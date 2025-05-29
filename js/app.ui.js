@@ -1,826 +1,445 @@
-(function() {
-'use strict';
+import { updateProperty, numFormat as fmt, timeFormat } from './util.js';
 
-var UI = function() {
-	this.game;
+(() => {
+	'use strict';
 
-	this.init = function(game) {
-		this.game = game;
-		Object.keys(toggle_buttons).forEach((f)=>update_button(f)())
-		setTimeout(update_interface, update_interface_interval);
-	}
-};
-
-var ui = new UI();
-window.ui = ui;
-
-// DOM nodes
-var $main = $('#main');
-var $reactor = $('#reactor');
-var $reactor_background = $('#reactor_background');
-var $reactor_section = $('#reactor_section');
-var $refund_exotic_particles = $('#refund_exotic_particles');
-var $reboot_exotic_particles = $('#reboot_exotic_particles');
-var $manual_heat_reduce = $('#manual_heat_reduce');
-var $auto_heat_reduce = $('#auto_heat_reduce');
-var $power_percentage = $('#power_percentage');
-var $heat_percentage = $('#heat_percentage');
-var $parts = $('#parts');
-var $primary = $('#primary');
-var $time_flux = $('#time_flux');
-
-var rows = [];
-var current_vars = new Map();
-var update_vars = new Map();
-
-var perc = function(numerator, denominator, dom) {
-	var percent = round_percentage(current_vars.get(numerator) / current_vars.get(denominator));
-	if ( percent > 100 ) percent = 100;
-	dom.style.width = percent + '%';
-};
-
-var update_heat_background = function (current_heat, max_heat) {
-	if ( current_heat <= max_heat ) {
-		$reactor_background.style['will-change'] = '';
-		$reactor_background.style.backgroundColor = 'transparent';
-	} else if ( current_heat > max_heat && current_heat <= max_heat * 2 ) {
-		$reactor_background.style['will-change'] = 'opacity';
-		$reactor_background.style.backgroundColor = 'rgba(255, 0, 0, ' + round_percentage((current_heat - max_heat) / max_heat, 2)/100 + ')';
-	} else {
-		$reactor_background.style['will-change'] = 'opacity';
-		$reactor_background.style.backgroundColor = 'rgb(255, 0, 0)';
-	}
-}
-
-var timestampFmt = function(ts) {
-	ts = Math.round(ts / 1000);
-
-	var s = String(ts % 60);
-	if(s.length < 2) s = '0' + s;
-	ts = Math.floor(ts / 60);
-	if(ts === 0) return s;
-
-	var m = String(ts % 60);
-	if(m.length < 2) m = '0' + m;
-	ts = Math.floor(ts / 60);
-	if(ts === 0) return m + ':' + s;
-
-	var h = String(ts % 24);
-	if(h.length < 2) h = '0' + h;
-	ts = Math.floor(ts / 24);
-	if(ts === 0) return h + ':' + m + ':' + s;
-
-	var d = String(ts);
-	return d + ':' + h + ':' + m + ':' + s;
-}
-
-var var_objs = {
-	manual_heat_reduce: {
-		onupdate: function() {
-			$manual_heat_reduce.textContent = '-' + fmt(current_vars.get('manual_heat_reduce'));
+	class UI {
+		constructor() {
+			this.game = null;
+			this.DOMElements = {};
+			this.rowsUI = [];
+			this.current_vars = new Map();
+			this.update_vars = new Map();
+			this.update_interface_interval = 100;
+			this.update_interface_task = null;
+			this.do_check_upgrades_affordability = false;
+			this.var_objs_config = {
+				current_money: { domId: 'info_bar_money', num: true },
+				current_power: { domId: 'info_bar_current_power', num: true, onupdate: () => this.updatePercentageBar('current_power', 'max_power', this.DOMElements.powerPercentage) },
+				max_power: { domId: 'info_bar_max_power', num: true, onupdate: () => this.updatePercentageBar('current_power', 'max_power', this.DOMElements.powerPercentage) },
+				current_heat: { domId: 'info_bar_current_heat', num: true, onupdate: () => {
+					this.updatePercentageBar('current_heat', 'max_heat', this.DOMElements.heatPercentage);
+					this.updateReactorHeatBackground();
+				}},
+				max_heat: { domId: 'info_bar_max_heat', num: true, onupdate: () => {
+					this.updatePercentageBar('current_heat', 'max_heat', this.DOMElements.heatPercentage);
+					if(this.DOMElements.infoBarAutoHeatReduce && this.current_vars.get('max_heat') > 0) this.DOMElements.infoBarAutoHeatReduce.textContent = `-${fmt(this.current_vars.get('max_heat') / 10000)}`;
+					this.updateReactorHeatBackground();
+				}},
+				auto_heat_reduce: { domId: 'info_bar_auto_heat_reduce', onupdate: () => this.DOMElements.infoBarAutoHeatReduce && (this.DOMElements.infoBarAutoHeatReduce.textContent = `-${fmt(this.current_vars.get('auto_heat_reduce'))}`) },
+				legacy_current_power: { domId: 'currentPower', num: true },
+				legacy_max_power: { domId: 'maxPower', num: true },
+				legacy_current_heat: { domId: 'currentHeat', num: true },
+				legacy_max_heat: { domId: 'maxHeat', num: true },
+				legacy_money: { domId: 'money', num: true },
+				exotic_particles: { domId: 'exoticParticles', num: true, onupdate: () => this.DOMElements.rebootExoticParticles && (this.DOMElements.rebootExoticParticles.textContent = fmt(this.current_vars.get('exotic_particles'))) },
+				current_exotic_particles: { domId: 'currentExoticParticles', num: true, onupdate: () => {
+					if (this.DOMElements.refundExoticParticles) {
+						const total_ep = this.current_vars.get('total_exotic_particles') || 0;
+						const current_ep = this.current_vars.get('current_exotic_particles');
+						this.DOMElements.refundExoticParticles.textContent = fmt(total_ep - current_ep);
+					}
+				}},
+				stats_power: { domId: 'statsPower', num: true },
+				total_heat: { domId: 'statsHeat', num: true },
+				stats_cash: { domId: 'statsCash', num: true, places: 2 },
+				stats_outlet: { domId: 'statsOutlet', num: true, places: 2 },
+				stats_inlet: { domId: 'statsInlet', num: true, places: 2 },
+				stats_vent: { domId: 'statsVent', num: true, places: 2 },
+				money_add: { domId: 'moneyPerTick', num: true },
+				power_add: { domId: 'powerPerTick', num: true },
+				heat_add: { domId: 'heatPerTick', num: true },
+				auto_sell_disabled_state_change: { onupdate: () => this.updateToggleButtonState('auto_sell', !this.current_vars.get('auto_sell_disabled_state_change')) },
+				auto_buy_disabled_state_change: { onupdate: () => this.updateToggleButtonState('auto_buy', !this.current_vars.get('auto_buy_disabled_state_change')) },
+				heat_control_enabled_state_change: { onupdate: () => this.updateToggleButtonState('heat_control', this.current_vars.get('heat_control_enabled_state_change')) },
+				time_flux_enabled_state_change: { onupdate: () => this.updateToggleButtonState('time_flux', this.current_vars.get('time_flux_enabled_state_change')) },
+				paused_state_change: { onupdate: () => this.updateToggleButtonState('pause', this.current_vars.get('paused_state_change')) },
+			};
+			this.toggle_buttons_config = {
+				auto_sell: { id: 'auto_sell_toggle', gameProperty: 'auto_sell_disabled', isPropertyNegated: true, enableFunc: window.enable_auto_sell, disableFunc: window.disable_auto_sell },
+				auto_buy: { id: 'auto_buy_toggle', gameProperty: 'auto_buy_disabled', isPropertyNegated: true, enableFunc: window.enable_auto_buy, disableFunc: window.disable_auto_buy },
+				heat_control: { id: 'heat_control_toggle', gameProperty: 'heat_controlled', isPropertyNegated: false, enableFunc: window.enable_heat_control, disableFunc: window.disable_heat_control },
+				time_flux: { id: 'time_flux_toggle', gameProperty: 'time_flux', isPropertyNegated: false, enableFunc: window.enable_time_flux, disableFunc: window.disable_time_flux },
+				pause: { id: 'pause_toggle', gameProperty: 'paused', isPropertyNegated: false, enableFunc: window.unpause_game, disableFunc: window.pause_game }
+			};
+			this.evts = {
+				game_reset: () => this.updateAllToggleBtnStates(),
+				game_loaded: () => this.updateAllToggleBtnStates(),
+				paused: () => this.updateToggleButtonState('pause', true),
+				unpaused: () => this.updateToggleButtonState('pause', false),
+				auto_sell_disabled: () => this.updateToggleButtonState('auto_sell', false),
+				auto_sell_enabled: () => this.updateToggleButtonState('auto_sell', true),
+				auto_buy_disabled: () => this.updateToggleButtonState('auto_buy', false),
+				auto_buy_enabled: () => this.updateToggleButtonState('auto_buy', true),
+				heat_control_disabled: () => this.updateToggleButtonState('heat_control', false),
+				heat_control_enabled: () => this.updateToggleButtonState('heat_control', true),
+				time_flux_disabled: () => this.updateToggleButtonState('time_flux', false),
+				time_flux_enabled: () => this.updateToggleButtonState('time_flux', true),
+				objective_loaded: (objData) => {
+					if (this.DOMElements.objectiveTitle) this.DOMElements.objectiveTitle.textContent = objData.title;
+					if (this.DOMElements.objectiveReward) {
+						this.DOMElements.objectiveReward.textContent = objData.reward ? fmt(objData.reward) : (objData.ep_reward ? `${fmt(objData.ep_reward)} EP` : '');
+					}
+					if (this.DOMElements.objectivesSection) this.DOMElements.objectivesSection.classList.remove('unloading', 'loading');
+				},
+				objective_unloaded: () => {
+					if (this.DOMElements.objectivesSection) this.DOMElements.objectivesSection.classList.add('unloading');
+					setTimeout(() => {
+						if (this.DOMElements.objectivesSection) this.DOMElements.objectivesSection.classList.add('loading');
+					}, 300);
+				},
+				part_added: (part_obj) => {
+					if (part_obj.erequires) {
+						const required_upgrade = this.game && this.game.upgrade_objects && this.game.upgrade_objects[part_obj.erequires];
+						if (!required_upgrade || required_upgrade.level < 1) {
+							return;
+						}
+					}
+					const part_el = document.createElement('button');
+					part_el.className = `part part_${part_obj.id} category_${part_obj.category}`;
+					part_el.id = `part_btn_${part_obj.id}`;
+					part_el._part = part_obj;
+					part_obj.$el = part_el;
+					const image_el = document.createElement('div');
+					image_el.className = 'image';
+					part_el.appendChild(image_el);
+					let containerKey = part_obj.category + 's';
+					const categoryToContainerMap = {
+						'coolant_cell': 'coolantCells',
+						'reactor_plating': 'reactorPlatings',
+						'heat_exchanger': 'heatExchangers',
+						'heat_inlet': 'heatInlets',
+						'heat_outlet': 'heatOutlets',
+						'particle_accelerator': 'particleAccelerators'
+					};
+					if (categoryToContainerMap[part_obj.category]) {
+						containerKey = categoryToContainerMap[part_obj.category];
+					}
+					const container = this.DOMElements[containerKey];
+					if (container) {
+						container.appendChild(part_el);
+					} else {
+						console.warn(`UI: Container for part category '${part_obj.category}' (expected key: '${containerKey}') not found in DOMElements. Appending to #parts as fallback.`);
+						if (this.DOMElements.parts) {
+							this.DOMElements.parts.appendChild(part_el);
+						} else {
+							console.error("UI: Fallback #parts container not found either.");
+						}
+					}
+				},
+				row_added: (row_index) => {},
+				tile_added: (tile_data) => {
+					const tile = tile_data.tile_instance;
+					const tile_el = document.createElement('button');
+					tile_el.className = 'tile';
+					tile_el.dataset.row = tile_data.row;
+					tile_el.dataset.col = tile_data.col;
+					tile.tile_index = tile_data.row * this.game.max_cols + tile_data.col;
+					tile_el.tile = tile;
+					tile.$el = tile_el;
+					const percent_wrapper_wrapper = document.createElement('div');
+					percent_wrapper_wrapper.className = 'percent_wrapper_wrapper';
+					const percent_wrapper = document.createElement('div');
+					percent_wrapper.className = 'percent_wrapper';
+					const percent = document.createElement('div');
+					percent.className = 'percent';
+					tile.$percent = percent;
+					percent_wrapper.appendChild(percent);
+					percent_wrapper_wrapper.appendChild(percent_wrapper);
+					tile_el.appendChild(percent_wrapper_wrapper);
+					if (this.DOMElements.reactor) {
+						this.DOMElements.reactor.appendChild(tile_el);
+					}
+				},
+			};
 		}
-	},
-	auto_heat_reduce: {
-		onupdate: function() {
-			$auto_heat_reduce.textContent = '-' + fmt(current_vars.get('auto_heat_reduce'));
-		}
-	},
-	flux_tick_time: {
-		onupdate: function() {
-			var flux_tick_time = current_vars.get('flux_tick_time');
-			console.log(flux_tick_time);
-			$time_flux.textContent = flux_tick_time > 1000 ? timestampFmt(flux_tick_time) : '-';
-		}
-	},
-	// TODO: Bad naming
-	current_money: {
-		dom: $('#money'),
-		num: true
-	},
-	current_power: {
-		dom: $('#current_power'),
-		num: true,
-		onupdate: function() {
-			perc('current_power', 'max_power', $power_percentage);
-		}
-	},
-	max_power: {
-		dom: $('#max_power'),
-		num: true,
-		// TODO: DRY?
-		onupdate: function() {
-			perc('current_power', 'max_power', $power_percentage);
-		}
-	},
-	// TODO: Bad naming
-	total_power: {
-		dom: $('#stats_power'),
-		num: true
-	},
-	current_heat: {
-		dom: $('#current_heat'),
-		num: true,
-		onupdate: function() {
-			perc('current_heat', 'max_heat', $heat_percentage);
 
-			var current_heat = current_vars.get('current_heat');
-			var max_heat = current_vars.get('max_heat');
-
-			update_heat_background(current_heat, max_heat)
-		}
-	},
-	total_heat: {
-		dom: $('#stats_heat'),
-		num: true
-	},
-	max_heat: {
-		dom: $('#max_heat'),
-		num: true,
-		onupdate: function() {
-			var current_heat = current_vars.get('current_heat');
-			var max_heat = current_vars.get('max_heat');
-
-			perc('current_heat', 'max_heat', $heat_percentage);
-			$auto_heat_reduce.textContent = '-' + (fmt(current_vars.get('max_heat')/10000));
-
-			update_heat_background(current_heat, max_heat)
-		}
-	},
-	exotic_particles: {
-		dom: $('#exotic_particles'),
-		num: true,
-		// TODO: Have more than one dom?
-		onupdate: function() {
-			var exotic_particles = current_vars.get('exotic_particles');
-			$reboot_exotic_particles.textContent = fmt(exotic_particles);
-		}
-	},
-	current_exotic_particles: {
-		dom: $('#current_exotic_particles'),
-		num: true,
-		onupdate: function() {
-			var total_exotic_particles = current_vars.get('total_exotic_particles');
-			var current_exotic_particles = current_vars.get('current_exotic_particles');
-			$refund_exotic_particles.textContent = fmt(total_exotic_particles - current_exotic_particles);
-		}
-	},
-
-	stats_cash: {
-		dom: $('#stats_cash'),
-		num: true,
-		places: 2
-	},
-	stats_outlet: {
-		dom: $('#stats_outlet'),
-		num: true,
-		places: 2
-	},
-	stats_inlet: {
-		dom: $('#stats_inlet'),
-		num: true,
-		places: 2
-	},
-	stats_vent: {
-		dom: $('#stats_vent'),
-		num: true,
-		places: 2
-	},
-	stats_heat: {
-		dom: $('#stats_heat'),
-		num: true,
-		places: 2
-	},
-
-	money_add: {
-		dom: $('#money_per_tick'),
-		num: true
-	},
-	power_add: {
-		dom: $('#power_per_tick'),
-		num: true
-	},
-	heat_add: {
-		dom: $('#heat_per_tick'),
-		num: true
-	}
-};
-
-// Update formatted numbers
-var update_var = function(obj, value) {
-	if ( obj.dom ) {
-		if ( obj.num ) {
-			obj.dom.textContent = fmt(value, obj.places || null);
-		} else {
-			obj.dom.textContent = value;
-		}
-	}
-
-	if ( obj.onupdate ) {
-		obj.onupdate();
-	}
-};
-
-var Update_vars = function() {
-	var perc;
-
-	for ( var [key, value] of update_vars ) {
-		var obj = var_objs[key];
-		if ( !obj ) continue;
-
-		update_var(obj, value);
-	}
-	update_vars.clear();
-};
-
-// width of percentage bar is about 28pt
-var percentage_interval = Math.round(100/28);
-
-var round_percentage = function(perc, step=1) {
-	return Math.round(perc*100/step)*step
-}
-
-// Update Interface
-// TODO: configurable interval
-var update_interface_interval = 100;
-var do_check_upgrades_affordability = false;
-var update_interface_task = null;
-
-var update_interface = function() {
-	var start_ui_loop = performance.now();
-
-	window.updateProperty();
-	Update_vars();
-
-	clearTimeout(update_interface_task);
-	update_interface_task = setTimeout(update_interface, update_interface_interval);
-
-	if ( $reactor_section.classList.contains('showing') ) {
-		for ( var tile of ui.game.active_tiles_2d ) {
-			if ( tile.ticksUpdated ) {
-				if ( tile.part ) {
-					// width of percentage bar is about 28pt
-					var width = round_percentage(tile.ticks/tile.part.ticks, Math.round(100/28));
-					tile.$percent.style.width = width + '%';
-				} else {
-					tile.$percent.style.width = '0';
-				}
-
-				tile.ticksUpdated = false;
+		init(gameInstance) {
+			this.game = gameInstance;
+			this.cacheDOMElements();
+			if (this.DOMElements.reactor && this.game) {
+				this.DOMElements.reactor.style.gridTemplateColumns = `repeat(${this.game.cols}, 32px)`;
 			}
-
-			if ( tile.heat_containedUpdated ) {
-				if ( tile.part && tile.part.containment ) {
-					// width of percentage bar is about 28pt
-					var width = round_percentage(tile.heat_contained/tile.part.containment, Math.round(100/28));
-					tile.$percent.style.width = width + '%';
-				} else {
-					tile.$percent.style.width = '0';
+			this.setupEventListeners();
+			this.initializeToggleButtons();
+			for (const key in this.var_objs_config) {
+				const config = this.var_objs_config[key];
+				if (config.domId) {
+					// Try both the original domId and the camelCase version
+					config.dom = this.DOMElements[config.domId] || this.DOMElements[config.domId.replace(/_([a-z])/g, (g) => g[1].toUpperCase())];
 				}
+			}
+			this.update_interface_task = setTimeout(() => this.runUpdateInterfaceLoop(), this.update_interface_interval);
+		}
 
-				tile.heat_containedUpdated = false;
+		cacheDOMElements() {
+			const ids = [
+				'main', 'reactor', 'reactorBackground', 'reactorSection',
+				'powerPercentage', 'heatPercentage', 'parts', 'primary', 'timeFlux',
+				'money', 'currentPower', 'maxPower', 'statsPower',
+				'currentHeat', 'maxHeat', 'statsHeat',
+				'exoticParticles', 'rebootExoticParticles', 'currentExoticParticles', 'refundExoticParticles',
+				'statsCash', 'statsOutlet', 'statsInlet', 'statsVent',
+				'moneyPerTick', 'powerPerTick', 'heatPerTick',
+				'cells', 'reflectors', 'capacitors', 'vents', 'heatExchangers',
+				'heatInlets', 'heatOutlets', 'coolantCells', 'reactorPlatings', 'particleAccelerators',
+				'objectivesSection', 'objectiveTitle', 'objectiveReward',
+				'rebootBtn', 'refundBtn',
+				'auto_sell_toggle', 'auto_buy_toggle', 'time_flux_toggle', 'heat_control_toggle', 'pause_toggle',
+				'parts_panel_toggle', 'sidebar_toggle',
+				'info_bar', 'info_heat_block', 'info_power_block', 'info_money_block',
+				'info_bar_current_heat', 'info_bar_max_heat', 'info_bar_auto_heat_reduce',
+				'info_bar_current_power', 'info_bar_max_power', 'info_bar_money',
+				'sellBtnInfoBar', 'reduceHeatBtnInfoBar',
+				'options', 'show_help', 'show_about',
+				'partsSection'
+			];
+			ids.forEach(id => {
+				const key = id.includes('_') ? id.replace(/_([a-z])/g, (g) => g[1].toUpperCase()) : id;
+				this.DOMElements[key] = document.getElementById(id);
+				if (!this.DOMElements[key] && id !== 'manualHeatReduce' && id !== 'autoHeatReduce' && !id.startsWith('info_bar_') && !id.endsWith('BtnInfoBar')) {
+					// console.warn(`UI cache: Element with ID '${id}' (key: '${key}') not found.`);
+				}
+			});
+			if (!this.DOMElements.reactor) this.DOMElements.reactor = document.getElementById('reactor');
+			if (!this.DOMElements.partsSection) this.DOMElements.partsSection = document.getElementById('parts_section');
+			if (!this.DOMElements.main) this.DOMElements.main = document.getElementById('main');
+		}
+
+		setupEventListeners() {
+			const { rebootBtn, refundBtn, sellBtnInfoBar, reduceHeatBtnInfoBar, partsPanelToggle, sidebarToggle, options, showHelp, showAbout } = this.DOMElements;
+			if (rebootBtn) rebootBtn.onclick = () => { if (confirm("Are you sure you want to reboot?")) this.game.reboot_action(); };
+			if (refundBtn) refundBtn.onclick = () => { if (confirm("Are you sure you want to reboot and refund EP?")) this.game.reboot_action(true); };
+			if (sellBtnInfoBar) sellBtnInfoBar.onclick = () => this.game.sell_action();
+			if (reduceHeatBtnInfoBar) reduceHeatBtnInfoBar.onclick = () => this.game.manual_reduce_heat_action();
+			if (partsPanelToggle && this.DOMElements.partsSection) {
+				partsPanelToggle.onclick = () => {
+					this.DOMElements.partsSection.classList.toggle('collapsed');
+				};
+			}
+			if (sidebarToggle && this.DOMElements.partsSection) {
+				sidebarToggle.onclick = () => {
+					document.body.classList.toggle('sidebar-collapsed');
+					document.body.classList.toggle('sidebar-expanded', !document.body.classList.contains('sidebar-collapsed'));
+				};
+			}
+			const pageButtons = [options, showHelp, showAbout, ...document.querySelectorAll('#bottom_nav .bottom_nav_btn')];
+			pageButtons.forEach(button => {
+				if (button) {
+					button.addEventListener('click', (e) => {
+						const targetSectionId = e.currentTarget.dataset.section;
+						const targetPageId = e.currentTarget.dataset.page;
+						if (targetSectionId && targetPageId) {
+							this.showPage(targetSectionId, targetPageId);
+						}
+					});
+				}
+			});
+		}
+		
+		showPage(sectionId, pageId) {
+			const section = document.getElementById(sectionId);
+			if (!section) return;
+			const pages = section.querySelectorAll('.page');
+			pages.forEach(p => p.classList.remove('showing'));
+			const targetPage = section.querySelector(`#${pageId}`);
+			if (targetPage) {
+				targetPage.classList.add('showing');
 			}
 		}
-	}
 
-	if ( do_check_upgrades_affordability === true ) {
-		window.check_upgrades_affordability();
-		for ( var i = 0, l = ui.game.upgrade_objects_array.length, upgrade; i < l; i++ ) {
-			upgrade = ui.game.upgrade_objects_array[i];
-
-			if ( upgrade.affordableUpdated === true ) {
-				if ( upgrade.affordable === true ) {
-					upgrade.$el.classList.remove('unaffordable');
-				} else {
-					upgrade.$el.classList.add('unaffordable');
+		initializeToggleButtons() {
+			for (const key in this.toggle_buttons_config) {
+				const config = this.toggle_buttons_config[key];
+				const button = document.getElementById(config.id);
+				if (button) {
+					this.DOMElements[config.id] = button;
+					button.onclick = () => {
+						if (!config.gameProperty) {
+							console.error(`gameProperty not defined for toggle button config: ${config.id}`);
+							return;
+						}
+						const gamePropertyValue = this.game[config.gameProperty];
+						let isFeatureCurrentlyActive = config.isPropertyNegated ? !gamePropertyValue : gamePropertyValue;
+						if (isFeatureCurrentlyActive) {
+							if (typeof config.disableFunc === 'function') {
+								config.disableFunc();
+							} else {
+								console.error(`disableFunc is not a function for ${config.id}`);
+							}
+						} else {
+							if (typeof config.enableFunc === 'function') {
+								config.enableFunc();
+							} else {
+								console.error(`enableFunc is not a function for ${config.id}`);
+							}
+						}
+					};
 				}
-
-				upgrade.affordableUpdated = false;
+			}
+			this.updateAllToggleBtnStates();
+		}
+		
+		updateToggleButtonState(toggleName, isEnabled) {
+			const config = this.toggle_buttons_config[toggleName];
+			if (config && this.DOMElements[config.id]) {
+				const button = this.DOMElements[config.id];
+				if (isEnabled) {
+					button.classList.add('enabled');
+					button.classList.remove('disabled');
+				} else {
+					button.classList.add('disabled');
+					button.classList.remove('enabled');
+				}
 			}
 		}
-	}
 
-	window.check_affordability();
+		updateAllToggleBtnStates() {
+			if (!this.game) return;
+			for (const key in this.toggle_buttons_config) {
+				const config = this.toggle_buttons_config[key];
+				if (config.gameProperty) {
+					const gamePropertyValue = this.game[config.gameProperty];
+					const isFeatureActive = config.isPropertyNegated ? !gamePropertyValue : gamePropertyValue;
+					this.updateToggleButtonState(key, isFeatureActive);
+				}
+			}
+		}
 
-	for ( var i = 0, l = ui.game.part_objects_array.length, part; i < l; i++ ) {
-		part = ui.game.part_objects_array[i];
+		updatePercentageBar(currentVarKey, maxVarKey, domElement) {
+			if (!domElement) return;
+			const currentValue = this.current_vars.get(currentVarKey);
+			const maxValue = this.current_vars.get(maxVarKey);
+			if (typeof currentValue !== 'number' || typeof maxValue !== 'number' || maxValue === 0) {
+				domElement.style.width = '0%';
+				return;
+			}
+			const percent = Math.min(100, Math.max(0, (currentValue / maxValue) * 100));
+			domElement.style.width = percent + '%';
+		}
 
-		if ( part.affordableUpdated === true ) {
-			if ( part.affordable === true ) {
-				part.$el.classList.remove('unaffordable', 'locked');
+		updateReactorHeatBackground() {
+			const current_heat = this.current_vars.get('current_heat');
+			const max_heat = this.current_vars.get('max_heat');
+			if (!this.DOMElements.reactorBackground || typeof current_heat !== 'number' || typeof max_heat !== 'number') return;
+			if (max_heat <= 0) {
+				this.DOMElements.reactorBackground.style.backgroundColor = 'transparent';
+				return;
+			}
+			if (current_heat <= max_heat) {
+				this.DOMElements.reactorBackground.style.backgroundColor = 'transparent';
+			} else if (current_heat > max_heat && current_heat <= max_heat * 2) {
+				this.DOMElements.reactorBackground.style.backgroundColor = `rgba(255, 0, 0, ${(current_heat - max_heat) / max_heat})`;
 			} else {
-				part.$el.classList.add('unaffordable');
+				this.DOMElements.reactorBackground.style.backgroundColor = 'rgb(255, 0, 0)';
+			}
+		}
+		
+		check_affordability_parts() {
+			if (!this.game || !this.game.part_objects_array) return;
+			this.game.part_objects_array.forEach(part => {
+				let affordable = false;
+				if (part.erequires) {
+					const required_upgrade = this.game.upgrade_objects[part.erequires];
+					if (required_upgrade && required_upgrade.level > 0 && this.game.current_exotic_particles >= part.cost) {
+						affordable = true;
+					}
+				} else {
+					if (this.game.current_money >= part.cost) {
+						affordable = true;
+					}
+				}
+				part.setAffordable(affordable);
+				if (part.$el) {
+					part.$el.classList.toggle('unaffordable', !affordable);
+				}
+			});
+		}
+
+		check_upgrades_affordability() {
+			if (!this.game || !this.game.upgrade_objects_array) return;
+			this.game.upgrade_objects_array.forEach(upgrade => {
+				let affordable = false;
+				if (upgrade.level >= upgrade.max_level) {
+					affordable = false;
+				} else if (upgrade.upgrade.ecost) {
+					const req = upgrade.erequires ? this.game.upgrade_objects[upgrade.erequires] : null;
+					if ((!req || req.level > 0) && this.game.current_exotic_particles >= upgrade.current_ecost) {
+						affordable = true;
+					}
+				} else {
+					 if (this.game.current_money >= upgrade.current_cost) {
+						affordable = true;
+					}
+				}
+				upgrade.setAffordable(affordable);
+				if (upgrade.$el) {
+					upgrade.$el.classList.toggle('unaffordable', !affordable);
+					 upgrade.$el.disabled = !affordable && upgrade.level < upgrade.max_level;
+				}
+			});
+		}
+
+		runUpdateInterfaceLoop() {
+			updateProperty();
+			for (const [key, value] of this.update_vars) {
+				const obj_config = this.var_objs_config[key];
+				if (!obj_config) continue;
+				let displayValue = value;
+				// For heat values, always show as integer
+				if ((key === 'current_heat' || key === 'max_heat') && typeof value === 'number') {
+					displayValue = Math.floor(value);
+				}
+				if (obj_config.dom && obj_config.dom instanceof HTMLElement) {
+					obj_config.dom.textContent = obj_config.num ? fmt(displayValue, obj_config.places || null) : displayValue;
+				}
+				if (obj_config.onupdate) obj_config.onupdate();
 			}
 
-			part.affordableUpdated = false;
-		}
-	}
-
-	//console.log(performance.now() - start_ui_loop);
-};
-ui.update_interface = update_interface;
-
-/////////////////////////////
-// Listen to app events
-/////////////////////////////
-
-var evts = {};
-
-ui.say = function(type, name, val) {
-	if ( type === 'var' ) {
-		if ( val === current_vars.get(name) ) return;
-		current_vars.set(name, val);
-		update_vars.set(name, val);
-	} else if ( type === 'evt' ) {
-		if ( evts[name] ) {
-			evts[name](val);
-		}
-	} else {
-	}
-
-	//console.log(arguments);
-};
-
-/////////////////////////////
-// Events
-/////////////////////////////
-
-evts.row_added = function() {
-	var row = {
-		dom: $('<div class="row">'),
-		tiles: []
-	};
-
-	rows.push(row);
-
-	$reactor.appendChild(row.dom);
-};
-
-evts.tile_added = function(val) {
-	var row = rows[val.row];
-	var tile = val.tile;
-
-	tile.$el = $('<button class="tile">');
-	tile.$el.tile = tile;
-
-	// remove exploding class after the exploding animation is completed
-	// so it doesn't play again when toggling css display object when switching between pages/panels
-	tile.$el.addEventListener("animationend", function(){this.classList.remove('exploding')})
-
-	var $percent_wrapper_wrapper = $('<div class="percent_wrapper_wrapper">');
-	var $percent_wrapper = $('<div class="percent_wrapper">');
-	tile.$percent = $('<p class="percent">');
-
-	$percent_wrapper_wrapper.appendChild($percent_wrapper);
-	$percent_wrapper.appendChild(tile.$percent);
-	tile.$el.appendChild($percent_wrapper_wrapper);
-
-	row.dom.appendChild(tile.$el);
-	row.tiles.push(tile);
-};
-
-var $cells = $('#cells');
-var $reflectors = $('#reflectors');
-var $capacitors = $('#capacitors');
-var $vents = $('#vents');
-var $heat_exchangers = $('#heat_exchangers');
-var $heat_inlets = $('#heat_inlets');
-var $heat_outlets = $('#heat_outlets');
-var $coolant_cells = $('#coolant_cells');
-var $reactor_platings = $('#reactor_platings');
-var $particle_accelerators = $('#particle_accelerators');
-
-evts.part_added = function(val) {
-	var part_obj = val;
-	var part = part_obj.part;
-
-	part_obj.className = 'part_' + part.id;
-	part_obj.$el = document.createElement('BUTTON');
-	part_obj.$el.classList.add('part', 'locked', part_obj.className);
-	part_obj.$el._part = part_obj;
-
-	var $image = $('<div class="image">');
-	$image.textContent = 'Click to Select';
-
-	part_obj.$el.appendChild($image);
-
-	if ( part.category === 'cell' ) {
-		$cells.appendChild(part_obj.$el);
-	} else if ( part.category === 'reflector' ) {
-		$reflectors.appendChild(part_obj.$el);
-	} else if ( part.category === 'capacitor' ) {
-		$capacitors.appendChild(part_obj.$el);
-	} else if ( part.category === 'vent' ) {
-		$vents.appendChild(part_obj.$el);
-	} else if ( part.category === 'heat_exchanger' ) {
-		$heat_exchangers.appendChild(part_obj.$el);
-	} else if ( part.category === 'heat_inlet' ) {
-		$heat_inlets.appendChild(part_obj.$el);
-	} else if ( part.category === 'heat_outlet' ) {
-		$heat_outlets.appendChild(part_obj.$el);
-	} else if ( part.category === 'coolant_cell' ) {
-		$coolant_cells.appendChild(part_obj.$el);
-	} else if ( part.category === 'reactor_plating' ) {
-		$reactor_platings.appendChild(part_obj.$el);
-	} else if ( part.category === 'particle_accelerator' ) {
-		$particle_accelerators.appendChild(part_obj.$el);
-	}
-};
-
-// Tile height/width change
-var adjust_primary_size_timeout;
-var adjust_primary_size = function() {
-	// If an element has display:none, it's offsetWidth would be 0
-	// so we have to temporary restore the display to get it's real offsetWidth
-	var original_display = $reactor_section.style.display;
-	$reactor_section.style.display = 'inherit';
-	// We also have to unset the width or else the offsetWidth would be capped to the primary width
-	$primary.style.width = '';
-	$primary.style.width = $reactor_section.offsetWidth + 32 + 'px';
-	$reactor_section.style.display = original_display;
-};
-
-evts.tile_disabled = function(tile) {
-	tile.$el.classList.remove('enabled');
-
-	clearTimeout(adjust_primary_size_timeout);
-	adjust_primary_size_timeout = setTimeout(adjust_primary_size, 10);
-};
-
-evts.tile_enabled = function(tile) {
-	tile.$el.classList.add('enabled');
-
-	clearTimeout(adjust_primary_size_timeout);
-	adjust_primary_size_timeout = setTimeout(adjust_primary_size, 10);
-};
-
-// Game
-
-evts.game_inited = function() {
-	ui.update_interface();
-}
-
-evts.game_loaded = function() {
-	$parts.scrollTop = $parts.scrollHeight;
-};
-
-evts.game_updated = function() {
-	_show_page('reactor_upgrades', 'patch_section', true);
-};
-
-// Objectives
-
-var $objectives_section = $('#objectives_section');
-var objective_timeout;
-
-var $objective_title = $('#objective_title');
-var $objective_reward = $('#objective_reward');
-
-evts.objective_unloaded = function() {
-	$objectives_section.classList.add('unloading');
-};
-
-evts.objective_loaded = function(val) {
-	$objectives_section.classList.add('loading');
-	$objective_title.textContent = val.title;
-	if ( val.reward ) {
-		$objective_reward.textContent = '$' + fmt(val.reward);
-	} else if ( val.ep_reward ) {
-		$objective_reward.textContent = fmt(val.ep_reward) + 'EP';
-	} else {
-		$objective_reward.textContent = '';
-	}
-	$objectives_section.classList.remove('unloading');
-
-	clearTimeout(objective_timeout);
-	objective_timeout = setTimeout(function() {
-		$objectives_section.classList.remove('loading');
-	}, 100);
-};
-
-/////////////////////////////
-// Reboot
-/////////////////////////////
-
-$('#reboot').onclick = function(event) {
-	event.preventDefault();
-
-	var response = confirm("Are you sure?");
-	if ( !response ) return;
-
-	reboot();
-};
-
-$('#refund').onclick = function(event) {
-	event.preventDefault();
-
-	var response = confirm("Are you sure?");
-	if ( !response ) return;
-
-	reboot(true);
-};
-
-/////////////////////////////
-// Reduce Heat Manually
-/////////////////////////////
-
-$('#reduce_heat').onclick = function(event) {
-	event.preventDefault();
-
-	window.manual_reduce_heat();
-};
-
-/////////////////////////////
-// Toggle UI
-/////////////////////////////
-
-var toggle_buttons = {};
-
-var toggle_buttons_saves = function() {
-	var sbuttons = {};
-	for (var button of Object.keys(toggle_buttons)) {
-		sbuttons[button] = toggle_buttons[button].state();
-	}
-	return sbuttons
-}
-ui.toggle_buttons_saves = toggle_buttons_saves;
-
-var toggle_buttons_loads = function(buttons) {
-	for (var [button, state] of Object.entries(buttons)) {
-		var button_obj = toggle_buttons[button];
-		if ( button_obj ) {
-			if ( button_obj.load_func ){
-				button_obj.load_func(state);
-			} else {
-				!state ? button_obj.enable() : button_obj.disable();
+			// Update info bar progress bars
+			const heat = this.current_vars.get('current_heat');
+			const maxHeat = this.current_vars.get('max_heat');
+			const power = this.current_vars.get('current_power');
+			const maxPower = this.current_vars.get('max_power');
+			const heatBar = document.getElementById('info_heat_progress');
+			const powerBar = document.getElementById('info_power_progress');
+			if (heatBar && typeof heat === 'number' && typeof maxHeat === 'number' && maxHeat > 0) {
+				heatBar.style.width = Math.min(100, Math.max(0, (heat / maxHeat) * 100)) + '%';
+			} else if (heatBar) {
+				heatBar.style.width = '0%';
 			}
-			button_obj.update_text();
-		}
-	}
-}
-ui.toggle_buttons_loads = toggle_buttons_loads;
-
-var update_button = function(button) {
-	return toggle_buttons[button]['update_text']
-}
-
-var create_toggle_button = function(button, enable_text, disable_text) {
-	var $button = $(button);
-	// Initiate with some text in the button so it isn't empty when something goes wrong when starting
-	$button.textContent = enable_text;
-	return (state, enable_callback, disable_callback, always_update_text, load_func) => {
-		var update_text = () => $button.textContent = !state() ? enable_text : disable_text;
-		toggle_buttons[button] = {update_text: update_text, state: state,
-		                          enable: enable_callback, disable: disable_callback,
-		                          load_func: load_func};
-		$button.onclick = (event) => {
-			event.preventDefault();
-			state() ? enable_callback() : disable_callback();
-			if (always_update_text){
-				update_text();
+			if (powerBar && typeof power === 'number' && typeof maxPower === 'number' && maxPower > 0) {
+				powerBar.style.width = Math.min(100, Math.max(0, (power / maxPower) * 100)) + '%';
+			} else if (powerBar) {
+				powerBar.style.width = '0%';
 			}
-		};
-	};
-};
 
-// Pause/Unpause
-create_toggle_button('#pause_toggle', 'Pause', 'Unpause')(
-	()=>ui.game.paused,
-	function() {
-		window.unpause();
-	},
-	function() {
-		window.pause();
-	}
-);
+			this.update_vars.clear();
+			this.check_affordability_parts();
+			this.check_upgrades_affordability();
+			clearTimeout(this.update_interface_task);
+			this.update_interface_task = setTimeout(() => this.runUpdateInterfaceLoop(), this.update_interface_interval);
+		}
 
-evts.paused = update_button('#pause_toggle');
-evts.unpaused = update_button('#pause_toggle');
+		say(type, name, val) {
+			if (type === 'var') {
+				if (val === this.current_vars.get(name) && !this.var_objs_config[name]?.forceUpdate) return;
+				this.current_vars.set(name, val);
+				this.update_vars.set(name, val);
+			} else if (type === 'evt') {
+				if (this.evts && this.evts[name]) {
+					this.evts[name](val);
+				}
+			}
+		}
 
-// Enable/Disable auto sell
-create_toggle_button('#auto_sell_toggle', 'Disable Auto Sell', 'Enable Auto Sell')(
-	()=>ui.game.auto_sell_disabled,
-	function() {
-		window.enable_auto_sell();
-	},
-	function() {
-		window.disable_auto_sell();
-	}
-);
-
-evts.auto_sell_disabled = update_button('#auto_sell_toggle');
-evts.auto_sell_enabled = update_button('#auto_sell_toggle');
-
-// Enable/Disable auto buy
-create_toggle_button('#auto_buy_toggle', 'Disable Auto Buy', 'Enable Auto Buy')(
-	()=>ui.game.auto_buy_disabled,
-	function() {
-		window.enable_auto_buy();
-	},
-	function() {
-		window.disable_auto_buy();
-	}
-);
-
-evts.auto_buy_disabled = update_button('#auto_buy_toggle');
-evts.auto_buy_enabled = update_button('#auto_buy_toggle');
-
-// Enable/Disable heat control
-create_toggle_button('#heat_control_toggle', 'Disable Heat Controller', 'Enable Heat Controller')(
-	()=>!ui.game.heat_controlled,
-	function() {
-		window.enable_heat_control();
-	},
-	function() {
-		window.disable_heat_control();
-	}
-)
-
-// Enable/Disable time flux
-create_toggle_button('#time_flux_toggle', 'Disable Time Flux', 'Enable Time Flux')(
-	()=>!ui.game.time_flux,
-	function() {
-		window.enable_time_flux();
-	},
-	function() {
-		window.disable_time_flux();
-	}
-)
-
-evts.heat_control_disabled = update_button('#heat_control_toggle');
-evts.heat_control_enabled = update_button('#heat_control_toggle');
-
-evts.time_flux_disabled = update_button('#time_flux_toggle');
-evts.time_flux_enabled = update_button('#time_flux_toggle');
-
-var speed_hack = false;
-create_toggle_button('#speed_hack', 'Disable Speed Hack', 'Enable Speed Hack')(
-	()=>!speed_hack,
-	function() {
-		speed_hack = true;
-		$main.classList.add('speed_hack');
-		$reactor.classList.add('speed_hack');
-	},
-	function() {
-		speed_hack = false;
-		$main.classList.remove('speed_hack');
-		$reactor.classList.remove('speed_hack');
-	},
-	true
-)
-
-create_toggle_button('#offline_tick', 'Disable Offline Tick', 'Enable Offline Tick')(
-	()=>!ui.game.offline_tick,
-	function() {
-		ui.game.offline_tick = true;
-	},
-	function() {
-		ui.game.offline_tick = false;
-	},
-	true,
-	function(state) {
-		ui.game.offline_tick = state || ui.game.offline_tick;
-	}
-)
-
-/////////////////////////////
-// Misc UI
-/////////////////////////////
-
-//Sell
-$('#sell').onclick = function(event) {
-	event.preventDefault();
-
-	window.sell();
-};
-
-// Save
-$('#trigger_save').onclick = function() {
-	ui.game.save_manager.active_saver.save(ui.game.saves());
-
-	// TODO: replace with a nice tooltip/notification
-	alert("Game saved");
-}
-
-$('#download_save').onclick = function() {
-	var save_data = ui.game.saves();
-	ui.game.save_manager.active_saver.save(save_data);
-	var saveAsBlob = new Blob([ save_data ], { type: 'text/plain' });
-	var downloadLink = document.createElement("a");
-
-	downloadLink.download = "reactor_knockoff_save.base64";
-	downloadLink.textContent = "Download File";
-	downloadLink.href = URL.createObjectURL(saveAsBlob);
-	downloadLink.onclick = (event) => {
-		// clean up blob after the browser get it
-		setTimeout(URL.revokeObjectURL, 100, event.target.href);
-		document.body.removeChild(event.target)
-	};
-	downloadLink.style.display = "none";
-	document.body.appendChild(downloadLink);
-
-	downloadLink.click();
-};
-
-$('#export_save').onclick = function() {
-	var save_data = ui.game.saves();
-	ui.game.save_manager.active_saver.save(save_data);
-	$('#import_button').style.display = "none";
-	$("#txtImportExport").value = save_data;
-	$("#txtImportExport").select();
-	$("#Import_Export_dialog").showModal();
-};
-
-$('#import_save').onclick = function() {
-	$('#import_button').style.display = null;
-	$("#txtImportExport").value = "";
-	$("#Import_Export_dialog").showModal();
-};
-
-$('#import_button').onclick = function() {
-	ui.game.loads($("#txtImportExport").value);
-	$("#txtImportExport").value = "";
-};
-
-$('#reset_game').onclick = function() {
-	if (confirm("confirm reset game?")){
-		ui.game.save_manager.active_saver.save("");
-		document.location.reload();
-	}
-}
-
-$('#Import_Export_close_button').onclick = function() {
-	$('#Import_Export_dialog').close();
-}
-
-/////////////////////////////
-// Pure UI
-/////////////////////////////
-
-// Show Pages
-var _show_page = function(section, id) {
-	var $page = $('#' + id);
-	var $section = $('#' + section);
-	var pages = $section.getElementsByClassName('page');
-
-	for ( var i = 0, length = pages.length, $p; i < length; i++ ) {
-		$p = pages[i];
-		$p.classList.remove('showing')
-	}
-
-	$page.classList.add('showing');
-
-	// Page specific stuff
-	if ( id == 'upgrades_section' || id == 'experimental_upgrades_section' ) {
-		do_check_upgrades_affordability = true;
-	} else {
-		do_check_upgrades_affordability = false;
-	}
-};
-
-$main.delegate('nav', 'click', function(event) {
-	if ( event ) {
-		event.preventDefault();
-	}
-
-	var id = this.getAttribute('data-page');
-	var section = this.getAttribute('data-section');
-	_show_page(section, id);
-});
-
-// TODO: Save preference
-// Stats more/less
-create_toggle_button('#more_stats_toggle', '[+]', '[-]')(
-	()=>$main.classList.contains('show_more_stats'),
-	function() {
-		$main.classList.remove('show_more_stats');
-		update_button('#more_stats_toggle')();
-	},
-	function() {
-		$main.classList.add('show_more_stats');
-		update_button('#more_stats_toggle')();
-	}
-);
-update_button('#more_stats_toggle')();
-
-// Show spoilers
-$('#help_section').delegate('show_spoiler', 'click', function() {
-	var has_spoiler = this;
-	var found = false;
-
-	while ( has_spoiler ) {
-		if ( has_spoiler.classList.contains('has_spoiler') ) {
-			found = true;
-			break;
-		} else {
-			has_spoiler = has_spoiler.parentNode;
+		updateReactorGridColumns() {
+			if (this.DOMElements.reactor && this.game) {
+				this.DOMElements.reactor.style.gridTemplateColumns = `repeat(${this.game.cols}, 32px)`;
+			}
 		}
 	}
 
-	if ( !found ) {
-		return;
-	}
-
-	has_spoiler.classList.toggle('show');
-});
-
+	const ui = new UI();
+	window.ui = ui;
 })();

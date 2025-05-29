@@ -1,186 +1,72 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 	<meta charset="utf-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<title>Reactor Knockoff</title>
-
-	<script>
-		if ( window.location.hostname.indexOf('.github.io') !== -1 && window.location.protocol !== 'https:' ) {
-			window.location.href = 'https:' + window.location.href.substring(window.location.protocol.length);
-		}
-	</script>
-
+	<meta name="description" content="A fun reactor simulation game.">
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-	<link rel="stylesheet" href="css/reset.css">
 	<link rel="stylesheet" href="css/app.css">
-	<link rel="stylesheet" href="css/app.perf.css">
-	<link rel="stylesheet" href="css/cms.css">
 </head>
+
 <body>
 	<div id="wrapper">
-		<main id="main" class="reactor_showing">
-			<!-- ---- Secondary ---- -->
-			<div id="secondary" class="panel_holder">
-				<!-- -- Stats -- -->
-				<section id="stats_section" class="panel">
-					<h2 class="stats_section_heading heading">Stats</h2>
-					<!-- Heat -->
-					<section id="heat">
-						<h3 class="heading"><span class="current">Current</span> Heat</h3>
-						<p id="heat_indicator">
-							<span id="heat_text">
-								<span id="heat_wrapper">
-									<span id="current_heat">0</span>/<span id="max_heat">0</span>
-									<span id="heat_per_tick_wrapper">(<span id="heat_per_tick">0</span> last tick)</span>
-								</span>
-							</span>
-							<span id="heat_percentage"></span>
-						</p>
-						<button id="reduce_heat">
-							<span id="manual_heat_reduce"></span>
-							(<span id="auto_heat_reduce"></span>/tick)
-						</button>
-					</section>
-
-					<!-- Power -->
-					<div id="power_section">
-						<section id="power">
-							<h3 class="heading"><span class="current">Current</span> Power</h3>
-							<p id="power_indicator">
-								<span id="power_text">
-									<span id="current_power">0</span>/<span id="max_power">0</span>
-								</span>
-								<span id="power_per_tick_wrapper">(<span id="power_per_tick">0</span> last tick)</span>
-
-								<span id="power_percentage"></span>
-							</p>
-						</section>
-						<button id="sell">Sell</button>
+		<aside id="parts_section" class="panel">
+			<button id="parts_panel_toggle" aria-label="Expand/collapse parts panel">&#9664;</button>
+			<h2 class="heading sr-only">Parts</h2>
+			<div id="all_parts">
+				<nav id="parts" class="page subpanel showing">
+					<div id="power">
+						<div id="cells" class="cells"></div>
+						<div id="reflectors"></div>
+						<div id="capacitors"></div>
 					</div>
-
-					<!-- Currency -->
-					<p id="currency">
-						<span id="money_wrapper">
-							$<span id="money">0</span>
-							<span id="money_per_tick_wrapper">(<span id="money_per_tick">0</span> last tick)</span>
-						</span>
-						<span id="exotic_particles_wrapper">
-							(<span id="current_exotic_particles">0</span>/<span id="exotic_particles">0</span> EP, <span id="time_flux">0</span> TF)
-						</span>
-					</p>
-					<!-- button id="scrounge">Scrounge for Cash</button -->
-					<menu id="more_stats">
-						<button id="more_stats_toggle"></button>
-					</menu>
-				</section>
-
-				<!-- -- Parts -- -->
-				<section id="parts_section" class="panel">
-					<h2 class="heading">Parts</h2>
-
-					<div id="all_parts">
-						<!-- nav id="parts_nav">
-							<a href="#top" id="parts_nav_top">&utrif;</a>
-							<a href="#bottom" id="parts_nav_bottom">&dtrif; </a>
-						</nav -->
-						<menu id="parts" class="page subpanel showing">
-							<!-- div id="top"></div -->
-							<menu id="power">
-								<menu id="cells" class="cells"></menu>
-								<menu id="reflectors"></menu>
-								<menu id="capacitors"></menu>
-							</menu>
-							<menu id="cooling">
-								<menu id="vents"></menu>
-								<menu id="heat_exchangers"></menu>
-								<menu id="heat_inlets"></menu>
-								<menu id="heat_outlets"></menu>
-								<menu id="coolant_cells"></menu>
-								<menu id="reactor_platings"></menu>
-								<menu id="particle_accelerators"></menu>
-							</menu>
-							<!-- div id="bottom"></div -->
-						</menu>
+					<div id="cooling">
+						<div id="vents"></div>
+						<div id="heatExchangers"></div>
+						<div id="heatInlets"></div>
+						<div id="heatOutlets"></div>
+						<div id="coolantCells"></div>
+						<div id="reactorPlatings"></div>
+						<div id="particleAccelerators"></div>
 					</div>
-				</section>
+				</nav>
+				<nav id="nav">
+					<button id="options" class="nav_button" data-section="reactor_upgrades" data-page="options_section">Options</button>
+					<button id="show_help" class="nav_button" data-section="reactor_upgrades" data-page="help_section">Help</button>
+					<button id="show_about" class="nav_button" data-section="reactor_upgrades" data-page="about_section">About</button>
+				</nav>
+				<nav id="controls_nav">
+					<button id="auto_sell_toggle" class="nav_button" title="Auto Sell">Auto Sell</button>
+					<button id="auto_buy_toggle" class="nav_button" title="Auto Buy">Auto Buy</button>
+					<button id="time_flux_toggle" class="nav_button" title="Time Flux">Time Flux</button>
+					<button id="heat_control_toggle" class="nav_button" title="Heat Ctrl">Heat Controller</button>
+					<button id="pause_toggle" class="nav_button" title="Pause/Play">Pause</button>
+				</nav>
 			</div>
+		</aside>
 
-			<!-- ---- Primary ---- -->
+		<main id="main">
 			<div id="primary" class="panel_holder">
-				<!-- -- Top -- -->
 				<div id="tooltip_nav" class="panel">
-					<!-- Nav -->
-					<menu id="nav">
-						<div class="flex_nav">
-							<menu>
-								<button id="options" class="nav" data-section="reactor_upgrades" data-page="options_section">Options</button>
-								<button id="show_help" class="nav" data-section="reactor_upgrades" data-page="help_section">Help</button>
-								<button id="show_about" class="nav" data-section="reactor_upgrades" data-page="about_section">About</button>
-							</menu>
-
-							<menu>
-								<button id="auto_sell_toggle"></button>
-								<button id="auto_buy_toggle"></button>
-							</menu>
-						</div>
-
-						<div class="flex_nav">
-							<menu>
-								<button id="time_flux_toggle"></button>
-							</menu>
-
-							<menu>
-								<button id="heat_control_toggle"></button>
-							</menu>
-						</div>
-
-						<div class="flex_nav">
-							<menu>
-								<button id="show_reactor" class="nav" data-section="reactor_upgrades" data-page="reactor_section">Reactor</button>
-								<button id="show_upgrades" class="nav" data-section="reactor_upgrades" data-page="upgrades_section">Upgrades</button>
-								<button id="show_experiments" class="nav" data-section="reactor_upgrades" data-page="experimental_upgrades_section">Experiments</button>
-							</menu>
-
-							<menu>
-								<button id="pause_toggle"></button>
-							</menu>
-						</div>
-					</menu>
-
-					<!-- -- Tooltip -- -->
-					<section id="tooltip">
+					<section id="tooltip" aria-live="polite">
 						<div id="tooltip_data" class="subpanel">
-							<p id="tooltip_cost" title="Cost"></p>
-							<p id="tooltip_heat_per_wrapper" title="Heat per tick">
-								Heat: <span id="tooltip_heat_per"></span>
-							</p>
-							<p id="tooltip_power_per_wrapper" title="Power per tick">
-								Power: <span id="tooltip_power_per"></span>
-							</p>
-							<p id="tooltip_ticks_wrapper" title="Ticks remaining">
-								Durability: <span id="tooltip_ticks"></span>/<span id="tooltip_max_ticks"></span>
-							</p>
-							<p id="tooltip_heat_wrapper" title="Heat contained">
-								Heat: <span id="tooltip_heat"></span>/<span id="tooltip_max_heat"></span>
-							</p>
-							<p id="tooltip_sells_wrapper">
-								Sells for: <span id="tooltip_sells"></span>
-							</p>
-							<p id="tooltip_chance_wrapper" title="Sells for">
-								EP chance: <span id="tooltip_chance"></span>% per tick (<span id="tooltip_chance_percent_of_total"></span>% of max)
-							</p>
+							<p id="tooltip_cost_wrapper" title="Cost">Cost: <span id="tooltip_cost"></span></p>
+							<p id="tooltip_heat_per_wrapper" title="Heat per tick">Heat: <span id="tooltip_heat_per"></span></p>
+							<p id="tooltip_power_per_wrapper" title="Power per tick">Power: <span id="tooltip_power_per"></span></p>
+							<p id="tooltip_ticks_wrapper" title="Ticks remaining">Durability: <span id="tooltip_ticks"></span>/<span id="tooltip_max_ticks"></span></p>
+							<p id="tooltip_heat_wrapper" title="Heat contained">Heat: <span id="tooltip_heat"></span>/<span id="tooltip_max_heat"></span></p>
+							<p id="tooltip_sells_wrapper">Sells for: <span id="tooltip_sells"></span></p>
+							<p id="tooltip_chance_wrapper" title="EP Generation Chance">EP chance: <span id="tooltip_chance"></span>% (<span id="tooltip_chance_percent_of_total"></span>% of max)</p>
 						</div>
 						<div id="tooltip_text" class="subpanel">
 							<div id="tooltip_info">
-								<h2 class="headline" id="tooltip_name" title="Name"></h2>
-								<p id="tooltip_description" title="Description" class="explanitory"></p>
+								<h2 class="headline" id="tooltip_name"></h2>
+								<p id="tooltip_description" class="explanitory"></p>
 							</div>
 						</div>
 					</section>
 				</div>
-
-				<!-- -- Middle -- -->
 				<section id="objectives_section" class="panel">
 					<h2 id="objectives_header">Objective</h2>
 					<div id="objectives_wrapper" class="subpanel">
@@ -190,13 +76,10 @@
 						</div>
 					</div>
 				</section>
-
-				<!-- -- Bottom -- -->
 				<div id="reactor_upgrades" class="panel">
-					<!-- Reactor -->
 					<section id="reactor_section" class="page showing">
 						<header id="reactor_header">
-							<h2 class="heading">Reactor</h2>
+							<h2 class="heading sr-only">Reactor Grid</h2>
 							<div id="reactor_stats">
 								<span id="stats_vent" class="stat" title="Estimated total heat venting per tick">0</span>
 								<span id="stats_inlet" class="stat" title="Total potential heat inletting per tick">0</span>
@@ -206,17 +89,11 @@
 								<span id="stats_cash" class="stat" title="Estimated autosell cash per tick">0</span>
 							</div>
 						</header>
-						<!-- the javascript code should prevent the context menu from showing but
-						     someone reported a issue on it https://github.com/asl97/reactor-knockoff/pull/1 -->
 						<div id="reactor_wrapper" oncontextmenu="return false;">
-							<div id="tile_wrapper" class="subpanel">
-								<div id="reactor"></div>
-							</div>
+							<div id="reactor"></div>
 							<div id="reactor_background"></div>
 						</div>
 					</section>
-
-					<!-- Help -->
 					<section id="help_section" class="page">
 						<h2 class="heading">Help</h2>
 						<div id="help" class="subpanel explanitory cms">
@@ -302,82 +179,6 @@
 								<ul>
 							</section>
 							<section class="patch">
-								<h3>v1.3.1 - June 12th, 2018</h3>
-								<ul>
-									<li>New Features:</li>
-									<ul>
-										<li>Save data exporting and importing</li>
-										<li>Additional hotkeys/macro:</li>
-										<ul>
-											<li>Hold keys in bracket and click to use the macro</li>
-											<li>Row (ctrl)</li>
-											<li>Column (alt)</li>
-											<li>Spacing options (number)</li>
-											<li>Don't filter by part (shift)</li>
-											<li>Checkered fill (ctrl+alt+shift)</li>
-
-										</ul>
-										<li>A reset button!</li>
-										<li>New upgrade which prevents outlets from outputting more than what the vent can handle</li>
-										<li>Speed hack toggle, throw more stuff into their own layer and thus reduce paint time (at the cost of memory)</li>
-										<li>Tick catchup</li>
-									</ul>
-									<li>Improvement:</li>
-									<ul>
-										<li>Replacing now works with same category parts, eg: downgrading, switching cell type</li>
-										<li>Replacing tiles is now faster</li>
-										<li>Less cpu usage when not on reactor tile panel</li>
-										<li>Shift/Double click now works on empty tiles</li>
-										<li>Greatly improve performance</li>
-										<ul>
-											<li>Faster repaint time by layering frequently updated ui (Improve fps/lag)</li>
-											<li>Faster tick timing (faster loading after offline)</li>
-											<li>Less lag spike for UI, tooltip</li>
-											<li>Percentage bar and overheating redness are now updated in steps (reduce repainting)</li>
-										</ul>
-										<li>Tile queue now buys as many as possible per tick</li>
-									</ul>
-									<li>Bug fixes:</li>
-									<ul>
-										<li>Right click no longer buy stuff</li>
-										<li>Fixes Heat Control Operator adding heat</li>
-										<li>Left+right click triggering double click function and deleting tiles</li>
-										<li>Replacing tiles with another now reimburse the amount for the part</li>
-										<li>Fixes reflector ui load bug</li>
-										<li>Fixes heat outlet heat distribution bug with multi-tier setup</li>
-										<li>Fixes extreme plating adding to max power despite not being bought yet</li>
-										<li>Make sure background get updated when placing plating so it doesn't get stuck on red</li>
-									</ul>
-								</ul>
-							</section>
-
-							<section class="patch">
-								<h3>v1.2.0 - February 7th, 2015</h3>
-								<ul>
-									<li>Signific code changes that shouldn't (but may) affect gameplay</li>
-									<li>Added Objectives</li>
-									<li>Removed old Particle Accelerator upgrades</li>
-									<li>Added individual experimental Particle Accelerator upgrades</li>
-								</ul>
-							</section>
-
-							<section class="patch">
-								<h3>v1.1.0 - January 13th, 2016</h3>
-								<h4>Features:</h4>
-								<ul>
-									<li>Added patch notes</li>
-									<li>Styling fixes to "pages"</li>
-								</ul>
-
-								<h4>Bug Fixes:</h4>
-								<ul>
-									<li>Fixed an issue with game loop firing too often</li>
-									<li>Platings (and possibly other things) now give 100% of their cost back when sold</li>
-									<li>Fixed sell costs for some components</li>
-									<li>Reflectors now start with a base % greater than 0</li>
-									<li>Multiple Exotic Particles gained when over 100% chance</li>
-									<li>Fixed support for larger touch devices to allow for selling, etc</li>
-								</ul>
 							</section>
 							<button id="show_reactor" class="nav" data-section="reactor_upgrades" data-page="reactor_section">Back to Reactor</button>
 						</div>
@@ -448,17 +249,47 @@
 				</div>
 			</div>
 		</main>
+		<div id="info_bar">
+			<div class="stat_block heat" id="info_heat_block">
+				<div class="stat_progress_bar" id="info_heat_progress"></div>
+				<span>Heat:</span>
+				<span class="stat_value"><span id="info_bar_current_heat">0</span>/<span id="info_bar_max_heat">0</span></span>
+			</div>
+			<div class="stat_block power" id="info_power_block">
+				<div class="stat_progress_bar" id="info_power_progress"></div>
+				<span>Power:</span>
+				<span class="stat_value"><span id="info_bar_current_power">0</span>/<span id="info_bar_max_power">0</span></span>
+			</div>
+			<div class="stat_block" id="info_money_block">
+				<span>Money:</span>
+				<span class="stat_value">$<span id="info_bar_money">0</span></span>
+			</div>
+			<button id="sellBtnInfoBar">Sell</button>
+			<button id="reduceHeatBtnInfoBar">Cool Reactor</button>
+		</div>
+		<nav id="bottom_nav">
+			<button id="nav_reactor" class="bottom_nav_btn" data-section="reactor_upgrades" data-page="reactor_section">Reactor</button>
+			<button id="nav_upgrades" class="bottom_nav_btn" data-section="reactor_upgrades" data-page="upgrades_section">Upgrades</button>
+			<button id="nav_experiments" class="bottom_nav_btn" data-section="reactor_upgrades" data-page="experimental_upgrades_section">Experiments</button>
+		</nav>
+		<button id="sidebar_toggle" aria-label="Toggle sidebar"></button>
 	</div>
 
-	<script src="js/app.compat.js"></script>
-	<script src="js/app.globals.js"></script>
-	<script src="js/app.parts.js"></script>
-	<script src="js/app.upgrades.js"></script>
-	<script src="js/app.objectives.js"></script>
-	<script src="js/app.ui.js"></script>
-	<script src="js/app.upgrade.js"></script>
-	<script src="js/app.save.js"></script>
-	<script src="js/app.hotkeys.js"></script>
-	<script src="js/app.js"></script>
+	<script type="module" src="js/app.ui.js"></script>
+	<script type="module" src="js/app.save.js"></script>
+	<script type="module" src="js/app.js"></script>
+	<script>
+	// Defensive: Ensure toggle functions exist before app.ui.js loads
+	window.unpause_game = window.unpause_game || function(){};
+	window.pause_game = window.pause_game || function(){};
+	window.enable_auto_sell = window.enable_auto_sell || function(){};
+	window.disable_auto_sell = window.disable_auto_sell || function(){};
+	window.enable_auto_buy = window.enable_auto_buy || function(){};
+	window.disable_auto_buy = window.disable_auto_buy || function(){};
+	window.enable_heat_control = window.enable_heat_control || function(){};
+	window.disable_heat_control = window.disable_heat_control || function(){};
+	window.enable_time_flux = window.enable_time_flux || function(){};
+	window.disable_time_flux = window.disable_time_flux || function(){};
+	</script>
 </body>
 </html>

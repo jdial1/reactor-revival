@@ -1,5 +1,158 @@
 @charset "UTF-8";
 
+:root {
+	/* Base Colors & Fonts */
+	--body-bg: #000204;
+	--main-bg: #374151;
+	--text-color: #fff;
+	--link-color: #d3f5f6;
+	--link-visited-color: #c3a5f6;
+	--font-sans-serif: sans-serif;
+	--font-monospace: monospace;
+	--panel-border-color: #eee;
+	--panel-bg: #485667;
+	--subpanel-bg: #222C38;
+	--button-bg: #76809b;
+	--button-bg-hover: #91a1c8;
+	--button-text-color: #fff;
+	--disabled-text-color: #aaa;
+	--disabled-bg-color: #46506b;
+	--success-color: #59c435;
+	--success-border-color: #198405;
+	--info-bar-bg: #2a3442;
+	--bottom-nav-bg: #222C38;
+	--bottom-nav-border: #485667;
+	--sidebar-width: 150px;
+	--sidebar-collapsed-width: 32px;
+	/* Image Paths - Cells */
+	--img-cell-uranium1: url("../img/parts/cells/cell_1_1.gif");
+	--img-cell-uranium2: url("../img/parts/cells/cell_1_2.gif");
+	--img-cell-uranium4: url("../img/parts/cells/cell_1_4.gif");
+	--img-cell-plutonium1: url("../img/parts/cells/cell_2_1.gif");
+	--img-cell-plutonium2: url("../img/parts/cells/cell_2_2.gif");
+	--img-cell-plutonium4: url("../img/parts/cells/cell_2_4.gif");
+	--img-cell-thorium1: url("../img/parts/cells/cell_3_1.gif");
+	--img-cell-thorium2: url("../img/parts/cells/cell_3_2.gif");
+	--img-cell-thorium4: url("../img/parts/cells/cell_3_4.gif");
+	--img-cell-seaborgium1: url("../img/parts/cells/cell_4_1.gif");
+	--img-cell-seaborgium2: url("../img/parts/cells/cell_4_2.gif");
+	--img-cell-seaborgium4: url("../img/parts/cells/cell_4_4.gif");
+	--img-cell-dolorium1: url("../img/parts/cells/cell_5_1.gif");
+	--img-cell-dolorium2: url("../img/parts/cells/cell_5_2.gif");
+	--img-cell-dolorium4: url("../img/parts/cells/cell_5_4.gif");
+	--img-cell-nefastium1: url("../img/parts/cells/cell_6_1.gif");
+	--img-cell-nefastium2: url("../img/parts/cells/cell_6_2.gif");
+	--img-cell-nefastium4: url("../img/parts/cells/cell_6_4.gif");
+	--img-cell-xprotium1: url("../img/parts/cells/xcell_1_1.gif");
+	--img-cell-xprotium2: url("../img/parts/cells/xcell_1_2.gif");
+	--img-cell-xprotium4: url("../img/parts/cells/xcell_1_4.gif");
+	/* Image Paths - Reflectors */
+	--img-reflector-1: url("../img/parts/reflectors/reflector_1.gif");
+	--img-reflector-2: url("../img/parts/reflectors/reflector_2.gif");
+	--img-reflector-3: url("../img/parts/reflectors/reflector_3.gif");
+	--img-reflector-4: url("../img/parts/reflectors/reflector_4.gif");
+	--img-reflector-5: url("../img/parts/reflectors/reflector_5.gif");
+	--img-reflector-6: url("../img/parts/reflectors/reflector_6.gif");
+	/* Image Paths - Capacitors */
+	--img-capacitor-1: url("../img/parts/capacitors/capacitor_1.gif");
+	--img-capacitor-2: url("../img/parts/capacitors/capacitor_2.gif");
+	--img-capacitor-3: url("../img/parts/capacitors/capacitor_3.gif");
+	--img-capacitor-4: url("../img/parts/capacitors/capacitor_4.gif");
+	--img-capacitor-5: url("../img/parts/capacitors/capacitor_5.gif");
+	--img-capacitor-6: url("../img/parts/capacitors/capacitor_6.gif");
+	/* Image Paths - Vents */
+	--img-vent-1: url("../img/parts/vents/vent_1.gif");
+	--img-vent-2: url("../img/parts/vents/vent_2.gif");
+	--img-vent-3: url("../img/parts/vents/vent_3.gif");
+	--img-vent-4: url("../img/parts/vents/vent_4.gif");
+	--img-vent-5: url("../img/parts/vents/vent_5.gif");
+	--img-vent-6: url("../img/parts/vents/vent_6.gif");
+	/* Image Paths - Exchangers */
+	--img-exchanger-1: url("../img/parts/exchangers/exchanger_1.gif");
+	--img-exchanger-2: url("../img/parts/exchangers/exchanger_2.gif");
+	--img-exchanger-3: url("../img/parts/exchangers/exchanger_3.gif");
+	--img-exchanger-4: url("../img/parts/exchangers/exchanger_4.gif");
+	--img-exchanger-5: url("../img/parts/exchangers/exchanger_5.gif");
+	--img-exchanger-6: url("../img/parts/exchangers/exchanger_6.gif");
+	/* Image Paths - Inlets */
+	--img-inlet-1: url("../img/parts/inlets/inlet_1.gif");
+	--img-inlet-2: url("../img/parts/inlets/inlet_2.gif");
+	--img-inlet-3: url("../img/parts/inlets/inlet_3.gif");
+	--img-inlet-4: url("../img/parts/inlets/inlet_4.gif");
+	--img-inlet-5: url("../img/parts/inlets/inlet_5.gif");
+	--img-inlet-6: url("../img/parts/inlets/inlet_6.gif");
+	/* Image Paths - Outlets */
+	--img-outlet-1: url("../img/parts/outlets/outlet_1.gif");
+	--img-outlet-2: url("../img/parts/outlets/outlet_2.gif");
+	--img-outlet-3: url("../img/parts/outlets/outlet_3.gif");
+	--img-outlet-4: url("../img/parts/outlets/outlet_4.gif");
+	--img-outlet-5: url("../img/parts/outlets/outlet_5.gif");
+	--img-outlet-6: url("../img/parts/outlets/outlet_6.gif");
+	/* Image Paths - Coolants */
+	--img-coolant-1: url("../img/parts/coolants/coolant_1.gif");
+	--img-coolant-2: url("../img/parts/coolants/coolant_2.gif");
+	--img-coolant-3: url("../img/parts/coolants/coolant_3.gif");
+	--img-coolant-4: url("../img/parts/coolants/coolant_4.gif");
+	--img-coolant-5: url("../img/parts/coolants/coolant_5.gif");
+	--img-coolant-6: url("../img/parts/coolants/coolant_6.gif");
+	/* Image Paths - Coolant Cells */
+	--img-coolant-cell-1: url("../img/parts/coolants/coolant_cell_1.gif");
+	--img-coolant-cell-2: url("../img/parts/coolants/coolant_cell_2.gif");
+	--img-coolant-cell-3: url("../img/parts/coolants/coolant_cell_3.gif");
+	--img-coolant-cell-4: url("../img/parts/coolants/coolant_cell_4.gif");
+	--img-coolant-cell-5: url("../img/parts/coolants/coolant_cell_5.gif");
+	--img-coolant-cell-6: url("../img/parts/coolants/coolant_cell_6.gif");
+	/* Image Paths - Platings */
+	--img-plating-1: url("../img/parts/platings/plating_1.gif");
+	--img-plating-2: url("../img/parts/platings/plating_2.gif");
+	--img-plating-3: url("../img/parts/platings/plating_3.gif");
+	--img-plating-4: url("../img/parts/platings/plating_4.gif");
+	--img-plating-5: url("../img/parts/platings/plating_5.gif");
+	--img-plating-6: url("../img/parts/platings/plating_6.gif");
+	/* Image Paths - Accelerators */
+	--img-accelerator-1: url("../img/parts/accelerators/accelerator_1.gif");
+	--img-accelerator-2: url("../img/parts/accelerators/accelerator_2.gif");
+	--img-accelerator-3: url("../img/parts/accelerators/accelerator_3.gif");
+	--img-accelerator-4: url("../img/parts/accelerators/accelerator_4.gif");
+	--img-accelerator-5: url("../img/parts/accelerators/accelerator_5.gif");
+	--img-accelerator-6: url("../img/parts/accelerators/accelerator_6.gif");
+	/* Image Paths - UI Icons */
+	--icon-vent: url("../img/ui/icons/icon_vent.gif");
+	--icon-inlet: url("../img/ui/icons/icon_inlet.gif");
+	--icon-outlet: url("../img/ui/icons/icon_outlet.gif");
+	--icon-heat: url("../img/ui/icons/icon_heat.gif");
+	--icon-power: url("../img/ui/icons/icon_power.gif");
+	--icon-cash: url("../img/ui/icons/icon_cash.gif");
+	/* Image Paths - UI Status */
+	--status-time: url("../img/ui/status/status_time.gif");
+	--status-plus: url("../img/ui/status/status_plus.gif");
+	--status-bolt: url("../img/ui/status/status_bolt.gif");
+	--status-infinity: url("../img/ui/status/status_infinity.gif");
+	/* Image Paths - Upgrades */
+	--img-upgrade-lab: url("../img/misc/lab.gif");
+	--img-upgrade-flux: url("../img/upgrades/upgrade_flux.gif");
+	--img-upgrade-computer: url("../img/upgrades/upgrade_computer.gif");
+	--img-upgrade-cols: url("../img/upgrades/upgrade_cols.gif");
+	--img-upgrade-rows: url("../img/upgrades/upgrade_rows.gif");
+	/* Image Paths - UI Borders */
+	--img-border-button-small-off: url("../img/ui/borders/button/small_button_off.png");
+	--img-border-button-small-on: url("../img/ui/borders/button/small_button_on.png");
+	--img-border-button-small-down: url("../img/ui/borders/button/small_button_down.png");
+	--img-border-inner: url("../img/ui/borders/inner/inner_border.png");
+	--img-border-inner-alt-flip: url("../img/ui/borders/inner/inner_border_alt_flip.png");
+	--img-border-inner-alt-flip-active: url("../img/ui/borders/inner/inner_border_alt_flip_active.png");
+	--img-border-inner-alt-flip-down: url("../img/ui/borders/inner/inner_border_alt_flip_down.png");
+	--img-border-connector: url("../img/ui/connector_border.png");
+	--img-border-panel-first-first: url("../img/ui/borders/panel/panel_border_first_first.png");
+	--img-border-panel-first-last: url("../img/ui/borders/panel/panel_border_first_last.png");
+	--img-border-panel-last-middle: url("../img/ui/borders/panel/panel_border_last_middle.png");
+	--img-border-panel-last-first: url("../img/ui/borders/panel/panel_border_last_first.png");
+	--img-border-panel-last-last: url("../img/ui/borders/panel/panel_border_last_last.png");
+	/* Image Paths - Misc */
+	--img-explosion-map: url('../img/ui/effects/explosion_map.gif');
+	--img-reactor-tile-bg: url('../img/ui/tile.png');
+}
+
 html {
 	box-sizing: border-box;
 	height: 100%;
@@ -22,15 +175,25 @@ html {
 	z-index: -2;
 }
 
-body {
+body, #wrapper {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	min-height: 0;
 	font-size: 16px;
 	font-family: sans-serif;
 	color: #fff;
-	height: 100%;
-	display: table;
+	display: block;
 	margin: auto;
 	-webkit-text-size-adjust: none;
-	overflow: scroll;
+	overflow-x: hidden;
+	overflow-y: auto;
+	padding-bottom: 112px;
+}
+
+#wrapper {
+	flex: 1 1 auto;
+	min-height: 0;
 }
 
 a {
@@ -111,17 +274,14 @@ menu {
 	margin: 0;
 }
 
-#wrapper {
-	display: table-cell;
-	height: 100%;
-	width: 100%;
-}
-
 #main {
-	display: -webkit-flex;
-	display: flex;
-	position: relative;
-	margin: 4px auto;
+	flex: 1 1 auto;
+	min-height: 0;
+	margin-left: 88px;
+	padding-bottom: 120px;
+	overflow-y: auto;
+	background: #374151;
+	transition: margin-left 0.2s;
 }
 
 #secondary {
@@ -258,7 +418,6 @@ menu {
 #tooltip_nav,
 #reactor_upgrades {
 	border: 10px solid #eee;
-	border-image: url("../img/border_bg.png") 10 10 stretch;
 	margin: 2px 0 0 2px;
 }
 
@@ -414,9 +573,59 @@ menu {
  // Reactor
 ////////////////////////// */
 
+#reactor_section {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  border: 10px solid var(--panel-border-color);
+  margin: 2px 0 0 2px;
+  background-color: var(--panel-bg);
+  min-height: 0;
+}
+
 #reactor_header {
-	display: table;
-	width: 100%;
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px;
+  flex-shrink: 0;
+}
+
+#reactor_wrapper {
+  background: #5C6166;
+  margin: 5px;
+  position: relative;
+  flex-grow: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: auto;
+}
+
+#reactor {
+  background-image: var(--img-reactor-tile-bg);
+  background-repeat: space;
+  display: grid;
+  /* grid-template-columns is set by JS using game.cols or game.max_cols */
+  /* grid-auto-rows: 32px; Ensures rows are also 32px if not enough content */
+  gap: 0px;
+  padding: 1px;
+  border: 1px solid #333;
+  will-change: transform;
+}
+
+#reactor .tile {
+  display: none;
+  width: 32px;
+  height: 32px;
+  background-color: rgba(0,0,0,0.2);
+  border: 1px solid rgba(0,0,0,0.1);
+  box-sizing: border-box;
+}
+
+#reactor .tile.enabled {
+  display: block;
 }
 
 #reactor_stats {
@@ -446,35 +655,31 @@ menu {
 }
 
 #stats_vent:before {
-	background-image: url("../img/icon_vent.gif");
+	background-image: url("../img/ui/icons/icon_vent.gif");
 }
 
 #stats_inlet:before {
-	background-image: url("../img/icon_inlet.gif");
+	background-image: url("../img/ui/icons/icon_inlet.gif");
 }
 
 #stats_outlet:before {
-	background-image: url("../img/icon_outlet.gif");
+	background-image: url("../img/ui/icons/icon_outlet.gif");
 }
 
 #stats_heat:before {
-	background-image: url("../img/icon_heat.gif");
+	background-image: url("../img/ui/icons/icon_heat.gif");
 }
 
 #stats_power:before {
-	background-image: url("../img/icon_power.gif");
+	background-image: url("../img/ui/icons/icon_power.gif");
 }
 
 #stats_cash:before {
-	background-image: url("../img/icon_cash.gif");
+	background-image: url("../img/ui/icons/icon_cash.gif");
 }
 
 #reactor .row {
 	white-space: nowrap;
-}
-
-#reactor .tile {
-	display: none;
 }
 
 #reactor .tile.tile_active,
@@ -554,12 +759,12 @@ menu {
 }
 
 @keyframes explosion {
-  0%   { background: url('../img/explosion_map.gif') 32px 0 no-repeat; } 
-  100% { background: url('../img/explosion_map.gif') -192px 0 no-repeat; }
+  0%   { background: url('../img/ui/effects/explosion_map.gif') 32px 0 no-repeat; } 
+  100% { background: url('../img/ui/effects/explosion_map.gif') -192px 0 no-repeat; }
 }
 
 #reactor .tile.exploding {
-  background: url('../img/explosion_map.gif') -192px 0 no-repeat;
+  background: url('../img/ui/effects/explosion_map.gif') -192px 0 no-repeat;
   animation: explosion .6s steps(7);
 }
 
@@ -570,10 +775,10 @@ menu {
 #reactor_upgrades .explanitory button,
 #tooltip button,
 #nav button {
-	padding: 0 1em .1em;
+	padding: 0 .75em .1em;
 	margin: 0;
 	border: 8px solid #76809b;
-	border-image: url("../img/small_button_off.png") 8 8 stretch;
+	border-image: url("../img/ui/borders/button/small_button_off.png") 8 8 stretch;
 	background-color: #76809b;
 	color: #fff;
 	outline: none;
@@ -591,7 +796,7 @@ menu {
 #tooltip button:focus,
 #nav button:hover,
 #nav button:focus {
-	border-image: url("../img/small_button_on.png") 8 8 stretch;
+	border-image: url("../img/ui/borders/button/small_button_on.png") 8 8 stretch;
 	background-color: #91a1c8;
 }
 
@@ -611,7 +816,7 @@ menu {
 #reactor_upgrades .explanitory button:active,
 #tooltip button:active,
 #nav button:active {
-	border-image: url("../img/small_button_down.png") 8 8 stretch;
+	border-image: url("../img/ui/borders/button/small_button_down.png") 8 8 stretch;
 	background-color: #91a1c8;
 }
 
@@ -690,13 +895,26 @@ menu {
  // Cells
 ////////////////////////// */
 
+#cells {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px 2px;
+  justify-items: center;
+  align-items: center;
+  margin-bottom: 12px;
+}
+#cells .part {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+}
+
 #parts_section .cells {
 }
 
 #parts_section .cells .part,
 #parts_section .cells .part:nth-child(5n) {
-	margin-right: 40px;
-	margin-left: 10px;
+	margin-right: 5px;
 }
 
 #parts_section .cells .part:nth-child(3n) {
@@ -722,104 +940,104 @@ menu {
 #reactor .tile.part_uranium1,
 #upgrades .uranium .image,
 #forceful_fusion .image {
-	background-image: url("../img/cell_1_1.gif");
+	background-image: url("../img/parts/cells/cell_1_1.gif");
 }
 
 #parts .part.part_uranium2 .image,
 #reactor .tile.part_uranium2 {
-	background-image: url("../img/cell_1_2.gif");
+	background-image: url("../img/parts/cells/cell_1_2.gif");
 }
 
 #parts .part.part_uranium3 .image,
 #reactor .tile.part_uranium3 {
-	background-image: url("../img/cell_1_4.gif");
+	background-image: url("../img/parts/cells/cell_1_4.gif");
 }
 
 /* plutonium */
 #parts .part.part_plutonium1 .image,
 #reactor .tile.part_plutonium1,
 #upgrades .plutonium .image {
-	background-image: url("../img/cell_2_1.gif");
+	background-image: url("../img/parts/cells/cell_2_1.gif");
 }
 
 #parts .part.part_plutonium2 .image,
 #reactor .tile.part_plutonium2 {
-	background-image: url("../img/cell_2_2.gif");
+	background-image: url("../img/parts/cells/cell_2_2.gif");
 }
 
 #parts .part.part_plutonium3 .image,
 #reactor .tile.part_plutonium3 {
-	background-image: url("../img/cell_2_4.gif");
+	background-image: url("../img/parts/cells/cell_2_4.gif");
 }
 
 /* thorium */
 #parts .part.part_thorium1 .image,
 #reactor .tile.part_thorium1,
 #upgrades .thorium .image {
-	background-image: url("../img/cell_3_1.gif");
+	background-image: url("../img/parts/cells/cell_3_1.gif");
 }
 
 #parts .part.part_thorium2 .image,
 #reactor .tile.part_thorium2 {
-	background-image: url("../img/cell_3_2.gif");
+	background-image: url("../img/parts/cells/cell_3_2.gif");
 }
 
 #parts .part.part_thorium3 .image,
 #reactor .tile.part_thorium3 {
-	background-image: url("../img/cell_3_4.gif");
+	background-image: url("../img/parts/cells/cell_3_4.gif");
 }
 
 /* seaborgium */
 #parts .part.part_seaborgium1 .image,
 #reactor .tile.part_seaborgium1,
 #upgrades .seaborgium .image {
-	background-image: url("../img/cell_4_1.gif");
+	background-image: url("../img/parts/cells/cell_4_1.gif");
 }
 
 #parts .part.part_seaborgium2 .image,
 #reactor .tile.part_seaborgium2 {
-	background-image: url("../img/cell_4_2.gif");
+	background-image: url("../img/parts/cells/cell_4_2.gif");
 }
 
 #parts .part.part_seaborgium3 .image,
 #reactor .tile.part_seaborgium3 {
-	background-image: url("../img/cell_4_4.gif");
+	background-image: url("../img/parts/cells/cell_4_4.gif");
 }
 
 /* dolorium */
 #parts .part.part_dolorium1 .image,
 #reactor .tile.part_dolorium1,
 #upgrades .dolorium .image {
-	background-image: url("../img/cell_5_1.gif");
+	background-image: url("../img/parts/cells/cell_5_1.gif");
 }
 
 #parts .part.part_dolorium2 .image,
 #experimental_upgrades #infused_cells .image,
 #reactor .tile.part_dolorium2 {
-	background-image: url("../img/cell_5_2.gif");
+	background-image: url("../img/parts/cells/cell_5_2.gif");
 }
 
 #parts .part.part_dolorium3 .image,
 #reactor .tile.part_dolorium3 {
-	background-image: url("../img/cell_5_4.gif");
+	background-image: url("../img/parts/cells/cell_5_4.gif");
 }
 
 /* nefastium */
 #parts .part.part_nefastium1 .image,
 #reactor .tile.part_nefastium1,
 #upgrades .nefastium .image {
-	background-image: url("../img/cell_6_1.gif");
+	background-image: url("../img/parts/cells/cell_6_1.gif");
 }
 
 #parts .part.part_nefastium2 .image,
 #reactor .tile.part_nefastium2 {
-	background-image: url("../img/cell_6_2.gif");
+	background-image: url("../img/parts/cells/cell_6_2.gif");
 }
 
 #parts .part.part_nefastium3 .image,
 #experimental_upgrades #unleashed_cells .image,
 #reactor .tile.part_nefastium3 {
-	background-image: url("../img/cell_6_4.gif");
+	background-image: url("../img/parts/cells/cell_6_4.gif");
 }
 
 /* protium */
@@ -827,18 +1045,18 @@ menu {
 #reactor .tile.part_protium1,
 #experimental_upgrades #protium_cells .image,
 #upgrades .protium .image {
-	background-image: url("../img/xcell_1_1.gif");
+	background-image: url("../img/parts/cells/xcell_1_1.gif");
 }
 
 #parts_section .part.part_protium2 .image,
 #experimental_upgrades #unstable_protium .image,
 #reactor .tile.part_protium2 {
-	background-image: url("../img/xcell_1_2.gif");
+	background-image: url("../img/parts/cells/xcell_1_2.gif");
 }
 
 #parts_section .part.part_protium3 .image,
 #reactor .tile.part_protium3 {
-	background-image: url("../img/xcell_1_4.gif");
+	background-image: url("../img/parts/cells/xcell_1_4.gif");
 }
 
   /* //////////////////////////
@@ -850,34 +1068,34 @@ menu {
 #perpetual_reflectors .image,
 #parts .part.part_reflector1 .image,
 #reactor .tile.part_reflector1 {
-	background-image: url("../img/reflector_1.gif");
+	background-image: url("../img/parts/reflectors/reflector_1.gif");
 }
 
 #parts .part.part_reflector2 .image,
 #reactor .tile.part_reflector2 {
-	background-image: url("../img/reflector_2.gif");
+	background-image: url("../img/parts/reflectors/reflector_2.gif");
 }
 
 #parts .part.part_reflector3 .image,
 #reactor .tile.part_reflector3 {
-	background-image: url("../img/reflector_3.gif");
+	background-image: url("../img/parts/reflectors/reflector_3.gif");
 }
 
 #parts .part.part_reflector4 .image,
 #reactor .tile.part_reflector4 {
-	background-image: url("../img/reflector_4.gif");
+	background-image: url("../img/parts/reflectors/reflector_4.gif");
 }
 
 #parts .part.part_reflector5 .image,
 #experimental_upgrades #full_spectrum_reflectors .image,
 #reactor .tile.part_reflector5 {
-	background-image: url("../img/reflector_5.gif");
+	background-image: url("../img/parts/reflectors/reflector_5.gif");
 }
 
 #parts .part.part_reflector6 .image,
 #experimental_upgrades #heat_reflection .image,
 #reactor .tile.part_reflector6 {
-	background-image: url("../img/reflector_6.gif");
+	background-image: url("../img/parts/reflectors/reflector_6.gif");
 }
 
   /* //////////////////////////
@@ -891,34 +1109,34 @@ menu {
 #active_exchangers .image,
 #improved_power_lines .image,
 #improved_wiring .image {
-	background-image: url("../img/capacitor_1.gif");
+	background-image: url("../img/parts/capacitors/capacitor_1.gif");
 }
 
 #parts .part.part_capacitor2 .image,
 #reactor .tile.part_capacitor2{
-	background-image: url("../img/capacitor_2.gif");
+	background-image: url("../img/parts/capacitors/capacitor_2.gif");
 }
 
 #parts .part.part_capacitor3 .image,
 #reactor .tile.part_capacitor3{
-	background-image: url("../img/capacitor_3.gif");
+	background-image: url("../img/parts/capacitors/capacitor_3.gif");
 }
 
 #parts .part.part_capacitor4 .image,
 #reactor .tile.part_capacitor4{
-	background-image: url("../img/capacitor_4.gif");
+	background-image: url("../img/parts/capacitors/capacitor_4.gif");
 }
 
 #parts .part.part_capacitor5 .image,
 #experimental_upgrades #quantum_buffering .image,
 #reactor .tile.part_capacitor5 {
-	background-image: url("../img/capacitor_5.gif");
+	background-image: url("../img/parts/capacitors/capacitor_5.gif");
 }
 
 #parts .part.part_capacitor6 .image,
 #experimental_upgrades #experimental_capacitance .image,
 #reactor .tile.part_capacitor6{
-	background-image: url("../img/capacitor_6.gif");
+	background-image: url("../img/parts/capacitors/capacitor_6.gif");
 }
 
   /* //////////////////////////
@@ -929,166 +1147,166 @@ menu {
 #parts .part.part_vent1 .image,
 #reactor .tile.part_vent1,
 #improved_heat_vents .image {
-	background-image: url("../img/vent_1.gif");
+	background-image: url("../img/parts/vents/vent_1.gif");
 }
 
 #parts .part.part_vent2 .image,
 #reactor .tile.part_vent2 {
-	background-image: url("../img/vent_2.gif");
+	background-image: url("../img/parts/vents/vent_2.gif");
 }
 
 #parts .part.part_vent3 .image,
 #reactor .tile.part_vent3 {
-	background-image: url("../img/vent_3.gif");
+	background-image: url("../img/parts/vents/vent_3.gif");
 }
 
 #parts .part.part_vent4 .image,
 #reactor .tile.part_vent4 {
-	background-image: url("../img/vent_4.gif");
+	background-image: url("../img/parts/vents/vent_4.gif");
 }
 
 #parts .part.part_vent5 .image,
 #experimental_upgrades #fluid_hyperdynamics .image,
 #reactor .tile.part_vent5 {
-	background-image: url("../img/vent_5.gif");
+	background-image: url("../img/parts/vents/vent_5.gif");
 }
 
 #parts .part.part_vent6 .image,
 #experimental_upgrades #vortex_cooling .image,
 #reactor .tile.part_vent6 {
-	background-image: url("../img/vent_6.gif");
+	background-image: url("../img/parts/vents/vent_6.gif");
 }
 
 /* Heat Exchangers */
 #parts .part.part_heat_exchanger1 .image,
 #reactor .tile.part_heat_exchanger1,
 #improved_heat_exchangers .image {
-	background-image: url("../img/exchanger_1.gif");
+	background-image: url("../img/parts/exchangers/exchanger_1.gif");
 }
 
 #parts .part.part_heat_exchanger2 .image,
 #reactor .tile.part_heat_exchanger2 {
-	background-image: url("../img/exchanger_2.gif");
+	background-image: url("../img/parts/exchangers/exchanger_2.gif");
 }
 
 #parts .part.part_heat_exchanger3 .image,
 #reactor .tile.part_heat_exchanger3 {
-	background-image: url("../img/exchanger_3.gif");
+	background-image: url("../img/parts/exchangers/exchanger_3.gif");
 }
 
 #parts .part.part_heat_exchanger4 .image,
 #reactor .tile.part_heat_exchanger4 {
-	background-image: url("../img/exchanger_4.gif");
+	background-image: url("../img/parts/exchangers/exchanger_4.gif");
 }
 
 #parts .part.part_heat_exchanger5 .image,
 #experimental_upgrades #fractal_piping .image,
 #reactor .tile.part_heat_exchanger5 {
-	background-image: url("../img/exchanger_5.gif");
+	background-image: url("../img/parts/exchangers/exchanger_5.gif");
 }
 
 #parts .part.part_heat_exchanger6 .image,
 #experimental_upgrades #underground_heat_extraction .image,
 #reactor .tile.part_heat_exchanger6 {
-	background-image: url("../img/exchanger_6.gif");
+	background-image: url("../img/parts/exchangers/exchanger_6.gif");
 }
 
 /* Heat Inlets */
 #parts .part.part_heat_inlet1 .image,
 #reactor .tile.part_heat_inlet1 {
-	background-image: url("../img/inlet_1.gif");
+	background-image: url("../img/parts/inlets/inlet_1.gif");
 }
 
 #parts .part.part_heat_inlet2 .image,
 #reactor .tile.part_heat_inlet2 {
-	background-image: url("../img/inlet_2.gif");
+	background-image: url("../img/parts/inlets/inlet_2.gif");
 }
 
 #parts .part.part_heat_inlet3 .image,
 #reactor .tile.part_heat_inlet3 {
-	background-image: url("../img/inlet_3.gif");
+	background-image: url("../img/parts/inlets/inlet_3.gif");
 }
 
 #parts .part.part_heat_inlet4 .image,
 #reactor .tile.part_heat_inlet4 {
-	background-image: url("../img/inlet_4.gif");
+	background-image: url("../img/parts/inlets/inlet_4.gif");
 }
 
 #parts .part.part_heat_inlet5 .image,
 #reactor .tile.part_heat_inlet5 {
-	background-image: url("../img/inlet_5.gif");
+	background-image: url("../img/parts/inlets/inlet_5.gif");
 }
 
 #parts .part.part_heat_inlet6 .image,
 #experimental_upgrades #vortex_extraction .image,
 #reactor .tile.part_heat_inlet6 {
-	background-image: url("../img/inlet_6.gif");
+	background-image: url("../img/parts/inlets/inlet_6.gif");
 }
 
 /* Heat Outlets */
 #parts .part.part_heat_outlet1 .image,
 #reactor .tile.part_heat_outlet1 {
-	background-image: url("../img/outlet_1.gif");
+	background-image: url("../img/parts/outlets/outlet_1.gif");
 }
 
 #parts .part.part_heat_outlet2 .image,
 #reactor .tile.part_heat_outlet2 {
-	background-image: url("../img/outlet_2.gif");
+	background-image: url("../img/parts/outlets/outlet_2.gif");
 }
 
 #parts .part.part_heat_outlet3 .image,
 #reactor .tile.part_heat_outlet3 {
-	background-image: url("../img/outlet_3.gif");
+	background-image: url("../img/parts/outlets/outlet_3.gif");
 }
 
 #parts .part.part_heat_outlet4 .image,
 #reactor .tile.part_heat_outlet4 {
-	background-image: url("../img/outlet_4.gif");
+	background-image: url("../img/parts/outlets/outlet_4.gif");
 }
 
 #parts .part.part_heat_outlet5 .image,
 #reactor .tile.part_heat_outlet5 {
-	background-image: url("../img/outlet_5.gif");
+	background-image: url("../img/parts/outlets/outlet_5.gif");
 }
 
 #parts .part.part_heat_outlet6 .image,
 #experimental_upgrades #explosive_ejection .image,
 #reactor .tile.part_heat_outlet6 {
-	background-image: url("../img/outlet_6.gif");
+	background-image: url("../img/parts/outlets/outlet_6.gif");
 }
 
 /* Coolant Cells */
 #improved_coolant_cells .image,
 #parts .part.part_coolant_cell1 .image,
 #reactor .tile.part_coolant_cell1 {
-	background-image: url("../img/coolant_1.gif");
+	background-image: url("../img/parts/coolants/coolant_1.gif");
 }
 
 #parts .part.part_coolant_cell2 .image,
 #reactor .tile.part_coolant_cell2 {
-	background-image: url("../img/coolant_2.gif");
+	background-image: url("../img/parts/coolants/coolant_2.gif");
 }
 
 #parts .part.part_coolant_cell3 .image,
 #reactor .tile.part_coolant_cell3 {
-	background-image: url("../img/coolant_3.gif");
+	background-image: url("../img/parts/coolants/coolant_3.gif");
 }
 
 #parts .part.part_coolant_cell4 .image,
 #reactor .tile.part_coolant_cell4 {
-	background-image: url("../img/coolant_4.gif");
+	background-image: url("../img/parts/coolants/coolant_4.gif");
 }
 
 #parts .part.part_coolant_cell5 .image,
 #experimental_upgrades #ultracryonics .image,
 #reactor .tile.part_coolant_cell5 {
-	background-image: url("../img/coolant_5.gif");
+	background-image: url("../img/parts/coolants/coolant_5.gif");
 }
 
 #parts .part.part_coolant_cell6 .image,
 #experimental_upgrades #thermionic_conversion .image,
 #reactor .tile.part_coolant_cell6 {
-	background-image: url("../img/coolant_6.gif");
+	background-image: url("../img/parts/coolants/coolant_6.gif");
 }
 
 /* Platings */
@@ -1098,34 +1316,34 @@ menu {
 #reinforced_heat_exchangers .image,
 #upgrades #improved_piping .image,
 #upgrades #improved_alloys .image {
-	background-image: url("../img/plating_1.gif");
+	background-image: url("../img/parts/platings/plating_1.gif");
 }
 
 #parts .part.part_reactor_plating2 .image,
 #reactor .tile.part_reactor_plating2 {
-	background-image: url("../img/plating_2.gif");
+	background-image: url("../img/parts/platings/plating_2.gif");
 }
 
 #parts .part.part_reactor_plating3 .image,
 #reactor .tile.part_reactor_plating3 {
-	background-image: url("../img/plating_3.gif");
+	background-image: url("../img/parts/platings/plating_3.gif");
 }
 
 #parts .part.part_reactor_plating4 .image,
 #reactor .tile.part_reactor_plating4 {
-	background-image: url("../img/plating_4.gif");
+	background-image: url("../img/parts/platings/plating_4.gif");
 }
 
 #parts .part.part_reactor_plating5 .image,
 #experimental_upgrades #phlembotinum_core .image,
 #reactor .tile.part_reactor_plating5 {
-	background-image: url("../img/plating_5.gif");
+	background-image: url("../img/parts/platings/plating_5.gif");
 }
 
 #parts .part.part_reactor_plating6 .image,
 #experimental_upgrades #micro_capacitance .image,
 #reactor .tile.part_reactor_plating6 {
-	background-image: url("../img/plating_6.gif");
+	background-image: url("../img/parts/platings/plating_6.gif");
 }
 
 /* Particle Accelerators */
@@ -1133,44 +1351,44 @@ menu {
 #upgrades #improved_particle_accelerators .image,
 #experimental_upgrades #improved_particle_accelerators1 .image,
 #reactor .tile.part_particle_accelerator1 {
-	background-image: url("../img/accelerator_1.gif");
+	background-image: url("../img/parts/accelerators/accelerator_1.gif");
 }
 
 #parts .part.part_particle_accelerator2 .image,
 #experimental_upgrades #improved_particle_accelerators2 .image,
 #reactor .tile.part_particle_accelerator2 {
-	background-image: url("../img/accelerator_2.gif");
+	background-image: url("../img/parts/accelerators/accelerator_2.gif");
 }
 
 #parts .part.part_particle_accelerator3 .image,
 #experimental_upgrades #improved_particle_accelerators3 .image,
 #reactor .tile.part_particle_accelerator3 {
-	background-image: url("../img/accelerator_3.gif");
+	background-image: url("../img/parts/accelerators/accelerator_3.gif");
 }
 
 #parts .part.part_particle_accelerator4 .image,
 #experimental_upgrades #improved_particle_accelerators4 .image,
 #reactor .tile.part_particle_accelerator4 {
-	background-image: url("../img/accelerator_4.gif");
+	background-image: url("../img/parts/accelerators/accelerator_4.gif");
 }
 
 #parts .part.part_particle_accelerator5 .image,
 #experimental_upgrades #improved_particle_accelerators5 .image,
 #reactor .tile.part_particle_accelerator5 {
-	background-image: url("../img/accelerator_5.gif");
+	background-image: url("../img/parts/accelerators/accelerator_5.gif");
 }
 
 #parts .part.part_particle_accelerator6 .image,
 #experimental_upgrades #improved_particle_accelerators6 .image,
 #experimental_upgrades #singularity_harnessing .image,
 #reactor .tile.part_particle_accelerator6 {
-	background-image: url("../img/accelerator_6.gif");
+	background-image: url("../img/parts/accelerators/accelerator_6.gif");
 }
 
 /* Other */
 
 #experimental_upgrades #laboratory .image {
-	background-image: url("../img/lab.gif");
+	background-image: url("../img/misc/lab.gif");
 }
 
   /* //////////////////////////
@@ -1200,7 +1418,7 @@ menu {
 /* Time */
 #improved_reflector_density .image:before,
 #all_upgrades .cell_tick .image:before {
-	background-image: url("../img/status_time.gif");
+	background-image: url("../img/ui/status/status_time.gif");
 	z-index: 2;
 }
 
@@ -1211,7 +1429,7 @@ menu {
 #forceful_fusion .image:before,
 #improved_wiring .image:before,
 #improved_alloys .image:before {
-	background-image: url("../img/status_plus.gif");
+	background-image: url("../img/ui/status/status_plus.gif");
 	z-index: 2;
 }
 
@@ -1220,7 +1438,7 @@ menu {
 #improved_power_lines .image:before,
 #improved_piping .image:before,
 #all_upgrades .cell_power .image:before {
-	background-image: url("../img/status_bolt.gif");
+	background-image: url("../img/ui/status/status_bolt.gif");
 	z-index: 2;
 }
 
@@ -1228,7 +1446,7 @@ menu {
 #perpetual_capacitors .image:before,
 #perpetual_reflectors .image:before,
 #all_upgrades .cell_perpetual .image:before {
-	background-image: url("../img/status_infinity.gif");
+	background-image: url("../img/ui/status/status_infinity.gif");
 	z-index: 2;
 }
 
@@ -1263,20 +1481,20 @@ menu {
 }*/
 
 #chronometer.upgrade .image {
-	background-image: url("../img/upgrade_flux.gif");
+	background-image: url("../img/upgrades/upgrade_flux.gif");
 }
 
 #heat_outlet_control_operator.upgrade .image,
 #heat_control_operator.upgrade .image {
-	background-image: url("../img/upgrade_computer.gif");
+	background-image: url("../img/upgrades/upgrade_computer.gif");
 }
 
 #expand_reactor_cols.upgrade .image {
-	background-image: url("../img/upgrade_cols.gif");
+	background-image: url("../img/upgrades/upgrade_cols.gif");
 }
 
 #expand_reactor_rows.upgrade .image {
-	background-image: url("../img/upgrade_rows.gif");
+	background-image: url("../img/upgrades/upgrade_rows.gif");
 }
 
 #all_upgrades .unaffordable .image {
@@ -1288,70 +1506,73 @@ menu {
 ////////////////////////// */
 
 #tooltip {
-	display: none;
-	height: 100%;
-	-webkit-flex-grow: 1;
-	flex-grow: 1;
-
-	width: auto;
+	position: absolute;
+	left: 50%;
+	top: 16px;
+	transform: translateX(-50%);
+	z-index: 1000;
+	display: block;
+	width: 24em;
+	min-width: 24em;
+	max-width: 90vw;
+	min-height: 4em;
+	max-height: 16em;
+	opacity: 0;
+	pointer-events: none;
+	background: #485667;
+	border: 2px solid #222C38;
+	border-radius: 8px;
+	transition: opacity 0.15s;
+	overflow-y: auto;
+	overflow-x: hidden;
+	box-sizing: border-box;
+	padding: 0.5em 1em;
+}
+@media (max-width: 500px) {
+	#tooltip {
+		left: 50%;
+		transform: translateX(-50%);
+		min-width: 0;
+		width: 98vw;
+		max-width: 98vw;
+	}
+}
+#main.tooltip_showing #tooltip {
+	opacity: 1;
+	pointer-events: auto;
+}
+#tooltip_data, #tooltip_text {
+	display: block;
+	width: 100%;
+	min-width: 0;
 	max-width: 100%;
+	box-sizing: border-box;
+	word-break: break-word;
+	overflow-wrap: break-word;
+	white-space: normal;
+	padding: 0.2em 0;
 }
-
-.touch #tooltip {
-	position: relative;
+#tooltip_info {
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+	word-break: break-word;
+	overflow-wrap: break-word;
+	white-space: normal;
 }
-
-#tooltip_text button {
-	display: none;
+#tooltip_name, #tooltip_description {
+	display: block;
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+	word-break: break-word;
+	overflow-wrap: break-word;
+	white-space: normal;
+	margin: 0.2em 0;
 }
-
-#tooltip > :first-child {
-	margin-right: .6em;
-}
-
-#tooltip_text {
-	padding: .2em .3em 0;
-	text-align: center;
-	-webkit-flex: 1;
-	flex: 1;
-}
-
-.touch #tooltip_info {
-	padding-right: 20px;
-	text-align: left;
-}
-
-#tooltip_data {
-	width: 13em;
-	text-align: left;
-	padding: 0 .3em;
-}
-
-#tooltip_name {
-	margin-bottom: .5em;
-}
-
-.touch #tooltip_name {
-	margin-bottom: 0;
-	display: inline;
-}
-
-.touch #tooltip_name:after {
-	content: ":";
-}
-
-#tooltip_description {
-	/*margin-bottom: .5em;*/
-}
-
-.touch #tooltip_description {
-	display: inline;
-}
-
 #tooltip_cost:before {
 	content: "Cost: ";
 }
-
 #main.tooltip_showing #tooltip {
 	/* for ie */
 	display: block;
@@ -1359,7 +1580,6 @@ menu {
 	display: -webkit-flex;
 	display: flex;
 }
-
 #main.tooltip_showing #nav {
 	display: none;
 }
@@ -1399,7 +1619,7 @@ menu {
 #main:before {
 	content: " ";
 	border: 10px solid #30424b;
-	border-image: url("../img/connector_border.png") 10 10 stretch;
+	border-image: url("../img/ui/connector_border.png") 10 10 stretch;
 	background-color: #30424b;
 	position: absolute;
 	left: 4px;
@@ -1411,7 +1631,7 @@ menu {
 
 #main .panel_holder:first-child .panel:first-child {
 	border: 12px solid #485667;
-	border-image: url("../img/panel_border_first_first.png") 12 12 stretch;
+	border-image: url("../img/ui/borders/panel/panel_border_first_first.png") 12 12 stretch;
 	background-color: #485667;
 	margin: 0 3px 0 0;
 	padding: 6px 0 2px 6px;
@@ -1419,31 +1639,30 @@ menu {
 
 #main .panel_holder:first-child .panel:last-child {
 	border: 12px solid #485667;
-	border-image: url("../img/panel_border_first_last.png") 12 12 stretch;
+	border-image: url("../img/ui/borders/panel/panel_border_first_last.png") 12 12 stretch;
 	background-color: #485667;
 	margin: 4px 3px 0 0;
 	padding: 2px 0 6px 6px;
 	-webkit-flex: 1;
-	/* This breaks ie11 all to hell so...
-	flex: 1; */
+	flex: 1;
 }
 
 #main .panel_holder:last-child .panel {
 	border: 12px solid #485667;
-	border-image: url("../img/panel_border_last_middle.png") 12 12 stretch;
+	border-image: url("../img/ui/borders/panel/panel_border_last_middle.png") 12 12 stretch;
 	background-color: #485667;
 	margin: 0 0 4px 0;
 	padding: 2px 6px 2px 2px;
 }
 
 #main .panel_holder:last-child .panel:first-child {
-	border-image: url("../img/panel_border_last_first.png") 12 12 stretch;
+	border-image: url("../img/ui/borders/panel/panel_border_last_first.png") 12 12 stretch;
 	margin: 0 0 4px 0;
 	padding: 6px 4px 2px 2px;
 }
 
 #main .panel_holder:last-child .panel:last-child {
-	border-image: url("../img/panel_border_last_last.png") 12 12 stretch;
+	border-image: url("../img/ui/borders/panel/panel_border_last_last.png") 12 12 stretch;
 	padding: 0 6px 6px 2px;
 	margin: 0;
 	-webkit-flex: 1;
@@ -1453,40 +1672,13 @@ menu {
 #reactor_stats .stat,
 #main .subpanel {
 	border: 4px solid #222C38;
-	border-image: url("../img/inner_border.png") 4 4 stretch;
+	border-image: url("../img/ui/borders/inner/inner_border.png") 4 4 stretch;
 }
 
-/*#parts_nav_top,
-#parts_nav_bottom {
-	position: absolute;
-	z-index: 1;
-	width: 100%;
-	left: 0;
-	color: #fff;
-}
-
-#parts_nav_top {
-	border: 8px solid #eee;
-	border-image: url("../img/inner_border_alt.png") 8 8 stretch;
-	background-color: #76809b;
-	width: 100%;
-	top: 0;
-}
-
-#parts_nav_top:hover,
-#parts_nav_top:focus {
-	border-image: url("../img/inner_border_alt_active.png") 8 8 stretch;
-	background-color: #96a0bb;
-}
-
-#parts_nav_top:active {
-	border-image: url("../img/inner_border_alt_down.png") 8 8 stretch;
-	background-color: #96a0bb;
-}*/
 
 #stats_section button {
 	border: 8px solid #76809b;
-	border-image: url("../img/inner_border_alt_flip.png") 8 8 stretch;
+	border-image: url("../img/ui/borders/inner/inner_border_alt_flip.png") 8 8 stretch;
 	background-color: #76809b;
 	bottom: 0;
 	color: #fff;
@@ -1494,11 +1686,428 @@ menu {
 
 #stats_section button:hover,
 #stats_section button:focus {
-	border-image: url("../img/inner_border_alt_flip_active.png") 8 8 stretch;
+	border-image: url("../img/ui/borders/inner/inner_border_alt_flip_active.png") 8 8 stretch;
 	background-color: #96a0bb;
 }
 
 #stats_section button:active {
-	border-image: url("../img/inner_border_alt_flip_down.png") 8 8 stretch;
+	border-image: url("../img/ui/borders/inner/inner_border_alt_flip_down.png") 8 8 stretch;
 	background-color: #96a0bb;
+}
+
+/* Bottom Navigation Bar */
+#bottom_nav {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  height: 56px !important;
+  background: #222C38 !important;
+  display: flex !important;
+  justify-content: space-around !important;
+  align-items: center !important;
+  z-index: 99999 !important;
+  border-top: 2px solid #485667 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+.bottom_nav_btn {
+  flex: 1 1 0;
+  margin: 0 8px;
+  padding: 8px 0;
+  background: none;
+  color: #fff;
+  font-size: 1em;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  font-family: monospace;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+.bottom_nav_btn:active, .bottom_nav_btn:focus {
+  background: #485667;
+}
+
+/* Sidebar Toggle Button */
+#sidebar_toggle {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1100;
+  width: 36px;
+  height: 36px;
+  /* background: #222C38 url('../img/icon_menu.svg') center center no-repeat; */
+  background: #222C38;
+  background-size: 60% 60%;
+  border: 2px solid #485667;
+  border-radius: 6px;
+  cursor: pointer;
+  display: none;
+}
+
+/* Sidebar compressed/expanded states */
+#secondary.compressed {
+  width: 48px !important;
+  min-width: 48px !important;
+  overflow: hidden;
+}
+#main.sidebar-compressed #secondary {
+  width: 48px !important;
+  min-width: 48px !important;
+  overflow: hidden;
+}
+#main.sidebar-compressed #parts_section, #main.sidebar-compressed #stats_section {
+  display: none;
+}
+
+/* Show sidebar toggle on small screens */
+@media (max-width: 900px) {
+  #sidebar_toggle {
+    display: block;
+  }
+  #secondary {
+    transition: width 0.2s;
+  }
+  #bottom_nav {
+    display: flex;
+  }
+  #main {
+    padding-bottom: 56px;
+  }
+}
+
+@media (min-width: 901px) {
+  #bottom_nav {
+    display: none;
+  }
+}
+
+body, #wrapper {
+  display: block !important;
+  overflow: visible !important;
+  height: auto !important;
+}
+
+main {
+  padding-bottom: 56px !important;
+}
+
+@media (max-width: 900px), (min-width: 901px) {
+  #bottom_nav {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+}
+
+/* Info Bar */
+#info_bar {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  justify-content: center;
+  background: #1b222c;
+  color: #fff;
+  padding: 8px 8vw;
+  gap: 16px;
+  font-family: monospace;
+  font-size: 1em;
+  border-top: 3px solid #485667;
+  border-bottom: 3px solid #485667;
+  box-shadow: 0 2px 8px #0008;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 56px;
+  z-index: 110000 !important;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.stat_block {
+  position: relative;
+  overflow: hidden;
+  background: rgba(34, 44, 56, 0.7); /* semi-transparent for progress bar visibility */
+  min-height: 32px;
+}
+
+.stat_progress_bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 0%;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 8px;
+  transition: width 0.2s cubic-bezier(.4,2,.6,1);
+  min-height: 100%;
+  opacity: 0.7;
+}
+
+.stat_block.heat .stat_progress_bar {
+  background: linear-gradient(90deg, #ff3c3c 0%, #ffb36b 100%);
+  opacity: 0.5;
+}
+.stat_block.power .stat_progress_bar {
+  background: linear-gradient(90deg, #00eaff 0%, #0051ff 100%);
+  box-shadow: 0 0 8px 2px #00eaff88, 0 0 16px 4px #0051ff44;
+  opacity: 0.5;
+}
+
+.stat_block span, .stat_block .stat_value {
+  position: relative;
+  z-index: 1;
+  background: none !important;
+}
+
+.stat_block span {
+  font-size: 0.95em;
+  color: #b8c7e0;
+  font-weight: normal;
+  margin: 0 2px 0 0;
+}
+
+.stat_block .stat_value {
+  font-size: 1em;
+  color: #fff;
+  font-weight: bold;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+#info_bar button {
+  margin-left: 12px;
+  font-size: 1em;
+  background: #485667;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: monospace;
+  font-weight: bold;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 4px #0004;
+}
+
+@media (max-width: 900px) {
+  #info_bar {
+    font-size: 0.95em;
+    padding: 6px 2vw;
+    gap: 8px;
+  }
+  .stat_block {
+    font-size: 0.9em;
+    min-width: 60px;
+    padding: 3px 4px;
+    gap: 2px;
+  }
+  #info_bar button {
+    font-size: 0.95em;
+    padding: 4px 8px;
+    margin-left: 6px;
+  }
+}
+@media (max-width: 600px) {
+  #info_bar {
+    font-size: 0.85em;
+    padding: 4px 1vw;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .stat_block {
+    font-size: 0.85em;
+    min-width: 40px;
+    padding: 2px 2px;
+    gap: 1px;
+  }
+  #info_bar button {
+    font-size: 0.85em;
+    padding: 2px 4px;
+    margin-left: 2px;
+  }
+}
+
+/* Parts Panel Full Height & Toggle */
+#parts_section {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 150px;
+  background: #222C38;
+  transition: width 0.2s;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 100vh;
+  overflow-y: auto;
+  z-index: 120000 !important; /* Raised above info bar and nav */
+}
+#parts_section.collapsed {
+  width: 32px;
+}
+#parts_panel_toggle {
+  display: block !important;
+  position: absolute;
+  top: 8px;
+  left: 100%;
+  right: auto;
+  width: 28px;
+  height: 40px;
+  background: #485667;
+  color: #fff;
+  border: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  font-size: 1.5em;
+  padding: 0;
+  line-height: 40px;
+  text-align: center;
+}
+#parts_panel_toggle:after {
+  content: '';
+}
+#parts_section.collapsed #parts_panel_toggle {
+  left: 100%;
+}
+#parts_section.collapsed #parts_panel_toggle:after {
+  content: '';
+}
+
+
+
+/* Adjust main content for info bar and parts panel */
+#main {
+  margin-left: 88px;
+  padding-bottom: 120px;
+  overflow-y: auto;
+  background: #374151;
+  transition: margin-left 0.2s;
+}
+#parts_section.collapsed ~ #main {
+  margin-left: 32px;
+}
+
+/* Bottom nav stays at bottom */
+#bottom_nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  z-index: 99999;
+}
+
+
+#primary, #reactor_upgrades, #objectives_section, #tooltip_nav {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Responsive scaling for nav/UI buttons */
+.bottom_nav_btn, #sidebar_toggle {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1em;
+}
+
+/* Upgrade icons using part images (restored old pattern) */
+#perpetual_capacitors .image,
+#active_venting .image,
+#active_exchangers .image,
+#improved_power_lines .image,
+#improved_wiring .image {
+    background-image: url("../img/parts/capacitors/capacitor_1.gif");
+}
+#improved_heat_vents .image {
+    background-image: url("../img/parts/vents/vent_1.gif");
+}
+#improved_heat_exchangers .image {
+    background-image: url("../img/parts/exchangers/exchanger_1.gif");
+}
+#reinforced_heat_exchangers .image {
+    background-image: url("../img/parts/platings/plating_1.gif");
+}
+#improved_coolant_cells .image {
+    background-image: url("../img/parts/coolants/coolant_cell_1.gif");
+}
+#improved_reflector_density .image,
+#improved_neutron_reflection .image,
+#perpetual_reflectors .image {
+    background-image: url("../img/parts/reflectors/reflector_1.gif");
+}
+#improved_alloys .image {
+    background-image: url("../img/parts/platings/plating_1.gif");
+}
+#improved_piping .image {
+    background-image: url("../img/parts/platings/plating_1.gif");
+}
+#expand_reactor_rows.upgrade .image {
+    background-image: url("../img/upgrades/upgrade_rows.gif");
+}
+#expand_reactor_cols.upgrade .image {
+    background-image: url("../img/upgrades/upgrade_cols.gif");
+}
+#chronometer.upgrade .image {
+    background-image: url("../img/upgrades/upgrade_flux.gif");
+}
+#heat_outlet_control_operator.upgrade .image,
+#heat_control_operator.upgrade .image {
+    background-image: url("../img/upgrades/upgrade_computer.gif");
+}
+
+/* Toggle button visual states */
+#nav button.enabled {
+  background-color: #59c435 !important; /* Green for enabled */
+  color: #fff !important;
+  border: 2px solid #3a8c1e !important;
+  filter: none;
+}
+#nav button.disabled {
+  background-color: #b23b3b !important; /* Red for disabled */
+  color: #fff !important;
+  border: 2px solid #7a2323 !important;
+  filter: grayscale(40%);
+}
+
+#all_parts {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#parts {
+  max-height: 70vh;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  display: block;
+  padding-bottom: 8px;
+}
+@media (max-width: 900px) {
+  #parts {
+    max-height: 40vh;
+  }
+}
+
+#nav .nav_button {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  padding: 8px 0;
+  background: #485667;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 1em;
+  font-weight: bold;
+  text-align: center;
+  transition: background 0.2s;
+}
+#nav .nav_button:hover, #nav .nav_button:focus {
+  background: #76809b;
 }

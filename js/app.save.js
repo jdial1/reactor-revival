@@ -1,389 +1,138 @@
-(function() {
-'use strict';
+export class LocalSaver {
+    constructor(game) {
+        this.game = game;
+        this.name = "LocalSaver";
+        this.save_key = "reactor_knockoff_save";
+    }
 
-// For iteration
-var i;
-var l;
-var ri;
-var pi;
-var pl;
-var ci;
-var row;
-var tile;
-var upgrade;
+    save(data_string) {
+        if (this.game.save_debug) console.log("LocalSave: Saving data...", data_string ? data_string.substring(0,100) + "..." : "null");
+        try {
+            localStorage.setItem(this.save_key, data_string);
+        } catch (e) {
+            console.error("Error saving to localStorage:", e);
+            // Potentially notify UI or user
+        }
+    }
 
-var SAVE_MANAGER = function() {
-	this.game;
+    load(callback) {
+        if (this.game.save_debug) console.log("LocalSave: Loading data...");
+        try {
+            const saved_data = localStorage.getItem(this.save_key);
+            if (saved_data) {
+                callback(saved_data);
+            } else {
+                console.log("No local save data found. Initializing new game state.");
+                callback(null); // Indicate no save data
+            }
+        } catch (e) {
+            console.error("Error loading from localStorage:", e);
+            callback(null); // Indicate error or no data
+        }
+    }
+}
 
-	this.active_saver;
+export class GoogleSaver { // Stub - full implementation needs Google API integration
+    constructor(game) {
+        this.game = game;
+        this.name = "GoogleSaver (Stub)";
+        // this.isAuthorized = false; // Example state
+        // this.fileId = null; // Store Google Drive file ID
+    }
 
-	this.init = function(game) {
-		this.game = game;
-	}
-};
+    // authorize(callback) { /* ... gapi.auth2 ... */ }
+    // saveFile(data_string) { /* ... gapi.client.drive.files.update ... or .create ... */ }
+    // loadFile(callback) { /* ... gapi.client.drive.files.get ... or .list ... */ }
 
-var save_manager = new SAVE_MANAGER();
-window.save_manager = save_manager;
+    save(data_string) {
+        console.warn("GoogleSaver: Save method not implemented.", data_string ? data_string.substring(0,100) + "..." : "null");
+        // if (this.isAuthorized) { this.saveFile(data_string); }
+        // else { console.warn("GoogleSaver: Not authorized to save."); }
+    }
 
-var LocalSaver = function() {
-	this.save = function(data, callback) {
-		save_manager.game.save_debug && console.log('LocalSaver.save');
-		window.localStorage.setItem('rks', data);
+    load(callback) {
+        console.warn("GoogleSaver: Load method not implemented. Falling back to local.");
+        // if (this.isAuthorized) { this.loadFile(callback); }
+        // else {
+        //   console.warn("GoogleSaver: Not authorized to load. Falling back.");
+        const localSaver = new LocalSaver(this.game);
+        localSaver.load(callback);
+        // }
+    }
+}
 
-		if ( callback ) {
-			callback();
-		}
-	}
+export class SaveManager {
+    constructor(game) {
+        this.game = game;
+        this.active_saver = new LocalSaver(game); // Default to local
+        this.save_interval_id = null;
+    }
 
-	this.enable = function() {
-		save_manager.game.save_debug && console.log('LocalSaver.enable');
-		localStorage.removeItem('google_drive_save');
-		save_manager.active_saver = this;
-	}
+    setSaver(saverInstance) {
+        this.active_saver = saverInstance;
+        console.log("Save manager active_saver changed to:", this.active_saver.name);
+        // If auto-save was running, restart it with the new saver
+        if (this.save_interval_id) {
+            this.disable(); // Clear old interval
+            this.enable();  // Start with new saver
+        }
+    }
 
-	this.load = function(callback) {
-		save_manager.game.save_debug && console.log('LocalSaver.load');
-		var rks = window.localStorage.getItem('rks');
-		callback(rks);
-	}
-};
+    enable() {
+        if (!this.active_saver) {
+            console.warn("SaveManager: No active saver set. Cannot enable auto-save.");
+            return;
+        }
+        console.log("Save manager enabled. Current saver:", this.active_saver.name);
+        this.scheduleAutoSave();
+    }
 
-save_manager.LocalSaver = LocalSaver
+    disable() {
+        if (this.save_interval_id) {
+            clearInterval(this.save_interval_id);
+            this.save_interval_id = null;
+        }
+        console.log("Save manager disabled.");
+    }
 
-var google_loaded = false;
-var google_auth_called = false;
+    scheduleAutoSave() {
+        if (this.save_interval_id) clearInterval(this.save_interval_id); // Clear existing interval
 
-window.set_google_loaded = function() {
-	save_manager.game.save_debug && console.log('set_google_loaded');
-	google_loaded = true;
+        this.save_interval_id = setInterval(() => {
+            if (!this.game.paused && this.active_saver) {
+                this.active_saver.save(this.game.saves());
+                if (this.game.save_debug) console.log("Game autosaved by " + this.active_saver.name);
+            }
+        }, this.game.save_interval);
+    }
 
-	if ( google_auth_called ) {
-		google_saver.checkAuth(null, true);
-	}
-};
+    load(loadDataFunction) {
+        if (this.active_saver) {
+            this.active_saver.load(loadDataFunction);
+        } else {
+            console.error("No active saver to load from.");
+            loadDataFunction(null); // Ensure callback is always called
+        }
+    }
 
-var GoogleSaver = function() {
-	var CLIENT_ID = '572695445092-svr182bgaass7vt97r5mnnk4phmmjh5u.apps.googleusercontent.com';
-	var SCOPES = ['https://www.googleapis.com/auth/drive.appfolder'];
-	var src = 'https://apis.google.com/js/client.js?onload=set_google_loaded';
-	var filename = 'save.txt'
-	var file_id = null;
-	var file_meta = null;
-	var tried_load = false;
-	var load_callback = null;
-	var self = this;
-	var enable_callback;
-	var access_token;
+    manualSave() {
+        if (!this.active_saver) {
+            console.warn("Cannot save: No active saver.");
+            return false;
+        }
+        if (this.game.paused) { // Some games might allow saving while paused, some not.
+            console.warn("Cannot save while paused (game rule).");
+            return false;
+        }
+        this.active_saver.save(this.game.saves());
+        console.log("Game manually saved by " + this.active_saver.name);
+        // Optionally provide feedback to the UI
+        // this.game.ui.showNotification("Game Saved!");
+        return true;
+    }
+}
 
-	// TODO: check if `google_loaded` can be safely used to replace this
-	this.loadfailed = false;
-
-	this.authChecked = false;
-
-	this.enable = function(callback, event) {
-		save_manager.game.save_debug && console.log('GoogleSaver.enable');
-		enable_callback = callback;
-
-		if ( google_loaded && this.authChecked === true && file_id !== null ) {
-			if ( callback ) {
-				callback();
-			}
-
-			return;
-		} else if ( google_loaded ) {
-			// If this was from a button click, open the popup
-			self.checkAuth(null, event ? false : true);
-		} else {
-			// Make sure they can see the auth popup
-			//show_page.call($('#options'), null);
-			google_auth_called = true;
-		}
-
-		save_manager.active_saver = this;
-	};
-
-	this.save = function(data, callback) {
-		save_manager.game.save_debug && console.log('GoogleSaver.save');
-		local_saver.save(data);
-
-		if ( google_loaded === true && this.authChecked === true && file_id !== null ) {
-			update_file(data, callback);
-		}
-	};
-
-	this.load = function(callback) {
-		save_manager.game.save_debug && console.log('GoogleSaver.load');
-
-		if ( file_meta !== null ) {
-			download_file(file_meta, callback);
-		} else {
-			tried_load = true;
-			load_callback = callback;
-		}
-	};
-
-	var load_script = function() {
-		var el = document.createElement('script');
-		el.setAttribute('type', 'text/javascript');
-		el.setAttribute('src', src);
-		// don't actually disable the button since we want to give some kind of feedback if players click it
-		el.onerror = function(event) { self.loadfailed = true; $('#enable_google_drive_save').classList.add("button_disabled") }
-
-		document.getElementsByTagName('head')[0].appendChild(el);
-	};
-
-	/**
-	 * Check if the current user has authorized the application.
-	 */
-	this.checkAuth = function(callback, immediate=false) {
-		save_manager.game.save_debug && console.log('GoogleSaver.checkAuth');
-
-		gapi.auth.authorize(
-			{
-				'client_id': CLIENT_ID,
-				'scope': SCOPES,
-				'immediate': immediate
-			},
-			function(authResult) {
-				save_manager.game.save_debug && console.log('gapi.auth.authorize CB', authResult);
-
-				if ( authResult && !authResult.error ) {
-					google_loaded = true;
-					self.authChecked = true;
-					access_token = authResult['access_token'];
-					// Access token has been successfully retrieved, requests can be sent to the API.
-					localStorage.setItem('google_drive_save', 1);
-
-					// We have a callback for refreshing the auth
-					if ( callback ) {
-						callback();
-					} else {
-						gapi.client.load('drive', 'v2', function(data) {
-							save_manager.game.save_debug && console.log('gapi.client.load CB', data);
-							get_file();
-						});
-					}
-
-					//show_page.call($('#show_reactor'), null);
-				} else if ( !immediate ) {
-					// No access token could be retrieved
-					local_saver.enable();
-					save_game = local_saver;
-					localStorage.removeItem('google_drive_save');
-					enable_local_save();
-					alert('Could not authorize. Switching to local save.')
-				} else {
-					self.checkAuth(callback, false);
-				}
-			}
-		);
-	};
-
-	var update_file = function(data='{}', callback) { 
-		save_manager.game.save_debug && console.log('GoogleSaver update_file', data);
-		var boundary = '-------314159265358979323846';
-		var delimiter = "\r\n--" + boundary + "\r\n";
-		var close_delim = "\r\n--" + boundary + "--";
-
-		var contentType = 'text/plain';
-		var base64Data = btoa(data);
-		var multipartRequestBody =
-			delimiter +
-			'Content-Type: application/json\r\n\r\n' +
-			JSON.stringify(file_meta) +
-			delimiter +
-			'Content-Type: ' + contentType + '\r\n' +
-			'Content-Transfer-Encoding: base64\r\n' +
-			'\r\n' +
-			base64Data +
-			close_delim;
-
-		var request = gapi.client.request({
-			'path': '/upload/drive/v2/files/' + file_id,
-			'method': 'PUT',
-			'params': {
-				uploadType: 'multipart',
-				alt: 'json'
-			},
-			'headers': {
-				'Content-Type': 'multipart/mixed; boundary="' + boundary + '"'
-			},
-			'body': multipartRequestBody
-		});
-
-		request.execute(function(data) {
-			save_manager.game.save_debug && console.log('gapi.client.request CB', data);
-
-			if ( !data || data.error ) {
-				if ( data.error.code === 404 ) {
-					alert('It looks like the game was taken over in a new window - to take the game back, please refresh');
-				} else {
-					self.authChecked = false;
-					// TODO: Use the refresh token instead
-					self.checkAuth(function() {
-						update_file(data, callback);
-					}, true);
-				}
-			} else {
-				if ( callback ) {
-					callback();
-				}
-			}
-		});
-	}
-
-	/**
-	 * Permanently delete a file, skipping the trash.
-	 *
-	 * @param {String} fileId ID of the file to delete.
-	 */
-	var deleteFile = function(fileId, callback) {
-		save_manager.game.save_debug && console.log('GoogleSaver deleteFile');
-		var request = gapi.client.drive.files.delete({
-			'fileId': fileId
-		});
-
-		request.execute(function(resp) {
-			if ( callback ) callback();
-		});
-	}
-
-	var get_file = function() {
-		save_manager.game.save_debug && console.log('GoogleSaver get_file');
-		/**
-		 * List all files contained in the Application Data folder.
-		 *
-		 * @param {Function} callback Function to call when the request is complete.
-		 */
-		function listFilesInApplicationDataFolder(callback) {
-			var retrievePageOfFiles = function(request, result) {
-				request.execute(function(resp) {
-					result = result.concat(resp.items);
-					var nextPageToken = resp.nextPageToken;
-
-					if (nextPageToken) {
-						request = gapi.client.drive.files.list({
-							'pageToken': nextPageToken
-						});
-						retrievePageOfFiles(request, result);
-					} else {
-						save_manager.game.save_debug && console.log('GoogleSaver retrievePageOfFiles CB', result);
-						callback(result);
-					}
-				});
-			}
-			var initialRequest = gapi.client.drive.files.list({
-				'q': '\'appfolder\' in parents'
-			});
-			retrievePageOfFiles(initialRequest, []);
-		}
-
-		listFilesInApplicationDataFolder(function(result) {
-			save_manager.game.save_debug && console.log('GoogleSaver listFilesInApplicationDataFolder CB', result);
-
-			for ( var i = 0, l = result.length; i < l; i++ ) {
-				var file = result[i];
-
-				// Found save file
-				if ( file.title === filename ) {
-					file_id = file.id;
-					file_meta = file;
-
-					if ( tried_load ) {
-						self.load(load_callback);
-					} else if ( enable_callback ) {
-						enable_callback();
-						enable_callback = null;
-					}
-
-					return;
-				}
-			}
-
-			// No save file found, make a new one
-			new_save_file(save_manager);
-		});
-	};
-
-	var new_save_file = function(callback) {
-		save_manager.game.save_debug && console.log('GoogleSaver new_save_file');
-		var boundary = '-------314159265358979323846264';
-		var delimiter = "\r\n--" + boundary + "\r\n";
-		var close_delim = "\r\n--" + boundary + "--";
-
-		var contentType = 'text/plain';
-		var metadata = {
-			'title': filename,
-			'mimeType': contentType,
-			'parents': [{'id': 'appfolder'}]
-		};
-		var base64Data = btoa(btoa(JSON.stringify({})));
-		var multipartRequestBody =
-			delimiter +
-			'Content-Type: application/json\r\n\r\n' +
-			JSON.stringify(metadata) +
-			delimiter +
-			'Content-Type: ' + contentType + '\r\n' +
-			'Content-Transfer-Encoding: base64\r\n' +
-			'\r\n' +
-			base64Data +
-			close_delim;
-		var request = gapi.client.request({
-			'path': '/upload/drive/v2/files',
-			'method': 'POST',
-			'params': {
-				uploadType: 'multipart'
-			},
-			'headers': {
-				'Content-Type': 'multipart/mixed; boundary="' + boundary + '"'
-			},
-			'body': multipartRequestBody
-		});
-
-		request.execute(function(arg) {
-			save_manager.game.save_debug && console.log('gapi.client.request CB', arg);
-			file_id = arg.id;
-			file_meta = arg;
-			if ( callback ) callback();
-		});
-	};
-
-	/**
-	 * Download a file's content.
-	 *
-	 * @param {File} file Drive File instance.
-	 * @param {Function} callback Function to call when the request is complete.
-	 */
-	var download_file = function(file, callback) {
-		save_manager.game.save_debug && console.log('GoogleSaver download_file');
-		if ( file.downloadUrl ) {
-			var accessToken = gapi.auth.getToken().access_token;
-			var xhr = new XMLHttpRequest();
-			xhr.open('GET', file.downloadUrl);
-			xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
-			xhr.onload = function() {
-				file_meta = null;
-				deleteFile(file_id, function() {
-					file_id = null;
-
-					new_save_file(function() {
-						callback(xhr.responseText);
-						// save game state
-						save_manager();
-					});
-				});
-			};
-			xhr.onerror = function() {
-				callback(null);
-			};
-			xhr.send();
-		} else {
-			callback(null);
-		}
-	}
-
-	load_script();
-};
-
-save_manager.GoogleSaver = GoogleSaver;
-})();
+// Make classes available on window if they are used by non-module scripts or for debugging
+window.SaveManager = SaveManager;
+window.LocalSaver = LocalSaver;
+window.GoogleSaver = GoogleSaver; // For potential later integration

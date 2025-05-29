@@ -1,7 +1,4 @@
-(function() {
-'use strict';
-
-window.parts = [
+export default  [
 		// Cells
 		{
 			id: 'uranium1',
@@ -413,4 +410,3 @@ window.parts = [
 		}
 	];
 
-})();
