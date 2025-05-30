@@ -1,12 +1,11 @@
-// Ensure numFormat is available globally or imported if this becomes a module itself
-// For now, assuming window.fmt from app.js
+import { numFormat as fmt } from '../js/util.js';
 
 const objective_list_data = [
     {
         title: 'Place your first component in the reactor',
         reward: 10,
         check: function(game) {
-            return game.tiles_list.some(tile => tile && tile.part && tile.activated);
+            return game.tileset.active_tiles_list.some(tile => tile && tile.part && tile.activated);
         }
     },
     {
@@ -27,9 +26,9 @@ const objective_list_data = [
         title: 'Put a Heat Vent next to a power Cell',
         reward: 50,
         check: function(game) {
-            return game.tiles_list.some(tile => {
+            return game.tileset.active_tiles_list.some(tile => {
                 if (tile && tile.part && tile.activated && tile.part.category === 'cell' && tile.ticks > 0) {
-                    for (const neighbor_tile of game.get_tile_in_range(tile, 1)) {
+                    for (const neighbor_tile of game.tileset.getTilesInRange(tile, 1)) {
                         if (neighbor_tile.part && neighbor_tile.activated && neighbor_tile.part.category === 'vent') {
                             return true;
                         }
@@ -166,7 +165,7 @@ const objective_list_data = [
         }
     },
     {
-        title: () => `Have at least $${window.fmt ? window.fmt(10000000000) : '10,000,000,000'} total`,
+        title: () => `Have at least $${fmt(10000000000)} total`,
         reward: 10000000000,
         check: function(game) {
             return game.current_money >= 10000000000;
@@ -217,7 +216,7 @@ const objective_list_data = [
         }
     },
     {
-        title: () => `Generate ${window.fmt ? window.fmt(1000) : '1,000'} Exotic Particles with Particle Accelerators`,
+        title: () => `Generate ${fmt(1000)} Exotic Particles with Particle Accelerators`,
         ep_reward: 1000,
         check: function(game) {
             return game.exotic_particles >= 1000;

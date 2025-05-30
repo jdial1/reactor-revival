@@ -1,80 +1,51 @@
 export function numFormat(num, places = null) {
     const cm_names = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
-    let pow;
-    let fnum;
-    const find_exponent = /(([1-9])(\.([0-9]+))?)e\+([0-9]+)/;
-    let fmt_parts;
-    let floor_num_str;
-
     if (num === null || typeof num === 'undefined' || Number.isNaN(num)) return '';
     if (num === Infinity || num === -Infinity) return num > 0 ? 'Infinity' : '-Infinity';
 
-    floor_num_str = Math.floor(num).toString();
+    if (places === null || typeof places === 'undefined') places = 1;
 
-    if (places !== null) {
-        pow = Math.floor((floor_num_str.length - 1) / 3) * 3;
-        // Avoid issues with very small numbers if pow becomes too large for precision
-        if (pow > 0) {
-             num = Math.round(num / Math.pow(10, pow - places)) * Math.pow(10, pow - places);
-        } else {
-             num = Math.round(num * Math.pow(10, places)) / Math.pow(10, places);
-        }
+    const absNum = Math.abs(num);
+
+    if (absNum >= 1e15) {
+        const exponent = Math.floor(Math.log10(absNum));
+        const mantissa = (num / Math.pow(10, exponent)).toFixed(places);
+        return `${mantissa}e+${exponent}`;
     }
-    
-    floor_num_str = Math.floor(num).toString(); // Recalculate after potential rounding
 
-    fmt_parts = floor_num_str.match(find_exponent);
-
-    if (fmt_parts) {
-        places = places === null ? 3 : places; // Default places for scientific notation
-        const exponentValue = parseInt(fmt_parts[5]);
-        if (exponentValue > (cm_names.length + 1) * 3) { // If beyond Dc
-            fnum = `${fmt_parts[2]}${fmt_parts[3] ? fmt_parts[3].substring(0, places + 1) : ''}e${fmt_parts[5]}`;
-        } else {
-            let temp_num_str = fmt_parts[2] + (fmt_parts[4] || '') + '000'; // Ensure enough digits
-            const characteristic = parseInt(fmt_parts[5]) % 3;
-            const mantissa = parseFloat(
-                temp_num_str.substring(0, characteristic + 1) + 
-                '.' + 
-                temp_num_str.substring(characteristic + 1, characteristic + 1 + places)
-            ).toFixed(places);
-            fnum = mantissa + (cm_names[Math.floor(exponentValue / 3) - 1] || `e${exponentValue}`);
-        }
-    } else {
-        pow = Math.floor((floor_num_str.length - 1) / 3) * 3;
-        if (pow === 0) {
-            fnum = (places === null) ? num.toString() : num.toFixed(places);
-        } else {
-            const val = num / Math.pow(10, pow);
-            fnum = (places === null) ? val.toString() : val.toFixed(places || 3);
-            fnum += (cm_names[(pow / 3) - 1] || '');
-        }
+    let pow = 0;
+    if (absNum >= 1000) {
+        pow = Math.floor(Math.log10(absNum) / 3) * 3;
     }
-    return fnum;
+    let mantissa = num;
+    let suffix = '';
+    if (pow > 0) {
+        mantissa = num / Math.pow(10, pow);
+        suffix = cm_names[(pow / 3) - 1] || '';
+    }
+    mantissa = Number(mantissa.toFixed(places));
+    let mantissaStr = mantissa.toFixed(places).replace(/\.0+$|(\.\d*?[1-9])0+$/, '$1');
+    return mantissaStr + suffix;
 }
 
 export function timeFormat(ts) {
-    ts = Math.round(ts / 1000); // total seconds
     if (ts < 0) ts = 0;
 
-    const s = String(ts % 60).padStart(2, '0');
-    ts = Math.floor(ts / 60); // total minutes
-    if (ts === 0) return `${s}s`;
+    var s = String(Math.round(ts / 1000)).padStart(2, '0');
+    var m = String(Math.floor(s / 60))   .padStart(2, '0');
+    var h = String(Math.floor(m / 60))   .padStart(2, '0');
+    var d = String(Math.floor(h / 24))   .padStart(2, '0');
 
-    const m = String(ts % 60).padStart(2, '0');
-    ts = Math.floor(ts / 60); // total hours
-    if (ts === 0) return `${m}m ${s}s`;
+    if (s <= 0) return `${s}s`;
+    if (m <= 0) return `${m}m ${s}s`;
+    if (h <= 0) return `${h}h ${m}m ${s}s`;
+    if (d <= 0) return `${d}d ${h}h ${m}m ${s}s`;
 
-    const h = String(ts % 24).padStart(2, '0');
-    ts = Math.floor(ts / 24); // total days
-    if (ts === 0) return `${h}h ${m}m ${s}s`;
-
-    const d = String(ts);
     return `${d}d ${h}h ${m}m ${s}s`;
 }
 
-// Ensure performance.now() is available
-window.performance = window.performance || { now: () => new Date().getTime() };
+
+export const performance = { now: () => new Date().getTime() };
 
 const property_buffer = new Map();
 
@@ -85,8 +56,8 @@ export function addProperty(name, initialValue) {
     }
 
     this[name] = initialValue;
-    this[`${name}Updated`] = true; // Initial state might need update
-    this[`${name}Last`] = initialValue; // Keep track of last "committed" value
+    this[`${name}Updated`] = true; 
+    this[`${name}Last`] = initialValue;
 
     const setterName = `set${name.charAt(0).toUpperCase()}${name.slice(1)}`;
     this[setterName] = (value) => {
@@ -104,23 +75,15 @@ export function addProperty(name, initialValue) {
     };
 }
 
-export function updateProperty() { // This function is called by app.ui.js in its update loop
+export function updateProperty() {
     for (const [instance, updatedProperties] of property_buffer) {
         for (const name of updatedProperties) {
-            // The consumer of the *Updated flag is responsible for resetting it
-            // This function mainly ensures the *Last value is synced if needed
-            // For this system, the main purpose of property_buffer might be to know *what* changed
-            // rather than deferring the actual property update.
-            // If the value has been "read" and processed by UI, we can sync 'Last'
-            // However, the current logic in app.ui seems to handle Updated flags individually.
-            // Let's assume this is mostly for notification and the *Updated flags are reset elsewhere.
-            instance[`${name}Last`] = instance[name]; // Sync Last to current after changes are processed
+            instance[`${name}Last`] = instance[name]; 
         }
     }
     property_buffer.clear();
 }
 
-// Event delegation utility
 export function on(parentElement, selector, eventType, handler) {
   if (!parentElement) {
     console.warn(`Parent element for delegation is null or undefined. Selector: "${selector}", Event: "${eventType}"`);

@@ -1,4 +1,4 @@
-import objective_list_data from './objective_list.js';
+import objective_list_data from '../data/objective_list.js';
 
 export class ObjectiveManager {
     constructor(gameInstance) {
@@ -13,11 +13,12 @@ export class ObjectiveManager {
     }
 
     start() {
-        this.set_objective(this.current_objective_index, true);
+        this.set_objective(this.game,this.current_objective_index, true);
     }
 
-    check_current_objective() {
-        if (this.game.paused || !this.current_objective_def) {
+    check_current_objective(game) {
+        if(!game) return;
+        if (game.ui.eventHandlers.getVar('paused') || !this.current_objective_def) {
             this.scheduleNextCheck();
             return;
         }
@@ -28,18 +29,20 @@ export class ObjectiveManager {
 
         if (this.current_objective_def.check(this.game)) {
             console.log(`Objective completed: ${currentTitle}`);
+            if (game.ui && typeof game.ui.say === 'function') {
+                game.ui.eventHandlers.objective_completed();
+            }
             this.current_objective_index++;
 
             if (this.current_objective_def.reward) {
                 this.game.current_money += this.current_objective_def.reward;
-                this.game.ui.say('var', 'current_money', this.game.current_money);
+                game.ui.eventHandlers.setVar('current_money', this.game.current_money,true);
             } else if (this.current_objective_def.ep_reward) {
                 this.game.exotic_particles += this.current_objective_def.ep_reward;
-                this.game.ui.say('var', 'exotic_particles', this.game.exotic_particles);
+                game.ui.eventHandlers.setVar('exotic_particles', this.game.exotic_particles,true);
             }
-            if (this.game.save_manager) this.game.save_manager.manualSave();
-            
-            this.set_objective(this.current_objective_index);
+
+            this.set_objective(game,this.current_objective_index);
         } else {
             this.scheduleNextCheck();
         }
@@ -50,7 +53,7 @@ export class ObjectiveManager {
         this.objective_timeout = setTimeout(() => this.check_current_objective(), this.objective_interval);
     }
 
-    set_objective(objective_index, skip_wait = false) {
+    set_objective(game,objective_index, skip_wait = false) {
         this.current_objective_index = objective_index;
         const wait = skip_wait ? 0 : this.objective_wait;
 
@@ -59,7 +62,7 @@ export class ObjectiveManager {
         if (nextObjective) {
             if (!skip_wait) {
                 this.objective_unloading = true;
-                this.game.ui.say('evt', 'objective_unloaded');
+                game.ui.eventHandlers.objective_unloaded();
             }
 
             clearTimeout(this.objective_timeout);
@@ -72,18 +75,18 @@ export class ObjectiveManager {
                            ? this.current_objective_def.title() 
                            : this.current_objective_def.title
                 };
-                this.game.ui.say('evt', 'objective_loaded', displayObjective);
+                game.ui.eventHandlers.handleObjectiveLoaded(game,displayObjective);
 
                 if (this.current_objective_def.start) {
                     this.current_objective_def.start(this.game);
                 }
                 this.objective_unloading = false;
-                this.check_current_objective();
+                this.check_current_objective(game);
             }, wait);
         } else {
             console.log("All objectives completed or objective index out of bounds.");
             this.current_objective_def = { title: "All objectives completed!", reward: 0, check: () => false };
-            this.game.ui.say('evt', 'objective_loaded', { ...this.current_objective_def });
+            game.ui.eventHandlers.objective_loaded({ ...this.current_objective_def });
             clearTimeout(this.objective_timeout);
         }
     }

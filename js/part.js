@@ -1,5 +1,5 @@
-import { addProperty, numFormat as fmt } from '../util.js';
-import part_list_data from './part_list_data.js'; // Ensure path is correct
+import { addProperty, numFormat as fmt } from './util.js';
+import part_list_data from '../data/part_list_data.js'; 
 
 const SINGLE_CELL_DESC_TPL = 'Produces %power power and %heat heat per tick. Lasts for %ticks ticks.';
 const MULTI_CELL_DESC_TPL = 'Acts as %count %type cells. Produces %power power and %heat heat per tick.';
@@ -9,14 +9,14 @@ const CELL_POWER_MULTIPLIERS = [1, 2, 4];
 const CELL_HEAT_MULTIPLIERS = [1, 2, 4];
 const CELL_COUNTS = [1, 2, 4];
 
-class Part {
-    constructor(part_definition, gameInstance) {
-        this.game = gameInstance;
+export class Part {
+    constructor(part_definition) {
         this.part = part_definition; // Store the original definition
 
         // Assign properties from definition, with defaults
         this.id = part_definition.id;
         this.category = part_definition.category;
+        this.type = part_definition.type;
         this.base_power = part_definition.base_power || 0;
         this.base_heat = part_definition.base_heat || 0;
         this.base_ticks = part_definition.base_ticks || 0;
@@ -73,9 +73,9 @@ class Part {
 
         let typeName = this.part.title;
         if (this.part.level > 1 && this.part.type) {
-            const baseTypePart = this.game.part_objects[`${this.part.type}1`];
+            var baseTypePart = part_list_data.filter(part => part.type === this.part.type && part.level === 1)[0];
             if (baseTypePart) {
-                typeName = baseTypePart.part.title.replace(/Dual |Quad /i,'');
+                typeName = baseTypePart.title.replace(/Dual |Quad /i,'');
             } else {
                 typeName = this.part.title.replace(/Dual |Quad /i,'');
             }
@@ -99,59 +99,3 @@ class Part {
     }
 }
 Part.prototype.addProperty = addProperty;
-
-function generatePartDefinition(template, level) {
-    const part_def = { ...template, level };
-    part_def.base_cost = template.base_cost * Math.pow(template.cost_multiplier || 1, level - 1);
-
-    if (part_def.category === 'cell') {
-        part_def.id = `${template.type}${level}`;
-        part_def.title = `${CELL_TITLE_PREFIXES[level - 1] || ''}${template.title}`;
-        part_def.base_description = level > 1 ? MULTI_CELL_DESC_TPL : SINGLE_CELL_DESC_TPL;
-        part_def.base_power = template.base_power * (CELL_POWER_MULTIPLIERS[level - 1] || 1);
-        part_def.base_heat = template.base_heat * (CELL_HEAT_MULTIPLIERS[level - 1] || 1);
-        part_def.cell_count = CELL_COUNTS[level - 1] || 1;
-    } else {
-        part_def.id = `${template.category}${level}`;
-        part_def.title = template.experimental 
-            ? `${PART_TITLE_PREFIXES[5]}${template.title}`
-            : `${PART_TITLE_PREFIXES[level - 1] || PART_TITLE_PREFIXES[0]}${template.title}`;
-        if (template.base_ticks && template.ticks_multiplier) part_def.base_ticks = template.base_ticks * Math.pow(template.ticks_multiplier, level - 1);
-        if (template.base_containment && template.containment_multiplier) part_def.base_containment = template.base_containment * Math.pow(template.containment_multiplier, level - 1);
-        if (template.base_reactor_power && template.reactor_power_multiplier) part_def.base_reactor_power = template.base_reactor_power * Math.pow(template.reactor_power_multiplier, level - 1);
-        if (template.base_reactor_heat && template.reactor_heat_multiplier) part_def.base_reactor_heat = template.base_reactor_heat * Math.pow(template.reactor_heat_multiplier, level - 1);
-        if (template.base_transfer && template.transfer_multiplier) part_def.base_transfer = template.base_transfer * Math.pow(template.transfer_multiplier, level - 1);
-        if (template.base_vent && template.vent_multiplier) part_def.base_vent = template.base_vent * Math.pow(template.vent_multiplier, level - 1);
-        if (template.base_ep_heat && template.ep_heat_multiplier) part_def.base_ep_heat = template.base_ep_heat * Math.pow(template.ep_heat_multiplier, level - 1);
-        if (template.base_power_increase && template.power_increase_add) part_def.base_power_increase = template.base_power_increase + (template.power_increase_add * (level - 1));
-        if (template.base_heat_increase && template.heat_increase_add) part_def.base_heat_increase = template.base_heat_increase + (template.heat_increase_add * (level-1));
-    }
-    return part_def;
-}
-
-export function initializeParts(gameInstance) {
-    part_list_data.forEach(part_def_template => {
-        if (part_def_template.levels) {
-            for (let i = 0; i < part_def_template.levels; i++) {
-                const level = i + 1;
-                const final_part_def = generatePartDefinition(part_def_template, level);
-                const part_obj = new Part(final_part_def, gameInstance);
-                gameInstance.part_objects[part_obj.id] = part_obj;
-                gameInstance.part_objects_array.push(part_obj);
-                gameInstance.ui.say('evt', 'part_added', part_obj);
-            }
-        } else {
-            // Single-level part definition
-            const final_part_def = { ...part_def_template };
-            if (!final_part_def.level) final_part_def.level = 1; // Default to level 1
-            if (final_part_def.experimental && final_part_def.level === 6) { // Specific case from original
-                 final_part_def.title = `${PART_TITLE_PREFIXES[5]}${part_def_template.title}`;
-            }
-            const part_obj = new Part(final_part_def, gameInstance);
-            gameInstance.part_objects[part_obj.id] = part_obj;
-            gameInstance.part_objects_array.push(part_obj);
-            gameInstance.ui.say('evt', 'part_added', part_obj);
-        }
-    });
-    gameInstance.update_cell_power(); // Recalculate cell powers after all parts are initialized
-}

@@ -15,8 +15,6 @@ export class TooltipManager {
         clearTimeout(this.tooltip_task);
 
         if (!part_or_upgrade_obj) {
-            // If no object, set a timeout to hide. This gives a small delay
-            // allowing mouse to move to another element that might show a tooltip.
             this.tooltip_task = setTimeout(() => this._hide(), 200);
             return;
         }
@@ -28,7 +26,7 @@ export class TooltipManager {
 
         this.tooltip_update_callback = update_callback;
         if (this.tooltip_update_callback) {
-            this.tooltip_update_callback(); // Immediately update content
+            this.tooltip_update_callback();
         }
     }
 
@@ -42,7 +40,6 @@ export class TooltipManager {
 
     hide() {
         clearTimeout(this.tooltip_task);
-        // Delay hiding to prevent flickering if mouse quickly moves over another active element
         this.tooltip_task = setTimeout(() => this._hide(), 200); 
     }
 
