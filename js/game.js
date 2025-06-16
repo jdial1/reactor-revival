@@ -18,7 +18,6 @@ export class Game {
         this._rows = this.base_rows;
         this._cols = this.base_cols;
 
-        this.debug = false;
         this.offline_tick = true;
         this.base_loop_wait = 1000;
         this.base_power_multiplier = 1;
@@ -59,37 +58,40 @@ export class Game {
         this.current_exotic_particles = 0;
         this.total_exotic_particles = 0;
 
+        this.ui.stateManager.setVar('auto_sell', false);
+        this.ui.stateManager.setVar('auto_buy', false);
+        this.ui.stateManager.setVar('heat_control', false);
+        this.ui.stateManager.setVar('time_flux', true);
+        this.ui.stateManager.setVar('pause', false);
+
         this.partset.check_affordability(this.game);
         this.upgradeset.check_affordability(this.game);
         this.upgradeset.reset();
         this.tileset.clearAllTiles();
         this.reactor.setDefaults();
 
-        this.reactor.updateStats(this.tileset,this.ui.eventHandlers);
-        this.ui.eventHandlers.game_reset();
+        this.reactor.updateStats(this.tileset,this.ui.stateManager);
+        this.ui.stateManager.game_reset();
     }
 
     initialize_new_game_state() {
-        this.ui.eventHandlers.setVar('current_money', this.current_money);
-        this.ui.eventHandlers.setVar('current_power', this.reactor.current_power);
-        this.ui.eventHandlers.setVar('current_heat', this.reactor.current_heat);
-        this.ui.eventHandlers.setVar('max_power', this.reactor.max_power);
-        this.ui.eventHandlers.setVar('max_heat', this.reactor.max_heat);
-        this.ui.eventHandlers.setVar('exotic_particles', this.exotic_particles);
-        this.ui.eventHandlers.setVar('current_exotic_particles', this.current_exotic_particles);
+        this.ui.stateManager.setVar('current_money', this.current_money);
+        this.ui.stateManager.setVar('current_power', this.reactor.current_power);
+        this.ui.stateManager.setVar('current_heat', this.reactor.current_heat);
+        this.ui.stateManager.setVar('max_power', this.reactor.max_power);
+        this.ui.stateManager.setVar('max_heat', this.reactor.max_heat);
+        this.ui.stateManager.setVar('exotic_particles', this.exotic_particles);
+        this.ui.stateManager.setVar('current_exotic_particles', this.current_exotic_particles);
         console.log('Init New Game Update Tiles')
         this.tileset.updateActiveTiles();
-        this.reactor.updateStats(this.tileset,this.ui.eventHandlers);
+        this.reactor.updateStats(this.tileset,this.ui.stateManager);
     }
 
     update_cell_power() {
         if(!this.partset || !this.reactor) return;
         this.partset.updateCellPower(this);
-        this.reactor.updateStats(this.tileset,this.ui.eventHandlers);
+        this.reactor.updateStats(this.tileset,this.ui.stateManager);
     }
-
-
-
 
     epart_onclick(purchased_upgrade) {
         if (!purchased_upgrade || !purchased_upgrade.upgrade || purchased_upgrade.level <= 0) return;
@@ -125,9 +127,30 @@ export class Game {
         this.set_defaults();
         this.initialize_new_game_state();
         if (this.objectives_manager) this.objectives_manager.set_objective(0, true);
-        this.ui.eventHandlers.setVar('current_exotic_particles', this.current_exotic_particles);
-        this.ui.eventHandlers.setVar('exotic_particles', this.exotic_particles);
+        this.ui.stateManager.setVar('current_exotic_particles', this.current_exotic_particles);
+        this.ui.stateManager.setVar('exotic_particles', this.exotic_particles);
         console.log(`Game rebooted. Refund EP: ${refund_ep}`);
+    }
+
+    // Add handler for state changes from UI
+    onToggleStateChange(property, newState) {
+        console.log(`[Game] Toggle state changed: ${property} is now ${newState}`);
+        if (property === 'pause') {
+            
+            if (newState) console.log("[Game] Pausing game loop (actual logic to be implemented)");
+            else console.log("[Game] Unpausing game loop (actual logic to be implemented)"); 
+
+        } else if (property === 'auto_sell') {
+            console.log(`[Game] Auto Sell is now ${newState ? 'ON' : 'OFF'}`);
+        } else if (property === 'auto_buy') {
+            console.log(`[Game] Auto Buy is now ${newState ? 'ON' : 'OFF'}`);
+        } else if (property === 'heat_control') {
+            console.log(`[Game] Heat Control is now ${newState ? 'ON' : 'OFF'}`);
+        } else if (property === 'time_flux') {
+            console.log(`[Game] Time Flux is now ${newState ? 'ON' : 'OFF'}`);
+        } else if (property === 'parts_panel') {
+            console.log(`[Game] Parts Panel is now ${newState ? 'ON' : 'OFF'}`);
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-import part_list_data from "./part_list_data.js";
+import part_list_data from "./part_list.js";
 
 export default function getUpgrades(game) {
     const upgrades = [
@@ -55,7 +55,7 @@ export default function getUpgrades(game) {
             multiplier: 20,
             onclick: function(upgrade, game) {
                 game.manual_heat_reduce = game.base_manual_heat_reduce * Math.pow(10, upgrade.level);
-                game.ui.eventHandlers.setVar('manual_heat_reduce', game.manual_heat_reduce,true);
+                game.ui.stateManager.setVar('manual_heat_reduce', game.manual_heat_reduce,true);
             }
         },
         {

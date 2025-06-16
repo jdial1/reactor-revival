@@ -18,7 +18,7 @@ export class ObjectiveManager {
 
     check_current_objective(game) {
         if(!game) return;
-        if (game.ui.eventHandlers.getVar('paused') || !this.current_objective_def) {
+        if (game.ui.stateManager.getVar('paused') || !this.current_objective_def) {
             this.scheduleNextCheck();
             return;
         }
@@ -30,16 +30,16 @@ export class ObjectiveManager {
         if (this.current_objective_def.check(this.game)) {
             console.log(`Objective completed: ${currentTitle}`);
             if (game.ui && typeof game.ui.say === 'function') {
-                game.ui.eventHandlers.objective_completed();
+                game.ui.stateManager.objective_completed();
             }
             this.current_objective_index++;
 
             if (this.current_objective_def.reward) {
                 this.game.current_money += this.current_objective_def.reward;
-                game.ui.eventHandlers.setVar('current_money', this.game.current_money,true);
+                game.ui.stateManager.setVar('current_money', this.game.current_money,true);
             } else if (this.current_objective_def.ep_reward) {
                 this.game.exotic_particles += this.current_objective_def.ep_reward;
-                game.ui.eventHandlers.setVar('exotic_particles', this.game.exotic_particles,true);
+                game.ui.stateManager.setVar('exotic_particles', this.game.exotic_particles,true);
             }
 
             this.set_objective(game,this.current_objective_index);
@@ -62,7 +62,7 @@ export class ObjectiveManager {
         if (nextObjective) {
             if (!skip_wait) {
                 this.objective_unloading = true;
-                game.ui.eventHandlers.objective_unloaded();
+                game.ui.stateManager.objective_unloaded();
             }
 
             clearTimeout(this.objective_timeout);
@@ -75,7 +75,7 @@ export class ObjectiveManager {
                            ? this.current_objective_def.title() 
                            : this.current_objective_def.title
                 };
-                game.ui.eventHandlers.handleObjectiveLoaded(game,displayObjective);
+                game.ui.stateManager.handleObjectiveLoaded(game,displayObjective);
 
                 if (this.current_objective_def.start) {
                     this.current_objective_def.start(this.game);
@@ -86,7 +86,7 @@ export class ObjectiveManager {
         } else {
             console.log("All objectives completed or objective index out of bounds.");
             this.current_objective_def = { title: "All objectives completed!", reward: 0, check: () => false };
-            game.ui.eventHandlers.objective_loaded({ ...this.current_objective_def });
+            game.ui.stateManager.objective_loaded({ ...this.current_objective_def });
             clearTimeout(this.objective_timeout);
         }
     }

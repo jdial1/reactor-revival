@@ -1,5 +1,5 @@
 import { Part } from './part.js';
-import part_list_data from '../data/part_list_data.js';
+import part_list_data from '../data/part_list.js';
 
 export class PartSet {
     constructor() {

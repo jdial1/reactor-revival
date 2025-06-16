@@ -1,5 +1,5 @@
 import { Upgrade } from './upgrade.js';
-import getUpgrades from '../data/upgrade_list_data.js';
+import getUpgrades from '../data/upgrade_list.js';
 
 export class UpgradeSet {
     constructor(game) {

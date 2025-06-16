@@ -12,7 +12,6 @@
 <body>
 	<div id="wrapper">
 		<aside id="parts_section" class="panel">
-			<button id="parts_panel_toggle" class="panel_toggle" aria-label="Toggle parts panel">❮</button>
 			<div id="parts_tabs" class="parts_tabs">
 				<button class="parts_tab active" id="tab_power" data-tab="power" title="Power Creation"><img src="img/ui/icons/icon_power.gif" alt="Power"></button>
 				<button class="parts_tab" id="tab_heat" data-tab="heat" title="Heat Management"><img src="img/ui/icons/icon_heat.gif" alt="Heat"></button>
@@ -39,11 +38,6 @@
 				<div class="parts_tab_content" id="parts_tab_misc1"></div>
 				<div class="parts_tab_content" id="parts_tab_misc2"></div>
 			</div>
-			<nav id="nav">
-				<button id="options" class="nav_button" data-section="reactor_upgrades" data-page="options_section">Options</button>
-				<button id="show_help" class="nav_button" data-section="reactor_upgrades" data-page="help_section">Help</button>
-				<button id="show_about" class="nav_button" data-section="reactor_upgrades" data-page="about_section">About</button>
-			</nav>
 			<nav id="controls_nav">
 				<button id="auto_sell_toggle" class="nav_button" title="Auto Sell">Auto Sell</button>
 				<button id="auto_buy_toggle" class="nav_button" title="Auto Buy">Auto Buy</button>
@@ -54,168 +48,70 @@
 		</aside>
 
 		<main id="main">
-			<div id="primary" class="panel_holder">
-				<div id="tooltip_nav" class="panel">
-					<section id="tooltip" aria-live="polite">
-						<div id="tooltip_data" class="subpanel">
-							<p id="tooltip_cost_wrapper" title="Cost">Cost: <span id="tooltip_cost"></span></p>
-							<p id="tooltip_heat_per_wrapper" title="Heat per tick">Heat: <span id="tooltip_heat_per"></span></p>
-							<p id="tooltip_power_per_wrapper" title="Power per tick">Power: <span id="tooltip_power_per"></span></p>
-							<p id="tooltip_ticks_wrapper" title="Ticks remaining">Durability: <span id="tooltip_ticks"></span>/<span id="tooltip_max_ticks"></span></p>
-							<p id="tooltip_heat_wrapper" title="Heat contained">Heat: <span id="tooltip_heat"></span>/<span id="tooltip_max_heat"></span></p>
-							<p id="tooltip_sells_wrapper">Sells for: <span id="tooltip_sells"></span></p>
-							<p id="tooltip_chance_wrapper" title="EP Generation Chance">EP chance: <span id="tooltip_chance"></span>% (<span id="tooltip_chance_percent_of_total"></span>% of max)</p>
-						</div>
-						<div id="tooltip_text" class="subpanel">
-							<div id="tooltip_info">
-								<h2 class="headline" id="tooltip_name"></h2>
-								<p id="tooltip_description" class="explanitory"></p>
-							</div>
-						</div>
-					</section>
+			<div id="main_top_controls_wrapper">
+				<div class="main_top_controls_row">
+					<button class="styled-button" id="options_btn_main" data-page="options_section">Options</button>
+					<button class="styled-button" id="help_btn_main" data-page="help_section">Help</button>
+					<button class="styled-button" id="about_btn_main" data-page="about_section">About</button>
+					<div class="flex-spacer"></div>
+					<button class="styled-button" id="main_auto_sell_toggle_btn">Disable Auto Sell</button>
+					<button class="styled-button" id="main_auto_buy_toggle_btn">Disable Auto Buy</button>
 				</div>
-				<section id="objectives_section" class="panel">
-					<h2 id="objectives_header">Objective</h2>
-					<div id="objectives_wrapper" class="subpanel">
-						<div id="objectives_content">
-							<div id="objective_title"></div>
-							<div id="objective_reward"></div>
+				<div class="main_top_controls_row">
+					<button class="styled-button" id="main_time_flux_toggle_btn">Disable Time Flux</button>
+					<div class="flex-spacer"></div>
+					<button class="styled-button" id="main_heat_controller_toggle_btn">Enable Heat Controller</button>
+					<button class="styled-button" id="main_pause_toggle_btn">Pause</button>
+				</div>
+			</div>
+
+			<section id="objectives_section">
+				<div id="objectives_wrapper">
+					<div id="objectives_content">
+						<span id="objective_title_display">Put a Heat Vent next to a power Cell</span>
+						<span id="objective_reward_display">$50</span>
+					</div>
+				</div>
+			</section>
+
+			<div id="page_content_area">
+				<section id="reactor_section" class="page showing">
+					<header id="reactor_header">
+						<div id="reactor_stats">
+							<span id="stats_power" class="stat icon_power_bg" title="Estimated power per tick">0</span>
+							<span id="stats_heat" class="stat icon_heat_bg" title="Estimated heat per tick">0</span>
+							<span id="stats_cash" class="stat icon_cash_bg" title="Estimated autosell cash per tick">0</span>
+							<span id="stats_vent" class="stat icon_vent_bg" title="Estimated total heat venting per tick">0</span>
+							<span id="stats_inlet" class="stat icon_inlet_bg" title="Total potential heat inletting per tick">0</span>
+							<span id="stats_outlet" class="stat icon_outlet_bg" title="Total potential heat outletting per tick">0</span>
 						</div>
+					</header>
+					<div id="reactor_wrapper" oncontextmenu="return false;">
+						<div id="reactor"></div>
+						<div id="reactor_background"></div>
 					</div>
 				</section>
-				<div id="reactor_upgrades" class="panel">
-					<section id="reactor_section" class="page showing">
-						<header id="reactor_header">
-							<h2 class="heading sr-only">Reactor Grid</h2>
-							<div id="reactor_stats">
-								<span id="stats_vent" class="stat" title="Estimated total heat venting per tick">0</span>
-								<span id="stats_inlet" class="stat" title="Total potential heat inletting per tick">0</span>
-								<span id="stats_outlet" class="stat" title="Total potential heat outletting per tick">0</span>
-								<span id="stats_power" class="stat" title="Estimated power per tick">0</span>
-								<span id="stats_heat" class="stat" title="Estimated heat per tick">0</span>
-								<span id="stats_cash" class="stat" title="Estimated autosell cash per tick">0</span>
-								<div class="per_tick_stats">
-									<span id="money_per_tick" class="stat" title="Money per tick">0</span>
-									<span id="power_per_tick" class="stat" title="Power per tick">0</span>
-									<span id="heat_per_tick" class="stat" title="Heat per tick">0</span>
-								</div>
-							</div>
-						</header>
-						<div id="reactor_wrapper" oncontextmenu="return false;">
-							<div id="reactor"></div>
-							<div id="reactor_background"></div>
-						</div>
-					</section>
-					<section id="help_section" class="page">
-						<h2 class="heading">Help</h2>
-						<div id="help" class="subpanel explanitory cms">
-							<h4>Basic Overview</h4>
-							<p>Cells = power and heat</p>
-							<p>Power = money</p>
-							<p>Money = Bigger cells and more money</p>
-							<p>Lots of money = particle accelerators</p>
-							<p>Particle accelerators = exotic particles (EP)</p>
-							<p>EP = more upgrades and new toys for more power, heat and money!</p>
-							<p>TF = Time Flux = Offline time accumulated (speeds game up when enabled)</p>
-							<div class="has_spoiler">
-								<h4>Exotic Particle setup</h4>
-								<p>
-									To generate Exotic Particles you will need to put heat into a Particle Accelerator and immediately take it out.
-									To do this you can use either Heat Exchangers or Heat Inlets.
-									See below for an example:
-								</p>
-							</div>
-						</div>
-					</section>
 
-					<!-- Options -->
-					<section id="options_section" class="page">
-						<h2 class="heading">Options</h2>
-								<button id="reset_game">Reset game</button></p>
-								<dialog id="Import_Export_dialog" style="padding: 0; border: none;">
-									<div class="panel">
-										<form method="dialog" class="subpanel">
-											<menu style="float: right">
-												<button id="Import_Export_close_button" type="reset">Cancel</button>
-												<button id="import_button" type="submit">Import</button>
-											</menu>
-											<section>
-												<textarea id="txtImportExport" rows="10" cols="75"></textarea>
-											</section>
-										</form>
-									</div>
-								</dialog>
-							</div>
-							<div>
-								<p><button id="speed_hack">Speed Hack</button>
-								<button id="offline_tick">Offline Tick</button>
-								</p>
-							</div>
-						</div></section>
-
-					<!-- About -->
-					<section id="about_section" class="page">
-						<h2 class="heading">About</h2>
-						<div id="about" class="subpanel explanitory cms">
-							<p>Based on <a href="https://github.com/cwmonkey/reactor-knockoff/" target="_blank">Reactor Knockoff</a>.</p>
-							<p>Based on <a href="http://www.kongregate.com/games/Cael/reactor-incremental" target="_blank">Reactor Incremental</a>.</p>
-							<p>UI based on <a href="http://opengameart.org/content/sci-fi-user-interface-elements" target="_blank">Sci-fi User Interface Elements</a> by <a href="http://opengameart.org/users/buch" target="_blank">Buch</a>.</p>
-
-							<p></p>
-						</div></section>
-
-					<!-- Patch Notes -->
-					<section id="patch_section" class="page">
-						<h2 class="heading">Patch Notes</h2>
-						<div id="about" class="subpanel explanitory cms">
-							<button id="show_reactor" class="nav" data-section="reactor_upgrades" data-page="reactor_section">Back to Reactor</button>
-							<section class="patch">
-								<h3>v1.3.2 - June 14th, 2018</h3>
-								<ul>
-									<li>Improvement:</li>
-									<ul>
-										<li>Upgrade tick catchup to offline ticks!</li>
-									</ul>
-								<ul>
-							</section>
-							<section class="patch">
-							</section>
-							<button id="show_reactor" class="nav" data-section="reactor_upgrades" data-page="reactor_section">Back to Reactor</button>
-						</div></section>
-
-					<!-- Upgrades -->
-					<div id="all_upgrades">
-						<!-- regular -->
-						<section id="upgrades_section" class="page">
-							<h2 class="heading">Upgrades</h2>
+				<div id="all_upgrades">
+					<section id="upgrades_section" class="page">
+						<h2 class="heading">Upgrades</h2>
+						<div id="upgrades_content_wrapper">
 							<div id="upgrades" class="subpanel">
 								<div id="cell_upgrades">
-									<div id="cell_tick_upgrades">
-
-									</div>
-									<div id="cell_power_upgrades">
-
-									</div>
-									<div id="cell_perpetual_upgrades">
-
-									</div>
+									<div id="cell_tick_upgrades"></div>
+									<div id="cell_power_upgrades"></div>
+									<div id="cell_perpetual_upgrades"></div>
 								</div>
-								<div id="other_upgrades">
-
-								</div>
-								<div id="vent_upgrades">
-
-								</div>
-								<div id="exchanger_upgrades">
-
-								</div>
+								<div id="other_upgrades"></div>
+								<div id="vent_upgrades"></div>
+								<div id="exchanger_upgrades"></div>
 							</div>
-						</section>
+						</div>
+					</section>
 
-						<!-- experimental -->
-						<section id="experimental_upgrades_section" class="page">
-							<h2 class="heading">Experimental Upgrades</h2>
-
+					<section id="experimental_upgrades_section" class="page">
+						<h2 class="heading">Experimental Upgrades</h2>
+						<div id="experimental_upgrades_content_wrapper">
 							<div id="experimental_upgrades" class="subpanel">
 								<div id="exotic_particles_display">
 									<span>Current EP: <span id="current_exotic_particles">0</span></span>
@@ -228,35 +124,65 @@
 								<div id="experimental_cell_boost"></div>
 								<div id="experimental_parts"></div>
 							</div>
-
 							<div id="reboot_section" class="explanitory">
-								<button id="reboot_btn">Reboot for <span id="reboot_exotic_particles">0</span> Exotic Particles (EP)</button>
+								<button class="styled-button" id="reboot_btn">Reboot for <span id="reboot_exotic_particles">0</span> Exotic Particles (EP)</button>
 								<p>
 									Rebooting the reactor will remove all parts, regular upgrades and money. Only your current experimental upgrades and EP will stay with you.
 								</p>
 							</div>
-
 							<div id="refund_section" class="explanitory">
-								<button id="refund_btn">Reboot and refund <span id="refund_exotic_particles">0</span> Exotic Particles</button>
+								<button class="styled-button" id="refund_btn">Reboot and refund <span id="refund_exotic_particles">0</span> Exotic Particles</button>
 								<p>
 									All of the above applies, however this will undo all your experiment upgrades and refund all your Exotic Particles.
 								</p>
 							</div>
-						</section>
+						</div>
+					</section>
+				</div>
+
+				<section id="options_section" class="page modal-like-page">
+					<h2>Options</h2>
+					<p>Options content here...</p>
+				</section>
+				<section id="help_section" class="page modal-like-page">
+					<h2>Help</h2>
+					<p>Help content here...</p>
+				</section>
+				<section id="about_section" class="page modal-like-page">
+					<h2>About</h2>
+					<p>About content here...</p>
+				</section>
+			</div>
+
+			<section id="tooltip" aria-live="polite">
+				<div id="tooltip_data" class="subpanel">
+					<p id="tooltip_cost_wrapper" title="Cost">Cost: <span id="tooltip_cost"></span></p>
+					<p id="tooltip_heat_per_wrapper" title="Heat per tick">Heat: <span id="tooltip_heat_per"></span></p>
+					<p id="tooltip_power_per_wrapper" title="Power per tick">Power: <span id="tooltip_power_per"></span></p>
+					<p id="tooltip_ticks_wrapper" title="Ticks remaining">Durability: <span id="tooltip_ticks"></span>/<span id="tooltip_max_ticks"></span></p>
+					<p id="tooltip_heat_wrapper" title="Heat contained">Heat: <span id="tooltip_heat"></span>/<span id="tooltip_max_heat"></span></p>
+					<p id="tooltip_sells_wrapper">Sells for: <span id="tooltip_sells"></span></p>
+					<p id="tooltip_chance_wrapper" title="EP Generation Chance">EP chance: <span id="tooltip_chance"></span>% (<span id="tooltip_chance_percent_of_total"></span>% of max)</p>
+				</div>
+				<div id="tooltip_text" class="subpanel">
+					<div id="tooltip_info">
+						<h2 class="headline" id="tooltip_name"></h2>
+						<p id="tooltip_description" class="explanitory"></p>
 					</div>
 				</div>
-			</div>
+			</section>
 		</main>
+
 		<div id="info_bar">
 			<div class="stat_block heat" id="info_heat_block">
 				<button id="reduceHeatBtnInfoBar">
-				<div class="stat_progress_bar" id="info_heat_progress"></div>
-				<span>Heat:</span>
-				<span class="stat_value">
-					<span id="info_bar_current_heat">0</span>
-					/
-					<span id="info_bar_max_heat">0</span>
-				</span>
+					<div class="stat_progress_bar" id="info_heat_progress"></div>
+					<span>Heat:</span>
+					<span class="stat_value">
+						<span id="info_bar_current_heat">0</span>
+						/
+						<span id="info_bar_max_heat">0</span>
+					</span>
 				</button>
 			</div>
 			<div class="stat_block power" id="info_power_block">
@@ -266,21 +192,22 @@
 			</div>
 			<div class="stat_block" id="info_money_block">
 				<button id="sellBtnInfoBar" title="Sell Power">
-				<span>Money:</span>
-				<span class="stat_value">$<span id="info_bar_money">0</span></span>
+					<span>Money:</span>
+					<span class="stat_value">$<span id="info_bar_money">0</span></span>
 				</button>
 			</div>
-			<div class="stat_block" id="time_flux">
+			<div class="stat_block" id="time_flux_display_block">
 				<span>Time Flux:</span>
-				<span class="stat_value"><span id="time_flux_value">0</span></span>
+				<span class="stat_value"><span id="time_flux_value">1x</span></span>
 			</div>
 		</div>
+
 		<nav id="bottom_nav">
-			<button id="nav_reactor" class="bottom_nav_btn" data-section="reactor_upgrades" data-page="reactor_section">Reactor</button>
-			<button id="nav_upgrades" class="bottom_nav_btn" data-section="reactor_upgrades" data-page="upgrades_section">Upgrades</button>
-			<button id="nav_experiments" class="bottom_nav_btn" data-section="reactor_upgrades" data-page="experimental_upgrades_section">Experiments</button>
+			<button id="nav_reactor_btn" class="bottom_nav_btn active" data-page="reactor_section">Reactor</button>
+			<button id="nav_upgrades_btn" class="bottom_nav_btn" data-page="upgrades_section">Upgrades</button>
+			<button id="nav_experiments_btn" class="bottom_nav_btn" data-page="experimental_upgrades_section">Experiments</button>
 		</nav>
-		<button id="sidebar_toggle" aria-label="Toggle sidebar"></button>
+		<button id="parts_panel_toggle" aria-label="Toggle parts panel">☰</button>
 	</div>
 
 	<script type="module" src="js/app.js"></script>

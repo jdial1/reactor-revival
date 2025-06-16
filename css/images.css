@@ -1,0 +1,501 @@
+/* Image Paths - Cells */
+.part.part_uranium1 .image,
+#reactor .tile.part_uranium1,
+#upgrades .uranium .image,
+#forceful_fusion .image {
+    background-image: url("../img/parts/cells/cell_1_1.gif");
+}
+
+.part.part_uranium2 .image,
+#reactor .tile.part_uranium2 {
+    background-image: url("../img/parts/cells/cell_1_2.gif");
+}
+
+.part.part_uranium3 .image,
+#reactor .tile.part_uranium3 {
+    background-image: url("../img/parts/cells/cell_1_4.gif");
+}
+
+/* plutonium */
+.part.part_plutonium1 .image,
+#reactor .tile.part_plutonium1,
+#upgrades .plutonium .image {
+    background-image: url("../img/parts/cells/cell_2_1.gif");
+}
+
+.part.part_plutonium2 .image,
+#reactor .tile.part_plutonium2 {
+    background-image: url("../img/parts/cells/cell_2_2.gif");
+}
+
+.part.part_plutonium3 .image,
+#reactor .tile.part_plutonium3 {
+    background-image: url("../img/parts/cells/cell_2_4.gif");
+}
+
+/* thorium */
+.part.part_thorium1 .image,
+#reactor .tile.part_thorium1,
+#upgrades .thorium .image {
+    background-image: url("../img/parts/cells/cell_3_1.gif");
+}
+
+.part.part_thorium2 .image,
+#reactor .tile.part_thorium2 {
+    background-image: url("../img/parts/cells/cell_3_2.gif");
+}
+
+.part.part_thorium3 .image,
+#reactor .tile.part_thorium3 {
+    background-image: url("../img/parts/cells/cell_3_4.gif");
+}
+
+/* seaborgium */
+.part.part_seaborgium1 .image,
+#reactor .tile.part_seaborgium1,
+#upgrades .seaborgium .image {
+    background-image: url("../img/parts/cells/cell_4_1.gif");
+}
+
+.part.part_seaborgium2 .image,
+#reactor .tile.part_seaborgium2 {
+    background-image: url("../img/parts/cells/cell_4_2.gif");
+}
+
+.part.part_seaborgium3 .image,
+#reactor .tile.part_seaborgium3 {
+    background-image: url("../img/parts/cells/cell_4_4.gif");
+}
+
+/* dolorium */
+.part.part_dolorium1 .image,
+#reactor .tile.part_dolorium1,
+#upgrades .dolorium .image {
+    background-image: url("../img/parts/cells/cell_5_1.gif");
+}
+
+.part.part_dolorium2 .image,
+#experimental_upgrades #infused_cells .image,
+#reactor .tile.part_dolorium2 {
+    background-image: url("../img/parts/cells/cell_5_2.gif");
+}
+
+.part.part_dolorium3 .image,
+#reactor .tile.part_dolorium3 {
+    background-image: url("../img/parts/cells/cell_5_4.gif");
+}
+
+/* nefastium */
+.part.part_nefastium1 .image,
+#reactor .tile.part_nefastium1,
+#upgrades .nefastium .image {
+    background-image: url("../img/parts/cells/cell_6_1.gif");
+}
+
+.part.part_nefastium2 .image,
+#reactor .tile.part_nefastium2 {
+    background-image: url("../img/parts/cells/cell_6_2.gif");
+}
+
+.part.part_nefastium3 .image,
+#experimental_upgrades #unleashed_cells .image,
+#reactor .tile.part_nefastium3 {
+    background-image: url("../img/parts/cells/cell_6_4.gif");
+}
+
+/* protium */
+.part.part_protium1 .image,
+#reactor .tile.part_protium1,
+#experimental_upgrades #protium_cells .image,
+#upgrades .protium .image {
+    background-image: url("../img/parts/cells/xcell_1_1.gif");
+}
+
+.part.part_protium2 .image,
+#experimental_upgrades #unstable_protium .image,
+#reactor .tile.part_protium2 {
+    background-image: url("../img/parts/cells/xcell_1_2.gif");
+}
+
+.part.part_protium3 .image,
+#reactor .tile.part_protium3 {
+    background-image: url("../img/parts/cells/xcell_1_4.gif");
+}
+
+/* Reflectors */
+#improved_neutron_reflection .image,
+#improved_reflector_density .image,
+#perpetual_reflectors .image,
+.part.part_reflector1 .image,
+#reactor .tile.part_reflector1 {
+    background-image: url("../img/parts/reflectors/reflector_1.gif");
+}
+
+.part.part_reflector2 .image,
+#reactor .tile.part_reflector2 {
+    background-image: url("../img/parts/reflectors/reflector_2.gif");
+}
+
+.part.part_reflector3 .image,
+#reactor .tile.part_reflector3 {
+    background-image: url("../img/parts/reflectors/reflector_3.gif");
+}
+
+.part.part_reflector4 .image,
+#reactor .tile.part_reflector4 {
+    background-image: url("../img/parts/reflectors/reflector_4.gif");
+}
+
+.part.part_reflector5 .image,
+#experimental_upgrades #full_spectrum_reflectors .image,
+#reactor .tile.part_reflector5 {
+    background-image: url("../img/parts/reflectors/reflector_5.gif");
+}
+
+.part.part_reflector6 .image,
+#experimental_upgrades #heat_reflection .image,
+#reactor .tile.part_reflector6 {
+    background-image: url("../img/parts/reflectors/reflector_6.gif");
+}
+
+/* Capacitors */
+.part.part_capacitor1 .image,
+#reactor .tile.part_capacitor1,
+#perpetual_capacitors .image,
+#active_venting .image,
+#active_exchangers .image,
+#improved_power_lines .image,
+#improved_wiring .image {
+    background-image: url("../img/parts/capacitors/capacitor_1.gif");
+}
+
+.part.part_capacitor2 .image,
+#reactor .tile.part_capacitor2 {
+    background-image: url("../img/parts/capacitors/capacitor_2.gif");
+}
+
+.part.part_capacitor3 .image,
+#reactor .tile.part_capacitor3 {
+    background-image: url("../img/parts/capacitors/capacitor_3.gif");
+}
+
+.part.part_capacitor4 .image,
+#reactor .tile.part_capacitor4 {
+    background-image: url("../img/parts/capacitors/capacitor_4.gif");
+}
+
+.part.part_capacitor5 .image,
+#experimental_upgrades #quantum_buffering .image,
+#reactor .tile.part_capacitor5 {
+    background-image: url("../img/parts/capacitors/capacitor_5.gif");
+}
+
+.part.part_capacitor6 .image,
+#experimental_upgrades #experimental_capacitance .image,
+#reactor .tile.part_capacitor6 {
+    background-image: url("../img/parts/capacitors/capacitor_6.gif");
+}
+
+/* Vents */
+.part.part_vent1 .image,
+#reactor .tile.part_vent1,
+#improved_heat_vents .image {
+    background-image: url("../img/parts/vents/vent_1.gif");
+}
+
+.part.part_vent2 .image,
+#reactor .tile.part_vent2 {
+    background-image: url("../img/parts/vents/vent_2.gif");
+}
+
+.part.part_vent3 .image,
+#reactor .tile.part_vent3 {
+    background-image: url("../img/parts/vents/vent_3.gif");
+}
+
+.part.part_vent4 .image,
+#reactor .tile.part_vent4 {
+    background-image: url("../img/parts/vents/vent_4.gif");
+}
+
+.part.part_vent5 .image,
+#experimental_upgrades #fluid_hyperdynamics .image,
+#reactor .tile.part_vent5 {
+    background-image: url("../img/parts/vents/vent_5.gif");
+}
+
+.part.part_vent6 .image,
+#experimental_upgrades #vortex_cooling .image,
+#reactor .tile.part_vent6 {
+    background-image: url("../img/parts/vents/vent_6.gif");
+}
+
+/* Heat Exchangers */
+.part.part_heat_exchanger1 .image,
+#reactor .tile.part_heat_exchanger1,
+#improved_heat_exchangers .image {
+    background-image: url("../img/parts/exchangers/exchanger_1.gif");
+}
+
+.part.part_heat_exchanger2 .image,
+#reactor .tile.part_heat_exchanger2 {
+    background-image: url("../img/parts/exchangers/exchanger_2.gif");
+}
+
+.part.part_heat_exchanger3 .image,
+#reactor .tile.part_heat_exchanger3 {
+    background-image: url("../img/parts/exchangers/exchanger_3.gif");
+}
+
+.part.part_heat_exchanger4 .image,
+#reactor .tile.part_heat_exchanger4 {
+    background-image: url("../img/parts/exchangers/exchanger_4.gif");
+}
+
+.part.part_heat_exchanger5 .image,
+#experimental_upgrades #fractal_piping .image,
+#reactor .tile.part_heat_exchanger5 {
+    background-image: url("../img/parts/exchangers/exchanger_5.gif");
+}
+
+.part.part_heat_exchanger6 .image,
+#experimental_upgrades #underground_heat_extraction .image,
+#reactor .tile.part_heat_exchanger6 {
+    background-image: url("../img/parts/exchangers/exchanger_6.gif");
+}
+
+/* Heat Inlets */
+.part.part_heat_inlet1 .image,
+#reactor .tile.part_heat_inlet1 {
+    background-image: url("../img/parts/inlets/inlet_1.gif");
+}
+
+.part.part_heat_inlet2 .image,
+#reactor .tile.part_heat_inlet2 {
+    background-image: url("../img/parts/inlets/inlet_2.gif");
+}
+
+.part.part_heat_inlet3 .image,
+#reactor .tile.part_heat_inlet3 {
+    background-image: url("../img/parts/inlets/inlet_3.gif");
+}
+
+.part.part_heat_inlet4 .image,
+#reactor .tile.part_heat_inlet4 {
+    background-image: url("../img/parts/inlets/inlet_4.gif");
+}
+
+.part.part_heat_inlet5 .image,
+#reactor .tile.part_heat_inlet5 {
+    background-image: url("../img/parts/inlets/inlet_5.gif");
+}
+
+.part.part_heat_inlet6 .image,
+#experimental_upgrades #vortex_extraction .image,
+#reactor .tile.part_heat_inlet6 {
+    background-image: url("../img/parts/inlets/inlet_6.gif");
+}
+
+/* Heat Outlets */
+.part.part_heat_outlet1 .image,
+#reactor .tile.part_heat_outlet1 {
+    background-image: url("../img/parts/outlets/outlet_1.gif");
+}
+
+.part.part_heat_outlet2 .image,
+#reactor .tile.part_heat_outlet2 {
+    background-image: url("../img/parts/outlets/outlet_2.gif");
+}
+
+.part.part_heat_outlet3 .image,
+#reactor .tile.part_heat_outlet3 {
+    background-image: url("../img/parts/outlets/outlet_3.gif");
+}
+
+.part.part_heat_outlet4 .image,
+#reactor .tile.part_heat_outlet4 {
+    background-image: url("../img/parts/outlets/outlet_4.gif");
+}
+
+.part.part_heat_outlet5 .image,
+#experimental_upgrades #explosive_ejection .image,
+#reactor .tile.part_heat_outlet5 {
+    background-image: url("../img/parts/outlets/outlet_5.gif");
+}
+
+.part.part_heat_outlet6 .image,
+#experimental_upgrades #explosive_ejection .image,
+#reactor .tile.part_heat_outlet6 {
+    background-image: url("../img/parts/outlets/outlet_6.gif");
+}
+
+/* Coolant Cells */
+#improved_coolant_cells .image,
+.part.part_coolant_cell1 .image,
+#reactor .tile.part_coolant_cell1 {
+    background-image: url("../img/parts/coolants/coolant_1.gif");
+}
+
+.part.part_coolant_cell2 .image,
+#reactor .tile.part_coolant_cell2 {
+    background-image: url("../img/parts/coolants/coolant_2.gif");
+}
+
+.part.part_coolant_cell3 .image,
+#reactor .tile.part_coolant_cell3 {
+    background-image: url("../img/parts/coolants/coolant_3.gif");
+}
+
+.part.part_coolant_cell4 .image,
+#reactor .tile.part_coolant_cell4 {
+    background-image: url("../img/parts/coolants/coolant_4.gif");
+}
+
+.part.part_coolant_cell5 .image,
+#experimental_upgrades #ultracryonics .image,
+#reactor .tile.part_coolant_cell5 {
+    background-image: url("../img/parts/coolants/coolant_5.gif");
+}
+
+.part.part_coolant_cell6 .image,
+#experimental_upgrades #thermionic_conversion .image,
+#reactor .tile.part_coolant_cell6 {
+    background-image: url("../img/parts/coolants/coolant_6.gif");
+}
+
+/* Platings */
+.part.part_reactor_plating1 .image,
+#reactor .tile.part_reactor_plating1,
+#improved_heatsinks .image,
+#reinforced_heat_exchangers .image,
+#upgrades #improved_piping .image,
+#upgrades #improved_alloys .image {
+    background-image: url("../img/parts/platings/plating_1.gif");
+}
+
+.part.part_reactor_plating2 .image,
+#reactor .tile.part_reactor_plating2 {
+    background-image: url("../img/parts/platings/plating_2.gif");
+}
+
+.part.part_reactor_plating3 .image,
+#reactor .tile.part_reactor_plating3 {
+    background-image: url("../img/parts/platings/plating_3.gif");
+}
+
+.part.part_reactor_plating4 .image,
+#reactor .tile.part_reactor_plating4 {
+    background-image: url("../img/parts/platings/plating_4.gif");
+}
+
+.part.part_reactor_plating5 .image,
+#experimental_upgrades #phlembotinum_core .image,
+#reactor .tile.part_reactor_plating5 {
+    background-image: url("../img/parts/platings/plating_5.gif");
+}
+
+.part.part_reactor_plating6 .image,
+#experimental_upgrades #micro_capacitance .image,
+#reactor .tile.part_reactor_plating6 {
+    background-image: url("../img/parts/platings/plating_6.gif");
+}
+
+/* Particle Accelerators */
+.part.part_particle_accelerator1 .image,
+#upgrades #improved_particle_accelerators .image,
+#experimental_upgrades #improved_particle_accelerators1 .image,
+#reactor .tile.part_particle_accelerator1 {
+    background-image: url("../img/parts/accelerators/accelerator_1.gif");
+}
+
+.part.part_particle_accelerator2 .image,
+#experimental_upgrades #improved_particle_accelerators2 .image,
+#reactor .tile.part_particle_accelerator2 {
+    background-image: url("../img/parts/accelerators/accelerator_2.gif");
+}
+
+.part.part_particle_accelerator3 .image,
+#experimental_upgrades #improved_particle_accelerators3 .image,
+#reactor .tile.part_particle_accelerator3 {
+    background-image: url("../img/parts/accelerators/accelerator_3.gif");
+}
+
+.part.part_particle_accelerator4 .image,
+#experimental_upgrades #improved_particle_accelerators4 .image,
+#reactor .tile.part_particle_accelerator4 {
+    background-image: url("../img/parts/accelerators/accelerator_4.gif");
+}
+
+.part.part_particle_accelerator5 .image,
+#experimental_upgrades #improved_particle_accelerators5 .image,
+#reactor .tile.part_particle_accelerator5 {
+    background-image: url("../img/parts/accelerators/accelerator_5.gif");
+}
+
+.part.part_particle_accelerator6 .image,
+#experimental_upgrades #improved_particle_accelerators6 .image,
+#experimental_upgrades #singularity_harnessing .image,
+#reactor .tile.part_particle_accelerator6 {
+    background-image: url("../img/parts/accelerators/accelerator_6.gif");
+}
+
+/* Other */
+#experimental_upgrades #laboratory .image {
+    background-image: url("../img/misc/lab.gif");
+}
+
+/* Upgrade icons using part images */
+#perpetual_capacitors .image,
+#active_venting .image,
+#active_exchangers .image,
+#improved_power_lines .image,
+#improved_wiring .image {
+    background-image: url("../img/parts/capacitors/capacitor_1.gif");
+}
+
+#improved_heat_vents .image {
+    background-image: url("../img/parts/vents/vent_1.gif");
+}
+
+#improved_heat_exchangers .image {
+    background-image: url("../img/parts/exchangers/exchanger_1.gif");
+}
+
+#reinforced_heat_exchangers .image {
+    background-image: url("../img/parts/platings/plating_1.gif");
+}
+
+#improved_coolant_cells .image {
+    background-image: url("../img/parts/coolants/coolant_cell_1.gif");
+}
+
+#improved_reflector_density .image,
+#improved_neutron_reflection .image,
+#perpetual_reflectors .image {
+    background-image: url("../img/parts/reflectors/reflector_1.gif");
+}
+
+#improved_alloys .image {
+    background-image: url("../img/parts/platings/plating_1.gif");
+}
+
+#improved_piping .image {
+    background-image: url("../img/parts/platings/plating_1.gif");
+}
+
+#expand_reactor_rows.upgrade .image {
+    background-image: url("../img/upgrades/upgrade_rows.gif");
+}
+
+#expand_reactor_cols.upgrade .image {
+    background-image: url("../img/upgrades/upgrade_cols.gif");
+}
+
+#chronometer.upgrade .image {
+    background-image: url("../img/upgrades/upgrade_flux.gif");
+}
+
+#heat_outlet_control_operator.upgrade .image,
+#heat_control_operator.upgrade .image {
+    background-image: url("../img/upgrades/upgrade_computer.gif");
+} 

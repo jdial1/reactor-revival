@@ -1,5 +1,5 @@
 import { addProperty, numFormat as fmt } from './util.js';
-import getUpgrades from '../data/upgrade_list_data.js';
+import getUpgrades from '../data/upgrade_list.js';
 
 let _upgrade_locations_dom = null;
 
@@ -39,9 +39,9 @@ export class Upgrade {
             this.$levels.textContent = this.level >= this.max_level && this.max_level > 1 ? 'MAX' : this.level;
         }
         
-        if(reactor) reactor.updateStats(game.tileset,game.ui.eventHandlers);
+        if(reactor) reactor.updateStats(game.tileset,game.ui.stateManager);
 
-        if(game) game.ui.eventHandlers.check_affordability(game);
+        if(game) game.ui.stateManager.check_affordability(game);
     }
 
     updateDisplayCost() {

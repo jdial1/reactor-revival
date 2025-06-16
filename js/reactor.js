@@ -112,13 +112,21 @@ export class Reactor {
 
         this.max_power = Number(current_max_power);
         this.max_heat = Number(current_max_heat);
+        this.stats_power = Number(this.stats_power);
+        this.stats_heat_generation = Number(this.stats_heat_generation);
 
-        // Fallback if they are still NaN
         if (isNaN(this.max_power)) {
             this.max_power = this.game.base_max_power || 0;
         }
         if (isNaN(this.max_heat)) {
             this.max_heat = this.game.base_max_heat || 0;
+        }
+
+        if (isNaN(this.stats_power)) {
+            this.stats_power = 0;
+        }
+        if (isNaN(this.stats_heat_generation)) {
+            this.stats_heat_generation = 0;
         }
 
         eventHandler.setVar('max_power', this.max_power);
@@ -215,7 +223,7 @@ export class Reactor {
             });
             this.current_heat = this.max_heat * 2 + 1;
     
-            this.game.ui.eventHandlers.setVar('melting_down', true,true);
+            this.game.ui.stateManager.setVar('melting_down', true,true);
             return true;
         }
         return false;

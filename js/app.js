@@ -19,13 +19,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     var tiles = game.tileset.initialize();
-    tiles.forEach(t => ui.eventHandlers.handleTileAdded(game,t));
+    tiles.forEach(t => ui.stateManager.handleTileAdded(game,t));
 
     var parts = game.partset.initialize();
-    parts.forEach(p => ui.eventHandlers.handlePartAdded(game,p));
+    parts.forEach(p => ui.stateManager.handlePartAdded(game,p));
 
     var upgrades = game.upgradeset.initialize();
-    upgrades.forEach(u => ui.eventHandlers.handleUpgradeAdded(game,u));
+    upgrades.forEach(u => ui.stateManager.handleUpgradeAdded(game,u));
 
     game.set_defaults();
 
@@ -39,6 +39,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const $all_parts = document.querySelector('#all_parts');
     const $all_upgrades = document.querySelector('#all_upgrades');
     
+    // Initialize toggle button states
+    ui.updateAllToggleBtnStates();
+
+    // Helper function to update all toggle button states
+    function _updateAllToggleBtnStatesForAppJs() {
+        if (ui && typeof ui.updateAllToggleBtnStates === 'function') {
+            ui.updateAllToggleBtnStates();
+        }
+    }
+
+    // Add game state change handler
+    game.onToggleStateChange = (property, newState) => {
+        console.log(`[Game] State change: ${property} = ${newState}`);
+        _updateAllToggleBtnStatesForAppJs();
+        
+        // Update UI elements based on state changes
+        if (property === 'pause') {
+            const pauseBtn = document.getElementById('main_pause_toggle_btn');
+            if (pauseBtn) {
+                pauseBtn.textContent = newState ? 'Play' : 'Pause';
+            }
+        }
+    };
+
+    // Initialize page content
+    if ($main) {
+        // Show reactor section by default
+        ui.showPage('reactor_section');
+        
+        // Set active state for bottom nav
+        const reactorBtn = document.querySelector('.bottom_nav_btn[data-page="reactor_section"]');
+        if (reactorBtn) {
+            reactorBtn.classList.add('active');
+        }
+    }
+
     const tooltipElements = {
         name: document.querySelector('#tooltip_name'),
         description: document.querySelector('#tooltip_description'),
@@ -63,8 +99,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const upgrade_locations_dom_map = {
         cell_tick_upgrades: document.getElementById('cell_tick_upgrades'),
+        cell_tick: document.getElementById('cell_tick_upgrades'),
         cell_power_upgrades: document.getElementById('cell_power_upgrades'),
+        cell_power: document.getElementById('cell_power_upgrades'),
         cell_perpetual_upgrades: document.getElementById('cell_perpetual_upgrades'),
+        cell_perpetual: document.getElementById('cell_perpetual_upgrades'),
         other: document.getElementById('other_upgrades'),
         vent: document.getElementById('vent_upgrades'),
         vents: document.getElementById('vent_upgrades'),
@@ -78,14 +117,12 @@ document.addEventListener('DOMContentLoaded', () => {
         experimental_cells_boost: document.getElementById('experimental_cell_boost'),
         experimental_parts: document.getElementById('experimental_parts'),
     };
+    window.upgrade_locations_dom_map = upgrade_locations_dom_map; // Make available globally
   
 
     game.objectives_manager.start();
-    if (game.debug && $main) {
-        $main.classList.add('debug');
-    }
-    ui.eventHandlers.setVar('max_heat', game.reactor.max_heat,true);
-    ui.eventHandlers.setVar('max_power', game.reactor.max_power,true);
+    ui.stateManager.setVar('max_heat', game.reactor.max_heat,true);
+    ui.stateManager.setVar('max_power', game.reactor.max_power,true);
 
     // --- Tooltip Logic ---
     function updateTooltipContent(obj, tile_context) {
@@ -184,9 +221,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.warn("Clicked element does not have _part object attached.", this);
                     return;
                 }
-                const current_clicked_part = ui.eventHandlers.getClickedPart();
+                const current_clicked_part = ui.stateManager.getVar('clicked_part');
                 if (current_clicked_part === part_obj_from_dom) {
-                    ui.eventHandlers.setClickedPart(null);
+                    ui.stateManager.setClickedPart(null);
                     this.classList.remove('part_active');
                     if ($main) $main.classList.remove('part_active');
                     game.tooltip_manager.hide();
@@ -194,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (current_clicked_part && current_clicked_part.$el) {
                         current_clicked_part.$el.classList.remove('part_active');
                     }
-                    ui.eventHandlers.setClickedPart(part_obj_from_dom);
+                    ui.stateManager.setClickedPart(part_obj_from_dom);
                     this.classList.add('part_active');
                     if ($main) $main.classList.add('part_active');
                     show_tooltip_for_object(part_obj_from_dom, null);
@@ -212,94 +249,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if ($all_upgrades) setupTooltipEvents($all_upgrades, '.upgrade', (el) => el.upgrade_object);
 
+    // Remove window functions since we're using game state management
     window.manual_reduce_heat = () => game.manual_reduce_heat_action();
     window.sell = () => game.sell_action();
     window.reboot = (refund_ep = false) => game.reboot_action(refund_ep);
-    if ($all_upgrades) {
-        on($all_upgrades, '.upgrade', 'click', function(event) {
-            const upgrade_obj = this.upgrade_object;
-            if (upgrade_obj) {
-                let result;
-                do {
-                    result = game.upgradeset.purchaseUpgrade(upgrade_obj.id);
-                } while (event.shiftKey && result && upgrade_obj.level < upgrade_obj.max_level);
-                if (game.tooltip_manager.tooltip_showing) {
-                    show_tooltip_for_object(upgrade_obj, null);
-                }
-            }
-        });
-    }
-
-    // --- Game Loop ---
-    let lastTick = Date.now();
-    function gameLoop() {
-        const now = Date.now();
-        const delta = now - lastTick;
-        lastTick = now;
-
-        if (!game.paused) {
-            game.tileset.active_tiles_list.forEach(tile => {
-                if (tile.activated && tile.part) {
-                    if (tile.part.category === 'cell' && tile.ticks > 0) {
-                        tile.ticks--;
-                        if (tile.ticks === 0) {
-                            tile.part = null;
-                            tile.activated = false;
-                            game.update_cell_power();
-                        }
-                    }
-                }
-            });
-
-            if (game.reactor.current_heat > 0) {
-                game.reactor.current_heat -= game.reactor.stats_vent;
-                if (game.reactor.current_heat < 0) game.reactor.current_heat = 0;
-                game.ui.eventHandlers.setVar('current_heat', game.reactor.current_heat,true);
-            }
-
-            if (game.reactor.current_power > 0 && !game.auto_sell_disabled) {
-                game.reactor.sellPower();
-            }
-
-            if (game.reactor.current_heat >= game.reactor.max_heat) {
-                game.reactor.checkMeltdown(game.tileset);
-            }
-
-            game.reactor.updateStats(game.tileset,ui.eventHandlers);
-        }
-
-        setTimeout(gameLoop, game.loop_wait);
-    }
-
-    // Start the game loop
-    gameLoop();
-
-
-    function pause_game() {
-        game.paused = true;
-        clearTimeout(loop_timeout);
-        last_tick_time = 0;
-        dtime = 0;
-        ui.eventHandlers.pause_game();
-    }
-
-    function unpause_game() {
-        if (!game.paused) return;
-        game.paused = false;
-        last_tick_time = performance.now();
-        dtime = 0;
-        gameLoop();
-        ui.eventHandlers.unpause_game();
-    };
-    
-    window.disable_auto_sell = () => { game.auto_sell_disabled = true; ui.eventHandlers.disable_auto_sell(); _updateAllToggleBtnStatesForAppJs(); };
-    window.enable_auto_sell = () => { game.auto_sell_disabled = false; ui.eventHandlers.enable_auto_sell(); _updateAllToggleBtnStatesForAppJs(); };
-    window.disable_auto_buy = () => { game.auto_buy_disabled = true; ui.eventHandlers.disable_auto_buy(); _updateAllToggleBtnStatesForAppJs(); };
-    window.enable_auto_buy = () => { game.auto_buy_disabled = false; ui.eventHandlers.enable_auto_buy(); _updateAllToggleBtnStatesForAppJs(); };
-    window.disable_heat_control = () => { game.heat_controlled = false; ui.eventHandlers.disable_heat_control(); _updateAllToggleBtnStatesForAppJs(); };
-    window.enable_heat_control = () => { game.heat_controlled = true; ui.eventHandlers.enable_heat_control(); _updateAllToggleBtnStatesForAppJs(); };
-    window.disable_time_flux = () => { game.time_flux = false; ui.eventHandlers.disable_time_flux(); _updateAllToggleBtnStatesForAppJs(); };
-    window.enable_time_flux = () => { game.time_flux = true; ui.eventHandlers.enable_time_flux(); _updateAllToggleBtnStatesForAppJs(); };
 
     // --- Cool Button Hold-to-Repeat ---
     const coolBtn = document.getElementById('reduceHeatBtnInfoBar');
@@ -327,14 +280,5 @@ document.addEventListener('DOMContentLoaded', () => {
         coolBtn.addEventListener('mouseleave', stopCoolRepeat);
         coolBtn.addEventListener('touchend', stopCoolRepeat, { passive: true });
         coolBtn.addEventListener('touchcancel', stopCoolRepeat, { passive: true });
-    }
-
-    // Helper in app.js to update button states if they are not fully managed by app.ui.js yet
-    function _updateAllToggleBtnStatesForAppJs() {
-        if (ui && typeof ui._updateAllToggleBtnStates === 'function') {
-            ui._updateAllToggleBtnStates();
-        } else if (ui && game) {
-            ui.eventHandlers.setVar('auto_sell_disabled_state_change', game.auto_sell_disabled,true);
-        }
     }
 });

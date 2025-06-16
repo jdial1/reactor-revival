@@ -1,5 +1,5 @@
 import { addProperty, numFormat as fmt } from './util.js';
-import part_list_data from '../data/part_list_data.js'; 
+import part_list_data from '../data/part_list.js'; 
 
 const SINGLE_CELL_DESC_TPL = 'Produces %power power and %heat heat per tick. Lasts for %ticks ticks.';
 const MULTI_CELL_DESC_TPL = 'Acts as %count %type cells. Produces %power power and %heat heat per tick.';
