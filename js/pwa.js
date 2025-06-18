@@ -189,6 +189,21 @@ export class PWA {
       }
     }
   }
+
+  attachUpdateDetection(registration) {
+    if (!registration) return;
+    registration.onupdatefound = () => {
+      const newWorker = registration.installing;
+      newWorker.onstatechange = () => {
+        if (
+          newWorker.state === "installed" &&
+          navigator.serviceWorker.controller
+        ) {
+          showUpdateBanner();
+        }
+      };
+    };
+  }
 }
 
 // Add PWA styles
@@ -324,24 +339,4 @@ function pollVersionJson() {
 setInterval(pollVersionJson, 60000); // Poll every 60 seconds
 pollVersionJson();
 
-// --- Service Worker Update Detection ---
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/reactor-knockoff/sw.js", { scope: "/reactor-knockoff/" })
-      .then((registration) => {
-        // Listen for updates
-        registration.onupdatefound = () => {
-          const newWorker = registration.installing;
-          newWorker.onstatechange = () => {
-            if (
-              newWorker.state === "installed" &&
-              navigator.serviceWorker.controller
-            ) {
-              showUpdateBanner();
-            }
-          };
-        };
-      });
-  });
-}
+window.pwa = new PWA();

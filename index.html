@@ -345,13 +345,12 @@
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
+          // Use a relative path. The browser will resolve it correctly.
           navigator.serviceWorker
-            .register("/reactor-knockoff/sw.js", {
-              scope: "/reactor-knockoff/",
-            })
+            .register("sw.js")
             .then((registration) => {
               console.log(
-                "Service Worker registered with scope:",
+                "Service Worker registered successfully with scope:",
                 registration.scope
               );
             })

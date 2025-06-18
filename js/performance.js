@@ -1,3 +1,5 @@
+const DEBUG_PERFORMANCE = false;
+
 export class Performance {
   constructor(game) {
     this.game = game;
@@ -13,6 +15,7 @@ export class Performance {
   }
 
   enable() {
+    if (!DEBUG_PERFORMANCE) return;
     this.enabled = true;
     this.startPeriodicDisplay();
   }
@@ -150,7 +153,7 @@ export class Performance {
   }
 
   displayPerformanceStats() {
-    if (!this.enabled) return;
+    if (!this.enabled || !DEBUG_PERFORMANCE) return;
 
     const now = performance.now();
     if (now - this.lastDisplayTime < this.displayInterval) return;

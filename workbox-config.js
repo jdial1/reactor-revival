@@ -9,7 +9,7 @@ module.exports = {
     "package.json",
     "package-lock.json",
     "workbox-config.js",
-    "src-sw.js", // This is the source, not the destination file
+    "src-sw.js",
     ".github/**/*",
     "README.md",
     ".gitignore",

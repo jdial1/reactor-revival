@@ -1,8 +1,9 @@
 {
   "name": "reactor-game-tests",
   "version": "1.0.0",
-  "description": "Tests for Reactor Game",
+  "description": "Reactor Game",
   "main": "index.html",
+  "debug": false,
   "scripts": {
     "test": "vitest",
     "generate-version": "node scripts/generate-version.js",
@@ -10,8 +11,8 @@
     "start": "npx live-server --port=8080 --open=/",
     "check-pwa-root-files": "node scripts/copy-pwa-root-files.js",
     "predeploy": "npm run build:sw && npm run check-pwa-root-files",
-    "deploy": "npm run build:sw && npm run check-pwa-root-files && git pull origin master && git add . && git commit -m 'Automated deploy' || echo 'No changes to commit' && git push origin master",
-     "build:sw": "workbox injectManifest workbox-config.js"
+    "build:sw": "workbox injectManifest workbox-config.js",
+    "deploy": "npm run build:sw && npm run check-pwa-root-files && git pull origin master && git add . && git commit -m 'Automated deploy' || echo 'No changes to commit' && git push origin master"
   },
   "keywords": [],
   "author": "",
