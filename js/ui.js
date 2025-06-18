@@ -1,353 +1,749 @@
-import { updateProperty, numFormat as fmt, timeFormat } from './util.js';
-import { EventHandlers } from './events.js';
-
+import { numFormat as fmt } from "./util.js";
+import { StateManager } from "./stateManager.js";
+import { Hotkeys } from "./hotkeys.js";
 
 export class UI {
-    constructor() {
-        console.log('UI constructor');
-        this.game = null;
-        this.DOMElements = {};
-        this.rowsUI = [];
-        this.current_vars = new Map();
-        this.update_vars = new Map();
-        this.update_interface_interval = 100;
-        this.update_interface_task = null;
-        this.do_check_upgrades_affordability = false;
-        this.stateManager = new EventHandlers(this);
-        
-        // Define toggle button configurations
-        this.toggle_buttons_config = {
-            auto_sell: { id: 'auto_sell_toggle', stateProperty: 'auto_sell' },
-            auto_buy: { id: 'auto_buy_toggle', stateProperty: 'auto_buy' },
-            time_flux: { id: 'time_flux_toggle', stateProperty: 'time_flux' },
-            heat_control: { id: 'heat_control_toggle', stateProperty: 'heat_control' },
-            pause: { id: 'pause_toggle', stateProperty: 'pause' },
-            // New main control buttons
-            main_auto_sell: { 
-                id: 'main_auto_sell_toggle_btn', 
-                stateProperty: 'auto_sell',
-                textMap: {true: 'Disable Auto Sell', false: 'Enable Auto Sell'}
-            },
-            main_auto_buy: { 
-                id: 'main_auto_buy_toggle_btn', 
-                stateProperty: 'auto_buy',
-                textMap: {true: 'Disable Auto Buy', false: 'Enable Auto Buy'}
-            },
-            main_time_flux: { 
-                id: 'main_time_flux_toggle_btn', 
-                stateProperty: 'time_flux',
-                textMap: {true: 'Disable Time Flux', false: 'Enable Time Flux'}
-            },
-            main_heat_controller: { 
-                id: 'main_heat_controller_toggle_btn', 
-                stateProperty: 'heat_control',
-                textMap: {true: 'Disable Heat Controller', false: 'Enable Heat Controller'}
-            },
-            main_pause: { 
-                id: 'main_pause_toggle_btn', 
-                stateProperty: 'pause',
-                textMap: {true: 'Play', false: 'Pause'}
-            },
-            main_parts_panel: { 
-                id: 'parts_panel_toggle', 
-                stateProperty: 'parts_panel',
-                textMap: {true: '>', false: '<'}
-            }
-        };
-    }
+  constructor() {
+    this.game = null;
+    this.DOMElements = {};
+    this.update_vars = new Map();
+    this.update_interface_interval = 100;
+    this.update_interface_task = null;
+    this.stateManager = new StateManager(this);
+    this.hotkeys = null;
+    this.isDragging = false;
+    this.lastTileModified = null;
+    this.longPressTimer = null;
+    this.longPressDuration = 500;
+    this.var_objs_config = {};
+    this.last_money = 0;
+    this.last_exotic_particles = 0;
+    this.dom_ids = [
+      "main",
+      "reactor",
+      "reactor_background",
+      "reactor_wrapper",
+      "reactor_section",
+      "parts_section",
+      "primary",
+      "info_bar",
+      "info_heat_block",
+      "info_power_block",
+      "info_money_block",
+      "time_flux",
+      "info_bar_current_heat",
+      "info_bar_max_heat",
+      "info_bar_auto_heat_reduce",
+      "info_heat_progress",
+      "info_bar_current_power",
+      "info_bar_max_power",
+      "info_power_progress",
+      "info_bar_money",
+      "time_flux_value",
+      "sellBtnInfoBar",
+      "reduceHeatBtnInfoBar",
+      "all_parts",
+      "parts_tab_contents",
+      "cells",
+      "reflectors",
+      "capacitors",
+      "vents",
+      "heatExchangers",
+      "heatInlets",
+      "heatOutlets",
+      "coolantCells",
+      "reactorPlatings",
+      "particleAccelerators",
+      "objectives_section",
+      "objective_title",
+      "objective_reward",
+      "tooltip",
+      "tooltip_data",
+      "tooltip_nav",
+      "stats_power",
+      "stats_heat",
+      "stats_cash",
+      "stats_outlet",
+      "stats_inlet",
+      "stats_vent",
+      "money_per_tick",
+      "power_per_tick",
+      "heat_per_tick",
+      "upgrades_section",
+      "experimental_upgrades_section",
+      "options_section",
+      "help_section",
+      "about_section",
+      "upgrades_content_wrapper",
+      "other_upgrades",
+      "cell_tick_upgrades",
+      "cell_power_upgrades",
+      "cell_perpetual_upgrades",
+      "vent_upgrades",
+      "exchanger_upgrades",
+      "experimental_upgrades_content_wrapper",
+      "exotic_particles_display",
+      "experimental_laboratory",
+      "experimental_boost",
+      "experimental_particle_accelerators",
+      "experimental_cells",
+      "experimental_cells_boost",
+      "experimental_parts",
+      "current_exotic_particles",
+      "exotic_particles",
+      "reboot_exotic_particles",
+      "refund_exotic_particles",
+      "reboot_btn",
+      "refund_btn",
+      "auto_sell_toggle",
+      "auto_buy_toggle",
+      "time_flux_toggle",
+      "heat_control_toggle",
+      "pause_toggle",
+      "parts_panel_toggle",
+      "bottom_nav",
+      "main_top_nav",
+    ];
+    this.toggle_buttons_config = {
+      auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
+      auto_buy: { id: "auto_buy_toggle", stateProperty: "auto_buy" },
+      time_flux: { id: "time_flux_toggle", stateProperty: "time_flux" },
+      heat_control: {
+        id: "heat_control_toggle",
+        stateProperty: "heat_control",
+      },
+      pause: { id: "pause_toggle", stateProperty: "pause" },
+    };
+  }
 
-    cacheDOMElements() {
-        const ids = this.stateManager.getVar('data')['dom_ids'];
-
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                this.DOMElements[id] = el;
-                // Add camelCase version if it contains underscores
-                if (id.includes('_')) {
-                    const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-                    this.DOMElements[camelCaseKey] = el;
-                }
-            } else {
-                console.warn(`[UI Cache] Element with ID '${id}' not found.`);
-            }
-        });
-
-        // Ensure critical elements are explicitly checked
-        if (!this.DOMElements.reactor) {
-            console.error("[UI Cache] Critical element #reactor not found!");
-            return false;
-        }
-
-        // Cache EP display spans if not caught by general ID list
-        this.DOMElements.currentExoticParticlesDisplay = document.getElementById('current_exotic_particles');
-        this.DOMElements.totalExoticParticlesDisplay = document.getElementById('exotic_particles');
-
-        return true;
-    }
-
+  cacheDOMElements() {
+    this.dom_ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        this.DOMElements[id] = el;
+        const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+        this.DOMElements[camelCaseKey] = el;
+      }
+    });
+    return !!this.DOMElements.reactor;
+  }
 
   initializeToggleButtons() {
-        if (!this.game) {
-            console.error('[UI] Cannot initialize toggle buttons: Game instance not found');
-            return;
-        }
-
-        for (const buttonKey in this.toggle_buttons_config) {
-            const config = this.toggle_buttons_config[buttonKey];
-            const button = this.DOMElements[config.id];
-
-            if (button) {
-                button.onclick = () => {
-                    const currentState = this.stateManager.getVar(config.stateProperty);
-                    const newState = !currentState;
-                    
-                    // Update the single source of truth
-                    this.stateManager.setVar(config.stateProperty, newState);
-
-                    // Game logic should react to this state change
-                    if (this.game && typeof this.game.onToggleStateChange === 'function') {
-                        this.game.onToggleStateChange(config.stateProperty, newState);
-                    }
-                };
-            } else {
-                console.warn(`[UI] Toggle button with ID '${config.id}' not found.`);
-            }
-        }
-        this.updateAllToggleBtnStates();
-    }
-
-    updateAllToggleBtnStates() {
-        console.log('[UI] updateAllToggleBtnStates');
-        if (!this.game) return;
-        for (const buttonKey in this.toggle_buttons_config) {
-            const config = this.toggle_buttons_config[buttonKey];
-            const isActive = this.stateManager.getVar(config.stateProperty);
-            this.updateToggleButtonState(buttonKey, isActive);
-        }
-    }
-    
-    _updateAllToggleBtnStates() { // Alias for external calls if needed
-        this.updateAllToggleBtnStates();
-    }
-    
-    setupPartsTabs() {
-        const tabButtons = Array.from(document.querySelectorAll('.parts_tab'));
-        const tabContents = Array.from(document.querySelectorAll('.parts_tab_content'));
-
-        tabButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                if (btn.disabled) return;
-                const clickedTabId = btn.getAttribute('data-tab');
-
-                tabButtons.forEach(b => b.classList.remove('active'));
-                tabContents.forEach(c => c.classList.remove('active'));
-
-                btn.classList.add('active');
-                const contentToShow = document.getElementById('parts_tab_' + clickedTabId);
-                if (contentToShow) contentToShow.classList.add('active');
-            });
-        });
-    }
-
-    runUpdateInterfaceLoop() {
-        updateProperty(); 
-
-
-        if (this.game && this.game.active_tiles_list) {
-            this.game.active_tiles_list.forEach(tile => {
-                if (!tile.$percent || !tile.part || !tile.activated) {
-                    if(tile.$percent) tile.$percent.style.width = '0%'; // Clear if no part or not active
-                    return;
-                }
-                if ((tile.part.category === 'cell' || tile.part.category === 'reflector') && tile.part.ticks > 0) {
-                    const perc = Math.max(0, Math.min(1, tile.ticks / tile.part.ticks));
-                    tile.$percent.style.width = (perc * 100) + '%';
-                    tile.$percent.style.backgroundColor = '#0f0'; // Green for durability
-                } else if (tile.part.containment > 0) {
-                    const perc = Math.max(0, Math.min(1, tile.heat_contained / tile.part.containment));
-                    tile.$percent.style.width = (perc * 100) + '%';
-                    tile.$percent.style.backgroundColor = '#f00'; // Red for heat
-                } else {
-                    tile.$percent.style.width = '0%'; // No relevant progress
-                }
-            });
-        }
-
-        if(this.game && this.game.partset) this.game.partset.check_affordability(this.game);
-        if(this.game && this.game.upgradeset) this.game.upgradeset.check_affordability(this.game);
-
-        clearTimeout(this.update_interface_task);
-        this.update_interface_task = setTimeout(() => this.runUpdateInterfaceLoop(), this.update_interface_interval);
-    }
-
-
-
-    init(gameInstance) {
-        console.log('[UI] INIT GAME: Starting initialization');
-        
-        // Set the game instance
-        this.game = gameInstance;
-        if (!this.game) {
-            console.error('[UI] No game instance provided for initialization');
-            return false;
-        }
-
-        // Set game instance in EventHandlers
-        this.stateManager.setGame(gameInstance);
-
-        console.log('[UI] INIT GAME: Caching DOM elements...');
-        if (!this.cacheDOMElements()) {
-            console.error('[UI] Failed to cache required DOM elements. Initialization aborted.');
-            return false;
-        }
-
-        console.log(`[UI] INIT GAME: Setting reactor grid columns to ${gameInstance.cols}`);
-        this.DOMElements.reactor.style.gridTemplateColumns = `repeat(${gameInstance.cols}, 32px)`;
-    
-        console.log('[UI] INIT GAME: Setting up event listeners...');
-        this.setupEventListeners(gameInstance);
-
-        console.log('[UI] INIT GAME: Initializing toggle buttons...');
-        this.initializeToggleButtons();
-
-        console.log('[UI] INIT GAME: Setting up part tabs...');
-        this.setupPartsTabs();
-
-        for (const key in this.var_objs_config) {
-            const config = this.var_objs_config[key];
-            if (config.domId) {
-                config.dom = this.DOMElements[config.domId] || this.DOMElements[config.domId.replace(/_([a-z])/g, (g) => g[1].toUpperCase())];
-            }
-        }
-
-        // Initialize state variables from EventHandlers.stateManager
-        for (const key in this.stateManager.data) {
-            if (this.stateManager.data.hasOwnProperty(key) && this.var_objs_config[key]) {
-                this.current_vars.set(key, this.stateManager.getVar(key));
-                this.update_vars.set(key, this.stateManager.getVar(key));
-            }
-        }
-
-        console.log('[UI] INIT GAME: Scheduling interface update loop...');
-        this.update_interface_task = setTimeout(() => this.runUpdateInterfaceLoop(), this.update_interface_interval);
-        
-        console.log('[UI] INIT GAME: Initialization complete.');
-        return true;
-    }
-
-    showPage(pageId) {
-        if (!this.DOMElements.main) {
-            console.error("[UI] Main element (#main) not found for page switching.");
-            return;
-        }
-
-        const pageElementIds = [
-            'reactor_section',
-            'upgrades_section',
-            'experimental_upgrades_section',
-            'options_section',
-            'help_section',
-            'about_section'
-        ];
-
-        // Hide all pages
-        pageElementIds.forEach(id => {
-            if (this.DOMElements[id] && this.DOMElements[id].classList.contains('page')) {
-                this.DOMElements[id].classList.remove('showing');
-            }
-        });
-
-        // Show the target page
-        if (this.DOMElements[pageId] && this.DOMElements[pageId].classList.contains('page')) {
-            this.DOMElements[pageId].classList.add('showing');
-            console.log(`[UI] Switched to page: ${pageId}`);
-        } else {
-            console.error(`[UI] Target page element for ID '${pageId}' not found or not a page in DOMElements.`);
-        }
-    }
-
-    setupEventListeners(gameInstance) {
-        // Existing reactor click listener
-        if (this.DOMElements.reactor) {
-            this.DOMElements.reactor.addEventListener('click', (e) => {
-                const tile_el = e.target.closest('.tile');
-                if (tile_el && tile_el.tile) {
-                    const tile = tile_el.tile;
-                    if (tile.enabled) {
-                        const clicked_part = this.stateManager.getClickedPart();
-                        if (clicked_part) {
-                            tile.part = clicked_part;
-                            tile.activated = true;
-                            tile.ticks = clicked_part.ticks;
-                            tile.heat_contained = 0;
-                            tile.$el.classList.add('activated');
-                            this.stateManager.setClickedPart(null);
-                            if (this.DOMElements.main) this.DOMElements.main.classList.remove('part_active');
-                        } else if (tile.part) {
-                            tile.part = null;
-                            tile.activated = false;
-                            tile.ticks = 0;
-                            tile.heat_contained = 0;
-                            tile.$el.classList.remove('activated'); 
-                        }
-                        gameInstance.update_cell_power();
-                    }
-                }
-            });
-        }
-
-        // Navigation event listeners
-        const setupNavListeners = (container, buttonClass) => {
-            if (container) {
-                container.addEventListener('click', (event) => {
-                    const button = event.target.closest(buttonClass);
-                    if (button && button.dataset.page) {
-                        this.showPage(button.dataset.page);
-                        
-                        // Update active state for bottom nav buttons
-                        if (buttonClass === '.bottom_nav_btn') {
-                            const allTabs = container.querySelectorAll(buttonClass);
-                            allTabs.forEach(tab => tab.classList.remove('active'));
-                            button.classList.add('active');
-                        }
-                    }
-                });
-            }
+    for (const buttonKey in this.toggle_buttons_config) {
+      const config = this.toggle_buttons_config[buttonKey];
+      const button = this.DOMElements[config.id];
+      if (button) {
+        button.onclick = () => {
+          const currentState = this.stateManager.getVar(config.stateProperty);
+          this.stateManager.setVar(config.stateProperty, !currentState);
         };
+      }
+    }
+    if (this.DOMElements.partsPanelToggle) {
+      this.DOMElements.partsPanelToggle.onclick = () => {
+        this.DOMElements.partsSection.classList.toggle("collapsed");
+      };
+    }
+    this.updateAllToggleBtnStates();
+  }
 
-        // Setup bottom navigation
-        setupNavListeners(this.DOMElements.bottom_nav, '.bottom_nav_btn');
+  updateAllToggleBtnStates() {
+    for (const buttonKey in this.toggle_buttons_config) {
+      const config = this.toggle_buttons_config[buttonKey];
+      const isActive = this.stateManager.getVar(config.stateProperty);
+      this.updateToggleButtonState(config, isActive);
+    }
+  }
 
-        // Setup main top controls navigation (Options, Help, About)
-        setupNavListeners(this.DOMElements.main_top_controls_wrapper, '.styled-button[data-page]');
+  updateToggleButtonState(config, isActive) {
+    const button = this.DOMElements[config.id];
+    if (!button) return;
+    button.classList.toggle("on", isActive);
+  }
+
+  clearPartContainers() {
+    const containerIds = [
+      "cells",
+      "reflectors",
+      "capacitors",
+      "particleAccelerators",
+      "vents",
+      "heatExchangers",
+      "heatInlets",
+      "heatOutlets",
+      "coolantCells",
+      "reactorPlatings",
+    ];
+    containerIds.forEach((id) => {
+      const el = this.DOMElements[id];
+      if (el) el.innerHTML = "";
+    });
+  }
+
+  populatePartsForTab(tabId) {
+    if (!this.game || !this.game.partset) return;
+
+    const categoryMap = {
+      power: ["cell", "reflector", "capacitor", "particle_accelerator"],
+      heat: [
+        "vent",
+        "heat_exchanger",
+        "heat_inlet",
+        "heat_outlet",
+        "coolant_cell",
+        "reactor_plating",
+      ],
+    };
+    const categories = categoryMap[tabId] || [];
+
+    this.clearPartContainers();
+
+    categories.forEach((partCategory) => {
+      const parts = this.game.partset.getPartsByCategory(partCategory);
+      parts.forEach((part) => {
+        this.stateManager.handlePartAdded(this.game, part);
+      });
+    });
+  }
+
+  setupPartsTabs() {
+    const tabButtons = Array.from(document.querySelectorAll(".parts_tab"));
+    const tabContents = Array.from(
+      document.querySelectorAll(".parts_tab_content")
+    );
+
+    tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        const clickedTabId = btn.getAttribute("data-tab");
+
+        tabButtons.forEach((b) => b.classList.remove("active"));
+        tabContents.forEach((c) => c.classList.remove("active"));
+
+        btn.classList.add("active");
+        const contentToShow = document.getElementById(
+          "parts_tab_" + clickedTabId
+        );
+        if (contentToShow) contentToShow.classList.add("active");
+
+        this.populatePartsForTab(clickedTabId);
+      });
+    });
+
+    const activeTab = tabButtons.find((btn) =>
+      btn.classList.contains("active")
+    );
+    if (activeTab) {
+      this.populatePartsForTab(activeTab.getAttribute("data-tab"));
+    }
+  }
+
+  runUpdateInterfaceLoop() {
+    this.processUpdateQueue();
+    if (this.game?.tileset.active_tiles_list) {
+      this.game.tileset.active_tiles_list.forEach((tile) =>
+        tile.updateVisualState()
+      );
+    }
+    if (this.game) {
+      // Ensure money is a number
+      this.game.current_money = Number(this.game.current_money);
+      this.game.current_exotic_particles = Number(
+        this.game.current_exotic_particles
+      );
+
+      // Only check affordability if money or exotic particles changed
+      const moneyChanged = this.last_money !== this.game.current_money;
+      const exoticParticlesChanged =
+        this.last_exotic_particles !== this.game.current_exotic_particles;
+
+      if (moneyChanged || exoticParticlesChanged) {
+        // Update last known values
+        this.last_money = this.game.current_money;
+        this.last_exotic_particles = this.game.current_exotic_particles;
+
+        // Check affordability for both parts and upgrades
+        this.game.partset.check_affordability(this.game);
+        this.game.upgradeset.check_affordability(this.game);
+      }
+
+      // Update UI state
+      this.stateManager.setVar("current_money", this.game.current_money);
+      this.stateManager.setVar(
+        "current_exotic_particles",
+        this.game.current_exotic_particles
+      );
+    }
+    this.update_interface_task = setTimeout(
+      () => this.runUpdateInterfaceLoop(),
+      this.update_interface_interval
+    );
+    // Live-update tooltip if showing
+    if (this.game?.tooltip_manager?.tooltip_showing) {
+      this.game.tooltip_manager.update();
+    }
+  }
+
+  processUpdateQueue() {
+    if (this.update_vars.size === 0) return;
+    for (const [key, value] of this.update_vars) {
+      const config = this.var_objs_config[key];
+      if (!config) continue;
+      if (config.dom) {
+        let textContent = config.num ? fmt(value, config.places) : value;
+        if (config.prefix) textContent = config.prefix + textContent;
+        config.dom.textContent = textContent;
+      }
+      config.onupdate?.(value);
+    }
+    this.update_vars.clear();
+  }
+
+  initVarObjsConfig() {
+    this.var_objs_config = {
+      current_money: { dom: this.DOMElements.info_bar_money, num: true },
+      current_power: {
+        dom: this.DOMElements.info_bar_current_power,
+        num: true,
+        onupdate: () =>
+          this.updatePercentageBar(
+            "current_power",
+            "max_power",
+            this.DOMElements.info_power_progress
+          ),
+      },
+      max_power: {
+        dom: this.DOMElements.info_bar_max_power,
+        num: true,
+        onupdate: () =>
+          this.updatePercentageBar(
+            "current_power",
+            "max_power",
+            this.DOMElements.info_power_progress
+          ),
+      },
+      current_heat: {
+        dom: this.DOMElements.info_bar_current_heat,
+        num: true,
+        onupdate: () => {
+          this.updatePercentageBar(
+            "current_heat",
+            "max_heat",
+            this.DOMElements.info_heat_progress
+          );
+          this.updateReactorHeatBackground();
+        },
+      },
+      max_heat: {
+        dom: this.DOMElements.info_bar_max_heat,
+        num: true,
+        onupdate: () => {
+          this.updatePercentageBar(
+            "current_heat",
+            "max_heat",
+            this.DOMElements.info_heat_progress
+          );
+          this.updateReactorHeatBackground();
+        },
+      },
+      exotic_particles: {
+        dom: this.DOMElements.exotic_particles,
+        num: true,
+        onupdate: (val) => {
+          if (this.DOMElements.reboot_exotic_particles)
+            this.DOMElements.reboot_exotic_particles.textContent = fmt(val);
+        },
+      },
+      current_exotic_particles: {
+        dom: this.DOMElements.current_exotic_particles,
+        num: true,
+        onupdate: () => {
+          if (this.DOMElements.refund_exotic_particles) {
+            this.DOMElements.refund_exotic_particles.textContent = fmt(
+              (this.stateManager.getVar("total_exotic_particles") || 0) +
+                (this.stateManager.getVar("exotic_particles") || 0)
+            );
+          }
+        },
+      },
+      total_exotic_particles: {
+        onupdate: () => {
+          if (this.DOMElements.refund_exotic_particles) {
+            this.DOMElements.refund_exotic_particles.textContent = fmt(
+              (this.stateManager.getVar("total_exotic_particles") || 0) +
+                (this.stateManager.getVar("exotic_particles") || 0)
+            );
+          }
+        },
+      },
+      stats_power: { dom: this.DOMElements.stats_power, num: true },
+      total_heat: { dom: this.DOMElements.stats_heat, num: true },
+      stats_cash: { dom: this.DOMElements.stats_cash, num: true, places: 2 },
+      stats_outlet: {
+        dom: this.DOMElements.stats_outlet,
+        num: true,
+        places: 2,
+      },
+      stats_inlet: { dom: this.DOMElements.stats_inlet, num: true, places: 2 },
+      stats_vent: { dom: this.DOMElements.stats_vent, num: true, places: 2 },
+      auto_sell: {
+        onupdate: (val) =>
+          this.updateToggleButtonState(
+            this.toggle_buttons_config.auto_sell,
+            val
+          ),
+      },
+      auto_buy: {
+        onupdate: (val) =>
+          this.updateToggleButtonState(
+            this.toggle_buttons_config.auto_buy,
+            val
+          ),
+      },
+      heat_control: {
+        onupdate: (val) =>
+          this.updateToggleButtonState(
+            this.toggle_buttons_config.heat_control,
+            val
+          ),
+      },
+      time_flux: {
+        onupdate: (val) =>
+          this.updateToggleButtonState(
+            this.toggle_buttons_config.time_flux,
+            val
+          ),
+      },
+      pause: {
+        onupdate: (val) =>
+          this.updateToggleButtonState(this.toggle_buttons_config.pause, val),
+      },
+    };
+  }
+
+  updatePercentageBar(currentKey, maxKey, domElement) {
+    if (!domElement) return;
+    const current = this.stateManager.getVar(currentKey) || 0;
+    const max = this.stateManager.getVar(maxKey) || 1;
+    domElement.style.width = `${Math.min(
+      100,
+      Math.max(0, (current / max) * 100)
+    )}%`;
+  }
+
+  updateReactorHeatBackground() {
+    const current = this.stateManager.getVar("current_heat") || 0;
+    const max = this.stateManager.getVar("max_heat") || 1;
+    const background = this.DOMElements.reactor_background;
+    if (!background) return;
+    if (current <= max) background.style.backgroundColor = "transparent";
+    else if (current <= max * 2)
+      background.style.backgroundColor = `rgba(255, 0, 0, ${
+        (current - max) / max
+      })`;
+    else background.style.backgroundColor = `rgb(255, 0, 0)`;
+  }
+
+  init(gameInstance) {
+    this.game = gameInstance;
+    this.stateManager.setGame(gameInstance);
+    this.hotkeys = new Hotkeys(this.game);
+    if (!this.cacheDOMElements()) return false;
+    this.initVarObjsConfig();
+    this.setupEventListeners();
+    this.initializeToggleButtons();
+    this.setupPartsTabs();
+    this.resizeReactor();
+    window.addEventListener("resize", () => this.resizeReactor());
+    this.update_interface_task = setTimeout(
+      () => this.runUpdateInterfaceLoop(),
+      this.update_interface_interval
+    );
+    // Add global click listener to collapse parts panel when clicking outside
+    document.addEventListener("mousedown", (e) => {
+      const partsSection = this.DOMElements.parts_section;
+      const toggle = this.DOMElements.partsPanelToggle;
+      if (!partsSection || !toggle) return;
+      if (!partsSection.contains(e.target) && !toggle.contains(e.target)) {
+        partsSection.classList.add("collapsed");
+      }
+    });
+    return true;
+  }
+
+  resizeReactor() {
+    if (
+      !this.game ||
+      !this.DOMElements.reactor ||
+      !this.DOMElements.reactor_wrapper
+    )
+      return;
+    const wrapperWidth = this.DOMElements.reactor_wrapper.clientWidth;
+    const numCols = this.game.cols;
+    const gap = 2;
+    let tileSize = Math.floor(wrapperWidth / numCols - gap);
+    tileSize = Math.max(50, Math.min(64, tileSize));
+    this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
+    this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
+  }
+
+  showPage(pageId) {
+    const pageElementIds = [
+      "reactor_section",
+      "upgrades_section",
+      "experimental_upgrades_section",
+      "options_section",
+      "help_section",
+      "about_section",
+    ];
+    pageElementIds.forEach((id) => {
+      const page = this.DOMElements[id];
+      if (page) page.classList.remove("showing");
+    });
+    const targetPage = this.DOMElements[pageId];
+    if (targetPage) {
+      targetPage.classList.add("showing");
+    }
+    if (pageId === "reactor_section") {
+      if (this.DOMElements.objectives_section)
+        this.DOMElements.objectives_section.style.display = "";
+      document.body.classList.remove("tooltips-disabled");
+    } else {
+      if (this.DOMElements.objectives_section)
+        this.DOMElements.objectives_section.style.display = "none";
+      document.body.classList.add("tooltips-disabled");
+    }
+  }
+
+  setupEventListeners() {
+    const reactor = this.DOMElements.reactor;
+    if (reactor) {
+      let longPressTargetTile = null;
+      let pointerMoved = false;
+      let pointerDownTileEl = null;
+      const cancelLongPress = () => {
+        if (this.longPressTimer) {
+          clearTimeout(this.longPressTimer);
+          this.longPressTimer = null;
+        }
+        if (longPressTargetTile) {
+          longPressTargetTile.$el.classList.remove("selling");
+          longPressTargetTile = null;
+        }
+      };
+      const pointerDownHandler = (e) => {
+        // Only left mouse or touch
+        if ((e.pointerType === "mouse" && e.button !== 0) || e.button > 0)
+          return;
+        const tileEl = e.target.closest(".tile");
+        if (!tileEl?.tile?.enabled) return;
+        pointerDownTileEl = tileEl;
+        e.preventDefault();
+        this.isDragging = true;
+        this.lastTileModified = tileEl.tile;
+        pointerMoved = false;
+        const hasPart = tileEl.tile.part;
+        const noModifiers = !e.ctrlKey && !e.altKey && !e.shiftKey;
+        if (hasPart && noModifiers) {
+          longPressTargetTile = tileEl.tile;
+          this.longPressTimer = setTimeout(() => {
+            this.longPressTimer = null;
+            if (longPressTargetTile) {
+              longPressTargetTile.$el.classList.add("selling");
+              longPressTargetTile.$el.style.setProperty(
+                "--sell-duration",
+                `${this.longPressDuration}ms`
+              );
+              setTimeout(() => {
+                if (longPressTargetTile) {
+                  longPressTargetTile.clearPart(true);
+                  this.game.reactor.updateStats();
+                  longPressTargetTile.$el.classList.remove("selling");
+                }
+              }, this.longPressDuration);
+            }
+            this.isDragging = false;
+          }, 250); // 250ms to start animation, then 500ms for the animation
+        }
+        const pointerMoveHandler = (e_move) => {
+          pointerMoved = true;
+          cancelLongPress();
+          if (!this.isDragging) return;
+          const moveTileEl = e_move.target.closest(".tile");
+          if (
+            moveTileEl &&
+            moveTileEl.tile &&
+            moveTileEl.tile !== this.lastTileModified
+          ) {
+            this.handleGridInteraction(moveTileEl, e_move);
+            this.lastTileModified = moveTileEl.tile;
+          }
+        };
+        const pointerUpHandler = (e_up) => {
+          // Always call handleGridInteraction for click/tap if no drag and no long-press
+          if (!pointerMoved && this.isDragging && pointerDownTileEl) {
+            cancelLongPress();
+            this.handleGridInteraction(pointerDownTileEl, e_up || e);
+          } else if (this.longPressTimer) {
+            cancelLongPress();
+          }
+          if (this.isDragging) {
+            this.isDragging = false;
+            this.lastTileModified = null;
+            this.game.reactor.updateStats();
+            this.stateManager.setVar("current_money", this.game.current_money);
+          }
+          window.removeEventListener("pointermove", pointerMoveHandler);
+          window.removeEventListener("pointerup", pointerUpHandler);
+          window.removeEventListener("pointercancel", pointerUpHandler);
+          pointerDownTileEl = null;
+        };
+        window.addEventListener("pointermove", pointerMoveHandler);
+        window.addEventListener("pointerup", pointerUpHandler);
+        window.addEventListener("pointercancel", pointerUpHandler);
+      };
+      reactor.addEventListener("pointerdown", pointerDownHandler);
+      reactor.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.handleGridInteraction(e.target.closest(".tile"), e);
+      });
     }
 
-    updateToggleButtonState(buttonKey, isActive) {
-        console.log('[UI] updateToggleButtonState:', buttonKey, isActive);
-        const config = this.toggle_buttons_config[buttonKey];
-        if (!config) {
-            return;
+    const setupNav = (container, buttonClass) => {
+      container?.addEventListener("click", (event) => {
+        const button = event.target.closest(buttonClass);
+        if (button?.dataset.page) {
+          this.showPage(button.dataset.page);
+          container
+            .querySelectorAll(buttonClass)
+            .forEach((tab) => tab.classList.remove("active"));
+          button.classList.add("active");
         }
+      });
+    };
+    setupNav(this.DOMElements.bottom_nav, ".bottom_nav_btn");
+    setupNav(this.DOMElements.main_top_nav, ".styled-button");
 
-        const button = this.DOMElements[config.id];
-        if (!button) {
-            return;
-        }
+    // Reboot buttons
+    this.DOMElements.reboot_btn?.addEventListener("click", () =>
+      this.game.reboot_action(false)
+    );
+    this.DOMElements.refund_btn?.addEventListener("click", () =>
+      this.game.reboot_action(true)
+    );
 
-        if (isActive) {
-            button.classList.add('on');
-            button.classList.remove('off');
-        } else {
-            button.classList.remove('on');
-            button.classList.add('off');
-        }
+    // Helper to sync body class with panel state
+    this.updatePartsPanelBodyClass();
 
-        // Update button text if textMap is defined
-        if (config.textMap && button) {
-            button.textContent = config.textMap[isActive];
+    // Add hotkeys for testing
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey) {
+        switch (e.key) {
+          case "1":
+            e.preventDefault();
+            this.game.addMoney(10);
+            break;
+          case "2":
+            e.preventDefault();
+            this.game.addMoney(100);
+            break;
+          case "3":
+            e.preventDefault();
+            this.game.addMoney(1000);
+            break;
+          case "4":
+            e.preventDefault();
+            this.game.addMoney(10000);
+            break;
+          case "5":
+            e.preventDefault();
+            this.game.addMoney(100000);
+            break;
+          case "6":
+            e.preventDefault();
+            this.game.addMoney(1000000);
+            break;
+          case "7":
+            e.preventDefault();
+            this.game.addMoney(10000000);
+            break;
+          case "8":
+            e.preventDefault();
+            this.game.addMoney(100000000);
+            break;
+          case "9":
+            e.preventDefault();
+            this.game.addMoney(1000000000);
+            break;
         }
+      }
+    });
+
+    // Add parts panel toggle button handler
+    const partsButton = document.querySelector(
+      'button[data-toggle="parts_panel"]'
+    );
+    if (partsButton) {
+      partsButton.addEventListener("click", () => {
+        const partsSection = document.getElementById("parts_section");
+        if (partsSection) {
+          partsSection.classList.toggle("collapsed");
+          // Update button state
+          partsButton.classList.toggle("active");
+          // Always sync body class
+          this.updatePartsPanelBodyClass();
+        }
+      });
     }
 
+    // Add right-click sell functionality to reactor tiles
+    const reactorEl = document.getElementById("reactor");
+    if (reactorEl) {
+      reactorEl.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const tile = e.target.closest(".tile");
+        if (tile && tile.part) {
+          if (tile.part.id && !tile.part.isSpecialTile) {
+            this.game.sellPart(tile.part);
+          }
+        }
+      });
+    }
+  }
+
+  handleGridInteraction(tileEl, event) {
+    if (!tileEl || !tileEl.tile) return;
+    const startTile = tileEl.tile;
+    const isRightClick =
+      (event.pointerType === "mouse" && event.button === 2) ||
+      event.type === "contextmenu";
+    const clicked_part = this.stateManager.getClickedPart();
+    const tilesToModify = this.hotkeys.getTiles(startTile, event);
+
+    for (const tile of tilesToModify) {
+      if (isRightClick) {
+        if (tile.part) tile.clearPart(true);
+      } else {
+        if (clicked_part) {
+          if (tile.part) tile.clearPart(true);
+          if (this.game.current_money >= clicked_part.cost) {
+            this.game.current_money -= clicked_part.cost;
+            tile.setPart(clicked_part);
+          }
+        } else if (tile.part) {
+          tile.clearPart(true);
+        }
+      }
+    }
+  }
+
+  // Helper to sync body class with panel state
+  updatePartsPanelBodyClass() {
+    const partsSection = document.getElementById("parts_section");
+    if (partsSection && !partsSection.classList.contains("collapsed")) {
+      document.body.classList.add("parts-panel-open");
+    } else {
+      document.body.classList.remove("parts-panel-open");
+    }
+  }
 }
-

@@ -1,2265 +1,685 @@
 @charset "UTF-8";
-@import 'images.css';
-
 :root {
-  /* Base Colors & Fonts */
-  --body-bg: #1a1c23;
-  --main-bg: #2a2d38;
-  --text-color: #e0e0e0;
-  --text-color-darker: #a0a0a0;
-  --link-color: #d3f5f6;
-  --link-visited-color: #c3a5f6;
-  --font-sans-serif: 'Arial', sans-serif;
-  --font-monospace: 'Lucida Console', Monaco, monospace;
-  --panel-bg: #22252e;
-  --subpanel-bg: #1e2129;
-  --button-border-color: #5a5f73;
-  --button-bg: #3c3f50;
-  --button-bg-hover: #4a4e5f;
-  --button-text-color: #e0e0e0;
-  --disabled-text-color: #aaa;
-  --disabled-bg-color: #46506b;
-  --success-color: #59c435;
-  --success-border-color: #198405;
-  --info-bar-bg: #1e2129;
-  --bottom-nav-bg: #1e2129;
-  --bottom-nav-border: #3a3d4a;
-  --sidebar-width: 150px;
-  --sidebar-collapsed-width: 48px;
-  --sidebar-expanded-width: 200px; /* Default expanded width for left panel */
-  --objective-bg: #2f323d;
-  --objective-text-color: #c0c0c0;
-  --objective-reward-color: #f0b90b;
-  --border-image-slice: 8;
-  --border-image-width: 8px;
-  --border-image-button-off: url("../img/ui/borders/button/small_button_off.png");
-  --border-image-button-on: url("../img/ui/borders/button/small_button_on.png");
-  --border-image-button-down: url("../img/ui/borders/button/small_button_down.png");
-  --border-image-panel-outer: url("../img/ui/borders/panel/panel_border.png");
-  --border-image-panel-medium: url("../img/ui/borders/panel/medium_panel.png");
+--body-bg: #1a1c23;
+--main-bg: #2a2d38;
+--text-color: #e0e0e0;
+--text-color-darker: #a0a0a0;
+--link-color: #d3f5f6;
+--link-visited-color: #c3a5f6;
+--font-sans-serif: 'Arial', sans-serif;
+--font-monospace: 'Lucida Console', Monaco, monospace;
+--panel-bg: #22252e;
+--subpanel-bg: #1e2129;
+--button-bg: #3c3f50;
+--button-bg-hover: #4a4e5f;
+--button-text-color: #e0e0e0;
+--success-color: #59c435;
+--info-bar-bg: #1e2129;
+--bottom-nav-bg: #1e2129;
+--bottom-nav-border: #3a3d4a;
+--sidebar-width: 25%;
+--sidebar-width-mobile: 65%;
+--tile-size: 32px;
 }
-
+.part .image, .tile {
+background-size: contain;
+background-position: center;
+background-repeat: no-repeat;
+}
 html, body {
-  box-sizing: border-box;
-  height: 100% !important;
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-sans-serif);
-  color: var(--text-color);
-  background-color: var(--body-bg);
-  overflow: hidden;
+box-sizing: border-box;
+height: 100vh;
+margin: 0;
+padding: 0;
+font-family: var(--font-sans-serif);
+color: var(--text-color);
+background-color: var(--body-bg);
+overflow: hidden;
+-webkit-text-size-adjust: none;
+-webkit-tap-highlight-color: transparent;
 }
-
-*,
-*:before,
-*:after {
-  box-sizing: inherit;
+*, *:before, *:after {
+box-sizing: inherit;
 }
-
-html {
-  background: #000204;
-  z-index: -2;
-  overflow-y: hidden;
-}
-
-body,
-#wrapper {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  min-height: 0;
-  font-size: 16px;
-  -webkit-text-size-adjust: none;
-  overflow-x: hidden;
-  overflow-y: hidden;
-  padding-bottom: 112px;
-}
-
-#wrapper {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-a {
-  color: #d3f5f6;
-}
-
-a:visited {
-  color: #c3a5f6;
-}
-
+a { color: var(--link-color); }
+a:visited { color: var(--link-visited-color); }
 button {
-  padding: 0;
-  outline: 0;
-  margin: 0;
-  border: none;
-  box-shadow: none;
-  -webkit-appearance: none;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: transparent;
-  color: var(--button-text-color);
-  font-family: var(--font-monospace);
-  font-size: 13px;
-  text-shadow: 1px 1px 0 #00000066;
-  cursor: pointer;
-  image-rendering: pixelated;
-  -ms-interpolation-mode: nearest-neighbor;
+padding: 0; outline: 0; margin: 0; border: none;
+box-shadow: none; -webkit-appearance: none;
+background: transparent; color: inherit; font: inherit;
+cursor: pointer;
+text-align: center;
 }
-
-button:hover {
-  filter: brightness(1.15);
-}
-
 button:active {
-  filter: brightness(0.85);
+transform: translateY(1px);
 }
-
-#main p {
-  font-family: Arial, sans-serif;
-  font-size: 0.875em;
-  line-height: 1.4;
-  font-weight: normal;
+h1, h2, h3, h4, h5, h6 { font-weight: 400; text-shadow: 1px 1px 3px rgba(0, 0, 0, 1); font-size: 18px; margin: 0.5em 0; }
+h4 { font-size: 1rem; color: var(--text-color-darker); text-transform: uppercase; letter-spacing: 0.5px;}
+menu { margin: 0; padding: 0; }
+#wrapper {
+display: flex;
+height: 100%;
 }
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: sans-serif;
-  font-weight: 400;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 1);
-  font-size: 18px;
+#parts_section {
+width: var(--sidebar-width);
+flex-shrink: 0;
+background: var(--panel-bg);
+border-right: 1px solid var(--bottom-nav-border);
+transition: width 0.3s ease, transform 0.3s ease;
+display: flex;
+flex-direction: column;
 }
-
-menu {
-  margin: 0;
-}
-
 #main {
-  margin-left: calc(var(--sidebar-expanded-width) + 10px);
-  padding-bottom: 120px;
-  overflow-y: auto;
-  transition: margin-left 0.2s;
+flex-grow: 1;
+display: flex;
+flex-direction: column;
+height: 100%;
+overflow: hidden;
+padding-bottom: 112px;
 }
-
-main#main {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+#main_content_wrapper {
+flex-grow: 1;
+overflow-y: auto;
+padding: 1rem;
+position: relative;
 }
-
-#secondary {
-  /* for ie */
-  float: left;
-
-  width: 261px;
-  display: -webkit-flex;
-  display: flex;
-  -webkit-flex-direction: column;
-  flex-direction: column;
-  -webkit-flex-shrink: 0;
-  flex-shrink: 0;
-}
-
-#primary {
-  display: flex;
-  flex-direction: column;
-  flex-grow: 1;
-  flex-shrink: 1;
-  flex-basis: auto;
-  width: 100%;
-  min-width: 0;
-}
-
-#main_header,
-#stats_section .stats_section_heading,
-#parts_section .heading,
-#reactor_section .heading,
-.part .description,
-#all_upgrades .upgrade .description {
-  display: none;
-}
-
-#stats_section {
-}
-
-#stats_section .heading {
-  font-size: 0.9em;
-  margin-bottom: 0.2em;
-}
-
-#stats_section .heading:after {
-  content: ":";
-}
-
-#power_indicator,
-#heat_indicator,
-#currency {
-  border: 2px solid #334147;
-  border-bottom-width: 0;
-  position: relative;
-  font-size: 0.8em;
-  text-align: center;
-  padding: 5px 0;
-}
-
-#power_indicator,
-#heat_indicator {
-  padding: 8px 0;
-}
-
-#main #currency,
-#main #power_indicator,
-#main #heat_text {
-  position: relative;
-  z-index: 2;
-  color: #fff;
-  text-shadow:
-    1px 0 0 rgba(0, 0, 0, 1),
-    0 1px 0 rgba(0, 0, 0, 1),
-    -1px 0 0 rgba(0, 0, 0, 1),
-    0 -1px 0 rgba(0, 0, 0, 1),
-    1px 1px 0 rgba(0, 0, 0, 1),
-    -1px -1px 0 rgba(0, 0, 0, 1),
-    1px -1px 0 rgba(0, 0, 0, 1),
-    -1px 1px 0 rgba(0, 0, 0, 1);
-  font-family: monospace;
-  font-weight: bold;
-  line-height: 1.3;
-}
-
-#power_percentage,
-#heat_percentage {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 1;
-}
-
-#currency {
-  background: #59c435;
-  border-color: #198405;
-  border-bottom-width: 2px;
-}
-
-#heat_wrapper,
-#heat_per_tick_wrapper,
-#power_text,
-#power_per_tick_wrapper,
-#exotic_particles_wrapper,
-#money_per_tick_wrapper,
-#money_wrapper {
-  display: block;
-  position: relative;
-  z-index: 2;
-  white-space: nowrap;
-}
-
-#heat_percentage {
-  background-color: #f00;
-}
-
-#power_percentage {
-  background-color: #33a5c6;
-  max-width: 100%;
-}
-
-#parts,
-#parts > menu,
-#parts > menu > menu {
-  display: table;
-}
-
-#parts_section,
-#stats_section,
-#tooltip_nav,
-#reactor_upgrades {
-  border: 10px solid #eee;
-  margin: 2px 0 0 2px;
-}
-
-#more_stats {
-  display: none;
-}
-
-#power_section,
-#heat {
-  margin-bottom: 8px;
-}
-
-#reduce_heat,
-#sell {
-  display: block;
-  width: 100%;
-}
-
-#tooltip_nav {
-  padding: 4px;
-  height: 25px;
-  max-height: 50px;
-  width: 668px;
-  width: 100%;
-  max-width: 100%;
-}
-
-#all_parts {
-  position: relative;
-}
-
-#parts {
-  display: block;
-  overflow-y: hidden;
-}
-
-/*#top,
-#bottom {
-	height: 30px;
-}*/
-
-#parts_section .part .image,
-#all_upgrades .image,
-#reactor .tile {
-  position: relative;
-  overflow: hidden;
-  white-space: nowrap;
-  text-indent: 64px;
-  vertical-align: top;
-}
-
-#parts_section .part .image,
-#reactor .tile {
-  height: 32px;
-  width: 32px;
-}
-
-#all_upgrades .image {
-  height: 100%;
-  width: 100%;
-}
-
-#parts_section .part:nth-child(6n) {
-  margin-right: 0;
-}
-
-#parts_section .part.unaffordable .image {
-  opacity: 0.5;
-}
-
-#parts_section .part.part_active {
-  box-shadow: 0px 0px 2px 2px #59c435;
-  border:15px #59c435;
-}
-
-#parts_section .part .image,
-#all_upgrades .image,
-#all_upgrades .image,
-#reactor .tile {
-  background-repeat: no-repeat;
-}
-
-/* //////////////////////////
- // Objectives
-////////////////////////// */
-
+#main .page { display: none; }
+#main .page.showing { display: block; }
 #objectives_section {
-  display: table;
-  width: 100%;
-  max-width: 100%;
-  height: 25px;
-  max-height: 50px;
+background: var(--objective-bg, var(--subpanel-bg));
+color: var(--objective-text-color, var(--text-color));
+padding: 0.5rem 1rem;
+margin: 0 1rem 1rem;
+border-radius: 4px;
+display: flex;
+justify-content: center;
+flex-shrink: 0;
 }
-
-#objectives_header {
-  font-size: 0.9em;
-  display: table-cell;
-  padding-right: 5px;
-  width: 1px;
-  line-height: 1.7em;
-}
-
-#objectives_header:after {
-  content: ":";
-}
-
-#objectives_wrapper {
-  display: table-cell;
-  background: #222c38;
-  position: relative;
-  overflow: hidden;
-  height: .5em;
-  transition: all 0.3s linear;
-}
-
-#objectives_section.unloading #objectives_wrapper {
-  box-shadow: 0 0 4px 2px #0f0;
-  border: 4px solid #0f0;
-}
-
-#objectives_content {
-  width: 100%;
-  height: 25px;
-  padding: 2px 10px 2px 2px;
-  margin-left: 5px;
-  transition: left 0.9s ease-out;
-}
-
-#objectives_section.unloading #objectives_content {
-  left: -110%;
-  transition-delay: 2s;
-}
-
-#objectives_section.loading #objectives_content {
-  left: 110%;
-  transition: none;
-}
-
-
-#objective_title {
-  float: left;
-}
-
-#objective_reward {
-  float: right;
-  font-family: monospace;
-  width: 6em;
-}
-
-/* //////////////////////////
- // Reactor
-////////////////////////// */
-
-#reactor_section {
-  display: flex;
-  flex-direction: column;
-  flex-grow: 1;
-  min-height: 0;
-  height: 75%;
-  width: 100%;
-  min-width: 0;
-}
-
-#reactor_wrapper {
-  background: #5c6166;
-  margin: 15px;
-  padding: 12px;
-  border-radius: 8px;
-  box-shadow: 0 0 0 2px #374151;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  min-height: 0;
-}
-
-#reactor_header {
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-
-#reactor .tile {
-  display: none;
-  width: 32px;
-  height: 32px;
-  border: 1px solid #333;
-  box-sizing: border-box;
-  background-image: url("../img/ui/tile.png");
-  background-size: 32px 32px;
-  padding: 0;
-  margin: 0;
-}
-
-.tile .enabled {
-  background-color: rgba(0,0,0,0.5);
-  cursor: pointer;
-  display: block;
-}
-
-
-#reactor_background {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  z-index: 0;
-  pointer-events: none;
-  border-radius: 4px;
-}
-
-#reactor_stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 0.75em;
-  white-space: nowrap;
-}
-
+#objective_reward { font-family: var(--font-monospace); color: var(--objective-reward-color, var(--success-color)); margin-left: 1rem;}
+#reactor_section { display: flex; flex-direction: column; height: 100%; }
+#reactor_header { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
+#reactor_stats { display: flex;justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem;}
 #reactor_stats .stat {
-  font-family: monospace;
-  font-size: 13px;
-  display: inline-block;
-  width: 45px;
-  line-height: 16px;
-  text-align: right;
-  position: relative;
-  background: #222c38;
-  padding-right: 2px;
-}
-
-#reactor_stats .stat:before {
-  width: 16px;
-  height: 16px;
-  content: "";
-  position: absolute;
-  left: 0;
-}
-
-#stats_vent:before {
-  background-image: url("../img/ui/icons/icon_vent.gif");
-}
-
-#stats_inlet:before {
-  background-image: url("../img/ui/icons/icon_inlet.gif");
-}
-
-#stats_outlet:before {
-  background-image: url("../img/ui/icons/icon_outlet.gif");
-}
-
-#stats_heat:before {
-  background-image: url("../img/ui/icons/icon_heat.gif");
+font-family: var(--font-monospace); font-size: 1.5em; display: inline-flex; align-items: center;
+gap: 4px; padding: 2px 6px; background: var(--subpanel-bg); border-radius: 4px;
 }
 
 #stats_power:before {
-  background-image: url("../img/ui/icons/icon_power.gif");
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-image: url('../img/ui/icons/icon_power.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+#stats_heat:before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-image: url('../img/ui/icons/icon_heat.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    vertical-align: middle;
 }
 
 #stats_cash:before {
-  background-image: url("../img/ui/icons/icon_cash.gif");
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-image: url('../img/ui/icons/icon_cash.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    vertical-align: middle;
 }
 
-#reactor .row {
-  white-space: nowrap;
+#stats_vent:before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-image: url('../img/ui/icons/icon_vent.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    vertical-align: middle;
 }
 
-#reactor .tile.tile_active,
-#reactor .tile:focus {
-  box-shadow: 0px 0px 1px 1px #59c435;
-  background: #59c435;
+#stats_inlet:before {   
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-image: url('../img/ui/icons/icon_inlet.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    vertical-align: middle;
 }
 
-#reactor .tile.enabled {
-  display: block;
+#stats_outlet:before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-image: url('../img/ui/icons/icon_outlet.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;   
+    margin-right: 8px;
+    vertical-align: middle;
 }
 
-#reactor .tile.disabled {
-  opacity: 0.5;
-}
-
-#reactor .percent_wrapper_wrapper {
-  position: relative;
-  height: 100%;
-  width: 100%;
-  z-index: 2;
-}
-
-#reactor .category_coolant_cell .percent_wrapper,
-#reactor .category_reflector .percent_wrapper,
-#reactor .category_vent .percent_wrapper,
-#reactor .category_capacitor .percent_wrapper,
-#reactor .category_heat_exchanger .percent_wrapper,
-#reactor .category_particle_accelerator .percent_wrapper,
-#reactor .category_cell .percent_wrapper {
-  border: 1px solid black;
-  background: black;
-  position: absolute;
-  bottom: 1px;
-  left: 1px;
-  right: 1px;
-}
-#reactor .tile.spent {
-  -webkit-filter: grayscale(100%);
-  filter: grayscale(100%);
-}
-
-#reactor .tile.spent .percent_wrapper {
-  border-color: gray;
-  background: gray;
-}
-
-#reactor .category_coolant_cell .percent,
-#reactor .category_reflector .percent,
-#reactor .category_vent .percent,
-#reactor .category_capacitor .percent,
-#reactor .category_heat_exchanger .percent,
-#reactor .category_particle_accelerator .percent,
-#reactor .category_cell .percent {
-  text-indent: 64px;
-  white-space: nowrap;
-  height: 2px;
-}
-
-#reactor .disabled .percent_wrapper {
-  display: none;
-}
-
-#reactor .category_reflector .percent,
-#reactor .category_cell .percent {
-  background: #0f0;
-  width: 100%;
-}
-
-#reactor .category_coolant_cell .percent,
-#reactor .category_heat_exchanger .percent,
-#reactor .category_particle_accelerator .percent,
-#reactor .category_capacitor .percent,
-#reactor .category_vent .percent {
-  background: #f00;
-  width: 0;
-}
-
-@keyframes explosion {
-  0% {
-    background: url("../img/ui/effects/explosion_map.gif") 32px 0 no-repeat;
-  }
-  100% {
-    background: url("../img/ui/effects/explosion_map.gif") -192px 0 no-repeat;
-  }
-}
-
-#reactor .tile.exploding {
-  background: url("../img/ui/effects/explosion_map.gif") -192px 0 no-repeat;
-  animation: explosion 0.6s steps(7);
-}
-
-/* //////////////////////////
- // Navs
-////////////////////////// */
-
-#reactor_upgrades .explanitory button,
-#tooltip button,
-#nav button {
-  padding: 0 0.75em 0.1em;
-  margin: 0;
-  border: 8px solid #76809b;
-  border-image: url("../img/ui/borders/button/small_button_off.png") 8 8 stretch;
-  background-color: #76809b;
-  color: #fff;
-  outline: none;
-  transition: background-color 0.01s linear;
-  line-height: 1;
-}
-
-#nav button {
-  margin-right: 0.25em;
-}
-
-#reactor_upgrades .explanitory button:hover,
-#reactor_upgrades .explanitory button:focus,
-#tooltip button:hover,
-#tooltip button:focus,
-#nav button:hover,
-#nav button:focus {
-  border-image: url("../img/ui/borders/button/small_button_on.png") 8 8 stretch;
-  background-color: #91a1c8;
-}
-
-#main.touch #tooltip_text button {
-  display: inline-block;
-}
-
-#tooltip #tooltip_close {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  padding: 8px 9px 4px 4px;
-  border-right: 0;
-  border-top: 0;
-}
-
-#reactor_upgrades .explanitory button:active,
-#tooltip button:active,
-#nav button:active {
-  border-image: url("../img/ui/borders/button/small_button_down.png") 8 8
-    stretch;
-  background-color: #91a1c8;
-}
-
-
-
-#tooltip_nav {
-  display: flex;
-}
-
-#nav {
-  flex: 1 1 auto;
-  display: flex;
-  max-height: 10%;
-  place-content: space-between;
-  flex-direction: column;
-}
-
-.flex_nav {
-  display: flex;
-  place-content: space-between;
-}
-
-/* //////////////////////////
- // Pages
-////////////////////////// */
-
-#main .page {
-  display: none;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-#main .page.showing {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-#main .page .heading {
-  margin-bottom: 0.75em;
-}
-
-#main .page .subpanel {
-  padding: 0.5em;
-}
-
-#main .showing {
-  display: inherit;
-  position: static;
-  width: 100%;
-  min-width: 0;
-}
-
-#experimental_upgrades_section,
-#upgrades_section {
-}
-
-#experimental_upgrades_section .heading,
-#upgrades_section .heading {
-  margin-bottom: 1em;
-}
-
-#experimental_upgrades_section > div,
-#experimental_upgrades > div,
-#upgrades > div {
-  margin-bottom: 1em;
-}
-
-#reboot_section,
-#refund_section {
-  max-width: 37em;
-  margin: 2em auto 0;
-  text-align: center;
-}
-
-#reactor_upgrades .explanitory button {
-  margin-bottom: 1em;
-}
-
-/* //////////////////////////
- // Cells
-////////////////////////// */
-
-#cells {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2px 2px;
-  justify-items: center;
-  align-items: center;
-  margin-bottom: 12px;
-}
-#cells .part {
-  width: 32px;
-  height: 32px;
-  margin: 0;
-}
-
-#parts_section .cells {
-}
-
-#parts_section .cells .part,
-#parts_section .cells .part:nth-child(5n) {
-  margin-right: 5px;
-}
-
-#parts_section .cells .part:nth-child(3n) {
-  margin-right: 0;
-}
-
-#parts_section .locked + .locked {
-  display: none;
-}
 
 
 #reactor_wrapper {
-  float: center;
-}
-
-/* uranium */
-.part.part_uranium1 .image,
-#reactor .tile.part_uranium1,
-#upgrades .uranium .image,
-#forceful_fusion .image {
-  background-image: url("../img/parts/cells/cell_1_1.gif");
-}
-
-.part.part_uranium2 .image,
-#reactor .tile.part_uranium2 {
-  background-image: url("../img/parts/cells/cell_1_2.gif");
-}
-
-.part.part_uranium3 .image,
-#reactor .tile.part_uranium3 {
-  background-image: url("../img/parts/cells/cell_1_4.gif");
-}
-
-/* plutonium */
-.part.part_plutonium1 .image,
-#reactor .tile.part_plutonium1,
-#upgrades .plutonium .image {
-  background-image: url("../img/parts/cells/cell_2_1.gif");
-}
-
-.part.part_plutonium2 .image,
-#reactor .tile.part_plutonium2 {
-  background-image: url("../img/parts/cells/cell_2_2.gif");
-}
-
-.part.part_plutonium3 .image,
-#reactor .tile.part_plutonium3 {
-  background-image: url("../img/parts/cells/cell_2_4.gif");
-}
-
-/* thorium */
-.part.part_thorium1 .image,
-#reactor .tile.part_thorium1,
-#upgrades .thorium .image {
-  background-image: url("../img/parts/cells/cell_3_1.gif");
-}
-
-.part.part_thorium2 .image,
-#reactor .tile.part_thorium2 {
-  background-image: url("../img/parts/cells/cell_3_2.gif");
-}
-
-.part.part_thorium3 .image,
-#reactor .tile.part_thorium3 {
-  background-image: url("../img/parts/cells/cell_3_4.gif");
-}
-
-/* seaborgium */
-.part.part_seaborgium1 .image,
-#reactor .tile.part_seaborgium1,
-#upgrades .seaborgium .image {
-  background-image: url("../img/parts/cells/cell_4_1.gif");
-}
-
-.part.part_seaborgium2 .image,
-#reactor .tile.part_seaborgium2 {
-  background-image: url("../img/parts/cells/cell_4_2.gif");
-}
-
-.part.part_seaborgium3 .image,
-#reactor .tile.part_seaborgium3 {
-  background-image: url("../img/parts/cells/cell_4_4.gif");
-}
-
-/* dolorium */
-.part.part_dolorium1 .image,
-#reactor .tile.part_dolorium1,
-#upgrades .dolorium .image {
-  background-image: url("../img/parts/cells/cell_5_1.gif");
-}
-
-.part.part_dolorium2 .image,
-#experimental_upgrades #infused_cells .image,
-#reactor .tile.part_dolorium2 {
-  background-image: url("../img/parts/cells/cell_5_2.gif");
-}
-
-.part.part_dolorium3 .image,
-#reactor .tile.part_dolorium3 {
-  background-image: url("../img/parts/cells/cell_5_4.gif");
-}
-
-/* nefastium */
-.part.part_nefastium1 .image,
-#reactor .tile.part_nefastium1,
-#upgrades .nefastium .image {
-  background-image: url("../img/parts/cells/cell_6_1.gif");
-}
-
-.part.part_nefastium2 .image,
-#reactor .tile.part_nefastium2 {
-  background-image: url("../img/parts/cells/cell_6_2.gif");
-}
-
-.part.part_nefastium3 .image,
-#experimental_upgrades #unleashed_cells .image,
-#reactor .tile.part_nefastium3 {
-  background-image: url("../img/parts/cells/cell_6_4.gif");
-}
-
-/* protium */
-.part.part_protium1 .image,
-#reactor .tile.part_protium1,
-#experimental_upgrades #protium_cells .image,
-#upgrades .protium .image {
-  background-image: url("../img/parts/cells/xcell_1_1.gif");
-}
-
-.part.part_protium2 .image,
-#experimental_upgrades #unstable_protium .image,
-#reactor .tile.part_protium2 {
-  background-image: url("../img/parts/cells/xcell_1_2.gif");
-}
-
-.part.part_protium3 .image,
-#reactor .tile.part_protium3 {
-  background-image: url("../img/parts/cells/xcell_1_4.gif");
-}
-
-/* //////////////////////////
- // Reflectors
-////////////////////////// */
-
-#improved_neutron_reflection .image,
-#improved_reflector_density .image,
-#perpetual_reflectors .image,
-.part.part_reflector1 .image,
-#reactor .tile.part_reflector1 {
-  background-image: url("../img/parts/reflectors/reflector_1.gif");
-}
-
-.part.part_reflector2 .image,
-#reactor .tile.part_reflector2 {
-  background-image: url("../img/parts/reflectors/reflector_2.gif");
-}
-
-.part.part_reflector3 .image,
-#reactor .tile.part_reflector3 {
-  background-image: url("../img/parts/reflectors/reflector_3.gif");
-}
-
-.part.part_reflector4 .image,
-#reactor .tile.part_reflector4 {
-  background-image: url("../img/parts/reflectors/reflector_4.gif");
-}
-
-.part.part_reflector5 .image,
-#experimental_upgrades #full_spectrum_reflectors .image,
-#reactor .tile.part_reflector5 {
-  background-image: url("../img/parts/reflectors/reflector_5.gif");
-}
-
-.part.part_reflector6 .image,
-#experimental_upgrades #heat_reflection .image,
-#reactor .tile.part_reflector6 {
-  background-image: url("../img/parts/reflectors/reflector_6.gif");
-}
-
-/* //////////////////////////
- // Capacitors
-////////////////////////// */
-
-.part.part_capacitor1 .image,
-#reactor .tile.part_capacitor1,
-#perpetual_capacitors .image,
-#active_venting .image,
-#active_exchangers .image,
-#improved_power_lines .image,
-#improved_wiring .image {
-  background-image: url("../img/parts/capacitors/capacitor_1.gif");
-}
-
-.part.part_capacitor2 .image,
-#reactor .tile.part_capacitor2 {
-  background-image: url("../img/parts/capacitors/capacitor_2.gif");
-}
-
-.part.part_capacitor3 .image,
-#reactor .tile.part_capacitor3 {
-  background-image: url("../img/parts/capacitors/capacitor_3.gif");
-}
-
-.part.part_capacitor4 .image,
-#reactor .tile.part_capacitor4 {
-  background-image: url("../img/parts/capacitors/capacitor_4.gif");
-}
-
-.part.part_capacitor5 .image,
-#experimental_upgrades #quantum_buffering .image,
-#reactor .tile.part_capacitor5 {
-  background-image: url("../img/parts/capacitors/capacitor_5.gif");
-}
-
-.part.part_capacitor6 .image,
-#experimental_upgrades #experimental_capacitance .image,
-#reactor .tile.part_capacitor6 {
-  background-image: url("../img/parts/capacitors/capacitor_6.gif");
-}
-
-/* //////////////////////////
- // Cooling
-////////////////////////// */
-
-/* Vents */
-.part.part_vent1 .image,
-#reactor .tile.part_vent1,
-#improved_heat_vents .image {
-  background-image: url("../img/parts/vents/vent_1.gif");
-}
-
-.part.part_vent2 .image,
-#reactor .tile.part_vent2 {
-  background-image: url("../img/parts/vents/vent_2.gif");
-}
-
-.part.part_vent3 .image,
-#reactor .tile.part_vent3 {
-  background-image: url("../img/parts/vents/vent_3.gif");
-}
-
-.part.part_vent4 .image,
-#reactor .tile.part_vent4 {
-  background-image: url("../img/parts/vents/vent_4.gif");
-}
-
-.part.part_vent5 .image,
-#experimental_upgrades #fluid_hyperdynamics .image,
-#reactor .tile.part_vent5 {
-  background-image: url("../img/parts/vents/vent_5.gif");
-}
-
-.part.part_vent6 .image,
-#experimental_upgrades #vortex_cooling .image,
-#reactor .tile.part_vent6 {
-  background-image: url("../img/parts/vents/vent_6.gif");
-}
-
-/* Heat Exchangers */
-.part.part_heat_exchanger1 .image,
-#reactor .tile.part_heat_exchanger1,
-#improved_heat_exchangers .image {
-  background-image: url("../img/parts/exchangers/exchanger_1.gif");
-}
-
-.part.part_heat_exchanger2 .image,
-#reactor .tile.part_heat_exchanger2 {
-  background-image: url("../img/parts/exchangers/exchanger_2.gif");
-}
-
-.part.part_heat_exchanger3 .image,
-#reactor .tile.part_heat_exchanger3 {
-  background-image: url("../img/parts/exchangers/exchanger_3.gif");
-}
-
-.part.part_heat_exchanger4 .image,
-#reactor .tile.part_heat_exchanger4 {
-  background-image: url("../img/parts/exchangers/exchanger_4.gif");
-}
-
-.part.part_heat_exchanger5 .image,
-#experimental_upgrades #fractal_piping .image,
-#reactor .tile.part_heat_exchanger5 {
-  background-image: url("../img/parts/exchangers/exchanger_5.gif");
-}
-
-.part.part_heat_exchanger6 .image,
-#experimental_upgrades #underground_heat_extraction .image,
-#reactor .tile.part_heat_exchanger6 {
-  background-image: url("../img/parts/exchangers/exchanger_6.gif");
-}
-
-/* Heat Inlets */
-.part.part_heat_inlet1 .image,
-#reactor .tile.part_heat_inlet1 {
-  background-image: url("../img/parts/inlets/inlet_1.gif");
-}
-
-.part.part_heat_inlet2 .image,
-#reactor .tile.part_heat_inlet2 {
-  background-image: url("../img/parts/inlets/inlet_2.gif");
-}
-
-.part.part_heat_inlet3 .image,
-#reactor .tile.part_heat_inlet3 {
-  background-image: url("../img/parts/inlets/inlet_3.gif");
-}
-
-.part.part_heat_inlet4 .image,
-#reactor .tile.part_heat_inlet4 {
-  background-image: url("../img/parts/inlets/inlet_4.gif");
-}
-
-.part.part_heat_inlet5 .image,
-#reactor .tile.part_heat_inlet5 {
-  background-image: url("../img/parts/inlets/inlet_5.gif");
-}
-
-.part.part_heat_inlet6 .image,
-#experimental_upgrades #vortex_extraction .image,
-#reactor .tile.part_heat_inlet6 {
-  background-image: url("../img/parts/inlets/inlet_6.gif");
-}
-
-/* Heat Outlets */
-.part.part_heat_outlet1 .image,
-#reactor .tile.part_heat_outlet1 {
-  background-image: url("../img/parts/outlets/outlet_1.gif");
-}
-
-.part.part_heat_outlet2 .image,
-#reactor .tile.part_heat_outlet2 {
-  background-image: url("../img/parts/outlets/outlet_2.gif");
-}
-
-.part.part_heat_outlet3 .image,
-#reactor .tile.part_heat_outlet3 {
-  background-image: url("../img/parts/outlets/outlet_3.gif");
-}
-
-.part.part_heat_outlet4 .image,
-#reactor .tile.part_heat_outlet4 {
-  background-image: url("../img/parts/outlets/outlet_4.gif");
-}
-
-.part.part_heat_outlet5 .image,
-#experimental_upgrades #explosive_ejection .image,
-#reactor .tile.part_heat_outlet5 {
-  background-image: url("../img/parts/outlets/outlet_5.gif");
-}
-
-.part.part_heat_outlet6 .image,
-#experimental_upgrades #explosive_ejection .image,
-#reactor .tile.part_heat_outlet6 {
-  background-image: url("../img/parts/outlets/outlet_6.gif");
-}
-
-/* Coolant Cells */
-#improved_coolant_cells .image,
-.part.part_coolant_cell1 .image,
-#reactor .tile.part_coolant_cell1 {
-  background-image: url("../img/parts/coolants/coolant_1.gif");
-}
-
-.part.part_coolant_cell2 .image,
-#reactor .tile.part_coolant_cell2 {
-  background-image: url("../img/parts/coolants/coolant_2.gif");
-}
-
-.part.part_coolant_cell3 .image,
-#reactor .tile.part_coolant_cell3 {
-  background-image: url("../img/parts/coolants/coolant_3.gif");
-}
-
-.part.part_coolant_cell4 .image,
-#reactor .tile.part_coolant_cell4 {
-  background-image: url("../img/parts/coolants/coolant_4.gif");
-}
-
-.part.part_coolant_cell5 .image,
-#experimental_upgrades #ultracryonics .image,
-#reactor .tile.part_coolant_cell5 {
-  background-image: url("../img/parts/coolants/coolant_5.gif");
-}
-
-.part.part_coolant_cell6 .image,
-#experimental_upgrades #thermionic_conversion .image,
-#reactor .tile.part_coolant_cell6 {
-  background-image: url("../img/parts/coolants/coolant_6.gif");
-}
-
-/* Platings */
-.part.part_reactor_plating1 .image,
-#reactor .tile.part_reactor_plating1,
-#improved_heatsinks .image,
-#reinforced_heat_exchangers .image,
-#upgrades #improved_piping .image,
-#upgrades #improved_alloys .image {
-  background-image: url("../img/parts/platings/plating_1.gif");
-}
-
-.part.part_reactor_plating2 .image,
-#reactor .tile.part_reactor_plating2 {
-  background-image: url("../img/parts/platings/plating_2.gif");
-}
-
-.part.part_reactor_plating3 .image,
-#reactor .tile.part_reactor_plating3 {
-  background-image: url("../img/parts/platings/plating_3.gif");
-}
-
-.part.part_reactor_plating4 .image,
-#reactor .tile.part_reactor_plating4 {
-  background-image: url("../img/parts/platings/plating_4.gif");
-}
-
-.part.part_reactor_plating5 .image,
-#experimental_upgrades #phlembotinum_core .image,
-#reactor .tile.part_reactor_plating5 {
-  background-image: url("../img/parts/platings/plating_5.gif");
-}
-
-.part.part_reactor_plating6 .image,
-#experimental_upgrades #micro_capacitance .image,
-#reactor .tile.part_reactor_plating6 {
-  background-image: url("../img/parts/platings/plating_6.gif");
-}
-
-/* Particle Accelerators */
-.part.part_particle_accelerator1 .image,
-#upgrades #improved_particle_accelerators .image,
-#experimental_upgrades #improved_particle_accelerators1 .image,
-#reactor .tile.part_particle_accelerator1 {
-  background-image: url("../img/parts/accelerators/accelerator_1.gif");
-}
-
-.part.part_particle_accelerator2 .image,
-#experimental_upgrades #improved_particle_accelerators2 .image,
-#reactor .tile.part_particle_accelerator2 {
-  background-image: url("../img/parts/accelerators/accelerator_2.gif");
-}
-
-.part.part_particle_accelerator3 .image,
-#experimental_upgrades #improved_particle_accelerators3 .image,
-#reactor .tile.part_particle_accelerator3 {
-  background-image: url("../img/parts/accelerators/accelerator_3.gif");
-}
-
-.part.part_particle_accelerator4 .image,
-#experimental_upgrades #improved_particle_accelerators4 .image,
-#reactor .tile.part_particle_accelerator4 {
-  background-image: url("../img/parts/accelerators/accelerator_4.gif");
-}
-
-.part.part_particle_accelerator5 .image,
-#experimental_upgrades #improved_particle_accelerators5 .image,
-#reactor .tile.part_particle_accelerator5 {
-  background-image: url("../img/parts/accelerators/accelerator_5.gif");
-}
-
-.part.part_particle_accelerator6 .image,
-#experimental_upgrades #improved_particle_accelerators6 .image,
-#experimental_upgrades #singularity_harnessing .image,
-#reactor .tile.part_particle_accelerator6 {
-  background-image: url("../img/parts/accelerators/accelerator_6.gif");
-}
-
-/* Other */
-
-#experimental_upgrades #laboratory .image {
-  background-image: url("../img/misc/lab.gif");
-}
-
-/* //////////////////////////
- // Upgrades
-////////////////////////// */
-
-#all_upgrades .upgrade {
-  width: 2.5em;
-  height: 2.5em;
-  display: inline-block;
-  font-size: inherit;
-  vertical-align: top;
-}
-
-#all_upgrades .image:before {
-  top: auto;
-  bottom: 0;
-}
-
-#all_upgrades .image:after {
-  left: 50%;
-  margin-left: -16px;
-  top: 50%;
-  margin-top: -16px;
-}
-
-/* Time */
-#improved_reflector_density .image:before,
-#all_upgrades .cell_tick .image:before {
-  background-image: url("../img/ui/status/status_time.gif");
-  z-index: 2;
-}
-
-/* Plus */
-#improved_heat_exchangers .image:before,
-#improved_heat_vents .image:before,
-#improved_coolant_cells .image:before,
-#forceful_fusion .image:before,
-#improved_wiring .image:before,
-#improved_alloys .image:before {
-  background-image: url("../img/ui/status/status_plus.gif");
-  z-index: 2;
-}
-
-/* Bolt */
-#improved_neutron_reflection .image:before,
-#improved_power_lines .image:before,
-#improved_piping .image:before,
-#all_upgrades .cell_power .image:before {
-  background-image: url("../img/ui/status/status_bolt.gif");
-  z-index: 2;
-}
-
-/* Infinity */
-#perpetual_capacitors .image:before,
-#perpetual_reflectors .image:before,
-#all_upgrades .cell_perpetual .image:before {
-  background-image: url("../img/ui/status/status_infinity.gif");
-  z-index: 2;
-}
-
-#all_upgrades .upgrade .levels {
-  position: absolute;
-  z-index: 3;
-  text-indent: 0;
-  right: 2px;
-  bottom: 2px;
-  color: #fff;
-  font-size: 14px;
-  text-shadow:
-    1px 0 0 rgba(0, 0, 0, 1),
-    0 1px 0 rgba(0, 0, 0, 1),
-    -1px 0 0 rgba(0, 0, 0, 1),
-    0 -1px 0 rgba(0, 0, 0, 1),
-    1px 1px 0 rgba(0, 0, 0, 1),
-    -1px -1px 0 rgba(0, 0, 0, 1),
-    1px -1px 0 rgba(0, 0, 0, 1),
-    -1px 1px 0 rgba(0, 0, 0, 1);
-}
-
-/*#all_upgrades .upgrade .image:before {
-	position: absolute;
-	top: 4px;
-	left: 4px;
-	content: " ";
-	background: url("../img/sprites.png") left top no-repeat;
-	width: 32px;
-	height: 32px;
-}*/
-
-#chronometer.upgrade .image {
-  background-image: url("../img/upgrades/upgrade_flux.gif");
-}
-
-#heat_outlet_control_operator.upgrade .image,
-#heat_control_operator.upgrade .image {
-  background-image: url("../img/upgrades/upgrade_computer.gif");
-}
-
-#expand_reactor_cols.upgrade .image {
-  background-image: url("../img/upgrades/upgrade_cols.gif");
-}
-
-#expand_reactor_rows.upgrade .image {
-  background-image: url("../img/upgrades/upgrade_rows.gif");
-}
-
-#all_upgrades .unaffordable .image {
-  opacity: 0.5;
-}
-
-/* //////////////////////////
- // Tooltips
-////////////////////////// */
-
-#tooltip {
-  position: absolute;
-  left: 65%;
-  top: 16px;
-  transform: translateX(-50%);
-  z-index: 1000;
-  display: block;
-  width: 24em;
-  min-width: 24em;
-  max-width: 90vw;
-  min-height: 4em;
-  max-height: 16em;
-  opacity: 0;
-  pointer-events: none;
-  background: #485667;
-  border: 2px solid #222c38;
-  border-radius: 8px;
-  transition: opacity 0.15s;
-  overflow-y: auto;
-  overflow-x: hidden;
-  box-sizing: border-box;
-  padding: 0.5em 1em;
-}
-@media (max-width: 500px) {
-  #tooltip {
-    left: 50%;
-    transform: translateX(-50%);
-    min-width: 0;
-    width: 98vw;
-    max-width: 98vw;
-  }
-}
-#main.tooltip_showing #tooltip {
-  opacity: 1;
-  pointer-events: auto;
-}
-#tooltip_data,
-#tooltip_text {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-  padding: 0.2em 0;
-}
-#tooltip_info {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-}
-#tooltip_name,
-#tooltip_description {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-  margin: 0.2em 0;
-}
-#tooltip_cost:before {
-  content: " ";
-}
-#main.tooltip_showing #tooltip {
-  /* for ie */
-  display: block;
-
-  display: -webkit-flex;
-  display: flex;
-}
-#main.tooltip_showing #nav {
-  display: none;
-}
-
-/* //////////////////////////
- // Debug
-////////////////////////// */
-#reactor .heat {
-  color: red;
-  pointer-events: none;
-  opacity: 0.2;
-  font-size: 9px;
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  text-indent: 0;
-  z-index: 2;
-}
-
-#reactor .power {
-  color: green;
-  pointer-events: none;
-  font-size: 9px;
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  text-indent: 0;
-  z-index: 2;
-}
-
-
-/* //////////////////////////
- // UI
-////////////////////////// */
-#main:before {
-  content: " ";
-  border: 10px solid #30424b;
-  border-image: url("../img/ui/connector_border.png") 10 10 stretch;
-  /* background-color: #30424b; */
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  right: 4px;
-  bottom: 4px;
-  z-index: -1;
-}
-
-.panel_holder {
-	margin:15px 15px 10px 0px;
-}
-
-#main .panel_holder .panel:first-child {
-  border: 12px solid #485667;
-  border-image: url("../img/ui/borders/panel/panel_border_first_first.png") 12
-    12 stretch;
-  background-color: #485667;
-  margin: 0 0 0 0;
-}
-
-#main .panel_holder .panel:last-child {
-  border: 12px solid #485667;
-  border-image: url("../img/ui/borders/panel/panel_border_first_last.png") 12 12
-    stretch;
-  background-color: #485667;
-  margin: 4px 3px 0 0;
-  padding: 2px 0 6px 6px;
-  -webkit-flex: 1;
-  flex: 1;
-}
-
-#main .panel_holder .panel {
-  border: 12px solid #485667;
-  border-image: url("../img/ui/borders/panel/panel_border_last_middle.png") 12
-    12 stretch;
-  background-color: #485667;
-  margin: 0 0 4px 0;
-  padding: 2px 6px 2px 2px;
-}
-
-#main .panel_holder .panel:first-child {
-  border-image: url("../img/ui/borders/panel/panel_border_last_first.png") 12 12
-    stretch;
-  margin: 0 0 4px 0;
-  padding: 6px 4px 2px 2px;
-}
-
-#main .panel_holder .panel:last-child {
-  border-image: url("../img/ui/borders/panel/panel_border_last_last.png") 12 12
-    stretch;
-  padding: 0 6px 6px 2px;
-  margin: 0;
-  -webkit-flex: 1;
-  flex: 1;
-}
-
-
-#reactor_stats .stat,
-#main .subpanel {
-  border: 4px solid #222c38;
-  border-image: url("../img/ui/borders/inner/inner_border.png") 4 4 stretch;
-}
-
-#stats_section button {
-  border: 8px solid #76809b;
-  border-image: url("../img/ui/borders/inner/inner_border_alt_flip.png") 8 8
-    stretch;
-  background-color: #76809b;
-  bottom: 0;
-  color: #fff;
-}
-
-#stats_section button:hover,
-#stats_section button:focus {
-  border-image: url("../img/ui/borders/inner/inner_border_alt_flip_active.png")
-    8 8 stretch;
-  background-color: #96a0bb;
-}
-
-#stats_section button:active {
-  border-image: url("../img/ui/borders/inner/inner_border_alt_flip_down.png") 8
-    8 stretch;
-  background-color: #96a0bb;
-}
-
-/* Bottom Navigation */
-#bottom_nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  background: var(--bottom-nav-bg);
-  border-top: 1px solid var(--bottom-nav-border);
-  padding: 8px;
-  z-index: 1000;
-}
-
-.bottom_nav_btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  color: var(--text-color);
-  text-decoration: none;
-  font-size: 12px;
-  min-width: 60px;
-  min-height: 60px;
-}
-
-.bottom_nav_btn:hover {
-  background: var(--button-bg-hover);
-}
-
-.bottom_nav_btn.active {
-  background: var(--button-bg);
-}
-
-@media screen and (max-width: 900px) {
-  #bottom_nav {
-    font-size: 11px;
-    padding: 6px;
-  }
-  
-  .bottom_nav_btn {
-    padding: 6px;
-    min-width: 50px;
-    min-height: 50px;
-  }
-}
-
-@media screen and (max-width: 600px) {
-  #bottom_nav {
-    font-size: 10px;
-    padding: 4px;
-  }
-  
-  .bottom_nav_btn {
-    padding: 4px;
-    min-width: 40px;
-    min-height: 40px;
-  }
-}
-
-/* Sidebar Toggle Button */
-#sidebar_toggle {
-  position: fixed;
-  top: 8px;
-  left: 205px;
-  z-index: 1100;
-  width: 36px;
-  height: 36px;
-  /* background: #222C38 url('../img/icon_menu.svg') center center no-repeat; */
-  background: #222c38;
-  background-size: 60% 60%;
-  border: 2px solid #485667;
-  border-radius: 6px;
-  cursor: pointer;
-  display: none;
-}
-
-/* Sidebar compressed/expanded states */
-#secondary.compressed {
-  width: 48px !important;
-  min-width: 48px !important;
-  overflow: hidden;
-}
-#main.sidebar-compressed #secondary {
-  width: 48px !important;
-  min-width: 48px !important;
-  overflow: hidden;
-}
-#main.sidebar-compressed #parts_section,
-#main.sidebar-compressed #stats_section {
-  display: none;
-}
-
-/* Show sidebar toggle on small screens */
-@media (max-width: 900px) {
-  #sidebar_toggle {
-    display: block;
-  }
-  #secondary {
-    transition: width 0.2s;
-  }
-  #bottom_nav {
-    display: flex;
-  }
-  #main {
-    padding-bottom: 56px;
-  }
-}
-
-@media (min-width: 901px) {
-  #bottom_nav {
-    display: none;
-  }
-}
-
-
-#main {
-  padding-bottom: 56px !important;
-}
-
-@media (max-width: 900px), (min-width: 901px) {
-  #bottom_nav {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-}
-
-/* Info Bar */
+flex-grow: 1;
+background: #000;
+border: 1px solid #444;
+border-radius: 8px;
+padding: 8px;
+overflow: auto;
+display: flex;
+align-items: center;
+justify-content: center;
+position: relative;
+touch-action: none;
+}
+#reactor_background { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 1; }
+#reactor {
+display: grid;
+grid-template-columns: repeat(var(--game-cols, 12), var(--tile-size));
+gap: 1px;
+position: relative;
+z-index: 2;
+}
+#reactor .tile {
+width: var(--tile-size);
+height: var(--tile-size);
+border: 1px solid #333;
+background-color: #222;
+background-size: cover;
+position: relative;
+display: none;
+touch-action: none;
+}
+#reactor .tile.enabled {
+display: block;
+}
+#reactor .tile.part_active {
+box-shadow: 0 0 0 2px var(--success-color) inset;
+z-index: 5;
+}
+#reactor .tile.exploding {
+animation: explosion 0.6s steps(7);
+z-index: 10;
+}
+@keyframes explosion {
+0% { background-position: 32px 0; }
+100% { background-position: -192px 0; }
+}
+.percent_wrapper_wrapper { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+.percent_wrapper { position: absolute; bottom: 2px; left: 2px; right: 2px; height: 8px; border-radius: 2px; overflow: hidden; }
+.percent { height: 100%; transition: width 0.2s linear; }
+#reactor .category_reflector .percent, #reactor .category_cell .percent { background: #0f0; }
+#reactor .category_coolant_cell .percent, #reactor .category_heat_exchanger .percent, #reactor .category_particle_accelerator .percent, #reactor .category_capacitor .percent, #reactor .category_vent .percent { background: #f00; }
+#reactor .tile.spent { filter: grayscale(100%); }
 #info_bar {
-  display: flex;
-  align-items: center;
-  flex-direction: row;
-  justify-content: center;
-  background: #1b222c;
-  color: #fff;
-  gap: 16px;
-  font-family: monospace;
-  font-size: 1.3em;
-  border-top: 3px solid #485667;
-  border-bottom: 3px solid #485667;
-  box-shadow: 0 2px 8px #0008;
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 50px;
-  z-index: 110000 !important;
-  min-width: 0;
-  flex-wrap: wrap;
-  padding: 8px 8vw;
+display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 1rem;
+position: fixed; bottom: 56px; left: 0; right: 0;
+background: var(--info-bar-bg);
+padding: 8px;
+border-top: 1px solid var(--bottom-nav-border);
+font-family: var(--font-monospace);
+font-size: 1.1em;
+z-index: 1000;
+transition: margin-left 0.3s, width 0.3s;
+margin-left: 0;
+width: 100%;
 }
-
-.stat_block {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  background: transparent;
-  padding: 0 8px;
-  font-size: 1em;
-  height: 32px;
-  position: relative;
+.stat_block { display: flex; align-items: center; gap: 8px; position: relative; padding: 4px 8px; border-radius: 6px; }
+.stat_progress_bar { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; z-index: 0; border-radius: 6px; transition: width 0.2s; opacity: 0.4; }
+.stat_block.heat .stat_progress_bar { background: linear-gradient(90deg, #ff3c3c 0%, #ffb36b 100%); }
+.stat_block.power .stat_progress_bar { background: linear-gradient(90deg, #00eaff 0%, #0051ff 100%); }
+.stat_block > * { position: relative; z-index: 1; }
+.stat_value { font-weight: bold; }
+.stat_button { background: none; border: none; color: inherit; display: flex; align-items: center; gap: 8px; padding: 0; }
+.stat_button:active { transform: none; }
+#bottom_nav {
+display: none;
+position: fixed; bottom: 0; left: 0; right: 0;
+height: 56px;
+background: var(--bottom-nav-bg);
+border-top: 1px solid var(--bottom-nav-border);
+z-index: 1000;
+justify-content: space-around;
+align-items: center;
+transition: margin-left 0.3s, width 0.3s;
+margin-left: 0;
+width: 100%;
 }
-
-.stat_progress_bar {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 0%;
-  z-index: 0;
-  pointer-events: none;
-  border-radius: 8px;
-  transition: width 0.2s cubic-bezier(0.4, 2, 0.6, 1);
-  min-height: 100%;
-  opacity: 0.7;
+.bottom_nav_btn {
+flex-grow: 1;
+color: var(--text-color);
+text-decoration: none;
+padding: 8px;
+font-size: 14px;
+height: 100%;
+display: flex;
+align-items: center;
+justify-content: center;
 }
-
-.stat_block.heat .stat_progress_bar {
-  background: linear-gradient(90deg, #ff3c3c 0%, #ffb36b 100%);
-  opacity: 0.5;
-}
-.stat_block.power .stat_progress_bar {
-  background: linear-gradient(90deg, #00eaff 0%, #0051ff 100%);
-  box-shadow:
-    0 0 8px 2px #00eaff88,
-    0 0 16px 4px #0051ff44;
-  opacity: 0.5;
-}
-
-.stat_block span,
-.stat_block .stat_value,
-.stat_block button {
-  position: relative;
-  z-index: 1;
-  background: none !important;
-}
-
-.stat_block .stat_value {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: .8em;
-  color: #fff;
-  font-weight: bold;
-  margin: 0;
-  letter-spacing: 0.5px;
-}
-
-#info_bar button {
-  margin-left: 8px;
-  margin-top: 0;
-  margin-bottom: 0;
-  font-size: 1.3em;
-  background: #485667;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 12px;
-  cursor: pointer;
-  font-family: monospace;
-  font-weight: bold;
-  transition: background 0.2s, box-shadow 0.2s;
-  box-shadow: 0 1px 4px #0004;
-  height: 28px;
-  display: flex;
-  align-items: center;
-}
-#info_bar button:active,
-#info_bar button:focus {
-  background: #76809b;
-  outline: none;
-}
-
-@media (max-width: 900px) {
-  #info_bar {
-    font-size: 1.2em;
-    padding: 6px 2vw;
-    gap: 8px;
-  }
-  .stat_block {
-    font-size: 1.2em;
-    min-width: 60px;
-    padding: 3px 4px;
-    gap: 4px;
-    height: 28px;
-  }
-  .stat_value{
-	font-size: 1em;
-   }
-  #info_bar button {
-    font-size: 1.2em;
-    padding: 2px 8px;
-    margin-left: 6px;
-    height: 24px;
-  }
-}
-@media (max-width: 600px) {
-  #info_bar {
-    font-size: 1em;
-    padding: 4px 1vw;
-    gap: 4px;
-    flex-wrap: wrap;
-  }
-  .stat_block {
-    font-size: 1em;
-    min-width: 40px;
-    padding: 2px 2px;
-    gap: 2px;
-    height: 22px;
-  }
-    .stat_value{
-	font-size: .8em;
-   }
-  #info_bar button {
-    font-size: 1em;
-    padding: 1px 4px;
-    margin-left: 2px;
-    height: 18px;
-  }
-}
-
-/* Parts Panel Full Height & Toggle */
-#parts_section {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: var(--sidebar-expanded-width);
-  min-width: var(--sidebar-expanded-width);
-  max-width: var(--sidebar-expanded-width);
-  background: #222c38;
-  transition: width 0.2s, min-width 0.2s;
-  display: flex;
-  flex-direction: column;
-  /* overflow: hidden; */ /* Remove this to prevent clipping the toggle button */
-  max-height: 100vh;
-  overflow-y: auto;
-  z-index: 5 !important; /* Raised above info bar and nav */
-}
-#parts_section.collapsed {
-  width: var(--sidebar-collapsed-width) !important;
-  min-width: var(--sidebar-collapsed-width) !important;
-  max-width: var(--sidebar-collapsed-width) !important;
+.bottom_nav_btn.active { background: var(--button-bg); }
+.bottom_nav_btn:active {
+background-color: var(--button-bg-hover);
+transform: none;
 }
 #parts_panel_toggle {
-  display: block !important;
-  position: absolute;
-  top: 8px;
-  left: 205px;
-  right: auto;
-  width: 28px;
-  height: 40px;
-  background: #485667;
-  color: #fff;
-  border: none;
-  border-radius: 0 8px 8px 0;
-  cursor: pointer;
-  font-size: 1.5em;
-  padding: 0;
-  line-height: 40px;
-  text-align: center;
-  z-index: 10001;
-}
-#parts_panel_toggle:after {
-  content: "";
-}
-#parts_section.collapsed #parts_panel_toggle {
-  left: 100%;
-}
-#parts_section.collapsed #parts_panel_toggle:after {
-  content: "";
+position: absolute;
+top: 50%;
+left: 100%;
+width: 50px;
+height: 150px;
+background: var(--bottom-nav-border);
+border: 1px solid var(--panel-bg);
+border-right: none;
+border-radius: 0 8px 8px 0;
+font-size: 1.5em;
+line-height: 44px;
+transition: transform 0.3s ease;
+display: flex;
+align-items: center;
+justify-content: center;
+padding: 0;
 }
 
-/* Adjust main content for info bar and parts panel */
-#main {
-  margin-left: calc(var(--sidebar-expanded-width) + 10px);
-  padding-bottom: 120px;
-  overflow-y: auto;
-  /* background: #374151; */
-  transition: margin-left 0.2s;
+
+
+#parts_panel_toggle .image {
+width: 50px;
+height: 50px;
+padding-left: 10px;
+background-size: contain;
+background-position: center;
+background-repeat: no-repeat;
+}
+#parts_section.collapsed { width: 0; padding: 0; border: none; }
+#parts_section > *:not(#parts_panel_toggle) { transition: opacity 0.3s; }
+#parts_section.collapsed > *:not(#parts_panel_toggle) { opacity: 0; pointer-events: none; }
+#tooltip {
+position: fixed; left: 55%;  z-index: 1100;
+background: var(--panel-bg); border: 1px solid var(--bottom-nav-border);
+border-radius: 8px; padding: 1rem;
+ max-width: 90vw;
+opacity: 0; pointer-events: none;
+transition: opacity 0.15s;
+box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+#main.tooltip_showing #tooltip { opacity: 1; pointer-events: auto; }
+#tooltip_data dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-top: 0.5rem; }
+#tooltip_data dt { font-weight: bold; color: var(--text-color-darker); }
+#tooltip_data dd { text-align: right; font-family: var(--font-monospace); }
+.part.part_active { box-shadow: 0 0 0 2px var(--success-color) inset; }
+.parts_tabs { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--bottom-nav-border); }
+.parts_tab { flex-grow: 1; padding: 0.5rem; background: var(--button-bg); border-right: 1px solid var(--bottom-nav-border); }
+.parts_tab:last-child { border-right: none; }
+.parts_tab.active { background: var(--main-bg); }
+.parts_tab img { width: 24px; height: 24px; }
+.parts_tab_content { display: none; }
+.parts_tab_content.active { display: block; }
+#controls_nav { padding: 8px; display: flex; flex-direction: column; gap: 4px; margin-top: auto;}
+.nav_button { width: 100%; padding: 8px; background: var(--button-bg); border-radius: 4px; }
+.nav_button:hover { background: var(--button-bg-hover); }
+.nav_button.on { background: var(--success-color); }
+#main_top_nav { display: flex; gap: 8px; padding: 0 1rem 1rem; border-bottom: 1px solid var(--bottom-nav-border); margin-bottom: 1rem; }
+.flex-spacer { flex-grow: 1; }
+.styled-button { padding: 4px 12px; background: var(--success-color); border-radius: 4px; font-size: 1.5em; }
+
+#parts_tab_contents {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 12px;
 }
 
-#parts_section.collapsed ~ #main {
-  margin-left: var(--sidebar-collapsed-width) !important;
+.parts_tab_content h4 {
+    margin: 1.5rem 0 0.5rem 0;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--bottom-nav-border);
 }
 
-/* Bottom nav stays at bottom */
-#bottom_nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 56px;
-  z-index: 99999;
+#cells {
+    display: grid;
+    grid-template-columns: repeat(3, 48px);
+    gap: 8px;
+    padding: 12px;
 }
 
-#primary,
-#reactor_upgrades,
-#objectives_section,
-#tooltip_nav {
-  height: 100%;
-  min-height: 0;
+#reflectors,
+#capacitors,
+#particleAccelerators,
+#vents,
+#heatExchangers,
+#heatInlets,
+#heatOutlets,
+#coolantCells,
+#reactorPlatings {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 48px);
+    gap: 8px;
 }
 
-/* Responsive scaling for nav/UI buttons */
-.bottom_nav_btn,
-#sidebar_toggle {
-  min-width: 44px;
-  min-height: 44px;
-  font-size: 1em;
+.part {
+    width: 100%;
+    aspect-ratio: 1/1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #333;
+    border-radius: 4px;
+    border: 1px solid #555;
 }
 
-/* Upgrade icons using part images (restored old pattern) */
-#perpetual_capacitors .image,
-#active_venting .image,
-#active_exchangers .image,
-#improved_power_lines .image,
-#improved_wiring .image {
-  background-image: url("../img/parts/capacitors/capacitor_1.gif");
-}
-#improved_heat_vents .image {
-  background-image: url("../img/parts/vents/vent_1.gif");
-}
-#improved_heat_exchangers .image {
-  background-image: url("../img/parts/exchangers/exchanger_1.gif");
-}
-#reinforced_heat_exchangers .image {
-  background-image: url("../img/parts/platings/plating_1.gif");
-}
-#improved_coolant_cells .image {
-  background-image: url("../img/parts/coolants/coolant_cell_1.gif");
-}
-#improved_reflector_density .image,
-#improved_neutron_reflection .image,
-#perpetual_reflectors .image {
-  background-image: url("../img/parts/reflectors/reflector_1.gif");
-}
-#improved_alloys .image {
-  background-image: url("../img/parts/platings/plating_1.gif");
-}
-#improved_piping .image {
-  background-image: url("../img/parts/platings/plating_1.gif");
-}
-#expand_reactor_rows.upgrade .image {
-  background-image: url("../img/upgrades/upgrade_rows.gif");
-}
-#expand_reactor_cols.upgrade .image {
-  background-image: url("../img/upgrades/upgrade_cols.gif");
-}
-#chronometer.upgrade .image {
-  background-image: url("../img/upgrades/upgrade_flux.gif");
-}
-#heat_outlet_control_operator.upgrade .image,
-#heat_control_operator.upgrade .image {
-  background-image: url("../img/upgrades/upgrade_computer.gif");
+/* Single source of truth for unaffordable items */
+button.part.unaffordable,
+button.upgrade.unaffordable {
+    filter: grayscale(100%);
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    background-color: #222;
 }
 
-/* Toggle button visual states */
-#nav button.enabled {
-  background-color: #59c435 !important; /* Green for enabled */
-  color: #fff !important;
-  border: 2px solid #3a8c1e !important;
-  filter: none;
-}
-#nav button.disabled {
-  background-color: #b23b3b !important; /* Red for disabled */
-  color: #fff !important;
-  border: 2px solid #7a2323 !important;
-  filter: grayscale(40%);
+button.part.unaffordable .image,
+button.upgrade.unaffordable .image {
+    opacity: 0.5;
 }
 
-#all_parts {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+.part .image {
+    width: 80%;
+    height: 80%;
+    text-indent: -9999px;
 }
-#parts {
-  max-height: 70vh;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: auto;
-  display: block;
-  padding-bottom: 8px;
+
+#upgrades_section, #experimental_upgrades_section {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
 }
+
+.upgrade-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px;
+    background-color: var(--subpanel-bg);
+    border-radius: 8px;
+    border: 1px solid var(--bottom-nav-border);
+}
+
+#upgrades_content_wrapper h2, #experimental_upgrades_content_wrapper h2 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--bottom-nav-border);
+    padding-bottom: 0.5rem;
+}
+
+.upgrade {
+    width: 48px;
+    height: 48px;
+    background-color: #444;
+    border: 1px solid #666;
+    border-radius: 4px;
+    position: relative;
+    padding: 0;
+}
+
+.upgrade .image {
+    width: 100%;
+    height: 100%;
+    background-size: 32px 32px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.upgrade .levels {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    font-size: 11px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-family: var(--font-monospace);
+    font-weight: bold;
+}
+
+#exotic_particles_display {
+    font-size: 1.2em;
+    text-align: center;
+    padding: 1rem;
+    background: var(--subpanel-bg);
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+}
+
+.explanitory {
+    background: var(--subpanel-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.explanitory p {
+    margin-top: 0.5rem;
+    color: var(--text-color-darker);
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 @media (max-width: 900px) {
-  #parts {
-    max-height: 40vh;
+    #main_top_nav { display: none; }
+    #bottom_nav { display: flex; }
+    #parts_section { position: fixed; height: 100%; z-index: 1001; transform: translateX(-100%); width: var(--sidebar-width-mobile);}
+    #parts_section:not(.collapsed) { transform: translateX(0); }
+    #parts_panel_toggle { left: auto;  width: 50px; height: 50px; }
+    #info_bar { font-size: 1.5em; gap: 0.5rem; padding: 4px; }
+    .stat_block { padding: 2px 4px; }
+    #main_content_wrapper {
+        padding: 0.5rem;
+    }
+
+    #objectives_section {
+        margin-left: 0.5rem;
+        margin-right: 0.5rem;
+    }
+
+    /* --- MOBILE STYLES FOR PARTS LIST --- */
+    #parts_tab_contents {
+        padding: 0 8px;
+    }
+    .parts_tab_content > h4 {
+        padding: 0 8px;
+    }
+
+    #cells,
+    #reflectors,
+    #capacitors,
+    #particleAccelerators,
+    #vents,
+    #heatExchangers,
+    #heatInlets,
+    #heatOutlets,
+    #coolantCells,
+    #reactorPlatings {
+        display: flex;
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 10px;
+        padding: 8px;
+        margin: 0 -8px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    #cells::-webkit-scrollbar,
+    #reflectors::-webkit-scrollbar,
+    #capacitors::-webkit-scrollbar,
+    #particleAccelerators::-webkit-scrollbar,
+    #vents::-webkit-scrollbar,
+    #heatExchangers::-webkit-scrollbar,
+    #heatInlets::-webkit-scrollbar,
+    #heatOutlets::-webkit-scrollbar,
+    #coolantCells::-webkit-scrollbar,
+    #reactorPlatings::-webkit-scrollbar {
+        display: none;
+    }
+
+    .part {
+        flex-shrink: 0;
+        width: 56px;
+        height: 56px;
+    }
+
+    /* --- MOBILE STYLES FOR UPGRADES --- */
+    .upgrade-group {
+        gap: 16px;
+        padding: 16px;
+    }
+
+    .upgrade {
+        width: 56px;
+        height: 56px;
+    }
+    .upgrade .image {
+        background-size: 36px 36px;
+    }
+
+    #reactor_wrapper {
+        padding: 4px;
+    }
+}
+
+#sellBtnInfoBar, #reduceHeatBtnInfoBar {
+    border: 1px solid var(--button-bg);
+    padding: 2px;
+    margin: 2px;
+}
+
+#sellBtnInfoBar:hover, #reduceHeatBtnInfoBar:hover {
+    background-color: var(--button-bg-hover);
+    color: var(--text-color);
+    border-radius: 4px;
+    box-shadow: 0 0 0 2px var(--success-color) inset;
+}
+
+body.parts-panel-open #info_bar,
+body.parts-panel-open #bottom_nav {
+    margin-left: var(--sidebar-width);
+    width: calc(100% - var(--sidebar-width));
+    transition: margin-left 0.3s, width 0.3s;
+}
+
+@media (max-width: 900px) {
+  body.parts-panel-open #info_bar,
+  body.parts-panel-open #bottom_nav {
+    margin-left: 0;
+    width: 100%;
   }
 }
 
-#nav .nav_button {
-  display: block;
+/* Sell Animation for Long Press */
+.tile .sell-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  background: #485667;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 1em;
-  font-weight: bold;
-  text-align: center;
-  transition: background 0.2s;
-}
-#nav .nav_button:hover,
-#nav .nav_button:focus {
-  background: #76809b;
-}
-
-.parts_tabs {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start;
-  align-items: center;
-  background: #bfc7d6;
-  border-bottom: 2px solid #6a7a8c;
-  padding: 4px 4px 0 4px;
-  gap: 4px;
-}
-.parts_tab {
-  width: 36px;
-  height: 36px;
-  background: #e3e7ef;
-  border: 2px solid #6a7a8c;
-  border-radius: 6px 6px 0 0;
-  margin: 0 2px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    border 0.15s;
-  opacity: 0.7;
-}
-.parts_tab img {
-  width: 24px;
-  height: 24px;
+  height: 100%;
+  border-radius: inherit;
+  background-color: transparent;
+  z-index: 15;
   pointer-events: none;
-}
-.parts_tab.active {
-  background: #fff;
-  border-bottom: 2px solid #fff;
-  opacity: 1;
-  z-index: 2;
-}
-.parts_tab:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-#parts_tab_contents {
-  background: #e3e7ef;
-  border: 2px solid #6a7a8c;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  padding: 8px 4px 4px 4px;
-  height: 55%;
-  min-width: 180px;
-  box-shadow: 0 2px 8px #0002;
-}
-.parts_tab_content {
   display: none;
 }
-.parts_tab_content:target,
-.parts_tab_content.active,
-.parts_tab_content[style*="display: block"] {
-  display: block !important;
-}
-#parts_section {
-  background: #bfc7d6;
-  border: 4px solid #6a7a8c;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px #0002;
-  padding: 0 0 8px 0;
-  min-width: 200px;
-  max-width: 260px;
-}
-#nav,
-#controls_nav {
-  margin-top: 8px;
-  padding: 0 8px;
-}
-#nav .nav_button,
-#controls_nav .nav_button {
-  background: #e3e7ef;
-  border: 2px solid #6a7a8c;
-  border-radius: 4px;
-  color: #222c38;
-  font-weight: bold;
-  margin: 4px 0;
-  transition:
-    background 0.15s,
-    border 0.15s;
-}
-#nav .nav_button:hover,
-#controls_nav .nav_button:hover {
-  background: #fff;
-  border-color: #485667;
-}
 
-.parts_tab_content.active {
-  display: block !important;
-}
-
-/* Panel toggle button styles */
-#parts_panel_toggle.panel_toggle {
-  background: #222;
-  color: #fff;
-  border: none;
-  border-radius: 0 4px 4px 0;
-  cursor: pointer;
-  font-size: 1.5em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: left 0.2s;
-}
-#parts_section.collapsed {
-  width: 0 !important;
-  min-width: 0 !important;
-  max-width: 0 !important;
-  overflow: hidden;
-  padding: 0 !important;
-  border: none !important;
-}
-#parts_section.collapsed ~ main {
-  margin-left: 0 !important;
-}
-#parts_section.collapsed #parts_panel_toggle {
-  left: 0 !important;
-  border-radius: 0 4px 4px 0;
-}
-#parts_section:not(.collapsed) #parts_panel_toggle {
-  left: 100%;
-}
-#parts_section.collapsed #parts_panel_toggle {
-  transform: rotate(180deg);
-}
-
-#objectives_section.flash {
-  animation: objective-flash 0.8s;
-}
-@keyframes objective-flash {
-  0% { box-shadow: 0 0 0 0 #fff688, 0 0 8px 4px #fff688; border-color: #fff688; }
-  60% { box-shadow: 0 0 0 8px #fff688, 0 0 16px 8px #fff688; border-color: #fff688; }
-  100% { box-shadow: none; border-color: #6a7a8c; }
-}
-
-#reactor {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-#all_upgrades {
-  display: none;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-#all_upgrades:has(> .page.showing) {
+.tile.selling .sell-indicator {
   display: block;
+  animation: sell-progress-anim var(--sell-duration, 500ms) linear forwards;
+  --sell-color: rgba(255, 0, 0, 0.7);
+  background-image: conic-gradient(var(--sell-color) 0deg, transparent 0deg);
 }
 
-#all_upgrades > .page {
-  display: none;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
+@keyframes sell-progress-anim {
+  100% {
+    background-image: conic-gradient(var(--sell-color) 360deg, transparent 360deg);
+  }
 }
 
-#all_upgrades > .page.showing {
+.tooltip-title {
+  font-weight: bold;
+  font-size: 2em;
+  margin-bottom: 0.2em;
+}
+.tooltip-desc {
+  font-size: 1.5em;
+  color: var(--text-color-darker);
+  margin-bottom: 0.3em;
+}
+.tooltip-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0.2em 0 0 0;
+  font-size: 1.5em;
+}
+.tooltip-stats dt {
+  font-weight: 500;
+  color: var(--text-color-darker);
+  margin: 0;
+}
+.tooltip-stats dd {
+  text-align: right;
+  margin: 0;
+  font-family: var(--font-monospace);
+}
+.icon-inline {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: text-bottom;
+  margin-left: 0.15em;
+  margin-right: 0.15em;
+}
+.tooltip-summary-row {
   display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-#upgrades {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-#upgrades > div {
-  display: flex;
-  flex-direction: row;
-  gap: 8px;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 0.7em 1.2em;
   align-items: center;
-  flex-wrap: nowrap;
+  margin-bottom: 0.2em;
+  margin-top: 0.1em;
 }
-
-#upgrades .upgrade {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
+.tooltip-summary-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 14px;
-}
-
-#upgrades .upgrade .image {
-  width: 32px;
-  height: 32px;
-  background-size: contain;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 1.5em;
+  font-family: var(--font-monospace);
+  color: var(--text-color);
+  gap: 0.2em;
 }

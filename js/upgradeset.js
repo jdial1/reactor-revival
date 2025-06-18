@@ -1,83 +1,112 @@
-import { Upgrade } from './upgrade.js';
-import getUpgrades from '../data/upgrade_list.js';
-
+import { Upgrade } from "./upgrade.js";
+import upgradeActions from "./upgradeActions.js";
+import upgrade_templates from "../data/upgrade_list.js";
 export class UpgradeSet {
-    constructor(game) {
-        this.game = game;
-        this.upgrades = {};
-        this.upgradesArray = [];
-    }
-
-    initialize(upgrade_locations_dom_map) {
-        this.upgrades = {};
-        this.upgradesArray = [];
-
-        this.initializeUpgrades(this.game, upgrade_locations_dom_map);
-        return this.upgradesArray;
-    }
-
-    reset() {
-        this.upgradesArray.forEach(upgrade => {
-            upgrade.setLevel(this.game,0);
+  constructor(game) {
+    "use strict";
+    this.game = game;
+    this.upgrades = new Map();
+    this.upgradesArray = [];
+  }
+  initialize() {
+    const full_upgrade_list = [...upgrade_templates];
+    const baseCellParts = this.game.partset
+      .getAllParts()
+      .filter((p) => p.part.cell_tick_upgrade_cost && p.part.level === 1);
+    const cellUpgradeTemplates = [
+      {
+        type: "cell_power",
+        title: "Potent ",
+        description: " cells produce 100% more power per level of upgrade.",
+        actionId: "cell_power",
+      },
+      {
+        type: "cell_tick",
+        title: "Enriched ",
+        description: " cells last twice as long per level of upgrade.",
+        actionId: "cell_tick",
+      },
+      {
+        type: "cell_perpetual",
+        title: "Perpetual ",
+        description:
+          " cells are automatically replaced when they become depleted. The replacement cell will cost 1.5 times the normal cost.",
+        levels: 1,
+        actionId: "cell_perpetual",
+      },
+    ];
+    for (const template of cellUpgradeTemplates) {
+      for (const part of baseCellParts) {
+        full_upgrade_list.push({
+          id: `${part.id}_${template.type}`,
+          type: `${template.type}_upgrades`,
+          title: template.title + part.title, // Use part.title directly
+          description: part.title + template.description,
+          levels: template.levels,
+          cost: part.part[template.type + "_upgrade_cost"],
+          multiplier: part.part[template.type + "_upgrade_multi"],
+          actionId: template.actionId,
+          classList: [part.id, template.type],
+          part: part, // Use the Part instance, not part.part
+          icon: part.getImagePath(),
         });
+      }
     }
+    full_upgrade_list.forEach((upgrade_def) => {
+      const upgrade_obj = new Upgrade(upgrade_def, this.game);
+      this.upgrades.set(upgrade_obj.id, upgrade_obj);
+      this.upgradesArray.push(upgrade_obj);
+    });
+    return this.upgradesArray;
+  }
+  reset() {
+    this.upgrades.forEach((upgrade) => upgrade.setLevel(0));
+  }
+  getUpgrade(id) {
+    return this.upgrades.get(id);
+  }
+  getAllUpgrades() {
+    return this.upgradesArray;
+  }
+  getUpgradesByType(type) {
+    return this.upgradesArray.filter(
+      (upgrade) => upgrade.upgrade.type === type
+    );
+  }
+  purchaseUpgrade(upgradeId) {
+    const upgrade = this.getUpgrade(upgradeId);
+    if (!upgrade) return false;
 
-    getUpgrade(id) {
-        return this.upgrades[id];
-    }
+    const cost = upgrade.getCost();
+    if (this.game.current_money < cost) return false;
 
-    getAllUpgrades() {
-        return this.upgradesArray;
-    }
+    this.game.current_money -= cost;
+    upgrade.setLevel(upgrade.level + 1);
 
-    getUpgradesByType(type) {
-        return this.upgradesArray.filter(upgrade => upgrade.type === type);
-    }
+    this.game.ui.stateManager.setVar("current_money", this.game.current_money);
+    return true;
+  }
+  check_affordability(game) {
+    if (!game) return;
+    this.upgradesArray.forEach((upgrade) => {
+      let affordable = false;
 
-    purchaseUpgrade(upgradeId) {
-        const upgrade = this.getUpgrade(upgradeId);
-        if (!upgrade) return false;
-
-        if (upgrade.level >= upgrade.max_level) return false;
-        
-        if (upgrade.ecost) {
-            if (this.game.current_exotic_particles < upgrade.current_ecost) return false;
-            this.game.current_exotic_particles -= upgrade.current_ecost;
-            this.game.ui.say('var', 'current_exotic_particles', this.game.current_exotic_particles);
-        } else {
-            if (this.game.current_money < upgrade.current_cost) return false;
-            this.game.current_money -= upgrade.current_cost;
-            this.game.ui.say('var', 'current_money', this.game.current_money);
+      // First check if any required upgrade is missing
+      if (upgrade.erequires) {
+        const required_upgrade = game.upgradeset.getUpgrade(upgrade.erequires);
+        if (!required_upgrade || required_upgrade.level === 0) {
+          upgrade.setAffordable(false);
+          return;
         }
-        
-        upgrade.setLevel(this.game,upgrade.level + 1);
-        return true;
-    }
+      }
 
-    check_affordability(game) {
-        if(!game) return;
-        this.upgradesArray.forEach(upgrade => {
-            if (upgrade.level >= upgrade.max_level) {
-                upgrade.affordable = false;
-                return;
-            }
-
-            if (upgrade.ecost) {
-                upgrade.affordable = game.current_exotic_particles >= upgrade.current_ecost;
-            } else {
-                upgrade.affordable = game.current_money >= upgrade.current_cost;
-            }
-        });
-    }
-
-    initialize() {
-        console.log('Initializing upgrades');
-        var upgrade_list = getUpgrades(this.game);
-        upgrade_list.forEach(upgrade_def => {
-            const upgrade_obj = new Upgrade(upgrade_def, this.game);
-            this.upgrades[upgrade_obj.id] = upgrade_obj;
-            this.upgradesArray.push(upgrade_obj);
-        });
-        return this.upgradesArray;
-    }
+      // Then check if we can afford it
+      if (upgrade.base_ecost) {
+        affordable = game.current_exotic_particles >= upgrade.current_ecost;
+      } else {
+        affordable = game.current_money >= upgrade.current_cost;
+      }
+      upgrade.setAffordable(affordable);
+    });
+  }
 }
