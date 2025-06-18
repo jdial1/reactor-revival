@@ -1463,3 +1463,15 @@ body.hide-help-buttons .info-button {
   margin-left: 0.2em;
   /* No bullets */
 }
+
+@media (max-width: 600px) {
+  #objectives_section {
+    font-size: clamp(0.8em, 3vw, 1em);
+    padding: 0;
+    margin: 0;
+  }
+  #objectives_content {
+    font-size: inherit;
+    gap: 4px;
+  }
+}
