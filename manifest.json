@@ -16,18 +16,6 @@
       "sizes": "64x64",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "img/parts/cells/cell_1_1.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "img/parts/cells/cell_1_1.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
     }
   ],
   "shortcuts": [
@@ -39,7 +27,7 @@
       "icons": [
         {
           "src": "img/parts/cells/cell_1_1.png",
-          "sizes": "96x96"
+          "sizes": "64x64"
         }
       ]
     }
@@ -47,7 +35,7 @@
   "screenshots": [
     {
       "src": "img/misc/preview.png",
-      "sizes": "1280x720",
+      "sizes": "1200x1200",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Reactor simulation gameplay"
