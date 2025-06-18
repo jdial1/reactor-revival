@@ -3,20 +3,22 @@
   "version": "1.0.0",
   "description": "Tests for Reactor Game",
   "main": "index.html",
-"scripts": {
-  "test": "vitest",
-  "generate-version": "node scripts/generate-version.js",
-  "dev": "npm run generate-version && npx live-server --port=8080 --open=/",
-  "start": "npx live-server --port=8080 --open=/",
-  "check-pwa-root-files": "node scripts/copy-pwa-root-files.js",
-  "predeploy": "npm run check-pwa-root-files",
-  "deploy": "npm run predeploy && git add . && git commit -m 'Automated deploy' || echo 'No changes to commit' && git push origin master"
-},
+  "scripts": {
+    "test": "vitest",
+    "generate-version": "node scripts/generate-version.js",
+    "dev": "npm run generate-version && npm run build:sw && npx live-server --port=8080 --open=/",
+    "start": "npx live-server --port=8080 --open=/",
+    "check-pwa-root-files": "node scripts/copy-pwa-root-files.js",
+    "predeploy": "npm run build:sw && npm run check-pwa-root-files",
+    "deploy": "npm run predeploy && git add . && git commit -m 'Automated deploy' || echo 'No changes to commit' && git push origin master",
+    "build:sw": "workbox injectManifest workbox-config.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "gh-pages": "^6.3.0",
-    "vitest": "^1.6.1"
+    "vitest": "^1.6.1",
+    "workbox-cli": "^7.3.0"
   }
 }
