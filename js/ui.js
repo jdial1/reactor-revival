@@ -242,11 +242,18 @@ export class UI {
   }
 
   runUpdateInterfaceLoop() {
+    this.game.performance.markStart("ui_update_total");
+
+    this.game.performance.markStart("ui_process_queue");
     this.processUpdateQueue();
+    this.game.performance.markEnd("ui_process_queue");
+
     if (this.game?.tileset.active_tiles_list) {
+      this.game.performance.markStart("ui_visual_updates");
       this.game.tileset.active_tiles_list.forEach((tile) =>
         tile.updateVisualState()
       );
+      this.game.performance.markEnd("ui_visual_updates");
     }
     if (this.game) {
       // Ensure money is a number
@@ -261,6 +268,7 @@ export class UI {
         this.last_exotic_particles !== this.game.current_exotic_particles;
 
       if (moneyChanged || exoticParticlesChanged) {
+        this.game.performance.markStart("ui_affordability_check");
         // Update last known values
         this.last_money = this.game.current_money;
         this.last_exotic_particles = this.game.current_exotic_particles;
@@ -268,14 +276,17 @@ export class UI {
         // Check affordability for both parts and upgrades
         this.game.partset.check_affordability(this.game);
         this.game.upgradeset.check_affordability(this.game);
+        this.game.performance.markEnd("ui_affordability_check");
       }
 
       // Update UI state
+      this.game.performance.markStart("ui_state_manager");
       this.stateManager.setVar("current_money", this.game.current_money);
       this.stateManager.setVar(
         "current_exotic_particles",
         this.game.current_exotic_particles
       );
+      this.game.performance.markEnd("ui_state_manager");
     }
     this.update_interface_task = setTimeout(
       () => this.runUpdateInterfaceLoop(),
@@ -283,8 +294,12 @@ export class UI {
     );
     // Live-update tooltip if showing
     if (this.game?.tooltip_manager?.tooltip_showing) {
+      this.game.performance.markStart("ui_tooltip_update");
       this.game.tooltip_manager.update();
+      this.game.performance.markEnd("ui_tooltip_update");
     }
+
+    this.game.performance.markEnd("ui_update_total");
   }
 
   processUpdateQueue() {
@@ -560,6 +575,9 @@ export class UI {
       let longPressTargetTile = null;
       let pointerMoved = false;
       let pointerDownTileEl = null;
+      let startX = 0;
+      let startY = 0;
+      const MOVE_THRESHOLD = 10; // px
       const cancelLongPress = () => {
         if (this.longPressTimer) {
           clearTimeout(this.longPressTimer);
@@ -581,6 +599,8 @@ export class UI {
         this.isDragging = true;
         this.lastTileModified = tileEl.tile;
         pointerMoved = false;
+        startX = e.clientX;
+        startY = e.clientY;
         const hasPart = tileEl.tile.part;
         const noModifiers = !e.ctrlKey && !e.altKey && !e.shiftKey;
         if (hasPart && noModifiers) {
@@ -605,8 +625,15 @@ export class UI {
           }, 250); // 250ms to start animation, then 500ms for the animation
         }
         const pointerMoveHandler = (e_move) => {
-          pointerMoved = true;
-          cancelLongPress();
+          const dx = e_move.clientX - startX;
+          const dy = e_move.clientY - startY;
+          if (
+            !pointerMoved &&
+            (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD)
+          ) {
+            pointerMoved = true;
+            cancelLongPress();
+          }
           if (!this.isDragging) return;
           const moveTileEl = e_move.target.closest(".tile");
           if (

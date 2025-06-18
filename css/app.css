@@ -1,4 +1,10 @@
 @charset "UTF-8";
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap");
+body {
+  font-family: "Space Grotesk", Arial, sans-serif;
+}
+
 :root {
   --body-bg: #1a1c23;
   --main-bg: #2a2d38;
@@ -34,7 +40,7 @@ body {
   height: 100vh;
   margin: 0;
   padding: 0;
-  font-family: var(--font-sans-serif);
+  font-family: "Space Grotesk", Arial, sans-serif;
   color: var(--text-color);
   background-color: var(--body-bg);
   overflow: hidden;
@@ -130,22 +136,40 @@ menu {
   padding: 0.5rem 1rem;
   margin: 0 1rem 1rem;
   border-radius: 4px;
+  border: 1px solid var(--bottom-nav-border);
   display: flex;
   justify-content: center;
   flex-shrink: 0;
+  gap: 10px;
   overflow-x: auto;
 }
 #objectives_content {
+  position: relative;
+  min-height: 1.5em;
+  overflow: hidden;
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 10px;
 }
 #objective_reward {
   font-family: var(--font-monospace);
   color: var(--objective-reward-color, var(--success-color));
-  margin-left: 1rem;
 }
+
+#objective_reward:before {
+  content: "";
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  background-image: url("../img/ui/icons/icon_cash.png");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  vertical-align: middle;
+}
+
 #reactor_section {
   display: flex;
   flex-direction: column;
@@ -170,6 +194,9 @@ menu {
   margin-bottom: 1rem;
   overflow-x: auto;
   padding: 0 4px;
+  border: 1px solid var(--bottom-nav-border);
+  border-radius: 4px;
+  padding: 4px;
 }
 #reactor_stats .stat {
   font-family: var(--font-monospace);
@@ -805,6 +832,7 @@ button.upgrade.unaffordable .image {
   #objectives_section {
     margin-left: 0.5rem;
     margin-right: 0.5rem;
+    font-size: 1rem;
   }
 
   /* Add bottom padding to upgrades and experiments pages for mobile */
@@ -1118,4 +1146,187 @@ body.hide-help-buttons .info-button {
   width: 20px;
   height: 20px;
   margin: 0;
+}
+
+/* --- Enhanced Objective Completion Animation --- */
+#objectives_section.flash {
+  animation: obj-flash-glow 1s cubic-bezier(0.4, 0, 0.2, 1),
+    obj-flash-scale 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 24px 8px #59c435, 0 0 48px 16px #00eaff, 0 0 64px 24px #ffa500;
+  background: linear-gradient(90deg, #22252e 60%, #59c435 80%, #00eaff 100%);
+  border: 2px solid #59c435;
+  position: relative;
+  z-index: 10;
+}
+@keyframes obj-flash-glow {
+  0% {
+    box-shadow: 0 0 0 0 #59c435, 0 0 0 0 #00eaff, 0 0 0 0 #ffa500;
+  }
+  30% {
+    box-shadow: 0 0 24px 8px #59c435, 0 0 48px 16px #00eaff,
+      0 0 64px 24px #ffa500;
+  }
+  70% {
+    box-shadow: 0 0 24px 8px #59c435, 0 0 48px 16px #00eaff,
+      0 0 64px 24px #ffa500;
+  }
+  100% {
+    box-shadow: 0 0 0 0 #59c435, 0 0 0 0 #00eaff, 0 0 0 0 #ffa500;
+  }
+}
+@keyframes obj-flash-scale {
+  0% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.12);
+  }
+  40% {
+    transform: scale(0.98);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  80% {
+    transform: scale(1.01);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.confetti {
+  position: absolute;
+  width: 8px;
+  height: 16px;
+  border-radius: 2px;
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 20;
+  animation: confetti-fall 1s linear forwards;
+}
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(60px) rotate(360deg) scale(0.7);
+  }
+}
+
+/* Vertical text for parts panel toggle */
+.vertical-text {
+  display: inline-block;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 1.1em;
+  color: var(--success-color);
+  margin-right: 4px;
+  user-select: none;
+  text-shadow: 1px 1px 2px #222, 0 0 4px #59c43588;
+}
+
+@media (max-width: 600px) {
+  #tooltip {
+    max-width: 98vw;
+    min-width: 0;
+    width: 95vw;
+    font-size: 1.2em;
+    padding: 1.2em 0.7em 1.2em 0.7em;
+    border-radius: 12px;
+    word-break: break-word;
+    white-space: normal;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+  }
+  .tooltip-title {
+    font-size: 1.5em;
+    word-break: break-word;
+    margin-bottom: 0.4em;
+  }
+  .tooltip-desc {
+    font-size: 1.1em;
+    margin-bottom: 0.5em;
+    word-break: break-word;
+  }
+  .tooltip-summary-row {
+    flex-direction: column;
+    gap: 0.3em 0;
+    align-items: flex-start;
+    font-size: 1.1em;
+    margin-bottom: 0.5em;
+  }
+  .tooltip-summary-item {
+    font-size: 1.1em;
+    margin-bottom: 0.2em;
+  }
+  .tooltip-stats {
+    font-size: 1.1em;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+  }
+  #tooltip_close_btn {
+    top: 4px !important;
+    right: 4px !important;
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 20px !important;
+  }
+}
+
+/* Objective completion animation styles */
+.objective-old {
+  display: inline-block;
+  color: #aaa;
+  opacity: 0.7;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+  transition: color 0.5s, opacity 0.5s;
+}
+.objective-old.struck {
+  text-decoration: line-through wavy #ff3c3c 2px;
+  color: #ff3c3c;
+  opacity: 0.5;
+}
+.animate-strikeout {
+  transition: text-decoration 0.5s, color 0.5s, opacity 0.2s;
+}
+.animate-scroll-left {
+  animation: objective-scroll-left 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes objective-scroll-left {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+}
+#objective_title.animate-scroll-in {
+  animation: objective-scroll-in 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  position: relative;
+  z-index: 3;
+}
+@keyframes objective-scroll-in {
+  0% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  60% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }

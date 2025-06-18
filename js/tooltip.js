@@ -16,6 +16,7 @@ export class TooltipManager {
     this.isLocked = false;
     this.lastRenderedObj = null;
     this.lastRenderedTileContext = null;
+    this._lastTooltipContent = null;
 
     const closeButton = document.createElement("button");
     closeButton.innerHTML = "×";
@@ -116,6 +117,8 @@ export class TooltipManager {
   }
 
   update() {
+    this.game.performance.markStart("tooltip_update_total");
+
     if (!this.tooltip_showing || !this.current_obj) {
       return;
     }
@@ -134,24 +137,26 @@ export class TooltipManager {
       if (!str) return str;
       return (
         str
-          // Power icon
+          // Power icon (whole word only, not in 'powerful')
           .replace(
-            /(power)/gi,
-            "$1 <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>"
+            /\bpower\b/gi,
+            "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>"
           )
           // Heat icon
           .replace(
-            /(heat)/gi,
-            "$1 <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>"
+            /\bheat\b/gi,
+            "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>"
           )
+          // Tick/clock icon (word 'tick' or 'ticks')
           .replace(
             /\bticks?\b/gi,
             (match) =>
-              `${match} <img src='img/ui/status/status_time.png' class='icon-inline' alt='tick'>`
+              `${match} <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>`
           )
+          // Cash icon
           .replace(
             /\$(\d+)/g,
-            `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1`
+            "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1"
           )
       );
     };
@@ -196,7 +201,7 @@ export class TooltipManager {
 
     // Durability
     if (obj.ticks > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/status/status_time.png' class='icon-inline' alt='tick'>${fmt(
+      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(
         obj.ticks
       )}</span>`;
     }
@@ -221,17 +226,19 @@ export class TooltipManager {
       content += summary;
     }
     if (description) {
-      content += `<div class="tooltip-desc">${iconify(description)}</div>`;
+      // Insert <br> after each period followed by a space for better sentence wrapping
+      const formattedDesc = iconify(description).replace(/\.\s+/g, ".<br>");
+      content += `<div class="tooltip-desc">${formattedDesc}</div>`;
     }
     const stats = new Map();
     if (obj.upgrade) {
       if (obj.level >= obj.max_level) {
-        stats.set("Cost", "MAX");
+        stats.set("", "MAX");
       } else if (obj.ecost) {
-        stats.set("Cost", `${fmt(obj.current_ecost)} EP`);
+        stats.set("", `${fmt(obj.current_ecost)} EP`);
       } else {
         stats.set(
-          "Cost",
+          "",
           `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
             obj.current_cost
           )}`
@@ -242,10 +249,10 @@ export class TooltipManager {
         obj.erequires &&
         !this.game.upgradeset.getUpgrade(obj.erequires)?.level
       ) {
-        stats.set("Cost", "LOCKED");
+        stats.set("", "LOCKED");
       } else {
         stats.set(
-          "Cost",
+          "",
           `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
             obj.cost
           )}`
@@ -293,7 +300,14 @@ export class TooltipManager {
       }
       content += "</dl>";
     }
-    this.$tooltipContent.innerHTML = content;
+
+    // Only update DOM if content changed
+    if (this._lastTooltipContent !== content) {
+      this.game.performance.markStart("tooltip_dom_update");
+      this.$tooltipContent.innerHTML = content;
+      this._lastTooltipContent = content;
+      this.game.performance.markEnd("tooltip_dom_update");
+    }
 
     let actionsContainer =
       this.$tooltipContent.querySelector("#tooltip_actions");
@@ -313,12 +327,28 @@ export class TooltipManager {
         buyButton.className = "styled-button";
         buyButton.disabled = !obj.affordable;
         buyButton.onclick = () => {
+          console.log(
+            `Buy button clicked for upgrade: ${obj.id} (level ${
+              obj.level + 1
+            }, cost: ${obj.current_cost || obj.current_ecost})`
+          );
           if (this.game.upgradeset.purchaseUpgrade(obj.id)) {
+            console.log(
+              `Successfully purchased upgrade: ${obj.id} -> level ${obj.level}`
+            );
+            // Ensure all upgrades update their affordability before re-rendering
+            this.game.upgradeset.check_affordability(this.game);
             this.update();
+          } else {
+            console.log(
+              `Failed to purchase upgrade: ${obj.id} - insufficient funds or other error`
+            );
           }
         };
         actionsContainer.appendChild(buyButton);
       }
     }
+
+    this.game.performance.markEnd("tooltip_update_total");
   }
 }

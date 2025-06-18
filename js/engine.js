@@ -32,6 +32,8 @@ export class Engine {
       return;
     }
 
+    this.game.performance.markStart("engine_loop");
+
     const chronometerUpgrade = this.game.upgradeset.getUpgrade("chronometer");
     const tick_duration =
       this.game.loop_wait / (chronometerUpgrade?.level + 1 || 1);
@@ -55,19 +57,25 @@ export class Engine {
           ticks_to_process = max_catch_up_ticks;
         }
 
+        this.game.performance.markStart("batch_ticks");
         for (let i = 0; i < ticks_to_process; i++) {
           this.tick();
         }
+        this.game.performance.markEnd("batch_ticks");
       } else {
         this.tick();
       }
       this.dtime -= ticks_to_process * tick_duration;
     }
 
+    this.game.performance.markEnd("engine_loop");
+
     this.loop_timeout = setTimeout(() => this.loop(), tick_duration);
   }
 
   tick() {
+    this.game.performance.markStart("tick_total");
+
     const reactor = this.game.reactor;
     const tileset = this.game.tileset;
     const ui = this.game.ui;
@@ -80,6 +88,7 @@ export class Engine {
     let heat_add = 0;
 
     // 1. Process cells and basic components
+    this.game.performance.markStart("tick_cells");
     for (const tile of tileset.active_tiles_list) {
       if (!tile.activated || !tile.part) continue;
 
@@ -111,10 +120,12 @@ export class Engine {
         tile.heat_contained += tile.heat; // Heat from adjacent pulsing cells
       }
     }
+    this.game.performance.markEnd("tick_cells");
 
     reactor.current_heat += heat_add;
 
     // 2. Process heat transfer components
+    this.game.performance.markStart("tick_heat_transfer");
     const active_inlets = tileset.active_tiles_list.filter(
       (t) => t.activated && t.part?.category === "heat_inlet"
     );
@@ -185,8 +196,10 @@ export class Engine {
         if (i > neighbors.length * 2 && total_dispense > 0) break;
       }
     }
+    this.game.performance.markEnd("tick_heat_transfer");
 
     // 3. Process vents, EPs, and component failure
+    this.game.performance.markStart("tick_vents");
     let ep_chance_add = 0;
     for (const tile of tileset.active_tiles_list) {
       if (!tile.activated || !tile.part) continue;
@@ -224,6 +237,7 @@ export class Engine {
         this.handleComponentDepletion(tile);
       }
     }
+    this.game.performance.markEnd("tick_vents");
 
     if (ep_chance_add > 0) {
       let ep_gain =
@@ -235,6 +249,7 @@ export class Engine {
     }
 
     // 4. Update reactor-level stats
+    this.game.performance.markStart("tick_stats");
     if (reactor.heat_power_multiplier > 0 && reactor.current_heat > 1000) {
       power_add *=
         1 +
@@ -270,8 +285,11 @@ export class Engine {
 
     ui.stateManager.setVar("current_power", reactor.current_power);
     ui.stateManager.setVar("current_heat", reactor.current_heat);
+    this.game.performance.markEnd("tick_stats");
 
     if (reactor.checkMeltdown()) this.stop();
+
+    this.game.performance.markEnd("tick_total");
   }
 
   handleComponentDepletion(tile) {

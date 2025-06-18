@@ -1,185 +1,385 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>Reactor Clone</title>
-<meta name="description" content="A fun reactor simulation game.">
-<meta http-equiv='cache-control' content='no-cache'> 
-<meta http-equiv='expires' content='0'> 
-<meta http-equiv='pragma' content='no-cache'>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<link rel="icon" type="image/png" href="img/parts/cells/cell_1_1.png">
-<link rel="stylesheet" href="css/app.css">
-</head>
-<body>
-<div id="wrapper">
-<aside id="parts_section" class="panel collapsed">
-<button id="parts_panel_toggle" aria-label="Toggle parts panel">›</button>
-<div class="parts_tabs">
-<button class="parts_tab active" id="tab_power" data-tab="power" title="Power Creation"><img src="img/ui/icons/icon_power.png" alt="Power"></button>
-<button class="parts_tab" id="tab_heat" data-tab="heat" title="Heat Management"><img src="img/ui/icons/icon_heat.png" alt="Heat"></button>
-<button class="parts_tab" id="tab_misc1" data-tab="misc1" title="Other" disabled><span role="img" aria-label="Locked">🔒</span></button>
-<button class="parts_tab" id="tab_misc2" data-tab="misc2" title="Other" disabled><span role="img" aria-label="Locked">🔒</span></button>
-</div>
-<div id="parts_tab_contents">
-    <div id="parts_tab_power" class="parts_tab_content active">
-        <h4>Cells</h4>
-        <div id="cells"></div>
-        <h4>Reflectors</h4>
-        <div id="reflectors"></div>
-        <h4>Capacitors</h4>
-        <div id="capacitors"></div>
-        <h4>Particle Accelerators</h4>
-        <div id="particleAccelerators"></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Reactor Clone</title>
+    <meta name="description" content="A fun reactor simulation game." />
+    <meta http-equiv="cache-control" content="no-cache" />
+    <meta http-equiv="expires" content="0" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#59c435" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="Reactor" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="msapplication-TileColor" content="#59c435" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+
+    <!-- PWA Icons -->
+    <link rel="icon" type="image/png" href="img/parts/cells/cell_1_1.png" />
+    <link rel="apple-touch-icon" href="img/parts/cells/cell_1_1.png" />
+    <link
+      rel="apple-touch-icon"
+      sizes="192x192"
+      href="img/parts/cells/cell_1_1.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="512x512"
+      href="img/parts/cells/cell_1_1.png"
+    />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <div id="wrapper">
+      <aside id="parts_section" class="panel collapsed">
+        <button id="parts_panel_toggle" aria-label="Toggle parts panel">
+          <span class="vertical-text">PARTS</span>
+          ›
+        </button>
+        <div class="parts_tabs">
+          <button
+            class="parts_tab active"
+            id="tab_power"
+            data-tab="power"
+            title="Power Creation"
+          >
+            <img src="img/ui/icons/icon_power.png" alt="Power" />
+          </button>
+          <button
+            class="parts_tab"
+            id="tab_heat"
+            data-tab="heat"
+            title="Heat Management"
+          >
+            <img src="img/ui/icons/icon_heat.png" alt="Heat" />
+          </button>
+          <button
+            class="parts_tab"
+            id="tab_misc1"
+            data-tab="misc1"
+            title="Other"
+            disabled
+          >
+            <span role="img" aria-label="Locked">🔒</span>
+          </button>
+          <button
+            class="parts_tab"
+            id="tab_misc2"
+            data-tab="misc2"
+            title="Other"
+            disabled
+          >
+            <span role="img" aria-label="Locked">🔒</span>
+          </button>
+        </div>
+        <div id="parts_tab_contents">
+          <div id="parts_tab_power" class="parts_tab_content active">
+            <h4>Cells</h4>
+            <div id="cells"></div>
+            <h4>Reflectors</h4>
+            <div id="reflectors"></div>
+            <h4>Capacitors</h4>
+            <div id="capacitors"></div>
+            <h4>Particle Accelerators</h4>
+            <div id="particleAccelerators"></div>
+          </div>
+          <div id="parts_tab_heat" class="parts_tab_content">
+            <h4>Vents</h4>
+            <div id="vents"></div>
+            <h4>Heat Exchangers</h4>
+            <div id="heatExchangers"></div>
+            <h4>Inlets</h4>
+            <div id="heatInlets"></div>
+            <h4>Outlets</h4>
+            <div id="heatOutlets"></div>
+            <h4>Coolant Cells</h4>
+            <div id="coolantCells"></div>
+            <h4>Reactor Platings</h4>
+            <div id="reactorPlatings"></div>
+          </div>
+          <div id="parts_tab_misc1" class="parts_tab_content"></div>
+          <div id="parts_tab_misc2" class="parts_tab_content"></div>
+        </div>
+        <nav id="controls_nav">
+          <button id="auto_sell_toggle" class="nav_button" title="Auto Sell">
+            Auto Sell
+          </button>
+          <button id="auto_buy_toggle" class="nav_button" title="Auto Buy">
+            Auto Buy
+          </button>
+          <button id="time_flux_toggle" class="nav_button" title="Time Flux">
+            Time Flux
+          </button>
+          <button id="heat_control_toggle" class="nav_button" title="Heat Ctrl">
+            Heat Controller
+          </button>
+          <button id="pause_toggle" class="nav_button" title="Pause/Play">
+            Pause
+          </button>
+        </nav>
+      </aside>
+      <main id="main">
+        <div id="main_content_wrapper">
+          <div id="main_top_nav" class="main_top_controls_row">
+            <button class="styled-button active" data-page="reactor_section">
+              Reactor
+            </button>
+            <button class="styled-button" data-page="upgrades_section">
+              Upgrades
+            </button>
+            <button
+              class="styled-button"
+              data-page="experimental_upgrades_section"
+            >
+              Experiments
+            </button>
+            <button class="styled-button" data-toggle="parts_panel">
+              Parts
+            </button>
+            <div class="flex-spacer"></div>
+            <button
+              id="fullscreen_toggle"
+              class="styled-button"
+              title="Toggle Fullscreen"
+            >
+              <span>⛶</span>
+            </button>
+          </div>
+          <section id="objectives_section">
+            <div id="objectives_wrapper">
+              <div id="objectives_content">
+                <span id="objective_title"></span>
+                <span id="objective_reward"></span>
+              </div>
+            </div>
+          </section>
+          <div id="page_content_area">
+            <section id="reactor_section" class="page showing">
+              <header id="reactor_header">
+                <div id="reactor_stats">
+                  <span
+                    id="stats_power"
+                    class="stat"
+                    title="Estimated power per tick"
+                    >0</span
+                  >
+                  <span
+                    id="stats_heat"
+                    class="stat"
+                    title="Estimated heat per tick"
+                    >0</span
+                  >
+                  <span
+                    id="stats_cash"
+                    class="stat"
+                    title="Estimated autosell cash per tick"
+                    >0</span
+                  >
+                  <span
+                    id="stats_vent"
+                    class="stat"
+                    title="Estimated total heat venting per tick"
+                    >0</span
+                  >
+                  <span
+                    id="stats_inlet"
+                    class="stat"
+                    title="Total potential heat inletting per tick"
+                    >0</span
+                  >
+                  <span
+                    id="stats_outlet"
+                    class="stat"
+                    title="Total potential heat outletting per tick"
+                    >0</span
+                  >
+                </div>
+              </header>
+              <div id="pause_banner">PAUSED</div>
+              <div id="reactor_wrapper">
+                <div id="reactor"></div>
+                <div id="reactor_background"></div>
+              </div>
+            </section>
+            <section id="upgrades_section" class="page">
+              <div id="upgrades_content_wrapper">
+                <h2>General Upgrades</h2>
+                <div id="other_upgrades" class="upgrade-group"></div>
+                <h2>Cooling Upgrades</h2>
+                <div id="vent_upgrades" class="upgrade-group"></div>
+                <div id="exchanger_upgrades" class="upgrade-group"></div>
+                <h2>Cell Upgrades</h2>
+                <div id="cell_power_upgrades" class="upgrade-group"></div>
+                <div id="cell_tick_upgrades" class="upgrade-group"></div>
+                <div id="cell_perpetual_upgrades" class="upgrade-group"></div>
+              </div>
+            </section>
+            <section id="experimental_upgrades_section" class="page">
+              <div id="experimental_upgrades_content_wrapper">
+                <div id="exotic_particles_display">
+                  <span
+                    >Current EP:
+                    <span id="current_exotic_particles">0</span></span
+                  >
+                  <span
+                    >Total EP: <span id="total_exotic_particles">0</span></span
+                  >
+                </div>
+                <h2>Laboratory</h2>
+                <div id="experimental_laboratory" class="upgrade-group"></div>
+                <h2>Global Boosts</h2>
+                <div id="experimental_boost" class="upgrade-group"></div>
+                <h2>Particle Accelerators</h2>
+                <div
+                  id="experimental_particle_accelerators"
+                  class="upgrade-group"
+                ></div>
+                <h2>Experimental Cells</h2>
+                <div id="experimental_cells" class="upgrade-group"></div>
+                <div id="experimental_cells_boost" class="upgrade-group"></div>
+                <h2>Experimental Parts</h2>
+                <div id="experimental_parts" class="upgrade-group"></div>
+              </div>
+              <div id="reboot_section" class="explanitory">
+                <button class="styled-button" id="reboot_btn">
+                  Reboot for <span id="reboot_exotic_particles">0</span> Exotic
+                  Particles (EP)
+                </button>
+                <p>
+                  Rebooting the reactor will remove all parts, regular upgrades
+                  and money. You will keep your total Exotic Particles and
+                  experimental upgrades.
+                </p>
+              </div>
+              <div id="refund_section" class="explanitory">
+                <button class="styled-button" id="refund_btn">
+                  Reboot and Refund All EP
+                </button>
+                <p>
+                  This will reset everything, including experimental upgrades,
+                  and refund all Exotic Particles you have ever earned.
+                </p>
+              </div>
+              <div id="version_section" class="explanitory">
+                <p>Version: <span id="app_version"></span></p>
+              </div>
+            </section>
+          </div>
+          <section id="tooltip" aria-live="polite">
+            <div id="tooltip_data"></div>
+          </section>
+        </div>
+      </main>
     </div>
-    <div id="parts_tab_heat" class="parts_tab_content">
-        <h4>Vents</h4>
-        <div id="vents"></div>
-        <h4>Heat Exchangers</h4>
-        <div id="heatExchangers"></div>
-        <h4>Inlets</h4>
-        <div id="heatInlets"></div>
-        <h4>Outlets</h4>
-        <div id="heatOutlets"></div>
-        <h4>Coolant Cells</h4>
-        <div id="coolantCells"></div>
-        <h4>Reactor Platings</h4>
-        <div id="reactorPlatings"></div>
+    <div id="info_bar">
+      <div id="info_stats_group_1">
+        <div class="stat_block heat" id="info_heat_block">
+          <div class="stat_progress_bar" id="info_heat_progress"></div>
+          <button id="reduceHeatBtnInfoBar" class="stat_button">
+            <span>Heat:</span>
+            <span class="stat_value">
+              <span id="info_bar_current_heat">0</span>/<span
+                id="info_bar_max_heat"
+                >0</span
+              >
+            </span>
+          </button>
+        </div>
+        <div class="stat_block power" id="info_power_block">
+          <div class="stat_progress_bar" id="info_power_progress"></div>
+          <button id="sellBtnInfoBar" title="Sell Power" class="stat_button">
+            <span>Power:</span>
+            <span class="stat_value"
+              ><span id="info_bar_current_power">0</span>/<span
+                id="info_bar_max_power"
+                >0</span
+              ></span
+            >
+          </button>
+        </div>
+      </div>
+      <div id="info_stats_group_2">
+        <div class="stat_block" id="info_money_block">
+          <span>Money:</span>
+          <span class="stat_value">$<span id="info_bar_money">0</span></span>
+        </div>
+        <div class="stat_block" id="time_flux_display_block">
+          <span>TF:</span>
+          <span class="stat_value"><span id="time_flux_value">1x</span></span>
+        </div>
+      </div>
     </div>
-    <div id="parts_tab_misc1" class="parts_tab_content"></div>
-    <div id="parts_tab_misc2" class="parts_tab_content"></div>
-</div>
-<nav id="controls_nav">
-<button id="auto_sell_toggle" class="nav_button" title="Auto Sell">Auto Sell</button>
-<button id="auto_buy_toggle" class="nav_button" title="Auto Buy">Auto Buy</button>
-<button id="time_flux_toggle" class="nav_button" title="Time Flux">Time Flux</button>
-<button id="heat_control_toggle" class="nav_button" title="Heat Ctrl">Heat Controller</button>
-<button id="pause_toggle" class="nav_button" title="Pause/Play">Pause</button>
-</nav>
-</aside>
-<main id="main">
-<div id="main_content_wrapper">
-<div id="main_top_nav" class="main_top_controls_row">
-<button class="styled-button active" data-page="reactor_section">Reactor</button>
-<button class="styled-button" data-page="upgrades_section">Upgrades</button>
-<button class="styled-button" data-page="experimental_upgrades_section">Experiments</button>
-<button class="styled-button" data-toggle="parts_panel">Parts</button>
-<div class="flex-spacer"></div>
-<button id="fullscreen_toggle" class="styled-button" title="Toggle Fullscreen"><span>⛶</span></button>
-</div>
-<section id="objectives_section">
-<div id="objectives_wrapper">
-<div id="objectives_content">
-<span id="objective_title"></span>
-<span id="objective_reward"></span>
-</div>
-</div>
-</section>
-<div id="page_content_area">
-<section id="reactor_section" class="page showing">
-<header id="reactor_header">
-<div id="reactor_stats">
-<span id="stats_power" class="stat" title="Estimated power per tick">0</span>
-<span id="stats_heat" class="stat" title="Estimated heat per tick">0</span>
-<span id="stats_cash" class="stat" title="Estimated autosell cash per tick">0</span>
-<span id="stats_vent" class="stat" title="Estimated total heat venting per tick">0</span>
-<span id="stats_inlet" class="stat" title="Total potential heat inletting per tick">0</span>
-<span id="stats_outlet" class="stat" title="Total potential heat outletting per tick">0</span>
-</div>
-</header>
-<div id="pause_banner">PAUSED</div>
-<div id="reactor_wrapper">
-<div id="reactor"></div>
-<div id="reactor_background"></div>
-</div>
-</section>
-<section id="upgrades_section" class="page">
-<div id="upgrades_content_wrapper">
-    <h2>General Upgrades</h2>
-    <div id="other_upgrades" class="upgrade-group"></div>
-    <h2>Cooling Upgrades</h2>
-    <div id="vent_upgrades" class="upgrade-group"></div>
-    <div id="exchanger_upgrades" class="upgrade-group"></div>
-    <h2>Cell Upgrades</h2>
-    <div id="cell_power_upgrades" class="upgrade-group"></div>
-    <div id="cell_tick_upgrades" class="upgrade-group"></div>
-    <div id="cell_perpetual_upgrades" class="upgrade-group"></div>
-</div>
-</section>
-<section id="experimental_upgrades_section" class="page">
-<div id="experimental_upgrades_content_wrapper">
-<div id="exotic_particles_display">
-<span>Current EP: <span id="current_exotic_particles">0</span></span>
-<span>Total EP: <span id="total_exotic_particles">0</span></span>
-</div>
-    <h2>Laboratory</h2>
-    <div id="experimental_laboratory" class="upgrade-group"></div>
-    <h2>Global Boosts</h2>
-    <div id="experimental_boost" class="upgrade-group"></div>
-    <h2>Particle Accelerators</h2>
-    <div id="experimental_particle_accelerators" class="upgrade-group"></div>
-    <h2>Experimental Cells</h2>
-    <div id="experimental_cells" class="upgrade-group"></div>
-    <div id="experimental_cells_boost" class="upgrade-group"></div>
-    <h2>Experimental Parts</h2>
-    <div id="experimental_parts" class="upgrade-group"></div>
-</div>
-<div id="reboot_section" class="explanitory">
-<button class="styled-button" id="reboot_btn">Reboot for <span id="reboot_exotic_particles">0</span> Exotic Particles (EP)</button>
-<p>Rebooting the reactor will remove all parts, regular upgrades and money. You will keep your total Exotic Particles and experimental upgrades.</p>
-</div>
-<div id="refund_section" class="explanitory">
-<button class="styled-button" id="refund_btn">Reboot and Refund All EP</button>
-<p>This will reset everything, including experimental upgrades, and refund all Exotic Particles you have ever earned.</p>
-</div>
-<div id="version_section" class="explanitory">
-<p>Version: <span id="app_version"></span></p>
-</div>
-</section>
-</div>
-<section id="tooltip" aria-live="polite">
-<div id="tooltip_data"></div>
-</section>
-</div>
-</main>
-</div>
-<div id="info_bar">
-<div id="info_stats_group_1">
-<div class="stat_block heat" id="info_heat_block">
-<div class="stat_progress_bar" id="info_heat_progress"></div>
-<button id="reduceHeatBtnInfoBar" class="stat_button">
-<span>Heat:</span>
-<span class="stat_value">
-<span id="info_bar_current_heat">0</span>/<span id="info_bar_max_heat">0</span>
-</span>
-</button>
-</div>
-<div class="stat_block power" id="info_power_block">
-<div class="stat_progress_bar" id="info_power_progress"></div>
-<button id="sellBtnInfoBar" title="Sell Power" class="stat_button">
-<span>Power:</span>
-<span class="stat_value"><span id="info_bar_current_power">0</span>/<span id="info_bar_max_power">0</span></span>
-</button>
-</div>
-</div>
-<div id="info_stats_group_2">
-<div class="stat_block" id="info_money_block">
-<span>Money:</span>
-<span class="stat_value">$<span id="info_bar_money">0</span></span>
-</div>
-<div class="stat_block" id="time_flux_display_block">
-<span>TF:</span>
-<span class="stat_value"><span id="time_flux_value">1x</span></span>
-</div>
-</div>
-</div>
-</div>
-<nav id="bottom_nav">
-<button id="nav_reactor_btn" class="bottom_nav_btn active" data-page="reactor_section">Reactor</button>
-<button id="nav_upgrades_btn" class="bottom_nav_btn" data-page="upgrades_section">Upgrades</button>
-<button id="nav_experiments_btn" class="bottom_nav_btn" data-page="experimental_upgrades_section">Experiments</button>
-</nav>
-<script type="module" src="js/app.js"></script>
-</body>
+    <nav id="bottom_nav">
+      <button
+        id="nav_reactor_btn"
+        class="bottom_nav_btn active"
+        data-page="reactor_section"
+      >
+        Reactor
+      </button>
+      <button
+        id="nav_upgrades_btn"
+        class="bottom_nav_btn"
+        data-page="upgrades_section"
+      >
+        Upgrades
+      </button>
+      <button
+        id="nav_experiments_btn"
+        class="bottom_nav_btn"
+        data-page="experimental_upgrades_section"
+      >
+        Experiments
+      </button>
+    </nav>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              console.log("SW registered: ", registration);
+
+              // Check for updates
+              registration.addEventListener("updatefound", () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener("statechange", () => {
+                  if (
+                    newWorker.state === "installed" &&
+                    navigator.serviceWorker.controller
+                  ) {
+                    // New content is available, show update prompt
+                    if (confirm("New version available! Reload to update?")) {
+                      window.location.reload();
+                    }
+                  }
+                });
+              });
+            })
+            .catch((registrationError) => {
+              console.log("SW registration failed: ", registrationError);
+            });
+        });
+      }
+    </script>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
 </html>

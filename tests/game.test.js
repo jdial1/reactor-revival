@@ -169,19 +169,6 @@ describe("Reactor Game Integration Test Suite", () => {
       const cellPart = game.partset.getPartById("uranium1");
       game.upgradeset.purchaseUpgrade("perpetual_reflectors");
 
-      // Debug: Check available reflector parts
-      console.log("Available reflector parts:");
-      for (let i = 1; i <= 6; i++) {
-        const part = game.partset.getPartById(`reflector${i}`);
-        if (part) {
-          console.log(
-            `reflector${i}: cost=${part.cost}, base_cost=${part.base_cost}`
-          );
-        } else {
-          console.log(`reflector${i}: NOT FOUND`);
-        }
-      }
-
       // Set up the tile with the reflector
       const tile = game.tileset.getTile(0, 0);
       await tile.setPart(reflectorPart);
@@ -194,23 +181,11 @@ describe("Reactor Game Integration Test Suite", () => {
       const moneyBefore = game.current_money;
       const initialTicks = tile.part.ticks; // Will be 100
 
-      // Debug: Check conditions before depletion
-      console.log("Reflector perpetual before:", reflectorPart.perpetual);
-      console.log("Auto buy enabled:", game.ui.stateManager.getVar("auto_buy"));
-      console.log("Game money before:", game.current_money);
-      console.log("Reflector cost:", reflectorPart.cost);
-      console.log("Initial ticks:", initialTicks);
-
       // Set the reflector's ticks to 1 so the next pulse depletes it
       tile.ticks = 1;
 
       // Run the game engine tick. The cell at (0,1) will pulse, consuming the reflector's last tick.
       game.engine.tick();
-
-      // Debug: Check what happened
-      console.log("Tile part after tick:", tile.part);
-      console.log("Tile ticks after tick:", tile.ticks);
-      console.log("Game money after tick:", game.current_money);
 
       // Assertions
       // The part should still be there because it was auto-replaced

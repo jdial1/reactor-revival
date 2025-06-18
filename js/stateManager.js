@@ -40,11 +40,35 @@ export class StateManager {
     return this.clicked_part;
   }
   handleObjectiveLoaded(objData) {
-    if (this.ui.DOMElements.objective_title) {
-      this.ui.DOMElements.objective_title.textContent = objData.title;
-    }
-    if (this.ui.DOMElements.objective_reward) {
-      this.ui.DOMElements.objective_reward.textContent = objData.reward
+    const titleEl = this.ui.DOMElements.objective_title;
+    const rewardEl = this.ui.DOMElements.objective_reward;
+    const contentEl = document.getElementById("objectives_content");
+    if (titleEl && rewardEl && contentEl) {
+      // If there is already a title, animate it out
+      if (titleEl.textContent) {
+        // Create a span for the old objective
+        const oldSpan = document.createElement("span");
+        oldSpan.className =
+          "objective-old animate-strikeout animate-scroll-left";
+        oldSpan.textContent = titleEl.textContent;
+        // Insert before the current title
+        contentEl.insertBefore(oldSpan, titleEl);
+        // Animate the new objective in
+        titleEl.classList.add("animate-scroll-in");
+        // Strike out the old objective
+        setTimeout(() => {
+          oldSpan.classList.add("struck");
+        }, 50);
+        // Remove the old span after animation
+        setTimeout(() => {
+          if (oldSpan.parentNode) oldSpan.parentNode.removeChild(oldSpan);
+          titleEl.classList.remove("animate-scroll-in");
+        }, 700);
+      }
+      // Set new objective text
+      titleEl.textContent = objData.title;
+      // Set reward
+      rewardEl.textContent = objData.reward
         ? fmt(objData.reward)
         : objData.ep_reward
         ? `${fmt(objData.ep_reward)} EP`
@@ -69,10 +93,32 @@ export class StateManager {
   }
   handleObjectiveCompleted() {
     if (this.ui.DOMElements.objectives_section) {
-      this.ui.DOMElements.objectives_section.classList.add("flash");
+      const section = this.ui.DOMElements.objectives_section;
+      // Confetti colors
+      const confettiColors = [
+        "#59c435",
+        "#00eaff",
+        "#ffa500",
+        "#fff",
+        "#ff3c3c",
+        "#a259c4",
+      ];
+      // Spawn confetti
+      for (let i = 0; i < 15; i++) {
+        const conf = document.createElement("span");
+        conf.className = "confetti";
+        conf.style.background =
+          confettiColors[Math.floor(Math.random() * confettiColors.length)];
+        conf.style.left = `${10 + Math.random() * 80}%`;
+        conf.style.top = `${10 + Math.random() * 30}%`;
+        conf.style.transform = `rotate(${Math.random() * 360}deg)`;
+        conf.style.animationDelay = `${Math.random() * 0.2}s`;
+        section.appendChild(conf);
+        setTimeout(() => conf.remove(), 1500);
+      }
       setTimeout(() => {
-        this.ui.DOMElements.objectives_section.classList.remove("flash");
-      }, 800);
+        section.classList.remove("flash");
+      }, 1500);
     }
   }
   handlePartAdded(game, part_obj) {

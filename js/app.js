@@ -4,9 +4,13 @@ import { TooltipManager } from "./tooltip.js";
 import { on } from "./util.js";
 import { UI } from "./ui.js";
 import { Engine } from "./engine.js";
+import { PWA } from "./pwa.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   "use strict";
+
+  // Initialize PWA
+  const pwa = new PWA();
 
   // Load static version from deployment-generated file
   // Try multiple paths to handle different server configurations
@@ -76,6 +80,9 @@ document.addEventListener("DOMContentLoaded", () => {
   game.engine.start();
   ui.stateManager.setVar("max_heat", game.reactor.max_heat, true);
   ui.stateManager.setVar("max_power", game.reactor.max_power, true);
+
+  // Add PWA instance to game for access
+  game.pwa = pwa;
 
   const setupTooltipEvents = (parentElement, itemSelector, getObject) => {
     if (!parentElement) return;

@@ -31,6 +31,7 @@ export class Game {
     this.reactor = new Reactor(this);
     this.engine = new Engine(this);
     this.performance = new Performance(this);
+    this.performance.enable();
     this.loop_wait = this.base_loop_wait;
     this.paused = false;
     this.auto_sell_disabled = false;
