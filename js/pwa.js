@@ -280,3 +280,68 @@ body.offline::before {
 const styleSheet = document.createElement("style");
 styleSheet.textContent = pwaStyles;
 document.head.appendChild(styleSheet);
+
+// --- Version Polling and Update Banner ---
+let currentVersion = null;
+let updateBanner = null;
+
+function showUpdateBanner() {
+  if (updateBanner) return;
+  updateBanner = document.createElement("div");
+  updateBanner.id = "update-banner";
+  updateBanner.style.position = "fixed";
+  updateBanner.style.bottom = "0";
+  updateBanner.style.left = "0";
+  updateBanner.style.width = "100%";
+  updateBanner.style.background = "#222";
+  updateBanner.style.color = "#fff";
+  updateBanner.style.padding = "1em";
+  updateBanner.style.textAlign = "center";
+  updateBanner.style.zIndex = "10000";
+  updateBanner.innerHTML = `
+    <span>New version available!</span>
+    <button id="update-banner-reload" style="margin-left:1em;">Reload</button>
+  `;
+  document.body.appendChild(updateBanner);
+  document.getElementById("update-banner-reload").onclick = () => {
+    window.location.reload(true);
+  };
+}
+
+function pollVersionJson() {
+  fetch("version.json", { cache: "no-store" })
+    .then((res) => res.json())
+    .then((data) => {
+      if (currentVersion === null) {
+        currentVersion = data.version;
+      } else if (data.version !== currentVersion) {
+        showUpdateBanner();
+      }
+    })
+    .catch(() => {});
+}
+
+setInterval(pollVersionJson, 60000); // Poll every 60 seconds
+pollVersionJson();
+
+// --- Service Worker Update Detection ---
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/reactor-knockoff/sw.js", { scope: "/reactor-knockoff/" })
+      .then((registration) => {
+        // Listen for updates
+        registration.onupdatefound = () => {
+          const newWorker = registration.installing;
+          newWorker.onstatechange = () => {
+            if (
+              newWorker.state === "installed" &&
+              navigator.serviceWorker.controller
+            ) {
+              showUpdateBanner();
+            }
+          };
+        };
+      });
+  });
+}
