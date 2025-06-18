@@ -38,13 +38,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload only the essential files for the web app
-          path: |
-            index.html
-            css/
-            js/
-            data/
-            img/
+          # Upload the entire repository root (excluding .git, node_modules, etc.)
+          path: "."
 
       - name: Deploy to GitHub Pages
         id: deployment
