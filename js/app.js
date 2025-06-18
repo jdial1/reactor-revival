@@ -76,13 +76,15 @@ document.addEventListener("DOMContentLoaded", () => {
   game.objectives_manager = new ObjectiveManager(game);
   game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
   game.engine = new Engine(game);
-  game.initialize_new_game_state();
+
+  if (!game.loadGame()) {
+    game.initialize_new_game_state();
+  }
+
   game.objectives_manager.start();
   game.engine.start();
   ui.stateManager.setVar("max_heat", game.reactor.max_heat, true);
   ui.stateManager.setVar("max_power", game.reactor.max_power, true);
-
-  // Add PWA instance to game for access
   game.pwa = pwa;
 
   const setupTooltipEvents = (parentElement, itemSelector, getObject) => {
@@ -193,4 +195,9 @@ document.addEventListener("DOMContentLoaded", () => {
     sellBtn.addEventListener("click", () => game.sell_action());
   }
   window.reboot = (refund_ep = false) => game.reboot_action(refund_ep);
+
+  const SAVE_INTERVAL = 5 * 60 * 1000;
+  setInterval(() => {
+    game.saveGame();
+  }, SAVE_INTERVAL);
 });
