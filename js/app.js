@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const response = await fetch(path);
         if (response.ok) {
           const data = await response.json();
+          console.log("Version data:", data);
           const versionElement = document.getElementById("app_version");
           if (versionElement && data.version) {
             versionElement.textContent = data.version;
