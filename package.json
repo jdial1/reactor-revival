@@ -10,8 +10,8 @@
     "start": "npx live-server --port=8080 --open=/",
     "check-pwa-root-files": "node scripts/copy-pwa-root-files.js",
     "predeploy": "npm run build:sw && npm run check-pwa-root-files",
-    "deploy": "npm run predeploy && git add . && git commit -m 'Automated deploy' || echo 'No changes to commit' && git push origin master",
-    "build:sw": "workbox injectManifest workbox-config.js"
+    "deploy": "npm run build:sw && npm run check-pwa-root-files && git add . && git commit -m 'Automated deploy' || echo 'No changes to commit' && git push origin master",
+     "build:sw": "workbox injectManifest workbox-config.js"
   },
   "keywords": [],
   "author": "",

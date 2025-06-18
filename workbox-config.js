@@ -9,7 +9,10 @@ module.exports = {
     "package.json",
     "package-lock.json",
     "workbox-config.js",
-    "sw.js", // We will use this as our source file
+    "src-sw.js", // This is the source, not the destination file
+    ".github/**/*",
+    "README.md",
+    ".gitignore",
   ],
   swSrc: "src-sw.js",
   swDest: "sw.js",

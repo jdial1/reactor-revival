@@ -1,4 +1,4 @@
-name: Check PWA files and (optionally) build
+name: Build and Deploy Static Site to GitHub Pages (master root)
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-and-build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -20,14 +20,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build Service Worker
+        run: npm run build:sw
+
       - name: Check PWA root files
         run: npm run check-pwa-root-files
 
-      # Uncomment if you have a build step
-      # - name: Build
-      #   run: npm run build
-
-      - name: Commit changes
+      - name: Commit and push changes
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'

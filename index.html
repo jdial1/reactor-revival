@@ -348,30 +348,21 @@
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("sw.js")
-            .then((registration) => {
-              console.log("SW registered: ", registration);
-              registration.addEventListener("updatefound", () => {
-                const newWorker = registration.installing;
-                newWorker.addEventListener("statechange", () => {
-                  if (
-                    newWorker.state === "installed" &&
-                    navigator.serviceWorker.controller
-                  ) {
-                    if (confirm("New version available! Reload to update?")) {
-                      window.location.reload();
-                    }
-                  }
-                });
-              });
+            .register("/reactor-knockoff/sw.js", {
+              scope: "/reactor-knockoff/",
             })
-            .catch((registrationError) => {
-              console.log("SW registration failed: ", registrationError);
+            .then((registration) => {
+              console.log(
+                "Service Worker registered with scope:",
+                registration.scope
+              );
+            })
+            .catch((err) => {
+              console.error("Service Worker registration failed:", err);
             });
         });
       }
     </script>
-
     <script type="module" src="js/app.js"></script>
   </body>
 </html>
