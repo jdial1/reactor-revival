@@ -35,11 +35,31 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare files for deployment
+        run: |
+          # Create a clean deployment directory
+          mkdir -p deploy
+          # Copy only the essential files
+          cp index.html deploy/
+          cp -r css deploy/
+          cp -r js deploy/
+          cp -r data deploy/
+          cp -r img deploy/
+
+          # Generate static version file
+          echo "Generating version file..."
+          VERSION=$(date +%y_%m_%d_%H_%M)
+          echo "{\"version\": \"$VERSION\"}" > deploy/version.json
+          echo "Version generated: $VERSION"
+
+          # List what we're deploying
+          echo "Files to be deployed:"
+          find deploy -type f | head -20
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload the entire repository root (excluding .git, node_modules, etc.)
-          path: "."
+          path: "./deploy"
 
       - name: Deploy to GitHub Pages
         id: deployment

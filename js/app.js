@@ -7,6 +7,36 @@ import { Engine } from "./engine.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   "use strict";
+
+  // Load static version from deployment-generated file
+  fetch("/version.json")
+    .then((response) => response.json())
+    .then((data) => {
+      const versionElement = document.getElementById("app_version");
+      if (versionElement && data.version) {
+        versionElement.textContent = data.version;
+      }
+    })
+    .catch((error) => {
+      console.warn("Could not load version file:", error);
+      // Fallback to current date/time if version file is not available
+      const now = new Date();
+      const fallbackVersion =
+        now.getFullYear().toString().slice(-2) +
+        "_" +
+        String(now.getMonth() + 1).padStart(2, "0") +
+        "_" +
+        String(now.getDate()).padStart(2, "0") +
+        "_" +
+        String(now.getHours()).padStart(2, "0") +
+        "_" +
+        String(now.getMinutes()).padStart(2, "0");
+      const versionElement = document.getElementById("app_version");
+      if (versionElement) {
+        versionElement.textContent = fallbackVersion + " (dev)";
+      }
+    });
+
   const ui = new UI();
   if (!ui) {
     console.error("UI object could not be created.");

@@ -537,6 +537,11 @@ button.upgrade.unaffordable .image {
         margin-right: 0.5rem;
     }
 
+    /* Add bottom padding to upgrades and experiments pages for mobile */
+    #upgrades_section, #experimental_upgrades_section {
+        padding-bottom: 120px;
+    }
+
     /* --- MOBILE STYLES FOR PARTS LIST --- */
     #parts_tab_contents {
         padding: 0 8px;
