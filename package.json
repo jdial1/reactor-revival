@@ -1,13 +1,18 @@
 {
   "name": "reactor-game-tests",
   "version": "1.0.0",
-  "description": "A test suite for the reactor game.",
-  "type": "module",
+  "description": "Tests for Reactor Game",
+  "main": "index.html",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "generate-version": "node scripts/generate-version.js",
+    "dev": "npm run generate-version && npx live-server --port=8080 --open=/",  
+    "start": "npx live-server --port=8080 --open=/"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "devDependencies": {
-    "jsdom": "^24.0.0",
-    "vitest": "^1.4.0"
+    "vitest": "^1.6.1"
   }
 } 

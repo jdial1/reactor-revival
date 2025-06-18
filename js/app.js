@@ -9,33 +9,47 @@ document.addEventListener("DOMContentLoaded", () => {
   "use strict";
 
   // Load static version from deployment-generated file
-  fetch("/version.json")
-    .then((response) => response.json())
-    .then((data) => {
-      const versionElement = document.getElementById("app_version");
-      if (versionElement && data.version) {
-        versionElement.textContent = data.version;
+  // Try multiple paths to handle different server configurations
+  const versionPaths = ["/version.json", "./version.json", "version.json"];
+
+  const loadVersion = async () => {
+    for (const path of versionPaths) {
+      try {
+        const response = await fetch(path);
+        if (response.ok) {
+          const data = await response.json();
+          const versionElement = document.getElementById("app_version");
+          if (versionElement && data.version) {
+            versionElement.textContent = data.version;
+            return; // Successfully loaded version
+          }
+        }
+      } catch (error) {
+        // Continue to next path
+        continue;
       }
-    })
-    .catch((error) => {
-      console.warn("Could not load version file:", error);
-      // Fallback to current date/time if version file is not available
-      const now = new Date();
-      const fallbackVersion =
-        now.getFullYear().toString().slice(-2) +
-        "_" +
-        String(now.getMonth() + 1).padStart(2, "0") +
-        "_" +
-        String(now.getDate()).padStart(2, "0") +
-        "_" +
-        String(now.getHours()).padStart(2, "0") +
-        "_" +
-        String(now.getMinutes()).padStart(2, "0");
-      const versionElement = document.getElementById("app_version");
-      if (versionElement) {
-        versionElement.textContent = fallbackVersion + " (dev)";
-      }
-    });
+    }
+
+    // Fallback to current date/time if no version file is available (local development)
+    console.log("No version file found, using development fallback");
+    const now = new Date();
+    const fallbackVersion =
+      now.getFullYear().toString().slice(-2) +
+      "_" +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      "_" +
+      String(now.getDate()).padStart(2, "0") +
+      "_" +
+      String(now.getHours()).padStart(2, "0") +
+      "_" +
+      String(now.getMinutes()).padStart(2, "0");
+    const versionElement = document.getElementById("app_version");
+    if (versionElement) {
+      versionElement.textContent = fallbackVersion + " (dev)";
+    }
+  };
+
+  loadVersion();
 
   const ui = new UI();
   if (!ui) {
