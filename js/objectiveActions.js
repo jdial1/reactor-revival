@@ -1,5 +1,5 @@
 export const checkFunctions = {
-  firstComponent: (game) =>
+  firstCell: (game) =>
     game.tileset.active_tiles_list.some(
       (tile) => tile && tile.part && tile.activated
     ),

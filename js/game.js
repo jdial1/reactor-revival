@@ -107,7 +107,11 @@ export class Game {
     this.reactor.manualReduceHeat();
   }
   sell_action() {
-    this.reactor.sellPower();
+    if (this.current_money < 10) {
+      this.addMoney(1);
+    } else {
+      this.reactor.sellPower();
+    }
   }
   reboot_action(keep_exotic_particles = false) {
     this.current_money = this.base_money;

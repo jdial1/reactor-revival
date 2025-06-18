@@ -77,9 +77,43 @@ document.addEventListener("DOMContentLoaded", () => {
   game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
   game.engine = new Engine(game);
 
+  // Show quick start modal on first start
+  function showQuickStartModal() {
+    console.log("showQuickStartModal");
+    // if (localStorage.getItem("reactorGameQuickStartShown")) return;
+    const modal = document.createElement("div");
+    modal.id = "quick-start-modal";
+    modal.innerHTML = `
+      <div class="quick-start-content">
+        <h2>Welcome to Reactor!</h2>
+        <ul class="quick-start-list">
+          <li><b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>: must be managed or your reactor will melt down.</li>
+          <li><b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>: can be sold for money.</li>
+          <li><b>Tick</b> <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>: Each game tick processes heat, power, and component actions.</li>
+          <li><b>Pulse</b>: A single update cycle (tick) of the reactor.</li>
+        </ul>
+        <div class="quick-start-actions">
+          <div><b>Manual Cooling:</b> Click the <b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'> bar to reduce heat instantly.</div>
+          <div><b>Selling Power:</b> Click the <b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'> bar to convert power to money.</div>
+        </div>
+        <div class="quick-start-tutorial-note">
+          <b>Follow the objectives at the top to continue the tutorial!</b>
+        </div>
+        <button id="quick-start-close">Got it!</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById("quick-start-close").onclick = () => {
+      modal.remove();
+      localStorage.setItem("reactorGameQuickStartShown", "1");
+    };
+  }
+
   if (!game.loadGame()) {
     game.initialize_new_game_state();
   }
+
+  showQuickStartModal();
 
   game.objectives_manager.start();
   game.engine.start();
@@ -200,4 +234,24 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(() => {
     game.saveGame();
   }, SAVE_INTERVAL);
+
+  // Lock parts panel open on wide screens and remove parts button from top nav
+  function updatePartsPanelForScreen() {
+    const partsSection = document.getElementById("parts_section");
+    const partsPanelToggle = document.getElementById("parts_panel_toggle");
+    const partsButton = document.querySelector(
+      '.styled-button[data-toggle="parts_panel"]'
+    );
+    if (window.innerWidth > 900) {
+      if (partsSection) partsSection.classList.remove("collapsed");
+      if (partsPanelToggle) partsPanelToggle.style.display = "none";
+      if (partsButton) partsButton.style.display = "none";
+    } else {
+      if (partsPanelToggle) partsPanelToggle.style.display = "";
+      if (partsButton) partsButton.style.display = "";
+    }
+  }
+  // Call immediately after DOM is ready and after all DOM elements are available
+  updatePartsPanelForScreen();
+  window.addEventListener("resize", updatePartsPanelForScreen);
 });

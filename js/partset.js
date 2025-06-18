@@ -2,9 +2,9 @@ import { Part } from "./part.js";
 import part_list_data from "../data/part_list.js";
 
 const SINGLE_CELL_DESC_TPL =
-  "Produces %power power and %heat heat per tick. Lasts for %ticks ticks.";
+  "Produces %power power and %heat heat for %ticks ticks.";
 const MULTI_CELL_DESC_TPL =
-  "Acts as %count %type cells. Produces %power power and %heat heat per tick.";
+  "Acts as %count %type cells. Produces %power power and %heat heat for %ticks ticks.";
 const CELL_POWER_MULTIPLIERS = [1, 2, 4];
 const CELL_HEAT_MULTIPLIERS = [1, 2, 4];
 const CELL_COUNTS = [1, 2, 4];

@@ -7,18 +7,18 @@ const help_text = {
     capacitors:
       "Capacitors enhance the effectiveness of adjacent components. They can boost vent cooling and improve particle accelerator EP generation.",
     particleAccelerators:
-      "Particle accelerators generate Exotic Particles (EP) based on heat. Higher heat levels increase EP generation chance.",
+      "Particle Accelerators generate Exotic Particles (EP) based on heat. Higher heat levels increase EP generation chance.",
     vents:
       "Vents actively cool your reactor by removing heat each tick. More powerful vents handle higher heat loads but cost more.",
     heatExchangers:
-      "Heat exchangers transfer heat between adjacent components, helping distribute heat evenly across your reactor.",
+      "Heat Exchangers transfer heat between adjacent components, helping distribute heat evenly across your reactor.",
     heatInlets:
-      "Heat inlets pull heat from adjacent components into the reactor.",
-    heatOutlets: "Heat outlets push reactor heat into adjacent components.",
+      "Heat Inlets pull heat from adjacent components into the reactor.",
+    heatOutlets: "Heat Outlets push reactor heat into adjacent components.",
     coolantCells:
-      "Coolant cells passively absorb heat from adjacent components. They have high heat capacity but don't actively vent heat.",
+      "Coolant Cells passively absorb heat from adjacent components. They have high heat capacity but don't actively vent heat.",
     reactorPlatings:
-      "Reactor platings increase your reactor's maximum heat capacity. More platings allow you to run hotter safely.",
+      "Reactor Platings increase your reactor's maximum heat capacity. More platings allow you to run hotter safely.",
   },
   controls: {
     autoSell: "Automatically sells power when your power capacity is full.",
