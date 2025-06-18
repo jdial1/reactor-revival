@@ -193,23 +193,18 @@ export class TooltipManager {
       )}</span>`;
     }
     // Max Heat (containment)
+    let addedMaxHeat = false;
     if (obj.base_containment > 0 || obj.containment > 0) {
       summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='max heat'> Max: ${fmt(
         obj.base_containment || obj.containment
       )}</span>`;
+      addedMaxHeat = true;
     }
 
     // Durability
     if (obj.ticks > 0) {
       summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(
         obj.ticks
-      )}</span>`;
-    }
-
-    // Max Heat (containment)
-    if (obj.base_containment > 0 || obj.containment > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='max heat'> Max: ${fmt(
-        obj.base_containment || obj.containment
       )}</span>`;
     }
 
