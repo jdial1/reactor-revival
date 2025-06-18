@@ -13,7 +13,6 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
     />
 
-    <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#59c435" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
@@ -25,7 +24,6 @@
     <meta name="msapplication-TileColor" content="#59c435" />
     <meta name="msapplication-config" content="/browserconfig.xml" />
 
-    <!-- PWA Icons -->
     <link rel="icon" type="image/png" href="img/parts/cells/cell_1_1.png" />
     <link rel="apple-touch-icon" href="img/parts/cells/cell_1_1.png" />
     <link
@@ -39,9 +37,7 @@
       href="img/parts/cells/cell_1_1.png"
     />
 
-    <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json" />
-
     <link rel="stylesheet" href="css/app.css" />
   </head>
   <body>
@@ -348,7 +344,6 @@
       </button>
     </nav>
 
-    <!-- PWA Service Worker Registration -->
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -356,8 +351,6 @@
             .register("sw.js")
             .then((registration) => {
               console.log("SW registered: ", registration);
-
-              // Check for updates
               registration.addEventListener("updatefound", () => {
                 const newWorker = registration.installing;
                 newWorker.addEventListener("statechange", () => {
@@ -365,7 +358,6 @@
                     newWorker.state === "installed" &&
                     navigator.serviceWorker.controller
                   ) {
-                    // New content is available, show update prompt
                     if (confirm("New version available! Reload to update?")) {
                       window.location.reload();
                     }

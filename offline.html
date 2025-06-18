@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reactor Clone - Offline</title>
+    <meta name="theme-color" content="#59c435" />
+    <link rel="icon" type="image/png" href="img/parts/cells/cell_1_1.png" />
+    <link rel="stylesheet" href="css/app.css" />
+    <style>
+      body {
+        background: #181b22;
+        color: #fff;
+        text-align: center;
+        padding-top: 10vh;
+      }
+      .offline-img {
+        width: 96px;
+        margin-bottom: 1em;
+      }
+      .reload-btn {
+        background: #222;
+        color: #59c435;
+        border: 1px solid #59c435;
+        border-radius: 6px;
+        padding: 10px 24px;
+        font-size: 1.2em;
+        cursor: pointer;
+        margin-top: 2em;
+      }
+      .reload-btn:hover {
+        background: #59c435;
+        color: #222;
+      }
+    </style>
+  </head>
+  <body>
+    <img src="img/parts/cells/cell_1_1.png" alt="Offline" class="offline-img" />
+    <h1>Offline</h1>
+    <p>You are offline. Please check your internet connection.</p>
+    <button class="reload-btn" onclick="window.location.reload()">
+      Reload
+    </button>
+  </body>
+</html>

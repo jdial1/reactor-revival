@@ -2,12 +2,12 @@
   "name": "Reactor Clone",
   "short_name": "Reactor",
   "description": "A fun reactor simulation game with industrial tech styling",
-  "start_url": "/reactor-knockoff/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#59c435",
   "orientation": "portrait-primary",
-  "scope": "/reactor-knockoff/",
+  "scope": ".",
   "lang": "en",
   "categories": ["games", "simulation", "strategy"],
   "icons": [
@@ -23,11 +23,11 @@
       "name": "Start New Game",
       "short_name": "New Game",
       "description": "Start a fresh reactor simulation",
-      "url": "/reactor-knockoff/?action=new",
+      "url": "./?action=new",
       "icons": [
         {
           "src": "img/parts/cells/cell_1_1.png",
-          "sizes": "64x64"
+          "sizes":"64x64"
         }
       ]
     }
