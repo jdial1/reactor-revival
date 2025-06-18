@@ -31,27 +31,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload only the necessary files for the web app
+          # Upload only the essential files for the web app
           path: |
             index.html
             css/
             js/
             data/
             img/
-            package.json
-            package-lock.json
-            jsconfig.json
-            vitest.config.js
-            tests/
-            .github/
-            
+
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4 
+        uses: actions/deploy-pages@v4
