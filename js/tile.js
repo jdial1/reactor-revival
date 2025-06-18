@@ -120,6 +120,14 @@ export class Tile {
       this.$el.style.backgroundImage = "none";
       if (this.$percent) this.$percent.style.width = "0%";
     }
+
+    // Hide tooltip if it's showing this tile's info
+    if (this.game.tooltip_manager?.current_tile_context === this) {
+      this.game.tooltip_manager.hide();
+    }
+
+    // Update reactor stats
+    this.game.reactor.updateStats();
   }
 
   updateVisualState() {

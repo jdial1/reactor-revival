@@ -66,6 +66,7 @@
 <button class="styled-button" data-page="experimental_upgrades_section">Experiments</button>
 <button class="styled-button" data-toggle="parts_panel">Parts</button>
 <div class="flex-spacer"></div>
+<button id="fullscreen_toggle" class="styled-button" title="Toggle Fullscreen"><span>⛶</span></button>
 </div>
 <section id="objectives_section">
 <div id="objectives_wrapper">
@@ -87,6 +88,7 @@
 <span id="stats_outlet" class="stat" title="Total potential heat outletting per tick">0</span>
 </div>
 </header>
+<div id="pause_banner">PAUSED</div>
 <div id="reactor_wrapper">
 <div id="reactor"></div>
 <div id="reactor_background"></div>
@@ -143,6 +145,7 @@
 </main>
 </div>
 <div id="info_bar">
+<div id="info_stats_group_1">
 <div class="stat_block heat" id="info_heat_block">
 <div class="stat_progress_bar" id="info_heat_progress"></div>
 <button id="reduceHeatBtnInfoBar" class="stat_button">
@@ -159,6 +162,8 @@
 <span class="stat_value"><span id="info_bar_current_power">0</span>/<span id="info_bar_max_power">0</span></span>
 </button>
 </div>
+</div>
+<div id="info_stats_group_2">
 <div class="stat_block" id="info_money_block">
 <span>Money:</span>
 <span class="stat_value">$<span id="info_bar_money">0</span></span>
@@ -166,6 +171,8 @@
 <div class="stat_block" id="time_flux_display_block">
 <span>TF:</span>
 <span class="stat_value"><span id="time_flux_value">1x</span></span>
+</div>
+</div>
 </div>
 </div>
 <nav id="bottom_nav">

@@ -132,15 +132,28 @@ export class TooltipManager {
     // Helper to inject icons (not in title)
     const iconify = (str) => {
       if (!str) return str;
-      return str
-        .replace(
-          /(power)/gi,
-          "$1 <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>"
-        )
-        .replace(
-          /(heat)/gi,
-          "$1 <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>"
-        );
+      return (
+        str
+          // Power icon
+          .replace(
+            /(power)/gi,
+            "$1 <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>"
+          )
+          // Heat icon
+          .replace(
+            /(heat)/gi,
+            "$1 <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>"
+          )
+          .replace(
+            /\bticks?\b/gi,
+            (match) =>
+              `${match} <img src='img/ui/status/status_time.png' class='icon-inline' alt='tick'>`
+          )
+          .replace(
+            /\$(\d+)/g,
+            `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1`
+          )
+      );
     };
 
     // Summary row for power, heat, max_heat, cost
@@ -183,7 +196,7 @@ export class TooltipManager {
 
     // Durability
     if (obj.ticks > 0) {
-      summary += `<span class='tooltip-summary-item'>⏱️${fmt(
+      summary += `<span class='tooltip-summary-item'><img src='img/ui/status/status_time.png' class='icon-inline' alt='tick'>${fmt(
         obj.ticks
       )}</span>`;
     }
@@ -197,7 +210,9 @@ export class TooltipManager {
 
     // Cost
     if (obj.cost !== undefined) {
-      summary += `<span class='tooltip-summary-item'>$${fmt(obj.cost)}</span>`;
+      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+        obj.cost
+      )}</span>`;
     }
     summary += "</div>";
 
@@ -215,7 +230,12 @@ export class TooltipManager {
       } else if (obj.ecost) {
         stats.set("Cost", `${fmt(obj.current_ecost)} EP`);
       } else {
-        stats.set("Cost", `$${fmt(obj.current_cost)}`);
+        stats.set(
+          "Cost",
+          `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+            obj.current_cost
+          )}`
+        );
       }
     } else if (obj.cost !== undefined) {
       if (
@@ -224,7 +244,12 @@ export class TooltipManager {
       ) {
         stats.set("Cost", "LOCKED");
       } else {
-        stats.set("Cost", `$${fmt(obj.cost)}`);
+        stats.set(
+          "Cost",
+          `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+            obj.cost
+          )}`
+        );
       }
     }
     if (tile && tile.activated) {
@@ -246,7 +271,12 @@ export class TooltipManager {
             obj.cost -
             Math.ceil((tile.heat_contained / obj.containment) * obj.cost);
         }
-        stats.set("Sells for", `$${fmt(Math.max(0, sell_value))}`);
+        stats.set(
+          "Sells for",
+          `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+            Math.max(0, sell_value)
+          )}`
+        );
       }
       if (obj.category === "particle_accelerator") {
         stats.set("EP Chance", `${fmt(tile.display_chance, 2)}%`);

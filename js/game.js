@@ -173,9 +173,15 @@ export class Game {
         this.ui.stateManager.setVar("current_money", this.current_money);
         part.recalculate_stats();
         tile.ticks = part.ticks;
+        this.reactor.updateStats();
         return;
       }
     }
+
+    if (this.tooltip_manager?.current_tile_context === tile) {
+      this.tooltip_manager.hide();
+    }
+
     tile.clearPart(false);
   }
 }

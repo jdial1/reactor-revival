@@ -204,6 +204,12 @@ export class Reactor {
   checkMeltdown() {
     if (this.current_heat > this.max_heat * 2) {
       this.has_melted_down = true;
+
+      // Hide any active tooltips before clearing parts
+      if (this.game.tooltip_manager) {
+        this.game.tooltip_manager.hide();
+      }
+
       this.game.tileset.active_tiles_list.forEach((tile) => {
         if (tile.part) {
           if (tile.$el) tile.$el.classList.add("exploding");

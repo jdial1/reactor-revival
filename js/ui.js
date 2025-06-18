@@ -1,6 +1,7 @@
 import { numFormat as fmt } from "./util.js";
 import { StateManager } from "./stateManager.js";
 import { Hotkeys } from "./hotkeys.js";
+import help_text from "../data/help_text.js";
 
 export class UI {
   constructor() {
@@ -103,6 +104,8 @@ export class UI {
       "parts_panel_toggle",
       "bottom_nav",
       "main_top_nav",
+      "fullscreen_toggle",
+      "help_toggle_checkbox",
     ];
     this.toggle_buttons_config = {
       auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
@@ -415,8 +418,16 @@ export class UI {
           ),
       },
       pause: {
-        onupdate: (val) =>
-          this.updateToggleButtonState(this.toggle_buttons_config.pause, val),
+        id: "pause_toggle",
+        stateProperty: "pause",
+        onupdate: (val) => {
+          this.updateToggleButtonState(this.toggle_buttons_config.pause, val);
+          const pauseBtn = this.DOMElements.pause_toggle;
+          if (pauseBtn) {
+            pauseBtn.textContent = val ? "Resume" : "Pause";
+          }
+          document.body.classList.toggle("game-paused", val);
+        },
       },
     };
   }
@@ -468,6 +479,34 @@ export class UI {
         partsSection.classList.add("collapsed");
       }
     });
+
+    // Add help toggle to experimental upgrades section
+    const experimentalSection = document.getElementById(
+      "experimental_upgrades_content_wrapper"
+    );
+    if (experimentalSection) {
+      const helpToggle = document.createElement("div");
+      helpToggle.id = "help_toggle";
+      helpToggle.innerHTML = `
+        <input type="checkbox" id="help_toggle_checkbox" checked>
+        <label for="help_toggle_checkbox">Show Help Buttons</label>
+      `;
+      experimentalSection.insertBefore(
+        helpToggle,
+        experimentalSection.firstChild
+      );
+
+      // Add event listener for help toggle
+      const checkbox = helpToggle.querySelector("#help_toggle_checkbox");
+      checkbox.addEventListener("change", (e) => {
+        const showHelp = e.target.checked;
+        document.body.classList.toggle("hide-help-buttons", !showHelp);
+        this.stateManager.setVar("show_help_buttons", showHelp);
+      });
+    }
+
+    this.initializeHelpButtons();
+
     return true;
   }
 
@@ -687,13 +726,37 @@ export class UI {
       partsButton.addEventListener("click", () => {
         const partsSection = document.getElementById("parts_section");
         if (partsSection) {
+          const isMobile = window.innerWidth <= 900;
+          const isOpening = partsSection.classList.contains("collapsed");
+
           partsSection.classList.toggle("collapsed");
           // Update button state
           partsButton.classList.toggle("active");
           // Always sync body class
           this.updatePartsPanelBodyClass();
+
+          // Auto-pause on mobile when opening parts panel
+          if (isMobile && isOpening && !this.stateManager.getVar("pause")) {
+            this.stateManager.setVar("pause", true);
+          }
         }
       });
+    }
+
+    // Add fullscreen toggle functionality
+    const fullscreenButton = this.DOMElements.fullscreen_toggle;
+    if (fullscreenButton) {
+      fullscreenButton.addEventListener("click", () => {
+        this.toggleFullscreen();
+      });
+
+      // Update fullscreen button state when fullscreen changes
+      document.addEventListener("fullscreenchange", () => {
+        this.updateFullscreenButtonState();
+      });
+
+      // Initialize button state
+      this.updateFullscreenButtonState();
     }
 
     // Add right-click sell functionality to reactor tiles
@@ -744,6 +807,114 @@ export class UI {
       document.body.classList.add("parts-panel-open");
     } else {
       document.body.classList.remove("parts-panel-open");
+    }
+  }
+
+  toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.warn("Error attempting to enable fullscreen:", err);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch((err) => {
+          console.warn("Error attempting to exit fullscreen:", err);
+        });
+      }
+    }
+  }
+
+  updateFullscreenButtonState() {
+    const fullscreenButton = this.DOMElements.fullscreen_toggle;
+    if (!fullscreenButton) return;
+
+    if (document.fullscreenElement) {
+      fullscreenButton.textContent = "⛶";
+      fullscreenButton.title = "Exit Fullscreen";
+    } else {
+      fullscreenButton.textContent = "⛶";
+      fullscreenButton.title = "Enter Fullscreen";
+    }
+  }
+
+  initializeHelpButtons() {
+    // Add info buttons to part headers
+    document.querySelectorAll(".parts_tab_content h4").forEach((header) => {
+      const originalText = header.textContent; // Store original text before adding button
+      const partType = originalText.toLowerCase();
+
+      // Map header text to help text keys
+      const helpTextKeyMap = {
+        cells: "cells",
+        reflectors: "reflectors",
+        capacitors: "capacitors",
+        "particle accelerators": "particleAccelerators",
+        vents: "vents",
+        "heat exchangers": "heatExchangers",
+        inlets: "heatInlets",
+        outlets: "heatOutlets",
+        "coolant cells": "coolantCells",
+        "reactor platings": "reactorPlatings",
+      };
+
+      const helpKey = helpTextKeyMap[partType];
+
+      if (help_text.parts[helpKey]) {
+        const infoButton = document.createElement("button");
+        infoButton.className = "info-button";
+        infoButton.textContent = "ⓘ";
+        infoButton.title = "Click for information";
+
+        infoButton.addEventListener("click", (e) => {
+          if (this.game && this.game.tooltip_manager) {
+            this.game.tooltip_manager.show(
+              {
+                title: originalText, // Use original text without info button
+                description: help_text.parts[helpKey],
+              },
+              null,
+              true,
+              infoButton
+            );
+          }
+        });
+        header.appendChild(infoButton);
+      }
+    });
+
+    // Add info buttons to control buttons
+    document.querySelectorAll("#controls_nav .nav_button").forEach((button) => {
+      const originalText = button.textContent; // Store original text before adding button
+      const controlType = originalText.replace(/\s+/g, "").toLowerCase();
+      if (help_text.controls[controlType]) {
+        const infoButton = document.createElement("button");
+        infoButton.className = "info-button";
+        infoButton.textContent = "ⓘ";
+        infoButton.title = "Click for information";
+        infoButton.style.marginLeft = "4px";
+        infoButton.addEventListener("click", (e) => {
+          e.stopPropagation(); // Prevent triggering the main button
+          if (this.game && this.game.tooltip_manager) {
+            this.game.tooltip_manager.show(
+              {
+                title: originalText, // Use original text without info button
+                description: help_text.controls[controlType],
+              },
+              null,
+              true,
+              infoButton
+            );
+          }
+        });
+        button.appendChild(infoButton);
+      }
+    });
+
+    // Initialize help toggle state
+    const helpEnabled = this.stateManager.getVar("show_help_buttons") ?? true;
+    document.body.classList.toggle("hide-help-buttons", !helpEnabled);
+    if (this.DOMElements.help_toggle_checkbox) {
+      this.DOMElements.help_toggle_checkbox.checked = helpEnabled;
     }
   }
 }
