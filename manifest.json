@@ -98,12 +98,6 @@
       "purpose": "maskable"
     },
     {
-      "src": "img/parts/cells/cell_1_1_maskable_512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
       "src": "img/parts/cells/cell_1_1_192x192.png",
       "sizes": "180x180",
       "type": "image/png",

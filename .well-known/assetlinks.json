@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.jdial1.reactorRevival",
+        "sha256_cert_fingerprints": ["BE:E1:C4:41:53:31:E1:AD:7A:F1:30:62:3C:F3:8E:5B:6A:E5:3C:57:A2:08:6A:33:FA:A1:84:84:4A:1B:C4:CF"]
+      }
+    }]
