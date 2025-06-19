@@ -25,17 +25,4 @@ module.exports = {
   swDest: "sw.js",
   maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
   dontCacheBustURLsMatching: /\.(js|css)$/,
-  runtimeCaching: [
-    {
-      urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
-      handler: "CacheFirst",
-      options: {
-        cacheName: "images",
-        expiration: {
-          maxEntries: 200,
-          maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-        },
-      },
-    },
-  ],
 };
