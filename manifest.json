@@ -43,13 +43,13 @@
       "purpose": "any"
     },
     {
-      "src": "img/parts/cells/cell_1_1_maskable_64x64.png",
-      "sizes": "64x64",
+      "src": "img/parts/cells/cell_1_1_512x512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "img/parts/cells/cell_1_1_maskable_192x192.png",
+      "src": "img/parts/cells/cell_1_1_192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
