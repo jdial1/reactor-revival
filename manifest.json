@@ -5,6 +5,7 @@
   "description": "A reactor simulation game where you manage everything from basic uranium cells to advanced reactor cores. Unlock progressive upgrades, collect exotic particles, play offline, and enjoy a fast, responsive modern interface",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay"],
   "background_color": "#1a1a1a",
   "theme_color": "#303236",
   "orientation": "portrait-primary",
@@ -22,6 +23,41 @@
   ],
   "launch_handler": {
     "client_mode": ["navigate-existing", "auto"]
+  },
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "application/json": [".reactor"]
+      },
+      "icons": [
+        {
+          "src": "img/parts/cells/cell_1_1.png",
+          "sizes": "64x64",
+          "type": "image/png"
+        }
+      ],
+      "launch_type": "single-client"
+    }
+  ],
+  "handle_links": true,
+  "protocol_handlers": [
+    {
+      "protocol": "web+reactor",
+      "url": "/%s"
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "share_target": {
+    "action": "/share-target/",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
   },
   "icons": [
     {
@@ -105,5 +141,27 @@
       "form_factor": "narrow",
       "label": "Mobile reactor simulation gameplay"
     }
-  ]
+  ],
+  "widgets": [
+    {
+      "name": "Reactor Status",
+      "tag": "reactor-status",
+      "description": "Shows current reactor power and heat levels",
+      "screenshots": [
+        {
+          "src": "img/misc/preview.png",
+          "sizes": "600x400",
+          "label": "Reactor Status Widget"
+        }
+      ],
+      "data": {
+        "interval": 60,
+        "fields": ["power", "heat", "money"]
+      }
+    }
+  ],
+  "background_sync": {
+    "periodic": true,
+    "tag": "reactor-sync"
+  }
 } 
