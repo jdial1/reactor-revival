@@ -4,7 +4,26 @@ importScripts(
   "https://storage.googleapis.com/workbox-cdn/releases/6.4.1/workbox-sw.js"
 );
 
-self.skipWaiting();
+// Force activation
+self.addEventListener("install", (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            return caches.delete(cacheName);
+          })
+        );
+      }),
+    ])
+  );
+});
+
 workbox.core.clientsClaim();
 
 // This line is a placeholder. Workbox will replace it with the precache manifest.
@@ -19,6 +38,9 @@ workbox.routing.registerRoute(
       new workbox.expiration.ExpirationPlugin({
         maxEntries: 50,
         maxAgeSeconds: 24 * 60 * 60, // 24 hours
+      }),
+      new workbox.cacheableResponse.CacheableResponsePlugin({
+        statuses: [0, 200],
       }),
     ],
   })
@@ -51,6 +73,9 @@ workbox.routing.registerRoute(
         maxEntries: 20,
         maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
       }),
+      new workbox.cacheableResponse.CacheableResponsePlugin({
+        statuses: [0, 200],
+      }),
     ],
   })
 );
@@ -64,6 +89,9 @@ workbox.routing.registerRoute(
       new workbox.expiration.ExpirationPlugin({
         maxEntries: 50,
         maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+      }),
+      new workbox.cacheableResponse.CacheableResponsePlugin({
+        statuses: [0, 200],
       }),
     ],
   })
@@ -93,6 +121,7 @@ workbox.routing.setCatchHandler(({ event }) => {
   }
 });
 
+// Handle messages
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();

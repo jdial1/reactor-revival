@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Reactor Clone</title>
+    <title>Reactor Revival</title>
     <meta name="description" content="A fun reactor simulation game." />
     <meta http-equiv="cache-control" content="no-cache" />
     <meta http-equiv="expires" content="0" />
@@ -14,7 +14,7 @@
     />
     <meta name="theme-color" content="#303236" />
     <link rel="icon" type="image/png" href="img/parts/cells/cell_1_1.png" />
-    <link rel="manifest" href="manifest.json" />
+    <link rel="manifest" href="manifest.json" crossorigin="use-credentials" />
     <link
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
       rel="stylesheet"
@@ -460,19 +460,25 @@
 
     <script type="module" src="js/app.js"></script>
     <script>
-      if ("serviceWorker" in navigator && location.hostname !== "localhost") {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("sw.js")
-            .then((registration) => {
-              console.log(
-                "Service Worker registered successfully with scope:",
-                registration.scope
-              );
-            })
-            .catch((err) => {
-              console.error("Service Worker registration failed:", err);
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', async () => {
+          try {
+            const registration = await navigator.serviceWorker.register('/sw.js', {
+              scope: '/',
+              updateViaCache: 'none'
             });
+            console.log('Service Worker registered successfully with scope:', registration.scope);
+
+            if (registration.active) {
+              console.log('Service Worker is already active');
+            } else {
+              registration.addEventListener('activate', () => {
+                console.log('Service Worker activated');
+              });
+            }
+          } catch (err) {
+            console.error('Service Worker registration failed:', err);
+          }
         });
       }
     </script>
