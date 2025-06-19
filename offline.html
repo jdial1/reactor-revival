@@ -2,45 +2,65 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Reactor Clone - Offline</title>
-    <meta name="theme-color" content="#59c435" />
-    <link rel="icon" type="image/png" href="img/parts/cells/cell_1_1.png" />
-    <link rel="stylesheet" href="css/app.css" />
+    <title>Offline - Reactor Clone</title>
     <style>
       body {
-        background: #181b22;
+        font-family: "Press Start 2P", system-ui, -apple-system, sans-serif;
+        background-color: #1a1a1a;
         color: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
         text-align: center;
-        padding-top: 10vh;
+        padding: 20px;
       }
-      .offline-img {
-        width: 96px;
-        margin-bottom: 1em;
+      .offline-container {
+        background-color: #303236;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        max-width: 600px;
+        width: 90%;
       }
-      .reload-btn {
-        background: #222;
+      h1 {
         color: #59c435;
-        border: 1px solid #59c435;
-        border-radius: 6px;
-        padding: 10px 24px;
-        font-size: 1.2em;
-        cursor: pointer;
-        margin-top: 2em;
+        margin-bottom: 1rem;
       }
-      .reload-btn:hover {
-        background: #59c435;
-        color: #222;
+      p {
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+      }
+      .retry-button {
+        background-color: #59c435;
+        color: white;
+        border: none;
+        padding: 1rem 2rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 1rem;
+        transition: background-color 0.3s;
+      }
+      .retry-button:hover {
+        background-color: #4a9c2a;
       }
     </style>
   </head>
   <body>
-    <img src="img/parts/cells/cell_1_1.png" alt="Offline" class="offline-img" />
-    <h1>Offline</h1>
-    <p>You are offline. Please check your internet connection.</p>
-    <button class="reload-btn" onclick="window.location.reload()">
-      Reload
-    </button>
+    <div class="offline-container">
+      <h1>You're Offline</h1>
+      <p>
+        It seems you've lost connection to the internet. The Reactor Clone game
+        requires an active connection to function properly.
+      </p>
+      <p>Please check your internet connection and try again.</p>
+      <button class="retry-button" onclick="window.location.reload()">
+        Retry Connection
+      </button>
+    </div>
   </body>
 </html>

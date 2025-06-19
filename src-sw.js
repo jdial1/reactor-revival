@@ -18,6 +18,7 @@ workbox.routing.registerRoute(
     plugins: [
       new workbox.expiration.ExpirationPlugin({
         maxEntries: 50,
+        maxAgeSeconds: 24 * 60 * 60, // 24 hours
       }),
     ],
   })
@@ -33,16 +34,73 @@ workbox.routing.registerRoute(
         statuses: [0, 200],
       }),
       new workbox.expiration.ExpirationPlugin({
-        maxEntries: 100,
-        maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+        maxEntries: 200,
+        maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
       }),
     ],
   })
 );
 
+// Cache strategy for styles
+workbox.routing.registerRoute(
+  ({ request }) => request.destination === "style",
+  new workbox.strategies.StaleWhileRevalidate({
+    cacheName: "styles",
+    plugins: [
+      new workbox.expiration.ExpirationPlugin({
+        maxEntries: 20,
+        maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+      }),
+    ],
+  })
+);
+
+// Cache strategy for scripts
+workbox.routing.registerRoute(
+  ({ request }) => request.destination === "script",
+  new workbox.strategies.StaleWhileRevalidate({
+    cacheName: "scripts",
+    plugins: [
+      new workbox.expiration.ExpirationPlugin({
+        maxEntries: 50,
+        maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+      }),
+    ],
+  })
+);
+
+// Handle offline fallback
+workbox.routing.setCatchHandler(({ event }) => {
+  switch (event.request.destination) {
+    case "document":
+      return caches.match("offline.html");
+    case "image":
+      return new Response(
+        `<svg role="img" aria-labelledby="offline-title" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+          <title id="offline-title">Offline</title>
+          <rect width="100%" height="100%" fill="#f5f5f5"/>
+          <text x="50%" y="50%" fill="#666" text-anchor="middle">Offline</text>
+        </svg>`,
+        {
+          headers: {
+            "Content-Type": "image/svg+xml",
+            "Cache-Control": "no-store",
+          },
+        }
+      );
+    default:
+      return Response.error();
+  }
+});
+
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === "GET_VERSION") {
+    event.ports[0].postMessage({
+      version: "1.0.0", // This should match your app version
+    });
   }
   // ... any other custom message handling
 });

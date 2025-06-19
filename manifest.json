@@ -1,20 +1,29 @@
 {
-  "name": "Reactor Clone",
-  "short_name": "Reactor",
-  "description": "A fun reactor simulation game with industrial tech styling",
-  "start_url": ".",
+  "id": "com.jdial.reactor",
+  "name": "Reactor",
+  "short_name": "Reactor Revival",
+  "description": "A reactor simulation game where you manage everything from basic uranium cells to advanced reactor cores. Unlock progressive upgrades, collect exotic particles, play offline, and enjoy a fast, responsive moderninterface",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a1a",
-  "theme_color": "#59c435",
+  "theme_color": "#303236",
   "orientation": "portrait-primary",
-  "scope": ".",
+  "scope": "/",
   "lang": "en",
+  "dir": "ltr",
   "categories": ["games", "simulation", "strategy"],
+  "iarc_rating_id": "",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "icons": [
     {
       "src": "img/parts/cells/cell_1_1.png",
       "sizes": "64x64",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "img/parts/cells/cell_1_1_192x192.png",
@@ -25,7 +34,8 @@
     {
       "src": "img/parts/cells/cell_1_1_512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -33,11 +43,11 @@
       "name": "Start New Game",
       "short_name": "New Game",
       "description": "Start a fresh reactor simulation",
-      "url": "./?action=new",
+      "url": "/?action=new",
       "icons": [
         {
           "src": "img/parts/cells/cell_1_1.png",
-          "sizes":"64x64"
+          "sizes": "64x64"
         }
       ]
     }

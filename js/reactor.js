@@ -3,7 +3,7 @@ export class Reactor {
     "use strict";
     this.game = game;
     this.base_max_heat = 1000;
-    this.base_max_power = 1000;
+    this.base_max_power = 100;
     this.setDefaults();
   }
 

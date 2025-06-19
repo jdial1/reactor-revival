@@ -252,6 +252,182 @@ const upgrade_templates = [
     levels: 1,
     icon: "img/parts/cells/xcell_1_1.png",
   },
+  {
+    id: "quantum_buffering",
+    type: "experimental_boost",
+    title: "Quantum Buffering",
+    description:
+      "Capacitors and platings provide twice as much reactor power and heat capacity, and capacitors can contain twice as much heat per level of upgrade.",
+    erequires: "laboratory",
+    ecost: 50,
+    multiplier: 2,
+    icon: "img/parts/capacitors/capacitor_6.png",
+  },
+  {
+    id: "full_spectrum_reflectors",
+    type: "experimental_boost",
+    title: "Full Spectrum Reflectors",
+    description:
+      "Reflectors gain an additional 100% of their base power reflection per level of upgrade.",
+    erequires: "laboratory",
+    ecost: 50,
+    multiplier: 2,
+    icon: "img/parts/reflectors/reflector_6.png",
+  },
+  {
+    id: "fluid_hyperdynamics",
+    type: "experimental_boost",
+    title: "Fluid Hyperdynamics",
+    description:
+      "Heat vents, exchangers, inlets and outlets are two times as effective per level of upgrade.",
+    erequires: "laboratory",
+    ecost: 50,
+    multiplier: 2,
+    icon: "img/parts/exchangers/exchanger_6.png",
+  },
+  {
+    id: "fractal_piping",
+    type: "experimental_boost",
+    title: "Fractal Piping",
+    description:
+      "Heat vents and exchangers hold two times their base heat per level of upgrade.",
+    erequires: "laboratory",
+    ecost: 50,
+    multiplier: 2,
+    icon: "img/parts/exchangers/exchanger_6.png",
+  },
+  {
+    id: "ultracryonics",
+    type: "experimental_boost",
+    title: "Ultracryonics",
+    description:
+      "Coolant cells hold two times their base heat per level of upgrade.",
+    erequires: "laboratory",
+    ecost: 50,
+    multiplier: 2,
+    icon: "img/parts/coolants/coolant_cell_6.png",
+  },
+  {
+    id: "phlembotinum_core",
+    type: "experimental_boost",
+    title: "Phlembotinum Core",
+    description:
+      "Increase the base heat and power storage of the reactor by four times per level of upgrade.",
+    erequires: "laboratory",
+    ecost: 50,
+    multiplier: 2,
+    icon: "img/parts/platings/plating_6.png",
+  },
+  {
+    id: "unstable_protium",
+    type: "experimental_cells_boost",
+    title: "Unstable Protium",
+    description:
+      "Protium cells last half as long and produce twice as much power and heat per level.",
+    erequires: "protium_cells",
+    ecost: 500,
+    multiplier: 2,
+    icon: "img/parts/cells/xcell_1_2.png",
+  },
+  {
+    id: "heat_reflection",
+    type: "experimental_parts",
+    title: "Heat Reflection",
+    description:
+      "Allows you to use Thermal Neutron Reflectors. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/reflectors/reflector_6.png",
+  },
+  {
+    id: "experimental_capacitance",
+    type: "experimental_parts",
+    title: "Experimental Capacitance",
+    description:
+      "Allows you to use Extreme Capacitors. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/capacitors/capacitor_6.png",
+  },
+  {
+    id: "vortex_cooling",
+    type: "experimental_parts",
+    title: "Vortex Cooling",
+    description:
+      "Allows you to use Extreme Vents. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/vents/vent_6.png",
+  },
+  {
+    id: "underground_heat_extraction",
+    type: "experimental_parts",
+    title: "Underground Heat Extraction",
+    description:
+      "Allows you to use Extreme Heat Exchangers. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/exchangers/exchanger_6.png",
+  },
+  {
+    id: "vortex_extraction",
+    type: "experimental_parts",
+    title: "Vortex Extraction",
+    description:
+      "Allows you to use Extreme Heat Inlets. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/inlets/inlet_6.png",
+  },
+  {
+    id: "explosive_ejection",
+    type: "experimental_parts",
+    title: "Explosive Ejection",
+    description:
+      "Allows you to use Extreme Heat Outlets. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/outlets/outlet_6.png",
+  },
+  {
+    id: "thermionic_conversion",
+    type: "experimental_parts",
+    title: "Thermionic Conversion",
+    description:
+      "Allows you to use Thermionic Coolant Cells. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/coolants/coolant_6.png",
+  },
+  {
+    id: "micro_capacitance",
+    type: "experimental_parts",
+    title: "Micro Capacitance",
+    description:
+      "Allows you to use Charged Reactor Plating. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/platings/plating_6.png",
+  },
+  {
+    id: "singularity_harnessing",
+    type: "experimental_parts",
+    title: "Singularity Harnessing",
+    description:
+      "Allows you to use Black Hole Particle Accelerators. When purchased, the EP cost of other experimental part upgrades increases.",
+    erequires: "laboratory",
+    ecost: 10000,
+    levels: 1,
+    icon: "img/parts/accelerators/accelerator_6.png",
+  },
 ];
 
 for (let i = 1; i <= 6; i++) {

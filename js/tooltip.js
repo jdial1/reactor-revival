@@ -45,10 +45,7 @@ export class TooltipManager {
       this.$main.classList.add("tooltip_showing");
       this.tooltip_showing = true;
     }
-    this.$tooltip.querySelector("#tooltip_close_btn").style.display = this
-      .isLocked
-      ? "block"
-      : "none";
+    this.$tooltip.querySelector("#tooltip_close_btn").style.display = "block";
     if (
       this.lastRenderedObj !== obj ||
       this.lastRenderedTileContext !== tile_context
@@ -132,12 +129,12 @@ export class TooltipManager {
     const description =
       obj.description || (obj.upgrade && obj.upgrade.description);
 
-    // Helper to inject icons (not in title)
+    // Helper to inject icons
     const iconify = (str) => {
       if (!str) return str;
       return (
         str
-          // Power icon (whole word only, not in 'powerful')
+          // Power icon
           .replace(
             /\bpower\b/gi,
             "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>"
@@ -147,7 +144,7 @@ export class TooltipManager {
             /\bheat\b/gi,
             "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>"
           )
-          // Tick/clock icon (word 'tick' or 'ticks')
+          // Tick/clock icon
           .replace(
             /\bticks?\b/gi,
             (match) =>
@@ -180,6 +177,15 @@ export class TooltipManager {
     } else if (obj.base_heat !== undefined) {
       summaryHeat = obj.base_heat;
     }
+
+    // Cost
+    if (obj.cost !== undefined) {
+      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+        obj.cost
+      )}</span>`;
+    }
+    summary += "</div>";
+
     // Power (created/generated)
     if (summaryPower > 0) {
       summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'> ${fmt(
@@ -189,14 +195,16 @@ export class TooltipManager {
     // Heat (created/generated)
     if (summaryHeat > 0) {
       summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'> ${fmt(
-        summaryHeat
+        summaryHeat,
+        0
       )}</span>`;
     }
     // Max Heat (containment)
     let addedMaxHeat = false;
     if (obj.base_containment > 0 || obj.containment > 0) {
       summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='max heat'> Max: ${fmt(
-        obj.base_containment || obj.containment
+        obj.base_containment || obj.containment,
+        0
       )}</span>`;
       addedMaxHeat = true;
     }
@@ -207,14 +215,6 @@ export class TooltipManager {
         obj.ticks
       )}</span>`;
     }
-
-    // Cost
-    if (obj.cost !== undefined) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
-        obj.cost
-      )}</span>`;
-    }
-    summary += "</div>";
 
     content += `<div class="tooltip-title">${title}</div>`;
     if (summary !== '<div class="tooltip-summary-row"></div>') {
@@ -231,13 +231,6 @@ export class TooltipManager {
         stats.set("", "MAX");
       } else if (obj.ecost) {
         stats.set("", `${fmt(obj.current_ecost)} EP`);
-      } else {
-        stats.set(
-          "",
-          `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
-            obj.current_cost
-          )}`
-        );
       }
     } else if (obj.cost !== undefined) {
       if (
@@ -245,24 +238,13 @@ export class TooltipManager {
         !this.game.upgradeset.getUpgrade(obj.erequires)?.level
       ) {
         stats.set("", "LOCKED");
-      } else {
-        stats.set(
-          "",
-          `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
-            obj.cost
-          )}`
-        );
       }
     }
     if (tile && tile.activated) {
-      if (obj.base_power > 0) stats.set("Power/t", fmt(tile.display_power));
-      if (obj.base_heat > 0) stats.set("Heat/t", fmt(tile.display_heat));
-      if (obj.ticks)
-        stats.set("Durability", `${fmt(tile.ticks)} / ${fmt(obj.ticks)}`);
       if (obj.containment)
         stats.set(
           "Heat",
-          `${fmt(tile.heat_contained)} / ${fmt(obj.containment)}`
+          `${fmt(tile.heat_contained, 0)} / ${fmt(obj.containment, 0)}`
         );
       if (obj.category !== "cell") {
         let sell_value = obj.cost;

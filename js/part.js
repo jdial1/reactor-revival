@@ -200,16 +200,16 @@ export class Part {
 
     this.description = baseDescTpl
       .replace(/%power_increase/g, fmt(this.power_increase))
-      .replace(/%heat_increase/g, fmt(this.heat_increase))
+      .replace(/%heat_increase/g, fmt(this.heat_increase, 0))
       .replace(/%reactor_power/g, fmt(this.reactor_power))
-      .replace(/%reactor_heat/g, fmt(this.reactor_heat))
+      .replace(/%reactor_heat/g, fmt(this.reactor_heat, 0))
       .replace(/%ticks/g, fmt(this.ticks))
-      .replace(/%containment/g, fmt(this.containment))
-      .replace(/%ep_heat/g, fmt(this.ep_heat))
+      .replace(/%containment/g, fmt(this.containment, 0))
+      .replace(/%ep_heat/g, fmt(this.ep_heat, 0))
       .replace(/%range/g, fmt(this.range))
       .replace(/%count/g, cellCountForDesc)
       .replace(/%power/g, fmt(this.power))
-      .replace(/%heat/g, fmt(this.heat))
+      .replace(/%heat/g, fmt(this.heat, 0))
       .replace(/%transfer/g, fmt(effectiveTransfer))
       .replace(/%vent/g, fmt(effectiveVent))
       .replace(/%type/g, this.part.title.replace(/Dual |Quad /, ""));
@@ -229,6 +229,14 @@ export class Part {
     imageDiv.style.backgroundImage = `url('${this.getImagePath()}')`;
     this.$el.appendChild(imageDiv);
 
+    // Add price display
+    const priceDiv = document.createElement("div");
+    priceDiv.className = "part-price";
+    priceDiv.textContent = this.erequires
+      ? `${fmt(this.cost)} EP`
+      : `${fmt(this.cost)}`;
+    this.$el.appendChild(priceDiv);
+
     this.$el.classList.toggle("unaffordable", !this.affordable);
     this.$el.disabled = !this.affordable;
 
@@ -239,13 +247,6 @@ export class Part {
           .forEach((el) => el.classList.remove("part_active"));
         this.game.ui.stateManager.setClickedPart(this);
         this.$el.classList.add("part_active");
-        const icon = document.createElement("div");
-        icon.className = "image";
-        icon.style.backgroundImage = `url(${this.getImagePath()})`;
-        if (this.game.ui.DOMElements.partsPanelToggle) {
-          this.game.ui.DOMElements.partsPanelToggle.innerHTML = "";
-          this.game.ui.DOMElements.partsPanelToggle.appendChild(icon);
-        }
       }
     });
 
@@ -258,6 +259,18 @@ export class Part {
       if (this.$el) {
         this.$el.classList.toggle("unaffordable", !isAffordable);
         this.$el.disabled = !isAffordable;
+
+        // Add or remove price display
+        let priceDiv = this.$el.querySelector(".part-price");
+        if (!priceDiv) {
+          // Add price display for unaffordable parts
+          priceDiv = document.createElement("div");
+          priceDiv.className = "part-price";
+          priceDiv.textContent = this.erequires
+            ? `${fmt(this.cost)} EP`
+            : `${fmt(this.cost)}`;
+          this.$el.appendChild(priceDiv);
+        }
       }
     }
   }

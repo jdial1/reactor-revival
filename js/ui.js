@@ -126,6 +126,8 @@ export class UI {
         this.DOMElements[id] = el;
         const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
         this.DOMElements[camelCaseKey] = el;
+      } else {
+        console.warn(`[UI] Element with id '${id}' not found in DOM.`);
       }
     });
     return !!this.DOMElements.reactor;
@@ -136,16 +138,22 @@ export class UI {
       const config = this.toggle_buttons_config[buttonKey];
       const button = this.DOMElements[config.id];
       if (button) {
+        console.log(`[UI] Attaching toggle handler to #${config.id}`);
         button.onclick = () => {
           const currentState = this.stateManager.getVar(config.stateProperty);
           this.stateManager.setVar(config.stateProperty, !currentState);
         };
+      } else {
+        console.warn(`[UI] Toggle button #${config.id} not found.`);
       }
     }
-    if (this.DOMElements.partsPanelToggle) {
-      this.DOMElements.partsPanelToggle.onclick = () => {
-        this.DOMElements.partsSection.classList.toggle("collapsed");
+    if (this.DOMElements.parts_panel_toggle) {
+      console.log("[UI] Attaching parts panel toggle handler");
+      this.DOMElements.parts_panel_toggle.onclick = () => {
+        this.DOMElements.parts_section.classList.toggle("collapsed");
       };
+    } else {
+      console.warn("[UI] #parts_panel_toggle not found.");
     }
     this.updateAllToggleBtnStates();
   }
@@ -210,32 +218,30 @@ export class UI {
   }
 
   setupPartsTabs() {
-    const tabButtons = Array.from(document.querySelectorAll(".parts_tab"));
+    const partsTabsContainer = document.querySelector(".parts_tabs");
+    if (!partsTabsContainer) return;
     const tabContents = Array.from(
       document.querySelectorAll(".parts_tab_content")
     );
-
-    tabButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (btn.disabled) return;
-        const clickedTabId = btn.getAttribute("data-tab");
-
-        tabButtons.forEach((b) => b.classList.remove("active"));
-        tabContents.forEach((c) => c.classList.remove("active"));
-
-        btn.classList.add("active");
-        const contentToShow = document.getElementById(
-          "parts_tab_" + clickedTabId
-        );
-        if (contentToShow) contentToShow.classList.add("active");
-
-        this.populatePartsForTab(clickedTabId);
-      });
+    partsTabsContainer.addEventListener("click", (event) => {
+      const btn = event.target.closest(".parts_tab");
+      if (!btn || btn.disabled) return;
+      const tabButtons = Array.from(
+        partsTabsContainer.querySelectorAll(".parts_tab")
+      );
+      const clickedTabId = btn.getAttribute("data-tab");
+      tabButtons.forEach((b) => b.classList.remove("active"));
+      tabContents.forEach((c) => c.classList.remove("active"));
+      btn.classList.add("active");
+      const contentToShow = document.getElementById(
+        "parts_tab_" + clickedTabId
+      );
+      if (contentToShow) contentToShow.classList.add("active");
+      this.populatePartsForTab(clickedTabId);
     });
-
-    const activeTab = tabButtons.find((btn) =>
-      btn.classList.contains("active")
-    );
+    const activeTab = Array.from(
+      partsTabsContainer.querySelectorAll(".parts_tab")
+    ).find((btn) => btn.classList.contains("active"));
     if (activeTab) {
       this.populatePartsForTab(activeTab.getAttribute("data-tab"));
     }
@@ -343,6 +349,7 @@ export class UI {
       current_heat: {
         dom: this.DOMElements.info_bar_current_heat,
         num: true,
+        places: 0,
         onupdate: () => {
           this.updatePercentageBar(
             "current_heat",
@@ -355,6 +362,7 @@ export class UI {
       max_heat: {
         dom: this.DOMElements.info_bar_max_heat,
         num: true,
+        places: 0,
         onupdate: () => {
           this.updatePercentageBar(
             "current_heat",
@@ -395,15 +403,15 @@ export class UI {
         },
       },
       stats_power: { dom: this.DOMElements.stats_power, num: true },
-      total_heat: { dom: this.DOMElements.stats_heat, num: true },
+      total_heat: { dom: this.DOMElements.stats_heat, num: true, places: 0 },
       stats_cash: { dom: this.DOMElements.stats_cash, num: true, places: 2 },
       stats_outlet: {
         dom: this.DOMElements.stats_outlet,
         num: true,
-        places: 2,
+        places: 0,
       },
-      stats_inlet: { dom: this.DOMElements.stats_inlet, num: true, places: 2 },
-      stats_vent: { dom: this.DOMElements.stats_vent, num: true, places: 2 },
+      stats_inlet: { dom: this.DOMElements.stats_inlet, num: true, places: 0 },
+      stats_vent: { dom: this.DOMElements.stats_vent, num: true, places: 0 },
       auto_sell: {
         onupdate: (val) =>
           this.updateToggleButtonState(
@@ -506,10 +514,7 @@ export class UI {
         <input type="checkbox" id="help_toggle_checkbox" checked>
         <label for="help_toggle_checkbox">Show Help Buttons</label>
       `;
-      experimentalSection.insertBefore(
-        helpToggle,
-        experimentalSection.firstChild
-      );
+      experimentalSection.appendChild(helpToggle);
 
       // Add event listener for help toggle
       const checkbox = helpToggle.querySelector("#help_toggle_checkbox");
@@ -521,6 +526,7 @@ export class UI {
     }
 
     this.initializeHelpButtons();
+    this.initializePartsPanel();
 
     return true;
   }
@@ -676,7 +682,17 @@ export class UI {
     }
 
     const setupNav = (container, buttonClass) => {
-      container?.addEventListener("click", (event) => {
+      if (!container) {
+        console.warn(`[UI] Nav container not found for selector`, buttonClass);
+        return;
+      }
+      console.log(
+        `[UI] Attaching nav handler to`,
+        container,
+        "with selector",
+        buttonClass
+      );
+      container.addEventListener("click", (event) => {
         const button = event.target.closest(buttonClass);
         if (button?.dataset.page) {
           this.showPage(button.dataset.page);
@@ -687,8 +703,8 @@ export class UI {
         }
       });
     };
-    setupNav(this.DOMElements.bottom_nav, ".bottom_nav_btn");
-    setupNav(this.DOMElements.main_top_nav, ".styled-button");
+    setupNav(this.DOMElements.bottom_nav, ".pixel-btn");
+    setupNav(this.DOMElements.main_top_nav, ".pixel-btn");
 
     // Reboot buttons
     this.DOMElements.reboot_btn?.addEventListener("click", () =>
@@ -815,13 +831,22 @@ export class UI {
         if (tile.part) tile.clearPart(true);
       } else {
         if (clicked_part) {
-          if (tile.part) tile.clearPart(true);
+          if (tile.part) {
+            if (this.game && this.game.tooltip_manager) {
+              console.log("Showing tooltip for part", tile.part);
+              this.game.tooltip_manager.show(tile.part, null, true);
+            }
+            continue;
+          }
           if (this.game.current_money >= clicked_part.cost) {
             this.game.current_money -= clicked_part.cost;
             tile.setPart(clicked_part);
           }
         } else if (tile.part) {
-          tile.clearPart(true);
+          // No part selected, show tooltip for existing part
+          if (this.game && this.game.tooltip_manager) {
+            this.game.tooltip_manager.show(tile.part, null, true);
+          }
         }
       }
     }
@@ -911,7 +936,7 @@ export class UI {
 
     // Add info buttons to control buttons
     document.querySelectorAll("#controls_nav .nav_button").forEach((button) => {
-      const originalText = button.textContent; // Store original text before adding button
+      const originalText = button.textContent;
       const controlType = originalText.replace(/\s+/g, "").toLowerCase();
       if (help_text.controls[controlType]) {
         const infoButton = document.createElement("button");
@@ -919,12 +944,13 @@ export class UI {
         infoButton.textContent = "ⓘ";
         infoButton.title = "Click for information";
         infoButton.style.marginLeft = "4px";
+
         infoButton.addEventListener("click", (e) => {
-          e.stopPropagation(); // Prevent triggering the main button
+          e.stopPropagation();
           if (this.game && this.game.tooltip_manager) {
             this.game.tooltip_manager.show(
               {
-                title: originalText, // Use original text without info button
+                title: originalText,
                 description: help_text.controls[controlType],
               },
               null,
@@ -937,11 +963,69 @@ export class UI {
       }
     });
 
-    // Initialize help toggle state
     const helpEnabled = this.stateManager.getVar("show_help_buttons") ?? true;
     document.body.classList.toggle("hide-help-buttons", !helpEnabled);
     if (this.DOMElements.help_toggle_checkbox) {
       this.DOMElements.help_toggle_checkbox.checked = helpEnabled;
+    }
+  }
+
+  initializePartsPanel() {
+    const toggle = this.DOMElements.parts_panel_toggle;
+    const panel = this.DOMElements.parts_section;
+
+    if (toggle && panel) {
+      // Initialize dragging functionality
+      let isDragging = false;
+      let startY = 0;
+      let startTop = 0;
+
+      const onPointerDown = (e) => {
+        isDragging = true;
+        startY = e.clientY;
+        startTop = toggle.offsetTop;
+        toggle.setPointerCapture(e.pointerId);
+      };
+
+      const onPointerMove = (e) => {
+        if (!isDragging) return;
+
+        const deltaY = e.clientY - startY;
+        const newTop = startTop + deltaY;
+
+        // Calculate bounds - account for bottom bars
+        const bottomBarHeight = 112; // 56px nav + 56px info bar
+        const maxTop =
+          window.innerHeight - toggle.offsetHeight - bottomBarHeight;
+        const boundedTop = Math.max(0, Math.min(newTop, maxTop));
+
+        toggle.style.top = `${boundedTop}px`;
+      };
+
+      const onPointerUp = () => {
+        isDragging = false;
+      };
+
+      // Add event listeners for dragging
+      toggle.addEventListener("pointerdown", onPointerDown);
+      toggle.addEventListener("pointermove", onPointerMove);
+      toggle.addEventListener("pointerup", onPointerUp);
+      toggle.addEventListener("pointercancel", onPointerUp);
+
+      // Set initial position to center if not already set
+      if (!toggle.style.top) {
+        toggle.style.top = `${
+          (window.innerHeight - toggle.offsetHeight) / 2
+        }px`;
+      }
+
+      // Handle panel toggle
+      toggle.onclick = (e) => {
+        // Only toggle if we haven't dragged
+        if (Math.abs(e.clientY - startY) < 5) {
+          panel.classList.toggle("collapsed");
+        }
+      };
     }
   }
 }

@@ -5,6 +5,7 @@ import { on } from "./util.js";
 import { UI } from "./ui.js";
 import { Engine } from "./engine.js";
 import { PWA } from "./pwa.js";
+import help_text from "../data/help_text.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   "use strict";
@@ -26,6 +27,12 @@ document.addEventListener("DOMContentLoaded", () => {
           const versionElement = document.getElementById("app_version");
           if (versionElement && data.version) {
             versionElement.textContent = data.version;
+            // Also update about section version
+            const aboutVersionElement =
+              document.getElementById("about_version");
+            if (aboutVersionElement) {
+              aboutVersionElement.textContent = data.version;
+            }
             return; // Successfully loaded version
           }
         }
@@ -177,6 +184,12 @@ document.addEventListener("DOMContentLoaded", () => {
     setupTooltipEvents(reactorEl, ".tile", (el) =>
       el.tile && el.tile.part ? el.tile.part : null
     );
+    // Add click handler for mobile/tap support
+    on(reactorEl, ".tile", "click", function () {
+      if (this.tile && this.tile.part) {
+        game.tooltip_manager.show(this.tile.part, this.tile, true, this);
+      }
+    });
   }
 
   document.addEventListener(
@@ -254,4 +267,47 @@ document.addEventListener("DOMContentLoaded", () => {
   // Call immediately after DOM is ready and after all DOM elements are available
   updatePartsPanelForScreen();
   window.addEventListener("resize", updatePartsPanelForScreen);
+
+  // Add info icons and tooltips to control buttons
+  function addControlHelpTooltips() {
+    const controlMap = [
+      { id: "auto_sell_toggle", help: "autoSell" },
+      { id: "auto_buy_toggle", help: "autoBuy" },
+      { id: "time_flux_toggle", help: "timeFlux" },
+      { id: "heat_control_toggle", help: "heatController" },
+      { id: "pause_toggle", help: "pause" },
+    ];
+    controlMap.forEach(({ id, help }) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      // Only add if not already present
+      if (!btn.querySelector(".info-button")) {
+        const infoButton = document.createElement("button");
+        infoButton.className = "info-button";
+        infoButton.textContent = "ⓘ";
+        infoButton.title = "Click for information";
+        btn.appendChild(infoButton);
+        // Tooltip event: only on click
+        infoButton.addEventListener("click", (e) => {
+          e.stopPropagation();
+          // Get button label without the info icon
+          let label = btn.cloneNode(true);
+          label.querySelector(".info-button")?.remove();
+          let title = label.textContent.trim();
+          game.tooltip_manager.show(
+            {
+              title: title,
+              description: help_text.controls[help],
+            },
+            null,
+            true,
+            infoButton
+          );
+        });
+      }
+    });
+  }
+
+  // ... after game.engine.start();
+  addControlHelpTooltips();
 });

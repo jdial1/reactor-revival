@@ -107,8 +107,8 @@ export class Game {
     this.reactor.manualReduceHeat();
   }
   sell_action() {
-    if (this.current_money < 10) {
-      this.addMoney(1);
+    if (this.current_money < 10 && this.reactor.current_power == 0) {
+      this.addMoney(10);
     } else {
       this.reactor.sellPower();
     }

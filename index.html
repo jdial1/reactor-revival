@@ -12,44 +12,30 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
     />
-
-    <meta name="theme-color" content="#59c435" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
-    <meta name="apple-mobile-web-app-title" content="Reactor" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="msapplication-TileColor" content="#59c435" />
-    <meta name="msapplication-config" content="/browserconfig.xml" />
-
+    <meta name="theme-color" content="#303236" />
     <link rel="icon" type="image/png" href="img/parts/cells/cell_1_1.png" />
-    <link rel="apple-touch-icon" href="img/parts/cells/cell_1_1.png" />
-    <link
-      rel="apple-touch-icon"
-      sizes="192x192"
-      href="img/parts/cells/cell_1_1.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="512x512"
-      href="img/parts/cells/cell_1_1.png"
-    />
-
     <link rel="manifest" href="manifest.json" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="css/app.css" />
   </head>
+
   <body>
     <div id="wrapper">
-      <aside id="parts_section" class="panel collapsed">
-        <button id="parts_panel_toggle" aria-label="Toggle parts panel">
+      <!-- PARTS SIDEBAR -->
+      <aside id="parts_section" class="pixel-panel collapsed">
+        <button
+          id="parts_panel_toggle"
+          class="pixel-btn"
+          aria-label="Toggle parts panel"
+        >
           <span class="vertical-text">PARTS</span>
-          ›
         </button>
         <div class="parts_tabs">
           <button
-            class="parts_tab active"
+            class="pixel-btn parts_tab active"
             id="tab_power"
             data-tab="power"
             title="Power Creation"
@@ -57,7 +43,7 @@
             <img src="img/ui/icons/icon_power.png" alt="Power" />
           </button>
           <button
-            class="parts_tab"
+            class="pixel-btn parts_tab"
             id="tab_heat"
             data-tab="heat"
             title="Heat Management"
@@ -65,7 +51,7 @@
             <img src="img/ui/icons/icon_heat.png" alt="Heat" />
           </button>
           <button
-            class="parts_tab"
+            class="pixel-btn parts_tab"
             id="tab_misc1"
             data-tab="misc1"
             title="Other"
@@ -74,7 +60,7 @@
             <span role="img" aria-label="Locked">🔒</span>
           </button>
           <button
-            class="parts_tab"
+            class="pixel-btn parts_tab"
             id="tab_misc2"
             data-tab="misc2"
             title="Other"
@@ -86,77 +72,108 @@
         <div id="parts_tab_contents">
           <div id="parts_tab_power" class="parts_tab_content active">
             <h4>Cells</h4>
-            <div id="cells"></div>
+            <div id="cells" class="item-grid pixel-panel is-inset"></div>
             <h4>Reflectors</h4>
-            <div id="reflectors"></div>
+            <div id="reflectors" class="item-grid pixel-panel is-inset"></div>
             <h4>Capacitors</h4>
-            <div id="capacitors"></div>
+            <div id="capacitors" class="item-grid pixel-panel is-inset"></div>
             <h4>Particle Accelerators</h4>
-            <div id="particleAccelerators"></div>
+            <div
+              id="particleAccelerators"
+              class="item-grid pixel-panel is-inset"
+            ></div>
           </div>
           <div id="parts_tab_heat" class="parts_tab_content">
             <h4>Vents</h4>
-            <div id="vents"></div>
+            <div id="vents" class="item-grid pixel-panel is-inset"></div>
             <h4>Heat Exchangers</h4>
-            <div id="heatExchangers"></div>
+            <div
+              id="heatExchangers"
+              class="item-grid pixel-panel is-inset"
+            ></div>
             <h4>Inlets</h4>
-            <div id="heatInlets"></div>
+            <div id="heatInlets" class="item-grid pixel-panel is-inset"></div>
             <h4>Outlets</h4>
-            <div id="heatOutlets"></div>
+            <div id="heatOutlets" class="item-grid pixel-panel is-inset"></div>
             <h4>Coolant Cells</h4>
-            <div id="coolantCells"></div>
+            <div id="coolantCells" class="item-grid pixel-panel is-inset"></div>
             <h4>Reactor Platings</h4>
-            <div id="reactorPlatings"></div>
+            <div
+              id="reactorPlatings"
+              class="item-grid pixel-panel is-inset"
+            ></div>
           </div>
-          <div id="parts_tab_misc1" class="parts_tab_content"></div>
-          <div id="parts_tab_misc2" class="parts_tab_content"></div>
         </div>
-        <nav id="controls_nav">
-          <button id="auto_sell_toggle" class="nav_button" title="Auto Sell">
+        <nav id="controls_nav" class="pixel-panel is-inset">
+          <button
+            id="auto_sell_toggle"
+            class="pixel-btn nav_button"
+            title="Auto Sell"
+          >
             Auto Sell
           </button>
-          <button id="auto_buy_toggle" class="nav_button" title="Auto Buy">
+          <button
+            id="auto_buy_toggle"
+            class="pixel-btn nav_button"
+            title="Auto Buy"
+          >
             Auto Buy
           </button>
-          <button id="time_flux_toggle" class="nav_button" title="Time Flux">
+          <button
+            id="time_flux_toggle"
+            class="pixel-btn nav_button"
+            title="Time Flux"
+          >
             Time Flux
           </button>
-          <button id="heat_control_toggle" class="nav_button" title="Heat Ctrl">
+          <button
+            id="heat_control_toggle"
+            class="pixel-btn nav_button"
+            title="Heat Ctrl"
+          >
             Heat Controller
           </button>
-          <button id="pause_toggle" class="nav_button" title="Pause/Play">
+          <button
+            id="pause_toggle"
+            class="pixel-btn nav_button"
+            title="Pause/Play"
+          >
             Pause
           </button>
         </nav>
       </aside>
+
+      <!-- MAIN CONTENT -->
       <main id="main">
         <div id="main_content_wrapper">
-          <div id="main_top_nav" class="main_top_controls_row">
-            <button class="styled-button active" data-page="reactor_section">
+          <div id="main_top_nav" class="main_top_controls_row pixel-panel">
+            <button class="pixel-btn active" data-page="reactor_section">
               Reactor
             </button>
-            <button class="styled-button" data-page="upgrades_section">
+            <button class="pixel-btn" data-page="upgrades_section">
               Upgrades
             </button>
-            <button
-              class="styled-button"
-              data-page="experimental_upgrades_section"
-            >
+            <button class="pixel-btn" data-page="experimental_upgrades_section">
               Experiments
-            </button>
-            <button class="styled-button" data-toggle="parts_panel">
-              Parts
             </button>
             <div class="flex-spacer"></div>
             <button
+              id="about_toggle"
+              class="pixel-btn is-small"
+              title="About"
+              data-page="about_section"
+            >
+              ℹ
+            </button>
+            <button
               id="fullscreen_toggle"
-              class="styled-button"
+              class="pixel-btn is-small"
               title="Toggle Fullscreen"
             >
-              <span>⛶</span>
+              ⛶
             </button>
           </div>
-          <section id="objectives_section">
+          <section id="objectives_section" class="pixel-panel panel-ornate">
             <div id="objectives_wrapper">
               <div id="objectives_content">
                 <span id="objective_title"></span>
@@ -164,10 +181,12 @@
               </div>
             </div>
           </section>
+
           <div id="page_content_area">
+            <!-- REACTOR PAGE -->
             <section id="reactor_section" class="page showing">
               <header id="reactor_header">
-                <div id="reactor_stats">
+                <div id="reactor_stats" class="pixel-panel is-inset">
                   <span
                     id="stats_power"
                     class="stat"
@@ -206,26 +225,44 @@
                   >
                 </div>
               </header>
-              <div id="pause_banner">PAUSED</div>
+              <div id="pause_banner" class="pixel-panel panel-warning">
+                PAUSED
+              </div>
               <div id="reactor_wrapper">
-                <div id="reactor"></div>
+                <div id="reactor" class="pixel-panel is-inset"></div>
                 <div id="reactor_background"></div>
               </div>
             </section>
+
+            <!-- UPGRADES PAGE -->
             <section id="upgrades_section" class="page">
               <div id="upgrades_content_wrapper">
                 <h2>Cooling Upgrades</h2>
-                <div id="vent_upgrades" class="upgrade-group"></div>
-                <div id="exchanger_upgrades" class="upgrade-group"></div>
+                <div id="vent_upgrades" class="pixel-panel upgrade-group"></div>
+                <div
+                  id="exchanger_upgrades"
+                  class="pixel-panel upgrade-group"
+                ></div>
                 <h2>Cell Upgrades</h2>
-                <div id="cell_power_upgrades" class="upgrade-group"></div>
-                <div id="cell_tick_upgrades" class="upgrade-group"></div>
-                <div id="cell_perpetual_upgrades" class="upgrade-group"></div>
+                <div
+                  id="cell_power_upgrades"
+                  class="pixel-panel upgrade-group"
+                ></div>
+                <div
+                  id="cell_tick_upgrades"
+                  class="pixel-panel upgrade-group"
+                ></div>
+                <div
+                  id="cell_perpetual_upgrades"
+                  class="pixel-panel upgrade-group"
+                ></div>
               </div>
             </section>
+
+            <!-- EXPERIMENTS PAGE -->
             <section id="experimental_upgrades_section" class="page">
               <div id="experimental_upgrades_content_wrapper">
-                <div id="exotic_particles_display">
+                <div id="exotic_particles_display" class="pixel-panel is-inset">
                   <span
                     >Current EP:
                     <span id="current_exotic_particles">0</span></span
@@ -235,24 +272,38 @@
                   >
                 </div>
                 <h2>Laboratory</h2>
-                <div id="experimental_laboratory" class="upgrade-group"></div>
+                <div
+                  id="experimental_laboratory"
+                  class="pixel-panel upgrade-group"
+                ></div>
                 <h2>Global Boosts</h2>
-                <div id="experimental_boost" class="upgrade-group"></div>
+                <div
+                  id="experimental_boost"
+                  class="pixel-panel upgrade-group"
+                ></div>
                 <h2>Particle Accelerators</h2>
                 <div
                   id="experimental_particle_accelerators"
-                  class="upgrade-group"
+                  class="pixel-panel upgrade-group"
                 ></div>
                 <h2>Experimental Cells</h2>
-                <div id="experimental_cells" class="upgrade-group"></div>
-                <div id="experimental_cells_boost" class="upgrade-group"></div>
+                <div
+                  id="experimental_cells"
+                  class="pixel-panel upgrade-group"
+                ></div>
+                <div
+                  id="experimental_cells_boost"
+                  class="pixel-panel upgrade-group"
+                ></div>
                 <h2>Experimental Parts</h2>
-                <div id="experimental_parts" class="upgrade-group"></div>
+                <div
+                  id="experimental_parts"
+                  class="pixel-panel upgrade-group"
+                ></div>
               </div>
-              <div id="reboot_section" class="explanitory">
-                <button class="styled-button" id="reboot_btn">
-                  Reboot for <span id="reboot_exotic_particles">0</span> Exotic
-                  Particles (EP)
+              <div id="reboot_section" class="pixel-panel explanitory">
+                <button class="pixel-btn btn-start" id="reboot_btn">
+                  Reboot for <span id="reboot_exotic_particles">0</span> EP
                 </button>
                 <p>
                   Rebooting the reactor will remove all parts, regular upgrades
@@ -260,8 +311,8 @@
                   experimental upgrades.
                 </p>
               </div>
-              <div id="refund_section" class="explanitory">
-                <button class="styled-button" id="refund_btn">
+              <div id="refund_section" class="pixel-panel explanitory">
+                <button class="pixel-btn" id="refund_btn">
                   Reboot and Refund All EP
                 </button>
                 <p>
@@ -269,34 +320,101 @@
                   and refund all Exotic Particles you have ever earned.
                 </p>
               </div>
-              <div id="version_section" class="explanitory">
+              <div
+                id="version_section"
+                class="pixel-panel is-inset explanitory"
+              >
                 <p>Version: <span id="app_version"></span></p>
               </div>
             </section>
+
+            <!-- ABOUT PAGE -->
+            <section id="about_section" class="page">
+              <div class="about-content pixel-panel is-inset">
+                <h2>About Reactor Revival</h2>
+                <div class="about-section">
+                  <h3>Game</h3>
+                  <p>
+                    A reactor simulation game where you manage everything from
+                    basic uranium cells to advanced reactor cores. Build your
+                    reactor, manage heat, generate power, and unlock upgrades as
+                    you progress.
+                  </p>
+                </div>
+
+                <div class="about-section">
+                  <h3>Features</h3>
+                  <ul>
+                    <li>Progressive upgrade system</li>
+                    <li>Exotic particle collection</li>
+                    <li>Offline play support</li>
+                    <li>Fast, responsive interface</li>
+                    <li>Multiple reactor components</li>
+                    <li>Heat management mechanics</li>
+                  </ul>
+                </div>
+
+                <div class="about-section">
+                  <h3>Version</h3>
+                  <p>Current Version: <span id="about_version"></span></p>
+                </div>
+
+                <div class="about-section">
+                  <h3>Credits</h3>
+                  <p>Created by <a href="https://github.com/jdial1" target="_blank" rel="noopener noreferrer"></a>Justin Dial</a></p>
+                  <p class="credits-list">
+                    Special thanks to:
+                    <ul>
+                      <li><a href="https://forum.industrial-craft.net/thread/2147-new-reactor-planner-made-by-talonius/" target="_blank" rel="noopener noreferrer">Talonius</a> - IC2 Reactor Planner</li>
+                      <li><a href="https://github.com/MauveCloud/Ic2ExpReactorPlanner" target="_blank" rel="noopener noreferrer">MauveCloud</a> - IC2 Experimental Reactor Planner</li>
+                      <li><a href="https://www.kongregate.com/games/Cael/reactor-incremental" target="_blank" rel="noopener noreferrer">Cael & Mephyst</a> - Reactor Incremental</li>
+                      <li><a href="https://github.com/cwmonkey/reactor-knockoff" target="_blank" rel="noopener noreferrer">cwmonkey</a> - Reactor Knockoff</li>
+                    </ul>
+                  </p>
+                </div>
+
+                <div class="about-section">
+                  <h3>Contact</h3>
+                  <p>
+                    For feedback or issues, please visit the
+                    <a
+                      href="https://github.com/jdial1/reactor-revival"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >GitHub</a
+                    >.
+                  </p>
+                </div>
+              </div>
+            </section>
           </div>
-          <section id="tooltip" aria-live="polite">
+
+          <!-- TOOLTIP -->
+          <section id="tooltip" class="pixel-panel" aria-live="polite">
             <div id="tooltip_data"></div>
           </section>
         </div>
       </main>
     </div>
-    <div id="info_bar">
+
+    <!-- INFO BAR (FIXED) -->
+    <div id="info_bar" class="pixel-panel">
       <div id="info_stats_group_1">
-        <div class="stat_block heat" id="info_heat_block">
-          <div class="stat_progress_bar" id="info_heat_progress"></div>
-          <button id="reduceHeatBtnInfoBar" class="stat_button">
+        <div class="pixel-progress heat" id="reduceHeatBtnInfoBar">
+          <div class="pixel-progress-bar" id="info_heat_progress"></div>
+          <button class="stat_button pixel-btn">
             <span>Heat:</span>
-            <span class="stat_value">
-              <span id="info_bar_current_heat">0</span>/<span
+            <span class="stat_value"
+              ><span id="info_bar_current_heat">0</span>/<span
                 id="info_bar_max_heat"
                 >0</span
-              >
-            </span>
+              ></span
+            >
           </button>
         </div>
-        <div class="stat_block power" id="info_power_block">
-          <div class="stat_progress_bar" id="info_power_progress"></div>
-          <button id="sellBtnInfoBar" title="Sell Power" class="stat_button">
+        <div class="pixel-progress power" id="sellBtnInfoBar">
+          <div class="pixel-progress-bar" id="info_power_progress"></div>
+          <button title="Sell Power" class="stat_button pixel-btn">
             <span>Power:</span>
             <span class="stat_value"
               ><span id="info_bar_current_power">0</span>/<span
@@ -312,40 +430,38 @@
           <span>Money:</span>
           <span class="stat_value">$<span id="info_bar_money">0</span></span>
         </div>
-        <div class="stat_block" id="time_flux_display_block">
-          <span>TF:</span>
-          <span class="stat_value"><span id="time_flux_value">1x</span></span>
-        </div>
       </div>
     </div>
+
+    <!-- BOTTOM NAV (MOBILE) -->
     <nav id="bottom_nav">
       <button
         id="nav_reactor_btn"
-        class="bottom_nav_btn active"
+        class="pixel-btn active"
         data-page="reactor_section"
       >
         Reactor
       </button>
       <button
         id="nav_upgrades_btn"
-        class="bottom_nav_btn"
+        class="pixel-btn"
         data-page="upgrades_section"
       >
         Upgrades
       </button>
       <button
         id="nav_experiments_btn"
-        class="bottom_nav_btn"
+        class="pixel-btn"
         data-page="experimental_upgrades_section"
       >
         Experiments
       </button>
     </nav>
 
+    <script type="module" src="js/app.js"></script>
     <script>
-      if ("serviceWorker" in navigator) {
+      if ("serviceWorker" in navigator && location.hostname !== "localhost") {
         window.addEventListener("load", () => {
-          // Use a relative path. The browser will resolve it correctly.
           navigator.serviceWorker
             .register("sw.js")
             .then((registration) => {
@@ -360,6 +476,5 @@
         });
       }
     </script>
-    <script type="module" src="js/app.js"></script>
   </body>
 </html>

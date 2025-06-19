@@ -3,9 +3,9 @@ const help_text = {
     cells:
       "Cells are your primary power generators. They produce both power and heat, with higher tiers offering increased output but requiring more heat management.",
     reflectors:
-      "Reflectors boost the power output of adjacent cells. Place them strategically next to uranium cells to maximize power generation.",
+      "Reflectors boost the power output of adjacent cells. Place them next to cells to maximize power generation.",
     capacitors:
-      "Capacitors enhance the effectiveness of adjacent components. They can boost vent cooling and improve particle accelerator EP generation.",
+      "Capacitors increase your reactor's maximum power capacity. More capacitors allow you to hold more power before selling it.",
     particleAccelerators:
       "Particle Accelerators generate Exotic Particles (EP) based on heat. Higher heat levels increase EP generation chance.",
     vents:
@@ -13,8 +13,9 @@ const help_text = {
     heatExchangers:
       "Heat Exchangers transfer heat between adjacent components, helping distribute heat evenly across your reactor.",
     heatInlets:
-      "Heat Inlets pull heat from adjacent components into the reactor.",
-    heatOutlets: "Heat Outlets push reactor heat into adjacent components.",
+      "Heat Inlets push heat from adjacent components into the reactor.",
+    heatOutlets:
+      "Heat Outlets pull heat from the reactor into adjacent components.",
     coolantCells:
       "Coolant Cells passively absorb heat from adjacent components. They have high heat capacity but don't actively vent heat.",
     reactorPlatings:
