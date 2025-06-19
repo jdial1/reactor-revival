@@ -53,8 +53,8 @@ Reactor Revival is the latest step in a storied chain of reactor games and plann
 ## <img src="https://github.com/jdial1/reactor-revival/blob/master/img/parts/cells/cell_3_2.png" width="35" alt="Reactor Revival Cell Icon" style="vertical-align: middle;">  Getting Started (Local Dev)
 
 ```bash
-git clone https://github.com/jdial1/reactor-knockoff.git
-cd reactor-knockoff
+git clone https://github.com/jdial1/reactor-revival.git
+cd reactor-revival
 npm install
 npm run dev
 ```

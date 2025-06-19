@@ -75,7 +75,7 @@ export class Upgrade {
 
   createElement() {
     this.$el = document.createElement("button");
-    this.$el.className = "upgrade";
+    this.$el.className = "upgrade pixel-btn is-square";
     if (this.upgrade.classList)
       this.$el.classList.add(...this.upgrade.classList);
     this.$el.id = this.id;
@@ -87,10 +87,21 @@ export class Upgrade {
       imageDiv.style.backgroundImage = `url('${this.upgrade.icon}')`;
     }
 
-    this.$levels = document.createElement("span");
+    // Add cost display
+    if (this.current_cost !== undefined && this.current_cost !== Infinity) {
+      const costDiv = document.createElement("div");
+      costDiv.className = "upgrade-price";
+      costDiv.textContent = this.display_cost;
+      this.$el.appendChild(costDiv);
+    }
+
+    // Add level display
+    this.$levels = document.createElement("div");
     this.$levels.className = "levels";
-    this.$levels.textContent = this.level;
-    imageDiv.appendChild(this.$levels);
+    this.$levels.textContent =
+      this.level >= this.max_level && this.max_level > 1 ? "MAX" : this.level;
+    this.$el.appendChild(this.$levels);
+
     this.$el.appendChild(imageDiv);
 
     this.$el.classList.toggle("unaffordable", !this.affordable);

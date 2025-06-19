@@ -17,6 +17,16 @@ export class TooltipManager {
     this.lastRenderedObj = null;
     this.lastRenderedTileContext = null;
     this._lastTooltipContent = null;
+    this.isMobile = window.innerWidth <= 768;
+
+    // Listen for resize events to update mobile state
+    window.addEventListener("resize", () => {
+      const wasMobile = this.isMobile;
+      this.isMobile = window.innerWidth <= 768;
+      if (wasMobile !== this.isMobile && this.current_obj) {
+        this.update(); // Re-render tooltip if mobile state changed
+      }
+    });
 
     const closeButton = document.createElement("button");
     closeButton.innerHTML = "×";
@@ -122,109 +132,207 @@ export class TooltipManager {
     const obj = this.current_obj;
     const tile = this.current_tile_context;
     let content = "";
-    const title = obj.title || (obj.upgrade && obj.upgrade.title);
-    if (obj.updateDescription) {
-      obj.updateDescription(tile);
-    }
-    const description =
-      obj.description || (obj.upgrade && obj.upgrade.description);
 
     // Helper to inject icons
     const iconify = (str) => {
       if (!str) return str;
-      return (
-        str
-          // Power icon
-          .replace(
-            /\bpower\b/gi,
-            "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>"
-          )
-          // Heat icon
-          .replace(
-            /\bheat\b/gi,
-            "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>"
-          )
-          // Tick/clock icon
-          .replace(
-            /\bticks?\b/gi,
-            (match) =>
-              `${match} <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>`
-          )
-          // Cash icon
-          .replace(
-            /\$(\d+)/g,
-            "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1"
-          )
-      );
+      return str
+        .replace(
+          /\bpower\b/gi,
+          "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>"
+        )
+        .replace(
+          /\bheat\b/gi,
+          "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>"
+        )
+        .replace(
+          /\bticks?\b/gi,
+          (match) =>
+            `${match} <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>`
+        )
+        .replace(
+          /\$(\d+)/g,
+          "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1"
+        );
     };
 
-    // Summary row for power, heat, max_heat, cost
-    let summary = '<div class="tooltip-summary-row">';
-    // Use tile.display_power/display_heat for cells if available, else fallback
-    let summaryPower = null;
-    let summaryHeat = null;
-    if (tile && tile.display_power !== undefined) {
-      summaryPower = tile.display_power;
-    } else if (obj.power !== undefined) {
-      summaryPower = obj.power;
-    } else if (obj.base_power !== undefined) {
-      summaryPower = obj.base_power;
-    }
-    if (tile && tile.display_heat !== undefined) {
-      summaryHeat = tile.display_heat;
-    } else if (obj.heat !== undefined) {
-      summaryHeat = obj.heat;
-    } else if (obj.base_heat !== undefined) {
-      summaryHeat = obj.base_heat;
+    if (this.isMobile) {
+      // Mobile condensed view
+      content = this.generateMobileTooltip(obj, tile, iconify);
+    } else {
+      // Desktop detailed view
+      content = this.generateDesktopTooltip(obj, tile, iconify);
     }
 
-    // Cost
+    // Only update DOM if content changed
+    if (this._lastTooltipContent !== content) {
+      this.game.performance.markStart("tooltip_dom_update");
+      this.$tooltipContent.innerHTML = content;
+      this._lastTooltipContent = content;
+      this.game.performance.markEnd("tooltip_dom_update");
+    }
+
+    this.updateActionButtons(obj);
+    this.game.performance.markEnd("tooltip_update_total");
+  }
+
+  generateMobileTooltip(obj, tile, iconify) {
+    const title = obj.title || (obj.upgrade && obj.upgrade.title);
+    let content = `<div class="tooltip-title">${title}</div>`;
+
+    // Compact stats row
+    let stats = [];
+
+    // Level for upgrades
+    if (obj.upgrade) {
+      stats.push(`Level ${obj.level}/${obj.max_level}`);
+    }
+
+    // Cost - Show for parts, upgrades and experimental research
+    if (
+      obj.cost !== undefined ||
+      (obj.upgrade && obj.upgrade.cost !== undefined)
+    ) {
+      const cost = obj.cost ?? obj.upgrade?.cost;
+      stats.push(
+        `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+          cost
+        )}`
+      );
+    }
+
+    // Power
+    if (
+      tile?.display_power !== undefined ||
+      obj.power !== undefined ||
+      obj.base_power !== undefined
+    ) {
+      const power = tile?.display_power ?? obj.power ?? obj.base_power;
+      if (power > 0) {
+        stats.push(
+          `<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>${fmt(
+            power
+          )}`
+        );
+      }
+    }
+
+    // Heat
+    if (
+      tile?.display_heat !== undefined ||
+      obj.heat !== undefined ||
+      obj.base_heat !== undefined
+    ) {
+      const heat = tile?.display_heat ?? obj.heat ?? obj.base_heat;
+      if (heat > 0) {
+        stats.push(
+          `<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>${fmt(
+            heat,
+            0
+          )}`
+        );
+      }
+    }
+
+    // Ticks
+    if (obj.ticks > 0) {
+      stats.push(
+        `<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(
+          obj.ticks
+        )}`
+      );
+    }
+
+    if (stats.length > 0) {
+      content += `<div class="tooltip-mobile-stats">${stats.join(" ")}</div>`;
+    }
+
+    // Add description for parts and upgrades
+    const description =
+      obj.description || (obj.upgrade && obj.upgrade.description);
+    if (description) {
+      const formattedDesc = iconify(description)
+        .replace(/\.\s+/g, ". ")
+        .replace(/\s+/g, " ")
+        .trim();
+      content += `<div class="tooltip-mobile-desc">${formattedDesc}</div>`;
+    }
+
+    // Add upgrade-specific info
+    if (obj.upgrade) {
+      if (obj.level >= obj.max_level) {
+        content += `<div class="tooltip-mobile-upgrade">Maximum Level Reached</div>`;
+      } else if (!obj.affordable) {
+        content += `<div class="tooltip-mobile-upgrade tooltip-mobile-unaffordable">Cannot Afford Upgrade</div>`;
+      }
+    }
+
+    return content;
+  }
+
+  generateDesktopTooltip(obj, tile, iconify) {
+    const title = obj.title || (obj.upgrade && obj.upgrade.title);
+    const description =
+      obj.description || (obj.upgrade && obj.upgrade.description);
+    let content = `<div class="tooltip-title">${title}</div>`;
+
+    // Summary row
+    let summary = '<div class="tooltip-summary-row">';
+    let summaryPower = tile?.display_power ?? obj.power ?? obj.base_power;
+    let summaryHeat = tile?.display_heat ?? obj.heat ?? obj.base_heat;
+
     if (obj.cost !== undefined) {
       summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
         obj.cost
       )}</span>`;
     }
-    summary += "</div>";
-
-    // Power (created/generated)
     if (summaryPower > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'> ${fmt(
+      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>${fmt(
         summaryPower
       )}</span>`;
     }
-    // Heat (created/generated)
     if (summaryHeat > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'> ${fmt(
+      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>${fmt(
         summaryHeat,
         0
       )}</span>`;
     }
-    // Max Heat (containment)
-    let addedMaxHeat = false;
     if (obj.base_containment > 0 || obj.containment > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='max heat'> Max: ${fmt(
+      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='max heat'>Max: ${fmt(
         obj.base_containment || obj.containment,
         0
       )}</span>`;
-      addedMaxHeat = true;
     }
-
-    // Durability
     if (obj.ticks > 0) {
       summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(
         obj.ticks
       )}</span>`;
     }
+    summary += "</div>";
 
-    content += `<div class="tooltip-title">${title}</div>`;
     if (summary !== '<div class="tooltip-summary-row"></div>') {
       content += summary;
     }
+
     if (description) {
-      // Insert <br> after each period followed by a space for better sentence wrapping
       const formattedDesc = iconify(description).replace(/\.\s+/g, ".<br>");
       content += `<div class="tooltip-desc">${formattedDesc}</div>`;
     }
+
+    // Add detailed stats for desktop
+    const stats = this.getDetailedStats(obj, tile);
+    if (stats.size > 0) {
+      content += '<dl class="tooltip-stats">';
+      for (const [key, value] of stats) {
+        content += `<dt>${iconify(key)}</dt><dd>${iconify(value)}</dd>`;
+      }
+      content += "</dl>";
+    }
+
+    return content;
+  }
+
+  getDetailedStats(obj, tile) {
     const stats = new Map();
     if (obj.upgrade) {
       if (obj.level >= obj.max_level) {
@@ -232,29 +340,23 @@ export class TooltipManager {
       } else if (obj.ecost) {
         stats.set("", `${fmt(obj.current_ecost)} EP`);
       }
-    } else if (obj.cost !== undefined) {
-      if (
-        obj.erequires &&
-        !this.game.upgradeset.getUpgrade(obj.erequires)?.level
-      ) {
-        stats.set("", "LOCKED");
-      }
+    } else if (
+      obj.cost !== undefined &&
+      obj.erequires &&
+      !this.game.upgradeset.getUpgrade(obj.erequires)?.level
+    ) {
+      stats.set("", "LOCKED");
     }
-    if (tile && tile.activated) {
-      if (obj.containment)
+
+    if (tile?.activated) {
+      if (obj.containment) {
         stats.set(
           "Heat",
           `${fmt(tile.heat_contained, 0)} / ${fmt(obj.containment, 0)}`
         );
+      }
       if (obj.category !== "cell") {
-        let sell_value = obj.cost;
-        if (obj.ticks > 0) {
-          sell_value = Math.ceil((tile.ticks / obj.ticks) * obj.cost);
-        } else if (obj.containment > 0) {
-          sell_value =
-            obj.cost -
-            Math.ceil((tile.heat_contained / obj.containment) * obj.cost);
-        }
+        let sell_value = this.calculateSellValue(obj, tile);
         stats.set(
           "Sells for",
           `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
@@ -270,22 +372,22 @@ export class TooltipManager {
         );
       }
     }
-    if (stats.size > 0) {
-      content += '<dl class="tooltip-stats">';
-      for (const [key, value] of stats) {
-        content += `<dt>${iconify(key)}</dt><dd>${iconify(value)}</dd>`;
-      }
-      content += "</dl>";
-    }
+    return stats;
+  }
 
-    // Only update DOM if content changed
-    if (this._lastTooltipContent !== content) {
-      this.game.performance.markStart("tooltip_dom_update");
-      this.$tooltipContent.innerHTML = content;
-      this._lastTooltipContent = content;
-      this.game.performance.markEnd("tooltip_dom_update");
+  calculateSellValue(obj, tile) {
+    let sell_value = obj.cost;
+    if (obj.ticks > 0) {
+      sell_value = Math.ceil((tile.ticks / obj.ticks) * obj.cost);
+    } else if (obj.containment > 0) {
+      sell_value =
+        obj.cost -
+        Math.ceil((tile.heat_contained / obj.containment) * obj.cost);
     }
+    return sell_value;
+  }
 
+  updateActionButtons(obj) {
     let actionsContainer =
       this.$tooltipContent.querySelector("#tooltip_actions");
     if (!actionsContainer) {
@@ -297,35 +399,18 @@ export class TooltipManager {
     }
     actionsContainer.innerHTML = "";
 
-    if (this.isLocked) {
-      if (obj.upgrade && obj.level < obj.max_level) {
-        const buyButton = document.createElement("button");
-        buyButton.textContent = "Buy";
-        buyButton.className = "styled-button";
-        buyButton.disabled = !obj.affordable;
-        buyButton.onclick = () => {
-          console.log(
-            `Buy button clicked for upgrade: ${obj.id} (level ${
-              obj.level + 1
-            }, cost: ${obj.current_cost || obj.current_ecost})`
-          );
-          if (this.game.upgradeset.purchaseUpgrade(obj.id)) {
-            console.log(
-              `Successfully purchased upgrade: ${obj.id} -> level ${obj.level}`
-            );
-            // Ensure all upgrades update their affordability before re-rendering
-            this.game.upgradeset.check_affordability(this.game);
-            this.update();
-          } else {
-            console.log(
-              `Failed to purchase upgrade: ${obj.id} - insufficient funds or other error`
-            );
-          }
-        };
-        actionsContainer.appendChild(buyButton);
-      }
+    if (this.isLocked && obj.upgrade && obj.level < obj.max_level) {
+      const buyButton = document.createElement("button");
+      buyButton.textContent = "Buy";
+      buyButton.className = "styled-button";
+      buyButton.disabled = !obj.affordable;
+      buyButton.onclick = () => {
+        if (this.game.upgradeset.purchaseUpgrade(obj.id)) {
+          this.game.upgradeset.check_affordability(this.game);
+          this.update();
+        }
+      };
+      actionsContainer.appendChild(buyButton);
     }
-
-    this.game.performance.markEnd("tooltip_update_total");
   }
 }

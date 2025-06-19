@@ -283,8 +283,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Only add if not already present
       if (!btn.querySelector(".info-button")) {
         const infoButton = document.createElement("button");
-        infoButton.className = "info-button";
-        infoButton.textContent = "ⓘ";
+        infoButton.className = "info-button pixel-btn-small";
+        infoButton.textContent = "❓";
         infoButton.title = "Click for information";
         btn.appendChild(infoButton);
         // Tooltip event: only on click

@@ -522,6 +522,18 @@ export class UI {
         const showHelp = e.target.checked;
         document.body.classList.toggle("hide-help-buttons", !showHelp);
         this.stateManager.setVar("show_help_buttons", showHelp);
+        // Force update all info buttons visibility
+        document.querySelectorAll(".info-button").forEach((button) => {
+          button.style.display = showHelp ? "" : "none";
+        });
+      });
+
+      // Initialize state
+      const helpEnabled = this.stateManager.getVar("show_help_buttons") ?? true;
+      checkbox.checked = helpEnabled;
+      document.body.classList.toggle("hide-help-buttons", !helpEnabled);
+      document.querySelectorAll(".info-button").forEach((button) => {
+        button.style.display = helpEnabled ? "" : "none";
       });
     }
 
@@ -913,8 +925,8 @@ export class UI {
 
       if (help_text.parts[helpKey]) {
         const infoButton = document.createElement("button");
-        infoButton.className = "info-button";
-        infoButton.textContent = "ⓘ";
+        infoButton.className = "info-button pixel-btn-small";
+        infoButton.textContent = "❓";
         infoButton.title = "Click for information";
 
         infoButton.addEventListener("click", (e) => {
@@ -940,8 +952,8 @@ export class UI {
       const controlType = originalText.replace(/\s+/g, "").toLowerCase();
       if (help_text.controls[controlType]) {
         const infoButton = document.createElement("button");
-        infoButton.className = "info-button";
-        infoButton.textContent = "ⓘ";
+        infoButton.className = "info-button pixel-btn-small";
+        infoButton.textContent = "❓";
         infoButton.title = "Click for information";
         infoButton.style.marginLeft = "4px";
 
@@ -994,7 +1006,7 @@ export class UI {
         const newTop = startTop + deltaY;
 
         // Calculate bounds - account for bottom bars
-        const bottomBarHeight = 112; // 56px nav + 56px info bar
+        const bottomBarHeight = 150; // 56px nav + 56px info bar
         const maxTop =
           window.innerHeight - toggle.offsetHeight - bottomBarHeight;
         const boundedTop = Math.max(0, Math.min(newTop, maxTop));
@@ -1012,10 +1024,10 @@ export class UI {
       toggle.addEventListener("pointerup", onPointerUp);
       toggle.addEventListener("pointercancel", onPointerUp);
 
-      // Set initial position to center if not already set
+      // Set initial position to bottom if not already set
       if (!toggle.style.top) {
         toggle.style.top = `${
-          (window.innerHeight - toggle.offsetHeight) / 2
+          window.innerHeight - toggle.offsetHeight - 150
         }px`;
       }
 
@@ -1027,5 +1039,32 @@ export class UI {
         }
       };
     }
+  }
+
+  renderUpgrade(upgrade) {
+    const btn = document.createElement("button");
+    btn.className = "pixel-btn is-square upgrade";
+    btn.dataset.id = upgrade.id;
+
+    const image = document.createElement("div");
+    image.className = "image";
+    image.style.backgroundImage = `url(${upgrade.image})`;
+    btn.appendChild(image);
+
+    if (upgrade.cost !== undefined) {
+      const price = document.createElement("div");
+      price.className = "upgrade-price";
+      price.textContent = fmt(upgrade.cost);
+      btn.appendChild(price);
+    }
+
+    if (upgrade.level !== undefined) {
+      const levels = document.createElement("div");
+      levels.className = "levels";
+      levels.textContent = `${upgrade.level}/${upgrade.max_level}`;
+      btn.appendChild(levels);
+    }
+
+    return btn;
   }
 }
