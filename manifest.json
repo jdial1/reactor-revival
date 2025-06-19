@@ -2,7 +2,7 @@
   "id": "com.jdial.reactor",
   "name": "Reactor",
   "short_name": "Reactor Revival",
-  "description": "A reactor simulation game where you manage everything from basic uranium cells to advanced reactor cores. Unlock progressive upgrades, collect exotic particles, play offline, and enjoy a fast, responsive moderninterface",
+  "description": "A reactor simulation game where you manage everything from basic uranium cells to advanced reactor cores. Unlock progressive upgrades, collect exotic particles, play offline, and enjoy a fast, responsive modern interface",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a1a",
@@ -12,9 +12,14 @@
   "lang": "en",
   "dir": "ltr",
   "categories": ["games", "simulation", "strategy"],
-  "iarc_rating_id": "",
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
   "prefer_related_applications": false,
   "related_applications": [],
+  "scope_extensions": [
+    {
+      "origin": "*.jdial1.github.io"
+    }
+  ],
   "launch_handler": {
     "client_mode": ["navigate-existing", "auto"]
   },
@@ -29,13 +34,45 @@
       "src": "img/parts/cells/cell_1_1_192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "img/parts/cells/cell_1_1_512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "img/parts/cells/cell_1_1_maskable_64x64.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "img/parts/cells/cell_1_1_maskable_192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "img/parts/cells/cell_1_1_maskable_512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "img/parts/cells/cell_1_1_192x192.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any",
+      "platform": "ios"
+    },
+    {
+      "src": "img/parts/cells/cell_1_1_512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any",
+      "form_factor": "wide"
     }
   ],
   "shortcuts": [
@@ -47,7 +84,8 @@
       "icons": [
         {
           "src": "img/parts/cells/cell_1_1.png",
-          "sizes": "64x64"
+          "sizes": "64x64",
+          "type": "image/png"
         }
       ]
     }
@@ -59,6 +97,13 @@
       "type": "image/png",
       "form_factor": "wide",
       "label": "Reactor simulation gameplay"
+    },
+    {
+      "src": "img/misc/preview.png",
+      "sizes": "1200x1200",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile reactor simulation gameplay"
     }
   ]
 } 
