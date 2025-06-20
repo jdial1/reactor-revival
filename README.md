@@ -7,7 +7,8 @@
   <img src="https://github.com/jdial1/reactor-revival/blob/master/img/misc/preview.png" width="250" alt="Reactor Revival preview">
 </p>
 
-**Reactor Revival** is a modern browser-based incremental reactor simulator. Build and optimize nuclear reactors using realistic mechanics inspired by the **IndustrialCraft²** mod for Minecraft—and the long line of games and tools that came after it.
+**Reactor Revival** is a modern browser-based incremental reactor simulator. 
+Build and optimize nuclear reactors using realistic mechanics inspired by the **IndustrialCraft²** mod for Minecraft—and the long line of games and tools that came after it.
 
 ## <img src="https://github.com/jdial1/reactor-revival/blob/master/img/parts/cells/cell_1_2.png" width="35" alt="Reactor Revival Cell Icon" style="vertical-align: middle;">  A Legacy of Reactor Design
 
