@@ -292,7 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!btn.querySelector(".info-button")) {
         const infoButton = document.createElement("button");
         infoButton.className = "info-button pixel-btn-small";
-        infoButton.textContent = "❓";
+        infoButton.textContent = "?";
         infoButton.title = "Click for information";
         btn.appendChild(infoButton);
         // Tooltip event: only on click

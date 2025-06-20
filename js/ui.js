@@ -926,7 +926,7 @@ export class UI {
       if (help_text.parts[helpKey]) {
         const infoButton = document.createElement("button");
         infoButton.className = "info-button pixel-btn-small";
-        infoButton.textContent = "❓";
+        infoButton.textContent = "?";
         infoButton.title = "Click for information";
 
         infoButton.addEventListener("click", (e) => {
@@ -953,7 +953,7 @@ export class UI {
       if (help_text.controls[controlType]) {
         const infoButton = document.createElement("button");
         infoButton.className = "info-button pixel-btn-small";
-        infoButton.textContent = "❓";
+        infoButton.textContent = "?";
         infoButton.title = "Click for information";
         infoButton.style.marginLeft = "4px";
 

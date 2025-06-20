@@ -13,7 +13,6 @@ export class PWA {
     this.setupOnlineStatus();
     this.setupBeforeInstallPrompt();
     this.setupAppInstalled();
-    this.setupFullscreenHandling();
     this.setupMobileOptimizations();
   }
 
@@ -208,28 +207,6 @@ export class PWA {
     };
   }
 
-  setupFullscreenHandling() {
-    // Handle fullscreen mode detection
-    if (window.matchMedia) {
-      const fullscreenQuery = window.matchMedia("(display-mode: fullscreen)");
-      const standaloneQuery = window.matchMedia("(display-mode: standalone)");
-
-      const handleDisplayModeChange = (e) => {
-        this.isFullscreen = e.matches;
-        document.body.classList.toggle("fullscreen-mode", this.isFullscreen);
-        this.optimizeForFullscreen();
-      };
-
-      fullscreenQuery.addListener(handleDisplayModeChange);
-      standaloneQuery.addListener(handleDisplayModeChange);
-
-      // Initial check
-      this.isFullscreen = fullscreenQuery.matches || standaloneQuery.matches;
-      document.body.classList.toggle("fullscreen-mode", this.isFullscreen);
-      this.optimizeForFullscreen();
-    }
-  }
-
   setupMobileOptimizations() {
     // Prevent zoom on double tap
     let lastTouchEnd = 0;
@@ -255,18 +232,6 @@ export class PWA {
       },
       { passive: false }
     );
-
-    // Handle orientation changes
-    window.addEventListener("orientationchange", () => {
-      setTimeout(() => {
-        this.optimizeForFullscreen();
-      }, 100);
-    });
-
-    // Handle resize events
-    window.addEventListener("resize", () => {
-      this.optimizeForFullscreen();
-    });
   }
 
   optimizeForFullscreen() {
@@ -280,7 +245,6 @@ export class PWA {
         );
       }
 
-      // Add fullscreen-specific classes
       document.body.classList.add("pwa-fullscreen");
       document.documentElement.classList.add("pwa-fullscreen");
     }
@@ -315,7 +279,7 @@ const pwaStyles = `
   border-radius: 8px;
   color: white;
   font-weight: bold;
-  z-index: 10000;
+  z-index: 9000;
   animation: slideIn 0.3s ease-out;
   max-width: 300px;
   word-wrap: break-word;
@@ -368,7 +332,7 @@ body.offline::before {
   padding: 4px;
   font-size: 12px;
   font-weight: bold;
-  z-index: 10001;
+  z-index: 9000;
 }
 `;
 
