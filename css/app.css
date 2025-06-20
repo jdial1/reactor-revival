@@ -1170,3 +1170,135 @@ body.hide-help-buttons .info-button {
   z-index: 10002;
   opacity: 0.8;
 }
+
+/* --- QUICK START MODAL --- */
+#quick-start-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.quick-start-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.quick-start-content {
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 2rem;
+  text-align: center;
+  position: relative;
+}
+
+.quick-start-title {
+  color: var(--success-color);
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  text-transform: uppercase;
+}
+
+.quick-start-section {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.quick-start-section h3 {
+  color: var(--accent-color);
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+}
+
+.quick-start-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.quick-start-list li {
+  margin-bottom: 0.75rem;
+  padding-left: 1.5rem;
+  position: relative;
+  line-height: 1.4;
+}
+
+.quick-start-list li:before {
+  content: "▶";
+  color: var(--success-color);
+  position: absolute;
+  left: 0;
+  font-size: 0.8em;
+}
+
+.quick-start-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.quick-start-actions div {
+  padding: 0.5rem;
+  background: rgba(89, 196, 53, 0.1);
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+.quick-start-tutorial-note {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: rgba(169, 132, 79, 0.1);
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  color: var(--accent-color);
+}
+
+#quick-start-close {
+  margin-top: 1rem;
+  min-width: 120px;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .quick-start-content {
+    padding: 1.5rem;
+    max-height: 90vh;
+  }
+
+  .quick-start-title {
+    font-size: 1.2rem;
+  }
+
+  .quick-start-section h3 {
+    font-size: 1rem;
+  }
+
+  .quick-start-list li {
+    font-size: 0.9rem;
+  }
+
+  .quick-start-actions div {
+    font-size: 0.9rem;
+  }
+
+  .quick-start-tutorial-note {
+    font-size: 0.9rem;
+  }
+}

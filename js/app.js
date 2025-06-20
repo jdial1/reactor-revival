@@ -91,22 +91,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const modal = document.createElement("div");
     modal.id = "quick-start-modal";
     modal.innerHTML = `
-      <div class="quick-start-content">
-        <h2>Welcome to Reactor!</h2>
-        <ul class="quick-start-list">
-          <li><b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>: must be managed or your reactor will melt down.</li>
-          <li><b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>: can be sold for money.</li>
-          <li><b>Tick</b> <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>: Each game tick processes heat, power, and component actions.</li>
-          <li><b>Pulse</b>: A single update cycle (tick) of the reactor.</li>
-        </ul>
-        <div class="quick-start-actions">
-          <div><b>Manual Cooling:</b> Click the <b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'> bar to reduce heat instantly.</div>
-          <div><b>Selling Power:</b> Click the <b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'> bar to convert power to money.</div>
+      <div class="quick-start-overlay">
+        <div class="quick-start-content pixel-panel">
+          <h2 class="quick-start-title">Welcome to Reactor!</h2>
+          <div class="quick-start-section">
+            <h3>Key Concepts:</h3>
+            <ul class="quick-start-list">
+              <li><b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>: must be managed or your reactor will melt down.</li>
+              <li><b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>: can be sold for money.</li>
+              <li><b>Tick</b> <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>: Each game tick processes heat, power, and component actions.</li>
+              <li><b>Pulse</b>: A single update cycle (tick) of the reactor.</li>
+            </ul>
+          </div>
+          <div class="quick-start-section">
+            <h3>Quick Actions:</h3>
+            <div class="quick-start-actions">
+              <div><b>Manual Cooling:</b> Click the <b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'> bar to reduce heat instantly.</div>
+              <div><b>Selling Power:</b> Click the <b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'> bar to convert power to money.</div>
+            </div>
+          </div>
+          <div class="quick-start-tutorial-note">
+            <b>Follow the objectives at the top to continue the tutorial!</b>
+          </div>
+          <button id="quick-start-close" class="pixel-btn btn-start">Got it!</button>
         </div>
-        <div class="quick-start-tutorial-note">
-          <b>Follow the objectives at the top to continue the tutorial!</b>
-        </div>
-        <button id="quick-start-close">Got it!</button>
       </div>
     `;
     document.body.appendChild(modal);
