@@ -3,6 +3,7 @@ export class PWA {
     this.deferredPrompt = null;
     this.isInstalled = false;
     this.isOnline = navigator.onLine;
+    this.isFullscreen = false;
 
     this.init();
   }
@@ -12,6 +13,8 @@ export class PWA {
     this.setupOnlineStatus();
     this.setupBeforeInstallPrompt();
     this.setupAppInstalled();
+    this.setupFullscreenHandling();
+    this.setupMobileOptimizations();
   }
 
   setupInstallPrompt() {
@@ -203,6 +206,84 @@ export class PWA {
         }
       };
     };
+  }
+
+  setupFullscreenHandling() {
+    // Handle fullscreen mode detection
+    if (window.matchMedia) {
+      const fullscreenQuery = window.matchMedia("(display-mode: fullscreen)");
+      const standaloneQuery = window.matchMedia("(display-mode: standalone)");
+
+      const handleDisplayModeChange = (e) => {
+        this.isFullscreen = e.matches;
+        document.body.classList.toggle("fullscreen-mode", this.isFullscreen);
+        this.optimizeForFullscreen();
+      };
+
+      fullscreenQuery.addListener(handleDisplayModeChange);
+      standaloneQuery.addListener(handleDisplayModeChange);
+
+      // Initial check
+      this.isFullscreen = fullscreenQuery.matches || standaloneQuery.matches;
+      document.body.classList.toggle("fullscreen-mode", this.isFullscreen);
+      this.optimizeForFullscreen();
+    }
+  }
+
+  setupMobileOptimizations() {
+    // Prevent zoom on double tap
+    let lastTouchEnd = 0;
+    document.addEventListener(
+      "touchend",
+      (event) => {
+        const now = new Date().getTime();
+        if (now - lastTouchEnd <= 300) {
+          event.preventDefault();
+        }
+        lastTouchEnd = now;
+      },
+      false
+    );
+
+    // Prevent pull-to-refresh on mobile
+    document.addEventListener(
+      "touchmove",
+      (event) => {
+        if (event.scale !== 1) {
+          event.preventDefault();
+        }
+      },
+      { passive: false }
+    );
+
+    // Handle orientation changes
+    window.addEventListener("orientationchange", () => {
+      setTimeout(() => {
+        this.optimizeForFullscreen();
+      }, 100);
+    });
+
+    // Handle resize events
+    window.addEventListener("resize", () => {
+      this.optimizeForFullscreen();
+    });
+  }
+
+  optimizeForFullscreen() {
+    if (this.isFullscreen || this.isStandalone()) {
+      // Set viewport meta tag for fullscreen
+      const viewport = document.querySelector('meta[name="viewport"]');
+      if (viewport) {
+        viewport.setAttribute(
+          "content",
+          "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+        );
+      }
+
+      // Add fullscreen-specific classes
+      document.body.classList.add("pwa-fullscreen");
+      document.documentElement.classList.add("pwa-fullscreen");
+    }
   }
 }
 
