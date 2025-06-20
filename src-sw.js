@@ -101,7 +101,7 @@ workbox.routing.registerRoute(
 workbox.routing.setCatchHandler(({ event }) => {
   switch (event.request.destination) {
     case "document":
-      return caches.match("offline.html");
+      return caches.match("/reactor-revival/offline.html");
     case "image":
       return new Response(
         `<svg role="img" aria-labelledby="offline-title" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">

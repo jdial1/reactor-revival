@@ -3,13 +3,13 @@
   "name": "Reactor Revival",
   "short_name": "Reactor Revival",
   "description": "A reactor simulation game where you manage everything from basic uranium cells to advanced reactor cores. Unlock progressive upgrades, collect exotic particles, play offline, and enjoy a fast, responsive modern interface",
-  "start_url": "/",
+  "start_url": "/reactor-revival/",
   "display": "standalone",
   "display_override": ["window-controls-overlay"],
   "background_color": "#1a1a1a",
   "theme_color": "#303236",
   "orientation": "portrait-primary",
-  "scope": "/",
+  "scope": "/reactor-revival/",
   "lang": "en",
   "dir": "ltr",
   "categories": ["games", "simulation", "strategy"],
@@ -21,7 +21,7 @@
   },
   "file_handlers": [
     {
-      "action": "/",
+      "action": "/reactor-revival/",
       "accept": {
         "application/json": [".reactor"]
       },
@@ -39,14 +39,14 @@
   "protocol_handlers": [
     {
       "protocol": "web+reactor",
-      "url": "/%s"
+      "url": "/reactor-revival/%s"
     }
   ],
   "edge_side_panel": {
     "preferred_width": 400
   },
   "share_target": {
-    "action": "/share-target/",
+    "action": "/reactor-revival/share-target/",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
@@ -112,7 +112,7 @@
       "name": "Start New Game",
       "short_name": "New Game",
       "description": "Start a fresh reactor simulation",
-      "url": "/?action=new",
+      "url": "/reactor-revival/?action=new",
       "icons": [
         {
           "src": "img/parts/cells/cell_1_1.png",

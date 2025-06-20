@@ -156,8 +156,8 @@ export class PWA {
   sendNotification(title, options = {}) {
     if (Notification.permission === "granted") {
       new Notification(title, {
-        icon: "/img/parts/cells/cell_1_1.png",
-        badge: "/img/parts/cells/cell_1_1.png",
+        icon: "img/parts/cells/cell_1_1.png",
+        badge: "img/parts/cells/cell_1_1.png",
         ...options,
       });
     }

@@ -1,7 +1,7 @@
 {
-  "name": "reactor-game-tests",
+  "name": "reactor-revival",
   "version": "1.0.0",
-  "description": "Reactor Game",
+  "description": "Reactor Revival",
   "main": "index.html",
   "debug": false,
   "scripts": {
@@ -15,7 +15,7 @@
     "deploy": "npm run build:sw && npm run check-pwa-root-files && git pull origin master && git add . && git commit -m 'Automated deploy' || echo 'No changes to commit' && git push origin master"
   },
   "keywords": [],
-  "author": "",
+  "author": "Justin Dial",
   "license": "ISC",
   "devDependencies": {
     "gh-pages": "^6.3.0",
