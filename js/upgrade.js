@@ -28,8 +28,11 @@ export class Upgrade {
   }
 
   setLevel(level) {
-    this.level = Math.min(level, this.max_level);
-    this.updateDisplayCost();
+    if (this.level !== level) {
+      this.level = level;
+      this.updateDisplayCost();
+      this.game.upgradeset.check_affordability(this.game);
+    }
     if (this.actionId) {
       executeUpgradeAction(this.actionId, this, this.game);
     }
@@ -41,7 +44,6 @@ export class Upgrade {
         this.level >= this.max_level && this.max_level > 1 ? "MAX" : this.level;
     }
     this.game.reactor.updateStats();
-    this.game.upgradeset.check_affordability(this.game);
   }
 
   setAffordable(isAffordable) {
@@ -111,7 +113,7 @@ export class Upgrade {
   }
 
   getCost() {
-    return this.base_ecost > 0 ? this.current_ecost : this.current_cost;
+    return this.current_cost;
   }
 
   getEcost() {

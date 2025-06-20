@@ -1,4 +1,16 @@
 const help_text = {
+  basic_overview: {
+    title: "Basic Overview",
+    content: [
+      "Cells = power and heat",
+      "Power = money",
+      "Money = Bigger cells and more money",
+      "Lots of money = particle accelerators",
+      "Particle accelerators = exotic particles (EP)",
+      "EP = more upgrades and new toys for more power, heat and money!",
+      "TF = Time Flux = Offline time accumulated (speeds game up when enabled)",
+    ].join("<br>"),
+  },
   parts: {
     cells:
       "Cells are your primary power generators. They produce both power and heat.",

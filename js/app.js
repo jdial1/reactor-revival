@@ -4,14 +4,14 @@ import { TooltipManager } from "./tooltip.js";
 import { on } from "./util.js";
 import { UI } from "./ui.js";
 import { Engine } from "./engine.js";
-import { PWA } from "./pwa.js";
+import "./pwa.js";
 import help_text from "../data/help_text.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   "use strict";
 
   // Initialize PWA
-  const pwa = new PWA();
+  // const pwa = new PWA();
 
   // Load static version from deployment-generated file
   // Try multiple paths to handle different server configurations
@@ -93,35 +93,100 @@ document.addEventListener("DOMContentLoaded", () => {
     modal.innerHTML = `
       <div class="quick-start-overlay">
         <div class="quick-start-content pixel-panel">
-          <h2 class="quick-start-title">Welcome to Reactor!</h2>
-          <div class="quick-start-section">
-            <h3>Key Concepts:</h3>
-            <ul class="quick-start-list">
-              <li><b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>: must be managed or your reactor will melt down.</li>
-              <li><b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>: can be sold for money.</li>
-              <li><b>Tick</b> <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>: Each game tick processes heat, power, and component actions.</li>
-              <li><b>Pulse</b>: A single update cycle (tick) of the reactor.</li>
-            </ul>
-          </div>
-          <div class="quick-start-section">
-            <h3>Quick Actions:</h3>
-            <div class="quick-start-actions">
-              <div><b>Manual Cooling:</b> Click the <b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'> bar to reduce heat instantly.</div>
-              <div><b>Selling Power:</b> Click the <b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'> bar to convert power to money.</div>
+          <!-- Page 1: Basic Introduction -->
+          <div id="quick-start-page-1" class="quick-start-page">
+            <h2 class="quick-start-title">Welcome to Reactor!</h2>
+            <div class="quick-start-section">
+              <h3>Key Concepts:</h3>
+              <ul class="quick-start-list">
+                <li><b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>: must be managed or your reactor will melt down.</li>
+                <li><b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>: can be sold for money.</li>
+                <li><b>Tick</b> <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>: A game tick processes heat, power, and component actions.</li>
+                <li><b>Pulse</b>: A single tick of a cell.</li>
+              </ul>
+            </div>
+            <div class="quick-start-section">
+              <h3>Quick Actions:</h3>
+              <div class="quick-start-actions">
+                <div><b>Manual Cooling:</b> Click the <b>Heat</b> <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'> bar to reduce heat instantly.</div>
+                <div><b>Selling Power:</b> Click the <b>Power</b> <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'> bar to convert power to money.</div>
+              </div>
+            </div>
+            <div class="quick-start-tutorial-note">
+              <b>Follow the objectives at the top to continue the tutorial!</b>
+            </div>
+            <div class="quick-start-buttons">
+              <button id="quick-start-more-details" class="pixel-btn">More Details</button>
+              <button id="quick-start-close" class="pixel-btn btn-start">Got it!</button>
             </div>
           </div>
-          <div class="quick-start-tutorial-note">
-            <b>Follow the objectives at the top to continue the tutorial!</b>
+
+          <!-- Page 2: Detailed Guide -->
+          <div id="quick-start-page-2" class="quick-start-page" style="display: none;">
+            <h2 class="quick-start-title">Getting Started Guide</h2>
+            <div class="quick-start-section">
+              <h3>First Steps:</h3>
+              <ul class="quick-start-list">
+                <li>Click "Scrounge for cash (+1$)" 10 times to get your first $10</li>
+                <li>Place your first Fuel Cell on the reactor grid</li>
+                <li>Cells come in 3 configurations: Single, Double, and Quad</li>
+              </ul>
+            </div>
+            <div class="quick-start-section">
+              <h3>Cell Mechanics:</h3>
+              <ul class="quick-start-list">
+                <li><b>Single cells:</b> Generate 1 pulse, 1 power, 1 heat per tick</li>
+                <li><b>Double cells:</b> Generate 2 pulses, act like two adjacent single cells</li>
+                <li><b>Quad cells:</b> Generate 4 pulses, act like four adjacent single cells in a 2x2 grid</li>
+                <li><b>Adjacency bonus:</b> Adjacent cells share pulses, increasing power and heat output</li>
+              </ul>
+            </div>
+            <div class="quick-start-section">
+              <h3>Heat Management:</h3>
+              <ul class="quick-start-list">
+                <li>Click the Heat bar to manually reduce heat (-1 heat per click)</li>
+                <li>Build vents and heat exchangers to automatically manage heat</li>
+                <li>Use reactor plating to increase maximum heat capacity</li>
+                <li>Exceeding max heat causes components to melt/explode</li>
+              </ul>
+            </div>
+            <div class="quick-start-section">
+              <h3>Power & Upgrades:</h3>
+              <ul class="quick-start-list">
+                <li>Build capacitors to increase maximum power storage</li>
+                <li>Enable auto-sell to automatically convert power to money</li>
+                <li>Use heat controllers for automatic cooling systems</li>
+                <li>Save your game regularly using the export feature</li>
+              </ul>
+            </div>
+            <div class="quick-start-buttons">
+              <button id="quick-start-back" class="pixel-btn">Back</button>
+              <button id="quick-start-close-2" class="pixel-btn btn-start">Got it!</button>
+            </div>
           </div>
-          <button id="quick-start-close" class="pixel-btn btn-start">Got it!</button>
         </div>
       </div>
     `;
     document.body.appendChild(modal);
-    document.getElementById("quick-start-close").onclick = () => {
+
+    // Add event listeners for navigation
+    document.getElementById("quick-start-more-details").onclick = () => {
+      document.getElementById("quick-start-page-1").style.display = "none";
+      document.getElementById("quick-start-page-2").style.display = "block";
+    };
+
+    document.getElementById("quick-start-back").onclick = () => {
+      document.getElementById("quick-start-page-2").style.display = "none";
+      document.getElementById("quick-start-page-1").style.display = "block";
+    };
+
+    const closeModal = () => {
       modal.remove();
       localStorage.setItem("reactorGameQuickStartShown", "1");
     };
+
+    document.getElementById("quick-start-close").onclick = closeModal;
+    document.getElementById("quick-start-close-2").onclick = closeModal;
   }
 
   if (!game.loadGame()) {
@@ -134,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
   game.engine.start();
   ui.stateManager.setVar("max_heat", game.reactor.max_heat, true);
   ui.stateManager.setVar("max_power", game.reactor.max_power, true);
-  game.pwa = pwa;
+  // game.pwa = pwa;
 
   const setupTooltipEvents = (parentElement, itemSelector, getObject) => {
     if (!parentElement) return;

@@ -17,20 +17,20 @@ export class UpgradeSet {
       {
         type: "cell_power",
         title: "Potent ",
-        description: " cells produce 100% more power per level of upgrade.",
+        description: "s produce 100% more power per level of upgrade.",
         actionId: "cell_power",
       },
       {
         type: "cell_tick",
         title: "Enriched ",
-        description: " cells last twice as long per level of upgrade.",
+        description: "s last twice as long per level of upgrade.",
         actionId: "cell_tick",
       },
       {
         type: "cell_perpetual",
         title: "Perpetual ",
         description:
-          " cells are automatically replaced when they become depleted. The replacement cell will cost 1.5 times the normal cost.",
+          "s are automatically replaced when they become depleted. The replacement cell will cost 1.5 times the normal cost.",
         levels: 1,
         actionId: "cell_perpetual",
       },
@@ -84,6 +84,7 @@ export class UpgradeSet {
     upgrade.setLevel(upgrade.level + 1);
 
     this.game.ui.stateManager.setVar("current_money", this.game.current_money);
+    this.game.saveGame();
     return true;
   }
   check_affordability(game) {

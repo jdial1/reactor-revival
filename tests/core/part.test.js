@@ -130,7 +130,8 @@ describe("Part Mechanics", () => {
     part.updateDescription();
     expect(part.description).toContain("Produces");
     expect(part.description).toContain("power and");
-    expect(part.description).toContain("heat per tick.");
+    expect(part.description).toContain("heat for");
+    expect(part.description).toContain("ticks.");
   });
 
   it("should be affordable if player has enough money", () => {

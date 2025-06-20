@@ -87,23 +87,14 @@ export class Tile {
     }
   }
 
-  clearPart(refund = true) {
-    if (this.part && refund && this.activated) {
-      let sell_value = this.part.cost;
-      if (this.part.ticks > 0) {
-        sell_value = Math.ceil((this.ticks / this.part.ticks) * this.part.cost);
-      } else if (this.part.containment > 0) {
-        sell_value =
-          this.part.cost -
-          Math.ceil(
-            (this.heat_contained / this.part.containment) * this.part.cost
-          );
-      }
-      this.game.current_money += Math.max(0, sell_value);
-      this.game.ui.stateManager.setVar(
-        "current_money",
-        this.game.current_money
-      );
+  clearPart(full_clear = true) {
+    if (!this.part) return;
+
+    const part_id = this.part.id;
+
+    if (full_clear) {
+      const sell_value = this.calculateSellValue();
+      this.game.addMoney(sell_value);
     }
     this.part = null;
     this.ticks = 0;
@@ -128,6 +119,13 @@ export class Tile {
 
     // Update reactor stats
     this.game.reactor.updateStats();
+
+    this.contained_heat = 0;
+    this.$el.className = "tile";
+    this.$el.style.cssText = "";
+    this.updateVisualState();
+    // this.game.reactor.removePartFromClassMap(part_id);
+    this.$el.classList.remove("is-processing");
   }
 
   updateVisualState() {
@@ -155,6 +153,52 @@ export class Tile {
     } else {
       this.$percent.style.width = "0%";
       this.$el.classList.remove("spent");
+    }
+
+    if (this.part && this.part.category === "cell") {
+      const isPaused = this.game.ui.stateManager.getVar("pause");
+      const isProcessing = this.ticks > 0 && !isPaused;
+      this.$el.classList.toggle("is-processing", isProcessing);
+    } else if (this.part) {
+      this.$el.classList.remove("is-processing");
+    }
+  }
+
+  calculateSellValue() {
+    if (!this.part) {
+      return 0;
+    }
+    const part = this.part;
+    let sellValue = part.cost;
+
+    // Parts with a limited lifespan (value decreases over time)
+    if (part.ticks > 0 && typeof this.ticks === "number") {
+      const lifeRemainingRatio = Math.max(0, this.ticks / part.ticks);
+      sellValue = Math.ceil(part.cost * lifeRemainingRatio);
+    }
+    // Parts that degrade with heat (value decreases with damage)
+    else if (part.containment > 0 && typeof this.heat_contained === "number") {
+      const damageRatio = Math.min(1, this.heat_contained / part.containment);
+      sellValue = part.cost - Math.ceil(part.cost * damageRatio);
+    }
+
+    return Math.max(0, sellValue);
+  }
+
+  updateTooltip(force = false) {
+    if (this.game.tooltip.current_obj === this.part || force) {
+      const heat_percent = this.heat / this.part.containment;
+      this.$el.style.backgroundColor = `rgba(255, 0, 0, ${heat_percent})`;
+    } else {
+      this.$el.style.backgroundColor = "transparent";
+    }
+
+    if (this.part && this.part.category === "cell") {
+      const isPaused = this.game.ui.stateManager.getVar("pause");
+      const isProcessing = this.ticks > 0 && !isPaused;
+      this.$el.classList.toggle("is-processing", isProcessing);
+    } else if (this.part) {
+      this.$el.classList.remove("is-processing");
     }
   }
 }

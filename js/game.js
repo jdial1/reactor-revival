@@ -68,17 +68,10 @@ export class Game {
   }
 
   initialize_new_game_state() {
-    this.ui.stateManager.setVar("current_money", this.current_money);
-    this.ui.stateManager.setVar("current_power", this.reactor.current_power);
-    this.ui.stateManager.setVar("current_heat", this.reactor.current_heat);
-    this.ui.stateManager.setVar("max_power", this.reactor.max_power);
-    this.ui.stateManager.setVar("max_heat", this.reactor.max_heat);
-    this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
-    this.ui.stateManager.setVar(
-      "current_exotic_particles",
-      this.current_exotic_particles
-    );
-    this.tileset.updateActiveTiles();
+    this.set_defaults();
+    this.upgradeset.reset();
+    this.tileset.clearAllParts();
+    this.upgradeset.check_affordability(this);
     this.reactor.updateStats();
   }
   update_cell_power() {
@@ -164,6 +157,12 @@ export class Game {
       this._cols = value;
       this.tileset.updateActiveTiles();
       this.reactor.updateStats();
+    }
+  }
+
+  sellPart(tile) {
+    if (tile && tile.part) {
+      tile.clearPart(true);
     }
   }
 
@@ -257,6 +256,8 @@ export class Game {
       if (savedDataJSON) {
         const savedData = JSON.parse(savedDataJSON);
         this.applySaveState(savedData);
+        this.upgradeset.check_affordability(this);
+        this.reactor.updateStats();
         return true;
       }
     } catch (error) {
@@ -311,7 +312,6 @@ export class Game {
         this.ui.stateManager.setVar(key, value);
       }
     }
-    this.initialize_new_game_state();
     this.ui.updateAllToggleBtnStates();
   }
 }

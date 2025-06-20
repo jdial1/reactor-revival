@@ -106,6 +106,7 @@ export class UI {
       "main_top_nav",
       "fullscreen_toggle",
       "help_toggle_checkbox",
+      "basic_overview_section",
     ];
     this.toggle_buttons_config = {
       auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
@@ -539,6 +540,15 @@ export class UI {
 
     this.initializeHelpButtons();
     this.initializePartsPanel();
+    this.addHelpButtonToMainPage();
+
+    // Populate Basic Overview
+    if (this.DOMElements.basic_overview_section && help_text.basic_overview) {
+      this.DOMElements.basic_overview_section.innerHTML = `
+        <h3>${help_text.basic_overview.title}</h3>
+        <p>${help_text.basic_overview.content}</p>
+      `;
+    }
 
     return true;
   }
@@ -840,7 +850,9 @@ export class UI {
 
     for (const tile of tilesToModify) {
       if (isRightClick) {
-        if (tile.part) tile.clearPart(true);
+        if (tile.part && tile.part.id && !tile.part.isSpecialTile) {
+          this.game.sellPart(tile);
+        }
       } else {
         if (clicked_part) {
           if (tile.part) {
@@ -1066,5 +1078,82 @@ export class UI {
     }
 
     return btn;
+  }
+
+  showDetailedQuickStart() {
+    const modal = document.createElement("div");
+    modal.id = "quick-start-modal";
+    modal.innerHTML = `
+      <div class="quick-start-overlay">
+        <div class="quick-start-content pixel-panel">
+          <div id="quick-start-page-2" class="quick-start-page">
+            <h2 class="quick-start-title">Getting Started Guide</h2>
+            <div class="quick-start-section">
+              <h3>First Steps:</h3>
+              <ul class="quick-start-list">
+                <li>Click "Scrounge for cash (+1$)" 10 times to get your first $10</li>
+                <li>Place your first Fuel Cell on the reactor grid</li>
+                <li>Cells come in 3 configurations: Single, Double, and Quad</li>
+              </ul>
+            </div>
+            <div class="quick-start-section">
+              <h3>Cell Mechanics:</h3>
+              <ul class="quick-start-list">
+                <li><b>Single cells:</b> Generate 1 pulse, 1 power, 1 heat per tick</li>
+                <li><b>Double cells:</b> Generate 2 pulses, act like two adjacent single cells</li>
+                <li><b>Quad cells:</b> Generate 4 pulses, act like four adjacent single cells in a 2x2 grid</li>
+                <li><b>Adjacency bonus:</b> Adjacent cells share pulses, increasing power and heat output</li>
+              </ul>
+            </div>
+            <div class="quick-start-section">
+              <h3>Heat Management:</h3>
+              <ul class="quick-start-list">
+                <li>Click the Heat bar to manually reduce heat (-1 heat per click)</li>
+                <li>Build vents and heat exchangers to automatically manage heat</li>
+                <li>Use reactor plating to increase maximum heat capacity</li>
+                <li>Exceeding max heat causes components to melt/explode</li>
+              </ul>
+            </div>
+            <div class="quick-start-section">
+              <h3>Power & Upgrades:</h3>
+              <ul class="quick-start-list">
+                <li>Build capacitors to increase maximum power storage</li>
+                <li>Enable auto-sell to automatically convert power to money</li>
+                <li>Use heat controllers for automatic cooling systems</li>
+              </ul>
+            </div>
+            <div class="quick-start-buttons">
+              <button id="quick-start-close-detailed" class="pixel-btn btn-start">Got it!</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById("quick-start-close-detailed").onclick = () => {
+      modal.remove();
+    };
+  }
+
+  addHelpButtonToMainPage() {
+    // Add help button to the main top navigation
+    const mainTopNav = this.DOMElements.main_top_nav;
+    if (mainTopNav) {
+      const helpButton = document.createElement("button");
+      helpButton.className = "pixel-btn is-small";
+      helpButton.title = "Getting Started Guide";
+      helpButton.textContent = "?";
+      helpButton.style.marginLeft = "8px";
+      helpButton.onclick = () => this.showDetailedQuickStart();
+
+      // Insert before the about button
+      const aboutButton = mainTopNav.querySelector("#about_toggle");
+      if (aboutButton) {
+        mainTopNav.insertBefore(helpButton, aboutButton);
+      } else {
+        mainTopNav.appendChild(helpButton);
+      }
+    }
   }
 }

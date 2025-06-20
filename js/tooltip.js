@@ -255,7 +255,9 @@ export class TooltipManager {
         .replace(/\.\s+/g, ". ")
         .replace(/\s+/g, " ")
         .trim();
-      content += `<div class="tooltip-mobile-desc">${formattedDesc}</div>`;
+      content += `<div class="tooltip-mobile-desc${
+        obj.upgrade ? " pixel-panel is-inset" : ""
+      }">${formattedDesc}</div>`;
     }
 
     // Add upgrade-specific info
@@ -316,7 +318,9 @@ export class TooltipManager {
 
     if (description) {
       const formattedDesc = iconify(description).replace(/\.\s+/g, ".<br>");
-      content += `<div class="tooltip-desc">${formattedDesc}</div>`;
+      content += `<div class="tooltip-desc${
+        obj.upgrade ? " pixel-panel is-inset" : ""
+      }">${formattedDesc}</div>`;
     }
 
     // Add detailed stats for desktop
@@ -401,8 +405,25 @@ export class TooltipManager {
 
     if (this.isLocked && obj.upgrade && obj.level < obj.max_level) {
       const buyButton = document.createElement("button");
-      buyButton.textContent = "Buy";
-      buyButton.className = "styled-button";
+      let costText = "";
+      if (obj.cost !== undefined) {
+        costText = ` <img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+          obj.cost
+        )}`;
+      } else if (obj.current_ecost !== undefined) {
+        costText = ` ${fmt(obj.current_ecost)} EP`;
+      }
+
+      if (obj.current_cost !== undefined) {
+        costText = ` <img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+          obj.current_cost
+        )}`;
+      } else if (obj.current_ecost !== undefined) {
+        costText = ` ${fmt(obj.current_ecost)} EP`;
+      }
+
+      buyButton.innerHTML = `Buy${costText} `;
+      buyButton.className = "pixel-btn";
       buyButton.disabled = !obj.affordable;
       buyButton.onclick = () => {
         if (this.game.upgradeset.purchaseUpgrade(obj.id)) {
