@@ -5,19 +5,33 @@ const path = require("path");
 
 // Generate version in yy_mm_dd_hh_mm format using Central Time
 const now = new Date();
-const centralTime = new Date(
-  now.toLocaleString("en-US", { timeZone: "America/Chicago" })
-);
+
+// Use Intl.DateTimeFormat to get Central Time components
+const centralFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Chicago",
+  year: "2-digit",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+const centralParts = centralFormatter.formatToParts(now);
+const centralValues = {};
+centralParts.forEach((part) => {
+  centralValues[part.type] = part.value;
+});
 
 const version =
-  centralTime.getFullYear().toString().slice(-2) +
+  centralValues.year +
   "_" +
-  String(centralTime.getMonth() + 1).padStart(2, "0") +
+  centralValues.month +
   "_" +
-  String(centralTime.getDate()).padStart(2, "0") +
+  centralValues.day +
   "-" +
-  String(centralTime.getHours()).padStart(2, "0") +
-  String(centralTime.getMinutes()).padStart(2, "0");
+  centralValues.hour +
+  centralValues.minute;
 
 // Create version.json file
 const versionData = { version: version };
@@ -27,8 +41,5 @@ fs.writeFileSync(versionPath, JSON.stringify(versionData, null, 2));
 
 console.log(`Generated version.json: ${version}`);
 console.log(`File location: ${versionPath}`);
-console.log(
-  `Central Time: ${centralTime.toLocaleString("en-US", {
-    timeZone: "America/Chicago",
-  })}`
-);
+console.log(`UTC Time: ${now.toISOString()}`);
+console.log(`Central Time: ${centralFormatter.format(now)}`);
