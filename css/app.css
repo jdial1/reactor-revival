@@ -179,8 +179,54 @@ button {
 }
 
 #pause_banner {
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-weight: bold;
+  color: var(--bg-color);
+  background-color: var(--warning-color);
+  border-color: var(--border-dark);
+  display: none;
   text-shadow: 1px 0 0 white, -1px 0 0 white, 0 1px 0 white, 0 -1px 0 white,
     1px 1px 0 white, -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white;
+}
+body.game-paused #pause_banner {
+  display: block;
+}
+
+#meltdown_banner {
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-weight: bold;
+  color: var(--bg-color);
+  background-color: var(--primary-color);
+  border-color: var(--border-dark);
+  display: none;
+  text-shadow: 1px 0 0 white, -1px 0 0 white, 0 1px 0 white, 0 -1px 0 white,
+    1px 1px 0 white, -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white;
+}
+body.reactor-meltdown #meltdown_banner {
+  display: block;
+}
+
+/* Global meltdown state styling */
+body.reactor-meltdown #reactor {
+  filter: grayscale(50%) brightness(0.8);
+  pointer-events: none;
+}
+
+body.reactor-meltdown #parts_section {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* During meltdown, only allow reboot/refund buttons and navigation */
+body.reactor-meltdown
+  .pixel-btn:not([data-page]):not(#reboot_btn):not(#refund_btn) {
+  opacity: 0.6 !important;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
 }
 
 /* Reactor stats text shadows */
@@ -503,6 +549,7 @@ button.unaffordable .part-price {
 #upgrades_section,
 #experimental_upgrades_section {
   margin-top: 1rem;
+  margin-bottom: 200px;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -655,6 +702,7 @@ button.unaffordable .part-price {
 #reactor {
   display: grid;
   grid-template-columns: repeat(var(--game-cols, 12), var(--tile-size));
+  grid-template-rows: repeat(var(--game-rows, 12), var(--tile-size));
   gap: 1px;
 }
 #reactor .tile {
@@ -673,14 +721,25 @@ button.unaffordable .part-price {
 }
 #reactor .tile.exploding {
   z-index: 10;
-  animation: explosion 0.6s steps(7);
+  animation: explosion 0.6s ease-out;
+  background: radial-gradient(circle, #ff4444 0%, #ff0000 50%, #880000 100%);
+  box-shadow: 0 0 20px #ff0000, inset 0 0 10px #ff0000;
 }
 @keyframes explosion {
   0% {
-    background-position: 32px 0;
+    transform: scale(1);
+    opacity: 1;
+    background: radial-gradient(circle, #ff4444 0%, #ff0000 50%, #880000 100%);
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.8;
+    background: radial-gradient(circle, #ffff44 0%, #ffaa00 50%, #ff4400 100%);
   }
   100% {
-    background-position: -192px 0;
+    transform: scale(2);
+    opacity: 0;
+    background: radial-gradient(circle, #ffffff 0%, #ffff44 50%, #ffaa00 100%);
   }
 }
 
@@ -730,6 +789,7 @@ button.unaffordable .part-price {
   min-height: 50px;
 }
 #objectives_content {
+  padding: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -755,20 +815,6 @@ button.unaffordable .part-price {
   vertical-align: middle;
 }
 
-#pause_banner {
-  padding: 0.5rem;
-  margin-bottom: 1rem;
-  text-align: center;
-  font-weight: bold;
-  color: var(--bg-color);
-  background-color: var(--warning-color);
-  border-color: var(--border-dark);
-  display: none;
-}
-body.game-paused #pause_banner {
-  display: block;
-}
-
 /* --- INFO BAR (BOTTOM FIXED) --- */
 #info_bar {
   display: flex;
@@ -787,7 +833,7 @@ body.game-paused #pause_banner {
 #info_stats_group_2 {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 5px;
 }
 .stat_block {
   display: flex;
@@ -960,6 +1006,7 @@ body.game-paused #pause_banner {
   }
   #bottom_nav {
     display: flex;
+    gap: 4px;
   }
   #info_bar {
     display: flex;
@@ -1545,4 +1592,119 @@ body.hide-help-buttons .info-button {
   --glow-color-1: #7501de;
   --glow-color-2: #ff4111;
   --glow-color-3: #ffd6d6;
+}
+
+/* --- DEBUG PANEL STYLES --- */
+#debug_section {
+  margin-top: 1rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+#debug_content h3 {
+  color: var(--warning-color);
+  margin-bottom: 1rem;
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.debug-section {
+  margin-bottom: 1.5rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-dark);
+  border-radius: 3px;
+}
+
+.debug-section h4 {
+  color: var(--accent-color);
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-dark);
+  padding-bottom: 0.25rem;
+}
+
+.debug-variables-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.5rem;
+}
+
+.debug-variable {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+  font-size: 0.8rem;
+  font-family: monospace;
+}
+
+.debug-key {
+  color: var(--text-color);
+  font-weight: bold;
+  margin-right: 0.5rem;
+}
+
+.debug-value {
+  color: var(--secondary-color);
+  text-align: right;
+  word-break: break-all;
+}
+
+/* Debug value type styling */
+.debug-null {
+  color: #888;
+  font-style: italic;
+}
+
+.debug-boolean {
+  color: var(--warning-color);
+  font-weight: bold;
+}
+
+.debug-number {
+  color: var(--success-color);
+  font-weight: bold;
+}
+
+.debug-string {
+  color: var(--accent-color);
+}
+
+.debug-array {
+  color: var(--primary-color);
+  font-style: italic;
+}
+
+.debug-object {
+  color: var(--secondary-color);
+  font-style: italic;
+}
+
+.debug-other {
+  color: var(--text-color);
+}
+
+/* Mobile responsive adjustments for debug panel */
+@media (max-width: 768px) {
+  .debug-variables-list {
+    grid-template-columns: 1fr;
+  }
+
+  .debug-variable {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .debug-value {
+    text-align: left;
+  }
+
+  #debug_section {
+    max-height: 50vh;
+  }
 }

@@ -31,7 +31,6 @@ const actions = {
   expand_reactor_rows: (upgrade, game) => {
     game.rows = game.base_rows + upgrade.level;
     game.ui.resizeReactor();
-    game.reactor.updateStats();
   },
   expand_reactor_cols: (upgrade, game) => {
     // BUG FIX: Changed game.reactor.resize() to game.ui.resizeReactor()

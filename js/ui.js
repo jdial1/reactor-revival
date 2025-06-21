@@ -107,6 +107,12 @@ export class UI {
       "fullscreen_toggle",
       "help_toggle_checkbox",
       "basic_overview_section",
+      "debug_section",
+      "debug_toggle_btn",
+      "debug_hide_btn",
+      "debug_variables",
+      "debug_refresh_btn",
+      "meltdown_banner",
     ];
     this.toggle_buttons_config = {
       auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
@@ -248,6 +254,13 @@ export class UI {
     }
   }
 
+  updateMeltdownState() {
+    if (this.game && this.game.reactor) {
+      const hasMeltedDown = this.game.reactor.has_melted_down;
+      document.body.classList.toggle("reactor-meltdown", hasMeltedDown);
+    }
+  }
+
   runUpdateInterfaceLoop() {
     this.game.performance.markStart("ui_update_total");
 
@@ -305,6 +318,8 @@ export class UI {
       this.game.tooltip_manager.update();
       this.game.performance.markEnd("ui_tooltip_update");
     }
+
+    this.updateMeltdownState();
 
     this.game.performance.markEnd("ui_update_total");
   }
@@ -453,6 +468,11 @@ export class UI {
           document.body.classList.toggle("game-paused", val);
         },
       },
+      melting_down: {
+        onupdate: (val) => {
+          // This is handled by updateMeltdownState()
+        },
+      },
     };
   }
 
@@ -562,14 +582,21 @@ export class UI {
       return;
     const wrapperWidth = this.DOMElements.reactor_wrapper.clientWidth;
     const numCols = this.game.cols;
+    const numRows = this.game.rows;
     const gap = 2;
     let tileSize = Math.floor(wrapperWidth / numCols - gap);
     tileSize = Math.max(50, Math.min(64, tileSize));
     this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
     this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
+    this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
   }
 
-  showPage(pageId) {
+  showPage(pageId, force = false) {
+    if (!force && this.game.reactor.has_melted_down) {
+      console.log("Cannot switch pages during meltdown.");
+      return;
+    }
+
     const pageElementIds = [
       "reactor_section",
       "upgrades_section",
@@ -586,6 +613,26 @@ export class UI {
     if (targetPage) {
       targetPage.classList.add("showing");
     }
+
+    // Update nav buttons active state
+    const navContainers = [
+      this.DOMElements.main_top_nav,
+      this.DOMElements.bottom_nav,
+    ];
+    navContainers.forEach((container) => {
+      if (container) {
+        container
+          .querySelectorAll(".pixel-btn")
+          .forEach((btn) => btn.classList.remove("active"));
+        const activeButton = container.querySelector(
+          `.pixel-btn[data-page="${pageId}"]`
+        );
+        if (activeButton) {
+          activeButton.classList.add("active");
+        }
+      }
+    });
+
     if (pageId === "reactor_section") {
       if (this.DOMElements.objectives_section)
         this.DOMElements.objectives_section.style.display = "";
@@ -824,6 +871,30 @@ export class UI {
       this.updateFullscreenButtonState();
     }
 
+    // Add debug panel functionality
+    const debugToggleBtn = this.DOMElements.debug_toggle_btn;
+    const debugHideBtn = this.DOMElements.debug_hide_btn;
+    const debugRefreshBtn = this.DOMElements.debug_refresh_btn;
+    const debugSection = this.DOMElements.debug_section;
+
+    if (debugToggleBtn) {
+      debugToggleBtn.addEventListener("click", () => {
+        this.showDebugPanel();
+      });
+    }
+
+    if (debugHideBtn) {
+      debugHideBtn.addEventListener("click", () => {
+        this.hideDebugPanel();
+      });
+    }
+
+    if (debugRefreshBtn) {
+      debugRefreshBtn.addEventListener("click", () => {
+        this.updateDebugVariables();
+      });
+    }
+
     // Add right-click sell functionality to reactor tiles
     const reactorEl = document.getElementById("reactor");
     if (reactorEl) {
@@ -841,6 +912,12 @@ export class UI {
 
   handleGridInteraction(tileEl, event) {
     if (!tileEl || !tileEl.tile) return;
+
+    // Prevent interactions if reactor has melted down
+    if (this.game && this.game.reactor && this.game.reactor.has_melted_down) {
+      return;
+    }
+
     const startTile = tileEl.tile;
     const isRightClick =
       (event.pointerType === "mouse" && event.button === 2) ||
@@ -1155,5 +1232,231 @@ export class UI {
         mainTopNav.appendChild(helpButton);
       }
     }
+  }
+
+  showDebugPanel() {
+    const debugSection = this.DOMElements.debug_section;
+    const debugToggleBtn = this.DOMElements.debug_toggle_btn;
+
+    if (debugSection && debugToggleBtn) {
+      debugSection.style.display = "block";
+      debugToggleBtn.textContent = "Hide Debug Info";
+      this.updateDebugVariables();
+    }
+  }
+
+  hideDebugPanel() {
+    const debugSection = this.DOMElements.debug_section;
+    const debugToggleBtn = this.DOMElements.debug_toggle_btn;
+
+    if (debugSection && debugToggleBtn) {
+      debugSection.style.display = "none";
+      debugToggleBtn.textContent = "Show Debug Info";
+    }
+  }
+
+  updateDebugVariables() {
+    if (!this.game || !this.DOMElements.debug_variables) return;
+
+    const debugContainer = this.DOMElements.debug_variables;
+    debugContainer.innerHTML = "";
+
+    // Collect all game variables organized by source file
+    const gameVars = this.collectGameVariables();
+
+    // Create sections for each file
+    Object.entries(gameVars).forEach(([fileName, variables]) => {
+      const section = document.createElement("div");
+      section.className = "debug-section";
+
+      const title = document.createElement("h4");
+      title.textContent = fileName;
+      section.appendChild(title);
+
+      const varList = document.createElement("div");
+      varList.className = "debug-variables-list";
+
+      // Sort variables by key
+      Object.entries(variables)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([key, value]) => {
+          const varItem = document.createElement("div");
+          varItem.className = "debug-variable";
+          varItem.innerHTML = `
+            <span class="debug-key">${key}:</span>
+            <span class="debug-value">${this.formatDebugValue(value)}</span>
+          `;
+          varList.appendChild(varItem);
+        });
+
+      section.appendChild(varList);
+      debugContainer.appendChild(section);
+    });
+  }
+
+  collectGameVariables() {
+    const vars = {
+      "Game (game.js)": {},
+      "Reactor (reactor.js)": {},
+      "State Manager": {},
+      "UI State": {},
+      Performance: {},
+      Tileset: {},
+      Engine: {},
+    };
+
+    if (!this.game) return vars;
+
+    // Game variables
+    const game = this.game;
+    vars["Game (game.js)"]["version"] = game.version;
+    vars["Game (game.js)"]["base_cols"] = game.base_cols;
+    vars["Game (game.js)"]["base_rows"] = game.base_rows;
+    vars["Game (game.js)"]["max_cols"] = game.max_cols;
+    vars["Game (game.js)"]["max_rows"] = game.max_rows;
+    vars["Game (game.js)"]["rows"] = game.rows;
+    vars["Game (game.js)"]["cols"] = game.cols;
+    vars["Game (game.js)"]["base_loop_wait"] = game.base_loop_wait;
+    vars["Game (game.js)"]["base_manual_heat_reduce"] =
+      game.base_manual_heat_reduce;
+    vars["Game (game.js)"]["upgrade_max_level"] = game.upgrade_max_level;
+    vars["Game (game.js)"]["base_money"] = game.base_money;
+    vars["Game (game.js)"]["current_money"] = game.current_money;
+    vars["Game (game.js)"]["protium_particles"] = game.protium_particles;
+    vars["Game (game.js)"]["total_exotic_particles"] =
+      game.total_exotic_particles;
+    vars["Game (game.js)"]["exotic_particles"] = game.exotic_particles;
+    vars["Game (game.js)"]["current_exotic_particles"] =
+      game.current_exotic_particles;
+    vars["Game (game.js)"]["loop_wait"] = game.loop_wait;
+    vars["Game (game.js)"]["paused"] = game.paused;
+    vars["Game (game.js)"]["auto_sell_disabled"] = game.auto_sell_disabled;
+    vars["Game (game.js)"]["auto_buy_disabled"] = game.auto_buy_disabled;
+    vars["Game (game.js)"]["time_flux"] = game.time_flux;
+    vars["Game (game.js)"]["sold_power"] = game.sold_power;
+    vars["Game (game.js)"]["sold_heat"] = game.sold_heat;
+
+    // Reactor variables
+    if (game.reactor) {
+      const reactor = game.reactor;
+      vars["Reactor (reactor.js)"]["base_max_heat"] = reactor.base_max_heat;
+      vars["Reactor (reactor.js)"]["base_max_power"] = reactor.base_max_power;
+      vars["Reactor (reactor.js)"]["current_heat"] = reactor.current_heat;
+      vars["Reactor (reactor.js)"]["current_power"] = reactor.current_power;
+      vars["Reactor (reactor.js)"]["max_heat"] = reactor.max_heat;
+      vars["Reactor (reactor.js)"]["altered_max_heat"] =
+        reactor.altered_max_heat;
+      vars["Reactor (reactor.js)"]["max_power"] = reactor.max_power;
+      vars["Reactor (reactor.js)"]["altered_max_power"] =
+        reactor.altered_max_power;
+      vars["Reactor (reactor.js)"]["auto_sell_multiplier"] =
+        reactor.auto_sell_multiplier;
+      vars["Reactor (reactor.js)"]["heat_power_multiplier"] =
+        reactor.heat_power_multiplier;
+      vars["Reactor (reactor.js)"]["heat_controlled"] = reactor.heat_controlled;
+      vars["Reactor (reactor.js)"]["heat_outlet_controlled"] =
+        reactor.heat_outlet_controlled;
+      vars["Reactor (reactor.js)"]["vent_capacitor_multiplier"] =
+        reactor.vent_capacitor_multiplier;
+      vars["Reactor (reactor.js)"]["vent_plating_multiplier"] =
+        reactor.vent_plating_multiplier;
+      vars["Reactor (reactor.js)"]["transfer_capacitor_multiplier"] =
+        reactor.transfer_capacitor_multiplier;
+      vars["Reactor (reactor.js)"]["transfer_plating_multiplier"] =
+        reactor.transfer_plating_multiplier;
+      vars["Reactor (reactor.js)"]["has_melted_down"] = reactor.has_melted_down;
+      vars["Reactor (reactor.js)"]["stats_power"] = reactor.stats_power;
+      vars["Reactor (reactor.js)"]["stats_heat_generation"] =
+        reactor.stats_heat_generation;
+      vars["Reactor (reactor.js)"]["stats_vent"] = reactor.stats_vent;
+      vars["Reactor (reactor.js)"]["stats_inlet"] = reactor.stats_inlet;
+      vars["Reactor (reactor.js)"]["stats_outlet"] = reactor.stats_outlet;
+      vars["Reactor (reactor.js)"]["stats_cash"] = reactor.stats_cash;
+      vars["Reactor (reactor.js)"]["vent_multiplier_eff"] =
+        reactor.vent_multiplier_eff;
+      vars["Reactor (reactor.js)"]["transfer_multiplier_eff"] =
+        reactor.transfer_multiplier_eff;
+    }
+
+    // Tileset variables
+    if (game.tileset) {
+      const tileset = game.tileset;
+      vars["Tileset"]["max_rows"] = tileset.max_rows;
+      vars["Tileset"]["max_cols"] = tileset.max_cols;
+      vars["Tileset"]["rows"] = tileset.rows;
+      vars["Tileset"]["cols"] = tileset.cols;
+      vars["Tileset"]["tiles_list_length"] = tileset.tiles_list?.length || 0;
+      vars["Tileset"]["active_tiles_list_length"] =
+        tileset.active_tiles_list?.length || 0;
+      vars["Tileset"]["tiles_with_parts"] =
+        tileset.tiles_list?.filter((t) => t.part)?.length || 0;
+    }
+
+    // Engine variables
+    if (game.engine) {
+      const engine = game.engine;
+      vars["Engine"]["running"] = engine.running;
+      vars["Engine"]["tick_count"] = engine.tick_count;
+      vars["Engine"]["last_tick_time"] = engine.last_tick_time;
+      vars["Engine"]["tick_interval"] = engine.tick_interval;
+    }
+
+    // State Manager variables
+    if (this.stateManager) {
+      const stateVars = this.stateManager.getAllVars();
+      Object.entries(stateVars).forEach(([key, value]) => {
+        vars["State Manager"][key] = value;
+      });
+    }
+
+    // UI State variables
+    vars["UI State"]["update_interface_interval"] =
+      this.update_interface_interval;
+    vars["UI State"]["isDragging"] = this.isDragging;
+    vars["UI State"]["lastTileModified"] = this.lastTileModified
+      ? "Tile Object"
+      : null;
+    vars["UI State"]["longPressTimer"] = this.longPressTimer ? "Active" : null;
+    vars["UI State"]["longPressDuration"] = this.longPressDuration;
+    vars["UI State"]["last_money"] = this.last_money;
+    vars["UI State"]["last_exotic_particles"] = this.last_exotic_particles;
+    vars["UI State"][
+      "screen_resolution"
+    ] = `${window.innerWidth}x${window.innerHeight}`;
+    vars["UI State"]["device_pixel_ratio"] = window.devicePixelRatio;
+
+    // Performance variables
+    if (game.performance) {
+      const perf = game.performance;
+      vars["Performance"]["enabled"] = perf.enabled;
+      vars["Performance"]["marks"] = Object.keys(perf.marks || {}).length;
+      vars["Performance"]["measures"] = Object.keys(perf.measures || {}).length;
+    }
+
+    return vars;
+  }
+
+  formatDebugValue(value) {
+    if (value === null || value === undefined) {
+      return "<span class='debug-null'>null</span>";
+    }
+    if (typeof value === "boolean") {
+      return `<span class='debug-boolean'>${value}</span>`;
+    }
+    if (typeof value === "number") {
+      return `<span class='debug-number'>${value}</span>`;
+    }
+    if (typeof value === "string") {
+      return `<span class='debug-string'>"${value}"</span>`;
+    }
+    if (typeof value === "object") {
+      if (Array.isArray(value)) {
+        return `<span class='debug-array'>[${value.length} items]</span>`;
+      }
+      return `<span class='debug-object'>{${
+        Object.keys(value).length
+      } keys}</span>`;
+    }
+    return `<span class='debug-other'>${String(value)}</span>`;
   }
 }

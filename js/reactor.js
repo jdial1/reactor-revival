@@ -218,8 +218,19 @@ export class Reactor {
       });
       this.current_heat = this.max_heat * 2 + 1;
       this.game.ui.stateManager.setVar("melting_down", true, true);
+
+      // Update UI to show meltdown state
+      document.body.classList.add("reactor-meltdown");
+      this.game.ui.showPage("experimental_upgrades_section", true);
+
       return true;
     }
     return false;
+  }
+
+  clearMeltdownState() {
+    this.has_melted_down = false;
+    this.game.ui.stateManager.setVar("melting_down", false, true);
+    document.body.classList.remove("reactor-meltdown");
   }
 }

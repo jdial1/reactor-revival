@@ -209,4 +209,12 @@ export class StateManager {
     this.setVar("max_power", this.game.base_max_power);
     this.setVar("max_heat", this.game.base_max_heat);
   }
+
+  getAllVars() {
+    const vars = {};
+    for (const [key, value] of this.vars.entries()) {
+      vars[key] = value;
+    }
+    return vars;
+  }
 }

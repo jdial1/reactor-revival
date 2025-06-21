@@ -47,7 +47,7 @@ export class Tileset {
   }
 
   getTile(row, col) {
-    if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
+    if (row >= 0 && row < this.game.rows && col >= 0 && col < this.game.cols) {
       return this.tiles[row][col];
     }
     return null;

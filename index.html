@@ -228,6 +228,9 @@
               <div id="pause_banner" class="pixel-panel panel-warning">
                 PAUSED
               </div>
+              <div id="meltdown_banner" class="pixel-panel panel-danger">
+                REACTOR MELTDOWN - ALL PARTS DESTROYED
+              </div>
               <div id="reactor_wrapper">
                 <div id="reactor" class="pixel-panel is-inset"></div>
                 <div id="reactor_background"></div>
@@ -319,6 +322,26 @@
                   This will reset everything, including experimental upgrades,
                   and refund all Exotic Particles you have ever earned.
                 </p>
+              </div>
+              <div class="pixel-panel explanitory">
+                <button class="pixel-btn" id="debug_toggle_btn">
+                  Show Debug Info
+                </button>
+                <p>
+                  Display all main game variables for debugging purposes.
+                </p>
+              </div>
+              <div id="debug_section" class="pixel-panel explanitory" style="display: none;">
+                <button class="pixel-btn" id="debug_hide_btn">
+                  Hide Debug Info
+                </button>
+                <button class="pixel-btn" id="debug_refresh_btn" style="margin-left: 0.5rem;">
+                  Refresh
+                </button>
+                <div id="debug_content">
+                  <h3>Game Variables Debug Panel</h3>
+                  <div id="debug_variables"></div>
+                </div>
               </div>
               <div
                 id="version_section"

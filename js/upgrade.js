@@ -64,6 +64,7 @@ export class Upgrade {
       this.current_cost =
         this.base_cost * Math.pow(this.cost_multiplier, this.level);
     }
+
     if (this.level >= this.max_level) {
       this.display_cost = "--";
       this.current_cost = Infinity;
@@ -72,6 +73,30 @@ export class Upgrade {
       this.display_cost = this.base_ecost
         ? fmt(this.current_ecost)
         : fmt(this.current_cost);
+    }
+
+    // Update the DOM element if it exists
+    if (this.$el) {
+      let costDiv = this.$el.querySelector(".upgrade-price");
+      if (!costDiv) {
+        costDiv = document.createElement("div");
+        costDiv.className = "upgrade-price";
+        // Insert it before the levels div if it exists
+        const levelsDiv = this.$el.querySelector(".levels");
+        if (levelsDiv) {
+          this.$el.insertBefore(costDiv, levelsDiv);
+        } else {
+          this.$el.appendChild(costDiv);
+        }
+      }
+      costDiv.textContent = this.display_cost;
+
+      // Hide the cost if it's not applicable (e.g., max level)
+      if (this.display_cost === "--") {
+        costDiv.style.display = "none";
+      } else {
+        costDiv.style.display = "";
+      }
     }
   }
 

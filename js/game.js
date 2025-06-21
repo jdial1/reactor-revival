@@ -58,6 +58,7 @@ export class Game {
     this.upgradeset.reset();
     this.tileset.clearAllTiles();
     this.reactor.setDefaults();
+    this.reactor.clearMeltdownState();
     this.reactor.updateStats();
     this.ui.stateManager.game_reset();
   }
@@ -119,7 +120,7 @@ export class Game {
     this.tileset.clearAllParts();
     this.reactor.current_power = 0;
     this.reactor.current_heat = 0;
-    this.reactor.has_melted_down = false;
+    this.reactor.clearMeltdownState();
     this.initialize_new_game_state();
   }
   onToggleStateChange(property, newState) {
@@ -281,6 +282,13 @@ export class Game {
       this.reactor.current_heat = savedData.reactor.current_heat || 0;
       this.reactor.current_power = savedData.reactor.current_power || 0;
       this.reactor.has_melted_down = savedData.reactor.has_melted_down || false;
+
+      // Update UI state for meltdown
+      if (this.reactor.has_melted_down) {
+        document.body.classList.add("reactor-meltdown");
+      } else {
+        document.body.classList.remove("reactor-meltdown");
+      }
     }
     this.upgradeset.reset();
     if (savedData.upgrades) {
