@@ -580,12 +580,26 @@ export class UI {
       !this.DOMElements.reactor_wrapper
     )
       return;
-    const wrapperWidth = this.DOMElements.reactor_wrapper.clientWidth;
+
+    const wrapper = this.DOMElements.reactor_wrapper;
+    const wrapperWidth = wrapper.clientWidth;
+    const wrapperHeight = wrapper.clientHeight;
+
     const numCols = this.game.cols;
     const numRows = this.game.rows;
-    const gap = 2;
-    let tileSize = Math.floor(wrapperWidth / numCols - gap);
-    tileSize = Math.max(50, Math.min(64, tileSize));
+    const gap = 1; // Match the CSS gap value
+
+    // Calculate tile size based on both width and height constraints
+    const tileSizeForWidth = wrapperWidth / numCols;
+    const tileSizeForHeight = wrapperHeight / numRows;
+
+    // Use the smaller of the two to ensure the entire grid fits
+    let tileSize =
+      Math.floor(Math.min(tileSizeForWidth, tileSizeForHeight)) - gap;
+
+    // Clamp the tile size to a reasonable range for usability
+    tileSize = Math.max(20, Math.min(64, tileSize)); // Lowered min size for mobile
+
     this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
     this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
     this.DOMElements.reactor.style.setProperty("--game-rows", numRows);

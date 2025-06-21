@@ -30,12 +30,9 @@ const actions = {
   // Reactor Expansion
   expand_reactor_rows: (upgrade, game) => {
     game.rows = game.base_rows + upgrade.level;
-    game.ui.resizeReactor();
   },
   expand_reactor_cols: (upgrade, game) => {
-    // BUG FIX: Changed game.reactor.resize() to game.ui.resizeReactor()
     game.cols = game.base_cols + upgrade.level;
-    game.ui.resizeReactor();
   },
 
   // Part Improvements

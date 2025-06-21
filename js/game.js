@@ -148,6 +148,9 @@ export class Game {
       this._rows = value;
       this.tileset.updateActiveTiles();
       this.reactor.updateStats();
+      if (this.ui) {
+        this.ui.resizeReactor();
+      }
     }
   }
   get cols() {
@@ -158,6 +161,9 @@ export class Game {
       this._cols = value;
       this.tileset.updateActiveTiles();
       this.reactor.updateStats();
+      if (this.ui) {
+        this.ui.resizeReactor();
+      }
     }
   }
 
