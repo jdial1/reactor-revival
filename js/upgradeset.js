@@ -73,19 +73,76 @@ export class UpgradeSet {
       (upgrade) => upgrade.upgrade.type === type
     );
   }
+  populateUpgrades() {
+    const wrapper = document.getElementById("upgrades_content_wrapper");
+    if (wrapper) {
+      wrapper
+        .querySelectorAll(".upgrade-group")
+        .forEach((el) => (el.innerHTML = ""));
+    }
+    this.upgradesArray.forEach((upgrade) => {
+      if (!upgrade.base_ecost) {
+        this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
+      }
+    });
+  }
+  populateExperimentalUpgrades() {
+    const wrapper = document.getElementById(
+      "experimental_upgrades_content_wrapper"
+    );
+    if (wrapper) {
+      wrapper
+        .querySelectorAll(".upgrade-group")
+        .forEach((el) => (el.innerHTML = ""));
+    }
+    this.upgradesArray.forEach((upgrade) => {
+      if (upgrade.base_ecost) {
+        this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
+      }
+    });
+  }
   purchaseUpgrade(upgradeId) {
     const upgrade = this.getUpgrade(upgradeId);
-    if (!upgrade) return false;
+    if (!upgrade || upgrade.level >= upgrade.max_level) {
+      return false;
+    }
 
     const cost = upgrade.getCost();
-    if (this.game.current_money < cost) return false;
+    const ecost = upgrade.getEcost();
 
-    this.game.current_money -= cost;
-    upgrade.setLevel(upgrade.level + 1);
+    let purchased = false;
+    if (ecost > 0) {
+      // This is an experimental upgrade that costs EP
+      if (this.game.current_exotic_particles >= ecost) {
+        this.game.current_exotic_particles -= ecost;
+        this.game.ui.stateManager.setVar(
+          "current_exotic_particles",
+          this.game.current_exotic_particles
+        );
+        purchased = true;
+      }
+    } else {
+      // This is a regular upgrade that costs money
+      if (this.game.current_money >= cost) {
+        this.game.current_money -= cost;
+        this.game.ui.stateManager.setVar(
+          "current_money",
+          this.game.current_money
+        );
+        purchased = true;
+      }
+    }
 
-    this.game.ui.stateManager.setVar("current_money", this.game.current_money);
-    this.game.saveGame();
-    return true;
+    if (purchased) {
+      upgrade.setLevel(upgrade.level + 1);
+      if (upgrade.upgrade.type === "experimental_parts") {
+        this.game.epart_onclick(upgrade);
+      }
+      this.game.saveGame();
+      return true;
+    }
+
+    return false;
   }
   check_affordability(game) {
     if (!game) return;

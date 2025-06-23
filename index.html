@@ -23,492 +23,120 @@
   </head>
 
   <body>
-    <div id="wrapper">
-      <!-- PARTS SIDEBAR -->
-      <aside id="parts_section" class="pixel-panel collapsed">
-        <button
-          id="parts_panel_toggle"
-          class="pixel-btn"
-          aria-label="Toggle parts panel"
-        >
-          <span class="vertical-text">PARTS</span>
-        </button>
-        <div class="parts_tabs">
-          <button
-            class="pixel-btn parts_tab active"
-            id="tab_power"
-            data-tab="power"
-            title="Power Creation"
-          >
-            <img src="img/ui/icons/icon_power.png" alt="Power" />
-          </button>
-          <button
-            class="pixel-btn parts_tab"
-            id="tab_heat"
-            data-tab="heat"
-            title="Heat Management"
-          >
-            <img src="img/ui/icons/icon_heat.png" alt="Heat" />
-          </button>
-          <button
-            class="pixel-btn parts_tab"
-            id="tab_misc1"
-            data-tab="misc1"
-            title="Other"
-            disabled
-          >
-            <span role="img" aria-label="Locked">🔒</span>
-          </button>
-          <button
-            class="pixel-btn parts_tab"
-            id="tab_misc2"
-            data-tab="misc2"
-            title="Other"
-            disabled
-          >
-            <span role="img" aria-label="Locked">🔒</span>
-          </button>
+    <!-- SPLASH SCREEN -->
+    <div id="splash-screen">
+      <div class="splash-logo"></div>
+      <div class="splash-title">REACTOR REVIVAL</div>
+      <div class="splash-subtitle">Nuclear Power Simulation</div>
+      <div class="splash-loading">
+        <div class="splash-spinner" style="display: none"></div>
+        <div class="splash-status" id="splash-status" style="display: none">
+          Ready!
         </div>
-        <div id="parts_tab_contents">
-          <div id="parts_tab_power" class="parts_tab_content active">
-            <h4>Cells</h4>
-            <div id="cells" class="item-grid pixel-panel is-inset"></div>
-            <h4>Reflectors</h4>
-            <div id="reflectors" class="item-grid pixel-panel is-inset"></div>
-            <h4>Capacitors</h4>
-            <div id="capacitors" class="item-grid pixel-panel is-inset"></div>
-            <h4>Particle Accelerators</h4>
-            <div
-              id="particleAccelerators"
-              class="item-grid pixel-panel is-inset"
-            ></div>
-          </div>
-          <div id="parts_tab_heat" class="parts_tab_content">
-            <h4>Vents</h4>
-            <div id="vents" class="item-grid pixel-panel is-inset"></div>
-            <h4>Heat Exchangers</h4>
-            <div
-              id="heatExchangers"
-              class="item-grid pixel-panel is-inset"
-            ></div>
-            <h4>Inlets</h4>
-            <div id="heatInlets" class="item-grid pixel-panel is-inset"></div>
-            <h4>Outlets</h4>
-            <div id="heatOutlets" class="item-grid pixel-panel is-inset"></div>
-            <h4>Coolant Cells</h4>
-            <div id="coolantCells" class="item-grid pixel-panel is-inset"></div>
-            <h4>Reactor Platings</h4>
-            <div
-              id="reactorPlatings"
-              class="item-grid pixel-panel is-inset"
-            ></div>
-          </div>
-        </div>
-        <nav id="controls_nav" class="pixel-panel is-inset">
-          <button
-            id="auto_sell_toggle"
-            class="pixel-btn nav_button"
-            title="Auto Sell"
-          >
-            Auto Sell
-          </button>
-          <button
-            id="auto_buy_toggle"
-            class="pixel-btn nav_button"
-            title="Auto Buy"
-          >
-            Auto Buy
-          </button>
-          <button
-            id="time_flux_toggle"
-            class="pixel-btn nav_button"
-            title="Time Flux"
-          >
-            Time Flux
-          </button>
-          <button
-            id="heat_control_toggle"
-            class="pixel-btn nav_button"
-            title="Heat Ctrl"
-          >
-            Heat Controller
-          </button>
-          <button
-            id="pause_toggle"
-            class="pixel-btn nav_button"
-            title="Pause/Play"
-          >
-            Pause
-          </button>
-        </nav>
-      </aside>
+      </div>
+    </div>
 
-      <!-- MAIN CONTENT -->
-      <main id="main">
-        <div id="main_content_wrapper">
-          <div id="main_top_nav" class="main_top_controls_row pixel-panel">
-            <button class="pixel-btn active" data-page="reactor_section">
-              Reactor
-            </button>
-            <button class="pixel-btn" data-page="upgrades_section">
-              Upgrade
-            </button>
-            <button class="pixel-btn" data-page="experimental_upgrades_section">
-              Research
-            </button>
-            <div class="flex-spacer"></div>
-            <button
-              id="about_toggle"
-              class="pixel-btn is-small"
-              title="About"
-              data-page="about_section"
-            >
-              ℹ
-            </button>
-            <button
-              id="fullscreen_toggle"
-              class="pixel-btn is-small"
-              title="Toggle Fullscreen"
-            >
-              ⛶
-            </button>
+    <div id="faction-select-panel" style="display: none">
+      <div class="faction-select-title">Select Your Faction</div>
+      <div class="faction-cards-row">
+        <div class="faction-card faction-ATOM" data-faction="ATOM" tabindex="0">
+          <div class="card-header">
+            <span class="flag">🇺🇸</span> <span class="faction-name">ATOM</span>
           </div>
-          <section id="objectives_section" class="pixel-panel panel-ornate">
-            <div id="objectives_wrapper">
-              <div id="objectives_content">
-                <span id="objective_title"></span>
-                <span id="objective_reward"></span>
-              </div>
+          <div class="card-body">
+            <div class="traits-header">Faction Traits</div>
+            <div class="feature-box">
+              <span class="icon">🔧</span> Small Modular Reactors
             </div>
-          </section>
-
-          <div id="page_content_area">
-            <!-- REACTOR PAGE -->
-            <section id="reactor_section" class="page showing">
-              <header id="reactor_header">
-                <div id="reactor_stats" class="pixel-panel is-inset">
-                  <span
-                    id="stats_power"
-                    class="stat"
-                    title="Estimated power per tick"
-                    >0</span
-                  >
-                  <span
-                    id="stats_heat"
-                    class="stat"
-                    title="Estimated heat per tick"
-                    >0</span
-                  >
-                  <span
-                    id="stats_cash"
-                    class="stat"
-                    title="Estimated autosell cash per tick"
-                    >0</span
-                  >
-                  <span
-                    id="stats_vent"
-                    class="stat"
-                    title="Estimated total heat venting per tick"
-                    >0</span
-                  >
-                  <span
-                    id="stats_inlet"
-                    class="stat"
-                    title="Total potential heat inletting per tick"
-                    >0</span
-                  >
-                  <span
-                    id="stats_outlet"
-                    class="stat"
-                    title="Total potential heat outletting per tick"
-                    >0</span
-                  >
-                </div>
-              </header>
-              <div id="pause_banner" class="pixel-panel panel-warning">
-                PAUSED
-              </div>
-              <div id="meltdown_banner" class="pixel-panel panel-danger">
-                REACTOR MELTDOWN - ALL PARTS DESTROYED
-              </div>
-              <div id="reactor_wrapper">
-                <div id="reactor" class="pixel-panel is-inset"></div>
-                <div id="reactor_background"></div>
-              </div>
-            </section>
-
-            <!-- UPGRADES PAGE -->
-            <section id="upgrades_section" class="page">
-              <div id="upgrades_content_wrapper">
-                <h2>Cooling Upgrades</h2>
-                <div id="vent_upgrades" class="pixel-panel upgrade-group"></div>
-                <div
-                  id="exchanger_upgrades"
-                  class="pixel-panel upgrade-group"
-                ></div>
-                <h2>Cell Upgrades</h2>
-                <div
-                  id="cell_power_upgrades"
-                  class="pixel-panel upgrade-group"
-                ></div>
-                <div
-                  id="cell_tick_upgrades"
-                  class="pixel-panel upgrade-group"
-                ></div>
-                <div
-                  id="cell_perpetual_upgrades"
-                  class="pixel-panel upgrade-group"
-                ></div>
-              </div>
-            </section>
-
-            <!-- EXPERIMENTS PAGE -->
-            <section id="experimental_upgrades_section" class="page">
-              <div id="experimental_upgrades_content_wrapper">
-                <div id="exotic_particles_display" class="pixel-panel is-inset">
-                  <span
-                    >Current EP:
-                    <span id="current_exotic_particles">0</span></span
-                  >
-                  <span
-                    >Total EP: <span id="total_exotic_particles">0</span></span
-                  >
-                </div>
-                <h2>Laboratory</h2>
-                <div
-                  id="experimental_laboratory"
-                  class="pixel-panel upgrade-group"
-                ></div>
-                <h2>Global Boosts</h2>
-                <div
-                  id="experimental_boost"
-                  class="pixel-panel upgrade-group"
-                ></div>
-                <h2>Particle Accelerators</h2>
-                <div
-                  id="experimental_particle_accelerators"
-                  class="pixel-panel upgrade-group"
-                ></div>
-                <h2>Experimental Cells</h2>
-                <div
-                  id="experimental_cells"
-                  class="pixel-panel upgrade-group"
-                ></div>
-                <div
-                  id="experimental_cells_boost"
-                  class="pixel-panel upgrade-group"
-                ></div>
-                <h2>Experimental Parts</h2>
-                <div
-                  id="experimental_parts"
-                  class="pixel-panel upgrade-group"
-                ></div>
-              </div>
-              <div id="reboot_section" class="pixel-panel explanitory">
-                <button class="pixel-btn btn-start" id="reboot_btn">
-                  Reboot for <span id="reboot_exotic_particles">0</span> EP
-                </button>
-                <p>
-                  Rebooting the reactor will remove all parts, regular upgrades
-                  and money. You will keep your total Exotic Particles and
-                  experimental upgrades.
-                </p>
-              </div>
-              <div id="refund_section" class="pixel-panel explanitory">
-                <button class="pixel-btn" id="refund_btn">
-                  Reboot and Refund All EP
-                </button>
-                <p>
-                  This will reset everything, including experimental upgrades,
-                  and refund all Exotic Particles you have ever earned.
-                </p>
-              </div>
-              <div class="pixel-panel explanitory">
-                <button class="pixel-btn" id="debug_toggle_btn">
-                  Show Debug Info
-                </button>
-                <p>
-                  Display all main game variables for debugging purposes.
-                </p>
-              </div>
-              <div id="debug_section" class="pixel-panel explanitory" style="display: none;">
-                <button class="pixel-btn" id="debug_hide_btn">
-                  Hide Debug Info
-                </button>
-                <button class="pixel-btn" id="debug_refresh_btn" style="margin-left: 0.5rem;">
-                  Refresh
-                </button>
-                <div id="debug_content">
-                  <h3>Game Variables Debug Panel</h3>
-                  <div id="debug_variables"></div>
-                </div>
-              </div>
-              <div
-                id="version_section"
-                class="pixel-panel is-inset explanitory"
-              >
-                <p>Version: <span id="app_version"></span></p>
-              </div>
-            </section>
-
-            <!-- ABOUT PAGE -->
-            <section id="about_section" class="page">
-              <div class="about-content pixel-panel is-inset">
-                <h2>About Reactor Revival</h2>
-                <div id="basic_overview_section" class="about-section">
-                  <!-- content will be injected by ui.js -->
-                </div>
-                <div class="about-section">
-                  <h3>Game</h3>
-                  <p>
-                    A reactor simulation game where you manage everything from
-                    basic uranium cells to advanced reactor cores. Build your
-                    reactor, manage heat, generate power, and unlock upgrades as
-                    you progress.
-                  </p>
-                </div>
-
-                <div class="about-section">
-                  <h3>Features</h3>
-                  <ul>
-                    <li>Progressive upgrade system</li>
-                    <li>Exotic particle collection</li>
-                    <li>Offline play support</li>
-                    <li>Fast, responsive interface</li>
-                    <li>Multiple reactor components</li>
-                    <li>Heat management mechanics</li>
-                  </ul>
-                </div>
-
-                <div class="about-section">
-                  <h3>Version</h3>
-                  <p>Current Version: <span id="about_version"></span></p>
-                </div>
-
-                <div class="about-section">
-                  <h3>Credits</h3>
-                  <p>Created by <a href="https://github.com/jdial1" target="_blank" rel="noopener noreferrer"></a>Justin Dial</a></p>
-                  <p class="credits-list">
-                    Special thanks to:
-                    <ul>
-                      <li><a href="https://forum.industrial-craft.net/thread/2147-new-reactor-planner-made-by-talonius/" target="_blank" rel="noopener noreferrer">Talonius</a> - IC2 Reactor Planner</li>
-                      <li><a href="https://github.com/MauveCloud/Ic2ExpReactorPlanner" target="_blank" rel="noopener noreferrer">MauveCloud</a> - IC2 Experimental Reactor Planner</li>
-                      <li><a href="https://www.kongregate.com/games/Cael/reactor-incremental" target="_blank" rel="noopener noreferrer">Cael & Mephyst</a> - Reactor Incremental</li>
-                      <li><a href="https://github.com/cwmonkey/reactor-knockoff" target="_blank" rel="noopener noreferrer">cwmonkey</a> - Reactor Knockoff</li>
-                    </ul>
-                  </p>
-                </div>
-
-                <div class="about-section">
-                  <h3>Contact</h3>
-                  <p>
-                    For feedback or issues, please visit the
-                    <a
-                      href="https://github.com/jdial1/reactor-revival"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      >GitHub</a
-                    >.
-                  </p>
-                </div>
-
-                <p>
-                  This game is a work-in-progress and is subject to change.
-                </p>
-                <button id="install_pwa_btn" class="pixel-btn" style="display: none;">Install App</button>
-              </div>
-            </section>
+            <div class="feature-box">Efficiency +10%</div>
+            <div class="penalty-box">
+              <span class="icon">❌</span> No access to natural uranium fuel
+              systems
+            </div>
+            <div class="penalty-box">Durability -10%</div>
           </div>
-
-          <!-- TOOLTIP -->
-          <section id="tooltip" class="pixel-panel" aria-live="polite">
-            <div id="tooltip_data"></div>
-          </section>
         </div>
-      </main>
-    </div>
-
-    <!-- INFO BAR (FIXED) -->
-    <div id="info_bar" class="pixel-panel">
-      <div id="info_stats_group_1">
-        <div class="pixel-progress heat" id="reduceHeatBtnInfoBar">
-          <div class="pixel-progress-bar" id="info_heat_progress"></div>
-          <button class="stat_button pixel-btn">
-            <span>Heat:</span>
-            <span class="stat_value"
-              ><span id="info_bar_current_heat">0</span>/<span
-                id="info_bar_max_heat"
-                >0</span
-              ></span
-            >
-          </button>
+        <div class="faction-card faction-BLOK" data-faction="BLOK" tabindex="0">
+          <div class="card-header">
+            <span class="flag">🇷🇺</span> <span class="faction-name">БЛОК</span>
+          </div>
+          <div class="card-body">
+            <div class="traits-header">Faction Traits</div>
+            <div class="feature-box">
+              <span class="icon">🛠️</span> Fast Neutron Reactors
+            </div>
+            <div class="feature-box">Power Output +15%</div>
+            <div class="penalty-box">
+              <span class="icon">❌</span> No access to molten salt reactor
+              systems
+            </div>
+            <div class="penalty-box">Meltdown Chance +25%</div>
+          </div>
         </div>
-        <div class="pixel-progress power" id="sellBtnInfoBar">
-          <div class="pixel-progress-bar" id="info_power_progress"></div>
-          <button title="Sell Power" class="stat_button pixel-btn">
-            <span>Power:</span>
-            <span class="stat_value"
-              ><span id="info_bar_current_power">0</span>/<span
-                id="info_bar_max_power"
-                >0</span
-              ></span
-            >
-          </button>
+        <div class="faction-card faction-ROD" data-faction="ROD" tabindex="0">
+          <div class="card-header">
+            <span class="flag">🇬🇧</span> <span class="faction-name">ROD</span>
+          </div>
+          <div class="card-body">
+            <div class="traits-header">Faction Traits</div>
+            <div class="feature-box">
+              <span class="icon">⚛️</span> Dual-fuel Path
+            </div>
+            <div class="feature-box">Fuel Compatibility +10%</div>
+            <div class="penalty-box">
+              <span class="icon">❌</span> No access to breeder or fast reactor
+              systems
+            </div>
+            <div class="penalty-box">Max Power Scaling -15%</div>
+          </div>
+        </div>
+        <div class="faction-card faction-CORE" data-faction="CORE" tabindex="0">
+          <div class="card-header">
+            <span class="flag">🌐</span> <span class="faction-name">CORE</span>
+          </div>
+          <div class="card-body">
+            <div class="traits-header">Faction Traits</div>
+            <div class="feature-box">
+              <span class="icon">🛡️</span> Ultra-safe Cores
+            </div>
+            <div class="feature-box">Meltdown Chance -20%</div>
+            <div class="penalty-box">
+              <span class="icon">❌</span> No access to high-output core designs
+            </div>
+            <div class="penalty-box">Base Power -10%</div>
+          </div>
         </div>
       </div>
-      <div id="info_stats_group_2">
-        <div class="stat_block" id="info_money_block">
-          <span>Money:</span>
-          <span class="stat_value">$<span id="info_bar_money">0</span></span>
-        </div>
-      </div>
     </div>
 
-    <!-- BOTTOM NAV (MOBILE) -->
-    <nav id="bottom_nav">
-      <button
-        id="nav_reactor_btn"
-        class="pixel-btn active"
-        data-page="reactor_section"
-      >
-        Reactor
-      </button>
-      <button
-        id="nav_upgrades_btn"
-        class="pixel-btn"
-        data-page="upgrades_section"
-      >
-        Upgrade
-      </button>
-      <button
-        id="nav_experiments_btn"
-        class="pixel-btn"
-        data-page="experimental_upgrades_section"
-      >
-        Research
-      </button>
-    </nav>
+    <div id="wrapper" style="display: none"></div>
 
     <script type="module" src="js/app.js"></script>
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', async () => {
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register('/sw.js', {
-              scope: '/',
-              updateViaCache: 'none'
-            });
-            console.log('Service Worker registered successfully with scope:', registration.scope);
+            const registration = await navigator.serviceWorker.register(
+              "/sw.js",
+              {
+                scope: "/",
+                updateViaCache: "none",
+              }
+            );
+            console.log(
+              "Service Worker registered successfully with scope:",
+              registration.scope
+            );
 
             if (registration.active) {
-              console.log('Service Worker is already active');
+              console.log("Service Worker is already active");
             } else {
-              registration.addEventListener('activate', () => {
-                console.log('Service Worker activated');
+              registration.addEventListener("activate", () => {
+                console.log("Service Worker activated");
               });
             }
           } catch (err) {
-            console.error('Service Worker registration failed:', err);
+            console.error("Service Worker registration failed:", err);
           }
         });
       }

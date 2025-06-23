@@ -73,7 +73,6 @@ const actions = {
     updateAllPartStats(game, "vent");
   },
 
-  // Advanced Mechanics
   perpetual_capacitors: (upgrade, game) => {
     game.reactor.perpetual_capacitors = upgrade.level > 0;
   },
@@ -210,7 +209,6 @@ export function executeUpgradeAction(actionId, upgrade, game) {
   if (actions[actionId]) {
     actions[actionId](upgrade, game);
   } else {
-    // It's useful to know if an action is missing, but not a fatal error.
     console.warn(`No action found for upgrade actionId: ${actionId}`);
   }
 }

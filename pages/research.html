@@ -1,0 +1,59 @@
+<section id="experimental_upgrades_section" class="page">
+  <div id="experimental_upgrades_content_wrapper">
+    <div id="exotic_particles_display" class="pixel-panel is-inset">
+      <span>Current EP: <span id="current_exotic_particles">0</span></span>
+      <span>Total EP: <span id="total_exotic_particles">0</span></span>
+    </div>
+    <h2>Laboratory</h2>
+    <div id="experimental_laboratory" class="pixel-panel upgrade-group"></div>
+    <h2>Global Boosts</h2>
+    <div id="experimental_boost" class="pixel-panel upgrade-group"></div>
+    <h2>Particle Accelerators</h2>
+    <div
+      id="experimental_particle_accelerators"
+      class="pixel-panel upgrade-group"
+    ></div>
+    <h2>Experimental Cells</h2>
+    <div id="experimental_cells" class="pixel-panel upgrade-group"></div>
+    <div id="experimental_cells_boost" class="pixel-panel upgrade-group"></div>
+    <h2>Experimental Parts</h2>
+    <div id="experimental_parts" class="pixel-panel upgrade-group"></div>
+  </div>
+  <div id="reboot_section" class="pixel-panel explanitory">
+    <button class="pixel-btn btn-start" id="reboot_btn">
+      Reboot for <span id="reboot_exotic_particles">0</span> EP
+    </button>
+    <p>
+      Rebooting the reactor will remove all parts, regular upgrades and money.
+      You will keep your total Exotic Particles and experimental upgrades.
+    </p>
+  </div>
+  <div id="refund_section" class="pixel-panel explanitory">
+    <button class="pixel-btn" id="refund_btn">Reboot and Refund All EP</button>
+    <p>
+      This will reset everything, including experimental upgrades, and refund
+      all Exotic Particles you have ever earned.
+    </p>
+  </div>
+  <div class="pixel-panel explanitory">
+    <button class="pixel-btn" id="debug_toggle_btn">Show Debug Info</button>
+    <p>Display all main game variables for debugging purposes.</p>
+  </div>
+  <div id="debug_section" class="pixel-panel explanitory" style="display: none">
+    <button class="pixel-btn" id="debug_hide_btn">Hide Debug Info</button>
+    <button
+      class="pixel-btn"
+      id="debug_refresh_btn"
+      style="margin-left: 0.5rem"
+    >
+      Refresh
+    </button>
+    <div id="debug_content">
+      <h3>Game Variables Debug Panel</h3>
+      <div id="debug_variables"></div>
+    </div>
+  </div>
+  <div id="version_section" class="pixel-panel is-inset explanitory">
+    <p>Version: <span id="app_version"></span></p>
+  </div>
+</section>

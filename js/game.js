@@ -8,6 +8,7 @@ import { Performance } from "./performance.js";
 export class Game {
   constructor(ui_instance) {
     this.ui = ui_instance;
+    this.router = null;
     this.version = "1.4.0";
     this.base_cols = 12;
     this.base_rows = 12;

@@ -221,7 +221,11 @@ export class Reactor {
 
       // Update UI to show meltdown state
       document.body.classList.add("reactor-meltdown");
-      this.game.ui.showPage("experimental_upgrades_section", true);
+
+      // Use the router instance from the game object
+      if (this.game.router) {
+        this.game.router.loadPage("experimental_upgrades_section", true);
+      }
 
       return true;
     }

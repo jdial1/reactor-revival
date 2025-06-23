@@ -2,6 +2,7 @@ import { numFormat as fmt } from "./util.js";
 import { StateManager } from "./stateManager.js";
 import { Hotkeys } from "./hotkeys.js";
 import help_text from "../data/help_text.js";
+import { on } from "./util.js";
 
 export class UI {
   constructor() {
@@ -26,24 +27,17 @@ export class UI {
       "reactor_wrapper",
       "reactor_section",
       "parts_section",
-      "primary",
       "info_bar",
-      "info_heat_block",
-      "info_power_block",
       "info_money_block",
-      "time_flux",
       "info_bar_current_heat",
       "info_bar_max_heat",
-      "info_bar_auto_heat_reduce",
       "info_heat_progress",
       "info_bar_current_power",
       "info_bar_max_power",
       "info_power_progress",
       "info_bar_money",
-      "time_flux_value",
       "sellBtnInfoBar",
       "reduceHeatBtnInfoBar",
-      "all_parts",
       "parts_tab_contents",
       "cells",
       "reflectors",
@@ -60,23 +54,16 @@ export class UI {
       "objective_reward",
       "tooltip",
       "tooltip_data",
-      "tooltip_nav",
       "stats_power",
       "stats_heat",
       "stats_cash",
       "stats_outlet",
       "stats_inlet",
       "stats_vent",
-      "money_per_tick",
-      "power_per_tick",
-      "heat_per_tick",
       "upgrades_section",
       "experimental_upgrades_section",
-      "options_section",
-      "help_section",
       "about_section",
       "upgrades_content_wrapper",
-      "other_upgrades",
       "cell_tick_upgrades",
       "cell_power_upgrades",
       "cell_perpetual_upgrades",
@@ -91,9 +78,8 @@ export class UI {
       "experimental_cells_boost",
       "experimental_parts",
       "current_exotic_particles",
-      "exotic_particles",
+      "total_exotic_particles",
       "reboot_exotic_particles",
-      "refund_exotic_particles",
       "reboot_btn",
       "refund_btn",
       "auto_sell_toggle",
@@ -105,7 +91,6 @@ export class UI {
       "bottom_nav",
       "main_top_nav",
       "fullscreen_toggle",
-      "help_toggle_checkbox",
       "basic_overview_section",
       "debug_section",
       "debug_toggle_btn",
@@ -113,6 +98,11 @@ export class UI {
       "debug_variables",
       "debug_refresh_btn",
       "meltdown_banner",
+      "controls_collapse_btn",
+      "controls_collapse_icon",
+      "controls_expanded_group",
+      "controls_collapsed_group",
+      "splash_close_btn",
     ];
     this.toggle_buttons_config = {
       auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
@@ -127,6 +117,8 @@ export class UI {
   }
 
   cacheDOMElements() {
+    // Cache all available DOM elements, but don't fail if some are missing
+    // since they'll be loaded dynamically
     this.dom_ids.forEach((id) => {
       const el = document.getElementById(id);
       if (el) {
@@ -134,10 +126,74 @@ export class UI {
         const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
         this.DOMElements[camelCaseKey] = el;
       } else {
-        console.warn(`[UI] Element with id '${id}' not found in DOM.`);
+        // Don't warn for elements that will be loaded dynamically
+        const dynamicElements = [
+          "reactor",
+          "reactor_background",
+          "reactor_wrapper",
+          "reactor_section",
+          "upgrades_section",
+          "experimental_upgrades_section",
+          "about_section",
+          "upgrades_content_wrapper",
+          "experimental_upgrades_content_wrapper",
+          "stats_power",
+          "stats_heat",
+          "stats_cash",
+          "stats_outlet",
+          "stats_inlet",
+          "stats_vent",
+          "cell_power_upgrades",
+          "cell_tick_upgrades",
+          "cell_perpetual_upgrades",
+          "vent_upgrades",
+          "exchanger_upgrades",
+          "experimental_laboratory",
+          "experimental_boost",
+          "experimental_particle_accelerators",
+          "experimental_cells",
+          "experimental_cells_boost",
+          "experimental_parts",
+          "current_exotic_particles",
+          "total_exotic_particles",
+          "reboot_exotic_particles",
+          "refund_exotic_particles",
+          "reboot_btn",
+          "refund_btn",
+          "basic_overview_section",
+          "debug_section",
+          "debug_toggle_btn",
+          "debug_hide_btn",
+          "debug_variables",
+          "debug_refresh_btn",
+          "meltdown_banner",
+          "collapsed_controls_nav",
+        ];
+        if (!dynamicElements.includes(id)) {
+          console.warn(`[UI] Element with id '${id}' not found in DOM.`);
+        }
       }
     });
-    return !!this.DOMElements.reactor;
+
+    // Cache control elements
+    this.DOMElements.collapsed_controls_nav = document.getElementById(
+      "collapsed_controls_nav"
+    );
+    this.DOMElements.controls_collapse_btn = document.getElementById(
+      "controls_collapse_btn"
+    );
+    this.DOMElements.controls_collapse_icon = document.getElementById(
+      "controls_collapse_icon"
+    );
+    this.DOMElements.controls_expanded_group = document.getElementById(
+      "controls_expanded_group"
+    );
+    this.DOMElements.controls_collapsed_group = document.getElementById(
+      "controls_collapsed_group"
+    );
+
+    // Always return true - we'll handle missing elements gracefully
+    return true;
   }
 
   initializeToggleButtons() {
@@ -162,7 +218,64 @@ export class UI {
     } else {
       console.warn("[UI] #parts_panel_toggle not found.");
     }
+    if (this.DOMElements.controls_collapse_btn) {
+      this.DOMElements.controls_collapse_btn.onclick = () => {
+        const isCollapsed =
+          this.DOMElements.controls_collapsed_group.style.display !== "none";
+        if (isCollapsed) {
+          // Expand
+          this.DOMElements.controls_collapsed_group.style.display = "none";
+          this.DOMElements.controls_expanded_group.style.display = "";
+          this.DOMElements.controls_collapse_icon.textContent = "▼";
+        } else {
+          // Collapse
+          this.DOMElements.controls_collapsed_group.style.display = "flex";
+          this.DOMElements.controls_expanded_group.style.display = "none";
+          this.DOMElements.controls_collapse_icon.textContent = "▲";
+        }
+      };
+    }
     this.updateAllToggleBtnStates();
+    if (this.DOMElements.controls_collapsed_group) {
+      const icons = {
+        auto_sell: "💲",
+        auto_buy: "🛒",
+        time_flux: "⏩",
+        heat_control: "🌡️",
+        pause: "⏸️", // initial, will be updated in updateAllToggleBtnStates
+      };
+      this.DOMElements.controls_collapsed_group
+        .querySelectorAll(".collapsed-control-btn")
+        .forEach((btn) => {
+          const control = btn.getAttribute("data-control");
+          btn.innerHTML = icons[control] || "?";
+          btn.onclick = () => {
+            const currentState = this.stateManager.getVar(control);
+            this.stateManager.setVar(control, !currentState);
+            this.updateAllToggleBtnStates(); // Ensure UI updates everywhere
+          };
+        });
+    }
+
+    // Add this after setting up all toggle buttons in initializeToggleButtons()
+    const updatePauseButtonIcon = () => {
+      const isPaused = this.stateManager.getVar("pause");
+      const pauseBtn = this.DOMElements.pause_toggle;
+      if (pauseBtn) {
+        pauseBtn.textContent = isPaused ? "▶️" : "⏸️";
+      }
+    };
+    updatePauseButtonIcon();
+
+    // Patch setVar to also update pause button icon and toggle states
+    const origSetVar = this.stateManager.setVar.bind(this.stateManager);
+    this.stateManager.setVar = (key, value) => {
+      origSetVar(key, value);
+      if (key === "pause") {
+        this.updateAllToggleBtnStates();
+        updatePauseButtonIcon();
+      }
+    };
   }
 
   updateAllToggleBtnStates() {
@@ -170,6 +283,24 @@ export class UI {
       const config = this.toggle_buttons_config[buttonKey];
       const isActive = this.stateManager.getVar(config.stateProperty);
       this.updateToggleButtonState(config, isActive);
+    }
+    if (this.DOMElements.controls_collapsed_group) {
+      const isPaused = this.stateManager.getVar("pause");
+      this.DOMElements.controls_collapsed_group
+        .querySelectorAll(".collapsed-control-btn")
+        .forEach((btn) => {
+          const control = btn.getAttribute("data-control");
+          const isActive = this.stateManager.getVar(control);
+          btn.classList.toggle("on", isActive);
+          const icons = {
+            auto_sell: "💲",
+            auto_buy: "🛒",
+            time_flux: "⏩",
+            heat_control: "🌡️",
+            pause: isPaused ? "▶️" : "⏸️",
+          };
+          btn.innerHTML = icons[control] || "?";
+        });
     }
   }
 
@@ -252,6 +383,7 @@ export class UI {
     if (activeTab) {
       this.populatePartsForTab(activeTab.getAttribute("data-tab"));
     }
+    this.updateCollapsedControlsNav();
   }
 
   updateMeltdownState() {
@@ -389,34 +521,25 @@ export class UI {
         },
       },
       exotic_particles: {
-        dom: this.DOMElements.exotic_particles,
         num: true,
         onupdate: (val) => {
-          if (this.DOMElements.reboot_exotic_particles)
+          if (this.DOMElements.reboot_exotic_particles) {
             this.DOMElements.reboot_exotic_particles.textContent = fmt(val);
+          }
+          if (this.DOMElements.refund_exotic_particles) {
+            this.DOMElements.refund_exotic_particles.textContent = fmt(
+              (this.stateManager.getVar("total_exotic_particles") || 0) + val
+            );
+          }
         },
       },
       current_exotic_particles: {
         dom: this.DOMElements.current_exotic_particles,
         num: true,
-        onupdate: () => {
-          if (this.DOMElements.refund_exotic_particles) {
-            this.DOMElements.refund_exotic_particles.textContent = fmt(
-              (this.stateManager.getVar("total_exotic_particles") || 0) +
-                (this.stateManager.getVar("exotic_particles") || 0)
-            );
-          }
-        },
       },
       total_exotic_particles: {
-        onupdate: () => {
-          if (this.DOMElements.refund_exotic_particles) {
-            this.DOMElements.refund_exotic_particles.textContent = fmt(
-              (this.stateManager.getVar("total_exotic_particles") || 0) +
-                (this.stateManager.getVar("exotic_particles") || 0)
-            );
-          }
-        },
+        dom: this.DOMElements.total_exotic_particles,
+        num: true,
       },
       stats_power: { dom: this.DOMElements.stats_power, num: true },
       total_heat: { dom: this.DOMElements.stats_heat, num: true, places: 0 },
@@ -499,78 +622,40 @@ export class UI {
     else background.style.backgroundColor = `rgb(255, 0, 0)`;
   }
 
+  /**
+   * Initial setup that does NOT depend on the main game layout.
+   * @param {import('./game.js').Game} gameInstance
+   * @returns {boolean} Success state
+   */
   init(gameInstance) {
     this.game = gameInstance;
     this.stateManager.setGame(gameInstance);
     this.hotkeys = new Hotkeys(this.game);
-    if (!this.cacheDOMElements()) return false;
+    return true;
+  }
+
+  /**
+   * Initializes all UI components and event listeners that depend on the main game layout.
+   * This should be called AFTER the game.html layout has been loaded into the DOM.
+   */
+  initMainLayout() {
+    this.cacheDOMElements();
     this.initVarObjsConfig();
     this.setupEventListeners();
     this.initializeToggleButtons();
     this.setupPartsTabs();
-    this.resizeReactor();
-    window.addEventListener("resize", () => this.resizeReactor());
-    this.update_interface_task = setTimeout(
-      () => this.runUpdateInterfaceLoop(),
-      this.update_interface_interval
-    );
-    // Add global click listener to collapse parts panel when clicking outside
-    document.addEventListener("mousedown", (e) => {
-      const partsSection = this.DOMElements.parts_section;
-      const toggle = this.DOMElements.partsPanelToggle;
-      if (!partsSection || !toggle) return;
-      if (!partsSection.contains(e.target) && !toggle.contains(e.target)) {
-        partsSection.classList.add("collapsed");
-      }
-    });
-
-    // Add help toggle to experimental upgrades section
-    const experimentalSection = document.getElementById(
-      "experimental_upgrades_content_wrapper"
-    );
-    if (experimentalSection) {
-      const helpToggle = document.createElement("div");
-      helpToggle.id = "help_toggle";
-      helpToggle.innerHTML = `
-        <input type="checkbox" id="help_toggle_checkbox" checked>
-        <label for="help_toggle_checkbox">Show Help Buttons</label>
-      `;
-      experimentalSection.appendChild(helpToggle);
-
-      // Add event listener for help toggle
-      const checkbox = helpToggle.querySelector("#help_toggle_checkbox");
-      checkbox.addEventListener("change", (e) => {
-        const showHelp = e.target.checked;
-        document.body.classList.toggle("hide-help-buttons", !showHelp);
-        this.stateManager.setVar("show_help_buttons", showHelp);
-        // Force update all info buttons visibility
-        document.querySelectorAll(".info-button").forEach((button) => {
-          button.style.display = showHelp ? "" : "none";
-        });
-      });
-
-      // Initialize state
-      const helpEnabled = this.stateManager.getVar("show_help_buttons") ?? true;
-      checkbox.checked = helpEnabled;
-      document.body.classList.toggle("hide-help-buttons", !helpEnabled);
-      document.querySelectorAll(".info-button").forEach((button) => {
-        button.style.display = helpEnabled ? "" : "none";
-      });
-    }
-
     this.initializeHelpButtons();
     this.initializePartsPanel();
     this.addHelpButtonToMainPage();
-
-    // Populate Basic Overview
     if (this.DOMElements.basic_overview_section && help_text.basic_overview) {
       this.DOMElements.basic_overview_section.innerHTML = `
         <h3>${help_text.basic_overview.title}</h3>
         <p>${help_text.basic_overview.content}</p>
-      `;
+        `;
     }
-
-    return true;
+    this.resizeReactor();
+    window.addEventListener("resize", () => this.resizeReactor());
+    this.runUpdateInterfaceLoop();
   }
 
   resizeReactor() {
@@ -605,170 +690,10 @@ export class UI {
     this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
   }
 
-  showPage(pageId, force = false) {
-    if (!force && this.game.reactor.has_melted_down) {
-      console.log("Cannot switch pages during meltdown.");
-      return;
-    }
-
-    const pageElementIds = [
-      "reactor_section",
-      "upgrades_section",
-      "experimental_upgrades_section",
-      "options_section",
-      "help_section",
-      "about_section",
-    ];
-    pageElementIds.forEach((id) => {
-      const page = this.DOMElements[id];
-      if (page) page.classList.remove("showing");
-    });
-    const targetPage = this.DOMElements[pageId];
-    if (targetPage) {
-      targetPage.classList.add("showing");
-    }
-
-    // Update nav buttons active state
-    const navContainers = [
-      this.DOMElements.main_top_nav,
-      this.DOMElements.bottom_nav,
-    ];
-    navContainers.forEach((container) => {
-      if (container) {
-        container
-          .querySelectorAll(".pixel-btn")
-          .forEach((btn) => btn.classList.remove("active"));
-        const activeButton = container.querySelector(
-          `.pixel-btn[data-page="${pageId}"]`
-        );
-        if (activeButton) {
-          activeButton.classList.add("active");
-        }
-      }
-    });
-
-    if (pageId === "reactor_section") {
-      if (this.DOMElements.objectives_section)
-        this.DOMElements.objectives_section.style.display = "";
-      document.body.classList.remove("tooltips-disabled");
-    } else {
-      if (this.DOMElements.objectives_section)
-        this.DOMElements.objectives_section.style.display = "none";
-      document.body.classList.add("tooltips-disabled");
-    }
-  }
-
   setupEventListeners() {
-    const reactor = this.DOMElements.reactor;
-    if (reactor) {
-      let longPressTargetTile = null;
-      let pointerMoved = false;
-      let pointerDownTileEl = null;
-      let startX = 0;
-      let startY = 0;
-      const MOVE_THRESHOLD = 10; // px
-      const cancelLongPress = () => {
-        if (this.longPressTimer) {
-          clearTimeout(this.longPressTimer);
-          this.longPressTimer = null;
-        }
-        if (longPressTargetTile) {
-          longPressTargetTile.$el.classList.remove("selling");
-          longPressTargetTile = null;
-        }
-      };
-      const pointerDownHandler = (e) => {
-        // Only left mouse or touch
-        if ((e.pointerType === "mouse" && e.button !== 0) || e.button > 0)
-          return;
-        const tileEl = e.target.closest(".tile");
-        if (!tileEl?.tile?.enabled) return;
-        pointerDownTileEl = tileEl;
-        e.preventDefault();
-        this.isDragging = true;
-        this.lastTileModified = tileEl.tile;
-        pointerMoved = false;
-        startX = e.clientX;
-        startY = e.clientY;
-        const hasPart = tileEl.tile.part;
-        const noModifiers = !e.ctrlKey && !e.altKey && !e.shiftKey;
-        if (hasPart && noModifiers) {
-          longPressTargetTile = tileEl.tile;
-          this.longPressTimer = setTimeout(() => {
-            this.longPressTimer = null;
-            if (longPressTargetTile) {
-              longPressTargetTile.$el.classList.add("selling");
-              longPressTargetTile.$el.style.setProperty(
-                "--sell-duration",
-                `${this.longPressDuration}ms`
-              );
-              setTimeout(() => {
-                if (longPressTargetTile) {
-                  longPressTargetTile.clearPart(true);
-                  this.game.reactor.updateStats();
-                  longPressTargetTile.$el.classList.remove("selling");
-                }
-              }, this.longPressDuration);
-            }
-            this.isDragging = false;
-          }, 250); // 250ms to start animation, then 500ms for the animation
-        }
-        const pointerMoveHandler = (e_move) => {
-          const dx = e_move.clientX - startX;
-          const dy = e_move.clientY - startY;
-          if (
-            !pointerMoved &&
-            (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD)
-          ) {
-            pointerMoved = true;
-            cancelLongPress();
-          }
-          if (!this.isDragging) return;
-          const moveTileEl = e_move.target.closest(".tile");
-          if (
-            moveTileEl &&
-            moveTileEl.tile &&
-            moveTileEl.tile !== this.lastTileModified
-          ) {
-            this.handleGridInteraction(moveTileEl, e_move);
-            this.lastTileModified = moveTileEl.tile;
-          }
-        };
-        const pointerUpHandler = (e_up) => {
-          // Always call handleGridInteraction for click/tap if no drag and no long-press
-          if (!pointerMoved && this.isDragging && pointerDownTileEl) {
-            cancelLongPress();
-            this.handleGridInteraction(pointerDownTileEl, e_up || e);
-          } else if (this.longPressTimer) {
-            cancelLongPress();
-          }
-          if (this.isDragging) {
-            this.isDragging = false;
-            this.lastTileModified = null;
-            this.game.reactor.updateStats();
-            this.stateManager.setVar("current_money", this.game.current_money);
-          }
-          window.removeEventListener("pointermove", pointerMoveHandler);
-          window.removeEventListener("pointerup", pointerUpHandler);
-          window.removeEventListener("pointercancel", pointerUpHandler);
-          pointerDownTileEl = null;
-        };
-        window.addEventListener("pointermove", pointerMoveHandler);
-        window.addEventListener("pointerup", pointerUpHandler);
-        window.addEventListener("pointercancel", pointerUpHandler);
-      };
-      reactor.addEventListener("pointerdown", pointerDownHandler);
-      reactor.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        this.handleGridInteraction(e.target.closest(".tile"), e);
-      });
-    }
-
+    // Only navigation, info bar, and other non-reactor event listeners remain here
     const setupNav = (container, buttonClass) => {
-      if (!container) {
-        console.warn(`[UI] Nav container not found for selector`, buttonClass);
-        return;
-      }
+      if (!container) return;
       console.log(
         `[UI] Attaching nav handler to`,
         container,
@@ -778,7 +703,7 @@ export class UI {
       container.addEventListener("click", (event) => {
         const button = event.target.closest(buttonClass);
         if (button?.dataset.page) {
-          this.showPage(button.dataset.page);
+          this.game.router.loadPage(button.dataset.page);
           container
             .querySelectorAll(buttonClass)
             .forEach((tab) => tab.classList.remove("active"));
@@ -788,19 +713,23 @@ export class UI {
     };
     setupNav(this.DOMElements.bottom_nav, ".pixel-btn");
     setupNav(this.DOMElements.main_top_nav, ".pixel-btn");
-
-    // Reboot buttons
+    if (this.DOMElements.reduceHeatBtnInfoBar) {
+      this.DOMElements.reduceHeatBtnInfoBar.addEventListener("click", () => {
+        if (this.game) this.game.manual_reduce_heat_action();
+      });
+    }
+    if (this.DOMElements.sellBtnInfoBar) {
+      this.DOMElements.sellBtnInfoBar.addEventListener("click", () => {
+        if (this.game) this.game.sell_action();
+      });
+    }
     this.DOMElements.reboot_btn?.addEventListener("click", () =>
       this.game.reboot_action(false)
     );
     this.DOMElements.refund_btn?.addEventListener("click", () =>
       this.game.reboot_action(true)
     );
-
-    // Helper to sync body class with panel state
     this.updatePartsPanelBodyClass();
-
-    // Add hotkeys for testing
     document.addEventListener("keydown", (e) => {
       if (e.ctrlKey) {
         switch (e.key) {
@@ -843,8 +772,6 @@ export class UI {
         }
       }
     });
-
-    // Add parts panel toggle button handler
     const partsButton = document.querySelector(
       'button[data-toggle="parts_panel"]'
     );
@@ -854,72 +781,47 @@ export class UI {
         if (partsSection) {
           const isMobile = window.innerWidth <= 900;
           const isOpening = partsSection.classList.contains("collapsed");
-
           partsSection.classList.toggle("collapsed");
-          // Update button state
           partsButton.classList.toggle("active");
-          // Always sync body class
           this.updatePartsPanelBodyClass();
-
-          // Auto-pause on mobile when opening parts panel
           if (isMobile && isOpening && !this.stateManager.getVar("pause")) {
             this.stateManager.setVar("pause", true);
           }
         }
       });
     }
-
-    // Add fullscreen toggle functionality
     const fullscreenButton = this.DOMElements.fullscreen_toggle;
     if (fullscreenButton) {
       fullscreenButton.addEventListener("click", () => {
         this.toggleFullscreen();
       });
-
-      // Update fullscreen button state when fullscreen changes
       document.addEventListener("fullscreenchange", () => {
         this.updateFullscreenButtonState();
       });
-
-      // Initialize button state
       this.updateFullscreenButtonState();
     }
-
-    // Add debug panel functionality
+    if (this.DOMElements.splash_close_btn) {
+      this.DOMElements.splash_close_btn.onclick = () => {
+        location.reload();
+      };
+    }
     const debugToggleBtn = this.DOMElements.debug_toggle_btn;
     const debugHideBtn = this.DOMElements.debug_hide_btn;
     const debugRefreshBtn = this.DOMElements.debug_refresh_btn;
     const debugSection = this.DOMElements.debug_section;
-
     if (debugToggleBtn) {
       debugToggleBtn.addEventListener("click", () => {
         this.showDebugPanel();
       });
     }
-
     if (debugHideBtn) {
       debugHideBtn.addEventListener("click", () => {
         this.hideDebugPanel();
       });
     }
-
     if (debugRefreshBtn) {
       debugRefreshBtn.addEventListener("click", () => {
         this.updateDebugVariables();
-      });
-    }
-
-    // Add right-click sell functionality to reactor tiles
-    const reactorEl = document.getElementById("reactor");
-    if (reactorEl) {
-      reactorEl.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        const tile = e.target.closest(".tile");
-        if (tile && tile.part) {
-          if (tile.part.id && !tile.part.isSpecialTile) {
-            this.game.sellPart(tile.part);
-          }
-        }
       });
     }
   }
@@ -1080,9 +982,6 @@ export class UI {
 
     const helpEnabled = this.stateManager.getVar("show_help_buttons") ?? true;
     document.body.classList.toggle("hide-help-buttons", !helpEnabled);
-    if (this.DOMElements.help_toggle_checkbox) {
-      this.DOMElements.help_toggle_checkbox.checked = helpEnabled;
-    }
   }
 
   initializePartsPanel() {
@@ -1171,60 +1070,43 @@ export class UI {
     return btn;
   }
 
-  showDetailedQuickStart() {
-    const modal = document.createElement("div");
-    modal.id = "quick-start-modal";
-    modal.innerHTML = `
-      <div class="quick-start-overlay">
-        <div class="quick-start-content pixel-panel">
-          <div id="quick-start-page-2" class="quick-start-page">
-            <h2 class="quick-start-title">Getting Started Guide</h2>
-            <div class="quick-start-section">
-              <h3>First Steps:</h3>
-              <ul class="quick-start-list">
-                <li>Click "Scrounge for cash (+1$)" 10 times to get your first $10</li>
-                <li>Place your first Fuel Cell on the reactor grid</li>
-                <li>Cells come in 3 configurations: Single, Double, and Quad</li>
-              </ul>
-            </div>
-            <div class="quick-start-section">
-              <h3>Cell Mechanics:</h3>
-              <ul class="quick-start-list">
-                <li><b>Single cells:</b> Generate 1 pulse, 1 power, 1 heat per tick</li>
-                <li><b>Double cells:</b> Generate 2 pulses, act like two adjacent single cells</li>
-                <li><b>Quad cells:</b> Generate 4 pulses, act like four adjacent single cells in a 2x2 grid</li>
-                <li><b>Adjacency bonus:</b> Adjacent cells share pulses, increasing power and heat output</li>
-              </ul>
-            </div>
-            <div class="quick-start-section">
-              <h3>Heat Management:</h3>
-              <ul class="quick-start-list">
-                <li>Click the Heat bar to manually reduce heat (-1 heat per click)</li>
-                <li>Build vents and heat exchangers to automatically manage heat</li>
-                <li>Use reactor plating to increase maximum heat capacity</li>
-                <li>Exceeding max heat causes components to melt/explode</li>
-              </ul>
-            </div>
-            <div class="quick-start-section">
-              <h3>Power & Upgrades:</h3>
-              <ul class="quick-start-list">
-                <li>Build capacitors to increase maximum power storage</li>
-                <li>Enable auto-sell to automatically convert power to money</li>
-                <li>Use heat controllers for automatic cooling systems</li>
-              </ul>
-            </div>
-            <div class="quick-start-buttons">
-              <button id="quick-start-close-detailed" class="pixel-btn btn-start">Got it!</button>
-            </div>
+  async showDetailedQuickStart() {
+    try {
+      const response = await fetch("pages/detailed-quick-start.html");
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const html = await response.text();
+
+      const modal = document.createElement("div");
+      modal.id = "quick-start-modal";
+      modal.innerHTML = html;
+      document.body.appendChild(modal);
+
+      document.getElementById("quick-start-close-detailed").onclick = () => {
+        modal.remove();
+      };
+    } catch (error) {
+      console.error("Failed to load detailed quick start modal:", error);
+      // Fallback to a simple modal if loading fails
+      const modal = document.createElement("div");
+      modal.id = "quick-start-modal";
+      modal.innerHTML = `
+        <div class="quick-start-overlay">
+          <div class="quick-start-content pixel-panel">
+            <h2>Getting Started Guide</h2>
+            <p>Follow the objectives at the top to continue the tutorial!</p>
+            <button id="quick-start-close-detailed-fallback" class="pixel-btn btn-start">Got it!</button>
           </div>
         </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
+      `;
+      document.body.appendChild(modal);
 
-    document.getElementById("quick-start-close-detailed").onclick = () => {
-      modal.remove();
-    };
+      document.getElementById("quick-start-close-detailed-fallback").onclick =
+        () => {
+          modal.remove();
+        };
+    }
   }
 
   addHelpButtonToMainPage() {
@@ -1236,7 +1118,7 @@ export class UI {
       helpButton.title = "Getting Started Guide";
       helpButton.textContent = "?";
       helpButton.style.marginLeft = "8px";
-      helpButton.onclick = () => this.showDetailedQuickStart();
+      helpButton.onclick = async () => await this.showDetailedQuickStart();
 
       // Insert before the about button
       const aboutButton = mainTopNav.querySelector("#about_toggle");
@@ -1472,5 +1354,225 @@ export class UI {
       } keys}</span>`;
     }
     return `<span class='debug-other'>${String(value)}</span>`;
+  }
+
+  updateCollapsedControlsNav() {
+    const isCollapsed =
+      this.DOMElements.parts_section.classList.contains("collapsed");
+    if (this.DOMElements.collapsed_controls_nav) {
+      this.DOMElements.collapsed_controls_nav.style.display = isCollapsed
+        ? "flex"
+        : "none";
+    }
+  }
+
+  initializePage(pageId) {
+    const game = this.game;
+    // Always refresh DOM element cache at the start
+    this.cacheDOMElements();
+
+    // Helper function to set up click handlers for upgrade buttons on a page.
+    const setupUpgradeClickHandler = (containerId) => {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      on(container, ".upgrade", "click", function (e) {
+        const upgradeEl = this; // 'this' is the button element from 'on' handler
+        if (!upgradeEl.upgrade_object) return;
+        const upgrade_obj = upgradeEl.upgrade_object;
+
+        if (e.shiftKey) {
+          let bought = 0;
+          while (upgrade_obj.affordable && bought < 10) {
+            if (game.upgradeset.purchaseUpgrade(upgrade_obj.id)) {
+              bought++;
+            } else {
+              break; // Stop if purchase fails (e.g., not enough money for next level)
+            }
+          }
+          if (
+            game.tooltip_manager.isLocked &&
+            game.tooltip_manager.current_obj === upgrade_obj
+          ) {
+            game.tooltip_manager.update();
+          }
+        } else {
+          game.tooltip_manager.show(upgrade_obj, null, true, upgradeEl);
+        }
+      });
+    };
+
+    switch (pageId) {
+      case "reactor_section":
+        if (this.DOMElements.reactor) {
+          this.DOMElements.reactor.innerHTML = "";
+        }
+        console.log(
+          "[UI] Rendering reactor grid. Tileset:",
+          this.game.tileset,
+          "Tiles:",
+          this.game.tileset?.tiles_list?.length
+        );
+        if (this.game && this.game.tileset && this.game.tileset.tiles_list) {
+          this.game.tileset.tiles_list.forEach((tile) => {
+            tile.enabled = true; // Ensure tile is enabled for visibility
+            this.stateManager.handleTileAdded(this.game, tile);
+          });
+        }
+        this.setupReactorEventListeners();
+        this.resizeReactor();
+        break;
+      case "upgrades_section":
+        console.log("[UI] Initializing upgrades section");
+        setupUpgradeClickHandler("upgrades_content_wrapper");
+        if (
+          game.upgradeset &&
+          typeof game.upgradeset.populateUpgrades === "function"
+        ) {
+          console.log(
+            "[UI] Populating upgrades via upgradeset.populateUpgrades"
+          );
+          game.upgradeset.populateUpgrades();
+        } else {
+          console.warn(
+            "[UI] upgradeset.populateUpgrades is not a function or upgradeset missing"
+          );
+        }
+        break;
+      case "experimental_upgrades_section":
+        console.log("[UI] Initializing experimental upgrades section");
+        setupUpgradeClickHandler("experimental_upgrades_content_wrapper");
+        if (
+          game.upgradeset &&
+          typeof game.upgradeset.populateExperimentalUpgrades === "function"
+        ) {
+          console.log(
+            "[UI] Populating experimental upgrades via upgradeset.populateExperimentalUpgrades"
+          );
+          game.upgradeset.populateExperimentalUpgrades();
+        } else {
+          console.warn(
+            "[UI] upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing"
+          );
+        }
+        const rebootBtn = document.getElementById("reboot_btn");
+        const refundBtn = document.getElementById("refund_btn");
+        if (rebootBtn) rebootBtn.onclick = () => game.reboot_action(false);
+        if (refundBtn) refundBtn.onclick = () => game.reboot_action(true);
+        break;
+      case "about_section":
+        const versionEl = document.getElementById("about_version");
+        const appVersionEl = document.getElementById("app_version");
+        if (versionEl && appVersionEl) {
+          versionEl.textContent = appVersionEl.textContent;
+        }
+        break;
+    }
+  }
+
+  setupReactorEventListeners() {
+    const reactor = this.DOMElements.reactor;
+    if (!reactor) {
+      console.error("Reactor element not found for event listeners.");
+      return;
+    }
+
+    let longPressTargetTile = null;
+    let pointerMoved = false;
+    let pointerDownTileEl = null;
+    let startX = 0;
+    let startY = 0;
+    const MOVE_THRESHOLD = 10;
+    const cancelLongPress = () => {
+      if (this.longPressTimer) {
+        clearTimeout(this.longPressTimer);
+        this.longPressTimer = null;
+      }
+      if (longPressTargetTile) {
+        longPressTargetTile.$el.classList.remove("selling");
+        longPressTargetTile = null;
+      }
+    };
+    const pointerDownHandler = (e) => {
+      if ((e.pointerType === "mouse" && e.button !== 0) || e.button > 0) return;
+      const tileEl = e.target.closest(".tile");
+      if (!tileEl?.tile?.enabled) return;
+      pointerDownTileEl = tileEl;
+      e.preventDefault();
+      this.isDragging = true;
+      this.lastTileModified = tileEl.tile;
+      pointerMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      const hasPart = tileEl.tile.part;
+      const noModifiers = !e.ctrlKey && !e.altKey && !e.shiftKey;
+      if (hasPart && noModifiers) {
+        longPressTargetTile = tileEl.tile;
+        this.longPressTimer = setTimeout(() => {
+          this.longPressTimer = null;
+          if (longPressTargetTile) {
+            longPressTargetTile.$el.classList.add("selling");
+            longPressTargetTile.$el.style.setProperty(
+              "--sell-duration",
+              `${this.longPressDuration}ms`
+            );
+            setTimeout(() => {
+              if (longPressTargetTile) {
+                longPressTargetTile.clearPart(true);
+                this.game.reactor.updateStats();
+                longPressTargetTile.$el.classList.remove("selling");
+              }
+            }, this.longPressDuration);
+          }
+          this.isDragging = false;
+        }, 250);
+      }
+      const pointerMoveHandler = (e_move) => {
+        const dx = e_move.clientX - startX;
+        const dy = e_move.clientY - startY;
+        if (
+          !pointerMoved &&
+          (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD)
+        ) {
+          pointerMoved = true;
+          cancelLongPress();
+        }
+        if (!this.isDragging) return;
+        const moveTileEl = e_move.target.closest(".tile");
+        if (
+          moveTileEl &&
+          moveTileEl.tile &&
+          moveTileEl.tile !== this.lastTileModified
+        ) {
+          this.handleGridInteraction(moveTileEl, e_move);
+          this.lastTileModified = moveTileEl.tile;
+        }
+      };
+      const pointerUpHandler = (e_up) => {
+        if (!pointerMoved && this.isDragging && pointerDownTileEl) {
+          cancelLongPress();
+          this.handleGridInteraction(pointerDownTileEl, e_up || e);
+        } else if (this.longPressTimer) {
+          cancelLongPress();
+        }
+        if (this.isDragging) {
+          this.isDragging = false;
+          this.lastTileModified = null;
+          this.game.reactor.updateStats();
+          this.stateManager.setVar("current_money", this.game.current_money);
+        }
+        window.removeEventListener("pointermove", pointerMoveHandler);
+        window.removeEventListener("pointerup", pointerUpHandler);
+        window.removeEventListener("pointercancel", pointerUpHandler);
+        pointerDownTileEl = null;
+      };
+      window.addEventListener("pointermove", pointerMoveHandler);
+      window.addEventListener("pointerup", pointerUpHandler);
+      window.addEventListener("pointercancel", pointerUpHandler);
+    };
+    reactor.addEventListener("pointerdown", pointerDownHandler);
+    reactor.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      this.handleGridInteraction(e.target.closest(".tile"), e);
+    });
   }
 }

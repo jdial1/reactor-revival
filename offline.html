@@ -3,63 +3,60 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Offline - Reactor Revival</title>
+    <title>Reactor Revival - Offline</title>
     <style>
       body {
-        font-family: "Press Start 2P", system-ui, -apple-system, sans-serif;
-        background-color: #1a1a1a;
+        font-family: "Press Start 2P", monospace;
+        background: linear-gradient(
+          135deg,
+          #1a1a2e 0%,
+          #16213e 50%,
+          #0f3460 100%
+        );
         color: #fff;
         display: flex;
         flex-direction: column;
-        align-items: center;
         justify-content: center;
+        align-items: center;
         height: 100vh;
         margin: 0;
         text-align: center;
-        padding: 20px;
       }
       .offline-container {
-        background-color: #303236;
+        background: rgba(0, 0, 0, 0.5);
         padding: 2rem;
         border-radius: 8px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        max-width: 600px;
-        width: 90%;
+        border: 2px solid #4a7dab;
       }
       h1 {
-        color: #59c435;
+        color: #4a7dab;
         margin-bottom: 1rem;
       }
       p {
-        line-height: 1.6;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
+        line-height: 1.5;
       }
-      .retry-button {
-        background-color: #59c435;
+      .retry-btn {
+        background: #4a7dab;
         color: white;
         border: none;
-        padding: 1rem 2rem;
+        padding: 0.5rem 1rem;
         border-radius: 4px;
         cursor: pointer;
         font-family: inherit;
-        font-size: 1rem;
-        transition: background-color 0.3s;
       }
-      .retry-button:hover {
-        background-color: #4a9c2a;
+      .retry-btn:hover {
+        background: #5a8dbb;
       }
     </style>
   </head>
   <body>
     <div class="offline-container">
-      <h1>You're Offline</h1>
-      <p>
-        It seems you've lost connection to the internet. Reactor Revival
-        requires an active connection to function properly.
-      </p>
+      <h1>⚡ Reactor Revival</h1>
+      <p>You're currently offline.</p>
       <p>Please check your internet connection and try again.</p>
-      <button class="retry-button" onclick="window.location.reload()">
-        Retry Connection
+      <button class="retry-btn" onclick="window.location.reload()">
+        Retry
       </button>
     </div>
   </body>

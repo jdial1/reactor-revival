@@ -73,7 +73,10 @@ export class Tile {
   }
 
   async setPart(partInstance) {
-    this.clearPart(false);
+    // Only clear if there is an existing part
+    if (this.part) {
+      this.clearPart(false);
+    }
     this.part = partInstance || null;
     if (this.part) {
       this.activated = true;
@@ -85,25 +88,32 @@ export class Tile {
         this.updateVisualState();
       }
     }
+    // Save game after placing a part
+    if (this.game && typeof this.game.saveGame === "function") {
+      this.game.saveGame();
+    }
   }
 
   clearPart(full_clear = true) {
     if (!this.part) return;
-
     const part_id = this.part.id;
 
     if (full_clear) {
       const sell_value = this.calculateSellValue();
       this.game.addMoney(sell_value);
     }
+
+    // Always set activated to false when a part is cleared
+    this.activated = false;
+
     this.part = null;
     this.ticks = 0;
     this.heat_contained = 0;
-    this.activated = false;
     this.power = 0;
     this.heat = 0;
     this.display_power = 0;
     this.display_heat = 0;
+
     if (this.$el) {
       const baseClasses = ["tile"];
       if (this.enabled) baseClasses.push("enabled");
@@ -112,20 +122,20 @@ export class Tile {
       if (this.$percent) this.$percent.style.width = "0%";
     }
 
-    // Hide tooltip if it's showing this tile's info
     if (this.game.tooltip_manager?.current_tile_context === this) {
       this.game.tooltip_manager.hide();
     }
 
-    // Update reactor stats
     this.game.reactor.updateStats();
 
-    this.contained_heat = 0;
-    this.$el.className = "tile";
-    this.$el.style.cssText = "";
     this.updateVisualState();
-    // this.game.reactor.removePartFromClassMap(part_id);
-    this.$el.classList.remove("is-processing");
+    if (this.$el) {
+      this.$el.classList.remove("is-processing");
+    }
+    // Save game after removing a part
+    if (this.game && typeof this.game.saveGame === "function") {
+      this.game.saveGame();
+    }
   }
 
   updateVisualState() {

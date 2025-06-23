@@ -172,34 +172,62 @@ export class StateManager {
   }
   handleTileAdded(game, tile_data) {
     const tile = tile_data;
-    const tile_el = document.createElement("button");
-    tile_el.className = "tile";
-    tile_el.dataset.row = tile_data.row;
-    tile_el.dataset.col = tile_data.col;
-    tile.tile_index = tile_data.row * game.max_cols + tile_data.col;
-    tile_el.tile = tile;
-    tile.$el = tile_el;
+    // Only add tiles within the current active area
+    if (tile.row >= game.rows || tile.col >= game.cols) {
+      // Remove from DOM if present
+      if (tile.$el && tile.$el.parentNode) {
+        tile.$el.parentNode.removeChild(tile.$el);
+      }
+      return;
+    }
+    // Create tile element if it doesn't exist
+    let tile_el = tile.$el;
+    if (!tile_el) {
+      tile_el = document.createElement("button");
+      tile_el.className = "tile";
+      tile_el.dataset.row = tile.row;
+      tile_el.dataset.col = tile.col;
+      tile.tile_index = tile.row * game.max_cols + tile.col;
+      tile_el.tile = tile;
+      tile.$el = tile_el;
+      const percent_wrapper_wrapper = document.createElement("div");
+      percent_wrapper_wrapper.className = "percent_wrapper_wrapper";
+      const percent_wrapper = document.createElement("div");
+      percent_wrapper.className = "percent_wrapper";
+      const percent = document.createElement("div");
+      percent.className = "percent";
+      tile.$percent = percent;
+      percent_wrapper.appendChild(percent);
+      percent_wrapper_wrapper.appendChild(percent_wrapper);
+      tile_el.appendChild(percent_wrapper_wrapper);
+      // Add sell indicator element
+      const sellIndicator = document.createElement("div");
+      sellIndicator.className = "sell-indicator";
+      tile_el.appendChild(sellIndicator);
+      // Debug log for tile creation
+      console.log(
+        "[StateManager] Created tile element for tile:",
+        tile.row,
+        tile.col,
+        tile
+      );
+    }
+    // Add enabled class if needed
     if (tile.enabled) {
       tile.$el.classList.add("enabled");
+    } else {
+      tile.$el.classList.remove("enabled");
     }
-    const percent_wrapper_wrapper = document.createElement("div");
-    percent_wrapper_wrapper.className = "percent_wrapper_wrapper";
-    const percent_wrapper = document.createElement("div");
-    percent_wrapper.className = "percent_wrapper";
-    const percent = document.createElement("div");
-    percent.className = "percent";
-    tile.$percent = percent;
-    percent_wrapper.appendChild(percent);
-    percent_wrapper_wrapper.appendChild(percent_wrapper);
-    tile_el.appendChild(percent_wrapper_wrapper);
-
-    // Add sell indicator element
-    const sellIndicator = document.createElement("div");
-    sellIndicator.className = "sell-indicator";
-    tile_el.appendChild(sellIndicator);
-
-    if (this.ui.DOMElements.reactor) {
+    // Only append if not already in DOM
+    if (this.ui.DOMElements.reactor && !tile_el.parentNode) {
       this.ui.DOMElements.reactor.appendChild(tile_el);
+      // Debug log for tile appending
+      console.log(
+        "[StateManager] Appended tile to DOM:",
+        tile.row,
+        tile.col,
+        tile
+      );
     }
   }
   game_reset() {

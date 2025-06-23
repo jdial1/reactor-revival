@@ -46,7 +46,7 @@ workbox.routing.registerRoute(
   })
 );
 
-// Cache strategy for images
+// Cache strategy for images (including splash screen assets)
 workbox.routing.registerRoute(
   ({ request }) => request.destination === "image",
   new workbox.strategies.CacheFirst({
@@ -101,21 +101,9 @@ workbox.routing.registerRoute(
 workbox.routing.setCatchHandler(({ event }) => {
   switch (event.request.destination) {
     case "document":
-      return caches.match("/reactor-revival/offline.html");
+      return caches.match("/offline.html");
     case "image":
-      return new Response(
-        `<svg role="img" aria-labelledby="offline-title" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-          <title id="offline-title">Offline</title>
-          <rect width="100%" height="100%" fill="#f5f5f5"/>
-          <text x="50%" y="50%" fill="#666" text-anchor="middle">Offline</text>
-        </svg>`,
-        {
-          headers: {
-            "Content-Type": "image/svg+xml",
-            "Cache-Control": "no-store",
-          },
-        }
-      );
+      return caches.match("/img/misc/preview.png");
     default:
       return Response.error();
   }
@@ -131,6 +119,77 @@ self.addEventListener("message", (event) => {
       version: "1.0.0", // This should match your app version
     });
   }
+  // Handle splash screen related messages
+  if (event.data && event.data.type === "SPLASH_READY") {
+    // Notify all clients that splash screen is ready to hide
+    self.clients.matchAll().then((clients) => {
+      clients.forEach((client) => {
+        client.postMessage({
+          type: "HIDE_SPLASH",
+        });
+      });
+    });
+  }
   // ... any other custom message handling
 });
 // ... keep any other custom event listeners if present
+
+// --- NEW: Add Runtime Caching for Google Fonts ---
+workbox.routing.registerRoute(
+  ({ url }) => url.origin === "https://fonts.googleapis.com",
+  new workbox.strategies.StaleWhileRevalidate({
+    cacheName: "google-fonts-stylesheets",
+  })
+);
+workbox.routing.registerRoute(
+  ({ url }) => url.origin === "https://fonts.gstatic.com",
+  new workbox.strategies.CacheFirst({
+    cacheName: "google-fonts-webfonts",
+    plugins: [
+      new workbox.cacheableResponse.CacheableResponsePlugin({
+        statuses: [0, 200],
+      }),
+      new workbox.expiration.ExpirationPlugin({
+        maxAgeSeconds: 60 * 60 * 24 * 365, // Cache for a year
+        maxEntries: 30,
+      }),
+    ],
+  })
+);
+
+// --- Runtime Caching for App Assets (Unchanged but will work better now) ---
+workbox.routing.registerRoute(
+  ({ request }) => request.mode === "navigate",
+  new workbox.strategies.NetworkFirst({
+    cacheName: "pages",
+    plugins: [
+      new workbox.cacheableResponse.CacheableResponsePlugin({
+        statuses: [0, 200],
+      }),
+    ],
+  })
+);
+
+workbox.routing.registerRoute(
+  ({ request }) => request.destination === "image",
+  new workbox.strategies.CacheFirst({
+    cacheName: "images",
+    plugins: [
+      new workbox.cacheableResponse.CacheableResponsePlugin({
+        statuses: [0, 200],
+      }),
+      new workbox.expiration.ExpirationPlugin({
+        maxEntries: 60,
+        maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+      }),
+    ],
+  })
+);
+
+workbox.routing.registerRoute(
+  ({ request }) =>
+    request.destination === "script" || request.destination === "style",
+  new workbox.strategies.StaleWhileRevalidate({
+    cacheName: "static-resources",
+  })
+);
