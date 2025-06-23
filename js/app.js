@@ -74,6 +74,13 @@ async function main() {
           await startGame(pageRouter, ui, game);
         };
       }
+      const newGameBtn = document.getElementById("splash-new-game-btn");
+      if (newGameBtn) {
+        newGameBtn.onclick = () => {
+          localStorage.setItem("reactorNewGamePending", "1");
+          window.location.reload();
+        };
+      }
     } else {
       await startGame(pageRouter, ui, game);
     }
