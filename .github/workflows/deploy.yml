@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -62,6 +62,8 @@ jobs:
   post-deploy-check:
     needs: deploy
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -75,6 +77,7 @@ jobs:
         run: sleep 30
 
       - name: Run PWA post-deployment checks
+        id: pwa-check
         env:
           GITHUB_PAGES_URL: ${{ needs.deploy.outputs.page_url }}
         run: node scripts/post-deploy-pwa-check.js
@@ -82,29 +85,43 @@ jobs:
       - name: Create check status comment (on failure)
         if: failure()
         uses: actions/github-script@v7
+        continue-on-error: true
         with:
           script: |
-            const { owner, repo } = context.repo;
-            const sha = context.sha;
-            
-            await github.rest.repos.createCommitComment({
-              owner,
-              repo,
-              commit_sha: sha,
-              body: '❌ PWA post-deployment checks failed. Please check the workflow logs for details.'
-            });
+            try {
+              const { owner, repo } = context.repo;
+              const sha = context.sha;
+              
+              await github.rest.repos.createCommitComment({
+                owner,
+                repo,
+                commit_sha: sha,
+                body: '❌ PWA post-deployment checks failed. Please check the workflow logs for details.'
+              });
+              console.log('✅ Failure comment created successfully');
+            } catch (error) {
+              console.log('⚠️ Could not create commit comment (insufficient permissions):', error.message);
+              console.log('📝 PWA check failed - see workflow logs for details');
+            }
 
       - name: Create check status comment (on success)
         if: success()
         uses: actions/github-script@v7
+        continue-on-error: true
         with:
           script: |
-            const { owner, repo } = context.repo;
-            const sha = context.sha;
-            
-            await github.rest.repos.createCommitComment({
-              owner,
-              repo,
-              commit_sha: sha,
-              body: '✅ PWA deployment successful! All post-deployment checks passed.'
-            });
+            try {
+              const { owner, repo } = context.repo;
+              const sha = context.sha;
+              
+              await github.rest.repos.createCommitComment({
+                owner,
+                repo,
+                commit_sha: sha,
+                body: '✅ PWA deployment successful! All post-deployment checks passed.'
+              });
+              console.log('✅ Success comment created successfully');
+            } catch (error) {
+              console.log('⚠️ Could not create commit comment (insufficient permissions):', error.message);
+              console.log('📝 PWA deployment successful - all checks passed!');
+            }
