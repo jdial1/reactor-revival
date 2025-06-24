@@ -1,4 +1,10 @@
-const DEBUG_PERFORMANCE = process.env.NODE_ENV === "test" || false;
+// Check if we're in a test environment or debugging mode
+// In browser, process is undefined, so we need a fallback
+const DEBUG_PERFORMANCE =
+  (typeof process !== "undefined" && process.env?.NODE_ENV === "test") ||
+  (typeof window !== "undefined" &&
+    window.location?.hostname === "localhost") ||
+  false;
 
 export class Performance {
   constructor(game) {

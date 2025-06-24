@@ -50,16 +50,37 @@
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", async () => {
           try {
+            // For GitHub Pages, we need to use the repository base path
+            const isGitHubPages =
+              window.location.hostname.includes("github.io");
+            let swPath, swScope;
+
+            if (isGitHubPages) {
+              // Extract the repository name from the path (e.g., /reactor-revival/)
+              const pathParts = window.location.pathname
+                .split("/")
+                .filter((part) => part);
+              const repoName = pathParts[0] || "";
+              swPath = `/${repoName}/sw.js`;
+              swScope = `/${repoName}/`;
+            } else {
+              // For local development or other hosting
+              swPath = "/sw.js";
+              swScope = "/";
+            }
+
             const registration = await navigator.serviceWorker.register(
-              "/sw.js",
+              swPath,
               {
-                scope: "/",
+                scope: swScope,
                 updateViaCache: "none",
               }
             );
             console.log(
               "Service Worker registered successfully with scope:",
-              registration.scope
+              registration.scope,
+              "and path:",
+              swPath
             );
 
             if (registration.active) {
