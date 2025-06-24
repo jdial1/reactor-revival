@@ -216,7 +216,15 @@ export async function setupGame() {
   const ui = new UI();
 
   // Mock the DOM elements and methods that would require actual DOM
-  ui.DOMElements = {};
+  ui.DOMElements = {
+    main: {
+      classList: {
+        toggle: vi.fn(),
+        add: vi.fn(),
+        remove: vi.fn(),
+      },
+    },
+  };
   ui.update_vars = new Map();
   ui.cacheDOMElements = vi.fn(() => true);
   ui.resizeReactor = vi.fn();
