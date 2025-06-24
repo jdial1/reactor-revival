@@ -7,6 +7,7 @@ import { Engine } from "./engine.js";
 import "./pwa.js";
 import help_text from "../data/help_text.js";
 import { PageRouter } from "./pageRouter.js";
+import faction_data from "../data/faction_data.js";
 
 async function main() {
   "use strict";
@@ -42,6 +43,7 @@ async function main() {
   if (!savedGame || localStorage.getItem("reactorNewGamePending") === "1") {
     localStorage.removeItem("reactorNewGamePending");
     game.initialize_new_game_state();
+    populateFactionSelector();
     // Show faction selection for a new game
     if (window.splashManager) {
       window.splashManager.setStep("ready");
@@ -197,6 +199,42 @@ async function showQuickStartModal() {
       localStorage.setItem("reactorGameQuickStartShown", "1");
     };
   }
+}
+
+function populateFactionSelector() {
+  const cardsRow = document.querySelector(
+    "#faction-select-panel .faction-cards-row"
+  );
+  if (!cardsRow) return;
+
+  cardsRow.innerHTML = "";
+
+  faction_data.forEach((faction) => {
+    const card = document.createElement("div");
+    card.className = `faction-card faction-${faction.id}`;
+    card.dataset.faction = faction.id;
+    card.tabIndex = 0;
+
+    let cardBodyHtml = "";
+    faction.traits.forEach((trait) => {
+      const boxClass = trait.type === "feature" ? "feature-box" : "penalty-box";
+      const iconHtml = trait.icon
+        ? `<span class="icon">${trait.icon}</span>`
+        : "";
+      cardBodyHtml += `<div class="${boxClass}">${iconHtml} ${trait.text}</div>`;
+    });
+
+    card.innerHTML = `
+      <div class="card-header">
+        <span class="flag">${faction.flag}</span> <span class="faction-name">${faction.name}</span>
+      </div>
+      <div class="card-body">
+        <div class="traits-header">Faction Traits</div>
+        ${cardBodyHtml}
+      </div>
+    `;
+    cardsRow.appendChild(card);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", main);

@@ -7,28 +7,19 @@ export class PageRouter {
       experimental_upgrades_section: { path: "pages/research.html" },
       about_section: { path: "pages/about.html" },
     };
+    this.pageCache = new Map();
+    this.initializedPages = new Set();
     this.currentPageId = null;
     this.contentAreaSelector = "#page_content_area";
   }
 
   async loadPage(pageId, force = false) {
-    console.log(`PageRouter: Attempting to load page "${pageId}"`);
-
     if (!force && this.ui.game.reactor.has_melted_down) {
       console.log("PageRouter: Navigation disabled during meltdown.");
       return;
     }
-
     if (!force && this.currentPageId === pageId) {
       console.log(`PageRouter: Page "${pageId}" is already loaded, skipping.`);
-      return;
-    }
-
-    const pageDef = this.pages[pageId];
-    if (!pageDef) {
-      console.error(
-        `PageRouter: Page definition not found for ID "${pageId}".`
-      );
       return;
     }
 
@@ -40,7 +31,33 @@ export class PageRouter {
       return;
     }
 
-    console.log(`PageRouter: Loading page from "${pageDef.path}"`);
+    // Hide the currently showing page
+    if (this.currentPageId && this.pageCache.has(this.currentPageId)) {
+      this.pageCache.get(this.currentPageId).classList.remove("showing");
+    }
+
+    this.currentPageId = pageId;
+    this.updateNavigation(pageId);
+
+    // If page is already cached, just show it and we're done.
+    if (this.pageCache.has(pageId)) {
+      const cachedPage = this.pageCache.get(pageId);
+      cachedPage.classList.add("showing");
+      console.log(`PageRouter: Switched to cached page "${pageId}".`);
+      if (pageId === "reactor_section" && this.ui.resizeReactor) {
+        this.ui.resizeReactor();
+      }
+      return;
+    }
+
+    // Page not cached, so load, build, and initialize it.
+    const pageDef = this.pages[pageId];
+    if (!pageDef) {
+      console.error(
+        `PageRouter: Page definition not found for ID "${pageId}".`
+      );
+      return;
+    }
 
     try {
       const response = await fetch(pageDef.path);
@@ -49,62 +66,43 @@ export class PageRouter {
       }
       const html = await response.text();
 
-      console.log(`PageRouter: Removing showing class from existing pages`);
-      // Remove showing class from all existing pages
-      pageContentArea.querySelectorAll(".page").forEach((page) => {
-        page.classList.remove("showing");
-        console.log(`PageRouter: Removed showing class from page: ${page.id}`);
-      });
+      const tempContainer = document.createElement("div");
+      tempContainer.innerHTML = html;
+      const newPageElement = tempContainer.firstElementChild;
 
-      console.log(`PageRouter: Replacing content area HTML`);
-      pageContentArea.innerHTML = html;
+      if (newPageElement && newPageElement.classList.contains("page")) {
+        pageContentArea.appendChild(newPageElement);
+        this.pageCache.set(pageId, newPageElement);
+        newPageElement.classList.add("showing");
 
-      // Add showing class to the newly loaded page
-      const newPage = pageContentArea.querySelector(".page");
-      if (newPage) {
-        console.log(
-          `PageRouter: Adding showing class to new page: ${newPage.id}`
-        );
-        newPage.classList.add("showing");
+        if (!this.initializedPages.has(pageId)) {
+          console.log(
+            `PageRouter: Initializing page "${pageId}" for the first time.`
+          );
+          this.ui.initializePage(pageId);
+          this.initializedPages.add(pageId);
+        }
       } else {
-        console.warn(`PageRouter: No .page element found in loaded content`);
-      }
-
-      const oldPageId = this.currentPageId;
-      this.currentPageId = pageId;
-
-      console.log(
-        `PageRouter: Page loaded successfully. Old: "${oldPageId}", New: "${pageId}"`
-      );
-
-      this.updateNavigation(pageId);
-
-      if (this.ui && typeof this.ui.initializePage === "function") {
-        console.log(`PageRouter: Initializing page "${pageId}"`);
-        this.ui.initializePage(pageId, pageContentArea);
+        console.warn(
+          `PageRouter: No .page element found in loaded content for ${pageId}`
+        );
       }
     } catch (error) {
       console.error(
         `PageRouter: Failed to load page "${pageId}" from "${pageDef.path}":`,
         error
       );
-
-      // Load error page from separate file
       try {
         const errorResponse = await fetch("pages/error-page.html");
         if (errorResponse.ok) {
-          const errorHtml = await errorResponse.text();
-          pageContentArea.innerHTML = errorHtml;
+          pageContentArea.innerHTML = await errorResponse.text();
         } else {
-          // Fallback to inline error message if error page fails to load
           pageContentArea.innerHTML = `<div class="pixel-panel explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`;
         }
       } catch (errorPageError) {
         console.error("Failed to load error page:", errorPageError);
-        // Final fallback
         pageContentArea.innerHTML = `<div class="pixel-panel explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`;
       }
-
       if (this.currentPageId) this.updateNavigation(this.currentPageId);
     }
   }
@@ -131,7 +129,6 @@ export class PageRouter {
       }
       const html = await response.text();
       const wrapper = document.getElementById("wrapper");
-
       if (wrapper) {
         wrapper.innerHTML = html;
         wrapper.style.display = "";
