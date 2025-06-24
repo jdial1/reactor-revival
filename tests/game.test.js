@@ -5,47 +5,6 @@ import { Game } from "../js/game.js";
 import { UI } from "../js/ui.js";
 import { setupGame } from "./helpers/setup.js";
 
-// Mock the UI to prevent DOM errors and control game state variables
-vi.mock("../js/ui.js", () => {
-  const mockState = new Map();
-  const mockGetVar = vi.fn((key) => {
-    // Default values for toggles
-    if (["auto_buy", "auto_sell", "heat_control", "pause"].includes(key)) {
-      return mockState.get(key) ?? false;
-    }
-    if (key === "time_flux") {
-      return mockState.get(key) ?? true;
-    }
-    return mockState.get(key);
-  });
-  const mockSetVar = vi.fn((key, value) => {
-    mockState.set(key, value);
-  });
-
-  const UI = vi.fn();
-  UI.prototype.init = vi.fn(() => true);
-  UI.prototype.resizeReactor = vi.fn();
-  UI.prototype.stateManager = {
-    handleTileAdded: vi.fn(),
-    handlePartAdded: vi.fn(),
-    handleUpgradeAdded: vi.fn(),
-    getVar: mockGetVar,
-    setVar: mockSetVar,
-    setGame: vi.fn(),
-    game_reset: vi.fn(),
-  };
-
-  // Attach mocks to the prototype to be accessible in tests
-  UI.prototype.getMockGetVar = function () {
-    return this.stateManager.getVar;
-  };
-  UI.prototype.getMockSetVar = function () {
-    return this.stateManager.setVar;
-  };
-
-  return { UI };
-});
-
 describe("Reactor Game Integration Test Suite", () => {
   let game;
 

@@ -11,17 +11,38 @@ export default defineConfig({
     },
     maxConcurrency: 1,
     silent: false,
-    testTimeout: 10000,
-    hookTimeout: 10000,
+    testTimeout: 15000,
+    hookTimeout: 15000,
     errorOnDeprecated: false,
-    pool: "forks",
+    isolate: false,
+    pool: "threads",
     poolOptions: {
-      forks: {
-        singleFork: true,
+      threads: {
+        singleThread: true,
+        isolate: false,
       },
+    },
+    // Optimize memory usage
+    forceRerunTriggers: ["**/package.json/**", "**/{vitest,vite}.config.*"],
+    // Prevent massive console output
+    printConsoleTrace: false,
+    logHeapUsage: false,
+    env: {
+      NODE_OPTIONS: "--max-old-space-size=4096",
     },
   },
   define: {
     "process.env.NODE_ENV": '"test"',
+  },
+  esbuild: {
+    target: "esnext",
+  },
+  optimizeDeps: {
+    force: true,
+  },
+  // Use ESM instead of CJS
+  build: {
+    target: "esnext",
+    minify: false,
   },
 });

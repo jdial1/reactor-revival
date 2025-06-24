@@ -1,4 +1,4 @@
-const DEBUG_PERFORMANCE = false;
+const DEBUG_PERFORMANCE = process.env.NODE_ENV === "test" || false;
 
 export class Performance {
   constructor(game) {

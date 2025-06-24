@@ -87,7 +87,12 @@ describe("Reactor Mechanics", () => {
     game.cols = 2;
     game.tileset.updateActiveTiles();
 
-    const tile = game.tileset.getTile(2, 2);
+    // getTile only returns tiles within reactor bounds, so we need to access
+    // the tile directly from tiles_list to check if it's disabled
+    const tile = game.tileset.tiles_list.find(
+      (t) => t.row === 2 && t.col === 2
+    );
+    expect(tile).toBeDefined();
     expect(tile.enabled).toBe(false);
   });
 

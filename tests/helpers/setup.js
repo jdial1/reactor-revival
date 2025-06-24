@@ -1,57 +1,120 @@
-import { vi } from "vitest";
+import { vi, afterEach, expect } from "vitest";
 import { Game } from "../../js/game.js";
 import { UI } from "../../js/ui.js";
 
-// Configure test environment to limit verbose output
-// Override console methods to prevent massive output
+// --- START: Enhanced Test Environment Setup ---
+
+// 1. Define large object constructors we want to suppress in logs and assertions.
+const LARGE_OBJECT_CONSTRUCTORS = [
+  "Game",
+  "Tileset",
+  "PartSet",
+  "UpgradeSet",
+  "Reactor",
+  "UI",
+  "Tile",
+  "Engine",
+  "ObjectiveManager",
+  "TooltipManager",
+  "StateManager",
+];
+
+// 2. Add a snapshot serializer to clean up Vitest's `expect` failure messages.
+expect.addSnapshotSerializer({
+  test: (val) =>
+    val &&
+    val.constructor &&
+    LARGE_OBJECT_CONSTRUCTORS.includes(val.constructor.name),
+  print: (val) => `[${val.constructor.name} Object]`,
+});
+
+// 3. Globally patch console methods to prevent object dumps during tests.
 const originalConsoleLog = console.log;
 const originalConsoleDir = console.dir;
 const originalConsoleError = console.error;
 
-console.log = (...args) => {
-  // Only log simple values, truncate objects
-  const truncatedArgs = args.map((arg) => {
-    if (typeof arg === "object" && arg !== null) {
-      return "[Object]";
-    }
-    return arg;
-  });
-  originalConsoleLog(...truncatedArgs);
-};
+const createSafeLogger =
+  (originalLogger) =>
+  (...args) => {
+    const safeArgs = args.map((arg) => {
+      if (
+        arg &&
+        typeof arg === "object" &&
+        arg.constructor &&
+        LARGE_OBJECT_CONSTRUCTORS.includes(arg.constructor.name)
+      ) {
+        return `[${arg.constructor.name} Object]`;
+      }
+      return arg;
+    });
+    originalLogger(...safeArgs);
+  };
 
-console.dir = (obj, options) => {
-  // Limit depth to 2 levels
-  originalConsoleDir(obj, { ...options, depth: 2 });
-};
+console.log = createSafeLogger(originalConsoleLog);
+console.dir = createSafeLogger(originalConsoleDir);
 
+// Suppress known "Error saving game" messages in test environment
 console.error = (...args) => {
-  // Truncate error objects
-  const truncatedArgs = args.map((arg) => {
-    if (typeof arg === "object" && arg !== null) {
-      return "[Error Object]";
-    }
-    return arg;
-  });
-  originalConsoleError(...truncatedArgs);
+  const errorMessage = args.join(" ");
+  if (
+    errorMessage.includes("Error saving game") &&
+    process.env.NODE_ENV === "test"
+  ) {
+    return;
+  }
+  originalConsoleError(...args);
 };
 
-// Limit the depth of object serialization to prevent massive dumps
+// --- END: Enhanced Test Environment Setup ---
+
+// Note: Enhanced console logging setup is now handled above
+
+// Prevent massive object dumps that crash the terminal
 const originalStringify = JSON.stringify;
 JSON.stringify = function (value, replacer, space) {
   if (typeof value === "object" && value !== null) {
+    // Check if this looks like a game object that would be massive
+    if (
+      value.constructor &&
+      (value.constructor.name === "Game" ||
+        value.constructor.name === "Tileset" ||
+        value.constructor.name === "PartSet" ||
+        value.constructor.name === "UpgradeSet" ||
+        (value.tiles_list && value.tiles_list.length > 100) ||
+        (value.partsArray && value.partsArray.length > 50))
+    ) {
+      return `[${value.constructor.name} Object - Truncated to prevent terminal crash]`;
+    }
+
     // Limit depth for large objects
     const seen = new WeakSet();
+    let depth = 0;
     const limitedReplacer = (key, val) => {
+      depth++;
+      if (depth > 5) {
+        return "[Max Depth Reached]";
+      }
+
       if (typeof val === "object" && val !== null) {
         if (seen.has(val)) {
           return "[Circular]";
         }
         seen.add(val);
-        // Limit depth by truncating nested objects
-        if (key && key.length > 2) {
-          return "[Truncated]";
+
+        // Truncate arrays that are too large
+        if (Array.isArray(val) && val.length > 10) {
+          return `[Array(${val.length}) - Truncated]`;
+        }
+
+        // Truncate objects with too many properties
+        if (Object.keys(val).length > 20) {
+          return `[Object with ${
+            Object.keys(val).length
+          } properties - Truncated]`;
         }
       }
+
+      depth--;
       return val;
     };
     return originalStringify(value, limitedReplacer, space);
@@ -60,97 +123,112 @@ JSON.stringify = function (value, replacer, space) {
 };
 
 // Override expect to limit object depth in error messages
-const originalExpect = global.expect;
-if (originalExpect) {
+const originalExpected = global.expect;
+if (originalExpected) {
   global.expect = function (actual) {
-    const result = originalExpect(actual);
-
-    // Override toEqual to limit object depth
-    const originalToEqual = result.toEqual;
-    result.toEqual = function (expected) {
-      try {
-        return originalToEqual.call(this, expected);
-      } catch (error) {
-        // Truncate the error message if it contains large objects
-        if (error.message && error.message.length > 1000) {
-          error.message = error.message.substring(0, 1000) + "...[truncated]";
-        }
-        throw error;
+    // Check if actual is a game object and replace with summary
+    if (actual && typeof actual === "object" && actual.constructor) {
+      const className = actual.constructor.name;
+      if (
+        ["Game", "Tileset", "PartSet", "UpgradeSet", "Reactor", "UI"].includes(
+          className
+        )
+      ) {
+        actual = `[${className} Object - Use specific property tests instead of comparing entire object]`;
       }
-    };
+    }
+
+    const result = originalExpected(actual);
+
+    // Override common matchers to prevent large object dumps
+    const matchers = ["toEqual", "toStrictEqual", "toMatchObject", "toContain"];
+    matchers.forEach((matcherName) => {
+      if (result[matcherName]) {
+        const originalMatcher = result[matcherName];
+        result[matcherName] = function (expected) {
+          try {
+            return originalMatcher.call(this, expected);
+          } catch (error) {
+            // Severely truncate error messages that contain large objects
+            if (error.message) {
+              // Remove massive object dumps from error messages
+              let message = error.message;
+
+              // Replace object dumps with summaries
+              message = message.replace(
+                /\{[^{}]{500,}\}/g,
+                "[Large Object - Truncated]"
+              );
+              message = message.replace(
+                /\[[^\[\]]{500,}\]/g,
+                "[Large Array - Truncated]"
+              );
+
+              // Hard limit on message length
+              if (message.length > 2000) {
+                message =
+                  message.substring(0, 2000) +
+                  "\n...[Error message truncated to prevent terminal crash]";
+              }
+
+              error.message = message;
+            }
+            throw error;
+          }
+        };
+      }
+    });
 
     return result;
   };
 }
 
-// Mock the UI class, as we don't need to test the actual DOM rendering.
-// We'll provide a mock stateManager to control game flags during tests.
-vi.mock("../../js/ui.js", () => {
-  const mockState = new Map();
-
-  const mockGetVar = vi.fn((key) => {
-    // Provide default values for toggleable states
-    if (["auto_buy", "auto_sell", "heat_control", "pause"].includes(key)) {
-      return mockState.get(key) ?? false;
-    }
-    if (key === "time_flux") {
-      return mockState.get(key) ?? true;
-    }
-    return mockState.get(key);
-  });
-
-  const mockSetVar = vi.fn((key, value) => {
-    mockState.set(key, value);
-  });
-
-  // Clear state between tests
-  vi.spyOn(mockState, "clear").mockClear();
-  vi.spyOn(mockGetVar, "mockClear").mockClear();
-  vi.spyOn(mockSetVar, "mockClear").mockClear();
-
-  const UI = vi.fn();
-  UI.prototype.init = vi.fn(() => true);
-  UI.prototype.cacheDOMElements = vi.fn(() => true);
-  UI.prototype.resizeReactor = vi.fn();
-  UI.prototype.updateAllToggleBtnStates = vi.fn();
-  UI.prototype.updateToggleButtonState = vi.fn();
-  UI.prototype.showPage = vi.fn();
-
-  // The state manager is the most important part of the UI to mock for logic tests
-  UI.prototype.stateManager = {
-    handleTileAdded: vi.fn(),
-    handlePartAdded: vi.fn(),
-    handleUpgradeAdded: vi.fn(),
-    getVar: mockGetVar,
-    setVar: mockSetVar,
-    setGame: vi.fn(),
-    game_reset: vi.fn(),
-    setClickedPart: vi.fn(),
-    getClickedPart: vi.fn(() => null),
-    handleObjectiveCompleted: vi.fn(),
-    handleObjectiveLoaded: vi.fn(),
-    handleObjectiveUnloaded: vi.fn(),
-  };
-
-  // Helper to access mocks from the test files
-  UI.prototype.getMockGetVar = () => mockGetVar;
-  UI.prototype.getMockSetVar = () => mockSetVar;
-
-  return { UI };
-});
+// Global game instance to reuse and prevent memory issues
+let globalGame = null;
 
 /**
  * Creates a fully initialized game instance for testing.
+ * Reuses instance when possible to prevent memory leaks.
  * @returns {Promise<Game>} A game instance ready for testing.
  */
 export async function setupGame() {
-  const mockUi = new UI();
+  // Reuse existing game instance if available
+  if (globalGame) {
+    // Reset the game state for each test
+    globalGame.tileset.clearAllTiles(); // Clear ALL tiles, not just active ones
+    globalGame.reactor.setDefaults();
+    globalGame.upgradeset.reset();
+    globalGame.current_money = 1e30;
+    globalGame.exotic_particles = 1e20;
+    globalGame.current_exotic_particles = 1e20;
+    globalGame.rows = globalGame.base_rows;
+    globalGame.cols = globalGame.base_cols;
+    globalGame.tileset.updateActiveTiles();
 
-  // Clear mocks before each setup
-  mockUi.stateManager.getVar.mockClear();
-  mockUi.stateManager.setVar.mockClear();
+    globalGame.partset.check_affordability(globalGame);
+    globalGame.upgradeset.check_affordability(globalGame);
+    globalGame.reactor.updateStats();
 
-  const game = new Game(mockUi);
+    return globalGame;
+  }
+
+  // Create real UI instance but with minimal DOM setup for testing
+  const ui = new UI();
+
+  // Mock the DOM elements and methods that would require actual DOM
+  ui.DOMElements = {};
+  ui.update_vars = new Map();
+  ui.cacheDOMElements = vi.fn(() => true);
+  ui.resizeReactor = vi.fn();
+  ui.updateAllToggleBtnStates = vi.fn();
+  ui.updateToggleButtonState = vi.fn();
+  ui.showPage = vi.fn();
+
+  const game = new Game(ui);
+
+  // Connect the UI to the game - this is crucial for StateManager to work
+  // We call the real init method, not a mock, since we need the StateManager connection
+  ui.init(game);
 
   // Initialize the game with real data, not mocks
   game.tileset.initialize();
@@ -170,5 +248,34 @@ export async function setupGame() {
 
   game.reactor.updateStats();
 
+  // Store for reuse
+  globalGame = game;
+
   return game;
 }
+
+// Cleanup function for test teardown
+export function cleanupGame() {
+  if (globalGame) {
+    // Clear any timers or intervals
+    if (globalGame.engine && globalGame.engine.stop) {
+      globalGame.engine.stop();
+    }
+    if (
+      globalGame.objectives_manager &&
+      globalGame.objectives_manager.objective_timeout
+    ) {
+      clearTimeout(globalGame.objectives_manager.objective_timeout);
+    }
+  }
+}
+
+// Global cleanup after each test
+afterEach(() => {
+  cleanupGame();
+
+  // Force garbage collection if available (for debugging memory issues)
+  if (global.gc) {
+    global.gc();
+  }
+});

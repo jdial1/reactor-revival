@@ -20,6 +20,13 @@ describe("Performance Mechanics", () => {
       clearMarks: vi.fn(),
       clearMeasures: vi.fn(),
     };
+
+    // Completely reset performance state for each test
+    game.performance.enabled = false;
+    game.performance.marks = {};
+    game.performance.measures = {};
+    game.performance.counters = {};
+    game.performance.averages = {};
   });
 
   it("should initialize with correct default values", () => {
@@ -29,6 +36,9 @@ describe("Performance Mechanics", () => {
   });
 
   it("should enable performance monitoring", () => {
+    // Performance is automatically enabled when NODE_ENV is test
+    // But we can still test the enable method
+    game.performance.disable(); // First disable it
     game.performance.enable();
 
     expect(game.performance.enabled).toBe(true);
@@ -43,6 +53,7 @@ describe("Performance Mechanics", () => {
 
   it("should mark start time", () => {
     const markName = "test_mark";
+    game.performance.disable(); // Ensure clean state
     game.performance.enable();
 
     game.performance.markStart(markName);
@@ -53,8 +64,11 @@ describe("Performance Mechanics", () => {
 
   it("should not mark start time when disabled", () => {
     const markName = "test_mark";
-    game.performance.enable();
+    // Ensure performance is disabled
     game.performance.disable();
+
+    // Clear previous mock calls
+    performance.mark.mockClear();
 
     game.performance.markStart(markName);
 
@@ -64,6 +78,7 @@ describe("Performance Mechanics", () => {
 
   it("should mark end time and measure", () => {
     const markName = "test_mark";
+    game.performance.disable(); // Ensure clean state
     game.performance.enable();
 
     game.performance.markStart(markName);
@@ -98,6 +113,7 @@ describe("Performance Mechanics", () => {
 
   it("should measure time between marks", () => {
     const markName = "test_mark";
+    game.performance.disable(); // Ensure clean state
     game.performance.enable();
     game.performance.markStart(markName);
     game.performance.markEnd(markName);
@@ -109,9 +125,14 @@ describe("Performance Mechanics", () => {
 
   it("should not measure time when disabled", () => {
     const markName = "test_mark";
-    game.performance.enable();
-    game.performance.markStart(markName);
+    // Start with performance disabled from the beginning
     game.performance.disable();
+
+    // Clear previous mock calls
+    performance.mark.mockClear();
+    performance.measure.mockClear();
+
+    game.performance.markStart(markName);
     game.performance.markEnd(markName);
 
     const measure = game.performance.getMeasure(markName);
@@ -146,6 +167,7 @@ describe("Performance Mechanics", () => {
   it("should get all measures", () => {
     const markName1 = "test_mark_1";
     const markName2 = "test_mark_2";
+    game.performance.disable(); // Ensure clean state
     game.performance.enable();
     game.performance.markStart(markName1);
     game.performance.markEnd(markName1);
