@@ -88,6 +88,10 @@ export class Tile {
         this.updateVisualState();
       }
     }
+
+    // Update reactor stats after placing/removing a part
+    this.game.reactor.updateStats();
+
     // Save game after placing a part
     if (this.game && typeof this.game.saveGame === "function") {
       this.game.saveGame();
@@ -152,14 +156,20 @@ export class Tile {
       this.$percent.style.width = perc * 100 + "%";
       this.$percent.style.backgroundColor = "#0f0";
       this.$el.classList.toggle("spent", this.ticks === 0);
-    } else if (this.part.containment > 0) {
-      const perc = Math.max(
-        0,
-        Math.min(1, this.heat_contained / this.part.containment)
-      );
+    } else if (this.part.containment > 0 || this.heat_contained > 0) {
+      // Show heat bar if part has containment OR currently contains heat
+      const maxHeat = this.part.containment || Math.max(this.heat_contained, 1);
+      const perc = Math.max(0, Math.min(1, this.heat_contained / maxHeat));
       this.$percent.style.width = perc * 100 + "%";
       this.$percent.style.backgroundColor = "#f00";
       this.$el.classList.remove("spent");
+
+      // Debug logging for parts without containment that have heat
+      if (!this.part.containment && this.heat_contained > 0) {
+        console.log(
+          `[Heat Bar] ${this.part.id} has ${this.heat_contained} heat but no containment`
+        );
+      }
     } else {
       this.$percent.style.width = "0%";
       this.$el.classList.remove("spent");

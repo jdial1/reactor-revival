@@ -1,3 +1,5 @@
+import { numFormat as fmt } from "./util.js";
+
 let deferredPrompt;
 const installButton = document.getElementById("install_pwa_btn");
 
@@ -118,7 +120,7 @@ class SplashScreenManager {
           const detailsDiv = document.createElement("div");
           detailsDiv.className = "splash-save-details";
           detailsDiv.innerHTML =
-            `<div><b>Money:</b> $${saveData.current_money ?? 0}</div>` +
+            `<div><b>Money:</b> $${fmt(saveData.current_money ?? 0)}</div>` +
             `<div><b>Cells:</b> ${
               saveData.tiles ? saveData.tiles.length : 0
             }</div>`;

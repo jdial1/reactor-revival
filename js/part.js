@@ -247,6 +247,24 @@ export class Part {
           .forEach((el) => el.classList.remove("part_active"));
         this.game.ui.stateManager.setClickedPart(this);
         this.$el.classList.add("part_active");
+      } else {
+        // Show tooltip for unaffordable parts when clicked
+        if (this.game && this.game.tooltip_manager) {
+          this.game.tooltip_manager.show(this, null, true, this.$el);
+        }
+      }
+    });
+
+    // Add hover tooltips for parts
+    this.$el.addEventListener("mouseenter", (e) => {
+      if (this.game && this.game.tooltip_manager) {
+        this.game.tooltip_manager.show(this, null, false, this.$el);
+      }
+    });
+
+    this.$el.addEventListener("mouseleave", (e) => {
+      if (this.game && this.game.tooltip_manager) {
+        this.game.tooltip_manager.hide();
       }
     });
 

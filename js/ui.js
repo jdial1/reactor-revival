@@ -125,6 +125,11 @@ export class UI {
         this.DOMElements[id] = el;
         const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
         this.DOMElements[camelCaseKey] = el;
+
+        // Debug logging for stats elements
+        if (id.startsWith("stats_")) {
+          console.log(`[UI] Cached DOM element ${id}:`, el);
+        }
       } else {
         // Don't warn for elements that will be loaded dynamically
         const dynamicElements = [
@@ -210,14 +215,8 @@ export class UI {
         console.warn(`[UI] Toggle button #${config.id} not found.`);
       }
     }
-    if (this.DOMElements.parts_panel_toggle) {
-      console.log("[UI] Attaching parts panel toggle handler");
-      this.DOMElements.parts_panel_toggle.onclick = () => {
-        this.DOMElements.parts_section.classList.toggle("collapsed");
-      };
-    } else {
-      console.warn("[UI] #parts_panel_toggle not found.");
-    }
+    // Parts panel toggle is handled in initializePartsPanel() with pointer events
+    // No need for onclick handler here as it conflicts with drag functionality
     if (this.DOMElements.controls_collapse_btn) {
       this.DOMElements.controls_collapse_btn.onclick = () => {
         const isCollapsed =
@@ -434,6 +433,11 @@ export class UI {
       // Update UI state
       this.game.performance.markStart("ui_state_manager");
       this.stateManager.setVar("current_money", this.game.current_money);
+      this.stateManager.setVar("current_heat", this.game.reactor.current_heat);
+      this.stateManager.setVar(
+        "current_power",
+        this.game.reactor.current_power
+      );
       this.stateManager.setVar(
         "current_exotic_particles",
         this.game.current_exotic_particles
@@ -460,7 +464,10 @@ export class UI {
     if (this.update_vars.size === 0) return;
     for (const [key, value] of this.update_vars) {
       const config = this.var_objs_config[key];
-      if (!config) continue;
+      if (!config) {
+        console.log(`[UI] No config found for update key: ${key}`);
+        continue;
+      }
       if (config.dom) {
         let textContent = config.num ? fmt(value, config.places) : value;
         if (config.prefix) textContent = config.prefix + textContent;
@@ -541,8 +548,29 @@ export class UI {
         dom: this.DOMElements.total_exotic_particles,
         num: true,
       },
-      stats_power: { dom: this.DOMElements.stats_power, num: true },
-      total_heat: { dom: this.DOMElements.stats_heat, num: true, places: 0 },
+      stats_power: {
+        dom: this.DOMElements.stats_power,
+        num: true,
+        onupdate: (val) => {
+          if (!this.DOMElements.stats_power) {
+            console.log(
+              `[UI] stats_power DOM element missing when trying to update with value: ${val}`
+            );
+          }
+        },
+      },
+      total_heat: {
+        dom: this.DOMElements.stats_heat,
+        num: true,
+        places: 0,
+        onupdate: (val) => {
+          if (!this.DOMElements.stats_heat) {
+            console.log(
+              `[UI] stats_heat DOM element missing when trying to update with value: ${val}`
+            );
+          }
+        },
+      },
       stats_cash: { dom: this.DOMElements.stats_cash, num: true, places: 2 },
       stats_outlet: {
         dom: this.DOMElements.stats_outlet,
@@ -772,24 +800,8 @@ export class UI {
         }
       }
     });
-    const partsButton = document.querySelector(
-      'button[data-toggle="parts_panel"]'
-    );
-    if (partsButton) {
-      partsButton.addEventListener("click", () => {
-        const partsSection = document.getElementById("parts_section");
-        if (partsSection) {
-          const isMobile = window.innerWidth <= 900;
-          const isOpening = partsSection.classList.contains("collapsed");
-          partsSection.classList.toggle("collapsed");
-          partsButton.classList.toggle("active");
-          this.updatePartsPanelBodyClass();
-          if (isMobile && isOpening && !this.stateManager.getVar("pause")) {
-            this.stateManager.setVar("pause", true);
-          }
-        }
-      });
-    }
+    // Parts panel toggle is handled in initializePartsPanel() method
+    // This button selector doesn't match our current HTML structure anyway
     const fullscreenButton = this.DOMElements.fullscreen_toggle;
     if (fullscreenButton) {
       fullscreenButton.addEventListener("click", () => {
@@ -851,7 +863,7 @@ export class UI {
           if (tile.part) {
             if (this.game && this.game.tooltip_manager) {
               console.log("Showing tooltip for part", tile.part);
-              this.game.tooltip_manager.show(tile.part, null, true);
+              this.game.tooltip_manager.show(tile.part, tile, true);
             }
             continue;
           }
@@ -862,7 +874,7 @@ export class UI {
         } else if (tile.part) {
           // No part selected, show tooltip for existing part
           if (this.game && this.game.tooltip_manager) {
-            this.game.tooltip_manager.show(tile.part, null, true);
+            this.game.tooltip_manager.show(tile.part, tile, true);
           }
         }
       }
@@ -991,33 +1003,114 @@ export class UI {
     if (toggle && panel) {
       // Initialize dragging functionality
       let isDragging = false;
+      let startX = 0;
       let startY = 0;
       let startTop = 0;
+      let dragStartTime = 0;
+      let hasMoved = false;
+
+      // Load saved panel side preference
+      const savedSide = localStorage.getItem("partsPanelSide") || "left";
+      if (savedSide === "right") {
+        panel.classList.add("right-side");
+      }
 
       const onPointerDown = (e) => {
         isDragging = true;
+        startX = e.clientX;
         startY = e.clientY;
         startTop = toggle.offsetTop;
+        dragStartTime = Date.now();
+        hasMoved = false;
+
+        toggle.classList.add("dragging");
         toggle.setPointerCapture(e.pointerId);
+        e.preventDefault();
       };
 
       const onPointerMove = (e) => {
         if (!isDragging) return;
 
+        const deltaX = e.clientX - startX;
         const deltaY = e.clientY - startY;
-        const newTop = startTop + deltaY;
+        const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-        // Calculate bounds - account for bottom bars
-        const bottomBarHeight = 150; // 56px nav + 56px info bar
-        const maxTop =
-          window.innerHeight - toggle.offsetHeight - bottomBarHeight;
-        const boundedTop = Math.max(0, Math.min(newTop, maxTop));
+        if (totalMovement > 5) {
+          hasMoved = true;
+        }
 
-        toggle.style.top = `${boundedTop}px`;
+        // Determine if this is primarily horizontal or vertical movement
+        const isHorizontalDrag =
+          Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20;
+
+        if (isHorizontalDrag) {
+          // Horizontal drag - show visual feedback for side switching
+          const threshold = 100; // pixels to drag before switching sides
+          const isRightSide = panel.classList.contains("right-side");
+
+          if (!isRightSide && deltaX > threshold) {
+            // Dragging right from left side
+            toggle.style.transform = `translateX(${Math.min(
+              deltaX,
+              threshold * 2
+            )}px)`;
+            toggle.style.opacity = "0.6";
+          } else if (isRightSide && deltaX < -threshold) {
+            // Dragging left from right side
+            toggle.style.transform = `translateX(${Math.max(
+              deltaX,
+              -threshold * 2
+            )}px)`;
+            toggle.style.opacity = "0.6";
+          }
+        } else {
+          // Vertical drag - reposition toggle
+          const newTop = startTop + deltaY;
+
+          // Calculate bounds - account for bottom bars
+          const bottomBarHeight = 150; // 56px nav + 56px info bar
+          const maxTop =
+            window.innerHeight - toggle.offsetHeight - bottomBarHeight;
+          const boundedTop = Math.max(0, Math.min(newTop, maxTop));
+
+          toggle.style.top = `${boundedTop}px`;
+        }
       };
 
-      const onPointerUp = () => {
+      const onPointerUp = (e) => {
+        if (!isDragging) return;
+
         isDragging = false;
+        toggle.classList.remove("dragging");
+        toggle.style.transform = "";
+        toggle.style.opacity = "";
+
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        const isHorizontalDrag =
+          hasMoved &&
+          Math.abs(deltaX) > Math.abs(deltaY) &&
+          Math.abs(deltaX) > 20;
+
+        if (isHorizontalDrag) {
+          const threshold = 100;
+          const isRightSide = panel.classList.contains("right-side");
+
+          if (!isRightSide && deltaX > threshold) {
+            panel.classList.add("right-side");
+            localStorage.setItem("partsPanelSide", "right");
+          } else if (isRightSide && deltaX < -threshold) {
+            panel.classList.remove("right-side");
+            localStorage.setItem("partsPanelSide", "left");
+          }
+        } else {
+          const clickTime = Date.now() - dragStartTime;
+          const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+          if (!hasMoved || (clickTime < 200 && totalMovement < 10)) {
+            panel.classList.toggle("collapsed");
+          }
+        }
       };
 
       // Add event listeners for dragging
@@ -1033,13 +1126,19 @@ export class UI {
         }px`;
       }
 
-      // Handle panel toggle
-      toggle.onclick = (e) => {
-        // Only toggle if we haven't dragged
-        if (Math.abs(e.clientY - startY) < 5) {
-          panel.classList.toggle("collapsed");
+      // Update position on window resize
+      window.addEventListener("resize", () => {
+        if (!toggle.style.top) return;
+
+        const currentTop = parseInt(toggle.style.top);
+        const bottomBarHeight = 150;
+        const maxTop =
+          window.innerHeight - toggle.offsetHeight - bottomBarHeight;
+
+        if (currentTop > maxTop) {
+          toggle.style.top = `${maxTop}px`;
         }
-      };
+      });
     }
   }
 
@@ -1371,6 +1470,11 @@ export class UI {
     // Always refresh DOM element cache at the start
     this.cacheDOMElements();
 
+    // For reactor page, also reinitialize the var objects config since DOM elements may have changed
+    if (pageId === "reactor_section") {
+      this.initVarObjsConfig();
+    }
+
     // Helper function to set up click handlers for upgrade buttons on a page.
     const setupUpgradeClickHandler = (containerId) => {
       const container = document.getElementById(containerId);
@@ -1580,5 +1684,36 @@ export class UI {
       e.preventDefault();
       this.handleGridInteraction(e.target.closest(".tile"), e);
     });
+
+    // Add hover events for reactor tiles to show tooltips
+    reactor.addEventListener(
+      "mouseenter",
+      (e) => {
+        const tileEl = e.target.closest(".tile");
+        if (
+          tileEl?.tile?.part &&
+          this.game?.tooltip_manager &&
+          !this.isDragging
+        ) {
+          this.game.tooltip_manager.show(tileEl.tile.part, tileEl.tile, false);
+        }
+      },
+      true
+    );
+
+    reactor.addEventListener(
+      "mouseleave",
+      (e) => {
+        const tileEl = e.target.closest(".tile");
+        if (
+          tileEl?.tile?.part &&
+          this.game?.tooltip_manager &&
+          !this.isDragging
+        ) {
+          this.game.tooltip_manager.hide();
+        }
+      },
+      true
+    );
   }
 }

@@ -117,7 +117,13 @@ export class Engine {
           this.handleComponentDepletion(tile);
         }
       } else if (part.containment > 0) {
+        const old_heat = tile.heat_contained;
         tile.heat_contained += tile.heat; // Heat from adjacent pulsing cells
+
+        // Update visual state if heat changed
+        if (old_heat !== tile.heat_contained) {
+          tile.updateVisualState();
+        }
       }
     }
     this.game.performance.markEnd("tick_cells");
@@ -143,8 +149,14 @@ export class Engine {
           tile.getEffectiveTransferValue(),
           neighbor.heat_contained
         );
+        const old_neighbor_heat = neighbor.heat_contained;
         neighbor.heat_contained -= transfer_heat;
         reactor.current_heat += transfer_heat;
+
+        // Update visual state if heat changed
+        if (old_neighbor_heat !== neighbor.heat_contained) {
+          neighbor.updateVisualState();
+        }
       }
     }
     // Exchangers
@@ -156,6 +168,9 @@ export class Engine {
           tile.getEffectiveTransferValue(),
           Math.abs(diff) / 2
         );
+        const old_tile_heat = tile.heat_contained;
+        const old_neighbor_heat = neighbor.heat_contained;
+
         if (diff > 0) {
           // tile is hotter
           tile.heat_contained -= heat_to_move;
@@ -164,6 +179,14 @@ export class Engine {
           // neighbor is hotter
           tile.heat_contained += heat_to_move;
           neighbor.heat_contained -= heat_to_move;
+        }
+
+        // Update visual states if heat changed
+        if (old_tile_heat !== tile.heat_contained) {
+          tile.updateVisualState();
+        }
+        if (old_neighbor_heat !== neighbor.heat_contained) {
+          neighbor.updateVisualState();
         }
       });
     }
@@ -177,6 +200,8 @@ export class Engine {
         reactor.current_heat
       );
       let i = 0;
+      const neighbor_heat_changes = new Map();
+
       while (total_dispense > 0) {
         const neighbor = neighbors[i % neighbors.length];
         let heat_per_neighbor = 1;
@@ -187,13 +212,26 @@ export class Engine {
           );
         }
         if (heat_per_neighbor > 0) {
+          const old_heat = neighbor.heat_contained;
           neighbor.heat_contained += heat_per_neighbor;
           reactor.current_heat -= heat_per_neighbor;
           total_dispense -= heat_per_neighbor;
+
+          // Track neighbors that changed for visual updates
+          if (!neighbor_heat_changes.has(neighbor)) {
+            neighbor_heat_changes.set(neighbor, old_heat);
+          }
         }
         i++;
         // Prevent infinite loop if all neighbors are full
         if (i > neighbors.length * 2 && total_dispense > 0) break;
+      }
+
+      // Update visual states for all neighbors that had heat changes
+      for (const [neighbor, old_heat] of neighbor_heat_changes) {
+        if (old_heat !== neighbor.heat_contained) {
+          neighbor.updateVisualState();
+        }
       }
     }
     this.game.performance.markEnd("tick_heat_transfer");
@@ -206,6 +244,7 @@ export class Engine {
       // Vents
       if (tile.part.vent > 0) {
         const vent_value = tile.getEffectiveVentValue();
+        const old_heat = tile.heat_contained;
         if (tile.heat_contained > 0) {
           if (tile.heat_contained <= vent_value) {
             tile.heat_contained = 0;
@@ -214,6 +253,11 @@ export class Engine {
           }
         }
         if (tile.part.id === "vent6") reactor.current_power -= vent_value;
+
+        // Update visual state if heat changed
+        if (old_heat !== tile.heat_contained) {
+          tile.updateVisualState();
+        }
       }
       // Particle Accelerators
       if (

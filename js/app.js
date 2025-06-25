@@ -107,11 +107,22 @@ async function startGame(pageRouter, ui, game) {
   // Start game systems
   game.objectives_manager.start();
   game.engine.start();
-  ui.stateManager.setVar("max_heat", game.reactor.max_heat, true);
-  ui.stateManager.setVar("max_power", game.reactor.max_power, true);
+
+  // Initialize UI state with current game values
+  ui.stateManager.setVar("current_money", game.current_money);
+  ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+  ui.stateManager.setVar("current_power", game.reactor.current_power);
+  ui.stateManager.setVar("max_heat", game.reactor.max_heat);
+  ui.stateManager.setVar("max_power", game.reactor.max_power);
 
   // Setup global listeners
   setupGlobalListeners(game);
+
+  // Debug: Force reactor stats update after a short delay to ensure DOM is ready
+  setTimeout(() => {
+    console.log("[DEBUG] Forcing reactor stats update...");
+    game.reactor.updateStats();
+  }, 1000);
 
   if (!localStorage.getItem("reactorGameQuickStartShown")) {
     await showQuickStartModal();

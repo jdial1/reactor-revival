@@ -256,6 +256,7 @@ pixel-btn.active {
 #wrapper {
   display: flex;
   height: 100%;
+  flex-direction: row; /* Ensure proper flex direction for left/right positioning */
 }
 
 #main {
@@ -433,6 +434,20 @@ button.unaffordable .part-price {
   padding: 0; /* Panels have their own padding */
   z-index: 14;
 }
+
+/* Right-side positioning */
+#parts_section.right-side {
+  order: 2; /* Move to right side of flex container */
+}
+
+#parts_section.right-side #parts_panel_toggle {
+  left: auto;
+  right: 100%;
+  border-right: 4px solid var(--secondary-color);
+  border-left: none;
+  transform: rotate(180deg);
+}
+
 .parts_tabs {
   display: flex;
   flex-shrink: 0;
@@ -533,15 +548,41 @@ button.unaffordable .part-price {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transition: left 0.3s ease, right 0.3s ease, border 0.3s ease,
+    transform 0.2s ease, opacity 0.2s ease;
+  z-index: 1000;
+}
+
+#parts_panel_toggle:hover {
+  opacity: 1;
+  border-color: var(--accent-color);
 }
 
 #parts_panel_toggle:active {
   cursor: grabbing;
 }
 
+#parts_panel_toggle.dragging {
+  cursor: grabbing;
+  opacity: 0.8;
+  z-index: 1000;
+}
+
 #parts_panel_toggle .vertical-text {
   writing-mode: vertical-rl;
   text-orientation: mixed;
+}
+
+/* Add drag hint indicator */
+#parts_panel_toggle::after {
+  content: "⟷";
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.8em;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
 }
 
 /* --- UPGRADES PAGE --- */
@@ -823,34 +864,40 @@ button.unaffordable .part-price {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem;
   position: fixed;
   bottom: 0px;
   left: 0;
   right: 0;
-  padding: 8px;
+  padding: 6px 8px;
   z-index: 10;
+  min-height: 44px;
 }
 #info_stats_group_1,
 #info_stats_group_2 {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 .stat_block {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
+  gap: 6px;
+  padding: 4px 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pixel-progress {
-  width: 200px;
-  height: 30px;
+  width: clamp(180px, 22vw, 240px);
+  height: 34px;
   padding: var(--border-width);
   position: relative;
   border-color: var(--border-dark) var(--border-light) var(--border-light)
     var(--border-dark); /* Inset */
+  flex-shrink: 0;
+  min-width: 180px;
 }
 .pixel-progress-bar {
   height: 100%;
@@ -873,7 +920,11 @@ button.unaffordable .part-price {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  font-size: 0.85em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* --- BOTTOM NAV (MOBILE) --- */
@@ -1014,15 +1065,65 @@ button.unaffordable .part-price {
   #info_bar {
     display: flex;
     bottom: 56px;
+    gap: 0.3rem;
+    padding: 3px 5px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    min-height: 42px;
   }
+
+  .pixel-progress {
+    width: clamp(140px, 26vw, 200px);
+    height: 28px;
+    min-width: 140px;
+  }
+
+  #info_stats_group_1,
+  #info_stats_group_2 {
+    gap: 0.3rem;
+  }
+
+  .stat_block {
+    gap: 3px;
+    padding: 2px 3px;
+    font-size: 0.85em;
+  }
+
+  .stat_button {
+    gap: 2px;
+    font-size: 0.75em;
+  }
+
+  .stat_value {
+    font-size: 0.85em;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 900px) {
   #parts_section {
     position: fixed;
     height: 100%;
     z-index: 14;
     transform: translateX(-100%);
     width: var(--sidebar-width-mobile);
+    left: 0;
+    right: auto;
   }
   #parts_section:not(.collapsed) {
+    transform: translateX(0);
+  }
+
+  /* Right-side positioning for mobile */
+  #parts_section.right-side {
+    left: auto;
+    right: 0;
+    transform: translateX(100%);
+  }
+  #parts_section.right-side:not(.collapsed) {
     transform: translateX(0);
   }
 
@@ -1045,6 +1146,41 @@ button.unaffordable .part-price {
   }
 }
 
+/* Tablet and large phone adjustments */
+@media (max-width: 768px) and (min-width: 601px) {
+  #info_bar {
+    gap: 0.25rem;
+    padding: 2px 4px;
+    min-height: 38px;
+  }
+
+  #info_stats_group_1,
+  #info_stats_group_2 {
+    gap: 0.25rem;
+  }
+
+  .pixel-progress {
+    width: clamp(130px, 28vw, 180px);
+    height: 26px;
+  }
+
+  .stat_block {
+    font-size: 0.8em;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .stat_button {
+    gap: 2px;
+    font-size: 0.7em;
+  }
+
+  .stat_value {
+    font-size: 0.8em;
+    font-weight: 600;
+  }
+}
+
 @media (max-width: 600px) {
   .item-grid {
     grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
@@ -1054,6 +1190,125 @@ button.unaffordable .part-price {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 6px;
+  }
+
+  /* Extra small screen info bar adjustments */
+  #info_bar {
+    gap: 0.25rem;
+    padding: 2px 4px;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 40px;
+  }
+
+  #info_stats_group_1,
+  #info_stats_group_2 {
+    justify-content: center;
+    gap: 0.25rem;
+  }
+
+  .pixel-progress {
+    width: clamp(110px, 32vw, 150px);
+    height: 24px;
+  }
+
+  .stat_block {
+    font-size: 0.7em;
+    padding: 1px 2px;
+    gap: 2px;
+  }
+
+  .stat_button {
+    gap: 2px;
+    font-size: 0.65em;
+  }
+
+  .stat_value {
+    font-size: 0.75em;
+    font-weight: 600;
+  }
+
+  #bottom_nav {
+    bottom: 40px;
+  }
+}
+
+/* Even smaller screens (phones in portrait) */
+@media (max-width: 480px) {
+  #info_bar {
+    gap: 0.2rem;
+    padding: 1px 2px;
+    min-height: 36px;
+  }
+
+  #info_stats_group_1,
+  #info_stats_group_2 {
+    gap: 0.2rem;
+  }
+
+  .pixel-progress {
+    width: clamp(90px, 35vw, 130px);
+    height: 22px;
+  }
+
+  .stat_block {
+    font-size: 0.65em;
+    padding: 1px;
+    gap: 1px;
+  }
+
+  .stat_button {
+    gap: 1px;
+    font-size: 0.6em;
+  }
+
+  .stat_value {
+    font-size: 0.7em;
+    font-weight: 600;
+  }
+
+  #bottom_nav {
+    bottom: 36px;
+  }
+}
+
+/* Ultra-small screens */
+@media (max-width: 360px) {
+  #info_bar {
+    gap: 0.15rem;
+    padding: 1px;
+    min-height: 32px;
+  }
+
+  #info_stats_group_1,
+  #info_stats_group_2 {
+    gap: 0.15rem;
+  }
+
+  .pixel-progress {
+    width: clamp(75px, 38vw, 110px);
+    height: 20px;
+  }
+
+  .stat_block {
+    font-size: 0.6em;
+    padding: 0px 1px;
+    gap: 1px;
+  }
+
+  .stat_button {
+    gap: 1px;
+    font-size: 0.55em;
+  }
+
+  .stat_value {
+    font-size: 0.65em;
+    font-weight: 600;
+  }
+
+  /* Ensure bottom nav is properly positioned above smaller info bar */
+  #bottom_nav {
+    bottom: 32px;
   }
 }
 
@@ -1161,6 +1416,9 @@ button.unaffordable .part-price {
 
 #info_bar .stat_value {
   pointer-events: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 600;
 }
 
 .about-content {

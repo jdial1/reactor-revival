@@ -353,11 +353,10 @@ export class TooltipManager {
     }
 
     if (tile?.activated) {
-      if (obj.containment) {
-        stats.set(
-          "Heat",
-          `${fmt(tile.heat_contained, 0)} / ${fmt(obj.containment, 0)}`
-        );
+      if (obj.containment || tile.heat_contained > 0) {
+        const maxHeat = obj.containment || "∞";
+        const maxHeatDisplay = maxHeat === "∞" ? maxHeat : fmt(maxHeat, 0);
+        stats.set("Heat", `${fmt(tile.heat_contained, 0)} / ${maxHeatDisplay}`);
       }
       if (obj.category !== "cell") {
         let sell_value = this.calculateSellValue(obj, tile);

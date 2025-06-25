@@ -120,6 +120,13 @@ export class Reactor {
     this.game.ui.stateManager.setVar("stats_outlet", this.stats_outlet);
     this.game.ui.stateManager.setVar("stats_cash", this.stats_cash);
 
+    // Debug: Log reactor stats updates only when stats change
+    if (this.stats_power > 0 || this.stats_heat_generation > 0) {
+      console.log(
+        `[Reactor] Updated stats: power=${this.stats_power}, heat=${this.stats_heat_generation}, vent=${this.stats_vent}`
+      );
+    }
+
     if (
       this.game.tileset.active_tiles_list.every((t) => !t.part) &&
       this.current_power + this.game.current_money < this.game.base_money
