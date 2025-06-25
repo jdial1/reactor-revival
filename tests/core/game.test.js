@@ -105,4 +105,122 @@ describe("Core Game Mechanics", () => {
       expect(game.current_exotic_particles).toBe(0);
     });
   });
+
+  it("should initialize with correct default values", () => {
+    expect(game.current_money).toBe(game.base_money);
+    expect(game.protium_particles).toBe(0);
+    expect(game.total_exotic_particles).toBe(0);
+    expect(game.exotic_particles).toBe(0);
+    expect(game.current_exotic_particles).toBe(0);
+    expect(game.rows).toBe(game.base_rows);
+    expect(game.cols).toBe(game.base_cols);
+  });
+
+  it("should initialize new game state correctly", () => {
+    // Set some non-default values first
+    game.current_money = 999;
+    game.protium_particles = 50;
+    game.total_exotic_particles = 25;
+
+    // Initialize new game state
+    game.initialize_new_game_state();
+
+    // Check that values are reset to defaults
+    expect(game.current_money).toBe(game.base_money);
+    expect(game.protium_particles).toBe(0);
+    expect(game.total_exotic_particles).toBe(0);
+    expect(game.exotic_particles).toBe(0);
+    expect(game.current_exotic_particles).toBe(0);
+
+    // Session should not be started automatically
+    expect(game.session_start_time).toBeNull();
+  });
+
+  it("should track total played time correctly", () => {
+    // Mock Date.now to control time
+    const mockNow = vi.spyOn(Date, "now");
+    let currentTime = 1000000;
+    mockNow.mockImplementation(() => currentTime);
+
+    // Start session
+    game.startSession();
+    expect(game.session_start_time).toBe(currentTime);
+    expect(game.total_played_time).toBe(0);
+
+    // Advance time by 5 seconds
+    currentTime += 5000;
+    game.updateSessionTime();
+
+    // Should have accumulated 5 seconds
+    expect(game.total_played_time).toBe(5000);
+    expect(game.session_start_time).toBe(currentTime); // Should be reset
+
+    // Advance time by another 3 seconds
+    currentTime += 3000;
+    game.updateSessionTime();
+
+    // Should have accumulated 8 seconds total
+    expect(game.total_played_time).toBe(8000);
+
+    mockNow.mockRestore();
+  });
+
+  it("should format time correctly", () => {
+    expect(game.formatTime(0)).toBe('0<span class="time-unit">s</span>');
+    expect(game.formatTime(30000)).toBe('30<span class="time-unit">s</span>');
+    expect(game.formatTime(90000)).toBe(
+      '1<span class="time-unit">m</span> 30<span class="time-unit">s</span>'
+    );
+    expect(game.formatTime(3661000)).toBe(
+      '1<span class="time-unit">h</span> 1<span class="time-unit">m</span> 1<span class="time-unit">s</span>'
+    );
+    expect(game.formatTime(90061000)).toBe(
+      '1<span class="time-unit">d</span> 1<span class="time-unit">h</span> 1<span class="time-unit">m</span> 1<span class="time-unit">s</span>'
+    );
+  });
+
+  it("should get formatted total played time including current session", () => {
+    // Mock Date.now to control time
+    const mockNow = vi.spyOn(Date, "now");
+    let currentTime = 1000000;
+    mockNow.mockImplementation(() => currentTime);
+
+    // Set some existing total time
+    game.total_played_time = 10000; // 10 seconds
+
+    // Start session
+    game.startSession();
+    expect(game.session_start_time).toBe(currentTime);
+
+    // Advance time by 5 seconds
+    currentTime += 5000;
+
+    // Should include both total and current session time
+    const formattedTime = game.getFormattedTotalPlayedTime();
+    expect(formattedTime).toBe('15<span class="time-unit">s</span>'); // 10s + 5s
+
+    mockNow.mockRestore();
+  });
+
+  it("should save and load total played time", () => {
+    // Set some played time
+    game.total_played_time = 15000;
+    game.session_start_time = Date.now();
+
+    // Get save state
+    const saveData = game.getSaveState();
+    expect(saveData.total_played_time).toBe(15000);
+    expect(saveData.last_save_time).toBeDefined();
+
+    // Create new game and apply save state
+    const newGame = Object.create(Object.getPrototypeOf(game));
+    Object.assign(newGame, game);
+    newGame.total_played_time = 0;
+    newGame.session_start_time = null;
+
+    newGame.applySaveState(saveData);
+    expect(newGame.total_played_time).toBe(15000);
+    // Session should not start automatically - needs to be started explicitly
+    expect(newGame.session_start_time).toBeNull();
+  });
 });

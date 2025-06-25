@@ -23,6 +23,9 @@ class SplashScreenManager {
     this.errorTimeout = null;
     this.installPrompt = null;
 
+    // Initialize splash screen stats
+    this.initializeSplashStats();
+
     // Listen for service worker messages
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.addEventListener("message", (event) => {
@@ -38,6 +41,77 @@ class SplashScreenManager {
       this.installPrompt = e;
       console.log("Install prompt captured");
     });
+  }
+
+  /**
+   * Initialize splash screen with game stats (version and total played time)
+   */
+  async initializeSplashStats() {
+    if (!this.splashScreen) return;
+
+    // Get version from version.json
+    let version = "Unknown";
+    try {
+      const versionResponse = await fetch("./version.json");
+      const versionData = await versionResponse.json();
+      version = versionData.version || "Unknown";
+    } catch (error) {
+      console.warn("Could not load version info:", error);
+    }
+
+    // Get total played time from saved game
+    let totalPlayedTime = "0s";
+    try {
+      const savedDataJSON = localStorage.getItem("reactorGameSave");
+      if (savedDataJSON) {
+        const savedData = JSON.parse(savedDataJSON);
+        const totalMs = savedData.total_played_time || 0;
+        totalPlayedTime = this.formatTime(totalMs);
+      }
+    } catch (error) {
+      console.warn("Could not load played time:", error);
+    }
+
+    // Add stats to splash screen
+    this.addSplashStats(version, totalPlayedTime);
+  }
+
+  /**
+   * Add stats display to splash screen
+   */
+  addSplashStats(version, totalPlayedTime) {
+    // Remove existing stats if any
+    const existingStats = this.splashScreen.querySelector(".splash-stats");
+    if (existingStats) {
+      existingStats.remove();
+    }
+
+    // Version at bottom only (removed total played time from main screen)
+    const versionDiv = document.createElement("div");
+    versionDiv.className = "splash-version";
+    versionDiv.textContent = `v${version}`;
+
+    // Insert version at the very bottom
+    this.splashScreen.appendChild(versionDiv);
+  }
+
+  /**
+   * Format time in milliseconds to human readable format with smaller units
+   */
+  formatTime(ms) {
+    if (ms < 0) ms = 0;
+    const s = Math.floor(ms / 1000) % 60;
+    const m = Math.floor(ms / (1000 * 60)) % 60;
+    const h = Math.floor(ms / (1000 * 60 * 60)) % 24;
+    const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+
+    if (d > 0)
+      return `${d}<span class="time-unit">d</span> ${h}<span class="time-unit">h</span> ${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
+    if (h > 0)
+      return `${h}<span class="time-unit">h</span> ${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
+    if (m > 0)
+      return `${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
+    return `${s}<span class="time-unit">s</span>`;
   }
 
   updateStatus(message) {
@@ -119,11 +193,19 @@ class SplashScreenManager {
           const saveData = JSON.parse(saveDataJSON);
           const detailsDiv = document.createElement("div");
           detailsDiv.className = "splash-save-details";
+
+          // Format played time
+          const totalPlayedMs = saveData.total_played_time || 0;
+          const playedTimeStr = this.formatTime(totalPlayedMs);
+
           detailsDiv.innerHTML =
-            `<div><b>Money:</b> $${fmt(saveData.current_money ?? 0)}</div>` +
-            `<div><b>Cells:</b> ${
+            `<div><span class="save-detail-label">Money:</span> <span class="save-detail-value">$${fmt(
+              saveData.current_money ?? 0
+            )}</span></div>` +
+            `<div><span class="save-detail-label">Cells:</span> <span class="save-detail-value">${
               saveData.tiles ? saveData.tiles.length : 0
-            }</div>`;
+            }</span></div>` +
+            `<div><span class="save-detail-label">Played:</span> <span class="save-detail-value">${playedTimeStr}</span></div>`;
           loadGameButton.appendChild(detailsDiv);
         } catch (e) {}
         startOptionsSection.appendChild(loadGameButton);

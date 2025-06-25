@@ -7,6 +7,8 @@ export class Engine {
     this.last_tick_time = null;
     this.dtime = 0;
     this.running = false;
+    this.last_session_update = 0; // Track when we last updated session time
+    this.session_update_interval = 60000; // Update session time every 60 seconds
   }
 
   start() {
@@ -14,6 +16,8 @@ export class Engine {
     this.running = true;
     if (!this.loop_timeout) {
       this.last_tick_time = performance.now();
+      this.last_session_update = Date.now(); // Initialize session update tracking
+
       this.loop();
     }
   }
@@ -24,6 +28,9 @@ export class Engine {
     clearTimeout(this.loop_timeout);
     this.loop_timeout = null;
     this.last_tick_time = null;
+
+    // Update session time when stopping
+    this.game.updateSessionTime();
   }
 
   loop() {
@@ -346,6 +353,13 @@ export class Engine {
     ui.stateManager.setVar("current_power", reactor.current_power);
     ui.stateManager.setVar("current_heat", reactor.current_heat);
     this.game.performance.markEnd("tick_stats");
+
+    // 5. Periodic session time update (every 60 seconds)
+    const now = Date.now();
+    if (now - this.last_session_update >= this.session_update_interval) {
+      this.game.updateSessionTime();
+      this.last_session_update = now;
+    }
 
     if (reactor.checkMeltdown()) this.stop();
 

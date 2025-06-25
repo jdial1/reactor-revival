@@ -119,6 +119,9 @@ async function startGame(pageRouter, ui, game) {
   // Create and start game systems (moved here from main() to prevent splash screen background execution)
   game.engine = new Engine(game);
 
+  // Start session tracking now that the game is actually starting
+  game.startSession();
+
   // Restore any pending toggle states from loaded save (after engine is created)
   let startEngine = true; // Default: start the engine
   if (game._pendingToggleStates) {
@@ -182,6 +185,14 @@ function setupGlobalListeners(game) {
     },
     true
   );
+
+  // Save session time when page is unloaded
+  window.addEventListener("beforeunload", () => {
+    if (game && typeof game.updateSessionTime === "function") {
+      game.updateSessionTime();
+      game.saveGame();
+    }
+  });
 }
 
 async function showQuickStartModal() {

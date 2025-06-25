@@ -26,6 +26,12 @@ export class Game {
     this.total_exotic_particles = 0;
     this.exotic_particles = 0;
     this.current_exotic_particles = 0;
+
+    // Total played time tracking
+    this.total_played_time = 0; // Total time played in milliseconds
+    this.session_start_time = null; // When current session started
+    this.last_save_time = null; // When the game was last saved
+
     this.tileset = new Tileset(this);
     this.partset = new PartSet(this);
     this.upgradeset = new UpgradeSet(this);
@@ -71,11 +77,73 @@ export class Game {
 
   initialize_new_game_state() {
     this.set_defaults();
+    this.tileset.clearAllTiles();
     this.upgradeset.reset();
-    this.tileset.clearAllParts();
+    this.current_money = this.base_money;
+    this.protium_particles = 0;
+    this.total_exotic_particles = 0;
+    this.exotic_particles = 0;
+    this.current_exotic_particles = 0;
+
+    // Initialize time tracking for new game (but don't start session yet)
+    this.total_played_time = 0;
+    this.last_save_time = null;
+    this.session_start_time = null;
+
     this.upgradeset.check_affordability(this);
     this.reactor.updateStats();
   }
+
+  /**
+   * Start tracking time for the current session
+   */
+  startSession() {
+    this.session_start_time = Date.now();
+    console.log("Session started:", new Date(this.session_start_time));
+  }
+
+  /**
+   * Update the total played time with current session time
+   */
+  updateSessionTime() {
+    if (this.session_start_time) {
+      const sessionTime = Date.now() - this.session_start_time;
+      this.total_played_time += sessionTime;
+      this.session_start_time = Date.now(); // Reset session start for next interval
+    }
+  }
+
+  /**
+   * Get formatted total played time
+   */
+  getFormattedTotalPlayedTime() {
+    // Add current session time to total
+    let totalTime = this.total_played_time;
+    if (this.session_start_time) {
+      totalTime += Date.now() - this.session_start_time;
+    }
+    return this.formatTime(totalTime);
+  }
+
+  /**
+   * Format time in milliseconds to human readable format with smaller units
+   */
+  formatTime(ms) {
+    if (ms < 0) ms = 0;
+    const s = Math.floor(ms / 1000) % 60;
+    const m = Math.floor(ms / (1000 * 60)) % 60;
+    const h = Math.floor(ms / (1000 * 60 * 60)) % 24;
+    const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+
+    if (d > 0)
+      return `${d}<span class="time-unit">d</span> ${h}<span class="time-unit">h</span> ${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
+    if (h > 0)
+      return `${h}<span class="time-unit">h</span> ${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
+    if (m > 0)
+      return `${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
+    return `${s}<span class="time-unit">s</span>`;
+  }
+
   update_cell_power() {
     if (!this.partset || !this.reactor) return;
     this.partset.updateCellPower();
@@ -201,6 +269,9 @@ export class Game {
   }
 
   getSaveState() {
+    // Update session time before saving
+    this.updateSessionTime();
+
     const saveData = {
       version: this.version,
       current_money: this.current_money,
@@ -212,6 +283,11 @@ export class Game {
       cols: this.cols,
       sold_power: this.sold_power,
       sold_heat: this.sold_heat,
+
+      // Time tracking
+      total_played_time: this.total_played_time,
+      last_save_time: Date.now(),
+
       reactor: {
         current_heat: this.reactor.current_heat,
         current_power: this.reactor.current_power,
@@ -305,6 +381,12 @@ export class Game {
     this.cols = savedData.cols || this.base_cols;
     this.sold_power = savedData.sold_power || false;
     this.sold_heat = savedData.sold_heat || false;
+
+    // Load time tracking data (but don't start session yet - wait for game to actually start)
+    this.total_played_time = savedData.total_played_time || 0;
+    this.last_save_time = savedData.last_save_time || null;
+    this.session_start_time = null;
+
     if (savedData.reactor) {
       this.reactor.current_heat = savedData.reactor.current_heat || 0;
       this.reactor.current_power = savedData.reactor.current_power || 0;

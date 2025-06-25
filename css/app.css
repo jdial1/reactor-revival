@@ -2466,6 +2466,25 @@ body.hide-help-buttons .info-button {
   border-radius: 4px;
 }
 
+.save-detail-label {
+  font-size: 0.7em;
+  color: #b0bec5;
+  font-weight: normal;
+  margin-right: 0.5rem;
+}
+
+.save-detail-value {
+  font-size: 1em;
+  color: #4fc3f7;
+  font-weight: bold;
+}
+
+.time-unit {
+  font-size: 0.7em;
+  color: #b0bec5;
+  font-weight: normal;
+}
+
 /* Animations */
 @keyframes pulse {
   0%,
@@ -2498,6 +2517,10 @@ body.hide-help-buttons .info-button {
   }
 
   .splash-subtitle {
+    font-size: 0.6rem;
+  }
+
+  .splash-version {
     font-size: 0.6rem;
   }
 
@@ -2855,4 +2878,15 @@ body.hide-help-buttons .info-button {
     width: 90vw;
     min-width: 220px;
   }
+}
+
+.splash-version {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: "Press Start 2P", cursive;
+  font-size: 0.8rem;
+  color: #666;
+  opacity: 0.7;
 }
