@@ -768,7 +768,15 @@ export class UI {
     );
     this.updatePartsPanelBodyClass();
     document.addEventListener("keydown", (e) => {
-      if (e.ctrlKey) {
+      // Spacebar to toggle pause/play
+      if (e.code === "Space") {
+        // Only handle spacebar if not typing in an input field
+        if (!e.target.matches("input, textarea, [contenteditable]")) {
+          e.preventDefault();
+          const currentPauseState = this.stateManager.getVar("pause");
+          this.stateManager.setVar("pause", !currentPauseState);
+        }
+      } else if (e.ctrlKey) {
         switch (e.key) {
           case "1":
             e.preventDefault();

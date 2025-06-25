@@ -87,6 +87,59 @@ export class Tile {
         this.$el.style.backgroundImage = `url('${this.part.getImagePath()}')`;
         this.updateVisualState();
       }
+
+      // Clear meltdown state when placing parts after meltdown
+      if (this.game.reactor.has_melted_down) {
+        console.log(
+          "[Recovery] Clearing meltdown state after placing part:",
+          this.part.id
+        );
+        console.log(
+          "[Recovery] Reactor heat before reset:",
+          this.game.reactor.current_heat,
+          "max:",
+          this.game.reactor.max_heat
+        );
+
+        // Reset reactor heat to prevent immediate re-meltdown
+        this.game.reactor.current_heat = 0;
+        this.game.reactor.clearMeltdownState();
+
+        // Update UI to reflect reset heat
+        this.game.ui.stateManager.setVar(
+          "current_heat",
+          this.game.reactor.current_heat
+        );
+
+        // Restart the engine if it was stopped due to meltdown
+        // Force engine restart by ensuring pause state is properly managed
+        if (this.game.engine && !this.game.engine.running) {
+          const currentPauseState = this.game.ui.stateManager.getVar("pause");
+          console.log("[Recovery] Current pause state:", currentPauseState);
+          console.log(
+            "[Recovery] Engine running state:",
+            this.game.engine.running
+          );
+          console.log("[Recovery] Game paused state:", this.game.paused);
+
+          // Force unpause if needed, then restart engine
+          if (currentPauseState) {
+            console.log("[Recovery] Unpausing game");
+            this.game.ui.stateManager.setVar("pause", false);
+          } else {
+            // Even if not paused, force engine restart
+            console.log("[Recovery] Force restarting engine");
+            this.game.paused = false; // Ensure game.paused is synchronized
+            this.game.engine.start();
+          }
+        }
+        console.log(
+          "[Recovery] Meltdown state cleared, has_melted_down:",
+          this.game.reactor.has_melted_down,
+          "heat reset to:",
+          this.game.reactor.current_heat
+        );
+      }
     }
 
     // Update reactor stats after placing/removing a part
