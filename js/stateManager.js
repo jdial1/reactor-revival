@@ -45,7 +45,7 @@ export class StateManager {
     const contentEl = document.getElementById("objectives_content");
     if (titleEl && rewardEl && contentEl) {
       // If there is already a title, animate it out
-      if (titleEl.textContent) {
+      if (titleEl.textContent.trim()) {
         // Create a span for the old objective
         const oldSpan = document.createElement("span");
         oldSpan.className =
@@ -65,8 +65,8 @@ export class StateManager {
           titleEl.classList.remove("animate-scroll-in");
         }, 700);
       }
-      // Set new objective text
-      titleEl.textContent = objData.title;
+      // Set new objective text (wrapped in span for scrolling)
+      titleEl.innerHTML = `<span>${objData.title}</span>`;
       // Set reward
       rewardEl.textContent = objData.reward
         ? fmt(objData.reward)
@@ -94,31 +94,31 @@ export class StateManager {
   handleObjectiveCompleted() {
     if (this.ui.DOMElements.objectives_section) {
       const section = this.ui.DOMElements.objectives_section;
-      // Confetti colors
+
+      // Add flash class for completion animation
+      section.classList.add("flash");
+
+      // Minimal confetti - just a few particles
       const confettiColors = [
-        "#59c435",
-        "#00eaff",
-        "#ffa500",
-        "#fff",
-        "#ff3c3c",
-        "#a259c4",
+        "rgba(89, 196, 53, 0.8)",
+        "rgba(255, 255, 255, 0.6)",
       ];
-      // Spawn confetti
-      for (let i = 0; i < 15; i++) {
+      // Spawn fewer, subtler confetti
+      for (let i = 0; i < 5; i++) {
         const conf = document.createElement("span");
         conf.className = "confetti";
         conf.style.background =
           confettiColors[Math.floor(Math.random() * confettiColors.length)];
-        conf.style.left = `${10 + Math.random() * 80}%`;
-        conf.style.top = `${10 + Math.random() * 30}%`;
-        conf.style.transform = `rotate(${Math.random() * 360}deg)`;
-        conf.style.animationDelay = `${Math.random() * 0.2}s`;
+        conf.style.left = `${30 + Math.random() * 40}%`;
+        conf.style.top = `${20 + Math.random() * 20}%`;
+        conf.style.transform = `rotate(${Math.random() * 180}deg)`;
+        conf.style.animationDelay = `${Math.random() * 0.1}s`;
         section.appendChild(conf);
-        setTimeout(() => conf.remove(), 1500);
+        setTimeout(() => conf.remove(), 800);
       }
       setTimeout(() => {
         section.classList.remove("flash");
-      }, 1500);
+      }, 800);
     }
   }
   handlePartAdded(game, part_obj) {

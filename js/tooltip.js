@@ -18,6 +18,7 @@ export class TooltipManager {
     this.lastRenderedTileContext = null;
     this._lastTooltipContent = null;
     this.isMobile = window.innerWidth <= 768;
+    this.needsLiveUpdates = false;
 
     // Listen for resize events to update mobile state
     window.addEventListener("resize", () => {
@@ -51,6 +52,9 @@ export class TooltipManager {
     }
     this.current_obj = obj;
     this.current_tile_context = tile_context;
+
+    this.needsLiveUpdates = this._shouldTooltipUpdateLive(obj, tile_context);
+
     if (!this.tooltip_showing) {
       this.$main.classList.add("tooltip_showing");
       this.tooltip_showing = true;
@@ -353,10 +357,13 @@ export class TooltipManager {
     }
 
     if (tile?.activated) {
-      if (obj.containment || tile.heat_contained > 0) {
+      if (obj.containment) {
         const maxHeat = obj.containment || "∞";
         const maxHeatDisplay = maxHeat === "∞" ? maxHeat : fmt(maxHeat, 0);
-        stats.set("Heat", `${fmt(tile.heat_contained, 0)} / ${maxHeatDisplay}`);
+        stats.set(
+          "Heat",
+          `${fmt(tile.heat_contained || 0, 0)} / ${maxHeatDisplay}`
+        );
       }
       if (obj.category !== "cell") {
         let sell_value = this.calculateSellValue(obj, tile);
@@ -424,13 +431,38 @@ export class TooltipManager {
       buyButton.innerHTML = `Buy${costText} `;
       buyButton.className = "pixel-btn";
       buyButton.disabled = !obj.affordable;
-      buyButton.onclick = () => {
+      buyButton.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         if (this.game.upgradeset.purchaseUpgrade(obj.id)) {
           this.game.upgradeset.check_affordability(this.game);
           this.update();
         }
       };
       actionsContainer.appendChild(buyButton);
+    }
+  }
+
+  _shouldTooltipUpdateLive(obj, tile_context) {
+    // Upgrades typically don't need live updates unless showing buy buttons
+    if (obj.upgrade) {
+      return false; // Upgrades are static except for affordability
+    }
+
+    // Parts with tile context need live updates for heat, ticks, etc.
+    if (tile_context && tile_context.activated) {
+      return true;
+    }
+
+    // Parts in the parts panel (no tile context) are mostly static
+    return false;
+  }
+
+  // Call this when money or exotic particles change to update upgrade affordability
+  updateUpgradeAffordability() {
+    // Only update if showing an upgrade tooltip and it's locked (clicked)
+    if (this.tooltip_showing && this.current_obj?.upgrade && this.isLocked) {
+      this.update();
     }
   }
 }

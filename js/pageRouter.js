@@ -23,6 +23,25 @@ export class PageRouter {
       return;
     }
 
+    // Handle reactor pause/unpause based on page navigation
+    const wasOnReactorPage = this.currentPageId === "reactor_section";
+    const goingToReactorPage = pageId === "reactor_section";
+
+    if (this.ui.game.engine) {
+      if (wasOnReactorPage && !goingToReactorPage) {
+        // Leaving reactor page - pause the engine
+        console.log("PageRouter: Pausing reactor (leaving reactor page)");
+        this.ui.game.engine.stop();
+      } else if (!wasOnReactorPage && goingToReactorPage) {
+        // Entering reactor page - unpause the engine (if not manually paused)
+        const isManuallyPaused = this.ui.game.ui.stateManager.getVar("pause");
+        if (!isManuallyPaused) {
+          console.log("PageRouter: Resuming reactor (entering reactor page)");
+          this.ui.game.engine.start();
+        }
+      }
+    }
+
     const pageContentArea = document.querySelector(this.contentAreaSelector);
     if (!pageContentArea) {
       console.error(
@@ -119,6 +138,17 @@ export class PageRouter {
           });
       }
     });
+
+    // Add page-specific class to body for conditional styling
+    document.body.className = document.body.className.replace(
+      /\bpage-\w+\b/g,
+      ""
+    );
+    if (activePageId) {
+      document.body.classList.add(
+        `page-${activePageId.replace("_section", "")}`
+      );
+    }
   }
 
   async loadGameLayout() {

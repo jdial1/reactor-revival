@@ -427,6 +427,12 @@ export class UI {
         // Check affordability for both parts and upgrades
         this.game.partset.check_affordability(this.game);
         this.game.upgradeset.check_affordability(this.game);
+
+        // Update upgrade tooltip if one is showing and money/particles changed
+        if (this.game.tooltip_manager) {
+          this.game.tooltip_manager.updateUpgradeAffordability();
+        }
+
         this.game.performance.markEnd("ui_affordability_check");
       }
 
@@ -448,8 +454,11 @@ export class UI {
       () => this.runUpdateInterfaceLoop(),
       this.update_interface_interval
     );
-    // Live-update tooltip if showing
-    if (this.game?.tooltip_manager?.tooltip_showing) {
+    // Live-update tooltip only if it needs dynamic updates
+    if (
+      this.game?.tooltip_manager?.tooltip_showing &&
+      this.game?.tooltip_manager?.needsLiveUpdates
+    ) {
       this.game.performance.markStart("ui_tooltip_update");
       this.game.tooltip_manager.update();
       this.game.performance.markEnd("ui_tooltip_update");
@@ -886,8 +895,16 @@ export class UI {
     const partsSection = document.getElementById("parts_section");
     if (partsSection && !partsSection.classList.contains("collapsed")) {
       document.body.classList.add("parts-panel-open");
+
+      // Track which side the panel is on
+      if (partsSection.classList.contains("right-side")) {
+        document.body.classList.add("parts-panel-right");
+      } else {
+        document.body.classList.remove("parts-panel-right");
+      }
     } else {
       document.body.classList.remove("parts-panel-open");
+      document.body.classList.remove("parts-panel-right");
     }
   }
 
@@ -1015,6 +1032,13 @@ export class UI {
         panel.classList.add("right-side");
       }
 
+      // On desktop (>900px), ensure panel is expanded by default
+      const isMobile = window.innerWidth <= 900;
+      if (!isMobile) {
+        panel.classList.remove("collapsed");
+        this.updatePartsPanelBodyClass();
+      }
+
       const onPointerDown = (e) => {
         isDragging = true;
         startX = e.clientX;
@@ -1044,7 +1068,7 @@ export class UI {
           Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20;
 
         if (isHorizontalDrag) {
-          // Horizontal drag - show visual feedback for side switching
+          // Horizontal drag - show visual feedback for side switching (both desktop and mobile)
           const threshold = 100; // pixels to drag before switching sides
           const isRightSide = panel.classList.contains("right-side");
 
@@ -1063,12 +1087,15 @@ export class UI {
             )}px)`;
             toggle.style.opacity = "0.6";
           }
-        } else {
-          // Vertical drag - reposition toggle
+        }
+
+        // Always allow vertical repositioning (regardless of horizontal movement)
+        if (Math.abs(deltaY) > 5) {
           const newTop = startTop + deltaY;
 
           // Calculate bounds - account for bottom bars
-          const bottomBarHeight = 150; // 56px nav + 56px info bar
+          const isMobile = window.innerWidth <= 900;
+          const bottomBarHeight = isMobile ? 250 : 150; // More space needed on mobile
           const maxTop =
             window.innerHeight - toggle.offsetHeight - bottomBarHeight;
           const boundedTop = Math.max(0, Math.min(newTop, maxTop));
@@ -1092,23 +1119,38 @@ export class UI {
           Math.abs(deltaX) > Math.abs(deltaY) &&
           Math.abs(deltaX) > 20;
 
+        // Check if we're on mobile (screen width <= 900px)
+        const isMobile = window.innerWidth <= 900;
+
         if (isHorizontalDrag) {
+          // Allow side switching on both desktop and mobile for horizontal drags
           const threshold = 100;
           const isRightSide = panel.classList.contains("right-side");
 
           if (!isRightSide && deltaX > threshold) {
             panel.classList.add("right-side");
             localStorage.setItem("partsPanelSide", "right");
+            this.updatePartsPanelBodyClass();
           } else if (isRightSide && deltaX < -threshold) {
             panel.classList.remove("right-side");
             localStorage.setItem("partsPanelSide", "left");
+            this.updatePartsPanelBodyClass();
           }
         } else {
+          // For non-horizontal interactions (clicks and vertical drags)
           const clickTime = Date.now() - dragStartTime;
           const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
+          // Check if we're on mobile for click behavior
+          // const isMobile = window.innerWidth <= 900; // Already declared above
+
           if (!hasMoved || (clickTime < 200 && totalMovement < 10)) {
-            panel.classList.toggle("collapsed");
+            // Only allow collapse/expand clicks on mobile
+            if (isMobile) {
+              panel.classList.toggle("collapsed");
+              this.updatePartsPanelBodyClass();
+            }
+            // On desktop, clicks do nothing
           }
         }
       };
@@ -1121,8 +1163,10 @@ export class UI {
 
       // Set initial position to bottom if not already set
       if (!toggle.style.top) {
+        const isMobileInit = window.innerWidth <= 900;
+        const bottomBarHeight = isMobileInit ? 250 : 150;
         toggle.style.top = `${
-          window.innerHeight - toggle.offsetHeight - 150
+          window.innerHeight - toggle.offsetHeight - bottomBarHeight
         }px`;
       }
 
@@ -1131,12 +1175,21 @@ export class UI {
         if (!toggle.style.top) return;
 
         const currentTop = parseInt(toggle.style.top);
-        const bottomBarHeight = 150;
+        const isMobileResize = window.innerWidth <= 900;
+        const bottomBarHeight = isMobileResize ? 250 : 150;
         const maxTop =
           window.innerHeight - toggle.offsetHeight - bottomBarHeight;
 
         if (currentTop > maxTop) {
           toggle.style.top = `${maxTop}px`;
+        }
+
+        // Update panel collapsed state based on screen size
+        const isMobileState = window.innerWidth <= 900;
+        if (!isMobileState) {
+          // Desktop: ensure panel is expanded
+          panel.classList.remove("collapsed");
+          this.updatePartsPanelBodyClass();
         }
       });
     }

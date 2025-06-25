@@ -30,7 +30,7 @@ export class Game {
     this.partset = new PartSet(this);
     this.upgradeset = new UpgradeSet(this);
     this.reactor = new Reactor(this);
-    this.engine = new Engine(this);
+    this.engine = null; // Engine will be created later in startGame()
     this.performance = new Performance(this);
     this.performance.enable();
     this.loop_wait = this.base_loop_wait;
@@ -129,15 +129,18 @@ export class Game {
     this.reactor.heat_controlled = this.ui.stateManager.getVar("heat_control");
 
     if (property === "pause") {
-      if (newState) {
-        this.engine.stop();
-      } else {
-        this.engine.start();
+      if (this.engine) {
+        if (newState) {
+          this.engine.stop();
+        } else {
+          this.engine.start();
+        }
       }
     } else if (property === "parts_panel") {
       const partsPanel = document.getElementById("parts_section");
       if (partsPanel) {
         partsPanel.classList.toggle("collapsed", !newState);
+        this.ui.updatePartsPanelBodyClass();
       }
     }
   }
@@ -339,11 +342,8 @@ export class Game {
       this.objectives_manager.current_objective_index =
         savedData.objectives.current_objective_index || 0;
     }
-    if (savedData.toggles) {
-      for (const [key, value] of Object.entries(savedData.toggles)) {
-        this.ui.stateManager.setVar(key, value);
-      }
-    }
+    // Store toggles for later restoration (after engine is created)
+    this._pendingToggleStates = savedData.toggles;
     this.ui.updateAllToggleBtnStates();
   }
 }

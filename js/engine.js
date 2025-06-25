@@ -101,6 +101,19 @@ export class Engine {
         heat_add += tile.heat;
         tile.ticks--;
 
+        // Transfer heat to adjacent containment parts
+        for (const neighbor of tile.containmentNeighborTiles) {
+          const old_neighbor_heat = neighbor.heat_contained;
+          const heat_per_neighbor =
+            tile.heat / Math.max(tile.containmentNeighborTiles.length, 1);
+          neighbor.heat_contained += heat_per_neighbor;
+
+          // Update visual state if heat changed
+          if (old_neighbor_heat !== neighbor.heat_contained) {
+            neighbor.updateVisualState();
+          }
+        }
+
         // Process reflector decay
         for (const r_tile of tile.reflectorNeighborTiles) {
           if (r_tile.ticks > 0) {
@@ -117,13 +130,8 @@ export class Engine {
           this.handleComponentDepletion(tile);
         }
       } else if (part.containment > 0) {
-        const old_heat = tile.heat_contained;
-        tile.heat_contained += tile.heat; // Heat from adjacent pulsing cells
-
-        // Update visual state if heat changed
-        if (old_heat !== tile.heat_contained) {
-          tile.updateVisualState();
-        }
+        // Containment parts receive heat from adjacent cells (handled above)
+        // and from heat transfer components (handled in next section)
       }
     }
     this.game.performance.markEnd("tick_cells");
@@ -195,19 +203,27 @@ export class Engine {
     for (const tile of active_outlets) {
       const neighbors = tile.containmentNeighborTiles;
       if (neighbors.length === 0) continue;
-      let total_dispense = Math.min(
-        tile.getEffectiveTransferValue() * neighbors.length,
-        reactor.current_heat
-      );
+      const outlet_capacity =
+        tile.getEffectiveTransferValue() * neighbors.length;
+      let total_dispense = Math.min(outlet_capacity, reactor.current_heat);
+
       let i = 0;
       const neighbor_heat_changes = new Map();
 
       while (total_dispense > 0) {
         const neighbor = neighbors[i % neighbors.length];
-        let heat_per_neighbor = 1;
+        // Calculate max heat this neighbor can receive
+        const neighbor_space =
+          neighbor.part.containment - neighbor.heat_contained;
+        let heat_per_neighbor = Math.min(
+          total_dispense / neighbors.length, // Fair share of remaining heat
+          neighbor_space, // Don't overfill neighbor
+          tile.getEffectiveTransferValue() // Don't exceed transfer rate per neighbor
+        );
+
         if (reactor.heat_outlet_controlled && neighbor.part.vent) {
           heat_per_neighbor = Math.min(
-            1,
+            heat_per_neighbor,
             neighbor.part.vent - neighbor.heat_contained
           );
         }

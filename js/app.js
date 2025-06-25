@@ -35,7 +35,7 @@ async function main() {
 
   game.set_defaults();
   game.objectives_manager = new ObjectiveManager(game);
-  game.engine = new Engine(game);
+  // Note: Engine creation moved to startGame() to prevent background execution
 
   // --- 3. Determine Game Start Flow (New Game vs. Load Game) ---
   const savedGame = game.loadGame();
@@ -58,11 +58,17 @@ async function main() {
           factionPanel.style.display = "none";
           const faction = card.getAttribute("data-faction");
           localStorage.setItem("reactorFaction", faction);
+          // Wait a moment for faction panel to hide before starting game
+          await new Promise((resolve) => setTimeout(resolve, 200));
           await startGame(pageRouter, ui, game);
         };
       });
     } else {
-      await startGame(pageRouter, ui, game);
+      // Fallback: No splash manager available for new game
+      console.warn(
+        "No splash manager available - creating minimal start interface"
+      );
+      createFallbackStartInterface(pageRouter, ui, game);
     }
   } else {
     // Load existing game
@@ -73,6 +79,8 @@ async function main() {
       if (loadGameBtn) {
         loadGameBtn.onclick = async () => {
           window.splashManager.hide();
+          // Wait for splash screen fade-out animation to complete (500ms)
+          await new Promise((resolve) => setTimeout(resolve, 600));
           await startGame(pageRouter, ui, game);
         };
       }
@@ -84,7 +92,11 @@ async function main() {
         };
       }
     } else {
-      await startGame(pageRouter, ui, game);
+      // Fallback: No splash manager available for load game
+      console.warn(
+        "No splash manager available - creating minimal start interface"
+      );
+      createFallbackStartInterface(pageRouter, ui, game);
     }
   }
 }
@@ -104,9 +116,25 @@ async function startGame(pageRouter, ui, game) {
   // Create tooltip manager before setting up global listeners
   game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
 
-  // Start game systems
+  // Create and start game systems (moved here from main() to prevent splash screen background execution)
+  game.engine = new Engine(game);
+
+  // Restore any pending toggle states from loaded save (after engine is created)
+  let startEngine = true; // Default: start the engine
+  if (game._pendingToggleStates) {
+    for (const [key, value] of Object.entries(game._pendingToggleStates)) {
+      game.ui.stateManager.setVar(key, value);
+      if (key === "pause" && value === true) {
+        startEngine = false; // Don't start if game was paused
+      }
+    }
+    delete game._pendingToggleStates; // Clean up
+  }
+
   game.objectives_manager.start();
-  game.engine.start();
+  if (startEngine) {
+    game.engine.start();
+  }
 
   // Initialize UI state with current game values
   ui.stateManager.setVar("current_money", game.current_money);
@@ -145,7 +173,8 @@ function setupGlobalListeners(game) {
         if (
           tooltipEl &&
           !tooltipEl.contains(e.target) &&
-          !e.target.closest(".upgrade, .part")
+          !e.target.closest(".upgrade, .part") &&
+          !e.target.closest("#tooltip_actions")
         ) {
           game.tooltip_manager.closeView();
         }
@@ -210,6 +239,41 @@ async function showQuickStartModal() {
       localStorage.setItem("reactorGameQuickStartShown", "1");
     };
   }
+}
+
+function createFallbackStartInterface(pageRouter, ui, game) {
+  // Create a minimal start interface even without splash manager
+  const fallbackDiv = document.createElement("div");
+  fallbackDiv.id = "fallback-start-interface";
+  fallbackDiv.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    color: white;
+    font-family: monospace;
+  `;
+
+  fallbackDiv.innerHTML = `
+    <div style="text-align: center;">
+      <h1>Reactor Game</h1>
+      <p>Click to start the game</p>
+      <button id="fallback-start-btn" style="padding: 10px 20px; font-size: 16px;">Start Game</button>
+    </div>
+  `;
+
+  document.body.appendChild(fallbackDiv);
+
+  document.getElementById("fallback-start-btn").onclick = async () => {
+    fallbackDiv.remove();
+    await startGame(pageRouter, ui, game);
+  };
 }
 
 function populateFactionSelector() {
