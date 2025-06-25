@@ -294,7 +294,7 @@ export class Engine {
           reactor.checkMeltdown();
           return;
         }
-        this.handleComponentDepletion(tile);
+        this.handleComponentExplosion(tile);
       }
     }
     this.game.performance.markEnd("tick_vents");
@@ -355,5 +355,23 @@ export class Engine {
   handleComponentDepletion(tile) {
     // Delegate the logic to the main game class
     this.game.handleComponentDepletion(tile);
+  }
+
+  handleComponentExplosion(tile) {
+    // Visual explosion effect
+    if (tile.$el) {
+      tile.$el.classList.add("exploding");
+      // Remove the explosion class after animation completes
+      setTimeout(() => {
+        if (tile.$el) {
+          tile.$el.classList.remove("exploding");
+        }
+      }, 600); // Match animation duration
+    }
+
+    // Remove the part after a short delay to show explosion
+    setTimeout(() => {
+      this.handleComponentDepletion(tile);
+    }, 100);
   }
 }
