@@ -409,7 +409,7 @@ async function runAllChecks() {
   log(`Target URL: ${BASE_URL}`, "yellow");
   log("=".repeat(50), "blue");
 
-  const checks = [
+  const checkFunctions = [
     { name: "Manifest Start URL", fn: checkManifestStartUrl },
     { name: "Service Worker", fn: checkServiceWorker },
     { name: "Browser Compatibility", fn: checkBrowserCompatibility },
@@ -420,14 +420,17 @@ async function runAllChecks() {
     { name: "HTTPS & Security", fn: checkSecurity },
   ];
 
+  const checkResults = [];
   let passedChecks = 0;
 
-  for (const check of checks) {
+  for (const check of checkFunctions) {
     try {
       const result = await check.fn();
+      checkResults.push({ name: check.name, passed: result });
       if (result) passedChecks++;
     } catch (error) {
       log(`❌ ${check.name} check crashed: ${error.message}`, "red");
+      checkResults.push({ name: check.name, passed: false });
     }
   }
 
@@ -435,18 +438,18 @@ async function runAllChecks() {
   log("\n" + "=".repeat(50), "blue");
   log(`${colors.bold}📋 Summary${colors.reset}`, "blue");
 
-  checks.forEach((check) => {
+  checkResults.forEach((check) => {
     const status = check.passed ? "✅ PASS" : "❌ FAIL";
     const color = check.passed ? "green" : "red";
     log(`${status} ${check.name}`, color);
   });
 
   log(
-    `\n${passedChecks}/${checks.length} checks passed`,
-    passedChecks === checks.length ? "green" : "red"
+    `\n${passedChecks}/${checkResults.length} checks passed`,
+    passedChecks === checkResults.length ? "green" : "red"
   );
 
-  if (passedChecks === checks.length) {
+  if (passedChecks === checkResults.length) {
     log("\n🎉 All PWA checks passed! Deployment is successful.", "green");
     process.exit(0);
   } else {

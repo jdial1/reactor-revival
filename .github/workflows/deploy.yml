@@ -80,7 +80,9 @@ jobs:
         id: pwa-check
         env:
           GITHUB_PAGES_URL: ${{ needs.deploy.outputs.page_url }}
-        run: node scripts/post-deploy-pwa-check.js
+        run: |
+          echo "Running PWA checks for: ${{ needs.deploy.outputs.page_url }}"
+          node scripts/post-deploy-pwa-check.js
 
       - name: Create check status comment (on failure)
         if: failure()

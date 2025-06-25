@@ -211,4 +211,19 @@ export class Tile {
       this.$el.classList.remove("is-processing");
     }
   }
+
+  /**
+   * Refreshes the tile's visual state after DOM element creation.
+   * This is needed when loading save games where parts are set before DOM elements exist.
+   */
+  refreshVisualState() {
+    if (!this.$el || !this.part) return;
+
+    // Set the part classes and background image
+    this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
+    this.$el.style.backgroundImage = `url('${this.part.getImagePath()}')`;
+
+    // Update the visual state (progress bars, etc.)
+    this.updateVisualState();
+  }
 }

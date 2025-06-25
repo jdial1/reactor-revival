@@ -1417,6 +1417,12 @@ export class UI {
             tile.enabled = true; // Ensure tile is enabled for visibility
             this.stateManager.handleTileAdded(this.game, tile);
           });
+
+          this.game.tileset.tiles_list.forEach((tile) => {
+            if (tile.part) {
+              tile.refreshVisualState();
+            }
+          });
         }
         this.setupReactorEventListeners();
         this.resizeReactor();

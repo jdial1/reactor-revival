@@ -256,14 +256,18 @@ export class Game {
       if (typeof localStorage !== "undefined" && localStorage !== null) {
         localStorage.setItem("reactorGameSave", JSON.stringify(saveData));
         console.log("Game saved successfully.");
-      } else if (process.env.NODE_ENV === "test") {
+      } else if (
+        typeof process !== "undefined" &&
+        process.env?.NODE_ENV === "test"
+      ) {
         // Silent success in test environment
         return;
       }
     } catch (error) {
       // Only log errors in non-test environments or if it's not a localStorage issue
       if (
-        process.env.NODE_ENV !== "test" ||
+        typeof process === "undefined" ||
+        process.env?.NODE_ENV !== "test" ||
         !error.message.includes("localStorage")
       ) {
         console.error("Error saving game:", error);
