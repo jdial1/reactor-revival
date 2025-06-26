@@ -181,6 +181,14 @@ export class Game {
       ? this.total_exotic_particles + this.exotic_particles
       : 0;
 
+    // Save current upgrades before reset
+    const currentUpgrades = this.upgradeset.upgradesArray
+      .filter((upg) => upg.level > 0)
+      .map((upg) => ({
+        id: upg.id,
+        level: upg.level,
+      }));
+
     this.set_defaults();
 
     // Restore exotic particles if keeping them
@@ -196,6 +204,18 @@ export class Game {
       this.current_exotic_particles
     );
     this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
+
+    // Restore upgrades (this will trigger their actions and update reactor size)
+    currentUpgrades.forEach((upgData) => {
+      const upgrade = this.upgradeset.getUpgrade(upgData.id);
+      if (upgrade) {
+        upgrade.setLevel(upgData.level);
+      }
+    });
+
+    // Final update to ensure everything is in sync
+    this.reactor.updateStats();
+    this.upgradeset.check_affordability(this);
   }
   onToggleStateChange(property, newState) {
     this.paused = this.ui.stateManager.getVar("pause");

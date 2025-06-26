@@ -9,6 +9,11 @@ export class UI {
     this.game = null;
     this.DOMElements = {};
     this.update_vars = new Map();
+    this.var_objs_config = {};
+    this.last_money = 0;
+    this.last_exotic_particles = 0;
+    this.parts_panel_collapsed = true;
+    this.parts_panel_right_side = false;
     this.update_interface_interval = 100;
     this.update_interface_task = null;
     this.stateManager = new StateManager(this);
@@ -17,9 +22,7 @@ export class UI {
     this.lastTileModified = null;
     this.longPressTimer = null;
     this.longPressDuration = 500;
-    this.var_objs_config = {};
-    this.last_money = 0;
-    this.last_exotic_particles = 0;
+    this.help_mode_active = false; // Track help mode state
     this.dom_ids = [
       "main",
       "reactor",
@@ -376,6 +379,20 @@ export class UI {
       if (contentToShow) contentToShow.classList.add("active");
       this.populatePartsForTab(clickedTabId);
     });
+
+    // Setup help toggle button
+    const helpToggleBtn = document.getElementById("parts_help_toggle");
+    if (helpToggleBtn) {
+      helpToggleBtn.addEventListener("click", () => {
+        this.help_mode_active = !this.help_mode_active;
+        helpToggleBtn.classList.toggle("active", this.help_mode_active);
+        document.body.classList.toggle(
+          "help-mode-active",
+          this.help_mode_active
+        );
+      });
+    }
+
     const activeTab = Array.from(
       partsTabsContainer.querySelectorAll(".parts_tab")
     ).find((btn) => btn.classList.contains("active"));
@@ -927,22 +944,29 @@ export class UI {
           this.game.sellPart(tile);
         }
       } else {
+        // Check if there's a part on the tile and help mode is active - show tooltip
+        if (tile.part && this.help_mode_active) {
+          if (this.game && this.game.tooltip_manager) {
+            console.log("Showing tooltip for part", tile.part);
+            this.game.tooltip_manager.show(tile.part, tile, true);
+          }
+          return; // Don't place parts when in help mode
+        }
+
+        // Normal game interactions when help mode is off
         if (clicked_part) {
           if (tile.part) {
-            if (this.game && this.game.tooltip_manager) {
-              console.log("Showing tooltip for part", tile.part);
-              this.game.tooltip_manager.show(tile.part, tile, true);
+            // Replace existing part with selected part
+            if (this.game.current_money >= clicked_part.cost) {
+              this.game.current_money -= clicked_part.cost;
+              tile.setPart(clicked_part);
             }
-            continue;
-          }
-          if (this.game.current_money >= clicked_part.cost) {
-            this.game.current_money -= clicked_part.cost;
-            tile.setPart(clicked_part);
-          }
-        } else if (tile.part) {
-          // No part selected, show tooltip for existing part
-          if (this.game && this.game.tooltip_manager) {
-            this.game.tooltip_manager.show(tile.part, tile, true);
+          } else {
+            // Empty tile with part selected - place the part
+            if (this.game.current_money >= clicked_part.cost) {
+              this.game.current_money -= clicked_part.cost;
+              tile.setPart(clicked_part);
+            }
           }
         }
       }
@@ -1797,7 +1821,7 @@ export class UI {
       this.handleGridInteraction(e.target.closest(".tile"), e);
     });
 
-    // Add hover events for reactor tiles to show tooltips
+    // Add hover events for reactor tiles to show tooltips (only in help mode)
     reactor.addEventListener(
       "mouseenter",
       (e) => {
@@ -1805,7 +1829,8 @@ export class UI {
         if (
           tileEl?.tile?.part &&
           this.game?.tooltip_manager &&
-          !this.isDragging
+          !this.isDragging &&
+          this.help_mode_active
         ) {
           this.game.tooltip_manager.show(tileEl.tile.part, tileEl.tile, false);
         }
@@ -1820,7 +1845,8 @@ export class UI {
         if (
           tileEl?.tile?.part &&
           this.game?.tooltip_manager &&
-          !this.isDragging
+          !this.isDragging &&
+          this.help_mode_active
         ) {
           this.game.tooltip_manager.hide();
         }

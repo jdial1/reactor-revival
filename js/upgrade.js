@@ -51,7 +51,7 @@ export class Upgrade {
       this.affordable = isAffordable;
       if (this.$el) {
         this.$el.classList.toggle("unaffordable", !isAffordable);
-        this.$el.disabled = !isAffordable;
+        // this.$el.disabled = !isAffordable;
       }
     }
   }
@@ -132,7 +132,8 @@ export class Upgrade {
     this.$el.appendChild(imageDiv);
 
     this.$el.classList.toggle("unaffordable", !this.affordable);
-    this.$el.disabled = !this.affordable;
+    // Remove disabled state so unaffordable upgrades can still be clicked for tooltips
+    // this.$el.disabled = !this.affordable;
 
     return this.$el;
   }

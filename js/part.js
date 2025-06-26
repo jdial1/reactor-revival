@@ -385,6 +385,15 @@ export class Part {
     this.$el.disabled = !this.affordable;
 
     this.$el.addEventListener("click", (e) => {
+      // Check if help mode is active
+      if (this.game?.ui?.help_mode_active) {
+        // In help mode, show tooltip instead of selecting part
+        if (this.game && this.game.tooltip_manager) {
+          this.game.tooltip_manager.show(this, null, true, this.$el);
+        }
+        return;
+      }
+
       if (this.affordable) {
         document
           .querySelectorAll(".part.part_active")
@@ -401,13 +410,23 @@ export class Part {
 
     // Add hover tooltips for parts
     this.$el.addEventListener("mouseenter", (e) => {
-      if (this.game && this.game.tooltip_manager) {
+      // Only show hover tooltips when help mode is active
+      if (
+        this.game?.ui?.help_mode_active &&
+        this.game &&
+        this.game.tooltip_manager
+      ) {
         this.game.tooltip_manager.show(this, null, false, this.$el);
       }
     });
 
     this.$el.addEventListener("mouseleave", (e) => {
-      if (this.game && this.game.tooltip_manager) {
+      // Only hide tooltips if help mode is active (since we only show them in help mode)
+      if (
+        this.game?.ui?.help_mode_active &&
+        this.game &&
+        this.game.tooltip_manager
+      ) {
         this.game.tooltip_manager.hide();
       }
     });

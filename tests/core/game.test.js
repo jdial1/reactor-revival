@@ -256,4 +256,41 @@ describe("Core Game Mechanics", () => {
     // Verify the objective manager has the correct index
     expect(newGame.objectives_manager.current_objective_index).toBe(5);
   });
+
+  it("should preserve reactor expansion upgrades during reboot", async () => {
+    // Purchase row and column expansion upgrades
+    const rowUpgrade = game.upgradeset.getUpgrade("expand_reactor_rows");
+    const colUpgrade = game.upgradeset.getUpgrade("expand_reactor_cols");
+
+    // Set enough money to buy upgrades
+    game.current_money = 1000000;
+
+    // Purchase upgrades
+    game.upgradeset.purchaseUpgrade(rowUpgrade.id);
+    game.upgradeset.purchaseUpgrade(rowUpgrade.id);
+    game.upgradeset.purchaseUpgrade(colUpgrade.id);
+
+    // Verify initial state
+    expect(rowUpgrade.level).toBe(2);
+    expect(colUpgrade.level).toBe(1);
+    expect(game.rows).toBe(game.base_rows + 2);
+    expect(game.cols).toBe(game.base_cols + 1);
+
+    const expectedRows = game.rows;
+    const expectedCols = game.cols;
+
+    // Perform reboot
+    game.reboot_action(false);
+
+    // Verify upgrades and reactor size are preserved
+    expect(rowUpgrade.level).toBe(2);
+    expect(colUpgrade.level).toBe(1);
+    expect(game.rows).toBe(expectedRows);
+    expect(game.cols).toBe(expectedCols);
+
+    // Verify other things are reset properly
+    expect(game.current_money).toBe(game.base_money);
+    expect(game.reactor.current_heat).toBe(0);
+    expect(game.reactor.current_power).toBe(0);
+  });
 });
