@@ -1,16 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setupGame } from "../helpers/setup.js";
-import { executeUpgradeAction } from "../../js/upgradeActions.js";
-
-vi.mock("../../js/upgradeActions.js", () => ({
-  executeUpgradeAction: vi.fn(),
-}));
 
 describe("Upgrade Mechanics", () => {
   let game;
   beforeEach(async () => {
     game = await setupGame();
-    vi.clearAllMocks();
   });
 
   it("should calculate increasing cost based on level and multiplier", () => {
@@ -27,13 +21,15 @@ describe("Upgrade Mechanics", () => {
 
   it("should set level and trigger its action", () => {
     const upgrade = game.upgradeset.getUpgrade("expand_reactor_rows");
+
+    // Track the initial reactor rows
+    const initialRows = game.rows;
+
     upgrade.setLevel(1);
     expect(upgrade.level).toBe(1);
-    expect(executeUpgradeAction).toHaveBeenCalledWith(
-      upgrade.actionId,
-      upgrade,
-      game
-    );
+
+    // Verify the action was executed by checking the effect
+    expect(game.rows).toBe(initialRows + 1);
   });
 
   it("should become unaffordable with insufficient funds", () => {

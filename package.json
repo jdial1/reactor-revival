@@ -6,6 +6,7 @@
   "debug": false,
   "scripts": {
     "test": "vitest",
+    "test:ci": "vitest --run",
     "test:safe": "vitest --reporter=basic --no-coverage",
     "generate-version": "node scripts/generate-version.js",
     "dev": "npm run generate-version && npm run build:sw && npx live-server --port=8080 --open=/ --cors --headers='Cache-Control: no-store' .",

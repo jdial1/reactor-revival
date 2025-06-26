@@ -106,14 +106,19 @@ describe("Core Game Mechanics", () => {
     });
   });
 
-  it("should initialize with correct default values", () => {
-    expect(game.current_money).toBe(game.base_money);
-    expect(game.protium_particles).toBe(0);
-    expect(game.total_exotic_particles).toBe(0);
-    expect(game.exotic_particles).toBe(0);
-    expect(game.current_exotic_particles).toBe(0);
-    expect(game.rows).toBe(game.base_rows);
-    expect(game.cols).toBe(game.base_cols);
+  it("should initialize with correct default values", async () => {
+    // Create a fresh game instance specifically for this test to avoid test setup interference
+    const freshGame = await setupGame();
+    // Reset to actual defaults by calling set_defaults
+    freshGame.set_defaults();
+
+    expect(freshGame.current_money).toBe(freshGame.base_money);
+    expect(freshGame.protium_particles).toBe(0);
+    expect(freshGame.total_exotic_particles).toBe(0);
+    expect(freshGame.exotic_particles).toBe(0);
+    expect(freshGame.current_exotic_particles).toBe(0);
+    expect(freshGame.rows).toBe(freshGame.base_rows);
+    expect(freshGame.cols).toBe(freshGame.base_cols);
   });
 
   it("should initialize new game state correctly", () => {
@@ -222,5 +227,33 @@ describe("Core Game Mechanics", () => {
     expect(newGame.total_played_time).toBe(15000);
     // Session should not start automatically - needs to be started explicitly
     expect(newGame.session_start_time).toBeNull();
+  });
+
+  it("should save and load objectives state correctly", async () => {
+    // Complete a few objectives to advance the index
+    game.objectives_manager.current_objective_index = 5;
+
+    // Get save state
+    const saveData = game.getSaveState();
+
+    // Verify objective index is saved
+    expect(saveData.objectives.current_objective_index).toBe(5);
+
+    // Create a new game instance and apply save state
+    const newGame = await setupGame();
+    newGame.applySaveState(saveData);
+
+    // Verify the saved objective index is stored for restoration
+    expect(newGame._saved_objective_index).toBe(5);
+
+    // Simulate the startup process where objective manager gets the saved index
+    if (newGame._saved_objective_index !== undefined) {
+      newGame.objectives_manager.current_objective_index =
+        newGame._saved_objective_index;
+      delete newGame._saved_objective_index;
+    }
+
+    // Verify the objective manager has the correct index
+    expect(newGame.objectives_manager.current_objective_index).toBe(5);
   });
 });

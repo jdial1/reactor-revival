@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run test suite
+        run: npm run test:ci
+
       - name: Generate version.json
         run: npm run generate-version
 

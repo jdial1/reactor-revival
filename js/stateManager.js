@@ -160,6 +160,7 @@ export class StateManager {
         cell_perpetual: "cell_perpetual_upgrades",
         exchangers: "exchanger_upgrades",
         vents: "vent_upgrades",
+        other: "other_upgrades",
       };
       return map[key] || key;
     };

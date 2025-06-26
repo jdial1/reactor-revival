@@ -100,7 +100,7 @@ describe("Full Part and Upgrade Coverage", () => {
             });
 
             // Setup the test state
-            tile.heat_contained = 100;
+            tile.heat_contained = 80;
             const ventValue = tile.getEffectiveVentValue();
 
             if (part.id === "vent6") {
@@ -117,10 +117,10 @@ describe("Full Part and Upgrade Coverage", () => {
 
             // --- CORRECTED EXPECTATION LOGIC ---
             let expectedVentHeat;
-            if (100 <= ventValue) {
+            if (80 <= ventValue) {
               expectedVentHeat = 0;
             } else {
-              expectedVentHeat = 100 - ventValue;
+              expectedVentHeat = 80 - ventValue;
             }
 
             // Account for component depletion

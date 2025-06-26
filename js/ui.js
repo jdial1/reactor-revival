@@ -725,6 +725,27 @@ export class UI {
     this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
     this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
     this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
+
+    // Force a layout recalculation on mobile devices to ensure proper alignment
+    if (window.innerWidth <= 900) {
+      // Trigger a reflow to ensure CSS grid updates properly
+      this.DOMElements.reactor.offsetHeight;
+    }
+  }
+
+  // Utility method to force reactor realignment - useful for mobile orientation changes
+  forceReactorRealignment() {
+    if (!this.game || !this.DOMElements.reactor) return;
+
+    // Force a complete reflow by briefly hiding and showing the reactor
+    const reactor = this.DOMElements.reactor;
+    const originalDisplay = reactor.style.display;
+    reactor.style.display = "none";
+    reactor.offsetHeight; // Force reflow
+    reactor.style.display = originalDisplay;
+
+    // Then resize normally
+    this.resizeReactor();
   }
 
   setupEventListeners() {
@@ -829,6 +850,36 @@ export class UI {
       });
       this.updateFullscreenButtonState();
     }
+
+    // Handle window resize events for mobile orientation changes
+    let resizeTimeout;
+    window.addEventListener("resize", () => {
+      // Debounce resize events to avoid excessive calls
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (this.game && this.DOMElements.reactor) {
+          this.resizeReactor();
+        }
+      }, 100);
+    });
+
+    // Handle Visual Viewport changes (mobile keyboard, orientation, etc.)
+    if (window.visualViewport) {
+      let viewportTimeout;
+      window.visualViewport.addEventListener("resize", () => {
+        clearTimeout(viewportTimeout);
+        viewportTimeout = setTimeout(() => {
+          if (
+            this.game &&
+            this.DOMElements.reactor &&
+            window.innerWidth <= 900
+          ) {
+            this.forceReactorRealignment();
+          }
+        }, 150);
+      });
+    }
+
     if (this.DOMElements.splash_close_btn) {
       this.DOMElements.splash_close_btn.onclick = () => {
         location.reload();

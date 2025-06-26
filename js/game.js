@@ -99,7 +99,7 @@ export class Game {
    */
   startSession() {
     this.session_start_time = Date.now();
-    console.log("Session started:", new Date(this.session_start_time));
+    // Silenced log to reduce test noise
   }
 
   /**
@@ -177,20 +177,25 @@ export class Game {
     }
   }
   reboot_action(keep_exotic_particles = false) {
-    this.current_money = this.base_money;
-    if (keep_exotic_particles) {
-      this.total_exotic_particles += this.exotic_particles;
-      this.current_exotic_particles = this.total_exotic_particles;
-    } else {
-      this.total_exotic_particles = 0;
-      this.current_exotic_particles = 0;
-    }
-    this.exotic_particles = 0;
-    this.tileset.clearAllParts();
-    this.reactor.current_power = 0;
-    this.reactor.current_heat = 0;
-    this.reactor.clearMeltdownState();
-    this.initialize_new_game_state();
+    const epToKeep = keep_exotic_particles
+      ? this.total_exotic_particles + this.exotic_particles
+      : 0;
+
+    this.set_defaults();
+
+    // Restore exotic particles if keeping them
+    this.total_exotic_particles = epToKeep;
+    this.current_exotic_particles = epToKeep;
+
+    this.ui.stateManager.setVar(
+      "total_exotic_particles",
+      this.total_exotic_particles
+    );
+    this.ui.stateManager.setVar(
+      "current_exotic_particles",
+      this.current_exotic_particles
+    );
+    this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
   }
   onToggleStateChange(property, newState) {
     this.paused = this.ui.stateManager.getVar("pause");
@@ -326,7 +331,7 @@ export class Game {
   saveGame() {
     try {
       if (this.reactor.has_melted_down) {
-        console.log("Reactor has melted down. Not saving game.");
+        // Silenced log to reduce test noise
         return;
       }
       const saveData = this.getSaveState();
@@ -334,7 +339,7 @@ export class Game {
       // Skip localStorage in test environment
       if (typeof localStorage !== "undefined" && localStorage !== null) {
         localStorage.setItem("reactorGameSave", JSON.stringify(saveData));
-        console.log("Game saved successfully.");
+        // Silenced log to reduce test noise
       } else if (
         typeof process !== "undefined" &&
         process.env?.NODE_ENV === "test"
@@ -422,6 +427,9 @@ export class Game {
     }
     if (savedData.objectives) {
       this.objectives_manager.current_objective_index =
+        savedData.objectives.current_objective_index || 0;
+      // Also store this for use when starting the objective manager
+      this._saved_objective_index =
         savedData.objectives.current_objective_index || 0;
     }
     // Store toggles for later restoration (after engine is created)

@@ -1,6 +1,8 @@
 import { vi, afterEach, expect } from "vitest";
 import { Game } from "../../js/game.js";
 import { UI } from "../../js/ui.js";
+import { Engine } from "../../js/engine.js";
+import { ObjectiveManager } from "../../js/objective.js";
 
 // --- START: Enhanced Test Environment Setup ---
 
@@ -205,6 +207,11 @@ export async function setupGame() {
     globalGame.cols = globalGame.base_cols;
     globalGame.tileset.updateActiveTiles();
 
+    // Ensure engine is stopped for tests
+    if (globalGame.engine && globalGame.engine.running) {
+      globalGame.engine.stop();
+    }
+
     globalGame.partset.check_affordability(globalGame);
     globalGame.upgradeset.check_affordability(globalGame);
     globalGame.reactor.updateStats();
@@ -238,6 +245,10 @@ export async function setupGame() {
   // We call the real init method, not a mock, since we need the StateManager connection
   ui.init(game);
 
+  // Add missing Engine and ObjectiveManager instantiation
+  game.engine = new Engine(game);
+  game.objectives_manager = new ObjectiveManager(game);
+
   // Initialize the game with real data, not mocks
   game.tileset.initialize();
   game.partset.initialize();
@@ -255,6 +266,11 @@ export async function setupGame() {
   game.upgradeset.check_affordability(game);
 
   game.reactor.updateStats();
+
+  // Ensure engine is definitely stopped after all initialization
+  if (game.engine && game.engine.running) {
+    game.engine.stop();
+  }
 
   // Store for reuse
   globalGame = game;

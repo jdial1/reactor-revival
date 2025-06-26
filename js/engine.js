@@ -58,9 +58,7 @@ export class Engine {
       if (time_flux_enabled && ticks_to_process > 1) {
         const max_catch_up_ticks = 1000;
         if (ticks_to_process > max_catch_up_ticks) {
-          console.warn(
-            `Capping offline ticks from ${ticks_to_process} to ${max_catch_up_ticks} to prevent freezing.`
-          );
+          // Silenced log to reduce test noise
           ticks_to_process = max_catch_up_ticks;
         }
 

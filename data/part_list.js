@@ -227,7 +227,7 @@ export default [
     cost_multi: 250,
     base_containment: 80,
     containment_multi: 75,
-    base_vent: 1, // Temporarily reduced from 4 to 1 for testing
+    base_vent: 4,
     vent_multiplier: 75,
     location: "cooling",
   },

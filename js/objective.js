@@ -42,7 +42,13 @@ export class ObjectiveManager {
           true
         );
       }
+
       this.set_objective(this.current_objective_index);
+
+      // Auto-save the game after setting the new objective to ensure the completion is saved
+      if (this.game && typeof this.game.saveGame === "function") {
+        this.game.saveGame();
+      }
     } else {
       this.scheduleNextCheck();
     }
@@ -79,7 +85,47 @@ export class ObjectiveManager {
         this.game.ui.stateManager.handleObjectiveLoaded(displayObjective);
 
         this.objective_unloading = false;
-        this.check_current_objective();
+
+        // Immediately check if this objective is already completed to prevent getting stuck
+        const checkFn = getObjectiveCheck(this.current_objective_def.checkId);
+        if (checkFn) {
+          const isCompleted = checkFn(this.game);
+          if (isCompleted) {
+            // Objective is already completed, advance immediately
+            this.game.ui.stateManager.handleObjectiveCompleted();
+            this.current_objective_index++;
+            if (this.current_objective_def.reward) {
+              this.game.current_money += this.current_objective_def.reward;
+              this.game.ui.stateManager.setVar(
+                "current_money",
+                this.game.current_money,
+                true
+              );
+            } else if (this.current_objective_def.ep_reward) {
+              this.game.exotic_particles +=
+                this.current_objective_def.ep_reward;
+              this.game.ui.stateManager.setVar(
+                "exotic_particles",
+                this.game.exotic_particles,
+                true
+              );
+            }
+
+            // Recursively set the next objective
+            this.set_objective(this.current_objective_index, true);
+
+            // Auto-save after completing an already-satisfied objective
+            if (this.game && typeof this.game.saveGame === "function") {
+              this.game.saveGame();
+            }
+          } else {
+            // Objective not yet completed, start normal checking
+            this.check_current_objective();
+          }
+        } else {
+          // Objective not yet completed, start normal checking
+          this.check_current_objective();
+        }
       }, wait);
     } else {
       this.current_objective_def = {
@@ -92,5 +138,19 @@ export class ObjectiveManager {
       });
       clearTimeout(this.objective_timeout);
     }
+  }
+
+  // Utility method to get current objective information for debugging
+  getCurrentObjectiveInfo() {
+    return {
+      index: this.current_objective_index,
+      title: this.current_objective_def
+        ? typeof this.current_objective_def.title === "function"
+          ? this.current_objective_def.title()
+          : this.current_objective_def.title
+        : "No objective loaded",
+      checkId: this.current_objective_def?.checkId || null,
+      total_objectives: this.objectives_data.length,
+    };
   }
 }

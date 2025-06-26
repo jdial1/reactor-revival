@@ -44,7 +44,7 @@ describe("Partset Mechanics", () => {
     });
 
     const ventParts = game.partset.getPartsByType("vent");
-    expect(ventParts.length).toBe(3);
+    expect(ventParts.length).toBe(6);
     ventParts.forEach((part) => {
       expect(part.id).toMatch(/^vent\d$/);
     });
@@ -59,13 +59,13 @@ describe("Partset Mechanics", () => {
     const tier1Parts = game.partset.getPartsByTier(1);
     expect(tier1Parts.length).toBeGreaterThan(0);
     tier1Parts.forEach((part) => {
-      expect(part.tier).toBe(1);
+      expect(part.level).toBe(1);
     });
 
     const tier2Parts = game.partset.getPartsByTier(2);
     expect(tier2Parts.length).toBeGreaterThan(0);
     tier2Parts.forEach((part) => {
-      expect(part.tier).toBe(2);
+      expect(part.level).toBe(2);
     });
   });
 

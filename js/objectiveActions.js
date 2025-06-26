@@ -25,7 +25,7 @@ export const checkFunctions = {
       (tile) => tile.part?.category === "cell" && tile.ticks > 0
     ).length >= 10,
   perpetualUranium: (game) =>
-    game.upgradeset.getUpgrade("uranium_cell_perpetual")?.level > 0,
+    game.upgradeset.getUpgrade("uranium1_cell_perpetual")?.level > 0,
   increaseMaxPower: (game) =>
     game.tileset.tiles_list.some((tile) => tile.part?.category === "capacitor"),
   powerPerTick200: (game) => game.reactor.stats_power >= 200 && !game.paused,
@@ -43,7 +43,7 @@ export const checkFunctions = {
     ).length >= 10,
   powerPerTick500: (game) => game.reactor.stats_power >= 500 && !game.paused,
   potentUranium3: (game) =>
-    game.upgradeset.getUpgrade("uranium_cell_power")?.level >= 3,
+    game.upgradeset.getUpgrade("uranium1_cell_power")?.level >= 3,
   autoSell500: (game) => game.reactor.stats_cash >= 500,
   fiveQuadPlutonium: (game) =>
     game.tileset.tiles_list.filter(

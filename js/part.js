@@ -50,6 +50,30 @@ export class Part {
       game.upgradeset.getUpgrade("improved_alloys")?.level || 0;
     const quantumBuffering =
       game.upgradeset.getUpgrade("quantum_buffering")?.level || 0;
+    const improvedWiring =
+      game.upgradeset.getUpgrade("improved_wiring")?.level || 0;
+    const improvedCoolantCells =
+      game.upgradeset.getUpgrade("improved_coolant_cells")?.level || 0;
+    const improvedNeutronReflection =
+      game.upgradeset.getUpgrade("improved_neutron_reflection")?.level || 0;
+    const improvedHeatExchangers =
+      game.upgradeset.getUpgrade("improved_heat_exchangers")?.level || 0;
+    const improvedHeatVents =
+      game.upgradeset.getUpgrade("improved_heat_vents")?.level || 0;
+    const fullSpectrumReflectors =
+      game.upgradeset.getUpgrade("full_spectrum_reflectors")?.level || 0;
+    const fluidHyperdynamics =
+      game.upgradeset.getUpgrade("fluid_hyperdynamics")?.level || 0;
+    const fractalPiping =
+      game.upgradeset.getUpgrade("fractal_piping")?.level || 0;
+    const ultracryonics =
+      game.upgradeset.getUpgrade("ultracryonics")?.level || 0;
+    const infusedCells =
+      game.upgradeset.getUpgrade("infused_cells")?.level || 0;
+    const unleashedCells =
+      game.upgradeset.getUpgrade("unleashed_cells")?.level || 0;
+    const unstableProtium =
+      game.upgradeset.getUpgrade("unstable_protium")?.level || 0;
 
     // Cell tick upgrades
     let tickMultiplier = 1;
@@ -57,6 +81,11 @@ export class Part {
       const tickUpgrade = game.upgradeset.getUpgrade(`${this.type}1_cell_tick`);
       if (tickUpgrade) {
         tickMultiplier = Math.pow(2, tickUpgrade.level);
+      }
+
+      // Unstable Protium for protium cells
+      if (this.type === "protium" && unstableProtium > 0) {
+        tickMultiplier /= Math.pow(2, unstableProtium);
       }
     }
 
@@ -79,6 +108,104 @@ export class Part {
       if (powerUpgrade) {
         powerMultiplier = Math.pow(2, powerUpgrade.level);
       }
+
+      // Infused cells upgrade
+      if (infusedCells > 0) {
+        powerMultiplier *= Math.pow(2, infusedCells);
+      }
+
+      // Unleashed cells upgrade
+      if (unleashedCells > 0) {
+        powerMultiplier *= Math.pow(2, unleashedCells);
+      }
+
+      // Unstable Protium for protium cells
+      if (this.type === "protium" && unstableProtium > 0) {
+        powerMultiplier *= Math.pow(2, unstableProtium);
+      }
+    }
+
+    // Capacitor upgrades
+    let capacitorPowerMultiplier = 1;
+    let capacitorContainmentMultiplier = 1;
+    if (this.category === "capacitor") {
+      if (improvedWiring > 0) {
+        capacitorPowerMultiplier *= improvedWiring + 1;
+        capacitorContainmentMultiplier *= improvedWiring + 1;
+      }
+      if (quantumBuffering > 0) {
+        capacitorPowerMultiplier *= Math.pow(2, quantumBuffering);
+        capacitorContainmentMultiplier *= Math.pow(2, quantumBuffering);
+      }
+    }
+
+    // Heat exchanger upgrades
+    let transferMultiplier = 1;
+    let heatExchangerContainmentMultiplier = 1;
+    if (
+      this.category === "heat_exchanger" ||
+      this.category === "heat_inlet" ||
+      this.category === "heat_outlet"
+    ) {
+      if (improvedHeatExchangers > 0) {
+        transferMultiplier *= improvedHeatExchangers + 1;
+        heatExchangerContainmentMultiplier *= improvedHeatExchangers + 1;
+      }
+      if (fluidHyperdynamics > 0) {
+        transferMultiplier *= Math.pow(2, fluidHyperdynamics);
+      }
+      if (fractalPiping > 0 && this.category === "heat_exchanger") {
+        heatExchangerContainmentMultiplier *= Math.pow(2, fractalPiping);
+      }
+    }
+
+    // Vent upgrades
+    let ventMultiplier = 1;
+    let ventContainmentMultiplier = 1;
+    if (this.category === "vent") {
+      if (improvedHeatVents > 0) {
+        ventMultiplier *= Math.pow(2, improvedHeatVents); // Changed to match legacy behavior
+        ventContainmentMultiplier *= improvedHeatVents + 1;
+      }
+      if (fluidHyperdynamics > 0) {
+        ventMultiplier *= Math.pow(2, fluidHyperdynamics);
+      }
+      if (fractalPiping > 0) {
+        ventContainmentMultiplier *= Math.pow(2, fractalPiping);
+      }
+    }
+
+    // Coolant cell upgrades
+    let coolantContainmentMultiplier = 1;
+    if (this.category === "coolant_cell") {
+      if (improvedCoolantCells > 0) {
+        coolantContainmentMultiplier *= improvedCoolantCells + 1;
+      }
+      if (ultracryonics > 0) {
+        coolantContainmentMultiplier *= Math.pow(2, ultracryonics);
+      }
+    }
+
+    // Reflector power increase upgrades
+    let reflectorPowerIncreaseMultiplier = 1;
+    if (this.category === "reflector") {
+      if (improvedNeutronReflection > 0) {
+        reflectorPowerIncreaseMultiplier *= 1 + improvedNeutronReflection / 100;
+      }
+      if (fullSpectrumReflectors > 0) {
+        reflectorPowerIncreaseMultiplier += fullSpectrumReflectors;
+      }
+    }
+
+    // Particle accelerator upgrades
+    let epHeatMultiplier = 1;
+    if (this.category === "particle_accelerator") {
+      const levelUpgrade = game.upgradeset.getUpgrade(
+        `improved_particle_accelerators${this.part.level}`
+      );
+      if (levelUpgrade) {
+        epHeatMultiplier *= levelUpgrade.level + 1;
+      }
     }
 
     this.reactor_heat =
@@ -88,14 +215,31 @@ export class Part {
 
     this.power = this.base_power * powerMultiplier;
     this.heat = this.base_heat;
+    if (this.category === "cell" && unleashedCells > 0) {
+      this.heat *= Math.pow(2, unleashedCells);
+    }
+    if (
+      this.category === "cell" &&
+      this.type === "protium" &&
+      unstableProtium > 0
+    ) {
+      this.heat *= Math.pow(2, unstableProtium);
+    }
+
     this.ticks = this.base_ticks * tickMultiplier;
-    this.containment = this.base_containment;
-    this.vent = this.base_vent;
-    this.reactor_power = this.base_reactor_power;
-    this.transfer = this.base_transfer;
+    this.containment =
+      this.base_containment *
+      capacitorContainmentMultiplier *
+      heatExchangerContainmentMultiplier *
+      ventContainmentMultiplier *
+      coolantContainmentMultiplier;
+    this.vent = this.base_vent * ventMultiplier;
+    this.reactor_power = this.base_reactor_power * capacitorPowerMultiplier;
+    this.transfer = this.base_transfer * transferMultiplier;
     this.range = this.base_range;
-    this.ep_heat = this.base_ep_heat;
-    this.power_increase = this.base_power_increase;
+    this.ep_heat = this.base_ep_heat * epHeatMultiplier;
+    this.power_increase =
+      this.base_power_increase * reflectorPowerIncreaseMultiplier;
     this.heat_increase = this.base_heat_increase;
     this.cost = this.base_cost;
     this.ecost = this.base_ecost;

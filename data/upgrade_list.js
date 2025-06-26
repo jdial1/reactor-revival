@@ -62,6 +62,7 @@ const upgrade_templates = [
     cost: 5000,
     multiplier: 5,
     icon: "img/parts/platings/plating_1.png",
+    actionId: "improved_alloys",
   },
   {
     id: "improved_power_lines",
@@ -81,6 +82,7 @@ const upgrade_templates = [
     cost: 5000,
     multiplier: 5,
     icon: "img/parts/capacitors/capacitor_1.png",
+    actionId: "improved_wiring",
   },
   {
     id: "perpetual_capacitors",
@@ -92,6 +94,7 @@ const upgrade_templates = [
     multiplier: 5,
     levels: 1,
     icon: "img/parts/capacitors/capacitor_1.png",
+    actionId: "perpetual_capacitors",
   },
   {
     id: "improved_coolant_cells",
@@ -101,6 +104,7 @@ const upgrade_templates = [
     cost: 5000,
     multiplier: 100,
     icon: "img/parts/coolants/coolant_cell_1.png",
+    actionId: "improved_coolant_cells",
   },
   {
     id: "improved_reflector_density",
@@ -120,6 +124,7 @@ const upgrade_templates = [
     cost: 5000,
     multiplier: 100,
     icon: "img/parts/reflectors/reflector_1.png",
+    actionId: "improved_neutron_reflection",
   },
   {
     id: "perpetual_reflectors",
@@ -141,6 +146,7 @@ const upgrade_templates = [
     cost: 600,
     multiplier: 100,
     icon: "img/parts/exchangers/exchanger_1.png",
+    actionId: "improved_heat_exchangers",
   },
   {
     id: "reinforced_heat_exchangers",
@@ -180,6 +186,7 @@ const upgrade_templates = [
     cost: 1000,
     multiplier: 100,
     icon: "img/parts/platings/plating_1.png",
+    actionId: "improved_heatsinks",
   },
   {
     id: "active_venting",
@@ -262,6 +269,7 @@ const upgrade_templates = [
     ecost: 50,
     multiplier: 2,
     icon: "img/parts/capacitors/capacitor_6.png",
+    actionId: "quantum_buffering",
   },
   {
     id: "full_spectrum_reflectors",
@@ -273,6 +281,7 @@ const upgrade_templates = [
     ecost: 50,
     multiplier: 2,
     icon: "img/parts/reflectors/reflector_6.png",
+    actionId: "full_spectrum_reflectors",
   },
   {
     id: "fluid_hyperdynamics",
@@ -284,6 +293,7 @@ const upgrade_templates = [
     ecost: 50,
     multiplier: 2,
     icon: "img/parts/exchangers/exchanger_6.png",
+    actionId: "fluid_hyperdynamics",
   },
   {
     id: "fractal_piping",
@@ -295,6 +305,7 @@ const upgrade_templates = [
     ecost: 50,
     multiplier: 2,
     icon: "img/parts/exchangers/exchanger_6.png",
+    actionId: "fractal_piping",
   },
   {
     id: "ultracryonics",
@@ -306,6 +317,7 @@ const upgrade_templates = [
     ecost: 50,
     multiplier: 2,
     icon: "img/parts/coolants/coolant_cell_6.png",
+    actionId: "ultracryonics",
   },
   {
     id: "phlembotinum_core",
@@ -317,6 +329,7 @@ const upgrade_templates = [
     ecost: 50,
     multiplier: 2,
     icon: "img/parts/platings/plating_6.png",
+    actionId: "phlembotinum_core",
   },
   {
     id: "unstable_protium",
@@ -328,6 +341,7 @@ const upgrade_templates = [
     ecost: 500,
     multiplier: 2,
     icon: "img/parts/cells/xcell_1_2.png",
+    actionId: "unstable_protium",
   },
   {
     id: "heat_reflection",

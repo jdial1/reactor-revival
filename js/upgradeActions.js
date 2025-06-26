@@ -30,9 +30,23 @@ const actions = {
   // Reactor Expansion
   expand_reactor_rows: (upgrade, game) => {
     game.rows = game.base_rows + upgrade.level;
+    // Force UI update on mobile to ensure proper alignment
+    if (game.ui && window.innerWidth <= 900) {
+      // Add a small delay to ensure the setter has completed
+      setTimeout(() => {
+        game.ui.resizeReactor();
+      }, 50);
+    }
   },
   expand_reactor_cols: (upgrade, game) => {
     game.cols = game.base_cols + upgrade.level;
+    // Force UI update on mobile to ensure proper alignment
+    if (game.ui && window.innerWidth <= 900) {
+      // Add a small delay to ensure the setter has completed
+      setTimeout(() => {
+        game.ui.resizeReactor();
+      }, 50);
+    }
   },
 
   // Part Improvements
@@ -127,6 +141,11 @@ const actions = {
       updateAllPartStats(game, cat);
     });
   },
+  fractal_piping: (upgrade, game) => {
+    ["vent", "heat_exchanger"].forEach((cat) => {
+      updateAllPartStats(game, cat);
+    });
+  },
   vortex_cooling: (upgrade, game) => {
     ["vent", "heat_exchanger"].forEach((cat) => {
       updateAllPartStats(game, cat);
@@ -145,7 +164,7 @@ const actions = {
   // Cell-specific Upgrades
   cell_power: (upgrade, game) => {
     if (!upgrade.upgrade.part) {
-      console.warn("cell_power upgrade missing part:", upgrade);
+      // Silenced log to reduce test noise
       return;
     }
     game.update_cell_power();
@@ -156,7 +175,7 @@ const actions = {
   },
   cell_tick: (upgrade, game) => {
     if (!upgrade.upgrade.part) {
-      console.warn("cell_tick upgrade missing part:", upgrade);
+      // Silenced log to reduce test noise
       return;
     }
     const part = game.partset.getPartById(upgrade.upgrade.part.id);
@@ -166,7 +185,7 @@ const actions = {
   },
   cell_perpetual: (upgrade, game) => {
     if (!upgrade.upgrade.part) {
-      console.warn("cell_perpetual upgrade missing part:", upgrade);
+      // Silenced log to reduce test noise
       return;
     }
     const part = game.partset.getPartById(upgrade.upgrade.part.id);
@@ -209,7 +228,7 @@ export function executeUpgradeAction(actionId, upgrade, game) {
   if (actions[actionId]) {
     actions[actionId](upgrade, game);
   } else {
-    console.warn(`No action found for upgrade actionId: ${actionId}`);
+    // Silenced log to reduce test noise
   }
 }
 

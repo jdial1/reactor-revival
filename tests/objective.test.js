@@ -42,7 +42,8 @@ async function satisfyObjective(game, idx) {
       break;
 
     case 6: // Have at least 10 active power Cells in your reactor
-      for (let i = 0; i < 10; i++) {
+      // Start from position 1 to avoid overwriting the uranium2 cell at position 0
+      for (let i = 1; i < 11; i++) {
         await game.tileset
           .getTile(0, i)
           .setPart(game.partset.getPartById("uranium1"));
@@ -270,6 +271,161 @@ describe("Objective System", () => {
       } else {
         expect(obj.check(game)).toBe(true);
       }
+    });
+  });
+
+  describe("Already Completed Objectives", () => {
+    it("should auto-complete objectives that are already satisfied when loaded", async () => {
+      // Test critical objectives that could get stuck if already completed
+      const testObjectives = [
+        { index: 7, description: "Perpetual uranium upgrade" },
+        { index: 10, description: "Chronometer upgrade" },
+        { index: 14, description: "Uranium power upgrade level 3" },
+        { index: 24, description: "Experimental upgrade" },
+      ];
+
+      for (const { index, description } of testObjectives) {
+        // Create a fresh game instance for each test
+        const testGame = await setupGame();
+
+        // Set up the game state to satisfy the objective
+        await satisfyObjective(testGame, index);
+
+        // Verify the objective condition is satisfied
+        const objective = objective_list_data[index];
+        expect(
+          objective.check(testGame),
+          `Objective ${index} (${description}) should be satisfied`
+        ).toBe(true);
+
+        // Start objective manager at the target objective
+        testGame.objectives_manager.current_objective_index = index;
+
+        // Track initial values
+        const initialMoney = testGame.current_money;
+        const initialEP = testGame.exotic_particles;
+
+        // Mock the UI state manager methods to track calls
+        let objectiveCompletedCalled = false;
+        let objectiveLoadedCalled = false;
+        const originalHandleCompleted =
+          testGame.ui.stateManager.handleObjectiveCompleted;
+        const originalHandleLoaded =
+          testGame.ui.stateManager.handleObjectiveLoaded;
+
+        testGame.ui.stateManager.handleObjectiveCompleted = () => {
+          objectiveCompletedCalled = true;
+          originalHandleCompleted.call(testGame.ui.stateManager);
+        };
+
+        testGame.ui.stateManager.handleObjectiveLoaded = (obj) => {
+          objectiveLoadedCalled = true;
+          originalHandleLoaded.call(testGame.ui.stateManager, obj);
+        };
+
+        // Mock saveGame to track if it's called
+        let saveGameCalled = false;
+        const originalSaveGame = testGame.saveGame;
+        testGame.saveGame = () => {
+          saveGameCalled = true;
+          originalSaveGame.call(testGame);
+        };
+
+        // Set the objective (this should trigger immediate completion)
+        testGame.objectives_manager.set_objective(index, true);
+
+        // Wait a bit for async completion
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Verify the objective was auto-completed
+        expect(
+          objectiveCompletedCalled,
+          `Objective ${index} (${description}) should have been auto-completed`
+        ).toBe(true);
+        expect(
+          testGame.objectives_manager.current_objective_index,
+          `Should have advanced to next objective after completing ${index}`
+        ).toBe(index + 1);
+
+        // Verify rewards were given
+        if (objective.reward) {
+          expect(
+            testGame.current_money,
+            `Should have received money reward for objective ${index}`
+          ).toBe(initialMoney + objective.reward);
+        }
+        if (objective.ep_reward) {
+          expect(
+            testGame.exotic_particles,
+            `Should have received EP reward for objective ${index}`
+          ).toBe(initialEP + objective.ep_reward);
+        }
+
+        // Verify save was called
+        expect(
+          saveGameCalled,
+          `Game should have been saved after auto-completing objective ${index}`
+        ).toBe(true);
+
+        // Restore original methods
+        testGame.ui.stateManager.handleObjectiveCompleted =
+          originalHandleCompleted;
+        testGame.ui.stateManager.handleObjectiveLoaded = originalHandleLoaded;
+        testGame.saveGame = originalSaveGame;
+      }
+    });
+
+    it("should handle multiple consecutive already-completed objectives", async () => {
+      // Test scenario where multiple objectives in sequence are already completed
+      const testGame = await setupGame();
+
+      // Set up game state to satisfy objectives 4, 5, and 6
+      await satisfyObjective(testGame, 4); // Purchase an Upgrade
+      await satisfyObjective(testGame, 5); // Purchase a Dual power Cell
+      await satisfyObjective(testGame, 6); // Have at least 10 active power Cells
+
+      // Start at objective 4
+      testGame.objectives_manager.current_objective_index = 4;
+
+      let completionCount = 0;
+      const originalHandleCompleted =
+        testGame.ui.stateManager.handleObjectiveCompleted;
+      testGame.ui.stateManager.handleObjectiveCompleted = () => {
+        completionCount++;
+        originalHandleCompleted.call(testGame.ui.stateManager);
+      };
+
+      // Mock saveGame to track calls
+      let saveCallCount = 0;
+      const originalSaveGame = testGame.saveGame;
+      testGame.saveGame = () => {
+        saveCallCount++;
+        originalSaveGame.call(testGame);
+      };
+
+      // Set objective 4 (should auto-complete 4, 5, and 6)
+      testGame.objectives_manager.set_objective(4, true);
+
+      // Wait for all async completions
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Should have completed 3 objectives and be on objective 7
+      expect(
+        completionCount,
+        "Should have auto-completed 3 consecutive objectives"
+      ).toBe(3);
+      expect(
+        testGame.objectives_manager.current_objective_index,
+        "Should have advanced to objective 7"
+      ).toBe(7);
+      expect(saveCallCount, "Should have saved at least once").toBeGreaterThan(
+        0
+      );
+
+      // Restore original methods
+      testGame.ui.stateManager.handleObjectiveCompleted =
+        originalHandleCompleted;
+      testGame.saveGame = originalSaveGame;
     });
   });
 });

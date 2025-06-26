@@ -154,4 +154,9 @@ export class PartSet {
   getPartsByLevel(level) {
     return this.partsArray.filter((part) => part.level === level);
   }
+
+  getPartsByTier(tier) {
+    // Tier is an alias for level in this system
+    return this.partsArray.filter((part) => part.level === tier);
+  }
 }

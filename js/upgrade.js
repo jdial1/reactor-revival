@@ -32,9 +32,9 @@ export class Upgrade {
       this.level = level;
       this.updateDisplayCost();
       this.game.upgradeset.check_affordability(this.game);
-    }
-    if (this.actionId) {
-      executeUpgradeAction(this.actionId, this, this.game);
+      if (this.actionId) {
+        executeUpgradeAction(this.actionId, this, this.game);
+      }
     }
     if (this.type.includes("cell")) {
       this.game.update_cell_power();

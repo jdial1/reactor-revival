@@ -129,15 +129,17 @@ describe("Reactor Mechanics", () => {
   });
 
   it("should go into meltdown when heat > 2 * max_heat", () => {
+    // Set up spy on setVar method
+    const setVarSpy = vi.spyOn(game.ui.stateManager, "setVar");
+
     game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
     const meltdown = game.reactor.checkMeltdown();
     expect(meltdown).toBe(true);
     expect(game.reactor.has_melted_down).toBe(true);
-    expect(game.ui.stateManager.setVar).toHaveBeenCalledWith(
-      "melting_down",
-      true,
-      true
-    );
+    expect(setVarSpy).toHaveBeenCalledWith("melting_down", true, true);
+
+    // Clean up spy
+    setVarSpy.mockRestore();
   });
 
   it("should not meltdown when heat is high but not critical", () => {

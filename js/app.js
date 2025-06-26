@@ -134,6 +134,13 @@ async function startGame(pageRouter, ui, game) {
     delete game._pendingToggleStates; // Clean up
   }
 
+  // Restore saved objective index if available
+  if (game._saved_objective_index !== undefined) {
+    game.objectives_manager.current_objective_index =
+      game._saved_objective_index;
+    delete game._saved_objective_index; // Clean up
+  }
+
   game.objectives_manager.start();
   if (startEngine) {
     game.engine.start();

@@ -45,13 +45,22 @@ describe("Upgrade Actions Mechanics", () => {
     expect(game.reactor.max_heat).toBeCloseTo(expectedHeat);
   });
 
-  it("should apply quantum buffering upgrade correctly", () => {
-    const upgrade = game.upgradeset.getUpgrade("quantum_buffering");
+  it("should apply quantum buffering upgrade correctly", async () => {
+    // Add reactor plating to test the quantum buffering effect
+    const plating = game.partset.getPartById("reactor_plating1");
+    await game.tileset.getTile(0, 0).setPart(plating);
+    game.reactor.updateStats();
+    const initialMaxHeat = game.reactor.max_heat;
 
-    upgrade.setLevel(1);
     game.upgradeset.purchaseUpgrade("quantum_buffering");
+    game.reactor.updateStats();
 
-    expect(game.reactor.max_heat).toBe(game.reactor.base_max_heat * 2);
+    // Quantum buffering doubles the reactor_heat contribution from plating
+    // Expected: base_max_heat + (plating.base_reactor_heat * 2)
+    const expectedMaxHeat =
+      game.reactor.base_max_heat + plating.base_reactor_heat * 2;
+    expect(game.reactor.max_heat).toBeCloseTo(expectedMaxHeat);
+    expect(game.reactor.max_heat).toBeGreaterThan(initialMaxHeat);
   });
 
   it("should apply active venting upgrade correctly", async () => {

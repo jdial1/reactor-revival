@@ -31,8 +31,8 @@ export class Reactor {
 
   updateStats() {
     this._resetStats();
-    let current_max_power = this.altered_max_power;
-    let current_max_heat = this.altered_max_heat;
+    let current_max_power = this.altered_max_power || this.base_max_power;
+    let current_max_heat = this.altered_max_heat || this.base_max_heat;
     let temp_transfer_multiplier = 0;
     let temp_vent_multiplier = 0;
 
@@ -120,13 +120,7 @@ export class Reactor {
     this.game.ui.stateManager.setVar("stats_outlet", this.stats_outlet);
     this.game.ui.stateManager.setVar("stats_cash", this.stats_cash);
 
-    // Debug: Log reactor stats updates only when stats change
-    if (this.stats_power > 0 || this.stats_heat_generation > 0) {
-      console.log(
-        `[Reactor] Updated stats: power=${this.stats_power}, heat=${this.stats_heat_generation}, vent=${this.stats_vent}`
-      );
-    }
-
+    // Silenced log to reduce test noise
     if (
       this.game.tileset.active_tiles_list.every((t) => !t.part) &&
       this.current_power + this.game.current_money < this.game.base_money
@@ -192,7 +186,8 @@ export class Reactor {
 
   manualReduceHeat() {
     if (this.current_heat > 0) {
-      this.current_heat -= this.game.base_manual_heat_reduce || 1;
+      this.current_heat -=
+        this.manual_heat_reduce || this.game.base_manual_heat_reduce || 1;
       if (this.current_heat < 0) this.current_heat = 0;
       if (this.current_heat === 0) this.game.sold_heat = true;
       this.game.ui.stateManager.setVar("current_heat", this.current_heat);
