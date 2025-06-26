@@ -293,4 +293,56 @@ describe("Core Game Mechanics", () => {
     expect(game.reactor.current_heat).toBe(0);
     expect(game.reactor.current_power).toBe(0);
   });
+
+  describe("Failsafe Logic", () => {
+    it("should give $10 when player has no money, no power, and no parts to sell", () => {
+      game.current_money = 0;
+      game.reactor.current_power = 0;
+      // Ensure no parts in reactor
+      game.tileset.active_tiles_list.forEach((tile) => {
+        if (tile.part) tile.clearPart(false);
+      });
+
+      const initialMoney = game.current_money;
+      game.sell_action();
+
+      expect(game.current_money).toBe(initialMoney + 10);
+    });
+
+    it("should NOT give money when player has sellable parts in reactor", async () => {
+      game.current_money = 0;
+      game.reactor.current_power = 0;
+
+      // Place a part in the reactor
+      const tile = game.tileset.getTile(0, 0);
+      const part = game.partset.getPartById("uranium1");
+      await tile.setPart(part);
+
+      const initialMoney = game.current_money;
+      game.sell_action();
+
+      // Should not give free money since there's a part to sell
+      expect(game.current_money).toBe(initialMoney);
+    });
+
+    it("should give money via reactor updateStats only when no sellable parts exist", async () => {
+      game.current_money = 0;
+      game.reactor.current_power = 0;
+
+      // First test with a part in reactor - should not give money
+      const tile = game.tileset.getTile(0, 0);
+      const part = game.partset.getPartById("uranium1");
+      await tile.setPart(part);
+
+      game.reactor.updateStats();
+      expect(game.current_money).toBe(0); // No money given
+
+      // Now remove the part and test again
+      tile.clearPart(false);
+      game.current_money = 0; // Reset to ensure test is accurate
+
+      game.reactor.updateStats();
+      expect(game.current_money).toBe(game.base_money); // Money given when no parts
+    });
+  });
 });

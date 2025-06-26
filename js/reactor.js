@@ -120,14 +120,24 @@ export class Reactor {
     this.game.ui.stateManager.setVar("stats_outlet", this.stats_outlet);
     this.game.ui.stateManager.setVar("stats_cash", this.stats_cash);
 
-    // Silenced log to reduce test noise
-    if (
-      this.game.tileset.active_tiles_list.every((t) => !t.part) &&
-      this.current_power + this.game.current_money < this.game.base_money
-    ) {
+    // Emergency failsafe: only give money if truly stuck (no parts AND no money)
+    const hasNoSellableParts = this.game.tileset.active_tiles_list.every(
+      (t) => !t.part
+    );
+    const hasInsufficientResources =
+      this.current_power + this.game.current_money < this.game.base_money;
+
+    if (hasNoSellableParts && hasInsufficientResources) {
+      // Calculate how much money to give to reach base_money
+      const moneyToGive = this.game.base_money - this.current_power;
+
+      // Update the game's current_money directly
+      this.game.current_money = moneyToGive;
+
+      // Then sync with StateManager for UI updates
       this.game.ui.stateManager.setVar(
         "current_money",
-        this.game.base_money - this.current_power
+        this.game.current_money
       );
     }
   }

@@ -902,25 +902,7 @@ export class UI {
         location.reload();
       };
     }
-    const debugToggleBtn = this.DOMElements.debug_toggle_btn;
-    const debugHideBtn = this.DOMElements.debug_hide_btn;
-    const debugRefreshBtn = this.DOMElements.debug_refresh_btn;
-    const debugSection = this.DOMElements.debug_section;
-    if (debugToggleBtn) {
-      debugToggleBtn.addEventListener("click", () => {
-        this.showDebugPanel();
-      });
-    }
-    if (debugHideBtn) {
-      debugHideBtn.addEventListener("click", () => {
-        this.hideDebugPanel();
-      });
-    }
-    if (debugRefreshBtn) {
-      debugRefreshBtn.addEventListener("click", () => {
-        this.updateDebugVariables();
-      });
-    }
+    // Debug button event listeners are now set up in initializePage() for experimental_upgrades_section
   }
 
   handleGridInteraction(tileEl, event) {
@@ -1704,6 +1686,26 @@ export class UI {
         const refundBtn = document.getElementById("refund_btn");
         if (rebootBtn) rebootBtn.onclick = () => game.reboot_action(false);
         if (refundBtn) refundBtn.onclick = () => game.reboot_action(true);
+
+        // Setup debug button event listeners since they're on this page
+        const debugToggleBtn = document.getElementById("debug_toggle_btn");
+        const debugHideBtn = document.getElementById("debug_hide_btn");
+        const debugRefreshBtn = document.getElementById("debug_refresh_btn");
+        if (debugToggleBtn) {
+          debugToggleBtn.addEventListener("click", () => {
+            this.showDebugPanel();
+          });
+        }
+        if (debugHideBtn) {
+          debugHideBtn.addEventListener("click", () => {
+            this.hideDebugPanel();
+          });
+        }
+        if (debugRefreshBtn) {
+          debugRefreshBtn.addEventListener("click", () => {
+            this.updateDebugVariables();
+          });
+        }
         break;
       case "about_section":
         const versionEl = document.getElementById("about_version");

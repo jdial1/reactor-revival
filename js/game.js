@@ -171,7 +171,15 @@ export class Game {
   }
   sell_action() {
     if (this.current_money < 10 && this.reactor.current_power == 0) {
-      this.addMoney(10);
+      // Check if there are any parts in the reactor that could be sold for money
+      const hasPartsToSell = this.tileset.active_tiles_list.some(
+        (tile) => tile.part && !tile.part.isSpecialTile
+      );
+
+      if (!hasPartsToSell) {
+        this.addMoney(10);
+      }
+      // If there are parts to sell, don't give free money - player should sell parts first
     } else {
       this.reactor.sellPower();
     }
