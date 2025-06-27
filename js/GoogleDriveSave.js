@@ -337,8 +337,8 @@ export class GoogleDriveSave {
         throw new Error(`Failed to download save file: ${response.status}`);
       }
 
-      const encryptedBlob = await response.blob();
-      const saveData = await this.decompressAndDecrypt(encryptedBlob);
+      const encryptedData = await response.arrayBuffer();
+      const saveData = await this.decompressAndDecrypt(encryptedData);
 
       console.log("Game loaded from Google Drive");
       return saveData;
@@ -582,29 +582,75 @@ export class GoogleDriveSave {
       throw new Error("zip.js library failed to load");
     }
 
-    const password = "reactor-revival-secure-save-2024";
-    const zipReader = new zip.ZipReader(new zip.BlobReader(encryptedData), {
-      password: password,
-    });
-    const entries = await zipReader.getEntries();
+    try {
+      const blob = new Blob([encryptedData], { type: "application/zip" });
+      const zipReader = new zip.ZipReader(new zip.BlobReader(blob));
 
-    if (entries.length === 0) {
-      throw new Error("No entries found in encrypted save file");
+      const password = "reactor-revival-secure-save-2024";
+      const entries = await zipReader.getEntries({ password });
+
+      if (entries.length > 0) {
+        const writer = new zip.TextWriter();
+        const jsonText = await entries[0].getData(writer, { password });
+        await zipReader.close();
+        return JSON.parse(jsonText);
+      } else {
+        await zipReader.close();
+        throw new Error("No data found in save file.");
+      }
+    } catch (error) {
+      console.error("Decryption/Decompression failed:", error);
+      // Fallback for old save format for compatibility
+      if (error.message.includes("password")) {
+        console.log("Password decryption failed, trying old format...");
+        return this.decompressAndDecryptLegacy(encryptedData);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Decrypt and decompress save data from old XOR format
+   */
+  async decompressAndDecryptLegacy(encryptedData) {
+    if (!(encryptedData instanceof ArrayBuffer)) {
+      throw new Error("Encrypted data must be an ArrayBuffer.");
     }
 
-    const saveData = await entries[0].getData(new zip.TextWriter());
-    await zipReader.close();
+    const key = "a_very_secure_key";
+    const encryptedBytes = new Uint8Array(encryptedData);
+    const decryptedBytes = new Uint8Array(encryptedBytes.length);
 
-    console.log(
-      `Save data decrypted and decompressed: ${encryptedData.size} → ${saveData.length} bytes`
-    );
-    return saveData;
+    // Apply XOR decryption
+    for (let i = 0; i < encryptedBytes.length; i++) {
+      decryptedBytes[i] = encryptedBytes[i] ^ key.charCodeAt(i % key.length);
+    }
+
+    // Decompress the decrypted data
+    if (typeof pako === "undefined") {
+      throw new Error("pako is not defined");
+    }
+    const decompressedData = pako.inflate(decryptedBytes, { to: "string" });
+    return JSON.parse(decompressedData);
   }
 
   /**
    * Load zip.js library for encryption
    */
   async loadZipLibrary() {
+    if (typeof pako === "undefined") {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/pako@2.1.0/dist/pako.min.js";
+        script.onload = () => {
+          console.log("pako.js library loaded successfully");
+          resolve();
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
     if (window.zip) return;
 
     await new Promise((resolve, reject) => {

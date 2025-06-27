@@ -409,7 +409,14 @@ export class UI {
     }
     if (this.game && this.game.reactor) {
       const hasMeltedDown = this.game.reactor.has_melted_down;
-      document.body.classList.toggle("reactor-meltdown", hasMeltedDown);
+      const isMeltdownClassPresent =
+        document.body.classList.contains("reactor-meltdown");
+
+      if (hasMeltedDown && !isMeltdownClassPresent) {
+        document.body.classList.add("reactor-meltdown");
+      } else if (!hasMeltedDown && isMeltdownClassPresent) {
+        document.body.classList.remove("reactor-meltdown");
+      }
     }
   }
 
@@ -725,36 +732,51 @@ export class UI {
       return;
 
     const wrapper = this.DOMElements.reactor_wrapper;
-    const wrapperWidth = wrapper.clientWidth;
-    const wrapperHeight = wrapper.clientHeight;
-
     const numCols = this.game.cols;
     const numRows = this.game.rows;
-    const gap = 1; // Match the CSS gap value
+    const isMobile = typeof window !== "undefined" && window.innerWidth <= 900;
+    let tileSize;
 
-    // Calculate tile size based on both width and height constraints
-    const tileSizeForWidth = wrapperWidth / numCols;
-    const tileSizeForHeight = wrapperHeight / numRows;
+    if (isMobile) {
+      // On mobile, use a fixed, touch-friendly tile size.
+      // The wrapper is scrollable.
+      tileSize = 48;
+    } else {
+      // On desktop, calculate tile size to fit the entire grid in the wrapper.
+      const wrapperWidth = wrapper.clientWidth;
+      const wrapperHeight = wrapper.clientHeight;
+      const gap = 1;
 
-    // Use the smaller of the two to ensure the entire grid fits
-    let tileSize =
-      Math.floor(Math.min(tileSizeForWidth, tileSizeForHeight)) - gap;
+      const tileSizeForWidth = wrapperWidth / numCols - gap;
+      const tileSizeForHeight = wrapperHeight / numRows - gap;
 
-    // Clamp the tile size to a reasonable range for usability
-    tileSize = Math.max(20, Math.min(64, tileSize)); // Lowered min size for mobile
+      tileSize = Math.floor(Math.min(tileSizeForWidth, tileSizeForHeight));
+
+      // Clamp the tile size to a reasonable range for usability on desktop
+      tileSize = Math.max(20, Math.min(64, tileSize));
+    }
 
     this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
     this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
     this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
 
     // Force a layout recalculation on mobile devices to ensure proper alignment
-    if (
-      typeof window !== "undefined" &&
-      window.innerWidth &&
-      window.innerWidth <= 900
-    ) {
+    if (isMobile) {
       // Trigger a reflow to ensure CSS grid updates properly
       this.DOMElements.reactor.offsetHeight;
+
+      // Center the grid
+      const reactorEl = this.DOMElements.reactor;
+      const wrapperEl = this.DOMElements.reactor_wrapper;
+
+      const reactorWidth = reactorEl.scrollWidth;
+      const reactorHeight = reactorEl.scrollHeight;
+
+      const wrapperWidth = wrapperEl.clientWidth;
+      const wrapperHeight = wrapperEl.clientHeight;
+
+      wrapperEl.scrollLeft = (reactorWidth - wrapperWidth) / 2;
+      wrapperEl.scrollTop = (reactorHeight - wrapperHeight) / 2;
     }
   }
 

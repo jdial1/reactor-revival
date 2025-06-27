@@ -282,7 +282,7 @@ describe("Large Grid Performance Stress Tests", () => {
     },
     {
       name: "Cell/Vent Mix",
-      parts: ["thorium1", "vent4"],
+      parts: ["thorium3", "vent4"],
       description: "Heat production with cooling",
     },
     {
@@ -292,7 +292,7 @@ describe("Large Grid Performance Stress Tests", () => {
     },
     {
       name: "High Throughput",
-      parts: ["uranium4", "heat_outlet5", "vent5"],
+      parts: ["protium1", "heat_exchanger5", "vent5", "protium1"],
       description: "Maximum heat flow scenario",
       preheat: true,
     },

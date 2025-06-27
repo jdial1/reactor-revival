@@ -31,6 +31,9 @@ async function main() {
   // This minimal init does not depend on the main layout
   ui.init(game);
 
+  // Populate the faction selector panel before it's needed
+  populateFactionSelector();
+
   // --- 2. Load Static Game Data ---
   if (window.splashManager) await window.splashManager.setStep("parts");
   game.tileset.initialize();
@@ -45,218 +48,81 @@ async function main() {
 
   // --- 3. Determine Game Start Flow (New Game vs. Load Game) ---
   const savedGame = game.loadGame();
+  const isNewGamePending =
+    localStorage.getItem("reactorNewGamePending") === "1";
 
-  if (!savedGame || localStorage.getItem("reactorNewGamePending") === "1") {
-    localStorage.removeItem("reactorNewGamePending");
-    game.initialize_new_game_state();
-    populateFactionSelector();
-    // Show faction selection for a new game
-    if (window.splashManager) {
-      await window.splashManager.setStep("ready");
-      await window.splashManager.showStartOptions(false); // Show only "New Game"
-      const factionPanel = document.getElementById("faction-select-panel");
-      const splashScreen = document.getElementById("splash-screen");
-      factionPanel.style.display = "flex";
-      splashScreen.classList.add("hidden");
-
-      factionPanel.querySelectorAll(".faction-card").forEach((card) => {
-        card.onclick = async () => {
-          factionPanel.style.display = "none";
-          const faction = card.getAttribute("data-faction");
-          localStorage.setItem("reactorFaction", faction);
-          // Wait a moment for faction panel to hide before starting game
-          await new Promise((resolve) => setTimeout(resolve, 200));
-          await startGame(pageRouter, ui, game);
-        };
-      });
-    } else {
-      // Fallback: No splash manager available for new game
-      console.warn(
-        "No splash manager available - creating minimal start interface"
-      );
-      createFallbackStartInterface(pageRouter, ui, game);
-    }
+  if (window.splashManager) {
+    await window.splashManager.setStep("ready");
+    // Show start options. If there's no saved game, only show "New Game".
+    await window.splashManager.showStartOptions(
+      !!savedGame && !isNewGamePending
+    );
   } else {
-    // Load existing game
-    if (window.splashManager) {
-      await window.splashManager.setStep("ready");
-      await window.splashManager.showStartOptions(true);
+    // Fallback for when splash manager isn't available
+    createFallbackStartInterface(pageRouter, ui, game);
+  }
 
-      // Local load handler
-      const loadGameBtn = document.getElementById("splash-load-game-btn");
-      if (loadGameBtn) {
-        loadGameBtn.onclick = async () => {
-          console.log("🎮 Loading game from local storage...");
-          if (window.splashManager) {
-            window.splashManager.setSubStep("Loading from local storage...");
-          }
+  // --- 4. Add Event Handlers for Splash Screen Buttons ---
+  const newGameBtn = document.getElementById("splash-new-game-btn");
+  if (newGameBtn) {
+    newGameBtn.onclick = async () => {
+      // Show the faction selection panel
+      const factionPanel = document.getElementById("faction-select-panel");
+      if (factionPanel) {
+        document.getElementById("splash-screen").style.display = "none";
+        factionPanel.style.display = "flex";
+      }
+    };
+  }
+
+  const factionPanel = document.getElementById("faction-select-panel");
+  if (factionPanel) {
+    factionPanel.querySelectorAll(".faction-card").forEach((card) => {
+      card.onclick = async () => {
+        factionPanel.style.display = "none";
+        const faction = card.getAttribute("data-faction");
+        localStorage.setItem("reactorFaction", faction);
+        game.set_defaults();
+        await startGame(pageRouter, ui, game);
+      };
+    });
+  }
+
+  const loadGameBtn = document.getElementById("splash-load-game-btn");
+  if (loadGameBtn) {
+    loadGameBtn.onclick = async () => {
+      window.splashManager.hide();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await startGame(pageRouter, ui, game);
+    };
+  }
+
+  const loadCloudBtn = document.getElementById("splash-load-cloud-btn");
+  if (loadCloudBtn) {
+    loadCloudBtn.onclick = async () => {
+      try {
+        if (!window.googleDriveSave.isSignedIn) {
+          alert("Please sign in to Google Drive first.");
+          return;
+        }
+        const cloudSaveData = await window.googleDriveSave.load();
+        if (cloudSaveData) {
+          game.applySaveState(cloudSaveData);
           window.splashManager.hide();
-          // Wait for splash screen fade-out animation to complete (500ms)
           await new Promise((resolve) => setTimeout(resolve, 600));
           await startGame(pageRouter, ui, game);
-
-          // Show temporary notification about save source
-          setTimeout(() => {
-            console.log("💾 Game loaded from Local Storage");
-            // Create a temporary notification element
-            const notification = document.createElement("div");
-            notification.style.cssText = `
-              position: fixed; top: 20px; right: 20px; z-index: 10000;
-              background: #4CAF50; color: white; padding: 12px 20px;
-              border-radius: 8px; font-family: Arial, sans-serif; font-size: 14px;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.3s;
-            `;
-            notification.innerHTML = `💾 Game loaded from <strong>Local Storage</strong>`;
-            document.body.appendChild(notification);
-
-            // Animate in
-            setTimeout(() => (notification.style.opacity = "1"), 10);
-
-            // Remove after 3 seconds
-            setTimeout(() => {
-              notification.style.opacity = "0";
-              setTimeout(() => document.body.removeChild(notification), 300);
-            }, 3000);
-          }, 1000);
-        };
+        } else {
+          alert("Could not find a save file in Google Drive.");
+        }
+      } catch (error) {
+        console.error("Failed to load from Google Drive:", error);
+        alert(`Error loading from Google Drive: ${error.message}`);
       }
-
-      // Cloud load handler
-      const loadCloudBtn = document.getElementById("splash-load-cloud-btn");
-      if (loadCloudBtn) {
-        loadCloudBtn.onclick = async () => {
-          try {
-            // Load from cloud
-            console.log("☁️ Loading game from Google Drive...");
-
-            // Check if user is signed in first
-            if (!window.googleDriveSave.isSignedIn) {
-              alert(
-                "Please sign in to Google Drive first before loading your save."
-              );
-              return;
-            }
-
-            if (window.splashManager) {
-              window.splashManager.setSubStep("Loading from cloud...");
-            }
-            const cloudSaveData = await window.googleDriveSave.load();
-            if (cloudSaveData) {
-              console.log("✅ Successfully loaded game from Google Drive");
-              const parsedCloudData = JSON.parse(cloudSaveData);
-              game.applySaveState(parsedCloudData);
-              window.splashManager.hide();
-              await new Promise((resolve) => setTimeout(resolve, 600));
-              await startGame(pageRouter, ui, game);
-
-              // Show temporary notification about save source
-              setTimeout(() => {
-                console.log("☁️ Game loaded from Google Drive");
-                // Create a temporary notification element
-                const notification = document.createElement("div");
-                notification.style.cssText = `
-                  position: fixed; top: 20px; right: 20px; z-index: 10000;
-                  background: linear-gradient(135deg, #4285F4, #34a853); color: white; padding: 12px 20px;
-                  border-radius: 8px; font-family: Arial, sans-serif; font-size: 14px;
-                  box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.3s;
-                  border-left: 4px solid #ff6b35;
-                `;
-                notification.innerHTML = `☁️ Game loaded from <strong>Google Drive</strong>`;
-                document.body.appendChild(notification);
-
-                // Animate in
-                setTimeout(() => (notification.style.opacity = "1"), 10);
-
-                // Remove after 3 seconds
-                setTimeout(() => {
-                  notification.style.opacity = "0";
-                  setTimeout(
-                    () => document.body.removeChild(notification),
-                    300
-                  );
-                }, 3000);
-              }, 1000);
-            } else {
-              alert(
-                "Could not find a save file in Google Drive. Starting new game."
-              );
-              localStorage.setItem("reactorNewGamePending", "1");
-              window.location.reload();
-            }
-          } catch (error) {
-            console.error("Failed to load from Google Drive:", error);
-            alert(`Error loading from Google Drive: ${error.message}`);
-            if (window.splashManager) {
-              window.splashManager.setSubStep("Ready to start...");
-            }
-          }
-        };
-      }
-
-      // Upload to cloud option button handler (small button next to Load Game)
-      const uploadOptionBtn = document.getElementById(
-        "splash-upload-option-btn"
-      );
-      if (uploadOptionBtn) {
-        uploadOptionBtn.onclick = async () => {
-          try {
-            // Upload local save to cloud
-            console.log("📤 Uploading local save to Google Drive...");
-
-            // Check if user is signed in first
-            if (!window.googleDriveSave.isSignedIn) {
-              alert(
-                "Please sign in to Google Drive first before uploading your save."
-              );
-              return;
-            }
-
-            if (window.splashManager) {
-              window.splashManager.setSubStep("Uploading save to cloud...");
-            }
-
-            // Get the raw save data string from localStorage
-            const saveDataString = localStorage.getItem("reactorGameSave");
-            if (!saveDataString) {
-              throw new Error("No local save data found");
-            }
-
-            await window.googleDriveSave.uploadLocalSave(saveDataString);
-
-            // Show success message and refresh the UI
-            alert(
-              "Local save successfully uploaded to Google Drive!\n\nYour save is now available in the cloud and on this device. You can load from either location."
-            );
-
-            // Update the entire save options UI to reflect the new state
-            if (window.splashManager) {
-              await window.splashManager.refreshSaveOptions();
-            }
-          } catch (error) {
-            console.error("Failed to upload to Google Drive:", error);
-            alert(`Error uploading to Google Drive: ${error.message}`);
-            if (window.splashManager) {
-              window.splashManager.setSubStep("Ready to start...");
-            }
-          }
-        };
-      }
-
-      const newGameBtn = document.getElementById("splash-new-game-btn");
-      if (newGameBtn) {
-        newGameBtn.onclick = () => {
-          localStorage.setItem("reactorNewGamePending", "1");
-          window.location.reload();
-        };
-      }
-    } else {
-      // Fallback: No splash manager available for load game
-      console.warn(
-        "No splash manager available - creating minimal start interface"
-      );
-      createFallbackStartInterface(pageRouter, ui, game);
-    }
+    };
   }
+
+  // Event handlers for splash screen buttons are now set inside showStartOptions
+  // and will handle the rest of the flow.
 }
 
 /**

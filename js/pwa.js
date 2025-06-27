@@ -802,44 +802,43 @@ class SplashScreenManager {
             console.log("[DEBUG] Cloud save found, hiding local load button");
           }
 
-          // Try to get cloud save details to display
+          // Try to load save data to get last save time, etc.
           try {
-            const cloudSaveData = await window.googleDriveSave.load();
-            if (cloudSaveData) {
-              const saveData = JSON.parse(cloudSaveData);
-              const totalPlayedMs = saveData.total_played_time || 0;
-              const playedTimeStr = this.formatTime(totalPlayedMs);
+            const saveData = await window.googleDriveSave.load();
+            const totalPlayedMs = saveData.total_played_time || 0;
+            const playedTimeStr = this.formatTime(totalPlayedMs);
 
-              loadFromCloudButton.innerHTML = `
-                <div style="text-align: center; margin-bottom: 0.3rem;">
-                  <span>Load Game</span>
-                </div>
-                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8em; color: #CCC; line-height: 1.3; font-weight: 400;">
-                  <span style="color: #4285F4; font-weight: 500;">CLOUD</span>
-                  <img src="img/ui/icons/icon_cash.png" style="width: 16px; height: 16px;" alt="$">
-                  <span>$${fmt(saveData.current_money ?? 0)}</span>
-                  <img src="img/ui/icons/icon_time.png" style="width: 16px; height: 16px;" alt="⏰">
-                  <span>${playedTimeStr}</span>
-                </div>
-              `;
-            } else {
-              throw new Error("Could not parse cloud save data");
-            }
-          } catch (error) {
-            console.log("[DEBUG] Could not load cloud save details:", error);
-            // Fallback to simple format
             loadFromCloudButton.innerHTML = `
               <div style="text-align: center; margin-bottom: 0.3rem;">
                 <span>Load Game</span>
               </div>
               <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8em; color: #CCC; line-height: 1.3; font-weight: 400;">
                 <span style="color: #4285F4; font-weight: 500;">CLOUD</span>
+                <img src="img/ui/icons/icon_cash.png" style="width: 16px; height: 16px;" alt="$">
+                <span>$${fmt(saveData.current_money ?? 0)}</span>
+                <img src="img/ui/icons/icon_time.png" style="width: 16px; height: 16px;" alt="⏰">
+                <span>${playedTimeStr}</span>
               </div>
             `;
+            loadFromCloudButton.disabled = false;
+            console.log("[DEBUG] Cloud save button updated with save details.");
+          } catch (error) {
+            console.error("[DEBUG] Could not load cloud save details:", error);
+            loadFromCloudButton.innerHTML = `
+              <div style="text-align: center; margin-bottom: 0.3rem;">
+                <span>Load Game</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8em; color: #CCC; line-height: 1.3; font-weight: 400;">
+                <span style="color: #4285F4; font-weight: 500;">CLOUD</span>
+                <img src="img/ui/icons/icon_cash.png" style="width: 16px; height: 16px;" alt="$">
+                <span>$${fmt(saveData.current_money ?? 0)}</span>
+                <img src="img/ui/icons/icon_time.png" style="width: 16px; height: 16px;" alt="⏰">
+                <span>${playedTimeStr}</span>
+              </div>
+            `;
+            loadFromCloudButton.disabled = false;
+            console.log("[DEBUG] Cloud save button updated with save details.");
           }
-          // Clear upload-specific data attributes
-          delete loadFromCloudButton.dataset.action;
-          delete loadFromCloudButton.dataset.gameState;
         } else {
           console.log("[DEBUG] No cloud save found, hiding load button");
           loadFromCloudButton.style.display = "none";

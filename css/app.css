@@ -452,7 +452,7 @@ button.unaffordable .part-price {
   display: flex;
   flex-direction: row;
   justify-content: flex-start;
-  gap: 3px;
+  gap: 2px;
   margin-bottom: 0.5rem;
   flex: 1;
   border-bottom: var(--border-width) solid var(--border-dark);
@@ -461,7 +461,7 @@ button.unaffordable .part-price {
 .parts_header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
   margin-bottom: 0.5rem;
   flex-wrap: wrap;
 }
@@ -483,6 +483,7 @@ button.unaffordable .part-price {
 #parts_tab_contents {
   flex-grow: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0 0.5rem 0.5rem 0.5rem;
 }
 
@@ -676,13 +677,13 @@ body:not(.page-reactor) #parts_panel_toggle {
 
 .upgrade .image,
 .experimental_upgrade .image {
-  width: 90%;
-  height: 90%;
+  width: 95%;
+  height: 95%;
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
-  padding: 5px;
-  margin: 5px;
+  padding: 2px;
+  margin: 2px;
 }
 
 .upgrade-price {
@@ -800,19 +801,19 @@ body:not(.page-reactor) #parts_panel_toggle {
 
 #reactor_wrapper {
   flex-grow: 1;
-  padding: 8px;
-  overflow: auto;
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  overflow: hidden; /* Hide overflow on desktop */
   position: relative;
-  touch-action: none;
 }
 #reactor {
   display: grid;
   grid-template-columns: repeat(var(--game-cols, 12), var(--tile-size));
   grid-template-rows: repeat(var(--game-rows, 12), var(--tile-size));
-  gap: 1px;
+  border: var(--border-width) solid var(--border-dark);
+  background-color: var(--base-color);
+  image-rendering: pixelated;
 }
 #reactor .tile {
   width: var(--tile-size);
@@ -1280,6 +1281,15 @@ body:not(.page-reactor) #parts_panel_toggle {
     font-size: 0.85em;
     font-weight: 600;
   }
+
+  #reactor_wrapper {
+    overflow: auto; /* Enable scrolling on mobile */
+    -webkit-overflow-scrolling: touch; /* Momentum scrolling for iOS */
+  }
+
+  #reactor {
+    margin: 0.25rem; /* Add some margin to not stick to the edges */
+  }
 }
 
 @media (max-width: 900px) {
@@ -1314,7 +1324,7 @@ body:not(.page-reactor) #parts_panel_toggle {
 
   #main_content_wrapper {
     padding: 0.1rem;
-    padding-bottom: 140px; /* Increased from 120px for better mobile clearance */
+    padding-bottom: 120px; /* Increased from 120px for better mobile clearance */
   }
 
   #bottom_nav .pixel-btn {
@@ -1595,14 +1605,14 @@ body:not(.page-reactor) #parts_panel_toggle {
 
 .part .image,
 .upgrade .image {
-  width: 90%;
-  height: 90%;
+  width: 95%;
+  height: 95%;
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
   display: block;
-  padding: 5px !important;
-  margin: 5px !important;
+  padding: 2px !important;
+  margin: 2px !important;
 }
 
 .part-price,
@@ -2924,10 +2934,10 @@ body.hide-help-buttons .info-button {
 .collapsed-control-btn {
   background: none;
   border: none;
-  font-size: 2rem;
+  font-size: 1.575rem;
   color: var(--text-color);
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;

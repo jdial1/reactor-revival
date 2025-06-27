@@ -298,3 +298,381 @@ describe("Full Part and Upgrade Coverage", () => {
     }
   );
 });
+
+describe("Data Integrity Tests", () => {
+  describe("Parts List", () => {
+    it("should not have duplicate part IDs", () => {
+      const partIds = new Set();
+      const duplicates = [];
+
+      for (const part of allParts) {
+        if (partIds.has(part.id)) {
+          duplicates.push(part.id);
+        }
+        partIds.add(part.id);
+      }
+
+      expect(duplicates).toEqual([]);
+    });
+
+    it("should have valid part categories", () => {
+      const validCategories = [
+        "cell",
+        "reflector",
+        "capacitor",
+        "vent",
+        "heat_exchanger",
+        "heat_inlet",
+        "heat_outlet",
+        "coolant_cell",
+        "reactor_plating",
+        "particle_accelerator",
+      ];
+
+      for (const part of allParts) {
+        expect(validCategories).toContain(part.category);
+      }
+    });
+
+    it("should have required properties for all parts", () => {
+      for (const part of allParts) {
+        expect(part).toHaveProperty("id");
+        expect(part).toHaveProperty("title");
+        expect(part).toHaveProperty("category");
+        expect(part).toHaveProperty("base_cost");
+        expect(typeof part.id).toBe("string");
+        expect(typeof part.title).toBe("string");
+        expect(typeof part.category).toBe("string");
+        expect(typeof part.base_cost).toBe("number");
+      }
+    });
+  });
+
+  describe("Upgrades List", () => {
+    it("should not have duplicate upgrade IDs", () => {
+      const upgradeIds = new Set();
+      const duplicates = [];
+
+      for (const upgrade of allUpgrades) {
+        if (upgradeIds.has(upgrade.id)) {
+          duplicates.push(upgrade.id);
+        }
+        upgradeIds.add(upgrade.id);
+      }
+
+      expect(duplicates).toEqual([]);
+    });
+
+    it("should have required properties for all upgrades", () => {
+      for (const upgrade of allUpgrades) {
+        expect(upgrade).toHaveProperty("id");
+        expect(upgrade).toHaveProperty("title");
+        // Upgrades have different cost property names or computed costs
+        const costValue =
+          upgrade.cost ||
+          upgrade.baseCost ||
+          upgrade.totalCost ||
+          upgrade.ecost ||
+          upgrade.base_ecost;
+        if (!costValue && typeof upgrade.totalCost === "function") {
+          // Some upgrades have calculated costs
+          expect(upgrade.totalCost()).toBeGreaterThan(0);
+        } else if (costValue !== undefined) {
+          expect(typeof costValue).toBe("number");
+        } else {
+          // Some upgrades might have dynamic cost calculation - skip for those
+          console.log(
+            `Upgrade ${upgrade.id} has no direct cost property - may use dynamic calculation`
+          );
+        }
+        expect(typeof upgrade.id).toBe("string");
+        expect(typeof upgrade.title).toBe("string");
+      }
+    });
+
+    it("should have valid upgrade types", () => {
+      const validTypes = [
+        "utility",
+        "experimental",
+        "cell_upgrade",
+        "reactor_expansion",
+        "other",
+        "exchangers",
+        "vents",
+        "experimental_laboratory",
+        "experimental_boost",
+        "experimental_cells",
+        "experimental_parts",
+        "experimental_particle_accelerators",
+        "experimental_cells_boost",
+        "cell_power_upgrades",
+        "cell_tick_upgrades",
+        "cell_perpetual_upgrades",
+      ];
+
+      for (const upgrade of allUpgrades) {
+        if (upgrade.type) {
+          expect(validTypes).toContain(upgrade.type);
+        }
+      }
+    });
+  });
+});
+
+describe("Logical Duplication Tests", () => {
+  let game;
+
+  beforeEach(() => {
+    // Initialize game with all components (no DOM required)
+    // Create minimal UI mock for the game constructor
+    const mockUI = {
+      stateManager: {
+        setVar: () => {},
+        getVar: () => {},
+        setClickedPart: () => {},
+      },
+    };
+
+    game = new Game(mockUI);
+    game.set_defaults(); // This calls initialize on partset and upgradeset
+  });
+
+  describe("Parts Data Duplication", () => {
+    test("should not have duplicate parts by category", () => {
+      // Test each category for duplicate parts
+      const categories = [
+        "cell",
+        "reflector",
+        "capacitor",
+        "particle_accelerator",
+        "vent",
+        "heat_exchanger",
+        "heat_inlet",
+        "heat_outlet",
+        "coolant_cell",
+        "reactor_plating",
+      ];
+
+      categories.forEach((category) => {
+        const parts = game.partset.getPartsByCategory(category);
+        const partIds = parts.map((part) => part.id);
+        const uniquePartIds = [...new Set(partIds)];
+
+        expect(partIds.length).toBe(
+          uniquePartIds.length,
+          `Category ${category} has duplicate part IDs: ${partIds.filter(
+            (id, index) => partIds.indexOf(id) !== index
+          )}`
+        );
+      });
+    });
+
+    test("should not have duplicate cell parts", () => {
+      // Specifically test cell duplication which was mentioned by user
+      const cellParts = game.partset.getPartsByCategory("cell");
+      const cellIds = cellParts.map((part) => part.id);
+      const uniqueCellIds = [...new Set(cellIds)];
+
+      expect(cellIds.length).toBe(
+        uniqueCellIds.length,
+        `Cell parts have duplicate IDs. Found: ${cellIds.join(", ")}`
+      );
+
+      // Verify cells by type and level don't duplicate
+      const cellsByTypeLevel = new Map();
+      cellParts.forEach((cell) => {
+        const key = `${cell.type}_${cell.level}`;
+        if (cellsByTypeLevel.has(key)) {
+          throw new Error(`Duplicate cell found: ${key} exists multiple times`);
+        }
+        cellsByTypeLevel.set(key, cell);
+      });
+    });
+
+    test("should generate parts correctly without logical duplicates", () => {
+      // Test that part generation doesn't create logical duplicates
+      const allParts = game.partset.getAllParts();
+      const partsByTypeLevel = new Map();
+
+      allParts.forEach((part) => {
+        const key = `${part.type}_${part.level}`;
+        if (partsByTypeLevel.has(key)) {
+          const existing = partsByTypeLevel.get(key);
+          expect(existing.id).toBe(
+            part.id,
+            `Found different parts with same type and level: ${existing.id} vs ${part.id}`
+          );
+        } else {
+          partsByTypeLevel.set(key, part);
+        }
+      });
+    });
+  });
+
+  describe("Upgrades Data Duplication", () => {
+    test("should not have duplicate upgrade objects in upgrade sets", () => {
+      // Test that upgrades don't have duplicate IDs in the data structure
+      const allUpgrades = game.upgradeset.getAllUpgrades();
+      const upgradeIds = allUpgrades.map((upgrade) => upgrade.id);
+      const uniqueUpgradeIds = [...new Set(upgradeIds)];
+
+      expect(upgradeIds.length).toBe(
+        uniqueUpgradeIds.length,
+        `Upgrade set has duplicate upgrade IDs: ${upgradeIds.filter(
+          (id, index) => upgradeIds.indexOf(id) !== index
+        )}`
+      );
+    });
+
+    test("should not have duplicate upgrades by type", () => {
+      // Test upgrades by type for logical duplicates
+      const upgradeTypes = [
+        "other",
+        "exchangers",
+        "vents",
+        "cell_power_upgrades",
+        "cell_tick_upgrades",
+        "cell_perpetual_upgrades",
+        "experimental_laboratory",
+        "experimental_boost",
+        "experimental_cells",
+      ];
+
+      upgradeTypes.forEach((type) => {
+        const upgradesOfType = game.upgradeset.getUpgradesByType(type);
+        const upgradeIds = upgradesOfType.map((upgrade) => upgrade.id);
+        const uniqueUpgradeIds = [...new Set(upgradeIds)];
+
+        expect(upgradeIds.length).toBe(
+          uniqueUpgradeIds.length,
+          `Upgrade type ${type} has duplicate IDs: ${upgradeIds.filter(
+            (id, index) => upgradeIds.indexOf(id) !== index
+          )}`
+        );
+      });
+    });
+
+    test("should generate unique cell upgrade IDs", () => {
+      // Test that dynamically generated cell upgrades have unique IDs
+      const allUpgrades = game.upgradeset.getAllUpgrades();
+      const cellUpgrades = allUpgrades.filter(
+        (u) =>
+          u.upgrade.type.includes("cell_power") ||
+          u.upgrade.type.includes("cell_tick") ||
+          u.upgrade.type.includes("cell_perpetual")
+      );
+
+      const upgradeIds = cellUpgrades.map((u) => u.id);
+      const uniqueUpgradeIds = [...new Set(upgradeIds)];
+
+      expect(upgradeIds.length).toBe(
+        uniqueUpgradeIds.length,
+        `Duplicate cell upgrade IDs found: ${upgradeIds.filter(
+          (id, index) => upgradeIds.indexOf(id) !== index
+        )}`
+      );
+
+      // Test that each cell has exactly one upgrade of each type (except protium which has no upgrades)
+      const cellParts = game.partset
+        .getPartsByCategory("cell")
+        .filter((p) => p.level === 1 && p.part.cell_tick_upgrade_cost); // Only cells with upgrade costs
+      const upgradeTypes = ["cell_power", "cell_tick", "cell_perpetual"];
+
+      cellParts.forEach((cellPart) => {
+        upgradeTypes.forEach((upgradeType) => {
+          const matchingUpgrades = cellUpgrades.filter(
+            (u) => u.id.includes(cellPart.id) && u.id.includes(upgradeType)
+          );
+
+          expect(matchingUpgrades.length).toBe(
+            1,
+            `Cell ${cellPart.id} should have exactly 1 ${upgradeType} upgrade, found ${matchingUpgrades.length}`
+          );
+        });
+      });
+    });
+
+    test("should not have logical duplicate upgrades for same functionality", () => {
+      // Test that there are no logically duplicate upgrades (same name/function but different IDs)
+      const allUpgrades = game.upgradeset.getAllUpgrades();
+      const upgradesByTitle = new Map();
+
+      allUpgrades.forEach((upgrade) => {
+        const title = upgrade.title;
+        if (upgradesByTitle.has(title)) {
+          const existing = upgradesByTitle.get(title);
+          expect(existing.id).toBe(
+            upgrade.id,
+            `Found duplicate upgrades with same title '${title}': ${existing.id} vs ${upgrade.id}`
+          );
+        } else {
+          upgradesByTitle.set(title, upgrade);
+        }
+      });
+    });
+  });
+
+  describe("Cross-Component Data Integrity", () => {
+    test("should not have ID conflicts between parts and upgrades", () => {
+      // Test for ID conflicts at the data level (not DOM level)
+      const allParts = game.partset.getAllParts();
+      const allUpgrades = game.upgradeset.getAllUpgrades();
+
+      const partIds = allParts.map((part) => part.id);
+      const upgradeIds = allUpgrades.map((upgrade) => upgrade.id);
+
+      const allIds = [...partIds, ...upgradeIds];
+      const uniqueIds = [...new Set(allIds)];
+
+      expect(allIds.length).toBe(
+        uniqueIds.length,
+        `ID conflicts found between parts and upgrades: ${allIds.filter(
+          (id, index) => allIds.indexOf(id) !== index
+        )}`
+      );
+    });
+
+    test("should maintain data integrity when components are reinitialized", () => {
+      // Test scenario where game components are reinitialized (like after save/load)
+
+      // Get initial counts
+      const initialPartCount = game.partset.getAllParts().length;
+      const initialUpgradeCount = game.upgradeset.getAllUpgrades().length;
+
+      // Reinitialize components
+      game.partset.initialize();
+      game.upgradeset.initialize();
+
+      const finalPartCount = game.partset.getAllParts().length;
+      const finalUpgradeCount = game.upgradeset.getAllUpgrades().length;
+
+      expect(finalPartCount).toBe(
+        initialPartCount,
+        "Part count changed after reinitialization"
+      );
+      expect(finalUpgradeCount).toBe(
+        initialUpgradeCount,
+        "Upgrade count changed after reinitialization"
+      );
+
+      // Check for duplicates after reinitialization
+      const allParts = game.partset.getAllParts();
+      const allUpgrades = game.upgradeset.getAllUpgrades();
+
+      const partIds = allParts.map((part) => part.id);
+      const upgradeIds = allUpgrades.map((upgrade) => upgrade.id);
+
+      const allPartIds = [...new Set(partIds)];
+      const allUpgradeIds = [...new Set(upgradeIds)];
+
+      expect(partIds.length).toBe(
+        allPartIds.length,
+        "Reinitialization created duplicate part IDs"
+      );
+      expect(upgradeIds.length).toBe(
+        allUpgradeIds.length,
+        "Reinitialization created duplicate upgrade IDs"
+      );
+    });
+  });
+});

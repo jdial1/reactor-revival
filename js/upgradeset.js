@@ -9,6 +9,10 @@ export class UpgradeSet {
     this.upgradesArray = [];
   }
   initialize() {
+    // Clear existing upgrades to prevent duplication
+    this.upgrades.clear();
+    this.upgradesArray = [];
+
     const full_upgrade_list = [...upgrade_templates];
     const baseCellParts = this.game.partset
       .getAllParts()

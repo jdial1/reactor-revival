@@ -30,6 +30,10 @@ export class PartSet {
   }
 
   initialize() {
+    // Clear existing parts to prevent duplication
+    this.parts.clear();
+    this.partsArray = [];
+
     part_list_data.forEach((template) => {
       const levels = template.levels || 1;
       for (let i = 0; i < levels; i++) {

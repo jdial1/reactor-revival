@@ -10,7 +10,7 @@
   <div class="parts_header">
     <div class="parts_tabs">
       <button
-        class="pixel-btn parts_tab active"
+        class="pixel-btn-small parts_tab active"
         id="tab_power"
         data-tab="power"
         title="Power Creation"
@@ -18,7 +18,7 @@
         <img src="img/ui/icons/icon_power.png" alt="Power" />
       </button>
       <button
-        class="pixel-btn parts_tab"
+        class="pixel-btn-small parts_tab"
         id="tab_heat"
         data-tab="heat"
         title="Heat Management"
@@ -26,7 +26,7 @@
         <img src="img/ui/icons/icon_heat.png" alt="Heat" />
       </button>
       <button
-        class="pixel-btn parts_tab"
+        class="pixel-btn-small parts_tab"
         id="tab_misc1"
         data-tab="misc1"
         title="Other"
@@ -35,7 +35,7 @@
         <span role="img" aria-label="Locked">🔒</span>
       </button>
       <button
-        class="pixel-btn parts_tab"
+        class="pixel-btn-small parts_tab"
         id="tab_misc2"
         data-tab="misc2"
         title="Other"
@@ -43,15 +43,15 @@
       >
         <span role="img" aria-label="Locked">🔒</span>
       </button>
+      <button
+        id="parts_help_toggle"
+        class="pixel-btn-small parts_help_btn"
+        title="Toggle help mode - click to show part information instead of placing parts"
+        aria-label="Toggle help mode"
+      >
+        ?
+      </button>
     </div>
-    <button
-      id="parts_help_toggle"
-      class="pixel-btn parts_help_btn"
-      title="Toggle help mode - click to show part information instead of placing parts"
-      aria-label="Toggle help mode"
-    >
-      ?
-    </button>
   </div>
   <div id="parts_tab_contents">
     <div id="parts_tab_power" class="parts_tab_content active">
