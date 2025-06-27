@@ -31,7 +31,12 @@ const actions = {
   expand_reactor_rows: (upgrade, game) => {
     game.rows = game.base_rows + upgrade.level;
     // Force UI update on mobile to ensure proper alignment
-    if (game.ui && window.innerWidth <= 900) {
+    if (
+      game.ui &&
+      typeof window !== "undefined" &&
+      window.innerWidth &&
+      window.innerWidth <= 900
+    ) {
       // Add a small delay to ensure the setter has completed
       setTimeout(() => {
         game.ui.resizeReactor();
@@ -41,7 +46,12 @@ const actions = {
   expand_reactor_cols: (upgrade, game) => {
     game.cols = game.base_cols + upgrade.level;
     // Force UI update on mobile to ensure proper alignment
-    if (game.ui && window.innerWidth <= 900) {
+    if (
+      game.ui &&
+      typeof window !== "undefined" &&
+      window.innerWidth &&
+      window.innerWidth <= 900
+    ) {
       // Add a small delay to ensure the setter has completed
       setTimeout(() => {
         game.ui.resizeReactor();

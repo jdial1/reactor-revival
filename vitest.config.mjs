@@ -24,9 +24,16 @@ export default defineConfig({
     },
     // Optimize memory usage
     forceRerunTriggers: ["**/package.json/**", "**/{vitest,vite}.config.*"],
-    // Prevent massive console output
+    // Prevent massive console output and DOM object dumps
     printConsoleTrace: false,
     logHeapUsage: false,
+    // Reduce verbosity of DOM objects in test output
+    outputTruncateLength: 80,
+    chaiConfig: {
+      truncateThreshold: 40,
+      useColors: true,
+      showDiff: true,
+    },
     env: {
       NODE_OPTIONS: "--max-old-space-size=4096",
     },

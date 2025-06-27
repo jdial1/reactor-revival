@@ -5,9 +5,9 @@
   "main": "index.html",
   "debug": false,
   "scripts": {
-    "test": "vitest",
-    "test:ci": "vitest --run",
-    "test:safe": "vitest --reporter=basic --no-coverage",
+    "test": "npx vitest --run",
+    "test:ci": "npx vitest --run",
+    "test:safe": "npx vitest --reporter=basic --no-coverage",
     "generate-version": "node scripts/generate-version.js",
     "dev": "npm run generate-version && npm run build:sw && npx live-server --port=8080 --open=/ --cors --headers='Cache-Control: no-store' .",
     "start": "npx live-server --port=8080 --open=/",
@@ -24,6 +24,7 @@
   "license": "ISC",
   "devDependencies": {
     "gh-pages": "^6.3.0",
+    "jsdom": "^24.1.0",
     "vitest": "^1.6.1",
     "workbox-cli": "^7.3.0"
   }

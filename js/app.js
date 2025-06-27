@@ -8,13 +8,19 @@ import "./pwa.js";
 import help_text from "../data/help_text.js";
 import { PageRouter } from "./pageRouter.js";
 import faction_data from "../data/faction_data.js";
+import { GoogleDriveSave } from "./GoogleDriveSave.js";
 
 async function main() {
   "use strict";
 
+  // Wait for splash manager to be ready before proceeding
   if (window.splashManager) {
+    await window.splashManager.readyPromise;
     window.splashManager.setStep("init");
   }
+
+  // Initialize Google Drive Save module and attach to window for global access
+  window.googleDriveSave = new GoogleDriveSave();
 
   // --- 1. Core Object Initialization ---
   const ui = new UI();
@@ -26,11 +32,11 @@ async function main() {
   ui.init(game);
 
   // --- 2. Load Static Game Data ---
-  if (window.splashManager) window.splashManager.setStep("parts");
+  if (window.splashManager) await window.splashManager.setStep("parts");
   game.tileset.initialize();
   game.partset.initialize();
 
-  if (window.splashManager) window.splashManager.setStep("upgrades");
+  if (window.splashManager) await window.splashManager.setStep("upgrades");
   game.upgradeset.initialize();
 
   game.set_defaults();
@@ -46,8 +52,8 @@ async function main() {
     populateFactionSelector();
     // Show faction selection for a new game
     if (window.splashManager) {
-      window.splashManager.setStep("ready");
-      window.splashManager.showStartOptions(false); // Show only "New Game"
+      await window.splashManager.setStep("ready");
+      await window.splashManager.showStartOptions(false); // Show only "New Game"
       const factionPanel = document.getElementById("faction-select-panel");
       const splashScreen = document.getElementById("splash-screen");
       factionPanel.style.display = "flex";
@@ -73,17 +79,169 @@ async function main() {
   } else {
     // Load existing game
     if (window.splashManager) {
-      window.splashManager.setStep("ready");
-      window.splashManager.showStartOptions(true);
+      await window.splashManager.setStep("ready");
+      await window.splashManager.showStartOptions(true);
+
+      // Local load handler
       const loadGameBtn = document.getElementById("splash-load-game-btn");
       if (loadGameBtn) {
         loadGameBtn.onclick = async () => {
+          console.log("🎮 Loading game from local storage...");
+          if (window.splashManager) {
+            window.splashManager.setSubStep("Loading from local storage...");
+          }
           window.splashManager.hide();
           // Wait for splash screen fade-out animation to complete (500ms)
           await new Promise((resolve) => setTimeout(resolve, 600));
           await startGame(pageRouter, ui, game);
+
+          // Show temporary notification about save source
+          setTimeout(() => {
+            console.log("💾 Game loaded from Local Storage");
+            // Create a temporary notification element
+            const notification = document.createElement("div");
+            notification.style.cssText = `
+              position: fixed; top: 20px; right: 20px; z-index: 10000;
+              background: #4CAF50; color: white; padding: 12px 20px;
+              border-radius: 8px; font-family: Arial, sans-serif; font-size: 14px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.3s;
+            `;
+            notification.innerHTML = `💾 Game loaded from <strong>Local Storage</strong>`;
+            document.body.appendChild(notification);
+
+            // Animate in
+            setTimeout(() => (notification.style.opacity = "1"), 10);
+
+            // Remove after 3 seconds
+            setTimeout(() => {
+              notification.style.opacity = "0";
+              setTimeout(() => document.body.removeChild(notification), 300);
+            }, 3000);
+          }, 1000);
         };
       }
+
+      // Cloud load handler
+      const loadCloudBtn = document.getElementById("splash-load-cloud-btn");
+      if (loadCloudBtn) {
+        loadCloudBtn.onclick = async () => {
+          try {
+            // Load from cloud
+            console.log("☁️ Loading game from Google Drive...");
+
+            // Check if user is signed in first
+            if (!window.googleDriveSave.isSignedIn) {
+              alert(
+                "Please sign in to Google Drive first before loading your save."
+              );
+              return;
+            }
+
+            if (window.splashManager) {
+              window.splashManager.setSubStep("Loading from cloud...");
+            }
+            const cloudSaveData = await window.googleDriveSave.load();
+            if (cloudSaveData) {
+              console.log("✅ Successfully loaded game from Google Drive");
+              const parsedCloudData = JSON.parse(cloudSaveData);
+              game.applySaveState(parsedCloudData);
+              window.splashManager.hide();
+              await new Promise((resolve) => setTimeout(resolve, 600));
+              await startGame(pageRouter, ui, game);
+
+              // Show temporary notification about save source
+              setTimeout(() => {
+                console.log("☁️ Game loaded from Google Drive");
+                // Create a temporary notification element
+                const notification = document.createElement("div");
+                notification.style.cssText = `
+                  position: fixed; top: 20px; right: 20px; z-index: 10000;
+                  background: linear-gradient(135deg, #4285F4, #34a853); color: white; padding: 12px 20px;
+                  border-radius: 8px; font-family: Arial, sans-serif; font-size: 14px;
+                  box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.3s;
+                  border-left: 4px solid #ff6b35;
+                `;
+                notification.innerHTML = `☁️ Game loaded from <strong>Google Drive</strong>`;
+                document.body.appendChild(notification);
+
+                // Animate in
+                setTimeout(() => (notification.style.opacity = "1"), 10);
+
+                // Remove after 3 seconds
+                setTimeout(() => {
+                  notification.style.opacity = "0";
+                  setTimeout(
+                    () => document.body.removeChild(notification),
+                    300
+                  );
+                }, 3000);
+              }, 1000);
+            } else {
+              alert(
+                "Could not find a save file in Google Drive. Starting new game."
+              );
+              localStorage.setItem("reactorNewGamePending", "1");
+              window.location.reload();
+            }
+          } catch (error) {
+            console.error("Failed to load from Google Drive:", error);
+            alert(`Error loading from Google Drive: ${error.message}`);
+            if (window.splashManager) {
+              window.splashManager.setSubStep("Ready to start...");
+            }
+          }
+        };
+      }
+
+      // Upload to cloud option button handler (small button next to Load Game)
+      const uploadOptionBtn = document.getElementById(
+        "splash-upload-option-btn"
+      );
+      if (uploadOptionBtn) {
+        uploadOptionBtn.onclick = async () => {
+          try {
+            // Upload local save to cloud
+            console.log("📤 Uploading local save to Google Drive...");
+
+            // Check if user is signed in first
+            if (!window.googleDriveSave.isSignedIn) {
+              alert(
+                "Please sign in to Google Drive first before uploading your save."
+              );
+              return;
+            }
+
+            if (window.splashManager) {
+              window.splashManager.setSubStep("Uploading save to cloud...");
+            }
+
+            // Get the raw save data string from localStorage
+            const saveDataString = localStorage.getItem("reactorGameSave");
+            if (!saveDataString) {
+              throw new Error("No local save data found");
+            }
+
+            await window.googleDriveSave.uploadLocalSave(saveDataString);
+
+            // Show success message and refresh the UI
+            alert(
+              "Local save successfully uploaded to Google Drive!\n\nYour save is now available in the cloud and on this device. You can load from either location."
+            );
+
+            // Update the entire save options UI to reflect the new state
+            if (window.splashManager) {
+              await window.splashManager.refreshSaveOptions();
+            }
+          } catch (error) {
+            console.error("Failed to upload to Google Drive:", error);
+            alert(`Error uploading to Google Drive: ${error.message}`);
+            if (window.splashManager) {
+              window.splashManager.setSubStep("Ready to start...");
+            }
+          }
+        };
+      }
+
       const newGameBtn = document.getElementById("splash-new-game-btn");
       if (newGameBtn) {
         newGameBtn.onclick = () => {
@@ -198,6 +356,11 @@ function setupGlobalListeners(game) {
     if (game && typeof game.updateSessionTime === "function") {
       game.updateSessionTime();
       game.saveGame();
+
+      // Flush any pending Google Drive saves
+      if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {
+        window.googleDriveSave.flushPendingSave().catch(console.error);
+      }
     }
   });
 }

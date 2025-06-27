@@ -42,7 +42,7 @@ export class Reactor {
     this.game.tileset.active_tiles_list.forEach((tile) => {
       if (tile.activated && tile.part) {
         this._resetTileStats(tile);
-        this._gatherNeighbors(tile);
+        this._gatherNeighbors(tile); // Still needed for cell power/heat initialization
       }
     });
 
@@ -119,27 +119,8 @@ export class Reactor {
     this.game.ui.stateManager.setVar("stats_inlet", this.stats_inlet);
     this.game.ui.stateManager.setVar("stats_outlet", this.stats_outlet);
     this.game.ui.stateManager.setVar("stats_cash", this.stats_cash);
-
-    // Emergency failsafe: only give money if truly stuck (no parts AND no money)
-    const hasNoSellableParts = this.game.tileset.active_tiles_list.every(
-      (t) => !t.part
-    );
-    const hasInsufficientResources =
-      this.current_power + this.game.current_money < this.game.base_money;
-
-    if (hasNoSellableParts && hasInsufficientResources) {
-      // Calculate how much money to give to reach base_money
-      const moneyToGive = this.game.base_money - this.current_power;
-
-      // Update the game's current_money directly
-      this.game.current_money = moneyToGive;
-
-      // Then sync with StateManager for UI updates
-      this.game.ui.stateManager.setVar(
-        "current_money",
-        this.game.current_money
-      );
-    }
+    this.game.ui.stateManager.setVar("current_power", this.current_power);
+    this.game.ui.stateManager.setVar("current_heat", this.current_heat);
   }
 
   _resetStats() {
@@ -155,26 +136,12 @@ export class Reactor {
     tile.heatOutput = 0;
     tile.display_power = 0;
     tile.display_heat = 0;
-    tile.containmentNeighborTiles = [];
-    tile.cellNeighborTiles = [];
-    tile.reflectorNeighborTiles = [];
+    // Neighbor arrays are now handled by getters, don't reset them
   }
 
   _gatherNeighbors(tile) {
+    // This method is now simplified - neighbor gathering is handled by tile getters
     const p = tile.part;
-    const neighbors = Array.from(
-      this.game.tileset.getTilesInRange(tile, p.range || 1)
-    );
-    for (const neighbor_tile of neighbors) {
-      if (neighbor_tile.part && neighbor_tile.activated) {
-        if (neighbor_tile.part.containment)
-          tile.containmentNeighborTiles.push(neighbor_tile);
-        if (neighbor_tile.part.category === "cell" && neighbor_tile.ticks > 0)
-          tile.cellNeighborTiles.push(neighbor_tile);
-        if (neighbor_tile.part.category === "reflector")
-          tile.reflectorNeighborTiles.push(neighbor_tile);
-      }
-    }
     if (p.category === "cell" && tile.ticks > 0) {
       tile.power = p.power;
       tile.heat = p.heat;
@@ -214,7 +181,7 @@ export class Reactor {
   }
 
   checkMeltdown() {
-    if (this.current_heat > this.max_heat * 2) {
+    if (this.current_heat > 2 * this.max_heat) {
       this.has_melted_down = true;
 
       // Hide any active tooltips before clearing parts
@@ -232,7 +199,9 @@ export class Reactor {
       this.game.ui.stateManager.setVar("melting_down", true, true);
 
       // Update UI to show meltdown state
-      document.body.classList.add("reactor-meltdown");
+      if (typeof document !== "undefined" && document.body) {
+        document.body.classList.add("reactor-meltdown");
+      }
 
       // Use the router instance from the game object
       if (this.game.router) {

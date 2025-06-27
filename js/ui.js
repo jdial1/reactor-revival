@@ -403,6 +403,10 @@ export class UI {
   }
 
   updateMeltdownState() {
+    // Add this check to prevent errors when document is not available
+    if (typeof document === "undefined" || !document.body) {
+      return;
+    }
     if (this.game && this.game.reactor) {
       const hasMeltedDown = this.game.reactor.has_melted_down;
       document.body.classList.toggle("reactor-meltdown", hasMeltedDown);
@@ -744,7 +748,11 @@ export class UI {
     this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
 
     // Force a layout recalculation on mobile devices to ensure proper alignment
-    if (window.innerWidth <= 900) {
+    if (
+      typeof window !== "undefined" &&
+      window.innerWidth &&
+      window.innerWidth <= 900
+    ) {
       // Trigger a reflow to ensure CSS grid updates properly
       this.DOMElements.reactor.offsetHeight;
     }
@@ -889,6 +897,8 @@ export class UI {
           if (
             this.game &&
             this.DOMElements.reactor &&
+            typeof window !== "undefined" &&
+            window.innerWidth &&
             window.innerWidth <= 900
           ) {
             this.forceReactorRealignment();

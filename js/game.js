@@ -21,7 +21,7 @@ export class Game {
     this.base_manual_heat_reduce = 1;
     this.upgrade_max_level = 32;
     this.base_money = 10;
-    this.current_money = 0;
+    this._current_money = 0; // Internal property
     this.protium_particles = 0;
     this.total_exotic_particles = 0;
     this.exotic_particles = 0;
@@ -46,52 +46,62 @@ export class Game {
     this.time_flux = true;
     this.sold_power = false;
     this.sold_heat = false;
+    this.objectives_manager = null; // Will be initialized by app.js
+    this.tooltip_manager = null; // Will be initialized by app.js
   }
   set_defaults() {
-    this.current_money = this.base_money;
-    this.rows = this.base_rows;
-    this.cols = this.base_cols;
+    this.base_cols = 12;
+    this.base_rows = 12;
+    this._rows = this.base_rows;
+    this._cols = this.base_cols;
+    this._current_money = this.base_money;
     this.protium_particles = 0;
+    this.total_exotic_particles = 0;
     this.exotic_particles = 0;
     this.current_exotic_particles = 0;
-    this.total_exotic_particles = 0;
-    this.ui.stateManager.setVar("auto_sell", false);
-    this.ui.stateManager.setVar("auto_buy", false);
-    this.ui.stateManager.setVar("heat_control", false);
-    this.ui.stateManager.setVar("time_flux", true);
-    this.ui.stateManager.setVar("pause", false);
-    this.partset.check_affordability(this);
-    this.upgradeset.check_affordability(this);
-    this.upgradeset.reset();
-    this.tileset.clearAllTiles();
+    this.sold_power = false;
+    this.sold_heat = false;
     this.reactor.setDefaults();
-    this.reactor.clearMeltdownState();
+    this.partset.initialize();
+    this.upgradeset.initialize();
+    this.upgradeset.reset();
+    this.upgradeset.check_affordability(this);
+    this.tileset.clearAllTiles();
     this.reactor.updateStats();
-    this.ui.stateManager.game_reset();
+    this.loop_wait = this.base_loop_wait;
+    this.paused = false;
+
+    // Initialize session tracking
+    this.session_start_time = null;
+    this.total_played_time = 0;
+    this.last_save_time = null;
+  }
+
+  // Add getter and setter for current_money to track all assignments
+  get current_money() {
+    return this._current_money;
+  }
+
+  set current_money(value) {
+    this._current_money = value;
   }
 
   addMoney(amount) {
-    this.current_money += amount;
-    this.ui.stateManager.setVar("current_money", this.current_money);
+    this._current_money += amount;
+    this.ui.stateManager.setVar("current_money", this._current_money);
   }
 
   initialize_new_game_state() {
     this.set_defaults();
-    this.tileset.clearAllTiles();
-    this.upgradeset.reset();
-    this.current_money = this.base_money;
-    this.protium_particles = 0;
-    this.total_exotic_particles = 0;
-    this.exotic_particles = 0;
-    this.current_exotic_particles = 0;
-
-    // Initialize time tracking for new game (but don't start session yet)
-    this.total_played_time = 0;
-    this.last_save_time = null;
-    this.session_start_time = null;
-
-    this.upgradeset.check_affordability(this);
-    this.reactor.updateStats();
+    this._current_money = this.base_money;
+    this.ui.stateManager.setVar("current_money", this._current_money);
+    this.ui.stateManager.setVar("stats_cash", this._current_money);
+    this.ui.stateManager.setVar("current_exotic_particles", 0);
+    this.ui.stateManager.setVar("total_exotic_particles", 0);
+    this.ui.stateManager.setVar("exotic_particles", 0);
+    if (this.objectives_manager) {
+      this.objectives_manager.set_objective(0, true);
+    }
   }
 
   /**
@@ -170,7 +180,7 @@ export class Game {
     this.reactor.manualReduceHeat();
   }
   sell_action() {
-    if (this.current_money < 10 && this.reactor.current_power == 0) {
+    if (this._current_money < 10 && this.reactor.current_power == 0) {
       // Check if there are any parts in the reactor that could be sold for money
       const hasPartsToSell = this.tileset.active_tiles_list.some(
         (tile) => tile.part && !tile.part.isSpecialTile
@@ -224,6 +234,16 @@ export class Game {
     // Final update to ensure everything is in sync
     this.reactor.updateStats();
     this.upgradeset.check_affordability(this);
+
+    if (this.reactor.has_melted_down) {
+      if (typeof document !== "undefined" && document.body) {
+        document.body.classList.add("reactor-meltdown");
+      }
+    } else {
+      if (typeof document !== "undefined" && document.body) {
+        document.body.classList.remove("reactor-meltdown");
+      }
+    }
   }
   onToggleStateChange(property, newState) {
     this.paused = this.ui.stateManager.getVar("pause");
@@ -284,9 +304,9 @@ export class Game {
     const part = tile.part;
     if (part.perpetual && this.ui.stateManager.getVar("auto_buy")) {
       const cost = part.cost * 1.5;
-      if (this.current_money >= cost) {
-        this.current_money -= cost;
-        this.ui.stateManager.setVar("current_money", this.current_money);
+      if (this._current_money >= cost) {
+        this._current_money -= cost;
+        this.ui.stateManager.setVar("current_money", this._current_money);
         part.recalculate_stats();
         tile.ticks = part.ticks;
         this.reactor.updateStats();
@@ -307,7 +327,7 @@ export class Game {
 
     const saveData = {
       version: this.version,
-      current_money: this.current_money,
+      current_money: this._current_money,
       protium_particles: this.protium_particles,
       total_exotic_particles: this.total_exotic_particles,
       exotic_particles: this.exotic_particles,
@@ -343,7 +363,7 @@ export class Game {
         })),
       objectives: {
         current_objective_index:
-          this.objectives_manager.current_objective_index,
+          this.objectives_manager?.current_objective_index || 0,
       },
       toggles: {
         auto_sell: this.ui.stateManager.getVar("auto_sell"),
@@ -353,7 +373,80 @@ export class Game {
         pause: this.ui.stateManager.getVar("pause"),
       },
     };
+
+    // Preserve cloud sync information if it exists and the save data hasn't changed significantly
+    try {
+      if (typeof localStorage !== "undefined" && localStorage !== null) {
+        const existingData = localStorage.getItem("reactorGameSave");
+        if (existingData) {
+          const existingSave = JSON.parse(existingData);
+          if (existingSave.isCloudSynced) {
+            const coreDataChanged = this._hasCoreDataChanged(
+              saveData,
+              existingSave
+            );
+            if (!coreDataChanged) {
+              saveData.isCloudSynced = existingSave.isCloudSynced;
+              saveData.cloudUploadedAt = existingSave.cloudUploadedAt;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("Could not preserve cloud sync flags:", error.message);
+    }
+
     return saveData;
+  }
+
+  // Helper method to check if core game data has changed (excluding time fields)
+  _hasCoreDataChanged(newData, existingData) {
+    // Compare key fields that indicate actual game progress changes
+    const keyFields = [
+      "current_money",
+      "protium_particles",
+      "total_exotic_particles",
+      "exotic_particles",
+      "current_exotic_particles",
+      "rows",
+      "cols",
+      "sold_power",
+      "sold_heat",
+    ];
+
+    for (const field of keyFields) {
+      if (newData[field] !== existingData[field]) {
+        return true;
+      }
+    }
+
+    // Compare reactor state (excluding heat/power which fluctuate normally)
+    if (
+      newData.reactor?.has_melted_down !== existingData.reactor?.has_melted_down
+    ) {
+      return true;
+    }
+
+    // Compare tiles (structural changes)
+    if (newData.tiles?.length !== existingData.tiles?.length) {
+      return true;
+    }
+
+    // Compare upgrades
+    if (newData.upgrades?.length !== existingData.upgrades?.length) {
+      return true;
+    }
+
+    // Compare objectives
+    if (
+      newData.objectives?.current_objective_index !==
+      existingData.objectives?.current_objective_index
+    ) {
+      return true;
+    }
+
+    // If none of the core data changed, we can preserve the cloud sync flag
+    return false;
   }
 
   saveGame() {
@@ -364,7 +457,7 @@ export class Game {
       }
       const saveData = this.getSaveState();
 
-      // Skip localStorage in test environment
+      // Save to Local Storage (existing logic)
       if (typeof localStorage !== "undefined" && localStorage !== null) {
         localStorage.setItem("reactorGameSave", JSON.stringify(saveData));
         // Silenced log to reduce test noise
@@ -375,6 +468,17 @@ export class Game {
         // Silent success in test environment
         return;
       }
+
+      // --- GOOGLE DRIVE INTEGRATION ---
+      // Save to Google Drive if available and authorized
+      if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {
+        window.googleDriveSave.save(JSON.stringify(saveData)).catch((error) => {
+          console.error("Failed to auto-save to Google Drive:", error);
+          // Optionally notify the user non-intrusively
+          // Could show a small notification in the UI here
+        });
+      }
+      // --- END INTEGRATION ---
     } catch (error) {
       // Only log errors in non-test environments or if it's not a localStorage issue
       if (
@@ -389,6 +493,11 @@ export class Game {
 
   loadGame() {
     try {
+      // Check if localStorage is available before use
+      if (typeof localStorage === "undefined" || localStorage === null) {
+        return false;
+      }
+
       const savedDataJSON = localStorage.getItem("reactorGameSave");
       if (savedDataJSON) {
         const savedData = JSON.parse(savedDataJSON);
@@ -399,13 +508,15 @@ export class Game {
       }
     } catch (error) {
       console.error("Error loading game:", error);
-      localStorage.removeItem("reactorGameSave");
+      if (typeof localStorage !== "undefined" && localStorage !== null) {
+        localStorage.removeItem("reactorGameSave");
+      }
     }
     return false;
   }
 
   applySaveState(savedData) {
-    this.current_money = savedData.current_money || this.base_money;
+    this._current_money = savedData.current_money || this.base_money;
     this.protium_particles = savedData.protium_particles || 0;
     this.total_exotic_particles = savedData.total_exotic_particles || 0;
     this.exotic_particles = savedData.exotic_particles || 0;
@@ -427,9 +538,13 @@ export class Game {
 
       // Update UI state for meltdown
       if (this.reactor.has_melted_down) {
-        document.body.classList.add("reactor-meltdown");
+        if (typeof document !== "undefined" && document.body) {
+          document.body.classList.add("reactor-meltdown");
+        }
       } else {
-        document.body.classList.remove("reactor-meltdown");
+        if (typeof document !== "undefined" && document.body) {
+          document.body.classList.remove("reactor-meltdown");
+        }
       }
     }
     this.upgradeset.reset();
@@ -454,13 +569,13 @@ export class Game {
       });
     }
     if (savedData.objectives) {
-      this.objectives_manager.current_objective_index =
-        savedData.objectives.current_objective_index || 0;
-      // Also store this for use when starting the objective manager
+      if (this.objectives_manager) {
+        this.objectives_manager.current_objective_index =
+          savedData.objectives.current_objective_index || 0;
+      }
       this._saved_objective_index =
         savedData.objectives.current_objective_index || 0;
     }
-    // Store toggles for later restoration (after engine is created)
     this._pendingToggleStates = savedData.toggles;
     this.ui.updateAllToggleBtnStates();
   }

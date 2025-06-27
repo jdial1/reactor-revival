@@ -80,7 +80,6 @@ export class Engine {
 
   tick() {
     this.game.performance.markStart("tick_total");
-
     const reactor = this.game.reactor;
     const tileset = this.game.tileset;
     const ui = this.game.ui;
@@ -89,73 +88,85 @@ export class Engine {
       return;
     }
 
+    // --- Optimization: Categorize active parts once per tick ---
+    this.game.performance.markStart("tick_categorize_parts");
+    const active_cells = [];
+    const active_inlets = [];
+    const active_exchangers = [];
+    const active_outlets = [];
+    const active_vessels = []; // For venting, EP, explosions
+
+    for (const tile of tileset.active_tiles_list) {
+      if (!tile.activated || !tile.part) continue;
+      const part = tile.part;
+      const category = part.category;
+
+      if (category === "cell" && tile.ticks > 0) {
+        active_cells.push(tile);
+      }
+
+      if (category === "heat_inlet") {
+        active_inlets.push(tile);
+      } else if (category === "heat_exchanger") {
+        active_exchangers.push(tile);
+      } else if (category === "heat_outlet") {
+        active_outlets.push(tile);
+      }
+
+      if (
+        part.vent > 0 ||
+        category === "particle_accelerator" ||
+        part.containment > 0
+      ) {
+        active_vessels.push(tile);
+      }
+    }
+    this.game.performance.markEnd("tick_categorize_parts");
+    // --- End Optimization ---
+
     let power_add = 0;
     let heat_add = 0;
 
-    // 1. Process cells and basic components
     this.game.performance.markStart("tick_cells");
-    for (const tile of tileset.active_tiles_list) {
-      if (!tile.activated || !tile.part) continue;
-
+    for (const tile of active_cells) {
       const part = tile.part;
-      if (part.category === "cell" && tile.ticks > 0) {
-        // Always update tile.power and tile.heat from part
-        tile.power = part.power;
-        tile.heat = part.heat;
-        power_add += tile.power;
-        heat_add += tile.heat;
-        tile.ticks--;
+      tile.power = part.power;
+      tile.heat = part.heat;
+      power_add += tile.power;
+      heat_add += tile.heat;
+      tile.ticks--;
 
-        // Transfer heat to adjacent containment parts
-        for (const neighbor of tile.containmentNeighborTiles) {
-          const old_neighbor_heat = neighbor.heat_contained;
-          const heat_per_neighbor =
-            tile.heat / Math.max(tile.containmentNeighborTiles.length, 1);
-          neighbor.heat_contained += heat_per_neighbor;
-
-          // Update visual state if heat changed
-          if (old_neighbor_heat !== neighbor.heat_contained) {
-            neighbor.updateVisualState();
-          }
+      for (const neighbor of tile.containmentNeighborTiles) {
+        const old_neighbor_heat = neighbor.heat_contained;
+        const heat_per_neighbor =
+          tile.heat / Math.max(tile.containmentNeighborTiles.length, 1);
+        neighbor.heat_contained += heat_per_neighbor;
+        if (old_neighbor_heat !== neighbor.heat_contained) {
+          neighbor.updateVisualState();
         }
+      }
 
-        // Process reflector decay
-        for (const r_tile of tile.reflectorNeighborTiles) {
-          if (r_tile.ticks > 0) {
-            r_tile.ticks--;
-            if (r_tile.ticks === 0) this.handleComponentDepletion(r_tile);
-          }
+      for (const r_tile of tile.reflectorNeighborTiles) {
+        if (r_tile.ticks > 0) {
+          r_tile.ticks--;
+          if (r_tile.ticks === 0) this.handleComponentDepletion(r_tile);
         }
+      }
 
-        if (tile.ticks === 0) {
-          if (part.type === "protium") {
-            this.game.protium_particles += part.cell_count;
-            this.game.update_cell_power();
-          }
-          this.handleComponentDepletion(tile);
+      if (tile.ticks === 0) {
+        if (part.type === "protium") {
+          this.game.protium_particles += part.cell_count;
+          this.game.update_cell_power();
         }
-      } else if (part.containment > 0) {
-        // Containment parts receive heat from adjacent cells (handled above)
-        // and from heat transfer components (handled in next section)
+        this.handleComponentDepletion(tile);
       }
     }
     this.game.performance.markEnd("tick_cells");
 
     reactor.current_heat += heat_add;
 
-    // 2. Process heat transfer components
     this.game.performance.markStart("tick_heat_transfer");
-    const active_inlets = tileset.active_tiles_list.filter(
-      (t) => t.activated && t.part?.category === "heat_inlet"
-    );
-    const active_exchangers = tileset.active_tiles_list.filter(
-      (t) => t.activated && t.part?.category === "heat_exchanger"
-    );
-    const active_outlets = tileset.active_tiles_list.filter(
-      (t) => t.activated && t.part?.category === "heat_outlet"
-    );
 
-    // Inlets
     for (const tile of active_inlets) {
       for (const neighbor of tile.containmentNeighborTiles) {
         const transfer_heat = Math.min(
@@ -165,16 +176,13 @@ export class Engine {
         const old_neighbor_heat = neighbor.heat_contained;
         neighbor.heat_contained -= transfer_heat;
         reactor.current_heat += transfer_heat;
-
-        // Update visual state if heat changed
         if (old_neighbor_heat !== neighbor.heat_contained) {
           neighbor.updateVisualState();
         }
       }
     }
-    // Exchangers
+
     for (const tile of active_exchangers) {
-      // Simplified balancing logic
       tile.containmentNeighborTiles.forEach((neighbor) => {
         const diff = tile.heat_contained - neighbor.heat_contained;
         const heat_to_move = Math.min(
@@ -185,16 +193,12 @@ export class Engine {
         const old_neighbor_heat = neighbor.heat_contained;
 
         if (diff > 0) {
-          // tile is hotter
           tile.heat_contained -= heat_to_move;
           neighbor.heat_contained += heat_to_move;
         } else {
-          // neighbor is hotter
           tile.heat_contained += heat_to_move;
           neighbor.heat_contained -= heat_to_move;
         }
-
-        // Update visual states if heat changed
         if (old_tile_heat !== tile.heat_contained) {
           tile.updateVisualState();
         }
@@ -204,26 +208,23 @@ export class Engine {
       });
     }
 
-    // Outlets
     for (const tile of active_outlets) {
       const neighbors = tile.containmentNeighborTiles;
       if (neighbors.length === 0) continue;
+
       const outlet_capacity =
         tile.getEffectiveTransferValue() * neighbors.length;
       let total_dispense = Math.min(outlet_capacity, reactor.current_heat);
-
       let i = 0;
       const neighbor_heat_changes = new Map();
-
       while (total_dispense > 0) {
         const neighbor = neighbors[i % neighbors.length];
-        // Calculate max heat this neighbor can receive
         const neighbor_space =
           neighbor.part.containment - neighbor.heat_contained;
         let heat_per_neighbor = Math.min(
-          total_dispense / neighbors.length, // Fair share of remaining heat
-          neighbor_space, // Don't overfill neighbor
-          tile.getEffectiveTransferValue() // Don't exceed transfer rate per neighbor
+          total_dispense / neighbors.length,
+          neighbor_space,
+          tile.getEffectiveTransferValue()
         );
 
         if (reactor.heat_outlet_controlled && neighbor.part.vent) {
@@ -232,23 +233,19 @@ export class Engine {
             neighbor.part.vent - neighbor.heat_contained
           );
         }
+
         if (heat_per_neighbor > 0) {
           const old_heat = neighbor.heat_contained;
           neighbor.heat_contained += heat_per_neighbor;
           reactor.current_heat -= heat_per_neighbor;
           total_dispense -= heat_per_neighbor;
-
-          // Track neighbors that changed for visual updates
           if (!neighbor_heat_changes.has(neighbor)) {
             neighbor_heat_changes.set(neighbor, old_heat);
           }
         }
         i++;
-        // Prevent infinite loop if all neighbors are full
         if (i > neighbors.length * 2 && total_dispense > 0) break;
       }
-
-      // Update visual states for all neighbors that had heat changes
       for (const [neighbor, old_heat] of neighbor_heat_changes) {
         if (old_heat !== neighbor.heat_contained) {
           neighbor.updateVisualState();
@@ -257,13 +254,12 @@ export class Engine {
     }
     this.game.performance.markEnd("tick_heat_transfer");
 
-    // 3. Process vents, EPs, and component failure
     this.game.performance.markStart("tick_vents");
     let ep_chance_add = 0;
-    for (const tile of tileset.active_tiles_list) {
-      if (!tile.activated || !tile.part) continue;
-      // Vents
-      if (tile.part.vent > 0) {
+    for (const tile of active_vessels) {
+      const part = tile.part;
+
+      if (part.vent > 0) {
         const vent_value = tile.getEffectiveVentValue();
         const old_heat = tile.heat_contained;
         if (tile.heat_contained > 0) {
@@ -273,29 +269,20 @@ export class Engine {
             tile.heat_contained -= vent_value;
           }
         }
-        if (tile.part.id === "vent6") reactor.current_power -= vent_value;
-
-        // Update visual state if heat changed
+        if (part.id === "vent6") reactor.current_power -= vent_value;
         if (old_heat !== tile.heat_contained) {
           tile.updateVisualState();
         }
       }
-      // Particle Accelerators
-      if (
-        tile.part.category === "particle_accelerator" &&
-        tile.heat_contained > 0
-      ) {
-        const lower_heat = Math.min(tile.heat_contained, tile.part.ep_heat);
+
+      if (part.category === "particle_accelerator" && tile.heat_contained > 0) {
+        const lower_heat = Math.min(tile.heat_contained, part.ep_heat);
         ep_chance_add +=
-          (Math.log(lower_heat) / Math.log(10)) *
-          (lower_heat / tile.part.ep_heat);
+          (Math.log(lower_heat) / Math.log(10)) * (lower_heat / part.ep_heat);
       }
-      // Check for containment failure
-      if (
-        tile.part.containment > 0 &&
-        tile.heat_contained > tile.part.containment
-      ) {
-        if (tile.part.category === "particle_accelerator") {
+
+      if (part.containment > 0 && tile.heat_contained > part.containment) {
+        if (part.category === "particle_accelerator") {
           reactor.checkMeltdown();
           return;
         }
@@ -313,7 +300,6 @@ export class Engine {
       }
     }
 
-    // 4. Update reactor-level stats
     this.game.performance.markStart("tick_stats");
     if (reactor.heat_power_multiplier > 0 && reactor.current_heat > 1000) {
       power_add *=
@@ -352,7 +338,6 @@ export class Engine {
     ui.stateManager.setVar("current_heat", reactor.current_heat);
     this.game.performance.markEnd("tick_stats");
 
-    // 5. Periodic session time update (every 60 seconds)
     const now = Date.now();
     if (now - this.last_session_update >= this.session_update_interval) {
       this.game.updateSessionTime();

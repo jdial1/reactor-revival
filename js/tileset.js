@@ -44,6 +44,13 @@ export class Tileset {
     }
 
     this.active_tiles_list = this.tiles_list.filter((t) => t.enabled);
+
+    // Invalidate all neighbor caches when grid size changes
+    this.tiles_list.forEach((tile) => {
+      if (tile._neighborCache !== undefined) {
+        tile._neighborCache = null;
+      }
+    });
   }
 
   getTile(row, col) {

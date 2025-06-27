@@ -6,9 +6,10 @@ export class Tile {
     this.heat = 0;
     this.display_power = 0;
     this.display_heat = 0;
-    this.containmentNeighborTiles = [];
-    this.cellNeighborTiles = [];
-    this.reflectorNeighborTiles = [];
+    // Note: These are now private. We will use getters.
+    this._containmentNeighborTiles = [];
+    this._cellNeighborTiles = [];
+    this._reflectorNeighborTiles = [];
 
     this.activated = false;
     this.row = row;
@@ -22,6 +23,64 @@ export class Tile {
 
     this.$el = null;
     this.$percent = null;
+    this._neighborCache = null; // This will hold our cached neighbor lists
+  }
+
+  _calculateAndCacheNeighbors() {
+    // This logic is moved from reactor.js and localized to the tile.
+    const p = this.part;
+    if (!p) {
+      this._neighborCache = { containment: [], cell: [], reflector: [] };
+      return;
+    }
+
+    const neighbors = Array.from(
+      this.game.tileset.getTilesInRange(this, p.range || 1)
+    );
+    const containment = [];
+    const cell = [];
+    const reflector = [];
+
+    for (const neighbor_tile of neighbors) {
+      if (neighbor_tile.part && neighbor_tile.activated) {
+        if (neighbor_tile.part.containment) containment.push(neighbor_tile);
+        if (neighbor_tile.part.category === "cell" && neighbor_tile.ticks > 0)
+          cell.push(neighbor_tile);
+        if (neighbor_tile.part.category === "reflector")
+          reflector.push(neighbor_tile);
+      }
+    }
+    this._neighborCache = { containment, cell, reflector };
+  }
+
+  invalidateNeighborCaches() {
+    this._neighborCache = null; // Invalidate self
+    for (const neighbor of this.game.tileset.getTilesInRange(this, 1)) {
+      if (neighbor) neighbor._neighborCache = null; // Invalidate neighbors
+    }
+  }
+
+  // --- Convert properties to getters for on-demand caching ---
+
+  get containmentNeighborTiles() {
+    if (this._neighborCache === null) {
+      this._calculateAndCacheNeighbors();
+    }
+    return this._neighborCache.containment;
+  }
+
+  get cellNeighborTiles() {
+    if (this._neighborCache === null) {
+      this._calculateAndCacheNeighbors();
+    }
+    return this._neighborCache.cell;
+  }
+
+  get reflectorNeighborTiles() {
+    if (this._neighborCache === null) {
+      this._calculateAndCacheNeighbors();
+    }
+    return this._neighborCache.reflector;
   }
 
   getEffectiveVentValue() {
@@ -78,6 +137,7 @@ export class Tile {
       this.clearPart(false);
     }
     this.part = partInstance || null;
+    this.invalidateNeighborCaches(); // Invalidate cache on change
     if (this.part) {
       this.activated = true;
       this.ticks = this.part.ticks;
@@ -154,6 +214,8 @@ export class Tile {
   clearPart(full_clear = true) {
     if (!this.part) return;
     const part_id = this.part.id;
+
+    this.invalidateNeighborCaches(); // Invalidate cache on change
 
     if (full_clear) {
       const sell_value = this.calculateSellValue();

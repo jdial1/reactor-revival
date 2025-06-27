@@ -321,28 +321,21 @@ describe("Core Game Mechanics", () => {
       const initialMoney = game.current_money;
       game.sell_action();
 
-      // Should not give free money since there's a part to sell
-      expect(game.current_money).toBe(initialMoney);
+      expect(game.current_money).toBe(initialMoney); // No money given when parts can be sold
     });
 
-    it("should give money via reactor updateStats only when no sellable parts exist", async () => {
+    it("should NOT automatically give money via reactor updateStats (removed for being too aggressive)", () => {
       game.current_money = 0;
       game.reactor.current_power = 0;
+      // Ensure no parts in reactor
+      game.tileset.active_tiles_list.forEach((tile) => {
+        if (tile.part) tile.clearPart(false);
+      });
 
-      // First test with a part in reactor - should not give money
-      const tile = game.tileset.getTile(0, 0);
-      const part = game.partset.getPartById("uranium1");
-      await tile.setPart(part);
-
+      const initialMoney = game.current_money;
       game.reactor.updateStats();
-      expect(game.current_money).toBe(0); // No money given
 
-      // Now remove the part and test again
-      tile.clearPart(false);
-      game.current_money = 0; // Reset to ensure test is accurate
-
-      game.reactor.updateStats();
-      expect(game.current_money).toBe(game.base_money); // Money given when no parts
+      expect(game.current_money).toBe(initialMoney); // No automatic money from reactor updateStats
     });
   });
 });

@@ -24,6 +24,11 @@ export class PartSet {
     this.partsArray = [];
   }
 
+  reset() {
+    this.parts.clear();
+    this.partsArray = [];
+  }
+
   initialize() {
     part_list_data.forEach((template) => {
       const levels = template.levels || 1;

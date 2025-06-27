@@ -1,236 +1,106 @@
-import { vi, afterEach, expect } from "vitest";
+import { vi, afterEach } from "vitest";
+import fs from "fs";
+import path from "path";
+import { JSDOM } from "jsdom";
 import { Game } from "../../js/game.js";
 import { UI } from "../../js/ui.js";
 import { Engine } from "../../js/engine.js";
 import { ObjectiveManager } from "../../js/objective.js";
+import { PageRouter } from "../../js/pageRouter.js";
 
-// --- START: Enhanced Test Environment Setup ---
-
-// 1. Define large object constructors we want to suppress in logs and assertions.
-const LARGE_OBJECT_CONSTRUCTORS = [
-  "Game",
-  "Tileset",
-  "PartSet",
-  "UpgradeSet",
-  "Reactor",
-  "UI",
-  "Tile",
-  "Engine",
-  "ObjectiveManager",
-  "TooltipManager",
-  "StateManager",
-];
-
-// 2. Add a snapshot serializer to clean up Vitest's `expect` failure messages.
-expect.addSnapshotSerializer({
-  test: (val) =>
-    val &&
-    val.constructor &&
-    LARGE_OBJECT_CONSTRUCTORS.includes(val.constructor.name),
-  print: (val) => `[${val.constructor.name} Object]`,
-});
-
-// 3. Globally patch console methods to prevent object dumps during tests.
+// Suppress verbose console output during tests
 const originalConsoleLog = console.log;
-const originalConsoleDir = console.dir;
+const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
 
-const createSafeLogger =
-  (originalLogger) =>
-  (...args) => {
-    const safeArgs = args.map((arg) => {
-      if (
-        arg &&
-        typeof arg === "object" &&
-        arg.constructor &&
-        LARGE_OBJECT_CONSTRUCTORS.includes(arg.constructor.name)
-      ) {
-        return `[${arg.constructor.name} Object]`;
-      }
-      return arg;
-    });
-    originalLogger(...safeArgs);
-  };
-
-console.log = createSafeLogger(originalConsoleLog);
-console.dir = createSafeLogger(originalConsoleDir);
-
-// Suppress known "Error saving game" messages in test environment
-console.error = (...args) => {
-  const errorMessage = args.join(" ");
-  if (
-    errorMessage.includes("Error saving game") &&
-    process.env.NODE_ENV === "test"
-  ) {
-    return;
+// Helper to detect circular references safely
+const hasCircularReference = (obj) => {
+  try {
+    JSON.stringify(obj);
+    return false;
+  } catch (e) {
+    return e.message.includes("circular");
   }
+};
+
+// Override console methods to reduce DOM object dumps
+console.log = (...args) => {
+  const sanitizedArgs = args.map((arg) => {
+    if (typeof arg === "object" && arg !== null) {
+      if (arg.constructor && arg.constructor.name.includes("HTML")) {
+        return `[${arg.constructor.name}]`;
+      }
+      if (hasCircularReference(arg)) {
+        return "[Circular Object]";
+      }
+      try {
+        const str = JSON.stringify(arg);
+        if (str && str.length > 200) {
+          return "[Large Object]";
+        }
+      } catch (e) {
+        return "[Complex Object]";
+      }
+    }
+    return arg;
+  });
+
+  // Only log during tests if explicitly requested
+  if (process.env.VITEST_VERBOSE === "true") {
+    originalConsoleLog(...sanitizedArgs);
+  }
+};
+
+console.warn = (...args) => {
+  // Filter out known test-related warnings
+  const message = args[0]?.toString() || "";
+  if (
+    message.includes("[StateManager]") ||
+    message.includes("Page loading failed") ||
+    message.includes("exotic_particles_display") ||
+    message.includes("PageRouter: Failed to load page") ||
+    message.includes("Could not preserve cloud sync flags")
+  ) {
+    return; // Suppress these warnings
+  }
+  originalConsoleWarn(...args);
+};
+
+console.error = (...args) => {
   originalConsoleError(...args);
 };
 
-// --- END: Enhanced Test Environment Setup ---
+// This setup is for CORE LOGIC tests that do not require a DOM.
+// It uses a mocked UI for speed and isolation.
+let globalGameLogicOnly = null;
 
-// Note: Enhanced console logging setup is now handled above
-
-// Prevent massive object dumps that crash the terminal
-const originalStringify = JSON.stringify;
-JSON.stringify = function (value, replacer, space) {
-  if (typeof value === "object" && value !== null) {
-    // Check if this looks like a game object that would be massive
-    if (
-      value.constructor &&
-      (value.constructor.name === "Game" ||
-        value.constructor.name === "Tileset" ||
-        value.constructor.name === "PartSet" ||
-        value.constructor.name === "UpgradeSet" ||
-        (value.tiles_list && value.tiles_list.length > 100) ||
-        (value.partsArray && value.partsArray.length > 50))
-    ) {
-      return `[${value.constructor.name} Object - Truncated to prevent terminal crash]`;
-    }
-
-    // Limit depth for large objects
-    const seen = new WeakSet();
-    let depth = 0;
-    const limitedReplacer = (key, val) => {
-      depth++;
-      if (depth > 5) {
-        return "[Max Depth Reached]";
-      }
-
-      if (typeof val === "object" && val !== null) {
-        if (seen.has(val)) {
-          return "[Circular]";
-        }
-        seen.add(val);
-
-        // Truncate arrays that are too large
-        if (Array.isArray(val) && val.length > 10) {
-          return `[Array(${val.length}) - Truncated]`;
-        }
-
-        // Truncate objects with too many properties
-        if (Object.keys(val).length > 20) {
-          return `[Object with ${
-            Object.keys(val).length
-          } properties - Truncated]`;
-        }
-      }
-
-      depth--;
-      return val;
-    };
-    return originalStringify(value, limitedReplacer, space);
-  }
-  return originalStringify(value, replacer, space);
-};
-
-// Override expect to limit object depth in error messages
-const originalExpected = global.expect;
-if (originalExpected) {
-  global.expect = function (actual) {
-    // Check if actual is a game object and replace with summary
-    if (actual && typeof actual === "object" && actual.constructor) {
-      const className = actual.constructor.name;
-      if (
-        ["Game", "Tileset", "PartSet", "UpgradeSet", "Reactor", "UI"].includes(
-          className
-        )
-      ) {
-        actual = `[${className} Object - Use specific property tests instead of comparing entire object]`;
-      }
-    }
-
-    const result = originalExpected(actual);
-
-    // Override common matchers to prevent large object dumps
-    const matchers = ["toEqual", "toStrictEqual", "toMatchObject", "toContain"];
-    matchers.forEach((matcherName) => {
-      if (result[matcherName]) {
-        const originalMatcher = result[matcherName];
-        result[matcherName] = function (expected) {
-          try {
-            return originalMatcher.call(this, expected);
-          } catch (error) {
-            // Severely truncate error messages that contain large objects
-            if (error.message) {
-              // Remove massive object dumps from error messages
-              let message = error.message;
-
-              // Replace object dumps with summaries
-              message = message.replace(
-                /\{[^{}]{500,}\}/g,
-                "[Large Object - Truncated]"
-              );
-              message = message.replace(
-                /\[[^\[\]]{500,}\]/g,
-                "[Large Array - Truncated]"
-              );
-
-              // Hard limit on message length
-              if (message.length > 2000) {
-                message =
-                  message.substring(0, 2000) +
-                  "\n...[Error message truncated to prevent terminal crash]";
-              }
-
-              error.message = message;
-            }
-            throw error;
-          }
-        };
-      }
-    });
-
-    return result;
-  };
-}
-
-// Global game instance to reuse and prevent memory issues
-let globalGame = null;
-
-/**
- * Creates a fully initialized game instance for testing.
- * Reuses instance when possible to prevent memory leaks.
- * @returns {Promise<Game>} A game instance ready for testing.
- */
 export async function setupGame() {
-  // Reuse existing game instance if available
-  if (globalGame) {
-    // Reset the game state for each test
-    globalGame.tileset.clearAllTiles(); // Clear ALL tiles, not just active ones
-    globalGame.reactor.setDefaults();
-    globalGame.upgradeset.reset();
-    globalGame.current_money = 1e30;
-    globalGame.exotic_particles = 1e20;
-    globalGame.current_exotic_particles = 1e20;
-    globalGame.rows = globalGame.base_rows;
-    globalGame.cols = globalGame.base_cols;
-    globalGame.tileset.updateActiveTiles();
+  if (globalGameLogicOnly) {
+    globalGameLogicOnly.tileset.clearAllTiles();
+    globalGameLogicOnly.reactor.setDefaults();
+    globalGameLogicOnly.upgradeset.reset();
+    globalGameLogicOnly.partset.reset();
+    globalGameLogicOnly.partset.initialize();
+    globalGameLogicOnly.current_money = 1e30;
+    globalGameLogicOnly.exotic_particles = 1e20;
+    globalGameLogicOnly.current_exotic_particles = 1e20;
+    globalGameLogicOnly.rows = globalGameLogicOnly.base_rows;
+    globalGameLogicOnly.cols = globalGameLogicOnly.base_cols;
+    globalGameLogicOnly.tileset.updateActiveTiles();
 
-    // Ensure engine is stopped for tests
-    if (globalGame.engine && globalGame.engine.running) {
-      globalGame.engine.stop();
+    if (globalGameLogicOnly.engine && globalGameLogicOnly.engine.running) {
+      globalGameLogicOnly.engine.stop();
     }
 
-    globalGame.partset.check_affordability(globalGame);
-    globalGame.upgradeset.check_affordability(globalGame);
-    globalGame.reactor.updateStats();
-
-    return globalGame;
+    globalGameLogicOnly.partset.check_affordability(globalGameLogicOnly);
+    globalGameLogicOnly.upgradeset.check_affordability(globalGameLogicOnly);
+    globalGameLogicOnly.reactor.updateStats();
+    return globalGameLogicOnly;
   }
 
-  // Create real UI instance but with minimal DOM setup for testing
   const ui = new UI();
-
-  // Mock the DOM elements and methods that would require actual DOM
   ui.DOMElements = {
-    main: {
-      classList: {
-        toggle: vi.fn(),
-        add: vi.fn(),
-        remove: vi.fn(),
-      },
-    },
+    main: { classList: { toggle: vi.fn(), add: vi.fn(), remove: vi.fn() } },
   };
   ui.update_vars = new Map();
   ui.cacheDOMElements = vi.fn(() => true);
@@ -238,68 +108,172 @@ export async function setupGame() {
   ui.updateAllToggleBtnStates = vi.fn();
   ui.updateToggleButtonState = vi.fn();
   ui.showPage = vi.fn();
+  ui.stateManager.handlePartAdded = vi.fn();
+  ui.stateManager.handleUpgradeAdded = vi.fn();
+  ui.stateManager.handleObjectiveCompleted = vi.fn();
+  ui.stateManager.handleObjectiveLoaded = vi.fn();
+  ui.stateManager.handleObjectiveUnloaded = vi.fn();
 
   const game = new Game(ui);
-
-  // Connect the UI to the game - this is crucial for StateManager to work
-  // We call the real init method, not a mock, since we need the StateManager connection
   ui.init(game);
-
-  // Add missing Engine and ObjectiveManager instantiation
   game.engine = new Engine(game);
   game.objectives_manager = new ObjectiveManager(game);
-
-  // Initialize the game with real data, not mocks
   game.tileset.initialize();
   game.partset.initialize();
   game.upgradeset.initialize();
-
   game.set_defaults();
+  game.current_money = 1e30;
+  game.exotic_particles = 1e20;
+  game.current_exotic_particles = 1e20;
+  game.partset.check_affordability(game);
+  game.upgradeset.check_affordability(game);
+  game.reactor.updateStats();
 
-  // Give plenty of resources for testing purchases
+  if (game.engine && game.engine.running) {
+    game.engine.stop();
+  }
+  globalGameLogicOnly = game;
+  return game;
+}
+
+// This setup is for UI/INTEGRATION tests that require a real DOM.
+let dom, window, document;
+let globalGameWithDOM = null;
+
+export async function setupGameWithDOM() {
+  const indexHtml = fs.readFileSync(
+    path.resolve(__dirname, "../../index.html"),
+    "utf-8"
+  );
+  dom = new JSDOM(indexHtml, {
+    url: "http://localhost:8080",
+    pretendToBeVisual: true,
+    resources: "usable",
+  });
+  window = dom.window;
+  document = window.document;
+
+  global.window = window;
+  global.document = document;
+  global.localStorage = window.localStorage;
+  global.HTMLElement = window.HTMLElement;
+  global.Element = window.Element;
+  global.Node = window.Node;
+  global.CustomEvent = window.CustomEvent;
+  global.Event = window.Event;
+
+  global.fetch = async (url) => {
+    try {
+      const filePath = path.resolve(
+        __dirname,
+        "../../",
+        url.toString().replace(/^\//, "")
+      );
+      const content = fs.readFileSync(filePath, "utf-8");
+      return {
+        ok: true,
+        text: () => Promise.resolve(content),
+        json: () => Promise.resolve(JSON.parse(content)),
+      };
+    } catch (error) {
+      console.error(`Fetch failed for URL: ${url}`, error);
+      return { ok: false, status: 404, statusText: "Not Found" };
+    }
+  };
+
+  const ui = new UI();
+  const game = new Game(ui);
+  const pageRouter = new PageRouter(ui);
+  game.router = pageRouter;
+
+  ui.init(game);
+
+  // Add a basic tooltip manager mock for DOM tests
+  game.tooltip_manager = {
+    show: () => {},
+    hide: () => {},
+    closeView: () => {},
+    update: () => {},
+    updateUpgradeAffordability: () => {},
+    isLocked: false,
+    tooltip_showing: false,
+    current_obj: null,
+  };
+
+  game.tileset.initialize();
+  game.partset.initialize();
+  game.upgradeset.initialize();
+  game.set_defaults();
+  game.objectives_manager = new ObjectiveManager(game);
+  game.engine = new Engine(game);
+
+  try {
+    await pageRouter.loadGameLayout();
+    ui.initMainLayout();
+    await pageRouter.loadPage("reactor_section");
+  } catch (error) {
+    // Suppress verbose page loading warnings
+    if (process.env.VITEST_VERBOSE) {
+      console.warn("Page loading failed in test setup:", error.message);
+    }
+  }
+
   game.current_money = 1e30;
   game.exotic_particles = 1e20;
   game.current_exotic_particles = 1e20;
 
-  // Recalculate affordability for all parts and upgrades
   game.partset.check_affordability(game);
   game.upgradeset.check_affordability(game);
 
-  game.reactor.updateStats();
-
-  // Ensure engine is definitely stopped after all initialization
-  if (game.engine && game.engine.running) {
-    game.engine.stop();
-  }
-
-  // Store for reuse
-  globalGame = game;
-
-  return game;
+  globalGameWithDOM = game;
+  return { game, document, window };
 }
 
-// Cleanup function for test teardown
 export function cleanupGame() {
-  if (globalGame) {
-    // Clear any timers or intervals
-    if (globalGame.engine && globalGame.engine.stop) {
-      globalGame.engine.stop();
+  if (globalGameLogicOnly) {
+    if (globalGameLogicOnly.engine && globalGameLogicOnly.engine.stop) {
+      globalGameLogicOnly.engine.stop();
     }
     if (
-      globalGame.objectives_manager &&
-      globalGame.objectives_manager.objective_timeout
+      globalGameLogicOnly.objectives_manager &&
+      globalGameLogicOnly.objectives_manager.objective_timeout
     ) {
-      clearTimeout(globalGame.objectives_manager.objective_timeout);
+      clearTimeout(globalGameLogicOnly.objectives_manager.objective_timeout);
+    }
+    if (globalGameLogicOnly.ui?.update_interface_task) {
+      clearTimeout(globalGameLogicOnly.ui.update_interface_task);
+      globalGameLogicOnly.ui.update_interface_task = null;
     }
   }
+
+  // More thorough cleanup for the DOM-based game instance
+  if (globalGameWithDOM) {
+    if (globalGameWithDOM.engine) {
+      globalGameWithDOM.engine.stop();
+    }
+    if (globalGameWithDOM.ui?.update_interface_task) {
+      clearTimeout(globalGameWithDOM.ui.update_interface_task);
+      globalGameWithDOM.ui.update_interface_task = null;
+    }
+    if (globalGameWithDOM.objectives_manager?.objective_timeout) {
+      clearTimeout(globalGameWithDOM.objectives_manager.objective_timeout);
+      globalGameWithDOM.objectives_manager.objective_timeout = null;
+    }
+    globalGameWithDOM = null;
+  }
+
+  if (global.window && typeof global.window.close === "function") {
+    // This properly disposes of the JSDOM environment, including its timers
+    global.window.close();
+  }
+
+  // Clear any potentially lingering globals to ensure test isolation
+  global.window = undefined;
+  global.document = undefined;
+  global.localStorage = undefined;
 }
 
-// Global cleanup after each test
 afterEach(() => {
   cleanupGame();
-
-  // Force garbage collection if available (for debugging memory issues)
-  if (global.gc) {
-    global.gc();
-  }
+  vi.restoreAllMocks();
 });
