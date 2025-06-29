@@ -1057,22 +1057,6 @@ button.upgrade.unaffordable .image {
   padding: 8px;
 }
 
-#pause_toggle::before {
-  content: "";
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-image: url("../img/ui/nav/nav_pause.png");
-  flex-shrink: 0;
-}
-
-#pause_toggle.on::before {
-  background-image: url("../img/ui/nav/nav_play.png");
-}
-
 #pause_banner {
   display: none;
   text-align: center;

@@ -3,7 +3,7 @@ module.exports = {
   globPatterns: [
     "index.html",
     "offline.html",
-    "css/app.css",
+    "css/main.css",
     "js/**/*.js",
     "data/**/*.js",
     "img/**/*.{png,svg,jpg,jpeg}",
@@ -14,6 +14,7 @@ module.exports = {
   globIgnores: [
     "node_modules/**/*",
     "css/old_app.css",
+    "css/old2_app.css",
     "src-sw.js",
     "workbox-config.js",
     "package.json",

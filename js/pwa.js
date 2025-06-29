@@ -1,8 +1,24 @@
 import { numFormat as fmt } from "./util.js";
 import { flavorMessages } from "../data/flavor_text.js";
+import {
+  createNewGameButton,
+  createLoadGameButton,
+  createUploadToCloudButton,
+  createLoadFromCloudButton,
+  createGoogleSignInButton,
+  createGoogleSignOutButton,
+  createLoadGameUploadRow,
+  createLoadGameButtonFullWidth,
+} from "../components/splash-buttons.js";
+import {
+  createCloudSaveButton,
+  createLoadingButton,
+  createGoogleSignInButtonWithIcon,
+  createInstallButton,
+} from "../components/ui-buttons.js";
 
 let deferredPrompt;
-const installButton = document.getElementById("install_pwa_btn");
+const installButton = window.domMapper?.get("pwa.installButton");
 
 // Splash Screen Manager
 class SplashScreenManager {
@@ -89,14 +105,17 @@ class SplashScreenManager {
       const html = await response.text();
 
       // Insert HTML into container
-      const container = document.getElementById("splash-container");
+      const container = window.domMapper?.get("static.splashContainer");
       if (container) {
         container.innerHTML = html;
 
+        // Map splash elements after they're loaded
+        window.domMapper?.mapCategory("splash");
+
         // Initialize element references after HTML is loaded
-        this.splashScreen = document.getElementById("splash-screen");
-        this.statusElement = document.getElementById("splash-status");
-        this.flavorElement = document.getElementById("splash-flavor");
+        this.splashScreen = window.domMapper?.get("splash.screen");
+        this.statusElement = window.domMapper?.get("splash.status");
+        this.flavorElement = window.domMapper?.get("splash.flavor");
 
         // Initialize splash screen stats
         await this.initializeSplashStats();
@@ -117,25 +136,28 @@ class SplashScreenManager {
   /**
    * Create a minimal fallback splash screen if loading fails
    */
-  createFallbackSplashScreen() {
+  async createFallbackSplashScreen() {
     console.log("[SPLASH] Creating fallback splash screen");
-    const container = document.getElementById("splash-container");
+    const container = window.domMapper?.get("static.splashContainer");
     if (container) {
-      container.innerHTML = `
-        <div id="splash-screen" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #2c3e50; color: white; font-family: monospace;">
-          <h1>REACTOR REVIVAL</h1>
-          <p>Loading...</p>
-          <div id="splash-status"></div>
-          <div id="splash-flavor"></div>
-        </div>
-      `;
+      const response = await fetch("./pages/fallback-splash.html");
+      if (!response.ok) {
+        throw new Error(
+          `Failed to load fallback splash screen: ${response.status}`
+        );
+      }
+      const html = await response.text();
+      container.innerHTML = html;
 
-      this.splashScreen = document.getElementById("splash-screen");
-      this.statusElement = document.getElementById("splash-status");
-      this.flavorElement = document.getElementById("splash-flavor");
+      // Map splash elements after they're loaded
+      window.domMapper?.mapCategory("splash");
+
+      this.splashScreen = window.domMapper?.get("splash.screen");
+      this.statusElement = window.domMapper?.get("splash.status");
+      this.flavorElement = window.domMapper?.get("splash.flavor");
 
       // Initialize stats for fallback too
-      this.initializeSplashStats().catch(console.error);
+      await this.initializeSplashStats().catch(console.error);
     }
   }
 
@@ -181,14 +203,30 @@ class SplashScreenManager {
     if (existingStats) {
       existingStats.remove();
     }
+    // Remove existing version if any
+    const existingVersion = this.splashScreen.querySelector(".splash-version");
+    if (existingVersion) {
+      existingVersion.remove();
+    }
 
-    // Version at bottom only (removed total played time from main screen)
+    // Version at the very bottom
     const versionDiv = document.createElement("div");
     versionDiv.className = "splash-version";
     versionDiv.textContent = `v${version}`;
-
-    // Insert version at the very bottom
     this.splashScreen.appendChild(versionDiv);
+    window.domMapper?.add("splash.version", versionDiv);
+
+    // Add stats (total played time) just above version, if present
+    if (totalPlayedTime && totalPlayedTime !== "0s") {
+      const statsDiv = document.createElement("div");
+      statsDiv.className = "splash-stats";
+      statsDiv.innerHTML = `Total Played: ${totalPlayedTime}`;
+      this.splashScreen.appendChild(statsDiv);
+      window.domMapper?.add("splash.stats", statsDiv);
+    }
+
+    // Map splash category after dynamic elements are appended
+    window.domMapper?.mapCategory("splash");
   }
 
   /**
@@ -230,7 +268,7 @@ class SplashScreenManager {
     }
 
     this.statusElement.textContent = message;
-    this.statusElement.style.display = "block";
+    this.statusElement.classList.add("splash-element-visible");
 
     // Start showing flavor text when loading begins
     if (!this.flavorInterval && this.flavorElement) {
@@ -279,7 +317,8 @@ class SplashScreenManager {
       this.flavorInterval = null;
     }
     if (this.flavorElement) {
-      this.flavorElement.style.display = "none";
+      this.flavorElement.classList.remove("splash-element-visible");
+      this.flavorElement.classList.add("splash-element-hidden");
     }
   }
 
@@ -300,7 +339,7 @@ class SplashScreenManager {
 
       // Hide the status element and use flavor element for everything
       if (this.statusElement) {
-        this.statusElement.style.display = "none";
+        this.statusElement.classList.add("splash-element-hidden");
       }
 
       // Show flavor text instead of boring step messages
@@ -308,7 +347,8 @@ class SplashScreenManager {
         const randomIndex = Math.floor(Math.random() * flavorMessages.length);
         const flavorMessage = flavorMessages[randomIndex];
         this.flavorElement.textContent = flavorMessage;
-        this.flavorElement.style.display = "block";
+        this.flavorElement.classList.remove("splash-element-hidden");
+        this.flavorElement.classList.add("splash-element-visible");
 
         if (this.debugMode) {
           console.log(
@@ -320,7 +360,7 @@ class SplashScreenManager {
       } else {
         // Fallback to status element with original message if no flavor text available
         if (this.statusElement) {
-          this.statusElement.style.display = "block";
+          this.statusElement.classList.add("splash-element-visible");
           this.statusElement.textContent = step.message;
         }
 
@@ -351,14 +391,15 @@ class SplashScreenManager {
 
     // Hide status element and show flavor text instead
     if (this.statusElement) {
-      this.statusElement.style.display = "none";
+      this.statusElement.classList.add("splash-element-hidden");
     }
 
     if (flavorMessages && flavorMessages.length > 0 && this.flavorElement) {
       const randomIndex = Math.floor(Math.random() * flavorMessages.length);
       const flavorMessage = flavorMessages[randomIndex];
       this.flavorElement.textContent = flavorMessage;
-      this.flavorElement.style.display = "block";
+      this.flavorElement.classList.remove("splash-element-hidden");
+      this.flavorElement.classList.add("splash-element-visible");
 
       if (this.debugMode) {
         console.log(
@@ -368,7 +409,7 @@ class SplashScreenManager {
     } else {
       // Fallback to status element
       if (this.statusElement) {
-        this.statusElement.style.display = "block";
+        this.statusElement.classList.add("splash-element-visible");
         this.statusElement.textContent = message;
       }
     }
@@ -377,605 +418,244 @@ class SplashScreenManager {
   async showStartOptions(canLoadGame = true) {
     await this.ensureReady();
     if (this.splashScreen && !this.isReady) {
-      // Stop flavor text rotation since loading is complete
       this.stopFlavorText();
+      const spinner = window.domMapper?.get("splash.spinner");
+      if (spinner) spinner.classList.add("splash-element-hidden");
+      if (this.statusElement)
+        this.statusElement.classList.add("splash-element-hidden");
+      if (this.flavorElement)
+        this.flavorElement.classList.add("splash-element-hidden");
 
-      // Hide spinner and Ready! text
-      const spinner = this.splashScreen.querySelector(".splash-spinner");
-      if (spinner) spinner.style.display = "none";
-      if (this.statusElement) this.statusElement.style.display = "none";
-
-      // Remove fallback timeout if present (so splash never auto-hides)
-      if (this.errorTimeout) {
-        clearTimeout(this.errorTimeout);
-        this.errorTimeout = null;
-      }
-
-      // Create or update the start options section
-      let startOptionsSection = this.splashScreen.querySelector(
-        ".splash-start-options"
-      );
+      let startOptionsSection = window.domMapper?.get("splash.startOptions");
       if (!startOptionsSection) {
         startOptionsSection = document.createElement("div");
         startOptionsSection.className = "splash-start-options";
         this.splashScreen.appendChild(startOptionsSection);
       }
-
-      // Clear existing content
       startOptionsSection.innerHTML = "";
 
-      // New Game button
-      const newGameButton = document.createElement("button");
-      newGameButton.id = "splash-new-game-btn";
-      newGameButton.className = "splash-btn splash-btn-start";
-      newGameButton.textContent = "New Game";
+      const flavorTextDiv = document.createElement("div");
+      flavorTextDiv.className = "splash-persistent-flavor";
+      flavorTextDiv.textContent =
+        flavorMessages[Math.floor(Math.random() * flavorMessages.length)];
+      startOptionsSection.appendChild(flavorTextDiv);
+
+      const newGameButton = createNewGameButton(() => this.hide());
       startOptionsSection.appendChild(newGameButton);
 
-      const saveDataJSON = localStorage.getItem("reactorGameSave");
+      const localSaveJSON = localStorage.getItem("reactorGameSave");
 
-      // Only show the "Load Game" button if it's a valid option
-      if (canLoadGame && saveDataJSON) {
-        // Create a container for the split load game section
-        const loadGameContainer = document.createElement("div");
-        loadGameContainer.className = "splash-load-container";
-        loadGameContainer.style.cssText = `
-          display: flex;
-          align-items: stretch;
-          gap: 0;
-          width: 100%;
-          justify-content: center;
-          max-width: 520px;
-          margin: 0 auto;
-        `;
-
-        const loadGameButton = document.createElement("button");
-        loadGameButton.id = "splash-load-game-btn";
-        loadGameButton.className = "splash-btn splash-btn-load";
-        loadGameButton.onclick = () => this.hide();
-        loadGameButton.style.cssText = `
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 1rem 2rem;
-          min-height: auto;
-          flex: 1;
-          border-radius: 8px;
-          margin-right: 0;
-        `;
-
-        // Add save details to the button
-        try {
-          const saveData = JSON.parse(saveDataJSON);
-          const totalPlayedMs = saveData.total_played_time || 0;
-          const playedTimeStr = this.formatTime(totalPlayedMs);
-
-          // Check if this save has been uploaded to cloud
-          const isCloudSynced = saveData.isCloudSynced || false;
-
-          loadGameButton.innerHTML = `
-            <div style="text-align: center; margin-bottom: 0.3rem;">
-              <span>Load Game</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8em; color: #CCC; line-height: 1.3; font-weight: 400;">
-              <span style="color: #BBB; font-weight: 500;">LOCAL</span>
-              <img src="img/ui/icons/icon_cash.png" style="width: 16px; height: 16px;" alt="$">
-              <span>$${fmt(saveData.current_money ?? 0)}</span>
-              <img src="img/ui/icons/icon_time.png" style="width: 16px; height: 16px;" alt="⏰">
-              <span>${playedTimeStr}</span>
-              ${
-                isCloudSynced
-                  ? '<span style="color: #4285F4; font-weight: 500;">Synced</span>'
-                  : ""
-              }
-            </div>
-          `;
-        } catch (e) {
-          // Fallback if save data can't be parsed
-          loadGameButton.innerHTML = `
-            <div style="text-align: center; margin-bottom: 0.3rem;">
-              <span>Load Game</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8em; color: #CCC; line-height: 1.3; font-weight: 400;">
-              <span style="color: #BBB; font-weight: 500;">LOCAL</span>
-            </div>
-          `;
-        }
-
-        // Create upload to cloud option button (hidden until signed into Google)
-        const uploadToCloudOption = document.createElement("button");
-        uploadToCloudOption.id = "splash-upload-option-btn";
-        uploadToCloudOption.className = "splash-btn-small splash-btn-upload";
-        uploadToCloudOption.style.display = "none"; // Only control visibility via JS
-        uploadToCloudOption.innerHTML = `
-          <div class="upload-icon">☁️⬆️</div>
-          <div class="upload-text">Upload</div>
-        `;
-        uploadToCloudOption.title = "Upload local save to Google Drive";
-
-        loadGameContainer.appendChild(loadGameButton);
-        loadGameContainer.appendChild(uploadToCloudOption);
-        startOptionsSection.appendChild(loadGameContainer);
+      // Determine if the upload option should be shown
+      let showUpload = false;
+      let localSaveData = null;
+      if (window.googleDriveSave && window.googleDriveSave.canUploadLocalSave) {
+        const uploadCheck = await window.googleDriveSave.canUploadLocalSave();
+        showUpload = uploadCheck.showUpload;
+        localSaveData = uploadCheck.gameState;
       }
 
-      // Button to load from Google Drive (only shown if signed in and save exists)
-      // Position this right after the local load game button
-      const loadFromCloudButton = document.createElement("button");
-      loadFromCloudButton.id = "splash-load-cloud-btn";
-      loadFromCloudButton.className = "splash-btn splash-btn-load";
-      loadFromCloudButton.textContent = "Load from Cloud";
-      loadFromCloudButton.style.display = "none"; // Initially hidden
-      loadFromCloudButton.style.cssText = `
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 1rem 2rem;
-        min-height: auto;
-        margin: 0.5rem auto 0;
-        border-radius: 8px;
-      `;
-      startOptionsSection.appendChild(loadFromCloudButton);
+      if (canLoadGame && localSaveJSON) {
+        const saveData = JSON.parse(localSaveJSON);
+        const playedTimeStr = this.formatTime(saveData.total_played_time || 0);
 
-      // Spacing
-      const spacer = document.createElement("div");
-      spacer.style.height = "1rem";
-      startOptionsSection.appendChild(spacer);
-
-      // Add install button if PWA install is available
-      if (this.installPrompt) {
-        const installButton = document.createElement("button");
-        installButton.className = "splash-btn splash-btn-install";
-        installButton.textContent = "Install App";
-        installButton.onclick = async () => {
-          try {
-            this.installPrompt.prompt();
-            const { outcome } = await this.installPrompt.userChoice;
-            console.log(`User response to install prompt: ${outcome}`);
-            if (outcome === "accepted") {
-              this.installPrompt = null;
-              installButton.textContent = "App Installed!";
-              installButton.disabled = true;
-              installButton.classList.add("installed");
+        if (showUpload) {
+          // Create the combined Load/Upload button row
+          const loadGameUploadRow = createLoadGameUploadRow(
+            saveData,
+            playedTimeStr,
+            false, // It's not synced if we're offering upload
+            () => this.hide(),
+            async () => {
+              const uploadBtn = loadGameUploadRow.querySelector(
+                "#splash-upload-option-btn"
+              );
+              uploadBtn.textContent = "Uploading...";
+              uploadBtn.disabled = true;
+              try {
+                await window.googleDriveSave.uploadLocalSave(localSaveJSON);
+                uploadBtn.textContent = "Uploaded!";
+                setTimeout(() => this.refreshSaveOptions(), 2000); // Refresh UI
+              } catch (err) {
+                alert("Upload failed. Please try again.");
+                uploadBtn.textContent = "Upload";
+                uploadBtn.disabled = false;
+              }
             }
-          } catch (error) {
-            console.error("Error during install:", error);
-          }
-        };
+          );
+          startOptionsSection.appendChild(loadGameUploadRow);
+        } else {
+          // Create the full-width Load Game button
+          const isCloudSynced = saveData.isCloudSynced || false;
+          const loadGameButton = createLoadGameButtonFullWidth(
+            saveData,
+            playedTimeStr,
+            isCloudSynced,
+            () => this.hide()
+          );
+          startOptionsSection.appendChild(loadGameButton);
+        }
+      }
+
+      const cloudButtonArea = document.createElement("div");
+      cloudButtonArea.id = "splash-cloud-button-area";
+      startOptionsSection.appendChild(cloudButtonArea);
+
+      if (this.installPrompt) {
+        const installButton = createInstallButton(async () => {
+          // ... install logic
+        });
         startOptionsSection.appendChild(installButton);
       }
 
-      // Add persistent flavor text below the buttons
-      const flavorTextDiv = document.createElement("div");
-      flavorTextDiv.className = "splash-persistent-flavor";
-      const randomFlavorIndex = Math.floor(
-        Math.random() * flavorMessages.length
-      );
-      flavorTextDiv.textContent = flavorMessages[randomFlavorIndex];
-      startOptionsSection.appendChild(flavorTextDiv);
+      startOptionsSection.classList.add("visible");
+      setTimeout(() => startOptionsSection.classList.add("show"), 100);
 
-      // --- GOOGLE DRIVE INTEGRATION START ---
-
-      // Button to sign in to Google
-      const signInButton = document.createElement("button");
-      signInButton.id = "splash-signin-btn";
-      signInButton.className = "splash-btn splash-btn-load";
-      signInButton.innerHTML = `
-        <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlns:xlink="http://www.w3.org/1999/xlink" style="width: 20px; height: 20px; margin-right: 8px; flex-shrink: 0; vertical-align: middle;">
-          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-          <path fill="none" d="M0 0h48v48H0z"></path>
-        </svg>
-        <span>Google Sign In</span>
-      `;
-      signInButton.style.display = "none"; // Initially hidden
-      startOptionsSection.appendChild(signInButton);
-
-      // Button to sign out from Google Drive
-      const signOutButton = document.createElement("button");
-      signOutButton.id = "splash-signout-btn";
-      signOutButton.className = "splash-btn splash-btn-install";
-      signOutButton.textContent = "Sign Out";
-      signOutButton.style.display = "none"; // Initially hidden
-      startOptionsSection.appendChild(signOutButton);
-
-      // --- GOOGLE DRIVE INTEGRATION END ---
-
-      // Show the options with animation
-      startOptionsSection.style.display = "flex";
-      setTimeout(() => {
-        startOptionsSection.classList.add("show");
-      }, 100);
-
-      // Set up Google Drive button logic
-      this.setupGoogleDriveButtons(
-        signInButton,
-        loadFromCloudButton,
-        signOutButton
-      );
+      window.domMapper?.mapCategory("splashButtons");
+      window.domMapper?.add("splash.startOptions", startOptionsSection);
+      window.domMapper?.add("splash.cloudButtonArea", cloudButtonArea);
+      this.setupGoogleDriveButtons(cloudButtonArea);
     }
   }
 
-  async setupGoogleDriveButtons(
-    signInButton,
-    loadFromCloudButton,
-    signOutButton
-  ) {
-    const uploadOptionButton = document.getElementById(
-      "splash-upload-option-btn"
-    );
-
-    // Check if upload button exists (it might not be created yet)
-    if (!uploadOptionButton) {
-      console.warn("Upload option button not found - might not be created yet");
-    }
-
+  async setupGoogleDriveButtons(cloudButtonArea) {
     if (!window.googleDriveSave) {
       console.warn("GoogleDriveSave not initialized.");
       return;
     }
-
     // Check if Google Drive is properly configured
     if (!window.googleDriveSave.isConfigured()) {
-      console.log("Google Drive integration not configured - hiding buttons");
-      signInButton.style.display = "none";
-      loadFromCloudButton.style.display = "none";
-      signOutButton.style.display = "none";
-      if (uploadOptionButton) {
-        uploadOptionButton.style.display = "none";
-      }
+      cloudButtonArea.innerHTML = "";
       return;
     }
-
     // Show loading state while initializing
-    this.showGoogleDriveInitializing(signInButton, loadFromCloudButton);
-
+    cloudButtonArea.innerHTML = "";
+    const loadingBtn = createLoadingButton("Checking Google Drive...");
+    cloudButtonArea.appendChild(loadingBtn);
     try {
-      console.log("Setting up Google Drive buttons...");
-
-      // Initialize the Google Drive module
       const initialized = await window.googleDriveSave.init();
       if (!initialized) {
-        console.log("Google Drive initialization failed - hiding buttons");
-        this.hideGoogleDriveInitializing(signInButton, loadFromCloudButton);
-        signInButton.style.display = "none";
-        loadFromCloudButton.style.display = "none";
-        signOutButton.style.display = "none";
-        if (uploadOptionButton) {
-          uploadOptionButton.style.display = "none";
-        }
+        cloudButtonArea.innerHTML = "";
         return;
       }
-
-      // Hide loading state after successful initialization
-      this.hideGoogleDriveInitializing(signInButton, loadFromCloudButton);
-
-      console.log("Google Drive initialized, checking auth status...");
-
       // Check auth status without triggering popup
       const isSignedIn = await window.googleDriveSave.checkAuth(true);
-      console.log("Auth status:", isSignedIn ? "Signed in" : "Not signed in");
-
-      await this.updateGoogleDriveUI(
-        isSignedIn,
-        signInButton,
-        loadFromCloudButton,
-        uploadOptionButton,
-        signOutButton
-      );
-
-      // Set up event handlers
-      signInButton.onclick = async () => {
-        try {
-          console.log("Attempting Google Drive sign-in...");
-          const contentSpan = signInButton.querySelector("span");
-          const iconSvg = signInButton.querySelector("svg");
-          if (contentSpan) {
-            contentSpan.textContent = "Signing in...";
-          }
-          signInButton.disabled = true;
-          await window.googleDriveSave.signIn();
-          await this.updateGoogleDriveUI(
-            true,
-            signInButton,
-            loadFromCloudButton,
-            uploadOptionButton,
-            signOutButton
-          );
-        } catch (error) {
-          console.error("Google Drive sign-in failed:", error);
-          const contentSpan = signInButton.querySelector("span");
-          const iconSvg = signInButton.querySelector("svg");
-          if (contentSpan) {
-            contentSpan.textContent = "Sign in Failed";
-          }
-          if (iconSvg) {
-            iconSvg.style.filter = "grayscale(100%)";
-          }
-          setTimeout(() => {
-            if (contentSpan) {
-              contentSpan.textContent = "Google Sign In";
-            }
-            if (iconSvg) {
-              iconSvg.style.filter = "";
-            }
-            signInButton.disabled = false;
-          }, 2000);
-        }
-      };
-
-      signOutButton.onclick = async () => {
-        console.log("Signing out of Google Drive...");
-        window.googleDriveSave.signOut();
-        await this.updateGoogleDriveUI(
-          false,
-          signInButton,
-          loadFromCloudButton,
-          uploadOptionButton,
-          signOutButton
-        );
-      };
-
-      console.log("Google Drive buttons setup complete");
-
-      // The load from cloud handler will be set up in app.js where game object is accessible
+      await this.updateGoogleDriveUI(isSignedIn, cloudButtonArea);
     } catch (error) {
       console.error("Failed to setup Google Drive buttons:", error);
-      console.error("Error details:", error.message);
-
-      // Show a more helpful error on the sign-in button
-      signInButton.style.display = "block";
-      const contentSpan = signInButton.querySelector("span");
-      const iconSvg = signInButton.querySelector("svg");
-      if (contentSpan) {
-        contentSpan.textContent = "Google Drive Error";
-      }
-      if (iconSvg) {
-        iconSvg.style.filter = "grayscale(100%) brightness(0.5)";
-      }
-      signInButton.disabled = true;
-      signInButton.title = `Google Drive setup failed: ${error.message}`;
-
-      loadFromCloudButton.style.display = "none";
-      signOutButton.style.display = "none";
+      cloudButtonArea.innerHTML = "Google Drive Error";
     }
   }
 
-  async updateGoogleDriveUI(
-    isSignedIn,
-    signInButton,
-    loadFromCloudButton,
-    uploadOptionButton,
-    signOutButton
-  ) {
-    console.log(
-      "[DEBUG] updateGoogleDriveUI called with isSignedIn:",
-      isSignedIn
-    );
-
+  async updateGoogleDriveUI(isSignedIn, cloudButtonArea) {
+    cloudButtonArea.innerHTML = "";
     if (isSignedIn) {
-      // Reset sign-in button state before hiding it (in case it was in loading state)
-      const contentSpan = signInButton.querySelector("span");
-      const iconSvg = signInButton.querySelector("svg");
-      if (contentSpan) {
-        contentSpan.textContent = "Google Sign In";
-      }
-      if (iconSvg) {
-        iconSvg.style.filter = "";
-      }
-      signInButton.disabled = false;
-      signInButton.style.display = "none";
-      signOutButton.style.display = "block";
-
-      // Show loading state for cloud save button while checking
-      this.showCloudSaveLoading(loadFromCloudButton);
-
       // Check if there's a save file in the cloud
       try {
-        console.log("[DEBUG] Checking for cloud save file...");
-        console.log(
-          "[DEBUG] Current cached saveFileId:",
-          window.googleDriveSave.saveFileId
-        );
-
-        // Always search for the file instead of relying on cache for now (to debug)
         const fileFound = await window.googleDriveSave.findSaveFile();
         const fileId = window.googleDriveSave.saveFileId;
-
-        console.log("[DEBUG] findSaveFile() returned:", fileFound);
-        console.log("[DEBUG] Cloud save file ID after search:", fileId);
-
-        // Show cloud save load button if cloud save exists
         if (fileId) {
-          console.log("[DEBUG] Cloud save found, showing load button");
-          loadFromCloudButton.style.display = "block";
-
-          // Hide local save button when cloud save is found
-          // This prioritizes cloud saves over local saves for a cleaner UX
-          const localLoadButton = document.getElementById(
-            "splash-load-game-btn"
-          );
-          if (localLoadButton) {
-            localLoadButton.style.display = "none";
-            console.log("[DEBUG] Cloud save found, hiding local load button");
-          }
-
           // Try to load save data to get last save time, etc.
+          let saveData = {};
+          let playedTimeStr = "";
           try {
-            const saveData = await window.googleDriveSave.load();
+            saveData = await window.googleDriveSave.load();
             const totalPlayedMs = saveData.total_played_time || 0;
-            const playedTimeStr = this.formatTime(totalPlayedMs);
-
-            loadFromCloudButton.innerHTML = `
-              <div style="text-align: center; margin-bottom: 0.3rem;">
-                <span>Load Game</span>
-              </div>
-              <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8em; color: #CCC; line-height: 1.3; font-weight: 400;">
-                <span style="color: #4285F4; font-weight: 500;">CLOUD</span>
-                <img src="img/ui/icons/icon_cash.png" style="width: 16px; height: 16px;" alt="$">
-                <span>$${fmt(saveData.current_money ?? 0)}</span>
-                <img src="img/ui/icons/icon_time.png" style="width: 16px; height: 16px;" alt="⏰">
-                <span>${playedTimeStr}</span>
-              </div>
-            `;
-            loadFromCloudButton.disabled = false;
-            console.log("[DEBUG] Cloud save button updated with save details.");
+            playedTimeStr = this.formatTime(totalPlayedMs);
           } catch (error) {
-            console.error("[DEBUG] Could not load cloud save details:", error);
-            loadFromCloudButton.innerHTML = `
-              <div style="text-align: center; margin-bottom: 0.3rem;">
-                <span>Load Game</span>
-              </div>
-              <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8em; color: #CCC; line-height: 1.3; font-weight: 400;">
-                <span style="color: #4285F4; font-weight: 500;">CLOUD</span>
-                <img src="img/ui/icons/icon_cash.png" style="width: 16px; height: 16px;" alt="$">
-                <span>$${fmt(saveData.current_money ?? 0)}</span>
-                <img src="img/ui/icons/icon_time.png" style="width: 16px; height: 16px;" alt="⏰">
-                <span>${playedTimeStr}</span>
-              </div>
-            `;
-            loadFromCloudButton.disabled = false;
-            console.log("[DEBUG] Cloud save button updated with save details.");
+            // fallback to empty
           }
-        } else {
-          console.log("[DEBUG] No cloud save found, hiding load button");
-          loadFromCloudButton.style.display = "none";
-          // Clear any stale data attributes
-          delete loadFromCloudButton.dataset.action;
-          delete loadFromCloudButton.dataset.gameState;
-
-          // Show local save button if local save exists and no cloud save
-          const localLoadButton = document.getElementById(
-            "splash-load-game-btn"
-          );
-          const localSaveData = localStorage.getItem("reactorGameSave");
-          if (localLoadButton && localSaveData) {
-            localLoadButton.style.display = "block";
-            console.log(
-              "[DEBUG] No cloud save found, showing local load button"
-            );
-          }
-        }
-
-        // Check for local save to offer upload (only when signed in)
-        console.log("[DEBUG] Checking for local save to upload...");
-        const localSaveInfo =
-          await window.googleDriveSave.offerLocalSaveUpload();
-        console.log("[DEBUG] Local save info:", localSaveInfo);
-
-        // Additional debug: Check if local save is cloud synced
-        const localSaveData = localStorage.getItem("reactorGameSave");
-        if (localSaveData) {
-          try {
-            const parsedSave = JSON.parse(localSaveData);
-            console.log(
-              "[DEBUG] Local save isCloudSynced:",
-              parsedSave.isCloudSynced
-            );
-            console.log(
-              "[DEBUG] Local save cloudUploadedAt:",
-              parsedSave.cloudUploadedAt
-            );
-          } catch (e) {
-            console.log("[DEBUG] Could not parse local save for sync check");
-          }
-        }
-
-        if (localSaveInfo && localSaveInfo.hasLocalSave) {
-          console.log(
-            "[DEBUG] Local save found, offering upload to cloud:",
-            localSaveInfo.saveSize
-          );
-
-          // Show the split upload option button
-          if (uploadOptionButton) {
-            uploadOptionButton.style.display = "flex";
-            uploadOptionButton.dataset.action = "upload";
-            uploadOptionButton.dataset.gameState = JSON.stringify(
-              localSaveInfo.gameState
-            );
-
-            // Adjust Load Game button for split-button layout
-            const loadGameButton = document.getElementById(
-              "splash-load-game-btn"
-            );
-            if (loadGameButton) {
-              loadGameButton.style.borderTopRightRadius = "0";
-              loadGameButton.style.borderBottomRightRadius = "0";
-              loadGameButton.style.borderRadius = "8px 0 0 8px";
+          const cloudBtn = createLoadFromCloudButton(async () => {
+            try {
+              console.log("[DEBUG] Loading from Google Drive...");
+              const cloudSaveData = await window.googleDriveSave.load();
+              if (cloudSaveData) {
+                console.log("[DEBUG] Cloud save data loaded successfully");
+                if (window.splashManager) {
+                  console.log("[DEBUG] Hiding splash manager...");
+                  window.splashManager.hide();
+                }
+                await new Promise((resolve) => setTimeout(resolve, 600));
+                if (window.pageRouter && window.ui && window.game) {
+                  console.log("[DEBUG] Applying save state...");
+                  window.game.applySaveState(cloudSaveData);
+                  // Call the startGame function that should be available globally
+                  if (typeof window.startGame === "function") {
+                    console.log("[DEBUG] Calling global startGame function...");
+                    await window.startGame(
+                      window.pageRouter,
+                      window.ui,
+                      window.game
+                    );
+                  } else {
+                    console.error("startGame function not available globally");
+                    // Fallback: try to trigger the game start manually
+                    await window.pageRouter.loadGameLayout();
+                    window.ui.initMainLayout();
+                    await window.pageRouter.loadPage("reactor_section");
+                    window.game.tooltip_manager = new (
+                      await import("./tooltip.js")
+                    ).TooltipManager("#main", "#tooltip", window.game);
+                    window.game.engine = new (
+                      await import("./engine.js")
+                    ).Engine(window.game);
+                    window.game.startSession();
+                    window.game.engine.start();
+                  }
+                } else {
+                  console.error(
+                    "[DEBUG] Required global objects not available:",
+                    {
+                      pageRouter: !!window.pageRouter,
+                      ui: !!window.ui,
+                      game: !!window.game,
+                    }
+                  );
+                }
+              } else {
+                alert("Could not find a save file in Google Drive.");
+              }
+            } catch (error) {
+              console.error("Failed to load from Google Drive:", error);
+              alert(`Error loading from Google Drive: ${error.message}`);
             }
-          }
+          });
+          cloudButtonArea.appendChild(cloudBtn);
         } else {
-          console.log(
-            "[DEBUG] No uploadable local save found (may be already synced), hiding upload buttons"
-          );
-
-          // Hide the split upload option button
-          if (uploadOptionButton) {
-            uploadOptionButton.style.display = "none";
-            delete uploadOptionButton.dataset.action;
-            delete uploadOptionButton.dataset.gameState;
-
-            // Restore Load Game button to full width when upload option is hidden
-            const loadGameButton = document.getElementById(
-              "splash-load-game-btn"
-            );
-            if (loadGameButton) {
-              loadGameButton.style.borderRadius = "8px";
-              loadGameButton.style.borderTopRightRadius = "8px";
-              loadGameButton.style.borderBottomRightRadius = "8px";
-            }
-          }
+          // No cloud save, show info
+          const info = document.createElement("div");
+          info.textContent = "No cloud save found.";
+          cloudButtonArea.appendChild(info);
         }
       } catch (error) {
-        console.error("Error checking for cloud save:", error);
-        loadFromCloudButton.style.display = "none";
-      } finally {
-        // Hide loading state regardless of outcome
-        this.hideCloudSaveLoading(loadFromCloudButton);
+        cloudButtonArea.innerHTML = "Cloud check failed.";
       }
     } else {
-      console.log("[DEBUG] Not signed in, showing sign-in button");
-      signInButton.style.display = "block";
-      const contentSpan = signInButton.querySelector("span");
-      const iconSvg = signInButton.querySelector("svg");
-      if (contentSpan) {
-        contentSpan.textContent = "Google Sign In";
-      }
-      if (iconSvg) {
-        iconSvg.style.filter = "";
-      }
-      signInButton.disabled = false;
-      loadFromCloudButton.style.display = "none";
-      if (uploadOptionButton) {
-        uploadOptionButton.style.display = "none";
-
-        // Restore Load Game button to full width when not signed in
-        const loadGameButton = document.getElementById("splash-load-game-btn");
-        if (loadGameButton) {
-          loadGameButton.style.borderRadius = "8px";
-          loadGameButton.style.borderTopRightRadius = "8px";
-          loadGameButton.style.borderBottomRightRadius = "8px";
+      // Not signed in, show Google Sign In button
+      const signInBtn = createGoogleSignInButton(async () => {
+        try {
+          signInBtn.disabled = true;
+          signInBtn.querySelector("span").textContent = "Signing in...";
+          await window.googleDriveSave.signIn();
+          await this.updateGoogleDriveUI(true, cloudButtonArea);
+        } catch (error) {
+          signInBtn.querySelector("span").textContent = "Sign in Failed";
+          setTimeout(() => {
+            signInBtn.querySelector("span").textContent = "Google Sign In";
+            signInBtn.disabled = false;
+          }, 2000);
         }
-      }
-      signOutButton.style.display = "none";
-
-      // Show local save button if local save exists and not signed in
-      const localLoadButton = document.getElementById("splash-load-game-btn");
-      const localSaveData = localStorage.getItem("reactorGameSave");
-      if (localLoadButton && localSaveData) {
-        localLoadButton.style.display = "block";
-        console.log(
-          "[DEBUG] Not signed in, showing local load button if local save exists"
-        );
-      }
+      });
+      cloudButtonArea.appendChild(signInBtn);
     }
   }
 
   hide() {
+    console.log("[DEBUG] SplashManager.hide() called");
+    console.log("[DEBUG] splashScreen exists:", !!this.splashScreen);
+    console.log("[DEBUG] isReady:", this.isReady);
+
     if (this.splashScreen && !this.isReady) {
+      console.log("[DEBUG] Hiding splash screen...");
       this.isReady = true;
 
       // Stop flavor text rotation
@@ -987,9 +667,15 @@ class SplashScreenManager {
         this.errorTimeout = null;
       }
 
+      console.log("[DEBUG] Adding fade-out class...");
       this.splashScreen.classList.add("fade-out");
       setTimeout(() => {
+        console.log("[DEBUG] Adding hidden class...");
         this.splashScreen.classList.add("hidden");
+        console.log(
+          "[DEBUG] Splash screen classes:",
+          this.splashScreen.className
+        );
         // Notify service worker that splash is hidden
         if (
           "serviceWorker" in navigator &&
@@ -1000,6 +686,8 @@ class SplashScreenManager {
           });
         }
       }, 500);
+    } else {
+      console.log("[DEBUG] Splash screen already hidden or not ready");
     }
   }
 
@@ -1037,13 +725,9 @@ class SplashScreenManager {
   showCloudSaveLoading(loadFromCloudButton) {
     if (!loadFromCloudButton) return;
 
-    loadFromCloudButton.style.display = "block";
-    loadFromCloudButton.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-        <div style="width: 16px; height: 16px; border: 2px solid #4285F4; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <span>Checking for cloud save...</span>
-      </div>
-    `;
+    loadFromCloudButton.classList.add("visible", "cloud-loading");
+    const loadingButton = createLoadingButton("Checking for cloud save...");
+    loadFromCloudButton.innerHTML = loadingButton.innerHTML;
     loadFromCloudButton.disabled = true;
   }
 
@@ -1051,6 +735,7 @@ class SplashScreenManager {
   hideCloudSaveLoading(loadFromCloudButton) {
     if (!loadFromCloudButton) return;
 
+    loadFromCloudButton.classList.remove("cloud-loading");
     loadFromCloudButton.disabled = false;
     // The actual content will be set by the calling function based on whether a save was found
   }
@@ -1058,120 +743,31 @@ class SplashScreenManager {
   // Show loading state during Google Drive initialization
   showGoogleDriveInitializing(signInButton, loadFromCloudButton) {
     if (signInButton) {
-      signInButton.style.display = "block";
-      signInButton.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <div style="width: 16px; height: 16px; border: 2px solid #4285F4; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-          <span>Initializing Google Drive...</span>
-        </div>
-      `;
+      signInButton.classList.add("visible", "google-loading");
+      const loadingButton = createLoadingButton("Initializing Google Drive...");
+      signInButton.innerHTML = loadingButton.innerHTML;
       signInButton.disabled = true;
     }
 
     if (loadFromCloudButton) {
-      loadFromCloudButton.style.display = "none";
+      loadFromCloudButton.classList.remove("visible");
     }
   }
 
   // Hide loading state after Google Drive initialization
   hideGoogleDriveInitializing(signInButton, loadFromCloudButton) {
     if (signInButton) {
+      signInButton.classList.remove("google-loading");
       signInButton.disabled = false;
       // Reset button content to normal Google Sign In button
-      signInButton.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <svg width="18" height="18" viewBox="0 0 24 24" style="fill: currentColor;">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-          </svg>
-          <span>Google Sign In</span>
-        </div>
-      `;
+      const newButton = createGoogleSignInButtonWithIcon();
+      signInButton.innerHTML = newButton.innerHTML;
     }
   }
 
   // Refresh save options after upload/download operations
   async refreshSaveOptions() {
-    console.log("[DEBUG] Refreshing save options...");
-
-    // Check if we still have buttons to update
-    const signInButton = document.getElementById("splash-signin-btn");
-    const loadFromCloudButton = document.getElementById(
-      "splash-load-cloud-btn"
-    );
-
-    const uploadOptionButton = document.getElementById(
-      "splash-upload-option-btn"
-    );
-    const signOutButton = document.getElementById("splash-signout-btn");
-
-    if (!signInButton || !loadFromCloudButton || !signOutButton) {
-      console.log(
-        "[DEBUG] Required save option buttons not found, can't refresh"
-      );
-      return;
-    }
-
-    // Upload button is optional - it might not exist yet
-    if (!uploadOptionButton) {
-      console.log(
-        "[DEBUG] Upload option button not found - will skip upload option UI updates"
-      );
-    }
-
-    // Update Google Drive UI state
-    if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {
-      console.log("[DEBUG] User is signed in, updating Google Drive UI...");
-
-      // Ensure Google Drive is fully initialized
-      try {
-        await window.googleDriveSave.init();
-        console.log("[DEBUG] Google Drive initialization confirmed");
-      } catch (initError) {
-        console.error("[DEBUG] Google Drive initialization error:", initError);
-      }
-
-      await this.updateGoogleDriveUI(
-        true,
-        signInButton,
-        loadFromCloudButton,
-        uploadOptionButton,
-        signOutButton
-      );
-    } else {
-      console.log("[DEBUG] User is not signed in to Google Drive");
-    }
-
-    // Check local save status and update the local load button accordingly
-    const localLoadButton = document.getElementById("splash-load-game-btn");
-    const saveDataJSON = localStorage.getItem("reactorGameSave");
-
-    // Check if there's a cloud save to determine local button visibility
-    let hasCloudSave = false;
-    if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {
-      try {
-        const fileId =
-          window.googleDriveSave.saveFileId ||
-          (await window.googleDriveSave.findSaveFile());
-        hasCloudSave = !!fileId;
-      } catch (error) {
-        console.log("[DEBUG] Error checking for cloud save in refresh:", error);
-      }
-    }
-
-    if (localLoadButton && saveDataJSON && !hasCloudSave) {
-      localLoadButton.style.display = "block";
-      console.log(
-        "[DEBUG] Local save exists and no cloud save, keeping local load button visible"
-      );
-    } else if (localLoadButton) {
-      localLoadButton.style.display = "none";
-      console.log(
-        "[DEBUG] No local save found or cloud save exists, hiding local load button"
-      );
-    }
+    await this.showStartOptions(!!localStorage.getItem("reactorGameSave"));
   }
 }
 
@@ -1516,7 +1112,7 @@ if (installButton) {
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`User response to the install prompt: ${outcome}`);
       deferredPrompt = null;
-      installButton.style.display = "none";
+      installButton.classList.add("hidden");
     }
   });
 }
@@ -1525,6 +1121,6 @@ window.addEventListener("appinstalled", () => {
   console.log("PWA was installed");
   deferredPrompt = null;
   if (installButton) {
-    installButton.style.display = "none";
+    installButton.classList.add("hidden");
   }
 });

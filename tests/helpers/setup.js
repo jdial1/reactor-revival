@@ -111,9 +111,6 @@ export async function setupGame() {
   ui.stateManager.handlePartAdded = vi.fn();
   ui.stateManager.handleUpgradeAdded = vi.fn();
   ui.stateManager.handleObjectiveCompleted = vi.fn();
-  ui.stateManager.handleObjectiveLoaded = vi.fn();
-  ui.stateManager.handleObjectiveUnloaded = vi.fn();
-
   const game = new Game(ui);
   ui.init(game);
   game.engine = new Engine(game);

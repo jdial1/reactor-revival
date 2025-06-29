@@ -75,7 +75,7 @@ describe("UI Integration and Gameplay", () => {
     expect(game.current_money).toBe(initialMoney + 1234);
 
     // Check that the money display exists
-    const moneyDisplay = document.getElementById("info_bar_money");
+    const moneyDisplay = document.getElementById("info_money");
     expect(moneyDisplay, "Money display element should exist").not.toBeNull();
 
     // Verify the StateManager can track the money value correctly
@@ -99,5 +99,27 @@ describe("UI Integration and Gameplay", () => {
     expect(upgrade.level).toBe(1);
     expect(game.rows).toBe(initialRows + 1);
     expect(game.current_money).toBe(initialMoney - upgrade.base_cost);
+  });
+
+  it("should show/hide objectives when navigating between pages", async () => {
+    // Start on reactor page
+    await game.router.loadPage("reactor_section");
+
+    // Check that objectives are visible on reactor page
+    const objectivesSection = document.getElementById("objectives_section");
+    expect(objectivesSection, "Objectives section should exist").not.toBeNull();
+    expect(objectivesSection.classList.contains("hidden")).toBe(false);
+
+    // Navigate to upgrades page
+    await game.router.loadPage("upgrades_section");
+
+    // Check that objectives are hidden on upgrades page
+    expect(objectivesSection.classList.contains("hidden")).toBe(true);
+
+    // Navigate back to reactor page
+    await game.router.loadPage("reactor_section");
+
+    // Check that objectives are visible again on reactor page
+    expect(objectivesSection.classList.contains("hidden")).toBe(false);
   });
 });

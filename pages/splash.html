@@ -1,15 +1,21 @@
 <!-- SPLASH SCREEN -->
-<div id="splash-screen">
-  <div class="splash-logo"></div>
-  <div class="splash-title">REACTOR REVIVAL</div>
-  <div class="splash-subtitle">Nuclear Power Simulation</div>
+<main id="splash-screen" class="container">
+  <figure class="splash-logo"></figure>
+  <header>
+    <h1 class="splash-title">REACTOR REVIVAL</h1>
+    <h2 class="splash-subtitle">Nuclear Power Simulation</h2>
+  </header>
+
   <div class="splash-loading">
-    <div class="splash-spinner" style="display: none"></div>
-    <div class="splash-status" id="splash-status" style="display: none">
-      Ready!
-    </div>
-    <div class="splash-flavor" id="splash-flavor" style="display: none">
-      Initializing reactor protocols...
-    </div>
+    <div class="splash-spinner hidden"></div>
+    <p id="splash-status" class="hidden">Ready!</p>
+    <p id="splash-flavor" class="hidden"></p>
   </div>
-</div>
+
+  <article id="splash-start-options" class="hidden">
+    <!-- Content injected by splashManager.js -->
+  </article>
+
+  <footer class="splash-version"></footer>
+  <div class="splash-stats"></div>
+</main>

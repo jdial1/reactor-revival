@@ -31,16 +31,13 @@ export class UI {
       "reactor_section",
       "parts_section",
       "info_bar",
-      "info_money_block",
-      "info_bar_current_heat",
-      "info_bar_max_heat",
-      "info_heat_progress",
-      "info_bar_current_power",
-      "info_bar_max_power",
-      "info_power_progress",
-      "info_bar_money",
-      "sellBtnInfoBar",
-      "reduceHeatBtnInfoBar",
+      "info_heat",
+      "info_power",
+      "info_money",
+      "info_heat_denom",
+      "info_power_denom",
+      "info_bar_heat_btn",
+      "info_bar_power_btn",
       "parts_tab_contents",
       "cells",
       "reflectors",
@@ -99,7 +96,6 @@ export class UI {
       "debug_toggle_btn",
       "debug_hide_btn",
       "debug_variables",
-      "debug_refresh_btn",
       "meltdown_banner",
       "controls_collapse_btn",
       "controls_collapse_icon",
@@ -176,6 +172,10 @@ export class UI {
           "debug_refresh_btn",
           "meltdown_banner",
           "collapsed_controls_nav",
+          "controls_collapse_btn",
+          "controls_collapse_icon",
+          "controls_expanded_group",
+          "controls_collapsed_group",
         ];
         if (!dynamicElements.includes(id)) {
           console.warn(`[UI] Element with id '${id}' not found in DOM.`);
@@ -244,38 +244,44 @@ export class UI {
         auto_buy: "🛒",
         time_flux: "⏩",
         heat_control: "🌡️",
-        pause: "⏸️", // initial, will be updated in updateAllToggleBtnStates
+        // pause: removed, use text only
       };
       this.DOMElements.controls_collapsed_group
         .querySelectorAll(".collapsed-control-btn")
         .forEach((btn) => {
           const control = btn.getAttribute("data-control");
-          btn.innerHTML = icons[control] || "?";
+          if (control === "pause") {
+            btn.textContent = this.stateManager.getVar("pause")
+              ? "Resume"
+              : "Pause";
+          } else {
+            btn.innerHTML = icons[control] || "?";
+          }
           btn.onclick = () => {
             const currentState = this.stateManager.getVar(control);
             this.stateManager.setVar(control, !currentState);
-            this.updateAllToggleBtnStates(); // Ensure UI updates everywhere
+            this.updateAllToggleBtnStates();
           };
         });
     }
 
     // Add this after setting up all toggle buttons in initializeToggleButtons()
-    const updatePauseButtonIcon = () => {
+    const updatePauseButtonText = () => {
       const isPaused = this.stateManager.getVar("pause");
       const pauseBtn = this.DOMElements.pause_toggle;
       if (pauseBtn) {
-        pauseBtn.textContent = isPaused ? "▶️" : "⏸️";
+        pauseBtn.textContent = isPaused ? "Resume" : "Pause";
       }
     };
-    updatePauseButtonIcon();
+    updatePauseButtonText();
 
-    // Patch setVar to also update pause button icon and toggle states
+    // Patch setVar to also update pause button text and toggle states
     const origSetVar = this.stateManager.setVar.bind(this.stateManager);
     this.stateManager.setVar = (key, value) => {
       origSetVar(key, value);
       if (key === "pause") {
         this.updateAllToggleBtnStates();
-        updatePauseButtonIcon();
+        updatePauseButtonText();
       }
     };
   }
@@ -299,7 +305,7 @@ export class UI {
             auto_buy: "🛒",
             time_flux: "⏩",
             heat_control: "🌡️",
-            pause: isPaused ? "▶️" : "⏸️",
+            // pause: removed, use text only
           };
           btn.innerHTML = icons[control] || "?";
         });
@@ -412,6 +418,16 @@ export class UI {
       const isMeltdownClassPresent =
         document.body.classList.contains("reactor-meltdown");
 
+      // Show/hide meltdown banner (outer and inner)
+      const meltdownBanner = document.getElementById("meltdown_banner");
+      if (meltdownBanner) {
+        meltdownBanner.classList.toggle("hidden", !hasMeltedDown);
+        const article = meltdownBanner.querySelector("article");
+        if (article) {
+          article.classList.toggle("hidden", !hasMeltedDown);
+        }
+      }
+
       if (hasMeltedDown && !isMeltdownClassPresent) {
         document.body.classList.add("reactor-meltdown");
       } else if (!hasMeltedDown && isMeltdownClassPresent) {
@@ -517,51 +533,47 @@ export class UI {
 
   initVarObjsConfig() {
     this.var_objs_config = {
-      current_money: { dom: this.DOMElements.info_bar_money, num: true },
+      current_money: { dom: document.getElementById("info_money"), num: true },
       current_power: {
-        dom: this.DOMElements.info_bar_current_power,
+        dom: document.getElementById("info_power"),
         num: true,
-        onupdate: () =>
-          this.updatePercentageBar(
-            "current_power",
-            "max_power",
-            this.DOMElements.info_power_progress
-          ),
+        onupdate: () => {
+          // Update denominator
+          const denom = document.getElementById("info_power_denom");
+          if (denom)
+            denom.textContent =
+              "/" + (this.stateManager.getVar("max_power") || "");
+        },
       },
       max_power: {
-        dom: this.DOMElements.info_bar_max_power,
+        dom: document.getElementById("info_power_denom"),
         num: true,
-        onupdate: () =>
-          this.updatePercentageBar(
-            "current_power",
-            "max_power",
-            this.DOMElements.info_power_progress
-          ),
+        onupdate: () => {
+          const denom = document.getElementById("info_power_denom");
+          if (denom)
+            denom.textContent =
+              "/" + (this.stateManager.getVar("max_power") || "");
+        },
       },
       current_heat: {
-        dom: this.DOMElements.info_bar_current_heat,
+        dom: document.getElementById("info_heat"),
         num: true,
         places: 0,
         onupdate: () => {
-          this.updatePercentageBar(
-            "current_heat",
-            "max_heat",
-            this.DOMElements.info_heat_progress
-          );
-          this.updateReactorHeatBackground();
+          const denom = document.getElementById("info_heat_denom");
+          if (denom)
+            denom.textContent =
+              "/" + (this.stateManager.getVar("max_heat") || "");
         },
       },
       max_heat: {
-        dom: this.DOMElements.info_bar_max_heat,
+        dom: document.getElementById("info_heat_denom"),
         num: true,
-        places: 0,
         onupdate: () => {
-          this.updatePercentageBar(
-            "current_heat",
-            "max_heat",
-            this.DOMElements.info_heat_progress
-          );
-          this.updateReactorHeatBackground();
+          const denom = document.getElementById("info_heat_denom");
+          if (denom)
+            denom.textContent =
+              "/" + (this.stateManager.getVar("max_heat") || "");
         },
       },
       exotic_particles: {
@@ -654,6 +666,16 @@ export class UI {
             pauseBtn.textContent = val ? "Resume" : "Pause";
           }
           document.body.classList.toggle("game-paused", val);
+
+          // Show/hide pause banner (outer and inner)
+          const pauseBanner = document.getElementById("pause_banner");
+          if (pauseBanner) {
+            pauseBanner.classList.toggle("hidden", !val);
+            const article = pauseBanner.querySelector("article");
+            if (article) {
+              article.classList.toggle("hidden", !val);
+            }
+          }
         },
       },
       melting_down: {
@@ -687,11 +709,6 @@ export class UI {
     else background.style.backgroundColor = `rgb(255, 0, 0)`;
   }
 
-  /**
-   * Initial setup that does NOT depend on the main game layout.
-   * @param {import('./game.js').Game} gameInstance
-   * @returns {boolean} Success state
-   */
   init(gameInstance) {
     this.game = gameInstance;
     this.stateManager.setGame(gameInstance);
@@ -699,17 +716,12 @@ export class UI {
     return true;
   }
 
-  /**
-   * Initializes all UI components and event listeners that depend on the main game layout.
-   * This should be called AFTER the game.html layout has been loaded into the DOM.
-   */
   initMainLayout() {
     this.cacheDOMElements();
     this.initVarObjsConfig();
     this.setupEventListeners();
     this.initializeToggleButtons();
     this.setupPartsTabs();
-    this.initializeHelpButtons();
     this.initializePartsPanel();
     this.addHelpButtonToMainPage();
     if (this.DOMElements.basic_overview_section && help_text.basic_overview) {
@@ -738,11 +750,8 @@ export class UI {
     let tileSize;
 
     if (isMobile) {
-      // On mobile, use a fixed, touch-friendly tile size.
-      // The wrapper is scrollable.
       tileSize = 48;
     } else {
-      // On desktop, calculate tile size to fit the entire grid in the wrapper.
       const wrapperWidth = wrapper.clientWidth;
       const wrapperHeight = wrapper.clientHeight;
       const gap = 1;
@@ -752,7 +761,6 @@ export class UI {
 
       tileSize = Math.floor(Math.min(tileSizeForWidth, tileSizeForHeight));
 
-      // Clamp the tile size to a reasonable range for usability on desktop
       tileSize = Math.max(20, Math.min(64, tileSize));
     }
 
@@ -760,12 +768,9 @@ export class UI {
     this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
     this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
 
-    // Force a layout recalculation on mobile devices to ensure proper alignment
     if (isMobile) {
-      // Trigger a reflow to ensure CSS grid updates properly
       this.DOMElements.reactor.offsetHeight;
 
-      // Center the grid
       const reactorEl = this.DOMElements.reactor;
       const wrapperEl = this.DOMElements.reactor_wrapper;
 
@@ -780,23 +785,19 @@ export class UI {
     }
   }
 
-  // Utility method to force reactor realignment - useful for mobile orientation changes
   forceReactorRealignment() {
     if (!this.game || !this.DOMElements.reactor) return;
 
-    // Force a complete reflow by briefly hiding and showing the reactor
     const reactor = this.DOMElements.reactor;
     const originalDisplay = reactor.style.display;
     reactor.style.display = "none";
     reactor.offsetHeight; // Force reflow
     reactor.style.display = originalDisplay;
 
-    // Then resize normally
     this.resizeReactor();
   }
 
   setupEventListeners() {
-    // Only navigation, info bar, and other non-reactor event listeners remain here
     const setupNav = (container, buttonClass) => {
       if (!container) return;
       console.log(
@@ -816,18 +817,8 @@ export class UI {
         }
       });
     };
-    setupNav(this.DOMElements.bottom_nav, ".pixel-btn");
-    setupNav(this.DOMElements.main_top_nav, ".pixel-btn");
-    if (this.DOMElements.reduceHeatBtnInfoBar) {
-      this.DOMElements.reduceHeatBtnInfoBar.addEventListener("click", () => {
-        if (this.game) this.game.manual_reduce_heat_action();
-      });
-    }
-    if (this.DOMElements.sellBtnInfoBar) {
-      this.DOMElements.sellBtnInfoBar.addEventListener("click", () => {
-        if (this.game) this.game.sell_action();
-      });
-    }
+    setupNav(this.DOMElements.bottom_nav, "div");
+    setupNav(this.DOMElements.main_top_nav, "div");
     this.DOMElements.reboot_btn?.addEventListener("click", () =>
       this.game.reboot_action(false)
     );
@@ -836,9 +827,7 @@ export class UI {
     );
     this.updatePartsPanelBodyClass();
     document.addEventListener("keydown", (e) => {
-      // Spacebar to toggle pause/play
       if (e.code === "Space") {
-        // Only handle spacebar if not typing in an input field
         if (!e.target.matches("input, textarea, [contenteditable]")) {
           e.preventDefault();
           const currentPauseState = this.stateManager.getVar("pause");
@@ -885,8 +874,6 @@ export class UI {
         }
       }
     });
-    // Parts panel toggle is handled in initializePartsPanel() method
-    // This button selector doesn't match our current HTML structure anyway
     const fullscreenButton = this.DOMElements.fullscreen_toggle;
     if (fullscreenButton) {
       fullscreenButton.addEventListener("click", () => {
@@ -898,10 +885,8 @@ export class UI {
       this.updateFullscreenButtonState();
     }
 
-    // Handle window resize events for mobile orientation changes
     let resizeTimeout;
     window.addEventListener("resize", () => {
-      // Debounce resize events to avoid excessive calls
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
         if (this.game && this.DOMElements.reactor) {
@@ -910,7 +895,6 @@ export class UI {
       }, 100);
     });
 
-    // Handle Visual Viewport changes (mobile keyboard, orientation, etc.)
     if (window.visualViewport) {
       let viewportTimeout;
       window.visualViewport.addEventListener("resize", () => {
@@ -934,13 +918,61 @@ export class UI {
         location.reload();
       };
     }
-    // Debug button event listeners are now set up in initializePage() for experimental_upgrades_section
+
+    const copyStateBtn = document.getElementById("copy_state_btn");
+    if (copyStateBtn) {
+      copyStateBtn.onclick = () => {
+        const gameStateObject = this.game.getSaveState();
+        const gameStateString = JSON.stringify(gameStateObject, null, 2);
+        navigator.clipboard
+          .writeText(gameStateString)
+          .then(() => {
+            const originalText = copyStateBtn.textContent;
+            copyStateBtn.textContent = "Copied!";
+            setTimeout(() => {
+              copyStateBtn.textContent = originalText;
+            }, 2000);
+          })
+          .catch((err) => {
+            console.error("Failed to copy game state: ", err);
+            const originalText = copyStateBtn.textContent;
+            copyStateBtn.textContent = "Error!";
+            setTimeout(() => {
+              copyStateBtn.textContent = originalText;
+            }, 2000);
+          });
+      };
+    }
+
+    // Re-enable click handlers for info bar items
+    const heatItem = document.querySelector(".info-item.heat");
+    if (heatItem) {
+      heatItem.onclick = () => {
+        if (this.game) this.game.manual_reduce_heat_action();
+      };
+    }
+    const powerItem = document.querySelector(".info-item.power");
+    if (powerItem) {
+      powerItem.onclick = () => {
+        if (this.game) this.game.sell_action();
+      };
+    }
+
+    document
+      .getElementById("info_bar_heat_btn")
+      ?.addEventListener("click", function () {
+        if (window.game) window.game.manual_reduce_heat_action();
+      });
+    document
+      .getElementById("info_bar_power_btn")
+      ?.addEventListener("click", function () {
+        if (window.game) window.game.sell_action();
+      });
   }
 
   handleGridInteraction(tileEl, event) {
     if (!tileEl || !tileEl.tile) return;
 
-    // Prevent interactions if reactor has melted down
     if (this.game && this.game.reactor && this.game.reactor.has_melted_down) {
       return;
     }
@@ -958,25 +990,21 @@ export class UI {
           this.game.sellPart(tile);
         }
       } else {
-        // Check if there's a part on the tile and help mode is active - show tooltip
         if (tile.part && this.help_mode_active) {
           if (this.game && this.game.tooltip_manager) {
             console.log("Showing tooltip for part", tile.part);
             this.game.tooltip_manager.show(tile.part, tile, true);
           }
-          return; // Don't place parts when in help mode
+          return;
         }
 
-        // Normal game interactions when help mode is off
         if (clicked_part) {
           if (tile.part) {
-            // Replace existing part with selected part
             if (this.game.current_money >= clicked_part.cost) {
               this.game.current_money -= clicked_part.cost;
               tile.setPart(clicked_part);
             }
           } else {
-            // Empty tile with part selected - place the part
             if (this.game.current_money >= clicked_part.cost) {
               this.game.current_money -= clicked_part.cost;
               tile.setPart(clicked_part);
@@ -987,13 +1015,10 @@ export class UI {
     }
   }
 
-  // Helper to sync body class with panel state
   updatePartsPanelBodyClass() {
     const partsSection = document.getElementById("parts_section");
     if (partsSection && !partsSection.classList.contains("collapsed")) {
       document.body.classList.add("parts-panel-open");
-
-      // Track which side the panel is on
       if (partsSection.classList.contains("right-side")) {
         document.body.classList.add("parts-panel-right");
       } else {
@@ -1032,269 +1057,44 @@ export class UI {
     }
   }
 
-  initializeHelpButtons() {
-    // Add info buttons to part headers
-    document.querySelectorAll(".parts_tab_content h4").forEach((header) => {
-      const originalText = header.textContent; // Store original text before adding button
-      const partType = originalText.toLowerCase();
-
-      // Map header text to help text keys
-      const helpTextKeyMap = {
-        cells: "cells",
-        reflectors: "reflectors",
-        capacitors: "capacitors",
-        "particle accelerators": "particleAccelerators",
-        vents: "vents",
-        "heat exchangers": "heatExchangers",
-        inlets: "heatInlets",
-        outlets: "heatOutlets",
-        "coolant cells": "coolantCells",
-        "reactor platings": "reactorPlatings",
-      };
-
-      const helpKey = helpTextKeyMap[partType];
-
-      if (help_text.parts[helpKey]) {
-        const infoButton = document.createElement("button");
-        infoButton.className = "info-button pixel-btn-small";
-        infoButton.textContent = "?";
-        infoButton.title = "Click for information";
-
-        infoButton.addEventListener("click", (e) => {
-          if (this.game && this.game.tooltip_manager) {
-            this.game.tooltip_manager.show(
-              {
-                title: originalText, // Use original text without info button
-                description: help_text.parts[helpKey],
-              },
-              null,
-              true,
-              infoButton
-            );
-          }
-        });
-        header.appendChild(infoButton);
-      }
-    });
-
-    // Add info buttons to control buttons
-    document.querySelectorAll("#controls_nav .nav_button").forEach((button) => {
-      const originalText = button.textContent;
-      const controlType = originalText.replace(/\s+/g, "").toLowerCase();
-      if (help_text.controls[controlType]) {
-        const infoButton = document.createElement("button");
-        infoButton.className = "info-button pixel-btn-small";
-        infoButton.textContent = "?";
-        infoButton.title = "Click for information";
-        infoButton.style.marginLeft = "4px";
-
-        infoButton.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (this.game && this.game.tooltip_manager) {
-            this.game.tooltip_manager.show(
-              {
-                title: originalText,
-                description: help_text.controls[controlType],
-              },
-              null,
-              true,
-              infoButton
-            );
-          }
-        });
-        button.appendChild(infoButton);
-      }
-    });
-
-    const helpEnabled = this.stateManager.getVar("show_help_buttons") ?? true;
-    document.body.classList.toggle("hide-help-buttons", !helpEnabled);
-  }
-
   initializePartsPanel() {
     const toggle = this.DOMElements.parts_panel_toggle;
     const panel = this.DOMElements.parts_section;
 
     if (toggle && panel) {
-      // Initialize dragging functionality
-      let isDragging = false;
-      let startX = 0;
-      let startY = 0;
-      let startTop = 0;
-      let dragStartTime = 0;
-      let hasMoved = false;
-
-      // Load saved panel side preference
-      const savedSide = localStorage.getItem("partsPanelSide") || "left";
-      if (savedSide === "right") {
-        panel.classList.add("right-side");
-      }
-
-      // On desktop (>900px), ensure panel is expanded by default
-      const isMobile = window.innerWidth <= 900;
-      if (!isMobile) {
-        panel.classList.remove("collapsed");
-        this.updatePartsPanelBodyClass();
-      }
-
-      const onPointerDown = (e) => {
-        isDragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        startTop = toggle.offsetTop;
-        dragStartTime = Date.now();
-        hasMoved = false;
-
-        toggle.classList.add("dragging");
-        toggle.setPointerCapture(e.pointerId);
+      // Use a simple click event for robust toggling
+      toggle.addEventListener("click", (e) => {
         e.preventDefault();
-      };
-
-      const onPointerMove = (e) => {
-        if (!isDragging) return;
-
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
-        const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-        if (totalMovement > 5) {
-          hasMoved = true;
-        }
-
-        // Determine if this is primarily horizontal or vertical movement
-        const isHorizontalDrag =
-          Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20;
-
-        if (isHorizontalDrag) {
-          // Horizontal drag - show visual feedback for side switching (both desktop and mobile)
-          const threshold = 100; // pixels to drag before switching sides
-          const isRightSide = panel.classList.contains("right-side");
-
-          if (!isRightSide && deltaX > threshold) {
-            // Dragging right from left side
-            toggle.style.transform = `translateX(${Math.min(
-              deltaX,
-              threshold * 2
-            )}px)`;
-            toggle.style.opacity = "0.6";
-          } else if (isRightSide && deltaX < -threshold) {
-            // Dragging left from right side
-            toggle.style.transform = `translateX(${Math.max(
-              deltaX,
-              -threshold * 2
-            )}px)`;
-            toggle.style.opacity = "0.6";
-          }
-        }
-
-        // Always allow vertical repositioning (regardless of horizontal movement)
-        if (Math.abs(deltaY) > 5) {
-          const newTop = startTop + deltaY;
-
-          // Calculate bounds - account for bottom bars
-          const isMobile = window.innerWidth <= 900;
-          const bottomBarHeight = isMobile ? 250 : 150; // More space needed on mobile
-          const maxTop =
-            window.innerHeight - toggle.offsetHeight - bottomBarHeight;
-          const boundedTop = Math.max(0, Math.min(newTop, maxTop));
-
-          toggle.style.top = `${boundedTop}px`;
-        }
-      };
-
-      const onPointerUp = (e) => {
-        if (!isDragging) return;
-
-        isDragging = false;
-        toggle.classList.remove("dragging");
-        toggle.style.transform = "";
-        toggle.style.opacity = "";
-
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
-        const isHorizontalDrag =
-          hasMoved &&
-          Math.abs(deltaX) > Math.abs(deltaY) &&
-          Math.abs(deltaX) > 20;
-
-        // Check if we're on mobile (screen width <= 900px)
         const isMobile = window.innerWidth <= 900;
-
-        if (isHorizontalDrag) {
-          // Allow side switching on both desktop and mobile for horizontal drags
-          const threshold = 100;
-          const isRightSide = panel.classList.contains("right-side");
-
-          if (!isRightSide && deltaX > threshold) {
-            panel.classList.add("right-side");
-            localStorage.setItem("partsPanelSide", "right");
-            this.updatePartsPanelBodyClass();
-          } else if (isRightSide && deltaX < -threshold) {
-            panel.classList.remove("right-side");
-            localStorage.setItem("partsPanelSide", "left");
-            this.updatePartsPanelBodyClass();
-          }
-        } else {
-          // For non-horizontal interactions (clicks and vertical drags)
-          const clickTime = Date.now() - dragStartTime;
-          const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-          // Check if we're on mobile for click behavior
-          // const isMobile = window.innerWidth <= 900; // Already declared above
-
-          if (!hasMoved || (clickTime < 200 && totalMovement < 10)) {
-            // Only allow collapse/expand clicks on mobile
-            if (isMobile) {
-              panel.classList.toggle("collapsed");
-              this.updatePartsPanelBodyClass();
-            }
-            // On desktop, clicks do nothing
-          }
-        }
-      };
-
-      // Add event listeners for dragging
-      toggle.addEventListener("pointerdown", onPointerDown);
-      toggle.addEventListener("pointermove", onPointerMove);
-      toggle.addEventListener("pointerup", onPointerUp);
-      toggle.addEventListener("pointercancel", onPointerUp);
-
-      // Set initial position to bottom if not already set
-      if (!toggle.style.top) {
-        const isMobileInit = window.innerWidth <= 900;
-        const bottomBarHeight = isMobileInit ? 250 : 150;
-        toggle.style.top = `${
-          window.innerHeight - toggle.offsetHeight - bottomBarHeight
-        }px`;
-      }
-
-      // Update position on window resize
-      window.addEventListener("resize", () => {
-        if (!toggle.style.top) return;
-
-        const currentTop = parseInt(toggle.style.top);
-        const isMobileResize = window.innerWidth <= 900;
-        const bottomBarHeight = isMobileResize ? 250 : 150;
-        const maxTop =
-          window.innerHeight - toggle.offsetHeight - bottomBarHeight;
-
-        if (currentTop > maxTop) {
-          toggle.style.top = `${maxTop}px`;
-        }
-
-        // Update panel collapsed state based on screen size
-        const isMobileState = window.innerWidth <= 900;
-        if (!isMobileState) {
-          // Desktop: ensure panel is expanded
-          panel.classList.remove("collapsed");
+        if (isMobile) {
+          panel.classList.toggle("collapsed");
           this.updatePartsPanelBodyClass();
         }
+      });
+
+      // Initialize the panel state based on screen size
+      const isMobileOnLoad = window.innerWidth <= 900;
+      if (isMobileOnLoad) {
+        panel.classList.add("collapsed");
+      } else {
+        panel.classList.remove("collapsed");
+      }
+      this.updatePartsPanelBodyClass();
+
+      // Add a resize listener to handle transitions between mobile/desktop
+      window.addEventListener("resize", () => {
+        const isCurrentlyMobile = window.innerWidth <= 900;
+        if (!isCurrentlyMobile) {
+          panel.classList.remove("collapsed");
+        }
+        this.updatePartsPanelBodyClass();
       });
     }
   }
 
   renderUpgrade(upgrade) {
     const btn = document.createElement("button");
-    btn.className = "pixel-btn is-square upgrade";
+    btn.className = "upgrade";
     btn.dataset.id = upgrade.id;
 
     const image = document.createElement("div");
@@ -1337,15 +1137,14 @@ export class UI {
       };
     } catch (error) {
       console.error("Failed to load detailed quick start modal:", error);
-      // Fallback to a simple modal if loading fails
       const modal = document.createElement("div");
       modal.id = "quick-start-modal";
       modal.innerHTML = `
         <div class="quick-start-overlay">
-          <div class="quick-start-content pixel-panel">
+          <div class="quick-start-content">
             <h2>Getting Started Guide</h2>
             <p>Follow the objectives at the top to continue the tutorial!</p>
-            <button id="quick-start-close-detailed-fallback" class="pixel-btn btn-start">Got it!</button>
+            <button id="quick-start-close-detailed-fallback" class="btn-start">Got it!</button>
           </div>
         </div>
       `;
@@ -1359,17 +1158,15 @@ export class UI {
   }
 
   addHelpButtonToMainPage() {
-    // Add help button to the main top navigation
     const mainTopNav = this.DOMElements.main_top_nav;
     if (mainTopNav) {
-      const helpButton = document.createElement("button");
-      helpButton.className = "pixel-btn is-small";
+      const helpButton = document.createElement("div");
+      helpButton.className = "hidden";
       helpButton.title = "Getting Started Guide";
       helpButton.textContent = "?";
       helpButton.style.marginLeft = "8px";
       helpButton.onclick = async () => await this.showDetailedQuickStart();
 
-      // Insert before the about button
       const aboutButton = mainTopNav.querySelector("#about_toggle");
       if (aboutButton) {
         mainTopNav.insertBefore(helpButton, aboutButton);
@@ -1406,10 +1203,8 @@ export class UI {
     const debugContainer = this.DOMElements.debug_variables;
     debugContainer.innerHTML = "";
 
-    // Collect all game variables organized by source file
     const gameVars = this.collectGameVariables();
 
-    // Create sections for each file
     Object.entries(gameVars).forEach(([fileName, variables]) => {
       const section = document.createElement("div");
       section.className = "debug-section";
@@ -1421,7 +1216,6 @@ export class UI {
       const varList = document.createElement("div");
       varList.className = "debug-variables-list";
 
-      // Sort variables by key
       Object.entries(variables)
         .sort(([a], [b]) => a.localeCompare(b))
         .forEach(([key, value]) => {
@@ -1452,7 +1246,6 @@ export class UI {
 
     if (!this.game) return vars;
 
-    // Game variables
     const game = this.game;
     vars["Game (game.js)"]["version"] = game.version;
     vars["Game (game.js)"]["base_cols"] = game.base_cols;
@@ -1481,7 +1274,6 @@ export class UI {
     vars["Game (game.js)"]["sold_power"] = game.sold_power;
     vars["Game (game.js)"]["sold_heat"] = game.sold_heat;
 
-    // Reactor variables
     if (game.reactor) {
       const reactor = game.reactor;
       vars["Reactor (reactor.js)"]["base_max_heat"] = reactor.base_max_heat;
@@ -1523,7 +1315,6 @@ export class UI {
         reactor.transfer_multiplier_eff;
     }
 
-    // Tileset variables
     if (game.tileset) {
       const tileset = game.tileset;
       vars["Tileset"]["max_rows"] = tileset.max_rows;
@@ -1537,7 +1328,6 @@ export class UI {
         tileset.tiles_list?.filter((t) => t.part)?.length || 0;
     }
 
-    // Engine variables
     if (game.engine) {
       const engine = game.engine;
       vars["Engine"]["running"] = engine.running;
@@ -1546,7 +1336,6 @@ export class UI {
       vars["Engine"]["tick_interval"] = engine.tick_interval;
     }
 
-    // State Manager variables
     if (this.stateManager) {
       const stateVars = this.stateManager.getAllVars();
       Object.entries(stateVars).forEach(([key, value]) => {
@@ -1554,7 +1343,6 @@ export class UI {
       });
     }
 
-    // UI State variables
     vars["UI State"]["update_interface_interval"] =
       this.update_interface_interval;
     vars["UI State"]["isDragging"] = this.isDragging;
@@ -1570,7 +1358,6 @@ export class UI {
     ] = `${window.innerWidth}x${window.innerHeight}`;
     vars["UI State"]["device_pixel_ratio"] = window.devicePixelRatio;
 
-    // Performance variables
     if (game.performance) {
       const perf = game.performance;
       vars["Performance"]["enabled"] = perf.enabled;
@@ -1617,20 +1404,17 @@ export class UI {
 
   initializePage(pageId) {
     const game = this.game;
-    // Always refresh DOM element cache at the start
     this.cacheDOMElements();
 
-    // For reactor page, also reinitialize the var objects config since DOM elements may have changed
     if (pageId === "reactor_section") {
       this.initVarObjsConfig();
     }
 
-    // Helper function to set up click handlers for upgrade buttons on a page.
     const setupUpgradeClickHandler = (containerId) => {
       const container = document.getElementById(containerId);
       if (!container) return;
       on(container, ".upgrade", "click", function (e) {
-        const upgradeEl = this; // 'this' is the button element from 'on' handler
+        const upgradeEl = this;
         if (!upgradeEl.upgrade_object) return;
         const upgrade_obj = upgradeEl.upgrade_object;
 
@@ -1640,7 +1424,7 @@ export class UI {
             if (game.upgradeset.purchaseUpgrade(upgrade_obj.id)) {
               bought++;
             } else {
-              break; // Stop if purchase fails (e.g., not enough money for next level)
+              break;
             }
           }
           if (
@@ -1719,7 +1503,6 @@ export class UI {
         if (rebootBtn) rebootBtn.onclick = () => game.reboot_action(false);
         if (refundBtn) refundBtn.onclick = () => game.reboot_action(true);
 
-        // Setup debug button event listeners since they're on this page
         const debugToggleBtn = document.getElementById("debug_toggle_btn");
         const debugHideBtn = document.getElementById("debug_hide_btn");
         const debugRefreshBtn = document.getElementById("debug_refresh_btn");
@@ -1738,6 +1521,32 @@ export class UI {
             this.updateDebugVariables();
           });
         }
+
+        const copyStateBtn = document.getElementById("copy_state_btn");
+        if (copyStateBtn) {
+          copyStateBtn.onclick = () => {
+            const gameStateObject = this.game.getSaveState();
+            const gameStateString = JSON.stringify(gameStateObject, null, 2);
+            navigator.clipboard
+              .writeText(gameStateString)
+              .then(() => {
+                const originalText = copyStateBtn.textContent;
+                copyStateBtn.textContent = "Copied!";
+                setTimeout(() => {
+                  copyStateBtn.textContent = originalText;
+                }, 2000);
+              })
+              .catch((err) => {
+                console.error("Failed to copy game state: ", err);
+                const originalText = copyStateBtn.textContent;
+                copyStateBtn.textContent = "Error!";
+                setTimeout(() => {
+                  copyStateBtn.textContent = originalText;
+                }, 2000);
+              });
+          };
+        }
+
         break;
       case "about_section":
         const versionEl = document.getElementById("about_version");
@@ -1747,6 +1556,8 @@ export class UI {
         }
         break;
     }
+
+    this.showObjectivesForPage(pageId);
   }
 
   setupReactorEventListeners() {
@@ -1855,7 +1666,6 @@ export class UI {
       this.handleGridInteraction(e.target.closest(".tile"), e);
     });
 
-    // Add hover events for reactor tiles to show tooltips (only in help mode)
     reactor.addEventListener(
       "mouseenter",
       (e) => {
@@ -1887,5 +1697,31 @@ export class UI {
       },
       true
     );
+  }
+
+  showObjectivesForPage(pageId) {
+    // Always re-cache DOM elements after navigation
+    this.cacheDOMElements();
+    const objectivesSection = document.getElementById("objectives_section");
+    if (objectivesSection) {
+      objectivesSection.classList.toggle(
+        "hidden",
+        pageId !== "reactor_section"
+      );
+      if (pageId === "reactor_section") {
+        // Force refresh of the current objective display
+        const objectivesManager = this.game && this.game.objectives_manager;
+        if (objectivesManager && objectivesManager.current_objective_def) {
+          this.stateManager.handleObjectiveLoaded({
+            ...objectivesManager.current_objective_def,
+            title:
+              typeof objectivesManager.current_objective_def.title ===
+              "function"
+                ? objectivesManager.current_objective_def.title()
+                : objectivesManager.current_objective_def.title,
+          });
+        }
+      }
+    }
   }
 }

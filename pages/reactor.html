@@ -1,44 +1,12 @@
 <section id="reactor_section" class="page">
-  <header id="reactor_header">
-    <div id="reactor_stats" class="pixel-panel is-inset">
-      <span id="stats_power" class="stat" title="Estimated power per tick"
-        >0</span
-      >
-      <span id="stats_heat" class="stat" title="Estimated heat per tick"
-        >0</span
-      >
-      <span
-        id="stats_cash"
-        class="stat"
-        title="Estimated autosell cash per tick"
-        >0</span
-      >
-      <span
-        id="stats_vent"
-        class="stat"
-        title="Estimated total heat venting per tick"
-        >0</span
-      >
-      <span
-        id="stats_inlet"
-        class="stat"
-        title="Total potential heat inletting per tick"
-        >0</span
-      >
-      <span
-        id="stats_outlet"
-        class="stat"
-        title="Total potential heat outletting per tick"
-        >0</span
-      >
-    </div>
-  </header>
-  <div id="pause_banner" class="pixel-panel panel-warning">PAUSED</div>
-  <div id="meltdown_banner" class="pixel-panel panel-danger">
-    REACTOR MELTDOWN - ALL PARTS DESTROYED
+  <div id="pause_banner" class="container">
+    <article class="hidden">PAUSED</article>
+  </div>
+  <div id="meltdown_banner" class="container">
+    <article class="hidden">REACTOR MELTDOWN - ALL PARTS DESTROYED</article>
   </div>
   <div id="reactor_wrapper">
-    <div id="reactor" class="pixel-panel is-inset"></div>
+    <div id="reactor"></div>
     <div id="reactor_background"></div>
   </div>
 </section>

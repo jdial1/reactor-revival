@@ -6,9 +6,11 @@ export class TooltipManager {
     this.$tooltip = document.querySelector(tooltip_element_selector);
     this.$tooltipContent = document.getElementById("tooltip_data");
     this.game = game;
+
     if (!this.$main || !this.$tooltip || !this.$tooltipContent) {
       console.error("TooltipManager: A required element was not found.");
     }
+
     this.tooltip_task = null;
     this.tooltip_showing = false;
     this.current_obj = null;
@@ -20,46 +22,47 @@ export class TooltipManager {
     this.isMobile = window.innerWidth <= 768;
     this.needsLiveUpdates = false;
 
-    // Listen for resize events to update mobile state
     window.addEventListener("resize", () => {
       const wasMobile = this.isMobile;
       this.isMobile = window.innerWidth <= 768;
       if (wasMobile !== this.isMobile && this.current_obj) {
-        this.update(); // Re-render tooltip if mobile state changed
+        this.update();
       }
     });
 
-    const closeButton = document.createElement("button");
-    closeButton.innerHTML = "×";
-    closeButton.id = "tooltip_close_btn";
-    closeButton.style.cssText =
-      "position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border: 1px solid #555; background: #333; color: white; border-radius: 50%; cursor: pointer; font-size: 16px; line-height: 22px; z-index: 10;";
-    closeButton.onclick = () => this.closeView();
-    this.$tooltip.appendChild(closeButton);
+    // Use event delegation for the close button
+    this.$tooltip.addEventListener("click", (e) => {
+      if (e.target.id === "tooltip_close_btn") {
+        this.closeView();
+      }
+    });
   }
 
   show(obj, tile_context, isClick = false, anchorEl = null) {
     if (this.isLocked && !isClick) return;
     clearTimeout(this.tooltip_task);
+
     if (!obj) {
       this.hide();
       return;
     }
+
     if (isClick) {
       this.isLocked = true;
     } else if (this.isLocked) {
       return;
     }
+
     this.current_obj = obj;
     this.current_tile_context = tile_context;
-
     this.needsLiveUpdates = this._shouldTooltipUpdateLive(obj, tile_context);
 
     if (!this.tooltip_showing) {
       this.$main.classList.add("tooltip_showing");
+      this.$tooltip.classList.remove("hidden");
       this.tooltip_showing = true;
     }
-    this.$tooltip.querySelector("#tooltip_close_btn").style.display = "block";
+
     if (
       this.lastRenderedObj !== obj ||
       this.lastRenderedTileContext !== tile_context
@@ -74,22 +77,20 @@ export class TooltipManager {
       const tooltipRect = this.$tooltip.getBoundingClientRect();
       const scrollY = window.scrollY || window.pageYOffset;
       const scrollX = window.scrollX || window.pageXOffset;
+
       let top = rect.top + scrollY - tooltipRect.height - 8;
       let left = rect.left + scrollX + rect.width / 2 - tooltipRect.width / 2;
-      // Clamp to viewport with margin
       const margin = 8;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      // If tooltip goes above, show below anchor
+
       if (top < margin) {
         top = rect.bottom + scrollY + 8;
       }
-      // Clamp left/right
       if (left < margin) left = margin;
       if (left + tooltipRect.width > viewportWidth - margin) {
         left = viewportWidth - tooltipRect.width - margin;
       }
-      // Clamp bottom
       if (top + tooltipRect.height > viewportHeight - margin) {
         top = Math.max(margin, viewportHeight - tooltipRect.height - margin);
       }
@@ -123,22 +124,227 @@ export class TooltipManager {
     this.current_tile_context = null;
     if (this.tooltip_showing) {
       this.$main.classList.remove("tooltip_showing");
+      this.$tooltip.classList.add("hidden");
       this.tooltip_showing = false;
     }
   }
 
-  update() {
+  async update() {
     this.game.performance.markStart("tooltip_update_total");
-
     if (!this.tooltip_showing || !this.current_obj) {
       return;
     }
+
+    let tooltipBody = null;
+
+    // Try to use template loader first
+    if (window.templateLoader && window.templateLoader.loaded) {
+      tooltipBody = window.templateLoader.cloneTemplate(
+        "tooltip-body-template"
+      );
+    }
+
+    // Fallback: create tooltip structure manually if template not available
+    if (!tooltipBody) {
+      const fallbackDiv = document.createElement("div");
+      fallbackDiv.innerHTML = `
+        <div data-role="title" class="tooltip-title" style="font-size:1.1em;font-weight:bold;margin-bottom:0.5em;"></div>
+        <div data-role="desktop-summary" class="tooltip-summary-row"></div>
+        <p data-role="description"></p>
+        <dl class="tooltip-stats" data-role="desktop-stats"></dl>
+        <footer id="tooltip_actions"></footer>
+      `;
+      tooltipBody = fallbackDiv;
+    }
+
+    if (tooltipBody) {
+      this.$tooltipContent.innerHTML = "";
+      this.$tooltipContent.appendChild(tooltipBody);
+    } else {
+      this.$tooltipContent.innerHTML = "Error: Tooltip template not found.";
+      return;
+    }
+
+    // Set the part name/title at the top
+    const titleEl = this.$tooltipContent.querySelector('[data-role="title"]');
+    if (titleEl && this.current_obj?.title) {
+      titleEl.textContent = this.current_obj.title;
+    }
+
+    if (this.isMobile) {
+      this.populateMobileTooltip();
+    } else {
+      this.populateDesktopTooltip();
+    }
+    this.updateActionButtons(this.current_obj);
+    this.game.performance.markEnd("tooltip_update_total");
+  }
+
+  populateMobileTooltip() {
     const obj = this.current_obj;
     const tile = this.current_tile_context;
-    let content = "";
+    const iconify = this.getIconifyFn();
 
-    // Helper to inject icons
-    const iconify = (str) => {
+    const titleEl = this.$tooltipContent.querySelector('[data-role="title"]');
+    if (titleEl) titleEl.textContent = obj.title || obj.upgrade?.title;
+
+    const stats = [];
+    if (obj.upgrade) stats.push(`Level ${obj.level}/${obj.max_level}`);
+    if (obj.cost !== undefined || obj.upgrade?.cost !== undefined) {
+      const cost = obj.cost ?? obj.upgrade?.cost;
+      stats.push(
+        `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+          cost
+        )}`
+      );
+    }
+    if (
+      tile?.display_power !== undefined ||
+      obj.power !== undefined ||
+      obj.base_power !== undefined
+    ) {
+      const power = tile?.display_power ?? obj.power ?? obj.base_power;
+      if (power > 0)
+        stats.push(
+          `<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>${fmt(
+            power
+          )}`
+        );
+    }
+    if (
+      tile?.display_heat !== undefined ||
+      obj.heat !== undefined ||
+      obj.base_heat !== undefined
+    ) {
+      const heat = tile?.display_heat ?? obj.heat ?? obj.base_heat;
+      if (heat > 0)
+        stats.push(
+          `<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>${fmt(
+            heat,
+            0
+          )}`
+        );
+    }
+    if (obj.ticks > 0)
+      stats.push(
+        `<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(
+          obj.ticks
+        )}`
+      );
+
+    const mobileStatsEl = this.$tooltipContent.querySelector(
+      '[data-role="mobile-stats"]'
+    );
+    if (mobileStatsEl) mobileStatsEl.innerHTML = stats.join(" ");
+
+    const descEl = this.$tooltipContent.querySelector(
+      '[data-role="description"]'
+    );
+    if (descEl) {
+      const description = obj.description || obj.upgrade?.description;
+      if (description) {
+        descEl.innerHTML = iconify(description);
+        if (obj.upgrade) descEl.classList.add("is-inset");
+      } else {
+        descEl.innerHTML = "";
+      }
+    }
+
+    const upgradeStatusEl = this.$tooltipContent.querySelector(
+      '[data-role="mobile-upgrade-status"]'
+    );
+    if (upgradeStatusEl) {
+      if (obj.upgrade) {
+        if (obj.level >= obj.max_level)
+          upgradeStatusEl.textContent = "Maximum Level Reached";
+        else if (!obj.affordable)
+          upgradeStatusEl.innerHTML =
+            '<span class="tooltip-mobile-unaffordable">Cannot Afford Upgrade</span>';
+        else upgradeStatusEl.textContent = "";
+      } else {
+        upgradeStatusEl.textContent = "";
+      }
+    }
+  }
+
+  populateDesktopTooltip() {
+    const obj = this.current_obj;
+    const tile = this.current_tile_context;
+    const iconify = this.getIconifyFn();
+
+    const titleEl = this.$tooltipContent.querySelector('[data-role="title"]');
+    if (titleEl) titleEl.textContent = obj.title || obj.upgrade?.title;
+
+    let summaryItems = [];
+    let summaryPower = tile?.display_power ?? obj.power ?? obj.base_power;
+    let summaryHeat = tile?.display_heat ?? obj.heat ?? obj.base_heat;
+
+    if (obj.cost !== undefined)
+      summaryItems.push(
+        `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+          obj.cost
+        )}</span>`
+      );
+    if (summaryPower > 0)
+      summaryItems.push(
+        `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>${fmt(
+          summaryPower
+        )}</span>`
+      );
+    if (summaryHeat > 0)
+      summaryItems.push(
+        `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>${fmt(
+          summaryHeat,
+          0
+        )}</span>`
+      );
+    if (obj.base_containment > 0 || obj.containment > 0)
+      summaryItems.push(
+        `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='max heat'>Max: ${fmt(
+          obj.base_containment || obj.containment,
+          0
+        )}</span>`
+      );
+    if (obj.ticks > 0)
+      summaryItems.push(
+        `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(
+          obj.ticks
+        )}</span>`
+      );
+
+    const summaryEl = this.$tooltipContent.querySelector(
+      '[data-role="desktop-summary"]'
+    );
+    if (summaryEl) summaryEl.innerHTML = summaryItems.join("");
+
+    const descEl = this.$tooltipContent.querySelector(
+      '[data-role="description"]'
+    );
+    if (descEl) {
+      const description = obj.description || obj.upgrade?.description;
+      if (description) {
+        descEl.innerHTML = iconify(description).replace(/\.\s+/g, ".<br>");
+        if (obj.upgrade) descEl.classList.add("is-inset");
+      } else {
+        descEl.innerHTML = "";
+      }
+    }
+
+    const stats = this.getDetailedStats(obj, tile);
+    const statsEl = this.$tooltipContent.querySelector(
+      '[data-role="desktop-stats"]'
+    );
+    if (statsEl) {
+      let statsHtml = "";
+      for (const [key, value] of stats) {
+        statsHtml += `<dt>${iconify(key)}</dt><dd>${iconify(value)}</dd>`;
+      }
+      statsEl.innerHTML = statsHtml;
+    }
+  }
+
+  getIconifyFn() {
+    return (str) => {
       if (!str) return str;
       return str
         .replace(
@@ -159,185 +365,6 @@ export class TooltipManager {
           "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1"
         );
     };
-
-    if (this.isMobile) {
-      // Mobile condensed view
-      content = this.generateMobileTooltip(obj, tile, iconify);
-    } else {
-      // Desktop detailed view
-      content = this.generateDesktopTooltip(obj, tile, iconify);
-    }
-
-    // Only update DOM if content changed
-    if (this._lastTooltipContent !== content) {
-      this.game.performance.markStart("tooltip_dom_update");
-      this.$tooltipContent.innerHTML = content;
-      this._lastTooltipContent = content;
-      this.game.performance.markEnd("tooltip_dom_update");
-    }
-
-    this.updateActionButtons(obj);
-    this.game.performance.markEnd("tooltip_update_total");
-  }
-
-  generateMobileTooltip(obj, tile, iconify) {
-    const title = obj.title || (obj.upgrade && obj.upgrade.title);
-    let content = `<div class="tooltip-title">${title}</div>`;
-
-    // Compact stats row
-    let stats = [];
-
-    // Level for upgrades
-    if (obj.upgrade) {
-      stats.push(`Level ${obj.level}/${obj.max_level}`);
-    }
-
-    // Cost - Show for parts, upgrades and experimental research
-    if (
-      obj.cost !== undefined ||
-      (obj.upgrade && obj.upgrade.cost !== undefined)
-    ) {
-      const cost = obj.cost ?? obj.upgrade?.cost;
-      stats.push(
-        `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
-          cost
-        )}`
-      );
-    }
-
-    // Power
-    if (
-      tile?.display_power !== undefined ||
-      obj.power !== undefined ||
-      obj.base_power !== undefined
-    ) {
-      const power = tile?.display_power ?? obj.power ?? obj.base_power;
-      if (power > 0) {
-        stats.push(
-          `<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>${fmt(
-            power
-          )}`
-        );
-      }
-    }
-
-    // Heat
-    if (
-      tile?.display_heat !== undefined ||
-      obj.heat !== undefined ||
-      obj.base_heat !== undefined
-    ) {
-      const heat = tile?.display_heat ?? obj.heat ?? obj.base_heat;
-      if (heat > 0) {
-        stats.push(
-          `<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>${fmt(
-            heat,
-            0
-          )}`
-        );
-      }
-    }
-
-    // Ticks
-    if (obj.ticks > 0) {
-      stats.push(
-        `<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(
-          obj.ticks
-        )}`
-      );
-    }
-
-    if (stats.length > 0) {
-      content += `<div class="tooltip-mobile-stats">${stats.join(" ")}</div>`;
-    }
-
-    // Add description for parts and upgrades
-    const description =
-      obj.description || (obj.upgrade && obj.upgrade.description);
-    if (description) {
-      const formattedDesc = iconify(description)
-        .replace(/\.\s+/g, ". ")
-        .replace(/\s+/g, " ")
-        .trim();
-      content += `<div class="tooltip-mobile-desc${
-        obj.upgrade ? " pixel-panel is-inset" : ""
-      }">${formattedDesc}</div>`;
-    }
-
-    // Add upgrade-specific info
-    if (obj.upgrade) {
-      if (obj.level >= obj.max_level) {
-        content += `<div class="tooltip-mobile-upgrade">Maximum Level Reached</div>`;
-      } else if (!obj.affordable) {
-        content += `<div class="tooltip-mobile-upgrade tooltip-mobile-unaffordable">Cannot Afford Upgrade</div>`;
-      }
-    }
-
-    return content;
-  }
-
-  generateDesktopTooltip(obj, tile, iconify) {
-    const title = obj.title || (obj.upgrade && obj.upgrade.title);
-    const description =
-      obj.description || (obj.upgrade && obj.upgrade.description);
-    let content = `<div class="tooltip-title">${title}</div>`;
-
-    // Summary row
-    let summary = '<div class="tooltip-summary-row">';
-    let summaryPower = tile?.display_power ?? obj.power ?? obj.base_power;
-    let summaryHeat = tile?.display_heat ?? obj.heat ?? obj.base_heat;
-
-    if (obj.cost !== undefined) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
-        obj.cost
-      )}</span>`;
-    }
-    if (summaryPower > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>${fmt(
-        summaryPower
-      )}</span>`;
-    }
-    if (summaryHeat > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>${fmt(
-        summaryHeat,
-        0
-      )}</span>`;
-    }
-    if (obj.base_containment > 0 || obj.containment > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='max heat'>Max: ${fmt(
-        obj.base_containment || obj.containment,
-        0
-      )}</span>`;
-    }
-    if (obj.ticks > 0) {
-      summary += `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(
-        obj.ticks
-      )}</span>`;
-    }
-    summary += "</div>";
-
-    if (summary !== '<div class="tooltip-summary-row"></div>') {
-      content += summary;
-    }
-
-    if (description) {
-      const formattedDesc = iconify(description).replace(/\.\s+/g, ".<br>");
-      content += `<div class="tooltip-desc${
-        obj.upgrade ? " pixel-panel is-inset" : ""
-      }">${formattedDesc}</div>`;
-    }
-
-    // Add detailed stats for desktop
-    const stats = this.getDetailedStats(obj, tile);
-    if (stats.size > 0) {
-      content += '<dl class="tooltip-stats">';
-      for (const [key, value] of stats) {
-        content += `<dt>${iconify(key)}</dt><dd>${iconify(value)}</dd>`;
-      }
-      content += "</dl>";
-    }
-
-    return content;
   }
 
   getDetailedStats(obj, tile) {
@@ -403,12 +430,9 @@ export class TooltipManager {
     if (!actionsContainer) {
       actionsContainer = document.createElement("div");
       actionsContainer.id = "tooltip_actions";
-      actionsContainer.style.marginTop = "0.5rem";
-      actionsContainer.style.textAlign = "center";
       this.$tooltipContent.appendChild(actionsContainer);
     }
     actionsContainer.innerHTML = "";
-
     if (this.isLocked && obj.upgrade && obj.level < obj.max_level) {
       const buyButton = document.createElement("button");
       let costText = "";
@@ -429,7 +453,7 @@ export class TooltipManager {
       }
 
       buyButton.innerHTML = `Buy${costText} `;
-      buyButton.className = "pixel-btn";
+      buyButton.className = "";
       buyButton.disabled = !obj.affordable;
       buyButton.onclick = (e) => {
         e.preventDefault();
@@ -444,23 +468,16 @@ export class TooltipManager {
   }
 
   _shouldTooltipUpdateLive(obj, tile_context) {
-    // Upgrades typically don't need live updates unless showing buy buttons
     if (obj.upgrade) {
-      return false; // Upgrades are static except for affordability
+      return false;
     }
-
-    // Parts with tile context need live updates for heat, ticks, etc.
     if (tile_context && tile_context.activated) {
       return true;
     }
-
-    // Parts in the parts panel (no tile context) are mostly static
     return false;
   }
 
-  // Call this when money or exotic particles change to update upgrade affordability
   updateUpgradeAffordability() {
-    // Only update if showing an upgrade tooltip and it's locked (clicked)
     if (this.tooltip_showing && this.current_obj?.upgrade && this.isLocked) {
       this.update();
     }

@@ -1,52 +1,73 @@
 <section id="experimental_upgrades_section" class="page">
+  <h2>Research</h2>
   <div id="experimental_upgrades_content_wrapper">
-    <div id="exotic_particles_display" class="pixel-panel is-inset">
-      <span>Current EP: <span id="current_exotic_particles">0</span></span>
-      <span>Total EP: <span id="total_exotic_particles">0</span></span>
-    </div>
-    <h2>Laboratory</h2>
-    <div id="experimental_laboratory" class="pixel-panel upgrade-group"></div>
-    <h2>Global Boosts</h2>
-    <div id="experimental_boost" class="pixel-panel upgrade-group"></div>
-    <h2>Particle Accelerators</h2>
-    <div
-      id="experimental_particle_accelerators"
-      class="pixel-panel upgrade-group"
-    ></div>
-    <h2>Experimental Cells</h2>
-    <div id="experimental_cells" class="pixel-panel upgrade-group"></div>
-    <div id="experimental_cells_boost" class="pixel-panel upgrade-group"></div>
-    <h2>Experimental Parts</h2>
-    <div id="experimental_parts" class="pixel-panel upgrade-group"></div>
+    <article id="exotic_particles_display">
+      <div class="grid">
+        <div>
+          Current EP:
+          <strong><span id="current_exotic_particles">0</span></strong>
+        </div>
+        <div>
+          Total EP: <strong><span id="total_exotic_particles">0</span></strong>
+        </div>
+      </div>
+    </article>
+    <article>
+      <header><strong>Laboratory</strong></header>
+      <div id="experimental_laboratory" class="pixel-panel upgrade-group"></div>
+    </article>
+    <article>
+      <header><strong>Global Boosts</strong></header>
+      <div id="experimental_boost" class="pixel-panel upgrade-group"></div>
+    </article>
+    <article>
+      <header><strong>Experimental Parts & Cells</strong></header>
+      <div id="experimental_parts" class="pixel-panel upgrade-group"></div>
+      <div id="experimental_cells" class="pixel-panel upgrade-group"></div>
+      <div
+        id="experimental_cells_boost"
+        class="pixel-panel upgrade-group"
+      ></div>
+    </article>
+    <article>
+      <header><strong>Particle Accelerators</strong></header>
+      <div
+        id="experimental_particle_accelerators"
+        class="pixel-panel upgrade-group"
+      ></div>
+    </article>
   </div>
-  <div id="reboot_section" class="pixel-panel explanitory">
-    <button class="pixel-btn btn-start" id="reboot_btn">
-      Reboot for <span id="reboot_exotic_particles">0</span> EP
-    </button>
-    <p>
-      Rebooting the reactor will remove all parts, regular upgrades and money.
-      You will keep your total Exotic Particles and experimental upgrades.
-    </p>
-  </div>
-  <div id="refund_section" class="pixel-panel explanitory">
-    <button class="pixel-btn" id="refund_btn">Reboot and Refund All EP</button>
-    <p>
-      This will reset everything, including experimental upgrades, and refund
-      all Exotic Particles you have ever earned.
-    </p>
+  <div class="grid">
+    <article id="reboot_section">
+      <button class="contrast" id="reboot_btn">
+        Reboot for <span id="reboot_exotic_particles">0</span> EP
+      </button>
+      <small>
+        Rebooting resets parts, regular upgrades and money. You keep Exotic
+        Particles and research.
+      </small>
+    </article>
+    <article id="refund_section">
+      <button class="secondary" id="refund_btn">
+        Reboot and Refund All EP
+      </button>
+      <small>
+        This resets everything, including research, and refunds all EP ever
+        earned.
+      </small>
+    </article>
   </div>
   <div class="pixel-panel explanitory">
     <button class="pixel-btn" id="debug_toggle_btn">Show Debug Info</button>
     <p>Display all main game variables for debugging purposes.</p>
   </div>
-  <div id="debug_section" class="pixel-panel explanitory" style="display: none">
+  <div id="debug_section" class="pixel-panel explanitory hidden">
     <button class="pixel-btn" id="debug_hide_btn">Hide Debug Info</button>
-    <button
-      class="pixel-btn"
-      id="debug_refresh_btn"
-      style="margin-left: 0.5rem"
-    >
+    <button class="pixel-btn" id="debug_refresh_btn" class="debug-btn-spacing">
       Refresh
+    </button>
+    <button class="pixel-btn" id="copy_state_btn" class="debug-btn-spacing">
+      Copy Game State
     </button>
     <div id="debug_content">
       <h3>Game Variables Debug Panel</h3>

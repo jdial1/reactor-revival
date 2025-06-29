@@ -21,7 +21,6 @@ export class StateManager {
           "auto_buy",
           "time_flux",
           "heat_control",
-          "parts_panel",
         ].includes(key)
       ) {
         this.game.onToggleStateChange(key, value);
@@ -39,58 +38,7 @@ export class StateManager {
   getClickedPart() {
     return this.clicked_part;
   }
-  handleObjectiveLoaded(objData) {
-    const titleEl = this.ui.DOMElements.objective_title;
-    const rewardEl = this.ui.DOMElements.objective_reward;
-    const contentEl = document.getElementById("objectives_content");
-    if (titleEl && rewardEl && contentEl) {
-      // If there is already a title, animate it out
-      if (titleEl.textContent.trim()) {
-        // Create a span for the old objective
-        const oldSpan = document.createElement("span");
-        oldSpan.className =
-          "objective-old animate-strikeout animate-scroll-left";
-        oldSpan.textContent = titleEl.textContent;
-        // Insert before the current title
-        contentEl.insertBefore(oldSpan, titleEl);
-        // Animate the new objective in
-        titleEl.classList.add("animate-scroll-in");
-        // Strike out the old objective
-        setTimeout(() => {
-          oldSpan.classList.add("struck");
-        }, 50);
-        // Remove the old span after animation
-        setTimeout(() => {
-          if (oldSpan.parentNode) oldSpan.parentNode.removeChild(oldSpan);
-          titleEl.classList.remove("animate-scroll-in");
-        }, 700);
-      }
-      // Set new objective text (wrapped in span for scrolling)
-      titleEl.innerHTML = `<span>${objData.title}</span>`;
-      // Set reward
-      rewardEl.textContent = objData.reward
-        ? fmt(objData.reward)
-        : objData.ep_reward
-        ? `${fmt(objData.ep_reward)} EP`
-        : "";
-    }
-    if (this.ui.DOMElements.objectives_section) {
-      this.ui.DOMElements.objectives_section.classList.remove(
-        "unloading",
-        "loading"
-      );
-    }
-  }
-  handleObjectiveUnloaded() {
-    if (this.ui.DOMElements.objectives_section) {
-      this.ui.DOMElements.objectives_section.classList.add("unloading");
-      setTimeout(() => {
-        if (this.ui.DOMElements.objectives_section) {
-          this.ui.DOMElements.objectives_section.classList.add("loading");
-        }
-      }, 300);
-    }
-  }
+
   handleObjectiveCompleted() {
     if (this.ui.DOMElements.objectives_section) {
       const section = this.ui.DOMElements.objectives_section;
@@ -191,27 +139,44 @@ export class StateManager {
       tile.tile_index = tile.row * game.max_cols + tile.col;
       tile_el.tile = tile;
       tile.$el = tile_el;
+
+      // --- Begin: Updated percent bar logic ---
       const percent_wrapper_wrapper = document.createElement("div");
       percent_wrapper_wrapper.className = "percent_wrapper_wrapper";
       const percent_wrapper = document.createElement("div");
       percent_wrapper.className = "percent_wrapper";
-      const percent = document.createElement("div");
-      percent.className = "percent";
-      tile.$percent = percent;
-      percent_wrapper.appendChild(percent);
+
+      // Add heat bar if part has base_containment
+      if (tile.part && tile.part.base_containment > 0) {
+        const heatBar = document.createElement("div");
+        heatBar.className = "percent heat";
+        percent_wrapper.appendChild(heatBar);
+        tile.$heatBar = heatBar;
+      }
+
+      // Add durability bar if part has base_ticks
+      else if (tile.part && tile.part.base_ticks > 0) {
+        const durabilityBar = document.createElement("div");
+        durabilityBar.className = "percent durability";
+        percent_wrapper.appendChild(durabilityBar);
+        tile.$durabilityBar = durabilityBar;
+      }
+
       percent_wrapper_wrapper.appendChild(percent_wrapper);
       tile_el.appendChild(percent_wrapper_wrapper);
+      // --- End: Updated percent bar logic ---
+
       // Add sell indicator element
       const sellIndicator = document.createElement("div");
       sellIndicator.className = "sell-indicator";
       tile_el.appendChild(sellIndicator);
       // Debug log for tile creation
-      console.log(
-        "[StateManager] Created tile element for tile:",
-        tile.row,
-        tile.col,
-        tile
-      );
+      // console.log(
+      //   "[StateManager] Created tile element for tile:",
+      //   tile.row,
+      //   tile.col,
+      //   tile
+      // );
     }
     // Add enabled class if needed
     if (tile.enabled) {
@@ -223,12 +188,12 @@ export class StateManager {
     if (this.ui.DOMElements.reactor && !tile_el.parentNode) {
       this.ui.DOMElements.reactor.appendChild(tile_el);
       // Debug log for tile appending
-      console.log(
-        "[StateManager] Appended tile to DOM:",
-        tile.row,
-        tile.col,
-        tile
-      );
+      // console.log(
+      //   "[StateManager] Appended tile to DOM:",
+      //   tile.row,
+      //   tile.col,
+      //   tile
+      // );
     }
   }
   game_reset() {
@@ -245,5 +210,35 @@ export class StateManager {
       vars[key] = value;
     }
     return vars;
+  }
+
+  handleObjectiveLoaded(objective) {
+    // Update the current objective title and reward
+    const titleEl = this.ui.DOMElements.objective_title;
+    const rewardEl = this.ui.DOMElements.objective_reward;
+    const oldObjectivesEl = this.ui.DOMElements.objectives_old;
+    if (titleEl && objective.title) {
+      // Move the previous objective to the old objectives list
+      const prevTitle = titleEl.querySelector("span")?.textContent;
+      if (prevTitle && prevTitle !== objective.title && oldObjectivesEl) {
+        const oldObj = document.createElement("div");
+        oldObj.className = "objective-old";
+        oldObj.textContent = prevTitle;
+        oldObjectivesEl.prepend(oldObj);
+      }
+      // Set the new objective
+      titleEl.innerHTML = `<span>${objective.title}</span>`;
+    }
+    if (rewardEl && (objective.reward || objective.ep_reward)) {
+      rewardEl.textContent = objective.reward
+        ? `+${objective.reward} $`
+        : `+${objective.ep_reward} EP`;
+    } else if (rewardEl) {
+      rewardEl.textContent = "";
+    }
+  }
+
+  handleObjectiveUnloaded() {
+    // No-op for now. Could add animation or clearing logic here if desired.
   }
 }

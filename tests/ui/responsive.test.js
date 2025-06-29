@@ -111,7 +111,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
 
         // Verify info bar contains expected child elements (using actual structure from game.html)
         const infoBarElements = infoBar.querySelectorAll(
-          ".stat_value, .stat_button, .pixel-progress, #info_stats_group_1, #info_stats_group_2"
+          ".info-item, .info-row, .info-main, .info-denom"
         );
         expect(
           infoBarElements.length,

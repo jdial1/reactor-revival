@@ -244,6 +244,19 @@ export class Part {
     this.cost = this.base_cost;
     this.ecost = this.base_ecost;
 
+    // Check for perpetual upgrade and adjust cost
+    if (this.category === "cell") {
+      const perpetualUpgrade = game.upgradeset.getUpgrade(
+        `${this.id}_cell_perpetual`
+      );
+      if (perpetualUpgrade && perpetualUpgrade.level > 0) {
+        this.perpetual = true;
+        this.cost *= 1.5; // Perpetual cells cost 1.5x more
+      } else {
+        this.perpetual = false;
+      }
+    }
+
     // Apply forceful fusion upgrade
     if (this.category === "cell" && game.reactor.heat_power_multiplier > 0) {
       const heatMultiplier =
@@ -360,30 +373,108 @@ export class Part {
   }
 
   createElement() {
-    this.$el = document.createElement("button");
-    this.$el.className = "part";
+    this.$el = window.templateLoader.cloneTemplateElement("part-btn-template");
+    if (!this.$el) {
+      // Fallback to original method if template not available
+      this.$el = document.createElement("button");
+      this.$el.className = "part";
+      if (this.className) this.$el.classList.add(this.className);
+      this.$el.classList.add(`part_${this.id}`);
+      this.$el.classList.add(`category_${this.category}`);
+      this.$el.id = `part_btn_${this.id}`;
+      this.$el.title = this.title;
+
+      const imageDiv = document.createElement("div");
+      imageDiv.className = "image";
+      imageDiv.style.backgroundImage = `url('${this.getImagePath()}')`;
+      this.$el.appendChild(imageDiv);
+
+      // Add price display
+      const priceDiv = document.createElement("div");
+      priceDiv.className = "part-price";
+      priceDiv.textContent = this.erequires
+        ? `${fmt(this.cost)} EP`
+        : `${fmt(this.cost)}`;
+      this.$el.appendChild(priceDiv);
+
+      this.$el.classList.toggle("unaffordable", !this.affordable);
+      this.$el.disabled = !this.affordable;
+
+      this.$el.addEventListener("click", (e) => {
+        // Check if help mode is active
+        if (this.game?.ui?.help_mode_active) {
+          // In help mode, show tooltip instead of selecting part
+          if (this.game && this.game.tooltip_manager) {
+            this.game.tooltip_manager.show(this, null, true, this.$el);
+          }
+          return;
+        }
+
+        if (this.affordable) {
+          document
+            .querySelectorAll(".part.part_active")
+            .forEach((el) => el.classList.remove("part_active"));
+          this.game.ui.stateManager.setClickedPart(this);
+          this.$el.classList.add("part_active");
+        } else {
+          // Show tooltip for unaffordable parts when clicked
+          if (this.game && this.game.tooltip_manager) {
+            this.game.tooltip_manager.show(this, null, true, this.$el);
+          }
+        }
+      });
+
+      // Add hover tooltips for parts
+      this.$el.addEventListener("mouseenter", (e) => {
+        // Only show hover tooltips when help mode is active
+        if (
+          this.game?.ui?.help_mode_active &&
+          this.game &&
+          this.game.tooltip_manager
+        ) {
+          this.game.tooltip_manager.show(this, null, false, this.$el);
+        }
+      });
+
+      this.$el.addEventListener("mouseleave", (e) => {
+        // Only hide tooltips if help mode is active (since we only show them in help mode)
+        if (
+          this.game?.ui?.help_mode_active &&
+          this.game &&
+          this.game.tooltip_manager
+        ) {
+          this.game.tooltip_manager.hide();
+        }
+      });
+
+      return this.$el;
+    }
+
+    // Set part data
     if (this.className) this.$el.classList.add(this.className);
     this.$el.classList.add(`part_${this.id}`);
     this.$el.classList.add(`category_${this.category}`);
     this.$el.id = `part_btn_${this.id}`;
     this.$el.title = this.title;
 
-    const imageDiv = document.createElement("div");
-    imageDiv.className = "image";
-    imageDiv.style.backgroundImage = `url('${this.getImagePath()}')`;
-    this.$el.appendChild(imageDiv);
+    // Set image
+    const imageDiv = this.$el.querySelector(".image");
+    if (imageDiv) {
+      imageDiv.style.backgroundImage = `url('${this.getImagePath()}')`;
+    }
 
-    // Add price display
-    const priceDiv = document.createElement("div");
-    priceDiv.className = "part-price";
-    priceDiv.textContent = this.erequires
-      ? `${fmt(this.cost)} EP`
-      : `${fmt(this.cost)}`;
-    this.$el.appendChild(priceDiv);
+    // Set price
+    const priceDiv = this.$el.querySelector(".part-price");
+    if (priceDiv) {
+      priceDiv.textContent = this.erequires
+        ? `${fmt(this.cost)} EP`
+        : `${fmt(this.cost)}`;
+    }
 
     this.$el.classList.toggle("unaffordable", !this.affordable);
     this.$el.disabled = !this.affordable;
 
+    // Add event listeners
     this.$el.addEventListener("click", (e) => {
       // Check if help mode is active
       if (this.game?.ui?.help_mode_active) {

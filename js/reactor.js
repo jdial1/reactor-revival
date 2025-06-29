@@ -157,7 +157,7 @@ export class Reactor {
         reflector_heat_bonus += r_tile.part.heat_increase || 0;
       }
     });
-    tile.power *= 1 + reflector_power_bonus / 100;
+    tile.power *= Math.max(0, 1 + reflector_power_bonus / 100);
     tile.heat *= 1 + reflector_heat_bonus / 100;
   }
 
@@ -216,6 +216,14 @@ export class Reactor {
   clearMeltdownState() {
     this.has_melted_down = false;
     this.game.ui.stateManager.setVar("melting_down", false, true);
-    document.body.classList.remove("reactor-meltdown");
+    if (typeof document !== "undefined" && document.body) {
+      document.body.classList.remove("reactor-meltdown");
+    }
+    if (
+      this.game.ui &&
+      typeof this.game.ui.updateMeltdownState === "function"
+    ) {
+      this.game.ui.updateMeltdownState();
+    }
   }
 }

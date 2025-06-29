@@ -489,19 +489,52 @@ export class GoogleDriveSave {
   /**
    * Upload local save to cloud
    */
-  async uploadLocalSave(saveData) {
+  async uploadLocalSave(saveDataString) {
     if (!this.isSignedIn) {
       throw new Error("User is not signed in to Google Drive");
     }
-
     console.log("Uploading local save to Google Drive...");
-    const success = await this.save(saveData, true);
+
+    const success = await this._performSave(saveDataString);
 
     if (success) {
       console.log("Local save uploaded to cloud successfully");
+      // Mark the local save as synced
+      try {
+        const localSave = JSON.parse(saveDataString);
+        localSave.isCloudSynced = true;
+        localSave.cloudUploadedAt = new Date().toISOString();
+        localStorage.setItem("reactorGameSave", JSON.stringify(localSave));
+      } catch (e) {
+        console.error("Failed to mark local save as synced after upload.", e);
+      }
     }
-
     return success;
+  }
+
+  async canUploadLocalSave() {
+    if (!this.isSignedIn) {
+      return { showUpload: false };
+    }
+    const localSaveJSON = localStorage.getItem("reactorGameSave");
+    if (!localSaveJSON) {
+      return { showUpload: false };
+    }
+    try {
+      const localSave = JSON.parse(localSaveJSON);
+      if (localSave.isCloudSynced) {
+        return { showUpload: false };
+      }
+      // Check if a cloud save already exists. If so, we shouldn't offer an upload.
+      const hasCloudSave = await this.findSaveFile();
+      if (hasCloudSave) {
+        return { showUpload: false };
+      }
+      return { showUpload: true, gameState: localSave };
+    } catch (e) {
+      console.error("Error checking if local save can be uploaded:", e);
+      return { showUpload: false };
+    }
   }
 
   /**
@@ -638,43 +671,25 @@ export class GoogleDriveSave {
    * Load zip.js library for encryption
    */
   async loadZipLibrary() {
+    // Libraries are now loaded in HTML head, just verify they're available
     if (typeof pako === "undefined") {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = "https://unpkg.com/pako@2.1.0/dist/pako.min.js";
-        script.onload = () => {
-          console.log("pako.js library loaded successfully");
-          resolve();
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
+      throw new Error(
+        "pako library not loaded. Check that lib/pako.min.js is included in HTML."
+      );
     }
 
-    if (window.zip) return;
+    if (typeof window.zip === "undefined") {
+      throw new Error(
+        "zip.js library not loaded. Check that lib/zip.min.js is included in HTML."
+      );
+    }
 
-    await new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/@zip.js/zip.js@2.7.62/dist/zip.min.js";
-      script.onload = () => {
-        console.log("zip.js library loaded successfully");
-        // Initialize zip.js
-        if (window.zip) {
-          zip.configure({
-            useWebWorkers: false, // Disable web workers for simpler usage
-          });
-        }
-        resolve();
-      };
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
+    // Configure zip.js to not use web workers for better compatibility
+    if (window.zip) {
+      zip.configure({ useWebWorkers: false });
+    }
   }
 
-  /**
-   * Force immediate save of any pending data
-   * @returns {Promise<boolean>} - Success status
-   */
   async flushPendingSave() {
     if (this.pendingSaveData && this.isSignedIn) {
       const dataToSave = this.pendingSaveData;
@@ -689,9 +704,6 @@ export class GoogleDriveSave {
     return true;
   }
 
-  /**
-   * Test basic Google Drive operations (simplified version for debug UI)
-   */
   async testBasicFileOperations() {
     console.log("Testing basic Google Drive operations...");
 
@@ -701,7 +713,6 @@ export class GoogleDriveSave {
         return false;
       }
 
-      // Simple test: try to list files
       const response = await fetch(
         "https://www.googleapis.com/drive/v3/files?pageSize=1",
         {
@@ -722,9 +733,6 @@ export class GoogleDriveSave {
     }
   }
 
-  /**
-   * Delete the current save file
-   */
   async deleteSave() {
     if (!this.isSignedIn || !this.saveFileId) {
       throw new Error("No save file to delete");

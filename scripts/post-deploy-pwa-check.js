@@ -339,7 +339,7 @@ async function checkCriticalAssets() {
   log("\n🔍 Checking critical assets...", "blue");
 
   const criticalAssets = [
-    "/css/app.css",
+    "/css/main.css",
     "/js/app.js",
     "/js/game.js",
     "/pages/game.html",

@@ -2,7 +2,6 @@ import { Tileset } from "./tileset.js";
 import { PartSet } from "./partset.js";
 import { UpgradeSet } from "./upgradeset.js";
 import { Reactor } from "./reactor.js";
-import { Engine } from "./engine.js";
 import { Performance } from "./performance.js";
 
 export class Game {
@@ -21,22 +20,21 @@ export class Game {
     this.base_manual_heat_reduce = 1;
     this.upgrade_max_level = 32;
     this.base_money = 10;
-    this._current_money = 0; // Internal property
+    this._current_money = 0;
     this.protium_particles = 0;
     this.total_exotic_particles = 0;
     this.exotic_particles = 0;
     this.current_exotic_particles = 0;
 
-    // Total played time tracking
-    this.total_played_time = 0; // Total time played in milliseconds
-    this.session_start_time = null; // When current session started
-    this.last_save_time = null; // When the game was last saved
+    this.total_played_time = 0;
+    this.session_start_time = null;
+    this.last_save_time = null;
 
     this.tileset = new Tileset(this);
     this.partset = new PartSet(this);
     this.upgradeset = new UpgradeSet(this);
     this.reactor = new Reactor(this);
-    this.engine = null; // Engine will be created later in startGame()
+    this.engine = null;
     this.performance = new Performance(this);
     this.performance.enable();
     this.loop_wait = this.base_loop_wait;
@@ -46,8 +44,8 @@ export class Game {
     this.time_flux = true;
     this.sold_power = false;
     this.sold_heat = false;
-    this.objectives_manager = null; // Will be initialized by app.js
-    this.tooltip_manager = null; // Will be initialized by app.js
+    this.objectives_manager = null;
+    this.tooltip_manager = null;
   }
   set_defaults() {
     this.base_cols = 12;
@@ -71,13 +69,11 @@ export class Game {
     this.loop_wait = this.base_loop_wait;
     this.paused = false;
 
-    // Initialize session tracking
     this.session_start_time = null;
     this.total_played_time = 0;
     this.last_save_time = null;
   }
 
-  // Add getter and setter for current_money to track all assignments
   get current_money() {
     return this._current_money;
   }
@@ -93,6 +89,8 @@ export class Game {
 
   initialize_new_game_state() {
     this.set_defaults();
+    // Always clear meltdown state and update UI after new game
+    this.reactor.clearMeltdownState();
     this._current_money = this.base_money;
     this.ui.stateManager.setVar("current_money", this._current_money);
     this.ui.stateManager.setVar("stats_cash", this._current_money);
@@ -104,30 +102,19 @@ export class Game {
     }
   }
 
-  /**
-   * Start tracking time for the current session
-   */
   startSession() {
     this.session_start_time = Date.now();
-    // Silenced log to reduce test noise
   }
 
-  /**
-   * Update the total played time with current session time
-   */
   updateSessionTime() {
     if (this.session_start_time) {
       const sessionTime = Date.now() - this.session_start_time;
       this.total_played_time += sessionTime;
-      this.session_start_time = Date.now(); // Reset session start for next interval
+      this.session_start_time = Date.now();
     }
   }
 
-  /**
-   * Get formatted total played time
-   */
   getFormattedTotalPlayedTime() {
-    // Add current session time to total
     let totalTime = this.total_played_time;
     if (this.session_start_time) {
       totalTime += Date.now() - this.session_start_time;
@@ -135,9 +122,6 @@ export class Game {
     return this.formatTime(totalTime);
   }
 
-  /**
-   * Format time in milliseconds to human readable format with smaller units
-   */
   formatTime(ms) {
     if (ms < 0) ms = 0;
     const s = Math.floor(ms / 1000) % 60;
@@ -181,7 +165,6 @@ export class Game {
   }
   sell_action() {
     if (this._current_money < 10 && this.reactor.current_power == 0) {
-      // Check if there are any parts in the reactor that could be sold for money
       const hasPartsToSell = this.tileset.active_tiles_list.some(
         (tile) => tile.part && !tile.part.isSpecialTile
       );
@@ -189,7 +172,6 @@ export class Game {
       if (!hasPartsToSell) {
         this.addMoney(10);
       }
-      // If there are parts to sell, don't give free money - player should sell parts first
     } else {
       this.reactor.sellPower();
     }
@@ -199,7 +181,6 @@ export class Game {
       ? this.total_exotic_particles + this.exotic_particles
       : 0;
 
-    // Save current upgrades before reset
     const currentUpgrades = this.upgradeset.upgradesArray
       .filter((upg) => upg.level > 0)
       .map((upg) => ({
@@ -209,7 +190,9 @@ export class Game {
 
     this.set_defaults();
 
-    // Restore exotic particles if keeping them
+    // Always clear meltdown state and update UI after reboot
+    this.reactor.clearMeltdownState();
+
     this.total_exotic_particles = epToKeep;
     this.current_exotic_particles = epToKeep;
 
@@ -223,7 +206,6 @@ export class Game {
     );
     this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
 
-    // Restore upgrades (this will trigger their actions and update reactor size)
     currentUpgrades.forEach((upgData) => {
       const upgrade = this.upgradeset.getUpgrade(upgData.id);
       if (upgrade) {
@@ -231,7 +213,6 @@ export class Game {
       }
     });
 
-    // Final update to ensure everything is in sync
     this.reactor.updateStats();
     this.upgradeset.check_affordability(this);
 
@@ -322,7 +303,6 @@ export class Game {
   }
 
   getSaveState() {
-    // Update session time before saving
     this.updateSessionTime();
 
     const saveData = {
@@ -337,7 +317,6 @@ export class Game {
       sold_power: this.sold_power,
       sold_heat: this.sold_heat,
 
-      // Time tracking
       total_played_time: this.total_played_time,
       last_save_time: Date.now(),
 
@@ -374,21 +353,14 @@ export class Game {
       },
     };
 
-    // Preserve cloud sync information if it exists and the save data hasn't changed significantly
     try {
       if (typeof localStorage !== "undefined" && localStorage !== null) {
         const existingData = localStorage.getItem("reactorGameSave");
         if (existingData) {
           const existingSave = JSON.parse(existingData);
           if (existingSave.isCloudSynced) {
-            const coreDataChanged = this._hasCoreDataChanged(
-              saveData,
-              existingSave
-            );
-            if (!coreDataChanged) {
-              saveData.isCloudSynced = existingSave.isCloudSynced;
-              saveData.cloudUploadedAt = existingSave.cloudUploadedAt;
-            }
+            saveData.isCloudSynced = existingSave.isCloudSynced;
+            saveData.cloudUploadedAt = existingSave.cloudUploadedAt;
           }
         }
       }
@@ -399,9 +371,7 @@ export class Game {
     return saveData;
   }
 
-  // Helper method to check if core game data has changed (excluding time fields)
   _hasCoreDataChanged(newData, existingData) {
-    // Compare key fields that indicate actual game progress changes
     const keyFields = [
       "current_money",
       "protium_particles",
@@ -420,19 +390,16 @@ export class Game {
       }
     }
 
-    // Compare reactor state (excluding heat/power which fluctuate normally)
     if (
       newData.reactor?.has_melted_down !== existingData.reactor?.has_melted_down
     ) {
       return true;
     }
 
-    // Compare tiles (structural changes)
     if (newData.tiles?.length !== existingData.tiles?.length) {
       return true;
     }
 
-    // Compare upgrades
     if (newData.upgrades?.length !== existingData.upgrades?.length) {
       return true;
     }
@@ -445,42 +412,31 @@ export class Game {
       return true;
     }
 
-    // If none of the core data changed, we can preserve the cloud sync flag
     return false;
   }
 
   saveGame() {
     try {
       if (this.reactor.has_melted_down) {
-        // Silenced log to reduce test noise
         return;
       }
       const saveData = this.getSaveState();
 
-      // Save to Local Storage (existing logic)
       if (typeof localStorage !== "undefined" && localStorage !== null) {
         localStorage.setItem("reactorGameSave", JSON.stringify(saveData));
-        // Silenced log to reduce test noise
       } else if (
         typeof process !== "undefined" &&
         process.env?.NODE_ENV === "test"
       ) {
-        // Silent success in test environment
         return;
       }
 
-      // --- GOOGLE DRIVE INTEGRATION ---
-      // Save to Google Drive if available and authorized
       if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {
         window.googleDriveSave.save(JSON.stringify(saveData)).catch((error) => {
           console.error("Failed to auto-save to Google Drive:", error);
-          // Optionally notify the user non-intrusively
-          // Could show a small notification in the UI here
         });
       }
-      // --- END INTEGRATION ---
     } catch (error) {
-      // Only log errors in non-test environments or if it's not a localStorage issue
       if (
         typeof process === "undefined" ||
         process.env?.NODE_ENV !== "test" ||
@@ -493,7 +449,6 @@ export class Game {
 
   loadGame() {
     try {
-      // Check if localStorage is available before use
       if (typeof localStorage === "undefined" || localStorage === null) {
         return false;
       }
@@ -526,7 +481,6 @@ export class Game {
     this.sold_power = savedData.sold_power || false;
     this.sold_heat = savedData.sold_heat || false;
 
-    // Load time tracking data (but don't start session yet - wait for game to actually start)
     this.total_played_time = savedData.total_played_time || 0;
     this.last_save_time = savedData.last_save_time || null;
     this.session_start_time = null;
@@ -536,7 +490,6 @@ export class Game {
       this.reactor.current_power = savedData.reactor.current_power || 0;
       this.reactor.has_melted_down = savedData.reactor.has_melted_down || false;
 
-      // Update UI state for meltdown
       if (this.reactor.has_melted_down) {
         if (typeof document !== "undefined" && document.body) {
           document.body.classList.add("reactor-meltdown");

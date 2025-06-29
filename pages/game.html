@@ -1,266 +1,279 @@
-<!-- PARTS SIDEBAR -->
-<aside id="parts_section" class="pixel-panel collapsed">
-  <button
-    id="parts_panel_toggle"
-    class="pixel-btn"
-    aria-label="Toggle parts panel"
-  >
-    <span class="vertical-text">PARTS</span>
-  </button>
-  <div class="parts_header">
-    <div class="parts_tabs">
-      <button
-        class="pixel-btn-small parts_tab active"
-        id="tab_power"
-        data-tab="power"
-        title="Power Creation"
+<nav id="main_top_nav" class="grid container-fluid nav-bar-row">
+  <ul>
+    <li>
+      <a href="#" class="secondary" role="button" data-page="reactor_section"
+        >Reactor</a
       >
-        <img src="img/ui/icons/icon_power.png" alt="Power" />
-      </button>
-      <button
-        class="pixel-btn-small parts_tab"
-        id="tab_heat"
-        data-tab="heat"
-        title="Heat Management"
+    </li>
+    <li>
+      <a href="#" class="secondary" role="button" data-page="upgrades_section"
+        >Upgrades</a
       >
-        <img src="img/ui/icons/icon_heat.png" alt="Heat" />
-      </button>
-      <button
-        class="pixel-btn-small parts_tab"
-        id="tab_misc1"
-        data-tab="misc1"
-        title="Other"
-        disabled
+    </li>
+    <li>
+      <a
+        href="#"
+        class="secondary"
+        role="button"
+        data-page="experimental_upgrades_section"
+        >Research</a
       >
-        <span role="img" aria-label="Locked">🔒</span>
-      </button>
-      <button
-        class="pixel-btn-small parts_tab"
-        id="tab_misc2"
-        data-tab="misc2"
-        title="Other"
-        disabled
+    </li>
+  </ul>
+  <ul id="reactor_stats">
+    <li>
+      <strong title="Estimated power per tick"
+        >⚡<span id="stats_power">0</span></strong
       >
-        <span role="img" aria-label="Locked">🔒</span>
-      </button>
-      <button
-        id="parts_help_toggle"
-        class="pixel-btn-small parts_help_btn"
-        title="Toggle help mode - click to show part information instead of placing parts"
-        aria-label="Toggle help mode"
+    </li>
+    <li>
+      <strong title="Estimated heat per tick"
+        >🔥<span id="stats_heat">0</span></strong
       >
-        ?
-      </button>
-    </div>
-  </div>
-  <div id="parts_tab_contents">
-    <div id="parts_tab_power" class="parts_tab_content active">
-      <h4>Cells</h4>
-      <div id="cells" class="item-grid pixel-panel is-inset"></div>
-      <h4>Reflectors</h4>
-      <div id="reflectors" class="item-grid pixel-panel is-inset"></div>
-      <h4>Capacitors</h4>
-      <div id="capacitors" class="item-grid pixel-panel is-inset"></div>
-      <h4>Particle Accelerators</h4>
-      <div
-        id="particleAccelerators"
-        class="item-grid pixel-panel is-inset"
-      ></div>
-    </div>
-    <div id="parts_tab_heat" class="parts_tab_content">
-      <h4>Vents</h4>
-      <div id="vents" class="item-grid pixel-panel is-inset"></div>
-      <h4>Heat Exchangers</h4>
-      <div id="heatExchangers" class="item-grid pixel-panel is-inset"></div>
-      <h4>Inlets</h4>
-      <div id="heatInlets" class="item-grid pixel-panel is-inset"></div>
-      <h4>Outlets</h4>
-      <div id="heatOutlets" class="item-grid pixel-panel is-inset"></div>
-      <h4>Coolant Cells</h4>
-      <div id="coolantCells" class="item-grid pixel-panel is-inset"></div>
-      <h4>Reactor Platings</h4>
-      <div id="reactorPlatings" class="item-grid pixel-panel is-inset"></div>
-    </div>
-  </div>
-  <nav id="controls_nav" class="pixel-panel is-inset">
-    <button
-      id="controls_collapse_btn"
-      class="pixel-btn nav_button"
-      title="Collapse Options"
-    >
-      <span id="controls_collapse_icon">▼</span>
-    </button>
-    <div id="controls_expanded_group">
-      <button
-        id="auto_sell_toggle"
-        class="pixel-btn nav_button"
-        title="Auto Sell"
+    </li>
+    <li>
+      <strong title="Estimated cash per tick"
+        >💰<span id="stats_cash">0</span></strong
       >
-        Auto Sell
-      </button>
-      <button
-        id="auto_buy_toggle"
-        class="pixel-btn nav_button"
-        title="Auto Buy"
-      >
-        Auto Buy
-      </button>
-      <button
-        id="time_flux_toggle"
-        class="pixel-btn nav_button"
-        title="Time Flux"
-      >
-        Time Flux
-      </button>
-      <button
-        id="heat_control_toggle"
-        class="pixel-btn nav_button"
-        title="Heat Ctrl"
-      >
-        Heat Controller
-      </button>
-      <button id="pause_toggle" class="pixel-btn nav_button" title="Pause/Play">
-        Pause
-      </button>
-    </div>
-    <div id="controls_collapsed_group" style="display: none">
-      <button
-        class="collapsed-control-btn"
-        data-control="auto_sell"
-        title="Auto Sell"
-      ></button>
-      <button
-        class="collapsed-control-btn"
-        data-control="auto_buy"
-        title="Auto Buy"
-      ></button>
-      <button
-        class="collapsed-control-btn"
-        data-control="time_flux"
-        title="Time Flux"
-      ></button>
-      <button
-        class="collapsed-control-btn"
-        data-control="heat_control"
-        title="Heat Controller"
-      ></button>
-      <button
-        class="collapsed-control-btn"
-        data-control="pause"
-        title="Pause"
-      ></button>
-    </div>
-  </nav>
-</aside>
-
-<!-- MAIN CONTENT -->
-<main id="main">
-  <div id="main_content_wrapper">
-    <div id="main_top_nav" class="main_top_controls_row pixel-panel">
-      <button class="pixel-btn active" data-page="reactor_section">
-        Reactor
-      </button>
-      <button class="pixel-btn" data-page="upgrades_section">Upgrade</button>
-      <button class="pixel-btn" data-page="experimental_upgrades_section">
-        Research
-      </button>
-      <div class="flex-spacer"></div>
-      <button
-        id="about_toggle"
-        class="pixel-btn is-small"
-        title="About"
-        data-page="about_section"
-      >
-        ℹ
-      </button>
+    </li>
+  </ul>
+  <ul>
+    <li>
+      <a href="#" role="button" data-page="about_section" title="About">ℹ️</a>
+    </li>
+    <li>
       <button
         id="fullscreen_toggle"
-        class="pixel-btn is-small"
+        class="secondary"
         title="Toggle Fullscreen"
       >
         ⛶
       </button>
-      <button
-        id="splash_close_btn"
-        class="pixel-btn is-small splash-close-btn"
-        title="Back to Splash"
-      >
+    </li>
+    <li>
+      <button id="splash_close_btn" class="secondary" title="Back to Splash">
         ✖
       </button>
+    </li>
+  </ul>
+</nav>
+
+<!-- MAIN CONTENT -->
+<main id="main">
+  <!-- PARTS SIDEBAR -->
+  <aside id="parts_section" class="collapsed">
+    <button id="parts_panel_toggle" aria-label="Toggle parts panel">☰</button>
+    <div class="parts_header">
+      <div class="parts_tabs">
+        <button
+          class="parts_tab active"
+          id="tab_power"
+          data-tab="power"
+          title="Power Creation"
+        >
+          <img src="img/ui/icons/icon_power.png" alt="Power" />
+        </button>
+        <button
+          class="parts_tab"
+          id="tab_heat"
+          data-tab="heat"
+          title="Heat Management"
+        >
+          <img src="img/ui/icons/icon_heat.png" alt="Heat" />
+        </button>
+        <button
+          class="parts_tab"
+          id="tab_misc1"
+          data-tab="misc1"
+          title="Other"
+          disabled
+        >
+          <span role="img" aria-label="Locked">🔒</span>
+        </button>
+        <button
+          class="parts_tab"
+          id="tab_misc2"
+          data-tab="misc2"
+          title="Other"
+          disabled
+        >
+          <span role="img" aria-label="Locked">🔒</span>
+        </button>
+        <button
+          id="parts_help_toggle"
+          class="parts_help_btn"
+          title="Toggle help mode - click to show part information instead of placing parts"
+          aria-label="Toggle help mode"
+        >
+          ?
+        </button>
+      </div>
     </div>
-    <section id="objectives_section" class="pixel-panel panel-ornate">
-      <div id="objectives_wrapper">
+    <div id="parts_tab_contents">
+      <div id="parts_tab_power" class="parts_tab_content active">
+        <hgroup>
+          <h4>Cells</h4>
+          <h6>Generate power and heat.</h6>
+        </hgroup>
+        <div id="cells" class="item-grid"></div>
+        <hgroup>
+          <h4>Reflectors</h4>
+          <h6>Boost adjacent cell output.</h6>
+        </hgroup>
+        <div id="reflectors" class="item-grid"></div>
+        <hgroup>
+          <h4>Capacitors</h4>
+          <h6>Increase reactor power capacity.</h6>
+        </hgroup>
+        <div id="capacitors" class="item-grid"></div>
+        <hgroup>
+          <h4>Particle Accelerators</h4>
+          <h6>Generate Exotic Particles from heat.</h6>
+        </hgroup>
+        <div id="particleAccelerators" class="item-grid"></div>
+      </div>
+      <div id="parts_tab_heat" class="parts_tab_content">
+        <hgroup>
+          <h4>Vents</h4>
+          <h6>Actively cool components.</h6>
+        </hgroup>
+        <div id="vents" class="item-grid"></div>
+        <hgroup>
+          <h4>Heat Exchangers</h4>
+          <h6>Distribute heat between components.</h6>
+        </hgroup>
+        <div id="heatExchangers" class="item-grid"></div>
+        <hgroup>
+          <h4>Heat Inlets</h4>
+          <h6>Move heat into the reactor core.</h6>
+        </hgroup>
+        <div id="heatInlets" class="item-grid"></div>
+        <hgroup>
+          <h4>Heat Outlets</h4>
+          <h6>Move heat out of the reactor core.</h6>
+        </hgroup>
+        <div id="heatOutlets" class="item-grid"></div>
+        <hgroup>
+          <h4>Coolant Cells</h4>
+          <h6>Absorb and contain heat.</h6>
+        </hgroup>
+        <div id="coolantCells" class="item-grid"></div>
+        <hgroup>
+          <h4>Reactor Plating</h4>
+          <h6>Increase reactor heat capacity.</h6>
+        </hgroup>
+        <div id="reactorPlatings" class="item-grid"></div>
+      </div>
+    </div>
+    <nav id="controls_nav">
+      <button id="auto_sell_toggle" class="secondary outline" title="Auto Sell">
+        Auto Sell
+      </button>
+      <button id="auto_buy_toggle" class="secondary outline" title="Auto Buy">
+        Auto Buy
+      </button>
+      <button id="time_flux_toggle" class="secondary outline" title="Time Flux">
+        Time Flux
+      </button>
+      <button
+        id="heat_control_toggle"
+        class="secondary outline"
+        title="Heat Ctrl"
+      >
+        Auto Heat
+      </button>
+      <button id="pause_toggle" class="contrast" title="Pause/Play">
+        Pause
+      </button>
+    </nav>
+  </aside>
+
+  <div id="main_content_wrapper">
+    <!-- Only show objectives on reactor page -->
+    <div class="reactor-only">
+      <div id="objectives_section">
         <div id="objectives_content">
-          <span id="objective_title"></span>
-          <span id="objective_reward"></span>
+          <div id="objective_title_wrapper">
+            <span id="objective_title"
+              ><span><!-- Objective text will be injected here --></span></span
+            >
+            <span id="objective_reward"></span>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
+    <!-- End reactor-only objectives -->
 
     <div id="page_content_area">
       <!-- Content will be loaded dynamically -->
     </div>
 
     <!-- TOOLTIP -->
-    <section id="tooltip" class="pixel-panel" aria-live="polite">
-      <div id="tooltip_data"></div>
-    </section>
+    <div id="tooltip" class="hidden">
+      <div id="tooltip_data">
+        <!-- Content injected by TooltipManager -->
+      </div>
+      <button id="tooltip_close_btn" title="Close">×</button>
+    </div>
   </div>
 </main>
 
-<!-- INFO BAR (FIXED) -->
-<div id="info_bar" class="pixel-panel">
-  <div id="info_stats_group_1">
-    <div class="pixel-progress heat" id="reduceHeatBtnInfoBar">
-      <div class="pixel-progress-bar" id="info_heat_progress"></div>
-      <button class="stat_button pixel-btn">
-        <span>Heat:</span>
-        <span class="stat_value"
-          ><span id="info_bar_current_heat">0</span>/<span
-            id="info_bar_max_heat"
-            >0</span
-          ></span
-        >
-      </button>
-    </div>
-    <div class="pixel-progress power" id="sellBtnInfoBar">
-      <div class="pixel-progress-bar" id="info_power_progress"></div>
-      <button title="Sell Power" class="stat_button pixel-btn">
-        <span>Power:</span>
-        <span class="stat_value"
-          ><span id="info_bar_current_power">0</span>/<span
-            id="info_bar_max_power"
-            >0</span
-          ></span
-        >
-      </button>
-    </div>
+<!-- INFO BAR (FOOTER) -->
+<footer id="info_bar">
+  <div class="info-row info-main">
+    <button
+      class="info-item heat"
+      id="info_bar_heat_btn"
+      type="button"
+      tabindex="0"
+      aria-label="Reduce Heat"
+    >
+      <span class="icon">🔥</span>
+      <span class="value" id="info_heat">496</span>
+    </button>
+    <button
+      class="info-item power"
+      id="info_bar_power_btn"
+      type="button"
+      tabindex="0"
+      aria-label="Sell Power"
+    >
+      <span class="icon">⚡</span>
+      <span class="value" id="info_power">100</span>
+    </button>
+    <span class="info-item money"
+      ><span class="icon">$</span>
+      <span class="value" id="info_money">20.6K</span></span
+    >
   </div>
-  <div id="info_stats_group_2">
-    <div class="stat_block" id="info_money_block">
-      <span>Money:</span>
-      <span class="stat_value">$<span id="info_bar_money">0</span></span>
-    </div>
+  <div class="info-row info-denom">
+    <span class="info-item heat"
+      ><span class="denom" id="info_heat_denom">/1K</span></span
+    >
+    <span class="info-item power"
+      ><span class="denom" id="info_power_denom">/100</span></span
+    >
+    <span class="info-item money"></span>
   </div>
-</div>
+</footer>
 
 <!-- BOTTOM NAV (MOBILE) -->
-<nav id="bottom_nav">
-  <button
-    id="nav_reactor_btn"
-    class="pixel-btn active"
-    data-page="reactor_section"
-  >
-    Reactor
-  </button>
-  <button id="nav_upgrades_btn" class="pixel-btn" data-page="upgrades_section">
-    Upgrade
-  </button>
-  <button
-    id="nav_experiments_btn"
-    class="pixel-btn"
-    data-page="experimental_upgrades_section"
-  >
-    Research
-  </button>
-</nav>
+<footer id="bottom_nav">
+  <nav>
+    <ul>
+      <li>
+        <button data-page="reactor_section" class="secondary active">
+          Reactor
+        </button>
+      </li>
+      <li>
+        <button data-page="upgrades_section" class="secondary">Upgrades</button>
+      </li>
+      <li>
+        <button data-page="experimental_upgrades_section" class="secondary">
+          Research
+        </button>
+      </li>
+    </ul>
+  </nav>
+</footer>

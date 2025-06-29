@@ -7,8 +7,8 @@ export class Engine {
     this.last_tick_time = null;
     this.dtime = 0;
     this.running = false;
-    this.last_session_update = 0; // Track when we last updated session time
-    this.session_update_interval = 60000; // Update session time every 60 seconds
+    this.last_session_update = 0;
+    this.session_update_interval = 60000;
   }
 
   start() {
@@ -16,7 +16,7 @@ export class Engine {
     this.running = true;
     if (!this.loop_timeout) {
       this.last_tick_time = performance.now();
-      this.last_session_update = Date.now(); // Initialize session update tracking
+      this.last_session_update = Date.now();
 
       this.loop();
     }
@@ -29,7 +29,6 @@ export class Engine {
     this.loop_timeout = null;
     this.last_tick_time = null;
 
-    // Update session time when stopping
     this.game.updateSessionTime();
   }
 
@@ -49,6 +48,7 @@ export class Engine {
     if (this.last_tick_time) {
       this.dtime += now - this.last_tick_time;
     }
+
     this.last_tick_time = now;
 
     let ticks_to_process = Math.floor(this.dtime / tick_duration);
@@ -58,7 +58,6 @@ export class Engine {
       if (time_flux_enabled && ticks_to_process > 1) {
         const max_catch_up_ticks = 1000;
         if (ticks_to_process > max_catch_up_ticks) {
-          // Silenced log to reduce test noise
           ticks_to_process = max_catch_up_ticks;
         }
 
@@ -88,13 +87,12 @@ export class Engine {
       return;
     }
 
-    // --- Optimization: Categorize active parts once per tick ---
     this.game.performance.markStart("tick_categorize_parts");
     const active_cells = [];
     const active_inlets = [];
     const active_exchangers = [];
     const active_outlets = [];
-    const active_vessels = []; // For venting, EP, explosions
+    const active_vessels = [];
 
     for (const tile of tileset.active_tiles_list) {
       if (!tile.activated || !tile.part) continue;
@@ -122,7 +120,6 @@ export class Engine {
       }
     }
     this.game.performance.markEnd("tick_categorize_parts");
-    // --- End Optimization ---
 
     let power_add = 0;
     let heat_add = 0;
@@ -350,23 +347,19 @@ export class Engine {
   }
 
   handleComponentDepletion(tile) {
-    // Delegate the logic to the main game class
     this.game.handleComponentDepletion(tile);
   }
 
   handleComponentExplosion(tile) {
-    // Visual explosion effect
     if (tile.$el) {
       tile.$el.classList.add("exploding");
-      // Remove the explosion class after animation completes
       setTimeout(() => {
         if (tile.$el) {
           tile.$el.classList.remove("exploding");
         }
-      }, 600); // Match animation duration
+      }, 600);
     }
 
-    // Remove the part after a short delay to show explosion
     setTimeout(() => {
       this.handleComponentDepletion(tile);
     }, 100);

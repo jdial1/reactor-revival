@@ -60,10 +60,9 @@ export class Upgrade {
     if (this.base_ecost) {
       this.current_ecost =
         this.base_ecost * Math.pow(this.cost_multiplier, this.level);
-    } else {
-      this.current_cost =
-        this.base_cost * Math.pow(this.cost_multiplier, this.level);
     }
+    this.current_cost =
+      this.base_cost * Math.pow(this.cost_multiplier, this.level);
 
     if (this.level >= this.max_level) {
       this.display_cost = "--";
@@ -101,40 +100,89 @@ export class Upgrade {
   }
 
   createElement() {
+    if (window.templateLoader && window.templateLoader.loaded) {
+      this.$el = window.templateLoader.cloneTemplateElement(
+        "upgrade-btn-template"
+      );
+      if (this.$el) {
+        // Set upgrade data
+        if (this.upgrade.classList) {
+          this.$el.classList.add(...this.upgrade.classList);
+        }
+        this.$el.id = this.id;
+
+        // Set image
+        const imageDiv = this.$el.querySelector(".image");
+        if (imageDiv && this.upgrade.icon) {
+          imageDiv.style.backgroundImage = `url('${this.upgrade.icon}')`;
+          imageDiv.style.width = "90%";
+          imageDiv.style.height = "90%";
+          imageDiv.style.backgroundSize = "contain";
+          imageDiv.style.backgroundPosition = "center";
+          imageDiv.style.backgroundRepeat = "no-repeat";
+        }
+
+        // Set cost display
+        const costDiv = this.$el.querySelector(".upgrade-price");
+        if (
+          costDiv &&
+          this.current_cost !== undefined &&
+          this.current_cost !== Infinity
+        ) {
+          costDiv.textContent = this.display_cost;
+          costDiv.style.display = "";
+        }
+
+        // Set level display
+        this.$levels = this.$el.querySelector(".levels");
+        if (this.$levels) {
+          this.$levels.textContent =
+            this.level >= this.max_level && this.max_level > 1
+              ? "MAX"
+              : this.level;
+        }
+
+        this.$el.classList.toggle("unaffordable", !this.affordable);
+        return this.$el;
+      }
+    }
+
+    // Fallback to original method if template not available
     this.$el = document.createElement("button");
-    this.$el.className = "upgrade pixel-btn is-square";
+    this.$el.className = "upgrade";
     if (this.upgrade.classList)
       this.$el.classList.add(...this.upgrade.classList);
     this.$el.id = this.id;
 
+    // Create image div first, matching .part .image
     const imageDiv = document.createElement("div");
     imageDiv.className = "image";
-
+    imageDiv.style.width = "90%";
+    imageDiv.style.height = "90%";
+    imageDiv.style.backgroundSize = "contain";
+    imageDiv.style.backgroundPosition = "center";
+    imageDiv.style.backgroundRepeat = "no-repeat";
     if (this.upgrade.icon) {
       imageDiv.style.backgroundImage = `url('${this.upgrade.icon}')`;
     }
+    this.$el.appendChild(imageDiv);
 
-    // Add cost display
+    // Add cost display overlay
     if (this.current_cost !== undefined && this.current_cost !== Infinity) {
       const costDiv = document.createElement("div");
-      costDiv.className = "upgrade-price";
+      costDiv.className = "part-price upgrade-price";
       costDiv.textContent = this.display_cost;
       this.$el.appendChild(costDiv);
     }
 
-    // Add level display
+    // Add level display overlay
     this.$levels = document.createElement("div");
     this.$levels.className = "levels";
     this.$levels.textContent =
       this.level >= this.max_level && this.max_level > 1 ? "MAX" : this.level;
     this.$el.appendChild(this.$levels);
 
-    this.$el.appendChild(imageDiv);
-
     this.$el.classList.toggle("unaffordable", !this.affordable);
-    // Remove disabled state so unaffordable upgrades can still be clicked for tooltips
-    // this.$el.disabled = !this.affordable;
-
     return this.$el;
   }
 

@@ -1,5 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
-/* --- PIXEL UI KIT & VARIABLES --- */
+
 :root {
   --bg-color: #303236;
   --text-color: #9badb7;
@@ -9,17 +9,13 @@
   --accent-color: #a9844f;
   --warning-color: #ffa500;
   --success-color: #59c435;
-
   --border-light: #5f6672;
   --border-dark: #2a2d34;
   --border-width: 3px;
-
   --sidebar-width: 25%;
   --sidebar-width-mobile: 65%;
   --tile-size: 48px;
 }
-
-/* --- BASE & TYPOGRAPHY --- */
 html,
 body {
   box-sizing: border-box;
@@ -34,24 +30,20 @@ body {
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
-  /* Fullscreen optimizations */
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
-  /* Text readability - sharp pixelated outline */
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
 *,
 *:before,
 *:after {
   box-sizing: inherit;
 }
-
 h1,
 h2,
 h3,
@@ -65,7 +57,6 @@ h6 {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
 h4 {
   font-size: 1rem;
   text-transform: uppercase;
@@ -79,8 +70,6 @@ h4 {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
-/* Global text shadow for all text elements - sharp pixelated outline */
 p,
 span,
 div,
@@ -95,8 +84,6 @@ th {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
-/* Stronger shadow for important text elements */
 h1,
 h2,
 h3,
@@ -109,15 +96,11 @@ h6,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black,
     2px 0 0 black, -2px 0 0 black, 0 2px 0 black, 0 -2px 0 black;
 }
-
-/* Special shadow for buttons to maintain readability */
 .pixel-btn,
 button {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
-/* Enhanced shadow for stats and important numbers */
 .stat,
 .stat_value,
 .upgrade-price,
@@ -126,12 +109,9 @@ button {
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black,
     2px 0 0 black, -2px 0 0 black, 0 2px 0 black, 0 -2px 0 black;
 }
-
 .part-price {
   text-shadow: 1px 1px 0 black;
 }
-
-/* Tooltip text shadow for better readability */
 #tooltip,
 .tooltip-title,
 .tooltip-mobile-stats,
@@ -139,8 +119,6 @@ button {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
-/* Modal and overlay text shadows */
 .quick-start-content,
 .quick-start-title,
 .quick-start-section h3,
@@ -150,14 +128,10 @@ button {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
-/* Notification text shadow */
 .pwa-notification {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
-/* About section text shadows */
 .about-section h2,
 .about-section h3,
 .about-section p,
@@ -168,8 +142,6 @@ button {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
-/* Objective and banner text shadows */
 #objectives_content,
 #objective_title,
 #objective_reward,
@@ -177,7 +149,6 @@ button {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
 #pause_banner {
   padding: 0.5rem;
   margin-bottom: 1rem;
@@ -193,7 +164,6 @@ button {
 body.game-paused #pause_banner {
   display: block;
 }
-
 #meltdown_banner {
   padding: 0.5rem;
   margin-bottom: 1rem;
@@ -209,35 +179,26 @@ body.game-paused #pause_banner {
 body.reactor-meltdown #meltdown_banner {
   display: block;
 }
-
-/* Global meltdown state styling */
 body.reactor-meltdown #reactor {
   filter: grayscale(50%) brightness(0.8);
   pointer-events: none;
 }
-
 body.reactor-meltdown #parts_section {
   opacity: 0.5;
   pointer-events: none;
 }
-
-/* During meltdown, only allow reboot/refund buttons and navigation */
 body.reactor-meltdown
   .pixel-btn:not([data-page]):not(#reboot_btn):not(#refund_btn) {
   opacity: 0.6 !important;
   pointer-events: none !important;
   cursor: not-allowed !important;
 }
-
-/* Reactor stats text shadows */
 #reactor_stats .stat,
 #info_bar .stat_value {
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black,
     2px 0 0 black, -2px 0 0 black, 0 2px 0 black, 0 -2px 0 black;
 }
-
-/* Parts and upgrades text shadows */
 .parts_tab,
 .nav_button,
 .upgrade,
@@ -245,20 +206,16 @@ body.reactor-meltdown
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
-
 .nav_button.on,
 pixel-btn.active {
   text-shadow: 1px 0 0 white, -1px 0 0 white, 0 1px 0 white, 0 -1px 0 white,
     1px 1px 0 white, -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white;
 }
-
-/* --- LAYOUT STRUCTURE --- */
 #wrapper {
   display: flex;
   height: 100%;
-  flex-direction: row; /* Ensure proper flex direction for left/right positioning */
+  flex-direction: row;
 }
-
 #main {
   flex-grow: 1;
   display: flex;
@@ -266,15 +223,13 @@ pixel-btn.active {
   height: 100%;
   overflow: hidden;
 }
-
 #main_content_wrapper {
   flex-grow: 1;
-  overflow-y: auto;
+  overflow-y: hidden;
   padding: 0.1rem;
   position: relative;
   padding-bottom: 120px;
 }
-
 #page_content_area > .page {
   display: none;
 }
@@ -282,7 +237,11 @@ pixel-btn.active {
   display: block;
 }
 
-/* --- CORE PIXEL STYLES --- */
+#page_content_area {
+  padding-left: 5px;
+  margin-left: 5px;
+}
+
 .pixel-panel,
 .pixel-btn {
   background: var(--base-color);
@@ -292,7 +251,6 @@ pixel-btn.active {
     var(--border-light);
   position: relative;
 }
-
 .pixel-btn:active,
 .is-pressed {
   border-color: var(--border-dark) var(--border-light) var(--border-light)
@@ -305,8 +263,6 @@ pixel-btn.active {
   border-color: var(--border-dark) var(--border-light) var(--border-light)
     var(--border-dark);
 }
-
-/* --- BUTTONS --- */
 button,
 .pixel-btn {
   padding: 0;
@@ -349,7 +305,6 @@ button,
     0 calc(100% - 4px)
   );
 }
-
 .pixel-btn-small {
   display: inline-flex;
   justify-content: center;
@@ -357,20 +312,16 @@ button,
   padding: 0.25rem 0.5rem;
   text-transform: uppercase;
 }
-
-/* Specific Button Applications */
 .parts_tab,
 .nav_button {
   flex-grow: 1;
 }
-
 .info-button {
   margin-left: auto;
   color: white;
   font-family: inherit;
   text-shadow: 1px 1px 0 black;
 }
-
 .parts_tab img {
   width: 24px;
   height: 24px;
@@ -383,27 +334,21 @@ button,
   background-color: var(--success-color);
   color: var(--bg-color);
 }
-
 .main_top_controls_row .pixel-btn {
   padding: 8px 16px;
 }
-
 button.unaffordable {
   opacity: 0.6;
   cursor: not-allowed;
   pointer-events: none;
 }
-
 button.unaffordable .image {
   filter: grayscale(100%);
 }
-
 button.unaffordable .part-price {
   color: #aaaaaa;
   background: rgba(0, 0, 0, 0.7);
 }
-
-/* --- PANELS --- */
 .pixel-panel.panel-ornate {
   border-color: var(--accent-color);
   border-width: 2px;
@@ -411,7 +356,6 @@ button.unaffordable .part-price {
   display: block;
   margin: 0 auto;
 }
-
 .explanitory {
   padding: 1rem;
   text-align: center;
@@ -423,23 +367,18 @@ button.unaffordable .part-price {
   margin-left: auto;
   margin-right: auto;
 }
-
-/* --- PARTS & UPGRADES (Sidebar) --- */
 #parts_section {
   width: var(--sidebar-width);
   flex-shrink: 0;
   transition: width 0.3s ease, transform 0.3s ease;
   display: flex;
   flex-direction: column;
-  padding: 0; /* Panels have their own padding */
+  padding: 0;
   z-index: 14;
 }
-
-/* Right-side positioning */
 #parts_section.right-side {
-  order: 2; /* Move to right side of flex container */
+  order: 2;
 }
-
 #parts_section.right-side #parts_panel_toggle {
   left: auto;
   right: 100%;
@@ -447,7 +386,6 @@ button.unaffordable .part-price {
   border-left: none;
   transform: rotate(180deg);
 }
-
 .parts_tabs {
   display: flex;
   flex-direction: row;
@@ -457,7 +395,6 @@ button.unaffordable .part-price {
   flex: 1;
   border-bottom: var(--border-width) solid var(--border-dark);
 }
-
 .parts_header {
   display: flex;
   align-items: center;
@@ -465,7 +402,6 @@ button.unaffordable .part-price {
   margin-bottom: 0.5rem;
   flex-wrap: wrap;
 }
-
 .parts_help_btn {
   min-width: 32px;
   height: 32px;
@@ -473,27 +409,23 @@ button.unaffordable .part-price {
   font-weight: bold;
   flex-shrink: 0;
 }
-
 .parts_help_btn.active {
   background-color: var(--warning-color);
   color: var(--bg-color);
   text-shadow: 1px 0 0 white, -1px 0 0 white, 0 1px 0 white, 0 -1px 0 white;
 }
-
 #parts_tab_contents {
   flex-grow: 1;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0 0.5rem 0.5rem 0.5rem;
 }
-
 .parts_tab_content {
   display: none;
 }
 .parts_tab_content.active {
   display: block;
 }
-
 .item-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
@@ -502,7 +434,6 @@ button.unaffordable .part-price {
   overflow-x: hidden;
   padding: 6px !important;
 }
-
 .item-grid:has(#cells) {
   grid-template-columns: repeat(3, 48px);
   gap: 6px !important;
@@ -510,7 +441,6 @@ button.unaffordable .part-price {
   width: 100%;
   overflow-x: hidden;
 }
-
 .icon-inline {
   width: 1.25em;
   height: 1.25em;
@@ -518,22 +448,19 @@ button.unaffordable .part-price {
   vertical-align: text-bottom;
   margin-right: 0.15em;
 }
-
 .tooltip-title {
   display: flex;
   align-items: center;
   gap: 0.25em;
   margin-bottom: 1em;
 }
-
 .tooltip-summary-item {
   display: flex;
   align-items: center;
   gap: 0.25em;
 }
-
 .item-grid .pixel-btn.is-square {
-  width: 100%; /* Fill grid cell */
+  width: 100%;
   aspect-ratio: 1/1;
   height: auto;
 }
@@ -547,12 +474,10 @@ button.unaffordable .part-price {
   margin: 5px !important;
 }
 .pixel-btn.is-square.part_active {
-  /* Special active state for part selection */
   border-color: var(--success-color);
   box-shadow: 0 0 5px var(--success-color);
   color: var(--bg-color);
 }
-
 #controls_nav {
   border-top: var(--border-width) solid var(--border-dark);
   padding: 8px;
@@ -561,7 +486,6 @@ button.unaffordable .part-price {
   gap: 4px;
   margin-top: auto;
 }
-
 #parts_panel_toggle {
   position: absolute;
   left: 100%;
@@ -583,33 +507,25 @@ button.unaffordable .part-price {
     transform 0.2s ease, opacity 0.2s ease;
   z-index: 1000;
 }
-
-/* Hide parts panel toggle when not on reactor page */
 body:not(.page-reactor) #parts_panel_toggle {
   display: none;
 }
-
 #parts_panel_toggle:hover {
   opacity: 1;
   border-color: var(--accent-color);
 }
-
 #parts_panel_toggle:active {
   cursor: grabbing;
 }
-
 #parts_panel_toggle.dragging {
   cursor: grabbing;
   opacity: 0.8;
   z-index: 1000;
 }
-
 #parts_panel_toggle .vertical-text {
   writing-mode: vertical-rl;
   text-orientation: mixed;
 }
-
-/* Add drag hint indicator */
 #parts_panel_toggle::after {
   content: "⟷";
   position: absolute;
@@ -620,8 +536,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   opacity: 0.6;
   transition: opacity 0.2s ease;
 }
-
-/* --- UPGRADES PAGE --- */
 #upgrades_section,
 #experimental_upgrades_section {
   margin-top: 1rem;
@@ -629,30 +543,23 @@ body:not(.page-reactor) #parts_panel_toggle {
   flex-direction: column;
   gap: 1.5rem;
 }
-
-/* Mobile-specific bottom padding for upgrades and research pages */
 @media (max-width: 900px) {
   #upgrades_section,
   #experimental_upgrades_section {
-    padding-bottom: 2rem; /* Extra padding for mobile to clear info bar and nav */
-    margin-bottom: 2rem; /* Additional margin for complete clearance */
+    padding-bottom: 2rem;
+    margin-bottom: 2rem;
   }
 }
-
 @media (max-width: 600px) {
   #upgrades_section,
   #experimental_upgrades_section {
-    padding-bottom: 3rem; /* Even more padding for smaller screens */
-    margin-bottom: 3rem; /* Even more margin for smaller screens */
+    padding-bottom: 3rem;
+    margin-bottom: 3rem;
   }
-
-  /* Ensure last elements in upgrade sections have extra bottom space */
   #upgrades_section > *:last-child,
   #experimental_upgrades_section > *:last-child {
     margin-bottom: 2rem;
   }
-
-  /* Extra space for research page footer sections on mobile */
   #reboot_section,
   #refund_section,
   #debug_section,
@@ -660,7 +567,6 @@ body:not(.page-reactor) #parts_panel_toggle {
     margin-bottom: 1.5rem;
   }
 }
-
 .upgrade-group {
   display: flex;
   flex-wrap: wrap;
@@ -674,7 +580,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   height: 52px;
   background: none;
 }
-
 .upgrade .image,
 .experimental_upgrade .image {
   width: 95%;
@@ -685,7 +590,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   padding: 2px;
   margin: 2px;
 }
-
 .upgrade-price {
   position: absolute;
   top: 75%;
@@ -700,7 +604,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   white-space: nowrap;
   z-index: 1;
 }
-
 .upgrade .levels,
 .experimental_upgrade .levels {
   position: absolute;
@@ -713,21 +616,16 @@ body:not(.page-reactor) #parts_panel_toggle {
   border-radius: 3px;
   z-index: 2;
 }
-
-/* Only apply grayscale to unaffordable items */
 .upgrade.unaffordable,
 .experimental_upgrade.unaffordable {
   opacity: 0.5;
-  cursor: pointer; /* Change to pointer to indicate clickable */
-  pointer-events: auto; /* Ensure clicks work for tooltips */
+  cursor: pointer;
+  pointer-events: auto;
 }
-
 .upgrade.unaffordable .image,
 .experimental_upgrade.unaffordable .image {
   filter: grayscale(100%);
 }
-
-/* Research specific styles */
 .experimental_upgrade .image {
   width: 90%;
   height: 90%;
@@ -737,21 +635,18 @@ body:not(.page-reactor) #parts_panel_toggle {
   padding: 5px;
   margin: 5px;
 }
-
 .experimental_upgrade.unaffordable {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
 .experimental_upgrade.unaffordable .image {
   filter: grayscale(100%);
 }
-
-/* --- REACTOR GRID --- */
 #reactor_section {
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow-y: hidden;
 }
 #reactor_header {
   margin-bottom: 0.5rem;
@@ -766,7 +661,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   padding: 8px;
 }
 #reactor_stats .stat {
-  font-size: clamp(0.8em, 2vw, 1.5em);
   white-space: nowrap;
 }
 #reactor_stats .stat::before {
@@ -798,14 +692,11 @@ body:not(.page-reactor) #parts_panel_toggle {
 #stats_outlet:before {
   background-image: url("../img/ui/icons/icon_outlet.png");
 }
-
-#reactor_wrapper {
+#reactor_wrapper,
+#reactor {
   flex-grow: 1;
   display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden; /* Hide overflow on desktop */
-  position: relative;
+  overflow-y: hidden;
 }
 #reactor {
   display: grid;
@@ -814,6 +705,7 @@ body:not(.page-reactor) #parts_panel_toggle {
   border: var(--border-width) solid var(--border-dark);
   background-color: var(--base-color);
   image-rendering: pixelated;
+  margin: 0.5rem;
 }
 #reactor .tile {
   width: var(--tile-size);
@@ -823,7 +715,7 @@ body:not(.page-reactor) #parts_panel_toggle {
   background-size: cover;
   position: relative;
   display: block;
-  visibility: hidden; /* Hide by default, but keep grid cell */
+  visibility: hidden;
   opacity: 0.25;
   pointer-events: none;
   box-shadow: inherit;
@@ -856,7 +748,6 @@ body:not(.page-reactor) #parts_panel_toggle {
     background: radial-gradient(circle, #ffffff 0%, #ffff44 50%, #ffaa00 100%);
   }
 }
-
 .percent_wrapper_wrapper {
   position: absolute;
   top: 0;
@@ -891,8 +782,6 @@ body:not(.page-reactor) #parts_panel_toggle {
 #reactor .tile.spent {
   filter: grayscale(100%);
 }
-
-/* --- OBJECTIVES & BANNERS --- */
 #objectives_section {
   padding: 0;
   margin: 0;
@@ -909,12 +798,10 @@ body:not(.page-reactor) #parts_panel_toggle {
   gap: 10px;
   width: 100%;
 }
-
 #objective_title {
   flex: 0 0 90%;
   overflow: hidden;
 }
-
 #objective_reward {
   flex: 0 0 10%;
   text-align: right;
@@ -924,7 +811,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   justify-content: flex-end;
   min-width: 0;
 }
-
 #objective_reward:before {
   content: "";
   display: inline-block;
@@ -937,8 +823,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   margin-right: 2px;
   vertical-align: middle;
 }
-
-/* --- INFO BAR (BOTTOM FIXED) --- */
 #info_bar {
   display: flex;
   align-items: center;
@@ -954,16 +838,11 @@ body:not(.page-reactor) #parts_panel_toggle {
   min-height: 44px;
   transition: left 0.3s ease, right 0.3s ease;
 }
-
-/* Desktop: Adjust info bar when parts panel is open */
 @media (min-width: 901px) {
-  /* Default: Parts panel on left side */
   body.parts-panel-open #info_bar {
     left: var(--sidebar-width);
     right: 0;
   }
-
-  /* Parts panel on right side */
   body.parts-panel-open.parts-panel-right #info_bar {
     left: 0;
     right: var(--sidebar-width);
@@ -984,14 +863,13 @@ body:not(.page-reactor) #parts_panel_toggle {
   white-space: nowrap;
   flex-shrink: 0;
 }
-
 .pixel-progress {
   width: clamp(180px, 22vw, 240px);
   height: 34px;
   padding: 0;
   position: relative;
   border-color: var(--border-dark) var(--border-light) var(--border-light)
-    var(--border-dark); /* Inset */
+    var(--border-dark);
   flex-shrink: 0;
   min-width: 180px;
   overflow: hidden;
@@ -1023,8 +901,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* --- BOTTOM NAV (MOBILE) --- */
 #bottom_nav {
   display: none;
   position: fixed;
@@ -1036,14 +912,12 @@ body:not(.page-reactor) #parts_panel_toggle {
   justify-content: space-around;
   align-items: center;
 }
-
 #bottom_nav .pixel-btn {
   flex-grow: 1;
   height: 100%;
   font-size: 0.8rem;
   padding: 4px 8px;
 }
-
 #bottom_nav .pixel-btn.active,
 #main_top_nav .pixel-btn.active {
   background-color: var(--success-color);
@@ -1051,7 +925,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   text-shadow: 1px 0 0 white, -1px 0 0 white, 0 1px 0 white, 0 -1px 0 white,
     1px 1px 0 white, -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white;
 }
-
 @media (min-width: 900px) {
   #bottom_nav {
     display: none;
@@ -1063,8 +936,6 @@ body:not(.page-reactor) #parts_panel_toggle {
     overflow: hidden;
   }
 }
-
-/* --- TOOLTIP --- */
 #tooltip {
   position: fixed;
   left: 55%;
@@ -1075,15 +946,28 @@ body:not(.page-reactor) #parts_panel_toggle {
   pointer-events: none;
   transition: opacity 0.15s;
 }
+#tooltip_close_btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #555;
+  background: #333;
+  color: white;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 22px;
+  z-index: 10;
+}
 #main.tooltip_showing #tooltip {
   opacity: 1;
   pointer-events: auto;
 }
-
 #tooltip-desc {
   padding: 0.5rem;
 }
-
 #tooltip_data dl {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1096,8 +980,6 @@ body:not(.page-reactor) #parts_panel_toggle {
 #tooltip_data dd {
   text-align: right;
 }
-
-/* Mobile Tooltip Styles */
 .tooltip-mobile-stats {
   display: flex;
   gap: 8px;
@@ -1106,7 +988,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   margin: 4px 0;
   font-size: 0.9em;
 }
-
 .tooltip-mobile-desc {
   font-size: 0.85em;
   line-height: 1.3;
@@ -1115,7 +996,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   color: #ccc;
   text-align: left;
 }
-
 .tooltip-mobile-upgrade {
   font-size: 0.85em;
   color: var(--success-color);
@@ -1125,31 +1005,25 @@ body:not(.page-reactor) #parts_panel_toggle {
   background: rgba(89, 196, 53, 0.1);
   border-radius: 3px;
 }
-
 .tooltip-mobile-upgrade.tooltip-mobile-unaffordable {
   color: var(--primary-color);
   background: rgba(208, 70, 72, 0.1);
 }
-
 @media (max-width: 768px) {
   #tooltip {
     max-width: 90vw;
     padding: 8px 12px;
   }
-
   .tooltip-title {
     font-size: 0.9em;
     margin-bottom: 6px;
     text-align: center;
   }
-
   .tooltip-mobile-stats {
     flex-wrap: wrap;
     justify-content: center;
   }
 }
-
-/* --- RESPONSIVE STYLES --- */
 @media (max-width: 900px) {
   #main_top_nav {
     display: none;
@@ -1174,20 +1048,16 @@ body:not(.page-reactor) #parts_panel_toggle {
     background: var(--base-color);
     z-index: 11;
   }
-
-  /* Mobile scaling for top elements */
   #objectives_section {
     min-height: 60px;
     padding: 8px 4px;
   }
-
   #objectives_content {
     gap: 4px;
     font-size: 1.1em;
     flex-direction: column;
     align-items: center;
   }
-
   #objective_title {
     font-size: 0.9em;
     white-space: nowrap;
@@ -1198,21 +1068,17 @@ body:not(.page-reactor) #parts_panel_toggle {
     text-align: center;
     width: 100%;
   }
-
   #objective_title span {
     display: inline-block;
     animation: scroll-text 8s linear infinite;
     min-width: 100%;
   }
-
   #objective_title span::before {
     content: "   ";
   }
-
   #objective_title span::after {
     content: "   ";
   }
-
   @keyframes scroll-text {
     0% {
       transform: translateX(100%);
@@ -1221,11 +1087,9 @@ body:not(.page-reactor) #parts_panel_toggle {
       transform: translateX(-100%);
     }
   }
-
   #objective_title:hover span {
     animation-play-state: paused;
   }
-
   #objective_reward {
     font-size: 0.8em;
     color: var(--text-color);
@@ -1233,65 +1097,43 @@ body:not(.page-reactor) #parts_panel_toggle {
     flex: none;
     text-align: center;
   }
-
   #objective_reward:before {
     width: 16px;
     height: 16px;
     margin-right: 3px;
   }
-
   #reactor_stats {
     padding: 8px 6px;
     gap: 8px;
   }
-
-  #reactor_stats .stat {
-    font-size: clamp(0.8em, 2.5vw, 1.2em);
-  }
-
   #reactor_stats .stat::before {
     width: 20px;
     height: 20px;
     margin-right: 6px;
   }
-
   .pixel-progress {
     width: clamp(140px, 45vw, 200px);
     height: 28px;
     min-width: 140px;
   }
-
   #info_stats_group_1,
   #info_stats_group_2 {
     gap: 0.3rem;
   }
-
   .stat_block {
     gap: 3px;
     padding: 2px 3px;
     font-size: 0.85em;
   }
-
   .stat_button {
     gap: 2px;
     font-size: 0.75em;
   }
-
   .stat_value {
     font-size: 0.85em;
     font-weight: 600;
   }
-
-  #reactor_wrapper {
-    overflow: auto; /* Enable scrolling on mobile */
-    -webkit-overflow-scrolling: touch; /* Momentum scrolling for iOS */
-  }
-
-  #reactor {
-    margin: 0.25rem; /* Add some margin to not stick to the edges */
-  }
 }
-
 @media (max-width: 900px) {
   #parts_section {
     position: fixed;
@@ -1305,8 +1147,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   #parts_section:not(.collapsed) {
     transform: translateX(0);
   }
-
-  /* Right-side positioning for mobile */
   #parts_section.right-side {
     left: auto;
     right: 0;
@@ -1315,18 +1155,15 @@ body:not(.page-reactor) #parts_panel_toggle {
   #parts_section.right-side:not(.collapsed) {
     transform: translateX(0);
   }
-
   #parts_panel_toggle {
     width: 48px;
     height: 100px;
-    bottom: 200px; /* Move higher on mobile to account for larger info bar */
+    bottom: 200px;
   }
-
   #main_content_wrapper {
     padding: 0.1rem;
-    padding-bottom: 120px; /* Increased from 120px for better mobile clearance */
+    padding-bottom: 120px;
   }
-
   #bottom_nav .pixel-btn {
     background: var(--base-color);
     color: var(--text-color);
@@ -1336,7 +1173,6 @@ body:not(.page-reactor) #parts_panel_toggle {
     color: var(--bg-color);
   }
 }
-
 @media (max-width: 600px) {
   .item-grid {
     grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
@@ -1349,20 +1185,16 @@ body:not(.page-reactor) #parts_panel_toggle {
     gap: 4px !important;
     padding: 4px !important;
   }
-
-  /* Enhanced mobile scaling for top elements */
   #objectives_section {
     min-height: 70px;
     padding: 10px 6px;
   }
-
   #objectives_content {
     gap: 6px;
     font-size: 1.2em;
     flex-direction: column;
     align-items: center;
   }
-
   #objective_title {
     font-size: 0.8em;
     white-space: nowrap;
@@ -1371,41 +1203,30 @@ body:not(.page-reactor) #parts_panel_toggle {
     text-align: center;
     width: 100%;
   }
-
   #objective_title span {
     display: inline-block;
     animation: scroll-text 10s linear infinite;
     min-width: 100%;
   }
-
   #objective_reward {
     font-size: 0.75em;
     flex: none;
     text-align: center;
   }
-
   #objective_reward:before {
     width: 14px;
     height: 14px;
     margin-right: 2px;
   }
-
   #reactor_stats {
     padding: 6px 4px;
     gap: 6px;
   }
-
-  #reactor_stats .stat {
-    font-size: clamp(0.75em, 3vw, 1.1em);
-  }
-
   #reactor_stats .stat::before {
     width: 18px;
     height: 18px;
     margin-right: 5px;
   }
-
-  /* Extra small screen info bar adjustments */
   #info_bar {
     gap: 0.6rem;
     padding: 6px 8px;
@@ -1415,49 +1236,39 @@ body:not(.page-reactor) #parts_panel_toggle {
     background: var(--base-color);
     bottom: 56px;
   }
-
   #info_stats_group_1,
   #info_stats_group_2 {
     justify-content: center;
     gap: 0.3rem;
   }
-
   #info_stats_group_1 {
     margin-bottom: 0.4rem;
   }
-
   #info_stats_group_2 {
     margin-top: 0.1rem;
   }
-
   .pixel-progress {
     width: clamp(90px, 35vw, 160px);
     height: 30px;
   }
-
   .stat_block {
     font-size: 1em;
     padding: 2px 4px;
     gap: 3px;
   }
-
   .stat_button {
     gap: 3px;
     font-size: 0.9em;
   }
-
   .stat_value {
     font-size: 1em;
     font-weight: 600;
   }
-
   #bottom_nav {
     height: 56px;
     bottom: 0;
   }
 }
-
-/* Small screens (phones) */
 @media (max-width: 480px) {
   .item-grid {
     grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
@@ -1469,20 +1280,16 @@ body:not(.page-reactor) #parts_panel_toggle {
     gap: 3px !important;
     padding: 3px !important;
   }
-
-  /* Maximum mobile scaling for top elements */
   #objectives_section {
     min-height: 75px;
     padding: 12px 8px;
   }
-
   #objectives_content {
     gap: 8px;
     font-size: 1.3em;
     flex-direction: column;
     align-items: center;
   }
-
   #objective_title {
     font-size: 0.75em;
     white-space: nowrap;
@@ -1491,40 +1298,30 @@ body:not(.page-reactor) #parts_panel_toggle {
     text-align: center;
     width: 100%;
   }
-
   #objective_title span {
     display: inline-block;
     animation: scroll-text 10s linear infinite;
     min-width: 100%;
   }
-
   #objective_reward {
     font-size: 0.7em;
     flex: none;
     text-align: center;
   }
-
   #objective_reward:before {
     width: 12px;
     height: 12px;
     margin-right: 2px;
   }
-
   #reactor_stats {
     padding: 4px 2px;
     gap: 4px;
   }
-
-  #reactor_stats .stat {
-    font-size: clamp(0.7em, 3.5vw, 1em);
-  }
-
   #reactor_stats .stat::before {
     width: 16px;
     height: 16px;
     margin-right: 4px;
   }
-
   #info_bar {
     gap: 0.5rem;
     padding: 5px 6px;
@@ -1532,56 +1329,43 @@ body:not(.page-reactor) #parts_panel_toggle {
     background: var(--base-color);
     bottom: 56px;
   }
-
   #info_stats_group_1,
   #info_stats_group_2 {
     gap: 0.3rem;
   }
-
   #info_stats_group_1 {
     margin-bottom: 0.5rem;
   }
-
   #info_stats_group_2 {
     margin-top: 0.1rem;
   }
-
   .pixel-progress {
     width: clamp(75px, 32vw, 140px);
     height: 28px;
   }
-
   .stat_block {
     font-size: 0.9em;
     padding: 2px 3px;
     gap: 2px;
   }
-
   .stat_button {
     gap: 2px;
     font-size: 0.8em;
   }
-
   .stat_value {
     font-size: 0.9em;
     font-weight: 600;
   }
-
   #bottom_nav {
     height: 56px;
     bottom: 0;
   }
-
-  /* Extra spacing for upgrades and research on smallest screens */
   #upgrades_section,
   #experimental_upgrades_section {
-    padding-bottom: 4rem; /* Maximum padding for smallest screens */
-    margin-bottom: 4rem; /* Maximum margin for smallest screens */
+    padding-bottom: 4rem;
+    margin-bottom: 4rem;
   }
 }
-
-/* Ultra-small screens */
-
 .parts_tab_content .item-grid .image {
   width: 90% !important;
   height: 90% !important;
@@ -1592,7 +1376,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   padding: 5px !important;
   margin: 5px !important;
 }
-
 .part,
 .upgrade {
   width: 52px;
@@ -1602,7 +1385,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   justify-content: center;
   position: relative;
 }
-
 .part .image,
 .upgrade .image {
   width: 95%;
@@ -1614,7 +1396,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   padding: 2px !important;
   margin: 2px !important;
 }
-
 .part-price,
 .upgrade-price {
   position: absolute;
@@ -1630,7 +1411,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   white-space: nowrap;
   z-index: 1;
 }
-
 .upgrade .levels {
   position: absolute;
   right: 2px;
@@ -1641,13 +1421,10 @@ body:not(.page-reactor) #parts_panel_toggle {
   border-radius: 3px;
   z-index: 2;
 }
-
-/* When an upgrade has both price and levels, adjust positioning */
 .upgrade-price + .levels {
   right: auto;
   left: 2px;
 }
-
 .main_top_controls_row {
   display: flex;
   flex-direction: row;
@@ -1655,7 +1432,6 @@ body:not(.page-reactor) #parts_panel_toggle {
   flex-wrap: nowrap;
   gap: 8px;
 }
-
 .main_top_controls_row .pixel-btn.is-small {
   min-width: 32px;
   height: 32px;
@@ -1665,11 +1441,9 @@ body:not(.page-reactor) #parts_panel_toggle {
   align-items: center;
   justify-content: center;
 }
-
 .flex-spacer {
   flex: 1 1 auto;
 }
-
 #info_bar,
 .stat_button,
 #info_bar * {
@@ -1680,57 +1454,47 @@ body:not(.page-reactor) #parts_panel_toggle {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-
 .stat_button {
   outline: none;
   -webkit-tap-highlight-color: transparent;
 }
-
 #info_bar .stat_value {
   pointer-events: none;
   white-space: nowrap;
   flex-shrink: 0;
   font-weight: 600;
 }
-
 .about-content {
   max-width: 800px;
   margin: 0 auto;
   padding: 2rem;
 }
-
 .about-section {
   margin-bottom: 2rem;
 }
-
 .about-section h2 {
   color: #59c435;
   margin-bottom: 1rem;
   font-size: 1.5rem;
 }
-
 .about-section h3 {
   color: #59c435;
   margin-bottom: 0.75rem;
   font-size: 1.2rem;
 }
-
 .about-section p {
   margin-bottom: 1rem;
   line-height: 1.6;
 }
-
 .about-section ul {
   list-style: none;
   padding: 0;
 }
-
 .about-section li {
   margin-bottom: 0.5rem;
   padding-left: 1.5rem;
   position: relative;
 }
-
 .about-section li:before {
   content: "▶";
   color: #59c435;
@@ -1738,43 +1502,35 @@ body:not(.page-reactor) #parts_panel_toggle {
   left: 0;
   font-size: 0.8em;
 }
-
 .about-section a {
   color: #59c435;
   text-decoration: none;
   transition: color 0.2s;
 }
-
 .about-section a:hover {
   color: #4a9c2a;
   text-decoration: underline;
 }
-
 #about_toggle {
   margin-right: 0.5rem;
   font-size: 1.2em;
 }
-
 .credits-list {
   margin-bottom: 1.5rem;
 }
-
 .credits-list ul {
   margin: 1rem 0;
   padding-left: 1rem;
 }
-
 .credits-list li {
   margin-bottom: 0.75rem;
   padding-left: 1.75rem;
 }
-
 .credits-list li:before {
   content: "★";
   color: #59c435;
   font-size: 0.9em;
 }
-
 .credits-list a {
   font-weight: bold;
   padding: 0.2rem 0.4rem;
@@ -1782,18 +1538,13 @@ body:not(.page-reactor) #parts_panel_toggle {
   border-radius: 3px;
   transition: all 0.2s ease;
 }
-
 .credits-list a:hover {
   background: rgba(89, 196, 53, 0.2);
   text-decoration: none;
 }
-
-/* Add this near the top of the file with other body class styles */
 body.hide-help-buttons .info-button {
   display: none !important;
 }
-
-/* Fullscreen mode optimizations */
 @media (display-mode: fullscreen) {
   html,
   body {
@@ -1801,56 +1552,45 @@ body.hide-help-buttons .info-button {
     width: 100vw;
     overflow: hidden;
   }
-
   #wrapper {
     height: 100vh;
     width: 100vw;
   }
-
   #main {
     height: 100vh;
     width: 100vw;
   }
 }
-
-/* Mobile fullscreen optimizations */
 @media (max-width: 768px) {
   html,
   body {
     height: 100vh;
     width: 100vw;
   }
-
   #wrapper {
     height: 100vh;
     width: 100vw;
   }
-
   #main {
     height: 100vh;
     width: 100vw;
   }
 }
-
 @media (display-mode: standalone) {
   html,
   body {
     height: 100vh;
     width: 100vw;
   }
-
   #wrapper {
     height: 100vh;
     width: 100vw;
   }
-
   #main {
     height: 100vh;
     width: 100vw;
   }
 }
-
-/* --- QUICK START MODAL --- */
 #quick-start-modal {
   position: fixed;
   top: 0;
@@ -1863,7 +1603,6 @@ body.hide-help-buttons .info-button {
   justify-content: center;
   padding: 1rem;
 }
-
 .quick-start-overlay {
   position: fixed;
   top: 0;
@@ -1876,7 +1615,6 @@ body.hide-help-buttons .info-button {
   justify-content: center;
   padding: 1rem;
 }
-
 .quick-start-content {
   max-width: 600px;
   width: 100%;
@@ -1886,11 +1624,9 @@ body.hide-help-buttons .info-button {
   text-align: center;
   position: relative;
 }
-
 .quick-start-page {
   text-align: left;
 }
-
 .quick-start-title {
   color: var(--success-color);
   margin-bottom: 1.5rem;
@@ -1898,32 +1634,27 @@ body.hide-help-buttons .info-button {
   text-transform: uppercase;
   text-align: center;
 }
-
 .quick-start-section {
   margin-bottom: 1.5rem;
   text-align: left;
 }
-
 .quick-start-section h3 {
   color: var(--accent-color);
   margin-bottom: 0.75rem;
   font-size: 1.1rem;
   text-transform: uppercase;
 }
-
 .quick-start-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
-
 .quick-start-list li {
   margin-bottom: 0.75rem;
   padding-left: 1.5rem;
   position: relative;
   line-height: 1.4;
 }
-
 .quick-start-list li:before {
   content: "▶";
   color: var(--success-color);
@@ -1931,20 +1662,17 @@ body.hide-help-buttons .info-button {
   left: 0;
   font-size: 0.8em;
 }
-
 .quick-start-actions {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
-
 .quick-start-actions div {
   padding: 0.5rem;
   background: rgba(89, 196, 53, 0.1);
   border-radius: 3px;
   line-height: 1.4;
 }
-
 .quick-start-tutorial-note {
   margin: 1.5rem 0;
   padding: 1rem;
@@ -1953,56 +1681,44 @@ body.hide-help-buttons .info-button {
   border-radius: 3px;
   color: var(--accent-color);
 }
-
 .quick-start-buttons {
   display: flex;
   gap: 1rem;
   justify-content: center;
   margin-top: 1.5rem;
 }
-
 #quick-start-close,
 #quick-start-close-2 {
   min-width: 120px;
 }
-
 #quick-start-more-details,
 #quick-start-back {
   min-width: 120px;
 }
-
-/* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .quick-start-content {
     padding: 1.5rem;
     max-height: 90vh;
   }
-
   .quick-start-title {
     font-size: 1.2rem;
   }
-
   .quick-start-section h3 {
     font-size: 1rem;
   }
-
   .quick-start-list li {
     font-size: 0.9rem;
   }
-
   .quick-start-actions div {
     font-size: 0.9rem;
   }
-
   .quick-start-tutorial-note {
     font-size: 0.9rem;
   }
-
   .quick-start-buttons {
     flex-direction: column;
     align-items: center;
   }
-
   #quick-start-close,
   #quick-start-close-2,
   #quick-start-more-details,
@@ -2010,14 +1726,12 @@ body.hide-help-buttons .info-button {
     min-width: 200px;
   }
 }
-
 .tile.is-processing {
   position: relative;
   overflow: hidden;
   border-radius: 4px;
   z-index: 0;
 }
-
 .tile.is-processing::before,
 .tile.is-processing::after {
   content: "";
@@ -2037,17 +1751,14 @@ body.hide-help-buttons .info-button {
   border-radius: inherit;
   z-index: -1;
 }
-
 .tile.is-processing::before {
   animation: glow-variance-1 5s ease-in-out infinite;
 }
-
 .tile.is-processing::after {
   animation: glow-variance-2 6s ease-in-out infinite;
   opacity: 0.25;
   filter: blur(10px);
 }
-
 @keyframes glow-variance-1 {
   0%,
   100% {
@@ -2067,7 +1778,6 @@ body.hide-help-buttons .info-button {
     opacity: 0.4;
   }
 }
-
 @keyframes glow-variance-2 {
   0%,
   100% {
@@ -2079,7 +1789,6 @@ body.hide-help-buttons .info-button {
     opacity: 0.5;
   }
 }
-
 .tile[class*="part_uranium1"].is-processing,
 .tile[class*="part_uranium2"].is-processing,
 .tile[class*="part_uranium3"].is-processing {
@@ -2087,7 +1796,6 @@ body.hide-help-buttons .info-button {
   --glow-color-2: #66ff66;
   --glow-color-3: #c2ffc2;
 }
-
 .tile[class*="part_plutonium1"].is-processing,
 .tile[class*="part_plutonium2"].is-processing,
 .tile[class*="part_plutonium3"].is-processing {
@@ -2095,7 +1803,6 @@ body.hide-help-buttons .info-button {
   --glow-color-2: #e7d601;
   --glow-color-3: #fff1b8;
 }
-
 .tile[class*="part_thorium1"].is-processing,
 .tile[class*="part_thorium2"].is-processing,
 .tile[class*="part_thorium3"].is-processing {
@@ -2103,7 +1810,6 @@ body.hide-help-buttons .info-button {
   --glow-color-2: #12e7fe;
   --glow-color-3: #c2f7ff;
 }
-
 .tile[class*="part_seaborgium1"].is-processing,
 .tile[class*="part_seaborgium2"].is-processing,
 .tile[class*="part_seaborgium3"].is-processing {
@@ -2111,7 +1817,6 @@ body.hide-help-buttons .info-button {
   --glow-color-2: #fe3fdd;
   --glow-color-3: #ffd2fb;
 }
-
 .tile[class*="part_dolorium1"].is-processing,
 .tile[class*="part_dolorium2"].is-processing,
 .tile[class*="part_dolorium3"].is-processing {
@@ -2119,7 +1824,6 @@ body.hide-help-buttons .info-button {
   --glow-color-2: #ffc8a4;
   --glow-color-3: #fff0e5;
 }
-
 .tile[class*="part_nefastium1"].is-processing,
 .tile[class*="part_nefastium2"].is-processing,
 .tile[class*="part_nefastium3"].is-processing {
@@ -2127,7 +1831,6 @@ body.hide-help-buttons .info-button {
   --glow-color-2: #7501de;
   --glow-color-3: #d0d5ff;
 }
-
 .tile[class*="part_protium1"].is-processing,
 .tile[class*="part_protium2"].is-processing,
 .tile[class*="part_protium3"].is-processing {
@@ -2135,21 +1838,17 @@ body.hide-help-buttons .info-button {
   --glow-color-2: #ff4111;
   --glow-color-3: #ffd6d6;
 }
-
-/* --- DEBUG PANEL STYLES --- */
 #debug_section {
   margin-top: 1rem;
   max-height: 60vh;
   overflow-y: auto;
 }
-
 #debug_content h3 {
   color: var(--warning-color);
   margin-bottom: 1rem;
   text-align: center;
   font-size: 1.2rem;
 }
-
 .debug-section {
   margin-bottom: 1.5rem;
   padding: 0.75rem;
@@ -2157,7 +1856,6 @@ body.hide-help-buttons .info-button {
   border: 1px solid var(--border-dark);
   border-radius: 3px;
 }
-
 .debug-section h4 {
   color: var(--accent-color);
   margin-bottom: 0.75rem;
@@ -2166,13 +1864,11 @@ body.hide-help-buttons .info-button {
   border-bottom: 1px solid var(--border-dark);
   padding-bottom: 0.25rem;
 }
-
 .debug-variables-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 0.5rem;
 }
-
 .debug-variable {
   display: flex;
   justify-content: space-between;
@@ -2183,75 +1879,58 @@ body.hide-help-buttons .info-button {
   font-size: 0.8rem;
   font-family: monospace;
 }
-
 .debug-key {
   color: var(--text-color);
   font-weight: bold;
   margin-right: 0.5rem;
 }
-
 .debug-value {
   color: var(--secondary-color);
   text-align: right;
   word-break: break-all;
 }
-
-/* Debug value type styling */
 .debug-null {
   color: #888;
   font-style: italic;
 }
-
 .debug-boolean {
   color: var(--warning-color);
   font-weight: bold;
 }
-
 .debug-number {
   color: var(--success-color);
   font-weight: bold;
 }
-
 .debug-string {
   color: var(--accent-color);
 }
-
 .debug-array {
   color: var(--primary-color);
   font-style: italic;
 }
-
 .debug-object {
   color: var(--secondary-color);
   font-style: italic;
 }
-
 .debug-other {
   color: var(--text-color);
 }
-
-/* Mobile responsive adjustments for debug panel */
 @media (max-width: 768px) {
   .debug-variables-list {
     grid-template-columns: 1fr;
   }
-
   .debug-variable {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
   }
-
   .debug-value {
     text-align: left;
   }
-
   #debug_section {
     max-height: 50vh;
   }
 }
-
-/* --- SPLASH SCREEN STYLES --- */
 #splash-screen {
   position: fixed;
   top: 0;
@@ -2266,15 +1945,12 @@ body.hide-help-buttons .info-button {
   z-index: 9999;
   transition: opacity 0.5s ease-out;
 }
-
 #splash-screen.fade-out {
   opacity: 0;
 }
-
 #splash-screen.hidden {
   display: none;
 }
-
 .splash-logo {
   width: 120px;
   height: 120px;
@@ -2283,7 +1959,6 @@ body.hide-help-buttons .info-button {
   margin-bottom: 2rem;
   animation: pulse 2s ease-in-out infinite;
 }
-
 .splash-title {
   font-family: "Press Start 2P", cursive;
   font-size: 2rem;
@@ -2292,7 +1967,6 @@ body.hide-help-buttons .info-button {
   margin-bottom: 1rem;
   text-align: center;
 }
-
 .splash-subtitle {
   font-family: "Press Start 2P", cursive;
   font-size: 0.6rem;
@@ -2300,14 +1974,12 @@ body.hide-help-buttons .info-button {
   margin-bottom: 2rem;
   text-align: center;
 }
-
 .splash-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
 }
-
 .splash-spinner {
   width: 40px;
   height: 40px;
@@ -2316,7 +1988,6 @@ body.hide-help-buttons .info-button {
   border-radius: 50%;
   animation: spin 2s linear infinite;
 }
-
 .splash-status {
   font-family: "Press Start 2P", cursive;
   font-size: 0.6rem;
@@ -2324,7 +1995,6 @@ body.hide-help-buttons .info-button {
   text-align: center;
   min-height: 1.2rem;
 }
-
 .splash-flavor {
   font-family: "Press Start 2P", cursive;
   font-size: 0.8rem;
@@ -2337,24 +2007,21 @@ body.hide-help-buttons .info-button {
   transition: opacity 0.3s ease-in-out;
   font-style: italic;
 }
-
 .splash-start-options {
   display: none;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-top: 2rem;
   opacity: 0;
   width: 100%;
   transform: translateY(20px);
   transition: opacity 0.5s ease-out, transform 0.5s ease-out;
 }
-
 .splash-start-options.show {
   opacity: 1;
   transform: translateY(0);
 }
-
 .splash-persistent-flavor {
   font-family: "Press Start 2P", cursive;
   font-size: 0.9rem;
@@ -2367,120 +2034,95 @@ body.hide-help-buttons .info-button {
   opacity: 0.8;
   animation: flavor-wiggle 4s ease-in-out infinite;
 }
-
-/* Base button styles */
 .splash-btn {
   font-family: "Press Start 2P", cursive;
-  font-size: 0.8rem;
-  padding: 1rem 2rem;
+  font-size: 0.75rem;
+  padding: 1rem;
   border: 3px solid;
   border-radius: 0;
   cursor: pointer;
   text-transform: uppercase;
   transition: all 0.2s ease;
   min-width: 200px;
-  width: auto; /* Allow inline styles to override */
-  max-width: 50%; /* Default max width for consistency */
+  width: auto;
+  max-width: 50%;
   text-align: center;
   color: white;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
     1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
-  margin: 0.5rem 0; /* Consistent spacing between buttons */
-  /* Ensure flex content is centered */
+  margin: 0.5rem 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
 .splash-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
 }
-
 .splash-btn:active {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
-
-/* Button variants */
 .splash-btn-start {
   background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
   border-color: #0277bd #01579b #01579b #0277bd;
 }
-
 .splash-btn-start:hover {
   background: linear-gradient(135deg, #29b6f6 0%, #0288d1 100%);
 }
-
 .splash-btn-load {
   background: #4a7dab;
   border-color: #4a7dab #2e3a4f #2e3a4f #4a7dab;
 }
-
 .splash-btn-load:hover {
   background: #2e3a4f;
 }
-
-/* Google Drive specific buttons */
 .splash-btn-load#splash-signin-btn {
   background: linear-gradient(135deg, #db4437 0%, #c23321 100%);
   border-color: #a52714 #8b1a00 #8b1a00 #a52714;
 }
-
 .splash-btn-load#splash-signin-btn:hover {
   background: linear-gradient(135deg, #c23321 0%, #a52714 100%);
 }
-
 .splash-btn-load#splash-load-cloud-btn {
   background: linear-gradient(135deg, #0f9d58 0%, #0d8043 100%);
   border-color: #0d652d #0a5125 #0a5125 #0d652d;
 }
-
 .splash-btn-load#splash-load-cloud-btn:hover {
   background: linear-gradient(135deg, #0d8043 0%, #0b6d37 100%);
 }
-
 .splash-btn-install#splash-signout-btn {
   background: linear-gradient(135deg, #757575 0%, #616161 100%);
   border-color: #424242 #212121 #212121 #424242;
 }
-
 .splash-btn-install#splash-signout-btn:hover {
   background: linear-gradient(135deg, #616161 0%, #424242 100%);
 }
-
 .splash-btn-install {
   background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
   border-color: #388e3c #2e7d32 #2e7d32 #388e3c;
 }
-
 .splash-btn-install:hover {
   background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
 }
-
 .splash-btn-install.installed {
   background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
   border-color: #616161 #424242 #424242 #616161;
   cursor: not-allowed;
   opacity: 0.7;
 }
-
 .splash-btn-install.installed:hover {
   transform: none;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
-
 .splash-btn-upload {
   background: linear-gradient(135deg, #4285f4 0%, #3367d6 100%);
   border-color: #1976d2 #0d47a1 #0d47a1 #1976d2;
 }
-
 .splash-btn-upload:hover {
   background: linear-gradient(135deg, #3367d6 0%, #1976d2 100%);
 }
-
-/* Upload button styling */
 .splash-btn-small.splash-btn-upload {
   font-size: 0.8rem;
   min-width: 80px;
@@ -2490,21 +2132,15 @@ body.hide-help-buttons .info-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Connect with Load Game button */
   border-top-left-radius: 0 !important;
   border-bottom-left-radius: 0 !important;
   border-left: 1px solid rgba(255, 255, 255, 0.2) !important;
-  /* Match the exact height of the main load button */
   height: 100%;
   box-sizing: border-box;
 }
-
-/* Ensure display can be controlled by JavaScript */
 .splash-btn-small.splash-btn-upload[style*="display: none"] {
   display: none !important;
 }
-
-/* Loading spinner animation for Google Drive operations */
 @keyframes spin {
   0% {
     transform: rotate(0deg);
@@ -2513,22 +2149,15 @@ body.hide-help-buttons .info-button {
     transform: rotate(360deg);
   }
 }
-
-/* Upload button content styling */
 .splash-btn-small.splash-btn-upload .upload-icon {
   font-size: 1.2em;
   margin-bottom: 4px;
   line-height: 1;
 }
-
 .splash-btn-small.splash-btn-upload .upload-text {
   font-size: 0.9em;
   line-height: 1.1;
 }
-
-/* Save details styling removed - load button now simplified */
-
-/* Animations */
 @keyframes pulse {
   0%,
   100% {
@@ -2538,7 +2167,6 @@ body.hide-help-buttons .info-button {
     transform: scale(1.1);
   }
 }
-
 @keyframes spin {
   0% {
     transform: rotate(0deg);
@@ -2547,8 +2175,6 @@ body.hide-help-buttons .info-button {
     transform: rotate(360deg);
   }
 }
-
-/* Wiggle animation for persistent flavor text */
 @keyframes flavor-wiggle {
   0% {
     transform: rotate(-2deg) translateX(-1.5px);
@@ -2566,205 +2192,166 @@ body.hide-help-buttons .info-button {
     transform: rotate(-2deg) translateX(-1.5px);
   }
 }
-
-/* Desktop enhancements */
 @media (min-width: 1200px) {
   .splash-logo {
     width: 180px;
     height: 180px;
     margin-bottom: 2.5rem;
   }
-
   .splash-title {
     font-size: 3.5rem;
     margin-bottom: 1.5rem;
   }
-
   .splash-subtitle {
     font-size: 1rem;
     margin-bottom: 3rem;
   }
-
   .splash-flavor {
     font-size: 1.2rem;
     margin-top: 1.2rem;
     padding: 0 1rem;
     max-width: 800px;
   }
-
   .splash-persistent-flavor {
     font-size: 1.5rem;
     margin: 2rem 0 1rem 0;
     padding: 0 1.5rem;
     max-width: 900px;
   }
-
   .splash-btn {
     font-size: 1.1rem;
     padding: 1.5rem 3rem;
     min-width: 350px;
   }
-
   .splash-start-options {
     margin-top: 3rem;
     gap: 1.5rem;
   }
-
-  /* Upload button desktop sizing */
   .splash-btn-small.splash-btn-upload {
     font-size: 0.9rem;
     min-width: 100px;
     width: 100px;
     padding: 0.75rem;
   }
-
   .splash-btn-small.splash-btn-upload .upload-icon {
     font-size: 1.4em;
     margin-bottom: 6px;
   }
-
   .splash-btn-small.splash-btn-upload .upload-text {
     font-size: 1em;
   }
-
   .splash-status {
     font-size: 0.9rem;
     min-height: 1.8rem;
   }
-
   .splash-version {
     font-size: 0.8rem;
   }
-
   .splash-spinner {
     width: 60px;
     height: 60px;
     border-width: 6px;
   }
 }
-
 @media (min-width: 769px) and (max-width: 1199px) {
   .splash-logo {
     width: 150px;
     height: 150px;
     margin-bottom: 2.25rem;
   }
-
   .splash-title {
     font-size: 2.75rem;
     margin-bottom: 1.25rem;
   }
-
   .splash-subtitle {
     font-size: 0.8rem;
     margin-bottom: 2.5rem;
   }
-
   .splash-flavor {
     font-size: 1rem;
     margin-top: 1rem;
     padding: 0 0.75rem;
     max-width: 700px;
   }
-
   .splash-persistent-flavor {
     font-size: 1.1rem;
     margin: 1.75rem 0 0.75rem 0;
     padding: 0 1rem;
     max-width: 750px;
   }
-
   .splash-btn {
     font-size: 0.95rem;
     padding: 1.25rem 2.5rem;
     min-width: 320px;
   }
-
   .splash-start-options {
     margin-top: 2.5rem;
     gap: 1.25rem;
   }
-
   .splash-status {
     font-size: 0.8rem;
     min-height: 1.6rem;
   }
-
   .splash-version {
     font-size: 0.7rem;
   }
-
   .splash-spinner {
     width: 50px;
     height: 50px;
     border-width: 5px;
   }
 }
-
-/* Mobile responsive */
 @media (max-width: 768px) {
   .splash-logo {
     width: 80px;
     height: 80px;
   }
-
   .splash-title {
     font-size: 1.5rem;
   }
-
   .splash-subtitle {
     font-size: 0.6rem;
   }
-
   .splash-flavor {
     font-size: 0.7rem;
     margin-top: 0.8rem;
     padding: 0 0.5rem;
   }
-
   .splash-persistent-flavor {
     font-size: 0.8rem;
     margin: 1rem 0 0.5rem 0;
     padding: 0 0.5rem;
   }
-
   .splash-version {
     font-size: 0.6rem;
   }
-
   .splash-btn {
     font-size: 0.7rem;
     padding: 0.8rem 1.5rem;
     min-width: 250px;
   }
-
   .splash-start-options {
     margin-top: 1.5rem;
     gap: 0.8rem;
   }
 }
-
 @media (max-width: 600px) {
   .splash-btn {
     font-size: 0.8em;
     padding: 0.5rem 1rem;
     min-width: 200px;
   }
-
   .splash-flavor {
     font-size: 0.6rem;
     margin-top: 0.6rem;
     padding: 0 0.25rem;
   }
-
   .splash-persistent-flavor {
     font-size: 0.7rem;
     margin: 0.8rem 0 0.25rem 0;
     padding: 0 0.25rem;
   }
 }
-
-/* Objective completion animation styles */
 .objective-old {
   display: inline-block;
   color: #aaa;
@@ -2774,21 +2361,17 @@ body.hide-help-buttons .info-button {
   z-index: 2;
   transition: color 0.5s, opacity 0.5s;
 }
-
 .objective-old.struck {
   text-decoration: line-through wavy #ff3c3c 2px;
   color: #ff3c3c;
   opacity: 0.5;
 }
-
 .animate-strikeout {
   transition: text-decoration 0.5s, color 0.5s, opacity 0.2s;
 }
-
 .animate-scroll-left {
   animation: objective-scroll-left 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
-
 @keyframes objective-scroll-left {
   0% {
     transform: translateX(0);
@@ -2802,13 +2385,11 @@ body.hide-help-buttons .info-button {
     opacity: 0;
   }
 }
-
 #objective_title.animate-scroll-in {
   animation: objective-scroll-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   position: relative;
   z-index: 3;
 }
-
 @keyframes objective-scroll-in {
   0% {
     transform: translateX(120%);
@@ -2822,14 +2403,11 @@ body.hide-help-buttons .info-button {
     opacity: 1;
   }
 }
-
-/* Simplified Objective Completion Animation */
 #objectives_section.flash {
   animation: obj-flash-subtle 0.8s ease-out;
   position: relative;
   z-index: 10;
 }
-
 @keyframes obj-flash-subtle {
   0% {
     background: var(--panel-bg, #22252e);
@@ -2855,7 +2433,6 @@ body.hide-help-buttons .info-button {
     box-shadow: none;
   }
 }
-
 .confetti {
   position: absolute;
   width: 4px;
@@ -2866,7 +2443,6 @@ body.hide-help-buttons .info-button {
   z-index: 20;
   animation: confetti-fall-subtle 0.8s ease-out forwards;
 }
-
 @keyframes confetti-fall-subtle {
   0% {
     opacity: 0.6;
@@ -2881,14 +2457,13 @@ body.hide-help-buttons .info-button {
     transform: translateY(30px) rotate(180deg) scale(0.5);
   }
 }
-
 #collapsed_controls_nav {
   display: none;
   flex-direction: row;
   justify-content: space-around;
   align-items: center;
   position: fixed;
-  bottom: 56px; /* just above bottom nav */
+  bottom: 56px;
   left: 0;
   right: 0;
   height: 56px;
@@ -2922,7 +2497,6 @@ body.hide-help-buttons .info-button {
     display: none !important;
   }
 }
-
 #controls_collapsed_group {
   display: flex;
   flex-direction: row;
@@ -2950,8 +2524,6 @@ body.hide-help-buttons .info-button {
   opacity: 1;
   border-radius: 6px;
 }
-
-/* --- Faction Selection Panel Styles --- */
 #faction-select-panel {
   background: #111;
   color: #fff;
@@ -3095,7 +2667,6 @@ body.hide-help-buttons .info-button {
     min-width: 220px;
   }
 }
-
 .splash-version {
   position: absolute;
   bottom: 1rem;
@@ -3106,17 +2677,13 @@ body.hide-help-buttons .info-button {
   color: #666;
   opacity: 0.7;
 }
-
-/* Help mode styling */
 body.help-mode-active .part {
   cursor: help !important;
 }
-
 body.help-mode-active .part:hover {
   transform: scale(1.05);
   transition: transform 0.1s ease;
 }
-
 body.help-mode-active .parts_header::after {
   content: "Help Mode Active - Click parts for information";
   display: block;
@@ -3130,14 +2697,10 @@ body.help-mode-active .parts_header::after {
   order: 10;
   text-shadow: 1px 0 0 white, -1px 0 0 white, 0 1px 0 white, 0 -1px 0 white;
 }
-
-/* Specific optimization for iPhone SE and similar (375px) */
-
 .splash-start-options.show {
   opacity: 1;
   transform: translateY(0);
 }
-
 .splash-persistent-flavor {
   font-family: "Press Start 2P", cursive;
   font-size: 0.7rem;
@@ -3149,8 +2712,6 @@ body.help-mode-active .parts_header::after {
   font-style: italic;
   opacity: 0.8;
 }
-
-/* Google Drive button styles */
 .google-drive-button {
   display: inline-block;
   padding: 12px 24px;
@@ -3165,54 +2726,43 @@ body.help-mode-active .parts_header::after {
   min-width: 200px;
   text-align: center;
 }
-
 .google-drive-button.sign-in {
   background-color: #db4437;
   color: white;
 }
-
 .google-drive-button.sign-in:hover {
   background-color: #c23321;
   transform: translateY(-1px);
 }
-
 .google-drive-button.load {
   background-color: #0f9d58;
   color: white;
 }
-
 .google-drive-button.load:hover {
   background-color: #0b8043;
   transform: translateY(-1px);
 }
-
 .google-drive-button.upload {
   background-color: #4285f4;
   color: white;
 }
-
 .google-drive-button.upload:hover {
   background-color: #3367d6;
   transform: translateY(-1px);
 }
-
 .google-drive-button.sign-out {
   background-color: #666;
   color: white;
 }
-
 .google-drive-button.sign-out:hover {
   background-color: #555;
   transform: translateY(-1px);
 }
-
 .google-drive-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none !important;
 }
-
-/* Encryption indicators */
 .encryption-badge {
   display: inline-flex;
   align-items: center;
@@ -3227,22 +2777,17 @@ body.help-mode-active .parts_header::after {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
-
 .encryption-badge::before {
   content: "🔒";
   font-size: 8px;
 }
-
 .encrypted-save-indicator {
   color: #ff6b35;
   font-weight: bold;
 }
-
 .encrypted-save-indicator::before {
   content: "🔒 ";
 }
-
-/* Enhanced notification styles for encrypted saves */
 .notification.encrypted {
   border-left: 4px solid #ff6b35;
   background: linear-gradient(
@@ -3251,9 +2796,59 @@ body.help-mode-active .parts_header::after {
     rgba(247, 147, 30, 0.1)
   );
 }
-
 .notification.encrypted::before {
   content: "🔒 ";
   font-weight: bold;
   color: #ff6b35;
+}
+/* Styles for fallback UI elements */
+#fallback-start-interface {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  color: white;
+  font-family: "Press Start 2P", monospace;
+  text-align: center;
+}
+#fallback-start-btn {
+  padding: 10px 20px;
+  font-size: 16px;
+  font-family: "Press Start 2P", monospace;
+}
+#splash-screen.fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: #2c3e50;
+  color: white;
+  font-family: "Press Start 2P", monospace;
+}
+.splash-load-container {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  justify-content: center;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.splash-load-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 2rem;
+  min-height: auto;
+  flex: 1;
+  border-radius: 8px;
+  margin-right: 0;
 }

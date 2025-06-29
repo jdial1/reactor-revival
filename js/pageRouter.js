@@ -52,7 +52,7 @@ export class PageRouter {
 
     // Hide the currently showing page
     if (this.currentPageId && this.pageCache.has(this.currentPageId)) {
-      this.pageCache.get(this.currentPageId).classList.remove("showing");
+      this.pageCache.get(this.currentPageId).classList.add("hidden");
     }
 
     this.currentPageId = pageId;
@@ -61,13 +61,30 @@ export class PageRouter {
     // If page is already cached, just show it and we're done.
     if (this.pageCache.has(pageId)) {
       const cachedPage = this.pageCache.get(pageId);
-      cachedPage.classList.add("showing");
+      cachedPage.classList.remove("hidden");
       console.log(`PageRouter: Switched to cached page "${pageId}".`);
       if (pageId === "reactor_section" && this.ui.resizeReactor) {
         this.ui.resizeReactor();
       }
+      // Always call showObjectivesForPage when switching pages, even cached ones
+      this.ui.showObjectivesForPage(pageId);
       return;
     }
+
+    // --- START SCROLL TO TOP ---
+    // Scroll to top for specific pages
+    const pagesToScroll = [
+      "reactor_section",
+      "upgrades_section",
+      "experimental_upgrades_section",
+    ];
+    if (pagesToScroll.includes(pageId)) {
+      const contentArea = document.querySelector("#main_content_wrapper");
+      if (contentArea) {
+        contentArea.scrollTop = 0;
+      }
+    }
+    // --- END SCROLL TO TOP ---
 
     // Page not cached, so load, build, and initialize it.
     const pageDef = this.pages[pageId];
@@ -92,7 +109,7 @@ export class PageRouter {
       if (newPageElement && newPageElement.classList.contains("page")) {
         pageContentArea.appendChild(newPageElement);
         this.pageCache.set(pageId, newPageElement);
-        newPageElement.classList.add("showing");
+        newPageElement.classList.remove("hidden");
 
         if (!this.initializedPages.has(pageId)) {
           console.log(
@@ -116,11 +133,11 @@ export class PageRouter {
         if (errorResponse.ok) {
           pageContentArea.innerHTML = await errorResponse.text();
         } else {
-          pageContentArea.innerHTML = `<div class="pixel-panel explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`;
+          pageContentArea.innerHTML = `<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`;
         }
       } catch (errorPageError) {
         console.error("Failed to load error page:", errorPageError);
-        pageContentArea.innerHTML = `<div class="pixel-panel explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`;
+        pageContentArea.innerHTML = `<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`;
       }
       if (this.currentPageId) this.updateNavigation(this.currentPageId);
     }
@@ -131,11 +148,9 @@ export class PageRouter {
     navSelectors.forEach((selector) => {
       const navContainer = document.querySelector(selector);
       if (navContainer) {
-        navContainer
-          .querySelectorAll(".pixel-btn[data-page]")
-          .forEach((btn) => {
-            btn.classList.toggle("active", btn.dataset.page === activePageId);
-          });
+        navContainer.querySelectorAll("button[data-page]").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.page === activePageId);
+        });
       }
     });
 
@@ -153,15 +168,31 @@ export class PageRouter {
 
   async loadGameLayout() {
     try {
+      console.log("[DEBUG] PageRouter: Starting to load game layout...");
       const response = await fetch("pages/game.html");
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const html = await response.text();
+      console.log(
+        "[DEBUG] PageRouter: Game layout HTML loaded, length:",
+        html.length
+      );
+
       const wrapper = document.getElementById("wrapper");
       if (wrapper) {
+        console.log(
+          "[DEBUG] PageRouter: Wrapper element found, setting innerHTML..."
+        );
         wrapper.innerHTML = html;
-        wrapper.style.display = "";
+        console.log(
+          "[DEBUG] PageRouter: Removing hidden class from wrapper..."
+        );
+        wrapper.classList.remove("hidden");
+        console.log(
+          "[DEBUG] PageRouter: Wrapper classes are now:",
+          wrapper.className
+        );
       } else {
         console.error(
           "PageRouter: #wrapper element not found to load game layout."

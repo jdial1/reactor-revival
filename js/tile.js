@@ -1,3 +1,4 @@
+import { Part } from "./part.js";
 export class Tile {
   constructor(row, col, game) {
     this.game = game;
@@ -6,41 +7,33 @@ export class Tile {
     this.heat = 0;
     this.display_power = 0;
     this.display_heat = 0;
-    // Note: These are now private. We will use getters.
     this._containmentNeighborTiles = [];
     this._cellNeighborTiles = [];
     this._reflectorNeighborTiles = [];
-
     this.activated = false;
     this.row = row;
     this.col = col;
     this.enabled = false;
     this.display_chance = 0;
     this.display_chance_percent_of_total = 0;
-
     this.heat_contained = 0;
     this.ticks = 0;
-
     this.$el = null;
     this.$percent = null;
-    this._neighborCache = null; // This will hold our cached neighbor lists
+    this._neighborCache = null;
   }
-
   _calculateAndCacheNeighbors() {
-    // This logic is moved from reactor.js and localized to the tile.
     const p = this.part;
     if (!p) {
       this._neighborCache = { containment: [], cell: [], reflector: [] };
       return;
     }
-
     const neighbors = Array.from(
       this.game.tileset.getTilesInRange(this, p.range || 1)
     );
     const containment = [];
     const cell = [];
     const reflector = [];
-
     for (const neighbor_tile of neighbors) {
       if (neighbor_tile.part && neighbor_tile.activated) {
         if (neighbor_tile.part.containment) containment.push(neighbor_tile);
@@ -52,48 +45,37 @@ export class Tile {
     }
     this._neighborCache = { containment, cell, reflector };
   }
-
   invalidateNeighborCaches() {
-    this._neighborCache = null; // Invalidate self
+    this._neighborCache = null;
     for (const neighbor of this.game.tileset.getTilesInRange(this, 1)) {
-      if (neighbor) neighbor._neighborCache = null; // Invalidate neighbors
+      if (neighbor) neighbor._neighborCache = null;
     }
   }
-
-  // --- Convert properties to getters for on-demand caching ---
-
   get containmentNeighborTiles() {
     if (this._neighborCache === null) {
       this._calculateAndCacheNeighbors();
     }
     return this._neighborCache.containment;
   }
-
   get cellNeighborTiles() {
     if (this._neighborCache === null) {
       this._calculateAndCacheNeighbors();
     }
     return this._neighborCache.cell;
   }
-
   get reflectorNeighborTiles() {
     if (this._neighborCache === null) {
       this._calculateAndCacheNeighbors();
     }
     return this._neighborCache.reflector;
   }
-
   getEffectiveVentValue() {
     if (!this.part || !this.part.vent) return 0;
     let ventValue = this.part.vent;
-
-    // Apply vent upgrades
     const ventUpgrade = this.game.upgradeset.getUpgrade("improved_heat_vents");
     if (ventUpgrade) {
       ventValue *= Math.pow(2, ventUpgrade.level);
     }
-
-    // Apply active venting upgrade
     const activeVenting = this.game.upgradeset.getUpgrade("active_venting");
     if (activeVenting && activeVenting.level > 0) {
       let capacitorBonus = 0;
@@ -104,10 +86,8 @@ export class Tile {
       }
       ventValue *= 1 + (activeVenting.level * capacitorBonus) / 100;
     }
-
     return ventValue;
   }
-
   getEffectiveTransferValue() {
     if (this.part && this.part.transfer) {
       const transferMultiplier =
@@ -116,28 +96,24 @@ export class Tile {
     }
     return 0;
   }
-
   disable() {
     if (this.enabled) {
       this.enabled = false;
       if (this.$el) this.$el.classList.remove("enabled");
     }
   }
-
   enable() {
     if (!this.enabled) {
       this.enabled = true;
       if (this.$el) this.$el.classList.add("enabled");
     }
   }
-
   async setPart(partInstance) {
-    // Only clear if there is an existing part
     if (this.part) {
       this.clearPart(false);
     }
     this.part = partInstance || null;
-    this.invalidateNeighborCaches(); // Invalidate cache on change
+    this.invalidateNeighborCaches();
     if (this.part) {
       this.activated = true;
       this.ticks = this.part.ticks;
@@ -146,9 +122,35 @@ export class Tile {
         this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
         this.$el.style.backgroundImage = `url('${this.part.getImagePath()}')`;
         this.updateVisualState();
-      }
 
-      // Clear meltdown state when placing parts after meltdown
+        // Remove old percent bars
+        const percentWrapperWrapper = this.$el.querySelector(
+          ".percent_wrapper_wrapper"
+        );
+        if (percentWrapperWrapper) {
+          percentWrapperWrapper.innerHTML = "";
+          const percentWrapper = document.createElement("div");
+          percentWrapper.className = "percent_wrapper";
+
+          // Add heat bar if part has base_containment
+          if (this.part && this.part.base_containment > 0) {
+            const heatBar = document.createElement("div");
+            heatBar.className = "percent heat";
+            percentWrapper.appendChild(heatBar);
+            this.$heatBar = heatBar;
+          }
+
+          // Add durability bar if part has base_ticks
+          else if (this.part && this.part.base_ticks > 0) {
+            const durabilityBar = document.createElement("div");
+            durabilityBar.className = "percent durability";
+            percentWrapper.appendChild(durabilityBar);
+            this.$durabilityBar = durabilityBar;
+          }
+
+          percentWrapperWrapper.appendChild(percentWrapper);
+        }
+      }
       if (this.game.reactor.has_melted_down) {
         console.log(
           "[Recovery] Clearing meltdown state after placing part:",
@@ -160,19 +162,12 @@ export class Tile {
           "max:",
           this.game.reactor.max_heat
         );
-
-        // Reset reactor heat to prevent immediate re-meltdown
         this.game.reactor.current_heat = 0;
         this.game.reactor.clearMeltdownState();
-
-        // Update UI to reflect reset heat
         this.game.ui.stateManager.setVar(
           "current_heat",
           this.game.reactor.current_heat
         );
-
-        // Restart the engine if it was stopped due to meltdown
-        // Force engine restart by ensuring pause state is properly managed
         if (this.game.engine && !this.game.engine.running) {
           const currentPauseState = this.game.ui.stateManager.getVar("pause");
           console.log("[Recovery] Current pause state:", currentPauseState);
@@ -181,15 +176,12 @@ export class Tile {
             this.game.engine.running
           );
           console.log("[Recovery] Game paused state:", this.game.paused);
-
-          // Force unpause if needed, then restart engine
           if (currentPauseState) {
             console.log("[Recovery] Unpausing game");
             this.game.ui.stateManager.setVar("pause", false);
           } else {
-            // Even if not paused, force engine restart
             console.log("[Recovery] Force restarting engine");
-            this.game.paused = false; // Ensure game.paused is synchronized
+            this.game.paused = false;
             this.game.engine.start();
           }
         }
@@ -201,30 +193,20 @@ export class Tile {
         );
       }
     }
-
-    // Update reactor stats after placing/removing a part
     this.game.reactor.updateStats();
-
-    // Save game after placing a part
     if (this.game && typeof this.game.saveGame === "function") {
       this.game.saveGame();
     }
   }
-
   clearPart(full_clear = true) {
     if (!this.part) return;
     const part_id = this.part.id;
-
-    this.invalidateNeighborCaches(); // Invalidate cache on change
-
+    this.invalidateNeighborCaches();
     if (full_clear) {
       const sell_value = this.calculateSellValue();
       this.game.addMoney(sell_value);
     }
-
-    // Always set activated to false when a part is cleared
     this.activated = false;
-
     this.part = null;
     this.ticks = 0;
     this.heat_contained = 0;
@@ -232,7 +214,6 @@ export class Tile {
     this.heat = 0;
     this.display_power = 0;
     this.display_heat = 0;
-
     if (this.$el) {
       const baseClasses = ["tile"];
       if (this.enabled) baseClasses.push("enabled");
@@ -240,54 +221,42 @@ export class Tile {
       this.$el.style.backgroundImage = "none";
       if (this.$percent) this.$percent.style.width = "0%";
     }
-
     if (this.game.tooltip_manager?.current_tile_context === this) {
       this.game.tooltip_manager.hide();
     }
-
     this.game.reactor.updateStats();
-
     this.updateVisualState();
     if (this.$el) {
       this.$el.classList.remove("is-processing");
     }
-    // Save game after removing a part
     if (this.game && typeof this.game.saveGame === "function") {
       this.game.saveGame();
     }
   }
-
   updateVisualState() {
-    if (!this.$percent || !this.part || !this.activated) {
-      if (this.$percent) this.$percent.style.width = "0%";
+    if (!this.$el || !this.part || !this.activated) {
+      if (this.$heatBar) this.$heatBar.style.width = "0%";
+      if (this.$durabilityBar) this.$durabilityBar.style.width = "0%";
       return;
     }
 
-    if (
-      (this.part.category === "cell" || this.part.category === "reflector") &&
-      this.part.ticks > 0
-    ) {
-      const perc = Math.max(0, Math.min(1, this.ticks / this.part.ticks));
-      this.$percent.style.width = perc * 100 + "%";
-      this.$percent.style.backgroundColor = "#0f0";
-      this.$el.classList.toggle("spent", this.ticks === 0);
-    } else if (this.part.containment > 0 || this.heat_contained > 0) {
-      // Show heat bar if part has containment OR currently contains heat
-      const maxHeat = this.part.containment || Math.max(this.heat_contained, 1);
-      const perc = Math.max(0, Math.min(1, this.heat_contained / maxHeat));
-      this.$percent.style.width = perc * 100 + "%";
-      this.$percent.style.backgroundColor = "#f00";
-      this.$el.classList.remove("spent");
+    // Update heat bar if present
+    if (this.$heatBar && this.part && this.part.base_containment > 0) {
+      const maxHeat = this.part.containment || 1;
+      const percent = Math.max(0, Math.min(1, this.heat_contained / maxHeat));
+      this.$heatBar.style.width = percent * 100 + "%";
+    }
 
-      // Debug logging for parts without containment that have heat
-      if (!this.part.containment && this.heat_contained > 0) {
-        console.log(
-          `[Heat Bar] ${this.part.id} has ${this.heat_contained} heat but no containment`
-        );
-      }
-    } else {
+    // Update durability bar if present
+    if (this.$durabilityBar && this.part && this.part.base_ticks > 0) {
+      const maxTicks = this.part.ticks || 1;
+      const percent = Math.max(0, Math.min(1, this.ticks / maxTicks));
+      this.$durabilityBar.style.width = percent * 100 + "%";
+    }
+
+    // Fallback for legacy $percent
+    if (this.$percent && !this.$heatBar && !this.$durabilityBar) {
       this.$percent.style.width = "0%";
-      this.$el.classList.remove("spent");
     }
 
     if (this.part && this.part.category === "cell") {
@@ -298,28 +267,24 @@ export class Tile {
       this.$el.classList.remove("is-processing");
     }
   }
-
   calculateSellValue() {
     if (!this.part) {
       return 0;
     }
     const part = this.part;
     let sellValue = part.cost;
-
-    // Parts with a limited lifespan (value decreases over time)
     if (part.ticks > 0 && typeof this.ticks === "number") {
       const lifeRemainingRatio = Math.max(0, this.ticks / part.ticks);
       sellValue = Math.ceil(part.cost * lifeRemainingRatio);
-    }
-    // Parts that degrade with heat (value decreases with damage)
-    else if (part.containment > 0 && typeof this.heat_contained === "number") {
+    } else if (
+      part.containment > 0 &&
+      typeof this.heat_contained === "number"
+    ) {
       const damageRatio = Math.min(1, this.heat_contained / part.containment);
       sellValue = part.cost - Math.ceil(part.cost * damageRatio);
     }
-
     return Math.max(0, sellValue);
   }
-
   updateTooltip(force = false) {
     if (this.game.tooltip.current_obj === this.part || force) {
       const heat_percent = this.heat / this.part.containment;
@@ -327,7 +292,6 @@ export class Tile {
     } else {
       this.$el.style.backgroundColor = "transparent";
     }
-
     if (this.part && this.part.category === "cell") {
       const isPaused = this.game.ui.stateManager.getVar("pause");
       const isProcessing = this.ticks > 0 && !isPaused;
@@ -336,19 +300,10 @@ export class Tile {
       this.$el.classList.remove("is-processing");
     }
   }
-
-  /**
-   * Refreshes the tile's visual state after DOM element creation.
-   * This is needed when loading save games where parts are set before DOM elements exist.
-   */
   refreshVisualState() {
     if (!this.$el || !this.part) return;
-
-    // Set the part classes and background image
     this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
     this.$el.style.backgroundImage = `url('${this.part.getImagePath()}')`;
-
-    // Update the visual state (progress bars, etc.)
     this.updateVisualState();
   }
 }
