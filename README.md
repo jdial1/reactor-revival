@@ -17,31 +17,21 @@ Reactor Revival is the latest step in a storied chain of reactor games and plann
 *  **<img src="https://wiki.industrial-craft.net/images/archive/c/cc/20120922200247%21Grid_Uranium_Cell.png" width="35" alt="Industrial Craft Cell">  [ IndustrialCraft² ](https://wiki.industrial-craft.net/index.php?title=Old_Reactor_Mechanics_and_Components)** - The Original IC2 Reactor Minecraft Mod.
 *  **<img src="https://github.com/jdial1/reactor-revival/blob/master/img/misc/reactor_planner.png" width="35" alt="Reactor Planner Cell">  [ Talonius's Reactor Planner ](https://forum.industrial-craft.net/thread/2147-new-reactor-planner-made-by-talonius/)** – An IC2 reactor planner tool.
 *  **<img src="https://github.com/MauveCloud/Ic2ExpReactorPlanner/blob/master/src/assets/ic2/textures/items/reactorUraniumSimple.png?raw=true)" width="35" alt="Exp Reactor Planner Cell">  [ MauveCloud's IC2 Experimental Planner ](https://github.com/MauveCloud/Ic2ExpReactorPlanner)** – A rebuilt IC2 reactor planner tool supporting GregTech and IC2 Experimental mechanics.
-*  **<img src="https://github.com/jdial1/reactor-revival/blob/master/img/misc/reactor_incremental.png" width="35" alt="Exp Reactor Incremental Cell"> [ Reactor Incremental ](https://www.kongregate.com/games/Cael/reactor-incremental)** by Cael (with help from Mephyst) – A clicker/idle game that turned IC2-style reactors into a rewarding progression system with prestige and exotic particles.
+*  **<img src="https://github.com/jdial1/reactor-revival/blob/master/img/misc/reactor_incremental.png" width="35" alt="Exp Reactor Incremental Cell"> [ Reactor Incremental ](https://www.kongregate.com/games/Cael/reactor-incremental)** by Cael (with help from Mephyst) – A clicker/idle game that turned IC2-style reactors into a progression system.
 *  **<img src="https://github.com/cwmonkey/reactor-knockoff/blob/master/img/cell_1_1.gif?raw=true" width="35" alt="Reactor Knockoff Cell">[ Reactor Knockoff ](https://github.com/cwmonkey/reactor-knockoff)** by cwmonkey – A HTML5/JavaScript web adaptation of Reactor Incremental.
 
 ## 🚀 Development
 
 ### Quick Start
 ```bash
-# Clone the repository
 git clone https://github.com/jdial1/reactor-revival.git
 cd reactor-revival
-
-# Install dependencies
 npm install
-
-# Download external libraries and start development server
 npm run dev
 ```
 
 ### External Libraries
-This project uses external libraries (pako and zip.js) that are downloaded locally for faster loading. See [EXTERNAL_LIBRARIES.md](docs/EXTERNAL_LIBRARIES.md) for details.
+This project uses external libraries (pako and zip.js) that are downloaded locally for faster loading.
 
-### Available Scripts
-- `npm run dev` - Start development server with live reload
-- `npm run test` - Run all tests
-- `npm run download-libs` - Download external libraries
-- `npm run deploy` - Deploy to GitHub Pages
 
 
