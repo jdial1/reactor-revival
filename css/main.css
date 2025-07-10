@@ -30,9 +30,7 @@ body {
 }
 
 #main {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
   height: 100%;
   overflow: hidden;
   background-color: var(--pico-card-background-color, #222);
@@ -426,7 +424,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
   background-color: var(--pico-card-background-color);
   padding-left: 0 !important;
   padding-right: 0 !important;
@@ -434,14 +431,12 @@ body {
   margin-right: 0 !important;
   border-radius: var(--pico-border-radius);
   touch-action: none;
-  width: 100vw !important;
-  max-width: 100vw !important;
+  width: 100% !important;
+  height: 100% !important;
   margin: 0 auto !important;
-  box-sizing: border-box;
-  overflow-x: auto !important;
-  overflow-y: auto !important;
-  /* Ensure horizontal scroll only */
-  position: relative;
+  overflow-x: overlay !important;
+  overflow-y: overlay !important;
+
   padding: 15px !important;
 }
 
@@ -456,15 +451,7 @@ body {
 #reactor_wrapper::-webkit-scrollbar-track {
   background: #23272f;
 }
-#reactor_wrapper {
-  scrollbar-color: #5f6672 #23272f; /* For Firefox */
-  scrollbar-width: thick;
-}
 
-/* Flip the scrollbar to the top using a hack (Webkit only) */
-#reactor_wrapper {
-  direction: rtl;
-}
 #reactor {
   direction: ltr;
   display: grid;
@@ -474,8 +461,8 @@ body {
   height: calc(var(--tile-size, 48px) * var(--game-rows, 12));
   min-width: 0;
   min-height: 0;
-  max-width: 100vw;
-  max-height: 80vh;
+  max-width: 100%;
+  max-height: 100%;
   margin: 5px;
   overflow: auto;
   /* Ensure grid fills available space */
@@ -980,9 +967,8 @@ footer#bottom_nav button {
   }
 
   #main_content_wrapper {
-    padding-bottom: calc(
-      48px + 42px + 4px
-    ); /* bottom nav + info bar + minimal gap */
+    height: 100% !important;
+    width: 100% !important;
   }
 }
 
@@ -1020,21 +1006,7 @@ footer#bottom_nav button {
   margin: 0 0.1em;
 }
 
-#main_content_wrapper {
-  width: 100vw !important;
-  max-width: 100vw !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  box-sizing: border-box !important;
-  overflow-x: auto;
-  background-color: var(--pico-card-background-color, #222);
-}
 @media (min-width: 901px) {
-  #main_content_wrapper {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
-  }
   #parts_section {
     flex: 0 0 300px; /* or your sidebar width */
     max-width: 300px;
@@ -1042,14 +1014,6 @@ footer#bottom_nav button {
   }
   #parts_section.collapsed {
     display: none;
-  }
-  #reactor_wrapper {
-    flex: 1 1 auto;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 0;
-    padding: 0;
   }
 }
 
@@ -1476,10 +1440,11 @@ footer#bottom_nav button {
 
 /* Objectives Section Modernized */
 #objectives_section {
-  width: 80vw !important;
-  max-width: 80vw !important;
-  margin-left: 10vw !important;
-  margin-right: 10vw !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  height: 50px !important;
   left: 0;
   right: 0;
   overflow: hidden;
@@ -1578,6 +1543,7 @@ footer#bottom_nav button {
   padding-bottom: 5px;
   padding-top: 5px;
 }
+
 #controls_nav button {
   width: 90%;
   box-sizing: border-box;
@@ -1714,12 +1680,6 @@ body:not(.page-reactor) #parts_section {
     bottom: 48px; /* Match the bottom nav height */
     height: 44px; /* Slightly smaller height for very small screens */
     padding: 0 8px;
-  }
-
-  #main_content_wrapper {
-    padding-bottom: calc(
-      48px + 44px + 8px
-    ); /* bottom nav + info bar + small gap */
   }
 
   footer#bottom_nav {
@@ -1913,13 +1873,6 @@ footer#bottom_nav button {
   box-sizing: border-box !important;
 }
 
-#reactor_wrapper {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-}
-
 #controls_nav button.on {
   background: #59c435 !important;
   color: #23272e !important;
@@ -1932,50 +1885,48 @@ footer#bottom_nav button {
 
 @media (min-width: 901px) {
   #controls_nav {
-    height: auto;
-  }
-  #parts_section {
     display: flex;
+    height: 50%;
     flex-direction: column;
-    height: 100%;
-    max-width: 25vw;
-    width: 25vw;
-    min-width: 200px;
-    box-sizing: border-box;
+    gap: 5px;
+    justify-content: center;
+    align-items: center;
+    padding: 0 0 8px 0;
   }
-  #parts_tab_contents {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
+  #controls_nav button {
+    width: auto;
+    min-width: 100px;
+    max-width: 180px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    padding: 8px;
+    font-size: 0.8em;
+    background: #434955;
+    color: #fff;
+    border: 2px solid #5f6672;
+    border-radius: 6px;
+    box-shadow: none;
+    transition: background 0.15s, color 0.15s, border 0.15s;
   }
-  .parts_tab_content {
-    max-width: 100%;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .item-grid {
-    max-width: 100%;
-    width: 100%;
-    box-sizing: border-box;
-    overflow-x: auto;
+  #controls_nav button.on,
+  #controls_nav button.active {
+    background: #59c435;
+    color: #181c22;
+    border-color: #59c435;
   }
 }
 
 @media (max-width: 900px) {
-  #reactor_wrapper {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-  }
-
   #reactor {
-    width: 100% !important;
-    min-width: 100% !important;
-    height: auto !important;
-    min-height: 100% !important;
-    box-sizing: border-box !important;
-    padding: 25px !important; /* 16px left, 32px bottom for scroll buffer */
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    min-height: 100%;
+    box-sizing: border-box;
+    padding: 15px; /* 16px left, 32px bottom for scroll buffer */
   }
 }
 
@@ -2208,12 +2159,6 @@ footer#bottom_nav button {
     padding: 0 8px;
   }
 
-  #main_content_wrapper {
-    padding-bottom: calc(
-      48px + 44px + 8px
-    ); /* bottom nav + info bar + small gap */
-  }
-
   footer#bottom_nav {
     height: 48px;
   }
@@ -2245,12 +2190,6 @@ footer#bottom_nav button {
     bottom: 48px; /* Match the bottom nav height */
     height: 46px; /* Slightly larger than 500px breakpoint */
     padding: 0 12px;
-  }
-
-  #main_content_wrapper {
-    padding-bottom: calc(
-      48px + 46px + 6px
-    ); /* bottom nav + info bar + small gap */
   }
 
   footer#bottom_nav {
@@ -2295,60 +2234,31 @@ footer#bottom_nav button {
 
 /* Mobile-specific reactor scrolling - enable both directions with higher specificity */
 @media (max-width: 900px) {
-  #reactor_wrapper {
-    overflow-x: auto !important;
-    overflow-y: auto !important;
-    min-height: calc(100vh - 200px) !important;
-    /* Add extra padding to ensure grid is fully scrollable */
-    /* Override global styles */
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    width: 100% !important;
-    max-width: 100vw !important;
-    box-sizing: border-box !important;
-    /* Touch-friendly scrolling */
-    -webkit-overflow-scrolling: touch !important;
-    scroll-behavior: smooth !important;
-  }
-
   #reactor {
     /* Ensure grid can be scrolled in all directions */
-    width: auto !important;
-    max-width: none !important;
-    box-sizing: border-box !important;
+    width: auto;
+    max-width: none;
+    box-sizing: border-box;
     /* Ensure grid fills container */
-    flex: 1 1 auto !important;
+    flex: 1 1 auto;
     /* Touch-friendly scrolling */
-    -webkit-overflow-scrolling: touch !important;
-    scroll-behavior: smooth !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
   }
 }
 
 /* Extra spacing for very small screens */
 @media (max-width: 600px) {
-  #reactor_wrapper {
-  }
-
   #reactor {
-    margin: 0.1rem !important;
-    flex: 1 1 auto !important;
+    margin: 0.1rem;
+    flex: 1 1 auto;
   }
 }
 
 @media (max-width: 400px) {
-  #reactor_wrapper {
-  }
-
   #reactor {
-    margin: 0.5rem !important;
-    flex: 1 1 auto !important;
-  }
-}
-
-/* Desktop-only reactor wrapper styles */
-@media (min-width: 901px) {
-  #reactor_wrapper {
-    /* Centering is now handled in the main desktop layout rule above */
+    margin: 0.5rem;
+    flex: 1 1 auto;
   }
 }
 
@@ -2412,4 +2322,124 @@ footer#bottom_nav button {
 /* Ensure banners appear above other content */
 #reactor_section {
   position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hide navigation elements on privacy policy page - HIGH SPECIFICITY */
+body.page-privacy_policy nav#main_top_nav,
+body.page-privacy_policy footer#bottom_nav,
+body.page-privacy_policy footer#info_bar,
+body.page-privacy_policy #main_top_nav,
+body.page-privacy_policy #bottom_nav,
+body.page-privacy_policy #info_bar {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Hide splash screen and overlays on privacy policy page */
+body.page-privacy_policy #splash-container,
+body.page-privacy_policy #quick-start-modal,
+body.page-privacy_policy #faction-select-panel {
+  display: none !important;
+}
+
+/* Hide navigation elements that are inside the wrapper */
+body.page-privacy_policy #wrapper #main_top_nav,
+body.page-privacy_policy #wrapper #bottom_nav,
+body.page-privacy_policy #wrapper #info_bar {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Make text smaller and improve readability for privacy policy page */
+body.page-privacy_policy .about-content {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+body.page-privacy_policy .about-content h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+body.page-privacy_policy .about-content h3 {
+  font-size: 1.2rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+body.page-privacy_policy .about-content p {
+  margin-bottom: 0.75rem;
+}
+
+body.page-privacy_policy .about-content ul {
+  margin-bottom: 0.75rem;
+}
+
+body.page-privacy_policy .about-content li {
+  margin-bottom: 0.25rem;
+}
+
+body.page-privacy_policy {
+}
+
+body.page-privacy_policy #wrapper {
+  padding: 15px !important;
+  margin: 15p !important;
+  overflow: visible !important;
+}
+
+/* Ensure privacy policy page has clean body classes */
+body.page-privacy_policy {
+  /* Remove any game-state classes that might interfere */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif !important;
+  height: 100vh !important;
+  overflow-y: auto !important;
+}
+
+body.page-privacy_policy #wrapper {
+  padding: 15px !important;
+  margin: 15px !important;
+  min-height: calc(100vh - 30px) !important;
+  overflow-y: auto !important;
+}
+
+body.page-privacy_policy #main {
+  height: 100% !important;
+  min-height: calc(100vh - 100px) !important;
+  overflow-y: auto !important;
+  width: 100% !important;
+}
+
+body.page-privacy_policy #main_content_wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+}
+
+body.page-privacy_policy #page_content_area {
+  height: 100% !important;
+  width: 100% !important;
+  overflow-y: visible !important;
+}
+
+body.page-privacy_policy .highlight {
+  background: #fde82dd7;
+  color: #222;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }

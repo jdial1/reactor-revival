@@ -99,9 +99,6 @@ class SplashScreenManager {
   async loadSplashScreen() {
     try {
       const response = await fetch("./pages/splash.html");
-      if (!response.ok) {
-        throw new Error(`Failed to load splash screen: ${response.status}`);
-      }
       const html = await response.text();
 
       // Insert HTML into container

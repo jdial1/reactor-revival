@@ -50,8 +50,32 @@ async function main() {
   const savedGame = game.loadGame();
   const isNewGamePending =
     localStorage.getItem("reactorNewGamePending") === "1";
+  const hash = window.location.hash.substring(1);
+  const pageInfo = pageRouter.pages[hash];
+  const shouldAutoStart = savedGame && !isNewGamePending && pageInfo;
 
-  if (window.splashManager) {
+  if (shouldAutoStart) {
+    console.log(
+      `[DEBUG] Saved game and deep link found (${hash}). Auto-starting...`
+    );
+
+    // For stateless pages, just hide splash and load the page
+    if (pageInfo.stateless) {
+      console.log(`[DEBUG] Auto-starting to stateless page: ${hash}`);
+      if (window.splashManager) {
+        window.splashManager.hide();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 600)); // Allow time for splash to hide
+      await pageRouter.loadPage(hash);
+    } else {
+      // For game pages, start the full game
+      if (window.splashManager) {
+        window.splashManager.hide();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 600)); // Allow time for splash to hide
+      await startGame(pageRouter, ui, game);
+    }
+  } else if (window.splashManager) {
     await window.splashManager.setStep("ready");
     await window.splashManager.showStartOptions(
       !!savedGame && !isNewGamePending
@@ -116,6 +140,19 @@ async function startGame(pageRouter, ui, game) {
   console.log("[DEBUG] ui:", !!ui);
   console.log("[DEBUG] game:", !!game);
 
+  const hash = window.location.hash.substring(1);
+  const pageExists = hash in pageRouter.pages;
+  const initialPage = pageExists ? hash : "reactor_section";
+  const pageDef = pageRouter.pages[initialPage];
+
+  // For stateless pages, only load the page without game initialization
+  if (pageDef && pageDef.stateless) {
+    console.log(`[DEBUG] Loading stateless page: ${initialPage}`);
+    await pageRouter.loadPage(initialPage);
+    console.log("[DEBUG] Stateless page loaded successfully");
+    return;
+  }
+
   console.log("[DEBUG] Loading game layout...");
   await pageRouter.loadGameLayout();
   console.log("[DEBUG] Game layout loaded");
@@ -124,9 +161,8 @@ async function startGame(pageRouter, ui, game) {
   ui.initMainLayout();
   console.log("[DEBUG] Main layout initialized");
 
-  console.log("[DEBUG] Loading reactor page...");
-  await pageRouter.loadPage("reactor_section");
-  console.log("[DEBUG] Reactor page loaded");
+  console.log(`[DEBUG] Loading initial page: ${initialPage}`);
+  await pageRouter.loadPage(initialPage);
 
   console.log("[DEBUG] Creating tooltip manager...");
   game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
@@ -189,6 +225,7 @@ window.startGame = startGame;
 
 function setupGlobalListeners(game) {
   on(document, "[data-page]", "click", async (e) => {
+    e.preventDefault();
     const pageBtn = e.target.closest("[data-page]");
     if (pageBtn) {
       await game.router.loadPage(pageBtn.dataset.page);

@@ -6,6 +6,10 @@ export class PageRouter {
       upgrades_section: { path: "pages/upgrades.html" },
       experimental_upgrades_section: { path: "pages/research.html" },
       about_section: { path: "pages/about.html" },
+      privacy_policy_section: {
+        path: "pages/privacy-policy.html",
+        stateless: true,
+      },
     };
     this.pageCache = new Map();
     this.initializedPages = new Set();
@@ -42,6 +46,16 @@ export class PageRouter {
       }
     }
 
+    // Ensure game layout is loaded for stateless pages
+    const earlyPageDef = this.pages[pageId];
+    if (earlyPageDef && earlyPageDef.stateless) {
+      const wrapper = document.getElementById("wrapper");
+      if (!wrapper || wrapper.classList.contains("hidden")) {
+        console.log("PageRouter: Loading game layout for stateless page");
+        await this.loadGameLayout();
+      }
+    }
+
     const pageContentArea = document.querySelector(this.contentAreaSelector);
     if (!pageContentArea) {
       console.error(
@@ -56,7 +70,11 @@ export class PageRouter {
     }
 
     this.currentPageId = pageId;
+    window.location.hash = pageId;
     this.updateNavigation(pageId);
+
+    // Clean up UI for stateless pages (like privacy policy)
+    this.cleanupUIForStatelessPage(pageId);
 
     // If page is already cached, just show it and we're done.
     if (this.pageCache.has(pageId)) {
@@ -163,6 +181,121 @@ export class PageRouter {
       document.body.classList.add(
         `page-${activePageId.replace("_section", "")}`
       );
+    }
+  }
+
+  cleanupUIForStatelessPage(pageId) {
+    const pageDef = this.pages[pageId];
+    if (pageDef && pageDef.stateless) {
+      console.log(`PageRouter: Cleaning up UI for stateless page "${pageId}"`);
+
+      // Hide splash screen container
+      const splashContainer = document.getElementById("splash-container");
+      if (splashContainer) {
+        splashContainer.style.display = "none";
+      }
+
+      // Close any open modals/dialogs
+      const factionDialog = document.getElementById("faction-select-panel");
+      if (factionDialog && factionDialog.open) {
+        factionDialog.close();
+      }
+
+      const quickStartModal = document.getElementById("quick-start-modal");
+      if (quickStartModal) {
+        quickStartModal.style.display = "none";
+      }
+
+      // Programmatically hide navigation elements as fallback
+      const navElements = ["main_top_nav", "bottom_nav", "info_bar"];
+
+      navElements.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.style.display = "none";
+          element.style.visibility = "hidden";
+          element.style.opacity = "0";
+          element.style.height = "0";
+          element.style.overflow = "hidden";
+        }
+      });
+
+      // Populate privacy policy date if on privacy policy page
+      if (pageId === "privacy_policy_section") {
+        this.populatePrivacyPolicyDate();
+      }
+
+      // Remove game-state classes from body, keep only the page class
+      const bodyClasses = document.body.className.split(" ");
+      const cleanClasses = bodyClasses.filter(
+        (cls) =>
+          cls === `page-${pageId.replace("_section", "")}` ||
+          (!cls.startsWith("page-") &&
+            !cls.includes("panel") &&
+            !cls.includes("open"))
+      );
+      document.body.className = cleanClasses.join(" ");
+
+      // Ensure the page class is present
+      if (
+        !document.body.classList.contains(
+          `page-${pageId.replace("_section", "")}`
+        )
+      ) {
+        document.body.classList.add(`page-${pageId.replace("_section", "")}`);
+      }
+    }
+  }
+
+  async populatePrivacyPolicyDate() {
+    try {
+      const response = await fetch("version.json");
+      if (response.ok) {
+        const versionData = await response.json();
+        const version = versionData.version;
+
+        // Parse version format: "25_06_23-1539" -> "June 25, 2023"
+        const parts = version.split("-")[0].split("_");
+        if (parts.length === 3) {
+          const day = parts[0];
+          const month = parts[1];
+          const year = "20" + parts[2]; // Convert YY to YYYY
+
+          const monthNames = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+          ];
+
+          const monthName = monthNames[parseInt(month) - 1];
+          const formattedDate = `${monthName} ${day}, ${year}`;
+
+          const dateElement = document.getElementById("privacy-policy-date");
+          if (dateElement) {
+            dateElement.textContent = formattedDate;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load version for privacy policy date:", error);
+      // Fallback to current date if version loading fails
+      const dateElement = document.getElementById("privacy-policy-date");
+      if (dateElement) {
+        dateElement.textContent = new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+      }
     }
   }
 

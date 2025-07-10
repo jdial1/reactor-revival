@@ -63,6 +63,7 @@ export class UI {
       "upgrades_section",
       "experimental_upgrades_section",
       "about_section",
+      "privacy_policy_section",
       "upgrades_content_wrapper",
       "cell_tick_upgrades",
       "cell_power_upgrades",
