@@ -1310,7 +1310,7 @@ export class UI {
     const debugToggleBtn = this.DOMElements.debug_toggle_btn;
 
     if (debugSection && debugToggleBtn) {
-      debugSection.style.display = "block";
+      debugSection.classList.remove("hidden");
       debugToggleBtn.textContent = "Hide Debug Info";
       this.updateDebugVariables();
     }
@@ -1321,7 +1321,7 @@ export class UI {
     const debugToggleBtn = this.DOMElements.debug_toggle_btn;
 
     if (debugSection && debugToggleBtn) {
-      debugSection.style.display = "none";
+      debugSection.classList.add("hidden");
       debugToggleBtn.textContent = "Show Debug Info";
     }
   }
@@ -1528,6 +1528,67 @@ export class UI {
         ? "flex"
         : "none";
     }
+  }
+
+  // Clipboard utility functions with fallbacks
+  async writeToClipboard(text) {
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return { success: true, method: 'clipboard-api' };
+      }
+    } catch (error) {
+      console.warn("Clipboard API failed:", error);
+    }
+
+    // Fallback to document.execCommand for older browsers
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+
+      if (successful) {
+        return { success: true, method: 'exec-command' };
+      }
+    } catch (error) {
+      console.warn("execCommand fallback failed:", error);
+    }
+
+    return { success: false, error: 'No clipboard method available' };
+  }
+
+  async readFromClipboard() {
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        return { success: true, data: text, method: 'clipboard-api' };
+      }
+    } catch (error) {
+      console.warn("Clipboard API read failed:", error);
+      // Check if it's a permission error
+      if (error.name === 'NotAllowedError') {
+        return {
+          success: false,
+          error: 'permission-denied',
+          message: 'Clipboard access denied. Please manually paste your data.'
+        };
+      }
+    }
+
+    return {
+      success: false,
+      error: 'no-clipboard-api',
+      message: 'Clipboard reading not supported. Please manually paste your data.'
+    };
   }
 
   initializeCopyPasteUI() {
@@ -1807,7 +1868,7 @@ export class UI {
       updateCopySummary(); // Initial update
 
       // Set up copy action
-      confirmBtn.onclick = () => {
+      confirmBtn.onclick = async () => {
         // Filter the data based on checked types
         const filteredLayout = layout.map(row => row.map(cell => {
           if (!cell) return null;
@@ -1817,17 +1878,18 @@ export class UI {
         // Serialize the filtered layout
         const filteredData = JSON.stringify(filteredLayout);
 
-        navigator.clipboard.writeText(filteredData).then(() => {
+        const result = await this.writeToClipboard(filteredData);
+        if (result.success) {
           confirmBtn.textContent = "Copied!";
           setTimeout(() => {
             this.hideModal();
           }, 1000);
-        }).catch(() => {
+        } else {
           confirmBtn.textContent = "Failed to Copy";
           setTimeout(() => {
             this.hideModal();
           }, 1000);
-        });
+        }
       };
 
       // Ensure copy button is enabled and visible
@@ -1841,11 +1903,15 @@ export class UI {
     pasteBtn.onclick = async () => {
       // Try to get data from clipboard first
       let data = "";
-      try {
-        data = await navigator.clipboard.readText();
-      } catch {
-        data = "";
+      const clipboardResult = await this.readFromClipboard();
+
+      if (clipboardResult.success) {
+        data = clipboardResult.data;
+      } else if (clipboardResult.error === 'permission-denied') {
+        // Show user-friendly message for permission denial
+        alert(clipboardResult.message);
       }
+
       // Show modal with clipboard data (if any)
       let checkedTypes = {};
       let layout = deserializeReactor(data);
@@ -2021,17 +2087,12 @@ export class UI {
         // Build summary of existing parts
         const existingSummary = this.buildExistingPartSummary();
 
-        if (existingSummary.length > 0) {
-          // Initialize checked types (all checked by default)
-          let checkedTypes = {};
-          existingSummary.forEach(item => { checkedTypes[item.id] = true; });
+        // Always show the modal, even when there are no parts
+        // Initialize checked types (all checked by default)
+        let checkedTypes = {};
+        existingSummary.forEach(item => { checkedTypes[item.id] = true; });
 
-          this.showSellModal(existingSummary, checkedTypes, wasPaused);
-        } else {
-          // No parts to sell - restore pause state and show message
-          this.stateManager.setVar("pause", wasPaused);
-          console.log("No parts to sell");
-        }
+        this.showSellModal(existingSummary, checkedTypes, wasPaused);
       };
     }
   }
@@ -2365,7 +2426,12 @@ export class UI {
         const debugRefreshBtn = document.getElementById("debug_refresh_btn");
         if (debugToggleBtn) {
           debugToggleBtn.addEventListener("click", () => {
-            this.showDebugPanel();
+            const debugSection = this.DOMElements.debug_section;
+            if (debugSection && debugSection.classList.contains("hidden")) {
+              this.showDebugPanel();
+            } else {
+              this.hideDebugPanel();
+            }
           });
         }
         if (debugHideBtn) {
@@ -2381,26 +2447,21 @@ export class UI {
 
         const copyStateBtn = document.getElementById("copy_state_btn");
         if (copyStateBtn) {
-          copyStateBtn.onclick = () => {
+          copyStateBtn.onclick = async () => {
             const gameStateObject = this.game.getSaveState();
             const gameStateString = JSON.stringify(gameStateObject, null, 2);
-            navigator.clipboard
-              .writeText(gameStateString)
-              .then(() => {
-                const originalText = copyStateBtn.textContent;
-                copyStateBtn.textContent = "Copied!";
-                setTimeout(() => {
-                  copyStateBtn.textContent = originalText;
-                }, 2000);
-              })
-              .catch((err) => {
-                console.error("Failed to copy game state: ", err);
-                const originalText = copyStateBtn.textContent;
-                copyStateBtn.textContent = "Error!";
-                setTimeout(() => {
-                  copyStateBtn.textContent = originalText;
-                }, 2000);
-              });
+            const result = await this.writeToClipboard(gameStateString);
+
+            const originalText = copyStateBtn.textContent;
+            if (result.success) {
+              copyStateBtn.textContent = "Copied!";
+            } else {
+              console.error("Failed to copy game state: ", result.error);
+              copyStateBtn.textContent = "Error!";
+            }
+            setTimeout(() => {
+              copyStateBtn.textContent = originalText;
+            }, 2000);
           };
         }
 

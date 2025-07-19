@@ -221,6 +221,7 @@ export class Tile {
       if (this.enabled) baseClasses.push("enabled");
       this.$el.className = baseClasses.join(" ");
       this.$el.style.backgroundImage = "none";
+      this.$el.style.backgroundColor = "transparent"; // Clear any red heat indicators
       if (this.$percent) this.$percent.style.width = "0%";
     }
     if (this.game.tooltip_manager?.current_tile_context === this) {
