@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { setupGameWithDOM } from '../helpers/setup.js';
+import { setupGame } from '../helpers/setup.js';
 
 describe('EP Upgrade Purchase Functionality', () => {
     let game;
-    let document;
 
     beforeEach(async () => {
-        const setup = await setupGameWithDOM();
-        game = setup.game;
-        document = setup.document;
+        game = await setupGame();
     });
 
     afterEach(() => {
