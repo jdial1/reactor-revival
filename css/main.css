@@ -53,7 +53,7 @@ height: 120px;
 background: url("../img/parts/cells/cell_1_1.png") no-repeat center;
 background-size: contain;
 animation: greenPulseGlow 4s ease-in-out infinite;
-margin-bottom: 2rem;
+margin-bottom: 0.5rem;
 filter: drop-shadow(0 0 10px rgba(143, 214, 148, 0.8));
 }
 @keyframes pulse {
@@ -89,7 +89,7 @@ border-radius: var(--splash-btn-radius);
 border: none;
 background: #3a4e6b;
 color: #fff;
-margin: 0 auto 1rem auto;
+margin: 0 auto 0.25rem auto;
 display: flex;
 flex-direction: column;
 align-items: center;
@@ -149,15 +149,15 @@ left: 0;
 right: 0;
 bottom: 0;
 text-align: center;
-font-size: 0.8em;
-opacity: 0.7;
+font-size: 0.5em;
+opacity: 0.6;
 font-family: "Press Start 2P", cursive, monospace !important;
 }
 .splash-version {
-bottom: 5em;
+bottom: 2.5em;
 }
 .splash-stats {
-bottom: 3.5em;
+bottom: 1.5em;
 }
 .splash-cloud-button {
 width: var(--splash-btn-width);
@@ -171,7 +171,7 @@ border: 2px solid #1ca3ec;
 background: #fff;
 color: #1ca3ec;
 box-shadow: 0 2px 0 #222, 0 4px 8px #0002;
-margin: 0 auto 1rem auto;
+margin: 0 auto 0.25rem auto;
 display: flex;
 flex-direction: column;
 align-items: center;
@@ -194,18 +194,72 @@ display: inline-block;
 vertical-align: middle;
 }
 .splash-persistent-flavor {
-font-size: .8em;
-color: #8fd694;
-margin-bottom: 3rem;
-margin-top: 1rem;
-font-family: "Press Start 2P", cursive, monospace !important;
+    color: #FFFF00;
+    font-size: 0.9em;
+    font-family: 'minecraftfont', "Press Start 2P", cursive, monospace;
+    text-shadow: 3px 3px #3F3F00;
+    padding: 5px;
+    margin: 0.5rem 0 1rem 0;
+    text-align: center;
+    animation: pop 0.58s infinite;
+    -webkit-animation: pop 0.58s infinite;
+}
+
+.splash-persistent-flavor.pop {
+    animation: pop 0.58s infinite;
+    -webkit-animation: pop 0.58s infinite;
+}
+
+@keyframes pop {
+    from {
+        transform: scale(0.95)
+    }
+    50% {
+        transform: scale(1)
+    }
+    to {
+        transform: scale(0.95)
+    }
+}
+
+@-webkit-keyframes pop {
+    from {
+        -webkit-transform: scale(0.95)
+    }
+    50% {
+        -webkit-transform: scale(1)
+    }
+    to {
+        -webkit-transform: scale(0.95)
+    }
+}
+
+.splash-persistent-flavor.tilt {
+    -ms-transform: rotate(-25deg);
+    -webkit-transform: rotate(-25deg);
+    transform: rotate(-25deg);
+}
+
+@font-face {
+    font-family: 'minecraftfont';
+    src: url('http://design.d3x.co/demo/mcgeneric/font/minecraft_font.woff');
+}
+
+/* Splash start options container */
+.splash-start-options {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
 }
 .splash-title {
 font-family: "Press Start 2P", cursive, monospace !important;
-font-size: 2.2rem;
+font-size: 3.5rem;
 letter-spacing: 2px;
 margin: 1.5rem 0 0.5rem 0;
 text-shadow: 2px 2px 0 #222, 0 0 8px #1ca3ec44;
+white-space: pre-line;
 }
 .splash-subtitle {
 font-family: "Press Start 2P", cursive, monospace !important;
@@ -978,16 +1032,19 @@ overflow: visible;
   }
   
   .splash-version {
-    bottom: 8em;
+    bottom: 4.5em;
+    font-size: 0.4em;
   }
   
   .splash-stats {
-    bottom: 6.5em;
+    bottom: 3.5em;
+    font-size: 0.4em;
   }
   
   .splash-footer-links {
-    bottom: 3em;
-    padding-bottom: 1.5em;
+    bottom: 1.5em;
+    padding-bottom: 0.5em;
+    font-size: 0.4em;
   }
 #bottom_nav button {
 font-size: 0.7rem;
@@ -1046,6 +1103,23 @@ margin-left: 0.05em;
 }
 #info_bar .info-bar-item {
 gap: 0.15em;
+}
+
+/* Mobile splash screen bottom text spacing */
+.splash-version {
+  bottom: 5em;
+  font-size: 0.45em;
+}
+
+.splash-stats {
+  bottom: 4em;
+  font-size: 0.45em;
+}
+
+.splash-footer-links {
+  bottom: 2em;
+  padding-bottom: 0.75em;
+  font-size: 0.45em;
 }
 }
 .unaffordable {

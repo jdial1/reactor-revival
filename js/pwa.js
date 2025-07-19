@@ -466,7 +466,7 @@ class SplashScreenManager {
       startOptionsSection.innerHTML = "";
 
       const flavorTextDiv = document.createElement("div");
-      flavorTextDiv.className = "splash-persistent-flavor";
+      flavorTextDiv.className = "splash-persistent-flavor pop";
       flavorTextDiv.textContent =
         flavorMessages[Math.floor(Math.random() * flavorMessages.length)];
       startOptionsSection.appendChild(flavorTextDiv);
