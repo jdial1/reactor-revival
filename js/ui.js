@@ -590,8 +590,8 @@ export class UI {
           const mobileDenom = document.getElementById("info_power_denom");
           const desktopDenom = document.getElementById("info_power_denom_desktop");
           const maxPower = this.stateManager.getVar("max_power") || "";
-          if (mobileDenom) mobileDenom.textContent = "/" + maxPower;
-          if (desktopDenom) desktopDenom.textContent = "/" + maxPower;
+          if (mobileDenom) mobileDenom.textContent = "/" + fmt(maxPower);
+          if (desktopDenom) desktopDenom.textContent = "/" + fmt(maxPower);
         },
       },
       max_power: {
@@ -600,8 +600,8 @@ export class UI {
         onupdate: (val) => {
           const mobileDenom = document.getElementById("info_power_denom");
           const desktopDenom = document.getElementById("info_power_denom_desktop");
-          if (mobileDenom) mobileDenom.textContent = "/" + val;
-          if (desktopDenom) desktopDenom.textContent = "/" + val;
+          if (mobileDenom) mobileDenom.textContent = "/" + fmt(val);
+          if (desktopDenom) desktopDenom.textContent = "/" + fmt(val);
         },
       },
       current_heat: {
@@ -619,8 +619,8 @@ export class UI {
           const mobileDenom = document.getElementById("info_heat_denom");
           const desktopDenom = document.getElementById("info_heat_denom_desktop");
           const maxHeat = this.stateManager.getVar("max_heat") || "";
-          if (mobileDenom) mobileDenom.textContent = "/" + maxHeat;
-          if (desktopDenom) desktopDenom.textContent = "/" + maxHeat;
+          if (mobileDenom) mobileDenom.textContent = "/" + fmt(maxHeat);
+          if (desktopDenom) desktopDenom.textContent = "/" + fmt(maxHeat);
         },
       },
       max_heat: {
@@ -629,8 +629,8 @@ export class UI {
         onupdate: (val) => {
           const mobileDenom = document.getElementById("info_heat_denom");
           const desktopDenom = document.getElementById("info_heat_denom_desktop");
-          if (mobileDenom) mobileDenom.textContent = "/" + val;
-          if (desktopDenom) desktopDenom.textContent = "/" + val;
+          if (mobileDenom) mobileDenom.textContent = "/" + fmt(val);
+          if (desktopDenom) desktopDenom.textContent = "/" + fmt(val);
         },
       },
       exotic_particles: {
@@ -2517,8 +2517,8 @@ export class UI {
         }
         const rebootBtn = document.getElementById("reboot_btn");
         const refundBtn = document.getElementById("refund_btn");
-        if (rebootBtn) rebootBtn.onclick = () => game.reboot_action(false);
-        if (refundBtn) refundBtn.onclick = () => game.reboot_action(true);
+        if (rebootBtn) rebootBtn.onclick = () => game.reboot_action(true);
+        if (refundBtn) refundBtn.onclick = () => game.reboot_action(false);
 
         const debugToggleBtn = document.getElementById("debug_toggle_btn");
         const debugHideBtn = document.getElementById("debug_hide_btn");

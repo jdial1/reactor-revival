@@ -21,11 +21,8 @@ export function numFormat(num, places = null) {
         suffix = cm_names[(pow / 3) - 1] || '';
     }
 
-    // Round up to the specified number of decimal places
-    const multiplier = Math.pow(10, places);
-    const roundedMantissa = Math.ceil(mantissa * multiplier) / multiplier;
-
-    const mantissaStr = roundedMantissa.toFixed(places);
+    // Don't round - just truncate to the specified number of decimal places
+    const mantissaStr = mantissa.toFixed(places);
 
     return mantissaStr + suffix;
 }

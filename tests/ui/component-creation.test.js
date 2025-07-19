@@ -54,7 +54,7 @@ describe("UI Component Creation and State", () => {
 
             // Test without cloud sync
             let btn = createLoadGameButton(saveData, playedTime, false, () => { });
-            expect(btn.querySelector(".money").textContent).toContain("124K");
+            expect(btn.querySelector(".money").textContent).toContain("123K");
             expect(btn.querySelector(".played-time").innerHTML).toBe(playedTime);
             expect(btn.querySelector(".synced-label").style.display).toBe("none");
 
