@@ -1757,18 +1757,31 @@ export class UI {
       modalTitle.textContent = title;
       modalText.value = data;
 
-      // Ensure textarea is visible and properly styled
-      console.log("[UI] Textarea element:", modalText);
-      console.log("[UI] Textarea display style:", window.getComputedStyle(modalText).display);
-      console.log("[UI] Textarea visibility:", window.getComputedStyle(modalText).visibility);
-      console.log("[UI] Textarea opacity:", window.getComputedStyle(modalText).opacity);
+      // Show/hide textarea based on action
+      if (action === "paste") {
+        // Ensure textarea is visible and properly styled for paste actions
+        console.log("[UI] Textarea element:", modalText);
+        console.log("[UI] Textarea display style:", window.getComputedStyle(modalText).display);
+        console.log("[UI] Textarea visibility:", window.getComputedStyle(modalText).visibility);
+        console.log("[UI] Textarea opacity:", window.getComputedStyle(modalText).opacity);
 
-      // Force textarea to be visible
-      modalText.style.display = "block";
-      modalText.style.visibility = "visible";
-      modalText.style.opacity = "1";
-      modalText.style.position = "relative";
-      modalText.style.zIndex = "1";
+        // Force textarea to be visible
+        modalText.classList.remove("hidden");
+        modalText.style.display = "block";
+        modalText.style.visibility = "visible";
+        modalText.style.opacity = "1";
+        modalText.style.position = "relative";
+        modalText.style.zIndex = "1";
+      } else {
+        // Hide textarea for copy and other actions
+        modalText.classList.add("hidden");
+        modalText.style.display = "none";
+        modalText.style.visibility = "hidden";
+        modalText.style.opacity = "0";
+        modalText.style.height = "0";
+        modalText.style.overflow = "hidden";
+        console.log("[UI] Hiding textarea for non-paste action:", action);
+      }
 
       // Pause the reactor when modal opens
       const wasPaused = this.stateManager.getVar("pause");
@@ -2028,7 +2041,15 @@ export class UI {
         // Show cost information below the sell checkbox
         if (cost > 0) {
           const finalCost = sellExisting && currentSellValue > 0 ? Math.max(0, netCost) : cost;
-          html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">$${finalCost}</div>`;
+          const costColor = canPaste ? "#4caf50" : "#ff6b6b";
+          html += `<div style="margin-top: 10px; font-weight: bold; color: ${costColor};">$${finalCost}</div>`;
+
+          // Add unaffordable message if the layout costs more than player can afford
+          if (!canPaste) {
+            html += `<div style="margin-top: 5px; font-size: 14px; color: #ff6b6b; font-style: italic;">
+              Not enough money! You have $${this.game.current_money} but need $${finalCost}
+            </div>`;
+          }
         } else {
           html += `<div style="margin-top: 10px; font-weight: bold; color: #ff6b6b;">No parts found in layout</div>`;
         }
@@ -2200,6 +2221,7 @@ export class UI {
   showSellModal(summary, checkedTypes, previousPauseState = false) {
     const modal = document.getElementById("reactor_copy_paste_modal");
     const modalTitle = document.getElementById("reactor_copy_paste_modal_title");
+    const modalText = document.getElementById("reactor_copy_paste_text");
     const modalCost = document.getElementById("reactor_copy_paste_cost");
     const confirmBtn = document.getElementById("reactor_copy_paste_confirm_btn");
     const closeBtn = document.getElementById("reactor_copy_paste_close_btn");
@@ -2208,6 +2230,17 @@ export class UI {
 
     // Update modal title
     modalTitle.textContent = "Sell Reactor Parts";
+
+    // Hide textarea for sell modal
+    if (modalText) {
+      modalText.classList.add("hidden");
+      modalText.style.display = "none";
+      modalText.style.visibility = "hidden";
+      modalText.style.opacity = "0";
+      modalText.style.height = "0";
+      modalText.style.overflow = "hidden";
+      console.log("[UI] Hiding textarea for sell modal");
+    }
 
     // Show modal
     modal.classList.remove("hidden");

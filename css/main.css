@@ -2911,6 +2911,19 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   z-index: 1 !important;
 }
 
+/* Hide textarea when not needed for copy/sell actions */
+#reactor_copy_paste_text.hidden,
+#reactor_copy_paste_text[style*="display: none"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
 #reactor_copy_paste_cost {
   margin-bottom: 15px;
   color: #4caf50;
