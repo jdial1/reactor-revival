@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { setupGameWithDOM } from '../helpers/setup.js';
+import { setupGame } from '../helpers/setup.js';
 
 describe('EP Reboot Functionality', () => {
     let game;
-    let ui;
 
     beforeEach(async () => {
-        const setup = await setupGameWithDOM();
-        game = setup.game;
-        ui = setup.ui;
+        game = await setupGame();
 
         // Reset EP to 0 to ensure clean state
         game.exotic_particles = 0;
