@@ -494,9 +494,12 @@ export class TooltipManager {
       let costText = "";
 
       // Handle cost display - check for EP costs first
-      if (obj.current_ecost !== undefined || obj.ecost !== undefined || obj.base_ecost !== undefined) {
-        const ecost = obj.current_ecost ?? obj.ecost ?? obj.base_ecost;
-        costText = ` 🧬 ${fmt(ecost)} EP`;
+      if (obj.current_ecost !== undefined) {
+        costText = ` 🧬 ${fmt(obj.current_ecost)} EP`;
+      } else if (obj.ecost !== undefined) {
+        costText = ` 🧬 ${fmt(obj.ecost)} EP`;
+      } else if (obj.base_ecost !== undefined) {
+        costText = ` 🧬 ${fmt(obj.base_ecost)} EP`;
       } else if (obj.current_cost !== undefined) {
         costText = ` <img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
           obj.current_cost

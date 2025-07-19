@@ -89,6 +89,14 @@ export class UpgradeSet {
         this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
       }
     });
+
+    // Force update all upgrade elements to reflect current state
+    this.upgradesArray.forEach((upgrade) => {
+      if (!upgrade.base_ecost && upgrade.$el) {
+        upgrade.updateDisplayCost();
+        upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
+      }
+    });
   }
   populateExperimentalUpgrades() {
     const wrapper = document.getElementById(
@@ -104,11 +112,27 @@ export class UpgradeSet {
         this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
       }
     });
+
+    // Force update all upgrade elements to reflect current state
+    this.upgradesArray.forEach((upgrade) => {
+      if (upgrade.base_ecost && upgrade.$el) {
+        upgrade.updateDisplayCost();
+        upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
+      }
+    });
   }
   purchaseUpgrade(upgradeId) {
     const upgrade = this.getUpgrade(upgradeId);
     if (!upgrade || upgrade.level >= upgrade.max_level) {
       return false;
+    }
+
+    // Check if required upgrade is missing
+    if (upgrade.erequires) {
+      const required_upgrade = this.game.upgradeset.getUpgrade(upgrade.erequires);
+      if (!required_upgrade || required_upgrade.level === 0) {
+        return false;
+      }
     }
 
     const cost = upgrade.getCost();

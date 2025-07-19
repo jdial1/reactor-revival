@@ -15,7 +15,8 @@ export class Upgrade {
     this.category = upgrade_definition.category;
     this.erequires = upgrade_definition.erequires;
     this.base_ecost = upgrade_definition.ecost;
-    this.ecost_multiplier = upgrade_definition.ecost_multiplier || 1.5;
+    // For EP upgrades, use multiplier if ecost_multiplier is not specified
+    this.ecost_multiplier = upgrade_definition.ecost_multiplier || upgrade_definition.multiplier || 1.5;
     this.actionId = upgrade_definition.actionId;
     this.level = 0;
     this.current_cost = this.base_cost;
@@ -59,7 +60,7 @@ export class Upgrade {
   updateDisplayCost() {
     if (this.base_ecost) {
       this.current_ecost =
-        this.base_ecost * Math.pow(this.cost_multiplier, this.level);
+        this.base_ecost * Math.pow(this.ecost_multiplier, this.level);
     }
     this.current_cost =
       this.base_cost * Math.pow(this.cost_multiplier, this.level);

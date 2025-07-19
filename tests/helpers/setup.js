@@ -94,6 +94,11 @@ export async function setupGame() {
       globalGameLogicOnly.engine.stop();
     }
 
+    // Reset state manager
+    globalGameLogicOnly.ui.stateManager.setVar("current_money", globalGameLogicOnly.current_money);
+    globalGameLogicOnly.ui.stateManager.setVar("exotic_particles", globalGameLogicOnly.exotic_particles);
+    globalGameLogicOnly.ui.stateManager.setVar("current_exotic_particles", globalGameLogicOnly.current_exotic_particles);
+
     globalGameLogicOnly.partset.check_affordability(globalGameLogicOnly);
     globalGameLogicOnly.upgradeset.check_affordability(globalGameLogicOnly);
     globalGameLogicOnly.reactor.updateStats();

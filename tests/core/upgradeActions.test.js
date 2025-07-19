@@ -52,6 +52,12 @@ describe("Upgrade Actions Mechanics", () => {
     game.reactor.updateStats();
     const initialMaxHeat = game.reactor.max_heat;
 
+    // Purchase laboratory first (required for EP upgrades)
+    game.current_exotic_particles = 1;
+    game.upgradeset.purchaseUpgrade("laboratory");
+
+    // Now purchase quantum buffering
+    game.current_exotic_particles = 50; // quantum_buffering costs 50 EP
     game.upgradeset.purchaseUpgrade("quantum_buffering");
     game.reactor.updateStats();
 

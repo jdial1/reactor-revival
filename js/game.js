@@ -244,6 +244,11 @@ export class Game {
         document.body.classList.remove("reactor-meltdown");
       }
     }
+
+    // Check objectives after reboot to trigger completion
+    if (this.objectives_manager) {
+      this.objectives_manager.check_current_objective();
+    }
   }
   onToggleStateChange(property, newState) {
     this.paused = this.ui.stateManager.getVar("pause");
@@ -495,6 +500,11 @@ export class Game {
     this.total_exotic_particles = savedData.total_exotic_particles || 0;
     this.exotic_particles = savedData.exotic_particles || 0;
     this.current_exotic_particles = savedData.current_exotic_particles || 0;
+
+    // Update UI state manager with EP values so EP display shows immediately
+    this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
+    this.ui.stateManager.setVar("total_exotic_particles", this.total_exotic_particles);
+    this.ui.stateManager.setVar("current_exotic_particles", this.current_exotic_particles);
     this.rows = savedData.rows || this.base_rows;
     this.cols = savedData.cols || this.base_cols;
     this.sold_power = savedData.sold_power || false;

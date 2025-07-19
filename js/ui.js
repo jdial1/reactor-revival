@@ -46,6 +46,10 @@ export class UI {
       "info_power_denom_desktop",
       "info_bar_heat_btn_desktop",
       "info_bar_power_btn_desktop",
+      "info_ep",
+      "info_ep_desktop",
+      "info_ep_value",
+      "info_ep_value_desktop",
       "parts_tab_contents",
       "cells",
       "reflectors",
@@ -644,6 +648,24 @@ export class UI {
               (this.stateManager.getVar("total_exotic_particles") || 0) + val
             );
           }
+
+          // Update info bar EP display
+          const mobileEl = document.getElementById("info_ep");
+          const desktopEl = document.getElementById("info_ep_desktop");
+          const mobileValueEl = document.getElementById("info_ep_value");
+          const desktopValueEl = document.getElementById("info_ep_value_desktop");
+
+          if (val > 0) {
+            // Show EP display when there are exotic particles
+            if (mobileEl) mobileEl.style.display = "flex";
+            if (desktopEl) desktopEl.style.display = "flex";
+            if (mobileValueEl) mobileValueEl.textContent = fmt(val);
+            if (desktopValueEl) desktopValueEl.textContent = fmt(val);
+          } else {
+            // Hide EP display when there are no exotic particles
+            if (mobileEl) mobileEl.style.display = "none";
+            if (desktopEl) desktopEl.style.display = "none";
+          }
         },
       },
       current_exotic_particles: {
@@ -1000,6 +1022,22 @@ export class UI {
           case "9":
             e.preventDefault();
             this.game.addMoney(1000000000);
+            break;
+          case "e":
+          case "E":
+            e.preventDefault();
+            // Give user +1 EP
+            this.game.exotic_particles += 1;
+            this.game.total_exotic_particles += 1;
+            this.game.current_exotic_particles += 1;
+
+            // Update state manager for all EP values
+            this.stateManager.setVar("exotic_particles", this.game.exotic_particles);
+            this.stateManager.setVar("total_exotic_particles", this.game.total_exotic_particles);
+            this.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
+
+            // Update research affordability after adding EP
+            this.game.upgradeset.check_affordability(this.game);
             break;
         }
       }

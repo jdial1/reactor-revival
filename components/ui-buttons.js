@@ -66,7 +66,7 @@ export function createPartButton(part) {
   }
   const priceDiv = btn.querySelector(".part-price");
   if (priceDiv) {
-    priceDiv.textContent = part.erequires ? `${part.cost} EP` : `${part.cost}`;
+    priceDiv.textContent = part.erequires ? `${part.cost} 🧬 EP` : `${part.cost}`;
   }
   btn.classList.toggle("unaffordable", !part.affordable);
   btn.disabled = !part.affordable;
@@ -88,7 +88,7 @@ export function createBuyButton(upgrade, onClick) {
     if (costText) costText.textContent = `${upgrade.current_cost}`;
   } else if (upgrade.current_ecost !== undefined) {
     if (cashIcon) cashIcon.style.display = "none";
-    if (costText) costText.textContent = `${upgrade.current_ecost} EP`;
+    if (costText) costText.textContent = `${upgrade.current_ecost} 🧬 EP`;
   }
 
   if (onClick) {
