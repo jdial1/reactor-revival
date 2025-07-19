@@ -1410,15 +1410,80 @@ margin-left: 0.1em;
 }
 }
 .pixel-btn {
-background: var(--pico-card-background-color, #222);
-border: 2px solid var(--pico-card-border-color, #444);
-color: var(--pico-color, #fff);
-padding: 8px 16px;
-cursor: pointer;
-font-family: inherit;
-font-size: 14px;
-border-radius: 4px;
-transition: all 0.1s ease;
+  background: var(--pico-card-background-color, #222);
+  border: 2px solid var(--pico-card-border-color, #444);
+  color: var(--pico-color, #fff);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+.google-signin-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.google-signin-container .google-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.google-signin-container span {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+/* Horizontal button layout for research page */
+.research-buttons-container {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.research-buttons-container .nav-btn {
+  flex: 0 1 auto;
+  min-width: 140px;
+}
+
+/* Navigation button styling to match top nav */
+.nav-btn {
+  background: #434955 !important;
+  color: #fff !important;
+  border: 2px solid #5f6672 !important;
+  border-radius: 2px !important;
+  padding: 8px 16px !important;
+  font-size: 0.9em !important;
+  font-family: inherit !important;
+  transition: background 0.15s, color 0.15s, border 0.15s !important;
+  box-shadow: none !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+}
+
+.nav-btn:hover {
+  background: #59c435 !important;
+  color: #181c22 !important;
+  border-color: #59c435 !important;
+}
+
+.nav-btn:active {
+  transform: translateY(1px) !important;
+  background: #4aaf2a !important;
+}
+
+.pixel-btn {
+  transition: all 0.1s ease;
 text-decoration: none;
 display: inline-block;
 text-align: center;

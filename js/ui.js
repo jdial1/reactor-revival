@@ -109,6 +109,10 @@ export class UI {
       "debug_toggle_btn",
       "debug_hide_btn",
       "debug_variables",
+      "debug_refresh_btn",
+      "copy_state_btn",
+      "research_google_signin_btn",
+      "research_back_to_splash_btn",
       "meltdown_banner",
       "controls_collapse_btn",
       "controls_collapse_icon",
@@ -192,6 +196,9 @@ export class UI {
           "debug_hide_btn",
           "debug_variables",
           "debug_refresh_btn",
+          "copy_state_btn",
+          "research_google_signin_btn",
+          "research_back_to_splash_btn",
           "meltdown_banner",
           "collapsed_controls_nav",
           "controls_collapse_btn",
@@ -2599,6 +2606,46 @@ export class UI {
             setTimeout(() => {
               copyStateBtn.textContent = originalText;
             }, 2000);
+          };
+        }
+
+        // Setup research page bottom navigation buttons
+        const researchGoogleSigninBtn = document.getElementById("research_google_signin_btn");
+        const researchBackToSplashBtn = document.getElementById("research_back_to_splash_btn");
+
+        if (researchGoogleSigninBtn) {
+          researchGoogleSigninBtn.onclick = async () => {
+            try {
+              researchGoogleSigninBtn.disabled = true;
+              const span = researchGoogleSigninBtn.querySelector("span");
+              if (span) span.textContent = "Signing in...";
+
+              if (window.googleDriveSave) {
+                await window.googleDriveSave.signIn();
+                if (span) span.textContent = "Signed In!";
+                setTimeout(() => {
+                  if (span) span.textContent = "Google Sign In";
+                  researchGoogleSigninBtn.disabled = false;
+                }, 2000);
+              } else {
+                throw new Error("Google Drive Save not available");
+              }
+            } catch (error) {
+              console.error("Failed to sign in to Google Drive:", error);
+              const span = researchGoogleSigninBtn.querySelector("span");
+              if (span) span.textContent = "Sign in Failed";
+              setTimeout(() => {
+                if (span) span.textContent = "Google Sign In";
+                researchGoogleSigninBtn.disabled = false;
+              }, 2000);
+            }
+          };
+        }
+
+        if (researchBackToSplashBtn) {
+          researchBackToSplashBtn.onclick = () => {
+            // Navigate to root URL to show splash screen (same as top nav)
+            window.location.href = window.location.origin + window.location.pathname;
           };
         }
 
