@@ -2634,13 +2634,28 @@ export class UI {
 
   async loadAndSetVersion() {
     try {
+      console.log("[UI] Loading version for research page...");
       const response = await fetch("version.json");
       const versionData = await response.json();
       const version = versionData.version || "Unknown";
+      console.log("[UI] Version loaded:", version);
 
       const appVersionEl = document.getElementById("app_version");
       if (appVersionEl) {
         appVersionEl.textContent = version;
+        console.log("[UI] Version set in DOM element:", appVersionEl.textContent);
+      } else {
+        console.warn("[UI] app_version element not found in DOM");
+        // Try again after a short delay in case the element hasn't been created yet
+        setTimeout(async () => {
+          const retryEl = document.getElementById("app_version");
+          if (retryEl) {
+            retryEl.textContent = version;
+            console.log("[UI] Version set in DOM element (retry):", retryEl.textContent);
+          } else {
+            console.error("[UI] app_version element still not found after retry");
+          }
+        }, 100);
       }
     } catch (error) {
       console.warn("Could not load version info:", error);

@@ -99,6 +99,8 @@ export class PageRouter {
       const cachedPage = this.pageCache.get(pageId);
       cachedPage.classList.remove("hidden");
       console.log(`PageRouter: Switched to cached page "${pageId}".`);
+
+      // Handle page-specific actions for cached pages
       if (pageId === "reactor_section" && this.ui.resizeReactor) {
         // For reactor page, do an immediate resize and then a delayed resize to handle any layout shifts
         this.ui.resizeReactor();
@@ -111,7 +113,11 @@ export class PageRouter {
             reactorElement.style.visibility = "visible";
           }
         }, 100);
+      } else if (pageId === "experimental_upgrades_section") {
+        // For research page, always load version when showing the page
+        this.ui.loadAndSetVersion();
       }
+
       // Always call showObjectivesForPage when switching pages, even cached ones
       this.ui.showObjectivesForPage(pageId);
       return;
