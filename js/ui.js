@@ -1753,8 +1753,22 @@ export class UI {
 
     // Show modal with data, cost, and action options
     const showModal = (title, data, cost, action, canPaste = false, summary = [], options = {}) => {
+      console.log("[UI] showModal called with title:", title, "action:", action);
       modalTitle.textContent = title;
       modalText.value = data;
+
+      // Ensure textarea is visible and properly styled
+      console.log("[UI] Textarea element:", modalText);
+      console.log("[UI] Textarea display style:", window.getComputedStyle(modalText).display);
+      console.log("[UI] Textarea visibility:", window.getComputedStyle(modalText).visibility);
+      console.log("[UI] Textarea opacity:", window.getComputedStyle(modalText).opacity);
+
+      // Force textarea to be visible
+      modalText.style.display = "block";
+      modalText.style.visibility = "visible";
+      modalText.style.opacity = "1";
+      modalText.style.position = "relative";
+      modalText.style.zIndex = "1";
 
       // Pause the reactor when modal opens
       const wasPaused = this.stateManager.getVar("pause");
@@ -1779,7 +1793,12 @@ export class UI {
         confirmBtn.disabled = false;
       } else if (action === "paste") {
         modalText.readOnly = false;
-        modalText.placeholder = "Paste reactor layout data here...";
+        // Set placeholder based on whether we have data or not
+        if (data && data.trim()) {
+          modalText.placeholder = "Paste reactor layout data here...";
+        } else {
+          modalText.placeholder = "Enter reactor layout JSON data manually...";
+        }
         confirmBtn.textContent = "Paste";
         confirmBtn.classList.remove("hidden"); // Always show paste button
         confirmBtn.disabled = !canPaste; // Disable if unaffordable
@@ -1886,8 +1905,33 @@ export class UI {
           return checkedTypes[cell.id] !== false ? cell : null;
         }));
 
-        // Serialize the filtered layout
-        const filteredData = JSON.stringify(filteredLayout);
+        // Convert filtered layout to compact format
+        const rows = this.game.rows;
+        const cols = this.game.cols;
+        const parts = [];
+
+        for (let r = 0; r < filteredLayout.length; r++) {
+          for (let c = 0; c < filteredLayout[r].length; c++) {
+            const cell = filteredLayout[r][c];
+            if (cell && cell.id) {
+              parts.push({
+                r: r,
+                c: c,
+                t: cell.t,
+                id: cell.id,
+                lvl: cell.lvl || 1
+              });
+            }
+          }
+        }
+
+        const compactLayout = {
+          size: { rows, cols },
+          parts: parts
+        };
+
+        // Serialize the compact layout
+        const filteredData = JSON.stringify(compactLayout, null, 2);
 
         const result = await this.writeToClipboard(filteredData);
         if (result.success) {
@@ -1919,22 +1963,37 @@ export class UI {
       if (clipboardResult.success) {
         data = clipboardResult.data;
       } else if (clipboardResult.error === 'permission-denied') {
-        // Show user-friendly message for permission denial
-        alert(clipboardResult.message);
+        // Show user-friendly message for permission denial and show modal for manual entry
+        console.log("[UI] Clipboard access denied, showing manual entry modal");
+        data = ""; // Ensure data is empty for manual entry
+        // No notification - just show the modal directly
+      } else {
+        // For other clipboard errors, also show manual entry modal
+        console.log("[UI] Clipboard error:", clipboardResult.error, "showing manual entry modal");
+        data = "";
+        // No notification - just show the modal directly
       }
 
-      // Show modal with clipboard data (if any)
+      // Show modal with clipboard data (if any) or for manual entry
       let checkedTypes = {};
       let layout = deserializeReactor(data);
       let summary = buildPartSummary(layout || []);
       summary.forEach(item => { checkedTypes[item.id] = true; });
-      showModal("Paste Reactor Layout", data, 0, "paste", false, summary, { showCheckboxes: true, checkedTypes });
+
+      // Set appropriate title based on whether we have data or not
+      const modalTitle = data ? "Paste Reactor Layout" : "Enter Reactor Layout Manually";
+      console.log("[UI] About to show modal with title:", modalTitle, "data length:", data ? data.length : 0);
+      showModal(modalTitle, data, 0, "paste", false, summary, { showCheckboxes: true, checkedTypes });
       // Add real-time cost calculation and filtering
       const updateCostAndSummary = () => {
         const textareaData = modalText.value.trim();
         let layout = deserializeReactor(textareaData);
         if (!layout) {
-          modalCost.innerHTML = "Invalid layout data";
+          if (!textareaData) {
+            modalCost.innerHTML = "Enter reactor layout JSON data in the text area above";
+          } else {
+            modalCost.innerHTML = "Invalid layout data - please check the JSON format";
+          }
           confirmBtn.disabled = true;
           confirmBtn.classList.remove("hidden"); // Always show button
           return;
@@ -2259,6 +2318,8 @@ export class UI {
     const previousPauseState = modal.dataset.previousPauseState === "true";
     this.stateManager.setVar("pause", previousPauseState);
   }
+
+
 
   // Paste layout logic
   pasteReactorLayout(layout) {
