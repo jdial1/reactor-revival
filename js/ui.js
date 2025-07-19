@@ -2042,14 +2042,8 @@ export class UI {
         if (cost > 0) {
           const finalCost = sellExisting && currentSellValue > 0 ? Math.max(0, netCost) : cost;
           const costColor = canPaste ? "#4caf50" : "#ff6b6b";
-          html += `<div style="margin-top: 10px; font-weight: bold; color: ${costColor};">$${finalCost}</div>`;
-
-          // Add unaffordable message if the layout costs more than player can afford
-          if (!canPaste) {
-            html += `<div style="margin-top: 5px; font-size: 14px; color: #ff6b6b; font-style: italic;">
-              Not enough money! You have $${this.game.current_money} but need $${finalCost}
-            </div>`;
-          }
+          const costText = canPaste ? `$${finalCost}` : `$${finalCost} - Not Enough Money`;
+          html += `<div style="margin-top: 10px; font-weight: bold; color: ${costColor};">${costText}</div>`;
         } else {
           html += `<div style="margin-top: 10px; font-weight: bold; color: #ff6b6b;">No parts found in layout</div>`;
         }

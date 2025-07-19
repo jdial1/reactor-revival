@@ -85,8 +85,7 @@ describe('Paste Modal Unaffordable Text', () => {
 
             // Check that unaffordable text is displayed
             const modalCost = document.getElementById('reactor_copy_paste_cost');
-            expect(modalCost.innerHTML).toContain('Not enough money!');
-            expect(modalCost.innerHTML).toContain('You have $100 but need');
+            expect(modalCost.innerHTML).toContain('Not Enough Money');
         });
 
         it('should show affordable text when layout costs less than player money', async () => {
@@ -129,7 +128,7 @@ describe('Paste Modal Unaffordable Text', () => {
 
             // Check that unaffordable text is NOT displayed
             const modalCost = document.getElementById('reactor_copy_paste_cost');
-            expect(modalCost.innerHTML).not.toContain('Not enough money!');
+            expect(modalCost.innerHTML).not.toContain('Not Enough Money');
         });
 
         it('should update unaffordable text when player money changes', async () => {
@@ -168,8 +167,7 @@ describe('Paste Modal Unaffordable Text', () => {
 
             // Check that unaffordable text is displayed initially
             const modalCost = document.getElementById('reactor_copy_paste_cost');
-            expect(modalCost.innerHTML).toContain('Not enough money!');
-            expect(modalCost.innerHTML).toContain('You have $100 but need');
+            expect(modalCost.innerHTML).toContain('Not Enough Money');
 
             // Increase player money
             game.current_money = 10000;
@@ -183,7 +181,7 @@ describe('Paste Modal Unaffordable Text', () => {
             await new Promise(resolve => setTimeout(resolve, 50));
 
             // Check that unaffordable text is no longer displayed
-            expect(modalCost.innerHTML).not.toContain('Not enough money!');
+            expect(modalCost.innerHTML).not.toContain('Not Enough Money');
         });
     });
 }); 
