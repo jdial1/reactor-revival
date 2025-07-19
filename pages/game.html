@@ -39,9 +39,6 @@
   </ul>
   <ul>
     <li>
-      <a href="#" role="button" data-page="about_section" title="About">ℹ️</a>
-    </li>
-    <li>
       <button
         id="fullscreen_toggle"
         class="secondary"
@@ -61,7 +58,7 @@
 <!-- MAIN CONTENT -->
 <main id="main">
   <!-- PARTS SIDEBAR -->
-  <aside id="parts_section" class="collapsed">
+  <aside id="parts_section">
     <button id="parts_panel_toggle" aria-label="Toggle parts panel">☰</button>
     <div class="parts_header">
       <div class="parts_tabs">
@@ -188,19 +185,21 @@
     </nav>
   </aside>
 
-  <div id="main_content_wrapper">
-    <!-- Only show objectives on reactor page -->
+      <div id="main_content_wrapper">
+      <!-- Only show objectives on reactor page -->
 
-    <div id="objectives_section">
-      <div id="objectives_content">
-        <div id="objective_title_wrapper">
-          <span id="objective_title"
-            ><span><!-- Objective text will be injected here --></span></span
-          >
-          <span id="objective_reward"></span>
+      <div id="objectives_section">
+        <div id="objectives_content">
+          <div id="objective_title_wrapper">
+            <span id="objective_title"
+              ><span><!-- Objective text will be injected here --></span></span
+            >
+            <span id="objective_reward"></span>
+          </div>
         </div>
       </div>
-    </div>
+
+
 
     <!-- End reactor-only objectives -->
 
@@ -218,42 +217,91 @@
   </div>
 </main>
 
+<!-- Modal for Copy/Paste Data -->
+<div id="reactor_copy_paste_modal" class="hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="reactor_copy_paste_modal_title">Reactor Layout</h3>
+      <button id="reactor_copy_paste_close_btn" title="Close">×</button>
+    </div>
+    <textarea id="reactor_copy_paste_text" style="width:100%;min-height:80px;" placeholder="Paste reactor layout data here..."></textarea>
+    <div id="reactor_copy_paste_cost"></div>
+    <div class="modal-actions">
+      <button id="reactor_copy_paste_confirm_btn" class="hidden">Action</button>
+    </div>
+  </div>
+</div>
+<!-- End Copy/Paste UI -->
+
 <!-- INFO BAR (FOOTER) -->
 <footer id="info_bar">
-  <div class="info-row info-main">
+  <!-- Desktop Layout (Single Row) -->
+  <div class="info-bar-desktop">
     <button
       class="info-item heat"
-      id="info_bar_heat_btn"
+      id="info_bar_heat_btn_desktop"
       type="button"
       tabindex="0"
       aria-label="Reduce Heat"
     >
       <span class="icon">🔥</span>
-      <span class="value" id="info_heat">496</span>
+      <span class="value" id="info_heat_desktop">496</span>
+      <span class="denom" id="info_heat_denom_desktop">/1K</span>
     </button>
     <button
       class="info-item power"
-      id="info_bar_power_btn"
+      id="info_bar_power_btn_desktop"
       type="button"
       tabindex="0"
       aria-label="Sell Power"
     >
       <span class="icon">⚡</span>
-      <span class="value" id="info_power">100</span>
+      <span class="value" id="info_power_desktop">100</span>
+      <span class="denom" id="info_power_denom_desktop">/100</span>
     </button>
     <span class="info-item money"
       ><span class="icon">$</span>
-      <span class="value" id="info_money">20.6K</span></span
+      <span class="value" id="info_money_desktop">20.6K</span></span
     >
   </div>
-  <div class="info-row info-denom">
-    <span class="info-item heat"
-      ><span class="denom" id="info_heat_denom">/1K</span></span
-    >
-    <span class="info-item power"
-      ><span class="denom" id="info_power_denom">/100</span></span
-    >
-    <span class="info-item money"></span>
+
+  <!-- Mobile Layout (Two Rows) -->
+  <div class="info-bar-mobile">
+    <div class="info-row info-main">
+      <button
+        class="info-item heat"
+        id="info_bar_heat_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Reduce Heat"
+      >
+        <span class="icon">🔥</span>
+        <span class="value" id="info_heat">496</span>
+      </button>
+      <button
+        class="info-item power"
+        id="info_bar_power_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Sell Power"
+      >
+        <span class="icon">⚡</span>
+        <span class="value" id="info_power">100</span>
+      </button>
+      <span class="info-item money"
+        ><span class="icon">$</span>
+        <span class="value" id="info_money">20.6K</span></span
+      >
+    </div>
+    <div class="info-row info-denom">
+      <span class="info-item heat"
+        ><span class="denom" id="info_heat_denom">/1K</span></span
+      >
+      <span class="info-item power"
+        ><span class="denom" id="info_power_denom">/100</span></span
+      >
+      <span class="info-item money"></span>
+    </div>
   </div>
 </footer>
 

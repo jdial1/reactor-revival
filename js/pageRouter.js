@@ -113,6 +113,8 @@ export class PageRouter {
       return;
     }
 
+
+
     try {
       const response = await fetch(pageDef.path);
       if (!response.ok) {
@@ -298,6 +300,8 @@ export class PageRouter {
       }
     }
   }
+
+
 
   async loadGameLayout() {
     try {

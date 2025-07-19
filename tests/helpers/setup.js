@@ -7,6 +7,7 @@ import { UI } from "../../js/ui.js";
 import { Engine } from "../../js/engine.js";
 import { ObjectiveManager } from "../../js/objective.js";
 import { PageRouter } from "../../js/pageRouter.js";
+import { TemplateLoader } from "../../js/templateLoader.js";
 
 // Suppress verbose console output during tests
 const originalConsoleLog = console.log;
@@ -59,7 +60,8 @@ console.warn = (...args) => {
     message.includes("Page loading failed") ||
     message.includes("exotic_particles_display") ||
     message.includes("PageRouter: Failed to load page") ||
-    message.includes("Could not preserve cloud sync flags")
+    message.includes("Could not preserve cloud sync flags") ||
+    message.includes("[UI] Copy/paste UI elements not found")
   ) {
     return; // Suppress these warnings
   }
@@ -178,20 +180,32 @@ export async function setupGameWithDOM() {
     }
   };
 
+  // Initialize the template loader
+  const templateLoader = new TemplateLoader();
+  await templateLoader.loadTemplates();
+  window.templateLoader = templateLoader;
+
   const ui = new UI();
   const game = new Game(ui);
   const pageRouter = new PageRouter(ui);
   game.router = pageRouter;
 
+  // Mock Google Drive functionality for all tests
+  game.googleDriveSave = {
+    saveToCloud: vi.fn(() => Promise.resolve()),
+    loadFromCloud: vi.fn(() => Promise.resolve({})),
+    isSignedIn: vi.fn(() => false)
+  };
+
   ui.init(game);
 
   // Add a basic tooltip manager mock for DOM tests
   game.tooltip_manager = {
-    show: () => {},
-    hide: () => {},
-    closeView: () => {},
-    update: () => {},
-    updateUpgradeAffordability: () => {},
+    show: () => { },
+    hide: () => { },
+    closeView: () => { },
+    update: () => { },
+    updateUpgradeAffordability: () => { },
     isLocked: false,
     tooltip_showing: false,
     current_obj: null,

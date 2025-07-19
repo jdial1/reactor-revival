@@ -109,8 +109,9 @@ export class Tile {
     }
   }
   async setPart(partInstance) {
+    // Prevent overwriting existing parts
     if (this.part) {
-      this.clearPart(false);
+      return false; // Return false to indicate the part was not placed
     }
     this.part = partInstance || null;
     this.invalidateNeighborCaches();
@@ -197,6 +198,7 @@ export class Tile {
     if (this.game && typeof this.game.saveGame === "function") {
       this.game.saveGame();
     }
+    return true; // Return true to indicate the part was successfully placed
   }
   clearPart(full_clear = true) {
     if (!this.part) return;

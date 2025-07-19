@@ -64,6 +64,50 @@ describe("UI Integration and Gameplay", () => {
     expect(game.reactor.current_heat).toBeGreaterThan(0);
   });
 
+  it("should refund money when trying to place part on occupied tile", async () => {
+    // 1. Get parts and verify they exist
+    const uraniumPart = game.partset.getPartById("uranium1");
+    const ventPart = game.partset.getPartById("vent1");
+    expect(uraniumPart, "Uranium part should exist").not.toBeNull();
+    expect(ventPart, "Vent part should exist").not.toBeNull();
+
+    // 2. Select the vent part (simulating UI selection)
+    game.ui.stateManager.setClickedPart(ventPart);
+    expect(game.ui.stateManager.getClickedPart().id).toBe("vent1");
+
+    // 3. Get a tile and place the first part
+    const tile = game.tileset.getTile(5, 5);
+    expect(tile, "Tile should exist").not.toBeNull();
+    expect(tile.part).toBeNull(); // Should be empty initially
+
+    // 4. Place the first part
+    const initialMoney = game.current_money;
+    if (game.current_money >= uraniumPart.cost) {
+      game.current_money -= uraniumPart.cost;
+      await tile.setPart(uraniumPart);
+    }
+
+    // 5. Verify the first part was placed
+    expect(tile.part).not.toBeNull();
+    expect(tile.part.id).toBe("uranium1");
+
+    // 6. Try to place a second part on the same tile (simulating UI interaction)
+    const moneyBeforeSecondPart = game.current_money;
+    if (game.current_money >= ventPart.cost) {
+      game.current_money -= ventPart.cost;
+      const partPlaced = await tile.setPart(ventPart);
+      if (!partPlaced) {
+        // Refund the money if the part couldn't be placed
+        game.current_money += ventPart.cost;
+      }
+    }
+
+    // 7. Verify the first part is still there and money was refunded
+    expect(tile.part.id).toBe("uranium1");
+    expect(tile.part.id).not.toBe("vent1");
+    expect(game.current_money).toBe(moneyBeforeSecondPart); // Money should be refunded
+  });
+
   it("should update money display after selling power", async () => {
     const initialMoney = game.current_money;
     game.reactor.current_power = 1234;

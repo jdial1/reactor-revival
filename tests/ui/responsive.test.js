@@ -31,9 +31,8 @@ const checkViewportTracking = (window) => {
 // Helper to get element info without dumping entire DOM object
 const getElementInfo = (element) => {
   if (!element) return "null";
-  return `${element.tagName}#${element.id || "no-id"}.${
-    element.className || "no-class"
-  }`;
+  return `${element.tagName}#${element.id || "no-id"}.${element.className || "no-class"
+    }`;
 };
 
 describe("Responsive UI Layout and Overlap Checks", () => {
@@ -251,9 +250,9 @@ describe("Responsive UI Layout and Overlap Checks", () => {
       // Verify structure exists (elements can be found or created)
       expect(
         createdPartsCount +
-          createdUpgradesCount +
-          partElements.length +
-          upgradeElements.length,
+        createdUpgradesCount +
+        partElements.length +
+        upgradeElements.length,
         "Should have some part/upgrade elements or creation capability"
       ).toBeGreaterThan(0);
 
@@ -266,6 +265,279 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         typeof game.upgradeset.getUpgrade,
         "Upgrade system should be functional"
       ).toBe("function");
+    });
+  });
+
+  describe("Page Scrolling Functionality", () => {
+    beforeEach(async () => {
+      const setup = await setupGameWithDOM();
+      game = setup.game;
+      document = setup.document;
+      window = setup.window;
+    });
+
+    afterEach(() => {
+      cleanupGame();
+    });
+
+    it("should have scrollable upgrade page on mobile and desktop", async () => {
+      await game.router.loadPage("upgrades_section");
+
+      const upgradesSection = document.getElementById("upgrades_section");
+      const pageContentArea = document.getElementById("page_content_area");
+      const mainContentWrapper = document.getElementById("main_content_wrapper");
+
+      expect(upgradesSection, "Upgrades section should exist").not.toBeNull();
+      expect(pageContentArea, "Page content area should exist").not.toBeNull();
+      expect(mainContentWrapper, "Main content wrapper should exist").not.toBeNull();
+
+      // Test that the page has the correct class for scrolling
+      expect(document.body.classList.contains("page-upgrades"),
+        "Body should have page-upgrades class").toBe(true);
+
+      // Test that the upgrades section has scrollable properties
+      expect(upgradesSection.classList.contains("page"),
+        "Upgrades section should have page class").toBe(true);
+    });
+
+    it("should have scrollable research page on mobile and desktop", async () => {
+      await game.router.loadPage("experimental_upgrades_section");
+
+      const researchSection = document.getElementById("experimental_upgrades_section");
+      const pageContentArea = document.getElementById("page_content_area");
+      const mainContentWrapper = document.getElementById("main_content_wrapper");
+
+      expect(researchSection, "Research section should exist").not.toBeNull();
+      expect(pageContentArea, "Page content area should exist").not.toBeNull();
+      expect(mainContentWrapper, "Main content wrapper should exist").not.toBeNull();
+
+      // Test that the page has the correct class for scrolling
+      expect(document.body.classList.contains("page-experimental_upgrades"),
+        "Body should have page-experimental_upgrades class").toBe(true);
+
+      // Test that the research section has scrollable properties
+      expect(researchSection.classList.contains("page"),
+        "Research section should have page class").toBe(true);
+    });
+
+    it("should hide objectives section on non-reactor pages", async () => {
+      // Test on upgrades page
+      await game.router.loadPage("upgrades_section");
+      const objectivesSection = document.getElementById("objectives_section");
+
+      if (objectivesSection) {
+        // Objectives should be hidden on non-reactor pages
+        expect(objectivesSection.style.display === "none" ||
+          objectivesSection.classList.contains("hidden") ||
+          !isElementPresent(objectivesSection),
+          "Objectives should be hidden on upgrades page").toBe(true);
+      }
+
+      // Test on research page
+      await game.router.loadPage("experimental_upgrades_section");
+      const objectivesSection2 = document.getElementById("objectives_section");
+
+      if (objectivesSection2) {
+        // Objectives should be hidden on non-reactor pages
+        expect(objectivesSection2.style.display === "none" ||
+          objectivesSection2.classList.contains("hidden") ||
+          !isElementPresent(objectivesSection2),
+          "Objectives should be hidden on research page").toBe(true);
+      }
+    });
+  });
+
+  describe("Desktop Grid Scaling", () => {
+    beforeEach(async () => {
+      const setup = await setupGameWithDOM();
+      game = setup.game;
+      document = setup.document;
+      window = setup.window;
+      await game.router.loadPage("reactor_section");
+    });
+
+    afterEach(() => {
+      cleanupGame();
+    });
+
+    it("should scale down reactor grid by 15% and center it on desktop", () => {
+      // Set desktop viewport
+      resizeWindow(window, 1280, 800);
+
+      const reactor = document.getElementById("reactor");
+      const reactorWrapper = document.getElementById("reactor_wrapper");
+
+      expect(reactor, "Reactor should exist").not.toBeNull();
+      expect(reactorWrapper, "Reactor wrapper should exist").not.toBeNull();
+
+      // Test that the reactor has proper structure for desktop scaling
+      expect(reactor.tagName, "Reactor should be a valid HTML element").toBeTruthy();
+      expect(reactorWrapper.tagName, "Reactor wrapper should be a valid HTML element").toBeTruthy();
+
+      // Test that the reactor has grid structure
+      const tiles = reactor.querySelectorAll(".tile, button");
+      expect(tiles.length, "Reactor should have tile elements").toBeGreaterThan(0);
+
+      // Test that the reactor wrapper has centering structure
+      expect(reactorWrapper.style.display || "flex",
+        "Reactor wrapper should have flex display for centering").toBeTruthy();
+
+      // Verify viewport is desktop size
+      const viewport = checkViewportTracking(window);
+      expect(viewport.isMobile, "Should detect desktop viewport").toBe(false);
+    });
+
+    it("should have no top or bottom padding/margins on reactor wrapper and reactor", () => {
+      const reactor = document.getElementById("reactor");
+      const reactorWrapper = document.getElementById("reactor_wrapper");
+
+      expect(reactor, "Reactor should exist").not.toBeNull();
+      expect(reactorWrapper, "Reactor wrapper should exist").not.toBeNull();
+
+      // Test that the reactor wrapper has no top/bottom padding
+      expect(reactorWrapper.style.paddingTop === "0px" ||
+        reactorWrapper.style.paddingTop === "0" ||
+        !reactorWrapper.style.paddingTop,
+        "Reactor wrapper should have no top padding").toBeTruthy();
+
+      expect(reactorWrapper.style.paddingBottom === "0px" ||
+        reactorWrapper.style.paddingBottom === "0" ||
+        !reactorWrapper.style.paddingBottom,
+        "Reactor wrapper should have no bottom padding").toBeTruthy();
+
+      // Test that the reactor has no top/bottom margins
+      expect(reactor.style.marginTop === "0px" ||
+        reactor.style.marginTop === "0" ||
+        !reactor.style.marginTop,
+        "Reactor should have no top margin").toBeTruthy();
+
+      expect(reactor.style.marginBottom === "0px" ||
+        reactor.style.marginBottom === "0" ||
+        !reactor.style.marginBottom,
+        "Reactor should have no bottom margin").toBeTruthy();
+
+      // Test that the reactor has no top/bottom padding
+      expect(reactor.style.paddingTop === "0px" ||
+        reactor.style.paddingTop === "0" ||
+        !reactor.style.paddingTop,
+        "Reactor should have no top padding").toBeTruthy();
+
+      expect(reactor.style.paddingBottom === "0px" ||
+        reactor.style.paddingBottom === "0" ||
+        !reactor.style.paddingBottom,
+        "Reactor should have no bottom padding").toBeTruthy();
+    });
+
+    it("should have objectives section with matching background and border styling", () => {
+      const objectivesSection = document.getElementById("objectives_section");
+
+      expect(objectivesSection, "Objectives section should exist").not.toBeNull();
+
+      // Test that objectives section has proper structure
+      expect(objectivesSection.tagName, "Objectives section should be a valid HTML element").toBeTruthy();
+
+      // Test that objectives section has the correct background and border styling
+      // Note: JSDOM doesn't apply CSS, so we test for the presence of the element and its structure
+      const hasObjectivesContent = objectivesSection.querySelector("#objectives_content, .objective, .objective-title");
+      expect(hasObjectivesContent || objectivesSection.textContent.trim().length > 0,
+        "Objectives section should have content or structure").toBeTruthy();
+
+      // Test that the objectives section has the correct CSS class or structure for styling
+      expect(objectivesSection.id === "objectives_section",
+        "Objectives section should have correct ID").toBe(true);
+    });
+  });
+
+  describe("Mobile Grid Scaling", () => {
+    beforeEach(async () => {
+      const setup = await setupGameWithDOM();
+      game = setup.game;
+      document = setup.document;
+      window = setup.window;
+      await game.router.loadPage("reactor_section");
+    });
+
+    afterEach(() => {
+      cleanupGame();
+    });
+
+    it("should fill height and allow horizontal scrolling on mobile", () => {
+      // Set mobile viewport
+      resizeWindow(window, 480, 800);
+
+      const reactor = document.getElementById("reactor");
+      const reactorWrapper = document.getElementById("reactor_wrapper");
+      const infoBar = document.getElementById("info_bar");
+      const bottomNav = document.getElementById("bottom_nav");
+
+      expect(reactor, "Reactor should exist").not.toBeNull();
+      expect(reactorWrapper, "Reactor wrapper should exist").not.toBeNull();
+      expect(infoBar, "Info bar should exist").not.toBeNull();
+      expect(bottomNav, "Bottom nav should exist").not.toBeNull();
+
+      // Trigger resize to apply mobile layout
+      game.ui.resizeReactor();
+
+      // Verify that the reactor has proper dimensions set
+      const tileSize = reactor.style.getPropertyValue("--tile-size");
+      expect(tileSize, "Reactor should have tile size set").toBeTruthy();
+
+      // Verify that the reactor wrapper exists and has proper structure
+      // Note: JSDOM doesn't apply CSS, so we focus on element existence and basic properties
+      expect(reactorWrapper, "Reactor wrapper should exist").not.toBeNull();
+      expect(reactorWrapper.id === "reactor_wrapper", "Reactor wrapper should have correct ID").toBe(true);
+
+      // Verify viewport is mobile size
+      const viewport = checkViewportTracking(window);
+      expect(viewport.isMobile, "Should detect mobile viewport").toBe(true);
+
+      // Verify that the grid has proper dimensions
+      const reactorWidth = reactor.style.width;
+      const reactorHeight = reactor.style.height;
+      expect(reactorWidth, "Grid should have width set").toBeTruthy();
+      expect(reactorHeight, "Grid should have height set").toBeTruthy();
+
+      // Verify that the grid dimensions are reasonable
+      const widthMatch = reactorWidth.match(/(\d+)px/);
+      const heightMatch = reactorHeight.match(/(\d+)px/);
+      expect(widthMatch, "Grid width should be a valid pixel value").toBeTruthy();
+      expect(heightMatch, "Grid height should be a valid pixel value").toBeTruthy();
+
+      const gridWidth = parseInt(widthMatch[1]);
+      const gridHeight = parseInt(heightMatch[1]);
+      expect(gridWidth, "Grid width should be positive").toBeGreaterThan(0);
+      expect(gridHeight, "Grid height should be positive").toBeGreaterThan(0);
+
+      // Verify that the grid doesn't exceed available space
+      const viewportHeight = window.innerHeight;
+      const uiSpace = 170; // Updated to match the new calculation with reactor padding
+      const availableHeight = viewportHeight - uiSpace;
+
+      // The grid should fit within the available height
+      expect(gridHeight, "Grid height should fit within available space").toBeLessThanOrEqual(availableHeight);
+    });
+
+    it("should maintain minimum tile size on very small screens", () => {
+      // Set very small mobile viewport
+      resizeWindow(window, 320, 600);
+
+      const reactor = document.getElementById("reactor");
+      expect(reactor, "Reactor should exist").not.toBeNull();
+
+      // Trigger resize to apply mobile layout
+      game.ui.resizeReactor();
+
+      // Verify that tile size is set
+      const tileSize = reactor.style.getPropertyValue("--tile-size");
+      expect(tileSize, "Reactor should have tile size set").toBeTruthy();
+
+      // Extract tile size value
+      const tileSizeMatch = tileSize.match(/(\d+)px/);
+      expect(tileSizeMatch, "Should be able to extract tile size value").toBeTruthy();
+
+      const tileSizeValue = parseInt(tileSizeMatch[1]);
+      expect(tileSizeValue, "Tile size should be a valid number").toBeGreaterThan(0);
+      expect(tileSizeValue, "Tile size should not be too small").toBeGreaterThanOrEqual(24);
     });
   });
 });

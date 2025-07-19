@@ -215,6 +215,25 @@ export class Game {
 
     this.reactor.updateStats();
     this.upgradeset.check_affordability(this);
+    this.partset.check_affordability(this);
+
+    // Refresh the UI to show updated affordability
+    if (this.ui) {
+      // Find the currently active tab and refresh it
+      if (typeof document !== "undefined" && document.querySelector) {
+        const activeTab = document.querySelector(".parts_tab.active");
+        if (activeTab) {
+          const tabId = activeTab.getAttribute("data-tab");
+          this.ui.populatePartsForTab(tabId);
+        } else {
+          // Fallback to power tab if no active tab found
+          this.ui.populatePartsForTab("power");
+        }
+      } else {
+        // Fallback to power tab if no document available
+        this.ui.populatePartsForTab("power");
+      }
+    }
 
     if (this.reactor.has_melted_down) {
       if (typeof document !== "undefined" && document.body) {
@@ -284,7 +303,7 @@ export class Game {
 
     const part = tile.part;
     if (part.perpetual && this.ui.stateManager.getVar("auto_buy")) {
-      const cost = part.cost * 1.5;
+      const cost = part.getAutoReplacementCost();
       if (this._current_money >= cost) {
         this._current_money -= cost;
         this.ui.stateManager.setVar("current_money", this._current_money);

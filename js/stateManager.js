@@ -34,9 +34,37 @@ export class StateManager {
     this.clicked_part = part;
     const partActive = !!part;
     this.ui.DOMElements.main.classList.toggle("part_active", partActive);
+
+    // Update the parts panel toggle with selected part icon
+    this.updatePartsPanelToggleIcon(part);
   }
   getClickedPart() {
     return this.clicked_part;
+  }
+
+  updatePartsPanelToggleIcon(part) {
+    const toggle = this.ui.DOMElements.parts_panel_toggle;
+    if (!toggle) return;
+
+    // Remove existing selected part icon
+    let icon = toggle.querySelector('.selected-part-icon');
+    if (!icon) {
+      icon = document.createElement('div');
+      icon.className = 'selected-part-icon';
+      toggle.appendChild(icon);
+    }
+
+    if (part) {
+      // Set the part image as background
+      icon.style.backgroundImage = `url('${part.getImagePath()}')`;
+      icon.classList.add('visible');
+      icon.title = `Selected: ${part.title}`;
+    } else {
+      // Hide the icon when no part is selected
+      icon.classList.remove('visible');
+      icon.style.backgroundImage = '';
+      icon.title = '';
+    }
   }
 
   handleObjectiveCompleted() {
@@ -230,11 +258,23 @@ export class StateManager {
       titleEl.innerHTML = `<span>${objective.title}</span>`;
     }
     if (rewardEl && (objective.reward || objective.ep_reward)) {
-      rewardEl.textContent = objective.reward
-        ? `+${objective.reward} $`
-        : `+${objective.ep_reward} EP`;
+      const isEpReward = objective.ep_reward !== undefined && objective.ep_reward !== null;
+      const rewardValue = isEpReward ? objective.ep_reward : objective.reward;
+      const formattedReward = fmt(rewardValue);
+      const rewardText = isEpReward ? `+${formattedReward} EP` : `+${formattedReward} $`;
+
+      // Set the reward text
+      rewardEl.textContent = rewardText;
+
+      // Update the icon based on reward type
+      if (isEpReward) {
+        rewardEl.style.setProperty('--reward-icon', 'url("../img/ui/icons/icon_power.png")');
+      } else {
+        rewardEl.style.setProperty('--reward-icon', 'url("../img/ui/icons/icon_cash.png")');
+      }
     } else if (rewardEl) {
       rewardEl.textContent = "";
+      rewardEl.style.setProperty('--reward-icon', 'none');
     }
   }
 

@@ -123,6 +123,11 @@ export class Part {
       if (this.type === "protium" && unstableProtium > 0) {
         powerMultiplier *= Math.pow(2, unstableProtium);
       }
+
+      // Protium cell depletion bonus
+      if (this.type === "protium" && game.protium_particles > 0) {
+        powerMultiplier *= (1 + (game.protium_particles * 0.1));
+      }
     }
 
     // Capacitor upgrades
@@ -244,14 +249,13 @@ export class Part {
     this.cost = this.base_cost;
     this.ecost = this.base_ecost;
 
-    // Check for perpetual upgrade and adjust cost
+    // Check for perpetual upgrade (but don't adjust manual purchase cost)
     if (this.category === "cell") {
       const perpetualUpgrade = game.upgradeset.getUpgrade(
         `${this.id}_cell_perpetual`
       );
       if (perpetualUpgrade && perpetualUpgrade.level > 0) {
         this.perpetual = true;
-        this.cost *= 1.5; // Perpetual cells cost 1.5x more
       } else {
         this.perpetual = false;
       }
@@ -262,7 +266,7 @@ export class Part {
       const heatMultiplier =
         1 +
         game.reactor.heat_power_multiplier *
-          (Math.log(game.reactor.current_heat) / Math.log(1000) / 100);
+        (Math.log(game.reactor.current_heat) / Math.log(1000) / 100);
       this.power *= heatMultiplier;
     }
 
@@ -411,10 +415,15 @@ export class Part {
         }
 
         if (this.affordable) {
+          // Remove active class from all parts
           document
             .querySelectorAll(".part.part_active")
             .forEach((el) => el.classList.remove("part_active"));
+
+          // Set the clicked part in state manager (this will update the toggle icon)
           this.game.ui.stateManager.setClickedPart(this);
+
+          // Add active class to this part
           this.$el.classList.add("part_active");
         } else {
           // Show tooltip for unaffordable parts when clicked
@@ -486,10 +495,15 @@ export class Part {
       }
 
       if (this.affordable) {
+        // Remove active class from all parts
         document
           .querySelectorAll(".part.part_active")
           .forEach((el) => el.classList.remove("part_active"));
+
+        // Set the clicked part in state manager (this will update the toggle icon)
         this.game.ui.stateManager.setClickedPart(this);
+
+        // Add active class to this part
         this.$el.classList.add("part_active");
       } else {
         // Show tooltip for unaffordable parts when clicked
@@ -571,5 +585,13 @@ export class Part {
       }
     }
     return ventValue;
+  }
+
+  // Get the cost for auto-replacement (1.5x base cost for perpetual cells)
+  getAutoReplacementCost() {
+    if (this.category === "cell" && this.perpetual) {
+      return this.base_cost * 1.5;
+    }
+    return this.base_cost;
   }
 }

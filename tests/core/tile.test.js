@@ -50,6 +50,41 @@ describe("Tile Mechanics", () => {
     expect(game.current_money).toBe(moneyBeforeSell + expectedRefund);
   });
 
+  it("should not allow overwriting existing parts", async () => {
+    const tile = game.tileset.getTile(0, 0);
+    const firstPart = game.partset.getPartById("uranium1");
+    const secondPart = game.partset.getPartById("vent1");
+
+    // Place the first part
+    await tile.setPart(firstPart);
+    expect(tile.part).toBe(firstPart);
+    expect(tile.part.id).toBe("uranium1");
+
+    // Attempt to place a second part - this should not overwrite the first
+    await tile.setPart(secondPart);
+
+    // The first part should still be there, not overwritten
+    expect(tile.part).toBe(firstPart);
+    expect(tile.part.id).toBe("uranium1");
+    expect(tile.part.id).not.toBe("vent1");
+  });
+
+  it("should return false when trying to place part on occupied tile", async () => {
+    const tile = game.tileset.getTile(0, 0);
+    const firstPart = game.partset.getPartById("uranium1");
+    const secondPart = game.partset.getPartById("vent1");
+
+    // Place the first part
+    const firstResult = await tile.setPart(firstPart);
+    expect(firstResult).toBe(true);
+    expect(tile.part).toBe(firstPart);
+
+    // Try to place a second part - should return false
+    const secondResult = await tile.setPart(secondPart);
+    expect(secondResult).toBe(false);
+    expect(tile.part).toBe(firstPart); // First part should still be there
+  });
+
   it("should calculate effective vent value with upgrades", async () => {
     const ventTile = game.tileset.getTile(0, 0);
     const ventPart = game.partset.getPartById("vent1");

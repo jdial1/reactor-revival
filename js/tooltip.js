@@ -28,6 +28,34 @@ export class TooltipManager {
       if (wasMobile !== this.isMobile && this.current_obj) {
         this.update();
       }
+
+      // Handle tooltip mouse events for desktop/mobile transitions
+      const isDesktop = window.innerWidth > 768;
+      if (isDesktop) {
+        // Add mouse events for desktop
+        if (!this.$tooltip._hasMouseEvents) {
+          this.$tooltip._mouseEnterHandler = () => {
+            clearTimeout(this.tooltip_task);
+          };
+
+          this.$tooltip._mouseLeaveHandler = () => {
+            if (!this.isLocked) {
+              this.hide();
+            }
+          };
+
+          this.$tooltip.addEventListener("mouseenter", this.$tooltip._mouseEnterHandler);
+          this.$tooltip.addEventListener("mouseleave", this.$tooltip._mouseLeaveHandler);
+          this.$tooltip._hasMouseEvents = true;
+        }
+      } else {
+        // Remove mouse events for mobile
+        if (this.$tooltip._hasMouseEvents) {
+          this.$tooltip.removeEventListener("mouseenter", this.$tooltip._mouseEnterHandler);
+          this.$tooltip.removeEventListener("mouseleave", this.$tooltip._mouseLeaveHandler);
+          this.$tooltip._hasMouseEvents = false;
+        }
+      }
     });
 
     // Use event delegation for the close button
@@ -36,6 +64,25 @@ export class TooltipManager {
         this.closeView();
       }
     });
+
+    // Keep tooltip open when mouse moves over it (desktop only)
+    if (window.innerWidth > 768) {
+      this.$tooltip._mouseEnterHandler = () => {
+        // Clear any pending hide timeout when mouse enters tooltip
+        clearTimeout(this.tooltip_task);
+      };
+
+      this.$tooltip._mouseLeaveHandler = () => {
+        // Only hide if not locked and mouse leaves tooltip
+        if (!this.isLocked) {
+          this.hide();
+        }
+      };
+
+      this.$tooltip.addEventListener("mouseenter", this.$tooltip._mouseEnterHandler);
+      this.$tooltip.addEventListener("mouseleave", this.$tooltip._mouseLeaveHandler);
+      this.$tooltip._hasMouseEvents = true;
+    }
   }
 
   show(obj, tile_context, isClick = false, anchorEl = null) {
@@ -190,6 +237,8 @@ export class TooltipManager {
 
     const stats = [];
     if (obj.upgrade) stats.push(`Level ${obj.level}/${obj.max_level}`);
+
+    // Only show money costs in mobile stats, not EP costs
     if (obj.cost !== undefined || obj.upgrade?.cost !== undefined) {
       const cost = obj.cost ?? obj.upgrade?.cost;
       stats.push(
@@ -279,12 +328,14 @@ export class TooltipManager {
     let summaryPower = tile?.display_power ?? obj.power ?? obj.base_power;
     let summaryHeat = tile?.display_heat ?? obj.heat ?? obj.base_heat;
 
-    if (obj.cost !== undefined)
+    // Only show money costs in desktop summary, not EP costs
+    if (obj.cost !== undefined) {
       summaryItems.push(
         `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
           obj.cost
         )}</span>`
       );
+    }
     if (summaryPower > 0)
       summaryItems.push(
         `<span class='tooltip-summary-item'><img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>${fmt(
@@ -363,6 +414,10 @@ export class TooltipManager {
         .replace(
           /\$(\d+)/g,
           "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1"
+        )
+        .replace(
+          /\bEP\b/g,
+          "🧬 $&"
         );
     };
   }
@@ -372,9 +427,8 @@ export class TooltipManager {
     if (obj.upgrade) {
       if (obj.level >= obj.max_level) {
         stats.set("", "MAX");
-      } else if (obj.ecost) {
-        stats.set("", `${fmt(obj.current_ecost)} EP`);
       }
+      // Don't show EP costs in detailed stats, only on buy button
     } else if (
       obj.cost !== undefined &&
       obj.erequires &&
@@ -433,23 +487,24 @@ export class TooltipManager {
       this.$tooltipContent.appendChild(actionsContainer);
     }
     actionsContainer.innerHTML = "";
-    if (this.isLocked && obj.upgrade && obj.level < obj.max_level) {
+
+    // Show buy button for upgrades regardless of locked state
+    if (obj.upgrade && obj.level < obj.max_level) {
       const buyButton = document.createElement("button");
       let costText = "";
-      if (obj.cost !== undefined) {
-        costText = ` <img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
-          obj.cost
-        )}`;
-      } else if (obj.current_ecost !== undefined) {
-        costText = ` ${fmt(obj.current_ecost)} EP`;
-      }
 
-      if (obj.current_cost !== undefined) {
+      // Handle cost display - check for EP costs first
+      if (obj.current_ecost !== undefined || obj.ecost !== undefined || obj.base_ecost !== undefined) {
+        const ecost = obj.current_ecost ?? obj.ecost ?? obj.base_ecost;
+        costText = ` 🧬 ${fmt(ecost)} EP`;
+      } else if (obj.current_cost !== undefined) {
         costText = ` <img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
           obj.current_cost
         )}`;
-      } else if (obj.current_ecost !== undefined) {
-        costText = ` ${fmt(obj.current_ecost)} EP`;
+      } else if (obj.cost !== undefined) {
+        costText = ` <img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
+          obj.cost
+        )}`;
       }
 
       buyButton.innerHTML = `Buy${costText} `;

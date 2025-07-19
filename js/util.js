@@ -2,7 +2,7 @@ export function numFormat(num, places = null) {
     const cm_names = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
     if (num === null || typeof num === 'undefined' || Number.isNaN(num)) return '';
     if (num === Infinity || num === -Infinity) return num > 0 ? 'Infinity' : '-Infinity';
-    if (places === null) places = 1;
+    if (places === null) places = 0; // Changed default to 0 for no decimal places
 
     const absNum = Math.abs(num);
     if (absNum >= 1e36) {
@@ -21,9 +21,12 @@ export function numFormat(num, places = null) {
         suffix = cm_names[(pow / 3) - 1] || '';
     }
 
-    const fixed = mantissa.toFixed(places);
-    const mantissaStr = parseFloat(fixed).toString();
-    
+    // Round up to the specified number of decimal places
+    const multiplier = Math.pow(10, places);
+    const roundedMantissa = Math.ceil(mantissa * multiplier) / multiplier;
+
+    const mantissaStr = roundedMantissa.toFixed(places);
+
     return mantissaStr + suffix;
 }
 

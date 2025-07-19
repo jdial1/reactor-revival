@@ -94,6 +94,37 @@ class SplashScreenManager {
   }
 
   /**
+   * Randomize the splash logo with a random cell image
+   */
+  randomizeSplashLogo() {
+    const cellImages = [
+      'cell_1_1.png', 'cell_1_2.png', 'cell_1_4.png',
+      'cell_2_1.png', 'cell_2_2.png', 'cell_2_4.png',
+      'cell_3_1.png', 'cell_3_2.png', 'cell_3_4.png',
+      'cell_4_1.png', 'cell_4_2.png', 'cell_4_4.png',
+      'cell_5_1.png', 'cell_5_2.png', 'cell_5_4.png',
+      'cell_6_1.png', 'cell_6_2.png', 'cell_6_4.png',
+      'xcell_1_1.png', 'xcell_1_2.png', 'xcell_1_4.png'
+    ];
+
+    const logo = this.splashScreen?.querySelector('.splash-logo');
+    if (!logo) {
+      console.log('[SPLASH] Logo element not found for randomization');
+      return;
+    }
+
+    // Pick a random cell image
+    const randomCell = cellImages[Math.floor(Math.random() * cellImages.length)];
+    const timestamp = Date.now(); // Cache busting
+    const imagePath = `./img/parts/cells/${randomCell}?t=${timestamp}`;
+
+    // Update the logo background
+    logo.style.backgroundImage = `url("${imagePath}")`;
+
+    console.log(`[SPLASH] Logo randomized to: ${randomCell}`);
+  }
+
+  /**
    * Load splash screen HTML from pages folder
    */
   async loadSplashScreen() {
@@ -116,6 +147,9 @@ class SplashScreenManager {
 
         // Initialize splash screen stats
         await this.initializeSplashStats();
+
+        // Randomize the splash logo
+        this.randomizeSplashLogo();
 
         console.log("[SPLASH] Splash screen loaded successfully");
         return true;
@@ -155,6 +189,9 @@ class SplashScreenManager {
 
       // Initialize stats for fallback too
       await this.initializeSplashStats().catch(console.error);
+
+      // Randomize the splash logo for fallback too
+      this.randomizeSplashLogo();
     }
   }
 
@@ -301,8 +338,7 @@ class SplashScreenManager {
 
     if (this.debugMode) {
       console.log(
-        `[SPLASH DEBUG] Showing flavor text ${randomIndex + 1}/${
-          flavorMessages.length
+        `[SPLASH DEBUG] Showing flavor text ${randomIndex + 1}/${flavorMessages.length
         }: "${message}"`
       );
     }
@@ -349,8 +385,7 @@ class SplashScreenManager {
 
         if (this.debugMode) {
           console.log(
-            `[SPLASH DEBUG] Step ${stepIndex + 1}/${
-              this.loadingSteps.length
+            `[SPLASH DEBUG] Step ${stepIndex + 1}/${this.loadingSteps.length
             }: ${step.message} -> showing flavor: "${flavorMessage}"`
           );
         }
@@ -363,8 +398,7 @@ class SplashScreenManager {
 
         if (this.debugMode) {
           console.log(
-            `[SPLASH DEBUG] Step ${stepIndex + 1}/${
-              this.loadingSteps.length
+            `[SPLASH DEBUG] Step ${stepIndex + 1}/${this.loadingSteps.length
             }: ${step.message} (no flavor text available, using status element)`
           );
         }
@@ -780,9 +814,9 @@ window.debugSplash = {
     );
     console.log(
       "[SPLASH DEBUG] Or visit: " +
-        window.location.origin +
-        window.location.pathname +
-        "?debug-splash"
+      window.location.origin +
+      window.location.pathname +
+      "?debug-splash"
     );
   },
 

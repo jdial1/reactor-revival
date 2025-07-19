@@ -1,0 +1,262 @@
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { setupGame } from "../helpers/setup.js";
+
+describe("Complex Layouts and Advanced Interactions", () => {
+    let game;
+
+    beforeEach(async () => {
+        game = await setupGame();
+        // Use fake timers to control game ticks precisely
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("should correctly transfer heat through a long chain of heat exchangers", async () => {
+        const cell = game.partset.getPartById("thorium1"); // High heat producer
+        const exchanger = game.partset.getPartById("heat_exchanger1");
+        const vent = game.partset.getPartById("vent1");
+
+        // Layout: Cell -> Exchanger -> Exchanger -> ... -> Exchanger -> Vent
+        const cellTile = game.tileset.getTile(5, 5);
+        await cellTile.setPart(cell);
+        cellTile.ticks = 1; // Ensure cell is active
+
+        const exchangerTiles = [];
+        for (let i = 0; i < 5; i++) {
+            const tile = game.tileset.getTile(5, 6 + i);
+            await tile.setPart(exchanger);
+            tile.activated = true; // Ensure exchangers are activated
+            exchangerTiles.push(tile);
+        }
+        const ventTile = game.tileset.getTile(5, 11);
+        await ventTile.setPart(vent);
+        ventTile.activated = true; // Ensure vent is activated
+
+        // Run the engine for one tick to generate heat from the cell
+        game.engine.tick();
+
+        // The first exchanger should have absorbed heat
+        if (exchangerTiles[0].heat_contained <= 0) {
+            console.warn("Heat transfer not working as expected - first exchanger has no heat");
+        }
+        expect(exchangerTiles[0].heat_contained).toBeGreaterThan(0);
+
+        // Run for more ticks to allow heat to propagate
+        for (let i = 0; i < 10; i++) {
+            game.engine.tick();
+        }
+
+        // All exchangers in the chain should now have some heat
+        exchangerTiles.forEach((tile, index) => {
+            if (tile.heat_contained <= 0) {
+                console.warn(`Exchanger at index ${index} has no heat - heat transfer may not be working`);
+            }
+            expect(tile.heat_contained, `Exchanger at index ${index} should have heat`).toBeGreaterThan(0);
+        });
+
+        // The last exchanger should have less heat than the first, showing distribution
+        if (exchangerTiles[4].heat_contained >= exchangerTiles[0].heat_contained) {
+            console.warn("Heat distribution not working as expected - last exchanger has more heat than first");
+        }
+        expect(exchangerTiles[4].heat_contained).toBeLessThan(exchangerTiles[0].heat_contained);
+
+        // The vent at the end should have received heat and be trying to cool it
+        if (ventTile.heat_contained <= 0) {
+            console.warn("Vent has no heat - heat transfer chain may not be working");
+        }
+        expect(ventTile.heat_contained).toBeGreaterThan(0);
+    });
+
+    it("should increase cell power with high sustained heat when Forceful Fusion is active", async () => {
+        // Purchase Forceful Fusion and Heat Control Operator upgrades
+        const fusionUpgrade = game.upgradeset.getUpgrade("forceful_fusion");
+        const heatControlUpgrade = game.upgradeset.getUpgrade("heat_control_operator");
+        fusionUpgrade.setLevel(1);
+        heatControlUpgrade.setLevel(1);
+        expect(game.reactor.heat_power_multiplier).toBe(1);
+        expect(game.reactor.heat_controlled).toBe(true);
+
+        const cellPart = game.partset.getPartById("uranium1");
+        const cellTile = game.tileset.getTile(5, 5);
+        await cellTile.setPart(cellPart);
+        cellTile.ticks = 1; // Ensure the cell has ticks > 0
+
+        // Artificially set a high heat level
+        game.reactor.current_heat = 2000000; // 2M heat
+
+        // Update stats to apply the bonus BEFORE the tick
+        game.reactor.updateStats();
+
+        // Check the power bonus calculation in updateStats
+        const expectedMultiplier = 1 + (1 * (Math.log(2000000) / Math.log(1000) / 100));
+        const expectedPower = cellPart.base_power * expectedMultiplier;
+
+        if (Math.abs(game.reactor.stats_power - expectedPower) > 1) {
+            console.warn(`Forceful Fusion power calculation may be incorrect. Expected: ${expectedPower}, Got: ${game.reactor.stats_power}`);
+        }
+        expect(game.reactor.stats_power).toBeCloseTo(expectedPower, 1);
+
+        // Now run a tick to actually add the power
+        game.engine.tick();
+
+        // Run a tick to see the effect on power generation
+        game.engine.tick();
+
+        // Power added should be greater than the base power of the cell
+        if (game.reactor.current_power <= cellPart.base_power) {
+            console.warn("Forceful Fusion power bonus not applied - current power not greater than base power");
+        }
+        expect(game.reactor.current_power).toBeGreaterThan(cellPart.base_power);
+
+        if (Math.abs(game.reactor.current_power - expectedPower) > 1) {
+            console.warn(`Forceful Fusion power not matching expected value. Expected: ${expectedPower}, Got: ${game.reactor.current_power}`);
+        }
+        expect(game.reactor.current_power).toBeCloseTo(expectedPower, 1);
+    });
+
+    it("should correctly apply the power bonus from depleted Protium Cells", async () => {
+        const protiumPart = game.partset.getPartById("protium1");
+
+        // Enable protium cells
+        game.upgradeset.getUpgrade("laboratory").setLevel(1);
+        game.upgradeset.getUpgrade("protium_cells").setLevel(1);
+
+        // Deplete one Protium cell
+        const firstTile = game.tileset.getTile(0, 0);
+        await firstTile.setPart(protiumPart);
+        firstTile.ticks = 1;
+        game.engine.tick(); // This tick will deplete the cell
+
+        if (firstTile.part !== null) {
+            console.warn("Protium cell not depleted as expected");
+        }
+        expect(firstTile.part).toBeNull();
+
+        if (game.protium_particles !== protiumPart.cell_count) {
+            console.warn(`Protium particles not correctly added. Expected: ${protiumPart.cell_count}, Got: ${game.protium_particles}`);
+        }
+        expect(game.protium_particles).toBe(protiumPart.cell_count);
+
+        // Place a new Protium cell
+        const secondTile = game.tileset.getTile(1, 0);
+        await secondTile.setPart(protiumPart);
+
+        // The new part instance should have its power recalculated
+        const newProtiumInstance = game.partset.getPartById("protium1");
+        const expectedPower = newProtiumInstance.base_power * (1 + (game.protium_particles * 0.1));
+
+        // Update stats and check
+        game.reactor.updateStats();
+
+        if (Math.abs(game.reactor.stats_power - expectedPower) > 1) {
+            console.warn(`Protium power bonus not applied correctly. Expected: ${expectedPower}, Got: ${game.reactor.stats_power}`);
+        }
+        expect(game.reactor.stats_power).toBeCloseTo(expectedPower, 1);
+    });
+
+    it("should consume reactor power when an Extreme Vent is active", async () => {
+        const extremeVentPart = game.partset.getPartById("vent6");
+        const labUpgrade = game.upgradeset.getUpgrade("laboratory");
+        const ventUpgrade = game.upgradeset.getUpgrade("vortex_cooling");
+        const capacitorPart = game.partset.getPartById("capacitor1");
+
+        labUpgrade.setLevel(1);
+        ventUpgrade.setLevel(1);
+
+        // Add a capacitor to increase max_power above the test values
+        const capacitorTile = game.tileset.getTile(1, 0);
+        await capacitorTile.setPart(capacitorPart);
+        capacitorTile.activated = true;
+
+        const ventTile = game.tileset.getTile(0, 0);
+        await ventTile.setPart(extremeVentPart);
+
+        const heatToVent = 1000;
+        const powerToConsume = 1000;
+
+        ventTile.heat_contained = heatToVent;
+        game.reactor.current_power = 2000;
+
+        // Ensure the vent is activated
+        ventTile.activated = true;
+
+        // Run a tick to actually vent the heat
+        game.engine.tick();
+
+        // Heat should be vented (up to the vent's capacity)
+        const ventAmount = Math.min(heatToVent, extremeVentPart.vent);
+        const expectedHeat = heatToVent - ventAmount;
+
+        if (Math.abs(ventTile.heat_contained - expectedHeat) > 1) {
+            console.warn(`Extreme Vent heat venting not working correctly. Expected: ${expectedHeat}, Got: ${ventTile.heat_contained}`);
+        }
+        expect(ventTile.heat_contained).toBeCloseTo(expectedHeat);
+
+        // Power should be consumed equal to the heat vented
+        const expectedPower = 2000 - ventAmount;
+
+        if (Math.abs(game.reactor.current_power - expectedPower) > 1) {
+            console.warn(`Extreme Vent power consumption not working correctly. Expected: ${expectedPower}, Got: ${game.reactor.current_power}`);
+        }
+        expect(game.reactor.current_power).toBeCloseTo(expectedPower, 1);
+    });
+
+    it("should handle auto-buy for multiple depleted perpetual parts in the same tick", async () => {
+        const perpetualUranium = game.upgradeset.getUpgrade("uranium1_cell_perpetual");
+        perpetualUranium.setLevel(1);
+        const perpetualReflector = game.upgradeset.getUpgrade("perpetual_reflectors");
+        perpetualReflector.setLevel(1);
+        game.ui.stateManager.setVar("auto_buy", true);
+
+        const cellPart = game.partset.getPartById("uranium1");
+        const reflectorPart = game.partset.getPartById("reflector1");
+
+        const cellTile = game.tileset.getTile(0, 0);
+        const reflectorTile = game.tileset.getTile(0, 1);
+
+        await cellTile.setPart(cellPart);
+        await reflectorTile.setPart(reflectorPart);
+
+        // Set both to be depleted on the next tick
+        cellTile.ticks = 1;
+        reflectorTile.ticks = 1;
+
+        const cellCost = cellPart.getAutoReplacementCost();
+        const reflectorCost = reflectorPart.getAutoReplacementCost();
+        const totalCost = cellCost + reflectorCost;
+
+        game.current_money = totalCost;
+
+        game.engine.tick();
+
+        // Both parts should have been replaced
+        if (cellTile.part === null) {
+            console.warn("Auto-buy not working for cell - part is null");
+        }
+        expect(cellTile.part).not.toBeNull();
+
+        if (reflectorTile.part === null) {
+            console.warn("Auto-buy not working for reflector - part is null");
+        }
+        expect(reflectorTile.part).not.toBeNull();
+
+        if (cellTile.ticks !== cellPart.base_ticks) {
+            console.warn(`Cell ticks not reset correctly. Expected: ${cellPart.base_ticks}, Got: ${cellTile.ticks}`);
+        }
+        expect(cellTile.ticks).toBe(cellPart.base_ticks);
+
+        if (reflectorTile.ticks !== reflectorPart.base_ticks) {
+            console.warn(`Reflector ticks not reset correctly. Expected: ${reflectorPart.base_ticks}, Got: ${reflectorTile.ticks}`);
+        }
+        expect(reflectorTile.ticks).toBe(reflectorPart.base_ticks);
+
+        // Money should be deducted correctly
+        if (game.current_money !== 0) {
+            console.warn(`Auto-buy money deduction not working correctly. Expected: 0, Got: ${game.current_money}`);
+        }
+        expect(game.current_money).toBe(0);
+    });
+}); 

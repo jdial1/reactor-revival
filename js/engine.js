@@ -127,8 +127,10 @@ export class Engine {
     this.game.performance.markStart("tick_cells");
     for (const tile of active_cells) {
       const part = tile.part;
-      tile.power = part.power;
-      tile.heat = part.heat;
+      // Use the power and heat values that were calculated in updateStats()
+      // which include Forceful Fusion and other bonuses
+      tile.power = tile.power || part.power;
+      tile.heat = tile.heat || part.heat;
       power_add += tile.power;
       heat_add += tile.heat;
       tile.ticks--;
@@ -259,14 +261,17 @@ export class Engine {
       if (part.vent > 0) {
         const vent_value = tile.getEffectiveVentValue();
         const old_heat = tile.heat_contained;
+        let heat_vented = 0; // track how much is vented
+
         if (tile.heat_contained > 0) {
-          if (tile.heat_contained <= vent_value) {
-            tile.heat_contained = 0;
-          } else {
-            tile.heat_contained -= vent_value;
-          }
+          heat_vented = Math.min(tile.heat_contained, vent_value);
+          tile.heat_contained -= heat_vented;
         }
-        if (part.id === "vent6") reactor.current_power -= vent_value;
+
+        if (part.id === "vent6") {
+          reactor.current_power -= heat_vented; // Use heat_vented, not vent_value
+        }
+
         if (old_heat !== tile.heat_contained) {
           tile.updateVisualState();
         }
@@ -298,12 +303,7 @@ export class Engine {
     }
 
     this.game.performance.markStart("tick_stats");
-    if (reactor.heat_power_multiplier > 0 && reactor.current_heat > 1000) {
-      power_add *=
-        1 +
-        reactor.heat_power_multiplier *
-          (Math.log(reactor.current_heat) / Math.log(1000) / 100);
-    }
+    // Forceful Fusion is now handled in reactor.updateStats()
 
     // Apply global power multiplier
     power_add *= reactor.power_multiplier || 1;

@@ -104,7 +104,12 @@ describe("Full Part and Upgrade Coverage", () => {
             const ventValue = tile.getEffectiveVentValue();
 
             if (part.id === "vent6") {
-              game.reactor.current_power = ventValue;
+              // Add a capacitor to increase max_power so the test doesn't get capped
+              const capacitorTile = game.tileset.getTile(1, 0);
+              await capacitorTile.setPart(game.partset.getPartById("capacitor1"));
+              capacitorTile.activated = true;
+              // Set initial power to a value that will be reduced below 100 when vent consumes power
+              game.reactor.current_power = 150;
             }
 
             // Ensure tile is in active tiles list for vent processing
@@ -132,7 +137,11 @@ describe("Full Part and Upgrade Coverage", () => {
             expect(tile.heat_contained).toBeCloseTo(expectedVentHeat);
 
             if (part.id === "vent6") {
-              expect(game.reactor.current_power).toBe(0);
+              // Extreme vent consumes power equal to heat vented
+              // With 80 heat and ventValue capacity, it should vent 80 heat and consume 80 power
+              // Initial power was 150, so final power should be 150 - 80 = 70
+              const expectedPower = 150 - 80; // 70
+              expect(game.reactor.current_power).toBeCloseTo(expectedPower, 1);
             }
             break;
           case "coolant_cell":
@@ -427,9 +436,9 @@ describe("Logical Duplication Tests", () => {
     // Create minimal UI mock for the game constructor
     const mockUI = {
       stateManager: {
-        setVar: () => {},
-        getVar: () => {},
-        setClickedPart: () => {},
+        setVar: () => { },
+        getVar: () => { },
+        setClickedPart: () => { },
       },
     };
 

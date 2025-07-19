@@ -38,6 +38,14 @@ export class UI {
       "info_power_denom",
       "info_bar_heat_btn",
       "info_bar_power_btn",
+      // Desktop info bar elements
+      "info_heat_desktop",
+      "info_power_desktop",
+      "info_money_desktop",
+      "info_heat_denom_desktop",
+      "info_power_denom_desktop",
+      "info_bar_heat_btn_desktop",
+      "info_bar_power_btn_desktop",
       "parts_tab_contents",
       "cells",
       "reflectors",
@@ -103,6 +111,14 @@ export class UI {
       "controls_expanded_group",
       "controls_collapsed_group",
       "splash_close_btn",
+      "reactor_copy_btn",
+      "reactor_paste_btn",
+      "reactor_copy_paste_modal",
+      "reactor_copy_paste_modal_title",
+      "reactor_copy_paste_text",
+      "reactor_copy_paste_cost",
+      "reactor_copy_paste_close_btn",
+      "reactor_copy_paste_confirm_btn",
     ];
     this.toggle_buttons_config = {
       auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
@@ -140,6 +156,7 @@ export class UI {
           "upgrades_section",
           "experimental_upgrades_section",
           "about_section",
+          "privacy_policy_section",
           "upgrades_content_wrapper",
           "experimental_upgrades_content_wrapper",
           "stats_power",
@@ -397,6 +414,17 @@ export class UI {
           "help-mode-active",
           this.help_mode_active
         );
+
+        // When help mode is activated, deselect current part and clear selection
+        if (this.help_mode_active) {
+          // Deselect any currently selected part
+          document.querySelectorAll(".part.part_active").forEach((el) => {
+            el.classList.remove("part_active");
+          });
+
+          // Clear the clicked part from state manager
+          this.stateManager.setClickedPart(null);
+        }
       });
     }
 
@@ -419,14 +447,10 @@ export class UI {
       const isMeltdownClassPresent =
         document.body.classList.contains("reactor-meltdown");
 
-      // Show/hide meltdown banner (outer and inner)
+      // Show/hide meltdown banner
       const meltdownBanner = document.getElementById("meltdown_banner");
       if (meltdownBanner) {
         meltdownBanner.classList.toggle("hidden", !hasMeltedDown);
-        const article = meltdownBanner.querySelector("article");
-        if (article) {
-          article.classList.toggle("hidden", !hasMeltedDown);
-        }
       }
 
       if (hasMeltedDown && !isMeltdownClassPresent) {
@@ -533,48 +557,80 @@ export class UI {
   }
 
   initVarObjsConfig() {
+    // Helper function to get the appropriate DOM element based on screen size
+    const getInfoElement = (mobileId, desktopId) => {
+      const isDesktop = window.innerWidth >= 901;
+      const elementId = isDesktop ? desktopId : mobileId;
+      return document.getElementById(elementId);
+    };
+
     this.var_objs_config = {
-      current_money: { dom: document.getElementById("info_money"), num: true },
-      current_power: {
-        dom: document.getElementById("info_power"),
+      current_money: {
+        dom: getInfoElement("info_money", "info_money_desktop"),
         num: true,
-        onupdate: () => {
-          // Update denominator
-          const denom = document.getElementById("info_power_denom");
-          if (denom)
-            denom.textContent =
-              "/" + (this.stateManager.getVar("max_power") || "");
+        onupdate: (val) => {
+          // Update both mobile and desktop elements
+          const mobileEl = document.getElementById("info_money");
+          const desktopEl = document.getElementById("info_money_desktop");
+          if (mobileEl) mobileEl.textContent = fmt(val);
+          if (desktopEl) desktopEl.textContent = fmt(val);
+        }
+      },
+      current_power: {
+        dom: getInfoElement("info_power", "info_power_desktop"),
+        num: true,
+        onupdate: (val) => {
+          // Update both mobile and desktop elements
+          const mobileEl = document.getElementById("info_power");
+          const desktopEl = document.getElementById("info_power_desktop");
+          if (mobileEl) mobileEl.textContent = fmt(val);
+          if (desktopEl) desktopEl.textContent = fmt(val);
+
+          // Update denominators
+          const mobileDenom = document.getElementById("info_power_denom");
+          const desktopDenom = document.getElementById("info_power_denom_desktop");
+          const maxPower = this.stateManager.getVar("max_power") || "";
+          if (mobileDenom) mobileDenom.textContent = "/" + maxPower;
+          if (desktopDenom) desktopDenom.textContent = "/" + maxPower;
         },
       },
       max_power: {
-        dom: document.getElementById("info_power_denom"),
+        dom: getInfoElement("info_power_denom", "info_power_denom_desktop"),
         num: true,
-        onupdate: () => {
-          const denom = document.getElementById("info_power_denom");
-          if (denom)
-            denom.textContent =
-              "/" + (this.stateManager.getVar("max_power") || "");
+        onupdate: (val) => {
+          const mobileDenom = document.getElementById("info_power_denom");
+          const desktopDenom = document.getElementById("info_power_denom_desktop");
+          if (mobileDenom) mobileDenom.textContent = "/" + val;
+          if (desktopDenom) desktopDenom.textContent = "/" + val;
         },
       },
       current_heat: {
-        dom: document.getElementById("info_heat"),
+        dom: getInfoElement("info_heat", "info_heat_desktop"),
         num: true,
         places: 0,
-        onupdate: () => {
-          const denom = document.getElementById("info_heat_denom");
-          if (denom)
-            denom.textContent =
-              "/" + (this.stateManager.getVar("max_heat") || "");
+        onupdate: (val) => {
+          // Update both mobile and desktop elements
+          const mobileEl = document.getElementById("info_heat");
+          const desktopEl = document.getElementById("info_heat_desktop");
+          if (mobileEl) mobileEl.textContent = fmt(val);
+          if (desktopEl) desktopEl.textContent = fmt(val);
+
+          // Update denominators
+          const mobileDenom = document.getElementById("info_heat_denom");
+          const desktopDenom = document.getElementById("info_heat_denom_desktop");
+          const maxHeat = this.stateManager.getVar("max_heat") || "";
+          if (mobileDenom) mobileDenom.textContent = "/" + maxHeat;
+          if (desktopDenom) desktopDenom.textContent = "/" + maxHeat;
         },
       },
       max_heat: {
-        dom: document.getElementById("info_heat_denom"),
+        dom: getInfoElement("info_heat_denom", "info_heat_denom_desktop"),
         num: true,
-        onupdate: () => {
-          const denom = document.getElementById("info_heat_denom");
-          if (denom)
-            denom.textContent =
-              "/" + (this.stateManager.getVar("max_heat") || "");
+        onupdate: (val) => {
+          const mobileDenom = document.getElementById("info_heat_denom");
+          const desktopDenom = document.getElementById("info_heat_denom_desktop");
+          if (mobileDenom) mobileDenom.textContent = "/" + val;
+          if (desktopDenom) desktopDenom.textContent = "/" + val;
         },
       },
       exotic_particles: {
@@ -668,14 +724,10 @@ export class UI {
           }
           document.body.classList.toggle("game-paused", val);
 
-          // Show/hide pause banner (outer and inner)
+          // Show/hide pause banner
           const pauseBanner = document.getElementById("pause_banner");
           if (pauseBanner) {
             pauseBanner.classList.toggle("hidden", !val);
-            const article = pauseBanner.querySelector("article");
-            if (article) {
-              article.classList.toggle("hidden", !val);
-            }
           }
         },
       },
@@ -704,9 +756,8 @@ export class UI {
     if (!background) return;
     if (current <= max) background.style.backgroundColor = "transparent";
     else if (current <= max * 2)
-      background.style.backgroundColor = `rgba(255, 0, 0, ${
-        (current - max) / max
-      })`;
+      background.style.backgroundColor = `rgba(255, 0, 0, ${(current - max) / max
+        })`;
     else background.style.backgroundColor = `rgb(255, 0, 0)`;
   }
 
@@ -732,6 +783,12 @@ export class UI {
         `;
     }
     this.resizeReactor();
+    // Add a small delay to ensure proper mobile scaling after DOM is ready
+    setTimeout(() => {
+      if (typeof window !== "undefined" && window.innerWidth <= 900) {
+        this.resizeReactor();
+      }
+    }, 100);
     window.addEventListener("resize", () => this.resizeReactor());
     this.runUpdateInterfaceLoop();
   }
@@ -751,38 +808,99 @@ export class UI {
     let tileSize;
 
     if (isMobile) {
-      tileSize = 48;
-    } else {
-      const wrapperWidth = wrapper.clientWidth;
+      // Mobile: Force a reflow to get accurate wrapper dimensions
+      wrapper.offsetHeight; // Force reflow
+
+      // Get the actual wrapper dimensions after reflow
       const wrapperHeight = wrapper.clientHeight;
-      const gap = 1;
+      const wrapperWidth = wrapper.clientWidth;
 
-      const tileSizeForWidth = wrapperWidth / numCols - gap;
-      const tileSizeForHeight = wrapperHeight / numRows - gap;
+      console.log(`[UI] Mobile wrapper dimensions: ${wrapperWidth}x${wrapperHeight}`);
 
-      tileSize = Math.floor(Math.min(tileSizeForWidth, tileSizeForHeight));
+      // Calculate tile size to fit the height of the reactor area
+      // Account for objectives section (70px-90px) and info bar (48px) and bottom nav (56px)
+      let objectivesHeight = 70; // Default height
+      if (window.innerWidth <= 400) {
+        objectivesHeight = 90;
+      } else if (window.innerWidth <= 600) {
+        objectivesHeight = 80;
+      }
+      const uiSpace = objectivesHeight + 48 + 56; // objectives + info bar + bottom nav
+      const availableHeight = wrapperHeight - uiSpace;
 
-      tileSize = Math.max(20, Math.min(64, tileSize));
-    }
+      // Scale to fit height - this ensures the grid fills the available height
+      const tileSizeForHeight = availableHeight / numRows;
 
-    this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
-    this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
-    this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
+      // Use height-based scaling to ensure grid fits vertically
+      tileSize = Math.floor(tileSizeForHeight);
 
-    if (isMobile) {
-      this.DOMElements.reactor.offsetHeight;
+      // Ensure reasonable tile size bounds for mobile
+      tileSize = Math.max(25, Math.min(tileSize, 55));
 
-      const reactorEl = this.DOMElements.reactor;
-      const wrapperEl = this.DOMElements.reactor_wrapper;
+      // Calculate grid dimensions
+      const gridWidth = tileSize * numCols;
+      const gridHeight = tileSize * numRows;
 
-      const reactorWidth = reactorEl.scrollWidth;
-      const reactorHeight = reactorEl.scrollHeight;
+      // Removed width-based recalculation to prevent grid from becoming too tall
+      // The grid will now fit vertically and scroll horizontally when needed
 
-      const wrapperWidth = wrapperEl.clientWidth;
-      const wrapperHeight = wrapperEl.clientHeight;
+      console.log(`[UI] Mobile final tile size: ${tileSize}px`);
 
-      wrapperEl.scrollLeft = (reactorWidth - wrapperWidth) / 2;
-      wrapperEl.scrollTop = (reactorHeight - wrapperHeight) / 2;
+      // Set CSS custom properties
+      this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
+      this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
+      this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
+
+      // Calculate final grid dimensions
+      const finalGridWidth = tileSize * numCols;
+      const finalGridHeight = tileSize * numRows;
+
+      console.log(`[UI] Mobile grid dimensions: ${finalGridWidth}x${finalGridHeight}`);
+
+      // // Set grid dimensions
+      // this.DOMElements.reactor.style.width = `${finalGridWidth}px`;
+      // this.DOMElements.reactor.style.height = `${finalGridHeight}px`;
+
+    } else {
+      // Desktop: Scale grid to fit height while preventing horizontal scrollbar
+      const wrapperHeight = wrapper.clientHeight;
+      const sidebarWidth = 300; // Fixed sidebar width
+      const availableWidth = (typeof window !== "undefined" ? window.innerWidth : 1200) - sidebarWidth - 20; // Account for margins
+
+      // Account for bottom info bar height (48px) and grid padding (10px total: 5px top + 5px bottom)
+      const bottomInfoBarHeight = 48;
+      const gridPadding = 50;
+      const availableHeight = wrapperHeight - bottomInfoBarHeight - gridPadding;
+
+      // Calculate tile size to fit available height perfectly
+      const tileSizeForHeight = Math.floor(availableHeight / numRows);
+
+      // Calculate tile size to fit width without horizontal scrollbar
+      const tileSizeForWidth = Math.floor(availableWidth / numCols);
+
+      // Use the smaller of the two to ensure no scrollbars
+      tileSize = Math.min(tileSizeForHeight, tileSizeForWidth);
+
+      // Ensure minimum tile size for usability
+      tileSize = Math.max(tileSize, 32);
+
+      tileSize = Math.min(tileSize, 60);
+
+      this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
+      this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
+      this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
+
+      // Remove scaling to fill entire space
+      this.DOMElements.reactor.style.setProperty("transform", "none");
+      this.DOMElements.reactor.style.setProperty("transform-origin", "center center");
+
+      // Set grid dimensions based on calculated tile size
+      const gridWidth = tileSize * numCols;
+      const gridHeight = tileSize * numRows;
+      this.DOMElements.reactor.style.width = `${gridWidth}px`;
+      this.DOMElements.reactor.style.height = `${gridHeight}px`;
+
+
     }
   }
 
@@ -890,7 +1008,7 @@ export class UI {
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
-        if (this.game && this.DOMElements.reactor) {
+        if (this.game && this.DOMElements.reactor && typeof window !== "undefined") {
           this.resizeReactor();
         }
       }, 100);
@@ -908,7 +1026,7 @@ export class UI {
             window.innerWidth &&
             window.innerWidth <= 900
           ) {
-            this.forceReactorRealignment();
+            this.resizeReactor();
           }
         }, 150);
       });
@@ -916,7 +1034,8 @@ export class UI {
 
     if (this.DOMElements.splash_close_btn) {
       this.DOMElements.splash_close_btn.onclick = () => {
-        location.reload();
+        // Navigate to root URL to show splash screen
+        window.location.href = window.location.origin + window.location.pathname;
       };
     }
 
@@ -945,33 +1064,39 @@ export class UI {
       };
     }
 
-    // Re-enable click handlers for info bar items
-    const heatItem = document.querySelector(".info-item.heat");
-    if (heatItem) {
+    // Re-enable click handlers for info bar items (both mobile and desktop)
+    const heatItems = document.querySelectorAll(".info-item.heat");
+    heatItems.forEach(heatItem => {
       heatItem.onclick = () => {
         if (this.game) this.game.manual_reduce_heat_action();
       };
-    }
-    const powerItem = document.querySelector(".info-item.power");
-    if (powerItem) {
+    });
+
+    const powerItems = document.querySelectorAll(".info-item.power");
+    powerItems.forEach(powerItem => {
       powerItem.onclick = () => {
         if (this.game) this.game.sell_action();
       };
-    }
+    });
 
-    document
-      .getElementById("info_bar_heat_btn")
-      ?.addEventListener("click", function () {
+    // Handle both mobile and desktop button IDs
+    const heatBtnIds = ["info_bar_heat_btn", "info_bar_heat_btn_desktop"];
+    const powerBtnIds = ["info_bar_power_btn", "info_bar_power_btn_desktop"];
+
+    heatBtnIds.forEach(btnId => {
+      document.getElementById(btnId)?.addEventListener("click", function () {
         if (window.game) window.game.manual_reduce_heat_action();
       });
-    document
-      .getElementById("info_bar_power_btn")
-      ?.addEventListener("click", function () {
+    });
+
+    powerBtnIds.forEach(btnId => {
+      document.getElementById(btnId)?.addEventListener("click", function () {
         if (window.game) window.game.sell_action();
       });
+    });
   }
 
-  handleGridInteraction(tileEl, event) {
+  async handleGridInteraction(tileEl, event) {
     if (!tileEl || !tileEl.tile) return;
 
     if (this.game && this.game.reactor && this.game.reactor.has_melted_down) {
@@ -1000,15 +1125,12 @@ export class UI {
         }
 
         if (clicked_part) {
-          if (tile.part) {
-            if (this.game.current_money >= clicked_part.cost) {
-              this.game.current_money -= clicked_part.cost;
-              tile.setPart(clicked_part);
-            }
-          } else {
-            if (this.game.current_money >= clicked_part.cost) {
-              this.game.current_money -= clicked_part.cost;
-              tile.setPart(clicked_part);
+          if (this.game.current_money >= clicked_part.cost) {
+            this.game.current_money -= clicked_part.cost;
+            const partPlaced = await tile.setPart(clicked_part);
+            if (!partPlaced) {
+              // Refund the money if the part couldn't be placed (tile already occupied)
+              this.game.current_money += clicked_part.cost;
             }
           }
         }
@@ -1076,7 +1198,8 @@ export class UI {
       // Initialize the panel state based on screen size
       const isMobileOnLoad = window.innerWidth <= 900;
       if (isMobileOnLoad) {
-        panel.classList.add("collapsed");
+        // Start with panel visible on mobile for better UX
+        panel.classList.remove("collapsed");
       } else {
         panel.classList.remove("collapsed");
       }
@@ -1090,6 +1213,9 @@ export class UI {
         }
         this.updatePartsPanelBodyClass();
       });
+
+      // Initialize the selected part icon
+      this.stateManager.updatePartsPanelToggleIcon(null);
     }
   }
 
@@ -1116,6 +1242,8 @@ export class UI {
       levels.textContent = `${upgrade.level}/${upgrade.max_level}`;
       btn.appendChild(levels);
     }
+
+
 
     return btn;
   }
@@ -1386,9 +1514,8 @@ export class UI {
       if (Array.isArray(value)) {
         return `<span class='debug-array'>[${value.length} items]</span>`;
       }
-      return `<span class='debug-object'>{${
-        Object.keys(value).length
-      } keys}</span>`;
+      return `<span class='debug-object'>{${Object.keys(value).length
+        } keys}</span>`;
     }
     return `<span class='debug-other'>${String(value)}</span>`;
   }
@@ -1403,6 +1530,712 @@ export class UI {
     }
   }
 
+  initializeCopyPasteUI() {
+    const copyBtn = document.getElementById("reactor_copy_btn");
+    const pasteBtn = document.getElementById("reactor_paste_btn");
+    const modal = document.getElementById("reactor_copy_paste_modal");
+    const modalTitle = document.getElementById("reactor_copy_paste_modal_title");
+    const modalText = document.getElementById("reactor_copy_paste_text");
+    const modalCost = document.getElementById("reactor_copy_paste_cost");
+    const closeBtn = document.getElementById("reactor_copy_paste_close_btn");
+    const confirmBtn = document.getElementById("reactor_copy_paste_confirm_btn");
+
+    // Check if all required elements exist
+    if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) {
+      console.warn("[UI] Copy/paste UI elements not found, skipping initialization");
+      return;
+    }
+
+    // Helper: serialize reactor layout
+    const serializeReactor = () => {
+      if (!this.game || !this.game.tileset || !this.game.tileset.tiles_list) return "";
+
+      // Get the current reactor dimensions
+      const rows = this.game.rows;
+      const cols = this.game.cols;
+
+      // Collect only the parts that exist
+      const parts = [];
+      this.game.tileset.tiles_list.forEach(tile => {
+        if (tile.enabled && tile.part) {
+          parts.push({
+            r: tile.row,
+            c: tile.col,
+            t: tile.part.type,
+            id: tile.part.id,
+            lvl: tile.part.level || 1
+          });
+        }
+      });
+
+      // Create compact layout object
+      const layout = {
+        size: { rows, cols },
+        parts: parts
+      };
+
+      return JSON.stringify(layout, null, 2);
+    };
+
+    // Helper: deserialize layout
+    const deserializeReactor = (str) => {
+      try {
+        const data = JSON.parse(str);
+
+        // Handle new compact format
+        if (data.size && data.parts) {
+          const { rows, cols } = data.size;
+          const layout = [];
+
+          // Initialize empty grid
+          for (let r = 0; r < rows; r++) {
+            layout[r] = [];
+            for (let c = 0; c < cols; c++) {
+              layout[r][c] = null;
+            }
+          }
+
+          // Fill in parts
+          data.parts.forEach(part => {
+            if (part.r >= 0 && part.r < rows && part.c >= 0 && part.c < cols) {
+              layout[part.r][part.c] = {
+                t: part.t,
+                id: part.id,
+                lvl: part.lvl || 1
+              };
+            }
+          });
+
+          return layout;
+        }
+
+        // Handle old format (2D array)
+        if (Array.isArray(data) && Array.isArray(data[0])) {
+          return data;
+        }
+
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
+    // Helper: calculate total cost of a layout
+    const calculateLayoutCost = (layout) => {
+      if (!layout || !this.game || !this.game.partset) return 0;
+      let cost = 0;
+      for (const row of layout) {
+        for (const cell of row) {
+          if (cell && cell.id) {
+            const part = this.game.partset.parts.get(cell.id);
+            if (part) cost += part.cost * (cell.lvl || 1);
+          }
+        }
+      }
+      return cost;
+    };
+
+    // Helper: build part summary from layout
+    const buildPartSummary = (layout) => {
+      const summary = {};
+      for (const row of layout) {
+        for (const cell of row) {
+          if (cell && cell.id) {
+            const key = `${cell.id}|${cell.lvl || 1}`;
+            if (!summary[key]) {
+              const part = this.game.partset.parts.get(cell.id);
+              summary[key] = {
+                id: cell.id,
+                type: cell.t,
+                lvl: cell.lvl || 1,
+                title: part ? part.title : cell.id,
+                unitPrice: part ? part.cost : 0,
+                count: 0,
+                total: 0,
+              };
+            }
+            summary[key].count++;
+            summary[key].total += summary[key].unitPrice;
+          }
+        }
+      }
+      return Object.values(summary);
+    };
+
+    // Helper: calculate sell value of current reactor
+    const calculateCurrentSellValue = () => {
+      if (!this.game || !this.game.tileset || !this.game.tileset.tiles_list) return 0;
+      let sellValue = 0;
+      this.game.tileset.tiles_list.forEach(tile => {
+        if (tile.enabled && tile.part) {
+          // Sell value is typically 50% of purchase cost
+          sellValue += (tile.part.cost * (tile.part.level || 1)) * 0.5;
+        }
+      });
+      return Math.floor(sellValue);
+    };
+
+
+
+
+
+    // Show modal with data, cost, and action options
+    const showModal = (title, data, cost, action, canPaste = false, summary = [], options = {}) => {
+      modalTitle.textContent = title;
+      modalText.value = data;
+
+      // Pause the reactor when modal opens
+      const wasPaused = this.stateManager.getVar("pause");
+      this.stateManager.setVar("pause", true);
+
+      // Render component icons first
+      let summaryHtml = '';
+      if (summary.length) {
+        summaryHtml = this.renderComponentIcons(summary, options);
+      }
+
+      // Show total cost under the table
+      const costText = cost > 0 ? `Total Cost: $${cost}` : "";
+      modalCost.innerHTML = summaryHtml + (costText ? `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">${costText}</div>` : "");
+
+      // Set textarea properties based on action
+      if (action === "copy") {
+        modalText.readOnly = true;
+        modalText.placeholder = "Reactor layout data (read-only)";
+        confirmBtn.textContent = "Copy";
+        confirmBtn.classList.remove("hidden");
+        confirmBtn.disabled = false;
+      } else if (action === "paste") {
+        modalText.readOnly = false;
+        modalText.placeholder = "Paste reactor layout data here...";
+        confirmBtn.textContent = "Paste";
+        confirmBtn.classList.remove("hidden"); // Always show paste button
+        confirmBtn.disabled = !canPaste; // Disable if unaffordable
+
+        // Add sell existing grid option (always show if there are any parts)
+        const currentSellValue = calculateCurrentSellValue();
+        console.log("[UI] Current sell value:", currentSellValue);
+
+        // Check if there are any parts in the current reactor
+        const hasExistingParts = this.game.tileset.tiles_list.some(tile => tile.enabled && tile.part);
+        console.log("[UI] Has existing parts:", hasExistingParts);
+
+        // Store the sell option HTML to be used in real-time updates
+        modal.dataset.sellOptionHtml = '';
+        if (hasExistingParts) {
+          modal.dataset.sellOptionHtml = `
+            <div style="margin-top: 15px; padding: 10px; background-color: #2a2a2a; border: 1px solid #444; border-radius: 4px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="sell_existing_checkbox" style="margin: 0;">
+                <span style="color: #ffd700;">Sell existing grid for $${currentSellValue}</span>
+              </label>
+            </div>
+          `;
+        }
+      }
+
+      modal.classList.remove("hidden");
+
+      // Store the previous pause state to restore it when modal closes
+      modal.dataset.previousPauseState = wasPaused;
+
+      // Add click-outside-to-close functionality
+      const handleOutsideClick = (e) => {
+        if (e.target === modal) {
+          this.hideModal();
+          modal.removeEventListener('click', handleOutsideClick);
+        }
+      };
+      modal.addEventListener('click', handleOutsideClick);
+    };
+
+
+
+    // Copy button handler
+    copyBtn.onclick = () => {
+      const data = serializeReactor();
+      const layout = deserializeReactor(data);
+      const cost = calculateLayoutCost(layout);
+      const summary = buildPartSummary(layout);
+
+      // Initialize checked types for copy (all checked by default)
+      let checkedTypes = {};
+      summary.forEach(item => { checkedTypes[item.id] = true; });
+
+      showModal("Copy Reactor Layout", data, cost, "copy", false, summary, { showCheckboxes: true, checkedTypes });
+
+      // Add real-time filtering for copy
+      const updateCopySummary = () => {
+        // Filter layout by checked types for summary display
+        const filteredLayout = layout.map(row => row.map(cell => {
+          if (!cell) return null;
+          return checkedTypes[cell.id] !== false ? cell : null;
+        }));
+
+        const filteredSummary = buildPartSummary(filteredLayout);
+        const filteredCost = calculateLayoutCost(filteredLayout);
+
+        let html = this.renderComponentIcons(summary, { showCheckboxes: true, checkedTypes });
+        html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">Selected Parts Cost: $${filteredCost}</div>`;
+
+        modalCost.innerHTML = html;
+
+        // Ensure copy button is always enabled for copy action
+        confirmBtn.disabled = false;
+        confirmBtn.classList.remove("hidden");
+      };
+
+      // Listen for component icon clicks
+      modalCost.addEventListener("click", (e) => {
+        const componentSlot = e.target.closest('.component-slot');
+        if (componentSlot) {
+          const ids = componentSlot.getAttribute("data-ids");
+          if (!ids) return;
+
+          const idArray = ids.split(',');
+          const isCurrentlyChecked = !componentSlot.classList.contains('component-disabled');
+
+          // Toggle all associated IDs to the opposite state
+          idArray.forEach(id => {
+            checkedTypes[id] = !isCurrentlyChecked;
+          });
+
+          updateCopySummary();
+        }
+      });
+
+      updateCopySummary(); // Initial update
+
+      // Set up copy action
+      confirmBtn.onclick = () => {
+        // Filter the data based on checked types
+        const filteredLayout = layout.map(row => row.map(cell => {
+          if (!cell) return null;
+          return checkedTypes[cell.id] !== false ? cell : null;
+        }));
+
+        // Serialize the filtered layout
+        const filteredData = JSON.stringify(filteredLayout);
+
+        navigator.clipboard.writeText(filteredData).then(() => {
+          confirmBtn.textContent = "Copied!";
+          setTimeout(() => {
+            this.hideModal();
+          }, 1000);
+        }).catch(() => {
+          confirmBtn.textContent = "Failed to Copy";
+          setTimeout(() => {
+            this.hideModal();
+          }, 1000);
+        });
+      };
+
+      // Ensure copy button is enabled and visible
+      confirmBtn.disabled = false;
+      confirmBtn.classList.remove("hidden");
+      confirmBtn.style.backgroundColor = "#236090"; // Reset to normal button color
+      confirmBtn.style.cursor = "pointer";
+    };
+
+    // Paste button handler
+    pasteBtn.onclick = async () => {
+      // Try to get data from clipboard first
+      let data = "";
+      try {
+        data = await navigator.clipboard.readText();
+      } catch {
+        data = "";
+      }
+      // Show modal with clipboard data (if any)
+      let checkedTypes = {};
+      let layout = deserializeReactor(data);
+      let summary = buildPartSummary(layout || []);
+      summary.forEach(item => { checkedTypes[item.id] = true; });
+      showModal("Paste Reactor Layout", data, 0, "paste", false, summary, { showCheckboxes: true, checkedTypes });
+      // Add real-time cost calculation and filtering
+      const updateCostAndSummary = () => {
+        const textareaData = modalText.value.trim();
+        let layout = deserializeReactor(textareaData);
+        if (!layout) {
+          modalCost.innerHTML = "Invalid layout data";
+          confirmBtn.disabled = true;
+          confirmBtn.classList.remove("hidden"); // Always show button
+          return;
+        }
+
+        // Preserve checkbox state before updating HTML
+        const currentSellCheckboxState = document.getElementById('sell_existing_checkbox')?.checked || false;
+
+        // Build summary from original layout (keep all items visible)
+        const originalSummary = buildPartSummary(layout);
+
+        // Filter layout by checked types for cost calculation
+        const filteredLayout = layout.map(row => row.map(cell => {
+          if (!cell) return null;
+          return checkedTypes[cell.id] !== false ? cell : null;
+        }));
+
+        const cost = calculateLayoutCost(filteredLayout);
+        const currentSellValue = calculateCurrentSellValue();
+        const sellExisting = currentSellCheckboxState;
+        const netCost = cost - (sellExisting ? currentSellValue : 0);
+        const canPaste = cost > 0 && this.game.current_money >= netCost;
+
+        let html = this.renderComponentIcons(originalSummary, { showCheckboxes: true, checkedTypes });
+
+        // Add sell existing grid option from stored HTML
+        const sellOptionHtml = modal.dataset.sellOptionHtml || '';
+        if (sellOptionHtml) {
+          html += sellOptionHtml;
+        }
+
+        // Show cost information below the sell checkbox
+        if (cost > 0) {
+          const finalCost = sellExisting && currentSellValue > 0 ? Math.max(0, netCost) : cost;
+          html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">$${finalCost}</div>`;
+        } else {
+          html += `<div style="margin-top: 10px; font-weight: bold; color: #ff6b6b;">No parts found in layout</div>`;
+        }
+
+        modalCost.innerHTML = html;
+
+        // Restore checkbox state and ensure it's properly initialized
+        const sellCheckbox = document.getElementById('sell_existing_checkbox');
+        if (sellCheckbox) {
+          console.log("[UI] Sell checkbox found and initialized");
+          // Restore the previous state
+          sellCheckbox.checked = currentSellCheckboxState;
+          // Make sure it's not disabled and can be interacted with
+          sellCheckbox.disabled = false;
+          sellCheckbox.style.pointerEvents = 'auto';
+
+          // Add a direct change event listener to the checkbox
+          sellCheckbox.addEventListener('change', (e) => {
+            console.log("[UI] Sell checkbox change event:", e.target.checked);
+            updateCostAndSummary();
+          });
+        }
+
+        confirmBtn.disabled = !canPaste;
+        confirmBtn.classList.remove("hidden"); // Always show button
+      };
+      // Listen for component icon clicks and sell checkbox
+      modalCost.addEventListener("click", (e) => {
+        const componentSlot = e.target.closest('.component-slot');
+        if (componentSlot) {
+          const ids = componentSlot.getAttribute("data-ids");
+          if (!ids) return;
+
+          const idArray = ids.split(',');
+          const isCurrentlyChecked = !componentSlot.classList.contains('component-disabled');
+
+          // Toggle all associated IDs to the opposite state
+          idArray.forEach(id => {
+            checkedTypes[id] = !isCurrentlyChecked;
+          });
+
+          updateCostAndSummary();
+        } else if (e.target.id === "sell_existing_checkbox") {
+          // Let the native checkbox behavior handle this
+          e.stopPropagation();
+          console.log("[UI] Sell checkbox changed:", e.target.checked);
+          updateCostAndSummary();
+        } else if (e.target.closest('label') && e.target.closest('label').querySelector('#sell_existing_checkbox')) {
+          // Handle label clicks for the sell checkbox
+          const checkbox = e.target.closest('label').querySelector('#sell_existing_checkbox');
+          if (e.target.tagName !== 'INPUT') {
+            e.preventDefault();
+            e.stopPropagation();
+            checkbox.checked = !checkbox.checked;
+            console.log("[UI] Sell checkbox toggled via label click:", checkbox.checked);
+            updateCostAndSummary();
+          }
+        }
+      });
+      // Update cost on input
+      modalText.addEventListener("input", () => {
+        layout = deserializeReactor(modalText.value.trim());
+        summary = buildPartSummary(layout || []);
+        checkedTypes = {};
+        summary.forEach(item => { checkedTypes[item.id] = true; });
+        updateCostAndSummary();
+      });
+      updateCostAndSummary(); // Initial update
+      // Set up paste action that reads from textarea
+      confirmBtn.onclick = () => {
+        const textareaData = modalText.value.trim();
+        let layout = deserializeReactor(textareaData);
+        if (!layout) {
+          alert("Please paste reactor layout data into the text area.");
+          return;
+        }
+        // Filter layout by checked types
+        const filteredLayout = layout.map(row => row.map(cell => {
+          if (!cell) return null;
+          return checkedTypes[cell.id] !== false ? cell : null;
+        }));
+        const cost = calculateLayoutCost(filteredLayout);
+        const currentSellValue = calculateCurrentSellValue();
+        const sellExisting = document.getElementById('sell_existing_checkbox')?.checked || false;
+        const netCost = cost - (sellExisting ? currentSellValue : 0);
+
+        if (cost <= 0) {
+          alert("Invalid layout: no parts found.");
+          return;
+        }
+        if (this.game.current_money < netCost) {
+          alert(`Not enough money! Layout costs $${cost}${sellExisting ? ` - $${currentSellValue} (sell value) = $${netCost}` : ''} but you only have $${this.game.current_money}.`);
+          return;
+        }
+
+        // Sell existing grid if checkbox is checked
+        if (sellExisting) {
+          this.game.tileset.tiles_list.forEach(tile => {
+            if (tile.enabled && tile.part) {
+              tile.clearPart(true); // Sell the part
+            }
+          });
+          this.game.reactor.updateStats();
+        }
+
+        // Apply layout to reactor
+        this.pasteReactorLayout(filteredLayout);
+        this.hideModal();
+      };
+    };
+
+    closeBtn.onclick = this.hideModal.bind(this);
+  }
+
+  // Initialize sell all button functionality
+  initializeSellAllButton() {
+    const sellAllBtn = document.getElementById("reactor_sell_all_btn");
+    if (sellAllBtn) {
+      sellAllBtn.onclick = () => {
+        if (!this.game || !this.game.tileset) return;
+
+        // Pause the reactor when sell modal opens
+        const wasPaused = this.stateManager.getVar("pause");
+        this.stateManager.setVar("pause", true);
+
+        // Build summary of existing parts
+        const existingSummary = this.buildExistingPartSummary();
+
+        if (existingSummary.length > 0) {
+          // Initialize checked types (all checked by default)
+          let checkedTypes = {};
+          existingSummary.forEach(item => { checkedTypes[item.id] = true; });
+
+          this.showSellModal(existingSummary, checkedTypes, wasPaused);
+        } else {
+          // No parts to sell - restore pause state and show message
+          this.stateManager.setVar("pause", wasPaused);
+          console.log("No parts to sell");
+        }
+      };
+    }
+  }
+
+  // Build summary of existing parts in reactor
+  buildExistingPartSummary() {
+    if (!this.game || !this.game.tileset || !this.game.tileset.tiles_list) return [];
+
+    const summary = {};
+    this.game.tileset.tiles_list.forEach(tile => {
+      if (tile.enabled && tile.part) {
+        const key = `${tile.part.id}|${tile.part.level || 1}`;
+        if (!summary[key]) {
+          summary[key] = {
+            id: tile.part.id,
+            type: tile.part.type,
+            lvl: tile.part.level || 1,
+            title: tile.part.title || tile.part.id,
+            unitPrice: tile.part.cost,
+            count: 0,
+            total: 0,
+            tileIds: []
+          };
+        }
+        summary[key].count++;
+        summary[key].total += tile.part.cost;
+        summary[key].tileIds.push(tile.id);
+      }
+    });
+
+    return Object.values(summary);
+  }
+
+  // Show sell modal with component selection
+  showSellModal(summary, checkedTypes, previousPauseState = false) {
+    const modal = document.getElementById("reactor_copy_paste_modal");
+    const modalTitle = document.getElementById("reactor_copy_paste_modal_title");
+    const modalCost = document.getElementById("reactor_copy_paste_cost");
+    const confirmBtn = document.getElementById("reactor_copy_paste_confirm_btn");
+    const closeBtn = document.getElementById("reactor_copy_paste_close_btn");
+
+    if (!modal || !modalTitle || !modalCost || !confirmBtn || !closeBtn) return;
+
+    // Update modal title
+    modalTitle.textContent = "Sell Reactor Parts";
+
+    // Show modal
+    modal.classList.remove("hidden");
+
+    // Store the previous pause state to restore it when modal closes
+    modal.dataset.previousPauseState = previousPauseState;
+
+    // Update component display and cost
+    const updateSellSummary = () => {
+      // Filter summary by checked types
+      const filteredSummary = summary.filter(item => checkedTypes[item.id] !== false);
+      const totalSellValue = filteredSummary.reduce((sum, item) => sum + item.total, 0);
+
+      // Render component icons with checkboxes
+      let html = this.renderComponentIcons(summary, { showCheckboxes: true, checkedTypes });
+
+      // Show total sell value
+      if (totalSellValue > 0) {
+        html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">Total Sell Value: $${totalSellValue}</div>`;
+      } else {
+        html += `<div style="margin-top: 10px; font-weight: bold; color: #ff6b6b;">No parts selected</div>`;
+      }
+
+      modalCost.innerHTML = html;
+
+      // Enable/disable confirm button based on selection
+      confirmBtn.disabled = totalSellValue === 0;
+    };
+
+    // Listen for component icon clicks
+    modalCost.addEventListener("click", (e) => {
+      const componentSlot = e.target.closest('.component-slot');
+      if (componentSlot) {
+        const ids = componentSlot.getAttribute("data-ids");
+        if (!ids) return;
+
+        const idArray = ids.split(',');
+        const isCurrentlyChecked = !componentSlot.classList.contains('component-disabled');
+
+        // Toggle all associated IDs to the opposite state
+        idArray.forEach(id => {
+          checkedTypes[id] = !isCurrentlyChecked;
+        });
+
+        updateSellSummary();
+      }
+    });
+
+    // Set up confirm button action
+    confirmBtn.textContent = "Sell Selected";
+    confirmBtn.classList.remove("hidden"); // Ensure button is visible
+    confirmBtn.disabled = false; // Enable button initially
+    confirmBtn.style.backgroundColor = '#e74c3c'; // Red background for sell action
+    confirmBtn.onclick = () => {
+      // Get tiles to sell based on checked types
+      const tilesToSell = [];
+      this.game.tileset.tiles_list.forEach(tile => {
+        if (tile.enabled && tile.part && checkedTypes[tile.part.id] !== false) {
+          tilesToSell.push(tile);
+        }
+      });
+
+      // Calculate total sell value
+      const totalSellValue = tilesToSell.reduce((sum, tile) => sum + tile.part.cost, 0);
+
+      // Sell selected parts
+      tilesToSell.forEach(tile => {
+        tile.clearPart(true);
+      });
+
+      // Update reactor stats
+      this.game.reactor.updateStats();
+
+      // Show success feedback
+      confirmBtn.textContent = `Sold $${totalSellValue}`;
+      confirmBtn.style.backgroundColor = '#27ae60';
+
+      setTimeout(() => {
+        this.hideModal();
+        // Reset button styling
+        confirmBtn.style.backgroundColor = '#4a9eff';
+      }, 1500);
+    };
+
+    // Set up close button
+    closeBtn.onclick = this.hideModal.bind(this);
+
+    // Handle outside click to close
+    const handleOutsideClick = (e) => {
+      if (e.target === modal) {
+        this.hideModal();
+      }
+    };
+    modal.addEventListener("click", handleOutsideClick);
+
+    // Initial update
+    updateSellSummary();
+  }
+
+  // Hide modal helper
+  hideModal() {
+    const modal = document.getElementById("reactor_copy_paste_modal");
+    if (!modal) return;
+
+    modal.classList.add("hidden");
+
+    // Restore the previous pause state when modal closes
+    const previousPauseState = modal.dataset.previousPauseState === "true";
+    this.stateManager.setVar("pause", previousPauseState);
+  }
+
+  // Paste layout logic
+  pasteReactorLayout(layout) {
+    if (!layout || !this.game || !this.game.tileset || !this.game.partset) return;
+
+    // Helper: calculate total cost of a layout
+    const calculateLayoutCost = (layout) => {
+      if (!layout || !this.game || !this.game.partset) return 0;
+      let cost = 0;
+      for (const row of layout) {
+        for (const cell of row) {
+          if (cell && cell.id) {
+            const part = this.game.partset.parts.get(cell.id);
+            if (part) cost += part.cost * (cell.lvl || 1);
+          }
+        }
+      }
+      return cost;
+    };
+
+    // Clear existing parts first
+    this.game.tileset.tiles_list.forEach(tile => {
+      if (tile.enabled && tile.part) {
+        tile.setPart(null);
+      }
+    });
+
+    // Apply the new layout
+    for (let r = 0; r < layout.length; r++) {
+      for (let c = 0; c < layout[r].length; c++) {
+        const cell = layout[r][c];
+        if (cell && cell.id) {
+          const part = this.game.partset.parts.get(cell.id);
+          if (part) {
+            const tile = this.game.tileset.getTile(r, c);
+            if (tile && tile.enabled) {
+              tile.setPart(part);
+            }
+          }
+        }
+      }
+    }
+
+    // Deduct cost
+    const cost = calculateLayoutCost(layout);
+    this.game.current_money -= cost;
+    this.runUpdateInterfaceLoop();
+  }
+
   initializePage(pageId) {
     const game = this.game;
     this.cacheDOMElements();
@@ -1414,6 +2247,8 @@ export class UI {
     const setupUpgradeClickHandler = (containerId) => {
       const container = document.getElementById(containerId);
       if (!container) return;
+
+      // Click handler for upgrades
       on(container, ".upgrade", "click", function (e) {
         const upgradeEl = this;
         if (!upgradeEl.upgrade_object) return;
@@ -1438,6 +2273,25 @@ export class UI {
           game.tooltip_manager.show(upgrade_obj, null, true, upgradeEl);
         }
       });
+
+      // Desktop hover functionality
+      if (window.innerWidth > 768) {
+        on(container, ".upgrade", "mouseenter", function (e) {
+          const upgradeEl = this;
+          if (!upgradeEl.upgrade_object) return;
+          const upgrade_obj = upgradeEl.upgrade_object;
+
+          // Show tooltip on hover (not locked)
+          game.tooltip_manager.show(upgrade_obj, null, false, upgradeEl);
+        });
+
+        on(container, ".upgrade", "mouseleave", function (e) {
+          // Hide tooltip when mouse leaves (only if not locked)
+          if (!game.tooltip_manager.isLocked) {
+            game.tooltip_manager.hide();
+          }
+        });
+      }
     };
 
     switch (pageId) {
@@ -1465,6 +2319,8 @@ export class UI {
         }
         this.setupReactorEventListeners();
         this.resizeReactor();
+        this.initializeCopyPasteUI();
+        this.initializeSellAllButton();
         break;
       case "upgrades_section":
         console.log("[UI] Initializing upgrades section");
@@ -1618,7 +2474,7 @@ export class UI {
           this.isDragging = false;
         }, 250);
       }
-      const pointerMoveHandler = (e_move) => {
+      const pointerMoveHandler = async (e_move) => {
         const dx = e_move.clientX - startX;
         const dy = e_move.clientY - startY;
         if (
@@ -1635,14 +2491,14 @@ export class UI {
           moveTileEl.tile &&
           moveTileEl.tile !== this.lastTileModified
         ) {
-          this.handleGridInteraction(moveTileEl, e_move);
+          await this.handleGridInteraction(moveTileEl, e_move);
           this.lastTileModified = moveTileEl.tile;
         }
       };
-      const pointerUpHandler = (e_up) => {
+      const pointerUpHandler = async (e_up) => {
         if (!pointerMoved && this.isDragging && pointerDownTileEl) {
           cancelLongPress();
-          this.handleGridInteraction(pointerDownTileEl, e_up || e);
+          await this.handleGridInteraction(pointerDownTileEl, e_up || e);
         } else if (this.longPressTimer) {
           cancelLongPress();
         }
@@ -1662,9 +2518,9 @@ export class UI {
       window.addEventListener("pointercancel", pointerUpHandler);
     };
     reactor.addEventListener("pointerdown", pointerDownHandler);
-    reactor.addEventListener("contextmenu", (e) => {
+    reactor.addEventListener("contextmenu", async (e) => {
       e.preventDefault();
-      this.handleGridInteraction(e.target.closest(".tile"), e);
+      await this.handleGridInteraction(e.target.closest(".tile"), e);
     });
 
     reactor.addEventListener(
@@ -1717,12 +2573,117 @@ export class UI {
             ...objectivesManager.current_objective_def,
             title:
               typeof objectivesManager.current_objective_def.title ===
-              "function"
+                "function"
                 ? objectivesManager.current_objective_def.title()
                 : objectivesManager.current_objective_def.title,
           });
         }
       }
     }
+  }
+
+  // Get part image path based on type and level
+  getPartImagePath(partType, level = 1) {
+    const levelStr = level.toString();
+    const typeMap = {
+      'cell': 'cells',
+      'capacitor': 'capacitors',
+      'accelerator': 'accelerators',
+      'vent': 'vents',
+      'heat_exchanger': 'exchangers',
+      'heat_inlet': 'inlets',
+      'heat_outlet': 'outlets',
+      'coolant_cell': 'coolants',
+      'reactor_plating': 'platings',
+      'particle_accelerator': 'accelerators',
+      'reflector': 'reflectors'
+    };
+
+    // Handle cell types (uranium, plutonium, thorium, etc.)
+    const cellTypes = ['uranium', 'plutonium', 'thorium', 'seaborgium', 'dolorium', 'nefastium', 'protium'];
+    if (cellTypes.includes(partType)) {
+      const folder = 'cells';
+      const cellCounts = { 1: 1, 2: 2, 3: 4 };
+      const cellType = partType === 'protium' ? 'xcell' : 'cell';
+      const typeToNum = {
+        uranium: 1,
+        plutonium: 2,
+        thorium: 3,
+        seaborgium: 4,
+        dolorium: 5,
+        nefastium: 6,
+        protium: 1,
+      };
+      const cellNum = typeToNum[partType];
+      const fileName = `${cellType}_${cellNum}_${cellCounts[level]}.png`;
+      return `img/parts/${folder}/${fileName}`;
+    }
+
+    const folder = typeMap[partType] || partType;
+    let fileName;
+
+    // Handle special cases for file naming
+    if (partType === 'heat_exchanger') {
+      fileName = `exchanger_${levelStr}.png`;
+    } else if (partType === 'heat_inlet') {
+      fileName = `inlet_${levelStr}.png`;
+    } else if (partType === 'heat_outlet') {
+      fileName = `outlet_${levelStr}.png`;
+    } else if (partType === 'coolant_cell') {
+      fileName = `coolant_cell_${levelStr}.png`;
+    } else if (partType === 'reactor_plating') {
+      fileName = `plating_${levelStr}.png`;
+    } else if (partType === 'particle_accelerator') {
+      fileName = `accelerator_${levelStr}.png`;
+    } else {
+      fileName = `${partType}_${levelStr}.png`;
+    }
+
+    return `img/parts/${folder}/${fileName}`;
+  }
+
+  // Render component icons (replaces table)
+  renderComponentIcons(summary, options = {}) {
+    const { showCheckboxes = false, checkedTypes = {} } = options;
+
+    // Merge duplicate components by type and level
+    const mergedComponents = {};
+    summary.forEach(item => {
+      const key = `${item.type}_${item.lvl}`;
+      if (!mergedComponents[key]) {
+        mergedComponents[key] = {
+          ...item,
+          count: 0,
+          ids: []
+        };
+      }
+      mergedComponents[key].count += item.count;
+      mergedComponents[key].ids.push(item.id);
+    });
+
+    let html = '<div class="component-summary-section">';
+    html += '<div class="component-header">';
+    html += '<span class="component-title">Components</span>';
+    html += '</div>';
+    html += '<div class="component-grid">';
+
+    Object.values(mergedComponents).forEach(item => {
+      // Check if any of the merged IDs are unchecked
+      const anyUnchecked = item.ids.some(id => checkedTypes[id] === false);
+      const checked = !anyUnchecked;
+      const disabledClass = showCheckboxes && !checked ? 'component-disabled' : '';
+      const imagePath = this.getPartImagePath(item.type, item.lvl);
+
+      html += `<div class="component-slot ${disabledClass}" data-ids="${item.ids.join(',')}" data-type="${item.type}" data-lvl="${item.lvl}">`;
+      html += `<div class="component-icon">`;
+      html += `<img src="${imagePath}" alt="${item.title}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />`;
+      html += `<div class="component-fallback" style="display: none;">${item.title.charAt(0).toUpperCase()}</div>`;
+      html += `</div>`;
+      html += `<div class="component-count">${item.count}</div>`;
+      html += `</div>`;
+    });
+
+    html += '</div></div>';
+    return html;
   }
 }

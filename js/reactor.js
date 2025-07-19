@@ -51,6 +51,12 @@ export class Reactor {
       if (tile.activated && tile.part) {
         if (tile.part.category === "cell" && tile.ticks > 0) {
           this._applyReflectorEffects(tile);
+
+          // Add Forceful Fusion power bonus
+          if (this.heat_power_multiplier > 0 && this.current_heat > 1000) {
+            tile.power *= 1 + (this.heat_power_multiplier * (Math.log(this.current_heat) / Math.log(1000) / 100));
+          }
+
           this.stats_power += tile.power || 0;
           this.stats_heat_generation += tile.heat || 0;
         }
