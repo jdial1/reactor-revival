@@ -46,6 +46,24 @@ export class PageRouter {
       }
     }
 
+    // Handle grid hiding for smooth transitions from upgrades to reactor
+    if (this.currentPageId === "upgrades_section" && goingToReactorPage) {
+      console.log("PageRouter: Hiding grid for smooth transition from upgrades to reactor");
+      const reactorElement = this.ui.DOMElements.reactor;
+      if (reactorElement) {
+        reactorElement.style.visibility = "hidden";
+        // Ensure the grid stays hidden for the full duration
+        setTimeout(() => {
+          if (reactorElement) {
+            reactorElement.style.visibility = "visible";
+            console.log("PageRouter: Grid visibility restored after transition");
+          }
+        }, 250);
+      } else {
+        console.warn("PageRouter: Reactor element not found for grid hiding");
+      }
+    }
+
     // Ensure game layout is loaded for stateless pages
     const earlyPageDef = this.pages[pageId];
     if (earlyPageDef && earlyPageDef.stateless) {
@@ -82,7 +100,17 @@ export class PageRouter {
       cachedPage.classList.remove("hidden");
       console.log(`PageRouter: Switched to cached page "${pageId}".`);
       if (pageId === "reactor_section" && this.ui.resizeReactor) {
+        // For reactor page, do an immediate resize and then a delayed resize to handle any layout shifts
         this.ui.resizeReactor();
+        // Add a small delay to ensure the page transition is complete before recalculating
+        setTimeout(() => {
+          this.ui.resizeReactor();
+          // Ensure grid is visible after transition
+          const reactorElement = this.ui.DOMElements.reactor;
+          if (reactorElement) {
+            reactorElement.style.visibility = "visible";
+          }
+        }, 100);
       }
       // Always call showObjectivesForPage when switching pages, even cached ones
       this.ui.showObjectivesForPage(pageId);
@@ -137,6 +165,19 @@ export class PageRouter {
           );
           this.ui.initializePage(pageId);
           this.initializedPages.add(pageId);
+        }
+
+        // For reactor page, ensure proper sizing after page load
+        if (pageId === "reactor_section" && this.ui.resizeReactor) {
+          // Add a small delay to ensure the page transition is complete before recalculating
+          setTimeout(() => {
+            this.ui.resizeReactor();
+            // Ensure grid is visible after transition
+            const reactorElement = this.ui.DOMElements.reactor;
+            if (reactorElement) {
+              reactorElement.style.visibility = "visible";
+            }
+          }, 100);
         }
       } else {
         console.warn(

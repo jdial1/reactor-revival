@@ -807,13 +807,25 @@ export class UI {
     const isMobile = typeof window !== "undefined" && window.innerWidth <= 900;
     let tileSize;
 
+    // Hide the reactor during resize to prevent visual scaling
+    const reactor = this.DOMElements.reactor;
+    const originalVisibility = reactor.style.visibility;
+    reactor.style.visibility = "hidden";
+
     if (isMobile) {
       // Mobile: Force a reflow to get accurate wrapper dimensions
       wrapper.offsetHeight; // Force reflow
 
       // Get the actual wrapper dimensions after reflow
-      const wrapperHeight = wrapper.clientHeight;
-      const wrapperWidth = wrapper.clientWidth;
+      let wrapperHeight = wrapper.clientHeight;
+      let wrapperWidth = wrapper.clientWidth;
+
+      // If wrapper dimensions are 0 or very small, use viewport dimensions as fallback
+      if (wrapperHeight < 100 || wrapperWidth < 100) {
+        wrapperHeight = window.innerHeight;
+        wrapperWidth = window.innerWidth;
+        console.log(`[UI] Using viewport dimensions as fallback: ${wrapperWidth}x${wrapperHeight}`);
+      }
 
       console.log(`[UI] Mobile wrapper dimensions: ${wrapperWidth}x${wrapperHeight}`);
 
@@ -837,13 +849,6 @@ export class UI {
       // Ensure reasonable tile size bounds for mobile
       tileSize = Math.max(25, Math.min(tileSize, 55));
 
-      // Calculate grid dimensions
-      const gridWidth = tileSize * numCols;
-      const gridHeight = tileSize * numRows;
-
-      // Removed width-based recalculation to prevent grid from becoming too tall
-      // The grid will now fit vertically and scroll horizontally when needed
-
       console.log(`[UI] Mobile final tile size: ${tileSize}px`);
 
       // Set CSS custom properties
@@ -857,9 +862,13 @@ export class UI {
 
       console.log(`[UI] Mobile grid dimensions: ${finalGridWidth}x${finalGridHeight}`);
 
-      // // Set grid dimensions
-      // this.DOMElements.reactor.style.width = `${finalGridWidth}px`;
-      // this.DOMElements.reactor.style.height = `${finalGridHeight}px`;
+      // Ensure the reactor wrapper is properly positioned
+      wrapper.style.position = "relative";
+      wrapper.style.overflow = "auto";
+
+      // Reset any transform that might have been applied
+      this.DOMElements.reactor.style.transform = "none";
+      this.DOMElements.reactor.style.transformOrigin = "center center";
 
     } else {
       // Desktop: Scale grid to fit height while preventing horizontal scrollbar
@@ -883,7 +892,6 @@ export class UI {
 
       // Ensure minimum tile size for usability
       tileSize = Math.max(tileSize, 32);
-
       tileSize = Math.min(tileSize, 60);
 
       this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
@@ -899,10 +907,13 @@ export class UI {
       const gridHeight = tileSize * numRows;
       this.DOMElements.reactor.style.width = `${gridWidth}px`;
       this.DOMElements.reactor.style.height = `${gridHeight}px`;
-
-
     }
+
+    // Show the reactor again after resize is complete
+    reactor.style.visibility = originalVisibility;
   }
+
+
 
   forceReactorRealignment() {
     if (!this.game || !this.DOMElements.reactor) return;
@@ -2473,6 +2484,10 @@ export class UI {
           versionEl.textContent = appVersionEl.textContent;
         }
         break;
+      case "experimental_upgrades_section":
+        // Load and set version for research page
+        this.loadAndSetVersion();
+        break;
     }
 
     this.showObjectivesForPage(pageId);
@@ -2615,6 +2630,25 @@ export class UI {
       },
       true
     );
+  }
+
+  async loadAndSetVersion() {
+    try {
+      const response = await fetch("version.json");
+      const versionData = await response.json();
+      const version = versionData.version || "Unknown";
+
+      const appVersionEl = document.getElementById("app_version");
+      if (appVersionEl) {
+        appVersionEl.textContent = version;
+      }
+    } catch (error) {
+      console.warn("Could not load version info:", error);
+      const appVersionEl = document.getElementById("app_version");
+      if (appVersionEl) {
+        appVersionEl.textContent = "Unknown";
+      }
+    }
   }
 
   showObjectivesForPage(pageId) {
