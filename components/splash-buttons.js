@@ -122,14 +122,21 @@ export function createLoadGameButtonFullWidth(
     "splash-load-game-btn-template"
   );
   if (!btn) return null;
-  window.templateLoader.setText(
-    btn,
-    ".money",
-    `$${numFormat(saveData?.current_money ?? 0)}`
-  );
-  const playedTimeEl = btn.querySelector(".played-time");
-  if (playedTimeEl) playedTimeEl.innerHTML = playedTimeStr;
+
+  const headerSpan = btn.querySelector(".load-game-header span");
+  if (headerSpan) {
+    headerSpan.textContent = "Load Game"; // Set a default that can be overridden
+  }
+
+  // Remove money and played time details for a cleaner button
+  const moneyEl = btn.querySelector('.money');
+  if (moneyEl) moneyEl.remove();
+  const playedTimeEl = btn.querySelector('.played-time');
+  if (playedTimeEl) playedTimeEl.remove();
+
   window.templateLoader.setVisible(btn, ".synced-label", isCloudSynced);
+
   if (onClick) btn.onclick = onClick;
+
   return btn;
 }

@@ -296,6 +296,27 @@ export function cleanupGame() {
   global.localStorage = undefined;
 }
 
+// Add minimal DOM stubs for UI elements required by tests
+beforeEach(() => {
+  if (typeof document !== 'undefined') {
+    if (!document.getElementById('reactor_copy_btn')) {
+      const copyBtn = document.createElement('button');
+      copyBtn.id = 'reactor_copy_btn';
+      document.body.appendChild(copyBtn);
+    }
+    if (!document.getElementById('reactor_paste_btn')) {
+      const pasteBtn = document.createElement('button');
+      pasteBtn.id = 'reactor_paste_btn';
+      document.body.appendChild(pasteBtn);
+    }
+    if (!document.getElementById('reactor')) {
+      const reactorDiv = document.createElement('div');
+      reactorDiv.id = 'reactor';
+      document.body.appendChild(reactorDiv);
+    }
+  }
+});
+
 afterEach(() => {
   cleanupGame();
   vi.restoreAllMocks();

@@ -37,15 +37,32 @@ min-height: 0;
 display: none !important;
 }
 #splash-screen {
-text-align: center;
-font-family: "Press Start 2P", cursive, monospace !important;
-min-height: 100vh;
-padding-top: 5vh;
-display: flex;
-flex-direction: column;
-justify-content: flex-start;
-align-items: center;
-position: relative;
+  text-align: center;
+  font-family: "Press Start 2P", cursive, monospace !important;
+  min-height: 100vh;
+  padding-top: 5vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  background-color: #373737;
+  background-image: url("../img/ui/tile.png");
+  background-repeat: repeat;
+  padding: 2rem;
+  animation: splash-bg-scroll 120s linear infinite;
+  background-size: auto;
+}
+
+@keyframes splash-bg-scroll {
+  0% {
+    background-position-y: 0;
+    background-position-x: 0;
+  }
+  100% {
+    background-position-y: 1024px;
+    background-position-x: 1024px;
+  }
 }
 .splash-logo {
 width: 120px;
@@ -78,187 +95,93 @@ text-shadow: 1px 0 0 black, -1px 0 0 black, 0 1px 0 black, 0 -1px 0 black,
 1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
 }
 .splash-btn {
-width: var(--splash-btn-width);
-min-width: var(--splash-btn-width);
-max-width: var(--splash-btn-width);
-height: var(--splash-btn-height);
-min-height: var(--splash-btn-height);
-font-family: "Press Start 2P", cursive, monospace !important;
-font-size: 1rem;
-border-radius: var(--splash-btn-radius);
-border: none;
-background: #3a4e6b;
-color: #fff;
-margin: 0 auto 0.25rem auto;
-display: flex;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-box-shadow: 0 2px 0 #222, 0 4px 8px #0002;
-transition: background 0.2s, box-shadow 0.2s, color 0.2s;
-cursor: pointer;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: var(--splash-btn-height);
+  min-height: var(--splash-btn-height);
+  font-family: "Press Start 2P", cursive, monospace !important;
+  font-size: 1rem;
+  border: 3px solid;
+  border-color: #a0a0a0 #505050 #505050 #a0a0a0;
+  background: #787878;
+  color: #e0e0e0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  transition: none;
+  cursor: pointer;
+  padding: 0 1rem;
+  text-shadow: 2px 2px #383838;
+  border-radius: 0;
 }
-
+.splash-btn:hover {
+  color: #ffffa0;
+  border-color: #c0c0c0 #606060 #606060 #c0c0c0;
+}
 .splash-btn:active {
-box-shadow: 0 1px 0 #222;
+  box-shadow: 0 1px 0 #222;
+  border-color: #505050 #a0a0a0 #a0a0a0 #505050;
+  background: #686868;
+}
+.splash-btn-continue {
+  background: #5d9c51;
+  border-color: #89c57d #416d39 #416d39 #89c57d;
+  color: white;
+  text-shadow: 2px 2px #365a2f;
+  margin-bottom: 1rem;
+  position: relative;
 }
 
-/* Container for load game details to keep money and played time on one line */
-.splash-btn .load-game-details {
-display: flex;
-flex-direction: row;
-align-items: center;
-justify-content: center;
-gap: 0.5rem;
-margin-top: 0.1rem;
+.splash-btn-continue .continue-label {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.7rem;
+  opacity: 0.8;
+  text-shadow: 1px 1px #222;
 }
-
-/* Reduce text size for load game info details */
-.splash-btn .money,
-.splash-btn .played-time {
-font-size: 0.7rem;
-opacity: 0.9;
+.splash-btn-continue:hover {
+  background: #6daa5f;
+  border-color: #a3d99a #4e8045 #4e8045 #a3d99a;
 }
-.splash-btn-start {
-background: #1ca3ec;
-color: #fff;
+.splash-btn-exit {
+  background: #ab3f3f;
+  border-color: #d16b6b #7a2d2d #7a2d2d #d16b6b;
+  color: white;
+  text-shadow: 2px 2px #6e2a2a;
 }
-.splash-btn-load,
-.splash-btn-cloud {
-background: #5a6b8c;
-color: #fff;
+.splash-btn-exit:hover {
+  background: #c24747;
 }
-.splash-btn-google {
-background: #ea4335;
-color: #fff;
-display: flex;
-flex-direction: row;
-align-items: center;
-justify-content: center;
-gap: 0.5em;
+.splash-btn-exit:active {
+  background: #9e3939;
+  border-color: #7a2d2d #d16b6b #d16b6b #7a2d2d;
 }
 .splash-btn[disabled],
 .splash-btn.disabled {
-opacity: 0.5;
-cursor: not-allowed;
-}
-.splash-version,
-.splash-stats {
-position: absolute;
-left: 0;
-right: 0;
-text-align: center;
-font-size: 0.5em;
-opacity: 0.6;
-font-family: "Press Start 2P", cursive, monospace !important;
-}
-.splash-version {
-bottom: 4em;
-}
-.splash-stats {
-bottom: 2.5em;
-}
-.splash-cloud-button {
-width: var(--splash-btn-width);
-height: var(--splash-btn-height);
-min-width: var(--splash-btn-width);
-min-height: var(--splash-btn-height);
-font-family: "Press Start 2P", cursive, monospace !important;
-font-size: 1rem;
-border-radius: var(--splash-btn-radius);
-border: 2px solid #1ca3ec;
-background: #fff;
-color: #1ca3ec;
-box-shadow: 0 2px 0 #222, 0 4px 8px #0002;
-margin: 0 auto 0.25rem auto;
-display: flex;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-transition: background 0.2s, box-shadow 0.2s, color 0.2s;
-cursor: pointer;
-}
-.splash-cloud-button:active {
-box-shadow: 0 1px 0 #222;
-}
-.splash-btn-google svg {
-width: 1.6em;
-height: 1.6em;
-background: #fff;
-border-radius: 50%;
-padding: 0.15em;
-margin-right: 0.5em;
-box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-display: inline-block;
-vertical-align: middle;
-}
-.splash-persistent-flavor {
-    color: #FFFF00;
-    font-size: 2em;
-    font-family: 'minecraftfont', "Press Start 2P", cursive, monospace;
-    text-shadow: 3px 3px #3F3F00;
-    padding: 5px;
-    margin: 0.5rem 0 1rem 0;
-    text-align: center;
-    animation: pop 1s infinite;
-    -webkit-animation: pop 1s infinite;
-}
-
-.splash-persistent-flavor.pop {
-    animation: pop 1s infinite;
-    -webkit-animation: pop 1s infinite;
-}
-
-@keyframes pop {
-    from {
-        transform: scale(0.95)
-    }
-    50% {
-        transform: scale(1)
-    }
-    to {
-        transform: scale(0.95)
-    }
-}
-
-@-webkit-keyframes pop {
-    from {
-        -webkit-transform: scale(0.95)
-    }
-    50% {
-        -webkit-transform: scale(1)
-    }
-    to {
-        -webkit-transform: scale(0.95)
-    }
-}
-
-.splash-persistent-flavor.tilt {
-    -ms-transform: rotate(-25deg);
-    -webkit-transform: rotate(-25deg);
-    transform: rotate(-25deg);
-}
-
-@font-face {
-    font-family: 'minecraftfont';
-    src: url('MinecraftRegular.otf');
-}
-
-/* Splash start options container */
-.splash-start-options {
-    margin-top: 1rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .splash-title {
-font-family: "Press Start 2P", cursive, monospace !important;
-font-size: 3.5rem;
-letter-spacing: 2px;
-margin: 1.5rem 0 0.5rem 0;
-text-shadow: 2px 2px 0 #222, 0 0 8px #1ca3ec44;
-white-space: pre-line;
+  font-family: 'minecraftfont', "Press Start 2P", cursive, monospace !important;
+  font-size: 3.5rem;
+  letter-spacing: 2px;
+  margin: 1.5rem 0 1rem 0;
+  text-shadow: 4px 4px #3a3a3a;
+  white-space: pre-line;
+  color: #ededed;
+}
+.splash-menu-header {
+  font-family: "Press Start 2P", cursive, monospace !important;
+  font-size: 1.5rem;
+  color: white;
+  text-shadow: 2px 2px #222;
+  margin-bottom: 1rem;
+  text-align: center;
 }
 .splash-subtitle {
 font-family: "Press Start 2P", cursive, monospace !important;
@@ -297,9 +220,9 @@ border-bottom-left-radius: var(--splash-btn-radius) !important;
   right: 0;
   bottom: 0.5em;
   text-align: center;
-  font-size: 0.5em;
+  font-size: 0.7em;
   opacity: 0.6;
-  font-family: "Press Start 2P", cursive, monospace !important;
+  font-family: inherit;
   z-index: 10;
 }
 
@@ -3678,5 +3601,212 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   }
   body.reactor-meltdown #meltdown_banner {
     height: 60px !important;
+  }
+}
+
+.splash-menu-panel {
+  background-color: rgba(0, 0, 0, 0.4);
+  padding: 1.5rem;
+  border: 4px solid #1e1e1e;
+  border-right-color: #5a5a5a;
+  border-bottom-color: #5a5a5a;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 420px;
+}
+
+.splash-btn-google {
+  margin-top: 1.5rem;
+}
+
+#splash-flavor {
+  font-family: 'minecraftfont', "Press Start 2P", cursive, monospace !important;
+  color: #ffe082;
+  font-size: 1.2rem;
+  margin: 0.5rem 0 1.5rem 0;
+  text-shadow: 2px 2px 0 #3a3a3a, 0 0 8px #ffe08299;
+  animation: splash-flavor-pop 2s infinite;
+}
+
+@keyframes splash-flavor-pop {
+  0% {
+    transform: scale(1);
+  }
+  60% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.splash-version, .splash-stats {
+  position: fixed;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: inherit;
+  font-size: 0.7em;
+  color: #b0b0b0;
+  opacity: 0.8;
+  z-index: 11;
+  pointer-events: none;
+}
+.splash-version {
+  bottom: 2.7em;
+}
+.splash-stats {
+  bottom: 2.1em;
+}
+
+.splash-bottom-row {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 2.2em;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 2em;
+  text-align: center;
+  font-family: inherit;
+  font-size: 0.7em;
+  color: #b0b0b0;
+  opacity: 0.8;
+  z-index: 11;
+  pointer-events: none;
+}
+.splash-version, .splash-stats {
+  position: static;
+  display: inline;
+  margin: 0;
+  padding: 0 0.5em;
+}
+
+@media (max-width: 600px) {
+  .splash-menu-panel {
+    margin-bottom: 7em;
+  }
+}
+
+@media (max-width: 400px) {
+  .splash-menu-panel {
+    margin-bottom: 9em;
+  }
+}
+
+@media (max-width: 600px) {
+  #splash-screen {
+    padding-bottom: 9em;
+  }
+  .splash-menu-panel {
+    margin-bottom: 8em;
+  }
+}
+
+@media (max-width: 400px) {
+  #splash-screen {
+    padding-bottom: 11em;
+  }
+  .splash-menu-panel {
+    margin-bottom: 11em;
+  }
+}
+
+@media (max-width: 600px) {
+  .splash-footer-links {
+    bottom: 0 !important;
+    padding-bottom: 0.5em;
+    font-size: 0.8em;
+    display: block;
+    width: 100%;
+    text-align: center;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.2;
+    margin-top: 0.5em;
+  }
+  .splash-stats {
+    bottom: 2em !important;
+    font-size: 0.8em;
+    display: block;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 0.2em;
+  }
+  .splash-version {
+    bottom: 3.5em !important;
+    font-size: 0.8em;
+    display: block;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 0.2em;
+  }
+}
+
+/* --- Add this at the end of the file for mobile --- */
+@media (max-width: 600px) {
+  .splash-bottom-stack {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 20;
+    background: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+  }
+  .splash-version,
+  .splash-stats,
+  .splash-footer-links {
+    position: static !important;
+    bottom: auto !important;
+    display: block !important;
+    width: 100%;
+    text-align: center;
+    font-size: 0.8em !important;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.2;
+    margin: 0;
+    padding: 0;
+    pointer-events: auto;
+    background: none;
+  }
+  .splash-footer-links {
+    margin-top: 0.2em;
+    margin-bottom: 0.5em;
+  }
+  
+  /* Stack footer links vertically on mobile */
+  .splash-footer-links a {
+    display: block;
+    margin: 0;
+    line-height: 1.2;
+  }
+  
+  /* Hide separator pipes on mobile */
+  .splash-footer-links {
+    white-space: normal;
+    font-size: 0;
+  }
+  
+  .splash-footer-links a {
+    font-size: 0.8em;
+  }
+  
+  /* Completely hide pipe separators on mobile */
+  .splash-footer-links {
+    color: transparent;
+  }
+  
+  .splash-footer-links a {
+    color: #8fd694;
   }
 }

@@ -151,6 +151,11 @@ class SplashScreenManager {
         // Randomize the splash logo
         this.randomizeSplashLogo();
 
+        // Generate the splash background now that the element exists
+        if (this.splashScreen) {
+          generateSplashBackground();
+        }
+
         console.log("[SPLASH] Splash screen loaded successfully");
         return true;
       } else {
@@ -232,35 +237,26 @@ class SplashScreenManager {
    * Add stats display to splash screen
    */
   addSplashStats(version, totalPlayedTime) {
-    // Remove existing stats if any
-    const existingStats = this.splashScreen.querySelector(".splash-stats");
-    if (existingStats) {
-      existingStats.remove();
-    }
-    // Remove existing version if any
-    const existingVersion = this.splashScreen.querySelector(".splash-version");
-    if (existingVersion) {
-      existingVersion.remove();
-    }
+    // Remove existing stats/version if any
+    const existingBottomRow = this.splashScreen.querySelector('.splash-bottom-row');
+    if (existingBottomRow) existingBottomRow.remove();
 
-    // Version at the very bottom
-    const versionDiv = document.createElement("div");
-    versionDiv.className = "splash-version";
+    // Create a flex row for version and play time
+    const bottomRow = document.createElement('div');
+    bottomRow.className = 'splash-bottom-row';
+    const versionDiv = document.createElement('span');
+    versionDiv.className = 'splash-version';
     versionDiv.textContent = `v${version}`;
-    this.splashScreen.appendChild(versionDiv);
-    window.domMapper?.add("splash.version", versionDiv);
-
-    // Add stats (total played time) just above version, if present
-    if (totalPlayedTime && totalPlayedTime !== "0s") {
-      const statsDiv = document.createElement("div");
-      statsDiv.className = "splash-stats";
-      statsDiv.innerHTML = `Total Played: ${totalPlayedTime}`;
-      this.splashScreen.appendChild(statsDiv);
-      window.domMapper?.add("splash.stats", statsDiv);
-    }
-
+    const statsDiv = document.createElement('span');
+    statsDiv.className = 'splash-stats';
+    statsDiv.innerHTML = `Total Played: ${totalPlayedTime}`;
+    bottomRow.appendChild(versionDiv);
+    bottomRow.appendChild(statsDiv);
+    this.splashScreen.appendChild(bottomRow);
+    window.domMapper?.add('splash.version', versionDiv);
+    window.domMapper?.add('splash.stats', statsDiv);
     // Map splash category after dynamic elements are appended
-    window.domMapper?.mapCategory("splash");
+    window.domMapper?.mapCategory('splash');
   }
 
   /**
@@ -452,99 +448,140 @@ class SplashScreenManager {
       this.stopFlavorText();
       const spinner = window.domMapper?.get("splash.spinner");
       if (spinner) spinner.classList.add("splash-element-hidden");
-      if (this.statusElement)
-        this.statusElement.classList.add("splash-element-hidden");
-      if (this.flavorElement)
-        this.flavorElement.classList.add("splash-element-hidden");
-
+      if (this.statusElement) this.statusElement.classList.add("splash-element-hidden");
+      // Ensure flavor text is visible when menu is shown
+      if (this.flavorElement && flavorMessages && flavorMessages.length > 0) {
+        if (!this.flavorElement.textContent) {
+          const randomIndex = Math.floor(Math.random() * flavorMessages.length);
+          this.flavorElement.textContent = flavorMessages[randomIndex];
+        }
+        this.flavorElement.classList.remove("splash-element-hidden");
+        this.flavorElement.classList.add("splash-element-visible");
+      }
       let startOptionsSection = window.domMapper?.get("splash.startOptions");
       if (!startOptionsSection) {
         startOptionsSection = document.createElement("div");
-        startOptionsSection.className = "splash-start-options";
-        this.splashScreen.appendChild(startOptionsSection);
+        startOptionsSection.id = "splash-start-options";
+        this.splashScreen.querySelector('.splash-menu-panel').appendChild(startOptionsSection);
       }
       startOptionsSection.innerHTML = "";
-
-      const flavorTextDiv = document.createElement("div");
-      flavorTextDiv.className = "splash-persistent-flavor pop";
-      flavorTextDiv.textContent =
-        flavorMessages[Math.floor(Math.random() * flavorMessages.length)];
-      startOptionsSection.appendChild(flavorTextDiv);
-
-      const newGameButton = createNewGameButton(() => this.hide());
-      startOptionsSection.appendChild(newGameButton);
-
       const localSaveJSON = localStorage.getItem("reactorGameSave");
-
-      // Determine if the upload option should be shown
-      let showUpload = false;
-      let localSaveData = null;
-      if (window.googleDriveSave && window.googleDriveSave.canUploadLocalSave) {
-        const uploadCheck = await window.googleDriveSave.canUploadLocalSave();
-        showUpload = uploadCheck.showUpload;
-        localSaveData = uploadCheck.gameState;
-      }
-
-      if (canLoadGame && localSaveJSON) {
-        const saveData = JSON.parse(localSaveJSON);
-        const playedTimeStr = this.formatTime(saveData.total_played_time || 0);
-
-        if (showUpload) {
-          // Create the combined Load/Upload button row
-          const loadGameUploadRow = createLoadGameUploadRow(
-            saveData,
-            playedTimeStr,
-            false, // It's not synced if we're offering upload
-            () => this.hide(),
-            async () => {
-              const uploadBtn = loadGameUploadRow.querySelector(
-                "#splash-upload-option-btn"
-              );
-              uploadBtn.textContent = "Uploading...";
-              uploadBtn.disabled = true;
+      let hasSave = canLoadGame && localSaveJSON;
+      let cloudSaveOnly = false;
+      let cloudSaveData = null;
+      let cloudSaveLabel = null;
+      if (!hasSave && window.googleDriveSave && window.googleDriveSave.isConfigured) {
+        try {
+          const isSignedIn = await window.googleDriveSave.checkAuth(true);
+          if (isSignedIn) {
+            const fileFound = await window.googleDriveSave.findSaveFile();
+            if (fileFound) {
+              cloudSaveOnly = true;
+              cloudSaveLabel = "☁️";
               try {
-                await window.googleDriveSave.uploadLocalSave(localSaveJSON);
-                uploadBtn.textContent = "Uploaded!";
-                setTimeout(() => this.refreshSaveOptions(), 2000); // Refresh UI
-              } catch (err) {
-                alert("Upload failed. Please try again.");
-                uploadBtn.textContent = "Upload";
-                uploadBtn.disabled = false;
+                cloudSaveData = await window.googleDriveSave.load();
+              } catch (e) {
+                cloudSaveData = null;
               }
             }
-          );
-          startOptionsSection.appendChild(loadGameUploadRow);
-        } else {
-          // Create the full-width Load Game button
-          const isCloudSynced = saveData.isCloudSynced || false;
-          const loadGameButton = createLoadGameButtonFullWidth(
-            saveData,
-            playedTimeStr,
-            isCloudSynced,
-            () => this.hide()
-          );
-          startOptionsSection.appendChild(loadGameButton);
-        }
+          }
+        } catch (e) { }
       }
-
+      let skipCloudButton = false;
+      if (hasSave || cloudSaveOnly) {
+        let saveData, playedTimeStr, isCloudSynced, continueLabel;
+        if (hasSave) {
+          saveData = JSON.parse(localSaveJSON);
+          playedTimeStr = this.formatTime(saveData.total_played_time || 0);
+          isCloudSynced = saveData.isCloudSynced || false;
+          continueLabel = "💾";
+          if (window.googleDriveSave && window.googleDriveSave.isConfigured()) {
+            try {
+              const isSignedIn = await window.googleDriveSave.checkAuth(true);
+              if (isSignedIn) {
+                const fileFound = await window.googleDriveSave.findSaveFile();
+                if (fileFound) {
+                  continueLabel = "☁️";
+                }
+              }
+            } catch (error) {
+              console.warn("Could not check Google Drive status:", error);
+            }
+          }
+        } else if (cloudSaveOnly && cloudSaveData) {
+          saveData = cloudSaveData;
+          playedTimeStr = this.formatTime(saveData.total_played_time || 0);
+          isCloudSynced = true;
+          continueLabel = cloudSaveLabel;
+        }
+        const loadGameButton = createLoadGameButtonFullWidth(
+          saveData,
+          playedTimeStr,
+          isCloudSynced,
+          () => this.hide()
+        );
+        loadGameButton.classList.add("splash-btn-continue");
+        // Remove .synced-label for Continue button
+        const syncedLabel = loadGameButton.querySelector('.synced-label');
+        if (syncedLabel) syncedLabel.remove();
+        const header = loadGameButton.querySelector(".load-game-header span");
+        if (header) {
+          header.textContent = "Continue";
+        }
+        const labelElement = document.createElement("div");
+        labelElement.className = "continue-label";
+        labelElement.textContent = continueLabel;
+        loadGameButton.appendChild(labelElement);
+        startOptionsSection.appendChild(loadGameButton);
+        if (continueLabel === "☁️") skipCloudButton = true;
+      }
+      const newGameButton = createNewGameButton(() => {
+        if (hasSave && !confirm("Are you sure you want to start a new game? Your saved progress will be overwritten.")) {
+          return;
+        }
+        localStorage.setItem("reactorNewGamePending", "1");
+        window.location.reload();
+      });
+      newGameButton.textContent = hasSave ? "New Game" : "New Game";
+      startOptionsSection.appendChild(newGameButton);
+      const staticButtons = [
+        { text: "Settings", disabled: true },
+      ];
+      staticButtons.forEach(btnInfo => {
+        const btn = document.createElement("button");
+        btn.className = "splash-btn";
+        btn.textContent = btnInfo.text;
+        if (btnInfo.disabled) {
+          btn.disabled = true;
+          btn.style.opacity = "0.5";
+          btn.style.cursor = "not-allowed";
+        }
+        startOptionsSection.appendChild(btn);
+      });
+      const exitButton = document.createElement("button");
+      exitButton.className = "splash-btn splash-btn-exit";
+      exitButton.textContent = "Exit";
+      exitButton.onclick = () => {
+        if (confirm("Are you sure you want to exit?")) {
+          window.close();
+          if (window.opener) {
+            window.opener.focus();
+          } else {
+            window.location.href = 'about:blank';
+          }
+        }
+      };
+      startOptionsSection.appendChild(exitButton);
+      startOptionsSection.classList.add("visible");
+      setTimeout(() => startOptionsSection.classList.add("show"), 100);
+      window.domMapper?.mapCategory("splashButtons");
+      window.domMapper?.add("splash.startOptions", startOptionsSection);
       const cloudButtonArea = document.createElement("div");
       cloudButtonArea.id = "splash-cloud-button-area";
       startOptionsSection.appendChild(cloudButtonArea);
-
-      if (this.installPrompt) {
-        const installButton = createInstallButton(async () => {
-          // ... install logic
-        });
-        startOptionsSection.appendChild(installButton);
+      if (!skipCloudButton) {
+        this.setupGoogleDriveButtons(cloudButtonArea);
       }
-
-      startOptionsSection.classList.add("visible");
-      setTimeout(() => startOptionsSection.classList.add("show"), 100);
-
-      window.domMapper?.mapCategory("splashButtons");
-      window.domMapper?.add("splash.startOptions", startOptionsSection);
-      window.domMapper?.add("splash.cloudButtonArea", cloudButtonArea);
-      this.setupGoogleDriveButtons(cloudButtonArea);
     }
   }
 
@@ -560,7 +597,8 @@ class SplashScreenManager {
     }
     // Show loading state while initializing
     cloudButtonArea.innerHTML = "";
-    const loadingBtn = createLoadingButton("Checking Google Drive...");
+    const loadingBtn = createLoadingButton("Checking ...");
+    loadingBtn.classList.add("splash-btn-google"); // Ensure margin is consistent
     cloudButtonArea.appendChild(loadingBtn);
     try {
       const initialized = await window.googleDriveSave.init();
@@ -757,7 +795,7 @@ class SplashScreenManager {
     if (!loadFromCloudButton) return;
 
     loadFromCloudButton.classList.add("visible", "cloud-loading");
-    const loadingButton = createLoadingButton("Checking for cloud save...");
+    const loadingButton = createLoadingButton("Checking...");
     loadFromCloudButton.innerHTML = loadingButton.innerHTML;
     loadFromCloudButton.disabled = true;
   }
@@ -775,7 +813,7 @@ class SplashScreenManager {
   showGoogleDriveInitializing(signInButton, loadFromCloudButton) {
     if (signInButton) {
       signInButton.classList.add("visible", "google-loading");
-      const loadingButton = createLoadingButton("Initializing Google Drive...");
+      const loadingButton = createLoadingButton("Initializing...");
       signInButton.innerHTML = loadingButton.innerHTML;
       signInButton.disabled = true;
     }
@@ -1153,5 +1191,206 @@ window.addEventListener("appinstalled", () => {
   deferredPrompt = null;
   if (installButton) {
     installButton.classList.add("hidden");
+  }
+});
+
+// --- Group part images by tier ---
+const partImagesByTier = {
+  1: [
+    'img/parts/accelerators/accelerator_1.png',
+    'img/parts/capacitors/capacitor_1.png',
+    'img/parts/cells/cell_1_1.png',
+    'img/parts/cells/cell_1_2.png',
+    'img/parts/cells/cell_1_4.png',
+    'img/parts/coolants/coolant_1.png',
+    'img/parts/coolants/coolant_cell_1.png',
+    'img/parts/exchangers/exchanger_1.png',
+    'img/parts/inlets/inlet_1.png',
+    'img/parts/outlets/outlet_1.png',
+    'img/parts/platings/plating_1.png',
+    'img/parts/reflectors/reflector_1.png',
+    'img/parts/vents/vent_1.png',
+  ],
+  2: [
+    'img/parts/accelerators/accelerator_2.png',
+    'img/parts/capacitors/capacitor_2.png',
+    'img/parts/cells/cell_2_1.png',
+    'img/parts/cells/cell_2_2.png',
+    'img/parts/cells/cell_2_4.png',
+    'img/parts/coolants/coolant_2.png',
+    'img/parts/coolants/coolant_cell_2.png',
+    'img/parts/exchangers/exchanger_2.png',
+    'img/parts/inlets/inlet_2.png',
+    'img/parts/outlets/outlet_2.png',
+    'img/parts/platings/plating_2.png',
+    'img/parts/reflectors/reflector_2.png',
+    'img/parts/vents/vent_2.png',
+  ],
+  3: [
+    'img/parts/accelerators/accelerator_3.png',
+    'img/parts/capacitors/capacitor_3.png',
+    'img/parts/cells/cell_3_1.png',
+    'img/parts/cells/cell_3_2.png',
+    'img/parts/cells/cell_3_4.png',
+    'img/parts/coolants/coolant_3.png',
+    'img/parts/coolants/coolant_cell_3.png',
+    'img/parts/exchangers/exchanger_3.png',
+    'img/parts/inlets/inlet_3.png',
+    'img/parts/outlets/outlet_3.png',
+    'img/parts/platings/plating_3.png',
+    'img/parts/reflectors/reflector_3.png',
+    'img/parts/vents/vent_3.png',
+  ],
+  4: [
+    'img/parts/accelerators/accelerator_4.png',
+    'img/parts/capacitors/capacitor_4.png',
+    'img/parts/cells/cell_4_1.png',
+    'img/parts/cells/cell_4_2.png',
+    'img/parts/cells/cell_4_4.png',
+    'img/parts/coolants/coolant_4.png',
+    'img/parts/coolants/coolant_cell_4.png',
+    'img/parts/exchangers/exchanger_4.png',
+    'img/parts/inlets/inlet_4.png',
+    'img/parts/outlets/outlet_4.png',
+    'img/parts/platings/plating_4.png',
+    'img/parts/reflectors/reflector_4.png',
+    'img/parts/vents/vent_4.png',
+  ],
+  5: [
+    'img/parts/accelerators/accelerator_5.png',
+    'img/parts/capacitors/capacitor_5.png',
+    'img/parts/coolants/coolant_5.png',
+    'img/parts/coolants/coolant_cell_5.png',
+    'img/parts/exchangers/exchanger_5.png',
+    'img/parts/inlets/inlet_5.png',
+    'img/parts/outlets/outlet_5.png',
+    'img/parts/platings/plating_5.png',
+    'img/parts/cells/cell_5_1.png',
+    'img/parts/cells/cell_5_2.png',
+    'img/parts/cells/cell_5_4.png',
+    'img/parts/reflectors/reflector_5.png',
+    'img/parts/vents/vent_5.png',
+  ],
+  6: [
+    'img/parts/accelerators/accelerator_6.png',
+    'img/parts/capacitors/capacitor_6.png',
+    'img/parts/cells/cell_6_1.png',
+    'img/parts/cells/cell_6_2.png',
+    'img/parts/cells/cell_6_4.png',
+    'img/parts/cells/xcell_1_1.png',
+    'img/parts/cells/xcell_1_2.png',
+    'img/parts/cells/xcell_1_4.png',
+    'img/parts/coolants/coolant_6.png',
+    'img/parts/coolants/coolant_cell_6.png',
+    'img/parts/exchangers/exchanger_6.png',
+    'img/parts/inlets/inlet_6.png',
+    'img/parts/outlets/outlet_6.png',
+    'img/parts/platings/plating_6.png',
+    'img/parts/reflectors/reflector_6.png',
+    'img/parts/vents/vent_6.png',
+  ],
+};
+const maxTier = 6;
+const splashStartTime = Date.now();
+let splashBgInterval = null;
+
+function getSplashTierAndFill() {
+  const elapsedMin = (Date.now() - splashStartTime) / 60000;
+  // Tier: start at 1, increase to 6 over 15 minutes (linear)
+  const avgTier = Math.min(1 + (elapsedMin / 15) * (maxTier - 1), maxTier);
+  // Fill: start at 3%, increase to 80% over 15 minutes (linear)
+  const fillPct = Math.min(0.03 + (elapsedMin / 15) * (0.80 - 0.03), 0.80);
+  return { avgTier, fillPct };
+}
+
+function pickTier(avgTier) {
+  // Weighted random: higher chance for lower tiers, but mean = avgTier
+  // Use a normal distribution centered at avgTier, clamp to [1, maxTier]
+  let tier = Math.round(randNormal(avgTier, 1.1));
+  tier = Math.max(1, Math.min(maxTier, tier));
+  return tier;
+}
+
+function randNormal(mean, stddev) {
+  // Box-Muller transform
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  let num = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  return mean + stddev * num;
+}
+
+function generateSplashBackground() {
+  const tileImg = new window.Image();
+  tileImg.src = 'img/ui/tile.png';
+
+  const canvas = document.createElement('canvas');
+  const tileSize = 64;
+  const gridW = 25, gridH = 25;
+  canvas.width = tileSize * gridW;
+  canvas.height = tileSize * gridH;
+  const ctx = canvas.getContext('2d');
+
+  tileImg.onload = () => {
+    // Draw base tiles
+    for (let y = 0; y < gridH; y++) {
+      for (let x = 0; x < gridW; x++) {
+        ctx.drawImage(tileImg, x * tileSize, y * tileSize, tileSize, tileSize);
+      }
+    }
+
+    // --- Dynamic tier/fill logic ---
+    const { avgTier, fillPct } = getSplashTierAndFill();
+    const totalPartsToPlace = Math.floor(gridW * gridH * fillPct);
+    const partLoadPromises = [];
+    for (let i = 0; i < totalPartsToPlace; i++) {
+      const px = Math.floor(Math.random() * gridW);
+      const py = Math.floor(Math.random() * gridH);
+      const tier = pickTier(avgTier);
+      const tierParts = partImagesByTier[tier] || partImagesByTier[1];
+      const partImg = new window.Image();
+      const randomPartSrc = tierParts[Math.floor(Math.random() * tierParts.length)];
+      partImg.src = randomPartSrc;
+      const loadPromise = new Promise(resolve => {
+        partImg.onload = () => {
+          ctx.drawImage(partImg, px * tileSize + 8, py * tileSize + 8, tileSize - 16, tileSize - 16);
+          resolve();
+        };
+        partImg.onerror = () => {
+          console.warn(`Failed to load splash background part image: ${randomPartSrc}`);
+          resolve();
+        };
+      });
+      partLoadPromises.push(loadPromise);
+    }
+    Promise.all(partLoadPromises).then(() => {
+      const splashEl = document.getElementById('splash-screen');
+      if (splashEl) {
+        splashEl.style.backgroundImage = `url('${canvas.toDataURL()}')`;
+        splashEl.style.backgroundRepeat = 'repeat';
+        splashEl.style.backgroundSize = '';
+        // CSS animation handles the scrolling automatically
+        // Schedule next update in 1 minute
+        if (splashBgInterval) clearTimeout(splashBgInterval);
+        splashBgInterval = setTimeout(generateSplashBackground, 60000);
+        console.log("Splash screen background with parts generated and applied.");
+      }
+    }).catch(error => {
+      console.error("An unexpected error occurred during splash background part loading:", error);
+    });
+  };
+
+  tileImg.onerror = () => {
+    console.error("Failed to load base tile image: 'img/ui/tile.png'. Dynamic background with parts will not be fully rendered.");
+  };
+}
+
+// CSS animation handles the background scrolling automatically
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (document.getElementById('splash-screen')) {
+    generateSplashBackground();
+  } else {
+    console.warn("Splash screen element not found, skipping dynamic background generation.");
   }
 });

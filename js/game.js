@@ -73,6 +73,9 @@ export class Game {
     this.total_played_time = 0;
     this.last_save_time = null;
 
+    // Clear the cached objective index from a previous load
+    delete this._saved_objective_index;
+
     // Ensure objectives are reset to 0 completed
     if (this.objectives_manager) {
       this.objectives_manager.current_objective_index = 0;
@@ -461,7 +464,8 @@ export class Game {
         return;
       }
 
-      if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {
+      // Only attempt Google Drive save if running in browser and googleDriveSave is defined
+      if (typeof window !== "undefined" && window.googleDriveSave && window.googleDriveSave.isSignedIn) {
         window.googleDriveSave.save(JSON.stringify(saveData)).catch((error) => {
           console.error("Failed to auto-save to Google Drive:", error);
         });
