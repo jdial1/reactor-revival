@@ -72,6 +72,12 @@ export class Game {
     this.session_start_time = null;
     this.total_played_time = 0;
     this.last_save_time = null;
+
+    // Ensure objectives are reset to 0 completed
+    if (this.objectives_manager) {
+      this.objectives_manager.current_objective_index = 0;
+      this.objectives_manager.set_objective(0, true);
+    }
   }
 
   get current_money() {

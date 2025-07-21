@@ -71,6 +71,9 @@ export class StateManager {
     if (this.ui.DOMElements.objectives_section) {
       const section = this.ui.DOMElements.objectives_section;
 
+      // Add completed class for green border and glow
+      section.classList.add("completed");
+
       // Add flash class for completion animation
       section.classList.add("flash");
 
@@ -96,6 +99,8 @@ export class StateManager {
         section.classList.remove("flash");
       }, 800);
     }
+
+
   }
   handlePartAdded(game, part_obj) {
     if (part_obj.erequires) {
@@ -240,6 +245,90 @@ export class StateManager {
     return vars;
   }
 
+  // Function to add part icons to objective titles
+  addPartIconsToTitle(title) {
+    if (typeof title !== 'string') return title;
+
+    const partMappings = {
+      'Quad Plutonium Cells': './img/parts/cells/cell_1_4.png',
+      'Quad Thorium Cells': './img/parts/cells/cell_1_4.png',
+      'Quad Seaborgium Cells': './img/parts/cells/cell_1_4.png',
+      'Quad Dolorium Cells': './img/parts/cells/cell_1_4.png',
+      'Quad Nefastium Cells': './img/parts/cells/cell_1_4.png',
+      'Particle Accelerators': './img/parts/accelerators/accelerator_1.png',
+      'Plutonium Cells': './img/parts/cells/cell_1_1.png',
+      'Thorium Cells': './img/parts/cells/cell_1_1.png',
+      'Seaborgium Cells': './img/parts/cells/cell_1_1.png',
+      'Dolorium Cells': './img/parts/cells/cell_1_1.png',
+      'Nefastium Cells': './img/parts/cells/cell_1_1.png',
+      'Heat Vent': './img/parts/vents/vent_1.png',
+      'Capacitors': './img/parts/capacitors/capacitor_1.png',
+      'Dual Cell': './img/parts/cells/cell_1_2.png',
+      'Uranium Cell': './img/parts/cells/cell_1_1.png',
+      'Capacitor': './img/parts/capacitors/capacitor_1.png',
+      'Cells': './img/parts/cells/cell_1_1.png',
+      'Cell': './img/parts/cells/cell_1_1.png',
+      'experimental part': './img/parts/cells/xcell_1_1.png',
+      'Improved Chronometers upgrade': './img/upgrades/upgrade_flux.png',
+      'Improved Chronometers': './img/upgrades/upgrade_flux.png',
+      'Power': '⚡',
+      'Heat': '🔥',
+      'Exotic Particles': '🧬'
+    };
+
+    let processedTitle = title;
+
+    // Sort part mappings by length (longest first) to avoid partial matches
+    const sortedMappings = Object.entries(partMappings).sort((a, b) => b[0].length - a[0].length);
+
+    // Use a placeholder system to prevent nested replacements
+    const placeholders = new Map();
+    let placeholderCounter = 0;
+
+    // Replace part names with icons + names (only first occurrence)
+    for (const [partName, iconPath] of sortedMappings) {
+      const isEmoji = iconPath.length === 1 || iconPath.match(/^[^a-zA-Z0-9./]/);
+      const escapedPartName = partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\b${escapedPartName.replace(/\s+/g, '\\s+')}\\b`, 'i');
+      if (isEmoji) {
+        processedTitle = processedTitle.replace(regex, `${iconPath} ${partName}`);
+      } else {
+        // It's an image path, create img tag (only first occurrence)
+        const iconHtml = `<img src=\"${iconPath}\" class=\"objective-part-icon\" alt=\"${partName}\" title=\"${partName}\">`;
+        processedTitle = processedTitle.replace(regex, (match) => {
+          const placeholder = `__PLACEHOLDER_${placeholderCounter}__`;
+          placeholders.set(placeholder, `${iconHtml} ${partName}`);
+          placeholderCounter++;
+          return placeholder;
+        });
+      }
+    }
+
+    // Replace all placeholders with actual HTML
+    for (const [placeholder, replacement] of placeholders) {
+      processedTitle = processedTitle.replace(placeholder, replacement);
+    }
+
+    // Format all numbers in the title using numFormat
+    processedTitle = processedTitle.replace(/\$?\d{1,3}(?:,\d{3})+|\$?\d{4,}/g, (match) => {
+      // Remove $ for formatting, add back if present
+      const hasDollar = match.startsWith('$');
+      const numStr = match.replace(/[^\d]/g, '');
+      const formatted = fmt(Number(numStr));
+      return hasDollar ? ('$' + formatted) : formatted;
+    });
+
+    // Debug logging
+    if (processedTitle !== title) {
+      console.log('Part icons added to objective title:', {
+        original: title,
+        processed: processedTitle
+      });
+    }
+
+    return processedTitle;
+  }
+
   handleObjectiveLoaded(objective) {
     // Update the current objective title and reward
     const titleEl = this.ui.DOMElements.objective_title;
@@ -247,24 +336,55 @@ export class StateManager {
     const oldObjectivesEl = this.ui.DOMElements.objectives_old;
     if (titleEl && objective.title) {
       // Move the previous objective to the old objectives list
-      const prevTitle = titleEl.querySelector("span")?.textContent;
+      const prevSpan = titleEl.querySelector("span");
+      const prevTitle = prevSpan?.textContent;
       if (prevTitle && prevTitle !== objective.title && oldObjectivesEl) {
         const oldObj = document.createElement("div");
         oldObj.className = "objective-old";
-        oldObj.textContent = prevTitle;
+        // Use innerHTML to preserve any existing part icons
+        oldObj.innerHTML = prevSpan?.innerHTML || prevTitle;
         oldObjectivesEl.prepend(oldObj);
       }
-      // Set the new objective
-      titleEl.innerHTML = `<span>${objective.title}</span>`;
+      // Set the new objective with objective number prefix and part icons
+      const objectiveNumber = this.game?.objectives_manager?.current_objective_index + 1 || 1;
+      const processedTitle = this.addPartIconsToTitle(objective.title);
+      titleEl.innerHTML = `<span>${objectiveNumber}: ${processedTitle}</span>`;
+
+      // Add green border if completed
+      const objectivesSection = this.ui.DOMElements.objectives_section;
+      if (objective.completed) {
+        objectivesSection?.classList.add('completed');
+        titleEl.classList.add('completed');
+      } else {
+        objectivesSection?.classList.remove('completed');
+        titleEl.classList.remove('completed');
+      }
+
+      // Check if text needs scrolling and add animation if needed
+      setTimeout(() => {
+        const span = titleEl.querySelector('span');
+        if (span && span.scrollWidth > titleEl.clientWidth) {
+          span.style.animation = 'scroll-objective-title 8s linear infinite';
+        } else {
+          span.style.animation = 'none';
+        }
+      }, 100);
     }
     if (rewardEl && (objective.reward || objective.ep_reward)) {
       const isEpReward = objective.ep_reward !== undefined && objective.ep_reward !== null;
       const rewardValue = isEpReward ? objective.ep_reward : objective.reward;
       const formattedReward = fmt(rewardValue);
-      const rewardText = isEpReward ? `+${formattedReward} EP` : `+${formattedReward} $`;
 
-      // Set the reward text
-      rewardEl.textContent = rewardText;
+      if (objective.completed) {
+        // Show claim button when completed
+        rewardEl.innerHTML = `<button class="claim-btn" onclick="window.game.objectives_manager.claimObjective()">Claim +${formattedReward} ${isEpReward ? 'EP' : '$'}</button>`;
+        rewardEl.classList.add('claimable');
+      } else {
+        // Show regular reward text when not completed
+        const rewardText = isEpReward ? `+${formattedReward} EP` : `+${formattedReward} $`;
+        rewardEl.textContent = rewardText;
+        rewardEl.classList.remove('claimable');
+      }
 
       // Update the icon based on reward type
       if (isEpReward) {
@@ -275,10 +395,26 @@ export class StateManager {
     } else if (rewardEl) {
       rewardEl.textContent = "";
       rewardEl.style.setProperty('--reward-icon', 'none');
+      rewardEl.classList.remove('claimable');
     }
   }
 
   handleObjectiveUnloaded() {
     // No-op for now. Could add animation or clearing logic here if desired.
+  }
+
+  // Check if objective text needs scrolling
+  checkObjectiveTextScrolling() {
+    const titleEl = this.ui.DOMElements.objective_title;
+    if (titleEl) {
+      const span = titleEl.querySelector('span');
+      if (span) {
+        if (span.scrollWidth > titleEl.clientWidth) {
+          span.style.animation = 'scroll-objective-title 8s linear infinite';
+        } else {
+          span.style.animation = 'none';
+        }
+      }
+    }
   }
 }

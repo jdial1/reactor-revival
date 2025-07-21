@@ -1,0 +1,321 @@
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
+import { setupGame } from "../helpers/setup.js";
+import objective_list_data from "../../data/objective_list.js";
+import { getObjectiveCheck } from "../../js/objectiveActions.js";
+
+async function satisfyObjective(game, idx) {
+    const obj = objective_list_data[idx];
+    switch (obj.checkId) {
+        case "firstCell":
+            await game.tileset
+                .getTile(0, 0)
+                .setPart(game.partset.getPartById("uranium1"));
+            break;
+        case "sellPower":
+            game.sold_power = true;
+            break;
+        case "reduceHeat":
+            game.sold_heat = true;
+            break;
+        case "ventNextToCell":
+            await game.tileset
+                .getTile(0, 0)
+                .setPart(game.partset.getPartById("uranium1"));
+            await game.tileset
+                .getTile(0, 1)
+                .setPart(game.partset.getPartById("vent1"));
+            break;
+        case "purchaseUpgrade":
+            game.upgradeset.getAllUpgrades()[0].setLevel(1);
+            break;
+        case "purchaseDualCell":
+            await game.tileset
+                .getTile(0, 0)
+                .setPart(game.partset.getPartById("uranium2"));
+            // Run a tick and update stats to activate the cell
+            game.engine?.tick?.();
+            game.reactor.updateStats();
+            game.objectives_manager.check_current_objective();
+            break;
+        case "tenActiveCells":
+            for (let i = 0; i < 10; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("uranium1"));
+                }
+            }
+            break;
+        case "perpetualUranium":
+            game.upgradeset.getUpgrade("uranium1_cell_perpetual")?.setLevel(1);
+            break;
+        case "increaseMaxPower":
+            await game.tileset
+                .getTile(0, 0)
+                .setPart(game.partset.getPartById("capacitor1"));
+            break;
+        case "powerPerTick200":
+            for (let i = 0; i < 4; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("plutonium1"));
+                }
+            }
+            game.reactor.updateStats();
+            break;
+        case "improvedChronometers":
+            game.upgradeset.getUpgrade("chronometer")?.setLevel(1);
+            break;
+        case "fiveComponentKinds":
+            await game.tileset
+                .getTile(0, 0)
+                .setPart(game.partset.getPartById("uranium1"));
+            await game.tileset
+                .getTile(0, 1)
+                .setPart(game.partset.getPartById("vent1"));
+            await game.tileset
+                .getTile(0, 2)
+                .setPart(game.partset.getPartById("capacitor1"));
+            await game.tileset
+                .getTile(0, 3)
+                .setPart(game.partset.getPartById("reflector1"));
+            await game.tileset
+                .getTile(0, 4)
+                .setPart(game.partset.getPartById("heat_exchanger1"));
+            break;
+        case "tenCapacitors":
+            for (let i = 0; i < 10; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("capacitor1"));
+                }
+            }
+            break;
+        case "powerPerTick500":
+            for (let i = 0; i < 8; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("plutonium1"));
+                }
+            }
+            game.reactor.updateStats();
+            break;
+        case "potentUranium3":
+            game.upgradeset.getUpgrade("uranium1_cell_power")?.setLevel(3);
+            break;
+        case "autoSell500":
+            game.upgradeset.getUpgrade("improved_power_lines")?.setLevel(50);
+            game.ui.stateManager.setVar("auto_sell", true);
+            for (let i = 0; i < 10; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("capacitor1"));
+                }
+            }
+            for (let i = 0; i < 5; i++) {
+                const tile = game.tileset.getTile(1, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("plutonium1"));
+                }
+            }
+            game.reactor.updateStats();
+            game.reactor.stats_cash = 501;
+            break;
+        case "sustainedPower1k":
+            for (let i = 0; i < 20; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("plutonium1"));
+                }
+            }
+            game.reactor.updateStats();
+            game.sustainedPower1k = { startTime: Date.now() - 180000 };
+            break;
+        case "infrastructureUpgrade1":
+            for (let i = 0; i < 10; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("capacitor2"));
+                }
+            }
+            for (let i = 0; i < 10; i++) {
+                const tile = game.tileset.getTile(1, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("vent2"));
+                }
+            }
+            break;
+        case "fiveQuadPlutonium":
+            for (let i = 0; i < 5; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("plutonium3"));
+                }
+            }
+            break;
+        case "initialExpansion2":
+            game.upgradeset.getUpgrade("expand_reactor_rows")?.setLevel(2);
+            break;
+        case "incomeMilestone50k":
+            game.upgradeset.getUpgrade("improved_power_lines")?.setLevel(100);
+            game.ui.stateManager.setVar("auto_sell", true);
+            for (let i = 0; i < 10; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("thorium1"));
+                }
+            }
+            game.reactor.updateStats();
+            game.reactor.stats_cash = 50001;
+            break;
+        case "expandReactor4":
+            game.upgradeset.getUpgrade("expand_reactor_rows")?.setLevel(4);
+            break;
+        case "unlockThorium":
+            for (let i = 0; i < 5; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("thorium3"));
+                }
+            }
+            break;
+        case "firstBillion":
+            game.current_money = 1000000000;
+            break;
+        case "money10B":
+            game.current_money = 1e10;
+            break;
+        case "unlockSeaborgium":
+            for (let i = 0; i < 5; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("seaborgium3"));
+                }
+            }
+            break;
+        case "masterHighHeat":
+            game.reactor.current_heat = 10000001;
+            game.masterHighHeat = { startTime: Date.now() - 300000 };
+            break;
+        case "ep10":
+            game.exotic_particles = 10;
+            break;
+        case "ep51":
+            game.exotic_particles = 51;
+            break;
+        case "ep250":
+            game.exotic_particles = 250;
+            break;
+        case "investInResearch1":
+            game.upgradeset.getUpgrade("laboratory")?.setLevel(1);
+            game.upgradeset.getUpgrade("infused_cells")?.setLevel(1);
+            game.upgradeset.getUpgrade("unleashed_cells")?.setLevel(1);
+            break;
+        case "reboot":
+            game.total_exotic_particles = 100;
+            game.current_money = game.base_money;
+            game.exotic_particles = 0;
+            break;
+        case "experimentalUpgrade":
+            game.upgradeset.getUpgrade("laboratory")?.setLevel(1);
+            game.upgradeset.getUpgrade("infused_cells")?.setLevel(1);
+            break;
+        case "fiveQuadDolorium":
+            for (let i = 0; i < 5; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("dolorium3"));
+                }
+            }
+            break;
+        case "ep1000":
+            game.exotic_particles = 1000;
+            break;
+        case "fiveQuadNefastium":
+            for (let i = 0; i < 5; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (tile) {
+                    await tile.setPart(game.partset.getPartById("nefastium3"));
+                }
+            }
+            break;
+        case "placeExperimentalPart":
+            game.upgradeset.getUpgrade("laboratory")?.setLevel(1);
+            game.upgradeset.getUpgrade("protium_cells")?.setLevel(1);
+            await game.tileset
+                .getTile(0, 0)
+                .setPart(game.partset.getPartById("protium1"));
+            break;
+        case "allObjectives":
+            break;
+        default:
+            console.warn(`No test implementation for objective: ${obj.checkId}`);
+            break;
+    }
+}
+
+describe('Full Objective Run', () => {
+    let game;
+
+    beforeEach(async () => {
+        game = await setupGame();
+        game.objectives_manager.disableTimers = true;
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('should complete all objectives in a single continuous run', async () => {
+        const totalObjectives = objective_list_data.length;
+        game.objectives_manager.current_objective_index = 0;
+        game.set_defaults();
+
+        let saveCallCount = 0;
+        const originalSaveGame = game.saveGame;
+        game.saveGame = () => {
+            saveCallCount++;
+            originalSaveGame.call(game);
+        };
+
+        game.objectives_manager.start();
+        await vi.runAllTimersAsync();
+
+        for (let i = 0; i < totalObjectives - 1; i++) {
+            const objective = objective_list_data[i];
+
+            // Clear the grid before each objective to prevent part conflicts
+            game.tileset.clearAllTiles();
+
+            expect(game.objectives_manager.current_objective_index).toBe(i);
+
+            await satisfyObjective(game, i);
+
+            game.objectives_manager.check_current_objective();
+            await vi.runAllTimersAsync();
+
+            if (!game.objectives_manager.current_objective_def.completed) {
+                game.reactor.updateStats();
+                game.objectives_manager.check_current_objective();
+                await vi.runAllTimersAsync();
+            }
+
+            expect(game.objectives_manager.current_objective_def.completed, `Objective ${i} (${objective.checkId}) should be completed.`).toBe(true);
+
+            if (game.objectives_manager.current_objective_index === i) {
+                game.objectives_manager.claimObjective();
+                await vi.runAllTimersAsync();
+            }
+
+            if (game.objectives_manager.current_objective_index === i) {
+                break;
+            }
+        }
+
+        expect(game.objectives_manager.current_objective_index).toBe(totalObjectives - 1);
+        expect(game.objectives_manager.current_objective_def.checkId).toBe("allObjectives");
+        expect(saveCallCount).toBeGreaterThan(0);
+
+        game.saveGame = originalSaveGame;
+    }, 60000); // Increased timeout for this long-running test
+}); 

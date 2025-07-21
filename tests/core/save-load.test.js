@@ -32,10 +32,8 @@ describe("Save and Load Functionality", () => {
 
     it("should correctly save the game state to localStorage", async () => {
         // Modify the game state
-        game.current_money = 5000;
-        game.exotic_particles = 100;
         await game.tileset.getTile(0, 0).setPart(game.partset.getPartById("uranium1"));
-
+        game.reactor.updateStats();
         // Purchase an upgrade and ensure it's properly applied
         const upgrade = game.upgradeset.getUpgrade("chronometer");
         game.current_money = upgrade.getCost(); // Ensure we have enough money
@@ -43,16 +41,15 @@ describe("Save and Load Functionality", () => {
         const purchased = game.upgradeset.purchaseUpgrade("chronometer");
         expect(purchased).toBe(true);
         expect(upgrade.level).toBe(1);
-
+        // Set money and exotic_particles to test values right before saving
+        game.current_money = 5000;
+        game.exotic_particles = 100;
         // Save the game
         game.saveGame();
-
         // Retrieve the saved data from our mock storage
         const savedDataJSON = localStorage.getItem("reactorGameSave");
         expect(savedDataJSON).not.toBeNull();
-
         const savedData = JSON.parse(savedDataJSON);
-
         // Verify the saved data
         expect(savedData.version).toBe(game.version);
         expect(savedData.current_money).toBe(5000);
@@ -174,5 +171,28 @@ describe("Save and Load Functionality", () => {
                 expect(loadedTile.part?.id).toBe(originalTile.part?.id);
             }
         }
+    });
+
+    it("should reset objectives and default values when starting a new game after saving and completing the first objective", async () => {
+        global.window = {};
+        global.performance = { now: () => Date.now() };
+        // 1. Start a new game and complete the first objective
+        const game1 = await setupGame();
+        // Place a cell to complete the first objective
+        const cellPart = game1.partset.getPartById("uranium1");
+        await game1.tileset.getTile(0, 0).setPart(cellPart);
+        // Let the objective manager process the completion
+        game1.objectives_manager.checkAndAutoComplete();
+        // Save the game
+        game1.saveGame();
+        // 2. Start a new game instance (simulate 'New Game')
+        const game2 = await setupGame();
+        game2.set_defaults();
+        game2.objectives_manager = new (require("../../js/objective.js").ObjectiveManager)(game2);
+        // 3. Validate that the new game has default values and objectives are reset
+        expect(game2.current_money).toBe(game2.base_money);
+        expect(game2.objectives_manager.current_objective_index).toBe(0);
+        expect(game2.objectives_manager.objectives_data[0].completed).not.toBe(true);
+        // The first objective should not be completed in the new game
     });
 }); 

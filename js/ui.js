@@ -1046,6 +1046,28 @@ export class UI {
             // Update research affordability after adding EP
             this.game.upgradeset.check_affordability(this.game);
             break;
+          case "x":
+          case "X":
+            e.preventDefault();
+            // Complete current objective for testing/review
+            if (this.game.objectives_manager && this.game.objectives_manager.current_objective_def) {
+              // Mark the current objective as completed
+              this.game.objectives_manager.current_objective_def.completed = true;
+              this.game.ui.stateManager.handleObjectiveCompleted();
+
+              // Update the UI to show completed state with claim button
+              const displayObjective = {
+                ...this.game.objectives_manager.current_objective_def,
+                title: typeof this.game.objectives_manager.current_objective_def.title === "function"
+                  ? this.game.objectives_manager.current_objective_def.title()
+                  : this.game.objectives_manager.current_objective_def.title,
+                completed: true
+              };
+              this.game.ui.stateManager.handleObjectiveLoaded(displayObjective);
+
+              console.log("Objective completed via CTRL+X:", displayObjective.title);
+            }
+            break;
         }
       }
     });
@@ -1066,6 +1088,10 @@ export class UI {
       resizeTimeout = setTimeout(() => {
         if (this.game && this.DOMElements.reactor && typeof window !== "undefined") {
           this.resizeReactor();
+        }
+        // Check objective text scrolling on resize
+        if (this.game && this.game.ui && this.game.ui.stateManager) {
+          this.game.ui.stateManager.checkObjectiveTextScrolling();
         }
       }, 100);
     });

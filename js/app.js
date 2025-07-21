@@ -6,9 +6,7 @@ import { UI } from "./ui.js";
 import { Engine } from "./engine.js";
 import "./pwa.js";
 import { PageRouter } from "./pageRouter.js";
-import faction_data from "../data/faction_data.js";
 import { GoogleDriveSave } from "./GoogleDriveSave.js";
-import { createFactionCard } from "../components/faction-card.js";
 
 async function main() {
   "use strict";
@@ -34,8 +32,8 @@ async function main() {
   window.game = game;
 
   ui.init(game);
-  populateFactionSelector();
-  setupFactionCardHandlers();
+  // Removed: populateFactionSelector();
+  // Removed: setupFactionCardHandlers();
 
   if (window.splashManager) await window.splashManager.setStep("parts");
   game.tileset.initialize();
@@ -87,16 +85,15 @@ async function main() {
   const newGameBtn = document.getElementById("splash-new-game-btn");
   if (newGameBtn) {
     newGameBtn.onclick = async () => {
-      const factionDialog = document.getElementById("faction-select-panel");
-      if (factionDialog && typeof factionDialog.showModal === "function") {
-        // Use the splashManager to properly hide the splash screen
-        if (window.splashManager) {
-          window.splashManager.hide();
-        }
-        // Wait for the fade-out animation (500ms in pwa.js) to complete
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        factionDialog.showModal();
+      // Directly start a new game, skipping faction selection
+      if (window.splashManager) {
+        window.splashManager.hide();
       }
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      game.set_defaults();
+      // Re-create the ObjectiveManager to ensure a fresh state
+      game.objectives_manager = new ObjectiveManager(game);
+      await startGame(pageRouter, ui, game);
     };
   }
 
@@ -328,56 +325,6 @@ async function createFallbackStartInterface(pageRouter, ui, game) {
     };
   } catch (error) {
     console.error("Could not load fallback start interface", error);
-  }
-}
-
-function populateFactionSelector() {
-  const cardsRow = document.querySelector(
-    "#faction-select-panel .faction-cards-row"
-  );
-  if (!cardsRow) return;
-
-  cardsRow.innerHTML = "";
-  faction_data.forEach((faction) => {
-    const card = createFactionCard(faction);
-    cardsRow.appendChild(card);
-  });
-}
-
-function setupFactionCardHandlers() {
-  const factionPanel = document.getElementById("faction-select-panel");
-  if (factionPanel) {
-    // Use event delegation to handle clicks on faction cards
-    factionPanel.addEventListener("click", async (event) => {
-      const card = event.target.closest(".faction-card");
-      if (card) {
-        // Close the dialog
-        if (typeof factionPanel.close === "function") {
-          factionPanel.close();
-        }
-        console.log(
-          "[DEBUG] Faction card clicked:",
-          card.getAttribute("data-faction")
-        );
-        const faction = card.getAttribute("data-faction");
-        localStorage.setItem("reactorFaction", faction);
-        // Ensure we have the proper game objects
-        const pageRouter = window.pageRouter;
-        const ui = window.ui;
-        const game = window.game;
-        if (!pageRouter || !ui || !game) {
-          console.error("[DEBUG] Missing game objects:", {
-            pageRouter: !!pageRouter,
-            ui: !!ui,
-            game: !!game,
-          });
-          return;
-        }
-        console.log("[DEBUG] Starting new game with faction:", faction);
-        game.set_defaults();
-        await startGame(pageRouter, ui, game);
-      }
-    });
   }
 }
 

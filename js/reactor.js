@@ -174,6 +174,11 @@ export class Reactor {
       if (this.current_heat < 0) this.current_heat = 0;
       if (this.current_heat === 0) this.game.sold_heat = true;
       this.game.ui.stateManager.setVar("current_heat", this.current_heat);
+
+      // Check objectives after heat reduction
+      if (this.game.objectives_manager) {
+        this.game.objectives_manager.check_current_objective();
+      }
     }
   }
 
@@ -183,6 +188,11 @@ export class Reactor {
       this.current_power = 0;
       this.game.ui.stateManager.setVar("current_power", this.current_power);
       this.game.sold_power = true;
+
+      // Check objectives after power selling
+      if (this.game.objectives_manager) {
+        this.game.objectives_manager.check_current_objective();
+      }
     }
   }
 

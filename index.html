@@ -4,7 +4,6 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title>Reactor Revival</title>
-    <meta name="description" content="A fun reactor simulation game." />
     <meta http-equiv="cache-control" content="no-cache" />
     <meta http-equiv="expires" content="0" />
     <meta http-equiv="pragma" content="no-cache" />
@@ -15,76 +14,20 @@
     <meta name="theme-color" content="#11191f" />
     <link rel="icon" type="image/png" href="img/parts/cells/cell_1_1.png" />
     <link rel="manifest" href="manifest.json" crossorigin="use-credentials" />
-
-    <!-- Pico.css -->
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css"
     />
-
-    <!-- Link to your simplified, custom stylesheet -->
     <link rel="stylesheet" href="css/main.css" />
-
-    <!-- External Libraries -->
     <script src="lib/pako.min.js"></script>
     <script src="lib/zip.min.js"></script>
   </head>
   <body>
-    <!-- SPLASH SCREEN CONTAINER -->
     <div id="splash-container"></div>
-    <dialog id="faction-select-panel">
-      <article>
-        <header>
-          <h2 class="faction-select-title">Select Your Faction</h2>
-        </header>
-        <div class="faction-cards-row grid">
-          <!-- Faction cards will be dynamically inserted here -->
-        </div>
-      </article>
-    </dialog>
     <div id="wrapper" class="hidden"></div>
-
     <!-- Templates are now loaded via js/templateLoader.js -->
-
     <script type="module" src="js/domMapper.js"></script>
     <script type="module" src="js/templateLoader.js"></script>
     <script type="module" src="js/app.js"></script>
-    <script>
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", async () => {
-          try {
-            const isGitHubPages =
-              window.location.hostname.includes("github.io");
-            let swPath, swScope;
-            if (isGitHubPages) {
-              const pathParts = window.location.pathname
-                .split("/")
-                .filter((part) => part);
-              const repoName = pathParts[0] || "";
-              swPath = `/${repoName}/sw.js`;
-              swScope = `/${repoName}/`;
-            } else {
-              swPath = "/sw.js";
-              swScope = "/";
-            }
-            const registration = await navigator.serviceWorker.register(
-              swPath,
-              {
-                scope: swScope,
-                updateViaCache: "none",
-              }
-            );
-            console.log(
-              "Service Worker registered successfully with scope:",
-              registration.scope,
-              "and path:",
-              swPath
-            );
-          } catch (err) {
-            console.error("Service Worker registration failed:", err);
-          }
-        });
-      }
-    </script>
   </body>
 </html>

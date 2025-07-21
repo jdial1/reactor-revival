@@ -10,6 +10,7 @@ export class PageRouter {
         path: "pages/privacy-policy.html",
         stateless: true,
       },
+      // Removed: faction page
     };
     this.pageCache = new Map();
     this.initializedPages = new Set();
@@ -245,10 +246,7 @@ export class PageRouter {
       }
 
       // Close any open modals/dialogs
-      const factionDialog = document.getElementById("faction-select-panel");
-      if (factionDialog && factionDialog.open) {
-        factionDialog.close();
-      }
+      // Removed: faction-select-panel logic
 
       const quickStartModal = document.getElementById("quick-start-modal");
       if (quickStartModal) {

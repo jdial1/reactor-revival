@@ -9,6 +9,13 @@ import { ObjectiveManager } from "../../js/objective.js";
 import { PageRouter } from "../../js/pageRouter.js";
 import { TemplateLoader } from "../../js/templateLoader.js";
 
+// Polyfill performance.mark and performance.measure for all tests
+if (typeof global.performance === "undefined") {
+  global.performance = {};
+}
+global.performance.mark = global.performance.mark || (() => { });
+global.performance.measure = global.performance.measure || (() => { });
+
 // Suppress verbose console output during tests
 const originalConsoleLog = console.log;
 const originalConsoleWarn = console.warn;

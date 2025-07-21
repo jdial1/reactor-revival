@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setupGame } from "./helpers/setup.js";
 import objective_list_data from "../data/objective_list.js";
+import { getObjectiveCheck } from "../js/objectiveActions.js";
 
 // Helper to set up the game state for each objective
 async function satisfyObjective(game, idx) {
   const obj = objective_list_data[idx];
+  const checkFn = getObjectiveCheck(obj.checkId);
 
   switch (idx) {
     case 0: // Place your first component in the reactor
@@ -21,7 +23,7 @@ async function satisfyObjective(game, idx) {
       game.sold_heat = true;
       break;
 
-    case 3: // Put a Heat Vent next to a power Cell
+    case 3: // Put a Heat Vent next to a Cell
       await game.tileset
         .getTile(0, 0)
         .setPart(game.partset.getPartById("uranium1"));
@@ -35,13 +37,13 @@ async function satisfyObjective(game, idx) {
       upg.setLevel(1);
       break;
 
-    case 5: // Purchase a Dual power Cell
+    case 5: // Purchase a Dual Cell
       await game.tileset
         .getTile(0, 0)
         .setPart(game.partset.getPartById("uranium2"));
       break;
 
-    case 6: // Have at least 10 active power Cells in your reactor
+    case 6: // Have at least 10 active Cells in your reactor
       // Start from position 1 to avoid overwriting the uranium2 cell at position 0
       for (let i = 1; i < 11; i++) {
         await game.tileset
@@ -50,7 +52,7 @@ async function satisfyObjective(game, idx) {
       }
       break;
 
-    case 7: // Purchase a Perpetual power Cell upgrade for Uranium
+    case 7: // Purchase a Perpetual Cell upgrade for Uranium
       const perpetualUpgrade = game.upgradeset.getUpgrade(
         "uranium1_cell_perpetual"
       );
@@ -64,7 +66,7 @@ async function satisfyObjective(game, idx) {
       break;
 
     case 9: // Generate at least 200 power per tick
-      // Place multiple high-power cells
+      // Place multiple high-power Cells
       for (let i = 0; i < 5; i++) {
         await game.tileset
           .getTile(0, i)
@@ -105,7 +107,7 @@ async function satisfyObjective(game, idx) {
       break;
 
     case 13: // Generate at least 500 power per tick
-      // Place multiple high-power cells
+      // Place multiple high-power Cells
       for (let i = 0; i < 10; i++) {
         await game.tileset
           .getTile(0, i)
@@ -142,7 +144,33 @@ async function satisfyObjective(game, idx) {
       game.reactor.updateStats();
       break;
 
-    case 16: // Have at least 5 active Quad Plutonium Cells in your reactor
+    // New intermediary objectives
+    case 16: // Achieve a steady power generation of 1,000 per tick for at least 3 minutes
+      // Place enough cells to generate 1000+ power (but not too many to avoid tile limits)
+      for (let i = 0; i < 8; i++) {
+        await game.tileset
+          .getTile(0, i)
+          .setPart(game.partset.getPartById("plutonium3"));
+      }
+      game.reactor.updateStats();
+      // Simulate 3 minutes of sustained power
+      game.sustainedPower1k = { startTime: Date.now() - 180000 };
+      break;
+
+    case 17: // Have at least 10 active Advanced Capacitors and 10 Advanced Heat Vents
+      for (let i = 0; i < 10; i++) {
+        await game.tileset
+          .getTile(0, i)
+          .setPart(game.partset.getPartById("capacitor2"));
+      }
+      for (let i = 0; i < 10; i++) {
+        await game.tileset
+          .getTile(1, i)
+          .setPart(game.partset.getPartById("vent2"));
+      }
+      break;
+
+    case 18: // Have at least 5 active Quad Plutonium Cells in your reactor
       for (let i = 0; i < 5; i++) {
         await game.tileset
           .getTile(0, i)
@@ -150,14 +178,46 @@ async function satisfyObjective(game, idx) {
       }
       break;
 
-    case 17: // Expand your reactor 4 times in either direction
+    case 19: // Expand your reactor 2 times in either direction
       const expandRowsUpgrade = game.upgradeset.getUpgrade(
         "expand_reactor_rows"
       );
-      expandRowsUpgrade.setLevel(4);
+      expandRowsUpgrade.setLevel(2);
       break;
 
-    case 18: // Have at least 5 active Quad Thorium Cells in your reactor
+    case 20: // Achieve a passive income of $50,000 per tick through auto-selling
+      // Set up high power generation and auto-sell (but not too many tiles)
+      for (let i = 0; i < 8; i++) {
+        await game.tileset
+          .getTile(0, i)
+          .setPart(game.partset.getPartById("plutonium3"));
+      }
+      // Add capacitors to increase max_power
+      for (let i = 0; i < 10; i++) {
+        await game.tileset
+          .getTile(1, i)
+          .setPart(game.partset.getPartById("capacitor1"));
+      }
+      // Set up auto-sell
+      game.ui.stateManager.setVar("auto_sell", true);
+      // Purchase Improved Power Lines upgrade to enable auto-sell
+      const improvedPowerLinesUpgrade2 = game.upgradeset.getUpgrade(
+        "improved_power_lines"
+      );
+      improvedPowerLinesUpgrade2.setLevel(50); // Level 50 gives 50% auto-sell
+      game.reactor.updateStats();
+      // Manually set stats_cash to ensure it meets the requirement
+      game.reactor.stats_cash = 60000;
+      break;
+
+    case 21: // Expand your reactor 4 times in either direction
+      const expandRowsUpgrade4 = game.upgradeset.getUpgrade(
+        "expand_reactor_rows"
+      );
+      expandRowsUpgrade4.setLevel(4);
+      break;
+
+    case 22: // Have at least 5 active Quad Thorium Cells in your reactor
       for (let i = 0; i < 5; i++) {
         await game.tileset
           .getTile(0, i)
@@ -165,12 +225,17 @@ async function satisfyObjective(game, idx) {
       }
       break;
 
-    case 19: // Have at least $10,000,000,000 total
+    case 23: // Reach a balance of $1,000,000,000
+      game.current_money = 1000000000;
+      game.ui.stateManager.setVar("current_money", game.current_money);
+      break;
+
+    case 24: // Have at least $10,000,000,000 total
       game.current_money = 10000000000;
       game.ui.stateManager.setVar("current_money", game.current_money);
       break;
 
-    case 20: // Have at least 5 active Quad Seaborgium Cells in your reactor
+    case 25: // Have at least 5 active Quad Seaborgium Cells in your reactor
       for (let i = 0; i < 5; i++) {
         await game.tileset
           .getTile(0, i)
@@ -178,17 +243,47 @@ async function satisfyObjective(game, idx) {
       }
       break;
 
-    case 21: // Generate 10 Exotic Particles with Particle Accelerators
+    case 26: // Sustain a reactor heat level above 10,000,000 for 5 minutes without a meltdown
+      // Set up high heat generation (but not too many tiles)
+      for (let i = 0; i < 8; i++) {
+        await game.tileset
+          .getTile(0, i)
+          .setPart(game.partset.getPartById("plutonium3"));
+      }
+      game.reactor.updateStats();
+      // Manually set high heat level
+      game.reactor.current_heat = 15000000;
+      // Simulate 5 minutes of sustained high heat
+      game.masterHighHeat = { startTime: Date.now() - 300000 };
+      break;
+
+    case 27: // Generate 10 Exotic Particles with Particle Accelerators
       game.exotic_particles = 10;
       game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
       break;
 
-    case 22: // Generate 51 Exotic Particles with Particle Accelerators
+    case 28: // Generate 51 Exotic Particles with Particle Accelerators
       game.exotic_particles = 51;
       game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
       break;
 
-    case 23: // Reboot your reactor in the Experiments tab
+    case 29: // Generate 250 Exotic Particles
+      game.exotic_particles = 250;
+      game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
+      break;
+
+    case 30: // Purchase the 'Infused Cells' and 'Unleashed Cells' experimental upgrades
+      // First unlock laboratory
+      const laboratoryUpgrade = game.upgradeset.getUpgrade("laboratory");
+      laboratoryUpgrade.setLevel(1);
+      // Then purchase both upgrades
+      const infusedCellsUpgrade = game.upgradeset.getUpgrade("infused_cells");
+      infusedCellsUpgrade.setLevel(1);
+      const unleashedCellsUpgrade = game.upgradeset.getUpgrade("unleashed_cells");
+      unleashedCellsUpgrade.setLevel(1);
+      break;
+
+    case 31: // Reboot your reactor in the Experiments tab
       game.total_exotic_particles = 100;
       game.current_money = game.base_money;
       game.exotic_particles = 0;
@@ -200,16 +295,16 @@ async function satisfyObjective(game, idx) {
       game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
       break;
 
-    case 24: // Purchase an Experimental Upgrade
+    case 32: // Purchase an Experimental Upgrade
       // First unlock laboratory
-      const laboratoryUpgrade = game.upgradeset.getUpgrade("laboratory");
-      laboratoryUpgrade.setLevel(1);
+      const labUpgrade = game.upgradeset.getUpgrade("laboratory");
+      labUpgrade.setLevel(1);
       // Then purchase an experimental upgrade
-      const infusedCellsUpgrade = game.upgradeset.getUpgrade("infused_cells");
-      infusedCellsUpgrade.setLevel(1);
+      const infusedCellsUpgrade2 = game.upgradeset.getUpgrade("infused_cells");
+      infusedCellsUpgrade2.setLevel(1);
       break;
 
-    case 25: // Have at least 5 active Quad Dolorium Cells in your reactor
+    case 33: // Have at least 5 active Quad Dolorium Cells in your reactor
       for (let i = 0; i < 5; i++) {
         await game.tileset
           .getTile(0, i)
@@ -217,12 +312,12 @@ async function satisfyObjective(game, idx) {
       }
       break;
 
-    case 26: // Generate 1000 Exotic Particles with Particle Accelerators
+    case 34: // Generate 1000 Exotic Particles with Particle Accelerators
       game.exotic_particles = 1000;
       game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
       break;
 
-    case 27: // Have at least 5 active Quad Nefastium Cells in your reactor
+    case 35: // Have at least 5 active Quad Nefastium Cells in your reactor
       for (let i = 0; i < 5; i++) {
         await game.tileset
           .getTile(0, i)
@@ -230,10 +325,10 @@ async function satisfyObjective(game, idx) {
       }
       break;
 
-    case 28: // Place an experimental part in your reactor
+    case 36: // Place an experimental part in your reactor
       // First unlock laboratory and protium cells
-      const labUpgrade = game.upgradeset.getUpgrade("laboratory");
-      labUpgrade.setLevel(1);
+      const labUpgrade2 = game.upgradeset.getUpgrade("laboratory");
+      labUpgrade2.setLevel(1);
       const protiumCellsUpgrade = game.upgradeset.getUpgrade("protium_cells");
       protiumCellsUpgrade.setLevel(1);
       // Then place an experimental part
@@ -242,7 +337,7 @@ async function satisfyObjective(game, idx) {
         .setPart(game.partset.getPartById("protium1"));
       break;
 
-    case 29: // All objectives completed!
+    case 37: // All objectives completed!
       // This objective should always return false
       break;
 
@@ -264,11 +359,12 @@ describe("Objective System", () => {
       }`, async () => {
         await satisfyObjective(game, idx);
 
+        const checkFn = getObjectiveCheck(obj.checkId);
         // For the last objective (All objectives completed), it should always return false
-        if (idx === 29) {
-          expect(obj.check(game)).toBe(false);
+        if (idx === objective_list_data.length - 1) {
+          expect(checkFn(game)).toBe(false);
         } else {
-          expect(obj.check(game)).toBe(true);
+          expect(checkFn(game)).toBe(true);
         }
       });
   });
@@ -280,7 +376,7 @@ describe("Objective System", () => {
         { index: 7, description: "Perpetual uranium upgrade" },
         { index: 10, description: "Chronometer upgrade" },
         { index: 14, description: "Uranium power upgrade level 3" },
-        { index: 24, description: "Experimental upgrade" },
+        { index: 32, description: "Experimental upgrade" },
       ];
 
       for (const { index, description } of testObjectives) {
@@ -292,8 +388,9 @@ describe("Objective System", () => {
 
         // Verify the objective condition is satisfied
         const objective = objective_list_data[index];
+        const checkFn = getObjectiveCheck(objective.checkId);
         expect(
-          objective.check(testGame),
+          checkFn(testGame),
           `Objective ${index} (${description}) should be satisfied`
         ).toBe(true);
 
@@ -330,8 +427,8 @@ describe("Objective System", () => {
           originalSaveGame.call(testGame);
         };
 
-        // Set the objective (this should trigger immediate completion)
-        testGame.objectives_manager.set_objective(index, true);
+        // Start the objective manager (this should trigger auto-completion)
+        testGame.objectives_manager.start();
 
         // Wait a bit for async completion
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -380,8 +477,8 @@ describe("Objective System", () => {
 
       // Set up game state to satisfy objectives 4, 5, and 6
       await satisfyObjective(testGame, 4); // Purchase an Upgrade
-      await satisfyObjective(testGame, 5); // Purchase a Dual power Cell
-      await satisfyObjective(testGame, 6); // Have at least 10 active power Cells
+      await satisfyObjective(testGame, 5); // Purchase a Dual Cell
+      await satisfyObjective(testGame, 6); // Have at least 10 active Cells
 
       // Start at objective 4
       testGame.objectives_manager.current_objective_index = 4;
@@ -402,8 +499,8 @@ describe("Objective System", () => {
         originalSaveGame.call(testGame);
       };
 
-      // Set objective 4 (should auto-complete 4, 5, and 6)
-      testGame.objectives_manager.set_objective(4, true);
+      // Start the objective manager (should auto-complete 4, 5, and 6)
+      testGame.objectives_manager.start();
 
       // Wait for all async completions
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -518,8 +615,8 @@ describe("Objective System", () => {
     });
 
     it("should validate that objectives with EP rewards are in the correct section", () => {
-      // EP rewards should only appear in objectives after the first EP objective (index 21)
-      const firstEpObjectiveIndex = 21; // "Generate 10 Exotic Particles"
+      // EP rewards should only appear in objectives after the first EP objective (index 27) - adjusted for new objectives
+      const firstEpObjectiveIndex = 27; // "Generate 10 Exotic Particles"
 
       objective_list_data.forEach((objective, index) => {
         if (objective.ep_reward !== undefined && objective.ep_reward !== null) {
@@ -560,8 +657,8 @@ describe("Objective System", () => {
       const testObjectives = [
         { index: 0, expectedReward: 10, rewardType: 'money' },
         { index: 4, expectedReward: 100, rewardType: 'money' },
-        { index: 22, expectedReward: 50, rewardType: 'ep' },
-        { index: 26, expectedReward: 1000, rewardType: 'ep' },
+        { index: 28, expectedReward: 50, rewardType: 'ep' },
+        { index: 34, expectedReward: 1000, rewardType: 'ep' },
       ];
 
       for (const { index, expectedReward, rewardType } of testObjectives) {
@@ -576,7 +673,8 @@ describe("Objective System", () => {
 
         // Verify the objective is satisfied
         const objective = objective_list_data[index];
-        expect(objective.check(testGame)).toBe(true);
+        const checkFn = getObjectiveCheck(objective.checkId);
+        expect(checkFn(testGame)).toBe(true);
 
         // Manually trigger the reward logic (simulating objective completion)
         if (rewardType === 'money' && objective.reward) {
@@ -623,6 +721,220 @@ describe("Objective System", () => {
 
       // This test will pass but will warn about any objectives with both reward types
       expect(objectivesWithBothRewards.length).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe("New Intermediary Objectives", () => {
+    it("should test sustained power generation objective", async () => {
+      const testGame = await setupGame();
+
+      // Set up power generation
+      for (let i = 0; i < 8; i++) {
+        await testGame.tileset
+          .getTile(0, i)
+          .setPart(testGame.partset.getPartById("plutonium3"));
+      }
+      testGame.reactor.updateStats();
+
+      // Reset sustained power state
+      testGame.sustainedPower1k = { startTime: 0 };
+
+      // Test that it fails without sustained time
+      const checkFn = getObjectiveCheck("sustainedPower1k");
+      expect(checkFn(testGame)).toBe(false);
+
+      // Test that it passes with sustained time
+      testGame.sustainedPower1k = { startTime: Date.now() - 180000 };
+      expect(checkFn(testGame)).toBe(true);
+
+      // Test that it fails if power drops below threshold
+      testGame.reactor.stats_power = 500;
+      expect(checkFn(testGame)).toBe(false);
+    });
+
+    it("should test infrastructure upgrade objective", async () => {
+      const testGame = await setupGame();
+
+      // Test that it fails without enough advanced components
+      const checkFn = getObjectiveCheck("infrastructureUpgrade1");
+      expect(checkFn(testGame)).toBe(false);
+
+      // Add advanced capacitors
+      for (let i = 0; i < 10; i++) {
+        await testGame.tileset
+          .getTile(0, i)
+          .setPart(testGame.partset.getPartById("capacitor2"));
+      }
+      expect(checkFn(testGame)).toBe(false);
+
+      // Add advanced heat vents
+      for (let i = 0; i < 10; i++) {
+        await testGame.tileset
+          .getTile(1, i)
+          .setPart(testGame.partset.getPartById("vent2"));
+      }
+      expect(checkFn(testGame)).toBe(true);
+    });
+
+    it("should test reactor expansion objectives", async () => {
+      const testGame = await setupGame();
+
+      // Test initial expansion
+      const checkFn2 = getObjectiveCheck("initialExpansion2");
+      expect(checkFn2(testGame)).toBe(false);
+
+      const expandRowsUpgrade = testGame.upgradeset.getUpgrade("expand_reactor_rows");
+      expandRowsUpgrade.setLevel(2);
+      expect(checkFn2(testGame)).toBe(true);
+
+      // Test full expansion
+      const checkFn4 = getObjectiveCheck("expandReactor4");
+      expect(checkFn4(testGame)).toBe(false);
+
+      expandRowsUpgrade.setLevel(4);
+      expect(checkFn4(testGame)).toBe(true);
+    });
+
+    it("should test high heat mastery objective", async () => {
+      const testGame = await setupGame();
+
+      // Set up high heat generation
+      for (let i = 0; i < 8; i++) {
+        await testGame.tileset
+          .getTile(0, i)
+          .setPart(testGame.partset.getPartById("plutonium3"));
+      }
+      testGame.reactor.updateStats();
+
+      // Manually set high heat level
+      testGame.reactor.current_heat = 15000000;
+
+      // Reset high heat state
+      testGame.masterHighHeat = { startTime: 0 };
+
+      // Test that it fails without sustained time
+      const checkFn = getObjectiveCheck("masterHighHeat");
+      expect(checkFn(testGame)).toBe(false);
+
+      // Test that it passes with sustained time
+      testGame.masterHighHeat = { startTime: Date.now() - 300000 };
+      expect(checkFn(testGame)).toBe(true);
+
+      // Test that it fails if reactor melts down
+      testGame.reactor.has_melted_down = true;
+      expect(checkFn(testGame)).toBe(false);
+    });
+
+    it("should test research investment objective", async () => {
+      const testGame = await setupGame();
+
+      // Test that it fails without upgrades
+      const checkFn = getObjectiveCheck("investInResearch1");
+      expect(checkFn(testGame)).toBe(false);
+
+      // Unlock laboratory
+      const laboratoryUpgrade = testGame.upgradeset.getUpgrade("laboratory");
+      laboratoryUpgrade.setLevel(1);
+
+      // Purchase infused cells
+      const infusedCellsUpgrade = testGame.upgradeset.getUpgrade("infused_cells");
+      infusedCellsUpgrade.setLevel(1);
+      expect(checkFn(testGame)).toBe(false);
+
+      // Purchase unleashed cells
+      const unleashedCellsUpgrade = testGame.upgradeset.getUpgrade("unleashed_cells");
+      unleashedCellsUpgrade.setLevel(1);
+      expect(checkFn(testGame)).toBe(true);
+    });
+  });
+
+  describe("Part Icon Integration", () => {
+    it("should add part icons to objective titles that mention parts", () => {
+      const stateManager = game.ui.stateManager;
+
+      // Test various objective titles that should have part icons
+      const testCases = [
+        {
+          title: "Place your first Cell in the reactor by clicking 'Parts'",
+          shouldHaveIcon: true,
+          expectedIcon: 'img/parts/cells/cell_1_1.png'
+        },
+        {
+          title: "Purchase a Dual Cell",
+          shouldHaveIcon: true,
+          expectedIcon: 'img/parts/cells/cell_1_2.png'
+        },
+        {
+          title: "Put a Heat Vent next to a Cell",
+          shouldHaveIcon: true,
+          expectedIcon: 'img/parts/vents/vent_1.png'
+        },
+        {
+          title: "Have at least 10 Capacitors",
+          shouldHaveIcon: true,
+          expectedIcon: 'img/parts/capacitors/capacitor_1.png'
+        },
+        {
+          title: "Generate 10 Exotic Particles",
+          shouldHaveIcon: true,
+          expectedIcon: '🧬'
+        },
+        {
+          title: "Have at least 5 active Quad Plutonium Cells in your reactor",
+          shouldHaveIcon: true,
+          expectedIcon: 'img/parts/cells/cell_1_4.png'
+        },
+        {
+          title: "Sell all your power by clicking 'Power'",
+          shouldHaveIcon: true,
+          expectedIcon: '⚡'
+        },
+        {
+          title: "Reduce your Current Heat to 0 by clicking 'Heat'",
+          shouldHaveIcon: true,
+          expectedIcon: '🔥'
+        }
+      ];
+
+      testCases.forEach(({ title, shouldHaveIcon, expectedIcon }) => {
+        const processedTitle = stateManager.addPartIconsToTitle(title);
+
+        if (shouldHaveIcon) {
+          if (expectedIcon.startsWith('./img/') || expectedIcon.startsWith('img/')) {
+            // Image files should create img tags
+            expect(processedTitle).toContain('<img');
+            expect(processedTitle).toContain('objective-part-icon');
+            expect(processedTitle).toContain(expectedIcon);
+          } else {
+            // Emojis should be inserted directly
+            expect(processedTitle).toContain(expectedIcon);
+          }
+        } else {
+          expect(processedTitle).toBe(title);
+        }
+      });
+    });
+
+    it("should handle objective titles with multiple part mentions", () => {
+      const stateManager = game.ui.stateManager;
+      const title = "Put a Heat Vent next to a Cell";
+      const processedTitle = stateManager.addPartIconsToTitle(title);
+
+      // Should have icons for both "Heat Vent" and "Cell"
+      expect(processedTitle).toContain('img/parts/vents/vent_1.png');
+      expect(processedTitle).toContain('img/parts/cells/cell_1_1.png');
+      expect(processedTitle).toContain('Heat Vent');
+      expect(processedTitle).toContain('Cell');
+    });
+
+    it("should handle objective titles with emoji mentions", () => {
+      const stateManager = game.ui.stateManager;
+      const title = "Sell all your power by clicking 'Power'";
+      const processedTitle = stateManager.addPartIconsToTitle(title);
+
+      // Should have emoji for "Power"
+      expect(processedTitle).toContain('⚡');
+      expect(processedTitle).toContain('Power');
     });
   });
 });

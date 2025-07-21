@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setupGameWithDOM } from "../helpers/setup.js";
-import { createFactionCard } from "../../components/faction-card.js";
 import { createNewGameButton, createLoadGameButton, createUploadToCloudButton, createLoadFromCloudButton, createGoogleSignInButton, createGoogleSignOutButton, createLoadGameUploadRow } from "../../components/splash-buttons.js";
 import { createTooltipCloseButton, createUpgradeButton, createPartButton, createBuyButton } from "../../components/ui-buttons.js";
 import faction_data from "../../data/faction_data.js";
@@ -17,27 +16,6 @@ describe("UI Component Creation and State", () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
-    });
-
-    describe("Faction Card Creation", () => {
-        it("should create a faction card with the correct name, flag, and traits", () => {
-            const atomFaction = faction_data.find(f => f.id === "ATOM");
-            const card = createFactionCard(atomFaction);
-
-            expect(card).not.toBeNull();
-            expect(card.querySelector(".faction-name").textContent).toBe(atomFaction.name);
-            expect(card.querySelector(".flag").textContent).toBe(atomFaction.flag);
-
-            const features = card.querySelectorAll(".feature-box");
-            const penalties = card.querySelectorAll(".penalty-box");
-
-            const expectedFeatures = atomFaction.traits.filter(t => t.type === "feature").length;
-            const expectedPenalties = atomFaction.traits.filter(t => t.type === "penalty").length;
-
-            expect(features.length).toBe(expectedFeatures);
-            expect(penalties.length).toBe(expectedPenalties);
-            expect(card.querySelector(".feature-box .trait-text").textContent).toBe("Small Modular Reactors");
-        });
     });
 
     describe("Splash Button Creation", () => {
