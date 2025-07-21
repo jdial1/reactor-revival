@@ -1445,7 +1445,8 @@ function generateSplashBackground() {
         splashEl.style.backgroundImage = `url('${canvas.toDataURL()}')`;
         splashEl.style.backgroundRepeat = 'repeat';
         splashEl.style.backgroundSize = '';
-        // CSS animation handles the scrolling automatically
+        // Ensure animation works on all devices
+        splashEl.style.animation = 'splash-bg-scroll 120s linear infinite';
         // Schedule next update in 1 minute
         if (splashBgInterval) clearTimeout(splashBgInterval);
         splashBgInterval = setTimeout(generateSplashBackground, 60000);

@@ -1729,6 +1729,7 @@ white-space: nowrap;
 #objective_title span {
 display: inline-block;
 white-space: nowrap;
+animation: scroll-objective-title 8s linear infinite;
 }
 #objective_title:hover span {
 animation-play-state: paused;
@@ -3843,12 +3844,22 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     animation: splash-bg-scroll 120s linear infinite;
     background-size: auto;
   }
+  
+  /* Ensure objective text scrolling works on tablets */
+  #objective_title span {
+    animation: scroll-objective-title 8s linear infinite;
+  }
 }
 
 @media (max-width: 768px) {
   #splash-screen {
     animation: splash-bg-scroll 120s linear infinite;
     background-size: auto;
+  }
+  
+  /* Ensure objective text scrolling works on tablets */
+  #objective_title span {
+    animation: scroll-objective-title 8s linear infinite;
   }
 }
 
