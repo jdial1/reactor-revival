@@ -195,4 +195,13 @@ describe("Save and Load Functionality", () => {
         expect(game2.objectives_manager.objectives_data[0].completed).not.toBe(true);
         // The first objective should not be completed in the new game
     });
+});
+
+describe("index.html", () => {
+    it("should contain the google-site-verification meta tag", () => {
+        const fs = require("fs");
+        const path = require("path");
+        const html = fs.readFileSync(path.join(__dirname, "../../index.html"), "utf8");
+        expect(html).toMatch(/<meta[^>]+name=["']google-site-verification["'][^>]+>/);
+    });
 }); 

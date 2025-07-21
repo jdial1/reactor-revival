@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
   <head>
+    <meta name="google-site-verification" content="LnIs3f51u0D2EqYjCdWgyctu2zs9jaD8lOEdgZVOcQY" />
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title>Reactor Revival</title>
@@ -30,10 +31,9 @@
     <script type="module" src="js/templateLoader.js"></script>
     <script type="module" src="js/app.js"></script>
     
-    <!-- Service Worker Registration -->
+
     <script>
       if ('serviceWorker' in navigator) {
-        // Handle GitHub Pages path structure
         const pathParts = window.location.pathname.split('/');
         const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
         const swPath = repoName ? `/${repoName}/src-sw.js` : '/src-sw.js';
