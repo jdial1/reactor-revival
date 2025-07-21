@@ -360,13 +360,11 @@ export class StateManager {
         titleEl.classList.remove('completed');
       }
 
-      // Check if text needs scrolling and add animation if needed
+      // Always add scrolling animation for objective text
       setTimeout(() => {
         const span = titleEl.querySelector('span');
-        if (span && span.scrollWidth > titleEl.clientWidth) {
+        if (span) {
           span.style.animation = 'scroll-objective-title 8s linear infinite';
-        } else {
-          span.style.animation = 'none';
         }
       }, 100);
     }
@@ -403,17 +401,13 @@ export class StateManager {
     // No-op for now. Could add animation or clearing logic here if desired.
   }
 
-  // Check if objective text needs scrolling
+  // Always enable objective text scrolling
   checkObjectiveTextScrolling() {
     const titleEl = this.ui.DOMElements.objective_title;
     if (titleEl) {
       const span = titleEl.querySelector('span');
       if (span) {
-        if (span.scrollWidth > titleEl.clientWidth) {
-          span.style.animation = 'scroll-objective-title 8s linear infinite';
-        } else {
-          span.style.animation = 'none';
-        }
+        span.style.animation = 'scroll-objective-title 8s linear infinite';
       }
     }
   }

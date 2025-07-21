@@ -800,6 +800,12 @@ class SplashScreenManager {
       // Stop flavor text rotation
       this.stopFlavorText();
 
+      // Stop version checking
+      if (this.versionCheckInterval) {
+        clearInterval(this.versionCheckInterval);
+        this.versionCheckInterval = null;
+      }
+
       // Clear any error timeout
       if (this.errorTimeout) {
         clearTimeout(this.errorTimeout);
