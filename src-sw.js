@@ -109,6 +109,50 @@ workbox.routing.setCatchHandler(({ event }) => {
   }
 });
 
+// Version checking variables
+let currentVersion = null;
+let lastCheckedVersion = null;
+let versionCheckInterval = null;
+
+// Start version checking
+function startVersionChecking() {
+  if (versionCheckInterval) {
+    clearInterval(versionCheckInterval);
+  }
+
+  // Check version every 30 seconds
+  versionCheckInterval = setInterval(async () => {
+    try {
+      const response = await fetch('/version.json', { cache: 'no-cache' });
+      const versionData = await response.json();
+      const newVersion = versionData.version;
+
+      if (currentVersion === null) {
+        currentVersion = newVersion;
+        lastCheckedVersion = newVersion;
+      } else if (newVersion !== lastCheckedVersion) {
+        // New version detected
+        lastCheckedVersion = newVersion;
+        notifyClientsOfNewVersion(newVersion);
+      }
+    } catch (error) {
+      console.warn('Failed to check for new version:', error);
+    }
+  }, 30000); // Check every 30 seconds
+}
+
+// Notify all clients of new version
+function notifyClientsOfNewVersion(newVersion) {
+  self.clients.matchAll().then((clients) => {
+    clients.forEach((client) => {
+      client.postMessage({
+        type: "NEW_VERSION_AVAILABLE",
+        version: newVersion
+      });
+    });
+  });
+}
+
 // Handle messages
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
@@ -116,8 +160,17 @@ self.addEventListener("message", (event) => {
   }
   if (event.data && event.data.type === "GET_VERSION") {
     event.ports[0].postMessage({
-      version: "1.0.0", // This should match your app version
+      version: currentVersion || "Unknown"
     });
+  }
+  if (event.data && event.data.type === "START_VERSION_CHECKING") {
+    startVersionChecking();
+  }
+  if (event.data && event.data.type === "STOP_VERSION_CHECKING") {
+    if (versionCheckInterval) {
+      clearInterval(versionCheckInterval);
+      versionCheckInterval = null;
+    }
   }
   // Handle splash screen related messages
   if (event.data && event.data.type === "SPLASH_READY") {
@@ -131,6 +184,11 @@ self.addEventListener("message", (event) => {
     });
   }
   // ... any other custom message handling
+});
+
+// Start version checking when service worker installs
+self.addEventListener('install', (event) => {
+  startVersionChecking();
 });
 // ... keep any other custom event listeners if present
 

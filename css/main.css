@@ -954,9 +954,28 @@ overflow: visible;
   }
   
   .splash-version {
-    bottom: 4.5em;
-    font-size: 0.4em;
+  bottom: 4.5em;
+  font-size: 0.4em;
+  transition: all 0.3s ease;
+}
+
+.splash-version.new-version {
+  animation: version-flash 2s ease-in-out infinite;
+  color: #ff6b6b;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+}
+
+@keyframes version-flash {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
   }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
   
   .splash-stats {
     bottom: 3.5em;
