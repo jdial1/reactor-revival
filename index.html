@@ -29,5 +29,25 @@
     <script type="module" src="js/domMapper.js"></script>
     <script type="module" src="js/templateLoader.js"></script>
     <script type="module" src="js/app.js"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        // Handle GitHub Pages path structure
+        const pathParts = window.location.pathname.split('/');
+        const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
+        const swPath = repoName ? `/${repoName}/src-sw.js` : '/src-sw.js';
+        
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register(swPath)
+            .then(registration => {
+              console.log('Service Worker registered successfully:', registration);
+            })
+            .catch(error => {
+              console.log('Service Worker registration failed:', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
