@@ -231,6 +231,9 @@ class SplashScreenManager {
 
     // Add stats to splash screen
     this.addSplashStats(version, totalPlayedTime);
+
+    // Start version checking for updates
+    this.startVersionChecking();
   }
 
   /**
@@ -276,6 +279,73 @@ class SplashScreenManager {
     if (m > 0)
       return `${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
     return `${s}<span class="time-unit">s</span>`;
+  }
+
+  /**
+ * Start version checking for updates
+ */
+  startVersionChecking() {
+    // Store current version for comparison
+    this.currentVersion = null;
+
+    // Listen for service worker messages about new versions
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'NEW_VERSION_AVAILABLE') {
+          this.handleNewVersion(event.data.version);
+        }
+      });
+    }
+
+    // Initial version check
+    this.checkForNewVersion();
+
+    // Set up periodic version checking (every 30 seconds)
+    this.versionCheckInterval = setInterval(() => {
+      this.checkForNewVersion();
+    }, 30000);
+  }
+
+  /**
+   * Check for new version
+   */
+  async checkForNewVersion() {
+    try {
+      const response = await fetch('./version.json', { cache: 'no-cache' });
+      const versionData = await response.json();
+      const newVersion = versionData.version;
+
+      if (this.currentVersion === null) {
+        this.currentVersion = newVersion;
+      } else if (newVersion !== this.currentVersion) {
+        this.handleNewVersion(newVersion);
+      }
+    } catch (error) {
+      console.warn('Failed to check for new version:', error);
+    }
+  }
+
+  /**
+   * Handle new version detection
+   */
+  handleNewVersion(newVersion) {
+    console.log('New version detected:', newVersion);
+
+    // Find the version element and add flashing class
+    const versionElement = this.splashScreen.querySelector('.splash-version');
+    if (versionElement) {
+      versionElement.classList.add('new-version');
+      versionElement.title = `New version available: ${newVersion}`;
+
+      // Stop flashing after 30 seconds
+      setTimeout(() => {
+        versionElement.classList.remove('new-version');
+        versionElement.title = '';
+      }, 30000);
+    }
+
+    // Update current version
+    this.currentVersion = newVersion;
   }
 
   /**
