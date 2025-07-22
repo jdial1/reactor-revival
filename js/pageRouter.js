@@ -193,7 +193,9 @@ export class PageRouter {
       }
     } catch (error) {
       console.error(
-        `PageRouter: Failed to load page "${pageId}" from "${pageDef.path}":`,
+        "PageRouter: Failed to load page \"%s\" from \"%s\":",
+        pageId,
+        pageDef.path,
         error
       );
       try {
