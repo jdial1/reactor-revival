@@ -231,10 +231,18 @@ async function checkServiceWorkerRegistration() {
     const content = response.body;
 
     // Check for GitHub Pages aware service worker registration
-    const hasGitHubPagesLogic =
-      content.includes("github.io") ||
-      content.includes("pathParts") ||
-      content.includes("repoName");
+    const hasGitHubPagesLogic = (() => {
+      const urlRegex = /https?:\/\/[^\s]+/g;
+      const urls = content.match(urlRegex) || [];
+      return urls.some((url) => {
+        try {
+          const parsedUrl = new URL(url);
+          return parsedUrl.host.endsWith("github.io");
+        } catch {
+          return false;
+        }
+      }) || content.includes("pathParts") || content.includes("repoName");
+    })();
 
     const hasServiceWorkerRegistration = content.includes(
       "serviceWorker.register"
