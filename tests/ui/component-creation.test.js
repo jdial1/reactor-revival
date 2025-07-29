@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { setupGameWithDOM } from "../helpers/setup.js";
-import { createNewGameButton, createLoadGameButton, createUploadToCloudButton, createLoadFromCloudButton, createGoogleSignInButton, createGoogleSignOutButton, createLoadGameUploadRow } from "../../components/splash-buttons.js";
-import { createTooltipCloseButton, createUpgradeButton, createPartButton, createBuyButton } from "../../components/ui-buttons.js";
-import faction_data from "../../data/faction_data.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
+import {
+    createNewGameButton,
+    createLoadGameButton,
+    createLoadGameUploadRow,
+    createPartButton,
+    createUpgradeButton,
+    createBuyButton,
+    createTooltipCloseButton
+} from "../../src/components/buttonFactory.js";
 
 describe("UI Component Creation and State", () => {
     let game, document, window;

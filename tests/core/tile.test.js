@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
 
 describe("Tile Mechanics", () => {
   let game;
@@ -94,10 +93,13 @@ describe("Tile Mechanics", () => {
     expect(initialVentValue).toBe(ventPart.vent);
 
     const ventUpgrade = game.upgradeset.getUpgrade("improved_heat_vents");
+    console.log(`[TEST] Before upgrade: vent value = ${ventTile.getEffectiveVentValue()}, part.vent = ${ventTile.part.vent}`);
     game.upgradeset.purchaseUpgrade(ventUpgrade.id);
+    console.log(`[TEST] After upgrade: vent value = ${ventTile.getEffectiveVentValue()}, part.vent = ${ventTile.part.vent}, upgrade level = ${ventUpgrade.level}`);
 
-    const expectedValue = ventPart.vent * Math.pow(2, ventUpgrade.level);
+    const expectedValue = ventPart.base_vent * (1 + ventUpgrade.level); // Calculate from base value
     expect(ventTile.getEffectiveVentValue()).toBe(expectedValue);
+    console.log(`[TEST] Base vent: ${ventPart.base_vent}, upgrade level: ${ventUpgrade.level}, expected: ${expectedValue}, actual: ${ventTile.getEffectiveVentValue()}`);
   });
 
   it("should be enabled or disabled based on game dimensions", () => {

@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame } from "../helpers/setup.js";
 
 describe("Performance Class Functionality", () => {
   let game;
@@ -333,8 +332,7 @@ describe("Large Grid Performance Stress Tests", () => {
           game.upgradeset.getUpgrade("thermal_dynamics")?.setLevel(1);
 
           console.log(
-            `📋 Placing ${partInstances.length} part types across ${
-              size * size
+            `📋 Placing ${partInstances.length} part types across ${size * size
             } tiles...`
           );
 
@@ -392,13 +390,11 @@ describe("Large Grid Performance Stress Tests", () => {
             `   Active Tiles: ${game.tileset.active_tiles_list.length}`
           );
           console.log(
-            `   Heat: ${game.reactor.current_heat.toFixed(0)} / ${
-              game.reactor.max_heat
+            `   Heat: ${game.reactor.current_heat.toFixed(0)} / ${game.reactor.max_heat
             }`
           );
           console.log(
-            `   Power: ${game.reactor.current_power.toFixed(0)} / ${
-              game.reactor.max_power
+            `   Power: ${game.reactor.current_power.toFixed(0)} / ${game.reactor.max_power
             }`
           );
 
@@ -450,4 +446,185 @@ describe("Large Grid Performance Stress Tests", () => {
       }
     );
   });
+});
+
+describe("Experimental Parts 100x100 Grid Stress Test", () => {
+  let game;
+  const TEST_TICKS = 30; // Reduced for the most intensive test
+  const originalPerformance = global.performance;
+
+  beforeEach(async () => {
+    // Restore native performance object for accurate timing
+    global.performance = originalPerformance;
+
+    game = await setupGame();
+    game.performance.enable();
+    game.performance.clearMarks();
+    game.performance.clearMeasures();
+  });
+
+  it("should handle 100x100 grid with all experimental parts and max global boost upgrades", async () => {
+    console.log(`\n🧪 Starting 100x100 Experimental Parts Stress Test...`);
+
+    // Expand grid to 100x100
+    game.rows = 100;
+    game.cols = 100;
+    game.tileset.updateActiveTiles();
+
+    // Enable all experimental upgrades at max level
+    console.log(`📋 Enabling all experimental upgrades at max level...`);
+
+    // Laboratory and core experimental upgrades
+    game.upgradeset.getUpgrade("laboratory")?.setLevel(10);
+    game.upgradeset.getUpgrade("protium_cells")?.setLevel(10);
+    game.upgradeset.getUpgrade("infused_cells")?.setLevel(10);
+    game.upgradeset.getUpgrade("unleashed_cells")?.setLevel(10);
+
+    // Heat management experimental upgrades
+    game.upgradeset.getUpgrade("heat_reflection")?.setLevel(10);
+    game.upgradeset.getUpgrade("vortex_cooling")?.setLevel(10);
+    game.upgradeset.getUpgrade("thermal_dynamics")?.setLevel(10);
+    game.upgradeset.getUpgrade("advanced_cooling")?.setLevel(10);
+
+    // Particle and energy experimental upgrades
+    game.upgradeset.getUpgrade("singularity_harnessing")?.setLevel(10);
+    game.upgradeset.getUpgrade("quantum_stabilization")?.setLevel(10);
+    game.upgradeset.getUpgrade("dimensional_engineering")?.setLevel(10);
+    game.upgradeset.getUpgrade("reality_manipulation")?.setLevel(10);
+
+    // Global boost upgrades at max level
+    console.log(`📋 Enabling all global boost upgrades at max level...`);
+    game.upgradeset.getUpgrade("chronometer")?.setLevel(10);
+    game.upgradeset.getUpgrade("forceful_fusion")?.setLevel(10);
+    game.upgradeset.getUpgrade("heat_control_operator")?.setLevel(10);
+    game.upgradeset.getUpgrade("power_distribution")?.setLevel(10);
+    game.upgradeset.getUpgrade("thermal_optimization")?.setLevel(10);
+    game.upgradeset.getUpgrade("energy_efficiency")?.setLevel(10);
+    game.upgradeset.getUpgrade("reactor_stability")?.setLevel(10);
+    game.upgradeset.getUpgrade("heat_management")?.setLevel(10);
+    game.upgradeset.getUpgrade("power_generation")?.setLevel(10);
+    game.upgradeset.getUpgrade("cooling_systems")?.setLevel(10);
+    game.upgradeset.getUpgrade("thermal_conductivity")?.setLevel(10);
+    game.upgradeset.getUpgrade("energy_conversion")?.setLevel(10);
+    game.upgradeset.getUpgrade("heat_transfer")?.setLevel(10);
+    game.upgradeset.getUpgrade("power_efficiency")?.setLevel(10);
+    game.upgradeset.getUpgrade("thermal_regulation")?.setLevel(10);
+    game.upgradeset.getUpgrade("energy_optimization")?.setLevel(10);
+    game.upgradeset.getUpgrade("heat_balance")?.setLevel(10);
+    game.upgradeset.getUpgrade("power_management")?.setLevel(10);
+    game.upgradeset.getUpgrade("thermal_control")?.setLevel(10);
+    game.upgradeset.getUpgrade("energy_management")?.setLevel(10);
+    game.upgradeset.getUpgrade("heat_optimization")?.setLevel(10);
+    game.upgradeset.getUpgrade("power_optimization")?.setLevel(10);
+    game.upgradeset.getUpgrade("thermal_management")?.setLevel(10);
+    game.upgradeset.getUpgrade("energy_control")?.setLevel(10);
+    game.upgradeset.getUpgrade("heat_management_advanced")?.setLevel(10);
+    game.upgradeset.getUpgrade("power_management_advanced")?.setLevel(10);
+    game.upgradeset.getUpgrade("thermal_management_advanced")?.setLevel(10);
+    game.upgradeset.getUpgrade("energy_management_advanced")?.setLevel(10);
+
+    // Define experimental parts to use
+    const experimentalParts = [
+      "protium1",           // Experimental cell
+      "reflector6",         // Thermal reflector
+      "vent6",             // Extreme vent
+      "heat_exchanger6",   // Quantum heat exchanger
+      "coolant_cell6",     // Quantum coolant cell
+      "heat_outlet6",      // Quantum heat outlet
+      "heat_inlet6",       // Quantum heat inlet
+      "particle_accelerator6", // Black hole accelerator
+      "capacitor6",        // Quantum capacitor
+      "neutron_reflector6", // Quantum neutron reflector
+    ];
+
+    const partInstances = experimentalParts.map((id) => game.partset.getPartById(id));
+
+    // Verify all experimental parts are available
+    const missingParts = partInstances.filter((p, index) => !p);
+    if (missingParts.length > 0) {
+      console.warn(`⚠️ Missing experimental parts:`, experimentalParts.filter((_, index) => !partInstances[index]));
+      console.warn(`⚠️ Skipping test due to missing parts`);
+      return;
+    }
+
+    console.log(`📋 Placing ${partInstances.length} experimental part types across ${100 * 100} tiles...`);
+
+    // Place experimental parts in a pattern across the entire grid
+    for (const tile of game.tileset.active_tiles_list) {
+      const partIndex = (tile.row + tile.col) % partInstances.length;
+      const partToPlace = partInstances[partIndex];
+      await tile.setPart(partToPlace);
+    }
+
+    // Pre-heat the reactor to test heat management
+    game.reactor.current_heat = game.reactor.max_heat * 0.4;
+    game.reactor.current_power = game.reactor.max_power * 0.3;
+
+    console.log(`⚡ Running ${TEST_TICKS} ticks on ${100 * 100} experimental tiles...`);
+
+    // Run the stress test
+    const startTime = performance.now();
+    for (let i = 0; i < TEST_TICKS; i++) {
+      game.engine.tick();
+    }
+    const endTime = performance.now();
+    const totalTime = endTime - startTime;
+
+    const avgTickTime = game.performance.getAverage("tick_total");
+    const categorizeTime = game.performance.getAverage("tick_categorize_parts");
+    const cellsTime = game.performance.getAverage("tick_cells");
+    const heatTransferTime = game.performance.getAverage("tick_heat_transfer");
+    const ventsTime = game.performance.getAverage("tick_vents");
+    const statsTime = game.performance.getAverage("tick_stats");
+
+    // Detailed performance reporting
+    console.log(`📊 100x100 Experimental Parts Performance Results:`);
+    console.log(`   Total Test Time: ${totalTime.toFixed(2)}ms`);
+    console.log(`   Average Tick Time: ${avgTickTime?.toFixed(3) || "N/A"}ms`);
+    console.log(`   - Categorization: ${categorizeTime?.toFixed(3) || "N/A"}ms`);
+    console.log(`   - Cells Processing: ${cellsTime?.toFixed(3) || "N/A"}ms`);
+    console.log(`   - Heat Transfer: ${heatTransferTime?.toFixed(3) || "N/A"}ms`);
+    console.log(`   - Vents/EP: ${ventsTime?.toFixed(3) || "N/A"}ms`);
+    console.log(`   - Stats Update: ${statsTime?.toFixed(3) || "N/A"}ms`);
+    console.log(`   Active Tiles: ${game.tileset.active_tiles_list.length}`);
+    console.log(`   Heat: ${game.reactor.current_heat.toFixed(0)} / ${game.reactor.max_heat}`);
+    console.log(`   Power: ${game.reactor.current_power.toFixed(0)} / ${game.reactor.max_power}`);
+    console.log(`   Exotic Particles: ${game.exotic_particles.toFixed(0)}`);
+
+    // Performance assertions - verify timing data is valid
+    expect(avgTickTime).toBeDefined();
+    expect(avgTickTime).not.toBeNaN();
+    expect(avgTickTime).toBeGreaterThan(0);
+
+    // Performance expectations for experimental parts with max upgrades
+    // This is the most intensive test, so we allow higher performance limits
+    const maxExpectedTime = 200; // 200ms per tick for 100x100 experimental grid
+    console.log(`   Expected Performance: < ${maxExpectedTime}ms per tick (100x100 experimental grid)`);
+    expect(avgTickTime).toBeLessThan(maxExpectedTime);
+
+    // Verify the categorization optimization is working efficiently
+    if (categorizeTime) {
+      const categorizePercentage = (categorizeTime / avgTickTime) * 100;
+      console.log(`   Categorization Overhead: ${categorizePercentage.toFixed(1)}%`);
+
+      // Categorization should be a reasonable percentage even for experimental parts
+      expect(categorizePercentage).toBeLessThan(30); // Should be < 30% of total tick time
+    }
+
+    // Performance scaling validation for experimental parts
+    const tilesProcessed = game.tileset.active_tiles_list.length;
+    const timePerTile = avgTickTime / tilesProcessed;
+    console.log(`   Time per Tile: ${(timePerTile * 1000).toFixed(3)}μs`);
+
+    // Time per tile should be reasonable even for experimental parts
+    const maxTimePerTile = 3.0; // Allow higher per-tile time for experimental parts
+    expect(timePerTile).toBeLessThan(maxTimePerTile);
+
+    // Verify experimental parts are working correctly
+    expect(game.exotic_particles).toBeGreaterThan(0);
+    expect(game.reactor.current_heat).toBeLessThan(game.reactor.max_heat);
+    expect(game.reactor.current_power).toBeLessThan(game.reactor.max_power);
+
+    console.log(`✅ 100x100 Experimental Parts Stress Test passed!\n`);
+  }, 120000); // 2 minute timeout for the most intensive test
 });

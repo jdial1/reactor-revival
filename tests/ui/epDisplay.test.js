@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { setupGameWithDOM } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM } from '../helpers/setup.js';
 
 describe('EP Info Bar Display', () => {
     let game;

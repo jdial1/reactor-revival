@@ -1,7 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { setupGameWithDOM } from '../helpers/setup.js';
+import { describe, it, expect, vi, beforeEach, afterEach, setupGameWithDOM } from '../helpers/setup.js';
 
-describe.skip('Paste Modal Unaffordable Text', () => {
+describe('Paste Modal Unaffordable Text', () => {
     let game;
     let ui;
 

@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, setupGame } from "../helpers/setup.js";
 
 describe("State Manager Mechanics", () => {
   let game;
@@ -15,11 +14,12 @@ describe("State Manager Mechanics", () => {
 
   it("should add variable to UI update queue", () => {
     game.ui.stateManager.setVar("test_var", "abc");
-    // Check if update_vars exists and has the expected structure
     expect(game.ui.update_vars.get("test_var")).toBe("abc");
   });
 
   it("should trigger onToggleStateChange for specific game properties", () => {
+    game.ui.stateManager.setGame(game);
+
     const spy = vi.spyOn(game, "onToggleStateChange");
     game.ui.stateManager.setVar("pause", true);
     expect(spy).toHaveBeenCalledWith("pause", true);
@@ -31,13 +31,15 @@ describe("State Manager Mechanics", () => {
     const part = game.partset.getPartById("uranium1");
     game.ui.stateManager.setClickedPart(part);
     const clickedPart = game.ui.stateManager.getClickedPart();
-    // Test specific properties instead of the whole part object
+
     expect(clickedPart?.id).toBe(part.id);
     game.ui.stateManager.setClickedPart(null);
     expect(game.ui.stateManager.getClickedPart()).toBeNull();
   });
 
   it("should reset specific game variables on game_reset", () => {
+    game.ui.stateManager.setGame(game);
+
     game.ui.stateManager.setVar("current_money", 100);
     game.ui.stateManager.setVar("current_power", 100);
 
@@ -122,6 +124,9 @@ describe("State Manager Mechanics", () => {
   });
 
   it("should properly initialize with game instance", () => {
+    // Ensure the state manager has a reference to the game
+    game.ui.stateManager.setGame(game);
+
     expect(game.ui.stateManager.game).toBe(game);
     expect(game.ui.stateManager.ui).toBe(game.ui);
     expect(game.ui.stateManager.vars).toBeInstanceOf(Map);

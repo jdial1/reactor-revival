@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { setupGame } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, setupGame } from '../helpers/setup.js';
 
 describe('EP Reboot Functionality', () => {
     let game;
@@ -76,7 +75,7 @@ describe('EP Reboot Functionality', () => {
     });
 
     describe('Reboot for EP (Keep EP)', () => {
-        it('should keep EP when rebooting with keep_exotic_particles=true', () => {
+        it('should keep EP when rebooting with keep_exotic_particles=true', async () => {
             // Set up initial state
             game.exotic_particles = 100;
             game.total_exotic_particles = 200;
@@ -87,7 +86,7 @@ describe('EP Reboot Functionality', () => {
             tile.setPart(game.partset.getPartById("uranium1"));
 
             // Perform reboot that keeps EP
-            game.reboot_action(true);
+            await game.reboot_action(true);
 
             // EP should be preserved and added to total
             expect(game.exotic_particles).toBe(0); // Current EP is reset
@@ -97,13 +96,13 @@ describe('EP Reboot Functionality', () => {
             expect(tile.part).toBeNull(); // Parts should be cleared
         });
 
-        it('should update state manager after keeping EP reboot', () => {
+        it('should update state manager after keeping EP reboot', async () => {
             game.exotic_particles = 75;
             game.total_exotic_particles = 125;
             game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
             game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
 
-            game.reboot_action(true);
+            await game.reboot_action(true);
 
             // Check that state manager is updated correctly
             expect(game.ui.stateManager.getVar("exotic_particles")).toBe(0); // Current EP is reset
@@ -113,7 +112,7 @@ describe('EP Reboot Functionality', () => {
     });
 
     describe('Reboot and Refund EP (Full Refund)', () => {
-        it('should refund all EP when rebooting with keep_exotic_particles=false', () => {
+        it('should refund all EP when rebooting with keep_exotic_particles=false', async () => {
             // Set up initial state
             game.exotic_particles = 100;
             game.total_exotic_particles = 200;
@@ -121,10 +120,10 @@ describe('EP Reboot Functionality', () => {
 
             // Place a part to verify it gets cleared
             const tile = game.tileset.getTile(0, 0);
-            tile.setPart(game.partset.getPartById("uranium1"));
+            await tile.setPart(game.partset.getPartById("uranium1"));
 
             // Perform reboot that refunds all EP
-            game.reboot_action(false);
+            await game.reboot_action(false);
 
             // All EP should be reset to 0
             expect(game.exotic_particles).toBe(0);
@@ -134,13 +133,13 @@ describe('EP Reboot Functionality', () => {
             expect(tile.part).toBeNull(); // Parts should be cleared
         });
 
-        it('should update state manager after refund reboot', () => {
+        it('should update state manager after refund reboot', async () => {
             game.exotic_particles = 75;
             game.total_exotic_particles = 125;
             game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
             game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
 
-            game.reboot_action(false);
+            await game.reboot_action(false);
 
             // Check that state manager is updated correctly
             expect(game.ui.stateManager.getVar("exotic_particles")).toBe(0);

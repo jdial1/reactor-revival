@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM } from "../helpers/setup.js";
 
 describe("Reactor Meltdown Scenarios", () => {
     let game;
@@ -88,15 +87,50 @@ describe("Reactor Meltdown Scenarios", () => {
         expect(setVarSpy).toHaveBeenCalledWith("melting_down", true, true);
     });
 
-    it("should clear the meltdown state upon a full reboot", () => {
+    it("should clear the meltdown state upon a full reboot", async () => {
         game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
         game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
 
-        game.reboot_action(false);
+        await game.reboot_action(false);
 
         expect(game.reactor.has_melted_down).toBe(false);
         expect(game.ui.stateManager.getVar("melting_down")).toBe(false);
+    });
+
+    it("should clear the meltdown CSS class from body upon reboot", async () => {
+        // Set up game with DOM for this test
+        const { game: gameWithDOM } = await setupGameWithDOM();
+
+        // Set up a mock router
+        gameWithDOM.router = {
+            currentPageId: 'reactor_section',
+            loadPage: vi.fn(function (pageId) {
+                if (gameWithDOM.reactor.has_melted_down && pageId !== 'experimental_upgrades_section') {
+                    return;
+                }
+                this.currentPageId = pageId;
+            })
+        };
+
+        // Set up DOM for this test
+        document.body.classList.add("reactor-meltdown");
+        expect(document.body.classList.contains("reactor-meltdown")).toBe(true);
+
+        // Trigger meltdown
+        gameWithDOM.reactor.current_heat = gameWithDOM.reactor.max_heat * 2 + 1;
+        gameWithDOM.engine.tick();
+        expect(gameWithDOM.reactor.has_melted_down).toBe(true);
+
+        // Perform reboot
+        await gameWithDOM.reboot_action(false);
+
+        // Verify meltdown state is cleared
+        expect(gameWithDOM.reactor.has_melted_down).toBe(false);
+        expect(gameWithDOM.ui.stateManager.getVar("melting_down")).toBe(false);
+
+        // Verify CSS class is removed from body
+        expect(document.body.classList.contains("reactor-meltdown")).toBe(false);
     });
 
     it("should clear the meltdown state if a part is placed after a meltdown", async () => {

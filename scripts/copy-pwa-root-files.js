@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const rootFiles = [
+const pwaFiles = [
   "sw.js",
   "manifest.json",
   "offline.html",
@@ -9,8 +9,8 @@ const rootFiles = [
 ];
 
 let allPresent = true;
-rootFiles.forEach((file) => {
-  const filePath = path.join(__dirname, "..", file);
+pwaFiles.forEach((file) => {
+  const filePath = path.join(__dirname, "..", "public", file);
   if (fs.existsSync(filePath)) {
     console.log(`✅ Found: ${file}`);
   } else {

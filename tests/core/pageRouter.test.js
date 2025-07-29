@@ -1,7 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { PageRouter } from "../../js/pageRouter.js";
-import { UI } from "../../js/ui.js";
-import { Game } from "../../js/game.js";
+import { describe, it, expect, beforeEach, vi, PageRouter, UI, Game } from "../helpers/setup.js";
 
 describe("PageRouter Grid Transition", () => {
     let pageRouter;

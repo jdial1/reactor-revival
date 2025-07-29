@@ -1,7 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { setupGame } from "../helpers/setup.js";
-import { Game } from "../../js/game.js";
-import { UI } from "../../js/ui.js";
+import { describe, it, expect, beforeEach, afterEach, Game, UI, setupGame } from "../helpers/setup.js";
 
 // Create a temporary game instance just to generate the list of tests.
 // This is NOT the instance that will be used in the `it` blocks.
@@ -19,6 +16,8 @@ describe("Full Part and Upgrade Coverage", () => {
     // Use the proper async setup for each actual test to get a clean state
     game = await setupGame();
   });
+
+  it.todo('should have tests for all parts and upgrades');
 
   describe.each(allParts)(
     "Part Functionality Coverage: $title (ID: $id)",
@@ -452,7 +451,7 @@ describe("Data Integrity Tests", () => {
 describe("Logical Duplication Tests", () => {
   let game;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Initialize game with all components (no DOM required)
     // Create minimal UI mock for the game constructor
     const mockUI = {
@@ -464,7 +463,7 @@ describe("Logical Duplication Tests", () => {
     };
 
     game = new Game(mockUI);
-    game.set_defaults(); // This calls initialize on partset and upgradeset
+    await game.set_defaults(); // This calls initialize on partset and upgradeset
   });
 
   describe("Parts Data Duplication", () => {
@@ -622,7 +621,7 @@ describe("Logical Duplication Tests", () => {
       });
     });
 
-    test("should not have logical duplicate upgrades for same functionality", () => {
+    it("should not have logical duplicate upgrades for same functionality", () => {
       // Test that there are no logically duplicate upgrades (same name/function but different IDs)
       const allUpgrades = game.upgradeset.getAllUpgrades();
       const upgradesByTitle = new Map();
@@ -643,7 +642,7 @@ describe("Logical Duplication Tests", () => {
   });
 
   describe("Cross-Component Data Integrity", () => {
-    test("should not have ID conflicts between parts and upgrades", () => {
+    it("should not have ID conflicts between parts and upgrades", () => {
       // Test for ID conflicts at the data level (not DOM level)
       const allParts = game.partset.getAllParts();
       const allUpgrades = game.upgradeset.getAllUpgrades();
@@ -662,7 +661,7 @@ describe("Logical Duplication Tests", () => {
       );
     });
 
-    test("should maintain data integrity when components are reinitialized", () => {
+    it("should maintain data integrity when components are reinitialized", () => {
       // Test scenario where game components are reinitialized (like after save/load)
 
       // Get initial counts

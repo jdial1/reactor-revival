@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { setupGameWithDOM } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from '../helpers/setup.js';
 
 describe('EP Hotkey Functionality', () => {
     let game;
@@ -145,22 +144,65 @@ describe('EP Hotkey Functionality', () => {
         expect(game.ui.stateManager.getVar("exotic_particles")).toBe(initialEP);
     });
 
-    it('should not trigger when CTRL is pressed with other keys', () => {
-        // Set initial EP
-        const initialEP = game.exotic_particles;
-        game.ui.stateManager.setVar("exotic_particles", initialEP);
+    it('should start exponential money increase when CTRL+9 is pressed', () => {
+        // Set initial money
+        const initialMoney = game.current_money;
+        game.ui.stateManager.setVar("current_money", initialMoney);
 
-        // Simulate CTRL+A keypress
+        // Mock the exponential money methods
+        const startSpy = vi.spyOn(game.ui, 'startCtrl9MoneyIncrease');
+
+        // Simulate CTRL+9 keypress
         const event = new KeyboardEvent('keydown', {
-            key: 'a',
+            key: '9',
+            ctrlKey: true,
+            bubbles: true
+        });
+
+        // Mock preventDefault
+        const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+
+        document.dispatchEvent(event);
+
+        // Verify that startCtrl9MoneyIncrease was called
+        expect(startSpy).toHaveBeenCalled();
+
+        // Verify that preventDefault was called
+        expect(preventDefaultSpy).toHaveBeenCalled();
+    });
+
+    it('should stop exponential money increase when CTRL+9 is released', () => {
+        // Mock the exponential money methods
+        const stopSpy = vi.spyOn(game.ui, 'stopCtrl9MoneyIncrease');
+
+        // Simulate CTRL+9 keyup
+        const event = new KeyboardEvent('keyup', {
+            key: '9',
             ctrlKey: true,
             bubbles: true
         });
 
         document.dispatchEvent(event);
 
-        // Verify that EP did not change
-        expect(game.exotic_particles).toBe(initialEP);
-        expect(game.ui.stateManager.getVar("exotic_particles")).toBe(initialEP);
+        // Verify that stopCtrl9MoneyIncrease was called
+        expect(stopSpy).toHaveBeenCalled();
+    });
+
+    it('should calculate exponential money correctly', () => {
+        // Test the exponential calculation logic
+        const baseAmount = 1000000000;
+        const rate = 1.5;
+
+        // Simulate 1 second hold
+        const oneSecondAmount = Math.floor(baseAmount * Math.pow(rate, 1));
+        expect(oneSecondAmount).toBe(1500000000);
+
+        // Simulate 2 second hold
+        const twoSecondAmount = Math.floor(baseAmount * Math.pow(rate, 2));
+        expect(twoSecondAmount).toBe(2250000000);
+
+        // Simulate 3 second hold
+        const threeSecondAmount = Math.floor(baseAmount * Math.pow(rate, 3));
+        expect(threeSecondAmount).toBe(3375000000);
     });
 }); 

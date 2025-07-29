@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
-import { setupGame } from "../helpers/setup.js";
-import objective_list_data from "../../data/objective_list.js";
-import { getObjectiveCheck } from "../../js/objectiveActions.js";
+import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../helpers/setup.js";
+import objective_list_data from "../../public/data/objective_list.json";
+import { getObjectiveCheck } from "../../src/core/objectiveActions.js";
 
 async function satisfyObjective(game, idx) {
     const obj = objective_list_data[idx];
@@ -10,6 +9,11 @@ async function satisfyObjective(game, idx) {
             await game.tileset
                 .getTile(0, 0)
                 .setPart(game.partset.getPartById("uranium1"));
+            // Run a tick to activate the cell
+            game.engine?.tick?.();
+            game.reactor.updateStats();
+            // Ensure the tile is in the active tiles list
+            game.tileset.updateActiveTiles();
             break;
         case "sellPower":
             game.sold_power = true;
@@ -44,6 +48,9 @@ async function satisfyObjective(game, idx) {
                     await tile.setPart(game.partset.getPartById("uranium1"));
                 }
             }
+            // Run a tick to activate all cells
+            game.engine?.tick?.();
+            game.reactor.updateStats();
             break;
         case "perpetualUranium":
             game.upgradeset.getUpgrade("uranium1_cell_perpetual")?.setLevel(1);
@@ -216,7 +223,11 @@ async function satisfyObjective(game, idx) {
             game.exotic_particles = 0;
             break;
         case "experimentalUpgrade":
+            game.exotic_particles = 1;
+            game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
             game.upgradeset.getUpgrade("laboratory")?.setLevel(1);
+            game.exotic_particles = 100;
+            game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
             game.upgradeset.getUpgrade("infused_cells")?.setLevel(1);
             break;
         case "fiveQuadDolorium":
@@ -259,17 +270,17 @@ describe('Full Objective Run', () => {
     beforeEach(async () => {
         game = await setupGame();
         game.objectives_manager.disableTimers = true;
-        vi.useFakeTimers();
+        // vi.useFakeTimers(); // Removed as per new_code
     });
 
     afterEach(() => {
-        vi.useRealTimers();
+        // vi.useRealTimers(); // Removed as per new_code
     });
 
     it('should complete all objectives in a single continuous run', async () => {
         const totalObjectives = objective_list_data.length;
         game.objectives_manager.current_objective_index = 0;
-        game.set_defaults();
+        await game.set_defaults(); // Wait for set_defaults to complete
 
         let saveCallCount = 0;
         const originalSaveGame = game.saveGame;
@@ -279,37 +290,34 @@ describe('Full Objective Run', () => {
         };
 
         game.objectives_manager.start();
-        await vi.runAllTimersAsync();
 
         for (let i = 0; i < totalObjectives - 1; i++) {
             const objective = objective_list_data[i];
-
-            // Clear the grid before each objective to prevent part conflicts
-            game.tileset.clearAllTiles();
 
             expect(game.objectives_manager.current_objective_index).toBe(i);
 
             await satisfyObjective(game, i);
 
             game.objectives_manager.check_current_objective();
-            await vi.runAllTimersAsync();
 
             if (!game.objectives_manager.current_objective_def.completed) {
                 game.reactor.updateStats();
                 game.objectives_manager.check_current_objective();
-                await vi.runAllTimersAsync();
             }
 
             expect(game.objectives_manager.current_objective_def.completed, `Objective ${i} (${objective.checkId}) should be completed.`).toBe(true);
 
-            if (game.objectives_manager.current_objective_index === i) {
-                game.objectives_manager.claimObjective();
-                await vi.runAllTimersAsync();
-            }
+            // Claim the objective to advance to the next one
+            game.objectives_manager.claimObjective();
 
-            if (game.objectives_manager.current_objective_index === i) {
-                break;
-            }
+            // Wait a bit for the claim to process
+            await new Promise(resolve => setTimeout(resolve, 600));
+
+            // Verify we've advanced to the next objective
+            expect(game.objectives_manager.current_objective_index).toBe(i + 1);
+
+            // Clear the grid after completing the objective to prevent part conflicts for the next objective
+            game.tileset.clearAllTiles();
         }
 
         expect(game.objectives_manager.current_objective_index).toBe(totalObjectives - 1);

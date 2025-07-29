@@ -1,7 +1,47 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { setupGame, cleanupGame } from "../helpers/setup.js";
-import { Game } from "../../js/game.js";
-import { UI } from "../../js/ui.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame, cleanupGame, Game, UI } from "../helpers/setup.js";
+import objective_list_data from "../../public/data/objective_list.json";
+import { getObjectiveCheck } from "../../src/core/objectiveActions.js";
+
+// Helper to set up the game state for each objective
+async function satisfyObjective(game, idx) {
+    const obj = objective_list_data[idx];
+    const checkFn = getObjectiveCheck(obj.checkId);
+
+    switch (idx) {
+        case 0: // Place your first component in the reactor
+            await game.tileset
+                .getTile(0, 0)
+                .setPart(game.partset.getPartById("uranium1"));
+            // Run a tick to activate the cell
+            game.engine?.tick?.();
+            game.reactor.updateStats();
+            // Ensure the tile is in the active tiles list
+            game.tileset.updateActiveTiles();
+            break;
+
+        case 1: // Sell all your power by clicking "Sell"
+            game.sold_power = true;
+            break;
+
+        case 3: // Put a Heat Vent next to a Cell
+            await game.tileset
+                .getTile(0, 0)
+                .setPart(game.partset.getPartById("uranium1"));
+            await game.tileset
+                .getTile(0, 1)
+                .setPart(game.partset.getPartById("vent1"));
+            // Run a tick to activate the cell
+            game.engine?.tick?.();
+            game.reactor.updateStats();
+            // Ensure the tile is in the active tiles list
+            game.tileset.updateActiveTiles();
+            break;
+
+        default:
+            console.warn(`No test implementation for objective ${idx}`);
+            break;
+    }
+}
 
 describe("Save and Load Functionality", () => {
     let game;
@@ -85,6 +125,9 @@ describe("Save and Load Functionality", () => {
         // Create a new game instance to load into
         const newGame = await setupGame();
         const loaded = newGame.loadGame();
+
+        // Wait for upgrade loading to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Verify the loaded game state
         expect(loaded).toBe(true);
@@ -175,7 +218,11 @@ describe("Save and Load Functionality", () => {
 
     it("should reset objectives and default values when starting a new game after saving and completing the first objective", async () => {
         global.window = {};
-        global.performance = { now: () => Date.now() };
+        global.performance = {
+            now: () => Date.now(),
+            mark: () => { },
+            measure: () => { }
+        };
         // 1. Start a new game and complete the first objective
         const game1 = await setupGame();
         // Place a cell to complete the first objective
@@ -187,13 +234,73 @@ describe("Save and Load Functionality", () => {
         game1.saveGame();
         // 2. Start a new game instance (simulate 'New Game')
         const game2 = await setupGame();
-        game2.set_defaults();
-        game2.objectives_manager = new (require("../../js/objective.js").ObjectiveManager)(game2);
+        await game2.set_defaults();
+        // Re-create the ObjectiveManager to ensure a fresh state (like in app.js)
+        const { ObjectiveManager } = require("../../src/core/objective.js");
+        game2.objectives_manager = new ObjectiveManager(game2);
+        await game2.objectives_manager.initialize();
+        game2.objectives_manager.start();
         // 3. Validate that the new game has default values and objectives are reset
         expect(game2.current_money).toBe(game2.base_money);
         expect(game2.objectives_manager.current_objective_index).toBe(0);
         expect(game2.objectives_manager.objectives_data[0].completed).not.toBe(true);
         // The first objective should not be completed in the new game
+    });
+
+    it("should not re-reward completed objectives when loading a saved game", async () => {
+        // 1. Start a game and complete multiple objectives
+        const game1 = await setupGame();
+
+        // Complete first objective by placing a cell
+        game1.objectives_manager.current_objective_index = 0;
+        await satisfyObjective(game1, 0);
+        game1.engine.tick();
+        game1.objectives_manager.check_current_objective();
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(game1.objectives_manager.objectives_data[0].completed).toBe(true);
+
+        // Complete second objective by selling power
+        game1.objectives_manager.current_objective_index = 1;
+        await satisfyObjective(game1, 1);
+        game1.sold_power = true;
+        game1.engine.tick();
+        game1.objectives_manager.checkAndAutoComplete();
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(game1.objectives_manager.objectives_data[1].completed).toBe(true);
+
+        // Complete third objective by placing a heat exchanger
+        game1.objectives_manager.current_objective_index = 3;
+        game1.objectives_manager.set_objective(3, true); // Set the objective to update current_objective_def
+        await satisfyObjective(game1, 3); // ventNextToCell objective
+        game1.engine.tick();
+        game1.objectives_manager.check_current_objective();
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(game1.objectives_manager.objectives_data[3].completed).toBe(true);
+
+        // Record the money and EP before saving
+        const moneyBeforeSave = game1.current_money;
+        const epBeforeSave = game1.exotic_particles;
+
+        // Save the game
+        game1.saveGame();
+
+        // 2. Load the saved game
+        const game2 = await setupGame();
+        const saveData = game1.getSaveState();
+        game2.applySaveState(saveData);
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // 3. Verify that money and EP haven't increased (no re-rewarding)
+        expect(game2.current_money).toBe(moneyBeforeSave);
+        expect(game2.exotic_particles).toBe(epBeforeSave);
+
+        // 4. Verify that objectives are marked as completed
+        expect(game2.objectives_manager.objectives_data[0].completed).toBe(true);
+        expect(game2.objectives_manager.objectives_data[1].completed).toBe(true);
+        expect(game2.objectives_manager.objectives_data[3].completed).toBe(true);
+
+        // 5. Verify that we're at the current objective (not back at the beginning)
+        expect(game2.objectives_manager.current_objective_index).toBeGreaterThan(0);
     });
 });
 
@@ -201,7 +308,7 @@ describe("index.html", () => {
     it("should contain the google-site-verification meta tag", () => {
         const fs = require("fs");
         const path = require("path");
-        const html = fs.readFileSync(path.join(__dirname, "../../index.html"), "utf8");
+        const html = fs.readFileSync(path.join(__dirname, "../../public/index.html"), "utf8");
         expect(html).toMatch(/<meta[^>]+name=["']google-site-verification["'][^>]+>/);
     });
 }); 

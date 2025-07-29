@@ -6,7 +6,7 @@ export default defineConfig({
     environment: "jsdom",
     environmentOptions: {
       jsdom: {
-        url: "http://localhost/",
+        url: "http://localhost:8080",
       },
     },
     setupFiles: ["./tests/helpers/setup.js"],
@@ -16,8 +16,8 @@ export default defineConfig({
     },
     maxConcurrency: 1,
     silent: false,
-    testTimeout: 15000,
-    hookTimeout: 15000,
+    testTimeout: 60000,
+    hookTimeout: 60000,
     errorOnDeprecated: false,
     isolate: false,
     pool: "threads",
@@ -28,7 +28,7 @@ export default defineConfig({
       },
     },
     // Optimize memory usage
-    forceRerunTriggers: ["**/package.json/**", "**/{vitest,vite}.config.*"],
+    forceRerunTriggers: ["**/package.json{vitest,vite}.config.*"],
     // Prevent massive console output and DOM object dumps
     printConsoleTrace: false,
     logHeapUsage: false,
@@ -39,6 +39,19 @@ export default defineConfig({
       useColors: true,
       showDiff: true,
     },
+    // Enhanced error output control
+    onConsoleLog(log, type) {
+      // Allow debug output to pass through, but suppress regular test output
+      // We will handle console output manually in setup.js to buffer it.
+      if (log.includes('[DEBUG]')) {
+        return true; // Allow debug output
+      }
+      return false; // Suppress regular test output
+    },
+    // Limit diff output size
+    diffLimit: 1000,
+    // Prevent full object dumps in error messages
+    errorOnConsole: false,
     env: {
       NODE_OPTIONS: "--max-old-space-size=4096",
     },

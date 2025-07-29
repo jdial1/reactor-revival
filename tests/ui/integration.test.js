@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from "../helpers/setup.js";
 
 const fireEvent = (element, eventType) => {
   if (!element)
@@ -165,5 +164,71 @@ describe("UI Integration and Gameplay", () => {
 
     // Check that objectives are visible again on reactor page
     expect(objectivesSection.classList.contains("hidden")).toBe(false);
+  });
+
+  it("should update reactor heat background based on heat ratio", async () => {
+    // Start on reactor page
+    await game.router.loadPage("reactor_section");
+
+    // Get the reactor background element
+    const reactorBackground = document.getElementById("reactor_background");
+    expect(reactorBackground, "Reactor background element should exist").not.toBeNull();
+
+    // Set initial heat values
+    game.reactor.current_heat = 0;
+    game.reactor.max_heat = 1000;
+    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    game.ui.stateManager.setVar("max_heat", game.reactor.max_heat);
+
+    // Test low heat (should be transparent)
+    game.ui.updateHeatVisuals();
+    expect(reactorBackground.style.backgroundColor).toBe("transparent");
+    expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
+    expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
+
+    // Test moderate heat (50% of max)
+    game.reactor.current_heat = 500;
+    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    game.ui.updateHeatVisuals();
+    expect(reactorBackground.style.backgroundColor).toBe("transparent");
+    expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
+
+    // Test high heat (80% of max - should show warning)
+    game.reactor.current_heat = 800;
+    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    game.ui.updateHeatVisuals();
+    expect(reactorBackground.style.backgroundColor).not.toBe("transparent");
+    expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
+    expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
+
+    // Test critical heat (130% of max - should show critical)
+    game.reactor.current_heat = 1300;
+    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    game.ui.updateHeatVisuals();
+    expect(reactorBackground.style.backgroundColor).not.toBe("transparent");
+    expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
+    expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
+
+    // Test extreme heat (200% of max - should show maximum effect)
+    game.reactor.current_heat = 2000;
+    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    game.ui.updateHeatVisuals();
+    expect(reactorBackground.style.backgroundColor).toBe("rgba(255, 0, 0, 0.5)");
+    expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
+
+    // Test tile wiggle effect when heat is high (90%+ of max)
+    const testPart = game.partset.getPartById("vent1"); // Use a part with containment
+    const testTile = game.tileset.getTile(0, 0);
+    await testTile.setPart(testPart);
+    testTile.heat_contained = testPart.containment * 0.95; // Set tile heat directly
+    game.ui.updateHeatVisuals();
+
+    // Check that the tile has the wiggle class
+    expect(testTile.$el.classList.contains("heat-wiggle")).toBe(true);
+
+    // Now, reduce the TILE's heat and check that the wiggle class is removed
+    testTile.heat_contained = testPart.containment * 0.5;
+    game.ui.updateHeatVisuals();
+    expect(testTile.$el.classList.contains("heat-wiggle")).toBe(false);
   });
 });

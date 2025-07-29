@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, setupGame } from "../helpers/setup.js";
 
 describe("Reactor Mechanics", () => {
   let game;

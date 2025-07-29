@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { setupGame } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, setupGame } from '../helpers/setup.js';
 
 describe('EP Upgrade Purchase Functionality', () => {
     let game;

@@ -33,9 +33,9 @@ const version =
   centralValues.hour +
   centralValues.minute;
 
-// Create version.json file
+// Create version.json file in public folder
 const versionData = { version: version };
-const versionPath = path.join(__dirname, "..", "version.json");
+const versionPath = path.join(__dirname, "..", "public", "version.json");
 
 fs.writeFileSync(versionPath, JSON.stringify(versionData, null, 2));
 

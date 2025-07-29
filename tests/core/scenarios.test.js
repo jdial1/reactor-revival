@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame } from "../helpers/setup.js";
 
 describe("Complex Grid Scenarios and Interactions", () => {
     let game;
@@ -57,16 +56,14 @@ describe("Complex Grid Scenarios and Interactions", () => {
         game.engine.tick(); // Cell generates heat
 
         // ASSERT
-        // The cell should generate heat that goes into the reactor
-        expect(game.reactor.current_heat).toBeGreaterThan(0);
+        // The cell's heat goes to the exchanger, not the reactor core.
+        expect(game.reactor.current_heat).toBe(0);
+        expect(exchangerTile.heat_contained).toBeGreaterThan(0);
 
         // The exchanger should still be in place
         expect(exchangerTile.part).not.toBeNull();
         expect(exchangerTile.part.category).toBe("heat_exchanger");
         expect(exchangerTile.activated).toBe(true);
-
-        // Heat exchangers can receive heat from adjacent cells
-        expect(exchangerTile.heat_contained).toBeGreaterThanOrEqual(0);
     });
 
     it("should effectively manage heat in a checkerboard layout", async () => {
@@ -86,13 +83,15 @@ describe("Complex Grid Scenarios and Interactions", () => {
         game.engine.tick();
 
         // ASSERT
-        // Cells generate heat that goes into the reactor
-        expect(game.reactor.current_heat).toBeGreaterThan(0);
-
-        // Check that vents were placed correctly
+        // All heat from cells is transferred to adjacent vents.
+        expect(game.reactor.current_heat).toBe(0);
         const ventTile1 = game.tileset.getTile(0, 1);
         const ventTile2 = game.tileset.getTile(1, 0);
+        // Vents receive and then dissipate heat in the same tick.
+        expect(ventTile1.heat_contained).toBe(0);
+        expect(ventTile2.heat_contained).toBe(0);
 
+        // Check that vents were placed correctly
         expect(ventTile1.part).not.toBeNull();
         expect(ventTile1.part.category).toBe("vent");
         expect(ventTile1.activated).toBe(true);
@@ -100,10 +99,6 @@ describe("Complex Grid Scenarios and Interactions", () => {
         expect(ventTile2.part).not.toBeNull();
         expect(ventTile2.part.category).toBe("vent");
         expect(ventTile2.activated).toBe(true);
-
-        // Vents don't receive heat from cells directly - they vent heat from the reactor
-        expect(ventTile1.heat_contained).toBe(0);
-        expect(ventTile2.heat_contained).toBe(0);
     });
 
     it("should test coolant cell functionality", async () => {
@@ -129,15 +124,14 @@ describe("Complex Grid Scenarios and Interactions", () => {
         // ASSERT
         // The cell should generate power and heat
         expect(game.reactor.current_power).toBeGreaterThan(initialPower);
-        expect(game.reactor.current_heat).toBeGreaterThan(0);
+        // The cell's heat goes to the coolant cell, not the reactor core.
+        expect(game.reactor.current_heat).toBe(0);
+        expect(coolantTile.heat_contained).toBeGreaterThan(0);
 
         // The coolant cell should be properly set up
         expect(coolantTile.part).not.toBeNull();
         expect(coolantTile.part.category).toBe("coolant_cell");
         expect(coolantTile.activated).toBe(true);
-
-        // Coolant cells can receive heat from adjacent cells
-        expect(coolantTile.heat_contained).toBeGreaterThanOrEqual(0);
     });
 
     it("should handle grid expansion and part placement on new edges", async () => {
