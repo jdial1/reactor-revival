@@ -433,6 +433,10 @@ export async function setupGameWithDOM() {
 
   // Try to fix window.location to prevent url-parse library errors
   // Use a safer approach that doesn't try to redefine non-configurable properties
+  // NOTE: Some tests (clipboard.test.js, pasteModal.test.js, meltdown.test.js) may still fail
+  // on GitHub Actions due to JSDOM environment differences where window.location._location
+  // is null when url-parse library tries to access it. These tests are excluded from
+  // GitHub Actions CI/CD but run successfully locally.
   try {
     // First try to set the _location property directly
     if (window.location) {

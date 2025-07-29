@@ -30,7 +30,7 @@ jobs:
         run: npm ci
 
       - name: Run test suite
-        run: npx vitest run --exclude 'tests/ui/**'
+        run: npx vitest run --exclude 'tests/ui/**' --exclude 'tests/core/clipboard.test.js' --exclude 'tests/core/pasteModal.test.js' --exclude 'tests/core/meltdown.test.js'
 
       - name: Generate version.json
         run: npm run generate-version
