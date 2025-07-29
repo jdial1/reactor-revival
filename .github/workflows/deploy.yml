@@ -38,6 +38,12 @@ jobs:
       - name: Generate version.json
         run: npm run generate-version
 
+      - name: Copy external libraries
+        run: npm run copy-libs
+
+      - name: Build for deployment
+        run: npm run build-for-deploy
+
       - name: Fix manifest.json for GitHub Pages
         run: node scripts/fix-github-pages-manifest.js
 
