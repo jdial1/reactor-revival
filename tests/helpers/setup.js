@@ -398,10 +398,41 @@ export async function setupGameWithDOM() {
   global.Event = window.Event;
 
   // Add only essential global properties to avoid circular references
-  global.location = window.location;
+  // Fix location object to prevent url-parse library errors
+  const location = {
+    href: 'http://localhost:8080/',
+    origin: 'http://localhost:8080',
+    protocol: 'http:',
+    host: 'localhost:8080',
+    hostname: 'localhost',
+    port: '8080',
+    pathname: '/',
+    search: '',
+    hash: '',
+    username: '',
+    password: '',
+    _location: {
+      href: 'http://localhost:8080/',
+      origin: 'http://localhost:8080',
+      protocol: 'http:',
+      host: 'localhost:8080',
+      hostname: 'localhost',
+      port: '8080',
+      pathname: '/',
+      search: '',
+      hash: '',
+      username: '',
+      password: ''
+    }
+  };
+
+  global.location = location;
   global.navigator = window.navigator;
   global.URL = window.URL;
   global.URLSearchParams = window.URLSearchParams;
+
+  // Also update window.location to prevent url-parse library errors
+  window.location._location = location._location;
 
   // Add missing clipboard API
   global.navigator.clipboard = {
