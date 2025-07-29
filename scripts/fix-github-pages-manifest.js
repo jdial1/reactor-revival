@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { toFileURL } from "url";
 
 // Get __dirname equivalent for ES modules
-const __filename = fileURLToPath(import.meta.url);
+const __filename = toFileURL(import.meta.url).href;
 const __dirname = path.dirname(__filename);
 
 // Configuration
@@ -117,7 +117,7 @@ function main() {
 }
 
 // Handle script execution
-if (import.meta.url === path.toFileURL(process.argv[1]).href) {
+if (import.meta.url === toFileURL(process.argv[1]).href) {
   main();
 }
 
