@@ -431,8 +431,38 @@ export async function setupGameWithDOM() {
   global.URL = window.URL;
   global.URLSearchParams = window.URLSearchParams;
 
-  // Also update window.location to prevent url-parse library errors
-  window.location._location = location._location;
+  // Try to fix window.location to prevent url-parse library errors
+  // Use a safer approach that doesn't try to redefine non-configurable properties
+  try {
+    // First try to set the _location property directly
+    if (window.location) {
+      window.location._location = location._location;
+    }
+  } catch (error) {
+    // If that fails, try to define the property only if it's configurable
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(window, 'location');
+      if (descriptor && descriptor.configurable) {
+        Object.defineProperty(window, 'location', {
+          value: location,
+          writable: true,
+          configurable: true
+        });
+      } else {
+        // If not configurable, just set the _location property on the existing object
+        if (window.location) {
+          Object.defineProperty(window.location, '_location', {
+            value: location._location,
+            writable: true,
+            configurable: true
+          });
+        }
+      }
+    } catch (innerError) {
+      // If all else fails, just log the error and continue
+      console.warn('Could not configure window.location for url-parse compatibility:', innerError.message);
+    }
+  }
 
   // Add missing clipboard API
   global.navigator.clipboard = {

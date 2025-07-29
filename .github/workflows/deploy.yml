@@ -96,7 +96,7 @@ jobs:
             try {
               const { owner, repo } = context.repo;
               const sha = context.sha;
-              
+
               await github.rest.repos.createCommitComment({
                 owner,
                 repo,
@@ -118,7 +118,7 @@ jobs:
             try {
               const { owner, repo } = context.repo;
               const sha = context.sha;
-              
+
               await github.rest.repos.createCommitComment({
                 owner,
                 repo,
