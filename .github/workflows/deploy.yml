@@ -30,7 +30,10 @@ jobs:
         run: npm ci
 
       - name: Run test suite
-        run: npx vitest run --exclude 'tests/ui/**' --exclude 'tests/core/clipboard.test.js' --exclude 'tests/core/pasteModal.test.js' --exclude 'tests/core/meltdown.test.js'
+        # Exclude UI tests and specific core tests that fail on GitHub Actions due to JSDOM environment differences
+        # The excluded tests (clipboard, pasteModal, meltdown) work locally but fail on GitHub Actions
+        # because the url-parse library tries to access window.location._location before our setup code runs
+        run: npx vitest run --exclude 'tests/ui/**|tests/core/clipboard.test.js|tests/core/pasteModal.test.js|tests/core/meltdown.test.js'
 
       - name: Generate version.json
         run: npm run generate-version
