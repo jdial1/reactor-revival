@@ -28,6 +28,8 @@ const initManifestValidator = async () => {
 const GITHUB_PAGES_URL = process.env.GITHUB_PAGES_URL || "https://jdial1.github.io/reactor-revival/";
 const BASE_URL = GITHUB_PAGES_URL.replace(/\/$/, "");
 const TIMEOUT = 30000; // 30 seconds
+const MAX_RETRIES = 5; // Maximum number of retries
+const INITIAL_DELAY = 10000; // Initial delay in milliseconds (10 seconds)
 
 // Color codes for console output
 const colors = {
@@ -41,6 +43,44 @@ const colors = {
 
 function log(message, color = "reset") {
   console.log(`${colors[color]}${message}${colors.reset}`);
+}
+
+// Retry function with exponential backoff
+async function retryWithBackoff(fn, maxRetries = MAX_RETRIES, initialDelay = INITIAL_DELAY) {
+  let delay = initialDelay;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error; // Last attempt failed, throw the error
+      }
+
+      log(`⚠️  Attempt ${attempt} failed: ${error.message}`, "yellow");
+      log(`⏳ Waiting ${delay / 1000} seconds before retry...`, "yellow");
+
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2; // Exponential backoff
+    }
+  }
+}
+
+// Check if the site is available by testing the main page
+async function checkSiteAvailability() {
+  log("\n🔍 Checking if site is available...", "blue");
+
+  try {
+    const response = await makeRequest(`${BASE_URL}/index.html`);
+    if (response.statusCode === 200) {
+      log("✅ Site is available!", "green");
+      return true;
+    } else {
+      throw new Error(`HTTP ${response.statusCode}`);
+    }
+  } catch (error) {
+    throw new Error(`Site not available: ${error.message}`);
+  }
 }
 
 function makeRequest(url, options = {}) {
@@ -341,6 +381,15 @@ async function runAllChecks() {
   log(`${colors.bold}🚀 PWA Deployment Check${colors.reset}`, "blue");
   log(`Target URL: ${BASE_URL}`, "yellow");
   log("=".repeat(50), "blue");
+
+  // First, check if the site is available with retries
+  try {
+    await retryWithBackoff(checkSiteAvailability);
+  } catch (error) {
+    log(`💥 Site availability check failed after ${MAX_RETRIES} attempts: ${error.message}`, "red");
+    log("💡 This might be due to GitHub Pages deployment delay. Try again in a few minutes.", "yellow");
+    process.exit(1);
+  }
 
   const checkFunctions = [
     { name: "Manifest", fn: checkManifest },

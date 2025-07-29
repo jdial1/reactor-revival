@@ -50,7 +50,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: public
 
   deploy:
     needs: build
@@ -80,7 +80,7 @@ jobs:
           node-version: 20
 
       - name: Wait for deployment to be ready
-        run: sleep 30
+        run: sleep 60
 
       - name: Run PWA post-deployment checks
         id: pwa-check
