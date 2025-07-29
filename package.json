@@ -12,6 +12,7 @@
     "generate-version": "node scripts/generate-version.js",
     "copy-libs": "node scripts/copy-libs.js",
     "build:sw": "workbox injectManifest workbox-config.cjs",
+    "check-pwa-root-files": "node scripts/copy-pwa-root-files.js",
     "postinstall": "npm run copy-libs"
   },
   "keywords": [],
