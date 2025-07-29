@@ -5,25 +5,37 @@
   "description": "A reactor simulation game where you manage everything from basic uranium cells to advanced reactor cores. Unlock progressive upgrades, collect exotic particles, play offline, and enjoy a fast, responsive modern interface",
   "start_url": "/reactor-revival/",
   "display": "fullscreen",
-  "display_override": ["fullscreen", "window-controls-overlay"],
+  "display_override": [
+    "fullscreen",
+    "window-controls-overlay"
+  ],
   "background_color": "#1a1a1a",
   "theme_color": "#303236",
   "orientation": "portrait-primary",
   "scope": "/reactor-revival/",
   "lang": "en",
   "dir": "ltr",
-  "categories": ["games", "simulation", "strategy"],
+  "categories": [
+    "games",
+    "simulation",
+    "strategy"
+  ],
   "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
   "prefer_related_applications": false,
   "related_applications": [],
   "launch_handler": {
-    "client_mode": ["navigate-existing", "auto"]
+    "client_mode": [
+      "navigate-existing",
+      "auto"
+    ]
   },
   "file_handlers": [
     {
       "action": "/reactor-revival/",
       "accept": {
-        "application/json": [".reactor"]
+        "application/json": [
+          ".reactor"
+        ]
       },
       "icons": [
         {
@@ -56,7 +68,9 @@
       "files": [
         {
           "name": "reactor",
-          "accept": ["application/json"]
+          "accept": [
+            "application/json"
+          ]
         }
       ]
     }
@@ -152,7 +166,11 @@
       ],
       "data": {
         "interval": 60,
-        "fields": ["power", "heat", "money"]
+        "fields": [
+          "power",
+          "heat",
+          "money"
+        ]
       }
     }
   ],
@@ -160,4 +178,4 @@
     "periodic": true,
     "tag": "reactor-sync"
   }
-} 
+}
