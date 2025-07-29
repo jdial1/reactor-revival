@@ -191,36 +191,36 @@ describe("Responsive UI Layout and Overlap Checks", () => {
       it("should have correct mobile/desktop parts panel behavior", () => {
         const partsPanel = document.getElementById("parts_section");
         const toggle = document.getElementById("parts_panel_toggle");
-        
+
         expect(partsPanel, "Parts panel should exist").not.toBeNull();
         expect(toggle, "Parts panel toggle should exist").not.toBeNull();
 
         // Test mobile behavior (≤900px)
         resizeWindow(window, 800, 600);
         const isMobile = window.innerWidth <= 900;
-        
+
         // Trigger parts panel initialization after resize to ensure correct state
         if (game && game.ui && game.ui.initializePartsPanel) {
           game.ui.initializePartsPanel();
         }
-        
+
         if (isMobile) {
           // On mobile, panel should start collapsed
-          expect(partsPanel.classList.contains("collapsed"), 
+          expect(partsPanel.classList.contains("collapsed"),
             "Mobile: Parts panel should start collapsed").toBe(true);
-          
+
           // Toggle should be visible on mobile
           const toggleStyle = window.getComputedStyle(toggle);
-          expect(toggleStyle.display !== "none", 
+          expect(toggleStyle.display !== "none",
             "Mobile: Toggle should be visible").toBe(true);
         } else {
           // On desktop, panel should start open
-          expect(partsPanel.classList.contains("collapsed"), 
+          expect(partsPanel.classList.contains("collapsed"),
             "Desktop: Parts panel should start open").toBe(false);
-          
+
           // Toggle should be hidden on desktop
           const toggleStyle = window.getComputedStyle(toggle);
-          expect(toggleStyle.display === "none", 
+          expect(toggleStyle.display === "none",
             "Desktop: Toggle should be hidden").toBe(true);
         }
       });

@@ -154,7 +154,6 @@ async function checkServiceWorker() {
   }
 }
 
-<<<<<<< Updated upstream
 async function checkBrowserCompatibility() {
   log("\n🔍 Checking browser compatibility...", "blue");
 
@@ -284,8 +283,6 @@ async function checkServiceWorkerRegistration() {
   }
 }
 
-=======
->>>>>>> Stashed changes
 async function checkMainPage() {
   log("\n🔍 Checking main page...", "blue");
 
