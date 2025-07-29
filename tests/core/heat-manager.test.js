@@ -416,7 +416,7 @@ describe("HeatManager Segment System", () => {
         game.engine.start();
 
         // Debug: Check if neighbors are being found
-        const neighbors = game.tileset.getTilesInRange(cellTile, 1);
+        const neighbors = Array.from(game.tileset.getTilesInRange(cellTile, 1));
         console.log(`Cell at (5,5) has ${neighbors.length} neighbors`);
         neighbors.forEach((neighbor, i) => {
             if (neighbor && neighbor.part) {

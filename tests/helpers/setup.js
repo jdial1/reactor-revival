@@ -397,6 +397,51 @@ export async function setupGameWithDOM() {
   global.CustomEvent = window.CustomEvent;
   global.Event = window.Event;
 
+  // Add only essential global properties to avoid circular references
+  global.location = window.location;
+  global.navigator = window.navigator;
+  global.URL = window.URL;
+  global.URLSearchParams = window.URLSearchParams;
+
+  // Add missing clipboard API
+  global.navigator.clipboard = {
+    readText: vi.fn(() => Promise.resolve('')),
+    writeText: vi.fn(() => Promise.resolve()),
+    read: vi.fn(() => Promise.resolve([])),
+    write: vi.fn(() => Promise.resolve())
+  };
+
+  // Add missing matchMedia API
+  global.matchMedia = vi.fn(() => ({
+    matches: false,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  }));
+
+  // Add missing ResizeObserver API
+  global.ResizeObserver = vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn()
+  }));
+
+  // Add missing IntersectionObserver API
+  global.IntersectionObserver = vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn()
+  }));
+
+  // Add missing MutationObserver API
+  global.MutationObserver = vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    disconnect: vi.fn(),
+    takeRecords: vi.fn(() => [])
+  }));
+
   // Enhanced fetch mock that handles more file types
   global.fetch = async (url) => {
     try {

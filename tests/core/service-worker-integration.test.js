@@ -59,7 +59,7 @@ describe('Service Worker Real File Integration Tests', () => {
         it('should have proper event listeners', () => {
             expect(swContent).toContain('addEventListener("install"');
             expect(swContent).toContain('addEventListener("activate"');
-            expect(swContent).toContain('addEventListener("fetch"');
+            expect(swContent).toContain('workbox.routing.registerRoute');
         });
 
         it('should have client communication', () => {
