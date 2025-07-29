@@ -11,7 +11,7 @@
     "setup": "npm run generate-version && npm run copy-libs && npm run build:sw",
     "generate-version": "node scripts/generate-version.js",
     "copy-libs": "node scripts/copy-libs.js",
-    "build:sw": "workbox injectManifest workbox-config.js",
+    "build:sw": "workbox injectManifest workbox-config.cjs",
     "postinstall": "npm run copy-libs"
   },
   "keywords": [],

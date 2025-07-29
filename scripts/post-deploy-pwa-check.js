@@ -1,7 +1,12 @@
-const https = require("https");
-const fs = require("fs");
-const path = require("path");
-const http = require("http");
+import https from "https";
+import fs from "fs";
+import path from "path";
+import http from "http";
+import { fileURLToPath } from "url";
+
+// Get __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Import our manifest validator (using dynamic import for ESM compatibility)
 let validateManifestFromFile;

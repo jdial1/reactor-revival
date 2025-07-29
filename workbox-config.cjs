@@ -4,7 +4,7 @@ module.exports = {
     "index.html",
     "offline.html",
     "css/**/*.css",
-    "data/**/*.js",
+    "data/**/*.json",
     "img/**/*.{png,svg,jpg,jpeg}",
     "pages/**/*.html",
     "components/**/*.html",
