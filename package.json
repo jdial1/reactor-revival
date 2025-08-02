@@ -13,6 +13,7 @@
     "copy-libs": "node scripts/copy-libs.js",
     "build-for-deploy": "node scripts/build-for-deploy.js",
     "build:sw": "workbox injectManifest workbox-config.cjs",
+    "lint": "eslint . --format @microsoft/eslint-formatter-sarif --output-file eslint-results.sarif",
     "check-pwa-root-files": "node scripts/copy-pwa-root-files.js",
     "postinstall": "npm run copy-libs"
   },
@@ -20,7 +21,9 @@
   "author": "Justin Dial",
   "license": "ISC",
   "devDependencies": {
+    "@microsoft/eslint-formatter-sarif": "^3.1.0",
     "@zip.js/zip.js": "^2.7.62",
+    "eslint": "^9.32.0",
     "gh-pages": "^6.3.0",
     "jsdom": "^24.1.0",
     "pako": "^2.1.0",
