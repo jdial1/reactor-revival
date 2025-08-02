@@ -834,21 +834,21 @@ describe("Objective System", () => {
   });
 
   describe("Objective Reward Validation", () => {
-    it("should ensure every objective has either a reward or ep_reward", () => {
+    it("should ensure every objective has either a reward_money or reward_ep", () => {
       objective_list_data.forEach((objective, index) => {
-        const hasReward = objective.reward !== undefined && objective.reward !== null;
-        const hasEpReward = objective.ep_reward !== undefined && objective.ep_reward !== null;
+        const hasReward = objective.reward_money !== undefined && objective.reward_money !== null;
+        const hasEpReward = objective.reward_ep !== undefined && objective.reward_ep !== null;
         const hasEitherReward = hasReward || hasEpReward;
 
         expect(
           hasEitherReward,
-          `Objective ${index + 1}: "${typeof objective.title === 'function' ? objective.title() : objective.title}" should have either reward or ep_reward`
+          `Objective ${index + 1}: "${typeof objective.title === 'function' ? objective.title() : objective.title}" should have either reward_money or reward_ep`
         ).toBe(true);
 
         // Additional validation: should not have both reward types
         if (hasReward && hasEpReward) {
           console.warn(
-            `Objective ${index + 1} has both reward (${objective.reward}) and ep_reward (${objective.ep_reward}). This might be intentional but should be reviewed.`
+            `Objective ${index + 1} has both reward_money (${objective.reward_money}) and reward_ep (${objective.reward_ep}). This might be intentional but should be reviewed.`
           );
         }
       });
@@ -856,17 +856,17 @@ describe("Objective System", () => {
 
     it("should validate reward values are positive numbers", () => {
       objective_list_data.forEach((objective, index) => {
-        if (objective.reward !== undefined && objective.reward !== null) {
+        if (objective.reward_money !== undefined && objective.reward_money !== null) {
           expect(
-            typeof objective.reward === 'number' && objective.reward >= 0,
-            `Objective ${index + 1}: reward should be a non-negative number, got ${objective.reward} (${typeof objective.reward})`
+            typeof objective.reward_money === 'number' && objective.reward_money >= 0,
+            `Objective ${index + 1}: reward_money should be a non-negative number, got ${objective.reward_money} (${typeof objective.reward_money})`
           ).toBe(true);
         }
 
-        if (objective.ep_reward !== undefined && objective.ep_reward !== null) {
+        if (objective.reward_ep !== undefined && objective.reward_ep !== null) {
           expect(
-            typeof objective.ep_reward === 'number' && objective.ep_reward >= 0,
-            `Objective ${index + 1}: ep_reward should be a non-negative number, got ${objective.ep_reward} (${typeof objective.ep_reward})`
+            typeof objective.reward_ep === 'number' && objective.reward_ep >= 0,
+            `Objective ${index + 1}: reward_ep should be a non-negative number, got ${objective.reward_ep} (${typeof objective.reward_ep})`
           ).toBe(true);
         }
       });
@@ -875,23 +875,23 @@ describe("Objective System", () => {
     it("should validate that the final objective has zero reward", () => {
       const finalObjective = objective_list_data[objective_list_data.length - 1];
       expect(
-        finalObjective.reward === 0,
+        finalObjective.reward_money === 0,
         "Final objective should have reward of 0"
       ).toBe(true);
       expect(
-        finalObjective.ep_reward === undefined || finalObjective.ep_reward === null,
+        finalObjective.reward_ep === undefined || finalObjective.reward_ep === null,
         "Final objective should not have ep_reward"
       ).toBe(true);
     });
 
     it("should validate reward progression makes sense", () => {
       const rewards = objective_list_data
-        .filter(obj => obj.reward !== undefined && obj.reward !== null)
-        .map(obj => obj.reward);
+        .filter(obj => obj.reward_money !== undefined && obj.reward_money !== null)
+        .map(obj => obj.reward_money);
 
       const epRewards = objective_list_data
-        .filter(obj => obj.ep_reward !== undefined && obj.ep_reward !== null)
-        .map(obj => obj.ep_reward);
+        .filter(obj => obj.reward_ep !== undefined && obj.reward_ep !== null)
+        .map(obj => obj.reward_ep);
 
       // Check that money rewards generally increase (allowing for some variation)
       let increasingCount = 0;
@@ -927,7 +927,7 @@ describe("Objective System", () => {
       const firstEpObjectiveIndex = 27; // "Generate 10 Exotic Particles"
 
       objective_list_data.forEach((objective, index) => {
-        if (objective.ep_reward !== undefined && objective.ep_reward !== null) {
+        if (objective.reward_ep !== undefined && objective.reward_ep !== null) {
           expect(
             index >= firstEpObjectiveIndex,
             `Objective ${index + 1} has EP reward but appears before the first EP objective (index ${firstEpObjectiveIndex + 1})`
@@ -938,11 +938,11 @@ describe("Objective System", () => {
 
     it("should validate that money rewards are properly formatted", () => {
       objective_list_data.forEach((objective, index) => {
-        if (objective.reward !== undefined && objective.reward !== null) {
+        if (objective.reward_money !== undefined && objective.reward_money !== null) {
           // Check that money rewards are whole numbers (no decimals for money)
           expect(
-            Number.isInteger(objective.reward),
-            `Objective ${index + 1}: money reward should be a whole number, got ${objective.reward}`
+            Number.isInteger(objective.reward_money),
+            `Objective ${index + 1}: money reward should be a whole number, got ${objective.reward_money}`
           ).toBe(true);
         }
       });
@@ -950,11 +950,11 @@ describe("Objective System", () => {
 
     it("should validate that EP rewards are properly formatted", () => {
       objective_list_data.forEach((objective, index) => {
-        if (objective.ep_reward !== undefined && objective.ep_reward !== null) {
+        if (objective.reward_ep !== undefined && objective.reward_ep !== null) {
           // Check that EP rewards are whole numbers
           expect(
-            Number.isInteger(objective.ep_reward),
-            `Objective ${index + 1}: EP reward should be a whole number, got ${objective.ep_reward}`
+            Number.isInteger(objective.reward_ep),
+            `Objective ${index + 1}: EP reward should be a whole number, got ${objective.reward_ep}`
           ).toBe(true);
         }
       });
@@ -986,7 +986,7 @@ describe("Objective System", () => {
         // Debug output
         console.log(`[DEBUG] Testing objective ${index} (${objective.title})`);
         console.log(`[DEBUG] Check function: ${objective.checkId}`);
-        console.log(`[DEBUG] Objective data:`, { title: objective.title, checkId: objective.checkId, reward: objective.reward, ep_reward: objective.ep_reward });
+        console.log(`[DEBUG] Objective data:`, { title: objective.title, checkId: objective.checkId, reward_money: objective.reward_money, reward_ep: objective.reward_ep });
         console.log(`[DEBUG] Check result: ${checkFn(testGame)}`);
 
         // Debug: Show objectives around the current index
@@ -999,20 +999,20 @@ describe("Objective System", () => {
         expect(checkFn(testGame)).toBe(true);
 
         // Manually trigger the reward logic (simulating objective completion)
-        if (rewardType === 'money' && objective.reward) {
-          testGame.current_money += objective.reward;
+        if (rewardType === 'money' && objective.reward_money) {
+          testGame.current_money += objective.reward_money;
           testGame.ui.stateManager.setVar('current_money', testGame.current_money, true);
 
           expect(
             testGame.current_money,
             `Objective ${index + 1} should give ${expectedReward} money`
           ).toBe(initialMoney + expectedReward);
-        } else if (rewardType === 'ep' && objective.ep_reward) {
+        } else if (rewardType === 'ep' && objective.reward_ep) {
           // For EP rewards, we need to simulate the actual reward being given
           // The satisfyObjective function sets exotic_particles to satisfy the condition
           // but doesn't give the reward. We need to add the reward on top of that.
           const currentEP = testGame.exotic_particles;
-          testGame.exotic_particles += objective.ep_reward;
+          testGame.exotic_particles += objective.reward_ep;
           testGame.ui.stateManager.setVar('exotic_particles', testGame.exotic_particles, true);
 
           expect(
@@ -1025,8 +1025,8 @@ describe("Objective System", () => {
 
     it("should validate that objectives with both reward types are flagged", () => {
       const objectivesWithBothRewards = objective_list_data.filter(
-        obj => obj.reward !== undefined && obj.reward !== null &&
-          obj.ep_reward !== undefined && obj.ep_reward !== null
+        obj => obj.reward_money !== undefined && obj.reward_money !== null &&
+          obj.reward_ep !== undefined && obj.reward_ep !== null
       );
 
       if (objectivesWithBothRewards.length > 0) {
@@ -1035,8 +1035,8 @@ describe("Objective System", () => {
           objectivesWithBothRewards.map((obj, idx) => ({
             index: objective_list_data.indexOf(obj) + 1,
             title: typeof obj.title === 'function' ? obj.title() : obj.title,
-            reward: obj.reward,
-            ep_reward: obj.ep_reward
+            reward_money: obj.reward_money,
+            reward_ep: obj.reward_ep
           }))
         );
       }
@@ -1333,7 +1333,7 @@ describe("Objective System", () => {
       expect(firstObjective).toBeDefined();
       expect(firstObjective.title).toContain("Place your first Cell");
       expect(firstObjective.checkId).toBe("firstCell");
-      expect(firstObjective.reward).toBe(10);
+      expect(firstObjective.reward_money).toBe(10);
 
       // Clean up
       cleanupGame();
