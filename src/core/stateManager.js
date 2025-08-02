@@ -147,15 +147,10 @@ export class StateManager {
     }
   }
   handleUpgradeAdded(game, upgrade_obj, container) {
-    if (!container) {
-        // Fallback for safety, but should not be needed with the new approach
-        const locationKey = upgrade_obj.upgrade.type + "_upgrades";
-        container = document.getElementById(locationKey);
-        if (!container) {
-            console.error(`[StateManager] Container not found for upgrade type '${upgrade_obj.upgrade.type}' and no container was provided.`);
-            return;
-        }
-    }
+      if (!container) {
+          console.error(`[StateManager] Container not found for upgrade type '${upgrade_obj.upgrade.type}' and no container was provided.`);
+          return;
+      }
     const upgradeEl = upgrade_obj.createElement();
     upgradeEl.upgrade_object = upgrade_obj;
     container.appendChild(upgradeEl);
