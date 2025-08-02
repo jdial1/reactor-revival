@@ -129,31 +129,28 @@ export class UpgradeSet {
     }, {});
 
     // Dynamically create categories and populate them
-    for (const type in groupedUpgrades) {
-      if (groupedUpgrades.hasOwnProperty(type)) {
-        const upgrades = groupedUpgrades[type];
+    // Note: The data files intentionally store very large numbers as strings.
+    // The data service is responsible for parsing these into BigInts.
+    for (const [type, upgrades] of Object.entries(groupedUpgrades)) {
+      // Create a title for the category
+      const titleEl = document.createElement("h2");
+      titleEl.textContent = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+      wrapper.appendChild(titleEl);
 
-        // Create a title for the category
-        const titleEl = document.createElement("h2");
-        titleEl.textContent = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-        wrapper.appendChild(titleEl);
+      // Create a container for the upgrades in this category
+      const container = document.createElement("div");
+      container.id = type;
+      container.className = "pixel-panel upgrade-group";
+      wrapper.appendChild(container);
 
-        // Create a container for the upgrades in this category
-        const container = document.createElement("div");
-        container.id = type;
-        container.className = "pixel-panel upgrade-group";
-        wrapper.appendChild(container);
-
-        upgrades.forEach((upgrade) => {
-          // We need to append the element to the new container, not rely on handleUpgradeAdded
-          const upgradeEl = upgrade.createElement(); // Assuming createElement is in Upgrade class
-          if (upgradeEl) {
-            container.appendChild(upgradeEl);
-            upgrade.updateDisplayCost();
-            upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
-          }
-        });
-      }
+      upgrades.forEach((upgrade) => {
+        const upgradeEl = upgrade.createElement();
+        if (upgradeEl) {
+          container.appendChild(upgradeEl);
+          upgrade.updateDisplayCost();
+          upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
+        }
+      });
     }
   }
 
