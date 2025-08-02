@@ -1,0 +1,474 @@
+{
+  "version": "2.1.0",
+  "$schema": "http://json.schemastore.org/sarif-2.1.0-rtm.5",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "ESLint",
+          "informationUri": "https://eslint.org",
+          "rules": [],
+          "version": "9.32.0"
+        }
+      },
+      "artifacts": [
+        {
+          "location": {
+            "uri": "file:///app/eslint.config.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/public/clear-sw.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/public/lib/pako.min.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/public/lib/zip.min.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/public/sw.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/scripts/build-for-deploy.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/scripts/copy-libs.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/scripts/copy-pwa-root-files.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/scripts/fix-github-pages-manifest.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/scripts/generate-version.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/scripts/post-deploy-pwa-check.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/scripts/test-runner.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src-sw.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/app.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/components/buttonFactory.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/components/domMapper.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/components/pageRouter.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/components/tooltip.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/components/ui.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/engine.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/game.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/heatManager.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/objective.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/objectiveActions.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/part.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/partset.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/performance.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/reactor.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/stateManager.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/tile.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/tileset.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/upgrade.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/upgradeActions.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/core/upgradeset.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/services/GoogleDriveSave.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/services/dataService.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/services/google-drive-config.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/services/pwa.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/services/templateLoader.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/utils/hotkeys.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/utils/manifestValidator.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/src/utils/util.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/clipboard.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/complex-layouts.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/coverage.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/engine.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/epReboot.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/epUpgradePurchase.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/full-objective-run.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/game.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/global-boosts.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/heat-debug.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/heat-feedback-loop.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/heat-manager.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/heat-outlet-debug.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/manifest.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/meltdown.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/neighbor-debug.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/pageRouter.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/part-detection.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/part-stats-validation.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/part.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/partset.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/pasteModal.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/pause-behavior.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/performance.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/reactor.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/save-load.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/scenarios.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/service-worker-integration.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/service-worker.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/stateManager.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/tile.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/tileset.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/upgrade.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/upgradeActions.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/core/upgradeset.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/helpers/setup.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/objective-simple.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/objective.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/ui/component-creation.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/ui/epDisplay.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/ui/epPriceDisplay.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/ui/hotkey.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/ui/integration.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/ui/quick-start-modal.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/ui/responsive.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/tests/ui/user-interaction.test.js"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/vitest.config.mjs"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/workbox-config.cjs"
+          }
+        },
+        {
+          "location": {
+            "uri": "file:///app/workbox-config.js"
+          }
+        }
+      ],
+      "results": []
+    }
+  ]
+}
