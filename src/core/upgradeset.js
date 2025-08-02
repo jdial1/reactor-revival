@@ -103,26 +103,71 @@ export class UpgradeSet {
   }
 
   populateUpgrades() {
-    this._populateUpgradeSection("upgrades_content_wrapper", (upgrade) => !upgrade.base_ecost);
+    this._populateUpgradeSection("upgrades_content_wrapper", (upgrade) => !upgrade.base_ecost && !upgrade.upgrade.type.startsWith('experimental'));
   }
 
   populateExperimentalUpgrades() {
-    this._populateUpgradeSection("experimental_upgrades_content_wrapper", (upgrade) => !!upgrade.base_ecost);
+    this._populateUpgradeSection("experimental_upgrades_content_wrapper", (upgrade) => !!upgrade.base_ecost || upgrade.upgrade.type.startsWith('experimental'));
   }
 
   _populateUpgradeSection(wrapperId, filterFn) {
     const wrapper = document.getElementById(wrapperId);
-    if (!wrapper) return;
+    if (!wrapper) {
+        console.error(`[UpgradeSet] Wrapper element with ID '${wrapperId}' not found.`);
+        return;
+    }
 
-    wrapper.querySelectorAll(".upgrade-group").forEach((el) => (el.innerHTML = ""));
+    // Clear the main container
+    wrapper.innerHTML = "";
 
-    this.upgradesArray.filter(filterFn).forEach((upgrade) => {
-      this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
-      if (upgrade.$el) {
-        upgrade.updateDisplayCost();
-        upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
-      }
-    });
+    const upgradesToRender = this.upgradesArray.filter(filterFn);
+
+    // Group upgrades by their 'type'
+    const groupedUpgrades = upgradesToRender.reduce((acc, upgrade) => {
+        const type = upgrade.upgrade.type;
+        if (!acc[type]) {
+            acc[type] = [];
+        }
+        acc[type].push(upgrade);
+        return acc;
+    }, {});
+
+    // Dynamically create headers and containers for each group
+    for (const type in groupedUpgrades) {
+        if (groupedUpgrades.hasOwnProperty(type)) {
+            const upgrades = groupedUpgrades[type];
+
+            // Create and append the header
+            const header = document.createElement("h2");
+            header.textContent = this._formatUpgradeType(type);
+            wrapper.appendChild(header);
+
+            // Create and append the container for the upgrades
+            const container = document.createElement("div");
+            container.id = `${type}_upgrades`; // e.g., other_upgrades
+            container.className = "pixel-panel upgrade-group";
+            wrapper.appendChild(container);
+
+            // Add each upgrade to the newly created container
+            upgrades.forEach((upgrade) => {
+                // Pass the container directly to the handler
+                this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade, container);
+                if (upgrade.$el) {
+                    upgrade.updateDisplayCost();
+                    upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
+                }
+            });
+        }
+    }
+  }
+
+  _formatUpgradeType(type) {
+    // Example: 'cell_power_upgrades' -> 'Cell Power Upgrades'
+    return type
+        .replace(/_/g, ' ')
+        .replace('upgrades', '')
+        .trim()
+        .replace(/\b\w/g, char => char.toUpperCase());
   }
 
   purchaseUpgrade(upgradeId) {
