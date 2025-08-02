@@ -146,12 +146,14 @@ export class UpgradeSet {
       upgrades.forEach((upgrade) => {
         const upgradeEl = upgrade.createElement();
         if (upgradeEl) {
-          container.appendChild(upgradeEl);
-          upgrade.updateDisplayCost();
-          upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
-        }
-      });
-    }
+          if (typeof upgrade.createElement === 'function') {
+            const upgradeEl = upgrade.createElement();
+            if (upgradeEl) {
+              container.appendChild(upgradeEl);
+              upgrade.updateDisplayCost();
+              upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
+            }
+          }
   }
 
   purchaseUpgrade(upgradeId) {
