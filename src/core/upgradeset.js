@@ -114,15 +114,47 @@ export class UpgradeSet {
     const wrapper = document.getElementById(wrapperId);
     if (!wrapper) return;
 
-    wrapper.querySelectorAll(".upgrade-group").forEach((el) => (el.innerHTML = ""));
+    wrapper.innerHTML = ""; // Clear the entire wrapper
 
-    this.upgradesArray.filter(filterFn).forEach((upgrade) => {
-      this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
-      if (upgrade.$el) {
-        upgrade.updateDisplayCost();
-        upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
+    const upgradesToPopulate = this.upgradesArray.filter(filterFn);
+
+    // Group upgrades by their type
+    const groupedUpgrades = upgradesToPopulate.reduce((groups, upgrade) => {
+      const type = upgrade.upgrade.type || "other";
+      if (!groups[type]) {
+        groups[type] = [];
       }
-    });
+      groups[type].push(upgrade);
+      return groups;
+    }, {});
+
+    // Dynamically create categories and populate them
+    for (const type in groupedUpgrades) {
+      if (groupedUpgrades.hasOwnProperty(type)) {
+        const upgrades = groupedUpgrades[type];
+
+        // Create a title for the category
+        const titleEl = document.createElement("h2");
+        titleEl.textContent = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+        wrapper.appendChild(titleEl);
+
+        // Create a container for the upgrades in this category
+        const container = document.createElement("div");
+        container.id = type;
+        container.className = "pixel-panel upgrade-group";
+        wrapper.appendChild(container);
+
+        upgrades.forEach((upgrade) => {
+          // We need to append the element to the new container, not rely on handleUpgradeAdded
+          const upgradeEl = upgrade.createElement(); // Assuming createElement is in Upgrade class
+          if (upgradeEl) {
+            container.appendChild(upgradeEl);
+            upgrade.updateDisplayCost();
+            upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
+          }
+        });
+      }
+    }
   }
 
   purchaseUpgrade(upgradeId) {
