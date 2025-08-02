@@ -163,10 +163,10 @@ export class UpgradeSet {
 
   _formatUpgradeType(type) {
     // Example: 'cell_power_upgrades' -> 'Cell Power Upgrades'
-    return type
-        .replace(/_/g, ' ')
-        .replace('upgrades', '')
-        .trim()
+      return type
+          .replace(/_upgrades$/, '')
+          .replace(/_/g, ' ')
+          .trim()
         .replace(/\b\w/g, char => char.toUpperCase());
   }
 
