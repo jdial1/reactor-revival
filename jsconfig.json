@@ -1,20 +1,6 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
-    "paths": {
-      "@components/*": [
-        "public/src/components/*"
-      ],
-      "@app/components/*": [
-        "public/src/components/*"
-      ],
-      "@app/*": [
-        "public/src/*"
-      ],
-      "@public/*": [
-        "public/*"
-      ]
-    },
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ES2022",

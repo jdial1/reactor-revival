@@ -1,26 +1,6 @@
 import { defineConfig } from "vite";
-import { fileURLToPath } from "url";
-import path from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export default defineConfig({
-  // Treat `public/` as a normal folder in tests so imports like
-  // "../../public/src/components/ui.js" resolve in CI.
-  // Without this, Vite considers `public/` a static assets dir and won't
-  // include modules from there in the module graph during Vitest runs.
-  publicDir: false,
-  resolve: {
-    alias: [
-      // Specific rule for components first (actual location under public/src)
-      { find: "@components", replacement: path.resolve(__dirname, "public/src/components") },
-      { find: "@app/components", replacement: path.resolve(__dirname, "public/src/components") },
-      // Fallback for other @app imports (e.g., core, services)
-      { find: "@app", replacement: path.resolve(__dirname, "public/src") },
-      { find: "@public", replacement: path.resolve(__dirname, "public") },
-    ],
-  },
   test: {
     globals: true,
     environment: "jsdom",
@@ -30,22 +10,6 @@ export default defineConfig({
       },
     },
     setupFiles: ["./tests/helpers/setup.js"],
-    // Always exclude external and build outputs; add CI-specific excludes on top
-    exclude: [
-      "**/node_modules/**",
-      "**/dist/**",
-      "**/build/**",
-      "**/out/**",
-      "**/.{idea,git,cache}/**",
-      ...(process.env.CI
-        ? [
-          "tests/ui/**",
-          "tests/core/clipboard.test.js",
-          "tests/core/pasteModal.test.js",
-          "tests/core/meltdown.test.js",
-        ]
-        : []),
-    ],
     reporters: ["default"],
     outputFile: {
       json: "./test-results.json",
