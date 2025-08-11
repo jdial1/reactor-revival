@@ -4,7 +4,7 @@
 --sidebar-width: 300px;
 --sidebar-width-mobile: 80%;
 --tile-size: 48px;
---bottom-nav-height: 56px;
+--bottom-nav-height: 50px;
 --game-success-color: #43a047;
 --game-warning-color: #ffa000;
 --game-danger-color: #d32f2f;
@@ -13,6 +13,12 @@
 --splash-btn-radius: 8px;
 --main-top-nav-height: 50px;
 }
+
+nav li {
+  list-style: none;
+  padding:0;
+}
+
 html {
 image-rendering: auto;
 }
@@ -449,10 +455,13 @@ top: 0;
 left: 0;
 right: 0;
 bottom: 0;
+width: 100%;
+height: 100%;
 background: rgba(255, 0, 0, 0);
 transition: background-color 0.5s ease, box-shadow 0.5s ease;
 pointer-events: none;
 z-index: 1;
+overflow: hidden;
 border-radius: 8px;
 }
 
@@ -684,7 +693,7 @@ opacity: 1;
   right: 0 !important;
   z-index: 26;
   bottom: var(--bottom-nav-height);
-  height: 56px; /* slightly shorter for more space */
+  height: 50px; /* slightly shorter for more space */
   padding: 0 !important;
   margin: 0 !important;
   box-sizing: border-box;
@@ -708,9 +717,9 @@ opacity: 1;
     repeating-linear-gradient(
       90deg,
       transparent 0px,
-      transparent 8px,
-      rgba(0,0,0,0.3) 8px,
-      rgba(0,0,0,0.3) 12px
+      transparent 2px,
+      rgba(0,0,0,0.3) 2px,
+      rgba(0,0,0,0.3) 10px
     );
   pointer-events: none;
   z-index: 1;
@@ -744,9 +753,9 @@ opacity: 1;
   background-image: repeating-linear-gradient(
     90deg,
     transparent 0px,
-    transparent 8px,
-    rgba(0,0,0,0.3) 8px,
-    rgba(0,0,0,0.3) 12px
+    transparent 2px,
+    rgba(0,0,0,0.3) 2px,
+    rgba(0,0,0,0.3) 10px
   );
   border: 2px solid #555;
   border-radius: 6px;
@@ -789,10 +798,11 @@ opacity: 1;
   background-image: repeating-linear-gradient(
     90deg,
     transparent 0px,
-    transparent 8px,
-    rgba(0,0,0,0.3) 8px,
-    rgba(0,0,0,0.3) 12px
+    transparent 2px,
+    rgba(0,0,0,0.3) 2px,
+    rgba(0,0,0,0.3) 10px
   );
+
   border: 2px solid #666;
   outline: none;
   padding: 0 12px;
@@ -844,9 +854,9 @@ opacity: 1;
   background: repeating-linear-gradient(
     90deg,
     transparent 0px,
-    transparent 8px,
-    rgba(244,67,54,0.4) 8px,
-    rgba(244,67,54,0.4) 12px
+    transparent 2px,
+    rgba(244,67,54,0.4) 2px,
+    rgba(244,67,54,0.4) 10px
   );
   background-size: 12px 100%;
   background-repeat: repeat-x;
@@ -894,9 +904,9 @@ opacity: 1;
   background-image: repeating-linear-gradient(
     90deg,
     transparent 0px,
-    transparent 8px,
-    rgba(0,0,0,0.3) 8px,
-    rgba(0,0,0,0.3) 12px
+    transparent 2px,
+    rgba(0,0,0,0.3) 2px,
+    rgba(0,0,0,0.3) 10px
   );
   border: 2px solid #aaa;
   border-radius: 8px;
@@ -978,6 +988,7 @@ flex: 1 1 0;
 height: 100%;
 display: flex;
 align-items: center;
+padding:none !important;
 }
 footer#bottom_nav button {
 width: 100%;
@@ -1005,6 +1016,11 @@ font-size: 1em;
 background: none;
 border: none;
 color: #fff;
+  display: flex;              /* ensure horizontal + vertical centering */
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  line-height: 1;
 transition: background 0.2s;
 }
 #bottom_nav button.active,
@@ -1028,8 +1044,7 @@ display: flex !important;
 flex-direction: row !important;
 align-items: center !important;
 justify-content: center !important;
-height: 64px !important;
-min-height: 64px !important;
+height: 50px !important;
 padding: 0 !important;
 bottom: 0 !important;
 left: 0 !important;
@@ -1139,9 +1154,9 @@ background: rgba(0,0,0,0.3);
 background-image: repeating-linear-gradient(
   90deg,
   transparent 0px,
-  transparent 8px,
-  rgba(0,0,0,0.3) 8px,
-  rgba(0,0,0,0.3) 12px
+  transparent 2px,
+  rgba(0,0,0,0.3) 2px,
+  rgba(0,0,0,0.3) 10px
 );
 background-size: 12px 100%;
 background-repeat: repeat-x;
@@ -1168,9 +1183,9 @@ height: 100%;
 background: repeating-linear-gradient(
   90deg,
   transparent 0px,
-  transparent 8px,
-  rgba(0,255,255,0.4) 8px,
-  rgba(0,255,255,0.4) 12px
+  transparent 2px,
+  rgba(0,255,255,0.4) 2px,
+  rgba(0,255,255,0.4) 10px
 );
 background-size: 12px 100%;
 background-repeat: repeat-x;
@@ -1189,9 +1204,9 @@ height: 100%;
 background: repeating-linear-gradient(
   90deg,
   transparent 0px,
-  transparent 8px,
-  rgba(244,67,54,0.4) 8px,
-  rgba(244,67,54,0.4) 12px
+  transparent 2px,
+  rgba(244,67,54,0.4) 2px,
+  rgba(244,67,54,0.4) 10px
 );
 background-size: 12px 100%;
 background-repeat: repeat-x;
@@ -1243,11 +1258,11 @@ grid-column: 2;
 #mobile_top_bar.active { display: flex; }
 #mobile_top_bar .mobile-top-stats,
 #mobile_top_bar #reactor_stats,
-#mobile_top_bar .mobile-top-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: auto; width: 100%;}
+#mobile_top_bar .mobile-top-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: auto; width: 100%; padding-left:5px;padding-right:5px;}
 #mobile_top_bar #reactor_stats { display: flex; gap: 6px; margin: 0; padding: 4px 6px; list-style: none; background: rgba(0,0,0,0.25); border-radius: 12px; }
 #mobile_top_bar #reactor_stats li { display: flex; align-items: center; }
 #mobile_top_bar #reactor_stats li strong { font-size: 0.9em; white-space: nowrap; }
-#mobile_top_bar #reactor_copy_paste_btns { position: static !important; display: flex; gap: 6px; }
+#mobile_top_bar #reactor_copy_paste_btns {display: flex; gap: 6px; align-items: right ; justify-content: right;}
 #mobile_top_bar #reactor_copy_paste_btns button { width: 32px; height: 32px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; }
 
 /* Keep bottom info bar visible on mobile; the mobile top bar complements it */
@@ -2452,7 +2467,7 @@ right: 0.2rem;
 @media (max-width: 500px) {
 #info_bar {
 bottom: 48px;
-height: 44px;
+height: 40px;
 padding: 0 8px;
 }
 footer#bottom_nav {
@@ -2905,10 +2920,7 @@ align-items: center;
 justify-content: center;
 transition: background 0.15s;
 }
-#info_bar .info-item.heat:hover,
-#info_bar .info-item.power:hover {
-background: #333;
-}
+
 .part-price,
 .upgrade-price,
 .experimental_upgrade-price {
@@ -3437,6 +3449,16 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   transform: none;
 }
 
+/* Ensure desktop also pins buttons to the reactor area top-right */
+@media (min-width: 901px) {
+  #reactor_wrapper #reactor_copy_paste_btns {
+    position: absolute !important;
+    top: 20px;
+    right: 20px;
+    z-index: 900;
+  }
+}
+
 #reactor_copy_paste_btns button {
   background: #23272e;
   border: 2px solid #444;
@@ -3648,6 +3670,16 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 
 /* Mobile responsive styles */
 @media (max-width: 900px) {
+  /* Keep copy/paste/sell buttons pinned to the top-right of the reactor area without overlapping objectives */
+  #reactor_copy_paste_btns {
+    display: flex;
+    flex: 1;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: flex-end;
+    z-index: 900; /* below modal (1000), above content */
+  }
+
   #reactor_copy_paste_modal .modal-content {
     max-width: 95%;
     max-height: 95%;
@@ -4623,18 +4655,18 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     background: repeating-linear-gradient(
       90deg,
       transparent 0px,
-      transparent 8px,
-      rgba(0,255,255,0.4) 8px,
-      rgba(0,255,255,0.4) 12px
+      transparent 2px,
+      rgba(0,255,255,0.4) 2px,
+      rgba(0,255,255,0.4) 10px
     );
   }
   50% { 
     background: repeating-linear-gradient(
       90deg,
       transparent 0px,
-      transparent 8px,
-      rgba(0,255,255,0.8) 8px,
-      rgba(0,255,255,0.8) 12px
+      transparent 2px,
+      rgba(0,255,255,0.8) 2px,
+      rgba(0,255,255,0.8) 10px
     );
   }
 }
@@ -4650,18 +4682,18 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     background: repeating-linear-gradient(
       90deg,
       transparent 0px,
-      transparent 8px,
-      rgba(255,100,0,0.4) 8px,
-      rgba(255,100,0,0.4) 12px
+      transparent 2px,
+      rgba(255,100,0,0.4) 2px,
+      rgba(255,100,0,0.4) 10px
     );
   }
   50% { 
     background: repeating-linear-gradient(
       90deg,
       transparent 0px,
-      transparent 8px,
-      rgba(244,67,54,0.8) 8px,
-      rgba(244,67,54,0.8) 12px
+      transparent 2px,
+      rgba(244,67,54,0.8) 2px,
+      rgba(244,67,54,0.8) 10px
     );
   }
 }

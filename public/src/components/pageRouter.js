@@ -14,6 +14,9 @@ export class PageRouter {
     this.pageCache = new Map();
     this.initializedPages = new Set();
     this.currentPageId = null;
+    // Track if pause was applied automatically due to navigation away from reactor
+    // so we can safely auto-unpause when returning.
+    this.navigationPaused = false;
     this.contentAreaSelector = "#page_content_area";
   }
 
@@ -33,16 +36,22 @@ export class PageRouter {
 
     if (this.ui.game.engine) {
       if (wasOnReactorPage && !goingToReactorPage) {
-        // Leaving reactor page - pause the engine
-        console.log("PageRouter: Pausing reactor (leaving reactor page)");
-        this.ui.game.engine.stop();
-        // Use stateManager to properly set pause state
-        this.ui.stateManager.setVar("pause", true);
+        // Leaving reactor page - if not already paused, pause due to navigation
+        const currentlyPaused = this.ui.stateManager.getVar("pause");
+        if (!currentlyPaused) {
+          this.navigationPaused = true;
+          console.log("PageRouter: Pausing reactor (leaving reactor page)");
+          this.ui.game.engine.stop();
+          this.ui.stateManager.setVar("pause", true);
+        } else {
+          // Already paused (manual); do not auto-unpause on return
+          this.navigationPaused = false;
+        }
       } else if (!wasOnReactorPage && goingToReactorPage) {
-        // Entering reactor page - unpause the engine (if not manually paused)
-        const isManuallyPaused = this.ui.stateManager.getVar("pause");
-        if (!isManuallyPaused) {
-          console.log("PageRouter: Resuming reactor (entering reactor page)");
+        // Entering reactor page - only auto-unpause if we paused due to navigation
+        if (this.navigationPaused) {
+          console.log("PageRouter: Resuming reactor (returning to reactor page)");
+          this.navigationPaused = false;
           this.ui.stateManager.setVar("pause", false);
         }
       }

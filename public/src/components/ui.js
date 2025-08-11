@@ -100,7 +100,6 @@ export class UI {
       "tooltip_data",
       "stats_power",
       "stats_heat",
-      // "stats_cash", // removed from reactor_stats UI
       "engine_status_indicator",
       "stats_outlet",
       "stats_inlet",
