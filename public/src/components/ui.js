@@ -100,7 +100,7 @@ export class UI {
       "tooltip_data",
       "stats_power",
       "stats_heat",
-      "stats_cash",
+      // "stats_cash", // removed from reactor_stats UI
       "engine_status_indicator",
       "stats_outlet",
       "stats_inlet",
@@ -796,11 +796,6 @@ export class UI {
             );
           }
 
-          // Check if power is full and trigger confetti effect
-          const maxPower = this.stateManager.getVar("max_power") || 0;
-          if (val >= maxPower && maxPower > 0) {
-            this.triggerPowerConfetti();
-          }
         },
       },
       total_heat: {
@@ -815,7 +810,8 @@ export class UI {
           }
         },
       },
-      stats_cash: { dom: this.DOMElements.stats_cash, num: true, places: 2 },
+      // Remove autosell cash from reactor_stats; keep mapping undefined to avoid updates
+      // stats_cash intentionally not bound (feature disabled)
       engine_status: {
         onupdate: (val) => {
           const indicator = this.DOMElements.engine_status_indicator;
@@ -1815,7 +1811,7 @@ export class UI {
       vars["Reactor (reactor.js)"]["stats_vent"] = reactor.stats_vent;
       vars["Reactor (reactor.js)"]["stats_inlet"] = reactor.stats_inlet;
       vars["Reactor (reactor.js)"]["stats_outlet"] = reactor.stats_outlet;
-      vars["Reactor (reactor.js)"]["stats_cash"] = reactor.stats_cash;
+      // stats_cash disabled from UI; omit from debug vars to reduce noise
       vars["Reactor (reactor.js)"]["vent_multiplier_eff"] =
         reactor.vent_multiplier_eff;
       vars["Reactor (reactor.js)"]["transfer_multiplier_eff"] =
@@ -2880,6 +2876,9 @@ export class UI {
         this.resizeReactor();
         this.initializeCopyPasteUI();
         this.initializeSellAllButton();
+        // Prepare mobile top overlay that aligns stats with copy/paste/sell
+        this.setupMobileTopBar();
+        this.setupMobileTopBarResizeListener();
         break;
       case "upgrades_section":
         console.log("[UI] Initializing upgrades section");
@@ -3018,6 +3017,73 @@ export class UI {
     }
 
     this.showObjectivesForPage(pageId);
+  }
+
+  // Align top stats and copy/paste/sell buttons into a single transparent bar on mobile
+  setupMobileTopBar() {
+    try {
+      const mobileTopBar = document.getElementById("mobile_top_bar");
+      const stats = document.getElementById("reactor_stats");
+      const topNav = document.getElementById("main_top_nav");
+      const reactorWrapper = document.getElementById("reactor_wrapper");
+      const copyPasteBtns = document.getElementById("reactor_copy_paste_btns");
+      if (!mobileTopBar || !stats) return;
+
+      const isMobile = typeof window !== "undefined" && window.innerWidth <= 900;
+
+      if (isMobile) {
+        // Activate overlay container
+        mobileTopBar.classList.add("active");
+        mobileTopBar.setAttribute("aria-hidden", "false");
+
+        // Ensure inner containers exist
+        let statsWrap = mobileTopBar.querySelector(".mobile-top-stats");
+        if (!statsWrap) {
+          statsWrap = document.createElement("div");
+          statsWrap.className = "mobile-top-stats";
+          mobileTopBar.appendChild(statsWrap);
+        }
+
+        // Move existing nodes into overlay
+        if (stats && stats.parentElement !== statsWrap) statsWrap.appendChild(stats);
+
+        // Ensure copy/paste/sell buttons remain top-right in reactor wrapper
+        if (copyPasteBtns && reactorWrapper && copyPasteBtns.parentElement !== reactorWrapper) {
+          reactorWrapper.appendChild(copyPasteBtns);
+        }
+      } else {
+        // Deactivate overlay and restore elements
+        mobileTopBar.classList.remove("active");
+        mobileTopBar.setAttribute("aria-hidden", "true");
+
+        if (topNav && stats) {
+          const engineUl = topNav.querySelector("#engine_status");
+          if (engineUl) {
+            topNav.insertBefore(stats, engineUl);
+          } else {
+            topNav.appendChild(stats);
+          }
+        }
+        if (reactorWrapper && copyPasteBtns && copyPasteBtns.parentElement !== reactorWrapper) {
+          reactorWrapper.appendChild(copyPasteBtns);
+        }
+      }
+
+      this._lastIsMobileForTopBar = isMobile;
+    } catch (err) {
+      console.warn("[UI] setupMobileTopBar error:", err);
+    }
+  }
+
+  setupMobileTopBarResizeListener() {
+    if (this._mobileTopBarResizeListenerAdded) return;
+    this._mobileTopBarResizeListenerAdded = true;
+    window.addEventListener("resize", () => {
+      const isMobile = window.innerWidth <= 900;
+      if (isMobile !== this._lastIsMobileForTopBar) {
+        this.setupMobileTopBar();
+      }
+    });
   }
 
   setupReactorEventListeners() {
