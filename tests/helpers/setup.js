@@ -9,12 +9,12 @@ import path from "path";
 import { JSDOM } from "jsdom";
 
 // Core game imports
-import { Game } from "../../public/src/core/game.js";
-import { UI } from "../../public/src/components/ui.js";
-import { Engine } from "../../public/src/core/engine.js";
-import { ObjectiveManager } from "../../public/src/core/objective.js";
-import { PageRouter } from "../../public/src/components/pageRouter.js";
-import { TemplateLoader } from "../../public/src/services/templateLoader.js";
+import { Game } from "@app/core/game.js";
+import { UI } from "@app/components/ui.js";
+import { Engine } from "@app/core/engine.js";
+import { ObjectiveManager } from "@app/core/objective.js";
+import { PageRouter } from "@app/components/pageRouter.js";
+import { TemplateLoader } from "@app/services/templateLoader.js";
 
 // Export all common imports for use in test files
 export {

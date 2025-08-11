@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../helpers/setup.js";
 import objective_list_data from "../../public/data/objective_list.json";
-import { getObjectiveCheck } from "../../public/src/core/objectiveActions.js";
+import { getObjectiveCheck } from "@app/core/objectiveActions.js";
 
 async function satisfyObjective(game, idx) {
     const obj = objective_list_data[idx];

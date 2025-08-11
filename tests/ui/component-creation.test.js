@@ -7,7 +7,7 @@ import {
     createUpgradeButton,
     createBuyButton,
     createTooltipCloseButton
-} from "../../public/src/components/buttonFactory.js";
+} from "@app/components/buttonFactory.js";
 
 describe("UI Component Creation and State", () => {
     let game, document, window;

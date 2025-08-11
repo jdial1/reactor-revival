@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame, cleanupGame, Game, UI } from "../helpers/setup.js";
 import objective_list_data from "../../public/data/objective_list.json";
-import { getObjectiveCheck } from "../../public/src/core/objectiveActions.js";
+import { getObjectiveCheck } from "@app/core/objectiveActions.js";
 
 // Helper to set up the game state for each objective
 async function satisfyObjective(game, idx) {
@@ -236,7 +236,7 @@ describe("Save and Load Functionality", () => {
         const game2 = await setupGame();
         await game2.set_defaults();
         // Re-create the ObjectiveManager to ensure a fresh state (like in app.js)
-        const { ObjectiveManager } = require("../../public/src/core/objective.js");
+        const { ObjectiveManager } = await import("@app/core/objective.js");
         game2.objectives_manager = new ObjectiveManager(game2);
         await game2.objectives_manager.initialize();
         game2.objectives_manager.start();
