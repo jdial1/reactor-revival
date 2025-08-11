@@ -1,5 +1,17 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@app/components/*": [
+        "public/src/components/*"
+      ],
+      "@app/*": [
+        "public/src/*"
+      ],
+      "@public/*": [
+        "public/*"
+      ]
+    },
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ES2022",
@@ -8,5 +20,8 @@
     "strictNullChecks": true,
     "strictFunctionTypes": true
   },
-  "exclude": ["node_modules", "**/node_modules/*"]
+  "exclude": [
+    "node_modules",
+    "**/node_modules/*"
+  ]
 }

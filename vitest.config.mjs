@@ -12,17 +12,20 @@ export default defineConfig({
   // include modules from there in the module graph during Vitest runs.
   publicDir: false,
   resolve: {
-    alias: {
-      "@app": path.resolve(__dirname, "public/src"),
-      "@public": path.resolve(__dirname, "public"),
-    },
+    alias: [
+      // Specific rule for components first (actual location under public/src)
+      { find: "@app/components", replacement: path.resolve(__dirname, "public/src/components") },
+      // Fallback for other @app imports (e.g., core, services)
+      { find: "@app", replacement: path.resolve(__dirname, "public/src") },
+      { find: "@public", replacement: path.resolve(__dirname, "public") },
+    ],
   },
   test: {
     globals: true,
     environment: "jsdom",
     environmentOptions: {
       jsdom: {
-        url: "http://localhost:8080",
+        url: "http://localhost:8080/",
       },
     },
     setupFiles: ["./tests/helpers/setup.js"],
@@ -45,7 +48,7 @@ export default defineConfig({
       },
     },
     // Optimize memory usage
-    forceRerunTriggers: ["**/package.json{vitest,vite}.config.*"],
+    forceRerunTriggers: ["**/package.json", "{vitest,vite}.config.*"],
     // Prevent massive console output and DOM object dumps
     printConsoleTrace: false,
     logHeapUsage: false,
