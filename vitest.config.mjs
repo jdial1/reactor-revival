@@ -1,4 +1,9 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
+import { fileURLToPath } from "url";
+import path from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   // Treat `public/` as a normal folder in tests so imports like
@@ -6,6 +11,12 @@ export default defineConfig({
   // Without this, Vite considers `public/` a static assets dir and won't
   // include modules from there in the module graph during Vitest runs.
   publicDir: false,
+  resolve: {
+    alias: {
+      "@app": path.resolve(__dirname, "public/src"),
+      "@public": path.resolve(__dirname, "public"),
+    },
+  },
   test: {
     globals: true,
     environment: "jsdom",
