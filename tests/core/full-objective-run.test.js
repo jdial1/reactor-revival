@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../helpers/setup.js";
 import objective_list_data from "../../public/data/objective_list.json";
-import { getObjectiveCheck } from "../../src/core/objectiveActions.js";
+import { getObjectiveCheck } from "../../public/src/core/objectiveActions.js";
 
 async function satisfyObjective(game, idx) {
     const obj = objective_list_data[idx];
@@ -278,9 +278,21 @@ describe('Full Objective Run', () => {
     });
 
     it('should complete all objectives in a single continuous run', async () => {
-        const totalObjectives = objective_list_data.length;
+        const totalObjectives = objective_list_data.length; // Include all objectives including "All objectives completed!"
         game.objectives_manager.current_objective_index = 0;
         await game.set_defaults(); // Wait for set_defaults to complete
+
+        // Ensure objectives manager is properly initialized
+        if (!game.objectives_manager.objectives_data) {
+            await game.objectives_manager.initialize();
+        }
+
+        // Ensure objectives manager is properly initialized and ready
+        if (!game.objectives_manager.current_objective_def) {
+            game.objectives_manager.start();
+            // Give it a moment to initialize
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
 
         let saveCallCount = 0;
         const originalSaveGame = game.saveGame;
@@ -291,7 +303,10 @@ describe('Full Objective Run', () => {
 
         game.objectives_manager.start();
 
-        for (let i = 0; i < totalObjectives - 1; i++) {
+        // Ensure we have a valid objective before proceeding
+        expect(game.objectives_manager.current_objective_def).not.toBeNull();
+
+        for (let i = 0; i < totalObjectives - 1; i++) { // Loop through all objectives except the final "allObjectives"
             const objective = objective_list_data[i];
 
             expect(game.objectives_manager.current_objective_index).toBe(i);
@@ -300,12 +315,15 @@ describe('Full Objective Run', () => {
 
             game.objectives_manager.check_current_objective();
 
-            if (!game.objectives_manager.current_objective_def.completed) {
+            if (game.objectives_manager.current_objective_def && !game.objectives_manager.current_objective_def.completed) {
                 game.reactor.updateStats();
                 game.objectives_manager.check_current_objective();
             }
 
-            expect(game.objectives_manager.current_objective_def.completed, `Objective ${i} (${objective.checkId}) should be completed.`).toBe(true);
+            // The final "allObjectives" objective is just a placeholder and doesn't need to be completed
+            if (objective.checkId !== "allObjectives") {
+                expect(game.objectives_manager.current_objective_def.completed, `Objective ${i} (${objective.checkId}) should be completed.`).toBe(true);
+            }
 
             // Claim the objective to advance to the next one
             game.objectives_manager.claimObjective();
@@ -313,8 +331,12 @@ describe('Full Objective Run', () => {
             // Wait a bit for the claim to process
             await new Promise(resolve => setTimeout(resolve, 600));
 
-            // Verify we've advanced to the next objective
-            expect(game.objectives_manager.current_objective_index).toBe(i + 1);
+            // Verify we've advanced to the next objective (or reached the end)
+            if (i < totalObjectives - 2) {
+                expect(game.objectives_manager.current_objective_index).toBe(i + 1);
+            } else {
+                expect(game.objectives_manager.current_objective_index).toBe(totalObjectives - 1);
+            }
 
             // Clear the grid after completing the objective to prevent part conflicts for the next objective
             game.tileset.clearAllTiles();

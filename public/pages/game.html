@@ -22,18 +22,40 @@
   </ul>
   <ul id="reactor_stats">
     <li>
+      <strong title="Estimated total heat venting per tick"
+        ><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent">0</span></strong
+      >
+    </li>
+    <li>
+      <strong title="Total potential heat inletting per tick"
+        ><img src="img/ui/icons/icon_inlet.png" alt="Inlet" class="icon-inline" /><span id="stats_inlet">0</span></strong
+      >
+    </li>
+    <li>
+      <strong title="Total potential heat outletting per tick"
+        ><img src="img/ui/icons/icon_outlet.png" alt="Outlet" class="icon-inline" /><span id="stats_outlet">0</span></strong
+      >
+    </li>
+    <li>
       <strong title="Estimated power per tick"
-        >⚡<span id="stats_power">0</span></strong
+        ><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power">0</span></strong
       >
     </li>
     <li>
       <strong title="Estimated heat per tick"
-        >🔥<span id="stats_heat">0</span></strong
+        ><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat">0</span></strong
       >
     </li>
     <li>
-      <strong title="Estimated cash per tick"
-        >💰<span id="stats_cash">0</span></strong
+      <strong title="Estimated autosell cash per tick"
+        ><img src="img/ui/icons/icon_cash.png" alt="Cash" class="icon-inline" /><span id="stats_cash">0</span></strong
+      >
+    </li>
+  </ul>
+  <ul id="engine_status">
+    <li class="desktop-only">
+      <strong title="Engine Status"
+        ><img src="img/ui/icons/icon_time.png" alt="Engine" class="icon-inline" /><span id="engine_status_indicator">●</span></strong
       >
     </li>
   </ul>
@@ -238,50 +260,43 @@
   <!-- Desktop Layout (Single Row) -->
   <div class="info-bar-desktop">
     <button
-      class="info-item heat"
-      id="info_bar_heat_btn_desktop"
-      type="button"
-      tabindex="0"
-      aria-label="Reduce Heat"
-    >
-      <span class="icon">🔥</span>
-      <span class="value" id="info_heat_desktop">496</span>
-      <span class="denom" id="info_heat_denom_desktop">/1K</span>
-    </button>
-    <button
       class="info-item power"
       id="info_bar_power_btn_desktop"
       type="button"
       tabindex="0"
       aria-label="Sell Power"
     >
-      <span class="icon">⚡</span>
+      <img src="img/ui/icons/icon_power.png" alt="Power" class="icon" />
       <span class="value" id="info_power_desktop">100</span>
       <span class="denom" id="info_power_denom_desktop">/100</span>
     </button>
     <span class="info-item money"
-      ><span class="icon">$</span>
+      ><img src="img/ui/icons/icon_cash.png" alt="Cash" class="icon" />
       <span class="value" id="info_money_desktop">20.6K</span></span
     >
-    <span class="info-item ep" id="info_ep_desktop" style="display: none;">
-      <span class="icon">🧬</span>
-      <span class="value" id="info_ep_value_desktop">0</span>
+        <span class="info-item ep" id="info_ep_desktop">
+      <span class="ep-content" style="display: none;">
+        <span class="icon">🧬</span>
+        <span class="value" id="info_ep_value_desktop">0</span>
+      </span>
     </span>
+    <button
+      class="info-item heat"
+      id="info_bar_heat_btn_desktop"
+      type="button"
+      tabindex="0"
+      aria-label="Reduce Heat"
+    >
+      <img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon" />
+      <span class="value" id="info_heat_desktop">496</span>
+      <span class="denom" id="info_heat_denom_desktop">/1K</span>
+    </button>
+
   </div>
 
   <!-- Mobile Layout (Two Rows) -->
   <div class="info-bar-mobile">
     <div class="info-row info-main">
-      <button
-        class="info-item heat"
-        id="info_bar_heat_btn"
-        type="button"
-        tabindex="0"
-        aria-label="Reduce Heat"
-      >
-        <span class="icon">🔥</span>
-        <span class="value" id="info_heat">496</span>
-      </button>
       <button
         class="info-item power"
         id="info_bar_power_btn"
@@ -289,25 +304,37 @@
         tabindex="0"
         aria-label="Sell Power"
       >
-        <span class="icon">⚡</span>
+        <img src="img/ui/icons/icon_power.png" alt="Power" class="icon" />
         <span class="value" id="info_power">100</span>
       </button>
       <span class="info-item money"
-        ><span class="icon">$</span>
+        ><img src="img/ui/icons/icon_cash.png" alt="Cash" class="icon" />
         <span class="value" id="info_money">20.6K</span></span
       >
+      <button
+        class="info-item heat"
+        id="info_bar_heat_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Reduce Heat"
+      >
+        <img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon" />
+        <span class="value" id="info_heat">496</span>
+      </button>
     </div>
     <div class="info-row info-denom">
-      <span class="info-item heat"
-        ><span class="denom" id="info_heat_denom">/1K</span></span
-      >
       <span class="info-item power"
         ><span class="denom" id="info_power_denom">/100</span></span
       >
-      <span class="info-item ep" id="info_ep" style="display: none;">
-        <span class="icon">🧬</span>
-        <span class="value" id="info_ep_value">0</span>
-      </span>
+                 <span class="info-item ep" id="info_ep">
+             <span class="ep-content" style="display: none;">
+               <span class="icon">🧬</span>
+               <span class="value" id="info_ep_value">0</span>
+             </span>
+           </span>
+      <span class="info-item heat"
+        ><span class="denom" id="info_heat_denom">/1K</span></span
+      >
     </div>
   </div>
 </footer>

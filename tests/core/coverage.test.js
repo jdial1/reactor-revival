@@ -459,6 +459,18 @@ describe("Logical Duplication Tests", () => {
         setVar: () => { },
         getVar: () => { },
         setClickedPart: () => { },
+        handleObjectiveLoaded: vi.fn(),
+        handleObjectiveUnloaded: vi.fn(),
+        handleObjectiveCompleted: vi.fn(),
+        handlePartAdded: vi.fn(),
+        handleUpgradeAdded: vi.fn(),
+        handleTileAdded: vi.fn(),
+        game_reset: vi.fn(),
+        getAllVars: vi.fn(),
+        addPartIconsToTitle: vi.fn(),
+        checkObjectiveTextScrolling: vi.fn(),
+        updatePartsPanelToggleIcon: vi.fn(),
+        setGame: vi.fn(),
       },
     };
 

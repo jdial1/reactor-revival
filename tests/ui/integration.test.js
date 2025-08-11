@@ -48,7 +48,21 @@ describe("UI Integration and Gameplay", () => {
     // 4. Simulate placing the part (what clicking would do)
     if (game.current_money >= uraniumPart.cost) {
       game.current_money -= uraniumPart.cost;
-      tile.setPart(uraniumPart);
+      await tile.setPart(uraniumPart);
+
+      // Activate the cell and set ticks so it generates power and heat
+      tile.activated = true;
+      tile.ticks = 10;
+
+      // Update reactor stats to include the new part
+      game.reactor.updateStats();
+
+      // Force update the engine's part cache to include the new part
+      game.engine.markPartCacheAsDirty();
+      game.engine._updatePartCaches();
+
+      // Ensure the engine is running so it can process the part
+      game.engine.running = true;
     }
 
     // 5. Verify the part was placed

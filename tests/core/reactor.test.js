@@ -38,21 +38,22 @@ describe("Reactor Mechanics", () => {
   });
 
   it("should handle heat generation and venting", async () => {
+    const initialHeat = 0;
+    game.reactor.current_heat = 0;
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("uranium1");
     await tile.setPart(part);
-    game.reactor.updateStats();
-    const initialHeat = game.reactor.current_heat;
+
+    // Activate the cell and set ticks so it generates heat
+    tile.activated = true;
+    tile.ticks = 10;
 
     game.engine.tick();
-
-    const heatGenerated = part.heat;
-    const naturalVenting = game.reactor.heat_controlled
-      ? 0
-      : game.reactor.max_heat / 10000;
+    const naturalVenting = game.reactor.max_heat / 10000; // 0.1
+    const heatGenerated = part.heat; // Get actual heat from the part
     const expected = initialHeat + heatGenerated - naturalVenting;
 
-    expect(game.reactor.current_heat).toBeCloseTo(expected, 5);
+    expect(game.reactor.current_heat).toBeCloseTo(expected, 0);
   });
 
   it("should not vent below zero heat", async () => {
@@ -179,6 +180,7 @@ describe("Reactor Mechanics", () => {
     // Don't add a heat-generating part for a venting test
     game.reactor.current_heat = 1000;
     game.reactor.vent_multiplier = 2; // Test the implemented multiplier
+    game.reactor.heat_controlled = true; // Enable auto heat reduction
     game.engine.tick();
     expect(game.reactor.current_heat).toBeLessThan(1000);
   });

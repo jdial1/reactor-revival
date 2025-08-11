@@ -25,7 +25,11 @@ describe("PageRouter Grid Transition", () => {
             DOMElements: mockDOMElements,
             resizeReactor: vi.fn(),
             showObjectivesForPage: vi.fn(),
-            initializePage: vi.fn()
+            initializePage: vi.fn(),
+            stateManager: {
+                getVar: vi.fn().mockReturnValue(false),
+                setVar: vi.fn()
+            }
         };
 
         // Create game mock
@@ -34,14 +38,8 @@ describe("PageRouter Grid Transition", () => {
                 start: vi.fn(),
                 stop: vi.fn()
             },
-            reactor: {
-                has_melted_down: false
-            },
-            ui: {
-                stateManager: {
-                    getVar: vi.fn().mockReturnValue(false) // Not manually paused
-                }
-            }
+            reactor: { has_melted_down: false },
+            ui: ui // Add this line to correctly structure the mock
         };
 
         ui.game = game;

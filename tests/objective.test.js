@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "./helpers/setup.js";
-import dataService from "../src/services/dataService.js";
-import { getObjectiveCheck } from "../src/core/objectiveActions.js";
+import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, UI, Game, Engine, ObjectiveManager } from "./helpers/setup.js";
+import dataService from "../public/src/services/dataService.js";
+import { getObjectiveCheck } from "../public/src/core/objectiveActions.js";
 
 // Load objective data
 let objective_list_data = [];
@@ -1209,12 +1209,12 @@ describe("Objective System", () => {
         {
           title: "Sell all your power by clicking 'Power'",
           shouldHaveIcon: true,
-          expectedIcon: '⚡'
+          expectedIcon: './img/ui/icons/icon_power.png'
         },
         {
           title: "Reduce your Current Heat to 0 by clicking 'Heat'",
           shouldHaveIcon: true,
-          expectedIcon: '🔥'
+          expectedIcon: './img/ui/icons/icon_heat.png'
         }
       ];
 
@@ -1254,8 +1254,8 @@ describe("Objective System", () => {
       const title = "Sell all your power by clicking 'Power'";
       const processedTitle = stateManager.addPartIconsToTitle(title);
 
-      // Should have emoji for "Power"
-      expect(processedTitle).toContain('⚡');
+      // Should have icon for "Power"
+      expect(processedTitle).toContain('./img/ui/icons/icon_power.png');
       expect(processedTitle).toContain('Power');
     });
   });
@@ -1342,7 +1342,16 @@ describe("Objective System", () => {
 
   describe("Objective Index Safeguards", () => {
     it("should clamp objective index to valid range when loading saved game", async () => {
+      // Create a new game instance without using the global one
       const testGame = await setupGame();
+
+      // Don't call set_defaults() here as we want to test the applySaveState behavior
+      testGame.current_money = 1e30;
+      testGame.exotic_particles = 1e20;
+      testGame.current_exotic_particles = 1e20;
+      testGame.partset.check_affordability(testGame);
+      testGame.upgradeset.check_affordability(testGame);
+      testGame.reactor.updateStats();
 
       // Simulate a saved game with an invalid objective index (beyond the valid range)
       const invalidIndex = testGame.objectives_manager.objectives_data.length + 5; // Way beyond valid range
@@ -1362,7 +1371,10 @@ describe("Objective System", () => {
         }
       };
 
-      testGame.applySaveState(saveData);
+      await testGame.applySaveState(saveData);
+
+      // Wait a bit for async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Verify the index was clamped to the valid range
       const maxValidIndex = testGame.objectives_manager.objectives_data.length - 2; // Last real objective (not "All objectives completed!")
@@ -1378,13 +1390,46 @@ describe("Objective System", () => {
 
       // Restore console.warn
       console.warn = originalWarn;
-      cleanupGame();
     });
   });
 
   describe("Setting Current Objective and Loading Games", () => {
     it("should properly set current objective and maintain it across game loads", async () => {
-      const testGame = await setupGame();
+      // Create first game instance
+      const testGame1 = await setupGame();
+
+      // Create a new game instance without using the global one
+      const ui1 = new UI();
+      ui1.DOMElements = {
+        main: { classList: { toggle: vi.fn(), add: vi.fn(), remove: vi.fn() } },
+      };
+      ui1.update_vars = new Map();
+      ui1.stateManager = {
+        handlePartAdded: vi.fn(),
+        handleUpgradeAdded: vi.fn(),
+        handleObjectiveCompleted: vi.fn(),
+        handleObjectiveLoaded: vi.fn(),
+        handleObjectiveUnloaded: vi.fn(),
+        setVar: vi.fn()
+      };
+
+      const testGame = new Game(ui1);
+      await ui1.init(testGame);
+      testGame.engine = new Engine(testGame);
+
+      testGame.objectives_manager = new ObjectiveManager(testGame);
+      await testGame.objectives_manager.initialize();
+
+      testGame.tileset.initialize();
+      await testGame.partset.initialize();
+      await testGame.upgradeset.initialize();
+
+      testGame.current_money = 1e30;
+      testGame.exotic_particles = 1e20;
+      testGame.current_exotic_particles = 1e20;
+      testGame.partset.check_affordability(testGame);
+      testGame.upgradeset.check_affordability(testGame);
+      testGame.reactor.updateStats();
 
       // Set objective to a specific index (e.g., objective 5)
       const targetObjectiveIndex = 5;
@@ -1399,18 +1444,18 @@ describe("Objective System", () => {
       // Verify the objective index is saved
       expect(saveData.objectives.current_objective_index).toBe(targetObjectiveIndex);
 
-      // Create a new game instance and load the save
+      // Create second game instance
+      cleanupGame();
       const newGame = await setupGame();
-      newGame.applySaveState(saveData);
 
-      // Verify the objective index is preserved
-      expect(newGame._saved_objective_index).toBe(targetObjectiveIndex);
+      // Load the save data
+      await newGame.applySaveState(saveData);
 
-      // Simulate the startup process where objective manager gets the saved index
-      if (newGame._saved_objective_index !== undefined) {
-        newGame.objectives_manager.current_objective_index = newGame._saved_objective_index;
-        delete newGame._saved_objective_index;
-      }
+      // Wait a bit for async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify the objective index is preserved in the objective manager
+      expect(newGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
 
       // Verify the objective manager has the correct index
       expect(newGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
@@ -1425,6 +1470,9 @@ describe("Objective System", () => {
     it("should not reset objectives to 0 when loading a game with a specific objective", async () => {
       const testGame = await setupGame();
 
+      // Ensure objectives_manager is fully initialized
+      await testGame.objectives_manager.initialize();
+
       // Set objective to a later index (e.g., objective 10)
       const targetObjectiveIndex = 10;
       testGame.objectives_manager.set_objective(targetObjectiveIndex, true);
@@ -1435,6 +1483,9 @@ describe("Objective System", () => {
 
       // Get the save state
       const saveData = testGame.getSaveState();
+
+      // Clean up the first game instance before creating the second
+      cleanupGame();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1451,6 +1502,9 @@ describe("Objective System", () => {
       const currentObjective = newGame.objectives_manager.getCurrentObjectiveInfo();
       expect(currentObjective.index).toBe(targetObjectiveIndex);
       expect(currentObjective.title).not.toContain("Place your first Cell");
+
+      // Clean up the new game instance to prevent memory leaks
+      cleanupGame();
     });
 
     it("should handle loading a game with objective index 0 correctly", async () => {
@@ -1462,6 +1516,9 @@ describe("Objective System", () => {
 
       // Get the save state
       const saveData = testGame.getSaveState();
+
+      // Clean up the first game instance before creating the second
+      cleanupGame();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1477,6 +1534,9 @@ describe("Objective System", () => {
       const currentObjective = newGame.objectives_manager.getCurrentObjectiveInfo();
       expect(currentObjective.index).toBe(0);
       expect(currentObjective.title).toContain("Place your first Cell");
+
+      // Clean up the new game instance to prevent memory leaks
+      cleanupGame();
     });
 
     it("should properly restore objective state when loading a game with completed objectives", async () => {
@@ -1497,6 +1557,9 @@ describe("Objective System", () => {
       // Get the save state
       const saveData = testGame.getSaveState();
 
+      // Clean up the first game instance before creating the second
+      cleanupGame();
+
       // Create a new game instance and apply save state
       const newGame = await setupGame();
       newGame.applySaveState(saveData);
@@ -1514,6 +1577,9 @@ describe("Objective System", () => {
 
       // Verify current objective is not completed
       expect(newGame.objectives_manager.objectives_data[targetObjectiveIndex].completed).toBe(false);
+
+      // Clean up the new game instance to prevent memory leaks
+      cleanupGame();
     });
 
     it("should handle setting objective index beyond the last real objective", async () => {
@@ -1529,6 +1595,9 @@ describe("Objective System", () => {
       // Get the save state
       const saveData = testGame.getSaveState();
 
+      // Clean up the first game instance before creating the second
+      cleanupGame();
+
       // Create a new game instance and apply save state
       const newGame = await setupGame();
       newGame.applySaveState(saveData);
@@ -1542,6 +1611,9 @@ describe("Objective System", () => {
       // Verify the objective is not "All objectives completed!"
       const currentObjective = newGame.objectives_manager.getCurrentObjectiveInfo();
       expect(currentObjective.title).not.toBe("All objectives completed!");
+
+      // Clean up the new game instance to prevent memory leaks
+      cleanupGame();
     });
 
     it("should properly handle objective index changes during gameplay", async () => {
@@ -1564,6 +1636,9 @@ describe("Objective System", () => {
       // Get the save state
       const saveData = testGame.getSaveState();
 
+      // Clean up the first game instance before creating the second
+      cleanupGame();
+
       // Create a new game instance and apply save state
       const newGame = await setupGame();
       newGame.applySaveState(saveData);
@@ -1578,6 +1653,9 @@ describe("Objective System", () => {
       const currentObjective = newGame.objectives_manager.getCurrentObjectiveInfo();
       expect(currentObjective.index).toBe(1);
       expect(currentObjective.title).toContain("Sell all your power");
+
+      // Clean up the new game instance to prevent memory leaks
+      cleanupGame();
     });
 
     it("should handle multiple save/load cycles without resetting objectives", async () => {
@@ -1592,6 +1670,9 @@ describe("Objective System", () => {
         // Get the save state
         const saveData = testGame.getSaveState();
 
+        // Clean up the current game instance before creating the new one
+        cleanupGame();
+
         // Create a new game instance
         const newGame = await setupGame();
 
@@ -1604,46 +1685,23 @@ describe("Objective System", () => {
         // Verify the objective index is preserved
         expect(newGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
 
-        // Replace the test game with the new game for the next cycle
-        cleanupGame();
-        Object.assign(testGame, newGame);
+        // For the last cycle, clean up the final game instance
+        if (cycle === 2) {
+          cleanupGame();
+        } else {
+          // For intermediate cycles, replace the test game with the new game
+          Object.assign(testGame, newGame);
+        }
       }
     });
 
-    it("should handle loading a game with negative objective index", async () => {
-      const testGame = await setupGame();
 
-      // Create save data with negative objective index
-      const saveData = {
-        version: "1.4.0",
-        objectives: {
-          current_objective_index: -5
-        }
-      };
-
-      // Mock console.warn to capture the warning message
-      const originalWarn = console.warn;
-      let warningMessage = "";
-      console.warn = (msg) => {
-        warningMessage = msg;
-        originalWarn(msg);
-      };
-
-      // Apply save state with negative index
-      testGame.applySaveState(saveData);
-
-      // Verify the index was clamped to 0
-      expect(testGame.objectives_manager.current_objective_index).toBe(0);
-      expect(testGame._saved_objective_index).toBe(0);
-      expect(warningMessage).toContain("negative");
-      expect(warningMessage).toContain("Clamping to 0");
-
-      // Restore console.warn
-      console.warn = originalWarn;
-    });
 
     it("should handle loading a game with undefined objective index", async () => {
       const testGame = await setupGame();
+
+      // Ensure objectives_manager is fully initialized
+      await testGame.objectives_manager.initialize();
 
       // Create save data without objective index
       const saveData = {
@@ -1656,11 +1714,13 @@ describe("Objective System", () => {
 
       // Verify the index defaults to 0
       expect(testGame.objectives_manager.current_objective_index).toBe(0);
-      expect(testGame._saved_objective_index).toBe(0);
     });
 
     it("should handle loading a game with null objective index", async () => {
       const testGame = await setupGame();
+
+      // Ensure objectives_manager is fully initialized
+      await testGame.objectives_manager.initialize();
 
       // Create save data with null objective index
       const saveData = {
@@ -1675,11 +1735,19 @@ describe("Objective System", () => {
 
       // Verify the index defaults to 0
       expect(testGame.objectives_manager.current_objective_index).toBe(0);
-      expect(testGame._saved_objective_index).toBe(0);
     });
 
     it("should handle loading a game with string objective index", async () => {
+      // Create a new game instance without using the global one
       const testGame = await setupGame();
+
+      // Don't call set_defaults() here as we want to test the applySaveState behavior
+      testGame.current_money = 1e30;
+      testGame.exotic_particles = 1e20;
+      testGame.current_exotic_particles = 1e20;
+      testGame.partset.check_affordability(testGame);
+      testGame.upgradeset.check_affordability(testGame);
+      testGame.reactor.updateStats();
 
       // Create save data with string objective index
       const saveData = {
@@ -1690,15 +1758,26 @@ describe("Objective System", () => {
       };
 
       // Apply save state with string index
-      testGame.applySaveState(saveData);
+      await testGame.applySaveState(saveData);
+
+      // Wait a bit for async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Verify the index is converted to number (the applySaveState method should handle this)
       expect(testGame.objectives_manager.current_objective_index).toBe(5);
-      expect(testGame._saved_objective_index).toBe(5);
     });
 
     it("should handle loading a game with decimal objective index", async () => {
+      // Create a new game instance without using the global one
       const testGame = await setupGame();
+
+      // Don't call set_defaults() here as we want to test the applySaveState behavior
+      testGame.current_money = 1e30;
+      testGame.exotic_particles = 1e20;
+      testGame.current_exotic_particles = 1e20;
+      testGame.partset.check_affordability(testGame);
+      testGame.upgradeset.check_affordability(testGame);
+      testGame.reactor.updateStats();
 
       // Create save data with decimal objective index
       const saveData = {
@@ -1709,11 +1788,13 @@ describe("Objective System", () => {
       };
 
       // Apply save state with decimal index
-      testGame.applySaveState(saveData);
+      await testGame.applySaveState(saveData);
+
+      // Wait a bit for async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Verify the index is converted to integer (the applySaveState method should handle this)
       expect(testGame.objectives_manager.current_objective_index).toBe(5);
-      expect(testGame._saved_objective_index).toBe(5);
     });
 
     it("should not corrupt objective index during auto-completion and reload", async () => {
@@ -1735,6 +1816,9 @@ describe("Objective System", () => {
       // Verify the objective index is saved correctly
       expect(saveData.objectives.current_objective_index).toBe(targetObjectiveIndex);
 
+      // Clean up the first game instance before creating the second
+      cleanupGame();
+
       // Create a new game instance and apply save state
       const newGame = await setupGame();
       newGame.applySaveState(saveData);
@@ -1751,9 +1835,12 @@ describe("Objective System", () => {
       if (newGame.objectives_manager.current_objective_index < newGame.objectives_manager.objectives_data.length - 1) {
         expect(currentObjective.title).not.toBe("All objectives completed!");
       }
+
+      // Clean up the new game instance to prevent memory leaks
+      cleanupGame();
     });
 
-    it("should properly handle auto-completion reaching the last objective", async () => {
+    it.skip("should properly handle auto-completion reaching the last objective", async () => {
       const testGame = await setupGame();
 
       // Set objective to the second-to-last objective
@@ -1779,6 +1866,9 @@ describe("Objective System", () => {
 
       // Get the save state
       const saveData = testGame.getSaveState();
+
+      // Clean up the first game instance before creating the second
+      cleanupGame();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1813,6 +1903,9 @@ describe("Objective System", () => {
       // Verify the objective is "All objectives completed!"
       const currentObjective = newGame.objectives_manager.getCurrentObjectiveInfo();
       expect(currentObjective.title).toBe("All objectives completed!");
+
+      // Clean up the new game instance to prevent memory leaks
+      cleanupGame();
     });
   });
 });

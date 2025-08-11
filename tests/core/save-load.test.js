@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame, cleanupGame, Game, UI } from "../helpers/setup.js";
 import objective_list_data from "../../public/data/objective_list.json";
-import { getObjectiveCheck } from "../../src/core/objectiveActions.js";
+import { getObjectiveCheck } from "../../public/src/core/objectiveActions.js";
 
 // Helper to set up the game state for each objective
 async function satisfyObjective(game, idx) {
@@ -124,7 +124,7 @@ describe("Save and Load Functionality", () => {
 
         // Create a new game instance to load into
         const newGame = await setupGame();
-        const loaded = newGame.loadGame();
+        const loaded = await newGame.loadGame();
 
         // Wait for upgrade loading to complete
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -236,7 +236,7 @@ describe("Save and Load Functionality", () => {
         const game2 = await setupGame();
         await game2.set_defaults();
         // Re-create the ObjectiveManager to ensure a fresh state (like in app.js)
-        const { ObjectiveManager } = require("../../src/core/objective.js");
+        const { ObjectiveManager } = require("../../public/src/core/objective.js");
         game2.objectives_manager = new ObjectiveManager(game2);
         await game2.objectives_manager.initialize();
         game2.objectives_manager.start();
@@ -245,6 +245,9 @@ describe("Save and Load Functionality", () => {
         expect(game2.objectives_manager.current_objective_index).toBe(0);
         expect(game2.objectives_manager.objectives_data[0].completed).not.toBe(true);
         // The first objective should not be completed in the new game
+
+        // Clean up game instances to prevent memory leaks
+        cleanupGame();
     });
 
     it("should not re-reward completed objectives when loading a saved game", async () => {
@@ -301,6 +304,9 @@ describe("Save and Load Functionality", () => {
 
         // 5. Verify that we're at the current objective (not back at the beginning)
         expect(game2.objectives_manager.current_objective_index).toBeGreaterThan(0);
+
+        // Clean up game instances to prevent memory leaks
+        cleanupGame();
     });
 });
 

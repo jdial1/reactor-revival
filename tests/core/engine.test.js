@@ -48,8 +48,15 @@ describe("Engine Mechanics", () => {
     // Set up auto-sell
     game.ui.stateManager.setVar("auto_sell", true);
     game.reactor.auto_sell_multiplier = 0.1;
-    game.reactor.current_power = 650;
+    game.reactor.current_power = 649; // Start with 649 so after +1 from uranium = 650, then -100 from auto-sell = 550
     game.reactor.altered_max_power = 1000; // Set altered_max_power instead of max_power
+
+    // Add a fuel cell to generate power during the tick
+    const fuelPart = game.partset.getPartById("uranium1");
+    const tile = game.tileset.getTile(0, 0);
+    await tile.setPart(fuelPart);
+    tile.activated = true;
+    tile.ticks = 10;
 
     const initialMoney = game.current_money;
     let autoSellCallCount = 0;
@@ -84,7 +91,7 @@ describe("Engine Mechanics", () => {
     // Manually simulate the auto-sell logic
     game.ui.stateManager.setVar("auto_sell", true);
     game.reactor.auto_sell_multiplier = 0.1;
-    game.reactor.current_power = 650;
+    game.reactor.current_power = 650; // This test doesn't add a uranium cell, so 650 is correct
     game.reactor.max_power = 1000;
 
     const initialMoney = game.current_money;
@@ -347,9 +354,13 @@ describe("Engine Mechanics", () => {
     // Helper function to test if a part explodes when exceeding containment
     async function testPartExplosion(partId, description) {
       it(`should explode ${description} when exceeding containment`, async () => {
+        // Clear all tiles to ensure isolation
+        game.tileset.clearAllTiles();
+
         const tile = game.tileset.getTile(0, 0);
         const part = game.partset.getPartById(partId);
         await tile.setPart(part);
+        tile.activated = true; // Activate the tile so it's processed by the engine
 
         // Verify the part has containment
         expect(part.containment).toBeGreaterThan(0);
@@ -357,6 +368,9 @@ describe("Engine Mechanics", () => {
         // Set heat above containment limit
         const testHeat = part.containment * 1.5;
         tile.heat_contained = testHeat;
+
+        // Debug logging
+        console.log(`[DEBUG] Test setup: part=${part.id}, containment=${part.containment}, testHeat=${testHeat}, heat_contained=${tile.heat_contained}`);
 
         // Mock the explosion handler to track if it was called
         const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
@@ -387,9 +401,13 @@ describe("Engine Mechanics", () => {
     testPartExplosion("coolant_cell6", "thermionic coolant cell");
     // Special test for particle accelerator since it triggers meltdown
     it("should trigger meltdown when particle accelerator exceeds containment", async () => {
+      // Clear all tiles to ensure isolation
+      game.tileset.clearAllTiles();
+
       const tile = game.tileset.getTile(0, 0);
       const part = game.partset.getPartById("particle_accelerator1");
       await tile.setPart(part);
+      tile.activated = true; // Activate the tile so it's processed by the engine
 
       // Verify the part has containment
       expect(part.containment).toBeGreaterThan(0);
@@ -416,6 +434,9 @@ describe("Engine Mechanics", () => {
     });
 
     it("should NOT explode parts without containment", async () => {
+      // Clear all tiles to ensure isolation
+      game.tileset.clearAllTiles();
+
       const tile = game.tileset.getTile(0, 0);
       const part = game.partset.getPartById("uranium1"); // No containment
       await tile.setPart(part);
@@ -443,6 +464,9 @@ describe("Engine Mechanics", () => {
     });
 
     it("should NOT explode parts when heat is below containment", async () => {
+      // Clear all tiles to ensure isolation
+      game.tileset.clearAllTiles();
+
       const tile = game.tileset.getTile(0, 0);
       const part = game.partset.getPartById("vent1");
       await tile.setPart(part);
@@ -496,9 +520,13 @@ describe("Engine Mechanics", () => {
     });
 
     it("should explode when heat exceeds containment by any amount", async () => {
+      // Clear all tiles to ensure isolation
+      game.tileset.clearAllTiles();
+
       const tile = game.tileset.getTile(0, 0);
       const part = game.partset.getPartById("vent1");
       await tile.setPart(part);
+      tile.activated = true; // Activate the tile so it's processed by the engine
 
       // Set heat just above containment limit
       tile.heat_contained = part.containment + 0.1;
@@ -521,12 +549,17 @@ describe("Engine Mechanics", () => {
     });
 
     it("should handle multiple explosions in the same tick", async () => {
+      // Clear all tiles to ensure isolation
+      game.tileset.clearAllTiles();
+
       const tile1 = game.tileset.getTile(0, 0);
       const tile2 = game.tileset.getTile(1, 0);
       const part = game.partset.getPartById("vent1");
 
       await tile1.setPart(part);
       await tile2.setPart(part);
+      tile1.activated = true; // Activate the tiles so they're processed by the engine
+      tile2.activated = true;
 
       // Set both tiles above containment
       tile1.heat_contained = part.containment * 1.5;
@@ -551,9 +584,13 @@ describe("Engine Mechanics", () => {
     });
 
     it("should skip venting for exploded components", async () => {
+      // Clear all tiles to ensure isolation
+      game.tileset.clearAllTiles();
+
       const tile = game.tileset.getTile(0, 0);
       const part = game.partset.getPartById("vent1");
       await tile.setPart(part);
+      tile.activated = true; // Activate the tile so it's processed by the engine
 
       // Set heat above containment to trigger explosion
       tile.heat_contained = part.containment * 1.5;
@@ -582,6 +619,8 @@ describe("Engine Mechanics", () => {
     });
 
     it("should allow heat outlets to overfill components beyond containment", async () => {
+      // Clear all tiles to ensure isolation
+      game.tileset.clearAllTiles();
       // Set up a heat outlet and a component with containment - place them adjacent
       const outletTile = game.tileset.getTile(0, 0);
       const componentTile = game.tileset.getTile(0, 1); // Adjacent to outlet
@@ -633,6 +672,7 @@ describe("Engine Mechanics", () => {
       const tile = game.tileset.getTile(0, 0);
       const part = game.partset.getPartById("vent1");
       await tile.setPart(part);
+      tile.activated = true; // Activate the tile so it's processed by the engine
 
       // Set heat above containment to trigger explosion
       tile.heat_contained = part.containment * 1.5;
@@ -670,7 +710,7 @@ describe("Engine Mechanics", () => {
     expect(game.paused).toBe(true);
 
     // Process a tick while paused
-    game.engine.tick();
+    game.engine.manualTick();
 
     // Heat should not change when game is paused
     expect(game.reactor.current_heat).toBe(initialHeat);
@@ -681,7 +721,7 @@ describe("Engine Mechanics", () => {
     expect(game.paused).toBe(false);
 
     // Process a tick while unpaused
-    game.engine.tick();
+    game.engine.manualTick();
 
     // Heat should now change when game is unpaused
     expect(game.reactor.current_heat).toBeGreaterThan(initialHeat);

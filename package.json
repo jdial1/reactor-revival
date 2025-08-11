@@ -7,10 +7,11 @@
   "debug": false,
   "scripts": {
     "test": "vitest --run",
-    "start": "live-server --port=8080 --open=public/ --entry-file=public/index.html",
+    "start": "npm run copy-src && live-server --port=8080 --open=public/ --entry-file=public/index.html",
     "setup": "npm run generate-version && npm run copy-libs && npm run build:sw",
     "generate-version": "node scripts/generate-version.js",
     "copy-libs": "node scripts/copy-libs.js",
+    "copy-src": "node scripts/build-for-deploy.js",
     "build-for-deploy": "node scripts/build-for-deploy.js",
     "build:sw": "workbox injectManifest workbox-config.cjs",
     "lint": "eslint . --format @microsoft/eslint-formatter-sarif --output-file eslint-results.sarif",

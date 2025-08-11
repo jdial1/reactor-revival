@@ -53,13 +53,23 @@ describe('EP Info Bar Display', () => {
         const mobileEl = document.getElementById("info_ep");
         const desktopEl = document.getElementById("info_ep_desktop");
 
+        // Start with EP visible
+        game.exotic_particles = 10;
+        game.ui.stateManager.setVar("exotic_particles", 10);
+        game.ui.processUpdateQueue();
+
+        // FIX: Check the inner content element, not the parent
+        expect(mobileEl.querySelector('.ep-content').style.display).not.toBe("none");
+        expect(desktopEl.querySelector('.ep-content').style.display).not.toBe("none");
+
         // Set EP to zero
         game.exotic_particles = 0;
         game.ui.stateManager.setVar("exotic_particles", 0);
+        game.ui.processUpdateQueue();
 
-        // Check that EP display elements are hidden
-        expect(mobileEl.style.display).toBe("none");
-        expect(desktopEl.style.display).toBe("none");
+        // FIX: Check the inner content element again
+        expect(mobileEl.querySelector('.ep-content').style.display).toBe("none");
+        expect(desktopEl.querySelector('.ep-content').style.display).toBe("none");
     });
 
     it('should show EP display immediately when loading saved game with EP', () => {

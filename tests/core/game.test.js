@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, Game, UI, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, Game, UI, setupGame, cleanupGame } from "../helpers/setup.js";
 
 describe("Core Game Mechanics", () => {
   let game;
@@ -237,7 +237,7 @@ describe("Core Game Mechanics", () => {
 
     // Create a new game instance and apply save state
     const newGame = await setupGame();
-    newGame.applySaveState(saveData);
+    await newGame.applySaveState(saveData);
 
     // Verify the saved objective index is stored for restoration
     expect(newGame._saved_objective_index).toBe(5);
@@ -251,6 +251,9 @@ describe("Core Game Mechanics", () => {
 
     // Verify the objective manager has the correct index
     expect(newGame.objectives_manager.current_objective_index).toBe(5);
+
+    // Clean up the new game instance to prevent memory leaks
+    cleanupGame();
   });
 
   it("should preserve reactor expansion upgrades during reboot", async () => {

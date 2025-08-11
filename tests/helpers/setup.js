@@ -9,12 +9,12 @@ import path from "path";
 import { JSDOM } from "jsdom";
 
 // Core game imports
-import { Game } from "../../src/core/game.js";
-import { UI } from "../../src/components/ui.js";
-import { Engine } from "../../src/core/engine.js";
-import { ObjectiveManager } from "../../src/core/objective.js";
-import { PageRouter } from "../../src/components/pageRouter.js";
-import { TemplateLoader } from "../../src/services/templateLoader.js";
+import { Game } from "../../public/src/core/game.js";
+import { UI } from "../../public/src/components/ui.js";
+import { Engine } from "../../public/src/core/engine.js";
+import { ObjectiveManager } from "../../public/src/core/objective.js";
+import { PageRouter } from "../../public/src/components/pageRouter.js";
+import { TemplateLoader } from "../../public/src/services/templateLoader.js";
 
 // Export all common imports for use in test files
 export {
@@ -244,34 +244,31 @@ let globalGameLogicOnly = null;
 
 export async function setupGame() {
   if (globalGameLogicOnly) {
-    globalGameLogicOnly.tileset.clearAllTiles();
-    globalGameLogicOnly.reactor.setDefaults();
-    globalGameLogicOnly.upgradeset.reset();
-    await globalGameLogicOnly.upgradeset.initialize(); // Re-initialize upgrades after reset
-    globalGameLogicOnly.partset.reset();
-    await globalGameLogicOnly.partset.initialize();
-    await globalGameLogicOnly.objectives_manager.initialize(); // Re-initialize objective manager
+    // Don't call set_defaults() when reusing global instance to preserve save state
+    // Only reset basic values that don't affect save state
     globalGameLogicOnly.current_money = 1e30;
     globalGameLogicOnly.exotic_particles = 1e20;
     globalGameLogicOnly.current_exotic_particles = 1e20;
-    globalGameLogicOnly.rows = globalGameLogicOnly.base_rows;
-    globalGameLogicOnly.cols = globalGameLogicOnly.base_cols;
-    globalGameLogicOnly.tileset.updateActiveTiles();
+    globalGameLogicOnly.partset.check_affordability(globalGameLogicOnly);
+    globalGameLogicOnly.upgradeset.check_affordability(globalGameLogicOnly);
+    globalGameLogicOnly.reactor.updateStats();
 
     if (globalGameLogicOnly.engine && globalGameLogicOnly.engine.running) {
       globalGameLogicOnly.engine.stop();
     }
 
-    // Reset state manager
+    const currentPauseState = globalGameLogicOnly.ui.stateManager.getVar("pause");
+    if (currentPauseState === undefined) {
+      globalGameLogicOnly.paused = false;
+      globalGameLogicOnly.ui.stateManager.setVar("pause", false);
+    } else {
+      globalGameLogicOnly.paused = currentPauseState;
+    }
+
     globalGameLogicOnly.ui.stateManager.setVar("current_money", globalGameLogicOnly.current_money);
     globalGameLogicOnly.ui.stateManager.setVar("exotic_particles", globalGameLogicOnly.exotic_particles);
     globalGameLogicOnly.ui.stateManager.setVar("current_exotic_particles", globalGameLogicOnly.current_exotic_particles);
 
-    globalGameLogicOnly.partset.check_affordability(globalGameLogicOnly);
-    globalGameLogicOnly.upgradeset.check_affordability(globalGameLogicOnly);
-    globalGameLogicOnly.reactor.updateStats();
-
-    // Start the engine for tests (unless explicitly testing pause behavior)
     if (globalGameLogicOnly.engine && !globalGameLogicOnly.paused) {
       globalGameLogicOnly.engine.start();
     }
@@ -289,18 +286,45 @@ export async function setupGame() {
   ui.updateAllToggleBtnStates = vi.fn();
   ui.updateToggleButtonState = vi.fn();
   ui.showPage = vi.fn();
-  ui.stateManager.handlePartAdded = vi.fn();
-  ui.stateManager.handleUpgradeAdded = vi.fn();
-  ui.stateManager.handleObjectiveCompleted = vi.fn();
+
+  // Mock stateManager methods after UI is created
+  if (ui.stateManager) {
+    ui.stateManager.handlePartAdded = vi.fn();
+    ui.stateManager.handleUpgradeAdded = vi.fn();
+    ui.stateManager.handleObjectiveCompleted = vi.fn();
+    ui.stateManager.handleObjectiveLoaded = vi.fn();
+    ui.stateManager.handleObjectiveUnloaded = vi.fn();
+    ui.stateManager.setVar = vi.fn();
+  } else {
+    // Create stateManager if it doesn't exist
+    ui.stateManager = {
+      handlePartAdded: vi.fn(),
+      handleUpgradeAdded: vi.fn(),
+      handleObjectiveCompleted: vi.fn(),
+      handleObjectiveLoaded: vi.fn(),
+      handleObjectiveUnloaded: vi.fn(),
+      setVar: vi.fn()
+    };
+  }
   const game = new Game(ui);
   await ui.init(game);
   game.engine = new Engine(game);
-  game.objectives_manager = new ObjectiveManager(game);
-  await game.objectives_manager.initialize(); // Initialize the objective manager
+
+  // Only create a new objective manager if one doesn't exist
+  if (!game.objectives_manager) {
+    game.objectives_manager = new ObjectiveManager(game);
+    await game.objectives_manager.initialize(); // Initialize the objective manager
+  }
+
   game.tileset.initialize();
   await game.partset.initialize();
   await game.upgradeset.initialize();
-  await game.set_defaults();
+
+  // Only call set_defaults() if there's no saved objective index
+  if (game._saved_objective_index === undefined) {
+    await game.set_defaults();
+  }
+
   game.current_money = 1e30;
   game.exotic_particles = 1e20;
   game.current_exotic_particles = 1e20;
@@ -636,47 +660,121 @@ export async function setupGameWithDOM() {
 }
 
 export function cleanupGame() {
+  // Clean up global game logic instance
   if (globalGameLogicOnly) {
+    // Stop engine and clear timers
     if (globalGameLogicOnly.engine && globalGameLogicOnly.engine.stop) {
       globalGameLogicOnly.engine.stop();
     }
-    if (
-      globalGameLogicOnly.objectives_manager &&
-      globalGameLogicOnly.objectives_manager.objective_timeout
-    ) {
-      clearTimeout(globalGameLogicOnly.objectives_manager.objective_timeout);
+    if (globalGameLogicOnly.engine && globalGameLogicOnly.engine.interval) {
+      clearInterval(globalGameLogicOnly.engine.interval);
+      globalGameLogicOnly.engine.interval = null;
     }
+
+    // Clear objective manager timeouts
+    if (globalGameLogicOnly.objectives_manager) {
+      if (globalGameLogicOnly.objectives_manager.objective_timeout) {
+        clearTimeout(globalGameLogicOnly.objectives_manager.objective_timeout);
+        globalGameLogicOnly.objectives_manager.objective_timeout = null;
+      }
+      // Clear any other timers in objective manager
+      if (globalGameLogicOnly.objectives_manager.timers) {
+        globalGameLogicOnly.objectives_manager.timers.forEach(timer => clearTimeout(timer));
+        globalGameLogicOnly.objectives_manager.timers = [];
+      }
+    }
+
+    // Clear UI update tasks
     if (globalGameLogicOnly.ui?.update_interface_task) {
       clearTimeout(globalGameLogicOnly.ui.update_interface_task);
       globalGameLogicOnly.ui.update_interface_task = null;
     }
+
+    // Clear any other timers
+    if (globalGameLogicOnly.ui?.timers) {
+      globalGameLogicOnly.ui.timers.forEach(timer => clearTimeout(timer));
+      globalGameLogicOnly.ui.timers = [];
+    }
+
+    // Reset pause state
+    globalGameLogicOnly.paused = false;
+    if (globalGameLogicOnly.ui?.stateManager) {
+      globalGameLogicOnly.ui.stateManager.setVar("pause", false);
+    }
+
+    // Clear references to prevent memory leaks
+    globalGameLogicOnly = null;
   }
 
-  // More thorough cleanup for the DOM-based game instance
+  // Clean up DOM-based game instance
   if (globalGameWithDOM) {
+    // Stop engine and clear timers
     if (globalGameWithDOM.engine) {
       globalGameWithDOM.engine.stop();
+      if (globalGameWithDOM.engine.interval) {
+        clearInterval(globalGameWithDOM.engine.interval);
+        globalGameWithDOM.engine.interval = null;
+      }
     }
+
+    // Clear UI update tasks
     if (globalGameWithDOM.ui?.update_interface_task) {
       clearTimeout(globalGameWithDOM.ui.update_interface_task);
       globalGameWithDOM.ui.update_interface_task = null;
     }
-    if (globalGameWithDOM.objectives_manager?.objective_timeout) {
-      clearTimeout(globalGameWithDOM.objectives_manager.objective_timeout);
-      globalGameWithDOM.objectives_manager.objective_timeout = null;
+
+    // Clear objective manager timeouts
+    if (globalGameWithDOM.objectives_manager) {
+      if (globalGameWithDOM.objectives_manager.objective_timeout) {
+        clearTimeout(globalGameWithDOM.objectives_manager.objective_timeout);
+        globalGameWithDOM.objectives_manager.objective_timeout = null;
+      }
+      if (globalGameWithDOM.objectives_manager.timers) {
+        globalGameWithDOM.objectives_manager.timers.forEach(timer => clearTimeout(timer));
+        globalGameWithDOM.objectives_manager.timers = [];
+      }
     }
+
+    // Clear any other timers
+    if (globalGameWithDOM.ui?.timers) {
+      globalGameWithDOM.ui.timers.forEach(timer => clearTimeout(timer));
+      globalGameWithDOM.ui.timers = [];
+    }
+
     globalGameWithDOM = null;
   }
 
+  // Clean up JSDOM environment
   if (global.window && typeof global.window.close === "function") {
-    // This properly disposes of the JSDOM environment, including its timers
+    // Clear all timers in the window
+    if (global.window.setTimeout && global.window.clearTimeout) {
+      // This is a bit aggressive but helps prevent timer leaks
+      const maxTimerId = 10000; // Reasonable upper bound
+      for (let i = 1; i <= maxTimerId; i++) {
+        try {
+          clearTimeout(i);
+          clearInterval(i);
+        } catch (e) {
+          // Ignore errors for non-existent timers
+        }
+      }
+    }
+
+    // Close the window to dispose of JSDOM environment
     global.window.close();
   }
 
-  // Clear any potentially lingering globals to ensure test isolation
+  // Clear global references
   global.window = undefined;
   global.document = undefined;
   global.localStorage = undefined;
+  global.location = undefined;
+  global.navigator = undefined;
+
+  // Force garbage collection if available
+  if (global.gc) {
+    global.gc();
+  }
 }
 
 // Enhanced DOM setup for UI elements required by tests
@@ -799,6 +897,22 @@ beforeEach(() => {
 afterEach(() => {
   cleanupGame();
   vi.restoreAllMocks();
+
+  // Additional memory cleanup
+  if (global.gc) {
+    global.gc();
+  }
+
+  // Clear any remaining timers
+  const maxTimerId = 10000;
+  for (let i = 1; i <= maxTimerId; i++) {
+    try {
+      clearTimeout(i);
+      clearInterval(i);
+    } catch (e) {
+      // Ignore errors for non-existent timers
+    }
+  }
 });
 
 // Custom assertion helpers for focused error reporting

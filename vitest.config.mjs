@@ -25,6 +25,7 @@ export default defineConfig({
       threads: {
         singleThread: true,
         isolate: false,
+        memoryLimit: "4GB", // Increased from 2GB to 4GB
       },
     },
     // Optimize memory usage
@@ -53,7 +54,7 @@ export default defineConfig({
     // Prevent full object dumps in error messages
     errorOnConsole: false,
     env: {
-      NODE_OPTIONS: "--max-old-space-size=4096",
+      NODE_OPTIONS: "--max-old-space-size=8192", // Removed gc-interval as it's not allowed in worker threads
     },
   },
   define: {

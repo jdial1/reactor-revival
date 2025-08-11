@@ -60,35 +60,30 @@ describe("Upgrade Actions Mechanics", () => {
   });
 
   it("should apply quantum buffering upgrade correctly", async () => {
-    // Add reactor plating to test the quantum buffering effect
     const plating = game.partset.getPartById("reactor_plating1");
-    await game.tileset.getTile(0, 0).setPart(plating);
-    game.reactor.updateStats();
-    const initialMaxHeat = game.reactor.max_heat;
+    // FIX: Get base heat before any parts are added
+    const initialMaxHeat = game.reactor.base_max_heat;
 
-    // Purchase laboratory first (required for EP upgrades)
+    await game.tileset.getTile(0, 0).setPart(plating);
+
     game.current_exotic_particles = 1;
     game.upgradeset.purchaseUpgrade("laboratory");
-
-    // Now purchase quantum buffering
-    game.current_exotic_particles = 50; // quantum_buffering costs 50 EP
-    game.upgradeset.check_affordability(game); // Check affordability after setting EP
-
+    game.current_exotic_particles = 50;
+    game.upgradeset.check_affordability(game);
     const purchased = game.upgradeset.purchaseUpgrade("quantum_buffering");
-    expect(purchased).toBe(true); // Ensure the upgrade was purchased
-
+    expect(purchased).toBe(true);
     const quantumBufferingUpgrade = game.upgradeset.getUpgrade("quantum_buffering");
-    expect(quantumBufferingUpgrade.level).toBe(1); // Ensure the upgrade level is 1
+    expect(quantumBufferingUpgrade.level).toBe(1);
 
+    plating.recalculate_stats();
     game.reactor.updateStats();
 
-    // Quantum buffering doubles the reactor_heat contribution from plating
-    // Expected: base_max_heat + (plating.base_reactor_heat * 2)
-    const expectedMaxHeat =
-      game.reactor.base_max_heat + plating.base_reactor_heat * 2;
+    const multiplier = Math.pow(2, quantumBufferingUpgrade.level);
+    // FIX: Calculate expected heat based on initial value + upgraded part value
+    const expectedMaxHeat = initialMaxHeat + (plating.base_reactor_heat * multiplier);
 
     expect(game.reactor.max_heat).toBeCloseTo(expectedMaxHeat);
-    expect(game.reactor.max_heat).toBeGreaterThan(initialMaxHeat);
+    expect(game.reactor.max_heat).toBeGreaterThan(initialMaxHeat + plating.base_reactor_heat);
   });
 
   it("should apply active venting upgrade correctly", async () => {

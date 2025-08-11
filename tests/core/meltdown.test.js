@@ -53,7 +53,7 @@ describe("Reactor Meltdown Scenarios", () => {
         const engineStopSpy = vi.spyOn(game.engine, "stop");
 
         game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.tick();
+        game.engine.manualTick();
 
         expect(engineStopSpy).toHaveBeenCalled();
         expect(game.engine.running).toBe(false);
@@ -62,7 +62,7 @@ describe("Reactor Meltdown Scenarios", () => {
     it("should prevent any further page navigation (except to the research page) after a meltdown", async () => {
         // Trigger a meltdown first
         game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.tick();
+        game.engine.manualTick();
         expect(game.reactor.has_melted_down).toBe(true);
 
         // Attempt to navigate to the upgrades page
@@ -82,14 +82,14 @@ describe("Reactor Meltdown Scenarios", () => {
         const setVarSpy = vi.spyOn(game.ui.stateManager, "setVar");
 
         game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.tick();
+        game.engine.manualTick();
 
         expect(setVarSpy).toHaveBeenCalledWith("melting_down", true, true);
     });
 
     it("should clear the meltdown state upon a full reboot", async () => {
         game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.tick();
+        game.engine.manualTick();
         expect(game.reactor.has_melted_down).toBe(true);
 
         await game.reboot_action(false);
@@ -119,7 +119,7 @@ describe("Reactor Meltdown Scenarios", () => {
 
         // Trigger meltdown
         gameWithDOM.reactor.current_heat = gameWithDOM.reactor.max_heat * 2 + 1;
-        gameWithDOM.engine.tick();
+        gameWithDOM.engine.manualTick();
         expect(gameWithDOM.reactor.has_melted_down).toBe(true);
 
         // Perform reboot
@@ -135,7 +135,7 @@ describe("Reactor Meltdown Scenarios", () => {
 
     it("should clear the meltdown state if a part is placed after a meltdown", async () => {
         game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.tick();
+        game.engine.manualTick();
         expect(game.reactor.has_melted_down).toBe(true);
 
         const tile = game.tileset.getTile(0, 0);
