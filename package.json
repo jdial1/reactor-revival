@@ -6,7 +6,9 @@
   "main": "public/index.html",
   "debug": false,
   "scripts": {
-    "test": "vitest --run",
+    "test": "vitest --run -c vitest.config.mjs",
+    "test:ci": "vitest --run -c vitest.config.mjs",
+    "ci:test": "vitest --run -c vitest.config.mjs",
     "start": "live-server --port=8080 --open=public/ --entry-file=public/index.html",
     "setup": "npm run generate-version && npm run copy-libs && npm run build:sw",
     "generate-version": "node scripts/generate-version.js",
