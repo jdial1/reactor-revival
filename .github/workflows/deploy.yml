@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build source for tests (populate public/src)
+        run: npm run build-for-deploy
+
       - name: Run test suite
         # Exclude UI tests and specific core tests that fail on GitHub Actions due to JSDOM environment differences
         # The excluded tests (clipboard, pasteModal, meltdown) work locally but fail on GitHub Actions
