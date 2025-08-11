@@ -29,8 +29,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build source for tests (populate public/src)
-        run: npm run build-for-deploy
+      # public/src is the single source of truth; no copy step needed
 
       - name: Run test suite
         # Exclude UI tests and specific core tests that fail on GitHub Actions due to JSDOM environment differences
@@ -44,8 +43,7 @@ jobs:
       - name: Copy external libraries
         run: npm run copy-libs
 
-      - name: Build for deployment
-        run: npm run build-for-deploy
+      # No separate build step required; static files are under public/
 
       - name: Fix manifest.json for GitHub Pages
         run: node scripts/fix-github-pages-manifest.js

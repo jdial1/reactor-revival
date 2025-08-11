@@ -24,17 +24,17 @@ The game implements a comprehensive asset management strategy to optimize perfor
 4. **Fallback Handling:** Individual images serve as fallbacks during development
 ## 3. Module Architecture
 The target architecture is a modular, event-driven system designed for performance, testability, and maintainability.
-### 3.1. Core Logic Layer (`src/core/`)
+### 3.1. Core Logic Layer (`public/src/core/`)
 -   **StateManager.js**: The single source of truth for all game state (e.g., `current_money`, `current_heat`, `current_ep`, `total_ep`, `protium_particles`, `pause`, `auto_sell`). Uses an observer pattern to notify subscribers (primarily UI components) of changes. It is the only module authorized to directly mutate state.
 -   **Game.js**: The central orchestrator. Provides a public API for high-level actions (`reboot_action`, `sell_action`), which it delegates to the `StateManager` or other core modules. It does **not** hold its own state, accessing it via getters from the `StateManager`.
 -   **Engine.js**: Manages the main game loop (tick). It delegates per-tick operations to specialized subsystems like the `HeatManager`. Implements performance optimizations such as part categorization and caching.
 -   **HeatManager.js**: A dedicated subsystem to handle all heat transfer logic, abstracting this complexity away from the main `Engine`.
 -   **PartSet.js / UpgradeSet.js**: Manages the collections of all available parts and upgrades, loaded from data files. Handles creation, retrieval, and global updates (e.g., affordability checks).
-### 3.2. UI Layer (`src/components/`)
+### 3.2. UI Layer (`public/src/components/`)
 -   **UI.js**: The primary UI manager. It subscribes to the `StateManager` and orchestrates DOM updates in response to state changes. It caches DOM element references and handles event delegation.
 -   **PageRouter.js**: Handles navigation between game screens (Reactor, Upgrades, Research), loading and unloading page-specific components.
 -   **Page Components (`*Page.js`)**: Encapsulated components for each major UI view, responsible for their own structure and event listeners. They are built from HTML templates and rendered into the main layout.
-### 3.3. Services Layer (`src/services/`)
+### 3.3. Services Layer (`public/src/services/`)
 -   **dataService.js**: A centralized service for fetching and caching all game content from JSON files.
 -   **GoogleDriveSave.js**: Encapsulates all logic for interacting with the Google Drive API for cloud saves.
 ## 4. Functional Requirements (FR)
@@ -127,6 +127,6 @@ The following patterns are considered technical debt and should be refactored or
 - **Solution**: When a new implementation is introduced, a plan must be made to migrate all uses of the old implementation and then delete it entirely, as outlined in the Deprecation Strategy.
 This pattern has been refactored by consolidating all `.unaffordable` styles into a single, canonical definition in `base.css`.
 ### 7.4. Deprecation Example: Google Drive Save Decryption
-- **Legacy Code:** `src/services/GoogleDriveSave.js` contains a `decompressAndDecryptLegacy` method to handle an old `pako`-based save structure.
+- **Legacy Code:** `public/src/services/GoogleDriveSave.js` contains a `decompressAndDecryptLegacy` method to handle an old `pako`-based save structure.
 - **Current Logic:** The primary `decompressAndDecrypt` method uses a `try...catch` block. If the modern `@zip.js` decryption fails, it falls back to the legacy method.
 - **Policy Action:** This fallback is a temporary measure. A formal migration path should be implemented as described in **[SAVE_LOAD_INTEGRITY_IMPLEMENTATION.md](./SAVE_LOAD_INTEGRITY_IMPLEMENTATION.md)**, with a planned removal date for the legacy code.

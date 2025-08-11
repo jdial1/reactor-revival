@@ -1,6 +1,11 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // Treat `public/` as a normal folder in tests so imports like
+  // "../../public/src/components/ui.js" resolve in CI.
+  // Without this, Vite considers `public/` a static assets dir and won't
+  // include modules from there in the module graph during Vitest runs.
+  publicDir: false,
   test: {
     globals: true,
     environment: "jsdom",

@@ -11,7 +11,7 @@ This document reviews the auto heat testing functionality in the Reactor Revival
 The game has **one unified heat reduction mechanism**:
 
 **Auto Heat Reduction** (Conditional)
-- Location: `src/core/engine.js` lines 433-443
+- Location: `public/src/core/engine.js` lines 433-443
 - Logic: Only reduces heat when `reactor.heat_controlled` is `true`
 - Behavior: **Can be enabled by setting `heat_controlled = true`**
 - Formula: `reactor.current_heat -= (reactor.max_heat / 10000) * vent_multiplier`
@@ -59,7 +59,7 @@ I created comprehensive tests in `tests/core/auto-heat-testing.test.js` that ver
 **Issue**: `heat_control` state is saved in the save state but not restored when loading.
 
 **Location**: 
-- Save: `src/core/game.js` line 407
+- Save: `public/src/core/game.js` line 407
 - Load: Missing in `applySaveState` method
 
 **Impact**: Players lose their heat control setting when loading a saved game.

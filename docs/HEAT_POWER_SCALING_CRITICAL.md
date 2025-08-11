@@ -40,7 +40,7 @@ Logarithmic Formula:
 Detection and Prevention
 Code Comments
 
-Both src/core/reactor.js and src/core/part.js contain critical comments explaining why logarithmic scaling must be used.
+Both `public/src/core/reactor.js` and `public/src/core/part.js` contain critical comments explaining why logarithmic scaling must be used.
 Comprehensive Tests
 
     tests/core/heat-power-scaling.test.js - Dedicated test suite
@@ -76,8 +76,8 @@ Common AI Refactoring Pitfalls
 Implementation Locations
 Primary Implementation
 
-    src/core/reactor.js:56 - Main reactor power calculation
-    src/core/part.js:278 - Part power calculation
+    public/src/core/reactor.js:56 - Main reactor power calculation
+    public/src/core/part.js:278 - Part power calculation
 
 Test Coverage
 

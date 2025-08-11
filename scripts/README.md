@@ -31,9 +31,9 @@ Validates PWA deployment by checking manifest, service worker, and critical asse
 
 ## Project Structure
 
-The project now follows a modern structure:
+The project now uses `public/` as the single source of truth for both static assets and application code.
 
-### `public/` - Static assets served directly to the browser
+### `public/` - Application and assets
 - `index.html` - Main application entry point
 - `manifest.json` - PWA manifest
 - `sw.js` - Service worker
@@ -46,16 +46,15 @@ The project now follows a modern structure:
 - `pages/` - HTML partials
 - `components/` - UI components
 - `lib/` - External libraries (copied from node_modules)
-
-### `src/` - JavaScript source code
-- `app.js` - Main application entry point
-- `core/` - Core game logic (engine, game, reactor, etc.)
-- `services/` - External services (PWA, Google Drive, etc.)
-- `components/` - UI components and DOM manipulation
-- `utils/` - Utility functions and helpers
+- `src/` - JavaScript source code
+  - `app.js` - App bootstrap
+  - `core/` - Core game logic (engine, game, reactor, etc.)
+  - `services/` - External services (PWA, Google Drive, etc.)
+  - `components/` - UI components and DOM manipulation
+  - `utils/` - Utility functions and helpers
 
 ### Root - Project configuration
 - `workbox-config.js` - Service worker build configuration
 - `vitest.config.mjs` - Test configuration
 - `jsconfig.json` - JavaScript configuration
-- `src-sw.js` - Service worker source file 
+- `src-sw.js` - Service worker source file
