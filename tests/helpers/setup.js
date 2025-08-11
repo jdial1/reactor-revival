@@ -10,10 +10,10 @@ import { JSDOM } from "jsdom";
 
 // Core game imports
 import { Game } from "@app/core/game.js";
-import { UI } from "@app/components/ui.js";
+import { UI } from "@components/ui.js";
 import { Engine } from "@app/core/engine.js";
 import { ObjectiveManager } from "@app/core/objective.js";
-import { PageRouter } from "@app/components/pageRouter.js";
+import { PageRouter } from "@components/pageRouter.js";
 import { TemplateLoader } from "@app/services/templateLoader.js";
 
 // Export all common imports for use in test files

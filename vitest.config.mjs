@@ -14,6 +14,7 @@ export default defineConfig({
   resolve: {
     alias: [
       // Specific rule for components first (actual location under public/src)
+      { find: "@components", replacement: path.resolve(__dirname, "public/src/components") },
       { find: "@app/components", replacement: path.resolve(__dirname, "public/src/components") },
       // Fallback for other @app imports (e.g., core, services)
       { find: "@app", replacement: path.resolve(__dirname, "public/src") },
