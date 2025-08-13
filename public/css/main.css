@@ -354,10 +354,10 @@ display: block;
 .item-grid {
 display: grid;
 grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
-gap: 2px !important;
+  gap: 2px !important;
 width: 100%;
 overflow-x: hidden;
-padding: 2px !important;
+  padding: 1px !important;
 background: #23272f;
 border: 2px solid #5f6672;
 border-radius: 0;
@@ -431,8 +431,8 @@ width: 26px;
 height: 26px;
 }
 .item-grid {
-gap: 3px !important;
-padding: 3px !important;
+  gap: 2px !important;
+  padding: 2px !important;
 }
 .item-grid .part {
 width: 40px;
@@ -1913,6 +1913,19 @@ display: flex;
 align-items: center;
 justify-content: center;
 }
+/* Marker class reserved for potential styling of locked items */
+.part .tier-progress {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 10px;
+  line-height: 1;
+  background: rgba(0,0,0,0.6);
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: #fff;
+  pointer-events: none;
+}
 .part:hover {
 border-color: var(--pico-primary-hover, #666);
 background: var(--pico-primary-hover, #333);
@@ -2804,7 +2817,7 @@ border: 3px solid #a9844f;
 background: #23272e;
 box-shadow: 0 2px 0 #222, 0 0 8px #a9844f33;
 border-radius: 6px;
-margin: 2px;
+  margin: 1px;
 padding: 0;
 display: flex;
 flex-direction: column;

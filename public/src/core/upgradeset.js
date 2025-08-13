@@ -117,6 +117,24 @@ export class UpgradeSet {
     wrapper.querySelectorAll(".upgrade-group").forEach((el) => (el.innerHTML = ""));
 
     this.upgradesArray.filter(filterFn).forEach((upgrade) => {
+      // Gate cell upgrade visibility based on whether the corresponding base
+      // cell part is actually unlocked/placeable (progress-based).
+      // By default only Uranium (first type) will be visible; subsequent
+      // columns (e.g., Plutonium) appear once unlocked via placements.
+      try {
+        const upgType = upgrade?.upgrade?.type || "";
+        const basePart = upgrade?.upgrade?.part;
+        const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
+        if (isCellUpgrade && basePart && basePart.category === "cell") {
+          const show = this.game && typeof this.game.isPartUnlocked === "function"
+            ? this.game.isPartUnlocked(basePart)
+            : true;
+          if (!show) {
+            return; // Skip rendering this upgrade until unlocked
+          }
+        }
+      } catch (_) { /* no-op */ }
+
       this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
       if (upgrade.$el) {
         upgrade.updateDisplayCost();

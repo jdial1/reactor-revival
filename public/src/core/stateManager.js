@@ -127,9 +127,37 @@ export class StateManager {
       }
     }
 
+    // Apply gating rules: show/hide and lock based on previous tier count
+    const shouldShow = this.ui?.game?.shouldShowPart(part_obj);
+    if (!shouldShow) {
+      return; // Do not render this part in the panel yet
+    }
+
     // Use the Part class's createElement method for consistent element creation
     const part_el = part_obj.createElement();
     part_el._part = part_obj; // Assign the object to the element for event handlers
+
+    // Add/Update progress counter for parts that are shown but locked
+    const prevCount = this.ui?.game?.getPreviousTierCount(part_obj) || 0;
+    const unlocked = this.ui?.game?.isPartUnlocked(part_obj);
+    if (!unlocked) {
+      part_el.classList.add("locked-by-tier");
+      let counter = part_el.querySelector(".tier-progress");
+      if (!counter) {
+        counter = document.createElement("div");
+        counter.className = "tier-progress";
+        part_el.appendChild(counter);
+      }
+      counter.textContent = `${Math.min(prevCount, 10)}/10`;
+      counter.style.display = "block";
+      part_el.disabled = true;
+    }
+    else {
+      // If this part just became unlocked, ensure the next tier becomes visible with its own counter
+      // We simply hide this part's counter, as the next item will be handled separately when rendered
+      const counter = part_el.querySelector(".tier-progress");
+      if (counter) counter.style.display = "none";
+    }
 
     let containerKey = part_obj.category + "s";
     const categoryToContainerMap = {
@@ -250,6 +278,13 @@ export class StateManager {
     this.setVar("current_heat", 0);
     this.setVar("max_power", this.game.base_max_power);
     this.setVar("max_heat", this.game.base_max_heat);
+    // Ensure any progress-based gating resets as well
+    try {
+      if (this.game) {
+        this.game.placedCounts = {};
+        this.game._suppressPlacementCounting = false;
+      }
+    } catch (_) { }
   }
 
   getAllVars() {
@@ -265,17 +300,17 @@ export class StateManager {
     if (typeof title !== 'string') return title;
 
     const partMappings = {
-      'Quad Plutonium Cells': './img/parts/cells/cell_1_4.png',
-      'Quad Thorium Cells': './img/parts/cells/cell_1_4.png',
-      'Quad Seaborgium Cells': './img/parts/cells/cell_1_4.png',
-      'Quad Dolorium Cells': './img/parts/cells/cell_1_4.png',
-      'Quad Nefastium Cells': './img/parts/cells/cell_1_4.png',
+      'Quad Plutonium Cells': './img/parts/cells/cell_2_4.png',
+      'Quad Thorium Cells': './img/parts/cells/cell_3_4.png',
+      'Quad Seaborgium Cells': './img/parts/cells/cell_4_4.png',
+      'Quad Dolorium Cells': './img/parts/cells/cell_5_4.png',
+      'Quad Nefastium Cells': './img/parts/cells/cell_6_4.png',
       'Particle Accelerators': './img/parts/accelerators/accelerator_1.png',
-      'Plutonium Cells': './img/parts/cells/cell_1_1.png',
-      'Thorium Cells': './img/parts/cells/cell_1_1.png',
-      'Seaborgium Cells': './img/parts/cells/cell_1_1.png',
-      'Dolorium Cells': './img/parts/cells/cell_1_1.png',
-      'Nefastium Cells': './img/parts/cells/cell_1_1.png',
+      'Plutonium Cells': './img/parts/cells/cell_2_1.png',
+      'Thorium Cells': './img/parts/cells/cell_3_1.png',
+      'Seaborgium Cells': './img/parts/cells/cell_4_1.png',
+      'Dolorium Cells': './img/parts/cells/cell_5_1.png',
+      'Nefastium Cells': './img/parts/cells/cell_6_1.png',
       'Heat Vent': './img/parts/vents/vent_1.png',
       'Capacitors': './img/parts/capacitors/capacitor_1.png',
       'Dual Cell': './img/parts/cells/cell_1_2.png',

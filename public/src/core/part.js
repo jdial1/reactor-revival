@@ -501,6 +501,15 @@ export class Part {
     this.$el.classList.toggle("unaffordable", !this.affordable);
     this.$el.disabled = !this.affordable;
 
+    // Ensure a tier-progress element exists for potential locking UI
+    let tp = this.$el.querySelector('.tier-progress');
+    if (!tp) {
+      tp = document.createElement('div');
+      tp.className = 'tier-progress';
+      this.$el.appendChild(tp);
+    }
+    tp.style.display = 'none';
+
     // Add event listeners
     this.$el.addEventListener("click", (e) => {
       // Check if help mode is active

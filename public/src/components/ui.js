@@ -483,6 +483,18 @@ export class UI {
     });
   }
 
+  // Allow other systems to trigger a refresh of the visible parts panel
+  refreshPartsPanel() {
+    const partsTabsContainer = document.querySelector(".parts_tabs");
+    const activeTab = partsTabsContainer
+      ? Array.from(partsTabsContainer.querySelectorAll(".parts_tab")).find((btn) =>
+        btn.classList.contains("active")
+      )
+      : null;
+    const activeTabId = activeTab ? activeTab.getAttribute("data-tab") : "power";
+    this.populatePartsForTab(activeTabId);
+  }
+
   setupPartsTabs() {
     const partsTabsContainer = document.querySelector(".parts_tabs");
     if (!partsTabsContainer) return;
@@ -2188,7 +2200,7 @@ export class UI {
       }
 
       // Show total cost under the table
-      const costText = cost > 0 ? `Total Cost: $${cost}` : "";
+      const costText = cost > 0 ? `Total Cost: $${fmt(cost)}` : "";
       modalCost.innerHTML = summaryHtml + (costText ? `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">${costText}</div>` : "");
 
       // Set textarea properties based on action
@@ -2225,7 +2237,7 @@ export class UI {
             <div style="margin-top: 15px; padding: 10px; background-color: #2a2a2a; border: 1px solid #444; border-radius: 4px;">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="sell_existing_checkbox" style="margin: 0;">
-                <span style="color: #ffd700;">Sell existing grid for $${currentSellValue}</span>
+                <span style="color: #ffd700;">Sell existing grid for $${fmt(currentSellValue)}</span>
               </label>
             </div>
           `;
@@ -2274,7 +2286,7 @@ export class UI {
         const filteredCost = calculateLayoutCost(filteredLayout);
 
         let html = this.renderComponentIcons(summary, { showCheckboxes: true, checkedTypes });
-        html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">Selected Parts Cost: $${filteredCost}</div>`;
+        html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">Selected Parts Cost: $${fmt(filteredCost)}</div>`;
 
         modalCost.innerHTML = html;
 
@@ -2436,7 +2448,7 @@ export class UI {
         if (cost > 0) {
           const finalCost = sellExisting && currentSellValue > 0 ? Math.max(0, netCost) : cost;
           const costColor = canPaste ? "#4caf50" : "#ff6b6b";
-          const costText = canPaste ? `$${finalCost}` : `$${finalCost} - Not Enough Money`;
+          const costText = canPaste ? `$${fmt(finalCost)}` : `$${fmt(finalCost)} - Not Enough Money`;
           html += `<div style="margin-top: 10px; font-weight: bold; color: ${costColor};">${costText}</div>`;
         } else {
           html += `<div style="margin-top: 10px; font-weight: bold; color: #ff6b6b;">No parts found in layout</div>`;
@@ -2529,7 +2541,7 @@ export class UI {
           return;
         }
         if (this.game.current_money < netCost) {
-          alert(`Not enough money! Layout costs $${cost}${sellExisting ? ` - $${currentSellValue} (sell value) = $${netCost}` : ''} but you only have $${this.game.current_money}.`);
+          alert(`Not enough money! Layout costs $${fmt(cost)}${sellExisting ? ` - $${fmt(currentSellValue)} (sell value) = $${fmt(netCost)}` : ''} but you only have $${fmt(this.game.current_money)}.`);
           return;
         }
 
@@ -2647,7 +2659,7 @@ export class UI {
 
       // Show total sell value
       if (totalSellValue > 0) {
-        html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">Total Sell Value: $${totalSellValue}</div>`;
+        html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">Total Sell Value: $${fmt(totalSellValue)}</div>`;
       } else {
         html += `<div style="margin-top: 10px; font-weight: bold; color: #ff6b6b;">No parts selected</div>`;
       }
@@ -2703,7 +2715,7 @@ export class UI {
       this.game.reactor.updateStats();
 
       // Show success feedback
-      confirmBtn.textContent = `Sold $${totalSellValue}`;
+      confirmBtn.textContent = `Sold $${fmt(totalSellValue)}`;
       confirmBtn.style.backgroundColor = '#27ae60';
 
       setTimeout(() => {

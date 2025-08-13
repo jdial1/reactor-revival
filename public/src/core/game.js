@@ -49,6 +49,95 @@ export class Game {
     this.sold_heat = false;
     this.objectives_manager = new ObjectiveManager(this); // MOVED HERE
     this.tooltip_manager = null;
+    this.placedCounts = {}; // cumulative placements per `${type}:${level}`
+    this._suppressPlacementCounting = false;
+  }
+
+  // Returns how many parts of a given type and level are currently placed
+  countPlacedParts(type, level) {
+    if (!this.tileset || !this.tileset.tiles_list) return 0;
+    let count = 0;
+    for (const tile of this.tileset.tiles_list) {
+      const tilePart = tile.part;
+      if (tilePart && tilePart.type === type && tilePart.level === level) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  // For a part, returns the number of previous-tier parts placed (cumulative)
+  getPreviousTierCount(part) {
+    const prevSpec = this.getPreviousTierSpec(part);
+    if (!prevSpec) return 0;
+    return this.getPlacedCount(prevSpec.type, prevSpec.level);
+  }
+
+  // Resolve the previous step in the linear chain across types and levels within a category
+  getPreviousTierSpec(part) {
+    if (!part) return null;
+    // Within the same type, previous level
+    if (part.level && part.level > 1) {
+      return { type: part.type, level: part.level - 1, category: part.category };
+    }
+    // For level 1, previous is the max level of the previous type within this category
+    const orderIdx = this.partset?.typeOrderIndex?.get(`${part.category}:${part.type}`);
+    const typeOrder = this.partset?.categoryTypeOrder?.get(part.category) || [];
+    if (typeof orderIdx !== 'number' || orderIdx <= 0) return null;
+    const prevType = typeOrder[orderIdx - 1];
+    const prevMaxLevel = Math.max(
+      1,
+      ...(this.partset?.getPartsByType(prevType)?.map((p) => p.level) || [1])
+    );
+    return { type: prevType, level: prevMaxLevel, category: part.category };
+  }
+
+  // Returns true if the provided spec is the very first item in the category chain
+  isFirstInChainSpec(spec) {
+    if (!spec) return false;
+    const idx = this.partset?.typeOrderIndex?.get(`${spec.category}:${spec.type}`);
+    return (idx === 0) && spec.level === 1;
+  }
+
+  // Determine if a spec (type+level within a category) is unlocked by the 10-previous rule
+  isSpecUnlocked(spec) {
+    if (!spec) return false;
+    const prev = this.getPreviousTierSpec({ type: spec.type, level: spec.level, category: spec.category });
+    if (!prev) return true; // first in chain
+    return this.getPlacedCount(prev.type, prev.level) >= 10;
+  }
+
+  // Determines if a part should be visible in the parts panel
+  // Rule: level 1 and level 2 are shown. Level 3+ shown only after 10 of previous tier placed
+  shouldShowPart(part) {
+    if (!part) return false;
+    const prevSpec = this.getPreviousTierSpec(part);
+    if (!prevSpec) return true; // first in chain is visible
+    // Show the immediate next item after any unlocked item
+    if (this.isSpecUnlocked(prevSpec)) return true;
+    // Otherwise, hide until previous tier is unlocked
+    return false;
+  }
+
+  // Determines if a part is unlocked (enabled) based on previous-tier progress
+  // Rule: level 1 is unlocked. Level 2+ unlocked after 10 of previous tier
+  isPartUnlocked(part) {
+    if (!part) return false;
+    const prevSpec = this.getPreviousTierSpec(part);
+    if (!prevSpec) return true; // First element in chain
+    return this.getPreviousTierCount(part) >= 10;
+  }
+
+  // Cumulative placement tracking
+  getPlacedCount(type, level) {
+    const key = `${type}:${level}`;
+    return this.placedCounts[key] || 0;
+  }
+
+  incrementPlacedCount(type, level) {
+    if (this._suppressPlacementCounting) return;
+    const key = `${type}:${level}`;
+    this.placedCounts[key] = (this.placedCounts[key] || 0) + 1;
   }
   async set_defaults() {
     this.base_cols = 12;
@@ -68,6 +157,9 @@ export class Game {
     this.upgradeset.reset();
     await this.upgradeset.initialize(); // Await initialization
     this.upgradeset.check_affordability(this);
+    // Clear cumulative placement counters for a fresh run
+    this.placedCounts = {};
+    this._suppressPlacementCounting = false;
     this.tileset.clearAllTiles();
     this.reactor.updateStats();
 
@@ -540,6 +632,7 @@ export class Game {
     this.total_played_time = savedData.total_played_time || 0;
     this.last_save_time = savedData.last_save_time || null;
     this.session_start_time = null;
+    this.placedCounts = savedData.placedCounts || {};
 
     if (savedData.reactor) {
       this.reactor.current_heat = savedData.reactor.current_heat || 0;

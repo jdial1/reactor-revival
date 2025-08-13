@@ -46,6 +46,9 @@ export class PartSet {
     this.parts = new Map();
     this.partsArray = [];
     this.initialized = false;
+    // Order of types within each category based on part_list.json appearance
+    this.categoryTypeOrder = new Map(); // category -> [type]
+    this.typeOrderIndex = new Map(); // `${category}:${type}` -> index
   }
 
   reset() {
@@ -72,6 +75,15 @@ export class PartSet {
     }
 
     data.forEach((template) => {
+      // Build type order per category (skip experimental entries)
+      if (template.category && !template.experimental) {
+        const arr = this.categoryTypeOrder.get(template.category) || [];
+        if (!arr.includes(template.type)) {
+          arr.push(template.type);
+          this.categoryTypeOrder.set(template.category, arr);
+          this.typeOrderIndex.set(`${template.category}:${template.type}`, arr.length - 1);
+        }
+      }
       const levels = template.levels || 1;
       for (let i = 0; i < levels; i++) {
         const level = template.levels ? i + 1 : template.level;
@@ -153,13 +165,17 @@ export class PartSet {
     if (!game) return;
     this.partsArray.forEach((part) => {
       let isAffordable = false;
+      // Gating: a part must be unlocked to be affordable/selectable
+      const isUnlocked = typeof game.isPartUnlocked === 'function' ? game.isPartUnlocked(part) : true;
       if (part.erequires) {
         const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
-        if (requiredUpgrade && requiredUpgrade.level > 0) {
+        if (requiredUpgrade && requiredUpgrade.level > 0 && isUnlocked) {
           isAffordable = Number(game.current_exotic_particles) >= Number(part.cost);
         }
       } else {
-        isAffordable = Number(game.current_money) >= Number(part.cost);
+        if (isUnlocked) {
+          isAffordable = Number(game.current_money) >= Number(part.cost);
+        }
       }
       part.setAffordable(isAffordable);
     });

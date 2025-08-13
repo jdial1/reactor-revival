@@ -1204,7 +1204,7 @@ describe("Objective System", () => {
         {
           title: "Have at least 5 active Quad Plutonium Cells in your reactor",
           shouldHaveIcon: true,
-          expectedIcon: 'img/parts/cells/cell_1_4.png'
+          expectedIcon: 'img/parts/cells/cell_2_4.png'
         },
         {
           title: "Sell all your power by clicking 'Power'",

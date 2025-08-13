@@ -160,6 +160,12 @@ export class Tile {
           percentWrapperWrapper.appendChild(percentWrapper);
         }
       }
+      // Cumulative placement tracking for gating
+      try {
+        if (this.game && this.part && typeof this.game.incrementPlacedCount === "function") {
+          this.game.incrementPlacedCount(this.part.type, this.part.level);
+        }
+      } catch (_) { }
       if (this.game.reactor.has_melted_down) {
         console.log(
           "[Recovery] Clearing meltdown state after placing part:",
@@ -206,6 +212,17 @@ export class Tile {
     this.game.engine?.markPartCacheAsDirty();
     this.game.engine?.heatManager?.markSegmentsAsDirty();
     this.game.reactor.updateStats();
+    // Refresh parts panel to update tier gating counters/visibility
+    try {
+      if (this.game && this.game.ui && typeof this.game.ui.refreshPartsPanel === "function") {
+        this.game.ui.refreshPartsPanel();
+      }
+      // Also refresh the upgrades section so gated cell upgrade columns
+      // appear as soon as the corresponding cell becomes unlocked
+      if (this.game && this.game.upgradeset && typeof this.game.upgradeset.populateUpgrades === "function") {
+        this.game.upgradeset.populateUpgrades();
+      }
+    } catch (_) { }
     if (this.game && typeof this.game.saveGame === "function") {
       this.game.saveGame();
     }
@@ -221,6 +238,7 @@ export class Tile {
     if (full_clear) {
       const sell_value = this.calculateSellValue();
       this.game.addMoney(sell_value);
+      // Note: do NOT decrement cumulative placedCounts; progress is permanent
     }
     this.activated = false;
     this.part = null;
@@ -245,6 +263,12 @@ export class Tile {
     this.game.engine?.markPartCacheAsDirty();
     this.game.engine?.heatManager?.markSegmentsAsDirty();
     this.game.reactor.updateStats();
+    // Refresh parts panel to update tier gating after selling
+    try {
+      if (this.game && this.game.ui && typeof this.game.ui.refreshPartsPanel === "function") {
+        this.game.ui.refreshPartsPanel();
+      }
+    } catch (_) { }
     this.updateVisualState();
     if (this.$el) {
       this.$el.classList.remove("is-processing");
