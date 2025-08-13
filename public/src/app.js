@@ -7,6 +7,8 @@ import { Engine } from "./core/engine.js";
 import "./services/pwa.js";
 import { PageRouter } from "./components/pageRouter.js";
 import { GoogleDriveSave } from "./services/GoogleDriveSave.js";
+// Background/PWA helpers
+import "./services/pwa.js";
 
 async function initializeApp(game, ui, pageRouter) {
   if (window.splashManager) {
@@ -165,6 +167,12 @@ async function main() {
   await handleUserSession(game, pageRouter);
   setupButtonHandlers(pageRouter, ui, game);
   setupGlobalListeners(game);
+
+  // Register background capabilities (best-effort, feature-detected inside functions)
+  if (typeof window !== "undefined") {
+    if (typeof registerPeriodicSync === "function") registerPeriodicSync();
+    if (typeof registerOneOffSync === "function") registerOneOffSync();
+  }
 }
 
 async function startGame(pageRouter, ui, game) {

@@ -13,6 +13,9 @@
   "theme_color": "#303236",
   "orientation": "portrait-primary",
   "scope": "/reactor-revival/",
+  "scope_extensions": [
+    { "origin": "/reactor-revival/" }
+  ],
   "lang": "en",
   "dir": "ltr",
   "categories": [

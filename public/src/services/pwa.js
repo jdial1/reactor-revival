@@ -72,11 +72,13 @@ class SplashScreenManager {
       });
     }
 
-    // Listen for beforeinstallprompt event
+    // Listen for beforeinstallprompt event and show install button
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       this.installPrompt = e;
       console.log("Install prompt captured");
+      const btn = window.domMapper?.get("pwa.installButton");
+      if (btn) btn.classList.remove("hidden");
     });
   }
 
@@ -1390,3 +1392,38 @@ window.addEventListener('DOMContentLoaded', () => {
     console.warn("Splash screen element not found, skipping dynamic background generation.");
   }
 });
+
+// Background capabilities and push helpers
+async function registerPeriodicSync() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const ready = await navigator.serviceWorker.ready;
+      if ('periodicSync' in ready) {
+        const tags = await ready.periodicSync.getTags();
+        if (!tags.includes('reactor-periodic-sync')) {
+          const perm = await navigator.permissions.query({ name: 'periodic-background-sync' });
+          if (perm.state === 'granted') {
+            await ready.periodicSync.register('reactor-periodic-sync', { minInterval: 60 * 60 * 1000 });
+            console.log('[PWA] Periodic sync registered');
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[PWA] Periodic sync unavailable:', e?.message || e);
+  }
+}
+
+async function registerOneOffSync() {
+  try {
+    if ('serviceWorker' in navigator && 'SyncManager' in window) {
+      const ready = await navigator.serviceWorker.ready;
+      await ready.sync.register('reactor-sync');
+      console.log('[PWA] One-off sync registered');
+    }
+  } catch (e) {
+    console.log('[PWA] One-off sync unavailable:', e?.message || e);
+  }
+}
+
+// Push notifications disabled on GitHub Pages hosting (no backend available)

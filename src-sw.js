@@ -119,3 +119,40 @@ self.addEventListener("activate", (event) => {
     ])
   );
 });
+
+// -----------------------------
+// Periodic Background Sync
+// -----------------------------
+async function handlePeriodicSync() {
+  try {
+    // Fetch a lightweight resource to refresh caches or notify clients of updates
+    const res = await fetch("/version.json", { cache: "no-cache" });
+    if (res.ok) {
+      const versionData = await res.json();
+      notifyClientsOfNewVersion(versionData.version);
+    }
+  } catch (e) {
+    // Silent fail; periodic sync will retry later
+    console.log("Periodic sync failed:", e);
+  }
+}
+
+self.addEventListener("periodicsync", (event) => {
+  if (event.tag === "reactor-periodic-sync") {
+    event.waitUntil(handlePeriodicSync());
+  }
+});
+
+// -----------------------------
+// One-off Background Sync (fallback)
+// -----------------------------
+self.addEventListener("sync", (event) => {
+  if (event.tag === "reactor-sync") {
+    event.waitUntil(handlePeriodicSync());
+  }
+});
+
+// -----------------------------
+// Push Notifications
+// -----------------------------
+// Push notifications are disabled for GitHub Pages hosting (no server to send pushes)

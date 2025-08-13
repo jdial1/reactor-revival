@@ -32,26 +32,21 @@
     <script type="module" src="src/app.js"></script>
     
 
-    <!-- Clear ServiceWorker for development -->
+    <!-- Clear ServiceWorker only in development; no-op in production -->
     <script src="clear-sw.js"></script>
-    <!--
     <script>
+      // Register Service Worker in production builds for PWA
       if ('serviceWorker' in navigator) {
+        const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
         const pathParts = window.location.pathname.split('/');
         const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
         const swPath = repoName ? `/${repoName}/sw.js` : '/sw.js';
-        
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register(swPath)
-            .then(registration => {
-              console.log('Service Worker registered successfully:', registration);
-            })
-            .catch(error => {
-              console.log('Service Worker registration failed:', error);
-            });
-        });
+        if (!isLocalhost) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register(swPath).catch(console.warn);
+          });
+        }
       }
     </script>
-    -->
   </body>
 </html>
