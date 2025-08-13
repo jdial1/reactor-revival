@@ -250,6 +250,31 @@ describe("Save and Load Functionality", () => {
         cleanupGame();
     });
 
+    it("New Game should clear saved objectives and upgrades even if a save exists", async () => {
+        // 1) Create a game, buy an upgrade, advance objective, and save
+        const game1 = await setupGame();
+        const upg = game1.upgradeset.getAllUpgrades().find(u => !u.base_ecost);
+        if (upg) {
+            // Ensure we can purchase
+            game1.current_money = 1e9;
+            game1.upgradeset.check_affordability(game1);
+            game1.upgradeset.purchaseUpgrade(upg.id);
+        }
+        game1.objectives_manager.current_objective_index = 3;
+        game1.saveGame();
+
+        // 2) Simulate clicking New Game: call set_defaults on a fresh game instance
+        const game2 = await setupGame();
+        await game2.set_defaults();
+
+        // 3) Validate objectives and upgrades are reset
+        expect(game2.objectives_manager.current_objective_index).toBe(0);
+        const anyPurchased = game2.upgradeset.getAllUpgrades().some(u => u.level > 0);
+        expect(anyPurchased).toBe(false);
+
+        cleanupGame();
+    });
+
     it("should not re-reward completed objectives when loading a saved game", async () => {
         // 1. Start a game and complete multiple objectives
         const game1 = await setupGame();

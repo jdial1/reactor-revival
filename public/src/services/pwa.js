@@ -531,6 +531,7 @@ class SplashScreenManager {
         if (hasSave && !confirm("Are you sure you want to start a new game? Your saved progress will be overwritten.")) {
           return;
         }
+        try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
         localStorage.setItem("reactorNewGamePending", "1");
         window.location.reload();
       });

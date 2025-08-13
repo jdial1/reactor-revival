@@ -80,10 +80,9 @@ export class Game {
     this.total_played_time = 0;
     this.last_save_time = null;
 
-    // Only reset objectives if we're not loading from a save file
-    if (this.objectives_manager && this._saved_objective_index === undefined) {
+    // Always reset objectives for a clean New Game state
+    if (this.objectives_manager) {
       this.objectives_manager.current_objective_index = 0;
-      // Add a check to prevent errors if data isn't loaded yet
       if (this.objectives_manager.objectives_data) {
         this.objectives_manager.objectives_data.forEach(obj => {
           obj.completed = false;

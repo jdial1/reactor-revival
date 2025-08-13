@@ -75,6 +75,9 @@ function setupButtonHandlers(pageRouter, ui, game) {
         window.splashManager.hide();
       }
       await new Promise((resolve) => setTimeout(resolve, 600));
+      // Clear any persisted save and pending saved objective index to force a true reset
+      try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
+      delete game._saved_objective_index;
       await game.set_defaults();
       localStorage.removeItem("reactorGameQuickStartShown");
       await startGame(pageRouter, ui, game);
