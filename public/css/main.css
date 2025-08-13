@@ -2419,6 +2419,20 @@ box-shadow: 0 2px 0 #222, 0 4px 8px #0002;
 transition: background 0.2s, box-shadow 0.2s, color 0.2s;
 box-sizing: border-box;
 }
+.tooltip-bonuses {
+  margin-top: 0.4rem;
+  background: #1a1d24;
+  padding: 0.5rem;
+  border-left: 3px solid #2f6b3a;
+  border-radius: 4px;
+}
+.tooltip-section-title { font-weight: bold; font-size: 0.75em; margin: 0.35rem 0 0.2rem; opacity: 0.9; }
+.tooltip-bonus-line {
+  font-size: 0.75em;
+  line-height: 1.2;
+}
+.tooltip-bonus-line .pos { color: #5CFF85; }
+.tooltip-bonus-line .neg { color: #FF6B6B; }
 .tooltip-mobile-unaffordable {
 color: #ff6b6b;
 font-weight: bold;

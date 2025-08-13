@@ -204,6 +204,10 @@ async function startGame(pageRouter, ui, game) {
 
   const finalizeGameStart = () => {
     console.log(`[DEBUG] Finalizing game start. Initial paused state: ${game.paused}`);
+    // Ensure a fresh game always starts unpaused
+    try {
+      ui.stateManager.setVar("pause", false);
+    } catch (_) { /* no-op */ }
     game.engine.start();
 
     ui.stateManager.setVar("current_money", game.current_money);

@@ -473,6 +473,8 @@ export class Game {
         current_power: this.reactor.current_power,
         has_melted_down: this.reactor.has_melted_down,
       },
+      // Persist cumulative placement progress used for tier gating
+      placedCounts: this.placedCounts,
       tiles: this.tileset.tiles_list
         .filter((tile) => tile.part)
         .map((tile) => ({
@@ -602,7 +604,7 @@ export class Game {
       const savedDataJSON = localStorage.getItem("reactorGameSave");
       if (savedDataJSON) {
         const savedData = JSON.parse(savedDataJSON);
-        this.applySaveState(savedData);
+        await this.applySaveState(savedData);
         return true;
       }
     } catch (error) {
@@ -632,7 +634,13 @@ export class Game {
     this.total_played_time = savedData.total_played_time || 0;
     this.last_save_time = savedData.last_save_time || null;
     this.session_start_time = null;
-    this.placedCounts = savedData.placedCounts || {};
+    // Restore cumulative placement history if present.
+    // If missing (older saves), backfill from current tiles to avoid locking users out.
+    if (savedData.placedCounts && typeof savedData.placedCounts === 'object') {
+      this.placedCounts = savedData.placedCounts;
+    } else {
+      this.placedCounts = {};
+    }
 
     if (savedData.reactor) {
       this.reactor.current_heat = savedData.reactor.current_heat || 0;
@@ -662,6 +670,9 @@ export class Game {
 
     this.tileset.clearAllTiles();
     if (savedData.tiles) {
+      // Suppress counting while reconstructing the grid to avoid double counting
+      const prevSuppress = this._suppressPlacementCounting;
+      this._suppressPlacementCounting = true;
       savedData.tiles.forEach((tileData) => {
         const tile = this.tileset.getTile(tileData.row, tileData.col);
         const part = this.partset.getPartById(tileData.partId);
@@ -671,6 +682,17 @@ export class Game {
           tile.heat_contained = tileData.heat_contained;
         }
       });
+      this._suppressPlacementCounting = prevSuppress;
+
+      // Backfill placedCounts if it was missing in save data
+      if (!savedData.placedCounts) {
+        for (const tile of this.tileset.tiles_list) {
+          if (tile.part) {
+            const key = `${tile.part.type}:${tile.part.level}`;
+            this.placedCounts[key] = (this.placedCounts[key] || 0) + 1;
+          }
+        }
+      }
     }
 
     // Restore objectives state

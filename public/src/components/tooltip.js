@@ -294,7 +294,15 @@ export class TooltipManager {
     const mobileStatsEl = this.$tooltipContent.querySelector(
       '[data-role="mobile-stats"]'
     );
-    if (mobileStatsEl) mobileStatsEl.innerHTML = stats.join(" ");
+    if (mobileStatsEl) {
+      if (obj.upgrade) {
+        mobileStatsEl.style.display = '';
+        mobileStatsEl.innerHTML = stats.join(" ");
+      } else {
+        mobileStatsEl.style.display = 'none';
+        mobileStatsEl.innerHTML = '';
+      }
+    }
 
     const descEl = this.$tooltipContent.querySelector(
       '[data-role="description"]'
@@ -302,11 +310,45 @@ export class TooltipManager {
     if (descEl) {
       const description = obj.description || obj.upgrade?.description;
       if (description) {
+        // Ensure section header exists
+        let descHeader = this.$tooltipContent.querySelector('[data-role="description-header"]');
+        if (!descHeader) {
+          descHeader = document.createElement('div');
+          descHeader.setAttribute('data-role', 'description-header');
+          descHeader.className = 'tooltip-section-title';
+          descHeader.textContent = 'Description';
+          descEl.parentNode.insertBefore(descHeader, descEl);
+        }
         descEl.innerHTML = iconify(description);
         if (obj.upgrade) descEl.classList.add("is-inset");
       } else {
         descEl.innerHTML = "";
       }
+    }
+
+    // Insert upgrade bonuses (mobile)
+    const mobileBonusLines = this.getUpgradeBonusLines(obj, tile);
+    if (mobileBonusLines.length > 0) {
+      let bonusEl = this.$tooltipContent.querySelector('[data-role="bonus-lines"]');
+      if (!bonusEl) {
+        bonusEl = document.createElement('div');
+        bonusEl.setAttribute('data-role', 'bonus-lines');
+        bonusEl.className = 'tooltip-bonuses';
+        descEl?.insertAdjacentElement('afterend', bonusEl);
+      }
+      // Ensure bonuses header exists
+      let bonusHeader = this.$tooltipContent.querySelector('[data-role="bonuses-header"]');
+      if (!bonusHeader) {
+        bonusHeader = document.createElement('div');
+        bonusHeader.setAttribute('data-role', 'bonuses-header');
+        bonusHeader.className = 'tooltip-section-title';
+        bonusHeader.textContent = 'Bonuses';
+        bonusEl.parentNode.insertBefore(bonusHeader, bonusEl);
+      }
+
+      bonusEl.innerHTML = mobileBonusLines
+        .map(line => `<div class="tooltip-bonus-line">${this._colorizeBonus(line)}</div>`)
+        .join("");
     }
 
     const upgradeStatusEl = this.$tooltipContent.querySelector(
@@ -376,7 +418,15 @@ export class TooltipManager {
     const summaryEl = this.$tooltipContent.querySelector(
       '[data-role="desktop-summary"]'
     );
-    if (summaryEl) summaryEl.innerHTML = summaryItems.join("");
+    if (summaryEl) {
+      if (obj.upgrade) {
+        summaryEl.style.display = '';
+        summaryEl.innerHTML = summaryItems.join("");
+      } else {
+        summaryEl.style.display = 'none';
+        summaryEl.innerHTML = '';
+      }
+    }
 
     const descEl = this.$tooltipContent.querySelector(
       '[data-role="description"]'
@@ -384,12 +434,45 @@ export class TooltipManager {
     if (descEl) {
       const description = obj.description || obj.upgrade?.description;
       if (description) {
+        // Ensure section header exists
+        let descHeader = this.$tooltipContent.querySelector('[data-role="description-header"]');
+        if (!descHeader) {
+          descHeader = document.createElement('div');
+          descHeader.setAttribute('data-role', 'description-header');
+          descHeader.className = 'tooltip-section-title';
+          descHeader.textContent = 'Description';
+          descEl.parentNode.insertBefore(descHeader, descEl);
+        }
         // Make description more compact by reducing line breaks
         descEl.innerHTML = iconify(description).replace(/\.\s+/g, ". ");
         if (obj.upgrade) descEl.classList.add("is-inset");
       } else {
         descEl.innerHTML = "";
       }
+    }
+
+    // Insert upgrade bonuses (desktop)
+    const bonusLines = this.getUpgradeBonusLines(obj, tile);
+    if (bonusLines.length > 0) {
+      let bonusEl = this.$tooltipContent.querySelector('[data-role="bonus-lines"]');
+      if (!bonusEl) {
+        bonusEl = document.createElement('div');
+        bonusEl.setAttribute('data-role', 'bonus-lines');
+        bonusEl.className = 'tooltip-bonuses';
+        descEl?.insertAdjacentElement('afterend', bonusEl);
+      }
+      // Ensure bonuses header exists
+      let bonusHeader = this.$tooltipContent.querySelector('[data-role="bonuses-header"]');
+      if (!bonusHeader) {
+        bonusHeader = document.createElement('div');
+        bonusHeader.setAttribute('data-role', 'bonuses-header');
+        bonusHeader.className = 'tooltip-section-title';
+        bonusHeader.textContent = 'Bonuses';
+        bonusEl.parentNode.insertBefore(bonusHeader, bonusEl);
+      }
+      bonusEl.innerHTML = bonusLines
+        .map(line => `<div class="tooltip-bonus-line">${this._colorizeBonus(line)}</div>`)
+        .join("");
     }
 
     const stats = this.getDetailedStats(obj, tile);
@@ -431,6 +514,176 @@ export class TooltipManager {
           "🧬 $&"
         );
     };
+  }
+
+  // Wrap numeric deltas in pos/neg spans for colorizing
+  _colorizeBonus(line) {
+    if (!line) return line;
+    // Replace patterns like +123%, -45%, +12/tick, etc.
+    return line
+      .replace(/([+][0-9]+(?:\.[0-9]+)?%?)/g, '<span class="pos">$1</span>')
+      .replace(/([-][0-9]+(?:\.[0-9]+)?%?)/g, '<span class="neg">$1</span>')
+      .replace(/([+][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="pos">$1</span>')
+      .replace(/([-][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="neg">$1</span>')
+      .replace(/\b(power|heat|duration|venting|max heat|transfer|EP heat cap)\b/gi, (m) =>
+        this.getIconifyFn()(m)
+      );
+  }
+
+  // Build human-readable upgrade bonus lines that affect the given part
+  getUpgradeBonusLines(obj, tile) {
+    const lines = [];
+    if (!obj || obj.upgrade) return lines;
+    const upg = (id) => this.game.upgradeset.getUpgrade(id)?.level || 0;
+
+    // Helper to format percent increase from a multiplier (e.g., 2^n)
+    const pctFromMultiplier = (mult) => Math.round((mult - 1) * 100);
+    const stripPrefixes = (title) => (title || '').replace(/^(Basic |Advanced |Super |Wonderous |Ultimate )/, '');
+
+    switch (obj.category) {
+      case 'vent': {
+        const tev = upg('improved_heat_vents'); // Thermal Emission Coating
+        if (tev > 0) {
+          const pct = tev * 100;
+          lines.push(`+${pct}% venting, +${pct}% max heat`);
+        }
+        const fh = upg('fluid_hyperdynamics');
+        if (fh > 0) {
+          const mult = Math.pow(2, fh);
+          const pct = pctFromMultiplier(mult);
+          lines.push(`+${pct}% venting`);
+        }
+        const fp = upg('fractal_piping');
+        if (fp > 0) {
+          const mult = Math.pow(2, fp);
+          const pct = pctFromMultiplier(mult);
+          lines.push(`+${pct}% max heat`);
+        }
+        const av = upg('active_venting');
+        if (av > 0 && tile) {
+          // Count adjacent capacitors similar to Part.getEffectiveVentValue
+          let capCount = 0;
+          if (tile.containmentNeighborTiles) {
+            for (const neighbor of tile.containmentNeighborTiles) {
+              if (neighbor.part && neighbor.part.category === 'capacitor') {
+                capCount += neighbor.part.part.level || 1;
+              }
+            }
+          }
+          const pct = av * capCount;
+          if (pct > 0) {
+            lines.push(`+${pct}% venting from ${capCount} capacitor neighbors`);
+          }
+        }
+        break;
+      }
+      case 'heat_exchanger': {
+        const ihe = upg('improved_heat_exchangers');
+        if (ihe > 0) {
+          const pct = ihe * 100;
+          lines.push(`+${pct}% transfer, +${pct}% max heat`);
+        }
+        const fh = upg('fluid_hyperdynamics');
+        if (fh > 0) {
+          const mult = Math.pow(2, fh);
+          const pct = pctFromMultiplier(mult);
+          lines.push(`+${pct}% transfer`);
+        }
+        const fp = upg('fractal_piping');
+        if (fp > 0) {
+          const mult = Math.pow(2, fp);
+          const pct = pctFromMultiplier(mult);
+          lines.push(`+${pct}% max heat`);
+        }
+        break;
+      }
+      case 'heat_inlet':
+      case 'heat_outlet': {
+        const ihe = upg('improved_heat_exchangers');
+        if (ihe > 0) {
+          const pct = ihe * 100;
+          lines.push(`+${pct}% transfer, +${pct}% max heat`);
+        }
+        const fp = upg('fractal_piping');
+        if (fp > 0) {
+          const mult = Math.pow(2, fp);
+          const pct = pctFromMultiplier(mult);
+          lines.push(`+${pct}% max heat`);
+        }
+        break;
+      }
+      case 'capacitor': {
+        const iw = upg('improved_wiring');
+        if (iw > 0) {
+          const pct = iw * 100;
+          lines.push(`+${pct}% power capacity, +${pct}% max heat`);
+        }
+        const qb = upg('quantum_buffering');
+        if (qb > 0) {
+          const mult = Math.pow(2, qb);
+          const pct = pctFromMultiplier(mult);
+          lines.push(`+${pct}% power capacity and max heat`);
+        }
+        break;
+      }
+      case 'coolant_cell': {
+        const icc = upg('improved_coolant_cells');
+        if (icc > 0) lines.push(`+${icc * 100}% max heat`);
+        const uc = upg('ultracryonics');
+        if (uc > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, uc))}% max heat`);
+        break;
+      }
+      case 'reflector': {
+        const ird = upg('improved_reflector_density');
+        if (ird > 0) lines.push(`+${ird * 100}% duration`);
+        const inr = upg('improved_neutron_reflection');
+        if (inr > 0) lines.push(`+${inr}% power reflection`);
+        const fsr = upg('full_spectrum_reflectors');
+        if (fsr > 0) lines.push(`+${fsr * 100}% base power reflection`);
+        break;
+      }
+      case 'reactor_plating': {
+        const ia = upg('improved_alloys');
+        if (ia > 0) lines.push(`+${ia * 100}% reactor max heat`);
+        const qb = upg('quantum_buffering');
+        if (qb > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, qb))}% reactor max heat`);
+        break;
+      }
+      case 'particle_accelerator': {
+        const lvl = obj.level || 1;
+        const id = lvl === 6 ? 'improved_particle_accelerators6' : 'improved_particle_accelerators1';
+        const ipa = upg(id);
+        if (ipa > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, ipa))}% EP heat cap`);
+        break;
+      }
+      case 'cell': {
+        // Per-cell dynamic upgrades are embedded as generated upgrades; summarize power/tick upgrades
+        const powerUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_power`);
+        if (powerUpg?.level > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, powerUpg.level))}% power`);
+        const tickUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_tick`);
+        if (tickUpg?.level > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, tickUpg.level))}% duration`);
+        const perpUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_perpetual`);
+        if (perpUpg?.level > 0) lines.push(`Auto-replacement enabled`);
+
+        // Global experimental boosts that affect cells
+        const infused = upg('infused_cells');
+        if (infused > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, infused))}% power`);
+        const unleashed = upg('unleashed_cells');
+        if (unleashed > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, unleashed))}% power and heat`);
+        if (obj.type === 'protium') {
+          const unstable = upg('unstable_protium');
+          if (unstable > 0) {
+            const powPct = pctFromMultiplier(Math.pow(2, unstable));
+            const durPct = Math.round((1 - 1 / Math.pow(2, unstable)) * 100);
+            lines.push(`+${powPct}% power and heat, -${durPct}% duration`);
+          }
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    return lines;
   }
 
   getDetailedStats(obj, tile) {

@@ -97,6 +97,9 @@ describe("Save and Load Functionality", () => {
         expect(savedData.tiles.length).toBe(1);
         expect(savedData.tiles[0].partId).toBe("uranium1");
         expect(savedData.upgrades.some(u => u.id === "chronometer" && u.level === 1)).toBe(true);
+        // New: placedCounts persisted and reflects cumulative placements
+        expect(savedData.placedCounts).toBeTypeOf('object');
+        expect(savedData.placedCounts['uranium:1']).toBeGreaterThanOrEqual(1);
     });
 
     it("should correctly load a saved game state", async () => {
@@ -118,7 +121,8 @@ describe("Save and Load Functionality", () => {
                 current_heat: 500,
                 current_power: 200,
                 has_melted_down: false
-            }
+            },
+            placedCounts: { 'vent:2': 3 }
         };
         localStorage.setItem("reactorGameSave", JSON.stringify(mockSaveData));
 
@@ -139,6 +143,33 @@ describe("Save and Load Functionality", () => {
         expect(newGame.tileset.getTile(1, 1).heat_contained).toBe(50);
         expect(newGame.upgradeset.getUpgrade("expand_reactor_rows").level).toBe(2);
         expect(newGame.reactor.current_heat).toBe(500);
+        // New: placedCounts should be restored from save
+        expect(newGame.getPlacedCount('vent', 2)).toBe(3);
+    });
+
+    it("should backfill placedCounts from tiles when missing in save data", async () => {
+        const mockSaveData = {
+            version: "1.4.0",
+            current_money: 100,
+            rows: 12,
+            cols: 12,
+            tiles: [
+                { row: 0, col: 0, partId: "uranium1", ticks: 10, heat_contained: 0 },
+                { row: 0, col: 1, partId: "uranium1", ticks: 10, heat_contained: 0 },
+                { row: 0, col: 2, partId: "vent1", ticks: 10, heat_contained: 0 }
+            ],
+            upgrades: [],
+            reactor: { current_heat: 0, current_power: 0, has_melted_down: false }
+            // placedCounts intentionally omitted
+        };
+        localStorage.setItem("reactorGameSave", JSON.stringify(mockSaveData));
+
+        const newGame = await setupGame();
+        const loaded = await newGame.loadGame();
+        expect(loaded).toBe(true);
+        // Backfilled counts from tiles
+        expect(newGame.getPlacedCount('uranium', 1)).toBe(2);
+        expect(newGame.getPlacedCount('vent', 1)).toBe(1);
     });
 
     it("should not save the game if a meltdown has occurred", async () => {
