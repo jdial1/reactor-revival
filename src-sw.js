@@ -10,6 +10,13 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Allow clients to request immediate activation of the new service worker
+self.addEventListener("message", (event) => {
+  if (event && event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 workbox.core.clientsClaim();
 
 // This line is a placeholder. Workbox will replace it with the precache manifest.

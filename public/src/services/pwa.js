@@ -594,6 +594,17 @@ class SplashScreenManager {
       cloudButtonArea.innerHTML = "";
       return;
     }
+    // If offline, show disabled button with tooltip and skip network calls
+    if (!navigator.onLine) {
+      cloudButtonArea.innerHTML = "";
+      const signInBtn = createGoogleSignInButton(() => { });
+      if (signInBtn) {
+        signInBtn.disabled = true;
+        signInBtn.title = "Requires an internet connection";
+        cloudButtonArea.appendChild(signInBtn);
+      }
+      return;
+    }
     // Show loading state while initializing
     cloudButtonArea.innerHTML = "";
     const loadingBtn = createLoadingButton("Checking ...");
@@ -687,6 +698,11 @@ class SplashScreenManager {
               alert(`Error loading from Google Drive: ${error.message}`);
             }
           });
+          // Respect current connectivity immediately
+          if (cloudBtn && !navigator.onLine) {
+            cloudBtn.disabled = true;
+            cloudBtn.title = "Requires an internet connection";
+          }
           cloudButtonArea.appendChild(cloudBtn);
         } else {
           // No cloud save, show info
@@ -713,6 +729,11 @@ class SplashScreenManager {
           }, 2000);
         }
       });
+      // Respect current connectivity immediately
+      if (signInBtn && !navigator.onLine) {
+        signInBtn.disabled = true;
+        signInBtn.title = "Requires an internet connection";
+      }
       cloudButtonArea.appendChild(signInBtn);
     }
   }
@@ -1427,3 +1448,43 @@ async function registerOneOffSync() {
 }
 
 // Push notifications disabled on GitHub Pages hosting (no backend available)
+
+// -----------------------------
+// Connectivity-aware Google Drive UI state
+// -----------------------------
+(function setupConnectivityUI() {
+  function updateGoogleDriveButtonState() {
+    const isOnline = navigator.onLine;
+    const selectors = [
+      "#splash-load-cloud-btn",
+      "#splash-google-signin-btn",
+      "#splash-google-signout-btn",
+    ];
+    selectors.forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (el) {
+        el.disabled = !isOnline;
+        el.title = isOnline ? "Requires Google Drive permissions" : "Requires an internet connection";
+      }
+    });
+    // Also disable any dynamically created cloud buttons in splash area
+    const cloudArea = document.getElementById("splash-cloud-button-area");
+    if (cloudArea) {
+      cloudArea.querySelectorAll("button").forEach((btn) => {
+        btn.disabled = !isOnline;
+        btn.title = isOnline ? btn.title || "" : "Requires an internet connection";
+      });
+    }
+  }
+
+  // Initial check (after DOM content is ready)
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", updateGoogleDriveButtonState, { once: true });
+  } else {
+    updateGoogleDriveButtonState();
+  }
+
+  // Listen for connection changes
+  window.addEventListener("online", updateGoogleDriveButtonState);
+  window.addEventListener("offline", updateGoogleDriveButtonState);
+})();

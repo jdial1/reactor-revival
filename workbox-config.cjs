@@ -11,6 +11,9 @@ module.exports = {
     "manifest.json",
     "version.json",
     "lib/**/*.js",
+    // Cache game JavaScript for offline play
+    "src/**/*.js",
+    "components/**/*.js",
   ],
   globIgnores: [
     "**/node_modules/**/*",

@@ -168,6 +168,24 @@ async function main() {
   setupButtonHandlers(pageRouter, ui, game);
   setupGlobalListeners(game);
 
+  // Listen for service worker update notifications and offer to refresh
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event && event.data && event.data.type === "NEW_VERSION_AVAILABLE") {
+        const shouldReload = window.confirm("A new version is available. Refresh now to update?");
+        if (shouldReload) {
+          navigator.serviceWorker.getRegistration().then((reg) => {
+            if (reg && reg.waiting) {
+              reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+            // Reload to let the new SW take control
+            window.location.reload();
+          });
+        }
+      }
+    });
+  }
+
   // Register background capabilities (best-effort, feature-detected inside functions)
   if (typeof window !== "undefined") {
     if (typeof registerPeriodicSync === "function") registerPeriodicSync();
