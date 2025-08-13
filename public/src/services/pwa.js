@@ -1457,8 +1457,11 @@ async function registerOneOffSync() {
     const isOnline = navigator.onLine;
     const selectors = [
       "#splash-load-cloud-btn",
-      "#splash-google-signin-btn",
-      "#splash-google-signout-btn",
+      "#splash-google-signin-btn", // legacy/mistyped id (keep for safety)
+      "#splash-google-signout-btn", // legacy/mistyped id (keep for safety)
+      "#splash-signin-btn",
+      "#splash-signout-btn",
+      "#splash-upload-option-btn",
     ];
     selectors.forEach((sel) => {
       const el = document.querySelector(sel);
