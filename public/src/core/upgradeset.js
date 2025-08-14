@@ -57,9 +57,9 @@ export class UpgradeSet {
     console.log("Base cell parts for upgrades:", baseCellParts.map(p => p.id));
 
     const cellUpgradeTemplates = [
-      { type: "cell_power", title: "Potent ", description: "s: +100% power per level.", actionId: "cell_power" },
-      { type: "cell_tick", title: "Enriched ", description: "s: 2x duration per level.", actionId: "cell_tick" },
-      { type: "cell_perpetual", title: "Perpetual ", description: "s auto-replace when depleted. Replacement costs 1.5x normal price.", levels: 1, actionId: "cell_perpetual" },
+      { type: "cell_power", title: "Potent ", description: "s: +100% power.", actionId: "cell_power" },
+      { type: "cell_tick", title: "Enriched ", description: "s: 2x duration.", actionId: "cell_tick" },
+      { type: "cell_perpetual", title: "Perpetual ", description: "s: auto-replace at 1.5x normal price.", levels: 1, actionId: "cell_perpetual" },
     ];
 
     for (const template of cellUpgradeTemplates) {

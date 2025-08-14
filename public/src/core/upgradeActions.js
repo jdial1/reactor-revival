@@ -25,7 +25,7 @@ function updateAllPartStats(game, partType) {
 const actions = {
   // Core Game Mechanics
   chronometer: (upgrade, game) => {
-    // The description implies halving the time per level.
+    // The description implies halving the time
     game.loop_wait = game.base_loop_wait / (1 + upgrade.level);
     game.ui.stateManager.setVar("loop_wait", game.loop_wait);
   },

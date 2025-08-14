@@ -29,8 +29,8 @@ async function ensureDataLoaded() {
 
 // --- Constants for Part Generation ---
 
-const SINGLE_CELL_DESC_TPL = "Produces %power power and %heat heat for %ticks ticks.";
-const MULTI_CELL_DESC_TPL = "Acts as %count %type cells. Produces %power power and %heat heat for %ticks ticks.";
+const SINGLE_CELL_DESC_TPL = "Creates %power power and %heat heat for %ticks ticks.";
+const MULTI_CELL_DESC_TPL = "Acts as %count %type cells. Creates %power power and %heat heat for %ticks ticks.";
 
 // Legacy multipliers restored as per user request
 const CELL_POWER_MULTIPLIERS = [1, 4, 12];

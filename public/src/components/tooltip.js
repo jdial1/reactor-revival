@@ -127,39 +127,53 @@ export class TooltipManager {
       this.$tooltip.style.right = "";
       this.$tooltip.style.transform = "";
     } else {
-      // Mobile: Use original positioning logic
-      if (anchorEl) {
+      // Mobile: Prefer docking tooltip to the right of the parts panel, near the top
+      const partsPanel = document.getElementById("parts_section");
+      const nav = document.getElementById("main_top_nav");
+      const tooltipEl = this.$tooltip;
+      const margin = 8;
+      const scrollY = window.scrollY || window.pageYOffset;
+      const scrollX = window.scrollX || window.pageXOffset;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      // Reset sizing each time to avoid cumulative growth
+      tooltipEl.style.width = "";
+      tooltipEl.style.maxWidth = "";
+      const tooltipRect = tooltipEl.getBoundingClientRect();
+      let top = (nav ? (nav.getBoundingClientRect().bottom + margin) : margin) + scrollY;
+      let left;
+
+      if (partsPanel) {
+        const panelRect = partsPanel.getBoundingClientRect();
+        left = panelRect.right + margin + scrollX;
+        // Constrain width to available space to the right of the parts panel
+        const availableWidth = Math.max(180, viewportWidth - panelRect.right - (margin * 2));
+        tooltipEl.style.maxWidth = availableWidth + "px";
+      } else if (anchorEl) {
+        // Fallback to anchor positioning if parts panel isn't found
         const rect = anchorEl.getBoundingClientRect();
-        const tooltipRect = this.$tooltip.getBoundingClientRect();
-        const scrollY = window.scrollY || window.pageYOffset;
-        const scrollX = window.scrollX || window.pageXOffset;
-
-        let top = rect.top + scrollY - tooltipRect.height - 8;
-        let left = rect.left + scrollX + rect.width / 2 - tooltipRect.width / 2;
-        const margin = 8;
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        if (top < margin) {
-          top = rect.bottom + scrollY + 8;
-        }
-        if (left < margin) left = margin;
-        if (left + tooltipRect.width > viewportWidth - margin) {
-          left = viewportWidth - tooltipRect.width - margin;
-        }
-        if (top + tooltipRect.height > viewportHeight - margin) {
-          top = Math.max(margin, viewportHeight - tooltipRect.height - margin);
-        }
-        this.$tooltip.style.top = `${top}px`;
-        this.$tooltip.style.left = `${left}px`;
-        this.$tooltip.style.right = "auto";
-        this.$tooltip.style.transform = "none";
+        left = rect.left + scrollX + rect.width / 2 - tooltipRect.width / 2;
+        top = rect.top + scrollY - tooltipRect.height - margin;
       } else {
-        this.$tooltip.style.top = "20px";
-        this.$tooltip.style.left = "50%";
-        this.$tooltip.style.right = "auto";
-        this.$tooltip.style.transform = "translateX(-50%)";
+        // Final fallback: centered near top
+        left = (viewportWidth - tooltipRect.width) / 2 + scrollX;
       }
+
+      // Constrain within viewport
+      if (left < margin + scrollX) left = margin + scrollX;
+      if (left + tooltipRect.width > viewportWidth - margin + scrollX) {
+        left = viewportWidth - tooltipRect.width - margin + scrollX;
+      }
+      if (top < margin + scrollY) top = margin + scrollY;
+      if (top + tooltipRect.height > viewportHeight - margin + scrollY) {
+        top = Math.max(margin + scrollY, viewportHeight - tooltipRect.height - margin + scrollY);
+      }
+
+      tooltipEl.style.top = `${top}px`;
+      tooltipEl.style.left = `${left}px`;
+      tooltipEl.style.right = "auto";
+      tooltipEl.style.transform = "none";
     }
   }
 
@@ -310,16 +324,7 @@ export class TooltipManager {
     if (descEl) {
       const description = obj.description || obj.upgrade?.description;
       if (description) {
-        // Ensure section header exists
-        let descHeader = this.$tooltipContent.querySelector('[data-role="description-header"]');
-        if (!descHeader) {
-          descHeader = document.createElement('div');
-          descHeader.setAttribute('data-role', 'description-header');
-          descHeader.className = 'tooltip-section-title';
-          descHeader.textContent = 'Description';
-          descEl.parentNode.insertBefore(descHeader, descEl);
-        }
-        descEl.innerHTML = iconify(description);
+        descEl.innerHTML = this._formatDescriptionBulleted(description, iconify);
         if (obj.upgrade) descEl.classList.add("is-inset");
       } else {
         descEl.innerHTML = "";
@@ -336,15 +341,7 @@ export class TooltipManager {
         bonusEl.className = 'tooltip-bonuses';
         descEl?.insertAdjacentElement('afterend', bonusEl);
       }
-      // Ensure bonuses header exists
-      let bonusHeader = this.$tooltipContent.querySelector('[data-role="bonuses-header"]');
-      if (!bonusHeader) {
-        bonusHeader = document.createElement('div');
-        bonusHeader.setAttribute('data-role', 'bonuses-header');
-        bonusHeader.className = 'tooltip-section-title';
-        bonusHeader.textContent = 'Upgrades';
-        bonusEl.parentNode.insertBefore(bonusHeader, bonusEl);
-      }
+      // No section header; we only show the lines
 
       bonusEl.innerHTML = mobileBonusLines
         .map(line => `<div class="tooltip-bonus-line">${this._colorizeBonus(line)}</div>`)
@@ -434,17 +431,7 @@ export class TooltipManager {
     if (descEl) {
       const description = obj.description || obj.upgrade?.description;
       if (description) {
-        // Ensure section header exists
-        let descHeader = this.$tooltipContent.querySelector('[data-role="description-header"]');
-        if (!descHeader) {
-          descHeader = document.createElement('div');
-          descHeader.setAttribute('data-role', 'description-header');
-          descHeader.className = 'tooltip-section-title';
-          descHeader.textContent = 'Description';
-          descEl.parentNode.insertBefore(descHeader, descEl);
-        }
-        // Make description more compact by reducing line breaks
-        descEl.innerHTML = iconify(description).replace(/\.\s+/g, ". ");
+        descEl.innerHTML = this._formatDescriptionBulleted(description, iconify);
         if (obj.upgrade) descEl.classList.add("is-inset");
       } else {
         descEl.innerHTML = "";
@@ -461,15 +448,7 @@ export class TooltipManager {
         bonusEl.className = 'tooltip-bonuses';
         descEl?.insertAdjacentElement('afterend', bonusEl);
       }
-      // Ensure bonuses header exists
-      let bonusHeader = this.$tooltipContent.querySelector('[data-role="bonuses-header"]');
-      if (!bonusHeader) {
-        bonusHeader = document.createElement('div');
-        bonusHeader.setAttribute('data-role', 'bonuses-header');
-        bonusHeader.className = 'tooltip-section-title';
-        bonusHeader.textContent = 'Upgrades';
-        bonusEl.parentNode.insertBefore(bonusHeader, bonusEl);
-      }
+      // No section header; we only show the lines
       bonusEl.innerHTML = bonusLines
         .map(line => `<div class="tooltip-bonus-line">${this._colorizeBonus(line)}</div>`)
         .join("");
@@ -491,7 +470,7 @@ export class TooltipManager {
   getIconifyFn() {
     return (str) => {
       if (!str) return str;
-      return str
+      const withIcons = str
         .replace(
           /\bpower\b/gi,
           "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>"
@@ -509,11 +488,43 @@ export class TooltipManager {
           /\$(\d+)/g,
           "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1"
         )
-        .replace(
-          /\bEP\b/g,
-          "🧬 $&"
-        );
+        .replace(/\bEP\b/g, "🧬 $&");
+
+      // Highlight numbers preceding power/heat/tick terms after icon injection
+      // Support compact units like 4K, 19M, 58B, and scientific e-notation
+      const numWithUnit = "(?:\\d[\\d,.]*?(?:\\s*[kKmMbBtTqQ])?|\\d[\\d,.]*?(?:e[+\\-]?\\d+)?)";
+      const rePower = new RegExp(`(\\b${numWithUnit}\\b)\\s+(power)\\s+(<img[^>]+alt=['\" ]power['\"][^>]*>)`, 'gi');
+      const reHeat = new RegExp(`(\\b${numWithUnit}\\b)\\s+(heat)\\s+(<img[^>]+alt=['\" ]heat['\"][^>]*>)`, 'gi');
+      const reTick = new RegExp(`(\\b${numWithUnit}\\b)\\s+(ticks?)\\s+(<img[^>]+alt=['\" ]tick['\"][^>]*>)`, 'gi');
+      return withIcons
+        .replace(rePower, '<span class="num power-num">$1</span> $2 $3')
+        .replace(reHeat, '<span class="num heat-num">$1</span> $2 $3')
+        .replace(reTick, '<span class="num tick-num">$1</span> $2 $3');
     };
+  }
+
+  // Convert a paragraph description into bulleted lines.
+  // - Splits on sentence boundaries
+  // - Trims whitespace
+  // - Ignores empty results
+  // - Applies the provided iconify function to each bullet item
+  _formatDescriptionBulleted(description, iconifyFn) {
+    const raw = String(description || "");
+    // Split on period + whitespace before an uppercase, digit or '(' to keep prior logic
+    const parts = raw
+      .split(/\.\s+(?=[A-Z(0-9])/g)
+      .map(s => s.trim())
+      .filter(Boolean)
+      // Add the trailing period back if it was removed by the split
+      .map(s => (/[.!?]$/.test(s) ? s : s + '.'));
+
+    if (parts.length === 0) return '';
+
+    const bullets = parts
+      .map(line => `<div class="tooltip-bullet">• ${iconifyFn(line)}</div>`)
+      .join("");
+
+    return bullets;
   }
 
   // Wrap numeric deltas in pos/neg spans for colorizing
@@ -526,11 +537,11 @@ export class TooltipManager {
       .replace(/([+][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="pos">$1</span>')
       .replace(/([-][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="neg">$1</span>');
 
-    // Use icons instead of text for key terms in bonus lines
+    // Show text and icon together for key terms in bonus lines
     result = result
-      .replace(/\bpower\b/gi, "<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>")
-      .replace(/\bheat\b/gi, "<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>")
-      .replace(/\bduration\b/gi, "<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='time'>");
+      .replace(/\bpower\b/gi, "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>")
+      .replace(/\bheat\b/gi, "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>")
+      .replace(/\bduration\b/gi, "$& <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='time'>");
 
     // Keep iconified versions for other terms using the existing helper
     result = result.replace(/\b(venting|max heat|transfer|EP heat cap)\b/gi, (m) =>

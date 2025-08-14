@@ -127,7 +127,7 @@ describe("Part Mechanics", () => {
   it("should generate a descriptive text", () => {
     const part = game.partset.getPartById("uranium1");
     part.updateDescription();
-    expect(part.description).toContain("Produces");
+    expect(part.description).toContain("Creates");
     expect(part.description).toContain("power and");
     expect(part.description).toContain("heat for");
     expect(part.description).toContain("ticks.");

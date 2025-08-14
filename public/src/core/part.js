@@ -1,9 +1,9 @@
 import { numFormat as fmt } from "../utils/util.js";
 
 const SINGLE_CELL_DESC_TPL =
-  "Produces %power power and %heat heat for %ticks ticks.";
+  "Creates %power power and %heat heat for %ticks ticks.";
 const MULTI_CELL_DESC_TPL =
-  "Acts as %count %type cells. Produces %power power and %heat heat for %ticks ticks";
+  "Acts as %count %type cells. Creates %power power and %heat heat for %ticks ticks";
 
 export class Part {
   constructor(part_definition, game) {

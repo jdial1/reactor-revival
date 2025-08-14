@@ -2318,7 +2318,7 @@ background: #23272f;
 border: 2px solid #5f6672;
 border-radius: 0;
 padding: 0.75rem;
-max-width: 400px;
+  max-width: 400px;
 min-width: 300px;
 width: auto;
 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -2334,6 +2334,32 @@ pointer-events: none;
 #tooltip_data {
 color: var(--pico-color, #fff);
 }
+
+/* Highlight numbers adjacent to power/heat/tick in tooltips */
+#tooltip .num {
+  font-weight: 900;
+  color: #fff;
+  /* Subtle outline for pixel-clarity similar to retro fonts */
+  text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
+}
+#tooltip .power-num { color: #8fd694; text-shadow: 1px 0 0 #003, -1px 0 0 #003, 0 1px 0 #003, 0 -1px 0 #003, 0 0 6px rgba(0,255,255,0.35); }
+#tooltip .heat-num { color: #ff8888; text-shadow: 1px 0 0 #300, -1px 0 0 #300, 0 1px 0 #300, 0 -1px 0 #300, 0 0 6px rgba(255,80,80,0.35); }
+#tooltip .tick-num { color: #ffd27f; text-shadow: 1px 0 0 #330, -1px 0 0 #330, 0 1px 0 #330, 0 -1px 0 #330, 0 0 6px rgba(255,200,100,0.3); }
+
+/* Make formatted numbers inside description easier to scan */
+#tooltip_data p[data-role="description"] .num {
+  font-size: 1.2em;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.35);
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.15);
+}
+#tooltip_data p[data-role="description"] .power-num { background-color: rgba(0, 220, 180, 0.12); }
+#tooltip_data p[data-role="description"] .heat-num { background-color: rgba(255, 80, 80, 0.12); }
+#tooltip_data p[data-role="description"] .tick-num { background-color: rgba(255, 200, 100, 0.12); }
+
+/* Slightly increase spacing around inline icons for readability */
+#tooltip .icon-inline { margin: 0 3px; }
 #tooltip_close_btn {
 position: absolute;
 top: 0;
@@ -2386,8 +2412,23 @@ border-radius: 4px;
 margin: 0.4rem 0;
 border-left: 3px solid #5f6672;
 font-size: 0.75em;
-line-height: 1.2;
+  line-height: 1.2;
+  /* Indented wrap for bullets */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
+
+/* Allow tooltip content to wrap naturally but keep description bullets on one line */
+#tooltip_data { max-width: 100%; overflow: visible; }
+#tooltip { box-sizing: border-box; }
+#tooltip .tooltip-bonuses,
+#tooltip .tooltip-summary-row,
+#tooltip .tooltip-stats { max-width: 100%; overflow-wrap: anywhere; }
+
+/* Indented word wrapping for bullets */
+.tooltip-bullet { display: block; padding-left: 1.1em; text-indent: -1.1em; white-space: normal; }
+.tooltip-bonuses .tooltip-bullet { padding-left: 1.0em; text-indent: -1.0em; }
 .tooltip-stats dt {
 font-weight: bold;
 margin-top: 0.25rem;
@@ -2401,23 +2442,27 @@ margin-top: 0.5rem;
 padding-top: 0.5rem;
 border-top: 1px solid var(--pico-card-border-color, #444);
 }
+#tooltip_actions { display: flex; align-items: center; justify-content: center; }
 #tooltip_actions button {
-display: block;
-width: 100%;
-margin: 0.3rem 0;
-font-size: 0.85em;
-padding: 0.5em 1.2em;
-border-radius: 6px;
-background: #236090;
-color: #b0ffb0;
-font-family: inherit;
-font-weight: bold;
-border: none;
-text-align: center;
-cursor: pointer;
-box-shadow: 0 2px 0 #222, 0 4px 8px #0002;
-transition: background 0.2s, box-shadow 0.2s, color 0.2s;
-box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 90%;
+  max-width: 520px;
+  margin: 0.25rem auto 0.1rem auto;
+  font-size: 0.9em;
+  padding: 0.6em 1.2em;
+  border-radius: 6px;
+  background: #236090;
+  color: #b0ffb0;
+  font-family: inherit;
+  font-weight: bold;
+  border: none;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #222, 0 4px 8px #0002;
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+  box-sizing: border-box;
 }
 .tooltip-bonuses {
   margin-top: 0.4rem;
@@ -2444,7 +2489,7 @@ display: flex;
 flex-direction: row;
 align-items: flex-start;
 gap: 1rem;
-max-width: 800px;
+  max-width: 760px;
 min-width: 600px;
 padding: 1rem;
 top: var(--main-top-nav-height, 50px);
@@ -2462,12 +2507,13 @@ flex-wrap: wrap;
 }
 
 #tooltip_actions {
-margin-top: 0;
-padding-top: 0;
-border-top: none;
-border-left: 1px solid var(--pico-card-border-color, #444);
-padding-left: 1rem;
-margin-left: 1rem;
+  margin-top: 0.5rem;
+  padding-top: 0;
+  border-top: none;
+  border-left: none;
+  padding-left: 0;
+  margin-left: 0;
+  width: 100%;
 }
 }
 
@@ -2475,9 +2521,17 @@ margin-left: 1rem;
 #tooltip {
 font-size: 0.8em;
 padding: 0.5rem;
-max-width: 350px;
+ max-width: calc(100vw - var(--parts-panel-width, 260px) - 24px);
 min-width: 280px;
+ /* Place to the right of the parts panel on mobile */
+ left: calc(var(--parts-panel-width, 260px) + 12px);
+ right: auto;
+ top: calc(var(--main-top-nav-height, 50px) + 8px);
+ transform: none;
+ position: fixed;
 }
+.tooltip-summary-row { border-bottom: none; margin-bottom: 0.2rem; padding-bottom: 0; }
+#tooltip_actions { margin-top: 0.3rem; }
 .tooltip-summary-row {
 flex-direction: column;
 gap: 0.3rem;
@@ -3493,6 +3547,7 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   flex-direction: row;
   gap: 8px;
   transform: none;
+  z-index: 25;
 }
 
 /* Ensure desktop also pins buttons to the reactor area top-right */
@@ -3501,7 +3556,7 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     position: absolute !important;
     top: 20px;
     right: 20px;
-    z-index: 900;
+    z-index: 25;
   }
 }
 
@@ -3745,7 +3800,7 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     flex-direction: row;
     justify-content: flex-end;
     align-items: flex-end;
-    z-index: 900; /* below modal (1000), above content */
+    z-index: 25; /* below modal (1000), above content */
   }
 
   #reactor_copy_paste_modal .modal-content {
