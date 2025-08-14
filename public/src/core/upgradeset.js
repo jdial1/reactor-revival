@@ -57,8 +57,8 @@ export class UpgradeSet {
     console.log("Base cell parts for upgrades:", baseCellParts.map(p => p.id));
 
     const cellUpgradeTemplates = [
-      { type: "cell_power", title: "Potent ", description: "s produce 100% more power per level of upgrade.", actionId: "cell_power" },
-      { type: "cell_tick", title: "Enriched ", description: "s last twice as long per level of upgrade.", actionId: "cell_tick" },
+      { type: "cell_power", title: "Potent ", description: "s: +100% power per level.", actionId: "cell_power" },
+      { type: "cell_tick", title: "Enriched ", description: "s: 2x duration per level.", actionId: "cell_tick" },
       { type: "cell_perpetual", title: "Perpetual ", description: "s auto-replace when depleted. Replacement costs 1.5x normal price.", levels: 1, actionId: "cell_perpetual" },
     ];
 
@@ -116,6 +116,10 @@ export class UpgradeSet {
 
     wrapper.querySelectorAll(".upgrade-group").forEach((el) => (el.innerHTML = ""));
 
+    // Custom layout breaks for General (other) upgrades
+    const isGeneralGroup = (upgrade) => (upgrade?.upgrade?.type === "other");
+    let generalCount = 0;
+
     this.upgradesArray.filter(filterFn).forEach((upgrade) => {
       // Gate cell upgrade visibility based on whether the corresponding base
       // cell part is actually unlocked/placeable (progress-based).
@@ -136,6 +140,33 @@ export class UpgradeSet {
       } catch (_) { /* no-op */ }
 
       this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
+
+      // Inject layout line breaks for General Upgrades in requested pattern
+      try {
+        if (isGeneralGroup(upgrade) && upgrade.$el && upgrade.$el.parentElement && upgrade.$el.parentElement.id === "other_upgrades") {
+          generalCount++;
+          const parent = upgrade.$el.parentElement;
+          const insertBreak = () => {
+            const br = document.createElement("div");
+            br.className = "row-break";
+            parent.appendChild(br);
+          };
+          // Pattern: 1 | 1 | 2 | 2 | 3 | 1 | 3 | 2
+          // Implement by step counters within each cycle
+          const pattern = [1, 1, 2, 2, 3, 1, 3, 2];
+          // Track how many items placed in current line within the pattern
+          if (!parent._patternIndex) parent._patternIndex = 0;
+          if (!parent._lineFill) parent._lineFill = 0;
+
+          const target = pattern[parent._patternIndex % pattern.length];
+          parent._lineFill += 1;
+          if (parent._lineFill >= target) {
+            insertBreak();
+            parent._patternIndex = (parent._patternIndex + 1) % pattern.length;
+            parent._lineFill = 0;
+          }
+        }
+      } catch (_) { /* no-op */ }
       if (upgrade.$el) {
         upgrade.updateDisplayCost();
         upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);

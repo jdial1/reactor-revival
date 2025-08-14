@@ -122,6 +122,57 @@ export class Upgrade {
           imageDiv.style.backgroundRepeat = "no-repeat";
         }
 
+        // Add status icon overlay for all upgrades using simple heuristics
+        try {
+          const classes = Array.isArray(this.upgrade.classList) ? this.upgrade.classList : [];
+          const title = (this.title || "").toLowerCase();
+          const desc = (this.description || "").toLowerCase();
+          const type = (this.type || this.upgrade?.type || "").toLowerCase();
+          const actionId = (this.actionId || this.upgrade?.actionId || "").toLowerCase();
+
+          let iconPath = null;
+          let isHeat = false;
+
+          // Perpetual
+          if (classes.includes("cell_perpetual") || title.includes("perpetual") || actionId.includes("perpetual")) {
+            iconPath = "img/ui/status/status_infinity.png";
+          }
+
+          // Time/duration/tick modifiers
+          if (!iconPath && (classes.includes("cell_tick") || title.includes("enriched") || actionId.includes("tick") ||
+            desc.includes("tick") || desc.includes("duration") || desc.includes("last") || desc.includes("per second") || title.includes("clock") || title.includes("chronometer"))) {
+            iconPath = "img/ui/icons/icon_time.png";
+          }
+
+          // Heat transfer/capacity (use heat icon) vs power/strength (use bolt)
+          if (!iconPath) {
+            const heatTerms = ["heat", "vent", "exchange", "containment", "hold", "heatsink", "coolant", "thermal", "inlet", "outlet", "exchanger", "venting"];
+            const powerTerms = ["power", "potent", "reflection", "transformer", "grid", "capacitor", "capacitance", "accelerator"];
+            const hasHeat = heatTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t));
+            const hasPower = powerTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t) || classes.includes("cell_power"));
+            if (hasHeat) {
+              iconPath = "img/ui/icons/icon_heat.png";
+              isHeat = true;
+            } else if (hasPower) {
+              iconPath = "img/ui/icons/icon_power.png";
+            }
+          }
+
+          // Default fallback
+          if (!iconPath) {
+            iconPath = "img/ui/status/status_star.png";
+          }
+
+          if (iconPath) {
+            const overlay = document.createElement("img");
+            overlay.className = "status-overlay";
+            if (isHeat) overlay.classList.add("status-heat");
+            overlay.src = iconPath;
+            overlay.alt = "";
+            this.$el.appendChild(overlay);
+          }
+        } catch (_) { /* no-op */ }
+
         // Set cost display
         const costDiv = this.$el.querySelector(".upgrade-price");
         if (
@@ -166,6 +217,49 @@ export class Upgrade {
       imageDiv.style.backgroundImage = `url('${this.upgrade.icon}')`;
     }
     this.$el.appendChild(imageDiv);
+
+    // Add status icon overlay for all upgrades in fallback path
+    try {
+      const classes = Array.isArray(this.upgrade.classList) ? this.upgrade.classList : [];
+      const title = (this.title || "").toLowerCase();
+      const desc = (this.description || "").toLowerCase();
+      const type = (this.type || this.upgrade?.type || "").toLowerCase();
+      const actionId = (this.actionId || this.upgrade?.actionId || "").toLowerCase();
+
+      let iconPath = null;
+      let isHeat = false;
+
+      if (classes.includes("cell_perpetual") || title.includes("perpetual") || actionId.includes("perpetual")) {
+        iconPath = "img/ui/status/status_infinity.png";
+      }
+      if (!iconPath && (classes.includes("cell_tick") || title.includes("enriched") || actionId.includes("tick") ||
+        desc.includes("tick") || desc.includes("duration") || desc.includes("last") || desc.includes("per second") || title.includes("clock") || title.includes("chronometer"))) {
+        iconPath = "img/ui/icons/icon_time.png";
+      }
+      if (!iconPath) {
+        const heatTerms = ["heat", "vent", "exchange", "containment", "hold", "heatsink", "coolant", "thermal", "inlet", "outlet", "exchanger", "venting"];
+        const powerTerms = ["power", "potent", "reflection", "transformer", "grid", "capacitor", "capacitance", "accelerator"];
+        const hasHeat = heatTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t));
+        const hasPower = powerTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t) || classes.includes("cell_power"));
+        if (hasHeat) {
+          iconPath = "img/ui/icons/icon_heat.png";
+          isHeat = true;
+        } else if (hasPower) {
+          iconPath = "img/ui/icons/icon_power.png";
+        }
+      }
+      if (!iconPath) {
+        iconPath = "img/ui/status/status_star.png";
+      }
+      if (iconPath) {
+        const overlay = document.createElement("img");
+        overlay.className = "status-overlay";
+        if (isHeat) overlay.classList.add("status-heat");
+        overlay.src = iconPath;
+        overlay.alt = "";
+        this.$el.appendChild(overlay);
+      }
+    } catch (_) { /* no-op */ }
 
     // Add cost display overlay
     if (this.current_cost !== undefined && this.current_cost !== Infinity) {

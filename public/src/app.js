@@ -80,7 +80,8 @@ function setupButtonHandlers(pageRouter, ui, game) {
       // Clear any persisted save and pending saved objective index to force a true reset
       try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
       delete game._saved_objective_index;
-      await game.set_defaults();
+      // Perform a full clean initialization (resets reactor/tiles, parts, upgrades and UI vars)
+      await game.initialize_new_game_state();
       localStorage.removeItem("reactorGameQuickStartShown");
       await startGame(pageRouter, ui, game);
     };

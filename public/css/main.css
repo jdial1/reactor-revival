@@ -2840,6 +2840,17 @@ justify-content: flex-start;
 position: relative;
 overflow: visible;
 }
+/* Small status icon overlay for cell upgrades */
+.upgrade .status-overlay {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 3;
+}
 .upgrade .image,
 .part .image {
 width: 48px;
@@ -2896,6 +2907,14 @@ flex-wrap: wrap;
 gap: 0;
 justify-content: flex-start;
 align-items: flex-start;
+}
+
+/* Line break helper for flex-wrapped upgrade groups */
+.upgrade-group .row-break {
+  flex-basis: 100%;
+  height: 0;
+  margin: 0;
+  padding: 0;
 }
 .part-price,
 .upgrade-price {

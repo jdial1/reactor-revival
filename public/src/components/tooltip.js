@@ -520,14 +520,23 @@ export class TooltipManager {
   _colorizeBonus(line) {
     if (!line) return line;
     // Replace patterns like +123%, -45%, +12/tick, etc.
-    return line
+    let result = line
       .replace(/([+][0-9]+(?:\.[0-9]+)?%?)/g, '<span class="pos">$1</span>')
       .replace(/([-][0-9]+(?:\.[0-9]+)?%?)/g, '<span class="neg">$1</span>')
       .replace(/([+][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="pos">$1</span>')
-      .replace(/([-][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="neg">$1</span>')
-      .replace(/\b(power|heat|duration|venting|max heat|transfer|EP heat cap)\b/gi, (m) =>
-        this.getIconifyFn()(m)
-      );
+      .replace(/([-][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="neg">$1</span>');
+
+    // Use icons instead of text for key terms in bonus lines
+    result = result
+      .replace(/\bpower\b/gi, "<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>")
+      .replace(/\bheat\b/gi, "<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>")
+      .replace(/\bduration\b/gi, "<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='time'>");
+
+    // Keep iconified versions for other terms using the existing helper
+    result = result.replace(/\b(venting|max heat|transfer|EP heat cap)\b/gi, (m) =>
+      this.getIconifyFn()(m)
+    );
+    return result;
   }
 
   // Build human-readable upgrade bonus lines that affect the given part
@@ -538,6 +547,8 @@ export class TooltipManager {
 
     // Helper to format percent increase from a multiplier (e.g., 2^n)
     const pctFromMultiplier = (mult) => Math.round((mult - 1) * 100);
+    // Helper to show explicit multiplicative scaling for doubling-style upgrades
+    const multX = (level) => `x${Math.pow(2, level)}`;
     const stripPrefixes = (title) => (title || '').replace(/^(Basic |Advanced |Super |Wonderous |Ultimate )/, '');
 
     switch (obj.category) {
@@ -657,25 +668,40 @@ export class TooltipManager {
         break;
       }
       case 'cell': {
-        // Per-cell dynamic upgrades are embedded as generated upgrades; summarize power/tick upgrades
+        // Show multiplicative effect for cell-specific upgrades to avoid misleading huge % values
         const powerUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_power`);
-        if (powerUpg?.level > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, powerUpg.level))}% power`);
+        if (powerUpg?.level > 0) {
+          const lvl = powerUpg.level;
+          const totalPct = (Math.pow(2, lvl) - 1) * 100;
+          lines.push(`+100% power x ${lvl} lvl${lvl > 1 ? 's' : ''} (${totalPct}%)`);
+        }
         const tickUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_tick`);
-        if (tickUpg?.level > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, tickUpg.level))}% duration`);
+        if (tickUpg?.level > 0) {
+          const lvl = tickUpg.level;
+          const totalPct = (Math.pow(2, lvl) - 1) * 100;
+          lines.push(`+100% duration x ${lvl} lvl${lvl > 1 ? 's' : ''} (${totalPct}%)`);
+        }
         const perpUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_perpetual`);
         if (perpUpg?.level > 0) lines.push(`Auto-replacement enabled`);
 
         // Global experimental boosts that affect cells
         const infused = upg('infused_cells');
-        if (infused > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, infused))}% power`);
+        if (infused > 0) {
+          const totalPct = (Math.pow(2, infused) - 1) * 100;
+          lines.push(`+100% power x ${infused} lvl${infused > 1 ? 's' : ''} (${totalPct}%)`);
+        }
         const unleashed = upg('unleashed_cells');
-        if (unleashed > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, unleashed))}% power and heat`);
+        if (unleashed > 0) {
+          const totalPct = (Math.pow(2, unleashed) - 1) * 100;
+          lines.push(`+100% power and heat x ${unleashed} lvl${unleashed > 1 ? 's' : ''} (${totalPct}%)`);
+        }
         if (obj.type === 'protium') {
           const unstable = upg('unstable_protium');
           if (unstable > 0) {
-            const powPct = pctFromMultiplier(Math.pow(2, unstable));
+            // Display both per-level phrasing and net effect for unstable protium
             const durPct = Math.round((1 - 1 / Math.pow(2, unstable)) * 100);
-            lines.push(`+${powPct}% power and heat, -${durPct}% duration`);
+            const totalPct = (Math.pow(2, unstable) - 1) * 100;
+            lines.push(`+100% power and heat x ${unstable} lvl${unstable > 1 ? 's' : ''} (${totalPct}%), -${durPct}% duration`);
           }
         }
         break;
