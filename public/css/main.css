@@ -3536,6 +3536,21 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   pointer-events: none;
 }
 
+#reactor_copy_paste_btns .emoji-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  font-size: 22px; /* slightly larger for visual centering */
+}
+
+/* Dropper-specific alignment/rotation */
+#reactor_copy_paste_btns #reactor_dropper_btn .emoji-icon {
+  transform: translateX(-1px) translateY(-1px) rotate(-50deg);
+}
+
 /* Active state for dropper/deselect buttons */
 #reactor_copy_paste_btns #reactor_dropper_btn.on,
 #reactor_copy_paste_btns #reactor_deselect_btn.on {
