@@ -4768,15 +4768,19 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 
 /* Full power and heat animation classes */
 
-/* Disable full/flash animations (confetti-like effects) */
-.info-bar-desktop .info-item.power.full,
-.info-bar-desktop .info-item.heat.full { animation: none !important; }
-.info-bar-desktop .info-item.power.full::after,
-.info-bar-desktop .info-item.heat.full::after { animation: none !important; }
+/* When full, flash the striped fill to draw attention */
+.info-bar-desktop .info-item.power.full::after {
+  animation: full-power-flash 0.9s ease-in-out infinite;
+}
+.info-bar-desktop .info-item.heat.full::after {
+  animation: full-heat-flash 0.9s ease-in-out infinite;
+}
 
 /* Mobile full power and heat animation classes */
-#info_bar .info-row.info-main .info-item.power.full,
-#info_bar .info-row.info-main .info-item.heat.full { animation: none !important; }
-#info_bar .info-row.info-main .info-item.power.full::after,
-#info_bar .info-row.info-main .info-item.heat.full::after { animation: none !important; }
+#info_bar .info-row.info-main .info-item.power.full::after {
+  animation: full-power-flash 0.9s ease-in-out infinite;
+}
+#info_bar .info-row.info-main .info-item.heat.full::after {
+  animation: full-heat-flash 0.9s ease-in-out infinite;
+}
 
