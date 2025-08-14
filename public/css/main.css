@@ -3536,6 +3536,13 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   pointer-events: none;
 }
 
+/* Active state for dropper/deselect buttons */
+#reactor_copy_paste_btns #reactor_dropper_btn.on,
+#reactor_copy_paste_btns #reactor_deselect_btn.on {
+  background: #1ca3ec;
+  border-color: #1ca3ec;
+}
+
 #reactor_copy_paste_modal {
   position: fixed;
   top: 0;

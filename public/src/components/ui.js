@@ -155,6 +155,8 @@ export class UI {
       "collapsed_controls_nav",
       "reactor_copy_btn",
       "reactor_paste_btn",
+      "reactor_deselect_btn",
+      "reactor_dropper_btn",
       "reactor_copy_paste_modal",
       "reactor_copy_paste_modal_title",
       "reactor_copy_paste_text",
@@ -2011,6 +2013,8 @@ export class UI {
   initializeCopyPasteUI() {
     const copyBtn = document.getElementById("reactor_copy_btn");
     const pasteBtn = document.getElementById("reactor_paste_btn");
+    const deselectBtn = document.getElementById("reactor_deselect_btn");
+    const dropperBtn = document.getElementById("reactor_dropper_btn");
     const modal = document.getElementById("reactor_copy_paste_modal");
     const modalTitle = document.getElementById("reactor_copy_paste_modal_title");
     const modalText = document.getElementById("reactor_copy_paste_text");
@@ -2022,6 +2026,54 @@ export class UI {
     if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) {
       console.warn("[UI] Copy/paste UI elements not found, skipping initialization");
       return;
+    }
+
+    // Deselect current selected part
+    if (deselectBtn) {
+      deselectBtn.onclick = () => {
+        try {
+          document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
+        } catch (_) { }
+        this.stateManager.setClickedPart(null);
+      };
+    }
+
+    // Dropper mode: click a placed part in the reactor to select its part
+    if (dropperBtn) {
+      dropperBtn.onclick = () => {
+        this._dropperModeActive = !this._dropperModeActive;
+        dropperBtn.classList.toggle("on", this._dropperModeActive);
+        if (this._dropperModeActive) {
+          // Visually clear existing active part selection in panel
+          try {
+            document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
+          } catch (_) { }
+          // Temporarily highlight tiles on hover and pick on click
+          const reactorEl = this.DOMElements.reactor;
+          if (reactorEl && !this._dropperPointerHandler) {
+            this._dropperPointerHandler = async (e) => {
+              const tileEl = e.target && e.target.closest ? e.target.closest(".tile") : null;
+              if (tileEl && tileEl.tile && tileEl.tile.part) {
+                const pickedPart = tileEl.tile.part;
+                // Set selected part
+                this.stateManager.setClickedPart(pickedPart);
+                // Best-effort: add active class to the matching button in parts panel
+                const btn = document.getElementById(`part_btn_${pickedPart.id}`);
+                if (btn) btn.classList.add("part_active");
+                // Exit dropper mode
+                this._dropperModeActive = false;
+                dropperBtn.classList.remove("on");
+                reactorEl.removeEventListener("pointerdown", this._dropperPointerHandler, true);
+                this._dropperPointerHandler = null;
+              }
+            };
+            reactorEl.addEventListener("pointerdown", this._dropperPointerHandler, true);
+          }
+        } else if (this._dropperPointerHandler && this.DOMElements.reactor) {
+          this.DOMElements.reactor.removeEventListener("pointerdown", this._dropperPointerHandler, true);
+          this._dropperPointerHandler = null;
+        }
+      };
     }
 
     // Helper: serialize reactor layout
