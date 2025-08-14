@@ -1,11 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none">
-  <g stroke="#4a9eff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Pen body -->
-    <path d="M7 17 L15 9" />
-    <!-- Pen tail -->
-    <path d="M6 18 L7 17" />
-    <!-- Pen nib -->
-    <path d="M15 9 L17 7 L19 9 L17 11 Z" />
+  <!-- Basic monotone pen/dropper icon, oriented 45deg -->
+  <g transform="rotate(-45 12 12)">
+    <!-- Barrel -->
+    <path d="M7 15 L15 7" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+    <!-- Nib -->
+    <path d="M15 7 L17 7 L17 9 L15 9 Z" stroke="#4a9eff" fill="none" stroke-width="2" stroke-linejoin="round" />
+    <!-- Tail cap -->
+    <path d="M6 16 L7 15" stroke="#4a9eff" stroke-width="2" stroke-linecap="round" />
   </g>
 </svg>
 
