@@ -342,7 +342,7 @@ export class TooltipManager {
         bonusHeader = document.createElement('div');
         bonusHeader.setAttribute('data-role', 'bonuses-header');
         bonusHeader.className = 'tooltip-section-title';
-        bonusHeader.textContent = 'Bonuses';
+        bonusHeader.textContent = 'Upgrades';
         bonusEl.parentNode.insertBefore(bonusHeader, bonusEl);
       }
 
@@ -467,7 +467,7 @@ export class TooltipManager {
         bonusHeader = document.createElement('div');
         bonusHeader.setAttribute('data-role', 'bonuses-header');
         bonusHeader.className = 'tooltip-section-title';
-        bonusHeader.textContent = 'Bonuses';
+        bonusHeader.textContent = 'Upgrades';
         bonusEl.parentNode.insertBefore(bonusHeader, bonusEl);
       }
       bonusEl.innerHTML = bonusLines
