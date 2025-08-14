@@ -152,10 +152,16 @@ export class Game {
     this.sold_power = false;
     this.sold_heat = false;
     this.reactor.setDefaults();
+    this.upgradeset.reset();
     this.partset.reset();
     await this.partset.initialize(); // Await initialization
-    this.upgradeset.reset();
     await this.upgradeset.initialize(); // Await initialization
+    // Recalculate all part stats after upgrades are freshly initialized to ensure no stale upgrade effects linger
+    if (this.partset?.partsArray?.length) {
+      this.partset.partsArray.forEach((part) => {
+        try { part.recalculate_stats(); } catch (_) { /* no-op */ }
+      });
+    }
     this.upgradeset.check_affordability(this);
     // Clear cumulative placement counters for a fresh run
     this.placedCounts = {};
@@ -301,18 +307,13 @@ export class Game {
       ? this.total_exotic_particles + this.exotic_particles
       : 0;
 
-    const preservedUpgrades = this.upgradeset.upgradesArray
-      .filter(upg => upg.level > 0 && (upg.upgrade.ecost > 0 || upg.id.startsWith('expand_reactor')))
-      .map(upg => ({ id: upg.id, level: upg.level }));
-
+    // Fully reset game state, parts, tiles, and upgrades
     await this.set_defaults();
-
-    // Re-initialize the upgradeset so we can set levels on them
-    // await this.upgradeset.initialize(); // This line is removed as set_defaults now awaits it
 
     // Always clear meltdown state and update UI after reboot
     this.reactor.clearMeltdownState();
 
+    // Re-apply EP amounts per reboot mode; upgrades remain cleared
     this.total_exotic_particles = epToKeep;
     this.current_exotic_particles = epToKeep;
 
@@ -325,17 +326,6 @@ export class Game {
       this.current_exotic_particles
     );
     this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
-
-    preservedUpgrades.forEach((upgData) => {
-      const upgrade = this.upgradeset.getUpgrade(upgData.id);
-      if (upgrade) {
-        upgrade.setLevel(upgData.level);
-        // Execute the upgrade action to apply its effects
-        if (upgData.id.startsWith('expand_reactor')) {
-          executeUpgradeAction(upgData.id, upgrade, this);
-        }
-      }
-    });
 
     this.reactor.updateStats();
     this.upgradeset.check_affordability(this);

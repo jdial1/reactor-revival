@@ -256,7 +256,7 @@ describe("Core Game Mechanics", () => {
     cleanupGame();
   });
 
-  it("should preserve reactor expansion upgrades during reboot", async () => {
+  it("should clear all upgrades and reset reactor size during reboot (no preserve)", async () => {
     // Purchase row and column expansion upgrades
     const rowUpgrade = game.upgradeset.getUpgrade("expand_reactor_rows");
     const colUpgrade = game.upgradeset.getUpgrade("expand_reactor_cols");
@@ -269,23 +269,20 @@ describe("Core Game Mechanics", () => {
     game.upgradeset.purchaseUpgrade(rowUpgrade.id);
     game.upgradeset.purchaseUpgrade(colUpgrade.id);
 
-    // Verify initial state
+    // Sanity check before reboot
     expect(rowUpgrade.level).toBe(2);
     expect(colUpgrade.level).toBe(1);
     expect(game.rows).toBe(game.base_rows + 2);
     expect(game.cols).toBe(game.base_cols + 1);
 
-    const expectedRows = game.rows;
-    const expectedCols = game.cols;
-
-    // Perform reboot
+    // Perform reboot with refund (clear all research/upgrades)
     await game.reboot_action(false);
 
-    // Verify upgrades and reactor size are preserved
-    expect(rowUpgrade.level).toBe(2);
-    expect(colUpgrade.level).toBe(1);
-    expect(game.rows).toBe(expectedRows);
-    expect(game.cols).toBe(expectedCols);
+    // All upgrades should be cleared and reactor size reset to base
+    expect(game.upgradeset.getUpgrade("expand_reactor_rows").level).toBe(0);
+    expect(game.upgradeset.getUpgrade("expand_reactor_cols").level).toBe(0);
+    expect(game.rows).toBe(game.base_rows);
+    expect(game.cols).toBe(game.base_cols);
 
     // Verify other things are reset properly
     expect(game.current_money).toBe(game.base_money);
