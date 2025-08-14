@@ -32,8 +32,9 @@ async function initializeApp(game, ui, pageRouter) {
 }
 
 async function handleUserSession(game, pageRouter) {
-  const savedGame = await game.loadGame();
   const isNewGamePending = localStorage.getItem("reactorNewGamePending") === "1";
+  // If a New Game is pending, skip loading any existing save to avoid applying old upgrades
+  const savedGame = isNewGamePending ? false : await game.loadGame();
   const hash = window.location.hash.substring(1);
   const pageInfo = pageRouter.pages[hash];
   const shouldAutoStart = savedGame && !isNewGamePending && pageInfo;
@@ -79,11 +80,14 @@ function setupButtonHandlers(pageRouter, ui, game) {
       await new Promise((resolve) => setTimeout(resolve, 600));
       // Clear any persisted save and pending saved objective index to force a true reset
       try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
+      try { localStorage.setItem("reactorNewGamePending", "1"); } catch (_) { }
       delete game._saved_objective_index;
       // Perform a full clean initialization (resets reactor/tiles, parts, upgrades and UI vars)
       await game.initialize_new_game_state();
       localStorage.removeItem("reactorGameQuickStartShown");
       await startGame(pageRouter, ui, game);
+      // Clear the pending flag once the new session has started
+      try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
     };
   }
 
@@ -238,6 +242,9 @@ async function startGame(pageRouter, ui, game) {
       ui.updateHeatVisuals();
     }
 
+    // Clear any New Game pending flag after a session begins
+    try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
+
     setTimeout(() => {
       console.log("[DEBUG] Forcing reactor stats update post-load...");
       game.reactor.updateStats();
@@ -324,6 +331,12 @@ function setupGlobalListeners(game) {
   );
 
   window.addEventListener("beforeunload", () => {
+    // If a New Game is pending (e.g., triggered via splash), do not overwrite the cleared save
+    try {
+      if (localStorage.getItem("reactorNewGamePending") === "1") {
+        return;
+      }
+    } catch (_) { /* no-op */ }
     if (game && typeof game.updateSessionTime === "function") {
       game.updateSessionTime();
       game.saveGame();

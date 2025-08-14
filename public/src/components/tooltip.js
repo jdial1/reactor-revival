@@ -127,52 +127,19 @@ export class TooltipManager {
       this.$tooltip.style.right = "";
       this.$tooltip.style.transform = "";
     } else {
-      // Mobile: Prefer docking tooltip to the right of the parts panel, near the top
-      const partsPanel = document.getElementById("parts_section");
+      // Mobile: full-width tooltip aligned to the very top (can overlap the parts panel)
       const nav = document.getElementById("main_top_nav");
       const tooltipEl = this.$tooltip;
       const margin = 8;
-      const scrollY = window.scrollY || window.pageYOffset;
-      const scrollX = window.scrollX || window.pageXOffset;
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+      const navBottom = nav ? nav.getBoundingClientRect().bottom : 0;
+      const top = Math.max(margin, navBottom + margin);
 
-      // Reset sizing each time to avoid cumulative growth
-      tooltipEl.style.width = "";
-      tooltipEl.style.maxWidth = "";
-      const tooltipRect = tooltipEl.getBoundingClientRect();
-      let top = (nav ? (nav.getBoundingClientRect().bottom + margin) : margin) + scrollY;
-      let left;
-
-      if (partsPanel) {
-        const panelRect = partsPanel.getBoundingClientRect();
-        left = panelRect.right + margin + scrollX;
-        // Constrain width to available space to the right of the parts panel
-        const availableWidth = Math.max(180, viewportWidth - panelRect.right - (margin * 2));
-        tooltipEl.style.maxWidth = availableWidth + "px";
-      } else if (anchorEl) {
-        // Fallback to anchor positioning if parts panel isn't found
-        const rect = anchorEl.getBoundingClientRect();
-        left = rect.left + scrollX + rect.width / 2 - tooltipRect.width / 2;
-        top = rect.top + scrollY - tooltipRect.height - margin;
-      } else {
-        // Final fallback: centered near top
-        left = (viewportWidth - tooltipRect.width) / 2 + scrollX;
-      }
-
-      // Constrain within viewport
-      if (left < margin + scrollX) left = margin + scrollX;
-      if (left + tooltipRect.width > viewportWidth - margin + scrollX) {
-        left = viewportWidth - tooltipRect.width - margin + scrollX;
-      }
-      if (top < margin + scrollY) top = margin + scrollY;
-      if (top + tooltipRect.height > viewportHeight - margin + scrollY) {
-        top = Math.max(margin + scrollY, viewportHeight - tooltipRect.height - margin + scrollY);
-      }
-
+      // Enforce full-width on every show to avoid cumulative growth artifacts
+      tooltipEl.style.left = "0px";
+      tooltipEl.style.right = "0px";
+      tooltipEl.style.width = "100vw";
+      tooltipEl.style.maxWidth = "100vw";
       tooltipEl.style.top = `${top}px`;
-      tooltipEl.style.left = `${left}px`;
-      tooltipEl.style.right = "auto";
       tooltipEl.style.transform = "none";
     }
   }
@@ -601,118 +568,78 @@ export class TooltipManager {
       }
       case 'heat_exchanger': {
         const ihe = upg('improved_heat_exchangers');
-        if (ihe > 0) {
-          const pct = ihe * 100;
-          lines.push(`+${pct}% transfer, +${pct}% max heat`);
-        }
+        if (ihe > 0) lines.push(`<span class="pos">+${ihe * 100}%</span> transfer, <span class="pos">+${ihe * 100}%</span> max heat`);
         const fh = upg('fluid_hyperdynamics');
-        if (fh > 0) {
-          const mult = Math.pow(2, fh);
-          const pct = pctFromMultiplier(mult);
-          lines.push(`+${pct}% transfer`);
-        }
+        if (fh > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, fh))}%</span> transfer`);
         const fp = upg('fractal_piping');
-        if (fp > 0) {
-          const mult = Math.pow(2, fp);
-          const pct = pctFromMultiplier(mult);
-          lines.push(`+${pct}% max heat`);
-        }
+        if (fp > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, fp))}%</span> max heat`);
         break;
       }
       case 'heat_inlet':
       case 'heat_outlet': {
         const ihe = upg('improved_heat_exchangers');
-        if (ihe > 0) {
-          const pct = ihe * 100;
-          lines.push(`+${pct}% transfer, +${pct}% max heat`);
-        }
+        if (ihe > 0) lines.push(`<span class="pos">+${ihe * 100}%</span> transfer, <span class="pos">+${ihe * 100}%</span> max heat`);
         const fp = upg('fractal_piping');
-        if (fp > 0) {
-          const mult = Math.pow(2, fp);
-          const pct = pctFromMultiplier(mult);
-          lines.push(`+${pct}% max heat`);
-        }
+        if (fp > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, fp))}%</span> max heat`);
         break;
       }
       case 'capacitor': {
         const iw = upg('improved_wiring');
-        if (iw > 0) {
-          const pct = iw * 100;
-          lines.push(`+${pct}% power capacity, +${pct}% max heat`);
-        }
+        if (iw > 0) lines.push(`<span class="pos">+${iw * 100}%</span> power capacity, <span class="pos">+${iw * 100}%</span> max heat`);
         const qb = upg('quantum_buffering');
-        if (qb > 0) {
-          const mult = Math.pow(2, qb);
-          const pct = pctFromMultiplier(mult);
-          lines.push(`+${pct}% power capacity and max heat`);
-        }
+        if (qb > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, qb))}%</span> power capacity and max heat`);
         break;
       }
       case 'coolant_cell': {
         const icc = upg('improved_coolant_cells');
-        if (icc > 0) lines.push(`+${icc * 100}% max heat`);
+        if (icc > 0) lines.push(`<span class="pos">+${icc * 100}%</span> max heat`);
         const uc = upg('ultracryonics');
-        if (uc > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, uc))}% max heat`);
+        if (uc > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, uc))}%</span> max heat`);
         break;
       }
       case 'reflector': {
         const ird = upg('improved_reflector_density');
-        if (ird > 0) lines.push(`+${ird * 100}% duration`);
+        if (ird > 0) lines.push(`<span class="pos">+${ird * 100}%</span> duration`);
         const inr = upg('improved_neutron_reflection');
-        if (inr > 0) lines.push(`+${inr}% power reflection`);
+        if (inr > 0) lines.push(`<span class="pos">+${inr}%</span> power reflection`);
         const fsr = upg('full_spectrum_reflectors');
-        if (fsr > 0) lines.push(`+${fsr * 100}% base power reflection`);
+        if (fsr > 0) lines.push(`<span class="pos">+${fsr * 100}%</span> base power reflection`);
         break;
       }
       case 'reactor_plating': {
         const ia = upg('improved_alloys');
-        if (ia > 0) lines.push(`+${ia * 100}% reactor max heat`);
+        if (ia > 0) lines.push(`<span class="pos">+${ia * 100}%</span> reactor max heat`);
         const qb = upg('quantum_buffering');
-        if (qb > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, qb))}% reactor max heat`);
+        if (qb > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, qb))}%</span> reactor max heat`);
         break;
       }
       case 'particle_accelerator': {
         const lvl = obj.level || 1;
         const id = lvl === 6 ? 'improved_particle_accelerators6' : 'improved_particle_accelerators1';
         const ipa = upg(id);
-        if (ipa > 0) lines.push(`+${pctFromMultiplier(Math.pow(2, ipa))}% EP heat cap`);
+        if (ipa > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, ipa))}%</span> EP heat cap`);
         break;
       }
       case 'cell': {
         // Show multiplicative effect for cell-specific upgrades to avoid misleading huge % values
         const powerUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_power`);
-        if (powerUpg?.level > 0) {
-          const lvl = powerUpg.level;
-          const totalPct = (Math.pow(2, lvl) - 1) * 100;
-          lines.push(`+100% power x ${lvl} lvl${lvl > 1 ? 's' : ''} (${totalPct}%)`);
-        }
+        if (powerUpg?.level > 0) lines.push(`<span class="pos">+${(Math.pow(2, powerUpg.level) - 1) * 100}%</span> power`);
         const tickUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_tick`);
-        if (tickUpg?.level > 0) {
-          const lvl = tickUpg.level;
-          const totalPct = (Math.pow(2, lvl) - 1) * 100;
-          lines.push(`+100% duration x ${lvl} lvl${lvl > 1 ? 's' : ''} (${totalPct}%)`);
-        }
+        if (tickUpg?.level > 0) lines.push(`<span class="pos">+${(Math.pow(2, tickUpg.level) - 1) * 100}%</span> duration`);
         const perpUpg = this.game.upgradeset.getUpgrade(`${obj.type}1_cell_perpetual`);
         if (perpUpg?.level > 0) lines.push(`Auto-replacement enabled`);
 
         // Global experimental boosts that affect cells
         const infused = upg('infused_cells');
-        if (infused > 0) {
-          const totalPct = (Math.pow(2, infused) - 1) * 100;
-          lines.push(`+100% power x ${infused} lvl${infused > 1 ? 's' : ''} (${totalPct}%)`);
-        }
+        if (infused > 0) lines.push(`<span class="pos">+${(Math.pow(2, infused) - 1) * 100}%</span> power`);
         const unleashed = upg('unleashed_cells');
-        if (unleashed > 0) {
-          const totalPct = (Math.pow(2, unleashed) - 1) * 100;
-          lines.push(`+100% power and heat x ${unleashed} lvl${unleashed > 1 ? 's' : ''} (${totalPct}%)`);
-        }
+        if (unleashed > 0) lines.push(`<span class="pos">+${(Math.pow(2, unleashed) - 1) * 100}%</span> power and heat`);
         if (obj.type === 'protium') {
           const unstable = upg('unstable_protium');
           if (unstable > 0) {
-            // Display both per-level phrasing and net effect for unstable protium
             const durPct = Math.round((1 - 1 / Math.pow(2, unstable)) * 100);
             const totalPct = (Math.pow(2, unstable) - 1) * 100;
-            lines.push(`+100% power and heat x ${unstable} lvl${unstable > 1 ? 's' : ''} (${totalPct}%), -${durPct}% duration`);
+            lines.push(`<span class="pos">+${totalPct}%</span> power and heat, <span class="neg">-${durPct}%</span> duration`);
           }
         }
         break;

@@ -2521,11 +2521,10 @@ flex-wrap: wrap;
 #tooltip {
 font-size: 0.8em;
 padding: 0.5rem;
- max-width: calc(100vw - var(--parts-panel-width, 260px) - 24px);
-min-width: 280px;
- /* Place to the right of the parts panel on mobile */
- left: calc(var(--parts-panel-width, 260px) + 12px);
- right: auto;
+ max-width: 100vw;
+ min-width: 100vw;
+ left: 0;
+ right: 0;
  top: calc(var(--main-top-nav-height, 50px) + 8px);
  transform: none;
  position: fixed;
