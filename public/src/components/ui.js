@@ -45,6 +45,9 @@ export class UI {
     this.help_mode_active = false; // Track help mode state
     this.highlightedSegment = null; // Track the currently highlighted segment
 
+    // Fit-to-screen mode state
+    this._fitToScreenActive = false;
+
     // CTRL+9 exponential money variables
     this.ctrl9HoldTimer = null;
     this.ctrl9HoldStartTime = null;
@@ -157,6 +160,7 @@ export class UI {
       "reactor_paste_btn",
       "reactor_deselect_btn",
       "reactor_dropper_btn",
+      "reactor_fit_btn",
       "reactor_copy_paste_modal",
       "reactor_copy_paste_modal_title",
       "reactor_copy_paste_text",
@@ -1102,7 +1106,65 @@ export class UI {
     const originalVisibility = reactor.style.visibility;
     reactor.style.visibility = "hidden";
 
+    // If fit-to-screen is enabled, scale the entire grid to fit within the wrapper
+    if (this._fitToScreenActive) {
+      const baseTileSize = isMobile ? 48 : 60;
+      this.DOMElements.reactor.style.setProperty("--tile-size", `${baseTileSize}px`);
+      this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
+      this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
+      // Ensure a 5px padding border while fitting
+      this.DOMElements.reactor.style.padding = "5px";
+
+      // Base grid dimensions (without container padding)
+      const rawGridWidth = baseTileSize * numCols;
+      const rawGridHeight = baseTileSize * numRows;
+
+      // Include container padding so scale truly fits visible bounds
+      let paddingX = 0;
+      let paddingY = 0;
+      try {
+        const cs = window.getComputedStyle(this.DOMElements.reactor);
+        const pl = parseFloat(cs.paddingLeft || '0');
+        const pr = parseFloat(cs.paddingRight || '0');
+        const pt = parseFloat(cs.paddingTop || '0');
+        const pb = parseFloat(cs.paddingBottom || '0');
+        paddingX = (isFinite(pl) ? pl : 0) + (isFinite(pr) ? pr : 0);
+        paddingY = (isFinite(pt) ? pt : 0) + (isFinite(pb) ? pb : 0);
+      } catch (_) { }
+
+      const gridWidth = rawGridWidth + paddingX;
+      const gridHeight = rawGridHeight + paddingY;
+
+      // Prevent scrollbars from affecting available size and ensure centering while fitting
+      wrapper.style.overflow = "hidden";
+      wrapper.style.alignItems = "center";
+      wrapper.style.justifyContent = "center";
+      // On mobile, reduce top/bottom padding to maximize available height
+      if (isMobile) {
+        wrapper.style.paddingTop = "8px";
+        wrapper.style.paddingBottom = "8px";
+      }
+
+      const wrapperWidth = Math.max(1, this.DOMElements.reactor_wrapper.clientWidth || 1);
+      const wrapperHeight = Math.max(1, this.DOMElements.reactor_wrapper.clientHeight || 1);
+
+      const scaleX = wrapperWidth / gridWidth;
+      const scaleY = wrapperHeight / gridHeight;
+      const scale = Math.max(0.1, Math.min(scaleX, scaleY));
+
+      this.DOMElements.reactor.style.width = `${rawGridWidth}px`;
+      this.DOMElements.reactor.style.height = `${rawGridHeight}px`;
+      this.DOMElements.reactor.style.transformOrigin = "center center";
+      this.DOMElements.reactor.style.transform = `scale(${scale})`;
+
+      reactor.style.visibility = originalVisibility;
+      return;
+    }
+
     if (isMobile) {
+      // Restore default mobile paddings when not in fit-to-screen mode
+      wrapper.style.paddingTop = "";
+      wrapper.style.paddingBottom = "";
       // Mobile: Force a reflow to get accurate wrapper dimensions
       wrapper.offsetHeight; // Force reflow
 
@@ -1197,6 +1259,11 @@ export class UI {
       const gridHeight = tileSize * numRows;
       this.DOMElements.reactor.style.width = `${gridWidth}px`;
       this.DOMElements.reactor.style.height = `${gridHeight}px`;
+
+      // Restore wrapper scroll behavior when not in fit-to-screen mode
+      wrapper.style.overflow = "auto";
+      wrapper.style.alignItems = "center";
+      wrapper.style.justifyContent = "center";
     }
 
     // Show the reactor again after resize is complete
@@ -2013,6 +2080,7 @@ export class UI {
   initializeCopyPasteUI() {
     const copyBtn = document.getElementById("reactor_copy_btn");
     const pasteBtn = document.getElementById("reactor_paste_btn");
+    const fitBtn = document.getElementById("reactor_fit_btn");
     const deselectBtn = document.getElementById("reactor_deselect_btn");
     const dropperBtn = document.getElementById("reactor_dropper_btn");
     const modal = document.getElementById("reactor_copy_paste_modal");
@@ -2026,6 +2094,18 @@ export class UI {
     if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) {
       console.warn("[UI] Copy/paste UI elements not found, skipping initialization");
       return;
+    }
+
+    // Fit-to-screen toggle
+    if (fitBtn) {
+      fitBtn.onclick = () => {
+        this._fitToScreenActive = !this._fitToScreenActive;
+        fitBtn.classList.toggle("on", this._fitToScreenActive);
+        try {
+          document.body.classList.toggle("fit-screen-mode", this._fitToScreenActive);
+        } catch (_) { }
+        this.resizeReactor();
+      };
     }
 
     // Deselect current selected part

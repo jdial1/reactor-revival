@@ -123,6 +123,14 @@ class SplashScreenManager {
         // Initialize splash screen stats
         await this.initializeSplashStats();
 
+        // Proactively warm the cache for critical UI icon assets so images never
+        // disappear during gameplay due to network hiccups or memory pressure
+        try {
+          await warmImageCache(getCriticalUiIconAssets());
+        } catch (e) {
+          console.warn("[PWA] Failed to warm image cache:", e);
+        }
+
         // Generate the splash background now that the element exists
         if (this.splashScreen) {
           generateSplashBackground();
@@ -166,6 +174,11 @@ class SplashScreenManager {
 
       // Initialize stats for fallback too
       await this.initializeSplashStats().catch(console.error);
+
+      // Warm image cache even in fallback mode
+      try {
+        await warmImageCache(getCriticalUiIconAssets());
+      } catch (_) { /* non-fatal */ }
     }
   }
 
@@ -209,6 +222,10 @@ class SplashScreenManager {
     window.domMapper?.mapCategory('splash');
   }
 
+  // Return list of critical UI asset paths to pre-cache
+  // (helper functions declared after class)
+
+
 
 
 
@@ -229,8 +246,8 @@ class SplashScreenManager {
   }
 
   /**
- * Start version checking for updates
- */
+  * Start version checking for updates
+  */
   startVersionChecking() {
     // Store current version for comparison
     this.currentVersion = null;

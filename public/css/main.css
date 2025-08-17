@@ -693,7 +693,7 @@ opacity: 1;
   right: 0 !important;
   z-index: 26;
   bottom: var(--bottom-nav-height);
-  height: 50px; /* slightly shorter for more space */
+  height: 44px; /* slightly shorter for more space */
   padding: 0 !important;
   margin: 0 !important;
   box-sizing: border-box;
@@ -1095,16 +1095,16 @@ transform: translateX(-100%);
 display: none;
 }
 #bottom_nav {
-display: grid;
-grid-template-columns: 1fr 1fr 1fr;
-position: fixed;
-bottom: 0;
-left: 0;
-right: 0;
-height: var(--bottom-nav-height);
-z-index: 10;
-padding: 0;
-gap: 0;
+	 display: grid;
+	 grid-template-columns: 1fr 1fr 1fr;
+	 position: fixed;
+	 bottom: 0;
+	 left: 0;
+	 right: 0;
+	 height: 44px;
+	 z-index: 10;
+	 padding: 0;
+	 gap: 0;
 }
 #info_bar {
  display: flex;
@@ -1243,7 +1243,7 @@ grid-column: 2;
 }
 #mobile_top_bar {
   position: fixed;
-  bottom: calc(var(--bottom-nav-height) + 50px + 6px); /* sit just above bottom info bar */
+  bottom: calc(var(--bottom-nav-height) + 44px + 4px); /* sit just above bottom info bar with tighter spacing */
   left: 8px;
   right: 8px;
   z-index: 20; /* below parts panel (z-index: 30) */
@@ -1454,7 +1454,7 @@ padding-left: 275px !important;
 @media (min-width: 901px) {
 body.page-reactor #reactor_wrapper {
 justify-content: center;
-overflow: visible !important;  
+overflow: hidden;  
 }
 
 /* Make tooltips smaller on desktop */
@@ -1469,7 +1469,7 @@ font-size: 0.85em;
 #parts_panel_toggle {
 position: absolute;
 left: 100%;
-top: 50%;
+top: 15%;
 transform: translateY(-50%);
 width: 48px;
 height: 100px;
@@ -2836,20 +2836,21 @@ border-color: #59c435;
 grid-template-columns: repeat(var(--game-cols, 12), var(--tile-size, 48px));
 grid-template-rows: repeat(var(--game-rows, 12), var(--tile-size, 48px));
 box-sizing: border-box;
-padding: 0;
+padding: 5px;
 margin: 0;
 transform-origin: center center;
 flex-shrink: 0;
 }
 #reactor_wrapper {
 display: flex;
-padding: 50px 25px 25px 25px;
+padding: 36px 25px 25px 25px;
 align-items: flex-start;
 justify-content: flex-start;
 scroll-behavior: smooth;
 -webkit-overflow-scrolling: touch;
 width: 100%;
 overflow-x: scroll;
+overflow-y: hidden; /* prevent vertical scrollbar on mobile */
 }
 #reactor_section {
 display: flex;
@@ -2865,7 +2866,7 @@ flex-direction: column;
 height: 100%;
 padding: 0;
 margin: 0;
-overflow: auto;
+overflow: hidden; /* avoid page-level vertical scroll; inner wrapper scrolls horizontally */
 position: relative;
 }
 #main {
@@ -3282,6 +3283,21 @@ justify-content: center;
 flex: 1;
 min-height: 0;
 }
+
+/* Fit-to-screen: prevent vertical page scroll and keep content within viewport */
+body.fit-screen-mode {
+  overflow-y: hidden !important;
+  height: 100vh;
+}
+body.fit-screen-mode #wrapper,
+body.fit-screen-mode #main_content_wrapper,
+body.fit-screen-mode #reactor_section {
+  height: 100%;
+  overflow-y: hidden !important;
+}
+body.fit-screen-mode #reactor_wrapper {
+  overflow: hidden !important;
+}
 body.page-privacy_policy nav#main_top_nav,
 body.page-privacy_policy footer#bottom_nav,
 body.page-privacy_policy footer#info_bar,
@@ -3540,11 +3556,13 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 
 #reactor_copy_paste_btns {
   position: absolute;
-  top: 20px;
+  top: 0px;
   right: 20px;
   display: flex;
   flex-direction: row;
   gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
   transform: none;
   z-index: 25;
 }
@@ -3553,7 +3571,7 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 @media (min-width: 901px) {
   #reactor_wrapper #reactor_copy_paste_btns {
     position: absolute !important;
-    top: 20px;
+    top: 0px;
     right: 20px;
     z-index: 25;
   }
@@ -3608,6 +3626,12 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 /* Active state for dropper/deselect buttons */
 #reactor_copy_paste_btns #reactor_dropper_btn.on,
 #reactor_copy_paste_btns #reactor_deselect_btn.on {
+  background: #1ca3ec;
+  border-color: #1ca3ec;
+}
+
+/* Active state for fit-to-screen toggle */
+#reactor_copy_paste_btns #reactor_fit_btn.on {
   background: #1ca3ec;
   border-color: #1ca3ec;
 }
