@@ -171,6 +171,12 @@ export class Reactor {
       if (r_tile.ticks > 0) {
         reflector_power_bonus += r_tile.part.power_increase || 0;
         reflector_heat_bonus += r_tile.part.heat_increase || 0;
+        // Visual: pulse aura signaling boost
+        try {
+          if (this.game?.ui && typeof this.game.ui.pulseReflector === 'function') {
+            this.game.ui.pulseReflector(r_tile, tile);
+          }
+        } catch (_) { /* ignore */ }
       }
     });
     // Ensure tile.power and tile.heat are valid numbers before applying multipliers

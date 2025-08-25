@@ -51,6 +51,9 @@ export class Game {
     this.tooltip_manager = null;
     this.placedCounts = {}; // cumulative placements per `${type}:${level}`
     this._suppressPlacementCounting = false;
+
+    // Buffer for per-tick visual events produced by the engine
+    this._visualEvents = [];
   }
 
   // Returns how many parts of a given type and level are currently placed
@@ -138,6 +141,31 @@ export class Game {
     if (this._suppressPlacementCounting) return;
     const key = `${type}:${level}`;
     this.placedCounts[key] = (this.placedCounts[key] || 0) + 1;
+  }
+
+  // Visual events API: engine enqueues, UI drains each frame
+  enqueueVisualEvent(event) {
+    if (!event) return;
+    this._visualEvents.push(event);
+  }
+
+  enqueueVisualEvents(events) {
+    if (!Array.isArray(events) || events.length === 0) return;
+    // Avoid accidental huge spikes by soft-capping to a reasonable frame budget
+    const maxBatch = 1000;
+    if (this._visualEvents.length + events.length > maxBatch) {
+      const remaining = Math.max(0, maxBatch - this._visualEvents.length);
+      if (remaining > 0) this._visualEvents.push(...events.slice(0, remaining));
+    } else {
+      this._visualEvents.push(...events);
+    }
+  }
+
+  drainVisualEvents() {
+    if (!this._visualEvents || this._visualEvents.length === 0) return [];
+    const out = this._visualEvents;
+    this._visualEvents = [];
+    return out;
   }
   async set_defaults() {
     this.base_cols = 12;
@@ -307,15 +335,34 @@ export class Game {
       ? this.total_exotic_particles + this.exotic_particles
       : 0;
 
+    // If keeping EP, capture currently purchased EP-based upgrades (research) to restore after reset
+    const preservedEpUpgrades = keep_exotic_particles
+      ? this.upgradeset.getAllUpgrades()
+        .filter((upg) => upg.base_ecost && upg.level > 0)
+        .map((upg) => ({ id: upg.id, level: upg.level }))
+      : [];
+    try { if (keep_exotic_particles) console.log("[Reboot] Will preserve EP upgrades:", preservedEpUpgrades); } catch (_) { }
+
     // Fully reset game state, parts, tiles, and upgrades
     await this.set_defaults();
 
     // Always clear meltdown state and update UI after reboot
     this.reactor.clearMeltdownState();
 
-    // Re-apply EP amounts per reboot mode; upgrades remain cleared
+    // Re-apply EP amounts per reboot mode
     this.total_exotic_particles = epToKeep;
     this.current_exotic_particles = epToKeep;
+
+    // If keeping EP, restore previously purchased EP-based upgrades (research)
+    if (keep_exotic_particles && preservedEpUpgrades.length > 0) {
+      preservedEpUpgrades.forEach(({ id, level }) => {
+        const upg = this.upgradeset.getUpgrade(id);
+        if (upg) {
+          upg.setLevel(level);
+        }
+      });
+      try { console.log("[Reboot] Restored EP upgrade levels (e.g., lab):", this.upgradeset.getUpgrade("laboratory")?.level); } catch (_) { }
+    }
 
     this.ui.stateManager.setVar(
       "total_exotic_particles",

@@ -55,6 +55,18 @@ export class UI {
     this.ctrl9BaseAmount = 1000000000; // Base amount for CTRL+9
     this.ctrl9ExponentialRate = 5; // Exponential growth rate
     this.ctrl9IntervalMs = 100; // How often to add money while held
+    // Visual event rendering pool
+    this._visualPool = {
+      emit: [],
+      flow: [],
+      maxEmit: 64,
+      maxFlow: 32,
+    };
+    this._flowAnimations = new Set();
+    this._icons = {
+      power: "img/ui/icons/icon_power.png",
+      heat: "img/ui/icons/icon_heat.png",
+    };
 
 
 
@@ -595,6 +607,13 @@ export class UI {
       );
       this.game.performance.markEnd("ui_visual_updates");
     }
+    // Drain and render visual events produced during the last engine tick
+    if (this.game && typeof this.game.drainVisualEvents === 'function') {
+      const events = this.game.drainVisualEvents();
+      if (events && events.length) {
+        this._renderVisualEvents(events);
+      }
+    }
     if (this.game) {
       // Ensure money is a number
       this.game.current_money = Number(this.game.current_money);
@@ -639,6 +658,7 @@ export class UI {
       );
       this.game.performance.markEnd("ui_state_manager");
     }
+
     this.update_interface_task = setTimeout(
       () => this.runUpdateInterfaceLoop(),
       this.update_interface_interval
@@ -656,6 +676,199 @@ export class UI {
     this.updateMeltdownState();
 
     this.game.performance.markEnd("ui_update_total");
+  }
+
+  // Internal: render batched visual events
+  _renderVisualEvents(events) {
+    if (!events || !events.length) return;
+    const tileFor = (r, c) => (this.game?.tileset ? this.game.tileset.getTile(r, c) : null);
+    for (const evt of events) {
+      if (!evt) continue;
+      if (evt.type === 'emit') {
+        if (evt.icon === 'power' && Array.isArray(evt.tile)) {
+          const t = tileFor(evt.tile[0], evt.tile[1]);
+          if (t) this.spawnTileIcon('power', t, null);
+        } else if (evt.icon === 'heat' && evt.part === 'vent' && Array.isArray(evt.tile)) {
+          const t = tileFor(evt.tile[0], evt.tile[1]);
+          if (t) this.blinkVent(t);
+        }
+      } else if (evt.type === 'flow' && Array.isArray(evt.from) && Array.isArray(evt.to)) {
+        const fromT = tileFor(evt.from[0], evt.from[1]);
+        const toT = tileFor(evt.to[0], evt.to[1]);
+        if (fromT && toT) {
+          if (evt.icon === 'heat') this.spawnTileIcon('heat', fromT, toT);
+          else if (evt.icon === 'power') this.spawnTileIcon('power', fromT, toT);
+        }
+      }
+    }
+  }
+
+  _ensureOverlay() {
+    if (this._overlay && this._overlay.parentElement) return this._overlay;
+    const reactorWrapper = this.DOMElements.reactor_wrapper || document.getElementById('reactor_wrapper');
+    if (!reactorWrapper) return null;
+    const overlay = document.createElement('div');
+    overlay.className = 'reactor-overlay';
+    overlay.style.position = 'absolute';
+    overlay.style.left = '0';
+    overlay.style.top = '0';
+    overlay.style.right = '0';
+    overlay.style.bottom = '0';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.overflow = 'hidden';
+    reactorWrapper.style.position = reactorWrapper.style.position || 'relative';
+    reactorWrapper.appendChild(overlay);
+    this._overlay = overlay;
+    return overlay;
+  }
+
+  _borrowEmitNode() {
+    const pool = this._visualPool.emit;
+    let node = pool.find(n => n._free);
+    if (!node && pool.length < this._visualPool.maxEmit) {
+      node = document.createElement('img');
+      node.className = 'vis-emit';
+      node.style.position = 'absolute';
+      node.style.width = '16px';
+      node.style.height = '16px';
+      node.style.opacity = '0';
+      node.style.transition = 'transform 300ms ease-out, opacity 300ms ease-out';
+      node._free = true;
+      const overlay = this._ensureOverlay();
+      if (overlay) overlay.appendChild(node);
+      pool.push(node);
+    }
+    if (node) node._free = false;
+    return node;
+  }
+
+  _returnEmitNode(node) {
+    if (!node) return;
+    node._free = true;
+    node.style.opacity = '0';
+  }
+
+  _tileCenterToOverlayPosition(row, col) {
+    const reactor = this.DOMElements.reactor;
+    const overlay = this._ensureOverlay();
+    if (!reactor || !overlay) return { x: 0, y: 0 };
+    const tileSize = reactor.querySelector('.tile')?.offsetWidth || 32;
+    const reactorRect = reactor.getBoundingClientRect();
+    const overlayRect = overlay.getBoundingClientRect();
+    const x = (col * tileSize + tileSize / 2) + (reactorRect.left - overlayRect.left);
+    const y = (row * tileSize + tileSize / 2) + (reactorRect.top - overlayRect.top);
+    return { x, y };
+  }
+
+  _renderVisualEvents(events) {
+    if (typeof document === "undefined") return;
+    if (!events || !events.length) return;
+    const tileFor = (r, c) => (this.game?.tileset ? this.game.tileset.getTile(r, c) : null);
+    for (const evt of events) {
+      if (!evt) continue;
+      // Emit events: only render if the source tile exists and is populated
+      if (evt.type === 'emit' && Array.isArray(evt.tile)) {
+        const t = tileFor(evt.tile[0], evt.tile[1]);
+        if (!t?.$el || !t.part) continue;
+        if (evt.icon === 'power') {
+          this.spawnTileIcon('power', t, null);
+        } else if (evt.icon === 'heat' && evt.part === 'vent') {
+          this.blinkVent(t);
+        } else if (evt.icon === 'heat') {
+          this.spawnTileIcon('heat', t, null);
+        }
+      }
+      // Flow events: only render if both endpoints exist and are populated
+      else if (evt.type === 'flow' && Array.isArray(evt.from) && Array.isArray(evt.to)) {
+        const fromT = tileFor(evt.from[0], evt.from[1]);
+        const toT = tileFor(evt.to[0], evt.to[1]);
+        if (!fromT?.$el || !toT?.$el || !fromT.part || !toT.part) continue;
+        // Inter-part flow uses colored dots (handled in _renderFlow)
+        this._renderFlow(evt);
+      }
+    }
+  }
+
+  // Public helpers to be called from the engine (DOM-guarded)
+  emitPowerFromCell(tile) {
+    try {
+      if (!tile?.$el) return;
+      const icon = 'power';
+      this._renderEmit({ type: 'emit', icon, tile: [tile.row, tile.col] });
+    } catch (_) { /* ignore in tests */ }
+  }
+
+  emitHeatFromCell(tile) {
+    try {
+      if (!tile?.$el) return;
+      const icon = 'heat';
+      this._renderEmit({ type: 'emit', icon, tile: [tile.row, tile.col] });
+    } catch (_) { /* ignore in tests */ }
+  }
+
+  showHeatFlow(fromTile, toTile) {
+    try {
+      if (!fromTile?.$el || !toTile?.$el) return;
+      this._renderFlow({ type: 'flow', icon: 'heat', from: [fromTile.row, fromTile.col], to: [toTile.row, toTile.col] });
+    } catch (_) { /* ignore in tests */ }
+  }
+
+  _renderEmit(evt) {
+    const node = this._borrowEmitNode();
+    if (!node) return;
+    const iconUrl = this._icons[evt.icon] || this._icons.heat;
+    node.src = iconUrl;
+    const { x, y } = this._tileCenterToOverlayPosition(evt.tile[0], evt.tile[1]);
+    // Offset icons so heat/power do not overlap when emitted simultaneously
+    const offset = (evt.icon === 'power') ? { x: 6, y: -6 } : (evt.icon === 'heat') ? { x: -6, y: 6 } : { x: 0, y: 0 };
+    node.style.transform = `translate(${x - 8 + offset.x}px, ${y - 8 + offset.y}px) scale(0.8)`;
+    // Force reflow to apply transition cleanly
+    // eslint-disable-next-line no-unused-expressions
+    node.offsetHeight;
+    node.style.opacity = '1';
+    node.style.transform = `translate(${x - 8 + offset.x}px, ${y - 16 + offset.y}px) scale(1)`;
+    setTimeout(() => this._returnEmitNode(node), 320);
+  }
+
+  _renderFlow(evt) {
+    const overlay = this._ensureOverlay();
+    if (!overlay) return;
+    // Render directional flow as a colored dot (not icon) for inter-part interactions
+    const dot = document.createElement('div');
+    dot.className = 'vis-flow-dot';
+    dot.style.position = 'absolute';
+    dot.style.width = '10px';
+    dot.style.height = '10px';
+    dot.style.borderRadius = '50%';
+    dot.style.opacity = '0.95';
+    dot.style.willChange = 'transform, opacity';
+    const color = evt.icon === 'power' ? '#ffd54f' : evt.icon === 'money' ? '#66bb6a' : '#ef5350';
+    dot.style.background = color;
+    dot.style.boxShadow = `0 0 6px ${color}77`;
+    overlay.appendChild(dot);
+
+    const start = this._tileCenterToOverlayPosition(evt.from[0], evt.from[1]);
+    const end = this._tileCenterToOverlayPosition(evt.to[0], evt.to[1]);
+    const duration = 250; // ms
+    const startTime = performance.now();
+
+    const anim = { img: dot };
+    this._flowAnimations.add(anim);
+
+    const step = (now) => {
+      const t = Math.min(1, (now - startTime) / duration);
+      const x = start.x + (end.x - start.x) * t - 5;
+      const y = start.y + (end.y - start.y) * t - 5;
+      dot.style.transform = `translate(${x}px, ${y}px)`;
+      if (t < 1) {
+        anim._raf = requestAnimationFrame(step);
+      } else {
+        overlay.removeChild(dot);
+        this._flowAnimations.delete(anim);
+      }
+    };
+    dot.style.transform = `translate(${start.x - 5}px, ${start.y - 5}px)`;
+    anim._raf = requestAnimationFrame(step);
   }
 
   processUpdateQueue() {
@@ -1005,6 +1218,170 @@ export class UI {
     }
   }
 
+  // Spawn a transient icon representing power/heat on the grid
+  // kind: 'power' | 'heat' | 'vent'
+  // fromTile: Tile instance to start from
+  // toTile: optional Tile instance to travel to
+  spawnTileIcon(kind, fromTile, toTile = null) {
+    try {
+      if (
+        typeof document === "undefined" ||
+        !fromTile?.$el ||
+        (!this.DOMElements?.reactor_background && !document.getElementById)
+      )
+        return;
+
+      const container =
+        this.DOMElements.reactor_background ||
+        document.getElementById("reactor_background");
+      if (!container) return;
+
+      const iconSrcMap = {
+        power: "img/ui/icons/icon_power.png",
+        heat: "img/ui/icons/icon_heat.png",
+        vent: "img/ui/icons/icon_vent.png",
+      };
+      const src = iconSrcMap[kind];
+      if (!src) return;
+
+      const startRect = fromTile.$el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = kind;
+      img.className = `tile-fx fx-${kind}`;
+      const size = Math.max(12, Math.min(18, parseInt(getComputedStyle(this.DOMElements.reactor).getPropertyValue('--tile-size')) / 3 || 16));
+      img.style.width = `${size}px`;
+      img.style.height = `${size}px`;
+
+      // Start at center of fromTile
+      // Offset heat/power so they do not overlap
+      const startOffset = (kind === 'power') ? { x: 6, y: -6 } : (kind === 'heat') ? { x: -6, y: 6 } : { x: 0, y: 0 };
+      const startLeft = startRect.left - containerRect.left + startRect.width / 2 - size / 2 + startOffset.x;
+      const startTop = startRect.top - containerRect.top + startRect.height / 2 - size / 2 + startOffset.y;
+      img.style.left = `${startLeft}px`;
+      img.style.top = `${startTop}px`;
+
+      container.appendChild(img);
+
+      // Next frame: animate
+      requestAnimationFrame(() => {
+        if (toTile?.$el) {
+          const endRect = toTile.$el.getBoundingClientRect();
+          const endLeft = endRect.left - containerRect.left + endRect.width / 2 - size / 2;
+          const endTop = endRect.top - containerRect.top + endRect.height / 2 - size / 2;
+
+          img.style.left = `${endLeft}px`;
+          img.style.top = `${endTop}px`;
+          // Slight fade on move for heat
+          if (kind === "heat") img.style.opacity = "0.75";
+        } else {
+          // No destination: quick fade out in place (power)
+          img.classList.add("fx-fade-out");
+        }
+
+        // Cleanup after animation
+        setTimeout(() => {
+          if (img && img.parentNode) img.parentNode.removeChild(img);
+        }, 450);
+      });
+    } catch (_) {
+      // No-op on environments without DOM
+    }
+  }
+
+  // Ensure a blinking vent indicator exists and trigger a brief blink
+  blinkVent(tile) {
+    try {
+      if (typeof document === "undefined" || !tile?.$el) return;
+      let indicator = tile.$el.querySelector(".vent-indicator");
+      if (!indicator) {
+        indicator = document.createElement("span");
+        indicator.className = "vent-indicator";
+        tile.$el.appendChild(indicator);
+      }
+      indicator.classList.remove("vent-blink");
+      // Restart the animation
+      // Force reflow then add class
+      void indicator.offsetWidth;
+      indicator.classList.add("vent-blink");
+      // Auto-remove the class after a short duration to allow re-triggering each tick
+      setTimeout(() => indicator && indicator.classList.remove("vent-blink"), 400);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  // Pulse a subtle aura from a reflector towards a target cell
+  pulseReflector(fromTile, toTile) {
+    try {
+      if (!fromTile?.$el || !toTile?.$el) return;
+      const container = this.DOMElements.reactor_background || document.getElementById('reactor_background');
+      if (!container) return;
+      const size = 12;
+      const aura = document.createElement('div');
+      aura.className = 'reflector-aura';
+      const fromRect = fromTile.$el.getBoundingClientRect();
+      const toRect = toTile.$el.getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
+      const x1 = fromRect.left - cRect.left + fromRect.width / 2;
+      const y1 = fromRect.top - cRect.top + fromRect.height / 2;
+      const x2 = toRect.left - cRect.left + toRect.width / 2;
+      const y2 = toRect.top - cRect.top + toRect.height / 2;
+      const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+      aura.style.left = `${x1 - size / 2}px`;
+      aura.style.top = `${y1 - size / 2}px`;
+      aura.style.width = `${size}px`;
+      aura.style.height = `${size}px`;
+      aura.style.transform = `rotate(${angle}deg)`;
+      container.appendChild(aura);
+      requestAnimationFrame(() => aura.classList.add('active'));
+      setTimeout(() => aura.remove(), 450);
+    } catch (_) { /* ignore */ }
+  }
+
+  // Emit a transient EP icon that travels from a tile towards the EP display
+  emitEP(fromTile) {
+    try {
+      if (!fromTile?.$el) return;
+      const container = this.DOMElements.reactor_background || document.getElementById('reactor_background');
+      if (!container) return;
+      const src = 'img/ui/icons/icon_power.png'; // reuse closest visual; custom EP icon can be added later
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = 'ep';
+      img.className = 'tile-fx fx-ep';
+      const startRect = fromTile.$el.getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
+      const size = 14;
+      img.style.width = `${size}px`;
+      img.style.height = `${size}px`;
+      const startLeft = startRect.left - cRect.left + startRect.width / 2 - size / 2;
+      const startTop = startRect.top - cRect.top + startRect.height / 2 - size / 2;
+      img.style.left = `${startLeft}px`;
+      img.style.top = `${startTop}px`;
+      container.appendChild(img);
+      // Find EP display target (desktop then mobile)
+      const epEl = document.getElementById('info_ep_desktop') || document.getElementById('info_ep');
+      const valueEl = document.getElementById('info_ep_value_desktop') || document.getElementById('info_ep_value');
+      const targetEl = valueEl || epEl;
+      requestAnimationFrame(() => {
+        if (targetEl) {
+          const tRect = targetEl.getBoundingClientRect();
+          const endLeft = tRect.left - cRect.left + tRect.width / 2 - size / 2;
+          const endTop = tRect.top - cRect.top + tRect.height / 2 - size / 2;
+          img.style.left = `${endLeft}px`;
+          img.style.top = `${endTop}px`;
+          img.style.opacity = '0.2';
+        } else {
+          img.classList.add('fx-fade-out');
+        }
+        setTimeout(() => img.remove(), 550);
+      });
+    } catch (_) { /* ignore */ }
+  }
+
   updateInfoBarFillIndicator(type, current, max) {
     // Calculate percentage (0-100)
     const percentage = max > 0 ? Math.min(100, Math.max(0, (current / max) * 100)) : 0;
@@ -1141,8 +1518,8 @@ export class UI {
       wrapper.style.justifyContent = "center";
       // On mobile, reduce top/bottom padding to maximize available height
       if (isMobile) {
-        wrapper.style.paddingTop = "8px";
-        wrapper.style.paddingBottom = "8px";
+        wrapper.style.paddingTop = "16px";
+        wrapper.style.paddingBottom = "16px";
       }
 
       const wrapperWidth = Math.max(1, this.DOMElements.reactor_wrapper.clientWidth || 1);

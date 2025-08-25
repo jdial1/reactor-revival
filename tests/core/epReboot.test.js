@@ -109,6 +109,35 @@ describe('EP Reboot Functionality', () => {
             expect(game.ui.stateManager.getVar("total_exotic_particles")).toBe(200); // 125 + 75
             expect(game.ui.stateManager.getVar("current_exotic_particles")).toBe(200);
         });
+
+        it('should preserve experimental upgrades but reset standard ones on reboot', async () => {
+            // Ensure a clean and affordable state
+            game.current_money = 1e9;
+            game.exotic_particles = 1e6;
+            game.current_exotic_particles = 1e6;
+            game.upgradeset.check_affordability(game);
+
+            // 1. Purchase a standard upgrade
+            const standardUpgrade = game.upgradeset.getUpgrade("chronometer");
+            expect(standardUpgrade).toBeDefined();
+            game.current_money = standardUpgrade.getCost();
+            game.upgradeset.purchaseUpgrade(standardUpgrade.id);
+            expect(standardUpgrade.level).toBe(1);
+
+            // 2. Purchase an experimental upgrade (research)
+            const labUpgrade = game.upgradeset.getUpgrade("laboratory");
+            expect(labUpgrade).toBeDefined();
+            game.current_exotic_particles = labUpgrade.getEcost();
+            game.upgradeset.purchaseUpgrade(labUpgrade.id);
+            expect(labUpgrade.level).toBe(1);
+
+            // 3. Perform the reboot for EP
+            await game.reboot_action(true);
+
+            // 4. Verify the state after reboot
+            expect(game.upgradeset.getUpgrade("chronometer").level).toBe(0); // Standard reset
+            expect(game.upgradeset.getUpgrade("laboratory").level).toBe(1);  // EP persists
+        });
     });
 
     describe('Reboot and Refund EP (Full Refund)', () => {

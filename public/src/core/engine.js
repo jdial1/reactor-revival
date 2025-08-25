@@ -181,6 +181,8 @@ export class Engine {
     const reactor = this.game.reactor;
     const tileset = this.game.tileset;
     const ui = this.game.ui;
+    // Collect visual events for this tick and flush once at end
+    const visualEvents = [];
 
     // Update engine status indicator for tick
     if (ui && ui.stateManager) {
@@ -234,6 +236,19 @@ export class Engine {
         return;
       }
       power_add += tile.power;
+      // Visual: emissions from active cells (frequency loosely proportional to output)
+      if (tile.power > 0) {
+        const count = tile.power >= 200 ? 3 : tile.power >= 50 ? 2 : 1;
+        for (let i = 0; i < count; i++) {
+          visualEvents.push({ type: 'emit', part: 'cell', icon: 'power', tile: [tile.row, tile.col] });
+        }
+      }
+      if (tile.heat > 0) {
+        const countH = tile.heat >= 200 ? 3 : tile.heat >= 50 ? 2 : 1;
+        for (let i = 0; i < countH; i++) {
+          visualEvents.push({ type: 'emit', part: 'cell', icon: 'heat', tile: [tile.row, tile.col] });
+        }
+      }
       const heatNeighbors = tile.containmentNeighborTiles.filter(
         (t) => t.part && t.part.containment > 0
       );
@@ -241,6 +256,13 @@ export class Engine {
         const heat_remove = Math.ceil(tile.heat / heatNeighbors.length);
         heatNeighbors.forEach((neighbor) => {
           neighbor.heat_contained += heat_remove;
+          // Visual: local containment receiving heat flow from cell
+          visualEvents.push({
+            type: 'flow',
+            icon: 'heat',
+            from: [tile.row, tile.col],
+            to: [neighbor.row, neighbor.col]
+          });
         });
       } else {
         heat_add += tile.heat;
@@ -252,6 +274,13 @@ export class Engine {
         if (r_tile.ticks > 0) {
           r_tile.ticks--;
           if (r_tile.ticks === 0) this.handleComponentDepletion(r_tile);
+          // Visual: show reflector contributing to the cell with a power icon flow
+          visualEvents.push({
+            type: 'flow',
+            icon: 'power',
+            from: [r_tile.row, r_tile.col],
+            to: [tile.row, tile.col]
+          });
         }
       }
 
@@ -286,6 +315,12 @@ export class Engine {
         tile_containment.heat_contained -= transfer_heat;
         reactor.current_heat += transfer_heat;
         heat_add += transfer_heat;
+        if (transfer_heat > 0) {
+          const cnt = transfer_heat >= 50 ? 3 : transfer_heat >= 15 ? 2 : 1;
+          for (let i = 0; i < cnt; i++) {
+            visualEvents.push({ type: 'flow', icon: 'heat', from: [tile_containment.row, tile_containment.col], to: [tile.row, tile.col] });
+          }
+        }
       }
     }
 
@@ -303,6 +338,12 @@ export class Engine {
           );
           tile_containment.heat_contained += transfer_heat;
           tile.heat_contained -= transfer_heat;
+          if (transfer_heat > 0) {
+            const cnt = transfer_heat >= 50 ? 3 : transfer_heat >= 15 ? 2 : 1;
+            for (let i = 0; i < cnt; i++) {
+              visualEvents.push({ type: 'flow', icon: 'heat', from: [tile.row, tile.col], to: [tile_containment.row, tile_containment.col] });
+            }
+          }
         }
       }
     }
@@ -338,6 +379,12 @@ export class Engine {
 
           tile_containment.heat_contained += amountToAdd;
           reactor.current_heat -= amountToAdd;
+          {
+            const cnt = amountToAdd >= 50 ? 3 : amountToAdd >= 15 ? 2 : 1;
+            for (let i = 0; i < cnt; i++) {
+              visualEvents.push({ type: 'flow', icon: 'heat', from: [tile.row, tile.col], to: [tile_containment.row, tile_containment.col] });
+            }
+          }
 
           // If we've exhausted the outlet's transfer or reactor heat, stop early
           outlet_transfer_heat -= amountToAdd;
@@ -412,6 +459,21 @@ export class Engine {
         reactor.current_power -= powerToConsume;
       }
       tile.heat_contained -= vent_reduce;
+      if (vent_reduce > 0) {
+        const cnt = vent_reduce >= 50 ? 3 : vent_reduce >= 15 ? 2 : 1;
+        for (let i = 0; i < cnt; i++) {
+          visualEvents.push({ type: 'emit', part: 'vent', icon: 'heat', tile: [tile.row, tile.col] });
+        }
+        // Blink indicator visually
+        try {
+          if (this.game.ui && typeof this.game.ui.blinkVent === 'function') {
+            for (let i = 0; i < cnt; i++) {
+              const delay = i * 60;
+              setTimeout(() => this.game.ui.blinkVent(tile), delay);
+            }
+          }
+        } catch (_) { /* ignore */ }
+      }
     }
 
     this.game.performance.markEnd("tick_vents");
@@ -430,6 +492,19 @@ export class Engine {
       if (ep_gain > 0) {
         this.game.exotic_particles += ep_gain;
         ui.stateManager.setVar("exotic_particles", this.game.exotic_particles);
+        // Visual: EP emission from accelerators towards EP display (limit burst count)
+        try {
+          if (this.game.ui && typeof this.game.ui.emitEP === 'function') {
+            let emitted = 0;
+            for (const t of this.active_vessels) {
+              if (t.part?.category === 'particle_accelerator' && t.heat_contained > 0) {
+                this.game.ui.emitEP(t);
+                emitted++;
+                if (emitted >= 5) break;
+              }
+            }
+          }
+        } catch (_) { /* ignore in test env */ }
       }
     }
 
@@ -498,8 +573,20 @@ export class Engine {
 
     if (reactor.checkMeltdown()) this.stop();
 
+    // Flush visual events once per tick
+    try {
+      if (visualEvents.length && this.game.ui && typeof this.game.ui._renderVisualEvents === 'function') {
+        this.game.ui._renderVisualEvents(visualEvents);
+      }
+    } catch (_) { /* ignore */ }
+
     this.game.performance.markEnd("tick_total");
     this.tick_count = (this.tick_count || 0) + 1; // Increment tick_count at the end of each tick
+
+    // Flush visual events to the game buffer once per tick
+    if (visualEvents.length) {
+      this.game.enqueueVisualEvents(visualEvents);
+    }
   }
 
   handleComponentDepletion(tile) {
