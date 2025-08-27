@@ -100,4 +100,8 @@ export class Tileset {
     // Mark segments as dirty after bulk operation
     this.game.engine?.heatManager?.markSegmentsAsDirty();
   }
+
+  getAllTiles() {
+    return this.active_tiles_list;
+  }
 }

@@ -30,6 +30,13 @@ export class Part {
     this.base_ecost = part_definition.base_ecost || 0;
     this.base_cost = part_definition.base_cost || 0;
 
+    // Add missing properties that are defined in part_list.json
+    this.location = part_definition.location || null;
+    this.base_description = part_definition.base_description || "";
+    this.valve_group = part_definition.valve_group || null;
+    this.activation_threshold = part_definition.activation_threshold || null;
+    this.transfer_direction = part_definition.transfer_direction || null;
+
     this.erequires = part_definition.erequires || null;
     this.cost = part_definition.base_cost;
     this.perpetual = false;
@@ -172,6 +179,11 @@ export class Part {
       }
     }
 
+    // Valve upgrades - apply transfer multiplier from part definition
+    if (this.category === "valve" && this.part.transfer_multiplier) {
+      transferMultiplier *= this.part.transfer_multiplier;
+    }
+
     // Vent upgrades
     let ventMultiplier = 1;
     let ventContainmentMultiplier = 1;
@@ -252,6 +264,9 @@ export class Part {
       heatExchangerContainmentMultiplier *
       ventContainmentMultiplier *
       coolantContainmentMultiplier;
+
+    // Valves should never store heat - they only transfer when both input and output are available
+    // No containment needed since they don't store heat
     this.vent = this.base_vent * ventMultiplier;
     this.reactor_power = this.base_reactor_power * capacitorPowerMultiplier;
     this.transfer = this.base_transfer * transferMultiplier;
@@ -349,6 +364,24 @@ export class Part {
       case "particle_accelerator":
         folder = "accelerators";
         filename = `accelerator_${level}`;
+        break;
+      case "valve":
+        folder = "valves";
+        const valveImageMap = {
+          "overflow_valve": "valve_1_1",
+          "overflow_valve2": "valve_1_2",
+          "overflow_valve3": "valve_1_3",
+          "overflow_valve4": "valve_1_4",
+          "topup_valve": "valve_2_1",
+          "topup_valve2": "valve_2_2",
+          "topup_valve3": "valve_2_3",
+          "topup_valve4": "valve_2_4",
+          "check_valve": "valve_3_1",
+          "check_valve2": "valve_3_2",
+          "check_valve3": "valve_3_3",
+          "check_valve4": "valve_3_4"
+        };
+        filename = valveImageMap[this.id] || `valve_1`;
         break;
       default:
         folder = this.type + "s";

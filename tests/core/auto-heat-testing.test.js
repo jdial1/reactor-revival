@@ -117,7 +117,7 @@ describe("Auto Heat Testing", () => {
         game.reactor.heat_controlled = true;
 
         // Add a heat outlet with a containment neighbor
-        const outletPart = game.partset.getPartById("heat_outlet");
+        const outletPart = game.partset.getPartById("vent1");
         const outletTile = game.tileset.getTile(0, 0);
         await outletTile.setPart(outletPart);
         outletTile.activated = true;
@@ -144,7 +144,7 @@ describe("Auto Heat Testing", () => {
         game.reactor.heat_controlled = true;
 
         // Add a heat outlet with a containment neighbor
-        const outletPart = game.partset.getPartById("heat_outlet");
+        const outletPart = game.partset.getPartById("vent1");
         const outletTile = game.tileset.getTile(0, 0);
         await outletTile.setPart(outletPart);
         outletTile.activated = true;
@@ -163,7 +163,9 @@ describe("Auto Heat Testing", () => {
         expect(heatAfterTick1).toBeLessThanOrEqual(heatBeforeTick1 - autoHeatReduction);
 
         // Remove the outlet
-        outletTile.clearPart();
+        if (outletTile.$el) {
+            outletTile.clearPart();
+        }
 
         // Verify auto venting still works the same way
         const heatBeforeTick2 = game.reactor.current_heat;

@@ -50,7 +50,7 @@ export class Tile {
     }
 
     if (typeof process !== "undefined" && process.env.NODE_ENV === 'test' && this.part && this.part.category === 'heat_outlet') {
-      console.log(`[DEBUG] Outlet at (${this.row}, ${this.col}) has ${containment.length} containment neighbors: ${containment.map(t => `(${t.row}, ${t.col}) ${t.part?.id}`).join(', ')}`);
+      this.game.logger?.debug(`Outlet at (${this.row}, ${this.col}) has ${containment.length} containment neighbors: ${containment.map(t => `(${t.row}, ${t.col}) ${t.part?.id}`).join(', ')}`);
     }
 
     this._neighborCache = { containment, cell, reflector };
@@ -117,11 +117,16 @@ export class Tile {
     }
   }
   async setPart(partInstance) {
+    // Validate part instance
+    if (partInstance === null || partInstance === undefined) {
+      throw new Error("Invalid part: part cannot be null or undefined");
+    }
+    
     // Prevent overwriting existing parts
     if (this.part) {
       return false; // Return false to indicate the part was not placed
     }
-    this.part = partInstance || null;
+    this.part = partInstance;
     this.invalidateNeighborCaches();
     if (this.part) {
       this.activated = true;
@@ -141,8 +146,8 @@ export class Tile {
           const percentWrapper = document.createElement("div");
           percentWrapper.className = "percent_wrapper";
 
-          // Add heat bar if part has base_containment
-          if (this.part && this.part.base_containment > 0) {
+          // Add heat bar if part has base_containment or containment (but not for valves)
+          if (this.part && (this.part.base_containment > 0 || (this.part.containment > 0 && this.part.category !== "valve"))) {
             const heatBar = document.createElement("div");
             heatBar.className = "percent heat";
             percentWrapper.appendChild(heatBar);
@@ -167,11 +172,11 @@ export class Tile {
         }
       } catch (_) { }
       if (this.game.reactor.has_melted_down) {
-        console.log(
+        this.game.logger?.debug(
           "[Recovery] Clearing meltdown state after placing part:",
           this.part.id
         );
-        console.log(
+        this.game.logger?.debug(
           "[Recovery] Reactor heat before reset:",
           this.game.reactor.current_heat,
           "max:",
@@ -185,22 +190,22 @@ export class Tile {
         );
         if (this.game.engine && !this.game.engine.running) {
           const currentPauseState = this.game.ui.stateManager.getVar("pause");
-          console.log("[Recovery] Current pause state:", currentPauseState);
-          console.log(
+          this.game.logger?.debug("[Recovery] Current pause state:", currentPauseState);
+          this.game.logger?.debug(
             "[Recovery] Engine running state:",
             this.game.engine.running
           );
-          console.log("[Recovery] Game paused state:", this.game.paused);
+          this.game.logger?.debug("[Recovery] Game paused state:", this.game.paused);
           if (currentPauseState) {
-            console.log("[Recovery] Unpausing game");
+            this.game.logger?.info("[Recovery] Unpausing game");
             this.game.ui.stateManager.setVar("pause", false);
           } else {
-            console.log("[Recovery] Force restarting engine");
+            this.game.logger?.info("[Recovery] Force restarting engine");
             this.game.paused = false;
             this.game.engine.start();
           }
         }
-        console.log(
+        this.game.logger?.debug(
           "[Recovery] Meltdown state cleared, has_melted_down:",
           this.game.reactor.has_melted_down,
           "heat reset to:",
@@ -233,7 +238,7 @@ export class Tile {
     const part_id = this.part.id;
     this.invalidateNeighborCaches();
     if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-      console.log(`[DEBUG] Clearing part ${part_id} from tile (${this.row}, ${this.col})`);
+      this.game.logger?.debug(`Clearing part ${part_id} from tile (${this.row}, ${this.col})`);
     }
     if (full_clear) {
       const sell_value = this.calculateSellValue();
@@ -250,6 +255,11 @@ export class Tile {
     this.display_heat = 0;
     this.exploded = false; // Reset explosion state when clearing part
     if (this.$el) {
+      // Remove any lingering vent rotor element from UI
+      try {
+        const rotor = this.$el.querySelector('.vent-rotor');
+        if (rotor && rotor.parentNode) rotor.parentNode.removeChild(rotor);
+      } catch (_) { }
       const baseClasses = ["tile"];
       if (this.enabled) baseClasses.push("enabled");
       this.$el.className = baseClasses.join(" ");
@@ -285,7 +295,7 @@ export class Tile {
     }
 
     // Update heat bar if present - now reflects segment heat level
-    if (this.$heatBar && this.part && this.part.base_containment > 0) {
+    if (this.$heatBar && this.part && (this.part.base_containment > 0 || (this.part.containment > 0 && this.part.category !== "valve"))) {
       const maxHeat = this.part.containment || 1;
       const percent = Math.max(0, Math.min(1, this.heat_contained / maxHeat));
       this.$heatBar.style.width = percent * 100 + "%";

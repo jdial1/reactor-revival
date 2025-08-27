@@ -68,7 +68,10 @@ export class UI {
       heat: "img/ui/icons/icon_heat.png",
     };
 
-
+    // Animation state tracking to prevent spam
+    this._activeVentRotors = new Set(); // Track tiles with active vent rotor animations
+    this._activeFlowIndicators = new Map(); // Track active flow indicators by flow path
+    this._activeTileIcons = new Map(); // Track active tile icons by tile and type
 
     this.dom_ids = [
       "main",
@@ -108,6 +111,9 @@ export class UI {
       "coolantCells",
       "reactorPlatings",
       "particleAccelerators",
+      "overflowValves",
+      "topupValves",
+      "checkValves",
       "objectives_section",
       "objective_title",
       "objective_reward",
@@ -228,12 +234,14 @@ export class UI {
         "coolantCells",
         "reactorPlatings",
         "particleAccelerators",
+        "overflowValves",
+        "topupValves",
+        "checkValves",
         "objectives_section",
         "objective_title",
         "objective_reward",
         "tooltip",
-        "tooltip_data",
-        "meltdown_banner"
+        "tooltip_data"
       ],
 
       // Reactor page specific elements
@@ -242,7 +250,8 @@ export class UI {
         "reactor_background",
         "reactor_wrapper",
         "reactor_section",
-        "parts_section"
+        "parts_section",
+        "meltdown_banner"
       ],
 
       // Upgrades page specific elements
@@ -316,7 +325,7 @@ export class UI {
 
         // Debug logging for stats elements
         if (id.startsWith("stats_")) {
-          console.log(`[UI] Cached DOM element ${id}:`, el);
+
         }
       } else {
         // Only warn for global elements that should always exist
@@ -355,7 +364,7 @@ export class UI {
       const config = this.toggle_buttons_config[buttonKey];
       const button = this.DOMElements[config.id];
       if (button) {
-        console.log(`[UI] Attaching toggle handler to #${config.id}`);
+
         button.onclick = () => {
           const currentState = this.stateManager.getVar(config.stateProperty);
           this.stateManager.setVar(config.stateProperty, !currentState);
@@ -468,6 +477,9 @@ export class UI {
       "heatOutlets",
       "coolantCells",
       "reactorPlatings",
+      "overflowValves",
+      "topupValves",
+      "checkValves",
     ];
     containerIds.forEach((id) => {
       const el = this.DOMElements[id];
@@ -487,15 +499,23 @@ export class UI {
         "heat_outlet",
         "coolant_cell",
         "reactor_plating",
+        "valve",
       ],
     };
     const categories = categoryMap[tabId] || [];
+
+
 
     this.clearPartContainers();
 
     categories.forEach((partCategory) => {
       const parts = this.game.partset.getPartsByCategory(partCategory);
+
+      if (parts.length === 0) {
+        console.warn(`No parts found for category: ${partCategory}`);
+      }
       parts.forEach((part) => {
+
         this.stateManager.handlePartAdded(this.game, part);
       });
     });
@@ -511,6 +531,27 @@ export class UI {
       : null;
     const activeTabId = activeTab ? activeTab.getAttribute("data-tab") : "power";
     this.populatePartsForTab(activeTabId);
+  }
+
+  // Fallback method to refresh parts display when refreshPartsPanel is not available
+  refreshPartsDisplay() {
+    // Clear and repopulate all parts tabs
+    const partsTabsContainer = document.querySelector(".parts_tabs");
+    if (partsTabsContainer) {
+      const activeTab = Array.from(partsTabsContainer.querySelectorAll(".parts_tab")).find((btn) =>
+        btn.classList.contains("active")
+      );
+      const activeTabId = activeTab ? activeTab.getAttribute("data-tab") : "power";
+
+      // Clear all tab contents first
+      const tabContents = document.querySelector(".parts_tab_contents");
+      if (tabContents) {
+        tabContents.innerHTML = "";
+      }
+
+      // Repopulate the active tab
+      this.populatePartsForTab(activeTabId);
+    }
   }
 
   setupPartsTabs() {
@@ -610,6 +651,7 @@ export class UI {
     // Drain and render visual events produced during the last engine tick
     if (this.game && typeof this.game.drainVisualEvents === 'function') {
       const events = this.game.drainVisualEvents();
+      // Visual events drained from game queue
       if (events && events.length) {
         this._renderVisualEvents(events);
       }
@@ -680,10 +722,14 @@ export class UI {
 
   // Internal: render batched visual events
   _renderVisualEvents(events) {
-    if (!events || !events.length) return;
+    if (!events || !events.length) {
+      return;
+    }
     const tileFor = (r, c) => (this.game?.tileset ? this.game.tileset.getTile(r, c) : null);
     for (const evt of events) {
-      if (!evt) continue;
+      if (!evt) {
+        continue;
+      }
       if (evt.type === 'emit') {
         if (evt.icon === 'power' && Array.isArray(evt.tile)) {
           const t = tileFor(evt.tile[0], evt.tile[1]);
@@ -692,21 +738,33 @@ export class UI {
           const t = tileFor(evt.tile[0], evt.tile[1]);
           if (t) this.blinkVent(t);
         }
-      } else if (evt.type === 'flow' && Array.isArray(evt.from) && Array.isArray(evt.to)) {
-        const fromT = tileFor(evt.from[0], evt.from[1]);
-        const toT = tileFor(evt.to[0], evt.to[1]);
-        if (fromT && toT) {
-          if (evt.icon === 'heat') this.spawnTileIcon('heat', fromT, toT);
-          else if (evt.icon === 'power') this.spawnTileIcon('power', fromT, toT);
+      } else if (evt.type === 'flow' && Array.isArray(evt.from)) {
+        if (evt.to === 'reactor') {
+          // Special case: heat going directly to reactor
+          const fromT = tileFor(evt.from[0], evt.from[1]);
+          if (fromT) {
+            this._renderFlow(evt);
+          } else {
+          }
+        } else if (Array.isArray(evt.to)) {
+          // Normal flow between tiles
+          const fromT = tileFor(evt.from[0], evt.from[1]);
+          const toT = tileFor(evt.to[0], evt.to[1]);
+          if (fromT && toT) {
+            this._renderFlow(evt);
+          } else {
+          }
         }
       }
     }
   }
-
+  // eslint-disable-next-line class-methods-use-this
   _ensureOverlay() {
     if (this._overlay && this._overlay.parentElement) return this._overlay;
     const reactorWrapper = this.DOMElements.reactor_wrapper || document.getElementById('reactor_wrapper');
-    if (!reactorWrapper) return null;
+    if (!reactorWrapper) {
+      return null;
+    }
     const overlay = document.createElement('div');
     overlay.className = 'reactor-overlay';
     overlay.style.position = 'absolute';
@@ -752,42 +810,53 @@ export class UI {
     const reactor = this.DOMElements.reactor;
     const overlay = this._ensureOverlay();
     if (!reactor || !overlay) return { x: 0, y: 0 };
-    const tileSize = reactor.querySelector('.tile')?.offsetWidth || 32;
+
+    // Get the actual tile size from CSS custom property or fallback to measured size
+    const computedTileSize = getComputedStyle(reactor).getPropertyValue('--tile-size');
+    let tileSize = 48; // Default fallback
+
+    if (computedTileSize) {
+      // Parse the CSS value (e.g., "32px" -> 32)
+      tileSize = parseInt(computedTileSize) || 48;
+    } else {
+      // Fallback to measuring an actual tile
+      tileSize = reactor.querySelector('.tile')?.offsetWidth || 48;
+    }
+
+    // Get reactor and overlay positions
     const reactorRect = reactor.getBoundingClientRect();
     const overlayRect = overlay.getBoundingClientRect();
-    const x = (col * tileSize + tileSize / 2) + (reactorRect.left - overlayRect.left);
-    const y = (row * tileSize + tileSize / 2) + (reactorRect.top - overlayRect.top);
+
+    // Account for reactor padding (important for mobile grid alignment)
+    const reactorStyle = getComputedStyle(reactor);
+    const reactorPaddingLeft = parseFloat(reactorStyle.paddingLeft) || 0;
+    const reactorPaddingTop = parseFloat(reactorStyle.paddingTop) || 0;
+
+    // Account for tile border width (1px border on each side)
+    const tileBorderWidth = 1;
+    const totalTileSize = tileSize + (tileBorderWidth * 2);
+
+    // Check if there's a specific tile at this position to get exact coordinates
+    const targetTile = reactor.querySelector(`[data-row="${row}"][data-col="${col}"]`) ||
+      reactor.querySelector(`.tile:nth-child(${row * parseInt(getComputedStyle(reactor).getPropertyValue('--game-cols') || 12) + col + 1})`);
+
+    if (targetTile) {
+      // Use the actual tile position for perfect alignment
+      const tileRect = targetTile.getBoundingClientRect();
+      const x = tileRect.left + (tileRect.width / 2) - overlayRect.left;
+      const y = tileRect.top + (tileRect.height / 2) - overlayRect.top;
+      return { x, y };
+    }
+
+    // Fallback: Calculate position using the grid system
+    // The grid starts at the reactor's position, plus padding, plus the tile offset
+    const x = reactorRect.left + reactorPaddingLeft + (col * totalTileSize) + (totalTileSize / 2) - overlayRect.left;
+    const y = reactorRect.top + reactorPaddingTop + (row * totalTileSize) + (totalTileSize / 2) - overlayRect.top;
+
     return { x, y };
   }
 
-  _renderVisualEvents(events) {
-    if (typeof document === "undefined") return;
-    if (!events || !events.length) return;
-    const tileFor = (r, c) => (this.game?.tileset ? this.game.tileset.getTile(r, c) : null);
-    for (const evt of events) {
-      if (!evt) continue;
-      // Emit events: only render if the source tile exists and is populated
-      if (evt.type === 'emit' && Array.isArray(evt.tile)) {
-        const t = tileFor(evt.tile[0], evt.tile[1]);
-        if (!t?.$el || !t.part) continue;
-        if (evt.icon === 'power') {
-          this.spawnTileIcon('power', t, null);
-        } else if (evt.icon === 'heat' && evt.part === 'vent') {
-          this.blinkVent(t);
-        } else if (evt.icon === 'heat') {
-          this.spawnTileIcon('heat', t, null);
-        }
-      }
-      // Flow events: only render if both endpoints exist and are populated
-      else if (evt.type === 'flow' && Array.isArray(evt.from) && Array.isArray(evt.to)) {
-        const fromT = tileFor(evt.from[0], evt.from[1]);
-        const toT = tileFor(evt.to[0], evt.to[1]);
-        if (!fromT?.$el || !toT?.$el || !fromT.part || !toT.part) continue;
-        // Inter-part flow uses colored dots (handled in _renderFlow)
-        this._renderFlow(evt);
-      }
-    }
-  }
+
 
   // Public helpers to be called from the engine (DOM-guarded)
   emitPowerFromCell(tile) {
@@ -833,42 +902,210 @@ export class UI {
   _renderFlow(evt) {
     const overlay = this._ensureOverlay();
     if (!overlay) return;
-    // Render directional flow as a colored dot (not icon) for inter-part interactions
-    const dot = document.createElement('div');
-    dot.className = 'vis-flow-dot';
-    dot.style.position = 'absolute';
-    dot.style.width = '10px';
-    dot.style.height = '10px';
-    dot.style.borderRadius = '50%';
-    dot.style.opacity = '0.95';
-    dot.style.willChange = 'transform, opacity';
-    const color = evt.icon === 'power' ? '#ffd54f' : evt.icon === 'money' ? '#66bb6a' : '#ef5350';
-    dot.style.background = color;
-    dot.style.boxShadow = `0 0 6px ${color}77`;
-    overlay.appendChild(dot);
 
-    const start = this._tileCenterToOverlayPosition(evt.from[0], evt.from[1]);
-    const end = this._tileCenterToOverlayPosition(evt.to[0], evt.to[1]);
-    const duration = 250; // ms
-    const startTime = performance.now();
 
-    const anim = { img: dot };
-    this._flowAnimations.add(anim);
 
-    const step = (now) => {
-      const t = Math.min(1, (now - startTime) / duration);
-      const x = start.x + (end.x - start.x) * t - 5;
-      const y = start.y + (end.y - start.y) * t - 5;
-      dot.style.transform = `translate(${x}px, ${y}px)`;
-      if (t < 1) {
-        anim._raf = requestAnimationFrame(step);
+    const from = { row: evt.from[0], col: evt.from[1] };
+    const to = evt.to;
+
+    // Handle special case where heat goes to reactor (no neighbors)
+    let flowKey, start, end, direction;
+
+    if (to === 'reactor') {
+      // Heat going directly to reactor - show arrows in all 8 directions
+      // Add timestamp to make each flow arrow unique
+      flowKey = `${from.row}-${from.col}-to-reactor-${Date.now()}`;
+      start = this._tileCenterToOverlayPosition(from.row, from.col);
+
+      // Create multiple arrows in all 8 directions
+      const directions = ['up', 'down', 'left', 'right', 'up-left', 'up-right', 'down-left', 'down-right'];
+      // Responsive arrow distance - smaller on mobile
+      const isMobile = window.innerWidth <= 900;
+      const arrowDistance = isMobile ? 40 : 60; // 40px on mobile, 60px on desktop
+
+      directions.forEach((dir, index) => {
+        const uniqueKey = `${flowKey}-${dir}`;
+        let endX, endY;
+
+        switch (dir) {
+          case 'up': endX = start.x; endY = start.y - arrowDistance; break;
+          case 'down': endX = start.x; endY = start.y + arrowDistance; break;
+          case 'left': endX = start.x - arrowDistance; endY = start.y; break;
+          case 'right': endX = start.x + arrowDistance; endY = start.y; break;
+          case 'up-left': endX = start.x - arrowDistance; endY = start.y - arrowDistance; break;
+          case 'up-right': endX = start.x + arrowDistance; endY = start.y - arrowDistance; break;
+          case 'down-left': endX = start.x - arrowDistance; endY = start.y + arrowDistance; break;
+          case 'down-right': endX = start.x + arrowDistance; endY = start.y + arrowDistance; break;
+        }
+
+        this._createReactorFlowArrow(uniqueKey, start, { x: endX, y: endY }, dir, evt.amount);
+      });
+
+      // Return early since we're creating arrows in _createReactorFlowArrow
+      return;
+    }
+
+    // Normal flow between tiles (both reactor and part-to-part)
+    if (Array.isArray(to)) {
+      const toTile = { row: to[0], col: to[1] };
+      flowKey = `${from.row}-${from.col}-to-${toTile.row}-${toTile.col}`;
+      start = this._tileCenterToOverlayPosition(from.row, from.col);
+      end = this._tileCenterToOverlayPosition(toTile.row, toTile.col);
+
+      // Determine direction based on tile deltas
+      const dRow = toTile.row - from.row;
+      const dCol = toTile.col - from.col;
+      if (Math.abs(dRow) > Math.abs(dCol)) {
+        direction = dRow < 0 ? 'up' : 'down';
       } else {
-        overlay.removeChild(dot);
-        this._flowAnimations.delete(anim);
+        direction = dCol < 0 ? 'left' : 'right';
       }
-    };
-    dot.style.transform = `translate(${start.x - 5}px, ${start.y - 5}px)`;
-    anim._raf = requestAnimationFrame(step);
+    }
+
+    // Check if this flow animation is already running
+    if (this._activeFlowIndicators.has(flowKey)) {
+      return;
+    }
+
+    // Determine indicator size based on amount thresholds
+    const amount = Number(evt.amount || 0);
+    let amountClass = 'flow-amount-sm';
+    if (amount > 1000) amountClass = 'flow-amount-lg';
+    else if (amount > 100) amountClass = 'flow-amount-md';
+
+    // Position at midpoint between start and end
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+
+    const indicator = document.createElement('div');
+    indicator.className = `flow-indicator flow-arrow-${direction} ${amountClass}`;
+    indicator.style.position = 'absolute';
+    indicator.style.left = `${midX}px`;
+    indicator.style.top = `${midY}px`;
+    indicator.style.pointerEvents = 'none';
+    indicator.style.transform = 'translate(-50%, -50%)';
+
+
+
+    // Mark this flow animation as active
+    this._activeFlowIndicators.set(flowKey, indicator);
+
+    overlay.appendChild(indicator);
+
+    // Auto-remove after a longer duration to make arrows more visible
+    setTimeout(() => {
+      if (indicator.parentElement === overlay) overlay.removeChild(indicator);
+      // Remove from active animations
+      this._activeFlowIndicators.delete(flowKey);
+    }, 1000); // Increased from 300ms to 1000ms for better visibility
+  }
+
+  _createReactorFlowArrow(flowKey, start, end, direction, amount) {
+    const overlay = this._ensureOverlay();
+    if (!overlay) return;
+
+    // Check if this flow animation is already running
+    if (this._activeFlowIndicators.has(flowKey)) {
+      return;
+    }
+
+    // Determine indicator size based on amount thresholds
+    let amountClass = 'flow-amount-sm';
+    if (amount > 1000) amountClass = 'flow-amount-lg';
+    else if (amount > 100) amountClass = 'flow-amount-md';
+
+    // Position at midpoint between start and end
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+
+    const indicator = document.createElement('div');
+    indicator.className = `flow-indicator flow-arrow-${direction} ${amountClass}`;
+    indicator.style.position = 'absolute';
+    indicator.style.left = `${midX}px`;
+    indicator.style.top = `${midY}px`;
+    indicator.style.pointerEvents = 'none';
+    indicator.style.transform = 'translate(-50%, -50%)';
+
+
+
+    // Mark this flow animation as active
+    this._activeFlowIndicators.set(flowKey, indicator);
+
+    overlay.appendChild(indicator);
+
+    // Auto-remove after a longer duration to make arrows more visible
+    setTimeout(() => {
+      if (indicator.parentElement === overlay) overlay.removeChild(indicator);
+      // Remove from active animations
+      this._activeFlowIndicators.delete(flowKey);
+    }, 1000); // Increased from 300ms to 1000ms for better visibility
+  }
+
+  _resolveFlowStyle(amount) {
+    const a = Number(amount || 0);
+    const exp = isFinite(a) && a > 0 ? Math.floor(Math.log10(a)) : 0;
+    // Defaults
+    let style = 'dot';
+    let size = 10;
+    let duration = 240;
+    let count = 1;
+    let transform = '';
+    let stagger = 0; // fraction of duration
+    // Tiered styling inspired by the reference grid; more variety at higher magnitudes
+    if (exp <= 0) { // 1 to 5
+      style = 'dot'; size = 8; duration = 260; count = 1;
+    } else if (exp <= 1) { // 5 to 10
+      style = 'streak'; size = 9; duration = 240; count = 1; transform = 'rotate(0deg)';
+    } else if (exp <= 2) { // 10 to 25
+      style = 'ring'; size = 10; duration = 230; count = 1;
+    } else if (exp <= 3) { // 25 to 50
+      style = 'burst3'; size = 10; duration = 220; count = 3; stagger = 0.15;
+    } else if (exp <= 4) { // 50 to 100
+      style = 'chev'; size = 11; duration = 210; count = 1;
+    } else if (exp <= 5) { // 100 to 250
+      style = 'burst6'; size = 10; duration = 200; count = 5; stagger = 0.25;
+    } else if (exp <= 6) { // 250 to 500
+      style = 'cross'; size = 12; duration = 190; count = 1;
+    } else if (exp <= 7) { // 500 to 1k
+      style = 'star'; size = 12; duration = 180; count = 1;
+    } else if (exp <= 8) { // 1k to 2.5k
+      style = 'beam'; size = 12; duration = 170; count = 1;
+    } else if (exp <= 10) { // up to ~1e10
+      style = 'beam'; size = 14; duration = 150; count = 2; stagger = 0.1;
+    } else if (exp <= 20) { // 1e10 to 1e20
+      style = 'beam'; size = 16; duration = 130; count = 3; stagger = 0.15;
+    } else if (exp <= 100) { // 1e20 to 1e100
+      style = 'beam'; size = 18; duration = 110; count = 4; stagger = 0.2;
+    } else { // 1e100+ up to beyond 1e999
+      style = 'beam'; size = 20; duration = 90; count = 5; stagger = 0.25;
+    }
+    return { style, size, duration: duration * 5, count, transform, stagger, fadeOut: style !== 'beam', centerOffset: Math.max(3, Math.round(size / 2)) };
+  }
+
+  _createFlowNode(styleCfg, color) {
+    const el = document.createElement('div');
+    el.className = `vis-flow ${this._flowClassFor(styleCfg.style)}`;
+    el.style.position = 'absolute';
+    el.style.setProperty('--s', `${styleCfg.size}px`);
+    el.style.color = color;
+    el.style.opacity = '0.95';
+    el.style.willChange = 'transform, opacity';
+    return el;
+  }
+
+  _flowClassFor(name) {
+    switch (name) {
+      case 'streak': return 'flow-streak';
+      case 'ring': return 'flow-ring';
+      case 'burst3': return 'flow-dot';
+      case 'burst6': return 'flow-dot';
+      case 'chev': return 'flow-chev';
+      case 'cross': return 'flow-cross';
+      case 'star': return 'flow-star';
+      case 'beam': return 'flow-beam';
+      case 'dot':
+      default: return 'flow-dot';
+    }
   }
 
   processUpdateQueue() {
@@ -876,7 +1113,6 @@ export class UI {
     for (const [key, value] of this.update_vars) {
       const config = this.var_objs_config[key];
       if (!config) {
-        console.log(`[UI] No config found for update key: ${key}`);
         continue;
       }
       if (config.dom) {
@@ -1021,9 +1257,7 @@ export class UI {
         num: true,
         onupdate: (val) => {
           if (!this.DOMElements.stats_power) {
-            console.log(
-              `[UI] stats_power DOM element missing when trying to update with value: ${val}`
-            );
+            // DOM element missing
           }
 
         },
@@ -1034,9 +1268,7 @@ export class UI {
         places: 0,
         onupdate: (val) => {
           if (!this.DOMElements.stats_heat) {
-            console.log(
-              `[UI] stats_heat DOM element missing when trying to update with value: ${val}`
-            );
+            // DOM element missing
           }
         },
       },
@@ -1124,6 +1356,11 @@ export class UI {
             pauseBanner.classList.toggle("hidden", !val);
           }
 
+          // Clear all active animations when pausing to prevent visual spam
+          if (val) {
+            this.clearAllActiveAnimations();
+          }
+
           // Update engine status indicator and start/stop engine
           if (this.game && this.game.engine) {
             if (val) {
@@ -1141,6 +1378,10 @@ export class UI {
       melting_down: {
         onupdate: (val) => {
           // This is handled by updateMeltdownState()
+          // Clear animations when meltdown occurs to prevent visual spam
+          if (val) {
+            this.clearAllActiveAnimations();
+          }
         },
       },
     };
@@ -1231,6 +1472,17 @@ export class UI {
       )
         return;
 
+      // Create a unique key for this animation
+      const animationKey = `${fromTile.row}-${fromTile.col}-${kind}`;
+      if (toTile) {
+        animationKey += `-to-${toTile.row}-${toTile.col}`;
+      }
+
+      // Check if this animation is already running
+      if (this._activeTileIcons.has(animationKey)) {
+        return;
+      }
+
       const container =
         this.DOMElements.reactor_background ||
         document.getElementById("reactor_background");
@@ -1263,6 +1515,9 @@ export class UI {
       img.style.left = `${startLeft}px`;
       img.style.top = `${startTop}px`;
 
+      // Mark this animation as active
+      this._activeTileIcons.set(animationKey, img);
+
       container.appendChild(img);
 
       // Next frame: animate
@@ -1284,6 +1539,8 @@ export class UI {
         // Cleanup after animation
         setTimeout(() => {
           if (img && img.parentNode) img.parentNode.removeChild(img);
+          // Remove from active animations
+          this._activeTileIcons.delete(animationKey);
         }, 450);
       });
     } catch (_) {
@@ -1291,26 +1548,108 @@ export class UI {
     }
   }
 
-  // Ensure a blinking vent indicator exists and trigger a brief blink
+  // Ensure an animated vent rotor exists and trigger a brief spin
   blinkVent(tile) {
     try {
       if (typeof document === "undefined" || !tile?.$el) return;
-      let indicator = tile.$el.querySelector(".vent-indicator");
-      if (!indicator) {
-        indicator = document.createElement("span");
-        indicator.className = "vent-indicator";
-        tile.$el.appendChild(indicator);
+
+      // Check if this tile already has an active vent rotor animation
+      if (this._activeVentRotors.has(tile)) {
+        return;
       }
-      indicator.classList.remove("vent-blink");
+
+      let rotor = tile.$el.querySelector(".vent-rotor");
+      if (!rotor) {
+        rotor = document.createElement("span");
+        rotor.className = "vent-rotor";
+        tile.$el.appendChild(rotor);
+      }
+      // Use the exact vent sprite as the rotor background so we rotate the center of the sprite
+      try {
+        if (tile?.part && typeof tile.part.getImagePath === 'function') {
+          const sprite = tile.part.getImagePath();
+          if (sprite) {
+            rotor.style.backgroundImage = `url('${sprite}')`;
+          }
+        }
+      } catch (_) { /* ignore */ }
+
+      // Mark this tile as having an active animation
+      this._activeVentRotors.add(tile);
+
+      rotor.classList.remove("spin");
       // Restart the animation
-      // Force reflow then add class
-      void indicator.offsetWidth;
-      indicator.classList.add("vent-blink");
+      void rotor.offsetWidth;
+      rotor.classList.add("spin");
+
       // Auto-remove the class after a short duration to allow re-triggering each tick
-      setTimeout(() => indicator && indicator.classList.remove("vent-blink"), 400);
+      setTimeout(() => {
+        if (!rotor || !rotor.parentNode) return;
+        rotor.classList.remove("spin");
+
+        // Remove from active animations set
+        this._activeVentRotors.delete(tile);
+
+        // If the tile is no longer a vent, remove the rotor element entirely
+        const isVent = tile?.part?.category === 'vent';
+        if (!isVent) {
+          rotor.parentNode.removeChild(rotor);
+        }
+      }, 450);
     } catch (_) {
       // ignore
     }
+  }
+
+  // Utility: remove lingering vent rotor if present (e.g., after part removal)
+  _cleanupVentRotor(tile) {
+    try {
+      if (!tile?.$el) return;
+      const rotor = tile.$el.querySelector('.vent-rotor');
+      if (rotor && tile?.part?.category !== 'vent') {
+        rotor.parentNode.removeChild(rotor);
+      }
+      // Remove from active animations if present
+      this._activeVentRotors.delete(tile);
+    } catch (_) { /* ignore */ }
+  }
+
+  // Clear all active animations (useful for cleanup or when game state changes)
+  clearAllActiveAnimations() {
+    // Clear vent rotor animations
+    this._activeVentRotors.clear();
+
+    // Clear flow indicator animations
+    this._activeFlowIndicators.forEach((indicator) => {
+      if (indicator && indicator.parentElement) {
+        indicator.parentElement.removeChild(indicator);
+      }
+    });
+    this._activeFlowIndicators.clear();
+
+    // Clear tile icon animations
+    this._activeTileIcons.forEach((icon) => {
+      if (icon && icon.parentElement) {
+        icon.parentElement.removeChild(icon);
+      }
+    });
+    this._activeTileIcons.clear();
+  }
+
+  // Get animation status for debugging
+  getAnimationStatus() {
+    return {
+      activeVentRotors: this._activeVentRotors.size,
+      activeFlowIndicators: this._activeFlowIndicators.size,
+      activeTileIcons: this._activeTileIcons.size,
+      totalActiveAnimations: this._activeVentRotors.size + this._activeFlowIndicators.size + this._activeTileIcons.size
+    };
+  }
+
+  // Debug method to log current animation status
+  logAnimationStatus() {
+    const status = this.getAnimationStatus();
+    // Animation status logging removed for cleaner console
   }
 
   // Pulse a subtle aura from a reflector towards a target cell
@@ -1430,6 +1769,10 @@ export class UI {
     this.stateManager = new StateManager(this);
     this.hotkeys = new Hotkeys();
     this.help_text = data;
+
+    // Clear any existing animations when initializing
+    this.clearAllActiveAnimations();
+
     return true;
   }
 
@@ -1553,10 +1896,7 @@ export class UI {
       if (wrapperHeight < 100 || wrapperWidth < 100) {
         wrapperHeight = window.innerHeight;
         wrapperWidth = window.innerWidth;
-        console.log(`[UI] Using viewport dimensions as fallback: ${wrapperWidth}x${wrapperHeight}`);
       }
-
-      console.log(`[UI] Mobile wrapper dimensions: ${wrapperWidth}x${wrapperHeight}`);
 
       // Calculate tile size to fit the height of the reactor area
       // Account for objectives section (70px-90px) and info bar (48px) and bottom nav (56px)
@@ -1578,7 +1918,7 @@ export class UI {
       // Ensure reasonable tile size bounds for mobile
       tileSize = Math.max(25, Math.min(tileSize, 55));
 
-      console.log(`[UI] Mobile final tile size: ${tileSize}px`);
+
 
       // Set CSS custom properties
       this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
@@ -1589,7 +1929,7 @@ export class UI {
       const finalGridWidth = tileSize * numCols;
       const finalGridHeight = tileSize * numRows;
 
-      console.log(`[UI] Mobile grid dimensions: ${finalGridWidth}x${finalGridHeight}`);
+
 
       // Ensure the reactor wrapper is properly positioned
       wrapper.style.position = "relative";
@@ -1664,12 +2004,7 @@ export class UI {
   setupEventListeners() {
     const setupNav = (container, buttonClass) => {
       if (!container) return;
-      console.log(
-        `[UI] Attaching nav handler to`,
-        container,
-        "with selector",
-        buttonClass
-      );
+
       container.addEventListener("click", (event) => {
         const button = event.target.closest(buttonClass);
         if (button?.dataset.page) {
@@ -1771,7 +2106,39 @@ export class UI {
               };
               this.game.ui.stateManager.handleObjectiveLoaded(displayObjective, this.game.objectives_manager.current_objective_index);
 
-              console.log("Objective completed via CTRL+X:", displayObjective.title);
+
+            }
+            break;
+          case "u":
+          case "U":
+            e.preventDefault();
+            // Unlock all parts for testing by setting placement counts to 10
+            if (this.game.partset && this.game.partset.partsArray) {
+              // Get all unique type:level combinations from all parts
+              const typeLevelCombos = new Set();
+              this.game.partset.partsArray.forEach(part => {
+                if (part.type && part.level) {
+                  typeLevelCombos.add(`${part.type}:${part.level}`);
+                }
+              });
+
+              // Set all placement counts to 10 to unlock everything
+              typeLevelCombos.forEach(combo => {
+                this.game.placedCounts[combo] = 10;
+              });
+
+              // Refresh part affordability and UI
+              this.game.partset.check_affordability(this.game);
+
+              // Force refresh of parts panel to show all unlocked parts
+              if (this.stateManager && typeof this.stateManager.refreshPartsPanel === 'function') {
+                this.stateManager.refreshPartsPanel();
+              } else {
+                // Fallback: manually refresh the parts display
+                this.refreshPartsDisplay();
+              }
+
+
             }
             break;
         }
@@ -1948,7 +2315,7 @@ export class UI {
       } else {
         if (tile.part && this.help_mode_active) {
           if (this.game && this.game.tooltip_manager) {
-            console.log("Showing tooltip for part", tile.part);
+
             this.game.tooltip_manager.show(tile.part, tile, true);
           }
           return;
@@ -2668,17 +3035,12 @@ export class UI {
 
     // Show modal with data, cost, and action options
     const showModal = (title, data, cost, action, canPaste = false, summary = [], options = {}) => {
-      console.log("[UI] showModal called with title:", title, "action:", action);
       modalTitle.textContent = title;
       modalText.value = data;
 
       // Show/hide textarea based on action
       if (action === "paste") {
         // Ensure textarea is visible and properly styled for paste actions
-        console.log("[UI] Textarea element:", modalText);
-        console.log("[UI] Textarea display style:", window.getComputedStyle(modalText).display);
-        console.log("[UI] Textarea visibility:", window.getComputedStyle(modalText).visibility);
-        console.log("[UI] Textarea opacity:", window.getComputedStyle(modalText).opacity);
 
         // Force textarea to be visible
         modalText.classList.remove("hidden");
@@ -2695,7 +3057,7 @@ export class UI {
         modalText.style.opacity = "0";
         modalText.style.height = "0";
         modalText.style.overflow = "hidden";
-        console.log("[UI] Hiding textarea for non-paste action:", action);
+
       }
 
       // Pause the reactor when modal opens
@@ -2733,11 +3095,9 @@ export class UI {
 
         // Add sell existing grid option (always show if there are any parts)
         const currentSellValue = calculateCurrentSellValue();
-        console.log("[UI] Current sell value:", currentSellValue);
 
         // Check if there are any parts in the current reactor
         const hasExistingParts = this.game.tileset.tiles_list.some(tile => tile.enabled && tile.part);
-        console.log("[UI] Has existing parts:", hasExistingParts);
 
         // Store the sell option HTML to be used in real-time updates
         modal.dataset.sellOptionHtml = '';
@@ -2892,12 +3252,10 @@ export class UI {
         data = clipboardResult.data;
       } else if (clipboardResult.error === 'permission-denied') {
         // Show user-friendly message for permission denial and show modal for manual entry
-        console.log("[UI] Clipboard access denied, showing manual entry modal");
         data = ""; // Ensure data is empty for manual entry
         // No notification - just show the modal directly
       } else {
         // For other clipboard errors, also show manual entry modal
-        console.log("[UI] Clipboard error:", clipboardResult.error, "showing manual entry modal");
         data = "";
         // No notification - just show the modal directly
       }
@@ -2910,7 +3268,6 @@ export class UI {
 
       // Set appropriate title based on whether we have data or not
       const modalTitle = data ? "Paste Reactor Layout" : "Enter Reactor Layout Manually";
-      console.log("[UI] About to show modal with title:", modalTitle, "data length:", data ? data.length : 0);
       showModal(modalTitle, data, 0, "paste", false, summary, { showCheckboxes: true, checkedTypes });
       // Add real-time cost calculation and filtering
       const updateCostAndSummary = () => {
@@ -2968,7 +3325,6 @@ export class UI {
         // Restore checkbox state and ensure it's properly initialized
         const sellCheckbox = document.getElementById('sell_existing_checkbox');
         if (sellCheckbox) {
-          console.log("[UI] Sell checkbox found and initialized");
           // Restore the previous state
           sellCheckbox.checked = currentSellCheckboxState;
           // Make sure it's not disabled and can be interacted with
@@ -2977,7 +3333,7 @@ export class UI {
 
           // Add a direct change event listener to the checkbox
           sellCheckbox.addEventListener('change', (e) => {
-            console.log("[UI] Sell checkbox change event:", e.target.checked);
+
             updateCostAndSummary();
           });
         }
@@ -3004,7 +3360,7 @@ export class UI {
         } else if (e.target.id === "sell_existing_checkbox") {
           // Let the native checkbox behavior handle this
           e.stopPropagation();
-          console.log("[UI] Sell checkbox changed:", e.target.checked);
+
           updateCostAndSummary();
         } else if (e.target.closest('label') && e.target.closest('label').querySelector('#sell_existing_checkbox')) {
           // Handle label clicks for the sell checkbox
@@ -3013,7 +3369,7 @@ export class UI {
             e.preventDefault();
             e.stopPropagation();
             checkbox.checked = !checkbox.checked;
-            console.log("[UI] Sell checkbox toggled via label click:", checkbox.checked);
+
             updateCostAndSummary();
           }
         }
@@ -3148,7 +3504,7 @@ export class UI {
       modalText.style.opacity = "0";
       modalText.style.height = "0";
       modalText.style.overflow = "hidden";
-      console.log("[UI] Hiding textarea for sell modal");
+
     }
 
     // Show modal
@@ -3374,12 +3730,7 @@ export class UI {
         if (this.DOMElements.reactor) {
           this.DOMElements.reactor.innerHTML = "";
         }
-        console.log(
-          "[UI] Rendering reactor grid. Tileset:",
-          this.game.tileset,
-          "Tiles:",
-          this.game.tileset?.tiles_list?.length
-        );
+
         if (this.game && this.game.tileset && this.game.tileset.tiles_list) {
           this.game.tileset.tiles_list.forEach((tile) => {
             tile.enabled = true; // Ensure tile is enabled for visibility
@@ -3401,15 +3752,11 @@ export class UI {
         this.setupMobileTopBarResizeListener();
         break;
       case "upgrades_section":
-        console.log("[UI] Initializing upgrades section");
         setupUpgradeClickHandler("upgrades_content_wrapper");
         if (
           game.upgradeset &&
           typeof game.upgradeset.populateUpgrades === "function"
         ) {
-          console.log(
-            "[UI] Populating upgrades via upgradeset.populateUpgrades"
-          );
           game.upgradeset.populateUpgrades();
         } else {
           console.warn(
@@ -3418,15 +3765,11 @@ export class UI {
         }
         break;
       case "experimental_upgrades_section":
-        console.log("[UI] Initializing experimental upgrades section");
         setupUpgradeClickHandler("experimental_upgrades_content_wrapper");
         if (
           game.upgradeset &&
           typeof game.upgradeset.populateExperimentalUpgrades === "function"
         ) {
-          console.log(
-            "[UI] Populating experimental upgrades via upgradeset.populateExperimentalUpgrades"
-          );
           game.upgradeset.populateExperimentalUpgrades();
         } else {
           console.warn(
@@ -3747,16 +4090,13 @@ export class UI {
 
   async loadAndSetVersion() {
     try {
-      console.log("[UI] Loading version for research page...");
       const response = await fetch("version.json");
       const versionData = await response.json();
       const version = versionData.version || "Unknown";
-      console.log("[UI] Version loaded:", version);
 
       const appVersionEl = document.getElementById("app_version");
       if (appVersionEl) {
         appVersionEl.textContent = version;
-        console.log("[UI] Version set in DOM element:", appVersionEl.textContent);
       } else {
         console.warn("[UI] app_version element not found in DOM");
         // Try again after a short delay in case the element hasn't been created yet
@@ -3764,7 +4104,6 @@ export class UI {
           const retryEl = document.getElementById("app_version");
           if (retryEl) {
             retryEl.textContent = version;
-            console.log("[UI] Version set in DOM element (retry):", retryEl.textContent);
           } else {
             console.error("[UI] app_version element still not found after retry");
           }

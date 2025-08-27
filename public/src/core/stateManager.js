@@ -167,6 +167,7 @@ export class StateManager {
       heat_inlet: "heatInlets",
       heat_outlet: "heatOutlets",
       particle_accelerator: "particleAccelerators",
+      valve: part_obj.valve_group ? part_obj.valve_group + "Valves" : "valves",
     };
     if (categoryToContainerMap[part_obj.category]) {
       containerKey = categoryToContainerMap[part_obj.category];
@@ -174,6 +175,11 @@ export class StateManager {
     const container = this.ui.DOMElements[containerKey];
     if (container) {
       container.appendChild(part_el);
+    } else {
+      // Only log error in development mode or when debugging is explicitly enabled
+      if (this.debugMode) {
+        console.warn(`Container ${containerKey} not found for part ${part_obj.id} (category: ${part_obj.category})`);
+      }
     }
   }
   handleUpgradeAdded(game, upgrade_obj) {
@@ -222,8 +228,8 @@ export class StateManager {
       const percent_wrapper = document.createElement("div");
       percent_wrapper.className = "percent_wrapper";
 
-      // Add heat bar if part has base_containment
-      if (tile.part && tile.part.base_containment > 0) {
+      // Add heat bar if part has base_containment or containment (but not for valves)
+      if (tile.part && (tile.part.base_containment > 0 || (tile.part.containment > 0 && tile.part.category !== "valve"))) {
         const heatBar = document.createElement("div");
         heatBar.className = "percent heat";
         percent_wrapper.appendChild(heatBar);
@@ -368,9 +374,9 @@ export class StateManager {
       return hasDollar ? ('$' + formatted) : formatted;
     });
 
-    // Debug logging
-    if (processedTitle !== title) {
-      console.log('Part icons added to objective title:', {
+    // Debug logging - only in development mode
+    if (processedTitle !== title && typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+      this.game.logger?.debug('Part icons added to objective title:', {
         original: title,
         processed: processedTitle
       });

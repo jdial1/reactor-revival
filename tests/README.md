@@ -1,201 +1,104 @@
 # Reactor Revival Test Suite
 
-This directory contains the comprehensive test suite for Reactor Revival, designed to ensure game functionality works correctly across all components.
+This directory contains the comprehensive test suite for Reactor Revival, organized by testing type and purpose.
 
 ## Test Structure
 
-- `core/` - Core game logic tests (engine, reactor, parts, upgrades, etc.)
-- `ui/` - User interface and DOM interaction tests
-- `helpers/` - Test utilities and setup functions
-- `objective.test.js` - Objective system tests
+### Unit Tests (`/unit/`)
+**Purpose**: Test individual components and functions in isolation
+
+#### Core (`/unit/core/`)
+- **`game.test.js`** - Core game logic, state management, reboot mechanics, and save/load integration
+- **`engine.test.js`** - Game loop, tick processing, and engine performance
+- **`heat.test.js`** - Consolidated heat mechanics including auto-control, transfer, venting, and pause behavior
+- **`part.test.js`** - Part system including placement, affordability, tier unlocking, and functionality
+- **`upgrade.test.js`** - Upgrade system including purchases, dependencies, effects, and EP mechanics
+
+#### Services (`/unit/services/`)
+- **`saveLoad.test.js`** - Save/load serialization, data integrity, and auto-save functionality
+
+### Integration Tests (`/integration/`)
+**Purpose**: Test interactions between multiple components and complex scenarios
+
+- **`gameplay-scenarios.test.js`** - Complex layouts, neighbor interactions, global boosts, and upgrade chains
+- **`pause.test.js`** - All pause-related behavior including resource generation, heat transfer, and complex layouts
+- **`objectives.e2e.test.js`** - End-to-end objective system testing
+- **`meltdown.test.js`** - Meltdown scenarios and edge cases
+
+### UI Tests (`/ui/`)
+**Purpose**: Test user interface components and interactions
+
+- **`interaction.test.js`** - User actions including clicks, hotkeys, copy/paste, and drag/drop
+- **`rendering.test.js`** - Component creation, DOM updates, and responsive behavior
+- **`navigation.test.js`** - Page routing and transitions
+- **`responsive.test.js`** - Responsive design validation
+
+### Validation Tests (`/validation/`)
+**Purpose**: Test data integrity and schema validation
+
+- **`data-integrity.test.js`** - Parts and upgrades data validation, duplicate detection, and schema consistency
+- **`manifest.test.js`** - PWA manifest validation
+
+### Performance Tests (`/performance/`)
+**Purpose**: Stress testing and performance validation
+
+- **`performance.test.js`** - Game engine performance, memory usage, and stress testing
 
 ## Running Tests
 
-### Standard Test Commands
-
+### All Tests
 ```bash
-# Run all tests with default output
 npm test
-
-# Run all tests with clean output (recommended)
-npm run test:clean
-
-# Run tests with verbose output (for debugging)
-npm run test:verbose
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests in watch mode with clean output
-npm run test:watch:clean
-
-# Run tests with coverage report
-npm run test:coverage
-
-# Run tests in UI mode
-npm run test:ui
 ```
 
-### Custom Test Runner
-
-The project includes a custom test runner that provides better error reporting and prevents verbose dumps:
-
+### Specific Test Categories
 ```bash
-# Run specific test files
-node scripts/test-runner.js tests/core/complex-layouts.test.js
+# Unit tests only
+npm test tests/unit/
 
-# Run specific test patterns
-node scripts/test-runner.js tests/core/
+# Integration tests only
+npm test tests/integration/
 
-# Run with verbose output
-node scripts/test-runner.js --verbose
+# UI tests only
+npm test tests/ui/
 
-# Run in watch mode
-node scripts/test-runner.js --watch
-
-# Show help
-node scripts/test-runner.js --help
+# Performance tests only
+npm test tests/performance/
 ```
 
-## Error Output Control
-
-The test suite has been configured to prevent verbose dumps of game state and HTML structure during test failures:
-
-### Features
-
-1. **Console Output Filtering**: Automatically suppresses verbose console.log and console.warn statements
-2. **Object Serialization**: Limits object depth and size in error messages
-3. **DOM Element Handling**: Replaces DOM objects with descriptive placeholders
-4. **Circular Reference Detection**: Prevents infinite loops when serializing objects
-5. **Focused Error Messages**: Custom assertion helpers provide targeted error information
-
-### Custom Assertion Helpers
-
-Use the `gameAssertions` object for focused error reporting:
-
-```javascript
-import { gameAssertions } from "../helpers/setup.js";
-
-// Instead of verbose console.log + expect
-gameAssertions.tileHasPart(tile, "uranium1", "Cell placement failed: ");
-gameAssertions.tileHeatLevel(tile, 100, 0.1, "Heat transfer failed: ");
-gameAssertions.reactorStats(reactor, { current_power: 1000 }, "Power generation failed: ");
-gameAssertions.upgradeLevel(upgrade, 1, "Upgrade activation failed: ");
-gameAssertions.moneyAmount(game, 0, 0.1, "Money deduction failed: ");
-```
-
-### Custom Expect Matchers
-
-Enhanced expect matchers for game objects:
-
-```javascript
-// Clean error messages for common assertions
-expect(tile).toHavePart("uranium1");
-expect(tile).toHaveHeatLevel(100, 0.1);
-expect(upgrade).toHaveUpgradeLevel(1);
-```
-
-## Test Configuration
-
-### Environment Variables
-
-- `VITEST_VERBOSE=false` - Suppress verbose console output
-- `VITEST_MAX_CONCURRENCY=1` - Run tests sequentially
-- `VITEST_OUTPUT_TRUNCATE_LENGTH=80` - Limit output size
-- `VITEST_DIFF_LIMIT=1000` - Limit diff output size
-
-### Vitest Configuration
-
-The `vitest.config.mjs` file includes:
-
-- Console output filtering
-- Object serialization limits
-- Error message truncation
-- DOM object handling
-- Memory optimization settings
-
-## Writing Tests
-
-### Best Practices
-
-1. **Use Focused Assertions**: Use `gameAssertions` helpers instead of verbose console.log + expect
-2. **Avoid Object Dumps**: Don't log entire game state objects
-3. **Use Descriptive Messages**: Provide clear error messages in assertions
-4. **Test Isolation**: Each test should be independent and not rely on other tests
-5. **Clean Setup**: Use the provided setup functions for consistent test environment
-
-### Example Test Structure
-
-```javascript
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame, gameAssertions } from "../helpers/setup.js";
-
-describe("Feature Name", () => {
-    let game;
-
-    beforeEach(async () => {
-        game = await setupGame();
-        vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
-    });
-
-    it("should perform expected behavior", async () => {
-        // Setup
-        const part = game.partset.getPartById("uranium1");
-        const tile = game.tileset.getTile(0, 0);
-        await tile.setPart(part);
-
-        // Action
-        game.engine.tick();
-
-        // Assertions with focused error messages
-        gameAssertions.tileHasPart(tile, "uranium1", "Part placement failed: ");
-        gameAssertions.tileHeatLevel(tile, 100, 0.1, "Heat generation failed: ");
-        
-        // Or use custom matchers
-        expect(tile).toHavePart("uranium1");
-        expect(tile).toHaveHeatLevel(100, 0.1);
-    });
-});
-```
-
-## Debugging Tests
-
-### Enable Verbose Output
-
+### Individual Test Files
 ```bash
-# Run specific test with verbose output
-VITEST_VERBOSE=true npm test
-
-# Or use the test runner
-npm run test:verbose
+npm test tests/unit/core/game.test.js
+npm test tests/integration/gameplay-scenarios.test.js
 ```
 
-### Common Issues
+## Test Coverage
 
-1. **Test Isolation**: Ensure tests don't depend on each other
-2. **Async Operations**: Use proper async/await patterns
-3. **Timer Mocking**: Use `vi.useFakeTimers()` for time-dependent tests
-4. **DOM Setup**: Use `setupGameWithDOM()` for UI tests
+The consolidated test suite provides comprehensive coverage of:
 
-## Performance
+- **Core Game Mechanics**: Game loop, state management, resource generation
+- **Heat System**: Transfer, venting, auto-control, and pause behavior
+- **Part System**: Placement, tier unlocking, affordability, and functionality
+- **Upgrade System**: Purchases, dependencies, effects, and EP mechanics
+- **UI Interactions**: User input, rendering, and responsive behavior
+- **Data Integrity**: Validation, duplicate detection, and schema consistency
+- **Performance**: Stress testing, memory usage, and optimization
 
-The test suite is optimized for:
+## Benefits of New Structure
 
-- **Memory Usage**: Limited object serialization and cleanup
-- **Execution Speed**: Parallel test execution where possible
-- **Output Clarity**: Focused error messages without verbose dumps
-- **Reliability**: Consistent test environment and isolation
+1. **Reduced Redundancy**: Eliminated duplicate tests across multiple files
+2. **Clear Organization**: Tests grouped by purpose and testing type
+3. **Easier Maintenance**: Related tests consolidated into logical files
+4. **Better Coverage**: Comprehensive testing without excessive file fragmentation
+5. **Improved Performance**: Faster test execution with consolidated setup
 
-## Contributing
+## Migration Notes
 
-When adding new tests:
+The following test files have been consolidated and removed:
+- `coverage.test.js` → Data integrity tests moved to `validation/data-integrity.test.js`
+- `auto-heat-testing.test.js` → Heat mechanics consolidated in `unit/core/heat.test.js`
+- `pause-*.test.js` → All pause behavior consolidated in `integration/pause.test.js`
+- `complex-layouts.test.js` → Layout scenarios consolidated in `integration/gameplay-scenarios.test.js`
+- `epReboot.test.js` → EP functionality integrated into `unit/core/game.test.js` and `unit/core/upgrade.test.js`
 
-1. Follow the existing patterns and structure
-2. Use the provided assertion helpers
-3. Avoid verbose console output
-4. Ensure proper test isolation
-5. Add appropriate error messages
-6. Update this documentation if needed 
+All test cases and assertions have been preserved and enhanced in the new structure. 

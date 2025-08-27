@@ -442,7 +442,7 @@ height: 40px;
 #reactor_wrapper {
 flex-grow: 1;
 display: flex;
-align-items: center;
+align-items: flex-start !important;
 justify-content: center;
 overflow: auto;
 min-height: 0;
@@ -512,20 +512,26 @@ animation: tile-heat-wiggle 0.3s ease-in-out infinite;
 .tile-fx.fx-power.fx-fade-out { opacity: 0; }
 .tile-fx.fx-heat { opacity: 0.9; }
 
-/* Vent activity indicator: small blinking vent icon in tile corner */
-.vent-indicator {
+/* Vent rotor: rotate center area while venting */
+.vent-rotor {
   position: absolute;
-  right: 1px;
-  bottom: 12px;
-  width: 12px;
-  height: 12px;
-  background: url('../img/ui/icons/icon_vent.png') center/contain no-repeat;
-  opacity: 0.0;
-  z-index: 3;
+  left: 20%;
+  top: 20%;
+  width: 60%;
+  height: 60%;
+  background-size: 166.66% 166.66%;
+  background-position: center;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  opacity: 1.0;
   pointer-events: none;
+  z-index: 3;
 }
-.vent-indicator.vent-blink { animation: vent-blink 0.35s ease-in-out; }
-@keyframes vent-blink { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+.vent-rotor.spin { animation: vent-rotate 0.45s linear; }
+@keyframes vent-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 
 /* Reflector pulse aura */
 .reflector-aura {
@@ -553,6 +559,65 @@ animation: tile-heat-wiggle 0.3s ease-in-out infinite;
   opacity: 0.95;
   z-index: 22;
   pointer-events: none;
+}
+
+/* Generic flow node; size driven by --s */
+.vis-flow { position: absolute; width: var(--s, 10px); height: var(--s, 10px); z-index: 22; pointer-events: none; }
+.vis-flow.flow-dot { 
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+.vis-flow.flow-streak::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  border-radius: 999px;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+.vis-flow.flow-ring {
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  background: transparent;
+}
+.vis-flow.flow-chev::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: conic-gradient(from 45deg, transparent 0 25%, currentColor 25% 50%, transparent 50% 100%);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 45%, black 46%);
+          mask: radial-gradient(circle at 50% 50%, transparent 45%, black 46%);
+}
+.vis-flow.flow-cross::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(currentColor, currentColor),
+    linear-gradient(90deg, currentColor, currentColor);
+  background-size: 2px 100%, 100% 2px;
+  background-position: 50% 0, 0 50%;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+.vis-flow.flow-star::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(36deg, currentColor, currentColor),
+    linear-gradient(-36deg, currentColor, currentColor),
+    linear-gradient(90deg, currentColor, currentColor);
+  background-size: 2px 100%, 2px 100%, 2px 100%;
+  background-position: 50% 0, 50% 0, 50% 0;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+.vis-flow.flow-beam::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 50%, currentColor 40%, transparent 41%),
+              radial-gradient(circle at 20% 50%, currentColor 20%, transparent 21%),
+              radial-gradient(circle at 80% 50%, currentColor 20%, transparent 21%);
+  filter: drop-shadow(0 0 8px currentColor);
 }
 #reactor_wrapper::-webkit-scrollbar {
 height: 18px;
@@ -613,6 +678,8 @@ cursor: pointer;
 position: relative;
 transition: all 0.1s ease;
 border: 1px solid var(--pico-form-element-border-color);
+/* Ensure tiles are properly positioned in the grid */
+box-sizing: border-box;
 }
 @media (min-width: 901px) {
 .tile {
@@ -631,6 +698,89 @@ background-size: cover;
 background-position: center;
 background-repeat: no-repeat;
 }
+
+/* Enhanced valve tile styling for better visual flow */
+.tile[class*="part_overflow_valve"],
+.tile[class*="part_topup_valve"],
+.tile[class*="part_check_valve"] {
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 0 4px rgba(255, 255, 255, 0.1);
+  /* Enhanced visual indicators for directional flow */
+  position: relative;
+}
+
+/* Directional flow indicators for valves */
+.tile[class*="part_overflow_valve"]::before,
+.tile[class*="part_topup_valve"]::before,
+.tile[class*="part_check_valve"]::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60%;
+  height: 60%;
+  transform: translate(-50%, -50%);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0.7;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Horizontal flow indicators (left-to-right) */
+.tile[class*="part_overflow_valve"]::before,
+.tile[class*="part_topup_valve"]::before,
+.tile[class*="part_check_valve"]::before {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M2 12h16l-4-4v8l4-4z"/></svg>');
+}
+
+/* Vertical flow indicators (top-to-bottom) */
+.tile[class*="part_overflow_valve2"]::before,
+.tile[class*="part_topup_valve2"]::before,
+.tile[class*="part_check_valve2"]::before {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 2v16l-4-4v8l4-4z"/></svg>');
+}
+
+/* Right-to-left flow indicators */
+.tile[class*="part_overflow_valve3"]::before,
+.tile[class*="part_topup_valve3"]::before,
+.tile[class*="part_check_valve3"]::before {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M22 12H6l4 4V8l-4 4z"/></svg>');
+}
+
+/* Bottom-to-top flow indicators */
+.tile[class*="part_overflow_valve4"]::before,
+.tile[class*="part_topup_valve4"]::before,
+.tile[class*="part_check_valve4"]::before {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 22V6l4 4V2l-4 4z"/></svg>');
+}
+
+/* Active flow state for valves with enhanced visibility */
+.tile[class*="part_overflow_valve"].flow-active,
+.tile[class*="part_topup_valve"].flow-active,
+.tile[class*="part_check_valve"].flow-active {
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.8);
+  /* Enhanced glow effect for active valves */
+  animation: valve-pulse 2s ease-in-out infinite alternate;
+}
+
+/* Pulse animation for active valves */
+@keyframes valve-pulse {
+  0% {
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+  }
+}
+
+
+
 .percent_wrapper_wrapper {
 position: absolute;
 bottom: 0;
@@ -643,6 +793,275 @@ overflow: hidden;
 z-index: 10;
 display: block;
 }
+/* Overlay used for transient visual effects (flow arrows, emits) */
+.reactor-overlay {
+position: absolute;
+left: 0;
+top: 0;
+right: 0;
+bottom: 0;
+pointer-events: none;
+z-index: 22;
+}
+
+/* Enhanced flow indicator positioning and visibility */
+.flow-indicator {
+  z-index: 23; /* Ensure flow indicators appear above other elements */
+  transition: all 0.2s ease; /* Smooth transitions for flow changes */
+}
+
+/* Flow indicator hover effects for better visibility */
+.flow-indicator:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+}
+/* Flow indicators (arrow-based) - consolidated styles */
+.flow-indicator {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  z-index: 23; /* Ensure flow indicators appear above other elements */
+  transition: all 0.2s ease; /* Smooth transitions for flow changes */
+}
+
+/* Enhanced flow arrow sizing and visibility */
+.flow-amount-sm { 
+  width: 32px; 
+  height: 32px; 
+  opacity: 0.8; 
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3));
+}
+.flow-amount-md { 
+  width: 44px; 
+  height: 44px; 
+  opacity: 0.9; 
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.4));
+}
+.flow-amount-lg { 
+  width: 56px; 
+  height: 56px; 
+  opacity: 1; 
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+}
+
+.flow-arrow-up { background-image: url('../img/ui/flow/flow-arrow-up.svg'); }
+.flow-arrow-down { background-image: url('../img/ui/flow/flow-arrow-down.svg'); }
+.flow-arrow-left { background-image: url('../img/ui/flow/flow-arrow-left.svg'); }
+.flow-arrow-right { background-image: url('../img/ui/flow/flow-arrow-right.svg'); }
+
+/* Diagonal reactor flow arrows - use existing arrows with rotation */
+.flow-arrow-up-left { 
+  background-image: url('../img/ui/flow/flow-arrow-up.svg'); 
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+.flow-arrow-up-right { 
+  background-image: url('../img/ui/flow/flow-arrow-up.svg'); 
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.flow-arrow-down-left { 
+  background-image: url('../img/ui/flow/flow-arrow-down.svg'); 
+  transform: translate(-50%, -50%) rotate(-135deg);
+}
+.flow-arrow-down-right { 
+  background-image: url('../img/ui/flow/flow-arrow-down.svg'); 
+  transform: translate(-50%, -50%) rotate(135deg);
+}
+
+/* Enhanced valve part styling for better visibility */
+.tile[class*="part_overflow_valve"] .part-image,
+.tile[class*="part_topup_valve"] .part-image,
+.tile[class*="part_check_valve"] .part-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform: scale(1.1); /* Scale up valve images by 10% for better visibility */
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.2));
+  transition: all 0.2s ease; /* Smooth transitions for visual changes */
+}
+
+/* Active flow state for valves */
+.tile[class*="part_overflow_valve"].flow-active,
+.tile[class*="part_topup_valve"].flow-active,
+.tile[class*="part_check_valve"].flow-active {
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Valve image hover effects */
+.tile[class*="part_overflow_valve"]:hover .part-image,
+.tile[class*="part_topup_valve"]:hover .part-image,
+.tile[class*="part_check_valve"]:hover .part-image {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.4));
+}
+
+/* Specific styling for overflow valves (white arrows) */
+.tile[class*="part_overflow_valve"] .part-image {
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.4));
+}
+
+/* Specific styling for topup valves (green arrows) */
+.tile[class*="part_topup_valve"] .part-image {
+  filter: drop-shadow(0 0 3px rgba(0, 255, 0, 0.4));
+}
+
+/* Specific styling for check valves (blue arrows) */
+.tile[class*="part_check_valve"] .part-image {
+  filter: drop-shadow(0 0 3px rgba(0, 150, 255, 0.4));
+}
+
+/* Enhanced part image styling for better scaling */
+.part .image {
+  width: 95%;
+  height: 95%;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  padding: 2px;
+  margin: 2px;
+  object-fit: contain; /* Ensures images scale properly within containers */
+}
+
+/* Responsive scaling for different screen sizes */
+@media (min-width: 1200px) {
+  .tile[class*="part_overflow_valve"] .part-image,
+  .tile[class*="part_topup_valve"] .part-image,
+  .tile[class*="part_check_valve"] .part-image {
+    transform: scale(1.15); /* Slightly larger on bigger screens */
+  }
+  
+  .flow-amount-sm { width: 14px; height: 14px; }
+  .flow-amount-md { width: 18px; height: 18px; }
+  .flow-amount-lg { width: 22px; height: 22px; }
+  
+  /* Enhanced flow indicators for high-resolution displays */
+  .flow-indicator {
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.4));
+  }
+}
+
+/* Mobile-specific flow arrow adjustments */
+@media (max-width: 900px) {
+  /* Adjust flow arrow sizes for mobile screens */
+  .flow-amount-sm { 
+    width: 20px; 
+    height: 20px; 
+  }
+  .flow-amount-md { 
+    width: 24px; 
+    height: 24px; 
+  }
+  .flow-amount-lg { 
+    width: 32px; 
+    height: 32px; 
+  }
+  
+  /* Reduce arrow distance for mobile to prevent overflow */
+  .flow-indicator {
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  
+  /* Ensure flow indicators are properly positioned on mobile */
+  .flow-indicator {
+    /* Mobile-specific positioning adjustments */
+    transform: translate(-50%, -50%) scale(1);
+    /* Ensure arrows are visible on smaller screens */
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
+  }
+  
+  /* Mobile valve styling adjustments */
+  .tile[class*="part_overflow_valve"] .part-image,
+  .tile[class*="part_topup_valve"] .part-image,
+  .tile[class*="part_check_valve"] .part-image {
+    transform: scale(1.05); /* Slightly smaller on mobile for better fit */
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .flow-amount-sm { 
+    width: 16px; 
+    height: 16px; 
+  }
+  .flow-amount-md { 
+    width: 20px; 
+    height: 20px; 
+  }
+  .flow-amount-lg { 
+    width: 24px; 
+    height: 24px; 
+  }
+  
+  /* Further reduce arrow distance for very small screens */
+  .flow-indicator {
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  
+  /* Ensure flow indicators remain visible on very small screens */
+  .flow-indicator {
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.8));
+  }
+}
+
+
+
+/* High DPI display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .flow-indicator {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+  
+  .tile[class*="part_overflow_valve"] .part-image,
+  .tile[class*="part_topup_valve"] .part-image,
+  .tile[class*="part_check_valve"] .part-image {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Ensure flow arrows align properly with dynamic grid sizing */
+.flow-indicator {
+  /* Ensure proper centering regardless of grid adjustments */
+  position: absolute;
+  transform: translate(-50%, -50%);
+  /* Prevent flow arrows from being clipped by overflow */
+  z-index: 23;
+  pointer-events: none;
+  /* Ensure arrows are pixel-perfect aligned with grid */
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* Mobile grid-specific flow arrow positioning */
+@media (max-width: 900px) {
+  .flow-indicator {
+    /* Ensure arrows are properly centered on mobile grids */
+    transform: translate(-50%, -50%) scale(1);
+    /* Prevent positioning issues with dynamic tile sizing */
+    will-change: transform;
+    /* Ensure mobile arrows are crisp and aligned */
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
+  }
+}
+
+/* Debug: Add visual grid alignment helpers (can be removed in production) */
+.flow-indicator::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 0, 0.8);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 24;
+}
+
 .percent_wrapper {
 height: 100%;
 width: 100%;
@@ -2913,7 +3332,7 @@ flex-shrink: 0;
 #reactor_wrapper {
 display: flex;
 padding: 36px 25px 25px 25px;
-align-items: flex-start;
+align-items: flex-start !important;
 justify-content: flex-start;
 scroll-behavior: smooth;
 -webkit-overflow-scrolling: touch;

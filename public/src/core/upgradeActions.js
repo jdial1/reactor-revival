@@ -16,7 +16,7 @@ function updateAllPartStats(game, partType) {
   // Then, update the instances on the grid
   game.tileset.tiles_list.forEach(tile => {
     if (tile.part && tile.part.category === partType) {
-      console.log(`[DEBUG] Updating part ${tile.part.id} (category: ${tile.part.category}) on tile (${tile.row}, ${tile.col})`);
+      game.logger?.debug(`Updating part ${tile.part.id} (category: ${tile.part.category}) on tile (${tile.row}, ${tile.col})`);
       tile.part.recalculate_stats();
     }
   });
@@ -99,7 +99,7 @@ const actions = {
     });
   },
   improved_heat_vents: (upgrade, game) => {
-    console.log(`[DEBUG] improved_heat_vents upgrade action called with level ${upgrade.level}`);
+    game.logger?.debug(`improved_heat_vents upgrade action called with level ${upgrade.level}`);
     updateAllPartStats(game, "vent");
   },
 

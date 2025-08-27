@@ -10,12 +10,12 @@ async function ensureDataLoaded() {
     try {
       objective_list_data = await dataService.loadObjectiveList();
       if (objective_list_data.length === 0) {
-        console.error("Failed to load objective list:", objective_list_data);
+        this.game.logger?.error("Failed to load objective list:", objective_list_data);
         return;
       }
       dataLoaded = true;
     } catch (error) {
-      console.warn("Failed to load objective list:", error);
+      this.game.logger?.warn("Failed to load objective list:", error);
       objective_list_data = [];
       dataLoaded = true;
     }
@@ -44,26 +44,26 @@ export class ObjectiveManager {
     const data = objective_list_data.default || objective_list_data;
 
     if (!Array.isArray(data)) {
-      console.error("objective_list_data is not an array:", data);
+      this.game.logger?.error("objective_list_data is not an array:", data);
       return;
     }
 
     // Store the data directly - no need for Objective class instances
     this.objectives_data = data;
-    console.log(`[DEBUG] ObjectiveManager initialized with ${this.objectives_data.length} objectives`);
-    console.log(`[DEBUG] First objective: ${this.objectives_data[0]?.title}`);
-    console.log(`[DEBUG] Last objective: ${this.objectives_data[this.objectives_data.length - 1]?.title}`);
+    this.game.logger?.debug(`ObjectiveManager initialized with ${this.objectives_data.length} objectives`);
+    this.game.logger?.debug(`First objective: ${this.objectives_data[0]?.title}`);
+    this.game.logger?.debug(`Last objective: ${this.objectives_data[this.objectives_data.length - 1]?.title}`);
   }
 
   start() {
-    console.log(`[DEBUG] ObjectiveManager.start() called with current_objective_index: ${this.current_objective_index}`);
+    this.game.logger?.debug(`ObjectiveManager.start() called with current_objective_index: ${this.current_objective_index}`);
 
     // Ensure data is loaded before setting objectives
     if (!this.objectives_data || this.objectives_data.length === 0) {
-      console.log(`[DEBUG] Objectives data not loaded yet, waiting for initialization...`);
+      this.game.logger?.debug(`Objectives data not loaded yet, waiting for initialization...`);
       // Wait for initialization to complete, then call start again
       this.initialize().then(() => {
-        console.log(`[DEBUG] Initialization completed, now calling start() again`);
+        this.game.logger?.debug(`Initialization completed, now calling start() again`);
         this.start();
       });
       return;
@@ -73,7 +73,7 @@ export class ObjectiveManager {
 
     // Wait for the objective to be loaded, then check for auto-completion
     setTimeout(() => {
-      console.log(`[DEBUG] ObjectiveManager.checkAndAutoComplete() called`);
+      this.game.logger?.debug(`ObjectiveManager.checkAndAutoComplete() called`);
       this.checkAndAutoComplete();
     }, 0);
   }
@@ -83,7 +83,7 @@ export class ObjectiveManager {
     if (typeof window !== 'undefined' && window.location &&
       (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') &&
       typeof process === 'undefined') { // Allow in Node.js/test environment
-      console.log('Development mode detected, skipping auto-completion');
+      this.game.logger?.debug('Development mode detected, skipping auto-completion');
       this.scheduleNextCheck();
       return;
     }
@@ -120,7 +120,7 @@ export class ObjectiveManager {
           this.game.ui.stateManager.handleObjectiveCompleted();
 
           // Give the reward immediately
-          console.log(`[DEBUG] Giving reward for objective ${this.current_objective_index}:`, {
+          this.game.logger?.debug(`Giving reward for objective ${this.current_objective_index}:`, {
             title: this.current_objective_def.title,
             reward: this.current_objective_def.reward,
             ep_reward: this.current_objective_def.ep_reward,
@@ -128,7 +128,7 @@ export class ObjectiveManager {
             hasEpReward: !!this.current_objective_def.ep_reward
           });
           if (this.current_objective_def.reward) {
-            console.log(`[DEBUG] Giving money reward: ${this.current_objective_def.reward}`);
+            this.game.logger?.debug(`Giving money reward: ${this.current_objective_def.reward}`);
             this.game.current_money += this.current_objective_def.reward;
             this.game.ui.stateManager.setVar(
               "current_money",
@@ -217,10 +217,10 @@ export class ObjectiveManager {
   }
 
   set_objective(objective_index, skip_wait = false) {
-    console.log(`[DEBUG] set_objective called with index: ${objective_index}, skip_wait: ${skip_wait}, current_objective_index: ${this.current_objective_index}`);
+    this.game.logger?.debug(`set_objective called with index: ${objective_index}, skip_wait: ${skip_wait}, current_objective_index: ${this.current_objective_index}`);
 
     if (!this.objectives_data || this.objectives_data.length === 0) {
-      console.warn(`[DEBUG] Cannot set objective ${objective_index}: objectives_data not loaded yet (length: ${this.objectives_data?.length || 0})`);
+      this.game.logger?.warn(`Cannot set objective ${objective_index}: objectives_data not loaded yet (length: ${this.objectives_data?.length || 0})`);
       return;
     }
 
@@ -230,20 +230,20 @@ export class ObjectiveManager {
     }
 
     if (objective_index < 0) {
-      console.warn(`[DEBUG] Objective index ${objective_index} is negative. Clamping to 0.`);
+      this.game.logger?.warn(`Objective index ${objective_index} is negative. Clamping to 0.`);
       objective_index = 0;
     }
 
     // The maximum valid index is length - 1, which includes the "All objectives completed!" objective
     const maxValidIndex = this.objectives_data.length - 1;
     if (objective_index > maxValidIndex) {
-      console.warn(`[DEBUG] Objective index ${objective_index} is beyond valid range (0-${maxValidIndex}). Clamping to ${maxValidIndex}.`);
+      this.game.logger?.warn(`Objective index ${objective_index} is beyond valid range (0-${maxValidIndex}). Clamping to ${maxValidIndex}.`);
       objective_index = maxValidIndex;
     }
 
     this.current_objective_index = objective_index;
     const nextObjective = this.objectives_data[this.current_objective_index];
-    console.log(`[DEBUG] Setting objective ${objective_index}: ${nextObjective?.title || 'undefined'}`);
+    this.game.logger?.debug(`Setting objective ${objective_index}: ${nextObjective?.title || 'undefined'}`);
 
     const updateLogic = () => {
       if (nextObjective) {
@@ -255,7 +255,7 @@ export class ObjectiveManager {
               ? this.current_objective_def.title()
               : this.current_objective_def.title,
         };
-        console.log(`[DEBUG] Loading objective: ${displayObjective.title}`);
+        this.game.logger?.debug(`Loading objective: ${displayObjective.title}`);
         this.game.ui.stateManager.handleObjectiveLoaded(displayObjective, this.current_objective_index);
         this.objective_unloading = false;
         this.scheduleNextCheck();
@@ -265,7 +265,7 @@ export class ObjectiveManager {
           reward: 0,
           checkId: "allObjectives",
         };
-        console.log(`[DEBUG] Loading "All objectives completed!" objective`);
+        this.game.logger?.debug(`Loading "All objectives completed!" objective`);
         this.game.ui.stateManager.handleObjectiveLoaded({
           ...this.current_objective_def,
         }, this.current_objective_index);

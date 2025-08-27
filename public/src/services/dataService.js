@@ -88,18 +88,24 @@ class DataService {
     }
 
     async loadObjectiveList() {
-        return this.loadData('./data/objective_list.json');
+        const data = await this.loadData('./data/objective_list.json');
+        // Handle ES module format where data might be in the 'default' property
+        return data?.default || data;
     }
 
     async loadPartList() {
-        return this.loadData('./data/part_list.json');
+        const data = await this.loadData('./data/part_list.json');
+        // Handle ES module format where data might be in the 'default' property
+        return data?.default || data;
     }
 
     async loadUpgradeList() {
         console.log("Loading upgrade list...");
         const data = await this.loadData('./data/upgrade_list.json');
-        console.log("Upgrade list loaded:", data?.length, "items");
-        return data;
+        // Handle ES module format where data might be in the 'default' property
+        const actualData = data?.default || data;
+        console.log("Upgrade list loaded:", actualData?.length, "items");
+        return actualData;
     }
 
     // Clear cache if needed

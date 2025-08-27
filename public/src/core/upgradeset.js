@@ -31,8 +31,7 @@ export class UpgradeSet {
     this.reset();
 
     const data = upgrade_templates.default || upgrade_templates;
-    console.log("Upgrade data loaded:", data?.length, "upgrades");
-    console.log("First upgrade:", data?.[0]);
+    this.game.logger?.debug("Upgrade data loaded:", data?.length, "upgrades");
 
     const fullUpgradeList = [...data, ...this._generateCellUpgrades()];
 
@@ -49,12 +48,12 @@ export class UpgradeSet {
   _generateCellUpgrades() {
     const generatedUpgrades = [];
     const allParts = this.game.partset.getAllParts();
-    console.log("All parts:", allParts.map(p => ({ id: p.id, level: p.level, hasCost: !!p.part.cell_tick_upgrade_cost })));
+    this.game.logger?.debug("All parts:", allParts.map(p => ({ id: p.id, level: p.level, hasCost: !!p.part.cell_tick_upgrade_cost })));
 
     const baseCellParts = allParts
       .filter((p) => p.part.cell_tick_upgrade_cost && p.level === 1);
 
-    console.log("Base cell parts for upgrades:", baseCellParts.map(p => p.id));
+    this.game.logger?.debug("Base cell parts for upgrades:", baseCellParts.map(p => p.id));
 
     const cellUpgradeTemplates = [
       { type: "cell_power", title: "Potent ", description: "s: +100% power.", actionId: "cell_power" },
@@ -77,11 +76,11 @@ export class UpgradeSet {
           part: part,
           icon: part.getImagePath(),
         };
-        console.log(`Generated upgrade: ${upgradeDef.id} with cost: ${upgradeDef.cost}`);
+        this.game.logger?.debug(`Generated upgrade: ${upgradeDef.id} with cost: ${upgradeDef.cost}`);
         generatedUpgrades.push(upgradeDef);
       }
     }
-    console.log("Total generated upgrades:", generatedUpgrades.length);
+    this.game.logger?.debug("Total generated upgrades:", generatedUpgrades.length);
     return generatedUpgrades;
   }
 

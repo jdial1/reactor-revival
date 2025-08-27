@@ -694,7 +694,7 @@ class SplashScreenManager {
                     window.game.engine = new (
                       await import("./engine.js")
                     ).Engine(window.game);
-                    window.game.startSession();
+                    await window.game.startSession();
                     window.game.engine.start();
                   }
                 } else {

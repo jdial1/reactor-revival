@@ -108,8 +108,8 @@ describe("PageRouter Grid Transition", () => {
         // Check that the grid was hidden
         expect(ui.DOMElements.reactor.style.visibility).toBe("hidden");
 
-        // Fast-forward time to trigger the visibility restoration
-        vi.advanceTimersByTime(250);
+        // Fast-forward time to trigger the visibility restoration (100ms for cached pages)
+        vi.advanceTimersByTime(100);
 
         // Check that the grid is visible again
         expect(ui.DOMElements.reactor.style.visibility).toBe("visible");

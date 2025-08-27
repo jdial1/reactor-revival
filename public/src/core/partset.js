@@ -58,9 +58,13 @@ export class PartSet {
   }
 
   async initialize() {
+    if (this.initialized) {
+      return this.partsArray;
+    }
+
     await ensureDataLoaded();
-    this.reset();
-    console.log("part_list_data type:", typeof part_list_data, "length:", part_list_data?.length, "isArray:", Array.isArray(part_list_data));
+
+    this.game.logger?.info("Loading part list data...");
 
     // Handle ES module format - the dataService returns the entire JSON object
     let data = part_list_data;
@@ -69,10 +73,15 @@ export class PartSet {
     }
 
     if (!Array.isArray(data)) {
-      console.error("part_list_data is not an array:", data);
-      console.error("part_list_data structure:", Object.keys(part_list_data || {}));
+      this.game.logger?.error("part_list_data is not an array:", data);
+      this.game.logger?.error("part_list_data structure:", Object.keys(part_list_data || {}));
       return;
     }
+
+    this.game.logger?.debug("Part list data loaded:", {
+      count: data?.length,
+      categories: [...new Set(data?.map(p => p.category) || [])]
+    });
 
     data.forEach((template) => {
       // Build type order per category (skip experimental entries)
@@ -84,10 +93,18 @@ export class PartSet {
           this.typeOrderIndex.set(`${template.category}:${template.type}`, arr.length - 1);
         }
       }
-      const levels = template.levels || 1;
-      for (let i = 0; i < levels; i++) {
-        const level = template.levels ? i + 1 : template.level;
-        const partDef = this.generatePartDefinition(template, level);
+      if (template.levels) {
+        // Multi-level parts (like cells, reflectors, etc.)
+        for (let i = 0; i < template.levels; i++) {
+          const level = i + 1;
+          const partDef = this.generatePartDefinition(template, level);
+          const partInstance = new Part(partDef, this.game);
+          this.parts.set(partInstance.id, partInstance);
+          this.partsArray.push(partInstance);
+        }
+      } else {
+        // Single-level parts (like valves, experimental parts)
+        const partDef = this.generatePartDefinition(template, template.level);
         const partInstance = new Part(partDef, this.game);
         this.parts.set(partInstance.id, partInstance);
         this.partsArray.push(partInstance);
@@ -102,8 +119,24 @@ export class PartSet {
   generatePartDefinition(template, level) {
     const partDef = { ...template, level };
 
-    partDef.id = `${template.type}${level}`;
-    partDef.base_cost = template.base_cost * Math.pow(template.cost_multi || 1, level - 1);
+    // For multi-level parts, always append the level number to the ID
+    if (template.levels) {
+      partDef.id = `${template.type}${level}`;
+    } else {
+      // For single-level parts, use the template ID if it exists, otherwise generate one
+      if (template.id) {
+        partDef.id = template.id;
+      } else {
+        partDef.id = `${template.type}${level}`;
+      }
+    }
+
+    // Only apply cost multipliers for multi-level parts
+    if (template.levels) {
+      partDef.base_cost = template.base_cost * Math.pow(template.cost_multi || 1, level - 1);
+    } else {
+      partDef.base_cost = template.base_cost;
+    }
 
     if (partDef.category === "cell") {
       this._applyCellProperties(partDef, template, level);
@@ -125,31 +158,49 @@ export class PartSet {
 
 
   _applyGenericPartProperties(partDef, template, level) {
-    partDef.title = template.experimental ? template.title : `${PART_TITLE_PREFIXES[level - 1] || ""}${template.title}`;
+    // If the template has an explicit title, preserve it; otherwise apply prefixes
+    if (template.title && !template.experimental) {
+      partDef.title = template.title;
+    } else {
+      partDef.title = template.experimental ? template.title : `${PART_TITLE_PREFIXES[level - 1] || ""}${template.title || template.type}`;
+    }
 
-    const applyMultiplier = (baseKey, multiplierKey) => {
-      if (template[baseKey] && template[multiplierKey]) {
-        partDef[baseKey] = template[baseKey] * Math.pow(template[multiplierKey], level - 1);
+    // Only apply multipliers for multi-level parts
+    if (template.levels) {
+      const applyMultiplier = (baseKey, multiplierKey) => {
+        if (template[baseKey] && template[multiplierKey]) {
+          partDef[baseKey] = template[baseKey] * Math.pow(template[multiplierKey], level - 1);
+        }
+      };
+
+      applyMultiplier("base_ticks", "ticks_multiplier");
+      applyMultiplier("base_containment", "containment_multi");
+      applyMultiplier("base_reactor_power", "reactor_power_multi");
+      applyMultiplier("base_reactor_heat", "reactor_heat_multiplier");
+      applyMultiplier("base_ep_heat", "ep_heat_multiplier");
+
+      // Correctly use the multipliers from the part definition
+      if (template.base_transfer && template.transfer_multiplier) {
+        partDef.base_transfer = template.base_transfer * Math.pow(template.transfer_multiplier, level - 1);
       }
-    };
 
-    applyMultiplier("base_ticks", "ticks_multiplier");
-    applyMultiplier("base_containment", "containment_multi");
-    applyMultiplier("base_reactor_power", "reactor_power_multi");
-    applyMultiplier("base_reactor_heat", "reactor_heat_multiplier");
-    applyMultiplier("base_ep_heat", "ep_heat_multiplier");
+      if (template.base_vent && template.vent_multiplier) {
+        partDef.base_vent = template.base_vent * Math.pow(template.vent_multiplier, level - 1);
+      }
 
-    // Correctly use the multipliers from the part definition
-    if (template.base_transfer && template.transfer_multiplier) {
-      partDef.base_transfer = template.base_transfer * Math.pow(template.transfer_multiplier, level - 1);
-    }
-
-    if (template.base_vent && template.vent_multiplier) {
-      partDef.base_vent = template.base_vent * Math.pow(template.vent_multiplier, level - 1);
-    }
-
-    if (template.base_power_increase && template.power_increase_add) {
-      partDef.base_power_increase = template.base_power_increase + (template.power_increase_add * (level - 1));
+      if (template.base_power_increase && template.power_increase_add) {
+        partDef.base_power_increase = template.base_power_increase + (template.power_increase_add * (level - 1));
+      }
+    } else {
+      // For single-level parts, copy values directly without multipliers
+      if (template.base_transfer) partDef.base_transfer = template.base_transfer;
+      if (template.base_vent) partDef.base_vent = template.base_vent;
+      if (template.base_power_increase) partDef.base_power_increase = template.base_power_increase;
+      if (template.base_ticks) partDef.base_ticks = template.base_ticks;
+      if (template.base_containment) partDef.base_containment = template.base_containment;
+      if (template.base_reactor_power) partDef.base_reactor_power = template.base_reactor_power;
+      if (template.base_reactor_heat) partDef.base_reactor_heat = template.base_reactor_heat;
+      if (template.base_ep_heat) partDef.base_ep_heat = template.base_ep_heat;
     }
   }
 

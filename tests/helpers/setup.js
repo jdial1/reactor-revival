@@ -119,6 +119,84 @@ const getFullTestName = (task) => {
 const createLogger = (type) => (...args) => {
   const logs = currentTestName ? testLogs.get(currentTestName) : null;
 
+  // Filter out large objects and save data to prevent verbose logging
+  const shouldLog = args.every((arg) => {
+    if (typeof arg === "string") {
+      // Don't log save data or large JSON strings
+      if (arg.includes('"version"') && arg.includes('"current_money"') && arg.includes('"rows"')) {
+        return false; // This looks like save data
+      }
+      // Don't log very long strings
+      if (arg.length > 200) {
+        return false;
+      }
+    }
+    if (typeof arg === "object" && arg !== null) {
+      // Don't log very large objects
+      try {
+        const size = JSON.stringify(arg).length;
+        if (size > 500) {
+          return false;
+        }
+
+        // Don't log Tile objects or other game objects that are verbose
+        if (arg.constructor && (
+          arg.constructor.name === 'Tile' ||
+          arg.constructor.name === 'Game' ||
+          arg.constructor.name === 'Reactor' ||
+          arg.constructor.name === 'Engine' ||
+          arg.constructor.name === 'Tileset' ||
+          arg.constructor.name === 'PartSet' ||
+          arg.constructor.name === 'UpgradeSet'
+        )) {
+          return false;
+        }
+      } catch (e) {
+        // If we can't serialize, don't log it
+        return false;
+      }
+    }
+    return true;
+  });
+
+  if (!shouldLog) {
+    // Replace with a summary message
+    const summaryArgs = args.map((arg) => {
+      if (typeof arg === "string" && arg.length > 200) {
+        return `[Long string: ${arg.length} characters]`;
+      }
+      if (typeof arg === "object" && arg !== null) {
+        try {
+          const size = JSON.stringify(arg).length;
+          if (size > 500) {
+            return `[Large object: ${size} characters]`;
+          }
+
+          // Handle game objects specifically
+          if (arg.constructor && (
+            arg.constructor.name === 'Tile' ||
+            arg.constructor.name === 'Game' ||
+            arg.constructor.name === 'Reactor' ||
+            arg.constructor.name === 'Engine' ||
+            arg.constructor.name === 'Tileset' ||
+            arg.constructor.name === 'PartSet' ||
+            arg.constructor.name === 'UpgradeSet'
+          )) {
+            return `[${arg.constructor.name} object]`;
+          }
+        } catch (e) {
+          return '[Complex object]';
+        }
+      }
+      return arg;
+    });
+
+    if (logs) {
+      logs.push({ type, args: summaryArgs });
+    }
+    return;
+  }
+
   const sanitizedArgs = args.map((arg) => {
     if (typeof arg === "object" && arg !== null) {
       return safeSerialize(arg, 2);
@@ -192,7 +270,7 @@ const hasCircularReference = (obj) => {
 };
 
 // Helper to safely serialize objects for console output
-const safeSerialize = (obj, maxDepth = 2, currentDepth = 0) => {
+const safeSerialize = (obj, maxDepth = 1, currentDepth = 0) => {
   if (obj === null || obj === undefined) {
     return String(obj);
   }
@@ -217,22 +295,22 @@ const safeSerialize = (obj, maxDepth = 2, currentDepth = 0) => {
   // Handle arrays
   if (Array.isArray(obj)) {
     if (obj.length === 0) return '[]';
-    if (obj.length > 10) return `[Array(${obj.length})]`;
-    return `[${obj.slice(0, 10).map(item => safeSerialize(item, maxDepth, currentDepth + 1)).join(', ')}${obj.length > 10 ? '...' : ''}]`;
+    if (obj.length > 5) return `[Array(${obj.length})]`;
+    return `[${obj.slice(0, 5).map(item => safeSerialize(item, maxDepth, currentDepth + 1)).join(', ')}${obj.length > 5 ? '...' : ''}]`;
   }
 
-  // Handle objects
+  // Handle objects - be more aggressive about truncating
   try {
     const keys = Object.keys(obj);
     if (keys.length === 0) return '{}';
-    if (keys.length > 10) return `{Object(${keys.length} keys)}`;
+    if (keys.length > 5) return `{Object(${keys.length} keys)}`;
 
-    const serialized = keys.slice(0, 10).map(key => {
+    const serialized = keys.slice(0, 5).map(key => {
       const value = safeSerialize(obj[key], maxDepth, currentDepth + 1);
       return `${key}: ${value}`;
     }).join(', ');
 
-    return `{${serialized}${keys.length > 10 ? '...' : ''}}`;
+    return `{${serialized}${keys.length > 5 ? '...' : ''}}`;
   } catch (e) {
     return '[Complex Object]';
   }
@@ -309,6 +387,9 @@ export async function setupGame() {
   const game = new Game(ui);
   await ui.init(game);
   game.engine = new Engine(game);
+
+  // Mock isPartUnlocked to always return true for tests
+  game.isPartUnlocked = vi.fn().mockReturnValue(true);
 
   // Only create a new objective manager if one doesn't exist
   if (!game.objectives_manager) {
@@ -654,6 +735,7 @@ export async function setupGameWithDOM() {
 
   game.partset.check_affordability(game);
   game.upgradeset.check_affordability(game);
+  game.reactor.updateStats();
 
   globalGameWithDOM = game;
   return { game, document, window };

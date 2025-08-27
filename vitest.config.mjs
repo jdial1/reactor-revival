@@ -42,12 +42,9 @@ export default defineConfig({
     },
     // Enhanced error output control
     onConsoleLog(log, type) {
-      // Allow debug output to pass through, but suppress regular test output
-      // We will handle console output manually in setup.js to buffer it.
-      if (log.includes('[DEBUG]')) {
-        return true; // Allow debug output
-      }
-      return false; // Suppress regular test output
+      // Suppress all console output during tests to prevent verbose logging
+      // Console output will be captured and only shown on test failures
+      return false;
     },
     // Limit diff output size
     diffLimit: 1000,

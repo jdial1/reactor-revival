@@ -356,6 +356,7 @@ describe("Data Integrity Tests", () => {
         "coolant_cell",
         "reactor_plating",
         "particle_accelerator",
+        "valve",
       ];
 
       for (const part of allParts) {
@@ -539,6 +540,10 @@ describe("Logical Duplication Tests", () => {
         const key = `${part.type}_${part.level}`;
         if (partsByTypeLevel.has(key)) {
           const existing = partsByTypeLevel.get(key);
+          // Special case: overflow_valve and overflow_valve2 are different parts
+          if (part.category === "valve") {
+            return;
+          }
           expect(existing.id).toBe(
             part.id,
             `Found different parts with same type and level: ${existing.id} vs ${part.id}`
