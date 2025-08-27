@@ -42,9 +42,8 @@ export default defineConfig({
     },
     // Enhanced error output control
     onConsoleLog(log, type) {
-      // Suppress all console output during tests to prevent verbose logging
-      // Console output will be captured and only shown on test failures
-      return false;
+      // Temporarily enable console output for debugging
+      return true;
     },
     // Limit diff output size
     diffLimit: 1000,

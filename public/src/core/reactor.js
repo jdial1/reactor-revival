@@ -61,6 +61,11 @@ export class Reactor {
           this.stats_heat_generation += tile.heat || 0;
         }
 
+        // Add to total part heat for all activated parts
+        if (tile.heat_contained > 0) {
+          this.stats_total_part_heat += tile.heat_contained;
+        }
+
         if (tile.part.reactor_power) {
           current_max_power += tile.part.reactor_power;
         }
@@ -113,6 +118,7 @@ export class Reactor {
     this.max_heat = Number(current_max_heat);
     this.stats_power = Number(this.stats_power || 0);
     this.stats_heat_generation = Number(this.stats_heat_generation || 0);
+    this.stats_total_part_heat = Number(this.stats_total_part_heat || 0);
     this.stats_cash = this.max_power * this.auto_sell_multiplier;
 
     // Ensure stats_power is valid
@@ -132,6 +138,7 @@ export class Reactor {
       this.game.ui.stateManager.setVar("stats_cash", this.stats_cash);
       this.game.ui.stateManager.setVar("current_power", this.current_power);
       this.game.ui.stateManager.setVar("current_heat", this.current_heat);
+      this.game.ui.stateManager.setVar("stats_total_part_heat", this.stats_total_part_heat);
     }
 
     // Note: Heat background tint is updated by the engine tick for immediate feedback
@@ -144,6 +151,7 @@ export class Reactor {
     this.stats_vent = 0;
     this.stats_inlet = 0;
     this.stats_outlet = 0;
+    this.stats_total_part_heat = 0;
   }
 
   _resetTileStats(tile) {

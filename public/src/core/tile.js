@@ -18,6 +18,7 @@ export class Tile {
     this.display_chance_percent_of_total = 0;
     this.heat_contained = 0;
     this.ticks = 0;
+    this.exploded = false; // Initialize the exploded property
     this.$el = null;
     this.$percent = null;
     this.$heatBar = null;       // Direct reference to the heat bar element
@@ -97,7 +98,14 @@ export class Tile {
     return ventValue;
   }
   getEffectiveTransferValue() {
-    if (this.part && this.part.transfer) {
+    if (!this.part) return 0;
+
+    // Handle different part categories
+    if (this.part.category === 'vent' && this.part.vent) {
+      // Vents use the vent property
+      return this.part.vent;
+    } else if (this.part.transfer) {
+      // Other parts use the transfer property
       const transferMultiplier =
         this.game?.reactor.transfer_multiplier_eff || 0;
       return this.part.transfer * (1 + transferMultiplier / 100);
@@ -121,7 +129,7 @@ export class Tile {
     if (partInstance === null || partInstance === undefined) {
       throw new Error("Invalid part: part cannot be null or undefined");
     }
-    
+
     // Prevent overwriting existing parts
     if (this.part) {
       return false; // Return false to indicate the part was not placed
@@ -132,9 +140,18 @@ export class Tile {
       this.activated = true;
       this.ticks = this.part.ticks;
       this.heat_contained = 0;
+      this.exploded = false; // Reset explosion state when setting a new part
       if (this.$el) {
         this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
         this.$el.style.backgroundImage = `url('${this.part.getImagePath()}')`;
+
+        // For valves, preserve orientation data
+        if (this.part.category === "valve" && this.part.getOrientation) {
+          const orientation = this.part.getOrientation();
+          this.$el.classList.add(`orientation-${orientation}`);
+          this.$el.dataset.orientation = orientation;
+        }
+
         this.updateVisualState();
 
         // Remove old percent bars and set up new ones

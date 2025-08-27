@@ -47,7 +47,7 @@ export class Game {
     this.time_flux = true;
     this.sold_power = false;
     this.sold_heat = false;
-    this.objectives_manager = new ObjectiveManager(this); // MOVED HERE
+    this.objectives_manager = new ObjectiveManager(this);
     this.tooltip_manager = null;
     this.placedCounts = {}; // cumulative placements per `${type}:${level}`
     this._suppressPlacementCounting = false;
@@ -269,7 +269,6 @@ export class Game {
     this.ui.stateManager.setVar("current_exotic_particles", 0);
     this.ui.stateManager.setVar("total_exotic_particles", 0);
     this.ui.stateManager.setVar("exotic_particles", 0);
-    // Don't set objective here - wait for initialize() to complete
   }
 
   async startSession() {

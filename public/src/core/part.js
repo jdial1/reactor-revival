@@ -240,7 +240,6 @@ export class Part {
       Math.pow(2, quantumBuffering);
 
     this.power = this.base_power * powerMultiplier;
-    // Ensure power is a valid number
     if (!isFinite(this.power) || isNaN(this.power)) {
       this.power = this.base_power || 0;
     }
@@ -265,8 +264,6 @@ export class Part {
       ventContainmentMultiplier *
       coolantContainmentMultiplier;
 
-    // Valves should never store heat - they only transfer when both input and output are available
-    // No containment needed since they don't store heat
     this.vent = this.base_vent * ventMultiplier;
     this.reactor_power = this.base_reactor_power * capacitorPowerMultiplier;
     this.transfer = this.base_transfer * transferMultiplier;
@@ -297,7 +294,6 @@ export class Part {
         game.reactor.heat_power_multiplier *
         (Math.log(game.reactor.current_heat) / Math.log(1000) / 100);
       this.power *= heatMultiplier;
-      // Ensure power is still valid after heat multiplier
       if (!isFinite(this.power) || isNaN(this.power)) {
         this.power = this.base_power || 0;
       }
@@ -430,7 +426,6 @@ export class Part {
   createElement() {
     this.$el = window.templateLoader.cloneTemplateElement("part-btn-template");
     if (!this.$el) {
-      // Fallback to original method if template not available
       this.$el = document.createElement("button");
       this.$el.className = "part";
       if (this.className) this.$el.classList.add(this.className);
@@ -444,7 +439,6 @@ export class Part {
       imageDiv.style.backgroundImage = `url('${this.getImagePath()}')`;
       this.$el.appendChild(imageDiv);
 
-      // Add price display
       const priceDiv = document.createElement("div");
       priceDiv.className = "part-price";
       priceDiv.textContent = this.erequires
@@ -456,9 +450,7 @@ export class Part {
       this.$el.disabled = !this.affordable;
 
       this.$el.addEventListener("click", (e) => {
-        // Check if help mode is active
         if (this.game?.ui?.help_mode_active) {
-          // In help mode, show tooltip instead of selecting part
           if (this.game && this.game.tooltip_manager) {
             this.game.tooltip_manager.show(this, null, true, this.$el);
           }
@@ -466,27 +458,21 @@ export class Part {
         }
 
         if (this.affordable) {
-          // Remove active class from all parts
           document
             .querySelectorAll(".part.part_active")
             .forEach((el) => el.classList.remove("part_active"));
 
-          // Set the clicked part in state manager (this will update the toggle icon)
           this.game.ui.stateManager.setClickedPart(this);
 
-          // Add active class to this part
           this.$el.classList.add("part_active");
         } else {
-          // Show tooltip for unaffordable parts when clicked
           if (this.game && this.game.tooltip_manager) {
             this.game.tooltip_manager.show(this, null, true, this.$el);
           }
         }
       });
 
-      // Add hover tooltips for parts
       this.$el.addEventListener("mouseenter", (e) => {
-        // Only show hover tooltips when help mode is active
         if (
           this.game?.ui?.help_mode_active &&
           this.game &&
@@ -497,7 +483,6 @@ export class Part {
       });
 
       this.$el.addEventListener("mouseleave", (e) => {
-        // Only hide tooltips if help mode is active (since we only show them in help mode)
         if (
           this.game?.ui?.help_mode_active &&
           this.game &&
@@ -510,20 +495,17 @@ export class Part {
       return this.$el;
     }
 
-    // Set part data
     if (this.className) this.$el.classList.add(this.className);
     this.$el.classList.add(`part_${this.id}`);
     this.$el.classList.add(`category_${this.category}`);
     this.$el.id = `part_btn_${this.id}`;
     this.$el.title = this.title;
 
-    // Set image
     const imageDiv = this.$el.querySelector(".image");
     if (imageDiv) {
       imageDiv.style.backgroundImage = `url('${this.getImagePath()}')`;
     }
 
-    // Set price
     const priceDiv = this.$el.querySelector(".part-price");
     if (priceDiv) {
       priceDiv.textContent = this.erequires
@@ -534,7 +516,6 @@ export class Part {
     this.$el.classList.toggle("unaffordable", !this.affordable);
     this.$el.disabled = !this.affordable;
 
-    // Ensure a tier-progress element exists for potential locking UI
     let tp = this.$el.querySelector('.tier-progress');
     if (!tp) {
       tp = document.createElement('div');
@@ -543,11 +524,8 @@ export class Part {
     }
     tp.style.display = 'none';
 
-    // Add event listeners
     this.$el.addEventListener("click", (e) => {
-      // Check if help mode is active
       if (this.game?.ui?.help_mode_active) {
-        // In help mode, show tooltip instead of selecting part
         if (this.game && this.game.tooltip_manager) {
           this.game.tooltip_manager.show(this, null, true, this.$el);
         }

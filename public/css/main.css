@@ -826,22 +826,22 @@ z-index: 22;
   transition: all 0.2s ease; /* Smooth transitions for flow changes */
 }
 
-/* Enhanced flow arrow sizing and visibility */
+/* Base flow amount sizes for desktop */
 .flow-amount-sm { 
-  width: 32px; 
-  height: 32px; 
+  width: 20px; 
+  height: 20px; 
   opacity: 0.8; 
   filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3));
 }
 .flow-amount-md { 
-  width: 44px; 
-  height: 44px; 
+  width: 28px; 
+  height: 28px; 
   opacity: 0.9; 
   filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.4));
 }
 .flow-amount-lg { 
-  width: 56px; 
-  height: 56px; 
+  width: 36px; 
+  height: 36px; 
   opacity: 1; 
   filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
 }
@@ -931,42 +931,60 @@ z-index: 22;
   .tile[class*="part_check_valve"] .part-image {
     transform: scale(1.15); /* Slightly larger on bigger screens */
   }
-  
-  .flow-amount-sm { width: 14px; height: 14px; }
-  .flow-amount-md { width: 18px; height: 18px; }
-  .flow-amount-lg { width: 22px; height: 22px; }
-  
-  /* Enhanced flow indicators for high-resolution displays */
-  .flow-indicator {
-    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.4));
+}
+
+/* Responsive flow amount sizing for different screen sizes */
+@media (max-width: 1024px) and (min-width: 901px) {
+  .flow-amount-sm {
+    width: 28px;
+    height: 28px;
+  }
+  .flow-amount-md {
+    width: 36px;
+    height: 36px;
+  }
+  .flow-amount-lg {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 900px) {
+  .flow-amount-sm {
+    width: 24px;
+    height: 24px;
+  }
+  .flow-amount-md {
+    width: 32px;
+    height: 32px;
+  }
+  .flow-amount-lg {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .flow-amount-sm {
+    width: 20px;
+    height: 20px;
+  }
+  .flow-amount-md {
+    width: 28px;
+    height: 28px;
+  }
+  .flow-amount-lg {
+    width: 36px;
+    height: 36px;
   }
 }
 
 /* Mobile-specific flow arrow adjustments */
 @media (max-width: 900px) {
-  /* Adjust flow arrow sizes for mobile screens */
-  .flow-amount-sm { 
-    width: 20px; 
-    height: 20px; 
-  }
-  .flow-amount-md { 
-    width: 24px; 
-    height: 24px; 
-  }
-  .flow-amount-lg { 
-    width: 32px; 
-    height: 32px; 
-  }
-  
-  /* Reduce arrow distance for mobile to prevent overflow */
-  .flow-indicator {
-    transform: translate(-50%, -50%) scale(0.8);
-  }
-  
   /* Ensure flow indicators are properly positioned on mobile */
   .flow-indicator {
     /* Mobile-specific positioning adjustments */
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%) scale(0.9);
     /* Ensure arrows are visible on smaller screens */
     filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
   }
@@ -981,19 +999,6 @@ z-index: 22;
 
 /* Extra small mobile devices */
 @media (max-width: 480px) {
-  .flow-amount-sm { 
-    width: 16px; 
-    height: 16px; 
-  }
-  .flow-amount-md { 
-    width: 20px; 
-    height: 20px; 
-  }
-  .flow-amount-lg { 
-    width: 24px; 
-    height: 24px; 
-  }
-  
   /* Further reduce arrow distance for very small screens */
   .flow-indicator {
     transform: translate(-50%, -50%) scale(0.6);
@@ -1060,6 +1065,29 @@ z-index: 22;
   /* Ensure diagonal arrows are properly sized */
   width: 24px;
   height: 24px;
+}
+
+/* Tablet-specific flow arrow positioning */
+@media (max-width: 1024px) and (min-width: 901px) {
+  .flow-indicator {
+    /* Ensure arrows are properly sized for tablet screens */
+    transform: translate(-50%, -50%) scale(0.9);
+    /* Prevent positioning issues with dynamic tile sizing */
+    will-change: transform;
+    /* Ensure tablet arrows are crisp and aligned */
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
+    /* Ensure arrows stay within tile boundaries on tablets */
+    max-width: 40px;
+    max-height: 40px;
+    overflow: hidden;
+  }
+  
+  /* Ensure reactor flow arrows (no neighbors) stay within tile bounds on tablets */
+  .flow-indicator[class*="flow-arrow-"] {
+    /* Limit arrow size to prevent overflow on tablets */
+    max-width: 28px;
+    max-height: 28px;
+  }
 }
 
 /* Mobile grid-specific flow arrow positioning */
@@ -3250,6 +3278,22 @@ color: #43a047;
 transform: scale(1);
 }
 }
+
+/* Performance display styling */
+#tps_display,
+#fps_display {
+font-weight: bold;
+font-size: 1.1em;
+transition: color 0.3s ease;
+}
+
+#tps_display {
+color: #4CAF50;
+}
+
+#fps_display {
+color: #4CAF50;
+}
 .nav-bar-row li {
 display: flex;
 align-items: center;
@@ -5388,4 +5432,463 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 #info_bar .info-row.info-main .info-item.heat.full::after {
   animation: full-heat-flash 0.9s ease-in-out infinite;
 }
+
+/*
+ * Heat Flow Arrow Stylesheet
+ *
+ * This stylesheet defines a set of CSS classes to visually represent
+ * the amount of heat being transferred in flow-arrows. The styles are
+ * categorized into tiers based on the digit length of the heat value (from 1 to 25).
+ *
+ * Tiers:
+ * - Tier 1 (heat-1 to heat-3): Minimal Heat (Cool colors, stable)
+ * - Tier 2 (heat-4 to heat-7): Low Heat (Warm colors, gentle flow)
+ * - Tier 3 (heat-8 to heat-12): Medium Heat (Hot colors, active flow)
+ * - Tier 4 (heat-13 to heat-18): High Heat (Intense reds, rapid flow)
+ * - Tier 5 (heat-19 to heat-25): Extreme Heat (White-hot, volatile)
+ *
+ * Usage:
+ * Apply the base class `heat-arrow` and a tier-specific class (e.g., `heat-5`)
+ * to an HTML element to style it.
+ */
+
+/* --- Base Arrow Style --- */
+.heat-arrow {
+    position: relative;
+    /* Don't override existing dimensions - let the flow-arrow classes handle sizing */
+    box-sizing: border-box;
+    overflow: visible; /* Allow heat effects to extend beyond arrow bounds */
+}
+
+/* CSS-based arrow shapes for heat arrows */
+.heat-arrow::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: currentColor;
+    clip-path: polygon(0 40%, 100% 40%, 100% 60%, 0 60%);
+}
+
+/* Direction-specific arrow shapes */
+.flow-arrow-up.heat-arrow::before {
+    clip-path: polygon(40% 0, 60% 0, 50% 100%);
+}
+
+.flow-arrow-down.heat-arrow::before {
+    clip-path: polygon(40% 0, 60% 0, 50% 100%);
+    transform: rotate(180deg);
+}
+
+.flow-arrow-left.heat-arrow::before {
+    clip-path: polygon(0 40%, 0 60%, 100% 50%);
+}
+
+.flow-arrow-right.heat-arrow::before {
+    clip-path: polygon(0 50%, 100% 40%, 100% 60%);
+}
+
+.flow-arrow-top-left.heat-arrow::before {
+    clip-path: polygon(0 40%, 60% 0, 40% 0, 0 60%);
+}
+
+.flow-arrow-top-right.heat-arrow::before {
+    clip-path: polygon(40% 0, 100% 40%, 100% 60%, 60% 0);
+}
+
+.flow-arrow-down-left.heat-arrow::before {
+    clip-path: polygon(0 40%, 40% 100%, 60% 100%, 0 60%);
+}
+
+.flow-arrow-down-right.heat-arrow::before {
+    clip-path: polygon(40% 100%, 100% 40%, 100% 60%, 60% 100%);
+}
+
+/* Override existing flow arrow styles when heat classes are applied */
+.flow-indicator.heat-arrow.heat-1,
+.flow-indicator.heat-arrow.heat-2,
+.flow-indicator.heat-arrow.heat-3,
+.flow-indicator.heat-arrow.heat-4,
+.flow-indicator.heat-arrow.heat-5,
+.flow-indicator.heat-arrow.heat-6,
+.flow-indicator.heat-arrow.heat-7,
+.flow-indicator.heat-arrow.heat-8,
+.flow-indicator.heat-arrow.heat-9,
+.flow-indicator.heat-arrow.heat-10,
+.flow-indicator.heat-arrow.heat-11,
+.flow-indicator.heat-arrow.heat-12,
+.flow-indicator.heat-arrow.heat-13,
+.flow-indicator.heat-arrow.heat-14,
+.flow-indicator.heat-arrow.heat-15,
+.flow-indicator.heat-arrow.heat-16,
+.flow-indicator.heat-arrow.heat-17,
+.flow-indicator.heat-arrow.heat-18,
+.flow-indicator.heat-arrow.heat-19,
+.flow-indicator.heat-arrow.heat-20,
+.flow-indicator.heat-arrow.heat-21,
+.flow-indicator.heat-arrow.heat-22,
+.flow-indicator.heat-arrow.heat-23,
+.flow-indicator.heat-arrow.heat-24,
+.flow-indicator.heat-arrow.heat-25 {
+    /* Override the background image with heat-specific styling */
+    background-image: none !important;
+    background-color: transparent !important;
+    /* Force the heat styling to take precedence */
+}
+
+/* --- Keyframe Animations --- */
+
+/* A simple, slow-moving stripe for low heat */
+@keyframes flow-low {
+    0% { background-position: 0 0; }
+    100% { background-position: -40px 0; }
+}
+
+/* A faster, more energetic stripe for medium heat */
+@keyframes flow-medium {
+    0% { background-position: 0 0; }
+    100% { background-position: -60px 0; }
+}
+
+/* A rapid, shimmering effect for high heat */
+@keyframes flow-high {
+    0% { background-position: 0 0; }
+    100% { background-position: -100px 0; }
+}
+
+/* A volatile, "white-hot" pulsing animation for extreme heat */
+@keyframes flow-extreme {
+    0%, 100% { background-color: #fff; box-shadow: 0 0 15px 5px #ff5f5f; }
+    50% { background-color: #ffcccc; box-shadow: 0 0 25px 10px #ff3c3c; }
+}
+
+/* --- Tier 1: Minimal Heat (1-3 digits) --- */
+.heat-1, .heat-2, .heat-3 {
+    /* Add subtle heat indication without overwhelming the arrow */
+}
+
+.heat-1 {
+    color: #ffb74d; /* Light orange */
+}
+.heat-2 {
+    color: #ff8a65; /* Orange */
+}
+.heat-3 {
+    color: #ff7043; /* Deep orange */
+}
+
+.heat-1::after { 
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 183, 77, 0.3), transparent);
+    pointer-events: none;
+}
+.heat-2::after { 
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 138, 101, 0.4), transparent);
+    pointer-events: none;
+}
+.heat-3::after { 
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 112, 67, 0.5), transparent);
+    pointer-events: none;
+}
+
+
+/* --- Tier 2: Low Heat (4-7 digits) --- */
+.heat-4, .heat-5, .heat-6, .heat-7 {
+    /* Add flowing heat indication */
+}
+
+.heat-4 {
+    color: #ff5722; /* Red-orange */
+}
+.heat-5 {
+    color: #f44336; /* Red */
+}
+.heat-6 {
+    color: #e53935; /* Dark red */
+}
+.heat-7 {
+    color: #d32f2f; /* Deeper red */
+}
+
+.heat-4::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(255, 87, 34, 0.4), rgba(255, 87, 34, 0.4) 10px, rgba(255, 138, 101, 0.4) 10px, rgba(255, 138, 101, 0.4) 20px);
+    animation: flow-low 2s linear infinite;
+    pointer-events: none;
+}
+.heat-5::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(244, 67, 54, 0.4), rgba(244, 67, 54, 0.4) 10px, rgba(255, 87, 34, 0.4) 10px, rgba(255, 87, 34, 0.4) 20px);
+    animation: flow-low 2s linear infinite;
+    pointer-events: none;
+}
+.heat-6::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(229, 57, 53, 0.4), rgba(229, 57, 53, 0.4) 10px, rgba(244, 67, 54, 0.4) 10px, rgba(244, 67, 54, 0.4) 20px);
+    animation: flow-low 2s linear infinite;
+    pointer-events: none;
+}
+.heat-7::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(211, 47, 47, 0.4), rgba(211, 47, 47, 0.4) 10px, rgba(229, 57, 53, 0.4) 10px, rgba(229, 57, 53, 0.4) 20px);
+    animation: flow-low 2s linear infinite;
+    pointer-events: none;
+}
+
+
+/* --- Tier 3: Medium Heat (8-12 digits) --- */
+.heat-8, .heat-9, .heat-10, .heat-11, .heat-12 {
+    /* Add medium heat indication with faster flow */
+}
+
+.heat-8 {
+    color: #c62828; /* Very deep red */
+}
+.heat-9 {
+    color: #b71c1c; /* Darkest red */
+}
+.heat-10 {
+    color: #d50000; /* Pure red */
+}
+.heat-11 {
+    color: #ff1744; /* Bright red */
+}
+.heat-12 {
+    color: #ff5252; /* Light red */
+}
+
+.heat-8::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(255, 112, 67, 0.5), rgba(255, 112, 67, 0.5) 12px, rgba(255, 171, 145, 0.5) 12px, rgba(255, 171, 145, 0.5) 24px);
+    animation: flow-medium 1s linear infinite;
+    pointer-events: none;
+}
+.heat-9::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(239, 83, 80, 0.5), rgba(239, 83, 80, 0.5) 12px, rgba(239, 154, 154, 0.5) 12px, rgba(239, 154, 154, 0.5) 24px);
+    animation: flow-medium 1s linear infinite;
+    pointer-events: none;
+}
+.heat-10::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(229, 57, 53, 0.5), rgba(229, 57, 53, 0.5) 12px, rgba(239, 83, 80, 0.5) 12px, rgba(239, 83, 80, 0.5) 24px);
+    animation: flow-medium 1s linear infinite;
+    pointer-events: none;
+    box-shadow: inset 0 0 5px rgba(255, 0, 0, 0.3);
+}
+.heat-11::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(211, 47, 47, 0.5), rgba(211, 47, 47, 0.5) 12px, rgba(229, 57, 53, 0.5) 12px, rgba(229, 57, 53, 0.5) 24px);
+    animation: flow-medium 1s linear infinite;
+    pointer-events: none;
+    box-shadow: inset 0 0 8px rgba(255, 0, 0, 0.4);
+}
+.heat-12::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(-45deg, rgba(198, 40, 40, 0.5), rgba(198, 40, 40, 0.5) 12px, rgba(211, 47, 47, 0.5) 12px, rgba(211, 47, 47, 0.5) 24px);
+    animation: flow-medium 1s linear infinite;
+    pointer-events: none;
+    box-shadow: inset 0 0 10px rgba(255, 0, 0, 0.5);
+}
+
+
+/* --- Tier 4: High Heat (13-18 digits) --- */
+.heat-13, .heat-14, .heat-15, .heat-16, .heat-17, .heat-18 {
+    /* Add high heat indication with rapid flow and glow effects */
+}
+
+.heat-13 {
+    color: #ff8a80; /* Pink-red */
+}
+.heat-14 {
+    color: #ff80ab; /* Light pink */
+}
+.heat-15 {
+    color: #f8bbd9; /* Very light pink */
+}
+.heat-16 {
+    color: #fce4ec; /* Almost white with pink tint */
+}
+.heat-17 {
+    color: #fff3e0; /* Very light orange-white */
+}
+.heat-18 {
+    color: #fafafa; /* Almost white */
+}
+
+.heat-13::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(45deg, rgba(255, 61, 0, 0.6) 25%, transparent 25%), linear-gradient(-45deg, rgba(255, 61, 0, 0.6) 25%, transparent 25%);
+    background-size: 10px 10px;
+    animation: flow-high 0.7s linear infinite;
+    pointer-events: none;
+    box-shadow: 0 0 8px 2px rgba(255, 100, 0, 0.5);
+}
+.heat-14::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(45deg, rgba(213, 0, 0, 0.6) 25%, transparent 25%), linear-gradient(-45deg, rgba(213, 0, 0, 0.6) 25%, transparent 25%);
+    background-size: 10px 10px;
+    animation: flow-high 0.7s linear infinite;
+    pointer-events: none;
+    box-shadow: 0 0 8px 2px rgba(255, 100, 0, 0.5);
+}
+.heat-15::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(rgba(255, 82, 82, 0.6) 20%, transparent 20%), radial-gradient(rgba(255, 82, 82, 0.6) 20%, transparent 20%);
+    background-size: 15px 15px;
+    background-position: 0 0, 7.5px 7.5px;
+    animation: flow-high 0.7s linear infinite;
+    pointer-events: none;
+    box-shadow: 0 0 8px 2px rgba(255, 100, 0, 0.5);
+}
+.heat-16::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 23, 68, 0.6) 25%, transparent 25%) -10px 0,
+                linear-gradient(225deg, rgba(255, 23, 68, 0.6) 25%, transparent 25%) -10px 0,
+                linear-gradient(315deg, rgba(255, 23, 68, 0.6) 25%, transparent 25%),
+                linear-gradient(45deg, rgba(255, 23, 68, 0.6) 25%, transparent 25%);
+    background-size: 20px 20px;
+    animation: flow-high 0.7s linear infinite;
+    pointer-events: none;
+    box-shadow: 0 0 8px 2px rgba(255, 100, 0, 0.5);
+}
+.heat-17::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(45deg, rgba(255, 234, 0, 0.6), rgba(255, 234, 0, 0.6) 5px, rgba(255, 196, 0, 0.6) 5px, rgba(255, 196, 0, 0.6) 10px);
+    animation: flow-high 0.7s linear infinite;
+    pointer-events: none;
+    box-shadow: 0 0 12px 3px rgba(255, 171, 0, 0.5);
+}
+.heat-18::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-radial-gradient(circle, rgba(255, 145, 0, 0.6), rgba(255, 145, 0, 0.6) 5px, rgba(255, 109, 0, 0.6) 5px, rgba(255, 109, 0, 0.6) 10px);
+    animation: flow-high 0.7s linear infinite;
+    pointer-events: none;
+    box-shadow: 0 0 15px 4px rgba(255, 61, 0, 0.5);
+}
+
+
+/* --- Tier 5: Extreme Heat (19-25 digits) --- */
+.heat-19, .heat-20, .heat-21, .heat-22, .heat-23, .heat-24, .heat-25 {
+    /* Add extreme heat indication with volatile effects */
+}
+
+.heat-19 {
+    color: #ffffff; /* Pure white */
+}
+.heat-20 {
+    color: #ffffff; /* Pure white */
+}
+.heat-21 {
+    color: #ffffff; /* Pure white */
+}
+.heat-22 {
+    color: #ffffff; /* Pure white */
+}
+.heat-23 {
+    color: #ffffff; /* Pure white */
+}
+.heat-24 {
+    color: #ffffff; /* Pure white */
+}
+.heat-25 {
+    color: #ffffff; /* Pure white */
+}
+
+.heat-19::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 138, 128, 0.7);
+    animation: flow-extreme 1.2s ease-in-out infinite;
+    pointer-events: none;
+}
+.heat-20::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 128, 171, 0.7);
+    animation: flow-extreme 1.2s ease-in-out infinite;
+    pointer-events: none;
+}
+.heat-21::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(234, 128, 252, 0.7);
+    animation: flow-extreme 1.2s ease-in-out infinite;
+    pointer-events: none;
+}
+.heat-22::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(179, 136, 255, 0.7);
+    animation: flow-extreme 1.2s ease-in-out infinite;
+    pointer-events: none;
+}
+.heat-23::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(140, 158, 255, 0.7);
+    animation: flow-extreme 1.2s ease-in-out infinite;
+    pointer-events: none;
+}
+.heat-24::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(130, 177, 255, 0.7);
+    animation: flow-extreme 1.2s ease-in-out infinite;
+    pointer-events: none;
+}
+.heat-25::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    animation: flow-extreme 1.2s ease-in-out infinite;
+    pointer-events: none;
+    box-shadow: 0 0 20px 8px rgba(255, 255, 255, 0.6), 0 0 30px 15px rgba(255, 82, 82, 0.6);
+}
+
+/* Enhanced valve part styling for better visibility */
 

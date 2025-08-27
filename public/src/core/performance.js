@@ -15,9 +15,12 @@ export class Performance {
     this.counters = {};
     this.averages = {};
     this.lastDisplayTime = 0;
-    this.displayInterval = 30000; // Show stats every 30 seconds
+    this.displayInterval = 120000; // Show stats every 2 minutes instead of 30 seconds
     this.sampleCount = 0;
     this.maxSamples = 100; // Keep last 100 samples for averages
+    this.quietMode = true; // Enable quiet mode by default to reduce console spam
+    this.lastQuietMessage = 0; // Track when we last showed a quiet message
+    this.quietMessageInterval = 300000; // Show quiet message every 5 minutes
   }
 
   enable() {
@@ -29,6 +32,32 @@ export class Performance {
   disable() {
     this.enabled = false;
     this.stopPeriodicDisplay();
+  }
+
+  // New method to enable quiet mode (less console spam)
+  enableQuietMode() {
+    this.quietMode = true;
+  }
+
+  // New method to disable quiet mode
+  disableQuietMode() {
+    this.quietMode = false;
+  }
+
+  // New method to get current performance monitoring status
+  getStatus() {
+    return {
+      enabled: this.enabled,
+      quietMode: this.quietMode,
+      displayInterval: this.displayInterval,
+      quietMessageInterval: this.quietMessageInterval,
+      maxSamples: this.maxSamples
+    };
+  }
+
+  // Convenience method to check if performance monitoring should be used
+  shouldMeasure() {
+    return this.enabled && DEBUG_PERFORMANCE;
   }
 
   markStart(name) {
@@ -168,15 +197,20 @@ export class Performance {
     const stats = this.getAllAverages();
     const significantStats = {};
 
-    // Filter for significant operations (>1ms average or >10ms max)
+    // Filter for significant operations (>2ms average or >15ms max or >50 count)
+    // Increased thresholds to reduce noise
     for (const [name, data] of Object.entries(stats)) {
-      if (data.average > 1 || data.max > 10 || data.count > 10) {
+      if (data.average > 2 || data.max > 15 || data.count > 50) {
         significantStats[name] = data;
       }
     }
 
     if (Object.keys(significantStats).length === 0) {
-      console.log("🎯 Performance: All operations < 1ms average");
+      // Only show quiet message occasionally to reduce spam
+      if (!this.quietMode || (now - this.lastQuietMessage) > this.quietMessageInterval) {
+        console.log("🎯 Performance: All operations within normal thresholds");
+        this.lastQuietMessage = now;
+      }
       return;
     }
 
@@ -238,7 +272,7 @@ export class Performance {
   }
 
   // Quick performance check for specific operations
-  quickCheck(name, threshold = 10) {
+  quickCheck(name, threshold = 15) { // Increased default threshold
     const avg = this.getAverage(name);
     const max = this.getMax(name);
     const count = this.getCount(name);
@@ -252,5 +286,36 @@ export class Performance {
       return false;
     }
     return true;
+  }
+
+  // New method to get a summary of current performance
+  getPerformanceSummary() {
+    if (!this.enabled) return null;
+
+    const stats = this.getAllAverages();
+    const summary = {
+      totalOperations: Object.keys(stats).length,
+      slowOperations: 0,
+      verySlowOperations: 0,
+      totalCalls: 0
+    };
+
+    for (const [, data] of Object.entries(stats)) {
+      summary.totalCalls += data.count;
+      if (data.average > 5) summary.slowOperations++;
+      if (data.average > 20) summary.verySlowOperations++;
+    }
+
+    return summary;
+  }
+
+  // New method to log performance summary to console
+  logPerformanceSummary() {
+    if (!this.enabled || !DEBUG_PERFORMANCE) return;
+
+    const summary = this.getPerformanceSummary();
+    if (!summary) return;
+
+    console.log("📊 Performance Summary:", summary);
   }
 }

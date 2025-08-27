@@ -73,6 +73,15 @@ export class UI {
     this._activeFlowIndicators = new Map(); // Track active flow indicators by flow path
     this._activeTileIcons = new Map(); // Track active tile icons by tile and type
 
+    // Performance tracking for FPS and TPS
+    this._fpsHistory = [];
+    this._tpsHistory = [];
+    this._lastFrameTime = performance.now();
+    this._lastTickTime = performance.now();
+    this._frameCount = 0;
+    this._tickCount = 0;
+    this._performanceUpdateInterval = null;
+
     this.dom_ids = [
       "main",
       "reactor",
@@ -121,7 +130,10 @@ export class UI {
       "tooltip_data",
       "stats_power",
       "stats_heat",
+      "stats_total_part_heat",
       "engine_status_indicator",
+      "tps_display",
+      "fps_display",
       "stats_outlet",
       "stats_inlet",
       "stats_vent",
@@ -635,6 +647,9 @@ export class UI {
   }
 
   runUpdateInterfaceLoop() {
+    // Record frame for performance tracking
+    this.recordFrame();
+
     this.game.performance.markStart("ui_update_total");
 
     this.game.performance.markStart("ui_process_queue");
@@ -969,12 +984,15 @@ export class UI {
     if (amount > 1000) amountClass = 'flow-amount-lg';
     else if (amount > 100) amountClass = 'flow-amount-md';
 
+    // Get heat-specific styling class
+    const heatClass = this._getHeatArrowClass(amount);
+
     // Position at midpoint between start and end
     const midX = (start.x + end.x) / 2;
     const midY = (start.y + end.y) / 2;
 
     const indicator = document.createElement('div');
-    indicator.className = `flow-indicator flow-arrow-${direction} ${amountClass}`;
+    indicator.className = `flow-indicator flow-arrow-${direction} ${amountClass} heat-arrow ${heatClass}`;
     indicator.style.position = 'absolute';
     indicator.style.left = `${midX}px`;
     indicator.style.top = `${midY}px`;
@@ -1018,12 +1036,15 @@ export class UI {
     if (amount > 1000) amountClass = 'flow-amount-lg';
     else if (amount > 100) amountClass = 'flow-amount-md';
 
+    // Get heat-specific styling class
+    const heatClass = this._getHeatArrowClass(amount);
+
     // Position at midpoint between start and end
     const midX = (start.x + end.x) / 2;
     const midY = (start.y + end.y) / 2;
 
     const indicator = document.createElement('div');
-    indicator.className = `flow-indicator flow-arrow-${direction} ${amountClass}`;
+    indicator.className = `flow-indicator flow-arrow-${direction} ${amountClass} heat-arrow ${heatClass}`;
     indicator.style.position = 'absolute';
     indicator.style.left = `${midX}px`;
     indicator.style.top = `${midY}px`;
@@ -1321,6 +1342,11 @@ export class UI {
       },
       stats_inlet: { dom: this.DOMElements.stats_inlet, num: true, places: 0 },
       stats_vent: { dom: this.DOMElements.stats_vent, num: true, places: 0 },
+      stats_total_part_heat: {
+        dom: this.DOMElements.stats_total_part_heat,
+        num: true,
+        places: 0,
+      },
       auto_sell: {
         onupdate: (val) =>
           this.updateToggleButtonState(
@@ -1815,6 +1841,9 @@ export class UI {
       const status = this.game.paused ? "paused" : (this.game.engine.running ? "running" : "stopped");
       this.stateManager.setVar("engine_status", status);
     }
+
+    // Start performance tracking
+    this.startPerformanceTracking();
   }
 
   resizeReactor() {
@@ -2645,6 +2674,7 @@ export class UI {
       vars["Reactor (reactor.js)"]["stats_vent"] = reactor.stats_vent;
       vars["Reactor (reactor.js)"]["stats_inlet"] = reactor.stats_inlet;
       vars["Reactor (reactor.js)"]["stats_outlet"] = reactor.stats_outlet;
+      vars["Reactor (reactor.js)"]["stats_total_part_heat"] = reactor.stats_total_part_heat;
       // stats_cash disabled from UI; omit from debug vars to reduce noise
       vars["Reactor (reactor.js)"]["vent_multiplier_eff"] =
         reactor.vent_multiplier_eff;
@@ -4304,6 +4334,115 @@ export class UI {
       this.ctrl9MoneyInterval = null;
     }
     this.ctrl9HoldStartTime = null;
+  }
+
+  // Performance tracking methods
+  startPerformanceTracking() {
+    if (this._performanceUpdateInterval) return;
+
+    this._performanceUpdateInterval = setInterval(() => {
+      this.updatePerformanceDisplay();
+    }, 1000); // Update every second
+  }
+
+  stopPerformanceTracking() {
+    if (this._performanceUpdateInterval) {
+      clearInterval(this._performanceUpdateInterval);
+      this._performanceUpdateInterval = null;
+    }
+  }
+
+  recordFrame() {
+    const now = performance.now();
+    this._frameCount++;
+
+    // Calculate FPS over the last second
+    if (now - this._lastFrameTime >= 1000) {
+      const fps = this._frameCount;
+      this._fpsHistory.push(fps);
+
+      // Keep only last 10 samples
+      if (this._fpsHistory.length > 10) {
+        this._fpsHistory.shift();
+      }
+
+      this._frameCount = 0;
+      this._lastFrameTime = now;
+    }
+  }
+
+  recordTick() {
+    const now = performance.now();
+    this._tickCount++;
+
+    // Calculate TPS over the last second
+    if (now - this._lastTickTime >= 1000) {
+      const tps = this._tickCount;
+      this._tpsHistory.push(tps);
+
+      // Keep only last 10 samples
+      if (this._tpsHistory.length > 10) {
+        this._tpsHistory.shift();
+      }
+
+      this._tickCount = 0;
+      this._lastTickTime = now;
+    }
+  }
+
+  updatePerformanceDisplay() {
+    if (!this.DOMElements.fps_display || !this.DOMElements.tps_display) return;
+
+    // Calculate average FPS and TPS
+    const avgFPS = this._fpsHistory.length > 0
+      ? Math.round(this._fpsHistory.reduce((a, b) => a + b, 0) / this._fpsHistory.length)
+      : 0;
+
+    const avgTPS = this._tpsHistory.length > 0
+      ? Math.round(this._tpsHistory.reduce((a, b) => a + b, 0) / this._tpsHistory.length)
+      : 0;
+
+    // Update display with color coding based on performance
+    this.DOMElements.fps_display.textContent = avgFPS;
+    this.DOMElements.tps_display.textContent = avgTPS;
+
+    // Color code FPS based on 60 FPS target (16.7ms budget)
+    if (avgFPS >= 55) {
+      this.DOMElements.fps_display.style.color = '#4CAF50'; // Green for good performance
+    } else if (avgFPS >= 45) {
+      this.DOMElements.fps_display.style.color = '#FF9800'; // Orange for moderate performance
+    } else {
+      this.DOMElements.fps_display.style.color = '#F44336'; // Red for poor performance
+    }
+
+    // Color code TPS based on expected performance
+    if (avgTPS >= 30) {
+      this.DOMElements.tps_display.style.color = '#4CAF50'; // Green for good performance
+    } else if (avgTPS >= 20) {
+      this.DOMElements.tps_display.style.color = '#FF9800'; // Orange for moderate performance
+    } else {
+      this.DOMElements.tps_display.style.color = '#F44336'; // Red for poor performance
+    }
+  }
+
+  /**
+   * Determines the appropriate CSS class for a heat arrow based on the heat value.
+   * The style is scaled by the number of digits in the heat value.
+   *
+   * @param {number | string | bigint} heatValue The amount of heat being transferred.
+   * @returns {string} The CSS class name to apply to the arrow element.
+   */
+  _getHeatArrowClass(heatValue) {
+    // Convert BigInt to string; for numbers, convert to string directly.
+    const heatStr = typeof heatValue === 'bigint' ? heatValue.toString() : String(Math.floor(heatValue));
+
+    // Calculate the number of digits.
+    const digitLength = heatStr.length;
+
+    // Clamp the digit length between 1 and 25 to match the CSS classes.
+    const styleLevel = Math.max(1, Math.min(digitLength, 25));
+
+    return `heat-${styleLevel}`;
   }
 
 }

@@ -23,6 +23,7 @@ describe("Reactor Mechanics", () => {
 
     expect(game.reactor.stats_power).toBe(part.power);
     expect(game.reactor.stats_heat_generation).toBe(part.heat);
+    expect(game.reactor.stats_total_part_heat).toBe(0); // No heat contained initially
   });
 
   it("should handle multiple active parts", async () => {
@@ -35,6 +36,23 @@ describe("Reactor Mechanics", () => {
 
     expect(game.reactor.stats_power).toBe(part.power * 2);
     expect(game.reactor.stats_heat_generation).toBe(part.heat * 2);
+    expect(game.reactor.stats_total_part_heat).toBe(0); // No heat contained initially
+  });
+
+  it("should calculate total part heat correctly", async () => {
+    const tile1 = game.tileset.getTile(0, 0);
+    const tile2 = game.tileset.getTile(1, 1);
+    const part = game.partset.getPartById("uranium1");
+    await tile1.setPart(part);
+    await tile2.setPart(part);
+
+    // Simulate heat contained in parts
+    tile1.heat_contained = 50;
+    tile2.heat_contained = 75;
+
+    game.reactor.updateStats();
+
+    expect(game.reactor.stats_total_part_heat).toBe(125); // 50 + 75
   });
 
   it("should handle heat generation and venting", async () => {
