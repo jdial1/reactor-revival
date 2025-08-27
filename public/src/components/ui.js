@@ -918,24 +918,20 @@ export class UI {
       start = this._tileCenterToOverlayPosition(from.row, from.col);
 
       // Create multiple arrows in all 8 directions
-      const directions = ['up', 'down', 'left', 'right', 'up-left', 'up-right', 'down-left', 'down-right'];
-      // Responsive arrow distance - smaller on mobile
+      const directions = ['top', 'top-left', 'top-right'];
+      // Responsive arrow distance - ensure arrows stay within tile boundaries but closer to edges
       const isMobile = window.innerWidth <= 900;
-      const arrowDistance = isMobile ? 40 : 60; // 40px on mobile, 60px on desktop
+      const tileSize = 48; // Base tile size from CSS
+      const arrowDistance = isMobile ? tileSize * 0.65 : tileSize * 0.75; // 45% of tile size on mobile, 50% on desktop
 
       directions.forEach((dir, index) => {
         const uniqueKey = `${flowKey}-${dir}`;
         let endX, endY;
 
         switch (dir) {
-          case 'up': endX = start.x; endY = start.y - arrowDistance; break;
-          case 'down': endX = start.x; endY = start.y + arrowDistance; break;
-          case 'left': endX = start.x - arrowDistance; endY = start.y; break;
-          case 'right': endX = start.x + arrowDistance; endY = start.y; break;
-          case 'up-left': endX = start.x - arrowDistance; endY = start.y - arrowDistance; break;
-          case 'up-right': endX = start.x + arrowDistance; endY = start.y - arrowDistance; break;
-          case 'down-left': endX = start.x - arrowDistance; endY = start.y + arrowDistance; break;
-          case 'down-right': endX = start.x + arrowDistance; endY = start.y + arrowDistance; break;
+          case 'top': endX = start.x; endY = start.y - arrowDistance; break;
+          case 'top-left': endX = start.x - arrowDistance; endY = start.y - arrowDistance; break;
+          case 'top-right': endX = start.x + arrowDistance; endY = start.y - arrowDistance; break;
         }
 
         this._createReactorFlowArrow(uniqueKey, start, { x: endX, y: endY }, dir, evt.amount);
@@ -983,7 +979,15 @@ export class UI {
     indicator.style.left = `${midX}px`;
     indicator.style.top = `${midY}px`;
     indicator.style.pointerEvents = 'none';
-    indicator.style.transform = 'translate(-50%, -50%)';
+
+    // For diagonal arrows, let CSS handle the rotation, otherwise use basic positioning
+    if (direction === 'top-left' || direction === 'top-right') {
+      // CSS will handle the rotation transform
+      indicator.style.transform = 'translate(-50%, -50%)';
+    } else {
+      // Basic positioning for straight arrows
+      indicator.style.transform = 'translate(-50%, -50%)';
+    }
 
 
 
@@ -1024,9 +1028,15 @@ export class UI {
     indicator.style.left = `${midX}px`;
     indicator.style.top = `${midY}px`;
     indicator.style.pointerEvents = 'none';
-    indicator.style.transform = 'translate(-50%, -50%)';
 
-
+    // For diagonal arrows, let CSS handle the rotation, otherwise use basic positioning
+    if (direction === 'top-left' || direction === 'top-right') {
+      // CSS will handle the rotation transform
+      indicator.style.transform = 'translate(-50%, -50%)';
+    } else {
+      // Basic positioning for straight arrows
+      indicator.style.transform = 'translate(-50%, -50%)';
+    }
 
     // Mark this flow animation as active
     this._activeFlowIndicators.set(flowKey, indicator);

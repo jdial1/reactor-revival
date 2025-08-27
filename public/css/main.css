@@ -851,22 +851,22 @@ z-index: 22;
 .flow-arrow-left { background-image: url('../img/ui/flow/flow-arrow-left.svg'); }
 .flow-arrow-right { background-image: url('../img/ui/flow/flow-arrow-right.svg'); }
 
-/* Diagonal reactor flow arrows - use existing arrows with rotation */
-.flow-arrow-up-left { 
-  background-image: url('../img/ui/flow/flow-arrow-up.svg'); 
-  transform: translate(-50%, -50%) rotate(-45deg);
+/* Diagonal arrows using existing SVG files with rotation */
+.flow-arrow-top-left {
+  background-image: url('../img/ui/flow/flow-arrow-up.svg');
+  transform: translate(-50%, -50%) rotate(-45deg) !important;
 }
-.flow-arrow-up-right { 
-  background-image: url('../img/ui/flow/flow-arrow-up.svg'); 
-  transform: translate(-50%, -50%) rotate(45deg);
+.flow-arrow-top-right {
+  background-image: url('../img/ui/flow/flow-arrow-up.svg');
+  transform: translate(-50%, -50%) rotate(45deg) !important;
 }
-.flow-arrow-down-left { 
-  background-image: url('../img/ui/flow/flow-arrow-down.svg'); 
-  transform: translate(-50%, -50%) rotate(-135deg);
+.flow-arrow-down-left {
+  background-image: url('../img/ui/flow/flow-arrow-down.svg');
+  transform: translate(-50%, -50%) rotate(45deg) !important;
 }
-.flow-arrow-down-right { 
-  background-image: url('../img/ui/flow/flow-arrow-down.svg'); 
-  transform: translate(-50%, -50%) rotate(135deg);
+.flow-arrow-down-right {
+  background-image: url('../img/ui/flow/flow-arrow-down.svg');
+  transform: translate(-50%, -50%) rotate(-45deg) !important;
 }
 
 /* Enhanced valve part styling for better visibility */
@@ -997,11 +997,20 @@ z-index: 22;
   /* Further reduce arrow distance for very small screens */
   .flow-indicator {
     transform: translate(-50%, -50%) scale(0.6);
+    /* Ensure arrows stay within tile boundaries on very small screens */
+    max-width: 40px;
+    max-height: 40px;
   }
   
   /* Ensure flow indicators remain visible on very small screens */
   .flow-indicator {
     filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.8));
+  }
+  
+  /* Reactor flow arrows for very small screens */
+  .flow-indicator[class*="flow-arrow-"] {
+    max-width: 28px;
+    max-height: 28px;
   }
 }
 
@@ -1036,6 +1045,23 @@ z-index: 22;
   image-rendering: crisp-edges;
 }
 
+/* Specific styling for top arrows in reactor flow (no neighbors) */
+.flow-arrow-top {
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.flow-arrow-top-left,
+.flow-arrow-top-right {
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  /* Ensure diagonal arrows are properly sized */
+  width: 24px;
+  height: 24px;
+}
+
 /* Mobile grid-specific flow arrow positioning */
 @media (max-width: 900px) {
   .flow-indicator {
@@ -1045,6 +1071,17 @@ z-index: 22;
     will-change: transform;
     /* Ensure mobile arrows are crisp and aligned */
     filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
+    /* Ensure arrows stay within tile boundaries */
+    max-width: 48px;
+    max-height: 48px;
+    overflow: hidden;
+  }
+  
+  /* Ensure reactor flow arrows (no neighbors) stay within tile bounds */
+  .flow-indicator[class*="flow-arrow-"] {
+    /* Limit arrow size to prevent overflow */
+    max-width: 32px;
+    max-height: 32px;
   }
 }
 
