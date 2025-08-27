@@ -1200,9 +1200,11 @@ background: #ff0000;
 border-radius: 50%;
 opacity: 0;
 transition: opacity 0.2s;
+display: none; /* Hide the red dot completely */
 }
 .tile.selling .sell-indicator {
-opacity: 1;
+opacity: 0; /* Keep opacity at 0 even when selling */
+display: none; /* Keep hidden even when selling */
 }
 #info_bar {
   display: flex;
