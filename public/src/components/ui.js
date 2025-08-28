@@ -58,11 +58,8 @@ export class UI {
     // Visual event rendering pool
     this._visualPool = {
       emit: [],
-      flow: [],
       maxEmit: 64,
-      maxFlow: 32,
     };
-    this._flowAnimations = new Set();
     this._icons = {
       power: "img/ui/icons/icon_power.png",
       heat: "img/ui/icons/icon_heat.png",
@@ -918,8 +915,6 @@ export class UI {
     const overlay = this._ensureOverlay();
     if (!overlay) return;
 
-
-
     const from = { row: evt.from[0], col: evt.from[1] };
     const to = evt.to;
 
@@ -928,18 +923,16 @@ export class UI {
 
     if (to === 'reactor') {
       // Heat going directly to reactor - show arrows in all 8 directions
-      // Add timestamp to make each flow arrow unique
       flowKey = `${from.row}-${from.col}-to-reactor-${Date.now()}`;
       start = this._tileCenterToOverlayPosition(from.row, from.col);
 
       // Create multiple arrows in all 8 directions
       const directions = ['top', 'top-left', 'top-right'];
-      // Responsive arrow distance - ensure arrows stay within tile boundaries but closer to edges
       const isMobile = window.innerWidth <= 900;
       const tileSize = 48; // Base tile size from CSS
-      const arrowDistance = isMobile ? tileSize * 0.65 : tileSize * 0.75; // 45% of tile size on mobile, 50% on desktop
+      const arrowDistance = isMobile ? tileSize * 0.65 : tileSize * 0.75;
 
-      directions.forEach((dir, index) => {
+      directions.forEach((dir) => {
         const uniqueKey = `${flowKey}-${dir}`;
         let endX, endY;
 
@@ -952,11 +945,10 @@ export class UI {
         this._createReactorFlowArrow(uniqueKey, start, { x: endX, y: endY }, dir, evt.amount);
       });
 
-      // Return early since we're creating arrows in _createReactorFlowArrow
       return;
     }
 
-    // Normal flow between tiles (both reactor and part-to-part)
+    // Normal flow between tiles
     if (Array.isArray(to)) {
       const toTile = { row: to[0], col: to[1] };
       flowKey = `${from.row}-${from.col}-to-${toTile.row}-${toTile.col}`;
@@ -978,36 +970,41 @@ export class UI {
       return;
     }
 
-    // Determine indicator size based on amount thresholds
-    const amount = Number(evt.amount || 0);
-    let amountClass = 'flow-amount-sm';
-    if (amount > 1000) amountClass = 'flow-amount-lg';
-    else if (amount > 100) amountClass = 'flow-amount-md';
-
     // Get heat-specific styling class
-    const heatClass = this._getHeatArrowClass(amount);
+    const heatClass = this._getHeatArrowClass(evt.amount || 0);
 
-    // Position at midpoint between start and end
-    const midX = (start.x + end.x) / 2;
-    const midY = (start.y + end.y) / 2;
+    // Position arrows at the source tile boundary based on direction
+    let arrowX, arrowY;
+    const tileSize = 48; // Base tile size from CSS
 
-    const indicator = document.createElement('div');
-    indicator.className = `flow-indicator flow-arrow-${direction} ${amountClass} heat-arrow ${heatClass}`;
-    indicator.style.position = 'absolute';
-    indicator.style.left = `${midX}px`;
-    indicator.style.top = `${midY}px`;
-    indicator.style.pointerEvents = 'none';
-
-    // For diagonal arrows, let CSS handle the rotation, otherwise use basic positioning
-    if (direction === 'top-left' || direction === 'top-right') {
-      // CSS will handle the rotation transform
-      indicator.style.transform = 'translate(-50%, -50%)';
-    } else {
-      // Basic positioning for straight arrows
-      indicator.style.transform = 'translate(-50%, -50%)';
+    switch (direction) {
+      case 'up':
+        arrowX = start.x;
+        arrowY = start.y - (tileSize / 2) - (tileSize * 0.15); // Position closer to top edge
+        break;
+      case 'down':
+        arrowX = start.x;
+        arrowY = start.y + (tileSize / 2) + (tileSize * 0.15); // Position closer to bottom edge
+        break;
+      case 'left':
+        arrowX = start.x - (tileSize / 2) - (tileSize * 0.15); // Position closer to left edge
+        arrowY = start.y;
+        break;
+      case 'right':
+        arrowX = start.x + (tileSize / 2) + (tileSize * 0.15); // Position closer to right edge
+        arrowY = start.y;
+        break;
+      default:
+        arrowX = start.x;
+        arrowY = start.y;
     }
 
-
+    const indicator = document.createElement('div');
+    indicator.className = `flow-indicator flow-arrow-${direction} heat-arrow ${heatClass}`;
+    indicator.style.position = 'absolute';
+    indicator.style.left = `${arrowX}px`;
+    indicator.style.top = `${arrowY}px`;
+    indicator.style.pointerEvents = 'none';
 
     // Mark this flow animation as active
     this._activeFlowIndicators.set(flowKey, indicator);
@@ -1017,9 +1014,8 @@ export class UI {
     // Auto-remove after a longer duration to make arrows more visible
     setTimeout(() => {
       if (indicator.parentElement === overlay) overlay.removeChild(indicator);
-      // Remove from active animations
       this._activeFlowIndicators.delete(flowKey);
-    }, 1000); // Increased from 300ms to 1000ms for better visibility
+    }, 1000);
   }
 
   _createReactorFlowArrow(flowKey, start, end, direction, amount) {
@@ -1031,33 +1027,57 @@ export class UI {
       return;
     }
 
-    // Determine indicator size based on amount thresholds
-    let amountClass = 'flow-amount-sm';
-    if (amount > 1000) amountClass = 'flow-amount-lg';
-    else if (amount > 100) amountClass = 'flow-amount-md';
-
     // Get heat-specific styling class
     const heatClass = this._getHeatArrowClass(amount);
 
-    // Position at midpoint between start and end
-    const midX = (start.x + end.x) / 2;
-    const midY = (start.y + end.y) / 2;
+    // Position arrows at the source tile boundary based on direction
+    let arrowX, arrowY;
+    const tileSize = 48; // Base tile size from CSS
+
+    switch (direction) {
+      case 'up':
+        arrowX = start.x;
+        arrowY = start.y - tileSize / 2 + 8; // Position closer to top edge
+        break;
+      case 'down':
+        arrowX = start.x;
+        arrowY = start.y + tileSize / 2 - 8; // Position closer to bottom edge
+        break;
+      case 'left':
+        arrowX = start.x - tileSize / 2 + 8; // Position closer to left edge
+        arrowY = start.y;
+        break;
+      case 'right':
+        arrowX = start.x + tileSize / 2 - 8; // Position closer to right edge
+        arrowY = start.y;
+        break;
+      case 'top-left':
+        arrowX = start.x - tileSize / 2 + 8; // Position closer to left edge
+        arrowY = start.y - tileSize / 2 + 8; // Position closer to top edge
+        break;
+      case 'top-right':
+        arrowX = start.x + tileSize / 2 - 8; // Position closer to right edge
+        arrowY = start.y - tileSize / 2 + 8; // Position closer to top edge
+        break;
+      case 'down-left':
+        arrowX = start.x - tileSize / 2 + 8; // Position closer to left edge
+        arrowY = start.y + tileSize / 2 - 8; // Position closer to bottom edge
+        break;
+      case 'down-right':
+        arrowX = start.x + tileSize / 2 - 8; // Position closer to right edge
+        arrowY = start.y + tileSize / 2 - 8; // Position closer to bottom edge
+        break;
+      default:
+        arrowX = start.x;
+        arrowY = start.y;
+    }
 
     const indicator = document.createElement('div');
-    indicator.className = `flow-indicator flow-arrow-${direction} ${amountClass} heat-arrow ${heatClass}`;
+    indicator.className = `flow-indicator flow-arrow-${direction} heat-arrow ${heatClass}`;
     indicator.style.position = 'absolute';
-    indicator.style.left = `${midX}px`;
-    indicator.style.top = `${midY}px`;
+    indicator.style.left = `${arrowX}px`;
+    indicator.style.top = `${arrowY}px`;
     indicator.style.pointerEvents = 'none';
-
-    // For diagonal arrows, let CSS handle the rotation, otherwise use basic positioning
-    if (direction === 'top-left' || direction === 'top-right') {
-      // CSS will handle the rotation transform
-      indicator.style.transform = 'translate(-50%, -50%)';
-    } else {
-      // Basic positioning for straight arrows
-      indicator.style.transform = 'translate(-50%, -50%)';
-    }
 
     // Mark this flow animation as active
     this._activeFlowIndicators.set(flowKey, indicator);
@@ -1067,77 +1087,11 @@ export class UI {
     // Auto-remove after a longer duration to make arrows more visible
     setTimeout(() => {
       if (indicator.parentElement === overlay) overlay.removeChild(indicator);
-      // Remove from active animations
       this._activeFlowIndicators.delete(flowKey);
-    }, 1000); // Increased from 300ms to 1000ms for better visibility
+    }, 1000);
   }
 
-  _resolveFlowStyle(amount) {
-    const a = Number(amount || 0);
-    const exp = isFinite(a) && a > 0 ? Math.floor(Math.log10(a)) : 0;
-    // Defaults
-    let style = 'dot';
-    let size = 10;
-    let duration = 240;
-    let count = 1;
-    let transform = '';
-    let stagger = 0; // fraction of duration
-    // Tiered styling inspired by the reference grid; more variety at higher magnitudes
-    if (exp <= 0) { // 1 to 5
-      style = 'dot'; size = 8; duration = 260; count = 1;
-    } else if (exp <= 1) { // 5 to 10
-      style = 'streak'; size = 9; duration = 240; count = 1; transform = 'rotate(0deg)';
-    } else if (exp <= 2) { // 10 to 25
-      style = 'ring'; size = 10; duration = 230; count = 1;
-    } else if (exp <= 3) { // 25 to 50
-      style = 'burst3'; size = 10; duration = 220; count = 3; stagger = 0.15;
-    } else if (exp <= 4) { // 50 to 100
-      style = 'chev'; size = 11; duration = 210; count = 1;
-    } else if (exp <= 5) { // 100 to 250
-      style = 'burst6'; size = 10; duration = 200; count = 5; stagger = 0.25;
-    } else if (exp <= 6) { // 250 to 500
-      style = 'cross'; size = 12; duration = 190; count = 1;
-    } else if (exp <= 7) { // 500 to 1k
-      style = 'star'; size = 12; duration = 180; count = 1;
-    } else if (exp <= 8) { // 1k to 2.5k
-      style = 'beam'; size = 12; duration = 170; count = 1;
-    } else if (exp <= 10) { // up to ~1e10
-      style = 'beam'; size = 14; duration = 150; count = 2; stagger = 0.1;
-    } else if (exp <= 20) { // 1e10 to 1e20
-      style = 'beam'; size = 16; duration = 130; count = 3; stagger = 0.15;
-    } else if (exp <= 100) { // 1e20 to 1e100
-      style = 'beam'; size = 18; duration = 110; count = 4; stagger = 0.2;
-    } else { // 1e100+ up to beyond 1e999
-      style = 'beam'; size = 20; duration = 90; count = 5; stagger = 0.25;
-    }
-    return { style, size, duration: duration * 5, count, transform, stagger, fadeOut: style !== 'beam', centerOffset: Math.max(3, Math.round(size / 2)) };
-  }
 
-  _createFlowNode(styleCfg, color) {
-    const el = document.createElement('div');
-    el.className = `vis-flow ${this._flowClassFor(styleCfg.style)}`;
-    el.style.position = 'absolute';
-    el.style.setProperty('--s', `${styleCfg.size}px`);
-    el.style.color = color;
-    el.style.opacity = '0.95';
-    el.style.willChange = 'transform, opacity';
-    return el;
-  }
-
-  _flowClassFor(name) {
-    switch (name) {
-      case 'streak': return 'flow-streak';
-      case 'ring': return 'flow-ring';
-      case 'burst3': return 'flow-dot';
-      case 'burst6': return 'flow-dot';
-      case 'chev': return 'flow-chev';
-      case 'cross': return 'flow-cross';
-      case 'star': return 'flow-star';
-      case 'beam': return 'flow-beam';
-      case 'dot':
-      default: return 'flow-dot';
-    }
-  }
 
   processUpdateQueue() {
     if (this.update_vars.size === 0) return;
@@ -1688,6 +1642,45 @@ export class UI {
     // Animation status logging removed for cleaner console
   }
 
+  // Clear all reactor heat (hotkey: Ctrl+H)
+  clearReactorHeat() {
+    if (!this.game || !this.game.reactor) return;
+
+    try {
+      // Clear reactor heat
+      this.game.reactor.current_heat = 0;
+
+      // Clear all tile heat
+      if (this.game.tileset && this.game.tileset.active_tiles_list) {
+        this.game.tileset.active_tiles_list.forEach(tile => {
+          if (tile.heat_contained !== undefined) {
+            tile.heat_contained = 0;
+          }
+          if (tile.heat !== undefined) {
+            tile.heat = 0;
+          }
+          if (tile.display_heat !== undefined) {
+            tile.display_heat = 0;
+          }
+        });
+      }
+
+      // Update UI displays
+      if (this.stateManager) {
+        this.stateManager.setVar("current_heat", 0);
+        this.stateManager.setVar("total_heat", 0);
+      }
+
+      // Clear any active heat flow animations
+      this.clearAllActiveAnimations();
+
+      // Optional: Show feedback to user
+      console.log("Reactor heat cleared!");
+    } catch (error) {
+      console.error("Error clearing reactor heat:", error);
+    }
+  }
+
   // Pulse a subtle aura from a reflector towards a target cell
   pulseReflector(fromTile, toTile) {
     try {
@@ -2179,6 +2172,12 @@ export class UI {
 
 
             }
+            break;
+          case "h":
+          case "H":
+            e.preventDefault();
+            // Clear all reactor heat
+            this.clearReactorHeat();
             break;
         }
       }
