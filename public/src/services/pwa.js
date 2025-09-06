@@ -840,6 +840,167 @@ class SplashScreenManager {
   }
 
   /**
+   * Trigger version check and show toast notification
+   */
+  async triggerVersionCheckToast() {
+    console.log('Manual version check triggered via hotkey');
+
+    try {
+      // Get current version
+      const currentVersion = await this.getLocalVersion() || "Unknown";
+
+      // Check for deployed version
+      const deployedVersion = await this.checkDeployedVersion();
+
+      if (deployedVersion && deployedVersion !== currentVersion) {
+        // New version available
+        this.showUpdateToast(deployedVersion, currentVersion);
+        console.log(`Version check complete: New version ${deployedVersion} available (current: ${currentVersion})`);
+      } else if (deployedVersion && deployedVersion === currentVersion) {
+        // Same version
+        this.showVersionCheckToast(`You're running the latest version: ${currentVersion}`, 'info');
+        console.log(`Version check complete: Up to date (${currentVersion})`);
+      } else {
+        // Could not check deployed version
+        this.showVersionCheckToast(`Current version: ${currentVersion} (Unable to check for updates)`, 'warning');
+        console.log(`Version check complete: Current version ${currentVersion} (deployed check failed)`);
+      }
+    } catch (error) {
+      console.error('Version check failed:', error);
+      this.showVersionCheckToast('Version check failed. Please try again later.', 'error');
+    }
+  }
+
+  /**
+   * Show version check toast notification
+   */
+  showVersionCheckToast(message, type = 'info') {
+    // Remove any existing toast
+    const existingToast = document.querySelector('.version-check-toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = 'version-check-toast';
+    toast.innerHTML = `
+      <div class="version-check-toast-content">
+        <div class="version-check-toast-message">
+          <span class="version-check-toast-icon">${type === 'info' ? 'ℹ️' : type === 'warning' ? '⚠️' : '❌'}</span>
+          <span class="version-check-toast-text">${message}</span>
+        </div>
+        <button class="version-check-toast-close" onclick="this.closest('.version-check-toast').remove()">×</button>
+      </div>
+    `;
+
+    // Add toast styles if not already present
+    if (!document.querySelector('#version-check-toast-styles')) {
+      const style = document.createElement('style');
+      style.id = 'version-check-toast-styles';
+      style.textContent = `
+        .version-check-toast {
+          position: fixed;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #2a2a2a;
+          border: 2px solid ${type === 'info' ? '#2196F3' : type === 'warning' ? '#FF9800' : '#f44336'};
+          border-radius: 8px;
+          padding: 0;
+          z-index: 10000;
+          font-family: 'Minecraft', monospace;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+          animation: toast-slide-up 0.3s ease-out;
+          max-width: 400px;
+          width: 90%;
+        }
+
+        .version-check-toast-content {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 16px;
+          gap: 12px;
+        }
+
+        .version-check-toast-message {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+        }
+
+        .version-check-toast-icon {
+          font-size: 1.2em;
+        }
+
+        .version-check-toast-text {
+          color: #fff;
+          font-size: 0.9em;
+          line-height: 1.4;
+        }
+
+        .version-check-toast-close {
+          background: transparent;
+          color: #ccc;
+          border: none;
+          font-size: 1.2em;
+          cursor: pointer;
+          padding: 4px;
+          line-height: 1;
+          transition: color 0.2s;
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .version-check-toast-close:hover {
+          color: #fff;
+        }
+
+        @media (max-width: 480px) {
+          .version-check-toast {
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            transform: none;
+            max-width: none;
+            width: auto;
+          }
+
+          .version-check-toast-content {
+            padding: 10px 12px;
+            gap: 8px;
+          }
+
+          .version-check-toast-text {
+            font-size: 0.8em;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Add toast to page
+    document.body.appendChild(toast);
+
+    // Auto-remove toast after 5 seconds
+    setTimeout(() => {
+      if (document.body.contains(toast)) {
+        toast.style.animation = 'toast-slide-up 0.3s ease-out reverse';
+        setTimeout(() => {
+          if (document.body.contains(toast)) {
+            toast.remove();
+          }
+        }, 300);
+      }
+    }, 5000);
+  }
+
+  /**
    * Clear version notification when user updates
    */
   clearVersionNotification() {
@@ -1816,10 +1977,18 @@ function listFlavors() {
   });
 }
 
-// Add keyboard shortcut to force hide splash screen (for debugging)
+// Add keyboard shortcuts
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && window.splashManager) {
     window.splashManager.forceHide();
+  }
+
+  // Ctrl+Shift+V: Trigger version check and show toast
+  if (e.ctrlKey && e.shiftKey && e.key === "V") {
+    e.preventDefault();
+    if (window.splashManager) {
+      window.splashManager.triggerVersionCheckToast();
+    }
   }
 });
 
@@ -2157,4 +2326,36 @@ window.testUpdateToast = function (version = 'v1.1.0') {
   } else {
     console.error('Toast notification function not available');
   }
+};
+
+// Debug function to test version check hotkey
+window.testVersionCheckHotkey = function () {
+  console.log('Testing version check hotkey...');
+  if (window.splashManager) {
+    window.splashManager.triggerVersionCheckToast();
+  } else {
+    console.error('Splash manager not available');
+  }
+};
+
+// Help function to show available hotkeys
+window.showHotkeyHelp = function () {
+  console.log(`
+Version Check Hotkeys Available:
+  Ctrl+Shift+V  - Trigger version check and show toast notification
+  Escape        - Force hide splash screen (debug)
+
+Debug Functions Available:
+  testVersionCheckHotkey()  - Test the version check hotkey
+  testUpdateToast(version)  - Test update toast notification
+  testVersionCheck()        - Test version checking
+  simulateNewVersion(ver)   - Simulate a new version
+  clearVersionNotification() - Clear version notifications
+  checkServiceWorkerStatus() - Check service worker status
+  triggerServiceWorkerVersionCheck() - Trigger SW version check
+
+Examples:
+  testVersionCheckHotkey()  // Test the hotkey functionality
+  testUpdateToast('v1.2.0') // Test update toast with version
+  `);
 };
