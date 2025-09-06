@@ -33,6 +33,201 @@ dataService.loadFlavorText().then(messages => {
 let deferredPrompt;
 const installButton = window.domMapper?.get("pwa.installButton");
 
+/**
+ * Get list of critical UI icon assets that should be preloaded
+ * @returns {string[]} Array of image paths to preload
+ */
+function getCriticalUiIconAssets() {
+  return [
+    // UI Icons
+    'img/ui/icons/energy.png',
+    'img/ui/icons/heat.png',
+    'img/ui/icons/efficiency.png',
+    'img/ui/icons/radiation.png',
+    'img/ui/icons/money.png',
+    'img/ui/icons/upgrade.png',
+    'img/ui/icons/part.png',
+    'img/ui/icons/save.png',
+    'img/ui/icons/load.png',
+    'img/ui/icons/settings.png',
+    'img/ui/icons/help.png',
+    'img/ui/icons/close.png',
+
+    // Status Icons
+    'img/ui/status/online.png',
+    'img/ui/status/offline.png',
+    'img/ui/status/error.png',
+    'img/ui/status/warning.png',
+    'img/ui/status/success.png',
+
+    // Navigation Icons
+    'img/ui/nav/home.png',
+    'img/ui/nav/reactor.png',
+    'img/ui/nav/research.png',
+    'img/ui/nav/upgrades.png',
+    'img/ui/nav/about.png',
+    'img/ui/nav/back.png',
+
+    // Border Images
+    'img/ui/borders/border_1.png',
+    'img/ui/borders/border_2.png',
+    'img/ui/borders/border_3.png',
+    'img/ui/borders/border_4.png',
+    'img/ui/borders/border_5.png',
+    'img/ui/borders/border_6.png',
+    'img/ui/borders/border_7.png',
+    'img/ui/borders/border_8.png',
+    'img/ui/borders/border_9.png',
+    'img/ui/borders/border_10.png',
+    'img/ui/borders/border_11.png',
+    'img/ui/borders/border_12.png',
+    'img/ui/borders/border_13.png',
+    'img/ui/borders/border_14.png',
+    'img/ui/borders/border_15.png',
+
+    // Inner UI Elements
+    'img/ui/inner/inner_1.png',
+    'img/ui/inner/inner_2.png',
+    'img/ui/inner/inner_3.png',
+    'img/ui/inner/inner_4.png',
+    'img/ui/inner/inner_5.png',
+    'img/ui/inner/inner_6.png',
+    'img/ui/inner/inner_7.png',
+
+    // Flow Indicators
+    'img/ui/flow/flow_1.svg',
+    'img/ui/flow/flow_2.svg',
+    'img/ui/flow/flow_3.svg',
+    'img/ui/flow/flow_4.svg',
+
+    // Effects
+    'img/ui/effects/effect_1.png',
+
+    // Connector
+    'img/ui/connector_border.png',
+
+    // Base tile for splash background
+    'img/ui/tile.png',
+
+    // Critical part images (tier 1-3 for initial loading)
+    'img/parts/cells/cell_1_1.png',
+    'img/parts/cells/cell_1_2.png',
+    'img/parts/cells/cell_1_4.png',
+    'img/parts/accelerators/accelerator_1.png',
+    'img/parts/capacitors/capacitor_1.png',
+    'img/parts/coolants/coolant_cell_1.png',
+    'img/parts/exchangers/exchanger_1.png',
+    'img/parts/inlets/inlet_1.png',
+    'img/parts/outlets/outlet_1.png',
+    'img/parts/platings/plating_1.png',
+    'img/parts/reflectors/reflector_1.png',
+    'img/parts/vents/vent_1.png',
+    'img/parts/valves/valve_1_1.png',
+    'img/parts/valves/valve_1_2.png',
+    'img/parts/valves/valve_1_3.png',
+    'img/parts/valves/valve_1_4.png',
+    'img/parts/valves/valve_1_5.png'
+  ];
+}
+
+/**
+ * Warm the image cache by preloading critical UI assets
+ * @param {string[]} imagePaths - Array of image paths to preload
+ * @returns {Promise<void>}
+ */
+async function warmImageCache(imagePaths) {
+  console.log(`[PWA] Warming image cache for ${imagePaths.length} critical assets...`);
+
+  const loadPromises = imagePaths.map(async (imagePath) => {
+    try {
+      // Create a new Image object to trigger loading
+      const img = new Image();
+
+      // Set up promise-based loading
+      const loadPromise = new Promise((resolve, reject) => {
+        img.onload = () => {
+          console.log(`[PWA] Preloaded: ${imagePath}`);
+          resolve(imagePath);
+        };
+        img.onerror = (error) => {
+          console.warn(`[PWA] Failed to preload: ${imagePath}`, error);
+          resolve(imagePath); // Don't reject, just log and continue
+        };
+      });
+
+      // Start loading the image
+      img.src = imagePath;
+
+      return loadPromise;
+    } catch (error) {
+      console.warn(`[PWA] Error preloading ${imagePath}:`, error);
+      return imagePath; // Return the path even if loading failed
+    }
+  });
+
+  try {
+    // Wait for all images to load (or fail gracefully)
+    const results = await Promise.allSettled(loadPromises);
+
+    const successful = results.filter(result => result.status === 'fulfilled').length;
+    const failed = results.filter(result => result.status === 'rejected').length;
+
+    console.log(`[PWA] Image cache warming complete: ${successful} successful, ${failed} failed`);
+  } catch (error) {
+    console.warn('[PWA] Image cache warming encountered an error:', error);
+  }
+}
+
+/**
+ * Preload all part images for a specific tier
+ * @param {number} tier - The tier to preload (1-6)
+ * @returns {Promise<void>}
+ */
+async function preloadTierImages(tier) {
+  const tierImages = partImagesByTier[tier] || [];
+  if (tierImages.length === 0) {
+    console.warn(`[PWA] No images found for tier ${tier}`);
+    return;
+  }
+
+  console.log(`[PWA] Preloading ${tierImages.length} images for tier ${tier}...`);
+
+  const loadPromises = tierImages.map(async (imagePath) => {
+    try {
+      const img = new Image();
+      const loadPromise = new Promise((resolve) => {
+        img.onload = () => resolve(imagePath);
+        img.onerror = () => resolve(imagePath); // Don't fail on individual image errors
+      });
+      img.src = imagePath;
+      return loadPromise;
+    } catch (error) {
+      console.warn(`[PWA] Error preloading tier ${tier} image ${imagePath}:`, error);
+      return imagePath;
+    }
+  });
+
+  await Promise.allSettled(loadPromises);
+  console.log(`[PWA] Tier ${tier} images preloaded`);
+}
+
+/**
+ * Preload all part images progressively (tier by tier)
+ * @returns {Promise<void>}
+ */
+async function preloadAllPartImages() {
+  console.log('[PWA] Starting progressive preload of all part images...');
+
+  // Preload tier by tier to avoid overwhelming the browser
+  for (let tier = 1; tier <= maxTier; tier++) {
+    await preloadTierImages(tier);
+    // Small delay between tiers to prevent blocking
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  console.log('[PWA] All part images preloaded');
+}
+
 // Splash Screen Manager
 class SplashScreenManager {
   constructor() {
@@ -127,6 +322,12 @@ class SplashScreenManager {
         // disappear during gameplay due to network hiccups or memory pressure
         try {
           await warmImageCache(getCriticalUiIconAssets());
+
+          // Also preload all part images in the background
+          // This runs asynchronously and won't block the splash screen
+          preloadAllPartImages().catch(error => {
+            console.warn("[PWA] Background part image preloading failed:", error);
+          });
         } catch (e) {
           console.warn("[PWA] Failed to warm image cache:", e);
         }
@@ -178,6 +379,11 @@ class SplashScreenManager {
       // Warm image cache even in fallback mode
       try {
         await warmImageCache(getCriticalUiIconAssets());
+
+        // Also preload all part images in the background
+        preloadAllPartImages().catch(error => {
+          console.warn("[PWA] Background part image preloading failed:", error);
+        });
       } catch (_) { /* non-fatal */ }
     }
   }
@@ -387,7 +593,8 @@ class SplashScreenManager {
       }
 
       // Use current origin for version check
-      const basePath = window.getBasePath ? window.getBasePath() : '';
+      const { getBasePath } = await import("../utils/util.js");
+      const basePath = getBasePath();
       const versionUrl = `${window.location.origin}${basePath}/version.json`;
 
       const response = await fetch(versionUrl, {
@@ -450,7 +657,8 @@ class SplashScreenManager {
     try {
       // First try to get from cache
       const cache = await caches.open("static-resources");
-      const basePath = window.getBasePath ? window.getBasePath() : '';
+      const { getBasePath } = await import("../utils/util.js");
+      const basePath = getBasePath();
       const versionUrl = `${basePath}/version.json`;
       const response = await cache.match(versionUrl);
       if (response) {
@@ -2265,6 +2473,7 @@ async function registerOneOffSync() {
   window.addEventListener("online", updateGoogleDriveButtonState);
   window.addEventListener("offline", updateGoogleDriveButtonState);
 })();
+
 
 
 // Help function to show available hotkeys
