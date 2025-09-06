@@ -349,13 +349,13 @@ export class Engine {
       if (tile.power > 0) {
         const count = tile.power >= 200 ? 3 : tile.power >= 50 ? 2 : 1;
         for (let i = 0; i < count; i++) {
-          visualEvents[visualEventIndex++] = { type: 'emit', part: 'cell', icon: 'power', tile: [tile.row, tile.col] };
+          // visualEvents[visualEventIndex++] = { type: 'emit', part: 'cell', icon: 'power', tile: [tile.row, tile.col] };
         }
       }
       if (tile.heat > 0) {
         const countH = tile.heat >= 200 ? 3 : tile.heat >= 50 ? 2 : 1;
         for (let i = 0; i < countH; i++) {
-          visualEvents[visualEventIndex++] = { type: 'emit', part: 'cell', icon: 'heat', tile: [tile.row, tile.col] };
+          // visualEvents[visualEventIndex++] = { type: 'emit', part: 'cell', icon: 'heat', tile: [tile.row, tile.col] };
         }
       }
       const heatNeighbors = tile.containmentNeighborTiles.filter(
@@ -365,25 +365,25 @@ export class Engine {
         const heat_remove = Math.ceil(tile.heat / heatNeighbors.length);
         heatNeighbors.forEach((neighbor) => {
           neighbor.heat_contained += heat_remove;
-          // Visual: local containment receiving heat flow from cell
-          visualEvents[visualEventIndex++] = {
-            type: 'flow',
-            icon: 'heat',
-            from: [tile.row, tile.col],
-            to: [neighbor.row, neighbor.col],
-            amount: heat_remove
-          };
+          // Visual: local containment receiving heat flow from cell - DISABLED for performance
+          // visualEvents[visualEventIndex++] = {
+          //   type: 'flow',
+          //   icon: 'heat',
+          //   from: [tile.row, tile.col],
+          //   to: [neighbor.row, neighbor.col],
+          //   amount: heat_remove
+          // };
         });
       } else {
         heat_add += tile.heat;
-        // Visual: show heat going directly to reactor when no neighbors
-        visualEvents[visualEventIndex++] = {
-          type: 'flow',
-          icon: 'heat',
-          from: [tile.row, tile.col],
-          to: 'reactor', // Special target to indicate reactor
-          amount: tile.heat
-        };
+        // Visual: show heat going directly to reactor when no neighbors - DISABLED for performance
+        // visualEvents[visualEventIndex++] = {
+        //   type: 'flow',
+        //   icon: 'heat',
+        //   from: [tile.row, tile.col],
+        //   to: 'reactor', // Special target to indicate reactor
+        //   amount: tile.heat
+        // };
       }
 
       tile.ticks--;
@@ -392,13 +392,13 @@ export class Engine {
         if (r_tile.ticks > 0) {
           r_tile.ticks--;
           if (r_tile.ticks === 0) this.handleComponentDepletion(r_tile);
-          // Visual: show reflector contributing to the cell with a power icon flow
-          visualEvents[visualEventIndex++] = {
-            type: 'flow',
-            icon: 'power',
-            from: [r_tile.row, r_tile.col],
-            to: [tile.row, tile.col]
-          };
+          // Visual: show reflector contributing to the cell with a power icon flow - DISABLED for performance
+          // visualEvents[visualEventIndex++] = {
+          //   type: 'flow',
+          //   icon: 'power',
+          //   from: [r_tile.row, r_tile.col],
+          //   to: [tile.row, tile.col]
+          // };
         }
       }
 
@@ -445,7 +445,7 @@ export class Engine {
         if (transfer_heat > 0) {
           const cnt = transfer_heat >= 50 ? 3 : transfer_heat >= 15 ? 2 : 1;
           for (let i = 0; i < cnt; i++) {
-            visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [tile_containment.row, tile_containment.col], to: [tile.row, tile.col], amount: transfer_heat };
+            // visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [tile_containment.row, tile_containment.col], to: [tile.row, tile.col], amount: transfer_heat };
           }
         }
       }
@@ -608,16 +608,16 @@ export class Engine {
                     console.log(`[ENGINE] Valve ${valvePart.id} transfer complete: input heat now ${input.heat_contained}, output heat now ${output.heat_contained}`);
                   }
 
-                  // Add visual effect
+                  // Add visual effect - DISABLED for performance
                   const cnt = transferAmount >= 50 ? 3 : transferAmount >= 15 ? 2 : 1;
                   for (let i = 0; i < cnt; i++) {
-                    visualEvents[visualEventIndex++] = {
-                      type: 'flow',
-                      icon: 'heat',
-                      from: [input.row, input.col],
-                      to: [output.row, output.col],
-                      amount: transferAmount
-                    };
+                    // visualEvents[visualEventIndex++] = {
+                    //   type: 'flow',
+                    //   icon: 'heat',
+                    //   from: [input.row, input.col],
+                    //   to: [output.row, output.col],
+                    //   amount: transferAmount
+                    // };
                   }
                 }
               }
@@ -802,7 +802,7 @@ export class Engine {
         const transfer_heat = p.amount;
         const cnt = transfer_heat >= 50 ? 3 : transfer_heat >= 15 ? 2 : 1;
         for (let i = 0; i < cnt; i++) {
-          visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [p.from.row, p.from.col], to: [p.to.row, p.to.col], amount: transfer_heat };
+          // visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [p.from.row, p.from.col], to: [p.to.row, p.to.col], amount: transfer_heat };
         }
       }
 
@@ -863,7 +863,7 @@ export class Engine {
           {
             const cnt = amountToAdd >= 50 ? 3 : amountToAdd >= 15 ? 2 : 1;
             for (let i = 0; i < cnt; i++) {
-              visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [tile.row, tile.col], to: [tile_containment.row, tile_containment.col], amount: amountToAdd };
+              // visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [tile.row, tile.col], to: [tile_containment.row, tile_containment.col], amount: amountToAdd };
             }
           }
 
@@ -964,7 +964,7 @@ export class Engine {
       if (vent_reduce > 0) {
         const cnt = vent_reduce >= 50 ? 3 : vent_reduce >= 15 ? 2 : 1;
         for (let i = 0; i < cnt; i++) {
-          visualEvents[visualEventIndex++] = { type: 'emit', part: 'vent', icon: 'heat', tile: [tile.row, tile.col] };
+          // visualEvents[visualEventIndex++] = { type: 'emit', part: 'vent', icon: 'heat', tile: [tile.row, tile.col] };
         }
         // Blink indicator visually
         try {
@@ -1069,7 +1069,8 @@ export class Engine {
 
     if (reactor.checkMeltdown()) this.stop();
 
-    // Flush visual events once per tick
+    // Flush visual events once per tick - OPTIMIZED for performance
+    // Since most visual events are disabled, this is now much more efficient
     try {
       if (visualEventIndex > 0 && this.game.ui && typeof this.game.ui._renderVisualEvents === 'function') {
         this.game.ui._renderVisualEvents(visualEvents.slice(0, visualEventIndex));
@@ -1081,9 +1082,10 @@ export class Engine {
     }
     this.tick_count = (this.tick_count || 0) + 1; // Increment tick_count at the end of each tick
 
-    // Flush visual events to the game buffer once per tick
+    // Flush visual events to the game buffer once per tick - OPTIMIZED
+    // Since most visual events are disabled, this rarely processes events
     if (visualEventIndex > 0) {
-      // Enqueueing visual events
+      // Enqueueing visual events - now processes minimal events for better performance
       this.game.enqueueVisualEvents(visualEvents.slice(0, visualEventIndex));
     }
   }
