@@ -480,10 +480,18 @@ class SplashScreenManager {
 
     const versionSection = document.createElement('div');
     versionSection.className = 'splash-version-section';
+    versionSection.title = 'Click to check for updates';
+    versionSection.style.cursor = 'pointer';
+
+    // Add click handler to the entire section
+    versionSection.onclick = () => {
+      this.triggerVersionCheckToast();
+    };
 
     const versionDiv = document.createElement('span');
     versionDiv.className = 'splash-version';
     versionDiv.textContent = `Version ${version}`;
+
     versionSection.appendChild(versionDiv);
 
     this.splashScreen.appendChild(versionSection);
@@ -746,22 +754,16 @@ class SplashScreenManager {
     // Show toast notification
     this.showUpdateToast(newVersion, currentVersion || this.currentVersion);
 
-    // Find the version element and add flashing class
-    const versionElement = this.splashScreen?.querySelector('.splash-version');
-    if (versionElement) {
-      versionElement.classList.add('new-version');
-      versionElement.title = `New version available: ${newVersion} (Current: ${currentVersion || this.currentVersion})`;
-
-      // Add a click handler to show more details
-      versionElement.style.cursor = 'pointer';
-      versionElement.onclick = () => {
-        this.showUpdateNotification(newVersion, currentVersion || this.currentVersion);
-      };
+    // Find the version section and add flashing class
+    const versionSection = this.splashScreen?.querySelector('.splash-version-section');
+    if (versionSection) {
+      versionSection.classList.add('new-version');
+      versionSection.title = `New version available: ${newVersion} (Current: ${currentVersion || this.currentVersion})`;
 
       // Stop flashing after 30 seconds but keep the clickable state
       setTimeout(() => {
-        versionElement.classList.remove('new-version');
-        versionElement.title = `New version available: ${newVersion} (Current: ${currentVersion || this.currentVersion})`;
+        versionSection.classList.remove('new-version');
+        versionSection.title = `New version available: ${newVersion} (Current: ${currentVersion || this.currentVersion})`;
       }, 30000);
     }
 
@@ -1279,12 +1281,11 @@ class SplashScreenManager {
    */
   clearVersionNotification() {
     localStorage.removeItem('reactor-last-notified-version');
-    const versionElement = this.splashScreen?.querySelector('.splash-version');
-    if (versionElement) {
-      versionElement.classList.remove('new-version');
-      versionElement.style.cursor = 'default';
-      versionElement.onclick = null;
-      versionElement.title = '';
+    const versionSection = this.splashScreen?.querySelector('.splash-version-section');
+    if (versionSection) {
+      versionSection.classList.remove('new-version');
+      // Keep the click handler and cursor pointer for version checking
+      versionSection.title = 'Click to check for updates';
     }
   }
 
