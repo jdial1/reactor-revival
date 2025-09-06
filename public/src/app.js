@@ -362,11 +362,6 @@ async function main() {
     if (typeof registerOneOffSync === "function") registerOneOffSync();
   }
 
-  // Debug function to test toast notification
-  window.testUpdateToast = function (version = 'v1.1.0') {
-    console.log('Testing update toast notification...');
-    showUpdateToast(version, '25_07_28-2133');
-  };
 }
 
 async function startGame(pageRouter, ui, game) {
@@ -486,7 +481,7 @@ function setupGlobalListeners(game) {
   document.addEventListener(
     "click",
     (e) => {
-      if (game.tooltip_manager.isLocked) {
+      if (game.tooltip_manager && game.tooltip_manager.isLocked) {
         const tooltipEl = document.getElementById("tooltip");
         if (
           tooltipEl &&

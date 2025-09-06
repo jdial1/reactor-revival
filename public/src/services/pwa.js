@@ -334,8 +334,25 @@ class SplashScreenManager {
     try {
       // First, get the current local version
       const localResponse = await fetch('./version.json', { cache: 'no-cache' });
+
+      if (!localResponse.ok) {
+        console.warn(`Local version check failed with status: ${localResponse.status}`);
+        return;
+      }
+
+      const contentType = localResponse.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn(`Local version response is not JSON. Content-Type: ${contentType}`);
+        return;
+      }
+
       const localVersionData = await localResponse.json();
       const currentLocalVersion = localVersionData.version;
+
+      if (!currentLocalVersion) {
+        console.warn('Local version data missing or invalid:', localVersionData);
+        return;
+      }
 
       if (this.currentVersion === null) {
         this.currentVersion = currentLocalVersion;
@@ -363,6 +380,12 @@ class SplashScreenManager {
         return null;
       }
 
+      // Skip version check in development mode (localhost)
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log('Development mode - skipping deployed version check');
+        return null;
+      }
+
       // Use current origin for version check
       const basePath = window.getBasePath ? window.getBasePath() : '';
       const versionUrl = `${window.location.origin}${basePath}/version.json`;
@@ -383,9 +406,29 @@ class SplashScreenManager {
       });
 
       if (response.ok) {
-        const versionData = await response.json();
-        console.log(`Deployed version check successful: ${versionData.version}`);
-        return versionData.version;
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.warn(`Version check response is not JSON. Content-Type: ${contentType}`);
+          return null;
+        }
+
+        try {
+          const responseText = await response.text();
+          console.log(`Version response text: ${responseText.substring(0, 100)}`);
+
+          const versionData = JSON.parse(responseText);
+          if (versionData && versionData.version) {
+            console.log(`Deployed version check successful: ${versionData.version}`);
+            return versionData.version;
+          } else {
+            console.warn('Version data missing or invalid:', versionData);
+            return null;
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse version JSON:', parseError);
+          return null;
+        }
       } else {
         console.log(`Version check failed with status: ${response.status}`);
         return null;
@@ -1591,72 +1634,6 @@ window.splashManager = new SplashScreenManager();
 // Configuration (can be overridden)
 window.reactorConfig = window.reactorConfig || {};
 
-// Debug function to test version checking
-window.testVersionCheck = async function () {
-  console.log('Testing version check...');
-  if (window.splashManager) {
-    await window.splashManager.checkForNewVersion();
-  } else {
-    console.error('Splash manager not available');
-  }
-};
-
-// Debug function to simulate a new version
-window.simulateNewVersion = function (version = 'v1.0.0') {
-  console.log('Simulating new version:', version);
-  if (window.splashManager) {
-    window.splashManager.handleNewVersion(version, '25_07_28-2133');
-  } else {
-    console.error('Splash manager not available');
-  }
-};
-
-// Debug function to clear version notifications
-window.clearVersionNotification = function () {
-  console.log('Clearing version notification...');
-  if (window.splashManager) {
-    window.splashManager.clearVersionNotification();
-  } else {
-    console.error('Splash manager not available');
-  }
-};
-
-// Debug function to configure GitHub repository
-window.setGitHubRepository = function (owner, repo) {
-  console.log(`Setting GitHub repository to: ${owner}/${repo}`);
-  window.reactorConfig = window.reactorConfig || {};
-  window.reactorConfig.githubRepository = { owner, repo };
-  console.log('Repository configuration updated. Reload the page to test with new settings.');
-};
-
-// Debug function to test specific repository
-window.testSpecificRepository = async function (owner, repo) {
-  console.log(`Testing repository: ${owner}/${repo}`);
-  try {
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
-      headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Reactor-Revival-App'
-      },
-      signal: AbortSignal.timeout(10000)
-    });
-
-    if (response.ok) {
-      const releaseData = await response.json();
-      console.log('✅ Repository found!');
-      console.log('Latest release:', releaseData.tag_name);
-      console.log('Release name:', releaseData.name);
-      console.log('Published:', releaseData.published_at);
-      return true;
-    } else {
-      console.error(`❌ Repository not found: ${response.status} ${response.statusText}`);
-      return false;
-    }
-  } catch (error) {
-    console.error('❌ Error testing repository:', error.message);
-    return false;
-  }
-};
 
 
 function enable() {
@@ -2289,54 +2266,6 @@ async function registerOneOffSync() {
   window.addEventListener("offline", updateGoogleDriveButtonState);
 })();
 
-// Debug function to trigger service worker version check
-window.triggerServiceWorkerVersionCheck = async function () {
-  console.log('Triggering service worker version check...');
-  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'TRIGGER_VERSION_CHECK'
-    });
-    console.log('Version check triggered in service worker');
-  } else {
-    console.error('Service worker not available');
-  }
-};
-
-// Debug function to check service worker status
-window.checkServiceWorkerStatus = function () {
-  console.log('Service Worker Status:');
-  console.log('- Available:', 'serviceWorker' in navigator);
-  console.log('- Controller:', !!navigator.serviceWorker.controller);
-  console.log('- Registration:', navigator.serviceWorker.registration ? 'Active' : 'None');
-
-  if (navigator.serviceWorker.controller) {
-    console.log('✅ Service worker is active and ready for version checking');
-  } else {
-    console.log('❌ Service worker not active - version checking may not work');
-  }
-};
-
-// Debug function to test toast notification
-window.testUpdateToast = function (version = 'v1.1.0') {
-  console.log('Testing update toast notification...');
-  if (window.splashManager) {
-    window.splashManager.showUpdateToast(version, '25_07_28-2133');
-  } else if (typeof showUpdateToast === 'function') {
-    showUpdateToast(version, '25_07_28-2133');
-  } else {
-    console.error('Toast notification function not available');
-  }
-};
-
-// Debug function to test version check hotkey
-window.testVersionCheckHotkey = function () {
-  console.log('Testing version check hotkey...');
-  if (window.splashManager) {
-    window.splashManager.triggerVersionCheckToast();
-  } else {
-    console.error('Splash manager not available');
-  }
-};
 
 // Help function to show available hotkeys
 window.showHotkeyHelp = function () {
@@ -2344,18 +2273,5 @@ window.showHotkeyHelp = function () {
 Version Check Hotkeys Available:
   Ctrl+Shift+V  - Trigger version check and show toast notification
   Escape        - Force hide splash screen (debug)
-
-Debug Functions Available:
-  testVersionCheckHotkey()  - Test the version check hotkey
-  testUpdateToast(version)  - Test update toast notification
-  testVersionCheck()        - Test version checking
-  simulateNewVersion(ver)   - Simulate a new version
-  clearVersionNotification() - Clear version notifications
-  checkServiceWorkerStatus() - Check service worker status
-  triggerServiceWorkerVersionCheck() - Trigger SW version check
-
-Examples:
-  testVersionCheckHotkey()  // Test the hotkey functionality
-  testUpdateToast('v1.2.0') // Test update toast with version
   `);
 };
