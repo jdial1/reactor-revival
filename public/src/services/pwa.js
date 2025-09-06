@@ -125,8 +125,7 @@ function getCriticalUiIconAssets() {
     'img/parts/valves/valve_1_1.png',
     'img/parts/valves/valve_1_2.png',
     'img/parts/valves/valve_1_3.png',
-    'img/parts/valves/valve_1_4.png',
-    'img/parts/valves/valve_1_5.png'
+    'img/parts/valves/valve_1_4.png'
   ];
 }
 
@@ -146,12 +145,10 @@ async function warmImageCache(imagePaths) {
       // Set up promise-based loading
       const loadPromise = new Promise((resolve, reject) => {
         img.onload = () => {
-          console.log(`[PWA] Preloaded: ${imagePath}`);
-          resolve(imagePath);
+          resolve({ success: true, path: imagePath });
         };
         img.onerror = (error) => {
-          console.warn(`[PWA] Failed to preload: ${imagePath}`, error);
-          resolve(imagePath); // Don't reject, just log and continue
+          resolve({ success: false, path: imagePath, error });
         };
       });
 
@@ -160,8 +157,7 @@ async function warmImageCache(imagePaths) {
 
       return loadPromise;
     } catch (error) {
-      console.warn(`[PWA] Error preloading ${imagePath}:`, error);
-      return imagePath; // Return the path even if loading failed
+      return { success: false, path: imagePath, error };
     }
   });
 
@@ -169,10 +165,22 @@ async function warmImageCache(imagePaths) {
     // Wait for all images to load (or fail gracefully)
     const results = await Promise.allSettled(loadPromises);
 
-    const successful = results.filter(result => result.status === 'fulfilled').length;
-    const failed = results.filter(result => result.status === 'rejected').length;
+    const successful = results.filter(result =>
+      result.status === 'fulfilled' && result.value.success
+    ).length;
+    const failed = results.filter(result =>
+      result.status === 'fulfilled' && !result.value.success
+    ).length;
 
     console.log(`[PWA] Image cache warming complete: ${successful} successful, ${failed} failed`);
+
+    // Only log failed assets to keep console clean
+    if (failed > 0) {
+      const failedAssets = results
+        .filter(result => result.status === 'fulfilled' && !result.value.success)
+        .map(result => result.value.path);
+      console.warn(`[PWA] Failed to preload: ${failedAssets.join(', ')}`);
+    }
   } catch (error) {
     console.warn('[PWA] Image cache warming encountered an error:', error);
   }
@@ -669,7 +677,20 @@ class SplashScreenManager {
       console.warn("Failed to get local version from cache:", error);
     }
 
-    // If cache fails, try to get from service worker
+    // If cache fails, try direct fetch as fallback
+    try {
+      const { getResourceUrl } = await import("../utils/util.js");
+      const versionUrl = getResourceUrl("version.json");
+      const response = await fetch(versionUrl, { cache: 'no-cache' });
+      if (response.ok) {
+        const data = await response.json();
+        return data.version;
+      }
+    } catch (error) {
+      console.warn("Failed to get local version from direct fetch:", error);
+    }
+
+    // If direct fetch fails, try to get from service worker
     try {
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         // Request version from service worker
@@ -1099,9 +1120,11 @@ class SplashScreenManager {
     try {
       // Get current version
       const currentVersion = await this.getLocalVersion() || "Unknown";
+      console.log(`Local version detected: ${currentVersion}`);
 
       // Check for deployed version
       const deployedVersion = await this.checkDeployedVersion();
+      console.log(`Deployed version detected: ${deployedVersion}`);
 
       if (deployedVersion && deployedVersion !== currentVersion) {
         // New version available
