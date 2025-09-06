@@ -39,69 +39,69 @@ const installButton = window.domMapper?.get("pwa.installButton");
  */
 function getCriticalUiIconAssets() {
   return [
-    // UI Icons
-    'img/ui/icons/energy.png',
-    'img/ui/icons/heat.png',
-    'img/ui/icons/efficiency.png',
-    'img/ui/icons/radiation.png',
-    'img/ui/icons/money.png',
-    'img/ui/icons/upgrade.png',
-    'img/ui/icons/part.png',
-    'img/ui/icons/save.png',
-    'img/ui/icons/load.png',
-    'img/ui/icons/settings.png',
-    'img/ui/icons/help.png',
-    'img/ui/icons/close.png',
+    // UI Icons (actual existing files)
+    'img/ui/icons/icon_cash.png',
+    'img/ui/icons/icon_heat.png',
+    'img/ui/icons/icon_power.png',
+    'img/ui/icons/icon_time.png',
+    'img/ui/icons/icon_inlet.png',
+    'img/ui/icons/icon_outlet.png',
+    'img/ui/icons/icon_vent.png',
+    'img/ui/icons/icon_cash_outline.svg',
+    'img/ui/icons/icon_copy.svg',
+    'img/ui/icons/icon_deselect.svg',
+    'img/ui/icons/icon_dropper.svg',
+    'img/ui/icons/icon_paste.svg',
 
-    // Status Icons
-    'img/ui/status/online.png',
-    'img/ui/status/offline.png',
-    'img/ui/status/error.png',
-    'img/ui/status/warning.png',
-    'img/ui/status/success.png',
+    // Status Icons (actual existing files)
+    'img/ui/status/status_bolt.png',
+    'img/ui/status/status_infinity.png',
+    'img/ui/status/status_plus.png',
+    'img/ui/status/status_star.png',
+    'img/ui/status/status_time.png',
 
-    // Navigation Icons
-    'img/ui/nav/home.png',
-    'img/ui/nav/reactor.png',
-    'img/ui/nav/research.png',
-    'img/ui/nav/upgrades.png',
-    'img/ui/nav/about.png',
-    'img/ui/nav/back.png',
+    // Navigation Icons (actual existing files)
+    'img/ui/nav/nav_experimental.png',
+    'img/ui/nav/nav_normal.png',
+    'img/ui/nav/nav_pause.png',
+    'img/ui/nav/nav_play.png',
+    'img/ui/nav/nav_renew.png',
+    'img/ui/nav/nav_unrenew.png',
 
-    // Border Images
-    'img/ui/borders/border_1.png',
-    'img/ui/borders/border_2.png',
-    'img/ui/borders/border_3.png',
-    'img/ui/borders/border_4.png',
-    'img/ui/borders/border_5.png',
-    'img/ui/borders/border_6.png',
-    'img/ui/borders/border_7.png',
-    'img/ui/borders/border_8.png',
-    'img/ui/borders/border_9.png',
-    'img/ui/borders/border_10.png',
-    'img/ui/borders/border_11.png',
-    'img/ui/borders/border_12.png',
-    'img/ui/borders/border_13.png',
-    'img/ui/borders/border_14.png',
-    'img/ui/borders/border_15.png',
+    // Border Images (actual existing files)
+    'img/ui/borders/button/button_border.png',
+    'img/ui/borders/button/button_border_alt.png',
+    'img/ui/borders/button/button_border_alt_active.png',
+    'img/ui/borders/button/button_border_alt_down.png',
+    'img/ui/borders/button/button_border_alt_down_active.png',
+    'img/ui/borders/button/small_button_down.png',
+    'img/ui/borders/button/small_button_off.png',
+    'img/ui/borders/button/small_button_on.png',
+    'img/ui/borders/panel/medium_panel.png',
+    'img/ui/borders/panel/panel_border.png',
+    'img/ui/borders/panel/panel_border_first_first.png',
+    'img/ui/borders/panel/panel_border_first_last.png',
+    'img/ui/borders/panel/panel_border_last_first.png',
+    'img/ui/borders/panel/panel_border_last_last.png',
+    'img/ui/borders/panel/panel_border_last_middle.png',
 
-    // Inner UI Elements
-    'img/ui/inner/inner_1.png',
-    'img/ui/inner/inner_2.png',
-    'img/ui/inner/inner_3.png',
-    'img/ui/inner/inner_4.png',
-    'img/ui/inner/inner_5.png',
-    'img/ui/inner/inner_6.png',
-    'img/ui/inner/inner_7.png',
+    // Inner UI Elements (actual existing files)
+    'img/ui/inner/inner_border.png',
+    'img/ui/inner/inner_border_alt.png',
+    'img/ui/inner/inner_border_alt_active.png',
+    'img/ui/inner/inner_border_alt_down.png',
+    'img/ui/inner/inner_border_alt_flip.png',
+    'img/ui/inner/inner_border_alt_flip_active.png',
+    'img/ui/inner/inner_border_alt_flip_down.png',
 
-    // Flow Indicators
-    'img/ui/flow/flow_1.svg',
-    'img/ui/flow/flow_2.svg',
-    'img/ui/flow/flow_3.svg',
-    'img/ui/flow/flow_4.svg',
+    // Flow Indicators (actual existing files)
+    'img/ui/flow/flow-arrow-down.svg',
+    'img/ui/flow/flow-arrow-left.svg',
+    'img/ui/flow/flow-arrow-right.svg',
+    'img/ui/flow/flow-arrow-up.svg',
 
-    // Effects
-    'img/ui/effects/effect_1.png',
+    // Effects (actual existing files)
+    'img/ui/effects/explosion_map.png',
 
     // Connector
     'img/ui/connector_border.png',
@@ -109,7 +109,7 @@ function getCriticalUiIconAssets() {
     // Base tile for splash background
     'img/ui/tile.png',
 
-    // Critical part images (tier 1-3 for initial loading)
+    // Critical part images (tier 1 for initial loading)
     'img/parts/cells/cell_1_1.png',
     'img/parts/cells/cell_1_2.png',
     'img/parts/cells/cell_1_4.png',
