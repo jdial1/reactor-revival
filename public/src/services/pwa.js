@@ -188,11 +188,68 @@ class SplashScreenManager {
 
     let version = "Unknown";
     try {
-      const versionResponse = await fetch("./version.json");
-      const versionData = await versionResponse.json();
+      // Try multiple approaches to get the version
+      const { getResourceUrl } = await import("../utils/util.js");
+      const versionUrl = getResourceUrl("version.json");
+      console.log("Fetching version from:", versionUrl);
+
+      let versionResponse;
+      try {
+        versionResponse = await fetch(versionUrl);
+      } catch (urlError) {
+        console.warn("Primary URL failed, trying direct path:", urlError);
+        versionResponse = await fetch("/version.json");
+      }
+
+      console.log("Version response status:", versionResponse.status);
+      console.log("Version response headers:", versionResponse.headers.get('content-type'));
+
+      if (!versionResponse.ok) {
+        throw new Error(`HTTP ${versionResponse.status}: ${versionResponse.statusText}`);
+      }
+
+      const responseText = await versionResponse.text();
+      console.log("Version response text:", responseText.substring(0, 100));
+
+      const versionData = JSON.parse(responseText);
       version = versionData.version || "Unknown";
     } catch (error) {
       console.warn("Could not load version info:", error);
+
+      // Try to get local version from cache as fallback
+      try {
+        const localVersion = await this.getLocalVersion();
+        if (localVersion) {
+          version = localVersion;
+          console.log("Using local cached version:", localVersion);
+        } else {
+          // If cache is empty (development mode), try direct local fetch
+          try {
+            const directResponse = await fetch("./version.json");
+            if (directResponse.ok) {
+              const directData = await directResponse.json();
+              version = directData.version || "Unknown";
+              console.log("Using direct local version:", version);
+            }
+          } catch (directError) {
+            console.warn("Could not load direct local version:", directError);
+
+            // Final fallback: try absolute path
+            try {
+              const absoluteResponse = await fetch("/version.json");
+              if (absoluteResponse.ok) {
+                const absoluteData = await absoluteResponse.json();
+                version = absoluteData.version || "Unknown";
+                console.log("Using absolute path version:", version);
+              }
+            } catch (absoluteError) {
+              console.warn("Could not load absolute path version:", absoluteError);
+            }
+          }
+        }
+      } catch (localError) {
+        console.warn("Could not load local version:", localError);
+      }
     }
 
 
@@ -256,7 +313,7 @@ class SplashScreenManager {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'NEW_VERSION_AVAILABLE') {
-          this.handleNewVersion(event.data.version);
+          this.handleNewVersion(event.data.version, event.data.currentVersion);
         }
       });
     }
@@ -275,14 +332,20 @@ class SplashScreenManager {
    */
   async checkForNewVersion() {
     try {
-      const response = await fetch('./version.json', { cache: 'no-cache' });
-      const versionData = await response.json();
-      const newVersion = versionData.version;
+      // First, get the current local version
+      const localResponse = await fetch('./version.json', { cache: 'no-cache' });
+      const localVersionData = await localResponse.json();
+      const currentLocalVersion = localVersionData.version;
 
       if (this.currentVersion === null) {
-        this.currentVersion = newVersion;
-      } else if (newVersion !== this.currentVersion) {
-        this.handleNewVersion(newVersion);
+        this.currentVersion = currentLocalVersion;
+      }
+
+      // Check the deployed version for the latest release
+      const latestVersion = await this.checkDeployedVersion();
+
+      if (latestVersion && this.isNewerVersion(latestVersion, currentLocalVersion)) {
+        this.handleNewVersion(latestVersion, currentLocalVersion);
       }
     } catch (error) {
       console.warn('Failed to check for new version:', error);
@@ -290,26 +353,504 @@ class SplashScreenManager {
   }
 
   /**
+   * Check deployed version for the latest release
+   */
+  async checkDeployedVersion() {
+    try {
+      // Check if we're online first
+      if (!navigator.onLine) {
+        console.log('Offline - skipping deployed version check');
+        return null;
+      }
+
+      // Use current origin for version check
+      const basePath = window.getBasePath ? window.getBasePath() : '';
+      const versionUrl = `${window.location.origin}${basePath}/version.json`;
+
+      const response = await fetch(versionUrl, {
+        headers: {
+          'Accept': '*/*',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br, zstd',
+          'Referer': window.location.origin + window.location.pathname,
+          'Sec-Fetch-Dest': 'empty',
+          'Sec-Fetch-Mode': 'cors',
+          'Sec-Fetch-Site': 'same-origin',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0'
+        },
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(10000) // 10 second timeout
+      });
+
+      if (response.ok) {
+        const versionData = await response.json();
+        console.log(`Deployed version check successful: ${versionData.version}`);
+        return versionData.version;
+      } else {
+        console.log(`Version check failed with status: ${response.status}`);
+        return null;
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Version check timed out');
+      } else {
+        console.warn('Failed to check deployed version:', error);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Get local version from cache or service worker
+   */
+  async getLocalVersion() {
+    try {
+      // First try to get from cache
+      const cache = await caches.open("static-resources");
+      const basePath = window.getBasePath ? window.getBasePath() : '';
+      const versionUrl = `${basePath}/version.json`;
+      const response = await cache.match(versionUrl);
+      if (response) {
+        const data = await response.json();
+        return data.version;
+      }
+    } catch (error) {
+      console.warn("Failed to get local version from cache:", error);
+    }
+
+    // If cache fails, try to get from service worker
+    try {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        // Request version from service worker
+        return new Promise((resolve) => {
+          const messageChannel = new MessageChannel();
+          messageChannel.port1.onmessage = (event) => {
+            if (event.data && event.data.type === 'VERSION_RESPONSE') {
+              resolve(event.data.version);
+            } else {
+              resolve(null);
+            }
+          };
+
+          navigator.serviceWorker.controller.postMessage({
+            type: 'GET_VERSION'
+          }, [messageChannel.port2]);
+
+          // Timeout after 2 seconds
+          setTimeout(() => resolve(null), 2000);
+        });
+      }
+    } catch (error) {
+      console.warn("Failed to get local version from service worker:", error);
+    }
+
+    return null;
+  }
+
+
+  /**
+   * Compare if a version is newer than the current version
+   * Handles timestamp-based version format (25_09_05-2127)
+   */
+  isNewerVersion(deployedVersion, localVersion) {
+    // Both versions should be in timestamp format (YY_MM_DD-HHMM)
+    // We can do a simple string comparison since the format is chronological
+    return deployedVersion !== localVersion;
+  }
+
+  /**
    * Handle new version detection
    */
-  handleNewVersion(newVersion) {
-    console.log('New version detected:', newVersion);
+  handleNewVersion(newVersion, currentVersion = null) {
+    console.log('New version detected:', newVersion, 'Current version:', currentVersion);
+
+    // Check if we've already notified about this version
+    const lastNotifiedVersion = localStorage.getItem('reactor-last-notified-version');
+    if (lastNotifiedVersion === newVersion) {
+      console.log('Already notified about version:', newVersion);
+      return;
+    }
+
+    // Show toast notification
+    this.showUpdateToast(newVersion, currentVersion || this.currentVersion);
 
     // Find the version element and add flashing class
-    const versionElement = this.splashScreen.querySelector('.splash-version');
+    const versionElement = this.splashScreen?.querySelector('.splash-version');
     if (versionElement) {
       versionElement.classList.add('new-version');
-      versionElement.title = `New version available: ${newVersion}`;
+      versionElement.title = `New version available: ${newVersion} (Current: ${currentVersion || this.currentVersion})`;
 
-      // Stop flashing after 30 seconds
+      // Add a click handler to show more details
+      versionElement.style.cursor = 'pointer';
+      versionElement.onclick = () => {
+        this.showUpdateNotification(newVersion, currentVersion || this.currentVersion);
+      };
+
+      // Stop flashing after 30 seconds but keep the clickable state
       setTimeout(() => {
         versionElement.classList.remove('new-version');
-        versionElement.title = '';
+        versionElement.title = `New version available: ${newVersion} (Current: ${currentVersion || this.currentVersion})`;
       }, 30000);
     }
 
-    // Update current version
+    // Update current version and mark as notified
     this.currentVersion = newVersion;
+    localStorage.setItem('reactor-last-notified-version', newVersion);
+  }
+
+  /**
+   * Show update notification modal
+   */
+  showUpdateNotification(newVersion, currentVersion) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'update-notification-modal';
+    modal.innerHTML = `
+      <div class="update-notification-content">
+        <h3>🚀 Update Available!</h3>
+        <p>A new version of Reactor Revival is available:</p>
+        <div class="version-comparison">
+          <div class="version-item">
+            <span class="version-label">Current:</span>
+            <span class="version-value current">${currentVersion}</span>
+          </div>
+          <div class="version-item">
+            <span class="version-label">Latest:</span>
+            <span class="version-value latest">${newVersion}</span>
+          </div>
+        </div>
+        <p class="update-instruction">
+          To get the latest version, refresh your browser or check for updates.
+        </p>
+        <div class="update-actions">
+          <button class="update-btn refresh" onclick="window.location.reload()">
+            🔄 Refresh Now
+          </button>
+          <button class="update-btn dismiss" onclick="this.closest('.update-notification-modal').remove()">
+            ✕ Dismiss
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Add styles
+    const style = document.createElement('style');
+    style.textContent = `
+      .update-notification-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        font-family: 'Minecraft', monospace;
+      }
+      
+      .update-notification-content {
+        background: #2a2a2a;
+        border: 2px solid #4a4a4a;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 400px;
+        text-align: center;
+        color: #fff;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      }
+      
+      .update-notification-content h3 {
+        margin: 0 0 15px 0;
+        color: #4CAF50;
+        font-size: 1.2em;
+      }
+      
+      .version-comparison {
+        margin: 15px 0;
+        display: flex;
+        justify-content: space-around;
+        gap: 20px;
+      }
+      
+      .version-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+      }
+      
+      .version-label {
+        font-size: 0.9em;
+        color: #ccc;
+      }
+      
+      .version-value {
+        font-size: 1.1em;
+        font-weight: bold;
+        padding: 5px 10px;
+        border-radius: 4px;
+      }
+      
+      .version-value.current {
+        background: #f44336;
+        color: white;
+      }
+      
+      .version-value.latest {
+        background: #4CAF50;
+        color: white;
+      }
+      
+      .update-instruction {
+        margin: 15px 0;
+        font-size: 0.9em;
+        line-height: 1.4;
+      }
+      
+      .update-instruction a {
+        color: #4CAF50;
+        text-decoration: none;
+      }
+      
+      .update-instruction a:hover {
+        text-decoration: underline;
+      }
+      
+      .update-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 20px;
+      }
+      
+      .update-btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: 'Minecraft', monospace;
+        font-size: 0.9em;
+        transition: background-color 0.2s;
+      }
+      
+      .update-btn.refresh {
+        background: #4CAF50;
+        color: white;
+      }
+      
+      .update-btn.refresh:hover {
+        background: #45a049;
+      }
+      
+      .update-btn.dismiss {
+        background: #666;
+        color: white;
+      }
+      
+      .update-btn.dismiss:hover {
+        background: #777;
+      }
+    `;
+
+    document.head.appendChild(style);
+    document.body.appendChild(modal);
+
+    // Auto-remove after 30 seconds if not interacted with
+    setTimeout(() => {
+      if (document.body.contains(modal)) {
+        modal.remove();
+      }
+    }, 30000);
+  }
+
+  /**
+   * Show update toast notification
+   */
+  showUpdateToast(newVersion, currentVersion) {
+    // Remove any existing toast
+    const existingToast = document.querySelector('.update-toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = 'update-toast';
+    toast.innerHTML = `
+      <div class="update-toast-content">
+        <div class="update-toast-message">
+          <span class="update-toast-icon">🚀</span>
+          <span class="update-toast-text">A new version is available!</span>
+        </div>
+        <button id="refresh-button" class="update-toast-button">Refresh</button>
+        <button class="update-toast-close" onclick="this.closest('.update-toast').remove()">×</button>
+      </div>
+    `;
+
+    // Add toast styles if not already present
+    if (!document.querySelector('#update-toast-styles')) {
+      const style = document.createElement('style');
+      style.id = 'update-toast-styles';
+      style.textContent = `
+        .update-toast {
+          position: fixed;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #2a2a2a;
+          border: 2px solid #4CAF50;
+          border-radius: 8px;
+          padding: 0;
+          z-index: 10000;
+          font-family: 'Minecraft', monospace;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+          animation: toast-slide-up 0.3s ease-out;
+          max-width: 400px;
+          width: 90%;
+        }
+
+        .update-toast-content {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 16px;
+          gap: 12px;
+        }
+
+        .update-toast-message {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+          color: #fff;
+        }
+
+        .update-toast-icon {
+          font-size: 1.2em;
+        }
+
+        .update-toast-text {
+          font-size: 0.9em;
+          font-weight: 500;
+        }
+
+        .update-toast-button {
+          background: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          padding: 8px 16px;
+          font-family: 'Minecraft', monospace;
+          font-size: 0.8em;
+          cursor: pointer;
+          transition: background-color 0.2s;
+          white-space: nowrap;
+        }
+
+        .update-toast-button:hover {
+          background: #45a049;
+        }
+
+        .update-toast-close {
+          background: transparent;
+          color: #ccc;
+          border: none;
+          font-size: 1.2em;
+          cursor: pointer;
+          padding: 4px;
+          line-height: 1;
+          transition: color 0.2s;
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .update-toast-close:hover {
+          color: #fff;
+        }
+
+        @keyframes toast-slide-up {
+          from {
+            transform: translateX(-50%) translateY(100px);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .update-toast {
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            transform: none;
+            max-width: none;
+            width: auto;
+          }
+
+          .update-toast-content {
+            padding: 10px 12px;
+            gap: 8px;
+          }
+
+          .update-toast-text {
+            font-size: 0.8em;
+          }
+
+          .update-toast-button {
+            padding: 6px 12px;
+            font-size: 0.75em;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Add toast to page
+    document.body.appendChild(toast);
+
+    // Set up refresh button click handler
+    const refreshButton = toast.querySelector('#refresh-button');
+    refreshButton.addEventListener('click', () => {
+      // Send message to service worker to skip waiting and activate new version
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+      }
+      // Reload the page to apply the update
+      window.location.reload();
+    });
+
+    // Auto-remove toast after 10 seconds
+    setTimeout(() => {
+      if (document.body.contains(toast)) {
+        toast.style.animation = 'toast-slide-up 0.3s ease-out reverse';
+        setTimeout(() => {
+          if (document.body.contains(toast)) {
+            toast.remove();
+          }
+        }, 300);
+      }
+    }, 10000);
+  }
+
+  /**
+   * Clear version notification when user updates
+   */
+  clearVersionNotification() {
+    localStorage.removeItem('reactor-last-notified-version');
+    const versionElement = this.splashScreen?.querySelector('.splash-version');
+    if (versionElement) {
+      versionElement.classList.remove('new-version');
+      versionElement.style.cursor = 'default';
+      versionElement.onclick = null;
+      versionElement.title = '';
+    }
   }
 
   /**
@@ -885,6 +1426,76 @@ class SplashScreenManager {
 
 // Global splash screen manager instance
 window.splashManager = new SplashScreenManager();
+
+// Configuration (can be overridden)
+window.reactorConfig = window.reactorConfig || {};
+
+// Debug function to test version checking
+window.testVersionCheck = async function () {
+  console.log('Testing version check...');
+  if (window.splashManager) {
+    await window.splashManager.checkForNewVersion();
+  } else {
+    console.error('Splash manager not available');
+  }
+};
+
+// Debug function to simulate a new version
+window.simulateNewVersion = function (version = 'v1.0.0') {
+  console.log('Simulating new version:', version);
+  if (window.splashManager) {
+    window.splashManager.handleNewVersion(version, '25_07_28-2133');
+  } else {
+    console.error('Splash manager not available');
+  }
+};
+
+// Debug function to clear version notifications
+window.clearVersionNotification = function () {
+  console.log('Clearing version notification...');
+  if (window.splashManager) {
+    window.splashManager.clearVersionNotification();
+  } else {
+    console.error('Splash manager not available');
+  }
+};
+
+// Debug function to configure GitHub repository
+window.setGitHubRepository = function (owner, repo) {
+  console.log(`Setting GitHub repository to: ${owner}/${repo}`);
+  window.reactorConfig = window.reactorConfig || {};
+  window.reactorConfig.githubRepository = { owner, repo };
+  console.log('Repository configuration updated. Reload the page to test with new settings.');
+};
+
+// Debug function to test specific repository
+window.testSpecificRepository = async function (owner, repo) {
+  console.log(`Testing repository: ${owner}/${repo}`);
+  try {
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Reactor-Revival-App'
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (response.ok) {
+      const releaseData = await response.json();
+      console.log('✅ Repository found!');
+      console.log('Latest release:', releaseData.tag_name);
+      console.log('Release name:', releaseData.name);
+      console.log('Published:', releaseData.published_at);
+      return true;
+    } else {
+      console.error(`❌ Repository not found: ${response.status} ${response.statusText}`);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Error testing repository:', error.message);
+    return false;
+  }
+};
 
 
 function enable() {
@@ -1508,3 +2119,42 @@ async function registerOneOffSync() {
   window.addEventListener("online", updateGoogleDriveButtonState);
   window.addEventListener("offline", updateGoogleDriveButtonState);
 })();
+
+// Debug function to trigger service worker version check
+window.triggerServiceWorkerVersionCheck = async function () {
+  console.log('Triggering service worker version check...');
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'TRIGGER_VERSION_CHECK'
+    });
+    console.log('Version check triggered in service worker');
+  } else {
+    console.error('Service worker not available');
+  }
+};
+
+// Debug function to check service worker status
+window.checkServiceWorkerStatus = function () {
+  console.log('Service Worker Status:');
+  console.log('- Available:', 'serviceWorker' in navigator);
+  console.log('- Controller:', !!navigator.serviceWorker.controller);
+  console.log('- Registration:', navigator.serviceWorker.registration ? 'Active' : 'None');
+
+  if (navigator.serviceWorker.controller) {
+    console.log('✅ Service worker is active and ready for version checking');
+  } else {
+    console.log('❌ Service worker not active - version checking may not work');
+  }
+};
+
+// Debug function to test toast notification
+window.testUpdateToast = function (version = 'v1.1.0') {
+  console.log('Testing update toast notification...');
+  if (window.splashManager) {
+    window.splashManager.showUpdateToast(version, '25_07_28-2133');
+  } else if (typeof showUpdateToast === 'function') {
+    showUpdateToast(version, '25_07_28-2133');
+  } else {
+    console.error('Toast notification function not available');
+  }
+};

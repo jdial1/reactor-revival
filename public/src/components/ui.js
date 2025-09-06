@@ -4145,7 +4145,8 @@ export class UI {
 
   async loadAndSetVersion() {
     try {
-      const response = await fetch("version.json");
+      const { getResourceUrl } = await import("../utils/util.js");
+      const response = await fetch(getResourceUrl("version.json"));
       const versionData = await response.json();
       const version = versionData.version || "Unknown";
 

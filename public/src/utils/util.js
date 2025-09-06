@@ -62,3 +62,39 @@ export const on = (parentElement, selector, eventType, handler) => {
 };
 
 export const performance = window.performance || { now: () => new Date().getTime() };
+
+/**
+ * Get the correct base path for GitHub Pages deployment
+ * @returns {string} The base path for the current deployment
+ */
+export function getBasePath() {
+    // Check if we're on GitHub Pages
+    const isGitHubPages = window.location.hostname.includes('github.io');
+
+    if (isGitHubPages) {
+        // Extract repository name from path
+        const pathParts = window.location.pathname.split('/');
+        const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
+        return repoName ? `/${repoName}` : '';
+    }
+
+    // For local development or other deployments
+    return '';
+}
+
+/**
+ * Get the correct URL for a resource, accounting for GitHub Pages base path
+ * @param {string} resourcePath - The path to the resource (e.g., 'version.json', '/css/main.css')
+ * @returns {string} The full URL to the resource
+ */
+export function getResourceUrl(resourcePath) {
+    const basePath = getBasePath();
+
+    // Ensure resourcePath starts with / if it's an absolute path
+    if (resourcePath.startsWith('/')) {
+        return `${basePath}${resourcePath}`;
+    } else {
+        // For relative paths, ensure we have the correct base path
+        return `${basePath}/${resourcePath}`;
+    }
+}

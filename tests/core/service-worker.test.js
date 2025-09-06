@@ -266,8 +266,8 @@ describe('Service Worker Integration Tests', () => {
             const swPath = path.resolve(__dirname, '../../public/sw.js');
             const swContent = fs.readFileSync(swPath, 'utf-8');
 
-            expect(swContent).toContain('fetch("/version.json"');
-            expect(swContent).toContain('version');
+            expect(swContent).toContain('versionUrl');
+            expect(swContent).toContain('version.json');
             expect(swContent).toContain('notifyClientsOfNewVersion');
         });
 
@@ -477,7 +477,7 @@ describe('Service Worker Integration Tests', () => {
             const content = await response.text();
 
             expect(content).toContain('startVersionChecking');
-            expect(content).toContain('fetch("/version.json"');
+            expect(content).toContain('versionUrl');
             expect(content).toContain('notifyClientsOfNewVersion');
         });
     });

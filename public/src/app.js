@@ -154,6 +154,180 @@ function setupButtonHandlers(pageRouter, ui, game) {
   }
 }
 
+/**
+ * Show update toast notification
+ */
+function showUpdateToast(newVersion, currentVersion) {
+  // Remove any existing toast
+  const existingToast = document.querySelector('.update-toast');
+  if (existingToast) {
+    existingToast.remove();
+  }
+
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.className = 'update-toast';
+  toast.innerHTML = `
+    <div class="update-toast-content">
+      <div class="update-toast-message">
+        <span class="update-toast-icon">🚀</span>
+        <span class="update-toast-text">A new version is available!</span>
+      </div>
+      <button id="refresh-button" class="update-toast-button">Refresh</button>
+      <button class="update-toast-close" onclick="this.closest('.update-toast').remove()">×</button>
+    </div>
+  `;
+
+  // Add toast styles if not already present
+  if (!document.querySelector('#update-toast-styles')) {
+    const style = document.createElement('style');
+    style.id = 'update-toast-styles';
+    style.textContent = `
+      .update-toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #2a2a2a;
+        border: 2px solid #4CAF50;
+        border-radius: 8px;
+        padding: 0;
+        z-index: 10000;
+        font-family: 'Minecraft', monospace;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        animation: toast-slide-up 0.3s ease-out;
+        max-width: 400px;
+        width: 90%;
+      }
+
+      .update-toast-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        gap: 12px;
+      }
+
+      .update-toast-message {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        color: #fff;
+      }
+
+      .update-toast-icon {
+        font-size: 1.2em;
+      }
+
+      .update-toast-text {
+        font-size: 0.9em;
+        font-weight: 500;
+      }
+
+      .update-toast-button {
+        background: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 8px 16px;
+        font-family: 'Minecraft', monospace;
+        font-size: 0.8em;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        white-space: nowrap;
+      }
+
+      .update-toast-button:hover {
+        background: #45a049;
+      }
+
+      .update-toast-close {
+        background: transparent;
+        color: #ccc;
+        border: none;
+        font-size: 1.2em;
+        cursor: pointer;
+        padding: 4px;
+        line-height: 1;
+        transition: color 0.2s;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .update-toast-close:hover {
+        color: #fff;
+      }
+
+      @keyframes toast-slide-up {
+        from {
+          transform: translateX(-50%) translateY(100px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(-50%) translateY(0);
+          opacity: 1;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .update-toast {
+          bottom: 10px;
+          left: 10px;
+          right: 10px;
+          transform: none;
+          max-width: none;
+          width: auto;
+        }
+
+        .update-toast-content {
+          padding: 10px 12px;
+          gap: 8px;
+        }
+
+        .update-toast-text {
+          font-size: 0.8em;
+        }
+
+        .update-toast-button {
+          padding: 6px 12px;
+          font-size: 0.75em;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Add toast to page
+  document.body.appendChild(toast);
+
+  // Set up refresh button click handler
+  const refreshButton = toast.querySelector('#refresh-button');
+  refreshButton.addEventListener('click', () => {
+    // Send message to service worker to skip waiting and activate new version
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+    }
+    // Reload the page to apply the update
+    window.location.reload();
+  });
+
+  // Auto-remove toast after 10 seconds
+  setTimeout(() => {
+    if (document.body.contains(toast)) {
+      toast.style.animation = 'toast-slide-up 0.3s ease-out reverse';
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          toast.remove();
+        }
+      }, 300);
+    }
+  }, 10000);
+}
+
 async function main() {
   "use strict";
 
@@ -173,20 +347,11 @@ async function main() {
   setupButtonHandlers(pageRouter, ui, game);
   setupGlobalListeners(game);
 
-  // Listen for service worker update notifications and offer to refresh
+  // Listen for service worker update notifications and show toast
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", (event) => {
       if (event && event.data && event.data.type === "NEW_VERSION_AVAILABLE") {
-        const shouldReload = window.confirm("A new version is available. Refresh now to update?");
-        if (shouldReload) {
-          navigator.serviceWorker.getRegistration().then((reg) => {
-            if (reg && reg.waiting) {
-              reg.waiting.postMessage({ type: "SKIP_WAITING" });
-            }
-            // Reload to let the new SW take control
-            window.location.reload();
-          });
-        }
+        showUpdateToast(event.data.version, event.data.currentVersion);
       }
     });
   }
@@ -196,6 +361,12 @@ async function main() {
     if (typeof registerPeriodicSync === "function") registerPeriodicSync();
     if (typeof registerOneOffSync === "function") registerOneOffSync();
   }
+
+  // Debug function to test toast notification
+  window.testUpdateToast = function (version = 'v1.1.0') {
+    console.log('Testing update toast notification...');
+    showUpdateToast(version, '25_07_28-2133');
+  };
 }
 
 async function startGame(pageRouter, ui, game) {

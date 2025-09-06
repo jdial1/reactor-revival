@@ -14,6 +14,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event && event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+  } else if (event && event.data && event.data.type === "TRIGGER_VERSION_CHECK") {
+    // Manually trigger version check
+    checkForVersionUpdate();
   }
 });
 
@@ -64,38 +67,84 @@ workbox.routing.setCatchHandler(({ event }) => {
 // Version checking for app updates
 let versionCheckInterval;
 
+// Get the correct base path for GitHub Pages deployment
+function getBasePath() {
+  // Check if we're on GitHub Pages
+  const isGitHubPages = self.location.hostname.includes('github.io');
+
+  if (isGitHubPages) {
+    // Extract repository name from path
+    const pathParts = self.location.pathname.split('/');
+    const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
+    return repoName ? `/${repoName}` : '';
+  }
+
+  // For local development or other deployments
+  return '';
+}
+
 function startVersionChecking() {
   // Clear any existing interval
   if (versionCheckInterval) {
     clearInterval(versionCheckInterval);
   }
 
-  // Check for new version every 5 minutes
+  // Check for new version every 2 minutes
   versionCheckInterval = setInterval(async () => {
-    try {
-      const response = await fetch("/version.json", { cache: "no-cache" });
-      if (response.ok) {
-        const versionData = await response.json();
-        const newVersion = versionData.version;
+    await checkForVersionUpdate();
+  }, 2 * 60 * 1000); // 2 minutes
+}
 
-        // Get current version from cache
-        const currentVersion = await getCurrentVersion();
-
-        if (currentVersion && newVersion !== currentVersion) {
-          console.log(`New version detected: ${newVersion}`);
-          notifyClientsOfNewVersion(newVersion);
-        }
-      }
-    } catch (error) {
-      console.log("Version check failed:", error);
+async function checkForVersionUpdate() {
+  try {
+    // Get local version first
+    const localVersion = await getCurrentVersion();
+    if (!localVersion) {
+      console.log("No local version found, skipping check");
+      return;
     }
-  }, 5 * 60 * 1000); // 5 minutes
+
+    // Check deployed version
+    const deployedVersion = await getDeployedVersion();
+    if (!deployedVersion) {
+      console.log("Could not fetch deployed version");
+      return;
+    }
+
+    console.log(`Version check: Local=${localVersion}, Deployed=${deployedVersion}`);
+
+    if (deployedVersion !== localVersion) {
+      console.log(`New version detected: ${deployedVersion} (current: ${localVersion})`);
+      notifyClientsOfNewVersion(deployedVersion, localVersion);
+    }
+  } catch (error) {
+    console.log("Version check failed:", error);
+  }
+}
+
+async function getDeployedVersion() {
+  try {
+    const basePath = getBasePath();
+    const versionUrl = `${self.location.origin}${basePath}/version.json`;
+    // The cache: "no-cache" header is the most important part here.
+    const response = await fetch(versionUrl, { cache: "no-cache" });
+
+    if (response.ok) {
+      const versionData = await response.json();
+      return versionData.version;
+    }
+  } catch (error) {
+    console.log("Failed to get deployed version:", error);
+  }
+  return null;
 }
 
 async function getCurrentVersion() {
   try {
     const cache = await caches.open("static-resources");
-    const response = await cache.match("/version.json");
+    const basePath = getBasePath();
+    const versionUrl = `${basePath}/version.json`;
+    const response = await cache.match(versionUrl);
     if (response) {
       const data = await response.json();
       return data.version;
@@ -106,12 +155,13 @@ async function getCurrentVersion() {
   return null;
 }
 
-function notifyClientsOfNewVersion(newVersion) {
+function notifyClientsOfNewVersion(newVersion, currentVersion) {
   self.clients.matchAll().then((clients) => {
     clients.forEach((client) => {
       client.postMessage({
         type: "NEW_VERSION_AVAILABLE",
         version: newVersion,
+        currentVersion: currentVersion,
       });
     });
   });
@@ -132,12 +182,8 @@ self.addEventListener("activate", (event) => {
 // -----------------------------
 async function handlePeriodicSync() {
   try {
-    // Fetch a lightweight resource to refresh caches or notify clients of updates
-    const res = await fetch("/version.json", { cache: "no-cache" });
-    if (res.ok) {
-      const versionData = await res.json();
-      notifyClientsOfNewVersion(versionData.version);
-    }
+    // Use the same version checking logic as the interval
+    await checkForVersionUpdate();
   } catch (e) {
     // Silent fail; periodic sync will retry later
     console.log("Periodic sync failed:", e);
