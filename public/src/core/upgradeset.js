@@ -212,14 +212,20 @@ export class UpgradeSet {
     if (!game) return;
     this.upgradesArray.forEach((upgrade) => {
       let isAffordable = false;
-      const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
 
-      if (upgrade.erequires && (!requiredUpgrade || requiredUpgrade.level === 0)) {
+      // During meltdown, make all upgrades unaffordable
+      if (game.reactor && game.reactor.has_melted_down) {
         isAffordable = false;
-      } else if (upgrade.base_ecost) {
-        isAffordable = game.current_exotic_particles >= upgrade.current_ecost;
       } else {
-        isAffordable = game.current_money >= upgrade.current_cost;
+        const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
+
+        if (upgrade.erequires && (!requiredUpgrade || requiredUpgrade.level === 0)) {
+          isAffordable = false;
+        } else if (upgrade.base_ecost) {
+          isAffordable = game.current_exotic_particles >= upgrade.current_ecost;
+        } else {
+          isAffordable = game.current_money >= upgrade.current_cost;
+        }
       }
 
       upgrade.setAffordable(isAffordable);

@@ -216,16 +216,22 @@ export class PartSet {
     if (!game) return;
     this.partsArray.forEach((part) => {
       let isAffordable = false;
-      // Gating: a part must be unlocked to be affordable/selectable
-      const isUnlocked = typeof game.isPartUnlocked === 'function' ? game.isPartUnlocked(part) : true;
-      if (part.erequires) {
-        const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
-        if (requiredUpgrade && requiredUpgrade.level > 0 && isUnlocked) {
-          isAffordable = Number(game.current_exotic_particles) >= Number(part.cost);
-        }
+
+      // During meltdown, make all parts unaffordable
+      if (game.reactor && game.reactor.has_melted_down) {
+        isAffordable = false;
       } else {
-        if (isUnlocked) {
-          isAffordable = Number(game.current_money) >= Number(part.cost);
+        // Gating: a part must be unlocked to be affordable/selectable
+        const isUnlocked = typeof game.isPartUnlocked === 'function' ? game.isPartUnlocked(part) : true;
+        if (part.erequires) {
+          const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
+          if (requiredUpgrade && requiredUpgrade.level > 0 && isUnlocked) {
+            isAffordable = Number(game.current_exotic_particles) >= Number(part.cost);
+          }
+        } else {
+          if (isUnlocked) {
+            isAffordable = Number(game.current_money) >= Number(part.cost);
+          }
         }
       }
       part.setAffordable(isAffordable);

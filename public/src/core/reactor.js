@@ -247,7 +247,9 @@ export class Reactor {
           tile.clearPart(false);
         }
       });
+
       this.current_heat = this.max_heat * 2 + 1;
+      
       this.game.ui.stateManager.setVar("melting_down", true, true);
 
       // Update UI to show meltdown state
@@ -255,10 +257,9 @@ export class Reactor {
         document.body.classList.add("reactor-meltdown");
       }
 
-      // Use the router instance from the game object
-      if (this.game.router) {
-        this.game.router.loadPage("experimental_upgrades_section", true);
-      }
+      // Make all parts and upgrades unaffordable during meltdown
+      this.game.partset.check_affordability(this.game);
+      this.game.upgradeset.check_affordability(this.game);
 
       return true;
     }
@@ -277,6 +278,10 @@ export class Reactor {
     ) {
       this.game.ui.updateMeltdownState();
     }
+
+    // Restore affordability when meltdown is cleared
+    this.game.partset.check_affordability(this.game);
+    this.game.upgradeset.check_affordability(this.game);
 
     this.clearHeatVisualStates();
   }

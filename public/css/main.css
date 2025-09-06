@@ -3512,6 +3512,52 @@ font-weight: bold !important;
 text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000 !important;
 }
 
+#meltdown_banner .reset-btn {
+margin-left: 20px !important;
+padding: 8px 16px !important;
+background: rgba(255, 255, 255, 0.2) !important;
+border: 2px solid #fff !important;
+border-radius: 4px !important;
+color: #fff !important;
+font-weight: bold !important;
+font-size: 14px !important;
+cursor: pointer !important;
+text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8) !important;
+transition: all 0.3s ease !important;
+display: none !important; /* Hidden by default */
+}
+
+/* Show reset button only when meltdown banner is visible */
+body.reactor-meltdown #meltdown_banner .reset-btn {
+display: inline-block !important;
+}
+
+#meltdown_banner .reset-btn:hover {
+background: rgba(255, 255, 255, 0.3) !important;
+border-color: #ffeb3b !important;
+color: #ffeb3b !important;
+transform: scale(1.05) !important;
+box-shadow: 0 0 10px rgba(255, 235, 59, 0.5) !important;
+}
+
+@keyframes textFlash {
+  0% {
+    color: #fff;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    transform: scale(1);
+  }
+  50% {
+    color: #ffeb3b;
+    text-shadow: 0 0 10px rgba(255, 235, 59, 0.8), 2px 2px 4px rgba(0, 0, 0, 0.8);
+    transform: scale(1.05);
+  }
+  100% {
+    color: #ff5722;
+    text-shadow: 0 0 15px rgba(255, 87, 34, 0.9), 2px 2px 4px rgba(0, 0, 0, 0.8);
+    transform: scale(1.1);
+  }
+}
+
 /* Banner visibility rules */
 #pause_banner,
 #meltdown_banner {
@@ -3524,6 +3570,25 @@ display: flex !important;
 
 body.reactor-meltdown #meltdown_banner {
 display: flex !important;
+animation: meltdownFlash 1s ease-in-out infinite alternate !important;
+}
+
+@keyframes meltdownFlash {
+  0% {
+    background-color: #f44336;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    opacity: 1;
+  }
+  50% {
+    background-color: #d32f2f;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+    opacity: 1;
+  }
+  100% {
+    background-color: #b71c1c;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.7);
+    opacity: 1;
+  }
 }
 
 /* Desktop banner positioning */
@@ -4489,6 +4554,17 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   }
   body.reactor-meltdown #meltdown_banner {
     height: 60px !important;
+    font-size: 1.1rem !important;
+    padding: 0.4rem !important;
+  }
+  #meltdown_banner article {
+    font-size: 1.1rem !important;
+    letter-spacing: 0.3px !important;
+  }
+  #meltdown_banner .reset-btn {
+    margin-left: 10px !important;
+    padding: 6px 12px !important;
+    font-size: 12px !important;
   }
 }
 
@@ -4498,6 +4574,17 @@ box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   }
   body.reactor-meltdown #meltdown_banner {
     height: 60px !important;
+    font-size: 1rem !important;
+    padding: 0.3rem !important;
+  }
+  #meltdown_banner article {
+    font-size: 1rem !important;
+    letter-spacing: 0.2px !important;
+  }
+  #meltdown_banner .reset-btn {
+    margin-left: 8px !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
   }
 }
 
