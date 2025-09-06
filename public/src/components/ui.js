@@ -249,6 +249,19 @@ export class UI {
         "objectives_section",
         "objective_title",
         "objective_reward",
+        "objectives_container",
+        "objectives_header",
+        "objectives_toggle_btn",
+        "objectives_content_panel",
+        "objective_current_title",
+        "objective_current_progress_bar",
+        "objective_chapter_title",
+        "objective_chapter_progress_bar",
+        "objective_chapter_progress_text",
+        "objective_current_description",
+        "objective_current_progress_text",
+        "objective_claim_btn",
+        "objective_claim_btn_compact",
         "tooltip",
         "tooltip_data"
       ],
@@ -1125,6 +1138,10 @@ export class UI {
       }
       config.onupdate?.(value);
     }
+
+    // Add this line to update objectives progress continuously
+    this.updateObjectiveDisplay();
+
     this.update_vars.clear();
   }
 
@@ -2355,6 +2372,150 @@ export class UI {
         this.clearSegmentHighlight();
       });
     }
+
+    // NEW: Objectives UI event listeners
+    this.initObjectivesUIListeners();
+  }
+
+  // NEW METHOD for objective UI listeners
+  initObjectivesUIListeners() {
+    const header = this.DOMElements.objectives_header;
+    const claimBtn = this.DOMElements.objective_claim_btn;
+    const claimBtnCompact = this.DOMElements.objective_claim_btn_compact;
+
+    if (header) {
+      header.addEventListener('click', () => this.toggleObjectivesPanel());
+    }
+
+    if (claimBtn) {
+      claimBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent expanding the objectives panel
+        if (!claimBtn.disabled) {
+          this.game.objectives_manager.claimObjective();
+        }
+      });
+    }
+
+    if (claimBtnCompact) {
+      claimBtnCompact.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent expanding the objectives panel
+        if (!claimBtnCompact.disabled) {
+          this.game.objectives_manager.claimObjective();
+        }
+      });
+    }
+  }
+
+  // NEW METHOD to toggle the panel
+  toggleObjectivesPanel() {
+    const container = this.DOMElements.objectives_container;
+    if (container) {
+      container.classList.toggle('is-open');
+    }
+  }
+
+  // NEW METHOD to update the entire objectives display
+  updateObjectiveDisplay() {
+    // Check if game and objectives_manager are properly initialized
+    if (!this.game || !this.game.objectives_manager) {
+      return;
+    }
+
+    const info = this.game.objectives_manager.getCurrentObjectiveDisplayInfo();
+    if (!info) return;
+
+    // Update Titles
+    if (this.DOMElements.objective_current_title) {
+      this.DOMElements.objective_current_title.innerHTML = this.stateManager.addPartIconsToTitle(info.title);
+    }
+    if (this.DOMElements.objective_chapter_title) {
+      this.DOMElements.objective_chapter_title.textContent = info.chapterName;
+    }
+
+    // Update Progress Bars & Text with smooth animation
+    if (this.DOMElements.objective_current_progress_bar) {
+      this.DOMElements.objective_current_progress_bar.style.width = `${info.progressPercent}%`;
+    }
+    if (this.DOMElements.objective_chapter_progress_bar) {
+      this.DOMElements.objective_chapter_progress_bar.style.width = `${info.chapterProgressPercent}%`;
+    }
+    if (this.DOMElements.objective_chapter_progress_text) {
+      this.DOMElements.objective_chapter_progress_text.textContent = info.chapterProgressText;
+    }
+
+    // Update Detailed Info
+    if (this.DOMElements.objective_current_description) {
+      this.DOMElements.objective_current_description.innerHTML = this.stateManager.addPartIconsToTitle(info.description);
+    }
+    if (this.DOMElements.objective_current_progress_text) {
+      this.DOMElements.objective_current_progress_text.textContent = info.progressText;
+    }
+
+    // Update Reward Display
+    if (this.DOMElements.objective_reward) {
+      let rewardHTML = '';
+      if (info.reward.money > 0) {
+        rewardHTML = `<img src="img/ui/icons/icon_cash.png" alt="Money"> ${info.reward.money.toLocaleString()}`;
+      } else if (info.reward.ep > 0) {
+        rewardHTML = `<img src="img/ui/icons/icon_power.png" alt="EP"> ${info.reward.ep.toLocaleString()} EP`;
+      }
+      this.DOMElements.objective_reward.innerHTML = rewardHTML;
+    }
+
+    // Update Claim Button State with animation (both compact and full)
+    const claimButtons = [
+      this.DOMElements.objective_claim_btn,
+      this.DOMElements.objective_claim_btn_compact
+    ].filter(btn => btn);
+
+    if (claimButtons.length > 0) {
+      const wasComplete = claimButtons[0].classList.contains('ready-to-claim');
+
+      if (info.isComplete) {
+        claimButtons.forEach(btn => {
+          btn.disabled = false;
+          btn.classList.add('ready-to-claim');
+          btn.textContent = btn === this.DOMElements.objective_claim_btn_compact ? "Claim" : "Claim Reward";
+        });
+
+        // Add completion animation if this is a new completion
+        if (!wasComplete) {
+          this.animateObjectiveCompletion();
+        }
+      } else {
+        claimButtons.forEach(btn => {
+          btn.disabled = true;
+          btn.classList.remove('ready-to-claim');
+
+          // Show reward amount instead of "In Progress..."
+          let rewardText = "In Progress...";
+          if (info.reward.money > 0) {
+            rewardText = btn === this.DOMElements.objective_claim_btn_compact
+              ? `$${info.reward.money.toLocaleString()}`
+              : `Reward: $${info.reward.money.toLocaleString()}`;
+          } else if (info.reward.ep > 0) {
+            rewardText = btn === this.DOMElements.objective_claim_btn_compact
+              ? `${info.reward.ep.toLocaleString()} EP`
+              : `Reward: ${info.reward.ep.toLocaleString()} EP`;
+          }
+          btn.textContent = rewardText;
+        });
+      }
+    }
+  }
+
+  // NEW METHOD to animate objective completion
+  animateObjectiveCompletion() {
+    const container = this.DOMElements.objectives_container;
+    if (!container) return;
+
+    // Add completion class for CSS animation
+    container.classList.add('objective-completed');
+
+    // Remove the class after animation completes
+    setTimeout(() => {
+      container.classList.remove('objective-completed');
+    }, 2000);
   }
 
   async handleGridInteraction(tileEl, event) {
@@ -4187,12 +4348,15 @@ export class UI {
   showObjectivesForPage(pageId) {
     // Always re-cache DOM elements after navigation
     this.cacheDOMElements();
+
+    // Handle objectives section (contains both old and new UI)
     const objectivesSection = document.getElementById("objectives_section");
     if (objectivesSection) {
       objectivesSection.classList.toggle(
         "hidden",
         pageId !== "reactor_section"
       );
+
       if (pageId === "reactor_section") {
         // Force refresh of the current objective display
         const objectivesManager = this.game && this.game.objectives_manager;
@@ -4205,6 +4369,9 @@ export class UI {
                 ? objectivesManager.current_objective_def.title()
                 : objectivesManager.current_objective_def.title,
           }, objectivesManager.current_objective_index);
+
+          // Update the new objectives display
+          this.updateObjectiveDisplay();
         }
       }
     }

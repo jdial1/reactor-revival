@@ -182,3 +182,104 @@ A centralized logger is attached to the game object (`game.logger`) to reduce co
 -   **Usage:** Components should use `this.game.logger?.debug()`, `info()`, `warn()`, and `error()` for logging.
 -   **Console Controls:** Users can control the logging verbosity via functions available in the browser console (e.g., `setDebug()`, `setInfo()`).
 
+Chapter 1: First Fission: Mastering the Basics
+
+This chapter introduces the fundamental concepts of power generation, heat management, and component interaction. It ensures the player understands the core loop of placing parts, earning money, and managing the immediate consequences.
+
+Existing Objectives:
+
+    First Cell: Place your first Cell in the reactor.
+
+    Sell Power: Sell all your power by clicking 'Power'.
+
+    Reduce Heat: Reduce your Current Heat to 0 by clicking 'Heat'.
+
+    Component Synergy: Put a Heat Vent next to a Cell.
+
+    First Upgrade: Purchase any upgrade from the Upgrades screen.
+
+    Store Power: Increase your Max Power using a Capacitor.
+
+    Component Diversity: Use at least 5 different kinds of components in your reactor.
+
+New Padded Objectives:
+8. Boosted Power: Place a Reflector next to a Cell to boost its power output.
+9. First Payday: Accumulate a total of $1,000.
+10. Heat Transfer: Place a Heat Exchanger between a hot component and a cooler one.
+Chapter 2: Scaling Production: Automation and Efficiency
+
+This chapter focuses on moving beyond basic setups to more complex and sustainable designs. It introduces automation, tiered components, and the necessity of scaling up both power generation and support systems.
+
+Existing Objectives:
+
+    Tier 2 Power: Purchase a Dual Uranium Cell.
+
+    Cell Expansion: Have at least 10 active Cells in your reactor.
+
+    Power Milestone I: Generate 200 Power per tick.
+
+    Faster Ticks: Purchase the 'Improved Chronometers' upgrade.
+
+    Capacitor Bank: Have at least 10 Capacitors in your reactor.
+
+    Perpetual Motion: Research Perpetual Uranium Cells to automate cell replacement.
+
+    Automated Income: Auto-sell 500 Power per tick.
+
+    Power Milestone II: Generate 500 Power per tick.
+
+    Potent Fuel: Research 'Potent Uranium III' to enhance Uranium Cells.
+
+    Initial Expansion: Expand the reactor grid twice.
+
+Chapter 3: High-Energy Systems: Advanced Power and Expansion
+
+This chapter challenges the player to manage larger, more powerful reactors. It introduces higher-tier fuel sources, significant income goals, and the challenge of managing massive amounts of heat.
+
+Existing Objectives:
+
+    Sustained Output: Sustain 1,000 Power per tick for 3 minutes without interruption.
+
+    Infrastructure Upgrade: Have at least 10 Capacitors II and 10 Vents II.
+
+    Plutonium Power: Have at least 5 active Quad Plutonium Cells in your reactor.
+
+    Economic Milestone I: Reach an income of 50k per tick.
+
+    Major Expansion: Expand the reactor grid four times.
+
+    Thorium Power: Have at least 5 active Quad Thorium Cells in your reactor.
+
+    First Billion: Earn your first billion dollars.
+
+    Seaborgium Power: Have at least 5 active Quad Seaborgium Cells in your reactor.
+
+    Economic Milestone II: Earn a total of 10 billion dollars.
+
+    Master of Heat: Sustain 10 Million Reactor Heat for 5 minutes without a meltdown.
+
+Chapter 4: The Experimental Frontier: Exotic Particles and Prestige
+
+This final chapter introduces the prestige mechanic of Exotic Particles (EP). Objectives focus on generating EP, purchasing powerful experimental upgrades, and utilizing endgame-tier components that redefine the limits of the reactor.
+
+Existing Objectives:
+
+    First Particle: Generate 10 Exotic Particles (EP).
+
+    First Research: Purchase the 'Infused Cells' and 'Unleashed Cells' experimental upgrades.
+
+    Reboot: Perform a Reboot for EP to reset your progress and gain prestige.
+
+    Particle Milestone I: Generate 51 EP in a single run.
+
+    Experimental Tech: Purchase any Experimental Upgrade.
+
+    Particle Milestone II: Generate 250 EP in a single run.
+
+    Place Experimental Part: Place an Experimental Part, like a Protium Cell, in your reactor.
+
+    Dolorium Power: Have at least 5 active Quad Dolorium Cells in your reactor.
+
+    Particle Milestone III: Generate 1,000 EP in a single run.
+
+    Nefastium Power: Have at least 5 active Quad Nefastium Cells in your reactor.

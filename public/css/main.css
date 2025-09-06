@@ -1697,7 +1697,7 @@ padding-left: 275px !important;
 @media (min-width: 901px) {
 body.page-reactor #reactor_wrapper {
 justify-content: center;
-overflow: hidden;  
+overflow: visible;  
 }
 
 /* Make tooltips smaller on desktop */
@@ -2245,24 +2245,26 @@ width: 100% !important;
 max-width: 100% !important;
 margin-left: 0 !important;
 margin-right: 0 !important;
-height: 70px !important;
+min-height: 70px !important;
 left: 0;
 right: 0;
-overflow: hidden;
+overflow: visible;
 box-sizing: border-box;
 background: #23272e !important;
 border-bottom: 2px solid #444 !important;
 text-align: center;
 font-family: "Press Start 2P", cursive, monospace !important;
 display: flex;
+flex-direction: column;
 align-items: center;
-justify-content: center;
+justify-content: flex-start;
 position: sticky !important;
 top: 0 !important;
 transition: border-color 0.3s ease, box-shadow 0.3s ease;
+z-index: 1000;
 }
 #objectives_content {
-overflow: hidden;
+overflow: visible;
 display: flex;
 flex-direction: row;
 align-items: center;
@@ -2394,6 +2396,387 @@ animation: objective-flash 0.8s ease-out;
 }
 }
 
+/* ======================================================================= */
+/* NEW OBJECTIVES UI STYLES                                                */
+/* ======================================================================= */
+:root {
+    --objective-bg: rgba(35, 39, 46, 0.95);
+    --objective-border: #5a6268;
+    --objective-text: #ffffff;
+    --objective-accent: #66b3ff;
+    --objective-progress-bg: #2d3748;
+    --objective-reward-bg: #2d3748;
+    --objective-claim-ready-bg: #28a745;
+}
+
+/* Hide legacy objectives content when new UI is present */
+#objectives_section:has(#objectives_container) #objectives_content {
+    display: none;
+}
+
+/* Fallback for browsers without :has() support */
+#objectives_content {
+    display: block;
+}
+
+#objectives_container {
+    display: block;
+}
+
+/* When both exist, hide the legacy content */
+#objectives_section #objectives_content {
+    display: none;
+}
+
+#objectives_section #objectives_container {
+    display: block;
+}
+
+.mobile-objectives-container {
+    position: relative;
+    width: 100%;
+    background-color: var(--objective-bg);
+    border: 1px solid var(--objective-border);
+    border-radius: 6px;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    color: var(--objective-text);
+    margin-top: 8px;
+}
+
+.mobile-objectives-container.hidden {
+    display: none;
+}
+
+.objectives-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--objective-border);
+    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+    min-height: 40px;
+}
+
+.objective-main-info {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-right: 12px;
+}
+
+.objectives-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.objective-claim-btn-compact {
+    background: var(--objective-reward-bg);
+    border: 1px solid var(--objective-border);
+    color: var(--objective-text);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 50px;
+    white-space: nowrap;
+}
+
+.objective-claim-btn-compact:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.objective-claim-btn-compact.ready-to-claim {
+    background: var(--objective-claim-ready-bg);
+    border-color: var(--objective-claim-ready-bg);
+    color: white;
+    cursor: pointer;
+    opacity: 1;
+}
+
+.objective-claim-btn-compact.ready-to-claim:hover {
+    background: #34a853;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.objective-title-compact {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--objective-text);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+    line-height: 1.2;
+}
+
+.objective-progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background-color: var(--objective-progress-bg);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.objective-progress-bar {
+    width: 0%;
+    height: 100%;
+    background-color: var(--objective-accent);
+    border-radius: 3px;
+    transition: width 0.3s ease-in-out;
+}
+
+.objectives-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--objective-text);
+    padding: 4px;
+    cursor: pointer;
+    transition: transform 0.3s ease-in-out;
+}
+
+.objectives-content-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
+    padding: 0 16px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.05) 100%);
+}
+
+/* --- Expanded State --- */
+.mobile-objectives-container.is-open .objectives-content-panel {
+    max-height: 350px; /* Adjust as needed */
+    padding: 16px;
+    overflow: visible;
+}
+
+.mobile-objectives-container.is-open .objectives-toggle-btn {
+    transform: rotate(180deg);
+}
+
+.objectives-chapter-info {
+    margin-bottom: 10px;
+}
+
+.objectives-chapter-info h3 {
+    margin: 0 0 5px 0;
+    font-size: 1.1rem;
+    color: var(--objective-accent);
+}
+
+.chapter-progress-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+}
+
+.chapter-progress-bar-container {
+    flex-grow: 1;
+    height: 8px;
+    background-color: var(--objective-progress-bg);
+    border-radius: 4px;
+}
+
+.chapter-progress-bar {
+    width: 0%;
+    height: 100%;
+    background-color: var(--objective-accent);
+    border-radius: 4px;
+    transition: width 0.3s ease-in-out;
+}
+
+.objective-divider {
+    border: none;
+    height: 1px;
+    background-color: var(--objective-border);
+    margin: 10px 0;
+}
+
+.objective-details {
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.objective-description { margin: 0 0 8px 0; }
+.objective-progress-text { margin: 0 0 12px 0; font-style: italic; opacity: 0.8; }
+
+.objective-reward {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background-color: var(--objective-reward-bg);
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.objective-reward img { width: 16px; height: 16px; }
+
+.objective-claim-btn {
+    width: 100%;
+    padding: 10px;
+    margin-top: 12px;
+    font-size: 1rem;
+    font-weight: bold;
+    color: white;
+    background-color: var(--objective-border);
+    border: none;
+    border-radius: 6px;
+    cursor: not-allowed;
+    opacity: 0.6;
+    transition: background-color 0.2s, opacity 0.2s;
+}
+
+.objective-claim-btn.ready-to-claim {
+    background-color: var(--objective-claim-ready-bg);
+    cursor: pointer;
+    opacity: 1;
+}
+
+/* Desktop Adjustments - objectives container inherits positioning from parent #objectives_section */
+
+/* Animation for progress bars */
+.objective-progress-bar, .chapter-progress-bar {
+    position: relative;
+    overflow: hidden;
+}
+
+.objective-progress-bar::after, .chapter-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: progress-shine 2s infinite;
+}
+
+@keyframes progress-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* Hover effects */
+.objectives-header:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.objective-claim-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Smooth transitions for all interactive elements */
+.objective-claim-btn, .objectives-toggle-btn, .objectives-header {
+    transition: all 0.2s ease;
+}
+
+/* Better visual hierarchy */
+.objective-title-compact {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.objectives-chapter-info h3 {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Improved spacing for mobile */
+@media (max-width: 900px) {
+    .objectives-header {
+        padding: 8px 12px;
+    }
+    
+    .objective-title-compact {
+        font-size: 0.9rem;
+    }
+}
+
+/* Ensure objectives don't interfere with game elements */
+.mobile-objectives-container {
+    pointer-events: auto;
+    /* Position to avoid overlapping with top navigation and left sidebar */
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.mobile-objectives-container * {
+    pointer-events: auto;
+}
+
+/* Objectives container inherits positioning from parent #objectives_section */
+
+/* Objective completion animation */
+.objective-completed {
+    animation: objective-completion-pulse 2s ease-in-out;
+    border-color: #28a745 !important;
+    box-shadow: 0 0 20px rgba(40, 167, 69, 0.6) !important;
+}
+
+@keyframes objective-completion-pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    25% {
+        transform: scale(1.02);
+        box-shadow: 0 0 25px rgba(40, 167, 69, 0.8);
+    }
+    50% {
+        transform: scale(1.01);
+        box-shadow: 0 0 30px rgba(40, 167, 69, 0.9);
+    }
+    75% {
+        transform: scale(1.02);
+        box-shadow: 0 0 25px rgba(40, 167, 69, 0.8);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+}
+
+/* Additional responsive adjustments */
+@media (max-width: 768px) {
+    .objectives-header {
+        padding: 8px 12px;
+    }
+    
+    .objective-title-compact {
+        font-size: 0.85rem;
+    }
+    
+    .mobile-objectives-container.is-open .objectives-content-panel {
+        max-height: 300px;
+        padding: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .objectives-header {
+        padding: 6px 10px;
+    }
+    
+    .objective-title-compact {
+        font-size: 0.8rem;
+    }
+    
+    .mobile-objectives-container.is-open .objectives-content-panel {
+        max-height: 250px;
+        padding: 10px;
+    }
+}
+
 /* Claim button styling */
 #objective_reward.claimable .claim-btn {
 background: #4CAF50;
@@ -2483,7 +2866,7 @@ height: 16px;
 #objectives_content {
 padding: 0 12px;
 gap: 0.4em;
-overflow: hidden;
+overflow: visible;
 }
 @media (max-width: 400px) {
 #objectives_section {
@@ -2526,7 +2909,7 @@ height: 14px;
 #objectives_content {
 padding: 0 8px;
 gap: 0.3em;
-overflow: hidden;
+overflow: visible;
 }
 }
 #controls_nav {
@@ -3125,7 +3508,7 @@ flex-direction: column;
 height: 100%;
 padding: 0;
 margin: 0;
-overflow: hidden; /* avoid page-level vertical scroll; inner wrapper scrolls horizontally */
+overflow: visible; /* allow objectives to expand */
 position: relative;
 }
 #main {

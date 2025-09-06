@@ -237,7 +237,9 @@
       <div id="main_content_wrapper">
       <!-- Only show objectives on reactor page -->
 
+      <!-- ENHANCED OBJECTIVES SECTION -->
       <div id="objectives_section">
+        <!-- Legacy content for backward compatibility -->
         <div id="objectives_content">
           <div id="objective_title_wrapper">
             <span id="objective_title"
@@ -246,9 +248,56 @@
             <span id="objective_reward"></span>
           </div>
         </div>
+
+        <!-- NEW ENHANCED OBJECTIVES UI -->
+        <div id="objectives_container" class="mobile-objectives-container">
+
+          <!-- ALWAYS VISIBLE HEADER (THE 'HANDLE' FOR THE DRAWER) -->
+          <header id="objectives_header" class="objectives-header">
+              <div class="objective-main-info">
+                  <h2 id="objective_current_title" class="objective-title-compact"></h2>
+                  <div class="objective-progress-bar-container">
+                      <div id="objective_current_progress_bar" class="objective-progress-bar"></div>
+                  </div>
+              </div>
+              <div class="objectives-header-actions">
+                  <button id="objective_claim_btn_compact" class="objective-claim-btn-compact" disabled>Claim</button>
+                  <button id="objectives_toggle_btn" class="objectives-toggle-btn" aria-label="Toggle objectives panel">
+                      <!-- Icon can be an SVG or an <img> tag -->
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+                      </svg>
+                  </button>
+              </div>
+          </header>
+
+          <!-- EXPANDABLE CONTENT PANEL -->
+          <div id="objectives_content_panel" class="objectives-content-panel">
+              <!-- Chapter Information -->
+              <div class="objectives-chapter-info">
+                  <h3 id="objective_chapter_title"></h3>
+                  <div class="chapter-progress-container">
+                      <div class="chapter-progress-bar-container">
+                          <div id="objective_chapter_progress_bar" class="chapter-progress-bar"></div>
+                      </div>
+                      <span id="objective_chapter_progress_text"></span>
+                  </div>
+              </div>
+
+              <hr class="objective-divider">
+
+              <!-- Current Objective Details -->
+              <div class="objective-details">
+                  <p id="objective_current_description" class="objective-description"></p>
+                  <p id="objective_current_progress_text" class="objective-progress-text"></p>
+                  <div id="objective_reward" class="objective-reward"></div>
+              </div>
+
+              <!-- Claim Button -->
+              <button id="objective_claim_btn" class="objective-claim-btn" disabled>Claim Reward</button>
+          </div>
+        </div>
       </div>
-
-
 
     <!-- End reactor-only objectives -->
 
