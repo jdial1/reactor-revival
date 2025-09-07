@@ -56,8 +56,23 @@ export class ObjectiveManager {
       return;
     }
 
+    // Preserve existing completion status if objectives_data already exists
+    const existingCompletionStatus = this.objectives_data ?
+      this.objectives_data.map(obj => obj.completed) : [];
+
     // Store the data directly - no need for Objective class instances
     this.objectives_data = data;
+
+    // Restore completion status if it existed
+    if (existingCompletionStatus.length > 0) {
+      console.log(`[DEBUG] Preserving ${existingCompletionStatus.filter(c => c).length} completed objectives during initialize`);
+      existingCompletionStatus.forEach((completed, index) => {
+        if (this.objectives_data[index]) {
+          this.objectives_data[index].completed = completed;
+        }
+      });
+    }
+
     this.game.logger?.debug(`ObjectiveManager initialized with ${this.objectives_data.length} objectives`);
     this.game.logger?.debug(`First objective: ${this.objectives_data[0]?.title}`);
     this.game.logger?.debug(`Last objective: ${this.objectives_data[this.objectives_data.length - 1]?.title}`);
@@ -77,7 +92,13 @@ export class ObjectiveManager {
       return;
     }
 
-    this.set_objective(this.current_objective_index, true);
+    // Only set objective if it's not already set or if current_objective_def is null
+    if (!this.current_objective_def) {
+      this.game.logger?.debug(`Setting objective to index ${this.current_objective_index}`);
+      this.set_objective(this.current_objective_index, true);
+    } else {
+      this.game.logger?.debug(`Objective already set, skipping set_objective call`);
+    }
 
     // Wait for the objective to be loaded, then check for auto-completion
     setTimeout(() => {
@@ -120,6 +141,14 @@ export class ObjectiveManager {
         // Also mark the corresponding entry in objectives_data as completed
         if (this.objectives_data && this.objectives_data[this.current_objective_index]) {
           this.objectives_data[this.current_objective_index].completed = true;
+        }
+
+        // Check if this completion should trigger chapter completion
+        this.checkForChapterCompletion();
+
+        // Save the game after marking objective as completed
+        if (this.game && this.game.saveGame) {
+          this.game.saveGame();
         }
 
         // Only give rewards and call completion handler if this objective wasn't already completed
@@ -195,6 +224,12 @@ export class ObjectiveManager {
       if (this.objectives_data && this.objectives_data[this.current_objective_index]) {
         this.objectives_data[this.current_objective_index].completed = true;
       }
+
+      // Save the game after marking objective as completed
+      if (this.game && this.game.saveGame) {
+        this.game.saveGame();
+      }
+
       this.game.ui.stateManager.handleObjectiveCompleted();
 
       // Update the UI to show completed state with claim button
@@ -303,7 +338,18 @@ export class ObjectiveManager {
   // Claim the current objective reward
   claimObjective() {
     // Prevent multiple rapid claims
-    if (this.claiming || !this.current_objective_def || !this.current_objective_def.completed) {
+    if (this.claiming || !this.current_objective_def) {
+      return;
+    }
+
+    // For chapter completion objectives, check the chapter completion status
+    // For regular objectives, check the normal completed status
+    const isComplete = this.current_objective_def.isChapterCompletion ?
+      this.getChapterCompletionStatus(this.current_objective_def, this.current_objective_index) :
+      this.current_objective_def.completed;
+
+    if (!isComplete) {
+      console.log(`[DEBUG] Cannot claim objective ${this.current_objective_index}: not complete`);
       return;
     }
 
@@ -366,13 +412,15 @@ export class ObjectiveManager {
         chapterProgressPercent: 0,
         title: objective.title || "Loading...",
         description: objective.description || '',
+        flavor_text: objective.flavor_text,
         progressText: "Loading...",
         progressPercent: 0,
         reward: {
           money: objective.reward || 0,
           ep: objective.ep_reward || 0
         },
-        isComplete: objective.completed || false
+        isComplete: objective.completed || false,
+        isChapterCompletion: objective.isChapterCompletion || false
       };
     }
 
@@ -396,15 +444,17 @@ export class ObjectiveManager {
     }
     if (objective.completed) completedInChapter++;
 
+
     const progress = this.getCurrentObjectiveProgress();
 
     return {
       chapterName: CHAPTER_NAMES[chapterIndex] || `Chapter ${chapterIndex + 1}`,
-      chapterProgressText: `${(index % 10) + 1} / ${chapterSize}`,
-      chapterProgressPercent: ((index % 10) / chapterSize) * 100,
+      chapterProgressText: `${completedInChapter} / ${chapterSize}`,
+      chapterProgressPercent: (completedInChapter / chapterSize) * 100,
 
       title: objective.title,
       description: objective.description || '',
+      flavor_text: objective.flavor_text,
 
       progressText: progress.text,
       progressPercent: Math.min(100, progress.percent), // Clamp at 100%
@@ -413,7 +463,10 @@ export class ObjectiveManager {
         money: objective.reward || 0,
         ep: objective.ep_reward || 0
       },
-      isComplete: objective.completed
+      isComplete: objective.isChapterCompletion ?
+        this.getChapterCompletionStatus(objective, index) :
+        (objective.completed || false),
+      isChapterCompletion: objective.isChapterCompletion || false
     };
   }
 
@@ -421,7 +474,7 @@ export class ObjectiveManager {
   getCurrentObjectiveProgress() {
     const objective = this.current_objective_def;
     if (!objective || objective.completed) {
-      return { text: "Completed!", percent: 100 };
+      return { text: "", percent: 100 };
     }
 
     const checkId = objective.checkId;
@@ -526,11 +579,16 @@ export class ObjectiveManager {
       case 'heat10m':
         const heat = game.reactor.stats_heat || 0;
         return { text: `${heat.toLocaleString()} / 10,000,000 Heat`, percent: Math.min(100, (heat / 1e7) * 100) };
+      case 'completeChapter1':
+        return this.checkChapterCompletion(0, 10); // Chapter 1: objectives 0-9
+      case 'completeChapter2':
+        return this.checkChapterCompletion(10, 10); // Chapter 2: objectives 10-19
+      case 'completeChapter3':
+        return this.checkChapterCompletion(20, 10); // Chapter 3: objectives 20-29
+      case 'completeChapter4':
+        return this.checkChapterCompletion(30, 7); // Chapter 4: objectives 30-36
 
-      // Add more cases for other objectives with quantifiable progress...
-      default:
-        // For objectives that are simple true/false checks
-        return { text: "Awaiting completion...", percent: 0 };
+
     }
   }
 
@@ -550,11 +608,90 @@ export class ObjectiveManager {
     return false;
   }
 
+  // Helper method to check chapter completion
+  checkChapterCompletion(startIndex, chapterSize) {
+    let completedCount = 0;
+    const endIndex = Math.min(startIndex + chapterSize, this.objectives_data.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      // Skip chapter completion objectives when counting
+      if (this.objectives_data[i] && !this.objectives_data[i].isChapterCompletion && this.objectives_data[i].completed) {
+        completedCount++;
+      }
+    }
+
+    // Total objectives excluding chapter completion objectives
+    let totalObjectives = 0;
+    for (let i = startIndex; i < endIndex; i++) {
+      if (this.objectives_data[i] && !this.objectives_data[i].isChapterCompletion) {
+        totalObjectives++;
+      }
+    }
+
+    const percent = totalObjectives > 0 ? (completedCount / totalObjectives) * 100 : 0;
+
+    return {
+      text: `${completedCount} / ${totalObjectives} Objectives Complete`,
+      percent: Math.min(100, percent)
+    };
+  }
+
+  // Helper method to determine if a chapter completion objective is complete
+  getChapterCompletionStatus(objective, objectiveIndex) {
+    // For regular objectives, use the normal completed status
+    if (!objective.isChapterCompletion) {
+      return objective.completed || false;
+    }
+
+    // For chapter completion objectives, check if all regular objectives in that chapter are completed
+    const chapterIndex = Math.floor(objectiveIndex / 10);
+    let chapterSize = 10;
+    if (chapterIndex === 3) { // Chapter 4 (index 3)
+      chapterSize = 7;
+    }
+
+    const chapterStart = chapterIndex * 10;
+    const chapterEnd = Math.min(chapterStart + chapterSize, this.objectives_data.length);
+
+    // Check if all regular objectives (non-chapter completion) in this chapter are completed
+    for (let i = chapterStart; i < chapterEnd; i++) {
+      if (i !== objectiveIndex &&
+        this.objectives_data[i] &&
+        !this.objectives_data[i].isChapterCompletion) {
+        const isCompleted = this.objectives_data[i].completed;
+        if (!isCompleted) {
+          return false; // At least one regular objective in the chapter is not completed
+        }
+      }
+    }
+
+    // Mark the chapter completion objective as completed
+    if (this.objectives_data[objectiveIndex]) {
+      this.objectives_data[objectiveIndex].completed = true;
+    }
+
+    return true; // All regular objectives in the chapter are completed
+  }
+
   // Helper method to check if two tiles are adjacent
   areAdjacent(tile1, tile2) {
     const dx = Math.abs(tile1.col - tile2.col);
     const dy = Math.abs(tile1.row - tile2.row);
     return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+  }
+
+  // Check if any chapter completion objectives should be marked as completed
+  checkForChapterCompletion() {
+    if (!this.objectives_data) return;
+
+    // Check all chapter completion objectives
+    for (let i = 0; i < this.objectives_data.length; i++) {
+      const objective = this.objectives_data[i];
+      if (objective.isChapterCompletion && !objective.completed) {
+        // Check if this chapter completion objective should be completed
+        this.getChapterCompletionStatus(objective, i);
+      }
+    }
   }
 
   // Utility method to get current objective information for debugging

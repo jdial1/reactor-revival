@@ -567,7 +567,11 @@ export class Game {
       objectives: {
         current_objective_index:
           this.objectives_manager?.current_objective_index || 0,
-        completed_objectives: this.objectives_manager?.objectives_data?.map(obj => obj.completed) || [],
+        completed_objectives: (() => {
+          const completed = this.objectives_manager?.objectives_data?.map(obj => obj.completed) || [];
+          console.log(`[DEBUG] Saving ${completed.filter(c => c).length} completed objectives out of ${completed.length} total`);
+          return completed;
+        })(),
       },
       toggles: {
         auto_sell: this.ui.stateManager.getVar("auto_sell"),
@@ -816,11 +820,17 @@ export class Game {
         savedData.objectives.completed_objectives &&
         Array.isArray(savedData.objectives.completed_objectives)
       ) {
+        console.log(`[DEBUG] Restoring ${savedData.objectives.completed_objectives.length} completed objectives`);
         savedData.objectives.completed_objectives.forEach((completed, index) => {
           if (this.objectives_manager.objectives_data[index]) {
             this.objectives_manager.objectives_data[index].completed = completed;
+            if (completed) {
+              console.log(`[DEBUG] Restored objective ${index} as completed: ${this.objectives_manager.objectives_data[index].title}`);
+            }
           }
         });
+      } else {
+        console.log(`[DEBUG] No completed objectives data found in save`);
       }
 
       // 4. Apply the final, validated index.
@@ -832,6 +842,11 @@ export class Game {
       if (this.objectives_manager && this.objectives_manager.set_objective &&
         this.objectives_manager.objectives_data && this.objectives_manager.objectives_data.length > 0) {
         this.objectives_manager.set_objective(savedIndex, true);
+
+        // Check for chapter completion after loading save data
+        if (this.objectives_manager.checkForChapterCompletion) {
+          this.objectives_manager.checkForChapterCompletion();
+        }
       }
     } else {
       // If no objectives object exists in the save, default to 0.

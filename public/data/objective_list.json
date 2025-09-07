@@ -1,186 +1,251 @@
 [
     {
         "title": "Place your first Cell in the reactor by clicking '☰'",
+        "flavor_text": "The first component is online. The foundation of your reactor is set.",
         "reward": 10,
         "checkId": "firstCell"
     },
     {
         "title": "Sell all your power by clicking 'Power'",
+        "flavor_text": "Your first sale. The grid is now connected to your output.",
         "reward": 10,
         "checkId": "sellPower"
     },
     {
         "title": "Reduce your Heat to 0 by clicking 'Heat'",
+        "flavor_text": "Managing thermal output is critical. Venting heat is the first step to a stable core.",
         "reward": 10,
         "checkId": "reduceHeat"
     },
     {
         "title": "Put a Heat Vent next to a Cell",
+        "flavor_text": "Component placement is key. Adjacency can dramatically improve efficiency.",
         "reward": 50,
         "checkId": "ventNextToCell"
     },
     {
         "title": "Purchase an Upgrade",
+        "flavor_text": "Time to invest in efficiency. Upgrades are the path to greater output.",
         "reward": 100,
         "checkId": "purchaseUpgrade"
     },
     {
         "title": "Purchase a Dual Cell",
+        "flavor_text": "Double the fission, double the power. A straightforward upgrade to your core.",
         "reward": 25,
         "checkId": "purchaseDualCell"
     },
     {
         "title": "Have at least 10 Cells",
+        "flavor_text": "From a single cell to a small field. Your reactor's potential is growing.",
         "reward": 200,
         "checkId": "tenActiveCells"
     },
     {
         "title": "Purchase a Perpetual Cell upgrade",
+        "flavor_text": "This upgrade eliminates the need for cell replacement, ensuring constant output.",
         "reward": 1000,
         "checkId": "perpetualUranium"
     },
     {
         "title": "Purchase a Capacitor",
+        "flavor_text": "Power storage is now possible. Capacitors let you buffer energy for larger sales.",
         "reward": 100,
         "checkId": "increaseMaxPower"
     },
     {
+        "title": "Complete Chapter 1: First Fission",
+        "flavor_text": "You've mastered the fundamentals of reactor operation. Now, it's time to scale up.",
+        "reward": 5000,
+        "checkId": "completeChapter1",
+        "isChapterCompletion": true
+    },
+    {
         "title": "Generate at least 200 power per tick",
+        "flavor_text": "You are now a net energy producer, consistently supplying the grid.",
         "reward": 1000,
         "checkId": "powerPerTick200"
     },
     {
         "title": "Purchase an Improved Chronometers upgrade",
+        "flavor_text": "Precision timing increases efficiency. Every tick now counts for more.",
         "reward": 5000,
         "checkId": "improvedChronometers"
     },
     {
         "title": "Have 5 different kinds of components",
+        "flavor_text": "A complex machine requires diverse parts. Your reactor design is becoming more sophisticated.",
         "reward": 2000,
         "checkId": "fiveComponentKinds"
     },
     {
         "title": "Have at least 10 Capacitors",
+        "flavor_text": "Your energy storage capacity has significantly increased, allowing for greater strategic control.",
         "reward": 5000,
         "checkId": "tenCapacitors"
     },
     {
         "title": "Generate at least 500 power per tick",
+        "flavor_text": "Your reactor is now a significant power source on the grid.",
         "reward": 5000,
         "checkId": "powerPerTick500"
     },
     {
         "title": "Upgrade Potent Uranium Cell to level 3 or higher",
+        "flavor_text": "Component specialization is paying off. This cell now operates far beyond its base specifications.",
         "reward": 25000,
         "checkId": "potentUranium3"
     },
     {
         "title": "Auto-sell at least 500 power per tick",
+        "flavor_text": "Automation is online. Your surplus energy is now sold automatically, ensuring constant revenue.",
         "reward": 40000,
         "checkId": "autoSell500"
     },
     {
         "title": "Achieve a steady power generation of 1,000 per tick for at least 3 minutes.",
+        "flavor_text": "Stability is proof of a well-designed system. You're maintaining a high, steady output.",
         "reward": 200000,
         "checkId": "sustainedPower1k"
     },
     {
         "title": "Have at least 10 active Advanced Capacitors and 10 Advanced Heat Vents.",
+        "flavor_text": "Advanced components are online, allowing you to handle much greater power and heat loads.",
         "reward": 500000,
         "checkId": "infrastructureUpgrade1"
     },
     {
+        "title": "Complete Chapter 2: Scaling Production",
+        "flavor_text": "Automation and efficiency are now core to your operation. But there is always room to grow.",
+        "reward": 1000000,
+        "checkId": "completeChapter2",
+        "isChapterCompletion": true
+    },
+    {
         "title": "Have at least 5 Quad Plutonium Cells",
+        "flavor_text": "You've unlocked a more potent, and volatile, fuel source. Plutonium offers greater rewards at a greater risk.",
         "reward": 1000000,
         "checkId": "fiveQuadPlutonium"
     },
     {
         "title": "Achieve a passive income of $50,000 per tick through auto-selling.",
+        "flavor_text": "Your facility is now a major economic engine, generating immense profit.",
         "reward": 15000000,
         "checkId": "incomeMilestone50k"
     },
     {
         "title": "Expand your reactor 4 times in either direction",
+        "flavor_text": "The reactor hall has been expanded, making room for more complex and powerful designs.",
         "reward": 100000000,
         "checkId": "expandReactor4"
     },
     {
         "title": "Have at least 5 Quad Thorium Cells.",
+        "flavor_text": "A new fuel source is available. Thorium provides a significant leap in energy potential.",
         "reward": 600000000,
         "checkId": "unlockThorium"
     },
     {
         "title": "Reach a balance of $1,000,000,000.",
+        "flavor_text": "You're no longer just running a reactor; you're at the helm of a financial empire.",
         "reward": 1000000000,
         "checkId": "firstBillion"
     },
     {
         "title": "Have at least $10,000,000,000",
+        "flavor_text": "Your financial reserves have reached a new order of magnitude.",
         "reward": 10000000000,
         "checkId": "money10B"
     },
     {
         "title": "Have at least 5 Quad Seaborgium Cells.",
+        "flavor_text": "This synthetic element pushes the boundaries of physics, offering unprecedented energy density.",
         "reward": 600000000000,
         "checkId": "unlockSeaborgium"
     },
     {
         "title": "Sustain a reactor heat level above 10,000,000 for 5 minutes without a meltdown.",
+        "flavor_text": "You've demonstrated mastery over extreme heat management, a dangerous but rewarding feat.",
         "reward": 2500000000000,
         "checkId": "masterHighHeat"
     },
     {
         "title": "Generate 10 Exotic Particles",
+        "flavor_text": "Immense energy concentrations are producing something new... Exotic Particles have been discovered.",
         "reward": 10000000000000,
         "checkId": "ep10"
     },
     {
+        "title": "Complete Chapter 3: High-Energy Systems",
+        "flavor_text": "You've pushed conventional technology to its limit. To progress, you must embrace the exotic.",
+        "ep_reward": 500,
+        "checkId": "completeChapter3",
+        "isChapterCompletion": true
+    },
+    {
         "title": "Generate 51 Exotic Particles",
+        "flavor_text": "A sufficient quantity of exotic matter has been collected to begin meaningful research.",
         "ep_reward": 50,
         "checkId": "ep51"
     },
     {
         "title": "Generate 250 Exotic Particles.",
+        "flavor_text": "Your stockpile of Exotic Particles is growing, unlocking new research possibilities.",
         "ep_reward": 250,
         "checkId": "ep250"
     },
     {
         "title": "Purchase the 'Infused Cells' and 'Unleashed Cells' experimental upgrades.",
+        "flavor_text": "Applying exotic matter to existing components has created something far greater than the sum of its parts.",
         "ep_reward": 500,
         "checkId": "investInResearch1"
     },
     {
         "title": "Reboot your reactor in the Research tab",
+        "flavor_text": "A system reboot is required to integrate your research and apply its benefits.",
         "ep_reward": 50,
         "checkId": "reboot"
     },
     {
         "title": "Purchase an Experimental Upgrade",
+        "flavor_text": "Research is unlocking technologies that were once thought impossible.",
         "ep_reward": 50,
         "checkId": "experimentalUpgrade"
     },
     {
         "title": "Have at least 5 Quad Dolorium Cells",
+        "flavor_text": "This new cell type represents another leap forward in exotic energy generation.",
         "reward": 1000000000000000,
         "checkId": "fiveQuadDolorium"
     },
     {
         "title": "Generate 1,000 Exotic Particles",
+        "flavor_text": "Your systems are now consistently harvesting exotic matter from the quantum foam.",
         "ep_reward": 1000,
         "checkId": "ep1000"
     },
     {
         "title": "Have at least 5 Quad Nefastium Cells",
+        "flavor_text": "Harnessing the power of Nefastium is a new milestone in exotic energy.",
         "reward": 100000000000000000,
         "checkId": "fiveQuadNefastium"
     },
     {
         "title": "Place an experimental part.",
+        "flavor_text": "Experimental technology doesn't just generate power; it manipulates the laws of energy production itself.",
         "ep_reward": 10000,
         "checkId": "placeExperimentalPart"
     },
     {
+        "title": "Complete Chapter 4: The Experimental Frontier",
+        "flavor_text": "You have mastered both the atom and the quantum world. Your reactor is a monument to scientific achievement.",
+        "ep_reward": 25000,
+        "checkId": "completeChapter4",
+        "isChapterCompletion": true
+    },
+    {
         "title": "All objectives completed!",
+        "flavor_text": "You have achieved the pinnacle of reactor technology. Your work is complete.",
         "reward": 0,
         "checkId": "allObjectives"
     }

@@ -294,18 +294,13 @@ async function satisfyObjective(game, idx) {
       game.masterHighHeat = { startTime: Date.now() - 300000 };
       break;
 
-    case 27: // Generate 10 Exotic Particles with Particle Accelerators
-      game.exotic_particles = 10;
-      game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
-      break;
-
-    case 28: // Generate 51 Exotic Particles with Particle Accelerators
+    case 27: // Generate 51 Exotic Particles
       game.exotic_particles = 51;
       game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
       break;
 
-    case 29: // Purchase the 'Infused Cells' and 'Unleashed Cells' experimental upgrades
-      console.log("Setting up objective 29 - Infused and Unleashed Cells");
+    case 28: // Purchase the 'Infused Cells' and 'Unleashed Cells' experimental upgrades
+      console.log("Setting up objective 28 - Infused and Unleashed Cells");
       // First unlock laboratory
       const laboratoryUpgrade = game.upgradeset.getUpgrade("laboratory");
       console.log("Laboratory upgrade found:", !!laboratoryUpgrade);
@@ -328,6 +323,19 @@ async function satisfyObjective(game, idx) {
         console.log("Unleashed cells upgrade level before:", unleashedCellsUpgrade.level);
         unleashedCellsUpgrade.setLevel(1);
         console.log("Unleashed cells upgrade level after:", unleashedCellsUpgrade.level);
+      }
+      break;
+
+    case 29: // Complete Chapter 3: High-Energy Systems
+      // This is a chapter completion objective, so we need to complete all regular objectives in chapter 3
+      // Chapter 3 objectives are indices 20-29 (excluding the chapter completion objective at 29)
+      // For testing purposes, we'll just mark the chapter as complete
+      console.log("Setting up objective 29 - Chapter 3 completion");
+      // Mark all regular objectives in chapter 3 as completed
+      for (let i = 20; i < 29; i++) {
+        if (game.objectives_manager.objectives_data[i]) {
+          game.objectives_manager.objectives_data[i].completed = true;
+        }
       }
       break;
 
@@ -375,27 +383,133 @@ async function satisfyObjective(game, idx) {
       console.log("Infused cells level after setup:", infusedCellsUpgrade2.level);
       break;
 
-    case 32: // Have at least 5 active Quad Dolorium Cells in your reactor
-      // Reset exotic particles to zero to avoid auto-completing objective 33
+    case 35: // Have at least 5 active Quad Dolorium Cells in your reactor
+      // Reset exotic particles to zero to avoid auto-completing objective 36
       game.exotic_particles = 0;
       game.current_exotic_particles = 0;
       game.total_exotic_particles = 0;
+
+      // Give enough money to afford dolorium3 cells
+      game.current_money = 10000000000000000; // 10 quadrillion
+
+      // Increase max heat capacity to prevent meltdown
+      game.reactor.max_heat = 1000000000000; // 1 trillion heat capacity
+      game.reactor.altered_max_heat = 1000000000000;
+
+      // Unlock all parts first (similar to the 'U' hotkey)
+      const allParts = game.partset.getAllParts();
+      const typeLevelCombos = new Set();
+      allParts.forEach(part => {
+        if (part.type && part.level) {
+          typeLevelCombos.add(`${part.type}:${part.level}`);
+        }
+      });
+
+      // Set all placement counts to 10 to unlock everything
+      typeLevelCombos.forEach(combo => {
+        game.placedCounts[combo] = 10;
+      });
+
+      // Refresh part affordability
+      game.partset.check_affordability(game);
+
+      console.log("All parts after unlock:", allParts.map(p => p.id));
+      const doloriumParts = allParts.filter(p => p.id.startsWith("dolorium"));
+      console.log("Dolorium parts available:", doloriumParts.map(p => p.id));
+
       const doloriumCell = game.partset.getPartById("dolorium3");
       if (doloriumCell) {
+        console.log("Dolorium3 cell found:", doloriumCell.id, doloriumCell.title);
+        console.log("Dolorium3 cell cost:", doloriumCell.cost);
+        console.log("Dolorium3 cell affordable:", doloriumCell.affordable);
+        console.log("Dolorium3 cell unlocked:", game.isPartUnlocked(doloriumCell));
+
+        // Place the parts directly without using setPart to avoid any clearing issues
         for (let i = 0; i < 5; i++) {
-          await game.tileset
-            .getTile(2 + i, 2)
-            .setPart(doloriumCell);
+          const tile = game.tileset.getTile(0, i);
+          console.log(`Placing dolorium3 on tile (0, ${i})`);
+
+          // Directly set the part properties to avoid any clearing
+          tile.part = doloriumCell;
+          tile.activated = true;
+          tile.ticks = doloriumCell.ticks;
+          tile.heat_contained = 0;
+          tile.exploded = false;
+
+          console.log(`Tile after direct placement:`, tile.part?.id, tile.activated, tile.ticks);
         }
+
+        // Update the cached arrays to include the new parts
+        game.tileset.updateActiveTiles();
+
+        // Check tiles immediately after placement
+        console.log("Tiles immediately after placement:");
+        for (let i = 0; i < 5; i++) {
+          const tile = game.tileset.getTile(0, i);
+          console.log(`Tile (0, ${i}):`, { id: tile.part?.id, activated: tile.activated, ticks: tile.ticks, enabled: tile.enabled });
+        }
+
+        // Run ticks to activate the cells
+        for (let i = 0; i < 10; i++) {
+          game.engine?.tick?.();
+        }
+        game.reactor.updateStats();
+        game.tileset.updateActiveTiles();
+
+        // ADD THE FOLLOWING LINES
+        game.engine?.tick?.();
+        game.reactor.updateStats();
+        game.tileset.updateActiveTiles();
+
+        // Ensure the cells are properly activated
+        const doloriumTiles = game.tileset.tiles_list.filter(t => t.part?.id === "dolorium3");
+        const doloriumActiveTiles = game.tileset.active_tiles_list.filter(t => t.part?.id === "dolorium3");
+        console.log("Dolorium tiles in tiles_list:", doloriumTiles.length);
+        console.log("Dolorium tiles in active_tiles_list:", doloriumActiveTiles.length);
+        console.log("Dolorium tiles activated:", doloriumTiles.filter(t => t.ticks > 0).length);
+
+        // Debug all tiles to see what's actually placed
+        const allTiles = game.tileset.tiles_list.filter(t => t.part);
+        const allActiveTiles = game.tileset.active_tiles_list.filter(t => t.part);
+        console.log("All tiles with parts in tiles_list:", allTiles.map(t => ({ id: t.part?.id, activated: t.activated, ticks: t.ticks })));
+        console.log("All tiles with parts in active_tiles_list:", allActiveTiles.map(t => ({ id: t.part?.id, activated: t.activated, ticks: t.ticks })));
+
+        // Check individual tiles
+        for (let i = 0; i < 5; i++) {
+          const tile = game.tileset.getTile(0, i);
+          console.log(`Tile (0, ${i}):`, { id: tile.part?.id, activated: tile.activated, ticks: tile.ticks, enabled: tile.enabled });
+        }
+      } else {
+        console.error("Could not find dolorium3 part!");
       }
       break;
 
-    case 33: // Generate 1000 Exotic Particles with Particle Accelerators
+    case 33: // Reboot your reactor in the Research tab
+      // The reboot check requires: total_exotic_particles > 0, current_money < base_money * 2, exotic_particles === 0
+      game.total_exotic_particles = 100; // Set some total exotic particles
+      game.current_money = game.base_money; // Set money below base_money * 2
+      game.exotic_particles = 0; // Set current exotic particles to 0
+      // ADD THE FOLLOWING LINE
+      game.rebooted_for_ep = true;
+      break;
+
+    case 34: // Purchase an Experimental Upgrade
+      // Set up experimental upgrades
+      const labUpgrade34 = game.upgradeset.getUpgrade("laboratory");
+      const infusedCellsUpgrade34 = game.upgradeset.getUpgrade("infused_cells");
+      const unleashedCellsUpgrade34 = game.upgradeset.getUpgrade("unleashed_cells");
+
+      if (labUpgrade34) labUpgrade34.setLevel(1);
+      if (infusedCellsUpgrade34) infusedCellsUpgrade34.setLevel(1);
+      if (unleashedCellsUpgrade34) unleashedCellsUpgrade34.setLevel(1);
+      break;
+
+    case 36: // Generate 1,000 Exotic Particles
       game.exotic_particles = 1000;
       game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
       break;
 
-    case 34: // Have at least 5 active Quad Nefastium Cells in your reactor
+    case 37: // Have at least 5 Quad Nefastium Cells
       for (let i = 0; i < 5; i++) {
         await game.tileset
           .getTile(0, i)
@@ -403,10 +517,10 @@ async function satisfyObjective(game, idx) {
       }
       break;
 
-    case 35: // Place an experimental part in your reactor
+    case 38: // Place an experimental part
       // First unlock laboratory and protium cells
-      const labUpgrade2 = game.upgradeset.getUpgrade("laboratory");
-      labUpgrade2.setLevel(1);
+      const labUpgrade38 = game.upgradeset.getUpgrade("laboratory");
+      labUpgrade38.setLevel(1);
       const protiumCellsUpgrade = game.upgradeset.getUpgrade("protium_cells");
       protiumCellsUpgrade.setLevel(1);
       // Then place an experimental part
@@ -415,7 +529,11 @@ async function satisfyObjective(game, idx) {
         .setPart(game.partset.getPartById("protium1"));
       break;
 
-    case 36: // All objectives completed!
+    case 39: // Complete Chapter 4: The Experimental Frontier
+      // This is a chapter completion objective
+      break;
+
+    case 40: // All objectives completed!
       // This objective should always return false
       break;
 
@@ -640,7 +758,7 @@ describe("Objective System", () => {
     it("should auto-complete objectives that are already satisfied when loaded", async () => {
       // Test critical objectives that could get stuck if already completed
       const testObjectives = [
-        { index: 32, description: "Five Quad Dolorium Cells" },
+        { index: 35, description: "Five Quad Dolorium Cells" },
       ];
 
       for (const { index, description } of testObjectives) {
@@ -648,7 +766,19 @@ describe("Objective System", () => {
         const testGame = await setupGame();
 
         // Set up the game state to satisfy the objective
+        console.log("Calling satisfyObjective for index", index);
         await satisfyObjective(testGame, index);
+        console.log("satisfyObjective completed for index", index);
+
+        // Re-check affordability after setup to ensure parts are still affordable
+        testGame.partset.check_affordability(testGame);
+
+        // Debug: Check if tiles are still there after satisfyObjective
+        console.log("Tiles after satisfyObjective:");
+        for (let i = 0; i < 5; i++) {
+          const tile = testGame.tileset.getTile(0, i);
+          console.log(`Tile (0, ${i}):`, { id: tile.part?.id, activated: tile.activated, ticks: tile.ticks, enabled: tile.enabled });
+        }
 
         // Verify the objective condition is satisfied
         const objective = objective_list_data[index];
@@ -675,11 +805,11 @@ describe("Objective System", () => {
           console.log("Uranium power upgrade level:", testGame.upgradeset.getUpgrade("uranium1_cell_power")?.level);
         }
 
-        if (index === 32) {
+        if (index === 35) {
           const upgradesWithEcostAndLevel = testGame.upgradeset.getAllUpgrades().filter(u => u.base_ecost > 0 && u.level > 0);
           console.log("[TEST DEBUG] Upgrades with base_ecost > 0 and level > 0:", upgradesWithEcostAndLevel.map(u => ({ id: u.id, level: u.level, type: u.upgrade.type })));
           const checkResult = checkFn(testGame);
-          console.log("[TEST DEBUG] experimentalUpgrade checkFn result:", checkResult);
+          console.log("[TEST DEBUG] fiveQuadDolorium checkFn result:", checkResult);
         }
 
         expect(
@@ -965,8 +1095,8 @@ describe("Objective System", () => {
       const testObjectives = [
         { index: 0, expectedReward: 10, rewardType: 'money' },
         { index: 4, expectedReward: 100, rewardType: 'money' },
-        { index: 29, expectedReward: 500, rewardType: 'ep' }, // Purchase the 'Infused Cells' and 'Unleashed Cells' experimental upgrades
-        { index: 33, expectedReward: 1000, rewardType: 'ep' }, // Generate 1000 Exotic Particles
+        { index: 28, expectedReward: 10000000000000, rewardType: 'money' }, // Generate 10 Exotic Particles
+        { index: 33, expectedReward: 50, rewardType: 'ep' }, // Reboot your reactor in the Research tab
       ];
 
       for (const { index, expectedReward, rewardType } of testObjectives) {
@@ -987,6 +1117,12 @@ describe("Objective System", () => {
         console.log(`[DEBUG] Testing objective ${index} (${objective.title})`);
         console.log(`[DEBUG] Check function: ${objective.checkId}`);
         console.log(`[DEBUG] Objective data:`, { title: objective.title, checkId: objective.checkId, reward: objective.reward, ep_reward: objective.ep_reward });
+
+        if (!checkFn) {
+          console.error(`[ERROR] No check function found for checkId: ${objective.checkId}`);
+          throw new Error(`No check function found for checkId: ${objective.checkId}`);
+        }
+
         console.log(`[DEBUG] Check result: ${checkFn(testGame)}`);
 
         // Debug: Show objectives around the current index

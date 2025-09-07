@@ -135,6 +135,54 @@ export const checkFunctions = {
     game.total_exotic_particles > 0 &&
     game.current_money < game.base_money * 2 &&
     game.exotic_particles === 0,
+  completeChapter1: (game) => {
+    // Check if all regular objectives in chapter 1 (indices 0-8) are completed
+    if (!game.objectives_manager?.objectives_data) return false;
+
+    for (let i = 0; i < 9; i++) {
+      const objective = game.objectives_manager.objectives_data[i];
+      if (objective && !objective.isChapterCompletion && !objective.completed) {
+        return false;
+      }
+    }
+    return true;
+  },
+  completeChapter2: (game) => {
+    // Check if all regular objectives in chapter 2 (indices 10-18) are completed
+    if (!game.objectives_manager?.objectives_data) return false;
+
+    for (let i = 10; i < 19; i++) {
+      const objective = game.objectives_manager.objectives_data[i];
+      if (objective && !objective.isChapterCompletion && !objective.completed) {
+        return false;
+      }
+    }
+    return true;
+  },
+  completeChapter3: (game) => {
+    // Check if all regular objectives in chapter 3 (indices 20-28) are completed
+    if (!game.objectives_manager?.objectives_data) return false;
+
+    for (let i = 20; i < 29; i++) {
+      const objective = game.objectives_manager.objectives_data[i];
+      if (objective && !objective.isChapterCompletion && !objective.completed) {
+        return false;
+      }
+    }
+    return true;
+  },
+  completeChapter4: (game) => {
+    // Check if all regular objectives in chapter 4 (indices 30-35) are completed
+    if (!game.objectives_manager?.objectives_data) return false;
+
+    for (let i = 30; i < 36; i++) {
+      const objective = game.objectives_manager.objectives_data[i];
+      if (objective && !objective.isChapterCompletion && !objective.completed) {
+        return false;
+      }
+    }
+    return true;
+  },
   experimentalUpgrade: (game) => {
     const experimentalUpgrades = game.upgradeset
       .getAllUpgrades()

@@ -260,8 +260,11 @@ export class UI {
         "objective_chapter_progress_text",
         "objective_current_description",
         "objective_current_progress_text",
+        "objective_flavor_text",
         "objective_claim_btn",
         "objective_claim_btn_compact",
+        "objective_claim_chapter_btn",
+        "objective_claim_chapter_btn_compact",
         "tooltip",
         "tooltip_data"
       ],
@@ -2382,6 +2385,8 @@ export class UI {
     const header = this.DOMElements.objectives_header;
     const claimBtn = this.DOMElements.objective_claim_btn;
     const claimBtnCompact = this.DOMElements.objective_claim_btn_compact;
+    const chapterClaimBtn = this.DOMElements.objective_claim_chapter_btn;
+    const chapterClaimBtnCompact = this.DOMElements.objective_claim_chapter_btn_compact;
 
     if (header) {
       header.addEventListener('click', () => this.toggleObjectivesPanel());
@@ -2400,6 +2405,24 @@ export class UI {
       claimBtnCompact.addEventListener('click', (e) => {
         e.stopPropagation(); // Prevent expanding the objectives panel
         if (!claimBtnCompact.disabled) {
+          this.game.objectives_manager.claimObjective();
+        }
+      });
+    }
+
+    if (chapterClaimBtn) {
+      chapterClaimBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent expanding the objectives panel
+        if (!chapterClaimBtn.disabled) {
+          this.game.objectives_manager.claimObjective();
+        }
+      });
+    }
+
+    if (chapterClaimBtnCompact) {
+      chapterClaimBtnCompact.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent expanding the objectives panel
+        if (!chapterClaimBtnCompact.disabled) {
           this.game.objectives_manager.claimObjective();
         }
       });
@@ -2447,6 +2470,17 @@ export class UI {
     if (this.DOMElements.objective_current_description) {
       this.DOMElements.objective_current_description.innerHTML = this.stateManager.addPartIconsToTitle(info.description);
     }
+
+    // Add Flavor Text - only show when objective is completed
+    if (this.DOMElements.objective_flavor_text) {
+      if (info.flavor_text && info.isComplete) {
+        this.DOMElements.objective_flavor_text.textContent = info.flavor_text;
+        this.DOMElements.objective_flavor_text.hidden = false;
+      } else {
+        this.DOMElements.objective_flavor_text.hidden = true;
+      }
+    }
+
     if (this.DOMElements.objective_current_progress_text) {
       this.DOMElements.objective_current_progress_text.textContent = info.progressText;
     }
@@ -2463,19 +2497,51 @@ export class UI {
     }
 
     // Update Claim Button State with animation (both compact and full)
-    const claimButtons = [
+    const isChapterObjective = info.isChapterCompletion || false;
+    const normalClaimButtons = [
       this.DOMElements.objective_claim_btn,
       this.DOMElements.objective_claim_btn_compact
     ].filter(btn => btn);
 
-    if (claimButtons.length > 0) {
-      const wasComplete = claimButtons[0].classList.contains('ready-to-claim');
+    const chapterClaimButtons = [
+      this.DOMElements.objective_claim_chapter_btn,
+      this.DOMElements.objective_claim_chapter_btn_compact
+    ].filter(btn => btn);
+
+    // Show/hide appropriate buttons based on chapter completion
+    if (normalClaimButtons.length > 0) {
+      normalClaimButtons.forEach(btn => {
+        btn.style.display = isChapterObjective ? 'none' : 'block';
+      });
+    }
+
+    if (chapterClaimButtons.length > 0) {
+      chapterClaimButtons.forEach(btn => {
+        btn.style.display = isChapterObjective ? 'block' : 'none';
+      });
+    }
+
+    const activeButtons = isChapterObjective ? chapterClaimButtons : normalClaimButtons;
+    const activeButtonsFiltered = activeButtons.filter(btn => btn);
+
+    if (activeButtonsFiltered.length > 0) {
+      const wasComplete = activeButtonsFiltered[0].classList.contains('ready-to-claim');
+
 
       if (info.isComplete) {
-        claimButtons.forEach(btn => {
+        activeButtonsFiltered.forEach((btn, index) => {
           btn.disabled = false;
           btn.classList.add('ready-to-claim');
-          btn.textContent = btn === this.DOMElements.objective_claim_btn_compact ? "Claim" : "Claim Reward";
+
+          if (isChapterObjective) {
+            if (btn === this.DOMElements.objective_claim_chapter_btn_compact) {
+              btn.textContent = "Complete";
+            } else {
+              btn.textContent = `Complete ${info.chapterName || 'Chapter'}`;
+            }
+          } else {
+            btn.textContent = btn === this.DOMElements.objective_claim_btn_compact ? "Claim" : "Claim Reward";
+          }
         });
 
         // Add completion animation if this is a new completion
@@ -2483,7 +2549,7 @@ export class UI {
           this.animateObjectiveCompletion();
         }
       } else {
-        claimButtons.forEach(btn => {
+        activeButtonsFiltered.forEach(btn => {
           btn.disabled = true;
           btn.classList.remove('ready-to-claim');
 

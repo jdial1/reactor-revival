@@ -414,6 +414,11 @@ async function startGame(pageRouter, ui, game) {
     setTimeout(() => {
       console.log("[DEBUG] Forcing reactor stats update post-load...");
       game.reactor.updateStats();
+
+      // Update objectives display after everything is loaded
+      if (ui.updateObjectiveDisplay) {
+        ui.updateObjectiveDisplay();
+      }
     }, 100);
 
     if (!localStorage.getItem("reactorGameQuickStartShown")) {
@@ -444,6 +449,8 @@ async function startGame(pageRouter, ui, game) {
       }
       game.objectives_manager.current_objective_index = savedIndex;
       console.log(`[DEBUG] Restored objectives_manager.current_objective_index to: ${savedIndex}`);
+      game.objectives_manager.set_objective(savedIndex, true);
+      // Start the objective manager after setting the objective
       game.objectives_manager.start();
       finalizeGameStart();
     };
