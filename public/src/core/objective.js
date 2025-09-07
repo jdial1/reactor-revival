@@ -447,6 +447,9 @@ export class ObjectiveManager {
 
     const progress = this.getCurrentObjectiveProgress();
 
+    // Ensure progress is always a valid object
+    const safeProgress = progress || { text: "Loading...", percent: 0 };
+
     return {
       chapterName: CHAPTER_NAMES[chapterIndex] || `Chapter ${chapterIndex + 1}`,
       chapterProgressText: `${completedInChapter} / ${chapterSize}`,
@@ -456,8 +459,8 @@ export class ObjectiveManager {
       description: objective.description || '',
       flavor_text: objective.flavor_text,
 
-      progressText: progress.text,
-      progressPercent: Math.min(100, progress.percent), // Clamp at 100%
+      progressText: safeProgress.text,
+      progressPercent: Math.min(100, safeProgress.percent), // Clamp at 100%
 
       reward: {
         money: objective.reward || 0,
@@ -482,6 +485,11 @@ export class ObjectiveManager {
 
     // Check if game is fully initialized
     if (!game || !game.tileset || !game.reactor) {
+      return { text: "Loading...", percent: 0 };
+    }
+
+    // Check if objectives_data is available
+    if (!this.objectives_data || this.objectives_data.length === 0) {
       return { text: "Loading...", percent: 0 };
     }
 
@@ -588,6 +596,10 @@ export class ObjectiveManager {
       case 'completeChapter4':
         return this.checkChapterCompletion(30, 7); // Chapter 4: objectives 30-36
 
+      case 'allObjectives':
+        // All objectives completed - this is the final objective
+        return { text: "All objectives completed!", percent: 100 };
+
       // Add more cases for other objectives with quantifiable progress...
       default:
         // For objectives that are simple true/false checks
@@ -613,6 +625,11 @@ export class ObjectiveManager {
 
   // Helper method to check chapter completion
   checkChapterCompletion(startIndex, chapterSize) {
+    // Safety check for objectives_data
+    if (!this.objectives_data || this.objectives_data.length === 0) {
+      return { text: "Loading...", percent: 0 };
+    }
+
     let completedCount = 0;
     const endIndex = Math.min(startIndex + chapterSize, this.objectives_data.length);
 
