@@ -588,7 +588,10 @@ export class ObjectiveManager {
       case 'completeChapter4':
         return this.checkChapterCompletion(30, 7); // Chapter 4: objectives 30-36
 
-
+      // Add more cases for other objectives with quantifiable progress...
+      default:
+        // For objectives that are simple true/false checks
+        return { text: "Awaiting completion...", percent: 0 };
     }
   }
 
