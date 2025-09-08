@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, setupGame, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
 
 describe("Pause Behavior", () => {
     let game;
@@ -296,5 +296,44 @@ describe("Pause Behavior", () => {
 
         // Ticks should now decrease when game is unpaused
         expect(tile.ticks).toBeLessThan(initialTicks);
+    });
+
+    it("should show and hide pause banner when game is paused and resumed", async () => {
+        // Use setupGameWithDOM to get access to router and DOM
+        const { game: gameWithDOM } = await setupGameWithDOM();
+
+        // Ensure we're on the reactor page to have access to the pause banner
+        await gameWithDOM.router.loadPage("reactor_section");
+
+        // Wait for page to load
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const pauseBanner = document.getElementById("pause_banner");
+        expect(pauseBanner).toBeTruthy();
+
+        // Initially, pause banner should be hidden
+        expect(document.body.classList.contains("game-paused")).toBe(false);
+
+        // Pause the game
+        gameWithDOM.ui.stateManager.setVar("pause", true);
+        gameWithDOM.onToggleStateChange("pause", true);
+        expect(gameWithDOM.paused).toBe(true);
+
+        // Trigger UI update to show pause banner
+        gameWithDOM.ui.updatePauseState();
+
+        // Pause banner should now be visible
+        expect(document.body.classList.contains("game-paused")).toBe(true);
+
+        // Unpause the game
+        gameWithDOM.ui.stateManager.setVar("pause", false);
+        gameWithDOM.onToggleStateChange("pause", false);
+        expect(gameWithDOM.paused).toBe(false);
+
+        // Trigger UI update to hide pause banner
+        gameWithDOM.ui.updatePauseState();
+
+        // Pause banner should now be hidden
+        expect(document.body.classList.contains("game-paused")).toBe(false);
     });
 }); 

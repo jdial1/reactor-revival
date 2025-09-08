@@ -391,6 +391,9 @@ async function startGame(pageRouter, ui, game) {
   console.log("[DEBUG] Starting session...");
   game.startSession();
 
+  // Initialize parts panel position after game loads
+  ui.initializePartsPanelPosition();
+
   const finalizeGameStart = () => {
     console.log(`[DEBUG] Finalizing game start. Initial paused state: ${game.paused}`);
     // Ensure a fresh game always starts unpaused

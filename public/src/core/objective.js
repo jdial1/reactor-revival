@@ -143,8 +143,7 @@ export class ObjectiveManager {
           this.objectives_data[this.current_objective_index].completed = true;
         }
 
-        // Check if this completion should trigger chapter completion
-        this.checkForChapterCompletion();
+        // Chapter completion objectives are now auto-completed when reached
 
         // Save the game after marking objective as completed
         if (this.game && this.game.saveGame) {
@@ -295,6 +294,17 @@ export class ObjectiveManager {
     const updateLogic = () => {
       if (nextObjective) {
         this.current_objective_def = nextObjective;
+
+        // Auto-complete chapter completion objectives when they are reached
+        if (this.current_objective_def.isChapterCompletion && !this.current_objective_def.completed) {
+          this.current_objective_def.completed = true;
+          // Also mark the corresponding entry in objectives_data as completed
+          if (this.objectives_data && this.objectives_data[this.current_objective_index]) {
+            this.objectives_data[this.current_objective_index].completed = true;
+          }
+          this.game.logger?.debug(`Auto-completing chapter completion objective: ${this.current_objective_def.title}`);
+        }
+
         const displayObjective = {
           ...this.current_objective_def,
           title:
@@ -663,34 +673,9 @@ export class ObjectiveManager {
       return objective.completed || false;
     }
 
-    // For chapter completion objectives, check if all regular objectives in that chapter are completed
-    const chapterIndex = Math.floor(objectiveIndex / 10);
-    let chapterSize = 10;
-    if (chapterIndex === 3) { // Chapter 4 (index 3)
-      chapterSize = 7;
-    }
-
-    const chapterStart = chapterIndex * 10;
-    const chapterEnd = Math.min(chapterStart + chapterSize, this.objectives_data.length);
-
-    // Check if all regular objectives (non-chapter completion) in this chapter are completed
-    for (let i = chapterStart; i < chapterEnd; i++) {
-      if (i !== objectiveIndex &&
-        this.objectives_data[i] &&
-        !this.objectives_data[i].isChapterCompletion) {
-        const isCompleted = this.objectives_data[i].completed;
-        if (!isCompleted) {
-          return false; // At least one regular objective in the chapter is not completed
-        }
-      }
-    }
-
-    // Mark the chapter completion objective as completed
-    if (this.objectives_data[objectiveIndex]) {
-      this.objectives_data[objectiveIndex].completed = true;
-    }
-
-    return true; // All regular objectives in the chapter are completed
+    // For chapter completion objectives, simply return their completion status
+    // They should be automatically marked as completed when reached
+    return objective.completed || false;
   }
 
   // Helper method to check if two tiles are adjacent
@@ -700,19 +685,6 @@ export class ObjectiveManager {
     return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
   }
 
-  // Check if any chapter completion objectives should be marked as completed
-  checkForChapterCompletion() {
-    if (!this.objectives_data) return;
-
-    // Check all chapter completion objectives
-    for (let i = 0; i < this.objectives_data.length; i++) {
-      const objective = this.objectives_data[i];
-      if (objective.isChapterCompletion && !objective.completed) {
-        // Check if this chapter completion objective should be completed
-        this.getChapterCompletionStatus(objective, i);
-      }
-    }
-  }
 
   // Utility method to get current objective information for debugging
   getCurrentObjectiveInfo() {

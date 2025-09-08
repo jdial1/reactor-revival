@@ -467,8 +467,8 @@ export class UI {
 
     // Patch setVar to also update pause button text and toggle states
     const origSetVar = this.stateManager.setVar.bind(this.stateManager);
-    this.stateManager.setVar = (key, value) => {
-      origSetVar(key, value);
+    this.stateManager.setVar = (key, value, ...args) => {
+      origSetVar(key, value, ...args);
       if (key === "pause") {
         this.updateAllToggleBtnStates();
         updatePauseButtonText();
@@ -675,6 +675,24 @@ export class UI {
     }
   }
 
+  updatePauseState() {
+    // Add this check to prevent errors when document is not available
+    if (typeof document === "undefined" || !document.body) {
+      return;
+    }
+    if (this.stateManager) {
+      const isPaused = this.stateManager.getVar("pause");
+      const isPauseClassPresent = document.body.classList.contains("game-paused");
+
+      // Update body class for pause state - this controls banner visibility via CSS
+      if (isPaused && !isPauseClassPresent) {
+        document.body.classList.add("game-paused");
+      } else if (!isPaused && isPauseClassPresent) {
+        document.body.classList.remove("game-paused");
+      }
+    }
+  }
+
   runUpdateInterfaceLoop() {
     // Record frame for performance tracking
     this.recordFrame();
@@ -760,6 +778,7 @@ export class UI {
     }
 
     this.updateMeltdownState();
+    this.updatePauseState();
 
     this.game.performance.markEnd("ui_update_total");
   }
@@ -1376,13 +1395,7 @@ export class UI {
           if (pauseBtn) {
             pauseBtn.textContent = val ? "Resume" : "Pause";
           }
-          document.body.classList.toggle("game-paused", val);
-
-          // Show/hide pause banner
-          const pauseBanner = document.getElementById("pause_banner");
-          if (pauseBanner) {
-            pauseBanner.classList.toggle("hidden", !val);
-          }
+          // Body class and banner visibility are now handled by updatePauseState()
 
           // Clear all active animations when pausing to prevent visual spam
           if (val) {
@@ -2673,14 +2686,36 @@ export class UI {
     const panel = this.DOMElements.parts_section;
 
     if (toggle && panel) {
-      // Use a simple click event for robust toggling
+      // Initialize draggable state
+      this.partsPanelTogglePosition = 15; // Default 15%
+      this.isDraggingToggle = false;
+      this.dragStartY = 0;
+      this.dragStartTop = 0;
+
+      // Set initial position
+      this.updatePartsPanelTogglePosition();
+
+      // Use a simple click event for robust toggling (only on mobile)
       toggle.addEventListener("click", (e) => {
         e.preventDefault();
         const isMobile = window.innerWidth <= 900;
-        if (isMobile) {
+        if (isMobile && !this.isDraggingToggle) {
           panel.classList.toggle("collapsed");
           this.updatePartsPanelBodyClass();
         }
+      });
+
+      // Add drag functionality
+      toggle.addEventListener("mousedown", (e) => {
+        if (e.button === 0) { // Left mouse button only
+          this.startDragToggle(e);
+        }
+      });
+
+      // Add touch support for mobile
+      toggle.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        this.startDragToggle(e.touches[0]);
       });
 
       // Initialize the panel state based on screen size
@@ -2707,6 +2742,99 @@ export class UI {
       this.stateManager.updatePartsPanelToggleIcon(null);
     }
   }
+
+  startDragToggle(e) {
+    const toggle = this.DOMElements.parts_panel_toggle;
+    if (!toggle) return;
+
+    this.isDraggingToggle = true;
+    this.dragStartY = e.clientY;
+    this.dragStartTop = this.partsPanelTogglePosition;
+
+    toggle.classList.add('dragging');
+
+    // Add global event listeners
+    document.addEventListener('mousemove', this.handleDragToggle.bind(this));
+    document.addEventListener('mouseup', this.endDragToggle.bind(this));
+    document.addEventListener('touchmove', this.handleDragToggle.bind(this));
+    document.addEventListener('touchend', this.endDragToggle.bind(this));
+
+    e.preventDefault();
+  }
+
+  handleDragToggle(e) {
+    if (!this.isDraggingToggle) return;
+
+    const toggle = this.DOMElements.parts_panel_toggle;
+    if (!toggle) return;
+
+    // Handle both mouse and touch events
+    const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const deltaY = clientY - this.dragStartY;
+    const toggleHeight = toggle.offsetHeight;
+    const parentHeight = toggle.parentElement.offsetHeight;
+
+    // Calculate new position as percentage
+    const newTop = this.dragStartTop + (deltaY / parentHeight) * 100;
+
+    // Constrain to 0-100% range
+    this.partsPanelTogglePosition = Math.max(0, Math.min(100, newTop));
+
+    this.updatePartsPanelTogglePosition();
+  }
+
+  endDragToggle(e) {
+    if (!this.isDraggingToggle) return;
+
+    const toggle = this.DOMElements.parts_panel_toggle;
+    if (toggle) {
+      toggle.classList.remove('dragging');
+    }
+
+    this.isDraggingToggle = false;
+
+    // Remove global event listeners
+    document.removeEventListener('mousemove', this.handleDragToggle.bind(this));
+    document.removeEventListener('mouseup', this.endDragToggle.bind(this));
+    document.removeEventListener('touchmove', this.handleDragToggle.bind(this));
+    document.removeEventListener('touchend', this.endDragToggle.bind(this));
+
+    // Save position to game state
+    this.savePartsPanelTogglePosition();
+  }
+
+  updatePartsPanelTogglePosition() {
+    const toggle = this.DOMElements.parts_panel_toggle;
+    if (!toggle) return;
+
+    toggle.style.top = `${this.partsPanelTogglePosition}%`;
+  }
+
+  savePartsPanelTogglePosition() {
+    if (this.game && this.game.getSaveState) {
+      // This will be saved when the game next saves
+      // We'll add this to the save state in the game.js file
+    }
+  }
+
+  loadPartsPanelTogglePosition(saveData) {
+    if (saveData && saveData.ui && saveData.ui.partsPanelTogglePosition !== undefined) {
+      this.partsPanelTogglePosition = saveData.ui.partsPanelTogglePosition;
+      this.updatePartsPanelTogglePosition();
+    }
+  }
+
+  // Method to be called after game initialization to load saved position
+  initializePartsPanelPosition() {
+    if (this.game && this.game.getSaveState) {
+      const saveState = this.game.getSaveState();
+      if (saveState.ui && saveState.ui.partsPanelTogglePosition !== undefined) {
+        this.partsPanelTogglePosition = saveState.ui.partsPanelTogglePosition;
+        this.updatePartsPanelTogglePosition();
+      }
+    }
+  }
+
 
   renderUpgrade(upgrade) {
     const btn = document.createElement("button");
