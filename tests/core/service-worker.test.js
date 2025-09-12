@@ -171,7 +171,7 @@ describe('Service Worker Integration Tests', () => {
             const swContent = fs.readFileSync(swPath, 'utf-8');
 
             expect(swContent).toContain('setCatchHandler');
-            expect(swContent).toContain('offline.html');
+            expect(swContent).toContain('index.html');
         });
 
         it('should verify service worker file has version checking', () => {
@@ -185,28 +185,6 @@ describe('Service Worker Integration Tests', () => {
     });
 
     describe('Service Worker Dependencies and Assets', () => {
-        it('should verify offline.html exists', () => {
-            const offlinePath = path.resolve(__dirname, '../../public/offline.html');
-            expect(fs.existsSync(offlinePath)).toBe(true);
-        });
-
-        it('should verify offline.html is readable', () => {
-            const offlinePath = path.resolve(__dirname, '../../public/offline.html');
-            const offlineContent = fs.readFileSync(offlinePath, 'utf-8');
-            expect(offlineContent).toBeTruthy();
-            expect(offlineContent.length).toBeGreaterThan(0);
-        });
-
-        it('should verify offline.html has proper HTML structure', () => {
-            const offlinePath = path.resolve(__dirname, '../../public/offline.html');
-            const offlineContent = fs.readFileSync(offlinePath, 'utf-8');
-
-            expect(offlineContent).toContain('<!DOCTYPE html>');
-            expect(offlineContent).toContain('<html');
-            expect(offlineContent).toContain('<head>');
-            expect(offlineContent).toContain('<body>');
-            expect(offlineContent).toContain('offline');
-        });
 
         it('should verify version.json exists', () => {
             const versionPath = path.resolve(__dirname, '../../public/version.json');

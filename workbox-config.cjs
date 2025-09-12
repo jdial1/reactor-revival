@@ -2,7 +2,6 @@ module.exports = {
   globDirectory: "public",
   globPatterns: [
     "index.html",
-    "offline.html",
     "css/**/*.css",
     "data/**/*.json",
     "img/**/*.{png,svg,jpg,jpeg}",
@@ -11,7 +10,6 @@ module.exports = {
     "manifest.json",
     "version.json",
     "lib/**/*.js",
-    // Cache game JavaScript for offline play
     "src/**/*.js",
     "components/**/*.js",
   ],

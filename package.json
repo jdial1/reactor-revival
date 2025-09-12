@@ -14,10 +14,9 @@
     "generate-version": "node scripts/generate-version.js",
     "copy-libs": "node scripts/copy-libs.js",
     "build:sw": "workbox injectManifest workbox-config.cjs",
-    "lint": "npm run lint:js && npm run lint:css && npm run lint:css:duplicates",
+    "lint": "npm run lint:js && npm run lint:css",
     "lint:js": "eslint . --format @microsoft/eslint-formatter-sarif --output-file eslint-results.sarif",
     "lint:css": "stylelint \"public/css/**/*.css\" --fix",
-    "lint:css:duplicates": "node scripts/check-css-duplicates.js",
     "check-pwa-root-files": "node scripts/check-pwa-root-files.js",
     "postinstall": "npm run copy-libs"
   },

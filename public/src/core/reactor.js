@@ -249,7 +249,7 @@ export class Reactor {
       });
 
       this.current_heat = this.max_heat * 2 + 1;
-      
+
       this.game.ui.stateManager.setVar("melting_down", true, true);
 
       // Update UI to show meltdown state

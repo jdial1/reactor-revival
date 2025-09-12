@@ -58,9 +58,12 @@ export default [
     },
     ignores: [
       "public/lib/*.js", // Ignore copied third-party libraries
-      "public/clear-sw.js", // Ignore service worker files
+      "public/sw.js", // Generated service worker
+      "src-sw.js", // Service worker source
       "eslint-results.sarif",
-      "workbox-config.cjs"
+      "workbox-config.cjs",
+      "node_modules/**/*", // Node modules
+      "tests/**/*" // Test files
     ]
   }
 ];

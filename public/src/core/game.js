@@ -580,9 +580,7 @@ export class Game {
         time_flux: this.ui.stateManager.getVar("time_flux"),
         pause: this.ui.stateManager.getVar("pause"),
       },
-      ui: {
-        partsPanelTogglePosition: this.ui?.partsPanelTogglePosition || 15,
-      },
+      ui: {},
     };
 
     try {
@@ -863,9 +861,7 @@ export class Game {
     this.ui.updateAllToggleBtnStates();
 
     // Load UI state
-    if (savedData.ui) {
-      this.ui.loadPartsPanelTogglePosition(savedData.ui);
-    }
+    // Note: UI state loading removed as partsPanelTogglePosition is no longer used
 
     // Validate objective state consistency after restoration
     this._validateObjectiveState();

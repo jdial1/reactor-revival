@@ -700,7 +700,7 @@ body {
 
   /* overflow: auto; */
   flex: 1 1 auto;
-  padding: 5px;
+  padding: 15px 5px;
   margin: 0;
   direction: ltr;
   grid-template-columns: repeat(var(--game-cols, 12), var(--tile-size, 48px));
@@ -2623,10 +2623,6 @@ footer#bottom_nav button {
   --objective-claim-ready-bg: rgb(40 167 69);
 }
 
-/* Hide legacy objectives content when new UI is present */
-#objectives_section:has(#objectives_container) #objectives_content {
-  display: none;
-}
 
 /* Fallback for browsers without :has() support */
 #objectives_content {
@@ -2649,7 +2645,6 @@ footer#bottom_nav button {
 .mobile-objectives-container {
   position: absolute;
   z-index: 1000;
-  top: 8px;
   right: 0;
   left: 0;
   width: 100%;

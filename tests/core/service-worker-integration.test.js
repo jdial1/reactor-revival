@@ -2,20 +2,17 @@ import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, fs, 
 
 describe('Service Worker Real File Integration Tests', () => {
     let swContent;
-    let offlineContent;
     let versionContent;
     let manifestContent;
 
     beforeEach(() => {
         // Read actual service worker and related files
         const swPath = path.resolve(__dirname, '../../public/sw.js');
-        const offlinePath = path.resolve(__dirname, '../../public/offline.html');
         const versionPath = path.resolve(__dirname, '../../public/version.json');
         const manifestPath = path.resolve(__dirname, '../../public/manifest.json');
 
         try {
             swContent = fs.readFileSync(swPath, 'utf-8');
-            offlineContent = fs.readFileSync(offlinePath, 'utf-8');
             versionContent = fs.readFileSync(versionPath, 'utf-8');
             manifestContent = fs.readFileSync(manifestPath, 'utf-8');
         } catch (error) {
@@ -47,7 +44,7 @@ describe('Service Worker Real File Integration Tests', () => {
 
         it('should have offline fallback handling', () => {
             expect(swContent).toContain('setCatchHandler');
-            expect(swContent).toContain('offline.html');
+            expect(swContent).toContain('index.html');
         });
 
         it('should have version checking functionality', () => {
@@ -69,24 +66,6 @@ describe('Service Worker Real File Integration Tests', () => {
         });
     });
 
-    describe('Offline Page Content', () => {
-        it('should have valid offline page content', () => {
-            expect(offlineContent).toBeTruthy();
-            expect(offlineContent.length).toBeGreaterThan(100);
-        });
-
-        it('should have proper HTML structure', () => {
-            expect(offlineContent).toContain('<html');
-            expect(offlineContent).toContain('<head');
-            expect(offlineContent).toContain('<body');
-            expect(offlineContent).toContain('</html>');
-        });
-
-        it('should have offline-specific content', () => {
-            expect(offlineContent).toContain('offline');
-            expect(offlineContent).toContain('connection');
-        });
-    });
 
     describe('Version File Content', () => {
         it('should have valid version content', () => {
@@ -234,14 +213,14 @@ describe('Service Worker Real File Integration Tests', () => {
             expect(stats.size).toBeGreaterThan(1000);
         });
 
-        it('should have reasonable offline page size', () => {
-            const offlinePath = path.resolve(__dirname, '../../public/offline.html');
-            const stats = fs.statSync(offlinePath);
+        it('should have reasonable main page size', () => {
+            const indexPath = path.resolve(__dirname, '../../public/index.html');
+            const stats = fs.statSync(indexPath);
 
-            // Offline page should be less than 10KB
-            expect(stats.size).toBeLessThan(10 * 1024);
+            // Main page should be less than 50KB
+            expect(stats.size).toBeLessThan(50 * 1024);
 
-            // Offline page should not be empty
+            // Main page should not be empty
             expect(stats.size).toBeGreaterThan(100);
         });
 
@@ -269,12 +248,12 @@ describe('Service Worker Real File Integration Tests', () => {
     });
 
     describe('Cross-File Integration', () => {
-        it('should reference offline.html correctly in service worker', () => {
-            expect(swContent).toContain('offline.html');
+        it('should reference index.html correctly in service worker', () => {
+            expect(swContent).toContain('index.html');
 
-            // Verify the offline.html file actually exists and is referenced correctly
-            const offlinePath = path.resolve(__dirname, '../../public/offline.html');
-            expect(fs.existsSync(offlinePath)).toBe(true);
+            // Verify the index.html file actually exists and is referenced correctly
+            const indexPath = path.resolve(__dirname, '../../public/index.html');
+            expect(fs.existsSync(indexPath)).toBe(true);
         });
 
         it('should reference version.json correctly in service worker', () => {
@@ -296,14 +275,14 @@ describe('Service Worker Real File Integration Tests', () => {
 
         it('should have proper file relationships', () => {
             // Service worker should be able to handle all the files it references
-            expect(swContent).toContain('offline.html');
+            expect(swContent).toContain('index.html');
             expect(swContent).toContain('version.json');
 
             // All referenced files should exist
-            const offlinePath = path.resolve(__dirname, '../../public/offline.html');
+            const indexPath = path.resolve(__dirname, '../../public/index.html');
             const versionPath = path.resolve(__dirname, '../../public/version.json');
 
-            expect(fs.existsSync(offlinePath)).toBe(true);
+            expect(fs.existsSync(indexPath)).toBe(true);
             expect(fs.existsSync(versionPath)).toBe(true);
         });
     });

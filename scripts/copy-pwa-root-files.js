@@ -9,7 +9,6 @@ const __dirname = path.dirname(__filename);
 const pwaFiles = [
   "sw.js",
   "manifest.json",
-  "offline.html",
   "browserconfig.xml",
 ];
 

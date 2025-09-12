@@ -59,7 +59,7 @@ workbox.routing.registerRoute(
 // Handle offline fallback
 workbox.routing.setCatchHandler(({ event }) => {
   if (event.request.destination === "document") {
-    return caches.match("/offline.html");
+    return caches.match("/index.html");
   }
   return Response.error();
 });

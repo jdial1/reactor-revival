@@ -17,7 +17,7 @@ Copies external libraries from node_modules to public/lib for browser access.
 ### `copy-pwa-root-files.js`
 Validates that all required PWA files are present in the public directory.
 - **Usage**: Called by build process
-- **Checks**: sw.js, manifest.json, offline.html, browserconfig.xml
+- **Checks**: sw.js, manifest.json, browserconfig.xml
 
 ### `fix-github-pages-manifest.js`
 Updates manifest.json for GitHub Pages deployment by adjusting start_url and scope.
@@ -37,7 +37,6 @@ The project now uses `public/` as the single source of truth for both static ass
 - `index.html` - Main application entry point
 - `manifest.json` - PWA manifest
 - `sw.js` - Service worker
-- `offline.html` - Offline fallback page
 - `browserconfig.xml` - Browser configuration
 - `version.json` - Generated version information
 - `css/` - Stylesheets

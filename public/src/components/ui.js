@@ -55,11 +55,8 @@ export class UI {
     this.ctrl9BaseAmount = 1000000000; // Base amount for CTRL+9
     this.ctrl9ExponentialRate = 5; // Exponential growth rate
     this.ctrl9IntervalMs = 100; // How often to add money while held
-    // Visual event rendering pool
-    this._visualPool = {
-      emit: [],
-      maxEmit: 64,
-    };
+    // Visual event rendering pool (simplified - emit nodes removed)
+    this._visualPool = {};
     this._icons = {
       power: "img/ui/icons/icon_power.png",
       heat: "img/ui/icons/icon_heat.png",
@@ -67,7 +64,7 @@ export class UI {
 
     // Animation state tracking to prevent spam
     this._activeVentRotors = new Set(); // Track tiles with active vent rotor animations
-    this._activeFlowIndicators = new Map(); // Track active flow indicators by flow path
+    // Flow indicators removed for performance
     this._activeTileIcons = new Map(); // Track active tile icons by tile and type
 
     // Performance tracking for FPS and TPS
@@ -809,17 +806,9 @@ export class UI {
           const t = tileFor(evt.tile[0], evt.tile[1]);
           if (t) this.blinkVent(t);
         }
-      } else if (evt.type === 'flow' && Array.isArray(evt.from)) {
-        // Flow events are disabled in engine for performance - skip processing
-        // if (evt.to === 'reactor') {
-        //   const fromT = tileFor(evt.from[0], evt.from[1]);
-        //   if (fromT) this._renderFlow(evt);
-        // } else if (Array.isArray(evt.to)) {
-        //   const fromT = tileFor(evt.from[0], evt.from[1]);
-        //   const toT = tileFor(evt.to[0], evt.to[1]);
-        //   if (fromT && toT) this._renderFlow(evt);
-        // }
-        continue; // Skip flow events for performance
+      } else if (evt.type === 'flow') {
+        // Flow events are disabled for performance - skip processing
+        continue;
       }
     }
   }
@@ -845,31 +834,6 @@ export class UI {
     return overlay;
   }
 
-  _borrowEmitNode() {
-    const pool = this._visualPool.emit;
-    let node = pool.find(n => n._free);
-    if (!node && pool.length < this._visualPool.maxEmit) {
-      node = document.createElement('img');
-      node.className = 'vis-emit';
-      node.style.position = 'absolute';
-      node.style.width = '16px';
-      node.style.height = '16px';
-      node.style.opacity = '0';
-      node.style.transition = 'transform 300ms ease-out, opacity 300ms ease-out';
-      node._free = true;
-      const overlay = this._ensureOverlay();
-      if (overlay) overlay.appendChild(node);
-      pool.push(node);
-    }
-    if (node) node._free = false;
-    return node;
-  }
-
-  _returnEmitNode(node) {
-    if (!node) return;
-    node._free = true;
-    node.style.opacity = '0';
-  }
 
   _tileCenterToOverlayPosition(row, col) {
     const reactor = this.DOMElements.reactor;
@@ -923,226 +887,9 @@ export class UI {
 
 
 
-  // Public helpers to be called from the engine (DOM-guarded)
-  emitPowerFromCell(tile) {
-    try {
-      if (!tile?.$el) return;
-      const icon = 'power';
-      this._renderEmit({ type: 'emit', icon, tile: [tile.row, tile.col] });
-    } catch (_) { /* ignore in tests */ }
-  }
+  // Note: Power/heat emission and flow visualization methods removed for performance
+  // Vent spinning is preserved in blinkVent() method
 
-  emitHeatFromCell(tile) {
-    try {
-      if (!tile?.$el) return;
-      const icon = 'heat';
-      this._renderEmit({ type: 'emit', icon, tile: [tile.row, tile.col] });
-    } catch (_) { /* ignore in tests */ }
-  }
-
-  showHeatFlow(fromTile, toTile) {
-    try {
-      if (!fromTile?.$el || !toTile?.$el) return;
-      this._renderFlow({ type: 'flow', icon: 'heat', from: [fromTile.row, fromTile.col], to: [toTile.row, toTile.col] });
-    } catch (_) { /* ignore in tests */ }
-  }
-
-  _renderEmit(evt) {
-    const node = this._borrowEmitNode();
-    if (!node) return;
-    const iconUrl = this._icons[evt.icon] || this._icons.heat;
-    node.src = iconUrl;
-    const { x, y } = this._tileCenterToOverlayPosition(evt.tile[0], evt.tile[1]);
-    // Offset icons so heat/power do not overlap when emitted simultaneously
-    const offset = (evt.icon === 'power') ? { x: 6, y: -6 } : (evt.icon === 'heat') ? { x: -6, y: 6 } : { x: 0, y: 0 };
-    node.style.transform = `translate(${x - 8 + offset.x}px, ${y - 8 + offset.y}px) scale(0.8)`;
-    // Force reflow to apply transition cleanly
-    // eslint-disable-next-line no-unused-expressions
-    node.offsetHeight;
-    node.style.opacity = '1';
-    node.style.transform = `translate(${x - 8 + offset.x}px, ${y - 16 + offset.y}px) scale(1)`;
-    setTimeout(() => this._returnEmitNode(node), 320);
-  }
-
-  _renderFlow(evt) {
-    const overlay = this._ensureOverlay();
-    if (!overlay) return;
-
-    const from = { row: evt.from[0], col: evt.from[1] };
-    const to = evt.to;
-
-    // Handle special case where heat goes to reactor (no neighbors)
-    let flowKey, start, end, direction;
-
-    if (to === 'reactor') {
-      // Heat going directly to reactor - show arrows in all 8 directions
-      flowKey = `${from.row}-${from.col}-to-reactor-${Date.now()}`;
-      start = this._tileCenterToOverlayPosition(from.row, from.col);
-
-      // Create multiple arrows in all 8 directions
-      const directions = ['top', 'top-left', 'top-right'];
-      const isMobile = window.innerWidth <= 900;
-      const tileSize = 48; // Base tile size from CSS
-      const arrowDistance = isMobile ? tileSize * 0.65 : tileSize * 0.75;
-
-      directions.forEach((dir) => {
-        const uniqueKey = `${flowKey}-${dir}`;
-        let endX, endY;
-
-        switch (dir) {
-          case 'top': endX = start.x; endY = start.y - arrowDistance; break;
-          case 'top-left': endX = start.x - arrowDistance; endY = start.y - arrowDistance; break;
-          case 'top-right': endX = start.x + arrowDistance; endY = start.y - arrowDistance; break;
-        }
-
-        this._createReactorFlowArrow(uniqueKey, start, { x: endX, y: endY }, dir, evt.amount);
-      });
-
-      return;
-    }
-
-    // Normal flow between tiles
-    if (Array.isArray(to)) {
-      const toTile = { row: to[0], col: to[1] };
-      flowKey = `${from.row}-${from.col}-to-${toTile.row}-${toTile.col}`;
-      start = this._tileCenterToOverlayPosition(from.row, from.col);
-      end = this._tileCenterToOverlayPosition(toTile.row, toTile.col);
-
-      // Determine direction based on tile deltas
-      const dRow = toTile.row - from.row;
-      const dCol = toTile.col - from.col;
-      if (Math.abs(dRow) > Math.abs(dCol)) {
-        direction = dRow < 0 ? 'up' : 'down';
-      } else {
-        direction = dCol < 0 ? 'left' : 'right';
-      }
-    }
-
-    // Check if this flow animation is already running
-    if (this._activeFlowIndicators.has(flowKey)) {
-      return;
-    }
-
-    // Get heat-specific styling class
-    const heatClass = this._getHeatArrowClass(evt.amount || 0);
-
-    // Position arrows at the source tile boundary based on direction
-    let arrowX, arrowY;
-    const tileSize = 48; // Base tile size from CSS
-
-    switch (direction) {
-      case 'up':
-        arrowX = start.x;
-        arrowY = start.y - (tileSize / 2) - (tileSize * 0.15); // Position closer to top edge
-        break;
-      case 'down':
-        arrowX = start.x;
-        arrowY = start.y + (tileSize / 2) + (tileSize * 0.15); // Position closer to bottom edge
-        break;
-      case 'left':
-        arrowX = start.x - (tileSize / 2) - (tileSize * 0.15); // Position closer to left edge
-        arrowY = start.y;
-        break;
-      case 'right':
-        arrowX = start.x + (tileSize / 2) + (tileSize * 0.15); // Position closer to right edge
-        arrowY = start.y;
-        break;
-      default:
-        arrowX = start.x;
-        arrowY = start.y;
-    }
-
-    const indicator = document.createElement('div');
-    indicator.className = `flow-indicator flow-arrow-${direction} heat-arrow ${heatClass}`;
-    indicator.style.position = 'absolute';
-    indicator.style.left = `${arrowX}px`;
-    indicator.style.top = `${arrowY}px`;
-    indicator.style.pointerEvents = 'none';
-
-    // Mark this flow animation as active
-    this._activeFlowIndicators.set(flowKey, indicator);
-
-    overlay.appendChild(indicator);
-
-    // Auto-remove after a longer duration to make arrows more visible
-    setTimeout(() => {
-      if (indicator.parentElement === overlay) overlay.removeChild(indicator);
-      this._activeFlowIndicators.delete(flowKey);
-    }, 1000);
-  }
-
-  _createReactorFlowArrow(flowKey, start, end, direction, amount) {
-    const overlay = this._ensureOverlay();
-    if (!overlay) return;
-
-    // Check if this flow animation is already running
-    if (this._activeFlowIndicators.has(flowKey)) {
-      return;
-    }
-
-    // Get heat-specific styling class
-    const heatClass = this._getHeatArrowClass(amount);
-
-    // Position arrows at the source tile boundary based on direction
-    let arrowX, arrowY;
-    const tileSize = 48; // Base tile size from CSS
-
-    switch (direction) {
-      case 'up':
-        arrowX = start.x;
-        arrowY = start.y - tileSize / 2 + 8; // Position closer to top edge
-        break;
-      case 'down':
-        arrowX = start.x;
-        arrowY = start.y + tileSize / 2 - 8; // Position closer to bottom edge
-        break;
-      case 'left':
-        arrowX = start.x - tileSize / 2 + 8; // Position closer to left edge
-        arrowY = start.y;
-        break;
-      case 'right':
-        arrowX = start.x + tileSize / 2 - 8; // Position closer to right edge
-        arrowY = start.y;
-        break;
-      case 'top-left':
-        arrowX = start.x - tileSize / 2 + 8; // Position closer to left edge
-        arrowY = start.y - tileSize / 2 + 8; // Position closer to top edge
-        break;
-      case 'top-right':
-        arrowX = start.x + tileSize / 2 - 8; // Position closer to right edge
-        arrowY = start.y - tileSize / 2 + 8; // Position closer to top edge
-        break;
-      case 'down-left':
-        arrowX = start.x - tileSize / 2 + 8; // Position closer to left edge
-        arrowY = start.y + tileSize / 2 - 8; // Position closer to bottom edge
-        break;
-      case 'down-right':
-        arrowX = start.x + tileSize / 2 - 8; // Position closer to right edge
-        arrowY = start.y + tileSize / 2 - 8; // Position closer to bottom edge
-        break;
-      default:
-        arrowX = start.x;
-        arrowY = start.y;
-    }
-
-    const indicator = document.createElement('div');
-    indicator.className = `flow-indicator flow-arrow-${direction} heat-arrow ${heatClass}`;
-    indicator.style.position = 'absolute';
-    indicator.style.left = `${arrowX}px`;
-    indicator.style.top = `${arrowY}px`;
-    indicator.style.pointerEvents = 'none';
-
-    // Mark this flow animation as active
-    this._activeFlowIndicators.set(flowKey, indicator);
-
-    overlay.appendChild(indicator);
-
-    // Auto-remove after a longer duration to make arrows more visible
-    setTimeout(() => {
-      if (indicator.parentElement === overlay) overlay.removeChild(indicator);
-      this._activeFlowIndicators.delete(flowKey);
-    }, 1000);
-  }
 
 
 
@@ -1668,13 +1415,7 @@ export class UI {
     // Clear vent rotor animations
     this._activeVentRotors.clear();
 
-    // Clear flow indicator animations
-    this._activeFlowIndicators.forEach((indicator) => {
-      if (indicator && indicator.parentElement) {
-        indicator.parentElement.removeChild(indicator);
-      }
-    });
-    this._activeFlowIndicators.clear();
+    // Flow indicators removed for performance
 
     // Clear tile icon animations
     this._activeTileIcons.forEach((icon) => {
@@ -1689,9 +1430,8 @@ export class UI {
   getAnimationStatus() {
     return {
       activeVentRotors: this._activeVentRotors.size,
-      activeFlowIndicators: this._activeFlowIndicators.size,
       activeTileIcons: this._activeTileIcons.size,
-      totalActiveAnimations: this._activeVentRotors.size + this._activeFlowIndicators.size + this._activeTileIcons.size
+      totalActiveAnimations: this._activeVentRotors.size + this._activeTileIcons.size
     };
   }
 
@@ -4706,18 +4446,6 @@ export class UI {
    * @param {number | string | bigint} heatValue The amount of heat being transferred.
    * @returns {string} The CSS class name to apply to the arrow element.
    */
-  _getHeatArrowClass(heatValue) {
-    // Convert BigInt to string; for numbers, convert to string directly.
-    const heatStr = typeof heatValue === 'bigint' ? heatValue.toString() : String(Math.floor(heatValue));
-
-    // Calculate the number of digits.
-    const digitLength = heatStr.length;
-
-    // Clamp the digit length between 1 and 25 to match the CSS classes.
-    const styleLevel = Math.max(1, Math.min(digitLength, 25));
-
-    return `heat-${styleLevel}`;
-  }
 
   async resetReactor() {
     console.log("resetReactor method called - deleting save and returning to splash");
@@ -4830,5 +4558,6 @@ export class UI {
       this.stateManager.setVar("current_money", this.game.current_money);
     }
   }
+
 
 }
