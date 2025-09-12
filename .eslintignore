@@ -1,0 +1,14 @@
+# Third-party libraries
+public/lib/
+public/clear-sw.js
+public/sw.js
+src-sw.js
+
+# Generated files
+eslint-results.sarif
+
+# Node modules
+node_modules/
+
+# Test files (optional - you may want to lint these)
+tests/
