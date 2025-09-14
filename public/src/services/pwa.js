@@ -524,6 +524,280 @@ class SplashScreenManager {
     return `${s}<span class="time-unit">s</span>`;
   }
 
+  formatDateTime(timestamp) {
+    if (!timestamp) return "Unknown";
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffHours < 1) {
+      return "Just now";
+    } else if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    } else {
+      return date.toLocaleDateString();
+    }
+  }
+
+  showSaveSlotSelection(saveSlots) {
+    // Hide the splash screen temporarily
+    if (this.splashScreen) {
+      this.splashScreen.style.display = 'none';
+    }
+
+    // Create save slot selection screen using splash screen styling
+    const saveSlotScreen = document.createElement("main");
+    saveSlotScreen.id = "save-slot-screen";
+    saveSlotScreen.className = "splash-screen";
+    saveSlotScreen.style.position = "fixed";
+    saveSlotScreen.style.top = "0";
+    saveSlotScreen.style.left = "0";
+    saveSlotScreen.style.width = "100%";
+    saveSlotScreen.style.height = "100%";
+    saveSlotScreen.style.zIndex = "999";
+    saveSlotScreen.style.display = "flex";
+    saveSlotScreen.style.flexDirection = "column";
+    saveSlotScreen.style.alignItems = "center";
+    saveSlotScreen.style.justifyContent = "center";
+    saveSlotScreen.style.textAlign = "center";
+
+    // Check if all slots are empty
+    const hasAnySave = saveSlots.some(slot => slot.exists);
+
+    saveSlotScreen.innerHTML = `
+      <h1 class="splash-title">LOAD GAME</h1>
+      <div class="splash-menu-panel">
+        <div class="splash-start-options">
+          ${this.generateSaveSlotHTML(saveSlots)}
+          <div class="splash-btn-row">
+            <button class="splash-btn splash-btn-exit" id="back-to-splash">Back</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(saveSlotScreen);
+
+    // Add click handlers for save slots (only for filled slots)
+    saveSlotScreen.querySelectorAll('button[data-slot]:not([disabled])').forEach(button => {
+      button.addEventListener('click', async (e) => {
+        const slot = parseInt(e.currentTarget.dataset.slot);
+        await this.loadFromSaveSlot(slot);
+      });
+    });
+
+    // Add click handler for back button
+    saveSlotScreen.querySelector('#back-to-splash').addEventListener('click', () => {
+      saveSlotScreen.remove();
+      if (this.splashScreen) {
+        this.splashScreen.style.display = '';
+      }
+    });
+  }
+
+  generateSaveSlotHTML(saveSlots) {
+    // Create HTML for all 3 slots, showing existing saves or empty slots
+    let html = '';
+
+    for (let i = 1; i <= 3; i++) {
+      const slotData = saveSlots.find(slot => slot.slot === i);
+      const isEmpty = !slotData;
+
+      html += `
+        <div class="save-slot-container">
+          <button class="save-slot-button ${isEmpty ? 'save-slot-button-disabled' : 'save-slot-button-filled'}" 
+                  data-slot="${i}" 
+                  ${isEmpty ? 'disabled' : ''}>
+            ${isEmpty ?
+          '<div class="save-slot-empty">Empty</div>' :
+          `
+                <div class="save-slot-row-1">
+                  <span class="save-slot-slot">Slot ${i}</span>
+                  <span class="save-slot-time">${this.formatDateTime(slotData.lastSaveTime)}</span>
+                </div>
+                <div class="save-slot-row-2">
+                  <span class="save-slot-money">$${this.formatNumber(slotData.currentMoney)}</span>
+                  <span class="save-slot-ep">${this.formatNumber(slotData.exoticParticles)} EP</span>
+                  <span class="save-slot-playtime">Played: ${this.formatTime(slotData.totalPlayedTime)}</span>
+                </div>
+              `
+        }
+          </button>
+        </div>
+      `;
+    }
+
+    return html;
+  }
+
+  formatNumber(num) {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+  }
+
+  showSaveOverwriteModal(slot, saveData, callback) {
+    // Create modal overlay
+    const modal = document.createElement("div");
+    modal.className = "save-overwrite-modal-overlay";
+    modal.style.position = "fixed";
+    modal.style.top = "0";
+    modal.style.left = "0";
+    modal.style.width = "100%";
+    modal.style.height = "100%";
+    modal.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+    modal.style.display = "flex";
+    modal.style.alignItems = "center";
+    modal.style.justifyContent = "center";
+    modal.style.zIndex = "10000";
+    modal.style.fontFamily = '"Press Start 2P", cursive, monospace';
+
+    modal.innerHTML = `
+      <div class="save-overwrite-modal" style="
+        background: rgb(64 64 64);
+        border: 3px solid rgb(128 128 128);
+        border-radius: 12px;
+        padding: 2rem;
+        max-width: 500px;
+        width: 90%;
+        color: white;
+        text-shadow: 1px 1px 0 black;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+      ">
+        <h3 style="margin: 0 0 1rem 0; color: white; font-size: 1.2rem; text-align: center;">
+          Auto-Save Conflict
+        </h3>
+        <p style="margin: 0 0 1.5rem 0; color: rgb(255 182 193); font-size: 0.8rem; text-align: center;">
+          Auto-save wants to overwrite Slot ${slot}
+        </p>
+        
+        <div style="margin-bottom: 1.5rem;">
+          <div style="background: rgb(80 80 80); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+            <h4 style="margin: 0 0 0.5rem 0; color: rgb(143 214 148); font-size: 0.9rem;">Existing Save</h4>
+            <div style="font-size: 0.7rem; line-height: 1.4;">
+              <div>Play Time: <span style="color: rgb(255 255 160);">${saveData.existing.playTime}</span></div>
+              <div>Money: <span style="color: rgb(143 214 148);">$${saveData.existing.money}</span></div>
+            </div>
+          </div>
+          
+          <div style="background: rgb(80 80 80); padding: 1rem; border-radius: 8px;">
+            <h4 style="margin: 0 0 0.5rem 0; color: rgb(255 182 193); font-size: 0.9rem;">Current Game</h4>
+            <div style="font-size: 0.7rem; line-height: 1.4;">
+              <div>Play Time: <span style="color: rgb(255 255 160);">${saveData.current.playTime}</span></div>
+              <div>Money: <span style="color: rgb(143 214 148);">$${saveData.current.money}</span></div>
+            </div>
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+          <button id="overwrite-btn" style="
+            background: rgb(171 63 63);
+            border: 2px solid rgb(209 107 107);
+            border-radius: 6px;
+            padding: 0.75rem 1.5rem;
+            color: white;
+            font-family: inherit;
+            font-size: 0.7rem;
+            cursor: pointer;
+            text-shadow: 1px 1px 0 black;
+          ">Overwrite</button>
+          <button id="load-btn" style="
+            background: rgb(81 93 156);
+            border: 2px solid rgb(125 137 197);
+            border-radius: 6px;
+            padding: 0.75rem 1.5rem;
+            color: white;
+            font-family: inherit;
+            font-size: 0.7rem;
+            cursor: pointer;
+            text-shadow: 1px 1px 0 black;
+          ">Load Existing</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add click handlers
+    modal.querySelector('#overwrite-btn').addEventListener('click', () => {
+      modal.remove();
+      callback('overwrite');
+    });
+
+    modal.querySelector('#load-btn').addEventListener('click', () => {
+      modal.remove();
+      callback('load');
+    });
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+        callback('overwrite'); // Default to overwrite if user clicks outside
+      }
+    });
+  }
+
+  async loadFromSaveSlot(slot) {
+    try {
+      console.log(`[DEBUG] Loading from save slot: ${slot}`);
+
+      // Hide splash manager
+      if (window.splashManager) {
+        console.log("[DEBUG] Hiding splash manager...");
+        window.splashManager.hide();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      // Load the save data directly
+      if (window.game) {
+        console.log("[DEBUG] Loading game data from slot...");
+        const loadSuccess = await window.game.loadGame(slot);
+        console.log(`[DEBUG] Load result: ${loadSuccess}`);
+
+        if (loadSuccess && window.pageRouter && window.ui) {
+          console.log("[DEBUG] Starting game...");
+          // Call the startGame function that should be available globally
+          if (typeof window.startGame === "function") {
+            console.log("[DEBUG] Calling global startGame function...");
+            await window.startGame(
+              window.pageRouter,
+              window.ui,
+              window.game
+            );
+          } else {
+            console.error("startGame function not available globally");
+            // Fallback: try to trigger the game start manually
+            await window.pageRouter.loadGameLayout();
+            window.ui.initMainLayout();
+            await window.pageRouter.loadPage("reactor_section");
+            window.game.tooltip_manager = new (
+              await import("../components/tooltip.js")
+            ).TooltipManager("#main", "#tooltip", window.game);
+            window.game.engine = new (
+              await import("../core/engine.js")
+            ).Engine(window.game);
+            await window.game.startSession();
+            window.game.engine.start();
+          }
+        } else {
+          console.error("Failed to load game or missing dependencies");
+        }
+      } else {
+        console.error("Game instance not available");
+      }
+    } catch (error) {
+      console.error("Error loading from save slot:", error);
+    }
+  }
+
   /**
   * Start version checking for updates
   */
@@ -1444,8 +1718,57 @@ class SplashScreenManager {
         this.splashScreen.querySelector('.splash-menu-panel').appendChild(startOptionsSection);
       }
       startOptionsSection.innerHTML = "";
-      const localSaveJSON = localStorage.getItem("reactorGameSave");
-      let hasSave = canLoadGame && localSaveJSON;
+
+      // Check for saves in new multi-slot format and old format
+      let hasSave = false;
+      let saveSlots = [];
+
+      if (canLoadGame) {
+        // Check new slot format first
+        for (let i = 1; i <= 3; i++) {
+          const slotSave = localStorage.getItem(`reactorGameSave_${i}`);
+          if (slotSave) {
+            try {
+              const slotData = JSON.parse(slotSave);
+              saveSlots.push({
+                slot: i,
+                exists: true,
+                lastSaveTime: slotData.last_save_time || null,
+                totalPlayedTime: slotData.total_played_time || 0,
+                currentMoney: slotData.current_money || 0,
+                exoticParticles: slotData.exotic_particles || 0,
+                data: slotData
+              });
+              hasSave = true;
+            } catch (e) {
+              console.error(`Error parsing save slot ${i}:`, e);
+            }
+          }
+        }
+
+        // If no new format saves, check old format
+        if (!hasSave) {
+          const localSaveJSON = localStorage.getItem("reactorGameSave");
+          if (localSaveJSON) {
+            try {
+              const oldSaveData = JSON.parse(localSaveJSON);
+              saveSlots.push({
+                slot: 'legacy',
+                exists: true,
+                lastSaveTime: oldSaveData.last_save_time || null,
+                totalPlayedTime: oldSaveData.total_played_time || 0,
+                currentMoney: oldSaveData.current_money || 0,
+                exoticParticles: oldSaveData.exotic_particles || 0,
+                data: oldSaveData
+              });
+              hasSave = true;
+            } catch (e) {
+              console.error("Error parsing legacy save:", e);
+            }
+          }
+        }
+      }
+
       let cloudSaveOnly = false;
       let cloudSaveData = null;
       let cloudSaveLabel = null;
@@ -1467,69 +1790,193 @@ class SplashScreenManager {
         } catch (e) { }
       }
       let skipCloudButton = false;
-      if (hasSave || cloudSaveOnly) {
-        let saveData, playedTimeStr, isCloudSynced, continueLabel;
-        if (hasSave) {
-          saveData = JSON.parse(localSaveJSON);
-          playedTimeStr = this.formatTime(saveData.total_played_time || 0);
-          isCloudSynced = saveData.isCloudSynced || false;
-          continueLabel = "💾";
-          if (window.googleDriveSave && window.googleDriveSave.isConfigured()) {
-            try {
-              const isSignedIn = await window.googleDriveSave.checkAuth(true);
-              if (isSignedIn) {
-                const fileFound = await window.googleDriveSave.findSaveFile();
-                if (fileFound) {
-                  continueLabel = "☁️";
-                }
-              }
-            } catch (error) {
-              console.warn("Could not check Google Drive status:", error);
-            }
+      // 1. Continue button (if save exists, loads most recent save)
+      if (hasSave) {
+        // Find the most recent save
+        let mostRecentSave = null;
+        let mostRecentTime = 0;
+
+        for (const saveSlot of saveSlots) {
+          if (saveSlot.lastSaveTime && saveSlot.lastSaveTime > mostRecentTime) {
+            mostRecentTime = saveSlot.lastSaveTime;
+            mostRecentSave = saveSlot;
           }
-        } else if (cloudSaveOnly && cloudSaveData) {
-          saveData = cloudSaveData;
-          playedTimeStr = this.formatTime(saveData.total_played_time || 0);
-          isCloudSynced = true;
-          continueLabel = cloudSaveLabel;
         }
-        const loadGameButton = createLoadGameButtonFullWidth(
-          saveData,
+
+        if (mostRecentSave) {
+          const playedTimeStr = this.formatTime(mostRecentSave.totalPlayedTime || 0);
+          const continueButton = createLoadGameButtonFullWidth(
+            mostRecentSave.data,
+            playedTimeStr,
+            false,
+            async () => {
+              try {
+                console.log(`[DEBUG] Continue button clicked - loading slot: ${mostRecentSave.slot}`);
+
+                // Hide splash manager
+                if (window.splashManager) {
+                  console.log("[DEBUG] Hiding splash manager...");
+                  window.splashManager.hide();
+                }
+                await new Promise((resolve) => setTimeout(resolve, 600));
+
+                // Load the save data directly
+                if (window.game) {
+                  console.log("[DEBUG] Loading game data...");
+                  const loadSuccess = await window.game.loadGame(mostRecentSave.slot);
+                  console.log(`[DEBUG] Load result: ${loadSuccess}`);
+
+                  if (loadSuccess && window.pageRouter && window.ui) {
+                    console.log("[DEBUG] Starting game...");
+                    // Call the startGame function that should be available globally
+                    if (typeof window.startGame === "function") {
+                      console.log("[DEBUG] Calling global startGame function...");
+                      await window.startGame(
+                        window.pageRouter,
+                        window.ui,
+                        window.game
+                      );
+                    } else {
+                      console.error("startGame function not available globally");
+                      // Fallback: try to trigger the game start manually
+                      await window.pageRouter.loadGameLayout();
+                      window.ui.initMainLayout();
+                      await window.pageRouter.loadPage("reactor_section");
+                      window.game.tooltip_manager = new (
+                        await import("../components/tooltip.js")
+                      ).TooltipManager("#main", "#tooltip", window.game);
+                      window.game.engine = new (
+                        await import("../core/engine.js")
+                      ).Engine(window.game);
+                      await window.game.startSession();
+                      window.game.engine.start();
+                    }
+                  } else {
+                    console.error("Failed to load game or missing dependencies");
+                  }
+                } else {
+                  console.error("Game instance not available");
+                }
+              } catch (error) {
+                console.error("Error loading game:", error);
+              }
+            }
+          );
+          if (continueButton) {
+            continueButton.classList.add("splash-btn-continue");
+            const header = continueButton.querySelector(".load-game-header span");
+            if (header) {
+              header.textContent = "Continue";
+            }
+            const detailsElement = continueButton.querySelector(".load-game-details");
+            if (detailsElement) {
+              detailsElement.remove();
+            }
+            startOptionsSection.appendChild(continueButton);
+          }
+        }
+      }
+
+      // Handle cloud saves separately if they exist (cloud continue)
+      if (cloudSaveOnly && cloudSaveData && !hasSave) {
+        const playedTimeStr = this.formatTime(cloudSaveData.total_played_time || 0);
+        const cloudLoadButton = createLoadGameButtonFullWidth(
+          cloudSaveData,
           playedTimeStr,
-          isCloudSynced,
+          true,
           () => this.hide()
         );
-        if (loadGameButton) {
-          loadGameButton.classList.add("splash-btn-continue");
-          // Remove .synced-label for Continue button
-          const syncedLabel = loadGameButton.querySelector('.synced-label');
+        if (cloudLoadButton) {
+          cloudLoadButton.classList.add("splash-btn-continue");
+          const syncedLabel = cloudLoadButton.querySelector('.synced-label');
           if (syncedLabel) syncedLabel.remove();
-          const header = loadGameButton.querySelector(".load-game-header span");
+          const header = cloudLoadButton.querySelector(".load-game-header span");
           if (header) {
-            header.textContent = "Continue";
+            header.textContent = "Continue from Cloud";
           }
-          // Remove game details (money and played time)
-          const detailsElement = loadGameButton.querySelector(".load-game-details");
+          const detailsElement = cloudLoadButton.querySelector(".load-game-details");
           if (detailsElement) {
             detailsElement.remove();
           }
           const labelElement = document.createElement("div");
           labelElement.className = "continue-label";
-          labelElement.textContent = continueLabel;
-          loadGameButton.appendChild(labelElement);
-          startOptionsSection.appendChild(loadGameButton);
-        } else {
-          console.error("Failed to create load game button - template may be missing");
+          labelElement.textContent = "☁️";
+          cloudLoadButton.appendChild(labelElement);
+          startOptionsSection.appendChild(cloudLoadButton);
         }
-        if (continueLabel === "☁️") skipCloudButton = true;
+        skipCloudButton = true;
       }
-      const newGameButton = createNewGameButton(() => {
+
+      // 2. Add spacer if we have a continue button
+      if (hasSave || (cloudSaveOnly && cloudSaveData && !hasSave)) {
+        const spacer = document.createElement("div");
+        spacer.className = "splash-spacer";
+        spacer.style.height = "1rem";
+        startOptionsSection.appendChild(spacer);
+      }
+
+      // 3. New Game button
+      const newGameButton = createNewGameButton(async () => {
         if (hasSave && !confirm("Are you sure you want to start a new game? Your saved progress will be overwritten.")) {
           return;
         }
-        try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
-        localStorage.setItem("reactorNewGamePending", "1");
-        window.location.reload();
+        try {
+          console.log("[DEBUG] New Game button clicked");
+
+          // Clear all save slots
+          try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
+          for (let i = 1; i <= 3; i++) {
+            try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
+          }
+          try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
+
+          // Hide splash manager
+          if (window.splashManager) {
+            console.log("[DEBUG] Hiding splash manager...");
+            window.splashManager.hide();
+          }
+          await new Promise((resolve) => setTimeout(resolve, 600));
+
+          // Initialize new game state
+          if (window.game) {
+            console.log("[DEBUG] Initializing new game state...");
+            delete window.game._saved_objective_index;
+            await window.game.initialize_new_game_state();
+
+            if (window.pageRouter && window.ui) {
+              console.log("[DEBUG] Starting new game...");
+              // Call the startGame function that should be available globally
+              if (typeof window.startGame === "function") {
+                console.log("[DEBUG] Calling global startGame function...");
+                await window.startGame(
+                  window.pageRouter,
+                  window.ui,
+                  window.game
+                );
+              } else {
+                console.error("startGame function not available globally");
+                // Fallback: try to trigger the game start manually
+                await window.pageRouter.loadGameLayout();
+                window.ui.initMainLayout();
+                await window.pageRouter.loadPage("reactor_section");
+                window.game.tooltip_manager = new (
+                  await import("../components/tooltip.js")
+                ).TooltipManager("#main", "#tooltip", window.game);
+                window.game.engine = new (
+                  await import("../core/engine.js")
+                ).Engine(window.game);
+                await window.game.startSession();
+                window.game.engine.start();
+              }
+            } else {
+              console.error("Missing dependencies for starting new game");
+            }
+          } else {
+            console.error("Game instance not available");
+          }
+        } catch (error) {
+          console.error("Error starting new game:", error);
+        }
       });
       if (newGameButton) {
         newGameButton.textContent = hasSave ? "New Game" : "New Game";
@@ -1537,6 +1984,31 @@ class SplashScreenManager {
       } else {
         console.error("Failed to create new game button - template may be missing");
       }
+
+      // 4. Load Game button (always shown)
+      const loadGameButton = document.createElement("button");
+      loadGameButton.className = "splash-btn splash-btn-load";
+
+      if (hasSave) {
+        // If we have saves, show Load Game with save indicator
+        loadGameButton.innerHTML = `
+          <div class="load-game-header">
+            <span>Load Game</span>
+            <div class="save-slot-indicator">💾</div>
+          </div>
+        `;
+      } else {
+        // If no saves, show Load Game with empty indicator
+        loadGameButton.innerHTML = `
+          <div class="load-game-header">
+            <span>Load Game</span>
+            <div class="save-slot-indicator">📁</div>
+          </div>
+        `;
+      }
+
+      loadGameButton.onclick = () => this.showSaveSlotSelection(saveSlots);
+      startOptionsSection.appendChild(loadGameButton);
       const staticButtons = [
         { text: "Settings", disabled: true },
       ];

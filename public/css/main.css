@@ -176,11 +176,205 @@ body {
   background: rgb(158 57 57);
 }
 
-.splash-btn[disabled],
-.splash-btn.disabled {
+.splash-btn-load {
+  border-color: rgb(125 137 197) rgb(57 65 109) rgb(57 65 109) rgb(125 137 197);
+  background: rgb(81 93 156);
+  color: white;
+}
+
+.splash-btn-load:hover {
+  border-color: rgb(154 163 217) rgb(69 78 128) rgb(69 78 128) rgb(154 163 217);
+  background: rgb(95 109 170);
+}
+
+.save-slot-indicator {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+/* Save slot button styles - based on splash buttons but standalone */
+.save-slot-container {
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.save-slot-button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 120px;
+  padding: 0.75rem;
+  border: 3px solid;
+  border-color: rgb(160 160 160) rgb(80 80 80) rgb(80 80 80) rgb(160 160 160);
+  border-radius: 0;
+  font-family: "Press Start 2P", cursive, monospace !important;
+  font-size: 0.7rem;
+  font-weight: normal;
+  text-align: left;
+  cursor: pointer;
+  transition: none;
+  background: rgb(120 120 120);
+  color: rgb(224 224 224);
+  text-shadow: 2px 2px rgb(56 56 56);
+  box-shadow: none;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.save-slot-button-filled {
+  border-color: rgb(125 137 197) rgb(57 65 109) rgb(57 65 109) rgb(125 137 197);
+  background: rgb(81 93 156);
+  color: white;
+  text-shadow: 2px 2px rgb(47 54 90);
+}
+
+.save-slot-button-filled:hover {
+  border-color: rgb(154 163 217) rgb(69 78 128) rgb(69 78 128) rgb(154 163 217);
+  background: rgb(95 109 170);
+  color: rgb(255 255 160);
+}
+
+.save-slot-button-disabled {
+  border-color: rgb(64 64 64) rgb(32 32 32) rgb(32 32 32) rgb(64 64 64);
+  background: rgb(48 48 48);
+  color: rgb(128 128 128);
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+.save-slot-button-disabled:hover {
+  border-color: rgb(64 64 64) rgb(32 32 32) rgb(32 32 32) rgb(64 64 64);
+  background: rgb(48 48 48);
+  color: rgb(128 128 128);
+}
+
+.save-slot-header {
+  font-weight: bold;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: white;
+  text-shadow: 1px 1px 0 black;
+  width: 100%;
+}
+
+.save-slot-row-1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.save-slot-row-2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.save-slot-slot {
+  font-weight: bold;
+  font-size: 0.8rem;
+  color: white;
+  text-shadow: 1px 1px 0 black;
+}
+
+.save-slot-time {
+  color: rgb(200 200 200);
+  font-size: 0.8rem;
+}
+
+.save-slot-money {
+  color: rgb(143 214 148);
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+
+.save-slot-ep {
+  color: rgb(255 182 193);
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+
+.save-slot-playtime {
+  color: rgb(180 180 180);
+  font-size: 0.75rem;
+}
+
+.save-slot-empty {
+  color: rgb(128 128 128);
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+/* Mobile responsiveness for save slot buttons */
+@media (max-width: 600px) {
+  .save-slot-button {
+    padding: 0.6rem;
+    min-height: 100px;
+    font-size: 0.65rem;
+  }
+  
+  .save-slot-header {
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
+  }
+  
+  .save-slot-time {
+    font-size: 0.75rem;
+  }
+  
+  .save-slot-row-1 {
+    margin-bottom: 0.4rem;
+  }
+  
+  .save-slot-row-2 {
+    gap: 0.4rem;
+  }
+  
+  .save-slot-money,
+  .save-slot-ep {
+    font-size: 0.8rem;
+  }
+  
+  .save-slot-playtime {
+    font-size: 0.7rem;
+  }
+  
+  .save-slot-empty {
+    padding: 0.8rem 0;
+    font-size: 0.85rem;
+  }
+}
+
+.splash-btn[disabled],
+.splash-btn.disabled,
+.splash-btn-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  border-color: rgb(64 64 64) rgb(32 32 32) rgb(32 32 32) rgb(64 64 64);
+  background: rgb(48 48 48);
+  color: rgb(128 128 128);
+}
+
+.splash-btn-disabled:hover {
+  border-color: rgb(64 64 64) rgb(32 32 32) rgb(32 32 32) rgb(64 64 64);
+  background: rgb(48 48 48);
+  color: rgb(128 128 128);
+}
+
 
 .splash-title {
   margin: 1.5rem 0 1rem;
@@ -3250,7 +3444,7 @@ body:not(.page-reactor) #objectives_section {
 
 #tooltip {
   position: fixed;
-  z-index: 1000;
+  z-index: 1101;
   width: auto;
   min-width: 300px;
   max-width: 400px;
@@ -3297,6 +3491,19 @@ body:not(.page-reactor) #objectives_section {
 #tooltip_data p[data-role="description"] .power-num { background-color: rgb(0 220 180 / 12%); }
 #tooltip_data p[data-role="description"] .heat-num { background-color: rgb(255 80 80 / 12%); }
 #tooltip_data p[data-role="description"] .tick-num { background-color: rgb(255 200 100 / 12%); }
+
+/* Mobile tooltip positioning */
+@media (width <= 900px) {
+  #tooltip {
+    position: fixed;
+    top: 8px;
+    left: 20%; /* Default right padding for parts panel width */
+    width: auto;
+    min-width: 200px;
+    max-width: calc(100vw - 216px); /* Account for left + right padding */
+    z-index: 1110 !important; /* Above parts panel (1100) but below modal overlays */
+  }
+}
 
 /* Slightly increase spacing around inline icons for readability */
 #tooltip .icon-inline { margin: 0 3px; }

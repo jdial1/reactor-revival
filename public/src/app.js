@@ -33,11 +33,49 @@ async function initializeApp(game, ui, pageRouter) {
 
 async function handleUserSession(game, pageRouter) {
   const isNewGamePending = localStorage.getItem("reactorNewGamePending") === "1";
+  const loadSlot = localStorage.getItem("reactorLoadSlot");
+
+  // Check if there are any existing saves (old format or new slot format)
+  let hasAnySave = false;
+  if (!isNewGamePending) {
+    // Check old format first
+    const oldSave = localStorage.getItem("reactorGameSave");
+    if (oldSave) {
+      hasAnySave = true;
+    } else {
+      // Check new slot format
+      for (let i = 1; i <= 3; i++) {
+        const slotSave = localStorage.getItem(`reactorGameSave_${i}`);
+        if (slotSave) {
+          hasAnySave = true;
+          break;
+        }
+      }
+    }
+  }
+
   // If a New Game is pending, skip loading any existing save to avoid applying old upgrades
-  const savedGame = isNewGamePending ? false : await game.loadGame();
+  let savedGame = false;
+  if (!isNewGamePending) {
+    if (loadSlot) {
+      // Load from specific slot
+      console.log(`[DEBUG] Loading from slot: ${loadSlot}`);
+      savedGame = await game.loadGame(parseInt(loadSlot));
+      console.log(`[DEBUG] Load result: ${savedGame}`);
+      localStorage.removeItem("reactorLoadSlot"); // Clear the load slot flag
+    } else {
+      // Load from most recent save (backward compatibility)
+      console.log("[DEBUG] Loading from most recent save");
+      savedGame = await game.loadGame();
+      console.log(`[DEBUG] Load result: ${savedGame}`);
+    }
+  }
+
   const hash = window.location.hash.substring(1);
   const pageInfo = pageRouter.pages[hash];
-  const shouldAutoStart = savedGame && !isNewGamePending && pageInfo;
+  const shouldAutoStart = savedGame && !isNewGamePending && (pageInfo || !hash);
+
+  console.log(`[DEBUG] Auto-start check: savedGame=${savedGame}, isNewGamePending=${isNewGamePending}, hash="${hash}", pageInfo=${!!pageInfo}, shouldAutoStart=${shouldAutoStart}`);
 
   if (shouldAutoStart) {
     console.log(
@@ -62,9 +100,7 @@ async function handleUserSession(game, pageRouter) {
     }
   } else if (window.splashManager) {
     await window.splashManager.setStep("ready");
-    await window.splashManager.showStartOptions(
-      !!savedGame && !isNewGamePending
-    );
+    await window.splashManager.showStartOptions(true); // Always show load game option
   } else {
     createFallbackStartInterface(pageRouter, ui, game);
   }
@@ -78,8 +114,12 @@ function setupButtonHandlers(pageRouter, ui, game) {
         window.splashManager.hide();
       }
       await new Promise((resolve) => setTimeout(resolve, 600));
-      // Clear any persisted save and pending saved objective index to force a true reset
+      // Clear any persisted saves and pending saved objective index to force a true reset
       try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
+      for (let i = 1; i <= 3; i++) {
+        try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
+      }
+      try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
       try { localStorage.setItem("reactorNewGamePending", "1"); } catch (_) { }
       delete game._saved_objective_index;
       // Perform a full clean initialization (resets reactor/tiles, parts, upgrades and UI vars)

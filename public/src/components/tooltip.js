@@ -127,18 +127,23 @@ export class TooltipManager {
       this.$tooltip.style.right = "";
       this.$tooltip.style.transform = "";
     } else {
-      // Mobile: full-width tooltip aligned to the very top (can overlap the parts panel)
-      const nav = document.getElementById("main_top_nav");
+      // Mobile: position tooltip above parts panel with right padding
       const tooltipEl = this.$tooltip;
+      const partsPanel = document.getElementById("parts_section");
       const margin = 8;
-      const navBottom = nav ? nav.getBoundingClientRect().bottom : 0;
-      const top = Math.max(margin, navBottom + margin);
 
-      // Enforce full-width on every show to avoid cumulative growth artifacts
-      tooltipEl.style.left = "0px";
-      tooltipEl.style.right = "0px";
-      tooltipEl.style.width = "100vw";
-      tooltipEl.style.maxWidth = "100vw";
+      // Position above the parts panel
+      const top = margin;
+
+      // Calculate right padding to position next to parts panel
+      const partsPanelWidth = partsPanel ? partsPanel.getBoundingClientRect().width : 200;
+      const rightPadding = partsPanelWidth + 8; // 8px gap between panel and tooltip
+
+      // Reset positioning styles
+      tooltipEl.style.left = "8px";
+      tooltipEl.style.right = `${rightPadding}px`;
+      tooltipEl.style.width = "";
+      tooltipEl.style.maxWidth = "";
       tooltipEl.style.top = `${top}px`;
       tooltipEl.style.transform = "none";
     }

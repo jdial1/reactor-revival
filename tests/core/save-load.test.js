@@ -70,7 +70,7 @@ describe("Save and Load Functionality", () => {
         vi.restoreAllMocks();
     });
 
-    it("should correctly save the game state to localStorage", async () => {
+    it("should correctly save the game state to localStorage with cycling slots", async () => {
         // Modify the game state
         await game.tileset.getTile(0, 0).setPart(game.partset.getPartById("uranium1"));
         game.reactor.updateStats();
@@ -84,10 +84,29 @@ describe("Save and Load Functionality", () => {
         // Set money and exotic_particles to test values right before saving
         game.current_money = 5000;
         game.exotic_particles = 100;
-        // Save the game
+
+        // Test cycling through save slots
+        game.saveGame(); // Should save to slot 1 (default)
+        const currentSlot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1");
+        expect(currentSlot).toBe(1);
+
+        // Save again - should cycle to slot 2
         game.saveGame();
-        // Retrieve the saved data from our mock storage
-        const savedDataJSON = localStorage.getItem("reactorGameSave");
+        const nextSlot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1");
+        expect(nextSlot).toBe(2);
+
+        // Save again - should cycle to slot 3
+        game.saveGame();
+        const thirdSlot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1");
+        expect(thirdSlot).toBe(3);
+
+        // Save again - should cycle back to slot 1
+        game.saveGame();
+        const backToFirst = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1");
+        expect(backToFirst).toBe(1);
+
+        // Verify the saved data exists in the current slot
+        const savedDataJSON = localStorage.getItem(`reactorGameSave_${backToFirst}`);
         expect(savedDataJSON).not.toBeNull();
         const savedData = JSON.parse(savedDataJSON);
         // Verify the saved data
@@ -100,6 +119,38 @@ describe("Save and Load Functionality", () => {
         // New: placedCounts persisted and reflects cumulative placements
         expect(savedData.placedCounts).toBeTypeOf('object');
         expect(savedData.placedCounts['uranium:1']).toBeGreaterThanOrEqual(1);
+    });
+
+    it("should provide save slot information", async () => {
+        // Set up game state
+        game.current_money = 10000;
+        game.exotic_particles = 250;
+        game.total_played_time = 3600000; // 1 hour
+
+        // Save to slot 1
+        game.saveGame(1);
+
+        // Test getSaveSlotInfo
+        const slotInfo = game.getSaveSlotInfo(1);
+        expect(slotInfo.exists).toBe(true);
+        expect(slotInfo.currentMoney).toBe(10000);
+        expect(slotInfo.exoticParticles).toBe(250);
+        expect(slotInfo.totalPlayedTime).toBe(3600000);
+        expect(slotInfo.lastSaveTime).toBeGreaterThan(0);
+
+        // Test getSaveSlotInfo for empty slot
+        const emptySlotInfo = game.getSaveSlotInfo(2);
+        expect(emptySlotInfo.exists).toBe(false);
+
+        // Test getAllSaveSlots
+        const allSlots = game.getAllSaveSlots();
+        expect(allSlots).toHaveLength(3);
+        expect(allSlots[0].slot).toBe(1);
+        expect(allSlots[0].exists).toBe(true);
+        expect(allSlots[1].slot).toBe(2);
+        expect(allSlots[1].exists).toBe(false);
+        expect(allSlots[2].slot).toBe(3);
+        expect(allSlots[2].exists).toBe(false);
     });
 
     it("should correctly load a saved game state", async () => {
@@ -124,11 +175,12 @@ describe("Save and Load Functionality", () => {
             },
             placedCounts: { 'vent:2': 3 }
         };
-        localStorage.setItem("reactorGameSave", JSON.stringify(mockSaveData));
+        // Test loading from specific slot
+        localStorage.setItem("reactorGameSave_1", JSON.stringify(mockSaveData));
 
         // Create a new game instance to load into
         const newGame = await setupGame();
-        const loaded = await newGame.loadGame();
+        const loaded = await newGame.loadGame(1);
 
         // Wait for upgrade loading to complete
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -207,7 +259,9 @@ describe("Save and Load Functionality", () => {
 
         game.saveGame();
 
-        const savedData = JSON.parse(localStorage.getItem("reactorGameSave"));
+        // Get the current slot and retrieve saved data from that slot
+        const currentSlot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1");
+        const savedData = JSON.parse(localStorage.getItem(`reactorGameSave_${currentSlot}`));
 
         // total_played_time should be updated to include the last session
         expect(savedData.total_played_time).toBe(3600000 + 60000);
@@ -232,7 +286,10 @@ describe("Save and Load Functionality", () => {
         }
 
         game.saveGame();
-        const savedData = JSON.parse(localStorage.getItem("reactorGameSave"));
+
+        // Get the current slot and retrieve saved data from that slot
+        const currentSlot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1");
+        const savedData = JSON.parse(localStorage.getItem(`reactorGameSave_${currentSlot}`));
 
         const newGame = await setupGame();
         newGame.loadGame();

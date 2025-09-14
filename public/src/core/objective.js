@@ -198,7 +198,7 @@ export class ObjectiveManager {
 
         // Auto-save after claiming
         if (this.game && typeof this.game.saveGame === "function") {
-          this.game.saveGame();
+          this.game.saveGame(null, true); // true = isAutoSave
         }
         // The recursive setTimeout has been removed. The while loop will continue to the next check.
       } else {
@@ -226,7 +226,7 @@ export class ObjectiveManager {
 
       // Save the game after marking objective as completed
       if (this.game && this.game.saveGame) {
-        this.game.saveGame();
+        this.game.saveGame(null, true); // true = isAutoSave
       }
 
       this.game.ui.stateManager.handleObjectiveCompleted();
@@ -396,7 +396,7 @@ export class ObjectiveManager {
 
     // Always save after claiming
     if (this.game && typeof this.game.saveGame === "function") {
-      this.game.saveGame();
+      this.game.saveGame(null, true); // true = isAutoSave
     }
 
     // Reset claiming flag after a short delay to prevent rapid clicking

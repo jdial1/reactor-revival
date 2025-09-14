@@ -202,7 +202,7 @@ export class UpgradeSet {
       if (upgrade.upgrade.type === "experimental_parts") {
         this.game.epart_onclick(upgrade);
       }
-      this.game.saveGame();
+      this.game.saveGame(null, true); // true = isAutoSave
     }
 
     return purchased;

@@ -246,7 +246,7 @@ export class Tile {
       }
     } catch (_) { }
     if (this.game && typeof this.game.saveGame === "function") {
-      this.game.saveGame();
+      this.game.saveGame(null, true); // true = isAutoSave
     }
     return true; // Return true to indicate the part was successfully placed
   }
@@ -301,7 +301,7 @@ export class Tile {
       this.$el.classList.remove("is-processing");
     }
     if (this.game && typeof this.game.saveGame === "function") {
-      this.game.saveGame();
+      this.game.saveGame(null, true); // true = isAutoSave
     }
   }
   updateVisualState() {

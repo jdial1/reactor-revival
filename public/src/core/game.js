@@ -645,7 +645,7 @@ export class Game {
     return false;
   }
 
-  saveGame() {
+  saveGame(slot = null, isAutoSave = false) {
     try {
       if (this.reactor.has_melted_down) {
         return;
@@ -653,7 +653,23 @@ export class Game {
       const saveData = this.getSaveState();
 
       if (typeof localStorage !== "undefined" && localStorage !== null) {
-        localStorage.setItem("reactorGameSave", JSON.stringify(saveData));
+        // If no specific slot is requested, cycle through slots
+        if (slot === null) {
+          slot = this.getNextSaveSlot();
+        }
+
+        const saveKey = `reactorGameSave_${slot}`;
+
+        // Check if this is an auto-save and if we should prompt the user
+        if (isAutoSave && this.shouldPromptForSaveOverwrite(slot, saveData)) {
+          this.promptForSaveOverwrite(slot, saveData);
+          return; // Don't save yet, wait for user decision
+        }
+
+        localStorage.setItem(saveKey, JSON.stringify(saveData));
+
+        // Update the current slot tracking
+        localStorage.setItem("reactorCurrentSaveSlot", slot.toString());
       } else if (
         typeof process !== "undefined" &&
         process.env?.NODE_ENV === "test"
@@ -678,9 +694,184 @@ export class Game {
     }
   }
 
-  async loadGame() {
+  getNextSaveSlot() {
+    // Get the current slot or default to 1
+    const currentSlot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1");
+    // Cycle through slots 1, 2, 3
+    return ((currentSlot % 3) + 1);
+  }
+
+  shouldPromptForSaveOverwrite(slot, newSaveData) {
     try {
-      const savedDataJSON = localStorage.getItem("reactorGameSave");
+      const saveKey = `reactorGameSave_${slot}`;
+      const existingSaveJSON = localStorage.getItem(saveKey);
+
+      if (!existingSaveJSON) {
+        return false; // No existing save, no need to prompt
+      }
+
+      const existingSave = JSON.parse(existingSaveJSON);
+      const existingPlayTime = existingSave.total_played_time || 0;
+      const newPlayTime = newSaveData.total_played_time || 0;
+
+      // Only prompt if existing save has significantly more play time (more than 5 minutes)
+      return existingPlayTime > newPlayTime + 300000; // 300000ms = 5 minutes
+    } catch (error) {
+      console.error("Error checking save overwrite condition:", error);
+      return false; // If there's an error, allow overwrite
+    }
+  }
+
+  promptForSaveOverwrite(slot, newSaveData) {
+    try {
+      const saveKey = `reactorGameSave_${slot}`;
+      const existingSaveJSON = localStorage.getItem(saveKey);
+      const existingSave = JSON.parse(existingSaveJSON);
+
+      const existingPlayTime = existingSave.total_played_time || 0;
+      const newPlayTime = newSaveData.total_played_time || 0;
+
+      const existingTimeStr = this.formatTimeSimple(existingPlayTime);
+      const newTimeStr = this.formatTimeSimple(newPlayTime);
+
+      const existingMoney = this.formatNumber(existingSave.current_money || 0);
+      const newMoney = this.formatNumber(newSaveData.current_money || 0);
+
+      // Use the PWA service to show a styled modal instead of basic confirm
+      if (window.splashManager && typeof window.splashManager.showSaveOverwriteModal === 'function') {
+        window.splashManager.showSaveOverwriteModal(slot, {
+          existing: {
+            playTime: existingTimeStr,
+            money: existingMoney
+          },
+          current: {
+            playTime: newTimeStr,
+            money: newMoney
+          }
+        }, (choice) => {
+          if (choice === 'overwrite') {
+            localStorage.setItem(saveKey, JSON.stringify(newSaveData));
+            localStorage.setItem("reactorCurrentSaveSlot", slot.toString());
+            console.log(`[AUTO-SAVE] User chose to overwrite slot ${slot}`);
+          } else if (choice === 'load') {
+            console.log(`[AUTO-SAVE] User chose to load existing save from slot ${slot}`);
+            this.loadGame(slot);
+          }
+        });
+      } else {
+        // Fallback to basic confirm dialog
+        const message = `Auto-save wants to overwrite Slot ${slot}:\n\n` +
+          `Existing Save:\n` +
+          `  Play Time: ${existingTimeStr}\n` +
+          `  Money: $${existingMoney}\n\n` +
+          `Current Game:\n` +
+          `  Play Time: ${newTimeStr}\n` +
+          `  Money: $${newMoney}\n\n` +
+          `The existing save has more play time. What would you like to do?`;
+
+        const choice = confirm(message + "\n\nOK = Overwrite existing save\nCancel = Load existing save instead");
+
+        if (choice) {
+          localStorage.setItem(saveKey, JSON.stringify(newSaveData));
+          localStorage.setItem("reactorCurrentSaveSlot", slot.toString());
+          console.log(`[AUTO-SAVE] User chose to overwrite slot ${slot}`);
+        } else {
+          console.log(`[AUTO-SAVE] User chose to load existing save from slot ${slot}`);
+          this.loadGame(slot);
+        }
+      }
+    } catch (error) {
+      console.error("Error in save overwrite prompt:", error);
+      // Fallback: just save normally
+      const saveKey = `reactorGameSave_${slot}`;
+      localStorage.setItem(saveKey, JSON.stringify(newSaveData));
+      localStorage.setItem("reactorCurrentSaveSlot", slot.toString());
+    }
+  }
+
+  formatTimeSimple(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+      return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
+  getSaveSlotInfo(slot) {
+    try {
+      const saveKey = `reactorGameSave_${slot}`;
+      const savedDataJSON = localStorage.getItem(saveKey);
+      if (savedDataJSON) {
+        const savedData = JSON.parse(savedDataJSON);
+        return {
+          exists: true,
+          lastSaveTime: savedData.last_save_time || null,
+          totalPlayedTime: savedData.total_played_time || 0,
+          currentMoney: savedData.current_money || 0,
+          exoticParticles: savedData.exotic_particles || 0,
+          data: savedData
+        };
+      }
+    } catch (error) {
+      console.error(`Error reading save slot ${slot}:`, error);
+    }
+    return { exists: false };
+  }
+
+  getAllSaveSlots() {
+    const slots = [];
+    for (let i = 1; i <= 3; i++) {
+      const slotInfo = this.getSaveSlotInfo(i);
+      slots.push({
+        slot: i,
+        ...slotInfo
+      });
+    }
+    return slots;
+  }
+
+  async loadGame(slot = null) {
+    try {
+      let savedDataJSON;
+
+      if (slot !== null) {
+        // Load from specific slot
+        const saveKey = `reactorGameSave_${slot}`;
+        savedDataJSON = localStorage.getItem(saveKey);
+      } else {
+        // Try to load from the most recent save (backward compatibility)
+        // First try the old single save format
+        savedDataJSON = localStorage.getItem("reactorGameSave");
+
+        if (!savedDataJSON) {
+          // If no old save, try to find the most recent slot
+          let mostRecentSlot = null;
+          let mostRecentTime = 0;
+
+          for (let i = 1; i <= 3; i++) {
+            const slotInfo = this.getSaveSlotInfo(i);
+            if (slotInfo.exists && slotInfo.lastSaveTime > mostRecentTime) {
+              mostRecentTime = slotInfo.lastSaveTime;
+              mostRecentSlot = i;
+            }
+          }
+
+          if (mostRecentSlot) {
+            const saveKey = `reactorGameSave_${mostRecentSlot}`;
+            savedDataJSON = localStorage.getItem(saveKey);
+          }
+        }
+      }
+
       if (savedDataJSON) {
         const savedData = JSON.parse(savedDataJSON);
         await this.applySaveState(savedData);
@@ -689,7 +880,11 @@ export class Game {
     } catch (error) {
       console.error("Error loading game:", error);
       // Clear potentially corrupted save data
-      localStorage.removeItem("reactorGameSave");
+      if (slot !== null) {
+        localStorage.removeItem(`reactorGameSave_${slot}`);
+      } else {
+        localStorage.removeItem("reactorGameSave");
+      }
     }
     return false;
   }
