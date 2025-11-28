@@ -115,15 +115,7 @@ export class UpgradeSet {
 
     wrapper.querySelectorAll(".upgrade-group").forEach((el) => (el.innerHTML = ""));
 
-    // Custom layout breaks for General (other) upgrades
-    const isGeneralGroup = (upgrade) => (upgrade?.upgrade?.type === "other");
-    let generalCount = 0;
-
     this.upgradesArray.filter(filterFn).forEach((upgrade) => {
-      // Gate cell upgrade visibility based on whether the corresponding base
-      // cell part is actually unlocked/placeable (progress-based).
-      // By default only Uranium (first type) will be visible; subsequent
-      // columns (e.g., Plutonium) appear once unlocked via placements.
       try {
         const upgType = upgrade?.upgrade?.type || "";
         const basePart = upgrade?.upgrade?.part;
@@ -133,42 +125,16 @@ export class UpgradeSet {
             ? this.game.isPartUnlocked(basePart)
             : true;
           if (!show) {
-            return; // Skip rendering this upgrade until unlocked
+            return;
           }
         }
-      } catch (_) { /* no-op */ }
+      } catch (_) { }
 
+      upgrade.$el = null;
       this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
 
-      // Inject layout line breaks for General Upgrades in requested pattern
-      try {
-        if (isGeneralGroup(upgrade) && upgrade.$el && upgrade.$el.parentElement && upgrade.$el.parentElement.id === "other_upgrades") {
-          generalCount++;
-          const parent = upgrade.$el.parentElement;
-          const insertBreak = () => {
-            const br = document.createElement("div");
-            br.className = "row-break";
-            parent.appendChild(br);
-          };
-          // Pattern: 1 | 1 | 2 | 2 | 3 | 1 | 3 | 2
-          // Implement by step counters within each cycle
-          const pattern = [1, 1, 2, 2, 3, 1, 3, 2];
-          // Track how many items placed in current line within the pattern
-          if (!parent._patternIndex) parent._patternIndex = 0;
-          if (!parent._lineFill) parent._lineFill = 0;
-
-          const target = pattern[parent._patternIndex % pattern.length];
-          parent._lineFill += 1;
-          if (parent._lineFill >= target) {
-            insertBreak();
-            parent._patternIndex = (parent._patternIndex + 1) % pattern.length;
-            parent._lineFill = 0;
-          }
-        }
-      } catch (_) { /* no-op */ }
       if (upgrade.$el) {
         upgrade.updateDisplayCost();
-        upgrade.$el.classList.toggle("unaffordable", !upgrade.affordable);
       }
     });
   }

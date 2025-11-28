@@ -6,12 +6,27 @@
     <div class="tier-progress" style="display:none"></div>
   </button>
 </template>
-<template id="upgrade-btn-template">
-  <button class="upgrade pixel-btn is-square" data-id="">
-    <div class="image"></div>
-    <div class="upgrade-price" data-cost=""></div>
-    <div class="levels" data-level="" data-max-level=""></div>
-  </button>
+<template id="upgrade-card-template">
+  <div class="upgrade-card" data-id="">
+    <div class="upgrade-header">
+      <div class="upgrade-icon-wrapper">
+        <div class="image"></div>
+      </div>
+      <div class="upgrade-details">
+        <div class="upgrade-title"></div>
+        <div class="upgrade-description"></div>
+      </div>
+    </div>
+    <div class="upgrade-footer">
+      <div class="upgrade-level-info">
+        <span class="level-text"></span>
+      </div>
+      <button class="pixel-btn upgrade-action-btn">
+        <span class="action-text">Buy</span>
+        <span class="cost-display"></span>
+      </button>
+    </div>
+  </div>
 </template>
 <!-- Splash Screen Button Templates -->
 <template id="splash-new-game-btn-template">

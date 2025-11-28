@@ -170,13 +170,21 @@ describe("UI User Interaction Scenarios", () => {
         await game.router.loadPage("upgrades_section");
 
         const upgrade = game.upgradeset.getUpgrade("chronometer");
-        expect(upgrade, "Expand reactor rows upgrade should exist").not.toBeNull();
+        expect(upgrade).not.toBeNull();
 
-        const initialMoney = game.current_money;
-        const success = game.upgradeset.purchaseUpgrade(upgrade.id);
-        expect(success, "Upgrade purchase should succeed").toBe(true);
-        expect(game.upgradeset.getUpgrade("chronometer").level).toBe(1);
-        expect(game.current_money).toBe(initialMoney - upgrade.base_cost);
+        game.current_money = upgrade.getCost();
+        game.upgradeset.check_affordability(game);
+
+        const card = document.querySelector(`.upgrade-card[data-id="${upgrade.id}"]`);
+        expect(card).not.toBeNull();
+
+        const buyBtn = card.querySelector(".upgrade-action-btn");
+        expect(buyBtn).not.toBeNull();
+        expect(buyBtn.disabled).toBe(false);
+
+        buyBtn.click();
+
+        expect(upgrade.level).toBe(1);
     });
 
     it("should display a tooltip when hovering over a part button in help mode", async () => {

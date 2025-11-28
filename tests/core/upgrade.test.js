@@ -54,7 +54,7 @@ describe("Upgrade Mechanics", () => {
   it("should show MAX cost when at max level", () => {
     const upgrade = game.upgradeset.getUpgrade("heat_control_operator"); // max_level: 1
     upgrade.setLevel(1);
-    expect(upgrade.display_cost).toBe("--");
+    expect(upgrade.display_cost).toBe("MAX");
     expect(upgrade.current_cost).toBe(Infinity);
   });
 

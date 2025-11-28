@@ -3691,44 +3691,17 @@ export class UI {
       if (!container) return;
 
       // Click handler for upgrades
-      on(container, ".upgrade", "click", function (e) {
-        const upgradeEl = this;
-        if (!upgradeEl.upgrade_object) return;
-        const upgrade_obj = upgradeEl.upgrade_object;
-
-        if (e.shiftKey) {
-          let bought = 0;
-          while (upgrade_obj.affordable && bought < 10) {
-            if (game.upgradeset.purchaseUpgrade(upgrade_obj.id)) {
-              bought++;
-            } else {
-              break;
-            }
-          }
-          if (
-            game.tooltip_manager.isLocked &&
-            game.tooltip_manager.current_obj === upgrade_obj
-          ) {
-            game.tooltip_manager.update();
-          }
-        } else {
-          game.tooltip_manager.show(upgrade_obj, null, true, upgradeEl);
-        }
-      });
-
       // Desktop hover functionality
       if (window.innerWidth > 768) {
-        on(container, ".upgrade", "mouseenter", function (e) {
+        on(container, ".upgrade-card", "mouseenter", function (e) {
           const upgradeEl = this;
           if (!upgradeEl.upgrade_object) return;
           const upgrade_obj = upgradeEl.upgrade_object;
 
-          // Show tooltip on hover (not locked)
           game.tooltip_manager.show(upgrade_obj, null, false, upgradeEl);
         });
 
-        on(container, ".upgrade", "mouseleave", function (e) {
-          // Hide tooltip when mouse leaves (only if not locked)
+        on(container, ".upgrade-card", "mouseleave", function (e) {
           if (!game.tooltip_manager.isLocked) {
             game.tooltip_manager.hide();
           }
@@ -3768,7 +3741,6 @@ export class UI {
         }
         break;
       case "upgrades_section":
-        setupUpgradeClickHandler("upgrades_content_wrapper");
         if (
           game.upgradeset &&
           typeof game.upgradeset.populateUpgrades === "function"
@@ -3781,7 +3753,6 @@ export class UI {
         }
         break;
       case "experimental_upgrades_section":
-        setupUpgradeClickHandler("experimental_upgrades_content_wrapper");
         if (
           game.upgradeset &&
           typeof game.upgradeset.populateExperimentalUpgrades === "function"

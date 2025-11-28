@@ -171,39 +171,29 @@ export function createHelpButton(onClick, title = "Click for information") {
 }
 
 export function createUpgradeButton(upgrade) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "upgrade-btn-template"
-    );
-    if (!btn) return null;
+    const card = window.templateLoader.cloneTemplateElement("upgrade-card-template");
+    if (!card) return null;
 
-    // Set upgrade data
-    btn.dataset.id = upgrade.id;
+    card.dataset.id = upgrade.id;
 
-    // Set image
-    const image = btn.querySelector(".image");
-    if (image) {
-        image.style.setProperty("--bg-image", `url(${upgrade.image})`);
+    const imageDiv = card.querySelector(".image");
+    if (imageDiv) {
+        imageDiv.style.backgroundImage = `url('${upgrade.image}')`;
     }
 
-    // Set cost if available
-    if (upgrade.cost !== undefined) {
-        const price = btn.querySelector(".upgrade-price");
-        if (price) {
-            price.textContent = upgrade.cost;
-            price.style.display = "";
-        }
-    }
+    const titleEl = card.querySelector(".upgrade-title");
+    if (titleEl) titleEl.textContent = upgrade.title;
 
-    // Set level if available
-    if (upgrade.level !== undefined) {
-        const levels = btn.querySelector(".levels");
-        if (levels) {
-            levels.textContent = `${upgrade.level}/${upgrade.max_level}`;
-            levels.style.display = "";
-        }
-    }
+    const descEl = card.querySelector(".upgrade-description");
+    if (descEl) descEl.textContent = upgrade.description;
 
-    return btn;
+    const levelText = card.querySelector(".level-text");
+    if (levelText) levelText.textContent = `Level ${upgrade.level}/${upgrade.max_level}`;
+
+    const costDisplay = card.querySelector(".cost-display");
+    if (costDisplay) costDisplay.textContent = upgrade.cost;
+
+    return card;
 }
 
 export function createPartButton(part) {

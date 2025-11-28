@@ -40,10 +40,6 @@ export class Upgrade {
     if (this.type.includes("cell")) {
       this.game.update_cell_power();
     }
-    if (this.$levels) {
-      this.$levels.textContent =
-        this.level >= this.max_level && this.max_level > 1 ? "MAX" : this.level;
-    }
     this.game.reactor.updateStats();
   }
 
@@ -51,174 +47,92 @@ export class Upgrade {
     if (this.affordable !== isAffordable) {
       this.affordable = isAffordable;
       if (this.$el) {
-        this.$el.classList.toggle("unaffordable", !isAffordable);
-        // this.$el.disabled = !isAffordable;
+        const buyBtn = this.$el.querySelector(".upgrade-action-btn");
+        if (buyBtn) {
+          buyBtn.disabled = !isAffordable || this.level >= this.max_level;
+        }
       }
     }
   }
 
   updateDisplayCost() {
     if (this.base_ecost) {
-      this.current_ecost =
-        this.base_ecost * Math.pow(this.ecost_multiplier, this.level);
+      this.current_ecost = this.base_ecost * Math.pow(this.ecost_multiplier, this.level);
     }
-    this.current_cost =
-      this.base_cost * Math.pow(this.cost_multiplier, this.level);
+    this.current_cost = this.base_cost * Math.pow(this.cost_multiplier, this.level);
 
     if (this.level >= this.max_level) {
-      this.display_cost = "--";
+      this.display_cost = "MAX";
       this.current_cost = Infinity;
       this.current_ecost = Infinity;
     } else {
-      this.display_cost = this.base_ecost
-        ? fmt(this.current_ecost)
-        : fmt(this.current_cost);
+      this.display_cost = this.base_ecost ? `${fmt(this.current_ecost)} EP` : `$${fmt(this.current_cost)}`;
     }
 
     if (this.$el) {
-      let costDiv = this.$el.querySelector(".upgrade-price");
-      if (!costDiv) {
-        costDiv = document.createElement("div");
-        costDiv.className = "upgrade-price";
-        // Insert it before the levels div if it exists
-        const levelsDiv = this.$el.querySelector(".levels");
-        if (levelsDiv) {
-          this.$el.insertBefore(costDiv, levelsDiv);
-        } else {
-          this.$el.appendChild(costDiv);
-        }
+      const costDisplay = this.$el.querySelector(".cost-display");
+      if (costDisplay) {
+        costDisplay.textContent = this.display_cost;
       }
-      costDiv.textContent = this.display_cost;
 
-      // Hide the cost if it's not applicable (e.g., max level)
-      if (this.display_cost === "--") {
-        costDiv.style.display = "none";
+      const levelText = this.$el.querySelector(".level-text");
+      if (levelText) {
+        levelText.textContent = `Level ${this.level}/${this.max_level}`;
+      }
+
+      const buyBtn = this.$el.querySelector(".upgrade-action-btn");
+      if (buyBtn) {
+        buyBtn.disabled = !this.affordable || this.level >= this.max_level;
+      }
+
+      if (this.level >= this.max_level) {
+        this.$el.classList.add("maxed-out");
       } else {
-        costDiv.style.display = "";
+        this.$el.classList.remove("maxed-out");
       }
     }
   }
 
   createElement() {
     if (window.templateLoader && window.templateLoader.loaded) {
-      this.$el = window.templateLoader.cloneTemplateElement(
-        "upgrade-btn-template"
-      );
-      if (this.$el) {
-        // Set upgrade data
-        if (this.upgrade.classList) {
-          this.$el.classList.add(...this.upgrade.classList);
-        }
-        this.$el.id = this.id;
-
-        // Set image
-        const imageDiv = this.$el.querySelector(".image");
-        if (imageDiv && this.upgrade.icon) {
-          imageDiv.style.backgroundImage = `url('${this.upgrade.icon}')`;
-          imageDiv.style.width = "90%";
-          imageDiv.style.height = "90%";
-          imageDiv.style.backgroundSize = "contain";
-          imageDiv.style.backgroundPosition = "center";
-          imageDiv.style.backgroundRepeat = "no-repeat";
-        }
-
-        // Add status icon overlay for all upgrades using simple heuristics
-        try {
-          const classes = Array.isArray(this.upgrade.classList) ? this.upgrade.classList : [];
-          const title = (this.title || "").toLowerCase();
-          const desc = (this.description || "").toLowerCase();
-          const type = (this.type || this.upgrade?.type || "").toLowerCase();
-          const actionId = (this.actionId || this.upgrade?.actionId || "").toLowerCase();
-
-          let iconPath = null;
-          let isHeat = false;
-
-          // Perpetual
-          if (classes.includes("cell_perpetual") || title.includes("perpetual") || actionId.includes("perpetual")) {
-            iconPath = "img/ui/status/status_infinity.png";
-          }
-
-          // Time/duration/tick modifiers
-          if (!iconPath && (classes.includes("cell_tick") || title.includes("enriched") || actionId.includes("tick") ||
-            desc.includes("tick") || desc.includes("duration") || desc.includes("last") || desc.includes("per second") || title.includes("clock") || title.includes("chronometer"))) {
-            iconPath = "img/ui/icons/icon_time.png";
-          }
-
-          // Heat transfer/capacity (use heat icon) vs power/strength (use bolt)
-          if (!iconPath) {
-            const heatTerms = ["heat", "vent", "exchange", "containment", "hold", "heatsink", "coolant", "thermal", "inlet", "outlet", "exchanger", "venting"];
-            const powerTerms = ["power", "potent", "reflection", "transformer", "grid", "capacitor", "capacitance", "accelerator"];
-            const hasHeat = heatTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t));
-            const hasPower = powerTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t) || classes.includes("cell_power"));
-            if (hasHeat) {
-              iconPath = "img/ui/icons/icon_heat.png";
-              isHeat = true;
-            } else if (hasPower) {
-              iconPath = "img/ui/icons/icon_power.png";
-            }
-          }
-
-          // Default fallback
-          if (!iconPath) {
-            iconPath = "img/ui/status/status_star.png";
-          }
-
-          if (iconPath) {
-            const overlay = document.createElement("img");
-            overlay.className = "status-overlay";
-            if (isHeat) overlay.classList.add("status-heat");
-            overlay.src = iconPath;
-            overlay.alt = "";
-            this.$el.appendChild(overlay);
-          }
-        } catch (_) { /* no-op */ }
-
-        // Set cost display
-        const costDiv = this.$el.querySelector(".upgrade-price");
-        if (
-          costDiv &&
-          this.current_cost !== undefined &&
-          this.current_cost !== Infinity
-        ) {
-          costDiv.textContent = this.display_cost;
-          costDiv.style.display = "";
-        }
-
-        // Set level display
-        this.$levels = this.$el.querySelector(".levels");
-        if (this.$levels) {
-          this.$levels.textContent =
-            this.level >= this.max_level && this.max_level > 1
-              ? "MAX"
-              : this.level;
-        }
-
-        this.$el.classList.toggle("unaffordable", !this.affordable);
-        return this.$el;
-      }
+      this.$el = window.templateLoader.cloneTemplateElement("upgrade-card-template");
     }
 
-    // Fallback to original method if template not available
-    this.$el = document.createElement("button");
-    this.$el.className = "upgrade";
-    if (this.upgrade.classList)
-      this.$el.classList.add(...this.upgrade.classList);
-    this.$el.id = this.id;
+    if (!this.$el) {
+      this.$el = document.createElement("div");
+      this.$el.className = "upgrade-card";
+      this.$el.innerHTML = `
+        <div class="upgrade-header">
+          <div class="upgrade-icon-wrapper">
+            <div class="image"></div>
+          </div>
+          <div class="upgrade-details">
+            <div class="upgrade-title"></div>
+            <div class="upgrade-description"></div>
+          </div>
+        </div>
+        <div class="upgrade-footer">
+          <div class="upgrade-level-info">
+            <span class="level-text"></span>
+          </div>
+          <button class="pixel-btn upgrade-action-btn">
+            <span class="action-text">Buy</span>
+            <span class="cost-display"></span>
+          </button>
+        </div>
+      `;
+    }
 
-    // Create image div first, matching .part .image
-    const imageDiv = document.createElement("div");
-    imageDiv.className = "image";
-    imageDiv.style.width = "90%";
-    imageDiv.style.height = "90%";
-    imageDiv.style.backgroundSize = "contain";
-    imageDiv.style.backgroundPosition = "center";
-    imageDiv.style.backgroundRepeat = "no-repeat";
-    if (this.upgrade.icon) {
+    this.$el.dataset.id = this.id;
+    if (this.upgrade.classList) {
+      this.$el.classList.add(...this.upgrade.classList);
+    }
+
+    const imageDiv = this.$el.querySelector(".image");
+    if (imageDiv && this.upgrade.icon) {
       imageDiv.style.backgroundImage = `url('${this.upgrade.icon}')`;
     }
-    this.$el.appendChild(imageDiv);
 
-    // Add status icon overlay for all upgrades in fallback path
     try {
       const classes = Array.isArray(this.upgrade.classList) ? this.upgrade.classList : [];
       const title = (this.title || "").toLowerCase();
@@ -232,10 +146,12 @@ export class Upgrade {
       if (classes.includes("cell_perpetual") || title.includes("perpetual") || actionId.includes("perpetual")) {
         iconPath = "img/ui/status/status_infinity.png";
       }
+
       if (!iconPath && (classes.includes("cell_tick") || title.includes("enriched") || actionId.includes("tick") ||
         desc.includes("tick") || desc.includes("duration") || desc.includes("last") || desc.includes("per second") || title.includes("clock") || title.includes("chronometer"))) {
         iconPath = "img/ui/icons/icon_time.png";
       }
+
       if (!iconPath) {
         const heatTerms = ["heat", "vent", "exchange", "containment", "hold", "heatsink", "coolant", "thermal", "inlet", "outlet", "exchanger", "venting"];
         const powerTerms = ["power", "potent", "reflection", "transformer", "grid", "capacitor", "capacitance", "accelerator"];
@@ -248,35 +164,46 @@ export class Upgrade {
           iconPath = "img/ui/icons/icon_power.png";
         }
       }
+
       if (!iconPath) {
         iconPath = "img/ui/status/status_star.png";
       }
+
       if (iconPath) {
         const overlay = document.createElement("img");
         overlay.className = "status-overlay";
         if (isHeat) overlay.classList.add("status-heat");
         overlay.src = iconPath;
         overlay.alt = "";
-        this.$el.appendChild(overlay);
+        const iconWrapper = this.$el.querySelector(".upgrade-icon-wrapper");
+        if(iconWrapper) iconWrapper.appendChild(overlay);
       }
-    } catch (_) { /* no-op */ }
+    } catch (_) {  }
 
-    // Add cost display overlay
-    if (this.current_cost !== undefined && this.current_cost !== Infinity) {
-      const costDiv = document.createElement("div");
-      costDiv.className = "part-price upgrade-price";
-      costDiv.textContent = this.display_cost;
-      this.$el.appendChild(costDiv);
+    const titleEl = this.$el.querySelector(".upgrade-title");
+    if (titleEl) titleEl.textContent = this.title;
+
+    const descEl = this.$el.querySelector(".upgrade-description");
+    if (descEl) {
+      const desc = this.description || "";
+      if (this.game.ui && this.game.ui.stateManager) {
+        descEl.innerHTML = this.game.ui.stateManager.addPartIconsToTitle(desc);
+      } else {
+        descEl.textContent = desc;
+      }
     }
 
-    // Add level display overlay
-    this.$levels = document.createElement("div");
-    this.$levels.className = "levels";
-    this.$levels.textContent =
-      this.level >= this.max_level && this.max_level > 1 ? "MAX" : this.level;
-    this.$el.appendChild(this.$levels);
+    const buyBtn = this.$el.querySelector(".upgrade-action-btn");
+    if (buyBtn) {
+      buyBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (this.game.upgradeset.purchaseUpgrade(this.id)) {
+          this.game.upgradeset.check_affordability(this.game);
+        }
+      };
+    }
 
-    this.$el.classList.toggle("unaffordable", !this.affordable);
+    this.updateDisplayCost();
     return this.$el;
   }
 

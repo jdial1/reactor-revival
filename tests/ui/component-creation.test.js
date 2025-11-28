@@ -80,22 +80,25 @@ describe("UI Component Creation and State", () => {
             expect(btn.disabled).toBe(true);
         });
 
-        it("should create an upgrade button with level and cost", () => {
+        it("should create an upgrade card with level and cost", () => {
             const upgrade = game.upgradeset.getUpgrade("chronometer");
             upgrade.setLevel(2);
 
-            const btn = createUpgradeButton({
+            const card = createUpgradeButton({
                 id: upgrade.id,
+                title: upgrade.title,
+                description: upgrade.description,
                 image: upgrade.upgrade.icon,
                 cost: upgrade.display_cost,
                 level: upgrade.level,
                 max_level: upgrade.max_level
             });
 
-            expect(btn.dataset.id).toBe(upgrade.id);
-            expect(btn.querySelector(".image").style.getPropertyValue("--bg-image")).toContain(upgrade.upgrade.icon);
-            expect(btn.querySelector(".upgrade-price").textContent).toBe(upgrade.display_cost);
-            expect(btn.querySelector(".levels").textContent).toBe("2/32");
+            expect(card.dataset.id).toBe(upgrade.id);
+            expect(card.querySelector(".image").style.backgroundImage).toContain(upgrade.upgrade.icon);
+            expect(card.querySelector(".cost-display").textContent).toBe(upgrade.display_cost);
+            expect(card.querySelector(".level-text").textContent).toBe("Level 2/32");
+            expect(card.querySelector(".upgrade-title").textContent).toBe(upgrade.title);
         });
 
         it("should create a buy button that reflects cost and affordability", () => {

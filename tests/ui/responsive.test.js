@@ -280,7 +280,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         ".part, [id*='part_btn'], [class*='part']"
       );
       const upgradeElements = document.querySelectorAll(
-        ".upgrade, [id*='upgrade_btn'], [class*='upgrade']"
+        ".upgrade, .upgrade-card, [id*='upgrade_btn'], [class*='upgrade']"
       );
 
       // Verify structure exists (elements can be found or created)

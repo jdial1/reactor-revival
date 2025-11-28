@@ -175,7 +175,7 @@ describe('EP Upgrade Purchase Functionality', () => {
             const laboratory = game.upgradeset.getUpgrade("laboratory");
             laboratory.updateDisplayCost();
 
-            expect(laboratory.display_cost).toBe("1"); // base_ecost formatted
+            expect(laboratory.display_cost).toBe("1 EP"); // base_ecost formatted with EP suffix
         });
 
         it('should update EP cost display when level increases', () => {
@@ -183,12 +183,12 @@ describe('EP Upgrade Purchase Functionality', () => {
 
             // Level 0
             infusedCells.updateDisplayCost();
-            expect(infusedCells.display_cost).toBe("100");
+            expect(infusedCells.display_cost).toBe("100 EP");
 
             // Level 1
             infusedCells.setLevel(1);
             infusedCells.updateDisplayCost();
-            expect(infusedCells.display_cost).toBe("200"); // 100 * 2
+            expect(infusedCells.display_cost).toBe("200 EP"); // 100 * 2
         });
 
         it('should show max level indicator when at max level', () => {
@@ -196,7 +196,7 @@ describe('EP Upgrade Purchase Functionality', () => {
             laboratory.setLevel(laboratory.max_level);
             laboratory.updateDisplayCost();
 
-            expect(laboratory.display_cost).toBe("--");
+            expect(laboratory.display_cost).toBe("MAX");
             expect(laboratory.current_ecost).toBe(Infinity);
         });
     });

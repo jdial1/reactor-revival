@@ -28,8 +28,8 @@ describe('EP Price Display and Affordability Synchronization', () => {
             // Verify display costs match base costs
             laboratory.updateDisplayCost();
             infusedCells.updateDisplayCost();
-            expect(laboratory.display_cost).toBe("1");
-            expect(infusedCells.display_cost).toBe("100");
+            expect(laboratory.display_cost).toBe("1 EP");
+            expect(infusedCells.display_cost).toBe("100 EP");
         });
 
         it('should update price display when level increases', () => {
@@ -37,17 +37,17 @@ describe('EP Price Display and Affordability Synchronization', () => {
 
             // Level 0
             infusedCells.updateDisplayCost();
-            expect(infusedCells.display_cost).toBe("100");
+            expect(infusedCells.display_cost).toBe("100 EP");
 
             // Level 1
             infusedCells.setLevel(1);
             infusedCells.updateDisplayCost();
-            expect(infusedCells.display_cost).toBe("200"); // 100 * 2
+            expect(infusedCells.display_cost).toBe("200 EP"); // 100 * 2
 
             // Level 2
             infusedCells.setLevel(2);
             infusedCells.updateDisplayCost();
-            expect(infusedCells.display_cost).toBe("400"); // 100 * 2^2
+            expect(infusedCells.display_cost).toBe("400 EP"); // 100 * 2^2
         });
 
         it('should show max level indicator when at max level', () => {
@@ -57,7 +57,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
             laboratory.setLevel(laboratory.max_level);
             laboratory.updateDisplayCost();
 
-            expect(laboratory.display_cost).toBe("--");
+            expect(laboratory.display_cost).toBe("MAX");
             expect(laboratory.current_ecost).toBe(Infinity);
         });
     });
