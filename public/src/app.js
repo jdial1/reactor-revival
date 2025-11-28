@@ -7,6 +7,7 @@ import { Engine } from "./core/engine.js";
 import "./services/pwa.js";
 import { PageRouter } from "./components/pageRouter.js";
 import { GoogleDriveSave } from "./services/GoogleDriveSave.js";
+import { AudioService } from "./services/audioService.js";
 // Background/PWA helpers
 import "./services/pwa.js";
 
@@ -374,6 +375,8 @@ async function main() {
   window.googleDriveSave = new GoogleDriveSave();
   const ui = new UI();
   const game = new Game(ui);
+  game.audio = new AudioService();
+  game.audio.init();
   const pageRouter = new PageRouter(ui);
   game.router = pageRouter;
 
@@ -432,7 +435,7 @@ async function startGame(pageRouter, ui, game) {
   game.startSession();
 
   // Initialize parts panel position after game loads
-  ui.initializePartsPanelPosition();
+  ui.initializePartsPanel();
 
   const finalizeGameStart = () => {
     console.log(`[DEBUG] Finalizing game start. Initial paused state: ${game.paused}`);

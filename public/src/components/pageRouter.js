@@ -5,6 +5,7 @@ export class PageRouter {
       reactor_section: { path: "pages/reactor.html" },
       upgrades_section: { path: "pages/upgrades.html" },
       experimental_upgrades_section: { path: "pages/research.html" },
+      soundboard_section: { path: "pages/debug-soundboard.html" },
       about_section: { path: "pages/about.html" },
       privacy_policy_section: {
         path: "pages/privacy-policy.html",

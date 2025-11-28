@@ -20,34 +20,19 @@ describe("Pause Heat Processing", () => {
         tile.heat_contained = 100;
 
         const initialHeat = tile.heat_contained;
-
-        // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
-
-        // Process the heat manager while paused
-        game.engine.heatManager.processTick();
-
-        // Heat should not change when game is paused
+        game.engine.tick(); // Call the main engine tick to test its pause logic
         expect(tile.heat_contained).toBe(initialHeat);
-
-        // Unpause the game
-        game.ui.stateManager.setVar("pause", false);
-        game.onToggleStateChange("pause", false);
+        game.resume();
         expect(game.paused).toBe(false);
-
-        // Process the heat manager again while unpaused
-        game.engine.heatManager.processTick();
-
-        // Heat should now change when game is unpaused
-        expect(tile.heat_contained).not.toBe(initialHeat);
+        game.engine.tick(); // Now heat processing should occur
+        expect(tile.heat_contained).toBeLessThan(initialHeat);
     });
 
     it("should not call updateSegments when game is paused", () => {
         // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
 
         // Mock the updateSegments method to track if it's called

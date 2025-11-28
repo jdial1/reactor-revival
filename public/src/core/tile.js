@@ -134,7 +134,27 @@ export class Tile {
     if (this.part) {
       return false; // Return false to indicate the part was not placed
     }
+    const isRestoring = this.game?._isRestoringSave;
+    console.log(`[TILE DEBUG] setPart() called: tile=(${this.row},${this.col}), part=${partInstance.id}, isRestoring=${isRestoring}, audio=${!!this.game.audio}, audio.enabled=${this.game.audio?.enabled}`);
+    if (!isRestoring && this.game.audio && this.game.audio.enabled) {
+      this.game.logger?.debug(`Placing part '${partInstance.id}' on tile (${this.row}, ${this.col})`);
+      this.game.debugHistory.add('tile', 'setPart', { row: this.row, col: this.col, partId: partInstance.id });
+      const subtype =
+        partInstance.category === "cell"
+          ? "cell"
+          : partInstance.category === "reactor_plating" ? "plating" : null;
+      console.log(`[TILE DEBUG] Calling audio.play("placement", "${subtype}")`);
+      this.game.audio.play("placement", subtype);
+    } else {
+      console.log(`[TILE DEBUG] Audio play skipped: isRestoring=${isRestoring}, audio=${!!this.game.audio}, audio.enabled=${this.game.audio?.enabled}`);
+    }
+    const partBeforeSet = this.part?.id || null;
     this.part = partInstance;
+    const partAfterSet = this.part?.id || null;
+    console.log(`[TILE DEBUG] setPart assignment: tile=(${this.row},${this.col}), before=${partBeforeSet}, after=${partAfterSet}, expected=${partInstance.id}, match=${partAfterSet === partInstance.id}`);
+    if (typeof process !== "undefined" && process.env.NODE_ENV === 'test' && this.row === 0 && this.col === 0 && isRestoring) {
+      console.log(`[SAVE-LOAD DEBUG] restoring setPart for (0,0) with part ${partInstance.id}, part set to: ${this.part?.id || 'null'}`);
+    }
     this.invalidateNeighborCaches();
     if (this.part) {
       this.activated = true;
@@ -233,30 +253,34 @@ export class Tile {
 
     this.game.engine?.markPartCacheAsDirty();
     this.game.engine?.heatManager?.markSegmentsAsDirty();
-    this.game.reactor.updateStats();
-    // Refresh parts panel to update tier gating counters/visibility
-    try {
-      if (this.game && this.game.ui && typeof this.game.ui.refreshPartsPanel === "function") {
-        this.game.ui.refreshPartsPanel();
+    if (!isRestoring) {
+      this.game.reactor.updateStats();
+      // Refresh parts panel to update tier gating counters/visibility
+      try {
+        if (this.game && this.game.ui && typeof this.game.ui.refreshPartsPanel === "function") {
+          this.game.ui.refreshPartsPanel();
+        }
+        // Also refresh the upgrades section so gated cell upgrade columns
+        // appear as soon as the corresponding cell becomes unlocked
+        if (this.game && this.game.upgradeset && typeof this.game.upgradeset.populateUpgrades === "function") {
+          this.game.upgradeset.populateUpgrades();
+        }
+      } catch (_) { }
+      if (this.game && typeof this.game.saveGame === "function") {
+        this.game.saveGame(null, true); // true = isAutoSave
       }
-      // Also refresh the upgrades section so gated cell upgrade columns
-      // appear as soon as the corresponding cell becomes unlocked
-      if (this.game && this.game.upgradeset && typeof this.game.upgradeset.populateUpgrades === "function") {
-        this.game.upgradeset.populateUpgrades();
-      }
-    } catch (_) { }
-    if (this.game && typeof this.game.saveGame === "function") {
-      this.game.saveGame(null, true); // true = isAutoSave
     }
     return true; // Return true to indicate the part was successfully placed
   }
   clearPart(full_clear = true) {
     if (!this.part) return;
     const part_id = this.part.id;
-    this.invalidateNeighborCaches();
     if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-      this.game.logger?.debug(`Clearing part ${part_id} from tile (${this.row}, ${this.col})`);
+      console.warn(`[SAVE-LOAD DEBUG] clearPart on (${this.row}, ${this.col}) full=${full_clear} part=${part_id}`);
     }
+    this.game.logger?.debug(`Clearing part '${part_id}' from tile (${this.row}, ${this.col}). Full clear: ${full_clear}`);
+    this.game.debugHistory.add('tile', 'clearPart', { row: this.row, col: this.col, partId: this.part.id, fullClear: full_clear });
+    this.invalidateNeighborCaches();
     if (full_clear) {
       const sell_value = this.calculateSellValue();
       this.game.addMoney(sell_value);

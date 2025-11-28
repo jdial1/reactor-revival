@@ -184,8 +184,7 @@ describe("Paused reactor should not generate money for provided layout", () => {
         const moneyBefore = game.current_money;
 
         // Pause and enable auto-sell; engine should not process ticks while paused
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
 
         game.ui.stateManager.setVar("auto_sell", true);
@@ -199,8 +198,7 @@ describe("Paused reactor should not generate money for provided layout", () => {
         expect(game.current_money).toBe(moneyBefore);
 
         // Now unpause and verify the engine processes (layout may meltdown instead of selling power)
-        game.ui.stateManager.setVar("pause", false);
-        game.onToggleStateChange("pause", false);
+        game.resume();
         expect(game.paused).toBe(false);
 
         // Run a few ticks to allow power generation and auto-sell

@@ -46,38 +46,73 @@ class Logger {
         return this.currentLevel >= level;
     }
 
-    formatMessage(level, message, ...args) {
-        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-        const prefix = `[${timestamp}] [${level}]`;
+    _formatArgs(args) {
+        const seen = new WeakSet();
+        const replacer = (key, value) => {
+            if (typeof value === 'object' && value !== null) {
+                if (seen.has(value)) {
+                    return '[Circular]';
+                }
+                seen.add(value);
+                if (value.constructor && value.constructor.name !== 'Object' && value.constructor.name !== 'Array') {
+                    return `[${value.constructor.name}]`;
+                }
+            }
+            return value;
+        };
 
-        if (args.length === 0) {
-            return `${prefix} ${message}`;
+        return args.map(arg => {
+            if (typeof arg === 'object' && arg !== null) {
+                try {
+                    return JSON.stringify(arg, replacer, 2);
+                } catch (e) {
+                    return '[Unserializable Object]';
+                }
+            }
+            return arg;
+        });
+    }
+
+    _log(levelName, level, message, ...args) {
+        if (this.shouldLog(level)) {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const prefix = `[${timestamp}] [${levelName}]`;
+            const formattedArgs = this._formatArgs(args);
+            console[levelName.toLowerCase()](prefix, message, ...formattedArgs);
         }
-
-        return `${prefix} ${message}`;
     }
 
     error(message, ...args) {
-        if (this.shouldLog(this.levels.ERROR)) {
-            console.error(this.formatMessage('ERROR', message), ...args);
-        }
+        this._log('ERROR', this.levels.ERROR, message, ...args);
     }
 
     warn(message, ...args) {
-        if (this.shouldLog(this.levels.WARN)) {
-            console.warn(this.formatMessage('WARN', message), ...args);
-        }
+        this._log('WARN', this.levels.WARN, message, ...args);
     }
 
     info(message, ...args) {
-        if (this.shouldLog(this.levels.INFO)) {
-            console.log(this.formatMessage('INFO', message), ...args);
-        }
+        this._log('INFO', this.levels.INFO, message, ...args);
     }
 
     debug(message, ...args) {
+        this._log('DEBUG', this.levels.DEBUG, message, ...args);
+    }
+
+    group(label) {
         if (this.shouldLog(this.levels.DEBUG)) {
-            console.log(this.formatMessage('DEBUG', message), ...args);
+            console.group(label);
+        }
+    }
+
+    groupCollapsed(label) {
+        if (this.shouldLog(this.levels.DEBUG)) {
+            console.groupCollapsed(label);
+        }
+    }
+
+    groupEnd() {
+        if (this.shouldLog(this.levels.DEBUG)) {
+            console.groupEnd();
         }
     }
 

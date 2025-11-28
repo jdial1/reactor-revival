@@ -3,6 +3,7 @@ import { StateManager } from "../core/stateManager.js";
 import { Hotkeys } from "../utils/hotkeys.js";
 import dataService from "../services/dataService.js";
 import { on } from "../utils/util.js";
+import { SettingsModal } from "./settingsModal.js";
 
 // Load help text
 let help_text = {};
@@ -118,7 +119,6 @@ export class UI {
       "topupValves",
       "checkValves",
       "objectives_section",
-      "objective_title",
       "objective_reward",
       "tooltip",
       "tooltip_data",
@@ -163,6 +163,7 @@ export class UI {
       "bottom_nav",
       "main_top_nav",
       "fullscreen_toggle",
+      "settings_btn",
       "basic_overview_section",
       "debug_section",
       "debug_toggle_btn",
@@ -244,7 +245,6 @@ export class UI {
         "topupValves",
         "checkValves",
         "objectives_section",
-        "objective_title",
         "objective_reward",
         "objectives_container",
         "objectives_header",
@@ -322,6 +322,11 @@ export class UI {
       // Privacy policy page specific elements
       privacy_policy_section: [
         "privacy_policy_section"
+      ],
+      soundboard_section: [
+        "soundboard_section",
+        "sound_warning_intensity",
+        "sound_warning_value"
       ]
     };
 
@@ -691,6 +696,10 @@ export class UI {
   }
 
   runUpdateInterfaceLoop() {
+    // Guard against running after cleanup in test environment
+    if (this._updateLoopStopped || typeof document === 'undefined' || !document) {
+      return;
+    }
     // Record frame for performance tracking
     this.recordFrame();
 
@@ -1004,42 +1013,73 @@ export class UI {
           if (this.DOMElements.reboot_exotic_particles) {
             this.DOMElements.reboot_exotic_particles.textContent = fmt(val);
           }
-          if (this.DOMElements.refund_exotic_particles) {
-            this.DOMElements.refund_exotic_particles.textContent = fmt(
-              (this.stateManager.getVar("total_exotic_particles") || 0) + val
-            );
-          }
-
-          // Update info bar EP display
-          const shouldShow = val > 0;
-
-          const mobileEl = document.getElementById("info_ep");
-          const desktopEl = document.getElementById("info_ep_desktop");
-          const mobileValueEl = document.getElementById("info_ep_value");
-          const desktopValueEl = document.getElementById("info_ep_value_desktop");
-
-          if (mobileEl) {
-            const content = mobileEl.querySelector('.ep-content');
-            if (content) content.style.display = shouldShow ? "flex" : "none";
-          }
-          if (desktopEl) {
-            const content = desktopEl.querySelector('.ep-content');
-            if (content) content.style.display = shouldShow ? "flex" : "none";
-          }
-
-          if (shouldShow) {
-            if (mobileValueEl) mobileValueEl.textContent = fmt(val);
-            if (desktopValueEl) desktopValueEl.textContent = fmt(val);
-          }
         },
       },
       current_exotic_particles: {
         dom: this.DOMElements.current_exotic_particles,
         num: true,
+        onupdate: (val) => {
+          const shouldShow = val > 0;
+          const gameEP = this.game?.exotic_particles ?? 'N/A';
+          const stateManagerEP = this.stateManager.getVar("current_exotic_particles") ?? 'N/A';
+          console.log(`[EP-DISPLAY DEBUG] onupdate called: val=${val}, shouldShow=${shouldShow}, game.exotic_particles=${gameEP}, stateManager.current_exotic_particles=${stateManagerEP}`);
+          const mobileEl = document.getElementById("info_ep");
+          const desktopEl = document.getElementById("info_ep_desktop");
+          const mobileValueEl = document.getElementById("info_ep_value");
+          const desktopValueEl = document.getElementById("info_ep_value_desktop");
+
+          console.log(`[EP-DISPLAY DEBUG] Elements found: mobileEl=${!!mobileEl}, desktopEl=${!!desktopEl}, mobileValueEl=${!!mobileValueEl}, desktopValueEl=${!!desktopValueEl}`);
+
+          if (mobileEl) {
+            const content = mobileEl.querySelector('.ep-content');
+            console.log(`[EP-DISPLAY DEBUG] Mobile content element: ${!!content}, setting display to ${shouldShow ? "flex" : "none"}`);
+            if (content) {
+              content.style.display = shouldShow ? "flex" : "none";
+              console.log(`[EP-DISPLAY DEBUG] Mobile content display after update: ${content.style.display}`);
+            } else {
+              console.log(`[EP-DISPLAY DEBUG] Mobile .ep-content element not found`);
+            }
+          }
+          if (desktopEl) {
+            const content = desktopEl.querySelector('.ep-content');
+            console.log(`[EP-DISPLAY DEBUG] Desktop content element: ${!!content}, setting display to ${shouldShow ? "flex" : "none"}`);
+            if (content) {
+              content.style.display = shouldShow ? "flex" : "none";
+              console.log(`[EP-DISPLAY DEBUG] Desktop content display after update: ${content.style.display}`);
+            } else {
+              console.log(`[EP-DISPLAY DEBUG] Desktop .ep-content element not found`);
+            }
+          }
+
+          if (shouldShow) {
+            if (mobileValueEl) {
+              mobileValueEl.textContent = fmt(val);
+              console.log(`[EP-DISPLAY DEBUG] Mobile value updated to: ${fmt(val)}`);
+            }
+            if (desktopValueEl) {
+              desktopValueEl.textContent = fmt(val);
+              console.log(`[EP-DISPLAY DEBUG] Desktop value updated to: ${fmt(val)}`);
+            }
+          }
+
+          if (this.DOMElements.current_exotic_particles) {
+            this.DOMElements.current_exotic_particles.textContent = fmt(val);
+            console.log(`[EP-DISPLAY DEBUG] DOMElements.current_exotic_particles updated to: ${fmt(val)}`);
+          }
+        },
       },
       total_exotic_particles: {
         dom: this.DOMElements.total_exotic_particles,
         num: true,
+        onupdate: (val) => {
+          if (this.DOMElements.total_exotic_particles) {
+            this.DOMElements.total_exotic_particles.textContent = fmt(val);
+          }
+          const reboot_val = this.stateManager.getVar("exotic_particles") || 0;
+          if (this.DOMElements.refund_exotic_particles) {
+            this.DOMElements.refund_exotic_particles.textContent = fmt(val + reboot_val);
+          }
+        },
       },
       stats_power: {
         dom: this.DOMElements.stats_power,
@@ -2000,6 +2040,11 @@ export class UI {
       this.updateFullscreenButtonState();
     }
 
+    const settingsBtn = this.DOMElements.settings_btn;
+    if (settingsBtn) {
+      settingsBtn.addEventListener("click", () => new SettingsModal().show());
+    }
+
     let resizeTimeout;
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimeout);
@@ -2186,7 +2231,14 @@ export class UI {
   toggleObjectivesPanel() {
     const container = this.DOMElements.objectives_container;
     if (container) {
-      container.classList.toggle('is-open');
+      const isOpen = container.classList.toggle('is-open');
+      const toggleBtn = this.DOMElements.objectives_toggle_btn;
+      if (toggleBtn) {
+        toggleBtn.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+      }
+      if (this.game && this.game.audio) {
+        this.game.audio.play('click');
+      }
     }
   }
 
@@ -2350,11 +2402,17 @@ export class UI {
       event.type === "contextmenu";
     const clicked_part = this.stateManager.getClickedPart();
     const tilesToModify = this.hotkeys.getTiles(startTile, event);
+    let soundPlayed = false;
 
     for (const tile of tilesToModify) {
       if (isRightClick) {
         if (tile.part && tile.part.id && !tile.part.isSpecialTile) {
+          const moneyBefore = this.game.current_money;
           this.game.sellPart(tile);
+          if (!soundPlayed && this.game && this.game.audio) {
+            this.game.audio.play('sell');
+            soundPlayed = true;
+          }
         }
       } else {
         if (tile.part && this.help_mode_active) {
@@ -2367,11 +2425,23 @@ export class UI {
 
         if (clicked_part) {
           if (this.game.current_money >= clicked_part.cost) {
+            const moneyBefore = this.game.current_money;
             this.game.current_money -= clicked_part.cost;
             const partPlaced = await tile.setPart(clicked_part);
-            if (!partPlaced) {
+            if (partPlaced) {
+              soundPlayed = true; // Sound is now handled in tile.setPart
+            } else {
               // Refund the money if the part couldn't be placed (tile already occupied)
               this.game.current_money += clicked_part.cost;
+              if (!soundPlayed && this.game && this.game.audio) {
+                this.game.audio.play('error');
+                soundPlayed = true;
+              }
+            }
+          } else {
+            if (!soundPlayed && this.game && this.game.audio) {
+              this.game.audio.play('error');
+              soundPlayed = true;
             }
           }
         }
@@ -3924,9 +3994,59 @@ export class UI {
         // Load and set version for research page
         this.loadAndSetVersion();
         break;
+      case "soundboard_section":
+        this.setupSoundboardPage();
+        break;
     }
 
     this.showObjectivesForPage(pageId);
+  }
+
+  setupSoundboardPage() {
+    if (!this.game?.audio) return;
+    const page = this.DOMElements.soundboard_section || document.getElementById("soundboard_section");
+    if (!page) return;
+
+    const warningSlider = this.DOMElements.sound_warning_intensity || document.getElementById("sound_warning_intensity");
+    const warningValue = this.DOMElements.sound_warning_value || document.getElementById("sound_warning_value");
+    
+    const updateWarningValue = () => {
+      if (warningSlider && warningValue) {
+        warningValue.textContent = `${warningSlider.value}%`;
+      }
+    };
+
+    if (warningSlider) {
+      warningSlider.oninput = updateWarningValue;
+      updateWarningValue();
+    }
+
+    const playSound = (button) => {
+      const sound = button.dataset.sound;
+      if (!sound) return;
+
+      if (sound === "warning") {
+        const intensity = warningSlider ? Number(warningSlider.value) / 100 : 0.5;
+        this.game.audio.play("warning", intensity);
+        return;
+      }
+
+      if (sound === "explosion") {
+        if (button.dataset.variant === "meltdown") {
+          this.game.audio.play("explosion", "meltdown");
+        } else {
+          this.game.audio.play("explosion");
+        }
+        return;
+      }
+
+      const subtype = button.dataset.subtype || null;
+      this.game.audio.play(sound, subtype);
+    };
+
+    page.querySelectorAll("button.sound-btn").forEach((button) => {
+      button.onclick = () => playSound(button);
+    });
   }
 
   // Align top stats and copy/paste/sell buttons into a single transparent bar on mobile
@@ -4047,6 +4167,9 @@ export class UI {
                 longPressTargetTile.clearPart(true);
                 this.game.reactor.updateStats();
                 longPressTargetTile.$el.classList.remove("selling");
+                if (this.game && this.game.audio) {
+                  this.game.audio.play('sell');
+                }
               }
             }, this.longPressDuration);
           }

@@ -137,14 +137,14 @@ describe("Part Mechanics", () => {
   it("should be affordable if player has enough money", () => {
     const part = game.partset.getPartById("uranium1");
     game.current_money = part.cost + 1;
-    game.partset.check_affordability(game);
+    game.partset.check_affordability(game); // This is the system that updates the part's state
     expect(part.affordable).toBe(true);
   });
 
   it("should not be affordable if player has insufficient money", () => {
     const part = game.partset.getPartById("uranium1");
     game.current_money = part.cost - 1;
-    game.partset.check_affordability(game);
+    game.partset.check_affordability(game); // This is the system that updates the part's state
     expect(part.affordable).toBe(false);
   });
 });

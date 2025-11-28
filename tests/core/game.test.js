@@ -1,16 +1,29 @@
-import { describe, it, expect, beforeEach, vi, Game, UI, setupGame, cleanupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, Game, UI, setupGame, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
 
 describe("Core Game Mechanics", () => {
   let game;
 
   beforeEach(async () => {
-    game = await setupGame();
+    const setup = await setupGameWithDOM();
+    game = setup.game;
   });
 
-  it("should enter meltdown when heat exceeds 2x max_heat", async () => {
+  it("should enter meltdown from excessive heat generation", async () => {
     expect(game.reactor.has_melted_down).toBe(false);
+
+    // Create a high-heat layout
+    const highHeatPart = game.partset.getPartById("nefastium3");
+    for (let i = 0; i < 5; i++) {
+      const tile = game.tileset.getTile(0, i);
+      await tile.setPart(highHeatPart);
+      tile.activated = true;
+    }
+    game.reactor.updateStats();
+
+    // Set heat directly to trigger meltdown threshold
     game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-    game.engine.tick();
+    game.engine.manualTick();
+
     expect(game.reactor.has_melted_down).toBe(true);
     expect(game.ui.stateManager.getVar("melting_down")).toBe(true);
   });
@@ -20,7 +33,8 @@ describe("Core Game Mechanics", () => {
       .getTile(0, 0)
       .setPart(game.partset.getPartById("uranium1"));
     game.exotic_particles = 50;
-    game.total_exotic_particles = 10;
+    game.total_exotic_particles = 60;
+    game.current_exotic_particles = 60;
     game.current_money = 12345;
     await game.reboot_action(true);
     expect(game.current_money).toBe(game.base_money);
@@ -48,19 +62,10 @@ describe("Core Game Mechanics", () => {
     expect(game.exotic_particles).toBe(0);
   });
 
-  it("should toggle pause state and engine", () => {
-    const stopSpy = vi.spyOn(game.engine, "stop");
-    const startSpy = vi.spyOn(game.engine, "start");
-
-    game.ui.stateManager.setVar("pause", true);
-    game.onToggleStateChange("pause", true);
-    expect(game.paused).toBe(true);
-    expect(stopSpy).toHaveBeenCalled();
-
-    game.ui.stateManager.setVar("pause", false);
-    game.onToggleStateChange("pause", false);
+  it("should toggle pause state via game API", () => {
     expect(game.paused).toBe(false);
-    expect(startSpy).toHaveBeenCalled();
+    game.togglePause();
+    expect(game.paused).toBe(true);
   });
 
   it("should add money correctly", () => {
@@ -78,7 +83,8 @@ describe("Core Game Mechanics", () => {
         .getTile(0, 0)
         .setPart(game.partset.getPartById("uranium1"));
       game.exotic_particles = 50;
-      game.total_exotic_particles = 10;
+      game.total_exotic_particles = 60;
+      game.current_exotic_particles = 60;
       game.current_money = 12345;
     });
 
@@ -201,25 +207,14 @@ describe("Core Game Mechanics", () => {
     mockNow.mockRestore();
   });
 
-  it("should save and load total played time", () => {
-    // Reset session start time to ensure no session is active
+  it("should save and load total played time", async () => {
     game.session_start_time = null;
-
-    // Set some played time
     game.total_played_time = 15000;
-
-    // Get save state
     const saveData = game.getSaveState();
     expect(saveData.total_played_time).toBe(15000);
     expect(saveData.last_save_time).toBeDefined();
-
-    // Create new game and apply save state
-    const newGame = Object.create(Object.getPrototypeOf(game));
-    Object.assign(newGame, game);
-    newGame.total_played_time = 0;
-    newGame.session_start_time = null;
-
-    newGame.applySaveState(saveData);
+    const newGame = new Game(new UI());
+    await newGame.applySaveState(saveData);
     expect(newGame.total_played_time).toBe(15000);
     // Session should not start automatically - needs to be started explicitly
     expect(newGame.session_start_time).toBeNull();

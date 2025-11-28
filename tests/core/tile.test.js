@@ -29,7 +29,7 @@ describe("Tile Mechanics", () => {
     await tile.setPart(part);
 
     const moneyBeforeClear = game.current_money;
-    tile.clearPart(false); // refund = false
+    game.handleComponentDepletion(tile);
 
     expect(tile.part).toBeNull();
     expect(game.current_money).toBe(moneyBeforeClear);

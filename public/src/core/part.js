@@ -52,6 +52,8 @@ export class Part {
 
   recalculate_stats() {
     const { game } = this;
+    const epHeatBefore = this.ep_heat;
+    const partId = this.id;
     // Example:
     const improvedAlloys =
       game.upgradeset.getUpgrade("improved_alloys")?.level || 0;
@@ -268,7 +270,11 @@ export class Part {
     this.reactor_power = this.base_reactor_power * capacitorPowerMultiplier;
     this.transfer = this.base_transfer * transferMultiplier;
     this.range = this.base_range;
-    this.ep_heat = this.base_ep_heat * epHeatMultiplier;
+    const epHeatAfter = this.base_ep_heat * epHeatMultiplier;
+    if (partId === 'particle_accelerator1' && epHeatBefore !== undefined && epHeatAfter !== epHeatBefore) {
+      console.log(`[RECALC-STATS DEBUG] ep_heat changed for ${partId}: ${epHeatBefore} -> ${epHeatAfter} (base_ep_heat=${this.base_ep_heat}, multiplier=${epHeatMultiplier})`);
+    }
+    this.ep_heat = epHeatAfter;
     this.power_increase =
       this.base_power_increase * reflectorPowerIncreaseMultiplier;
     this.heat_increase = this.base_heat_increase;
@@ -627,8 +633,14 @@ export class Part {
 
   // Get the cost for auto-replacement (1.5x base cost for perpetual cells)
   getAutoReplacementCost() {
-    if (this.category === "cell" && this.perpetual) {
-      return this.base_cost * 1.5;
+    if (this.perpetual) {
+      if (this.category === 'reflector') {
+        return this.base_cost * 1.5;
+      } else if (this.category === 'capacitor') {
+        return this.base_cost * 10;
+      } else if (this.category === 'cell') {
+        return this.base_cost * 1.5;
+      }
     }
     return this.base_cost;
   }

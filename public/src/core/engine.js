@@ -96,8 +96,12 @@ export class Engine {
   }
 
   _updatePartCaches() {
-    if (!this._partCacheDirty) return;
+    if (!this._partCacheDirty) {
+      console.log(`[PART-CACHE DEBUG] Cache update skipped: _partCacheDirty=false`);
+      return;
+    }
 
+    console.log(`[PART-CACHE DEBUG] Starting cache update: grid size=${this.game._rows}x${this.game._cols}`);
     // Ensure arrays are always valid before proceeding
     this._ensureArraysValid();
 
@@ -147,8 +151,14 @@ export class Engine {
         }
 
         // Check containment conditions once
-        if (part.vent > 0 || category === "particle_accelerator" || (part.containment > 0 && category !== "valve")) {
+        const shouldAddToVessels = part.vent > 0 || category === "particle_accelerator" || (part.containment > 0 && category !== "valve");
+        if (shouldAddToVessels) {
+          if (category === "particle_accelerator") {
+            console.log(`[PART-CACHE DEBUG] Adding PA to vessels: tile=(${tile.row},${tile.col}), part.id=${part.id}, part.vent=${part.vent}, part.containment=${part.containment}, category=${category}, heat_contained=${tile.heat_contained}, ep_heat=${part.ep_heat}`);
+          }
           this.active_vessels[vesselIndex++] = tile;
+        } else if (category === "particle_accelerator") {
+          console.log(`[PART-CACHE DEBUG] PA NOT added to vessels: tile=(${tile.row},${tile.col}), part.id=${part.id}, part.vent=${part.vent}, part.containment=${part.containment}, category=${category}`);
         }
       }
     }
@@ -159,6 +169,17 @@ export class Engine {
     this.active_inlets.length = inletIndex;
     this.active_exchangers.length = exchangerIndex;
     this.active_outlets.length = outletIndex;
+    
+    console.log(`[PART-CACHE DEBUG] Updated caches: vessels=${this.active_vessels.length}, inlets=${this.active_inlets.length}, exchangers=${this.active_exchangers.length}, outlets=${this.active_outlets.length}`);
+    const paInVessels = this.active_vessels.filter(t => t?.part?.category === 'particle_accelerator').length;
+    if (paInVessels > 0) {
+      console.log(`[PART-CACHE DEBUG] Found ${paInVessels} particle accelerators in active_vessels`);
+      this.active_vessels.forEach(t => {
+        if (t?.part?.category === 'particle_accelerator') {
+          console.log(`[PART-CACHE DEBUG] PA in vessels: (${t.row},${t.col}), activated=${t.activated}, heat=${t.heat_contained}`);
+        }
+      });
+    }
 
     this._partCacheDirty = false;
   }
@@ -252,6 +273,7 @@ export class Engine {
   }
 
   tick() {
+    console.log(`[TICK-CALL DEBUG] tick() called: tick_count=${this.tick_count}, running=${this.running}, paused=${this.game?.paused}`);
     return this._processTick(false);
   }
 
@@ -261,6 +283,34 @@ export class Engine {
   }
 
   _processTick(manual = false) {
+    const tickStart = performance.now();
+    const currentTickNumber = this.tick_count;
+    console.log(`[TICK-ENTRY DEBUG] _processTick called: manual=${manual}, paused=${this.game.paused}, running=${this.running}, tick_count=${currentTickNumber}`);
+    this.game.logger?.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Running: ${this.running}`);
+    if (this.game.paused && !manual) {
+      console.log(`[TICK-EXIT DEBUG] Early exit: Game is paused (manual=${manual})`);
+      this.game.logger?.debug('[TICK ABORTED] Game is paused.');
+      return;
+    }
+    this.game.logger?.groupCollapsed(`Processing Tick #${currentTickNumber} (Manual: ${manual})`);
+    try {
+      // Immediately check for meltdown condition before any processing
+      if (this.game.reactor.has_melted_down) {
+        console.log(`[TICK-EXIT DEBUG] Early exit: Reactor already in meltdown state`);
+        this.game.logger?.debug(`[TICK ABORTED] Reactor already in meltdown state.`);
+        this.game.logger?.groupEnd();
+        return;
+      }
+      if (this.game.reactor.checkMeltdown()) {
+        console.log(`[TICK-EXIT DEBUG] Early exit: Meltdown triggered at start of tick`);
+        this.game.logger?.warn(`[TICK ABORTED] Meltdown triggered at start of tick.`);
+        this.game.logger?.groupEnd();
+        return;
+      }
+      
+      if (this.game.logger) {
+        this.game.logger.debug(`Manual: ${manual}, Paused: ${this.game.paused}, Running: ${this.running}`);
+      }
     // Only measure tick performance if performance monitoring is enabled
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markStart("tick_total");
@@ -269,6 +319,8 @@ export class Engine {
     const reactor = this.game.reactor;
     const tileset = this.game.tileset;
     const ui = this.game.ui;
+    console.log(`[TICK START] Paused: ${this.game.paused}, Heat: ${reactor.current_heat.toFixed(2)}`);
+    this.game.logger?.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Reactor Heat: ${reactor.current_heat.toFixed(2)}`);
     // Pre-allocate visual events array for better performance
     // Increased size to handle complex reactor layouts with many parts
     const visualEvents = new Array(200); // Increased from 100 to 200 for better performance
@@ -276,6 +328,8 @@ export class Engine {
 
     // Update engine status indicator for tick
     if (ui && ui.stateManager) {
+      const prevStatus = ui.stateManager.getVar("engine_status");
+      console.log(`[TICK-PROGRESS DEBUG] Setting engine_status: ${prevStatus} -> tick`);
       ui.stateManager.setVar("engine_status", "tick");
     }
 
@@ -285,28 +339,32 @@ export class Engine {
     }
 
     // Don't process ticks if the game is paused
-    if (this.game.paused) {
+    if (this.game.paused && !manual) {
+      console.log(`[TICK-EXIT DEBUG] Early exit: Game is paused (second check, manual=${manual})`);
+      this.game.logger?.debug('Tick skipped: Game is paused.');
       if (this.game.performance && this.game.performance.shouldMeasure()) {
         this.game.performance.markEnd("tick_total");
       }
+      this.game.logger?.groupEnd();
       return;
     }
 
     // Don't process ticks if engine is not running (for automatic ticks)
     if (!this.running && !manual) {
+      console.log(`[TICK-EXIT DEBUG] Early exit: Engine not running (running=${this.running}, manual=${manual})`);
+      this.game.logger?.debug('Tick skipped: Engine not running and not a manual tick.');
       if (this.game.performance && this.game.performance.shouldMeasure()) {
         this.game.performance.markEnd("tick_total");
       }
-      return;
-    }
-
-    if (reactor.has_melted_down) {
+      this.game.logger?.groupEnd();
       return;
     }
 
     // Force update part caches to ensure newly added parts are included
+    console.log(`[TICK-PROGRESS DEBUG] Before _updatePartCaches: _partCacheDirty=${this._partCacheDirty}`);
     this._partCacheDirty = true;
     this._updatePartCaches(); // Add this call at the beginning of the tick
+    console.log(`[TICK-PROGRESS DEBUG] After _updatePartCaches: active_vessels.length=${this.active_vessels.length}, active_cells.length=${this.active_cells.length}`);
     this._updateValveNeighborCache(); // Update valve neighbor cache
 
     // Only measure categorize parts if performance monitoring is enabled
@@ -322,6 +380,8 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_categorize_parts");
     }
+    this.game.logger?.debug(`Processing ${active_cells.length} active cells and ${active_vessels.length} active vessels.`);
+    this.game.logger?.debug(`[TICK] Processing ${this.active_cells.length} cells...`);
 
     let power_add = 0;
     let heat_add = 0; // Re-introduced for globally added heat
@@ -336,6 +396,7 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markStart("tick_cells");
     }
+    let cellsProcessed = 0;
     this.active_cells.forEach((tile) => {
       const part = tile.part;
       if (!part || tile.exploded) return;
@@ -345,6 +406,7 @@ export class Engine {
         return;
       }
       power_add += tile.power;
+      cellsProcessed++;
 
       if (tile.power > 0) {
         const count = tile.power >= 200 ? 3 : tile.power >= 50 ? 2 : 1;
@@ -358,13 +420,17 @@ export class Engine {
           // visualEvents[visualEventIndex++] = { type: 'emit', part: 'cell', icon: 'heat', tile: [tile.row, tile.col] };
         }
       }
+      this.game.logger?.debug(`[HEAT-GEN] Cell (${tile.row},${tile.col}) generated ${tile.heat.toFixed(2)} heat.`);
       const heatNeighbors = tile.containmentNeighborTiles.filter(
         (t) => t.part && t.part.containment > 0
       );
       if (heatNeighbors.length > 0) {
+        this.game.logger?.debug(`[HEAT-TRANSFER] Cell (${tile.row},${tile.col}) has ${heatNeighbors.length} neighbors. Distributing heat.`);
         const heat_remove = Math.ceil(tile.heat / heatNeighbors.length);
         heatNeighbors.forEach((neighbor) => {
+          const heatBefore = neighbor.heat_contained;
           neighbor.heat_contained += heat_remove;
+          this.game.logger?.debug(`  -> Transfer to ${neighbor.part.id} at (${neighbor.row},${neighbor.col}): heat ${heatBefore.toFixed(2)} -> ${neighbor.heat_contained.toFixed(2)}`);
           // Visual: local containment receiving heat flow from cell - DISABLED for performance
           // visualEvents[visualEventIndex++] = {
           //   type: 'flow',
@@ -375,6 +441,7 @@ export class Engine {
           // };
         });
       } else {
+        this.game.logger?.debug(`[HEAT-GEN] Cell (${tile.row},${tile.col}) has no neighbors. Adding ${tile.heat.toFixed(2)} to global reactor heat.`);
         heat_add += tile.heat;
         // Visual: show heat going directly to reactor when no neighbors - DISABLED for performance
         // visualEvents[visualEventIndex++] = {
@@ -413,9 +480,14 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_cells");
     }
+    this.game.logger?.debug(`Cell processing complete. Cells processed: ${cellsProcessed}. Power Added: ${power_add.toFixed(2)}, Heat Added to Reactor: ${heat_add.toFixed(2)}`);
+    this.game.logger?.debug(`[TICK] After cells: Power generated=${power_add.toFixed(2)}, Heat to reactor=${heat_add.toFixed(2)}`);
 
     // Add only the globally-directed heat to the reactor.
     reactor.current_heat += heat_add;
+    console.log(`[TICK STAGE] After Cells: Heat generated into reactor: ${heat_add.toFixed(2)}. Reactor Heat is now: ${reactor.current_heat.toFixed(2)}`);
+    this.game.logger?.debug(`[TICK STAGE] After cell processing: Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
+    this.game.logger?.debug(`[TICK] Reactor state after cells: Power=${reactor.current_power.toFixed(2)}, Heat=${reactor.current_heat.toFixed(2)}`);
     if (heat_add > 0) {
       // Heat added to reactor
     }
@@ -454,6 +526,7 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_inlets");
     }
+    this.game.logger?.debug(`[TICK STAGE] After heat transfer (inlets): Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
     // Valves (directional heat transfer with conditional logic)
     if (this.game.performance && this.game.performance.shouldMeasure()) {
@@ -820,6 +893,7 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_exchangers");
     }
+    this.game.logger?.debug(`[TICK STAGE] After heat transfer (exchangers): Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
     // Outlets
     if (this.game.performance && this.game.performance.shouldMeasure()) {
@@ -877,11 +951,13 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_outlets");
     }
+    this.game.logger?.debug(`[TICK STAGE] After heat transfer (outlets): Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
     // End the overall heat transfer measurement
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_heat_transfer");
     }
+    console.log(`[TICK STAGE] After Heat Transfer Logic: Reactor Heat is now: ${reactor.current_heat.toFixed(2)}`);
 
     // Process Particle Accelerators and Extreme Capacitors
     if (this.game.performance && this.game.performance.shouldMeasure()) {
@@ -890,17 +966,48 @@ export class Engine {
 
     const ep_chance_percent = 1 + this.game.total_exotic_particles / 100;
     let ep_chance_add = 0;
+    let paCount = 0;
+    console.log(`[EP-GEN DEBUG] Starting EP generation check. active_vessels count: ${this.active_vessels.length}, total_exotic_particles: ${this.game.total_exotic_particles}`);
+    
+    if (this.active_vessels.length === 0) {
+      console.log(`[EP-GEN DEBUG] No active vessels found. Checking all tiles for PAs...`);
+      console.log(`[EP-GEN DEBUG] Grid size: rows=${this.game._rows}, cols=${this.game._cols}`);
+      let paFoundCount = 0;
+      for (let r = 0; r < this.game._rows; r++) {
+        for (let c = 0; c < this.game._cols; c++) {
+          const tile = this.game.tileset.getTile(r, c);
+          if (tile?.part?.category === "particle_accelerator") {
+            paFoundCount++;
+            const part = tile.part;
+            console.log(`[EP-GEN DEBUG] Found PA at (${r},${c}) but not in active_vessels: part=${part.id}, part.vent=${part.vent}, part.containment=${part.containment}, activated=${tile.activated}, heat=${tile.heat_contained}, ep_heat=${part.ep_heat}`);
+          }
+        }
+      }
+      console.log(`[EP-GEN DEBUG] Total PAs found in grid but not in active_vessels: ${paFoundCount}`);
+    }
+    
     this.active_vessels.forEach((tile) => {
       const part = tile.part;
 
       // EP generation from particle accelerators (still handled per-tile)
-      if (part && part.category === "particle_accelerator" && tile.heat_contained > 0) {
-        const lower_heat = Math.min(tile.heat_contained, part.ep_heat);
-        ep_chance_add +=
-          (Math.log(lower_heat) / Math.log(10)) * (lower_heat / part.ep_heat);
+      if (part && part.category === "particle_accelerator") {
+        paCount++;
+        console.log(`[EP-GEN DEBUG] Found PA at (${tile.row},${tile.col}): part=${part.id}, heat_contained=${tile.heat_contained}, ep_heat=${part.ep_heat}, activated=${tile.activated}`);
+        if (tile.heat_contained > 0) {
+          const lower_heat = Math.min(tile.heat_contained, part.ep_heat);
+          const chance = (Math.log(lower_heat) / Math.log(10)) * (lower_heat / part.ep_heat);
+          ep_chance_add += chance;
+          this.game.logger?.debug(`[EP-GEN] PA at (${tile.row},${tile.col}) has ${tile.heat_contained.toFixed(2)} heat. Contributing to EP chance.`);
+          this.game.logger?.debug(`[EP-GEN] PA at (${tile.row},${tile.col}): heat=${tile.heat_contained.toFixed(2)}, ep_heat_cap=${part.ep_heat}, chance_added=${chance.toFixed(4)}`);
+          console.log(`[EP-GEN DEBUG] PA at (${tile.row},${tile.col}) contributing ${chance.toFixed(4)} to EP chance (lower_heat=${lower_heat}, log10=${(Math.log(lower_heat) / Math.log(10)).toFixed(4)}, ratio=${(lower_heat / part.ep_heat).toFixed(4)})`);
+        } else {
+          console.log(`[EP-GEN DEBUG] PA at (${tile.row},${tile.col}) has no heat (${tile.heat_contained}), skipping EP generation`);
+        }
       }
     });
 
+    console.log(`[EP-GEN DEBUG] Total PAs found: ${paCount}, Total EP chance: ${ep_chance_add.toFixed(4)}`);
+    this.game.logger?.debug(`[EP-GEN] Total EP chance for this tick: ${ep_chance_add}`);
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_particle_accelerators");
     }
@@ -948,9 +1055,10 @@ export class Engine {
     for (const tile of activeVents) {
       if (!tile.part || tile.exploded) continue;
 
-      const effectiveTransferValue = tile.getEffectiveTransferValue();
+      const effectiveVentValue = tile.getEffectiveVentValue();
+      const heatBeforeVent = tile.heat_contained;
       let vent_reduce = Math.min(
-        effectiveTransferValue,
+        effectiveVentValue,
         tile.heat_contained
       );
 
@@ -961,6 +1069,7 @@ export class Engine {
         reactor.current_power -= powerToConsume;
       }
       tile.heat_contained -= vent_reduce;
+      this.game.logger?.debug(`[VENT] Vent (${tile.row},${tile.col}) reduced its heat from ${heatBeforeVent.toFixed(2)} to ${tile.heat_contained.toFixed(2)}.`);
       if (vent_reduce > 0) {
         const cnt = vent_reduce >= 50 ? 3 : vent_reduce >= 15 ? 2 : 1;
         for (let i = 0; i < cnt; i++) {
@@ -981,6 +1090,8 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_vents");
     }
+    console.log(`[TICK STAGE] After Venting Logic: Reactor Heat is now: ${reactor.current_heat.toFixed(2)}`);
+    this.game.logger?.debug(`[TICK STAGE] After vent processing: Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
     // Add generated power to reactor
     reactor.current_power += Math.round(power_add);
@@ -991,9 +1102,28 @@ export class Engine {
     if (ep_chance_add > 0) {
       let ep_gain =
         Math.floor(ep_chance_add) + (Math.random() < ep_chance_add % 1 ? 1 : 0);
+      console.log(`[EP-GEN DEBUG] EP chance_add=${ep_chance_add.toFixed(4)}, ep_gain=${ep_gain}, random=${(ep_chance_add % 1).toFixed(4)}`);
       if (ep_gain > 0) {
+        const epBefore = this.game.exotic_particles;
+        const currentBefore = this.game.current_exotic_particles;
+        const totalBefore = this.game.total_exotic_particles;
         this.game.exotic_particles += ep_gain;
+        this.game.total_exotic_particles += ep_gain;
+        this.game.current_exotic_particles += ep_gain;
+        const debugEpGen = typeof process !== 'undefined' && process.env.DEBUG_REBOOT === 'true';
+        if (debugEpGen) {
+          console.log(`[EP-GEN DEBUG] EP gained: ${ep_gain}`);
+          console.log(`[EP-GEN DEBUG]   exotic_particles: ${epBefore} -> ${this.game.exotic_particles}`);
+          console.log(`[EP-GEN DEBUG]   total_exotic_particles: ${totalBefore} -> ${this.game.total_exotic_particles} (updated live - includes current run)`);
+          console.log(`[EP-GEN DEBUG]   current_exotic_particles: ${currentBefore} -> ${this.game.current_exotic_particles}`);
+          console.log(`[EP-GEN DEBUG]   ⚠️  NOTE: total_exotic_particles is updated live during ticks and already includes all EP from current run`);
+        }
         ui.stateManager.setVar("exotic_particles", this.game.exotic_particles);
+        ui.stateManager.setVar("total_exotic_particles", this.game.total_exotic_particles);
+        ui.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
+        if (debugEpGen) {
+          console.log(`[EP-GEN DEBUG] StateManager updated: exotic_particles=${ui.stateManager.getVar("exotic_particles")}, total_exotic_particles=${ui.stateManager.getVar("total_exotic_particles")}, current_exotic_particles=${ui.stateManager.getVar("current_exotic_particles")}`);
+        }
         // Visual: EP emission from accelerators towards EP display (limit burst count)
         try {
           if (this.game.ui && typeof this.game.ui.emitEP === 'function') {
@@ -1007,7 +1137,11 @@ export class Engine {
             }
           }
         } catch (_) { /* ignore in test env */ }
+      } else {
+        console.log(`[EP-GEN DEBUG] ep_gain is 0 despite ep_chance_add > 0`);
       }
+    } else {
+      console.log(`[EP-GEN DEBUG] ep_chance_add is 0, no EP generation this tick`);
     }
 
     // Only measure tick stats if performance monitoring is enabled
@@ -1026,6 +1160,7 @@ export class Engine {
     }
 
     // Auto-sell logic - move this after power multiplier is applied
+    this.game.logger?.debug(`[TICK STAGE] Before auto-sell: Reactor Power = ${reactor.current_power.toFixed(2)}`);
     if (ui.stateManager.getVar("auto_sell")) {
       const sell_amount = Math.min(
         reactor.current_power,
@@ -1034,6 +1169,7 @@ export class Engine {
       if (sell_amount > 0) {
         const powerBeforeSell = reactor.current_power;
         reactor.current_power -= sell_amount;
+        this.game.logger?.debug(`Auto-selling ${sell_amount} power for $${sell_amount}. Power: ${powerBeforeSell.toFixed(2)} -> ${reactor.current_power.toFixed(2)}`);
         this.game.current_money += sell_amount;
         ui.stateManager.setVar("current_money", this.game.current_money);
       }
@@ -1042,10 +1178,13 @@ export class Engine {
     if (reactor.current_power > reactor.max_power)
       reactor.current_power = reactor.max_power;
 
+    this.game.logger?.debug(`[TICK] Before auto-venting: Reactor Heat=${reactor.current_heat.toFixed(2)}, Heat Controlled=${reactor.heat_controlled}`);
     if (reactor.current_heat > 0 && reactor.heat_controlled) {
       // Auto heat reduction - only active when heat_controlled is true
-      const ventMultiplier = reactor.vent_multiplier || 1;
-      reactor.current_heat -= (reactor.max_heat / 10000) * ventMultiplier;
+      const ventMultiplierBonus = reactor.vent_multiplier_eff || 0;
+      const reduction = (reactor.max_heat / 10000) * (1 + ventMultiplierBonus / 100);
+      reactor.current_heat -= reduction;
+      this.game.logger?.debug(`[TICK] Auto-venting reduced heat by ${reduction.toFixed(2)}`);
     }
     if (reactor.current_heat < 0) reactor.current_heat = 0;
 
@@ -1066,8 +1205,8 @@ export class Engine {
       this.game.updateSessionTime();
       this.last_session_update = now;
     }
-
-    if (reactor.checkMeltdown()) this.stop();
+    console.log(`[TICK END] Final check. Reactor Heat: ${reactor.current_heat.toFixed(2)}. Max Heat: ${reactor.max_heat.toFixed(2)}.`);
+    this.game.logger?.debug(`[TICK STAGE] Before final meltdown check: Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
     // Flush visual events once per tick - OPTIMIZED for performance
     // Since most visual events are disabled, this is now much more efficient
@@ -1080,6 +1219,8 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_total");
     }
+    const duration = performance.now() - tickStart;
+    this.game.logger?.debug(`Tick finished in ${duration.toFixed(2)}ms. Final State - Power: ${reactor.current_power.toFixed(2)}, Heat: ${reactor.current_heat.toFixed(2)}`);
     this.tick_count = (this.tick_count || 0) + 1; // Increment tick_count at the end of each tick
 
     // Flush visual events to the game buffer once per tick - OPTIMIZED
@@ -1088,6 +1229,27 @@ export class Engine {
       // Enqueueing visual events - now processes minimal events for better performance
       this.game.enqueueVisualEvents(visualEvents.slice(0, visualEventIndex));
     }
+    
+    // Update engine status back to stopped after tick completes
+    if (ui && ui.stateManager) {
+      const prevStatus = ui.stateManager.getVar("engine_status");
+      console.log(`[TICK-EXIT DEBUG] Setting engine_status: ${prevStatus} -> stopped (tick complete)`);
+      ui.stateManager.setVar("engine_status", "stopped");
+    }
+    console.log(`[TICK-EXIT DEBUG] _processTick completed successfully: tick_count=${this.tick_count}, duration=${duration.toFixed(2)}ms`);
+    } catch (error) {
+      console.error(`[TICK-ERROR DEBUG] Error in _processTick:`, error);
+      if (ui && ui.stateManager) {
+        const prevStatus = ui.stateManager.getVar("engine_status");
+        console.log(`[TICK-ERROR DEBUG] Setting engine_status: ${prevStatus} -> stopped (error)`);
+        ui.stateManager.setVar("engine_status", "stopped");
+      }
+      throw error;
+    } finally {
+      this.game.logger?.groupEnd();
+    }
+    const tickDuration = performance.now() - tickStart;
+    this.game.debugHistory.add('engine', 'tick', { number: currentTickNumber, duration: tickDuration });
   }
 
   handleComponentDepletion(tile) {
@@ -1097,6 +1259,9 @@ export class Engine {
   handleComponentExplosion(tile) {
     // Mark the tile as exploded to prevent further processing
     tile.exploded = true;
+    if (this.game.audio) {
+      this.game.audio.play('explosion');
+    }
 
     // Add the component's heat to the reactor before it's cleared
     if (tile && tile.heat_contained > 0) {

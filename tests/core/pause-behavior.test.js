@@ -21,10 +21,7 @@ describe("Pause Behavior", () => {
 
         // Set initial reactor heat
         const initialHeat = game.reactor.current_heat;
-
-        // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
 
         // Process multiple ticks while paused
@@ -36,8 +33,7 @@ describe("Pause Behavior", () => {
         expect(game.reactor.current_heat).toBe(initialHeat);
 
         // Unpause the game
-        game.ui.stateManager.setVar("pause", false);
-        game.onToggleStateChange("pause", false);
+        game.resume();
         expect(game.paused).toBe(false);
 
         // Process a tick while unpaused
@@ -65,8 +61,7 @@ describe("Pause Behavior", () => {
         };
 
         // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
 
         // Process multiple ticks while paused
@@ -79,8 +74,7 @@ describe("Pause Behavior", () => {
         expect(tile.part).toBe(ventPart); // Part should still exist
 
         // Unpause the game
-        game.ui.stateManager.setVar("pause", false);
-        game.onToggleStateChange("pause", false);
+        game.resume();
         expect(game.paused).toBe(false);
 
         // Process a tick while unpaused
@@ -114,10 +108,7 @@ describe("Pause Behavior", () => {
         // Add initial heat to coolant cell
         coolantTile.heat_contained = 1000;
         const initialHeat = coolantTile.heat_contained;
-
-        // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
 
         // Process the engine tick while paused
@@ -127,8 +118,7 @@ describe("Pause Behavior", () => {
         expect(coolantTile.heat_contained).toBe(initialHeat);
 
         // Unpause the game
-        game.ui.stateManager.setVar("pause", false);
-        game.onToggleStateChange("pause", false);
+        game.resume();
         expect(game.paused).toBe(false);
 
         // Process the engine tick again while unpaused
@@ -153,16 +143,14 @@ describe("Pause Behavior", () => {
         expect(game.engine.running).toBe(true);
 
         // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
 
         // Engine should stop when game is paused
         expect(game.engine.running).toBe(false);
 
         // Unpause the game
-        game.ui.stateManager.setVar("pause", false);
-        game.onToggleStateChange("pause", false);
+        game.resume();
         expect(game.paused).toBe(false);
 
         // Engine should start again when game is unpaused
@@ -193,9 +181,9 @@ describe("Pause Behavior", () => {
         const initialVentHeat = ventTile.heat_contained || 0;
         const initialCapacitorHeat = capacitorTile.heat_contained || 0;
 
-        // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.ui.stateManager.setGame(game);
+
+        game.togglePause();
         expect(game.paused).toBe(true);
 
         // Process multiple engine ticks while paused
@@ -209,10 +197,7 @@ describe("Pause Behavior", () => {
         expect(ventTile.heat_contained || 0).toBe(initialVentHeat);
         expect(capacitorTile.heat_contained || 0).toBe(initialCapacitorHeat);
 
-        // Unpause the game
-        game.ui.stateManager.setVar("pause", false);
-        game.onToggleStateChange("pause", false);
-        expect(game.paused).toBe(false);
+        game.togglePause();
 
         // Process a single tick while unpaused
         game.engine.tick();
@@ -235,8 +220,7 @@ describe("Pause Behavior", () => {
         tile.activated = true;
 
         // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
 
         // Get save state
@@ -244,7 +228,7 @@ describe("Pause Behavior", () => {
 
         // Create new game and load save state
         const newGame = await setupGame();
-        newGame.applySaveState(saveData);
+        await newGame.applySaveState(saveData);
 
         // Pause state should be preserved
         expect(newGame.paused).toBe(true);
@@ -253,8 +237,7 @@ describe("Pause Behavior", () => {
         expect(newGame.engine.running).toBe(false);
 
         // Unpause the new game
-        newGame.ui.stateManager.setVar("pause", false);
-        newGame.onToggleStateChange("pause", false);
+        newGame.resume();
         expect(newGame.paused).toBe(false);
 
         // Engine should start
@@ -274,8 +257,7 @@ describe("Pause Behavior", () => {
         const initialTicks = tile.ticks;
 
         // Pause the game
-        game.ui.stateManager.setVar("pause", true);
-        game.onToggleStateChange("pause", true);
+        game.pause();
         expect(game.paused).toBe(true);
 
         // Process multiple ticks while paused
@@ -287,8 +269,7 @@ describe("Pause Behavior", () => {
         expect(tile.ticks).toBe(initialTicks);
 
         // Unpause the game
-        game.ui.stateManager.setVar("pause", false);
-        game.onToggleStateChange("pause", false);
+        game.resume();
         expect(game.paused).toBe(false);
 
         // Process a tick while unpaused
@@ -308,32 +289,16 @@ describe("Pause Behavior", () => {
         // Wait for page to load
         await new Promise((resolve) => setTimeout(resolve, 100));
 
-        const pauseBanner = document.getElementById("pause_banner");
-        expect(pauseBanner).toBeTruthy();
-
-        // Initially, pause banner should be hidden
         expect(document.body.classList.contains("game-paused")).toBe(false);
 
-        // Pause the game
-        gameWithDOM.ui.stateManager.setVar("pause", true);
-        gameWithDOM.onToggleStateChange("pause", true);
-        expect(gameWithDOM.paused).toBe(true);
-
-        // Trigger UI update to show pause banner
+        gameWithDOM.pause();
         gameWithDOM.ui.updatePauseState();
-
-        // Pause banner should now be visible
+        expect(gameWithDOM.paused).toBe(true);
         expect(document.body.classList.contains("game-paused")).toBe(true);
 
-        // Unpause the game
-        gameWithDOM.ui.stateManager.setVar("pause", false);
-        gameWithDOM.onToggleStateChange("pause", false);
-        expect(gameWithDOM.paused).toBe(false);
-
-        // Trigger UI update to hide pause banner
+        gameWithDOM.resume();
         gameWithDOM.ui.updatePauseState();
-
-        // Pause banner should now be hidden
+        expect(gameWithDOM.paused).toBe(false);
         expect(document.body.classList.contains("game-paused")).toBe(false);
     });
 }); 

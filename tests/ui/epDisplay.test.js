@@ -29,50 +29,48 @@ describe('EP Info Bar Display', () => {
         expect(desktopValueEl).toBeDefined();
     });
 
-    it('should update EP display when exotic_particles state changes', () => {
+    it('should update EP display when exotic_particles are generated', async () => {
+        game.engine.start();
         const mobileEl = document.getElementById("info_ep");
         const desktopEl = document.getElementById("info_ep_desktop");
         const mobileValueEl = document.getElementById("info_ep_value");
         const desktopValueEl = document.getElementById("info_ep_value_desktop");
 
-        // Set EP to a positive value
-        game.exotic_particles = 150;
-        game.ui.stateManager.setVar("exotic_particles", 150);
+        const pa = game.partset.getPartById('particle_accelerator1');
+        const paTile = game.tileset.getTile(0, 2);
+        pa.ep_heat = 1000;
+        await paTile.setPart(pa);
+        paTile.heat_contained = 1000;
 
-        // Force the UI update queue to process
+        game.engine.tick();
+        expect(game.exotic_particles).toBeGreaterThan(0);
+
         game.ui.processUpdateQueue();
-
-        // Check that EP display elements are visible
-        expect(mobileEl.style.display).not.toBe("none");
-        expect(desktopEl.style.display).not.toBe("none");
-        expect(mobileValueEl.textContent).toBe("150");
-        expect(desktopValueEl.textContent).toBe("150");
+        const mobileContent = mobileEl.querySelector('.ep-content');
+        const desktopContent = desktopEl.querySelector('.ep-content');
+        expect(mobileContent.style.display).not.toBe("none");
+        expect(desktopContent.style.display).not.toBe("none");
     });
 
     it('should hide EP display when EP is zero', () => {
         const mobileEl = document.getElementById("info_ep");
         const desktopEl = document.getElementById("info_ep_desktop");
 
-        // Start with EP visible
-        game.exotic_particles = 10;
-        game.ui.stateManager.setVar("exotic_particles", 10);
+        game.ui.stateManager.setVar("current_exotic_particles", 10); // Use current_exotic_particles
         game.ui.processUpdateQueue();
 
         // FIX: Check the inner content element, not the parent
         expect(mobileEl.querySelector('.ep-content').style.display).not.toBe("none");
         expect(desktopEl.querySelector('.ep-content').style.display).not.toBe("none");
 
-        // Set EP to zero
-        game.exotic_particles = 0;
-        game.ui.stateManager.setVar("exotic_particles", 0);
+        game.ui.stateManager.setVar("current_exotic_particles", 0); // Use current_exotic_particles
         game.ui.processUpdateQueue();
 
-        // FIX: Check the inner content element again
         expect(mobileEl.querySelector('.ep-content').style.display).toBe("none");
         expect(desktopEl.querySelector('.ep-content').style.display).toBe("none");
     });
 
-    it('should show EP display immediately when loading saved game with EP', () => {
+    it('should show EP display immediately when loading saved game with EP', async () => {
         const mobileEl = document.getElementById("info_ep");
         const desktopEl = document.getElementById("info_ep_desktop");
         const mobileValueEl = document.getElementById("info_ep_value");
@@ -93,7 +91,7 @@ describe('EP Info Bar Display', () => {
         };
 
         // Apply the saved state
-        game.applySaveState(savedData);
+        await game.applySaveState(savedData);
 
         // Force the UI update queue to process
         game.ui.processUpdateQueue();

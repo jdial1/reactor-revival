@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, PageRouter, UI, Game } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, PageRouter, setupGameWithDOM } from "../helpers/setup.js";
 
 describe("PageRouter Grid Transition", () => {
     let pageRouter;
@@ -6,88 +6,16 @@ describe("PageRouter Grid Transition", () => {
     let game;
 
     beforeEach(async () => {
-        // Set up fake timers
         vi.useFakeTimers();
-
-        // Create mock DOM elements
-        const mockReactorElement = {
-            style: {
-                visibility: "visible"
-            }
-        };
-
-        const mockDOMElements = {
-            reactor: mockReactorElement
-        };
-
-        // Create UI mock
-        ui = {
-            DOMElements: mockDOMElements,
-            resizeReactor: vi.fn(),
-            showObjectivesForPage: vi.fn(),
-            initializePage: vi.fn(),
-            stateManager: {
-                getVar: vi.fn().mockReturnValue(false),
-                setVar: vi.fn()
-            }
-        };
-
-        // Create game mock
-        game = {
-            engine: {
-                start: vi.fn(),
-                stop: vi.fn()
-            },
-            reactor: { has_melted_down: false },
-            ui: ui // Add this line to correctly structure the mock
-        };
-
-        ui.game = game;
-
-        // Create page router
-        pageRouter = new PageRouter(ui);
-
-        // Mock DOM methods
-        global.document = {
-            querySelector: vi.fn().mockImplementation((selector) => {
-                if (selector === "#page_content_area") {
-                    return {
-                        appendChild: vi.fn(),
-                        classList: {
-                            add: vi.fn(),
-                            remove: vi.fn(),
-                            contains: vi.fn().mockReturnValue(true)
-                        }
-                    };
-                }
-                if (selector === "#main_top_nav" || selector === "#bottom_nav") {
-                    return {
-                        querySelectorAll: vi.fn().mockReturnValue([])
-                    };
-                }
-                return null;
-            }),
-            getElementById: vi.fn().mockReturnValue({
-                classList: {
-                    toggle: vi.fn()
-                }
-            })
-        };
-
-        global.window = {
-            location: {
-                hash: ""
-            }
-        };
-
-        // Mock document.body
-        global.document.body = {
-            className: "",
-            classList: {
-                add: vi.fn(),
-                remove: vi.fn()
-            }
-        };
+        const setup = await setupGameWithDOM();
+        game = setup.game;
+        ui = game.ui;
+        pageRouter = game.router;
+        
+        // Ensure reactor element exists and has style
+        if (ui.DOMElements.reactor) {
+            ui.DOMElements.reactor.style.visibility = "visible";
+        }
     });
 
     it("should hide grid when transitioning from upgrades to reactor", async () => {

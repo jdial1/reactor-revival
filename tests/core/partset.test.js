@@ -97,4 +97,19 @@ describe("Partset Mechanics", () => {
     expect(allParts.length).toBeGreaterThan(0);
     expect(allParts.every((part) => part.id && part.type)).toBe(true);
   });
+
+  it("should only show parts whose prerequisites are met", async () => {
+    const uranium1 = game.partset.getPartById("uranium1");
+    const uranium2 = game.partset.getPartById("uranium2");
+
+    // Initially, uranium2 should be locked
+    expect(game.isPartUnlocked(uranium2)).toBe(false);
+
+    // Place 10 uranium1 parts
+    for (let i = 0; i < 10; i++) {
+      game.incrementPlacedCount('uranium', 1);
+    }
+
+    expect(game.isPartUnlocked(uranium2)).toBe(true);
+  });
 });

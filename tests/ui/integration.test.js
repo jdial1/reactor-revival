@@ -123,23 +123,17 @@ describe("UI Integration and Gameplay", () => {
 
   it("should update money display after selling power", async () => {
     const initialMoney = game.current_money;
-    game.reactor.current_power = 1234;
+    game.reactor.current_power = 1234; // Set power to be sold
 
-    // Directly sell power (simulating what the button does)
-    game.current_money += game.reactor.current_power;
-    game.reactor.current_power = 0;
+    game.sell_action(); // Trigger the actual game action
 
+    expect(game.reactor.current_power).toBe(0);
     expect(game.current_money).toBe(initialMoney + 1234);
 
-    // Check that the money display exists
     const moneyDisplay = document.getElementById("info_money");
     expect(moneyDisplay, "Money display element should exist").not.toBeNull();
-
-    // Verify the StateManager can track the money value correctly
-    game.ui.stateManager.setVar("current_money", game.current_money);
-    expect(game.ui.stateManager.getVar("current_money")).toBe(
-      game.current_money
-    );
+    // Just verify the money display was updated, not the exact format
+    expect(moneyDisplay.textContent).toBeTruthy();
   });
 
   it("should purchase an upgrade and deduct cost", async () => {

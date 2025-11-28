@@ -1,0 +1,59 @@
+<section id="soundboard_section" class="page soundboard-page">
+<div class="pixel-panel is-inset">
+<header class="soundboard-header">
+<div>
+<h2>Audio Soundboard</h2>
+<p>Trigger any game sound for quick debugging.</p>
+</div>
+<div class="soundboard-actions">
+<label for="sound_warning_intensity">Warning Intensity <span id="sound_warning_value"></span></label>
+<input id="sound_warning_intensity" type="range" min="10" max="100" step="5" value="50" />
+<button class="pixel-btn sound-btn" data-sound="warning">Play Warning</button>
+</div>
+</header>
+<div class="soundboard-groups">
+<article class="soundboard-card">
+<h3>Placement</h3>
+<div class="soundboard-grid">
+<button class="pixel-btn sound-btn" data-sound="placement">Generic</button>
+<button class="pixel-btn sound-btn" data-sound="placement" data-subtype="cell">Cell</button>
+<button class="pixel-btn sound-btn" data-sound="placement" data-subtype="plating">Plating</button>
+<button class="pixel-btn sound-btn" data-sound="placement" data-subtype="vent">Vent</button>
+</div>
+</article>
+<article class="soundboard-card">
+<h3>Actions</h3>
+<div class="soundboard-grid">
+<button class="pixel-btn sound-btn" data-sound="sell">Sell</button>
+<button class="pixel-btn sound-btn" data-sound="upgrade">Upgrade</button>
+<button class="pixel-btn sound-btn" data-sound="click">Click</button>
+</div>
+</article>
+<article class="soundboard-card">
+<h3>Alerts</h3>
+<div class="soundboard-grid">
+<button class="pixel-btn sound-btn" data-sound="warning" data-category="alerts">Warning</button>
+<button class="pixel-btn sound-btn" data-sound="error" data-category="alerts">Error</button>
+<button class="pixel-btn sound-btn" data-sound="geiger" data-category="alerts">Geiger</button>
+</div>
+</article>
+<article class="soundboard-card">
+<h3>System</h3>
+<div class="soundboard-grid">
+<button class="pixel-btn sound-btn" data-sound="click" data-category="system">System Click</button>
+<button class="pixel-btn sound-btn" data-sound="upgrade" data-category="system">System Upgrade</button>
+</div>
+</article>
+<article class="soundboard-card">
+<h3>Events</h3>
+<div class="soundboard-grid">
+<button class="pixel-btn sound-btn" data-sound="explosion">Explosion</button>
+</div>
+</article>
+</div>
+<div class="soundboard-footer">
+<button class="secondary nav-btn" data-page="experimental_upgrades_section">Back to Research</button>
+</div>
+</div>
+</section>
+

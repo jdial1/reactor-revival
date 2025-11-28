@@ -57,49 +57,7 @@ describe("Debug Tests", () => {
   });
 
   it("should handle loading a game with negative objective index", async () => {
-    // Clear the global instance to ensure a fresh start
-    cleanupGame();
-
-    // Create a new game instance without using the global one
-    const ui = new UI();
-    ui.DOMElements = {
-      main: { classList: { toggle: vi.fn(), add: vi.fn(), remove: vi.fn() } },
-    };
-    ui.update_vars = new Map();
-    ui.cacheDOMElements = vi.fn(() => true);
-    ui.resizeReactor = vi.fn();
-    ui.updateAllToggleBtnStates = vi.fn();
-    ui.updateToggleButtonState = vi.fn();
-    ui.showPage = vi.fn();
-
-    // Mock stateManager methods after UI is created
-    if (ui.stateManager) {
-      ui.stateManager.handlePartAdded = vi.fn();
-      ui.stateManager.handleUpgradeAdded = vi.fn();
-      ui.stateManager.handleObjectiveCompleted = vi.fn();
-      ui.stateManager.handleObjectiveUnloaded = vi.fn();
-      ui.stateManager.setVar = vi.fn();
-    }
-
-    const testGame = new Game(ui);
-    await ui.init(testGame);
-    testGame.engine = new Engine(testGame);
-
-    // Create objective manager
-    testGame.objectives_manager = new ObjectiveManager(testGame);
-    await testGame.objectives_manager.initialize();
-
-    testGame.tileset.initialize();
-    await testGame.partset.initialize();
-    await testGame.upgradeset.initialize();
-
-    // Don't call set_defaults() here as we want to test the applySaveState behavior
-    testGame.current_money = 1e30;
-    testGame.exotic_particles = 1e20;
-    testGame.current_exotic_particles = 1e20;
-    testGame.partset.check_affordability(testGame);
-    testGame.upgradeset.check_affordability(testGame);
-    testGame.reactor.updateStats();
+    const testGame = await setupGame();
 
     // Create save data with negative objective index
     const saveData = {
@@ -134,49 +92,7 @@ describe("Debug Tests", () => {
   });
 
   it("should handle loading a game with string objective index", async () => {
-    // Clear the global instance to ensure a fresh start
-    cleanupGame();
-
-    // Create a new game instance without using the global one
-    const ui = new UI();
-    ui.DOMElements = {
-      main: { classList: { toggle: vi.fn(), add: vi.fn(), remove: vi.fn() } },
-    };
-    ui.update_vars = new Map();
-    ui.cacheDOMElements = vi.fn(() => true);
-    ui.resizeReactor = vi.fn();
-    ui.updateAllToggleBtnStates = vi.fn();
-    ui.updateToggleButtonState = vi.fn();
-    ui.showPage = vi.fn();
-
-    // Mock stateManager methods after UI is created
-    if (ui.stateManager) {
-      ui.stateManager.handlePartAdded = vi.fn();
-      ui.stateManager.handleUpgradeAdded = vi.fn();
-      ui.stateManager.handleObjectiveCompleted = vi.fn();
-      ui.stateManager.handleObjectiveUnloaded = vi.fn();
-      ui.stateManager.setVar = vi.fn();
-    }
-
-    const testGame = new Game(ui);
-    await ui.init(testGame);
-    testGame.engine = new Engine(testGame);
-
-    // Create objective manager
-    testGame.objectives_manager = new ObjectiveManager(testGame);
-    await testGame.objectives_manager.initialize();
-
-    testGame.tileset.initialize();
-    await testGame.partset.initialize();
-    await testGame.upgradeset.initialize();
-
-    // Don't call set_defaults() here as we want to test the applySaveState behavior
-    testGame.current_money = 1e30;
-    testGame.exotic_particles = 1e20;
-    testGame.current_exotic_particles = 1e20;
-    testGame.partset.check_affordability(testGame);
-    testGame.upgradeset.check_affordability(testGame);
-    testGame.reactor.updateStats();
+    const testGame = await setupGame();
 
     // Create save data with string objective index
     const saveData = {
@@ -194,6 +110,23 @@ describe("Debug Tests", () => {
 
     // Verify the index is converted to number (the applySaveState method should handle this)
     console.log(`Expected: 5, Actual: ${testGame.objectives_manager.current_objective_index}`);
+    expect(testGame.objectives_manager.current_objective_index).toBe(5);
+  });
+
+  it("should handle loading a game with decimal objective index", async () => {
+    const testGame = await setupGame();
+
+    const saveData = {
+      version: "1.4.0",
+      objectives: {
+        current_objective_index: 5.7
+      }
+    };
+
+    await testGame.applySaveState(saveData);
+
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     expect(testGame.objectives_manager.current_objective_index).toBe(5);
   });
 });

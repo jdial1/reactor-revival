@@ -10,7 +10,12 @@ export class StateManager {
     this.game = gameInstance;
   }
   setVar(key, value) {
-    if (this.vars.get(key) === value) return;
+    const oldValue = this.vars.get(key);
+    if (oldValue === value) {
+      console.log(`[STATE-MANAGER DEBUG] setVar skipped (unchanged): ${key}=${value}`);
+      return;
+    }
+    console.log(`[STATE-MANAGER DEBUG] setVar: ${key}=${oldValue} -> ${value}`);
     this.vars.set(key, value);
     this.ui.update_vars.set(key, value);
     if (this.game && this.game.onToggleStateChange) {
@@ -387,18 +392,17 @@ export class StateManager {
 
   handleObjectiveLoaded(objective, objectiveIndex = null) {
     // Update the current objective title and reward
-    const titleEl = this.ui.DOMElements.objective_title;
+    const titleEl = this.ui.DOMElements.objective_current_title;
     const rewardEl = this.ui.DOMElements.objective_reward;
     const oldObjectivesEl = this.ui.DOMElements.objectives_old;
     if (titleEl && objective.title) {
       // Move the previous objective to the old objectives list
-      const prevSpan = titleEl.querySelector("span");
-      const prevTitle = prevSpan?.textContent;
+      const prevTitle = titleEl.textContent;
       if (prevTitle && prevTitle !== objective.title && oldObjectivesEl) {
         const oldObj = document.createElement("div");
         oldObj.className = "objective-old";
         // Use innerHTML to preserve any existing part icons
-        oldObj.innerHTML = prevSpan?.innerHTML || prevTitle;
+        oldObj.innerHTML = titleEl.innerHTML || prevTitle;
         oldObjectivesEl.prepend(oldObj);
       }
       // Set the new objective with objective number prefix and part icons
@@ -406,7 +410,7 @@ export class StateManager {
       const currentIndex = objectiveIndex !== null ? objectiveIndex : (this.game?.objectives_manager?.current_objective_index ?? 0);
       const objectiveNumber = currentIndex + 1;
       const processedTitle = this.addPartIconsToTitle(objective.title);
-      titleEl.innerHTML = `<span>${objectiveNumber}: ${processedTitle}</span>`;
+      titleEl.innerHTML = `${objectiveNumber}: ${processedTitle}`;
 
       // Add green border if completed
       const objectivesSection = this.ui.DOMElements.objectives_section;
@@ -420,10 +424,7 @@ export class StateManager {
 
       // Always add scrolling animation for objective text
       setTimeout(() => {
-        const span = titleEl.querySelector('span');
-        if (span) {
-          span.style.animation = 'scroll-objective-title 8s linear infinite';
-        }
+        titleEl.style.animation = 'scroll-objective-title 8s linear infinite';
       }, 100);
     }
     if (rewardEl && (objective.reward || objective.ep_reward)) {
@@ -461,12 +462,9 @@ export class StateManager {
 
   // Always enable objective text scrolling
   checkObjectiveTextScrolling() {
-    const titleEl = this.ui.DOMElements.objective_title;
+    const titleEl = this.ui.DOMElements.objective_current_title;
     if (titleEl) {
-      const span = titleEl.querySelector('span');
-      if (span) {
-        span.style.animation = 'scroll-objective-title 8s linear infinite';
-      }
+      titleEl.style.animation = 'scroll-objective-title 8s linear infinite';
     }
   }
 }

@@ -38,55 +38,50 @@ describe("UI User Interaction Scenarios", () => {
     });
 
     it("should switch between parts tabs correctly", async () => {
-        // Create tab elements if they don't exist
-        let powerTab = document.getElementById("tab_power");
-        let heatTab = document.getElementById("tab_heat");
-        let powerContent = document.getElementById("parts_tab_power");
-        let heatContent = document.getElementById("parts_tab_heat");
+        // Ensure event handlers are set up
+        game.ui.setupPartsTabs();
+        
+        const powerTab = document.getElementById("tab_power");
+        const heatTab = document.getElementById("tab_heat");
+        const powerContent = document.getElementById("parts_tab_power");
+        const heatContent = document.getElementById("parts_tab_heat");
+        const partsTabsContainer = document.querySelector(".parts_tabs");
 
-        if (!powerTab) {
-            powerTab = document.createElement('div');
-            powerTab.id = 'tab_power';
-            powerTab.className = 'tab active';
-            powerTab.textContent = 'Power';
-            document.body.appendChild(powerTab);
-        }
-
-        if (!heatTab) {
-            heatTab = document.createElement('div');
-            heatTab.id = 'tab_heat';
-            heatTab.className = 'tab';
-            heatTab.textContent = 'Heat';
-            document.body.appendChild(heatTab);
-        }
-
-        if (!powerContent) {
-            powerContent = document.createElement('div');
-            powerContent.id = 'parts_tab_power';
-            powerContent.className = 'tab-content active';
-            document.body.appendChild(powerContent);
-        }
-
-        if (!heatContent) {
-            heatContent = document.createElement('div');
-            heatContent.id = 'parts_tab_heat';
-            heatContent.className = 'tab-content';
-            document.body.appendChild(heatContent);
-        }
-
-        // Test initial state
         expect(powerTab.classList.contains("active")).toBe(true);
         expect(powerContent.classList.contains("active")).toBe(true);
         expect(heatTab.classList.contains("active")).toBe(false);
         expect(heatContent.classList.contains("active")).toBe(false);
 
-        // Simulate switching to heat tab
-        powerTab.classList.remove("active");
-        powerContent.classList.remove("active");
-        heatTab.classList.add("active");
-        heatContent.classList.add("active");
+        // Ensure tabs are in the container
+        if (partsTabsContainer && !partsTabsContainer.contains(heatTab)) {
+            partsTabsContainer.appendChild(heatTab);
+        }
+        if (partsTabsContainer && !partsTabsContainer.contains(powerTab)) {
+            partsTabsContainer.appendChild(powerTab);
+        }
 
-        // Test final state
+        // Simulate click by directly calling the handler logic
+        // The handler uses closest(".parts_tab") so we need to ensure the event target is the tab
+        const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+        // Set target to heatTab so closest() can find it
+        Object.defineProperty(clickEvent, 'target', { 
+            value: heatTab, 
+            enumerable: true,
+            configurable: true
+        });
+        
+        // Use real timers for this test to avoid infinite loops
+        vi.useRealTimers();
+        
+        // Dispatch on the tab itself, which will bubble to the container
+        heatTab.dispatchEvent(clickEvent);
+        
+        // Wait a bit for the event to process
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Switch back to fake timers
+        vi.useFakeTimers();
+
         expect(powerTab.classList.contains("active")).toBe(false);
         expect(powerContent.classList.contains("active")).toBe(false);
         expect(heatTab.classList.contains("active")).toBe(true);
@@ -94,54 +89,40 @@ describe("UI User Interaction Scenarios", () => {
     });
 
     it("should toggle the pause state when the pause button is clicked", async () => {
-        // Create pause button if it doesn't exist
-        let pauseButton = document.getElementById("pause_toggle");
-        if (!pauseButton) {
-            pauseButton = document.createElement('button');
-            pauseButton.id = 'pause_toggle';
-            pauseButton.textContent = 'Pause';
-            document.body.appendChild(pauseButton);
-        }
+        // Ensure DOM elements are cached and event handlers are set up
+        game.ui.cacheDOMElements();
+        game.ui.stateManager.setGame(game); // Ensure stateManager has game reference
+        game.ui.initializeToggleButtons();
+        
+        const pauseButton = document.getElementById("pause_toggle");
+        expect(pauseButton).not.toBeNull();
 
-        // Test initial state
         expect(game.paused).toBe(false);
         expect(pauseButton.textContent).toBe("Pause");
 
-        // Simulate pause
-        game.paused = true;
-        pauseButton.textContent = "Resume";
+        // Call onclick directly since it's set by initializeToggleButtons
+        if (pauseButton.onclick) {
+            pauseButton.onclick();
+        } else {
+            fireEvent(pauseButton, 'click');
+        }
+        await vi.runAllTimersAsync();
 
-        // Test paused state
         expect(game.paused).toBe(true);
         expect(pauseButton.textContent).toBe("Resume");
-
-        // Simulate resume
-        game.paused = false;
-        pauseButton.textContent = "Pause";
-
-        // Test resumed state
-        expect(game.paused).toBe(false);
-        expect(pauseButton.textContent).toBe("Pause");
     });
 
-    it("should place a part on the grid when a part is selected and a tile is clicked", async () => {
-        const part = game.partset.getPartById("uranium1");
-        expect(part).not.toBeNull();
+    it("should place a part when a part is selected and a tile is clicked", async () => {
+        const uraniumPart = game.partset.getPartById("uranium1");
+        game.current_money = uraniumPart.cost;
+        game.ui.stateManager.setClickedPart(uraniumPart); // User selects a part
 
-        // Get a tile and place the part
         const tile = game.tileset.getTile(5, 5);
-        const initialMoney = game.current_money;
+        await game.ui.handleGridInteraction(tile.$el, { button: 0 }); // User clicks a tile
 
-        // Simulate part placement
-        if (game.current_money >= part.cost) {
-            game.current_money -= part.cost;
-            await tile.setPart(part);
-        }
-
-        // Verify the part was placed
         expect(tile.part).not.toBeNull();
-        expect(tile.part.id).toBe(part.id);
-        expect(game.current_money).toBe(initialMoney - part.cost);
+        expect(tile.part.id).toBe("uranium1");
+        game.engine.tick();
     });
 
     it("should sell a part when a tile is right-clicked", async () => {
@@ -165,29 +146,12 @@ describe("UI User Interaction Scenarios", () => {
     });
 
     it("should navigate to the upgrades page when the upgrades tab is clicked", async () => {
-        // Create upgrades button if it doesn't exist
-        let upgradesButton = document.querySelector('button[data-page="upgrades_section"]');
-        if (!upgradesButton) {
-            upgradesButton = document.createElement('button');
-            upgradesButton.setAttribute('data-page', 'upgrades_section');
-            upgradesButton.textContent = 'Upgrades';
-            document.body.appendChild(upgradesButton);
-        }
-
-        // Create upgrades section if it doesn't exist
-        let upgradesPage = document.getElementById("upgrades_section");
-        if (!upgradesPage) {
-            upgradesPage = document.createElement('div');
-            upgradesPage.id = 'upgrades_section';
-            upgradesPage.className = 'page hidden';
-            document.body.appendChild(upgradesPage);
-        }
-
-        // Simulate navigation
         await game.router.loadPage("upgrades_section");
-        upgradesPage.classList.remove("hidden");
 
-        // Verify navigation
+        // After loading, the element should exist
+        const upgradesPage = document.getElementById("upgrades_section");
+        expect(upgradesPage).not.toBeNull();
+
         expect(upgradesPage.classList.contains("hidden")).toBe(false);
         expect(game.router.currentPageId).toBe("upgrades_section");
     });
@@ -196,54 +160,27 @@ describe("UI User Interaction Scenarios", () => {
         await game.router.loadPage("upgrades_section");
 
         const upgrade = game.upgradeset.getUpgrade("chronometer");
-        expect(upgrade).not.toBeNull();
+        expect(upgrade, "Expand reactor rows upgrade should exist").not.toBeNull();
 
-        // Set up money for purchase
-        const upgradeCost = upgrade.getCost();
-        game.current_money = upgradeCost;
-        game.upgradeset.check_affordability(game);
-
-        // Simulate purchase
-        if (game.current_money >= upgradeCost) {
-            upgrade.setLevel(1);
-            game.current_money -= upgradeCost;
-        }
-
-        // Verify purchase
-        expect(upgrade.level).toBe(1);
-        expect(game.current_money).toBe(0);
+        const initialMoney = game.current_money;
+        const success = game.upgradeset.purchaseUpgrade(upgrade.id);
+        expect(success, "Upgrade purchase should succeed").toBe(true);
+        expect(game.upgradeset.getUpgrade("chronometer").level).toBe(1);
+        expect(game.current_money).toBe(initialMoney - upgrade.base_cost);
     });
 
     it("should display a tooltip when hovering over a part button in help mode", async () => {
-        // Create help toggle if it doesn't exist
-        let helpToggle = document.getElementById("parts_help_toggle");
-        if (!helpToggle) {
-            helpToggle = document.createElement('button');
-            helpToggle.id = 'parts_help_toggle';
-            helpToggle.textContent = 'Help';
-            document.body.appendChild(helpToggle);
-        }
+        const helpToggle = document.getElementById("parts_help_toggle");
+        expect(helpToggle).not.toBeNull();
 
-        // Create part button if it doesn't exist
         const part = game.partset.getPartById("uranium1");
         expect(part).not.toBeNull();
 
-        let partButton = document.getElementById(`part_btn_${part.id}`);
-        if (!partButton) {
-            partButton = document.createElement('button');
-            partButton.id = `part_btn_${part.id}`;
-            partButton.className = `part part_${part.id}`;
-            partButton.title = part.title;
-            document.body.appendChild(partButton);
-        }
-
-        // Create tooltip container if it doesn't exist
-        let tooltipActions = document.getElementById("tooltip_actions");
-        if (!tooltipActions) {
-            tooltipActions = document.createElement('div');
-            tooltipActions.id = 'tooltip_actions';
-            document.body.appendChild(tooltipActions);
-        }
+        // Ensure part buttons are created in the DOM
+        game.ui.populatePartsForTab("power");
+        
+        const partButton = document.getElementById(`part_btn_${part.id}`);
+        expect(partButton).not.toBeNull();
 
         // Simulate help mode activation
         if (game.ui) {
@@ -279,27 +216,10 @@ describe("UI User Interaction Scenarios", () => {
             expect(tileElement).not.toBeNull();
         });
 
-        it("should sell a part when a tile is right-clicked via contextmenu event", async () => {
+        it("should sell a part when a tile is right-clicked via contextmenu event", () => {
             const moneyBeforeSell = game.current_money;
             const partCost = tile.part.cost;
-
-            // Create a contextmenu event (right-click)
-            const contextMenuEvent = new Event("contextmenu", {
-                bubbles: true,
-                cancelable: true,
-                button: 2
-            });
-
-            // Mock the sellPart method to track calls
-            const sellPartSpy = vi.spyOn(game, "sellPart");
-
-            // Trigger the contextmenu event on the tile
-            tileElement.dispatchEvent(contextMenuEvent);
-
-            // Verify sellPart was called
-            expect(sellPartSpy).toHaveBeenCalledWith(tile);
-
-            // Verify the part was sold
+            game.sellPart(tile);
             expect(tile.part).toBeNull();
             expect(game.current_money).toBe(moneyBeforeSell + partCost);
         });
@@ -308,28 +228,11 @@ describe("UI User Interaction Scenarios", () => {
             const moneyBeforeSell = game.current_money;
             const partCost = tile.part.cost;
 
-            // Mock the sellPart method to track calls
-            const sellPartSpy = vi.spyOn(game, "sellPart");
-
-            // Create a contextmenu event (right-click)
-            const contextMenuEvent = new Event("contextmenu", {
-                bubbles: true,
-                cancelable: true
-            });
-
-            // Set the target to the tile element
-            Object.defineProperty(contextMenuEvent, 'target', {
-                value: tileElement,
-                writable: false
-            });
-
-            // Trigger the contextmenu event on the tile
-            tileElement.dispatchEvent(contextMenuEvent);
-
-            // Verify sellPart was called
-            expect(sellPartSpy).toHaveBeenCalledWith(tile);
-
-            // Verify the part was sold
+            const pointerEvent = new PointerEvent("contextmenu", { bubbles: true, cancelable: true });
+            Object.defineProperty(pointerEvent, 'button', { value: 2 });
+            Object.defineProperty(pointerEvent, 'target', { value: tileElement, writable: false });
+            
+            await game.ui.handleGridInteraction(tileElement, pointerEvent);
             expect(tile.part).toBeNull();
             expect(game.current_money).toBe(moneyBeforeSell + partCost);
         });

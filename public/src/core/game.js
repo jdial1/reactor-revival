@@ -6,6 +6,7 @@ import { Engine } from "./engine.js";
 import { ObjectiveManager } from "./objective.js";
 import { executeUpgradeAction } from "./upgradeActions.js";
 import { Performance } from "./performance.js";
+import { DebugHistory } from "../utils/debugHistory.js";
 
 export class Game {
   constructor(ui_instance) {
@@ -51,9 +52,13 @@ export class Game {
     this.tooltip_manager = null;
     this.placedCounts = {}; // cumulative placements per `${type}:${level}`
     this._suppressPlacementCounting = false;
+    this._unlockStates = {}; // track previous unlock state per part to avoid duplicate logs
 
     // Buffer for per-tick visual events produced by the engine
     this._visualEvents = [];
+    this.debugHistory = new DebugHistory();
+    this.undoHistory = [];
+    this.audio = null;
   }
 
   // Returns how many parts of a given type and level are currently placed
@@ -131,14 +136,27 @@ export class Game {
   // Rule: level 1 is unlocked. Level 2+ unlocked after 10 of previous tier
   // Special case: valves are always unlocked from the start
   isPartUnlocked(part) {
-    if (!part) return false;
-
-    // Valves are always unlocked from the start
-    if (part.category === 'valve') return true;
-
+    if (!part || part.category === 'valve') {
+      this.logger?.debug(`[UNLOCK] Part ${part?.id || 'null'}: Valve or null, unlocked by default.`);
+      return true; // Valves are always unlocked
+    }
     const prevSpec = this.getPreviousTierSpec(part);
-    if (!prevSpec) return true; // First element in chain
-    return this.getPreviousTierCount(part) >= 10;
+    if (!prevSpec) {
+      this.logger?.debug(`[UNLOCK] Part '${part.id}' is a base part (no prerequisite). Unlocked by default.`);
+      return true; // It's a base part, so it's unlocked
+    }
+    const count = this.getPlacedCount(prevSpec.type, prevSpec.level);
+    const isUnlocked = count >= 10;
+    const partId = part.id;
+    const wasUnlocked = this._unlockStates[partId] || false;
+    
+    if (isUnlocked && !wasUnlocked) {
+      console.log(`[UNLOCK] '${partId}': ${count}/10 of '${prevSpec.type}:${prevSpec.level}' -> UNLOCKED`);
+    }
+    
+    this._unlockStates[partId] = isUnlocked;
+    this.logger?.debug(`[UNLOCK] Checking part '${part.id}': Requires 10 of '${prevSpec.type}:${prevSpec.level}'. Count: ${count}. Unlocked: ${isUnlocked}`);
+    return isUnlocked;
   }
 
   // Cumulative placement tracking
@@ -180,6 +198,17 @@ export class Game {
     return out;
   }
   async set_defaults() {
+    const debugSetDefaults = typeof process !== 'undefined' && process.env.DEBUG_REBOOT === 'true';
+    if (debugSetDefaults) {
+      const epBeforeReset = {
+        exotic_particles: this.exotic_particles,
+        total_exotic_particles: this.total_exotic_particles,
+        current_exotic_particles: this.current_exotic_particles
+      };
+      console.log(`[SET-DEFAULTS DEBUG] Resetting EP values:`);
+      console.log(`[SET-DEFAULTS DEBUG]   Before reset: exotic_particles=${epBeforeReset.exotic_particles}, total_exotic_particles=${epBeforeReset.total_exotic_particles}, current_exotic_particles=${epBeforeReset.current_exotic_particles}`);
+    }
+    
     this.base_cols = 12;
     this.base_rows = 12;
     this._rows = this.base_rows;
@@ -189,6 +218,10 @@ export class Game {
     this.total_exotic_particles = 0;
     this.exotic_particles = 0;
     this.current_exotic_particles = 0;
+    
+    if (debugSetDefaults) {
+      console.log(`[SET-DEFAULTS DEBUG]   After reset: exotic_particles=${this.exotic_particles}, total_exotic_particles=${this.total_exotic_particles}, current_exotic_particles=${this.current_exotic_particles}`);
+    }
     this.sold_power = false;
     this.sold_heat = false;
     this.reactor.setDefaults();
@@ -198,8 +231,15 @@ export class Game {
     await this.upgradeset.initialize(); // Await initialization
     // Recalculate all part stats after upgrades are freshly initialized to ensure no stale upgrade effects linger
     if (this.partset?.partsArray?.length) {
+      console.log(`[SET-DEFAULTS DEBUG] Recalculating stats for ${this.partset.partsArray.length} parts`);
       this.partset.partsArray.forEach((part) => {
-        try { part.recalculate_stats(); } catch (_) { /* no-op */ }
+        try { 
+          const epHeatBefore = part.ep_heat;
+          part.recalculate_stats();
+          if (part.id === 'particle_accelerator1' && epHeatBefore !== undefined && part.ep_heat !== epHeatBefore) {
+            console.log(`[SET-DEFAULTS DEBUG] ep_heat changed for ${part.id} during set_defaults: ${epHeatBefore} -> ${part.ep_heat}`);
+          }
+        } catch (_) { /* no-op */ }
       });
     }
     this.upgradeset.check_affordability(this);
@@ -233,9 +273,8 @@ export class Game {
       }
       this.objectives_manager.set_objective(0, true);
     }
-
-    // Validate objective state after initialization to ensure consistency
     if (this._saved_objective_index !== undefined) {
+      this.debugHistory.add('game', 'Validating objective state after default set');
       this._validateObjectiveState();
     }
   }
@@ -254,6 +293,7 @@ export class Game {
   }
 
   async initialize_new_game_state() {
+    this.debugHistory.clear();
     await this.set_defaults();
     // Always clear meltdown state and update UI after new game
     this.reactor.clearMeltdownState();
@@ -343,6 +383,7 @@ export class Game {
     this.upgradeset.check_affordability(this);
   }
   manual_reduce_heat_action() {
+    this.debugHistory.add('game', 'Manual heat reduction');
     this.reactor.manualReduceHeat();
   }
   sell_action() {
@@ -353,15 +394,36 @@ export class Game {
 
       if (!hasPartsToSell) {
         this.addMoney(10);
+        this.debugHistory.add('game', 'Failsafe: +$10 added');
       }
     } else {
       this.reactor.sellPower();
     }
   }
   async reboot_action(keep_exotic_particles = false) {
-    const epToKeep = keep_exotic_particles
-      ? this.total_exotic_particles + this.exotic_particles
-      : 0;
+    const debugReboot = typeof process !== 'undefined' && process.env.DEBUG_REBOOT === 'true';
+    if (debugReboot) {
+      console.log(`[REBOOT DEBUG] ========== Reboot Action Starting ==========`);
+      console.log(`[REBOOT DEBUG] keep_exotic_particles=${keep_exotic_particles}`);
+      console.log(`[REBOOT DEBUG] PRE-REBOOT STATE:`);
+      console.log(`[REBOOT DEBUG]   exotic_particles=${this.exotic_particles}`);
+      console.log(`[REBOOT DEBUG]   total_exotic_particles=${this.total_exotic_particles}`);
+      console.log(`[REBOOT DEBUG]   current_exotic_particles=${this.current_exotic_particles}`);
+    }
+    
+    this.debugHistory.add('game', 'Reboot action initiated', { keep_exotic_particles });
+    
+    if (this.audio) {
+      this.audio.play('reboot');
+    }
+    
+    const savedTotalEp = this.total_exotic_particles;
+    const savedCurrentEp = this.current_exotic_particles;
+    if (debugReboot) {
+      console.log(`[REBOOT DEBUG] Saved EP values for restoration:`);
+      console.log(`[REBOOT DEBUG]   savedTotalEp=${savedTotalEp}`);
+      console.log(`[REBOOT DEBUG]   savedCurrentEp=${savedCurrentEp}`);
+    }
 
     // If keeping EP, capture currently purchased EP-based upgrades (research) to restore after reset
     const preservedEpUpgrades = keep_exotic_particles
@@ -370,11 +432,25 @@ export class Game {
         .map((upg) => ({ id: upg.id, level: upg.level }))
       : [];
     try {
-      if (keep_exotic_particles) this.logger?.debug("[Reboot] Will preserve EP upgrades:", preservedEpUpgrades);
+      if (keep_exotic_particles) {
+        if (debugReboot) {
+          console.log(`[REBOOT DEBUG] Preserving ${preservedEpUpgrades.length} EP-based upgrades:`, preservedEpUpgrades);
+        }
+        this.logger?.debug("[Reboot] Will preserve EP upgrades:", preservedEpUpgrades);
+      }
     } catch (_) { }
 
     // Fully reset game state, parts, tiles, and upgrades
+    if (debugReboot) {
+      console.log(`[REBOOT DEBUG] Calling set_defaults() - this will reset all EP values to 0`);
+    }
     await this.set_defaults();
+    if (debugReboot) {
+      console.log(`[REBOOT DEBUG] After set_defaults():`);
+      console.log(`[REBOOT DEBUG]   exotic_particles=${this.exotic_particles} (should be 0)`);
+      console.log(`[REBOOT DEBUG]   total_exotic_particles=${this.total_exotic_particles} (should be 0)`);
+      console.log(`[REBOOT DEBUG]   current_exotic_particles=${this.current_exotic_particles} (should be 0)`);
+    }
 
     // Always clear meltdown state and update UI after reboot
     this.reactor.clearMeltdownState();
@@ -385,15 +461,39 @@ export class Game {
     }
 
     // Re-apply EP amounts per reboot mode
-    this.total_exotic_particles = epToKeep;
-    this.current_exotic_particles = epToKeep;
+    if (debugReboot) {
+      console.log(`[REBOOT DEBUG] Restoring EP values (keep_exotic_particles=${keep_exotic_particles}):`);
+    }
+    if (keep_exotic_particles) {
+      const beforeTotal = this.total_exotic_particles;
+      const beforeCurrent = this.current_exotic_particles;
+      this.total_exotic_particles = savedTotalEp;
+      this.current_exotic_particles = savedCurrentEp;
+      if (debugReboot) {
+        console.log(`[REBOOT DEBUG]   KEEP mode: Restoring saved values`);
+        console.log(`[REBOOT DEBUG]   total_exotic_particles: ${beforeTotal} -> ${this.total_exotic_particles} (from savedTotalEp=${savedTotalEp})`);
+        console.log(`[REBOOT DEBUG]   current_exotic_particles: ${beforeCurrent} -> ${this.current_exotic_particles} (from savedCurrentEp=${savedCurrentEp})`);
+      }
+    } else {
+      this.total_exotic_particles = 0;
+      this.current_exotic_particles = 0;
+      if (debugReboot) {
+        console.log(`[REBOOT DEBUG]   REFUND mode: Setting all EP to 0`);
+      }
+    }
 
     // If keeping EP, restore previously purchased EP-based upgrades (research)
     if (keep_exotic_particles && preservedEpUpgrades.length > 0) {
+      if (debugReboot) {
+        console.log(`[REBOOT DEBUG] Restoring ${preservedEpUpgrades.length} EP-based upgrades...`);
+      }
       preservedEpUpgrades.forEach(({ id, level }) => {
         const upg = this.upgradeset.getUpgrade(id);
         if (upg) {
           upg.setLevel(level);
+          if (debugReboot) {
+            console.log(`[REBOOT DEBUG]   Restored ${id} to level ${level}`);
+          }
         }
       });
       try {
@@ -401,6 +501,12 @@ export class Game {
       } catch (_) { }
     }
 
+    if (debugReboot) {
+      console.log(`[REBOOT DEBUG] Updating StateManager with final EP values:`);
+      console.log(`[REBOOT DEBUG]   total_exotic_particles=${this.total_exotic_particles}`);
+      console.log(`[REBOOT DEBUG]   current_exotic_particles=${this.current_exotic_particles}`);
+      console.log(`[REBOOT DEBUG]   exotic_particles=${this.exotic_particles}`);
+    }
     this.ui.stateManager.setVar(
       "total_exotic_particles",
       this.total_exotic_particles
@@ -410,6 +516,9 @@ export class Game {
       this.current_exotic_particles
     );
     this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
+    if (debugReboot) {
+      console.log(`[REBOOT DEBUG] ========== Reboot Action Complete ==========`);
+    }
 
     this.reactor.updateStats();
     this.upgradeset.check_affordability(this);
@@ -497,23 +606,33 @@ export class Game {
 
   sellPart(tile) {
     if (tile && tile.part) {
+      this.addMoney(tile.calculateSellValue());
+      this.debugHistory.add('game', 'sellPart', { row: tile.row, col: tile.col, partId: tile.part.id, value: tile.calculateSellValue() });
+      if (this.audio) {
+        this.audio.play("sell");
+      }
       tile.clearPart(true);
     }
   }
 
   handleComponentDepletion(tile) {
     if (!tile.part) return;
+    this.debugHistory.add('game', 'Component depletion', { row: tile.row, col: tile.col, partId: tile.part.id, perpetual: tile.part.perpetual });
 
     const part = tile.part;
     if (part.perpetual && this.ui.stateManager.getVar("auto_buy")) {
       const cost = part.getAutoReplacementCost();
-      if (this._current_money >= cost) {
-        this._current_money -= cost;
-        this.ui.stateManager.setVar("current_money", this._current_money);
+      this.logger?.debug(`[AUTO-BUY] Attempting to replace '${part.id}'. Cost: ${cost}, Current Money: ${this.current_money}`);
+      if (this.current_money >= cost) {
+        this.current_money -= cost;
+        this.logger?.debug(`[AUTO-BUY] Success. New Money: ${this.current_money}`);
+        this.ui.stateManager.setVar("current_money", this.current_money);
         part.recalculate_stats();
         tile.ticks = part.ticks;
         this.reactor.updateStats();
         return;
+      } else {
+        this.logger?.debug(`[AUTO-BUY] Failed. Insufficient funds.`);
       }
     }
 
@@ -525,6 +644,7 @@ export class Game {
   }
 
   getSaveState() {
+    this.debugHistory.add('game', 'Generating save state');
     this.updateSessionTime();
 
     const saveData = {
@@ -569,7 +689,7 @@ export class Game {
           this.objectives_manager?.current_objective_index || 0,
         completed_objectives: (() => {
           const completed = this.objectives_manager?.objectives_data?.map(obj => obj.completed) || [];
-          console.log(`[DEBUG] Saving ${completed.filter(c => c).length} completed objectives out of ${completed.length} total`);
+          this.logger?.debug(`Saving ${completed.filter(c => c).length} completed objectives out of ${completed.length} total`);
           return completed;
         })(),
       },
@@ -646,7 +766,11 @@ export class Game {
   }
 
   saveGame(slot = null, isAutoSave = false) {
+    if (this.logger) {
+      this.logger.debug(`Attempting to save game. Meltdown state: ${this.reactor.has_melted_down}`);
+    }
     try {
+      this.debugHistory.add('game', 'saveGame called', { slot, isAutoSave, meltdown: this.reactor.has_melted_down });
       if (this.reactor.has_melted_down) {
         return;
       }
@@ -667,6 +791,8 @@ export class Game {
         }
 
         localStorage.setItem(saveKey, JSON.stringify(saveData));
+        this.logger?.debug(`Game state saved to slot ${slot}. Size: ${JSON.stringify(saveData).length} bytes.`);
+        this.debugHistory.add('game', 'Game saved', { slot, size: JSON.stringify(saveData).length });
 
         // Update the current slot tracking
         localStorage.setItem("reactorCurrentSaveSlot", slot.toString());
@@ -840,6 +966,7 @@ export class Game {
   }
 
   async loadGame(slot = null) {
+    this.debugHistory.add('game', 'loadGame called', { slot });
     try {
       let savedDataJSON;
 
@@ -874,6 +1001,7 @@ export class Game {
 
       if (savedDataJSON) {
         const savedData = JSON.parse(savedDataJSON);
+        this.debugHistory.add('game', 'Applying save data from slot', { slot, version: savedData.version });
         await this.applySaveState(savedData);
         return true;
       }
@@ -890,7 +1018,19 @@ export class Game {
   }
 
   async applySaveState(savedData) {
+    this.logger?.debug('Applying save state...', {
+      version: savedData.version,
+      money: savedData.current_money,
+      tiles: savedData.tiles?.length || 0,
+      upgrades: savedData.upgrades?.length || 0,
+      objectiveIndex: savedData.objectives?.current_objective_index
+    });
+    this._isRestoringSave = true;
+    try {
     this._current_money = savedData.current_money || this.base_money;
+    if (!this.partset.initialized) {
+      await this.partset.initialize();
+    }
     this.protium_particles = savedData.protium_particles || 0;
     this.total_exotic_particles = savedData.total_exotic_particles || 0;
 
@@ -953,21 +1093,33 @@ export class Game {
     // Update reactor stats after upgrades are loaded
     this.reactor.updateStats();
 
+    // Ensure tileset is initialized before loading tiles
+    if (!this.tileset.initialized) {
+      this.tileset.initialize();
+    }
     this.tileset.clearAllTiles();
     if (savedData.tiles) {
-      // Suppress counting while reconstructing the grid to avoid double counting
+      console.log(`[SAVE-LOAD DEBUG] Starting tile restoration. _isRestoringSave=${this._isRestoringSave}, tiles count=${savedData.tiles.length}`);
       const prevSuppress = this._suppressPlacementCounting;
       this._suppressPlacementCounting = true;
-      savedData.tiles.forEach((tileData) => {
+      for (const tileData of savedData.tiles) {
         const tile = this.tileset.getTile(tileData.row, tileData.col);
         const part = this.partset.getPartById(tileData.partId);
+        console.log(`[SAVE-LOAD DEBUG] Restoring tile (${tileData.row},${tileData.col}): tile=${!!tile}, partId=${tileData.partId}, part=${!!part}, partIdResolved=${part?.id}`);
         if (tile && part) {
-          tile.setPart(part);
+          const tilePartBefore = tile.part?.id || null;
+          await tile.setPart(part);
+          const tilePartAfter = tile.part?.id || null;
+          console.log(`[SAVE-LOAD DEBUG] Tile (${tileData.row},${tileData.col}) setPart result: before=${tilePartBefore}, after=${tilePartAfter}, success=${tilePartAfter === part.id}`);
           tile.ticks = tileData.ticks;
           tile.heat_contained = tileData.heat_contained;
+          console.log(`[SAVE-LOAD DEBUG] Tile (${tileData.row},${tileData.col}) properties set: ticks=${tile.ticks}, heat=${tile.heat_contained}`);
+        } else {
+          console.log(`[SAVE-LOAD DEBUG] Tile (${tileData.row},${tileData.col}) restoration failed: tile=${!!tile}, part=${!!part}`);
         }
-      });
+      }
       this._suppressPlacementCounting = prevSuppress;
+      console.log(`[SAVE-LOAD DEBUG] Tile restoration complete. _isRestoringSave=${this._isRestoringSave}`);
 
       // Backfill placedCounts if it was missing in save data
       if (!savedData.placedCounts) {
@@ -1054,12 +1206,22 @@ export class Game {
 
     this._pendingToggleStates = savedData.toggles;
     this.ui.updateAllToggleBtnStates();
-
-    // Load UI state
-    // Note: UI state loading removed as partsPanelTogglePosition is no longer used
-
-    // Validate objective state consistency after restoration
-    this._validateObjectiveState();
+    this.reactor.updateStats();
+    
+    console.log(`[SAVE-LOAD DEBUG] Save state applied. _isRestoringSave=${this._isRestoringSave}, verifying tiles...`);
+    for (let r = 0; r < Math.min(this.rows, 5); r++) {
+      for (let c = 0; c < Math.min(this.cols, 5); c++) {
+        const tile = this.tileset.getTile(r, c);
+        if (tile?.part) {
+          console.log(`[SAVE-LOAD DEBUG] Tile (${r},${c}) verified after restore: part=${tile.part.id}, heat=${tile.heat_contained}`);
+        }
+      }
+    }
+    } finally {
+      console.log(`[SAVE-LOAD DEBUG] Setting _isRestoringSave=false`);
+      this._isRestoringSave = false;
+      console.log(`[SAVE-LOAD DEBUG] _isRestoringSave is now: ${this._isRestoringSave}`);
+    }
   }
 
   /**

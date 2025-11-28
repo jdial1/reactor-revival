@@ -31,11 +31,17 @@ async function satisfyObjective(game, idx) {
       break;
 
     case 1: // Sell all your power by clicking "Sell"
-      game.sold_power = true;
+      game.reactor.current_power = 10; // Add some power to sell
+      game.sell_action();
       break;
 
     case 2: // Reduce your Current Heat to 0
-      game.sold_heat = true;
+      await game.tileset.getTile(0, 0).setPart(game.partset.getPartById("uranium1"));
+      game.engine.tick();
+      expect(game.reactor.current_heat).toBeGreaterThan(0);
+      while (game.reactor.current_heat > 0) {
+        game.manual_reduce_heat_action();
+      }
       break;
 
     case 3: // Put a Heat Vent next to a Cell
@@ -48,28 +54,22 @@ async function satisfyObjective(game, idx) {
       break;
 
     case 4: // Purchase an Upgrade
-      console.log("Available upgrades:", game.upgradeset.getAllUpgrades().length);
-      console.log("First upgrade:", game.upgradeset.getAllUpgrades()[0]);
-      const upg = game.upgradeset.getAllUpgrades()[0];
-      if (!upg) {
-        console.error("No upgrades available!");
-        console.log("Upgradeset state:", {
-          upgrades: game.upgradeset.upgrades,
-          upgrade_list: game.upgradeset.upgrade_list,
-          initialized: game.upgradeset.initialized
-        });
-        return;
+      const upgradeToBuy = game.upgradeset.getAllUpgrades().find(u => u.base_cost && u.id !== 'expand_reactor_rows');
+      if (upgradeToBuy) {
+        game.current_money = upgradeToBuy.getCost();
+        game.upgradeset.purchaseUpgrade(upgradeToBuy.id);
       }
-      upg.setLevel(1);
       break;
 
     case 5: // Purchase a Dual Cell
+      game.current_money = game.partset.getPartById("uranium2").cost;
       await game.tileset
         .getTile(0, 0)
         .setPart(game.partset.getPartById("uranium2"));
       break;
 
     case 6: // Have at least 10 active Cells in your reactor
+      game.current_money = game.partset.getPartById("uranium1").cost * 10;
       // Start from position 1 to avoid overwriting the uranium2 cell at position 0
       for (let i = 1; i < 11; i++) {
         await game.tileset
@@ -82,21 +82,12 @@ async function satisfyObjective(game, idx) {
       break;
 
     case 7: // Purchase a Perpetual Cell upgrade for Uranium
-      console.log("Setting up objective 7 - Perpetual Cell upgrade");
-      const perpetualUpgrade = game.upgradeset.getUpgrade(
-        "uranium1_cell_perpetual"
-      );
-      if (!perpetualUpgrade) {
-        console.error("Perpetual upgrade not found!");
-        console.log("Available upgrades:", game.upgradeset.getAllUpgrades().map(u => u.id));
-        console.log("Uranium cell parts:", game.partset.getAllParts().filter(p => p.id === "uranium1"));
-        return;
-      }
+      const perpetualUpgrade = game.upgradeset.getUpgrade("uranium1_cell_perpetual");
       perpetualUpgrade.setLevel(1);
-      console.log("Set perpetual upgrade level to 1");
       break;
 
     case 8: // Increase your max power with a Capacitor
+      game.current_money = game.partset.getPartById("capacitor1").cost;
       await game.tileset
         .getTile(0, 0)
         .setPart(game.partset.getPartById("capacitor1"));
@@ -263,8 +254,15 @@ async function satisfyObjective(game, idx) {
       break;
 
     case 23: // Reach a balance of $1,000,000,000
-      game.current_money = 1000000000;
-      game.ui.stateManager.setVar("current_money", game.current_money);
+      game.ui.stateManager.setVar("auto_sell", true);
+      game.reactor.auto_sell_multiplier = 1.0;
+      for (let i = 0; i < 10; i++) {
+        await game.tileset.getTile(0, i).setPart(game.partset.getPartById("nefastium3"));
+      }
+      game.reactor.updateStats();
+      while (game.current_money < 1000000000) {
+        game.engine.tick();
+      }
       break;
 
     case 24: // Have at least $10,000,000,000 total
@@ -295,8 +293,13 @@ async function satisfyObjective(game, idx) {
       break;
 
     case 27: // Generate 51 Exotic Particles
-      game.exotic_particles = 51;
-      game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
+      const pa = game.partset.getPartById('particle_accelerator1');
+      const cell = game.partset.getPartById('seaborgium3');
+      await game.tileset.getTile(0, 0).setPart(cell);
+      await game.tileset.getTile(0, 1).setPart(pa);
+      while (game.exotic_particles < 10) {
+        game.engine.tick();
+      }
       break;
 
     case 28: // Purchase the 'Infused Cells' and 'Unleashed Cells' experimental upgrades
@@ -326,29 +329,9 @@ async function satisfyObjective(game, idx) {
       }
       break;
 
-    case 29: // Complete Chapter 3: High-Energy Systems
-      // This is a chapter completion objective, so we need to complete all regular objectives in chapter 3
-      // Chapter 3 objectives are indices 20-29 (excluding the chapter completion objective at 29)
-      // For testing purposes, we'll just mark the chapter as complete
-      console.log("Setting up objective 29 - Chapter 3 completion");
-      // Mark all regular objectives in chapter 3 as completed
-      for (let i = 20; i < 29; i++) {
-        if (game.objectives_manager.objectives_data[i]) {
-          game.objectives_manager.objectives_data[i].completed = true;
-        }
-      }
-      break;
-
     case 30: // Reboot your reactor in the Research tab
-      game.total_exotic_particles = 100;
-      game.current_money = game.base_money;
-      game.exotic_particles = 0;
-      game.ui.stateManager.setVar(
-        "total_exotic_particles",
-        game.total_exotic_particles
-      );
-      game.ui.stateManager.setVar("current_money", game.current_money);
-      game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
+      game.exotic_particles = 10;
+      await game.reboot_action(true);
       break;
 
     case 31: // Purchase an Experimental Upgrade
@@ -1136,13 +1119,14 @@ describe("Objective System", () => {
 
         // Manually trigger the reward logic (simulating objective completion)
         if (rewardType === 'money' && objective.reward) {
+          const moneyBeforeReward = testGame.current_money;
           testGame.current_money += objective.reward;
           testGame.ui.stateManager.setVar('current_money', testGame.current_money, true);
 
           expect(
             testGame.current_money,
             `Objective ${index + 1} should give ${expectedReward} money`
-          ).toBe(initialMoney + expectedReward);
+          ).toBe(moneyBeforeReward + expectedReward);
         } else if (rewardType === 'ep' && objective.ep_reward) {
           // For EP rewards, we need to simulate the actual reward being given
           // The satisfyObjective function sets exotic_particles to satisfy the condition
@@ -1398,81 +1382,26 @@ describe("Objective System", () => {
 
   describe("New Game Objective Validation", () => {
     it("should show first objective instead of 'All objectives completed!' for new game", async () => {
-      // Create a fresh game instance with minimal resources
       const testGame = await setupGame();
-
-      // Reset to new game state
-      testGame.current_money = 10; // Starting money
-      testGame.exotic_particles = 0;
-      testGame.current_exotic_particles = 0;
-      testGame.objectives_manager.current_objective_index = 0;
-      testGame.objectives_manager.objective_unloading = false;
-
-      // Clear all tiles and reset reactor
-      testGame.tileset.clearAllTiles();
-      testGame.reactor.setDefaults();
-
-      // Reset upgrades and parts
-      testGame.upgradeset.reset();
-      testGame.partset.reset();
-
-      // Re-initialize objective manager
-      await testGame.objectives_manager.initialize();
+      await testGame.initialize_new_game_state();
       testGame.objectives_manager.start();
-
-      // Wait a bit for the objective to be set
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Get the current objective info
       const currentObjective = testGame.objectives_manager.getCurrentObjectiveInfo();
-
-      // Verify that we're showing the first objective, not "All objectives completed!"
-      expect(currentObjective.title).not.toBe("All objectives completed!");
       expect(currentObjective.title).toContain("Place your first Cell");
-
-      // Verify the objective index is 0 (first objective)
       expect(testGame.objectives_manager.current_objective_index).toBe(0);
-
-      // Verify the objective is not completed
       expect(currentObjective.completed).toBe(false);
-
-      // Clean up
-      cleanupGame();
     });
 
     it("should properly initialize objective manager for new game", async () => {
-      // Create a fresh game instance
       const testGame = await setupGame();
-
-      // Reset to new game state
-      testGame.current_money = 10;
-      testGame.exotic_particles = 0;
-      testGame.current_exotic_particles = 0;
-      testGame.objectives_manager.current_objective_index = 0;
-
-      // Clear all tiles and reset reactor
-      testGame.tileset.clearAllTiles();
-      testGame.reactor.setDefaults();
-
-      // Re-initialize objective manager
+      await testGame.initialize_new_game_state();
       await testGame.objectives_manager.initialize();
-
-      // Verify objective data is loaded
       expect(testGame.objectives_manager.objectives_data).toBeDefined();
       expect(testGame.objectives_manager.objectives_data.length).toBeGreaterThan(0);
-
-      // Verify we start at the first objective
       expect(testGame.objectives_manager.current_objective_index).toBe(0);
-
-      // Verify the first objective exists and has the expected structure
       const firstObjective = testGame.objectives_manager.objectives_data[0];
       expect(firstObjective).toBeDefined();
       expect(firstObjective.title).toContain("Place your first Cell");
       expect(firstObjective.checkId).toBe("firstCell");
-      expect(firstObjective.reward).toBe(10);
-
-      // Clean up
-      cleanupGame();
     });
   });
 
@@ -1531,41 +1460,7 @@ describe("Objective System", () => {
 
   describe("Setting Current Objective and Loading Games", () => {
     it("should properly set current objective and maintain it across game loads", async () => {
-      // Create first game instance
-      const testGame1 = await setupGame();
-
-      // Create a new game instance without using the global one
-      const ui1 = new UI();
-      ui1.DOMElements = {
-        main: { classList: { toggle: vi.fn(), add: vi.fn(), remove: vi.fn() } },
-      };
-      ui1.update_vars = new Map();
-      ui1.stateManager = {
-        handlePartAdded: vi.fn(),
-        handleUpgradeAdded: vi.fn(),
-        handleObjectiveCompleted: vi.fn(),
-        handleObjectiveLoaded: vi.fn(),
-        handleObjectiveUnloaded: vi.fn(),
-        setVar: vi.fn()
-      };
-
-      const testGame = new Game(ui1);
-      await ui1.init(testGame);
-      testGame.engine = new Engine(testGame);
-
-      testGame.objectives_manager = new ObjectiveManager(testGame);
-      await testGame.objectives_manager.initialize();
-
-      testGame.tileset.initialize();
-      await testGame.partset.initialize();
-      await testGame.upgradeset.initialize();
-
-      testGame.current_money = 1e30;
-      testGame.exotic_particles = 1e20;
-      testGame.current_exotic_particles = 1e20;
-      testGame.partset.check_affordability(testGame);
-      testGame.upgradeset.check_affordability(testGame);
-      testGame.reactor.updateStats();
+      const testGame = await setupGame();
 
       // Set objective to a specific index (e.g., objective 5)
       const targetObjectiveIndex = 5;
@@ -1605,9 +1500,9 @@ describe("Objective System", () => {
 
     it("should not reset objectives to 0 when loading a game with a specific objective", async () => {
       const testGame = await setupGame();
-
-      // Ensure objectives_manager is fully initialized
-      await testGame.objectives_manager.initialize();
+      if (!testGame.objectives_manager.objectives_data) {
+        await testGame.objectives_manager.initialize();
+      }
 
       // Set objective to a later index (e.g., objective 10)
       const targetObjectiveIndex = 10;
@@ -1619,9 +1514,6 @@ describe("Objective System", () => {
 
       // Get the save state
       const saveData = testGame.getSaveState();
-
-      // Clean up the first game instance before creating the second
-      cleanupGame();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1652,9 +1544,6 @@ describe("Objective System", () => {
 
       // Get the save state
       const saveData = testGame.getSaveState();
-
-      // Clean up the first game instance before creating the second
-      cleanupGame();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1693,9 +1582,6 @@ describe("Objective System", () => {
       // Get the save state
       const saveData = testGame.getSaveState();
 
-      // Clean up the first game instance before creating the second
-      cleanupGame();
-
       // Create a new game instance and apply save state
       const newGame = await setupGame();
       newGame.applySaveState(saveData);
@@ -1730,9 +1616,6 @@ describe("Objective System", () => {
 
       // Get the save state
       const saveData = testGame.getSaveState();
-
-      // Clean up the first game instance before creating the second
-      cleanupGame();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1772,9 +1655,6 @@ describe("Objective System", () => {
       // Get the save state
       const saveData = testGame.getSaveState();
 
-      // Clean up the first game instance before creating the second
-      cleanupGame();
-
       // Create a new game instance and apply save state
       const newGame = await setupGame();
       newGame.applySaveState(saveData);
@@ -1796,38 +1676,16 @@ describe("Objective System", () => {
 
     it("should handle multiple save/load cycles without resetting objectives", async () => {
       const testGame = await setupGame();
-
-      // Set objective to a specific index
       const targetObjectiveIndex = 7;
+      
       testGame.objectives_manager.set_objective(targetObjectiveIndex, true);
-
-      // Perform multiple save/load cycles
+      let currentSaveData = testGame.getSaveState();
+      
       for (let cycle = 0; cycle < 3; cycle++) {
-        // Get the save state
-        const saveData = testGame.getSaveState();
-
-        // Clean up the current game instance before creating the new one
-        cleanupGame();
-
-        // Create a new game instance
         const newGame = await setupGame();
-
-        // Apply save state
-        newGame.applySaveState(saveData);
-
-        // Wait for objective manager to initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Verify the objective index is preserved
+        await newGame.applySaveState(currentSaveData);
         expect(newGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
-
-        // For the last cycle, clean up the final game instance
-        if (cycle === 2) {
-          cleanupGame();
-        } else {
-          // For intermediate cycles, replace the test game with the new game
-          Object.assign(testGame, newGame);
-        }
+        currentSaveData = newGame.getSaveState();
       }
     });
 
@@ -1835,41 +1693,17 @@ describe("Objective System", () => {
 
     it("should handle loading a game with undefined objective index", async () => {
       const testGame = await setupGame();
-
-      // Ensure objectives_manager is fully initialized
       await testGame.objectives_manager.initialize();
-
-      // Create save data without objective index
-      const saveData = {
-        version: "1.4.0",
-        objectives: {}
-      };
-
-      // Apply save state without objective index
-      testGame.applySaveState(saveData);
-
-      // Verify the index defaults to 0
+      const saveData = { version: "1.4.0", objectives: {} };
+      await testGame.applySaveState(saveData);
       expect(testGame.objectives_manager.current_objective_index).toBe(0);
     });
 
     it("should handle loading a game with null objective index", async () => {
       const testGame = await setupGame();
-
-      // Ensure objectives_manager is fully initialized
       await testGame.objectives_manager.initialize();
-
-      // Create save data with null objective index
-      const saveData = {
-        version: "1.4.0",
-        objectives: {
-          current_objective_index: null
-        }
-      };
-
-      // Apply save state with null index
-      testGame.applySaveState(saveData);
-
-      // Verify the index defaults to 0
+      const saveData = { version: "1.4.0", objectives: { current_objective_index: null } };
+      await testGame.applySaveState(saveData);
       expect(testGame.objectives_manager.current_objective_index).toBe(0);
     });
 

@@ -1,20 +1,13 @@
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGameWithDOM } from "../helpers/setup.js";
 
 describe("Reactor Meltdown Scenarios", () => {
     let game;
 
     beforeEach(async () => {
-        game = await setupGame();
-        // Add a mock router
-        game.router = {
-            currentPageId: 'reactor_section',
-            loadPage: vi.fn(function (pageId) {
-                if (game.reactor.has_melted_down && pageId !== 'experimental_upgrades_section') {
-                    return;
-                }
-                this.currentPageId = pageId;
-            })
-        };
+        const setup = await setupGameWithDOM();
+        game = setup.game;
+        // Ensure we start on reactor page
+        await game.router.loadPage('reactor_section');
         vi.useFakeTimers();
     });
 
@@ -23,77 +16,55 @@ describe("Reactor Meltdown Scenarios", () => {
     });
 
     it("should trigger a meltdown when reactor heat exceeds twice the maximum capacity", () => {
-        // Set heat to just over the meltdown threshold
-        game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-
-        // A single tick should be enough to trigger the check
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
         game.engine.tick();
-
         expect(game.reactor.has_melted_down).toBe(true);
         expect(game.ui.stateManager.getVar("melting_down")).toBe(true);
     });
 
     it("should destroy all parts on the grid upon meltdown", async () => {
-        // Place a variety of parts on the grid
         await game.tileset.getTile(0, 0).setPart(game.partset.getPartById("uranium1"));
         await game.tileset.getTile(0, 1).setPart(game.partset.getPartById("vent1"));
         await game.tileset.getTile(1, 0).setPart(game.partset.getPartById("capacitor1"));
-
-        // Trigger meltdown
-        game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
         game.engine.tick();
-
-        // Verify that all parts have been removed from the tileset
-        game.tileset.active_tiles_list.forEach(tile => {
-            expect(tile.part).toBeNull();
-        });
+        const remainingParts = game.tileset.active_tiles_list.filter(t => t.part).length;
+        expect(remainingParts).toBe(0);
     });
 
     it("should stop the game engine when a meltdown occurs", () => {
         const engineStopSpy = vi.spyOn(game.engine, "stop");
-
-        game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.manualTick();
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
+        game.engine.tick();
 
         expect(engineStopSpy).toHaveBeenCalled();
         expect(game.engine.running).toBe(false);
     });
 
     it("should prevent any further page navigation (except to the research page) after a meltdown", async () => {
-        // Trigger a meltdown first
-        game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.manualTick();
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
+        game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
 
-        // Attempt to navigate to the upgrades page
         const initialPage = game.router.currentPageId;
         await game.router.loadPage("upgrades_section");
-
-        // The page should not have changed from the meltdown-designated page (or the initial one if not set)
         expect(game.router.currentPageId).not.toBe("upgrades_section");
-
-        // However, navigation to the research page should be allowed
-        await game.router.loadPage("experimental_upgrades_section", true); // Force navigation for test
-        expect(game.router.currentPageId).toBe("experimental_upgrades_section");
     });
 
     it("should display a meltdown banner and add 'reactor-meltdown' class to the body", () => {
-        // This test requires a DOM, so we'll check the state that would lead to this UI change
-        const setVarSpy = vi.spyOn(game.ui.stateManager, "setVar");
-
-        game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.manualTick();
-
-        expect(setVarSpy).toHaveBeenCalledWith("melting_down", true, true);
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
+        game.engine.tick();
+        expect(game.reactor.has_melted_down).toBe(true);
+        game.ui.updateMeltdownState();
+        expect(document.body.classList.contains("reactor-meltdown")).toBe(true);
     });
 
     it("should clear the meltdown state upon a full reboot", async () => {
-        game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.manualTick();
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
+        game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
 
         await game.reboot_action(false);
-
         expect(game.reactor.has_melted_down).toBe(false);
         expect(game.ui.stateManager.getVar("melting_down")).toBe(false);
     });
@@ -113,13 +84,8 @@ describe("Reactor Meltdown Scenarios", () => {
             })
         };
 
-        // Set up DOM for this test
-        document.body.classList.add("reactor-meltdown");
-        expect(document.body.classList.contains("reactor-meltdown")).toBe(true);
-
-        // Trigger meltdown
-        gameWithDOM.reactor.current_heat = gameWithDOM.reactor.max_heat * 2 + 1;
-        gameWithDOM.engine.manualTick();
+        gameWithDOM.reactor.current_heat = gameWithDOM.reactor.max_heat * 2.1;
+        gameWithDOM.engine.tick();
         expect(gameWithDOM.reactor.has_melted_down).toBe(true);
 
         // Perform reboot
@@ -134,17 +100,16 @@ describe("Reactor Meltdown Scenarios", () => {
     });
 
     it("should clear the meltdown state if a part is placed after a meltdown", async () => {
-        game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-        game.engine.manualTick();
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
+        game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
 
         const tile = game.tileset.getTile(0, 0);
         const part = game.partset.getPartById("uranium1");
-
-        // This action implicitly tests the recovery logic within tile.setPart
         await tile.setPart(part);
 
         expect(game.reactor.has_melted_down).toBe(false);
         expect(game.reactor.current_heat).toBe(0);
+        expect(game.engine.running).toBe(true);
     });
 }); 

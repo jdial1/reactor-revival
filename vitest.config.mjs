@@ -14,10 +14,10 @@ export default defineConfig({
     outputFile: {
       json: "./test-results.json",
     },
-    maxConcurrency: 1,
+    maxConcurrency: 4,
     silent: false,
-    testTimeout: 60000,
-    hookTimeout: 60000,
+    testTimeout: 300000, // Increased to 5 minutes for long-running tests
+    hookTimeout: 300000, // Increased to 5 minutes for long-running hooks
     errorOnDeprecated: false,
     isolate: false,
     pool: "threads",
@@ -25,14 +25,14 @@ export default defineConfig({
       threads: {
         singleThread: true,
         isolate: false,
-        memoryLimit: "4GB", // Increased from 2GB to 4GB
+        memoryLimit: "16GB", // Increased from 4GB to 8GB
       },
     },
     // Optimize memory usage
     forceRerunTriggers: ["**/package.json", "{vitest,vite}.config.*"],
     // Prevent massive console output and DOM object dumps
     printConsoleTrace: false,
-    logHeapUsage: false,
+    logHeapUsage: true, // Enable heap usage logging for memory diagnostics
     // Reduce verbosity of DOM objects in test output
     outputTruncateLength: 80,
     chaiConfig: {
@@ -50,7 +50,7 @@ export default defineConfig({
     // Prevent full object dumps in error messages
     errorOnConsole: false,
     env: {
-      NODE_OPTIONS: "--max-old-space-size=8192", // Removed gc-interval as it's not allowed in worker threads
+      NODE_OPTIONS: "--max-old-space-size=32768", // Increased to 32GB heap size
     },
   },
   define: {

@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 // Node.js imports
 import fs from "fs";
 import path from "path";
+import { numFormat as fmt } from "../../public/src/utils/util.js";
 
 // DOM testing imports
 import { JSDOM } from "jsdom";
@@ -113,6 +114,29 @@ const getFullTestName = (task) => {
     current = current.suite;
   }
   return path.join(' > ');
+};
+
+// Helper to get the test file name from the task
+const getTestFileName = (task) => {
+  if (!task) return 'unknown';
+  let current = task;
+  while (current) {
+    if (current.file) {
+      let filePath;
+      if (typeof current.file === 'string') {
+        filePath = current.file;
+      } else if (current.file.filepath) {
+        filePath = current.file.filepath;
+      } else if (current.file.name) {
+        filePath = current.file.name;
+      } else {
+        filePath = String(current.file);
+      }
+      return path.basename(filePath);
+    }
+    current = current.suite;
+  }
+  return 'unknown';
 };
 
 // Immediately override console methods to ensure they're captured
@@ -225,9 +249,104 @@ console.log = createLogger('log');
 console.warn = createLogger('warn');
 console.error = createLogger('error');
 
+function diffObjects(obj1, obj2, path = '') {
+    const differences = {};
+    const allKeys = new Set([...Object.keys(obj1), ...Object.keys(obj2)]);
+
+    for (const key of allKeys) {
+        const newPath = path ? `${path}.${key}` : key;
+        const val1 = obj1[key];
+        const val2 = obj2[key];
+
+        if (typeof val1 === 'object' && val1 !== null && typeof val2 === 'object' && val2 !== null && !Array.isArray(val1) && !Array.isArray(val2)) {
+            const deepDiff = diffObjects(val1, val2, newPath);
+            if (Object.keys(deepDiff).length > 0) {
+                Object.assign(differences, deepDiff);
+            }
+        } else if (JSON.stringify(val1) !== JSON.stringify(val2)) {
+            differences[newPath] = { from: val1, to: val2 };
+        }
+    }
+    return differences;
+}
+
+let initialGameState = null;
+
+function getPartAbbreviation(part) {
+    if (!part) return '..';
+    const id = part.id;
+    if (id.startsWith('uranium')) return `U${id.slice(-1)}`;
+    if (id.startsWith('plutonium')) return `P${id.slice(-1)}`;
+    if (id.startsWith('thorium')) return `T${id.slice(-1)}`;
+    if (id.startsWith('seaborgium')) return `S${id.slice(-1)}`;
+    if (id.startsWith('dolorium')) return `D${id.slice(-1)}`;
+    if (id.startsWith('nefastium')) return `N${id.slice(-1)}`;
+    if (id.startsWith('protium')) return `X${id.slice(-1)}`;
+    if (id.startsWith('reflector')) return `R${id.slice(-1)}`;
+    if (id.startsWith('capacitor')) return `C${id.slice(-1)}`;
+    if (id.startsWith('vent')) return `V${id.slice(-1)}`;
+    if (id.startsWith('heat_exchanger')) return `E${id.slice(-1)}`;
+    if (id.startsWith('heat_inlet')) return `I${id.slice(-1)}`;
+    if (id.startsWith('heat_outlet')) return `O${id.slice(-1)}`;
+    if (id.startsWith('coolant_cell')) return `c${id.slice(-1)}`;
+    if (id.startsWith('reactor_plating')) return `p${id.slice(-1)}`;
+    if (id.startsWith('particle_accelerator')) return `A${id.slice(-1)}`;
+    if (id.startsWith('overflow_valve')) return `Ov`;
+    if (id.startsWith('topup_valve')) return `Tu`;
+    if (id.startsWith('check_valve')) return `Ch`;
+    return '??';
+}
+
+function dumpGrid(game) {
+    if (!game || !game.tileset || !game.rows || !game.cols) return "Could not dump grid: game or tileset not found.\n";
+    let output = '\n\u001b[34m--- Reactor Grid State ---\u001b[0m\n';
+    let header = ' '.repeat(3);
+    for (let c = 0; c < game.cols; c++) {
+        header += ` ${String(c).padStart(2)} `;
+    }
+    output += header + '\n';
+    output += '  +' + '----'.repeat(game.cols) + '+\n';
+
+    for (let r = 0; r < game.rows; r++) {
+        let rowStr = `${String(r).padStart(2)}|`;
+        for (let c = 0; c < game.cols; c++) {
+            const tile = game.tileset.getTile(r, c);
+            let heatIndicator = ' ';
+            if (tile?.part?.containment > 0 && tile.heat_contained > 0) {
+                const heatRatio = tile.heat_contained / tile.part.containment;
+                if (heatRatio >= 1) heatIndicator = '\u001b[31m*'; // Red asterisk for overheating/exploded
+                else if (heatRatio > 0.8) heatIndicator = '\u001b[33m!'; // Yellow exclamation for high heat
+                else if (heatRatio > 0.5) heatIndicator = '\u001b[37m·'; // Dim dot for some heat
+            }
+            rowStr += ` ${getPartAbbreviation(tile?.part)}${heatIndicator}\u001b[0m|`;
+        }
+        output += rowStr + '\n';
+    }
+
+    output += '  +' + '----'.repeat(game.cols) + '+\n';
+    output += 'Legend: \u001b[37m·\u001b[0m >50% heat, \u001b[33m!\u001b[0m >80% heat, \u001b[31m*\u001b[0m >=100% heat (Overheated)\n';
+    output += '\u001b[34m--- End Reactor Grid ---\u001b[0m\n';
+    return output;
+}
+
+const logGameStateSnapshot = (game, message = "Game State Snapshot") => {
+    originalConsoleLog(`\n\u001b[35m--- ${message} ---\u001b[0m`);
+    originalConsoleLog(dumpGrid(game));
+    originalConsoleLog('\u001b[34m--- Key Stats ---\u001b[0m');
+    originalConsoleLog(`Money: ${game.current_money}, Power: ${game.reactor.current_power.toFixed(2)}, Heat: ${game.reactor.current_heat.toFixed(2)}`);
+    originalConsoleLog('\u001b[34m--- Active Upgrades ---\u001b[0m');
+    game.upgradeset.getAllUpgrades().filter(u => u.level > 0).forEach(u => originalConsoleLog(`- ${u.id} (Level ${u.level})`));
+    originalConsoleLog(`\u001b[35m--- End Snapshot ---\u001b[0m\n`);
+};
+global.logGameStateSnapshot = logGameStateSnapshot;
+
 // Before each test, create a new log buffer
 beforeEach((context) => {
   currentTestName = getFullTestName(context.task);
+  const game = globalGameWithDOM || globalGameLogicOnly;
+  if (game) {
+    initialGameState = game.getSaveState();
+  }
   testLogs.set(currentTestName, []);
 });
 
@@ -252,6 +371,78 @@ afterEach((context) => {
       originalLogger(...args);
     });
     originalConsoleLog(`\u001b[36m---------------------------------------------------------\u001b[0m\n`);
+  }
+
+  if (testFailed) {
+    const game = globalGameWithDOM || globalGameLogicOnly;
+    if (game && game.getSaveState) {
+      const testFileName = getTestFileName(context.task);
+      originalConsoleLog(`\n\u001b[33m--- Extended Debug Information for Failed Test ---\u001b[0m`);
+      originalConsoleLog(`\u001b[33mTest: "${fullTestName}" | File: ${testFileName}\u001b[0m`);
+
+      // Grid State
+      originalConsoleLog(dumpGrid(game));
+
+      // Key State Variables
+      const objective = game.objectives_manager?.getCurrentObjectiveInfo();
+      originalConsoleLog('\u001b[34m--- Key State Variables ---\u001b[0m');
+      originalConsoleLog(`Money: ${fmt(game.current_money)} | Power: ${game.reactor?.current_power?.toFixed(2)} | Heat: ${game.reactor?.current_heat?.toFixed(2)} | EP: ${fmt(game.current_exotic_particles)}`);
+      if (objective) {
+        originalConsoleLog(`Objective: #${objective.index} - ${objective.title}`);
+      }
+
+      // State Diff
+      if (initialGameState) {
+        originalConsoleLog('\u001b[34m--- Game State Diff (Before vs. After) ---\u001b[0m');
+        const finalGameState = game.getSaveState();
+        const differences = diffObjects(initialGameState, finalGameState);
+        if (Object.keys(differences).length > 0) {
+          for (const [key, { from, to }] of Object.entries(differences)) {
+            const fromStr = JSON.stringify(from, null, 2);
+            const toStr = JSON.stringify(to, null, 2);
+            originalConsoleLog(`  \u001b[33m${key}:\u001b[0m \u001b[31m${fromStr}\u001b[0m -> \u001b[32m${toStr}\u001b[0m`);
+          }
+        } else {
+          originalConsoleLog('No state changes detected.');
+        }
+      }
+
+      // Active Upgrades
+      originalConsoleLog('\u001b[34m--- Active Upgrades (at time of failure) ---\u001b[0m');
+      const activeUpgrades = game.upgradeset.getAllUpgrades().filter(u => u.level > 0);
+      if (activeUpgrades.length > 0) {
+        activeUpgrades.forEach(u => originalConsoleLog(`- ${u.id} (Level ${u.level})`));
+      } else {
+        originalConsoleLog('None');
+      }
+
+      // In-Game Event History
+      if (game.debugHistory && game.debugHistory.getHistory().length > 0) {
+        originalConsoleLog('\u001b[34m--- In-Game Event History (last 200) ---\u001b[0m');
+        originalConsoleLog(game.debugHistory.format());
+      } else {
+        originalConsoleLog('\u001b[34m--- In-Game Event History: No events recorded. ---\u001b[0m');
+      }
+
+      // Full Game State
+      console.groupCollapsed('\u001b[34m--- Full Game State (at time of failure) ---\u001b[0m');
+      try {
+        const gameState = game.getSaveState();
+        const replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
+        originalConsoleLog(JSON.stringify(gameState, replacer, 2));
+      } catch (e) {
+        originalConsoleError('Error serializing game state for debug:', e);
+      }
+      console.groupEnd();
+
+      // Detailed Error
+      if (context.task.result?.error?.stack) {
+        originalConsoleLog('\u001b[31m--- Assertion Error Stack ---\u001b[0m');
+        originalConsoleError(context.task.result.error.stack);
+      }
+
+      originalConsoleLog('\u001b[33m--- End Extended Debug Information ---\u001b[0m');
+    }
   }
 
   // Clean up the logs for the completed test
@@ -387,9 +578,6 @@ export async function setupGame() {
   const game = new Game(ui);
   await ui.init(game);
   game.engine = new Engine(game);
-
-  // Mock isPartUnlocked to always return true for tests
-  game.isPartUnlocked = vi.fn().mockReturnValue(true);
 
   // Only create a new objective manager if one doesn't exist
   if (!game.objectives_manager) {
@@ -535,6 +723,67 @@ export async function setupGameWithDOM() {
   global.navigator = window.navigator;
   global.URL = window.URL;
   global.URLSearchParams = window.URLSearchParams;
+
+  // Mock AudioContext for JSDOM
+  window.AudioContext = class {
+    constructor() {
+      this.state = 'running';
+      this.destination = {};
+    }
+    createGain() {
+      return {
+        gain: {
+          value: 0,
+          setValueAtTime: () => {},
+          linearRampToValueAtTime: () => {},
+          setTargetAtTime: () => {},
+          exponentialRampToValueAtTime: () => {}
+        },
+        connect: () => {},
+        disconnect: () => {}
+      };
+    }
+    createOscillator() {
+      return {
+        type: 'sine',
+        frequency: { value: 440, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
+        connect: () => {},
+        disconnect: () => {},
+        start: () => {},
+        stop: () => {}
+      };
+    }
+    createBufferSource() {
+      return {
+        buffer: null,
+        loop: false,
+        connect: () => {},
+        disconnect: () => {},
+        start: () => {},
+        stop: () => {}
+      };
+    }
+    createBiquadFilter() {
+      return {
+        type: 'lowpass',
+        frequency: { value: 1000, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
+        Q: { value: 1 },
+        connect: () => {},
+        disconnect: () => {}
+      };
+    }
+    createWaveShaper() {
+      return { curve: null, connect: () => {}, disconnect: () => {} };
+    }
+    createBuffer() {
+      return {
+        getChannelData: () => new Float32Array(100)
+      };
+    }
+    suspend() {}
+    resume() {}
+  };
+  window.webkitAudioContext = window.AudioContext;
 
   // Try to fix window.location to prevent url-parse library errors
   // Use a safer approach that doesn't try to redefine non-configurable properties
@@ -687,6 +936,8 @@ export async function setupGameWithDOM() {
   const ui = new UI();
   const game = new Game(ui);
   const pageRouter = new PageRouter(ui);
+  game.audio = new (await import("../../public/src/services/audioService.js")).AudioService();
+  await game.audio.init();
   game.router = pageRouter;
 
   // Mock Google Drive functionality for all tests
@@ -766,16 +1017,20 @@ export function cleanupGame() {
       }
     }
 
-    // Clear UI update tasks
-    if (globalGameLogicOnly.ui?.update_interface_task) {
-      clearTimeout(globalGameLogicOnly.ui.update_interface_task);
-      globalGameLogicOnly.ui.update_interface_task = null;
-    }
-
-    // Clear any other timers
-    if (globalGameLogicOnly.ui?.timers) {
-      globalGameLogicOnly.ui.timers.forEach(timer => clearTimeout(timer));
-      globalGameLogicOnly.ui.timers = [];
+    // Stop UI update loop
+    if (globalGameLogicOnly.ui) {
+      if (globalGameLogicOnly.ui.update_interface_task) {
+        clearTimeout(globalGameLogicOnly.ui.update_interface_task);
+        globalGameLogicOnly.ui.update_interface_task = null;
+      }
+      // Set a flag to prevent the loop from continuing
+      globalGameLogicOnly.ui._updateLoopStopped = true;
+      
+      // Clear any other timers
+      if (globalGameLogicOnly.ui.timers) {
+        globalGameLogicOnly.ui.timers.forEach(timer => clearTimeout(timer));
+        globalGameLogicOnly.ui.timers = [];
+      }
     }
 
     // Reset pause state
@@ -799,10 +1054,18 @@ export function cleanupGame() {
       }
     }
 
-    // Clear UI update tasks
-    if (globalGameWithDOM.ui?.update_interface_task) {
-      clearTimeout(globalGameWithDOM.ui.update_interface_task);
-      globalGameWithDOM.ui.update_interface_task = null;
+    // Stop UI update loop
+    if (globalGameWithDOM.ui) {
+      if (globalGameWithDOM.ui.update_interface_task) {
+        clearTimeout(globalGameWithDOM.ui.update_interface_task);
+        globalGameWithDOM.ui.update_interface_task = null;
+      }
+      if (globalGameWithDOM.ui._performanceUpdateInterval) {
+        clearInterval(globalGameWithDOM.ui._performanceUpdateInterval);
+        globalGameWithDOM.ui._performanceUpdateInterval = null;
+      }
+      // Set a flag to prevent the loop from continuing
+      globalGameWithDOM.ui._updateLoopStopped = true;
     }
 
     // Clear objective manager timeouts
@@ -828,21 +1091,17 @@ export function cleanupGame() {
 
   // Clean up JSDOM environment
   if (global.window && typeof global.window.close === "function") {
-    // Clear all timers in the window
+    // Clear all timers to prevent async operations after test teardown
     if (global.window.setTimeout && global.window.clearTimeout) {
-      // This is a bit aggressive but helps prevent timer leaks
-      const maxTimerId = 10000; // Reasonable upper bound
-      for (let i = 1; i <= maxTimerId; i++) {
-        try {
-          clearTimeout(i);
-          clearInterval(i);
-        } catch (e) {
-          // Ignore errors for non-existent timers
-        }
+      const maxTimerId = setTimeout(() => {}, 0);
+      for (let i = 0; i <= maxTimerId; i++) {
+        clearTimeout(i);
+        clearInterval(i);
+      }
+      if (global.window._virtualConsole) {
+        global.window._virtualConsole.off("error", console.error);
       }
     }
-
-    // Close the window to dispose of JSDOM environment
     global.window.close();
   }
 

@@ -199,6 +199,7 @@ export class UpgradeSet {
 
     if (purchased) {
       upgrade.setLevel(upgrade.level + 1);
+      this.game.debugHistory.add('upgrades', 'Upgrade purchased', { id: upgradeId, level: upgrade.level });
       if (upgrade.upgrade.type === "experimental_parts") {
         this.game.epart_onclick(upgrade);
       }

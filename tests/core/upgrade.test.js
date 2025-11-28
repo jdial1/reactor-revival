@@ -10,8 +10,8 @@ describe("Upgrade Mechanics", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
     expect(upgrade.current_cost).toBe(upgrade.base_cost);
 
-    upgrade.setLevel(1);
-    upgrade.updateDisplayCost();
+    game.current_money = upgrade.getCost();
+    game.upgradeset.purchaseUpgrade(upgrade.id);
 
     expect(upgrade.current_cost).toBe(
       upgrade.base_cost * upgrade.cost_multiplier
@@ -20,20 +20,17 @@ describe("Upgrade Mechanics", () => {
 
   it("should set level and trigger its action", () => {
     const upgrade = game.upgradeset.getUpgrade("expand_reactor_rows");
-
-    // Track the initial reactor rows
     const initialRows = game.rows;
 
-    upgrade.setLevel(1);
-    expect(upgrade.level).toBe(1);
+    game.current_money = upgrade.getCost();
+    game.upgradeset.purchaseUpgrade(upgrade.id);
 
-    // Verify the action was executed by checking the effect
     expect(game.rows).toBe(initialRows + 1);
   });
 
   it("should become unaffordable with insufficient funds", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
-    game.current_money = upgrade.current_cost - 1;
+    game.current_money = upgrade.getCost() - 1;
     game.upgradeset.check_affordability(game);
     expect(upgrade.affordable).toBe(false);
   });

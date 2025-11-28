@@ -34,7 +34,9 @@ const actions = {
     game.reactor.updateStats();
   },
   heat_control_operator: (upgrade, game) => {
-    game.reactor.heat_controlled = upgrade.level > 0;
+    const isEnabled = upgrade.level > 0;
+    game.reactor.heat_controlled = isEnabled;
+    game.ui.stateManager.setVar("heat_control", isEnabled);
   },
   heat_outlet_control_operator: (upgrade, game) => {
     game.reactor.heat_outlet_controlled = upgrade.level > 0;

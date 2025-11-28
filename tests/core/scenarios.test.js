@@ -179,27 +179,24 @@ describe("Complex Grid Scenarios and Interactions", () => {
     });
 
     it("should handle Forceful Fusion upgrade with high heat", async () => {
-        // ARRANGE
         const fusionUpgrade = game.upgradeset.getUpgrade("forceful_fusion");
-        if (fusionUpgrade) fusionUpgrade.setLevel(1); // 1% power increase per log1000(heat)
+        if (fusionUpgrade) fusionUpgrade.setLevel(1);
 
-        const cellPart = game.partset.getPartById("thorium1");
-        await game.tileset.getTile(5, 5).setPart(cellPart);
+        // Place multiple high-heat cells to generate heat naturally
+        const cellPart = game.partset.getPartById("plutonium3");
+        for (let i = 0; i < 5; i++) {
+            await game.tileset.getTile(i, 0).setPart(cellPart);
+        }
 
-        game.reactor.current_heat = 2000000; // 2M heat, log1000(2M) is ~2.09
-        game.reactor.updateStats();
-        const basePower = game.reactor.stats_power; // Power before tick calculation
+        // Run the engine for a few ticks to accumulate heat
+        for (let i = 0; i < 5; i++) {
+            game.engine.tick();
+        }
+        expect(game.reactor.current_heat).toBeGreaterThan(1000);
 
-        // ACT
-        game.engine.tick(); // Tick to apply heat bonus
-
-        // ASSERT
-        // Check that power was generated (the cell should produce power)
-        expect(game.reactor.current_power).toBeGreaterThan(0);
-
-        // The cell should produce power (the exact amount depends on game mechanics)
-        // Just check that some power was generated
-        expect(game.reactor.current_power).toBeGreaterThan(0);
+        const basePower = game.reactor.stats_power;
+        game.engine.tick();
+        expect(game.reactor.current_power).toBeGreaterThan(basePower);
     });
 
 }); 

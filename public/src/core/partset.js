@@ -222,11 +222,11 @@ export class PartSet {
         isAffordable = false;
       } else {
         // Gating: a part must be unlocked to be affordable/selectable
-        const isUnlocked = typeof game.isPartUnlocked === 'function' ? game.isPartUnlocked(part) : true;
+        const isUnlocked = typeof this.game.isPartUnlocked === 'function' ? this.game.isPartUnlocked(part) : true;
         if (part.erequires) {
           const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
           if (requiredUpgrade && requiredUpgrade.level > 0 && isUnlocked) {
-            isAffordable = Number(game.current_exotic_particles) >= Number(part.cost);
+            isAffordable = Number(game.current_exotic_particles) >= Number(part.ecost || part.cost);
           }
         } else {
           if (isUnlocked) {

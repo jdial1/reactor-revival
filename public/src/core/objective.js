@@ -65,7 +65,7 @@ export class ObjectiveManager {
 
     // Restore completion status if it existed
     if (existingCompletionStatus.length > 0) {
-      console.log(`[DEBUG] Preserving ${existingCompletionStatus.filter(c => c).length} completed objectives during initialize`);
+      this.game.logger?.debug(`Preserving ${existingCompletionStatus.filter(c => c).length} completed objectives during initialize`);
       existingCompletionStatus.forEach((completed, index) => {
         if (this.objectives_data[index]) {
           this.objectives_data[index].completed = completed;
@@ -165,6 +165,7 @@ export class ObjectiveManager {
           });
           if (this.current_objective_def.reward) {
             this.game.logger?.debug(`Giving money reward: ${this.current_objective_def.reward}`);
+            this.game.debugHistory.add('objectives', 'Claiming money reward', { index: this.current_objective_index, reward: this.current_objective_def.reward });
             this.game.current_money += this.current_objective_def.reward;
             this.game.ui.stateManager.setVar(
               "current_money",
@@ -173,6 +174,7 @@ export class ObjectiveManager {
             );
           } else if (this.current_objective_def.ep_reward) {
             console.log(`[DEBUG] Giving EP reward: ${this.current_objective_def.ep_reward}`);
+            this.game.debugHistory.add('objectives', 'Claiming EP reward', { index: this.current_objective_index, ep_reward: this.current_objective_def.ep_reward });
             this.game.exotic_particles += this.current_objective_def.ep_reward;
             this.game.ui.stateManager.setVar(
               "exotic_particles",
@@ -289,6 +291,9 @@ export class ObjectiveManager {
 
     this.current_objective_index = objective_index;
     const nextObjective = this.objectives_data[this.current_objective_index];
+    if (this.game.debugHistory) {
+      this.game.debugHistory.add('objectives', 'Setting objective', { index: objective_index, id: nextObjective?.checkId });
+    }
     this.game.logger?.debug(`Setting objective ${objective_index}: ${nextObjective?.title || 'undefined'}`);
 
     const updateLogic = () => {

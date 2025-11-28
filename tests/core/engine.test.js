@@ -87,35 +87,24 @@ describe("Engine Mechanics", () => {
     expect(game.reactor.current_power).toBe(550);
   });
 
-  it("should manually simulate auto-sell", () => {
-    // Manually simulate the auto-sell logic
-    game.ui.stateManager.setVar("auto_sell", true);
+  it("should correctly perform auto-sell during a tick", async () => {
+    const cell = game.partset.getPartById("plutonium1");
+    const tile = game.tileset.getTile(0, 0);
+    await tile.setPart(cell);
+    tile.activated = true;
+    tile.ticks = cell.base_ticks;
     game.reactor.auto_sell_multiplier = 0.1;
-    game.reactor.current_power = 650; // This test doesn't add a uranium cell, so 650 is correct
-    game.reactor.max_power = 1000;
+    game.reactor.altered_max_power = 1000;
+    game.reactor.updateStats();
+    game.engine.tick(); // First tick to generate power
+    expect(game.reactor.current_power).toBe(cell.power);
 
+    game.ui.stateManager.setVar("auto_sell", true);
     const initialMoney = game.current_money;
-
-    // Simulate the auto-sell logic from the engine
-    if (game.ui.stateManager.getVar("auto_sell")) {
-      const sell_amount = Math.min(
-        game.reactor.current_power,
-        Math.floor(game.reactor.max_power * game.reactor.auto_sell_multiplier)
-      );
-
-      console.log(`[TEST] Manual auto-sell: current_power=${game.reactor.current_power}, sell_amount=${sell_amount}`);
-
-      if (sell_amount > 0) {
-        game.reactor.current_power -= sell_amount;
-        game.current_money += sell_amount;
-        game.ui.stateManager.setVar("current_money", game.current_money);
-      }
-    }
-
-    console.log(`[TEST] After manual auto-sell: power=${game.reactor.current_power}, money=${game.current_money}`);
-
-    expect(game.reactor.current_power).toBe(550);
-    expect(game.current_money).toBe(initialMoney + 100);
+    game.engine.tick();
+    const expectedSell = Math.floor(game.reactor.max_power * game.reactor.auto_sell_multiplier);
+    expect(game.reactor.current_power).toBe(cell.power * 2 - expectedSell); // 150 (from tick 1) + 150 (from tick 2) - 100 (sold) = 200
+    expect(game.current_money).toBe(initialMoney + expectedSell);
   });
 
   it("should calculate auto-sell amount correctly", () => {
@@ -180,40 +169,24 @@ describe("Engine Mechanics", () => {
   });
 
   it("should handle auto-sell when enabled", async () => {
-    // Enable auto-sell
+    game.tileset.clearAllTiles();
     game.ui.stateManager.setVar("auto_sell", true);
-    game.reactor.auto_sell_multiplier = 0.1; // 10%
-    game.reactor.current_power = 500;
-    game.reactor.altered_max_power = 1000; // Set altered_max_power instead of max_power
-
-    // Update reactor stats to ensure max_power is properly set
+    game.reactor.auto_sell_multiplier = 0.1;
+    game.reactor.altered_max_power = 1000;
+    game.reactor.current_power = 0;
+    game.reactor.max_power = 1000; // Set max power for calculation
     game.reactor.updateStats();
 
-    // Add a fuel cell to generate power during the tick
     const tile = game.tileset.getTile(0, 0);
-    const fuelPart = game.partset.getPartById("plutonium1"); // Use plutonium for more power
+    const fuelPart = game.partset.getPartById("plutonium1"); // A part that generates 150 power
     await tile.setPart(fuelPart);
     tile.activated = true;
-    tile.ticks = 10; // Ensure it has ticks to generate power
-
+    tile.ticks = 10;
     const initialMoney = game.current_money;
-    const sellAmount = Math.floor(1000 * 0.1); // 100
+    const sellAmount = Math.floor(1000 * 0.1);
 
-    // Check initial state
-    expect(game.reactor.current_power).toBe(500);
-    expect(game.ui.stateManager.getVar("auto_sell")).toBe(true);
-    expect(tile.part.id).toBe("plutonium1");
-    expect(tile.activated).toBe(true);
-    expect(tile.ticks).toBe(10);
-
-    console.log(`[TEST] Before tick: power=${game.reactor.current_power}, auto_sell=${game.ui.stateManager.getVar("auto_sell")}`);
     game.engine.tick();
-    console.log(`[TEST] After tick: power=${game.reactor.current_power}, money=${game.current_money}`);
 
-    // Power should be: initial (500) + generated power - sell amount
-    // The fuel cell generates power, then auto-sell removes some
-    // Since plutonium generates significant power, the result should be greater than initial - sell amount
-    expect(game.reactor.current_power).toBeGreaterThan(500 - sellAmount);
     expect(game.current_money).toBe(initialMoney + sellAmount);
   });
 
@@ -224,7 +197,7 @@ describe("Engine Mechanics", () => {
       console.warn("perpetual_reflectors upgrade not available, skipping test");
       return;
     }
-    game.upgradeset.purchaseUpgrade(perpetualUpgrade.id);
+    game.upgradeset.purchaseUpgrade('perpetual_reflectors');
 
     // Set auto-buy state directly
     game.ui.stateManager.setVar("auto_buy", true);
@@ -232,19 +205,17 @@ describe("Engine Mechanics", () => {
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("reflector1");
     await tile.setPart(part);
+    const cellTile = game.tileset.getTile(0, 1);
+    await cellTile.setPart(game.partset.getPartById('uranium1'));
 
-    // Verify the part is actually perpetual
-    expect(part.perpetual).toBe(true);
-
-    const initialMoney = game.current_money;
     const replacementCost = part.cost * 1.5;
-    tile.ticks = 1;
+    game.current_money = replacementCost * 2;
+    const initialMoney = game.current_money;
+    tile.ticks = 1; // Set ticks to 1 to trigger depletion on next tick
 
-    game.engine.tick(); // This tick will deplete the part
-
+    game.engine.tick();
     expect(tile.part).not.toBeNull();
-    // After replacement, ticks should be reset - just check it's not 0
-    expect(tile.ticks).toBeGreaterThan(0);
+    expect(tile.ticks).toBe(part.ticks);
     expect(game.current_money).toBe(initialMoney - replacementCost);
   });
 
@@ -287,16 +258,8 @@ describe("Engine Mechanics", () => {
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("particle_accelerator1");
     await tile.setPart(part);
-
-    // Set reactor heat high enough to trigger meltdown when checkMeltdown is called
-    game.reactor.current_heat = game.reactor.max_heat * 2.5;
-
-    // Set heat way above containment to trigger explosion
-    const testHeat = part.containment * 2;
-    tile.heat_contained = testHeat;
-
+    game.reactor.current_heat = game.reactor.max_heat * 3; // Trigger meltdown
     game.engine.tick();
-
     expect(game.reactor.has_melted_down).toBe(true);
   });
 
@@ -393,7 +356,26 @@ describe("Engine Mechanics", () => {
     // Test all parts with containment that should explode
     testPartExplosion("capacitor1", "capacitor");
     testPartExplosion("capacitor6", "extreme capacitor");
-    testPartExplosion("vent1", "heat vent");
+    it("should explode heat vent when exceeding containment via gameplay", async () => {
+      game.tileset.clearAllTiles();
+      const tile = game.tileset.getTile(0, 0);
+      const part = game.partset.getPartById("vent1");
+      await tile.setPart(part);
+      const highHeatCell = game.partset.getPartById('nefastium1');
+      await game.tileset.getTile(0, 1).setPart(highHeatCell);
+
+      const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
+      let explosionCalled = false;
+      game.engine.handleComponentExplosion = (explodedTile) => {
+        explosionCalled = true;
+        expect(explodedTile).toBe(tile);
+      };
+      for (let i = 0; i < 5; i++) {
+        game.engine.tick();
+      }
+      game.engine.handleComponentExplosion = originalHandleComponentExplosion;
+      expect(explosionCalled).toBe(true);
+    });
     testPartExplosion("vent6", "extreme vent");
     testPartExplosion("heat_exchanger1", "heat exchanger");
     testPartExplosion("heat_exchanger6", "extreme heat exchanger");
@@ -710,7 +692,7 @@ describe("Engine Mechanics", () => {
     expect(game.paused).toBe(true);
 
     // Process a tick while paused
-    game.engine.manualTick();
+    game.engine.tick();
 
     // Heat should not change when game is paused
     expect(game.reactor.current_heat).toBe(initialHeat);

@@ -61,13 +61,18 @@ export const on = (parentElement, selector, eventType, handler) => {
     });
 };
 
-export const performance = window.performance || { now: () => new Date().getTime() };
+export const performance = (typeof window !== 'undefined' && window.performance) || { now: () => new Date().getTime() };
 
 /**
  * Get the correct base path for GitHub Pages deployment
  * @returns {string} The base path for the current deployment
  */
 export function getBasePath() {
+    // In Node.js test environment, return empty string
+    if (typeof window === 'undefined' || !window.location) {
+        return '';
+    }
+
     // Check if we're on GitHub Pages
     const isGitHubPages = window.location.hostname.includes('github.io');
 

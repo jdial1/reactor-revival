@@ -233,7 +233,15 @@ export class Reactor {
   }
 
   checkMeltdown() {
-    if (this.current_heat > 2 * this.max_heat) {
+    if (this.has_melted_down) {
+      this.game.logger?.debug(`[MELTDOWN-CHECK] Already in meltdown state.`);
+      return false; // Already melted down, don't re-trigger
+    }
+    const isMeltdown = this.current_heat > 2 * this.max_heat;
+    this.game.logger?.debug(`[MELTDOWN-CHECK] Inside checkMeltdown. isMeltdown condition evaluated to: ${isMeltdown}. (Heat: ${this.current_heat.toFixed(2)} > 2 * Max Heat: ${this.max_heat.toFixed(2)})`);
+    if (isMeltdown) {
+      this.game.logger?.warn(`[MELTDOWN] Condition met! Initiating meltdown sequence.`);
+      this.game.debugHistory.add('reactor', 'Meltdown triggered', { heat: this.current_heat, max_heat: this.max_heat });
       this.has_melted_down = true;
 
       // Hide any active tooltips before clearing parts
@@ -241,29 +249,28 @@ export class Reactor {
         this.game.tooltip_manager.hide();
       }
 
-      this.game.tileset.active_tiles_list.forEach((tile) => {
-        if (tile.part) {
-          if (tile.$el) tile.$el.classList.add("exploding");
-          tile.clearPart(false);
-        }
-      });
-
-      this.current_heat = this.max_heat * 2 + 1;
-
       this.game.ui.stateManager.setVar("melting_down", true, true);
 
       // Update UI to show meltdown state
       if (typeof document !== "undefined" && document.body) {
         document.body.classList.add("reactor-meltdown");
       }
+      if (this.game.engine) {
+        this.game.engine.stop();
+      }
+      this.game.tileset.active_tiles_list.forEach((tile) => {
+        if (tile.part) {
+          tile.clearPart(false);
+        }
+      });
 
       // Make all parts and upgrades unaffordable during meltdown
       this.game.partset.check_affordability(this.game);
       this.game.upgradeset.check_affordability(this.game);
 
-      return true;
+      return isMeltdown;
     }
-    return false;
+    return isMeltdown;
   }
 
   clearMeltdownState() {

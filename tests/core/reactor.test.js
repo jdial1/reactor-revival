@@ -115,11 +115,14 @@ describe("Reactor Mechanics", () => {
   });
 
   it("should handle power generation and selling", async () => {
-    game.reactor.current_power = 500;
+    const cell = game.partset.getPartById('uranium1');
+    await game.tileset.getTile(0, 0).setPart(cell);
+    game.engine.tick();
+    expect(game.reactor.current_power).toBe(cell.power);
     const initialMoney = game.current_money;
     game.reactor.sellPower();
     expect(game.reactor.current_power).toBe(0);
-    expect(game.current_money).toBe(initialMoney + 500);
+    expect(game.current_money).toBe(initialMoney + cell.power);
     expect(game.sold_power).toBe(true);
   });
 
@@ -136,12 +139,12 @@ describe("Reactor Mechanics", () => {
 
   it("should manually reduce heat", () => {
     game.reactor.current_heat = 100;
-    game.reactor.manualReduceHeat();
+    game.manual_reduce_heat_action();
     expect(game.reactor.current_heat).toBe(100 - game.base_manual_heat_reduce);
     expect(game.sold_heat).toBe(false);
 
     game.reactor.current_heat = 0.5;
-    game.reactor.manualReduceHeat();
+    game.manual_reduce_heat_action();
     expect(game.reactor.current_heat).toBe(0);
     expect(game.sold_heat).toBe(true);
   });
@@ -167,13 +170,16 @@ describe("Reactor Mechanics", () => {
     expect(game.reactor.has_melted_down).toBe(false);
   });
 
-  it("should calculate power correctly", async () => {
+  it("should apply Infused Cells power multiplier correctly", async () => {
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("uranium1");
     await tile.setPart(part);
-    game.reactor.power_multiplier = 2;
+    game.upgradeset.purchaseUpgrade('laboratory');
+    game.upgradeset.purchaseUpgrade('infused_cells');
+    part.recalculate_stats(); // Manually trigger recalc after upgrade
+    game.reactor.updateStats(); // Ensure reactor stats are updated with the part's new stats
     game.engine.tick();
-    expect(game.reactor.current_power).toBe(part.power * 2);
+    expect(game.reactor.current_power).toBeCloseTo(part.base_power * 2, 0);
   });
 
   it("should handle heat generation correctly", async () => {
@@ -195,12 +201,11 @@ describe("Reactor Mechanics", () => {
   });
 
   it("should handle heat venting correctly", async () => {
-    // Don't add a heat-generating part for a venting test
     game.reactor.current_heat = 1000;
-    game.reactor.vent_multiplier = 2; // Test the implemented multiplier
-    game.reactor.heat_controlled = true; // Enable auto heat reduction
+    game.reactor.heat_controlled = true;
     game.engine.tick();
     expect(game.reactor.current_heat).toBeLessThan(1000);
+    expect(game.reactor.current_heat).toBeGreaterThan(0);
   });
 
   it("should handle power storage correctly", async () => {
@@ -220,16 +225,12 @@ describe("Reactor Mechanics", () => {
     expect(game.reactor.has_melted_down).toBe(false);
   });
 
-  it("should handle reactor stats update correctly", () => {
-    game.reactor.max_heat = 1000;
-    game.reactor.heat_power_multiplier = 2;
-    game.reactor.power_multiplier = 1.5;
-
+  it("should handle reactor stats update correctly", async () => {
+    const initialMaxHeat = game.reactor.max_heat;
+    const plating = game.partset.getPartById('reactor_plating1');
+    await game.tileset.getTile(0, 0).setPart(plating);
     game.reactor.updateStats();
-
-    expect(game.reactor.max_heat).toBe(1000);
-    expect(game.reactor.heat_power_multiplier).toBe(2);
-    expect(game.reactor.power_multiplier).toBe(1.5);
+    expect(game.reactor.max_heat).toBe(initialMaxHeat + plating.reactor_heat);
   });
 
   it("should handle reactor tick correctly", () => {

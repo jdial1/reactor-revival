@@ -83,11 +83,10 @@ describe("Complex Layouts and Advanced Interactions", () => {
     });
 
     it("should increase cell power with high sustained heat when Forceful Fusion is active", async () => {
-        // Purchase Forceful Fusion and Heat Control Operator upgrades
         const fusionUpgrade = game.upgradeset.getUpgrade("forceful_fusion");
-        const heatControlUpgrade = game.upgradeset.getUpgrade("heat_control_operator");
-        fusionUpgrade.setLevel(1);
-        heatControlUpgrade.setLevel(1);
+        game.upgradeset.purchaseUpgrade("forceful_fusion");
+        game.upgradeset.purchaseUpgrade("heat_control_operator");
+
         expect(game.reactor.heat_power_multiplier).toBe(1);
         expect(game.reactor.heat_controlled).toBe(true);
 
@@ -106,6 +105,7 @@ describe("Complex Layouts and Advanced Interactions", () => {
         // Artificially set a high heat level (but not so high it causes meltdown)
         game.reactor.current_heat = 10000; // 10K heat
         game.reactor.max_heat = 100000; // Increase max heat to prevent meltdown
+        game.reactor.altered_max_heat = 100000; // Prevent updateStats() from resetting max_heat
 
         // Ensure the tile's power is properly initialized
         cellTile.power = cellPart.base_power; // Use base_power instead of power
