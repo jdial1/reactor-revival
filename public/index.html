@@ -36,18 +36,52 @@
     
 
     <script>
-      // Register Service Worker in production builds for PWA
-      if ('serviceWorker' in navigator) {
-        const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-        const pathParts = window.location.pathname.split('/');
-        const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
-        const swPath = repoName ? `/${repoName}/sw.js` : '/sw.js';
-        if (!isLocalhost) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register(swPath).catch(console.warn);
-          });
+      // Service Worker Registration for PWA
+      // This registration is detectable by PWA analyzers like PWABuilder
+      (function() {
+        if ('serviceWorker' in navigator) {
+          const pathParts = window.location.pathname.split('/').filter(p => p);
+          const repoName = pathParts.length > 0 ? pathParts[0] : '';
+          const basePath = repoName ? `/${repoName}` : '';
+          const swPath = `${basePath}/sw.js`;
+          const scope = `${basePath}/`;
+
+          function registerServiceWorker() {
+            navigator.serviceWorker.register(swPath, { scope: scope })
+              .then(function(registration) {
+                console.log('[SW] Service Worker registered successfully:', registration.scope);
+                
+                registration.addEventListener('updatefound', function() {
+                  const newWorker = registration.installing;
+                  if (newWorker) {
+                    newWorker.addEventListener('statechange', function() {
+                      if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        console.log('[SW] New service worker available');
+                      }
+                    });
+                  }
+                });
+
+                if (registration.waiting) {
+                  console.log('[SW] Service worker waiting to activate');
+                }
+                if (registration.active) {
+                  console.log('[SW] Service worker active');
+                }
+              })
+              .catch(function(error) {
+                console.error('[SW] Service Worker registration failed:', error);
+              });
+          }
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', registerServiceWorker);
+          } else {
+            registerServiceWorker();
+          }
+          window.addEventListener('load', registerServiceWorker);
         }
-      }
+      })();
     </script>
   </body>
 </html>

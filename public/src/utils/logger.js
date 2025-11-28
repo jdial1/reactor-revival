@@ -12,6 +12,8 @@ class Logger {
             DEBUG: 3
         };
 
+        this.productionMode = typeof window !== 'undefined' && window.PRODUCTION_BUILD === true;
+
         // Default to INFO level in production, DEBUG in development
         this.currentLevel = this.levels.INFO;
 
@@ -20,14 +22,16 @@ class Logger {
             this.currentLevel = this.levels.DEBUG;
         }
 
-        // Check for localStorage override
-        try {
-            const storedLevel = localStorage.getItem('reactor_log_level');
-            if (storedLevel && this.levels[storedLevel.toUpperCase()] !== undefined) {
-                this.currentLevel = this.levels[storedLevel.toUpperCase()];
+        // Check for localStorage override (but not in production)
+        if (!this.productionMode) {
+            try {
+                const storedLevel = localStorage.getItem('reactor_log_level');
+                if (storedLevel && this.levels[storedLevel.toUpperCase()] !== undefined) {
+                    this.currentLevel = this.levels[storedLevel.toUpperCase()];
+                }
+            } catch (e) {
+                // Ignore localStorage errors
             }
-        } catch (e) {
-            // Ignore localStorage errors
         }
     }
 
@@ -43,6 +47,9 @@ class Logger {
     }
 
     shouldLog(level) {
+        if (this.productionMode) {
+            return false;
+        }
         return this.currentLevel >= level;
     }
 

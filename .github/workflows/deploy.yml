@@ -54,6 +54,9 @@ jobs:
       - name: Check PWA root files
         run: npm run check-pwa-root-files
 
+      - name: Remove console logging
+        run: node scripts/remove-console-logs.js
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

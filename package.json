@@ -18,6 +18,7 @@
     "lint:js": "eslint . --format @microsoft/eslint-formatter-sarif --output-file eslint-results.sarif",
     "lint:css": "stylelint \"public/css/**/*.css\" --fix",
     "check-pwa-root-files": "node scripts/check-pwa-root-files.js",
+    "remove-console-logs": "node scripts/remove-console-logs.js",
     "postinstall": "npm run copy-libs"
   },
   "keywords": [],
