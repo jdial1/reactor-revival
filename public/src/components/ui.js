@@ -2857,18 +2857,38 @@ export class UI {
       }
     }
 
-    const pwaDisplayBtn = document.getElementById("pwa_display_mode_btn");
-    if (pwaDisplayBtn) {
-      pwaDisplayBtn.style.display = "flex";
-      pwaDisplayBtn.style.visibility = "visible";
-      this.initializePWADisplayModeButton(pwaDisplayBtn);
-    } else {
-      console.warn("[UI] PWA display mode button element not found in DOM");
-    }
-
     // Check if all required elements exist
     if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) {
       console.warn("[UI] Copy/paste UI elements not found, skipping initialization");
+    }
+
+    // Initialize PWA display mode button (independent of copy/paste UI)
+    const pwaDisplayBtn = document.getElementById("pwa_display_mode_btn");
+    if (pwaDisplayBtn) {
+      console.log("[UI] PWA display mode button found, initializing...");
+      pwaDisplayBtn.style.display = "flex";
+      pwaDisplayBtn.style.visibility = "visible";
+      pwaDisplayBtn.style.opacity = "1";
+      this.initializePWADisplayModeButton(pwaDisplayBtn);
+    } else {
+      console.warn("[UI] PWA display mode button element not found, retrying...");
+      // Retry after a short delay in case DOM isn't ready
+      setTimeout(() => {
+        const retryBtn = document.getElementById("pwa_display_mode_btn");
+        if (retryBtn) {
+          console.log("[UI] PWA display mode button found on retry, initializing...");
+          retryBtn.style.display = "flex";
+          retryBtn.style.visibility = "visible";
+          retryBtn.style.opacity = "1";
+          this.initializePWADisplayModeButton(retryBtn);
+        } else {
+          console.warn("[UI] PWA display mode button element not found in DOM after retry");
+        }
+      }, 100);
+    }
+
+    // Early return only if critical copy/paste elements are missing
+    if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) {
       return;
     }
 
