@@ -116,11 +116,47 @@ async function checkForVersionUpdate() {
     if (deployedVersion !== localVersion) {
       console.log(`New version detected: ${deployedVersion} (current: ${localVersion})`);
       notifyClientsOfNewVersion(deployedVersion, localVersion);
+      showUpdateNotification(deployedVersion);
     }
   } catch (error) {
     console.log("Version check failed:", error);
   }
 }
+
+function showUpdateNotification(version) {
+  if (self.Notification && self.Notification.permission === 'granted') {
+    const title = 'Reactor Revival Update';
+    const options = {
+      body: `Version ${version} is available! Click to reload.`,
+      icon: 'img/parts/cells/cell_1_1.png',
+      badge: 'img/parts/cells/cell_1_1-192x192-maskable.png',
+      tag: 'reactor-update',
+      renotify: true,
+      data: {
+        url: self.location.origin + getBasePath()
+      }
+    };
+    self.registration.showNotification(title, options);
+  }
+}
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      if (clientList.length > 0) {
+        let client = clientList[0];
+        for (let i = 0; i < clientList.length; i++) {
+          if (clientList[i].focused) {
+            client = clientList[i];
+          }
+        }
+        return client.focus();
+      }
+      return self.clients.openWindow(event.notification.data.url || '/');
+    })
+  );
+});
 
 async function getDeployedVersion() {
   try {

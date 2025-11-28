@@ -99,12 +99,16 @@ export class SettingsModal {
 </div>
 <div class="settings-group">
 <h3>System</h3>
-<div class="data-buttons">
-<button class="pixel-btn" id="debug_toggle_btn">Show Debug Info</button>
-<button class="pixel-btn" id="copy_state_btn">Copy Game State</button>
-<button class="pixel-btn" id="open_soundboard_btn" data-page="soundboard_section">Audio Soundboard</button>
-</div>
-<div id="debug_section" class="pixel-panel explanitory hidden" style="margin-top: 1rem;">
+                <div class="data-buttons">
+                    <button class="pixel-btn" id="debug_toggle_btn">Show Debug Info</button>
+                    <button class="pixel-btn" id="copy_state_btn">Copy Game State</button>
+                    <button class="pixel-btn" id="open_soundboard_btn" data-page="soundboard_section">Audio Soundboard</button>
+                </div>
+                <label class="setting-row" style="margin-top: 10px; cursor: pointer;">
+                    <span>Update Notifications</span>
+                    <input type="checkbox" id="setting-notifications">
+                </label>
+                <div id="debug_section" class="pixel-panel explanitory hidden" style="margin-top: 1rem;">
 <button class="pixel-btn" id="debug_hide_btn">Hide Debug Info</button>
 <button class="pixel-btn" id="debug_refresh_btn" style="margin-left: 0.5rem;">Refresh</button>
 <div id="debug_content" style="margin-top: 1rem;">
@@ -353,6 +357,41 @@ export class SettingsModal {
           });
         }
       });
+    }
+
+    const notifCheckbox = this.overlay.querySelector("#setting-notifications");
+    if (notifCheckbox) {
+      if ('Notification' in window) {
+        notifCheckbox.checked = Notification.permission === 'granted';
+        notifCheckbox.addEventListener('change', async (e) => {
+          if (e.target.checked) {
+            const result = await Notification.requestPermission();
+            if (result === 'granted') {
+              notifCheckbox.checked = true;
+              if ('serviceWorker' in navigator) {
+                try {
+                  const reg = await navigator.serviceWorker.ready;
+                  if (reg.periodicSync) {
+                    await reg.periodicSync.register('reactor-periodic-sync', {
+                      minInterval: 60 * 60 * 1000
+                    });
+                  }
+                } catch (err) { console.log(err); }
+              }
+            } else {
+              notifCheckbox.checked = false;
+              alert("Notifications blocked. Please enable them in your browser settings.");
+            }
+          } else {
+            alert("To disable notifications completely, you must reset permissions in your browser settings.");
+            notifCheckbox.checked = Notification.permission === 'granted';
+          }
+        });
+      } else {
+        if (notifCheckbox.closest('.setting-row')) {
+          notifCheckbox.closest('.setting-row').style.display = 'none';
+        }
+      }
     }
 
     const googleSignInBtn = this.overlay.querySelector("#research_google_signin_btn");
