@@ -35,7 +35,6 @@ export function createLoadGameButton(
     // Use innerHTML for played-time to allow HTML tags
     const playedTimeEl = btn.querySelector(".played-time");
     if (playedTimeEl) playedTimeEl.innerHTML = playedTimeStr;
-    window.templateLoader.setVisible(btn, ".synced-label", isCloudSynced);
 
     if (onClick) {
         btn.onclick = onClick;

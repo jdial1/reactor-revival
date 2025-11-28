@@ -352,49 +352,10 @@ class SplashScreenManager {
       }
     } catch (error) {
       console.error("Error loading splash screen:", error);
-      // Fallback: create minimal splash screen
-      this.createFallbackSplashScreen();
       return false;
     }
   }
 
-  /**
-   * Create a minimal fallback splash screen if loading fails
-   */
-  async createFallbackSplashScreen() {
-    console.log("[SPLASH] Creating fallback splash screen");
-    const container = window.domMapper?.get("static.splashContainer");
-    if (container) {
-      const response = await fetch("./pages/fallback-splash.html");
-      if (!response.ok) {
-        throw new Error(
-          `Failed to load fallback splash screen: ${response.status}`
-        );
-      }
-      const html = await response.text();
-      container.innerHTML = html;
-
-      // Map splash elements after they're loaded
-      window.domMapper?.mapCategory("splash");
-
-      this.splashScreen = window.domMapper?.get("splash.screen");
-      this.statusElement = window.domMapper?.get("splash.status");
-      this.flavorElement = window.domMapper?.get("splash.flavor");
-
-      // Initialize stats for fallback too
-      await this.initializeSplashStats().catch(console.error);
-
-      // Warm image cache even in fallback mode
-      try {
-        await warmImageCache(getCriticalUiIconAssets());
-
-        // Also preload all part images in the background
-        preloadAllPartImages().catch(error => {
-          console.warn("[PWA] Background part image preloading failed:", error);
-        });
-      } catch (_) { /* non-fatal */ }
-    }
-  }
 
 
   async initializeSplashStats() {
