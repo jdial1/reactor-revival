@@ -850,55 +850,19 @@ class SplashScreenManager {
 
       const response = await fetch(versionUrl, {
         headers: {
-          'Accept': '*/*',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate, br, zstd',
-          'Referer': window.location.origin + window.location.pathname,
-          'Sec-Fetch-Dest': 'empty',
-          'Sec-Fetch-Mode': 'cors',
-          'Sec-Fetch-Site': 'same-origin',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0'
-        },
-        // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(10000) // 10 second timeout
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
       });
 
       if (response.ok) {
-        // Check if response is JSON
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          console.warn(`Version check response is not JSON. Content-Type: ${contentType}`);
-          return null;
-        }
-
-        try {
-          const responseText = await response.text();
-          console.log(`Version response text: ${responseText.substring(0, 100)}`);
-
-          const versionData = JSON.parse(responseText);
-          if (versionData && versionData.version) {
-            console.log(`Deployed version check successful: ${versionData.version}`);
-            return versionData.version;
-          } else {
-            console.warn('Version data missing or invalid:', versionData);
-            return null;
-          }
-        } catch (parseError) {
-          console.warn('Failed to parse version JSON:', parseError);
-          return null;
-        }
-      } else {
-        console.log(`Version check failed with status: ${response.status}`);
-        return null;
+        const data = await response.json();
+        return data.version;
       }
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.log('Version check timed out');
-      } else {
-        console.warn('Failed to check deployed version:', error);
-      }
-      return null;
+      console.warn('Failed to check deployed version:', error);
     }
+    return null;
   }
 
   /**

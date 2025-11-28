@@ -138,20 +138,23 @@ function removeConsoleStatements(content) {
             
             if (end > 0) {
                 let statementEnd = end;
+                let hasSemicolon = false;
+                let tempEnd = end;
+                
+                while (tempEnd < result.length && /\s/.test(result[tempEnd])) {
+                    tempEnd++;
+                }
+                
+                if (result[tempEnd] === ';') {
+                    hasSemicolon = true;
+                    statementEnd = tempEnd + 1;
+                }
                 
                 while (statementEnd < result.length && /\s/.test(result[statementEnd])) {
                     statementEnd++;
                 }
                 
-                if (result[statementEnd] === ';') {
-                    statementEnd++;
-                }
-                
-                while (statementEnd < result.length && /\s/.test(result[statementEnd])) {
-                    statementEnd++;
-                }
-                
-                removals.push({ start, end: statementEnd });
+                removals.push({ start, end: statementEnd, hasSemicolon });
             }
         }
     }
@@ -166,23 +169,9 @@ function removeConsoleStatements(content) {
         const before = result.substring(0, removal.start);
         const after = result.substring(removal.end);
         
-        const beforeLines = before.split('\n');
-        const afterLines = after.split('\n');
-        const beforeLastLine = beforeLines[beforeLines.length - 1] || '';
-        const afterFirstLine = afterLines[0] || '';
+        const replacement = removal.hasSemicolon ? "void(0);" : "void(0)";
         
-        const beforeTrimmed = beforeLastLine.trimRight();
-        const afterTrimmed = afterFirstLine.trimLeft();
-        
-        if (beforeTrimmed && afterTrimmed) {
-            if (beforeTrimmed.endsWith(';') && afterTrimmed.startsWith(';')) {
-                result = before + after.substring(1);
-            } else {
-                result = before + after;
-            }
-        } else {
-            result = before + after;
-        }
+        result = before + replacement + after;
     }
     
     const lines = result.split('\n');
