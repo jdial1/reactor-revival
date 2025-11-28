@@ -1,93 +1,60 @@
-<nav id="main_top_nav" class="grid container-fluid nav-bar-row">
-  <ul>
+<!-- TOP NAVIGATION -->
+<nav id="main_top_nav" class="nav-bar-row">
+  <!-- Left Group: Navigation Links -->
+  <ul class="nav-group-left">
     <li>
-      <a href="#" class="secondary" role="button" data-page="reactor_section"
-        >Reactor</a
-      >
+      <button data-page="reactor_section" class="active">Reactor</button>
     </li>
     <li>
-      <a href="#" class="secondary" role="button" data-page="upgrades_section"
-        >Upgrades</a
-      >
+      <button data-page="upgrades_section">Upgrades</button>
+      <!-- Indicator dot injected via JS -->
     </li>
     <li>
-      <a
-        href="#"
-        class="secondary"
-        role="button"
-        data-page="experimental_upgrades_section"
-        >Research</a
-      >
+      <button data-page="experimental_upgrades_section">Research</button>
     </li>
   </ul>
-  <ul id="reactor_stats">
+
+  <!-- Center Group: Stats (Desktop) -->
+  <ul id="reactor_stats" class="desktop-only">
     <li>
-      <strong title="Estimated total heat venting per tick"
-        ><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent">0</span></strong
-      >
+      <strong title="Total heat venting per tick">
+        <img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" />
+        <span id="stats_vent">0</span>
+      </strong>
     </li>
     <li>
-      <strong title="Total potential heat inletting per tick"
-        ><img src="img/ui/icons/icon_inlet.png" alt="Inlet" class="icon-inline" /><span id="stats_inlet">0</span></strong
-      >
+      <strong title="Power per tick">
+        <img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" />
+        <span id="stats_power">0</span>
+      </strong>
     </li>
     <li>
-      <strong title="Total potential heat outletting per tick"
-        ><img src="img/ui/icons/icon_outlet.png" alt="Outlet" class="icon-inline" /><span id="stats_outlet">0</span></strong
-      >
-    </li>
-    <li>
-      <strong title="Estimated power per tick"
-        ><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power">0</span></strong
-      >
-    </li>
-    <li>
-      <strong title="Estimated heat per tick"
-        ><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat">0</span></strong
-      >
-    </li>
-    <li>
-      <strong title="Total heat contained in all parts"
-        ><img src="img/ui/icons/icon_heat.png" alt="Part Heat" class="icon-inline" /><span id="stats_total_part_heat">0</span></strong
-      >
+      <strong title="Heat per tick">
+        <img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" />
+        <span id="stats_heat">0</span>
+      </strong>
     </li>
   </ul>
-  <ul id="engine_status">
-    <li class="desktop-only">
-      <strong title="Engine Status"
-        ><img src="img/ui/icons/icon_time.png" alt="Engine" class="icon-inline" /><span id="engine_status_indicator">●</span></strong
-      >
-    </li>
-    <li class="desktop-only">
-      <strong title="Ticks per Second"
-        ><img src="img/ui/icons/icon_time.png" alt="TPS" class="icon-inline" /><span id="tps_display">0</span></strong
-      >
-    </li>
-    <li class="desktop-only">
-      <strong title="Frames per Second (16.7ms budget)"
-        ><img src="img/ui/icons/icon_time.png" alt="FPS" class="icon-inline" /><span id="fps_display">0</span></strong
-      >
-    </li>
+
+  <ul id="engine_status" class="desktop-only">
+     <li>
+        <strong title="Tick Rate">
+            <img src="img/ui/icons/icon_time.png" alt="TPS" class="icon-inline" />
+            <span id="tps_display">0</span>
+        </strong>
+     </li>
   </ul>
-  <ul>
+
+  <!-- Right Group: System Controls -->
+  <ul class="nav-group-right">
     <li>
-      <button
-        id="fullscreen_toggle"
-        class="secondary"
-        title="Toggle Fullscreen"
-      >
-        ⛶
-      </button>
+      <button id="fullscreen_toggle" title="Toggle Fullscreen">⛶</button>
     </li>
     <li>
-      <button id="settings_btn" class="secondary" title="Settings">
-        ⚙️
-      </button>
+      <button id="settings_btn" title="Settings">⚙️</button>
     </li>
     <li>
-      <button id="splash_close_btn" class="secondary" title="Back to Splash">
-        ✖
-      </button>
+      <button id="splash_close_btn" title="Exit to Title">✖</button>
     </li>
   </ul>
 </nav>

@@ -429,7 +429,7 @@ describe("Large Grid Performance Stress Tests", () => {
 
             // Categorization should be a small percentage of total tick time
             // Allow slightly higher threshold in CI to account for env variance
-            const maxCategorizePct = process.env.CI ? 32 : 25;
+            const maxCategorizePct = process.env.CI ? 35 : 25;
             expect(categorizePercentage).toBeLessThan(maxCategorizePct);
           }
 

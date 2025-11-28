@@ -4,22 +4,24 @@
   --sidebar-width: 300px;
   --sidebar-width-mobile: 80%;
   --tile-size: 48px;
-  --bottom-nav-height: 50px;
+  --bottom-nav-height: 60px; /* Increased for better touch targets */
   --game-success-color: rgb(93 156 81);
   --game-warning-color: rgb(255 160 0);
   --game-danger-color: rgb(171 63 63);
   --game-primary-color: rgb(81 93 156);
-
+  
+  /* Splash Screen Palette */
   --bevel-light: rgb(190, 190, 190);
-  --bevel-mid: rgb(120, 120, 120);
+  --bevel-mid: rgb(120, 120, 120); /* Button face */
   --bevel-dark: rgb(60, 60, 60);
   --bevel-shadow: rgb(30, 30, 30);
-  --text-shadow: 2px 2px black;
-
+  --panel-bg: rgb(45, 45, 45);
+  --text-shadow: 2px 2px 0px black;
+  
   --splash-btn-width: 400px;
   --splash-btn-height: 50px;
   --splash-btn-radius: 0;
-  --main-top-nav-height: 50px;
+  --main-top-nav-height: 60px;
 }
 
 nav li {
@@ -1289,6 +1291,40 @@ body {
 
 
 
+/* Info Items as "Readout Panels" */
+.info-item {
+  background-color: rgb(20, 20, 20) !important;
+  border: 3px solid !important;
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark) !important;
+  color: white;
+  font-family: "Press Start 2P", cursive, monospace !important;
+  font-size: 0.7rem !important;
+  padding: 6px 10px !important;
+  margin: 0 4px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 1px 1px 0 black;
+  box-shadow: inset 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.info-item .value {
+  color: rgb(143, 214, 148); /* Retro green text */
+  font-weight: normal !important;
+  margin-left: 4px;
+}
+
+/* Interactive Info Items (Clickable) */
+button.info-item {
+  cursor: pointer;
+  background-color: rgb(35, 35, 35) !important;
+}
+
+button.info-item:active {
+  background-color: rgb(50, 50, 50) !important;
+  border-color: var(--bevel-dark) !important;
+}
+
 .info-bar-desktop .info-item {
   position: relative;
   display: flex;
@@ -1301,14 +1337,15 @@ body {
   border: 3px solid;
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); /* Inset look */
   border-radius: 0;
-  background: rgb(30, 30, 30);
-  box-shadow: inset 0 1px 2px rgb(255 255 255 / 10%),
-    0 1px 3px rgb(0 0 0 / 30%);
-  font-size: 1.2em;
+  background: rgb(20, 20, 20);
+  box-shadow: inset 2px 2px 4px rgba(0,0,0,0.5);
+  font-family: "Press Start 2P", cursive, monospace;
+  font-size: 0.7rem;
   gap: 0.4em;
   text-align: center;
-  transition: all 0.2s ease;
+  transition: none;
   white-space: nowrap;
+  text-shadow: 1px 1px 0 black;
 }
 
 .info-bar-desktop .info-item::before {
@@ -1593,8 +1630,87 @@ footer#bottom_nav button {
   }
 }
 
+/* --- Navigation Bars (Top & Bottom) --- */
+
+#main_top_nav,
+#bottom_nav {
+  background-color: var(--panel-bg) !important;
+  border-top: 4px solid var(--bevel-light) !important; /* Mobile bottom nav border */
+  box-shadow: 0 -4px 0 var(--bevel-dark);
+  padding: 0 !important;
+}
+
+/* Desktop Top Nav Specifics */
+@media (min-width: 901px) {
+  #main_top_nav {
+    border-top: none !important;
+    border-bottom: 4px solid var(--bevel-dark) !important;
+    box-shadow: 0 4px 0 var(--bevel-shadow);
+    height: var(--main-top-nav-height) !important;
+    padding: 0 1rem !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+/* Nav Buttons (Shared) */
+#main_top_nav a,
+#main_top_nav button,
+#bottom_nav button,
+footer#bottom_nav button {
+  font-family: "Press Start 2P", cursive, monospace !important;
+  font-size: 0.75rem !important;
+  color: white !important;
+  background-color: var(--bevel-mid) !important;
+  border: 3px solid !important;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light) !important;
+  margin: 4px !important;
+  padding: 0 12px !important; /* Horizontal padding */
+  height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-decoration: none !important;
+  text-shadow: 1px 1px 0 black !important;
+  box-shadow: 2px 2px 0 var(--bevel-shadow) !important;
+  border-radius: 0 !important;
+  transition: none !important; /* Pixel art shouldn't fade */
+  text-transform: uppercase;
+}
+
+/* Active/Pressed State for Nav Buttons */
+#main_top_nav a:active,
+#main_top_nav button:active,
+#bottom_nav button:active,
+#bottom_nav button.active,
+footer#bottom_nav button:active,
+footer#bottom_nav button.active,
+#main_top_nav a.active {
+  background-color: var(--bevel-dark) !important;
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark) !important;
+  transform: translateY(2px);
+  box-shadow: none !important;
+  color: rgb(255, 255, 160) !important;
+}
+
+/* Mobile Bottom Nav Specifics */
+@media (max-width: 900px) {
+  #bottom_nav {
+    padding: 4px !important;
+    height: var(--bottom-nav-height) !important;
+    gap: 4px;
+  }
+  
+  #bottom_nav button {
+    height: 100% !important;
+    margin: 0 !important;
+    width: 100%;
+  }
+}
+
 #main_top_nav {
-  height: var(--main-top-nav-height, 50px);
+  height: var(--main-top-nav-height, 60px);
 }
 
 @media (width <= 900px) {
@@ -2133,6 +2249,7 @@ footer#bottom_nav button {
   background: transparent;
   margin-bottom: 2rem;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
@@ -2152,6 +2269,8 @@ footer#bottom_nav button {
   padding: 0;
   height: 100%;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
   transition: transform 0.1s, filter 0.1s;
   box-shadow: 4px 4px 0 rgba(0,0,0,0.4);
@@ -2329,6 +2448,12 @@ footer#bottom_nav button {
   width: 100%;
   box-sizing: border-box;
   max-width: 100%;
+}
+
+#experimental_upgrades_content_wrapper article {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 600px) {
@@ -2982,35 +3107,64 @@ footer#bottom_nav button {
   display: block;
 }
 
-.mobile-objectives-container {
-  position: absolute;
+/* --- Objectives Styling (Splash Style Update) --- */
+
+:root {
+  /* Map objective vars to global palette */
+  --objective-bg: var(--panel-bg);
+  --objective-border: var(--bevel-light);
+  --objective-text: white;
+  --objective-accent: rgb(102, 179, 255);
+}
+
+#objectives_section {
+  position: sticky !important;
   z-index: 1000;
-  right: 0;
-  left: 0;
-  width: 100%;
-  border: 1px solid var(--objective-border);
-  border-radius: 6px;
-  margin-top: 0;
-  backdrop-filter: blur(5px);
-  background-color: var(--objective-bg);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
-  color: var(--objective-text);
-  transition: all 0.3s ease-in-out;
+  top: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  font-family: "Press Start 2P", cursive, monospace !important;
+  padding: 8px 0; /* Spacing around the widget */
+  pointer-events: none; /* Let clicks pass through spacing */
+}
+
+/* Main container behaves like a panel */
+.mobile-objectives-container {
+  position: relative;
+  width: 96%; /* Slight margin on sides */
+  margin: 0 auto;
+  pointer-events: auto;
+  background-color: var(--panel-bg);
+  border: 3px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  border-radius: 0;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.5); /* Chunky shadow */
+  color: white;
+  transition: transform 0.2s ease-in-out;
 }
 
 .mobile-objectives-container.hidden {
   display: none;
 }
 
+/* Header acts as the clickable button to expand */
 .objectives-header {
   display: flex;
   flex-direction: column;
   min-height: 60px;
-  padding: 12px;
-  border-bottom: 1px solid var(--objective-border);
-  background: linear-gradient(135deg, rgb(255 255 255 / 3%) 0%, rgb(255 255 255 / 1%) 100%);
+  padding: 8px 12px;
+  background-color: var(--bevel-mid);
   cursor: pointer;
-  gap: 8px;
+  gap: 6px;
+  border-bottom: 3px solid var(--bevel-dark); /* Separator if open */
+}
+
+.objectives-header:hover {
+  filter: brightness(1.1);
+}
+
+.objectives-header:active {
+  background-color: rgb(100, 100, 100);
 }
 
 .objective-title-row {
@@ -3046,133 +3200,137 @@ footer#bottom_nav button {
   margin-left: auto;
 }
 
-.objective-claim-btn-compact {
-  min-width: 50px;
-  padding: 4px 8px;
-  border: 1px solid var(--objective-border);
-  border-radius: 4px;
-  background: var(--objective-reward-bg);
-  color: var(--objective-text);
-  cursor: pointer;
+/* Buttons inside Objectives */
+.objective-claim-btn-compact,
+.objective-claim-btn {
+  font-family: inherit;
+  text-transform: uppercase;
   font-size: 0.7rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.objective-claim-btn-compact:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.objective-claim-btn-compact.ready-to-claim {
-  border-color: var(--objective-claim-ready-bg);
-  background: var(--objective-claim-ready-bg);
+  font-weight: bold;
   color: white;
+  background-color: var(--game-success-color);
+  border: 3px solid;
+  border-color: rgb(137 197 125) rgb(45 80 40) rgb(45 80 40) rgb(137 197 125);
+  padding: 4px 8px;
   cursor: pointer;
-  opacity: 1;
+  text-shadow: 1px 1px 0 black;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+  border-radius: 0;
 }
 
-.objective-claim-btn-compact.ready-to-claim:hover {
-  background: rgb(52 168 83);
-  box-shadow: 0 2px 4px rgb(0 0 0 / 30%);
+.objective-claim-btn-compact:hover,
+.objective-claim-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
   transform: translateY(-1px);
 }
 
-/* Compact chapter completion button styling */
-.objective-claim-btn-compact.chapter-claim-btn-compact {
-  border: 1px solid rgb(91 160 242);
-  background: linear-gradient(135deg, rgb(74 144 226) 0%, rgb(53 122 189) 100%);
-  box-shadow: 0 1px 4px rgb(74 144 226 / 30%);
-  color: white;
-  font-weight: 600;
-  text-shadow: 1px 1px 2px rgb(0 0 0 / 50%);
-}
-
-.objective-claim-btn-compact.chapter-claim-btn-compact:hover {
-  background: linear-gradient(135deg, rgb(91 160 242) 0%, rgb(74 144 226) 100%);
-  box-shadow: 0 2px 6px rgb(74 144 226 / 40%);
-  transform: translateY(-1px);
-}
-
-.objective-claim-btn-compact.chapter-claim-btn-compact:disabled {
-  border-color: rgb(136 136 136);
-  background: rgb(102 102 102);
+.objective-claim-btn-compact:active,
+.objective-claim-btn:active:not(:disabled) {
+  border-color: rgb(45 80 40) rgb(137 197 125) rgb(137 197 125) rgb(45 80 40);
+  transform: translateY(1px);
   box-shadow: none;
-  color: rgb(204 204 204);
-  transform: none;
 }
 
-.objective-title-compact {
-  overflow-x: auto;
-  overflow-y: hidden;
-  margin: 0;
-  padding: 0;
-  color: rgb(255 255 255);
-  font-size: 0.9rem;
-  font-weight: normal;
-  font-style: normal;
-  line-height: 1.5;
-  text-shadow: none;
-  white-space: nowrap;
+.objective-claim-btn-compact:disabled,
+.objective-claim-btn:disabled {
+  background-color: var(--bevel-mid);
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  color: #888;
+  cursor: not-allowed;
+  box-shadow: none;
+  filter: grayscale(1);
+}
+
+.objective-claim-btn {
   width: 100%;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(255 255 255 / 50%) transparent;
+  margin-top: 12px;
+  padding: 10px;
+  font-size: 0.8rem;
 }
 
-.objective-title-compact::-webkit-scrollbar {
-  height: 4px;
-}
-
-.objective-title-compact::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.objective-title-compact::-webkit-scrollbar-thumb {
-  background-color: rgb(255 255 255 / 50%);
-  border-radius: 2px;
-}
-
-.objective-progress-bar-container {
+/* Title Text */
+.objective-title-compact {
+  font-size: 0.8rem !important;
+  color: rgb(255, 255, 160); /* Highlight color */
+  text-shadow: 1px 1px 0 black;
+  white-space: nowrap;
   overflow: hidden;
-  width: 75%;
-  height: 6px;
-  border-radius: 3px;
-  background-color: var(--objective-progress-bg);
-  flex-shrink: 0;
+  text-overflow: ellipsis;
+  margin: 0;
+  line-height: 1.5;
 }
 
-.objective-progress-bar {
-  width: 0%;
+/* Progress Bar Container (Inset look) */
+.objective-progress-bar-container,
+.chapter-progress-bar-container {
+  width: 100%;
+  height: 12px;
+  background-color: rgb(20, 20, 20);
+  border: 2px solid;
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); /* Inset bevel */
+  border-radius: 0;
+  overflow: hidden;
+  flex-grow: 1;
+}
+
+/* Progress Bar Fill */
+.objective-progress-bar,
+.chapter-progress-bar {
   height: 100%;
-  border-radius: 3px;
-  background-color: var(--objective-accent);
-  transition: width 0.3s ease-in-out;
+  background-color: var(--game-success-color);
+  border-radius: 0;
+  position: relative;
 }
 
+/* Striped animation for active progress */
+.objective-progress-bar::after, 
+.chapter-progress-bar::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 16px 16px;
+  animation: progress-stripes 1s linear infinite;
+}
+
+@keyframes progress-stripes {
+  0% { background-position: 16px 0; }
+  100% { background-position: 0 0; }
+}
+
+/* Toggle Arrow */
 .objectives-toggle-btn {
-  padding: 4px;
-  border: none;
   background: none;
-  color: var(--objective-text);
+  border: none;
+  color: white;
   cursor: pointer;
-  transition: transform 0.3s ease-in-out;
+  font-size: 0.8rem;
+  transition: transform 0.2s;
 }
 
+/* Expandable Panel */
 .objectives-content-panel {
+  background-color: rgb(35, 35, 35); /* Darker background for content */
+  border-top: none;
   overflow: hidden;
   max-height: 0;
-  padding: 0 16px;
-  background: linear-gradient(180deg, rgb(0 0 0 / 10%) 0%, rgb(0 0 0 / 5%) 100%);
+  padding: 0 12px;
   transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
 }
 
-/* --- Expanded State --- */
 .mobile-objectives-container.is-open .objectives-content-panel {
-  overflow: visible;
-  max-height: 350px; /* Adjust as needed */
-  padding: 16px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+  max-height: 400px;
+  padding: 12px;
+  border-top: 2px solid var(--bevel-dark);
 }
 
 .mobile-objectives-container.is-open .objectives-toggle-btn {
@@ -3196,20 +3354,6 @@ footer#bottom_nav button {
   gap: 8px;
 }
 
-.chapter-progress-bar-container {
-  height: 8px;
-  flex-grow: 1;
-  border-radius: 4px;
-  background-color: var(--objective-progress-bg);
-}
-
-.chapter-progress-bar {
-  width: 0%;
-  height: 100%;
-  border-radius: 4px;
-  background-color: var(--objective-accent);
-  transition: width 0.3s ease-in-out;
-}
 
 .objective-divider {
   height: 1px;
@@ -3238,60 +3382,6 @@ footer#bottom_nav button {
 
 .objective-reward img { width: 16px; height: 16px; }
 
-.objective-claim-btn {
-  width: 100%;
-  padding: 10px;
-  border: none;
-  border-radius: 6px;
-  margin-top: 12px;
-  background-color: var(--objective-border);
-  color: white;
-  cursor: not-allowed;
-  font-size: 1rem;
-  font-weight: bold;
-  opacity: 0.6;
-  transition: background-color 0.2s, opacity 0.2s;
-}
-
-.objective-claim-btn.ready-to-claim {
-  background-color: var(--objective-claim-ready-bg);
-  cursor: pointer;
-  opacity: 1;
-}
-
-/* Chapter completion button styling */
-.objective-claim-btn.chapter-claim-btn {
-  border: 2px solid rgb(91 160 242);
-  background: linear-gradient(135deg, rgb(74 144 226) 0%, rgb(53 122 189) 100%);
-  box-shadow: 0 2px 8px rgb(74 144 226 / 30%);
-  color: white;
-  font-weight: 600;
-  text-shadow: 1px 1px 2px rgb(0 0 0 / 50%);
-}
-
-.objective-claim-btn.chapter-claim-btn:hover {
-  background: linear-gradient(135deg, rgb(91 160 242) 0%, rgb(74 144 226) 100%);
-  box-shadow: 0 4px 12px rgb(74 144 226 / 40%);
-  transform: translateY(-1px);
-}
-
-.objective-claim-btn.chapter-claim-btn:disabled {
-  border-color: rgb(136 136 136);
-  background: rgb(102 102 102);
-  box-shadow: none;
-  color: rgb(204 204 204);
-  transform: none;
-}
-
-/* Style for the flavor text */
-.objective-flavor-text {
-  padding-left: 10px;
-  border-left: 3px solid var(--objective-accent);
-  margin: 10px 0;
-  font-size: 0.85rem;
-  font-style: italic;
-  opacity: 0.7;
-}
 
 /* Style for the larger chapter completion button */
 .chapter-claim-btn {
@@ -3376,10 +3466,15 @@ footer#bottom_nav button {
 /* Objectives container inherits positioning from parent #objectives_section */
 
 /* Objective completion animation */
+/* Completed Pulse Animation override for pixel style */
+@keyframes pixel-pulse {
+  0% { border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); }
+  50% { border-color: rgb(255, 255, 160); }
+  100% { border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); }
+}
+
 .objective-completed {
-  border-color: rgb(40 167 69) !important;
-  animation: objective-completion-pulse 2s ease-in-out;
-  box-shadow: 0 0 20px rgb(40 167 69 / 60%) !important;
+  animation: pixel-pulse 0.5s step-end infinite;
 }
 
 @keyframes objective-completion-pulse {
@@ -3594,43 +3689,71 @@ footer#bottom_nav button {
   }
 }
 
+/* --- Controls Nav (Side Panel Buttons) --- */
+
 #controls_nav {
   flex: 0 0 15%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(2, 1fr);
-  gap: 6px;
-  padding: 5px;
+  gap: 8px;
+  padding: 8px;
   box-sizing: border-box;
+  background: var(--panel-bg);
+  border-top: 4px solid var(--bevel-dark);
 }
 
 #controls_nav button {
   position: relative;
+  font-family: "Press Start 2P", cursive, monospace !important;
+  font-size: 0.6rem !important; /* Small text for side buttons */
+  background-color: var(--bevel-mid) !important;
+  border: 3px solid !important;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light) !important;
+  color: white !important;
+  border-radius: 0 !important;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.5) !important;
+  transition: none !important;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px !important;
+  min-height: 60px; /* Square-ish look */
   width: 100%;
   height: 100%;
   min-width: 0;
-  min-height: 0;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  margin: 0;
   box-sizing: border-box;
   white-space: normal;
   word-break: break-word;
   overflow: hidden;
 }
 
-#controls_nav .control-text {
-  display: none;
+/* Toggle "On" State (Pressed In) */
+#controls_nav button.on,
+#controls_nav button.active,
+#controls_nav button:active {
+  background-color: rgb(80, 80, 80) !important;
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark) !important;
+  transform: translateY(2px);
+  box-shadow: none !important;
+  color: rgb(255, 255, 160) !important; /* Yellow text when active */
 }
 
-#controls_nav .control-icon {
+#controls_nav .control-text {
+  display: block;
+  text-align: center;
+  line-height: 1.1;
+  text-shadow: 1px 1px 0 black;
+}
+
+#controls_nav button img.control-icon {
   width: 24px;
   height: 24px;
-  object-fit: contain;
+  margin-bottom: 4px;
   image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.5));
+  object-fit: contain;
 }
 
 #controls_nav button .pause-icon,
@@ -4215,6 +4338,30 @@ body:not(.page-reactor) #objectives_section {
   white-space: nowrap;
 }
 
+/* Engine Status Indicators in Top Nav */
+#reactor_stats li,
+#engine_status li {
+  font-family: "Press Start 2P", cursive, monospace;
+  font-size: 0.65rem;
+  color: #ccc;
+  text-shadow: 1px 1px 0 black;
+  padding: 0 8px;
+  border-right: 2px solid var(--bevel-dark);
+}
+
+#reactor_stats li:last-child,
+#engine_status li:last-child {
+  border-right: none;
+}
+
+#reactor_stats strong,
+#engine_status strong {
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .nav-indicator {
   position: absolute;
   top: 4px;
@@ -4469,15 +4616,6 @@ footer#bottom_nav button {
   opacity: 0.7;
 }
 
-.upgrade-group {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.5rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
 
 
 .part-price,
