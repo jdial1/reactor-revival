@@ -1007,9 +1007,10 @@ class SplashScreenManager {
    * Handles timestamp-based version format (25_09_05-2127)
    */
   isNewerVersion(deployedVersion, localVersion) {
-    // Both versions should be in timestamp format (YY_MM_DD-HHMM)
-    // We can do a simple string comparison since the format is chronological
-    return deployedVersion !== localVersion;
+    if (!deployedVersion || !localVersion) {
+      return false;
+    }
+    return deployedVersion > localVersion;
   }
 
   /**
@@ -1402,16 +1403,16 @@ class SplashScreenManager {
       const deployedVersion = await this.checkDeployedVersion();
       console.log(`Deployed version detected: ${deployedVersion}`);
 
-      if (deployedVersion && deployedVersion !== currentVersion) {
-        // New version available
+      if (deployedVersion && this.isNewerVersion(deployedVersion, currentVersion)) {
         this.showUpdateToast(deployedVersion, currentVersion);
         console.log(`Version check complete: New version ${deployedVersion} available (current: ${currentVersion})`);
       } else if (deployedVersion && deployedVersion === currentVersion) {
-        // Same version
         this.showVersionCheckToast(`You're running the latest version: ${currentVersion}`, 'info');
         console.log(`Version check complete: Up to date (${currentVersion})`);
+      } else if (deployedVersion && !this.isNewerVersion(deployedVersion, currentVersion) && deployedVersion !== currentVersion) {
+        this.showVersionCheckToast(`Current version: ${currentVersion} (Deployed: ${deployedVersion})`, 'warning');
+        console.log(`Version check complete: Current version ${currentVersion} is newer than deployed ${deployedVersion}`);
       } else {
-        // Could not check deployed version
         this.showVersionCheckToast(`Current version: ${currentVersion} (Unable to check for updates)`, 'warning');
         console.log(`Version check complete: Current version ${currentVersion} (deployed check failed)`);
       }
