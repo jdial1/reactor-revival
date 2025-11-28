@@ -619,4 +619,61 @@ async function createFallbackStartInterface(pageRouter, ui, game) {
   }
 }
 
-document.addEventListener("DOMContentLoaded", main);
+function showCriticalError(error) {
+  const errorMessage = error?.message || error?.toString() || "Unknown error";
+  const errorStack = error?.stack || "";
+  
+  const errorOverlay = document.createElement("div");
+  errorOverlay.id = "critical-error-overlay";
+  errorOverlay.className = "critical-error-overlay";
+  errorOverlay.innerHTML = `
+    <div class="critical-error-content pixel-panel">
+      <h1 class="critical-error-title">REACTOR FAILED TO START</h1>
+      <div class="critical-error-message">
+        <p class="error-text">${escapeHtml(errorMessage)}</p>
+        ${errorStack ? `<details class="error-details"><summary>Error Details</summary><pre class="error-stack">${escapeHtml(errorStack)}</pre></details>` : ""}
+      </div>
+      <button id="critical-error-reload" class="pixel-btn btn-start">Reload Page</button>
+    </div>
+  `;
+  
+  document.body.appendChild(errorOverlay);
+  
+  document.getElementById("critical-error-reload").onclick = () => {
+    window.location.reload();
+  };
+  
+  document.body.style.overflow = "hidden";
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    main().catch((error) => {
+      console.error("Critical startup error:", error);
+      showCriticalError(error);
+    });
+  } catch (error) {
+    console.error("Critical startup error:", error);
+    showCriticalError(error);
+  }
+});
+
+window.addEventListener("error", (event) => {
+  if (event.error && !document.getElementById("critical-error-overlay")) {
+    console.error("Uncaught error:", event.error);
+    showCriticalError(event.error);
+  }
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  if (event.reason && !document.getElementById("critical-error-overlay")) {
+    console.error("Unhandled promise rejection:", event.reason);
+    showCriticalError(event.reason);
+  }
+});

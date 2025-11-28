@@ -2,10 +2,64 @@
 
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
+import { ESLint } from "eslint";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+let eslintInstance = null;
+
+async function initializeESLint() {
+    if (!eslintInstance) {
+        const configPath = path.join(__dirname, '..', 'eslint.config.js');
+        try {
+            const configUrl = pathToFileURL(configPath).href;
+            const config = await import(configUrl);
+            eslintInstance = new ESLint({
+                baseConfig: config.default,
+                ignore: false
+            });
+        } catch (error) {
+            eslintInstance = new ESLint({
+                overrideConfigFile: configPath,
+                ignore: false
+            });
+        }
+    }
+    return eslintInstance;
+}
+
+async function lintFile(filePath, content) {
+    try {
+        const eslint = await initializeESLint();
+        const results = await eslint.lintText(content, {
+            filePath: filePath
+        });
+        
+        if (results.length === 0) {
+            return { valid: true, errors: [] };
+        }
+        
+        const result = results[0];
+        const errors = result.messages.filter(msg => msg.severity === 2);
+        
+        return {
+            valid: errors.length === 0,
+            errors: errors.map(e => ({
+                line: e.line,
+                column: e.column,
+                message: e.message,
+                ruleId: e.ruleId
+            }))
+        };
+    } catch (error) {
+        return {
+            valid: false,
+            errors: [{ message: error.message }]
+        };
+    }
+}
 
 function removeConsoleStatements(content) {
     let result = content;
@@ -58,19 +112,35 @@ function addProductionFlag(htmlContent) {
     return htmlContent;
 }
 
-function processFile(filePath) {
+async function processFile(filePath) {
     try {
-        const content = fs.readFileSync(filePath, 'utf8');
-        const modified = removeConsoleStatements(content);
+        const originalContent = fs.readFileSync(filePath, 'utf8');
+        const modified = removeConsoleStatements(originalContent);
         
-        if (content !== modified) {
-            fs.writeFileSync(filePath, modified, 'utf8');
-            return true;
+        if (originalContent === modified) {
+            return { modified: false, kept: false };
         }
-        return false;
+        
+        const lintResult = await lintFile(filePath, modified);
+        
+        if (!lintResult.valid) {
+            console.warn(`⚠ Linting failed for ${path.relative(path.join(__dirname, '..'), filePath)}:`);
+            lintResult.errors.forEach(err => {
+                if (err.line) {
+                    console.warn(`  Line ${err.line}:${err.column || ''} - ${err.message}`);
+                } else {
+                    console.warn(`  ${err.message}`);
+                }
+            });
+            console.warn(`  Keeping original console statements in file.\n`);
+            return { modified: false, kept: true };
+        }
+        
+        fs.writeFileSync(filePath, modified, 'utf8');
+        return { modified: true, kept: false };
     } catch (error) {
         console.error(`Error processing ${filePath}:`, error.message);
-        return false;
+        return { modified: false, kept: false };
     }
 }
 
@@ -100,15 +170,21 @@ async function removeConsoleLogs() {
     }
 
     console.log('Removing console statements from JavaScript files...\n');
+    console.log('Note: Files will be linted after removal. If linting fails, console statements will be kept.\n');
 
     const jsFiles = walkDirectory(srcDir);
     let modifiedCount = 0;
+    let keptCount = 0;
 
     for (const file of jsFiles) {
         const relativePath = path.relative(path.join(__dirname, '..'), file);
-        if (processFile(file)) {
+        const result = await processFile(file);
+        
+        if (result.modified) {
             console.log(`✓ Removed console statements from: ${relativePath}`);
             modifiedCount++;
+        } else if (result.kept) {
+            keptCount++;
         }
     }
 
@@ -127,7 +203,11 @@ async function removeConsoleLogs() {
         }
     }
 
-    console.log(`\n✓ Process complete. Modified ${modifiedCount} file(s).`);
+    console.log(`\n✓ Process complete.`);
+    console.log(`  Modified: ${modifiedCount} file(s)`);
+    if (keptCount > 0) {
+        console.log(`  Kept console statements (linting failed): ${keptCount} file(s)`);
+    }
 }
 
 removeConsoleLogs().catch((error) => {

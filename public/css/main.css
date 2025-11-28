@@ -7163,3 +7163,126 @@ body.page-privacy_policy .highlight {
   animation: flow-extreme 0.7s ease-in-out infinite;
   filter: drop-shadow(0 0 1px rgb(0 0 0)) drop-shadow(0 0 2px rgb(0 0 0)) drop-shadow(0 0 25px rgb(255 255 255)) drop-shadow(0 0 35px rgb(255 23 68));
 }
+
+.critical-error-overlay {
+  position: fixed;
+  z-index: 99999;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  background-color: rgb(0 0 0 / 95%);
+  backdrop-filter: blur(4px);
+}
+
+.critical-error-content {
+  max-width: 90%;
+  max-height: 90%;
+  padding: 40px;
+  border: 4px solid;
+  border-color: rgb(255 68 68) rgb(153 0 0) rgb(153 0 0) rgb(255 68 68);
+  background: rgb(26 0 0);
+  box-shadow: 0 0 40px rgb(255 68 68 / 60%), inset 0 0 20px rgb(255 68 68 / 20%);
+  overflow-y: auto;
+  text-align: center;
+}
+
+.critical-error-title {
+  font-family: "Press Start 2P", cursive, monospace;
+  font-size: 24px;
+  color: rgb(255 68 68);
+  text-shadow: 3px 3px 0 rgb(0 0 0), 0 0 10px rgb(255 68 68);
+  margin: 0 0 30px;
+  line-height: 1.6;
+  animation: error-pulse 2s ease-in-out infinite;
+}
+
+@keyframes error-pulse {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 3px 3px 0 rgb(0 0 0), 0 0 10px rgb(255 68 68);
+  }
+  50% {
+    opacity: 0.9;
+    text-shadow: 3px 3px 0 rgb(0 0 0), 0 0 20px rgb(255 68 68), 0 0 30px rgb(255 68 68);
+  }
+}
+
+.critical-error-message {
+  margin: 30px 0;
+  color: rgb(255 200 200);
+  font-family: "Press Start 2P", cursive, monospace;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.error-text {
+  margin: 0 0 20px;
+  padding: 20px;
+  background: rgb(45 0 0);
+  border: 2px solid rgb(153 0 0);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.error-details {
+  margin-top: 20px;
+  text-align: left;
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: rgb(255 150 150);
+  margin-bottom: 10px;
+  font-size: 10px;
+}
+
+.error-details summary:hover {
+  color: rgb(255 200 200);
+}
+
+.error-stack {
+  margin: 10px 0 0;
+  padding: 15px;
+  background: rgb(20 0 0);
+  border: 2px solid rgb(102 0 0);
+  color: rgb(255 180 180);
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+#critical-error-reload {
+  margin-top: 30px;
+  font-size: 16px;
+  padding: 12px 24px;
+  background: rgb(255 68 68);
+  border-color: rgb(255 150 150) rgb(153 0 0) rgb(153 0 0) rgb(255 150 150);
+}
+
+#critical-error-reload:hover {
+  background: rgb(255 100 100);
+  color: rgb(255 255 200);
+}
+
+@media (width <= 600px) {
+  .critical-error-content {
+    padding: 20px;
+  }
+  
+  .critical-error-title {
+    font-size: 18px;
+  }
+  
+  .critical-error-message {
+    font-size: 10px;
+  }
+}
