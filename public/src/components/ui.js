@@ -4,6 +4,7 @@ import { Hotkeys } from "../utils/hotkeys.js";
 import dataService from "../services/dataService.js";
 import { on } from "../utils/util.js";
 import { SettingsModal } from "./settingsModal.js";
+import { GridScaler } from "./gridScaler.js";
 
 // Load help text
 let help_text = {};
@@ -37,17 +38,16 @@ export class UI {
     this.parts_panel_right_side = false;
     this.update_interface_interval = 100;
     this.update_interface_task = null;
+    this._updateLoopRunning = false;
     this.stateManager = new StateManager(this);
     this.hotkeys = null;
+    this.gridScaler = new GridScaler(this);
     this.isDragging = false;
     this.lastTileModified = null;
     this.longPressTimer = null;
     this.longPressDuration = 500;
     this.help_mode_active = false; // Track help mode state
     this.highlightedSegment = null; // Track the currently highlighted segment
-
-    // Fit-to-screen mode state
-    this._fitToScreenActive = false;
 
     // CTRL+9 exponential money variables
     this.ctrl9HoldTimer = null;
@@ -185,7 +185,6 @@ export class UI {
       "reactor_paste_btn",
       "reactor_deselect_btn",
       "reactor_dropper_btn",
-      "reactor_fit_btn",
       "reactor_copy_paste_modal",
       "reactor_copy_paste_modal_title",
       "reactor_copy_paste_text",
@@ -294,24 +293,12 @@ export class UI {
         "exotic_particles_display",
         "current_exotic_particles",
         "total_exotic_particles",
-        "reboot_exotic_particles",
-        "refund_exotic_particles",
-        "reboot_btn",
-        "refund_btn",
         "experimental_laboratory",
         "experimental_boost",
         "experimental_particle_accelerators",
         "experimental_cells",
         "experimental_cells_boost",
-        "experimental_parts",
-        "debug_section",
-        "debug_toggle_btn",
-        "debug_hide_btn",
-        "debug_variables",
-        "debug_refresh_btn",
-        "copy_state_btn",
-        "research_google_signin_btn",
-        "research_back_to_splash_btn"
+        "experimental_parts"
       ],
 
       // About page specific elements
@@ -442,7 +429,14 @@ export class UI {
         .forEach((btn) => {
           const control = btn.getAttribute("data-control");
           if (control === "pause") {
-            btn.textContent = this.stateManager.getVar("pause")
+            const isPaused = this.stateManager.getVar("pause");
+            if (isPaused) {
+              btn.classList.add("paused");
+              btn.title = "Resume";
+            } else {
+              btn.classList.remove("paused");
+              btn.title = "Pause";
+            }
               ? "Resume"
               : "Pause";
           } else {
@@ -462,7 +456,13 @@ export class UI {
       const isPaused = this.stateManager.getVar("pause");
       const pauseBtn = this.DOMElements.pause_toggle;
       if (pauseBtn) {
-        pauseBtn.textContent = isPaused ? "Resume" : "Pause";
+        if (isPaused) {
+          pauseBtn.classList.add("paused");
+          pauseBtn.title = "Resume";
+        } else {
+          pauseBtn.classList.remove("paused");
+          pauseBtn.title = "Pause";
+        }
       }
     };
     updatePauseButtonText();
@@ -695,11 +695,55 @@ export class UI {
     }
   }
 
+  updateNavIndicators() {
+    if (typeof document === "undefined" || !this.game || !this.game.upgradeset) {
+      return;
+    }
+
+    const hasAffordableUpgrades = this.game.upgradeset.hasAffordableUpgrades();
+    const hasAffordableResearch = this.game.upgradeset.hasAffordableResearch();
+
+    const upgradeButtons = document.querySelectorAll('[data-page="upgrades_section"]');
+    const researchButtons = document.querySelectorAll('[data-page="experimental_upgrades_section"]');
+
+    upgradeButtons.forEach((button) => {
+      let indicator = button.querySelector('.nav-indicator');
+      if (hasAffordableUpgrades) {
+        if (!indicator) {
+          indicator = document.createElement('span');
+          indicator.className = 'nav-indicator';
+          button.style.position = 'relative';
+          button.appendChild(indicator);
+        }
+        indicator.style.display = 'block';
+      } else if (indicator) {
+        indicator.style.display = 'none';
+      }
+    });
+
+    researchButtons.forEach((button) => {
+      let indicator = button.querySelector('.nav-indicator');
+      if (hasAffordableResearch) {
+        if (!indicator) {
+          indicator = document.createElement('span');
+          indicator.className = 'nav-indicator';
+          button.style.position = 'relative';
+          button.appendChild(indicator);
+        }
+        indicator.style.display = 'block';
+      } else if (indicator) {
+        indicator.style.display = 'none';
+      }
+    });
+  }
+
   runUpdateInterfaceLoop() {
     // Guard against running after cleanup in test environment
     if (this._updateLoopStopped || typeof document === 'undefined' || !document) {
       return;
     }
+    if (this._updateLoopRunning) return;
+    this._updateLoopRunning = true;
     // Record frame for performance tracking
     this.recordFrame();
 
@@ -751,6 +795,9 @@ export class UI {
           this.game.tooltip_manager.updateUpgradeAffordability();
         }
 
+        // Update nav indicators when affordability changes
+        this.updateNavIndicators();
+
         this.game.performance.markEnd("ui_affordability_check");
       }
 
@@ -769,6 +816,7 @@ export class UI {
       this.game.performance.markEnd("ui_state_manager");
     }
 
+    this._updateLoopRunning = false;
     this.update_interface_task = setTimeout(
       () => this.runUpdateInterfaceLoop(),
       this.update_interface_interval
@@ -1180,7 +1228,13 @@ export class UI {
           this.updateToggleButtonState(this.toggle_buttons_config.pause, val);
           const pauseBtn = this.DOMElements.pause_toggle;
           if (pauseBtn) {
-            pauseBtn.textContent = val ? "Resume" : "Pause";
+            if (val) {
+              pauseBtn.classList.add("paused");
+              pauseBtn.title = "Resume";
+            } else {
+              pauseBtn.classList.remove("paused");
+              pauseBtn.title = "Pause";
+            }
           }
           // Body class and banner visibility are now handled by updatePauseState()
 
@@ -1658,14 +1712,9 @@ export class UI {
         <p>${this.help_text.basic_overview.content}</p>
         `;
     }
-    this.resizeReactor();
+    if (this.gridScaler) this.gridScaler.init();
 
-    setTimeout(() => {
-      if (typeof window !== "undefined" && window.innerWidth <= 900) {
-        this.resizeReactor();
-      }
-    }, 100);
-    window.addEventListener("resize", () => this.resizeReactor());
+    this.gridScaler.resize();
     this.runUpdateInterfaceLoop();
 
     // Initialize engine status indicator
@@ -1679,183 +1728,7 @@ export class UI {
   }
 
   resizeReactor() {
-    if (
-      !this.game ||
-      !this.DOMElements.reactor ||
-      !this.DOMElements.reactor_wrapper
-    )
-      return;
-
-    const wrapper = this.DOMElements.reactor_wrapper;
-    const numCols = this.game.cols;
-    const numRows = this.game.rows;
-    const isMobile = typeof window !== "undefined" && window.innerWidth <= 900;
-    let tileSize;
-
-    // Hide the reactor during resize to prevent visual scaling
-    const reactor = this.DOMElements.reactor;
-    const originalVisibility = reactor.style.visibility;
-    reactor.style.visibility = "hidden";
-
-    // If fit-to-screen is enabled, scale the entire grid to fit within the wrapper
-    if (this._fitToScreenActive) {
-      const baseTileSize = isMobile ? 48 : 60;
-      this.DOMElements.reactor.style.setProperty("--tile-size", `${baseTileSize}px`);
-      this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
-      this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
-      // Ensure a 5px padding border while fitting
-      this.DOMElements.reactor.style.padding = "5px";
-
-      // Base grid dimensions (without container padding)
-      const rawGridWidth = baseTileSize * numCols;
-      const rawGridHeight = baseTileSize * numRows;
-
-      // Include container padding so scale truly fits visible bounds
-      let paddingX = 0;
-      let paddingY = 0;
-      try {
-        const cs = window.getComputedStyle(this.DOMElements.reactor);
-        const pl = parseFloat(cs.paddingLeft || '0');
-        const pr = parseFloat(cs.paddingRight || '0');
-        const pt = parseFloat(cs.paddingTop || '0');
-        const pb = parseFloat(cs.paddingBottom || '0');
-        paddingX = (isFinite(pl) ? pl : 0) + (isFinite(pr) ? pr : 0);
-        paddingY = (isFinite(pt) ? pt : 0) + (isFinite(pb) ? pb : 0);
-      } catch (_) { }
-
-      const gridWidth = rawGridWidth + paddingX;
-      const gridHeight = rawGridHeight + paddingY;
-
-      // Prevent scrollbars from affecting available size and ensure centering while fitting
-      wrapper.style.overflow = "hidden";
-      wrapper.style.alignItems = "center";
-      wrapper.style.justifyContent = "center";
-      // On mobile, reduce top/bottom padding to maximize available height
-      if (isMobile) {
-        wrapper.style.paddingTop = "16px";
-        wrapper.style.paddingBottom = "16px";
-      }
-
-      const wrapperWidth = Math.max(1, this.DOMElements.reactor_wrapper.clientWidth || 1);
-      const wrapperHeight = Math.max(1, this.DOMElements.reactor_wrapper.clientHeight || 1);
-
-      const scaleX = wrapperWidth / gridWidth;
-      const scaleY = wrapperHeight / gridHeight;
-      const scale = Math.max(0.1, Math.min(scaleX, scaleY));
-
-      this.DOMElements.reactor.style.width = `${rawGridWidth}px`;
-      this.DOMElements.reactor.style.height = `${rawGridHeight}px`;
-      this.DOMElements.reactor.style.transformOrigin = "center center";
-      this.DOMElements.reactor.style.transform = `scale(${scale})`;
-
-      reactor.style.visibility = originalVisibility;
-      return;
-    }
-
-    if (isMobile) {
-      // Restore default mobile paddings when not in fit-to-screen mode
-      wrapper.style.paddingTop = "";
-      wrapper.style.paddingBottom = "";
-      // Mobile: Force a reflow to get accurate wrapper dimensions
-      wrapper.offsetHeight; // Force reflow
-
-      // Get the actual wrapper dimensions after reflow
-      let wrapperHeight = wrapper.clientHeight;
-      let wrapperWidth = wrapper.clientWidth;
-
-      // If wrapper dimensions are 0 or very small, use viewport dimensions as fallback
-      if (wrapperHeight < 100 || wrapperWidth < 100) {
-        wrapperHeight = window.innerHeight;
-        wrapperWidth = window.innerWidth;
-      }
-
-      // Calculate tile size to fit the height of the reactor area
-      // Account for objectives section (70px-90px) and info bar (48px) and bottom nav (56px)
-      let objectivesHeight = 70; // Default height
-      if (window.innerWidth <= 400) {
-        objectivesHeight = 90;
-      } else if (window.innerWidth <= 600) {
-        objectivesHeight = 80;
-      }
-      const uiSpace = objectivesHeight + 48 + 56; // objectives + info bar + bottom nav
-      const availableHeight = wrapperHeight - uiSpace;
-
-      // Scale to fit height - this ensures the grid fills the available height
-      const tileSizeForHeight = availableHeight / numRows;
-
-      // Use height-based scaling to ensure grid fits vertically
-      tileSize = Math.floor(tileSizeForHeight);
-
-      // Ensure reasonable tile size bounds for mobile
-      tileSize = Math.max(25, Math.min(tileSize, 55));
-
-
-
-      // Set CSS custom properties
-      this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
-      this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
-      this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
-
-      // Calculate final grid dimensions
-      const finalGridWidth = tileSize * numCols;
-      const finalGridHeight = tileSize * numRows;
-
-
-
-      // Ensure the reactor wrapper is properly positioned
-      wrapper.style.position = "relative";
-      wrapper.style.overflow = "auto";
-
-      // Reset any transform that might have been applied
-      this.DOMElements.reactor.style.transform = "none";
-      this.DOMElements.reactor.style.transformOrigin = "center center";
-
-    } else {
-      // Desktop: Scale grid to fit height while preventing horizontal scrollbar
-      const wrapperHeight = wrapper.clientHeight;
-      const sidebarWidth = 300; // Fixed sidebar width
-      const availableWidth = (typeof window !== "undefined" ? window.innerWidth : 1200) - sidebarWidth - 20; // Account for margins
-
-      // Account for bottom info bar height (48px) and grid padding (10px total: 5px top + 5px bottom)
-      const bottomInfoBarHeight = 48;
-      const gridPadding = 50;
-      const availableHeight = wrapperHeight - bottomInfoBarHeight - gridPadding;
-
-      // Calculate tile size to fit available height perfectly
-      const tileSizeForHeight = Math.floor(availableHeight / numRows);
-
-      // Calculate tile size to fit width without horizontal scrollbar
-      const tileSizeForWidth = Math.floor(availableWidth / numCols);
-
-      // Use the smaller of the two to ensure no scrollbars
-      tileSize = Math.min(tileSizeForHeight, tileSizeForWidth);
-
-      // Ensure minimum tile size for usability
-      tileSize = Math.max(tileSize, 32);
-      tileSize = Math.min(tileSize, 60);
-
-      this.DOMElements.reactor.style.setProperty("--tile-size", `${tileSize}px`);
-      this.DOMElements.reactor.style.setProperty("--game-cols", numCols);
-      this.DOMElements.reactor.style.setProperty("--game-rows", numRows);
-
-      // Remove scaling to fill entire space
-      this.DOMElements.reactor.style.setProperty("transform", "none");
-      this.DOMElements.reactor.style.setProperty("transform-origin", "center center");
-
-      // Set grid dimensions based on calculated tile size
-      const gridWidth = tileSize * numCols;
-      const gridHeight = tileSize * numRows;
-      this.DOMElements.reactor.style.width = `${gridWidth}px`;
-      this.DOMElements.reactor.style.height = `${gridHeight}px`;
-
-      // Restore wrapper scroll behavior when not in fit-to-screen mode
-      wrapper.style.overflow = "auto";
-      wrapper.style.alignItems = "center";
-      wrapper.style.justifyContent = "center";
-    }
-
-    // Show the reactor again after resize is complete
-    reactor.style.visibility = originalVisibility;
+    this.gridScaler.resize();
   }
 
 
@@ -1866,10 +1739,10 @@ export class UI {
     const reactor = this.DOMElements.reactor;
     const originalDisplay = reactor.style.display;
     reactor.style.display = "none";
-    reactor.offsetHeight; // Force reflow
+    reactor.offsetHeight;
     reactor.style.display = originalDisplay;
 
-    this.resizeReactor();
+    this.gridScaler.resize();
   }
 
   setupEventListeners() {
@@ -2050,7 +1923,7 @@ export class UI {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
         if (this.game && this.DOMElements.reactor && typeof window !== "undefined") {
-          this.resizeReactor();
+          this.gridScaler.resize();
         }
         // Check objective text scrolling on resize
         if (this.game && this.game.ui && this.game.ui.stateManager) {
@@ -2071,7 +1944,7 @@ export class UI {
             window.innerWidth &&
             window.innerWidth <= 900
           ) {
-            this.resizeReactor();
+            this.gridScaler.resize();
           }
         }, 150);
       });
@@ -2496,15 +2369,43 @@ export class UI {
     const panel = this.DOMElements.parts_section;
 
     if (toggle && panel) {
-      // Use a simple click event for robust toggling (only on mobile)
-      toggle.addEventListener("click", (e) => {
+      // Remove existing event listeners if they exist
+      if (this._partsPanelToggleHandler) {
+        toggle.removeEventListener("click", this._partsPanelToggleHandler);
+      }
+      if (this._partsPanelResizeHandler) {
+        window.removeEventListener("resize", this._partsPanelResizeHandler);
+      }
+
+      // Create and store the toggle handler
+      this._partsPanelToggleHandler = (e) => {
         e.preventDefault();
+        e.stopPropagation();
         const isMobile = window.innerWidth <= 900;
         if (isMobile) {
           panel.classList.toggle("collapsed");
           this.updatePartsPanelBodyClass();
+          // Reposition tooltip if it's showing to avoid overlap
+          if (this.game && this.game.tooltip_manager) {
+            setTimeout(() => {
+              this.game.tooltip_manager.reposition();
+            }, 350);
+          }
         }
-      });
+      };
+
+      // Create and store the resize handler
+      this._partsPanelResizeHandler = () => {
+        const isCurrentlyMobile = window.innerWidth <= 900;
+        if (!isCurrentlyMobile) {
+          panel.classList.remove("collapsed");
+        }
+        this.updatePartsPanelBodyClass();
+      };
+
+      // Add the event listeners
+      toggle.addEventListener("click", this._partsPanelToggleHandler);
+      window.addEventListener("resize", this._partsPanelResizeHandler);
 
       // Initialize the panel state based on screen size
       const isMobileOnLoad = window.innerWidth <= 900;
@@ -2516,15 +2417,6 @@ export class UI {
         panel.classList.remove("collapsed");
       }
       this.updatePartsPanelBodyClass();
-
-      // Add a resize listener to handle transitions between mobile/desktop
-      window.addEventListener("resize", () => {
-        const isCurrentlyMobile = window.innerWidth <= 900;
-        if (!isCurrentlyMobile) {
-          panel.classList.remove("collapsed");
-        }
-        this.updatePartsPanelBodyClass();
-      });
 
       // Initialize the selected part icon
       this.stateManager.updatePartsPanelToggleIcon(null);
@@ -2939,9 +2831,10 @@ export class UI {
   }
 
   initializeCopyPasteUI() {
+    const copyPasteBtns = document.getElementById("reactor_copy_paste_btns");
+    const toggleBtn = document.getElementById("reactor_copy_paste_toggle");
     const copyBtn = document.getElementById("reactor_copy_btn");
     const pasteBtn = document.getElementById("reactor_paste_btn");
-    const fitBtn = document.getElementById("reactor_fit_btn");
     const deselectBtn = document.getElementById("reactor_deselect_btn");
     const dropperBtn = document.getElementById("reactor_dropper_btn");
     const modal = document.getElementById("reactor_copy_paste_modal");
@@ -2951,22 +2844,23 @@ export class UI {
     const closeBtn = document.getElementById("reactor_copy_paste_close_btn");
     const confirmBtn = document.getElementById("reactor_copy_paste_confirm_btn");
 
+    if (toggleBtn && copyPasteBtns) {
+      toggleBtn.onclick = () => {
+        copyPasteBtns.classList.toggle("collapsed");
+        const isCollapsed = copyPasteBtns.classList.contains("collapsed");
+        localStorage.setItem("reactor_copy_paste_collapsed", isCollapsed ? "true" : "false");
+      };
+      
+      const savedState = localStorage.getItem("reactor_copy_paste_collapsed");
+      if (savedState === "true") {
+        copyPasteBtns.classList.add("collapsed");
+      }
+    }
+
     // Check if all required elements exist
     if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) {
       console.warn("[UI] Copy/paste UI elements not found, skipping initialization");
       return;
-    }
-
-    // Fit-to-screen toggle
-    if (fitBtn) {
-      fitBtn.onclick = () => {
-        this._fitToScreenActive = !this._fitToScreenActive;
-        fitBtn.classList.toggle("on", this._fitToScreenActive);
-        try {
-          document.body.classList.toggle("fit-screen-mode", this._fitToScreenActive);
-        } catch (_) { }
-        this.resizeReactor();
-      };
     }
 
     // Deselect current selected part
@@ -3861,12 +3755,17 @@ export class UI {
           });
         }
         this.setupReactorEventListeners();
-        this.resizeReactor();
+        this.gridScaler.resize();
         this.initializeCopyPasteUI();
         this.initializeSellAllButton();
         // Prepare mobile top overlay that aligns stats with copy/paste/sell
         this.setupMobileTopBar();
         this.setupMobileTopBarResizeListener();
+        
+        const settingsBtnMobile = document.getElementById("settings_btn_mobile");
+        if (settingsBtnMobile) {
+          settingsBtnMobile.addEventListener("click", () => new SettingsModal().show());
+        }
         break;
       case "upgrades_section":
         setupUpgradeClickHandler("upgrades_content_wrapper");
@@ -3893,95 +3792,6 @@ export class UI {
             "[UI] upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing"
           );
         }
-        const rebootBtn = document.getElementById("reboot_btn");
-        const refundBtn = document.getElementById("refund_btn");
-        if (rebootBtn) rebootBtn.onclick = () => game.reboot_action(true);
-        if (refundBtn) refundBtn.onclick = () => game.reboot_action(false);
-
-        const debugToggleBtn = document.getElementById("debug_toggle_btn");
-        const debugHideBtn = document.getElementById("debug_hide_btn");
-        const debugRefreshBtn = document.getElementById("debug_refresh_btn");
-        if (debugToggleBtn) {
-          debugToggleBtn.addEventListener("click", () => {
-            const debugSection = this.DOMElements.debug_section;
-            if (debugSection && debugSection.classList.contains("hidden")) {
-              this.showDebugPanel();
-            } else {
-              this.hideDebugPanel();
-            }
-          });
-        }
-        if (debugHideBtn) {
-          debugHideBtn.addEventListener("click", () => {
-            this.hideDebugPanel();
-          });
-        }
-        if (debugRefreshBtn) {
-          debugRefreshBtn.addEventListener("click", () => {
-            this.updateDebugVariables();
-          });
-        }
-
-        const copyStateBtn = document.getElementById("copy_state_btn");
-        if (copyStateBtn) {
-          copyStateBtn.onclick = async () => {
-            const gameStateObject = this.game.getSaveState();
-            const gameStateString = JSON.stringify(gameStateObject, null, 2);
-            const result = await this.writeToClipboard(gameStateString);
-
-            const originalText = copyStateBtn.textContent;
-            if (result.success) {
-              copyStateBtn.textContent = "Copied!";
-            } else {
-              console.error("Failed to copy game state: ", result.error);
-              copyStateBtn.textContent = "Error!";
-            }
-            setTimeout(() => {
-              copyStateBtn.textContent = originalText;
-            }, 2000);
-          };
-        }
-
-        // Setup research page bottom navigation buttons
-        const researchGoogleSigninBtn = document.getElementById("research_google_signin_btn");
-        const researchBackToSplashBtn = document.getElementById("research_back_to_splash_btn");
-
-        if (researchGoogleSigninBtn) {
-          researchGoogleSigninBtn.onclick = async () => {
-            try {
-              researchGoogleSigninBtn.disabled = true;
-              const span = researchGoogleSigninBtn.querySelector("span");
-              if (span) span.textContent = "Signing in...";
-
-              if (window.googleDriveSave) {
-                await window.googleDriveSave.signIn();
-                if (span) span.textContent = "Signed In!";
-                setTimeout(() => {
-                  if (span) span.textContent = "Google Sign In";
-                  researchGoogleSigninBtn.disabled = false;
-                }, 2000);
-              } else {
-                throw new Error("Google Drive Save not available");
-              }
-            } catch (error) {
-              console.error("Failed to sign in to Google Drive:", error);
-              const span = researchGoogleSigninBtn.querySelector("span");
-              if (span) span.textContent = "Sign in Failed";
-              setTimeout(() => {
-                if (span) span.textContent = "Google Sign In";
-                researchGoogleSigninBtn.disabled = false;
-              }, 2000);
-            }
-          };
-        }
-
-        if (researchBackToSplashBtn) {
-          researchBackToSplashBtn.onclick = () => {
-            // Navigate to root URL to show splash screen (same as top nav)
-            window.location.href = window.location.origin + window.location.pathname;
-          };
-        }
-
         break;
       case "about_section":
         const versionEl = document.getElementById("about_version");
@@ -4262,6 +4072,16 @@ export class UI {
     try {
       const { getResourceUrl } = await import("../utils/util.js");
       const response = await fetch(getResourceUrl("version.json"));
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(`Expected JSON but got ${contentType || "unknown content type"}`);
+      }
+      
       const versionData = await response.json();
       const version = versionData.version || "Unknown";
 
@@ -4270,7 +4090,6 @@ export class UI {
         appVersionEl.textContent = version;
       } else {
         console.warn("[UI] app_version element not found in DOM");
-        // Try again after a short delay in case the element hasn't been created yet
         setTimeout(async () => {
           const retryEl = document.getElementById("app_version");
           if (retryEl) {
@@ -4281,7 +4100,7 @@ export class UI {
         }, 100);
       }
     } catch (error) {
-      console.warn("Could not load version info:", error);
+      console.warn("Could not load version info:", error.message || error);
       const appVersionEl = document.getElementById("app_version");
       if (appVersionEl) {
         appVersionEl.textContent = "Unknown";

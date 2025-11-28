@@ -10,6 +10,7 @@ export class SettingsModal {
     if (this.overlay) {
       if (window.game && window.game.audio) {
         window.game.audio.stopTestSound();
+        window.game.audio.stopWarningLoop();
       }
       this.overlay.classList.add("hidden");
       setTimeout(() => {

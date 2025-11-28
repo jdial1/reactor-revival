@@ -74,7 +74,7 @@ async function handleUserSession(game, pageRouter) {
 
   const hash = window.location.hash.substring(1);
   const pageInfo = pageRouter.pages[hash];
-  const shouldAutoStart = savedGame && !isNewGamePending && (pageInfo || !hash);
+  const shouldAutoStart = savedGame && !isNewGamePending && pageInfo;
 
   console.log(`[DEBUG] Auto-start check: savedGame=${savedGame}, isNewGamePending=${isNewGamePending}, hash="${hash}", pageInfo=${!!pageInfo}, shouldAutoStart=${shouldAutoStart}`);
 
@@ -84,7 +84,7 @@ async function handleUserSession(game, pageRouter) {
     );
 
     // For stateless pages, just hide splash and load the page
-    if (pageInfo.stateless) {
+    if (pageInfo && pageInfo.stateless) {
       console.log(`[DEBUG] Auto-starting to stateless page: ${hash}`);
       if (window.splashManager) {
         window.splashManager.hide();

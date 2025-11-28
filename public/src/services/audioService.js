@@ -25,6 +25,8 @@ export class AudioService {
   this._warningIntensity = 0.5;
   this._geigerInterval = null;
   this._geigerActive = false;
+  this._hasUnlocked = false;
+  this._pendingAmbience = false;
   }
   async init() {
   if (this._isInitialized) return;
@@ -37,7 +39,13 @@ export class AudioService {
   this.context = new AudioContext();
   this.masterGain = this.context.createGain();
   const savedMasterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
+  const isContextSuspended = this.context.state === 'suspended';
+  if (isContextSuspended) {
+  this.masterGain.gain.value = 0;
+  } else {
   this.masterGain.gain.value = savedMasterVol;
+  this._hasUnlocked = true;
+  }
   this.masterGain.connect(this.context.destination);
   this.effectsGain = this.context.createGain();
   this.alertsGain = this.context.createGain();
@@ -48,6 +56,9 @@ export class AudioService {
   this.systemGain.connect(this.masterGain);
   this.ambienceGain.connect(this.masterGain);
   this._loadVolumeSettings();
+  if (isContextSuspended) {
+  this.masterGain.gain.value = 0;
+  }
   const bufferSize = this.context.sampleRate * 4;
   this._noiseBuffer = this.context.createBuffer(1, bufferSize, this.context.sampleRate);
   const data = this._noiseBuffer.getChannelData(0);
@@ -62,15 +73,35 @@ export class AudioService {
   this._isInitialized = true;
   if (localStorage.getItem("reactor_mute") === "true") {
   this.toggleMute(true);
+  } else if (!isContextSuspended) {
+  this.startAmbience();
   } else {
+  this._pendingAmbience = true;
+  }
+  const unlockAudio = async () => {
+  if (!this._hasUnlocked && this.context) {
+  const wasSuspended = this.context.state === 'suspended';
+  if (wasSuspended) {
+  await this.context.resume();
+  }
+  this._hasUnlocked = true;
+  const savedMasterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
+  const t = this.context.currentTime;
+  const currentVol = this.masterGain.gain.value;
+  if (wasSuspended || currentVol < 0.001) {
+  this.masterGain.gain.setValueAtTime(0, t);
+  this.masterGain.gain.linearRampToValueAtTime(savedMasterVol, t + 1.5);
+  }
+  if (this._pendingAmbience) {
+  this._pendingAmbience = false;
   this.startAmbience();
   }
-  const unlockAudio = () => {
-  if (this.context.state === 'suspended') {
-  this.context.resume();
+  if (this._warningLoopActive) {
+  this._startGeigerTicks(this._warningIntensity);
   }
   document.removeEventListener('touchstart', unlockAudio);
   document.removeEventListener('click', unlockAudio);
+  }
   };
   document.addEventListener('touchstart', unlockAudio);
   document.addEventListener('click', unlockAudio);
@@ -79,7 +110,17 @@ export class AudioService {
   if (document.hidden) {
   this.context.suspend();
   } else {
-  this.context.resume();
+  this.context.resume().then(() => {
+  if (this._hasUnlocked && !document.hidden) {
+  const savedMasterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
+  const currentVol = this.masterGain.gain.value;
+  if (currentVol < savedMasterVol * 0.1) {
+  const t = this.context.currentTime;
+  this.masterGain.gain.setValueAtTime(currentVol, t);
+  this.masterGain.gain.linearRampToValueAtTime(savedMasterVol, t + 0.8);
+  }
+  }
+  });
   }
   });
   } catch (e) {
@@ -540,14 +581,7 @@ export class AudioService {
   }
   }
   play(type, param = null) {
-  const isMuted = this._muted;
-  console.log(`[AUDIO DEBUG] play() called: type=${type}, param=${param}, enabled=${this.enabled}, muted=${isMuted}, context=${!!this.context}, contextState=${this.context?.state}`);
   if (!this.enabled || !this.context || this.context.state !== 'running') {
-    console.log(`[AUDIO DEBUG] play() aborted: enabled=${this.enabled}, muted=${isMuted}, context=${!!this.context}, contextState=${this.context?.state}`);
-    return;
-  }
-  if (isMuted) {
-    console.log(`[AUDIO DEBUG] play() skipped due to mute: type=${type}, param=${param}`);
     return;
   }
   const ctx = this.context;

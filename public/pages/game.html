@@ -116,24 +116,6 @@
           <img src="img/ui/icons/icon_heat.png" alt="Heat" />
         </button>
         <button
-          class="parts_tab"
-          id="tab_misc1"
-          data-tab="misc1"
-          title="Other"
-          disabled
-        >
-          <span role="img" aria-label="Locked">🔒</span>
-        </button>
-        <button
-          class="parts_tab"
-          id="tab_misc2"
-          data-tab="misc2"
-          title="Other"
-          disabled
-        >
-          <span role="img" aria-label="Locked">🔒</span>
-        </button>
-        <button
           id="parts_help_toggle"
           class="parts_help_btn"
           title="Toggle help mode - click to show part information instead of placing parts"
@@ -218,23 +200,29 @@
     </div>
     <nav id="controls_nav">
       <button id="auto_sell_toggle" class="secondary outline" title="Auto Sell">
-        Auto Sell
+        <img src="img/ui/icons/icon_cash.png" alt="Auto Sell" class="control-icon" />
+        <span class="control-text">Auto Sell</span>
       </button>
       <button id="auto_buy_toggle" class="secondary outline" title="Auto Buy">
-        Auto Buy
+        <img src="img/ui/icons/icon_cash_outline.svg" alt="Auto Buy" class="control-icon" />
+        <span class="control-text">Auto Buy</span>
       </button>
       <button id="time_flux_toggle" class="secondary outline" title="Time Flux">
-        Time Flux
+        <img src="img/ui/icons/icon_time.png" alt="Time Flux" class="control-icon" />
+        <span class="control-text">Time Flux</span>
       </button>
       <button
         id="heat_control_toggle"
         class="secondary outline"
         title="Heat Ctrl"
       >
-        Auto Heat
+        <img src="img/ui/icons/icon_heat.png" alt="Auto Heat" class="control-icon" />
+        <span class="control-text">Auto Heat</span>
       </button>
       <button id="pause_toggle" class="contrast" title="Pause/Play">
-        Pause
+        <img src="img/ui/nav/nav_pause.png" alt="Pause" class="control-icon pause-icon" />
+        <img src="img/ui/nav/nav_play.png" alt="Resume" class="control-icon play-icon" />
+        <span class="control-text">Pause</span>
       </button>
     </nav>
   </aside>
@@ -250,21 +238,17 @@
 
           <!-- ALWAYS VISIBLE HEADER (THE 'HANDLE' FOR THE DRAWER) -->
           <header id="objectives_header" class="objectives-header">
-              <div class="objective-main-info">
+              <div class="objective-title-row">
                   <h2 id="objective_current_title" class="objective-title-compact"></h2>
+              </div>
+              <div class="objective-progress-row">
                   <div class="objective-progress-bar-container">
                       <div id="objective_current_progress_bar" class="objective-progress-bar"></div>
                   </div>
-              </div>
-              <div class="objectives-header-actions">
-                  <button id="objective_claim_btn_compact" class="objective-claim-btn-compact" disabled>Claim</button>
-                  <button id="objective_claim_chapter_btn_compact" class="objective-claim-btn-compact chapter-claim-btn-compact" disabled>Complete</button>
-                  <button id="objectives_toggle_btn" class="objectives-toggle-btn" aria-label="Toggle objectives panel">
-                      <!-- Icon can be an SVG or an <img> tag -->
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
-                      </svg>
-                  </button>
+                  <div class="objectives-header-actions">
+                      <button id="objective_claim_btn_compact" class="objective-claim-btn-compact" disabled>Claim</button>
+                      <button id="objective_claim_chapter_btn_compact" class="objective-claim-btn-compact chapter-claim-btn-compact" disabled>Complete</button>
+                  </div>
               </div>
           </header>
 
@@ -288,7 +272,6 @@
                   <p id="objective_current_description" class="objective-description"></p>
                   <p id="objective_flavor_text" class="objective-flavor-text" hidden></p>
                   <p id="objective_current_progress_text" class="objective-progress-text"></p>
-                  <div id="objective_reward" class="objective-reward"></div>
               </div>
 
               <!-- Claim Buttons -->

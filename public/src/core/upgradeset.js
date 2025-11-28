@@ -232,4 +232,12 @@ export class UpgradeSet {
       upgrade.setAffordable(isAffordable);
     });
   }
+
+  hasAffordableUpgrades() {
+    return this.upgradesArray.some((upgrade) => !upgrade.base_ecost && upgrade.affordable && upgrade.level < upgrade.max_level);
+  }
+
+  hasAffordableResearch() {
+    return this.upgradesArray.some((upgrade) => upgrade.base_ecost && upgrade.affordable && upgrade.level < upgrade.max_level);
+  }
 }

@@ -127,25 +127,46 @@ export class TooltipManager {
       this.$tooltip.style.right = "";
       this.$tooltip.style.transform = "";
     } else {
-      // Mobile: position tooltip above parts panel with right padding
+      // Mobile: position tooltip to avoid parts panel overlap
       const tooltipEl = this.$tooltip;
       const partsPanel = document.getElementById("parts_section");
       const margin = 8;
+      const sidePadding = 8;
+      const gap = 8;
 
       // Position above the parts panel
       const top = margin;
 
-      // Calculate right padding to position next to parts panel
-      const partsPanelWidth = partsPanel ? partsPanel.getBoundingClientRect().width : 200;
-      const rightPadding = partsPanelWidth + 8; // 8px gap between panel and tooltip
+      // Check if parts panel is open (not collapsed)
+      const isPartsPanelOpen = partsPanel && !partsPanel.classList.contains("collapsed");
+      const partsPanelWidth = isPartsPanelOpen && partsPanel 
+        ? partsPanel.getBoundingClientRect().width 
+        : 0;
 
-      // Reset positioning styles
-      tooltipEl.style.left = "8px";
+      // Calculate left position: start after parts panel if open, otherwise use side padding
+      const leftPosition = isPartsPanelOpen 
+        ? partsPanelWidth + gap 
+        : sidePadding;
+
+      // Calculate right padding (always maintain side padding on right)
+      const rightPadding = sidePadding;
+      const viewportWidth = window.innerWidth;
+      const maxWidth = viewportWidth - leftPosition - rightPadding;
+
+      // Set positioning to prevent overflow and overlap
+      tooltipEl.style.left = `${leftPosition}px`;
       tooltipEl.style.right = `${rightPadding}px`;
       tooltipEl.style.width = "";
-      tooltipEl.style.maxWidth = "";
+      tooltipEl.style.maxWidth = `${maxWidth}px`;
       tooltipEl.style.top = `${top}px`;
       tooltipEl.style.transform = "none";
+      tooltipEl.style.boxSizing = "border-box";
+    }
+  }
+
+  reposition() {
+    if (this.tooltip_showing && this.current_obj && window.innerWidth <= 768) {
+      this.show(this.current_obj, this.current_tile_context, this.isLocked, null);
     }
   }
 
@@ -481,19 +502,21 @@ export class TooltipManager {
   // - Ignores empty results
   // - Applies the provided iconify function to each bullet item
   _formatDescriptionBulleted(description, iconifyFn) {
-    const raw = String(description || "");
+    const raw = String(description || "").trim();
+    // Remove trailing periods from the entire description first
+    const cleaned = raw.replace(/\.+$/, '');
     // Split on period + whitespace before an uppercase, digit or '(' to keep prior logic
-    const parts = raw
+    const parts = cleaned
       .split(/\.\s+(?=[A-Z(0-9])/g)
       .map(s => s.trim())
       .filter(Boolean)
-      // Add the trailing period back if it was removed by the split
-      .map(s => (/[.!?]$/.test(s) ? s : s + '.'));
+      // Remove any remaining trailing periods from each part
+      .map(s => s.replace(/\.+$/, ''));
 
     if (parts.length === 0) return '';
 
     const bullets = parts
-      .map(line => `<div class="tooltip-bullet">• ${iconifyFn(line)}</div>`)
+      .map(line => `<div class="tooltip-bullet">${iconifyFn(line)}</div>`)
       .join("");
 
     return bullets;

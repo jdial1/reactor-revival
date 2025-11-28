@@ -12,10 +12,8 @@ export class StateManager {
   setVar(key, value) {
     const oldValue = this.vars.get(key);
     if (oldValue === value) {
-      console.log(`[STATE-MANAGER DEBUG] setVar skipped (unchanged): ${key}=${value}`);
       return;
     }
-    console.log(`[STATE-MANAGER DEBUG] setVar: ${key}=${oldValue} -> ${value}`);
     this.vars.set(key, value);
     this.ui.update_vars.set(key, value);
     if (this.game && this.game.onToggleStateChange) {
@@ -424,7 +422,8 @@ export class StateManager {
 
       // Always add scrolling animation for objective text
       setTimeout(() => {
-        titleEl.style.animation = 'scroll-objective-title 8s linear infinite';
+        const duration = this.getObjectiveScrollDuration();
+        titleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`;
       }, 100);
     }
     if (rewardEl && (objective.reward || objective.ep_reward)) {
@@ -460,11 +459,20 @@ export class StateManager {
     // No-op for now. Could add animation or clearing logic here if desired.
   }
 
+  getObjectiveScrollDuration() {
+    const baseWidth = 900;
+    const baseDuration = 8;
+    const screenWidth = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : baseWidth;
+    const duration = baseDuration * (screenWidth / baseWidth);
+    return Math.max(4, Math.min(20, duration));
+  }
+
   // Always enable objective text scrolling
   checkObjectiveTextScrolling() {
     const titleEl = this.ui.DOMElements.objective_current_title;
     if (titleEl) {
-      titleEl.style.animation = 'scroll-objective-title 8s linear infinite';
+      const duration = this.getObjectiveScrollDuration();
+      titleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`;
     }
   }
 }

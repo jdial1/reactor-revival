@@ -153,7 +153,6 @@ export class Tile {
     const partAfterSet = this.part?.id || null;
     console.log(`[TILE DEBUG] setPart assignment: tile=(${this.row},${this.col}), before=${partBeforeSet}, after=${partAfterSet}, expected=${partInstance.id}, match=${partAfterSet === partInstance.id}`);
     if (typeof process !== "undefined" && process.env.NODE_ENV === 'test' && this.row === 0 && this.col === 0 && isRestoring) {
-      console.log(`[SAVE-LOAD DEBUG] restoring setPart for (0,0) with part ${partInstance.id}, part set to: ${this.part?.id || 'null'}`);
     }
     this.invalidateNeighborCaches();
     if (this.part) {
@@ -276,7 +275,6 @@ export class Tile {
     if (!this.part) return;
     const part_id = this.part.id;
     if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-      console.warn(`[SAVE-LOAD DEBUG] clearPart on (${this.row}, ${this.col}) full=${full_clear} part=${part_id}`);
     }
     this.game.logger?.debug(`Clearing part '${part_id}' from tile (${this.row}, ${this.col}). Full clear: ${full_clear}`);
     this.game.debugHistory.add('tile', 'clearPart', { row: this.row, col: this.col, partId: this.part.id, fullClear: full_clear });

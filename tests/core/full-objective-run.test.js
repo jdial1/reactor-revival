@@ -2,19 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } f
 import objective_list_data from "../../public/data/objective_list.json";
 import { getObjectiveCheck } from "../../public/src/core/objectiveActions.js";
 
-// Log heap stats immediately upon module load
-if (typeof process !== 'undefined' && process.memoryUsage) {
-    try {
-        const usage = process.memoryUsage();
-        const formatMB = (bytes) => (bytes / 1024 / 1024).toFixed(2);
-        process.stderr.write(`\n[MODULE LOAD] Heap: RSS=${formatMB(usage.rss)}MB, Heap=${formatMB(usage.heapUsed)}/${formatMB(usage.heapTotal)}MB\n`);
-    } catch (e) {
-        process.stderr.write(`\n[MODULE LOAD] Could not log heap stats: ${e.message}\n`);
-    }
-}
-
 let previousStats = null;
 let statsHistory = [];
+let enableDebugLogging = false;
 
 function logHeapStats(label = 'Heap Stats') {
     try {
@@ -77,28 +67,9 @@ function logHeapStats(label = 'Heap Stats') {
                 warningStr = `\n  ⚠️ WARNING: Heap usage at ${heapUsedPercent}% - Monitor closely\n`;
             }
             
-            // Build output string
-            const statsStr = `\n[${label}]\n` +
-                `  RSS: ${formatMB(stats.rss)} MB (total allocated)\n` +
-                `  Heap: ${formatMB(stats.heapUsed)} / ${formatMB(stats.heapTotal)} MB (${heapUsedPercent}% used)\n` +
-                `  External: ${formatMB(stats.external)} MB\n` +
-                `  ArrayBuffers: ${formatMB(stats.arrayBuffers)} MB\n` +
-                `  Heap/RSS Ratio: ${rssPercent}%\n` +
-                `  Estimated Free Heap: ${formatMB(freeHeap)} MB\n` +
-                changeStr +
-                warningStr;
-            
-            // Write to stderr for immediate output (less buffered than stdout)
-            process.stderr.write(statsStr);
-            console.error(statsStr.trim());
-            // Force stdout flush
-            if (process.stdout && typeof process.stdout.write === 'function') {
-                process.stdout.write('');
-            }
-            
             previousStats = stats;
             
-            // Track history for summary
+            // Track history for summary (always collect, even if not logging)
             statsHistory.push({
                 label,
                 timestamp: Date.now(),
@@ -109,23 +80,46 @@ function logHeapStats(label = 'Heap Stats') {
                 freeHeap: freeHeap
             });
             
+            // Only output if debug logging is enabled
+            if (enableDebugLogging) {
+                const statsStr = `\n[${label}]\n` +
+                    `  RSS: ${formatMB(stats.rss)} MB (total allocated)\n` +
+                    `  Heap: ${formatMB(stats.heapUsed)} / ${formatMB(stats.heapTotal)} MB (${heapUsedPercent}% used)\n` +
+                    `  External: ${formatMB(stats.external)} MB\n` +
+                    `  ArrayBuffers: ${formatMB(stats.arrayBuffers)} MB\n` +
+                    `  Heap/RSS Ratio: ${rssPercent}%\n` +
+                    `  Estimated Free Heap: ${formatMB(freeHeap)} MB\n` +
+                    changeStr +
+                    warningStr;
+                
+                process.stderr.write(statsStr);
+                console.error(statsStr.trim());
+                if (process.stdout && typeof process.stdout.write === 'function') {
+                    process.stdout.write('');
+                }
+            }
+            
             return stats;
         }
     } catch (error) {
-        try {
-            const errorStr = `[${label}] ERROR getting heap stats: ${error.message}\n`;
-            process.stderr.write(errorStr);
-            console.error(errorStr.trim());
-        } catch (e) {
-            // If even error logging fails, we're in deep trouble
+        if (enableDebugLogging) {
+            try {
+                const errorStr = `[${label}] ERROR getting heap stats: ${error.message}\n`;
+                process.stderr.write(errorStr);
+                console.error(errorStr.trim());
+            } catch (e) {
+                // If even error logging fails, we're in deep trouble
+            }
         }
     }
     return null;
 }
 
 function printMemorySummary() {
+    if (!enableDebugLogging) {
+        return;
+    }
     if (statsHistory.length === 0) {
-        console.error('\n[SUMMARY] No memory stats collected yet.');
         return;
     }
     
@@ -243,12 +237,14 @@ if (typeof process !== 'undefined') {
     process.removeAllListeners('uncaughtException');
     
     process.on('uncaughtException', (error) => {
+        enableDebugLogging = true;
         logHeapStats('UNCAUGHT EXCEPTION - Final Heap State');
         printMemorySummary();
         originalUncaughtException.forEach(listener => listener(error));
     });
     
     process.on('unhandledRejection', (reason, promise) => {
+        enableDebugLogging = true;
         logHeapStats('UNHANDLED REJECTION - Heap State');
         printMemorySummary();
     });
@@ -546,74 +542,67 @@ describe('Full Objective Run', () => {
 
     // Add a simple test first to ensure we can log before the big test
     it('should initialize and log heap stats', () => {
-        logHeapStats('Simple Test - Initial Heap State');
         expect(true).toBe(true);
     });
 
     // Diagnostic test to see if setupGame causes memory issues
     it('should handle setupGame without crashing', async () => {
-        logHeapStats('Before setupGame (diagnostic)');
         const testGame = await setupGame();
-        logHeapStats('After setupGame (diagnostic)');
         expect(testGame).toBeDefined();
         expect(testGame.objectives_manager).toBeDefined();
-        logHeapStats('Before cleanup (diagnostic)');
     });
 
     beforeEach(async () => {
-        logHeapStats('Before setupGame');
+        enableDebugLogging = false;
+        statsHistory = [];
+        previousStats = null;
         try {
             game = await setupGame();
-            logHeapStats('After setupGame');
             game.objectives_manager.disableTimers = true;
-            // vi.useFakeTimers(); // Removed as per new_code
         } catch (error) {
+            enableDebugLogging = true;
             logHeapStats('ERROR during setupGame');
             throw error;
         }
     });
 
-    afterEach(() => {
-        logHeapStats('After test cleanup');
-        // Print summary even if test fails/crashes
-        if (statsHistory.length > 0) {
-            printMemorySummary();
-            statsHistory = []; // Reset for next test
+    afterEach((context) => {
+        const testFailed = context.task?.state === 'fail' || context.task?.result?.state === 'fail' || context.task?.result?.error;
+        if (testFailed) {
+            enableDebugLogging = true;
+            logHeapStats('After test cleanup (FAILED)');
+            if (statsHistory.length > 0) {
+                printMemorySummary();
+            }
         }
-        // vi.useRealTimers(); // Removed as per new_code
+        enableDebugLogging = false;
+        statsHistory = [];
+        previousStats = null;
     });
 
     it('should complete all objectives in a single continuous run', async () => {
-        logHeapStats('Test Start - Before Initialization');
-        const totalObjectives = objective_list_data.length; // Include all objectives including "All objectives completed!"
+        const totalObjectives = objective_list_data.length;
         game.objectives_manager.current_objective_index = 0;
         
         try {
-            logHeapStats('Before set_defaults');
-            await game.set_defaults(); // Wait for set_defaults to complete
-            logHeapStats('After set_defaults');
+            await game.set_defaults();
         } catch (error) {
+            enableDebugLogging = true;
             logHeapStats('ERROR during set_defaults');
             throw error;
         }
 
-        // Ensure objectives manager is properly initialized
         try {
             if (!game.objectives_manager.objectives_data) {
-                logHeapStats('Before objectives_manager.initialize');
                 await game.objectives_manager.initialize();
-                logHeapStats('After objectives_manager.initialize');
             }
 
-            // Ensure objectives manager is properly initialized and ready
             if (!game.objectives_manager.current_objective_def) {
-                logHeapStats('Before objectives_manager.start (initial)');
                 game.objectives_manager.start();
-                // Give it a moment to initialize
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                logHeapStats('After objectives_manager.start (initial)');
             }
         } catch (error) {
+            enableDebugLogging = true;
             logHeapStats('ERROR during objectives manager initialization');
             throw error;
         }
@@ -626,42 +615,26 @@ describe('Full Objective Run', () => {
         };
 
         try {
-            logHeapStats('Before objectives_manager.start (final)');
             game.objectives_manager.start();
-            logHeapStats('After objectives_manager.start (final)');
         } catch (error) {
+            enableDebugLogging = true;
             logHeapStats('ERROR during objectives_manager.start (final)');
             throw error;
         }
 
-        // Ensure we have a valid objective before proceeding
         expect(game.objectives_manager.current_objective_def).not.toBeNull();
-        
-        logHeapStats('Before Objective Loop - Starting');
-        console.error(`\n[INFO] Total objectives to process: ${totalObjectives - 1} (excluding final 'allObjectives')`);
 
-        for (let i = 0; i < totalObjectives - 1; i++) { // Loop through all objectives except the final "allObjectives"
+        for (let i = 0; i < totalObjectives - 1; i++) {
             const objective = objective_list_data[i];
-            
-            // Always log objective number for tracking
-            process.stderr.write(`\n[PROGRESS] Processing Objective ${i}/${totalObjectives - 2}: ${objective.checkId || 'unknown'}\n`);
-
-            // Log heap stats every 5 objectives, or every objective after 20 (critical region)
-            const shouldLog = i === 0 || i % 5 === 0 || i >= 20 || i === totalObjectives - 2;
-            if (shouldLog) {
-                logHeapStats(`Before Objective ${i} (${objective.checkId || 'unknown'})`);
-            }
 
             expect(game.objectives_manager.current_objective_index).toBe(i);
 
             try {
                 await satisfyObjective(game, i);
-                if (shouldLog) {
-                    logHeapStats(`After satisfyObjective ${i}`);
-                }
             } catch (error) {
+                enableDebugLogging = true;
                 logHeapStats(`ERROR during satisfyObjective ${i}`);
-                printMemorySummary(); // Print summary on error
+                printMemorySummary();
                 throw error;
             }
 
@@ -672,44 +645,23 @@ describe('Full Objective Run', () => {
                 game.objectives_manager.check_current_objective();
             }
 
-            // The final "allObjectives" objective is just a placeholder and doesn't need to be completed
             if (objective.checkId !== "allObjectives") {
                 expect(game.objectives_manager.current_objective_def.completed, `Objective ${i} (${objective.checkId}) should be completed.`).toBe(true);
             }
 
-            // Claim the objective to advance to the next one
             game.objectives_manager.claimObjective();
-
-            // Wait a bit for the claim to process
             await new Promise(resolve => setTimeout(resolve, 600));
 
-            // Verify we've advanced to the next objective (or reached the end)
             if (i < totalObjectives - 2) {
                 expect(game.objectives_manager.current_objective_index).toBe(i + 1);
             } else {
                 expect(game.objectives_manager.current_objective_index).toBe(totalObjectives - 1);
             }
 
-            // Clear the grid after completing the objective to prevent part conflicts for the next objective
             try {
                 game.tileset.clearAllTiles();
-                const shouldLogAfterClear = i % 5 === 0 || i >= 20;
-                if (shouldLogAfterClear) {
-                    logHeapStats(`After clearAllTiles ${i}`);
-                }
-                // Print summary after clearing if heap usage is critical, or every objective after 20
-                if (i >= 20) {
-                    const currentStats = previousStats;
-                    if (currentStats && currentStats.heapUsed / currentStats.heapTotal > 0.85) {
-                        process.stderr.write(`\n⚠️ HIGH HEAP USAGE detected after clearAllTiles ${i} - printing summary...\n`);
-                        printMemorySummary();
-                    } else if (i >= 20 && i % 3 === 0) {
-                        // Print summary every 3 objectives after 20 to catch gradual memory issues
-                        process.stderr.write(`\n[CHECKPOINT] Objective ${i} completed - printing memory summary...\n`);
-                        printMemorySummary();
-                    }
-                }
             } catch (error) {
+                enableDebugLogging = true;
                 logHeapStats(`ERROR during clearAllTiles ${i}`);
                 printMemorySummary();
                 throw error;
@@ -720,8 +672,6 @@ describe('Full Objective Run', () => {
         expect(game.objectives_manager.current_objective_def.checkId).toBe("allObjectives");
         expect(saveCallCount).toBeGreaterThan(0);
 
-        logHeapStats('Final State');
-        printMemorySummary();
         game.saveGame = originalSaveGame;
-    }, 60000); // Increased timeout for this long-running test
+    }, 60000);
 }); 

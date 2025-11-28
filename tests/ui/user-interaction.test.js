@@ -98,18 +98,28 @@ describe("UI User Interaction Scenarios", () => {
         expect(pauseButton).not.toBeNull();
 
         expect(game.paused).toBe(false);
-        expect(pauseButton.textContent).toBe("Pause");
+        expect(pauseButton.title).toBe("Pause");
+        expect(pauseButton.classList.contains("paused")).toBe(false);
 
+        // Stop the update loop to prevent infinite timers
+        if (game.ui.update_interface_task) {
+            clearTimeout(game.ui.update_interface_task);
+            game.ui.update_interface_task = null;
+        }
+        game.ui._updateLoopStopped = true;
+        
         // Call onclick directly since it's set by initializeToggleButtons
         if (pauseButton.onclick) {
             pauseButton.onclick();
         } else {
             fireEvent(pauseButton, 'click');
         }
-        await vi.runAllTimersAsync();
+        
+        // Use advanceTimersByTime instead of runAllTimersAsync to avoid infinite loops
+        vi.advanceTimersByTime(100);
 
         expect(game.paused).toBe(true);
-        expect(pauseButton.textContent).toBe("Resume");
+        expect(pauseButton.title).toBe("Resume");
     });
 
     it("should place a part when a part is selected and a tile is clicked", async () => {

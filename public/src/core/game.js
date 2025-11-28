@@ -1099,27 +1099,21 @@ export class Game {
     }
     this.tileset.clearAllTiles();
     if (savedData.tiles) {
-      console.log(`[SAVE-LOAD DEBUG] Starting tile restoration. _isRestoringSave=${this._isRestoringSave}, tiles count=${savedData.tiles.length}`);
       const prevSuppress = this._suppressPlacementCounting;
       this._suppressPlacementCounting = true;
       for (const tileData of savedData.tiles) {
         const tile = this.tileset.getTile(tileData.row, tileData.col);
         const part = this.partset.getPartById(tileData.partId);
-        console.log(`[SAVE-LOAD DEBUG] Restoring tile (${tileData.row},${tileData.col}): tile=${!!tile}, partId=${tileData.partId}, part=${!!part}, partIdResolved=${part?.id}`);
         if (tile && part) {
           const tilePartBefore = tile.part?.id || null;
           await tile.setPart(part);
           const tilePartAfter = tile.part?.id || null;
-          console.log(`[SAVE-LOAD DEBUG] Tile (${tileData.row},${tileData.col}) setPart result: before=${tilePartBefore}, after=${tilePartAfter}, success=${tilePartAfter === part.id}`);
           tile.ticks = tileData.ticks;
           tile.heat_contained = tileData.heat_contained;
-          console.log(`[SAVE-LOAD DEBUG] Tile (${tileData.row},${tileData.col}) properties set: ticks=${tile.ticks}, heat=${tile.heat_contained}`);
         } else {
-          console.log(`[SAVE-LOAD DEBUG] Tile (${tileData.row},${tileData.col}) restoration failed: tile=${!!tile}, part=${!!part}`);
         }
       }
       this._suppressPlacementCounting = prevSuppress;
-      console.log(`[SAVE-LOAD DEBUG] Tile restoration complete. _isRestoringSave=${this._isRestoringSave}`);
 
       // Backfill placedCounts if it was missing in save data
       if (!savedData.placedCounts) {
@@ -1208,19 +1202,15 @@ export class Game {
     this.ui.updateAllToggleBtnStates();
     this.reactor.updateStats();
     
-    console.log(`[SAVE-LOAD DEBUG] Save state applied. _isRestoringSave=${this._isRestoringSave}, verifying tiles...`);
     for (let r = 0; r < Math.min(this.rows, 5); r++) {
       for (let c = 0; c < Math.min(this.cols, 5); c++) {
         const tile = this.tileset.getTile(r, c);
         if (tile?.part) {
-          console.log(`[SAVE-LOAD DEBUG] Tile (${r},${c}) verified after restore: part=${tile.part.id}, heat=${tile.heat_contained}`);
         }
       }
     }
     } finally {
-      console.log(`[SAVE-LOAD DEBUG] Setting _isRestoringSave=false`);
       this._isRestoringSave = false;
-      console.log(`[SAVE-LOAD DEBUG] _isRestoringSave is now: ${this._isRestoringSave}`);
     }
   }
 
