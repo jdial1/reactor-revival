@@ -61,19 +61,127 @@ async function lintFile(filePath, content) {
     }
 }
 
-function removeConsoleStatements(content) {
-    let result = content;
+function findBalancedParens(text, startPos) {
+    let depth = 0;
+    let inString = false;
+    let stringChar = null;
+    let inTemplate = false;
+    let templateExprDepth = 0;
+    let i = startPos;
     
+    for (; i < text.length; i++) {
+        const char = text[i];
+        const prevChar = i > 0 ? text[i - 1] : '';
+        const nextChar = i < text.length - 1 ? text[i + 1] : '';
+        
+        if (!inString && !inTemplate) {
+            if (char === '"' || char === "'") {
+                inString = true;
+                stringChar = char;
+            } else if (char === '`') {
+                inTemplate = true;
+                templateExprDepth = 0;
+            } else if (char === '(') {
+                depth++;
+            } else if (char === ')') {
+                depth--;
+                if (depth === 0) {
+                    return i + 1;
+                }
+            }
+        } else if (inString) {
+            if (char === stringChar && prevChar !== '\\') {
+                inString = false;
+                stringChar = null;
+            }
+        } else if (inTemplate) {
+            if (char === '`' && prevChar !== '\\') {
+                if (templateExprDepth === 0) {
+                    inTemplate = false;
+                }
+            } else if (char === '$' && nextChar === '{') {
+                templateExprDepth++;
+                i++;
+            } else if (char === '{' && prevChar !== '$') {
+                if (templateExprDepth > 0) {
+                    depth++;
+                }
+            } else if (char === '}' && templateExprDepth > 0) {
+                if (depth > 0) {
+                    depth--;
+                }
+                templateExprDepth--;
+            } else if (char === '(' && templateExprDepth > 0) {
+                depth++;
+            } else if (char === ')' && templateExprDepth > 0) {
+                depth--;
+            }
+        }
+    }
+    
+    return -1;
+}
+
+function removeConsoleStatements(content) {
     const consoleMethods = ['log', 'debug', 'info', 'warn', 'error', 'group', 'groupCollapsed', 'groupEnd', 'table', 'time', 'timeEnd', 'trace'];
+    let result = content;
+    const removals = [];
     
     for (const method of consoleMethods) {
-        const patterns = [
-            new RegExp(`console\\.${method}\\s*\\([^)]*\\)\\s*;?`, 'g'),
-            new RegExp(`console\\.${method}\\s*\\([^)]*\\)\\s*;?\\s*$`, 'gm')
-        ];
+        const pattern = new RegExp(`console\\.${method}\\s*\\(`, 'g');
+        let match;
         
-        for (const pattern of patterns) {
-            result = result.replace(pattern, '');
+        while ((match = pattern.exec(result)) !== null) {
+            const start = match.index;
+            const openParenPos = start + match[0].length - 1;
+            const end = findBalancedParens(result, openParenPos);
+            
+            if (end > 0) {
+                let statementEnd = end;
+                
+                while (statementEnd < result.length && /\s/.test(result[statementEnd])) {
+                    statementEnd++;
+                }
+                
+                if (result[statementEnd] === ';') {
+                    statementEnd++;
+                }
+                
+                while (statementEnd < result.length && /\s/.test(result[statementEnd])) {
+                    statementEnd++;
+                }
+                
+                removals.push({ start, end: statementEnd });
+            }
+        }
+    }
+    
+    if (removals.length === 0) {
+        return content;
+    }
+    
+    removals.sort((a, b) => b.start - a.start);
+    
+    for (const removal of removals) {
+        const before = result.substring(0, removal.start);
+        const after = result.substring(removal.end);
+        
+        const beforeLines = before.split('\n');
+        const afterLines = after.split('\n');
+        const beforeLastLine = beforeLines[beforeLines.length - 1] || '';
+        const afterFirstLine = afterLines[0] || '';
+        
+        const beforeTrimmed = beforeLastLine.trimRight();
+        const afterTrimmed = afterFirstLine.trimLeft();
+        
+        if (beforeTrimmed && afterTrimmed) {
+            if (beforeTrimmed.endsWith(';') && afterTrimmed.startsWith(';')) {
+                result = before + after.substring(1);
+            } else {
+                result = before + after;
+            }
+        } else {
+            result = before + after;
         }
     }
     
@@ -140,7 +248,7 @@ async function processFile(filePath) {
         return { modified: true, kept: false };
     } catch (error) {
         console.error(`Error processing ${filePath}:`, error.message);
-        return { modified: false, kept: false };
+        return { modified: false, kept: true };
     }
 }
 
