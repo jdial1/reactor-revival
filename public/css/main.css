@@ -88,12 +88,15 @@ body {
 #splash-screen {
   position: relative;
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 2rem;
   padding-top: 5vh;
+  padding-bottom: 0;
   animation: splash-bg-scroll 120s linear infinite;
   background-color: rgb(55 55 55);
   background-image: url("../img/ui/tile.png");
@@ -476,6 +479,9 @@ body {
   font-size: 0.7em;
   opacity: 0.6;
   text-align: center;
+  max-width: 100vw;
+  box-sizing: border-box;
+  padding: 0 1rem;
 }
 
 .splash-footer-links a {
@@ -2053,18 +2059,18 @@ footer#bottom_nav button.active,
 
   /* Mobile splash screen bottom text spacing */
   .splash-version {
-    bottom: 5em;
+    bottom: 2.5em;
     font-size: 0.45em;
   }
 
   .splash-stats {
-    bottom: 4em;
+    bottom: 1.5em;
     font-size: 0.45em;
   }
 
   .splash-footer-links {
-    bottom: 2em;
-    padding-bottom: 0.75em;
+    bottom: 0.5em;
+    padding-bottom: 0.5em;
     font-size: 0.45em;
   }
 }
@@ -6106,6 +6112,8 @@ body.page-privacy_policy .highlight {
   opacity: 0.8;
   pointer-events: none;
   text-align: center;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 .splash-version {
@@ -6144,33 +6152,33 @@ body.page-privacy_policy .highlight {
 
 @media (width <= 600px) {
   .splash-menu-panel {
-    margin-bottom: 7em;
+    margin-bottom: 0;
   }
 }
 
 @media (width <= 400px) {
   .splash-menu-panel {
-    margin-bottom: 9em;
+    margin-bottom: 0;
   }
 }
 
 @media (width <= 600px) {
   #splash-screen {
-    padding-bottom: 9em;
+    padding-bottom: 0;
   }
 
   .splash-menu-panel {
-    margin-bottom: 8em;
+    margin-bottom: 0;
   }
 }
 
 @media (width <= 400px) {
   #splash-screen {
-    padding-bottom: 11em;
+    padding-bottom: 0;
   }
 
   .splash-menu-panel {
-    margin-bottom: 11em;
+    margin-bottom: 0;
   }
 }
 

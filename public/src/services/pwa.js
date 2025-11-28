@@ -1780,7 +1780,7 @@ class SplashScreenManager {
             const fileFound = await window.googleDriveSave.findSaveFile();
             if (fileFound) {
               cloudSaveOnly = true;
-              cloudSaveLabel = "☁️";
+              cloudSaveLabel = "";
               try {
                 cloudSaveData = await window.googleDriveSave.load();
               } catch (e) {
@@ -1901,7 +1901,7 @@ class SplashScreenManager {
           }
           const labelElement = document.createElement("div");
           labelElement.className = "continue-label";
-          labelElement.textContent = "☁️";
+          labelElement.textContent = "";
           cloudLoadButton.appendChild(labelElement);
           startOptionsSection.appendChild(cloudLoadButton);
         }
@@ -1990,23 +1990,11 @@ class SplashScreenManager {
       const loadGameButton = document.createElement("button");
       loadGameButton.className = "splash-btn splash-btn-load";
 
-      if (hasSave) {
-        // If we have saves, show Load Game with save indicator
-        loadGameButton.innerHTML = `
-          <div class="load-game-header">
-            <span>Load Game</span>
-            <div class="save-slot-indicator">💾</div>
-          </div>
-        `;
-      } else {
-        // If no saves, show Load Game with empty indicator
-        loadGameButton.innerHTML = `
-          <div class="load-game-header">
-            <span>Load Game</span>
-            <div class="save-slot-indicator">📁</div>
-          </div>
-        `;
-      }
+      loadGameButton.innerHTML = `
+        <div class="load-game-header">
+          <span>Load Game</span>
+        </div>
+      `;
 
       loadGameButton.onclick = () => this.showSaveSlotSelection(saveSlots);
       startOptionsSection.appendChild(loadGameButton);
