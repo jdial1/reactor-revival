@@ -7,7 +7,7 @@
   "display": "fullscreen",
   "display_override": [
     "fullscreen",
-    "window-controls-overlay"
+    "standalone"
   ],
   "background_color": "#1a1a1a",
   "theme_color": "#303236",
