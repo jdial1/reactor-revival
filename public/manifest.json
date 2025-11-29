@@ -4,9 +4,11 @@
   "short_name": "Reactor Revival",
   "description": "A reactor simulation game where you manage everything from basic uranium cells to advanced reactor cores. Unlock progressive upgrades, collect exotic particles, play offline, and enjoy a fast, responsive modern interface",
   "start_url": "/reactor-revival/",
-  "display": "standalone",
+  "display": "fullscreen",
   "display_override": [
-    "standalone"
+    "fullscreen",
+    "standalone",
+    "window-controls-overlay"
   ],
   "background_color": "#1a1a1a",
   "theme_color": "#303236",

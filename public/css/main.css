@@ -31,16 +31,34 @@ nav li {
 
 html {
   image-rendering: auto;
+  height: 100%;
+  height: 100dvh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
   font-family: "Press Start 2P", cursive, monospace !important;
   user-select: none;
+  height: 100%;
+  height: 100dvh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #wrapper {
   display: flex;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 #main {
@@ -55,6 +73,8 @@ body {
   background-repeat: repeat;
   background-size: auto;
   color: white;
+  padding: 0;
+  margin: 0;
 }
 
 .page {
@@ -88,8 +108,10 @@ body {
 #splash-screen {
   position: relative;
   display: flex;
-  height: 100vh;
-  max-height: 100vh;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
   flex-direction: column;
   align-items: center;
@@ -104,6 +126,7 @@ body {
   background-size: auto;
   font-family: "Press Start 2P", cursive, monospace !important;
   text-align: center;
+  margin: 0;
 }
 
 @keyframes splash-bg-scroll {
@@ -1767,9 +1790,11 @@ footer#bottom_nav button.active,
   #info_bar {
     right: 0 !important;
     left: 0 !important;
+    bottom: 44px !important;
     display: flex;
     width: 100vw !important;
     min-height: 60px;
+    height: auto !important;
     flex-direction: column;
     padding: 0 !important;
     padding-left: 0 !important; /* override desktop panel offset */
@@ -1799,11 +1824,16 @@ footer#bottom_nav button.active,
   #info_bar .info-row {
     display: grid;
     width: 100%;
-    place-items: center center;
+    place-items: stretch;
     padding: 0;
     margin: 0;
-    gap: 4px;
+    gap: 0;
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  #info_bar .info-row .info-item {
+    margin: 0 !important;
+    width: 100%;
   }
 
   #info_bar .info-row.info-main .info-item {
@@ -1812,11 +1842,9 @@ footer#bottom_nav button.active,
     overflow: hidden;
     align-items: center;
     justify-content: center;
-    padding: 4px 8px;
-    border: 2px solid;
-    border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+    padding: 4px 2px;
+    border: 1px solid var(--bevel-dark);
     border-radius: 0;
-    margin: 2px;
     background: rgb(30, 30, 30);
     background-repeat: repeat-x;
     background-size: 12px 100%;
@@ -2546,6 +2574,13 @@ footer#bottom_nav button.active,
   max-width: 100%;
 }
 
+@media (width > 900px) {
+  #upgrades_section,
+  #experimental_upgrades_section {
+    padding-top: calc(1rem + var(--main-top-nav-height, 60px) + 1rem);
+  }
+}
+
 /* Soundboard Page Styles */
 .soundboard-page .soundboard-header {
   display: flex;
@@ -3145,6 +3180,12 @@ footer#bottom_nav button.active,
   pointer-events: none; /* Let clicks pass through spacing */
 }
 
+@media (width > 900px) {
+  #objectives_section {
+    padding-top: calc(var(--main-top-nav-height, 60px));
+  }
+}
+
 /* Main container behaves like a panel */
 .mobile-objectives-container {
   position: relative;
@@ -3217,6 +3258,11 @@ footer#bottom_nav button.active,
   margin-left: auto;
 }
 
+.objectives-header-actions.full-width {
+  width: 100%;
+  margin-left: 0;
+}
+
 /* Buttons inside Objectives */
 .objective-claim-btn-compact,
 .objective-claim-btn {
@@ -3256,6 +3302,11 @@ footer#bottom_nav button.active,
   cursor: not-allowed;
   box-shadow: none;
   filter: grayscale(1);
+}
+
+.objective-claim-btn-compact.full-width {
+  width: 100%;
+  flex-grow: 1;
 }
 
 .objective-claim-btn {

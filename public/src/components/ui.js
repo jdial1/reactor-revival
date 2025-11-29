@@ -119,7 +119,6 @@ export class UI {
       "topupValves",
       "checkValves",
       "objectives_section",
-      "objective_reward",
       "tooltip",
       "tooltip_data",
       "stats_power",
@@ -2134,6 +2133,13 @@ export class UI {
     }
 
     // Update Progress Bars & Text with smooth animation
+    const progressBarContainer = this.DOMElements.objective_current_progress_bar?.parentElement;
+    if (info.isComplete && progressBarContainer) {
+      progressBarContainer.style.display = 'none';
+    } else if (progressBarContainer) {
+      progressBarContainer.style.display = 'flex';
+    }
+
     if (this.DOMElements.objective_current_progress_bar) {
       this.DOMElements.objective_current_progress_bar.style.width = `${info.progressPercent}%`;
     }
@@ -2220,7 +2226,16 @@ export class UI {
           } else {
             btn.textContent = btn === this.DOMElements.objective_claim_btn_compact ? "Claim" : "Claim Reward";
           }
+
+          if (btn === this.DOMElements.objective_claim_btn_compact || btn === this.DOMElements.objective_claim_chapter_btn_compact) {
+            btn.classList.add('full-width');
+          }
         });
+
+        const headerActions = this.DOMElements.objective_claim_btn_compact?.parentElement;
+        if (headerActions) {
+          headerActions.classList.add('full-width');
+        }
 
         // Add completion animation if this is a new completion
         if (!wasComplete) {
@@ -2230,6 +2245,10 @@ export class UI {
         activeButtonsFiltered.forEach(btn => {
           btn.disabled = true;
           btn.classList.remove('ready-to-claim');
+
+          if (btn === this.DOMElements.objective_claim_btn_compact || btn === this.DOMElements.objective_claim_chapter_btn_compact) {
+            btn.classList.remove('full-width');
+          }
 
           // Show reward amount instead of "In Progress..."
           let rewardText = "In Progress...";
@@ -2244,6 +2263,11 @@ export class UI {
           }
           btn.textContent = rewardText;
         });
+
+        const headerActions = this.DOMElements.objective_claim_btn_compact?.parentElement;
+        if (headerActions) {
+          headerActions.classList.remove('full-width');
+        }
       }
     }
   }
@@ -4085,6 +4109,10 @@ export class UI {
       
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+          throw new Error("HTML response received (likely 404 fallback)");
+        }
         throw new Error(`Expected JSON but got ${contentType || "unknown content type"}`);
       }
       
@@ -4106,7 +4134,9 @@ export class UI {
         }, 100);
       }
     } catch (error) {
-      console.warn("Could not load version info:", error.message || error);
+      if (!error.message || !error.message.includes("Expected JSON")) {
+        console.warn("Could not load version info:", error.message || error);
+      }
       const appVersionEl = document.getElementById("app_version");
       if (appVersionEl) {
         appVersionEl.textContent = "Unknown";
@@ -4582,6 +4612,11 @@ export class UI {
   updateManifestDisplayMode(mode) {
     const manifestLink = document.querySelector('link[rel="manifest"]');
     if (!manifestLink) return;
+
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocalhost) {
+      return;
+    }
 
     const originalHref = manifestLink.getAttribute("data-original-href") || manifestLink.href;
     if (!manifestLink.hasAttribute("data-original-href")) {

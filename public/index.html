@@ -43,6 +43,33 @@
       // Service Worker Registration for PWA
       // This registration is detectable by PWA analyzers like PWABuilder
       (function() {
+        // DEVELOPMENT CHECK: Disable Service Worker on localhost to ensure code freshness
+        // This prevents the browser from serving cached, stale versions of the game during development
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        if (isLocalhost) {
+          console.log('[SW] Localhost detected. Skipping Service Worker registration.');
+
+          // Redirect from GitHub Pages path to local dev path to fix asset 404s/MIME errors
+          // This handles cases where the browser is stuck on /reactor-revival/ from previous SW cache
+          if (window.location.pathname.indexOf('/reactor-revival/') === 0) {
+            console.log('[SW] Redirecting from production path to local /public/ path...');
+            const newPath = window.location.pathname.replace('/reactor-revival/', '/public/');
+            window.location.replace(newPath + window.location.search + window.location.hash);
+            return;
+          }
+
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for(let registration of registrations) {
+                registration.unregister();
+                console.log('[SW] Unregistered existing service worker on localhost');
+              }
+            });
+          }
+          return;
+        }
+
         if ('serviceWorker' in navigator) {
           const pathParts = window.location.pathname.split('/').filter(p => p);
           const repoName = pathParts.length > 0 ? pathParts[0] : '';
