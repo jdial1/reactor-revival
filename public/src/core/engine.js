@@ -1033,10 +1033,16 @@ export class Engine {
     }
     this.game.logger?.debug(`[TICK STAGE] After vent processing: Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
-    // Add generated power to reactor
-    reactor.current_power += Math.round(power_add);
-    if (reactor.current_power > reactor.max_power) {
+    // Add generated power to reactor with overflow logic
+    const powerToAdd = Math.round(power_add);
+    const potentialPower = reactor.current_power + powerToAdd;
+    
+    if (potentialPower > reactor.max_power) {
+      const excessPower = potentialPower - reactor.max_power;
       reactor.current_power = reactor.max_power;
+      reactor.current_heat += excessPower;
+    } else {
+      reactor.current_power = potentialPower;
     }
 
     if (ep_chance_add > 0) {
@@ -1077,7 +1083,15 @@ export class Engine {
     if (powerMultiplier !== 1) {
       // Calculate the additional power from the multiplier
       const additionalPower = (power_add * powerMultiplier) - power_add;
-      reactor.current_power += additionalPower;
+      const potentialPowerWithMult = reactor.current_power + additionalPower;
+      
+      if (potentialPowerWithMult > reactor.max_power) {
+        const excessPowerMult = potentialPowerWithMult - reactor.max_power;
+        reactor.current_power = reactor.max_power;
+        reactor.current_heat += excessPowerMult;
+      } else {
+        reactor.current_power = potentialPowerWithMult;
+      }
     }
 
     // Auto-sell logic - move this after power multiplier is applied
