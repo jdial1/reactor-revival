@@ -71,12 +71,35 @@ describe("Complex Grid Scenarios and Interactions", () => {
         const cell = game.partset.getPartById("plutonium2");
         const vent = game.partset.getPartById("vent3");
 
+        // Reset reactor state completely
+        game.reactor.setDefaults();
+        
+        // Increase max_power significantly to prevent power overflow from being converted to heat
+        // This allows the test to focus on heat management rather than power overflow
+        game.reactor.max_power = 10000;
+        game.reactor.altered_max_power = 10000;
+        game.reactor.current_heat = 0;
+        game.reactor.current_power = 0;
+        
+        // Ensure no power multiplier is applied
+        game.reactor.power_multiplier = 1;
+
         // Create a simple 2x2 pattern to test
         await game.tileset.getTile(0, 0).setPart(cell);
         await game.tileset.getTile(0, 1).setPart(vent);
         await game.tileset.getTile(1, 0).setPart(vent);
         await game.tileset.getTile(1, 1).setPart(cell);
 
+        // Ensure tileset is updated and neighbor caches are populated
+        game.tileset.updateActiveTiles();
+        game.reactor.updateStats();
+        
+        // Invalidate all neighbor caches to force recalculation
+        for (let r = 0; r < game.rows; r++) {
+            for (let c = 0; c < game.cols; c++) {
+                game.tileset.getTile(r, c).invalidateNeighborCaches();
+            }
+        }
         game.reactor.updateStats();
 
         // ACT
