@@ -186,6 +186,10 @@ export class StateManager {
     }
   }
   handleUpgradeAdded(game, upgrade_obj) {
+    const expandUpgradeIds = ["expand_reactor_rows", "expand_reactor_cols"];
+    if (expandUpgradeIds.includes(upgrade_obj.upgrade.id)) {
+      return;
+    }
     const normalizeKey = (key) => {
       const map = {
         cell_power: "cell_power_upgrades",
