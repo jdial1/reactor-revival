@@ -1960,6 +1960,7 @@ footer#bottom_nav button.active,
 }
 
 #main_content_wrapper {
+  position: relative;
   display: flex;
   overflow: visible;
   height: 100%;
@@ -2151,6 +2152,7 @@ footer#bottom_nav button.active,
   /* Add left padding to main content when parts panel is visible */
   body.page-reactor #main {
     padding-left: 275px;
+    position: relative;
   }
 
   /* Remove padding from objectives since it's already inside main */
@@ -2970,8 +2972,7 @@ footer#bottom_nav button.active,
 }
 
 #objectives_section {
-  position: relative;
-  position: sticky !important;
+  position: absolute !important;
   z-index: 1000;
   top: 0 !important;
   right: 0;
@@ -2990,6 +2991,7 @@ footer#bottom_nav button.active,
   font-family: "Press Start 2P", cursive, monospace !important;
   text-align: center;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  pointer-events: none;
 }
 
 #objectives_content {
@@ -3170,7 +3172,7 @@ footer#bottom_nav button.active,
 }
 
 #objectives_section {
-  position: sticky !important;
+  position: absolute !important;
   z-index: 1000;
   top: 0 !important;
   width: 100% !important;
@@ -3577,14 +3579,36 @@ footer#bottom_nav button.active,
   .objectives-header {
     padding: 8px 12px;
   }
-    
+  
   .objective-title-compact {
     font-size: 0.85rem;
   }
-    
+  
   .mobile-objectives-container.is-open .objectives-content-panel {
     max-height: 300px;
     padding: 12px;
+  }
+
+  .objective-claim-btn-compact,
+  .objective-claim-btn {
+    padding: 3px 6px;
+    font-size: 0.65rem;
+    border-width: 2px;
+  }
+
+  .objective-claim-btn {
+    padding: 6px;
+    font-size: 0.7rem;
+  }
+
+  #objective_reward.claimable .claim-btn {
+    padding: 4px 8px;
+    font-size: 0.7em;
+  }
+
+  .chapter-claim-btn {
+    padding: 8px;
+    font-size: 1rem;
   }
 }
 
@@ -3592,14 +3616,36 @@ footer#bottom_nav button.active,
   .objectives-header {
     padding: 6px 10px;
   }
-    
+  
   .objective-title-compact {
     font-size: 0.8rem;
   }
-    
+  
   .mobile-objectives-container.is-open .objectives-content-panel {
     max-height: 250px;
     padding: 10px;
+  }
+
+  .objective-claim-btn-compact,
+  .objective-claim-btn {
+    padding: 2px 4px;
+    font-size: 0.6rem;
+    border-width: 2px;
+  }
+
+  .objective-claim-btn {
+    padding: 4px;
+    font-size: 0.65rem;
+  }
+
+  #objective_reward.claimable .claim-btn {
+    padding: 3px 6px;
+    font-size: 0.65em;
+  }
+
+  .chapter-claim-btn {
+    padding: 6px;
+    font-size: 0.9rem;
   }
 }
 
@@ -5084,6 +5130,17 @@ body.reactor-meltdown #meltdown_banner {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding-top: calc(70px + 16px);
+}
+
+body.page-reactor #reactor_section {
+  padding-top: calc(70px + 16px);
+}
+
+@media (width > 900px) {
+  body.page-reactor #reactor_section {
+    padding-top: calc(70px + 16px + var(--main-top-nav-height, 60px));
+  }
 }
 
 body.page-privacy_policy nav#main_top_nav,
@@ -6767,13 +6824,12 @@ body.page-privacy_policy .highlight {
 }
 
 .volume-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: block;
+  width: 100%;
 }
 
 .volume-control input[type="range"] {
-  flex: 1;
+  width: 100%;
 }
 
 .mute-btn {
@@ -6805,6 +6861,171 @@ body.page-privacy_policy .highlight {
 .volume-test-btn.playing {
   background: var(--game-success-color, rgb(67 160 71));
   border-color: transparent;
+}
+
+.data-buttons {
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.settings-modal .pixel-btn {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: var(--splash-btn-height);
+  min-height: var(--splash-btn-height);
+  padding: 0 1rem;
+  border: 3px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  border-radius: 0;
+  background: var(--bevel-mid);
+  box-shadow: none;
+  font-family: "Press Start 2P", cursive, monospace !important;
+  font-size: 1rem;
+  text-shadow: var(--text-shadow);
+  transition: none;
+  flex: 1;
+}
+
+.settings-modal .pixel-btn:hover:not(:disabled) {
+  border-color: white rgb(100, 100, 100) rgb(100, 100, 100) white;
+  color: rgb(255 255 160);
+  filter: brightness(1.1);
+  background-color: rgb(140, 140, 140);
+}
+
+.settings-modal .pixel-btn:active:not(:disabled) {
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  background: rgb(100, 100, 100);
+  box-shadow: inset 2px 2px 0 rgba(0,0,0,0.2);
+  transform: translateY(1px);
+}
+
+.setting-row {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0;
+  gap: 1rem;
+}
+
+.setting-row > span {
+  flex: 1;
+  font-family: "Press Start 2P", cursive, monospace;
+  font-size: 0.8rem;
+  color: white;
+  text-shadow: var(--text-shadow);
+  text-align: left;
+}
+
+.setting-row input[type="checkbox"] {
+  appearance: none;
+  width: 60px;
+  height: var(--splash-btn-height);
+  min-height: var(--splash-btn-height);
+  border: 3px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  border-radius: 0;
+  background: var(--bevel-mid);
+  cursor: pointer;
+  position: relative;
+  transition: none;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.setting-row input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  background: rgb(60, 60, 60);
+  border: 2px solid;
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  transition: none;
+}
+
+.setting-row input[type="checkbox"]:checked {
+  background: var(--game-success-color);
+  border-color: rgb(137 197 125) rgb(45 80 40) rgb(45 80 40) rgb(137 197 125);
+}
+
+.setting-row input[type="checkbox"]:checked::before {
+  left: calc(100% - 24px);
+  background: white;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+}
+
+.setting-row input[type="checkbox"]:hover {
+  border-color: white rgb(100, 100, 100) rgb(100, 100, 100) white;
+  filter: brightness(1.1);
+}
+
+.setting-row input[type="checkbox"]:active {
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  background: rgb(100, 100, 100);
+  box-shadow: inset 2px 2px 0 rgba(0,0,0,0.2);
+  transform: translateY(1px);
+}
+
+.setting-row input[type="checkbox"]:checked:active {
+  background: rgb(109 170 95);
+  border-color: rgb(45 80 40) rgb(137 197 125) rgb(137 197 125) rgb(45 80 40);
+}
+
+.setting-row.mute-toggle {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 1rem;
+}
+
+.setting-row.mute-toggle .mute-btn {
+  margin-left: auto;
+}
+
+.mute-btn {
+  width: var(--splash-btn-height);
+  height: var(--splash-btn-height);
+  min-height: var(--splash-btn-height);
+  min-width: var(--splash-btn-height);
+  border: 3px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  border-radius: 0;
+  background: var(--bevel-mid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: none;
+  flex-shrink: 0;
+}
+
+.mute-btn:hover {
+  border-color: white rgb(100, 100, 100) rgb(100, 100, 100) white;
+  filter: brightness(1.1);
+  transform: none;
+}
+
+.mute-btn:active {
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  background: rgb(100, 100, 100);
+  box-shadow: inset 2px 2px 0 rgba(0,0,0,0.2);
+  transform: translateY(1px);
+}
+
+.mute-btn .mute-icon {
+  font-size: 1.2rem;
+  text-shadow: var(--text-shadow);
 }
 
 /* Desktop EP icon styling to match other icons */

@@ -60,21 +60,18 @@ export class SettingsModal {
 <label for="setting-volume-effects" class="volume-label">Effects Volume</label>
 <div class="volume-control">
 <input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}">
-<button class="volume-test-btn" id="setting-volume-effects-btn" data-category="effects">▶</button>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-alerts" class="volume-label">Alerts Volume</label>
 <div class="volume-control">
 <input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}">
-<button class="volume-test-btn" id="setting-volume-alerts-btn" data-category="alerts">▶</button>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-system" class="volume-label">System Volume</label>
 <div class="volume-control">
 <input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}">
-<button class="volume-test-btn" id="setting-volume-system-btn" data-category="system">▶</button>
 </div>
 </div>
 <div class="volume-setting">
@@ -102,30 +99,17 @@ export class SettingsModal {
 <div class="settings-group">
 <h3>Data</h3>
 <div class="data-buttons">
-<button class="pixel-btn" id="setting-export">Export Save to File</button>
-<button class="pixel-btn" id="setting-import">Import Save from File</button>
+<button class="pixel-btn" id="setting-export">Export</button>
+<button class="pixel-btn" id="setting-import">Import</button>
 <input type="file" id="setting-import-input" accept=".json" style="display: none;">
 </div>
 </div>
 <div class="settings-group">
 <h3>System</h3>
-                <div class="data-buttons">
-                    <button class="pixel-btn" id="debug_toggle_btn">Show Debug Info</button>
-                    <button class="pixel-btn" id="copy_state_btn">Copy Game State</button>
-                    <button class="pixel-btn" id="open_soundboard_btn" data-page="soundboard_section">Audio Soundboard</button>
-                </div>
-                <label class="setting-row" style="margin-top: 10px; cursor: pointer;">
-                    <span>Update Notifications</span>
-                    <input type="checkbox" id="setting-notifications">
-                </label>
-                <div id="debug_section" class="pixel-panel explanitory hidden" style="margin-top: 1rem;">
-<button class="pixel-btn" id="debug_hide_btn">Hide Debug Info</button>
-<button class="pixel-btn" id="debug_refresh_btn" style="margin-left: 0.5rem;">Refresh</button>
-<div id="debug_content" style="margin-top: 1rem;">
-<h3>Game Variables Debug Panel</h3>
-<div id="debug_variables"></div>
-</div>
-</div>
+<label class="setting-row" style="cursor: pointer;">
+<span>Update Notifications</span>
+<input type="checkbox" id="setting-notifications">
+</label>
 </div>
 <div class="settings-group">
 <h3>Navigation</h3>
@@ -141,7 +125,7 @@ export class SettingsModal {
 <span>Google Sign In</span>
 </div>
 </button>
-<button class="pixel-btn" id="research_back_to_splash_btn">✖ Back to Splash</button>
+<button class="pixel-btn" id="research_back_to_splash_btn">Quit Game</button>
 </div>
 </div>
 <div class="settings-group">
@@ -202,15 +186,6 @@ export class SettingsModal {
       });
     }
 
-    const effectsTestBtn = this.overlay.querySelector("#setting-volume-effects-btn");
-    if (effectsTestBtn) {
-      effectsTestBtn.addEventListener("click", () => {
-        if (window.game && window.game.audio) {
-          window.game.audio.startTestSound("effects");
-        }
-      });
-    }
-
     const alertsVolSlider = this.overlay.querySelector("#setting-volume-alerts");
     if (alertsVolSlider) {
       alertsVolSlider.addEventListener("input", (e) => {
@@ -222,15 +197,6 @@ export class SettingsModal {
       });
     }
 
-    const alertsTestBtn = this.overlay.querySelector("#setting-volume-alerts-btn");
-    if (alertsTestBtn) {
-      alertsTestBtn.addEventListener("click", () => {
-        if (window.game && window.game.audio) {
-          window.game.audio.startTestSound("alerts");
-        }
-      });
-    }
-
     const systemVolSlider = this.overlay.querySelector("#setting-volume-system");
     if (systemVolSlider) {
       systemVolSlider.addEventListener("input", (e) => {
@@ -238,15 +204,6 @@ export class SettingsModal {
         localStorage.setItem("reactor_volume_system", value.toString());
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("system", value);
-        }
-      });
-    }
-
-    const systemTestBtn = this.overlay.querySelector("#setting-volume-system-btn");
-    if (systemTestBtn) {
-      systemTestBtn.addEventListener("click", () => {
-        if (window.game && window.game.audio) {
-          window.game.audio.startTestSound("system");
         }
       });
     }
@@ -333,58 +290,6 @@ export class SettingsModal {
             }
           };
           reader.readAsText(file);
-        }
-      });
-    }
-
-    const debugToggleBtn = this.overlay.querySelector("#debug_toggle_btn");
-    const debugSection = this.overlay.querySelector("#debug_section");
-    const debugHideBtn = this.overlay.querySelector("#debug_hide_btn");
-    if (debugToggleBtn && debugSection) {
-      debugToggleBtn.addEventListener("click", () => {
-        debugSection.classList.remove("hidden");
-      });
-    }
-    if (debugHideBtn && debugSection) {
-      debugHideBtn.addEventListener("click", () => {
-        debugSection.classList.add("hidden");
-      });
-    }
-
-    const debugRefreshBtn = this.overlay.querySelector("#debug_refresh_btn");
-    if (debugRefreshBtn) {
-      debugRefreshBtn.addEventListener("click", () => {
-        if (window.ui && typeof window.ui.updateDebugInfo === "function") {
-          window.ui.updateDebugInfo();
-        }
-      });
-    }
-
-    const copyStateBtn = this.overlay.querySelector("#copy_state_btn");
-    if (copyStateBtn) {
-      copyStateBtn.addEventListener("click", () => {
-        if (window.game && typeof window.game.saveGame === "function") {
-          window.game.saveGame();
-          const saveData = localStorage.getItem("reactorGameSave") || localStorage.getItem("reactorGameSave_1");
-          if (saveData) {
-            navigator.clipboard.writeText(saveData).then(() => {
-              console.log("Game state copied to clipboard");
-            }).catch(err => {
-              console.error("Failed to copy game state:", err);
-            });
-          }
-        }
-      });
-    }
-
-    const soundboardBtn = this.overlay.querySelector("#open_soundboard_btn");
-    if (soundboardBtn) {
-      soundboardBtn.addEventListener("click", () => {
-        const page = soundboardBtn.dataset.page;
-        if (page && window.pageRouter) {
-          window.pageRouter.loadPage(page).then(() => {
-            this.hide();
-          });
         }
       });
     }
