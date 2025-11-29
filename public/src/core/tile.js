@@ -299,12 +299,50 @@ export class Tile {
         const rotor = this.$el.querySelector('.vent-rotor');
         if (rotor && rotor.parentNode) rotor.parentNode.removeChild(rotor);
       } catch (_) { }
+      
+      // Remove all part-related classes
+      const classesToRemove = [
+        "is-processing",
+        "spent",
+        "exploding",
+        "segment-highlight",
+        "selling"
+      ];
+      classesToRemove.forEach(cls => this.$el.classList.remove(cls));
+      
+      // Remove orientation classes (for valves)
+      const orientationClasses = Array.from(this.$el.classList).filter(cls => cls.startsWith("orientation-"));
+      orientationClasses.forEach(cls => this.$el.classList.remove(cls));
+      
+      // Remove part and category classes
+      const partClasses = Array.from(this.$el.classList).filter(cls => cls.startsWith("part_") || cls.startsWith("category_"));
+      partClasses.forEach(cls => this.$el.classList.remove(cls));
+      
+      // Reset to base classes
       const baseClasses = ["tile"];
       if (this.enabled) baseClasses.push("enabled");
       this.$el.className = baseClasses.join(" ");
-      this.$el.style.backgroundImage = "none";
-      this.$el.style.backgroundColor = "transparent"; // Clear any red heat indicators
-      if (this.$percent) this.$percent.style.width = "0%";
+      
+      // Clear dataset attributes
+      if (this.$el.dataset.orientation) {
+        delete this.$el.dataset.orientation;
+      }
+      
+      // Remove all inline styles to let CSS handle default empty tile styling
+      this.$el.removeAttribute("style");
+      
+      // Clear percent bars - remove all bar elements from the wrapper
+      const percentWrapper = this.$el.querySelector(".percent_wrapper");
+      if (percentWrapper) {
+        percentWrapper.innerHTML = "";
+      }
+      
+      // Clear references
+      this.$heatBar = null;
+      this.$durabilityBar = null;
+      if (this.$percent) {
+        this.$percent.style.width = "0%";
+      }
     }
     if (this.game.tooltip_manager?.current_tile_context === this) {
       this.game.tooltip_manager.hide();
@@ -399,11 +437,15 @@ export class Tile {
     return Math.max(0, sellValue);
   }
   updateTooltip(force = false) {
+    if (!this.part || !this.$el) {
+      this.$el.style.backgroundColor = "";
+      return;
+    }
     if (this.game.tooltip.current_obj === this.part || force) {
       const heat_percent = this.heat / this.part.containment;
       this.$el.style.backgroundColor = `rgba(255, 0, 0, ${heat_percent})`;
     } else {
-      this.$el.style.backgroundColor = "transparent";
+      this.$el.style.backgroundColor = "";
     }
     if (this.part && this.part.category === "cell") {
       const isPaused = this.game.ui.stateManager.getVar("pause");

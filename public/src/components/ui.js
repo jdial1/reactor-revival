@@ -3775,6 +3775,9 @@ export class UI {
           typeof game.upgradeset.populateUpgrades === "function"
         ) {
           game.upgradeset.populateUpgrades();
+          if (typeof game.upgradeset.check_affordability === "function") {
+            game.upgradeset.check_affordability(game);
+          }
         } else {
           console.warn(
             "[UI] upgradeset.populateUpgrades is not a function or upgradeset missing"
@@ -3787,6 +3790,9 @@ export class UI {
           typeof game.upgradeset.populateExperimentalUpgrades === "function"
         ) {
           game.upgradeset.populateExperimentalUpgrades();
+          if (typeof game.upgradeset.check_affordability === "function") {
+            game.upgradeset.check_affordability(game);
+          }
         } else {
           console.warn(
             "[UI] upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing"

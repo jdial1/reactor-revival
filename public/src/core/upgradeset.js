@@ -137,6 +137,10 @@ export class UpgradeSet {
         upgrade.updateDisplayCost();
       }
     });
+
+    if (this.game) {
+      this.check_affordability(this.game);
+    }
   }
 
   purchaseUpgrade(upgradeId) {
@@ -177,6 +181,10 @@ export class UpgradeSet {
 
   check_affordability(game) {
     if (!game) return;
+
+    const hideUpgrades = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_unaffordable_upgrades") !== "false";
+    const hideResearch = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_unaffordable_research") !== "false";
+
     this.upgradesArray.forEach((upgrade) => {
       let isAffordable = false;
 
@@ -196,6 +204,18 @@ export class UpgradeSet {
       }
 
       upgrade.setAffordable(isAffordable);
+
+      if (upgrade.$el) {
+        const isResearch = !!upgrade.base_ecost;
+        const shouldHide = isResearch ? hideResearch : hideUpgrades;
+        const isMaxed = upgrade.level >= upgrade.max_level;
+
+        if (shouldHide && !isAffordable && !isMaxed) {
+          upgrade.$el.classList.add("hidden");
+        } else {
+          upgrade.$el.classList.remove("hidden");
+        }
+      }
     });
   }
 

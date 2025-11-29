@@ -1318,6 +1318,10 @@ body {
   color: rgb(143, 214, 148); /* Retro green text */
   font-weight: normal !important;
   margin-left: 4px;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
 }
 
 /* Interactive Info Items (Clickable) */
@@ -1352,6 +1356,13 @@ button.info-item:active {
   transition: none;
   white-space: nowrap;
   text-shadow: 1px 1px 0 black;
+}
+
+.info-bar-desktop .info-item .value {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2;
+  vertical-align: middle;
 }
 
 .info-bar-desktop .info-item::before {

@@ -25,6 +25,8 @@ export class SettingsModal {
     if (this.overlay) return;
     const isMuted = localStorage.getItem("reactor_mute") === "true";
     const isReducedMotion = localStorage.getItem("reactor_reduced_motion") === "true";
+    const hideUnaffordableUpgrades = localStorage.getItem("reactor_hide_unaffordable_upgrades") !== "false";
+    const hideUnaffordableResearch = localStorage.getItem("reactor_hide_unaffordable_research") !== "false";
     const masterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
     const effectsVol = parseFloat(localStorage.getItem("reactor_volume_effects") || "0.50");
     const alertsVol = parseFloat(localStorage.getItem("reactor_volume_alerts") || "0.50");
@@ -87,6 +89,14 @@ export class SettingsModal {
 <label class="setting-row">
 <span>Reduced Motion</span>
 <input type="checkbox" id="setting-motion" ${isReducedMotion ? "checked" : ""}>
+</label>
+<label class="setting-row">
+    <span>Hide Unaffordable Upgrades</span>
+    <input type="checkbox" id="setting-hide-upgrades" ${hideUnaffordableUpgrades ? "checked" : ""}>
+</label>
+<label class="setting-row">
+    <span>Hide Unaffordable Research</span>
+    <input type="checkbox" id="setting-hide-research" ${hideUnaffordableResearch ? "checked" : ""}>
 </label>
 </div>
 <div class="settings-group">
@@ -257,6 +267,26 @@ export class SettingsModal {
       motionCheckbox.addEventListener("change", (e) => {
         localStorage.setItem("reactor_reduced_motion", e.target.checked ? "true" : "false");
         document.documentElement.style.setProperty("--prefers-reduced-motion", e.target.checked ? "reduce" : "no-preference");
+      });
+    }
+
+    const hideUpgradesCheckbox = this.overlay.querySelector("#setting-hide-upgrades");
+    if (hideUpgradesCheckbox) {
+      hideUpgradesCheckbox.addEventListener("change", (e) => {
+        localStorage.setItem("reactor_hide_unaffordable_upgrades", e.target.checked ? "true" : "false");
+        if (window.game && window.game.upgradeset) {
+          window.game.upgradeset.check_affordability(window.game);
+        }
+      });
+    }
+
+    const hideResearchCheckbox = this.overlay.querySelector("#setting-hide-research");
+    if (hideResearchCheckbox) {
+      hideResearchCheckbox.addEventListener("change", (e) => {
+        localStorage.setItem("reactor_hide_unaffordable_research", e.target.checked ? "true" : "false");
+        if (window.game && window.game.upgradeset) {
+          window.game.upgradeset.check_affordability(window.game);
+        }
       });
     }
 
