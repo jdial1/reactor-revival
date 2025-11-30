@@ -220,7 +220,13 @@ export class UpgradeSet {
   }
 
   hasAffordableUpgrades() {
-    return this.upgradesArray.some((upgrade) => !upgrade.base_ecost && upgrade.affordable && upgrade.level < upgrade.max_level);
+    const expandUpgradeIds = ["expand_reactor_rows", "expand_reactor_cols"];
+    return this.upgradesArray.some((upgrade) => 
+      !upgrade.base_ecost && 
+      !expandUpgradeIds.includes(upgrade.id) &&
+      upgrade.affordable && 
+      upgrade.level < upgrade.max_level
+    );
   }
 
   hasAffordableResearch() {

@@ -628,5 +628,41 @@ describe("Experimental Parts 100x100 Grid Stress Test", () => {
     expect(game.reactor.current_power).toBeLessThan(game.reactor.max_power);
 
     console.log(`✅ 100x100 Experimental Parts Stress Test passed!\n`);
-  }, 120000); // 2 minute timeout for the most intensive test
+  }, 120000);
+});
+
+describe("Performance with Time Scaling", () => {
+    let game;
+    const originalPerformance = global.performance;
+
+    beforeEach(async () => {
+        global.performance = originalPerformance;
+        game = await setupGame();
+        game.performance.enable();
+    });
+
+    it("should measure _processTick with non-standard multiplier", () => {
+        game.rows = 20;
+        game.cols = 20;
+        game.tileset.updateActiveTiles();
+        
+        const part = game.partset.getPartById("uranium1");
+        for(const tile of game.tileset.active_tiles_list) {
+            tile.setPart(part);
+        }
+
+        const startTime = performance.now();
+        game.engine._processTick(10.0);
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+
+        const start1 = performance.now();
+        game.engine._processTick(1.0);
+        const end1 = performance.now();
+        const duration1 = end1 - start1;
+
+        console.log(`Time Scaling Perf: 10x calc took ${duration.toFixed(3)}ms, 1x calc took ${duration1.toFixed(3)}ms`);
+        
+        expect(duration).toBeLessThan(duration1 * 5); 
+    });
 });

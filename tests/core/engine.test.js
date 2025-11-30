@@ -16,17 +16,18 @@ describe("Engine Mechanics", () => {
   it("should initialize correctly", () => {
     expect(game.engine).toBeDefined();
     expect(game.engine.game).toBe(game);
-    expect(game.engine.running).toBe(true); // Engine should be running in test environment
+    expect(game.engine.running).toBe(true);
   });
 
   it("should start and stop the game loop", () => {
     game.engine.start();
     expect(game.engine.running).toBe(true);
-    expect(game.engine.loop_timeout).toBeDefined();
+
+    vi.advanceTimersByTime(16); 
 
     game.engine.stop();
     expect(game.engine.running).toBe(false);
-    expect(game.engine.loop_timeout).toBeNull();
+    expect(game.engine.animationFrameId).toBeNull();
   });
 
   it("should process a single tick correctly", async () => {

@@ -1,7 +1,7 @@
 // DOM Element Mapping Utility
 // Provides a centralized way to access DOM elements and reduces getElementById calls
 
-class DOMMapper {
+export class DOMMapper {
   constructor() {
     this.elements = new Map();
     this.selectors = {
@@ -234,9 +234,9 @@ class DOMMapper {
 }
 
 // Global DOM mapper instance
-window.domMapper = new DOMMapper();
+if (typeof window !== "undefined") {
+    window.domMapper = new DOMMapper();
+    window.domMapper.init().catch(console.error);
+}
 
-// Initialize on startup
-window.domMapper.init().catch(console.error);
-
-export default window.domMapper;
+export default (typeof window !== "undefined" ? window.domMapper : null);

@@ -61,9 +61,9 @@ describe("UI Info Bar updates for max power/heat", () => {
         expect(mobileDenom).toBeTruthy();
         expect(desktopDenom).toBeTruthy();
 
-        // Base max heat is 1000; 4 x reactor_plating1 add +1000 -> 2000 => formatted as 2K
-        expect(mobileDenom.textContent).toBe("/2K");
-        expect(desktopDenom.textContent).toBe("/2K");
+        // Base max heat is 1000; 4 x reactor_plating1 add +1000 -> 2000 => formatted as 2.00K
+        expect(mobileDenom.textContent).toBe("/2.00K");
+        expect(desktopDenom.textContent).toBe("/2.00K");
     });
 });
 

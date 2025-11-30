@@ -3,13 +3,13 @@ import { performance } from "../utils/util.js";
 export class Engine {
   constructor(game) {
     this.game = game;
-    this.loop_timeout = null;
-    this.last_tick_time = null;
+    this.animationFrameId = null;
+    this.last_timestamp = 0;
     this.dtime = 0;
     this.running = false;
     this.last_session_update = 0;
     this.session_update_interval = 60000;
-    this.tick_count = 0; // Added for heat distribution rotation
+    this.tick_count = 0;
     this.active_cells = [];
     this.active_vessels = [];
     this.active_inlets = [];
@@ -21,6 +21,8 @@ export class Engine {
 
     // Ensure arrays are always valid
     this._ensureArraysValid();
+
+    this.time_accumulator = 0;
 
     // Add heatManager stub for tests
     this.heatManager = {
@@ -57,14 +59,10 @@ export class Engine {
   start() {
     if (this.running) return;
     this.running = true;
-    if (!this.loop_timeout) {
-      this.last_tick_time = performance.now();
-      this.last_session_update = Date.now();
+    this.last_timestamp = performance.now();
+    this.last_session_update = Date.now();
+    this.loop(this.last_timestamp);
 
-      this.loop();
-    }
-
-    // Update engine status indicator
     if (this.game.ui && this.game.ui.stateManager) {
       this.game.ui.stateManager.setVar("engine_status", "running");
     }
@@ -73,13 +71,11 @@ export class Engine {
   stop() {
     if (!this.running) return;
     this.running = false;
-    clearTimeout(this.loop_timeout);
-    this.loop_timeout = null;
-    this.last_tick_time = null;
-
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
     this.game.updateSessionTime();
-
-    // Update engine status indicator
     if (this.game.ui && this.game.ui.stateManager) {
       this.game.ui.stateManager.setVar("engine_status", "stopped");
     }
@@ -87,6 +83,19 @@ export class Engine {
 
   isRunning() {
     return this.running;
+  }
+
+  addTimeTicks(tickCount) {
+    if (!this.time_accumulator) {
+      this.time_accumulator = 0;
+    }
+    const targetTickDuration = this.game.loop_wait;
+    this.time_accumulator += tickCount * targetTickDuration;
+    
+    if (this.game.ui && typeof this.game.ui.updateTimeFluxButton === 'function') {
+      const queuedTicks = Math.floor(this.time_accumulator / targetTickDuration);
+      this.game.ui.updateTimeFluxButton(queuedTicks);
+    }
   }
 
   markPartCacheAsDirty() {
@@ -196,81 +205,105 @@ export class Engine {
     this._valveNeighborCacheDirty = false;
   }
 
-  loop() {
+  loop(timestamp) {
     if (!this.running || this.game.paused) {
+      if (this.game.paused) {
+         this.animationFrameId = requestAnimationFrame(this.loop.bind(this));
+         this.last_timestamp = timestamp; 
+         return;
+      }
       this.stop();
       return;
     }
 
-    // Only measure engine loop performance in debug mode
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markStart("engine_loop");
     }
 
-    const chronometerUpgrade = this.game.upgradeset.getUpgrade("chronometer");
-    const tick_duration =
-      this.game.loop_wait / (chronometerUpgrade?.level + 1 || 1);
+    const deltaTime = timestamp - this.last_timestamp;
+    this.last_timestamp = timestamp;
 
-    const now = performance.now();
-    if (this.last_tick_time) {
-      this.dtime += now - this.last_tick_time;
+    if (this._partCacheDirty) {
+      this._updatePartCaches();
     }
 
-    this.last_tick_time = now;
+    const targetTickDuration = this.game.loop_wait;
 
-    let ticks_to_process = Math.floor(this.dtime / tick_duration);
+    // Accumulate time flux only if offline/away (>30s)
+    if (deltaTime > 30000) {
+      const previousAccumulator = this.time_accumulator || 0;
+      this.time_accumulator = previousAccumulator + deltaTime;
+      this.game.logger?.debug(`[TIME FLUX] Offline time detected (${deltaTime.toFixed(0)}ms), accumulator: ${previousAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms`);
+    } else if (this.active_cells.length > 0) {
+      // Standard gameplay loop - process live time
+      let ticksToProcess = deltaTime / targetTickDuration;
+      const maxLiveTicks = 10.0;
+      const initialAccumulator = this.time_accumulator || 0;
+      let fluxTicksUsed = 0;
 
-    if (ticks_to_process > 0) {
-      const time_flux_enabled = this.game.ui.stateManager.getVar("time_flux");
-      if (time_flux_enabled && ticks_to_process > 1) {
-        const max_catch_up_ticks = 1000;
-        if (ticks_to_process > max_catch_up_ticks) {
-          ticks_to_process = max_catch_up_ticks;
-        }
-
-        // Only measure batch ticks if performance monitoring is enabled
-        if (this.game.performance && this.game.performance.shouldMeasure()) {
-          this.game.performance.markStart("batch_ticks");
-        }
-
-        for (let i = 0; i < ticks_to_process; i++) {
-          this.tick();
-        }
-
-        if (this.game.performance && this.game.performance.shouldMeasure()) {
-          this.game.performance.markEnd("batch_ticks");
-        }
-      } else {
-        this.tick();
+      // If clamped, add excess time to accumulator to prevent spiral of death
+      if (ticksToProcess > maxLiveTicks) {
+        const originalTicks = ticksToProcess;
+        const excessTime = (ticksToProcess - maxLiveTicks) * targetTickDuration;
+        this.time_accumulator = (this.time_accumulator || 0) + excessTime;
+        ticksToProcess = maxLiveTicks;
+        this.game.logger?.debug(`[TIME FLUX] Live time clamped from ${originalTicks.toFixed(2)} to ${maxLiveTicks.toFixed(2)} ticks, excess ${excessTime.toFixed(0)}ms added to accumulator`);
       }
-      this.dtime -= ticks_to_process * tick_duration;
+
+      // If Time Flux is enabled, consume banked time
+      if (this.game.time_flux && this.time_accumulator > 0) {
+        const maxFluxTicks = 10.0;
+        const availableFluxTicks = this.time_accumulator / targetTickDuration;
+        fluxTicksUsed = Math.min(availableFluxTicks, maxFluxTicks);
+        
+        ticksToProcess += fluxTicksUsed;
+        this.time_accumulator -= (fluxTicksUsed * targetTickDuration);
+        if (this.time_accumulator < 0.001) this.time_accumulator = 0;
+        
+        this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicksUsed.toFixed(2)} flux ticks (${(fluxTicksUsed * targetTickDuration).toFixed(0)}ms), accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
+      }
+
+      if (ticksToProcess > 0) {
+        this._processTick(ticksToProcess);
+        if (fluxTicksUsed === 0 && initialAccumulator > 0) {
+          this.game.logger?.debug(`[TIME FLUX] Processing live time only (${(deltaTime / targetTickDuration).toFixed(3)} ticks), accumulator preserved at ${initialAccumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
+        }
+      }
+    }
+
+    // Update Time Flux UI with queued tick count
+    if (this.game.ui && typeof this.game.ui.updateTimeFluxButton === 'function') {
+      const queuedTicks = Math.floor(this.time_accumulator / targetTickDuration);
+      this.game.ui.updateTimeFluxButton(queuedTicks);
     }
 
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("engine_loop");
     }
 
-    this.loop_timeout = setTimeout(() => this.loop(), tick_duration);
+    this.animationFrameId = requestAnimationFrame(this.loop.bind(this));
   }
 
   tick() {
-    return this._processTick(false);
+    return this._processTick(1.0, false);
   }
 
-  // Manual tick processing for tests
   manualTick() {
-    return this._processTick(true);
+    return this._processTick(1.0, true);
   }
 
-  _processTick(manual = false) {
+  _processTick(multiplier = 1.0, manual = false) {
     const tickStart = performance.now();
     const currentTickNumber = this.tick_count;
-    this.game.logger?.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Running: ${this.running}`);
+    
+    this.game.logger?.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Running: ${this.running}, Multiplier: ${multiplier.toFixed(4)}`);
+
     if (this.game.paused && !manual) {
       this.game.logger?.debug('[TICK ABORTED] Game is paused.');
       return;
     }
-    this.game.logger?.groupCollapsed(`Processing Tick #${currentTickNumber} (Manual: ${manual})`);
+    
+    this.game.logger?.groupCollapsed(`Processing Tick #${currentTickNumber} (Manual: ${manual}, x${multiplier.toFixed(2)})`);
     try {
       // Immediately check for meltdown condition before any processing
       if (this.game.reactor.has_melted_down) {
@@ -366,86 +399,66 @@ export class Engine {
       this.game.performance.markStart("tick_cells");
     }
     let cellsProcessed = 0;
-    this.active_cells.forEach((tile) => {
+    for (let i = 0; i < this.active_cells.length; i++) {
+      const tile = this.active_cells[i];
       const part = tile.part;
-      if (!part || tile.exploded) return;
 
-      // Skip processing if ticks are 0
-      if (tile.ticks <= 0) {
-        return;
-      }
-      power_add += tile.power;
+      if (!part || tile.exploded) continue;
+      if (tile.ticks <= 0) continue;
+
+      power_add += tile.power * multiplier;
       cellsProcessed++;
 
-      if (tile.power > 0) {
-        const count = tile.power >= 200 ? 3 : tile.power >= 50 ? 2 : 1;
-        for (let i = 0; i < count; i++) {
-          // visualEvents[visualEventIndex++] = { type: 'emit', part: 'cell', icon: 'power', tile: [tile.row, tile.col] };
-        }
+      if (tile.power > 0 && Math.random() < multiplier) {
+         const count = tile.power >= 200 ? 3 : tile.power >= 50 ? 2 : 1;
+         if (visualEventIndex < visualEvents.length - count) {
+           for(let k=0; k<count; k++) {
+             visualEvents[visualEventIndex++] = { type: 'emit', icon: 'power', tile: [tile.row, tile.col] };
+           }
+         }
       }
-      if (tile.heat > 0) {
-        const countH = tile.heat >= 200 ? 3 : tile.heat >= 50 ? 2 : 1;
-        for (let i = 0; i < countH; i++) {
-          // visualEvents[visualEventIndex++] = { type: 'emit', part: 'cell', icon: 'heat', tile: [tile.row, tile.col] };
-        }
+
+      const generatedHeat = tile.heat * multiplier;
+
+      if (tile.heat > 0 && Math.random() < multiplier) {
+           const countH = tile.heat >= 200 ? 3 : tile.heat >= 50 ? 2 : 1;
+           if (visualEventIndex < visualEvents.length - countH) {
+               for(let k=0; k<countH; k++) {
+                 visualEvents[visualEventIndex++] = { type: 'emit', icon: 'heat', tile: [tile.row, tile.col] };
+               }
+           }
       }
-      this.game.logger?.debug(`[HEAT-GEN] Cell (${tile.row},${tile.col}) generated ${tile.heat.toFixed(2)} heat.`);
+
       const heatNeighbors = tile.containmentNeighborTiles.filter(
         (t) => t.part && t.part.containment > 0
       );
+
       if (heatNeighbors.length > 0) {
-        this.game.logger?.debug(`[HEAT-TRANSFER] Cell (${tile.row},${tile.col}) has ${heatNeighbors.length} neighbors. Distributing heat.`);
-        const heat_remove = Math.ceil(tile.heat / heatNeighbors.length);
-        heatNeighbors.forEach((neighbor) => {
-          const heatBefore = neighbor.heat_contained;
-          neighbor.heat_contained += heat_remove;
-          this.game.logger?.debug(`  -> Transfer to ${neighbor.part.id} at (${neighbor.row},${neighbor.col}): heat ${heatBefore.toFixed(2)} -> ${neighbor.heat_contained.toFixed(2)}`);
-          // Visual: local containment receiving heat flow from cell - DISABLED for performance
-          // visualEvents[visualEventIndex++] = {
-          //   type: 'flow',
-          //   icon: 'heat',
-          //   from: [tile.row, tile.col],
-          //   to: [neighbor.row, neighbor.col],
-          //   amount: heat_remove
-          // };
-        });
+           const heat_per_neighbor = generatedHeat / heatNeighbors.length;
+           for (let j = 0; j < heatNeighbors.length; j++) {
+             heatNeighbors[j].heat_contained += heat_per_neighbor;
+           }
       } else {
-        this.game.logger?.debug(`[HEAT-GEN] Cell (${tile.row},${tile.col}) has no neighbors. Adding ${tile.heat.toFixed(2)} to global reactor heat.`);
-        heat_add += tile.heat;
-        // Visual: show heat going directly to reactor when no neighbors - DISABLED for performance
-        // visualEvents[visualEventIndex++] = {
-        //   type: 'flow',
-        //   icon: 'heat',
-        //   from: [tile.row, tile.col],
-        //   to: 'reactor', // Special target to indicate reactor
-        //   amount: tile.heat
-        // };
+           heat_add += generatedHeat;
       }
 
-      tile.ticks--;
-
+      tile.ticks -= multiplier;
+      
       for (const r_tile of tile.reflectorNeighborTiles) {
         if (r_tile.ticks > 0) {
-          r_tile.ticks--;
-          if (r_tile.ticks === 0) this.handleComponentDepletion(r_tile);
-          // Visual: show reflector contributing to the cell with a power icon flow - DISABLED for performance
-          // visualEvents[visualEventIndex++] = {
-          //   type: 'flow',
-          //   icon: 'power',
-          //   from: [r_tile.row, r_tile.col],
-          //   to: [tile.row, tile.col]
-          // };
+          r_tile.ticks -= multiplier;
+          if (r_tile.ticks <= 0) this.handleComponentDepletion(r_tile);
         }
       }
 
-      if (tile.ticks === 0) {
+      if (tile.ticks <= 0) {
         if (part.type === "protium") {
           this.game.protium_particles += part.cell_count;
           this.game.update_cell_power();
         }
         this.handleComponentDepletion(tile);
       }
-    });
+    }
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_cells");
     }
@@ -473,21 +486,20 @@ export class Engine {
       this.game.performance.markStart("tick_inlets");
     }
 
-    for (const tile of this.active_inlets) {
+    for (let i = 0; i < this.active_inlets.length; i++) {
+      const tile = this.active_inlets[i];
       const tile_part = tile.part;
       if (!tile_part) continue;
+
       for (const tile_containment of tile.containmentNeighborTiles) {
         if (!tile_containment.part || !tile_containment.heat_contained) continue;
-        let transfer_heat = Math.min(tile.getEffectiveTransferValue(), tile_containment.heat_contained);
+        
+        let maxTransfer = tile.getEffectiveTransferValue() * multiplier;
+        let transfer_heat = Math.min(maxTransfer, tile_containment.heat_contained);
+        
         tile_containment.heat_contained -= transfer_heat;
         reactor.current_heat += transfer_heat;
         heat_add += transfer_heat;
-        if (transfer_heat > 0) {
-          const cnt = transfer_heat >= 50 ? 3 : transfer_heat >= 15 ? 2 : 1;
-          for (let i = 0; i < cnt; i++) {
-            // visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [tile_containment.row, tile_containment.col], to: [tile.row, tile.col], amount: transfer_heat };
-          }
-        }
       }
     }
 
@@ -615,23 +627,19 @@ export class Engine {
           for (const input of inputNeighbors) {
             for (const output of outputNeighbors) {
               const inputHeat = input.heat_contained || 0;
-              const valveTransfer = valve.getEffectiveTransferValue();
+              let maxTransfer = valve.getEffectiveTransferValue() * multiplier;
 
-              if (valveTransfer > 0) {
-                // For top-up valves, limit transfer to 20% of output part's max containment
-                let maxTransfer = valveTransfer;
+              if (maxTransfer > 0) {
                 if (valvePart.type === 'topup_valve') {
-                  const outputContainment = output.part.containment || 1;
-                  maxTransfer = Math.min(valveTransfer, outputContainment * 0.2);
+                  const outCap = output.part.containment || 1;
+                  maxTransfer = Math.min(maxTransfer, outCap * 0.2);
                 }
 
-                // Prevent valve transfers from causing explosions by limiting to recipient's remaining capacity
-                const outputContainment = output.part.containment || 0;
-                const outputCurrentHeat = output.heat_contained || 0;
-                const outputRemainingCapacity = Math.max(0, outputContainment - outputCurrentHeat);
-                maxTransfer = Math.min(maxTransfer, outputRemainingCapacity);
+                const outputCap = output.part.containment || 0;
+                const outputHeat = output.heat_contained || 0;
+                const outputSpace = Math.max(0, outputCap - outputHeat);
 
-                const transferAmount = Math.min(maxTransfer, inputHeat);
+                const transferAmount = Math.min(maxTransfer, inputHeat, outputSpace);
 
                 if (transferAmount > 0) {
                   if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
@@ -671,10 +679,7 @@ export class Engine {
           }
         }
 
-        // Safety check: valves should never store heat
-        if (valve.heat_contained > 0) {
-          valve.heat_contained = 0;
-        }
+        valve.heat_contained = 0;
       }
     }
 
@@ -770,16 +775,13 @@ export class Engine {
           const neighborHeadroom = Math.max(0, neighborHeadroomBase - (plannedInByNeighbor.get(neighbor) || 0));
           const isPreferred = neighbor.part.category === 'vent' || neighbor.part.category === 'coolant_cell';
 
-          // Push: if exchanger is hotter than neighbor OR equal but neighbor is a sink (bias to sinks)
           if (remainingPush > 0 && (heatStart > nStartRaw || (isPreferred && heatStart === nStartRaw && heatStart > 0))) {
-            const diff = Math.max(0, heatStart - nStartRaw) || 1; // ensure at least 1 when equal to sink
-            // Capacity-aware weighting: larger headroom neighbors get a larger share of this tile's per-neighbor capability
+            const diff = Math.max(0, heatStart - nStartRaw) || 1;
             const totalHeadroom = orderedNeighbors.reduce((sum, n) => sum + Math.max((n.part?.containment || 0) - (n.heat_contained || 0), 0), 0) || 1;
             const neighborHeadroomForWeight = Math.max(neighborCapacity - nStartRaw, 0);
             const capacityBias = Math.max(neighborHeadroomForWeight / totalHeadroom, 0);
-            const biasedCap = Math.max(1, Math.floor(tile.getEffectiveTransferValue() * capacityBias));
+            const biasedCap = Math.max(1, Math.floor(tile.getEffectiveTransferValue() * capacityBias * multiplier));
 
-            // For valve neighbors, reduce the transfer rate to allow heat to accumulate
             let transfer_heat = Math.min(
               biasedCap,
               Math.ceil(diff / 2),
@@ -804,8 +806,7 @@ export class Engine {
             const nAvailable = Math.max(0, nStartRaw - alreadyOut);
             if (nAvailable > 0 && nStartRaw > heatStart) {
               const diff = nStartRaw - heatStart;
-              // Pull: capacity-aware, but allow overfill by not capping to exchanger headroom
-              const biasedCap = tile.getEffectiveTransferValue();
+              const biasedCap = tile.getEffectiveTransferValue() * multiplier;
               let transfer_heat = Math.min(
                 biasedCap,
                 Math.ceil(diff / 2),
@@ -868,52 +869,38 @@ export class Engine {
       this.game.performance.markStart("tick_outlets");
     }
 
-    for (const tile of this.active_outlets) {
-      const tile_part = tile.part;
-      if (!tile_part) continue;
-      // Allow valve neighbors to receive heat from outlets normally
-      const containmentNeighbors = tile.containmentNeighborTiles.filter(t =>
-        t.part &&
-        t.part.category !== 'valve'
-      );
-      if (containmentNeighbors.length) {
-        // Max heat this outlet can move from the reactor this tick
-        let outlet_transfer_heat = Math.min(tile.getEffectiveTransferValue(), reactor.current_heat);
-        if (outlet_transfer_heat <= 0) continue;
-
-        // Split intended transfer evenly across neighbors (allow overfill beyond containment)
-        const intended_per_neighbor = Math.ceil(outlet_transfer_heat / containmentNeighbors.length);
-
-        for (const tile_containment of containmentNeighbors) {
-          if (!tile_containment.part) continue;
-
-          const currentNeighborHeat = tile_containment.heat_contained || 0;
-          const neighborCapacity = tile_containment.part.containment || 0;
-
-          // Always allow overfill to enable explosions for standard outlets.
-          // For the extreme outlet (range 2), avoid instant overfill/explosion in the same tick
-          // so tests can observe heat reaching two-tiles-away components.
-          let amountToAdd = Math.min(intended_per_neighbor, reactor.current_heat);
-          if (tile_part.id === 'heat_outlet6' && neighborCapacity > 0) {
-            const headroom = Math.max(0, neighborCapacity - currentNeighborHeat);
-            amountToAdd = Math.min(amountToAdd, headroom);
-          }
-          if (amountToAdd <= 0) continue;
-
-          tile_containment.heat_contained += amountToAdd;
-          reactor.current_heat -= amountToAdd;
-          {
-            const cnt = amountToAdd >= 50 ? 3 : amountToAdd >= 15 ? 2 : 1;
-            for (let i = 0; i < cnt; i++) {
-              // visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [tile.row, tile.col], to: [tile_containment.row, tile_containment.col], amount: amountToAdd };
-            }
-          }
-
-          // If we've exhausted the outlet's transfer or reactor heat, stop early
-          outlet_transfer_heat -= amountToAdd;
-          if (outlet_transfer_heat <= 0 || reactor.current_heat <= 0) break;
-        }
-      }
+    for (let i=0; i<this.active_outlets.length; i++) {
+       const tile = this.active_outlets[i];
+       const tile_part = tile.part;
+       if (!tile_part) continue;
+       
+       const neighbors = tile.containmentNeighborTiles.filter(t => t.part && t.part.category !== 'valve');
+       if (neighbors.length) {
+           const transferCap = tile.getEffectiveTransferValue() * multiplier;
+           let outlet_transfer_heat = Math.min(transferCap, reactor.current_heat);
+           
+           if (outlet_transfer_heat > 0) {
+               const per_neighbor = outlet_transfer_heat / neighbors.length;
+               
+               for(const neighbor of neighbors) {
+                   const cap = neighbor.part.containment || 0;
+                   const current = neighbor.heat_contained || 0;
+                   
+                   let toAdd = per_neighbor;
+                   if (tile_part.id === 'heat_outlet6' && cap > 0) {
+                       toAdd = Math.min(toAdd, Math.max(0, cap - current));
+                   }
+                   
+                   toAdd = Math.min(toAdd, reactor.current_heat);
+                   
+                   if (toAdd > 0) {
+                       neighbor.heat_contained += toAdd;
+                       reactor.current_heat -= toAdd;
+                       outlet_transfer_heat -= toAdd;
+                   }
+               }
+           }
+       }
     }
 
     if (this.game.performance && this.game.performance.shouldMeasure()) {
@@ -931,23 +918,16 @@ export class Engine {
       this.game.performance.markStart("tick_particle_accelerators");
     }
 
-    const ep_chance_percent = 1 + this.game.total_exotic_particles / 100;
     let ep_chance_add = 0;
-    
-    this.active_vessels.forEach((tile) => {
-      const part = tile.part;
-
-      // EP generation from particle accelerators (still handled per-tile)
-      if (part && part.category === "particle_accelerator") {
-        if (tile.heat_contained > 0) {
-          const lower_heat = Math.min(tile.heat_contained, part.ep_heat);
-          const chance = (Math.log(lower_heat) / Math.log(10)) * (lower_heat / part.ep_heat);
-          ep_chance_add += chance;
-          this.game.logger?.debug(`[EP-GEN] PA at (${tile.row},${tile.col}) has ${tile.heat_contained.toFixed(2)} heat. Contributing to EP chance.`);
-          this.game.logger?.debug(`[EP-GEN] PA at (${tile.row},${tile.col}): heat=${tile.heat_contained.toFixed(2)}, ep_heat_cap=${part.ep_heat}, chance_added=${chance.toFixed(4)}`);
-        }
-      }
-    });
+    for (let i=0; i<this.active_vessels.length; i++) {
+       const tile = this.active_vessels[i];
+       const part = tile.part;
+       if (part && part.category === "particle_accelerator" && tile.heat_contained > 0) {
+           const lower_heat = Math.min(tile.heat_contained, part.ep_heat);
+           const chance = (Math.log(lower_heat) / Math.log(10)) * (lower_heat / part.ep_heat);
+           ep_chance_add += chance * multiplier;
+       }
+    }
     this.game.logger?.debug(`[EP-GEN] Total EP chance for this tick: ${ep_chance_add}`);
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_particle_accelerators");
@@ -993,25 +973,26 @@ export class Engine {
       }
     }
 
-    for (const tile of activeVents) {
-      if (!tile.part || tile.exploded) continue;
-
-      const effectiveVentValue = tile.getEffectiveVentValue();
-      const heatBeforeVent = tile.heat_contained;
-      let vent_reduce = Math.min(
-        effectiveVentValue,
-        tile.heat_contained
-      );
-
-      // Special logic for Extreme Vent (vent6)
-      if (tile.part.id === "vent6") {
-        const powerToConsume = Math.min(vent_reduce, reactor.current_power);
-        vent_reduce = powerToConsume;
-        reactor.current_power -= powerToConsume;
-      }
-      tile.heat_contained -= vent_reduce;
-      this.game.logger?.debug(`[VENT] Vent (${tile.row},${tile.col}) reduced its heat from ${heatBeforeVent.toFixed(2)} to ${tile.heat_contained.toFixed(2)}.`);
-      if (vent_reduce > 0) {
+    for(const tile of activeVents) {
+        if(!tile.part || tile.exploded) continue;
+        
+        const ventRate = tile.getEffectiveVentValue() * multiplier;
+        const heat = tile.heat_contained;
+        
+        let vent_reduce = Math.min(ventRate, heat);
+        
+        if (tile.part.id === "vent6") {
+            const powerAvail = reactor.current_power;
+            const powerNeeded = vent_reduce;
+            if (powerNeeded > powerAvail) {
+                vent_reduce = powerAvail;
+            }
+            reactor.current_power -= vent_reduce;
+        }
+        
+        tile.heat_contained -= vent_reduce;
+        
+        if (vent_reduce > 0 && Math.random() < multiplier) {
         const cnt = vent_reduce >= 50 ? 3 : vent_reduce >= 15 ? 2 : 1;
         for (let i = 0; i < cnt; i++) {
           // visualEvents[visualEventIndex++] = { type: 'emit', part: 'vent', icon: 'heat', tile: [tile.row, tile.col] };
@@ -1034,7 +1015,7 @@ export class Engine {
     this.game.logger?.debug(`[TICK STAGE] After vent processing: Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
     // Add generated power to reactor with overflow logic
-    const powerToAdd = Math.round(power_add);
+    const powerToAdd = power_add;
     const potentialPower = reactor.current_power + powerToAdd;
     
     if (potentialPower > reactor.max_power) {
@@ -1046,8 +1027,9 @@ export class Engine {
     }
 
     if (ep_chance_add > 0) {
-      let ep_gain =
-        Math.floor(ep_chance_add) + (Math.random() < ep_chance_add % 1 ? 1 : 0);
+      let ep_gain = Math.floor(ep_chance_add);
+      if (Math.random() < (ep_chance_add % 1)) ep_gain++;
+      
       if (ep_gain > 0) {
         this.game.exotic_particles += ep_gain;
         this.game.total_exotic_particles += ep_gain;
@@ -1078,34 +1060,23 @@ export class Engine {
 
     reactor.updateStats();
 
-    // Apply global power multiplier to the power that was already added
-    const powerMultiplier = reactor.power_multiplier || 1;
-    if (powerMultiplier !== 1) {
-      // Calculate the additional power from the multiplier
-      const additionalPower = (power_add * powerMultiplier) - power_add;
-      const potentialPowerWithMult = reactor.current_power + additionalPower;
-      
-      if (potentialPowerWithMult > reactor.max_power) {
-        const excessPowerMult = potentialPowerWithMult - reactor.max_power;
-        reactor.current_power = reactor.max_power;
-        reactor.current_heat += excessPowerMult;
-      } else {
-        reactor.current_power = potentialPowerWithMult;
-      }
+    const powerMult = reactor.power_multiplier || 1;
+    if (powerMult !== 1) {
+       const extra = power_add * (powerMult - 1);
+       reactor.current_power += extra; 
+       if (reactor.current_power > reactor.max_power) {
+           reactor.current_heat += (reactor.current_power - reactor.max_power);
+           reactor.current_power = reactor.max_power;
+       }
     }
 
-    // Auto-sell logic - move this after power multiplier is applied
-    this.game.logger?.debug(`[TICK STAGE] Before auto-sell: Reactor Power = ${reactor.current_power.toFixed(2)}`);
     if (ui.stateManager.getVar("auto_sell")) {
-      const sell_amount = Math.min(
-        reactor.current_power,
-        Math.floor(reactor.max_power * reactor.auto_sell_multiplier)
-      );
-      if (sell_amount > 0) {
-        const powerBeforeSell = reactor.current_power;
-        reactor.current_power -= sell_amount;
-        this.game.logger?.debug(`Auto-selling ${sell_amount} power for $${sell_amount}. Power: ${powerBeforeSell.toFixed(2)} -> ${reactor.current_power.toFixed(2)}`);
-        this.game.current_money += sell_amount;
+      const sellCap = Math.floor(reactor.max_power * reactor.auto_sell_multiplier) * multiplier;
+      const sellAmount = Math.min(reactor.current_power, sellCap);
+      
+      if (sellAmount > 0) {
+        reactor.current_power -= sellAmount;
+        this.game.current_money += sellAmount;
         ui.stateManager.setVar("current_money", this.game.current_money);
       }
     }
@@ -1113,13 +1084,12 @@ export class Engine {
     if (reactor.current_power > reactor.max_power)
       reactor.current_power = reactor.max_power;
 
-    this.game.logger?.debug(`[TICK] Before auto-venting: Reactor Heat=${reactor.current_heat.toFixed(2)}, Heat Controlled=${reactor.heat_controlled}`);
     if (reactor.current_heat > 0 && reactor.heat_controlled) {
-      // Auto heat reduction - only active when heat_controlled is true
-      const ventMultiplierBonus = reactor.vent_multiplier_eff || 0;
-      const reduction = (reactor.max_heat / 10000) * (1 + ventMultiplierBonus / 100);
+      const ventBonus = reactor.vent_multiplier_eff || 0;
+      const baseRed = (reactor.max_heat / 10000);
+      const reduction = baseRed * (1 + ventBonus / 100) * multiplier;
+      
       reactor.current_heat -= reduction;
-      this.game.logger?.debug(`[TICK] Auto-venting reduced heat by ${reduction.toFixed(2)}`);
     }
     if (reactor.current_heat < 0) reactor.current_heat = 0;
 
@@ -1142,32 +1112,14 @@ export class Engine {
     }
     this.game.logger?.debug(`[TICK STAGE] Before final meltdown check: Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
-    // Flush visual events once per tick - OPTIMIZED for performance
-    // Since most visual events are disabled, this is now much more efficient
-    try {
-      if (visualEventIndex > 0 && this.game.ui && typeof this.game.ui._renderVisualEvents === 'function') {
+    if (visualEventIndex > 0 && this.game.ui && typeof this.game.ui._renderVisualEvents === 'function') {
         this.game.ui._renderVisualEvents(visualEvents.slice(0, visualEventIndex));
-      }
-    } catch (_) { /* ignore */ }
+    }
 
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_total");
     }
-    const duration = performance.now() - tickStart;
-    this.game.logger?.debug(`Tick finished in ${duration.toFixed(2)}ms. Final State - Power: ${reactor.current_power.toFixed(2)}, Heat: ${reactor.current_heat.toFixed(2)}`);
-    this.tick_count = (this.tick_count || 0) + 1; // Increment tick_count at the end of each tick
-
-    // Flush visual events to the game buffer once per tick - OPTIMIZED
-    // Since most visual events are disabled, this rarely processes events
-    if (visualEventIndex > 0) {
-      // Enqueueing visual events - now processes minimal events for better performance
-      this.game.enqueueVisualEvents(visualEvents.slice(0, visualEventIndex));
-    }
-    
-    // Update engine status back to stopped after tick completes
-    if (ui && ui.stateManager) {
-      ui.stateManager.setVar("engine_status", "stopped");
-    }
+    this.tick_count++;
     } catch (error) {
       console.error(`Error in _processTick:`, error);
       if (ui && ui.stateManager) {

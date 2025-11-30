@@ -1890,6 +1890,17 @@ export class UI {
             // Clear all reactor heat
             this.clearReactorHeat();
             break;
+          case "0":
+            e.preventDefault();
+            console.log("CTRL+0 pressed");
+            // Add 10 ticks to time flux accumulator
+            if (this.game.engine) {
+              console.log("Adding 10 ticks to time flux accumulator");
+              console.log("Time flux accumulator:", this.game.engine.time_accumulator);
+              this.game.engine.addTimeTicks(1000);
+              console.log("Time flux accumulator after adding 10 ticks:", this.game.engine.time_accumulator);
+            }
+            break;
         }
       }
     });
@@ -2385,6 +2396,30 @@ export class UI {
     } else {
       fullscreenButton.textContent = "⛶";
       fullscreenButton.title = "Enter Fullscreen";
+    }
+  }
+
+  updateTimeFluxButton(count) {
+    const btn = this.DOMElements.time_flux_toggle;
+    if (!btn) return;
+    const label = btn.querySelector('.control-text');
+    if (label) {
+      const previousText = label.textContent;
+      const previousHasQueue = btn.classList.contains('has-queue');
+      const timeFluxEnabled = this.game && this.game.time_flux;
+      
+      if (count > 1) {
+        label.textContent = `Time Flux (${count})`;
+        btn.classList.add('has-queue');
+      } else {
+        label.textContent = `Time Flux`;
+        btn.classList.remove('has-queue');
+      }
+      
+      const hasQueueChanged = previousHasQueue !== btn.classList.contains('has-queue');
+      if (this.game && this.game.logger && (previousText !== label.textContent || hasQueueChanged)) {
+        this.game.logger.debug(`[TIME FLUX UI] Button state: "${label.textContent}", Queued ticks: ${count}, Time Flux: ${timeFluxEnabled ? 'ON' : 'OFF'}, Has queue class: ${btn.classList.contains('has-queue')}`);
+      }
     }
   }
 

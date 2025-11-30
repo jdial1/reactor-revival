@@ -455,8 +455,17 @@ async function satisfyObjective(game, idx) {
             }
             break;
         case "masterHighHeat":
-            game.reactor.current_heat = 10000001;
-            game.masterHighHeat = { startTime: Date.now() - 300000 };
+            // Objective 27: Sustain 10M heat for 5 minutes
+            for (let i = 0; i < 8; i++) {
+                await game.tileset
+                    .getTile(0, i)
+                    .setPart(game.partset.getPartById("plutonium3"));
+            }
+            game.reactor.updateStats();
+            game.reactor.current_heat = 15000000;
+            // Mock the start time to satisfy the condition immediately
+            // Ensure we set it far enough back to cover any potential time drift in tests
+            game.masterHighHeat = { startTime: Date.now() - 350000 };
             break;
         case "ep10":
             // FIX: Set EP directly to avoid infinite loop / OOM in simulation
@@ -558,6 +567,7 @@ describe('Full Objective Run', () => {
         previousStats = null;
         try {
             game = await setupGame();
+            game.engine.stop(); // Stop engine to prevent accidental ticks/meltdowns during logic checks
             game.objectives_manager.disableTimers = true;
         } catch (error) {
             enableDebugLogging = true;

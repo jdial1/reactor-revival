@@ -7,6 +7,7 @@ import { ObjectiveManager } from "./objective.js";
 import { executeUpgradeAction } from "./upgradeActions.js";
 import { Performance } from "./performance.js";
 import { DebugHistory } from "../utils/debugHistory.js";
+import { numFormat } from "../utils/util.js";
 
 export class Game {
   constructor(ui_instance) {
@@ -860,8 +861,8 @@ export class Game {
       const existingTimeStr = this.formatTimeSimple(existingPlayTime);
       const newTimeStr = this.formatTimeSimple(newPlayTime);
 
-      const existingMoney = this.formatNumber(existingSave.current_money || 0);
-      const newMoney = this.formatNumber(newSaveData.current_money || 0);
+      const existingMoney = numFormat(existingSave.current_money || 0);
+      const newMoney = numFormat(newSaveData.current_money || 0);
 
       // Use the PWA service to show a styled modal instead of basic confirm
       if (window.splashManager && typeof window.splashManager.showSaveOverwriteModal === 'function') {
@@ -1399,7 +1400,13 @@ export class Game {
         }
         break;
       case "time_flux":
+        const previousValue = this.time_flux;
         this.time_flux = value;
+        if (this.logger && previousValue !== value) {
+          const accumulator = this.engine?.time_accumulator || 0;
+          const queuedTicks = accumulator > 0 ? Math.floor(accumulator / this.loop_wait) : 0;
+          this.logger.debug(`[TIME FLUX] Toggle changed: ${previousValue ? 'ON' : 'OFF'} -> ${value ? 'ON' : 'OFF'}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}`);
+        }
         break;
       case "pause":
         this.paused = value;

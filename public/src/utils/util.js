@@ -9,9 +9,12 @@ export function numFormat(num, places = null) {
     if (Number.isNaN(num)) return '';
 
     if (num === Infinity || num === -Infinity) return num > 0 ? 'Infinity' : '-Infinity';
-    if (places === null) places = 0;
-
+    
     const absNum = Math.abs(num);
+
+    if (places === null) {
+        places = absNum >= 1000 ? 2 : 0;
+    }
     if (absNum >= 1e36) {
         return num.toExponential(places);
     }

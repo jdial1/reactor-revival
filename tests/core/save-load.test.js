@@ -167,9 +167,8 @@ describe("Save and Load Functionality", () => {
 
         // Create a new game instance to load into
         const newGame = await setupGame();
+        newGame.engine.stop(); // Stop engine to prevent heat changes during load verification
         const loaded = await newGame.loadGame(1);
-
-        // Wait for upgrade loading to complete
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Verify the loaded game state
@@ -179,7 +178,12 @@ describe("Save and Load Functionality", () => {
         expect(newGame.rows).toBe(14);
         expect(newGame.cols).toBe(14);
         expect(newGame.tileset.getTile(1, 1).part.id).toBe("vent2");
+        
+        // Allow for slight variation if a tick slipped through, but heat shouldn't drop by ~40%
+        // 28.25 is likely due to venting. 
+        // If engine is stopped, it should be exact.
         expect(newGame.tileset.getTile(1, 1).heat_contained).toBe(50);
+        
         expect(newGame.upgradeset.getUpgrade("expand_reactor_rows").level).toBe(2);
         expect(newGame.reactor.current_heat).toBe(500);
         // New: placedCounts should be restored from save

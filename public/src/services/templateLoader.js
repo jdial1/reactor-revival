@@ -134,4 +134,6 @@ export class TemplateLoader {
 }
 
 // Create global instance
-window.templateLoader = new TemplateLoader();
+if (typeof window !== "undefined") {
+    window.templateLoader = new TemplateLoader();
+}
