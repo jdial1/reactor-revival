@@ -12,7 +12,13 @@ export class StateManager {
   setVar(key, value) {
     const oldValue = this.vars.get(key);
     if (oldValue === value) {
+      if (key === "time_flux") {
+        console.log(`[TIME FLUX] StateManager.setVar: value unchanged (${value}), skipping`);
+      }
       return;
+    }
+    if (key === "time_flux") {
+      console.log(`[TIME FLUX] StateManager.setVar: ${oldValue} -> ${value}, game exists: ${!!this.game}, game.time_flux before: ${this.game?.time_flux}`);
     }
     this.vars.set(key, value);
     this.ui.update_vars.set(key, value);
@@ -26,6 +32,9 @@ export class StateManager {
           "heat_control",
         ].includes(key)
       ) {
+        if (key === "time_flux") {
+          console.log(`[TIME FLUX] StateManager calling game.onToggleStateChange("${key}", ${value})`);
+        }
         this.game.onToggleStateChange(key, value);
       }
     }

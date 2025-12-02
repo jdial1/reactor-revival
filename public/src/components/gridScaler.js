@@ -1,129 +1,242 @@
 export class GridScaler {
+
     constructor(ui) {
+
         this.ui = ui;
-        this.resizeObserver = null;
-        this.reactor = null;
+
         this.wrapper = null;
+
+        this.reactor = null;
+
+        this.resizeObserver = null;
+
+        
+
+        this.config = {
+
+            targetTotalTiles: 144, // The goal (e.g., 12x12 = 144)
+
+            minCols: 6,            // Never narrower than this
+
+            minRows: 6,            // Never shorter than this
+
+            maxCols: 20,           // Sanity cap
+
+            maxRows: 20            // Sanity cap
+
+        };
+
     }
+
+
 
     init() {
-        this.reactor = this.ui.DOMElements.reactor;
-        this.wrapper = this.ui.DOMElements.reactor_wrapper;
 
-        if (this.wrapper) {
-            this.resizeObserver = new ResizeObserver(() => {
-                if (this.ui.game && this.ui.game.router && this.ui.game.router.currentPageId === "reactor_section") {
-                    requestAnimationFrame(() => this.resize());
-                }
-            });
+        this.reactor = this.ui.DOMElements.reactor || document.getElementById('reactor');
 
-            this.resizeObserver.observe(this.wrapper);
+        this.wrapper = this.ui.DOMElements.reactor_wrapper || document.getElementById('reactor_wrapper');
+
+
+
+        if (!this.wrapper) return;
+
+
+
+        // Observe wrapper size changes
+
+        this.resizeObserver = new ResizeObserver(() => this.requestResize());
+
+        this.resizeObserver.observe(this.wrapper);
+
+        
+
+        this.requestResize();
+
+    }
+
+
+
+    requestResize() {
+
+        if (this.ui.game && this.reactor && this.wrapper) {
+
+            requestAnimationFrame(() => this.resize());
+
         }
 
-        window.addEventListener('resize', () => {
-            if (this.ui.game && this.ui.game.router && this.ui.game.router.currentPageId === "reactor_section") {
-                this.resize();
-            }
-        });
     }
+
+
+
+    /**
+
+     * Calculates grid dimensions that maintain ~144 tiles total,
+
+     * but reshaped to fit the screen's aspect ratio.
+
+     */
+
+    calculateReshapedDimensions(availWidth, availHeight) {
+
+        const screenRatio = availWidth / availHeight;
+
+        const targetArea = this.config.targetTotalTiles;
+
+
+
+        // 1. Calculate ideal Rows based on aspect ratio
+
+        // Algebra: Rows^2 = Area / Ratio
+
+        let idealRows = Math.sqrt(targetArea / screenRatio);
+
+        
+
+        // 2. Derive Cols from that
+
+        let idealCols = targetArea / idealRows;
+
+
+
+        // 3. Round to integers
+
+        let rows = Math.round(idealRows);
+
+        let cols = Math.round(idealCols);
+
+
+
+        // Debug raw math before clamping
+
+        // console.log(`[GridScaler Calc] Ratio: ${screenRatio.toFixed(2)}, Ideal: ${idealCols.toFixed(2)}x${idealRows.toFixed(2)}`);
+
+
+
+        // 4. Safety Clamps
+
+        rows = Math.max(this.config.minRows, Math.min(rows, this.config.maxRows));
+
+        cols = Math.max(this.config.minCols, Math.min(cols, this.config.maxCols));
+
+
+
+        return { rows, cols, screenRatio };
+
+    }
+
+
 
     resize() {
-        if (!this.reactor) this.reactor = document.getElementById('reactor');
-        if (!this.wrapper) this.wrapper = document.getElementById('reactor_wrapper');
 
-        if (!this.reactor || !this.wrapper || !this.ui.game) return;
-
-        if (this.wrapper.offsetParent === null) return;
-
-        const game = this.ui.game;
-        const rows = game.rows || 12;
-        const cols = game.cols || 12;
-
-        const isMobile = window.innerWidth <= 900;
-        let mobileBottomOffset = 0;
-
-        if (isMobile) {
-            const bottomNav = document.getElementById('bottom_nav') || document.querySelector('footer#bottom_nav');
-            const infoBar = document.getElementById('info_bar');
-            const mobileTopBar = document.getElementById('mobile_top_bar');
-            
-            if (bottomNav && bottomNav.offsetParent !== null) {
-                const bottomNavRect = bottomNav.getBoundingClientRect();
-                mobileBottomOffset += bottomNavRect.height;
-            }
-            
-            if (infoBar && infoBar.offsetParent !== null) {
-                const infoBarRect = infoBar.getBoundingClientRect();
-                mobileBottomOffset += infoBarRect.height;
-            }
-            
-            if (mobileTopBar && mobileTopBar.classList.contains('active') && mobileTopBar.offsetParent !== null) {
-                const mobileTopBarRect = mobileTopBar.getBoundingClientRect();
-                mobileBottomOffset += mobileTopBarRect.height;
-            }
+        if (!this.reactor || !this.wrapper) {
+            this.reactor = this.ui.DOMElements.reactor || document.getElementById('reactor');
+            this.wrapper = this.ui.DOMElements.reactor_wrapper || document.getElementById('reactor_wrapper');
         }
 
-        let w, h;
+        if (!this.reactor || !this.wrapper) {
+            return;
+        }
+
+
+
+        // 1. Get Available Space
+
+        const availWidth = this.wrapper.clientWidth;
+
+        const availHeight = this.wrapper.clientHeight;
+
+        if (availWidth <= 0 || availHeight <= 0) {
+            return;
+        }
+
+
+
+        // 2. Calculate the Grid Dimensions (Rows/Cols)
+
+        const dims = this.calculateReshapedDimensions(availWidth, availHeight);
+
         
-        if (typeof this.wrapper.getBoundingClientRect === 'function') {
-            const rect = this.wrapper.getBoundingClientRect();
-            w = rect.width;
-            h = this.wrapper.clientHeight || rect.height;
+
+        const cols = dims.cols;
+
+        const rows = dims.rows;
+
+
+
+        // 3. Calculate Tile Size to FIT those dimensions
+
+        const sizeX = availWidth / cols;
+
+        const sizeY = availHeight / rows;
+
+        
+
+        // Use the smaller size to ensure it fits both width and height
+
+        let tileSize = Math.floor(Math.min(sizeX, sizeY));
+
+
+
+        // --- DEBUG LOGGING ---
+
+        console.groupCollapsed(`[GridScaler] Resized to ${cols}x${rows}`);
+
+        console.log(`Wrapper Size:   ${availWidth}px x ${availHeight}px`);
+
+        console.log(`Aspect Ratio:   ${dims.screenRatio.toFixed(2)}`);
+
+        console.log(`Target Tiles:   ${this.config.targetTotalTiles} (Actual: ${rows * cols})`);
+
+        console.log(`Grid Logic:     ${cols} Cols x ${rows} Rows`);
+
+        console.log(`Tile Size:      ${tileSize}px (Fit Width: ${sizeX.toFixed(1)}, Fit Height: ${sizeY.toFixed(1)})`);
+
+        console.log(`Final Size:     ${cols * tileSize}px x ${rows * tileSize}px`);
+
+        console.groupEnd();
+
+        // ---------------------
+
+
+
+        // 4. Update Game Logic
+
+        if (this.ui.game.resizeGrid) {
+
+            this.ui.game.resizeGrid(rows, cols);
+
         } else {
-            w = this.wrapper.clientWidth || 800;
-            h = this.wrapper.clientHeight || 600;
+
+            this.ui.game.rows = rows;
+
+            this.ui.game.cols = cols;
+
         }
 
-        if (w === 0 || h === 0) {
-            w = w || 800;
-            h = h || 600;
-        }
 
-        const padding = 10;
-        
-        if (isMobile && mobileBottomOffset > 0) {
-            const wrapperTop = this.wrapper.getBoundingClientRect().top;
-            const viewportHeight = window.innerHeight;
-            const maxWrapperHeight = viewportHeight - wrapperTop - mobileBottomOffset;
-            
-            this.wrapper.style.maxHeight = `${maxWrapperHeight}px`;
-            
-            h = Math.min(h, maxWrapperHeight);
-        } else {
-            this.wrapper.style.maxHeight = '';
-        }
-        
-        let availW = w - (padding * 2);
-        let availH = h - (padding * 2);
-        availH = Math.max(availH, rows * 10);
 
-        let tileSize = Math.min(availW / cols, availH / rows);
-        tileSize = Math.floor(tileSize);
-        tileSize = Math.max(tileSize, 10);
+        // 5. Apply CSS
 
-        availH = h - (padding * 2) - (tileSize * 2);
-        availH = Math.max(availH, rows * 10);
+        const finalGridWidth = cols * tileSize;
 
-        tileSize = Math.min(availW / cols, availH / rows);
-        tileSize = Math.floor(tileSize);
-        tileSize = Math.max(tileSize, 10);
+        const finalGridHeight = rows * tileSize;
 
-        const gridWidth = cols * tileSize;
-        const gridHeight = rows * tileSize;
+
 
         this.reactor.style.setProperty('--tile-size', `${tileSize}px`);
+
         this.reactor.style.setProperty('--game-cols', cols);
+
         this.reactor.style.setProperty('--game-rows', rows);
 
-        this.reactor.style.width = `${gridWidth}px`;
-        this.reactor.style.height = `${gridHeight}px`;
 
-        this.wrapper.style.display = 'flex';
-        this.wrapper.style.alignItems = 'flex-start';
-        this.wrapper.style.justifyContent = 'center';
-        this.wrapper.style.overflow = 'hidden';
-        this.wrapper.style.marginTop = `${tileSize}px`;
-        
+
+        // Explicit size sets the container for centering
+
+        this.reactor.style.width = `${finalGridWidth}px`;
+
+        this.reactor.style.height = `${finalGridHeight}px`;
+
     }
-}
 
+}

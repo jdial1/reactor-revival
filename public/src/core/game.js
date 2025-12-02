@@ -14,10 +14,13 @@ export class Game {
     this.ui = ui_instance;
     this.router = null;
     this.version = "1.4.0";
-    this.base_cols = 12;
-    this.base_rows = 12;
-    this.max_cols = 35;
-    this.max_rows = 32;
+    
+    const dimensions = this.calculateBaseDimensions();
+    this.base_cols = dimensions.base_cols;
+    this.base_rows = dimensions.base_rows;
+
+    this.max_cols = 50;
+    this.max_rows = 50;
     this._rows = this.base_rows;
     this._cols = this.base_cols;
     this.offline_tick = true;
@@ -172,10 +175,16 @@ export class Game {
     this.placedCounts[key] = (this.placedCounts[key] || 0) + 1;
   }
 
-  // Visual events API: engine enqueues, UI drains each frame
+  // Deprecated/Legacy support for old visual event system if needed, 
+  // but Engine now handles it internally with pooling.
   enqueueVisualEvent(event) {
-    if (!event) return;
-    this._visualEvents.push(event);
+    // no-op or legacy
+  }
+  enqueueVisualEvents(events) {
+    // no-op or legacy
+  }
+  drainVisualEvents() {
+    return [];
   }
 
   enqueueVisualEvents(events) {
@@ -210,10 +219,12 @@ export class Game {
       console.log(`[SET-DEFAULTS DEBUG]   Before reset: exotic_particles=${epBeforeReset.exotic_particles}, total_exotic_particles=${epBeforeReset.total_exotic_particles}, current_exotic_particles=${epBeforeReset.current_exotic_particles}`);
     }
     
-    this.base_cols = 12;
-    this.base_rows = 12;
-    this._rows = this.base_rows;
-    this._cols = this.base_cols;
+    const dimensions = this.calculateBaseDimensions();
+    this.base_cols = dimensions.base_cols;
+    this.base_rows = dimensions.base_rows;
+
+    this.rows = this.base_rows;
+    this.cols = this.base_cols;
     this._current_money = this.base_money;
     this.protium_particles = 0;
     this.total_exotic_particles = 0;
@@ -578,6 +589,35 @@ export class Game {
       }
     }
   }
+  calculateBaseDimensions() {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
+    return {
+      base_cols: isMobile ? 10 : 12,
+      base_rows: isMobile ? 14 : 12
+    };
+  }
+
+  updateBaseDimensions() {
+    const dimensions = this.calculateBaseDimensions();
+    const oldBaseCols = this.base_cols;
+    const oldBaseRows = this.base_rows;
+    
+    this.base_cols = dimensions.base_cols;
+    this.base_rows = dimensions.base_rows;
+    
+    if (this.rows === oldBaseRows && this.cols === oldBaseCols) {
+      this.rows = this.base_rows;
+      this.cols = this.base_cols;
+    } else {
+      const rowDiff = this.base_rows - oldBaseRows;
+      const colDiff = this.base_cols - oldBaseCols;
+      if (rowDiff !== 0 || colDiff !== 0) {
+        this.rows = Math.max(this.base_rows, this.rows + rowDiff);
+        this.cols = Math.max(this.base_cols, this.cols + colDiff);
+      }
+    }
+  }
+
   get rows() {
     return this._rows;
   }
@@ -593,6 +633,10 @@ export class Game {
   }
   get cols() {
     return this._cols;
+  }
+  calculatePan(col) {
+    if (this.cols <= 1) return 0;
+    return ((col / (this.cols - 1)) * 2) - 1;
   }
   set cols(value) {
     if (this._cols !== value) {
@@ -610,7 +654,7 @@ export class Game {
       this.addMoney(tile.calculateSellValue());
       this.debugHistory.add('game', 'sellPart', { row: tile.row, col: tile.col, partId: tile.part.id, value: tile.calculateSellValue() });
       if (this.audio) {
-        this.audio.play("sell");
+        this.audio.play("sell", null, this.calculatePan(tile.col));
       }
       tile.clearPart(true);
     }
@@ -1029,6 +1073,18 @@ export class Game {
     this._isRestoringSave = true;
     try {
     this._current_money = savedData.current_money || this.base_money;
+    
+    if (savedData.base_rows) {
+      this.base_rows = savedData.base_rows;
+    } else {
+      this.base_rows = 12; // Legacy save compatibility
+    }
+    if (savedData.base_cols) {
+      this.base_cols = savedData.base_cols;
+    } else {
+      this.base_cols = 12; // Legacy save compatibility
+    }
+    
     if (!this.partset.initialized) {
       await this.partset.initialize();
     }
@@ -1378,6 +1434,8 @@ export class Game {
   }
 
   onToggleStateChange(toggleName, value) {
+    console.log(`[TOGGLE] Game.onToggleStateChange called: "${toggleName}" = ${value}`);
+    
     if (this.ui && this.ui.stateManager) {
       this.ui.stateManager.setVar(toggleName, value);
     }
@@ -1385,23 +1443,31 @@ export class Game {
     // Handle specific toggle changes
     switch (toggleName) {
       case "auto_sell":
+        const prevAutoSell = this.reactor?.auto_sell_enabled;
         if (this.reactor) {
           this.reactor.auto_sell_enabled = value;
+          console.log(`[TOGGLE] reactor.auto_sell_enabled: ${prevAutoSell} -> ${this.reactor.auto_sell_enabled}`);
         }
         break;
       case "auto_buy":
+        const prevAutoBuy = this.reactor?.auto_buy_enabled;
         if (this.reactor) {
           this.reactor.auto_buy_enabled = value;
+          console.log(`[TOGGLE] reactor.auto_buy_enabled: ${prevAutoBuy} -> ${this.reactor.auto_buy_enabled}`);
         }
         break;
       case "heat_control":
+        const prevHeatControl = this.reactor?.heat_controlled;
         if (this.reactor) {
           this.reactor.heat_controlled = value;
+          console.log(`[TOGGLE] reactor.heat_controlled: ${prevHeatControl} -> ${this.reactor.heat_controlled}`);
         }
         break;
       case "time_flux":
         const previousValue = this.time_flux;
+        console.log(`[TIME FLUX] Game.onToggleStateChange called: previousValue=${previousValue}, newValue=${value}`);
         this.time_flux = value;
+        console.log(`[TIME FLUX] Game.time_flux updated to: ${this.time_flux}`);
         if (this.logger && previousValue !== value) {
           const accumulator = this.engine?.time_accumulator || 0;
           const queuedTicks = accumulator > 0 ? Math.floor(accumulator / this.loop_wait) : 0;
@@ -1409,12 +1475,16 @@ export class Game {
         }
         break;
       case "pause":
+        const prevPaused = this.paused;
         this.paused = value;
+        console.log(`[TOGGLE] game.paused: ${prevPaused} -> ${this.paused}`);
         if (this.engine) {
           if (value) {
             this.engine.stop();
+            console.log(`[TOGGLE] Engine stopped`);
           } else {
             this.engine.start();
+            console.log(`[TOGGLE] Engine started`);
           }
         }
         break;

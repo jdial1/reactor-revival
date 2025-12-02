@@ -41,6 +41,13 @@ describe("Reactor Meltdown Scenarios", () => {
         expect(game.engine.running).toBe(false);
     });
 
+    it("should delegate explosion sequence to UI if available", () => {
+        game.ui.explodeAllPartsSequentially = vi.fn();
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
+        game.engine.tick();
+        expect(game.ui.explodeAllPartsSequentially).toHaveBeenCalled();
+    });
+
     it("should prevent any further page navigation (except to the research page) after a meltdown", async () => {
         game.reactor.current_heat = game.reactor.max_heat * 2.1;
         game.engine.tick();

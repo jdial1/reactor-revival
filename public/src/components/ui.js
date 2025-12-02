@@ -37,6 +37,7 @@ export class UI {
     this.parts_panel_collapsed = isMobileOnInit; // Mobile starts collapsed, desktop starts open
     this.parts_panel_right_side = false;
     this.update_interface_interval = 100;
+    this.last_interface_update = 0;
     this.update_interface_task = null;
     this._updateLoopRunning = false;
     this.stateManager = new StateManager(this);
@@ -56,6 +57,16 @@ export class UI {
     this.ctrl9BaseAmount = 1000000000; // Base amount for CTRL+9
     this.ctrl9ExponentialRate = 5; // Exponential growth rate
     this.ctrl9IntervalMs = 100; // How often to add money while held
+    
+    // Rolling numbers state
+    this.displayValues = {
+      money: { current: 0, target: 0, domId: ['info_money', 'info_money_desktop'] },
+      heat: { current: 0, target: 0, domId: ['info_heat', 'info_heat_desktop'], format0: true },
+      power: { current: 0, target: 0, domId: ['info_power', 'info_power_desktop'] },
+      ep: { current: 0, target: 0, domId: ['info_ep_value', 'info_ep_value_desktop'] }
+    };
+    this._lastUiTime = 0;
+
     // Visual event rendering pool (simplified - emit nodes removed)
     this._visualPool = {};
     this._icons = {
@@ -377,10 +388,22 @@ export class UI {
       const config = this.toggle_buttons_config[buttonKey];
       const button = this.DOMElements[config.id];
       if (button) {
-
         button.onclick = () => {
           const currentState = this.stateManager.getVar(config.stateProperty);
-          this.stateManager.setVar(config.stateProperty, !currentState);
+          const newState = !currentState;
+          
+          console.log(`[TOGGLE] Button "${config.stateProperty}" clicked: ${currentState ? 'ON' : 'OFF'} -> ${newState ? 'ON' : 'OFF'}`);
+          
+          if (config.stateProperty === "time_flux") {
+            const accumulator = this.game?.engine?.time_accumulator || 0;
+            const queuedTicks = accumulator > 0 ? Math.floor(accumulator / (this.game?.loop_wait || 1000)) : 0;
+            console.log(`[TIME FLUX] Button clicked: ${currentState ? 'ON' : 'OFF'} -> ${newState ? 'ON' : 'OFF'}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}, game.time_flux before: ${this.game?.time_flux}`);
+            if (this.game && this.game.logger) {
+              this.game.logger.debug(`[TIME FLUX] Button toggled: ${currentState ? 'ON' : 'OFF'} -> ${newState ? 'ON' : 'OFF'}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}`);
+            }
+          }
+          
+          this.stateManager.setVar(config.stateProperty, newState);
         };
       } else {
         console.warn(`[UI] Toggle button #${config.id} not found.`);
@@ -481,7 +504,32 @@ export class UI {
     for (const buttonKey in this.toggle_buttons_config) {
       const config = this.toggle_buttons_config[buttonKey];
       const isActive = this.stateManager.getVar(config.stateProperty);
+      console.log(`[TOGGLE] Updating button "${config.stateProperty}" to ${isActive ? 'ON' : 'OFF'}`);
       this.updateToggleButtonState(config, isActive);
+    }
+  }
+  
+  syncToggleStatesFromGame() {
+    if (!this.game) {
+      console.warn(`[TOGGLE] syncToggleStatesFromGame called but game is not available`);
+      return;
+    }
+    
+    const toggleMappings = {
+      auto_sell: () => this.game.reactor?.auto_sell_enabled ?? false,
+      auto_buy: () => this.game.reactor?.auto_buy_enabled ?? false,
+      heat_control: () => this.game.reactor?.heat_controlled ?? false,
+      time_flux: () => this.game.time_flux ?? true,
+      pause: () => this.game.paused ?? false,
+    };
+    
+    for (const [stateProperty, getValue] of Object.entries(toggleMappings)) {
+      const gameValue = getValue();
+      const currentState = this.stateManager.getVar(stateProperty);
+      if (currentState !== gameValue) {
+        console.log(`[TOGGLE] Syncing "${stateProperty}" from game: ${currentState} -> ${gameValue}`);
+        this.stateManager.setVar(stateProperty, gameValue);
+      }
     }
   }
 
@@ -736,136 +784,97 @@ export class UI {
     });
   }
 
-  runUpdateInterfaceLoop() {
-    // Guard against running after cleanup in test environment
+  runUpdateInterfaceLoop(timestamp = 0) {
     if (this._updateLoopStopped || typeof document === 'undefined' || !document) {
       return;
     }
-    if (this._updateLoopRunning) return;
-    this._updateLoopRunning = true;
-    // Record frame for performance tracking
-    this.recordFrame();
+    
+    if (!this._lastUiTime) this._lastUiTime = timestamp;
+    const dt = timestamp - this._lastUiTime;
+    this._lastUiTime = timestamp;
 
-    this.game.performance.markStart("ui_update_total");
+    // 1. Smooth Rolling Numbers (Every Frame)
+    this.updateRollingNumbers(dt);
 
-    this.game.performance.markStart("ui_process_queue");
+    // 2. Process Queue (Every Frame)
     this.processUpdateQueue();
-    this.game.performance.markEnd("ui_process_queue");
 
-    if (this.game?.tileset.active_tiles_list) {
-      this.game.performance.markStart("ui_visual_updates");
-      this.game.tileset.active_tiles_list.forEach((tile) =>
-        tile.updateVisualState()
-      );
-      this.game.performance.markEnd("ui_visual_updates");
-    }
-    // Drain and render visual events produced during the last engine tick
-    if (this.game && typeof this.game.drainVisualEvents === 'function') {
-      const events = this.game.drainVisualEvents();
-      // Visual events drained from game queue
-      if (events && events.length) {
-        this._renderVisualEvents(events);
-      }
-    }
-    if (this.game) {
-      // Ensure money is a number
-      this.game.current_money = Number(this.game.current_money);
-      this.game.current_exotic_particles = Number(
-        this.game.current_exotic_particles
-      );
+    // 3. Heavy Visual Updates (Throttled to ~10fps)
+    if (timestamp - this.last_interface_update > this.update_interface_interval) {
+        this.last_interface_update = timestamp;
+        this.recordFrame();
 
-      // Only check affordability if money or exotic particles changed
-      const moneyChanged = this.last_money !== this.game.current_money;
-      const exoticParticlesChanged =
-        this.last_exotic_particles !== this.game.current_exotic_particles;
-
-      if (moneyChanged || exoticParticlesChanged) {
-        this.game.performance.markStart("ui_affordability_check");
-        // Update last known values
-        this.last_money = this.game.current_money;
-        this.last_exotic_particles = this.game.current_exotic_particles;
-
-        // Check affordability for both parts and upgrades
-        this.game.partset.check_affordability(this.game);
-        this.game.upgradeset.check_affordability(this.game);
-
-        // Update upgrade tooltip if one is showing and money/particles changed
-        if (this.game.tooltip_manager) {
-          this.game.tooltip_manager.updateUpgradeAffordability();
+        if (this.game?.tileset.active_tiles_list) {
+            // We only update tiles that actually need a visual refresh (e.g. heat bar width)
+            // This forEach is okay at 10fps
+            this.game.tileset.active_tiles_list.forEach((tile) =>
+                tile.updateVisualState()
+            );
         }
 
-        // Update nav indicators when affordability changes
-        this.updateNavIndicators();
+        // Check affordability only periodically to save CPU
+        if (this.game) {
+             this.game.current_money = Number(this.game.current_money);
+             const moneyChanged = this.last_money !== this.game.current_money;
+             const exoticParticlesChanged = this.last_exotic_particles !== this.game.current_exotic_particles;
 
-        this.game.performance.markEnd("ui_affordability_check");
-      }
-
-      // Update UI state
-      this.game.performance.markStart("ui_state_manager");
-      this.stateManager.setVar("current_money", this.game.current_money);
-      this.stateManager.setVar("current_heat", this.game.reactor.current_heat);
-      this.stateManager.setVar(
-        "current_power",
-        this.game.reactor.current_power
-      );
-      this.stateManager.setVar(
-        "current_exotic_particles",
-        this.game.current_exotic_particles
-      );
-      this.game.performance.markEnd("ui_state_manager");
+             if (moneyChanged || exoticParticlesChanged) {
+                this.last_money = this.game.current_money;
+                this.last_exotic_particles = this.game.current_exotic_particles;
+                this.game.partset.check_affordability(this.game);
+                this.game.upgradeset.check_affordability(this.game);
+                if (this.game.tooltip_manager) {
+                    this.game.tooltip_manager.updateUpgradeAffordability();
+                }
+                this.updateNavIndicators();
+             }
+             
+             // Sync heavy state vars for debugging
+             this.stateManager.setVar("current_money", this.game.current_money);
+             this.stateManager.setVar("current_heat", this.game.reactor.current_heat);
+             this.stateManager.setVar("current_power", this.game.reactor.current_power);
+             this.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
+        }
+        
+        this.updateMeltdownState();
+        this.updatePauseState();
+        
+        if (
+            this.game?.tooltip_manager?.tooltip_showing &&
+            this.game?.tooltip_manager?.needsLiveUpdates
+        ) {
+            this.game.tooltip_manager.update();
+        }
     }
 
-    this._updateLoopRunning = false;
-    this.update_interface_task = setTimeout(
-      () => this.runUpdateInterfaceLoop(),
-      this.update_interface_interval
-    );
-    // Live-update tooltip only if it needs dynamic updates
-    if (
-      this.game?.tooltip_manager?.tooltip_showing &&
-      this.game?.tooltip_manager?.needsLiveUpdates
-    ) {
-      this.game.performance.markStart("ui_tooltip_update");
-      this.game.tooltip_manager.update();
-      this.game.performance.markEnd("ui_tooltip_update");
-    }
-
-    this.updateMeltdownState();
-    this.updatePauseState();
-
-    this.game.performance.markEnd("ui_update_total");
+    // Loop
+    this.update_interface_task = requestAnimationFrame((ts) => this.runUpdateInterfaceLoop(ts));
   }
 
   // Internal: render batched visual events - OPTIMIZED for performance
-  _renderVisualEvents(events) {
-    // Early return if no events - most common case after disabling visual events
-    if (!events || !events.length) {
-      return;
-    }
+  _renderVisualEvents(eventPool, count) {
+    // Support legacy array passing or new pool
+    const events = Array.isArray(eventPool) ? eventPool : [];
+    const loopCount = typeof count === 'number' ? count : events.length;
 
-    // Since we've disabled most visual events in the engine for performance,
-    // this method now primarily handles only essential visual feedback
-    const tileFor = (r, c) => (this.game?.tileset ? this.game.tileset.getTile(r, c) : null);
+    if (loopCount === 0) return;
 
-    for (const evt of events) {
-      if (!evt) {
-        continue;
-      }
+    for (let i = 0; i < loopCount; i++) {
+      const evt = events[i];
+      if (!evt) continue;
 
-      // Only process essential visual events - most are disabled for performance
       if (evt.type === 'emit') {
-        // Only handle critical visual feedback that doesn't impact performance
-        if (evt.icon === 'power' && Array.isArray(evt.tile)) {
-          const t = tileFor(evt.tile[0], evt.tile[1]);
-          if (t) this.spawnTileIcon('power', t, null);
-        } else if (evt.icon === 'heat' && evt.part === 'vent' && Array.isArray(evt.tile)) {
-          const t = tileFor(evt.tile[0], evt.tile[1]);
-          if (t) this.blinkVent(t);
+        // evt.tile is now a Tile object reference, not [r,c]
+        const t = evt.tile;
+        if (t) {
+            if (evt.icon === 'power') {
+                this.spawnTileIcon('power', t, null);
+            } else if (evt.icon === 'heat' && t.part && t.part.category === 'vent') {
+                this.blinkVent(t);
+            }
         }
-      } else if (evt.type === 'flow') {
-        // Flow events are disabled for performance - skip processing
-        continue;
-      }
+      } 
+      // Reset event object for pooling? No, Engine does that by overwriting.
     }
   }
   // eslint-disable-next-line class-methods-use-this
@@ -956,11 +965,16 @@ export class UI {
       if (!config) {
         continue;
       }
-      if (config.dom) {
-        let textContent = config.num ? fmt(value, config.places) : value;
-        if (config.prefix) textContent = config.prefix + textContent;
-        config.dom.textContent = textContent;
+      
+      // For rolling numbers, we just update the target, DOM update happens in animation loop
+      if (!config.rolling) {
+        if (config.dom) {
+            let textContent = config.num ? fmt(value, config.places) : value;
+            if (config.prefix) textContent = config.prefix + textContent;
+            config.dom.textContent = textContent;
+        }
       }
+      
       config.onupdate?.(value);
     }
 
@@ -968,6 +982,66 @@ export class UI {
     this.updateObjectiveDisplay();
 
     this.update_vars.clear();
+  }
+
+  updateRollingNumbers(dt) {
+    // Normalize dt (expecting ~16ms for 60fps)
+    const timeScale = dt / 16.667;
+    // Lerp factor: 0.15 at 60fps. 
+    const lerpFactor = 0.15 * timeScale; 
+    const epsilon = 0.1;
+
+    for (const key in this.displayValues) {
+      const obj = this.displayValues[key];
+      const diff = obj.target - obj.current;
+      
+      if (Math.abs(diff) > epsilon || (obj.target === 0 && obj.current !== 0)) {
+        // Analog-like behavior: move faster when further away, but enforce a minimum speed so it settles
+        const minSpeed = Math.max(1, Math.abs(diff) * 0.05); 
+        const change = diff * lerpFactor;
+        
+        // Apply change, ensuring we don't get stuck with tiny increments
+        if (Math.abs(change) < minSpeed * timeScale) {
+             obj.current += Math.sign(diff) * minSpeed * timeScale;
+        } else {
+             obj.current += change;
+        }
+
+        // Snap to target if we overshot or are very close
+        if ((diff > 0 && obj.current > obj.target) || (diff < 0 && obj.current < obj.target) || Math.abs(obj.target - obj.current) < epsilon) {
+            obj.current = obj.target;
+        }
+        
+        // Update DOM
+        const val = obj.current;
+        let formatted = fmt(val, obj.format0 ? (window.innerWidth <= 900 ? 0 : 2) : null);
+        
+        // For heat values, ensure 2 decimal places are always padded to prevent flickering
+        if (key === 'heat' && obj.format0 && window.innerWidth > 900) {
+          const num = Number(val);
+          if (!Number.isNaN(num)) {
+            const absNum = Math.abs(num);
+            if (absNum >= 1000) {
+              // For values >= 1000, ensure mantissa has 2 decimal places
+              const pow = Math.floor(Math.log10(absNum) / 3) * 3;
+              const mantissa = num / Math.pow(10, pow);
+              const suffix = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'][(pow / 3) - 1] || '';
+              formatted = mantissa.toFixed(2) + suffix;
+            } else {
+              // For values under 1000, ensure exactly 2 decimal places
+              formatted = num.toFixed(2);
+            }
+          }
+        }
+        
+        obj.domId.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.textContent !== formatted) {
+                el.textContent = formatted;
+            }
+        });
+      }
+    }
   }
 
   initVarObjsConfig() {
@@ -980,27 +1054,19 @@ export class UI {
 
     this.var_objs_config = {
       current_money: {
-        dom: getInfoElement("info_money", "info_money_desktop"),
+        // Removed direct dom property to prevent double update
+        rolling: true, 
         num: true,
         onupdate: (val) => {
-          // Update both mobile and desktop elements
-          const mobileEl = document.getElementById("info_money");
-          const desktopEl = document.getElementById("info_money_desktop");
-          if (mobileEl) mobileEl.textContent = fmt(val);
-          if (desktopEl) desktopEl.textContent = fmt(val);
+            this.displayValues.money.target = val;
+            // Fallback for instant updates on very large jumps or init could go here if needed
         }
       },
       current_power: {
-        dom: getInfoElement("info_power", "info_power_desktop"),
+        rolling: true,
         num: true,
         onupdate: (val) => {
-          // Update both mobile and desktop elements
-          const mobileEl = document.getElementById("info_power");
-          const desktopEl = document.getElementById("info_power_desktop");
-          if (mobileEl) mobileEl.textContent = fmt(val);
-          if (desktopEl) desktopEl.textContent = fmt(val);
-
-          // Update denominators
+          this.displayValues.power.target = val;
           const mobileDenom = document.getElementById("info_power_denom");
           const desktopDenom = document.getElementById("info_power_denom_desktop");
           const maxPower = this.stateManager.getVar("max_power") || "";
@@ -1022,18 +1088,11 @@ export class UI {
         },
       },
       current_heat: {
-        dom: getInfoElement("info_heat", "info_heat_desktop"),
+        rolling: true,
         num: true,
         places: 2,
         onupdate: (val) => {
-          // Update both mobile and desktop elements
-          const mobileEl = document.getElementById("info_heat");
-          const desktopEl = document.getElementById("info_heat_desktop");
-          const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
-          if (mobileEl) mobileEl.textContent = fmt(val, isMobile ? 0 : 2);
-          if (desktopEl) desktopEl.textContent = fmt(val, 2);
-
-          // Update denominators
+          this.displayValues.heat.target = val;
           const mobileDenom = document.getElementById("info_heat_denom");
           const desktopDenom = document.getElementById("info_heat_denom_desktop");
           const maxHeat = this.stateManager.getVar("max_heat") || "";
@@ -1063,55 +1122,33 @@ export class UI {
         },
       },
       current_exotic_particles: {
-        dom: this.DOMElements.current_exotic_particles,
+        rolling: true,
         num: true,
         onupdate: (val) => {
+          this.displayValues.ep.target = val;
           const shouldShow = val > 0;
-          const gameEP = this.game?.exotic_particles ?? 'N/A';
-          const stateManagerEP = this.stateManager.getVar("current_exotic_particles") ?? 'N/A';
-          console.log(`[EP-DISPLAY DEBUG] onupdate called: val=${val}, shouldShow=${shouldShow}, game.exotic_particles=${gameEP}, stateManager.current_exotic_particles=${stateManagerEP}`);
           const mobileEl = document.getElementById("info_ep");
           const desktopEl = document.getElementById("info_ep_desktop");
-          const mobileValueEl = document.getElementById("info_ep_value");
-          const desktopValueEl = document.getElementById("info_ep_value_desktop");
-
-          console.log(`[EP-DISPLAY DEBUG] Elements found: mobileEl=${!!mobileEl}, desktopEl=${!!desktopEl}, mobileValueEl=${!!mobileValueEl}, desktopValueEl=${!!desktopValueEl}`);
 
           if (mobileEl) {
             const content = mobileEl.querySelector('.ep-content');
-            console.log(`[EP-DISPLAY DEBUG] Mobile content element: ${!!content}, setting display to ${shouldShow ? "flex" : "none"}`);
             if (content) {
               content.style.display = shouldShow ? "flex" : "none";
-              console.log(`[EP-DISPLAY DEBUG] Mobile content display after update: ${content.style.display}`);
-            } else {
-              console.log(`[EP-DISPLAY DEBUG] Mobile .ep-content element not found`);
             }
+          } else {
+             // Element missing logging removed
           }
           if (desktopEl) {
             const content = desktopEl.querySelector('.ep-content');
-            console.log(`[EP-DISPLAY DEBUG] Desktop content element: ${!!content}, setting display to ${shouldShow ? "flex" : "none"}`);
             if (content) {
               content.style.display = shouldShow ? "flex" : "none";
-              console.log(`[EP-DISPLAY DEBUG] Desktop content display after update: ${content.style.display}`);
-            } else {
-              console.log(`[EP-DISPLAY DEBUG] Desktop .ep-content element not found`);
             }
+          } else {
+             // Element missing logging removed
           }
-
-          if (shouldShow) {
-            if (mobileValueEl) {
-              mobileValueEl.textContent = fmt(val);
-              console.log(`[EP-DISPLAY DEBUG] Mobile value updated to: ${fmt(val)}`);
-            }
-            if (desktopValueEl) {
-              desktopValueEl.textContent = fmt(val);
-              console.log(`[EP-DISPLAY DEBUG] Desktop value updated to: ${fmt(val)}`);
-            }
-          }
-
+          
           if (this.DOMElements.current_exotic_particles) {
             this.DOMElements.current_exotic_particles.textContent = fmt(val);
-            console.log(`[EP-DISPLAY DEBUG] DOMElements.current_exotic_particles updated to: ${fmt(val)}`);
           }
         },
       },
@@ -1688,6 +1725,7 @@ export class UI {
 
     this.game = game;
     this.stateManager = new StateManager(this);
+    this.stateManager.setGame(game);
     this.hotkeys = new Hotkeys();
     this.help_text = data;
 
@@ -1712,9 +1750,10 @@ export class UI {
         `;
     }
     if (this.gridScaler) this.gridScaler.init();
-
     this.gridScaler.resize();
-    this.runUpdateInterfaceLoop();
+    
+    // Start the loop
+    requestAnimationFrame((ts) => this.runUpdateInterfaceLoop(ts));
 
     // Initialize engine status indicator
     if (this.game && this.game.engine) {
@@ -1933,6 +1972,9 @@ export class UI {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
         if (this.game && this.DOMElements.reactor && typeof window !== "undefined") {
+          if (this.game.updateBaseDimensions) {
+            this.game.updateBaseDimensions();
+          }
           this.gridScaler.resize();
         }
         // Check objective text scrolling on resize
@@ -1954,6 +1996,9 @@ export class UI {
             window.innerWidth &&
             window.innerWidth <= 900
           ) {
+            if (this.game.updateBaseDimensions) {
+              this.game.updateBaseDimensions();
+            }
             this.gridScaler.resize();
           }
         }, 150);
@@ -2342,13 +2387,15 @@ export class UI {
               // Refund the money if the part couldn't be placed (tile already occupied)
               this.game.current_money += clicked_part.cost;
               if (!soundPlayed && this.game && this.game.audio) {
-                this.game.audio.play('error');
+                const pan = this.game.calculatePan ? this.game.calculatePan(tile.col) : 0;
+                this.game.audio.play('error', null, pan);
                 soundPlayed = true;
               }
             }
           } else {
             if (!soundPlayed && this.game && this.game.audio) {
-              this.game.audio.play('error');
+              const pan = this.game.calculatePan ? this.game.calculatePan(tile.col) : 0;
+              this.game.audio.play('error', null, pan);
               soundPlayed = true;
             }
           }
@@ -4481,26 +4528,20 @@ export class UI {
    * Should be called when tests finish or when the UI is being destroyed
    */
   cleanup() {
-    // Clear the update interface timer
     if (this.update_interface_task) {
-      clearTimeout(this.update_interface_task);
+      cancelAnimationFrame(this.update_interface_task);
       this.update_interface_task = null;
     }
-
-    // Clear any other timers that might be running
-    // This helps prevent "Error: This error was caught after test environment was torn down"
   }
 
-  explodeAllPartsSequentially() {
-    // Get all tiles with parts
+  explodeAllPartsSequentially(forceAnimate = false) {
     const tilesWithParts = this.game.tileset.active_tiles_list.filter(tile => tile.part);
 
     if (tilesWithParts.length === 0) {
       return;
     }
 
-    // In test mode, clear parts immediately without animation delays
-    if (typeof process !== "undefined" && (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true')) {
+    if (!forceAnimate && typeof process !== "undefined" && (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true')) {
       tilesWithParts.forEach((tile) => {
         if (tile.part) {
           tile.clearPart(false);
@@ -4517,7 +4558,10 @@ export class UI {
     shuffledTiles.forEach((tile, index) => {
       setTimeout(() => {
         if (tile.part && tile.$el) {
-          // Add explosion class for visual effect
+          if (this.game.audio) {
+            const pan = this.game.calculatePan ? this.game.calculatePan(tile.col) : 0;
+            this.game.audio.play('explosion', null, pan);
+          }
           tile.$el.classList.add("exploding");
 
           // Add a brief delay before clearing the part

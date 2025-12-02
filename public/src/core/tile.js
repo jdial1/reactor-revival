@@ -1,4 +1,7 @@
 import { Part } from "./part.js";
+
+const SHADOW_GRADIENT = "radial-gradient(ellipse 60% 25% at 50% 85%, rgba(0,0,0,0.4) 0%, transparent 70%)";
+
 export class Tile {
   constructor(row, col, game) {
     this.game = game;
@@ -142,9 +145,10 @@ export class Tile {
       const subtype =
         partInstance.category === "cell"
           ? "cell"
-          : partInstance.category === "reactor_plating" ? "plating" : null;
+          : partInstance.category === "reactor_plating" ? "plating" : partInstance.category === "vent" ? "vent" : null;
       console.log(`[TILE DEBUG] Calling audio.play("placement", "${subtype}")`);
-      this.game.audio.play("placement", subtype);
+      const pan = this.game.calculatePan ? this.game.calculatePan(this.col) : 0;
+      this.game.audio.play("placement", subtype, pan);
     } else {
       console.log(`[TILE DEBUG] Audio play skipped: isRestoring=${isRestoring}, audio=${!!this.game.audio}, audio.enabled=${this.game.audio?.enabled}`);
     }
@@ -162,7 +166,7 @@ export class Tile {
       this.exploded = false; // Reset explosion state when setting a new part
       if (this.$el) {
         this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
-        this.$el.style.backgroundImage = `url('${this.part.getImagePath()}')`;
+        this.$el.style.backgroundImage = `url('${this.part.getImagePath()}'), ${SHADOW_GRADIENT}`;
 
         // For valves, preserve orientation data
         if (this.part.category === "valve" && this.part.getOrientation) {
@@ -458,7 +462,7 @@ export class Tile {
   refreshVisualState() {
     if (!this.$el || !this.part) return;
     this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
-    this.$el.style.backgroundImage = `url('${this.part.getImagePath()}')`;
+    this.$el.style.backgroundImage = `url('${this.part.getImagePath()}'), ${SHADOW_GRADIENT}`;
     this.updateVisualState();
   }
 }

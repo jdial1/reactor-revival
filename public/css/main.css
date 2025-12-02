@@ -38,6 +38,7 @@ html {
   padding: 0;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 body {
@@ -50,6 +51,17 @@ body {
   padding: 0;
   overflow: hidden;
   overscroll-behavior: none;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+#app_container {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100vw;
 }
 
 #wrapper {
@@ -145,6 +157,49 @@ body {
   50% {
     transform: scale(1.1);
   }
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Apply pop animation to modals and panels */
+.settings-modal,
+.quick-start-content,
+.modal-content,
+#critical-error-overlay .critical-error-content,
+.save-overwrite-modal,
+.update-notification-content {
+  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center center;
+}
+
+/* Button Press Effect */
+.pixel-btn:active,
+.splash-btn:active,
+.nav-btn:active,
+.upgrade-card:active .upgrade-action-btn:active,
+.part:active,
+button:active {
+  transform: translateY(2px) !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.4) !important;
+}
+
+/* Page Transitions */
+@keyframes pageSlideIn {
+  0% { opacity: 0; transform: translateY(15px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.page:not(.hidden) {
+  animation: pageSlideIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Smooth number rolling class */
+.rolling-value, .info-item .value {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
 }
 
 .splash-btn-row,
@@ -759,14 +814,14 @@ body {
 }
 
 #reactor_wrapper {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
   position: relative;
   display: flex;
-  width: 100%;
-  flex: 1 1 auto;
-  overflow: hidden;
   align-items: center;
   justify-content: center;
-  min-height: 0;
+  overflow: hidden;
 }
 
 #reactor_background {
@@ -993,13 +1048,18 @@ body {
 
   /* Ensure tiles are properly positioned in the grid */
   box-sizing: border-box;
-  border: 1px solid rgb(50, 50, 50);
+  border: 1px solid rgb(30, 30, 30);
+  border-top-color: rgb(15, 15, 15);
+  border-left-color: rgb(15, 15, 15);
+  border-bottom-color: rgb(40, 40, 40);
+  border-right-color: rgb(40, 40, 40);
   background-color: rgb(20, 20, 20);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
   cursor: pointer;
   transition: all 0.1s ease;
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 60%), inset 2px 0 4px rgb(0 0 0 / 40%);
 }
 
 @media (width >= 901px) {
@@ -1021,6 +1081,7 @@ body {
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 60%), inset 2px 0 4px rgb(0 0 0 / 40%), 0 0 1px rgb(0 0 0 / 20%);
 }
 
 /* Enhanced valve tile styling for better visual flow */
@@ -1283,12 +1344,14 @@ body {
   overflow: hidden;
   width: 100vw !important;
   min-width: 0;
-  height: 44px; /* slightly shorter for more space */
+  height: 44px;
   box-sizing: border-box;
   flex-direction: row;
   align-items: center;
   justify-content: center;
   padding: 0 !important;
+  padding-bottom: env(safe-area-inset-bottom) !important;
+  height: calc(44px + env(safe-area-inset-bottom)) !important;
   border-radius: 0;
   border-top: 3px solid var(--bevel-light) !important;
   margin: 0 !important;
@@ -1688,6 +1751,8 @@ footer#bottom_nav button {
     box-shadow: 0 4px 0 var(--bevel-shadow);
     height: var(--main-top-nav-height) !important;
     padding: 0 1rem !important;
+    padding-top: env(safe-area-inset-top) !important;
+    height: calc(var(--main-top-nav-height) + env(safe-area-inset-top)) !important;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -3185,13 +3250,72 @@ footer#bottom_nav button.active,
 @media (width > 900px) {
   #objectives_section {
     padding-top: calc(var(--main-top-nav-height, 60px));
+    height: auto !important;
+    pointer-events: none;
+  }
+
+  .mobile-objectives-container {
+    width: 96%;
+    transform: none;
+    pointer-events: auto;
+    margin-top: 8px;
+  }
+
+  .objectives-header {
+    min-height: 50px !important;
+    padding: 6px 10px !important;
+    gap: 4px !important;
+  }
+
+  .objective-title-row {
+    padding: 2px 6px !important;
+    height: 75% !important;
+  }
+
+  .objective-progress-row {
+    gap: 6px !important;
+    height: 25% !important;
+  }
+
+  .objective-main-info {
+    gap: 8px !important;
+  }
+
+  .objectives-header-actions {
+    gap: 6px !important;
+  }
+
+  .objective-claim-btn-compact,
+  .objective-claim-btn {
+    font-size: 0.65rem !important;
+    padding: 3px 6px !important;
+  }
+
+  .objective-part-icon {
+    width: 1.1em !important;
+    height: 1.1em !important;
+    margin-right: 0.15em !important;
+    margin-bottom: 0.05em !important;
+  }
+
+  .objectives-toggle-btn {
+    font-size: 0.7rem !important;
+  }
+
+  .objective-title-compact {
+    font-size: 0.85rem !important;
+  }
+
+  #objective_title {
+    font-size: 0.75em !important;
+    line-height: 1.2 !important;
   }
 }
 
 /* Main container behaves like a panel */
 .mobile-objectives-container {
   position: relative;
-  width: 96%; /* Slight margin on sides */
+  width: 96%;
   margin: 0 auto;
   pointer-events: auto;
   background-color: var(--panel-bg);
@@ -5459,13 +5583,14 @@ body.page-privacy_policy .highlight {
   gap: 8px;
 }
 
-/* Ensure desktop also pins buttons to the reactor area top-right */
+/* Ensure desktop also pins buttons to the reactor area, centered vertically */
 @media (width >= 901px) {
   #reactor_wrapper #reactor_copy_paste_btns {
     position: absolute !important;
     z-index: 25;
-    top: 0;
+    top: 50%;
     right: 20px;
+    transform: translateY(-50%);
   }
 }
 
@@ -6443,6 +6568,27 @@ body.page-privacy_policy .highlight {
   #splash-screen {
     animation: splash-bg-scroll 120s linear infinite;
     background-size: auto;
+  }
+}
+
+@media (width >= 901px) {
+  #splash-container {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  #splash-screen {
+    padding-left: 0;
+    padding-right: 0;
+    max-width: none !important;
+    width: 100% !important;
+  }
+  
+  #splash-screen.container {
+    max-width: none !important;
+    width: 100% !important;
   }
 }
 

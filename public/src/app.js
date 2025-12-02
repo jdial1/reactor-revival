@@ -11,7 +11,31 @@ import { AudioService } from "./services/audioService.js";
 // Background/PWA helpers
 import "./services/pwa.js";
 
+function preventBrowserGestures() {
+  document.addEventListener("contextmenu", (e) => {
+    if (e.target.tagName === "IMG") {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  document.addEventListener("touchmove", (e) => {
+    if (e.scale !== 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", (e) => {
+    const now = (new Date()).getTime();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+}
+
 async function initializeApp(game, ui, pageRouter) {
+  preventBrowserGestures();
   if (window.splashManager) {
     await window.splashManager.readyPromise;
     window.splashManager.setStep("init");
@@ -439,10 +463,21 @@ async function startGame(pageRouter, ui, game) {
 
   const finalizeGameStart = () => {
     console.log(`[DEBUG] Finalizing game start. Initial paused state: ${game.paused}`);
-    // Ensure a fresh game always starts unpaused
-    try {
-      ui.stateManager.setVar("pause", false);
-    } catch (_) { /* no-op */ }
+    
+    // Sync all toggle states from game properties to stateManager
+    if (ui.syncToggleStatesFromGame) {
+      ui.syncToggleStatesFromGame();
+    } else {
+      // Fallback: manually set initial toggle states
+      try {
+        ui.stateManager.setVar("pause", game.paused ?? false);
+        ui.stateManager.setVar("auto_sell", game.reactor?.auto_sell_enabled ?? false);
+        ui.stateManager.setVar("auto_buy", game.reactor?.auto_buy_enabled ?? false);
+        ui.stateManager.setVar("heat_control", game.reactor?.heat_controlled ?? false);
+        ui.stateManager.setVar("time_flux", game.time_flux ?? true);
+      } catch (_) { /* no-op */ }
+    }
+    
     game.engine.start();
 
     ui.stateManager.setVar("current_money", game.current_money);

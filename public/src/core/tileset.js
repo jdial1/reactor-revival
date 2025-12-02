@@ -3,8 +3,8 @@ import { Tile } from "./tile.js";
 export class Tileset {
   constructor(game) {
     this.game = game;
-    this.max_rows = 32;
-    this.max_cols = 32;
+    this.max_rows = 50;
+    this.max_cols = 50;
     this.rows = 12;
     this.cols = 12;
     this.tiles = [];

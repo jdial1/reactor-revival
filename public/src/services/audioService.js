@@ -68,6 +68,8 @@ export class AudioService {
   data[i] = (lastOut + (0.02 * white)) / 1.02;
   lastOut = data[i];
   data[i] *= 3.5;
+  if (i < 500) data[i] *= (i / 500);
+  if (i > bufferSize - 500) data[i] *= ((bufferSize - i) / 500);
   }
   this._distortionCurve = this._makeDistortionCurve(400);
   this._isInitialized = true;
@@ -480,6 +482,10 @@ export class AudioService {
   const osc = this.context.createOscillator();
   const gain = this.context.createGain();
   let source = osc;
+  if (options.randomPitch) {
+  const variation = typeof options.randomPitch === 'number' ? options.randomPitch : 0.05;
+  freq *= (1 - variation) + Math.random() * (variation * 2);
+  }
   osc.type = type;
   osc.frequency.setValueAtTime(freq, startTime);
   if (options.freqEnd) {
@@ -492,8 +498,14 @@ export class AudioService {
   source = shaper;
   }
   source.connect(gain);
-  const categoryGain = this._getCategoryGain(options.category);
-  gain.connect(categoryGain);
+  let dest = this._getCategoryGain(options.category);
+  if (options.pan !== undefined && options.pan !== null && this.context.createStereoPanner) {
+  const panner = this.context.createStereoPanner();
+  panner.pan.value = Math.max(-1, Math.min(1, options.pan));
+  panner.connect(dest);
+  dest = panner;
+  }
+  gain.connect(dest);
   gain.gain.setValueAtTime(volume, startTime);
   const endVol = options.volEnd ?? 0.001;
   if (volume <= 0 || endVol <= 0) {
@@ -528,8 +540,14 @@ export class AudioService {
   node = filter;
   }
   node.connect(gain);
-  const categoryGain = this._getCategoryGain(options.category);
-  gain.connect(categoryGain);
+  let dest = this._getCategoryGain(options.category);
+  if (options.pan !== undefined && options.pan !== null && this.context.createStereoPanner) {
+  const panner = this.context.createStereoPanner();
+  panner.pan.value = Math.max(-1, Math.min(1, options.pan));
+  panner.connect(dest);
+  dest = panner;
+  }
+  gain.connect(dest);
   const available = Math.max(this._noiseBuffer.duration - duration, 0);
   const offset = Math.random() * available;
   gain.gain.setValueAtTime(volume, startTime);
@@ -580,7 +598,7 @@ export class AudioService {
   return 'effects';
   }
   }
-  play(type, param = null) {
+  play(type, param = null, pan = null) {
   if (!this.enabled || !this.context || this.context.state !== 'running') {
     return;
   }
@@ -591,30 +609,31 @@ export class AudioService {
   const intensity = typeof param === 'number' ? Math.min(Math.max(param, 0), 1) : 0.5;
   const category = this._getSoundCategory(type);
   const categoryGain = this._getCategoryGain(category);
+  const spatialOpts = { category, pan, randomPitch: 0.08 };
   switch (type) {
   case 'placement': {
-  const basePitch = 140 * (0.9 + Math.random() * 0.2);
-  const thud = this._osc(t, 'triangle', basePitch, 0, 0.25, { freqEnd: 40, volEnd: 0.01, category });
+  const basePitch = 140;
+  const thud = this._osc(t, 'triangle', basePitch, 0, 0.25, { freqEnd: 40, volEnd: 0.01, ...spatialOpts });
   thud?.gain.gain.linearRampToValueAtTime(0.5, t + 0.02);
-  this._osc(t, 'square', 800, 0.15, 0.05, { category });
+  this._osc(t, 'square', 800, 0.15, 0.05, { ...spatialOpts });
   if (subtype === 'cell') {
-  this._osc(t, 'sawtooth', 55, 0.15, 0.3, { freqEnd: 45, volEnd: 0, category });
+  this._osc(t, 'sawtooth', 55, 0.15, 0.3, { freqEnd: 45, volEnd: 0, ...spatialOpts });
   } else if (subtype === 'plating') {
   thud?.gain.gain.setValueAtTime(0.7, t + 0.02);
-  this._osc(t, 'sine', 1200, 0.1, 0.4, { category });
+  this._osc(t, 'sine', 1200, 0.1, 0.4, { ...spatialOpts });
   } else if (subtype === 'vent') {
   thud?.gain.gain.linearRampToValueAtTime(0.3, t + 0.02);
-  this._noise(t, 0.25, 0.3, { category });
+  this._noise(t, 0.25, 0.3, { ...spatialOpts });
   }
   break;
   }
   case 'sell': {
-  this._osc(t, 'square', 80, 0.4, 0.1, { freqEnd: 20, category });
-  this._noise(t, 0.15, 0.15, { type: 'highpass', freq: 2000, category });
-  const hum = this._osc(t, 'sawtooth', 60, 0, 0.4, { dist: true, volEnd: 0, category });
+  this._osc(t, 'square', 80, 0.4, 0.1, { freqEnd: 20, ...spatialOpts });
+  this._noise(t, 0.15, 0.15, { type: 'highpass', freq: 2000, ...spatialOpts });
+  const hum = this._osc(t, 'sawtooth', 60, 0, 0.4, { dist: true, volEnd: 0, ...spatialOpts });
   hum?.gain.gain.linearRampToValueAtTime(0.3, t + 0.05);
   hum?.gain.gain.setValueAtTime(0.3, t + 0.35);
-  this._osc(t + 0.3, 'sine', 400, 0, 0.5, { freqEnd: 50, category })
+  this._osc(t + 0.3, 'sine', 400, 0, 0.5, { freqEnd: 50, ...spatialOpts })
   ?.gain.gain.linearRampToValueAtTime(0.1, t + 0.35);
   break;
   }
@@ -649,7 +668,7 @@ export class AudioService {
   break;
   }
   case 'error':
-  this._osc(t, 'sawtooth', 150, 0.15, 0.2, { freqEnd: 100, volEnd: 0, category });
+  this._osc(t, 'sawtooth', 150, 0.15, 0.2, { freqEnd: 100, volEnd: 0, ...spatialOpts });
   break;
   case 'explosion':
   const isMeltdown = subtype === 'meltdown' || param === 'meltdown';
@@ -665,7 +684,14 @@ export class AudioService {
   snapFilter.frequency.value = 1500;
   snapSrc.connect(snapFilter);
   snapFilter.connect(snapGain);
-  snapGain.connect(categoryGain);
+  let dest = categoryGain;
+  if (pan !== null && !isMeltdown && this.context.createStereoPanner) {
+  const p = this.context.createStereoPanner();
+  p.pan.value = Math.max(-1, Math.min(1, pan));
+  p.connect(dest);
+  dest = p;
+  }
+  snapGain.connect(dest);
   snapGain.gain.setValueAtTime(masterVol, t);
   snapGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
   snapSrc.start(t);
@@ -677,7 +703,14 @@ export class AudioService {
   boom.frequency.setValueAtTime(150, t);
   boom.frequency.exponentialRampToValueAtTime(40, t + 0.3);
   boom.connect(boomGain);
-  boomGain.connect(categoryGain);
+  let boomDest = categoryGain;
+  if (pan !== null && !isMeltdown && this.context.createStereoPanner) {
+  const p = this.context.createStereoPanner();
+  p.pan.value = Math.max(-1, Math.min(1, pan));
+  p.connect(boomDest);
+  boomDest = p;
+  }
+  boomGain.connect(boomDest);
   boomGain.gain.setValueAtTime(masterVol, t);
   boomGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
   boom.start(t);
@@ -795,13 +828,21 @@ export class AudioService {
   const buttonGain = ctx.createGain();
   const buttonFilter = ctx.createBiquadFilter();
   buttonOsc.type = 'square';
-  buttonOsc.frequency.setValueAtTime(300, t);
+  const clickFreq = 300 * (0.95 + Math.random() * 0.1);
+  buttonOsc.frequency.setValueAtTime(clickFreq, t);
   buttonOsc.frequency.exponentialRampToValueAtTime(50, t + 0.08);
   buttonFilter.type = 'lowpass';
   buttonFilter.frequency.value = 800;
   buttonOsc.connect(buttonFilter);
   buttonFilter.connect(buttonGain);
-  buttonGain.connect(categoryGain);
+  let clickDest = categoryGain;
+  if (pan !== null && this.context.createStereoPanner) {
+  const p = this.context.createStereoPanner();
+  p.pan.value = Math.max(-1, Math.min(1, pan));
+  p.connect(clickDest);
+  clickDest = p;
+  }
+  buttonGain.connect(clickDest);
   buttonGain.gain.setValueAtTime(0.2, t);
   buttonGain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
   buttonOsc.start(t);

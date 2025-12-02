@@ -258,11 +258,16 @@ export class Reactor {
       if (this.game.engine) {
         this.game.engine.stop();
       }
-      this.game.tileset.active_tiles_list.forEach((tile) => {
-        if (tile.part) {
-          tile.clearPart(false);
-        }
-      });
+      
+      if (this.game.ui && typeof this.game.ui.explodeAllPartsSequentially === "function") {
+        this.game.ui.explodeAllPartsSequentially();
+      } else {
+        this.game.tileset.active_tiles_list.forEach((tile) => {
+          if (tile.part) {
+            tile.clearPart(false);
+          }
+        });
+      }
 
       // Make all parts and upgrades unaffordable during meltdown
       this.game.partset.check_affordability(this.game);

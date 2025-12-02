@@ -16,7 +16,9 @@ export function numFormat(num, places = null) {
         places = absNum >= 1000 ? 2 : 0;
     }
     if (absNum >= 1e36) {
-        return num.toExponential(places);
+        let expStr = num.toExponential(places);
+        expStr = expStr.replace(/\.0+e/, 'e');
+        return expStr;
     }
 
     let pow = 0;
@@ -36,7 +38,12 @@ export function numFormat(num, places = null) {
     if (Number.isNaN(mantissa)) return '';
 
     // Don't round - just truncate to the specified number of decimal places
-    const mantissaStr = mantissa.toFixed(places);
+    let mantissaStr = mantissa.toFixed(places);
+    
+    // Remove trailing zeros after decimal point
+    mantissaStr = mantissaStr.replace(/\.(\d*?)0+$/, (match, digits) => {
+        return digits ? `.${digits}` : '';
+    });
 
     return mantissaStr + suffix;
 }

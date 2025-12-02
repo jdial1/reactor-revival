@@ -16,8 +16,26 @@ export class Engine {
     this.active_exchangers = [];
     this.active_outlets = [];
     this._partCacheDirty = true;
-    this._valveNeighborCache = new Set(); // Cache for valve neighbors
-    this._valveNeighborCacheDirty = true; // Track when to invalidate
+    this._valveNeighborCache = new Set();
+    this._valveNeighborCacheDirty = true;
+    
+    // Object Pooling & Memory Optimization
+    this._visualEventPool = [];
+    for (let i = 0; i < 200; i++) {
+      this._visualEventPool.push({ type: null, icon: null, tile: null, part: null });
+    }
+    this._visualEventCount = 0;
+
+    // Heat Manager Pre-allocation (Avoid GC)
+    this._heatCalc_startHeat = new Map();
+    this._heatCalc_planned = [];
+    this._heatCalc_plannedPool = [];
+    for(let i=0; i<500; i++) this._heatCalc_plannedPool.push({ from: null, to: null, amount: 0 });
+    this._heatCalc_plannedCount = 0;
+    
+    this._heatCalc_plannedOutByNeighbor = new Map();
+    this._heatCalc_plannedInByNeighbor = new Map();
+    this._heatCalc_plannedInByExchanger = new Map();
 
     // Ensure arrays are always valid
     this._ensureArraysValid();
@@ -251,16 +269,28 @@ export class Engine {
       }
 
       // If Time Flux is enabled, consume banked time
+      console.log(`[TIME FLUX] Check: time_flux=${this.game.time_flux}, accumulator=${this.time_accumulator.toFixed(0)}ms`);
+      
       if (this.game.time_flux && this.time_accumulator > 0) {
-        const maxFluxTicks = 10.0;
-        const availableFluxTicks = this.time_accumulator / targetTickDuration;
-        fluxTicksUsed = Math.min(availableFluxTicks, maxFluxTicks);
-        
-        ticksToProcess += fluxTicksUsed;
-        this.time_accumulator -= (fluxTicksUsed * targetTickDuration);
-        if (this.time_accumulator < 0.001) this.time_accumulator = 0;
-        
-        this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicksUsed.toFixed(2)} flux ticks (${(fluxTicksUsed * targetTickDuration).toFixed(0)}ms), accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
+        const heatRatio = this.game.reactor.max_heat > 0 ? this.game.reactor.current_heat / this.game.reactor.max_heat : 0;
+        if (heatRatio >= 0.9) {
+          this.game.logger?.warn("[TIME FLUX] Safety stop: Heat > 90%. Pausing game and disabling Time Flux.");
+          this.game.ui.stateManager.setVar("time_flux", false);
+          this.game.pause();
+          ticksToProcess = 0;
+        } else {
+          const maxFluxTicks = 10.0;
+          const availableFluxTicks = this.time_accumulator / targetTickDuration;
+          fluxTicksUsed = Math.min(availableFluxTicks, maxFluxTicks);
+          ticksToProcess += fluxTicksUsed;
+          const subtractedAmount = fluxTicksUsed * targetTickDuration;
+          this.time_accumulator -= subtractedAmount;
+          console.log(`[TIME FLUX] Subtracted ${subtractedAmount.toFixed(0)}ms from accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms (time_flux=${this.game.time_flux})`);
+          if (this.time_accumulator < 0.001) this.time_accumulator = 0;
+          this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicksUsed.toFixed(2)} flux ticks (${(fluxTicksUsed * targetTickDuration).toFixed(0)}ms), accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
+        }
+      } else if (this.time_accumulator > 0) {
+        console.log(`[TIME FLUX] Skipped consumption: time_flux=${this.game.time_flux}, accumulator=${this.time_accumulator.toFixed(0)}ms`);
       }
 
       if (ticksToProcess > 0) {
@@ -329,11 +359,10 @@ export class Engine {
     const tileset = this.game.tileset;
     const ui = this.game.ui;
     this.game.logger?.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Reactor Heat: ${reactor.current_heat.toFixed(2)}`);
-    // Pre-allocate visual events array for better performance
-    // Increased size to handle complex reactor layouts with many parts
-    const visualEvents = new Array(200); // Increased from 100 to 200 for better performance
-    let visualEventIndex = 0;
-
+    
+    // Reset Visual Event Pool
+    this._visualEventCount = 0;
+    
     // Update engine status indicator for tick
     if (ui && ui.stateManager) {
       ui.stateManager.setVar("engine_status", "tick");
@@ -410,36 +439,52 @@ export class Engine {
       cellsProcessed++;
 
       if (tile.power > 0 && Math.random() < multiplier) {
-         const count = tile.power >= 200 ? 3 : tile.power >= 50 ? 2 : 1;
-         if (visualEventIndex < visualEvents.length - count) {
-           for(let k=0; k<count; k++) {
-             visualEvents[visualEventIndex++] = { type: 'emit', icon: 'power', tile: [tile.row, tile.col] };
-           }
-         }
+        const count = tile.power >= 200 ? 3 : tile.power >= 50 ? 2 : 1;
+        for(let k=0; k<count; k++) {
+          if (this._visualEventCount < this._visualEventPool.length) {
+            const evt = this._visualEventPool[this._visualEventCount++];
+            evt.type = 'emit';
+            evt.icon = 'power';
+            evt.tile = tile;
+            evt.part = null;
+          }
+        }
       }
 
       const generatedHeat = tile.heat * multiplier;
 
       if (tile.heat > 0 && Math.random() < multiplier) {
-           const countH = tile.heat >= 200 ? 3 : tile.heat >= 50 ? 2 : 1;
-           if (visualEventIndex < visualEvents.length - countH) {
-               for(let k=0; k<countH; k++) {
-                 visualEvents[visualEventIndex++] = { type: 'emit', icon: 'heat', tile: [tile.row, tile.col] };
-               }
-           }
+        const countH = tile.heat >= 200 ? 3 : tile.heat >= 50 ? 2 : 1;
+        for(let k=0; k<countH; k++) {
+          if (this._visualEventCount < this._visualEventPool.length) {
+            const evt = this._visualEventPool[this._visualEventCount++];
+            evt.type = 'emit';
+            evt.icon = 'heat';
+            evt.tile = tile;
+            evt.part = null;
+          }
+        }
+      }
+      
+      // Optimization: Avoid .filter() allocation inside loop
+      const neighbors = tile.containmentNeighborTiles;
+      let validNeighborCount = 0;
+      for(let nIdx = 0; nIdx < neighbors.length; nIdx++) {
+        if (neighbors[nIdx].part && neighbors[nIdx].part.containment > 0) {
+           validNeighborCount++;
+        }
       }
 
-      const heatNeighbors = tile.containmentNeighborTiles.filter(
-        (t) => t.part && t.part.containment > 0
-      );
-
-      if (heatNeighbors.length > 0) {
-           const heat_per_neighbor = generatedHeat / heatNeighbors.length;
-           for (let j = 0; j < heatNeighbors.length; j++) {
-             heatNeighbors[j].heat_contained += heat_per_neighbor;
-           }
+      if (validNeighborCount > 0) {
+        const heat_per_neighbor = generatedHeat / validNeighborCount;
+        for (let j = 0; j < neighbors.length; j++) {
+          const t = neighbors[j];
+          if (t.part && t.part.containment > 0) {
+            t.heat_contained += heat_per_neighbor;
+          }
+        }
       } else {
-           heat_add += generatedHeat;
+        heat_add += generatedHeat;
       }
 
       tile.ticks -= multiplier;
@@ -693,159 +738,143 @@ export class Engine {
     }
 
     {
-      // Ensure active_exchangers is always a valid array
       if (!Array.isArray(this.active_exchangers)) {
         this.active_exchangers = [];
       }
+      const exchangers = this.active_exchangers;
+      
+      // Clear reusable maps/arrays
+      this._heatCalc_startHeat.clear();
+      this._heatCalc_plannedCount = 0;
+      this._heatCalc_plannedOutByNeighbor.clear();
+      this._heatCalc_plannedInByNeighbor.clear();
+      this._heatCalc_plannedInByExchanger.clear();
 
-      // Include all non-valve exchangers, but valve neighbors can only participate in limited ways
-      const exchangers = this.active_exchangers.filter(t =>
-        t.part &&
-        t.part.category !== 'valve'
-      );
-
-      // For valve neighbors, we need to work with current heat values to account for valve transfers
-      // For non-valve neighbors, we can use snapshots to prevent ping-pong effects
-      // BUT: We need to ensure that heat received from valves is preserved throughout the tick
-      const startHeat = new Map();
+      const startHeat = this._heatCalc_startHeat;
       const valveNeighborExchangers = new Set();
 
-      for (const t of exchangers) {
+      // Pre-pass
+      for (let i = 0; i < exchangers.length; i++) {
+        const t = exchangers[i];
+        if (!t.part || t.part.category === 'valve') continue;
+
         if (valveNeighborTiles.has(t)) {
           valveNeighborExchangers.add(t);
-          // Store current heat for valve neighbors, but we'll use tile.heat_contained directly
-          // This ensures heat received from valves is preserved
           startHeat.set(t, t.heat_contained || 0);
         } else {
           startHeat.set(t, t.heat_contained || 0);
         }
       }
 
-      const planned = [];
-      const plannedOutByNeighbor = new Map();
-      const plannedInByNeighbor = new Map();
-      const plannedInByExchanger = new Map();
+      const plannedInByNeighbor = this._heatCalc_plannedInByNeighbor;
+      const plannedOutByNeighbor = this._heatCalc_plannedOutByNeighbor;
+      const plannedInByExchanger = this._heatCalc_plannedInByExchanger;
 
-      for (const tile of exchangers) {
+      for (let i = 0; i < exchangers.length; i++) {
+        const tile = exchangers[i];
         const tile_part = tile.part;
-        if (!tile_part) continue;
+        if (!tile_part || tile_part.category === 'valve') continue;
 
-        // For valve neighbors, always use current heat to preserve heat received from valves
-        // For others, use snapshot to prevent ping-pong effects
         const heatStart = valveNeighborExchangers.has(tile) ? (tile.heat_contained || 0) : (startHeat.get(tile) || 0);
+        
+        // Reuse neighbors array from Tile cache, avoid .filter()
+        const neighborsAll = tile.containmentNeighborTiles; 
+        
+        // Custom sort/filter logic without creating new arrays if possible
+        const validNeighbors = [];
+        for(let nIdx=0; nIdx<neighborsAll.length; nIdx++) {
+            if(neighborsAll[nIdx].part) validNeighbors.push(neighborsAll[nIdx]);
+        }
 
-        // Prefer sinks first, then other parts, exchangers last
-        // For valve neighbors, we need to be more careful about heat exchanger neighbors
-        // but we shouldn't completely exclude them as it prevents heat flow through valves
-        const neighborsAll = tile.containmentNeighborTiles.filter(t =>
-          t.part
-        );
         const headroomOf = (t) => {
           const cap = t.part?.containment || 0;
           const heat = t.heat_contained || 0;
           return Math.max(cap - heat, 0);
         };
-        const preferred = neighborsAll
-          .filter(t => t.part.category === 'vent' || t.part.category === 'coolant_cell')
-          .sort((a, b) => headroomOf(b) - headroomOf(a));
 
-        const exchNeighbors = neighborsAll
-          .filter(t => t.part.category === 'heat_exchanger')
-          .sort((a, b) => headroomOf(b) - headroomOf(a));
+        validNeighbors.sort((a, b) => {
+            // Custom weight sort
+            const aPref = (a.part.category === 'vent' || a.part.category === 'coolant_cell') ? 2 : (a.part.category === 'heat_exchanger' ? 0 : 1);
+            const bPref = (b.part.category === 'vent' || b.part.category === 'coolant_cell') ? 2 : (b.part.category === 'heat_exchanger' ? 0 : 1);
+            if (aPref !== bPref) return bPref - aPref;
+            return headroomOf(b) - headroomOf(a);
+        });
 
-        const others = neighborsAll
-          .filter(t => !preferred.includes(t) && !exchNeighbors.includes(t))
-          .sort((a, b) => headroomOf(b) - headroomOf(a));
-
-        const orderedNeighbors = [...preferred, ...others, ...exchNeighbors];
-
-        let remainingPush = heatStart; // cap push amounts so we don't exceed starting heat
+        let remainingPush = heatStart;
         const exchangerCapacity = tile_part.containment || 0;
-        const exchangerHeadroomBase = exchangerCapacity > 0 ? Math.max(0, exchangerCapacity - heatStart) : Number.POSITIVE_INFINITY;
 
-        for (const neighbor of orderedNeighbors) {
-          // For valve neighbors and their neighbors, always use current heat to preserve valve transfers
-          // For others, use snapshot to prevent ping-pong effects
-          const isExchangerNeighbor = startHeat.has(neighbor);
-          const isValveNeighbor = valveNeighborTiles.has(neighbor);
-          const isNeighborOfValveNeighbor = valveNeighborExchangers.has(tile) && isExchangerNeighbor;
-          const nStartRaw = (isValveNeighbor || isNeighborOfValveNeighbor) ? (neighbor.heat_contained || 0) : (isExchangerNeighbor ? (startHeat.get(neighbor) || 0) : (neighbor.heat_contained || 0));
-          const neighborCapacity = neighbor.part.containment || 0;
-          const neighborHeadroomBase = neighborCapacity > 0 ? Math.max(0, neighborCapacity - nStartRaw) : Number.POSITIVE_INFINITY;
-          const neighborHeadroom = Math.max(0, neighborHeadroomBase - (plannedInByNeighbor.get(neighbor) || 0));
-          const isPreferred = neighbor.part.category === 'vent' || neighbor.part.category === 'coolant_cell';
+        for (const neighbor of validNeighbors) {
+            const isExchangerNeighbor = startHeat.has(neighbor);
+            const isValveNeighbor = valveNeighborTiles.has(neighbor);
+            const isNeighborOfValveNeighbor = valveNeighborExchangers.has(tile) && isExchangerNeighbor;
+            const nStartRaw = (isValveNeighbor || isNeighborOfValveNeighbor) ? (neighbor.heat_contained || 0) : (isExchangerNeighbor ? (startHeat.get(neighbor) || 0) : (neighbor.heat_contained || 0));
+            const neighborCapacity = neighbor.part.containment || 0;
+            
+            if (remainingPush > 0 && (heatStart > nStartRaw || (/*isPreferred*/(neighbor.part.category === 'vent' || neighbor.part.category === 'coolant_cell') && heatStart === nStartRaw && heatStart > 0))) {
+                 const diff = Math.max(0, heatStart - nStartRaw) || 1;
+                 // We need totalHeadroom for bias. Recalc to avoid map/reduce allocs
+                 let totalHeadroom = 0;
+                 for(const n of validNeighbors) totalHeadroom += Math.max((n.part?.containment || 0) - (n.heat_contained || 0), 0);
+                 if(totalHeadroom === 0) totalHeadroom = 1;
 
-          if (remainingPush > 0 && (heatStart > nStartRaw || (isPreferred && heatStart === nStartRaw && heatStart > 0))) {
-            const diff = Math.max(0, heatStart - nStartRaw) || 1;
-            const totalHeadroom = orderedNeighbors.reduce((sum, n) => sum + Math.max((n.part?.containment || 0) - (n.heat_contained || 0), 0), 0) || 1;
-            const neighborHeadroomForWeight = Math.max(neighborCapacity - nStartRaw, 0);
-            const capacityBias = Math.max(neighborHeadroomForWeight / totalHeadroom, 0);
-            const biasedCap = Math.max(1, Math.floor(tile.getEffectiveTransferValue() * capacityBias * multiplier));
+                 const neighborHeadroomForWeight = Math.max(neighborCapacity - nStartRaw, 0);
+                 const capacityBias = Math.max(neighborHeadroomForWeight / totalHeadroom, 0);
+                 const biasedCap = Math.max(1, Math.floor(tile.getEffectiveTransferValue() * capacityBias * multiplier));
+                 let transfer_heat = Math.min(biasedCap, Math.ceil(diff / 2), remainingPush);
 
-            let transfer_heat = Math.min(
-              biasedCap,
-              Math.ceil(diff / 2),
-              remainingPush
-            );
-
-            // Valve neighbors can now process heat normally since we don't mark them as processed
-            // This allows heat to flow through valves correctly
-
-            if (transfer_heat > 0) {
-              planned.push({ from: tile, to: neighbor, amount: transfer_heat });
-              remainingPush -= transfer_heat;
-              plannedInByNeighbor.set(neighbor, (plannedInByNeighbor.get(neighbor) || 0) + transfer_heat);
-              if (remainingPush <= 0) continue;
+                 if (transfer_heat > 0) {
+                    // Use Pool
+                    if (this._heatCalc_plannedCount < this._heatCalc_plannedPool.length) {
+                        const p = this._heatCalc_plannedPool[this._heatCalc_plannedCount++];
+                        p.from = tile;
+                        p.to = neighbor;
+                        p.amount = transfer_heat;
+                    } else {
+                        // Fallback / Expand pool
+                        this._heatCalc_plannedPool.push({ from: tile, to: neighbor, amount: transfer_heat });
+                        this._heatCalc_plannedCount++;
+                    }
+                    
+                    remainingPush -= transfer_heat;
+                    plannedInByNeighbor.set(neighbor, (plannedInByNeighbor.get(neighbor) || 0) + transfer_heat);
+                    if (remainingPush <= 0) continue;
+                 }
             }
-          }
 
-          // Pull: only from non-exchanger neighbors that are hotter than this exchanger at start
-          // Valve neighbors and their neighbors can now pull heat normally since we don't mark them as processed
-          if (!isExchangerNeighbor || isValveNeighbor || isNeighborOfValveNeighbor) {
-            const alreadyOut = plannedOutByNeighbor.get(neighbor) || 0;
-            const nAvailable = Math.max(0, nStartRaw - alreadyOut);
-            if (nAvailable > 0 && nStartRaw > heatStart) {
-              const diff = nStartRaw - heatStart;
-              const biasedCap = tile.getEffectiveTransferValue() * multiplier;
-              let transfer_heat = Math.min(
-                biasedCap,
-                Math.ceil(diff / 2),
-                nAvailable
-              );
-              if (transfer_heat > 0) {
-                planned.push({ from: neighbor, to: tile, amount: transfer_heat });
-                plannedOutByNeighbor.set(neighbor, alreadyOut + transfer_heat);
-                plannedInByExchanger.set(tile, (plannedInByExchanger.get(tile) || 0) + transfer_heat);
-              }
+            // Pull logic
+            if (!isExchangerNeighbor || isValveNeighbor || isNeighborOfValveNeighbor) {
+                const alreadyOut = plannedOutByNeighbor.get(neighbor) || 0;
+                const nAvailable = Math.max(0, nStartRaw - alreadyOut);
+                if (nAvailable > 0 && nStartRaw > heatStart) {
+                    const diff = nStartRaw - heatStart;
+                    const biasedCap = tile.getEffectiveTransferValue() * multiplier;
+                    let transfer_heat = Math.min(biasedCap, Math.ceil(diff / 2), nAvailable);
+
+                    if (transfer_heat > 0) {
+                        // Use Pool
+                        if (this._heatCalc_plannedCount < this._heatCalc_plannedPool.length) {
+                            const p = this._heatCalc_plannedPool[this._heatCalc_plannedCount++];
+                            p.from = neighbor;
+                            p.to = tile;
+                            p.amount = transfer_heat;
+                        } else {
+                            this._heatCalc_plannedPool.push({ from: neighbor, to: tile, amount: transfer_heat });
+                            this._heatCalc_plannedCount++;
+                        }
+                        
+                        plannedOutByNeighbor.set(neighbor, alreadyOut + transfer_heat);
+                        plannedInByExchanger.set(tile, (plannedInByExchanger.get(tile) || 0) + transfer_heat);
+                    }
+                }
             }
-          }
         }
       }
 
-      // Apply all planned transfers
-      for (const p of planned) {
-        if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-          console.log(`[ENGINE] Heat exchanger transfer: ${p.amount} heat from ${p.from.part?.id} to ${p.to.part?.id}`);
-        }
-
+      // Apply Planned Transfers
+      for (let i=0; i < this._heatCalc_plannedCount; i++) {
+        const p = this._heatCalc_plannedPool[i];
         p.from.heat_contained -= p.amount;
         p.to.heat_contained += p.amount;
-
-        if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-          console.log(`[ENGINE] Heat exchanger transfer complete: ${p.from.part?.id} heat now ${p.from.heat_contained}, ${p.to.part?.id} heat now ${p.to.heat_contained}`);
-        }
-
-        // Debug: Log heat levels after each transfer for valve neighbors
-        if (typeof process !== "undefined" && process.env.NODE_ENV === 'test' &&
-          (valveNeighborTiles.has(p.from) || valveNeighborTiles.has(p.to))) {
-          console.log(`[ENGINE] After transfer - ${p.from.part?.id}: ${p.from.heat_contained}, ${p.to.part?.id}: ${p.to.heat_contained}`);
-        }
-
-        const transfer_heat = p.amount;
-        const cnt = transfer_heat >= 50 ? 3 : transfer_heat >= 15 ? 2 : 1;
-        for (let i = 0; i < cnt; i++) {
-          // visualEvents[visualEventIndex++] = { type: 'flow', icon: 'heat', from: [p.from.row, p.from.col], to: [p.to.row, p.to.col], amount: transfer_heat };
-        }
       }
 
       // Debug: Log final heat levels for valve neighbors after exchanger processing
@@ -1112,8 +1141,9 @@ export class Engine {
     }
     this.game.logger?.debug(`[TICK STAGE] Before final meltdown check: Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
-    if (visualEventIndex > 0 && this.game.ui && typeof this.game.ui._renderVisualEvents === 'function') {
-        this.game.ui._renderVisualEvents(visualEvents.slice(0, visualEventIndex));
+    // Render Visual Events (Optimized)
+    if (this._visualEventCount > 0 && this.game.ui && typeof this.game.ui._renderVisualEvents === 'function') {
+      this.game.ui._renderVisualEvents(this._visualEventPool, this._visualEventCount);
     }
 
     if (this.game.performance && this.game.performance.shouldMeasure()) {
@@ -1138,10 +1168,10 @@ export class Engine {
   }
 
   handleComponentExplosion(tile) {
-    // Mark the tile as exploded to prevent further processing
     tile.exploded = true;
     if (this.game.audio) {
-      this.game.audio.play('explosion');
+      const pan = this.game.calculatePan ? this.game.calculatePan(tile.col) : 0;
+      this.game.audio.play('explosion', null, pan);
     }
 
     // Add the component's heat to the reactor before it's cleared

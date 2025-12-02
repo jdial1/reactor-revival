@@ -176,9 +176,14 @@ export class PageRouter {
       const newPageElement = tempContainer.firstElementChild;
 
       if (newPageElement && newPageElement.classList.contains("page")) {
+        // Reset animation state by forcing reflow if needed, but just appending works with css animation
         pageContentArea.appendChild(newPageElement);
         this.pageCache.set(pageId, newPageElement);
-        newPageElement.classList.remove("hidden");
+        
+        // Small delay to allow DOM to register before removing hidden (triggers animation)
+        requestAnimationFrame(() => {
+             newPageElement.classList.remove("hidden");
+        });
 
         if (!this.initializedPages.has(pageId)) {
           console.log(

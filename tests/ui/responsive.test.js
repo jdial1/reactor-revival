@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
+import { GridScaler } from "../../public/src/components/gridScaler.js";
 
 // Helper to resize the window for responsive testing
 const resizeWindow = (window, width, height) => {
@@ -584,6 +585,66 @@ describe("Responsive UI Layout and Overlap Checks", () => {
       const tileSizeValue = parseInt(tileSizeMatch[1]);
       expect(tileSizeValue, "Tile size should be a valid number").toBeGreaterThan(0);
       expect(tileSizeValue, "Tile size should not be too small").toBeGreaterThanOrEqual(24);
+    });
+  });
+
+  describe("Grid Shape Adaptation", () => {
+    beforeEach(async () => {
+      const setup = await setupGameWithDOM();
+      game = setup.game;
+      document = setup.document;
+      window = setup.window;
+      
+      // Mock resizeGrid
+      game.resizeGrid = vi.fn((r, c) => { game.rows = r; game.cols = c; });
+      
+      await game.router.loadPage("reactor_section");
+    });
+
+    afterEach(() => {
+      cleanupGame();
+    });
+
+    it("should reshape grid for Mobile Portrait (Tall) screens", () => {
+      resizeWindow(window, 400, 800); // Mobile dimensions
+      
+      // Manually trigger logic because JSDOM resize events are tricky with Observers
+      const scaler = new GridScaler(game.ui);
+      scaler.init();
+      
+      // Mock the specific element sizes for the calculation
+      Object.defineProperty(scaler.wrapper, 'clientWidth', { value: 380 });
+      Object.defineProperty(scaler.wrapper, 'clientHeight', { value: 700 }); // Accounting for UI bars
+      
+      scaler.resize();
+
+      // Mobile should be taller than it is wide
+      expect(game.rows).toBeGreaterThan(game.cols);
+      
+      // Should fit within the view without scrolling
+      const reactorHeight = parseInt(scaler.reactor.style.height);
+      expect(reactorHeight).toBeLessThanOrEqual(700);
+    });
+
+    it("should reshape grid for Desktop Landscape (Wide) screens", () => {
+      resizeWindow(window, 1200, 800); // Desktop dimensions
+      
+      const scaler = new GridScaler(game.ui);
+      scaler.init();
+      
+      // Mock element sizes
+      Object.defineProperty(scaler.wrapper, 'clientWidth', { value: 1180 });
+      Object.defineProperty(scaler.wrapper, 'clientHeight', { value: 700 });
+      
+      scaler.resize();
+
+      // Desktop should be wider than it is tall
+      expect(game.cols).toBeGreaterThan(game.rows);
+      
+      // Should fill the width efficiently
+      const reactorWidth = parseInt(scaler.reactor.style.width);
+      // Allow some margin, but it should utilize space
+      expect(reactorWidth).toBeGreaterThan(800); 
     });
   });
 });
