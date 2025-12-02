@@ -546,7 +546,7 @@ describe("AudioService", () => {
 
       expect(tile.part).not.toBeNull();
       expect(tile.part.id).toBe("uranium1");
-      expect(playSpy).toHaveBeenCalledWith("placement", "cell");
+      expect(playSpy).toHaveBeenCalledWith("placement", "cell", expect.any(Number));
     });
 
     it("should play sound when part is sold", async () => {
@@ -555,7 +555,7 @@ describe("AudioService", () => {
       await tile.setPart(part);
       const playSpy = vi.spyOn(game.audio, 'play');
       game.sellPart(tile);
-      expect(playSpy).toHaveBeenCalledWith("sell");
+      expect(playSpy).toHaveBeenCalledWith("sell", null, expect.any(Number));
     });
 
     it("should play sound when explosion occurs", () => {
@@ -564,7 +564,7 @@ describe("AudioService", () => {
       
       if (game.engine && game.engine.handleComponentExplosion) {
         game.engine.handleComponentExplosion(tile);
-        expect(playSpy).toHaveBeenCalledWith("explosion");
+        expect(playSpy).toHaveBeenCalledWith("explosion", null, expect.any(Number));
       }
     });
 

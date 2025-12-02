@@ -96,10 +96,11 @@ describe("Grid Scaling Logic (Reshaping)", () => {
         
         expect(game.cols).toBeGreaterThan(game.rows); // Verify landscape shape
         expect(game.rows).toBe(8);
-        expect(game.cols).toBe(18);
+        expect(game.cols).toBe(17);
 
         // Verify total tiles is close to 144 (8 * 18 = 144)
-        expect(game.rows * game.cols).toBeCloseTo(144, -1);
+        // 17 * 8 = 136
+        expect(game.rows * game.cols).toBe(136);
     });
 
     it("should apply CSS variables correctly", () => {

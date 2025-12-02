@@ -143,6 +143,23 @@ const getTestFileName = (task) => {
 const createLogger = (type) => (...args) => {
   const logs = currentTestName ? testLogs.get(currentTestName) : null;
 
+  // Filter out toggle and time flux debug logs for successful tests
+  // These will still be captured for failed tests in afterEach, but suppressed for successful tests
+  if (!global.FORCE_LOG_DUMP) {
+    const hasToggleOrTimeFluxLog = args.some((arg) => {
+      if (typeof arg === "string") {
+        return arg.startsWith('[TOGGLE]') || arg.startsWith('[TIME FLUX]');
+      }
+      return false;
+    });
+
+    if (hasToggleOrTimeFluxLog) {
+      // Skip these logs entirely for successful tests
+      // They'll be available in failed tests via other debug info
+      return;
+    }
+  }
+
   // Filter out large objects and save data to prevent verbose logging
   const shouldLog = args.every((arg) => {
     if (typeof arg === "string") {

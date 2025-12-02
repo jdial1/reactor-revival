@@ -92,9 +92,10 @@ describe('EP Info Bar Display', () => {
 
         // Apply the saved state
         await game.applySaveState(savedData);
-
-        // Force the UI update queue to process
+        
         game.ui.processUpdateQueue();
+        // Force rolling numbers to update immediately by simulating a large time delta
+        game.ui.updateRollingNumbers(10000);
 
         // Check that EP display elements are immediately visible
         expect(mobileEl.style.display).not.toBe("none");

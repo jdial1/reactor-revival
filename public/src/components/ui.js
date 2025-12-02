@@ -995,23 +995,27 @@ export class UI {
       const obj = this.displayValues[key];
       const diff = obj.target - obj.current;
       
-      if (Math.abs(diff) > epsilon || (obj.target === 0 && obj.current !== 0)) {
-        // Analog-like behavior: move faster when further away, but enforce a minimum speed so it settles
-        const minSpeed = Math.max(1, Math.abs(diff) * 0.05); 
-        const change = diff * lerpFactor;
-        
-        // Apply change, ensuring we don't get stuck with tiny increments
-        if (Math.abs(change) < minSpeed * timeScale) {
-             obj.current += Math.sign(diff) * minSpeed * timeScale;
+      if (Math.abs(diff) > 0) {
+        if (Math.abs(diff) < epsilon && obj.target !== 0) {
+          obj.current = obj.target;
         } else {
-             obj.current += change;
+          // Analog-like behavior: move faster when further away, but enforce a minimum speed so it settles
+          const minSpeed = Math.max(1, Math.abs(diff) * 0.05); 
+          const change = diff * lerpFactor;
+          
+          // Apply change, ensuring we don't get stuck with tiny increments
+          if (Math.abs(change) < minSpeed * timeScale) {
+               obj.current += Math.sign(diff) * minSpeed * timeScale;
+          } else {
+               obj.current += change;
+          }
+
+          // Snap to target if we overshot or are very close
+          if ((diff > 0 && obj.current > obj.target) || (diff < 0 && obj.current < obj.target) || Math.abs(obj.target - obj.current) < epsilon) {
+              obj.current = obj.target;
+          }
         }
 
-        // Snap to target if we overshot or are very close
-        if ((diff > 0 && obj.current > obj.target) || (diff < 0 && obj.current < obj.target) || Math.abs(obj.target - obj.current) < epsilon) {
-            obj.current = obj.target;
-        }
-        
         // Update DOM
         const val = obj.current;
         let formatted = fmt(val, obj.format0 ? (window.innerWidth <= 900 ? 0 : 2) : null);

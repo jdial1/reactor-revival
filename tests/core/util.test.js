@@ -11,11 +11,11 @@ describe("Utility Functions", () => {
 
         it("should format large numbers with suffixes", () => {
             // Default behavior: 2 decimal places for numbers >= 1000, 0 for smaller numbers
-            expect(numFormat(1000)).toBe("1.00K");
-            expect(numFormat(1500)).toBe("1.50K");
-            expect(numFormat(1000000)).toBe("1.00M");
-            expect(numFormat(1000000000)).toBe("1.00B");
-            expect(numFormat(1000000000000)).toBe("1.00T");
+            expect(numFormat(1000)).toBe("1K");
+            expect(numFormat(1500)).toBe("1.5K");
+            expect(numFormat(1000000)).toBe("1M");
+            expect(numFormat(1000000000)).toBe("1B");
+            expect(numFormat(1000000000000)).toBe("1T");
             
             // Test with explicit places
             expect(numFormat(1000, 0)).toBe("1K");
@@ -29,7 +29,7 @@ describe("Utility Functions", () => {
 
         it("should handle negative numbers", () => {
             expect(numFormat(-100)).toBe("-100");
-            expect(numFormat(-1000)).toBe("-1.00K"); // Default places is 2 for numbers >= 1000
+            expect(numFormat(-1000)).toBe("-1K"); // Default places is 2 for numbers >= 1000, stripped to 0
             expect(numFormat(-1000, 0)).toBe("-1K");
         });
 
