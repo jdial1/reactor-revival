@@ -5,6 +5,7 @@ import dataService from "../services/dataService.js";
 import { on } from "../utils/util.js";
 import { SettingsModal } from "./settingsModal.js";
 import { GridScaler } from "./gridScaler.js";
+import { leaderboardService } from "../services/leaderboardService.js";
 
 // Load help text
 let help_text = {};
@@ -1071,24 +1072,16 @@ export class UI {
         num: true,
         onupdate: (val) => {
           this.displayValues.power.target = val;
-          const mobileDenom = document.getElementById("info_power_denom");
-          const desktopDenom = document.getElementById("info_power_denom_desktop");
-          const maxPower = this.stateManager.getVar("max_power") || "";
-          if (mobileDenom) mobileDenom.textContent = "/" + fmt(maxPower);
-          if (desktopDenom) desktopDenom.textContent = "/" + fmt(maxPower);
-
-          // Update fill indicator
+          const maxPower = this.stateManager.getVar("max_power") || 0;
+          this.updatePowerDenom();
           this.updateInfoBarFillIndicator("power", val, maxPower);
         },
       },
       max_power: {
         dom: getInfoElement("info_power_denom", "info_power_denom_desktop"),
         num: true,
-        onupdate: (val) => {
-          const mobileDenom = document.getElementById("info_power_denom");
-          const desktopDenom = document.getElementById("info_power_denom_desktop");
-          if (mobileDenom) mobileDenom.textContent = "/" + fmt(val);
-          if (desktopDenom) desktopDenom.textContent = "/" + fmt(val);
+        onupdate: () => {
+          this.updatePowerDenom();
         },
       },
       current_heat: {
@@ -1097,24 +1090,16 @@ export class UI {
         places: 2,
         onupdate: (val) => {
           this.displayValues.heat.target = val;
-          const mobileDenom = document.getElementById("info_heat_denom");
-          const desktopDenom = document.getElementById("info_heat_denom_desktop");
-          const maxHeat = this.stateManager.getVar("max_heat") || "";
-          if (mobileDenom) mobileDenom.textContent = "/" + fmt(maxHeat);
-          if (desktopDenom) desktopDenom.textContent = "/" + fmt(maxHeat);
-
-          // Update fill indicator
+          const maxHeat = this.stateManager.getVar("max_heat") || 0;
+          this.updateHeatDenom();
           this.updateInfoBarFillIndicator("heat", val, maxHeat);
         },
       },
       max_heat: {
         dom: getInfoElement("info_heat_denom", "info_heat_denom_desktop"),
         num: true,
-        onupdate: (val) => {
-          const mobileDenom = document.getElementById("info_heat_denom");
-          const desktopDenom = document.getElementById("info_heat_denom_desktop");
-          if (mobileDenom) mobileDenom.textContent = "/" + fmt(val);
-          if (desktopDenom) desktopDenom.textContent = "/" + fmt(val);
+        onupdate: () => {
+          this.updateHeatDenom();
         },
       },
       exotic_particles: {
@@ -1172,21 +1157,22 @@ export class UI {
       stats_power: {
         dom: this.DOMElements.stats_power,
         num: true,
-        onupdate: (val) => {
+        onupdate: () => {
           if (!this.DOMElements.stats_power) {
             // DOM element missing
           }
-
+          this.updatePowerDenom();
         },
       },
       total_heat: {
         dom: this.DOMElements.stats_heat,
         num: true,
         places: 0,
-        onupdate: (val) => {
+        onupdate: () => {
           if (!this.DOMElements.stats_heat) {
             // DOM element missing
           }
+          this.updateHeatDenom();
         },
       },
       // Remove autosell cash from reactor_stats; keep mapping undefined to avoid updates
@@ -1227,7 +1213,14 @@ export class UI {
         places: 0,
       },
       stats_inlet: { dom: this.DOMElements.stats_inlet, num: true, places: 0 },
-      stats_vent: { dom: this.DOMElements.stats_vent, num: true, places: 0 },
+      stats_vent: {
+        dom: this.DOMElements.stats_vent,
+        num: true,
+        places: 0,
+        onupdate: () => {
+          this.updateHeatDenom();
+        },
+      },
       stats_total_part_heat: {
         dom: this.DOMElements.stats_total_part_heat,
         num: true,
@@ -1681,6 +1674,64 @@ export class UI {
         setTimeout(() => img.remove(), 550);
       });
     } catch (_) { /* ignore */ }
+  }
+
+  updatePowerDenom() {
+    const maxPower = this.stateManager.getVar("max_power") || 0;
+    const statsPower = this.stateManager.getVar("stats_power") || 0;
+    const autoSellEnabled = this.stateManager.getVar("auto_sell") || false;
+    const autoSellMultiplier = this.game?.reactor?.auto_sell_multiplier || 0;
+    
+    let netChange = statsPower;
+    if (autoSellEnabled && autoSellMultiplier > 0) {
+      const sellAmount = statsPower * autoSellMultiplier;
+      netChange = statsPower - sellAmount;
+    }
+    
+    const mobileDenom = document.getElementById("info_power_denom");
+    const desktopDenom = document.getElementById("info_power_denom_desktop");
+    const arrow = netChange >= 0 ? "↑" : "↓";
+    const value = fmt(Math.abs(netChange));
+    const capacity = fmt(maxPower);
+    const isPositive = netChange >= 0;
+    
+    const text = `/${capacity} <span class="tick-change ${isPositive ? 'positive' : 'negative'}">${arrow} ${value}</span>`;
+    
+    if (mobileDenom) {
+      mobileDenom.innerHTML = text;
+      mobileDenom.style.textAlign = "right";
+    }
+    if (desktopDenom) {
+      desktopDenom.innerHTML = text;
+      desktopDenom.style.textAlign = "right";
+    }
+  }
+
+  updateHeatDenom() {
+    const maxHeat = this.stateManager.getVar("max_heat") || 0;
+    const totalHeat = this.stateManager.getVar("total_heat") || 0;
+    const statsVent = this.stateManager.getVar("stats_vent") || 0;
+    const manualReduce = this.game?.reactor?.manual_heat_reduce || this.game?.base_manual_heat_reduce || 1;
+    
+    const netChange = totalHeat - statsVent - manualReduce;
+    
+    const mobileDenom = document.getElementById("info_heat_denom");
+    const desktopDenom = document.getElementById("info_heat_denom_desktop");
+    const arrow = netChange >= 0 ? "↑" : "↓";
+    const value = fmt(Math.abs(netChange));
+    const capacity = fmt(maxHeat);
+    const isPositive = netChange >= 0;
+    
+    const text = `/${capacity} <span class="tick-change ${isPositive ? 'positive' : 'negative'}">${arrow} ${value}</span>`;
+    
+    if (mobileDenom) {
+      mobileDenom.innerHTML = text;
+      mobileDenom.style.textAlign = "right";
+    }
+    if (desktopDenom) {
+      desktopDenom.innerHTML = text;
+      desktopDenom.style.textAlign = "right";
+    }
   }
 
   updateInfoBarFillIndicator(type, current, max) {
@@ -3916,8 +3967,10 @@ export class UI {
           versionEl.textContent = appVersionEl.textContent;
         }
         break;
+      case "leaderboard_section":
+        this.setupLeaderboardPage();
+        break;
       case "experimental_upgrades_section":
-        // Load and set version for research page
         this.loadAndSetVersion();
         break;
       case "soundboard_section":
@@ -3926,6 +3979,58 @@ export class UI {
     }
 
     this.showObjectivesForPage(pageId);
+  }
+
+  setupLeaderboardPage() {
+    const container = document.getElementById("leaderboard_rows");
+    const sortButtons = document.querySelectorAll(".leaderboard-sort");
+    
+    if (!this.game) {
+      if (container) {
+        container.innerHTML = '<tr><td colspan="6" style="text-align:center;">Game not initialized</td></tr>';
+      }
+      return;
+    }
+    
+    const loadRecords = async (sortBy) => {
+      if (!container) return;
+      container.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
+      
+      await leaderboardService.init();
+      const records = leaderboardService.getTopRuns(sortBy, 20);
+      
+      if (records.length === 0) {
+        container.innerHTML = '<tr><td colspan="6" style="text-align:center">No records found yet. Play to save scores!</td></tr>';
+        return;
+      }
+
+      let html = '';
+      records.forEach((run, index) => {
+        const date = new Date(run.timestamp).toLocaleDateString();
+        const timeStr = this.game.formatTime ? this.game.formatTime(run.time_played) : 'N/A';
+        html += `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${date}</td>
+            <td>${fmt(run.power)}</td>
+            <td>${fmt(run.heat)}</td>
+            <td>$${fmt(run.money)}</td>
+            <td>${timeStr}</td>
+          </tr>
+        `;
+      });
+      container.innerHTML = html;
+    };
+
+    sortButtons.forEach(btn => {
+      btn.onclick = () => {
+        sortButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        loadRecords(btn.dataset.sort);
+      };
+    });
+
+    loadRecords("power");
   }
 
   setupSoundboardPage() {

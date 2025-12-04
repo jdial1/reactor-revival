@@ -8,6 +8,7 @@ import { executeUpgradeAction } from "./upgradeActions.js";
 import { Performance } from "./performance.js";
 import { DebugHistory } from "../utils/debugHistory.js";
 import { numFormat } from "../utils/util.js";
+import { leaderboardService } from "../services/leaderboardService.js";
 
 export class Game {
   constructor(ui_instance) {
@@ -63,6 +64,18 @@ export class Game {
     this.debugHistory = new DebugHistory();
     this.undoHistory = [];
     this.audio = null;
+
+    this.peak_power = 0;
+    this.peak_heat = 0;
+    
+    let existingUserId = localStorage.getItem("reactor_user_id");
+    if (!existingUserId) {
+      existingUserId = crypto.randomUUID();
+      localStorage.setItem("reactor_user_id", existingUserId);
+    }
+    this.user_id = existingUserId;
+    
+    this.run_id = crypto.randomUUID();
   }
 
   // Returns how many parts of a given type and level are currently placed
@@ -307,10 +320,11 @@ export class Game {
   async initialize_new_game_state() {
     this.debugHistory.clear();
     await this.set_defaults();
-    // Always clear meltdown state and update UI after new game
+    this.run_id = crypto.randomUUID();
     this.reactor.clearMeltdownState();
 
-    // Clear all active animations to prevent visual spam after new game
+    leaderboardService.init().catch(err => console.warn("Leaderboard init failed", err));
+
     if (this.ui && typeof this.ui.clearAllActiveAnimations === 'function') {
       this.ui.clearAllActiveAnimations();
     }
@@ -326,6 +340,9 @@ export class Game {
   async startSession() {
     this.session_start_time = Date.now();
     this.last_save_time = Date.now();
+
+    leaderboardService.init().catch(err => console.warn("Leaderboard init failed", err));
+
     await this.objectives_manager.initialize();
 
     // Set initial objective after initialization is complete
@@ -342,6 +359,11 @@ export class Game {
       const sessionTime = Date.now() - this.session_start_time;
       this.total_played_time += sessionTime;
       this.session_start_time = Date.now();
+    }
+
+    if (this.reactor) {
+      if (this.reactor.current_power > this.peak_power) this.peak_power = this.reactor.current_power;
+      if (this.reactor.current_heat > this.peak_heat) this.peak_heat = this.reactor.current_heat;
     }
   }
 
@@ -694,6 +716,7 @@ export class Game {
 
     const saveData = {
       version: this.version,
+      run_id: this.run_id,
       current_money: this._current_money,
       protium_particles: this.protium_particles,
       total_exotic_particles: this.total_exotic_particles,
@@ -819,6 +842,19 @@ export class Game {
       if (this.reactor.has_melted_down) {
         return;
       }
+
+      this.updateSessionTime();
+      if (this.peak_power > 0 || this.peak_heat > 0) {
+        leaderboardService.saveRun({
+          user_id: this.user_id,
+          run_id: this.run_id,
+          heat: this.peak_heat,
+          power: this.peak_power,
+          money: this.current_money,
+          time: this.total_played_time
+        });
+      }
+
       const saveData = this.getSaveState();
 
       if (typeof localStorage !== "undefined" && localStorage !== null) {
@@ -1073,7 +1109,11 @@ export class Game {
     this._isRestoringSave = true;
     try {
     this._current_money = savedData.current_money || this.base_money;
+    this.run_id = savedData.run_id || crypto.randomUUID();
     
+    this.peak_power = savedData.reactor?.current_power || 0;
+    this.peak_heat = savedData.reactor?.current_heat || 0;
+
     if (savedData.base_rows) {
       this.base_rows = savedData.base_rows;
     } else {

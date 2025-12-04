@@ -1,0 +1,32 @@
+<section id="leaderboard_section" class="page">
+    <div class="pixel-panel is-inset">
+        <header class="leaderboard-header">
+            <h2>Local Reactor Records</h2>
+        </header>
+        
+        <div class="leaderboard-controls">
+            <button class="pixel-btn leaderboard-sort active" data-sort="power">Top Power</button>
+            <button class="pixel-btn leaderboard-sort" data-sort="heat">Top Heat</button>
+            <button class="pixel-btn leaderboard-sort" data-sort="money">Top Money</button>
+        </div>
+
+        <div class="leaderboard-content">
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Date</th>
+                        <th>Power</th>
+                        <th>Heat</th>
+                        <th>Money</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboard_rows">
+                    <tr><td colspan="6" style="text-align:center;">Loading records...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+

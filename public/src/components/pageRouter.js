@@ -11,6 +11,7 @@ export class PageRouter {
         path: "pages/privacy-policy.html",
         stateless: true,
       },
+      leaderboard_section: { path: "pages/leaderboard.html" },
     };
     this.pageCache = new Map();
     this.initializedPages = new Set();

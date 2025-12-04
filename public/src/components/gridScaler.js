@@ -45,34 +45,48 @@ export class GridScaler {
 
 
     /**
-     * Calculates grid dimensions that maintain ~144 tiles total,
-     * but reshaped to fit the screen's aspect ratio.
+     * Calculates grid dimensions for desktop (square) or mobile (rectangular).
+     * Desktop: square grid targeting ~144 tiles (12x12).
+     * Mobile: rectangular grid (8x10 or 8x14) based on screen space.
      */
 
-    calculateReshapedDimensions(availWidth, availHeight) {
+    calculateGridDimensions(availWidth, availHeight, maxTileSize) {
 
-        const screenRatio = availWidth / availHeight;
-        const targetArea = this.config.targetTotalTiles;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
 
-        // 1. Calculate ideal Rows based on aspect ratio
-        // Algebra: Rows^2 = Area / Ratio
-        let idealRows = Math.sqrt(targetArea / screenRatio);
+        if (isMobile) {
+            const maxTilesX = Math.floor(availWidth / maxTileSize);
+            const maxTilesY = Math.floor(availHeight / maxTileSize);
 
-        // 2. Derive Cols from that
-        let idealCols = targetArea / idealRows;
+            let cols = 8;
+            cols = Math.max(this.config.minCols, Math.min(cols, maxTilesX, this.config.maxCols));
 
-        // 3. Round to integers
-        let rows = Math.round(idealRows);
-        let cols = Math.round(idealCols);
+            let rows;
+            if (maxTilesY >= 14) {
+                rows = 14;
+            } else if (maxTilesY >= 10) {
+                rows = 10;
+            } else {
+                rows = Math.max(this.config.minRows, Math.min(maxTilesY, this.config.maxRows));
+            }
 
-        // Debug raw math before clamping
-        console.log(`[GridScaler Calc] Ratio: ${screenRatio.toFixed(2)}, Ideal: ${idealCols.toFixed(2)}x${idealRows.toFixed(2)}`);
+            return { rows, cols };
+        } else {
+            const targetGridSize = Math.sqrt(this.config.targetTotalTiles);
+            const maxTilesX = Math.floor(availWidth / maxTileSize);
+            const maxTilesY = Math.floor(availHeight / maxTileSize);
+            const maxTilesThatFit = Math.min(maxTilesX, maxTilesY);
 
-        // 4. Safety Clamps
-        rows = Math.max(this.config.minRows, Math.min(rows, this.config.maxRows));
-        cols = Math.max(this.config.minCols, Math.min(cols, this.config.maxCols));
+            let gridSize = Math.round(targetGridSize);
 
-        return { rows, cols, screenRatio };
+            if (gridSize > maxTilesThatFit) {
+                gridSize = maxTilesThatFit;
+            }
+
+            gridSize = Math.max(this.config.minCols, Math.min(gridSize, this.config.maxCols));
+
+            return { rows: gridSize, cols: gridSize };
+        }
 
     }
 
@@ -99,33 +113,33 @@ export class GridScaler {
             return;
         }
 
-        // 2. Calculate the Grid Dimensions (Rows/Cols)
-        const dims = this.calculateReshapedDimensions(availWidth, availHeight);
+        // 2. Calculate grid dimensions (square for desktop, rectangular for mobile)
+        const maxTileSize = 64;
+        const dims = this.calculateGridDimensions(availWidth, availHeight, maxTileSize);
 
         const cols = dims.cols;
         const rows = dims.rows;
 
-        // 3. Calculate Tile Size to FIT those dimensions
-        const sizeX = availWidth / cols;
-        const sizeY = availHeight / rows;
-
-        // Use the smaller size to ensure it fits both width and height
-        let tileSize = Math.floor(Math.min(sizeX, sizeY));
+        // 3. Calculate tile size to fit the square grid perfectly (max 64px)
+        const sizeXFinal = availWidth / cols;
+        const sizeYFinal = availHeight / rows;
+        let tileSize = Math.floor(Math.min(sizeXFinal, sizeYFinal, maxTileSize));
 
         // --- DEBUG LOGGING ---
 
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
+        const gridType = isMobile ? 'Mobile (Rectangular)' : 'Desktop (Square)';
+        
         console.groupCollapsed(`[GridScaler] Resized to ${cols}x${rows}`);
         console.log(`Wrapper Size:   ${availWidth}px x ${availHeight}px`);
-        console.log(`Aspect Ratio:   ${dims.screenRatio.toFixed(2)}`);
-        console.log(`Target Tiles:   ${this.config.targetTotalTiles} (Actual: ${rows * cols})`);
-        console.log(`Grid Logic:     ${cols} Cols x ${rows} Rows`);
-        console.log(`Tile Size:      ${tileSize}px (Fit Width: ${sizeX.toFixed(1)}, Fit Height: ${sizeY.toFixed(1)})`);
+        console.log(`Grid Logic:     ${cols} Cols x ${rows} Rows (${gridType})`);
+        console.log(`Tile Size:      ${tileSize}px (Fit Width: ${sizeXFinal.toFixed(1)}, Fit Height: ${sizeYFinal.toFixed(1)})`);
         console.log(`Final Size:     ${cols * tileSize}px x ${rows * tileSize}px`);
         console.groupEnd();
 
         // ---------------------
 
-        // 4. Update Game Logic
+        // 5. Update Game Logic
 
         if (this.ui.game.resizeGrid) {
 
@@ -138,7 +152,7 @@ export class GridScaler {
 
         }
 
-        // 5. Apply CSS
+        // 6. Apply CSS
         const finalGridWidth = cols * tileSize;
         const finalGridHeight = rows * tileSize;
 
@@ -151,13 +165,19 @@ export class GridScaler {
         this.reactor.style.width = `${finalGridWidth}px`;
         this.reactor.style.height = `${finalGridHeight}px`;
 
-        // Center grid in wrapper
+        // Align grid in wrapper (flex-start for mobile, center for desktop)
 
         if (this.wrapper) {
 
             this.wrapper.style.display = 'flex';
-            this.wrapper.style.alignItems = 'center';
-            this.wrapper.style.justifyContent = 'center';
+            
+            if (isMobile) {
+                this.wrapper.style.alignItems = 'flex-start';
+                this.wrapper.style.justifyContent = 'flex-start';
+            } else {
+                this.wrapper.style.alignItems = 'center';
+                this.wrapper.style.justifyContent = 'center';
+            }
 
         }
 

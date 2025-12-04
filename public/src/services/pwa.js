@@ -1,5 +1,6 @@
 import { numFormat as fmt } from "../utils/util.js";
 import dataService from "./dataService.js";
+import { SettingsModal } from "../components/settingsModal.js";
 import {
   createNewGameButton,
   createLoadGameButton,
@@ -261,7 +262,11 @@ class SplashScreenManager {
     this.installPrompt = null;
     this.flavorInterval = null;
 
-    // Promise that resolves when splash screen is fully loaded
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem("reactor_user_id")) {
+      localStorage.setItem("reactor_user_id", crypto.randomUUID());
+      console.log("[SPLASH] Generated new User ID for leaderboard tracking.");
+    }
+
     this.readyPromise = this.waitForDOMAndLoad();
 
 
@@ -1923,20 +1928,14 @@ class SplashScreenManager {
 
       loadGameButton.onclick = () => this.showSaveSlotSelection(saveSlots);
       startOptionsSection.appendChild(loadGameButton);
-      const staticButtons = [
-        { text: "Settings", disabled: true },
-      ];
-      staticButtons.forEach(btnInfo => {
-        const btn = document.createElement("button");
-        btn.className = "splash-btn";
-        btn.textContent = btnInfo.text;
-        if (btnInfo.disabled) {
-          btn.disabled = true;
-          btn.style.opacity = "0.5";
-          btn.style.cursor = "not-allowed";
-        }
-        startOptionsSection.appendChild(btn);
-      });
+      
+      const settingsButton = document.createElement("button");
+      settingsButton.className = "splash-btn";
+      settingsButton.textContent = "Settings";
+      settingsButton.onclick = () => {
+        new SettingsModal().show();
+      };
+      startOptionsSection.appendChild(settingsButton);
       const exitButton = document.createElement("button");
       exitButton.className = "splash-btn splash-btn-exit";
       exitButton.textContent = "Exit";

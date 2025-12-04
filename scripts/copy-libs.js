@@ -25,6 +25,16 @@ const libraries = [
         source: "node_modules/@zip.js/zip.js/dist/zip.min.js",
         target: "public/lib/zip.min.js",
     },
+    {
+        name: "sqlite3",
+        source: "node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/jswasm/sqlite3.js",
+        target: "public/lib/sqlite3.js",
+    },
+    {
+        name: "sqlite3-wasm",
+        source: "node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/jswasm/sqlite3.wasm",
+        target: "public/lib/sqlite3.wasm",
+    },
 ];
 
 function copyFile(source, target) {

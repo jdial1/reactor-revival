@@ -824,6 +824,13 @@ button:active {
   overflow: hidden;
 }
 
+@media (width <= 900px) {
+  #reactor_wrapper {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}
+
 #reactor_background {
   position: absolute;
   z-index: 20;
@@ -1029,8 +1036,10 @@ button:active {
 #reactor button.tile {
   width: var(--tile-size, 48px);
   min-width: 0;
+  max-width: 64px;
   height: var(--tile-size, 48px);
   min-height: 0;
+  max-height: 64px;
   box-sizing: border-box;
 }
 
@@ -1044,7 +1053,9 @@ button:active {
 .tile {
   position: relative;
   width: var(--tile-size);
+  max-width: 64px;
   height: var(--tile-size);
+  max-height: 64px;
 
   /* Ensure tiles are properly positioned in the grid */
   box-sizing: border-box;
@@ -2034,6 +2045,53 @@ footer#bottom_nav button.active,
   flex-direction: column;
 }
 
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-family: "Press Start 2P", cursive, monospace;
+}
+
+.leaderboard-table th {
+  color: var(--game-warning-color);
+  text-transform: uppercase;
+  padding: 10px;
+  border-bottom: 2px solid var(--bevel-light);
+  text-align: left;
+}
+
+.leaderboard-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--bevel-dark);
+  color: white;
+}
+
+.leaderboard-table tr:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.leaderboard-controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.leaderboard-sort.active {
+  border-color: var(--game-success-color);
+  color: var(--game-success-color);
+}
+
+@media (max-width: 600px) {
+  .leaderboard-table {
+    font-size: 0.6rem;
+  }
+  .leaderboard-table th, .leaderboard-table td {
+    padding: 6px;
+  }
+}
+
 @media (width <= 400px) {
   .splash-btn {
     width: 100%;
@@ -2643,7 +2701,8 @@ footer#bottom_nav button.active,
 
 @media (width > 900px) {
   #upgrades_section,
-  #experimental_upgrades_section {
+  #experimental_upgrades_section,
+  #leaderboard_section {
     padding-top: calc(1rem + var(--main-top-nav-height, 60px) + 1rem);
   }
 }
