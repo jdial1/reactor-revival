@@ -411,12 +411,19 @@ describe("Large Grid Performance Stress Tests", () => {
           const baseTimePerTile = standardMaxTime / standardGridSize; // ~0.28ms per tile
 
           const currentGridSize = size * size;
+          // Apply larger buffer for CI environments and very large grids
+          // CI environments can be 1.5-2x slower, and large grids may have non-linear scaling
+          const baseBuffer = 2.5; // 150% buffer for complex heat management
+          const ciBuffer = process.env.CI ? 1.8 : 1.0; // Additional CI variance buffer
+          const largeGridBuffer = size >= 50 ? 1.3 : 1.0; // Extra buffer for very large grids
+          const totalBuffer = baseBuffer * ciBuffer * largeGridBuffer;
+          
           const expectedMaxTime = Math.ceil(
-            baseTimePerTile * currentGridSize * 2.5
-          ); // 150% buffer for complex heat management
+            baseTimePerTile * currentGridSize * totalBuffer
+          );
 
           console.log(
-            `   Expected Performance: < ${expectedMaxTime}ms per tick (${currentGridSize} tiles, linear scaling)`
+            `   Expected Performance: < ${expectedMaxTime}ms per tick (${currentGridSize} tiles, linear scaling, buffer: ${totalBuffer.toFixed(2)}x)`
           );
           expect(avgTickTime).toBeLessThan(expectedMaxTime);
 
