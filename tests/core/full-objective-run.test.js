@@ -565,9 +565,12 @@ describe('Full Objective Run', () => {
         enableDebugLogging = false;
         statsHistory = [];
         previousStats = null;
+
         try {
             game = await setupGame();
-            game.engine.stop(); // Stop engine to prevent accidental ticks/meltdowns during logic checks
+            if (game.engine) {
+                game.engine.stop();
+            }
             game.objectives_manager.disableTimers = true;
         } catch (error) {
             enableDebugLogging = true;

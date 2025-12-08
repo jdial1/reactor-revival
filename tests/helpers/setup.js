@@ -1,3 +1,61 @@
+// Ensure globals are mocked for all tests BEFORE any imports
+
+// --- 1. Define Mock Storage Factory ---
+const createMockLocalStorage = () => {
+    let store = {};
+    return {
+        getItem: (key) => store[key] || null,
+        setItem: (key, value) => { store[key] = String(value); },
+        removeItem: (key) => { delete store[key]; },
+        clear: () => { store = {}; },
+        key: (i) => Object.keys(store)[i] || null,
+        get length() { return Object.keys(store).length; },
+        _data: store // backdoor for tests
+    };
+};
+
+// --- 2. Ensure Global localStorage exists immediately ---
+// This is crucial because module imports (like Game) might use it at top-level
+if (typeof global.localStorage === "undefined") {
+    global.localStorage = createMockLocalStorage();
+}
+
+if (typeof global.crypto === "undefined") {
+    global.crypto = {
+        randomUUID: () => '00000000-0000-0000-0000-000000000000'
+    };
+}
+
+if (typeof global.window === "undefined") {
+    global.window = {
+        localStorage: global.localStorage,
+        setTimeout: setTimeout,
+        clearTimeout: clearTimeout,
+        location: {
+            href: 'http://localhost:8080/',
+            origin: 'http://localhost:8080',
+            pathname: '/',
+            hash: ''
+        }
+    };
+}
+
+if (typeof global.document === "undefined") {
+    global.document = {
+        createElement: () => ({ 
+            style: {}, 
+            classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+            appendChild: () => {},
+            addEventListener: () => {}
+        }),
+        getElementById: () => null,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        addEventListener: () => {},
+        removeEventListener: () => {}
+    };
+}
+
 // Test framework imports
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
@@ -529,6 +587,14 @@ const safeSerialize = (obj, maxDepth = 1, currentDepth = 0) => {
 let globalGameLogicOnly = null;
 
 export async function setupGame() {
+  // Ensure localStorage is available
+  if (!global.localStorage) {
+    global.localStorage = createMockLocalStorage();
+  } else if (global.localStorage.clear) {
+    // Reset it if it exists
+    global.localStorage.clear();
+  }
+
   if (globalGameLogicOnly) {
     // Don't call set_defaults() when reusing global instance to preserve save state
     // Only reset basic values that don't affect save state
@@ -700,7 +766,16 @@ export async function setupGameWithDOM() {
 
   global.window = window;
   global.document = document;
-  global.localStorage = window.localStorage;
+  
+  // Ensure localStorage exists in JSDOM
+  if (!window.localStorage) {
+    Object.defineProperty(window, 'localStorage', {
+      value: createMockLocalStorage()
+    });
+    global.localStorage = window.localStorage;
+  } else {
+    global.localStorage = window.localStorage;
+  }
   global.HTMLElement = window.HTMLElement;
   global.Element = window.Element;
   global.Node = window.Node;
@@ -1125,7 +1200,11 @@ export function cleanupGame() {
   // Clear global references
   global.window = undefined;
   global.document = undefined;
-  global.localStorage = undefined;
+  
+  // CRITICAL FIX: Restore mock localStorage instead of setting to undefined
+  // This ensures subsequent tests that don't use setupGameWithDOM still have a working localStorage
+  global.localStorage = createMockLocalStorage();
+  
   global.location = undefined;
   global.navigator = undefined;
 

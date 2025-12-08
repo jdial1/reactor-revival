@@ -162,11 +162,10 @@ describe("Save and Load Functionality", () => {
             },
             placedCounts: { 'vent:2': 3 }
         };
-        // Test loading from specific slot
-        localStorage.setItem("reactorGameSave_1", JSON.stringify(mockSaveData));
-
         // Create a new game instance to load into
         const newGame = await setupGame();
+        // Test loading from specific slot (set after setupGame to avoid localStorage.clear())
+        localStorage.setItem("reactorGameSave_1", JSON.stringify(mockSaveData));
         newGame.engine.stop(); // Stop engine to prevent heat changes during load verification
         const loaded = await newGame.loadGame(1);
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -205,9 +204,9 @@ describe("Save and Load Functionality", () => {
             reactor: { current_heat: 0, current_power: 0, has_melted_down: false }
             // placedCounts intentionally omitted
         };
-        localStorage.setItem("reactorGameSave", JSON.stringify(mockSaveData));
-
         const newGame = await setupGame();
+        // Set save data after setupGame to avoid localStorage.clear()
+        localStorage.setItem("reactorGameSave", JSON.stringify(mockSaveData));
         const loaded = await newGame.loadGame();
         expect(loaded).toBe(true);
         // Backfilled counts from tiles
@@ -231,10 +230,11 @@ describe("Save and Load Functionality", () => {
             current_money: 500,
             // Missing many properties
         };
-        localStorage.setItem("reactorGameSave", JSON.stringify(incompleteSave));
-
         const newGame = await setupGame();
-        newGame.loadGame();
+        // Set save data after setupGame to avoid localStorage.clear()
+        localStorage.setItem("reactorGameSave", JSON.stringify(incompleteSave));
+        const loaded = await newGame.loadGame();
+        expect(loaded).toBe(true);
 
         // Check that defaults are used for missing properties
         expect(newGame.current_money).toBe(500);

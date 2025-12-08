@@ -904,11 +904,11 @@ export class Engine {
        if (!tile_part) continue;
        
        const neighbors = tile.containmentNeighborTiles.filter(t => t.part && t.part.category !== 'valve');
-       if (neighbors.length) {
-           const transferCap = tile.getEffectiveTransferValue() * multiplier;
-           let outlet_transfer_heat = Math.min(transferCap, reactor.current_heat);
-           
-           if (outlet_transfer_heat > 0) {
+       const transferCap = tile.getEffectiveTransferValue() * multiplier;
+       let outlet_transfer_heat = Math.min(transferCap, reactor.current_heat);
+       
+       if (outlet_transfer_heat > 0 && reactor.current_heat > 0) {
+           if (neighbors.length > 0) {
                const per_neighbor = outlet_transfer_heat / neighbors.length;
                
                for(const neighbor of neighbors) {
@@ -928,6 +928,9 @@ export class Engine {
                        outlet_transfer_heat -= toAdd;
                    }
                }
+           } else {
+               tile.heat_contained = (tile.heat_contained || 0) + outlet_transfer_heat;
+               reactor.current_heat -= outlet_transfer_heat;
            }
        }
     }

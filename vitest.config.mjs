@@ -14,7 +14,7 @@ export default defineConfig({
     outputFile: {
       json: "./test-results.json",
     },
-    maxConcurrency: 4,
+    maxConcurrency: 10,
     silent: false,
     testTimeout: 300000, // Increased to 5 minutes for long-running tests
     hookTimeout: 300000, // Increased to 5 minutes for long-running hooks

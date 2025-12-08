@@ -8,7 +8,7 @@ describe('EP Upgrade Purchase Functionality', () => {
     });
 
     afterEach(() => {
-        if (game.engine) {
+        if (game && game.engine) {
             game.engine.stop();
         }
     });
@@ -101,7 +101,6 @@ describe('EP Upgrade Purchase Functionality', () => {
     describe('EP Purchase Functionality', () => {
         it('should successfully purchase EP upgrade and spend EP', async () => {
             const labUpgrade = game.upgradeset.getUpgrade("laboratory");
-            const cost = labUpgrade.getEcost();
 
             const cell = game.partset.getPartById('plutonium1');
             const exchanger = game.partset.getPartById('heat_exchanger1');

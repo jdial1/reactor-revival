@@ -1108,7 +1108,7 @@ export class Game {
     });
     this._isRestoringSave = true;
     try {
-    this._current_money = savedData.current_money || this.base_money;
+    this._current_money = savedData.current_money !== undefined ? savedData.current_money : this.base_money;
     this.run_id = savedData.run_id || crypto.randomUUID();
     
     this.peak_power = savedData.reactor?.current_power || 0;

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, Game, UI, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, Game, UI, setupGame } from "../helpers/setup.js";
 
 // Create a temporary game instance just to generate the list of tests.
 // This is NOT the instance that will be used in the `it` blocks.
@@ -436,7 +436,7 @@ describe("Logical Duplication Tests", () => {
   });
 
   describe("Parts Data Duplication", () => {
-    test("should not have duplicate parts by category", () => {
+    it("should not have duplicate parts by category", () => {
       // Test each category for duplicate parts
       const categories = [
         "cell",
@@ -465,7 +465,7 @@ describe("Logical Duplication Tests", () => {
       });
     });
 
-    test("should not have duplicate cell parts", () => {
+    it("should not have duplicate cell parts", () => {
       // Specifically test cell duplication which was mentioned by user
       const cellParts = game.partset.getPartsByCategory("cell");
       const cellIds = cellParts.map((part) => part.id);
@@ -487,7 +487,7 @@ describe("Logical Duplication Tests", () => {
       });
     });
 
-    test("should generate parts correctly without logical duplicates", () => {
+    it("should generate parts correctly without logical duplicates", () => {
       // Test that part generation doesn't create logical duplicates
       const allParts = game.partset.getAllParts();
       const partsByTypeLevel = new Map();
@@ -512,7 +512,7 @@ describe("Logical Duplication Tests", () => {
   });
 
   describe("Upgrades Data Duplication", () => {
-    test("should not have duplicate upgrade objects in upgrade sets", () => {
+    it("should not have duplicate upgrade objects in upgrade sets", () => {
       // Test that upgrades don't have duplicate IDs in the data structure
       const allUpgrades = game.upgradeset.getAllUpgrades();
       const upgradeIds = allUpgrades.map((upgrade) => upgrade.id);
@@ -526,7 +526,7 @@ describe("Logical Duplication Tests", () => {
       );
     });
 
-    test("should not have duplicate upgrades by type", () => {
+    it("should not have duplicate upgrades by type", () => {
       // Test upgrades by type for logical duplicates
       const upgradeTypes = [
         "other",
@@ -554,7 +554,7 @@ describe("Logical Duplication Tests", () => {
       });
     });
 
-    test("should generate unique cell upgrade IDs", () => {
+    it("should generate unique cell upgrade IDs", () => {
       // Test that dynamically generated cell upgrades have unique IDs
       const allUpgrades = game.upgradeset.getAllUpgrades();
       const cellUpgrades = allUpgrades.filter(

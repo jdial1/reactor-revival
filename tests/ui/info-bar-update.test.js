@@ -33,9 +33,9 @@ describe("UI Info Bar updates for max power/heat", () => {
         expect(mobileDenom).toBeTruthy();
         expect(desktopDenom).toBeTruthy();
 
-        // Base max power is 100; capacitor1 adds +100 -> 200
-        expect(mobileDenom.textContent).toBe("/200");
-        expect(desktopDenom.textContent).toBe("/200");
+        // Text content contains "/200" plus the change indicator (e.g. "↑ 0")
+        expect(mobileDenom.textContent).toContain("/200");
+        expect(desktopDenom.textContent).toContain("/200");
     });
 
     it("updates max heat denominator when reactor plating is added", async () => {
@@ -61,9 +61,9 @@ describe("UI Info Bar updates for max power/heat", () => {
         expect(mobileDenom).toBeTruthy();
         expect(desktopDenom).toBeTruthy();
 
-        // Base max heat is 1000; 4 x reactor_plating1 add +1000 -> 2000 => formatted as 2K
-        expect(mobileDenom.textContent).toBe("/2K");
-        expect(desktopDenom.textContent).toBe("/2K");
+        // Text content contains "/2K" plus the change indicator
+        expect(mobileDenom.textContent).toContain("/2K");
+        expect(desktopDenom.textContent).toContain("/2K");
     });
 });
 
