@@ -49,7 +49,7 @@ if (typeof global.window === "undefined") {
 } else {
     try {
         if (!global.window.location) {
-            global.window.location = {
+            const plainLocation = {
                 href: 'http://localhost:8080/',
                 origin: 'http://localhost:8080',
                 hostname: 'localhost',
@@ -61,6 +61,16 @@ if (typeof global.window === "undefined") {
                 port: '8080',
                 reload: () => {}
             };
+            try {
+                Object.defineProperty(global.window, 'location', {
+                    value: plainLocation,
+                    writable: true,
+                    configurable: true
+                });
+            } catch (e2) {
+                // If defineProperty fails, try direct assignment (only safe if location doesn't exist)
+                global.window.location = plainLocation;
+            }
         } else {
             // Always replace JSDOM's Location object with a plain object to avoid _location access errors
             const currentLocation = global.window.location;
@@ -84,12 +94,23 @@ if (typeof global.window === "undefined") {
                     configurable: true
                 });
             } catch (e) {
-                global.window.location = plainLocation;
+                try {
+                    Object.defineProperty(global.window, 'location', {
+                        value: plainLocation,
+                        writable: true,
+                        configurable: true
+                    });
+                } catch (e2) {
+                    // Last resort: try to create a new window object
+                    if (global.window && typeof global.window === 'object') {
+                        global.window = Object.assign({}, global.window, { location: plainLocation });
+                    }
+                }
             }
         }
     } catch (e) {
-        // If all else fails, create a plain location object
-        global.window.location = {
+        // If all else fails, use defineProperty to replace the location descriptor
+        const plainLocation = {
             href: 'http://localhost:8080/',
             origin: 'http://localhost:8080',
             hostname: 'localhost',
@@ -101,6 +122,18 @@ if (typeof global.window === "undefined") {
             port: '8080',
             reload: () => {}
         };
+        try {
+            Object.defineProperty(global.window, 'location', {
+                value: plainLocation,
+                writable: true,
+                configurable: true
+            });
+        } catch (e2) {
+            // If defineProperty also fails, we're in a bad state - try to create a new window
+            if (global.window && typeof global.window === 'object') {
+                global.window = Object.assign({}, global.window, { location: plainLocation });
+            }
+        }
     }
 }
 
@@ -960,7 +993,16 @@ export async function setupGameWithDOM() {
       configurable: true
     });
   } catch (e) {
-    window.location = plainLocation;
+    try {
+      Object.defineProperty(window, 'location', {
+        value: plainLocation,
+        writable: true,
+        configurable: true
+      });
+    } catch (e2) {
+      // If defineProperty fails, we can't safely set location on JSDOM window
+      // This should not happen if we're replacing it properly above
+    }
   }
 
   if (!window.location) {
@@ -983,7 +1025,15 @@ export async function setupGameWithDOM() {
         configurable: true
       });
     } catch (e) {
-      window.location = plainLocation;
+      try {
+        Object.defineProperty(window, 'location', {
+          value: plainLocation,
+          writable: true,
+          configurable: true
+        });
+      } catch (e2) {
+        // If defineProperty fails, we can't safely set location on JSDOM window
+      }
     }
   } else {
     try {
@@ -1008,7 +1058,15 @@ export async function setupGameWithDOM() {
             configurable: true
           });
         } catch (e2) {
-          window.location = plainLocation;
+          try {
+            Object.defineProperty(window, 'location', {
+              value: plainLocation,
+              writable: true,
+              configurable: true
+            });
+          } catch (e3) {
+            // If defineProperty fails, we can't safely set location on JSDOM window
+          }
         }
       }
     } catch (e) {
@@ -1353,7 +1411,7 @@ beforeEach(() => {
   } else {
     try {
       if (!global.window.location) {
-        global.window.location = {
+        const plainLocation = {
           href: 'http://localhost:8080/',
           origin: 'http://localhost:8080',
           hostname: 'localhost',
@@ -1365,6 +1423,16 @@ beforeEach(() => {
           port: '8080',
           reload: () => {}
         };
+        try {
+          Object.defineProperty(global.window, 'location', {
+            value: plainLocation,
+            writable: true,
+            configurable: true
+          });
+        } catch (e2) {
+          // If defineProperty fails, try direct assignment (only safe if location doesn't exist)
+          global.window.location = plainLocation;
+        }
       } else {
         // Always replace JSDOM's Location object with a plain object to avoid _location access errors
         const currentLocation = global.window.location;
@@ -1388,12 +1456,23 @@ beforeEach(() => {
             configurable: true
           });
         } catch (e) {
-          global.window.location = plainLocation;
+          try {
+            Object.defineProperty(global.window, 'location', {
+              value: plainLocation,
+              writable: true,
+              configurable: true
+            });
+          } catch (e2) {
+            // Last resort: try to create a new window object
+            if (global.window && typeof global.window === 'object') {
+              global.window = Object.assign({}, global.window, { location: plainLocation });
+            }
+          }
         }
       }
     } catch (e) {
-      // If all else fails, create a plain location object
-      global.window.location = {
+      // If all else fails, use defineProperty to replace the location descriptor
+      const plainLocation = {
         href: 'http://localhost:8080/',
         origin: 'http://localhost:8080',
         hostname: 'localhost',
@@ -1405,6 +1484,18 @@ beforeEach(() => {
         port: '8080',
         reload: () => {}
       };
+      try {
+        Object.defineProperty(global.window, 'location', {
+          value: plainLocation,
+          writable: true,
+          configurable: true
+        });
+      } catch (e2) {
+        // If defineProperty also fails, we're in a bad state - try to create a new window
+        if (global.window && typeof global.window === 'object') {
+          global.window = Object.assign({}, global.window, { location: plainLocation });
+        }
+      }
     }
   }
   
