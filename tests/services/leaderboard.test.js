@@ -76,6 +76,8 @@ describe("Leaderboard Service & Integration", () => {
         });
 
         it("should send correct data when saving a run", async () => {
+            leaderboardService.lastSaveTime = 0;
+            
             const stats = {
                 user_id: "user_123",
                 run_id: "run_abc",
@@ -111,6 +113,8 @@ describe("Leaderboard Service & Integration", () => {
         });
 
         it("should send correct data when saving a run with layout", async () => {
+            leaderboardService.lastSaveTime = 0;
+            
             const stats = {
                 user_id: "user_123",
                 run_id: "run_abc",
@@ -128,7 +132,10 @@ describe("Leaderboard Service & Integration", () => {
 
             await leaderboardService.saveRun(stats);
 
+            expect(global.fetch).toHaveBeenCalled();
             const callArgs = global.fetch.mock.calls[0];
+            expect(callArgs).toBeDefined();
+            expect(callArgs.length).toBeGreaterThan(1);
             const body = JSON.parse(callArgs[1].body);
             expect(body.layout).toBe(stats.layout);
         });

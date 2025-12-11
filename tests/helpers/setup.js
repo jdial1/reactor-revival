@@ -155,23 +155,35 @@ if (typeof global.window.URL === "undefined") {
                         if (urlModule && urlModule.URL) {
                             try {
                                 if (inputStr.startsWith('http://') || inputStr.startsWith('https://') || inputStr.startsWith('blob:') || inputStr.startsWith('data:')) {
-                                    const url = new urlModule.URL(inputStr);
-                                    if (url && url.href && typeof url.href === 'string') {
-                                        this.href = url.href;
-                                        this.origin = url.origin || 'http://localhost:8080';
-                                        this.pathname = url.pathname || '/';
-                                    } else {
+                                    try {
+                                        const url = new urlModule.URL(inputStr);
+                                        if (url && url.href && typeof url.href === 'string') {
+                                            this.href = url.href;
+                                            this.origin = url.origin || 'http://localhost:8080';
+                                            this.pathname = url.pathname || '/';
+                                        } else {
+                                            this.href = inputStr;
+                                            this.origin = 'http://localhost:8080';
+                                            this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
+                                        }
+                                    } catch (e) {
                                         this.href = inputStr;
                                         this.origin = 'http://localhost:8080';
                                         this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
                                     }
                                 } else {
-                                    const url = new urlModule.URL(inputStr, baseStr);
-                                    if (url && url.href && typeof url.href === 'string') {
-                                        this.href = url.href;
-                                        this.origin = url.origin || 'http://localhost:8080';
-                                        this.pathname = url.pathname || inputStr.split('?')[0].split('#')[0] || '/';
-                                    } else {
+                                    try {
+                                        const url = new urlModule.URL(inputStr, baseStr || 'http://localhost:8080');
+                                        if (url && url.href && typeof url.href === 'string') {
+                                            this.href = url.href;
+                                            this.origin = url.origin || 'http://localhost:8080';
+                                            this.pathname = url.pathname || inputStr.split('?')[0].split('#')[0] || '/';
+                                        } else {
+                                            this.href = inputStr.startsWith('/') ? `http://localhost:8080${inputStr}` : `http://localhost:8080/${inputStr}`;
+                                            this.origin = 'http://localhost:8080';
+                                            this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
+                                        }
+                                    } catch (e) {
                                         this.href = inputStr.startsWith('/') ? `http://localhost:8080${inputStr}` : `http://localhost:8080/${inputStr}`;
                                         this.origin = 'http://localhost:8080';
                                         this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
@@ -1220,23 +1232,35 @@ export async function setupGameWithDOM() {
           if (urlModule && urlModule.URL) {
             try {
               if (inputStr.startsWith('http://') || inputStr.startsWith('https://') || inputStr.startsWith('blob:') || inputStr.startsWith('data:')) {
-                const url = new urlModule.URL(inputStr);
-                if (url && url.href && typeof url.href === 'string') {
-                  this.href = url.href;
-                  this.origin = url.origin || 'http://localhost:8080';
-                  this.pathname = url.pathname || '/';
-                } else {
+                try {
+                  const url = new urlModule.URL(inputStr);
+                  if (url && url.href && typeof url.href === 'string') {
+                    this.href = url.href;
+                    this.origin = url.origin || 'http://localhost:8080';
+                    this.pathname = url.pathname || '/';
+                  } else {
+                    this.href = inputStr;
+                    this.origin = 'http://localhost:8080';
+                    this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
+                  }
+                } catch (e) {
                   this.href = inputStr;
                   this.origin = 'http://localhost:8080';
                   this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
                 }
               } else {
-                const url = new urlModule.URL(inputStr, baseStr);
-                if (url && url.href && typeof url.href === 'string') {
-                  this.href = url.href;
-                  this.origin = url.origin || 'http://localhost:8080';
-                  this.pathname = url.pathname || inputStr.split('?')[0].split('#')[0] || '/';
-                } else {
+                try {
+                  const url = new urlModule.URL(inputStr, baseStr || 'http://localhost:8080');
+                  if (url && url.href && typeof url.href === 'string') {
+                    this.href = url.href;
+                    this.origin = url.origin || 'http://localhost:8080';
+                    this.pathname = url.pathname || inputStr.split('?')[0].split('#')[0] || '/';
+                  } else {
+                    this.href = inputStr.startsWith('/') ? `http://localhost:8080${inputStr}` : `http://localhost:8080/${inputStr}`;
+                    this.origin = 'http://localhost:8080';
+                    this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
+                  }
+                } catch (e) {
                   this.href = inputStr.startsWith('/') ? `http://localhost:8080${inputStr}` : `http://localhost:8080/${inputStr}`;
                   this.origin = 'http://localhost:8080';
                   this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
@@ -1663,23 +1687,35 @@ beforeEach(() => {
             if (urlModule && urlModule.URL) {
               try {
                 if (inputStr.startsWith('http://') || inputStr.startsWith('https://') || inputStr.startsWith('blob:') || inputStr.startsWith('data:')) {
-                  const url = new urlModule.URL(inputStr);
-                  if (url && url.href && typeof url.href === 'string') {
-                    this.href = url.href;
-                    this.origin = url.origin || 'http://localhost:8080';
-                    this.pathname = url.pathname || '/';
-                  } else {
+                  try {
+                    const url = new urlModule.URL(inputStr);
+                    if (url && url.href && typeof url.href === 'string') {
+                      this.href = url.href;
+                      this.origin = url.origin || 'http://localhost:8080';
+                      this.pathname = url.pathname || '/';
+                    } else {
+                      this.href = inputStr;
+                      this.origin = 'http://localhost:8080';
+                      this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
+                    }
+                  } catch (e) {
                     this.href = inputStr;
                     this.origin = 'http://localhost:8080';
                     this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
                   }
                 } else {
-                  const url = new urlModule.URL(inputStr, baseStr);
-                  if (url && url.href && typeof url.href === 'string') {
-                    this.href = url.href;
-                    this.origin = url.origin || 'http://localhost:8080';
-                    this.pathname = url.pathname || inputStr.split('?')[0].split('#')[0] || '/';
-                  } else {
+                  try {
+                    const url = new urlModule.URL(inputStr, baseStr || 'http://localhost:8080');
+                    if (url && url.href && typeof url.href === 'string') {
+                      this.href = url.href;
+                      this.origin = url.origin || 'http://localhost:8080';
+                      this.pathname = url.pathname || inputStr.split('?')[0].split('#')[0] || '/';
+                    } else {
+                      this.href = inputStr.startsWith('/') ? `http://localhost:8080${inputStr}` : `http://localhost:8080/${inputStr}`;
+                      this.origin = 'http://localhost:8080';
+                      this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
+                    }
+                  } catch (e) {
                     this.href = inputStr.startsWith('/') ? `http://localhost:8080${inputStr}` : `http://localhost:8080/${inputStr}`;
                     this.origin = 'http://localhost:8080';
                     this.pathname = inputStr.split('?')[0].split('#')[0] || '/';
