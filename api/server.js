@@ -16,10 +16,10 @@ app.use(cors());
 app.use(express.json());
 
 const dbConfig = {
-    host: 'db.znfamffcymyvsihpnfpk.supabase.co',
-    port: 5432,
-    database: 'postgres',
-    user: 'postgres',
+    host: process.env.DB_HOST || 'aws-0-us-west-2.pooler.supabase.com',
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 6543,
+    database: process.env.DB_NAME || 'postgres',
+    user: process.env.DB_USER || 'postgres.znfamffcymyvsihpnfpk',
     password: process.env.DB_PASS,
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 30000,
@@ -37,25 +37,39 @@ async function logDnsResolution(hostname) {
     try {
         console.log(`${logTimestamp()} Resolving DNS for ${hostname}...`);
         
+        let hasIPv4 = false;
+        let hasIPv6 = false;
+        
         try {
             const ipv4 = await dnsResolve4(hostname);
-            console.log(`${logTimestamp()} IPv4 addresses: ${ipv4.join(', ')}`);
+            hasIPv4 = true;
+            console.log(`${logTimestamp()} ✓ IPv4 addresses found: ${ipv4.join(', ')}`);
         } catch (err) {
-            console.log(`${logTimestamp()} No IPv4 addresses found: ${err.message}`);
+            console.log(`${logTimestamp()} ✗ No IPv4 addresses found: ${err.message}`);
         }
         
         try {
             const ipv6 = await dnsResolve6(hostname);
-            console.log(`${logTimestamp()} IPv6 addresses: ${ipv6.join(', ')}`);
+            hasIPv6 = true;
+            console.log(`${logTimestamp()} ✓ IPv6 addresses found: ${ipv6.join(', ')}`);
         } catch (err) {
-            console.log(`${logTimestamp()} No IPv6 addresses found: ${err.message}`);
+            console.log(`${logTimestamp()} ✗ No IPv6 addresses found: ${err.message}`);
         }
         
         const lookup = await dnsLookup(hostname, { all: true });
-        console.log(`${logTimestamp()} DNS lookup results:`);
+        console.log(`${logTimestamp()} DNS lookup results (${lookup.length} address${lookup.length !== 1 ? 'es' : ''}):`);
         lookup.forEach((result, index) => {
             console.log(`${logTimestamp()}   ${index + 1}. Family: ${result.family === 4 ? 'IPv4' : 'IPv6'}, Address: ${result.address}`);
         });
+        
+        if (!hasIPv4 && hasIPv6) {
+            console.warn(`${logTimestamp()} ⚠ WARNING: Only IPv6 addresses available. If connection fails, this environment may not support IPv6.`);
+            console.warn(`${logTimestamp()}   Consider: Using Supabase Connection Pooler (IPv4) or configuring IPv6 support.`);
+        } else if (hasIPv4 && hasIPv6) {
+            console.log(`${logTimestamp()} ✓ Both IPv4 and IPv6 addresses available`);
+        } else if (hasIPv4) {
+            console.log(`${logTimestamp()} ✓ IPv4 addresses available`);
+        }
     } catch (error) {
         console.error(`${logTimestamp()} DNS resolution error:`, error.message);
     }
@@ -99,10 +113,11 @@ async function initDatabase() {
         const result = await pool.query('SELECT NOW() as current_time, version() as pg_version');
         const connectionTime = Date.now() - connectionStart;
         
-        console.log(`${logTimestamp()} Database connection successful (${connectionTime}ms)`);
-        console.log(`${logTimestamp()} PostgreSQL version: ${result.rows[0].pg_version.split(' ')[0]} ${result.rows[0].pg_version.split(' ')[1]}`);
-        console.log(`${logTimestamp()} Server time: ${result.rows[0].current_time}`);
-        console.log(`${logTimestamp()} Pool stats - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+        console.log(`${logTimestamp()} ✓ Database connection successful (${connectionTime}ms)`);
+        const pgVersion = result.rows[0].pg_version.split(' ');
+        console.log(`${logTimestamp()}   PostgreSQL: ${pgVersion[0]} ${pgVersion[1]}`);
+        console.log(`${logTimestamp()}   Server time: ${result.rows[0].current_time}`);
+        console.log(`${logTimestamp()}   Pool stats - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
         
         console.log(`${logTimestamp()} Creating runs table if not exists...`);
         const tableStart = Date.now();
@@ -121,7 +136,7 @@ async function initDatabase() {
             );
         `);
         const tableTime = Date.now() - tableStart;
-        console.log(`${logTimestamp()} Runs table ready (${tableTime}ms)`);
+        console.log(`${logTimestamp()} ✓ Runs table ready (${tableTime}ms)`);
 
         console.log(`${logTimestamp()} Creating indexes...`);
         const indexStart = Date.now();
@@ -132,15 +147,15 @@ async function initDatabase() {
             CREATE INDEX IF NOT EXISTS idx_runs_timestamp ON runs(timestamp DESC);
         `);
         const indexTime = Date.now() - indexStart;
-        console.log(`${logTimestamp()} Indexes ready (${indexTime}ms)`);
+        console.log(`${logTimestamp()} ✓ Indexes ready (${indexTime}ms)`);
         
         const totalTime = Date.now() - startTime;
-        console.log(`${logTimestamp()} Database initialization completed successfully (total: ${totalTime}ms)`);
-        console.log(`${logTimestamp()} Pool stats - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+        console.log(`${logTimestamp()} ✓ Database initialization completed (total: ${totalTime}ms)`);
+        console.log(`${logTimestamp()}   Pool stats - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
     } catch (error) {
         const totalTime = Date.now() - startTime;
         console.error(`${logTimestamp()} ========================================`);
-        console.error(`${logTimestamp()} Error initializing database (after ${totalTime}ms)`);
+        console.error(`${logTimestamp()} ✗ Database initialization failed (after ${totalTime}ms)`);
         console.error(`${logTimestamp()} Error code: ${error.code || 'N/A'}`);
         console.error(`${logTimestamp()} Error message: ${error.message || 'N/A'}`);
         console.error(`${logTimestamp()} Error syscall: ${error.syscall || 'N/A'}`);
@@ -149,18 +164,27 @@ async function initDatabase() {
         console.error(`${logTimestamp()} Error errno: ${error.errno || 'N/A'}`);
         
         if (error.code === 'ENETUNREACH') {
-            console.error(`${logTimestamp()} Network unreachable - possible causes:`);
-            console.error(`${logTimestamp()}   - IPv6 connectivity not available from this environment`);
-            console.error(`${logTimestamp()}   - Firewall blocking connection`);
-            console.error(`${logTimestamp()}   - Network routing issue`);
-            console.error(`${logTimestamp()}   - DNS resolved to unreachable address`);
+            console.error(`${logTimestamp()} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+            console.error(`${logTimestamp()} Network unreachable - Diagnosis:`);
+            if (error.address && error.address.includes(':')) {
+                console.error(`${logTimestamp()}   • Attempting IPv6 connection but IPv6 is not reachable`);
+                console.error(`${logTimestamp()}   • Solution: Set DB_HOST to the Supabase Connection Pooler address (e.g. aws-0-region.pooler.supabase.com)`);
+            } else {
+                console.error(`${logTimestamp()}   • Possible causes:`);
+                console.error(`${logTimestamp()}     - Firewall blocking connection`);
+                console.error(`${logTimestamp()}     - Network routing issue`);
+                console.error(`${logTimestamp()}     - DNS resolved to unreachable address`);
+            }
+            console.error(`${logTimestamp()} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         }
         
         if (error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
-            console.error(`${logTimestamp()} Connection timeout/refused - possible causes:`);
-            console.error(`${logTimestamp()}   - Database server not accepting connections`);
-            console.error(`${logTimestamp()}   - Firewall blocking port ${dbConfig.port}`);
-            console.error(`${logTimestamp()}   - Connection timeout too short (current: ${dbConfig.connectionTimeoutMillis}ms)`);
+            console.error(`${logTimestamp()} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+            console.error(`${logTimestamp()} Connection timeout/refused - Possible causes:`);
+            console.error(`${logTimestamp()}   • Database server not accepting connections`);
+            console.error(`${logTimestamp()}   • Firewall blocking port ${dbConfig.port}`);
+            console.error(`${logTimestamp()}   • Connection timeout too short (current: ${dbConfig.connectionTimeoutMillis}ms)`);
+            console.error(`${logTimestamp()} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         }
         
         console.error(`${logTimestamp()} Pool stats - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
@@ -299,11 +323,11 @@ async function startServer() {
         app.listen(port, () => {
             const totalStartTime = Date.now() - serverStartTime;
             console.log(`${logTimestamp()} ========================================`);
-            console.log(`${logTimestamp()} Leaderboard API server running on port ${port}`);
-            console.log(`${logTimestamp()} Server ready to accept connections`);
-            console.log(`${logTimestamp()} Total startup time: ${totalStartTime}ms`);
-            console.log(`${logTimestamp()} Health check endpoint: http://localhost:${port}/health`);
-            console.log(`${logTimestamp()} Pool stats - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+            console.log(`${logTimestamp()} ✓ Server started successfully`);
+            console.log(`${logTimestamp()}   Port: ${port}`);
+            console.log(`${logTimestamp()}   Startup time: ${totalStartTime}ms`);
+            console.log(`${logTimestamp()}   Health check: http://localhost:${port}/health`);
+            console.log(`${logTimestamp()}   Pool stats - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
             console.log(`${logTimestamp()} ========================================`);
         });
         
@@ -313,13 +337,9 @@ async function startServer() {
     } catch (error) {
         const totalStartTime = Date.now() - serverStartTime;
         console.error(`${logTimestamp()} ========================================`);
-        console.error(`${logTimestamp()} Failed to start server (after ${totalStartTime}ms)`);
-        console.error(`${logTimestamp()} Error code: ${error.code || 'N/A'}`);
-        console.error(`${logTimestamp()} Error message: ${error.message || 'N/A'}`);
-        console.error(`${logTimestamp()} Error syscall: ${error.syscall || 'N/A'}`);
-        console.error(`${logTimestamp()} Error address: ${error.address || 'N/A'}`);
-        console.error(`${logTimestamp()} Error port: ${error.port || 'N/A'}`);
-        console.error(`${logTimestamp()} Full error stack:`, error);
+        console.error(`${logTimestamp()} ✗ Server startup failed (after ${totalStartTime}ms)`);
+        console.error(`${logTimestamp()} Error: ${error.code || 'UNKNOWN'} - ${error.message || 'Unknown error'}`);
+        console.error(`${logTimestamp()} Full error details logged above. Exiting...`);
         console.error(`${logTimestamp()} ========================================`);
         process.exit(1);
     }
