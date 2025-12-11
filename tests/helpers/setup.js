@@ -1360,8 +1360,16 @@ export async function setupGameWithDOM() {
   
   // Start engine by default (tests that need it stopped can stop it in their beforeEach)
   game.paused = false;
-  if (game.engine && !game.engine.running) {
-    game.engine.start();
+  if (game.engine) {
+    // Ensure engine is stopped before starting
+    if (game.engine.running) {
+      game.engine.stop();
+    }
+    // Small delay to ensure cleanup completes
+    await new Promise(resolve => setTimeout(resolve, 10));
+    if (!game.engine.running) {
+      game.engine.start();
+    }
   }
   if (ui.stateManager) {
     ui.stateManager.setVar("pause", false);

@@ -24,13 +24,13 @@ export default defineConfig({
     poolOptions: {
       threads: {
         singleThread: true,
-        isolate: true,
+        isolate: false,
         memoryLimit: "12GB",
       },
     },
-    maxConcurrency: 3,
-    testTimeout: 10000,
-    hookTimeout: 10000,
+    maxConcurrency: 15,
+    testTimeout: 30000,
+    hookTimeout: 30000,
     silent: false,
     logHeapUsage: false,
     forceRerunTriggers: ["**/package.json", "{vitest,vite}.config.*"],
