@@ -11,7 +11,7 @@ describe('EP Hotkey Functionality', () => {
     });
 
     afterEach(() => {
-        if (game.engine) {
+        if (game && game.engine) {
             game.engine.stop();
         }
     });

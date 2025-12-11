@@ -19,7 +19,7 @@ describe("Time Flux Safety Mechanisms", () => {
     });
 
     afterEach(() => {
-        if (game.engine) game.engine.stop();
+        if (game && game.engine) game.engine.stop();
         vi.restoreAllMocks();
     });
 

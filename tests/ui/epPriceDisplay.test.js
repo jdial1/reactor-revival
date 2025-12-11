@@ -11,7 +11,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
     });
 
     afterEach(() => {
-        if (game.engine) {
+        if (game && game.engine) {
             game.engine.stop();
         }
     });

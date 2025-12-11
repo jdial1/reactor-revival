@@ -46,27 +46,57 @@ if (typeof global.window === "undefined") {
             reload: () => {}
         }
     };
-} else if (!global.window.location || !global.window.location.origin) {
-    if (!global.window.location) {
-        global.window.location = {
-            href: 'http://localhost:8080/',
-            origin: 'http://localhost:8080',
-            hostname: 'localhost',
-            host: 'localhost:8080',
-            pathname: '/',
-            hash: '',
-            search: '',
-            protocol: 'http:',
-            port: '8080',
-            reload: () => {}
-        };
-    } else {
-        global.window.location.origin = global.window.location.origin || 'http://localhost:8080';
-        global.window.location.hostname = global.window.location.hostname || 'localhost';
-        global.window.location.host = global.window.location.host || 'localhost:8080';
-        global.window.location.protocol = global.window.location.protocol || 'http:';
-        global.window.location.port = global.window.location.port || '8080';
-        global.window.location.reload = global.window.location.reload || (() => {});
+} else {
+    try {
+        if (!global.window.location) {
+            global.window.location = {
+                href: 'http://localhost:8080/',
+                origin: 'http://localhost:8080',
+                hostname: 'localhost',
+                host: 'localhost:8080',
+                pathname: '/',
+                hash: '',
+                search: '',
+                protocol: 'http:',
+                port: '8080',
+                reload: () => {}
+            };
+        } else {
+            let hasOrigin = false;
+            try {
+                hasOrigin = !!global.window.location.origin && global.window.location.origin !== 'null';
+            } catch (e) {
+            }
+
+            if (!hasOrigin) {
+                try {
+                    Object.defineProperty(global.window.location, 'origin', {
+                        value: 'http://localhost:8080',
+                        writable: true,
+                        configurable: true
+                    });
+                } catch (e) {
+                }
+            }
+
+            const props = {
+                hostname: 'localhost',
+                host: 'localhost:8080',
+                protocol: 'http:',
+                port: '8080',
+                reload: () => {}
+            };
+
+            for (const [key, val] of Object.entries(props)) {
+                try {
+                    if (!global.window.location[key]) {
+                        global.window.location[key] = val;
+                    }
+                } catch (e) {
+                }
+            }
+        }
+    } catch (e) {
     }
 }
 
@@ -906,8 +936,25 @@ export async function setupGameWithDOM() {
   global.document = document;
 
   if (!window.location) {
-    Object.defineProperty(window, 'location', {
-      value: {
+    try {
+      Object.defineProperty(window, 'location', {
+        value: {
+          href: 'http://localhost:8080/',
+          origin: 'http://localhost:8080',
+          hostname: 'localhost',
+          host: 'localhost:8080',
+          pathname: '/',
+          hash: '',
+          search: '',
+          protocol: 'http:',
+          port: '8080',
+          reload: () => {}
+        },
+        writable: true,
+        configurable: true
+      });
+    } catch (e) {
+      window.location = {
         href: 'http://localhost:8080/',
         origin: 'http://localhost:8080',
         hostname: 'localhost',
@@ -918,30 +965,56 @@ export async function setupGameWithDOM() {
         protocol: 'http:',
         port: '8080',
         reload: () => {}
-      },
-      writable: true,
-      configurable: true
-    });
-  } else if (!window.location.origin) {
+      };
+    }
+  } else {
+    let hasOrigin = false;
     try {
-      Object.defineProperty(window.location, 'origin', {
-        value: 'http://localhost:8080',
-        writable: true,
-        configurable: true
-      });
+      hasOrigin = !!window.location.origin && window.location.origin !== 'null';
     } catch (e) {
-      const locationBackup = { ...window.location };
-      locationBackup.origin = 'http://localhost:8080';
-      locationBackup.hostname = locationBackup.hostname || 'localhost';
-      locationBackup.host = locationBackup.host || 'localhost:8080';
-      locationBackup.protocol = locationBackup.protocol || 'http:';
-      locationBackup.port = locationBackup.port || '8080';
-      locationBackup.reload = locationBackup.reload || (() => {});
-      Object.defineProperty(window, 'location', {
-        value: locationBackup,
-        writable: true,
-        configurable: true
-      });
+    }
+
+    if (!hasOrigin) {
+      try {
+        Object.defineProperty(window.location, 'origin', {
+          value: 'http://localhost:8080',
+          writable: true,
+          configurable: true
+        });
+      } catch (e) {
+        try {
+          const locationBackup = { ...window.location };
+          locationBackup.origin = 'http://localhost:8080';
+          locationBackup.hostname = locationBackup.hostname || 'localhost';
+          locationBackup.host = locationBackup.host || 'localhost:8080';
+          locationBackup.protocol = locationBackup.protocol || 'http:';
+          locationBackup.port = locationBackup.port || '8080';
+          locationBackup.reload = locationBackup.reload || (() => {});
+          Object.defineProperty(window, 'location', {
+            value: locationBackup,
+            writable: true,
+            configurable: true
+          });
+        } catch (e2) {
+        }
+      }
+    }
+
+    const props = {
+      hostname: 'localhost',
+      host: 'localhost:8080',
+      protocol: 'http:',
+      port: '8080',
+      reload: () => {}
+    };
+
+    for (const [key, val] of Object.entries(props)) {
+      try {
+        if (!window.location[key]) {
+          window.location[key] = val;
+        }
+      } catch (e) {
+      }
     }
   }
 
@@ -1173,7 +1246,6 @@ export async function setupGameWithDOM() {
 export function cleanupGame() {
   if (globalGameWithDOM) {
     if (globalGameWithDOM.engine) globalGameWithDOM.engine.stop();
-    // Clear any timers/intervals attached to game components
     vi.clearAllTimers();
     globalGameWithDOM = null;
   }
@@ -1185,11 +1257,11 @@ export function cleanupGame() {
   window = null;
   document = null;
   if (global.window && typeof global.window.close === 'function') {
-    global.window.close();
+    try {
+      global.window.close();
+    } catch (e) {
+    }
   }
-  global.window = undefined;
-  global.document = undefined;
-  // Restore globals
   vi.restoreAllMocks();
 }
 
@@ -1216,19 +1288,58 @@ beforeEach(() => {
         reload: () => {}
       }
     };
-  } else if (!global.window.location || !global.window.location.origin) {
-    global.window.location = {
-      href: 'http://localhost:8080/',
-      origin: 'http://localhost:8080',
-      hostname: 'localhost',
-      host: 'localhost:8080',
-      pathname: '/',
-      hash: '',
-      search: '',
-      protocol: 'http:',
-      port: '8080',
-      reload: () => {}
-    };
+  } else {
+    try {
+      if (!global.window.location) {
+        global.window.location = {
+          href: 'http://localhost:8080/',
+          origin: 'http://localhost:8080',
+          hostname: 'localhost',
+          host: 'localhost:8080',
+          pathname: '/',
+          hash: '',
+          search: '',
+          protocol: 'http:',
+          port: '8080',
+          reload: () => {}
+        };
+      } else {
+        let hasOrigin = false;
+        try {
+          hasOrigin = !!global.window.location.origin && global.window.location.origin !== 'null';
+        } catch (e) {
+        }
+
+        if (!hasOrigin) {
+          try {
+            Object.defineProperty(global.window.location, 'origin', {
+              value: 'http://localhost:8080',
+              writable: true,
+              configurable: true
+            });
+          } catch (e) {
+          }
+        }
+
+        const props = {
+          hostname: 'localhost',
+          host: 'localhost:8080',
+          protocol: 'http:',
+          port: '8080',
+          reload: () => {}
+        };
+
+        for (const [key, val] of Object.entries(props)) {
+          try {
+            if (!global.window.location[key]) {
+              global.window.location[key] = val;
+            }
+          } catch (e) {
+          }
+        }
+      }
+    } catch (e) {
+    }
   }
   
   if (!global.window.URL || !global.window.URL.createObjectURL) {
@@ -1297,7 +1408,7 @@ beforeEach(() => {
     }
   }
   
-  if (typeof document !== 'undefined' && document && document.body) {
+  if (typeof document !== 'undefined' && document && document.body && typeof document.getElementById === 'function') {
     // Ensure required UI elements exist
     const requiredElements = [
       'reactor_copy_btn',

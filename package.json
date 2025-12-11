@@ -6,9 +6,9 @@
   "main": "public/index.html",
   "debug": false,
   "scripts": {
-    "test": "vitest --run -c vitest.config.mjs",
-    "test:ci": "vitest --run -c vitest.config.mjs",
-    "ci:test": "vitest --run -c vitest.config.mjs",
+    "test": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest --run -c vitest.config.mjs",
+    "test:ci": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest --run -c vitest.config.mjs",
+    "ci:test": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest --run -c vitest.config.mjs",
     "start": "node api/server.js",
     "setup": "npm run generate-version && npm run copy-libs && npm run build:sw",
     "generate-version": "node scripts/generate-version.js",
@@ -68,6 +68,7 @@
     "stylelint-use-nesting": "^6.0.0",
     "stylelint-value-no-unknown-custom-properties": "^6.0.1",
     "vitest": "^1.6.1",
-    "workbox-cli": "^7.3.0"
+    "workbox-cli": "^7.3.0",
+    "cross-env": "^7.0.3"
   }
 }

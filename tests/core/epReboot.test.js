@@ -25,7 +25,7 @@ describe('EP Reboot Functionality', () => {
 
     afterEach(() => {
         // Clean up any timers or intervals
-        if (game.engine) {
+        if (game && game.engine) {
             game.engine.stop();
         }
     });

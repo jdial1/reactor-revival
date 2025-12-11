@@ -11,7 +11,7 @@ describe('EP Info Bar Display', () => {
     });
 
     afterEach(() => {
-        if (game.engine) {
+        if (game && game.engine) {
             game.engine.stop();
         }
     });

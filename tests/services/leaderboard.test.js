@@ -32,7 +32,9 @@ describe("Leaderboard Service & Integration", () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
-        document.body.innerHTML = '';
+        if (document && document.body) {
+            document.body.innerHTML = '';
+        }
     });
 
     describe("Initialization", () => {
