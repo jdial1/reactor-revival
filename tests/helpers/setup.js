@@ -101,10 +101,8 @@ if (typeof global.window === "undefined") {
                         configurable: true
                     });
                 } catch (e2) {
-                    // Last resort: try to create a new window object
-                    if (global.window && typeof global.window === 'object') {
-                        global.window = Object.assign({}, global.window, { location: plainLocation });
-                    }
+                    // If defineProperty fails, we can't safely set location on JSDOM window
+                    // This should not happen if we're replacing it properly above
                 }
             }
         }
@@ -129,10 +127,8 @@ if (typeof global.window === "undefined") {
                 configurable: true
             });
         } catch (e2) {
-            // If defineProperty also fails, we're in a bad state - try to create a new window
-            if (global.window && typeof global.window === 'object') {
-                global.window = Object.assign({}, global.window, { location: plainLocation });
-            }
+            // If defineProperty fails, we can't safely set location on JSDOM window
+            // This should not happen if we're replacing it properly above
         }
     }
 }
@@ -1463,10 +1459,8 @@ beforeEach(() => {
               configurable: true
             });
           } catch (e2) {
-            // Last resort: try to create a new window object
-            if (global.window && typeof global.window === 'object') {
-              global.window = Object.assign({}, global.window, { location: plainLocation });
-            }
+            // If defineProperty fails, we can't safely replace location on JSDOM window
+            // This should not happen if we're replacing it properly above
           }
         }
       }
@@ -1491,10 +1485,8 @@ beforeEach(() => {
           configurable: true
         });
       } catch (e2) {
-        // If defineProperty also fails, we're in a bad state - try to create a new window
-        if (global.window && typeof global.window === 'object') {
-          global.window = Object.assign({}, global.window, { location: plainLocation });
-        }
+        // If defineProperty fails, we can't safely set location on JSDOM window
+        // This should not happen if we're replacing it properly above
       }
     }
   }
