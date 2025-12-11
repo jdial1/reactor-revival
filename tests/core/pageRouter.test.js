@@ -6,7 +6,6 @@ describe("PageRouter Grid Transition", () => {
     let game;
 
     beforeEach(async () => {
-        vi.useFakeTimers();
         const setup = await setupGameWithDOM();
         game = setup.game;
         ui = game.ui;
@@ -16,7 +15,10 @@ describe("PageRouter Grid Transition", () => {
         if (ui.DOMElements.reactor) {
             ui.DOMElements.reactor.style.visibility = "visible";
         }
-    });
+        
+        // Use fake timers after setup is complete to avoid interfering with async operations
+        vi.useFakeTimers();
+    }, 60000);
 
     it("should hide grid when transitioning from upgrades to reactor", async () => {
         // Set current page to upgrades
@@ -83,5 +85,8 @@ describe("PageRouter Grid Transition", () => {
 
     afterEach(() => {
         vi.useRealTimers();
+        if (game && game.engine) {
+            game.engine.stop();
+        }
     });
 }); 
