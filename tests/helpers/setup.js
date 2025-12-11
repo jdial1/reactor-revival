@@ -1001,6 +1001,11 @@ export async function setupGameWithDOM() {
     }
   }
 
+  // Ensure reload exists on location (JSDOM might not have it or it might be a no-op)
+  if (window.location && !window.location.reload) {
+    window.location.reload = () => {};
+  }
+
   if (!window.location) {
     const plainLocation = {
       href: 'http://localhost:8080/',
@@ -1174,6 +1179,10 @@ export async function setupGameWithDOM() {
       window.URL.revokeObjectURL = function(url) {
       };
     }
+  }
+  // Ensure we don't lose the global URL constructor if JSDOM replaced it
+  if (global.URL && !window.URL) {
+    window.URL = global.URL;
   }
   global.URL = window.URL;
 
@@ -1372,12 +1381,19 @@ export function cleanupGame() {
   dom = null;
   window = null;
   document = null;
+  
   if (global.window && typeof global.window.close === 'function') {
     try {
       global.window.close();
     } catch (e) {
+      // ignore
     }
   }
+  
+  // Clean up globals to ensure fresh state for next test
+  delete global.window;
+  delete global.document;
+
   vi.restoreAllMocks();
 }
 
@@ -1405,6 +1421,11 @@ beforeEach(() => {
       }
     };
   } else {
+    // Ensure location reload exists
+    if (global.window.location && !global.window.location.reload) {
+      global.window.location.reload = () => {};
+    }
+    
     try {
       if (!global.window.location) {
         const plainLocation = {
