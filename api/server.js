@@ -10,7 +10,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-const pool = new Pool({
+const dbConfig = {
     host: 'db.znfamffcymyvsihpnfpk.supabase.co',
     port: 5432,
     database: 'postgres',
@@ -19,15 +19,38 @@ const pool = new Pool({
     ssl: {
         rejectUnauthorized: false
     }
-});
+};
+
+console.log(`[${new Date().toISOString()}] Initializing database connection...`);
+console.log(`[${new Date().toISOString()}] Database host: ${dbConfig.host}:${dbConfig.port}`);
+console.log(`[${new Date().toISOString()}] Database name: ${dbConfig.database}`);
+console.log(`[${new Date().toISOString()}] Database user: ${dbConfig.user}`);
+console.log(`[${new Date().toISOString()}] DB_PASS environment variable: ${process.env.DB_PASS ? 'SET' : 'NOT SET'}`);
+
+const pool = new Pool(dbConfig);
 
 pool.on('error', (err) => {
-    console.error('Unexpected error on idle client', err);
+    console.error(`[${new Date().toISOString()}] Unexpected error on idle client:`, err);
     process.exit(-1);
 });
 
+pool.on('connect', () => {
+    console.log(`[${new Date().toISOString()}] Database client connected`);
+});
+
+pool.on('acquire', () => {
+    console.log(`[${new Date().toISOString()}] Database client acquired from pool`);
+});
+
 async function initDatabase() {
+    console.log(`[${new Date().toISOString()}] Starting database initialization...`);
+    
     try {
+        console.log(`[${new Date().toISOString()}] Testing database connection...`);
+        await pool.query('SELECT NOW()');
+        console.log(`[${new Date().toISOString()}] Database connection successful`);
+        
+        console.log(`[${new Date().toISOString()}] Creating runs table if not exists...`);
         await pool.query(`
             CREATE TABLE IF NOT EXISTS runs (
                 id SERIAL PRIMARY KEY,
@@ -42,15 +65,26 @@ async function initDatabase() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
+        console.log(`[${new Date().toISOString()}] Runs table ready`);
 
+        console.log(`[${new Date().toISOString()}] Creating indexes...`);
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_runs_power ON runs(power DESC);
             CREATE INDEX IF NOT EXISTS idx_runs_heat ON runs(heat DESC);
             CREATE INDEX IF NOT EXISTS idx_runs_money ON runs(money DESC);
             CREATE INDEX IF NOT EXISTS idx_runs_timestamp ON runs(timestamp DESC);
         `);
+        console.log(`[${new Date().toISOString()}] Indexes ready`);
+        
+        console.log(`[${new Date().toISOString()}] Database initialization completed successfully`);
     } catch (error) {
-        console.error('Error initializing database:', error);
+        console.error(`[${new Date().toISOString()}] Error initializing database:`);
+        console.error(`[${new Date().toISOString()}] Error code: ${error.code}`);
+        console.error(`[${new Date().toISOString()}] Error message: ${error.message}`);
+        console.error(`[${new Date().toISOString()}] Error syscall: ${error.syscall || 'N/A'}`);
+        console.error(`[${new Date().toISOString()}] Error address: ${error.address || 'N/A'}`);
+        console.error(`[${new Date().toISOString()}] Error port: ${error.port || 'N/A'}`);
+        console.error(`[${new Date().toISOString()}] Full error:`, error);
         throw error;
     }
 }
@@ -114,13 +148,26 @@ app.get('/health', async (req, res) => {
 });
 
 async function startServer() {
+    console.log(`[${new Date().toISOString()}] Starting server...`);
+    console.log(`[${new Date().toISOString()}] Port: ${port}`);
+    console.log(`[${new Date().toISOString()}] Node environment: ${process.env.NODE_ENV || 'not set'}`);
+    
     try {
         await initDatabase();
+        
         app.listen(port, () => {
-            console.log(`Leaderboard API server running on port ${port}`);
+            console.log(`[${new Date().toISOString()}] ========================================`);
+            console.log(`[${new Date().toISOString()}] Leaderboard API server running on port ${port}`);
+            console.log(`[${new Date().toISOString()}] Server ready to accept connections`);
+            console.log(`[${new Date().toISOString()}] ========================================`);
         });
     } catch (error) {
-        console.error('Failed to start server:', error);
+        console.error(`[${new Date().toISOString()}] ========================================`);
+        console.error(`[${new Date().toISOString()}] Failed to start server`);
+        console.error(`[${new Date().toISOString()}] Error code: ${error.code || 'N/A'}`);
+        console.error(`[${new Date().toISOString()}] Error message: ${error.message || 'N/A'}`);
+        console.error(`[${new Date().toISOString()}] Full error:`, error);
+        console.error(`[${new Date().toISOString()}] ========================================`);
         process.exit(1);
     }
 }

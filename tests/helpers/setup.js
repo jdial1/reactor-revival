@@ -1737,7 +1737,7 @@ beforeEach(() => {
   }
 });
 
-afterEach(() => {
+afterEach(async () => {
   // CRITICAL: Force stop all engines before cleanup to prevent infinite loops
   if (globalGameWithDOM && globalGameWithDOM.engine) {
     globalGameWithDOM.engine.running = false;
@@ -1745,6 +1745,11 @@ afterEach(() => {
     if (globalGameWithDOM.engine.interval) {
       clearInterval(globalGameWithDOM.engine.interval);
       globalGameWithDOM.engine.interval = null;
+    }
+    try {
+      globalGameWithDOM.engine.stop();
+    } catch (e) {
+      // Ignore errors during stop
     }
   }
   if (globalGameLogicOnly && globalGameLogicOnly.engine) {
@@ -1754,6 +1759,11 @@ afterEach(() => {
       clearInterval(globalGameLogicOnly.engine.interval);
       globalGameLogicOnly.engine.interval = null;
     }
+    try {
+      globalGameLogicOnly.engine.stop();
+    } catch (e) {
+      // Ignore errors during stop
+    }
   }
   
   cleanupGame();
@@ -1761,7 +1771,11 @@ afterEach(() => {
 
   // Additional memory cleanup
   if (global.gc) {
-    global.gc();
+    try {
+      global.gc();
+    } catch (e) {
+      // Ignore GC errors
+    }
   }
 
   // Clear any remaining timers
@@ -1774,6 +1788,9 @@ afterEach(() => {
       // Ignore errors for non-existent timers
     }
   }
+  
+  // Small delay to allow async cleanup to complete
+  await new Promise(resolve => setTimeout(resolve, 10));
 });
 
 // Export assertions for game state
