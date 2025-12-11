@@ -62,41 +62,45 @@ if (typeof global.window === "undefined") {
                 reload: () => {}
             };
         } else {
-            let hasOrigin = false;
-            try {
-                hasOrigin = !!global.window.location.origin && global.window.location.origin !== 'null';
-            } catch (e) {
-            }
-
-            if (!hasOrigin) {
-                try {
-                    Object.defineProperty(global.window.location, 'origin', {
-                        value: 'http://localhost:8080',
-                        writable: true,
-                        configurable: true
-                    });
-                } catch (e) {
-                }
-            }
-
-            const props = {
+            // Always replace JSDOM's Location object with a plain object to avoid _location access errors
+            const currentLocation = global.window.location;
+            const plainLocation = {
+                href: (currentLocation && currentLocation.href) ? String(currentLocation.href) : 'http://localhost:8080/',
+                origin: 'http://localhost:8080',
                 hostname: 'localhost',
                 host: 'localhost:8080',
+                pathname: (currentLocation && currentLocation.pathname) ? String(currentLocation.pathname) : '/',
+                hash: (currentLocation && currentLocation.hash) ? String(currentLocation.hash) : '',
+                search: (currentLocation && currentLocation.search) ? String(currentLocation.search) : '',
                 protocol: 'http:',
                 port: '8080',
                 reload: () => {}
             };
-
-            for (const [key, val] of Object.entries(props)) {
-                try {
-                    if (!global.window.location[key]) {
-                        global.window.location[key] = val;
-                    }
-                } catch (e) {
-                }
+            
+            try {
+                Object.defineProperty(global.window, 'location', {
+                    value: plainLocation,
+                    writable: true,
+                    configurable: true
+                });
+            } catch (e) {
+                global.window.location = plainLocation;
             }
         }
     } catch (e) {
+        // If all else fails, create a plain location object
+        global.window.location = {
+            href: 'http://localhost:8080/',
+            origin: 'http://localhost:8080',
+            hostname: 'localhost',
+            host: 'localhost:8080',
+            pathname: '/',
+            hash: '',
+            search: '',
+            protocol: 'http:',
+            port: '8080',
+            reload: () => {}
+        };
     }
 }
 
@@ -1362,41 +1366,45 @@ beforeEach(() => {
           reload: () => {}
         };
       } else {
-        let hasOrigin = false;
-        try {
-          hasOrigin = !!global.window.location.origin && global.window.location.origin !== 'null';
-        } catch (e) {
-        }
-
-        if (!hasOrigin) {
-          try {
-            Object.defineProperty(global.window.location, 'origin', {
-              value: 'http://localhost:8080',
-              writable: true,
-              configurable: true
-            });
-          } catch (e) {
-          }
-        }
-
-        const props = {
+        // Always replace JSDOM's Location object with a plain object to avoid _location access errors
+        const currentLocation = global.window.location;
+        const plainLocation = {
+          href: (currentLocation && currentLocation.href) ? String(currentLocation.href) : 'http://localhost:8080/',
+          origin: 'http://localhost:8080',
           hostname: 'localhost',
           host: 'localhost:8080',
+          pathname: (currentLocation && currentLocation.pathname) ? String(currentLocation.pathname) : '/',
+          hash: (currentLocation && currentLocation.hash) ? String(currentLocation.hash) : '',
+          search: (currentLocation && currentLocation.search) ? String(currentLocation.search) : '',
           protocol: 'http:',
           port: '8080',
           reload: () => {}
         };
-
-        for (const [key, val] of Object.entries(props)) {
-          try {
-            if (!global.window.location[key]) {
-              global.window.location[key] = val;
-            }
-          } catch (e) {
-          }
+        
+        try {
+          Object.defineProperty(global.window, 'location', {
+            value: plainLocation,
+            writable: true,
+            configurable: true
+          });
+        } catch (e) {
+          global.window.location = plainLocation;
         }
       }
     } catch (e) {
+      // If all else fails, create a plain location object
+      global.window.location = {
+        href: 'http://localhost:8080/',
+        origin: 'http://localhost:8080',
+        hostname: 'localhost',
+        host: 'localhost:8080',
+        pathname: '/',
+        hash: '',
+        search: '',
+        protocol: 'http:',
+        port: '8080',
+        reload: () => {}
+      };
     }
   }
   
