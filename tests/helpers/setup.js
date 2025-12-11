@@ -935,39 +935,80 @@ export async function setupGameWithDOM() {
   global.window = window;
   global.document = document;
 
+  // Replace JSDOM's Location object with a plain object immediately to avoid _location access errors
+  const plainLocation = {
+    href: 'http://localhost:8080/',
+    origin: 'http://localhost:8080',
+    hostname: 'localhost',
+    host: 'localhost:8080',
+    pathname: '/',
+    hash: '',
+    search: '',
+    protocol: 'http:',
+    port: '8080',
+    reload: () => {}
+  };
+  
+  try {
+    Object.defineProperty(window, 'location', {
+      value: plainLocation,
+      writable: true,
+      configurable: true
+    });
+  } catch (e) {
+    window.location = plainLocation;
+  }
+
   if (!window.location) {
+    const plainLocation = {
+      href: 'http://localhost:8080/',
+      origin: 'http://localhost:8080',
+      hostname: 'localhost',
+      host: 'localhost:8080',
+      pathname: '/',
+      hash: '',
+      search: '',
+      protocol: 'http:',
+      port: '8080',
+      reload: () => {}
+    };
     try {
       Object.defineProperty(window, 'location', {
-        value: {
-          href: 'http://localhost:8080/',
-          origin: 'http://localhost:8080',
-          hostname: 'localhost',
-          host: 'localhost:8080',
-          pathname: '/',
-          hash: '',
-          search: '',
-          protocol: 'http:',
-          port: '8080',
-          reload: () => {}
-        },
+        value: plainLocation,
         writable: true,
         configurable: true
       });
     } catch (e) {
-      window.location = {
-        href: 'http://localhost:8080/',
-        origin: 'http://localhost:8080',
-        hostname: 'localhost',
-        host: 'localhost:8080',
-        pathname: '/',
-        hash: '',
-        search: '',
-        protocol: 'http:',
-        port: '8080',
-        reload: () => {}
-      };
+      window.location = plainLocation;
     }
   } else {
+    try {
+      const currentLocation = window.location;
+      if (currentLocation && (typeof currentLocation.hostname === 'undefined' || currentLocation.hostname === null)) {
+        const plainLocation = {
+          href: currentLocation.href || 'http://localhost:8080/',
+          origin: 'http://localhost:8080',
+          hostname: 'localhost',
+          host: 'localhost:8080',
+          pathname: currentLocation.pathname || '/',
+          hash: currentLocation.hash || '',
+          search: currentLocation.search || '',
+          protocol: currentLocation.protocol || 'http:',
+          port: '8080',
+          reload: currentLocation.reload || (() => {})
+        };
+        try {
+          Object.defineProperty(window, 'location', {
+            value: plainLocation,
+            writable: true,
+            configurable: true
+          });
+        } catch (e2) {
+          window.location = plainLocation;
+        }
+      }
+    } catch (e) {
+    }
     let hasOrigin = false;
     try {
       hasOrigin = !!window.location.origin && window.location.origin !== 'null';
@@ -983,13 +1024,18 @@ export async function setupGameWithDOM() {
         });
       } catch (e) {
         try {
-          const locationBackup = { ...window.location };
-          locationBackup.origin = 'http://localhost:8080';
-          locationBackup.hostname = locationBackup.hostname || 'localhost';
-          locationBackup.host = locationBackup.host || 'localhost:8080';
-          locationBackup.protocol = locationBackup.protocol || 'http:';
-          locationBackup.port = locationBackup.port || '8080';
-          locationBackup.reload = locationBackup.reload || (() => {});
+          const locationBackup = {
+            href: window.location?.href || 'http://localhost:8080/',
+            origin: 'http://localhost:8080',
+            hostname: window.location?.hostname || 'localhost',
+            host: window.location?.host || 'localhost:8080',
+            pathname: window.location?.pathname || '/',
+            hash: window.location?.hash || '',
+            search: window.location?.search || '',
+            protocol: window.location?.protocol || 'http:',
+            port: window.location?.port || '8080',
+            reload: window.location?.reload || (() => {})
+          };
           Object.defineProperty(window, 'location', {
             value: locationBackup,
             writable: true,
@@ -1022,14 +1068,26 @@ export async function setupGameWithDOM() {
     window.URL = window.URL || global.URL || class URL {
       constructor(input, base) {
         try {
+          if (input == null) {
+            input = 'http://localhost:8080/';
+          }
+          if (base == null) {
+            base = 'http://localhost:8080';
+          }
           const urlModule = require('url');
           if (urlModule && urlModule.URL) {
-            const url = new urlModule.URL(input, base || 'http://localhost:8080');
-            if (url && url.href) {
-              this.href = url.href;
-              this.origin = url.origin || 'http://localhost:8080';
-              this.pathname = url.pathname || String(input).split('?')[0];
-            } else {
+            try {
+              const url = new urlModule.URL(String(input), String(base));
+              if (url && url.href && typeof url.href === 'string') {
+                this.href = url.href;
+                this.origin = url.origin || 'http://localhost:8080';
+                this.pathname = url.pathname || String(input).split('?')[0];
+              } else {
+                this.href = String(input);
+                this.origin = 'http://localhost:8080';
+                this.pathname = String(input).split('?')[0];
+              }
+            } catch (urlError) {
               this.href = String(input);
               this.origin = 'http://localhost:8080';
               this.pathname = String(input).split('?')[0];
@@ -1040,9 +1098,9 @@ export async function setupGameWithDOM() {
             this.pathname = String(input).split('?')[0];
           }
         } catch (e) {
-          this.href = String(input);
+          this.href = String(input || 'http://localhost:8080/');
           this.origin = 'http://localhost:8080';
-          this.pathname = String(input).split('?')[0];
+          this.pathname = String(input || '/').split('?')[0];
         }
       }
       static createObjectURL(blob) {

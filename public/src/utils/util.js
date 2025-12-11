@@ -79,18 +79,22 @@ export const performance = (typeof window !== 'undefined' && window.performance)
  */
 export function getBasePath() {
     // In Node.js test environment, return empty string
-    if (typeof window === 'undefined' || !window.location) {
+    if (typeof window === 'undefined' || !window.location || !window.location.hostname) {
         return '';
     }
 
-    // Check if we're on GitHub Pages
-    const isGitHubPages = window.location.hostname.includes('github.io');
+    try {
+        // Check if we're on GitHub Pages
+        const isGitHubPages = window.location.hostname && window.location.hostname.includes('github.io');
 
-    if (isGitHubPages) {
-        // Extract repository name from path
-        const pathParts = window.location.pathname.split('/');
-        const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
-        return repoName ? `/${repoName}` : '';
+        if (isGitHubPages && window.location.pathname) {
+            // Extract repository name from path
+            const pathParts = window.location.pathname.split('/');
+            const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
+            return repoName ? `/${repoName}` : '';
+        }
+    } catch (e) {
+        // If any property access fails, return empty string
     }
 
     // For local development or other deployments

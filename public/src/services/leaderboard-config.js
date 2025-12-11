@@ -1,6 +1,19 @@
+function getApiUrl() {
+    try {
+        if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+            const hostname = window.location.hostname;
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'http://localhost:3000';
+            }
+        }
+    } catch (e) {
+    }
+    return 'https://reactor-revival.onrender.com';
+}
+
 export const LEADERBOARD_CONFIG = {
-    API_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:3000' 
-        : 'https://reactor-revival.onrender.com'
+    get API_URL() {
+        return getApiUrl();
+    }
 };
 
