@@ -192,11 +192,20 @@ if (typeof global.ResizeObserver === "undefined") {
 
 if (typeof global.document === "undefined") {
     global.document = {
-        createElement: () => ({ 
-            style: {}, 
+        body: { appendChild: () => {} },
+        createElement: () => ({
+            style: {},
             classList: { add: () => {}, remove: () => {}, toggle: () => {} },
             appendChild: () => {},
-            addEventListener: () => {}
+            addEventListener: () => {},
+            setAttribute: () => {},
+            removeAttribute: () => {},
+            querySelector: () => null,
+            querySelectorAll: () => [],
+            dataset: {},
+            textContent: '',
+            id: '',
+            className: ''
         }),
         getElementById: () => null,
         querySelector: () => null,
@@ -204,6 +213,8 @@ if (typeof global.document === "undefined") {
         addEventListener: () => {},
         removeEventListener: () => {}
     };
+} else if (!global.document.body) {
+    global.document.body = { appendChild: () => {} };
 }
 
 // Test framework imports
@@ -1228,6 +1239,18 @@ export async function setupGameWithDOM() {
   global.fetch = window.fetch = async (url) => {
     try {
       let urlStr = url.toString();
+      
+      // Mock Leaderboard API calls
+      if (urlStr.includes('/api/leaderboard') || urlStr.includes('/health')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'application/json']]),
+          text: () => Promise.resolve(JSON.stringify({ status: 'ok', success: true, data: [] })),
+          json: () => Promise.resolve({ status: 'ok', success: true, data: [] })
+        };
+      }
+
       // Handle relative paths from root or public
       let cleanPath = urlStr.replace(/^http:\/\/localhost:8080\//, '').replace(/^\.\//, '').split('?')[0]; // Remove query params
 
