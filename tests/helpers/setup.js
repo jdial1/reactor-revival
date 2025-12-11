@@ -36,10 +36,38 @@ if (typeof global.window === "undefined") {
         location: {
             href: 'http://localhost:8080/',
             origin: 'http://localhost:8080',
+            hostname: 'localhost',
+            host: 'localhost:8080',
             pathname: '/',
-            hash: ''
+            hash: '',
+            search: '',
+            protocol: 'http:',
+            port: '8080',
+            reload: () => {}
         }
     };
+} else if (!global.window.location || !global.window.location.origin) {
+    if (!global.window.location) {
+        global.window.location = {
+            href: 'http://localhost:8080/',
+            origin: 'http://localhost:8080',
+            hostname: 'localhost',
+            host: 'localhost:8080',
+            pathname: '/',
+            hash: '',
+            search: '',
+            protocol: 'http:',
+            port: '8080',
+            reload: () => {}
+        };
+    } else {
+        global.window.location.origin = global.window.location.origin || 'http://localhost:8080';
+        global.window.location.hostname = global.window.location.hostname || 'localhost';
+        global.window.location.host = global.window.location.host || 'localhost:8080';
+        global.window.location.protocol = global.window.location.protocol || 'http:';
+        global.window.location.port = global.window.location.port || '8080';
+        global.window.location.reload = global.window.location.reload || (() => {});
+    }
 }
 
 if (typeof global.window.URL === "undefined") {
@@ -877,14 +905,67 @@ export async function setupGameWithDOM() {
   global.window = window;
   global.document = document;
 
+  if (!window.location) {
+    Object.defineProperty(window, 'location', {
+      value: {
+        href: 'http://localhost:8080/',
+        origin: 'http://localhost:8080',
+        hostname: 'localhost',
+        host: 'localhost:8080',
+        pathname: '/',
+        hash: '',
+        search: '',
+        protocol: 'http:',
+        port: '8080',
+        reload: () => {}
+      },
+      writable: true,
+      configurable: true
+    });
+  } else if (!window.location.origin) {
+    try {
+      Object.defineProperty(window.location, 'origin', {
+        value: 'http://localhost:8080',
+        writable: true,
+        configurable: true
+      });
+    } catch (e) {
+      const locationBackup = { ...window.location };
+      locationBackup.origin = 'http://localhost:8080';
+      locationBackup.hostname = locationBackup.hostname || 'localhost';
+      locationBackup.host = locationBackup.host || 'localhost:8080';
+      locationBackup.protocol = locationBackup.protocol || 'http:';
+      locationBackup.port = locationBackup.port || '8080';
+      locationBackup.reload = locationBackup.reload || (() => {});
+      Object.defineProperty(window, 'location', {
+        value: locationBackup,
+        writable: true,
+        configurable: true
+      });
+    }
+  }
+
   if (!window.URL || !window.URL.createObjectURL) {
     window.URL = window.URL || global.URL || class URL {
       constructor(input, base) {
         try {
-          const url = new (require('url').URL)(input, base || 'http://localhost:8080');
-          this.href = url.href;
-          this.origin = url.origin;
-          this.pathname = url.pathname;
+          const urlModule = require('url');
+          if (urlModule && urlModule.URL) {
+            const url = new urlModule.URL(input, base || 'http://localhost:8080');
+            if (url && url.href) {
+              this.href = url.href;
+              this.origin = url.origin || 'http://localhost:8080';
+              this.pathname = url.pathname || String(input).split('?')[0];
+            } else {
+              this.href = String(input);
+              this.origin = 'http://localhost:8080';
+              this.pathname = String(input).split('?')[0];
+            }
+          } else {
+            this.href = String(input);
+            this.origin = 'http://localhost:8080';
+            this.pathname = String(input).split('?')[0];
+          }
         } catch (e) {
           this.href = String(input);
           this.origin = 'http://localhost:8080';
@@ -1125,9 +1206,28 @@ beforeEach(() => {
       location: {
         href: 'http://localhost:8080/',
         origin: 'http://localhost:8080',
+        hostname: 'localhost',
+        host: 'localhost:8080',
         pathname: '/',
-        hash: ''
+        hash: '',
+        search: '',
+        protocol: 'http:',
+        port: '8080',
+        reload: () => {}
       }
+    };
+  } else if (!global.window.location || !global.window.location.origin) {
+    global.window.location = {
+      href: 'http://localhost:8080/',
+      origin: 'http://localhost:8080',
+      hostname: 'localhost',
+      host: 'localhost:8080',
+      pathname: '/',
+      hash: '',
+      search: '',
+      protocol: 'http:',
+      port: '8080',
+      reload: () => {}
     };
   }
   
