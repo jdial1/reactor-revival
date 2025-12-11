@@ -31,8 +31,8 @@ if (typeof global.window === "undefined") {
         localStorage: global.localStorage,
         setTimeout: setTimeout,
         clearTimeout: clearTimeout,
-        requestAnimationFrame: () => 0, // No-op raf to avoid scheduling loops
-        cancelAnimationFrame: () => {}, // No-op cancel
+        requestAnimationFrame: () => 0,
+        cancelAnimationFrame: () => {},
         location: {
             href: 'http://localhost:8080/',
             origin: 'http://localhost:8080',
@@ -41,6 +41,38 @@ if (typeof global.window === "undefined") {
         }
     };
 }
+
+if (typeof global.window.URL === "undefined") {
+    if (typeof global.URL !== "undefined") {
+        global.window.URL = global.URL;
+    } else {
+        global.window.URL = class URL {
+            constructor(input, base) {
+                this.href = String(input);
+                this.origin = 'http://localhost:8080';
+                this.pathname = String(input).split('?')[0];
+            }
+            static createObjectURL(blob) {
+                return `blob:http://localhost:8080/${Math.random().toString(36).substring(2)}`;
+            }
+            static revokeObjectURL(url) {
+            }
+        };
+    }
+}
+
+if (typeof global.URL === "undefined") {
+    global.URL = global.window.URL;
+}
+
+if (global.URL && !global.URL.createObjectURL) {
+    global.URL.createObjectURL = function(blob) {
+        return `blob:http://localhost:8080/${Math.random().toString(36).substring(2)}`;
+    };
+    global.URL.revokeObjectURL = function(url) {
+    };
+}
+
 
 // CRITICAL: Mock requestAnimationFrame globally to prevent infinite loops in tests
 if (typeof global.requestAnimationFrame === "undefined") {
@@ -845,6 +877,36 @@ export async function setupGameWithDOM() {
   global.window = window;
   global.document = document;
 
+  if (!window.URL || !window.URL.createObjectURL) {
+    window.URL = window.URL || global.URL || class URL {
+      constructor(input, base) {
+        try {
+          const url = new (require('url').URL)(input, base || 'http://localhost:8080');
+          this.href = url.href;
+          this.origin = url.origin;
+          this.pathname = url.pathname;
+        } catch (e) {
+          this.href = String(input);
+          this.origin = 'http://localhost:8080';
+          this.pathname = String(input).split('?')[0];
+        }
+      }
+      static createObjectURL(blob) {
+        return `blob:http://localhost:8080/${Math.random().toString(36).substring(2)}`;
+      }
+      static revokeObjectURL(url) {
+      }
+    };
+    if (!window.URL.createObjectURL) {
+      window.URL.createObjectURL = function(blob) {
+        return `blob:http://localhost:8080/${Math.random().toString(36).substring(2)}`;
+      };
+      window.URL.revokeObjectURL = function(url) {
+      };
+    }
+  }
+  global.URL = window.URL;
+
   // Ensure window.localStorage is available (JSDOM provides it, but ensure it's working)
   if (!window.localStorage) {
     window.localStorage = createMockLocalStorage();
@@ -1067,6 +1129,32 @@ beforeEach(() => {
         hash: ''
       }
     };
+  }
+  
+  if (!global.window.URL || !global.window.URL.createObjectURL) {
+    global.window.URL = global.URL || class URL {
+      constructor(input, base) {
+        this.href = String(input);
+        this.origin = 'http://localhost:8080';
+        this.pathname = String(input).split('?')[0];
+      }
+      static createObjectURL(blob) {
+        return `blob:http://localhost:8080/${Math.random().toString(36).substring(2)}`;
+      }
+      static revokeObjectURL(url) {
+      }
+    };
+    if (!global.window.URL.createObjectURL) {
+      global.window.URL.createObjectURL = function(blob) {
+        return `blob:http://localhost:8080/${Math.random().toString(36).substring(2)}`;
+      };
+      global.window.URL.revokeObjectURL = function(url) {
+      };
+    }
+  }
+  
+  if (typeof global.URL === 'undefined') {
+    global.URL = global.window.URL;
   }
   if (typeof global.document === 'undefined' || !global.document) {
     global.document = {
