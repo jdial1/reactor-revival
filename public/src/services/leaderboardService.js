@@ -5,6 +5,8 @@ export class LeaderboardService {
         this.initialized = false;
         this.initPromise = null;
         this.apiBaseUrl = LEADERBOARD_CONFIG.API_URL;
+        this.lastSaveTime = 0;
+        this.saveCooldownMs = 60000;
     }
 
     async init() {
@@ -35,6 +37,13 @@ export class LeaderboardService {
             await this.init();
         }
 
+        const now = Date.now();
+        const timeSinceLastSave = now - this.lastSaveTime;
+        
+        if (timeSinceLastSave < this.saveCooldownMs) {
+            return;
+        }
+
         try {
             const response = await fetch(`${this.apiBaseUrl}/api/leaderboard/save`, {
                 method: 'POST',
@@ -55,6 +64,8 @@ export class LeaderboardService {
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 console.error("Error saving run to leaderboard:", errorData.error || response.statusText);
+            } else {
+                this.lastSaveTime = now;
             }
         } catch (e) {
             console.error("Error saving run to leaderboard", e);

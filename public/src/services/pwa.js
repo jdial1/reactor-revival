@@ -538,8 +538,10 @@ class SplashScreenManager {
     }
 
     this.readyPromise = this.waitForDOMAndLoad();
+    this.socket = null;
+    this.userCount = 0;
 
-
+    this.initSocketConnection();
 
     // Listen for service worker messages
     if ("serviceWorker" in navigator) {
@@ -558,6 +560,51 @@ class SplashScreenManager {
       const btn = window.domMapper?.get("pwa.installButton");
       if (btn) btn.classList.remove("hidden");
     });
+  }
+
+  async initSocketConnection() {
+    if (typeof io === 'undefined') {
+      console.warn('[SPLASH] Socket.IO not available');
+      return;
+    }
+
+    try {
+      const { LEADERBOARD_CONFIG } = await import('./leaderboard-config.js');
+      const apiUrl = LEADERBOARD_CONFIG.API_URL;
+      
+      this.socket = io(apiUrl, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5
+      });
+
+      this.socket.on('connect', () => {
+        console.log('[SPLASH] Socket.IO connected');
+      });
+
+      this.socket.on('userCount', (count) => {
+        this.userCount = count;
+        this.updateUserCountDisplay();
+      });
+
+      this.socket.on('disconnect', () => {
+        console.log('[SPLASH] Socket.IO disconnected');
+      });
+
+      this.socket.on('connect_error', (error) => {
+        console.warn('[SPLASH] Socket.IO connection error:', error);
+      });
+    } catch (error) {
+      console.warn('[SPLASH] Failed to initialize Socket.IO:', error);
+    }
+  }
+
+  updateUserCountDisplay() {
+    const userCountElement = document.getElementById('user-count-text');
+    if (userCountElement) {
+        userCountElement.textContent = `${this.userCount}`;
+    }
   }
 
   /**
@@ -600,6 +647,9 @@ class SplashScreenManager {
 
         // Initialize splash screen stats
         await this.initializeSplashStats();
+        
+        // Update user count display after splash loads
+        this.updateUserCountDisplay();
 
         // Proactively warm the cache for critical UI icon assets so images never
         // disappear during gameplay due to network hiccups or memory pressure

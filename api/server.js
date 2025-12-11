@@ -3,6 +3,8 @@ import pg from 'pg';
 import cors from 'cors';
 import dns from 'dns';
 import { promisify } from 'util';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 const { Pool } = pg;
 const dnsLookup = promisify(dns.lookup);
@@ -10,7 +12,16 @@ const dnsResolve4 = promisify(dns.resolve4);
 const dnsResolve6 = promisify(dns.resolve6);
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 const port = process.env.PORT || 3000;
+
+let connectedUsers = 0;
 
 app.use(cors());
 app.use(express.json());
@@ -320,18 +331,31 @@ async function startServer() {
         
         console.log(`${logTimestamp()} Database initialization completed, starting HTTP server...`);
         
-        app.listen(port, () => {
+        io.on('connection', (socket) => {
+            connectedUsers++;
+            console.log(`${logTimestamp()} Socket.IO: User connected. Total users: ${connectedUsers}`);
+            io.emit('userCount', connectedUsers);
+            
+            socket.on('disconnect', () => {
+                connectedUsers = Math.max(0, connectedUsers - 1);
+                console.log(`${logTimestamp()} Socket.IO: User disconnected. Total users: ${connectedUsers}`);
+                io.emit('userCount', connectedUsers);
+            });
+        });
+        
+        httpServer.listen(port, () => {
             const totalStartTime = Date.now() - serverStartTime;
             console.log(`${logTimestamp()} ========================================`);
             console.log(`${logTimestamp()} ✓ Server started successfully`);
             console.log(`${logTimestamp()}   Port: ${port}`);
             console.log(`${logTimestamp()}   Startup time: ${totalStartTime}ms`);
             console.log(`${logTimestamp()}   Health check: http://localhost:${port}/health`);
+            console.log(`${logTimestamp()}   Socket.IO: Enabled`);
             console.log(`${logTimestamp()}   Pool stats - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
             console.log(`${logTimestamp()} ========================================`);
         });
         
-        app.on('error', (error) => {
+        httpServer.on('error', (error) => {
             console.error(`${logTimestamp()} HTTP server error:`, error);
         });
     } catch (error) {

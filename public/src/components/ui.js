@@ -4025,7 +4025,22 @@ export class UI {
 
       let html = '';
       records.forEach((run, index) => {
-        const date = new Date(run.timestamp).toLocaleDateString();
+        let date = 'N/A';
+        try {
+          const timestamp = typeof run.timestamp === 'string' ? parseInt(run.timestamp, 10) : run.timestamp;
+          if (timestamp && !isNaN(timestamp) && timestamp > 0) {
+            const dateObj = new Date(timestamp);
+            if (!isNaN(dateObj.getTime())) {
+              date = dateObj.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Error formatting date:', e);
+        }
         const timeStr = this.game.formatTime ? this.game.formatTime(run.time_played) : 'N/A';
         const hasLayout = !!run.layout;
         
