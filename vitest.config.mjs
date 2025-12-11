@@ -24,7 +24,7 @@ export default defineConfig({
     poolOptions: {
       threads: {
         singleThread: true,
-        isolate: false,
+        isolate: true,
         memoryLimit: "12GB",
       },
     },

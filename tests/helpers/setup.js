@@ -1414,10 +1414,23 @@ export function cleanupGame() {
   }
   
   // Clean up globals to ensure fresh state for next test
-  delete global.window;
-  delete global.document;
+  try {
+    delete global.window;
+    delete global.document;
+  } catch (e) {
+    // ignore
+  }
 
   vi.restoreAllMocks();
+  
+  // Force garbage collection if available (requires --expose-gc)
+  if (global.gc) {
+    try {
+      global.gc();
+    } catch (e) {
+      // ignore
+    }
+  }
 }
 
 // Enhanced DOM setup for UI elements required by tests

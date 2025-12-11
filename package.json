@@ -6,9 +6,9 @@
   "main": "public/index.html",
   "debug": false,
   "scripts": {
-    "test": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest --run -c vitest.config.mjs",
-    "test:ci": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest --run -c vitest.config.mjs",
-    "ci:test": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest --run -c vitest.config.mjs",
+    "test": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192 --expose-gc\" vitest --run -c vitest.config.mjs",
+    "test:ci": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192 --expose-gc\" vitest --run -c vitest.config.mjs",
+    "ci:test": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192 --expose-gc\" vitest --run -c vitest.config.mjs",
     "start": "node api/server.js",
     "setup": "npm run generate-version && npm run copy-libs && npm run build:sw",
     "generate-version": "node scripts/generate-version.js",
