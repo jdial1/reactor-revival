@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame, gameAssertions } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame } from "../helpers/setup.js";
+import { placePart, forcePurchaseUpgrade, runTicks } from "../helpers/gameHelpers.js";
 
 describe("Complex Layouts and Advanced Interactions", () => {
     let game;
@@ -14,93 +15,40 @@ describe("Complex Layouts and Advanced Interactions", () => {
     });
 
     it("should correctly transfer heat through a long chain of heat exchangers", async () => {
-        const cell = game.partset.getPartById("uranium1");
-        const exchanger = game.partset.getPartById("heat_exchanger1");
-        const vent = game.partset.getPartById("vent1");
-
-        // Place a fuel cell
-        const cellTile = game.tileset.getTile(5, 5);
-        await cellTile.setPart(cell);
-        cellTile.activated = true;
-        cellTile.ticks = 15; // Ensure the cell has ticks to generate heat and survives multiple ticks
-
-        // Place a chain of heat exchangers adjacent to the cell
+        const cellTile = await placePart(game, 5, 5, "uranium1");
+        
         const exchangerTiles = [];
         for (let i = 0; i < 5; i++) {
-            const tile = game.tileset.getTile(5, 6 + i);
-            await tile.setPart(exchanger);
-            tile.activated = true; // Ensure exchangers are activated
-            exchangerTiles.push(tile);
+            exchangerTiles.push(await placePart(game, 5, 6 + i, "heat_exchanger1"));
         }
-        const ventTile = game.tileset.getTile(5, 11);
-        await ventTile.setPart(vent);
-        ventTile.activated = true; // Ensure vent is activated
+        await placePart(game, 5, 11, "vent1");
 
-        // Update reactor stats to populate neighbor lists
         game.reactor.updateStats();
-
-        // Run the engine for one tick to generate heat from the cell
         game.engine.tick();
-
-        // Debug: Check if cell generated heat
-        console.log(`Cell heat generated: ${cell.heat}`);
-        console.log(`Cell tile ticks: ${cellTile.ticks}`);
-        console.log(`First exchanger heat: ${exchangerTiles[0].heat_contained}`);
-        console.log(`Cell tile activated: ${cellTile.activated}`);
-        console.log(`First exchanger activated: ${exchangerTiles[0].activated}`);
-
-        // The first exchanger should have absorbed heat from the cell
-        // Note: Heat distribution happens in the engine tick, but heat exchanger processing
-        // happens in the heat manager. The exchanger might not have heat immediately.
-        // The heat distribution system is complex and may redistribute heat in ways that
-        // don't match simple expectations. The important thing is that heat is being
-        // generated and processed correctly.
-
-        // Instead of checking specific heat values, let's verify that the system
-        // is functioning correctly by checking that no components have exploded
-        // and that the reactor hasn't melted down
+        
         expect(game.reactor.has_melted_down).toBe(false);
-
-        // Check that the fuel cell is still active and generating heat
         expect(cellTile.activated).toBe(true);
         expect(cellTile.ticks).toBeGreaterThan(0);
 
-        // Run for more ticks to allow heat to propagate through the chain
-        for (let i = 0; i < 10; i++) {
-            game.engine.tick();
-        }
-
-        // The heat distribution system is complex and may redistribute heat in ways that
-        // don't match simple expectations. The important thing is that the system is working
-        // and no components have exploded.
-
-        // Check that the system is still functioning
+        runTicks(game, 10);
+        
         expect(game.reactor.has_melted_down).toBe(false);
-
-        // Check that the fuel cell is still active (should have plenty of ticks left)
         expect(cellTile.activated).toBe(true);
         expect(cellTile.ticks).toBeGreaterThan(0);
     });
 
     it("should increase cell power with high sustained heat when Forceful Fusion is active", async () => {
-        const fusionUpgrade = game.upgradeset.getUpgrade("forceful_fusion");
-        game.upgradeset.purchaseUpgrade("forceful_fusion");
-        game.upgradeset.purchaseUpgrade("heat_control_operator");
-
+        game.bypass_tech_tree_restrictions = true;
+        
+        forcePurchaseUpgrade(game, "forceful_fusion");
+        forcePurchaseUpgrade(game, "heat_control_operator");
         expect(game.reactor.heat_power_multiplier).toBe(1);
         expect(game.reactor.heat_controlled).toBe(true);
 
         const cellPart = game.partset.getPartById("uranium1");
-        // Make it a perpetual cell so it doesn't get depleted
         game.upgradeset.getUpgrade("uranium1_cell_perpetual").setLevel(1);
-
-        // Ensure the part's power is properly initialized
-        cellPart.power = cellPart.base_power;
-
-        const cellTile = game.tileset.getTile(5, 5);
-        await cellTile.setPart(cellPart);
-        cellTile.ticks = 100; // Ensure the cell has plenty of ticks
-        cellTile.activated = true; // Ensure the cell is activated
+        
+        const cellTile = await placePart(game, 5, 5, "uranium1");
 
         // Artificially set a high heat level (but not so high it causes meltdown)
         game.reactor.current_heat = 10000; // 10K heat
@@ -119,7 +67,7 @@ describe("Complex Layouts and Advanced Interactions", () => {
         const expectedPower = cellPart.base_power * expectedMultiplier;
 
         expect(game.reactor.stats_power).toBeCloseTo(expectedPower, 1);
-
+        game.engine._updatePartCaches(); // Ensure active_cells is populated
         // Run a tick to see the effect on power generation
         game.engine.tick();
 
@@ -131,23 +79,17 @@ describe("Complex Layouts and Advanced Interactions", () => {
 
     it("should correctly apply the power bonus from depleted Protium Cells", async () => {
         const protiumPart = game.partset.getPartById("protium1");
-
-        // Enable protium cells
         game.upgradeset.getUpgrade("laboratory").setLevel(1);
         game.upgradeset.getUpgrade("protium_cells").setLevel(1);
 
-        // Deplete one Protium cell
-        const firstTile = game.tileset.getTile(0, 0);
-        await firstTile.setPart(protiumPart);
+        const firstTile = await placePart(game, 0, 0, "protium1");
         firstTile.ticks = 1;
-        game.engine.tick(); // This tick will deplete the cell
-
+        game.engine.tick();
+        
         expect(firstTile.part).toBeNull();
         expect(game.protium_particles).toBe(protiumPart.cell_count);
 
-        // Place a new Protium cell
-        const secondTile = game.tileset.getTile(1, 0);
-        await secondTile.setPart(protiumPart);
+        await placePart(game, 1, 0, "protium1");
 
         // The new part instance should have its power recalculated
         const newProtiumInstance = game.partset.getPartById("protium1");
@@ -160,30 +102,19 @@ describe("Complex Layouts and Advanced Interactions", () => {
     });
 
     it("should consume reactor power when an Extreme Vent is active", async () => {
-        // Temporarily enable console.log
+        // eslint-disable-next-line no-undef
         const originalConsoleLog = console.log;
+        // eslint-disable-next-line no-undef
         console.log = (...args) => originalConsoleLog(...args);
 
-        const extremeVentPart = game.partset.getPartById("vent6");
-        const labUpgrade = game.upgradeset.getUpgrade("laboratory");
-        const ventUpgrade = game.upgradeset.getUpgrade("vortex_cooling");
-        const capacitorPart = game.partset.getPartById("capacitor1");
-        const coolantPart = game.partset.getPartById("coolant_cell1");
+        game.upgradeset.getUpgrade("laboratory").setLevel(1);
+        game.upgradeset.getUpgrade("vortex_cooling").setLevel(1);
 
-        labUpgrade.setLevel(1);
-        ventUpgrade.setLevel(1);
-
-        // Add a capacitor to increase max_power above the test values
-        const capacitorTile = game.tileset.getTile(1, 0);
-        await capacitorTile.setPart(capacitorPart);
-        capacitorTile.activated = true;
-
-        // Create a segment with connected components: coolant -> vent
-        const coolantTile = game.tileset.getTile(0, 0);
-        const ventTile = game.tileset.getTile(0, 1);
-        await coolantTile.setPart(coolantPart);
+        await placePart(game, 1, 0, "capacitor1");
+        await placePart(game, 0, 0, "coolant_cell1");
+        const ventTile = await placePart(game, 0, 1, "vent6");
+        
         const heatToVent = 1000;
-        await ventTile.setPart(extremeVentPart);
         ventTile.heat_contained = heatToVent;
         game.reactor.current_power = 2000;
 
@@ -194,14 +125,21 @@ describe("Complex Layouts and Advanced Interactions", () => {
         game.engine.tick();
 
         // Debug: Check the values
+        // eslint-disable-next-line no-undef
         console.log(`Initial heat: ${heatToVent}`);
+        // eslint-disable-next-line no-undef
         console.log(`Final vent heat: ${ventTile.heat_contained}`);
+        // eslint-disable-next-line no-undef
         console.log(`Initial power: 2000`);
+        // eslint-disable-next-line no-undef
         console.log(`Final power: ${game.reactor.current_power}`);
+        // eslint-disable-next-line no-undef
         console.log(`Heat vented: ${heatToVent - ventTile.heat_contained}`);
+        // eslint-disable-next-line no-undef
         console.log(`Power consumed: ${2000 - game.reactor.current_power}`);
 
         // Restore console.log
+        // eslint-disable-next-line no-undef
         console.log = originalConsoleLog;
 
         // Check that heat was vented (some amount)
@@ -219,25 +157,19 @@ describe("Complex Layouts and Advanced Interactions", () => {
     });
 
     it("should handle auto-buy for multiple depleted perpetual parts in the same tick", async () => {
-        const perpetualUranium = game.upgradeset.getUpgrade("uranium1_cell_perpetual");
-        perpetualUranium.setLevel(1);
-        const perpetualReflector = game.upgradeset.getUpgrade("perpetual_reflectors");
-        perpetualReflector.setLevel(1);
+        game.upgradeset.getUpgrade("uranium1_cell_perpetual").setLevel(1);
+        game.upgradeset.getUpgrade("perpetual_reflectors").setLevel(1);
         game.ui.stateManager.setVar("auto_buy", true);
 
-        const cellPart = game.partset.getPartById("uranium1");
-        const reflectorPart = game.partset.getPartById("reflector1");
-
-        const cellTile = game.tileset.getTile(0, 0);
-        const reflectorTile = game.tileset.getTile(0, 1);
-
-        await cellTile.setPart(cellPart);
-        await reflectorTile.setPart(reflectorPart);
+        const cellTile = await placePart(game, 0, 0, "uranium1");
+        const reflectorTile = await placePart(game, 0, 1, "reflector1");
 
         // Set both to be depleted on the next tick
         cellTile.ticks = 1;
         reflectorTile.ticks = 1;
 
+        const cellPart = game.partset.getPartById("uranium1");
+        const reflectorPart = game.partset.getPartById("reflector1");
         const cellCost = cellPart.getAutoReplacementCost();
         const reflectorCost = reflectorPart.getAutoReplacementCost();
         const totalCost = cellCost + reflectorCost;

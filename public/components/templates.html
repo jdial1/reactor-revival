@@ -172,3 +172,34 @@
   <dl class="tooltip-stats" data-role="desktop-stats"></dl>
   <footer id="tooltip_actions"></footer>
 </template>
+
+<!-- Tech Tree Templates -->
+<template id="tech-tree-selection-template">
+  <div class="tech-tree-selection">
+    <h2 class="tech-tree-header">Select Your Doctrine</h2>
+    <div class="tech-tree-container">
+      <!-- Cards injected here -->
+    </div>
+    <div class="tech-tree-button-container">
+      <button class="splash-btn splash-btn-exit tech-tree-back-btn">Back</button>
+      <button class="splash-btn tech-tree-start-btn" disabled>Start</button>
+    </div>
+  </div>
+</template>
+
+<template id="tech-tree-card-template">
+  <div class="tech-tree-card">
+    <div class="tech-tree-card-header">
+      <img class="tech-tree-icon" src="" alt="Icon">
+      <div class="tech-tree-titles">
+        <h3 class="tech-tree-title"></h3>
+        <div class="tech-tree-subtitle"></div>
+      </div>
+    </div>
+    <div class="tech-tree-body">
+      <div class="tech-tree-playstyle"><strong>Playstyle:</strong> <span></span></div>
+      <p class="tech-tree-focus"></p>
+      <ul class="tech-tree-mechanics"></ul>
+    </div>
+  </div>
+</template>

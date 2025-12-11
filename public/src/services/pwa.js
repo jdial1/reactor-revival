@@ -31,6 +31,276 @@ dataService.loadFlavorText().then(messages => {
   flavorMessages = ["Loading..."];
 });
 
+// Tech Tree helpers
+async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
+  console.log("[TECH-TREE] showTechTreeSelection called", { 
+    game: !!game, 
+    pageRouter: !!pageRouter, 
+    ui: !!ui, 
+    splashManager: !!splashManager 
+  });
+
+  let overlay = document.getElementById("tech-tree-overlay");
+  if (!overlay) {
+    console.log("[TECH-TREE] Creating new overlay element");
+    overlay = document.createElement("div");
+    overlay.id = "tech-tree-overlay";
+    overlay.className = "tech-tree-overlay";
+    document.body.appendChild(overlay);
+    console.log("[TECH-TREE] Overlay created and appended to body", overlay);
+  } else {
+    console.log("[TECH-TREE] Using existing overlay element", overlay);
+  }
+
+  console.log("[TECH-TREE] Loading tech tree data...");
+  const techTreeData = await dataService.loadTechTree();
+  console.log("[TECH-TREE] Tech tree data loaded:", { 
+    data: techTreeData, 
+    length: techTreeData?.length,
+    isEmpty: !techTreeData || techTreeData.length === 0 
+  });
+
+  if (!techTreeData || techTreeData.length === 0) {
+    console.error("[TECH-TREE] Failed to load tech tree data - starting game without tech tree");
+    startNewGameFlow(game, pageRouter, ui, splashManager, null);
+    return;
+  }
+
+  console.log("[TECH-TREE] Clearing overlay and cloning selection template...");
+  overlay.innerHTML = "";
+  
+  if (!window.templateLoader) {
+    console.error("[TECH-TREE] templateLoader not available!");
+    return;
+  }
+  
+  console.log("[TECH-TREE] Checking for tech-tree-selection-template...");
+  const selectionScreen = window.templateLoader.cloneTemplateElement("tech-tree-selection-template");
+  if (!selectionScreen) {
+    console.error("[TECH-TREE] Failed to clone tech-tree-selection-template - template may not exist");
+    return;
+  }
+  console.log("[TECH-TREE] Selection screen template cloned:", selectionScreen);
+
+  const container = selectionScreen.querySelector(".tech-tree-container");
+  if (!container) {
+    console.error("[TECH-TREE] .tech-tree-container not found in selection screen");
+    return;
+  }
+  console.log("[TECH-TREE] Container found:", container);
+
+  // Track selected tech tree
+  let selectedTechTreeId = null;
+  const startBtn = selectionScreen.querySelector(".tech-tree-start-btn");
+
+  console.log("[TECH-TREE] Processing", techTreeData.length, "tech trees...");
+  techTreeData.forEach((tree, index) => {
+    console.log(`[TECH-TREE] Processing tree ${index + 1}:`, tree);
+    
+    const card = window.templateLoader.cloneTemplateElement("tech-tree-card-template");
+    if (!card) {
+      console.error(`[TECH-TREE] Failed to clone tech-tree-card-template for tree ${index + 1}`);
+      return;
+    }
+    console.log(`[TECH-TREE] Card template cloned for tree ${index + 1}`);
+
+    // Store tree data on card for later use
+    card.dataset.treeId = tree.id;
+    card.dataset.treeColor = tree.color;
+
+    const header = card.querySelector(".tech-tree-card-header");
+    if (header) {
+      header.style.borderColor = tree.color;
+      console.log(`[TECH-TREE] Set header border color for tree ${index + 1}:`, tree.color);
+    } else {
+      console.warn(`[TECH-TREE] .tech-tree-card-header not found in card ${index + 1}`);
+    }
+
+    const icon = card.querySelector(".tech-tree-icon");
+    if (icon) {
+      icon.src = tree.icon;
+      console.log(`[TECH-TREE] Set icon for tree ${index + 1}:`, tree.icon);
+    } else {
+      console.warn(`[TECH-TREE] .tech-tree-icon not found in card ${index + 1}`);
+    }
+
+    const titleEl = card.querySelector(".tech-tree-title");
+    if (titleEl) {
+      titleEl.textContent = tree.title;
+      console.log(`[TECH-TREE] Set title for tree ${index + 1}:`, tree.title);
+    } else {
+      console.warn(`[TECH-TREE] .tech-tree-title not found in card ${index + 1}`);
+    }
+    
+    const subtitle = card.querySelector(".tech-tree-subtitle");
+    if (subtitle) {
+      subtitle.textContent = tree.subtitle;
+      subtitle.style.color = tree.color;
+      console.log(`[TECH-TREE] Set subtitle for tree ${index + 1}:`, tree.subtitle);
+    } else {
+      console.warn(`[TECH-TREE] .tech-tree-subtitle not found in card ${index + 1}`);
+    }
+
+    const playstyle = card.querySelector(".tech-tree-playstyle span");
+    if (playstyle) {
+      playstyle.textContent = tree.playstyle;
+      playstyle.style.color = tree.color;
+      console.log(`[TECH-TREE] Set playstyle for tree ${index + 1}:`, tree.playstyle);
+    } else {
+      console.warn(`[TECH-TREE] .tech-tree-playstyle span not found in card ${index + 1}`);
+    }
+
+    const focusEl = card.querySelector(".tech-tree-focus");
+    if (focusEl) {
+      focusEl.textContent = tree.focus;
+      console.log(`[TECH-TREE] Set focus for tree ${index + 1}:`, tree.focus);
+    } else {
+      console.warn(`[TECH-TREE] .tech-tree-focus not found in card ${index + 1}`);
+    }
+
+    const mechanicsList = card.querySelector(".tech-tree-mechanics");
+    if (mechanicsList) {
+      tree.mechanics.forEach(mech => {
+        const li = document.createElement("li");
+        li.textContent = mech;
+        mechanicsList.appendChild(li);
+      });
+      console.log(`[TECH-TREE] Added ${tree.mechanics.length} mechanics for tree ${index + 1}`);
+    } else {
+      console.warn(`[TECH-TREE] .tech-tree-mechanics not found in card ${index + 1}`);
+    }
+
+    // Make entire card clickable for selection
+    card.style.cursor = "pointer";
+    card.onclick = () => {
+      console.log(`[TECH-TREE] Card clicked for tree:`, tree.id);
+      
+      // Remove selected class and reset border/outline from all cards
+      container.querySelectorAll(".tech-tree-card").forEach(c => {
+        c.classList.remove("tech-tree-card-selected");
+        c.style.borderColor = "";
+        c.style.outlineColor = "";
+        c.style.color = "";
+      });
+      
+      // Add selected class to clicked card and set border/outline color
+      card.classList.add("tech-tree-card-selected");
+      card.style.borderColor = tree.color;
+      card.style.outlineColor = tree.color;
+      card.style.color = tree.color;
+      selectedTechTreeId = tree.id;
+      
+      // Enable start button
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.style.borderColor = tree.color;
+        console.log("[TECH-TREE] Start button enabled");
+      }
+    };
+    console.log(`[TECH-TREE] Card ${index + 1} made clickable`);
+
+    container.appendChild(card);
+    console.log(`[TECH-TREE] Card ${index + 1} appended to container`);
+  });
+
+  console.log("[TECH-TREE] Setting up buttons...");
+  const backBtn = selectionScreen.querySelector(".tech-tree-back-btn");
+  if (backBtn) {
+    backBtn.onclick = () => {
+      console.log("[TECH-TREE] Back button clicked");
+      overlay.classList.add("hidden");
+      setTimeout(() => overlay.remove(), 300);
+    };
+    console.log("[TECH-TREE] Back button configured");
+  } else {
+    console.warn("[TECH-TREE] .tech-tree-back-btn not found in selection screen");
+  }
+
+  // Setup start button
+  if (startBtn) {
+    startBtn.onclick = async () => {
+      if (selectedTechTreeId) {
+        console.log("[TECH-TREE] Start button clicked for tree:", selectedTechTreeId);
+        overlay.classList.add("hidden");
+        setTimeout(() => overlay.remove(), 300);
+        try {
+          await startNewGameFlow(game, pageRouter, ui, splashManager, selectedTechTreeId);
+        } catch (error) {
+          console.error("[TECH-TREE] Failed to start game:", error);
+          // Show error to user or fallback behavior
+          alert("Failed to start game. Please try again.");
+        }
+      }
+    };
+    console.log("[TECH-TREE] Start button configured");
+  } else {
+    console.warn("[TECH-TREE] .tech-tree-start-btn not found in selection screen");
+  }
+
+  console.log("[TECH-TREE] Appending selection screen to overlay...");
+  overlay.appendChild(selectionScreen);
+  console.log("[TECH-TREE] Removing 'hidden' class from overlay...");
+  overlay.classList.remove("hidden");
+  console.log("[TECH-TREE] Overlay classes after removal:", overlay.className);
+  console.log("[TECH-TREE] Overlay display style:", window.getComputedStyle(overlay).display);
+  console.log("[TECH-TREE] Overlay visibility:", window.getComputedStyle(overlay).visibility);
+  console.log("[TECH-TREE] Overlay opacity:", window.getComputedStyle(overlay).opacity);
+  console.log("[TECH-TREE] Overlay z-index:", window.getComputedStyle(overlay).zIndex);
+  console.log("[TECH-TREE] Tech tree selection display complete");
+}
+
+// Make showTechTreeSelection available globally
+window.showTechTreeSelection = showTechTreeSelection;
+
+async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId) {
+    try {
+        if (splashManager) {
+            splashManager.hide();
+        }
+        await new Promise((resolve) => setTimeout(resolve, 600));
+
+        try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
+        for (let i = 1; i <= 3; i++) {
+            try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
+        }
+        try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
+        
+        delete game._saved_objective_index;
+        
+        // Initialize game state - leaderboard service errors are non-fatal
+        try {
+            await game.initialize_new_game_state();
+        } catch (error) {
+            console.warn("[TECH-TREE] Error during game initialization (non-fatal):", error);
+            // Continue with game start even if initialization has issues
+        }
+        
+        if (techTreeId) {
+            game.tech_tree = techTreeId;
+            console.log(`[GAME] Started with tech tree: ${techTreeId}`);
+        }
+        
+        localStorage.removeItem("reactorGameQuickStartShown");
+        
+        if (typeof window.startGame === "function") {
+            await window.startGame(pageRouter, ui, game);
+        } else {
+            await pageRouter.loadGameLayout();
+            ui.initMainLayout();
+            await pageRouter.loadPage("reactor_section");
+            game.startSession();
+            game.engine.start();
+        }
+        
+        try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
+    } catch (error) {
+        console.error("[TECH-TREE] Error in startNewGameFlow:", error);
+        console.error("[TECH-TREE] Error stack:", error.stack);
+        // Re-throw to allow caller to handle if needed
+        throw error;
+    }
+}
+
 let deferredPrompt;
 const installButton = window.domMapper?.get("pwa.installButton");
 
@@ -530,9 +800,6 @@ class SplashScreenManager {
     saveSlotScreen.style.alignItems = "center";
     saveSlotScreen.style.justifyContent = "center";
     saveSlotScreen.style.textAlign = "center";
-
-    // Check if all slots are empty
-    const hasAnySave = saveSlots.some(slot => slot.exists);
 
     saveSlotScreen.innerHTML = `
       <h1 class="splash-title">LOAD GAME</h1>
@@ -1147,7 +1414,7 @@ class SplashScreenManager {
   /**
    * Show update toast notification
    */
-  showUpdateToast(newVersion, currentVersion) {
+  showUpdateToast(_newVersion, _currentVersion) {
     // Remove any existing toast
     const existingToast = document.querySelector('.update-toast');
     if (existingToast) {
@@ -1702,7 +1969,6 @@ class SplashScreenManager {
 
       let cloudSaveOnly = false;
       let cloudSaveData = null;
-      let cloudSaveLabel = null;
       if (!hasSave && window.googleDriveSave && window.googleDriveSave.isConfigured) {
         try {
           const isSignedIn = await window.googleDriveSave.checkAuth(true);
@@ -1710,15 +1976,16 @@ class SplashScreenManager {
             const fileFound = await window.googleDriveSave.findSaveFile();
             if (fileFound) {
               cloudSaveOnly = true;
-              cloudSaveLabel = "";
               try {
                 cloudSaveData = await window.googleDriveSave.load();
-              } catch (e) {
+              } catch {
                 cloudSaveData = null;
               }
             }
           }
-        } catch (e) { }
+        } catch {
+          // Ignore errors during cloud save check
+        }
       }
       let skipCloudButton = false;
       // 1. Continue button (if save exists, loads most recent save)
@@ -1852,61 +2119,25 @@ class SplashScreenManager {
           return;
         }
         try {
-          console.log("[DEBUG] New Game button clicked");
-
-          // Clear all save slots
-          try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
-          for (let i = 1; i <= 3; i++) {
-            try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
-          }
-          try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
-
-          // Hide splash manager
-          if (window.splashManager) {
-            console.log("[DEBUG] Hiding splash manager...");
-            window.splashManager.hide();
-          }
-          await new Promise((resolve) => setTimeout(resolve, 600));
-
-          // Initialize new game state
+          console.log("[TECH-TREE] New Game button clicked - showing tech tree selection");
+          console.log("[TECH-TREE] Checking prerequisites:", {
+            game: !!window.game,
+            pageRouter: !!window.pageRouter,
+            ui: !!window.ui,
+            splashManager: !!this,
+            templateLoader: !!window.templateLoader,
+            dataService: !!window.dataService
+          });
           if (window.game) {
-            console.log("[DEBUG] Initializing new game state...");
-            delete window.game._saved_objective_index;
-            await window.game.initialize_new_game_state();
-
-            if (window.pageRouter && window.ui) {
-              console.log("[DEBUG] Starting new game...");
-              // Call the startGame function that should be available globally
-              if (typeof window.startGame === "function") {
-                console.log("[DEBUG] Calling global startGame function...");
-                await window.startGame(
-                  window.pageRouter,
-                  window.ui,
-                  window.game
-                );
-              } else {
-                console.error("startGame function not available globally");
-                // Fallback: try to trigger the game start manually
-                await window.pageRouter.loadGameLayout();
-                window.ui.initMainLayout();
-                await window.pageRouter.loadPage("reactor_section");
-                window.game.tooltip_manager = new (
-                  await import("../components/tooltip.js")
-                ).TooltipManager("#main", "#tooltip", window.game);
-                window.game.engine = new (
-                  await import("../core/engine.js")
-                ).Engine(window.game);
-                await window.game.startSession();
-                window.game.engine.start();
-              }
-            } else {
-              console.error("Missing dependencies for starting new game");
-            }
+            console.log("[TECH-TREE] Calling showTechTreeSelection...");
+            await showTechTreeSelection(window.game, window.pageRouter, window.ui, this);
+            console.log("[TECH-TREE] showTechTreeSelection returned");
           } else {
-            console.error("Game instance not available");
+            console.error("[TECH-TREE] Game instance not available for tech tree selection");
           }
         } catch (error) {
-          console.error("Error starting new game:", error);
+          console.error("[TECH-TREE] Error showing tech tree selection:", error);
+          console.error("[TECH-TREE] Error stack:", error.stack);
         }
       });
       if (newGameButton) {
@@ -2009,19 +2240,9 @@ class SplashScreenManager {
     if (isSignedIn) {
       // Check if there's a save file in the cloud
       try {
-        const fileFound = await window.googleDriveSave.findSaveFile();
+        await window.googleDriveSave.findSaveFile();
         const fileId = window.googleDriveSave.saveFileId;
         if (fileId) {
-          // Try to load save data to get last save time, etc.
-          let saveData = {};
-          let playedTimeStr = "";
-          try {
-            saveData = await window.googleDriveSave.load();
-            const totalPlayedMs = saveData.total_played_time || 0;
-            playedTimeStr = this.formatTime(totalPlayedMs);
-          } catch (error) {
-            // fallback to empty
-          }
           const cloudBtn = createLoadFromCloudButton(async () => {
             try {
               console.log("[DEBUG] Loading from Google Drive...");
@@ -2089,7 +2310,7 @@ class SplashScreenManager {
           info.textContent = "No cloud save found.";
           cloudButtonArea.appendChild(info);
         }
-      } catch (error) {
+      } catch {
         cloudButtonArea.innerHTML = "Cloud check failed.";
       }
     } else {
@@ -2100,7 +2321,7 @@ class SplashScreenManager {
           signInBtn.querySelector("span").textContent = "Signing in...";
           await window.googleDriveSave.signIn();
           await this.updateGoogleDriveUI(true, cloudButtonArea);
-        } catch (error) {
+        } catch {
           signInBtn.querySelector("span").textContent = "Sign in Failed";
           setTimeout(() => {
             signInBtn.querySelector("span").textContent = "Google Sign In";

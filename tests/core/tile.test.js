@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { placePart, forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("Tile Mechanics", () => {
   let game;
@@ -8,13 +9,8 @@ describe("Tile Mechanics", () => {
   });
 
   it("should set and clear parts correctly, handling money", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-
-    await tile.setPart(part);
-    expect(tile.part).toBe(part);
-    expect(tile.activated).toBe(true);
-    expect(tile.ticks).toBe(part.ticks);
+    const tile = await placePart(game, 0, 0, "uranium1");
+    const part = tile.part;
 
     const moneyBeforeSell = game.current_money;
     tile.clearPart(true); // refund = true
@@ -24,10 +20,7 @@ describe("Tile Mechanics", () => {
   });
 
   it("should clear a part without a refund", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-    await tile.setPart(part);
-
+    const tile = await placePart(game, 0, 0, "uranium1");
     const moneyBeforeClear = game.current_money;
     game.handleComponentDepletion(tile);
 
@@ -36,10 +29,8 @@ describe("Tile Mechanics", () => {
   });
 
   it("should calculate partial refund for damaged parts", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-    await tile.setPart(part);
-
+    const tile = await placePart(game, 0, 0, "uranium1");
+    const part = tile.part;
     tile.ticks = part.ticks / 2;
     const moneyBeforeSell = game.current_money;
     const expectedRefund = Math.ceil(part.cost * (tile.ticks / part.ticks));
@@ -50,16 +41,10 @@ describe("Tile Mechanics", () => {
   });
 
   it("should not allow overwriting existing parts", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const firstPart = game.partset.getPartById("uranium1");
+    const tile = await placePart(game, 0, 0, "uranium1");
+    const firstPart = tile.part;
     const secondPart = game.partset.getPartById("vent1");
 
-    // Place the first part
-    await tile.setPart(firstPart);
-    expect(tile.part).toBe(firstPart);
-    expect(tile.part.id).toBe("uranium1");
-
-    // Attempt to place a second part - this should not overwrite the first
     await tile.setPart(secondPart);
 
     // The first part should still be there, not overwritten
@@ -85,21 +70,15 @@ describe("Tile Mechanics", () => {
   });
 
   it("should calculate effective vent value with upgrades", async () => {
-    const ventTile = game.tileset.getTile(0, 0);
-    const ventPart = game.partset.getPartById("vent1");
-    await ventTile.setPart(ventPart);
-
+    const ventTile = await placePart(game, 0, 0, "vent1");
     const initialVentValue = ventTile.getEffectiveVentValue();
-    expect(initialVentValue).toBe(ventPart.vent);
+    expect(initialVentValue).toBe(ventTile.part.vent);
+
+    forcePurchaseUpgrade(game, "improved_heat_vents");
 
     const ventUpgrade = game.upgradeset.getUpgrade("improved_heat_vents");
-    console.log(`[TEST] Before upgrade: vent value = ${ventTile.getEffectiveVentValue()}, part.vent = ${ventTile.part.vent}`);
-    game.upgradeset.purchaseUpgrade(ventUpgrade.id);
-    console.log(`[TEST] After upgrade: vent value = ${ventTile.getEffectiveVentValue()}, part.vent = ${ventTile.part.vent}, upgrade level = ${ventUpgrade.level}`);
-
-    const expectedValue = ventPart.base_vent * (1 + ventUpgrade.level); // Calculate from base value
+    const expectedValue = ventTile.part.base_vent * (1 + ventUpgrade.level);
     expect(ventTile.getEffectiveVentValue()).toBe(expectedValue);
-    console.log(`[TEST] Base vent: ${ventPart.base_vent}, upgrade level: ${ventUpgrade.level}, expected: ${expectedValue}, actual: ${ventTile.getEffectiveVentValue()}`);
   });
 
   it("should be enabled or disabled based on game dimensions", () => {

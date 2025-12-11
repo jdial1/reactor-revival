@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from '../helpers/setup.js';
 import { AudioService } from '../../public/src/services/audioService.js';
+import { placePart, forcePurchaseUpgrade, runTicks } from "../helpers/gameHelpers.js";
 
 describe('EP Reboot Functionality', () => {
     let game;
-    let document;
 
     beforeEach(async () => {
         vi.spyOn(AudioService.prototype, 'play').mockImplementation(() => {});
@@ -11,7 +11,6 @@ describe('EP Reboot Functionality', () => {
         game = setup.game;
         game.audio = new AudioService();
         await game.audio.init();
-        document = setup.document;
 
         // Reset EP to 0 to ensure clean state
         game.exotic_particles = 0;
@@ -33,30 +32,22 @@ describe('EP Reboot Functionality', () => {
 
     describe('EP Generation and Display', () => {
         it('should generate EP from particle accelerators', async () => {
-            // Ensure engine is running
+            game.paused = false;
             if (!game.engine.running) {
                 game.engine.start();
             }
-
-            // Set up a particle accelerator
-            const tile = game.tileset.getTile(0, 0);
             const part = game.partset.getPartById("particle_accelerator1");
-            await tile.setPart(part);
-
-            // Set heat to trigger EP generation (need enough heat)
+            const tile = await placePart(game, 0, 0, "particle_accelerator1");
             tile.heat_contained = part.ep_heat * 10;
-            tile.activated = true;
+            
             game.reactor.updateStats();
-
             const initialEP = game.exotic_particles;
-
-            // Run multiple engine ticks to generate EP
+            
             for (let i = 0; i < 20; i++) {
                 game.engine.tick();
                 game.reactor.updateStats();
                 if (game.exotic_particles > initialEP) break;
             }
-
             expect(game.exotic_particles).toBeGreaterThan(initialEP);
         });
 
@@ -94,20 +85,19 @@ describe('EP Reboot Functionality', () => {
 
     describe('Reboot for EP (Keep EP)', () => {
         it('should play reboot sound and keep EP when rebooting', async () => {
+            game.paused = false;
             game.engine.start();
             const playSpy = vi.spyOn(game.audio, 'play');
-            const pa = game.partset.getPartById('particle_accelerator1');
-            const pa_tile = game.tileset.getTile(0, 2);
-            pa.ep_heat = 1000; // Set high enough to generate probability
-            await pa_tile.setPart(pa);
+            
+            const pa_tile = await placePart(game, 0, 2, "particle_accelerator1");
+            pa_tile.part.ep_heat = 1000;
             pa_tile.heat_contained = 1000;
-            for (let i = 0; i < 20; i++) game.engine.tick();
-
+            
+            runTicks(game, 20);
             expect(game.exotic_particles).toBeGreaterThan(50);
+            
             const epBeforeReboot = game.exotic_particles;
             game.current_money = 5000;
-
-            // Perform reboot that keeps EP
             await game.reboot_action(true);
 
             // EP should be preserved and added to total
@@ -123,54 +113,37 @@ describe('EP Reboot Functionality', () => {
         });
 
         it('should preserve experimental upgrades but reset standard ones on reboot', async () => {
-            // Ensure a clean and affordable state
-            game.current_money = 1e9;
-            game.exotic_particles = 1e6;
-            game.current_exotic_particles = 1e6;
-            game.upgradeset.check_affordability(game);
-
-            // 1. Purchase a standard upgrade
+            forcePurchaseUpgrade(game, "chronometer");
+            forcePurchaseUpgrade(game, "laboratory");
+            
             const standardUpgrade = game.upgradeset.getUpgrade("chronometer");
-            expect(standardUpgrade).toBeDefined();
-            game.current_money = standardUpgrade.getCost();
-            game.upgradeset.purchaseUpgrade(standardUpgrade.id);
-            expect(standardUpgrade.level).toBe(1);
-
-            // 2. Purchase an experimental upgrade (research)
             const labUpgrade = game.upgradeset.getUpgrade("laboratory");
-            expect(labUpgrade).toBeDefined();
-            game.current_exotic_particles = labUpgrade.getEcost();
-            game.upgradeset.purchaseUpgrade(labUpgrade.id);
+            
+            expect(standardUpgrade.level).toBe(1);
             expect(labUpgrade.level).toBe(1);
-
-            // 3. Perform the reboot for EP
+            
             await game.reboot_action(true);
-
-            // 4. Verify the state after reboot
-            expect(game.upgradeset.getUpgrade("chronometer").level).toBe(0); // Standard reset
-            expect(game.upgradeset.getUpgrade("laboratory").level).toBe(1);  // EP persists
+            
+            expect(game.upgradeset.getUpgrade("chronometer").level).toBe(0);
+            expect(game.upgradeset.getUpgrade("laboratory").level).toBe(1);
         });
     });
 
     describe('Reboot and Refund EP (Full Refund)', () => {
         it('should reset all EP to zero on a full refund reboot', async () => {
+            game.paused = false;
             game.engine.start();
-            const pa = game.partset.getPartById('particle_accelerator1');
-            const paTile = game.tileset.getTile(0, 2);
-            pa.ep_heat = 1000; // Set high enough to generate probability
-            await paTile.setPart(pa);
+            
+            const paTile = await placePart(game, 0, 2, "particle_accelerator1");
+            paTile.part.ep_heat = 1000;
             paTile.heat_contained = 1000;
-            for (let i = 0; i < 10; i++) game.engine.tick();
+            
+            runTicks(game, 10);
             expect(game.exotic_particles).toBeGreaterThan(0);
+            
             game.current_money = 5000;
             await game.router.loadPage("experimental_upgrades_section");
-            const refundBtn = document.getElementById('refund_btn');
-            if (refundBtn) {
-                refundBtn.click();
-                await new Promise(resolve => setTimeout(resolve, 10));
-            } else {
-                await game.reboot_action(false);
-            }
+            await game.reboot_action(false);
 
             expect(game.exotic_particles).toBe(0);
             expect(game.total_exotic_particles).toBe(0);

@@ -1,7 +1,7 @@
 // Ensure globals are mocked for all tests BEFORE any imports
 
 // --- 1. Define Mock Storage Factory ---
-const createMockLocalStorage = () => {
+function createMockLocalStorage() {
     let store = {};
     return {
         getItem: (key) => store[key] || null,
@@ -31,6 +31,8 @@ if (typeof global.window === "undefined") {
         localStorage: global.localStorage,
         setTimeout: setTimeout,
         clearTimeout: clearTimeout,
+        requestAnimationFrame: () => 0, // No-op raf to avoid scheduling loops
+        cancelAnimationFrame: () => {}, // No-op cancel
         location: {
             href: 'http://localhost:8080/',
             origin: 'http://localhost:8080',
@@ -38,6 +40,31 @@ if (typeof global.window === "undefined") {
             hash: ''
         }
     };
+}
+
+// CRITICAL: Mock requestAnimationFrame globally to prevent infinite loops in tests
+if (typeof global.requestAnimationFrame === "undefined") {
+    global.requestAnimationFrame = () => 0;
+}
+if (typeof global.cancelAnimationFrame === "undefined") {
+    global.cancelAnimationFrame = () => {};
+}
+
+// Mark test environment for engine detection - must be set BEFORE any game code runs
+if (typeof global !== 'undefined') {
+  global.__VITEST__ = true;
+}
+
+// Mock ResizeObserver globally for all tests
+if (typeof global.ResizeObserver === "undefined") {
+  global.ResizeObserver = class ResizeObserver {
+    constructor(callback) {
+      this.callback = callback;
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
 }
 
 if (typeof global.document === "undefined") {
@@ -101,14 +128,14 @@ export {
   TemplateLoader
 };
 
-// Polyfill performance.mark and performance.measure for all tests
+// Global mocks
 if (typeof global.performance === "undefined") {
   global.performance = {};
 }
 global.performance.mark = global.performance.mark || (() => { });
 global.performance.measure = global.performance.measure || (() => { });
 
-// Polyfill PointerEvent for tests
+// Mock PointerEvent
 if (typeof global.PointerEvent === "undefined") {
   global.PointerEvent = class PointerEvent extends Event {
     constructor(type, options = {}) {
@@ -143,15 +170,7 @@ if (typeof global.PointerEvent === "undefined") {
   };
 }
 
-// Polyfill closest method for window object in tests
-if (typeof global.window !== "undefined" && typeof global.window.closest === "undefined") {
-  global.window.closest = function (selector) {
-    // Window doesn't have a closest method, return null
-    return null;
-  };
-}
-
-// Store original console methods
+// Console Mocks & Filtering
 const originalConsoleLog = console.log;
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
@@ -582,11 +601,26 @@ const safeSerialize = (obj, maxDepth = 1, currentDepth = 0) => {
   }
 };
 
+// Shim for older tests using setupGame
+export async function setupGame() {
+  const { game } = await setupGameWithDOM();
+  // Start the engine for tests that use setupGame (they expect it to be running)
+  if (game.engine) {
+    game.paused = false;
+    game.engine.start();
+    if (game.ui && game.ui.stateManager) {
+      game.ui.stateManager.setVar("pause", false);
+      game.ui.stateManager.setVar("engine_status", "running");
+    }
+  }
+  return game;
+}
+
 // This setup is for CORE LOGIC tests that do not require a DOM.
 // It uses a mocked UI for speed and isolation.
 let globalGameLogicOnly = null;
 
-export async function setupGame() {
+export async function setupGameLogicOnly() {
   // Ensure localStorage is available
   if (!global.localStorage) {
     global.localStorage = createMockLocalStorage();
@@ -596,32 +630,58 @@ export async function setupGame() {
   }
 
   if (globalGameLogicOnly) {
-    // Don't call set_defaults() when reusing global instance to preserve save state
-    // Only reset basic values that don't affect save state
+    // Force a full reset of the reused game instance
+    await globalGameLogicOnly.set_defaults();
+    globalGameLogicOnly.bypass_tech_tree_restrictions = true; // Ensure restrictions are bypassed for logic tests
+    
+    // Set high resources for testing convenience by default, specific tests can override
     globalGameLogicOnly.current_money = 1e30;
     globalGameLogicOnly.exotic_particles = 1e20;
     globalGameLogicOnly.current_exotic_particles = 1e20;
+    globalGameLogicOnly.total_exotic_particles = 1e20;
+    
+    // Explicitly reset critical subsystems that might retain state
+    globalGameLogicOnly.reactor.heat_controlled = false;
+    globalGameLogicOnly.reactor.current_heat = 0;
+    globalGameLogicOnly.reactor.current_power = 0;
+    if (globalGameLogicOnly.tileset.tiles_list.length === 0) {
+      globalGameLogicOnly.tileset.initialize();
+    }
+    globalGameLogicOnly.tileset.clearAllTiles();
+    
+    // Reset all upgrades to level 0
+    if (globalGameLogicOnly.upgradeset && globalGameLogicOnly.upgradeset.upgradesArray) {
+        globalGameLogicOnly.upgradeset.upgradesArray.forEach(u => {
+            u.level = 0;
+            // CRITICAL FIX: Must recalculate display cost after level reset, 
+            // otherwise current_cost remains high from previous tests
+            u.updateDisplayCost(); 
+        });
+    }
+
+    // Refresh affordability flags based on the new money/EP
     globalGameLogicOnly.partset.check_affordability(globalGameLogicOnly);
     globalGameLogicOnly.upgradeset.check_affordability(globalGameLogicOnly);
     globalGameLogicOnly.reactor.updateStats();
-
-    if (globalGameLogicOnly.engine && globalGameLogicOnly.engine.running) {
-      globalGameLogicOnly.engine.stop();
+    
+    // Reset Engine state
+    if (globalGameLogicOnly.engine) {
+        if (globalGameLogicOnly.engine.running) globalGameLogicOnly.engine.stop();
+        globalGameLogicOnly.engine.tick_count = 0;
+        globalGameLogicOnly.engine.time_accumulator = 0;
     }
 
-    const currentPauseState = globalGameLogicOnly.ui.stateManager.getVar("pause");
-    if (currentPauseState === undefined) {
-      globalGameLogicOnly.paused = false;
-      globalGameLogicOnly.ui.stateManager.setVar("pause", false);
-    } else {
-      globalGameLogicOnly.paused = currentPauseState;
+    // Reset UI State
+    globalGameLogicOnly.paused = false;
+    if (globalGameLogicOnly.ui && globalGameLogicOnly.ui.stateManager) {
+        globalGameLogicOnly.ui.stateManager.setVar("pause", false);
+        globalGameLogicOnly.ui.stateManager.setVar("current_money", globalGameLogicOnly.current_money);
+        globalGameLogicOnly.ui.stateManager.setVar("exotic_particles", globalGameLogicOnly.exotic_particles);
+        globalGameLogicOnly.ui.stateManager.setVar("current_exotic_particles", globalGameLogicOnly.current_exotic_particles);
     }
 
-    globalGameLogicOnly.ui.stateManager.setVar("current_money", globalGameLogicOnly.current_money);
-    globalGameLogicOnly.ui.stateManager.setVar("exotic_particles", globalGameLogicOnly.exotic_particles);
-    globalGameLogicOnly.ui.stateManager.setVar("current_exotic_particles", globalGameLogicOnly.current_exotic_particles);
-
-    if (globalGameLogicOnly.engine && !globalGameLogicOnly.paused) {
+    // Restart engine for the test
+    if (globalGameLogicOnly.engine) {
       globalGameLogicOnly.engine.start();
     }
 
@@ -638,6 +698,31 @@ export async function setupGame() {
   ui.updateAllToggleBtnStates = vi.fn();
   ui.updateToggleButtonState = vi.fn();
   ui.showPage = vi.fn();
+  
+  // Mock template interaction
+  if (typeof window !== 'undefined' && window) {
+    window.templateLoader = {
+      cloneTemplateElement: vi.fn(() => {
+        // Return a dummy element to prevent crashes when logic tries to create UI
+        if (typeof document !== 'undefined') {
+          const el = document.createElement('div');
+          el.dataset = {};
+          return el;
+        }
+        return {
+          querySelector: () => ({ textContent: '', style: {} }),
+          classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+          style: {},
+          addEventListener: () => {},
+          appendChild: () => {},
+          dataset: {}
+        };
+      }),
+      getTemplate: vi.fn(),
+      setText: vi.fn(),
+      setVisible: vi.fn()
+    };
+  }
 
   // Mock stateManager methods after UI is created
   if (ui.stateManager) {
@@ -659,6 +744,7 @@ export async function setupGame() {
     };
   }
   const game = new Game(ui);
+  game.bypass_tech_tree_restrictions = true; // Ensure restrictions are bypassed for DOM tests
   await ui.init(game);
   game.engine = new Engine(game);
 
@@ -684,12 +770,14 @@ export async function setupGame() {
   game.upgradeset.check_affordability(game);
   game.reactor.updateStats();
 
+  // Ensure game is not paused and engine is ready
+  game.paused = false;
   if (game.engine && game.engine.running) {
     game.engine.stop();
   }
 
   // Start the engine for tests (unless explicitly testing pause behavior)
-  if (game.engine && !game.paused) {
+  if (game.engine) {
     game.engine.start();
   }
 
@@ -697,31 +785,17 @@ export async function setupGame() {
   return game;
 }
 
-let dom, window, document;
 let globalGameWithDOM = null;
+let dom, window, document;
 
-// Helper function to inject HTML content into the DOM
-function injectHTMLContent(document, htmlContent) {
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = htmlContent;
-
-  // Move all child nodes to the document body
-  while (tempDiv.firstChild) {
-    document.body.appendChild(tempDiv.firstChild);
-  }
-}
-
-// Helper function to initialize template loader with real content
+// Initialize template loader with real file content
 async function initializeTemplateLoader(window) {
   try {
-    // Read the actual templates.html file
     const templatesPath = path.resolve(__dirname, "../../public/components/templates.html");
     const templatesContent = fs.readFileSync(templatesPath, "utf-8");
-
-    // Create a template loader instance
     const templateLoader = new TemplateLoader();
-
-    // Mock the fetch method to return our templates content
+    
+    // Mock fetch just for this loader inside the window context if needed
     const originalFetch = window.fetch;
     window.fetch = vi.fn().mockImplementation((url) => {
       if (url.includes('templates.html')) {
@@ -730,265 +804,137 @@ async function initializeTemplateLoader(window) {
           text: () => Promise.resolve(templatesContent)
         });
       }
-      // Fall back to original fetch for other URLs
       return originalFetch(url);
     });
 
-    // Load templates
     await templateLoader.loadTemplates();
-
-    // Restore original fetch
-    window.fetch = originalFetch;
-
+    window.fetch = originalFetch; // Restore
     return templateLoader;
   } catch (error) {
     console.warn("Failed to initialize template loader with real content:", error.message);
-    // Return a basic mock if real content fails
     return {
-      cloneTemplateElement: vi.fn(() => document.createElement('div')),
-      getTemplate: vi.fn(() => document.createElement('div'))
+      cloneTemplateElement: vi.fn(() => window.document.createElement('div')),
+      getTemplate: vi.fn(() => window.document.createElement('div'))
     };
   }
 }
 
+function injectHTMLContent(document, htmlContent) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlContent;
+  while (tempDiv.firstChild) {
+    document.body.appendChild(tempDiv.firstChild);
+  }
+}
+
+// Main Setup Function
 export async function setupGameWithDOM() {
-  const indexHtml = fs.readFileSync(
-    path.resolve(__dirname, "../../public/index.html"),
-    "utf-8"
-  );
+  const indexHtmlPath = path.resolve(__dirname, "../../public/index.html");
+  const indexHtml = fs.readFileSync(indexHtmlPath, "utf-8");
+
+  // Create JSDOM environment
   dom = new JSDOM(indexHtml, {
-    url: "http://localhost:8080",
+    url: "http://localhost:8080/",
     pretendToBeVisual: true,
     resources: "usable",
+    runScripts: "dangerously"
   });
+
   window = dom.window;
   document = window.document;
-
   global.window = window;
   global.document = document;
-  
-  // Ensure localStorage exists in JSDOM
+
+  // Ensure window.localStorage is available (JSDOM provides it, but ensure it's working)
   if (!window.localStorage) {
-    Object.defineProperty(window, 'localStorage', {
-      value: createMockLocalStorage()
-    });
-    global.localStorage = window.localStorage;
-  } else {
-    global.localStorage = window.localStorage;
+    window.localStorage = createMockLocalStorage();
   }
-  global.HTMLElement = window.HTMLElement;
-  global.Element = window.Element;
-  global.Node = window.Node;
-  global.CustomEvent = window.CustomEvent;
-  global.Event = window.Event;
+  // Also ensure global.localStorage points to the same instance
+  global.localStorage = window.localStorage;
 
-  // Add only essential global properties to avoid circular references
-  // Fix location object to prevent url-parse library errors
-  const location = {
-    href: 'http://localhost:8080/',
-    origin: 'http://localhost:8080',
-    protocol: 'http:',
-    host: 'localhost:8080',
-    hostname: 'localhost',
-    port: '8080',
-    pathname: '/',
-    search: '',
-    hash: '',
-    username: '',
-    password: '',
-    _location: {
-      href: 'http://localhost:8080/',
-      origin: 'http://localhost:8080',
-      protocol: 'http:',
-      host: 'localhost:8080',
-      hostname: 'localhost',
-      port: '8080',
-      pathname: '/',
-      search: '',
-      hash: '',
-      username: '',
-      password: ''
+  window.requestAnimationFrame = () => 0;
+  window.cancelAnimationFrame = () => {};
+  global.requestAnimationFrame = () => 0;
+
+  // ResizeObserver Mock
+  window.ResizeObserver = class ResizeObserver {
+    constructor(callback) {
+      this.callback = callback;
     }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   };
+  global.ResizeObserver = window.ResizeObserver;
 
-  global.location = location;
-  global.navigator = window.navigator;
-  global.URL = window.URL;
-  global.URLSearchParams = window.URLSearchParams;
-
-  // Mock AudioContext for JSDOM
+  // Audio Context Mock (Simplified)
   window.AudioContext = class {
-    constructor() {
-      this.state = 'running';
-      this.destination = {};
-    }
-    createGain() {
-      return {
-        gain: {
-          value: 0,
-          setValueAtTime: () => {},
-          linearRampToValueAtTime: () => {},
-          setTargetAtTime: () => {},
-          exponentialRampToValueAtTime: () => {}
-        },
-        connect: () => {},
-        disconnect: () => {}
-      };
-    }
-    createOscillator() {
-      return {
-        type: 'sine',
-        frequency: { value: 440, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
-        connect: () => {},
-        disconnect: () => {},
-        start: () => {},
-        stop: () => {}
-      };
-    }
-    createBufferSource() {
-      return {
-        buffer: null,
-        loop: false,
-        connect: () => {},
-        disconnect: () => {},
-        start: () => {},
-        stop: () => {}
-      };
-    }
-    createBiquadFilter() {
-      return {
-        type: 'lowpass',
-        frequency: { value: 1000, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
-        Q: { value: 1 },
-        connect: () => {},
-        disconnect: () => {}
-      };
-    }
-    createWaveShaper() {
-      return { curve: null, connect: () => {}, disconnect: () => {} };
-    }
-    createBuffer() {
-      return {
-        getChannelData: () => new Float32Array(100)
-      };
-    }
-    suspend() {}
-    resume() {}
+    constructor() { this.state = 'running'; this.destination = {}; }
+    createGain() { return { gain: { value: 1, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {}, setTargetAtTime: () => {} }, connect: () => {} }; }
+    createOscillator() { return { type: 'sine', frequency: { value: 440, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} }, connect: () => {}, start: () => {}, stop: () => {} }; }
+    createBufferSource() { return { buffer: null, connect: () => {}, start: () => {}, stop: () => {} }; }
+    createBiquadFilter() { return { type: 'lowpass', frequency: { value: 350, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} }, Q: { value: 1, setValueAtTime: () => {} }, connect: () => {} }; }
+    createWaveShaper() { return { connect: () => {} }; }
+    createStereoPanner() { return { pan: { value: 0, setValueAtTime: () => {} }, connect: () => {} }; }
+    createBuffer() { return { getChannelData: () => new Float32Array(1024) }; }
+    suspend() { return Promise.resolve(); }
+    resume() { return Promise.resolve(); }
   };
   window.webkitAudioContext = window.AudioContext;
 
-  // Try to fix window.location to prevent url-parse library errors
-  // Use a safer approach that doesn't try to redefine non-configurable properties
-  // NOTE: Some tests (clipboard.test.js, pasteModal.test.js, meltdown.test.js) may still fail
-  // on GitHub Actions due to JSDOM environment differences where window.location._location
-  // is null when url-parse library tries to access it. These tests are excluded from
-  // GitHub Actions CI/CD but run successfully locally.
-  try {
-    // First try to set the _location property directly
-    if (window.location) {
-      window.location._location = location._location;
-    }
-  } catch (error) {
-    // If that fails, try to define the property only if it's configurable
+
+  // Implement fetch to read from filesystem
+  global.fetch = window.fetch = async (url) => {
     try {
-      const descriptor = Object.getOwnPropertyDescriptor(window, 'location');
-      if (descriptor && descriptor.configurable) {
-        Object.defineProperty(window, 'location', {
-          value: location,
-          writable: true,
-          configurable: true
-        });
+      let urlStr = url.toString();
+      // Handle relative paths from root or public
+      let cleanPath = urlStr.replace(/^http:\/\/localhost:8080\//, '').replace(/^\.\//, '').split('?')[0]; // Remove query params
+
+      // Force mock response for external libs to avoid HTML/404 syntax errors in JSDOM
+      if (
+        cleanPath.includes('lib/') ||
+        cleanPath.includes('pako') ||
+        cleanPath.includes('zip') ||
+        cleanPath.includes('sqlite')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'application/javascript']]),
+          text: () => Promise.resolve('/* Mock Lib */'),
+          json: () => Promise.resolve({})
+        };
+      }
+      
+      // Determine file path
+      let filePath;
+      if (cleanPath.startsWith('data/') || cleanPath.startsWith('pages/') || cleanPath.startsWith('components/') || cleanPath.startsWith('lib/')) {
+        filePath = path.resolve(__dirname, "../../public", cleanPath);
+      } else if (cleanPath === 'version.json') {
+        filePath = path.resolve(__dirname, "../../public/version.json");
       } else {
-        // If not configurable, just set the _location property on the existing object
-        if (window.location) {
-          Object.defineProperty(window.location, '_location', {
-            value: location._location,
-            writable: true,
-            configurable: true
-          });
+        // Fallback or specific handling
+        filePath = path.resolve(__dirname, "../../public", cleanPath);
+      }
+
+      if (!fs.existsSync(filePath)) {
+        // For library JS files that don't exist, return empty JS to prevent errors
+        if (cleanPath.includes('lib/') && (cleanPath.endsWith('.js') || cleanPath.endsWith('.min.js'))) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Map([['content-type', 'application/javascript']]),
+            text: () => Promise.resolve('// Mock library file'),
+            json: () => Promise.resolve({})
+          };
         }
-      }
-    } catch (innerError) {
-      // If all else fails, just log the error and continue
-      console.warn('Could not configure window.location for url-parse compatibility:', innerError.message);
-    }
-  }
-
-  // Add missing clipboard API
-  global.navigator.clipboard = {
-    readText: vi.fn(() => Promise.resolve('')),
-    writeText: vi.fn(() => Promise.resolve()),
-    read: vi.fn(() => Promise.resolve([])),
-    write: vi.fn(() => Promise.resolve())
-  };
-
-  // Add missing matchMedia API
-  global.matchMedia = vi.fn(() => ({
-    matches: false,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn()
-  }));
-
-  // Add missing ResizeObserver API
-  global.ResizeObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn()
-  }));
-
-  // Add missing IntersectionObserver API
-  global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn()
-  }));
-
-  // Add missing MutationObserver API
-  global.MutationObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    disconnect: vi.fn(),
-    takeRecords: vi.fn(() => [])
-  }));
-
-  // Enhanced fetch mock that handles more file types
-  global.fetch = async (url) => {
-    try {
-      // Handle different URL patterns
-      let relativePath = url.toString();
-
-      // Remove leading slash if present
-      if (relativePath.startsWith('/')) {
-        relativePath = relativePath.substring(1);
+        return { ok: false, status: 404, statusText: "Not Found" };
       }
 
-      // Handle relative paths that start with ./
-      if (relativePath.startsWith('./')) {
-        relativePath = relativePath.substring(2);
-      }
-
-      // Resolve to public directory for static assets
-      const filePath = path.resolve(
-        __dirname,
-        "../../public",
-        relativePath
-      );
+      const ext = path.extname(filePath);
 
       const content = fs.readFileSync(filePath, "utf-8");
-
-      // Determine content type based on file extension
-      let contentType = "text/plain";
-      if (relativePath.endsWith('.json')) {
-        contentType = "application/json";
-      } else if (relativePath.endsWith('.html')) {
-        contentType = "text/html";
-      } else if (relativePath.endsWith('.css')) {
-        contentType = "text/css";
-      } else if (relativePath.endsWith('.js')) {
-        contentType = "application/javascript";
-      }
+      const contentType = ext === '.json' ? 'application/json' : (ext === '.html' ? 'text/html' : (ext === '.js' ? 'application/javascript' : 'text/plain'));
 
       return {
         ok: true,
@@ -997,226 +943,173 @@ export async function setupGameWithDOM() {
         text: () => Promise.resolve(content),
         json: () => Promise.resolve(JSON.parse(content)),
       };
-    } catch (error) {
-      console.error(`Fetch failed for URL: ${url}`, error);
-      return { ok: false, status: 404, statusText: "Not Found" };
+    } catch (e) {
+      console.error(`Fetch error for ${url}:`, e);
+      return { ok: false, status: 500, statusText: "Internal Error" };
     }
   };
 
-  // Initialize the template loader with real content
+  // Load Templates
   window.templateLoader = await initializeTemplateLoader(window);
 
-  // Inject required HTML content from game pages
+  // Inject Partials (Reactor, Game, etc.) to ensure DOM is complete
   try {
-    // Inject reactor page content
-    const reactorHtmlPath = path.resolve(__dirname, "../../public/pages/reactor.html");
-    if (fs.existsSync(reactorHtmlPath)) {
-      const reactorContent = fs.readFileSync(reactorHtmlPath, "utf-8");
-      injectHTMLContent(document, reactorContent);
-    }
-
-    // Inject game page content
-    const gameHtmlPath = path.resolve(__dirname, "../../public/pages/game.html");
-    if (fs.existsSync(gameHtmlPath)) {
-      const gameContent = fs.readFileSync(gameHtmlPath, "utf-8");
-      injectHTMLContent(document, gameContent);
-    }
-  } catch (error) {
-    console.warn("Failed to inject HTML content:", error.message);
+    const reactorHTML = fs.readFileSync(path.resolve(__dirname, "../../public/pages/reactor.html"), "utf-8");
+    injectHTMLContent(document, reactorHTML);
+    const gameHTML = fs.readFileSync(path.resolve(__dirname, "../../public/pages/game.html"), "utf-8");
+    injectHTMLContent(document, gameHTML);
+  } catch (e) {
+    console.warn("Could not inject partials:", e.message);
   }
 
+  // Initialize Game Stack
   const ui = new UI();
   const game = new Game(ui);
   const pageRouter = new PageRouter(ui);
+  
   game.audio = new (await import("../../public/src/services/audioService.js")).AudioService();
   await game.audio.init();
+  
   game.router = pageRouter;
-
-  // Mock Google Drive functionality for all tests
   game.googleDriveSave = {
     saveToCloud: vi.fn(() => Promise.resolve()),
     loadFromCloud: vi.fn(() => Promise.resolve({})),
     isSignedIn: vi.fn(() => false)
   };
-
+  
+  // Initialize UI and Game
   await ui.init(game);
-
-  // Add a basic tooltip manager mock for DOM tests
-  game.tooltip_manager = {
-    show: () => { },
-    hide: () => { },
-    closeView: () => { },
-    update: () => { },
-    updateUpgradeAffordability: () => { },
-    isLocked: false,
-    tooltip_showing: false,
-    current_obj: null,
-  };
-
+  
+  if (ui.stateManager) {
+    // stateManager initialization if needed
+  }
+  
   game.tileset.initialize();
-  await game.partset.initialize();
-  await game.upgradeset.initialize();
+  await game.partset.initialize(); // Loads real JSON
+  await game.upgradeset.initialize(); // Loads real JSON
   await game.set_defaults();
+  
   game.objectives_manager = new ObjectiveManager(game);
-  await game.objectives_manager.initialize();
+  await game.objectives_manager.initialize(); // Loads real JSON
+  
   game.engine = new Engine(game);
-
-  try {
-    await pageRouter.loadGameLayout();
-    ui.initMainLayout();
-    await pageRouter.loadPage("reactor_section");
-  } catch (error) {
-    // Suppress verbose page loading warnings
-    if (process.env.VITEST_VERBOSE) {
-      console.warn("Page loading failed in test setup:", error.message);
-    }
+  
+  // Start engine by default (tests that need it stopped can stop it in their beforeEach)
+  game.paused = false;
+  if (game.engine && !game.engine.running) {
+    game.engine.start();
+  }
+  if (ui.stateManager) {
+    ui.stateManager.setVar("pause", false);
+    ui.stateManager.setVar("engine_status", "running");
   }
 
-  game.current_money = 1e30;
-  game.exotic_particles = 1e20;
-  game.current_exotic_particles = 1e20;
+  // Initialize UI layout
+  try {
+     // Mock router loading the layout since we manually injected HTML
+     // We just need to trigger the logic that binds events
+     ui.initMainLayout();
+     // Manually call resize to ensure grid is ready
+     ui.gridScaler.resize();
+  } catch(e) {
+     console.error("UI Init Error:", e);
+  }
 
+  globalGameWithDOM = game;
+
+  // Note: Do not set high resources by default in setupGameWithDOM
+  // Tests that need high resources should set them explicitly
+  // This allows tests to verify default initialization values
   game.partset.check_affordability(game);
   game.upgradeset.check_affordability(game);
   game.reactor.updateStats();
 
-  globalGameWithDOM = game;
   return { game, document, window };
 }
 
 export function cleanupGame() {
-  // Clean up global game logic instance
-  if (globalGameLogicOnly) {
-    // Stop engine and clear timers
-    if (globalGameLogicOnly.engine && globalGameLogicOnly.engine.stop) {
-      globalGameLogicOnly.engine.stop();
-    }
-    if (globalGameLogicOnly.engine && globalGameLogicOnly.engine.interval) {
-      clearInterval(globalGameLogicOnly.engine.interval);
-      globalGameLogicOnly.engine.interval = null;
-    }
-
-    // Clear objective manager timeouts
-    if (globalGameLogicOnly.objectives_manager) {
-      if (globalGameLogicOnly.objectives_manager.objective_timeout) {
-        clearTimeout(globalGameLogicOnly.objectives_manager.objective_timeout);
-        globalGameLogicOnly.objectives_manager.objective_timeout = null;
-      }
-      // Clear any other timers in objective manager
-      if (globalGameLogicOnly.objectives_manager.timers) {
-        globalGameLogicOnly.objectives_manager.timers.forEach(timer => clearTimeout(timer));
-        globalGameLogicOnly.objectives_manager.timers = [];
-      }
-    }
-
-    // Stop UI update loop
-    if (globalGameLogicOnly.ui) {
-      if (globalGameLogicOnly.ui.update_interface_task) {
-        clearTimeout(globalGameLogicOnly.ui.update_interface_task);
-        globalGameLogicOnly.ui.update_interface_task = null;
-      }
-      // Set a flag to prevent the loop from continuing
-      globalGameLogicOnly.ui._updateLoopStopped = true;
-      
-      // Clear any other timers
-      if (globalGameLogicOnly.ui.timers) {
-        globalGameLogicOnly.ui.timers.forEach(timer => clearTimeout(timer));
-        globalGameLogicOnly.ui.timers = [];
-      }
-    }
-
-    // Reset pause state
-    globalGameLogicOnly.paused = false;
-    if (globalGameLogicOnly.ui?.stateManager) {
-      globalGameLogicOnly.ui.stateManager.setVar("pause", false);
-    }
-
-    // Clear references to prevent memory leaks
-    globalGameLogicOnly = null;
-  }
-
-  // Clean up DOM-based game instance
   if (globalGameWithDOM) {
-    // Stop engine and clear timers
-    if (globalGameWithDOM.engine) {
-      globalGameWithDOM.engine.stop();
-      if (globalGameWithDOM.engine.interval) {
-        clearInterval(globalGameWithDOM.engine.interval);
-        globalGameWithDOM.engine.interval = null;
-      }
-    }
-
-    // Stop UI update loop
-    if (globalGameWithDOM.ui) {
-      if (globalGameWithDOM.ui.update_interface_task) {
-        clearTimeout(globalGameWithDOM.ui.update_interface_task);
-        globalGameWithDOM.ui.update_interface_task = null;
-      }
-      if (globalGameWithDOM.ui._performanceUpdateInterval) {
-        clearInterval(globalGameWithDOM.ui._performanceUpdateInterval);
-        globalGameWithDOM.ui._performanceUpdateInterval = null;
-      }
-      // Set a flag to prevent the loop from continuing
-      globalGameWithDOM.ui._updateLoopStopped = true;
-    }
-
-    // Clear objective manager timeouts
-    if (globalGameWithDOM.objectives_manager) {
-      if (globalGameWithDOM.objectives_manager.objective_timeout) {
-        clearTimeout(globalGameWithDOM.objectives_manager.objective_timeout);
-        globalGameWithDOM.objectives_manager.objective_timeout = null;
-      }
-      if (globalGameWithDOM.objectives_manager.timers) {
-        globalGameWithDOM.objectives_manager.timers.forEach(timer => clearTimeout(timer));
-        globalGameWithDOM.objectives_manager.timers = [];
-      }
-    }
-
-    // Clear any other timers
-    if (globalGameWithDOM.ui?.timers) {
-      globalGameWithDOM.ui.timers.forEach(timer => clearTimeout(timer));
-      globalGameWithDOM.ui.timers = [];
-    }
-
+    if (globalGameWithDOM.engine) globalGameWithDOM.engine.stop();
+    // Clear any timers/intervals attached to game components
+    vi.clearAllTimers();
     globalGameWithDOM = null;
   }
-
-  // Clean up JSDOM environment
-  if (global.window && typeof global.window.close === "function") {
-    // Clear all timers to prevent async operations after test teardown
-    if (global.window.setTimeout && global.window.clearTimeout) {
-      const maxTimerId = setTimeout(() => {}, 0);
-      for (let i = 0; i <= maxTimerId; i++) {
-        clearTimeout(i);
-        clearInterval(i);
-      }
-      if (global.window._virtualConsole) {
-        global.window._virtualConsole.off("error", console.error);
-      }
-    }
+  if (globalGameLogicOnly) {
+    if (globalGameLogicOnly.engine) globalGameLogicOnly.engine.stop();
+    globalGameLogicOnly = null;
+  }
+  dom = null;
+  window = null;
+  document = null;
+  if (global.window && typeof global.window.close === 'function') {
     global.window.close();
   }
-
-  // Clear global references
   global.window = undefined;
   global.document = undefined;
-  
-  // CRITICAL FIX: Restore mock localStorage instead of setting to undefined
-  // This ensures subsequent tests that don't use setupGameWithDOM still have a working localStorage
-  global.localStorage = createMockLocalStorage();
-  
-  global.location = undefined;
-  global.navigator = undefined;
-
-  // Force garbage collection if available
-  if (global.gc) {
-    global.gc();
-  }
+  // Restore globals
+  vi.restoreAllMocks();
 }
 
 // Enhanced DOM setup for UI elements required by tests
 beforeEach(() => {
-  if (typeof document !== 'undefined') {
+  // Recreate minimal window/document if cleanup cleared them between tests
+  if (typeof global.window === 'undefined' || !global.window) {
+    global.window = {
+      localStorage: global.localStorage || createMockLocalStorage(),
+      setTimeout,
+      clearTimeout,
+      requestAnimationFrame: () => 0,
+      cancelAnimationFrame: () => {},
+      location: {
+        href: 'http://localhost:8080/',
+        origin: 'http://localhost:8080',
+        pathname: '/',
+        hash: ''
+      }
+    };
+  }
+  if (typeof global.document === 'undefined' || !global.document) {
+    global.document = {
+      body: { appendChild: () => {} },
+      createElement: () => ({
+        style: {},
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+        appendChild: () => {},
+        addEventListener: () => {},
+        setAttribute: () => {},
+        textContent: '',
+        id: '',
+        className: ''
+      }),
+      getElementById: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    };
+  } else if (!global.document.body) {
+    global.document.body = { appendChild: () => {} };
+  }
+  document = global.document;
+  // Ensure any running game engines are stopped to prevent infinite loops
+  if (globalGameWithDOM && globalGameWithDOM.engine) {
+    globalGameWithDOM.engine.running = false;
+    globalGameWithDOM.engine.animationFrameId = null;
+    if (globalGameWithDOM.engine.interval) {
+      clearInterval(globalGameWithDOM.engine.interval);
+      globalGameWithDOM.engine.interval = null;
+    }
+  }
+  if (globalGameLogicOnly && globalGameLogicOnly.engine) {
+    globalGameLogicOnly.engine.running = false;
+    globalGameLogicOnly.engine.animationFrameId = null;
+    if (globalGameLogicOnly.engine.interval) {
+      clearInterval(globalGameLogicOnly.engine.interval);
+      globalGameLogicOnly.engine.interval = null;
+    }
+  }
+  
+  if (typeof document !== 'undefined' && document && document.body) {
     // Ensure required UI elements exist
     const requiredElements = [
       'reactor_copy_btn',
@@ -1332,6 +1225,24 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // CRITICAL: Force stop all engines before cleanup to prevent infinite loops
+  if (globalGameWithDOM && globalGameWithDOM.engine) {
+    globalGameWithDOM.engine.running = false;
+    globalGameWithDOM.engine.animationFrameId = null;
+    if (globalGameWithDOM.engine.interval) {
+      clearInterval(globalGameWithDOM.engine.interval);
+      globalGameWithDOM.engine.interval = null;
+    }
+  }
+  if (globalGameLogicOnly && globalGameLogicOnly.engine) {
+    globalGameLogicOnly.engine.running = false;
+    globalGameLogicOnly.engine.animationFrameId = null;
+    if (globalGameLogicOnly.engine.interval) {
+      clearInterval(globalGameLogicOnly.engine.interval);
+      globalGameLogicOnly.engine.interval = null;
+    }
+  }
+  
   cleanupGame();
   vi.restoreAllMocks();
 
@@ -1352,16 +1263,11 @@ afterEach(() => {
   }
 });
 
-// Custom assertion helpers for focused error reporting
+// Export assertions for game state
 export const gameAssertions = {
-  // Assert tile has specific part
-  tileHasPart: (tile, expectedPartId, message = '') => {
-    if (!tile.part) {
-      throw new Error(`${message}Tile has no part. Expected: ${expectedPartId}`);
-    }
-    if (tile.part.id !== expectedPartId) {
-      throw new Error(`${message}Tile has wrong part. Expected: ${expectedPartId}, Got: ${tile.part.id}`);
-    }
+  // ... existing assertions ...
+  tileHasPart: (tile, expectedPartId) => {
+      if(!tile.part || tile.part.id !== expectedPartId) throw new Error(`Expected part ${expectedPartId}, got ${tile.part?.id}`);
   },
 
   // Assert tile heat level

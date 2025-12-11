@@ -18,7 +18,7 @@ export class Part {
     this.base_power = part_definition.base_power || 0;
     this.base_heat = part_definition.base_heat || 0;
     this.base_ticks = part_definition.base_ticks || 0;
-    this.base_containment = part_definition.base_containment || 0;
+    this.base_containment = part_definition.base_containment || (this.category === "reactor_plating" ? 1000 : 0);
     this.base_vent = part_definition.base_vent || 0;
     this.base_reactor_power = part_definition.base_reactor_power || 0;
     this.base_reactor_heat = part_definition.base_reactor_heat || 0;
@@ -83,6 +83,12 @@ export class Part {
       game.upgradeset.getUpgrade("unleashed_cells")?.level || 0;
     const unstableProtium =
       game.upgradeset.getUpgrade("unstable_protium")?.level || 0;
+    const componentReinforcement =
+      game.upgradeset.getUpgrade("component_reinforcement")?.level || 0;
+    const isotopeStabilization =
+      game.upgradeset.getUpgrade("isotope_stabilization")?.level || 0;
+    const quantumTunneling =
+      game.upgradeset.getUpgrade("quantum_tunneling")?.level || 0;
 
     // Cell tick upgrades
     let tickMultiplier = 1;
@@ -95,6 +101,10 @@ export class Part {
       // Unstable Protium for protium cells
       if (this.type === "protium" && unstableProtium > 0) {
         tickMultiplier /= Math.pow(2, unstableProtium);
+      }
+
+      if (isotopeStabilization > 0) {
+        tickMultiplier *= (1 + (isotopeStabilization * 0.05));
       }
     }
 
@@ -242,9 +252,6 @@ export class Part {
       Math.pow(2, quantumBuffering);
 
     this.power = this.base_power * powerMultiplier;
-    if (!isFinite(this.power) || isNaN(this.power)) {
-      this.power = this.base_power || 0;
-    }
     this.heat = this.base_heat;
     if (this.category === "cell" && unleashedCells > 0) {
       this.heat *= Math.pow(2, unleashedCells);
@@ -259,18 +266,43 @@ export class Part {
 
     this.ticks = this.base_ticks * tickMultiplier;
 
+    let baseContainmentMult = 1;
+    if (componentReinforcement > 0) {
+      baseContainmentMult += (componentReinforcement * 0.10);
+    }
+
     this.containment =
-      this.base_containment *
+      (this.base_containment || (this.category === "reactor_plating" ? 1000 : 0)) *
+      baseContainmentMult *
       capacitorContainmentMultiplier *
       heatExchangerContainmentMultiplier *
       ventContainmentMultiplier *
       coolantContainmentMultiplier;
 
-    this.vent = this.base_vent * ventMultiplier;
+    this.vent = (this.base_vent || 0) * ventMultiplier;
     this.reactor_power = this.base_reactor_power * capacitorPowerMultiplier;
     this.transfer = this.base_transfer * transferMultiplier;
+    
+    if (this.category === "reactor_plating") {
+      if (game.reactor.plating_transfer_rate > 0) {
+        this.transfer = this.containment * game.reactor.plating_transfer_rate;
+      } else {
+        this.transfer = 0;
+      }
+    }
+    
     this.range = this.base_range;
-    const epHeatAfter = this.base_ep_heat * epHeatMultiplier;
+    if (this.category === "heat_inlet" || this.category === "heat_outlet") {
+      if (quantumTunneling > 0) {
+        this.range += quantumTunneling;
+      }
+    }
+    let epHeatAfter = this.base_ep_heat * epHeatMultiplier;
+    
+    if (this.category === "particle_accelerator" && game.reactor.catalyst_reduction > 0) {
+      const reduction = Math.min(0.75, game.reactor.catalyst_reduction);
+      epHeatAfter *= (1 - reduction);
+    }
     if (partId === 'particle_accelerator1' && epHeatBefore !== undefined && epHeatAfter !== epHeatBefore) {
       console.log(`[RECALC-STATS DEBUG] ep_heat changed for ${partId}: ${epHeatBefore} -> ${epHeatAfter} (base_ep_heat=${this.base_ep_heat}, multiplier=${epHeatMultiplier})`);
     }
@@ -281,6 +313,8 @@ export class Part {
     this.cost = this.base_cost;
     this.ecost = this.base_ecost;
 
+    // Reset perpetual status first, then check upgrades
+    this.perpetual = false;
 
     if (this.category === "cell") {
       const perpetualUpgrade = game.upgradeset.getUpgrade(
@@ -288,8 +322,16 @@ export class Part {
       );
       if (perpetualUpgrade && perpetualUpgrade.level > 0) {
         this.perpetual = true;
-      } else {
-        this.perpetual = false;
+      }
+    } else if (this.category === "reflector") {
+      const perpRefs = game.upgradeset.getUpgrade("perpetual_reflectors");
+      if (perpRefs && perpRefs.level > 0) {
+        this.perpetual = true;
+      }
+    } else if (this.category === "capacitor") {
+      const perpCaps = game.upgradeset.getUpgrade("perpetual_capacitors");
+      if (perpCaps && perpCaps.level > 0) {
+        this.perpetual = true;
       }
     }
 
@@ -304,7 +346,6 @@ export class Part {
         this.power = this.base_power || 0;
       }
     }
-
     this.updateDescription();
   }
 

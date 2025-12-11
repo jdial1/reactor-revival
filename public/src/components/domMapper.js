@@ -61,6 +61,11 @@ export class DOMMapper {
         debugRefreshBtn: "#debug_refresh_btn",
       },
 
+      // Objectives elements (loaded when game starts)
+      objectives: {
+        toggleBtn: "#objectives_toggle_btn",
+      },
+
       // Tooltip elements (loaded when game starts)
       tooltip: {
         tooltip: "#tooltip",

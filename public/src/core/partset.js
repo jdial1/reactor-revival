@@ -226,7 +226,12 @@ export class PartSet {
         if (part.erequires) {
           const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
           if (requiredUpgrade && requiredUpgrade.level > 0 && isUnlocked) {
-            isAffordable = Number(game.current_exotic_particles) >= Number(part.ecost || part.cost);
+            // Distinguish between EP and Money cost
+            if (part.ecost > 0) {
+              isAffordable = Number(game.current_exotic_particles) >= Number(part.ecost || 0);
+            } else {
+              isAffordable = Number(game.current_money) >= Number(part.cost);
+            }
           }
         } else {
           if (isUnlocked) {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("Part Mechanics", () => {
   let game;
@@ -104,13 +105,9 @@ describe("Part Mechanics", () => {
     const part = game.partset.getPartById("reflector1");
     const initialTicks = part.ticks;
 
-    const upgrade = game.upgradeset.getUpgrade("improved_reflector_density");
-    game.current_money = upgrade.base_cost;
-    game.upgradeset.purchaseUpgrade(upgrade.id);
+    forcePurchaseUpgrade(game, "improved_reflector_density");
 
-    // In the real app, this is called by the upgrade action. We call it manually here to test the Part class.
     part.recalculate_stats();
-
     expect(part.ticks).toBeGreaterThan(initialTicks);
   });
 

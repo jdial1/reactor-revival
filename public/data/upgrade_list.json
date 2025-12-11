@@ -189,6 +189,171 @@
       "icon": "img/parts/capacitors/capacitor_1.png"
     },
     {
+      "id": "stirling_generators",
+      "type": "vents",
+      "title": "Stirling Generators",
+      "description": "Vents generate power equal to 1% of heat removed per level.",
+      "cost": 25000,
+      "multiplier": 4,
+      "levels": 10,
+      "icon": "img/parts/vents/vent_3.png",
+      "actionId": "stirling_generators"
+    },
+    {
+      "id": "market_lobbying",
+      "type": "other",
+      "title": "Energy Market Lobbying",
+      "description": "Increases power sell value by 10% per level.",
+      "cost": 50000,
+      "multiplier": 2.5,
+      "levels": 20,
+      "icon": "img/ui/icons/icon_cash.png",
+      "actionId": "market_lobbying"
+    },
+    {
+      "id": "emergency_coolant",
+      "type": "cooling",
+      "title": "Emergency Coolant Injectors",
+      "description": "Manual heat reduction removes an additional 0.5% of Max Heat per level.",
+      "cost": 5000,
+      "multiplier": 3,
+      "levels": 10,
+      "icon": "img/parts/coolants/coolant_cell_3.png",
+      "actionId": "emergency_coolant"
+    },
+    {
+      "id": "component_reinforcement",
+      "type": "other",
+      "title": "Component Reinforcement",
+      "description": "Increases heat containment of ALL parts by 10% per level.",
+      "cost": 10000,
+      "multiplier": 2.0,
+      "levels": 10,
+      "icon": "img/ui/borders/panel/medium_panel.png",
+      "actionId": "component_reinforcement"
+    },
+    {
+      "id": "isotope_stabilization",
+      "type": "cell_tick_upgrades",
+      "title": "Isotope Stabilization",
+      "description": "Increases the lifespan of ALL cells by 5% per level.",
+      "cost": 75000,
+      "multiplier": 3.0,
+      "levels": 20,
+      "icon": "img/ui/icons/icon_time.png",
+      "actionId": "isotope_stabilization"
+    },
+    {
+      "id": "reflector_cooling",
+      "type": "reflector",
+      "title": "Reflector Coolant Injection",
+      "description": "Reflectors reduce adjacent cell heat generation by 2% per level.",
+      "cost": 100000,
+      "multiplier": 4.0,
+      "levels": 10,
+      "icon": "img/parts/reflectors/reflector_2.png",
+      "actionId": "reflector_cooling"
+    },
+    {
+      "id": "quantum_tunneling",
+      "type": "exchangers",
+      "title": "Quantum Tunneling",
+      "description": "Heat Inlets and Outlets gain +1 Range per level.",
+      "cost": 500000,
+      "multiplier": 10.0,
+      "levels": 2,
+      "icon": "img/parts/inlets/inlet_4.png",
+      "actionId": "quantum_tunneling"
+    },
+    {
+      "id": "reactor_insurance",
+      "type": "other",
+      "title": "Reactor Insurance",
+      "description": "Refunds 10% of a component's base cost upon explosion per level.",
+      "cost": 5000,
+      "multiplier": 2.0,
+      "levels": 8,
+      "icon": "img/ui/icons/icon_cash_outline.svg",
+      "actionId": "reactor_insurance"
+    },
+    {
+      "id": "manual_override",
+      "type": "other",
+      "title": "Manual Override",
+      "description": "Manually selling power boosts generation by +10% (stacking) for 10 seconds.",
+      "cost": 25000,
+      "multiplier": 3.0,
+      "levels": 10,
+      "icon": "img/ui/nav/nav_play.png",
+      "actionId": "manual_override"
+    },
+    {
+      "id": "convective_airflow",
+      "type": "vents",
+      "title": "Convective Airflow",
+      "description": "Vents gain +10% cooling for every EMPTY tile adjacent to them.",
+      "cost": 15000,
+      "multiplier": 3.0,
+      "levels": 5,
+      "icon": "img/parts/vents/vent_1.png",
+      "actionId": "convective_airflow"
+    },
+    {
+      "id": "electro_thermal_conversion",
+      "type": "cooling",
+      "title": "Electro-Thermal Conversion",
+      "description": "If Heat > 80%, consumes Power to reduce Heat (1 Power removes 2 Heat).",
+      "cost": 75000,
+      "multiplier": 2.5,
+      "levels": 5,
+      "icon": "img/parts/capacitors/capacitor_4.png",
+      "actionId": "electro_thermal_conversion"
+    },
+    {
+      "id": "sub_atomic_catalysts",
+      "type": "particle_accelerator",
+      "title": "Sub-Atomic Catalysts",
+      "description": "Lowers the heat required to generate Exotic Particles by 5% per level.",
+      "cost": 1000000,
+      "multiplier": 5.0,
+      "levels": 10,
+      "icon": "img/parts/accelerators/accelerator_2.png",
+      "actionId": "sub_atomic_catalysts"
+    },
+    {
+      "id": "flux_accumulators",
+      "type": "capacitor",
+      "title": "Flux Accumulators",
+      "description": "Capacitors generate trace EP when Reactor Power is above 90%.",
+      "cost": 500000,
+      "multiplier": 4.0,
+      "levels": 5,
+      "icon": "img/parts/capacitors/capacitor_6.png",
+      "actionId": "flux_accumulators"
+    },
+    {
+      "id": "thermal_feedback",
+      "type": "cell_power_upgrades",
+      "title": "Thermal Feedback Loops",
+      "description": "Cells gain +0.1% Power for every 1% Heat stored in adjacent Coolant Cells.",
+      "cost": 25000,
+      "multiplier": 2.5,
+      "levels": 10,
+      "icon": "img/parts/coolants/coolant_cell_4.png",
+      "actionId": "thermal_feedback"
+    },
+    {
+      "id": "autonomic_repair",
+      "type": "utility",
+      "title": "Autonomic Repair Grid",
+      "description": "Consumes 50 Power to restore 1 tick of durability to a damaged part per level per tick.",
+      "cost": 100000,
+      "multiplier": 2.0,
+      "levels": 5,
+      "icon": "img/ui/icons/icon_time.png",
+      "actionId": "autonomic_repair"
+    },
+    {
       "id": "expand_reactor_rows",
       "type": "other",
       "title": "Expand Reactor Rows",
@@ -437,6 +602,39 @@
       "multiplier": 2,
       "part_level": 6,
       "icon": "img/parts/accelerators/accelerator_6.png"
+    },
+    {
+      "id": "volatile_tuning",
+      "type": "cell_power_upgrades",
+      "title": "Volatile Tuning",
+      "description": "Cells generate up to +5% Power per level as their durability drops.",
+      "cost": 150000,
+      "multiplier": 2.5,
+      "levels": 10,
+      "icon": "img/parts/cells/cell_3_1.png",
+      "actionId": "volatile_tuning"
+    },
+    {
+      "id": "ceramic_composite",
+      "type": "other",
+      "title": "Ceramic Composite",
+      "description": "Reactor Plating gains Heat Transfer equal to 5% of its Heat Capacity per level.",
+      "cost": 50000,
+      "multiplier": 3.0,
+      "levels": 5,
+      "icon": "img/parts/platings/plating_2.png",
+      "actionId": "ceramic_composite"
+    },
+    {
+      "id": "explosive_decompression",
+      "type": "experimental_parts",
+      "title": "Explosive Decompression",
+      "description": "Explosions REMOVE their contained heat from the Reactor instead of adding it.",
+      "ecost": 5000,
+      "multiplier": 10.0,
+      "levels": 1,
+      "icon": "img/ui/icons/icon_vent.png",
+      "actionId": "explosive_decompression"
     }
   ]
 }

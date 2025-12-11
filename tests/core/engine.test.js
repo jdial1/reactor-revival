@@ -27,6 +27,8 @@ describe("Engine Mechanics", () => {
 
     game.engine.stop();
     expect(game.engine.running).toBe(false);
+    // animationFrameId should be null after stop() is called
+    // (it may have been null already if requestAnimationFrame wasn't called in test env)
     expect(game.engine.animationFrameId).toBeNull();
   });
 
@@ -51,6 +53,7 @@ describe("Engine Mechanics", () => {
     game.reactor.auto_sell_multiplier = 0.1;
     game.reactor.current_power = 649; // Start with 649 so after +1 from uranium = 650, then -100 from auto-sell = 550
     game.reactor.altered_max_power = 1000; // Set altered_max_power instead of max_power
+    console.log(`[DIAGNOSTIC] Set altered_max_power=${game.reactor.altered_max_power} just before tick()`);
 
     // Add a fuel cell to generate power during the tick
     const fuelPart = game.partset.getPartById("uranium1");
@@ -96,7 +99,9 @@ describe("Engine Mechanics", () => {
     tile.ticks = cell.base_ticks;
     game.reactor.auto_sell_multiplier = 0.1;
     game.reactor.altered_max_power = 1000;
+    console.log(`[DIAGNOSTIC] Set altered_max_power=${game.reactor.altered_max_power} just before updateStats()`);
     game.reactor.updateStats();
+    console.log(`[DIAGNOSTIC] After updateStats: altered_max_power=${game.reactor.altered_max_power}, max_power=${game.reactor.max_power}`);
     game.engine.tick(); // First tick to generate power
     expect(game.reactor.current_power).toBe(cell.power);
 
@@ -131,9 +136,11 @@ describe("Engine Mechanics", () => {
     game.reactor.auto_sell_multiplier = 0.1; // 10%
     game.reactor.current_power = 650; // Set power to expected value after plutonium generation
     game.reactor.altered_max_power = 1000; // Set altered_max_power instead of max_power
+    console.log(`[DIAGNOSTIC] Set altered_max_power=${game.reactor.altered_max_power} just before updateStats()`);
 
     // Update reactor stats to ensure max_power is properly set
     game.reactor.updateStats();
+    console.log(`[DIAGNOSTIC] After updateStats: altered_max_power=${game.reactor.altered_max_power}, max_power=${game.reactor.max_power}`);
 
     const initialMoney = game.current_money;
     const expectedSellAmount = Math.min(650, Math.floor(1000 * 0.1)); // Should be 100
@@ -192,13 +199,24 @@ describe("Engine Mechanics", () => {
   });
 
   it("should handle component depletion for a perpetual part with auto-buy on", async () => {
+    game.bypass_tech_tree_restrictions = true;
     const perpetualUpgrade = game.upgradeset.getUpgrade("perpetual_reflectors");
     if (!perpetualUpgrade) {
       // Skip this test if the upgrade is not available
       console.warn("perpetual_reflectors upgrade not available, skipping test");
       return;
     }
-    game.upgradeset.purchaseUpgrade('perpetual_reflectors');
+    // Force money for upgrade and buy it
+    game.current_money = perpetualUpgrade.getCost() * 10;
+    game.upgradeset.check_affordability(game);
+    const bought = game.upgradeset.purchaseUpgrade('perpetual_reflectors');
+    expect(bought, "Perpetual Reflectors purchase failed").toBe(true);
+    expect(perpetualUpgrade.level).toBe(1);
+    
+    // Re-fetch to ensure we have the updated state, though it should be the same object
+    const partRef = game.partset.getPartById("reflector1");
+    partRef.recalculate_stats();
+    expect(partRef.perpetual, "Reflector should be perpetual after upgrade").toBe(true);
 
     // Set auto-buy state directly
     game.ui.stateManager.setVar("auto_buy", true);

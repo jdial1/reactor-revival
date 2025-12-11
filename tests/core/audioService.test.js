@@ -380,33 +380,36 @@ describe("AudioService", () => {
     });
 
     it("should throttle explosion sounds based on interval", () => {
-      const interval = 100; // explosion sound interval from _config
+      const interval = 100;
       audioService._lastExplosionTime = 0;
       
-      // First call should play and update _lastExplosionTime
-      const beforeFirstCall = Date.now();
+      // Mock Date.now to control time deterministically
+      const nowSpy = vi.spyOn(Date, 'now');
+      let currentTime = 1000000;
+      nowSpy.mockImplementation(() => currentTime);
+
       audioService.play("explosion");
-      const afterFirstCall = audioService._lastExplosionTime;
-      expect(afterFirstCall).toBeGreaterThanOrEqual(beforeFirstCall);
+      // Should update last time
+      expect(audioService._lastExplosionTime).toBe(currentTime);
+
+      // Advance time but within interval
+      currentTime += (interval - 10); 
+      const timeWithinInterval = currentTime;
       
-      // Simulate time passing but less than interval - should be throttled
-      const timeWithinInterval = afterFirstCall - (interval - 10); // 90ms ago
-      audioService._lastExplosionTime = timeWithinInterval;
       audioService.play("explosion");
+      // Should NOT update last time (throttled)
+      expect(audioService._lastExplosionTime).not.toBe(timeWithinInterval);
+      expect(audioService._lastExplosionTime).toBe(1000000);
+
+      // Advance time past interval
+      currentTime += 20; // Now 1000000 + 90 + 20 = 1000110 (diff 110 > 100)
+      const timePastInterval = currentTime;
       
-      // Should be throttled - _lastExplosionTime should NOT be updated (still old value)
-      expect(audioService._lastExplosionTime).toBe(timeWithinInterval);
-      
-      // Now simulate time passing beyond interval - should play and update
-      const timePastInterval = Date.now() - (interval + 10); // 110ms ago
-      audioService._lastExplosionTime = timePastInterval;
-      const beforeSecondCall = Date.now();
       audioService.play("explosion");
-      const afterSecondCall = audioService._lastExplosionTime;
+      // Should update last time
+      expect(audioService._lastExplosionTime).toBe(timePastInterval);
       
-      // Should have updated to current time
-      expect(afterSecondCall).toBeGreaterThanOrEqual(beforeSecondCall);
-      expect(afterSecondCall).toBeGreaterThan(timePastInterval);
+      nowSpy.mockRestore();
     });
   });
 

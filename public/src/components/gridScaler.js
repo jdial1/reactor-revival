@@ -45,8 +45,8 @@ export class GridScaler {
 
 
     /**
-     * Calculates grid dimensions for desktop (square) or mobile (rectangular).
-     * Desktop: square grid targeting ~144 tiles (12x12).
+     * Calculates grid dimensions for desktop (rectangular) or mobile (rectangular).
+     * Desktop: scales columns up to 16, calculates rows to maintain ~144 total tiles.
      * Mobile: rectangular grid (8x10 or 8x14) based on screen space.
      */
 
@@ -55,10 +55,11 @@ export class GridScaler {
         const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
 
         if (isMobile) {
-            const maxTilesX = Math.floor(availWidth / maxTileSize);
-            const maxTilesY = Math.floor(availHeight / maxTileSize);
+            const minTileSize = 32;
+            const maxTilesX = Math.floor(availWidth / minTileSize);
+            const maxTilesY = Math.floor(availHeight / minTileSize);
 
-            let cols = 8;
+            let cols = 6;
             cols = Math.max(this.config.minCols, Math.min(cols, maxTilesX, this.config.maxCols));
 
             let rows;
@@ -69,23 +70,31 @@ export class GridScaler {
             } else {
                 rows = Math.max(this.config.minRows, Math.min(maxTilesY, this.config.maxRows));
             }
+            
+            const actualTileSizeY = availHeight / rows;
+            if (actualTileSizeY < minTileSize) {
+                rows = Math.floor(availHeight / minTileSize);
+                rows = Math.max(this.config.minRows, Math.min(rows, this.config.maxRows));
+            }
 
             return { rows, cols };
         } else {
-            const targetGridSize = Math.sqrt(this.config.targetTotalTiles);
-            const maxTilesX = Math.floor(availWidth / maxTileSize);
-            const maxTilesY = Math.floor(availHeight / maxTileSize);
-            const maxTilesThatFit = Math.min(maxTilesX, maxTilesY);
+            const maxDesktopCols = 16;
+            const minTileSize = 32;
+            const targetTotalTiles = this.config.targetTotalTiles;
 
-            let gridSize = Math.round(targetGridSize);
+            const maxTilesX = Math.floor(availWidth / minTileSize);
+            const maxTilesY = Math.floor(availHeight / minTileSize);
 
-            if (gridSize > maxTilesThatFit) {
-                gridSize = maxTilesThatFit;
-            }
-
-            gridSize = Math.max(this.config.minCols, Math.min(gridSize, this.config.maxCols));
-
-            return { rows: gridSize, cols: gridSize };
+            const idealCols = Math.ceil(Math.sqrt(targetTotalTiles));
+            
+            let cols = Math.min(maxTilesX, maxDesktopCols, Math.max(idealCols, this.config.minCols));
+            
+            let rows = Math.round(targetTotalTiles / cols);
+            
+            rows = Math.max(this.config.minRows, Math.min(rows, maxTilesY, this.config.maxRows));
+            
+            return { rows, cols };
         }
 
     }
@@ -113,29 +122,38 @@ export class GridScaler {
             return;
         }
 
-        // 2. Calculate grid dimensions (square for desktop, rectangular for mobile)
+        // 2. Calculate grid dimensions (rectangular for desktop and mobile)
         const maxTileSize = 64;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
         const dims = this.calculateGridDimensions(availWidth, availHeight, maxTileSize);
 
-        const cols = dims.cols;
-        const rows = dims.rows;
+        let cols = dims.cols;
+        let rows = dims.rows;
 
-        // 3. Calculate tile size to fit the square grid perfectly (max 64px)
+        // 3. Calculate tile size to fit the grid perfectly (max 64px)
         const sizeXFinal = availWidth / cols;
         const sizeYFinal = availHeight / rows;
         let tileSize = Math.floor(Math.min(sizeXFinal, sizeYFinal, maxTileSize));
+        
+        // 4. Verify grid fits and adjust rows if needed (especially for mobile)
+        const calculatedGridHeight = rows * tileSize;
+        if (calculatedGridHeight > availHeight && isMobile) {
+            const maxRowsForHeight = Math.floor(availHeight / tileSize);
+            if (maxRowsForHeight >= this.config.minRows) {
+                rows = maxRowsForHeight;
+                tileSize = Math.floor(availHeight / rows);
+            }
+        }
 
         // --- DEBUG LOGGING ---
-
-        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
-        const gridType = isMobile ? 'Mobile (Rectangular)' : 'Desktop (Square)';
+        const gridType = isMobile ? 'Mobile (Rectangular)' : 'Desktop (Rectangular)';
         
-        console.groupCollapsed(`[GridScaler] Resized to ${cols}x${rows}`);
-        console.log(`Wrapper Size:   ${availWidth}px x ${availHeight}px`);
-        console.log(`Grid Logic:     ${cols} Cols x ${rows} Rows (${gridType})`);
-        console.log(`Tile Size:      ${tileSize}px (Fit Width: ${sizeXFinal.toFixed(1)}, Fit Height: ${sizeYFinal.toFixed(1)})`);
-        console.log(`Final Size:     ${cols * tileSize}px x ${rows * tileSize}px`);
-        console.groupEnd();
+        // console.groupCollapsed(`[GridScaler] Resized to ${cols}x${rows}`);
+        // console.log(`Wrapper Size:   ${availWidth}px x ${availHeight}px`);
+        // console.log(`Grid Logic:     ${cols} Cols x ${rows} Rows (${gridType})`);
+        // console.log(`Tile Size:      ${tileSize}px (Fit Width: ${sizeXFinal.toFixed(1)}, Fit Height: ${sizeYFinal.toFixed(1)})`);
+        // console.log(`Final Size:     ${cols * tileSize}px x ${rows * tileSize}px`);
+        // console.groupEnd();
 
         // ---------------------
 

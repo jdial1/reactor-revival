@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../helpers/setup.js";
+import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Power Overflow Mechanics", () => {
     let game;
@@ -20,9 +21,7 @@ describe("Power Overflow Mechanics", () => {
     });
 
     it("should convert excess base power to heat when cap is reached", async () => {
-        const tile = game.tileset.getTile(0, 0);
-        const part = game.partset.getPartById("uranium1"); // Assuming base power is small
-        await tile.setPart(part);
+        const tile = await placePart(game, 0, 0, "uranium1");
         
         // Update stats to populate active_cells, then override values for precise testing
         game.reactor.updateStats();
@@ -48,9 +47,7 @@ describe("Power Overflow Mechanics", () => {
     });
 
     it("should convert 100% of generated power to heat if starting at max power", async () => {
-        const tile = game.tileset.getTile(0, 0);
-        const part = game.partset.getPartById("uranium1");
-        await tile.setPart(part);
+        const tile = await placePart(game, 0, 0, "uranium1");
         
         // Update stats to populate active_cells, then override values
         game.reactor.updateStats();
@@ -74,8 +71,7 @@ describe("Power Overflow Mechanics", () => {
     });
 
     it("should handle power multipliers correctly with overflow", async () => {
-        const tile = game.tileset.getTile(0, 0);
-        await tile.setPart(game.partset.getPartById("uranium1"));
+        const tile = await placePart(game, 0, 0, "uranium1");
         
         // Update stats to populate active_cells, then override values
         game.reactor.updateStats();
@@ -112,8 +108,7 @@ describe("Power Overflow Mechanics", () => {
     });
 
     it("should NOT add extra heat if power is within capacity", async () => {
-        const tile = game.tileset.getTile(0, 0);
-        await tile.setPart(game.partset.getPartById("uranium1"));
+        const tile = await placePart(game, 0, 0, "uranium1");
         
         // Update stats to populate active_cells, then override values
         game.reactor.updateStats();

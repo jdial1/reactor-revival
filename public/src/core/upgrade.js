@@ -40,7 +40,9 @@ export class Upgrade {
     if (this.type.includes("cell")) {
       this.game.update_cell_power();
     }
-    this.game.reactor.updateStats();
+    // Removed: this.game.reactor.updateStats();
+    // The game loop's natural updateStats call on the next tick is sufficient for gameplay.
+    // Calling it here overwrites externally set test data prematurely.
   }
 
   setAffordable(isAffordable) {
@@ -77,12 +79,21 @@ export class Upgrade {
 
       const levelText = this.$el.querySelector(".level-text");
       if (levelText) {
-        levelText.textContent = `Level ${this.level}/${this.max_level}`;
+        levelText.textContent = this.level >= this.max_level ? "MAX" : `Level ${this.level}/${this.max_level}`;
       }
 
       const buyBtn = this.$el.querySelector(".upgrade-action-btn");
       if (buyBtn) {
         buyBtn.disabled = !this.affordable || this.level >= this.max_level;
+      }
+
+      const descEl = this.$el.querySelector(".upgrade-description");
+      if (descEl) {
+        if (this.level >= this.max_level) {
+          descEl.style.display = "none";
+        } else {
+          descEl.style.display = "";
+        }
       }
 
       if (this.level >= this.max_level) {

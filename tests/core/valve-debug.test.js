@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame } from "../helpers/setup.js";
+import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Valve Debug Test", () => {
     let game;
@@ -13,48 +14,23 @@ describe("Valve Debug Test", () => {
     });
 
     it("should verify valve neighbor processing fix", async () => {
-        // Test 1: Inactive valve - vent should self-cool
         game.tileset.clearAllTiles();
 
-        const overflowValve = game.partset.getPartById("overflow_valve");
-        const vent = game.partset.getPartById("vent1");
-        const coolantCell = game.partset.getPartById("coolant_cell1");
+        const coolantTile1 = await placePart(game, 3, 5, "coolant_cell1");
+        const valveTile1 = await placePart(game, 3, 6, "overflow_valve");
+        const ventTile1 = await placePart(game, 3, 7, "vent1");
 
-        // Layout: coolant (low heat) -> valve -> vent (with heat)
-        const coolantTile1 = game.tileset.getTile(3, 5);
-        const valveTile1 = game.tileset.getTile(3, 6);
-        const ventTile1 = game.tileset.getTile(3, 7);
-
-        await coolantTile1.setPart(coolantCell);
-        await valveTile1.setPart(overflowValve);
-        await ventTile1.setPart(vent);
-
-        coolantTile1.activated = true;
-        valveTile1.activated = true;
-        ventTile1.activated = true;
-
-        // Inactive valve: coolant below 80% containment
-        coolantTile1.heat_contained = 1000; // 50% of 2000 containment
+        coolantTile1.heat_contained = 1000;
         valveTile1.heat_contained = 0;
-        ventTile1.heat_contained = 100; // Vent has heat to self-cool
+        ventTile1.heat_contained = 100;
 
-        // Test 2: Active valve - vent should NOT self-cool in same tick
-        const coolantTile2 = game.tileset.getTile(5, 5);
-        const valveTile2 = game.tileset.getTile(5, 6);
-        const ventTile2 = game.tileset.getTile(5, 7);
+        const coolantTile2 = await placePart(game, 5, 5, "coolant_cell1");
+        const valveTile2 = await placePart(game, 5, 6, "overflow_valve");
+        const ventTile2 = await placePart(game, 5, 7, "vent1");
 
-        await coolantTile2.setPart(coolantCell);
-        await valveTile2.setPart(overflowValve);
-        await ventTile2.setPart(vent);
-
-        coolantTile2.activated = true;
-        valveTile2.activated = true;
-        ventTile2.activated = true;
-
-        // Active valve: coolant above 80% containment
-        coolantTile2.heat_contained = 1700; // 85% of 2000 containment
+        coolantTile2.heat_contained = 1700;
         valveTile2.heat_contained = 0;
-        ventTile2.heat_contained = 0; // Vent starts with no heat
+        ventTile2.heat_contained = 0;
 
         game.reactor.updateStats();
         game.engine._updatePartCaches();
@@ -81,90 +57,39 @@ describe("Valve Debug Test", () => {
     });
 
     it("should allow vents adjacent to inactive valves to self-cool", async () => {
-        // Clear all tiles first
         game.tileset.clearAllTiles();
+        const coolantTile = await placePart(game, 5, 5, "coolant_cell1");
+        const valveTile = await placePart(game, 5, 6, "overflow_valve");
+        const ventTile = await placePart(game, 5, 7, "vent1");
 
-        // Get parts
-        const overflowValve = game.partset.getPartById("overflow_valve");
-        const vent = game.partset.getPartById("vent1");
-        const coolantCell = game.partset.getPartById("coolant_cell1");
-
-        // Create layout: coolant -> valve -> vent
-        const coolantTile = game.tileset.getTile(5, 5);
-        const valveTile = game.tileset.getTile(5, 6);
-        const ventTile = game.tileset.getTile(5, 7);
-
-        await coolantTile.setPart(coolantCell);
-        await valveTile.setPart(overflowValve);
-        await ventTile.setPart(vent);
-
-        // Activate components
-        coolantTile.activated = true;
-        valveTile.activated = true;
-        ventTile.activated = true;
-
-        // Set initial heat - coolant is below 80% containment so overflow valve will NOT activate
-        coolantTile.heat_contained = 1000; // Only 50% of 2000 containment
+        coolantTile.heat_contained = 1000;
         valveTile.heat_contained = 0;
-        ventTile.heat_contained = 100; // Give vent some heat to self-cool
+        ventTile.heat_contained = 100;
 
-        // Update reactor stats to populate neighbor lists
         game.reactor.updateStats();
-
-        // Update engine part caches to ensure valve is added to active_exchangers
         game.engine._updatePartCaches();
 
-        console.log("=== INACTIVE VALVE TEST ===");
-        console.log(`Coolant heat ratio: ${coolantTile.heat_contained / coolantCell.containment} (should be < 0.8)`);
-        console.log(`Vent initial heat: ${ventTile.heat_contained}`);
-
-        // Run engine tick
         game.engine.tick();
 
-        console.log(`Vent final heat: ${ventTile.heat_contained}`);
-        console.log(`Vent should have self-cooled because valve is inactive`);
-
-        // Vent should have self-cooled because valve is inactive
         expect(ventTile.heat_contained).toBeLessThan(100);
     });
 
     it("should debug valve processing step by step", async () => {
-        // Clear all tiles first
         game.tileset.clearAllTiles();
+        const coolantTile = await placePart(game, 5, 5, "coolant_cell1");
+        const valveTile = await placePart(game, 5, 6, "overflow_valve");
+        const ventTile = await placePart(game, 5, 7, "vent1");
 
-        // Get parts
-        const overflowValve = game.partset.getPartById("overflow_valve");
-        const vent = game.partset.getPartById("vent1");
-        const coolantCell = game.partset.getPartById("coolant_cell1");
-
-        // Create layout: coolant -> valve -> vent
-        const coolantTile = game.tileset.getTile(5, 5);
-        const valveTile = game.tileset.getTile(5, 6);
-        const ventTile = game.tileset.getTile(5, 7);
-
-        await coolantTile.setPart(coolantCell);
-        await valveTile.setPart(overflowValve);
-        await ventTile.setPart(vent);
-
-        // Activate components
-        coolantTile.activated = true;
-        valveTile.activated = true;
-        ventTile.activated = true;
-
-        // Set initial heat - coolant needs to be above 80% containment for overflow valve
         coolantTile.heat_contained = 1700;
         valveTile.heat_contained = 0;
         ventTile.heat_contained = 0;
 
-        // Update reactor stats to populate neighbor lists
         game.reactor.updateStats();
-
-        // Update engine part caches to ensure valve is added to active_exchangers
         game.engine._updatePartCaches();
 
-        // Check valve state before processing
         const isValveActive = game.engine.active_exchangers.includes(valveTile);
         const valveNeighbors = valveTile.containmentNeighborTiles.filter(t => t.part);
+        const coolantCell = game.partset.getPartById("coolant_cell1");
         const coolantRatio = coolantTile.heat_contained / coolantCell.containment;
 
         console.log("=== VALVE STATE BEFORE PROCESSING ===");
@@ -178,7 +103,7 @@ describe("Valve Debug Test", () => {
             }
         });
 
-        // Check valve orientation
+        const overflowValve = game.partset.getPartById("overflow_valve");
         const valveOrientation = game.engine._getValveOrientation(overflowValve.id);
         const { inputNeighbor, outputNeighbor } = game.engine._getInputOutputNeighbors(valveTile, valveNeighbors, valveOrientation);
 

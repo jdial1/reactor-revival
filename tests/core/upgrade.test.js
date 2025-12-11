@@ -4,15 +4,19 @@ describe("Upgrade Mechanics", () => {
   let game;
   beforeEach(async () => {
     game = await setupGame();
+    game.bypass_tech_tree_restrictions = true; // Ensure upgrades are purchasable
   });
 
   it("should calculate increasing cost based on level and multiplier", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
     expect(upgrade.current_cost).toBe(upgrade.base_cost);
 
-    game.current_money = upgrade.getCost();
+    game.current_money = upgrade.getCost() * 2;
+    game.ui.stateManager.setVar("current_money", game.current_money);
+    game.upgradeset.check_affordability(game);
     game.upgradeset.purchaseUpgrade(upgrade.id);
 
+    // After purchase, level is 1, so cost should be base_cost * cost_multiplier^1
     expect(upgrade.current_cost).toBe(
       upgrade.base_cost * upgrade.cost_multiplier
     );
@@ -23,6 +27,7 @@ describe("Upgrade Mechanics", () => {
     const initialRows = game.rows;
 
     game.current_money = upgrade.getCost();
+    game.upgradeset.check_affordability(game);
     game.upgradeset.purchaseUpgrade(upgrade.id);
 
     expect(game.rows).toBe(initialRows + 1);
@@ -72,12 +77,15 @@ describe("Upgrade Mechanics", () => {
   it("should allow purchase with sufficient funds and deduct cost", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
     const cost = upgrade.getCost();
-    game.current_money = cost;
-
+    game.current_money = cost + 1000;
+    game.ui.stateManager.setVar("current_money", game.current_money);
+    game.upgradeset.check_affordability(game);
+    const expectedMoney = game.current_money - cost;
+    
     const result = game.upgradeset.purchaseUpgrade(upgrade.id);
 
     expect(result).toBe(true);
     expect(upgrade.level).toBe(1);
-    expect(game.current_money).toBe(0);
+    expect(game.current_money).toBe(expectedMoney);
   });
 });

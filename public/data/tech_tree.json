@@ -1,0 +1,103 @@
+[
+  {
+    "id": "architect",
+    "title": "Systems Architect",
+    "subtitle": "Automation & Stability",
+    "playstyle": "Passive / Idle",
+    "focus": "Self-sustaining reactors, safety nets, long component life, and automatic resource management.",
+    "mechanics": [
+      "Automatic cooling & selling",
+      "Durability repair",
+      "Damage mitigation",
+      "Smart regulation"
+    ],
+    "color": "#4CAF50",
+    "icon": "img/upgrades/upgrade_computer.png",
+    "upgrades": [
+      "heat_control_operator",
+      "heat_outlet_control_operator",
+      "improved_power_lines",
+      "perpetual_capacitors",
+      "perpetual_reflectors",
+      "reactor_insurance",
+      "autonomic_repair",
+      "isotope_stabilization",
+      "component_reinforcement",
+      "improved_alloys",
+      "improved_wiring",
+      "market_lobbying",
+      "phlembotinum_core",
+      "quantum_buffering"
+    ]
+  },
+  {
+    "id": "physicist",
+    "title": "Particle Physicist",
+    "subtitle": "High Energy & Risk",
+    "playstyle": "Active / Burst",
+    "focus": "Maximizing raw power generation at the cost of heat and safety.",
+    "mechanics": [
+      "Bonuses for high heat",
+      "Manual click buffs",
+      "Short-lived powerful cells",
+      "Weaponized explosions"
+    ],
+    "color": "#FF5252",
+    "icon": "img/parts/accelerators/accelerator_1.png",
+    "upgrades": [
+      "forceful_fusion",
+      "manual_override",
+      "improved_piping",
+      "emergency_coolant",
+      "chronometer",
+      "infused_cells",
+      "unleashed_cells",
+      "protium_cells",
+      "unstable_protium",
+      "volatile_tuning",
+      "explosive_decompression",
+      "improved_particle_accelerators1",
+      "improved_particle_accelerators2",
+      "improved_particle_accelerators3",
+      "improved_particle_accelerators4",
+      "improved_particle_accelerators5",
+      "improved_particle_accelerators6",
+      "sub_atomic_catalysts",
+      "singularity_harnessing"
+    ]
+  },
+  {
+    "id": "engineer",
+    "title": "Thermodynamic Engineer",
+    "subtitle": "Conversion & Efficiency",
+    "playstyle": "Puzzle / Layout Optimization",
+    "focus": "Manipulation of heat and complex interactions between adjacent parts.",
+    "mechanics": [
+      "Convert heat to power",
+      "Adjacency bonuses",
+      "Extended range",
+      "Specialized heat moving"
+    ],
+    "color": "#2196F3",
+    "icon": "img/parts/exchangers/exchanger_1.png",
+    "upgrades": [
+      "stirling_generators",
+      "electro_thermal_conversion",
+      "quantum_tunneling",
+      "convective_airflow",
+      "reflector_cooling",
+      "thermal_feedback",
+      "ceramic_composite",
+      "improved_heat_exchangers",
+      "fluid_hyperdynamics",
+      "active_exchangers",
+      "active_venting",
+      "flux_accumulators",
+      "expand_reactor_rows",
+      "expand_reactor_cols",
+      "fractal_piping",
+      "ultracryonics"
+    ]
+  }
+]
+

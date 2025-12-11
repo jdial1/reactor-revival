@@ -65,12 +65,25 @@ class DataService {
             }
 
             // Browser environment - use fetch
+            console.log(`[DATA-SERVICE] Fetching ${filePath}...`);
             const response = await fetch(filePath);
+            console.log(`[DATA-SERVICE] Response for ${filePath}:`, {
+                ok: response.ok,
+                status: response.status,
+                statusText: response.statusText,
+                contentType: response.headers.get('content-type')
+            });
             if (!response.ok) {
                 throw new Error(`Failed to load ${filePath}: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
+            console.log(`[DATA-SERVICE] Successfully loaded ${filePath}:`, {
+                type: typeof data,
+                isArray: Array.isArray(data),
+                hasDefault: !!data?.default,
+                keys: data && typeof data === 'object' ? Object.keys(data) : 'N/A'
+            });
             this.cache.set(filePath, data);
             return data;
         } catch (error) {
@@ -106,6 +119,25 @@ class DataService {
         const actualData = data?.default || data;
         console.log("Upgrade list loaded:", actualData?.length, "items");
         return actualData;
+    }
+
+    async loadTechTree() {
+        console.log("[TECH-TREE] Loading tech tree data from ./data/tech_tree.json...");
+        try {
+            const data = await this.loadData('./data/tech_tree.json');
+            // Handle ES module format where data might be in the 'default' property
+            const actualData = data?.default || data;
+            console.log("[TECH-TREE] Tech tree data loaded:", {
+                hasData: !!actualData,
+                isArray: Array.isArray(actualData),
+                length: actualData?.length,
+                data: actualData
+            });
+            return actualData;
+        } catch (error) {
+            console.error("[TECH-TREE] Error loading tech tree data:", error);
+            throw error;
+        }
     }
 
     // Clear cache if needed

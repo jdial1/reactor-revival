@@ -6,7 +6,6 @@ describe("Leaderboard Service & Integration", () => {
     let game;
     let document;
     let window;
-    let mockDb;
 
     beforeEach(async () => {
         const setup = await setupGameWithDOM();
@@ -14,19 +13,11 @@ describe("Leaderboard Service & Integration", () => {
         document = setup.document;
         window = setup.window;
         
-        mockDb = {
-            exec: vi.fn()
-        };
-
-        leaderboardService.db = null;
         leaderboardService.initialized = false;
-        
-        window.sqlite3InitModule = vi.fn().mockResolvedValue({
-            oo1: {
-                DB: vi.fn(() => mockDb),
-                OpfsDb: vi.fn(() => mockDb)
-            }
-        });
+        leaderboardService.initPromise = null;
+        leaderboardService.apiBaseUrl = 'http://localhost:3000';
+
+        global.fetch = vi.fn();
 
         const leaderboardHtml = `
             <table class="leaderboard-table">
@@ -45,35 +36,44 @@ describe("Leaderboard Service & Integration", () => {
     });
 
     describe("Initialization", () => {
-        it("should initialize sqlite3 and create tables", async () => {
+        it("should initialize and check API health", async () => {
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ status: 'ok', database: 'connected' })
+            });
+
             await leaderboardService.init();
 
-            expect(window.sqlite3InitModule).toHaveBeenCalled();
+            expect(global.fetch).toHaveBeenCalledWith('http://localhost:3000/health');
             expect(leaderboardService.initialized).toBe(true);
-            expect(leaderboardService.db).toBe(mockDb);
-            
-            expect(mockDb.exec).toHaveBeenCalledWith(expect.stringContaining("CREATE TABLE IF NOT EXISTS runs"));
         });
 
         it("should not re-initialize if already initialized", async () => {
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ status: 'ok', database: 'connected' })
+            });
+
             await leaderboardService.init();
-            mockDb.exec.mockClear();
-            window.sqlite3InitModule.mockClear();
+            global.fetch.mockClear();
 
             await leaderboardService.init();
             
-            expect(window.sqlite3InitModule).not.toHaveBeenCalled();
-            expect(mockDb.exec).not.toHaveBeenCalled();
+            expect(global.fetch).not.toHaveBeenCalled();
         });
     });
 
     describe("Data Operations", () => {
         beforeEach(async () => {
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ status: 'ok', database: 'connected' })
+            });
             await leaderboardService.init();
-            mockDb.exec.mockClear();
+            global.fetch.mockClear();
         });
 
-        it("should construct correct SQL for saving a run", () => {
+        it("should send correct data when saving a run", async () => {
             const stats = {
                 user_id: "user_123",
                 run_id: "run_abc",
@@ -83,57 +83,91 @@ describe("Leaderboard Service & Integration", () => {
                 time: 3600000
             };
 
-            leaderboardService.saveRun(stats);
-
-            expect(mockDb.exec).toHaveBeenCalledTimes(1);
-            const callArg = mockDb.exec.mock.calls[0][0];
-            
-            expect(callArg.sql).toContain("INSERT INTO runs");
-            expect(callArg.sql).toContain("ON CONFLICT(user_id) DO UPDATE SET");
-            
-            expect(callArg.sql).toContain("heat = CASE WHEN $heat > heat THEN $heat ELSE heat END");
-            expect(callArg.sql).toContain("power = CASE WHEN $power > power THEN $power ELSE power END");
-
-            expect(callArg.bind).toEqual({
-                $user_id: stats.user_id,
-                $run_id: stats.run_id,
-                $timestamp: expect.any(Number),
-                $heat: stats.heat,
-                $power: stats.power,
-                $money: stats.money,
-                $time_played: stats.time
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { id: 1, ...stats } })
             });
+
+            await leaderboardService.saveRun(stats);
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                'http://localhost:3000/api/leaderboard/save',
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: stats.user_id,
+                        run_id: stats.run_id,
+                        heat: stats.heat,
+                        power: stats.power,
+                        money: stats.money,
+                        time: stats.time,
+                        layout: null
+                    })
+                })
+            );
         });
 
-        it("should query top runs with correct sorting", () => {
-            mockDb.exec.mockImplementation((opts) => {
-                if (opts.sql.includes("SELECT")) {
-                    opts.callback({ user_id: 'u1', power: 100 });
-                    opts.callback({ user_id: 'u2', power: 90 });
-                }
+        it("should send correct data when saving a run with layout", async () => {
+            const stats = {
+                user_id: "user_123",
+                run_id: "run_abc",
+                heat: 5000,
+                power: 1000,
+                money: 50000,
+                time: 3600000,
+                layout: '{"size":{"rows":12,"cols":12},"parts":[]}'
+            };
+
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { id: 1, ...stats } })
             });
 
-            const results = leaderboardService.getTopRuns('power', 5);
+            await leaderboardService.saveRun(stats);
 
-            expect(mockDb.exec).toHaveBeenCalled();
-            const callArg = mockDb.exec.mock.calls[0][0];
-            
-            expect(callArg.sql).toContain("ORDER BY power DESC");
-            expect(callArg.bind).toEqual([5]);
+            const callArgs = global.fetch.mock.calls[0];
+            const body = JSON.parse(callArgs[1].body);
+            expect(body.layout).toBe(stats.layout);
+        });
+
+        it("should query top runs with correct sorting", async () => {
+            const mockData = [
+                { user_id: 'u1', power: 100 },
+                { user_id: 'u2', power: 90 }
+            ];
+
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: mockData })
+            });
+
+            const results = await leaderboardService.getTopRuns('power', 5);
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                'http://localhost:3000/api/leaderboard/top?sortBy=power&limit=5'
+            );
             expect(results.length).toBe(2);
             expect(results[0].user_id).toBe('u1');
         });
 
-        it("should default to 'power' sort if invalid sort key provided", () => {
-            leaderboardService.getTopRuns('hacking_attempt', 10);
-            const callArg = mockDb.exec.mock.calls[0][0];
-            expect(callArg.sql).toContain("ORDER BY power DESC");
+        it("should default to 'power' sort if invalid sort key provided", async () => {
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: [] })
+            });
+
+            await leaderboardService.getTopRuns('hacking_attempt', 10);
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                'http://localhost:3000/api/leaderboard/top?sortBy=power&limit=10'
+            );
         });
     });
 
     describe("Game Integration", () => {
         it("should trigger saveRun when saving the game", async () => {
-            const saveSpy = vi.spyOn(leaderboardService, 'saveRun');
+            const saveSpy = vi.spyOn(leaderboardService, 'saveRun').mockResolvedValue();
             
             game.peak_heat = 1000;
             game.peak_power = 500;
@@ -150,7 +184,8 @@ describe("Leaderboard Service & Integration", () => {
                 heat: 1000,
                 power: 500,
                 money: 5000,
-                time: expect.any(Number)
+                time: 60000,
+                layout: expect.any(String)
             });
         });
 
@@ -168,6 +203,10 @@ describe("Leaderboard Service & Integration", () => {
 
     describe("UI Rendering", () => {
         beforeEach(async () => {
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ status: 'ok', database: 'connected' })
+            });
             await leaderboardService.init();
         });
 
@@ -177,12 +216,16 @@ describe("Leaderboard Service & Integration", () => {
                 { timestamp: Date.now() - 10000, power: 2000, heat: 100, money: 50000, time_played: 1800000 }
             ];
             
-            vi.spyOn(leaderboardService, 'getTopRuns').mockReturnValue(mockData);
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: mockData })
+            });
+
+            vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue(mockData);
 
             game.ui.setupLeaderboardPage();
             
-            // eslint-disable-next-line no-undef
-            await new Promise(r => setTimeout(r, 0));
+            await new Promise(r => setTimeout(r, 100));
 
             const rows = document.querySelectorAll('#leaderboard_rows tr');
             expect(rows.length).toBe(2);
@@ -194,11 +237,15 @@ describe("Leaderboard Service & Integration", () => {
         });
 
         it("should handle empty results gracefully", async () => {
-            vi.spyOn(leaderboardService, 'getTopRuns').mockReturnValue([]);
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: [] })
+            });
+
+            vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue([]);
 
             game.ui.setupLeaderboardPage();
-            // eslint-disable-next-line no-undef
-            await new Promise(r => setTimeout(r, 0));
+            await new Promise(r => setTimeout(r, 100));
 
             const rows = document.querySelectorAll('#leaderboard_rows tr');
             expect(rows.length).toBe(1);
@@ -206,19 +253,24 @@ describe("Leaderboard Service & Integration", () => {
         });
 
         it("should update list when sorting buttons are clicked", async () => {
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: [] })
+            });
+
+            vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue([]);
+
             game.ui.setupLeaderboardPage();
             
             const heatBtn = document.querySelector('[data-sort="heat"]');
-            leaderboardService.getTopRuns = vi.fn().mockReturnValue([]);
             
             expect(heatBtn).toBeTruthy();
             
             heatBtn.click();
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await new Promise(resolve => setTimeout(resolve, 100));
             
             expect(leaderboardService.getTopRuns).toHaveBeenCalledWith('heat', 20);
             expect(heatBtn.classList.contains('active')).toBe(true);
         });
     });
 });
-

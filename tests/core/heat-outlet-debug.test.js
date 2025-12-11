@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Heat Outlet Debug", () => {
     let game;
@@ -13,17 +14,8 @@ describe("Heat Outlet Debug", () => {
     });
 
     it("should debug heat outlet neighbor detection", async () => {
-        // Place a heat outlet in the center
-        const centerTile = game.tileset.getTile(5, 5);
-        const outletPart = game.partset.getPartById("heat_outlet1");
-        await centerTile.setPart(outletPart);
-        centerTile.activated = true;
-
-        // Place one neighbor
-        const neighborTile = game.tileset.getTile(5, 6);
-        const ventPart = game.partset.getPartById("vent1");
-        await neighborTile.setPart(ventPart);
-        neighborTile.activated = true;
+        const centerTile = await placePart(game, 5, 5, "heat_outlet1");
+        const neighborTile = await placePart(game, 5, 6, "vent1");
 
         // Force recalculation of neighbor caches
         centerTile.invalidateNeighborCaches();

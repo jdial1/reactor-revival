@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame } from "../helpers/setup.js";
+import { placePart, forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("Time Delta Physics Scaling", () => {
     let game;
@@ -6,6 +7,7 @@ describe("Time Delta Physics Scaling", () => {
     beforeEach(async () => {
         game = await setupGame();
         game.loop_wait = 1000;
+        game.bypass_tech_tree_restrictions = true;
     });
 
     afterEach(() => {
@@ -13,10 +15,8 @@ describe("Time Delta Physics Scaling", () => {
     });
 
     it("should scale cell power and heat generation by multiplier", async () => {
-        const tile = game.tileset.getTile(0, 0);
-        const part = game.partset.getPartById("uranium1");
-        await tile.setPart(part);
-        
+        const tile = await placePart(game, 0, 0, "uranium1");
+        const part = tile.part;
         const basePower = part.base_power;
         const baseHeat = part.base_heat;
         
@@ -46,10 +46,7 @@ describe("Time Delta Physics Scaling", () => {
     });
 
     it("should decrease component lifespan based on multiplier", async () => {
-        const tile = game.tileset.getTile(0, 0);
-        const part = game.partset.getPartById("uranium1");
-        await tile.setPart(part);
-        
+        const tile = await placePart(game, 0, 0, "uranium1");
         const initialTicks = tile.ticks;
         
         game.engine._processTick(1.5);
@@ -58,11 +55,10 @@ describe("Time Delta Physics Scaling", () => {
     });
 
     it("should scale heat transfer rates by multiplier", async () => {
-        const ventTile = game.tileset.getTile(0, 0);
-        const vent = game.partset.getPartById("vent1");
-        await ventTile.setPart(vent);
+        const ventTile = await placePart(game, 0, 0, "vent1");
+        const vent = ventTile.part;
         
-        const initialHeat = 50; 
+        const initialHeat = 50;
         ventTile.heat_contained = initialHeat;
         const baseVentRate = vent.vent;
 
@@ -73,17 +69,9 @@ describe("Time Delta Physics Scaling", () => {
     });
 
     it("should scale valve transfer rates by multiplier", async () => {
-        const valve = game.partset.getPartById("overflow_valve");
-        const container1 = game.partset.getPartById("coolant_cell1");
-        const container2 = game.partset.getPartById("coolant_cell1");
-
-        const t1 = game.tileset.getTile(0, 0);
-        const t2 = game.tileset.getTile(1, 0);
-        const t3 = game.tileset.getTile(2, 0);
-
-        await t1.setPart(container1);
-        await t2.setPart(valve);
-        await t3.setPart(container2);
+        const t1 = await placePart(game, 0, 0, "coolant_cell1");
+        const t2 = await placePart(game, 1, 0, "overflow_valve");
+        const t3 = await placePart(game, 2, 0, "coolant_cell1");
 
         t1.part.containment = 10000; 
         t1.heat_contained = 8000;
@@ -111,10 +99,7 @@ describe("Time Delta Physics Scaling", () => {
 
     it("should calculate correct multiplier from timestamps in the loop", async () => {
         vi.useFakeTimers();
-        
-        const tile = game.tileset.getTile(0, 0);
-        const part = game.partset.getPartById("uranium1");
-        await tile.setPart(part);
+        await placePart(game, 0, 0, "uranium1");
         game.engine.markPartCacheAsDirty();
         
         game.engine.start();
@@ -135,9 +120,7 @@ describe("Time Delta Physics Scaling", () => {
     });
 
     it("should clamp maximum multiplier to avoid spiral of death on massive lag spikes", async () => {
-        const tile = game.tileset.getTile(0, 0);
-        const part = game.partset.getPartById("uranium1");
-        await tile.setPart(part);
+        await placePart(game, 0, 0, "uranium1");
         game.engine.markPartCacheAsDirty();
         
         game.time_flux = false;
@@ -156,10 +139,8 @@ describe("Time Delta Physics Scaling", () => {
     });
 
     it("should generate fractional power for small multipliers (prevent stalling at high FPS)", async () => {
-        const tile = game.tileset.getTile(0, 0);
-        const part = game.partset.getPartById("uranium1");
-        await tile.setPart(part);
-        
+        const tile = await placePart(game, 0, 0, "uranium1");
+        const part = tile.part;
         const smallMultiplier = 0.016;
         const expectedPower = part.base_power * smallMultiplier;
 
@@ -172,30 +153,24 @@ describe("Time Delta Physics Scaling", () => {
 
     it("should correctly handle Clock Cycle Accelerator upgrade (+1 tick/sec)", async () => {
         vi.useFakeTimers();
-        
-        const tile = game.tileset.getTile(0, 0);
-        const part = game.partset.getPartById("uranium1");
-        await tile.setPart(part);
+        game.bypass_tech_tree_restrictions = true;
+        await placePart(game, 0, 0, "uranium1");
         game.engine.markPartCacheAsDirty();
         
         const upgrade = game.upgradeset.getUpgrade("chronometer");
         expect(upgrade.level).toBe(0);
         expect(game.loop_wait).toBe(1000);
-
+        
+        game.engine.last_timestamp = 0;
         game.engine.start();
         
         const t0 = game.engine.last_timestamp;
-        
         const tickSpy = vi.spyOn(game.engine, '_processTick');
-
         game.engine.loop(t0 + 1000);
-        
         expect(tickSpy.mock.calls[0][0]).toBeCloseTo(1.0, 5);
         tickSpy.mockClear();
-
-        game.current_money = upgrade.getCost();
-        game.upgradeset.check_affordability(game);
-        game.upgradeset.purchaseUpgrade("chronometer");
+        
+        forcePurchaseUpgrade(game, "chronometer");
         expect(upgrade.level).toBe(1);
         expect(game.loop_wait).toBe(500); 
 
@@ -206,11 +181,8 @@ describe("Time Delta Physics Scaling", () => {
         expect(tickSpy.mock.calls[0][0]).toBeCloseTo(2.0, 5);
         tickSpy.mockClear();
 
-        game.current_money = 1000000000;
-        game.upgradeset.check_affordability(game);
-        game.upgradeset.purchaseUpgrade("chronometer");
-        game.upgradeset.check_affordability(game);
-        game.upgradeset.purchaseUpgrade("chronometer");
+        forcePurchaseUpgrade(game, "chronometer", 2);
+        forcePurchaseUpgrade(game, "chronometer", 3);
         
         expect(upgrade.level).toBe(3);
         expect(game.loop_wait).toBe(250);
@@ -233,7 +205,7 @@ describe("Time Delta Physics Scaling", () => {
             game.engine.time_accumulator = 5000;
             const processSpy = vi.spyOn(game.engine, '_processTick');
 
-            const target = global.window || globalThis;
+            const target = globalThis.window || globalThis;
             if (!target.requestAnimationFrame) {
                 target.requestAnimationFrame = vi.fn().mockReturnValue(123);
             }
@@ -257,7 +229,7 @@ describe("Time Delta Physics Scaling", () => {
             game.engine.time_accumulator = 5000;
             const processSpy = vi.spyOn(game.engine, '_processTick');
 
-            const target = global.window || globalThis;
+            const target = globalThis.window || globalThis;
             if (!target.requestAnimationFrame) {
                 target.requestAnimationFrame = vi.fn().mockReturnValue(123);
             }
@@ -274,16 +246,12 @@ describe("Time Delta Physics Scaling", () => {
 
         it("should spend banked time rapidly once a cell is placed", async () => {
             game.tileset.clearAllTiles();
-            // Start with banked time
             game.engine.time_accumulator = 5000;
-
-            const tile = game.tileset.getTile(0, 0);
-            await tile.setPart(game.partset.getPartById("uranium1"));
-            // This marks cache dirty, next loop will update and see active_cell > 0
+            await placePart(game, 0, 0, "uranium1");
             game.engine.markPartCacheAsDirty();
 
             const processSpy = vi.spyOn(game.engine, '_processTick');
-            const target = global.window || globalThis;
+            const target = globalThis.window || globalThis;
             if (!target.requestAnimationFrame) {
                 target.requestAnimationFrame = vi.fn().mockReturnValue(123);
             }
@@ -301,17 +269,14 @@ describe("Time Delta Physics Scaling", () => {
 
         it("should preserve banked time if Time Flux is disabled", async () => {
             game.tileset.clearAllTiles();
-            game.engine.time_accumulator = 50000; // 50 seconds banked
-            game.time_flux = false; // Disabled
+            game.engine.time_accumulator = 50000;
+            game.time_flux = false;
             game.loop_wait = 1000;
-
-            const tile = game.tileset.getTile(0, 0);
-            await tile.setPart(game.partset.getPartById("uranium1"));
-            // Update cache so active_cells > 0
+            await placePart(game, 0, 0, "uranium1");
             game.engine.markPartCacheAsDirty();
 
             const processSpy = vi.spyOn(game.engine, '_processTick');
-            const target = global.window || globalThis;
+            const target = globalThis.window || globalThis;
             if (!target.requestAnimationFrame) {
                 target.requestAnimationFrame = vi.fn().mockReturnValue(123);
             }
@@ -336,15 +301,13 @@ describe("Time Delta Physics Scaling", () => {
         it("should consume banked time if Time Flux is enabled", async () => {
             game.tileset.clearAllTiles();
             game.engine.time_accumulator = 50000;
-            game.time_flux = true; // Enabled
+            game.time_flux = true;
             game.loop_wait = 1000;
-
-            const tile = game.tileset.getTile(0, 0);
-            await tile.setPart(game.partset.getPartById("uranium1"));
+            await placePart(game, 0, 0, "uranium1");
             game.engine.markPartCacheAsDirty();
 
             const processSpy = vi.spyOn(game.engine, '_processTick');
-            const target = global.window || globalThis;
+            const target = globalThis.window || globalThis;
             if (!target.requestAnimationFrame) {
                 target.requestAnimationFrame = vi.fn().mockReturnValue(123);
             }

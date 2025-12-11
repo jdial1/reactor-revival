@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGameWithDOM } from "../helpers/setup.js";
 
 describe("Auto Heat Testing", () => {
     let game;
@@ -9,16 +9,18 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should auto-reduce heat when 'Heat Control Operator' upgrade is purchased", async () => {
+        game.paused = false;
         // Ensure engine is running
         if (!game.engine.running) {
             game.engine.start();
         }
-
+        game.reactor.max_heat = 10000; // Set explicit max heat for deterministic reduction
         game.reactor.current_heat = 150;
         const initialHeat = game.reactor.current_heat;
 
-        // Purchase the upgrade that enables heat control
-        game.upgradeset.purchaseUpgrade('heat_control_operator');
+        // Ensure money and purchase upgrade
+        const { forcePurchaseUpgrade } = await import("../helpers/gameHelpers.js");
+        forcePurchaseUpgrade(game, 'heat_control_operator');
         expect(game.reactor.heat_controlled).toBe(true);
 
         // Run a tick
@@ -29,6 +31,7 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should NOT auto-reduce heat when heat_controlled is false", () => {
+        game.paused = false;
         // Set initial heat
         game.reactor.current_heat = 1000;
         const initialHeat = game.reactor.current_heat;
@@ -44,11 +47,12 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should toggle auto heat reduction when heat_control state changes", () => {
+        game.paused = false;
         // Ensure engine is running
         if (!game.engine.running) {
             game.engine.start();
         }
-
+        game.reactor.max_heat = 10000;
         // Set initial heat
         game.reactor.current_heat = 1000;
 
@@ -71,6 +75,7 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should handle heat_control toggle through UI state manager", () => {
+        game.paused = false;
         // Ensure engine is running
         if (!game.engine.running) {
             game.engine.start();
@@ -100,6 +105,7 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should not auto-reduce heat when heat is 0", () => {
+        game.paused = false;
         // Set heat to 0
         game.reactor.current_heat = 0;
         game.reactor.heat_controlled = true;
@@ -112,12 +118,16 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should apply vent multiplier from Plating/Capacitor parts when auto-reducing heat", async () => {
+        game.paused = false;
         // Ensure engine is running
         if (!game.engine.running) {
             game.engine.start();
         }
 
         // Purchase upgrade that enables vent_plating_multiplier
+        game.current_money = 1e9;
+        game.ui.stateManager.setVar("current_money", game.current_money);
+        game.upgradeset.check_affordability(game);
         game.upgradeset.purchaseUpgrade('improved_heatsinks');
         expect(game.reactor.vent_plating_multiplier).toBe(1);
 
@@ -139,6 +149,7 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should NOT disable auto venting when heat outlets are present", async () => {
+        game.paused = false;
         // Ensure engine is running
         if (!game.engine.running) {
             game.engine.start();
@@ -173,6 +184,7 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should maintain auto venting regardless of heat outlets", async () => {
+        game.paused = false;
         // Ensure engine is running
         if (!game.engine.running) {
             game.engine.start();
@@ -216,6 +228,7 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should handle multiple ticks correctly with heat_controlled = true", () => {
+        game.paused = false;
         // Ensure engine is running
         if (!game.engine.running) {
             game.engine.start();
@@ -254,9 +267,10 @@ describe("Auto Heat Testing", () => {
     });
 
     it("should correctly save and load the heat_control state via its upgrade", async () => {
-        game.upgradeset.purchaseUpgrade('heat_control_operator');
+        const { forcePurchaseUpgrade } = await import("../helpers/gameHelpers.js");
+        forcePurchaseUpgrade(game, 'heat_control_operator');
         game.saveGame(1);
-        const savedData = JSON.parse(localStorage.getItem('reactorGameSave_1'));
+        const savedData = JSON.parse(globalThis.localStorage.getItem('reactorGameSave_1'));
         expect(savedData.toggles.heat_control).toBe(true);
 
         await game.set_defaults();

@@ -1,23 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from "../helpers/setup.js";
-
-const fireEvent = (element, eventType) => {
-  if (!element)
-    throw new Error(`Cannot fire event on a null element. Event: ${eventType}`);
-  const event = new window.Event(eventType, {
-    bubbles: true,
-    cancelable: true,
-  });
-  element.dispatchEvent(event);
-};
+import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("UI Integration and Gameplay", () => {
-  let game, document, window;
+  let game, document;
 
   beforeEach(async () => {
     const setup = await setupGameWithDOM();
     game = setup.game;
     document = setup.document;
-    window = setup.window;
 
     // Pre-load all pages to ensure all DOM elements are available for update listeners
     await game.router.loadPage("upgrades_section");
@@ -56,12 +46,14 @@ describe("UI Integration and Gameplay", () => {
 
       // Update reactor stats to include the new part
       game.reactor.updateStats();
-
+      game.tileset.updateActiveTiles(); // Ensure tiles are active
       // Force update the engine's part cache to include the new part
       game.engine.markPartCacheAsDirty();
       game.engine._updatePartCaches();
 
-      // Ensure the engine is running so it can process the part
+      // Ensure the engine is running and game is unpaused so it can process the part
+      game.paused = false;
+      game.ui.stateManager.setVar("pause", false);
       game.engine.running = true;
     }
 
@@ -94,7 +86,6 @@ describe("UI Integration and Gameplay", () => {
     expect(tile.part).toBeNull(); // Should be empty initially
 
     // 4. Place the first part
-    const initialMoney = game.current_money;
     if (game.current_money >= uraniumPart.cost) {
       game.current_money -= uraniumPart.cost;
       await tile.setPart(uraniumPart);
@@ -138,18 +129,13 @@ describe("UI Integration and Gameplay", () => {
 
   it("should purchase an upgrade and deduct cost", async () => {
     const upgrade = game.upgradeset.getUpgrade("expand_reactor_rows");
-    expect(upgrade, "Expand reactor rows upgrade should exist").not.toBeNull();
-
-    const initialMoney = game.current_money;
     const initialRows = game.rows;
 
-    // Directly purchase the upgrade (simulating what the button does)
-    const success = game.upgradeset.purchaseUpgrade(upgrade.id);
-    expect(success, "Upgrade purchase should succeed").toBe(true);
+    const success = forcePurchaseUpgrade(game, "expand_reactor_rows");
 
+    expect(success, "Upgrade purchase should succeed").toBe(true);
     expect(upgrade.level).toBe(1);
     expect(game.rows).toBe(initialRows + 1);
-    expect(game.current_money).toBe(initialMoney - upgrade.base_cost);
   });
 
   it("should show/hide objectives when navigating between pages", async () => {

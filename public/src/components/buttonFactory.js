@@ -185,10 +185,23 @@ export function createUpgradeButton(upgrade) {
     if (titleEl) titleEl.textContent = upgrade.title;
 
     const descEl = card.querySelector(".upgrade-description");
-    if (descEl) descEl.textContent = upgrade.description;
+    const isMaxed = upgrade.level >= upgrade.max_level;
+    if (descEl) {
+      if (isMaxed) {
+        descEl.style.display = "none";
+      } else {
+        descEl.textContent = upgrade.description;
+        descEl.style.display = "";
+      }
+    }
 
     const levelText = card.querySelector(".level-text");
-    if (levelText) levelText.textContent = `Level ${upgrade.level}/${upgrade.max_level}`;
+    if (levelText) {
+      levelText.textContent = isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`;
+      if (isMaxed) {
+        card.classList.add("maxed-out");
+      }
+    }
 
     const costDisplay = card.querySelector(".cost-display");
     if (costDisplay) costDisplay.textContent = upgrade.cost;

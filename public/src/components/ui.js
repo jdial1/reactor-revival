@@ -1713,7 +1713,14 @@ export class UI {
     const statsVent = this.stateManager.getVar("stats_vent") || 0;
     const manualReduce = this.game?.reactor?.manual_heat_reduce || this.game?.base_manual_heat_reduce || 1;
     
-    const netChange = totalHeat - statsVent - manualReduce;
+    const currentPower = this.stateManager.getVar("current_power") || 0;
+    const statsPower = this.stateManager.getVar("stats_power") || 0;
+    const maxPower = this.stateManager.getVar("max_power") || 0;
+    
+    const potentialPower = currentPower + statsPower;
+    const excessPower = Math.max(0, potentialPower - maxPower);
+    
+    const netChange = totalHeat + excessPower - statsVent - manualReduce;
     
     const mobileDenom = document.getElementById("info_heat_denom");
     const desktopDenom = document.getElementById("info_heat_denom_desktop");
@@ -2606,7 +2613,8 @@ export class UI {
     if (upgrade.level !== undefined) {
       const levels = document.createElement("div");
       levels.className = "levels";
-      levels.textContent = `${upgrade.level}/${upgrade.max_level}`;
+      const isMaxed = upgrade.level >= upgrade.max_level;
+      levels.textContent = isMaxed ? "MAX" : `${upgrade.level}/${upgrade.max_level}`;
       btn.appendChild(levels);
     }
 
@@ -3984,23 +3992,34 @@ export class UI {
   setupLeaderboardPage() {
     const container = document.getElementById("leaderboard_rows");
     const sortButtons = document.querySelectorAll(".leaderboard-sort");
-    
+
+    const modal = document.getElementById("layout_view_modal");
+    const closeBtn = document.getElementById("layout_view_close_btn");
+
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        modal.classList.add("hidden");
+        modal.style.display = 'none';
+      };
+    }
+
+
     if (!this.game) {
       if (container) {
-        container.innerHTML = '<tr><td colspan="6" style="text-align:center;">Game not initialized</td></tr>';
+        container.innerHTML = '<tr><td colspan="7" style="text-align:center;">Game not initialized</td></tr>';
       }
       return;
     }
     
     const loadRecords = async (sortBy) => {
       if (!container) return;
-      container.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
+      container.innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>';
       
       await leaderboardService.init();
-      const records = leaderboardService.getTopRuns(sortBy, 20);
+      const records = await leaderboardService.getTopRuns(sortBy, 20);
       
       if (records.length === 0) {
-        container.innerHTML = '<tr><td colspan="6" style="text-align:center">No records found yet. Play to save scores!</td></tr>';
+        container.innerHTML = '<tr><td colspan="7" style="text-align:center">No records found yet. Play to save scores!</td></tr>';
         return;
       }
 
@@ -4008,6 +4027,8 @@ export class UI {
       records.forEach((run, index) => {
         const date = new Date(run.timestamp).toLocaleDateString();
         const timeStr = this.game.formatTime ? this.game.formatTime(run.time_played) : 'N/A';
+        const hasLayout = !!run.layout;
+        
         html += `
           <tr>
             <td>${index + 1}</td>
@@ -4016,10 +4037,28 @@ export class UI {
             <td>${fmt(run.heat)}</td>
             <td>$${fmt(run.money)}</td>
             <td>${timeStr}</td>
+            <td>
+              ${hasLayout ? `<button class="pixel-btn layout-view-btn" data-index="${index}" style="padding: 2px 6px; font-size: 0.6em;">View</button>` : '<span style="opacity:0.5">-</span>'}
+            </td>
           </tr>
         `;
       });
       container.innerHTML = html;
+
+      container.querySelectorAll('.layout-view-btn').forEach(btn => {
+        btn.onclick = () => {
+          const index = parseInt(btn.dataset.index);
+          const run = records[index];
+          if (run && run.layout) {
+            this.showLayoutModal(run.layout, {
+              money: run.money || 0,
+              ep: run.exotic_particles || 0,
+              heat: run.heat || 0,
+              power: run.power || 0
+            });
+          }
+        };
+      });
     };
 
     sortButtons.forEach(btn => {
@@ -4031,6 +4070,88 @@ export class UI {
     });
 
     loadRecords("power");
+  }
+
+  showLayoutModal(layoutJson, stats = {}) {
+    const modal = document.getElementById("layout_view_modal");
+    const gridContainer = document.getElementById("layout_view_grid");
+    if (!modal || !gridContainer) return;
+
+    try {
+      const layout = JSON.parse(layoutJson);
+      const { size, parts } = layout;
+      const rows = size.rows;
+      const cols = size.cols;
+
+      gridContainer.innerHTML = '';
+      gridContainer.style.display = 'grid';
+      gridContainer.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
+      gridContainer.style.gridTemplateRows = `repeat(${rows}, 32px)`;
+      gridContainer.style.gap = '1px';
+      gridContainer.style.backgroundColor = '#222';
+      gridContainer.style.border = '2px solid #444';
+      gridContainer.style.padding = '2px';
+
+      const partMap = new Map();
+      parts.forEach(p => partMap.set(`${p.r},${p.c}`, p));
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = document.createElement('div');
+          cell.style.width = '32px';
+          cell.style.height = '32px';
+          cell.style.backgroundColor = '#333';
+          cell.style.border = '1px solid #111';
+          cell.style.boxSizing = 'border-box';
+          cell.title = `(${r}, ${c})`;
+
+          const partData = partMap.get(`${r},${c}`);
+          if (partData) {
+            const partId = partData.id;
+            const partDef = this.game.partset.getPartById(partId);
+            
+            if (partDef) {
+              const imgPath = partDef.getImagePath();
+              cell.style.backgroundImage = `url('${imgPath}')`;
+              cell.style.backgroundSize = 'contain';
+              cell.style.backgroundPosition = 'center';
+              cell.style.backgroundRepeat = 'no-repeat';
+              cell.title = `${partDef.title} (${r}, ${c})`;
+              
+              if (partDef.category === 'cell') {
+                cell.style.backgroundColor = '#2a2a2a';
+              }
+            } else {
+              cell.textContent = '?';
+              cell.style.display = 'flex';
+              cell.style.alignItems = 'center';
+              cell.style.justifyContent = 'center';
+              cell.style.color = '#666';
+              cell.style.fontSize = '10px';
+            }
+          }
+
+          gridContainer.appendChild(cell);
+        }
+      }
+
+      const moneyEl = document.getElementById("layout_stats_money");
+      const epEl = document.getElementById("layout_stats_ep");
+      const heatEl = document.getElementById("layout_stats_heat");
+      const powerEl = document.getElementById("layout_stats_power");
+
+      if (moneyEl) moneyEl.textContent = `$${fmt(stats.money || 0)}`;
+      if (epEl) epEl.textContent = fmt(stats.ep || 0);
+      if (heatEl) heatEl.textContent = fmt(stats.heat || 0);
+      if (powerEl) powerEl.textContent = fmt(stats.power || 0);
+
+      modal.dataset.layout = layoutJson;
+      modal.style.display = 'flex';
+      modal.classList.remove("hidden");
+
+    } catch (e) {
+      console.error("Failed to render layout preview:", e);
+    }
   }
 
   setupSoundboardPage() {

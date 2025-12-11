@@ -4,7 +4,7 @@ describe("DOMMapper", () => {
   let domMapperInstance;
 
   beforeEach(async () => {
-    vi.resetModules(); // Ensure clean import
+    vi.resetModules();
     global.window = {
       document: {
         querySelector: vi.fn(),
@@ -15,7 +15,6 @@ describe("DOMMapper", () => {
     };
     global.document = global.window.document;
     
-    // Re-import the module to trigger the new DOMMapper() call with our mocked window
     const module = await import("../../public/src/components/domMapper.js");
     domMapperInstance = module.default;
   });

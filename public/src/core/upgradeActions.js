@@ -131,6 +131,100 @@ const actions = {
     game.reactor.updateStats();
   },
 
+  stirling_generators: (upgrade, game) => {
+    game.reactor.stirling_multiplier = upgrade.level * 0.01;
+  },
+
+  market_lobbying: (upgrade, game) => {
+    game.reactor.sell_price_multiplier = 1 + (upgrade.level * 0.1);
+  },
+
+  emergency_coolant: (upgrade, game) => {
+    game.reactor.manual_vent_percent = upgrade.level * 0.005;
+  },
+
+  component_reinforcement: (upgrade, game) => {
+    game.partset.partsArray.forEach(part => part.recalculate_stats());
+    game.tileset.active_tiles_list.forEach(tile => {
+      if (tile.part) tile.part.recalculate_stats();
+    });
+  },
+
+  isotope_stabilization: (upgrade, game) => {
+    game.partset.getPartsByCategory("cell").forEach(part => part.recalculate_stats());
+    game.tileset.active_tiles_list.forEach(tile => {
+      if (tile.part && tile.part.category === "cell") {
+        tile.part.recalculate_stats();
+      }
+    });
+  },
+
+  reflector_cooling: (upgrade, game) => {
+    game.reactor.reflector_cooling_factor = upgrade.level * 0.02;
+    game.reactor.updateStats();
+  },
+
+  quantum_tunneling: (upgrade, game) => {
+    ["heat_inlet", "heat_outlet"].forEach((cat) => {
+      updateAllPartStats(game, cat);
+    });
+    game.tileset.tiles_list.forEach(tile => tile.invalidateNeighborCaches());
+  },
+
+  reactor_insurance: (upgrade, game) => {
+    game.reactor.insurance_percentage = upgrade.level * 0.10;
+  },
+
+  manual_override: (upgrade, game) => {
+    game.reactor.manual_override_mult = upgrade.level * 0.10;
+  },
+
+  convective_airflow: (upgrade, game) => {
+    game.reactor.convective_boost = upgrade.level * 0.10;
+  },
+
+  electro_thermal_conversion: (upgrade, game) => {
+    game.reactor.power_to_heat_ratio = 2 + ((upgrade.level - 1) * 0.5);
+  },
+
+  sub_atomic_catalysts: (upgrade, game) => {
+    game.reactor.catalyst_reduction = upgrade.level * 0.05;
+    updateAllPartStats(game, "particle_accelerator");
+  },
+
+  flux_accumulators: (upgrade, game) => {
+    game.reactor.flux_accumulator_level = upgrade.level;
+  },
+
+  thermal_feedback: (upgrade, game) => {
+    game.reactor.thermal_feedback_rate = upgrade.level * 0.1;
+  },
+
+  autonomic_repair: (upgrade, game) => {
+    game.reactor.auto_repair_rate = upgrade.level;
+  },
+
+  volatile_tuning: (upgrade, game) => {
+    game.reactor.volatile_tuning_max = upgrade.level * 0.05;
+  },
+
+  ceramic_composite: (upgrade, game) => {
+    game.reactor.plating_transfer_rate = upgrade.level * 0.05;
+    updateAllPartStats(game, "reactor_plating");
+    game.tileset.tiles_list.forEach(tile => {
+      if (tile.part && tile.part.category === "reactor_plating") {
+        tile.part.recalculate_stats();
+      }
+    });
+    if (game.engine) {
+      game.engine.markPartCacheAsDirty();
+    }
+  },
+
+  explosive_decompression: (upgrade, game) => {
+    game.reactor.decompression_enabled = upgrade.level > 0;
+  },
+
   // Experimental Upgrades
   laboratory: (upgrade, game) => {
   },
@@ -171,10 +265,14 @@ const actions = {
     updateAllPartStats(game, "coolant_cell");
   },
   phlembotinum_core: (upgrade, game) => {
-    game.reactor.altered_max_power =
-      game.reactor.base_max_power * Math.pow(4, upgrade.level);
-    game.reactor.altered_max_heat =
-      game.reactor.base_max_heat * Math.pow(4, upgrade.level);
+    game.reactor.base_max_power =
+      100 * Math.pow(4, upgrade.level);
+    game.reactor.base_max_heat =
+      1000 * Math.pow(4, upgrade.level);
+    // Ensure altered stats track the new base so updateStats applies the boost
+    game.reactor.altered_max_power = game.reactor.base_max_power;
+    game.reactor.altered_max_heat = game.reactor.base_max_heat;
+    game.reactor.updateStats();
   },
 
   // Cell-specific Upgrades

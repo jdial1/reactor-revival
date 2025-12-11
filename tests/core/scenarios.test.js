@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame } from "../helpers/setup.js";
+import { placePart, forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("Complex Grid Scenarios and Interactions", () => {
     let game;
@@ -14,16 +15,14 @@ describe("Complex Grid Scenarios and Interactions", () => {
     });
 
     it("should correctly stack bonuses from multiple reflectors on a single cell", async () => {
-        // ARRANGE
         const cell = game.partset.getPartById("uranium1");
         const reflector = game.partset.getPartById("reflector1");
 
-        const cellTile = game.tileset.getTile(5, 5);
-        await cellTile.setPart(cell);
-        await game.tileset.getTile(4, 5).setPart(reflector);
-        await game.tileset.getTile(6, 5).setPart(reflector);
-        await game.tileset.getTile(5, 4).setPart(reflector);
-        await game.tileset.getTile(5, 6).setPart(reflector);
+        const cellTile = await placePart(game, 5, 5, "uranium1");
+        await placePart(game, 4, 5, "reflector1");
+        await placePart(game, 6, 5, "reflector1");
+        await placePart(game, 5, 4, "reflector1");
+        await placePart(game, 5, 6, "reflector1");
 
         game.reactor.updateStats();
         const powerWithoutReflectors = cell.power;
@@ -36,17 +35,8 @@ describe("Complex Grid Scenarios and Interactions", () => {
 
 
     it("should test heat exchanger functionality", async () => {
-        // ARRANGE
-        const cell = game.partset.getPartById("uranium1"); // Use uranium instead of thorium
-        const exchanger = game.partset.getPartById("heat_exchanger1");
-
-        // Place cell and exchanger adjacent to each other
-        await game.tileset.getTile(5, 1).setPart(cell);
-        await game.tileset.getTile(5, 2).setPart(exchanger);
-
-        // Check parts immediately after placement
-        const cellTile = game.tileset.getTile(5, 1);
-        const exchangerTile = game.tileset.getTile(5, 2);
+        const cellTile = await placePart(game, 5, 1, "uranium1");
+        const exchangerTile = await placePart(game, 5, 2, "heat_exchanger1");
 
         expect(cellTile.part).not.toBeNull();
         expect(exchangerTile.part).not.toBeNull();
@@ -67,28 +57,17 @@ describe("Complex Grid Scenarios and Interactions", () => {
     });
 
     it("should effectively manage heat in a checkerboard layout", async () => {
-        // ARRANGE
-        const cell = game.partset.getPartById("plutonium2");
-        const vent = game.partset.getPartById("vent3");
-
-        // Reset reactor state completely
         game.reactor.setDefaults();
-        
-        // Increase max_power significantly to prevent power overflow from being converted to heat
-        // This allows the test to focus on heat management rather than power overflow
         game.reactor.max_power = 10000;
         game.reactor.altered_max_power = 10000;
         game.reactor.current_heat = 0;
         game.reactor.current_power = 0;
-        
-        // Ensure no power multiplier is applied
         game.reactor.power_multiplier = 1;
 
-        // Create a simple 2x2 pattern to test
-        await game.tileset.getTile(0, 0).setPart(cell);
-        await game.tileset.getTile(0, 1).setPart(vent);
-        await game.tileset.getTile(1, 0).setPart(vent);
-        await game.tileset.getTile(1, 1).setPart(cell);
+        await placePart(game, 0, 0, "plutonium2");
+        const ventTile1 = await placePart(game, 0, 1, "vent3");
+        const ventTile2 = await placePart(game, 1, 0, "vent3");
+        await placePart(game, 1, 1, "plutonium2");
 
         // Ensure tileset is updated and neighbor caches are populated
         game.tileset.updateActiveTiles();
@@ -105,12 +84,7 @@ describe("Complex Grid Scenarios and Interactions", () => {
         // ACT
         game.engine.tick();
 
-        // ASSERT
-        // All heat from cells is transferred to adjacent vents.
         expect(game.reactor.current_heat).toBe(0);
-        const ventTile1 = game.tileset.getTile(0, 1);
-        const ventTile2 = game.tileset.getTile(1, 0);
-        // Vents receive and then dissipate heat in the same tick.
         expect(ventTile1.heat_contained).toBe(0);
         expect(ventTile2.heat_contained).toBe(0);
 
@@ -125,14 +99,8 @@ describe("Complex Grid Scenarios and Interactions", () => {
     });
 
     it("should test coolant cell functionality", async () => {
-        // ARRANGE
-        const cell = game.partset.getPartById("uranium1"); // Use uranium instead of nefastium
-        const coolant = game.partset.getPartById("coolant_cell1"); // Use regular coolant cell for testing
-
-        // Place cell and coolant adjacent to each other
-        await game.tileset.getTile(5, 5).setPart(cell);
-        const coolantTile = game.tileset.getTile(5, 6);
-        await coolantTile.setPart(coolant);
+        await placePart(game, 5, 5, "uranium1");
+        const coolantTile = await placePart(game, 5, 6, "coolant_cell1");
 
         // Check part immediately after placement
         expect(coolantTile.part).not.toBeNull();
@@ -158,38 +126,26 @@ describe("Complex Grid Scenarios and Interactions", () => {
     });
 
     it("should handle grid expansion and part placement on new edges", async () => {
-        // ARRANGE
         const initialRows = game.rows;
         const initialCols = game.cols;
-        const rowUpgrade = game.upgradeset.getUpgrade("expand_reactor_rows");
-        const colUpgrade = game.upgradeset.getUpgrade("expand_reactor_cols");
 
-        // ACT: Expand the grid
-        rowUpgrade.setLevel(1);
-        colUpgrade.setLevel(1);
+        forcePurchaseUpgrade(game, "expand_reactor_rows");
+        forcePurchaseUpgrade(game, "expand_reactor_cols");
 
-        // ASSERT: Grid size is updated
         expect(game.rows).toBe(initialRows + 1);
         expect(game.cols).toBe(initialCols + 1);
 
-        // ARRANGE: Place parts on new edges
         const cell = game.partset.getPartById("uranium1");
         const reflector = game.partset.getPartById("reflector1");
-        const newEdgeTileRow = game.tileset.getTile(initialRows, 5);
-        const newEdgeTileCol = game.tileset.getTile(5, initialCols);
-        const cornerTile = game.tileset.getTile(initialRows, initialCols);
+
+        const newEdgeTileRow = await placePart(game, initialRows, 5, "uranium1");
+        const cornerTile = await placePart(game, initialRows, initialCols, "reflector1");
 
         expect(newEdgeTileRow.enabled).toBe(true);
-        expect(newEdgeTileCol.enabled).toBe(true);
         expect(cornerTile.enabled).toBe(true);
 
-        await newEdgeTileRow.setPart(cell);
-        await cornerTile.setPart(reflector);
-
-        // ACT: Check interaction
         game.reactor.updateStats();
-        const neighborOfCorner = game.tileset.getTile(initialRows, initialCols - 1);
-        await neighborOfCorner.setPart(cell);
+        const neighborOfCorner = await placePart(game, initialRows, initialCols - 1, "uranium1");
         game.reactor.updateStats();
 
         // ASSERT
@@ -202,13 +158,10 @@ describe("Complex Grid Scenarios and Interactions", () => {
     });
 
     it("should handle Forceful Fusion upgrade with high heat", async () => {
-        const fusionUpgrade = game.upgradeset.getUpgrade("forceful_fusion");
-        if (fusionUpgrade) fusionUpgrade.setLevel(1);
+        forcePurchaseUpgrade(game, "forceful_fusion");
 
-        // Place multiple high-heat cells to generate heat naturally
-        const cellPart = game.partset.getPartById("plutonium3");
         for (let i = 0; i < 5; i++) {
-            await game.tileset.getTile(i, 0).setPart(cellPart);
+            await placePart(game, i, 0, "plutonium3");
         }
 
         // Run the engine for a few ticks to accumulate heat

@@ -3,20 +3,23 @@ import dataService from "../services/dataService.js";
 
 // Load upgrade data
 let upgrade_templates = [];
+let tech_tree_data = [];
 let dataLoaded = false;
 
 async function ensureDataLoaded() {
   if (!dataLoaded) {
     try {
       upgrade_templates = await dataService.loadUpgradeList();
+      tech_tree_data = await dataService.loadTechTree();
       dataLoaded = true;
     } catch (error) {
-      console.warn("Failed to load upgrade list:", error);
+      console.warn("Failed to load upgrade list or tech tree:", error);
       upgrade_templates = [];
+      tech_tree_data = [];
       dataLoaded = true;
     }
   }
-  return upgrade_templates;
+  return { upgrade_templates, tech_tree_data };
 }
 
 export class UpgradeSet {
@@ -24,11 +27,24 @@ export class UpgradeSet {
     this.game = game;
     this.upgrades = new Map();
     this.upgradesArray = [];
+    this.upgradeToTechTreeMap = new Map();
+    this.restrictedUpgrades = new Set();
   }
 
   async initialize() {
     await ensureDataLoaded();
     this.reset();
+    
+    // Process tech tree data to build restriction maps
+    const treeData = tech_tree_data.default || tech_tree_data || [];
+    treeData.forEach(tree => {
+      if (tree.upgrades) {
+        tree.upgrades.forEach(upgradeId => {
+          this.upgradeToTechTreeMap.set(upgradeId, tree.id);
+          this.restrictedUpgrades.add(upgradeId);
+        });
+      }
+    });
 
     const data = upgrade_templates.default || upgrade_templates;
     this.game.logger?.debug("Upgrade data loaded:", data?.length, "upgrades");
@@ -103,19 +119,27 @@ export class UpgradeSet {
 
   populateUpgrades() {
     this._populateUpgradeSection("upgrades_content_wrapper", (upgrade) => !upgrade.base_ecost);
+    this.updateSectionCounts();
   }
 
   populateExperimentalUpgrades() {
     this._populateUpgradeSection("experimental_upgrades_content_wrapper", (upgrade) => !!upgrade.base_ecost);
+    this.updateSectionCounts();
   }
 
   _populateUpgradeSection(wrapperId, filterFn) {
+    if (typeof document === "undefined") return;
     const wrapper = document.getElementById(wrapperId);
     if (!wrapper) return;
 
     wrapper.querySelectorAll(".upgrade-group").forEach((el) => (el.innerHTML = ""));
 
     this.upgradesArray.filter(filterFn).forEach((upgrade) => {
+      // Check if upgrade is available for current tech tree
+      if (!this.isUpgradeAvailable(upgrade.id)) {
+        return;
+      }
+
       try {
         const upgType = upgrade?.upgrade?.type || "";
         const basePart = upgrade?.upgrade?.part;
@@ -145,7 +169,16 @@ export class UpgradeSet {
 
   purchaseUpgrade(upgradeId) {
     const upgrade = this.getUpgrade(upgradeId);
-    if (!upgrade || !upgrade.affordable || upgrade.level >= upgrade.max_level) {
+    if (!upgrade) {
+      this.game.logger?.warn(`[Upgrade] Purchase failed: Upgrade '${upgradeId}' not found.`);
+      return false;
+    }
+    if (!upgrade.affordable) {
+      this.game.logger?.warn(`[Upgrade] Purchase failed: '${upgradeId}' not affordable. Money: ${this.game.current_money}, Cost: ${upgrade.getCost()}`);
+      return false;
+    }
+    if (upgrade.level >= upgrade.max_level) {
+      this.game.logger?.warn(`[Upgrade] Purchase failed: '${upgradeId}' already at max level (${upgrade.level})`);
       return false;
     }
 
@@ -173,6 +206,7 @@ export class UpgradeSet {
       if (upgrade.upgrade.type === "experimental_parts") {
         this.game.epart_onclick(upgrade);
       }
+      this.updateSectionCounts();
       this.game.saveGame(null, true); // true = isAutoSave
     }
 
@@ -184,8 +218,23 @@ export class UpgradeSet {
 
     const hideUpgrades = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_unaffordable_upgrades") !== "false";
     const hideResearch = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_unaffordable_research") !== "false";
+    const hideMaxUpgrades = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_max_upgrades") !== "false";
+    const hideMaxResearch = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_max_research") !== "false";
+
+    let hasVisibleAffordableUpgrade = false;
+    let hasVisibleAffordableResearch = false;
+    let hasAnyUpgrade = false;
+    let hasAnyResearch = false;
 
     this.upgradesArray.forEach((upgrade) => {
+      // Visibility check based on tech tree
+      if (!this.isUpgradeAvailable(upgrade.id)) {
+        if (upgrade.$el) {
+          upgrade.$el.classList.add("hidden");
+        }
+        return;
+      }
+
       let isAffordable = false;
 
       // During meltdown, make all upgrades unaffordable
@@ -207,29 +256,205 @@ export class UpgradeSet {
 
       if (upgrade.$el) {
         const isResearch = !!upgrade.base_ecost;
-        const shouldHide = isResearch ? hideResearch : hideUpgrades;
+        const shouldHideUnaffordable = isResearch ? hideResearch : hideUpgrades;
+        const shouldHideMaxed = isResearch ? hideMaxResearch : hideMaxUpgrades;
         const isMaxed = upgrade.level >= upgrade.max_level;
+        const isInDOM = upgrade.$el.isConnected;
 
-        if (shouldHide && !isAffordable && !isMaxed) {
+        if (isInDOM) {
+          if (isResearch) {
+            hasAnyResearch = true;
+            if (isAffordable && !isMaxed) {
+              hasVisibleAffordableResearch = true;
+            }
+          } else {
+            hasAnyUpgrade = true;
+            if (isAffordable && !isMaxed) {
+              hasVisibleAffordableUpgrade = true;
+            }
+          }
+        }
+
+        const shouldHide = (shouldHideUnaffordable && !isAffordable && !isMaxed) || (shouldHideMaxed && isMaxed);
+        if (shouldHide) {
           upgrade.$el.classList.add("hidden");
         } else {
           upgrade.$el.classList.remove("hidden");
         }
       }
     });
+
+    const upgradesBanner = typeof document !== "undefined" ? document.getElementById("upgrades_no_affordable_banner") : null;
+    if (upgradesBanner) {
+      if (hasAnyUpgrade && !hasVisibleAffordableUpgrade) {
+        upgradesBanner.classList.remove("hidden");
+      } else {
+        upgradesBanner.classList.add("hidden");
+      }
+    }
+
+    const researchBanner = typeof document !== "undefined" ? document.getElementById("research_no_affordable_banner") : null;
+    if (researchBanner) {
+      if (hasAnyResearch && !hasVisibleAffordableResearch) {
+        researchBanner.classList.remove("hidden");
+      } else {
+        researchBanner.classList.add("hidden");
+      }
+    }
+  }
+
+  isUpgradeAvailable(upgradeId) {
+    if (this.game.bypass_tech_tree_restrictions) return true;
+    
+    if (!this.restrictedUpgrades.has(upgradeId)) {
+      return true; // Available to all if not in any tree
+    }
+    
+    // If it is restricted, check if player has the matching tech tree
+    const requiredTree = this.upgradeToTechTreeMap.get(upgradeId);
+    return this.game.tech_tree === requiredTree;
   }
 
   hasAffordableUpgrades() {
     const expandUpgradeIds = ["expand_reactor_rows", "expand_reactor_cols"];
-    return this.upgradesArray.some((upgrade) => 
-      !upgrade.base_ecost && 
+    return this.upgradesArray.some((upgrade) =>
+      !upgrade.base_ecost &&
       !expandUpgradeIds.includes(upgrade.id) &&
-      upgrade.affordable && 
-      upgrade.level < upgrade.max_level
+      upgrade.affordable &&
+      upgrade.level < upgrade.max_level &&
+      this.isUpgradeAvailable(upgrade.id)
     );
   }
 
   hasAffordableResearch() {
-    return this.upgradesArray.some((upgrade) => upgrade.base_ecost && upgrade.affordable && upgrade.level < upgrade.max_level);
+    return this.upgradesArray.some((upgrade) => 
+      upgrade.base_ecost && 
+      upgrade.affordable && 
+      upgrade.level < upgrade.max_level &&
+      this.isUpgradeAvailable(upgrade.id)
+    );
+  }
+
+  _getUpgradeContainerId(upgrade) {
+    if (upgrade.base_ecost) {
+      return upgrade.upgrade.type;
+    }
+    const normalizeKey = (key) => {
+      if (key.endsWith("_upgrades")) {
+        return key;
+      }
+      const map = {
+        cell_power: "cell_power_upgrades",
+        cell_tick: "cell_tick_upgrades",
+        cell_perpetual: "cell_perpetual_upgrades",
+        exchangers: "exchanger_upgrades",
+        vents: "vent_upgrades",
+        other: "other_upgrades",
+      };
+      return map[key] || key;
+    };
+    return normalizeKey(upgrade.upgrade.type);
+  }
+
+  _getSectionUpgradeGroups(sectionName) {
+    const sectionMap = {
+      "Cell Upgrades": ["cell_power_upgrades", "cell_tick_upgrades", "cell_perpetual_upgrades"],
+      "Cooling Upgrades": ["vent_upgrades", "exchanger_upgrades"],
+      "General Upgrades": ["other_upgrades"],
+      "Laboratory": ["experimental_laboratory"],
+      "Global Boosts": ["experimental_boost"],
+      "Experimental Parts & Cells": ["experimental_parts", "experimental_cells", "experimental_cells_boost"],
+      "Particle Accelerators": ["experimental_particle_accelerators"],
+    };
+    return sectionMap[sectionName] || [];
+  }
+
+  _countUpgradesInGroups(groupIds, isResearch) {
+    if (typeof document === "undefined") return { total: 0, researched: 0 };
+    let total = 0;
+    let researched = 0;
+
+    groupIds.forEach(groupId => {
+      const container = document.getElementById(groupId);
+      if (!container) return;
+
+      const upgrades = this.upgradesArray.filter(upgrade => {
+        if (isResearch !== !!upgrade.base_ecost) return false;
+        if (!this.isUpgradeAvailable(upgrade.id)) return false;
+        
+        const containerId = this._getUpgradeContainerId(upgrade);
+        if (containerId !== groupId) return false;
+
+        const upgType = upgrade?.upgrade?.type || "";
+        const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
+        if (isCellUpgrade) {
+          const basePart = upgrade?.upgrade?.part;
+          if (basePart && basePart.category === "cell") {
+            if (this.game && typeof this.game.isPartUnlocked === "function") {
+              return this.game.isPartUnlocked(basePart);
+            }
+            return true;
+          }
+        }
+        return true;
+      });
+
+      upgrades.forEach(upgrade => {
+        total += upgrade.max_level;
+        researched += upgrade.level;
+      });
+    });
+
+    return { total, researched };
+  }
+
+  updateSectionCounts() {
+    const upgradeSections = [
+      { name: "Cell Upgrades", isResearch: false },
+      { name: "Cooling Upgrades", isResearch: false },
+      { name: "General Upgrades", isResearch: false },
+      { name: "Laboratory", isResearch: true },
+      { name: "Global Boosts", isResearch: true },
+      { name: "Experimental Parts & Cells", isResearch: true },
+      { name: "Particle Accelerators", isResearch: true },
+    ];
+
+    upgradeSections.forEach(section => {
+      const groupIds = this._getSectionUpgradeGroups(section.name);
+      if (groupIds.length === 0) return;
+
+      const { total, researched } = this._countUpgradesInGroups(groupIds, section.isResearch);
+      
+      if (typeof document === "undefined") return;
+      const wrapper = section.isResearch 
+        ? document.getElementById("experimental_upgrades_content_wrapper")
+        : document.getElementById("upgrades_content_wrapper");
+      
+      if (!wrapper) return;
+
+      const article = Array.from(wrapper.querySelectorAll("article")).find(art => {
+        const h2 = art.querySelector("h2");
+        if (!h2) return false;
+        let headerText = h2.textContent.trim();
+        const countSpan = h2.querySelector(".section-count");
+        if (countSpan) {
+          headerText = headerText.replace(countSpan.textContent, "").trim();
+        }
+        return headerText === section.name;
+      });
+
+      if (article) {
+        let h2 = article.querySelector("h2");
+        if (!h2) return;
+
+        let countSpan = h2.querySelector(".section-count");
+        if (!countSpan) {
+          countSpan = document.createElement("span");
+          countSpan.className = "section-count";
+          h2.appendChild(countSpan);
+        }
+        countSpan.textContent = ` ${researched}/${total}`;
+      }
+    });
   }
 }

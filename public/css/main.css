@@ -2459,6 +2459,38 @@ footer#bottom_nav button.active,
 .upgrade-card.maxed-out {
   opacity: 0.7;
   filter: grayscale(0.8);
+  transform: scale(0.85);
+  max-width: 85%;
+  margin: 0 auto;
+}
+
+.upgrade-card.maxed-out .upgrade-header {
+  padding: 8px 10px;
+  gap: 8px;
+}
+
+.upgrade-card.maxed-out .upgrade-footer {
+  padding: 6px 10px;
+}
+
+.upgrade-card.maxed-out .upgrade-icon-wrapper {
+  width: 40px;
+  height: 40px;
+}
+
+.upgrade-card.maxed-out .upgrade-icon-wrapper .image {
+  width: 28px;
+  height: 28px;
+}
+
+.upgrade-card.maxed-out .upgrade-title {
+  font-size: 0.85rem;
+  margin-bottom: 0;
+}
+
+.upgrade-card.maxed-out:hover {
+  transform: scale(0.87);
+  filter: grayscale(0.8) brightness(1.05);
 }
 
 .upgrade-header {
@@ -2620,7 +2652,8 @@ footer#bottom_nav button.active,
   max-width: 100%;
 }
 
-#experimental_upgrades_content_wrapper article {
+#experimental_upgrades_content_wrapper article,
+#upgrades_content_wrapper article {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -4797,7 +4830,7 @@ footer#bottom_nav button {
     width: 100%;
     align-items: center;
     justify-content: flex-start;
-    padding: 0 25px 25px;
+    padding: 0 5px 5px;
     -webkit-overflow-scrolling: touch;
     overflow: hidden;
     scroll-behavior: smooth;
@@ -5277,6 +5310,11 @@ body.reactor-meltdown #meltdown_banner {
   animation: meltdownFlash 1s ease-in-out infinite alternate !important;
 }
 
+body.game-paused #objectives_section,
+body.reactor-meltdown #objectives_section {
+  display: none !important;
+}
+
 @keyframes meltdownFlash {
   0% {
     background-color: rgb(244 67 54);
@@ -5372,6 +5410,37 @@ body.page-privacy_policy .about-content h3 {
 
 body.page-privacy_policy .about-content p {
   margin-bottom: 0.75rem;
+}
+
+.affordability-banner {
+  position: relative;
+  z-index: 100;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background-color: rgb(255 200 0);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 20%);
+  color: rgb(0 0 0);
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 4px;
+}
+
+.affordability-banner.hidden {
+  display: none;
+}
+
+.affordability-banner article {
+  padding: 0;
+  margin: 0;
+  background: none;
+  color: rgb(0 0 0);
+  font-weight: bold;
+  text-shadow: 1px 1px 2px rgb(255 255 255 / 50%);
 }
 
 body.page-privacy_policy .about-content ul {
@@ -7759,6 +7828,521 @@ body.page-privacy_policy .highlight {
 #critical-error-reload:hover {
   background: rgb(255 100 100);
   color: rgb(255 255 200);
+}
+
+/* Tech Tree Selection Styles */
+.tech-tree-selection {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.tech-tree-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  max-height: 100vh;
+  background-color: rgba(20, 20, 20, 0.98);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(5px);
+  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tech-tree-overlay.hidden {
+  display: none !important;
+}
+
+.tech-tree-header {
+  color: rgb(255, 224, 130);
+  text-shadow: 2px 2px 0 black;
+  font-size: 1.5rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.tech-tree-container {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  width: 100%;
+  max-width: 1200px;
+  justify-content: center;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.tech-tree-card {
+  flex: 1 1 300px;
+  max-width: 380px;
+  background: rgb(45, 45, 45);
+  border: 4px solid var(--bevel-light);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  cursor: pointer;
+  transition: opacity 0.2s, border-color 0.2s, box-shadow 0.2s, outline 0.2s;
+  outline: 0px solid transparent;
+  outline-offset: -4px;
+  box-sizing: border-box;
+}
+
+.tech-tree-card:active {
+  opacity: 0.8;
+}
+
+.tech-tree-card-selected {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.5), 0 4px 10px rgba(0,0,0,0.5);
+  outline: 3px solid currentColor;
+  outline-offset: -4px;
+}
+
+.tech-tree-card-header {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 2px solid var(--bevel-dark);
+  gap: 1rem;
+}
+
+.tech-tree-icon {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.tech-tree-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.tech-tree-title {
+  color: white;
+  font-size: 1rem;
+  margin: 0 0 0.3rem 0;
+  text-shadow: 1px 1px 0 black;
+}
+
+.tech-tree-subtitle {
+  color: rgb(176, 224, 230);
+  font-size: 0.7rem;
+}
+
+.tech-tree-body {
+  padding: 1rem;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  font-family: sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: #ddd;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tech-tree-playstyle {
+  margin-bottom: 0.8rem;
+  font-family: "Press Start 2P", cursive, monospace;
+  font-size: 0.65rem;
+  color: rgb(255, 255, 160);
+}
+
+.tech-tree-focus {
+  margin-bottom: 1rem;
+  font-style: italic;
+}
+
+.tech-tree-mechanics {
+  padding-left: 1.2rem;
+  margin: 0;
+}
+
+.tech-tree-mechanics li {
+  margin-bottom: 0.4rem;
+}
+
+.tech-tree-button-container {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.tech-tree-back-btn {
+  width: 200px !important;
+  flex-shrink: 0;
+}
+
+.tech-tree-start-btn {
+  width: 200px !important;
+  border-width: 4px;
+  flex-shrink: 0;
+}
+
+.tech-tree-start-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(50%);
+}
+
+.tech-tree-start-btn:not(:disabled) {
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .tech-tree-selection {
+    padding: 0.5rem;
+    gap: 0.5rem;
+    justify-content: flex-start;
+    height: 100%;
+    min-height: 100vh;
+  }
+
+  .tech-tree-overlay {
+    padding: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .tech-tree-container {
+    flex-direction: column;
+    align-items: stretch;
+    height: calc(100vh - 120px);
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    width: 100%;
+    gap: 0.5rem;
+    padding: 0.25rem;
+    flex: 1 1 auto;
+  }
+  
+  .tech-tree-card {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .tech-tree-card .tech-tree-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .tech-tree-header {
+    font-size: 1.4rem;
+    margin-bottom: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .tech-tree-card-header {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .tech-tree-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .tech-tree-title {
+    font-size: 1.1rem;
+  }
+
+  .tech-tree-subtitle {
+    font-size: 0.65rem;
+  }
+
+  .tech-tree-body {
+    padding: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .tech-tree-playstyle {
+    font-size: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .tech-tree-focus {
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .tech-tree-mechanics {
+    padding-left: 1rem;
+    font-size: 0.8rem;
+  }
+
+  .tech-tree-mechanics li {
+    margin-bottom: 0.3rem;
+  }
+
+  .tech-tree-button-container {
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .tech-tree-back-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .tech-tree-start-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .tech-tree-selection {
+    padding: 0.25rem;
+    gap: 0.4rem;
+    height: 100%;
+    min-height: 100vh;
+  }
+
+  .tech-tree-overlay {
+    padding: 0.25rem;
+  }
+
+  .tech-tree-container {
+    height: calc(100vh - 100px);
+    max-height: calc(100vh - 100px);
+    gap: 0.4rem;
+    padding: 0;
+    flex: 1 1 auto;
+  }
+
+  .tech-tree-card {
+    flex: 1 1 0;
+    min-height: 0;
+    border-width: 3px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .tech-tree-card .tech-tree-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .tech-tree-header {
+    font-size: 1.3rem;
+    margin-bottom: 0.2rem;
+    padding: 0 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .tech-tree-card-header {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .tech-tree-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .tech-tree-title {
+    font-size: 1rem;
+  }
+
+  .tech-tree-subtitle {
+    font-size: 0.6rem;
+  }
+
+  .tech-tree-body {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+
+  .tech-tree-playstyle {
+    font-size: 0.55rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+  }
+
+  .tech-tree-focus {
+    font-size: 0.8rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .tech-tree-mechanics {
+    padding-left: 0.9rem;
+    font-size: 0.75rem;
+  }
+
+  .tech-tree-mechanics li {
+    margin-bottom: 0.25rem;
+  }
+
+  .tech-tree-button-container {
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .tech-tree-back-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+    padding: 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .tech-tree-start-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+    padding: 0.6rem;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .tech-tree-selection {
+    padding: 0.2rem;
+    gap: 0.3rem;
+    height: 100%;
+    min-height: 100vh;
+  }
+
+  .tech-tree-overlay {
+    padding: 0.2rem;
+  }
+
+  .tech-tree-container {
+    height: calc(100vh - 90px);
+    max-height: calc(100vh - 90px);
+    gap: 0.3rem;
+    flex: 1 1 auto;
+  }
+
+  .tech-tree-card {
+    flex: 1 1 0;
+    min-height: 0;
+    border-width: 2px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .tech-tree-card .tech-tree-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .tech-tree-header {
+    font-size: 1.2rem;
+    margin-bottom: 0.15rem;
+    padding: 0 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .tech-tree-card-header {
+    padding: 0.4rem;
+    gap: 0.4rem;
+  }
+
+  .tech-tree-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .tech-tree-title {
+    font-size: 0.95rem;
+  }
+
+  .tech-tree-subtitle {
+    font-size: 0.55rem;
+  }
+
+  .tech-tree-body {
+    padding: 0.4rem;
+    font-size: 0.75rem;
+    line-height: 1.25;
+  }
+
+  .tech-tree-playstyle {
+    font-size: 0.5rem;
+    margin-bottom: 0.4rem;
+    line-height: 1.3;
+  }
+
+  .tech-tree-focus {
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .tech-tree-mechanics {
+    padding-left: 0.8rem;
+    font-size: 0.7rem;
+  }
+
+  .tech-tree-mechanics li {
+    margin-bottom: 0.2rem;
+  }
+
+  .tech-tree-button-container {
+    gap: 0.4rem;
+    margin-top: 0.3rem;
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .tech-tree-back-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .tech-tree-start-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
 }
 
 @media (width <= 600px) {

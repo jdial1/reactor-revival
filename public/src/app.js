@@ -135,24 +135,53 @@ function setupButtonHandlers(pageRouter, ui, game) {
   const newGameBtn = document.getElementById("splash-new-game-btn");
   if (newGameBtn) {
     newGameBtn.onclick = async () => {
-      if (window.splashManager) {
-        window.splashManager.hide();
+      console.log("[TECH-TREE] splash-new-game-btn clicked in app.js");
+      // Check if we should show tech tree selection (preferred) or fall back to direct start
+      if (window.showTechTreeSelection && window.splashManager) {
+        console.log("[TECH-TREE] Using tech tree selection flow");
+        try {
+          await window.showTechTreeSelection(game, pageRouter, ui, window.splashManager);
+        } catch (error) {
+          console.error("[TECH-TREE] Error in tech tree selection, falling back to direct start:", error);
+          // Fallback to direct start if tech tree selection fails
+          if (window.splashManager) {
+            window.splashManager.hide();
+          }
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
+          for (let i = 1; i <= 3; i++) {
+            try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
+          }
+          try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
+          try { localStorage.setItem("reactorNewGamePending", "1"); } catch (_) { }
+          delete game._saved_objective_index;
+          await game.initialize_new_game_state();
+          localStorage.removeItem("reactorGameQuickStartShown");
+          await startGame(pageRouter, ui, game);
+          try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
+        }
+      } else {
+        console.log("[TECH-TREE] Tech tree selection not available, using direct start");
+        // Fallback: direct start without tech tree selection
+        if (window.splashManager) {
+          window.splashManager.hide();
+        }
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        // Clear any persisted saves and pending saved objective index to force a true reset
+        try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
+        for (let i = 1; i <= 3; i++) {
+          try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
+        }
+        try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
+        try { localStorage.setItem("reactorNewGamePending", "1"); } catch (_) { }
+        delete game._saved_objective_index;
+        // Perform a full clean initialization (resets reactor/tiles, parts, upgrades and UI vars)
+        await game.initialize_new_game_state();
+        localStorage.removeItem("reactorGameQuickStartShown");
+        await startGame(pageRouter, ui, game);
+        // Clear the pending flag once the new session has started
+        try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
       }
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      // Clear any persisted saves and pending saved objective index to force a true reset
-      try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
-      for (let i = 1; i <= 3; i++) {
-        try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
-      }
-      try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
-      try { localStorage.setItem("reactorNewGamePending", "1"); } catch (_) { }
-      delete game._saved_objective_index;
-      // Perform a full clean initialization (resets reactor/tiles, parts, upgrades and UI vars)
-      await game.initialize_new_game_state();
-      localStorage.removeItem("reactorGameQuickStartShown");
-      await startGame(pageRouter, ui, game);
-      // Clear the pending flag once the new session has started
-      try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
     };
   }
 
@@ -456,12 +485,12 @@ async function startGame(pageRouter, ui, game) {
   game.engine = new Engine(game);
 
   console.log("[DEBUG] Starting session...");
-  game.startSession();
+  await game.startSession();
 
   // Initialize parts panel position after game loads
   ui.initializePartsPanel();
 
-  const finalizeGameStart = () => {
+  const finalizeGameStart = async () => {
     console.log(`[DEBUG] Finalizing game start. Initial paused state: ${game.paused}`);
     
     // Sync all toggle states from game properties to stateManager
@@ -503,7 +532,11 @@ async function startGame(pageRouter, ui, game) {
     }, 100);
 
     if (!localStorage.getItem("reactorGameQuickStartShown")) {
-      showQuickStartModal();
+      try {
+        await showQuickStartModal();
+      } catch (error) {
+        console.warn("Failed to show quick start modal:", error);
+      }
     }
     console.log("[DEBUG] startGame completed successfully");
   };
@@ -519,7 +552,7 @@ async function startGame(pageRouter, ui, game) {
     let savedIndex = game._saved_objective_index;
     delete game._saved_objective_index;
 
-    const restoreAndFinalize = () => {
+    const restoreAndFinalize = async () => {
       const maxValidIndex = game.objectives_manager.objectives_data.length - 2; // Exclude "All objectives completed!"
       if (savedIndex < 0) {
         savedIndex = 0;
@@ -533,24 +566,24 @@ async function startGame(pageRouter, ui, game) {
       game.objectives_manager.set_objective(savedIndex, true);
       // Start the objective manager after setting the objective
       game.objectives_manager.start();
-      finalizeGameStart();
+      await finalizeGameStart();
     };
 
     if (!game.objectives_manager?.objectives_data?.length) {
-      const checkReady = () => {
+      const checkReady = async () => {
         if (game.objectives_manager?.objectives_data?.length) {
-          restoreAndFinalize();
+          await restoreAndFinalize();
         } else {
           setTimeout(checkReady, 100);
         }
       };
       checkReady();
     } else {
-      restoreAndFinalize();
+      await restoreAndFinalize();
     }
   } else {
     game.objectives_manager.start();
-    finalizeGameStart();
+    await finalizeGameStart();
   }
 }
 

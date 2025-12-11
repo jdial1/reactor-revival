@@ -24,15 +24,52 @@ export class Reactor {
     this.transfer_capacitor_multiplier = 0;
     this.transfer_plating_multiplier = 0;
 
+    this.stirling_multiplier = 0;
+    this.sell_price_multiplier = 1;
+    this.manual_vent_percent = 0;
+    this.reflector_cooling_factor = 0;
+    this.insurance_percentage = 0;
+    this.manual_override_mult = 0;
+    this.override_end_time = 0;
+    this.convective_boost = 0;
+    this.power_to_heat_ratio = 0;
+    this.catalyst_reduction = 0;
+    this.flux_accumulator_level = 0;
+    this.thermal_feedback_rate = 0;
+    this.auto_repair_rate = 0;
+    this.volatile_tuning_max = 0;
+    this.decompression_enabled = false;
+    this.plating_transfer_rate = 0;
+
     this.has_melted_down = false;
     this.game.sold_power = false;
     this.game.sold_heat = false;
+
+    this._last_calculated_max_power = this.base_max_power;
+    this._last_calculated_max_heat = this.base_max_heat;
   }
 
   updateStats() {
     this._resetStats();
-    let current_max_power = this.altered_max_power || this.base_max_power;
-    let current_max_heat = this.altered_max_heat || this.base_max_heat;
+
+    // Treat max values as externally set only when they differ from both the last calculated values and the current base.
+    const maxPowerSetExternally =
+      this.max_power !== this._last_calculated_max_power &&
+      this.max_power !== this.base_max_power;
+    const maxHeatSetExternally =
+      this.max_heat !== this._last_calculated_max_heat &&
+      this.max_heat !== this.base_max_heat;
+    const alteredMaxPowerSet =
+      this.altered_max_power !== this.base_max_power;
+    const alteredMaxHeatSet =
+      this.altered_max_heat !== this.base_max_heat;
+    
+    let current_max_power = maxPowerSetExternally
+      ? this.max_power
+      : (alteredMaxPowerSet ? this.altered_max_power : this.base_max_power);
+    let current_max_heat = maxHeatSetExternally
+      ? this.max_heat
+      : (alteredMaxHeatSet ? this.altered_max_heat : this.base_max_heat);
     let temp_transfer_multiplier = 0;
     let temp_vent_multiplier = 0;
 
@@ -57,6 +94,40 @@ export class Reactor {
             tile.power *= 1 + (this.heat_power_multiplier * (Math.log(this.current_heat) / Math.log(1000) / 100));
           }
 
+          if (this.manual_override_mult > 0 && Date.now() < this.override_end_time) {
+            tile.power *= (1 + this.manual_override_mult);
+          }
+
+          // Thermal Feedback Logic
+          if (this.thermal_feedback_rate > 0) {
+            let feedbackBonus = 0;
+            tile.containmentNeighborTiles.forEach(neighbor => {
+              if (neighbor.part && neighbor.part.category === "coolant_cell") {
+                const ratio = neighbor.heat_contained / neighbor.part.containment;
+                if (ratio > 0) {
+                  feedbackBonus += (ratio * 100) * this.thermal_feedback_rate;
+                }
+              }
+            });
+
+            if (feedbackBonus > 0) {
+              tile.power *= (1 + (feedbackBonus / 100));
+            }
+          }
+
+          // Volatile Tuning Logic
+          if (this.volatile_tuning_max > 0) {
+            const maxTicks = tile.part.ticks;
+            if (maxTicks > 0 && tile.ticks >= 0) {
+              const degradation = 1 - (tile.ticks / maxTicks);
+              const bonus = this.volatile_tuning_max * degradation;
+              
+              if (bonus > 0 && typeof tile.power === 'number' && !isNaN(tile.power)) {
+                tile.power *= (1 + bonus);
+              }
+            }
+          }
+
           this.stats_power += tile.power || 0;
           this.stats_heat_generation += tile.heat || 0;
         }
@@ -66,14 +137,18 @@ export class Reactor {
           this.stats_total_part_heat += tile.heat_contained;
         }
 
-        if (tile.part.reactor_power) {
-          current_max_power += tile.part.reactor_power;
+        if (!maxPowerSetExternally) {
+          if (tile.part.reactor_power) {
+            current_max_power += tile.part.reactor_power;
+          }
+          if (tile.part.id === "reactor_plating6") {
+            current_max_power += tile.part.reactor_heat;
+          }
         }
-        if (tile.part.reactor_heat) {
-          current_max_heat += tile.part.reactor_heat;
-        }
-        if (tile.part.id === "reactor_plating6") {
-          current_max_power += tile.part.reactor_heat;
+        if (!maxHeatSetExternally) {
+          if (tile.part.reactor_heat) {
+            current_max_heat += tile.part.reactor_heat;
+          }
         }
 
         if (tile.part.category === "capacitor") {
@@ -116,6 +191,9 @@ export class Reactor {
     // Ensure all values are numbers
     this.max_power = Number(current_max_power);
     this.max_heat = Number(current_max_heat);
+    this._last_calculated_max_power = this.max_power;
+    this._last_calculated_max_heat = this.max_heat;
+
     this.stats_power = Number(this.stats_power || 0);
     this.stats_heat_generation = Number(this.stats_heat_generation || 0);
     this.stats_total_part_heat = Number(this.stats_total_part_heat || 0);
@@ -175,8 +253,10 @@ export class Reactor {
   _applyReflectorEffects(tile) {
     let reflector_power_bonus = 0;
     let reflector_heat_bonus = 0;
+    let reflector_count = 0;
     tile.reflectorNeighborTiles.forEach((r_tile) => {
       if (r_tile.ticks > 0) {
+        reflector_count++;
         reflector_power_bonus += r_tile.part.power_increase || 0;
         reflector_heat_bonus += r_tile.part.heat_increase || 0;
         // Visual: pulse aura signaling boost
@@ -192,15 +272,27 @@ export class Reactor {
       tile.power *= Math.max(0, 1 + reflector_power_bonus / 100);
     }
     if (typeof tile.heat === 'number' && !isNaN(tile.heat)) {
-      tile.heat *= 1 + reflector_heat_bonus / 100;
+      let heatMult = 1 + reflector_heat_bonus / 100;
+
+      if (this.reflector_cooling_factor > 0 && reflector_count > 0) {
+        const coolingReduction = reflector_count * this.reflector_cooling_factor;
+        heatMult *= Math.max(0.1, 1 - coolingReduction);
+      }
+
+      tile.heat *= heatMult;
     }
   }
 
   manualReduceHeat() {
     if (this.current_heat > 0) {
       const previousHeat = this.current_heat;
-      this.current_heat -=
-        this.manual_heat_reduce || this.game.base_manual_heat_reduce || 1;
+      let reduction = this.manual_heat_reduce || this.game.base_manual_heat_reduce || 1;
+
+      if (this.manual_vent_percent > 0) {
+        reduction += (this.max_heat * this.manual_vent_percent);
+      }
+
+      this.current_heat -= reduction;
       if (this.current_heat < 0) this.current_heat = 0;
       // Only set sold_heat to true if we actually reduced heat from a non-zero value
       if (this.current_heat === 0 && previousHeat > 0) this.game.sold_heat = true;
@@ -215,15 +307,23 @@ export class Reactor {
       if (this.game.objectives_manager) {
         this.game.objectives_manager.check_current_objective();
       }
+
+      this.updateStats();
     }
   }
 
   sellPower() {
     if (this.current_power > 0) {
-      this.game.addMoney(this.current_power);
+      const value = this.current_power * (this.sell_price_multiplier || 1);
+      this.game.addMoney(value);
       this.current_power = 0;
       this.game.ui.stateManager.setVar("current_power", this.current_power);
       this.game.sold_power = true;
+
+      if (this.manual_override_mult > 0) {
+        this.override_end_time = Date.now() + 10000;
+        this.updateStats();
+      }
 
       // Check objectives after power selling
       if (this.game.objectives_manager) {

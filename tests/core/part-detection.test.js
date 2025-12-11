@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Part Detection Test", () => {
     let game;
@@ -13,15 +14,8 @@ describe("Part Detection Test", () => {
     });
 
     it("should detect parts correctly", async () => {
-        // Place a heat outlet
-        const centerTile = game.tileset.getTile(5, 5);
-        const outletPart = game.partset.getPartById("heat_outlet1");
-        await centerTile.setPart(outletPart);
-
-        // Place a vent
-        const neighborTile = game.tileset.getTile(5, 6);
-        const ventPart = game.partset.getPartById("vent1");
-        await neighborTile.setPart(ventPart);
+        const centerTile = await placePart(game, 5, 5, "heat_outlet1");
+        const neighborTile = await placePart(game, 5, 6, "vent1");
 
         // Check that parts are detected
         expect(centerTile.part).toBeTruthy();

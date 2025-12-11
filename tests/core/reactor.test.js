@@ -171,13 +171,26 @@ describe("Reactor Mechanics", () => {
   });
 
   it("should apply Infused Cells power multiplier correctly", async () => {
+    game.bypass_tech_tree_restrictions = true;
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("uranium1");
     await tile.setPart(part);
-    game.upgradeset.purchaseUpgrade('laboratory');
-    game.upgradeset.purchaseUpgrade('infused_cells');
-    part.recalculate_stats(); // Manually trigger recalc after upgrade
-    game.reactor.updateStats(); // Ensure reactor stats are updated with the part's new stats
+    
+    // Ensure EP for purchase
+    const labUpgrade = game.upgradeset.getUpgrade('laboratory');
+    const infusedUpgrade = game.upgradeset.getUpgrade('infused_cells');
+    game.current_exotic_particles = Math.max(labUpgrade.getEcost(), infusedUpgrade.getEcost()) + 1000;
+    game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+    game.upgradeset.check_affordability(game);
+    
+    const labPurchased = game.upgradeset.purchaseUpgrade('laboratory');
+    expect(labPurchased).toBe(true);
+    game.upgradeset.check_affordability(game);
+    const infusedPurchased = game.upgradeset.purchaseUpgrade('infused_cells');
+    expect(infusedPurchased).toBe(true);
+    expect(game.upgradeset.getUpgrade('infused_cells').level).toBe(1);
+    part.recalculate_stats();
+    game.reactor.updateStats();
     game.engine.tick();
     expect(game.reactor.current_power).toBeCloseTo(part.base_power * 2, 0);
   });

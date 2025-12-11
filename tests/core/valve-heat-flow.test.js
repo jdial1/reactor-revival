@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame } from "../helpers/setup.js";
+import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Valve Heat Flow Integration", () => {
     let game;
@@ -50,26 +51,26 @@ describe("Valve Heat Flow Integration", () => {
         const bottomVent3 = game.tileset.getTile(3, 11); // Vent
 
         // Set parts for the layout
-        await topVent1.setPart(vent);
-        await topValve1.setPart(topupValve);
-        await topVent2.setPart(vent);
-        await topValve2.setPart(topupValve);
-        await topVent3.setPart(vent);
-        await topValve3.setPart(topupValve);
+        await placePart(game, 1, 6, "vent1");
+        await placePart(game, 1, 7, "topup_valve");
+        await placePart(game, 1, 8, "vent1");
+        await placePart(game, 1, 9, "topup_valve");
+        await placePart(game, 1, 10, "vent1");
+        await placePart(game, 1, 11, "topup_valve");
 
-        await middleValve1.setPart(topupValve);
-        await coolant1.setPart(coolantCell);
-        await exchanger1.setPart(heatExchanger);
-        await coolant2.setPart(coolantCell);
-        await exchanger2.setPart(heatExchanger);
-        await coolant3.setPart(coolantCell);
+        await placePart(game, 2, 6, "topup_valve");
+        await placePart(game, 2, 7, "coolant_cell1");
+        await placePart(game, 2, 8, "heat_exchanger1");
+        await placePart(game, 2, 9, "coolant_cell1");
+        await placePart(game, 2, 10, "heat_exchanger1");
+        await placePart(game, 2, 11, "coolant_cell1");
 
-        await bottomValve1.setPart(topupValve);
-        await bottomVent1.setPart(vent);
-        await bottomValve2.setPart(topupValve);
-        await bottomVent2.setPart(vent);
-        await bottomValve3.setPart(topupValve);
-        await bottomVent3.setPart(vent);
+        await placePart(game, 3, 6, "topup_valve");
+        await placePart(game, 3, 7, "vent1");
+        await placePart(game, 3, 8, "topup_valve");
+        await placePart(game, 3, 9, "vent1");
+        await placePart(game, 3, 10, "topup_valve");
+        await placePart(game, 3, 11, "vent1");
 
         // Activate all components
         const allTiles = [
@@ -250,24 +251,13 @@ describe("Valve Heat Flow Integration", () => {
             // Clear all tiles first
             game.tileset.clearAllTiles();
 
-            // Get parts
-            const overflowValve = game.partset.getPartById("overflow_valve");
-            const heatExchanger = game.partset.getPartById("heat_exchanger1");
-            const coolantCell = game.partset.getPartById("coolant_cell1");
-
             // Create layout: coolant -> valve -> exchanger
+            await placePart(game, 5, 5, "coolant_cell1");
+            await placePart(game, 5, 6, "overflow_valve");
+            await placePart(game, 5, 7, "heat_exchanger1");
             const coolantTile = game.tileset.getTile(5, 5);
             const valveTile = game.tileset.getTile(5, 6);
             const exchangerTile = game.tileset.getTile(5, 7);
-
-            await coolantTile.setPart(coolantCell);
-            await valveTile.setPart(overflowValve);
-            await exchangerTile.setPart(heatExchanger);
-
-            // Activate components
-            coolantTile.activated = true;
-            valveTile.activated = true;
-            exchangerTile.activated = true;
 
             // Set initial heat - coolant needs to be above 80% containment for overflow valve
             coolantTile.heat_contained = 1700;
@@ -300,24 +290,13 @@ describe("Valve Heat Flow Integration", () => {
             // Clear all tiles first
             game.tileset.clearAllTiles();
 
-            // Get parts
-            const overflowValve = game.partset.getPartById("overflow_valve");
-            const vent = game.partset.getPartById("vent1");
-            const coolantCell = game.partset.getPartById("coolant_cell1");
-
             // Create layout: coolant -> valve -> vent
+            await placePart(game, 5, 5, "coolant_cell1");
+            await placePart(game, 5, 6, "overflow_valve");
+            await placePart(game, 5, 7, "vent1");
             const coolantTile = game.tileset.getTile(5, 5);
             const valveTile = game.tileset.getTile(5, 6);
             const ventTile = game.tileset.getTile(5, 7);
-
-            await coolantTile.setPart(coolantCell);
-            await valveTile.setPart(overflowValve);
-            await ventTile.setPart(vent);
-
-            // Activate components
-            coolantTile.activated = true;
-            valveTile.activated = true;
-            ventTile.activated = true;
 
             // Set initial heat - coolant needs to be above 80% containment for overflow valve
             coolantTile.heat_contained = 1700;
@@ -357,10 +336,10 @@ describe("Valve Heat Flow Integration", () => {
             const exchangerTile = game.tileset.getTile(5, 7);
             const ventTile = game.tileset.getTile(5, 8);
 
-            await coolantTile.setPart(coolantCell);
-            await valveTile.setPart(overflowValve);
-            await exchangerTile.setPart(heatExchanger);
-            await ventTile.setPart(vent);
+            await placePart(game, 5, 5, "coolant_cell1");
+            await placePart(game, 5, 6, "overflow_valve");
+            await placePart(game, 5, 7, "heat_exchanger1");
+            await placePart(game, 5, 8, "vent1");
 
             // Activate components
             coolantTile.activated = true;
@@ -417,11 +396,11 @@ describe("Valve Heat Flow Integration", () => {
             const valve2Tile = game.tileset.getTile(5, 8);
             const ventTile = game.tileset.getTile(5, 9);
 
-            await coolantTile.setPart(coolantCell);
-            await valve1Tile.setPart(overflowValve);
-            await exchangerTile.setPart(heatExchanger);
-            await valve2Tile.setPart(checkValve);
-            await ventTile.setPart(vent);
+            await placePart(game, 5, 5, "coolant_cell1");
+            await placePart(game, 5, 6, "overflow_valve");
+            await placePart(game, 5, 7, "heat_exchanger1");
+            await placePart(game, 5, 8, "check_valve");
+            await placePart(game, 5, 9, "vent1");
 
             // Activate components
             coolantTile.activated = true;

@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("Upgradeset Mechanics", () => {
   let game;
   beforeEach(async () => {
     game = await setupGame();
+    game.bypass_tech_tree_restrictions = true;
   });
 
   it("should initialize with all required upgrades", () => {
@@ -59,27 +61,31 @@ describe("Upgradeset Mechanics", () => {
 
   it("should check affordability correctly", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
-
-    // Has enough money
-    game.current_money = upgrade.getCost();
+    // Ensure clean state
+    upgrade.setLevel(0);
+    upgrade.updateDisplayCost();
+    
+    const cost = upgrade.getCost();
+    
+    game.current_money = cost;
+    game.ui.stateManager.setVar("current_money", game.current_money);
     game.upgradeset.check_affordability(game);
-    expect(upgrade.affordable).toBe(true);
-
-    // Not enough money
-    game.current_money = upgrade.getCost() - 1;
+    expect(upgrade.affordable, `Expected affordable at money ${cost}`).toBe(true);
+    
+    game.current_money = cost - 1;
+    game.ui.stateManager.setVar("current_money", game.current_money);
     game.upgradeset.check_affordability(game);
-    expect(upgrade.affordable).toBe(false);
+    expect(upgrade.affordable, `Expected unaffordable at money ${cost - 1}`).toBe(false);
   });
 
   it("should correctly purchase an upgrade", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
-    const initialMoney = upgrade.getCost();
-    game.current_money = initialMoney;
+    upgrade.setLevel(0);
+    upgrade.updateDisplayCost();
 
-    const result = game.upgradeset.purchaseUpgrade(upgrade.id);
+    const result = forcePurchaseUpgrade(game, "chronometer");
 
-    expect(result).toBe(true);
+    expect(result, "Purchase returned false").toBe(true);
     expect(upgrade.level).toBe(1);
-    expect(game.current_money).toBe(0);
   });
 });

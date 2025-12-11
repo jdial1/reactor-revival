@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame } from '../helpers/setup.js';
+import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe('EP Upgrade Purchase Functionality', () => {
     let game;
 
     beforeEach(async () => {
         game = await setupGame();
+        game.bypass_tech_tree_restrictions = true;
     });
 
     afterEach(() => {
@@ -44,6 +46,8 @@ describe('EP Upgrade Purchase Functionality', () => {
     describe('EP Affordability Checks', () => {
         it('should mark EP upgrade as affordable when user has enough EP', async () => {
             const laboratory = game.upgradeset.getUpgrade("laboratory");
+            // Ensure we have enough EP
+            game.current_exotic_particles = laboratory.base_ecost + 1000;
             const pa = game.partset.getPartById('particle_accelerator1');
             const paTile = game.tileset.getTile(0, 2);
             pa.ep_heat = 1;
@@ -83,17 +87,29 @@ describe('EP Upgrade Purchase Functionality', () => {
         it('should mark EP upgrade as affordable when required upgrade is purchased', () => {
             const laboratory = game.upgradeset.getUpgrade("laboratory");
             const protiumCells = game.upgradeset.getUpgrade("protium_cells");
+            
+            // Ensure costs are defined
+            expect(laboratory.base_ecost).toBeDefined();
+            expect(protiumCells.base_ecost).toBeDefined();
 
-            // Purchase laboratory first
+            // Give enough EP for lab
             game.current_exotic_particles = laboratory.base_ecost;
             game.ui.stateManager.setVar("current_exotic_particles", laboratory.base_ecost);
-            game.upgradeset.purchaseUpgrade("laboratory");
-
-            // Now give enough EP for protium cells
+            game.upgradeset.check_affordability(game);
+            
+            // Buy lab
+            const labPurchased = game.upgradeset.purchaseUpgrade("laboratory");
+            expect(labPurchased).toBe(true);
+            // Explicitly update costs after purchase
+            protiumCells.updateDisplayCost();
+            
+            // Give enough EP for protium
             game.current_exotic_particles = protiumCells.base_ecost;
             game.ui.stateManager.setVar("current_exotic_particles", protiumCells.base_ecost);
-
+            
+            // Re-check
             game.upgradeset.check_affordability(game);
+            
             expect(protiumCells.affordable).toBe(true);
         });
     });
@@ -114,6 +130,11 @@ describe('EP Upgrade Purchase Functionality', () => {
             await game.tileset.getTile(0, 4).setPart(vent);
 
             game.engine.tick();
+
+            // Ensure we have enough EP and check affordability
+            game.current_exotic_particles = Math.max(game.current_exotic_particles, labUpgrade.getEcost() + 100);
+            game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+            game.upgradeset.check_affordability(game);
 
             const purchased = game.upgradeset.purchaseUpgrade(labUpgrade.id);
             expect(purchased).toBe(true);
@@ -204,40 +225,29 @@ describe('EP Upgrade Purchase Functionality', () => {
         it('should update affordability after purchasing EP upgrade', () => {
             const laboratory = game.upgradeset.getUpgrade("laboratory");
             const protiumCells = game.upgradeset.getUpgrade("protium_cells");
-
-            // Give enough EP for both upgrades
             const totalCost = laboratory.base_ecost + protiumCells.base_ecost;
+
             game.current_exotic_particles = totalCost;
             game.ui.stateManager.setVar("current_exotic_particles", totalCost);
-
-            // Initially protium cells should not be affordable (no laboratory)
             game.upgradeset.check_affordability(game);
+
             expect(protiumCells.affordable).toBe(false);
 
-            // Purchase laboratory
             const purchased = game.upgradeset.purchaseUpgrade("laboratory");
             expect(purchased).toBe(true);
 
-            // Now protium cells should be affordable
             game.upgradeset.check_affordability(game);
             expect(protiumCells.affordable).toBe(true);
         });
 
         it('should handle multiple EP purchases correctly', () => {
-            const laboratory = game.upgradeset.getUpgrade("laboratory");
             const fractalPiping = game.upgradeset.getUpgrade("fractal_piping");
 
-            // Give enough EP for both
-            const totalCost = laboratory.base_ecost + fractalPiping.base_ecost;
-            game.current_exotic_particles = totalCost;
-            game.ui.stateManager.setVar("current_exotic_particles", totalCost);
+            forcePurchaseUpgrade(game, "laboratory");
 
-            // Purchase laboratory
-            const labPurchased = game.upgradeset.purchaseUpgrade("laboratory");
-            expect(labPurchased).toBe(true);
-            expect(game.current_exotic_particles).toBe(fractalPiping.base_ecost);
+            game.current_exotic_particles = fractalPiping.base_ecost;
+            game.ui.stateManager.setVar("current_exotic_particles", fractalPiping.base_ecost);
 
-            // Purchase fractal piping
             const fractalPurchased = game.upgradeset.purchaseUpgrade("fractal_piping");
             expect(fractalPurchased).toBe(true);
             expect(game.current_exotic_particles).toBe(0);
@@ -251,7 +261,9 @@ describe('EP Upgrade Purchase Functionality', () => {
             const initialEP = cost + 100;
 
             game.current_exotic_particles = initialEP;
+            game.exotic_particles = initialEP;
             game.ui.stateManager.setVar("current_exotic_particles", initialEP);
+            game.upgradeset.check_affordability(game);
 
             const purchased = game.upgradeset.purchaseUpgrade("laboratory");
             expect(purchased).toBe(true);
@@ -274,6 +286,7 @@ describe('EP Upgrade Purchase Functionality', () => {
             game.ui.stateManager.setVar("exotic_particles", initialEP);
             game.ui.stateManager.setVar("total_exotic_particles", initialEP);
             game.ui.stateManager.setVar("current_exotic_particles", initialEP);
+            game.upgradeset.check_affordability(game);
 
             const purchased = game.upgradeset.purchaseUpgrade("laboratory");
             expect(purchased).toBe(true);

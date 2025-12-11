@@ -76,6 +76,30 @@ export class Game {
     this.user_id = existingUserId;
     
     this.run_id = crypto.randomUUID();
+    this.tech_tree = null;
+    this.bypass_tech_tree_restrictions = false;
+  }
+
+  getCompactLayout() {
+    if (!this.tileset || !this.tileset.tiles_list) return null;
+    const rows = this.rows;
+    const cols = this.cols;
+    const parts = [];
+    this.tileset.tiles_list.forEach(tile => {
+      if (tile.enabled && tile.part) {
+        parts.push({
+          r: tile.row,
+          c: tile.col,
+          t: tile.part.type,
+          id: tile.part.id,
+          lvl: tile.part.level || 1
+        });
+      }
+    });
+    return {
+      size: { rows, cols },
+      parts: parts
+    };
   }
 
   // Returns how many parts of a given type and level are currently placed
@@ -247,13 +271,18 @@ export class Game {
     if (debugSetDefaults) {
       console.log(`[SET-DEFAULTS DEBUG]   After reset: exotic_particles=${this.exotic_particles}, total_exotic_particles=${this.total_exotic_particles}, current_exotic_particles=${this.current_exotic_particles}`);
     }
+    // Preserve bypass flag (useful for tests)
+    const bypass = this.bypass_tech_tree_restrictions;
+
     this.sold_power = false;
     this.sold_heat = false;
     this.reactor.setDefaults();
     this.upgradeset.reset();
     this.partset.reset();
+    this.tech_tree = null;
     await this.partset.initialize(); // Await initialization
     await this.upgradeset.initialize(); // Await initialization
+    this.bypass_tech_tree_restrictions = bypass;
     // Recalculate all part stats after upgrades are freshly initialized to ensure no stale upgrade effects linger
     if (this.partset?.partsArray?.length) {
       console.log(`[SET-DEFAULTS DEBUG] Recalculating stats for ${this.partset.partsArray.length} parts`);
@@ -323,7 +352,23 @@ export class Game {
     this.run_id = crypto.randomUUID();
     this.reactor.clearMeltdownState();
 
-    leaderboardService.init().catch(err => console.warn("Leaderboard init failed", err));
+    // Leaderboard initialization is optional - failures are non-fatal
+    leaderboardService.init().catch(err => {
+        const errorMsg = err?.message || String(err);
+        // Only log if it's not an expected SQLite3 initialization error
+        const isExpectedError = [
+            'SharedArrayBuffer',
+            'Atomics',
+            'COOP/COEP',
+            'sqlite3InitModuleState',
+            'Cannot read properties',
+            "can't access property"
+        ].some(term => errorMsg.includes(term));
+        
+        if (!isExpectedError) {
+            console.warn("Leaderboard init failed:", errorMsg);
+        }
+    });
 
     if (this.ui && typeof this.ui.clearAllActiveAnimations === 'function') {
       this.ui.clearAllActiveAnimations();
@@ -341,7 +386,23 @@ export class Game {
     this.session_start_time = Date.now();
     this.last_save_time = Date.now();
 
-    leaderboardService.init().catch(err => console.warn("Leaderboard init failed", err));
+    // Leaderboard initialization is optional - failures are non-fatal
+    leaderboardService.init().catch(err => {
+        const errorMsg = err?.message || String(err);
+        // Only log if it's not an expected SQLite3 initialization error
+        const isExpectedError = [
+            'SharedArrayBuffer',
+            'Atomics',
+            'COOP/COEP',
+            'sqlite3InitModuleState',
+            'Cannot read properties',
+            "can't access property"
+        ].some(term => errorMsg.includes(term));
+        
+        if (!isExpectedError) {
+            console.warn("Leaderboard init failed:", errorMsg);
+        }
+    });
 
     await this.objectives_manager.initialize();
 
@@ -419,6 +480,7 @@ export class Game {
   manual_reduce_heat_action() {
     this.debugHistory.add('game', 'Manual heat reduction');
     this.reactor.manualReduceHeat();
+    this.reactor.updateStats();
   }
   sell_action() {
     if (this._current_money < 10 && this.reactor.current_power == 0) {
@@ -433,6 +495,7 @@ export class Game {
     } else {
       this.reactor.sellPower();
     }
+    this.reactor.updateStats();
   }
   async reboot_action(keep_exotic_particles = false) {
     const debugReboot = typeof process !== 'undefined' && process.env.DEBUG_REBOOT === 'true';
@@ -717,6 +780,7 @@ export class Game {
     const saveData = {
       version: this.version,
       run_id: this.run_id,
+      tech_tree: this.tech_tree,
       current_money: this._current_money,
       protium_particles: this.protium_particles,
       total_exotic_particles: this.total_exotic_particles,
@@ -844,6 +908,7 @@ export class Game {
       }
 
       this.updateSessionTime();
+
       if (this.peak_power > 0 || this.peak_heat > 0) {
         leaderboardService.saveRun({
           user_id: this.user_id,
@@ -851,7 +916,8 @@ export class Game {
           heat: this.peak_heat,
           power: this.peak_power,
           money: this.current_money,
-          time: this.total_played_time
+          time: this.total_played_time,
+          layout: JSON.stringify(this.getCompactLayout())
         });
       }
 
@@ -957,9 +1023,21 @@ export class Game {
           }
         }, (choice) => {
           if (choice === 'overwrite') {
+            // Clear all save slots to prevent prompts for other slots
+            try {
+              localStorage.removeItem("reactorGameSave");
+              for (let i = 1; i <= 3; i++) {
+                localStorage.removeItem(`reactorGameSave_${i}`);
+              }
+              console.log(`[AUTO-SAVE] Cleared all save slots after overwrite choice`);
+            } catch (error) {
+              console.warn(`[AUTO-SAVE] Error clearing save slots:`, error);
+            }
+            
+            // Save to the current slot
             localStorage.setItem(saveKey, JSON.stringify(newSaveData));
             localStorage.setItem("reactorCurrentSaveSlot", slot.toString());
-            console.log(`[AUTO-SAVE] User chose to overwrite slot ${slot}`);
+            console.log(`[AUTO-SAVE] User chose to overwrite slot ${slot} - all slots cleared`);
           } else if (choice === 'load') {
             console.log(`[AUTO-SAVE] User chose to load existing save from slot ${slot}`);
             this.loadGame(slot);
@@ -979,9 +1057,21 @@ export class Game {
         const choice = confirm(message + "\n\nOK = Overwrite existing save\nCancel = Load existing save instead");
 
         if (choice) {
+          // Clear all save slots to prevent prompts for other slots
+          try {
+            localStorage.removeItem("reactorGameSave");
+            for (let i = 1; i <= 3; i++) {
+              localStorage.removeItem(`reactorGameSave_${i}`);
+            }
+            console.log(`[AUTO-SAVE] Cleared all save slots after overwrite choice`);
+          } catch (error) {
+            console.warn(`[AUTO-SAVE] Error clearing save slots:`, error);
+          }
+          
+          // Save to the current slot
           localStorage.setItem(saveKey, JSON.stringify(newSaveData));
           localStorage.setItem("reactorCurrentSaveSlot", slot.toString());
-          console.log(`[AUTO-SAVE] User chose to overwrite slot ${slot}`);
+          console.log(`[AUTO-SAVE] User chose to overwrite slot ${slot} - all slots cleared`);
         } else {
           console.log(`[AUTO-SAVE] User chose to load existing save from slot ${slot}`);
           this.loadGame(slot);
@@ -1110,44 +1200,36 @@ export class Game {
     try {
     this._current_money = savedData.current_money !== undefined ? savedData.current_money : this.base_money;
     this.run_id = savedData.run_id || crypto.randomUUID();
-    
+    this.tech_tree = savedData.tech_tree || null;
     this.peak_power = savedData.reactor?.current_power || 0;
     this.peak_heat = savedData.reactor?.current_heat || 0;
 
     if (savedData.base_rows) {
       this.base_rows = savedData.base_rows;
     } else {
-      this.base_rows = 12; // Legacy save compatibility
+      this.base_rows = 12;
     }
     if (savedData.base_cols) {
       this.base_cols = savedData.base_cols;
     } else {
-      this.base_cols = 12; // Legacy save compatibility
+      this.base_cols = 12;
     }
-    
     if (!this.partset.initialized) {
       await this.partset.initialize();
     }
     this.protium_particles = savedData.protium_particles || 0;
     this.total_exotic_particles = savedData.total_exotic_particles || 0;
-
-    // Handle both exotic_particles and current_exotic_particles for backward compatibility
     if (savedData.current_exotic_particles !== undefined) {
       this.exotic_particles = savedData.current_exotic_particles;
       this.current_exotic_particles = savedData.current_exotic_particles;
     } else if (savedData.exotic_particles !== undefined) {
-      // Fallback for older save data that only has exotic_particles
       this.exotic_particles = savedData.exotic_particles;
       this.current_exotic_particles = savedData.exotic_particles;
     } else {
       this.exotic_particles = 0;
       this.current_exotic_particles = 0;
     }
-
-    // Update UI state manager with EP values so EP display shows immediately
     this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
-    this.ui.stateManager.setVar("total_exotic_particles", this.total_exotic_particles);
-    this.ui.stateManager.setVar("current_exotic_particles", this.current_exotic_particles);
     this.rows = savedData.rows || this.base_rows;
     this.cols = savedData.cols || this.base_cols;
     this.sold_power = savedData.sold_power || false;
@@ -1226,8 +1308,6 @@ export class Game {
     // Restore objectives state
     if (savedData.objectives) {
       let savedIndex = savedData.objectives.current_objective_index;
-
-      // 1. Sanitize the index to a number, defaulting to 0 for invalid types.
       if (savedIndex === null || savedIndex === undefined) {
         savedIndex = 0;
       } else {
@@ -1236,7 +1316,7 @@ export class Game {
           console.warn(`[Game] Invalid objective index "${savedData.objectives.current_objective_index}" in save data. Defaulting to 0.`);
           savedIndex = 0;
         } else {
-          savedIndex = Math.floor(parsedIndex); // Handle decimals
+          savedIndex = Math.floor(parsedIndex);
         }
       }
 
@@ -1296,6 +1376,12 @@ export class Game {
     }
 
     this._pendingToggleStates = savedData.toggles;
+    if (savedData.toggles && this.ui && this.ui.stateManager) {
+      this.ui.stateManager.setGame(this);
+      Object.entries(savedData.toggles).forEach(([key, value]) => {
+        this.ui.stateManager.setVar(key, value);
+      });
+    }
     this.ui.updateAllToggleBtnStates();
     this.reactor.updateStats();
     
@@ -1428,6 +1514,7 @@ export class Game {
     // Reset basic game state
     this.paused = false;
     this.current_money = 0; // Reset to 0 for testing
+    this.tech_tree = null;
     this.exotic_particles = 0;
     this.current_exotic_particles = 0;
     this.protium_particles = 0;

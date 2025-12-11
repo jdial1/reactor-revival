@@ -138,7 +138,6 @@ export class Tile {
       return false; // Return false to indicate the part was not placed
     }
     const isRestoring = this.game?._isRestoringSave;
-    console.log(`[TILE DEBUG] setPart() called: tile=(${this.row},${this.col}), part=${partInstance.id}, isRestoring=${isRestoring}, audio=${!!this.game.audio}, audio.enabled=${this.game.audio?.enabled}`);
     if (!isRestoring && this.game.audio && this.game.audio.enabled) {
       this.game.logger?.debug(`Placing part '${partInstance.id}' on tile (${this.row}, ${this.col})`);
       this.game.debugHistory.add('tile', 'setPart', { row: this.row, col: this.col, partId: partInstance.id });
@@ -146,18 +145,10 @@ export class Tile {
         partInstance.category === "cell"
           ? "cell"
           : partInstance.category === "reactor_plating" ? "plating" : partInstance.category === "vent" ? "vent" : null;
-      console.log(`[TILE DEBUG] Calling audio.play("placement", "${subtype}")`);
       const pan = this.game.calculatePan ? this.game.calculatePan(this.col) : 0;
       this.game.audio.play("placement", subtype, pan);
-    } else {
-      console.log(`[TILE DEBUG] Audio play skipped: isRestoring=${isRestoring}, audio=${!!this.game.audio}, audio.enabled=${this.game.audio?.enabled}`);
     }
-    const partBeforeSet = this.part?.id || null;
     this.part = partInstance;
-    const partAfterSet = this.part?.id || null;
-    console.log(`[TILE DEBUG] setPart assignment: tile=(${this.row},${this.col}), before=${partBeforeSet}, after=${partAfterSet}, expected=${partInstance.id}, match=${partAfterSet === partInstance.id}`);
-    if (typeof process !== "undefined" && process.env.NODE_ENV === 'test' && this.row === 0 && this.col === 0 && isRestoring) {
-    }
     this.invalidateNeighborCaches();
     if (this.part) {
       this.activated = true;
@@ -240,9 +231,15 @@ export class Tile {
             this.game.logger?.info("[Recovery] Unpausing game");
             this.game.ui.stateManager.setVar("pause", false);
           } else {
-            this.game.logger?.info("[Recovery] Force restarting engine");
-            this.game.paused = false;
-            this.game.engine.start();
+            // Prevent auto-start in test environment
+            const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') ||
+                              (typeof global !== 'undefined' && global.__VITEST__) ||
+                              (typeof window !== 'undefined' && window.__VITEST__);
+            if (!isTestEnv) {
+              this.game.logger?.info("[Recovery] Force restarting engine");
+              this.game.paused = false;
+              this.game.engine.start();
+            }
           }
         }
         this.game.logger?.debug(

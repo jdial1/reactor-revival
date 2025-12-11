@@ -27,6 +27,8 @@ export class SettingsModal {
     const isReducedMotion = localStorage.getItem("reactor_reduced_motion") === "true";
     const hideUnaffordableUpgrades = localStorage.getItem("reactor_hide_unaffordable_upgrades") !== "false";
     const hideUnaffordableResearch = localStorage.getItem("reactor_hide_unaffordable_research") !== "false";
+    const hideMaxUpgrades = localStorage.getItem("reactor_hide_max_upgrades") !== "false";
+    const hideMaxResearch = localStorage.getItem("reactor_hide_max_research") !== "false";
     const masterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
     const effectsVol = parseFloat(localStorage.getItem("reactor_volume_effects") || "0.50");
     const alertsVol = parseFloat(localStorage.getItem("reactor_volume_alerts") || "0.50");
@@ -94,6 +96,14 @@ export class SettingsModal {
 <label class="setting-row">
     <span>Hide Unaffordable Research</span>
     <input type="checkbox" id="setting-hide-research" ${hideUnaffordableResearch ? "checked" : ""}>
+</label>
+<label class="setting-row">
+    <span>Hide Max Upgrades</span>
+    <input type="checkbox" id="setting-hide-max-upgrades" ${hideMaxUpgrades ? "checked" : ""}>
+</label>
+<label class="setting-row">
+    <span>Hide Max Research</span>
+    <input type="checkbox" id="setting-hide-max-research" ${hideMaxResearch ? "checked" : ""}>
 </label>
 </div>
 <div class="settings-group">
@@ -241,6 +251,26 @@ export class SettingsModal {
     if (hideResearchCheckbox) {
       hideResearchCheckbox.addEventListener("change", (e) => {
         localStorage.setItem("reactor_hide_unaffordable_research", e.target.checked ? "true" : "false");
+        if (window.game && window.game.upgradeset) {
+          window.game.upgradeset.check_affordability(window.game);
+        }
+      });
+    }
+
+    const hideMaxUpgradesCheckbox = this.overlay.querySelector("#setting-hide-max-upgrades");
+    if (hideMaxUpgradesCheckbox) {
+      hideMaxUpgradesCheckbox.addEventListener("change", (e) => {
+        localStorage.setItem("reactor_hide_max_upgrades", e.target.checked ? "true" : "false");
+        if (window.game && window.game.upgradeset) {
+          window.game.upgradeset.check_affordability(window.game);
+        }
+      });
+    }
+
+    const hideMaxResearchCheckbox = this.overlay.querySelector("#setting-hide-max-research");
+    if (hideMaxResearchCheckbox) {
+      hideMaxResearchCheckbox.addEventListener("change", (e) => {
+        localStorage.setItem("reactor_hide_max_research", e.target.checked ? "true" : "false");
         if (window.game && window.game.upgradeset) {
           window.game.upgradeset.check_affordability(window.game);
         }

@@ -253,7 +253,10 @@ export class TooltipManager {
     if (titleEl) titleEl.textContent = obj.title || obj.upgrade?.title;
 
     const stats = [];
-    if (obj.upgrade) stats.push(`Level ${obj.level}/${obj.max_level}`);
+    if (obj.upgrade) {
+      const isMaxed = obj.level >= obj.max_level;
+      stats.push(isMaxed ? "MAX" : `Level ${obj.level}/${obj.max_level}`);
+    }
 
     // Only show money costs in mobile stats, not EP costs
     if (obj.cost !== undefined || obj.upgrade?.cost !== undefined) {
@@ -532,16 +535,16 @@ export class TooltipManager {
       .replace(/([+][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="pos">$1</span>')
       .replace(/([-][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="neg">$1</span>');
 
-    // Show text and icon together for key terms in bonus lines
-    result = result
-      .replace(/\bpower\b/gi, "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>")
-      .replace(/\bheat\b/gi, "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>")
-      .replace(/\bduration\b/gi, "$& <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='time'>");
-
-    // Keep iconified versions for other terms using the existing helper
+    // Process multi-word terms first to avoid double-processing
     result = result.replace(/\b(venting|max heat|transfer|EP heat cap)\b/gi, (m) =>
       this.getIconifyFn()(m)
     );
+
+    // Show text and icon together for key terms in bonus lines (exclude heat that's part of "max heat")
+    result = result
+      .replace(/\bpower\b/gi, "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>")
+      .replace(/(?<!max\s)\bheat\b/gi, "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>")
+      .replace(/\bduration\b/gi, "$& <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='time'>");
     return result;
   }
 
@@ -562,7 +565,8 @@ export class TooltipManager {
         const tev = upg('improved_heat_vents'); // Thermal Emission Coating
         if (tev > 0) {
           const pct = tev * 100;
-          lines.push(`+${pct}% venting, +${pct}% max heat`);
+          lines.push(`+${pct}% venting`);
+          lines.push(`+${pct}% max heat`);
         }
         const fh = upg('fluid_hyperdynamics');
         if (fh > 0) {
@@ -694,7 +698,8 @@ export class TooltipManager {
     }
 
     if (tile?.activated) {
-      if (obj.containment) {
+      // SHOW HEAT if containment > 0 OR if heat is present (for infinite buffer parts like outlets)
+      if (obj.containment || tile.heat_contained > 0) {
         const maxHeat = obj.containment || "∞";
         const maxHeatDisplay = maxHeat === "∞" ? maxHeat : fmt(maxHeat, 0);
         stats.set(
@@ -753,6 +758,14 @@ export class TooltipManager {
               );
             }
           }
+        }
+      }
+
+      // Always show transfer rate for outlets/inlets to confirm they are functional
+      if (obj.category === "heat_outlet" || obj.category === "heat_inlet") {
+        if (!stats.has("Transfer")) {
+          const transferVal = tile.getEffectiveTransferValue();
+          stats.set("Max Transfer", `${fmt(transferVal, 1)}/tick`);
         }
       }
       if (obj.category !== "cell") {
