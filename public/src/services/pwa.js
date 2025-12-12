@@ -1,5 +1,6 @@
 import { numFormat as fmt } from "../utils/util.js";
 import dataService from "./dataService.js";
+import { supabaseSave } from "./SupabaseSave.js";
 import { SettingsModal } from "../components/settingsModal.js";
 import {
   createNewGameButton,
@@ -829,13 +830,37 @@ class SplashScreenManager {
     }
   }
 
-  showSaveSlotSelection(saveSlots) {
-    // Hide the splash screen temporarily
+  async showSaveSlotSelection(localSaveSlots) {
     if (this.splashScreen) {
       this.splashScreen.style.display = 'none';
     }
 
-    // Create save slot selection screen using splash screen styling
+    let cloudSaveSlots = [];
+    let isCloudAvailable = false;
+
+    if (window.supabaseAuth && window.supabaseAuth.isSignedIn()) {
+        try {
+            const rawCloudSaves = await supabaseSave.getSaves();
+            cloudSaveSlots = rawCloudSaves.map(s => {
+                let data = {};
+                try { data = JSON.parse(s.save_data); } catch (e) {}
+                return {
+                    slot: s.slot_id,
+                    exists: true,
+                    lastSaveTime: parseInt(s.timestamp),
+                    totalPlayedTime: data.total_played_time || 0,
+                    currentMoney: data.current_money || 0,
+                    exoticParticles: data.exotic_particles || 0,
+                    data: data,
+                    isCloud: true
+                };
+            });
+            isCloudAvailable = true;
+        } catch (e) {
+            console.error("Failed to load cloud saves", e);
+        }
+    }
+
     const saveSlotScreen = document.createElement("main");
     saveSlotScreen.id = "save-slot-screen";
     saveSlotScreen.className = "splash-screen";
@@ -850,12 +875,22 @@ class SplashScreenManager {
     saveSlotScreen.style.alignItems = "center";
     saveSlotScreen.style.justifyContent = "center";
     saveSlotScreen.style.textAlign = "center";
+    
+    let html = '';
+    
+    if (isCloudAvailable) {
+        html += '<h2 class="splash-menu-header" style="font-size: 1rem; color: #4caf50;">CLOUD SAVES</h2>';
+        html += this.generateSaveSlotHTML(cloudSaveSlots, true);
+        html += '<h2 class="splash-menu-header" style="font-size: 1rem; color: #aaa; margin-top: 1rem;">LOCAL SAVES</h2>';
+    }
+
+    html += this.generateSaveSlotHTML(localSaveSlots, false);
 
     saveSlotScreen.innerHTML = `
       <h1 class="splash-title">LOAD GAME</h1>
-      <div class="splash-menu-panel">
+      <div class="splash-menu-panel" style="overflow-y: auto; max-height: 80vh;">
         <div class="splash-start-options">
-          ${this.generateSaveSlotHTML(saveSlots)}
+          ${html}
           <div class="splash-btn-row">
             <button class="splash-btn splash-btn-exit" id="back-to-splash">Back</button>
           </div>
@@ -865,15 +900,21 @@ class SplashScreenManager {
 
     document.body.appendChild(saveSlotScreen);
 
-    // Add click handlers for save slots (only for filled slots)
     saveSlotScreen.querySelectorAll('button[data-slot]:not([disabled])').forEach(button => {
       button.addEventListener('click', async (e) => {
         const slot = parseInt(e.currentTarget.dataset.slot);
-        await this.loadFromSaveSlot(slot);
+        const isCloud = e.currentTarget.dataset.isCloud === 'true';
+        if (isCloud) {
+            const save = cloudSaveSlots.find(s => s.slot === slot);
+            if (save) {
+                await this.loadFromData(save.data);
+            }
+        } else {
+            await this.loadFromSaveSlot(slot);
+        }
       });
     });
 
-    // Add click handler for back button
     saveSlotScreen.querySelector('#back-to-splash').addEventListener('click', () => {
       saveSlotScreen.remove();
       if (this.splashScreen) {
@@ -882,38 +923,38 @@ class SplashScreenManager {
     });
   }
 
-  generateSaveSlotHTML(saveSlots) {
-    // Create HTML for all 3 slots, showing existing saves or empty slots
+  generateSaveSlotHTML(saveSlots, isCloud) {
     let html = '';
-
     for (let i = 1; i <= 3; i++) {
       const slotData = saveSlots.find(slot => slot.slot === i);
       const isEmpty = !slotData;
+      
+      const label = isCloud ? `Cloud Slot ${i}` : `Local Slot ${i}`;
 
       html += `
         <div class="save-slot-container">
-          <button class="save-slot-button ${isEmpty ? 'save-slot-button-disabled' : 'save-slot-button-filled'}" 
-                  data-slot="${i}" 
-                  ${isEmpty ? 'disabled' : ''}>
+          <button class="save-slot-button ${isEmpty ? 'save-slot-button-disabled' : 'save-slot-button-filled'}"
+            data-slot="${i}"
+            data-is-cloud="${isCloud}"
+            ${isEmpty ? 'disabled' : ''}>
             ${isEmpty ?
-          '<div class="save-slot-empty">Empty</div>' :
-          `
-                <div class="save-slot-row-1">
-                  <span class="save-slot-slot">Slot ${i}</span>
-                  <span class="save-slot-time">${this.formatDateTime(slotData.lastSaveTime)}</span>
-                </div>
-                <div class="save-slot-row-2">
-                  <span class="save-slot-money">$${this.formatNumber(slotData.currentMoney)}</span>
-                  <span class="save-slot-ep">${this.formatNumber(slotData.exoticParticles)} EP</span>
-                  <span class="save-slot-playtime">Played: ${this.formatTime(slotData.totalPlayedTime)}</span>
-                </div>
+              `<div class="save-slot-row-1"><span class="save-slot-slot">${label}</span></div><div class="save-slot-empty">Empty</div>` :
               `
-        }
+              <div class="save-slot-row-1">
+                <span class="save-slot-slot">${label}</span>
+                <span class="save-slot-time">${this.formatDateTime(slotData.lastSaveTime)}</span>
+              </div>
+              <div class="save-slot-row-2">
+                <span class="save-slot-money">$${this.formatNumber(slotData.currentMoney)}</span>
+                <span class="save-slot-ep">${this.formatNumber(slotData.exoticParticles)} EP</span>
+                <span class="save-slot-playtime">Played: ${this.formatTime(slotData.totalPlayedTime)}</span>
+              </div>
+              `
+            }
           </button>
         </div>
       `;
     }
-
     return html;
   }
 
@@ -2231,15 +2272,289 @@ class SplashScreenManager {
         }
       };
       startOptionsSection.appendChild(exitButton);
+      
+      const supabaseAuthArea = document.createElement("div");
+      supabaseAuthArea.id = "splash-supabase-auth";
+      supabaseAuthArea.style.marginTop = "1rem";
+      this.setupSupabaseAuth(supabaseAuthArea);
+      startOptionsSection.appendChild(supabaseAuthArea);
+      
       startOptionsSection.classList.add("visible");
       setTimeout(() => startOptionsSection.classList.add("show"), 100);
       window.domMapper?.mapCategory("splashButtons");
       window.domMapper?.add("splash.startOptions", startOptionsSection);
-      const cloudButtonArea = document.createElement("div");
-      cloudButtonArea.id = "splash-cloud-button-area";
-      startOptionsSection.appendChild(cloudButtonArea);
-      if (!skipCloudButton) {
-        this.setupGoogleDriveButtons(cloudButtonArea);
+    }
+  }
+
+  async setupSupabaseAuth(container) {
+    if (window.googleDriveSave) {
+      await window.googleDriveSave.checkAuth(true);
+    }
+    if (window.supabaseAuth && window.supabaseAuth.refreshToken && !window.supabaseAuth.isSignedIn()) {
+      await window.supabaseAuth.refreshAccessToken();
+    }
+
+    const googleSignedIn = window.googleDriveSave && window.googleDriveSave.isSignedIn;
+    let googleUserInfo = null;
+    if (googleSignedIn) {
+      googleUserInfo = window.googleDriveSave.getUserInfo();
+      if (!googleUserInfo && window.googleDriveSave.authToken) {
+        try {
+          const userResponse = await fetch(
+            "https://www.googleapis.com/drive/v3/about?fields=user",
+            {
+              headers: { Authorization: `Bearer ${window.googleDriveSave.authToken}` },
+            }
+          );
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            if (userData.user) {
+              googleUserInfo = {
+                id: userData.user.permissionId || userData.user.emailAddress,
+                email: userData.user.emailAddress,
+                name: userData.user.displayName,
+                imageUrl: userData.user.photoLink
+              };
+              window.googleDriveSave.userInfo = googleUserInfo;
+              localStorage.setItem("google_drive_user_info", JSON.stringify(googleUserInfo));
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching Google user info:", error);
+        }
+      }
+    }
+    
+    const supabaseSignedIn = window.supabaseAuth && window.supabaseAuth.isSignedIn();
+    const supabaseUser = supabaseSignedIn ? window.supabaseAuth.getUser() : null;
+
+    const isAnySignedIn = googleSignedIn || supabaseSignedIn;
+
+    if (isAnySignedIn) {
+      const signedInDiv = document.createElement("div");
+      signedInDiv.style.cssText = "display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1rem; border: 2px solid rgb(62, 207, 142); border-radius: 4px; background-color: rgba(62, 207, 142, 0.1);";
+      
+      let userEmail = "";
+      let authIcon = "";
+      
+      if (googleUserInfo) {
+        const fullEmail = googleUserInfo.email || "";
+        userEmail = fullEmail.length > 10 ? fullEmail.substring(0, 10) + "..." : fullEmail;
+        authIcon = `
+          <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right: 0.5rem; vertical-align: middle;">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+          </svg>
+        `;
+      } else if (supabaseUser) {
+        const fullEmail = supabaseUser.email || "";
+        userEmail = fullEmail.length > 10 ? fullEmail.substring(0, 10) + "..." : fullEmail;
+        authIcon = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem; vertical-align: middle;">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+            <polyline points="22,6 12,13 2,6"></polyline>
+          </svg>
+        `;
+      }
+      
+      if (userEmail) {
+        const emailDisplay = document.createElement("div");
+        emailDisplay.style.cssText = "display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 0.8rem; font-weight: bold; color: rgb(62, 207, 142); gap: 0.5rem;";
+        
+        const emailContent = document.createElement("div");
+        emailContent.style.cssText = "display: flex; align-items: center; flex: 1; min-width: 0;";
+        emailContent.innerHTML = `${authIcon}<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${userEmail}</span>`;
+        emailDisplay.appendChild(emailContent);
+        
+        const logoutBtn = document.createElement("button");
+        logoutBtn.innerHTML = "✕";
+        logoutBtn.style.cssText = "background-color: #d32f2f; color: white; border: 1px solid #b71c1c; border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 1rem; cursor: pointer; font-weight: bold; flex-shrink: 0; line-height: 1; min-width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;";
+        logoutBtn.addEventListener("click", async () => {
+          if (supabaseSignedIn && window.supabaseAuth) {
+            window.supabaseAuth.signOut();
+          }
+          if (googleSignedIn && window.googleDriveSave) {
+            if (window.googleDriveSave.signOut) {
+              await window.googleDriveSave.signOut();
+            } else {
+              window.googleDriveSave.isSignedIn = false;
+              window.googleDriveSave.authToken = null;
+              localStorage.removeItem("google_drive_auth_token");
+              localStorage.removeItem("google_drive_user_info");
+            }
+          }
+          container.innerHTML = "";
+          await this.setupSupabaseAuth(container);
+        });
+        emailDisplay.appendChild(logoutBtn);
+        
+        signedInDiv.appendChild(emailDisplay);
+      }
+      
+      container.appendChild(signedInDiv);
+    } else {
+      const buttonRow = document.createElement("div");
+      buttonRow.style.display = "flex";
+      buttonRow.style.gap = "0.5rem";
+      buttonRow.style.justifyContent = "center";
+      buttonRow.style.marginBottom = "0.5rem";
+      buttonRow.style.width = "100%";
+      buttonRow.style.maxWidth = "400px";
+      
+      const googleBtn = document.createElement("button");
+      googleBtn.className = "splash-btn splash-btn-google";
+      googleBtn.style.flex = "1";
+      googleBtn.innerHTML = `
+        <div class="google-signin-container">
+          <svg width="24" height="24" viewBox="0 0 24 24" class="google-icon">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+          </svg>
+          <span>Google</span>
+        </div>
+      `;
+      googleBtn.addEventListener("click", async () => {
+        if (window.googleDriveSave) {
+          try {
+            await window.googleDriveSave.signIn();
+            await window.googleDriveSave.checkAuth(false);
+            container.innerHTML = "";
+            this.setupSupabaseAuth(container);
+          } catch (error) {
+            console.error("Google sign-in error:", error);
+          }
+        }
+      });
+      buttonRow.appendChild(googleBtn);
+
+      const emailBtn = document.createElement("button");
+      emailBtn.className = "splash-btn";
+      emailBtn.style.flex = "1";
+      emailBtn.textContent = "Email";
+      buttonRow.appendChild(emailBtn);
+      container.appendChild(buttonRow);
+
+      const authForm = document.createElement("div");
+      authForm.id = "splash-email-auth-form";
+      authForm.style.display = "none";
+      authForm.style.flexDirection = "column";
+      authForm.style.gap = "0.5rem";
+      authForm.innerHTML = `
+        <input type="email" id="splash-supabase-email" placeholder="Email" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
+        <input type="password" id="splash-supabase-password" placeholder="Password" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="splash-btn" id="splash-supabase-signin" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Sign In</button>
+          <button class="splash-btn" id="splash-supabase-signup" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Sign Up</button>
+          <button class="splash-btn" id="splash-supabase-reset" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Reset</button>
+        </div>
+        <div id="splash-supabase-message" style="font-size: 0.7rem; min-height: 1.5rem; text-align: center;"></div>
+      `;
+      container.appendChild(authForm);
+
+      emailBtn.addEventListener("click", () => {
+        const isVisible = authForm.style.display !== "none";
+        authForm.style.display = isVisible ? "none" : "flex";
+        const messageDiv = authForm.querySelector("#splash-supabase-message");
+        if (messageDiv && !isVisible) {
+          messageDiv.textContent = "";
+        }
+      });
+
+      const emailInput = authForm.querySelector("#splash-supabase-email");
+      const passwordInput = authForm.querySelector("#splash-supabase-password");
+      const signInBtn = authForm.querySelector("#splash-supabase-signin");
+      const signUpBtn = authForm.querySelector("#splash-supabase-signup");
+      const resetBtn = authForm.querySelector("#splash-supabase-reset");
+      const messageDiv = authForm.querySelector("#splash-supabase-message");
+
+      const showMessage = (text, isError = false) => {
+        if (messageDiv) {
+          messageDiv.textContent = text;
+          messageDiv.style.color = isError ? '#ff4444' : '#44ff44';
+        }
+      };
+
+      if (signInBtn) {
+        signInBtn.addEventListener("click", async () => {
+          if (!emailInput || !passwordInput) return;
+          
+          const email = emailInput.value.trim();
+          const password = passwordInput.value;
+          
+          if (!email || !password) {
+            showMessage('Please enter email and password', true);
+            return;
+          }
+          
+          showMessage('Signing in...');
+          const { data, error } = await window.supabaseAuth.signInWithPassword(email, password);
+          
+          if (error) {
+            showMessage(error, true);
+          } else {
+            showMessage('Signed in successfully!');
+            if (passwordInput) passwordInput.value = '';
+            setTimeout(() => {
+              container.innerHTML = "";
+              this.setupSupabaseAuth(container);
+            }, 1000);
+          }
+        });
+      }
+
+      if (signUpBtn) {
+        signUpBtn.addEventListener("click", async () => {
+          if (!emailInput || !passwordInput) return;
+          
+          const email = emailInput.value.trim();
+          const password = passwordInput.value;
+          
+          if (!email || !password) {
+            showMessage('Please enter email and password', true);
+            return;
+          }
+          
+          if (password.length < 6) {
+            showMessage('Password must be at least 6 characters', true);
+            return;
+          }
+          
+          showMessage('Signing up...');
+          const { data, error } = await window.supabaseAuth.signUp(email, password);
+          
+          if (error) {
+            showMessage(error, true);
+          } else {
+            showMessage('Sign up successful! Please check your email to confirm your account.');
+            if (passwordInput) passwordInput.value = '';
+          }
+        });
+      }
+
+      if (resetBtn) {
+        resetBtn.addEventListener("click", async () => {
+          if (!emailInput) return;
+          
+          const email = emailInput.value.trim();
+          
+          if (!email) {
+            showMessage('Please enter your email address', true);
+            return;
+          }
+          
+          showMessage('Sending password reset email...');
+          const { data, error } = await window.supabaseAuth.resetPasswordForEmail(email);
+          
+          if (error) {
+            showMessage(error, true);
+          } else {
+            showMessage('Password reset email sent! Please check your email.');
+          }
+        });
       }
     }
   }

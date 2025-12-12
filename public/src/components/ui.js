@@ -743,6 +743,35 @@ export class UI {
     }
   }
 
+  updateLeaderboardIcon() {
+    if (typeof document === "undefined" || !this.game) {
+      return;
+    }
+
+    const icon = this.game.cheats_used ? "🚷" : "🏆";
+    const isDisabled = this.game.cheats_used;
+    
+    // Update top nav leaderboard button
+    const topNavButton = document.querySelector('#main_top_nav button[data-page="leaderboard_section"]');
+    if (topNavButton) {
+      topNavButton.textContent = icon;
+      topNavButton.disabled = isDisabled;
+      topNavButton.style.opacity = isDisabled ? "0.5" : "1";
+      topNavButton.style.cursor = isDisabled ? "not-allowed" : "pointer";
+      topNavButton.style.pointerEvents = isDisabled ? "none" : "auto";
+    }
+    
+    // Update bottom nav leaderboard button
+    const bottomNavButton = document.querySelector('#bottom_nav button[data-page="leaderboard_section"], footer#bottom_nav button[data-page="leaderboard_section"]');
+    if (bottomNavButton) {
+      bottomNavButton.textContent = icon;
+      bottomNavButton.disabled = isDisabled;
+      bottomNavButton.style.opacity = isDisabled ? "0.5" : "1";
+      bottomNavButton.style.cursor = isDisabled ? "not-allowed" : "pointer";
+      bottomNavButton.style.pointerEvents = isDisabled ? "none" : "auto";
+    }
+  }
+
   updateNavIndicators() {
     if (typeof document === "undefined" || !this.game || !this.game.upgradeset) {
       return;
@@ -829,6 +858,9 @@ export class UI {
                 }
                 this.updateNavIndicators();
              }
+             
+             // Update leaderboard trophy emoji based on cheats_used
+             this.updateLeaderboardIcon();
              
              // Sync heavy state vars for debugging
              this.stateManager.setVar("current_money", this.game.current_money);
@@ -1805,6 +1837,7 @@ export class UI {
     this.setupPartsTabs();
     this.initializePartsPanel();
     this.addHelpButtonToMainPage();
+    this.setupUserAccountButton();
     if (this.DOMElements.basic_overview_section && this.help_text.basic_overview) {
       this.DOMElements.basic_overview_section.innerHTML = `
         <h3>${this.help_text.basic_overview.title}</h3>
@@ -1880,48 +1913,68 @@ export class UI {
         switch (e.key) {
           case "1":
             e.preventDefault();
+            this.game.cheats_used = true;
             this.game.addMoney(10);
+            this.updateLeaderboardIcon();
             break;
           case "2":
             e.preventDefault();
+            this.game.cheats_used = true;
             this.game.addMoney(100);
+            this.updateLeaderboardIcon();
             break;
           case "3":
             e.preventDefault();
+            this.game.cheats_used = true;
             this.game.addMoney(1000);
+            this.updateLeaderboardIcon();
             break;
           case "4":
             e.preventDefault();
+            this.game.cheats_used = true;
             this.game.addMoney(10000);
+            this.updateLeaderboardIcon();
             break;
           case "5":
             e.preventDefault();
+            this.game.cheats_used = true;
             this.game.addMoney(100000);
+            this.updateLeaderboardIcon();
             break;
           case "6":
             e.preventDefault();
+            this.game.cheats_used = true;
             this.game.addMoney(1000000);
+            this.updateLeaderboardIcon();
             break;
           case "7":
             e.preventDefault();
+            this.game.cheats_used = true;
             this.game.addMoney(10000000);
+            this.updateLeaderboardIcon();
             break;
           case "8":
             e.preventDefault();
+            this.game.cheats_used = true;
             this.game.addMoney(100000000);
+            this.updateLeaderboardIcon();
             break;
           case "9":
             e.preventDefault();
+            this.game.cheats_used = true;
             // Start exponential money increase
             this.startCtrl9MoneyIncrease();
+            this.updateLeaderboardIcon();
             break;
           case "e":
           case "E":
             e.preventDefault();
+            this.game.cheats_used = true;
             // Give user +1 EP
             this.game.exotic_particles += 1;
             this.game.total_exotic_particles += 1;
             this.game.current_exotic_particles += 1;
+            this.updateLeaderboardIcon();
 
             // Update state manager for all EP values
             this.stateManager.setVar("exotic_particles", this.game.exotic_particles);
@@ -3396,6 +3449,10 @@ export class UI {
 
       // Set up copy action
       confirmBtn.onclick = async () => {
+        if (!this.game) {
+          return;
+        }
+
         // Filter the data based on checked types
         const filteredLayout = layout.map(row => row.map(cell => {
           if (!cell) return null;
@@ -4003,6 +4060,41 @@ export class UI {
       };
     }
 
+    const showColumn = (sortBy) => {
+      const table = container?.closest('.leaderboard-table');
+      if (!table) return;
+      
+      const allPowerCells = table.querySelectorAll('.leaderboard-col-power');
+      const allHeatCells = table.querySelectorAll('.leaderboard-col-heat');
+      const allMoneyCells = table.querySelectorAll('.leaderboard-col-money');
+      
+      allPowerCells.forEach((el) => {
+        if (sortBy === 'power') {
+          el.classList.remove('hidden');
+          el.style.display = '';
+        } else {
+          el.classList.add('hidden');
+        }
+      });
+      
+      allHeatCells.forEach((el) => {
+        if (sortBy === 'heat') {
+          el.classList.remove('hidden');
+          el.style.display = '';
+        } else {
+          el.classList.add('hidden');
+        }
+      });
+      
+      allMoneyCells.forEach((el) => {
+        if (sortBy === 'money') {
+          el.classList.remove('hidden');
+          el.style.display = '';
+        } else {
+          el.classList.add('hidden');
+        }
+      });
+    };
 
     if (!this.game) {
       if (container) {
@@ -4020,6 +4112,7 @@ export class UI {
       
       if (records.length === 0) {
         container.innerHTML = '<tr><td colspan="7" style="text-align:center">No records found yet. Play to save scores!</td></tr>';
+        showColumn(sortBy);
         return;
       }
 
@@ -4031,11 +4124,10 @@ export class UI {
           if (timestamp && !isNaN(timestamp) && timestamp > 0) {
             const dateObj = new Date(timestamp);
             if (!isNaN(dateObj.getTime())) {
-              date = dateObj.toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
-              });
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const day = String(dateObj.getDate()).padStart(2, '0');
+              const year = String(dateObj.getFullYear()).slice(-2);
+              date = `${month}/${day}/${year}`;
             }
           }
         } catch (e) {
@@ -4048,10 +4140,10 @@ export class UI {
           <tr>
             <td>${index + 1}</td>
             <td>${date}</td>
-            <td>${fmt(run.power)}</td>
-            <td>${fmt(run.heat)}</td>
-            <td>$${fmt(run.money)}</td>
-            <td>${timeStr}</td>
+            <td class="leaderboard-col-power">${fmt(run.power)}</td>
+            <td class="leaderboard-col-heat">${fmt(run.heat)}</td>
+            <td class="leaderboard-col-money">$${fmt(run.money)}</td>
+            <td class="leaderboard-col-time" style="display: none;">${timeStr}</td>
             <td>
               ${hasLayout ? `<button class="pixel-btn layout-view-btn" data-index="${index}" style="padding: 2px 6px; font-size: 0.6em;">View</button>` : '<span style="opacity:0.5">-</span>'}
             </td>
@@ -4059,6 +4151,7 @@ export class UI {
         `;
       });
       container.innerHTML = html;
+      showColumn(sortBy);
 
       container.querySelectorAll('.layout-view-btn').forEach(btn => {
         btn.onclick = () => {
@@ -4076,15 +4169,19 @@ export class UI {
       });
     };
 
+    const activeButton = document.querySelector('.leaderboard-sort.active');
+    const initialSort = activeButton ? activeButton.dataset.sort : 'power';
+    
     sortButtons.forEach(btn => {
       btn.onclick = () => {
         sortButtons.forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
-        loadRecords(btn.dataset.sort);
+        const sortBy = btn.dataset.sort;
+        loadRecords(sortBy);
       };
     });
-
-    loadRecords("power");
+    
+    loadRecords(initialSort);
   }
 
   showLayoutModal(layoutJson, stats = {}) {
@@ -4971,5 +5068,376 @@ export class UI {
       .catch(error => {
         console.warn("[UI] Failed to update manifest display mode:", error);
       });
+  }
+
+  setupUserAccountButton() {
+    const userAccountBtn = document.getElementById("user_account_btn");
+    const userAccountBtnMobile = document.getElementById("user_account_btn_mobile");
+    
+    if (!userAccountBtn && !userAccountBtnMobile) return;
+
+    this.updateUserAccountIcon();
+    
+    if (userAccountBtn) {
+      userAccountBtn.addEventListener("click", () => {
+        this.handleUserAccountClick();
+      });
+    }
+
+    if (userAccountBtnMobile) {
+      userAccountBtnMobile.addEventListener("click", () => {
+        this.handleUserAccountClick();
+      });
+    }
+
+    if (window.googleDriveSave) {
+      const originalCheckAuth = window.googleDriveSave.checkAuth.bind(window.googleDriveSave);
+      window.googleDriveSave.checkAuth = async (...args) => {
+        const result = await originalCheckAuth(...args);
+        this.updateUserAccountIcon();
+        return result;
+      };
+    }
+
+    if (window.supabaseAuth) {
+      const originalSignOut = window.supabaseAuth.signOut.bind(window.supabaseAuth);
+      window.supabaseAuth.signOut = (...args) => {
+        originalSignOut(...args);
+        this.updateUserAccountIcon();
+      };
+    }
+  }
+
+  updateUserAccountIcon() {
+    const userAccountBtn = document.getElementById("user_account_btn");
+    const userAccountBtnMobile = document.getElementById("user_account_btn_mobile");
+
+    const googleSignedIn = window.googleDriveSave && window.googleDriveSave.isSignedIn;
+    const supabaseSignedIn = window.supabaseAuth && window.supabaseAuth.isSignedIn();
+    const isSignedIn = googleSignedIn || supabaseSignedIn;
+
+    const icon = isSignedIn ? "👤" : "🔐";
+    const title = isSignedIn ? "Account (Signed In)" : "Sign In";
+
+    if (userAccountBtn) {
+      userAccountBtn.textContent = icon;
+      userAccountBtn.title = title;
+    }
+
+    if (userAccountBtnMobile) {
+      const iconSpan = userAccountBtnMobile.querySelector(".control-icon");
+      if (iconSpan) {
+        iconSpan.textContent = icon;
+      }
+      userAccountBtnMobile.title = title;
+    }
+  }
+
+  handleUserAccountClick() {
+    const googleSignedIn = window.googleDriveSave && window.googleDriveSave.isSignedIn;
+    const supabaseSignedIn = window.supabaseAuth && window.supabaseAuth.isSignedIn();
+    const isSignedIn = googleSignedIn || supabaseSignedIn;
+
+    if (isSignedIn) {
+      this.showLogoutModal();
+    } else {
+      this.showLoginModal();
+    }
+  }
+
+  showLoginModal() {
+    const modal = document.createElement("div");
+    modal.id = "user_login_modal";
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+
+    const content = document.createElement("div");
+    content.style.cssText = `
+      background: rgb(45, 45, 45);
+      border: 4px solid var(--bevel-light);
+      padding: 1.5rem;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+      position: relative;
+    `;
+
+    const buttonRow = document.createElement("div");
+    buttonRow.style.display = "flex";
+    buttonRow.style.gap = "0.5rem";
+    buttonRow.style.marginBottom = "1rem";
+
+    const googleBtn = document.createElement("button");
+    googleBtn.className = "splash-btn splash-btn-google";
+    googleBtn.style.flex = "1";
+    googleBtn.innerHTML = `
+      <div class="google-signin-container">
+        <svg width="24" height="24" viewBox="0 0 24 24" class="google-icon">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+        </svg>
+        <span>Google</span>
+      </div>
+    `;
+    googleBtn.addEventListener("click", async () => {
+      if (window.googleDriveSave) {
+        try {
+          await window.googleDriveSave.signIn();
+          await window.googleDriveSave.checkAuth(false);
+          this.updateUserAccountIcon();
+          modal.remove();
+        } catch (error) {
+          console.error("Google sign-in error:", error);
+        }
+      }
+    });
+    buttonRow.appendChild(googleBtn);
+
+    const emailBtn = document.createElement("button");
+    emailBtn.className = "splash-btn";
+    emailBtn.style.flex = "1";
+    emailBtn.style.display = "flex";
+    emailBtn.style.alignItems = "center";
+    emailBtn.style.justifyContent = "center";
+    emailBtn.style.gap = "8px";
+    emailBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+        <polyline points="22,6 12,13 2,6"></polyline>
+      </svg>
+      <span>Email</span>
+    `;
+    buttonRow.appendChild(emailBtn);
+
+    const authForm = document.createElement("div");
+    authForm.id = "nav-email-auth-form";
+    authForm.style.display = "none";
+    authForm.style.flexDirection = "column";
+    authForm.style.gap = "0.5rem";
+    authForm.innerHTML = `
+      <input type="email" id="nav-supabase-email" placeholder="Email" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
+      <input type="password" id="nav-supabase-password" placeholder="Password" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="splash-btn" id="nav-supabase-signin" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Sign In</button>
+        <button class="splash-btn" id="nav-supabase-signup" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Sign Up</button>
+        <button class="splash-btn" id="nav-supabase-reset" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Reset</button>
+      </div>
+      <div id="nav-supabase-message" style="font-size: 0.7rem; min-height: 1.5rem; text-align: center;"></div>
+    `;
+
+    emailBtn.addEventListener("click", () => {
+      const isVisible = authForm.style.display !== "none";
+      authForm.style.display = isVisible ? "none" : "flex";
+    });
+
+    const emailInput = authForm.querySelector("#nav-supabase-email");
+    const passwordInput = authForm.querySelector("#nav-supabase-password");
+    const signInBtn = authForm.querySelector("#nav-supabase-signin");
+    const signUpBtn = authForm.querySelector("#nav-supabase-signup");
+    const resetBtn = authForm.querySelector("#nav-supabase-reset");
+    const messageDiv = authForm.querySelector("#nav-supabase-message");
+
+    const showMessage = (text, isError = false) => {
+      if (messageDiv) {
+        messageDiv.textContent = text;
+        messageDiv.style.color = isError ? '#ff4444' : '#44ff44';
+      }
+    };
+
+    if (signInBtn) {
+      signInBtn.addEventListener("click", async () => {
+        if (!emailInput || !passwordInput) return;
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+        if (!email || !password) {
+          showMessage('Please enter email and password', true);
+          return;
+        }
+        showMessage('Signing in...');
+        const { data, error } = await window.supabaseAuth.signInWithPassword(email, password);
+        if (error) {
+          showMessage(error, true);
+        } else {
+          showMessage('Signed in successfully!');
+          if (passwordInput) passwordInput.value = '';
+          setTimeout(() => {
+            this.updateUserAccountIcon();
+            modal.remove();
+          }, 1000);
+        }
+      });
+    }
+
+    if (signUpBtn) {
+      signUpBtn.addEventListener("click", async () => {
+        if (!emailInput || !passwordInput) return;
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+        if (!email || !password) {
+          showMessage('Please enter email and password', true);
+          return;
+        }
+        if (password.length < 6) {
+          showMessage('Password must be at least 6 characters', true);
+          return;
+        }
+        showMessage('Signing up...');
+        const { data, error } = await window.supabaseAuth.signUp(email, password);
+        if (error) {
+          showMessage(error, true);
+        } else {
+          showMessage('Sign up successful! Please check your email to confirm your account.');
+          if (passwordInput) passwordInput.value = '';
+        }
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener("click", async () => {
+        if (!emailInput) return;
+        const email = emailInput.value.trim();
+        if (!email) {
+          showMessage('Please enter your email address', true);
+          return;
+        }
+        showMessage('Sending password reset email...');
+        const { data, error } = await window.supabaseAuth.resetPasswordForEmail(email);
+        if (error) {
+          showMessage(error, true);
+        } else {
+          showMessage('Password reset email sent! Please check your email.');
+        }
+      });
+    }
+
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "✖";
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+    `;
+    closeBtn.addEventListener("click", () => modal.remove());
+
+    content.appendChild(closeBtn);
+    content.appendChild(buttonRow);
+    content.appendChild(authForm);
+    modal.appendChild(content);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    document.body.appendChild(modal);
+  }
+
+  showLogoutModal() {
+    const googleSignedIn = window.googleDriveSave && window.googleDriveSave.isSignedIn;
+    const supabaseSignedIn = window.supabaseAuth && window.supabaseAuth.isSignedIn();
+    const googleUserInfo = googleSignedIn ? window.googleDriveSave.getUserInfo() : null;
+    const supabaseUser = supabaseSignedIn ? window.supabaseAuth.getUser() : null;
+
+    const modal = document.createElement("div");
+    modal.id = "user_logout_modal";
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+
+    const content = document.createElement("div");
+    content.style.cssText = `
+      background: rgb(45, 45, 45);
+      border: 4px solid var(--bevel-light);
+      padding: 1.5rem;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+      position: relative;
+    `;
+
+    let userDisplay = "";
+    if (googleUserInfo) {
+      userDisplay = `<div style="font-size: 0.8rem; margin-bottom: 1rem;">Signed in with Google</div>`;
+      if (googleUserInfo.email) {
+        userDisplay += `<div style="font-size: 0.7rem; opacity: 0.8; margin-bottom: 1rem;">${googleUserInfo.email}</div>`;
+      }
+    } else if (supabaseUser) {
+      userDisplay = `<div style="font-size: 0.8rem; margin-bottom: 1rem;">Signed in with Email</div>`;
+      if (supabaseUser.email) {
+        userDisplay += `<div style="font-size: 0.7rem; opacity: 0.8; margin-bottom: 1rem;">${supabaseUser.email}</div>`;
+      }
+    }
+
+    content.innerHTML = userDisplay;
+
+    const logoutBtn = document.createElement("button");
+    logoutBtn.className = "splash-btn";
+    logoutBtn.style.background = "#d32f2f";
+    logoutBtn.style.borderColor = "#b71c1c";
+    logoutBtn.style.width = "100%";
+    logoutBtn.textContent = "Sign Out";
+    logoutBtn.addEventListener("click", async () => {
+      if (supabaseSignedIn && window.supabaseAuth) {
+        window.supabaseAuth.signOut();
+      }
+      if (googleSignedIn && window.googleDriveSave) {
+        if (window.googleDriveSave.signOut) {
+          await window.googleDriveSave.signOut();
+        } else {
+          window.googleDriveSave.isSignedIn = false;
+          window.googleDriveSave.authToken = null;
+          localStorage.removeItem("google_drive_auth_token");
+        }
+      }
+      this.updateUserAccountIcon();
+      modal.remove();
+    });
+
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "✖";
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+    `;
+    closeBtn.addEventListener("click", () => modal.remove());
+
+    content.appendChild(closeBtn);
+    content.appendChild(logoutBtn);
+    modal.appendChild(content);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    document.body.appendChild(modal);
   }
 }

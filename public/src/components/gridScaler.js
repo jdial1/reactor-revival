@@ -158,6 +158,9 @@ export class GridScaler {
         // ---------------------
 
         // 5. Update Game Logic
+        if (!this.ui.game) {
+            return;
+        }
 
         if (this.ui.game.resizeGrid) {
 

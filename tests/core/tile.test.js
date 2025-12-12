@@ -94,4 +94,90 @@ describe("Tile Mechanics", () => {
 
     expect(tileOutside.enabled).toBe(true);
   });
+
+  it("should give correct sell price when selling via sellPart()", async () => {
+    const part = game.partset.getPartById("uranium1");
+    const purchasePrice = part.cost;
+    
+    game.current_money = purchasePrice * 2;
+    game.ui.stateManager.setVar("current_money", game.current_money);
+    
+    const moneyBeforePurchase = game.current_money;
+    const tile = await placePart(game, 0, 0, "uranium1");
+    game.current_money -= purchasePrice;
+    game.ui.stateManager.setVar("current_money", game.current_money);
+    const moneyAfterPurchase = game.current_money;
+    
+    expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
+    
+    const moneyBeforeSell = game.current_money;
+    const expectedSellValue = tile.calculateSellValue();
+    
+    game.sellPart(tile);
+    const moneyAfterSell = game.current_money;
+    const actualSellValue = moneyAfterSell - moneyBeforeSell;
+    
+    expect(actualSellValue).toBe(expectedSellValue);
+    expect(actualSellValue).toBe(purchasePrice);
+    expect(actualSellValue).not.toBe(purchasePrice * 2);
+    expect(tile.part).toBeNull();
+  });
+
+  it("should not double the sell price when selling via sellPart()", async () => {
+    const part = game.partset.getPartById("vent1");
+    const purchasePrice = part.cost;
+    
+    game.current_money = purchasePrice * 3;
+    game.ui.stateManager.setVar("current_money", game.current_money);
+    
+    const moneyBeforePurchase = game.current_money;
+    const tile = await placePart(game, 0, 0, "vent1");
+    game.current_money -= purchasePrice;
+    game.ui.stateManager.setVar("current_money", game.current_money);
+    const moneyAfterPurchase = game.current_money;
+    
+    expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
+    
+    const moneyBeforeSell = moneyAfterPurchase;
+    const expectedSellValue = tile.calculateSellValue();
+    
+    game.sellPart(tile);
+    const moneyAfterSell = game.current_money;
+    const actualSellValue = moneyAfterSell - moneyBeforeSell;
+    
+    expect(actualSellValue).toBe(expectedSellValue);
+    expect(actualSellValue).toBe(purchasePrice);
+    expect(actualSellValue).not.toBe(purchasePrice * 2);
+  });
+
+  it("should calculate sell value correctly for parts with different costs", async () => {
+    const testParts = ["uranium1", "vent1", "capacitor1"];
+    
+    for (const partId of testParts) {
+      const part = game.partset.getPartById(partId);
+      const purchasePrice = part.cost;
+      
+      game.current_money = purchasePrice * 3;
+      game.ui.stateManager.setVar("current_money", game.current_money);
+      
+      const moneyBeforePurchase = game.current_money;
+      const tile = await placePart(game, 0, 0, partId);
+      game.current_money -= purchasePrice;
+      game.ui.stateManager.setVar("current_money", game.current_money);
+      const moneyAfterPurchase = game.current_money;
+      
+      expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
+      
+      const moneyBeforeSell = moneyAfterPurchase;
+      const expectedSellValue = tile.calculateSellValue();
+      
+      game.sellPart(tile);
+      const moneyAfterSell = game.current_money;
+      const actualSellValue = moneyAfterSell - moneyBeforeSell;
+      
+      expect(actualSellValue).toBe(expectedSellValue);
+      expect(actualSellValue).toBe(purchasePrice);
+      expect(actualSellValue).not.toBe(purchasePrice * 2);
+    }
+  });
 });

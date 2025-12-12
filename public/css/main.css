@@ -38,7 +38,7 @@ html {
   padding: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  touch-action: manipulation;
+  touch-action: pan-y pan-x;
 }
 
 body {
@@ -55,6 +55,14 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+}
+
+.page-upgrades,
+.page-experimental_upgrades,
+.page-leaderboard {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 #app_container {
@@ -2045,11 +2053,20 @@ footer#bottom_nav button.active,
   flex-direction: column;
 }
 
+.leaderboard-content {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
 .leaderboard-table {
   width: 100%;
+  min-width: 600px;
   border-collapse: collapse;
   font-size: 0.8rem;
   font-family: "Press Start 2P", cursive, monospace;
+  table-layout: auto;
 }
 
 .leaderboard-table th {
@@ -2058,12 +2075,32 @@ footer#bottom_nav button.active,
   padding: 10px;
   border-bottom: 2px solid var(--bevel-light);
   text-align: left;
+  white-space: nowrap;
+}
+
+.leaderboard-table th:first-child {
+  width: 50px;
+}
+
+.leaderboard-table th:nth-child(2) {
+  width: 80px;
+}
+
+.leaderboard-table th.leaderboard-col-power,
+.leaderboard-table th.leaderboard-col-heat,
+.leaderboard-table th.leaderboard-col-money {
+  width: 100px;
+}
+
+.leaderboard-table th:last-child {
+  width: 70px;
 }
 
 .leaderboard-table td {
   padding: 10px;
   border-bottom: 1px solid var(--bevel-dark);
   color: white;
+  white-space: nowrap;
 }
 
 .leaderboard-table tr:hover {
@@ -2083,12 +2120,88 @@ footer#bottom_nav button.active,
   color: var(--game-success-color);
 }
 
+.leaderboard-sort .icon-inline {
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.leaderboard-col-power.hidden,
+.leaderboard-col-heat.hidden,
+.leaderboard-col-money.hidden {
+  display: none !important;
+}
+
 @media (max-width: 600px) {
+  .leaderboard-content {
+    overflow-x: hidden;
+  }
+  
   .leaderboard-table {
     font-size: 0.6rem;
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
   }
+  
   .leaderboard-table th, .leaderboard-table td {
-    padding: 6px;
+    padding: 6px 4px;
+  }
+  
+  .leaderboard-table th:first-child {
+    width: 40px;
+  }
+  
+  .leaderboard-table th:nth-child(2) {
+    width: 70px;
+  }
+  
+  .leaderboard-table th.leaderboard-col-power,
+  .leaderboard-table th.leaderboard-col-heat,
+  .leaderboard-table th.leaderboard-col-money {
+    width: 80px;
+  }
+  
+  .leaderboard-table th:last-child {
+    width: 60px;
+  }
+  
+  .leaderboard-content {
+    margin: 0;
+    padding: 0;
+  }
+  
+  #leaderboard_section .pixel-panel {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 400px) {
+  .leaderboard-table {
+    font-size: 0.5rem;
+  }
+  
+  .leaderboard-table th, .leaderboard-table td {
+    padding: 4px 2px;
+  }
+  
+  .leaderboard-table th:first-child {
+    width: 35px;
+  }
+  
+  .leaderboard-table th:nth-child(2) {
+    width: 60px;
+  }
+  
+  .leaderboard-table th.leaderboard-col-power,
+  .leaderboard-table th.leaderboard-col-heat,
+  .leaderboard-table th.leaderboard-col-money {
+    width: 70px;
+  }
+  
+  .leaderboard-table th:last-child {
+    width: 50px;
   }
 }
 
@@ -2691,45 +2804,58 @@ footer#bottom_nav button.active,
 }
 
 .page-upgrades #main,
-.page-experimental_upgrades #main {
+.page-experimental_upgrades #main,
+.page-leaderboard #main {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
 }
 
 .page-upgrades #main_content_wrapper,
-.page-experimental_upgrades #main_content_wrapper {
+.page-experimental_upgrades #main_content_wrapper,
+.page-leaderboard #main_content_wrapper {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
 }
 
 .page-upgrades #page_content_area,
-.page-experimental_upgrades #page_content_area {
+.page-experimental_upgrades #page_content_area,
+.page-leaderboard #page_content_area {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
 }
 
 .page-upgrades #page_content_area .page,
-.page-experimental_upgrades #page_content_area .page {
+.page-experimental_upgrades #page_content_area .page,
+.page-leaderboard #page_content_area .page {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
 }
 
 #upgrades_section,
-#experimental_upgrades_section {
+#experimental_upgrades_section,
+#leaderboard_section {
   height: 100%;
   flex: 1;
   padding: 1rem;
   padding-bottom: 200px;
   -webkit-overflow-scrolling: touch;
   overflow-y: auto;
+  overflow-x: hidden;
   scroll-behavior: smooth;
   width: 100%;
   box-sizing: border-box;
   max-width: 100%;
+}
+
+#leaderboard_section .pixel-panel {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 @media (width > 900px) {
@@ -6447,7 +6573,9 @@ body.page-privacy_policy .highlight {
 }
 
 .splash-btn-google {
-  display: none !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #splash-flavor {

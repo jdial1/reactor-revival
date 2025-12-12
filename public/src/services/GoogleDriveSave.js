@@ -12,6 +12,7 @@ export class GoogleDriveSave {
     this.enabled = ENABLE_GOOGLE_DRIVE;
     this.isSignedIn = false;
     this.authToken = null;
+    this.userInfo = null;
     this.saveFileId = null;
     this.lastSaveTime = 0;
     this.pendingSaveData = null;
@@ -24,8 +25,40 @@ export class GoogleDriveSave {
       this.saveFileId = storedSaveFileId;
     }
 
+    // Restore auth token and user info from localStorage immediately
+    this.restoreAuthToken();
+    this.restoreUserInfo();
+
     if (this.enabled) {
       this.init();
+    }
+  }
+
+  restoreAuthToken() {
+    try {
+      const storedTokenData = localStorage.getItem("google_drive_auth_token");
+      if (storedTokenData) {
+        const tokenData = JSON.parse(storedTokenData);
+        if (tokenData.expires_at && tokenData.expires_at > Date.now() + 300000) {
+          this.authToken = tokenData.access_token;
+          this.isSignedIn = true;
+        } else {
+          localStorage.removeItem("google_drive_auth_token");
+        }
+      }
+    } catch (error) {
+      localStorage.removeItem("google_drive_auth_token");
+    }
+  }
+
+  restoreUserInfo() {
+    try {
+      const storedUserInfo = localStorage.getItem("google_drive_user_info");
+      if (storedUserInfo) {
+        this.userInfo = JSON.parse(storedUserInfo);
+      }
+    } catch (error) {
+      localStorage.removeItem("google_drive_user_info");
     }
   }
 
@@ -110,9 +143,9 @@ export class GoogleDriveSave {
       client_id: this.config.CLIENT_ID,
       scope:
         "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata",
-      callback: (response) => {
+      callback: async (response) => {
         if (response.access_token) {
-          this.handleAuthSuccess(response);
+          await this.handleAuthSuccess(response);
         }
       },
     });
@@ -164,6 +197,16 @@ export class GoogleDriveSave {
         );
 
         if (response.ok) {
+          const data = await response.json();
+          if (data.user) {
+            this.userInfo = {
+              id: data.user.permissionId || data.user.emailAddress,
+              email: data.user.emailAddress,
+              name: data.user.displayName,
+              imageUrl: data.user.photoLink
+            };
+            localStorage.setItem("google_drive_user_info", JSON.stringify(this.userInfo));
+          }
           this.isSignedIn = true;
           console.log("Auth token validated successfully");
           return true;
@@ -172,7 +215,9 @@ export class GoogleDriveSave {
           console.log("Auth token invalid, clearing stored credentials");
           this.authToken = null;
           this.isSignedIn = false;
+          this.userInfo = null;
           localStorage.removeItem("google_drive_auth_token");
+          localStorage.removeItem("google_drive_user_info");
         }
       }
 
@@ -181,8 +226,28 @@ export class GoogleDriveSave {
         const authInstance = window.gapi.auth2.getAuthInstance();
         if (authInstance && authInstance.isSignedIn.get()) {
           const user = authInstance.currentUser.get();
-          this.authToken = user.getAuthResponse().access_token;
+          const authResponse = user.getAuthResponse();
+          this.authToken = authResponse.access_token;
           this.isSignedIn = true;
+          
+          const expiresAt = Date.now() + (authResponse.expires_in || 3600) * 1000;
+          const tokenData = {
+            access_token: authResponse.access_token,
+            expires_at: expiresAt,
+          };
+          localStorage.setItem("google_drive_auth_token", JSON.stringify(tokenData));
+          
+          const profile = user.getBasicProfile();
+          if (profile) {
+            this.userInfo = {
+              id: profile.getId(),
+              email: profile.getEmail(),
+              name: profile.getName(),
+              imageUrl: profile.getImageUrl()
+            };
+            localStorage.setItem("google_drive_user_info", JSON.stringify(this.userInfo));
+          }
+          
           console.log("Silent auth successful");
           return true;
         }
@@ -196,17 +261,87 @@ export class GoogleDriveSave {
   }
 
   /**
+   * Get user info from Google auth
+   */
+  getUserInfo() {
+    if (!this.isSignedIn) {
+      return null;
+    }
+
+    if (this.userInfo) {
+      return this.userInfo;
+    }
+
+    try {
+      if (window.gapi && window.gapi.auth2) {
+        const authInstance = window.gapi.auth2.getAuthInstance();
+        if (authInstance && authInstance.isSignedIn.get()) {
+          const user = authInstance.currentUser.get();
+          const profile = user.getBasicProfile();
+          if (profile) {
+            this.userInfo = {
+              id: profile.getId(),
+              email: profile.getEmail(),
+              name: profile.getName(),
+              imageUrl: profile.getImageUrl()
+            };
+            localStorage.setItem("google_drive_user_info", JSON.stringify(this.userInfo));
+            return this.userInfo;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error getting Google user info:", error);
+    }
+
+    return null;
+  }
+
+  /**
+   * Get user ID for leaderboard
+   */
+  getUserId() {
+    const userInfo = this.getUserInfo();
+    return userInfo ? userInfo.id : null;
+  }
+
+  /**
    * Handle successful authentication
    */
-  handleAuthSuccess(response) {
+  async handleAuthSuccess(response) {
+    const expiresAt = Date.now() + (response.expires_in || 3600) * 1000;
     const tokenData = {
       access_token: response.access_token,
-      expires_at: Date.now() + response.expires_in * 1000,
+      expires_at: expiresAt,
     };
 
     localStorage.setItem("google_drive_auth_token", JSON.stringify(tokenData));
     this.authToken = response.access_token;
     this.isSignedIn = true;
+
+    try {
+      const userResponse = await fetch(
+        "https://www.googleapis.com/drive/v3/about?fields=user",
+        {
+          headers: { Authorization: `Bearer ${this.authToken}` },
+        }
+      );
+
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        if (userData.user) {
+          this.userInfo = {
+            id: userData.user.permissionId || userData.user.emailAddress,
+            email: userData.user.emailAddress,
+            name: userData.user.displayName,
+            imageUrl: userData.user.photoLink
+          };
+          localStorage.setItem("google_drive_user_info", JSON.stringify(this.userInfo));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user info:", error);
+    }
 
     console.log("Google Drive sign-in successful.");
   }
@@ -224,8 +359,11 @@ export class GoogleDriveSave {
         if (response.error) {
           reject(new Error(response.error));
         } else {
-          this.handleAuthSuccess(response);
-          resolve();
+          this.handleAuthSuccess(response).then(() => {
+            resolve();
+          }).catch((error) => {
+            reject(error);
+          });
         }
       };
 

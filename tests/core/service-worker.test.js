@@ -1,5 +1,37 @@
 import { describe, it, expect, beforeEach, afterEach, vi, fs, path } from '../helpers/setup.js';
 
+// Ensure location is initialized before any tests run
+if (typeof global !== 'undefined') {
+  if (!global.window) {
+    global.window = {};
+  }
+  if (!global.window.location || !global.window.location.origin) {
+    const plainLocation = {
+      href: 'http://localhost:8080/',
+      origin: 'http://localhost:8080',
+      hostname: 'localhost',
+      host: 'localhost:8080',
+      pathname: '/',
+      hash: '',
+      search: '',
+      protocol: 'http:',
+      port: '8080',
+      reload: () => {}
+    };
+    try {
+      Object.defineProperty(global.window, 'location', {
+        value: plainLocation,
+        writable: true,
+        configurable: true
+      });
+    } catch (e) {
+      if (!global.window.location) {
+        global.window.location = plainLocation;
+      }
+    }
+  }
+}
+
 // Mock service worker registration
 const mockServiceWorkerRegistration = {
     active: {
@@ -52,6 +84,35 @@ const mockFetch = vi.fn();
 
 describe('Service Worker Integration Tests', () => {
     beforeEach(() => {
+        // Ensure location is properly initialized
+        if (typeof global !== 'undefined' && global.window) {
+            if (!global.window.location || !global.window.location.origin) {
+                const plainLocation = {
+                    href: 'http://localhost:8080/',
+                    origin: 'http://localhost:8080',
+                    hostname: 'localhost',
+                    host: 'localhost:8080',
+                    pathname: '/',
+                    hash: '',
+                    search: '',
+                    protocol: 'http:',
+                    port: '8080',
+                    reload: () => {}
+                };
+                try {
+                    Object.defineProperty(global.window, 'location', {
+                        value: plainLocation,
+                        writable: true,
+                        configurable: true
+                    });
+                } catch (e) {
+                    if (!global.window.location) {
+                        global.window.location = plainLocation;
+                    }
+                }
+            }
+        }
+
         // Clear mocks before each test
         vi.clearAllMocks();
 

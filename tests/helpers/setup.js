@@ -127,8 +127,10 @@ if (typeof global.window === "undefined") {
                 configurable: true
             });
         } catch (e2) {
-            // If defineProperty fails, we can't safely set location on JSDOM window
-            // This should not happen if we're replacing it properly above
+            // If defineProperty fails, try direct assignment as last resort
+            if (!global.window.location) {
+                global.window.location = plainLocation;
+            }
         }
     }
 }

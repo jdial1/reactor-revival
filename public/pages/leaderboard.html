@@ -5,9 +5,15 @@
         </header>
         
         <div class="leaderboard-controls">
-            <button class="pixel-btn leaderboard-sort active" data-sort="power">Top Power</button>
-            <button class="pixel-btn leaderboard-sort" data-sort="heat">Top Heat</button>
-            <button class="pixel-btn leaderboard-sort" data-sort="money">Top Money</button>
+            <button class="pixel-btn leaderboard-sort active" data-sort="power" title="Top Power">
+                <img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" />
+            </button>
+            <button class="pixel-btn leaderboard-sort" data-sort="heat" title="Top Heat">
+                <img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" />
+            </button>
+            <button class="pixel-btn leaderboard-sort" data-sort="money" title="Top Money">
+                <img src="img/ui/icons/icon_cash.png" alt="Money" class="icon-inline" />
+            </button>
         </div>
 
         <div class="leaderboard-content">
@@ -16,10 +22,10 @@
                     <tr>
                         <th>Rank</th>
                         <th>Date</th>
-                        <th>Power</th>
-                        <th>Heat</th>
-                        <th>Money</th>
-                        <th>Time</th>
+                        <th class="leaderboard-col-power">Power</th>
+                        <th class="leaderboard-col-heat">Heat</th>
+                        <th class="leaderboard-col-money">Money</th>
+                        <th class="leaderboard-col-time" style="display: none;">Time</th>
                         <th>Layout</th>
                     </tr>
                 </thead>

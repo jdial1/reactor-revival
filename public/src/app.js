@@ -7,6 +7,8 @@ import { Engine } from "./core/engine.js";
 import "./services/pwa.js";
 import { PageRouter } from "./components/pageRouter.js";
 import { GoogleDriveSave } from "./services/GoogleDriveSave.js";
+import { SupabaseAuth } from "./services/SupabaseAuth.js";
+import { SupabaseSave } from "./services/SupabaseSave.js";
 import { AudioService } from "./services/audioService.js";
 // Background/PWA helpers
 import "./services/pwa.js";
@@ -229,23 +231,6 @@ function setupButtonHandlers(pageRouter, ui, game) {
     };
   }
 
-  const googleSignInBtn = document.getElementById("splash-google-signin-btn");
-  if (googleSignInBtn) {
-    googleSignInBtn.onclick = async () => {
-      if (window.googleDriveSave) {
-        await window.googleDriveSave.signIn();
-      }
-    };
-  }
-
-  const googleSignOutBtn = document.getElementById("splash-google-signout-btn");
-  if (googleSignOutBtn) {
-    googleSignOutBtn.onclick = async () => {
-      if (window.googleDriveSave) {
-        await window.googleDriveSave.signOut();
-      }
-    };
-  }
 }
 
 /**
@@ -426,6 +411,26 @@ async function main() {
   "use strict";
 
   window.googleDriveSave = new GoogleDriveSave();
+  
+  window.supabaseAuth = new SupabaseAuth();
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenHash = urlParams.get('token_hash');
+  const type = urlParams.get('type');
+  if (tokenHash && type) {
+      await window.supabaseAuth.handleEmailConfirmation(tokenHash, type);
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('token_hash');
+      cleanUrl.searchParams.delete('type');
+      cleanUrl.searchParams.delete('next');
+      window.history.replaceState({}, document.title, cleanUrl.toString());
+  }
+
+  await window.googleDriveSave.checkAuth(true);
+  if (window.supabaseAuth.refreshToken && !window.supabaseAuth.isSignedIn()) {
+      await window.supabaseAuth.refreshAccessToken();
+  }
+
   const ui = new UI();
   const game = new Game(ui);
   game.audio = new AudioService();

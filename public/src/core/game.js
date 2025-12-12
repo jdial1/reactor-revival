@@ -68,16 +68,35 @@ export class Game {
     this.peak_power = 0;
     this.peak_heat = 0;
     
+    this.user_id = this.getAuthenticatedUserId();
+    
+    this.run_id = crypto.randomUUID();
+    this.tech_tree = null;
+    this.bypass_tech_tree_restrictions = false;
+    this.cheats_used = false; // Flag to track if cheats were used (hotkeys for money/EP)
+  }
+
+  getAuthenticatedUserId() {
+    if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {
+      const googleUserId = window.googleDriveSave.getUserId();
+      if (googleUserId) {
+        return `google_${googleUserId}`;
+      }
+    }
+
+    if (window.supabaseAuth && window.supabaseAuth.isSignedIn()) {
+      const supabaseUserId = window.supabaseAuth.getUserId();
+      if (supabaseUserId) {
+        return `supabase_${supabaseUserId}`;
+      }
+    }
+
     let existingUserId = localStorage.getItem("reactor_user_id");
     if (!existingUserId) {
       existingUserId = crypto.randomUUID();
       localStorage.setItem("reactor_user_id", existingUserId);
     }
-    this.user_id = existingUserId;
-    
-    this.run_id = crypto.randomUUID();
-    this.tech_tree = null;
-    this.bypass_tech_tree_restrictions = false;
+    return existingUserId;
   }
 
   getCompactLayout() {
@@ -350,6 +369,7 @@ export class Game {
     this.debugHistory.clear();
     await this.set_defaults();
     this.run_id = crypto.randomUUID();
+    this.cheats_used = false; // Reset cheat flag for new game
     this.reactor.clearMeltdownState();
 
     // Leaderboard initialization is optional - failures are non-fatal
@@ -736,8 +756,8 @@ export class Game {
 
   sellPart(tile) {
     if (tile && tile.part) {
-      this.addMoney(tile.calculateSellValue());
-      this.debugHistory.add('game', 'sellPart', { row: tile.row, col: tile.col, partId: tile.part.id, value: tile.calculateSellValue() });
+      const sellValue = tile.calculateSellValue();
+      this.debugHistory.add('game', 'sellPart', { row: tile.row, col: tile.col, partId: tile.part.id, value: sellValue });
       if (this.audio) {
         this.audio.play("sell", null, this.calculatePan(tile.col));
       }
@@ -909,7 +929,7 @@ export class Game {
 
       this.updateSessionTime();
 
-      if (this.peak_power > 0 || this.peak_heat > 0) {
+      if ((this.peak_power > 0 || this.peak_heat > 0) && !this.cheats_used) {
         leaderboardService.saveRun({
           user_id: this.user_id,
           run_id: this.run_id,

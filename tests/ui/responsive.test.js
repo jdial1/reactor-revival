@@ -382,6 +382,81 @@ describe("Responsive UI Layout and Overlap Checks", () => {
           "Objectives should be hidden on research page").toBe(true);
       }
     });
+
+    it("should allow body scrolling on scrollable pages (upgrades, research, leaderboard)", async () => {
+      const scrollablePages = [
+        { id: "upgrades_section", class: "page-upgrades" },
+        { id: "experimental_upgrades_section", class: "page-experimental_upgrades" },
+        { id: "leaderboard_section", class: "page-leaderboard" }
+      ];
+
+      for (const page of scrollablePages) {
+        await game.router.loadPage(page.id);
+        
+        expect(document.body.classList.contains(page.class),
+          `Body should have ${page.class} class for ${page.id}`).toBe(true);
+        
+        const htmlElement = document.documentElement;
+        const bodyElement = document.body;
+        
+        const htmlStyle = window.getComputedStyle(htmlElement);
+        const bodyStyle = window.getComputedStyle(bodyElement);
+        
+        expect(bodyStyle.overflow === "auto" || bodyElement.classList.contains(page.class),
+          `Body should allow scrolling on ${page.id}`).toBeTruthy();
+        
+        expect(htmlStyle.touchAction.includes("pan-y") || htmlStyle.touchAction.includes("pan-x"),
+          `HTML should allow touch scrolling gestures on ${page.id}`).toBeTruthy();
+      }
+    });
+
+    it("should prevent body scrolling on reactor page", async () => {
+      await game.router.loadPage("reactor_section");
+      
+      expect(document.body.classList.contains("page-reactor"),
+        "Body should have page-reactor class").toBe(true);
+      
+      const bodyStyle = window.getComputedStyle(document.body);
+      
+      expect(bodyStyle.overflow === "hidden",
+        "Body should have overflow hidden on reactor page").toBe(true);
+    });
+
+    it("should have scrollable sections with proper CSS on mobile viewport", async () => {
+      resizeWindow(window, 480, 800);
+      
+      await game.router.loadPage("upgrades_section");
+      
+      const upgradesSection = document.getElementById("upgrades_section");
+      const mainContentWrapper = document.getElementById("main_content_wrapper");
+      const pageContentArea = document.getElementById("page_content_area");
+      
+      expect(upgradesSection, "Upgrades section should exist").not.toBeNull();
+      expect(mainContentWrapper, "Main content wrapper should exist").not.toBeNull();
+      expect(pageContentArea, "Page content area should exist").not.toBeNull();
+      
+      const sectionStyle = window.getComputedStyle(upgradesSection);
+      expect(sectionStyle.overflowY === "auto" || sectionStyle.overflow === "auto",
+        "Upgrades section should have overflow-y: auto on mobile").toBeTruthy();
+    });
+
+    it("should have scrollable leaderboard page on mobile and desktop", async () => {
+      await game.router.loadPage("leaderboard_section");
+
+      const leaderboardSection = document.getElementById("leaderboard_section");
+      const pageContentArea = document.getElementById("page_content_area");
+      const mainContentWrapper = document.getElementById("main_content_wrapper");
+
+      expect(leaderboardSection, "Leaderboard section should exist").not.toBeNull();
+      expect(pageContentArea, "Page content area should exist").not.toBeNull();
+      expect(mainContentWrapper, "Main content wrapper should exist").not.toBeNull();
+
+      expect(document.body.classList.contains("page-leaderboard"),
+        "Body should have page-leaderboard class").toBe(true);
+
+      expect(leaderboardSection.classList.contains("page"),
+        "Leaderboard section should have page class").toBe(true);
+    });
   });
 
   describe("Desktop Grid Scaling", () => {
