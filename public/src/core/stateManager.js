@@ -102,7 +102,6 @@ export class StateManager {
       // Add flash class for completion animation
       section.classList.add("flash");
 
-      // FIX: Add a guard to ensure this only runs in a browser environment
       if (typeof document !== 'undefined' && document.createElement && section && section.appendChild) {
         // Minimal confetti - just a few particles
         const confettiColors = [
