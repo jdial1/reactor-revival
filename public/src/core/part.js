@@ -185,7 +185,9 @@ export class Part {
         transferMultiplier *= improvedHeatExchangers + 1;
         heatExchangerContainmentMultiplier *= improvedHeatExchangers + 1;
       }
-      // Note: fluid_hyperdynamics should NOT affect inlets/outlets according to test expectations
+      if (fluidHyperdynamics > 0) {
+        transferMultiplier *= Math.pow(2, fluidHyperdynamics);
+      }
       if (fractalPiping > 0) {
         heatExchangerContainmentMultiplier *= Math.pow(2, fractalPiping);
       }

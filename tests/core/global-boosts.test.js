@@ -111,10 +111,8 @@ describe('Global Boost Research Upgrades', () => {
             const expectedMultiplier = Math.pow(2, 5); // 32x
             expect(vent.vent).toBe(initialVent * expectedMultiplier);
             expect(exchanger.transfer).toBe(initialExchangerTransfer * expectedMultiplier);
-            // Note: The code currently has a bug preventing this upgrade from affecting inlets/outlets.
-            // This test reflects the current state of the code, not the description.
-            expect(inlet.transfer).toBe(initialInletTransfer);
-            expect(outlet.transfer).toBe(initialOutletTransfer);
+            expect(inlet.transfer).toBe(initialInletTransfer * expectedMultiplier);
+            expect(outlet.transfer).toBe(initialOutletTransfer * expectedMultiplier);
         });
 
         it('fractal_piping should boost vent/exchanger heat capacity', () => {
