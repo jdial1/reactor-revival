@@ -1625,6 +1625,15 @@ export class Game {
         const prevPaused = this.paused;
         this.paused = value;
         console.log(`[TOGGLE] game.paused: ${prevPaused} -> ${this.paused}`);
+
+        // Fix for PageRouter auto-resume bug:
+        // If the pause state is manually toggled (not during navigation),
+        // we must clear the navigationPaused flag so we don't auto-resume later.
+        if (this.router && this.router.navigationPaused && !this.router.isNavigating) {
+          console.log("[TOGGLE] Clearing PageRouter.navigationPaused due to manual pause change");
+          this.router.navigationPaused = false;
+        }
+
         if (this.engine) {
           if (value) {
             this.engine.stop();
