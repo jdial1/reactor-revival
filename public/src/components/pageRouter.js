@@ -19,6 +19,8 @@ export class PageRouter {
     // Track if pause was applied automatically due to navigation away from reactor
     // so we can safely auto-unpause when returning.
     this.navigationPaused = false;
+    // Track if we are currently navigating to prevent clearing navigationPaused during auto-pause
+    this.isNavigating = false;
     this.contentAreaSelector = "#page_content_area";
   }
 
@@ -44,7 +46,9 @@ export class PageRouter {
           this.navigationPaused = true;
           console.log("PageRouter: Pausing reactor (leaving reactor page)");
           this.ui.game.engine.stop();
+          this.isNavigating = true;
           this.ui.stateManager.setVar("pause", true);
+          this.isNavigating = false;
         } else {
           // Already paused (manual); do not auto-unpause on return
           this.navigationPaused = false;
@@ -54,7 +58,9 @@ export class PageRouter {
         if (this.navigationPaused) {
           console.log("PageRouter: Resuming reactor (returning to reactor page)");
           this.navigationPaused = false;
+          this.isNavigating = true;
           this.ui.stateManager.setVar("pause", false);
+          this.isNavigating = false;
         }
       }
     }
