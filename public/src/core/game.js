@@ -821,7 +821,7 @@ export class Game {
       },
       // Persist cumulative placement progress used for tier gating
       placedCounts: this.placedCounts,
-      tiles: this.tileset.tiles_list
+      tiles: this.tileset.active_tiles_list
         .filter((tile) => tile.part)
         .map((tile) => ({
           row: tile.row,
