@@ -3,10 +3,12 @@ import { setupGameWithDOM } from "../helpers/setup.js";
 
 describe("UI User Interaction Scenarios", () => {
     let game;
+    let document;
 
     beforeEach(async () => {
         const setup = await setupGameWithDOM();
         game = setup.game;
+        document = setup.document;
     // Ensure tiles have DOM elements linked for interaction tests
     game.tileset.tiles_list.forEach(tile => {
       if (!tile.$el) {

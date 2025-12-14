@@ -1,32 +1,5 @@
 import { describe, it, expect, beforeEach, Game, UI, setupGame } from "../helpers/setup.js";
 
-// Ensure location is initialized before creating game instances
-if (typeof global !== 'undefined' && global.window && (!global.window.location || !global.window.location.origin)) {
-  const plainLocation = {
-    href: 'http://localhost:8080/',
-    origin: 'http://localhost:8080',
-    hostname: 'localhost',
-    host: 'localhost:8080',
-    pathname: '/',
-    hash: '',
-    search: '',
-    protocol: 'http:',
-    port: '8080',
-    reload: () => {}
-  };
-  try {
-    Object.defineProperty(global.window, 'location', {
-      value: plainLocation,
-      writable: true,
-      configurable: true
-    });
-  } catch (e) {
-    if (!global.window.location) {
-      global.window.location = plainLocation;
-    }
-  }
-}
-
 // Create a temporary game instance just to generate the list of tests.
 // This is NOT the instance that will be used in the `it` blocks.
 const mockUiForTestGen = new UI();

@@ -819,6 +819,11 @@ export class UI {
       return;
     }
     
+    // Safety check: ensure document.getElementById exists before using it
+    if (typeof document.getElementById !== 'function') {
+      return;
+    }
+    
     if (!this._lastUiTime) this._lastUiTime = timestamp;
     const dt = timestamp - this._lastUiTime;
     this._lastUiTime = timestamp;
@@ -1018,6 +1023,11 @@ export class UI {
   }
 
   updateRollingNumbers(dt) {
+    // Safety check: ensure document.getElementById exists before using it
+    if (typeof document === 'undefined' || !document || typeof document.getElementById !== 'function') {
+      return;
+    }
+    
     // Normalize dt (expecting ~16ms for 60fps)
     const timeScale = dt / 16.667;
     // Lerp factor: 0.15 at 60fps. 

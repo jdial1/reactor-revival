@@ -10,6 +10,7 @@ describe("DOMMapper", () => {
     global.window = {
       document: {
         querySelector: vi.fn(),
+        getElementById: vi.fn(() => null), // Prevent "is not a function" errors
         addEventListener: vi.fn(),
         // FIX: Change 'loading' to 'complete' to prevent init() from waiting forever for an event that won't fire
         readyState: 'complete'

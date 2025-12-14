@@ -56,15 +56,122 @@ describe("Meltdown Visual Effects", () => {
     ensureEl(tile1);
     ensureEl(tile2);
 
+    // Ensure audio is initialized
+    if (!game.audio || !game.audio._isInitialized) {
+      await game.audio.init(game);
+    }
     const playSpy = vi.spyOn(game.audio, "play");
     // Mock calculatePan
     game.calculatePan = vi.fn(() => 0);
-    // Ensure audio context is running for play checks
+    // Ensure audio context is running for play checks and has all required methods
     game.audio.enabled = true;
     if (game.audio.context) {
       Object.defineProperty(game.audio.context, 'state', { value: 'running', writable: true });
+      // Ensure all required AudioContext methods exist
+      if (!game.audio.context.createOscillator) {
+        game.audio.context.createOscillator = vi.fn(() => ({
+          type: 'sine',
+          frequency: {
+            value: 440,
+            setValueAtTime: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn(),
+            linearRampToValueAtTime: vi.fn(),
+          },
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        }));
+      }
+      if (!game.audio.context.createGain) {
+        game.audio.context.createGain = vi.fn(() => ({
+          gain: {
+            value: 1,
+            setValueAtTime: vi.fn(),
+            linearRampToValueAtTime: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn(),
+          },
+          connect: vi.fn(),
+        }));
+      }
+      if (!game.audio.context.createBufferSource) {
+        game.audio.context.createBufferSource = vi.fn(() => ({
+          buffer: null,
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        }));
+      }
+      if (!game.audio.context.createBiquadFilter) {
+        game.audio.context.createBiquadFilter = vi.fn(() => ({
+          type: 'lowpass',
+          frequency: { value: 1000 },
+          connect: vi.fn(),
+        }));
+      }
+      if (!game.audio.context.createStereoPanner) {
+        game.audio.context.createStereoPanner = vi.fn(() => ({
+          pan: { value: 0 },
+          connect: vi.fn(),
+        }));
+      }
+      if (!game.audio.context.createWaveShaper) {
+        game.audio.context.createWaveShaper = vi.fn(() => ({
+          curve: null,
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+        }));
+      }
+      if (!game.audio.context.currentTime) {
+        Object.defineProperty(game.audio.context, 'currentTime', { value: 0, writable: true });
+      }
     } else {
-      game.audio.context = { state: 'running' };
+      // Create a complete mock context if it doesn't exist
+      game.audio.context = {
+        state: 'running',
+        currentTime: 0,
+        destination: {},
+        createGain: vi.fn(() => ({
+          gain: {
+            value: 1,
+            setValueAtTime: vi.fn(),
+            linearRampToValueAtTime: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn(),
+          },
+          connect: vi.fn(),
+        })),
+        createOscillator: vi.fn(() => ({
+          type: 'sine',
+          frequency: {
+            value: 440,
+            setValueAtTime: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn(),
+            linearRampToValueAtTime: vi.fn(),
+          },
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        })),
+        createBufferSource: vi.fn(() => ({
+          buffer: null,
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        })),
+        createBiquadFilter: vi.fn(() => ({
+          type: 'lowpass',
+          frequency: { value: 1000 },
+          connect: vi.fn(),
+        })),
+        createStereoPanner: vi.fn(() => ({
+          pan: { value: 0 },
+          connect: vi.fn(),
+        })),
+        createWaveShaper: vi.fn(() => ({
+          curve: null,
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+        })),
+      };
     }
 
     // Trigger sequential explosion (forceAnimate = true for test)
