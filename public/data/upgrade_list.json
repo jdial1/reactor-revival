@@ -1,6 +1,4 @@
-{
-  "__esModule": true,
-  "default": [
+[
     {
       "id": "chronometer",
       "type": "other",
@@ -636,5 +634,4 @@
       "icon": "img/ui/icons/icon_vent.png",
       "actionId": "explosive_decompression"
     }
-  ]
-}
+]

@@ -1,6 +1,4 @@
-{
-  "__esModule": true,
-  "default": [
+[
     {
       "id": "uranium",
       "type": "uranium",
@@ -567,5 +565,4 @@
       "transfer_multiplier": 2.5,
       "location": "cooling"
     }
-  ]
-}
+]

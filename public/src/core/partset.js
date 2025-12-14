@@ -12,10 +12,8 @@ async function ensureDataLoaded() {
       part_list_data = await dataService.loadPartList();
       console.log("Part list data loaded:", {
         type: typeof part_list_data,
-        hasDefault: part_list_data && typeof part_list_data === 'object' && 'default' in part_list_data,
-        defaultType: part_list_data?.default ? typeof part_list_data.default : 'undefined',
-        defaultIsArray: Array.isArray(part_list_data?.default),
-        keys: part_list_data ? Object.keys(part_list_data) : []
+        isArray: Array.isArray(part_list_data),
+        length: Array.isArray(part_list_data) ? part_list_data.length : 'N/A'
       });
       dataLoaded = true;
     } catch (error) {
@@ -66,11 +64,7 @@ export class PartSet {
 
     this.game.logger?.info("Loading part list data...");
 
-    // Handle ES module format - the dataService returns the entire JSON object
-    let data = part_list_data;
-    if (part_list_data && typeof part_list_data === 'object' && part_list_data.default) {
-      data = part_list_data.default;
-    }
+    const data = part_list_data;
 
     if (!Array.isArray(data)) {
       this.game.logger?.error("part_list_data is not an array:", data);

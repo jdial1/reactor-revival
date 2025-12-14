@@ -46,7 +46,7 @@ export class UpgradeSet {
       }
     });
 
-    const data = upgrade_templates.default || upgrade_templates;
+    const data = upgrade_templates;
     this.game.logger?.debug("Upgrade data loaded:", data?.length, "upgrades");
 
     const fullUpgradeList = [...data, ...this._generateCellUpgrades()];
