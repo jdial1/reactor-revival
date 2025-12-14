@@ -376,6 +376,8 @@ export async function setupGameWithDOM() {
   mockBrowserGlobals();
   window.AudioContext = vi.fn().mockImplementation(() => ({
     state: 'running',
+    sampleRate: 44100,
+    currentTime: 0,
     destination: {},
     createGain: () => ({
       gain: {
@@ -383,8 +385,10 @@ export async function setupGameWithDOM() {
         setValueAtTime: vi.fn(),
         linearRampToValueAtTime: vi.fn(),
         exponentialRampToValueAtTime: vi.fn(),
+        setTargetAtTime: vi.fn(),
       },
       connect: vi.fn(),
+      disconnect: vi.fn(),
     }),
     createOscillator: () => ({
       type: 'sine',
@@ -401,14 +405,34 @@ export async function setupGameWithDOM() {
     createBufferSource: () => ({
       buffer: null,
       connect: vi.fn(),
+      disconnect: vi.fn(),
       start: vi.fn(),
       stop: vi.fn(),
+    }),
+    createBuffer: (channels, length, sampleRate) => ({
+      numberOfChannels: channels,
+      length: length,
+      sampleRate: sampleRate,
+      getChannelData: (channelIndex) => new Float32Array(length),
     }),
     createWaveShaper: () => ({
       curve: null,
       connect: vi.fn(),
       disconnect: vi.fn(),
     }),
+    createBiquadFilter: () => ({
+      type: 'lowpass',
+      frequency: {
+        value: 1000,
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+        exponentialRampToValueAtTime: vi.fn(),
+      },
+      Q: { value: 1 },
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    }),
+    suspend: vi.fn().mockResolvedValue(),
     resume: vi.fn().mockResolvedValue(),
   }));
   
@@ -480,7 +504,7 @@ export async function setupGameWithDOM() {
   // CRITICAL: Initialize audio service like in app.js
   const { AudioService } = await import("../../public/src/services/audioService.js");
   game.audio = new AudioService();
-  await game.audio.init(game);
+  await game.audio.init();
   
   // Manually trigger UI setup that would normally happen on page load
      ui.initMainLayout();

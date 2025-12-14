@@ -40,27 +40,16 @@ class DataService {
                 // Node.js environment - use file system
                 await initNodeModules();
                 if (fs && path && __dirname) {
-                    // Try multiple possible paths for the data files
-                    const possiblePaths = [
-                        path.resolve(__dirname, '../../public', filePath.replace('./', '')),
-                        path.resolve(__dirname, '../../../public', filePath.replace('./', '')),
-                        path.resolve(process.cwd(), 'public', filePath.replace('./', '')),
-                        path.resolve(process.cwd(), filePath.replace('./', ''))
-                    ];
-
-                    for (const absolutePath of possiblePaths) {
-                        try {
-                            const content = fs.readFileSync(absolutePath, 'utf-8');
-                            const data = JSON.parse(content);
-                            this.cache.set(filePath, data);
-                            console.log(`Successfully loaded ${filePath} from ${absolutePath}`);
-                            return data;
-                        } catch (error) {
-                            // Continue to next path
-                        }
+                    const absolutePath = path.resolve(__dirname, '../../../public/', filePath.replace('./', ''));
+                    try {
+                        const content = fs.readFileSync(absolutePath, 'utf-8');
+                        const data = JSON.parse(content);
+                        this.cache.set(filePath, data);
+                        console.log(`Successfully loaded ${filePath} from ${absolutePath}`);
+                        return data;
+                    } catch (error) {
+                        throw new Error(`Could not find ${filePath} at ${absolutePath}: ${error.message}`);
                     }
-
-                    throw new Error(`Could not find ${filePath} in any of the expected locations`);
                 }
             }
 

@@ -214,7 +214,7 @@ describe("AudioService", () => {
     };
 
     // Initialize the service with the mock game object
-    await audioService.init(game);
+    await audioService.init();
   });
 
   afterEach(() => {
@@ -585,7 +585,7 @@ describe("AudioService", () => {
     it("should play sound when part is placed", async () => {
       // Ensure audio is initialized
       if (!game.audio || !game.audio._isInitialized) {
-        await game.audio.init(game);
+        await game.audio.init();
       }
       const tile = game.tileset.getTile(5, 5);
       const part = game.partset.getPartById("uranium1");
@@ -602,7 +602,7 @@ describe("AudioService", () => {
     it("should play sound when part is sold", async () => {
       // Ensure audio is initialized
       if (!game.audio || !game.audio._isInitialized) {
-        await game.audio.init(game);
+        await game.audio.init();
       }
       const tile = game.tileset.getTile(5, 5);
       const part = game.partset.getPartById("uranium1");
@@ -615,7 +615,7 @@ describe("AudioService", () => {
     it("should play sound when explosion occurs", async () => {
       // Ensure audio is initialized
       if (!game.audio || !game.audio._isInitialized) {
-        await game.audio.init(game);
+        await game.audio.init();
       }
       const playSpy = vi.spyOn(game.audio, 'play');
       const tile = game.tileset.getTile(5, 5);
@@ -629,7 +629,7 @@ describe("AudioService", () => {
     it("should respect mute setting when playing sounds", async () => {
       // Ensure audio is initialized and enabled before muting to simulate real scenario
       if (!game.audio || !game.audio._isInitialized) {
-        await game.audio.init(game);
+        await game.audio.init();
       }
       
       // Verify initialization succeeded
