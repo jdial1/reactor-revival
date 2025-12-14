@@ -153,8 +153,11 @@ export function createTooltipCloseButton(onClick) {
     const btn = window.templateLoader.cloneTemplateElement(
         "tooltip-close-btn-template"
     );
-    if (btn && onClick) {
-        btn.onclick = onClick;
+    if (btn) {
+        btn.setAttribute("aria-label", "Close tooltip");
+        if (onClick) {
+            btn.onclick = onClick;
+        }
     }
     return btn;
 }
@@ -163,6 +166,7 @@ export function createHelpButton(onClick, title = "Click for information") {
     const btn = window.templateLoader.cloneTemplateElement("help-btn-template");
     if (btn) {
         btn.title = title;
+        btn.setAttribute("aria-label", title || "Help information");
         if (onClick) {
             btn.addEventListener("click", onClick);
         }
@@ -214,6 +218,7 @@ export function createPartButton(part) {
     if (!btn) return null;
     btn.id = `part_btn_${part.id}`;
     btn.title = part.title;
+    btn.setAttribute("aria-label", part.title || "Part button");
     const imageDiv = btn.querySelector(".image");
     if (imageDiv) {
         imageDiv.style.setProperty("--bg-image", `url('${part.getImagePath()}')`);
