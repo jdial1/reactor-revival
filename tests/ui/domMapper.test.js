@@ -31,4 +31,10 @@ describe("DOMMapper", () => {
     expect(domMapperInstance).not.toBeNull();
     expect(typeof domMapperInstance.init).toBe("function");
   });
+
+  it("should initialize and query static elements", async () => {
+    // Wait for microtasks to clear so init() promise has a chance to run
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(global.window.document.querySelector).toHaveBeenCalled();
+  });
 });
