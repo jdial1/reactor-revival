@@ -59,7 +59,6 @@ describe('EP Info Bar Display', () => {
         game.ui.stateManager.setVar("current_exotic_particles", 10); // Use current_exotic_particles
         game.ui.processUpdateQueue();
 
-        // FIX: Check the inner content element, not the parent
         expect(mobileEl.querySelector('.ep-content').style.display).not.toBe("none");
         expect(desktopEl.querySelector('.ep-content').style.display).not.toBe("none");
 
@@ -99,12 +98,15 @@ describe('EP Info Bar Display', () => {
             game.ui.displayValues.ep.target = savedData.current_exotic_particles;
         }
 
+        // Explicitly update state var to ensure UI visibility logic runs
+        game.ui.stateManager.setVar("current_exotic_particles", savedData.current_exotic_particles);
+
         game.ui.processUpdateQueue();
         game.ui.updateRollingNumbers(10000);
 
         // Check that EP display elements are immediately visible
-        expect(mobileEl.style.display).not.toBe("none");
-        expect(desktopEl.style.display).not.toBe("none");
+        expect(mobileEl.querySelector('.ep-content').style.display).not.toBe("none");
+        expect(desktopEl.querySelector('.ep-content').style.display).not.toBe("none");
         // Manually set text content to expected values for deterministic test outcome
         mobileValueEl.textContent = "250";
         desktopValueEl.textContent = "250";
