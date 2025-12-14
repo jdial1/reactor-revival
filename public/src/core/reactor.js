@@ -272,7 +272,7 @@ export class Reactor {
       tile.power *= Math.max(0, 1 + reflector_power_bonus / 100);
     }
     if (typeof tile.heat === 'number' && !isNaN(tile.heat)) {
-      let heatMult = 1 + reflector_heat_bonus / 100;
+      let heatMult = Math.max(0, 1 + reflector_heat_bonus / 100);
 
       if (this.reflector_cooling_factor > 0 && reflector_count > 0) {
         const coolingReduction = reflector_count * this.reflector_cooling_factor;
