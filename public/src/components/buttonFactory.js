@@ -163,6 +163,10 @@ export function createHelpButton(onClick, title = "Click for information") {
     const btn = window.templateLoader.cloneTemplateElement("help-btn-template");
     if (btn) {
         btn.title = title;
+        // Ensure aria-label matches title or default from template
+        if (title !== "Click for information") {
+             btn.setAttribute("aria-label", title);
+        }
         if (onClick) {
             btn.addEventListener("click", onClick);
         }
@@ -214,6 +218,7 @@ export function createPartButton(part) {
     if (!btn) return null;
     btn.id = `part_btn_${part.id}`;
     btn.title = part.title;
+    btn.setAttribute("aria-label", part.title);
     const imageDiv = btn.querySelector(".image");
     if (imageDiv) {
         imageDiv.style.setProperty("--bg-image", `url('${part.getImagePath()}')`);

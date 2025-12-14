@@ -547,6 +547,7 @@ export class Part {
     this.$el.classList.add(`category_${this.category}`);
     this.$el.id = `part_btn_${this.id}`;
     this.$el.title = this.title;
+    this.$el.setAttribute("aria-label", this.title);
 
     const imageDiv = this.$el.querySelector(".image");
     if (imageDiv) {
