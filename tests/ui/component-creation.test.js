@@ -67,6 +67,8 @@ describe("UI Component Creation and State", () => {
 
             let btn = createPartButton(part);
             expect(btn.title).toBe(part.title);
+            expect(btn.getAttribute("aria-label")).toContain(part.title);
+            expect(btn.getAttribute("aria-label")).toContain(part.cost.toString());
             expect(btn.querySelector(".image").style.getPropertyValue("--bg-image")).toContain(part.getImagePath());
             expect(btn.querySelector(".part-price").textContent).toBe(part.cost.toString());
             expect(btn.classList.contains("unaffordable")).toBe(false);

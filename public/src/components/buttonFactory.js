@@ -218,7 +218,8 @@ export function createPartButton(part) {
     if (!btn) return null;
     btn.id = `part_btn_${part.id}`;
     btn.title = part.title;
-    btn.setAttribute("aria-label", part.title || "Part button");
+    const costText = part.erequires ? `${part.cost} 🧬 EP` : `${part.cost}`;
+    btn.setAttribute("aria-label", `${part.title || "Part button"}, Cost: ${costText}`);
     const imageDiv = btn.querySelector(".image");
     if (imageDiv) {
         imageDiv.style.setProperty("--bg-image", `url('${part.getImagePath()}')`);
