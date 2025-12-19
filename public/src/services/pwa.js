@@ -88,6 +88,9 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
     console.error("[TECH-TREE] .tech-tree-container not found in selection screen");
     return;
   }
+  // Accessibility: Add role and label to container
+  container.setAttribute("role", "radiogroup");
+  container.setAttribute("aria-label", "Select Your Doctrine");
   console.log("[TECH-TREE] Container found:", container);
 
   // Track selected tech tree
@@ -105,6 +108,12 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
     }
     console.log(`[TECH-TREE] Card template cloned for tree ${index + 1}`);
 
+    // Accessibility: Set role, checked state, and keyboard focus
+    card.setAttribute("role", "radio");
+    card.setAttribute("aria-checked", "false");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("aria-label", tree.title || "Tech tree option");
+
     // Store tree data on card for later use
     card.dataset.treeId = tree.id;
     card.dataset.treeColor = tree.color;
@@ -120,6 +129,8 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
     const icon = card.querySelector(".tech-tree-icon");
     if (icon) {
       icon.src = tree.icon;
+      // Accessibility: Set descriptive alt text
+      icon.alt = `${tree.title} icon`;
       console.log(`[TECH-TREE] Set icon for tree ${index + 1}:`, tree.icon);
     } else {
       console.warn(`[TECH-TREE] .tech-tree-icon not found in card ${index + 1}`);
@@ -173,12 +184,15 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
 
     // Make entire card clickable for selection
     card.style.cursor = "pointer";
-    card.onclick = () => {
-      console.log(`[TECH-TREE] Card clicked for tree:`, tree.id);
+
+    // Function to handle selection
+    const selectCard = () => {
+      console.log(`[TECH-TREE] Card selected for tree:`, tree.id);
       
       // Remove selected class and reset border/outline from all cards
       container.querySelectorAll(".tech-tree-card").forEach(c => {
         c.classList.remove("tech-tree-card-selected");
+        c.setAttribute("aria-checked", "false");
         c.style.borderColor = "";
         c.style.outlineColor = "";
         c.style.color = "";
@@ -186,6 +200,7 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
       
       // Add selected class to clicked card and set border/outline color
       card.classList.add("tech-tree-card-selected");
+      card.setAttribute("aria-checked", "true");
       card.style.borderColor = tree.color;
       card.style.outlineColor = tree.color;
       card.style.color = tree.color;
@@ -196,6 +211,16 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
         startBtn.disabled = false;
         startBtn.style.borderColor = tree.color;
         console.log("[TECH-TREE] Start button enabled");
+      }
+    };
+
+    card.onclick = selectCard;
+
+    // Accessibility: Add keyboard support (Enter/Space to select)
+    card.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectCard();
       }
     };
     console.log(`[TECH-TREE] Card ${index + 1} made clickable`);
