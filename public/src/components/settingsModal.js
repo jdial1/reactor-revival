@@ -56,32 +56,37 @@ export class SettingsModal {
 </label>
 <div class="volume-setting">
 <label for="setting-volume-master" class="volume-label">Master Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-master" min="0" max="1" step="0.01" value="${masterVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-master" min="0" max="1" step="0.01" value="${masterVol}" style="flex: 1;">
+<span id="setting-volume-master-value" style="min-width: 3.5em; text-align: right; font-size: 0.8em; color: var(--accent-color, rgb(143 214 148));">${Math.round(masterVol * 100)}%</span>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-effects" class="volume-label">Effects Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}" style="flex: 1;">
+<span id="setting-volume-effects-value" style="min-width: 3.5em; text-align: right; font-size: 0.8em; color: var(--accent-color, rgb(143 214 148));">${Math.round(effectsVol * 100)}%</span>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-alerts" class="volume-label">Alerts Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}" style="flex: 1;">
+<span id="setting-volume-alerts-value" style="min-width: 3.5em; text-align: right; font-size: 0.8em; color: var(--accent-color, rgb(143 214 148));">${Math.round(alertsVol * 100)}%</span>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-system" class="volume-label">System Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}" style="flex: 1;">
+<span id="setting-volume-system-value" style="min-width: 3.5em; text-align: right; font-size: 0.8em; color: var(--accent-color, rgb(143 214 148));">${Math.round(systemVol * 100)}%</span>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-ambience" class="volume-label">Background Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-ambience" min="0" max="1" step="0.01" value="${ambienceVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-ambience" min="0" max="1" step="0.01" value="${ambienceVol}" style="flex: 1;">
+<span id="setting-volume-ambience-value" style="min-width: 3.5em; text-align: right; font-size: 0.8em; color: var(--accent-color, rgb(143 214 148));">${Math.round(ambienceVol * 100)}%</span>
 </div>
 </div>
 </div>
@@ -181,6 +186,8 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("master", value);
         }
+        const display = this.overlay.querySelector("#setting-volume-master-value");
+        if (display) display.textContent = `${Math.round(value * 100)}%`;
       });
     }
 
@@ -192,6 +199,8 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("effects", value);
         }
+        const display = this.overlay.querySelector("#setting-volume-effects-value");
+        if (display) display.textContent = `${Math.round(value * 100)}%`;
       });
     }
 
@@ -203,6 +212,8 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("alerts", value);
         }
+        const display = this.overlay.querySelector("#setting-volume-alerts-value");
+        if (display) display.textContent = `${Math.round(value * 100)}%`;
       });
     }
 
@@ -214,6 +225,8 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("system", value);
         }
+        const display = this.overlay.querySelector("#setting-volume-system-value");
+        if (display) display.textContent = `${Math.round(value * 100)}%`;
       });
     }
 
@@ -225,6 +238,8 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("ambience", value);
         }
+        const display = this.overlay.querySelector("#setting-volume-ambience-value");
+        if (display) display.textContent = `${Math.round(value * 100)}%`;
       });
     }
 
