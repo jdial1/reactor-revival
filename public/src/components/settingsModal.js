@@ -55,31 +55,46 @@ export class SettingsModal {
 <input type="checkbox" id="setting-mute" ${isMuted ? "checked" : ""} style="display: none;">
 </label>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-master" class="volume-label">Master Volume</label>
+<span id="setting-volume-master-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(masterVol * 100)}%</span>
+</div>
 <div class="volume-control">
 <input type="range" id="setting-volume-master" min="0" max="1" step="0.01" value="${masterVol}">
 </div>
 </div>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-effects" class="volume-label">Effects Volume</label>
+<span id="setting-volume-effects-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(effectsVol * 100)}%</span>
+</div>
 <div class="volume-control">
 <input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}">
 </div>
 </div>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-alerts" class="volume-label">Alerts Volume</label>
+<span id="setting-volume-alerts-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(alertsVol * 100)}%</span>
+</div>
 <div class="volume-control">
 <input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}">
 </div>
 </div>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-system" class="volume-label">System Volume</label>
+<span id="setting-volume-system-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(systemVol * 100)}%</span>
+</div>
 <div class="volume-control">
 <input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}">
 </div>
 </div>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-ambience" class="volume-label">Background Volume</label>
+<span id="setting-volume-ambience-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(ambienceVol * 100)}%</span>
+</div>
 <div class="volume-control">
 <input type="range" id="setting-volume-ambience" min="0" max="1" step="0.01" value="${ambienceVol}">
 </div>
@@ -181,6 +196,10 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("master", value);
         }
+        const valDisplay = this.overlay.querySelector("#setting-volume-master-val");
+        if (valDisplay) {
+            valDisplay.textContent = `${Math.round(value * 100)}%`;
+        }
       });
     }
 
@@ -191,6 +210,10 @@ export class SettingsModal {
         localStorage.setItem("reactor_volume_effects", value.toString());
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("effects", value);
+        }
+        const valDisplay = this.overlay.querySelector("#setting-volume-effects-val");
+        if (valDisplay) {
+            valDisplay.textContent = `${Math.round(value * 100)}%`;
         }
       });
     }
@@ -203,6 +226,10 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("alerts", value);
         }
+        const valDisplay = this.overlay.querySelector("#setting-volume-alerts-val");
+        if (valDisplay) {
+            valDisplay.textContent = `${Math.round(value * 100)}%`;
+        }
       });
     }
 
@@ -214,6 +241,10 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("system", value);
         }
+        const valDisplay = this.overlay.querySelector("#setting-volume-system-val");
+        if (valDisplay) {
+            valDisplay.textContent = `${Math.round(value * 100)}%`;
+        }
       });
     }
 
@@ -224,6 +255,10 @@ export class SettingsModal {
         localStorage.setItem("reactor_volume_ambience", value.toString());
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("ambience", value);
+        }
+        const valDisplay = this.overlay.querySelector("#setting-volume-ambience-val");
+        if (valDisplay) {
+            valDisplay.textContent = `${Math.round(value * 100)}%`;
         }
       });
     }
