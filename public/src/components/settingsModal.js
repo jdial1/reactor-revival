@@ -3,13 +3,16 @@ import { supabaseSave } from "../services/SupabaseSave.js";
 export class SettingsModal {
   constructor() {
     this.overlay = null;
+    this.handleKeyDown = this.handleKeyDown.bind(this);
   }
   show() {
     this.createDOM();
     this.overlay.classList.remove("hidden");
+    document.addEventListener("keydown", this.handleKeyDown);
   }
   hide() {
     if (this.overlay) {
+      document.removeEventListener("keydown", this.handleKeyDown);
       if (window.game && window.game.audio) {
         window.game.audio.stopTestSound();
         window.game.audio.stopWarningLoop();
@@ -21,6 +24,11 @@ export class SettingsModal {
           this.overlay = null;
         }
       }, 200);
+    }
+  }
+  handleKeyDown(e) {
+    if (e.key === "Escape") {
+      this.hide();
     }
   }
   createDOM() {
