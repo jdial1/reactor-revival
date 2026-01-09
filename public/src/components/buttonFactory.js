@@ -210,6 +210,11 @@ export function createUpgradeButton(upgrade) {
     const costDisplay = card.querySelector(".cost-display");
     if (costDisplay) costDisplay.textContent = upgrade.cost;
 
+    const buyBtn = card.querySelector(".upgrade-action-btn");
+    if (buyBtn) {
+        buyBtn.setAttribute("aria-label", `Buy ${upgrade.title} for ${upgrade.cost}`);
+    }
+
     return card;
 }
 
