@@ -7,9 +7,17 @@ export class SettingsModal {
   show() {
     this.createDOM();
     this.overlay.classList.remove("hidden");
+    this._escapeListener = (e) => {
+      if (e.key === "Escape") this.hide();
+    };
+    document.addEventListener("keydown", this._escapeListener);
   }
   hide() {
     if (this.overlay) {
+      if (this._escapeListener) {
+        document.removeEventListener("keydown", this._escapeListener);
+        this._escapeListener = null;
+      }
       if (window.game && window.game.audio) {
         window.game.audio.stopTestSound();
         window.game.audio.stopWarningLoop();
@@ -56,32 +64,37 @@ export class SettingsModal {
 </label>
 <div class="volume-setting">
 <label for="setting-volume-master" class="volume-label">Master Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-master" min="0" max="1" step="0.01" value="${masterVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-master" min="0" max="1" step="0.01" value="${masterVol}" style="flex: 1;">
+<span id="setting-volume-master-val" style="min-width: 3em; text-align: right;">${Math.round(masterVol * 100)}%</span>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-effects" class="volume-label">Effects Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}" style="flex: 1;">
+<span id="setting-volume-effects-val" style="min-width: 3em; text-align: right;">${Math.round(effectsVol * 100)}%</span>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-alerts" class="volume-label">Alerts Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}" style="flex: 1;">
+<span id="setting-volume-alerts-val" style="min-width: 3em; text-align: right;">${Math.round(alertsVol * 100)}%</span>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-system" class="volume-label">System Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}" style="flex: 1;">
+<span id="setting-volume-system-val" style="min-width: 3em; text-align: right;">${Math.round(systemVol * 100)}%</span>
 </div>
 </div>
 <div class="volume-setting">
 <label for="setting-volume-ambience" class="volume-label">Background Volume</label>
-<div class="volume-control">
-<input type="range" id="setting-volume-ambience" min="0" max="1" step="0.01" value="${ambienceVol}">
+<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
+<input type="range" id="setting-volume-ambience" min="0" max="1" step="0.01" value="${ambienceVol}" style="flex: 1;">
+<span id="setting-volume-ambience-val" style="min-width: 3em; text-align: right;">${Math.round(ambienceVol * 100)}%</span>
 </div>
 </div>
 </div>
@@ -174,9 +187,11 @@ export class SettingsModal {
     }
 
     const masterVolSlider = this.overlay.querySelector("#setting-volume-master");
+    const masterVolVal = this.overlay.querySelector("#setting-volume-master-val");
     if (masterVolSlider) {
       masterVolSlider.addEventListener("input", (e) => {
         const value = parseFloat(e.target.value);
+        if (masterVolVal) masterVolVal.textContent = `${Math.round(value * 100)}%`;
         localStorage.setItem("reactor_volume_master", value.toString());
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("master", value);
@@ -185,9 +200,11 @@ export class SettingsModal {
     }
 
     const effectsVolSlider = this.overlay.querySelector("#setting-volume-effects");
+    const effectsVolVal = this.overlay.querySelector("#setting-volume-effects-val");
     if (effectsVolSlider) {
       effectsVolSlider.addEventListener("input", (e) => {
         const value = parseFloat(e.target.value);
+        if (effectsVolVal) effectsVolVal.textContent = `${Math.round(value * 100)}%`;
         localStorage.setItem("reactor_volume_effects", value.toString());
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("effects", value);
@@ -196,9 +213,11 @@ export class SettingsModal {
     }
 
     const alertsVolSlider = this.overlay.querySelector("#setting-volume-alerts");
+    const alertsVolVal = this.overlay.querySelector("#setting-volume-alerts-val");
     if (alertsVolSlider) {
       alertsVolSlider.addEventListener("input", (e) => {
         const value = parseFloat(e.target.value);
+        if (alertsVolVal) alertsVolVal.textContent = `${Math.round(value * 100)}%`;
         localStorage.setItem("reactor_volume_alerts", value.toString());
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("alerts", value);
@@ -207,9 +226,11 @@ export class SettingsModal {
     }
 
     const systemVolSlider = this.overlay.querySelector("#setting-volume-system");
+    const systemVolVal = this.overlay.querySelector("#setting-volume-system-val");
     if (systemVolSlider) {
       systemVolSlider.addEventListener("input", (e) => {
         const value = parseFloat(e.target.value);
+        if (systemVolVal) systemVolVal.textContent = `${Math.round(value * 100)}%`;
         localStorage.setItem("reactor_volume_system", value.toString());
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("system", value);
@@ -218,9 +239,11 @@ export class SettingsModal {
     }
 
     const ambienceVolSlider = this.overlay.querySelector("#setting-volume-ambience");
+    const ambienceVolVal = this.overlay.querySelector("#setting-volume-ambience-val");
     if (ambienceVolSlider) {
       ambienceVolSlider.addEventListener("input", (e) => {
         const value = parseFloat(e.target.value);
+        if (ambienceVolVal) ambienceVolVal.textContent = `${Math.round(value * 100)}%`;
         localStorage.setItem("reactor_volume_ambience", value.toString());
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("ambience", value);
