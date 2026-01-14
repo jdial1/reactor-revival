@@ -13,7 +13,7 @@
       <button data-page="experimental_upgrades_section">Research</button>
     </li>
     <li>
-      <button data-page="leaderboard_section" title="Leaderboard">🏆</button>
+      <button data-page="leaderboard_section" title="Leaderboard" aria-label="Leaderboard">🏆</button>
     </li>
   </ul>
 
@@ -51,16 +51,16 @@
   <!-- Right Group: System Controls -->
   <ul class="nav-group-right">
     <li>
-      <button id="user_account_btn" title="Account">👤</button>
+      <button id="user_account_btn" title="Account" aria-label="User Account">👤</button>
     </li>
     <li>
-      <button id="fullscreen_toggle" title="Toggle Fullscreen">⛶</button>
+      <button id="fullscreen_toggle" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">⛶</button>
     </li>
     <li>
-      <button id="settings_btn" title="Settings">⚙️</button>
+      <button id="settings_btn" title="Settings" aria-label="Settings">⚙️</button>
     </li>
     <li>
-      <button id="splash_close_btn" title="Exit to Title">✖</button>
+      <button id="splash_close_btn" title="Exit to Title" aria-label="Exit to Title">✖</button>
     </li>
   </ul>
 </nav>
@@ -77,6 +77,7 @@
           id="tab_power"
           data-tab="power"
           title="Power Creation"
+          aria-label="Power Creation"
         >
           <img src="img/ui/icons/icon_power.png" alt="Power" />
         </button>
@@ -85,6 +86,7 @@
           id="tab_heat"
           data-tab="heat"
           title="Heat Management"
+          aria-label="Heat Management"
         >
           <img src="img/ui/icons/icon_heat.png" alt="Heat" />
         </button>
@@ -281,7 +283,7 @@
   <div class="modal-content">
     <div class="modal-header">
       <h3 id="reactor_copy_paste_modal_title">Reactor Layout</h3>
-      <button id="reactor_copy_paste_close_btn" title="Close">×</button>
+      <button id="reactor_copy_paste_close_btn" title="Close" aria-label="Close Modal">×</button>
     </div>
     <textarea id="reactor_copy_paste_text" style="width:100%;min-height:80px;" placeholder="Paste reactor layout data here..."></textarea>
     <div id="reactor_copy_paste_cost"></div>
@@ -394,7 +396,7 @@
         </button>
       </li>
       <li>
-        <button data-page="leaderboard_section" class="secondary" title="Leaderboard">🏆</button>
+        <button data-page="leaderboard_section" class="secondary" title="Leaderboard" aria-label="Leaderboard">🏆</button>
       </li>
     </ul>
   </nav>
