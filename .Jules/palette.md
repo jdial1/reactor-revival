@@ -1,3 +1,3 @@
-## 2024-05-22 - Accessible Icon-Only Buttons
-**Learning:** This codebase relies heavily on icon-only buttons for navigation and tools. While `title` attributes were present, they are not sufficient for full accessibility. Adding `aria-label` provides a reliable accessible name for screen readers.
-**Action:** When creating new buttons with icons, always include an `aria-label` that describes the action, especially if the button contains no visible text.
+## 2024-05-24 - Accessibility for Complex Interactives
+**Learning:** For interactive elements like "part selection" buttons that convey multiple pieces of information (identity, cost, status), a simple `aria-label` with just the name is insufficient.
+**Action:** Include critical decision-making information (like cost) directly in the `aria-label` so screen reader users don't have to navigate into the element or guess. E.g., "Uranium Cell, Cost: 100".

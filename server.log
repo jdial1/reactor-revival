@@ -4,25 +4,3 @@
 
 [32mServing "public" at http://127.0.0.1:8080[39m
 [36mReady for changes[39m
-[0mGET /pages/img/ui/icons/icon_vent.png [33m404[0m 3.214 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_power.png [33m404[0m 3.850 ms - 172[0m
-[0mGET /pages/img/ui/icons/icon_heat.png [33m404[0m 3.580 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_time.png [33m404[0m 4.343 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_cash.png [33m404[0m 3.279 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_cash_outline.svg [33m404[0m 3.334 ms - 179[0m
-[0mGET /pages/img/ui/nav/nav_pause.png [33m404[0m 2.778 ms - 169[0m
-[0mGET /pages/img/ui/nav/nav_play.png [33m404[0m 1.966 ms - 168[0m
-[0mGET /pages/img/ui/icons/icon_power.png [33m404[0m 1.792 ms - 172[0m
-[0mGET /pages/img/ui/icons/icon_vent.png [33m404[0m 0.683 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_power.png [33m404[0m 0.569 ms - 172[0m
-[0mGET /pages/img/ui/icons/icon_heat.png [33m404[0m 3.886 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_time.png [33m404[0m 2.181 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_cash.png [33m404[0m 4.241 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_cash_outline.svg [33m404[0m 3.880 ms - 179[0m
-[0mGET /pages/img/ui/nav/nav_pause.png [33m404[0m 1.601 ms - 169[0m
-[0mGET /pages/img/ui/nav/nav_play.png [33m404[0m 1.288 ms - 168[0m
-[0mGET /pages/img/ui/icons/icon_deselect.svg [33m404[0m 1.011 ms - 175[0m
-[0mGET /pages/img/ui/icons/icon_dropper.svg [33m404[0m 1.023 ms - 174[0m
-[0mGET /pages/img/ui/icons/icon_copy.svg [33m404[0m 1.156 ms - 171[0m
-[0mGET /pages/img/ui/icons/icon_paste.svg [33m404[0m 1.258 ms - 172[0m
-[0mGET /pages/img/ui/icons/icon_cash_outline.svg [33m404[0m 0.532 ms - 179[0m

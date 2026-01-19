@@ -482,7 +482,8 @@ export class Part {
       this.$el.classList.add(`category_${this.category}`);
       this.$el.id = `part_btn_${this.id}`;
       this.$el.title = this.title;
-      this.$el.setAttribute("aria-label", this.title || "Part button");
+      const costText = this.erequires ? `${fmt(this.cost)} EP` : `${fmt(this.cost)}`;
+      this.$el.setAttribute("aria-label", `${this.title || "Part button"}, Cost: ${costText}`);
 
       const imageDiv = document.createElement("div");
       imageDiv.className = "image";
@@ -550,7 +551,8 @@ export class Part {
     this.$el.classList.add(`category_${this.category}`);
     this.$el.id = `part_btn_${this.id}`;
     this.$el.title = this.title;
-    this.$el.setAttribute("aria-label", this.title || "Part button");
+    const costText = this.erequires ? `${fmt(this.cost)} EP` : `${fmt(this.cost)}`;
+    this.$el.setAttribute("aria-label", `${this.title || "Part button"}, Cost: ${costText}`);
 
     const imageDiv = this.$el.querySelector(".image");
     if (imageDiv) {
