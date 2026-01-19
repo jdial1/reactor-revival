@@ -1,3 +1,3 @@
-## 2026-01-17 - Icon-Only Buttons Accessibility
-**Learning:** Icon-only buttons (like settings, account, close) are a common accessibility gap. Adding `aria-label` provides necessary context for screen readers that would otherwise just announce "button" or the emoji/icon name if available.
-**Action:** When creating or modifying icon-only buttons, always ensure a descriptive `aria-label` is present, even if a `title` attribute exists. The `title` helps mouse users (tooltip), while `aria-label` helps screen reader users.
+## 2024-05-22 - Icon-Only Buttons
+**Learning:** Icon-only buttons using `title` attributes alone are insufficient for accessibility. Screen readers may not consistently announce `title` text.
+**Action:** Always include `aria-label` for icon-only buttons to ensure a consistent and accessible experience.
