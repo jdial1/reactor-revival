@@ -70,31 +70,63 @@ export class SettingsModal {
 </div>
 </div>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-effects" class="volume-label">Effects Volume</label>
+<<<<<<< HEAD
 <div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
 <input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}" style="flex: 1;">
 <span id="setting-volume-effects-val" style="min-width: 3em; text-align: right;">${Math.round(effectsVol * 100)}%</span>
+=======
+<span id="setting-volume-effects-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(effectsVol * 100)}%</span>
+</div>
+<div class="volume-control">
+<input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}">
+>>>>>>> origin/palette-volume-feedback-12251646824564655598
 </div>
 </div>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-alerts" class="volume-label">Alerts Volume</label>
+<<<<<<< HEAD
 <div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
 <input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}" style="flex: 1;">
 <span id="setting-volume-alerts-val" style="min-width: 3em; text-align: right;">${Math.round(alertsVol * 100)}%</span>
+=======
+<span id="setting-volume-alerts-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(alertsVol * 100)}%</span>
+</div>
+<div class="volume-control">
+<input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}">
+>>>>>>> origin/palette-volume-feedback-12251646824564655598
 </div>
 </div>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-system" class="volume-label">System Volume</label>
+<<<<<<< HEAD
 <div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
 <input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}" style="flex: 1;">
 <span id="setting-volume-system-val" style="min-width: 3em; text-align: right;">${Math.round(systemVol * 100)}%</span>
+=======
+<span id="setting-volume-system-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(systemVol * 100)}%</span>
+</div>
+<div class="volume-control">
+<input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}">
+>>>>>>> origin/palette-volume-feedback-12251646824564655598
 </div>
 </div>
 <div class="volume-setting">
+<div style="display: flex; justify-content: space-between;">
 <label for="setting-volume-ambience" class="volume-label">Background Volume</label>
+<<<<<<< HEAD
 <div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
 <input type="range" id="setting-volume-ambience" min="0" max="1" step="0.01" value="${ambienceVol}" style="flex: 1;">
 <span id="setting-volume-ambience-val" style="min-width: 3em; text-align: right;">${Math.round(ambienceVol * 100)}%</span>
+=======
+<span id="setting-volume-ambience-val" class="volume-value" style="font-size: 0.8rem; opacity: 0.9;">${Math.round(ambienceVol * 100)}%</span>
+</div>
+<div class="volume-control">
+<input type="range" id="setting-volume-ambience" min="0" max="1" step="0.01" value="${ambienceVol}">
+>>>>>>> origin/palette-volume-feedback-12251646824564655598
 </div>
 </div>
 </div>
@@ -203,7 +235,6 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("master", value);
         }
-        updateVolumeDisplay(e.target);
       });
     }
 
@@ -217,7 +248,6 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("effects", value);
         }
-        updateVolumeDisplay(e.target);
       });
     }
 
@@ -231,7 +261,6 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("alerts", value);
         }
-        updateVolumeDisplay(e.target);
       });
     }
 
@@ -245,7 +274,6 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("system", value);
         }
-        updateVolumeDisplay(e.target);
       });
     }
 
@@ -259,7 +287,6 @@ export class SettingsModal {
         if (window.game && window.game.audio) {
           window.game.audio.setVolume("ambience", value);
         }
-        updateVolumeDisplay(e.target);
       });
     }
 
