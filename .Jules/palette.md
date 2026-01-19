@@ -1,3 +1,3 @@
-## 2024-05-23 - [Accessibility]
-**Learning:** Icon-only buttons MUST have `aria-label` attributes for screen readers. Native tooltips (`title` attribute) are not sufficient for accessibility and are often not read by screen readers or are difficult to trigger.
-**Action:** When creating icon-only buttons, always include an `aria-label` describing the action.
+## 2026-01-15 - Upgrade Button Accessibility
+**Learning:** Dynamic components like `Upgrade` often manually manage their DOM. The "Buy" buttons in upgrade cards lacked `aria-label`, making them inaccessible to screen readers (announcing only "Buy $Cost").
+**Action:** When working with dynamic component classes (Upgrade, Part), always check `createElement` and update methods (like `updateDisplayCost`) to ensure interactive elements have descriptive `aria-label` attributes.

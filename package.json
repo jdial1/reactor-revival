@@ -36,7 +36,6 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@microsoft/eslint-formatter-sarif": "^3.1.0",
-    "@stylistic/stylelint-plugin": "^5.0.0",
     "@zip.js/zip.js": "^2.7.62",
     "cross-env": "^7.0.3",
     "eslint": "^9.32.0",
@@ -73,7 +72,7 @@
     "stylelint-stylus": "^1.0.0",
     "stylelint-use-nesting": "^6.0.0",
     "stylelint-value-no-unknown-custom-properties": "^6.0.1",
-    "vite": "^7.2.7",
+    "vite": "^7.3.1",
     "vitest": "^1.6.1",
     "workbox-cli": "^7.3.0"
   }
