@@ -85,7 +85,11 @@ export class Upgrade {
       const buyBtn = this.$el.querySelector(".upgrade-action-btn");
       if (buyBtn) {
         buyBtn.disabled = !this.affordable || this.level >= this.max_level;
-        buyBtn.setAttribute("aria-label", `Buy ${this.title} for ${this.display_cost}`);
+        if (this.level >= this.max_level) {
+          buyBtn.setAttribute("aria-label", `${this.title} is maxed out`);
+        } else {
+          buyBtn.setAttribute("aria-label", `Buy ${this.title} for ${this.display_cost}`);
+        }
       }
 
       const descEl = this.$el.querySelector(".upgrade-description");

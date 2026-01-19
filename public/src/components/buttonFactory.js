@@ -212,7 +212,11 @@ export function createUpgradeButton(upgrade) {
 
     const buyBtn = card.querySelector(".upgrade-action-btn");
     if (buyBtn) {
+      if (isMaxed) {
+        buyBtn.setAttribute("aria-label", `${upgrade.title} is maxed out`);
+      } else {
         buyBtn.setAttribute("aria-label", `Buy ${upgrade.title} for ${upgrade.cost}`);
+      }
     }
 
     return card;
@@ -241,6 +245,10 @@ export function createPartButton(part) {
 export function createBuyButton(upgrade, onClick) {
     const btn = window.templateLoader.cloneTemplateElement("buy-btn-template");
     if (!btn) return null;
+
+    if (upgrade.title) {
+        btn.setAttribute("aria-label", `Buy ${upgrade.title}`);
+    }
 
     btn.disabled = !upgrade.affordable;
 
