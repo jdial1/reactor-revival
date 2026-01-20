@@ -246,13 +246,14 @@ button:active {
   font-family: "Press Start 2P", cursive, monospace !important;
   font-size: 1rem;
   text-shadow: var(--text-shadow);
-  transition: none;
+  transition: transform 0.1s ease-out, filter 0.1s ease-out, border-color 0.1s ease-out, color 0.1s ease-out;
 }
 
 .splash-btn:hover {
   border-color: white rgb(100 100 100) rgb(100 100 100) white;
   color: rgb(255 255 160);
   filter: brightness(1.1);
+  transform: translateY(-2px);
 }
 
 .splash-btn:active {
@@ -3001,12 +3002,14 @@ footer#bottom_nav button.active,
   text-decoration: none;
   text-shadow: 2px 2px 0 black;
   text-transform: uppercase;
-  transition: none;
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out, background-color 0.1s ease-out;
 }
 
 .pixel-btn:hover:not(:disabled) {
   background-color: rgb(140 140 140);
   color: rgb(255 255 160);
+  transform: translateY(-2px);
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 40%);
 }
 
 .pixel-btn:active:not(:disabled) {
