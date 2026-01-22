@@ -600,166 +600,101 @@ export class Engine {
         this.active_exchangers = [];
       }
 
-      // Filter valves once and store the result - optimize with early exit
-      const valves = [];
-      for (const tile of this.active_exchangers) {
-        if (tile.part?.category === 'valve') {
-          valves.push(tile);
-        }
-      }
+      // Process valves with zero-allocation loops
+      for (const valve of this.active_exchangers) {
+        if (!valve.part || valve.part.category !== 'valve') continue;
 
-      // Process valves efficiently with minimal logging
-      for (const valve of valves) {
         const valvePart = valve.part;
-        const neighbors = valve.containmentNeighborTiles.filter(t => t.part);
+        const neighborsAll = valve.containmentNeighborTiles;
+        const neighbors = [];
+        for(let nIdx = 0; nIdx < neighborsAll.length; nIdx++) {
+            if(neighborsAll[nIdx].part) neighbors.push(neighborsAll[nIdx]);
+        }
 
-        if (neighbors.length < 2) continue; // Need at least 2 neighbors to transfer
+        if (neighbors.length < 2) continue;
 
-        // Determine input and output neighbors based on valve type and orientation
         let inputNeighbors = [];
         let outputNeighbors = [];
 
         if (valvePart.type === 'overflow_valve') {
-          // Overflow valve: only works if input side neighbor is above 80% containment
-          const orientation = this._getValveOrientation(valvePart.id);
-          const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
-
-          if (inputNeighbor && outputNeighbor) {
-            // Validation: valves can't pull from other valves unless input connects to output
-            if (inputNeighbor.part?.category === 'valve') {
-              const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
-              const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
-
-              // Only allow if this valve's input connects to another valve's output
-              if (inputValveOutput !== valve) continue;
+            const orientation = this._getValveOrientation(valvePart.id);
+            const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
+            if (inputNeighbor && outputNeighbor) {
+                if (inputNeighbor.part?.category === 'valve') {
+                    const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
+                    const inputValveNeighbors = this._getValidNeighbors(inputNeighbor, valve);
+                    const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
+                    if (inputValveOutput !== valve) continue;
+                }
+                const inputHeat = inputNeighbor.heat_contained || 0;
+                const inputContainment = inputNeighbor.part.containment || 1;
+                if ((inputHeat / inputContainment) >= 0.8) {
+                    inputNeighbors.push(inputNeighbor);
+                    outputNeighbors.push(outputNeighbor);
+                }
             }
-
-            const inputHeat = inputNeighbor.heat_contained || 0;
-            const inputContainment = inputNeighbor.part.containment || 1;
-            const inputRatio = inputHeat / inputContainment;
-
-            if (inputRatio >= 0.8) {
-              inputNeighbors.push(inputNeighbor);
-              outputNeighbors.push(outputNeighbor);
-            }
-          }
         } else if (valvePart.type === 'topup_valve') {
-          // Top-up valve: only works if output side neighbor is below 20% containment
-          const orientation = this._getValveOrientation(valvePart.id);
-          const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
-
-          if (inputNeighbor && outputNeighbor) {
-            // Validation: valves can't pull from other valves unless input connects to output
-            if (inputNeighbor.part?.category === 'valve') {
-              const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
-              const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
-
-              // Only allow if this valve's input connects to another valve's output
-              if (inputValveOutput !== valve) continue;
+            const orientation = this._getValveOrientation(valvePart.id);
+            const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
+            if (inputNeighbor && outputNeighbor) {
+                if (inputNeighbor.part?.category === 'valve') {
+                    const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
+                    const inputValveNeighbors = this._getValidNeighbors(inputNeighbor, valve);
+                    const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
+                    if (inputValveOutput !== valve) continue;
+                }
+                const outputHeat = outputNeighbor.heat_contained || 0;
+                const outputContainment = outputNeighbor.part.containment || 1;
+                if ((outputHeat / outputContainment) <= 0.2) {
+                    inputNeighbors.push(inputNeighbor);
+                    outputNeighbors.push(outputNeighbor);
+                }
             }
-
-            const outputHeat = outputNeighbor.heat_contained || 0;
-            const outputContainment = outputNeighbor.part.containment || 1;
-            const outputRatio = outputHeat / outputContainment;
-
-            if (outputRatio <= 0.2) {
-              inputNeighbors.push(inputNeighbor);
-              outputNeighbors.push(outputNeighbor);
-            }
-          }
         } else if (valvePart.type === 'check_valve') {
-          // Check valve: one-way transfer from input to output
-          const orientation = this._getValveOrientation(valvePart.id);
-          const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
-
-          if (inputNeighbor && outputNeighbor) {
-            // Validation: valves can't pull from other valves unless input connects to output
-            if (inputNeighbor.part?.category === 'valve') {
-              const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
-              const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
-
-              // Only allow if this valve's input connects to another valve's output
-              if (inputValveOutput !== valve) continue;
+            const orientation = this._getValveOrientation(valvePart.id);
+            const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
+            if (inputNeighbor && outputNeighbor) {
+                if (inputNeighbor.part?.category === 'valve') {
+                    const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
+                    const inputValveNeighbors = this._getValidNeighbors(inputNeighbor, valve);
+                    const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
+                    if (inputValveOutput !== valve) continue;
+                }
+                inputNeighbors.push(inputNeighbor);
+                outputNeighbors.push(outputNeighbor);
             }
-
-            // Check valve is always active (no threshold conditions)
-            inputNeighbors.push(inputNeighbor);
-            outputNeighbors.push(outputNeighbor);
-          }
         }
 
-        // Process heat transfer for each input-output pair
-        // Only transfer if we have valid input and output neighbors
-        // Valves should never store heat - they only transfer when both input and output are available
         if (inputNeighbors.length > 0 && outputNeighbors.length > 0) {
-          if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-            console.log(`[ENGINE] Valve ${valvePart.id} has ${inputNeighbors.length} inputs and ${outputNeighbors.length} outputs`);
-          }
-
-          // Add valve to active_vessels only when it has valid input/output neighbors
-          // This prevents idle valves from being processed by explosion checking
-          if (!this.active_vessels.includes(valve)) {
-            this.active_vessels.push(valve);
-          }
-
-          for (const input of inputNeighbors) {
-            for (const output of outputNeighbors) {
-              const inputHeat = input.heat_contained || 0;
-              let maxTransfer = valve.getEffectiveTransferValue() * multiplier;
-
-              if (maxTransfer > 0) {
-                if (valvePart.type === 'topup_valve') {
-                  const outCap = output.part.containment || 1;
-                  maxTransfer = Math.min(maxTransfer, outCap * 0.2);
-                }
-
-                const outputCap = output.part.containment || 0;
-                const outputHeat = output.heat_contained || 0;
-                const outputSpace = Math.max(0, outputCap - outputHeat);
-
-                const transferAmount = Math.min(maxTransfer, inputHeat, outputSpace);
-
-                if (transferAmount > 0) {
-                  if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-                    console.log(`[ENGINE] Valve ${valvePart.id} transferring ${transferAmount} heat from input to output`);
-                  }
-
-                  input.heat_contained -= transferAmount;
-                  output.heat_contained += transferAmount;
-
-                  // Note: Valve neighbors are now pre-populated in _updateValveNeighborCache()
-                  // so we don't need to add them here during heat transfer
-                  // DO NOT mark output as processed - it needs to run its own heat transfer logic
-
-                  if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-                    console.log(`[ENGINE] Valve ${valvePart.id} transfer complete: input heat now ${input.heat_contained}, output heat now ${output.heat_contained}`);
-                  }
-
-                  // Add visual effect - DISABLED for performance
-                  const cnt = transferAmount >= 50 ? 3 : transferAmount >= 15 ? 2 : 1;
-                  for (let i = 0; i < cnt; i++) {
-                    // visualEvents[visualEventIndex++] = {
-                    //   type: 'flow',
-                    //   icon: 'heat',
-                    //   from: [input.row, input.col],
-                    //   to: [output.row, output.col],
-                    //   amount: transferAmount
-                    // };
-                  }
-                }
-              }
+            if (!this.active_vessels.includes(valve)) {
+                this.active_vessels.push(valve);
             }
-          }
-        } else {
-          // Valve has no valid input/output pairs - remove it from active_vessels if it was there
-          if (this.active_vessels.includes(valve)) {
-            this.active_vessels = this.active_vessels.filter(v => v !== valve);
-          }
-        }
 
+            for (const input of inputNeighbors) {
+                for (const output of outputNeighbors) {
+                    const inputHeat = input.heat_contained || 0;
+                    let maxTransfer = valve.getEffectiveTransferValue() * multiplier;
+
+                    if (maxTransfer > 0) {
+                        if (valvePart.type === 'topup_valve') {
+                            maxTransfer = Math.min(maxTransfer, (output.part.containment || 1) * 0.2);
+                        }
+                        const outputSpace = Math.max(0, (output.part.containment || 0) - (output.heat_contained || 0));
+                        const transferAmount = Math.min(maxTransfer, inputHeat, outputSpace);
+
+                        if (transferAmount > 0) {
+                            input.heat_contained -= transferAmount;
+                            output.heat_contained += transferAmount;
+                        }
+                    }
+                }
+            }
+        } else {
+            const index = this.active_vessels.indexOf(valve);
+            if (index > -1) {
+                this.active_vessels.splice(index, 1);
+            }
+        }
         valve.heat_contained = 0;
       }
     }
@@ -930,7 +865,14 @@ export class Engine {
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
        
-       const neighbors = tile.containmentNeighborTiles.filter(t => t.part && t.part.category !== 'valve');
+       const neighborsAll = tile.containmentNeighborTiles;
+       const neighbors = [];
+       for(let nIdx = 0; nIdx < neighborsAll.length; nIdx++) {
+            const t = neighborsAll[nIdx];
+            if (t.part && t.part.category !== 'valve') {
+                neighbors.push(t);
+            }
+       }
        const transferCap = tile.getEffectiveTransferValue() * multiplier;
        let outlet_transfer_heat = Math.min(transferCap, reactor.current_heat);
        
@@ -1375,6 +1317,23 @@ export class Engine {
       // If there's no element, just deplete it immediately
       this.handleComponentDepletion(tile);
     }
+  }
+
+  /**
+   * Get valid neighbors for a valve, excluding the parent valve itself.
+   * @param {Tile} v - The tile to get neighbors for.
+   * @param {Tile} parentValve - The parent valve tile to exclude.
+   * @returns {Array} Array of valid neighbor tiles.
+   */
+  _getValidNeighbors(v, parentValve) {
+    const all = v.containmentNeighborTiles;
+    const valid = [];
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].part && all[i] !== parentValve) {
+        valid.push(all[i]);
+      }
+    }
+    return valid;
   }
 
   /**
