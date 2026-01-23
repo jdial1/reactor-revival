@@ -611,7 +611,11 @@ export class Engine {
       // Process valves efficiently with minimal logging
       for (const valve of valves) {
         const valvePart = valve.part;
-        const neighbors = valve.containmentNeighborTiles.filter(t => t.part);
+
+        const neighbors = [];
+        for(const t of valve.containmentNeighborTiles) {
+            if(t.part) neighbors.push(t);
+        }
 
         if (neighbors.length < 2) continue; // Need at least 2 neighbors to transfer
 
@@ -628,7 +632,10 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
+              const inputValveNeighbors = [];
+              for(const t of inputNeighbor.containmentNeighborTiles){
+                if(t.part && t !== valve) inputValveNeighbors.push(t);
+              }
               const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
 
               // Only allow if this valve's input connects to another valve's output
@@ -653,7 +660,10 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
+              const inputValveNeighbors = [];
+              for(const t of inputNeighbor.containmentNeighborTiles){
+                if(t.part && t !== valve) inputValveNeighbors.push(t);
+              }
               const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
 
               // Only allow if this valve's input connects to another valve's output
@@ -678,7 +688,10 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
+              const inputValveNeighbors = [];
+              for(const t of inputNeighbor.containmentNeighborTiles){
+                if(t.part && t !== valve) inputValveNeighbors.push(t);
+              }
               const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
 
               // Only allow if this valve's input connects to another valve's output
@@ -755,9 +768,13 @@ export class Engine {
           }
         } else {
           // Valve has no valid input/output pairs - remove it from active_vessels if it was there
-          if (this.active_vessels.includes(valve)) {
-            this.active_vessels = this.active_vessels.filter(v => v !== valve);
+          const new_active_vessels = [];
+          for(const v of this.active_vessels) {
+            if (v !== valve) {
+              new_active_vessels.push(v);
+            }
           }
+          this.active_vessels = new_active_vessels;
         }
 
         valve.heat_contained = 0;
@@ -930,7 +947,10 @@ export class Engine {
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
        
-       const neighbors = tile.containmentNeighborTiles.filter(t => t.part && t.part.category !== 'valve');
+       const neighbors = [];
+       for(const t of tile.containmentNeighborTiles) {
+           if(t.part && t.part.category !== 'valve') neighbors.push(t);
+       }
        const transferCap = tile.getEffectiveTransferValue() * multiplier;
        let outlet_transfer_heat = Math.min(transferCap, reactor.current_heat);
        
