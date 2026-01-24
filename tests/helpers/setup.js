@@ -359,13 +359,34 @@ export async function setupGameLogicOnly() {
  */
 export async function setupGameWithDOM() {
   const indexHtmlPath = path.resolve(__dirname, '../../public/index.html');
-  const indexHtml = fs.readFileSync(indexHtmlPath, 'utf-8');
+  let indexHtml = fs.readFileSync(indexHtmlPath, 'utf-8');
+  
+  // Remove script tags to prevent JSDOM from trying to load external scripts
+  indexHtml = indexHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+
+  // Custom resource loader that blocks script requests to prevent memory issues
+  const customResourceLoader = new (class {
+    fetch(url, options) {
+      const urlStr = url.toString();
+      // Block all script/library requests
+      if (urlStr.includes('/lib/') || urlStr.endsWith('.min.js') || (urlStr.endsWith('.js') && !urlStr.includes('/src/'))) {
+        return Promise.resolve(Buffer.from(''));
+      }
+      // For other resources, try to serve from filesystem
+      const cleanPath = urlStr.replace(/^http:\/\/localhost:8080\//, '').split('?')[0];
+      const filePath = path.resolve(__dirname, '../../public', cleanPath);
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        return Promise.resolve(fs.readFileSync(filePath));
+      }
+      return Promise.reject(new Error(`Resource not found: ${urlStr}`));
+    }
+  })();
 
   domInstance = new JSDOM(indexHtml, {
     url: 'http://localhost:8080/',
     pretendToBeVisual: true,
-    resources: 'usable',
-    runScripts: 'dangerously',
+    resources: customResourceLoader,
+    runScripts: 'outside-only',
   });
 
   // Assign JSDOM globals
@@ -441,18 +462,34 @@ export async function setupGameWithDOM() {
     close: vi.fn().mockResolvedValue(),
   }));
   
-  // Mock fetch to serve local files.
+  // Mock fetch to serve local files and prevent script loading
   global.fetch = window.fetch = async (url) => {
     const urlStr = url.toString();
     if (urlStr.includes('/api/leaderboard')) {
       return { ok: true, json: () => Promise.resolve({ success: true, data: [] }) };
     }
+    
+    // Block external script/library requests to prevent memory issues and connection errors
+    if (urlStr.includes('/lib/') || urlStr.endsWith('.min.js') || (urlStr.endsWith('.js') && !urlStr.includes('/src/'))) {
+      return { 
+        ok: true, 
+        text: () => Promise.resolve(''), 
+        json: () => Promise.resolve({}),
+        headers: new Map([['content-type', 'application/javascript']]) 
+      };
+    }
+    
     const cleanPath = urlStr.replace(/^http:\/\/localhost:8080\//, '').split('?')[0];
     const filePath = path.resolve(__dirname, '../../public', cleanPath);
-    if (fs.existsSync(filePath)) {
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const content = fs.readFileSync(filePath, 'utf-8');
       const contentType = path.extname(filePath) === '.json' ? 'application/json' : 'text/plain';
-      return { ok: true, text: () => Promise.resolve(content), json: () => Promise.resolve(JSON.parse(content)), headers: new Map([['content-type', contentType]]) };
+      return { 
+        ok: true, 
+        text: () => Promise.resolve(content), 
+        json: () => Promise.resolve(JSON.parse(content)), 
+        headers: new Map([['content-type', contentType]]) 
+      };
     }
     return { ok: false, status: 404 };
   };
@@ -559,7 +596,14 @@ export function cleanupGame() {
     if (globalGameInstance.audio._warningLoopInterval) clearInterval(globalGameInstance.audio._warningLoopInterval);
     if (globalGameInstance.audio._geigerInterval) clearTimeout(globalGameInstance.audio._geigerInterval);
     if (globalGameInstance.audio.context && typeof globalGameInstance.audio.context.close === 'function') {
-      globalGameInstance.audio.context.close().catch(() => {});
+      try {
+        const closeResult = globalGameInstance.audio.context.close();
+        if (closeResult && typeof closeResult.catch === 'function') {
+          closeResult.catch(() => {});
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
   }
 
