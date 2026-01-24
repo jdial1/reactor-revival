@@ -32,6 +32,8 @@ jobs:
       # public/src is the single source of truth; no copy step needed
 
       - name: Run test suite
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
         # Exclude UI tests and specific core tests that fail on GitHub Actions due to JSDOM environment differences
         # The excluded tests (clipboard, pasteModal, meltdown) work locally but fail on GitHub Actions
         # because the url-parse library tries to access window.location._location before our setup code runs

@@ -1,5 +1,7 @@
 import { defineConfig } from "vite";
 
+const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+
 export default defineConfig({
   test: {
     globals: true,
@@ -18,12 +20,12 @@ export default defineConfig({
         isolate: true,
         useAtomics: true,
         minThreads: 1,
-        maxThreads: 4,
+        maxThreads: isCI ? 2 : 4,
       },
     },
-    teardownTimeout: 10000,
-    testTimeout: 10000,
-    hookTimeout: 10000,
+    teardownTimeout: isCI ? 30000 : 10000,
+    testTimeout: isCI ? 60000 : 10000,
+    hookTimeout: isCI ? 30000 : 10000,
     silent: false,
     forceRerunTriggers: ["**/package.json", "{vitest,vite}.config.*"],
     printConsoleTrace: false,
