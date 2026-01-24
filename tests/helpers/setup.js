@@ -432,8 +432,13 @@ export async function setupGameWithDOM() {
       connect: vi.fn(),
       disconnect: vi.fn(),
     }),
+    createStereoPanner: () => ({
+      pan: { value: 0 },
+      connect: vi.fn(),
+    }),
     suspend: vi.fn().mockResolvedValue(),
     resume: vi.fn().mockResolvedValue(),
+    close: vi.fn().mockResolvedValue(),
   }));
   
   // Mock fetch to serve local files.
@@ -533,7 +538,7 @@ export function cleanupGame() {
   if (globalGameInstance?.engine?.stop) {
     globalGameInstance.engine.stop();
   }
-  
+
   // 2. Stop UI update loops to prevent them from accessing DOM after cleanup
   if (globalGameInstance?.ui?.cleanup) {
     globalGameInstance.ui.cleanup();
@@ -547,20 +552,34 @@ export function cleanupGame() {
       globalGameInstance.ui.update_interface_task = null;
     }
   }
-  
-  // 3. Clear all mocks and spies
+
+  // 3. Clean up Audio to stop any running intervals or contexts
+  if (globalGameInstance?.audio) {
+    if (globalGameInstance.audio._testLoopInterval) clearInterval(globalGameInstance.audio._testLoopInterval);
+    if (globalGameInstance.audio._warningLoopInterval) clearInterval(globalGameInstance.audio._warningLoopInterval);
+    if (globalGameInstance.audio._geigerInterval) clearTimeout(globalGameInstance.audio._geigerInterval);
+    if (globalGameInstance.audio.context && typeof globalGameInstance.audio.context.close === 'function') {
+      globalGameInstance.audio.context.close().catch(() => {});
+    }
+  }
+
+  // 4. Clear all mocks and spies
   vi.clearAllMocks();
   vi.restoreAllMocks();
 
-  // 4. Close the JSDOM window to release its memory
+  // 5. Close the JSDOM window to release its memory
   if (domInstance) {
     domInstance.window.close();
     domInstance = null;
   }
-  
+
+  // 6. Explicitly remove JSDOM globals so mockBrowserGlobals can recreate clean simple mocks
+  delete global.window;
+  delete global.document;
+
   globalGameInstance = null;
   initialGameState = null;
-  
+
   mockBrowserGlobals();
 
   if (global.gc) {
@@ -610,10 +629,10 @@ afterEach(async (context) => {
 
   testLogs.delete(currentTestName);
   currentTestName = null;
-  
+
   cleanupGame();
 
- vi.useRealTimers();
+  vi.useRealTimers();
 
   await new Promise(resolve => setTimeout(resolve, 10));
 });

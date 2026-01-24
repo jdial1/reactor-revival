@@ -15,7 +15,7 @@ export default defineConfig({
     pool: "threads",
     poolOptions: {
       threads: {
-        isolate: false, 
+        isolate: true,
         useAtomics: true,
         minThreads: 1,
         maxThreads: 4,
