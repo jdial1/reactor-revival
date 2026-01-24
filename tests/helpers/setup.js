@@ -20,7 +20,7 @@ import { URL as NodeURL } from 'url';
 import { vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { JSDOM } from 'jsdom';
+import { JSDOM, ResourceLoader } from 'jsdom';
 
 // Helper to create a mock localStorage implementation.
 function createMockLocalStorage() {
@@ -365,7 +365,7 @@ export async function setupGameWithDOM() {
   indexHtml = indexHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
 
   // Custom resource loader that blocks script requests to prevent memory issues
-  const customResourceLoader = new (class {
+  class CustomResourceLoader extends ResourceLoader {
     fetch(url, options) {
       const urlStr = url.toString();
       // Block all script/library requests
@@ -380,12 +380,12 @@ export async function setupGameWithDOM() {
       }
       return Promise.reject(new Error(`Resource not found: ${urlStr}`));
     }
-  })();
+  }
 
   domInstance = new JSDOM(indexHtml, {
     url: 'http://localhost:8080/',
     pretendToBeVisual: true,
-    resources: customResourceLoader,
+    resources: new CustomResourceLoader(),
     runScripts: 'outside-only',
   });
 
