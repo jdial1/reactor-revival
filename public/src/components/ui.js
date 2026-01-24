@@ -876,6 +876,7 @@ export class UI {
         
         this.updateMeltdownState();
         this.updatePauseState();
+        this.updateActiveBuffs();
         
         if (
             this.game?.tooltip_manager?.tooltip_showing &&
@@ -1819,6 +1820,70 @@ export class UI {
         mobileElement.classList.remove('full');
       }
     }
+  }
+
+  updateActiveBuffs() {
+    if (!this.game || !this.game.reactor) return;
+
+    const desktopContainer = document.getElementById('info_bar_buffs_desktop');
+    const mobileContainer = document.getElementById('info_bar_buffs');
+
+    const activeBuffs = [];
+
+    if (this.game.reactor.manual_override_mult > 0 && Date.now() < this.game.reactor.override_end_time) {
+      activeBuffs.push({
+        id: 'manual_override',
+        icon: 'img/ui/nav/nav_play.png',
+        title: 'Manual Override'
+      });
+    }
+
+    if (this.game.reactor.power_to_heat_ratio > 0) {
+      const heatPercent = this.game.reactor.max_heat > 0 
+        ? this.game.reactor.current_heat / this.game.reactor.max_heat 
+        : 0;
+      if (heatPercent > 0.80 && this.game.reactor.current_power > 0) {
+        activeBuffs.push({
+          id: 'electro_thermal_conversion',
+          icon: 'img/parts/capacitors/capacitor_4.png',
+          title: 'Electro-Thermal Conversion'
+        });
+      }
+    }
+
+    if (this.game.reactor.flux_accumulator_level > 0 && this.game.reactor.max_power > 0) {
+      const powerRatio = this.game.reactor.current_power / this.game.reactor.max_power;
+      if (powerRatio >= 0.90) {
+        activeBuffs.push({
+          id: 'flux_accumulators',
+          icon: 'img/parts/capacitors/capacitor_6.png',
+          title: 'Flux Accumulators'
+        });
+      }
+    }
+
+    const updateContainer = (container) => {
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      activeBuffs.forEach(buff => {
+        const buffIcon = document.createElement('div');
+        buffIcon.className = 'buff-icon active';
+        buffIcon.setAttribute('title', buff.title);
+        buffIcon.setAttribute('aria-label', buff.title);
+
+        const img = document.createElement('img');
+        img.src = buff.icon;
+        img.alt = buff.title;
+        buffIcon.appendChild(img);
+
+        container.appendChild(buffIcon);
+      });
+    };
+
+    updateContainer(desktopContainer);
+    updateContainer(mobileContainer);
   }
 
   async init(game) {

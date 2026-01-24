@@ -256,6 +256,7 @@ export class UpgradeSet {
 
       if (upgrade.$el) {
         const isResearch = !!upgrade.base_ecost;
+        const isTickSpeedUpgrade = upgrade.type === "cell_tick_upgrades" || upgrade.actionId === "cell_tick" || (upgrade.classList && upgrade.classList.includes("cell_tick"));
         const shouldHideUnaffordable = isResearch ? hideResearch : hideUpgrades;
         const shouldHideMaxed = isResearch ? hideMaxResearch : hideMaxUpgrades;
         const isMaxed = upgrade.level >= upgrade.max_level;
@@ -275,7 +276,7 @@ export class UpgradeSet {
           }
         }
 
-        const shouldHide = (shouldHideUnaffordable && !isAffordable && !isMaxed) || (shouldHideMaxed && isMaxed);
+        const shouldHide = isTickSpeedUpgrade ? false : ((shouldHideUnaffordable && !isAffordable && !isMaxed) || (shouldHideMaxed && isMaxed));
         if (shouldHide) {
           upgrade.$el.classList.add("hidden");
         } else {

@@ -140,9 +140,9 @@ describe("Grid Scaling Logic (Reshaping)", () => {
         Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
         ui.gridScaler.resize();
         
-        // Mobile: The scaler uses flex-start alignment
+        // Mobile: The scaler uses center alignment
         expect(wrapper.style.display).toBe('flex');
-        expect(wrapper.style.alignItems).toBe('flex-start');
-        expect(wrapper.style.justifyContent).toBe('flex-start');
+        expect(wrapper.style.alignItems).toBe('center');
+        expect(wrapper.style.justifyContent).toBe('center');
     });
 });

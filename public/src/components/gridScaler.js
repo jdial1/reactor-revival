@@ -191,14 +191,9 @@ export class GridScaler {
         if (this.wrapper) {
 
             this.wrapper.style.display = 'flex';
+            this.wrapper.style.alignItems = 'center';
+            this.wrapper.style.justifyContent = 'center';
             
-            if (isMobile) {
-                this.wrapper.style.alignItems = 'flex-start';
-                this.wrapper.style.justifyContent = 'flex-start';
-            } else {
-                this.wrapper.style.alignItems = 'center';
-                this.wrapper.style.justifyContent = 'center';
-            }
 
         }
 
