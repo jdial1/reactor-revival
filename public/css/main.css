@@ -3215,8 +3215,8 @@ footer#bottom_nav button.active,
 
 .pixel-btn:active:not(:disabled) {
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
-  box-shadow: none;
-  transform: translateY(2px);
+  box-shadow: 1px 1px 0 rgb(0 0 0 / 40%);
+  transform: translateY(1px);
 }
 
 .pixel-btn:disabled {
