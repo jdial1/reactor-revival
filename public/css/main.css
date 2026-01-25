@@ -3196,7 +3196,7 @@ footer#bottom_nav button.active,
   text-decoration: none;
   text-shadow: 2px 2px 0 black;
   text-transform: uppercase;
-  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out, background-color 0.1s ease-out;
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out, background-color 0.1s ease-out, color 0.1s ease-out;
 }
 
 .pixel-btn:hover:not(:disabled) {
