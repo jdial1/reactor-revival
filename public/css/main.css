@@ -3728,7 +3728,7 @@ footer#bottom_nav button.active,
   }
 
   #objective_title {
-    font-size: 0.75em !important;
+    font-size: 0.85em !important;
     line-height: 1.2 !important;
   }
 }
@@ -4156,7 +4156,7 @@ footer#bottom_nav button.active,
   }
   
   .objective-title-compact {
-    font-size: clamp(0.65rem, 2.2vw, 0.8rem);
+    font-size: clamp(0.75rem, 2.5vw, 0.9rem);
     line-height: 1.3;
   }
 
@@ -4184,13 +4184,13 @@ footer#bottom_nav button.active,
   .objective-claim-btn {
     padding: 2px clamp(4px, 1.5vw, 6px);
     border-width: 2px;
-    font-size: clamp(0.55rem, 1.8vw, 0.65rem);
+    font-size: clamp(0.65rem, 2.2vw, 0.75rem);
     white-space: nowrap;
   }
 
   .objective-claim-btn {
     padding: 6px;
-    font-size: clamp(0.6rem, 2vw, 0.7rem);
+    font-size: clamp(0.7rem, 2.3vw, 0.8rem);
   }
 
   .objectives-toggle-btn {
@@ -4222,7 +4222,7 @@ footer#bottom_nav button.active,
   }
   
   .objective-title-compact {
-    font-size: clamp(0.6rem, 2vw, 0.75rem);
+    font-size: clamp(0.7rem, 2.3vw, 0.85rem);
     line-height: 1.2;
   }
 
@@ -4256,13 +4256,13 @@ footer#bottom_nav button.active,
   .objective-claim-btn {
     padding: 2px clamp(3px, 1.2vw, 5px);
     border-width: 1.5px;
-    font-size: clamp(0.5rem, 1.6vw, 0.6rem);
+    font-size: clamp(0.6rem, 2vw, 0.7rem);
     white-space: nowrap;
   }
 
   .objective-claim-btn {
     padding: 4px;
-    font-size: clamp(0.55rem, 1.8vw, 0.65rem);
+    font-size: clamp(0.65rem, 2.1vw, 0.75rem);
   }
 
   .objectives-toggle-btn {
@@ -4298,7 +4298,7 @@ footer#bottom_nav button.active,
   }
 
   .objective-title-compact {
-    font-size: clamp(0.55rem, 1.8vw, 0.7rem);
+    font-size: clamp(0.65rem, 2.1vw, 0.8rem);
     line-height: 1.15;
   }
 
@@ -4309,7 +4309,7 @@ footer#bottom_nav button.active,
 
   .objective-claim-btn-compact {
     padding: 1px clamp(2px, 1vw, 4px);
-    font-size: clamp(0.45rem, 1.4vw, 0.55rem);
+    font-size: clamp(0.55rem, 1.8vw, 0.65rem);
   }
 
   .objectives-toggle-btn {
