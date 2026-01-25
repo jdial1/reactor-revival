@@ -236,7 +236,7 @@ async function initDatabase() {
         console.error(`${logTimestamp()} Full error stack:`, error);
         console.error(`${logTimestamp()} ========================================`);
         throw error;
-    }
+    } 
 }
 
 app.post('/api/leaderboard/save', async (req, res) => {

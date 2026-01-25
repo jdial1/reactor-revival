@@ -207,10 +207,7 @@ body {
 .part:active,
 button:active {
   box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%) !important;
-<<<<<<< HEAD
   transform: translateY(2px) scale(0.98) !important;
-=======
->>>>>>> origin/palette-button-hover-effects-16052882872990965775
 }
 
 /* Page Transitions */
@@ -269,11 +266,7 @@ button:active {
   font-family: "Press Start 2P", cursive, monospace !important;
   font-size: 1rem;
   text-shadow: var(--text-shadow);
-<<<<<<< HEAD
-  transition: transform 0.1s ease-out, filter 0.1s ease-out, border-color 0.1s ease-out, color 0.1s ease-out;
-=======
   transition: transform 0.1s ease;
->>>>>>> origin/palette-button-hover-effects-16052882872990965775
 }
 
 .splash-btn:hover {
