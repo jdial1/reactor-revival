@@ -39,6 +39,12 @@ export class Engine {
     this._heatCalc_plannedInByNeighbor = new Map();
     this._heatCalc_plannedInByExchanger = new Map();
 
+    // Valve Processing Pre-allocation (Avoid GC)
+    this._valveProcessing_valves = [];
+    this._valveProcessing_neighbors = [];
+    this._valveProcessing_inputNeighbors = [];
+    this._valveProcessing_outputNeighbors = [];
+
     // Ensure arrays are always valid
     this._ensureArraysValid();
 
@@ -599,8 +605,9 @@ export class Engine {
         this.active_exchangers = [];
       }
 
-      // Filter valves once and store the result - optimize with early exit
-      const valves = [];
+      // GC Optimization: Use pre-allocated arrays to avoid allocations in the hot path
+      const valves = this._valveProcessing_valves;
+      valves.length = 0; // Clear the array
       for (const tile of this.active_exchangers) {
         if (tile.part?.category === 'valve') {
           valves.push(tile);
@@ -610,7 +617,8 @@ export class Engine {
       // Process valves efficiently with minimal logging
       for (const valve of valves) {
         const valvePart = valve.part;
-        const neighbors = [];
+        const neighbors = this._valveProcessing_neighbors;
+        neighbors.length = 0; // Clear the array
         for (const t of valve.containmentNeighborTiles) {
           if (t.part) {
             neighbors.push(t);
@@ -620,8 +628,10 @@ export class Engine {
         if (neighbors.length < 2) continue; // Need at least 2 neighbors to transfer
 
         // Determine input and output neighbors based on valve type and orientation
-        let inputNeighbors = [];
-        let outputNeighbors = [];
+        const inputNeighbors = this._valveProcessing_inputNeighbors;
+        inputNeighbors.length = 0;
+        const outputNeighbors = this._valveProcessing_outputNeighbors;
+        outputNeighbors.length = 0;
 
         if (valvePart.type === 'overflow_valve') {
           // Overflow valve: only works if input side neighbor is above 80% containment
