@@ -430,7 +430,6 @@ export class Engine {
 
     // Force update part caches to ensure newly added parts are included
     console.log(`[DEBUG Engine] _processTick start: running=${this.running}, manual=${manual}, paused=${this.game.paused}`);
-    this._partCacheDirty = true;
     this._updatePartCaches();
     this._updateValveNeighborCache(); // Update valve neighbor cache
 
