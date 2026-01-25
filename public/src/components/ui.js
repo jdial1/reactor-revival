@@ -5454,20 +5454,29 @@ export class UI {
       position: relative;
     `;
 
-    let userDisplay = "";
     if (googleUserInfo) {
-      userDisplay = `<div style="font-size: 0.8rem; margin-bottom: 1rem;">Signed in with Google</div>`;
+      const signedInWith = document.createElement('div');
+      signedInWith.style.cssText = "font-size: 0.8rem; margin-bottom: 1rem;";
+      signedInWith.textContent = "Signed in with Google";
+      content.appendChild(signedInWith);
       if (googleUserInfo.email) {
-        userDisplay += `<div style="font-size: 0.7rem; opacity: 0.8; margin-bottom: 1rem;">${googleUserInfo.email}</div>`;
+        const emailDiv = document.createElement('div');
+        emailDiv.style.cssText = "font-size: 0.7rem; opacity: 0.8; margin-bottom: 1rem;";
+        emailDiv.textContent = googleUserInfo.email;
+        content.appendChild(emailDiv);
       }
     } else if (supabaseUser) {
-      userDisplay = `<div style="font-size: 0.8rem; margin-bottom: 1rem;">Signed in with Email</div>`;
+        const signedInWith = document.createElement('div');
+        signedInWith.style.cssText = "font-size: 0.8rem; margin-bottom: 1rem;";
+        signedInWith.textContent = "Signed in with Email";
+        content.appendChild(signedInWith);
       if (supabaseUser.email) {
-        userDisplay += `<div style="font-size: 0.7rem; opacity: 0.8; margin-bottom: 1rem;">${supabaseUser.email}</div>`;
+        const emailDiv = document.createElement('div');
+        emailDiv.style.cssText = "font-size: 0.7rem; opacity: 0.8; margin-bottom: 1rem;";
+        emailDiv.textContent = supabaseUser.email;
+        content.appendChild(emailDiv);
       }
     }
-
-    content.innerHTML = userDisplay;
 
     const logoutBtn = document.createElement("button");
     logoutBtn.className = "splash-btn";

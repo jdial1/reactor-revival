@@ -1,0 +1,6 @@
+
+> reactor-revival@1.0.0 dev /app
+> live-server public --port=8080 --open=/index.html --wait=100
+
+sh: 1: live-server: not found
+ ELIFECYCLE  Command failed.
