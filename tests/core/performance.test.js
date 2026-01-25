@@ -225,11 +225,13 @@ describe("Reactor Performance Stress Tests", () => {
         });
       }
 
-      for (const tile of game.tileset.active_tiles_list) {
+      // Batch operations to avoid overwhelming the event loop
+      const placementPromises = game.tileset.active_tiles_list.map(tile => {
         const partIndex = (tile.row + tile.col) % partInstances.length;
         const partToPlace = partInstances[partIndex];
-        await tile.setPart(partToPlace);
-      }
+        return tile.setPart(partToPlace);
+      });
+      await Promise.all(placementPromises);
 
       if (preheat) {
         game.reactor.current_heat = game.reactor.max_heat / 2;
@@ -352,11 +354,13 @@ describe("Large Grid Performance Stress Tests", () => {
           );
 
           // Place parts in a pattern across the entire grid
-          for (const tile of game.tileset.active_tiles_list) {
+          // Batch operations to avoid overwhelming the event loop
+          const placementPromises = game.tileset.active_tiles_list.map(tile => {
             const partIndex = (tile.row + tile.col) % partInstances.length;
             const partToPlace = partInstances[partIndex];
-            await tile.setPart(partToPlace);
-          }
+            return tile.setPart(partToPlace);
+          });
+          await Promise.all(placementPromises);
 
           if (preheat) {
             game.reactor.current_heat = game.reactor.max_heat * 0.3; // Moderate preheat for large grids
@@ -538,11 +542,13 @@ describe("Experimental Parts 100x100 Grid Stress Test", () => {
     console.log(`📋 Placing ${partInstances.length} experimental part types across ${100 * 100} tiles...`);
 
     // Place experimental parts in a pattern across the entire grid
-    for (const tile of game.tileset.active_tiles_list) {
+    // Batch operations to avoid overwhelming the event loop
+    const placementPromises = game.tileset.active_tiles_list.map(tile => {
       const partIndex = (tile.row + tile.col) % partInstances.length;
       const partToPlace = partInstances[partIndex];
-      await tile.setPart(partToPlace);
-    }
+      return tile.setPart(partToPlace);
+    });
+    await Promise.all(placementPromises);
 
     // Pre-heat the reactor to test heat management
     game.reactor.current_heat = game.reactor.max_heat * 0.4;
@@ -627,15 +633,15 @@ describe("Performance with Time Scaling", () => {
         game.performance.enable();
     });
 
-    it("should measure _processTick with non-standard multiplier", () => {
+    it("should measure _processTick with non-standard multiplier", async () => {
         game.rows = 20;
         game.cols = 20;
         game.tileset.updateActiveTiles();
         
         const part = game.partset.getPartById("uranium1");
-        for(const tile of game.tileset.active_tiles_list) {
-            tile.setPart(part);
-        }
+        await Promise.all(
+            game.tileset.active_tiles_list.map(tile => tile.setPart(part))
+        );
 
         const startTime = performance.now();
         game.engine._processTick(10.0);

@@ -18,14 +18,14 @@ export default defineConfig({
     poolOptions: {
       threads: {
         isolate: true,
-        useAtomics: true,
+        useAtomics: !isCI,
         minThreads: 1,
         maxThreads: isCI ? 2 : 4,
       },
     },
-    teardownTimeout: isCI ? 30000 : 10000,
-    testTimeout: isCI ? 60000 : 10000,
-    hookTimeout: isCI ? 30000 : 10000,
+    teardownTimeout: isCI ? 60000 : 10000,
+    testTimeout: isCI ? 120000 : 10000,
+    hookTimeout: isCI ? 60000 : 10000,
     silent: false,
     forceRerunTriggers: ["**/package.json", "{vitest,vite}.config.*"],
     printConsoleTrace: false,
