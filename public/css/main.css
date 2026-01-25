@@ -4527,7 +4527,8 @@ footer#bottom_nav button.active,
   font-size: 0.6rem !important; /* Small text for side buttons */
   transition: none !important;
   white-space: normal;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 /* Toggle "On" State (Pressed In) */
@@ -4546,6 +4547,9 @@ footer#bottom_nav button.active,
   line-height: 1.1;
   text-align: center;
   text-shadow: 1px 1px 0 black;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: none;
 }
 
 #controls_nav button img.control-icon {
@@ -4658,6 +4662,19 @@ body:not(.page-reactor) #objectives_section {
     width: auto;
     min-width: 200px;
     max-width: calc(100vw - 216px); /* Account for left + right padding */
+  }
+
+  #controls_nav button {
+    padding: 3px 2px !important;
+    font-size: 0.5rem !important;
+  }
+
+  #controls_nav .control-text {
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
+    line-height: 1.2;
+    max-width: 100%;
   }
 }
 
