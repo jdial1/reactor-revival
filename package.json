@@ -75,10 +75,11 @@
     "vite": "^7.3.1",
     "vitest": "^1.6.1",
     "workbox-cli": "^7.3.0"
-},
-"pnpm": {
-  "overrides": {
-    "braces": "^3.0.3"
-  }
+  },
+  "pnpm": {
+    "overrides": {
+      "braces": ">=3.0.3",
+      "micromatch": ">=4.0.8"
+    }
   }
 }
