@@ -207,7 +207,10 @@ body {
 .part:active,
 button:active {
   box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%) !important;
+<<<<<<< HEAD
   transform: translateY(2px) scale(0.98) !important;
+=======
+>>>>>>> origin/palette-button-hover-effects-16052882872990965775
 }
 
 /* Page Transitions */
@@ -266,7 +269,11 @@ button:active {
   font-family: "Press Start 2P", cursive, monospace !important;
   font-size: 1rem;
   text-shadow: var(--text-shadow);
+<<<<<<< HEAD
   transition: transform 0.1s ease-out, filter 0.1s ease-out, border-color 0.1s ease-out, color 0.1s ease-out;
+=======
+  transition: transform 0.1s ease;
+>>>>>>> origin/palette-button-hover-effects-16052882872990965775
 }
 
 .splash-btn:hover {
@@ -767,12 +774,15 @@ button:active {
   border-color: white;
   background: rgb(80 80 80);
   color: white;
+  transform: translateY(-2px);
+  filter: brightness(1.1);
 }
 
 .item-grid .part:active {
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
   background: rgb(40 40 40);
   color: white;
+  transform: translateY(1px);
 }
 
 .item-grid .part.part_active,
@@ -3274,13 +3284,14 @@ footer#bottom_nav button.active,
   font-family: inherit !important;
   font-size: 0.9em !important;
   text-decoration: none !important;
-  transition: background 0.15s, color 0.15s, border 0.15s !important;
+  transition: transform 0.1s ease, background 0.15s, color 0.15s, border 0.15s !important;
 }
 
 .nav-btn:hover {
   border-color: white !important;
   background: rgb(80 80 80) !important;
   color: rgb(255 255 160) !important;
+  transform: translateY(-2px);
 }
 
 .nav-btn:active {
@@ -3345,7 +3356,7 @@ footer#bottom_nav button.active,
   border-radius: 0;
   background: rgb(60 60 60);
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: transform 0.1s ease, background 0.1s, border 0.1s;
 }
 
 /* Marker class reserved for potential styling of locked items */
@@ -3365,11 +3376,14 @@ footer#bottom_nav button.active,
 .part:hover {
   border-color: white;
   background: rgb(80 80 80);
+  transform: translateY(-2px);
+  filter: brightness(1.1);
 }
 
 .part:active {
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
   background: rgb(40 40 40);
+  transform: translateY(1px);
 }
 
 .part .image {
@@ -3407,6 +3421,7 @@ footer#bottom_nav button.active,
 .part.pixel-btn:active {
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
   background: rgb(40 40 40);
+  transform: translateY(1px);
 }
 
 .info-icon {
