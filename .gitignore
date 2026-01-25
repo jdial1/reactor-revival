@@ -13,3 +13,4 @@ public/reactor_leaderboard.sqlite3
 package-lock.json
 public/lib/pako.min.js
 public/lib/sqlite3.js
+*.log
