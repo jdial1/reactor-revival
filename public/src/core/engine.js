@@ -430,7 +430,6 @@ export class Engine {
 
     // Force update part caches to ensure newly added parts are included
     console.log(`[DEBUG Engine] _processTick start: running=${this.running}, manual=${manual}, paused=${this.game.paused}`);
-    this._partCacheDirty = true;
     this._updatePartCaches();
     this._updateValveNeighborCache(); // Update valve neighbor cache
 
@@ -611,7 +610,12 @@ export class Engine {
       // Process valves efficiently with minimal logging
       for (const valve of valves) {
         const valvePart = valve.part;
-        const neighbors = valve.containmentNeighborTiles.filter(t => t.part);
+        const neighbors = [];
+        for (const t of valve.containmentNeighborTiles) {
+          if (t.part) {
+            neighbors.push(t);
+          }
+        }
 
         if (neighbors.length < 2) continue; // Need at least 2 neighbors to transfer
 
@@ -628,7 +632,12 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
+              const inputValveNeighbors = [];
+              for (const t of inputNeighbor.containmentNeighborTiles) {
+                if (t.part && t !== valve) {
+                  inputValveNeighbors.push(t);
+                }
+              }
               const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
 
               // Only allow if this valve's input connects to another valve's output
@@ -653,7 +662,12 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
+              const inputValveNeighbors = [];
+              for (const t of inputNeighbor.containmentNeighborTiles) {
+                if (t.part && t !== valve) {
+                  inputValveNeighbors.push(t);
+                }
+              }
               const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
 
               // Only allow if this valve's input connects to another valve's output
@@ -678,7 +692,12 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = inputNeighbor.containmentNeighborTiles.filter(t => t.part && t !== valve);
+              const inputValveNeighbors = [];
+              for (const t of inputNeighbor.containmentNeighborTiles) {
+                if (t.part && t !== valve) {
+                  inputValveNeighbors.push(t);
+                }
+              }
               const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
 
               // Only allow if this valve's input connects to another valve's output
@@ -755,8 +774,12 @@ export class Engine {
           }
         } else {
           // Valve has no valid input/output pairs - remove it from active_vessels if it was there
-          if (this.active_vessels.includes(valve)) {
-            this.active_vessels = this.active_vessels.filter(v => v !== valve);
+          // PERF: Use a reverse loop and splice for efficient removal without creating a new array
+          for (let i = this.active_vessels.length - 1; i >= 0; i--) {
+            if (this.active_vessels[i] === valve) {
+              this.active_vessels.splice(i, 1);
+              break; // Found and removed, no need to continue
+            }
           }
         }
 
@@ -930,7 +953,12 @@ export class Engine {
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
        
-       const neighbors = tile.containmentNeighborTiles.filter(t => t.part && t.part.category !== 'valve');
+       const neighbors = [];
+       for (const t of tile.containmentNeighborTiles) {
+         if (t.part && t.part.category !== 'valve') {
+           neighbors.push(t);
+         }
+       }
        const transferCap = tile.getEffectiveTransferValue() * multiplier;
        let outlet_transfer_heat = Math.min(transferCap, reactor.current_heat);
        
