@@ -45,6 +45,12 @@ export class Engine {
     this._valveProcessing_inputNeighbors = [];
     this._valveProcessing_outputNeighbors = [];
 
+    // Heat Exchanger Pre-allocation (Avoid GC)
+    this._heatExchanger_validNeighbors = [];
+
+    // Heat Outlet Pre-allocation (Avoid GC)
+    this._heatOutlet_neighbors = [];
+
     // Ensure arrays are always valid
     this._ensureArraysValid();
 
@@ -850,7 +856,8 @@ export class Engine {
         const neighborsAll = tile.containmentNeighborTiles; 
         
         // Custom sort/filter logic without creating new arrays if possible
-        const validNeighbors = [];
+        const validNeighbors = this._heatExchanger_validNeighbors;
+        validNeighbors.length = 0;
         for(let nIdx=0; nIdx<neighborsAll.length; nIdx++) {
             if(neighborsAll[nIdx].part) validNeighbors.push(neighborsAll[nIdx]);
         }
@@ -963,7 +970,8 @@ export class Engine {
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
        
-       const neighbors = [];
+       const neighbors = this._heatOutlet_neighbors;
+       neighbors.length = 0;
        for (const t of tile.containmentNeighborTiles) {
          if (t.part && t.part.category !== 'valve') {
            neighbors.push(t);
