@@ -39,6 +39,11 @@ export class Engine {
     this._heatCalc_plannedInByNeighbor = new Map();
     this._heatCalc_plannedInByExchanger = new Map();
 
+    // Heat Exchanger/Outlet/Explosion Processing - GC Optimization
+    this._heatCalc_validNeighbors = [];
+    this._outletProcessing_neighbors = [];
+    this._explosion_tilesToExplode = [];
+
     // Valve Processing Pre-allocation (Avoid GC)
     this._valveProcessing_valves = [];
     this._valveProcessing_neighbors = [];
@@ -849,8 +854,9 @@ export class Engine {
         // Reuse neighbors array from Tile cache, avoid .filter()
         const neighborsAll = tile.containmentNeighborTiles; 
         
-        // Custom sort/filter logic without creating new arrays if possible
-        const validNeighbors = [];
+        // GC Optimization: Use pre-allocated array
+        const validNeighbors = this._heatCalc_validNeighbors;
+        validNeighbors.length = 0;
         for(let nIdx=0; nIdx<neighborsAll.length; nIdx++) {
             if(neighborsAll[nIdx].part) validNeighbors.push(neighborsAll[nIdx]);
         }
@@ -963,7 +969,9 @@ export class Engine {
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
        
-       const neighbors = [];
+       // GC Optimization: Use pre-allocated array
+       const neighbors = this._outletProcessing_neighbors;
+       neighbors.length = 0;
        for (const t of tile.containmentNeighborTiles) {
          if (t.part && t.part.category !== 'valve') {
            neighbors.push(t);
@@ -1035,7 +1043,9 @@ export class Engine {
       this.game.performance.markStart("tick_explosions");
     }
 
-    const tilesToExplode = [];
+    // GC Optimization: Use pre-allocated array
+    const tilesToExplode = this._explosion_tilesToExplode;
+    tilesToExplode.length = 0;
     for (const tile of this.active_vessels) {
       if (!tile.part || tile.exploded) continue;
 
