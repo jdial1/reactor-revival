@@ -45,6 +45,12 @@ export class Engine {
     this._valveProcessing_inputNeighbors = [];
     this._valveProcessing_outputNeighbors = [];
 
+    // Outlet Processing Pre-allocation (Avoid GC)
+    this._outletProcessing_neighbors = [];
+
+    // Vent Processing Pre-allocation (Avoid GC)
+    this._ventProcessing_activeVents = [];
+
     // Ensure arrays are always valid
     this._ensureArraysValid();
 
@@ -963,7 +969,8 @@ export class Engine {
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
        
-       const neighbors = [];
+       const neighbors = this._outletProcessing_neighbors;
+       neighbors.length = 0;
        for (const t of tile.containmentNeighborTiles) {
          if (t.part && t.part.category !== 'valve') {
            neighbors.push(t);
@@ -1062,7 +1069,8 @@ export class Engine {
       this.game.performance.markStart("tick_vents");
     }
 
-    const activeVents = [];
+    const activeVents = this._ventProcessing_activeVents;
+    activeVents.length = 0;
     for (const tile of this.active_vessels) {
       if (tile.part?.category === 'vent') {
         activeVents.push(tile);
