@@ -1857,7 +1857,16 @@ footer#bottom_nav button {
   text-decoration: none !important;
   text-shadow: 1px 1px 0 black !important;
   text-transform: uppercase;
-  transition: none !important; /* Pixel art shouldn't fade */
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out !important;
+}
+
+/* Hover State for Nav Buttons */
+#main_top_nav a:hover,
+#main_top_nav button:hover,
+#bottom_nav button:hover,
+footer#bottom_nav button:hover {
+  transform: translateY(-2px);
+  box-shadow: 4px 4px 0 var(--bevel-shadow) !important;
 }
 
 /* Active/Pressed State for Nav Buttons */
