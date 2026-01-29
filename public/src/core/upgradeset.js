@@ -6,6 +6,13 @@ let upgrade_templates = [];
 let tech_tree_data = [];
 let dataLoaded = false;
 
+const OBJECTIVE_REQUIRED_UPGRADES = {
+  improvedChronometers: ["chronometer"],
+  expandReactor4: ["expand_reactor_rows", "expand_reactor_cols"],
+  initialExpansion2: ["expand_reactor_rows", "expand_reactor_cols"],
+  investInResearch1: ["infused_cells", "unleashed_cells"],
+};
+
 async function ensureDataLoaded() {
   if (!dataLoaded) {
     try {
@@ -256,7 +263,6 @@ export class UpgradeSet {
 
       if (upgrade.$el) {
         const isResearch = !!upgrade.base_ecost;
-        const isTickSpeedUpgrade = upgrade.type === "cell_tick_upgrades" || upgrade.actionId === "cell_tick" || (upgrade.classList && upgrade.classList.includes("cell_tick"));
         const shouldHideUnaffordable = isResearch ? hideResearch : hideUpgrades;
         const shouldHideMaxed = isResearch ? hideMaxResearch : hideMaxUpgrades;
         const isMaxed = upgrade.level >= upgrade.max_level;
@@ -276,7 +282,7 @@ export class UpgradeSet {
           }
         }
 
-        const shouldHide = isTickSpeedUpgrade ? false : ((shouldHideUnaffordable && !isAffordable && !isMaxed) || (shouldHideMaxed && isMaxed));
+        const shouldHide = (shouldHideUnaffordable && !isAffordable && !isMaxed) || (shouldHideMaxed && isMaxed);
         if (shouldHide) {
           upgrade.$el.classList.add("hidden");
         } else {
@@ -304,16 +310,38 @@ export class UpgradeSet {
     }
   }
 
+  _isUpgradeRequiredByIncompleteObjective(upgradeId) {
+    const objectives = this.game.objectives_manager?.objectives_data;
+    if (!objectives?.length) return false;
+    for (const obj of objectives) {
+      if (obj.completed) continue;
+      const checkId = obj.checkId;
+      const required = OBJECTIVE_REQUIRED_UPGRADES[checkId];
+      if (required?.includes(upgradeId)) return true;
+      if (checkId === "experimentalUpgrade") {
+        const upg = this.getUpgrade(upgradeId);
+        if (upg?.upgrade?.type?.startsWith("experimental_")) return true;
+      }
+    }
+    return false;
+  }
+
   isUpgradeAvailable(upgradeId) {
     if (this.game.bypass_tech_tree_restrictions) return true;
-    
+
     if (!this.restrictedUpgrades.has(upgradeId)) {
-      return true; // Available to all if not in any tree
+      return true;
     }
-    
-    // If it is restricted, check if player has the matching tech tree
-    const requiredTree = this.upgradeToTechTreeMap.get(upgradeId);
-    return this.game.tech_tree === requiredTree;
+
+    if (this.game.tech_tree === this.upgradeToTechTreeMap.get(upgradeId)) {
+      return true;
+    }
+
+    if (this._isUpgradeRequiredByIncompleteObjective(upgradeId)) {
+      return true;
+    }
+
+    return false;
   }
 
   hasAffordableUpgrades() {

@@ -182,6 +182,18 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
       console.warn(`[TECH-TREE] .tech-tree-mechanics not found in card ${index + 1}`);
     }
 
+    const moreInfoBtn = card.querySelector(".tech-tree-more-info-btn");
+    if (moreInfoBtn) {
+      moreInfoBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        card.classList.toggle("expanded");
+        const details = card.querySelector(".tech-tree-details");
+        if (details) {
+          details.style.display = card.classList.contains("expanded") ? "block" : "none";
+        }
+      });
+    }
+
     // Make entire card clickable for selection
     card.style.cursor = "pointer";
 

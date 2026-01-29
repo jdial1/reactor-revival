@@ -53,6 +53,11 @@ export class Upgrade {
         if (buyBtn) {
           buyBtn.disabled = !isAffordable || this.level >= this.max_level;
         }
+        if (isAffordable) {
+          this.$el.classList.remove("unaffordable");
+        } else {
+          this.$el.classList.add("unaffordable");
+        }
       }
     }
   }

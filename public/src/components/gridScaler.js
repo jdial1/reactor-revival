@@ -16,6 +16,17 @@ export class GridScaler {
 
         };
 
+        this.gestureState = {
+            isPinching: false,
+            isPanning: false,
+            initialDistance: 0,
+            initialScale: 1,
+            initialTranslate: { x: 0, y: 0 },
+            currentTranslate: { x: 0, y: 0 },
+            currentScale: 1,
+            touches: []
+        };
+
     }
 
 
@@ -33,6 +44,117 @@ export class GridScaler {
 
         this.requestResize();
 
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
+        if (isMobile) {
+            this.setupGestures();
+        }
+
+    }
+
+    setupGestures() {
+        if (!this.wrapper) return;
+
+        this.wrapper.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        this.wrapper.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        this.wrapper.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+        this.wrapper.addEventListener('touchcancel', (e) => this.handleTouchEnd(e), { passive: false });
+    }
+
+    getDistance(touch1, touch2) {
+        const dx = touch2.clientX - touch1.clientX;
+        const dy = touch2.clientY - touch1.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    getMidpoint(touch1, touch2) {
+        return {
+            x: (touch1.clientX + touch2.clientX) / 2,
+            y: (touch1.clientY + touch2.clientY) / 2
+        };
+    }
+
+    handleTouchStart(e) {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            this.gestureState.isPinching = true;
+            this.gestureState.isPanning = true;
+            this.gestureState.touches = Array.from(e.touches);
+            this.gestureState.initialDistance = this.getDistance(e.touches[0], e.touches[1]);
+            this.gestureState.initialScale = this.gestureState.currentScale || 1;
+            this.gestureState.initialTranslate = { ...this.gestureState.currentTranslate };
+        } else if (e.touches.length === 1 && this.gestureState.isPanning) {
+            e.preventDefault();
+        }
+    }
+
+    handleTouchMove(e) {
+        if (e.touches.length === 2 && this.gestureState.isPinching) {
+            e.preventDefault();
+            
+            const currentDistance = this.getDistance(e.touches[0], e.touches[1]);
+            const scale = (currentDistance / this.gestureState.initialDistance) * this.gestureState.initialScale;
+            const clampedScale = Math.max(0.5, Math.min(2.0, scale));
+            
+            this.gestureState.currentScale = clampedScale;
+
+            const midpoint = this.getMidpoint(e.touches[0], e.touches[1]);
+            const wrapperRect = this.wrapper.getBoundingClientRect();
+            const wrapperCenterX = wrapperRect.left + wrapperRect.width / 2;
+            const wrapperCenterY = wrapperRect.top + wrapperRect.height / 2;
+
+            const translateX = midpoint.x - wrapperCenterX;
+            const translateY = midpoint.y - wrapperCenterY;
+
+            this.gestureState.currentTranslate = {
+                x: translateX,
+                y: translateY
+            };
+
+            this.applyTransform();
+        } else if (e.touches.length === 2 && this.gestureState.isPanning) {
+            e.preventDefault();
+            
+            const currentMidpoint = this.getMidpoint(e.touches[0], e.touches[1]);
+            const previousMidpoint = this.getMidpoint(
+                this.gestureState.touches[0],
+                this.gestureState.touches[1]
+            );
+
+            const deltaX = currentMidpoint.x - previousMidpoint.x;
+            const deltaY = currentMidpoint.y - previousMidpoint.y;
+
+            this.gestureState.currentTranslate.x += deltaX;
+            this.gestureState.currentTranslate.y += deltaY;
+
+            this.gestureState.touches = Array.from(e.touches);
+            this.applyTransform();
+        }
+    }
+
+    handleTouchEnd(e) {
+        if (e.touches.length < 2) {
+            this.gestureState.isPinching = false;
+            this.gestureState.isPanning = false;
+            this.gestureState.touches = [];
+        }
+    }
+
+    applyTransform() {
+        if (!this.reactor) return;
+
+        const { currentScale, currentTranslate } = this.gestureState;
+        const transform = `translate(${currentTranslate.x}px, ${currentTranslate.y}px) scale(${currentScale})`;
+        this.reactor.style.transform = transform;
+        this.reactor.style.transformOrigin = 'center center';
+    }
+
+    resetTransform() {
+        if (!this.reactor) return;
+        
+        this.gestureState.currentScale = 1;
+        this.gestureState.currentTranslate = { x: 0, y: 0 };
+        this.reactor.style.transform = '';
+        this.reactor.style.transformOrigin = '';
     }
 
 
