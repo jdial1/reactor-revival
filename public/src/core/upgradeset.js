@@ -44,10 +44,14 @@ export class UpgradeSet {
     
     // Process tech tree data to build restriction maps
     const treeData = tech_tree_data.default || tech_tree_data || [];
+    this.treeList = treeData;
     treeData.forEach(tree => {
       if (tree.upgrades) {
         tree.upgrades.forEach(upgradeId => {
-          this.upgradeToTechTreeMap.set(upgradeId, tree.id);
+          if (!this.upgradeToTechTreeMap.has(upgradeId)) {
+            this.upgradeToTechTreeMap.set(upgradeId, new Set());
+          }
+          this.upgradeToTechTreeMap.get(upgradeId).add(tree.id);
           this.restrictedUpgrades.add(upgradeId);
         });
       }
@@ -114,6 +118,14 @@ export class UpgradeSet {
 
   getUpgrade(id) {
     return this.upgrades.get(id);
+  }
+
+  getDoctrineForUpgrade(upgradeId) {
+    const treeIds = this.upgradeToTechTreeMap.get(upgradeId);
+    if (!treeIds || treeIds.size !== 1) return null;
+    const treeId = [...treeIds][0];
+    const tree = (this.treeList || []).find(t => t.id === treeId);
+    return tree ? { id: tree.id, icon: tree.icon } : null;
   }
 
   getAllUpgrades() {
@@ -333,7 +345,8 @@ export class UpgradeSet {
       return true;
     }
 
-    if (this.game.tech_tree === this.upgradeToTechTreeMap.get(upgradeId)) {
+    const allowedTrees = this.upgradeToTechTreeMap.get(upgradeId);
+    if (allowedTrees && allowedTrees.has(this.game.tech_tree)) {
       return true;
     }
 

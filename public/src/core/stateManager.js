@@ -64,7 +64,10 @@ export class StateManager {
     } else if (isMobile && skipOpenPanel) {
       this.ui.updatePartsPanelBodyClass();
     }
-    if (part) this.pushLastUsedPart(part);
+    if (part) {
+      const inQuickSelect = this.getQuickSelectSlots().some((s) => s.partId === part.id);
+      if (!inQuickSelect) this.pushLastUsedPart(part);
+    }
     if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
     const heatComponentCategories = ['vent', 'heat_exchanger', 'heat_inlet', 'heat_outlet', 'coolant_cell', 'reactor_plating'];
     if (!part || !heatComponentCategories.includes(part.category)) {
