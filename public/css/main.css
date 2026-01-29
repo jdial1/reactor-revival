@@ -6676,7 +6676,7 @@ footer#bottom_nav button {
   height: 70px !important;
   align-items: center !important;
   justify-content: center !important;
-  padding: 0.5rem !important;
+  padding: 0.5rem 1rem !important;
   border: none !important;
   margin: 0 !important;
   background-color: rgb(255 235 59) !important;
@@ -6700,7 +6700,7 @@ footer#bottom_nav button {
   padding: 8px 16px !important;
   border: 2px solid rgb(0 0 0) !important;
   border-radius: 4px !important;
-  margin-left: 20px !important;
+  margin: 0 !important;
   background: rgb(0 0 0 / 12%) !important;
   color: rgb(0 0 0) !important;
   cursor: pointer !important;
