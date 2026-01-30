@@ -1092,7 +1092,6 @@ export class Engine {
         }
         
         const heat = tile.heat_contained;
-
         let vent_reduce = Math.min(ventRate, heat);
         
         if (tile.part.id === "vent6") {
@@ -1255,7 +1254,6 @@ export class Engine {
 
     if (fluxLevel > 0 && reactor.max_power > 0) {
       const powerRatio = reactor.current_power / reactor.max_power;
-
       if (powerRatio >= 0.90) {
         let activeCaps = 0;
         for (const t of this.active_vessels) {
@@ -1266,7 +1264,6 @@ export class Engine {
         }
 
         const epGain = 0.0001 * fluxLevel * activeCaps * multiplier;
-
         if (epGain > 0) {
           this.game.exotic_particles += epGain;
           this.game.total_exotic_particles += epGain;
@@ -1287,7 +1284,6 @@ export class Engine {
       // Iterate active cells that have durability (ticks)
       for (const tile of this.active_cells) {
         if (repairsRemaining <= 0 || reactor.current_power < powerCostPerRepair) break;
-
         if (tile.part && tile.part.ticks > 0) {
           // Repair 1 tick
           tile.ticks += 1;
