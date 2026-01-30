@@ -499,6 +499,9 @@ export class Game {
   }
   manual_reduce_heat_action() {
     this.debugHistory.add('game', 'Manual heat reduction');
+    if (this.ui && this.ui.heavyVibration) {
+      this.ui.heavyVibration();
+    }
     this.reactor.manualReduceHeat();
     this.reactor.updateStats();
   }
@@ -758,6 +761,9 @@ export class Game {
     if (tile && tile.part) {
       const sellValue = tile.calculateSellValue();
       this.debugHistory.add('game', 'sellPart', { row: tile.row, col: tile.col, partId: tile.part.id, value: sellValue });
+      if (this.ui && this.ui.heavyVibration) {
+        this.ui.heavyVibration();
+      }
       if (this.audio) {
         this.audio.play("sell", null, this.calculatePan(tile.col));
       }
@@ -852,6 +858,7 @@ export class Game {
         time_flux: this.ui.stateManager.getVar("time_flux"),
         pause: this.ui.stateManager.getVar("pause"),
       },
+      quick_select_slots: this.ui?.stateManager?.getQuickSelectSlots() ?? [],
       ui: {},
     };
 
@@ -1401,6 +1408,9 @@ export class Game {
       Object.entries(savedData.toggles).forEach(([key, value]) => {
         this.ui.stateManager.setVar(key, value);
       });
+    }
+    if (savedData.quick_select_slots && this.ui?.stateManager) {
+      this.ui.stateManager.setQuickSelectSlots(savedData.quick_select_slots);
     }
     this.ui.updateAllToggleBtnStates();
     this.reactor.updateStats();

@@ -182,6 +182,18 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
       console.warn(`[TECH-TREE] .tech-tree-mechanics not found in card ${index + 1}`);
     }
 
+    const moreInfoBtn = card.querySelector(".tech-tree-more-info-btn");
+    if (moreInfoBtn) {
+      moreInfoBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        card.classList.toggle("expanded");
+        const details = card.querySelector(".tech-tree-details");
+        if (details) {
+          details.style.display = card.classList.contains("expanded") ? "block" : "none";
+        }
+      });
+    }
+
     // Make entire card clickable for selection
     card.style.cursor = "pointer";
 
@@ -242,20 +254,15 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
     console.warn("[TECH-TREE] .tech-tree-back-btn not found in selection screen");
   }
 
-  // Setup start button
   if (startBtn) {
     startBtn.onclick = async () => {
       if (selectedTechTreeId) {
         console.log("[TECH-TREE] Start button clicked for tree:", selectedTechTreeId);
         overlay.classList.add("hidden");
-        setTimeout(() => overlay.remove(), 300);
-        try {
-          await startNewGameFlow(game, pageRouter, ui, splashManager, selectedTechTreeId);
-        } catch (error) {
-          console.error("[TECH-TREE] Failed to start game:", error);
-          // Show error to user or fallback behavior
-          alert("Failed to start game. Please try again.");
-        }
+        setTimeout(() => {
+          overlay.remove();
+          showDifficultySelection(game, pageRouter, ui, splashManager, selectedTechTreeId);
+        }, 300);
       }
     };
     console.log("[TECH-TREE] Start button configured");
@@ -275,8 +282,118 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
   console.log("[TECH-TREE] Tech tree selection display complete");
 }
 
-// Make showTechTreeSelection available globally
 window.showTechTreeSelection = showTechTreeSelection;
+
+const DIFFICULTY_PRESETS = {
+  easy: { base_money: 25, base_max_heat: 1500, base_max_power: 120, base_loop_wait: 1200, base_manual_heat_reduce: 2, power_overflow_to_heat_pct: 0 },
+  medium: { base_money: 10, base_max_heat: 1000, base_max_power: 100, base_loop_wait: 1000, base_manual_heat_reduce: 1, power_overflow_to_heat_pct: 50 },
+  hard: { base_money: 5, base_max_heat: 750, base_max_power: 80, base_loop_wait: 800, base_manual_heat_reduce: 0.5, power_overflow_to_heat_pct: 100 }
+};
+
+function showDifficultySelection(game, pageRouter, ui, splashManager, techTreeId) {
+  let overlay = document.getElementById("difficulty-selection-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "difficulty-selection-overlay";
+    overlay.className = "difficulty-selection-overlay";
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = "";
+
+  if (!window.templateLoader) return;
+  const screen = window.templateLoader.cloneTemplateElement("difficulty-selection-template");
+  if (!screen) return;
+
+  const preset = DIFFICULTY_PRESETS.medium;
+  const moneyInput = screen.querySelector("#difficulty-advanced-money");
+  const maxHeatInput = screen.querySelector("#difficulty-advanced-max-heat");
+  const maxPowerInput = screen.querySelector("#difficulty-advanced-max-power");
+  const loopWaitInput = screen.querySelector("#difficulty-advanced-loop-wait");
+  const manualHeatInput = screen.querySelector("#difficulty-advanced-manual-heat");
+  const overflowToHeatInput = screen.querySelector("#difficulty-advanced-overflow-to-heat");
+  const advancedPanel = screen.querySelector(".difficulty-advanced-panel");
+  const advancedBtn = screen.querySelector(".difficulty-advanced-btn");
+  const difficultyBtns = screen.querySelectorAll(".difficulty-btn");
+  const startBtn = screen.querySelector(".difficulty-start-btn");
+  const backBtn = screen.querySelector(".difficulty-back-btn");
+
+  function applyPresetToInputs(p) {
+    moneyInput.value = p.base_money;
+    maxHeatInput.value = p.base_max_heat;
+    maxPowerInput.value = p.base_max_power;
+    loopWaitInput.value = p.base_loop_wait;
+    manualHeatInput.value = p.base_manual_heat_reduce;
+    if (overflowToHeatInput) overflowToHeatInput.value = p.power_overflow_to_heat_pct;
+  }
+
+  applyPresetToInputs(preset);
+
+  difficultyBtns.forEach((btn) => {
+    btn.onclick = () => {
+      difficultyBtns.forEach((b) => {
+        b.classList.remove("difficulty-btn-selected");
+        b.setAttribute("aria-checked", "false");
+      });
+      btn.classList.add("difficulty-btn-selected");
+      btn.setAttribute("aria-checked", "true");
+      applyPresetToInputs(DIFFICULTY_PRESETS[btn.dataset.difficulty]);
+    };
+    btn.onkeydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        btn.click();
+      }
+    };
+  });
+
+  if (advancedBtn && advancedPanel) {
+    advancedBtn.onclick = () => {
+      const isExpanded = !advancedPanel.classList.toggle("hidden");
+      advancedBtn.setAttribute("aria-expanded", String(isExpanded));
+    };
+  }
+
+  if (startBtn) {
+    startBtn.onclick = async () => {
+      const base_money = Number(moneyInput.value) || preset.base_money;
+      const base_max_heat = Number(maxHeatInput.value) || preset.base_max_heat;
+      const base_max_power = Number(maxPowerInput.value) || preset.base_max_power;
+      const base_loop_wait = Number(loopWaitInput.value) || preset.base_loop_wait;
+      const base_manual_heat_reduce = Number(manualHeatInput.value) ?? preset.base_manual_heat_reduce;
+      const overflowPct = overflowToHeatInput ? Number(overflowToHeatInput.value) : preset.power_overflow_to_heat_pct;
+      const power_overflow_to_heat_ratio = Math.max(0, Math.min(1, (overflowPct == null || Number.isNaN(overflowPct) ? 50 : overflowPct) / 100));
+
+      game.base_money = Math.max(1, base_money);
+      game.base_loop_wait = Math.max(200, base_loop_wait);
+      game.base_manual_heat_reduce = Math.max(0, base_manual_heat_reduce);
+      game.reactor.base_max_heat = Math.max(100, base_max_heat);
+      game.reactor.base_max_power = Math.max(10, base_max_power);
+      game.reactor.power_overflow_to_heat_ratio = power_overflow_to_heat_ratio;
+
+      overlay.classList.add("hidden");
+      setTimeout(() => overlay.remove(), 300);
+      try {
+        await startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId);
+      } catch (error) {
+        console.error("[DIFFICULTY] Failed to start game:", error);
+        alert("Failed to start game. Please try again.");
+      }
+    };
+  }
+
+  if (backBtn) {
+    backBtn.onclick = () => {
+      overlay.classList.add("hidden");
+      setTimeout(() => {
+        overlay.remove();
+        showTechTreeSelection(game, pageRouter, ui, splashManager);
+      }, 300);
+    };
+  }
+
+  overlay.appendChild(screen);
+  overlay.classList.remove("hidden");
+}
 
 async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId) {
     try {
@@ -2390,16 +2507,11 @@ class SplashScreenManager {
         
         const emailContent = document.createElement("div");
         emailContent.style.cssText = "display: flex; align-items: center; flex: 1; min-width: 0;";
-
-        const iconSpan = document.createElement("span");
-        iconSpan.innerHTML = authIcon;
-        emailContent.appendChild(iconSpan);
-
+        emailContent.innerHTML = authIcon;
         const emailSpan = document.createElement("span");
         emailSpan.style.cssText = "white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
         emailSpan.textContent = userEmail;
         emailContent.appendChild(emailSpan);
-
         emailDisplay.appendChild(emailContent);
         
         const logoutBtn = document.createElement("button");
