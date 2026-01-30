@@ -39,6 +39,11 @@ export class Engine {
     this._heatCalc_plannedInByNeighbor = new Map();
     this._heatCalc_plannedInByExchanger = new Map();
 
+    // Heat Exchanger/Outlet/Explosion Processing - GC Optimization
+    this._heatCalc_validNeighbors = [];
+    this._outletProcessing_neighbors = [];
+    this._explosion_tilesToExplode = [];
+
     // Valve Processing Pre-allocation (Avoid GC)
     this._valveProcessing_valves = [];
     this._valveProcessing_neighbors = [];
@@ -142,7 +147,6 @@ export class Engine {
     if (!this._partCacheDirty) {
       return;
     }
-    console.log(`[DEBUG Engine] _updatePartCaches: rows=${this.game._rows}, cols=${this.game._cols}`);
     // Ensure arrays are always valid before proceeding
     this._ensureArraysValid();
 
@@ -171,7 +175,6 @@ export class Engine {
 
         const part = tile.part;
         const category = part.category;
-        if (tile && tile.part) console.log(`[DEBUG Engine] Found part at ${row},${col}: ${tile.part.id} (cat: ${tile.part.category})`);
 
         // Use switch for better performance than multiple if statements
         switch (category) {
@@ -214,7 +217,6 @@ export class Engine {
     this.active_exchangers.length = exchangerIndex;
     this.active_outlets.length = outletIndex;
 
-    console.log(`[DEBUG Engine] Caches updated: active_cells=${this.active_cells.length}, active_vessels=${this.active_vessels.length}`);
     this._partCacheDirty = false;
   }
 
@@ -316,8 +318,6 @@ export class Engine {
       }
 
       // If Time Flux is enabled, consume banked time
-      // console.log(`[TIME FLUX] Check: time_flux=${this.game.time_flux}, accumulator=${this.time_accumulator.toFixed(0)}ms`);
-      
       if (this.game.time_flux && this.time_accumulator > 0) {
         const heatRatio = this.game.reactor.max_heat > 0 ? this.game.reactor.current_heat / this.game.reactor.max_heat : 0;
         if (heatRatio >= 0.9) {
@@ -332,12 +332,10 @@ export class Engine {
           ticksToProcess += fluxTicksUsed;
           const subtractedAmount = fluxTicksUsed * targetTickDuration;
           this.time_accumulator -= subtractedAmount;
-          console.log(`[TIME FLUX] Subtracted ${subtractedAmount.toFixed(0)}ms from accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms (time_flux=${this.game.time_flux})`);
           if (this.time_accumulator < 0.001) this.time_accumulator = 0;
           this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicksUsed.toFixed(2)} flux ticks (${(fluxTicksUsed * targetTickDuration).toFixed(0)}ms), accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
         }
       } else if (this.time_accumulator > 0) {
-        console.log(`[TIME FLUX] Skipped consumption: time_flux=${this.game.time_flux}, accumulator=${this.time_accumulator.toFixed(0)}ms`);
       }
 
       if (ticksToProcess > 0) {
@@ -441,7 +439,6 @@ export class Engine {
     // tick() is an explicit request to process a tick, so it should execute regardless of running state
 
     // Force update part caches to ensure newly added parts are included
-    console.log(`[DEBUG Engine] _processTick start: running=${this.running}, manual=${manual}, paused=${this.game.paused}`);
     this._updatePartCaches();
     this._updateValveNeighborCache(); // Update valve neighbor cache
 
@@ -730,10 +727,6 @@ export class Engine {
         // Only transfer if we have valid input and output neighbors
         // Valves should never store heat - they only transfer when both input and output are available
         if (inputNeighbors.length > 0 && outputNeighbors.length > 0) {
-          if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-            console.log(`[ENGINE] Valve ${valvePart.id} has ${inputNeighbors.length} inputs and ${outputNeighbors.length} outputs`);
-          }
-
           // Add valve to active_vessels only when it has valid input/output neighbors
           // This prevents idle valves from being processed by explosion checking
           if (!this.active_vessels.includes(valve)) {
@@ -758,20 +751,12 @@ export class Engine {
                 const transferAmount = Math.min(maxTransfer, inputHeat, outputSpace);
 
                 if (transferAmount > 0) {
-                  if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-                    console.log(`[ENGINE] Valve ${valvePart.id} transferring ${transferAmount} heat from input to output`);
-                  }
-
                   input.heat_contained -= transferAmount;
                   output.heat_contained += transferAmount;
 
                   // Note: Valve neighbors are now pre-populated in _updateValveNeighborCache()
                   // so we don't need to add them here during heat transfer
                   // DO NOT mark output as processed - it needs to run its own heat transfer logic
-
-                  if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-                    console.log(`[ENGINE] Valve ${valvePart.id} transfer complete: input heat now ${input.heat_contained}, output heat now ${output.heat_contained}`);
-                  }
 
                   // Add visual effect - DISABLED for performance
                   const cnt = transferAmount >= 50 ? 3 : transferAmount >= 15 ? 2 : 1;
@@ -855,8 +840,9 @@ export class Engine {
         // Reuse neighbors array from Tile cache, avoid .filter()
         const neighborsAll = tile.containmentNeighborTiles; 
         
-        // Custom sort/filter logic without creating new arrays if possible
-        const validNeighbors = [];
+        // GC Optimization: Use pre-allocated array
+        const validNeighbors = this._heatCalc_validNeighbors;
+        validNeighbors.length = 0;
         for(let nIdx=0; nIdx<neighborsAll.length; nIdx++) {
             if(neighborsAll[nIdx].part) validNeighbors.push(neighborsAll[nIdx]);
         }
@@ -969,6 +955,7 @@ export class Engine {
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
        
+       // GC Optimization: Use pre-allocated array
        const neighbors = this._outletProcessing_neighbors;
        neighbors.length = 0;
        for (const t of tile.containmentNeighborTiles) {
@@ -1042,7 +1029,9 @@ export class Engine {
       this.game.performance.markStart("tick_explosions");
     }
 
-    const tilesToExplode = [];
+    // GC Optimization: Use pre-allocated array
+    const tilesToExplode = this._explosion_tilesToExplode;
+    tilesToExplode.length = 0;
     for (const tile of this.active_vessels) {
       if (!tile.part || tile.exploded) continue;
 
@@ -1103,8 +1092,7 @@ export class Engine {
         }
         
         const heat = tile.heat_contained;
-        if(tile.part.id.includes('vent')) console.log(`[DEBUG Vent] Tile ${tile.row},${tile.col} Type:${tile.part.id} Vent:${tile.part.vent} Eff:${tile.getEffectiveVentValue()} Rate:${ventRate} Heat:${heat} Boost:${reactor.convective_boost}`);
-        
+
         let vent_reduce = Math.min(ventRate, heat);
         
         if (tile.part.id === "vent6") {
@@ -1159,8 +1147,9 @@ export class Engine {
     
     if (potentialPower > effectiveMaxPower) {
       const excessPower = potentialPower - effectiveMaxPower;
+      const overflowToHeat = reactor.power_overflow_to_heat_ratio ?? 0.5;
       reactor.current_power = effectiveMaxPower;
-      reactor.current_heat += excessPower;
+      reactor.current_heat += excessPower * overflowToHeat;
     } else {
       reactor.current_power = potentialPower;
     }
@@ -1204,7 +1193,8 @@ export class Engine {
        const extra = power_add * (powerMult - 1);
        reactor.current_power += extra; 
        if (reactor.current_power > reactor.max_power) {
-           reactor.current_heat += (reactor.current_power - reactor.max_power);
+           const overflowToHeat = reactor.power_overflow_to_heat_ratio ?? 0.5;
+           reactor.current_heat += (reactor.current_power - reactor.max_power) * overflowToHeat;
            reactor.current_power = reactor.max_power;
        }
     }
@@ -1231,7 +1221,6 @@ export class Engine {
       reactor.current_power = reactor.max_power;
 
     if (reactor.power_to_heat_ratio > 0 && reactor.current_heat > 0) {
-      if(reactor.power_to_heat_ratio > 0) console.log(`[DEBUG Electro] Heat:${reactor.current_heat}/${reactor.max_heat} Power:${reactor.current_power} Ratio:${reactor.power_to_heat_ratio}`);
       const heatPercent = reactor.current_heat / reactor.max_heat;
       
       if (heatPercent > 0.80 && reactor.current_power > 0) {
@@ -1261,52 +1250,32 @@ export class Engine {
       const upg = this.game.upgradeset.getUpgrade("flux_accumulators");
       if (upg) {
         fluxLevel = upg.level;
-        console.log(`[DEBUG Flux] Fallback: Reactor level=${reactorFluxLevel}, Upgrade level=${upg.level}, Using=${fluxLevel}`);
-      } else {
-        console.log(`[DEBUG Flux] Fallback: Reactor level=${reactorFluxLevel}, Upgrade not found`);
       }
-    } else {
-      console.log(`[DEBUG Flux] Direct: Reactor level=${reactorFluxLevel}, Using=${fluxLevel}`);
     }
-    
-    console.log(`[DEBUG Flux] Check: fluxLevel=${fluxLevel}, max_power=${reactor.max_power}, current_power=${reactor.current_power}, active_vessels=${this.active_vessels.length}`);
-    
+
     if (fluxLevel > 0 && reactor.max_power > 0) {
       const powerRatio = reactor.current_power / reactor.max_power;
-      console.log(`[DEBUG Flux] Power ratio: ${powerRatio.toFixed(4)} (need >= 0.90)`);
-      
+
       if (powerRatio >= 0.90) {
-        // Count active capacitors using active_vessels cache
         let activeCaps = 0;
         for (const t of this.active_vessels) {
           if (t.part?.category === 'capacitor') {
             const capLevel = t.part.level || 1;
             activeCaps += capLevel;
-            console.log(`[DEBUG Flux] Found capacitor: ${t.part.id} at ${t.row},${t.col}, level=${capLevel}, totalCaps=${activeCaps}`);
           }
         }
 
-        // Formula: Base 0.0001 EP * Flux Level * Capacitor Levels
         const epGain = 0.0001 * fluxLevel * activeCaps * multiplier;
-        const epBefore = this.game.exotic_particles;
-        console.log(`[DEBUG Flux] Calculation: fluxLevel=${fluxLevel}, activeCaps=${activeCaps}, multiplier=${multiplier}, epGain=${epGain}, epBefore=${epBefore}`);
-        
+
         if (epGain > 0) {
           this.game.exotic_particles += epGain;
           this.game.total_exotic_particles += epGain;
           this.game.current_exotic_particles += epGain;
-          console.log(`[DEBUG Flux] EP updated: exotic_particles=${this.game.exotic_particles} (was ${epBefore}, added ${epGain})`);
           ui.stateManager.setVar("exotic_particles", this.game.exotic_particles);
           ui.stateManager.setVar("total_exotic_particles", this.game.total_exotic_particles);
           ui.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
-        } else {
-          console.log(`[DEBUG Flux] epGain is 0 or negative, skipping update`);
         }
-      } else {
-        console.log(`[DEBUG Flux] Power ratio ${powerRatio.toFixed(4)} < 0.90, skipping`);
       }
-    } else {
-      console.log(`[DEBUG Flux] Condition failed: fluxLevel=${fluxLevel}, max_power=${reactor.max_power}`);
     }
     // --------------------------------
 
@@ -1319,7 +1288,6 @@ export class Engine {
       for (const tile of this.active_cells) {
         if (repairsRemaining <= 0 || reactor.current_power < powerCostPerRepair) break;
 
-        if(reactor.auto_repair_rate > 0) console.log(`[DEBUG Repair] Tile ${tile.row},${tile.col} Ticks:${tile.ticks} PartTicks:${tile.part?.ticks} Condition:${tile.part && tile.part.ticks > 0}`);
         if (tile.part && tile.part.ticks > 0) {
           // Repair 1 tick
           tile.ticks += 1;
