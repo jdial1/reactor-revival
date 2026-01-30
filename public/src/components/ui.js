@@ -1,8 +1,7 @@
-import { numFormat as fmt } from "../utils/util.js";
+import { numFormat as fmt, on, escapeHtml } from "../utils/util.js";
 import { StateManager } from "../core/stateManager.js";
 import { Hotkeys } from "../utils/hotkeys.js";
 import dataService from "../services/dataService.js";
-import { on } from "../utils/util.js";
 import { SettingsModal } from "./settingsModal.js";
 import { GridScaler } from "./gridScaler.js";
 import { leaderboardService } from "../services/leaderboardService.js";
@@ -2912,7 +2911,7 @@ export class UI {
       return `<span class='debug-number'>${value}</span>`;
     }
     if (typeof value === "string") {
-      return `<span class='debug-string'>"${value}"</span>`;
+      return `<span class='debug-string'>"${escapeHtml(value)}"</span>`;
     }
     if (typeof value === "object") {
       if (Array.isArray(value)) {

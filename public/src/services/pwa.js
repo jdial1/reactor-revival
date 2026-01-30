@@ -2402,7 +2402,11 @@ class SplashScreenManager {
         
         const emailContent = document.createElement("div");
         emailContent.style.cssText = "display: flex; align-items: center; flex: 1; min-width: 0;";
-        emailContent.innerHTML = `${authIcon}<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${userEmail}</span>`;
+        emailContent.innerHTML = authIcon;
+        const emailSpan = document.createElement("span");
+        emailSpan.style.cssText = "white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+        emailSpan.textContent = userEmail;
+        emailContent.appendChild(emailSpan);
         emailDisplay.appendChild(emailContent);
         
         const logoutBtn = document.createElement("button");
