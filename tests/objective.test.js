@@ -920,23 +920,20 @@ describe("Objective System", () => {
       expect(checkFn(testGame)).toBe(true);
     });
 
-    it("should test reactor expansion objectives", async () => {
+    it("should test powerPerTick10k objective", async () => {
       const testGame = await setupGame();
 
-      // Test initial expansion
-      const checkFn2 = getObjectiveCheck("initialExpansion2");
-      expect(checkFn2(testGame)).toBe(false);
+      const checkFn = getObjectiveCheck("powerPerTick10k");
+      expect(checkFn(testGame)).toBe(false);
 
-      const expandRowsUpgrade = testGame.upgradeset.getUpgrade("expand_reactor_rows");
-      expandRowsUpgrade.setLevel(2);
-      expect(checkFn2(testGame)).toBe(true);
+      testGame.reactor.stats_power = 10000;
+      expect(checkFn(testGame)).toBe(true);
 
-      // Test full expansion
-      const checkFn4 = getObjectiveCheck("expandReactor4");
-      expect(checkFn4(testGame)).toBe(false);
+      testGame.paused = true;
+      expect(checkFn(testGame)).toBe(false);
 
-      expandRowsUpgrade.setLevel(4);
-      expect(checkFn4(testGame)).toBe(true);
+      testGame.paused = false;
+      expect(checkFn(testGame)).toBe(true);
     });
 
     it("should test high heat mastery objective", async () => {
