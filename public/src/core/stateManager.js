@@ -101,6 +101,18 @@ export class StateManager {
     return this.quickSelectSlots.map((s) => ({ partId: s.partId, locked: s.locked }));
   }
 
+  normalizeQuickSelectSlotsForUnlock() {
+    if (!this.game?.partset || typeof this.game.isPartUnlocked !== "function") return;
+    for (let i = 0; i < this.quickSelectSlots.length; i++) {
+      const s = this.quickSelectSlots[i];
+      if (!s.partId) continue;
+      const part = this.game.partset.getPartById(s.partId);
+      if (!part || !this.game.isPartUnlocked(part)) {
+        this.quickSelectSlots[i] = { partId: null, locked: false };
+      }
+    }
+  }
+
   setQuickSelectLock(index, locked) {
     if (index < 0 || index > 4) return;
     this.quickSelectSlots[index].locked = locked;
@@ -119,20 +131,7 @@ export class StateManager {
     if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
   }
 
-  updatePartsPanelToggleIcon(part) {
-    const buildButton = document.getElementById("build_button_above_deck");
-    if (!buildButton) return;
-
-    const iconEl = buildButton.querySelector(".build-button-icon");
-    const hasPart = !!part;
-    buildButton.classList.toggle("has-selected-part", hasPart);
-    if (iconEl) {
-      if (hasPart && typeof part.getImagePath === "function") {
-        iconEl.src = part.getImagePath();
-        iconEl.alt = part.title ? `${part.title} icon` : "";
-      }
-    }
-  }
+  updatePartsPanelToggleIcon(_part) {}
 
   handleObjectiveCompleted() {
     const toastBtn = this.ui.DOMElements.objectives_toast_btn;
@@ -332,8 +331,8 @@ export class StateManager {
     this.setVar("current_money", this.game.base_money);
     this.setVar("current_power", 0);
     this.setVar("current_heat", 0);
-    this.setVar("max_power", this.game.base_max_power);
-    this.setVar("max_heat", this.game.base_max_heat);
+    this.setVar("max_power", this.game.reactor.base_max_power);
+    this.setVar("max_heat", this.game.reactor.base_max_heat);
     // Ensure any progress-based gating resets as well
     try {
       if (this.game) {

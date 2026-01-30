@@ -42,18 +42,22 @@ export class Engine {
     this._heatCalc_plannedInByNeighbor = new Map();
     this._heatCalc_plannedInByExchanger = new Map();
 
+    // Heat Exchanger/Outlet/Explosion Processing - GC Optimization
+    this._heatCalc_validNeighbors = [];
+    this._outletProcessing_neighbors = [];
+    this._explosion_tilesToExplode = [];
+
     // Valve Processing Pre-allocation (Avoid GC)
     this._valveProcessing_valves = [];
     this._valveProcessing_neighbors = [];
     this._valveProcessing_inputNeighbors = [];
     this._valveProcessing_outputNeighbors = [];
 
-    // Object Pooling for hot path
-    this._tilesToExplode = [];
-    this._valveNeighborExchangers = new Set();
-    this._valve_inputValveNeighbors = [];
-    this._exchanger_validNeighbors = [];
-    this._outlet_neighbors = [];
+    // Outlet Processing Pre-allocation (Avoid GC)
+    this._outletProcessing_neighbors = [];
+
+    // Vent Processing Pre-allocation (Avoid GC)
+    this._ventProcessing_activeVents = [];
 
     // Ensure arrays are always valid
     this._ensureArraysValid();
@@ -354,6 +358,7 @@ export class Engine {
           if (this.time_accumulator < 0.001) this.time_accumulator = 0;
           this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicksUsed.toFixed(2)} flux ticks (${(fluxTicksUsed * targetTickDuration).toFixed(0)}ms), accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
         }
+      } else if (this.time_accumulator > 0) {
       }
 
       if (ticksToProcess > 0) {
@@ -869,10 +874,8 @@ export class Engine {
         const heatStart = valveNeighborExchangers.has(tile) ? (tile.heat_contained || 0) : (startHeat.get(tile) || 0);
         
         // Reuse neighbors array from Tile cache, avoid .filter()
-        const neighborsAll = tile.containmentNeighborTiles; 
-        
-        // Custom sort/filter logic without creating new arrays if possible
-        const validNeighbors = this._exchanger_validNeighbors;
+        const neighborsAll = tile.containmentNeighborTiles;
+        const validNeighbors = this._heatCalc_validNeighbors;
         validNeighbors.length = 0;
         for(let nIdx=0; nIdx<neighborsAll.length; nIdx++) {
             if(neighborsAll[nIdx].part) validNeighbors.push(neighborsAll[nIdx]);
@@ -985,12 +988,9 @@ export class Engine {
        const tile = this.active_outlets[i];
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
-       
-       const neighbors = this._outlet_neighbors;
+       const neighbors = this._outletProcessing_neighbors;
        neighbors.length = 0;
-       const outletNeighbors = tile.containmentNeighborTiles;
-       for (let j = 0; j < outletNeighbors.length; j++) {
-         const t = outletNeighbors[j];
+       for (const t of tile.containmentNeighborTiles) {
          if (t.part && t.part.category !== 'valve') {
            neighbors.push(t);
          }
@@ -1061,10 +1061,9 @@ export class Engine {
       this.game.performance.markStart("tick_explosions");
     }
 
-    const tilesToExplode = this._tilesToExplode;
+    const tilesToExplode = this._explosion_tilesToExplode;
     tilesToExplode.length = 0;
-    for (let i = 0; i < this.active_vessels.length; i++) {
-      const tile = this.active_vessels[i];
+    for (const tile of this.active_vessels) {
       if (!tile.part || tile.exploded) continue;
 
       const part = tile.part;
@@ -1091,8 +1090,13 @@ export class Engine {
       this.game.performance.markStart("tick_vents");
     }
 
-    const activeVents = this.active_vents;
-
+    const activeVents = this._ventProcessing_activeVents;
+    activeVents.length = 0;
+    for (const tile of this.active_vessels) {
+      if (tile.part?.category === 'vent') {
+        activeVents.push(tile);
+      }
+    }
     for(let i = 0; i < activeVents.length; i++) {
         const tile = activeVents[i];
         if(!tile.part) continue;
@@ -1121,7 +1125,6 @@ export class Engine {
         }
         
         const heat = tile.heat_contained;
-        
         let vent_reduce = Math.min(ventRate, heat);
         
         if (tile.part.id === "vent6") {
@@ -1168,8 +1171,9 @@ export class Engine {
     
     if (potentialPower > effectiveMaxPower) {
       const excessPower = potentialPower - effectiveMaxPower;
+      const overflowToHeat = reactor.power_overflow_to_heat_ratio ?? 0.5;
       reactor.current_power = effectiveMaxPower;
-      reactor.current_heat += excessPower;
+      reactor.current_heat += excessPower * overflowToHeat;
     } else {
       reactor.current_power = potentialPower;
     }
@@ -1213,7 +1217,8 @@ export class Engine {
        const extra = power_add * (powerMult - 1);
        reactor.current_power += extra; 
        if (reactor.current_power > reactor.max_power) {
-           reactor.current_heat += (reactor.current_power - reactor.max_power);
+           const overflowToHeat = reactor.power_overflow_to_heat_ratio ?? 0.5;
+           reactor.current_heat += (reactor.current_power - reactor.max_power) * overflowToHeat;
            reactor.current_power = reactor.max_power;
        }
     }
@@ -1270,22 +1275,18 @@ export class Engine {
         fluxLevel = upg.level;
       }
     }
-    
     if (fluxLevel > 0 && reactor.max_power > 0) {
       const powerRatio = reactor.current_power / reactor.max_power;
-      
       if (powerRatio >= 0.90) {
-        // Count active capacitors using pre-calculated cache
         let activeCaps = 0;
-        for (let i = 0; i < this.active_capacitors.length; i++) {
-          const t = this.active_capacitors[i];
-          const capLevel = t.part.level || 1;
-          activeCaps += capLevel;
+        for (const t of this.active_vessels) {
+          if (t.part?.category === 'capacitor') {
+            const capLevel = t.part.level || 1;
+            activeCaps += capLevel;
+          }
         }
 
-        // Formula: Base 0.0001 EP * Flux Level * Capacitor Levels
         const epGain = 0.0001 * fluxLevel * activeCaps * multiplier;
-        
         if (epGain > 0) {
           this.game.exotic_particles += epGain;
           this.game.total_exotic_particles += epGain;
@@ -1306,7 +1307,6 @@ export class Engine {
       // Iterate active cells that have durability (ticks)
       for (const tile of this.active_cells) {
         if (repairsRemaining <= 0 || reactor.current_power < powerCostPerRepair) break;
-
         if (tile.part && tile.part.ticks > 0) {
           // Repair 1 tick
           tile.ticks += 1;
