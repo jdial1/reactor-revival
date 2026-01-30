@@ -160,7 +160,8 @@ export async function satisfyObjective(game, idx) {
             break;
 
         case 22:
-            game.upgradeset.getUpgrade("expand_reactor_rows").setLevel(4);
+            game.reactor.stats_power = 10000;
+            game.paused = false;
             break;
 
         case 23:

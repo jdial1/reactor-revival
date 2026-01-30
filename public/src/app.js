@@ -570,7 +570,6 @@ async function startGame(pageRouter, ui, game) {
 
 window.startGame = startGame;
 window.clearAllGameDataForNewGame = clearAllGameDataForNewGame;
-export { clearAllGameDataForNewGame };
 
 function setupGlobalListeners(game) {
   on(document, "[data-page]", "click", async (e) => {

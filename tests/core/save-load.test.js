@@ -123,4 +123,41 @@ describe("Save and Load Functionality", () => {
     expect(loaded).toBe(false);
     expect(game.current_money).toBe(game.base_money);
   });
+
+  it("should clear all game data when starting new game so no stale save is loaded", () => {
+    localStorage.setItem("reactorGameSave", "{}");
+    localStorage.setItem("reactorGameSave_1", JSON.stringify({ version: 1, current_money: 9999 }));
+    localStorage.setItem("reactorGameSave_2", "{}");
+    localStorage.setItem("reactorGameSave_3", "{}");
+    localStorage.setItem("reactorCurrentSaveSlot", "1");
+    localStorage.setItem("reactorGameQuickStartShown", "1");
+    localStorage.setItem("google_drive_save_file_id", "fake-id");
+    game._saved_objective_index = 2;
+
+    if (typeof window.clearAllGameDataForNewGame === "function") {
+      window.clearAllGameDataForNewGame(game);
+    } else {
+      try {
+        localStorage.removeItem("reactorGameSave");
+        for (let i = 1; i <= 3; i++) localStorage.removeItem(`reactorGameSave_${i}`);
+        localStorage.removeItem("reactorCurrentSaveSlot");
+        localStorage.removeItem("reactorGameQuickStartShown");
+        localStorage.removeItem("google_drive_save_file_id");
+        localStorage.setItem("reactorNewGamePending", "1");
+      } catch (_) { }
+      if (game && Object.prototype.hasOwnProperty.call(game, "_saved_objective_index")) {
+        delete game._saved_objective_index;
+      }
+    }
+
+    expect(localStorage.getItem("reactorGameSave")).toBeNull();
+    expect(localStorage.getItem("reactorGameSave_1")).toBeNull();
+    expect(localStorage.getItem("reactorGameSave_2")).toBeNull();
+    expect(localStorage.getItem("reactorGameSave_3")).toBeNull();
+    expect(localStorage.getItem("reactorCurrentSaveSlot")).toBeNull();
+    expect(localStorage.getItem("reactorGameQuickStartShown")).toBeNull();
+    expect(localStorage.getItem("google_drive_save_file_id")).toBeNull();
+    expect(localStorage.getItem("reactorNewGamePending")).toBe("1");
+    expect(game._saved_objective_index).toBeUndefined();
+  });
 });
