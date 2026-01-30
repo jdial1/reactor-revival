@@ -1,6 +1,6 @@
 [
     {
-        "title": "Place your first Cell in the reactor by clicking '☰'",
+        "title": "Place your first Cell in the reactor by opening the Parts panel",
         "flavor_text": "The first component is online. The foundation of your reactor is set.",
         "reward": 10,
         "checkId": "firstCell"

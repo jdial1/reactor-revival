@@ -52,6 +52,8 @@ export class Engine {
     this._valveProcessing_neighbors = [];
     this._valveProcessing_inputNeighbors = [];
     this._valveProcessing_outputNeighbors = [];
+    this._valve_inputValveNeighbors = [];
+    this._valveNeighborExchangers = new Set();
 
     // Outlet Processing Pre-allocation (Avoid GC)
     this._outletProcessing_neighbors = [];

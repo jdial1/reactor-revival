@@ -2653,22 +2653,34 @@ export class UI {
 
   async showDetailedQuickStart() {
     try {
-      const response = await fetch("pages/detailed-quick-start.html");
+      const response = await fetch("pages/quick-start-modal.html");
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const html = await response.text();
-
       const modal = document.createElement("div");
       modal.id = "quick-start-modal";
       modal.innerHTML = html;
       document.body.appendChild(modal);
 
-      document.getElementById("quick-start-close-detailed").onclick = () => {
-        modal.remove();
+      const page1 = document.getElementById("quick-start-page-1");
+      const page2 = document.getElementById("quick-start-page-2");
+      page1.classList.add("hidden");
+      page2.classList.remove("hidden");
+
+      document.getElementById("quick-start-more-details").onclick = () => {
+        page1.classList.add("hidden");
+        page2.classList.remove("hidden");
       };
+      document.getElementById("quick-start-back").onclick = () => {
+        page2.classList.add("hidden");
+        page1.classList.remove("hidden");
+      };
+      const closeModal = () => modal.remove();
+      document.getElementById("quick-start-close").onclick = closeModal;
+      document.getElementById("quick-start-close-2").onclick = closeModal;
     } catch (error) {
-      console.error("Failed to load detailed quick start modal:", error);
+      console.error("Failed to load quick start modal:", error);
       const modal = document.createElement("div");
       modal.id = "quick-start-modal";
       modal.innerHTML = `
@@ -2681,11 +2693,8 @@ export class UI {
         </div>
       `;
       document.body.appendChild(modal);
-
       document.getElementById("quick-start-close-detailed-fallback").onclick =
-        () => {
-          modal.remove();
-        };
+        () => modal.remove();
     }
   }
 

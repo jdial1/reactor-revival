@@ -17,7 +17,7 @@
     },
     "controls": {
         "autoSell": "Automatically sells a portion of your power.",
-        "autoBuy": "Automatically replaces depleted components if you have Perpetual Power.",
+        "autoBuy": "Automatically replaces depleted components if you have Perpetual upgrades (Cells, Capacitors, Reflectors).",
         "timeFlux": "Accelerates game time, making everything happen faster.",
         "heatController": "Automatically reduces heat when it gets too high.",
         "pause": "Pauses all reactor operations. Use this to plan changes or prevent accidents."
