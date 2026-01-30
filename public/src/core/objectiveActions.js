@@ -193,17 +193,6 @@ export const checkFunctions = {
           upg.upgrade.type.startsWith("experimental_") &&
           upg.level > 0
       );
-
-    // Add this debug log:
-    console.log("[DEBUG] experimentalUpgrade check: all upgrades with experimental type", game.upgradeset.getAllUpgrades().filter(u => u.upgrade.type.startsWith("experimental_")).map(u => ({ id: u.id, level: u.level, type: u.upgrade.type })));
-    console.log("[DEBUG] experimentalUpgrade check: filtered upgrades", experimentalUpgrades.map(u => ({ id: u.id, level: u.level, type: u.upgrade.type })));
-    console.log("[DEBUG] experimentalUpgrade check: infused_cells details", {
-      exists: !!game.upgradeset.getUpgrade("infused_cells"),
-      level: game.upgradeset.getUpgrade("infused_cells")?.level,
-      type: game.upgradeset.getUpgrade("infused_cells")?.upgrade.type,
-      id: game.upgradeset.getUpgrade("infused_cells")?.upgrade.id
-    });
-
     return experimentalUpgrades.length > 0;
   },
   fiveQuadDolorium: (game) =>
