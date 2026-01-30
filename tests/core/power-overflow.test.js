@@ -6,14 +6,13 @@ describe("Power Overflow Mechanics", () => {
 
     beforeEach(async () => {
         game = await setupGame();
-        // Disable auto-cooling to ensure heat math is exact
         game.reactor.heat_controlled = false;
         game.ui.stateManager.setVar("heat_control", false);
-        // Ensure reactor has specific limits for math
         game.reactor.base_max_power = 100;
         game.reactor.max_power = 100;
         game.reactor.current_heat = 0;
         game.reactor.current_power = 0;
+        game.reactor.power_overflow_to_heat_ratio = 1;
     });
 
     afterEach(() => {
@@ -126,6 +125,108 @@ describe("Power Overflow Mechanics", () => {
 
         expect(game.reactor.current_power).toBe(60);
         expect(game.reactor.current_heat).toBe(5); // Only native heat
+    });
+});
+
+describe("Difficulty power overflow to heat ratio", () => {
+    let game;
+
+    beforeEach(async () => {
+        game = await setupGame();
+        game.reactor.heat_controlled = false;
+        game.ui.stateManager.setVar("heat_control", false);
+        game.reactor.base_max_power = 100;
+        game.reactor.max_power = 100;
+        game.reactor.current_heat = 0;
+        game.reactor.current_power = 0;
+    });
+
+    afterEach(() => {
+        cleanupGame();
+    });
+
+    it("easy (ratio 0): overflow power is lost, no heat from overflow", async () => {
+        game.reactor.power_overflow_to_heat_ratio = 0;
+        const tile = await placePart(game, 0, 0, "uranium1");
+        game.reactor.updateStats();
+        tile.activated = true;
+        tile.ticks = 10;
+        tile.power = 20;
+        tile.heat = 0;
+        game.reactor.current_power = 90;
+        game.reactor.max_power = 100;
+        game.reactor.current_heat = 0;
+
+        game.engine.tick();
+
+        expect(game.reactor.current_power).toBe(100);
+        expect(game.reactor.current_heat).toBe(0);
+    });
+
+    it("medium (ratio 0.5): 50% of overflow goes to heat", async () => {
+        game.reactor.power_overflow_to_heat_ratio = 0.5;
+        const tile = await placePart(game, 0, 0, "uranium1");
+        game.reactor.updateStats();
+        tile.activated = true;
+        tile.ticks = 10;
+        tile.power = 20;
+        tile.heat = 0;
+        game.reactor.current_power = 90;
+        game.reactor.max_power = 100;
+        game.reactor.current_heat = 0;
+
+        game.engine.tick();
+
+        expect(game.reactor.current_power).toBe(100);
+        expect(game.reactor.current_heat).toBe(5);
+    });
+
+    it("hard (ratio 1): 100% of overflow goes to heat", async () => {
+        game.reactor.power_overflow_to_heat_ratio = 1;
+        const tile = await placePart(game, 0, 0, "uranium1");
+        game.reactor.updateStats();
+        tile.activated = true;
+        tile.ticks = 10;
+        tile.power = 20;
+        tile.heat = 0;
+        game.reactor.current_power = 90;
+        game.reactor.max_power = 100;
+        game.reactor.current_heat = 0;
+
+        game.engine.tick();
+
+        expect(game.reactor.current_power).toBe(100);
+        expect(game.reactor.current_heat).toBe(10);
+    });
+});
+
+describe("Difficulty settings persist after init", () => {
+    let game;
+
+    beforeEach(async () => {
+        game = await setupGame();
+    });
+
+    afterEach(() => {
+        cleanupGame();
+    });
+
+    it("power_overflow_to_heat_ratio is not reset by initialize_new_game_state", async () => {
+        game.reactor.power_overflow_to_heat_ratio = 0;
+        await game.initialize_new_game_state();
+        expect(game.reactor.power_overflow_to_heat_ratio).toBe(0);
+    });
+
+    it("applying easy-like settings leaves power_overflow_to_heat_ratio at 0 after init", async () => {
+        game.base_money = 25;
+        game.reactor.base_max_heat = 1500;
+        game.reactor.base_max_power = 120;
+        game.reactor.power_overflow_to_heat_ratio = 0;
+        await game.initialize_new_game_state();
+        expect(game.reactor.power_overflow_to_heat_ratio).toBe(0);
+        expect(game.base_money).toBe(25);
+        expect(game.reactor.base_max_heat).toBe(1500);
+        expect(game.reactor.base_max_power).toBe(120);
     });
 });
 

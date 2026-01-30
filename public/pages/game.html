@@ -65,6 +65,21 @@
   </ul>
 </nav>
 
+<!-- MOBILE PASSIVE TOP BAR (EP | Money | Pause) - visible only when width <= 900px -->
+<div id="mobile_passive_top_bar" class="mobile-passive-top-bar" aria-hidden="true">
+  <span class="passive-top-ep">
+    <span class="passive-top-icon" aria-hidden="true">&#129516;</span>
+    <span id="mobile_passive_ep">0</span>
+  </span>
+  <span class="passive-top-money">
+    <span id="mobile_passive_money_value">0</span>
+  </span>
+  <button type="button" id="mobile_passive_pause_btn" class="passive-top-pause" aria-label="Pause" title="Pause">
+    <img src="img/ui/nav/nav_pause.png" alt="" class="passive-pause-icon pause-icon" />
+    <img src="img/ui/nav/nav_play.png" alt="" class="passive-pause-icon play-icon" />
+  </button>
+</div>
+
 <!-- MAIN CONTENT -->
 <main id="main">
   <!-- PARTS SIDEBAR / BOTTOM SHEET -->
@@ -80,7 +95,7 @@
           aria-label="Power Creation"
         >
           <img src="img/ui/icons/icon_power.png" alt="Power" />
-          <span class="parts_tab_label">Cells</span>
+          <span class="parts_tab_label">Power</span>
         </button>
         <button
           class="parts_tab"
@@ -90,7 +105,7 @@
           aria-label="Heat Management"
         >
           <img src="img/ui/icons/icon_heat.png" alt="Heat" />
-          <span class="parts_tab_label">Cooling</span>
+          <span class="parts_tab_label">Heat</span>
         </button>
         <button
           id="parts_help_toggle"
@@ -267,7 +282,7 @@
 </div>
 <!-- End Copy/Paste UI -->
 
-<!-- BUILD ROW (Above Control Deck, Reactor Page Only): 5 quick-select slots (50%) + Build button (50%) -->
+<!-- BUILD ROW (Above Control Deck, Reactor Page Only): 5 quick-select slots + build FAB -->
 <div id="build_above_deck_row" class="build-above-deck-row">
   <div class="quick-select-slots" aria-label="Recent parts">
     <button type="button" class="quick-select-slot" data-index="0" aria-label="Recent part 1"></button>
@@ -275,58 +290,57 @@
     <button type="button" class="quick-select-slot" data-index="2" aria-label="Recent part 3"></button>
     <button type="button" class="quick-select-slot" data-index="3" aria-label="Recent part 4"></button>
     <button type="button" class="quick-select-slot" data-index="4" aria-label="Recent part 5"></button>
+    <button id="control_deck_build_fab" class="control-deck-fab" type="button" aria-label="Build Parts" title="Build Parts">
+      <span class="control-deck-fab-icon" aria-hidden="true">…</span>
+    </button>
   </div>
-  <button id="build_button_above_deck" class="build-button-above-deck" aria-label="Build Parts">
-    <img class="build-button-icon" src="img/ui/icons/icon_power.png" alt="" />
-    <span class="build-button-label">Build</span>
-  </button>
 </div>
 
 <!-- REACTOR CONTROL DECK (Bottom Anchor) -->
 <footer id="reactor_control_deck" class="reactor-control-deck">
-  <div class="control-deck-grid">
-    <!-- Power Capacitor (Left 35%) -->
-    <button
-      class="control-deck-item power-capacitor"
-      id="control_deck_power_btn"
-      type="button"
-      tabindex="0"
-      aria-label="Sell Power"
-    >
-      <div class="control-deck-fill power-fill"></div>
-      <div class="control-deck-content">
-        <img src="img/ui/icons/icon_power.png" alt="Power" class="control-deck-icon" />
-        <span class="control-deck-value" id="control_deck_power">100</span>
-        <span class="control-deck-denom" id="control_deck_power_denom">/100</span>
-      </div>
-    </button>
+  <div class="control-deck-inner">
+    <div class="control-deck-grid">
+      <button
+        class="control-deck-item power-capacitor"
+        id="control_deck_power_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Sell Power"
+      >
+        <div class="control-deck-auto-sell-led" id="control_deck_auto_sell_led" aria-hidden="true"></div>
+        <div class="control-deck-fill power-fill"></div>
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_power.png" alt="Power" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_power">100</span>
+          <span class="control-deck-denom" id="control_deck_power_denom">/100</span>
+        </div>
+      </button>
 
-    <!-- Money Scoreboard (Center 30%) -->
-    <div class="control-deck-item money-scoreboard" id="control_deck_money">
-      <div class="control-deck-content">
-        <img src="img/ui/icons/icon_cash.png" alt="Cash" class="control-deck-icon" />
-        <span class="control-deck-value" id="control_deck_money_value">20.6K</span>
+      <div class="control-deck-item money-scoreboard" id="control_deck_money">
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_cash.png" alt="Cash" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_money_value">20.6K</span>
+        </div>
+        <div class="floating-text-container" id="floating_text_container"></div>
       </div>
-      <div class="floating-text-container" id="floating_text_container"></div>
+
+      <button
+        class="control-deck-item heat-vent"
+        id="control_deck_heat_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Vent Heat"
+      >
+        <div class="control-deck-fill heat-fill"></div>
+        <div class="control-deck-hazard-stripes"></div>
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_heat.png" alt="Heat" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_heat">496</span>
+          <span class="control-deck-denom" id="control_deck_heat_denom">/1K</span>
+        </div>
+        <div class="steam-particles" id="steam_particles"></div>
+      </button>
     </div>
-
-    <!-- Heat Vent (Right 35%) -->
-    <button
-      class="control-deck-item heat-vent"
-      id="control_deck_heat_btn"
-      type="button"
-      tabindex="0"
-      aria-label="Vent Heat"
-    >
-      <div class="control-deck-fill heat-fill"></div>
-      <div class="control-deck-hazard-stripes"></div>
-      <div class="control-deck-content">
-        <img src="img/ui/icons/icon_heat.png" alt="Heat" class="control-deck-icon" />
-        <span class="control-deck-value" id="control_deck_heat">496</span>
-        <span class="control-deck-denom" id="control_deck_heat_denom">/1K</span>
-      </div>
-      <div class="steam-particles" id="steam_particles"></div>
-    </button>
   </div>
 </footer>
 
