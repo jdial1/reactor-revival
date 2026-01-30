@@ -138,26 +138,23 @@ describe("UI Integration and Gameplay", () => {
     expect(game.rows).toBe(initialRows + 1);
   });
 
-  it("should show/hide objectives when navigating between pages", async () => {
+  it("should show/hide objectives toast when navigating between pages", async () => {
     // Start on reactor page
     await game.router.loadPage("reactor_section");
 
-    // Check that objectives are visible on reactor page
-    const objectivesSection = document.getElementById("objectives_section");
-    expect(objectivesSection, "Objectives section should exist").not.toBeNull();
-    expect(objectivesSection.classList.contains("hidden")).toBe(false);
+    const objectivesToast = document.getElementById("objectives_toast_btn");
+    expect(objectivesToast, "Objectives toast should exist").not.toBeNull();
+    expect(objectivesToast.classList.contains("hidden")).toBe(false);
 
     // Navigate to upgrades page
     await game.router.loadPage("upgrades_section");
 
-    // Check that objectives are hidden on upgrades page
-    expect(objectivesSection.classList.contains("hidden")).toBe(true);
+    expect(objectivesToast.classList.contains("hidden")).toBe(true);
 
     // Navigate back to reactor page
     await game.router.loadPage("reactor_section");
 
-    // Check that objectives are visible again on reactor page
-    expect(objectivesSection.classList.contains("hidden")).toBe(false);
+    expect(objectivesToast.classList.contains("hidden")).toBe(false);
   });
 
   it("should update reactor heat background based on heat ratio", async () => {

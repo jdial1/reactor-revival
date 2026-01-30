@@ -5,6 +5,7 @@ export class StateManager {
     this.clicked_part = null;
     this.game = null;
     this.vars = new Map();
+    this.quickSelectSlots = Array.from({ length: 5 }, () => ({ partId: null, locked: false }));
   }
   setGame(gameInstance) {
     this.game = gameInstance;
@@ -42,15 +43,32 @@ export class StateManager {
   getVar(key) {
     return this.vars.get(key);
   }
-  setClickedPart(part) {
+  setClickedPart(part, options = {}) {
     this.clicked_part = part;
     const partActive = !!part;
     this.ui.DOMElements.main.classList.toggle("part_active", partActive);
 
-    // Update the parts panel toggle with selected part icon
     this.updatePartsPanelToggleIcon(part);
 
-    // If the newly selected part is not a heat component, clear any active segment highlight
+    const skipOpenPanel = options.skipOpenPanel === true;
+    const isMobile = typeof window !== "undefined" && window.innerWidth <= 900;
+    if (isMobile && !skipOpenPanel) {
+      const partsSection = document.getElementById("parts_section");
+      if (partsSection) {
+        if (partActive) {
+          partsSection.classList.remove("collapsed");
+        }
+        this.ui.updatePartsPanelBodyClass();
+        void partsSection.offsetHeight;
+      }
+    } else if (isMobile && skipOpenPanel) {
+      this.ui.updatePartsPanelBodyClass();
+    }
+    if (part) {
+      const inQuickSelect = this.getQuickSelectSlots().some((s) => s.partId === part.id);
+      if (!inQuickSelect) this.pushLastUsedPart(part);
+    }
+    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
     const heatComponentCategories = ['vent', 'heat_exchanger', 'heat_inlet', 'heat_outlet', 'coolant_cell', 'reactor_plating'];
     if (!part || !heatComponentCategories.includes(part.category)) {
       this.ui.clearSegmentHighlight();
@@ -60,77 +78,68 @@ export class StateManager {
     return this.clicked_part;
   }
 
-  updatePartsPanelToggleIcon(part) {
-    const toggle = this.ui.DOMElements.parts_panel_toggle;
-    if (!toggle) return;
-
-    // Check if we're on desktop where the toggle is hidden
-    const isDesktop = window.innerWidth > 900;
-    if (isDesktop) {
-      // On desktop, the toggle button is hidden, so we don't need to update it
-      return;
+  pushLastUsedPart(part) {
+    const id = part?.id;
+    if (!id) return;
+    const slots = this.quickSelectSlots;
+    const seen = new Set();
+    const order = [id, ...slots.map((s) => s.partId).filter(Boolean).filter((pid) => {
+      if (pid === id || seen.has(pid)) return false;
+      seen.add(pid);
+      return true;
+    })].slice(0, 5);
+    const lockedPartIds = new Set(slots.map((s, i) => slots[i].locked && s.partId).filter(Boolean));
+    const available = order.filter((pid) => !lockedPartIds.has(pid));
+    for (let i = 0; i < 5; i++) {
+      if (slots[i].locked) continue;
+      slots[i].partId = available.shift() ?? null;
     }
+    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+  }
 
-    // Remove existing selected part icon
-    let icon = toggle.querySelector('.selected-part-icon');
-    if (!icon) {
-      icon = document.createElement('div');
-      icon.className = 'selected-part-icon';
-      toggle.appendChild(icon);
-    }
+  getQuickSelectSlots() {
+    return this.quickSelectSlots.map((s) => ({ partId: s.partId, locked: s.locked }));
+  }
 
-    if (part) {
-      // Set the part image as background
-      icon.style.backgroundImage = `url('${part.getImagePath()}')`;
-      icon.classList.add('visible');
-      icon.title = `Selected: ${part.title}`;
-    } else {
-      // Hide the icon when no part is selected
-      icon.classList.remove('visible');
-      icon.style.backgroundImage = '';
-      icon.title = '';
+  normalizeQuickSelectSlotsForUnlock() {
+    if (!this.game?.partset || typeof this.game.isPartUnlocked !== "function") return;
+    for (let i = 0; i < this.quickSelectSlots.length; i++) {
+      const s = this.quickSelectSlots[i];
+      if (!s.partId) continue;
+      const part = this.game.partset.getPartById(s.partId);
+      if (!part || !this.game.isPartUnlocked(part)) {
+        this.quickSelectSlots[i] = { partId: null, locked: false };
+      }
     }
   }
 
+  setQuickSelectLock(index, locked) {
+    if (index < 0 || index > 4) return;
+    this.quickSelectSlots[index].locked = locked;
+    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+  }
+
+  setQuickSelectSlots(slots) {
+    const normalized = Array.from({ length: 5 }, (_, i) => {
+      const s = slots?.[i];
+      return {
+        partId: s?.partId ?? null,
+        locked: !!s?.locked,
+      };
+    });
+    this.quickSelectSlots = normalized;
+    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+  }
+
+  updatePartsPanelToggleIcon(_part) {}
+
   handleObjectiveCompleted() {
-    if (this.ui.DOMElements.objectives_section) {
-      const section = this.ui.DOMElements.objectives_section;
+    const toastBtn = this.ui.DOMElements.objectives_toast_btn;
+    if (!toastBtn) return;
 
-      // Add completed class for green border and glow
-      section.classList.add("completed");
-
-      // Add flash class for completion animation
-      section.classList.add("flash");
-
-      if (typeof document !== 'undefined' && document.createElement && section && section.appendChild) {
-        // Minimal confetti - just a few particles
-        const confettiColors = [
-          "rgba(89, 196, 53, 0.8)",
-          "rgba(255, 255, 255, 0.6)",
-        ];
-        // Spawn fewer, subtler confetti
-        for (let i = 0; i < 5; i++) {
-          const conf = document.createElement("span");
-          conf.className = "confetti";
-          conf.style.background =
-            confettiColors[Math.floor(Math.random() * confettiColors.length)];
-          conf.style.left = `${30 + Math.random() * 40}%`;
-          conf.style.top = `${20 + Math.random() * 20}%`;
-          conf.style.transform = `rotate(${Math.random() * 180}deg)`;
-          conf.style.animationDelay = `${Math.random() * 0.1}s`;
-          
-          try {
-            section.appendChild(conf);
-            setTimeout(() => conf.remove(), 800);
-          } catch (e) {
-            // Ignore append errors in test environments (e.g., node vs jsdom type mismatch)
-          }
-        }
-      }
-
-      setTimeout(() => {
-        section.classList.remove("flash");
-      }, 800);
+    toastBtn.classList.add("is-complete");
+    if (typeof this.ui.animateObjectiveCompletion === "function") {
+      this.ui.animateObjectiveCompletion();
     }
   }
   handlePartAdded(game, part_obj) {
@@ -322,8 +331,8 @@ export class StateManager {
     this.setVar("current_money", this.game.base_money);
     this.setVar("current_power", 0);
     this.setVar("current_heat", 0);
-    this.setVar("max_power", this.game.base_max_power);
-    this.setVar("max_heat", this.game.base_max_heat);
+    this.setVar("max_power", this.game.reactor.base_max_power);
+    this.setVar("max_heat", this.game.reactor.base_max_heat);
     // Ensure any progress-based gating resets as well
     try {
       if (this.game) {
@@ -426,69 +435,19 @@ export class StateManager {
   }
 
   handleObjectiveLoaded(objective, objectiveIndex = null) {
-    // Update the current objective title and reward
-    const titleEl = this.ui.DOMElements.objective_current_title;
-    const rewardEl = this.ui.DOMElements.objective_reward;
-    const oldObjectivesEl = this.ui.DOMElements.objectives_old;
-    if (titleEl && objective.title) {
-      // Move the previous objective to the old objectives list
-      const prevTitle = titleEl.textContent;
-      if (prevTitle && prevTitle !== objective.title && oldObjectivesEl) {
-        const oldObj = document.createElement("div");
-        oldObj.className = "objective-old";
-        // Use innerHTML to preserve any existing part icons
-        oldObj.innerHTML = titleEl.innerHTML || prevTitle;
-        oldObjectivesEl.prepend(oldObj);
-      }
-      // Set the new objective with objective number prefix and part icons
-      // Use the passed index if available, otherwise fall back to the objective manager
+    const toastTitleEl = this.ui.DOMElements.objectives_toast_title;
+    const toastBtn = this.ui.DOMElements.objectives_toast_btn;
+    if (toastTitleEl && objective.title) {
       const currentIndex = objectiveIndex !== null ? objectiveIndex : (this.game?.objectives_manager?.current_objective_index ?? 0);
       const objectiveNumber = currentIndex + 1;
-      const processedTitle = this.addPartIconsToTitle(objective.title);
-      titleEl.innerHTML = `${objectiveNumber}: ${processedTitle}`;
-
-      // Add green border if completed
-      const objectivesSection = this.ui.DOMElements.objectives_section;
-      if (objective.completed) {
-        objectivesSection?.classList.add('completed');
-        titleEl.classList.add('completed');
-      } else {
-        objectivesSection?.classList.remove('completed');
-        titleEl.classList.remove('completed');
-      }
-
-      // Always add scrolling animation for objective text
-      setTimeout(() => {
-        const duration = this.getObjectiveScrollDuration();
-        titleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`;
-      }, 100);
+      const displayTitle = `${objectiveNumber}: ${objective.title}`;
+      toastTitleEl.textContent = displayTitle;
     }
-    if (rewardEl && (objective.reward || objective.ep_reward)) {
-      const isEpReward = objective.ep_reward !== undefined && objective.ep_reward !== null;
-      const rewardValue = isEpReward ? objective.ep_reward : objective.reward;
-      const formattedReward = fmt(rewardValue);
-
-      if (objective.completed) {
-        // Show claim button when completed
-        rewardEl.innerHTML = `<button class="claim-btn" onclick="window.game.objectives_manager.claimObjective()">Claim +${formattedReward} ${isEpReward ? 'EP' : '$'}</button>`;
-        rewardEl.classList.add('claimable');
-      } else {
-        // Show regular reward text when not completed
-        const rewardText = isEpReward ? `+${formattedReward} EP` : `+${formattedReward} $`;
-        rewardEl.textContent = rewardText;
-        rewardEl.classList.remove('claimable');
-      }
-
-      // Update the icon based on reward type
-      if (isEpReward) {
-        rewardEl.style.setProperty('--reward-icon', 'url("../img/ui/icons/icon_power.png")');
-      } else {
-        rewardEl.style.setProperty('--reward-icon', 'url("../img/ui/icons/icon_cash.png")');
-      }
-    } else if (rewardEl) {
-      rewardEl.textContent = "";
-      rewardEl.style.setProperty('--reward-icon', 'none');
-      rewardEl.classList.remove('claimable');
+    if (toastBtn) {
+      toastBtn.classList.toggle("is-complete", !!objective.completed);
+      toastBtn.classList.toggle("is-active", !objective.completed);
+      const iconEl = toastBtn.querySelector(".objectives-toast-icon");
+      if (iconEl) iconEl.textContent = objective.completed ? "!" : "?";
     }
   }
 
@@ -506,10 +465,10 @@ export class StateManager {
 
   // Always enable objective text scrolling
   checkObjectiveTextScrolling() {
-    const titleEl = this.ui.DOMElements.objective_current_title;
-    if (titleEl) {
+    const toastTitleEl = this.ui.DOMElements.objectives_toast_title;
+    if (toastTitleEl) {
       const duration = this.getObjectiveScrollDuration();
-      titleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`;
+      toastTitleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`;
     }
   }
 }
