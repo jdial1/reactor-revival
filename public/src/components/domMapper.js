@@ -78,7 +78,6 @@ export class DOMMapper {
       parts: {
         panel: "#parts_panel",
         panelBody: "#parts_panel_body",
-        panelToggle: "#parts_panel_toggle",
       },
 
       // PWA elements (may exist at startup)

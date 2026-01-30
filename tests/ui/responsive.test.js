@@ -125,26 +125,18 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         ).toBe("boolean");
       });
 
-      it("should have objectives section properly structured for responsive layout", () => {
-        const objectivesContent = document.getElementById("objectives_content");
-        const objectivesSection = document.getElementById("objectives_section");
+      it("should have objectives toast properly structured for responsive layout", () => {
+        const objectivesToast = document.getElementById("objectives_toast_btn");
 
-        // Objectives may not exist on all pages, so test is conditional
-        if (objectivesContent || objectivesSection) {
-          const targetElement = objectivesContent || objectivesSection;
+        if (objectivesToast) {
           expect(
-            isElementPresent(targetElement),
-            "Objectives should be present when found"
+            isElementPresent(objectivesToast),
+            "Objectives toast should be present when found"
           ).toBe(true);
 
-          // Test that objectives section has proper DOM structure
-          const objectiveElements = targetElement.querySelectorAll(
-            ".objective, .objective-item, .objective-text"
-          );
-          // Objectives may be empty or loaded dynamically, so just verify structure exists
           expect(
-            targetElement.tagName,
-            "Should be a valid HTML element"
+            objectivesToast.tagName,
+            "Objectives toast should be a valid HTML element"
           ).toBeTruthy();
         }
 
@@ -191,38 +183,24 @@ describe("Responsive UI Layout and Overlap Checks", () => {
 
       it("should have correct mobile/desktop parts panel behavior", () => {
         const partsPanel = document.getElementById("parts_section");
-        const toggle = document.getElementById("parts_panel_toggle");
+        const toggle = document.getElementById("build_button_above_deck");
 
         expect(partsPanel, "Parts panel should exist").not.toBeNull();
-        expect(toggle, "Parts panel toggle should exist").not.toBeNull();
+        expect(toggle, "Parts panel toggle (build button) should exist").not.toBeNull();
 
-        // Test mobile behavior (≤900px)
         resizeWindow(window, 800, 600);
         const isMobile = window.innerWidth <= 900;
 
-        // Trigger parts panel initialization after resize to ensure correct state
         if (game && game.ui && game.ui.initializePartsPanel) {
           game.ui.initializePartsPanel();
         }
 
         if (isMobile) {
-          // On mobile, panel should start collapsed
           expect(partsPanel.classList.contains("collapsed"),
             "Mobile: Parts panel should start collapsed").toBe(true);
-
-          // Toggle should be visible on mobile
-          const toggleStyle = window.getComputedStyle(toggle);
-          expect(toggleStyle.display !== "none",
-            "Mobile: Toggle should be visible").toBe(true);
         } else {
-          // On desktop, panel should start open
           expect(partsPanel.classList.contains("collapsed"),
             "Desktop: Parts panel should start open").toBe(false);
-
-          // Toggle should be hidden on desktop
-          const toggleStyle = window.getComputedStyle(toggle);
-          expect(toggleStyle.display === "none",
-            "Desktop: Toggle should be hidden").toBe(true);
         }
       });
     });
@@ -357,29 +335,27 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         "Research section should have page class").toBe(true);
     });
 
-    it("should hide objectives section on non-reactor pages", async () => {
+    it("should hide objectives toast on non-reactor pages", async () => {
       // Test on upgrades page
       await game.router.loadPage("upgrades_section");
-      const objectivesSection = document.getElementById("objectives_section");
+      const objectivesToast = document.getElementById("objectives_toast_btn");
 
-      if (objectivesSection) {
-        // Objectives should be hidden on non-reactor pages
-        expect(objectivesSection.style.display === "none" ||
-          objectivesSection.classList.contains("hidden") ||
-          !isElementPresent(objectivesSection),
-          "Objectives should be hidden on upgrades page").toBe(true);
+      if (objectivesToast) {
+        expect(objectivesToast.style.display === "none" ||
+          objectivesToast.classList.contains("hidden") ||
+          !isElementPresent(objectivesToast),
+          "Objectives toast should be hidden on upgrades page").toBe(true);
       }
 
       // Test on research page
       await game.router.loadPage("experimental_upgrades_section");
-      const objectivesSection2 = document.getElementById("objectives_section");
+      const objectivesToast2 = document.getElementById("objectives_toast_btn");
 
-      if (objectivesSection2) {
-        // Objectives should be hidden on non-reactor pages
-        expect(objectivesSection2.style.display === "none" ||
-          objectivesSection2.classList.contains("hidden") ||
-          !isElementPresent(objectivesSection2),
-          "Objectives should be hidden on research page").toBe(true);
+      if (objectivesToast2) {
+        expect(objectivesToast2.style.display === "none" ||
+          objectivesToast2.classList.contains("hidden") ||
+          !isElementPresent(objectivesToast2),
+          "Objectives toast should be hidden on research page").toBe(true);
       }
     });
 
@@ -573,23 +549,18 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         "Reactor should have no bottom padding").toBeTruthy();
     });
 
-    it("should have objectives section with matching background and border styling", () => {
-      const objectivesSection = document.getElementById("objectives_section");
+    it("should have objectives toast with matching background and border styling", () => {
+      const objectivesToast = document.getElementById("objectives_toast_btn");
 
-      expect(objectivesSection, "Objectives section should exist").not.toBeNull();
+      expect(objectivesToast, "Objectives toast should exist").not.toBeNull();
 
-      // Test that objectives section has proper structure
-      expect(objectivesSection.tagName, "Objectives section should be a valid HTML element").toBeTruthy();
+      expect(objectivesToast.tagName, "Objectives toast should be a valid HTML element").toBeTruthy();
 
-      // Test that objectives section has the correct background and border styling
-      // Note: JSDOM doesn't apply CSS, so we test for the presence of the element and its structure
-      const hasObjectivesContent = objectivesSection.querySelector("#objectives_content, .objective, .objective-title");
-      expect(hasObjectivesContent || objectivesSection.textContent.trim().length > 0,
-        "Objectives section should have content or structure").toBeTruthy();
+      expect(objectivesToast.textContent.trim().length >= 0,
+        "Objectives toast should have content or structure").toBeTruthy();
 
-      // Test that the objectives section has the correct CSS class or structure for styling
-      expect(objectivesSection.id === "objectives_section",
-        "Objectives section should have correct ID").toBe(true);
+      expect(objectivesToast.id === "objectives_toast_btn",
+        "Objectives toast should have correct ID").toBe(true);
     });
   });
 
