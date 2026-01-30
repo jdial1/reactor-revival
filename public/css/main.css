@@ -2591,7 +2591,7 @@ footer#bottom_nav button {
   text-decoration: none !important;
   text-shadow: 1px 1px 0 black !important;
   text-transform: uppercase;
-  transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out !important;
 }
 
 /* Hover State for Nav Buttons */
@@ -2600,6 +2600,7 @@ footer#bottom_nav button {
 #bottom_nav button:hover,
 footer#bottom_nav button:hover {
   transform: translateY(-2px);
+  box-shadow: 4px 4px 0 var(--bevel-shadow) !important;
   filter: brightness(1.1);
   color: rgb(255 255 160) !important;
 }
