@@ -1,7 +1,7 @@
 import { Game } from "./core/game.js";
 import { ObjectiveManager } from "./core/objective.js";
 import { TooltipManager } from "./components/tooltip.js";
-import { on } from "./utils/util.js";
+import { on, escapeHtml } from "./utils/util.js";
 import { UI } from "./components/ui.js";
 import { Engine } from "./core/engine.js";
 import "./services/pwa.js";
@@ -695,11 +695,6 @@ function showCriticalError(error) {
   document.body.style.overflow = "hidden";
 }
 
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 document.addEventListener("DOMContentLoaded", () => {
   try {

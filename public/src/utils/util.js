@@ -117,3 +117,15 @@ export function getResourceUrl(resourcePath) {
         return `${basePath}/${resourcePath}`;
     }
 }
+
+/**
+ * Escapes HTML special characters in a string to prevent XSS.
+ * @param {string} text - The text to escape.
+ * @returns {string} The escaped HTML string.
+ */
+export function escapeHtml(text) {
+    if (typeof text !== 'string') return text;
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+}
