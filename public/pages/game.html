@@ -65,13 +65,28 @@
   </ul>
 </nav>
 
+<!-- MOBILE PASSIVE TOP BAR (EP | Money | Pause) - visible only when width <= 900px -->
+<div id="mobile_passive_top_bar" class="mobile-passive-top-bar" aria-hidden="true">
+  <span class="passive-top-ep">
+    <span class="passive-top-icon" aria-hidden="true">&#129516;</span>
+    <span id="mobile_passive_ep">0</span>
+  </span>
+  <span class="passive-top-money">
+    <span id="mobile_passive_money_value">0</span>
+  </span>
+  <button type="button" id="mobile_passive_pause_btn" class="passive-top-pause" aria-label="Pause" title="Pause">
+    <img src="img/ui/nav/nav_pause.png" alt="" class="passive-pause-icon pause-icon" />
+    <img src="img/ui/nav/nav_play.png" alt="" class="passive-pause-icon play-icon" />
+  </button>
+</div>
+
 <!-- MAIN CONTENT -->
 <main id="main">
-  <!-- PARTS SIDEBAR -->
-  <aside id="parts_section">
-    <button id="parts_panel_toggle" aria-label="Toggle parts panel">☰</button>
+  <!-- PARTS SIDEBAR / BOTTOM SHEET -->
+  <aside id="parts_section" class="collapsed">
+    <div class="parts_sheet_handle" id="parts_sheet_handle"></div>
     <div class="parts_header">
-      <div class="parts_tabs">
+      <div class="parts_tabs parts_categories_carousel">
         <button
           class="parts_tab active"
           id="tab_power"
@@ -80,6 +95,7 @@
           aria-label="Power Creation"
         >
           <img src="img/ui/icons/icon_power.png" alt="Power" />
+          <span class="parts_tab_label">Power</span>
         </button>
         <button
           class="parts_tab"
@@ -89,6 +105,7 @@
           aria-label="Heat Management"
         >
           <img src="img/ui/icons/icon_heat.png" alt="Heat" />
+          <span class="parts_tab_label">Heat</span>
         </button>
         <button
           id="parts_help_toggle"
@@ -204,63 +221,17 @@
         <span class="control-text">Account</span>
       </button>
     </nav>
+    <button id="parts_close_btn" class="pixel-btn contrast parts-close-btn" type="button">Close</button>
   </aside>
 
       <div id="main_content_wrapper">
       <!-- Only show objectives on reactor page -->
 
-      <!-- ENHANCED OBJECTIVES SECTION -->
-      <div id="objectives_section">
-
-        <!-- NEW ENHANCED OBJECTIVES UI -->
-        <div id="objectives_container" class="mobile-objectives-container">
-
-          <!-- ALWAYS VISIBLE HEADER (THE 'HANDLE' FOR THE DRAWER) -->
-          <header id="objectives_header" class="objectives-header">
-              <div class="objective-title-row">
-                  <h2 id="objective_current_title" class="objective-title-compact"></h2>
-              </div>
-              <div class="objective-progress-row">
-                  <div class="objective-progress-bar-container">
-                      <div id="objective_current_progress_bar" class="objective-progress-bar"></div>
-                  </div>
-                  <div class="objectives-header-actions">
-                      <button id="objective_claim_btn_compact" class="objective-claim-btn-compact" disabled>Claim</button>
-                      <button id="objective_claim_chapter_btn_compact" class="objective-claim-btn-compact chapter-claim-btn-compact" disabled>Complete</button>
-                      <button id="objectives_toggle_btn" class="objectives-toggle-btn" aria-label="Toggle Objectives">▼</button>
-                  </div>
-              </div>
-          </header>
-
-          <!-- EXPANDABLE CONTENT PANEL -->
-          <div id="objectives_content_panel" class="objectives-content-panel">
-              <!-- Chapter Information -->
-              <div class="objectives-chapter-info">
-                  <h3 id="objective_chapter_title"></h3>
-                  <div class="chapter-progress-container">
-                      <div class="chapter-progress-bar-container">
-                          <div id="objective_chapter_progress_bar" class="chapter-progress-bar"></div>
-                      </div>
-                      <span id="objective_chapter_progress_text"></span>
-                  </div>
-              </div>
-
-              <hr class="objective-divider">
-
-              <!-- Current Objective Details -->
-              <div class="objective-details">
-                  <p id="objective_current_description" class="objective-description"></p>
-                  <p id="objective_flavor_text" class="objective-flavor-text" hidden></p>
-                  <p id="objective_current_progress_text" class="objective-progress-text"></p>
-                  <div id="objective_reward"></div>
-              </div>
-
-              <!-- Claim Buttons -->
-              <button id="objective_claim_btn" class="objective-claim-btn" disabled>Claim Reward</button>
-              <button id="objective_claim_chapter_btn" class="objective-claim-btn chapter-claim-btn" disabled>Complete Chapter</button>
-          </div>
-        </div>
-      </div>
+      <button id="objectives_toast_btn" class="objectives-toast-btn" aria-label="Show Objectives" aria-expanded="false" type="button">
+        <span class="objectives-toast-icon">?</span>
+        <span class="objectives-toast-title" id="objectives_toast_title"></span>
+        <span class="objectives-claim-pill">Claim</span>
+      </button>
 
     <!-- End reactor-only objectives -->
 
@@ -274,6 +245,23 @@
         <!-- Content injected by TooltipManager -->
       </div>
       <button id="tooltip_close_btn" title="Close" aria-label="Close tooltip">×</button>
+    </div>
+
+    <!-- CONTEXT MODAL (Mobile Bottom Sheet for Grid Selection) -->
+    <div id="context_modal" class="context-modal hidden">
+      <div class="context-modal-handle"></div>
+      <div class="context-modal-content">
+        <div class="context-modal-header">
+          <h3 id="context_modal_title" class="context-modal-title"></h3>
+          <button id="context_modal_close" class="context-modal-close" aria-label="Close">×</button>
+        </div>
+        <div id="context_modal_body" class="context-modal-body">
+          <!-- Content injected by UI -->
+        </div>
+        <div class="context-modal-actions">
+          <button id="context_modal_sell" class="context-modal-sell-btn">Sell/Destroy</button>
+        </div>
+      </div>
     </div>
   </div>
 </main>
@@ -294,8 +282,70 @@
 </div>
 <!-- End Copy/Paste UI -->
 
-<!-- INFO BAR (FOOTER) -->
-<footer id="info_bar">
+<!-- BUILD ROW (Above Control Deck, Reactor Page Only): 5 quick-select slots + build FAB -->
+<div id="build_above_deck_row" class="build-above-deck-row">
+  <div class="quick-select-slots" aria-label="Recent parts">
+    <button type="button" class="quick-select-slot" data-index="0" aria-label="Recent part 1"></button>
+    <button type="button" class="quick-select-slot" data-index="1" aria-label="Recent part 2"></button>
+    <button type="button" class="quick-select-slot" data-index="2" aria-label="Recent part 3"></button>
+    <button type="button" class="quick-select-slot" data-index="3" aria-label="Recent part 4"></button>
+    <button type="button" class="quick-select-slot" data-index="4" aria-label="Recent part 5"></button>
+    <button id="control_deck_build_fab" class="control-deck-fab" type="button" aria-label="Build Parts" title="Build Parts">
+      <span class="control-deck-fab-icon" aria-hidden="true">…</span>
+    </button>
+  </div>
+</div>
+
+<!-- REACTOR CONTROL DECK (Bottom Anchor) -->
+<footer id="reactor_control_deck" class="reactor-control-deck">
+  <div class="control-deck-inner">
+    <div class="control-deck-grid">
+      <button
+        class="control-deck-item power-capacitor"
+        id="control_deck_power_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Sell Power"
+      >
+        <div class="control-deck-auto-sell-led" id="control_deck_auto_sell_led" aria-hidden="true"></div>
+        <div class="control-deck-fill power-fill"></div>
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_power.png" alt="Power" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_power">100</span>
+          <span class="control-deck-denom" id="control_deck_power_denom">/100</span>
+        </div>
+      </button>
+
+      <div class="control-deck-item money-scoreboard" id="control_deck_money">
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_cash.png" alt="Cash" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_money_value">20.6K</span>
+        </div>
+        <div class="floating-text-container" id="floating_text_container"></div>
+      </div>
+
+      <button
+        class="control-deck-item heat-vent"
+        id="control_deck_heat_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Vent Heat"
+      >
+        <div class="control-deck-fill heat-fill"></div>
+        <div class="control-deck-hazard-stripes"></div>
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_heat.png" alt="Heat" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_heat">496</span>
+          <span class="control-deck-denom" id="control_deck_heat_denom">/1K</span>
+        </div>
+        <div class="steam-particles" id="steam_particles"></div>
+      </button>
+    </div>
+  </div>
+</footer>
+
+<!-- INFO BAR (Legacy - for desktop compatibility) -->
+<footer id="info_bar" class="info-bar-legacy">
   <!-- Desktop Layout (Single Row) -->
   <div class="info-bar-desktop">
     <button
@@ -334,8 +384,8 @@
     </div>
   </div>
 
-  <!-- Mobile Layout (Two Rows) -->
-  <div class="info-bar-mobile">
+  <!-- Mobile Layout (Two Rows) - Hidden, using control deck instead -->
+  <div class="info-bar-mobile" style="display: none;">
     <div class="info-row info-main">
       <button
         class="info-item power"
@@ -383,25 +433,27 @@
   </div>
 </footer>
 
-<!-- BOTTOM NAV (MOBILE) -->
+<!-- BOTTOM NAV (Global Navigation Bar) -->
 <footer id="bottom_nav">
   <nav>
     <ul>
       <li>
         <button data-page="reactor_section" class="secondary active">
-          Reactor
+          Core
         </button>
       </li>
       <li>
-        <button data-page="upgrades_section" class="secondary">Upgrades</button>
+        <button data-page="upgrades_section" class="secondary">Mods</button>
       </li>
       <li>
         <button data-page="experimental_upgrades_section" class="secondary">
-          Research
+          Tech
         </button>
       </li>
       <li>
-        <button data-page="leaderboard_section" class="secondary" title="Leaderboard" aria-label="Leaderboard">🏆</button>
+        <button id="menu_tab_btn" class="secondary" aria-label="Menu">
+          More
+        </button>
       </li>
     </ul>
   </nav>

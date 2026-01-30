@@ -53,6 +53,11 @@ export class Upgrade {
         if (buyBtn) {
           buyBtn.disabled = !isAffordable || this.level >= this.max_level;
         }
+        if (isAffordable) {
+          this.$el.classList.remove("unaffordable");
+        } else {
+          this.$el.classList.add("unaffordable");
+        }
       }
     }
   }
@@ -126,6 +131,7 @@ export class Upgrade {
             <div class="upgrade-title"></div>
             <div class="upgrade-description"></div>
           </div>
+          <div class="upgrade-doctrine-icon"></div>
         </div>
         <div class="upgrade-footer">
           <div class="upgrade-level-info">
@@ -147,6 +153,14 @@ export class Upgrade {
     const imageDiv = this.$el.querySelector(".image");
     if (imageDiv && this.upgrade.icon) {
       imageDiv.style.backgroundImage = `url('${this.upgrade.icon}')`;
+    }
+
+    const doctrineIconEl = this.$el.querySelector(".upgrade-doctrine-icon");
+    if (doctrineIconEl && this.game.upgradeset) {
+      const doctrine = this.game.upgradeset.getDoctrineForUpgrade(this.id);
+      const iconPath = doctrine ? doctrine.icon : "img/ui/status/status_star.png";
+      doctrineIconEl.style.backgroundImage = `url('${iconPath}')`;
+      doctrineIconEl.dataset.doctrine = doctrine ? doctrine.id : "base";
     }
 
     try {

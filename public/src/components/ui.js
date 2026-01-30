@@ -61,9 +61,9 @@ export class UI {
     
     // Rolling numbers state
     this.displayValues = {
-      money: { current: 0, target: 0, domId: ['info_money', 'info_money_desktop'] },
-      heat: { current: 0, target: 0, domId: ['info_heat', 'info_heat_desktop'], format0: true },
-      power: { current: 0, target: 0, domId: ['info_power', 'info_power_desktop'] },
+      money: { current: 0, target: 0, domId: ['info_money', 'info_money_desktop', 'control_deck_money_value'] },
+      heat: { current: 0, target: 0, domId: ['info_heat', 'info_heat_desktop', 'control_deck_heat'], format0: true },
+      power: { current: 0, target: 0, domId: ['info_power', 'info_power_desktop', 'control_deck_power'] },
       ep: { current: 0, target: 0, domId: ['info_ep_value', 'info_ep_value_desktop'] }
     };
     this._lastUiTime = 0;
@@ -130,7 +130,8 @@ export class UI {
       "overflowValves",
       "topupValves",
       "checkValves",
-      "objectives_section",
+      "objectives_toast_btn",
+      "objectives_toast_title",
       "tooltip",
       "tooltip_data",
       "stats_power",
@@ -170,7 +171,6 @@ export class UI {
       "time_flux_toggle",
       "heat_control_toggle",
       "pause_toggle",
-      "parts_panel_toggle",
       "bottom_nav",
       "main_top_nav",
       "fullscreen_toggle",
@@ -254,24 +254,22 @@ export class UI {
         "overflowValves",
         "topupValves",
         "checkValves",
-        "objectives_section",
-        "objective_reward",
-        "objectives_container",
-        "objectives_header",
-        "objectives_toggle_btn",
-        "objectives_content_panel",
-        "objective_current_title",
-        "objective_current_progress_bar",
-        "objective_chapter_title",
-        "objective_chapter_progress_bar",
-        "objective_chapter_progress_text",
-        "objective_current_description",
-        "objective_current_progress_text",
-        "objective_flavor_text",
-        "objective_claim_btn",
-        "objective_claim_btn_compact",
-        "objective_claim_chapter_btn",
-        "objective_claim_chapter_btn_compact",
+      "objectives_toast_btn",
+      "objectives_toast_title",
+      "reactor_control_deck",
+      "control_deck_power_btn",
+      "control_deck_heat_btn",
+      "control_deck_money",
+      "control_deck_power",
+      "control_deck_heat",
+      "mobile_passive_top_bar",
+      "mobile_passive_ep",
+      "mobile_passive_money_value",
+      "mobile_passive_pause_btn",
+      "control_deck_build_fab",
+      "context_modal",
+      "context_modal_sell",
+      "context_modal_close",
         "tooltip",
         "tooltip_data"
       ],
@@ -497,6 +495,7 @@ export class UI {
       if (key === "pause") {
         this.updateAllToggleBtnStates();
         updatePauseButtonText();
+        this.updateMobilePassiveTopBar();
       }
     };
   }
@@ -726,7 +725,6 @@ export class UI {
   }
 
   updatePauseState() {
-    // Add this check to prevent errors when document is not available
     if (typeof document === "undefined" || !document.body) {
       return;
     }
@@ -734,11 +732,20 @@ export class UI {
       const isPaused = this.stateManager.getVar("pause");
       const isPauseClassPresent = document.body.classList.contains("game-paused");
 
-      // Update body class for pause state - this controls banner visibility via CSS
       if (isPaused && !isPauseClassPresent) {
         document.body.classList.add("game-paused");
       } else if (!isPaused && isPauseClassPresent) {
         document.body.classList.remove("game-paused");
+      }
+
+      if (isPaused) {
+        const unpauseBtn = document.getElementById("unpause_btn");
+        if (unpauseBtn && !unpauseBtn.hasAttribute("data-listener-added")) {
+          unpauseBtn.addEventListener("click", () => {
+            this.stateManager.setVar("pause", false);
+          });
+          unpauseBtn.setAttribute("data-listener-added", "true");
+        }
       }
     }
   }
@@ -862,6 +869,7 @@ export class UI {
                     this.game.tooltip_manager.updateUpgradeAffordability();
                 }
                 this.updateNavIndicators();
+                if (typeof this.updateQuickSelectSlots === "function") this.updateQuickSelectSlots();
              }
              
              // Update leaderboard trophy emoji based on cheats_used
@@ -1107,6 +1115,7 @@ export class UI {
         num: true,
         onupdate: (val) => {
             this.displayValues.money.target = val;
+            this.updateControlDeckValues();
             // Fallback for instant updates on very large jumps or init could go here if needed
         }
       },
@@ -1118,6 +1127,7 @@ export class UI {
           const maxPower = this.stateManager.getVar("max_power") || 0;
           this.updatePowerDenom();
           this.updateInfoBarFillIndicator("power", val, maxPower);
+          this.updateControlDeckValues();
         },
       },
       max_power: {
@@ -1136,6 +1146,7 @@ export class UI {
           const maxHeat = this.stateManager.getVar("max_heat") || 0;
           this.updateHeatDenom();
           this.updateInfoBarFillIndicator("heat", val, maxHeat);
+          this.updateControlDeckValues();
         },
       },
       max_heat: {
@@ -1182,6 +1193,7 @@ export class UI {
           if (this.DOMElements.current_exotic_particles) {
             this.DOMElements.current_exotic_particles.textContent = fmt(val);
           }
+          this.updateMobilePassiveTopBar();
         },
       },
       total_exotic_particles: {
@@ -1913,6 +1925,9 @@ export class UI {
     this.initializePartsPanel();
     this.addHelpButtonToMainPage();
     this.setupUserAccountButton();
+    this.initializeControlDeck();
+    this.setupBuildTabButton();
+    this.setupMenuTabButton();
     if (this.DOMElements.basic_overview_section && this.help_text.basic_overview) {
       this.DOMElements.basic_overview_section.innerHTML = `
         <h3>${this.help_text.basic_overview.title}</h3>
@@ -2157,6 +2172,8 @@ export class UI {
       settingsBtn.addEventListener("click", () => new SettingsModal().show());
     }
 
+    this.setupInfoBarButtons();
+
     let resizeTimeout;
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimeout);
@@ -2298,66 +2315,24 @@ export class UI {
 
   // NEW METHOD for objective UI listeners
   initObjectivesUIListeners() {
-    const header = this.DOMElements.objectives_header;
-    const claimBtn = this.DOMElements.objective_claim_btn;
-    const claimBtnCompact = this.DOMElements.objective_claim_btn_compact;
-    const chapterClaimBtn = this.DOMElements.objective_claim_chapter_btn;
-    const chapterClaimBtnCompact = this.DOMElements.objective_claim_chapter_btn_compact;
+    const toastBtn = this.DOMElements.objectives_toast_btn;
+    if (!toastBtn) return;
 
-    if (header) {
-      header.addEventListener('click', () => this.toggleObjectivesPanel());
-    }
-
-    if (claimBtn) {
-      claimBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent expanding the objectives panel
-        if (!claimBtn.disabled) {
+    toastBtn.addEventListener('click', (event) => {
+      const claimPill = event.target.closest(".objectives-claim-pill");
+      if (claimPill && toastBtn.classList.contains("is-complete")) {
+        if (this.game?.objectives_manager) {
           this.game.objectives_manager.claimObjective();
         }
-      });
-    }
-
-    if (claimBtnCompact) {
-      claimBtnCompact.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent expanding the objectives panel
-        if (!claimBtnCompact.disabled) {
-          this.game.objectives_manager.claimObjective();
-        }
-      });
-    }
-
-    if (chapterClaimBtn) {
-      chapterClaimBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent expanding the objectives panel
-        if (!chapterClaimBtn.disabled) {
-          this.game.objectives_manager.claimObjective();
-        }
-      });
-    }
-
-    if (chapterClaimBtnCompact) {
-      chapterClaimBtnCompact.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent expanding the objectives panel
-        if (!chapterClaimBtnCompact.disabled) {
-          this.game.objectives_manager.claimObjective();
-        }
-      });
-    }
-  }
-
-  // NEW METHOD to toggle the panel
-  toggleObjectivesPanel() {
-    const container = this.DOMElements.objectives_container;
-    if (container) {
-      const isOpen = container.classList.toggle('is-open');
-      const toggleBtn = this.DOMElements.objectives_toggle_btn;
-      if (toggleBtn) {
-        toggleBtn.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+        return;
       }
-      if (this.game && this.game.audio) {
-        this.game.audio.play('click');
+
+      const isExpanded = toastBtn.classList.toggle("is-expanded");
+      toastBtn.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+      if (isExpanded && this.lightVibration) {
+        this.lightVibration();
       }
-    }
+    });
   }
 
   // NEW METHOD to update the entire objectives display
@@ -2370,165 +2345,39 @@ export class UI {
     const info = this.game.objectives_manager.getCurrentObjectiveDisplayInfo();
     if (!info) return;
 
-    // Update Titles
-    if (this.DOMElements.objective_current_title) {
-      this.DOMElements.objective_current_title.innerHTML = this.stateManager.addPartIconsToTitle(info.title);
+    const toastTitleEl = this.DOMElements.objectives_toast_title;
+    const toastBtn = this.DOMElements.objectives_toast_btn;
+    if (toastTitleEl) {
+      const objectiveIndex = this.game?.objectives_manager?.current_objective_index ?? 0;
+      const displayTitle = info.title ? `${objectiveIndex + 1}: ${info.title}` : "";
+      toastTitleEl.textContent = displayTitle;
     }
-    if (this.DOMElements.objective_chapter_title) {
-      this.DOMElements.objective_chapter_title.textContent = info.chapterName;
-    }
-
-    // Update Progress Bars & Text with smooth animation
-    const progressBarContainer = this.DOMElements.objective_current_progress_bar?.parentElement;
-    if (info.isComplete && progressBarContainer) {
-      progressBarContainer.style.display = 'none';
-    } else if (progressBarContainer) {
-      progressBarContainer.style.display = 'flex';
-    }
-
-    if (this.DOMElements.objective_current_progress_bar) {
-      this.DOMElements.objective_current_progress_bar.style.width = `${info.progressPercent}%`;
-    }
-    if (this.DOMElements.objective_chapter_progress_bar) {
-      this.DOMElements.objective_chapter_progress_bar.style.width = `${info.chapterProgressPercent}%`;
-    }
-    if (this.DOMElements.objective_chapter_progress_text) {
-      this.DOMElements.objective_chapter_progress_text.textContent = info.chapterProgressText;
-    }
-
-    // Update Detailed Info
-    if (this.DOMElements.objective_current_description) {
-      this.DOMElements.objective_current_description.innerHTML = this.stateManager.addPartIconsToTitle(info.description);
-    }
-
-    // Add Flavor Text - only show when objective is completed
-    if (this.DOMElements.objective_flavor_text) {
-      if (info.flavor_text && info.isComplete) {
-        this.DOMElements.objective_flavor_text.textContent = info.flavor_text;
-        this.DOMElements.objective_flavor_text.hidden = false;
-      } else {
-        this.DOMElements.objective_flavor_text.hidden = true;
+    if (toastBtn) {
+      const wasComplete = toastBtn.classList.contains("is-complete");
+      const claimPill = toastBtn.querySelector(".objectives-claim-pill");
+      toastBtn.classList.toggle("is-complete", !!info.isComplete);
+      toastBtn.classList.toggle("is-active", !info.isComplete);
+      if (claimPill) {
+        claimPill.textContent = info.isChapterCompletion ? "Complete" : "Claim";
       }
-    }
 
-    if (this.DOMElements.objective_current_progress_text) {
-      this.DOMElements.objective_current_progress_text.textContent = info.progressText;
-    }
-
-    // Update Reward Display
-    if (this.DOMElements.objective_reward) {
-      let rewardHTML = '';
-      if (info.reward.money > 0) {
-        rewardHTML = `<img src="img/ui/icons/icon_cash.png" alt="Money"> ${info.reward.money.toLocaleString()}`;
-      } else if (info.reward.ep > 0) {
-        rewardHTML = `<img src="img/ui/icons/icon_power.png" alt="EP"> ${info.reward.ep.toLocaleString()} EP`;
-      }
-      this.DOMElements.objective_reward.innerHTML = rewardHTML;
-    }
-
-    // Update Claim Button State with animation (both compact and full)
-    const isChapterObjective = info.isChapterCompletion || false;
-    const normalClaimButtons = [
-      this.DOMElements.objective_claim_btn,
-      this.DOMElements.objective_claim_btn_compact
-    ].filter(btn => btn);
-
-    const chapterClaimButtons = [
-      this.DOMElements.objective_claim_chapter_btn,
-      this.DOMElements.objective_claim_chapter_btn_compact
-    ].filter(btn => btn);
-
-    // Show/hide appropriate buttons based on chapter completion
-    if (normalClaimButtons.length > 0) {
-      normalClaimButtons.forEach(btn => {
-        btn.style.display = isChapterObjective ? 'none' : 'block';
-      });
-    }
-
-    if (chapterClaimButtons.length > 0) {
-      chapterClaimButtons.forEach(btn => {
-        btn.style.display = isChapterObjective ? 'block' : 'none';
-      });
-    }
-
-    const activeButtons = isChapterObjective ? chapterClaimButtons : normalClaimButtons;
-    const activeButtonsFiltered = activeButtons.filter(btn => btn);
-
-    if (activeButtonsFiltered.length > 0) {
-      const wasComplete = activeButtonsFiltered[0].classList.contains('ready-to-claim');
-
-
-      if (info.isComplete) {
-        activeButtonsFiltered.forEach((btn, index) => {
-          btn.disabled = false;
-          btn.classList.add('ready-to-claim');
-
-          if (isChapterObjective) {
-            if (btn === this.DOMElements.objective_claim_chapter_btn_compact) {
-              btn.textContent = "Complete";
-            } else {
-              btn.textContent = `Complete ${info.chapterName || 'Chapter'}`;
-            }
-          } else {
-            btn.textContent = btn === this.DOMElements.objective_claim_btn_compact ? "Claim" : "Claim Reward";
-          }
-
-          if (btn === this.DOMElements.objective_claim_btn_compact || btn === this.DOMElements.objective_claim_chapter_btn_compact) {
-            btn.classList.add('full-width');
-          }
-        });
-
-        const headerActions = this.DOMElements.objective_claim_btn_compact?.parentElement;
-        if (headerActions) {
-          headerActions.classList.add('full-width');
-        }
-
-        // Add completion animation if this is a new completion
-        if (!wasComplete) {
-          this.animateObjectiveCompletion();
-        }
-      } else {
-        activeButtonsFiltered.forEach(btn => {
-          btn.disabled = true;
-          btn.classList.remove('ready-to-claim');
-
-          if (btn === this.DOMElements.objective_claim_btn_compact || btn === this.DOMElements.objective_claim_chapter_btn_compact) {
-            btn.classList.remove('full-width');
-          }
-
-          // Show reward amount instead of "In Progress..."
-          let rewardText = "In Progress...";
-          if (info.reward.money > 0) {
-            rewardText = btn === this.DOMElements.objective_claim_btn_compact
-              ? `$${info.reward.money.toLocaleString()}`
-              : `Reward: $${info.reward.money.toLocaleString()}`;
-          } else if (info.reward.ep > 0) {
-            rewardText = btn === this.DOMElements.objective_claim_btn_compact
-              ? `${info.reward.ep.toLocaleString()} EP`
-              : `Reward: ${info.reward.ep.toLocaleString()} EP`;
-          }
-          btn.textContent = rewardText;
-        });
-
-        const headerActions = this.DOMElements.objective_claim_btn_compact?.parentElement;
-        if (headerActions) {
-          headerActions.classList.remove('full-width');
-        }
+      if (!wasComplete && info.isComplete) {
+        this.animateObjectiveCompletion();
       }
     }
   }
 
   // NEW METHOD to animate objective completion
   animateObjectiveCompletion() {
-    const container = this.DOMElements.objectives_container;
-    if (!container) return;
+    const toastBtn = this.DOMElements.objectives_toast_btn;
+    if (!toastBtn) return;
 
     // Add completion class for CSS animation
-    container.classList.add('objective-completed');
+    toastBtn.classList.add('objective-completed');
 
     // Remove the class after animation completes
     setTimeout(() => {
-      container.classList.remove('objective-completed');
+      toastBtn.classList.remove('objective-completed');
     }, 2000);
   }
 
@@ -2546,6 +2395,12 @@ export class UI {
     const clicked_part = this.stateManager.getClickedPart();
     const tilesToModify = this.hotkeys.getTiles(startTile, event);
     let soundPlayed = false;
+
+    const isMobile = window.innerWidth <= 900;
+    if (isMobile && !isRightClick && startTile.part && !clicked_part) {
+      this.showContextModal(startTile);
+      return;
+    }
 
     for (const tile of tilesToModify) {
       if (isRightClick) {
@@ -2572,7 +2427,13 @@ export class UI {
             this.game.current_money -= clicked_part.cost;
             const partPlaced = await tile.setPart(clicked_part);
             if (partPlaced) {
+              if (this.lightVibration) {
+                this.lightVibration();
+              }
               soundPlayed = true; // Sound is now handled in tile.setPart
+              
+              // Keep part selected for continuous placement (painting mode)
+              // The part remains selected via stateManager.getClickedPart()
             } else {
               // Refund the money if the part couldn't be placed (tile already occupied)
               this.game.current_money += clicked_part.cost;
@@ -2594,18 +2455,66 @@ export class UI {
     }
   }
 
+  updateQuickSelectSlots() {
+    this.stateManager.normalizeQuickSelectSlotsForUnlock();
+    const slots = this.stateManager.getQuickSelectSlots();
+    const partset = this.game?.partset;
+    const selectedPartId = this.stateManager.getClickedPart()?.id ?? null;
+    document.querySelectorAll(".quick-select-slot").forEach((el) => {
+      const i = parseInt(el.getAttribute("data-index"), 10);
+      if (i < 0 || i > 4) return;
+      const { partId, locked } = slots[i] || { partId: null, locked: false };
+      const part = partId && partset ? partset.getPartById(partId) : null;
+      el.innerHTML = "";
+      if (part && typeof part.getImagePath === "function") {
+        const icon = document.createElement("div");
+        icon.className = "quick-select-icon";
+        icon.style.backgroundImage = `url('${part.getImagePath()}')`;
+        el.appendChild(icon);
+      }
+      if (part) {
+        const costEl = document.createElement("div");
+        costEl.className = "quick-select-cost";
+        costEl.textContent = part.erequires ? `${fmt(part.cost)} EP` : `$${fmt(part.cost)}`;
+        el.appendChild(costEl);
+      }
+      el.classList.toggle("locked", !!locked);
+      el.classList.toggle("unaffordable", !!(part && !part.affordable));
+      el.classList.toggle("is-selected", partId !== null && partId === selectedPartId);
+      el.setAttribute("aria-label", part ? (locked ? `Unlock ${part.title}` : `Select ${part.title}`) : `Recent part ${i + 1}`);
+    });
+  }
+
   updatePartsPanelBodyClass() {
     const partsSection = document.getElementById("parts_section");
     if (partsSection && !partsSection.classList.contains("collapsed")) {
       document.body.classList.add("parts-panel-open");
-      if (partsSection.classList.contains("right-side")) {
-        document.body.classList.add("parts-panel-right");
-      } else {
-        document.body.classList.remove("parts-panel-right");
-      }
     } else {
       document.body.classList.remove("parts-panel-open");
+    }
+
+    if (partsSection && partsSection.classList.contains("right-side")) {
+      document.body.classList.add("parts-panel-right");
+    } else {
       document.body.classList.remove("parts-panel-right");
+    }
+    
+    console.log("[updatePartsPanelBodyClass] Panel collapsed:", partsSection?.classList.contains("collapsed"), "Body classes:", document.body.className);
+  }
+
+  togglePartsPanelForBuildButton() {
+    this.lightVibration();
+    const partsSection = document.getElementById("parts_section");
+    if (partsSection) {
+      const isMobile = window.innerWidth <= 900;
+      if (isMobile) {
+        partsSection.classList.toggle("collapsed");
+        this.updatePartsPanelBodyClass();
+        void partsSection.offsetHeight;
+      } else {
+        this.parts_panel_collapsed = !this.parts_panel_collapsed;
+        this.updatePartsPanelBodyClass();
+      }
     }
   }
 
@@ -2661,46 +2570,26 @@ export class UI {
   }
 
   initializePartsPanel() {
-    const toggle = this.DOMElements.parts_panel_toggle;
     const panel = this.DOMElements.parts_section;
 
-    if (toggle && panel) {
-      // Remove existing event listeners if they exist
-      if (this._partsPanelToggleHandler) {
-        toggle.removeEventListener("click", this._partsPanelToggleHandler);
-      }
+    if (panel) {
       if (this._partsPanelResizeHandler) {
         window.removeEventListener("resize", this._partsPanelResizeHandler);
       }
 
-      // Create and store the toggle handler
-      this._partsPanelToggleHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const isMobile = window.innerWidth <= 900;
-        if (isMobile) {
-          panel.classList.toggle("collapsed");
-          this.updatePartsPanelBodyClass();
-          // Reposition tooltip if it's showing to avoid overlap
-          if (this.game && this.game.tooltip_manager) {
-            setTimeout(() => {
-              this.game.tooltip_manager.reposition();
-            }, 350);
-          }
-        }
-      };
 
       // Create and store the resize handler
       this._partsPanelResizeHandler = () => {
         const isCurrentlyMobile = window.innerWidth <= 900;
         if (!isCurrentlyMobile) {
           panel.classList.remove("collapsed");
+        } else {
+          panel.classList.add("collapsed");
         }
         this.updatePartsPanelBodyClass();
       };
 
       // Add the event listeners
-      toggle.addEventListener("click", this._partsPanelToggleHandler);
       window.addEventListener("resize", this._partsPanelResizeHandler);
 
       // Initialize the panel state based on screen size
@@ -2708,11 +2597,23 @@ export class UI {
       if (isMobileOnLoad) {
         // Start with panel collapsed on mobile for better UX
         panel.classList.add("collapsed");
+        console.log("[Parts Panel Init] Mobile detected - added collapsed class");
       } else {
         // Desktop: always start open and stay open
         panel.classList.remove("collapsed");
+        console.log("[Parts Panel Init] Desktop detected - removed collapsed class");
       }
+      console.log("[Parts Panel Init] Final state - collapsed:", panel.classList.contains("collapsed"));
       this.updatePartsPanelBodyClass();
+
+      const closeBtn = document.getElementById("parts_close_btn");
+      if (closeBtn && !closeBtn.hasAttribute("data-listener-attached")) {
+        closeBtn.setAttribute("data-listener-attached", "true");
+        closeBtn.addEventListener("click", () => {
+          panel.classList.add("collapsed");
+          this.updatePartsPanelBodyClass();
+        });
+      }
 
       // Initialize the selected part icon
       this.stateManager.updatePartsPanelToggleIcon(null);
@@ -3159,31 +3060,6 @@ export class UI {
       console.warn("[UI] Copy/paste UI elements not found, skipping initialization");
     }
 
-    // Initialize PWA display mode button (independent of copy/paste UI)
-    const pwaDisplayBtn = document.getElementById("pwa_display_mode_btn");
-    if (pwaDisplayBtn) {
-      console.log("[UI] PWA display mode button found, initializing...");
-      pwaDisplayBtn.style.display = "flex";
-      pwaDisplayBtn.style.visibility = "visible";
-      pwaDisplayBtn.style.opacity = "1";
-      this.initializePWADisplayModeButton(pwaDisplayBtn);
-    } else {
-      console.warn("[UI] PWA display mode button element not found, retrying...");
-      // Retry after a short delay in case DOM isn't ready
-      setTimeout(() => {
-        const retryBtn = document.getElementById("pwa_display_mode_btn");
-        if (retryBtn) {
-          console.log("[UI] PWA display mode button found on retry, initializing...");
-          retryBtn.style.display = "flex";
-          retryBtn.style.visibility = "visible";
-          retryBtn.style.opacity = "1";
-          this.initializePWADisplayModeButton(retryBtn);
-        } else {
-          console.warn("[UI] PWA display mode button element not found in DOM after retry");
-        }
-      }, 100);
-    }
-
     // Early return only if critical copy/paste elements are missing
     if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) {
       return;
@@ -3216,11 +3092,9 @@ export class UI {
               const tileEl = e.target && e.target.closest ? e.target.closest(".tile") : null;
               if (tileEl && tileEl.tile && tileEl.tile.part) {
                 const pickedPart = tileEl.tile.part;
-                // Set selected part
-                this.stateManager.setClickedPart(pickedPart);
-                // Best-effort: add active class to the matching button in parts panel
-                const btn = document.getElementById(`part_btn_${pickedPart.id}`);
-                if (btn) btn.classList.add("part_active");
+                document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
+                this.stateManager.setClickedPart(pickedPart, { skipOpenPanel: true });
+                if (pickedPart.$el) pickedPart.$el.classList.add("part_active");
                 // Exit dropper mode
                 this._dropperModeActive = false;
                 dropperBtn.classList.remove("on");
@@ -4064,11 +3938,6 @@ export class UI {
         // Prepare mobile top overlay that aligns stats with copy/paste/sell
         this.setupMobileTopBar();
         this.setupMobileTopBarResizeListener();
-        
-        const settingsBtnMobile = document.getElementById("settings_btn_mobile");
-        if (settingsBtnMobile) {
-          settingsBtnMobile.addEventListener("click", () => new SettingsModal().show());
-        }
         break;
       case "upgrades_section":
         if (
@@ -4647,13 +4516,9 @@ export class UI {
     // Always re-cache DOM elements after navigation
     this.cacheDOMElements();
 
-    // Handle objectives section (contains both old and new UI)
-    const objectivesSection = document.getElementById("objectives_section");
-    if (objectivesSection) {
-      objectivesSection.classList.toggle(
-        "hidden",
-        pageId !== "reactor_section"
-      );
+    const toastBtn = this.DOMElements.objectives_toast_btn;
+    if (toastBtn) {
+      toastBtn.classList.toggle("hidden", pageId !== "reactor_section");
 
       if (pageId === "reactor_section") {
         // Force refresh of the current objective display
@@ -5523,5 +5388,385 @@ export class UI {
       if (e.target === modal) modal.remove();
     });
     document.body.appendChild(modal);
+  }
+
+  vibrate(pattern) {
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate(pattern);
+      } catch (e) {
+        console.warn("Vibration failed:", e);
+      }
+    }
+  }
+
+  lightVibration() {
+    this.vibrate(10);
+  }
+
+  heavyVibration() {
+    this.vibrate(50);
+  }
+
+  initializeControlDeck() {
+    if (window.innerWidth > 900) return;
+    this.updateControlDeckValues();
+  }
+
+  updateControlDeckValues() {
+    if (window.innerWidth > 900) return;
+
+    const powerEl = document.getElementById("control_deck_power");
+    const powerDenomEl = document.getElementById("control_deck_power_denom");
+    const moneyEl = document.getElementById("control_deck_money_value");
+    const heatEl = document.getElementById("control_deck_heat");
+    const heatDenomEl = document.getElementById("control_deck_heat_denom");
+
+    if (this.game && this.game.reactor) {
+      if (powerEl) {
+        const power = this.stateManager.getVar("current_power") || 0;
+        powerEl.textContent = Math.floor(power);
+      }
+      if (powerDenomEl && this.game.reactor.max_power) {
+        powerDenomEl.textContent = `/${Math.floor(this.game.reactor.max_power)}`;
+      }
+      if (moneyEl) {
+        const money = this.stateManager.getVar("current_money") || 0;
+        moneyEl.textContent = fmt(money);
+      }
+      if (heatEl) {
+        const heat = this.stateManager.getVar("current_heat") || 0;
+        heatEl.textContent = Math.floor(heat);
+      }
+      if (heatDenomEl && this.game.reactor.max_heat) {
+        heatDenomEl.textContent = `/${Math.floor(this.game.reactor.max_heat)}`;
+      }
+
+      const powerFill = document.querySelector(".power-fill");
+      const heatFill = document.querySelector(".heat-fill");
+      const heatVent = document.querySelector(".heat-vent");
+      const powerCapacitor = document.getElementById("control_deck_power_btn");
+
+      if (powerFill && this.game.reactor.max_power > 0) {
+        const fillPercent = (this.game.reactor.current_power / this.game.reactor.max_power) * 100;
+        powerFill.style.setProperty("--power-fill-height", `${fillPercent}%`);
+      }
+
+      if (heatFill && this.game.reactor.max_heat > 0) {
+        const fillPercent = (this.game.reactor.current_heat / this.game.reactor.max_heat) * 100;
+        heatFill.style.setProperty("--heat-fill-height", `${fillPercent}%`);
+
+        if (heatVent) {
+          if (fillPercent >= 95) {
+            heatVent.classList.add("hazard");
+            heatVent.classList.add("critical");
+          } else if (fillPercent > 80) {
+            heatVent.classList.remove("hazard");
+            heatVent.classList.add("critical");
+          } else {
+            heatVent.classList.remove("hazard", "critical");
+          }
+        }
+      }
+
+      if (powerCapacitor) {
+        const autoSell = this.stateManager.getVar("auto_sell");
+        powerCapacitor.classList.toggle("auto-sell-active", !!autoSell);
+      }
+    }
+
+    this.updateMobilePassiveTopBar();
+  }
+
+  updateMobilePassiveTopBar() {
+    if (window.innerWidth > 900) return;
+
+    const epEl = document.getElementById("mobile_passive_ep");
+    const moneyEl = document.getElementById("mobile_passive_money_value");
+    const pauseBtn = document.getElementById("mobile_passive_pause_btn");
+    const passiveBar = document.getElementById("mobile_passive_top_bar");
+
+    if (passiveBar) {
+      passiveBar.setAttribute("aria-hidden", "false");
+    }
+    if (epEl && this.stateManager) {
+      const ep = this.stateManager.getVar("current_exotic_particles") ?? this.stateManager.getVar("exotic_particles") ?? 0;
+      epEl.textContent = fmt(ep);
+    }
+    if (moneyEl && this.stateManager) {
+      const money = this.stateManager.getVar("current_money") ?? 0;
+      moneyEl.textContent = fmt(money);
+    }
+    if (pauseBtn) {
+      const paused = this.stateManager.getVar("pause") === true;
+      pauseBtn.classList.toggle("paused", paused);
+      pauseBtn.setAttribute("aria-label", paused ? "Resume" : "Pause");
+      pauseBtn.setAttribute("title", paused ? "Resume" : "Pause");
+    }
+  }
+
+  showFloatingText(container, amount) {
+    if (!container || amount <= 0) return;
+
+    const textEl = document.createElement("div");
+    textEl.className = "floating-text";
+    textEl.textContent = `+$${fmt(amount)}`;
+    container.querySelector(".floating-text-container")?.appendChild(textEl);
+
+    setTimeout(() => {
+      textEl.remove();
+    }, 1000);
+  }
+
+  createSteamParticles(container) {
+    if (!container) return;
+
+    const particlesContainer = container.querySelector(".steam-particles");
+    if (!particlesContainer) return;
+
+    for (let i = 0; i < 8; i++) {
+      const particle = document.createElement("div");
+      particle.className = "steam-particle";
+      const offsetX = (Math.random() - 0.5) * 40;
+      particle.style.setProperty("--steam-offset-x", `${offsetX}px`);
+      particle.style.left = `${50 + (Math.random() - 0.5) * 20}%`;
+      particlesContainer.appendChild(particle);
+
+      setTimeout(() => {
+        particle.remove();
+      }, 1500);
+    }
+  }
+
+  createBoltParticle(fromEl, toEl) {
+    if (!fromEl || !toEl) return;
+    const fromRect = fromEl.getBoundingClientRect();
+    const toRect = toEl.getBoundingClientRect();
+    const startX = fromRect.left + fromRect.width / 2;
+    const startY = fromRect.top + fromRect.height / 2;
+    const endX = toRect.left + toRect.width / 2;
+    const endY = toRect.top + toRect.height / 2;
+    const el = document.createElement("div");
+    el.className = "particle-bolt";
+    el.textContent = "\u26A1";
+    el.style.setProperty("--bolt-start-x", "0px");
+    el.style.setProperty("--bolt-start-y", "0px");
+    el.style.setProperty("--bolt-end-x", `${endX - startX}px`);
+    el.style.setProperty("--bolt-end-y", `${endY - startY}px`);
+    el.style.left = `${startX}px`;
+    el.style.top = `${startY}px`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 400);
+  }
+
+  setupInfoBarButtons() {
+    const powerBtn = document.getElementById("control_deck_power_btn");
+    if (powerBtn && !powerBtn.hasAttribute("data-listener-attached")) {
+      powerBtn.setAttribute("data-listener-attached", "true");
+      powerBtn.addEventListener("click", () => {
+        if (this.game) {
+          const moneyBefore = this.game.current_money;
+          this.game.sell_action();
+          const moneyGained = this.game.current_money - moneyBefore;
+          if (moneyGained > 0) {
+            const moneyDisplay = document.getElementById("control_deck_money");
+            if (moneyDisplay) {
+              this.showFloatingText(moneyDisplay, moneyGained);
+            }
+            const isMobile = window.innerWidth <= 900;
+            const moneyTarget = isMobile
+              ? document.getElementById("mobile_passive_money_value")?.closest(".passive-top-money") ?? document.getElementById("mobile_passive_top_bar")
+              : moneyDisplay;
+            if (moneyTarget) {
+              this.createBoltParticle(powerBtn, moneyTarget);
+            }
+          }
+        }
+      });
+    }
+
+    const heatBtn = document.getElementById("control_deck_heat_btn");
+    if (heatBtn && !heatBtn.hasAttribute("data-listener-attached")) {
+      heatBtn.setAttribute("data-listener-attached", "true");
+      heatBtn.addEventListener("click", () => {
+        if (this.game) {
+          this.game.manual_reduce_heat_action();
+          this.createSteamParticles(heatBtn);
+          heatBtn.classList.add("venting");
+          setTimeout(() => heatBtn.classList.remove("venting"), 400);
+        }
+      });
+    }
+
+    const mobilePauseBtn = document.getElementById("mobile_passive_pause_btn");
+    if (mobilePauseBtn && !mobilePauseBtn.hasAttribute("data-listener-attached")) {
+      mobilePauseBtn.setAttribute("data-listener-attached", "true");
+      mobilePauseBtn.addEventListener("click", () => {
+        const currentState = this.stateManager.getVar("pause");
+        this.stateManager.setVar("pause", !currentState);
+      });
+    }
+
+    const buildFab = document.getElementById("control_deck_build_fab");
+    if (buildFab && !buildFab.hasAttribute("data-listener-attached")) {
+      buildFab.setAttribute("data-listener-attached", "true");
+      buildFab.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.togglePartsPanelForBuildButton();
+      });
+    }
+
+    const powerBtnDesktop = document.getElementById("info_bar_power_btn_desktop");
+    if (powerBtnDesktop) {
+      powerBtnDesktop.addEventListener("click", () => {
+        if (this.game) {
+          this.game.sell_action();
+        }
+      });
+    }
+
+    const heatBtnDesktop = document.getElementById("info_bar_heat_btn_desktop");
+    if (heatBtnDesktop) {
+      heatBtnDesktop.addEventListener("click", () => {
+        if (this.game) {
+          this.game.manual_reduce_heat_action();
+        }
+      });
+    }
+  }
+
+  setupBuildTabButton() {
+    const buildBtn = document.getElementById("build_tab_btn");
+    if (buildBtn && !buildBtn.hasAttribute("data-listener-attached")) {
+      buildBtn.setAttribute("data-listener-attached", "true");
+      buildBtn.addEventListener("click", () => {
+        this.lightVibration();
+        const partsSection = this.DOMElements.parts_section;
+        if (partsSection) {
+          const isMobile = window.innerWidth <= 900;
+          const hasSelectedPart = this.stateManager.getClickedPart() !== null;
+          
+          if (isMobile) {
+            // If a part is selected, don't collapse - keep it open for painting
+            if (hasSelectedPart && partsSection.classList.contains("collapsed")) {
+              partsSection.classList.remove("collapsed");
+            } else if (!hasSelectedPart) {
+              partsSection.classList.toggle("collapsed");
+            }
+            this.updatePartsPanelBodyClass();
+          } else {
+            this.parts_panel_collapsed = !this.parts_panel_collapsed;
+            this.updatePartsPanelBodyClass();
+          }
+        }
+      });
+    }
+
+    const quickSelectSlots = document.querySelectorAll(".quick-select-slot");
+    const longPressMs = 500;
+    quickSelectSlots.forEach((slotEl) => {
+      if (slotEl.hasAttribute("data-listener-attached")) return;
+      slotEl.setAttribute("data-listener-attached", "true");
+      let longPressTimer = null;
+      let didLongPress = false;
+      const clearTimer = () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+      slotEl.addEventListener("pointerdown", (e) => {
+        didLongPress = false;
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          didLongPress = true;
+          this.heavyVibration();
+          const i = parseInt(slotEl.getAttribute("data-index"), 10);
+          const slots = this.stateManager.getQuickSelectSlots();
+          const locked = slots[i]?.locked ?? false;
+          this.stateManager.setQuickSelectLock(i, !locked);
+        }, longPressMs);
+      });
+      slotEl.addEventListener("pointerup", (e) => {
+        clearTimer();
+        if (didLongPress) return;
+        const i = parseInt(slotEl.getAttribute("data-index"), 10);
+        const slots = this.stateManager.getQuickSelectSlots();
+        const partId = slots[i]?.partId;
+        if (!partId || !this.game?.partset) return;
+        const part = this.game.partset.getPartById(partId);
+        if (!part || !part.affordable) return;
+        this.lightVibration();
+        document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
+        this.stateManager.setClickedPart(part, { skipOpenPanel: true });
+        if (part.$el) part.$el.classList.add("part_active");
+        this.updateQuickSelectSlots();
+      });
+      slotEl.addEventListener("pointercancel", clearTimer);
+      slotEl.addEventListener("pointerleave", clearTimer);
+    });
+    this.updateQuickSelectSlots();
+  }
+
+  setupMenuTabButton() {
+    const menuBtn = document.getElementById("menu_tab_btn");
+    if (menuBtn) {
+      menuBtn.addEventListener("click", () => {
+        this.lightVibration();
+        const settingsBtn = this.DOMElements.settings_btn;
+        if (settingsBtn) {
+          settingsBtn.click();
+        }
+      });
+    }
+  }
+
+  showContextModal(tile) {
+    if (!tile || !tile.part) return;
+
+    const modal = document.getElementById("context_modal");
+    const titleEl = document.getElementById("context_modal_title");
+    const bodyEl = document.getElementById("context_modal_body");
+    const sellBtn = document.getElementById("context_modal_sell");
+    const closeBtn = document.getElementById("context_modal_close");
+
+    if (!modal || !titleEl || !bodyEl || !sellBtn) return;
+
+    titleEl.textContent = tile.part.title || "Part";
+    
+    const stats = [];
+    if (tile.part.power) stats.push(`Power: ${tile.part.power}`);
+    if (tile.part.heat) stats.push(`Heat: ${tile.part.heat}`);
+    if (tile.part.ticks) stats.push(`Ticks: ${tile.part.ticks}`);
+    
+    bodyEl.innerHTML = stats.length > 0 
+      ? `<div>${stats.join("<br>")}</div>`
+      : "<div>No stats available</div>";
+
+    sellBtn.onclick = () => {
+      this.heavyVibration();
+      if (this.game && tile.part) {
+        this.game.sellPart(tile);
+        this.hideContextModal();
+      }
+    };
+
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        this.lightVibration();
+        this.hideContextModal();
+      };
+    }
+
+    modal.classList.remove("hidden");
+    this.lightVibration();
+  }
+
+  hideContextModal() {
+    const modal = document.getElementById("context_modal");
+    if (modal) {
+      modal.classList.add("hidden");
+    }
   }
 }

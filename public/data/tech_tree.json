@@ -47,6 +47,7 @@
     "upgrades": [
       "forceful_fusion",
       "manual_override",
+      "improved_power_lines",
       "improved_piping",
       "emergency_coolant",
       "chronometer",
@@ -82,6 +83,7 @@
     "icon": "img/parts/exchangers/exchanger_1.png",
     "upgrades": [
       "stirling_generators",
+      "improved_power_lines",
       "electro_thermal_conversion",
       "quantum_tunneling",
       "convective_airflow",
