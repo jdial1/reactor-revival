@@ -17,6 +17,9 @@ export class Engine {
     this.active_inlets = [];
     this.active_exchangers = [];
     this.active_outlets = [];
+    this.active_valves = [];
+    this.active_vents = [];
+    this.active_capacitors = [];
     this._partCacheDirty = true;
     this._valveNeighborCache = new Set();
     this._valveNeighborCacheDirty = true;
@@ -156,6 +159,9 @@ export class Engine {
     this.active_inlets.length = 0;
     this.active_exchangers.length = 0;
     this.active_outlets.length = 0;
+    this.active_valves.length = 0;
+    this.active_vents.length = 0;
+    this.active_capacitors.length = 0;
 
     // Pre-allocate arrays for better performance
     const maxParts = this.game._rows * this.game._cols;
@@ -164,8 +170,12 @@ export class Engine {
     this.active_inlets = new Array(Math.min(maxParts, 20));
     this.active_exchangers = new Array(Math.min(maxParts, 50));
     this.active_outlets = new Array(Math.min(maxParts, 20));
+    this.active_valves = new Array(Math.min(maxParts, 20));
+    this.active_vents = new Array(Math.min(maxParts, 50));
+    this.active_capacitors = new Array(Math.min(maxParts, 50));
 
     let cellIndex = 0, vesselIndex = 0, inletIndex = 0, exchangerIndex = 0, outletIndex = 0;
+    let valveIndex = 0, ventIndex = 0, capacitorIndex = 0;
 
     // Single pass through grid with early exits
     for (let row = 0; row < this.game._rows; row++) {
@@ -187,8 +197,11 @@ export class Engine {
             this.active_inlets[inletIndex++] = tile;
             break;
           case "heat_exchanger":
+            this.active_exchangers[exchangerIndex++] = tile;
+            break;
           case "valve":
             this.active_exchangers[exchangerIndex++] = tile;
+            this.active_valves[valveIndex++] = tile;
             break;
           case "reactor_plating":
             if (part.transfer > 0) {
@@ -199,6 +212,12 @@ export class Engine {
             if (tile.activated) {
               this.active_outlets[outletIndex++] = tile;
             }
+            break;
+          case "vent":
+            this.active_vents[ventIndex++] = tile;
+            break;
+          case "capacitor":
+            this.active_capacitors[capacitorIndex++] = tile;
             break;
         }
 
@@ -216,6 +235,9 @@ export class Engine {
     this.active_inlets.length = inletIndex;
     this.active_exchangers.length = exchangerIndex;
     this.active_outlets.length = outletIndex;
+    this.active_valves.length = valveIndex;
+    this.active_vents.length = ventIndex;
+    this.active_capacitors.length = capacitorIndex;
 
     this._partCacheDirty = false;
   }
@@ -237,13 +259,14 @@ export class Engine {
 
     // Pre-populate valve neighbors by finding all tiles that are adjacent to valves
     // This ensures proper neighbor filtering during heat exchange
-    for (const tile of this.active_exchangers) {
-      if (tile.part && tile.part.category === 'valve') {
-        // Add all containment neighbors of this valve to the cache
-        for (const neighbor of tile.containmentNeighborTiles) {
-          if (neighbor.part && neighbor.part.category !== 'valve') {
-            this._valveNeighborCache.add(neighbor);
-          }
+    for (let i = 0; i < this.active_valves.length; i++) {
+      const tile = this.active_valves[i];
+      // Add all containment neighbors of this valve to the cache
+      const neighbors = tile.containmentNeighborTiles;
+      for (let j = 0; j < neighbors.length; j++) {
+        const neighbor = neighbors[j];
+        if (neighbor.part && neighbor.part.category !== 'valve') {
+          this._valveNeighborCache.add(neighbor);
         }
       }
     }
@@ -377,7 +400,9 @@ export class Engine {
     const tickStart = performance.now();
     const currentTickNumber = this.tick_count;
     
-    this.game.logger?.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Running: ${this.running}, Multiplier: ${multiplier.toFixed(4)}`);
+    if (this.game.logger) {
+      this.game.logger.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Running: ${this.running}, Multiplier: ${multiplier.toFixed(4)}`);
+    }
 
     if (this.game.paused && !manual) {
       this.game.logger?.debug('[TICK ABORTED] Game is paused.');
@@ -409,7 +434,9 @@ export class Engine {
     const reactor = this.game.reactor;
     const tileset = this.game.tileset;
     const ui = this.game.ui;
-    this.game.logger?.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Reactor Heat: ${reactor.current_heat.toFixed(2)}`);
+    if (this.game.logger) {
+      this.game.logger.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Reactor Heat: ${reactor.current_heat.toFixed(2)}`);
+    }
     
     // Reset Visual Event Pool
     this._visualEventCount = 0;
@@ -455,8 +482,10 @@ export class Engine {
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_categorize_parts");
     }
-    this.game.logger?.debug(`Processing ${active_cells.length} active cells and ${active_vessels.length} active vessels.`);
-    this.game.logger?.debug(`[TICK] Processing ${this.active_cells.length} cells...`);
+    if (this.game.logger) {
+      this.game.logger.debug(`Processing ${active_cells.length} active cells and ${active_vessels.length} active vessels.`);
+      this.game.logger.debug(`[TICK] Processing ${this.active_cells.length} cells...`);
+    }
 
     let power_add = 0;
     let heat_add = 0; // Re-introduced for globally added heat
@@ -609,20 +638,17 @@ export class Engine {
       }
 
       // GC Optimization: Use pre-allocated arrays to avoid allocations in the hot path
-      const valves = this._valveProcessing_valves;
-      valves.length = 0; // Clear the array
-      for (const tile of this.active_exchangers) {
-        if (tile.part?.category === 'valve') {
-          valves.push(tile);
-        }
-      }
+      const valves = this.active_valves;
 
       // Process valves efficiently with minimal logging
-      for (const valve of valves) {
+      for (let vIdx = 0; vIdx < valves.length; vIdx++) {
+        const valve = valves[vIdx];
         const valvePart = valve.part;
         const neighbors = this._valveProcessing_neighbors;
         neighbors.length = 0; // Clear the array
-        for (const t of valve.containmentNeighborTiles) {
+        const valveNeighbors = valve.containmentNeighborTiles;
+        for (let j = 0; j < valveNeighbors.length; j++) {
+          const t = valveNeighbors[j];
           if (t.part) {
             neighbors.push(t);
           }
@@ -645,8 +671,11 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = [];
-              for (const t of inputNeighbor.containmentNeighborTiles) {
+              const inputValveNeighbors = this._valve_inputValveNeighbors;
+              inputValveNeighbors.length = 0;
+              const inputNeighborNeighbors = inputNeighbor.containmentNeighborTiles;
+              for (let j = 0; j < inputNeighborNeighbors.length; j++) {
+                const t = inputNeighborNeighbors[j];
                 if (t.part && t !== valve) {
                   inputValveNeighbors.push(t);
                 }
@@ -675,8 +704,11 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = [];
-              for (const t of inputNeighbor.containmentNeighborTiles) {
+              const inputValveNeighbors = this._valve_inputValveNeighbors;
+              inputValveNeighbors.length = 0;
+              const inputNeighborNeighbors = inputNeighbor.containmentNeighborTiles;
+              for (let j = 0; j < inputNeighborNeighbors.length; j++) {
+                const t = inputNeighborNeighbors[j];
                 if (t.part && t !== valve) {
                   inputValveNeighbors.push(t);
                 }
@@ -705,8 +737,11 @@ export class Engine {
             // Validation: valves can't pull from other valves unless input connects to output
             if (inputNeighbor.part?.category === 'valve') {
               const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = [];
-              for (const t of inputNeighbor.containmentNeighborTiles) {
+              const inputValveNeighbors = this._valve_inputValveNeighbors;
+              inputValveNeighbors.length = 0;
+              const inputNeighborNeighbors = inputNeighbor.containmentNeighborTiles;
+              for (let j = 0; j < inputNeighborNeighbors.length; j++) {
+                const t = inputNeighborNeighbors[j];
                 if (t.part && t !== valve) {
                   inputValveNeighbors.push(t);
                 }
@@ -811,7 +846,8 @@ export class Engine {
       this._heatCalc_plannedInByExchanger.clear();
 
       const startHeat = this._heatCalc_startHeat;
-      const valveNeighborExchangers = new Set();
+      const valveNeighborExchangers = this._valveNeighborExchangers;
+      valveNeighborExchangers.clear();
 
       // Pre-pass
       for (let i = 0; i < exchangers.length; i++) {
@@ -838,9 +874,7 @@ export class Engine {
         const heatStart = valveNeighborExchangers.has(tile) ? (tile.heat_contained || 0) : (startHeat.get(tile) || 0);
         
         // Reuse neighbors array from Tile cache, avoid .filter()
-        const neighborsAll = tile.containmentNeighborTiles; 
-        
-        // GC Optimization: Use pre-allocated array
+        const neighborsAll = tile.containmentNeighborTiles;
         const validNeighbors = this._heatCalc_validNeighbors;
         validNeighbors.length = 0;
         for(let nIdx=0; nIdx<neighborsAll.length; nIdx++) {
@@ -954,8 +988,6 @@ export class Engine {
        const tile = this.active_outlets[i];
        const tile_part = tile.part;
        if (!tile_part || !tile.activated) continue;
-       
-       // GC Optimization: Use pre-allocated array
        const neighbors = this._outletProcessing_neighbors;
        neighbors.length = 0;
        for (const t of tile.containmentNeighborTiles) {
@@ -1029,7 +1061,6 @@ export class Engine {
       this.game.performance.markStart("tick_explosions");
     }
 
-    // GC Optimization: Use pre-allocated array
     const tilesToExplode = this._explosion_tilesToExplode;
     tilesToExplode.length = 0;
     for (const tile of this.active_vessels) {
@@ -1041,7 +1072,8 @@ export class Engine {
       }
     }
 
-    for (const tile of tilesToExplode) {
+    for (let i = 0; i < tilesToExplode.length; i++) {
+      const tile = tilesToExplode[i];
       const part = tile.part;
       if (part?.category === "particle_accelerator") {
         reactor.checkMeltdown();
@@ -1065,8 +1097,8 @@ export class Engine {
         activeVents.push(tile);
       }
     }
-
-    for(const tile of activeVents) {
+    for(let i = 0; i < activeVents.length; i++) {
+        const tile = activeVents[i];
         if(!tile.part) continue;
         
         let ventRate = tile.getEffectiveVentValue() * multiplier;
@@ -1079,7 +1111,8 @@ export class Engine {
             {r: tile.row, c: tile.col-1}, {r: tile.row, c: tile.col+1}
           ];
           
-          for(const coord of coords) {
+          for(let j = 0; j < coords.length; j++) {
+            const coord = coords[j];
             const n = this.game.tileset.getTile(coord.r, coord.c);
             if (n && n.enabled && !n.part) {
               emptyNeighbors++;
@@ -1111,20 +1144,12 @@ export class Engine {
         }
         
         if (vent_reduce > 0 && Math.random() < multiplier) {
-        const cnt = vent_reduce >= 50 ? 3 : vent_reduce >= 15 ? 2 : 1;
-        for (let i = 0; i < cnt; i++) {
-          // visualEvents[visualEventIndex++] = { type: 'emit', part: 'vent', icon: 'heat', tile: [tile.row, tile.col] };
-        }
-        // Blink indicator visually
-        try {
-          if (this.game.ui && typeof this.game.ui.blinkVent === 'function') {
-            for (let i = 0; i < cnt; i++) {
-              const delay = i * 60;
-              setTimeout(() => this.game.ui.blinkVent(tile), delay);
+          try {
+            if (this.game.ui && typeof this.game.ui.blinkVent === 'function') {
+              this.game.ui.blinkVent(tile);
             }
-          }
-        } catch (_) { /* ignore */ }
-      }
+          } catch (_) { /* ignore */ }
+        }
     }
 
     if (this.game.performance && this.game.performance.shouldMeasure()) {
@@ -1244,14 +1269,12 @@ export class Engine {
 
     // --- FLUX ACCUMULATORS LOGIC ---
     let fluxLevel = reactor.flux_accumulator_level;
-    const reactorFluxLevel = reactor.flux_accumulator_level;
     if (!fluxLevel && this.game.upgradeset) {
       const upg = this.game.upgradeset.getUpgrade("flux_accumulators");
       if (upg) {
         fluxLevel = upg.level;
       }
     }
-
     if (fluxLevel > 0 && reactor.max_power > 0) {
       const powerRatio = reactor.current_power / reactor.max_power;
       if (powerRatio >= 0.90) {
