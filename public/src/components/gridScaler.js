@@ -177,11 +177,11 @@ export class GridScaler {
         const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
 
         if (isMobile) {
-            const minTileSize = 32;
+            const minTileSize = 40;
             const maxTilesX = Math.floor(availWidth / minTileSize);
             const maxTilesY = Math.floor(availHeight / minTileSize);
 
-            let cols = 6;
+            let cols = 8;
             cols = Math.max(this.config.minCols, Math.min(cols, maxTilesX, this.config.maxCols));
 
             let rows;
@@ -202,7 +202,7 @@ export class GridScaler {
             return { rows, cols };
         } else {
             const maxDesktopCols = 16;
-            const minTileSize = 32;
+            const minTileSize = 36;
             const targetTotalTiles = this.config.targetTotalTiles;
 
             const maxTilesX = Math.floor(availWidth / minTileSize);
@@ -311,12 +311,31 @@ export class GridScaler {
         // Align grid in wrapper (flex-start for mobile, center for desktop)
 
         if (this.wrapper) {
-
             this.wrapper.style.display = 'flex';
             this.wrapper.style.alignItems = 'center';
             this.wrapper.style.justifyContent = 'center';
-            
-
+            const section = document.getElementById('reactor_section') || this.wrapper.parentElement;
+            if (isMobile && section) {
+                const topBar = document.getElementById('mobile_passive_top_bar');
+                const topOffset = topBar ? topBar.offsetHeight : 0;
+                const buildRow = document.getElementById('build_above_deck_row');
+                const controlDeck = document.getElementById('reactor_control_deck');
+                const bottomNav = document.getElementById('bottom_nav');
+                const bottomOffset = (buildRow?.offsetHeight || 0) + (controlDeck?.offsetHeight || 0) + (bottomNav?.offsetHeight || 0);
+                section.style.paddingTop = `${topOffset}px`;
+                section.style.paddingRight = '5px';
+                section.style.paddingBottom = `${bottomOffset}px`;
+                section.style.paddingLeft = '5px';
+            } else if (section) {
+                section.style.paddingTop = '';
+                section.style.paddingRight = '';
+                section.style.paddingBottom = '';
+                section.style.paddingLeft = '';
+            }
+            this.wrapper.style.paddingTop = '';
+            this.wrapper.style.paddingRight = '';
+            this.wrapper.style.paddingBottom = '';
+            this.wrapper.style.paddingLeft = '';
         }
 
     }

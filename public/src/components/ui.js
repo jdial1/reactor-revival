@@ -261,6 +261,11 @@ export class UI {
       "control_deck_money",
       "control_deck_power",
       "control_deck_heat",
+      "mobile_passive_top_bar",
+      "mobile_passive_ep",
+      "mobile_passive_money_value",
+      "mobile_passive_pause_btn",
+      "control_deck_build_fab",
       "context_modal",
       "context_modal_sell",
       "context_modal_close",
@@ -489,6 +494,7 @@ export class UI {
       if (key === "pause") {
         this.updateAllToggleBtnStates();
         updatePauseButtonText();
+        this.updateMobilePassiveTopBar();
       }
     };
   }
@@ -862,6 +868,7 @@ export class UI {
                     this.game.tooltip_manager.updateUpgradeAffordability();
                 }
                 this.updateNavIndicators();
+                if (typeof this.updateQuickSelectSlots === "function") this.updateQuickSelectSlots();
              }
              
              // Update leaderboard trophy emoji based on cheats_used
@@ -1185,6 +1192,7 @@ export class UI {
           if (this.DOMElements.current_exotic_particles) {
             this.DOMElements.current_exotic_particles.textContent = fmt(val);
           }
+          this.updateMobilePassiveTopBar();
         },
       },
       total_exotic_particles: {
@@ -2447,6 +2455,7 @@ export class UI {
   }
 
   updateQuickSelectSlots() {
+    this.stateManager.normalizeQuickSelectSlotsForUnlock();
     const slots = this.stateManager.getQuickSelectSlots();
     const partset = this.game?.partset;
     const selectedPartId = this.stateManager.getClickedPart()?.id ?? null;
@@ -2469,6 +2478,7 @@ export class UI {
         el.appendChild(costEl);
       }
       el.classList.toggle("locked", !!locked);
+      el.classList.toggle("unaffordable", !!(part && !part.affordable));
       el.classList.toggle("is-selected", partId !== null && partId === selectedPartId);
       el.setAttribute("aria-label", part ? (locked ? `Unlock ${part.title}` : `Select ${part.title}`) : `Recent part ${i + 1}`);
     });
@@ -2476,20 +2486,10 @@ export class UI {
 
   updatePartsPanelBodyClass() {
     const partsSection = document.getElementById("parts_section");
-    const buildButton = document.getElementById("build_button_above_deck");
-
     if (partsSection && !partsSection.classList.contains("collapsed")) {
       document.body.classList.add("parts-panel-open");
-      if (buildButton) {
-        const label = buildButton.querySelector(".build-button-label");
-        if (label) label.textContent = "Done";
-      }
     } else {
       document.body.classList.remove("parts-panel-open");
-      if (buildButton) {
-        const label = buildButton.querySelector(".build-button-label");
-        if (label) label.textContent = "Build";
-      }
     }
 
     if (partsSection && partsSection.classList.contains("right-side")) {
@@ -2499,6 +2499,22 @@ export class UI {
     }
     
     console.log("[updatePartsPanelBodyClass] Panel collapsed:", partsSection?.classList.contains("collapsed"), "Body classes:", document.body.className);
+  }
+
+  togglePartsPanelForBuildButton() {
+    this.lightVibration();
+    const partsSection = document.getElementById("parts_section");
+    if (partsSection) {
+      const isMobile = window.innerWidth <= 900;
+      if (isMobile) {
+        partsSection.classList.toggle("collapsed");
+        this.updatePartsPanelBodyClass();
+        void partsSection.offsetHeight;
+      } else {
+        this.parts_panel_collapsed = !this.parts_panel_collapsed;
+        this.updatePartsPanelBodyClass();
+      }
+    }
   }
 
   toggleFullscreen() {
@@ -3075,11 +3091,9 @@ export class UI {
               const tileEl = e.target && e.target.closest ? e.target.closest(".tile") : null;
               if (tileEl && tileEl.tile && tileEl.tile.part) {
                 const pickedPart = tileEl.tile.part;
-                // Set selected part
-                this.stateManager.setClickedPart(pickedPart);
-                // Best-effort: add active class to the matching button in parts panel
-                const btn = document.getElementById(`part_btn_${pickedPart.id}`);
-                if (btn) btn.classList.add("part_active");
+                document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
+                this.stateManager.setClickedPart(pickedPart, { skipOpenPanel: true });
+                if (pickedPart.$el) pickedPart.$el.classList.add("part_active");
                 // Exit dropper mode
                 this._dropperModeActive = false;
                 dropperBtn.classList.remove("on");
@@ -5430,6 +5444,7 @@ export class UI {
       const powerFill = document.querySelector(".power-fill");
       const heatFill = document.querySelector(".heat-fill");
       const heatVent = document.querySelector(".heat-vent");
+      const powerCapacitor = document.getElementById("control_deck_power_btn");
 
       if (powerFill && this.game.reactor.max_power > 0) {
         const fillPercent = (this.game.reactor.current_power / this.game.reactor.max_power) * 100;
@@ -5441,13 +5456,51 @@ export class UI {
         heatFill.style.setProperty("--heat-fill-height", `${fillPercent}%`);
 
         if (heatVent) {
-          if (fillPercent > 80) {
+          if (fillPercent >= 95) {
+            heatVent.classList.add("hazard");
+            heatVent.classList.add("critical");
+          } else if (fillPercent > 80) {
+            heatVent.classList.remove("hazard");
             heatVent.classList.add("critical");
           } else {
-            heatVent.classList.remove("critical");
+            heatVent.classList.remove("hazard", "critical");
           }
         }
       }
+
+      if (powerCapacitor) {
+        const autoSell = this.stateManager.getVar("auto_sell");
+        powerCapacitor.classList.toggle("auto-sell-active", !!autoSell);
+      }
+    }
+
+    this.updateMobilePassiveTopBar();
+  }
+
+  updateMobilePassiveTopBar() {
+    if (window.innerWidth > 900) return;
+
+    const epEl = document.getElementById("mobile_passive_ep");
+    const moneyEl = document.getElementById("mobile_passive_money_value");
+    const pauseBtn = document.getElementById("mobile_passive_pause_btn");
+    const passiveBar = document.getElementById("mobile_passive_top_bar");
+
+    if (passiveBar) {
+      passiveBar.setAttribute("aria-hidden", "false");
+    }
+    if (epEl && this.stateManager) {
+      const ep = this.stateManager.getVar("current_exotic_particles") ?? this.stateManager.getVar("exotic_particles") ?? 0;
+      epEl.textContent = fmt(ep);
+    }
+    if (moneyEl && this.stateManager) {
+      const money = this.stateManager.getVar("current_money") ?? 0;
+      moneyEl.textContent = fmt(money);
+    }
+    if (pauseBtn) {
+      const paused = this.stateManager.getVar("pause") === true;
+      pauseBtn.classList.toggle("paused", paused);
+      pauseBtn.setAttribute("aria-label", paused ? "Resume" : "Pause");
+      pauseBtn.setAttribute("title", paused ? "Resume" : "Pause");
     }
   }
 
@@ -5484,6 +5537,27 @@ export class UI {
     }
   }
 
+  createBoltParticle(fromEl, toEl) {
+    if (!fromEl || !toEl) return;
+    const fromRect = fromEl.getBoundingClientRect();
+    const toRect = toEl.getBoundingClientRect();
+    const startX = fromRect.left + fromRect.width / 2;
+    const startY = fromRect.top + fromRect.height / 2;
+    const endX = toRect.left + toRect.width / 2;
+    const endY = toRect.top + toRect.height / 2;
+    const el = document.createElement("div");
+    el.className = "particle-bolt";
+    el.textContent = "\u26A1";
+    el.style.setProperty("--bolt-start-x", "0px");
+    el.style.setProperty("--bolt-start-y", "0px");
+    el.style.setProperty("--bolt-end-x", `${endX - startX}px`);
+    el.style.setProperty("--bolt-end-y", `${endY - startY}px`);
+    el.style.left = `${startX}px`;
+    el.style.top = `${startY}px`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 400);
+  }
+
   setupInfoBarButtons() {
     const powerBtn = document.getElementById("control_deck_power_btn");
     if (powerBtn && !powerBtn.hasAttribute("data-listener-attached")) {
@@ -5498,6 +5572,13 @@ export class UI {
             if (moneyDisplay) {
               this.showFloatingText(moneyDisplay, moneyGained);
             }
+            const isMobile = window.innerWidth <= 900;
+            const moneyTarget = isMobile
+              ? document.getElementById("mobile_passive_money_value")?.closest(".passive-top-money") ?? document.getElementById("mobile_passive_top_bar")
+              : moneyDisplay;
+            if (moneyTarget) {
+              this.createBoltParticle(powerBtn, moneyTarget);
+            }
           }
         }
       });
@@ -5510,7 +5591,28 @@ export class UI {
         if (this.game) {
           this.game.manual_reduce_heat_action();
           this.createSteamParticles(heatBtn);
+          heatBtn.classList.add("venting");
+          setTimeout(() => heatBtn.classList.remove("venting"), 400);
         }
+      });
+    }
+
+    const mobilePauseBtn = document.getElementById("mobile_passive_pause_btn");
+    if (mobilePauseBtn && !mobilePauseBtn.hasAttribute("data-listener-attached")) {
+      mobilePauseBtn.setAttribute("data-listener-attached", "true");
+      mobilePauseBtn.addEventListener("click", () => {
+        const currentState = this.stateManager.getVar("pause");
+        this.stateManager.setVar("pause", !currentState);
+      });
+    }
+
+    const buildFab = document.getElementById("control_deck_build_fab");
+    if (buildFab && !buildFab.hasAttribute("data-listener-attached")) {
+      buildFab.setAttribute("data-listener-attached", "true");
+      buildFab.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.togglePartsPanelForBuildButton();
       });
     }
 
@@ -5552,28 +5654,6 @@ export class UI {
               partsSection.classList.toggle("collapsed");
             }
             this.updatePartsPanelBodyClass();
-          } else {
-            this.parts_panel_collapsed = !this.parts_panel_collapsed;
-            this.updatePartsPanelBodyClass();
-          }
-        }
-      });
-    }
-
-    const buildBtnAboveDeck = document.getElementById("build_button_above_deck");
-    if (buildBtnAboveDeck && !buildBtnAboveDeck.hasAttribute("data-listener-attached")) {
-      buildBtnAboveDeck.setAttribute("data-listener-attached", "true");
-      buildBtnAboveDeck.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.lightVibration();
-        const partsSection = document.getElementById("parts_section");
-        if (partsSection) {
-          const isMobile = window.innerWidth <= 900;
-          if (isMobile) {
-            partsSection.classList.toggle("collapsed");
-            this.updatePartsPanelBodyClass();
-            void partsSection.offsetHeight;
           } else {
             this.parts_panel_collapsed = !this.parts_panel_collapsed;
             this.updatePartsPanelBodyClass();

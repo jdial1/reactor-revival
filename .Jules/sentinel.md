@@ -1,36 +1,8 @@
-# Sentinel Journal - Security Hardening
+# Sentinel's Journal
 
-## [2025-05-22] - XSS Mitigation in UI and PWA Services
+This document tracks systemic security vulnerabilities and recurring patterns discovered in this codebase.
 
-### Vulnerability
-Direct interpolation of user-controlled or dynamic data (emails, variable values) into  created multiple Stored and Reflected XSS vectors.
-
-### Mitigation
-1.  Extracted a centralized  utility in  that uses a browser-native dummy DOM element to safely escape text.
-2.  Refactored the user email display in  to use  on a separate span, avoiding  for user data.
-3.  Sanitized the debug panel string output in  using .
-4.  Updated existing  usage in  to use the centralized  utility.
-
-### Severity
-Medium/High - Attackers could potentially execute arbitrary JS by setting a malicious email address or triggering specific debug states.
-
-### Learnings
-Vanilla JS applications are highly susceptible to XSS if  is favored over  or manual DOM construction. Always use a centralized escaping utility or browser-native safe APIs for any dynamic content.
-# Sentinel Journal - Security Hardening
-
-## [2025-05-22] - XSS Mitigation in UI and PWA Services
-
-### Vulnerability
-Direct interpolation of user-controlled or dynamic data (emails, variable values) into `innerHTML` created multiple Stored and Reflected XSS vectors.
-
-### Mitigation
-1.  Extracted a centralized `escapeHtml` utility in `public/src/utils/util.js` that uses a browser-native dummy DOM element to safely escape text.
-2.  Refactored the user email display in `public/src/services/pwa.js` to use `textContent` on a separate span, avoiding `innerHTML` for user data.
-3.  Sanitized the debug panel string output in `public/src/components/ui.js` using `escapeHtml`.
-4.  Updated existing `innerHTML` usage in `public/src/app.js` to use the centralized `escapeHtml` utility.
-
-### Severity
-Medium/High - Attackers could potentially execute arbitrary JS by setting a malicious email address or triggering specific debug states.
-
-### Learnings
-Vanilla JS applications are highly susceptible to XSS if `innerHTML` is favored over `textContent` or manual DOM construction. Always use a centralized escaping utility or browser-native safe APIs for any dynamic content.
+| Date       | Title                         | Learning                                                                                                                              | Action                                                                                                             |
+|------------|-------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
+| 2024-08-14 | Unmaintained Dev Dependencies | The project uses `live-server`, an unmaintained package with known vulnerabilities, as its development server. This increases the attack surface for developers and can lead to downstream security issues. | Replaced `live-server` with `vite`, a modern and actively maintained development server that was already a dependency. |
+| 2025-05-22 | XSS Mitigation in UI and PWA  | Direct interpolation of user data into `innerHTML` created Stored/Reflected XSS vectors. Vanilla JS is susceptible if `innerHTML` is favored over `textContent` or centralized escaping. | Centralized `escapeHtml` in util.js; hardened email in pwa.js with `textContent`; sanitized debug panel in ui.js; migrated app.js to shared utility. |
