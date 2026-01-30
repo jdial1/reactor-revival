@@ -1,6 +1,9 @@
 
 > reactor-revival@1.0.0 dev /app
-> live-server public --port=8080 --open=/index.html --wait=100
+> vite
 
-sh: 1: live-server: not found
- ELIFECYCLE  Command failed.
+
+  VITE v7.3.1  ready in 242 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose

@@ -174,7 +174,9 @@ export function createHelpButton(onClick, title = "Click for information") {
     return btn;
 }
 
-export function createUpgradeButton(upgrade) {
+const BASE_DOCTRINE_ICON = "img/ui/status/status_star.png";
+
+export function createUpgradeButton(upgrade, doctrineSource) {
     const card = window.templateLoader.cloneTemplateElement("upgrade-card-template");
     if (!card) return null;
 
@@ -183,6 +185,20 @@ export function createUpgradeButton(upgrade) {
     const imageDiv = card.querySelector(".image");
     if (imageDiv) {
         imageDiv.style.backgroundImage = `url('${upgrade.image}')`;
+    }
+
+    const doctrineIconEl = card.querySelector(".upgrade-doctrine-icon");
+    if (doctrineIconEl) {
+        let icon = BASE_DOCTRINE_ICON;
+        let doctrineId = "base";
+        if (typeof doctrineSource === "string") icon = doctrineSource;
+        else if (typeof doctrineSource === "function") {
+            const d = doctrineSource(upgrade.id);
+            if (d?.icon) icon = d.icon;
+            if (d?.id) doctrineId = d.id;
+        }
+        doctrineIconEl.style.backgroundImage = `url('${icon}')`;
+        doctrineIconEl.dataset.doctrine = doctrineId;
     }
 
     const titleEl = card.querySelector(".upgrade-title");
