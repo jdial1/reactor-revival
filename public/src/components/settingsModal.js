@@ -311,7 +311,8 @@ export class SettingsModal {
       exportBtn.addEventListener("click", () => {
         if (window.game && typeof window.game.saveGame === "function") {
           window.game.saveGame();
-          const saveData = localStorage.getItem("reactorGameSave") || localStorage.getItem("reactorGameSave_1");
+          const slot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1", 10);
+          const saveData = localStorage.getItem(`reactorGameSave_${slot}`) || localStorage.getItem("reactorGameSave");
           if (saveData) {
             const blob = new Blob([saveData], { type: "application/json" });
             const url = URL.createObjectURL(blob);

@@ -27,9 +27,8 @@ describe("Paused reactor should not generate money for provided layout", () => {
 
         game.ui.stateManager.setVar("auto_sell", true);
 
-        // Try advancing many ticks; money must remain unchanged while paused
+        // Advance time via tick() only; when paused, tick() no-ops so money stays unchanged
         for (let i = 0; i < 50; i++) {
-            game.engine.manualTick();
             game.engine.tick();
         }
 

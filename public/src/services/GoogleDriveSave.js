@@ -381,9 +381,11 @@ export class GoogleDriveSave {
 
     localStorage.removeItem("google_drive_auth_token");
     localStorage.removeItem("google_drive_save_file_id");
+    localStorage.removeItem("google_drive_user_info");
     this.isSignedIn = false;
     this.authToken = null;
     this.saveFileId = null;
+    this.userInfo = null;
 
     console.log("User signed out from Google Drive.");
   }

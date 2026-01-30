@@ -53,7 +53,7 @@ export const checkFunctions = {
       if (game.sustainedPower1k.startTime === 0) {
         game.sustainedPower1k.startTime = Date.now();
       }
-      return Date.now() - game.sustainedPower1k.startTime >= 180000; // 3 minutes
+      return Date.now() - game.sustainedPower1k.startTime >= 30000;
     } else {
       game.sustainedPower1k.startTime = 0;
       return false;
@@ -72,18 +72,10 @@ export const checkFunctions = {
     game.tileset.tiles_list.filter(
       (t) => t.part?.id === "plutonium3" && t.ticks > 0
     ).length >= 5,
-  initialExpansion2: (game) => {
-    return (
-      game.upgradeset.getUpgrade("expand_reactor_rows")?.level >= 2 ||
-      game.upgradeset.getUpgrade("expand_reactor_cols")?.level >= 2
-    );
-  },
   incomeMilestone50k: (game) => {
     return game.reactor.stats_cash >= 50000;
   },
-  expandReactor4: (game) =>
-    game.upgradeset.getUpgrade("expand_reactor_rows")?.level >= 4 ||
-    game.upgradeset.getUpgrade("expand_reactor_cols")?.level >= 4,
+  powerPerTick10k: (game) => game.reactor.stats_power >= 10000 && !game.paused,
   unlockThorium: (game) => {
     return (
       game.tileset.tiles_list.filter(

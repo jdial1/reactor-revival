@@ -41,12 +41,10 @@ export class SupabaseAuth {
             const response = await fetch(`${SUPABASE_CONFIG.PROJECT_URL}/auth/v1/token?grant_type=refresh_token`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Type': 'application/json',
                     'apikey': SUPABASE_CONFIG.ANON_KEY
                 },
-                body: new URLSearchParams({
-                    refresh_token: this.refreshToken
-                })
+                body: JSON.stringify({ refresh_token: this.refreshToken })
             });
 
             const data = await response.json();

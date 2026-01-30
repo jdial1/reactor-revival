@@ -177,11 +177,32 @@ async function getDeployedVersion() {
 
 async function getCurrentVersion() {
   try {
-    const cache = await caches.open("static-resources");
     const basePath = getBasePath();
-    const versionUrl = `${basePath}/version.json`;
-    const response = await cache.match(versionUrl);
-    if (response) {
+    const versionUrl = `${self.location.origin}${basePath}/version.json`;
+    let response = null;
+    if (typeof workbox !== "undefined" && workbox.precaching && workbox.precaching.getCacheKeyForURL) {
+      const cacheKey = workbox.precaching.getCacheKeyForURL(versionUrl);
+      if (cacheKey) {
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+          const cache = await caches.open(name);
+          response = await cache.match(cacheKey);
+          if (response) break;
+        }
+      }
+    }
+    if (!response) {
+      const cacheNames = await caches.keys();
+      for (const name of cacheNames) {
+        const cache = await caches.open(name);
+        response = await cache.match(versionUrl);
+        if (response) break;
+      }
+    }
+    if (!response) {
+      response = await fetch(versionUrl, { cache: "force-cache" });
+    }
+    if (response && response.ok) {
       const data = await response.json();
       return data.version;
     }

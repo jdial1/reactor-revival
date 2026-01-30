@@ -840,6 +840,14 @@ export class UI {
     // 2. Process Queue (Every Frame)
     this.processUpdateQueue();
 
+    if (this.game?.objectives_manager) {
+      const checkId = this.game.objectives_manager.current_objective_def?.checkId;
+      const toastBtn = this.DOMElements.objectives_toast_btn;
+      if (checkId === "sustainedPower1k" && toastBtn?.classList.contains("is-expanded")) {
+        this.updateObjectiveDisplay();
+      }
+    }
+
     // 3. Heavy Visual Updates (Throttled to ~10fps)
     if (timestamp - this.last_interface_update > this.update_interface_interval) {
         this.last_interface_update = timestamp;
@@ -1067,28 +1075,28 @@ export class UI {
           }
         }
 
-        // Update DOM
         const val = obj.current;
-        let formatted = fmt(val, obj.format0 ? (window.innerWidth <= 900 ? 0 : 2) : null);
-        
-        // For heat values, ensure 2 decimal places are always padded to prevent flickering
-        if (key === 'heat' && obj.format0 && window.innerWidth > 900) {
+        const isDesktop = window.innerWidth > 900;
+        let formatted;
+        if (isDesktop && (key === 'heat' || key === 'power' || key === 'money')) {
           const num = Number(val);
           if (!Number.isNaN(num)) {
             const absNum = Math.abs(num);
             if (absNum >= 1000) {
-              // For values >= 1000, ensure mantissa has 2 decimal places
               const pow = Math.floor(Math.log10(absNum) / 3) * 3;
               const mantissa = num / Math.pow(10, pow);
               const suffix = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'][(pow / 3) - 1] || '';
               formatted = mantissa.toFixed(2) + suffix;
             } else {
-              // For values under 1000, ensure exactly 2 decimal places
               formatted = num.toFixed(2);
             }
+          } else {
+            formatted = fmt(val, 2, true);
           }
+        } else {
+          formatted = fmt(val, obj.format0 ? (isDesktop ? 2 : 0) : null);
         }
-        
+
         obj.domId.forEach(id => {
             const el = document.getElementById(id);
             if (el && el.textContent !== formatted) {
@@ -1730,67 +1738,65 @@ export class UI {
     } catch (_) { /* ignore */ }
   }
 
-  updatePowerDenom() {
-    const maxPower = this.stateManager.getVar("max_power") || 0;
+  getPowerNetChange() {
     const statsPower = this.stateManager.getVar("stats_power") || 0;
     const autoSellEnabled = this.stateManager.getVar("auto_sell") || false;
     const autoSellMultiplier = this.game?.reactor?.auto_sell_multiplier || 0;
-    
-    let netChange = statsPower;
     if (autoSellEnabled && autoSellMultiplier > 0) {
       const sellAmount = statsPower * autoSellMultiplier;
-      netChange = statsPower - sellAmount;
+      return statsPower - sellAmount;
     }
-    
+    return statsPower;
+  }
+
+  getHeatNetChange() {
+    const totalHeat = this.stateManager.getVar("total_heat") || 0;
+    const statsVent = this.stateManager.getVar("stats_vent") || 0;
+    const manualReduce = this.game?.reactor?.manual_heat_reduce || this.game?.base_manual_heat_reduce || 1;
+    const currentPower = this.stateManager.getVar("current_power") || 0;
+    const statsPower = this.stateManager.getVar("stats_power") || 0;
+    const maxPower = this.stateManager.getVar("max_power") || 0;
+    const potentialPower = currentPower + statsPower;
+    const excessPower = Math.max(0, potentialPower - maxPower);
+    return totalHeat + excessPower - statsVent - manualReduce;
+  }
+
+  updatePowerDenom() {
+    const maxPower = this.stateManager.getVar("max_power") || 0;
+    const netChange = this.getPowerNetChange();
     const mobileDenom = document.getElementById("info_power_denom");
     const desktopDenom = document.getElementById("info_power_denom_desktop");
     const arrow = netChange >= 0 ? "↑" : "↓";
-    const value = fmt(Math.abs(netChange));
-    const capacity = fmt(maxPower);
     const isPositive = netChange >= 0;
-    
-    const text = `/${capacity} <span class="tick-change ${isPositive ? 'positive' : 'negative'}">${arrow} ${value}</span>`;
-    
+    const mobileText = `/${fmt(maxPower)} <span class="tick-change ${isPositive ? 'positive' : 'negative'}">${arrow} ${fmt(Math.abs(netChange))}</span>`;
+    const desktopText = `/${fmt(maxPower, 2, true)} <span class="tick-change ${isPositive ? 'positive' : 'negative'}">${arrow} ${fmt(Math.abs(netChange), 2, true)}</span>`;
+
     if (mobileDenom) {
-      mobileDenom.innerHTML = text;
+      mobileDenom.innerHTML = mobileText;
       mobileDenom.style.textAlign = "right";
     }
     if (desktopDenom) {
-      desktopDenom.innerHTML = text;
+      desktopDenom.innerHTML = desktopText;
       desktopDenom.style.textAlign = "right";
     }
   }
 
   updateHeatDenom() {
     const maxHeat = this.stateManager.getVar("max_heat") || 0;
-    const totalHeat = this.stateManager.getVar("total_heat") || 0;
-    const statsVent = this.stateManager.getVar("stats_vent") || 0;
-    const manualReduce = this.game?.reactor?.manual_heat_reduce || this.game?.base_manual_heat_reduce || 1;
-    
-    const currentPower = this.stateManager.getVar("current_power") || 0;
-    const statsPower = this.stateManager.getVar("stats_power") || 0;
-    const maxPower = this.stateManager.getVar("max_power") || 0;
-    
-    const potentialPower = currentPower + statsPower;
-    const excessPower = Math.max(0, potentialPower - maxPower);
-    
-    const netChange = totalHeat + excessPower - statsVent - manualReduce;
-    
+    const netChange = this.getHeatNetChange();
     const mobileDenom = document.getElementById("info_heat_denom");
     const desktopDenom = document.getElementById("info_heat_denom_desktop");
     const arrow = netChange >= 0 ? "↑" : "↓";
-    const value = fmt(Math.abs(netChange));
-    const capacity = fmt(maxHeat);
     const isPositive = netChange >= 0;
-    
-    const text = `/${capacity} <span class="tick-change ${isPositive ? 'positive' : 'negative'}">${arrow} ${value}</span>`;
-    
+    const mobileText = `/${fmt(maxHeat)} <span class="tick-change ${isPositive ? 'positive' : 'negative'}">${arrow} ${fmt(Math.abs(netChange))}</span>`;
+    const desktopText = `/${fmt(maxHeat, 2, true)} <span class="tick-change ${isPositive ? 'positive' : 'negative'}">${arrow} ${fmt(Math.abs(netChange), 2, true)}</span>`;
+
     if (mobileDenom) {
-      mobileDenom.innerHTML = text;
+      mobileDenom.innerHTML = mobileText;
       mobileDenom.style.textAlign = "right";
     }
     if (desktopDenom) {
-      desktopDenom.innerHTML = text;
+      desktopDenom.innerHTML = desktopText;
       desktopDenom.style.textAlign = "right";
     }
   }
@@ -2350,6 +2356,7 @@ export class UI {
       const objectiveIndex = this.game?.objectives_manager?.current_objective_index ?? 0;
       const displayTitle = info.title ? `${objectiveIndex + 1}: ${info.title}` : "";
       toastTitleEl.textContent = displayTitle;
+      this.game?.ui?.stateManager?.checkObjectiveTextScrolling();
     }
     if (toastBtn) {
       const wasComplete = toastBtn.classList.contains("is-complete");
@@ -2358,6 +2365,14 @@ export class UI {
       toastBtn.classList.toggle("is-active", !info.isComplete);
       if (claimPill) {
         claimPill.textContent = info.isChapterCompletion ? "Complete" : "Claim";
+      }
+
+      const checkId = this.game.objectives_manager.current_objective_def?.checkId;
+      const showProgressBar = checkId === "sustainedPower1k" && toastBtn.classList.contains("is-expanded") && !info.isComplete;
+      toastBtn.classList.toggle("has-progress-bar", !!showProgressBar);
+      const progressFill = toastBtn.querySelector(".objectives-toast-progress-fill");
+      if (progressFill) {
+        progressFill.style.width = showProgressBar ? `${info.progressPercent}%` : "0%";
       }
 
       if (!wasComplete && info.isComplete) {
@@ -5433,10 +5448,10 @@ export class UI {
     if (this.game && this.game.reactor) {
       if (powerEl) {
         const power = this.stateManager.getVar("current_power") || 0;
-        powerEl.textContent = Math.floor(power);
+        powerEl.textContent = fmt(power, 0);
       }
       if (powerDenomEl && this.game.reactor.max_power) {
-        powerDenomEl.textContent = `/${Math.floor(this.game.reactor.max_power)}`;
+        powerDenomEl.textContent = `/${fmt(this.game.reactor.max_power, 0)}`;
       }
       if (moneyEl) {
         const money = this.stateManager.getVar("current_money") || 0;
@@ -5444,10 +5459,23 @@ export class UI {
       }
       if (heatEl) {
         const heat = this.stateManager.getVar("current_heat") || 0;
-        heatEl.textContent = Math.floor(heat);
+        heatEl.textContent = fmt(heat, 0);
       }
       if (heatDenomEl && this.game.reactor.max_heat) {
-        heatDenomEl.textContent = `/${Math.floor(this.game.reactor.max_heat)}`;
+        heatDenomEl.textContent = `/${fmt(this.game.reactor.max_heat, 0)}`;
+      }
+
+      const powerRateEl = document.getElementById("control_deck_power_rate");
+      const heatRateEl = document.getElementById("control_deck_heat_rate");
+      const powerDelta = this.getPowerNetChange();
+      const heatDelta = this.getHeatNetChange();
+      if (powerRateEl) {
+        const d = Math.round(powerDelta);
+        powerRateEl.textContent = d === 0 ? "0" : (d > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(d), 0);
+      }
+      if (heatRateEl) {
+        const d = Math.round(heatDelta);
+        heatRateEl.textContent = d === 0 ? "0" : (d > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(d), 0);
       }
 
       const powerFill = document.querySelector(".power-fill");

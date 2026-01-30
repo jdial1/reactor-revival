@@ -103,7 +103,7 @@
         "checkId": "autoSell500"
     },
     {
-        "title": "Achieve a steady power generation of 1,000 per tick for at least 3 minutes.",
+        "title": "Achieve a steady power generation of 1,000 per tick for at least 30 seconds.",
         "flavor_text": "Stability is proof of a well-designed system. You're maintaining a high, steady output.",
         "reward": 200000,
         "checkId": "sustainedPower1k"
@@ -134,10 +134,10 @@
         "checkId": "incomeMilestone50k"
     },
     {
-        "title": "Expand your reactor 4 times in either direction",
-        "flavor_text": "The reactor hall has been expanded, making room for more complex and powerful designs.",
+        "title": "Generate at least 10,000 power per tick",
+        "flavor_text": "Your reactor has reached a new tier of output, sustaining massive energy production.",
         "reward": 100000000,
-        "checkId": "expandReactor4"
+        "checkId": "powerPerTick10k"
     },
     {
         "title": "Have at least 5 Quad Thorium Cells.",

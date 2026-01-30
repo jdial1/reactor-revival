@@ -183,10 +183,10 @@ describe("Responsive UI Layout and Overlap Checks", () => {
 
       it("should have correct mobile/desktop parts panel behavior", () => {
         const partsPanel = document.getElementById("parts_section");
-        const toggle = document.getElementById("build_button_above_deck");
+        const toggle = document.getElementById("control_deck_build_fab");
 
         expect(partsPanel, "Parts panel should exist").not.toBeNull();
-        expect(toggle, "Parts panel toggle (build button) should exist").not.toBeNull();
+        expect(toggle, "Parts panel toggle (build FAB) should exist").not.toBeNull();
 
         resizeWindow(window, 800, 600);
         const isMobile = window.innerWidth <= 900;

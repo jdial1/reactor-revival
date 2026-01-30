@@ -8,8 +8,6 @@ let dataLoaded = false;
 
 const OBJECTIVE_REQUIRED_UPGRADES = {
   improvedChronometers: ["chronometer"],
-  expandReactor4: ["expand_reactor_rows", "expand_reactor_cols"],
-  initialExpansion2: ["expand_reactor_rows", "expand_reactor_cols"],
   investInResearch1: ["infused_cells", "unleashed_cells"],
 };
 

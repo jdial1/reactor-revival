@@ -109,55 +109,55 @@ async function handleUserSession(game, pageRouter) {
   }
 }
 
+function clearAllGameDataForNewGame(game) {
+  try {
+    localStorage.removeItem("reactorGameSave");
+  } catch (_) { }
+  for (let i = 1; i <= 3; i++) {
+    try {
+      localStorage.removeItem(`reactorGameSave_${i}`);
+    } catch (_) { }
+  }
+  try {
+    localStorage.removeItem("reactorCurrentSaveSlot");
+    localStorage.removeItem("reactorGameQuickStartShown");
+    localStorage.removeItem("google_drive_save_file_id");
+    localStorage.setItem("reactorNewGamePending", "1");
+  } catch (_) { }
+  if (game && Object.prototype.hasOwnProperty.call(game, "_saved_objective_index")) {
+    delete game._saved_objective_index;
+  }
+}
+
 function setupButtonHandlers(pageRouter, ui, game) {
   const newGameBtn = document.getElementById("splash-new-game-btn");
   if (newGameBtn) {
     newGameBtn.onclick = async () => {
       console.log("[TECH-TREE] splash-new-game-btn clicked in app.js");
-      // Check if we should show tech tree selection (preferred) or fall back to direct start
       if (window.showTechTreeSelection && window.splashManager) {
         console.log("[TECH-TREE] Using tech tree selection flow");
         try {
           await window.showTechTreeSelection(game, pageRouter, ui, window.splashManager);
         } catch (error) {
           console.error("[TECH-TREE] Error in tech tree selection, falling back to direct start:", error);
-          // Fallback to direct start if tech tree selection fails
           if (window.splashManager) {
             window.splashManager.hide();
           }
           await new Promise((resolve) => setTimeout(resolve, 600));
-          try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
-          for (let i = 1; i <= 3; i++) {
-            try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
-          }
-          try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
-          try { localStorage.setItem("reactorNewGamePending", "1"); } catch (_) { }
-          delete game._saved_objective_index;
+          clearAllGameDataForNewGame(game);
           await game.initialize_new_game_state();
-          localStorage.removeItem("reactorGameQuickStartShown");
           await startGame(pageRouter, ui, game);
           try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
         }
       } else {
         console.log("[TECH-TREE] Tech tree selection not available, using direct start");
-        // Fallback: direct start without tech tree selection
         if (window.splashManager) {
           window.splashManager.hide();
         }
         await new Promise((resolve) => setTimeout(resolve, 600));
-        // Clear any persisted saves and pending saved objective index to force a true reset
-        try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
-        for (let i = 1; i <= 3; i++) {
-          try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
-        }
-        try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
-        try { localStorage.setItem("reactorNewGamePending", "1"); } catch (_) { }
-        delete game._saved_objective_index;
-        // Perform a full clean initialization (resets reactor/tiles, parts, upgrades and UI vars)
+        clearAllGameDataForNewGame(game);
         await game.initialize_new_game_state();
-        localStorage.removeItem("reactorGameQuickStartShown");
         await startGame(pageRouter, ui, game);
-        // Clear the pending flag once the new session has started
         try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
       }
     };
@@ -568,8 +568,8 @@ async function startGame(pageRouter, ui, game) {
   }
 }
 
-// Make startGame available globally for PWA manager
 window.startGame = startGame;
+window.clearAllGameDataForNewGame = clearAllGameDataForNewGame;
 
 function setupGlobalListeners(game) {
   on(document, "[data-page]", "click", async (e) => {

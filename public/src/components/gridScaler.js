@@ -24,7 +24,8 @@ export class GridScaler {
             initialTranslate: { x: 0, y: 0 },
             currentTranslate: { x: 0, y: 0 },
             currentScale: 1,
-            touches: []
+            touches: [],
+            pinchDistanceThreshold: 10
         };
 
     }
@@ -75,60 +76,53 @@ export class GridScaler {
 
     handleTouchStart(e) {
         if (e.touches.length === 2) {
-            e.preventDefault();
-            this.gestureState.isPinching = true;
-            this.gestureState.isPanning = true;
             this.gestureState.touches = Array.from(e.touches);
             this.gestureState.initialDistance = this.getDistance(e.touches[0], e.touches[1]);
             this.gestureState.initialScale = this.gestureState.currentScale || 1;
             this.gestureState.initialTranslate = { ...this.gestureState.currentTranslate };
-        } else if (e.touches.length === 1 && this.gestureState.isPanning) {
-            e.preventDefault();
+            this.gestureState.isPinching = false;
+            this.gestureState.isPanning = false;
+        } else if (e.touches.length === 1) {
+            this.gestureState.isPinching = false;
+            this.gestureState.isPanning = false;
+            this.gestureState.touches = [];
         }
     }
 
     handleTouchMove(e) {
-        if (e.touches.length === 2 && this.gestureState.isPinching) {
-            e.preventDefault();
-            
-            const currentDistance = this.getDistance(e.touches[0], e.touches[1]);
+        if (e.touches.length !== 2) return;
+        const currentDistance = this.getDistance(e.touches[0], e.touches[1]);
+        if (!this.gestureState.isPinching && !this.gestureState.isPanning) {
+            const threshold = this.gestureState.pinchDistanceThreshold || 10;
+            const distanceDelta = Math.abs(currentDistance - this.gestureState.initialDistance);
+            if (distanceDelta < threshold) return;
+            this.gestureState.isPinching = true;
+            this.gestureState.isPanning = true;
+        }
+        e.preventDefault();
+        if (this.gestureState.isPinching) {
             const scale = (currentDistance / this.gestureState.initialDistance) * this.gestureState.initialScale;
             const clampedScale = Math.max(0.5, Math.min(2.0, scale));
-            
             this.gestureState.currentScale = clampedScale;
-
             const midpoint = this.getMidpoint(e.touches[0], e.touches[1]);
             const wrapperRect = this.wrapper.getBoundingClientRect();
             const wrapperCenterX = wrapperRect.left + wrapperRect.width / 2;
             const wrapperCenterY = wrapperRect.top + wrapperRect.height / 2;
-
-            const translateX = midpoint.x - wrapperCenterX;
-            const translateY = midpoint.y - wrapperCenterY;
-
             this.gestureState.currentTranslate = {
-                x: translateX,
-                y: translateY
+                x: midpoint.x - wrapperCenterX,
+                y: midpoint.y - wrapperCenterY
             };
-
-            this.applyTransform();
-        } else if (e.touches.length === 2 && this.gestureState.isPanning) {
-            e.preventDefault();
-            
+        } else {
             const currentMidpoint = this.getMidpoint(e.touches[0], e.touches[1]);
             const previousMidpoint = this.getMidpoint(
                 this.gestureState.touches[0],
                 this.gestureState.touches[1]
             );
-
-            const deltaX = currentMidpoint.x - previousMidpoint.x;
-            const deltaY = currentMidpoint.y - previousMidpoint.y;
-
-            this.gestureState.currentTranslate.x += deltaX;
-            this.gestureState.currentTranslate.y += deltaY;
-
-            this.gestureState.touches = Array.from(e.touches);
-            this.applyTransform();
+            this.gestureState.currentTranslate.x += currentMidpoint.x - previousMidpoint.x;
+            this.gestureState.currentTranslate.y += currentMidpoint.y - previousMidpoint.y;
         }
+        this.gestureState.touches = Array.from(e.touches);
+        this.applyTransform();
     }
 
     handleTouchEnd(e) {

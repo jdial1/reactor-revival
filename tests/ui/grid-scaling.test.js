@@ -70,8 +70,8 @@ describe("Grid Scaling Logic (Reshaping)", () => {
         
         ui.gridScaler.resize();
 
-        // Mobile: 400 / 64 = 6.25 tiles width. Max cols logic caps it.
-        expect(game.cols).toBe(6); // Correct expectation for 400px width with 64px max tile size
+        // Mobile: gridScaler uses cols = 8, capped by maxTilesX (400/40 = 10).
+        expect(game.cols).toBe(8);
         expect(game.rows).toBeGreaterThanOrEqual(10);
         expect(game.rows).toBeLessThanOrEqual(14);
         expect(game.rows).toBeGreaterThan(game.cols);

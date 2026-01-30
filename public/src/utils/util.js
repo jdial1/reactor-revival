@@ -1,15 +1,13 @@
-export function numFormat(num, places = null) {
+export function numFormat(num, places = null, fixedDecimals = false) {
     const cm_names = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
 
-    // Handle null, undefined, and NaN inputs
     if (num === null || typeof num === 'undefined') return '';
 
-    // Convert to number and handle NaN
     num = Number(num);
     if (Number.isNaN(num)) return '';
 
     if (num === Infinity || num === -Infinity) return num > 0 ? 'Infinity' : '-Infinity';
-    
+
     const absNum = Math.abs(num);
 
     if (places === null) {
@@ -33,17 +31,16 @@ export function numFormat(num, places = null) {
         suffix = cm_names[(pow / 3) - 1] || '';
     }
 
-    // Ensure mantissa is a number before calling toFixed
     mantissa = Number(mantissa);
     if (Number.isNaN(mantissa)) return '';
 
-    // Don't round - just truncate to the specified number of decimal places
     let mantissaStr = mantissa.toFixed(places);
-    
-    // Remove trailing zeros after decimal point
-    mantissaStr = mantissaStr.replace(/\.(\d*?)0+$/, (match, digits) => {
-        return digits ? `.${digits}` : '';
-    });
+
+    if (!fixedDecimals) {
+        mantissaStr = mantissaStr.replace(/\.(\d*?)0+$/, (match, digits) => {
+            return digits ? `.${digits}` : '';
+        });
+    }
 
     return mantissaStr + suffix;
 }

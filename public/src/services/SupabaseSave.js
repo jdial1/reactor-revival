@@ -9,6 +9,7 @@ export class SupabaseSave {
         if (!window.supabaseAuth?.isSignedIn()) throw new Error("Not signed in");
         
         const userId = window.supabaseAuth.getUserId();
+        const token = window.supabaseAuth.token;
         const payload = {
             user_id: userId,
             slot_id: slotId,
@@ -18,7 +19,10 @@ export class SupabaseSave {
 
         const response = await fetch(`${this.apiBaseUrl}/api/saves`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify(payload)
         });
 
@@ -30,7 +34,10 @@ export class SupabaseSave {
         if (!window.supabaseAuth?.isSignedIn()) return [];
         
         const userId = window.supabaseAuth.getUserId();
-        const response = await fetch(`${this.apiBaseUrl}/api/saves/${userId}`);
+        const token = window.supabaseAuth.token;
+        const response = await fetch(`${this.apiBaseUrl}/api/saves/${userId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         
         if (!response.ok) throw new Error("Failed to fetch saves");
         const json = await response.json();

@@ -402,29 +402,31 @@ async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId)
         }
         await new Promise((resolve) => setTimeout(resolve, 600));
 
-        try { localStorage.removeItem("reactorGameSave"); } catch (_) { }
-        for (let i = 1; i <= 3; i++) {
-            try { localStorage.removeItem(`reactorGameSave_${i}`); } catch (_) { }
+        if (typeof window.clearAllGameDataForNewGame === "function") {
+            window.clearAllGameDataForNewGame(game);
+        } else {
+            try {
+                localStorage.removeItem("reactorGameSave");
+                for (let i = 1; i <= 3; i++) localStorage.removeItem(`reactorGameSave_${i}`);
+                localStorage.removeItem("reactorCurrentSaveSlot");
+                localStorage.removeItem("reactorGameQuickStartShown");
+                localStorage.removeItem("google_drive_save_file_id");
+                localStorage.setItem("reactorNewGamePending", "1");
+            } catch (_) { }
+            delete game._saved_objective_index;
         }
-        try { localStorage.removeItem("reactorCurrentSaveSlot"); } catch (_) { }
-        
-        delete game._saved_objective_index;
-        
-        // Initialize game state - leaderboard service errors are non-fatal
+
         try {
             await game.initialize_new_game_state();
         } catch (error) {
             console.warn("[TECH-TREE] Error during game initialization (non-fatal):", error);
-            // Continue with game start even if initialization has issues
         }
-        
+
         if (techTreeId) {
             game.tech_tree = techTreeId;
             console.log(`[GAME] Started with tech tree: ${techTreeId}`);
         }
-        
-        localStorage.removeItem("reactorGameQuickStartShown");
-        
+
         if (typeof window.startGame === "function") {
             await window.startGame(pageRouter, ui, game);
         } else {
@@ -434,12 +436,11 @@ async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId)
             game.startSession();
             game.engine.start();
         }
-        
+
         try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
     } catch (error) {
         console.error("[TECH-TREE] Error in startNewGameFlow:", error);
         console.error("[TECH-TREE] Error stack:", error.stack);
-        // Re-throw to allow caller to handle if needed
         throw error;
     }
 }
@@ -1109,113 +1110,13 @@ class SplashScreenManager {
     return num.toString();
   }
 
-  showSaveOverwriteModal(slot, saveData, callback) {
-    // Create modal overlay
-    const modal = document.createElement("div");
-    modal.className = "save-overwrite-modal-overlay";
-    modal.style.position = "fixed";
-    modal.style.top = "0";
-    modal.style.left = "0";
-    modal.style.width = "100%";
-    modal.style.height = "100%";
-    modal.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-    modal.style.display = "flex";
-    modal.style.alignItems = "center";
-    modal.style.justifyContent = "center";
-    modal.style.zIndex = "10000";
-    modal.style.fontFamily = '"Press Start 2P", cursive, monospace';
-
-    modal.innerHTML = `
-      <div class="save-overwrite-modal" style="
-        background: rgb(64 64 64);
-        border: 3px solid rgb(128 128 128);
-        border-radius: 12px;
-        padding: 2rem;
-        max-width: 500px;
-        width: 90%;
-        color: white;
-        text-shadow: 1px 1px 0 black;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
-      ">
-        <h3 style="margin: 0 0 1rem 0; color: white; font-size: 1.2rem; text-align: center;">
-          Auto-Save Conflict
-        </h3>
-        <p style="margin: 0 0 1.5rem 0; color: rgb(255 182 193); font-size: 0.8rem; text-align: center;">
-          Auto-save wants to overwrite Slot ${slot}
-        </p>
-        
-        <div style="margin-bottom: 1.5rem;">
-          <div style="background: rgb(80 80 80); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-            <h4 style="margin: 0 0 0.5rem 0; color: rgb(143 214 148); font-size: 0.9rem;">Existing Save</h4>
-            <div style="font-size: 0.7rem; line-height: 1.4;">
-              <div>Play Time: <span style="color: rgb(255 255 160);">${saveData.existing.playTime}</span></div>
-              <div>Money: <span style="color: rgb(143 214 148);">$${saveData.existing.money}</span></div>
-            </div>
-          </div>
-          
-          <div style="background: rgb(80 80 80); padding: 1rem; border-radius: 8px;">
-            <h4 style="margin: 0 0 0.5rem 0; color: rgb(255 182 193); font-size: 0.9rem;">Current Game</h4>
-            <div style="font-size: 0.7rem; line-height: 1.4;">
-              <div>Play Time: <span style="color: rgb(255 255 160);">${saveData.current.playTime}</span></div>
-              <div>Money: <span style="color: rgb(143 214 148);">$${saveData.current.money}</span></div>
-            </div>
-          </div>
-        </div>
-        
-        <div style="display: flex; gap: 1rem; justify-content: center;">
-          <button id="overwrite-btn" style="
-            background: rgb(171 63 63);
-            border: 2px solid rgb(209 107 107);
-            border-radius: 6px;
-            padding: 0.75rem 1.5rem;
-            color: white;
-            font-family: inherit;
-            font-size: 0.7rem;
-            cursor: pointer;
-            text-shadow: 1px 1px 0 black;
-          ">Overwrite</button>
-          <button id="load-btn" style="
-            background: rgb(81 93 156);
-            border: 2px solid rgb(125 137 197);
-            border-radius: 6px;
-            padding: 0.75rem 1.5rem;
-            color: white;
-            font-family: inherit;
-            font-size: 0.7rem;
-            cursor: pointer;
-            text-shadow: 1px 1px 0 black;
-          ">Load Existing</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // Add click handlers
-    modal.querySelector('#overwrite-btn').addEventListener('click', () => {
-      modal.remove();
-      callback('overwrite');
-    });
-
-    modal.querySelector('#load-btn').addEventListener('click', () => {
-      modal.remove();
-      callback('load');
-    });
-
-    // Close on overlay click
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        modal.remove();
-        callback('overwrite'); // Default to overwrite if user clicks outside
-      }
-    });
-  }
-
   async loadFromSaveSlot(slot) {
     try {
       console.log(`[DEBUG] Loading from save slot: ${slot}`);
 
-      // Hide splash manager
+      const saveSlotEl = document.getElementById("save-slot-screen");
+      if (saveSlotEl) saveSlotEl.remove();
+
       if (window.splashManager) {
         console.log("[DEBUG] Hiding splash manager...");
         window.splashManager.hide();

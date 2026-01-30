@@ -228,9 +228,12 @@
       <!-- Only show objectives on reactor page -->
 
       <button id="objectives_toast_btn" class="objectives-toast-btn" aria-label="Show Objectives" aria-expanded="false" type="button">
-        <span class="objectives-toast-icon">?</span>
-        <span class="objectives-toast-title" id="objectives_toast_title"></span>
-        <span class="objectives-claim-pill">Claim</span>
+        <span class="objectives-toast-row">
+          <span class="objectives-toast-icon">?</span>
+          <span class="objectives-toast-title" id="objectives_toast_title"></span>
+          <span class="objectives-claim-pill">Claim</span>
+        </span>
+        <span class="objectives-toast-progress" aria-hidden="true"><span class="objectives-toast-progress-fill"></span></span>
       </button>
 
     <!-- End reactor-only objectives -->
@@ -308,6 +311,7 @@
         aria-label="Sell Power"
       >
         <div class="control-deck-auto-sell-led" id="control_deck_auto_sell_led" aria-hidden="true"></div>
+        <span class="control-deck-rate" id="control_deck_power_rate" aria-hidden="true"></span>
         <div class="control-deck-fill power-fill"></div>
         <div class="control-deck-content">
           <img src="img/ui/icons/icon_power.png" alt="Power" class="control-deck-icon" />
@@ -331,6 +335,7 @@
         tabindex="0"
         aria-label="Vent Heat"
       >
+        <span class="control-deck-rate" id="control_deck_heat_rate" aria-hidden="true"></span>
         <div class="control-deck-fill heat-fill"></div>
         <div class="control-deck-hazard-stripes"></div>
         <div class="control-deck-content">

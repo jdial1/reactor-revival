@@ -455,6 +455,10 @@ export class Engine {
 
     // Don't process ticks if the game is paused
     if (this.game.paused && !manual) {
+      if (ui && ui.stateManager) {
+        ui.stateManager.setVar("power_delta_per_tick", 0);
+        ui.stateManager.setVar("heat_delta_per_tick", 0);
+      }
       this.game.logger?.debug('Tick skipped: Game is paused.');
       if (this.game.performance && this.game.performance.shouldMeasure()) {
         this.game.performance.markEnd("tick_total");
@@ -462,6 +466,9 @@ export class Engine {
       this.game.logger?.groupEnd();
       return;
     }
+
+    const powerBeforeTick = reactor.current_power;
+    const heatBeforeTick = reactor.current_heat;
 
     // Removed: Blocking check for !this.running && !manual
     // This ensures game.engine.tick() works in tests even if engine loop is stopped
@@ -839,8 +846,13 @@ export class Engine {
         this.active_exchangers = [];
       }
       const exchangers = this.active_exchangers;
-      
-      // Clear reusable maps/arrays
+
+      if (!this._heatCalc_startHeat) this._heatCalc_startHeat = new Map();
+      if (!this._heatCalc_plannedOutByNeighbor) this._heatCalc_plannedOutByNeighbor = new Map();
+      if (!this._heatCalc_plannedInByNeighbor) this._heatCalc_plannedInByNeighbor = new Map();
+      if (!this._heatCalc_plannedInByExchanger) this._heatCalc_plannedInByExchanger = new Map();
+      if (!this._valveNeighborExchangers) this._valveNeighborExchangers = new Set();
+
       this._heatCalc_startHeat.clear();
       this._heatCalc_plannedCount = 0;
       this._heatCalc_plannedOutByNeighbor.clear();
@@ -1319,6 +1331,11 @@ export class Engine {
     }
     // ------------------------------
 
+    const rawPowerDelta = reactor.current_power - powerBeforeTick;
+    const rawHeatDelta = reactor.current_heat - heatBeforeTick;
+    const norm = Math.max(0.001, multiplier);
+    ui.stateManager.setVar("power_delta_per_tick", rawPowerDelta / norm);
+    ui.stateManager.setVar("heat_delta_per_tick", rawHeatDelta / norm);
     ui.stateManager.setVar("current_power", reactor.current_power);
     ui.stateManager.setVar("current_heat", reactor.current_heat);
 

@@ -442,6 +442,7 @@ export class StateManager {
       const objectiveNumber = currentIndex + 1;
       const displayTitle = `${objectiveNumber}: ${objective.title}`;
       toastTitleEl.textContent = displayTitle;
+      this.checkObjectiveTextScrolling();
     }
     if (toastBtn) {
       toastBtn.classList.toggle("is-complete", !!objective.completed);

@@ -594,10 +594,24 @@ export class ObjectiveManager {
         const totalMoney = game.total_money_earned || 0;
         return { text: `$${totalMoney.toLocaleString()} / $10,000,000,000`, percent: Math.min(100, (totalMoney / 1e10) * 100) };
 
-      case 'sustainedPower1000':
-        // This would need to track sustained power over time - simplified for now
-        const sustainedPower = game.reactor.stats_power || 0;
-        return { text: `${sustainedPower.toLocaleString()} / 1,000 Power (sustained)`, percent: Math.min(100, (sustainedPower / 1000) * 100) };
+      case 'sustainedPower1k': {
+        const DURATION_MS = 30000;
+        if (!game.sustainedPower1k) game.sustainedPower1k = { startTime: 0 };
+        const state = game.sustainedPower1k;
+        const powerOk = game.reactor.stats_power >= 1000 && !game.paused;
+        if (!powerOk) {
+          const power = game.reactor.stats_power || 0;
+          return { text: `${power.toLocaleString()} / 1,000 Power (hold 30 sec)`, percent: 0 };
+        }
+        if (state.startTime === 0) state.startTime = Date.now();
+        const elapsed = Date.now() - state.startTime;
+        const percent = Math.min(100, (elapsed / DURATION_MS) * 100);
+        const m = (x) => Math.floor(x / 60000);
+        const s = (x) => Math.floor((x % 60000) / 1000);
+        const elapsedStr = `${m(elapsed)}:${String(s(elapsed)).padStart(2, '0')}`;
+        const totalStr = `${m(DURATION_MS)}:${String(s(DURATION_MS)).padStart(2, '0')}`;
+        return { text: `${elapsedStr} / ${totalStr} steady`, percent };
+      }
 
       case 'heat10m':
         const heat = game.reactor.stats_heat || 0;
