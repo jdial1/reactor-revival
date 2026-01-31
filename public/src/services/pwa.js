@@ -1,7 +1,7 @@
 import { numFormat as fmt } from "../utils/util.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
-import { SettingsModal } from "../components/settingsModal.js";
+import { settingsModal } from "../components/settingsModal.js";
 import {
   createNewGameButton,
   createLoadGameButton,
@@ -43,10 +43,9 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
 
   let overlay = document.getElementById("tech-tree-overlay");
   if (!overlay) {
-    console.log("[TECH-TREE] Creating new overlay element");
     overlay = document.createElement("div");
     overlay.id = "tech-tree-overlay";
-    overlay.className = "tech-tree-overlay";
+    overlay.className = "tech-tree-overlay bios-overlay";
     document.body.appendChild(overlay);
     console.log("[TECH-TREE] Overlay created and appended to body", overlay);
   } else {
@@ -67,212 +66,86 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
     return;
   }
 
-  console.log("[TECH-TREE] Clearing overlay and cloning selection template...");
   overlay.innerHTML = "";
-  
-  if (!window.templateLoader) {
-    console.error("[TECH-TREE] templateLoader not available!");
-    return;
-  }
-  
-  console.log("[TECH-TREE] Checking for tech-tree-selection-template...");
+  if (!window.templateLoader) return;
   const selectionScreen = window.templateLoader.cloneTemplateElement("tech-tree-selection-template");
-  if (!selectionScreen) {
-    console.error("[TECH-TREE] Failed to clone tech-tree-selection-template - template may not exist");
-    return;
-  }
-  console.log("[TECH-TREE] Selection screen template cloned:", selectionScreen);
+  if (!selectionScreen) return;
 
-  const container = selectionScreen.querySelector(".tech-tree-container");
-  if (!container) {
-    console.error("[TECH-TREE] .tech-tree-container not found in selection screen");
-    return;
-  }
-  // Accessibility: Add role and label to container
-  container.setAttribute("role", "radiogroup");
-  container.setAttribute("aria-label", "Select Your Doctrine");
-  console.log("[TECH-TREE] Container found:", container);
+  const listEl = selectionScreen.querySelector(".doctrine-list");
+  const detailsPlaystyle = selectionScreen.querySelector(".bios-details-playstyle");
+  const detailsFocus = selectionScreen.querySelector(".bios-details-focus");
+  const nextBtn = selectionScreen.querySelector(".doctrine-next-btn");
+  const backBtn = selectionScreen.querySelector(".doctrine-back-btn");
+  if (!listEl) return;
 
-  // Track selected tech tree
-  let selectedTechTreeId = null;
-  const startBtn = selectionScreen.querySelector(".tech-tree-start-btn");
+  let selectedIndex = 0;
+  const updateDetails = () => {
+    const tree = techTreeData[selectedIndex];
+    if (detailsPlaystyle) detailsPlaystyle.textContent = `Playstyle: ${tree.playstyle}`;
+    if (detailsFocus) detailsFocus.textContent = tree.focus;
+  };
 
-  console.log("[TECH-TREE] Processing", techTreeData.length, "tech trees...");
+  const updateCursor = () => {
+    listEl.querySelectorAll(".doctrine-item").forEach((item, i) => {
+      const cursor = item.querySelector(".doctrine-cursor");
+      if (cursor) {
+        cursor.textContent = i === selectedIndex ? ">" : " ";
+        cursor.classList.toggle("cursor-blink", i === selectedIndex);
+      }
+      item.classList.toggle("doctrine-selected", i === selectedIndex);
+    });
+  };
+
   techTreeData.forEach((tree, index) => {
-    console.log(`[TECH-TREE] Processing tree ${index + 1}:`, tree);
-    
-    const card = window.templateLoader.cloneTemplateElement("tech-tree-card-template");
-    if (!card) {
-      console.error(`[TECH-TREE] Failed to clone tech-tree-card-template for tree ${index + 1}`);
-      return;
-    }
-    console.log(`[TECH-TREE] Card template cloned for tree ${index + 1}`);
-
-    // Accessibility: Set role, checked state, and keyboard focus
-    card.setAttribute("role", "radio");
-    card.setAttribute("aria-checked", "false");
-    card.setAttribute("tabindex", "0");
-    card.setAttribute("aria-label", tree.title || "Tech tree option");
-
-    // Store tree data on card for later use
-    card.dataset.treeId = tree.id;
-    card.dataset.treeColor = tree.color;
-
-    const header = card.querySelector(".tech-tree-card-header");
-    if (header) {
-      header.style.borderColor = tree.color;
-      console.log(`[TECH-TREE] Set header border color for tree ${index + 1}:`, tree.color);
-    } else {
-      console.warn(`[TECH-TREE] .tech-tree-card-header not found in card ${index + 1}`);
-    }
-
-    const icon = card.querySelector(".tech-tree-icon");
-    if (icon) {
-      icon.src = tree.icon;
-      // Accessibility: Set descriptive alt text
-      icon.alt = `${tree.title} icon`;
-      console.log(`[TECH-TREE] Set icon for tree ${index + 1}:`, tree.icon);
-    } else {
-      console.warn(`[TECH-TREE] .tech-tree-icon not found in card ${index + 1}`);
-    }
-
-    const titleEl = card.querySelector(".tech-tree-title");
-    if (titleEl) {
-      titleEl.textContent = tree.title;
-      console.log(`[TECH-TREE] Set title for tree ${index + 1}:`, tree.title);
-    } else {
-      console.warn(`[TECH-TREE] .tech-tree-title not found in card ${index + 1}`);
-    }
-    
-    const subtitle = card.querySelector(".tech-tree-subtitle");
-    if (subtitle) {
-      subtitle.textContent = tree.subtitle;
-      subtitle.style.color = tree.color;
-      console.log(`[TECH-TREE] Set subtitle for tree ${index + 1}:`, tree.subtitle);
-    } else {
-      console.warn(`[TECH-TREE] .tech-tree-subtitle not found in card ${index + 1}`);
-    }
-
-    const playstyle = card.querySelector(".tech-tree-playstyle span");
-    if (playstyle) {
-      playstyle.textContent = tree.playstyle;
-      playstyle.style.color = tree.color;
-      console.log(`[TECH-TREE] Set playstyle for tree ${index + 1}:`, tree.playstyle);
-    } else {
-      console.warn(`[TECH-TREE] .tech-tree-playstyle span not found in card ${index + 1}`);
-    }
-
-    const focusEl = card.querySelector(".tech-tree-focus");
-    if (focusEl) {
-      focusEl.textContent = tree.focus;
-      console.log(`[TECH-TREE] Set focus for tree ${index + 1}:`, tree.focus);
-    } else {
-      console.warn(`[TECH-TREE] .tech-tree-focus not found in card ${index + 1}`);
-    }
-
-    const mechanicsList = card.querySelector(".tech-tree-mechanics");
-    if (mechanicsList) {
-      tree.mechanics.forEach(mech => {
-        const li = document.createElement("li");
-        li.textContent = mech;
-        mechanicsList.appendChild(li);
+    const item = document.createElement("div");
+    item.className = "doctrine-item" + (index === 0 ? " doctrine-selected" : "");
+    item.dataset.treeId = tree.id;
+    item.setAttribute("role", "option");
+    item.setAttribute("aria-selected", index === 0 ? "true" : "false");
+    const cursor = document.createElement("span");
+    cursor.className = "doctrine-cursor" + (index === 0 ? " cursor-blink" : "");
+    cursor.textContent = index === 0 ? ">" : " ";
+    const title = document.createElement("span");
+    title.className = "doctrine-title";
+    title.textContent = tree.title;
+    const br = document.createElement("br");
+    const sub = document.createElement("span");
+    sub.className = "doctrine-subtitle";
+    sub.textContent = "  " + tree.subtitle;
+    item.appendChild(cursor);
+    item.appendChild(title);
+    item.appendChild(br);
+    item.appendChild(sub);
+    item.onclick = () => {
+      selectedIndex = index;
+      item.setAttribute("aria-selected", "true");
+      listEl.querySelectorAll(".doctrine-item").forEach((o, i) => {
+        if (i !== index) o.setAttribute("aria-selected", "false");
       });
-      console.log(`[TECH-TREE] Added ${tree.mechanics.length} mechanics for tree ${index + 1}`);
-    } else {
-      console.warn(`[TECH-TREE] .tech-tree-mechanics not found in card ${index + 1}`);
-    }
-
-    const moreInfoBtn = card.querySelector(".tech-tree-more-info-btn");
-    if (moreInfoBtn) {
-      moreInfoBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        card.classList.toggle("expanded");
-        const details = card.querySelector(".tech-tree-details");
-        if (details) {
-          details.style.display = card.classList.contains("expanded") ? "block" : "none";
-        }
-      });
-    }
-
-    // Make entire card clickable for selection
-    card.style.cursor = "pointer";
-
-    // Function to handle selection
-    const selectCard = () => {
-      console.log(`[TECH-TREE] Card selected for tree:`, tree.id);
-      
-      // Remove selected class and reset border/outline from all cards
-      container.querySelectorAll(".tech-tree-card").forEach(c => {
-        c.classList.remove("tech-tree-card-selected");
-        c.setAttribute("aria-checked", "false");
-        c.style.borderColor = "";
-        c.style.outlineColor = "";
-        c.style.color = "";
-      });
-      
-      // Add selected class to clicked card and set border/outline color
-      card.classList.add("tech-tree-card-selected");
-      card.setAttribute("aria-checked", "true");
-      card.style.borderColor = tree.color;
-      card.style.outlineColor = tree.color;
-      card.style.color = tree.color;
-      selectedTechTreeId = tree.id;
-      
-      // Enable start button
-      if (startBtn) {
-        startBtn.disabled = false;
-        startBtn.style.borderColor = tree.color;
-        console.log("[TECH-TREE] Start button enabled");
-      }
+      updateDetails();
+      updateCursor();
     };
-
-    card.onclick = selectCard;
-
-    // Accessibility: Add keyboard support (Enter/Space to select)
-    card.onkeydown = (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        selectCard();
-      }
-    };
-    console.log(`[TECH-TREE] Card ${index + 1} made clickable`);
-
-    container.appendChild(card);
-    console.log(`[TECH-TREE] Card ${index + 1} appended to container`);
+    listEl.appendChild(item);
   });
 
-  console.log("[TECH-TREE] Setting up buttons...");
-  const backBtn = selectionScreen.querySelector(".tech-tree-back-btn");
-  if (backBtn) {
-    backBtn.onclick = () => {
-      console.log("[TECH-TREE] Back button clicked");
-      overlay.classList.add("hidden");
-      setTimeout(() => overlay.remove(), 300);
-    };
-    console.log("[TECH-TREE] Back button configured");
-  } else {
-    console.warn("[TECH-TREE] .tech-tree-back-btn not found in selection screen");
-  }
+  updateDetails();
+  updateCursor();
 
-  if (startBtn) {
-    startBtn.onclick = async () => {
-      if (selectedTechTreeId) {
-        console.log("[TECH-TREE] Start button clicked for tree:", selectedTechTreeId);
-        overlay.classList.add("hidden");
-        setTimeout(() => {
-          overlay.remove();
-          showDifficultySelection(game, pageRouter, ui, splashManager, selectedTechTreeId);
-        }, 300);
-      }
-    };
-    console.log("[TECH-TREE] Start button configured");
-  } else {
-    console.warn("[TECH-TREE] .tech-tree-start-btn not found in selection screen");
-  }
+  if (backBtn) backBtn.onclick = () => {
+    overlay.classList.add("hidden");
+    setTimeout(() => overlay.remove(), 300);
+  };
 
-  console.log("[TECH-TREE] Appending selection screen to overlay...");
+  if (nextBtn) nextBtn.onclick = () => {
+    const selectedTechTreeId = techTreeData[selectedIndex].id;
+    overlay.classList.add("hidden");
+    setTimeout(() => {
+      overlay.remove();
+      showDifficultySelection(game, pageRouter, ui, splashManager, selectedTechTreeId);
+    }, 300);
+  };
+
   overlay.appendChild(selectionScreen);
-  console.log("[TECH-TREE] Removing 'hidden' class from overlay...");
   overlay.classList.remove("hidden");
   console.log("[TECH-TREE] Overlay classes after removal:", overlay.className);
   console.log("[TECH-TREE] Overlay display style:", window.getComputedStyle(overlay).display);
@@ -295,7 +168,7 @@ function showDifficultySelection(game, pageRouter, ui, splashManager, techTreeId
   if (!overlay) {
     overlay = document.createElement("div");
     overlay.id = "difficulty-selection-overlay";
-    overlay.className = "difficulty-selection-overlay";
+    overlay.className = "difficulty-selection-overlay bios-overlay";
     document.body.appendChild(overlay);
   }
   overlay.innerHTML = "";
@@ -311,31 +184,25 @@ function showDifficultySelection(game, pageRouter, ui, splashManager, techTreeId
   const loopWaitInput = screen.querySelector("#difficulty-advanced-loop-wait");
   const manualHeatInput = screen.querySelector("#difficulty-advanced-manual-heat");
   const overflowToHeatInput = screen.querySelector("#difficulty-advanced-overflow-to-heat");
-  const advancedPanel = screen.querySelector(".difficulty-advanced-panel");
-  const advancedBtn = screen.querySelector(".difficulty-advanced-btn");
-  const difficultyBtns = screen.querySelectorAll(".difficulty-btn");
+  const presetBtns = screen.querySelectorAll(".bios-preset-btn");
   const startBtn = screen.querySelector(".difficulty-start-btn");
   const backBtn = screen.querySelector(".difficulty-back-btn");
 
   function applyPresetToInputs(p) {
-    moneyInput.value = p.base_money;
-    maxHeatInput.value = p.base_max_heat;
-    maxPowerInput.value = p.base_max_power;
-    loopWaitInput.value = p.base_loop_wait;
-    manualHeatInput.value = p.base_manual_heat_reduce;
+    if (moneyInput) moneyInput.value = p.base_money;
+    if (maxHeatInput) maxHeatInput.value = p.base_max_heat;
+    if (maxPowerInput) maxPowerInput.value = p.base_max_power;
+    if (loopWaitInput) loopWaitInput.value = p.base_loop_wait;
+    if (manualHeatInput) manualHeatInput.value = p.base_manual_heat_reduce;
     if (overflowToHeatInput) overflowToHeatInput.value = p.power_overflow_to_heat_pct;
   }
 
   applyPresetToInputs(preset);
 
-  difficultyBtns.forEach((btn) => {
+  presetBtns.forEach((btn) => {
     btn.onclick = () => {
-      difficultyBtns.forEach((b) => {
-        b.classList.remove("difficulty-btn-selected");
-        b.setAttribute("aria-checked", "false");
-      });
-      btn.classList.add("difficulty-btn-selected");
-      btn.setAttribute("aria-checked", "true");
+      presetBtns.forEach((b) => b.classList.remove("bios-preset-selected"));
+      btn.classList.add("bios-preset-selected");
       applyPresetToInputs(DIFFICULTY_PRESETS[btn.dataset.difficulty]);
     };
     btn.onkeydown = (e) => {
@@ -346,12 +213,25 @@ function showDifficultySelection(game, pageRouter, ui, splashManager, techTreeId
     };
   });
 
-  if (advancedBtn && advancedPanel) {
-    advancedBtn.onclick = () => {
-      const isExpanded = !advancedPanel.classList.toggle("hidden");
-      advancedBtn.setAttribute("aria-expanded", String(isExpanded));
+  screen.querySelectorAll(".bios-input-wrap").forEach((wrap) => {
+    const input = wrap.querySelector(".bios-input");
+    const incBtn = wrap.querySelector(".bios-increment");
+    const decBtn = wrap.querySelector(".bios-decrement");
+    if (!input || !incBtn || !decBtn) return;
+    const step = parseFloat(input.step) || 1;
+    const min = input.min !== "" ? parseFloat(input.min) : -Infinity;
+    const max = input.max !== "" ? parseFloat(input.max) : Infinity;
+    const decimals = (step.toString().split(".")[1] || "").length;
+    const adjust = (delta) => {
+      let v = parseFloat(input.value) || 0;
+      v = Math.max(min, Math.min(max, v + delta));
+      v = decimals ? parseFloat(v.toFixed(decimals)) : Math.round(v);
+      input.value = String(v);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     };
-  }
+    incBtn.onclick = () => adjust(step);
+    decBtn.onclick = () => adjust(-step);
+  });
 
   if (startBtn) {
     startBtn.onclick = async () => {
@@ -2298,7 +2178,7 @@ class SplashScreenManager {
       settingsButton.className = "splash-btn";
       settingsButton.textContent = "Settings";
       settingsButton.onclick = () => {
-        new SettingsModal().show();
+        settingsModal.show();
       };
       startOptionsSection.appendChild(settingsButton);
       const exitButton = document.createElement("button");
@@ -2315,12 +2195,18 @@ class SplashScreenManager {
         }
       };
       startOptionsSection.appendChild(exitButton);
-      
+
       const supabaseAuthArea = document.createElement("div");
       supabaseAuthArea.id = "splash-supabase-auth";
-      supabaseAuthArea.style.marginTop = "1rem";
       this.setupSupabaseAuth(supabaseAuthArea);
-      startOptionsSection.appendChild(supabaseAuthArea);
+      const authRow = this.splashScreen.querySelector("#splash-auth-row");
+      if (authRow) {
+        authRow.innerHTML = "";
+        authRow.appendChild(supabaseAuthArea);
+      } else {
+        supabaseAuthArea.style.marginTop = "1rem";
+        startOptionsSection.appendChild(supabaseAuthArea);
+      }
       
       startOptionsSection.classList.add("visible");
       setTimeout(() => startOptionsSection.classList.add("show"), 100);
@@ -2443,12 +2329,7 @@ class SplashScreenManager {
       container.appendChild(signedInDiv);
     } else {
       const buttonRow = document.createElement("div");
-      buttonRow.style.display = "flex";
-      buttonRow.style.gap = "0.5rem";
-      buttonRow.style.justifyContent = "center";
-      buttonRow.style.marginBottom = "0.5rem";
-      buttonRow.style.width = "100%";
-      buttonRow.style.maxWidth = "400px";
+      buttonRow.className = "splash-auth-buttons";
       
       const googleBtn = document.createElement("button");
       googleBtn.className = "splash-btn splash-btn-google";

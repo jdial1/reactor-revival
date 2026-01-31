@@ -1,29 +1,38 @@
 import { supabaseSave } from "../services/SupabaseSave.js";
 
-export class SettingsModal {
+class SettingsModal {
   constructor() {
     this.overlay = null;
+    this.isVisible = false;
     this.handleKeyDown = this.handleKeyDown.bind(this);
   }
   show() {
+    if (this.isVisible) return;
+    this.isVisible = true;
     this.createDOM();
-    this.overlay.classList.remove("hidden");
     document.addEventListener("keydown", this.handleKeyDown);
   }
   hide() {
+    if (!this.isVisible) return;
+    this.isVisible = false;
+    document.removeEventListener("keydown", this.handleKeyDown);
+    if (window.game && window.game.audio) {
+      window.game.audio.stopTestSound();
+      window.game.audio.stopWarningLoop();
+    }
     if (this.overlay) {
-      document.removeEventListener("keydown", this.handleKeyDown);
-      if (window.game && window.game.audio) {
-        window.game.audio.stopTestSound();
-        window.game.audio.stopWarningLoop();
+      this.overlay.remove();
+      this.overlay = null;
+    }
+    const menuBtn = document.getElementById("menu_tab_btn");
+    if (menuBtn) menuBtn.classList.remove("active");
+    const currentPageId = window.game?.router?.currentPageId;
+    if (currentPageId) {
+      const bottomNav = document.getElementById("bottom_nav");
+      if (bottomNav) {
+        const pageBtn = bottomNav.querySelector(`button[data-page="${currentPageId}"]`);
+        if (pageBtn) pageBtn.classList.add("active");
       }
-      this.overlay.classList.add("hidden");
-      setTimeout(() => {
-        if (this.overlay) {
-          this.overlay.remove();
-          this.overlay = null;
-        }
-      }, 200);
     }
   }
   handleKeyDown(e) {
@@ -44,14 +53,21 @@ export class SettingsModal {
     const alertsVol = parseFloat(localStorage.getItem("reactor_volume_alerts") || "0.50");
     const systemVol = parseFloat(localStorage.getItem("reactor_volume_system") || "0.50");
     const ambienceVol = parseFloat(localStorage.getItem("reactor_volume_ambience") || "0.12");
+    const volToStep = (v) => Math.min(10, Math.round(v * 10));
+    const stepToVal = (s) => s / 10;
+    const volumeStepper = (key, value) => {
+      const step = volToStep(value);
+      const blocks = Array.from({ length: 11 }, (_, i) =>
+        `<button type="button" class="volume-block" data-step="${i}" aria-label="${i * 10}%" ${i <= step ? "data-active" : ""}></button>`
+      ).join("");
+      return `<div class="volume-stepper" data-volume-key="${key}"><div class="volume-blocks" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="${step}" tabindex="0">${blocks}</div><span class="volume-stepper-val">${step * 10}%</span></div>`;
+    };
+    const mechSwitch = (id, checked) =>
+      `<button type="button" class="mech-switch" role="switch" aria-checked="${checked}" data-checkbox-id="${id}" tabindex="0"><span class="mech-switch-off">OFF</span><span class="mech-switch-track"><span class="mech-switch-thumb"></span></span><span class="mech-switch-on">ON</span></button>`;
     this.overlay = document.createElement("div");
     this.overlay.className = "settings-modal-overlay";
     this.overlay.innerHTML = `
 <div class="settings-modal pixel-panel">
-<div class="settings-header">
-<h2>Settings</h2>
-<button class="close-btn" id="settings-close" aria-label="Close Settings">×</button>
-</div>
 <div class="settings-content">
 <div class="settings-group">
 <h3>Audio</h3>
@@ -63,62 +79,52 @@ export class SettingsModal {
 <input type="checkbox" id="setting-mute" ${isMuted ? "checked" : ""} style="display: none;">
 </label>
 <div class="volume-setting">
-<label for="setting-volume-master" class="volume-label">Master Volume</label>
-<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
-<input type="range" id="setting-volume-master" min="0" max="1" step="0.01" value="${masterVol}" style="flex: 1;">
-<span id="setting-volume-master-val" style="min-width: 3em; text-align: right;">${Math.round(masterVol * 100)}%</span>
-</div>
+<label class="volume-label">Master Volume</label>
+${volumeStepper("master", masterVol)}
 </div>
 <div class="volume-setting">
-<label for="setting-volume-effects" class="volume-label">Effects Volume</label>
-<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
-<input type="range" id="setting-volume-effects" min="0" max="1" step="0.01" value="${effectsVol}" style="flex: 1;">
-<span id="setting-volume-effects-val" style="min-width: 3em; text-align: right;">${Math.round(effectsVol * 100)}%</span>
-</div>
+<label class="volume-label">Effects Volume</label>
+${volumeStepper("effects", effectsVol)}
 </div>
 <div class="volume-setting">
-<label for="setting-volume-alerts" class="volume-label">Alerts Volume</label>
-<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
-<input type="range" id="setting-volume-alerts" min="0" max="1" step="0.01" value="${alertsVol}" style="flex: 1;">
-<span id="setting-volume-alerts-val" style="min-width: 3em; text-align: right;">${Math.round(alertsVol * 100)}%</span>
-</div>
+<label class="volume-label">Alerts Volume</label>
+${volumeStepper("alerts", alertsVol)}
 </div>
 <div class="volume-setting">
-<label for="setting-volume-system" class="volume-label">System Volume</label>
-<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
-<input type="range" id="setting-volume-system" min="0" max="1" step="0.01" value="${systemVol}" style="flex: 1;">
-<span id="setting-volume-system-val" style="min-width: 3em; text-align: right;">${Math.round(systemVol * 100)}%</span>
-</div>
+<label class="volume-label">System Volume</label>
+${volumeStepper("system", systemVol)}
 </div>
 <div class="volume-setting">
-<label for="setting-volume-ambience" class="volume-label">Background Volume</label>
-<div class="volume-control" style="display: flex; align-items: center; gap: 10px;">
-<input type="range" id="setting-volume-ambience" min="0" max="1" step="0.01" value="${ambienceVol}" style="flex: 1;">
-<span id="setting-volume-ambience-val" style="min-width: 3em; text-align: right;">${Math.round(ambienceVol * 100)}%</span>
-</div>
+<label class="volume-label">Background Volume</label>
+${volumeStepper("ambience", ambienceVol)}
 </div>
 </div>
 <div class="settings-group">
 <h3>Visuals</h3>
-<label class="setting-row">
+<label class="setting-row mech-switch-row">
 <span>Reduced Motion</span>
-<input type="checkbox" id="setting-motion" ${isReducedMotion ? "checked" : ""}>
+<input type="checkbox" id="setting-motion" ${isReducedMotion ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-motion", isReducedMotion)}
 </label>
-<label class="setting-row">
-    <span>Hide Unaffordable Upgrades</span>
-    <input type="checkbox" id="setting-hide-upgrades" ${hideUnaffordableUpgrades ? "checked" : ""}>
+<label class="setting-row mech-switch-row">
+<span>Hide Unaffordable Upgrades</span>
+<input type="checkbox" id="setting-hide-upgrades" ${hideUnaffordableUpgrades ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-hide-upgrades", hideUnaffordableUpgrades)}
 </label>
-<label class="setting-row">
-    <span>Hide Unaffordable Research</span>
-    <input type="checkbox" id="setting-hide-research" ${hideUnaffordableResearch ? "checked" : ""}>
+<label class="setting-row mech-switch-row">
+<span>Hide Unaffordable Research</span>
+<input type="checkbox" id="setting-hide-research" ${hideUnaffordableResearch ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-hide-research", hideUnaffordableResearch)}
 </label>
-<label class="setting-row">
-    <span>Hide Max Upgrades</span>
-    <input type="checkbox" id="setting-hide-max-upgrades" ${hideMaxUpgrades ? "checked" : ""}>
+<label class="setting-row mech-switch-row">
+<span>Hide Max Upgrades</span>
+<input type="checkbox" id="setting-hide-max-upgrades" ${hideMaxUpgrades ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-hide-max-upgrades", hideMaxUpgrades)}
 </label>
-<label class="setting-row">
-    <span>Hide Max Research</span>
-    <input type="checkbox" id="setting-hide-max-research" ${hideMaxResearch ? "checked" : ""}>
+<label class="setting-row mech-switch-row">
+<span>Hide Max Research</span>
+<input type="checkbox" id="setting-hide-max-research" ${hideMaxResearch ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-hide-max-research", hideMaxResearch)}
 </label>
 </div>
 <div class="settings-group">
@@ -139,9 +145,10 @@ export class SettingsModal {
 </div>
 <div class="settings-group">
 <h3>System</h3>
-<label class="setting-row" style="cursor: pointer;">
+<label class="setting-row mech-switch-row">
 <span>Update Notifications</span>
-<input type="checkbox" id="setting-notifications">
+<input type="checkbox" id="setting-notifications" style="display: none;">
+${mechSwitch("setting-notifications", false)}
 </label>
 </div>
 <div class="settings-group">
@@ -159,10 +166,9 @@ export class SettingsModal {
 `;
     document.body.appendChild(this.overlay);
 
-    const closeBtn = this.overlay.querySelector("#settings-close");
-    if (closeBtn) {
-      closeBtn.addEventListener("click", () => this.hide());
-    }
+    const playClick = () => {
+      if (window.game && window.game.audio) window.game.audio.play("click");
+    };
 
     this.overlay.addEventListener("click", (e) => {
       if (e.target === this.overlay) {
@@ -177,134 +183,114 @@ export class SettingsModal {
         muteCheckbox.checked = !muteCheckbox.checked;
         localStorage.setItem("reactor_mute", muteCheckbox.checked ? "true" : "false");
         const icon = muteBtn.querySelector(".mute-icon");
-        if (icon) {
-          icon.textContent = muteCheckbox.checked ? "🔇" : "🔊";
-        }
+        if (icon) icon.textContent = muteCheckbox.checked ? "🔇" : "🔊";
         if (window.game && window.game.audio) {
           window.game.audio.toggleMute(muteCheckbox.checked);
         }
+        playClick();
       });
     }
 
-    const updateVolumeDisplay = (slider) => {
-        const valSpan = slider.nextElementSibling;
-        if (valSpan && valSpan.classList.contains('volume-value')) {
-            valSpan.textContent = `${Math.round(parseFloat(slider.value) * 100)}%`;
+    const storageKeys = { master: "reactor_volume_master", effects: "reactor_volume_effects", alerts: "reactor_volume_alerts", system: "reactor_volume_system", ambience: "reactor_volume_ambience" };
+    this.overlay.querySelectorAll(".volume-stepper").forEach((stepper) => {
+      const key = stepper.dataset.volumeKey;
+      const blocks = stepper.querySelector(".volume-blocks");
+      const valSpan = stepper.querySelector(".volume-stepper-val");
+      const updateStepper = (step) => {
+        const value = stepToVal(step);
+        blocks.setAttribute("aria-valuenow", step);
+        blocks.querySelectorAll(".volume-block").forEach((b, i) => {
+          if (i <= step) b.setAttribute("data-active", "");
+          else b.removeAttribute("data-active");
+        });
+        if (valSpan) valSpan.textContent = `${step * 10}%`;
+        localStorage.setItem(storageKeys[key], value.toString());
+        if (window.game && window.game.audio) window.game.audio.setVolume(key, value);
+      };
+      blocks.querySelectorAll(".volume-block").forEach((block) => {
+        block.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const step = parseInt(block.dataset.step, 10);
+          updateStepper(step);
+          playClick();
+        });
+      });
+      blocks.addEventListener("keydown", (e) => {
+        const step = parseInt(blocks.getAttribute("aria-valuenow"), 10);
+        if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+          e.preventDefault();
+          if (step > 0) {
+            updateStepper(step - 1);
+            playClick();
+          }
+        } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+          e.preventDefault();
+          if (step < 10) {
+            updateStepper(step + 1);
+            playClick();
+          }
         }
+      });
+    });
+
+    const syncMechSwitch = (checkboxId, checked) => {
+      const btn = this.overlay.querySelector(`.mech-switch[data-checkbox-id="${checkboxId}"]`);
+      if (btn) {
+        btn.setAttribute("aria-checked", checked);
+        btn.classList.toggle("mech-switch-on-active", checked);
+      }
     };
 
-    const masterVolSlider = this.overlay.querySelector("#setting-volume-master");
-    const masterVolVal = this.overlay.querySelector("#setting-volume-master-val");
-    if (masterVolSlider) {
-      masterVolSlider.addEventListener("input", (e) => {
-        const value = parseFloat(e.target.value);
-        if (masterVolVal) masterVolVal.textContent = `${Math.round(value * 100)}%`;
-        localStorage.setItem("reactor_volume_master", value.toString());
-        if (window.game && window.game.audio) {
-          window.game.audio.setVolume("master", value);
-        }
+    const setupMechSwitch = (checkboxId, onChange) => {
+      const checkbox = this.overlay.querySelector(`#${checkboxId}`);
+      const btn = this.overlay.querySelector(`.mech-switch[data-checkbox-id="${checkboxId}"]`);
+      if (!checkbox || !btn) return;
+      syncMechSwitch(checkboxId, checkbox.checked);
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        checkbox.checked = !checkbox.checked;
+        syncMechSwitch(checkboxId, checkbox.checked);
+        playClick();
+        onChange(checkbox.checked);
       });
-    }
+    };
 
-    const effectsVolSlider = this.overlay.querySelector("#setting-volume-effects");
-    const effectsVolVal = this.overlay.querySelector("#setting-volume-effects-val");
-    if (effectsVolSlider) {
-      effectsVolSlider.addEventListener("input", (e) => {
-        const value = parseFloat(e.target.value);
-        if (effectsVolVal) effectsVolVal.textContent = `${Math.round(value * 100)}%`;
-        localStorage.setItem("reactor_volume_effects", value.toString());
-        if (window.game && window.game.audio) {
-          window.game.audio.setVolume("effects", value);
-        }
-      });
-    }
+    setupMechSwitch("setting-motion", (checked) => {
+      localStorage.setItem("reactor_reduced_motion", checked ? "true" : "false");
+      document.documentElement.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
+    });
 
-    const alertsVolSlider = this.overlay.querySelector("#setting-volume-alerts");
-    const alertsVolVal = this.overlay.querySelector("#setting-volume-alerts-val");
-    if (alertsVolSlider) {
-      alertsVolSlider.addEventListener("input", (e) => {
-        const value = parseFloat(e.target.value);
-        if (alertsVolVal) alertsVolVal.textContent = `${Math.round(value * 100)}%`;
-        localStorage.setItem("reactor_volume_alerts", value.toString());
-        if (window.game && window.game.audio) {
-          window.game.audio.setVolume("alerts", value);
-        }
-      });
-    }
+    setupMechSwitch("setting-hide-upgrades", () => {
+      localStorage.setItem("reactor_hide_unaffordable_upgrades", this.overlay.querySelector("#setting-hide-upgrades").checked ? "true" : "false");
+      if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
+    });
 
-    const systemVolSlider = this.overlay.querySelector("#setting-volume-system");
-    const systemVolVal = this.overlay.querySelector("#setting-volume-system-val");
-    if (systemVolSlider) {
-      systemVolSlider.addEventListener("input", (e) => {
-        const value = parseFloat(e.target.value);
-        if (systemVolVal) systemVolVal.textContent = `${Math.round(value * 100)}%`;
-        localStorage.setItem("reactor_volume_system", value.toString());
-        if (window.game && window.game.audio) {
-          window.game.audio.setVolume("system", value);
-        }
-      });
-    }
+    setupMechSwitch("setting-hide-research", () => {
+      localStorage.setItem("reactor_hide_unaffordable_research", this.overlay.querySelector("#setting-hide-research").checked ? "true" : "false");
+      if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
+    });
 
-    const ambienceVolSlider = this.overlay.querySelector("#setting-volume-ambience");
-    const ambienceVolVal = this.overlay.querySelector("#setting-volume-ambience-val");
-    if (ambienceVolSlider) {
-      ambienceVolSlider.addEventListener("input", (e) => {
-        const value = parseFloat(e.target.value);
-        if (ambienceVolVal) ambienceVolVal.textContent = `${Math.round(value * 100)}%`;
-        localStorage.setItem("reactor_volume_ambience", value.toString());
-        if (window.game && window.game.audio) {
-          window.game.audio.setVolume("ambience", value);
-        }
-      });
-    }
+    setupMechSwitch("setting-hide-max-upgrades", () => {
+      localStorage.setItem("reactor_hide_max_upgrades", this.overlay.querySelector("#setting-hide-max-upgrades").checked ? "true" : "false");
+      if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
+    });
 
-    const motionCheckbox = this.overlay.querySelector("#setting-motion");
-    if (motionCheckbox) {
-      motionCheckbox.addEventListener("change", (e) => {
-        localStorage.setItem("reactor_reduced_motion", e.target.checked ? "true" : "false");
-        document.documentElement.style.setProperty("--prefers-reduced-motion", e.target.checked ? "reduce" : "no-preference");
-      });
-    }
+    setupMechSwitch("setting-hide-max-research", () => {
+      localStorage.setItem("reactor_hide_max_research", this.overlay.querySelector("#setting-hide-max-research").checked ? "true" : "false");
+      if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
+    });
 
-    const hideUpgradesCheckbox = this.overlay.querySelector("#setting-hide-upgrades");
-    if (hideUpgradesCheckbox) {
-      hideUpgradesCheckbox.addEventListener("change", (e) => {
-        localStorage.setItem("reactor_hide_unaffordable_upgrades", e.target.checked ? "true" : "false");
-        if (window.game && window.game.upgradeset) {
-          window.game.upgradeset.check_affordability(window.game);
-        }
-      });
-    }
-
-    const hideResearchCheckbox = this.overlay.querySelector("#setting-hide-research");
-    if (hideResearchCheckbox) {
-      hideResearchCheckbox.addEventListener("change", (e) => {
-        localStorage.setItem("reactor_hide_unaffordable_research", e.target.checked ? "true" : "false");
-        if (window.game && window.game.upgradeset) {
-          window.game.upgradeset.check_affordability(window.game);
-        }
-      });
-    }
-
-    const hideMaxUpgradesCheckbox = this.overlay.querySelector("#setting-hide-max-upgrades");
-    if (hideMaxUpgradesCheckbox) {
-      hideMaxUpgradesCheckbox.addEventListener("change", (e) => {
-        localStorage.setItem("reactor_hide_max_upgrades", e.target.checked ? "true" : "false");
-        if (window.game && window.game.upgradeset) {
-          window.game.upgradeset.check_affordability(window.game);
-        }
-      });
-    }
-
-    const hideMaxResearchCheckbox = this.overlay.querySelector("#setting-hide-max-research");
-    if (hideMaxResearchCheckbox) {
-      hideMaxResearchCheckbox.addEventListener("change", (e) => {
-        localStorage.setItem("reactor_hide_max_research", e.target.checked ? "true" : "false");
-        if (window.game && window.game.upgradeset) {
-          window.game.upgradeset.check_affordability(window.game);
-        }
-      });
-    }
+    this.overlay.querySelectorAll(".mech-switch-row").forEach((row) => {
+      const labelSpan = row.querySelector("span");
+      const sw = row.querySelector(".mech-switch");
+      if (labelSpan && sw) {
+        labelSpan.addEventListener("click", (e) => {
+          e.preventDefault();
+          sw.click();
+        });
+      }
+    });
 
     const exportBtn = this.overlay.querySelector("#setting-export");
     if (exportBtn) {
@@ -358,11 +344,12 @@ export class SettingsModal {
     if (notifCheckbox) {
       if ('Notification' in window) {
         notifCheckbox.checked = Notification.permission === 'granted';
-        notifCheckbox.addEventListener('change', async (e) => {
-          if (e.target.checked) {
+        setupMechSwitch("setting-notifications", async (checked) => {
+          if (checked) {
             const result = await Notification.requestPermission();
             if (result === 'granted') {
               notifCheckbox.checked = true;
+              syncMechSwitch("setting-notifications", true);
               if ('serviceWorker' in navigator) {
                 try {
                   const reg = await navigator.serviceWorker.ready;
@@ -375,13 +362,16 @@ export class SettingsModal {
               }
             } else {
               notifCheckbox.checked = false;
+              syncMechSwitch("setting-notifications", false);
               alert("Notifications blocked. Please enable them in your browser settings.");
             }
           } else {
             alert("To disable notifications completely, you must reset permissions in your browser settings.");
             notifCheckbox.checked = Notification.permission === 'granted';
+            syncMechSwitch("setting-notifications", notifCheckbox.checked);
           }
         });
+        syncMechSwitch("setting-notifications", notifCheckbox.checked);
       } else {
         if (notifCheckbox.closest('.setting-row')) {
           notifCheckbox.closest('.setting-row').style.display = 'none';
@@ -445,3 +435,5 @@ export class SettingsModal {
     }
   }
 }
+
+export const settingsModal = new SettingsModal();

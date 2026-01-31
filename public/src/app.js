@@ -10,6 +10,7 @@ import { GoogleDriveSave } from "./services/GoogleDriveSave.js";
 import { SupabaseAuth } from "./services/SupabaseAuth.js";
 import { SupabaseSave } from "./services/SupabaseSave.js";
 import { AudioService } from "./services/audioService.js";
+import { settingsModal } from "./components/settingsModal.js";
 // Background/PWA helpers
 import "./services/pwa.js";
 
@@ -576,6 +577,7 @@ function setupGlobalListeners(game) {
     e.preventDefault();
     const pageBtn = e.target.closest("[data-page]");
     if (pageBtn) {
+      settingsModal.hide();
       await game.router.loadPage(pageBtn.dataset.page);
     }
   });

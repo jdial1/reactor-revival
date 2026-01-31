@@ -2,7 +2,7 @@ import { numFormat as fmt, on, escapeHtml } from "../utils/util.js";
 import { StateManager } from "../core/stateManager.js";
 import { Hotkeys } from "../utils/hotkeys.js";
 import dataService from "../services/dataService.js";
-import { SettingsModal } from "./settingsModal.js";
+import { settingsModal } from "./settingsModal.js";
 import { GridScaler } from "./gridScaler.js";
 import { leaderboardService } from "../services/leaderboardService.js";
 
@@ -2174,7 +2174,7 @@ export class UI {
 
     const settingsBtn = this.DOMElements.settings_btn;
     if (settingsBtn) {
-      settingsBtn.addEventListener("click", () => new SettingsModal().show());
+      settingsBtn.addEventListener("click", () => settingsModal.show());
     }
 
     this.setupInfoBarButtons();
@@ -2700,10 +2700,17 @@ export class UI {
       modal.id = "quick-start-modal";
       modal.innerHTML = `
         <div class="quick-start-overlay">
-          <div class="quick-start-content">
-            <h2>Getting Started Guide</h2>
-            <p>Follow the objectives at the top to continue the tutorial!</p>
-            <button id="quick-start-close-detailed-fallback" class="btn-start">Got it!</button>
+          <div class="bios-screen quick-start-screen">
+            <div class="bios-content">
+              <div class="bios-title-vfd"><h2 class="bios-title">[OPERATOR MANUAL]</h2></div>
+              <div class="bios-details-box">
+                <pre class="bios-details-head">[QUICK START]</pre>
+                <pre class="quick-start-line">Follow objectives at screen top</pre>
+              </div>
+            </div>
+            <footer class="bios-footer">
+              <button type="button" id="quick-start-close-detailed-fallback" class="bios-btn quick-start-next-btn">[ START &gt; ]</button>
+            </footer>
           </div>
         </div>
       `;
@@ -5750,9 +5757,17 @@ export class UI {
     if (menuBtn) {
       menuBtn.addEventListener("click", () => {
         this.lightVibration();
-        const settingsBtn = this.DOMElements.settings_btn;
-        if (settingsBtn) {
-          settingsBtn.click();
+        if (settingsModal.isVisible) {
+          settingsModal.hide();
+        } else {
+          const bottomNav = document.getElementById("bottom_nav");
+          if (bottomNav) {
+            bottomNav.querySelectorAll("button[data-page]").forEach((btn) => {
+              btn.classList.remove("active");
+            });
+          }
+          menuBtn.classList.add("active");
+          settingsModal.show();
         }
       });
     }
