@@ -202,6 +202,22 @@ body {
   transform-origin: center center;
 }
 
+@keyframes upgrade-purchase-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgb(143 214 148 / 0.8), 4px 4px 0 rgb(0 0 0 / 40%);
+    filter: brightness(1.5);
+  }
+  100% {
+    box-shadow: 0 0 20px 10px rgb(143 214 148 / 0), 4px 4px 0 rgb(0 0 0 / 40%);
+    filter: brightness(1);
+  }
+}
+
+.upgrade-purchase-success {
+  animation: upgrade-purchase-glow 0.4s ease-out;
+  z-index: 10;
+}
+
 /* Button Press Effect */
 .pixel-btn:active,
 .splash-btn:active,
