@@ -4662,10 +4662,10 @@ export class UI {
       const disabledClass = showCheckboxes && !checked ? 'component-disabled' : '';
       const imagePath = this.getPartImagePath(item.type, item.lvl);
 
-      html += `<div class="component-slot ${disabledClass}" data-ids="${item.ids.join(',')}" data-type="${item.type}" data-lvl="${item.lvl}">`;
+      html += `<div class="component-slot ${disabledClass}" data-ids="${escapeHtml(item.ids.join(','))}" data-type="${escapeHtml(item.type)}" data-lvl="${escapeHtml(String(item.lvl))}">`;
       html += `<div class="component-icon">`;
-      html += `<img src="${imagePath}" alt="${item.title}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />`;
-      html += `<div class="component-fallback" style="display: none;">${item.title.charAt(0).toUpperCase()}</div>`;
+      html += `<img src="${escapeHtml(imagePath)}" alt="${escapeHtml(item.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />`;
+      html += `<div class="component-fallback" style="display: none;">${escapeHtml(item.title.charAt(0).toUpperCase())}</div>`;
       html += `</div>`;
       html += `<div class="component-count">${item.count}</div>`;
       html += `</div>`;
