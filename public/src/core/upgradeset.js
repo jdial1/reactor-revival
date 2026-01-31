@@ -219,6 +219,14 @@ export class UpgradeSet {
 
     if (purchased) {
       upgrade.setLevel(upgrade.level + 1);
+
+      // Visual feedback: trigger purchase success animation
+      if (upgrade.$el) {
+        upgrade.$el.classList.remove("upgrade-purchase-success");
+        void upgrade.$el.offsetWidth; // Force reflow to re-trigger animation
+        upgrade.$el.classList.add("upgrade-purchase-success");
+      }
+
       this.game.debugHistory.add('upgrades', 'Upgrade purchased', { id: upgradeId, level: upgrade.level });
       if (upgrade.upgrade.type === "experimental_parts") {
         this.game.epart_onclick(upgrade);
