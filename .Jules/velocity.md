@@ -20,3 +20,13 @@
 3.  **Removed Logging:** Stripped all `console.log` calls and wrapped frequent `game.logger` calls in existence guards.
 4.  **Optimized Visuals:** Replaced staggered `setTimeout` calls for vent blinking with direct UI calls, relying on the UI's internal throttling.
 5.  **Loop Optimization:** Replaced `for...of` loops with standard `for` loops to avoid iterator allocations.
+
+## 2024-07-28 - Optimizing Exchanger Logic and Eliminating Iterator Allocations
+
+**Learning:** The heat exchanger logic in `_processTick` contained an O(N²) bottleneck where `totalHeadroom` was recalculated for every neighbor. Additionally, redundant filtering of `active_vessels` to find vents was occurring every tick despite `active_vents` being pre-calculated. Standard `for...of` loops were also causing minor but frequent iterator allocations in the hot path.
+
+**Action:**
+1. Moved `totalHeadroom` calculation outside the neighbor loop in the exchanger block, reducing complexity to O(N) per exchanger.
+2. Replaced redundant vent filtering with a direct reference to `this.active_vents`.
+3. Replaced all remaining `for...of` loops in `_processTick` with standard indexed `for` loops to eliminate iterator overhead.
+4. Inlined the `headroomOf` closure to avoid repeated function creation.
