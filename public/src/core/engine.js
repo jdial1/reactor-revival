@@ -61,6 +61,10 @@ export class Engine {
     // Vent Processing Pre-allocation (Avoid GC)
     this._ventProcessing_activeVents = [];
 
+    // Valve Result Pre-allocation
+    this._valveNeighborResult = { inputNeighbor: null, outputNeighbor: null };
+    this._valveOrientationCache = new Map();
+
     // Ensure arrays are always valid
     this._ensureArraysValid();
 
@@ -618,13 +622,13 @@ export class Engine {
       const tile_part = tile.part;
       if (!tile_part) continue;
 
+      const effectiveTransfer = tile.getEffectiveTransferValue() * multiplier;
       const containmentNeighbors = tile.containmentNeighborTiles;
       for (let j = 0; j < containmentNeighbors.length; j++) {
         const tile_containment = containmentNeighbors[j];
         if (!tile_containment.part || !tile_containment.heat_contained) continue;
         
-        let maxTransfer = tile.getEffectiveTransferValue() * multiplier;
-        let transfer_heat = Math.min(maxTransfer, tile_containment.heat_contained);
+        let transfer_heat = Math.min(effectiveTransfer, tile_containment.heat_contained);
         
         tile_containment.heat_contained -= transfer_heat;
         reactor.current_heat += transfer_heat;
@@ -890,6 +894,7 @@ export class Engine {
         if (!tile_part || tile_part.category === 'valve') continue;
 
         const heatStart = valveNeighborExchangers.has(tile) ? (tile.heat_contained || 0) : (startHeat.get(tile) || 0);
+        const effectiveTransferValue = tile.getEffectiveTransferValue();
         
         // Reuse neighbors array from Tile cache, avoid .filter()
         const neighborsAll = tile.containmentNeighborTiles;
@@ -933,7 +938,7 @@ export class Engine {
 
                  const neighborHeadroomForWeight = Math.max(neighborCapacity - nStartRaw, 0);
                  const capacityBias = Math.max(neighborHeadroomForWeight / totalHeadroom, 0);
-                 const biasedCap = Math.max(1, Math.floor(tile.getEffectiveTransferValue() * capacityBias * multiplier));
+                 const biasedCap = Math.max(1, Math.floor(effectiveTransferValue * capacityBias * multiplier));
                  let transfer_heat = Math.min(biasedCap, Math.ceil(diff / 2), remainingPush);
 
                  if (transfer_heat > 0) {
@@ -961,7 +966,7 @@ export class Engine {
                 const nAvailable = Math.max(0, nStartRaw - alreadyOut);
                 if (nAvailable > 0 && nStartRaw > heatStart) {
                     const diff = nStartRaw - heatStart;
-                    const biasedCap = tile.getEffectiveTransferValue() * multiplier;
+                    const biasedCap = effectiveTransferValue * multiplier;
                     let transfer_heat = Math.min(biasedCap, Math.ceil(diff / 2), nAvailable);
 
                     if (transfer_heat > 0) {
@@ -1122,18 +1127,18 @@ export class Engine {
 
         if (reactor.convective_boost > 0) {
           let emptyNeighbors = 0;
-          const coords = [
-            {r: tile.row-1, c: tile.col}, {r: tile.row+1, c: tile.col},
-            {r: tile.row, c: tile.col-1}, {r: tile.row, c: tile.col+1}
-          ];
+          const r = tile.row;
+          const c = tile.col;
+          const tileset = this.game.tileset;
           
-          for(let j = 0; j < coords.length; j++) {
-            const coord = coords[j];
-            const n = this.game.tileset.getTile(coord.r, coord.c);
-            if (n && n.enabled && !n.part) {
-              emptyNeighbors++;
-            }
-          }
+          let n = tileset.getTile(r - 1, c);
+          if (n && n.enabled && !n.part) emptyNeighbors++;
+          n = tileset.getTile(r + 1, c);
+          if (n && n.enabled && !n.part) emptyNeighbors++;
+          n = tileset.getTile(r, c - 1);
+          if (n && n.enabled && !n.part) emptyNeighbors++;
+          n = tileset.getTile(r, c + 1);
+          if (n && n.enabled && !n.part) emptyNeighbors++;
 
           if (emptyNeighbors > 0) {
             ventRate *= (1 + (emptyNeighbors * reactor.convective_boost));
@@ -1440,13 +1445,14 @@ export class Engine {
    * @returns {number} Orientation: 1=left input/right output, 2=top input/bottom output, 3=right input/left output, 4=bottom input/top output
    */
   _getValveOrientation(valveId) {
+    let orientation = this._valveOrientationCache.get(valveId);
+    if (orientation !== undefined) return orientation;
+
     // Extract orientation from valve ID (e.g., "overflow_valve2" -> 2)
     const match = valveId.match(/(\d+)$/);
-    if (match) {
-      return parseInt(match[1]);
-    }
-    // Default to orientation 1 (left input/right output) for valves without number suffix
-    return 1;
+    orientation = match ? parseInt(match[1]) : 1;
+    this._valveOrientationCache.set(valveId, orientation);
+    return orientation;
   }
 
   /**
@@ -1457,47 +1463,58 @@ export class Engine {
    * @returns {Object} Object with inputNeighbor and outputNeighbor properties
    */
   _getInputOutputNeighbors(valve, neighbors, orientation) {
+    const result = this._valveNeighborResult;
     if (neighbors.length < 2) {
-      return { inputNeighbor: null, outputNeighbor: null };
+      result.inputNeighbor = null;
+      result.outputNeighbor = null;
+      return result;
     }
-
-    // Sort neighbors by position relative to valve
-    const sortedNeighbors = neighbors.sort((a, b) => {
-      // For horizontal orientations (1, 3), sort by column
-      if (orientation === 1 || orientation === 3) {
-        return a.col - b.col;
-      }
-      // For vertical orientations (2, 4), sort by row
-      else {
-        return a.row - b.row;
-      }
-    });
 
     let inputNeighbor, outputNeighbor;
 
-    switch (orientation) {
-      case 1: // Left input, right output
-        inputNeighbor = sortedNeighbors[0];  // Leftmost
-        outputNeighbor = sortedNeighbors[sortedNeighbors.length - 1]; // Rightmost
-        break;
-      case 2: // Top input, bottom output
-        inputNeighbor = sortedNeighbors[0];  // Topmost
-        outputNeighbor = sortedNeighbors[sortedNeighbors.length - 1]; // Bottommost
-        break;
-      case 3: // Right input, left output
-        inputNeighbor = sortedNeighbors[sortedNeighbors.length - 1]; // Rightmost
-        outputNeighbor = sortedNeighbors[0];  // Leftmost
-        break;
-      case 4: // Bottom input, top output
-        inputNeighbor = sortedNeighbors[sortedNeighbors.length - 1]; // Bottommost
-        outputNeighbor = sortedNeighbors[0];  // Topmost
-        break;
-      default:
-        // Fallback to left input, right output
-        inputNeighbor = sortedNeighbors[0];
-        outputNeighbor = sortedNeighbors[sortedNeighbors.length - 1];
+    // Optimization: Avoid sort for the most common case of exactly 2 neighbors
+    if (neighbors.length === 2) {
+      const a = neighbors[0];
+      const b = neighbors[1];
+      let isAFirst = false;
+
+      if (orientation === 1 || orientation === 3) {
+        isAFirst = a.col < b.col;
+      } else {
+        isAFirst = a.row < b.row;
+      }
+
+      const first = isAFirst ? a : b;
+      const last = isAFirst ? b : a;
+
+      switch (orientation) {
+        case 1: inputNeighbor = first; outputNeighbor = last; break;
+        case 2: inputNeighbor = first; outputNeighbor = last; break;
+        case 3: inputNeighbor = last; outputNeighbor = first; break;
+        case 4: inputNeighbor = last; outputNeighbor = first; break;
+        default: inputNeighbor = first; outputNeighbor = last;
+      }
+    } else {
+      // Fallback for more than 2 neighbors
+      const sortedNeighbors = neighbors.sort((a, b) => {
+        if (orientation === 1 || orientation === 3) {
+          return a.col - b.col;
+        } else {
+          return a.row - b.row;
+        }
+      });
+
+      switch (orientation) {
+        case 1: inputNeighbor = sortedNeighbors[0]; outputNeighbor = sortedNeighbors[sortedNeighbors.length - 1]; break;
+        case 2: inputNeighbor = sortedNeighbors[0]; outputNeighbor = sortedNeighbors[sortedNeighbors.length - 1]; break;
+        case 3: inputNeighbor = sortedNeighbors[sortedNeighbors.length - 1]; outputNeighbor = sortedNeighbors[0]; break;
+        case 4: inputNeighbor = sortedNeighbors[sortedNeighbors.length - 1]; outputNeighbor = sortedNeighbors[0]; break;
+        default: inputNeighbor = sortedNeighbors[0]; outputNeighbor = sortedNeighbors[sortedNeighbors.length - 1];
+      }
     }
 
-    return { inputNeighbor, outputNeighbor };
+    result.inputNeighbor = inputNeighbor;
+    result.outputNeighbor = outputNeighbor;
+    return result;
   }
 }

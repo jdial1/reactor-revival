@@ -91,7 +91,9 @@ export class Tile {
     const activeVenting = this.game.upgradeset.getUpgrade("active_venting");
     if (activeVenting && activeVenting.level > 0) {
       let capacitorBonus = 0;
-      for (const neighbor of this.containmentNeighborTiles) {
+      const neighbors = this.containmentNeighborTiles;
+      for (let i = 0; i < neighbors.length; i++) {
+        const neighbor = neighbors[i];
         if (neighbor.part && neighbor.part.category === "capacitor") {
           capacitorBonus += neighbor.part.level || 1; // Corrected: neighbor.part.level
         }
