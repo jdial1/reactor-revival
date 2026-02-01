@@ -1,4 +1,4 @@
-import { numFormat as fmt, safeGetItem, safeSetItem, safeRemoveItem } from "../utils/util.js";
+import { numFormat as fmt, safeGetItem, safeSetItem, safeRemoveItem, escapeHtml } from "../utils/util.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
 import { settingsModal } from "../components/settingsModal.js";
@@ -694,7 +694,8 @@ class SplashScreenManager {
 
 
   formatTime(ms) {
-    if (ms < 0) ms = 0;
+    ms = Number(ms);
+    if (Number.isNaN(ms) || ms < 0) ms = 0;
     const s = Math.floor(ms / 1000) % 60;
     const m = Math.floor(ms / (1000 * 60)) % 60;
     const h = Math.floor(ms / (1000 * 60 * 60)) % 24;
@@ -711,7 +712,7 @@ class SplashScreenManager {
 
   formatDateTime(timestamp) {
     if (!timestamp) return "Unknown";
-    const date = new Date(timestamp);
+    const date = new Date(Number(timestamp) || timestamp);
     const now = new Date();
     const diffMs = now - date;
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -843,9 +844,9 @@ class SplashScreenManager {
                 <span class="save-slot-time">${this.formatDateTime(slotData.lastSaveTime)}</span>
               </div>
               <div class="save-slot-row-2">
-                <span class="save-slot-money">$${this.formatNumber(slotData.currentMoney)}</span>
-                <span class="save-slot-ep">${this.formatNumber(slotData.exoticParticles)} EP</span>
-                <span class="save-slot-playtime">Played: ${this.formatTime(slotData.totalPlayedTime)}</span>
+                <span class="save-slot-money">$${this.formatNumber(Number(slotData.currentMoney))}</span>
+                <span class="save-slot-ep">${this.formatNumber(Number(slotData.exoticParticles))} EP</span>
+                <span class="save-slot-playtime">Played: ${this.formatTime(Number(slotData.totalPlayedTime))}</span>
               </div>
               `
             }
@@ -857,12 +858,14 @@ class SplashScreenManager {
   }
 
   formatNumber(num) {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
+    const n = Number(num);
+    if (Number.isNaN(n)) return "0";
+    if (n >= 1000000) {
+      return (n / 1000000).toFixed(1) + "M";
+    } else if (n >= 1000) {
+      return (n / 1000).toFixed(1) + "K";
     }
-    return num.toString();
+    return n.toString();
   }
 
   async loadFromSaveSlot(slot) {
@@ -1138,8 +1141,8 @@ class SplashScreenManager {
    */
   showUpdateNotification(newVersion, currentVersion) {
     // Create modal overlay
-    const modal = document.createElement('div');
-    modal.className = 'update-notification-modal';
+    const modal = document.createElement("div");
+    modal.className = "update-notification-modal";
     modal.innerHTML = `
       <div class="update-notification-content">
         <h3>🚀 Update Available!</h3>
@@ -1147,11 +1150,11 @@ class SplashScreenManager {
         <div class="version-comparison">
           <div class="version-item">
             <span class="version-label">Current:</span>
-            <span class="version-value current">${currentVersion}</span>
+            <span class="version-value current">${escapeHtml(currentVersion)}</span>
           </div>
           <div class="version-item">
             <span class="version-label">Latest:</span>
-            <span class="version-value latest">${newVersion}</span>
+            <span class="version-value latest">${escapeHtml(newVersion)}</span>
           </div>
         </div>
         <p class="update-instruction">
@@ -1511,21 +1514,23 @@ class SplashScreenManager {
   /**
    * Show version check toast notification
    */
-  showVersionCheckToast(message, type = 'info') {
+  showVersionCheckToast(message, type = "info") {
     // Remove any existing toast
-    const existingToast = document.querySelector('.version-check-toast');
+    const existingToast = document.querySelector(".version-check-toast");
     if (existingToast) {
       existingToast.remove();
     }
 
     // Create toast element
-    const toast = document.createElement('div');
-    toast.className = 'version-check-toast';
+    const toast = document.createElement("div");
+    toast.className = "version-check-toast";
     toast.innerHTML = `
       <div class="version-check-toast-content">
         <div class="version-check-toast-message">
-          <span class="version-check-toast-icon">${type === 'info' ? 'ℹ️' : type === 'warning' ? '⚠️' : '❌'}</span>
-          <span class="version-check-toast-text">${message}</span>
+          <span class="version-check-toast-icon">${
+            type === "info" ? "ℹ️" : type === "warning" ? "⚠️" : "❌"
+          }</span>
+          <span class="version-check-toast-text">${escapeHtml(message)}</span>
         </div>
         <button class="version-check-toast-close" onclick="this.closest('.version-check-toast').remove()">×</button>
       </div>
