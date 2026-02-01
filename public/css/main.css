@@ -218,6 +218,26 @@ body {
   z-index: 10;
 }
 
+@keyframes tile-placement-pop {
+  0% {
+    transform: scale(0.85);
+    filter: brightness(2);
+  }
+  45% {
+    transform: scale(1.08);
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.tile-placement-pop {
+  animation: tile-placement-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 10;
+}
+
 /* Button Press Effect */
 .pixel-btn:active,
 .splash-btn:active,
