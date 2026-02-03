@@ -191,6 +191,12 @@ export class Tile {
 
         this.updateVisualState();
 
+        if (!isRestoring) {
+          this.$el.classList.remove("tile-placement-pop");
+          void this.$el.offsetWidth; // Force reflow
+          this.$el.classList.add("tile-placement-pop");
+        }
+
         // Remove old percent bars and set up new ones
         const percentWrapperWrapper = this.$el.querySelector(
           ".percent_wrapper_wrapper"

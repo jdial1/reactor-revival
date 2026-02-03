@@ -263,6 +263,17 @@ body {
   }
 }
 
+@keyframes tile-placement-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); filter: brightness(1.4); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+.tile-placement-pop {
+  animation: tile-placement-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 10;
+}
+
 .upgrade-purchase-success {
   animation: upgrade-purchase-glow 0.4s ease-out;
   z-index: 10;
@@ -1386,10 +1397,12 @@ button:active {
 }
 
 .tile:hover {
-  background-color: var(--pico-primary-hover);
-  transform: translateY(-2px);
-  filter: brightness(1.1);
   z-index: 10;
+  border-color: white;
+  background-color: var(--pico-primary-hover);
+  box-shadow: 0 0 8px rgb(255 255 255 / 40%), inset 0 2px 4px rgb(0 0 0 / 30%);
+  transform: scale(1.05) translateY(-2px);
+  filter: brightness(1.1);
 }
 
 .tile.enabled {
