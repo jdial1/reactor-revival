@@ -63,8 +63,7 @@ export class Engine {
     // Vent Processing Pre-allocation (Avoid GC)
     this._ventProcessing_activeVents = [];
 
-    // Valve Result Pre-allocation
-    this._valveNeighborResult = { inputNeighbor: null, outputNeighbor: null };
+    // Valve orientation cache (avoids repeated regex in hot path)
     this._valveOrientationCache = new Map();
 
     // Ensure arrays are always valid
@@ -781,12 +780,6 @@ export class Engine {
         // Only transfer if we have valid input and output neighbors
         // Valves should never store heat - they only transfer when both input and output are available
         if (inputNeighbors.length > 0 && outputNeighbors.length > 0) {
-          // Add valve to active_vessels only when it has valid input/output neighbors
-          // This prevents idle valves from being processed by explosion checking
-          if (!this.active_vessels.includes(valve)) {
-            this.active_vessels.push(valve);
-          }
-
           for (let inputIdx = 0; inputIdx < inputNeighbors.length; inputIdx++) {
             const input = inputNeighbors[inputIdx];
             for (let outputIdx = 0; outputIdx < outputNeighbors.length; outputIdx++) {
@@ -827,15 +820,6 @@ export class Engine {
                   }
                 }
               }
-            }
-          }
-        } else {
-          // Valve has no valid input/output pairs - remove it from active_vessels if it was there
-          // PERF: Use a reverse loop and splice for efficient removal without creating a new array
-          for (let i = this.active_vessels.length - 1; i >= 0; i--) {
-            if (this.active_vessels[i] === valve) {
-              this.active_vessels.splice(i, 1);
-              break; // Found and removed, no need to continue
             }
           }
         }
@@ -908,16 +892,34 @@ export class Engine {
             if(neighborsAll[nIdx].part) validNeighbors.push(neighborsAll[nIdx]);
         }
 
-        validNeighbors.sort((a, b) => {
-            // Custom weight sort
-            const aPref = (a.part.category === 'vent' || a.part.category === 'coolant_cell') ? 2 : (a.part.category === 'heat_exchanger' ? 0 : 1);
-            const bPref = (b.part.category === 'vent' || b.part.category === 'coolant_cell') ? 2 : (b.part.category === 'heat_exchanger' ? 0 : 1);
-            if (aPref !== bPref) return bPref - aPref;
+        // Manual insertion sort for small neighbor array (max 4-8 elements)
+        // Significantly faster than Array.prototype.sort() for tiny arrays due to avoiding native sort overhead
+        for (let sortIdx = 1; sortIdx < validNeighbors.length; sortIdx++) {
+            const current = validNeighbors[sortIdx];
+            let j = sortIdx - 1;
+            while (j >= 0) {
+                const a = validNeighbors[j];
+                const aPref = (a.part.category === 'vent' || a.part.category === 'coolant_cell') ? 2 : (a.part.category === 'heat_exchanger' ? 0 : 1);
+                const bPref = (current.part.category === 'vent' || current.part.category === 'coolant_cell') ? 2 : (current.part.category === 'heat_exchanger' ? 0 : 1);
 
-            const headA = Math.max((a.part?.containment || 0) - (a.heat_contained || 0), 0);
-            const headB = Math.max((b.part?.containment || 0) - (b.heat_contained || 0), 0);
-            return headB - headA;
-        });
+                let shouldMove = false;
+                if (bPref > aPref) {
+                    shouldMove = true;
+                } else if (bPref === aPref) {
+                    const headA = Math.max((a.part.containment || 0) - (a.heat_contained || 0), 0);
+                    const headB = Math.max((current.part.containment || 0) - (current.heat_contained || 0), 0);
+                    if (headB > headA) shouldMove = true;
+                }
+
+                if (shouldMove) {
+                    validNeighbors[j + 1] = validNeighbors[j];
+                    j--;
+                } else {
+                    break;
+                }
+            }
+            validNeighbors[j + 1] = current;
+        }
 
         let remainingPush = heatStart;
 
