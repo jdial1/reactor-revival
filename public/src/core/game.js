@@ -7,7 +7,7 @@ import { ObjectiveManager } from "./objective.js";
 import { executeUpgradeAction } from "./upgradeActions.js";
 import { Performance } from "./performance.js";
 import { DebugHistory } from "../utils/debugHistory.js";
-import { numFormat } from "../utils/util.js";
+import { numFormat, safeGetItem, safeSetItem, safeRemoveItem } from "../utils/util.js";
 import { leaderboardService } from "../services/leaderboardService.js";
 
 export class Game {
@@ -91,10 +91,10 @@ export class Game {
       }
     }
 
-    let existingUserId = localStorage.getItem("reactor_user_id");
+    let existingUserId = safeGetItem("reactor_user_id");
     if (!existingUserId) {
       existingUserId = crypto.randomUUID();
-      localStorage.setItem("reactor_user_id", existingUserId);
+      safeSetItem("reactor_user_id", existingUserId);
     }
     return existingUserId;
   }
@@ -871,7 +871,7 @@ export class Game {
 
     try {
       if (typeof localStorage !== "undefined" && localStorage !== null) {
-        const existingData = localStorage.getItem("reactorGameSave");
+        const existingData = safeGetItem("reactorGameSave");
         if (existingData) {
           const existingSave = JSON.parse(existingData);
           if (existingSave.isCloudSynced) {
@@ -976,12 +976,12 @@ export class Game {
 
         const saveKey = `reactorGameSave_${slot}`;
 
-        localStorage.setItem(saveKey, JSON.stringify(saveData));
+        safeSetItem(saveKey, JSON.stringify(saveData));
         this.logger?.debug(`Game state saved to slot ${slot}. Size: ${JSON.stringify(saveData).length} bytes.`);
         this.debugHistory.add('game', 'Game saved', { slot, size: JSON.stringify(saveData).length });
 
         // Update the current slot tracking
-        localStorage.setItem("reactorCurrentSaveSlot", slot.toString());
+        safeSetItem("reactorCurrentSaveSlot", slot.toString());
       } else if (
         typeof process !== "undefined" &&
         process.env?.NODE_ENV === "test"
@@ -1008,7 +1008,7 @@ export class Game {
 
   getNextSaveSlot() {
     // Get the current slot or default to 1
-    const currentSlot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1");
+    const currentSlot = parseInt(safeGetItem("reactorCurrentSaveSlot", "1"));
     // Cycle through slots 1, 2, 3
     return ((currentSlot % 3) + 1);
   }
@@ -1016,7 +1016,7 @@ export class Game {
   getSaveSlotInfo(slot) {
     try {
       const saveKey = `reactorGameSave_${slot}`;
-      const savedDataJSON = localStorage.getItem(saveKey);
+      const savedDataJSON = safeGetItem(saveKey);
       if (savedDataJSON) {
         const savedData = JSON.parse(savedDataJSON);
         return {
@@ -1054,11 +1054,11 @@ export class Game {
       if (slot !== null) {
         // Load from specific slot
         const saveKey = `reactorGameSave_${slot}`;
-        savedDataJSON = localStorage.getItem(saveKey);
+        savedDataJSON = safeGetItem(saveKey);
       } else {
         // Try to load from the most recent save (backward compatibility)
         // First try the old single save format
-        savedDataJSON = localStorage.getItem("reactorGameSave");
+        savedDataJSON = safeGetItem("reactorGameSave");
 
         if (!savedDataJSON) {
           // If no old save, try to find the most recent slot
@@ -1075,7 +1075,7 @@ export class Game {
 
           if (mostRecentSlot) {
             const saveKey = `reactorGameSave_${mostRecentSlot}`;
-            savedDataJSON = localStorage.getItem(saveKey);
+            savedDataJSON = safeGetItem(saveKey);
           }
         }
       }
@@ -1090,9 +1090,9 @@ export class Game {
       console.error("Error loading game:", error);
       // Clear potentially corrupted save data
       if (slot !== null) {
-        localStorage.removeItem(`reactorGameSave_${slot}`);
+        safeRemoveItem(`reactorGameSave_${slot}`);
       } else {
-        localStorage.removeItem("reactorGameSave");
+        safeRemoveItem("reactorGameSave");
       }
     }
     return false;
@@ -1194,9 +1194,7 @@ export class Game {
         const tile = this.tileset.getTile(tileData.row, tileData.col);
         const part = this.partset.getPartById(tileData.partId);
         if (tile && part) {
-          const tilePartBefore = tile.part?.id || null;
           await tile.setPart(part);
-          const tilePartAfter = tile.part?.id || null;
           tile.ticks = tileData.ticks;
           tile.heat_contained = tileData.heat_contained;
         } else {
@@ -1527,7 +1525,7 @@ export class Game {
           this.router.navigationPaused = false;
         }
 
-        if (this.engine) {
+          if (this.engine) {
           if (value) {
             this.engine.stop();
             console.log(`[TOGGLE] Engine stopped`);
@@ -1536,6 +1534,8 @@ export class Game {
             console.log(`[TOGGLE] Engine started`);
           }
         }
+        break;
+      default:
         break;
     }
   }

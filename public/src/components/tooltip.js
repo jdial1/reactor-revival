@@ -554,11 +554,7 @@ export class TooltipManager {
     if (!obj || obj.upgrade) return lines;
     const upg = (id) => this.game.upgradeset.getUpgrade(id)?.level || 0;
 
-    // Helper to format percent increase from a multiplier (e.g., 2^n)
     const pctFromMultiplier = (mult) => Math.round((mult - 1) * 100);
-    // Helper to show explicit multiplicative scaling for doubling-style upgrades
-    const multX = (level) => `x${Math.pow(2, level)}`;
-    const stripPrefixes = (title) => (title || '').replace(/^(Basic |Advanced |Super |Wonderous |Ultimate )/, '');
 
     switch (obj.category) {
       case 'vent': {

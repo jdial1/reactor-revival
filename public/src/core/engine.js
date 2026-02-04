@@ -221,6 +221,8 @@ export class Engine {
           case "capacitor":
             this.active_capacitors[capacitorIndex++] = tile;
             break;
+          default:
+            break;
         }
 
         // Fix: Ensure vents are added to active_vessels even if part.vent is 0 (can happen if base_vent not set correctly on init)
@@ -434,7 +436,6 @@ export class Engine {
     }
 
     const reactor = this.game.reactor;
-    const tileset = this.game.tileset;
     const ui = this.game.ui;
     if (this.game.logger) {
       this.game.logger.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Reactor Heat: ${reactor.current_heat.toFixed(2)}`);
@@ -910,7 +911,6 @@ export class Engine {
         });
 
         let remainingPush = heatStart;
-        const exchangerCapacity = tile_part.containment || 0;
 
         for (const neighbor of validNeighbors) {
             const isExchangerNeighbor = startHeat.has(neighbor);

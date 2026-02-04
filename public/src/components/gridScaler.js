@@ -261,9 +261,6 @@ export class GridScaler {
             }
         }
 
-        // --- DEBUG LOGGING ---
-        const gridType = isMobile ? 'Mobile (Rectangular)' : 'Desktop (Rectangular)';
-        
         // console.groupCollapsed(`[GridScaler] Resized to ${cols}x${rows}`);
         // console.log(`Wrapper Size:   ${availWidth}px x ${availHeight}px`);
         // console.log(`Grid Logic:     ${cols} Cols x ${rows} Rows (${gridType})`);

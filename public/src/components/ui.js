@@ -1,4 +1,4 @@
-import { numFormat as fmt, on, escapeHtml } from "../utils/util.js";
+import { numFormat as fmt, on, escapeHtml, safeGetItem, safeSetItem, safeRemoveItem } from "../utils/util.js";
 import { StateManager } from "../core/stateManager.js";
 import { Hotkeys } from "../utils/hotkeys.js";
 import dataService from "../services/dataService.js";
@@ -1451,7 +1451,7 @@ export class UI {
         return;
 
       // Create a unique key for this animation
-      const animationKey = `${fromTile.row}-${fromTile.col}-${kind}`;
+      let animationKey = `${fromTile.row}-${fromTile.col}-${kind}`;
       if (toTile) {
         animationKey += `-to-${toTile.row}-${toTile.col}`;
       }
@@ -1624,10 +1624,7 @@ export class UI {
     };
   }
 
-  // Debug method to log current animation status
   logAnimationStatus() {
-    const status = this.getAnimationStatus();
-    // Animation status logging removed for cleaner console
   }
 
   // Clear all reactor heat (hotkey: Ctrl+H)
@@ -1810,10 +1807,7 @@ export class UI {
     const desktopElement = document.querySelector(`.info-bar-desktop .info-item.${type}`);
     const mobileElement = document.querySelector(`#info_bar .info-row.info-main .info-item.${type}`);
 
-    // Update desktop fill indicator
     if (desktopElement) {
-      const afterElement = desktopElement.querySelector('::after') || desktopElement;
-      // Use CSS custom property to set the height
       desktopElement.style.setProperty('--fill-height', `${percentage}%`);
 
       // Add/remove full animation class
@@ -1826,7 +1820,6 @@ export class UI {
 
     // Update mobile fill indicator
     if (mobileElement) {
-      const afterElement = mobileElement.querySelector('::after') || mobileElement;
       // Use CSS custom property to set the height
       mobileElement.style.setProperty('--fill-height', `${percentage}%`);
 
@@ -2150,6 +2143,8 @@ export class UI {
               console.log("Time flux accumulator after adding 10 ticks:", this.game.engine.time_accumulator);
             }
             break;
+          default:
+            break;
         }
       }
     });
@@ -2419,7 +2414,6 @@ export class UI {
     for (const tile of tilesToModify) {
       if (isRightClick) {
         if (tile.part && tile.part.id && !tile.part.isSpecialTile) {
-          const moneyBefore = this.game.current_money;
           this.game.sellPart(tile);
           if (!soundPlayed && this.game && this.game.audio) {
             this.game.audio.play('sell');
@@ -2437,7 +2431,6 @@ export class UI {
 
         if (clicked_part) {
           if (this.game.current_money >= clicked_part.cost) {
-            const moneyBefore = this.game.current_money;
             this.game.current_money -= clicked_part.cost;
             const partPlaced = await tile.setPart(clicked_part);
             if (partPlaced) {
@@ -2700,16 +2693,22 @@ export class UI {
       modal.id = "quick-start-modal";
       modal.innerHTML = `
         <div class="quick-start-overlay">
-          <div class="bios-screen quick-start-screen">
+          <div class="quick-start-screen">
+            <div class="quick-start-header">[ REACTOR_BOOT_SEQ_v25 ]</div>
             <div class="bios-content">
-              <div class="bios-title-vfd"><h2 class="bios-title">[OPERATOR MANUAL]</h2></div>
-              <div class="bios-details-box">
-                <pre class="bios-details-head">[QUICK START]</pre>
-                <pre class="quick-start-line">Follow objectives at screen top</pre>
+              <div class="quick-start-icon-area">
+                <div class="quick-start-icon"><div class="quick-start-icon-inner"></div></div>
+                <div class="quick-start-icon-title">INITIALIZING CORE</div>
+              </div>
+              <div class="quick-start-section">
+                <div class="quick-start-section-head">>> SYSTEM LOGIC</div>
+                <div class="quick-start-list">
+                  <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Follow objectives at screen top</span></div>
+                </div>
               </div>
             </div>
             <footer class="bios-footer">
-              <button type="button" id="quick-start-close-detailed-fallback" class="bios-btn quick-start-next-btn">[ START &gt; ]</button>
+              <button type="button" id="quick-start-close-detailed-fallback" class="bios-btn quick-start-next-btn">INITIATE SEQUENCE ></button>
             </footer>
           </div>
         </div>
@@ -3076,10 +3075,10 @@ export class UI {
       toggleBtn.onclick = () => {
         copyPasteBtns.classList.toggle("collapsed");
         const isCollapsed = copyPasteBtns.classList.contains("collapsed");
-        localStorage.setItem("reactor_copy_paste_collapsed", isCollapsed ? "true" : "false");
+        safeSetItem("reactor_copy_paste_collapsed", isCollapsed ? "true" : "false");
       };
       
-      const savedState = localStorage.getItem("reactor_copy_paste_collapsed");
+      const savedState = safeGetItem("reactor_copy_paste_collapsed");
       if (savedState === "true") {
         copyPasteBtns.classList.add("collapsed");
       }
@@ -3392,7 +3391,6 @@ export class UI {
           return checkedTypes[cell.id] !== false ? cell : null;
         }));
 
-        const filteredSummary = buildPartSummary(filteredLayout);
         const filteredCost = calculateLayoutCost(filteredLayout);
 
         let html = this.renderComponentIcons(summary, { showCheckboxes: true, checkedTypes });
@@ -3920,29 +3918,6 @@ export class UI {
       this.initVarObjsConfig();
     }
 
-    const setupUpgradeClickHandler = (containerId) => {
-      const container = document.getElementById(containerId);
-      if (!container) return;
-
-      // Click handler for upgrades
-      // Desktop hover functionality
-      if (window.innerWidth > 768) {
-        on(container, ".upgrade-card", "mouseenter", function (e) {
-          const upgradeEl = this;
-          if (!upgradeEl.upgrade_object) return;
-          const upgrade_obj = upgradeEl.upgrade_object;
-
-          game.tooltip_manager.show(upgrade_obj, null, false, upgradeEl);
-        });
-
-        on(container, ".upgrade-card", "mouseleave", function (e) {
-          if (!game.tooltip_manager.isLocked) {
-            game.tooltip_manager.hide();
-          }
-        });
-      }
-    };
-
     switch (pageId) {
       case "reactor_section":
         if (this.DOMElements.reactor) {
@@ -4014,6 +3989,8 @@ export class UI {
         break;
       case "soundboard_section":
         this.setupSoundboardPage();
+        break;
+      default:
         break;
     }
 
@@ -4824,7 +4801,7 @@ export class UI {
 
     // Delete the current save file
     try {
-      localStorage.removeItem("reactorGameSave");
+      safeRemoveItem("reactorGameSave");
       console.log("Save file deleted from localStorage");
     } catch (error) {
       console.error("Error deleting save file:", error);
@@ -4943,7 +4920,7 @@ export class UI {
     };
 
     const getCurrentMode = () => {
-      const saved = localStorage.getItem("pwa_display_mode");
+      const saved = safeGetItem("pwa_display_mode");
       if (saved && displayModes.includes(saved)) {
         return saved;
       }
@@ -4951,7 +4928,7 @@ export class UI {
     };
 
     const setDisplayMode = (mode) => {
-      localStorage.setItem("pwa_display_mode", mode);
+      safeSetItem("pwa_display_mode", mode);
       this.updateManifestDisplayMode(mode);
       button.title = `PWA Display: ${modeLabels[mode]} (Click to cycle)`;
       button.style.display = "flex";
@@ -5389,7 +5366,7 @@ export class UI {
         } else {
           window.googleDriveSave.isSignedIn = false;
           window.googleDriveSave.authToken = null;
-          localStorage.removeItem("google_drive_auth_token");
+          safeRemoveItem("google_drive_auth_token");
         }
       }
       this.updateUserAccountIcon();

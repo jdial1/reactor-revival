@@ -1,4 +1,4 @@
-import { numFormat as fmt } from "../utils/util.js";
+import { numFormat as fmt, safeGetItem, safeSetItem, safeRemoveItem } from "../utils/util.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
 import { settingsModal } from "../components/settingsModal.js";
@@ -32,248 +32,123 @@ dataService.loadFlavorText().then(messages => {
   flavorMessages = ["Loading..."];
 });
 
-// Tech Tree helpers
-async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
-  console.log("[TECH-TREE] showTechTreeSelection called", { 
-    game: !!game, 
-    pageRouter: !!pageRouter, 
-    ui: !!ui, 
-    splashManager: !!splashManager 
-  });
-
-  let overlay = document.getElementById("tech-tree-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "tech-tree-overlay";
-    overlay.className = "tech-tree-overlay bios-overlay";
-    document.body.appendChild(overlay);
-    console.log("[TECH-TREE] Overlay created and appended to body", overlay);
-  } else {
-    console.log("[TECH-TREE] Using existing overlay element", overlay);
-  }
-
-  console.log("[TECH-TREE] Loading tech tree data...");
-  const techTreeData = await dataService.loadTechTree();
-  console.log("[TECH-TREE] Tech tree data loaded:", { 
-    data: techTreeData, 
-    length: techTreeData?.length,
-    isEmpty: !techTreeData || techTreeData.length === 0 
-  });
-
-  if (!techTreeData || techTreeData.length === 0) {
-    console.error("[TECH-TREE] Failed to load tech tree data - starting game without tech tree");
-    startNewGameFlow(game, pageRouter, ui, splashManager, null);
-    return;
-  }
-
-  overlay.innerHTML = "";
-  if (!window.templateLoader) return;
-  const selectionScreen = window.templateLoader.cloneTemplateElement("tech-tree-selection-template");
-  if (!selectionScreen) return;
-
-  const listEl = selectionScreen.querySelector(".doctrine-list");
-  const detailsPlaystyle = selectionScreen.querySelector(".bios-details-playstyle");
-  const detailsFocus = selectionScreen.querySelector(".bios-details-focus");
-  const nextBtn = selectionScreen.querySelector(".doctrine-next-btn");
-  const backBtn = selectionScreen.querySelector(".doctrine-back-btn");
-  if (!listEl) return;
-
-  let selectedIndex = 0;
-  const updateDetails = () => {
-    const tree = techTreeData[selectedIndex];
-    if (detailsPlaystyle) detailsPlaystyle.textContent = `Playstyle: ${tree.playstyle}`;
-    if (detailsFocus) detailsFocus.textContent = tree.focus;
-  };
-
-  const updateCursor = () => {
-    listEl.querySelectorAll(".doctrine-item").forEach((item, i) => {
-      const cursor = item.querySelector(".doctrine-cursor");
-      if (cursor) {
-        cursor.textContent = i === selectedIndex ? ">" : " ";
-        cursor.classList.toggle("cursor-blink", i === selectedIndex);
-      }
-      item.classList.toggle("doctrine-selected", i === selectedIndex);
-    });
-  };
-
-  techTreeData.forEach((tree, index) => {
-    const item = document.createElement("div");
-    item.className = "doctrine-item" + (index === 0 ? " doctrine-selected" : "");
-    item.dataset.treeId = tree.id;
-    item.setAttribute("role", "option");
-    item.setAttribute("aria-selected", index === 0 ? "true" : "false");
-    const cursor = document.createElement("span");
-    cursor.className = "doctrine-cursor" + (index === 0 ? " cursor-blink" : "");
-    cursor.textContent = index === 0 ? ">" : " ";
-    const title = document.createElement("span");
-    title.className = "doctrine-title";
-    title.textContent = tree.title;
-    const br = document.createElement("br");
-    const sub = document.createElement("span");
-    sub.className = "doctrine-subtitle";
-    sub.textContent = "  " + tree.subtitle;
-    item.appendChild(cursor);
-    item.appendChild(title);
-    item.appendChild(br);
-    item.appendChild(sub);
-    item.onclick = () => {
-      selectedIndex = index;
-      item.setAttribute("aria-selected", "true");
-      listEl.querySelectorAll(".doctrine-item").forEach((o, i) => {
-        if (i !== index) o.setAttribute("aria-selected", "false");
-      });
-      updateDetails();
-      updateCursor();
-    };
-    listEl.appendChild(item);
-  });
-
-  updateDetails();
-  updateCursor();
-
-  if (backBtn) backBtn.onclick = () => {
-    overlay.classList.add("hidden");
-    setTimeout(() => overlay.remove(), 300);
-  };
-
-  if (nextBtn) nextBtn.onclick = () => {
-    const selectedTechTreeId = techTreeData[selectedIndex].id;
-    overlay.classList.add("hidden");
-    setTimeout(() => {
-      overlay.remove();
-      showDifficultySelection(game, pageRouter, ui, splashManager, selectedTechTreeId);
-    }, 300);
-  };
-
-  overlay.appendChild(selectionScreen);
-  overlay.classList.remove("hidden");
-  console.log("[TECH-TREE] Overlay classes after removal:", overlay.className);
-  console.log("[TECH-TREE] Overlay display style:", window.getComputedStyle(overlay).display);
-  console.log("[TECH-TREE] Overlay visibility:", window.getComputedStyle(overlay).visibility);
-  console.log("[TECH-TREE] Overlay opacity:", window.getComputedStyle(overlay).opacity);
-  console.log("[TECH-TREE] Overlay z-index:", window.getComputedStyle(overlay).zIndex);
-  console.log("[TECH-TREE] Tech tree selection display complete");
-}
-
-window.showTechTreeSelection = showTechTreeSelection;
-
+// Game setup presets
 const DIFFICULTY_PRESETS = {
   easy: { base_money: 25, base_max_heat: 1500, base_max_power: 120, base_loop_wait: 1200, base_manual_heat_reduce: 2, power_overflow_to_heat_pct: 0 },
   medium: { base_money: 10, base_max_heat: 1000, base_max_power: 100, base_loop_wait: 1000, base_manual_heat_reduce: 1, power_overflow_to_heat_pct: 50 },
   hard: { base_money: 5, base_max_heat: 750, base_max_power: 80, base_loop_wait: 800, base_manual_heat_reduce: 0.5, power_overflow_to_heat_pct: 100 }
 };
 
-function showDifficultySelection(game, pageRouter, ui, splashManager, techTreeId) {
-  let overlay = document.getElementById("difficulty-selection-overlay");
+async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
+  let overlay = document.getElementById("game-setup-overlay");
   if (!overlay) {
     overlay = document.createElement("div");
-    overlay.id = "difficulty-selection-overlay";
-    overlay.className = "difficulty-selection-overlay bios-overlay";
+    overlay.id = "game-setup-overlay";
+    overlay.className = "game-setup-overlay bios-overlay";
     document.body.appendChild(overlay);
   }
-  overlay.innerHTML = "";
 
+  const techTreeData = await dataService.loadTechTree();
+  if (!techTreeData || techTreeData.length === 0) {
+    startNewGameFlow(game, pageRouter, ui, splashManager, null);
+    return;
+  }
+
+  overlay.innerHTML = "";
   if (!window.templateLoader) return;
-  const screen = window.templateLoader.cloneTemplateElement("difficulty-selection-template");
+  const screen = window.templateLoader.cloneTemplateElement("game-setup-template");
   if (!screen) return;
 
-  const preset = DIFFICULTY_PRESETS.medium;
-  const moneyInput = screen.querySelector("#difficulty-advanced-money");
-  const maxHeatInput = screen.querySelector("#difficulty-advanced-max-heat");
-  const maxPowerInput = screen.querySelector("#difficulty-advanced-max-power");
-  const loopWaitInput = screen.querySelector("#difficulty-advanced-loop-wait");
-  const manualHeatInput = screen.querySelector("#difficulty-advanced-manual-heat");
-  const overflowToHeatInput = screen.querySelector("#difficulty-advanced-overflow-to-heat");
-  const presetBtns = screen.querySelectorAll(".bios-preset-btn");
-  const startBtn = screen.querySelector(".difficulty-start-btn");
-  const backBtn = screen.querySelector(".difficulty-back-btn");
+  const doctrineContainer = screen.querySelector(".doctrine-cards");
+  const difficultyCards = screen.querySelectorAll(".difficulty-card");
+  const startBtn = screen.querySelector(".setup-start-btn");
+  const backBtn = screen.querySelector(".setup-back-btn");
 
-  function applyPresetToInputs(p) {
-    if (moneyInput) moneyInput.value = p.base_money;
-    if (maxHeatInput) maxHeatInput.value = p.base_max_heat;
-    if (maxPowerInput) maxPowerInput.value = p.base_max_power;
-    if (loopWaitInput) loopWaitInput.value = p.base_loop_wait;
-    if (manualHeatInput) manualHeatInput.value = p.base_manual_heat_reduce;
-    if (overflowToHeatInput) overflowToHeatInput.value = p.power_overflow_to_heat_pct;
-  }
+  let selectedDoctrine = null;
+  let selectedDifficulty = null;
 
-  applyPresetToInputs(preset);
+  const updateStartButton = () => {
+    const canStart = selectedDoctrine !== null && selectedDifficulty !== null;
+    startBtn.disabled = !canStart;
+  };
 
-  presetBtns.forEach((btn) => {
-    btn.onclick = () => {
-      presetBtns.forEach((b) => b.classList.remove("bios-preset-selected"));
-      btn.classList.add("bios-preset-selected");
-      applyPresetToInputs(DIFFICULTY_PRESETS[btn.dataset.difficulty]);
+  techTreeData.forEach((tree) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "doctrine-card";
+    card.dataset.treeId = tree.id;
+    card.setAttribute("role", "option");
+    card.setAttribute("aria-selected", "false");
+
+    const title = document.createElement("span");
+    title.className = "doctrine-card-title";
+    title.textContent = tree.title;
+
+    const subtitle = document.createElement("span");
+    subtitle.className = "doctrine-card-subtitle";
+    subtitle.textContent = tree.subtitle;
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    card.onclick = () => {
+      doctrineContainer.querySelectorAll(".doctrine-card").forEach((c) => {
+        c.classList.remove("selected");
+        c.setAttribute("aria-selected", "false");
+      });
+      card.classList.add("selected");
+      card.setAttribute("aria-selected", "true");
+      selectedDoctrine = tree.id;
+      updateStartButton();
     };
-    btn.onkeydown = (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        btn.click();
-      }
-    };
+
+    doctrineContainer.appendChild(card);
   });
 
-  screen.querySelectorAll(".bios-input-wrap").forEach((wrap) => {
-    const input = wrap.querySelector(".bios-input");
-    const incBtn = wrap.querySelector(".bios-increment");
-    const decBtn = wrap.querySelector(".bios-decrement");
-    if (!input || !incBtn || !decBtn) return;
-    const step = parseFloat(input.step) || 1;
-    const min = input.min !== "" ? parseFloat(input.min) : -Infinity;
-    const max = input.max !== "" ? parseFloat(input.max) : Infinity;
-    const decimals = (step.toString().split(".")[1] || "").length;
-    const adjust = (delta) => {
-      let v = parseFloat(input.value) || 0;
-      v = Math.max(min, Math.min(max, v + delta));
-      v = decimals ? parseFloat(v.toFixed(decimals)) : Math.round(v);
-      input.value = String(v);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+  difficultyCards.forEach((card) => {
+    card.onclick = () => {
+      difficultyCards.forEach((c) => c.classList.remove("selected"));
+      card.classList.add("selected");
+      selectedDifficulty = card.dataset.difficulty;
+      updateStartButton();
     };
-    incBtn.onclick = () => adjust(step);
-    decBtn.onclick = () => adjust(-step);
   });
-
-  if (startBtn) {
-    startBtn.onclick = async () => {
-      const base_money = Number(moneyInput.value) || preset.base_money;
-      const base_max_heat = Number(maxHeatInput.value) || preset.base_max_heat;
-      const base_max_power = Number(maxPowerInput.value) || preset.base_max_power;
-      const base_loop_wait = Number(loopWaitInput.value) || preset.base_loop_wait;
-      const base_manual_heat_reduce = Number(manualHeatInput.value) ?? preset.base_manual_heat_reduce;
-      const overflowPct = overflowToHeatInput ? Number(overflowToHeatInput.value) : preset.power_overflow_to_heat_pct;
-      const power_overflow_to_heat_ratio = Math.max(0, Math.min(1, (overflowPct == null || Number.isNaN(overflowPct) ? 50 : overflowPct) / 100));
-
-      game.base_money = Math.max(1, base_money);
-      game.base_loop_wait = Math.max(200, base_loop_wait);
-      game.base_manual_heat_reduce = Math.max(0, base_manual_heat_reduce);
-      game.reactor.base_max_heat = Math.max(100, base_max_heat);
-      game.reactor.base_max_power = Math.max(10, base_max_power);
-      game.reactor.power_overflow_to_heat_ratio = power_overflow_to_heat_ratio;
-
-      overlay.classList.add("hidden");
-      setTimeout(() => overlay.remove(), 300);
-      try {
-        await startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId);
-      } catch (error) {
-        console.error("[DIFFICULTY] Failed to start game:", error);
-        alert("Failed to start game. Please try again.");
-      }
-    };
-  }
 
   if (backBtn) {
     backBtn.onclick = () => {
       overlay.classList.add("hidden");
-      setTimeout(() => {
-        overlay.remove();
-        showTechTreeSelection(game, pageRouter, ui, splashManager);
-      }, 300);
+      setTimeout(() => overlay.remove(), 300);
+    };
+  }
+
+  if (startBtn) {
+    startBtn.onclick = async () => {
+      if (!selectedDoctrine || !selectedDifficulty) return;
+
+      const preset = DIFFICULTY_PRESETS[selectedDifficulty];
+      game.base_money = preset.base_money;
+      game.base_loop_wait = preset.base_loop_wait;
+      game.base_manual_heat_reduce = preset.base_manual_heat_reduce;
+      game.reactor.base_max_heat = preset.base_max_heat;
+      game.reactor.base_max_power = preset.base_max_power;
+      game.reactor.power_overflow_to_heat_ratio = preset.power_overflow_to_heat_pct / 100;
+
+      overlay.classList.add("hidden");
+      setTimeout(() => overlay.remove(), 300);
+      try {
+        await startNewGameFlow(game, pageRouter, ui, splashManager, selectedDoctrine);
+      } catch (error) {
+        console.error("[GAME-SETUP] Failed to start game:", error);
+        alert("Failed to start game. Please try again.");
+      }
     };
   }
 
   overlay.appendChild(screen);
   overlay.classList.remove("hidden");
 }
+
+window.showTechTreeSelection = showTechTreeSelection;
 
 async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId) {
     try {
@@ -286,12 +161,12 @@ async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId)
             window.clearAllGameDataForNewGame(game);
         } else {
             try {
-                localStorage.removeItem("reactorGameSave");
-                for (let i = 1; i <= 3; i++) localStorage.removeItem(`reactorGameSave_${i}`);
-                localStorage.removeItem("reactorCurrentSaveSlot");
-                localStorage.removeItem("reactorGameQuickStartShown");
-                localStorage.removeItem("google_drive_save_file_id");
-                localStorage.setItem("reactorNewGamePending", "1");
+                safeRemoveItem("reactorGameSave");
+                for (let i = 1; i <= 3; i++) safeRemoveItem(`reactorGameSave_${i}`);
+                safeRemoveItem("reactorCurrentSaveSlot");
+                safeRemoveItem("reactorGameQuickStartShown");
+                safeRemoveItem("google_drive_save_file_id");
+                safeSetItem("reactorNewGamePending", "1");
             } catch (_) { }
             delete game._saved_objective_index;
         }
@@ -317,7 +192,7 @@ async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId)
             game.engine.start();
         }
 
-        try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
+        safeRemoveItem("reactorNewGamePending");
     } catch (error) {
         console.error("[TECH-TREE] Error in startNewGameFlow:", error);
         console.error("[TECH-TREE] Error stack:", error.stack);
@@ -556,8 +431,8 @@ class SplashScreenManager {
     this.installPrompt = null;
     this.flavorInterval = null;
 
-    if (typeof localStorage !== 'undefined' && !localStorage.getItem("reactor_user_id")) {
-      localStorage.setItem("reactor_user_id", crypto.randomUUID());
+    if (!safeGetItem("reactor_user_id")) {
+      safeSetItem("reactor_user_id", crypto.randomUUID());
       console.log("[SPLASH] Generated new User ID for leaderboard tracking.");
     }
 
@@ -1231,7 +1106,7 @@ class SplashScreenManager {
     console.log('New version detected:', newVersion, 'Current version:', currentVersion);
 
     // Check if we've already notified about this version
-    const lastNotifiedVersion = localStorage.getItem('reactor-last-notified-version');
+    const lastNotifiedVersion = safeGetItem('reactor-last-notified-version');
     if (lastNotifiedVersion === newVersion) {
       console.log('Already notified about version:', newVersion);
       return;
@@ -1255,7 +1130,7 @@ class SplashScreenManager {
 
     // Update current version and mark as notified
     this.currentVersion = newVersion;
-    localStorage.setItem('reactor-last-notified-version', newVersion);
+    safeSetItem('reactor-last-notified-version', newVersion);
   }
 
   /**
@@ -1766,7 +1641,7 @@ class SplashScreenManager {
    * Clear version notification when user updates
    */
   clearVersionNotification() {
-    localStorage.removeItem('reactor-last-notified-version');
+    safeRemoveItem('reactor-last-notified-version');
     const versionSection = this.splashScreen?.querySelector('.splash-version-section');
     if (versionSection) {
       versionSection.classList.remove('new-version');
@@ -1938,7 +1813,7 @@ class SplashScreenManager {
       if (canLoadGame) {
         // Check new slot format first
         for (let i = 1; i <= 3; i++) {
-          const slotSave = localStorage.getItem(`reactorGameSave_${i}`);
+          const slotSave = safeGetItem(`reactorGameSave_${i}`);
           if (slotSave) {
             try {
               const slotData = JSON.parse(slotSave);
@@ -1960,7 +1835,7 @@ class SplashScreenManager {
 
         // If no new format saves, check old format
         if (!hasSave) {
-          const localSaveJSON = localStorage.getItem("reactorGameSave");
+          const localSaveJSON = safeGetItem("reactorGameSave");
           if (localSaveJSON) {
             try {
               const oldSaveData = JSON.parse(localSaveJSON);
@@ -2245,7 +2120,7 @@ class SplashScreenManager {
                 imageUrl: userData.user.photoLink
               };
               window.googleDriveSave.userInfo = googleUserInfo;
-              localStorage.setItem("google_drive_user_info", JSON.stringify(googleUserInfo));
+              safeSetItem("google_drive_user_info", JSON.stringify(googleUserInfo));
             }
           }
         } catch (error) {
@@ -2314,8 +2189,8 @@ class SplashScreenManager {
             } else {
               window.googleDriveSave.isSignedIn = false;
               window.googleDriveSave.authToken = null;
-              localStorage.removeItem("google_drive_auth_token");
-              localStorage.removeItem("google_drive_user_info");
+              safeRemoveItem("google_drive_auth_token");
+              safeRemoveItem("google_drive_user_info");
             }
           }
           container.innerHTML = "";
@@ -2755,7 +2630,7 @@ class SplashScreenManager {
 
   // Refresh save options after upload/download operations
   async refreshSaveOptions() {
-    await this.showStartOptions(!!localStorage.getItem("reactorGameSave"));
+    await this.showStartOptions(!!safeGetItem("reactorGameSave"));
   }
 }
 
@@ -2768,7 +2643,7 @@ window.reactorConfig = window.reactorConfig || {};
 
 
 function enable() {
-  localStorage.setItem("debug-splash", "true");
+  safeSetItem("debug-splash", "true");
   console.log(
     "[SPLASH DEBUG] Debug mode enabled. Reload the page to see slower loading with showcased flavor text."
   );
@@ -2787,7 +2662,7 @@ async function checkGoogleDrive() {
   console.log("- Is signed in:", window.googleDriveSave?.isSignedIn);
   console.log(
     "- Local save (reactorGameSave):",
-    window.localStorage.getItem("reactorGameSave") ? "EXISTS" : "NONE"
+    window.safeGetItem("reactorGameSave") ? "EXISTS" : "NONE"
   );
 
   if (window.googleDriveSave?.isSignedIn) {
@@ -2936,7 +2811,7 @@ async function testSaveFlow() {
   console.log("Before operation:");
   console.log(
     "- Local save exists:",
-    !!localStorage.getItem("reactorGameSave")
+    !!safeGetItem("reactorGameSave")
   );
   console.log(
     "- Signed into Google Drive:",
@@ -3064,7 +2939,7 @@ function resetAuth() {
 }
 
 function disable() {
-  localStorage.removeItem("debug-splash");
+  safeRemoveItem("debug-splash");
   console.log(
     "[SPLASH DEBUG] Debug mode disabled. Reload the page for normal loading speed."
   );

@@ -174,94 +174,45 @@
   <footer id="tooltip_actions"></footer>
 </template>
 
-<!-- Tech Tree Templates -->
-<template id="tech-tree-selection-template">
-  <div class="bios-screen doctrine-selection">
+<!-- Game Setup Template (Doctrine + Difficulty) -->
+<template id="game-setup-template">
+  <div class="bios-screen game-setup-selection">
+    <h1 class="game-setup-header">NEW GAME</h1>
     <div class="bios-content">
-      <div class="bios-title-vfd"><h2 class="bios-title">[SELECT DOCTRINE]</h2></div>
-      <div class="bios-details-box">
-        <pre class="bios-details-sep">-----------------------------------------</pre>
-        <pre class="bios-details-head">[DETAILS]</pre>
-        <pre class="bios-details-playstyle"></pre>
-        <pre class="bios-details-focus"></pre>
-        <pre class="bios-details-sep">-----------------------------------------</pre>
-      </div>
-      <div class="doctrine-list" role="listbox" aria-label="Select doctrine">
-      </div>
+      <section class="setup-section setup-doctrine">
+        <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DOCTRINE ]</h2></div>
+        <div class="doctrine-cards" role="listbox" aria-label="Select doctrine"></div>
+      </section>
+      <section class="setup-section setup-difficulty">
+        <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DIFFICULTY ]</h2></div>
+        <div class="difficulty-cards" role="radiogroup" aria-label="Select difficulty">
+          <button type="button" class="difficulty-card" data-difficulty="easy">
+            <div class="difficulty-card-info">
+              <span class="difficulty-name">EASY</span>
+              <span class="difficulty-desc">Forgiving heat margins</span>
+            </div>
+            <div class="difficulty-indicator"></div>
+          </button>
+          <button type="button" class="difficulty-card" data-difficulty="medium">
+            <div class="difficulty-card-info">
+              <span class="difficulty-name">MEDIUM</span>
+              <span class="difficulty-desc">Balanced challenge</span>
+            </div>
+            <div class="difficulty-indicator"></div>
+          </button>
+          <button type="button" class="difficulty-card" data-difficulty="hard">
+            <div class="difficulty-card-info">
+              <span class="difficulty-name">HARD</span>
+              <span class="difficulty-desc">Tight margins, fast ticks</span>
+            </div>
+            <div class="difficulty-indicator"></div>
+          </button>
+        </div>
+      </section>
     </div>
     <footer class="bios-footer">
-      <button type="button" class="bios-btn doctrine-back-btn">[ BACK ]</button>
-      <button type="button" class="bios-btn doctrine-next-btn">[ NEXT &gt; ]</button>
-    </footer>
-  </div>
-</template>
-
-<template id="difficulty-selection-template">
-  <div class="bios-screen difficulty-selection">
-    <div class="bios-content">
-      <div class="bios-title-vfd"><h2 class="bios-title">[ADJUST PARAMETERS]</h2></div>
-      <div class="bios-params">
-        <div class="bios-param-row">
-          <span class="bios-param-label">Starting Money</span>
-          <div class="bios-input-wrap">
-            <button type="button" class="bios-step-btn bios-decrement" aria-label="Decrease">[-]</button>
-            <input type="number" id="difficulty-advanced-money" class="bios-input" min="1" step="1" value="10">
-            <button type="button" class="bios-step-btn bios-increment" aria-label="Increase">[+]</button>
-          </div>
-        </div>
-        <div class="bios-param-row">
-          <span class="bios-param-label">Max Heat</span>
-          <div class="bios-input-wrap">
-            <button type="button" class="bios-step-btn bios-decrement" aria-label="Decrease">[-]</button>
-            <input type="number" id="difficulty-advanced-max-heat" class="bios-input" min="100" step="50" value="1000">
-            <button type="button" class="bios-step-btn bios-increment" aria-label="Increase">[+]</button>
-          </div>
-        </div>
-        <div class="bios-param-row">
-          <span class="bios-param-label">Max Power</span>
-          <div class="bios-input-wrap">
-            <button type="button" class="bios-step-btn bios-decrement" aria-label="Decrease">[-]</button>
-            <input type="number" id="difficulty-advanced-max-power" class="bios-input" min="10" step="10" value="100">
-            <button type="button" class="bios-step-btn bios-increment" aria-label="Increase">[+]</button>
-          </div>
-        </div>
-        <div class="bios-param-row">
-          <span class="bios-param-label">Tick Speed (ms)</span>
-          <div class="bios-input-wrap">
-            <button type="button" class="bios-step-btn bios-decrement" aria-label="Decrease">[-]</button>
-            <input type="number" id="difficulty-advanced-loop-wait" class="bios-input" min="200" step="100" value="1000">
-            <button type="button" class="bios-step-btn bios-increment" aria-label="Increase">[+]</button>
-          </div>
-        </div>
-        <div class="bios-param-row">
-          <span class="bios-param-label">Manual heat reduce</span>
-          <div class="bios-input-wrap">
-            <button type="button" class="bios-step-btn bios-decrement" aria-label="Decrease">[-]</button>
-            <input type="number" id="difficulty-advanced-manual-heat" class="bios-input" min="0" step="0.1" value="1">
-            <button type="button" class="bios-step-btn bios-increment" aria-label="Increase">[+]</button>
-          </div>
-        </div>
-        <div class="bios-param-row">
-          <span class="bios-param-label">Power overflow to heat (%)</span>
-          <div class="bios-input-wrap">
-            <button type="button" class="bios-step-btn bios-decrement" aria-label="Decrease">[-]</button>
-            <input type="number" id="difficulty-advanced-overflow-to-heat" class="bios-input" min="0" max="100" step="5" value="50">
-            <button type="button" class="bios-step-btn bios-increment" aria-label="Increase">[+]</button>
-          </div>
-        </div>
-      </div>
-      <div class="bios-preset-row">
-        <span class="bios-param-label">Load Preset:</span>
-        <div class="bios-preset-btns" role="radiogroup" aria-label="Select difficulty preset">
-          <button type="button" class="bios-preset-btn" data-difficulty="easy">Easy</button>
-          <button type="button" class="bios-preset-btn bios-preset-selected" data-difficulty="medium">Medium</button>
-          <button type="button" class="bios-preset-btn" data-difficulty="hard">Hard</button>
-        </div>
-      </div>
-    </div>
-    <footer class="bios-footer">
-      <button type="button" class="bios-btn difficulty-back-btn">[ BACK ]</button>
-      <button type="button" class="bios-btn difficulty-start-btn">[ START &gt; ]</button>
+      <button type="button" class="bios-btn setup-back-btn">[ BACK ]</button>
+      <button type="button" class="bios-btn setup-start-btn" disabled>[ START ]</button>
     </footer>
   </div>
 </template>

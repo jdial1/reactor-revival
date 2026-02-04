@@ -1,4 +1,5 @@
 import { supabaseSave } from "../services/SupabaseSave.js";
+import { safeGetItem, safeSetItem } from "../utils/util.js";
 
 class SettingsModal {
   constructor() {
@@ -42,17 +43,17 @@ class SettingsModal {
   }
   createDOM() {
     if (this.overlay) return;
-    const isMuted = localStorage.getItem("reactor_mute") === "true";
-    const isReducedMotion = localStorage.getItem("reactor_reduced_motion") === "true";
-    const hideUnaffordableUpgrades = localStorage.getItem("reactor_hide_unaffordable_upgrades") !== "false";
-    const hideUnaffordableResearch = localStorage.getItem("reactor_hide_unaffordable_research") !== "false";
-    const hideMaxUpgrades = localStorage.getItem("reactor_hide_max_upgrades") !== "false";
-    const hideMaxResearch = localStorage.getItem("reactor_hide_max_research") !== "false";
-    const masterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
-    const effectsVol = parseFloat(localStorage.getItem("reactor_volume_effects") || "0.50");
-    const alertsVol = parseFloat(localStorage.getItem("reactor_volume_alerts") || "0.50");
-    const systemVol = parseFloat(localStorage.getItem("reactor_volume_system") || "0.50");
-    const ambienceVol = parseFloat(localStorage.getItem("reactor_volume_ambience") || "0.12");
+    const isMuted = safeGetItem("reactor_mute") === "true";
+    const isReducedMotion = safeGetItem("reactor_reduced_motion") === "true";
+    const hideUnaffordableUpgrades = safeGetItem("reactor_hide_unaffordable_upgrades", "true") !== "false";
+    const hideUnaffordableResearch = safeGetItem("reactor_hide_unaffordable_research", "true") !== "false";
+    const hideMaxUpgrades = safeGetItem("reactor_hide_max_upgrades", "true") !== "false";
+    const hideMaxResearch = safeGetItem("reactor_hide_max_research", "true") !== "false";
+    const masterVol = parseFloat(safeGetItem("reactor_volume_master", "0.25"));
+    const effectsVol = parseFloat(safeGetItem("reactor_volume_effects", "0.50"));
+    const alertsVol = parseFloat(safeGetItem("reactor_volume_alerts", "0.50"));
+    const systemVol = parseFloat(safeGetItem("reactor_volume_system", "0.50"));
+    const ambienceVol = parseFloat(safeGetItem("reactor_volume_ambience", "0.12"));
     const volToStep = (v) => Math.min(10, Math.round(v * 10));
     const stepToVal = (s) => s / 10;
     const volumeStepper = (key, value) => {
@@ -181,7 +182,7 @@ ${mechSwitch("setting-notifications", false)}
     if (muteBtn && muteCheckbox) {
       muteBtn.addEventListener("click", () => {
         muteCheckbox.checked = !muteCheckbox.checked;
-        localStorage.setItem("reactor_mute", muteCheckbox.checked ? "true" : "false");
+        safeSetItem("reactor_mute", muteCheckbox.checked ? "true" : "false");
         const icon = muteBtn.querySelector(".mute-icon");
         if (icon) icon.textContent = muteCheckbox.checked ? "🔇" : "🔊";
         if (window.game && window.game.audio) {
@@ -204,7 +205,7 @@ ${mechSwitch("setting-notifications", false)}
           else b.removeAttribute("data-active");
         });
         if (valSpan) valSpan.textContent = `${step * 10}%`;
-        localStorage.setItem(storageKeys[key], value.toString());
+        safeSetItem(storageKeys[key], value.toString());
         if (window.game && window.game.audio) window.game.audio.setVolume(key, value);
       };
       blocks.querySelectorAll(".volume-block").forEach((block) => {
@@ -257,27 +258,27 @@ ${mechSwitch("setting-notifications", false)}
     };
 
     setupMechSwitch("setting-motion", (checked) => {
-      localStorage.setItem("reactor_reduced_motion", checked ? "true" : "false");
+      safeSetItem("reactor_reduced_motion", checked ? "true" : "false");
       document.documentElement.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
     });
 
     setupMechSwitch("setting-hide-upgrades", () => {
-      localStorage.setItem("reactor_hide_unaffordable_upgrades", this.overlay.querySelector("#setting-hide-upgrades").checked ? "true" : "false");
+      safeSetItem("reactor_hide_unaffordable_upgrades", this.overlay.querySelector("#setting-hide-upgrades").checked ? "true" : "false");
       if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
     });
 
     setupMechSwitch("setting-hide-research", () => {
-      localStorage.setItem("reactor_hide_unaffordable_research", this.overlay.querySelector("#setting-hide-research").checked ? "true" : "false");
+      safeSetItem("reactor_hide_unaffordable_research", this.overlay.querySelector("#setting-hide-research").checked ? "true" : "false");
       if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
     });
 
     setupMechSwitch("setting-hide-max-upgrades", () => {
-      localStorage.setItem("reactor_hide_max_upgrades", this.overlay.querySelector("#setting-hide-max-upgrades").checked ? "true" : "false");
+      safeSetItem("reactor_hide_max_upgrades", this.overlay.querySelector("#setting-hide-max-upgrades").checked ? "true" : "false");
       if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
     });
 
     setupMechSwitch("setting-hide-max-research", () => {
-      localStorage.setItem("reactor_hide_max_research", this.overlay.querySelector("#setting-hide-max-research").checked ? "true" : "false");
+      safeSetItem("reactor_hide_max_research", this.overlay.querySelector("#setting-hide-max-research").checked ? "true" : "false");
       if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
     });
 
@@ -297,8 +298,8 @@ ${mechSwitch("setting-notifications", false)}
       exportBtn.addEventListener("click", () => {
         if (window.game && typeof window.game.saveGame === "function") {
           window.game.saveGame();
-          const slot = parseInt(localStorage.getItem("reactorCurrentSaveSlot") || "1", 10);
-          const saveData = localStorage.getItem(`reactorGameSave_${slot}`) || localStorage.getItem("reactorGameSave");
+          const slot = parseInt(safeGetItem("reactorCurrentSaveSlot", "1"), 10);
+          const saveData = safeGetItem(`reactorGameSave_${slot}`) || safeGetItem("reactorGameSave");
           if (saveData) {
             const blob = new Blob([saveData], { type: "application/json" });
             const url = URL.createObjectURL(blob);
@@ -325,7 +326,7 @@ ${mechSwitch("setting-notifications", false)}
           reader.onload = (event) => {
             try {
               const saveData = event.target.result;
-              localStorage.setItem("reactorGameSave_1", saveData);
+              safeSetItem("reactorGameSave_1", saveData);
               if (window.game && typeof window.game.loadGame === "function") {
                 window.game.loadGame(1).then(() => {
                   window.location.reload();

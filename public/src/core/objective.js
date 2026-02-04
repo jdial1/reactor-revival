@@ -448,9 +448,6 @@ export class ObjectiveManager {
       chapterSize = 7;
     }
 
-    const chapterEnd = Math.min(chapterStart + chapterSize, this.objectives_data.length);
-    const chapterObjectives = this.objectives_data.slice(chapterStart, chapterEnd);
-
     let completedInChapter = 0;
     for (let i = chapterStart; i < index; i++) {
       if (this.objectives_data[i] && this.objectives_data[i].completed) {

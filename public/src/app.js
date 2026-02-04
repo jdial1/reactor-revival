@@ -1,7 +1,7 @@
 import { Game } from "./core/game.js";
 import { ObjectiveManager } from "./core/objective.js";
 import { TooltipManager } from "./components/tooltip.js";
-import { on, escapeHtml } from "./utils/util.js";
+import { on, escapeHtml, safeGetItem, safeSetItem, safeRemoveItem } from "./utils/util.js";
 import { UI } from "./components/ui.js";
 import { Engine } from "./core/engine.js";
 import "./services/pwa.js";
@@ -35,21 +35,21 @@ async function initializeApp(game, ui, pageRouter) {
   await game.set_defaults();
 }
 
-async function handleUserSession(game, pageRouter) {
-  const isNewGamePending = localStorage.getItem("reactorNewGamePending") === "1";
-  const loadSlot = localStorage.getItem("reactorLoadSlot");
+async function handleUserSession(game, pageRouter, ui) {
+  const isNewGamePending = safeGetItem("reactorNewGamePending") === "1";
+  const loadSlot = safeGetItem("reactorLoadSlot");
 
   // Check if there are any existing saves (old format or new slot format)
   let hasAnySave = false;
   if (!isNewGamePending) {
     // Check old format first
-    const oldSave = localStorage.getItem("reactorGameSave");
+    const oldSave = safeGetItem("reactorGameSave");
     if (oldSave) {
       hasAnySave = true;
     } else {
       // Check new slot format
       for (let i = 1; i <= 3; i++) {
-        const slotSave = localStorage.getItem(`reactorGameSave_${i}`);
+        const slotSave = safeGetItem(`reactorGameSave_${i}`);
         if (slotSave) {
           hasAnySave = true;
           break;
@@ -66,7 +66,7 @@ async function handleUserSession(game, pageRouter) {
       console.log(`[DEBUG] Loading from slot: ${loadSlot}`);
       savedGame = await game.loadGame(parseInt(loadSlot));
       console.log(`[DEBUG] Load result: ${savedGame}`);
-      localStorage.removeItem("reactorLoadSlot"); // Clear the load slot flag
+      safeRemoveItem("reactorLoadSlot"); // Clear the load slot flag
     } else {
       // Load from most recent save (backward compatibility)
       console.log("[DEBUG] Loading from most recent save");
@@ -111,20 +111,14 @@ async function handleUserSession(game, pageRouter) {
 }
 
 function clearAllGameDataForNewGame(game) {
-  try {
-    localStorage.removeItem("reactorGameSave");
-  } catch (_) { }
+  safeRemoveItem("reactorGameSave");
   for (let i = 1; i <= 3; i++) {
-    try {
-      localStorage.removeItem(`reactorGameSave_${i}`);
-    } catch (_) { }
+    safeRemoveItem(`reactorGameSave_${i}`);
   }
-  try {
-    localStorage.removeItem("reactorCurrentSaveSlot");
-    localStorage.removeItem("reactorGameQuickStartShown");
-    localStorage.removeItem("google_drive_save_file_id");
-    localStorage.setItem("reactorNewGamePending", "1");
-  } catch (_) { }
+  safeRemoveItem("reactorCurrentSaveSlot");
+  safeRemoveItem("reactorGameQuickStartShown");
+  safeRemoveItem("google_drive_save_file_id");
+  safeSetItem("reactorNewGamePending", "1");
   if (game && Object.prototype.hasOwnProperty.call(game, "_saved_objective_index")) {
     delete game._saved_objective_index;
   }
@@ -148,7 +142,7 @@ function setupButtonHandlers(pageRouter, ui, game) {
           clearAllGameDataForNewGame(game);
           await game.initialize_new_game_state();
           await startGame(pageRouter, ui, game);
-          try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
+          safeRemoveItem("reactorNewGamePending");
         }
       } else {
         console.log("[TECH-TREE] Tech tree selection not available, using direct start");
@@ -159,7 +153,7 @@ function setupButtonHandlers(pageRouter, ui, game) {
         clearAllGameDataForNewGame(game);
         await game.initialize_new_game_state();
         await startGame(pageRouter, ui, game);
-        try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
+        safeRemoveItem("reactorNewGamePending");
       }
     };
   }
@@ -421,7 +415,7 @@ async function main() {
   window.game = game;
 
   await initializeApp(game, ui, pageRouter);
-  await handleUserSession(game, pageRouter);
+  await handleUserSession(game, pageRouter, ui);
   setupButtonHandlers(pageRouter, ui, game);
   setupGlobalListeners(game);
 
@@ -501,7 +495,7 @@ async function startGame(pageRouter, ui, game) {
     }
 
     // Clear any New Game pending flag after a session begins
-    try { localStorage.removeItem("reactorNewGamePending"); } catch (_) { }
+    safeRemoveItem("reactorNewGamePending");
 
     setTimeout(() => {
       console.log("[DEBUG] Forcing reactor stats update post-load...");
@@ -513,7 +507,7 @@ async function startGame(pageRouter, ui, game) {
       }
     }, 100);
 
-    if (!localStorage.getItem("reactorGameQuickStartShown")) {
+    if (!safeGetItem("reactorGameQuickStartShown")) {
       try {
         await showQuickStartModal();
       } catch (error) {
@@ -603,7 +597,7 @@ function setupGlobalListeners(game) {
   window.addEventListener("beforeunload", () => {
     // If a New Game is pending (e.g., triggered via splash), do not overwrite the cleared save
     try {
-      if (localStorage.getItem("reactorNewGamePending") === "1") {
+      if (safeGetItem("reactorNewGamePending") === "1") {
         return;
       }
     } catch (_) { /* no-op */ }
@@ -642,7 +636,7 @@ async function showQuickStartModal() {
 
     const closeModal = () => {
       modal.remove();
-      localStorage.setItem("reactorGameQuickStartShown", "1");
+      safeSetItem("reactorGameQuickStartShown", "1");
     };
 
     document.getElementById("quick-start-close").onclick = closeModal;

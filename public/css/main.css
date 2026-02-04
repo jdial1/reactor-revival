@@ -12,11 +12,12 @@
   --game-primary-color: rgb(81 93 156);
   
   /* Splash Screen Palette */
-  --bevel-light: rgb(190 190 190);
-  --bevel-mid: rgb(120 120 120); 
-  --bevel-dark: rgb(60 60 60);
-  --bevel-shadow: rgb(30 30 30);
-  --panel-bg: rgb(45 45 45);
+  --bevel-light: rgb(153 153 153);
+  --bevel-mid: rgb(102 102 102); 
+  --bevel-dark: rgb(31 41 55);
+  --bevel-shadow: rgb(17 17 17);
+  --panel-bg: rgb(38 38 38);
+  --inset-bg: rgb(26 26 26);
   --text-shadow: 2px 2px 0px black;
   --splash-btn-width: 400px;
   --splash-btn-height: 52px;
@@ -25,6 +26,55 @@
   --splash-bevel-width: 4px;
   --main-top-nav-height: 60px;
   --mobile-passive-top-height: 48px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  border-left: 1px solid rgb(51 51 51);
+  background: var(--inset-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid var(--inset-bg);
+  background: rgb(68 68 68);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(102 102 102);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(68 68 68) var(--inset-bg);
+}
+
+.bevel-panel {
+  border: 3px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  background-color: var(--panel-bg);
+}
+
+.bevel-btn {
+  border: 3px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  background-color: rgb(51 51 51);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.bevel-btn:active {
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  transform: translateY(2px);
+}
+
+.inset-well {
+  border: 2px solid;
+  border-color: rgb(0 0 0) rgb(68 68 68) rgb(68 68 68) rgb(0 0 0);
+  background-color: var(--inset-bg);
+  padding: 15px;
 }
 
 nav li {
@@ -3160,7 +3210,7 @@ footer#bottom_nav button.active {
   #mobile_top_bar #reactor_copy_paste_btns { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 6px; }
 
   #mobile_top_bar #reactor_copy_paste_btns button,
-  #mobile_top_bar #reactor_copy_paste_btns .reactor_copy_paste_buttons button { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 16px; }
+  #mobile_top_bar #reactor_copy_paste_btns .reactor_copy_paste_buttons button { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 0; }
 
   /* Keep bottom info bar visible on mobile; the mobile top bar complements it */
 }
@@ -7758,12 +7808,12 @@ body:has(> .page-container) {
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 2px solid rgb(68 68 68);
-  border-radius: 50%;
-  background: rgb(35 39 46);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 40%);
+  border: 3px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  border-radius: 0;
+  background: rgb(50 50 50);
   cursor: pointer;
-  transition: background 0.15s, border 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 #reactor_copy_paste_toggle {
@@ -7780,14 +7830,18 @@ body:has(> .page-container) {
 
 #reactor_copy_paste_btns button:hover,
 .reactor_copy_paste_buttons button:hover {
-  border-color: rgb(28 163 236);
-  background: rgb(28 163 236);
+  background: rgb(70 70 70);
+}
+
+#reactor_copy_paste_btns button:active,
+.reactor_copy_paste_buttons button:active {
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  box-shadow: inset 2px 2px 4px rgb(0 0 0 / 50%);
 }
 
 #reactor_copy_paste_btns #reactor_sell_all_btn:hover,
 .reactor_copy_paste_buttons #reactor_sell_all_btn:hover {
-  border-color: rgb(192 57 43);
-  background: rgb(192 57 43);
+  background: rgb(120 40 30);
 }
 
 #reactor_copy_paste_btns img,
@@ -7819,7 +7873,6 @@ body:has(> .page-container) {
 #reactor_copy_paste_btns #reactor_deselect_btn.on,
 .reactor_copy_paste_buttons #reactor_dropper_btn.on,
 .reactor_copy_paste_buttons #reactor_deselect_btn.on {
-  border-color: rgb(28 163 236);
   background: rgb(28 163 236);
 }
 
@@ -8805,162 +8858,307 @@ body:has(> .page-container) {
 /* Quick Start Modal - BIOS Hardware Theme (Mobile First) */
 .quick-start-screen {
   display: flex;
-  width: 100%;
-  max-width: 700px;
-  min-height: 100%;
+  width: 90%;
+  max-width: 450px;
   flex-direction: column;
-  padding: 1rem;
+  margin: auto;
+  border: 2px solid rgb(153 153 153);
   box-sizing: border-box;
+  background-color: var(--panel-bg);
+  box-shadow: 0 0 0 4px var(--bevel-shadow);
   font-family: "Press Start 2P", cursive, monospace;
-  color: rgb(200 220 180);
+  color: rgb(204 204 204);
 }
 
 .quick-start-screen.hidden {
   display: none;
 }
 
-.quick-start-screen .bios-title {
-  font-size: 0.7rem;
+.quick-start-header {
+  padding: 10px;
+  border-bottom: 2px solid var(--bevel-shadow);
+  background: linear-gradient(180deg, rgb(68 68 68), rgb(51 51 51));
+  color: rgb(255 255 255);
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  text-align: left;
+  text-shadow: 0 2px 0 rgb(0 0 0);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.quick-start-header::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  background: rgb(74 222 128);
+  flex-shrink: 0;
+}
+
+.quick-start-version {
+  color: rgb(156 163 175);
+  font-size: 0.45rem;
 }
 
 .quick-start-screen .bios-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  padding: 10px;
   min-height: 0;
+  gap: 0;
 }
 
-.quick-start-screen .bios-details-box {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 0.75rem;
+.quick-start-icon-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 15px;
+  border: 2px solid;
+  border-color: rgb(0 0 0) rgb(68 68 68) rgb(68 68 68) rgb(0 0 0);
+  background-color: var(--inset-bg);
+  margin-bottom: 10px;
 }
 
-.quick-start-screen .bios-details-head {
-  font-size: 0.65rem;
+.quick-start-icon {
+  display: flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  border: 3px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  background: rgb(51 51 51);
+}
+
+.quick-start-icon-inner {
+  width: 1rem;
+  height: 1rem;
+  background: rgb(249 115 22);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.quick-start-icon-title {
   margin-bottom: 0.25rem;
+  color: rgb(255 255 255);
+  font-size: 0.65rem;
 }
 
-.quick-start-screen .bios-details-sep {
+.quick-start-icon-subtitle {
+  color: rgb(107 114 128);
   font-size: 0.5rem;
-  letter-spacing: -1px;
 }
 
-.quick-start-scrollable {
-  max-height: 65vh;
-  overflow-y: auto;
+.quick-start-section {
+  padding: 15px;
+  border: 2px solid;
+  border-color: rgb(0 0 0) rgb(68 68 68) rgb(68 68 68) rgb(0 0 0);
+  background: var(--inset-bg);
+  margin-bottom: 10px;
+}
+
+.quick-start-section-head {
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgb(55 65 81);
+  color: rgb(74 222 128);
+  font-size: 0.5rem;
+}
+
+.quick-start-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .quick-start-line {
+  display: flex;
+  align-items: flex-start;
   margin: 0;
-  padding: 0.15rem 0;
-  color: rgb(200 210 190);
+  padding: 0;
+  color: rgb(204 204 204);
   font-family: inherit;
-  font-size: 0.6rem;
+  font-size: 0.5rem;
   line-height: 1.6;
   white-space: normal;
   word-wrap: break-word;
 }
 
+.quick-start-line-prompt {
+  flex-shrink: 0;
+  margin-right: 0.5rem;
+  color: rgb(34 197 94);
+}
+
+.quick-start-highlight {
+  color: rgb(250 204 21);
+}
+
+.quick-start-danger {
+  color: rgb(248 113 113);
+}
+
+.quick-start-tasks-head {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid rgb(55 65 81);
+  color: rgb(96 165 250);
+  font-size: 0.5rem;
+}
+
+.quick-start-task {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(209 213 219);
+  font-size: 0.5rem;
+}
+
+.quick-start-task-check {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+  border: 2px solid;
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  background: rgb(0 0 0);
+}
+
 .quick-start-screen .bios-footer {
-  padding: 0.75rem 0;
-  gap: 0.75rem;
+  position: relative;
+  display: flex;
+  padding: 10px;
+  padding-top: 0;
+  border-top: none;
+  background: var(--panel-bg);
+  gap: 8px;
 }
 
 .quick-start-screen .bios-btn {
-  padding: 0.75rem 1rem;
-  font-size: 0.55rem;
+  padding: 12px;
+  border: 3px solid;
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  cursor: pointer;
 }
 
 .quick-start-back-btn {
-  border-color: rgb(209 107 107) rgb(80 30 30) rgb(80 30 30) rgb(209 107 107);
-  background: var(--game-danger-color);
+  flex: 0 0 auto;
+  max-width: none;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  background: rgb(75 85 99);
+  color: rgb(248 113 113);
 }
 
 .quick-start-back-btn:hover {
-  background: rgb(194 71 71);
+  background: rgb(107 114 128);
 }
 
 .quick-start-back-btn:active {
-  border-color: rgb(80 30 30) rgb(209 107 107) rgb(209 107 107) rgb(80 30 30);
-  background: rgb(158 57 57);
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  background: rgb(55 65 81);
 }
 
 .quick-start-next-btn {
-  border-color: rgb(107 209 107) rgb(30 80 30) rgb(30 80 30) rgb(107 209 107);
-  background: var(--game-success-color);
+  flex: 1;
+  max-width: none;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  background: rgb(75 85 99);
+  color: rgb(74 222 128);
 }
 
 .quick-start-next-btn:hover {
-  background: rgb(71 194 71);
+  background: rgb(107 114 128);
 }
 
 .quick-start-next-btn:active {
-  border-color: rgb(30 80 30) rgb(107 209 107) rgb(107 209 107) rgb(30 80 30);
-  background: rgb(57 158 57);
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  background: rgb(55 65 81);
+}
+
+.quick-start-scrollable {
+  max-height: 45vh;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+#quick-start-page-2 .bios-content {
+  gap: 0;
+}
+
+#quick-start-page-2 .quick-start-section {
+  padding: 12px;
 }
 
 @media (width >= 600px) {
   .quick-start-screen {
-    padding: 1.25rem;
+    max-width: 450px;
   }
 
-  .quick-start-screen .bios-title {
-    font-size: 0.75rem;
-  }
-
-  .quick-start-screen .bios-details-box {
-    padding: 1rem;
-  }
-
-  .quick-start-screen .bios-details-head {
-    font-size: 0.7rem;
+  .quick-start-header {
+    font-size: 0.6rem;
   }
 
   .quick-start-line {
-    font-size: 0.65rem;
-    line-height: 1.7;
+    font-size: 0.55rem;
   }
 
   .quick-start-screen .bios-btn {
-    padding: 0.8rem 1.2rem;
-    font-size: 0.6rem;
+    padding: 12px 16px;
+    font-size: 0.55rem;
   }
 }
 
-@media (width >= 900px) {
+@media (width <= 500px) {
   .quick-start-screen {
-    padding: 1.5rem;
+    width: calc(100% - 2rem);
+    margin: 1rem;
   }
 
-  .quick-start-screen .bios-title {
-    font-size: 0.8rem;
+  .quick-start-header {
+    padding: 8px;
+    font-size: 0.45rem;
   }
 
-  .quick-start-screen .bios-details-box {
-    padding: 1.25rem;
+  .quick-start-screen .bios-content {
+    padding: 8px;
   }
 
-  .quick-start-screen .bios-details-head {
-    font-size: 0.75rem;
+  .quick-start-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .quick-start-icon-inner {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+
+  .quick-start-icon-title {
+    font-size: 0.55rem;
+  }
+
+  .quick-start-section {
+    padding: 0.6rem;
   }
 
   .quick-start-line {
-    font-size: 0.7rem;
-    line-height: 1.8;
-  }
-
-  .quick-start-scrollable {
-    max-height: 60vh;
+    font-size: 0.45rem;
   }
 
   .quick-start-screen .bios-footer {
-    padding: 1rem 0;
+    flex-wrap: wrap;
+    padding: 0.75rem;
   }
 
   .quick-start-screen .bios-btn {
-    padding: 0.85rem 1.4rem;
-    font-size: 0.65rem;
+    flex: 1 1 45%;
+    min-width: 100px;
+    padding: 0.7rem 0.75rem;
+    font-size: 0.45rem;
   }
 }
 
@@ -10083,7 +10281,7 @@ body:has(> .page-container) {
 /* Doctrine & Difficulty: Brutalist Pixel Hardware Theme */
 .tech-tree-overlay,
 .bios-overlay,
-.difficulty-selection-overlay,
+.game-setup-overlay,
 .quick-start-overlay {
   position: fixed;
   z-index: 2000;
@@ -10096,10 +10294,11 @@ body:has(> .page-container) {
   max-height: 100dvh;
   align-items: center;
   justify-content: center;
-  background-color: rgb(35 35 35);
-  background-image: url("../img/ui/tile.png");
-  background-repeat: repeat;
-  background-size: auto;
+  background-color: rgb(26 26 26);
+  background-image:
+    linear-gradient(rgb(34 34 34) 2px, transparent 2px),
+    linear-gradient(90deg, rgb(34 34 34) 2px, transparent 2px);
+  background-size: 40px 40px;
   -webkit-overflow-scrolling: touch;
   overflow: hidden auto;
   overscroll-behavior: contain;
@@ -10107,7 +10306,7 @@ body:has(> .page-container) {
 }
 
 .tech-tree-overlay.hidden,
-.difficulty-selection-overlay.hidden,
+.game-setup-overlay.hidden,
 .quick-start-overlay.hidden {
   display: none !important;
 }
@@ -10115,13 +10314,28 @@ body:has(> .page-container) {
 .bios-screen {
   display: flex;
   width: 100%;
-  max-width: 640px;
+  max-width: 520px;
   min-height: 100%;
   flex-direction: column;
-  padding: 1.5rem;
+  padding: 2rem 1rem;
   box-sizing: border-box;
   font-family: "Press Start 2P", cursive, monospace;
-  color: rgb(200 220 180);
+  color: rgb(255 255 255);
+}
+
+.game-setup-header {
+  margin: 0 0 1rem;
+  color: rgb(255 255 255);
+  font-family: "Press Start 2P", cursive, monospace;
+  font-size: 1.5rem;
+  text-align: center;
+  text-shadow: 2px 2px 0 rgb(0 0 0);
+}
+
+@media (width <= 600px) {
+  .game-setup-header {
+    font-size: 1.2rem;
+  }
 }
 
 .bios-content {
@@ -10140,24 +10354,310 @@ body:has(> .page-container) {
   margin-bottom: 0;
 }
 
-.bios-title {
-  margin: 0 0 1rem;
-  color: rgb(100 255 100);
-  font-size: 0.75rem;
+.game-setup-selection .bios-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding-bottom: 5rem;
+}
+
+.setup-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-section .bios-title-vfd {
+  margin-bottom: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.doctrine-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.doctrine-card {
+  position: relative;
+  width: 100%;
+  padding: 1rem;
+  border: 3px solid;
+  border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102);
+  border-radius: 0;
+  background: rgb(51 51 51);
+  color: rgb(200 220 180);
+  font-family: "Press Start 2P", cursive, monospace;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.doctrine-card:hover {
+  background: rgb(68 68 68);
+}
+
+.doctrine-card.selected {
+  border-color: rgb(74 222 128);
+  background: rgb(55 65 55);
+}
+
+.doctrine-card.selected::after {
+  content: "◄";
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  color: rgb(74 222 128);
+  font-size: 0.6rem;
+}
+
+.doctrine-card.selected .doctrine-card-title {
+  color: rgb(255 255 255);
+}
+
+.doctrine-card.selected .doctrine-card-subtitle {
+  color: rgb(209 213 219);
+}
+
+.doctrine-card-title {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: rgb(74 222 128);
+  font-size: 0.65rem;
   font-weight: bold;
-  letter-spacing: 1px;
-  text-shadow: 0 0 8px rgb(80 255 80 / 60%);
+  transition: color 0.1s;
+}
+
+.doctrine-card:hover .doctrine-card-title {
+  color: rgb(134 239 172);
+}
+
+.doctrine-card[data-doctrine="physicist"] .doctrine-card-title {
+  color: rgb(96 165 250);
+}
+
+.doctrine-card[data-doctrine="physicist"]:hover .doctrine-card-title {
+  color: rgb(147 197 253);
+}
+
+.doctrine-card[data-doctrine="physicist"].selected {
+  border-color: rgb(96 165 250);
+}
+
+.doctrine-card[data-doctrine="engineer"] .doctrine-card-title {
+  color: rgb(250 204 21);
+}
+
+.doctrine-card[data-doctrine="engineer"]:hover .doctrine-card-title {
+  color: rgb(253 224 71);
+}
+
+.doctrine-card[data-doctrine="engineer"].selected {
+  border-color: rgb(250 204 21);
+}
+
+.doctrine-card-subtitle {
+  display: block;
+  color: rgb(156 163 175);
+  font-size: 0.5rem;
+  line-height: 1.6;
+}
+
+.difficulty-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.difficulty-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 3px solid;
+  border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102);
+  border-radius: 0;
+  background: rgb(51 51 51);
+  color: rgb(255 255 255);
+  font-family: "Press Start 2P", cursive, monospace;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.difficulty-card:hover {
+  background: rgb(68 68 68);
+}
+
+.difficulty-card.selected {
+  box-shadow: none;
+  transform: none;
+}
+
+.difficulty-card[data-difficulty="easy"] .difficulty-name {
+  color: rgb(34 197 94);
+}
+
+.difficulty-card[data-difficulty="easy"]:hover {
+  background: rgb(20 83 45 / 30%);
+}
+
+.difficulty-card[data-difficulty="easy"].selected {
+  border-color: rgb(34 197 94);
+  background: rgb(20 83 45 / 20%);
+}
+
+.difficulty-card[data-difficulty="medium"] .difficulty-name {
+  color: rgb(250 204 21);
+}
+
+.difficulty-card[data-difficulty="medium"]:hover {
+  background: rgb(113 63 18 / 30%);
+}
+
+.difficulty-card[data-difficulty="medium"].selected {
+  border-color: rgb(234 179 8);
+  background: rgb(113 63 18 / 20%);
+}
+
+.difficulty-card[data-difficulty="hard"] .difficulty-name {
+  color: rgb(239 68 68);
+}
+
+.difficulty-card[data-difficulty="hard"]:hover {
+  background: rgb(127 29 29 / 30%);
+}
+
+.difficulty-card[data-difficulty="hard"].selected {
+  border-color: rgb(239 68 68);
+  background: rgb(127 29 29 / 20%);
+}
+
+.difficulty-card-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.difficulty-name {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: bold;
+  text-shadow: none;
+}
+
+.difficulty-desc {
+  display: block;
+  color: rgb(107 114 128);
+  font-size: 0.45rem;
+  line-height: 1.4;
+  opacity: 1;
+}
+
+.difficulty-card.selected .difficulty-desc {
+  color: rgb(156 163 175);
+}
+
+.difficulty-indicator {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+  border: 1px solid rgb(107 114 128);
+  background: rgb(0 0 0);
+}
+
+.difficulty-card[data-difficulty="easy"] .difficulty-indicator {
+  border-color: rgb(34 197 94);
+  background: rgb(20 83 45);
+}
+
+.difficulty-card[data-difficulty="easy"]:hover .difficulty-indicator {
+  background: rgb(34 197 94);
+}
+
+.difficulty-card[data-difficulty="easy"].selected .difficulty-indicator {
+  background: rgb(34 197 94);
+  box-shadow: 0 0 5px rgb(34 197 94 / 80%);
+}
+
+.difficulty-card[data-difficulty="medium"] .difficulty-indicator {
+  border-color: rgb(234 179 8);
+  background: rgb(113 63 18);
+}
+
+.difficulty-card[data-difficulty="medium"]:hover .difficulty-indicator {
+  background: rgb(250 204 21);
+}
+
+.difficulty-card[data-difficulty="medium"].selected .difficulty-indicator {
+  background: rgb(250 204 21);
+  box-shadow: 0 0 5px rgb(250 204 21 / 80%);
+}
+
+.difficulty-card[data-difficulty="hard"] .difficulty-indicator {
+  border-color: rgb(239 68 68);
+  background: rgb(127 29 29);
+}
+
+.difficulty-card[data-difficulty="hard"]:hover .difficulty-indicator {
+  background: rgb(239 68 68);
+}
+
+.difficulty-card[data-difficulty="hard"].selected .difficulty-indicator {
+  background: rgb(239 68 68);
+  box-shadow: 0 0 5px rgb(239 68 68 / 80%);
+}
+
+.setup-start-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+.setup-start-btn:disabled:hover {
+  transform: none;
+  filter: grayscale(0.5);
+}
+
+@media (width <= 600px) {
+  .doctrine-cards {
+    flex-direction: column;
+  }
+
+  .doctrine-card {
+    flex: 1 1 100%;
+  }
+
+  .difficulty-cards {
+    flex-direction: column;
+  }
+
+  .difficulty-card {
+    padding: 1.25rem;
+  }
+}
+
+.bios-title {
+  margin: 0;
+  color: rgb(74 222 128);
+  font-size: 0.55rem;
+  font-weight: bold;
+  letter-spacing: 3px;
+  text-shadow: none;
 }
 
 .bios-title-vfd {
   display: block;
   width: 100%;
-  padding: 0.5rem 1rem;
-  border: 4px solid;
-  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
-  background: rgb(15 18 12);
-  box-shadow: inset 2px 2px 4px rgb(0 0 0 / 50%);
-  margin-bottom: 1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  margin-bottom: 0.5rem;
   text-align: center;
 }
 
@@ -10417,59 +10917,89 @@ body:has(> .page-container) {
 }
 
 .bios-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 1rem;
+  justify-content: center;
+  padding: 1rem;
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
-  border-top: 4px solid var(--bevel-light);
-  background: rgb(30 32 28);
-  box-shadow: 0 -4px 0 var(--bevel-dark);
+  border-top: 4px solid rgb(55 65 81);
+  background: rgb(26 26 26);
+  box-shadow: none;
   gap: 1rem;
 }
 
+.game-setup-selection .bios-footer {
+  max-width: 520px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 .bios-btn {
-  padding: 0.6rem 1.2rem;
+  flex: 1;
+  max-width: 150px;
+  padding: 0.75rem 1.5rem;
   border: 3px solid;
-  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102);
   border-radius: 0;
-  background: var(--bevel-mid);
+  background: rgb(51 51 51);
   color: rgb(255 255 255);
   font-family: "Press Start 2P", cursive, monospace;
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   text-shadow: var(--text-shadow);
   cursor: pointer;
-  transition: transform 0.08s, box-shadow 0.08s, border-color 0.08s;
+  transition: background 0.1s;
 }
 
 .bios-btn:hover {
-  filter: brightness(1.1);
-  transform: translateY(-2px);
+  background: rgb(68 68 68);
+  filter: none;
+  transform: none;
 }
 
 .bios-btn:active {
-  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
-  background: var(--bevel-dark);
-  box-shadow: inset 2px 2px 0 rgb(0 0 0 / 40%);
-  transform: translateY(1px);
+  border-color: rgb(17 17 17) rgb(102 102 102) rgb(102 102 102) rgb(17 17 17);
+  background: rgb(34 34 34);
+  box-shadow: none;
+  transform: translateY(2px);
 }
 
 .doctrine-back-btn,
-.difficulty-back-btn {
-  border-color: rgb(209 107 107) rgb(80 30 30) rgb(80 30 30) rgb(209 107 107);
-  background: var(--game-danger-color);
+.difficulty-back-btn,
+.setup-back-btn {
+  border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102);
+  background: rgb(127 29 29 / 80%);
 }
 
 .doctrine-back-btn:hover,
-.difficulty-back-btn:hover {
-  background: rgb(194 71 71);
+.difficulty-back-btn:hover,
+.setup-back-btn:hover {
+  background: rgb(153 27 27);
 }
 
 .doctrine-back-btn:active,
-.difficulty-back-btn:active {
-  border-color: rgb(80 30 30) rgb(209 107 107) rgb(209 107 107) rgb(80 30 30);
-  background: rgb(158 57 57);
+.difficulty-back-btn:active,
+.setup-back-btn:active {
+  border-color: rgb(17 17 17) rgb(102 102 102) rgb(102 102 102) rgb(17 17 17);
+  background: rgb(127 29 29);
+}
+
+.setup-start-btn {
+  border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102);
+  background: rgb(20 83 45 / 80%);
+}
+
+.setup-start-btn:hover:not(:disabled) {
+  background: rgb(21 128 61);
+}
+
+.setup-start-btn:active:not(:disabled) {
+  border-color: rgb(17 17 17) rgb(102 102 102) rgb(102 102 102) rgb(17 17 17);
+  background: rgb(20 83 45);
 }
 
 @media (width <= 900px) {

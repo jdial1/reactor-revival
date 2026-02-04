@@ -90,8 +90,8 @@ export function getBasePath() {
             const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
             return repoName ? `/${repoName}` : '';
         }
-    } catch (e) {
-        // If any property access fails, return empty string
+    } catch (_) {
+        // Ignore errors in environment detection
     }
 
     // For local development or other deployments
@@ -125,4 +125,57 @@ export function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+}
+
+let storageAvailable = null;
+
+function isStorageAvailable() {
+    if (storageAvailable !== null) return storageAvailable;
+    try {
+        const test = '__storage_test__';
+        localStorage.setItem(test, test);
+        localStorage.removeItem(test);
+        storageAvailable = true;
+    } catch (e) {
+        storageAvailable = false;
+    }
+    return storageAvailable;
+}
+
+export function safeGetItem(key, defaultValue = null) {
+    if (!isStorageAvailable()) return defaultValue;
+    try {
+        const value = localStorage.getItem(key);
+        return value !== null ? value : defaultValue;
+    } catch (e) {
+        return defaultValue;
+    }
+}
+
+export function safeSetItem(key, value) {
+    if (!isStorageAvailable()) return false;
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+export function safeRemoveItem(key) {
+    if (!isStorageAvailable()) return false;
+    try {
+        localStorage.removeItem(key);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+export function safeJsonParse(jsonString, defaultValue = null) {
+    try {
+        return JSON.parse(jsonString);
+    } catch (e) {
+        return defaultValue;
+    }
 }

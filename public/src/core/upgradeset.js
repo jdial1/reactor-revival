@@ -1,5 +1,6 @@
 import { Upgrade } from "./upgrade.js";
 import dataService from "../services/dataService.js";
+import { safeGetItem } from "../utils/util.js";
 
 // Load upgrade data
 let upgrade_templates = [];
@@ -233,10 +234,10 @@ export class UpgradeSet {
   check_affordability(game) {
     if (!game) return;
 
-    const hideUpgrades = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_unaffordable_upgrades") !== "false";
-    const hideResearch = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_unaffordable_research") !== "false";
-    const hideMaxUpgrades = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_max_upgrades") !== "false";
-    const hideMaxResearch = typeof localStorage !== "undefined" && localStorage.getItem("reactor_hide_max_research") !== "false";
+    const hideUpgrades = safeGetItem("reactor_hide_unaffordable_upgrades", "true") !== "false";
+    const hideResearch = safeGetItem("reactor_hide_unaffordable_research", "true") !== "false";
+    const hideMaxUpgrades = safeGetItem("reactor_hide_max_upgrades", "true") !== "false";
+    const hideMaxResearch = safeGetItem("reactor_hide_max_research", "true") !== "false";
 
     let hasVisibleAffordableUpgrade = false;
     let hasVisibleAffordableResearch = false;

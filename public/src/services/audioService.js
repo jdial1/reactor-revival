@@ -1,3 +1,4 @@
+import { safeGetItem, safeSetItem } from "../utils/util.js";
 
 export class AudioService {
   constructor() {
@@ -38,7 +39,7 @@ export class AudioService {
   }
   this.context = new AudioContext();
   this.masterGain = this.context.createGain();
-  const savedMasterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
+  const savedMasterVol = parseFloat(safeGetItem("reactor_volume_master", "0.25"));
   const isContextSuspended = this.context.state === 'suspended';
   if (isContextSuspended) {
   this.masterGain.gain.value = 0;
@@ -73,7 +74,7 @@ export class AudioService {
   }
   this._distortionCurve = this._makeDistortionCurve(400);
   this._isInitialized = true;
-  if (localStorage.getItem("reactor_mute") === "true") {
+  if (safeGetItem("reactor_mute") === "true") {
   this.toggleMute(true);
   } else if (!isContextSuspended) {
   this.startAmbience();
@@ -87,7 +88,7 @@ export class AudioService {
   await this.context.resume();
   }
   this._hasUnlocked = true;
-  const savedMasterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
+  const savedMasterVol = parseFloat(safeGetItem("reactor_volume_master", "0.25"));
   const t = this.context.currentTime;
   const currentVol = this.masterGain.gain.value;
   if (wasSuspended || currentVol < 0.001) {
@@ -114,7 +115,7 @@ export class AudioService {
   } else {
   this.context.resume().then(() => {
   if (this._hasUnlocked && !document.hidden) {
-  const savedMasterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
+  const savedMasterVol = parseFloat(safeGetItem("reactor_volume_master", "0.25"));
   const currentVol = this.masterGain.gain.value;
   if (currentVol < savedMasterVol * 0.1) {
   const t = this.context.currentTime;
@@ -141,11 +142,11 @@ export class AudioService {
   }
   _loadVolumeSettings() {
   if (!this._isInitialized) return;
-  const masterVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.25");
-  const effectsVol = parseFloat(localStorage.getItem("reactor_volume_effects") || "0.50");
-  const alertsVol = parseFloat(localStorage.getItem("reactor_volume_alerts") || "0.50");
-  const systemVol = parseFloat(localStorage.getItem("reactor_volume_system") || "0.50");
-  const ambienceVol = parseFloat(localStorage.getItem("reactor_volume_ambience") || "0.12");
+  const masterVol = parseFloat(safeGetItem("reactor_volume_master", "0.25"));
+  const effectsVol = parseFloat(safeGetItem("reactor_volume_effects", "0.50"));
+  const alertsVol = parseFloat(safeGetItem("reactor_volume_alerts", "0.50"));
+  const systemVol = parseFloat(safeGetItem("reactor_volume_system", "0.50"));
+  const ambienceVol = parseFloat(safeGetItem("reactor_volume_ambience", "0.12") || "0.12");
   if (this.masterGain) this.masterGain.gain.value = masterVol;
   if (this.effectsGain) this.effectsGain.gain.value = effectsVol;
   if (this.alertsGain) this.alertsGain.gain.value = alertsVol;
@@ -155,7 +156,7 @@ export class AudioService {
   setVolume(category, value) {
   if (!this._isInitialized) return;
   const clampedValue = Math.max(0, Math.min(1, value));
-  localStorage.setItem(`reactor_volume_${category}`, clampedValue.toString());
+  safeSetItem(`reactor_volume_${category}`, clampedValue.toString());
   switch (category) {
   case 'master':
   if (this.masterGain) this.masterGain.gain.value = clampedValue;
@@ -191,6 +192,8 @@ export class AudioService {
   if (clampedValue === 0) {
   this.stopAmbience();
   }
+  break;
+  default:
   break;
   }
   }
@@ -348,9 +351,9 @@ export class AudioService {
   toggleMute(muted) {
   if (!this._isInitialized) return;
   this.enabled = !muted;
-  localStorage.setItem("reactor_mute", muted ? "true" : "false");
+  safeSetItem("reactor_mute", muted ? "true" : "false");
   if (this.masterGain) {
-  const targetVol = this.enabled ? (parseFloat(localStorage.getItem("reactor_volume_master") || "0.12")) : 0;
+  const targetVol = this.enabled ? (parseFloat(safeGetItem("reactor_volume_master", "0.12"))) : 0;
   this.masterGain.gain.setTargetAtTime(targetVol, this.context.currentTime, 0.1);
   }
   if (this.enabled) {
@@ -1139,7 +1142,8 @@ export class AudioService {
   saveLatch.start(parkTime);
   saveLatch.stop(parkTime + 0.1);
   break;
+  default:
+  break;
   }
   }
-  }
-  
+}

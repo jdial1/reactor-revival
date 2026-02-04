@@ -2,6 +2,7 @@ import {
   GOOGLE_DRIVE_CONFIG,
   ENABLE_GOOGLE_DRIVE,
 } from "./google-drive-config.js";
+import { safeGetItem, safeSetItem, safeRemoveItem } from "../utils/util.js";
 
 /**
  * Google Drive Save Integration
@@ -20,7 +21,7 @@ export class GoogleDriveSave {
     this.config = null;
 
     // Restore save file ID from localStorage if available
-    const storedSaveFileId = localStorage.getItem("google_drive_save_file_id");
+    const storedSaveFileId = safeGetItem("google_drive_save_file_id");
     if (storedSaveFileId) {
       this.saveFileId = storedSaveFileId;
     }
@@ -36,29 +37,29 @@ export class GoogleDriveSave {
 
   restoreAuthToken() {
     try {
-      const storedTokenData = localStorage.getItem("google_drive_auth_token");
+      const storedTokenData = safeGetItem("google_drive_auth_token");
       if (storedTokenData) {
         const tokenData = JSON.parse(storedTokenData);
         if (tokenData.expires_at && tokenData.expires_at > Date.now() + 300000) {
           this.authToken = tokenData.access_token;
           this.isSignedIn = true;
         } else {
-          localStorage.removeItem("google_drive_auth_token");
+          safeRemoveItem("google_drive_auth_token");
         }
       }
     } catch (error) {
-      localStorage.removeItem("google_drive_auth_token");
+      safeRemoveItem("google_drive_auth_token");
     }
   }
 
   restoreUserInfo() {
     try {
-      const storedUserInfo = localStorage.getItem("google_drive_user_info");
+      const storedUserInfo = safeGetItem("google_drive_user_info");
       if (storedUserInfo) {
         this.userInfo = JSON.parse(storedUserInfo);
       }
     } catch (error) {
-      localStorage.removeItem("google_drive_user_info");
+      safeRemoveItem("google_drive_user_info");
     }
   }
 
@@ -165,7 +166,7 @@ export class GoogleDriveSave {
     try {
       // First, try to restore token from localStorage if we don't have one
       if (!this.authToken) {
-        const storedTokenData = localStorage.getItem("google_drive_auth_token");
+        const storedTokenData = safeGetItem("google_drive_auth_token");
         if (storedTokenData) {
           try {
             const tokenData = JSON.parse(storedTokenData);
@@ -178,11 +179,11 @@ export class GoogleDriveSave {
               console.log("Restored auth token from localStorage");
             } else {
               console.log("Stored token expired, removing from localStorage");
-              localStorage.removeItem("google_drive_auth_token");
+              safeRemoveItem("google_drive_auth_token");
             }
           } catch (error) {
             console.log("Invalid stored token data, removing");
-            localStorage.removeItem("google_drive_auth_token");
+            safeRemoveItem("google_drive_auth_token");
           }
         }
       }
@@ -205,7 +206,7 @@ export class GoogleDriveSave {
               name: data.user.displayName,
               imageUrl: data.user.photoLink
             };
-            localStorage.setItem("google_drive_user_info", JSON.stringify(this.userInfo));
+            safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
           }
           this.isSignedIn = true;
           console.log("Auth token validated successfully");
@@ -216,8 +217,8 @@ export class GoogleDriveSave {
           this.authToken = null;
           this.isSignedIn = false;
           this.userInfo = null;
-          localStorage.removeItem("google_drive_auth_token");
-          localStorage.removeItem("google_drive_user_info");
+          safeRemoveItem("google_drive_auth_token");
+          safeRemoveItem("google_drive_user_info");
         }
       }
 
@@ -235,7 +236,7 @@ export class GoogleDriveSave {
             access_token: authResponse.access_token,
             expires_at: expiresAt,
           };
-          localStorage.setItem("google_drive_auth_token", JSON.stringify(tokenData));
+          safeSetItem("google_drive_auth_token", JSON.stringify(tokenData));
           
           const profile = user.getBasicProfile();
           if (profile) {
@@ -245,7 +246,7 @@ export class GoogleDriveSave {
               name: profile.getName(),
               imageUrl: profile.getImageUrl()
             };
-            localStorage.setItem("google_drive_user_info", JSON.stringify(this.userInfo));
+            safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
           }
           
           console.log("Silent auth successful");
@@ -285,7 +286,7 @@ export class GoogleDriveSave {
               name: profile.getName(),
               imageUrl: profile.getImageUrl()
             };
-            localStorage.setItem("google_drive_user_info", JSON.stringify(this.userInfo));
+            safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
             return this.userInfo;
           }
         }
@@ -315,7 +316,7 @@ export class GoogleDriveSave {
       expires_at: expiresAt,
     };
 
-    localStorage.setItem("google_drive_auth_token", JSON.stringify(tokenData));
+    safeSetItem("google_drive_auth_token", JSON.stringify(tokenData));
     this.authToken = response.access_token;
     this.isSignedIn = true;
 
@@ -336,7 +337,7 @@ export class GoogleDriveSave {
             name: userData.user.displayName,
             imageUrl: userData.user.photoLink
           };
-          localStorage.setItem("google_drive_user_info", JSON.stringify(this.userInfo));
+          safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
         }
       }
     } catch (error) {
@@ -379,9 +380,9 @@ export class GoogleDriveSave {
       google.accounts.oauth2.revoke(this.authToken);
     }
 
-    localStorage.removeItem("google_drive_auth_token");
-    localStorage.removeItem("google_drive_save_file_id");
-    localStorage.removeItem("google_drive_user_info");
+    safeRemoveItem("google_drive_auth_token");
+    safeRemoveItem("google_drive_save_file_id");
+    safeRemoveItem("google_drive_user_info");
     this.isSignedIn = false;
     this.authToken = null;
     this.saveFileId = null;
@@ -418,7 +419,7 @@ export class GoogleDriveSave {
           // Use most recent file (already sorted by modifiedTime desc)
           const mostRecent = data.files[0];
           this.saveFileId = mostRecent.id;
-          localStorage.setItem("google_drive_save_file_id", mostRecent.id);
+          safeSetItem("google_drive_save_file_id", mostRecent.id);
           console.log("[DEBUG] Found save file:", mostRecent.id);
           return true;
         } else {
@@ -447,7 +448,7 @@ export class GoogleDriveSave {
         } else {
           console.log("[DEBUG] Cached file no longer exists");
           this.saveFileId = null;
-          localStorage.removeItem("google_drive_save_file_id");
+          safeRemoveItem("google_drive_save_file_id");
         }
       }
 
@@ -601,7 +602,7 @@ export class GoogleDriveSave {
       console.log("[DEBUG] Upload result:", result);
 
       this.saveFileId = result.id;
-      localStorage.setItem("google_drive_save_file_id", result.id);
+      safeSetItem("google_drive_save_file_id", result.id);
 
       console.log("Game saved to Google Drive:", result.id);
 
@@ -644,7 +645,7 @@ export class GoogleDriveSave {
         const localSave = JSON.parse(saveDataString);
         localSave.isCloudSynced = true;
         localSave.cloudUploadedAt = new Date().toISOString();
-        localStorage.setItem("reactorGameSave", JSON.stringify(localSave));
+        safeSetItem("reactorGameSave", JSON.stringify(localSave));
       } catch (e) {
         console.error("Failed to mark local save as synced after upload.", e);
       }
@@ -656,7 +657,7 @@ export class GoogleDriveSave {
     if (!this.isSignedIn) {
       return { showUpload: false };
     }
-    const localSaveJSON = localStorage.getItem("reactorGameSave");
+    const localSaveJSON = safeGetItem("reactorGameSave");
     if (!localSaveJSON) {
       return { showUpload: false };
     }
@@ -683,7 +684,7 @@ export class GoogleDriveSave {
   async offerLocalSaveUpload() {
     if (!this.isSignedIn) return { hasLocalSave: false };
 
-    const localSave = localStorage.getItem("reactorGameSave");
+    const localSave = safeGetItem("reactorGameSave");
     if (!localSave) return { hasLocalSave: false };
 
     try {
@@ -705,7 +706,7 @@ export class GoogleDriveSave {
         // Orphaned local save - clear sync flags
         delete gameState.isCloudSynced;
         delete gameState.cloudUploadedAt;
-        localStorage.setItem("reactorGameSave", JSON.stringify(gameState));
+        safeSetItem("reactorGameSave", JSON.stringify(gameState));
       }
 
       console.log("[DEBUG] Local save can be uploaded");

@@ -1,4 +1,5 @@
 import { SUPABASE_CONFIG } from './supabase-config.js';
+import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/util.js';
 
 export class SupabaseAuth {
     constructor() {
@@ -10,7 +11,7 @@ export class SupabaseAuth {
     }
 
     init() {
-        const stored = localStorage.getItem('supabase_auth_session');
+        const stored = safeGetItem('supabase_auth_session');
         if (stored) {
             try {
                 const session = JSON.parse(stored);
@@ -227,7 +228,7 @@ export class SupabaseAuth {
         this.user = data.user || { id: data.user_id, email: data.email };
         this.expiresAt = Date.now() + ((data.expires_in || 3600) * 1000);
         
-        localStorage.setItem('supabase_auth_session', JSON.stringify({
+        safeSetItem('supabase_auth_session', JSON.stringify({
             access_token: this.token,
             refresh_token: this.refreshToken,
             user: this.user,
@@ -240,7 +241,7 @@ export class SupabaseAuth {
         this.user = null;
         this.expiresAt = 0;
         this.refreshToken = null;
-        localStorage.removeItem('supabase_auth_session');
+        safeRemoveItem('supabase_auth_session');
     }
 
     isSignedIn() {
