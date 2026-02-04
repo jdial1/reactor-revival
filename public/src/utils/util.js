@@ -117,14 +117,19 @@ export function getResourceUrl(resourcePath) {
 
 /**
  * Escapes HTML special characters in a string to prevent XSS.
+ * This version escapes &, <, >, ", and ' to be safe in both HTML content and attributes.
  * @param {string} text - The text to escape.
  * @returns {string} The escaped HTML string.
  */
 export function escapeHtml(text) {
     if (typeof text !== 'string') return text;
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
+    return text.replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[m]));
 }
 
 let storageAvailable = null;

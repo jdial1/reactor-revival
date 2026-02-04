@@ -82,7 +82,7 @@ export class Engine {
       markSegmentsAsDirty: () => {
         // This is a stub - segment dirty marking is handled elsewhere
       },
-      getSegmentForTile: (tile) => {
+      getSegmentForTile: () => {
         // This is a stub - segment lookup is handled elsewhere
         return null;
       }
@@ -362,7 +362,6 @@ export class Engine {
           if (this.time_accumulator < 0.001) this.time_accumulator = 0;
           this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicksUsed.toFixed(2)} flux ticks (${(fluxTicksUsed * targetTickDuration).toFixed(0)}ms), accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
         }
-      } else if (this.time_accumulator > 0) {
       }
 
       if (ticksToProcess > 0) {
@@ -572,7 +571,9 @@ export class Engine {
 
       tile.ticks -= multiplier;
       
-      for (const r_tile of tile.reflectorNeighborTiles) {
+      const reflectorNeighbors = tile.reflectorNeighborTiles;
+      for (let j = 0; j < reflectorNeighbors.length; j++) {
+        const r_tile = reflectorNeighbors[j];
         if (r_tile.ticks > 0) {
           r_tile.ticks -= multiplier;
           if (r_tile.ticks <= 0) this.handleComponentDepletion(r_tile);
@@ -619,7 +620,9 @@ export class Engine {
       const tile_part = tile.part;
       if (!tile_part) continue;
 
-      for (const tile_containment of tile.containmentNeighborTiles) {
+      const containmentNeighbors = tile.containmentNeighborTiles;
+      for (let j = 0; j < containmentNeighbors.length; j++) {
+        const tile_containment = containmentNeighbors[j];
         if (!tile_containment.part || !tile_containment.heat_contained) continue;
         
         let maxTransfer = tile.getEffectiveTransferValue() * multiplier;
@@ -778,8 +781,10 @@ export class Engine {
             this.active_vessels.push(valve);
           }
 
-          for (const input of inputNeighbors) {
-            for (const output of outputNeighbors) {
+          for (let inputIdx = 0; inputIdx < inputNeighbors.length; inputIdx++) {
+            const input = inputNeighbors[inputIdx];
+            for (let outputIdx = 0; outputIdx < outputNeighbors.length; outputIdx++) {
+              const output = outputNeighbors[outputIdx];
               const inputHeat = input.heat_contained || 0;
               let maxTransfer = valve.getEffectiveTransferValue() * multiplier;
 
@@ -896,23 +901,29 @@ export class Engine {
             if(neighborsAll[nIdx].part) validNeighbors.push(neighborsAll[nIdx]);
         }
 
-        const headroomOf = (t) => {
-          const cap = t.part?.containment || 0;
-          const heat = t.heat_contained || 0;
-          return Math.max(cap - heat, 0);
-        };
-
         validNeighbors.sort((a, b) => {
             // Custom weight sort
             const aPref = (a.part.category === 'vent' || a.part.category === 'coolant_cell') ? 2 : (a.part.category === 'heat_exchanger' ? 0 : 1);
             const bPref = (b.part.category === 'vent' || b.part.category === 'coolant_cell') ? 2 : (b.part.category === 'heat_exchanger' ? 0 : 1);
             if (aPref !== bPref) return bPref - aPref;
-            return headroomOf(b) - headroomOf(a);
+
+            const headA = Math.max((a.part?.containment || 0) - (a.heat_contained || 0), 0);
+            const headB = Math.max((b.part?.containment || 0) - (b.heat_contained || 0), 0);
+            return headB - headA;
         });
 
         let remainingPush = heatStart;
 
-        for (const neighbor of validNeighbors) {
+        // Calculate totalHeadroom once per exchanger
+        let totalHeadroom = 0;
+        for (let nIdx = 0; nIdx < validNeighbors.length; nIdx++) {
+            const n = validNeighbors[nIdx];
+            totalHeadroom += Math.max((n.part?.containment || 0) - (n.heat_contained || 0), 0);
+        }
+        if (totalHeadroom === 0) totalHeadroom = 1;
+
+        for (let nIdx = 0; nIdx < validNeighbors.length; nIdx++) {
+            const neighbor = validNeighbors[nIdx];
             const isExchangerNeighbor = startHeat.has(neighbor);
             const isValveNeighbor = valveNeighborTiles.has(neighbor);
             const isNeighborOfValveNeighbor = valveNeighborExchangers.has(tile) && isExchangerNeighbor;
@@ -921,10 +932,6 @@ export class Engine {
             
             if (remainingPush > 0 && (heatStart > nStartRaw || (/*isPreferred*/(neighbor.part.category === 'vent' || neighbor.part.category === 'coolant_cell') && heatStart === nStartRaw && heatStart > 0))) {
                  const diff = Math.max(0, heatStart - nStartRaw) || 1;
-                 // We need totalHeadroom for bias. Recalc to avoid map/reduce allocs
-                 let totalHeadroom = 0;
-                 for(const n of validNeighbors) totalHeadroom += Math.max((n.part?.containment || 0) - (n.heat_contained || 0), 0);
-                 if(totalHeadroom === 0) totalHeadroom = 1;
 
                  const neighborHeadroomForWeight = Math.max(neighborCapacity - nStartRaw, 0);
                  const capacityBias = Math.max(neighborHeadroomForWeight / totalHeadroom, 0);
@@ -1004,7 +1011,9 @@ export class Engine {
        if (!tile_part || !tile.activated) continue;
        const neighbors = this._outletProcessing_neighbors;
        neighbors.length = 0;
-       for (const t of tile.containmentNeighborTiles) {
+       const contNeighbors = tile.containmentNeighborTiles;
+       for (let j = 0; j < contNeighbors.length; j++) {
+         const t = contNeighbors[j];
          if (t.part && t.part.category !== 'valve') {
            neighbors.push(t);
          }
@@ -1077,7 +1086,8 @@ export class Engine {
 
     const tilesToExplode = this._explosion_tilesToExplode;
     tilesToExplode.length = 0;
-    for (const tile of this.active_vessels) {
+    for (let i = 0; i < this.active_vessels.length; i++) {
+      const tile = this.active_vessels[i];
       if (!tile.part || tile.exploded) continue;
 
       const part = tile.part;
@@ -1104,13 +1114,7 @@ export class Engine {
       this.game.performance.markStart("tick_vents");
     }
 
-    const activeVents = this._ventProcessing_activeVents;
-    activeVents.length = 0;
-    for (const tile of this.active_vessels) {
-      if (tile.part?.category === 'vent') {
-        activeVents.push(tile);
-      }
-    }
+    const activeVents = this.active_vents;
     for(let i = 0; i < activeVents.length; i++) {
         const tile = activeVents[i];
         if(!tile.part) continue;
@@ -1162,7 +1166,7 @@ export class Engine {
             if (this.game.ui && typeof this.game.ui.blinkVent === 'function') {
               this.game.ui.blinkVent(tile);
             }
-          } catch (_) { /* ignore */ }
+          } catch { /* ignore */ }
         }
     }
 
@@ -1207,7 +1211,8 @@ export class Engine {
         try {
           if (this.game.ui && typeof this.game.ui.emitEP === 'function') {
             let emitted = 0;
-            for (const t of this.active_vessels) {
+            for (let j = 0; j < this.active_vessels.length; j++) {
+              const t = this.active_vessels[j];
               if (t.part?.category === 'particle_accelerator' && t.heat_contained > 0) {
                 this.game.ui.emitEP(t);
                 emitted++;
@@ -1215,7 +1220,7 @@ export class Engine {
               }
             }
           }
-        } catch (_) { /* ignore in test env */ }
+        } catch { /* ignore in test env */ }
       }
     }
 
@@ -1293,7 +1298,8 @@ export class Engine {
       const powerRatio = reactor.current_power / reactor.max_power;
       if (powerRatio >= 0.90) {
         let activeCaps = 0;
-        for (const t of this.active_vessels) {
+        for (let j = 0; j < this.active_vessels.length; j++) {
+          const t = this.active_vessels[j];
           if (t.part?.category === 'capacitor') {
             const capLevel = t.part.level || 1;
             activeCaps += capLevel;
@@ -1319,7 +1325,8 @@ export class Engine {
       const powerCostPerRepair = 50;
 
       // Iterate active cells that have durability (ticks)
-      for (const tile of this.active_cells) {
+      for (let i = 0; i < this.active_cells.length; i++) {
+        const tile = this.active_cells[i];
         if (repairsRemaining <= 0 || reactor.current_power < powerCostPerRepair) break;
         if (tile.part && tile.part.ticks > 0) {
           // Repair 1 tick
