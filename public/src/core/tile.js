@@ -95,7 +95,7 @@ export class Tile {
       for (let i = 0; i < neighbors.length; i++) {
         const neighbor = neighbors[i];
         if (neighbor.part && neighbor.part.category === "capacitor") {
-          capacitorBonus += neighbor.part.level || 1; // Corrected: neighbor.part.level
+          capacitorBonus += neighbor.part.level || 1;
         }
       }
       ventValue *= 1 + (activeVenting.level * capacitorBonus) / 100;

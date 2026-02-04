@@ -38,9 +38,11 @@
 2. **Valve Neighbors:** `Array.prototype.sort()` was being used for the common 2-neighbor valve case, and new result objects were being created.
 3. **Convective Boost:** A temporary array and four objects were being created for every vent on every tick.
 4. **Iterator Allocation:** A remaining `for...of` loop in the outlet processing block was causing minor memory churn.
+5. **Redundant Array Operations:** `active_vessels.includes()` and `splice()` were used inside the valve loop for components that do not need vessel-specific processing.
 
 **Action:**
 1. **Orientation Caching:** Implemented a `Map` cache for valve orientations.
 2. **Neighbor Pooling:** Pre-allocated a `_valveNeighborResult` object and implemented a fast-path for the 2-neighbor case in `_getInputOutputNeighbors`, avoiding `sort()`.
 3. **Allocation Removal:** Refactored convective boost calculation to use direct `getTile` calls instead of temporary arrays/objects.
 4. **Loop Optimization:** Replaced the final `for...of` loop in `_processTick` with a standard `for` loop.
+5. **Removed Redundancy:** Eliminated O(N) `includes`/`splice` calls from the valve processing loop.
