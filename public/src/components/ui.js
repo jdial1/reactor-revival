@@ -2819,7 +2819,7 @@ export class UI {
           const varItem = document.createElement("div");
           varItem.className = "debug-variable";
           varItem.innerHTML = `
-            <span class="debug-key">${key}:</span>
+            <span class="debug-key">${escapeHtml(key)}:</span>
             <span class="debug-value">${this.formatDebugValue(value)}</span>
           `;
           varList.appendChild(varItem);
@@ -3001,7 +3001,7 @@ export class UI {
       return `<span class='debug-object'>{${Object.keys(value).length
         } keys}</span>`;
     }
-    return `<span class='debug-other'>${String(value)}</span>`;
+    return `<span class='debug-other'>${escapeHtml(String(value))}</span>`;
   }
 
   updateCollapsedControlsNav() {
@@ -5828,7 +5828,7 @@ export class UI {
     if (tile.part.ticks) stats.push(`Ticks: ${tile.part.ticks}`);
     
     bodyEl.innerHTML = stats.length > 0 
-      ? `<div>${stats.join("<br>")}</div>`
+      ? `<div>${stats.map(s => escapeHtml(s)).join("<br>")}</div>`
       : "<div>No stats available</div>";
 
     sellBtn.onclick = () => {
