@@ -5071,10 +5071,8 @@ footer#bottom_nav button.active {
 }
 
 .objectives-toast-btn.is-expanded .objectives-toast-title {
-  flex: 1 1 0%;
+  flex: 0 0 auto;
   display: inline-block;
-  overflow: hidden;
-  max-width: 100%;
   position: relative;
   z-index: 0;
   text-align: left;
