@@ -2445,10 +2445,10 @@ class SplashScreenManager {
                     window.ui.initMainLayout();
                     await window.pageRouter.loadPage("reactor_section");
                     window.game.tooltip_manager = new (
-                      await import("./tooltip.js")
+                      await import("../components/tooltip.js")
                     ).TooltipManager("#main", "#tooltip", window.game);
                     window.game.engine = new (
-                      await import("./engine.js")
+                      await import("../core/engine.js")
                     ).Engine(window.game);
                     await window.game.startSession();
                     window.game.engine.start();
