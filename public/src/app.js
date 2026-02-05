@@ -11,8 +11,7 @@ import { SupabaseAuth } from "./services/SupabaseAuth.js";
 import { SupabaseSave } from "./services/SupabaseSave.js";
 import { AudioService } from "./services/audioService.js";
 import { settingsModal } from "./components/settingsModal.js";
-// Background/PWA helpers
-import "./services/pwa.js";
+import { requestWakeLock } from "./services/pwa.js";
 
 async function initializeApp(game, ui, pageRouter) {
   if (window.splashManager) {
@@ -69,7 +68,7 @@ async function handleUserSession(game, pageRouter, ui) {
       safeRemoveItem("reactorLoadSlot"); // Clear the load slot flag
     } else {
       // Load from most recent save (backward compatibility)
-      console.log("[DEBUG] Loading from most recent save");
+      
       savedGame = await game.loadGame();
       console.log(`[DEBUG] Load result: ${savedGame}`);
     }
@@ -434,10 +433,46 @@ async function main() {
     if (typeof registerOneOffSync === "function") registerOneOffSync();
   }
 
+  setupLaunchQueueHandler();
+}
+
+function setupLaunchQueueHandler() {
+  if (!('launchQueue' in window) || !('files' in LaunchParams.prototype)) return;
+
+  window.launchQueue.setConsumer(async (launchParams) => {
+    if (!launchParams.files.length) return;
+
+    const fileHandle = launchParams.files[0];
+    const file = await fileHandle.getFile();
+    const text = await file.text();
+
+    try {
+      const saveData = JSON.parse(text);
+
+      if (!window.game?.validateSaveData(saveData)) {
+        console.error("[PWA] Invalid save file structure");
+        return;
+      }
+
+      if (window.game.engine?.running) window.game.pause();
+
+      const confirmLoad = confirm(
+        `Load save "${file.name}"?\n(Current unsaved progress will be lost)`
+      );
+
+      if (confirmLoad) {
+        await window.game.applySaveState(saveData);
+        window.game.activeFileHandle = fileHandle;
+        console.log("[PWA] Save loaded from OS launch");
+      }
+    } catch (e) {
+      console.error("[PWA] Error handling launch file", e);
+    }
+  });
 }
 
 async function startGame(pageRouter, ui, game) {
-  console.log("[DEBUG] startGame called");
+  
 
   const hash = window.location.hash.substring(1);
   const initialPage = hash in pageRouter.pages ? hash : "reactor_section";
@@ -449,18 +484,18 @@ async function startGame(pageRouter, ui, game) {
     return;
   }
 
-  console.log("[DEBUG] Loading game layout...");
+  
   await pageRouter.loadGameLayout();
   ui.initMainLayout();
-  console.log("[DEBUG] Main layout initialized");
+  
 
   await pageRouter.loadPage(initialPage);
 
-  console.log("[DEBUG] Creating engine and managers...");
+  
   game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
   game.engine = new Engine(game);
 
-  console.log("[DEBUG] Starting session...");
+  
   await game.startSession();
 
   // Initialize parts panel position after game loads
@@ -473,7 +508,6 @@ async function startGame(pageRouter, ui, game) {
     if (ui.syncToggleStatesFromGame) {
       ui.syncToggleStatesFromGame();
     } else {
-      // Fallback: manually set initial toggle states
       try {
         ui.stateManager.setVar("pause", game.paused ?? false);
         ui.stateManager.setVar("auto_sell", game.reactor?.auto_sell_enabled ?? false);
@@ -484,6 +518,7 @@ async function startGame(pageRouter, ui, game) {
     }
     
     game.engine.start();
+    requestWakeLock();
 
     ui.stateManager.setVar("current_money", game.current_money);
     ui.stateManager.setVar("current_heat", game.reactor.current_heat);
@@ -498,7 +533,7 @@ async function startGame(pageRouter, ui, game) {
     safeRemoveItem("reactorNewGamePending");
 
     setTimeout(() => {
-      console.log("[DEBUG] Forcing reactor stats update post-load...");
+      
       game.reactor.updateStats();
 
       // Update objectives display after everything is loaded
@@ -514,7 +549,7 @@ async function startGame(pageRouter, ui, game) {
         console.warn("Failed to show quick start modal:", error);
       }
     }
-    console.log("[DEBUG] startGame completed successfully");
+    
   };
 
   if (game._pendingToggleStates) {

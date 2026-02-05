@@ -873,22 +873,22 @@ class SplashScreenManager {
       if (saveSlotEl) saveSlotEl.remove();
 
       if (window.splashManager) {
-        console.log("[DEBUG] Hiding splash manager...");
+        
         window.splashManager.hide();
       }
       await new Promise((resolve) => setTimeout(resolve, 600));
 
       // Load the save data directly
       if (window.game) {
-        console.log("[DEBUG] Loading game data from slot...");
+        
         const loadSuccess = await window.game.loadGame(slot);
         console.log(`[DEBUG] Load result: ${loadSuccess}`);
 
         if (loadSuccess && window.pageRouter && window.ui) {
-          console.log("[DEBUG] Starting game...");
+          
           // Call the startGame function that should be available globally
           if (typeof window.startGame === "function") {
-            console.log("[DEBUG] Calling global startGame function...");
+            
             await window.startGame(
               window.pageRouter,
               window.ui,
@@ -1902,22 +1902,22 @@ class SplashScreenManager {
 
                 // Hide splash manager
                 if (window.splashManager) {
-                  console.log("[DEBUG] Hiding splash manager...");
+                  
                   window.splashManager.hide();
                 }
                 await new Promise((resolve) => setTimeout(resolve, 600));
 
                 // Load the save data directly
                 if (window.game) {
-                  console.log("[DEBUG] Loading game data...");
+                  
                   const loadSuccess = await window.game.loadGame(mostRecentSave.slot);
                   console.log(`[DEBUG] Load result: ${loadSuccess}`);
 
                   if (loadSuccess && window.pageRouter && window.ui) {
-                    console.log("[DEBUG] Starting game...");
+                    
                     // Call the startGame function that should be available globally
                     if (typeof window.startGame === "function") {
-                      console.log("[DEBUG] Calling global startGame function...");
+                      
                       await window.startGame(
                         window.pageRouter,
                         window.ui,
@@ -2413,21 +2413,21 @@ class SplashScreenManager {
         if (fileId) {
           const cloudBtn = createLoadFromCloudButton(async () => {
             try {
-              console.log("[DEBUG] Loading from Google Drive...");
+              
               const cloudSaveData = await window.googleDriveSave.load();
               if (cloudSaveData) {
-                console.log("[DEBUG] Cloud save data loaded successfully");
+                
                 if (window.splashManager) {
-                  console.log("[DEBUG] Hiding splash manager...");
+                  
                   window.splashManager.hide();
                 }
                 await new Promise((resolve) => setTimeout(resolve, 600));
                 if (window.pageRouter && window.ui && window.game) {
-                  console.log("[DEBUG] Applying save state...");
+                  
                   window.game.applySaveState(cloudSaveData);
                   // Call the startGame function that should be available globally
                   if (typeof window.startGame === "function") {
-                    console.log("[DEBUG] Calling global startGame function...");
+                    
                     await window.startGame(
                       window.pageRouter,
                       window.ui,
@@ -2507,12 +2507,12 @@ class SplashScreenManager {
   }
 
   hide() {
-    console.log("[DEBUG] SplashManager.hide() called");
-    console.log("[DEBUG] splashScreen exists:", !!this.splashScreen);
-    console.log("[DEBUG] isReady:", this.isReady);
+    
+    
+    
 
     if (this.splashScreen && !this.isReady) {
-      console.log("[DEBUG] Hiding splash screen...");
+      
       this.isReady = true;
 
       // Stop flavor text rotation
@@ -2530,10 +2530,10 @@ class SplashScreenManager {
         this.errorTimeout = null;
       }
 
-      console.log("[DEBUG] Adding fade-out class...");
+      
       this.splashScreen.classList.add("fade-out");
       setTimeout(() => {
-        console.log("[DEBUG] Adding hidden class...");
+        
         this.splashScreen.classList.add("hidden");
         console.log(
           "[DEBUG] Splash screen classes:",
@@ -2550,7 +2550,7 @@ class SplashScreenManager {
         }
       }, 500);
     } else {
-      console.log("[DEBUG] Splash screen already hidden or not ready");
+      
     }
   }
 
@@ -2657,7 +2657,7 @@ function enable() {
 
 // Debug Google Drive functionality
 async function checkGoogleDrive() {
-  console.log("[DEBUG] Manual Google Drive check:");
+  
   console.log("- Google Drive Save exists:", !!window.googleDriveSave);
   console.log("- Is signed in:", window.googleDriveSave?.isSignedIn);
   console.log(
@@ -3193,6 +3193,32 @@ window.addEventListener('DOMContentLoaded', () => {
     console.warn("Splash screen element not found, skipping dynamic background generation.");
   }
 });
+
+let wakeLock = null;
+
+export async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('[PWA] Screen Wake Lock active');
+    
+    document.addEventListener('visibilitychange', async () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    });
+  } catch (err) {
+    console.log(`[PWA] Wake Lock failed: ${err.name}, ${err.message}`);
+  }
+}
+
+export function releaseWakeLock() {
+  if (wakeLock !== null) {
+    wakeLock.release();
+    wakeLock = null;
+    console.log('[PWA] Screen Wake Lock released');
+  }
+}
 
 // Background capabilities and push helpers
 async function registerPeriodicSync() {

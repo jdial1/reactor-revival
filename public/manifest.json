@@ -6,10 +6,11 @@
   "start_url": "/reactor-revival/",
   "display": "standalone",
   "display_override": [
+    "window-controls-overlay",
     "standalone"
   ],
   "background_color": "#1a1a1a",
-  "theme_color": "#303236",
+  "theme_color": "#262626",
   "orientation": "any",
   "scope": "/reactor-revival/",
   "scope_extensions": [

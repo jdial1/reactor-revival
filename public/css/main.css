@@ -2875,6 +2875,24 @@ footer#bottom_nav button {
   }
 }
 
+@media (display-mode: window-controls-overlay) {
+  #main_top_nav {
+    padding-left: env(titlebar-area-x, 0);
+    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0));
+    width: 100%;
+    app-region: drag;
+    -webkit-app-region: drag;
+    background: var(--panel-bg);
+  }
+
+  #main_top_nav button,
+  #main_top_nav .nav-group-left,
+  #main_top_nav .nav-group-right {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
+  }
+}
+
 /* Nav Buttons (Shared) */
 #main_top_nav a,
 #main_top_nav button,

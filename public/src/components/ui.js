@@ -749,6 +749,39 @@ export class UI {
     }
   }
 
+  updateAppBadge() {
+    if (!('setAppBadge' in navigator)) return;
+
+    const reactor = this.game?.reactor;
+    if (!reactor) return;
+
+    const heatPercent = reactor.current_heat / reactor.max_heat;
+    const isPaused = this.stateManager?.getVar("pause");
+
+    if (heatPercent >= 0.95 && !isPaused) {
+      navigator.setAppBadge(1);
+      return;
+    }
+
+    const hoursAccumulated = Math.floor((this.game.engine?.time_accumulator || 0) / (1000 * 60 * 60));
+    if (hoursAccumulated >= 1) {
+      navigator.setAppBadge(hoursAccumulated);
+      return;
+    }
+
+    navigator.clearAppBadge();
+  }
+
+  setupAppBadgeVisibilityHandler() {
+    if (!('setAppBadge' in navigator)) return;
+    
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        navigator.clearAppBadge();
+      }
+    });
+  }
+
   updateLeaderboardIcon() {
     if (typeof document === "undefined" || !this.game) {
       return;
@@ -892,6 +925,7 @@ export class UI {
         this.updateMeltdownState();
         this.updatePauseState();
         this.updateActiveBuffs();
+        this.updateAppBadge();
         
         if (
             this.game?.tooltip_manager?.tooltip_showing &&
@@ -1926,6 +1960,7 @@ export class UI {
     this.initializeControlDeck();
     this.setupBuildTabButton();
     this.setupMenuTabButton();
+    this.setupAppBadgeVisibilityHandler();
     if (this.DOMElements.basic_overview_section && this.help_text.basic_overview) {
       this.DOMElements.basic_overview_section.innerHTML = `
         <h3>${this.help_text.basic_overview.title}</h3>

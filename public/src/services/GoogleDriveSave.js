@@ -398,7 +398,7 @@ export class GoogleDriveSave {
     if (!this.isSignedIn) return false;
 
     try {
-      console.log("[DEBUG] Searching for save file...");
+      
 
       // Search for reactor revival save files by name (simpler approach)
       const searchQuery = encodeURIComponent(
@@ -413,17 +413,17 @@ export class GoogleDriveSave {
 
       if (response.ok) {
         const data = await response.json();
-        console.log("[DEBUG] Search response:", data);
+        
 
         if (data.files && data.files.length > 0) {
           // Use most recent file (already sorted by modifiedTime desc)
           const mostRecent = data.files[0];
           this.saveFileId = mostRecent.id;
           safeSetItem("google_drive_save_file_id", mostRecent.id);
-          console.log("[DEBUG] Found save file:", mostRecent.id);
+          
           return true;
         } else {
-          console.log("[DEBUG] No save files found");
+          
         }
       } else {
         console.error(
@@ -435,7 +435,7 @@ export class GoogleDriveSave {
 
       // Check cached file ID
       if (this.saveFileId) {
-        console.log("[DEBUG] Checking cached file ID:", this.saveFileId);
+        
         const verifyResponse = await fetch(
           `https://www.googleapis.com/drive/v3/files/${this.saveFileId}?fields=id,name,parents`,
           { headers: { Authorization: `Bearer ${this.authToken}` } }
@@ -443,16 +443,16 @@ export class GoogleDriveSave {
 
         if (verifyResponse.ok) {
           const fileData = await verifyResponse.json();
-          console.log("[DEBUG] Cached file still exists:", fileData);
+          
           return true;
         } else {
-          console.log("[DEBUG] Cached file no longer exists");
+          
           this.saveFileId = null;
           safeRemoveItem("google_drive_save_file_id");
         }
       }
 
-      console.log("[DEBUG] No save file found anywhere");
+      
       return false;
     } catch (error) {
       console.error("Error finding save file:", error);
@@ -545,7 +545,7 @@ export class GoogleDriveSave {
           .replace(/:/g, "-");
         const fileName = `reactor-revival-save-${timestamp}.zip`;
 
-        console.log("[DEBUG] Creating new file:", fileName);
+        
 
         const metadata = {
           name: fileName,
@@ -569,10 +569,10 @@ export class GoogleDriveSave {
         }
 
         const fileMetadata = await metadataResponse.json();
-        console.log("[DEBUG] File created:", fileMetadata);
+        
 
         // Upload file content
-        console.log("[DEBUG] Uploading content to file ID:", fileMetadata.id);
+        
 
         response = await fetch(
           `https://www.googleapis.com/upload/drive/v3/files/${fileMetadata.id}?uploadType=media`,
@@ -586,7 +586,7 @@ export class GoogleDriveSave {
           }
         );
 
-        console.log("[DEBUG] Upload response status:", response.status);
+        
       }
 
       if (!response.ok) {
@@ -599,7 +599,7 @@ export class GoogleDriveSave {
       }
 
       const result = await response.json();
-      console.log("[DEBUG] Upload result:", result);
+      
 
       this.saveFileId = result.id;
       safeSetItem("google_drive_save_file_id", result.id);
@@ -607,7 +607,7 @@ export class GoogleDriveSave {
       console.log("Game saved to Google Drive:", result.id);
 
       // Verify the file can be found
-      console.log("[DEBUG] Verifying uploaded file can be found...");
+      
       setTimeout(async () => {
         try {
           const found = await this.findSaveFile();
@@ -694,7 +694,7 @@ export class GoogleDriveSave {
       // Check if there's already a cloud save (regardless of local sync status)
       const hasCloudSave = await this.findSaveFile();
       if (hasCloudSave) {
-        console.log("[DEBUG] Cloud save already exists, not offering upload");
+        
         return { hasLocalSave: false }; // Cloud save exists
       }
 
@@ -709,7 +709,7 @@ export class GoogleDriveSave {
         safeSetItem("reactorGameSave", JSON.stringify(gameState));
       }
 
-      console.log("[DEBUG] Local save can be uploaded");
+      
       return {
         hasLocalSave: true,
         gameState: gameState,

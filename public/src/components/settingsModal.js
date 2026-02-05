@@ -41,6 +41,19 @@ class SettingsModal {
       this.hide();
     }
   }
+  async saveToHandle(handle) {
+    if (!handle || !window.game?.getSaveState) return;
+    try {
+      const writable = await handle.createWritable();
+      const data = JSON.stringify(window.game.getSaveState());
+      await writable.write(data);
+      await writable.close();
+      console.log("[PWA] Saved directly to disk");
+    } catch (e) {
+      console.warn("[PWA] Lost permission to file handle", e);
+      window.game.activeFileHandle = null;
+    }
+  }
   createDOM() {
     if (this.overlay) return;
     const isMuted = safeGetItem("reactor_mute") === "true";
@@ -296,8 +309,25 @@ ${mechSwitch("setting-notifications", false)}
 
     const exportBtn = this.overlay.querySelector("#setting-export");
     if (exportBtn) {
-      exportBtn.addEventListener("click", () => {
-        if (window.game && typeof window.game.saveGame === "function") {
+      exportBtn.addEventListener("click", async () => {
+        if (!window.game || typeof window.game.getSaveState !== "function") return;
+
+        if ('showSaveFilePicker' in window) {
+          try {
+            const opts = {
+              types: [{
+                description: 'Reactor Save File',
+                accept: { 'application/json': ['.reactor'] },
+              }],
+              suggestedName: `reactor-save-${new Date().toISOString().split("T")[0]}.reactor`
+            };
+            const handle = await window.showSaveFilePicker(opts);
+            window.game.activeFileHandle = handle;
+            await this.saveToHandle(handle);
+          } catch (err) {
+            if (err.name !== 'AbortError') console.warn('[PWA] Save picker error:', err);
+          }
+        } else {
           window.game.saveGame();
           const slot = parseInt(safeGetItem("reactorCurrentSaveSlot", "1"), 10);
           const saveData = safeGetItem(`reactorGameSave_${slot}`) || safeGetItem("reactorGameSave");
@@ -403,7 +433,7 @@ ${mechSwitch("setting-notifications", false)}
 
     const displayModeSpan = this.overlay.querySelector("#app_display_mode");
     if (displayModeSpan) {
-      const modes = ["fullscreen", "standalone", "minimal-ui", "browser"];
+      const modes = ["standalone", "minimal-ui", "browser"];
       const activeMode = modes.find(m => window.matchMedia(`(display-mode: ${m})`).matches) || "browser";
       displayModeSpan.textContent = activeMode;
     }

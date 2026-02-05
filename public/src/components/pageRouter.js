@@ -376,7 +376,7 @@ export class PageRouter {
 
   async loadGameLayout() {
     try {
-      console.log("[DEBUG] PageRouter: Starting to load game layout...");
+      
       const response = await fetch("pages/game.html");
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
