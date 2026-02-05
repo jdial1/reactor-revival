@@ -285,7 +285,7 @@ body {
 
 .tile-placement-pop {
   animation: tile-placement-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  z-index: 10;
+  z-index: 15;
 }
 
 /* Button Press Effect */
@@ -1387,6 +1387,9 @@ button:active {
 
 .tile:hover {
   background-color: var(--pico-primary-hover);
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  z-index: 10;
 }
 
 .tile.enabled {
@@ -1688,11 +1691,17 @@ button:active {
   background: rgb(60 60 60);
   box-shadow: 2px 2px 0 rgb(0 0 0 / 50%);
   cursor: pointer;
-  transition: transform 0.05s ease;
+  transition: transform 0.05s ease, filter 0.05s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+}
+
+#build_above_deck_row .quick-select-slot:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  z-index: 10;
 }
 
 #build_above_deck_row .quick-select-slot:empty {
@@ -2026,7 +2035,13 @@ body.page-leaderboard #build_above_deck_row {
   background: rgb(40 40 40);
   box-shadow: 2px 2px 0 rgb(0 0 0 / 50%);
   cursor: pointer;
-  transition: transform 0.05s ease;
+  transition: transform 0.05s ease, filter 0.05s ease;
+}
+
+.control-deck-item:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  z-index: 10;
 }
 
 .control-deck-item:active {

@@ -159,6 +159,14 @@ export class Tile {
       this.exploded = false; // Reset explosion state when setting a new part
       if (this.$el) {
         this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
+
+        // Trigger placement pop animation
+        if (!isRestoring) {
+          this.$el.classList.remove("tile-placement-pop");
+          void this.$el.offsetWidth; // Reflow trick to restart animation
+          this.$el.classList.add("tile-placement-pop");
+        }
+
         this.$el.style.backgroundImage = `url('${this.part.getImagePath()}'), ${SHADOW_GRADIENT}`;
 
         // Visual feedback: trigger placement success animation
