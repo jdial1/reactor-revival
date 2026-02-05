@@ -160,27 +160,18 @@ export class Tile {
       if (this.$el) {
         this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
 
-        // Trigger placement pop animation
         if (!isRestoring) {
           this.$el.classList.remove("tile-placement-pop");
-          void this.$el.offsetWidth; // Reflow trick to restart animation
+          void this.$el.offsetWidth;
           this.$el.classList.add("tile-placement-pop");
-        }
-
-        this.$el.style.backgroundImage = `url('${this.part.getImagePath()}'), ${SHADOW_GRADIENT}`;
-
-        // Visual feedback: trigger placement success animation
-        if (!isRestoring) {
-          this.$el.classList.remove("tile-placement-pop");
-          void this.$el.offsetWidth; // Force reflow
-          this.$el.classList.add("tile-placement-pop");
-          // Remove class after animation to keep DOM clean
           setTimeout(() => {
             if (this.$el) {
               this.$el.classList.remove("tile-placement-pop");
             }
           }, 300);
         }
+
+        this.$el.style.backgroundImage = `url('${this.part.getImagePath()}'), ${SHADOW_GRADIENT}`;
 
         // For valves, preserve orientation data
         if (this.part.category === "valve" && this.part.getOrientation) {
