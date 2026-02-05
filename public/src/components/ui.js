@@ -5597,6 +5597,25 @@ export class UI {
     }, 1000);
   }
 
+  showFloatingTextAtTile(tile, amount) {
+    if (!tile || amount <= 0) return;
+    const overlay = this._ensureOverlay();
+    if (!overlay) return;
+
+    const pos = this._tileCenterToOverlayPosition(tile.row, tile.col);
+
+    const textEl = document.createElement("div");
+    textEl.className = "floating-text";
+    textEl.textContent = `+$${fmt(amount)}`;
+    textEl.style.left = `${pos.x}px`;
+    textEl.style.top = `${pos.y}px`;
+    overlay.appendChild(textEl);
+
+    setTimeout(() => {
+      textEl.remove();
+    }, 1000);
+  }
+
   createSteamParticles(container) {
     if (!container) return;
 

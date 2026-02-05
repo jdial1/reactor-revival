@@ -173,7 +173,6 @@ export class Tile {
 
         this.$el.style.backgroundImage = `url('${this.part.getImagePath()}'), ${SHADOW_GRADIENT}`;
 
-        // For valves, preserve orientation data
         if (this.part.category === "valve" && this.part.getOrientation) {
           const orientation = this.part.getOrientation();
           this.$el.classList.add(`orientation-${orientation}`);
@@ -181,12 +180,6 @@ export class Tile {
         }
 
         this.updateVisualState();
-
-        if (!isRestoring) {
-          this.$el.classList.remove("tile-placement-pop");
-          void this.$el.offsetWidth; // Force reflow
-          this.$el.classList.add("tile-placement-pop");
-        }
 
         // Remove old percent bars and set up new ones
         const percentWrapperWrapper = this.$el.querySelector(
@@ -303,6 +296,9 @@ export class Tile {
     if (full_clear) {
       const sell_value = this.calculateSellValue();
       this.game.addMoney(sell_value);
+      if (this.game.ui && typeof this.game.ui.showFloatingTextAtTile === 'function') {
+        this.game.ui.showFloatingTextAtTile(this, sell_value);
+      }
       // Note: do NOT decrement cumulative placedCounts; progress is permanent
     }
     this.activated = false;
