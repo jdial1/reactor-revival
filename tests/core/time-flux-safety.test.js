@@ -80,11 +80,11 @@ describe("Time Flux Safety Mechanisms", () => {
         
         game.engine.running = true;
         game.engine.last_timestamp = 1000;
-        game.engine.loop(1016);
+        game.engine.loop(2000);
 
         expect(game.paused).toBe(false);
-        expect(game.time_flux).toBe(true); // Toggle remains on
-        expect(tickSpy).toHaveBeenCalled(); // Normal ticking continues
+        expect(game.time_flux).toBe(true);
+        expect(tickSpy).toHaveBeenCalledWith(1.0);
     });
 });
 

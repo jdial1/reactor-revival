@@ -62,6 +62,7 @@ class SettingsModal {
     const hideUnaffordableResearch = safeGetItem("reactor_hide_unaffordable_research", "true") !== "false";
     const hideMaxUpgrades = safeGetItem("reactor_hide_max_upgrades", "true") !== "false";
     const hideMaxResearch = safeGetItem("reactor_hide_max_research", "true") !== "false";
+    const debugHeatFlow = safeGetItem("reactor_debug_heat_flow") === "true";
     const masterVol = parseFloat(safeGetItem("reactor_volume_master", "0.25"));
     const effectsVol = parseFloat(safeGetItem("reactor_volume_effects", "0.50"));
     const alertsVol = parseFloat(safeGetItem("reactor_volume_alerts", "0.50"));
@@ -139,6 +140,11 @@ ${mechSwitch("setting-hide-max-upgrades", hideMaxUpgrades)}
 <span>Hide Max Research</span>
 <input type="checkbox" id="setting-hide-max-research" ${hideMaxResearch ? "checked" : ""} style="display: none;">
 ${mechSwitch("setting-hide-max-research", hideMaxResearch)}
+</label>
+<label class="setting-row mech-switch-row">
+<span>Show heat flow arrows</span>
+<input type="checkbox" id="setting-debug-heat-flow" ${debugHeatFlow ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-debug-heat-flow", debugHeatFlow)}
 </label>
 </div>
 <div class="settings-group">
@@ -294,6 +300,10 @@ ${mechSwitch("setting-notifications", false)}
     setupMechSwitch("setting-hide-max-research", () => {
       safeSetItem("reactor_hide_max_research", this.overlay.querySelector("#setting-hide-max-research").checked ? "true" : "false");
       if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
+    });
+
+    setupMechSwitch("setting-debug-heat-flow", (checked) => {
+      safeSetItem("reactor_debug_heat_flow", checked ? "true" : "false");
     });
 
     this.overlay.querySelectorAll(".mech-switch-row").forEach((row) => {

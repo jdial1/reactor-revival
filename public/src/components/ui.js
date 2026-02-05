@@ -933,6 +933,8 @@ export class UI {
         ) {
             this.game.tooltip_manager.update();
         }
+
+        this.drawHeatFlowOverlay();
     }
 
     // Loop
@@ -988,6 +990,23 @@ export class UI {
   }
 
 
+  _ensureHeatFlowOverlay() {
+    const overlay = this._ensureOverlay();
+    if (!overlay) return null;
+    if (this._heatFlowOverlay && this._heatFlowOverlay.parentElement) return this._heatFlowOverlay;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "heat-flow-overlay");
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+    svg.style.position = "absolute";
+    svg.style.left = "0";
+    svg.style.top = "0";
+    svg.style.pointerEvents = "none";
+    overlay.appendChild(svg);
+    this._heatFlowOverlay = svg;
+    return svg;
+  }
+
   _tileCenterToOverlayPosition(row, col) {
     const reactor = this.DOMElements.reactor;
     const overlay = this._ensureOverlay();
@@ -1039,6 +1058,58 @@ export class UI {
   }
 
 
+
+  drawHeatFlowOverlay() {
+    const enabled = safeGetItem("reactor_debug_heat_flow") === "true";
+    const overlay = this._ensureOverlay();
+    if (!overlay) return;
+    const svg = this._ensureHeatFlowOverlay();
+    if (!svg) return;
+    if (!enabled) {
+      svg.style.display = "none";
+      return;
+    }
+    svg.style.display = "";
+    const rect = overlay.getBoundingClientRect();
+    const w = Math.max(1, rect.width);
+    const h = Math.max(1, rect.height);
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.innerHTML = "";
+    const engine = this.game?.engine;
+    if (!engine || typeof engine.getLastHeatFlowVectors !== "function") return;
+    const vectors = engine.getLastHeatFlowVectors();
+    for (let i = 0; i < vectors.length; i++) {
+      const v = vectors[i];
+      const from = this._tileCenterToOverlayPosition(v.fromRow, v.fromCol);
+      const to = this._tileCenterToOverlayPosition(v.toRow, v.toCol);
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 2) continue;
+      const ux = dx / len;
+      const uy = dy / len;
+      const headLen = 8;
+      const endX = to.x - ux * headLen;
+      const endY = to.y - uy * headLen;
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", from.x);
+      line.setAttribute("y1", from.y);
+      line.setAttribute("x2", endX);
+      line.setAttribute("y2", endY);
+      line.setAttribute("stroke", "rgba(255,120,40,0.9)");
+      line.setAttribute("stroke-width", "2");
+      svg.appendChild(line);
+      const ax = ux * headLen;
+      const ay = uy * headLen;
+      const perp = 4;
+      const px = -uy * perp;
+      const py = ux * perp;
+      const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      poly.setAttribute("points", `${to.x},${to.y} ${to.x - ax + px},${to.y - ay + py} ${to.x - ax - px},${to.y - ay - py}`);
+      poly.setAttribute("fill", "rgba(255,120,40,0.9)");
+      svg.appendChild(poly);
+    }
+  }
 
   // Note: Power/heat emission and flow visualization methods removed for performance
   // Vent spinning is preserved in blinkVent() method
@@ -3092,6 +3163,39 @@ export class UI {
     };
   }
 
+  static get MY_LAYOUTS_STORAGE_KEY() { return 'reactor_my_layouts'; }
+
+  getMyLayouts() {
+    try {
+      const raw = safeGetItem(UI.MY_LAYOUTS_STORAGE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+
+  saveMyLayouts(layouts) {
+    safeSetItem(UI.MY_LAYOUTS_STORAGE_KEY, JSON.stringify(layouts));
+  }
+
+  addToMyLayouts(name, data) {
+    const list = this.getMyLayouts();
+    list.unshift({
+      id: String(Date.now()),
+      name: name || `Layout ${list.length + 1}`,
+      data,
+      createdAt: Date.now()
+    });
+    this.saveMyLayouts(list);
+  }
+
+  removeFromMyLayouts(id) {
+    const list = this.getMyLayouts().filter((e) => e.id !== id);
+    this.saveMyLayouts(list);
+  }
+
   initializeCopyPasteUI() {
     const copyPasteBtns = document.getElementById("reactor_copy_paste_btns");
     const toggleBtn = document.getElementById("reactor_copy_paste_toggle");
@@ -3501,6 +3605,8 @@ export class UI {
 
         const result = await this.writeToClipboard(filteredData);
         if (result.success) {
+          const name = `Layout ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          this.addToMyLayouts(name, filteredData);
           confirmBtn.textContent = "Copied!";
           setTimeout(() => {
             this.hideModal();
@@ -3520,157 +3626,92 @@ export class UI {
       confirmBtn.style.cursor = "pointer";
     };
 
-    // Paste button handler
-    pasteBtn.onclick = async () => {
-      // Try to get data from clipboard first
-      let data = "";
-      const clipboardResult = await this.readFromClipboard();
-
-      if (clipboardResult.success) {
-        data = clipboardResult.data;
-      } else if (clipboardResult.error === 'permission-denied') {
-        // Show user-friendly message for permission denial and show modal for manual entry
-        data = ""; // Ensure data is empty for manual entry
-        // No notification - just show the modal directly
-      } else {
-        // For other clipboard errors, also show manual entry modal
-        data = "";
-        // No notification - just show the modal directly
-      }
-
-      // Show modal with clipboard data (if any) or for manual entry
+    const showPasteModalWithData = (data) => {
       let checkedTypes = {};
       let layout = deserializeReactor(data);
       let summary = buildPartSummary(layout || []);
       summary.forEach(item => { checkedTypes[item.id] = true; });
-
-      // Set appropriate title based on whether we have data or not
-      const modalTitle = data ? "Paste Reactor Layout" : "Enter Reactor Layout Manually";
-      showModal(modalTitle, data, 0, "paste", false, summary, { showCheckboxes: true, checkedTypes });
-      // Add real-time cost calculation and filtering
+      const title = data ? "Paste Reactor Layout" : "Enter Reactor Layout Manually";
+      showModal(title, data, 0, "paste", false, summary, { showCheckboxes: true, checkedTypes });
       const updateCostAndSummary = () => {
         const textareaData = modalText.value.trim();
-        let layout = deserializeReactor(textareaData);
-        if (!layout) {
-          if (!textareaData) {
-            modalCost.innerHTML = "Enter reactor layout JSON data in the text area above";
-          } else {
-            modalCost.innerHTML = "Invalid layout data - please check the JSON format";
-          }
+        let layoutInner = deserializeReactor(textareaData);
+        if (!layoutInner) {
+          modalCost.innerHTML = !textareaData ? "Enter reactor layout JSON data in the text area above" : "Invalid layout data - please check the JSON format";
           confirmBtn.disabled = true;
-          confirmBtn.classList.remove("hidden"); // Always show button
+          confirmBtn.classList.remove("hidden");
           return;
         }
-
-        // Preserve checkbox state before updating HTML
         const currentSellCheckboxState = document.getElementById('sell_existing_checkbox')?.checked || false;
-
-        // Build summary from original layout (keep all items visible)
-        const originalSummary = buildPartSummary(layout);
-
-        // Filter layout by checked types for cost calculation
-        const filteredLayout = layout.map(row => row.map(cell => {
+        const originalSummary = buildPartSummary(layoutInner);
+        const filteredLayout = layoutInner.map(row => row.map(cell => {
           if (!cell) return null;
           return checkedTypes[cell.id] !== false ? cell : null;
         }));
-
         const cost = calculateLayoutCost(filteredLayout);
         const currentSellValue = calculateCurrentSellValue();
-        const sellExisting = currentSellCheckboxState;
-        const netCost = cost - (sellExisting ? currentSellValue : 0);
+        const netCost = cost - (currentSellCheckboxState ? currentSellValue : 0);
         const canPaste = cost > 0 && this.game.current_money >= netCost;
-
         let html = this.renderComponentIcons(originalSummary, { showCheckboxes: true, checkedTypes });
-
-        // Add sell existing grid option from stored HTML
         const sellOptionHtml = modal.dataset.sellOptionHtml || '';
-        if (sellOptionHtml) {
-          html += sellOptionHtml;
-        }
-
-        // Show cost information below the sell checkbox
+        if (sellOptionHtml) html += sellOptionHtml;
         if (cost > 0) {
-          const finalCost = sellExisting && currentSellValue > 0 ? Math.max(0, netCost) : cost;
+          const finalCost = currentSellCheckboxState && currentSellValue > 0 ? Math.max(0, netCost) : cost;
           const costColor = canPaste ? "#4caf50" : "#ff6b6b";
-          const costText = canPaste ? `$${fmt(finalCost)}` : `$${fmt(finalCost)} - Not Enough Money`;
-          html += `<div style="margin-top: 10px; color: ${costColor}; font-weight: bold;">${costText}</div>`;
+          html += `<div style="margin-top: 10px; color: ${costColor}; font-weight: bold;">${canPaste ? `$${fmt(finalCost)}` : `$${fmt(finalCost)} - Not Enough Money`}</div>`;
         } else {
           html += `<div style="margin-top: 10px; color: rgb(255 107 107); font-weight: bold;">No parts found in layout</div>`;
         }
-
         modalCost.innerHTML = html;
-
-        // Restore checkbox state and ensure it's properly initialized
         const sellCheckbox = document.getElementById('sell_existing_checkbox');
         if (sellCheckbox) {
-          // Restore the previous state
           sellCheckbox.checked = currentSellCheckboxState;
-          // Make sure it's not disabled and can be interacted with
           sellCheckbox.disabled = false;
           sellCheckbox.style.pointerEvents = 'auto';
-
-          // Add a direct change event listener to the checkbox
-          sellCheckbox.addEventListener('change', (e) => {
-
-            updateCostAndSummary();
-          });
+          sellCheckbox.onchange = () => updateCostAndSummary();
         }
-
         confirmBtn.disabled = !canPaste;
-        confirmBtn.classList.remove("hidden"); // Always show button
+        confirmBtn.classList.remove("hidden");
       };
-      // Listen for component icon clicks and sell checkbox
-      modalCost.addEventListener("click", (e) => {
+      modalCost.onclick = (e) => {
         const componentSlot = e.target.closest('.component-slot');
         if (componentSlot) {
           const ids = componentSlot.getAttribute("data-ids");
           if (!ids) return;
-
           const idArray = ids.split(',');
           const isCurrentlyChecked = !componentSlot.classList.contains('component-disabled');
-
-          // Toggle all associated IDs to the opposite state
-          idArray.forEach(id => {
-            checkedTypes[id] = !isCurrentlyChecked;
-          });
-
+          idArray.forEach(id => { checkedTypes[id] = !isCurrentlyChecked; });
           updateCostAndSummary();
         } else if (e.target.id === "sell_existing_checkbox") {
-          // Let the native checkbox behavior handle this
           e.stopPropagation();
-
           updateCostAndSummary();
-        } else if (e.target.closest('label') && e.target.closest('label').querySelector('#sell_existing_checkbox')) {
-          // Handle label clicks for the sell checkbox
-          const checkbox = e.target.closest('label').querySelector('#sell_existing_checkbox');
-          if (e.target.tagName !== 'INPUT') {
+        } else {
+          const label = e.target.closest('label');
+          if (label?.querySelector('#sell_existing_checkbox') && e.target.tagName !== 'INPUT') {
             e.preventDefault();
             e.stopPropagation();
-            checkbox.checked = !checkbox.checked;
-
+            const cb = label.querySelector('#sell_existing_checkbox');
+            cb.checked = !cb.checked;
             updateCostAndSummary();
           }
         }
-      });
-      // Update cost on input
-      modalText.addEventListener("input", () => {
+      };
+      modalText.oninput = () => {
         layout = deserializeReactor(modalText.value.trim());
         summary = buildPartSummary(layout || []);
         checkedTypes = {};
         summary.forEach(item => { checkedTypes[item.id] = true; });
         updateCostAndSummary();
-      });
-      updateCostAndSummary(); // Initial update
-      // Set up paste action that reads from textarea
+      };
+      updateCostAndSummary();
       confirmBtn.onclick = () => {
         const textareaData = modalText.value.trim();
-        let layout = deserializeReactor(textareaData);
-        if (!layout) {
+        const layoutToPaste = deserializeReactor(textareaData);
+        if (!layoutToPaste) {
           alert("Please paste reactor layout data into the text area.");
           return;
         }
-        // Filter layout by checked types
-        const filteredLayout = layout.map(row => row.map(cell => {
+        const filteredLayout = layoutToPaste.map(row => row.map(cell => {
           if (!cell) return null;
           return checkedTypes[cell.id] !== false ? cell : null;
         }));
@@ -3678,7 +3719,6 @@ export class UI {
         const currentSellValue = calculateCurrentSellValue();
         const sellExisting = document.getElementById('sell_existing_checkbox')?.checked || false;
         const netCost = cost - (sellExisting ? currentSellValue : 0);
-
         if (cost <= 0) {
           alert("Invalid layout: no parts found.");
           return;
@@ -3687,22 +3727,75 @@ export class UI {
           alert(`Not enough money! Layout costs $${fmt(cost)}${sellExisting ? ` - $${fmt(currentSellValue)} (sell value) = $${fmt(netCost)}` : ''} but you only have $${fmt(this.game.current_money)}.`);
           return;
         }
-
-        // Sell existing grid if checkbox is checked
         if (sellExisting) {
           this.game.tileset.tiles_list.forEach(tile => {
-            if (tile.enabled && tile.part) {
-              tile.clearPart(true); // Sell the part
-            }
+            if (tile.enabled && tile.part) tile.clearPart(true);
           });
           this.game.reactor.updateStats();
         }
-
-        // Apply layout to reactor
         this.pasteReactorLayout(filteredLayout);
         this.hideModal();
       };
     };
+
+    pasteBtn.onclick = async () => {
+      let data = "";
+      const clipboardResult = await this.readFromClipboard();
+      if (clipboardResult.success) data = clipboardResult.data;
+      showPasteModalWithData(data);
+    };
+
+    this._showPasteModalWithData = showPasteModalWithData;
+
+    const myLayoutsBtn = document.getElementById("reactor_my_layouts_btn");
+    const myLayoutsModal = document.getElementById("my_layouts_modal");
+    const myLayoutsList = document.getElementById("my_layouts_list");
+    const myLayoutsCloseBtn = document.getElementById("my_layouts_close_btn");
+    if (myLayoutsBtn && myLayoutsModal && myLayoutsList) {
+      myLayoutsBtn.onclick = () => {
+        const list = this.getMyLayouts();
+        if (list.length === 0) {
+          myLayoutsList.innerHTML = '<p style="color: rgb(180 180 180); margin: 0;">No saved layouts. Copy a reactor layout to add it here.</p>';
+        } else {
+          let tableHtml = '<table id="my_layouts_list_table"><tbody>';
+          list.forEach((entry) => {
+            const dateStr = entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '';
+            tableHtml += `<tr data-id="${escapeHtml(entry.id)}"><td>${escapeHtml(entry.name)}</td><td>${dateStr}</td><td class="my-layout-actions"><button class="pixel-btn my-layout-view-btn" type="button">View</button><button class="pixel-btn my-layout-load-btn" type="button">Load</button><button class="pixel-btn my-layout-delete-btn" type="button">Delete</button></td></tr>`;
+          });
+          tableHtml += '</tbody></table>';
+          myLayoutsList.innerHTML = tableHtml;
+          myLayoutsList.querySelectorAll('.my-layout-view-btn').forEach((btn) => {
+            const row = btn.closest('tr');
+            const id = row?.dataset.id;
+            const entry = list.find((e) => e.id === id);
+            if (entry) btn.onclick = () => this.showLayoutModal(entry.data, {});
+          });
+          myLayoutsList.querySelectorAll('.my-layout-load-btn').forEach((btn) => {
+            const row = btn.closest('tr');
+            const id = row?.dataset.id;
+            const entry = list.find((e) => e.id === id);
+            if (entry) {
+              btn.onclick = () => {
+                myLayoutsModal.classList.add("hidden");
+                this._showPasteModalWithData(entry.data);
+              };
+            }
+          });
+          myLayoutsList.querySelectorAll('.my-layout-delete-btn').forEach((btn) => {
+            const row = btn.closest('tr');
+            const id = row?.dataset.id;
+            if (id) {
+              btn.onclick = () => {
+                this.removeFromMyLayouts(id);
+                myLayoutsBtn.click();
+              };
+            }
+          });
+        }
+        myLayoutsModal.classList.remove("hidden");
+      };
+      if (myLayoutsCloseBtn) myLayoutsCloseBtn.onclick = () => myLayoutsModal.classList.add("hidden");
+    }
 
     closeBtn.onclick = this.hideModal.bind(this);
   }
@@ -4246,6 +4339,8 @@ export class UI {
       modal.dataset.layout = layoutJson;
       modal.style.display = 'flex';
       modal.classList.remove("hidden");
+      const layoutCloseBtn = document.getElementById("layout_view_close_btn");
+      if (layoutCloseBtn) layoutCloseBtn.onclick = () => { modal.classList.add("hidden"); modal.style.display = "none"; };
 
     } catch (e) {
       console.error("Failed to render layout preview:", e);

@@ -1,4 +1,5 @@
 import { performance } from "../utils/util.js";
+import { HeatSystem } from "./heatSystem.js";
 
 export class Engine {
   constructor(game) {
@@ -59,41 +60,36 @@ export class Engine {
     this._valveNeighborExchangers = new Set();
     this._valveNeighborResult = { inputNeighbor: null, outputNeighbor: null };
 
-    // Outlet Processing Pre-allocation (Avoid GC)
+    // Outlet Processing Pre-allocation
     this._outletProcessing_neighbors = [];
 
-    // Vent Processing Pre-allocation (Avoid GC)
+    // Vent Processing Pre-allocation
     this._ventProcessing_activeVents = [];
 
-    // Valve orientation cache (avoids repeated regex in hot path)
+    // Valve orientation cache
     this._valveOrientationCache = new Map();
 
     // Ensure arrays are always valid
     this._ensureArraysValid();
 
     this.time_accumulator = 0;
+    this._frameTimeAccumulator = 0;
 
-    // Add heatManager stub for tests
-    this.heatManager = {
-      segments: new Map(),
-      tileSegmentMap: new Map(),
-      processTick: () => {
-        // Heat processing is now done in the engine tick
-        if (!this.game.paused) {
-          // This is a stub - actual heat processing is in _processTick
-        }
-      },
-      updateSegments: () => {
-        // This is a stub - segment updates are handled elsewhere
-      },
-      markSegmentsAsDirty: () => {
-        // This is a stub - segment dirty marking is handled elsewhere
-      },
-      getSegmentForTile: () => {
-        // This is a stub - segment lookup is handled elsewhere
-        return null;
-      }
-    };
+    this.heatManager = new HeatSystem(this);
+    this._lastHeatFlowDebug = [];
+  }
+
+  getLastHeatFlowVectors() {
+    return this._lastHeatFlowDebug;
+  }
+
+  _hasHeatActivity() {
+    return this.active_cells.length > 0 ||
+      this.active_exchangers.length > 0 ||
+      this.active_inlets.length > 0 ||
+      this.active_outlets.length > 0 ||
+      this.active_valves.length > 0 ||
+      this.active_vents.length > 0;
   }
 
   _ensureArraysValid() {
@@ -329,52 +325,54 @@ export class Engine {
     }
 
     const targetTickDuration = this.game.loop_wait;
+    const maxLiveTicks = 10;
 
-    // Accumulate time flux only if offline/away (>30s)
     if (deltaTime > 30000) {
       const previousAccumulator = this.time_accumulator || 0;
       this.time_accumulator = previousAccumulator + deltaTime;
       this.game.logger?.debug(`[TIME FLUX] Offline time detected (${deltaTime.toFixed(0)}ms), accumulator: ${previousAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms`);
-    } else if (this.active_cells.length > 0) {
-      // Standard gameplay loop - process live time
-      let ticksToProcess = deltaTime / targetTickDuration;
-      const maxLiveTicks = 10.0;
+    } else if (this._hasHeatActivity()) {
+      this._frameTimeAccumulator = (this._frameTimeAccumulator || 0) + deltaTime;
       const initialAccumulator = this.time_accumulator || 0;
-      let fluxTicksUsed = 0;
 
-      // If clamped, add excess time to accumulator to prevent spiral of death
-      if (ticksToProcess > maxLiveTicks) {
-        const originalTicks = ticksToProcess;
-        const excessTime = (ticksToProcess - maxLiveTicks) * targetTickDuration;
-        this.time_accumulator = (this.time_accumulator || 0) + excessTime;
-        ticksToProcess = maxLiveTicks;
-        this.game.logger?.debug(`[TIME FLUX] Live time clamped from ${originalTicks.toFixed(2)} to ${maxLiveTicks.toFixed(2)} ticks, excess ${excessTime.toFixed(0)}ms added to accumulator`);
-      }
-
-      // If Time Flux is enabled, consume banked time
       if (this.game.time_flux && this.time_accumulator > 0) {
         const heatRatio = this.game.reactor.max_heat > 0 ? this.game.reactor.current_heat / this.game.reactor.max_heat : 0;
         if (heatRatio >= 0.9) {
           this.game.logger?.warn("[TIME FLUX] Safety stop: Heat > 90%. Pausing game and disabling Time Flux.");
           this.game.ui.stateManager.setVar("time_flux", false);
           this.game.pause();
-          ticksToProcess = 0;
-        } else {
-          const maxFluxTicks = 10.0;
-          const availableFluxTicks = this.time_accumulator / targetTickDuration;
-          fluxTicksUsed = Math.min(availableFluxTicks, maxFluxTicks);
-          ticksToProcess += fluxTicksUsed;
-          const subtractedAmount = fluxTicksUsed * targetTickDuration;
-          this.time_accumulator -= subtractedAmount;
-          if (this.time_accumulator < 0.001) this.time_accumulator = 0;
-          this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicksUsed.toFixed(2)} flux ticks (${(fluxTicksUsed * targetTickDuration).toFixed(0)}ms), accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
         }
       }
 
-      if (ticksToProcess > 0) {
-        this._processTick(ticksToProcess);
-        if (fluxTicksUsed === 0 && initialAccumulator > 0) {
-          this.game.logger?.debug(`[TIME FLUX] Processing live time only (${(deltaTime / targetTickDuration).toFixed(3)} ticks), accumulator preserved at ${initialAccumulator.toFixed(0)}ms, Time Flux: ${this.game.time_flux ? 'ON' : 'OFF'}`);
+      if (!this.game.paused) {
+        const rawLiveTicks = this._frameTimeAccumulator / targetTickDuration;
+        let liveTicks;
+        if (rawLiveTicks > maxLiveTicks) {
+          const excessTime = (rawLiveTicks - maxLiveTicks) * targetTickDuration;
+          this.time_accumulator = (this.time_accumulator || 0) + excessTime;
+          liveTicks = maxLiveTicks;
+          this._frameTimeAccumulator = maxLiveTicks * targetTickDuration;
+          this.game.logger?.debug(`[TIME FLUX] Live time clamped, excess ${excessTime.toFixed(0)}ms added to accumulator`);
+        } else {
+          liveTicks = Math.floor(rawLiveTicks);
+          this._frameTimeAccumulator -= liveTicks * targetTickDuration;
+        }
+
+        let fluxTicks = 0;
+        if (this.game.time_flux && this.time_accumulator > 0) {
+          const maxFluxTicks = 10;
+          fluxTicks = Math.min(Math.floor(this.time_accumulator / targetTickDuration), maxFluxTicks);
+          this.time_accumulator -= fluxTicks * targetTickDuration;
+          if (this.time_accumulator < 0.001) this.time_accumulator = 0;
+          this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicks} flux ticks, accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms`);
+        }
+
+        const totalTicks = liveTicks + fluxTicks;
+        for (let i = 0; i < totalTicks; i++) {
+          this._processTick(1.0);
+        }
+        if (fluxTicks === 0 && initialAccumulator > 0) {
+          this.game.logger?.debug(`[TIME FLUX] Processing live time only (${liveTicks} ticks), accumulator preserved at ${initialAccumulator.toFixed(0)}ms`);
         }
       }
     }
@@ -611,463 +609,20 @@ export class Engine {
 
     // (Explosion checks occur after outlet transfer but before vents to allow overfill)
 
-    // Break down heat transfer into focused performance measurements
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markStart("tick_heat_transfer");
-    }
-
-    // Legacy Heat Transfer Logic
-    // Inlets
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markStart("tick_inlets");
-    }
-
-    for (let i = 0; i < this.active_inlets.length; i++) {
-      const tile = this.active_inlets[i];
-      const tile_part = tile.part;
-      if (!tile_part) continue;
-
-      const effectiveTransfer = tile.getEffectiveTransferValue() * multiplier;
-      const containmentNeighbors = tile.containmentNeighborTiles;
-      for (let j = 0; j < containmentNeighbors.length; j++) {
-        const tile_containment = containmentNeighbors[j];
-        if (!tile_containment.part || !tile_containment.heat_contained) continue;
-        
-        let transfer_heat = Math.min(effectiveTransfer, tile_containment.heat_contained);
-        
-        tile_containment.heat_contained -= transfer_heat;
-        reactor.current_heat += transfer_heat;
-        heat_add += transfer_heat;
+    const heatResult = this.heatManager.processTick(multiplier);
+    heat_add += heatResult.heatFromInlets;
+    this._lastHeatFlowDebug.length = 0;
+    for (let i = 0; i < this._heatCalc_plannedCount; i++) {
+      const p = this._heatCalc_plannedPool[i];
+      if (p.from && p.to) {
+        this._lastHeatFlowDebug.push({
+          fromRow: p.from.row,
+          fromCol: p.from.col,
+          toRow: p.to.row,
+          toCol: p.to.col,
+          amount: p.amount
+        });
       }
-    }
-
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markEnd("tick_inlets");
-    }
-    this.game.logger?.debug(`[TICK STAGE] After heat transfer (inlets): Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
-
-    // Valves (directional heat transfer with conditional logic)
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markStart("tick_valves");
-    }
-
-    {
-      // Ensure active_exchangers is always a valid array
-      if (!Array.isArray(this.active_exchangers)) {
-        this.active_exchangers = [];
-      }
-
-      // GC Optimization: Use pre-allocated arrays to avoid allocations in the hot path
-      const valves = this.active_valves;
-
-      // Process valves efficiently with minimal logging
-      for (let vIdx = 0; vIdx < valves.length; vIdx++) {
-        const valve = valves[vIdx];
-        const valvePart = valve.part;
-        const neighbors = this._valveProcessing_neighbors;
-        neighbors.length = 0; // Clear the array
-        const valveNeighbors = valve.containmentNeighborTiles;
-        for (let j = 0; j < valveNeighbors.length; j++) {
-          const t = valveNeighbors[j];
-          if (t.part) {
-            neighbors.push(t);
-          }
-        }
-
-        if (neighbors.length < 2) continue; // Need at least 2 neighbors to transfer
-
-        // Determine input and output neighbors based on valve type and orientation
-        const inputNeighbors = this._valveProcessing_inputNeighbors;
-        inputNeighbors.length = 0;
-        const outputNeighbors = this._valveProcessing_outputNeighbors;
-        outputNeighbors.length = 0;
-
-        if (valvePart.type === 'overflow_valve') {
-          // Overflow valve: only works if input side neighbor is above 80% containment
-          const orientation = this._getValveOrientation(valvePart.id);
-          const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
-
-          if (inputNeighbor && outputNeighbor) {
-            // Validation: valves can't pull from other valves unless input connects to output
-            if (inputNeighbor.part?.category === 'valve') {
-              const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = this._valve_inputValveNeighbors;
-              inputValveNeighbors.length = 0;
-              const inputNeighborNeighbors = inputNeighbor.containmentNeighborTiles;
-              for (let j = 0; j < inputNeighborNeighbors.length; j++) {
-                const t = inputNeighborNeighbors[j];
-                if (t.part && t !== valve) {
-                  inputValveNeighbors.push(t);
-                }
-              }
-              const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
-
-              // Only allow if this valve's input connects to another valve's output
-              if (inputValveOutput !== valve) continue;
-            }
-
-            const inputHeat = inputNeighbor.heat_contained || 0;
-            const inputContainment = inputNeighbor.part.containment || 1;
-            const inputRatio = inputHeat / inputContainment;
-
-            if (inputRatio >= 0.8) {
-              inputNeighbors.push(inputNeighbor);
-              outputNeighbors.push(outputNeighbor);
-            }
-          }
-        } else if (valvePart.type === 'topup_valve') {
-          // Top-up valve: only works if output side neighbor is below 20% containment
-          const orientation = this._getValveOrientation(valvePart.id);
-          const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
-
-          if (inputNeighbor && outputNeighbor) {
-            // Validation: valves can't pull from other valves unless input connects to output
-            if (inputNeighbor.part?.category === 'valve') {
-              const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = this._valve_inputValveNeighbors;
-              inputValveNeighbors.length = 0;
-              const inputNeighborNeighbors = inputNeighbor.containmentNeighborTiles;
-              for (let j = 0; j < inputNeighborNeighbors.length; j++) {
-                const t = inputNeighborNeighbors[j];
-                if (t.part && t !== valve) {
-                  inputValveNeighbors.push(t);
-                }
-              }
-              const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
-
-              // Only allow if this valve's input connects to another valve's output
-              if (inputValveOutput !== valve) continue;
-            }
-
-            const outputHeat = outputNeighbor.heat_contained || 0;
-            const outputContainment = outputNeighbor.part.containment || 1;
-            const outputRatio = outputHeat / outputContainment;
-
-            if (outputRatio <= 0.2) {
-              inputNeighbors.push(inputNeighbor);
-              outputNeighbors.push(outputNeighbor);
-            }
-          }
-        } else if (valvePart.type === 'check_valve') {
-          // Check valve: one-way transfer from input to output
-          const orientation = this._getValveOrientation(valvePart.id);
-          const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
-
-          if (inputNeighbor && outputNeighbor) {
-            // Validation: valves can't pull from other valves unless input connects to output
-            if (inputNeighbor.part?.category === 'valve') {
-              const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
-              const inputValveNeighbors = this._valve_inputValveNeighbors;
-              inputValveNeighbors.length = 0;
-              const inputNeighborNeighbors = inputNeighbor.containmentNeighborTiles;
-              for (let j = 0; j < inputNeighborNeighbors.length; j++) {
-                const t = inputNeighborNeighbors[j];
-                if (t.part && t !== valve) {
-                  inputValveNeighbors.push(t);
-                }
-              }
-              const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
-
-              // Only allow if this valve's input connects to another valve's output
-              if (inputValveOutput !== valve) continue;
-            }
-
-            // Check valve is always active (no threshold conditions)
-            inputNeighbors.push(inputNeighbor);
-            outputNeighbors.push(outputNeighbor);
-          }
-        }
-
-        // Process heat transfer for each input-output pair
-        // Only transfer if we have valid input and output neighbors
-        // Valves should never store heat - they only transfer when both input and output are available
-        if (inputNeighbors.length > 0 && outputNeighbors.length > 0) {
-          for (let inputIdx = 0; inputIdx < inputNeighbors.length; inputIdx++) {
-            const input = inputNeighbors[inputIdx];
-            for (let outputIdx = 0; outputIdx < outputNeighbors.length; outputIdx++) {
-              const output = outputNeighbors[outputIdx];
-              const inputHeat = input.heat_contained || 0;
-              let maxTransfer = valve.getEffectiveTransferValue() * multiplier;
-
-              if (maxTransfer > 0) {
-                if (valvePart.type === 'topup_valve') {
-                  const outCap = output.part.containment || 1;
-                  maxTransfer = Math.min(maxTransfer, outCap * 0.2);
-                }
-
-                const outputCap = output.part.containment || 0;
-                const outputHeat = output.heat_contained || 0;
-                const outputSpace = Math.max(0, outputCap - outputHeat);
-
-                const transferAmount = Math.min(maxTransfer, inputHeat, outputSpace);
-
-                if (transferAmount > 0) {
-                  input.heat_contained -= transferAmount;
-                  output.heat_contained += transferAmount;
-
-                  // Note: Valve neighbors are now pre-populated in _updateValveNeighborCache()
-                  // so we don't need to add them here during heat transfer
-                  // DO NOT mark output as processed - it needs to run its own heat transfer logic
-
-                  // Add visual effect - DISABLED for performance
-                  const cnt = transferAmount >= 50 ? 3 : transferAmount >= 15 ? 2 : 1;
-                  for (let i = 0; i < cnt; i++) {
-                    // visualEvents[visualEventIndex++] = {
-                    //   type: 'flow',
-                    //   icon: 'heat',
-                    //   from: [input.row, input.col],
-                    //   to: [output.row, output.col],
-                    //   amount: transferAmount
-                    // };
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        valve.heat_contained = 0;
-      }
-    }
-
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markEnd("tick_valves");
-    }
-
-    // Exchangers (two-phase plan to prevent ping-pong; prioritize vents/coolants; capacity-aware)
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markStart("tick_exchangers");
-    }
-
-    {
-      if (!Array.isArray(this.active_exchangers)) {
-        this.active_exchangers = [];
-      }
-      const exchangers = this.active_exchangers;
-
-      if (!this._heatCalc_startHeat) this._heatCalc_startHeat = new Map();
-      if (!this._heatCalc_plannedOutByNeighbor) this._heatCalc_plannedOutByNeighbor = new Map();
-      if (!this._heatCalc_plannedInByNeighbor) this._heatCalc_plannedInByNeighbor = new Map();
-      if (!this._heatCalc_plannedInByExchanger) this._heatCalc_plannedInByExchanger = new Map();
-      if (!this._valveNeighborExchangers) this._valveNeighborExchangers = new Set();
-
-      this._heatCalc_startHeat.clear();
-      this._heatCalc_plannedCount = 0;
-      this._heatCalc_plannedOutByNeighbor.clear();
-      this._heatCalc_plannedInByNeighbor.clear();
-      this._heatCalc_plannedInByExchanger.clear();
-
-      const startHeat = this._heatCalc_startHeat;
-      const valveNeighborExchangers = this._valveNeighborExchangers;
-      valveNeighborExchangers.clear();
-
-      // Pre-pass
-      for (let i = 0; i < exchangers.length; i++) {
-        const t = exchangers[i];
-        if (!t.part || t.part.category === 'valve') continue;
-
-        if (valveNeighborTiles.has(t)) {
-          valveNeighborExchangers.add(t);
-          startHeat.set(t, t.heat_contained || 0);
-        } else {
-          startHeat.set(t, t.heat_contained || 0);
-        }
-      }
-
-      const plannedInByNeighbor = this._heatCalc_plannedInByNeighbor;
-      const plannedOutByNeighbor = this._heatCalc_plannedOutByNeighbor;
-      const plannedInByExchanger = this._heatCalc_plannedInByExchanger;
-
-      for (let i = 0; i < exchangers.length; i++) {
-        const tile = exchangers[i];
-        const tile_part = tile.part;
-        if (!tile_part || tile_part.category === 'valve') continue;
-
-        const heatStart = valveNeighborExchangers.has(tile) ? (tile.heat_contained || 0) : (startHeat.get(tile) || 0);
-        const effectiveTransferValue = tile.getEffectiveTransferValue();
-        
-        // Reuse neighbors array from Tile cache, avoid .filter()
-        const neighborsAll = tile.containmentNeighborTiles;
-        const validNeighbors = this._heatCalc_validNeighbors;
-        validNeighbors.length = 0;
-        for(let nIdx=0; nIdx<neighborsAll.length; nIdx++) {
-            if(neighborsAll[nIdx].part) validNeighbors.push(neighborsAll[nIdx]);
-        }
-
-        // Manual insertion sort for small neighbor array (max 4-8 elements)
-        for (let sortIdx = 1; sortIdx < validNeighbors.length; sortIdx++) {
-            const current = validNeighbors[sortIdx];
-            let j = sortIdx - 1;
-            while (j >= 0) {
-                const a = validNeighbors[j];
-                const aPref = (a.part.category === 'vent' || a.part.category === 'coolant_cell') ? 2 : (a.part.category === 'heat_exchanger' ? 0 : 1);
-                const bPref = (current.part.category === 'vent' || current.part.category === 'coolant_cell') ? 2 : (current.part.category === 'heat_exchanger' ? 0 : 1);
-
-                let shouldMove = false;
-                if (bPref > aPref) {
-                    shouldMove = true;
-                } else if (bPref === aPref) {
-                    const headA = Math.max((a.part.containment || 0) - (a.heat_contained || 0), 0);
-                    const headB = Math.max((current.part.containment || 0) - (current.heat_contained || 0), 0);
-                    if (headB > headA) shouldMove = true;
-                }
-
-                if (shouldMove) {
-                    validNeighbors[j + 1] = validNeighbors[j];
-                    j--;
-                } else {
-                    break;
-                }
-            }
-            validNeighbors[j + 1] = current;
-        }
-
-        let remainingPush = heatStart;
-
-        // Calculate totalHeadroom once per exchanger
-        let totalHeadroom = 0;
-        for (let nIdx = 0; nIdx < validNeighbors.length; nIdx++) {
-            const n = validNeighbors[nIdx];
-            totalHeadroom += Math.max((n.part?.containment || 0) - (n.heat_contained || 0), 0);
-        }
-        if (totalHeadroom === 0) totalHeadroom = 1;
-
-        for (let nIdx = 0; nIdx < validNeighbors.length; nIdx++) {
-            const neighbor = validNeighbors[nIdx];
-            const isExchangerNeighbor = startHeat.has(neighbor);
-            const isValveNeighbor = valveNeighborTiles.has(neighbor);
-            const isNeighborOfValveNeighbor = valveNeighborExchangers.has(tile) && isExchangerNeighbor;
-            const nStartRaw = (isValveNeighbor || isNeighborOfValveNeighbor) ? (neighbor.heat_contained || 0) : (isExchangerNeighbor ? (startHeat.get(neighbor) || 0) : (neighbor.heat_contained || 0));
-            const neighborCapacity = neighbor.part.containment || 0;
-            
-            if (remainingPush > 0 && (heatStart > nStartRaw || (/*isPreferred*/(neighbor.part.category === 'vent' || neighbor.part.category === 'coolant_cell') && heatStart === nStartRaw && heatStart > 0))) {
-                 const diff = Math.max(0, heatStart - nStartRaw) || 1;
-
-                 const neighborHeadroomForWeight = Math.max(neighborCapacity - nStartRaw, 0);
-                 const capacityBias = Math.max(neighborHeadroomForWeight / totalHeadroom, 0);
-                 const biasedCap = Math.max(1, Math.floor(effectiveTransferValue * capacityBias * multiplier));
-                 let transfer_heat = Math.min(biasedCap, Math.ceil(diff / 2), remainingPush);
-
-                 if (transfer_heat > 0) {
-                    // Use Pool
-                    if (this._heatCalc_plannedCount < this._heatCalc_plannedPool.length) {
-                        const p = this._heatCalc_plannedPool[this._heatCalc_plannedCount++];
-                        p.from = tile;
-                        p.to = neighbor;
-                        p.amount = transfer_heat;
-                    } else {
-                        // Fallback / Expand pool
-                        this._heatCalc_plannedPool.push({ from: tile, to: neighbor, amount: transfer_heat });
-                        this._heatCalc_plannedCount++;
-                    }
-                    
-                    remainingPush -= transfer_heat;
-                    plannedInByNeighbor.set(neighbor, (plannedInByNeighbor.get(neighbor) || 0) + transfer_heat);
-                    if (remainingPush <= 0) continue;
-                 }
-            }
-
-            // Pull logic
-            if (!isExchangerNeighbor || isValveNeighbor || isNeighborOfValveNeighbor) {
-                const alreadyOut = plannedOutByNeighbor.get(neighbor) || 0;
-                const nAvailable = Math.max(0, nStartRaw - alreadyOut);
-                if (nAvailable > 0 && nStartRaw > heatStart) {
-                    const diff = nStartRaw - heatStart;
-                    const biasedCap = effectiveTransferValue * multiplier;
-                    let transfer_heat = Math.min(biasedCap, Math.ceil(diff / 2), nAvailable);
-
-                    if (transfer_heat > 0) {
-                        // Use Pool
-                        if (this._heatCalc_plannedCount < this._heatCalc_plannedPool.length) {
-                            const p = this._heatCalc_plannedPool[this._heatCalc_plannedCount++];
-                            p.from = neighbor;
-                            p.to = tile;
-                            p.amount = transfer_heat;
-                        } else {
-                            this._heatCalc_plannedPool.push({ from: neighbor, to: tile, amount: transfer_heat });
-                            this._heatCalc_plannedCount++;
-                        }
-                        
-                        plannedOutByNeighbor.set(neighbor, alreadyOut + transfer_heat);
-                        plannedInByExchanger.set(tile, (plannedInByExchanger.get(tile) || 0) + transfer_heat);
-                    }
-                }
-            }
-        }
-      }
-
-      // Apply Planned Transfers
-      for (let i=0; i < this._heatCalc_plannedCount; i++) {
-        const p = this._heatCalc_plannedPool[i];
-        p.from.heat_contained -= p.amount;
-        p.to.heat_contained += p.amount;
-      }
-
-    }
-
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markEnd("tick_exchangers");
-    }
-    this.game.logger?.debug(`[TICK STAGE] After heat transfer (exchangers): Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
-
-    // Outlets
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markStart("tick_outlets");
-    }
-
-    for (let i=0; i<this.active_outlets.length; i++) {
-       const tile = this.active_outlets[i];
-       const tile_part = tile.part;
-       if (!tile_part || !tile.activated) continue;
-       const neighbors = this._outletProcessing_neighbors;
-       neighbors.length = 0;
-       const contNeighbors = tile.containmentNeighborTiles;
-       for (let j = 0; j < contNeighbors.length; j++) {
-         const t = contNeighbors[j];
-         if (t.part && t.part.category !== 'valve') {
-           neighbors.push(t);
-         }
-       }
-       const transferCap = tile.getEffectiveTransferValue() * multiplier;
-       let outlet_transfer_heat = Math.min(transferCap, reactor.current_heat);
-       
-       if (outlet_transfer_heat > 0 && reactor.current_heat > 0) {
-           if (neighbors.length > 0) {
-               const per_neighbor = outlet_transfer_heat / neighbors.length;
-               
-               for(let j = 0; j < neighbors.length; j++) {
-                   const neighbor = neighbors[j];
-                   const cap = neighbor.part.containment || 0;
-                   const current = neighbor.heat_contained || 0;
-                   
-                   let toAdd = per_neighbor;
-                   if (tile_part.id === 'heat_outlet6' && cap > 0) {
-                       toAdd = Math.min(toAdd, Math.max(0, cap - current));
-                   }
-                   
-                   toAdd = Math.min(toAdd, reactor.current_heat);
-                   
-                   if (toAdd > 0) {
-                       neighbor.heat_contained += toAdd;
-                       reactor.current_heat -= toAdd;
-                       outlet_transfer_heat -= toAdd;
-                   }
-               }
-           } else {
-               tile.heat_contained = (tile.heat_contained || 0) + outlet_transfer_heat;
-               reactor.current_heat -= outlet_transfer_heat;
-           }
-       }
-    }
-
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markEnd("tick_outlets");
-    }
-    this.game.logger?.debug(`[TICK STAGE] After heat transfer (outlets): Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
-
-    // End the overall heat transfer measurement
-    if (this.game.performance && this.game.performance.shouldMeasure()) {
-      this.game.performance.markEnd("tick_heat_transfer");
     }
 
     // Process Particle Accelerators and Extreme Capacitors

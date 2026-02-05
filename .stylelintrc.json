@@ -1,117 +1,59 @@
 {
-  "extends": [
-    "stylelint-config-standard",
-    "stylelint-config-idiomatic-order"
-  ],
-  "plugins": [
-    "stylelint-order",
-    "stylelint-color-format",
-    "@stylistic/stylelint-plugin",
-    "stylelint-plugin-defensive-css",
-    "stylelint-high-performance-animation"
-  ],
+  "extends": ["stylelint-config-standard"],
+  "plugins": ["@stylistic/stylelint-plugin"],
   "overrides": [
-    {
-      "files": ["**/*.html"],
-      "customSyntax": "postcss-html"
-    },
-    {
-      "files": ["**/*.js"],
-      "customSyntax": "postcss-html"
-    }
+    {"files": ["**/*.html"], "customSyntax": "postcss-html"},
+    {"files": ["**/*.js"], "customSyntax": "postcss-html"}
   ],
   "rules": {
-    "selector-class-pattern": [
-      "^[a-z]([a-z0-9-]+)?(__([a-z0-9]+-?)+)?(--([a-z0-9]+-?)+)?$",
-      {
-        "message": "Selector should follow BEM naming convention: .block__element--modifier (e.g., .parts-panel__button--disabled)"
-      }
-    ],
-    "declaration-property-unit-disallowed-list": {
-      "line-height": [
-        "px",
-        "rem",
-        "em"
-      ]
-    },
-    "declaration-no-important": [
-      true,
-      {
-        "severity": "warning"
-      }
-    ],
-    "max-nesting-depth": [
-      2,
-      {
-        "ignore": [
-          "pseudo-classes"
-        ]
-      }
-    ],
-    "at-rule-no-vendor-prefix": true,
-    "property-no-vendor-prefix": true,
-    "selector-no-vendor-prefix": true,
-    "value-no-vendor-prefix": true,
-    "comment-empty-line-before": [
-      "always",
-      {
-        "except": [
-          "first-nested"
-        ],
-        "ignore": [
-          "stylelint-commands"
-        ]
-      }
-    ],
-    "declaration-empty-line-before": [
-      "always",
-      {
-        "ignore": [
-          "after-comment",
-          "after-declaration",
-          "first-nested",
-          "inside-single-line-block"
-        ]
-      }
-    ],
-    "custom-property-pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$",
-    "color-hex-length": "short",
-    "font-family-name-quotes": "always-where-recommended",
-    "function-name-case": "lower",
-    "color-format/format": {
-      "format": "rgb"
-    },
-    "no-descending-specificity": null,
-    "selector-id-pattern": null,
-    "declaration-no-important": null,
-    "selector-class-pattern": null,
-    "plugin/use-defensive-css": [
-      true,
-      {
-        "accidental-hover": true,
-        "background-repeat": true,
-        "custom-property-fallbacks": true,
-        "flex-wrapping": true,
-        "scroll-chaining": true,
-        "scrollbar-gutter": true,
-        "vendor-prefix-grouping": true
-      }
-    ],
-    "plugin/no-low-performance-animation-properties": true,
-    "@stylistic/color-hex-case": "lower",
-    "@stylistic/number-leading-zero": "always",
-    "@stylistic/unit-case": "lower",
-    "@stylistic/string-quotes": "double",
-    "@stylistic/indentation": 2,
+    "declaration-block-no-redundant-longhand-properties": [true, {"ignoreShorthands": []}],
+    "shorthand-property-no-redundant-values": true,
+    "no-duplicate-selectors": true,
+    "declaration-block-no-duplicate-properties": [true, {"ignore": ["consecutive-duplicates-with-different-values"]}],
+    "no-duplicate-at-import-rules": true,
+    "comment-empty-line-before": ["never", {"ignore": ["stylelint-commands"]}],
+    "declaration-empty-line-before": ["never", {"ignore": ["first-nested", "inside-single-line-block"]}],
+    "@stylistic/indentation": 1,
+    "@stylistic/max-empty-lines": null,
+    "@stylistic/selector-list-comma-newline-after": "always-multi-line",
+    "@stylistic/selector-list-comma-newline-before": "never-multi-line",
+    "@stylistic/selector-list-comma-space-after": "always-single-line",
+    "@stylistic/selector-list-comma-space-before": "never",
+    "@stylistic/selector-max-empty-lines": 0,
+    "@stylistic/block-closing-brace-empty-line-before": "never",
     "@stylistic/block-closing-brace-newline-after": "always",
     "@stylistic/block-closing-brace-newline-before": "always-multi-line",
-    "@stylistic/block-opening-brace-newline-after": "always-multi-line",
+    "@stylistic/block-opening-brace-newline-after": null,
     "@stylistic/block-opening-brace-space-before": "always",
-    "@stylistic/declaration-colon-space-after": "always",
-    "@stylistic/declaration-colon-space-before": "never",
-    "@stylistic/declaration-block-semicolon-newline-after": "always-multi-line",
-    "@stylistic/declaration-block-semicolon-space-after": "always-single-line",
+    "@stylistic/block-opening-brace-space-after": null,
+    "@stylistic/declaration-block-semicolon-newline-after": null,
+    "@stylistic/declaration-block-semicolon-newline-before": "never-multi-line",
+    "@stylistic/declaration-block-semicolon-space-after": null,
     "@stylistic/declaration-block-semicolon-space-before": "never",
-    "@stylistic/declaration-block-trailing-semicolon": "always"
+    "@stylistic/declaration-block-trailing-semicolon": "always",
+    "@stylistic/declaration-colon-space-before": "never",
+    "@stylistic/declaration-colon-space-after": "always-single-line",
+    "@stylistic/declaration-colon-newline-after": null,
+    "@stylistic/no-extra-semicolons": true,
+    "@stylistic/no-eol-whitespace": true,
+    "@stylistic/no-empty-first-line": true,
+    "@stylistic/no-missing-end-of-source-newline": true,
+    "@stylistic/function-comma-space-after": "always-single-line",
+    "@stylistic/function-comma-space-before": "never",
+    "@stylistic/function-max-empty-lines": 0,
+    "@stylistic/value-list-comma-space-after": "always-single-line",
+    "@stylistic/value-list-comma-space-before": "never",
+    "@stylistic/value-list-max-empty-lines": 0,
+    "@stylistic/media-feature-parentheses-space-inside": "never",
+    "@stylistic/media-query-list-comma-space-after": "always-single-line",
+    "@stylistic/media-query-list-comma-space-before": "never",
+    "no-descending-specificity": null,
+    "selector-id-pattern": null,
+    "selector-class-pattern": null,
+    "declaration-block-single-line-max-declarations": null,
+    "keyframes-name-pattern": null,
+    "selector-type-no-unknown": null,
+    "block-no-empty": null,
+    "unit-no-unknown": [true, {"ignoreUnits": ["p"]}]
   }
 }

@@ -1,2 +1,14 @@
 {
+  "stylelint.enable": true,
+  "stylelint.validate": ["css", "html", "javascript"],
+  "stylelint.snippet": ["css"],
+  "css.validate": false,
+  "less.validate": false,
+  "scss.validate": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.stylelint": "explicit"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "stylelint.vscode-stylelint"
+  }
 }

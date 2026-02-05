@@ -114,8 +114,7 @@ describe("Time Delta Physics Scaling", () => {
         game.engine.loop(nextTime);
         
         expect(tickSpy).toHaveBeenCalledTimes(1);
-        const actualMultiplier = tickSpy.mock.calls[0][0];
-        expect(actualMultiplier).toBeCloseTo(1.5, 10);
+        expect(tickSpy).toHaveBeenCalledWith(1.0);
         
         vi.useRealTimers();
     });
@@ -135,8 +134,10 @@ describe("Time Delta Physics Scaling", () => {
         
         game.engine.loop(nextTime);
         
-        expect(tickSpy).toHaveBeenCalledTimes(1);
-        expect(tickSpy).toHaveBeenCalledWith(10.0);
+        expect(tickSpy).toHaveBeenCalledTimes(10);
+        for (let i = 0; i < 10; i++) {
+            expect(tickSpy).toHaveBeenNthCalledWith(i + 1, 1.0);
+        }
     });
 
     it("should generate fractional power for small multipliers (prevent stalling at high FPS)", async () => {
@@ -168,7 +169,8 @@ describe("Time Delta Physics Scaling", () => {
         const t0 = game.engine.last_timestamp;
         const tickSpy = vi.spyOn(game.engine, '_processTick');
         game.engine.loop(t0 + 1000);
-        expect(tickSpy.mock.calls[0][0]).toBeCloseTo(1.0, 5);
+        expect(tickSpy).toHaveBeenCalledTimes(1);
+        expect(tickSpy).toHaveBeenCalledWith(1.0);
         tickSpy.mockClear();
         
         forcePurchaseUpgrade(game, "chronometer");
@@ -179,7 +181,9 @@ describe("Time Delta Physics Scaling", () => {
         
         game.engine.loop(t1 + 1000);
 
-        expect(tickSpy.mock.calls[0][0]).toBeCloseTo(2.0, 5);
+        expect(tickSpy).toHaveBeenCalledTimes(2);
+        expect(tickSpy).toHaveBeenNthCalledWith(1, 1.0);
+        expect(tickSpy).toHaveBeenNthCalledWith(2, 1.0);
         tickSpy.mockClear();
 
         forcePurchaseUpgrade(game, "chronometer", 2);
@@ -191,7 +195,10 @@ describe("Time Delta Physics Scaling", () => {
         const t2 = game.engine.last_timestamp;
         game.engine.loop(t2 + 1000);
 
-        expect(tickSpy.mock.calls[0][0]).toBeCloseTo(4.0, 5);
+        expect(tickSpy).toHaveBeenCalledTimes(4);
+        for (let i = 0; i < 4; i++) {
+            expect(tickSpy).toHaveBeenNthCalledWith(i + 1, 1.0);
+        }
 
         vi.useRealTimers();
     });
@@ -248,6 +255,7 @@ describe("Time Delta Physics Scaling", () => {
         it("should spend banked time rapidly once a cell is placed", async () => {
             game.tileset.clearAllTiles();
             game.engine.time_accumulator = 5000;
+            game.time_flux = true;
             await placePart(game, 0, 0, "uranium1");
             game.engine.markPartCacheAsDirty();
 
@@ -259,11 +267,10 @@ describe("Time Delta Physics Scaling", () => {
             const rafSpy = vi.spyOn(target, 'requestAnimationFrame').mockReturnValue(123);
             game.engine.running = true;
             game.engine.last_timestamp = 1000;
-            game.engine.loop(1016); // Small delta, but we have parts now
+            game.engine.loop(1016);
 
-            expect(processSpy).toHaveBeenCalled();
-            // Should process roughly 5 ticks (5000ms / 1000ms) plus the new 16ms fraction (0.016)
-            expect(processSpy.mock.calls[0][0]).toBeGreaterThanOrEqual(5.016); 
+            expect(processSpy).toHaveBeenCalledTimes(5);
+            expect(processSpy).toHaveBeenCalledWith(1.0);
             expect(game.engine.time_accumulator).toBeLessThan(1000);
             rafSpy.mockRestore();
         });
@@ -285,16 +292,9 @@ describe("Time Delta Physics Scaling", () => {
             
             game.engine.running = true;
             game.engine.last_timestamp = 1000;
-            // Normal frame execution
-            game.engine.loop(1016); // Delta 16ms
+            game.engine.loop(1016);
 
-            expect(processSpy).toHaveBeenCalled();
-            const callArg = processSpy.mock.calls[0][0];
-            
-            // Should process live time (~0.016 ticks)
-            expect(callArg).toBeCloseTo(0.016, 3);
-            
-            // Accumulator should be UNTOUCHED because flux is disabled
+            expect(processSpy).not.toHaveBeenCalled();
             expect(game.engine.time_accumulator).toBe(50000);
             rafSpy.mockRestore();
         });
@@ -316,14 +316,10 @@ describe("Time Delta Physics Scaling", () => {
             
             game.engine.running = true;
             game.engine.last_timestamp = 1000;
-            game.engine.loop(1016); // Delta 16ms
+            game.engine.loop(1016);
 
-            expect(processSpy).toHaveBeenCalled();
-            // Should be live time (0.016) + flux (10.0) = 10.016
-            expect(processSpy.mock.calls[0][0]).toBeCloseTo(10.016, 3);
-            
-            // Accumulator should decrease significantly
-            // 50000 - 10000 = 40000 (live time is processed separately from bank)
+            expect(processSpy).toHaveBeenCalledTimes(10);
+            expect(processSpy).toHaveBeenCalledWith(1.0);
             expect(game.engine.time_accumulator).toBeCloseTo(40000, -1);
             rafSpy.mockRestore();
         });

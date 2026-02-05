@@ -72,6 +72,7 @@ async function handleUserSession(game, pageRouter, ui) {
       savedGame = await game.loadGame();
       console.log(`[DEBUG] Load result: ${savedGame}`);
     }
+    if (savedGame) game.paused = true;
   }
 
   const hash = window.location.hash.substring(1);
