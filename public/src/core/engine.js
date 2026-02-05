@@ -49,6 +49,8 @@ export class Engine {
     this._explosion_tilesToExplode = [];
 
     // Valve Processing Pre-allocation (Avoid GC)
+    this._valveOrientationCache = new Map();
+    this._valveNeighborResult = { inputNeighbor: null, outputNeighbor: null };
     this._valveProcessing_valves = [];
     this._valveProcessing_neighbors = [];
     this._valveProcessing_inputNeighbors = [];
