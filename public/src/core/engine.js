@@ -24,7 +24,7 @@ export class Engine {
     this._valveNeighborCache = new Set();
     this._valveNeighborCacheDirty = true;
     this._valveOrientationCache = new Map();
-    
+
     // Object Pooling & Memory Optimization
     this._visualEventPool = [];
     for (let i = 0; i < 200; i++) {
@@ -895,7 +895,6 @@ export class Engine {
         }
 
         // Manual insertion sort for small neighbor array (max 4-8 elements)
-        // Significantly faster than Array.prototype.sort() for tiny arrays due to avoiding native sort overhead
         for (let sortIdx = 1; sortIdx < validNeighbors.length; sortIdx++) {
             const current = validNeighbors[sortIdx];
             let j = sortIdx - 1;

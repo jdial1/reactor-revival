@@ -46,3 +46,4 @@
 3. **Allocation Removal:** Refactored convective boost calculation to use direct `getTile` calls instead of temporary arrays/objects.
 4. **Loop Optimization:** Replaced the final `for...of` loop in `_processTick` with a standard `for` loop.
 5. **Removed Redundancy:** Eliminated O(N) `includes`/`splice` calls from the valve processing loop.
+6. **Manual Insertion Sort:** Replaced `Array.prototype.sort()` with manual insertion sort for the small `validNeighbors` list in exchanger logic.
