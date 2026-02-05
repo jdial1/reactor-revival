@@ -4,9 +4,8 @@
   "short_name": "Reactor Revival",
   "description": "An incremental reactor simulation game. Build and optimize your reactor, balance power output against heat, unlock upgrades, and harness exotic particles to push your reactor further. Features offline progression and Time Flux acceleration.",
   "start_url": "/reactor-revival/",
-  "display": "fullscreen",
+  "display": "standalone",
   "display_override": [
-    "fullscreen",
     "standalone"
   ],
   "background_color": "#1a1a1a",

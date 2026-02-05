@@ -77,7 +77,7 @@ describe("Manifest Validation", () => {
         it("should have a display field", () => {
             expect(manifest.display).toBeDefined();
             expect(typeof manifest.display).toBe("string");
-            const validDisplays = ["fullscreen", "standalone", "minimal-ui", "browser"];
+            const validDisplays = ["standalone", "minimal-ui", "browser"];
             expect(validDisplays).toContain(manifest.display);
         });
 
