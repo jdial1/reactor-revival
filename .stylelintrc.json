@@ -10,6 +10,16 @@
     "stylelint-plugin-defensive-css",
     "stylelint-high-performance-animation"
   ],
+  "overrides": [
+    {
+      "files": ["**/*.html"],
+      "customSyntax": "postcss-html"
+    },
+    {
+      "files": ["**/*.js"],
+      "customSyntax": "postcss-html"
+    }
+  ],
   "rules": {
     "selector-class-pattern": [
       "^[a-z]([a-z0-9-]+)?(__([a-z0-9]+-?)+)?(--([a-z0-9]+-?)+)?$",

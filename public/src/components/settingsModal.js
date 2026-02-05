@@ -148,8 +148,8 @@ ${mechSwitch("setting-hide-max-research", hideMaxResearch)}
 <button class="pixel-btn" id="setting-import">Import</button>
 <input type="file" id="setting-import-input" accept=".json" style="display: none;">
 </div>
-<div id="setting-cloud-saves" style="display:none; margin-top: 10px;">
-<h4 style="font-size: 0.8rem; margin-bottom: 5px;">Cloud Saves</h4>
+<div id="setting-cloud-saves" style="display: none; margin-top: 10px;">
+<h4 style=" margin-bottom: 5px;font-size: 0.8rem;">Cloud Saves</h4>
 <div class="data-buttons">
 <button class="pixel-btn" id="setting-save-cloud-1">Save Slot 1</button>
 <button class="pixel-btn" id="setting-save-cloud-2">Save Slot 2</button>
@@ -173,8 +173,8 @@ ${mechSwitch("setting-notifications", false)}
 </div>
 <div class="settings-group">
 <h3>About</h3>
-<p style="font-size: 0.6rem; margin: 0.5rem 0;">Version: <span id="app_version">Loading...</span></p>
-<p style="font-size: 0.6rem; margin: 0.5rem 0;">Display Mode: <span id="app_display_mode">Detecting...</span></p>
+<p style=" margin: 0.5rem 0;font-size: 0.6rem;">Version: <span id="app_version">Loading...</span></p>
+<p style=" margin: 0.5rem 0;font-size: 0.6rem;">Display Mode: <span id="app_display_mode">Detecting...</span></p>
 </div>
 </div>
 </div>

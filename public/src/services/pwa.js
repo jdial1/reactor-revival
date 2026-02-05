@@ -778,16 +778,16 @@ class SplashScreenManager {
     let html = '';
     
     if (isCloudAvailable) {
-        html += '<h2 class="splash-menu-header" style="font-size: 1rem; color: #4caf50;">CLOUD SAVES</h2>';
+        html += '<h2 class="splash-menu-header" style=" color: rgb(76 175 80);font-size: 1rem;">CLOUD SAVES</h2>';
         html += this.generateSaveSlotHTML(cloudSaveSlots, true);
-        html += '<h2 class="splash-menu-header" style="font-size: 1rem; color: #aaa; margin-top: 1rem;">LOCAL SAVES</h2>';
+        html += '<h2 class="splash-menu-header" style=" margin-top: 1rem; color: rgb(170 170 170);font-size: 1rem;">LOCAL SAVES</h2>';
     }
 
     html += this.generateSaveSlotHTML(localSaveSlots, false);
 
     saveSlotScreen.innerHTML = `
       <h1 class="splash-title">LOAD GAME</h1>
-      <div class="splash-menu-panel" style="overflow-y: auto; max-height: 80vh;">
+      <div class="splash-menu-panel" style=" max-height: 80vh;overflow-y: auto;">
         <div class="splash-start-options">
           ${html}
           <div class="splash-btn-row">
@@ -2254,12 +2254,12 @@ class SplashScreenManager {
       authForm.innerHTML = `
         <input type="email" id="splash-supabase-email" placeholder="Email" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
         <input type="password" id="splash-supabase-password" placeholder="Password" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <button class="splash-btn" id="splash-supabase-signin" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Sign In</button>
-          <button class="splash-btn" id="splash-supabase-signup" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Sign Up</button>
-          <button class="splash-btn" id="splash-supabase-reset" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Reset</button>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+          <button class="splash-btn" id="splash-supabase-signin" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Sign In</button>
+          <button class="splash-btn" id="splash-supabase-signup" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Sign Up</button>
+          <button class="splash-btn" id="splash-supabase-reset" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Reset</button>
         </div>
-        <div id="splash-supabase-message" style="font-size: 0.7rem; min-height: 1.5rem; text-align: center;"></div>
+        <div id="splash-supabase-message" style=" min-height: 1.5rem;font-size: 0.7rem; text-align: center;"></div>
       `;
       container.appendChild(authForm);
 

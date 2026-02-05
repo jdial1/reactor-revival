@@ -212,7 +212,7 @@ export class TooltipManager {
     if (!tooltipBody) {
       const fallbackDiv = document.createElement("div");
       fallbackDiv.innerHTML = `
-        <div data-role="title" class="tooltip-title" style="font-size:1.1em;font-weight:bold;margin-bottom:0.5em;"></div>
+        <div data-role="title" class="tooltip-title" style="margin-bottom: 0.5em;font-size: 1.1em;font-weight: bold;"></div>
         <div data-role="desktop-summary" class="tooltip-summary-row"></div>
         <p data-role="description"></p>
         <dl class="tooltip-stats" data-role="desktop-stats"></dl>

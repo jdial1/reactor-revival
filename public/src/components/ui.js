@@ -3347,7 +3347,7 @@ export class UI {
 
       // Show total cost under the table
       const costText = cost > 0 ? `Total Cost: $${fmt(cost)}` : "";
-      modalCost.innerHTML = summaryHtml + (costText ? `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">${costText}</div>` : "");
+      modalCost.innerHTML = summaryHtml + (costText ? `<div style="margin-top: 10px; color: rgb(76 175 80); font-weight: bold;">${costText}</div>` : "");
 
       // Set textarea properties based on action
       if (action === "copy") {
@@ -3378,10 +3378,10 @@ export class UI {
         modal.dataset.sellOptionHtml = '';
         if (hasExistingParts) {
           modal.dataset.sellOptionHtml = `
-            <div style="margin-top: 15px; padding: 10px; background-color: #2a2a2a; border: 1px solid #444; border-radius: 4px;">
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <div style=" padding: 10px; border: 1px solid rgb(68 68 68); border-radius: 4px;margin-top: 15px; background-color: rgb(42 42 42);">
+              <label style="display: flex; align-items: center; cursor: pointer; gap: 8px;">
                 <input type="checkbox" id="sell_existing_checkbox" style="margin: 0;">
-                <span style="color: #ffd700;">Sell existing grid for $${fmt(currentSellValue)}</span>
+                <span style="color: rgb(255 215 0);">Sell existing grid for $${fmt(currentSellValue)}</span>
               </label>
             </div>
           `;
@@ -3429,7 +3429,7 @@ export class UI {
         const filteredCost = calculateLayoutCost(filteredLayout);
 
         let html = this.renderComponentIcons(summary, { showCheckboxes: true, checkedTypes });
-        html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">Selected Parts Cost: $${fmt(filteredCost)}</div>`;
+        html += `<div style="margin-top: 10px; color: rgb(76 175 80); font-weight: bold;">Selected Parts Cost: $${fmt(filteredCost)}</div>`;
 
         modalCost.innerHTML = html;
 
@@ -3593,9 +3593,9 @@ export class UI {
           const finalCost = sellExisting && currentSellValue > 0 ? Math.max(0, netCost) : cost;
           const costColor = canPaste ? "#4caf50" : "#ff6b6b";
           const costText = canPaste ? `$${fmt(finalCost)}` : `$${fmt(finalCost)} - Not Enough Money`;
-          html += `<div style="margin-top: 10px; font-weight: bold; color: ${costColor};">${costText}</div>`;
+          html += `<div style="margin-top: 10px; color: ${costColor}; font-weight: bold;">${costText}</div>`;
         } else {
-          html += `<div style="margin-top: 10px; font-weight: bold; color: #ff6b6b;">No parts found in layout</div>`;
+          html += `<div style="margin-top: 10px; color: rgb(255 107 107); font-weight: bold;">No parts found in layout</div>`;
         }
 
         modalCost.innerHTML = html;
@@ -3802,9 +3802,9 @@ export class UI {
 
       // Show total sell value
       if (totalSellValue > 0) {
-        html += `<div style="margin-top: 10px; font-weight: bold; color: #4caf50;">Total Sell Value: $${fmt(totalSellValue)}</div>`;
+        html += `<div style="margin-top: 10px; color: rgb(76 175 80); font-weight: bold;">Total Sell Value: $${fmt(totalSellValue)}</div>`;
       } else {
-        html += `<div style="margin-top: 10px; font-weight: bold; color: #ff6b6b;">No parts selected</div>`;
+        html += `<div style="margin-top: 10px; color: rgb(255 107 107); font-weight: bold;">No parts selected</div>`;
       }
 
       modalCost.innerHTML = html;
@@ -4084,20 +4084,20 @@ export class UI {
 
     if (!this.game) {
       if (container) {
-        container.innerHTML = '<tr><td colspan="7" style="text-align:center;">Game not initialized</td></tr>';
+        container.innerHTML = '<tr><td colspan="7" style="text-align: center;">Game not initialized</td></tr>';
       }
       return;
     }
     
     const loadRecords = async (sortBy) => {
       if (!container) return;
-      container.innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>';
+      container.innerHTML = '<tr><td colspan="7" style="text-align: center;">Loading...</td></tr>';
       
       await leaderboardService.init();
       const records = await leaderboardService.getTopRuns(sortBy, 20);
       
       if (records.length === 0) {
-        container.innerHTML = '<tr><td colspan="7" style="text-align:center">No records found yet. Play to save scores!</td></tr>';
+        container.innerHTML = '<tr><td colspan="7" style="text-align: center;">No records found yet. Play to save scores!</td></tr>';
         showColumn(sortBy);
         return;
       }
@@ -4131,7 +4131,7 @@ export class UI {
             <td class="leaderboard-col-money">$${fmt(run.money)}</td>
             <td class="leaderboard-col-time" style="display: none;">${timeStr}</td>
             <td>
-              ${hasLayout ? `<button class="pixel-btn layout-view-btn" data-index="${index}" style="padding: 2px 6px; font-size: 0.6em;">View</button>` : '<span style="opacity:0.5">-</span>'}
+              ${hasLayout ? `<button class="pixel-btn layout-view-btn" data-index="${index}" style="padding: 2px 6px; font-size: 0.6em;">View</button>` : '<span style="opacity: 0.5;">-</span>'}
             </td>
           </tr>
         `;
@@ -5211,12 +5211,12 @@ export class UI {
     authForm.innerHTML = `
       <input type="email" id="nav-supabase-email" placeholder="Email" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
       <input type="password" id="nav-supabase-password" placeholder="Password" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
-      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <button class="splash-btn" id="nav-supabase-signin" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Sign In</button>
-        <button class="splash-btn" id="nav-supabase-signup" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Sign Up</button>
-        <button class="splash-btn" id="nav-supabase-reset" style="flex: 1; min-width: 100px; background-color: #3ecf8e; border-color: #2b9e6b;">Reset</button>
+      <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        <button class="splash-btn" id="nav-supabase-signin" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Sign In</button>
+        <button class="splash-btn" id="nav-supabase-signup" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Sign Up</button>
+        <button class="splash-btn" id="nav-supabase-reset" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Reset</button>
       </div>
-      <div id="nav-supabase-message" style="font-size: 0.7rem; min-height: 1.5rem; text-align: center;"></div>
+      <div id="nav-supabase-message" style=" min-height: 1.5rem;font-size: 0.7rem; text-align: center;"></div>
     `;
 
     emailBtn.addEventListener("click", () => {
