@@ -449,6 +449,11 @@ export class StateManager {
       toastBtn.classList.toggle("is-active", !objective.completed);
       const iconEl = toastBtn.querySelector(".objectives-toast-icon");
       if (iconEl) iconEl.textContent = objective.completed ? "!" : "?";
+      const isNewGame = objectiveIndex === 0 && !this.game?._saved_objective_index;
+      if (isNewGame && !toastBtn.classList.contains("is-expanded")) {
+        toastBtn.classList.add("is-expanded");
+        toastBtn.setAttribute("aria-expanded", "true");
+      }
     }
   }
 
@@ -458,10 +463,10 @@ export class StateManager {
 
   getObjectiveScrollDuration() {
     const baseWidth = 900;
-    const baseDuration = 8;
+    const baseDuration = 14;
     const screenWidth = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : baseWidth;
     const duration = baseDuration * (screenWidth / baseWidth);
-    return Math.max(4, Math.min(20, duration));
+    return Math.max(10, Math.min(30, duration));
   }
 
   // Always enable objective text scrolling

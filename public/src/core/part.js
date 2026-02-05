@@ -497,6 +497,11 @@ export class Part {
         : `${fmt(this.cost)}`;
       this.$el.appendChild(priceDiv);
 
+      const detailsDiv = document.createElement("div");
+      detailsDiv.className = "part-details";
+      detailsDiv.innerHTML = '<div class="part-details-title"></div><div class="part-details-stats"></div><div class="part-details-desc"></div><div class="part-details-bonuses"></div>';
+      this.$el.appendChild(detailsDiv);
+
       this.$el.classList.toggle("unaffordable", !this.affordable);
       this.$el.disabled = !this.affordable;
 
@@ -543,6 +548,7 @@ export class Part {
         }
       });
 
+      this.populatePartDetails();
       return this.$el;
     }
 
@@ -627,7 +633,150 @@ export class Part {
       }
     });
 
+    this.populatePartDetails();
+
     return this.$el;
+  }
+
+  populatePartDetails() {
+    if (!this.$el) return;
+    const detailsEl = this.$el.querySelector(".part-details");
+    if (!detailsEl) return;
+
+    const titleEl = detailsEl.querySelector(".part-details-title");
+    if (titleEl) {
+      titleEl.textContent = this.title;
+    }
+
+    const statsEl = detailsEl.querySelector(".part-details-stats");
+    if (statsEl) {
+      const stats = [];
+      const cashIcon = "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='$'>";
+      const powerIcon = "<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='pwr'>";
+      const heatIcon = "<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>";
+      const tickIcon = "<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>";
+      if (this.erequires) {
+        stats.push(`<span class="stat-cost">${fmt(this.cost)} EP</span>`);
+      } else {
+        stats.push(`<span class="stat-cost">${cashIcon}${fmt(this.cost)}</span>`);
+      }
+      if (this.power > 0) stats.push(`<span class="stat-power">${powerIcon}${fmt(this.power)}</span>`);
+      if (this.heat > 0) stats.push(`<span class="stat-heat">${heatIcon}${fmt(this.heat, 0)}</span>`);
+      if (this.vent > 0) stats.push(`<span class="stat-vent">${fmt(this.vent, 0)} vent</span>`);
+      if (this.containment > 0) stats.push(`<span class="stat-cont">${heatIcon}${fmt(this.containment, 0)} cap</span>`);
+      if (this.transfer > 0) stats.push(`<span class="stat-xfer">${fmt(this.transfer, 0)} xfer</span>`);
+      if (this.ticks > 0) stats.push(`<span class="stat-tick">${tickIcon}${fmt(this.ticks)}</span>`);
+      if (this.reactor_power > 0) stats.push(`<span class="stat-rpower">${powerIcon}${fmt(this.reactor_power)} cap</span>`);
+      if (this.power_increase > 0) stats.push(`<span class="stat-boost">+${fmt(this.power_increase)}%${powerIcon}</span>`);
+      statsEl.innerHTML = stats.join("");
+    }
+
+    const descEl = detailsEl.querySelector(".part-details-desc");
+    if (descEl) {
+      descEl.textContent = this.description;
+    }
+
+    const bonusEl = detailsEl.querySelector(".part-details-bonuses");
+    if (bonusEl) {
+      const bonuses = this.getUpgradeBonusLines();
+      if (bonuses.length > 0) {
+        bonusEl.innerHTML = bonuses.map(line => `<span class="bonus-line">${line}</span>`).join("");
+      } else {
+        bonusEl.innerHTML = "";
+      }
+    }
+  }
+
+  getUpgradeBonusLines() {
+    const lines = [];
+    if (!this.game?.upgradeset) return lines;
+    const upg = (id) => this.game.upgradeset.getUpgrade(id)?.level || 0;
+    const pctFromMultiplier = (mult) => Math.round((mult - 1) * 100);
+
+    switch (this.category) {
+      case 'vent': {
+        const tev = upg('improved_heat_vents');
+        if (tev > 0) {
+          lines.push(`<span class="pos">+${tev * 100}%</span> venting`);
+          lines.push(`<span class="pos">+${tev * 100}%</span> max heat`);
+        }
+        const fh = upg('fluid_hyperdynamics');
+        if (fh > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, fh))}%</span> venting`);
+        const fp = upg('fractal_piping');
+        if (fp > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, fp))}%</span> max heat`);
+        break;
+      }
+      case 'heat_exchanger': {
+        const ihe = upg('improved_heat_exchangers');
+        if (ihe > 0) lines.push(`<span class="pos">+${ihe * 100}%</span> transfer`);
+        const fh = upg('fluid_hyperdynamics');
+        if (fh > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, fh))}%</span> transfer`);
+        const fp = upg('fractal_piping');
+        if (fp > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, fp))}%</span> max heat`);
+        break;
+      }
+      case 'heat_inlet':
+      case 'heat_outlet': {
+        const ihe = upg('improved_heat_exchangers');
+        if (ihe > 0) lines.push(`<span class="pos">+${ihe * 100}%</span> transfer`);
+        const fp = upg('fractal_piping');
+        if (fp > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, fp))}%</span> max heat`);
+        break;
+      }
+      case 'capacitor': {
+        const iw = upg('improved_wiring');
+        if (iw > 0) lines.push(`<span class="pos">+${iw * 100}%</span> power capacity`);
+        const qb = upg('quantum_buffering');
+        if (qb > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, qb))}%</span> capacity`);
+        break;
+      }
+      case 'coolant_cell': {
+        const icc = upg('improved_coolant_cells');
+        if (icc > 0) lines.push(`<span class="pos">+${icc * 100}%</span> max heat`);
+        const uc = upg('ultracryonics');
+        if (uc > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, uc))}%</span> max heat`);
+        break;
+      }
+      case 'reflector': {
+        const ird = upg('improved_reflector_density');
+        if (ird > 0) lines.push(`<span class="pos">+${ird * 100}%</span> duration`);
+        const inr = upg('improved_neutron_reflection');
+        if (inr > 0) lines.push(`<span class="pos">+${inr}%</span> reflection`);
+        const fsr = upg('full_spectrum_reflectors');
+        if (fsr > 0) lines.push(`<span class="pos">+${fsr * 100}%</span> base reflection`);
+        break;
+      }
+      case 'reactor_plating': {
+        const ia = upg('improved_alloys');
+        if (ia > 0) lines.push(`<span class="pos">+${ia * 100}%</span> reactor heat`);
+        const qb = upg('quantum_buffering');
+        if (qb > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, qb))}%</span> reactor heat`);
+        break;
+      }
+      case 'particle_accelerator': {
+        const lvl = this.level || 1;
+        const id = lvl === 6 ? 'improved_particle_accelerators6' : 'improved_particle_accelerators1';
+        const ipa = upg(id);
+        if (ipa > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, ipa))}%</span> EP heat cap`);
+        break;
+      }
+      case 'cell': {
+        const powerUpg = this.game.upgradeset.getUpgrade(`${this.type}1_cell_power`);
+        if (powerUpg?.level > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, powerUpg.level))}%</span> power`);
+        const tickUpg = this.game.upgradeset.getUpgrade(`${this.type}1_cell_tick`);
+        if (tickUpg?.level > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, tickUpg.level))}%</span> duration`);
+        const perpUpg = this.game.upgradeset.getUpgrade(`${this.type}1_cell_perpetual`);
+        if (perpUpg?.level > 0) lines.push(`Auto-replace`);
+        const infused = upg('infused_cells');
+        if (infused > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, infused))}%</span> power`);
+        const unleashed = upg('unleashed_cells');
+        if (unleashed > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, unleashed))}%</span> pwr/heat`);
+        break;
+      }
+      default:
+        break;
+    }
+    return lines;
   }
 
   setAffordable(isAffordable) {

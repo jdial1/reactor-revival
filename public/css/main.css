@@ -849,6 +849,139 @@ button:active {
   color: white;
 }
 
+.part-details {
+  display: none;
+}
+
+@media (width <= 768px) {
+  body.help-mode-active .item-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  body.help-mode-active .item-grid .part {
+    width: 100%;
+    height: auto;
+    min-height: 48px;
+    flex-direction: row;
+    align-items: stretch;
+    padding: 6px;
+    gap: 8px;
+  }
+
+  body.help-mode-active .item-grid .part .image {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  body.help-mode-active .item-grid .part .part-price {
+    display: none;
+  }
+
+  body.help-mode-active .item-grid .part .part-details {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 2px;
+    text-align: left;
+    overflow: hidden;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-title {
+    font-weight: bold;
+    font-size: 0.95em;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    font-size: 0.8em;
+    color: #ccc;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-cost {
+    color: #9f9;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-power {
+    color: #ff0;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-heat {
+    color: #f80;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-vent {
+    color: #8cf;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-cont {
+    color: #fa0;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-xfer {
+    color: #8af;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-tick {
+    color: #aaa;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-rpower {
+    color: #ff0;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-stats .stat-boost {
+    color: #0f0;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-desc {
+    font-size: 0.75em;
+    color: #aaa;
+    line-height: 1.3;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-bonuses {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    font-size: 0.75em;
+    margin-top: 2px;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-bonuses:empty {
+    display: none;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-bonuses .bonus-line {
+    color: #cfc;
+    white-space: nowrap;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-bonuses .pos {
+    color: #0f0;
+  }
+
+  body.help-mode-active .item-grid .part .part-details-bonuses .neg {
+    color: #f44;
+  }
+}
+
 #parts_tab_contents {
   overflow: hidden auto;
   max-width: 100%;
@@ -1735,6 +1868,7 @@ body.page-leaderboard #build_above_deck_row {
   width: 44px;
   height: 44px;
   padding: 0;
+  margin-bottom:-4px; 
   border: 4px solid;
   border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
   border-radius: 0;
@@ -2012,6 +2146,27 @@ body.page-leaderboard #build_above_deck_row {
 
 .heat-vent .control-deck-rate {
   color: rgb(255 140 80);
+}
+
+.control-deck-auto-rate {
+  position: absolute;
+  top: 18px;
+  right: 6px;
+  font-family: "Press Start 2P", cursive, monospace;
+  font-size: 0.60rem;
+  color: rgb(143 214 148);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.control-deck-auto-rate.visible {
+  opacity: 1;
+}
+
+.power-capacitor .control-deck-auto-rate {
+  right: 16px;
 }
 
 .control-deck-auto-sell-led {
@@ -4769,7 +4924,7 @@ footer#bottom_nav button.active {
 
 #objective_title span {
   display: inline-block;
-  animation: scroll-objective-title 8s linear infinite;
+  animation: scroll-objective-title 14s linear infinite;
   white-space: nowrap;
 }
 
@@ -5100,10 +5255,12 @@ footer#bottom_nav button.active {
 
 .objectives-toast-title {
   display: none;
-  font-size: 0.6rem;
+  font-size: 0.75rem;
   line-height: 1.2;
   min-width: 0;
   white-space: nowrap;
+  color: #2a1a00;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 30%);
 }
 
 .objectives-claim-pill {
@@ -8677,7 +8834,17 @@ body:has(> .page-container) {
 
 @media (width <= 600px) {
   #splash-screen {
-    padding-bottom: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: auto;
+    min-height: 100dvh;
+    max-height: none;
+    justify-content: flex-start;
+    padding-top: 2rem;
+    padding-bottom: 1rem;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
 
   .splash-menu-panel {
@@ -8687,7 +8854,8 @@ body:has(> .page-container) {
 
 @media (width <= 400px) {
   #splash-screen {
-    padding-bottom: 0;
+    padding-top: 1.5rem;
+    padding-bottom: 1rem;
   }
 
   .splash-menu-panel {
@@ -8810,7 +8978,7 @@ body:has(> .page-container) {
   
   /* Ensure objective text scrolling works on tablets */
   #objective_title span {
-    animation: scroll-objective-title 8s linear infinite;
+    animation: scroll-objective-title 14s linear infinite;
   }
 }
 
@@ -8822,7 +8990,7 @@ body:has(> .page-container) {
   
   /* Ensure objective text scrolling works on tablets */
   #objective_title span {
-    animation: scroll-objective-title 8s linear infinite;
+    animation: scroll-objective-title 14s linear infinite;
   }
 }
 

@@ -5451,6 +5451,8 @@ export class UI {
 
       const powerRateEl = document.getElementById("control_deck_power_rate");
       const heatRateEl = document.getElementById("control_deck_heat_rate");
+      const autoSellRateEl = document.getElementById("control_deck_auto_sell_rate");
+      const autoHeatRateEl = document.getElementById("control_deck_auto_heat_rate");
       const powerDelta = this.getPowerNetChange();
       const heatDelta = this.getHeatNetChange();
       if (powerRateEl) {
@@ -5460,6 +5462,28 @@ export class UI {
       if (heatRateEl) {
         const d = Math.round(heatDelta);
         heatRateEl.textContent = d === 0 ? "0" : (d > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(d), 0);
+      }
+      if (autoSellRateEl) {
+        const autoSellEnabled = this.stateManager.getVar("auto_sell");
+        const multiplier = this.game?.reactor?.auto_sell_multiplier || 0;
+        if (autoSellEnabled && multiplier > 0) {
+          const rate = Math.floor(this.game.reactor.max_power * multiplier);
+          autoSellRateEl.innerHTML = "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='$'>" + fmt(rate, 0);
+          autoSellRateEl.classList.add("visible");
+        } else {
+          autoSellRateEl.classList.remove("visible");
+        }
+      }
+      if (autoHeatRateEl) {
+        const heatControlEnabled = this.game?.reactor?.heat_controlled;
+        if (heatControlEnabled && this.game?.reactor?.max_heat > 0) {
+          const ventBonus = this.game.reactor.vent_multiplier_eff || 0;
+          const rate = (this.game.reactor.max_heat / 10000) * (1 + ventBonus / 100);
+          autoHeatRateEl.innerHTML = "<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>\u2193" + fmt(Math.round(rate), 0);
+          autoHeatRateEl.classList.add("visible");
+        } else {
+          autoHeatRateEl.classList.remove("visible");
+        }
       }
 
       const powerFill = document.querySelector(".power-fill");
@@ -5515,7 +5539,7 @@ export class UI {
     }
     if (moneyEl && this.stateManager) {
       const money = this.stateManager.getVar("current_money") ?? 0;
-      moneyEl.textContent = fmt(money);
+      moneyEl.textContent = fmt(money, 0);
     }
     if (pauseBtn) {
       const paused = this.stateManager.getVar("pause") === true;

@@ -2,7 +2,7 @@
   "id": "com.jdial.reactor",
   "name": "Reactor Revival",
   "short_name": "Reactor Revival",
-  "description": "A reactor simulation game where you manage everything from basic uranium cells to advanced reactor cores. Unlock progressive upgrades, collect exotic particles, play offline, and enjoy a fast, responsive modern interface",
+  "description": "An incremental reactor simulation game. Build and optimize your reactor, balance power output against heat, unlock upgrades, and harness exotic particles to push your reactor further. Features offline progression and Time Flux acceleration.",
   "start_url": "/reactor-revival/",
   "display": "fullscreen",
   "display_override": [

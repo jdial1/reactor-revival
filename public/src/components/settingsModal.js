@@ -161,6 +161,7 @@ ${mechSwitch("setting-notifications", false)}
 <div class="settings-group">
 <h3>About</h3>
 <p style="font-size: 0.6rem; margin: 0.5rem 0;">Version: <span id="app_version">Loading...</span></p>
+<p style="font-size: 0.6rem; margin: 0.5rem 0;">Display Mode: <span id="app_display_mode">Detecting...</span></p>
 </div>
 </div>
 </div>
@@ -398,6 +399,13 @@ ${mechSwitch("setting-notifications", false)}
         .catch(() => {
           versionSpan.textContent = "Unknown";
         });
+    }
+
+    const displayModeSpan = this.overlay.querySelector("#app_display_mode");
+    if (displayModeSpan) {
+      const modes = ["fullscreen", "standalone", "minimal-ui", "browser"];
+      const activeMode = modes.find(m => window.matchMedia(`(display-mode: ${m})`).matches) || "browser";
+      displayModeSpan.textContent = activeMode;
     }
 
     if (window.supabaseAuth && window.supabaseAuth.isSignedIn()) {
