@@ -23,6 +23,7 @@ export class Engine {
     this._partCacheDirty = true;
     this._valveNeighborCache = new Set();
     this._valveNeighborCacheDirty = true;
+    this._valveOrientationCache = new Map();
     
     // Object Pooling & Memory Optimization
     this._visualEventPool = [];
@@ -54,6 +55,7 @@ export class Engine {
     this._valveProcessing_outputNeighbors = [];
     this._valve_inputValveNeighbors = [];
     this._valveNeighborExchangers = new Set();
+    this._valveNeighborResult = { inputNeighbor: null, outputNeighbor: null };
 
     // Outlet Processing Pre-allocation (Avoid GC)
     this._outletProcessing_neighbors = [];
@@ -1030,7 +1032,8 @@ export class Engine {
            if (neighbors.length > 0) {
                const per_neighbor = outlet_transfer_heat / neighbors.length;
                
-               for(const neighbor of neighbors) {
+               for(let j = 0; j < neighbors.length; j++) {
+                   const neighbor = neighbors[j];
                    const cap = neighbor.part.containment || 0;
                    const current = neighbor.heat_contained || 0;
                    
@@ -1132,7 +1135,7 @@ export class Engine {
           const r = tile.row;
           const c = tile.col;
           const tileset = this.game.tileset;
-          
+
           let n = tileset.getTile(r - 1, c);
           if (n && n.enabled && !n.part) emptyNeighbors++;
           n = tileset.getTile(r + 1, c);
@@ -1450,7 +1453,6 @@ export class Engine {
     let orientation = this._valveOrientationCache.get(valveId);
     if (orientation !== undefined) return orientation;
 
-    // Extract orientation from valve ID (e.g., "overflow_valve2" -> 2)
     const match = valveId.match(/(\d+)$/);
     orientation = match ? parseInt(match[1]) : 1;
     this._valveOrientationCache.set(valveId, orientation);
@@ -1474,7 +1476,6 @@ export class Engine {
 
     let inputNeighbor, outputNeighbor;
 
-    // Optimization: Avoid sort for the most common case of exactly 2 neighbors
     if (neighbors.length === 2) {
       const a = neighbors[0];
       const b = neighbors[1];
@@ -1497,7 +1498,6 @@ export class Engine {
         default: inputNeighbor = first; outputNeighbor = last;
       }
     } else {
-      // Fallback for more than 2 neighbors
       const sortedNeighbors = neighbors.sort((a, b) => {
         if (orientation === 1 || orientation === 3) {
           return a.col - b.col;

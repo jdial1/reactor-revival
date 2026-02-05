@@ -30,3 +30,17 @@
 2. Replaced redundant vent filtering with a direct reference to `this.active_vents`.
 3. Replaced all remaining `for...of` loops in `_processTick` with standard indexed `for` loops to eliminate iterator overhead.
 4. Inlined the `headroomOf` closure to avoid repeated function creation.
+
+## 2024-07-29 - Optimizing Valve Logic and Convective Boost
+
+**Learning:** Several bottlenecks were identified in the engine tick:
+1. **Valve Orientation:** Regex parsing for valve orientation was happening every tick.
+2. **Valve Neighbors:** `Array.prototype.sort()` was being used for the common 2-neighbor valve case, and new result objects were being created.
+3. **Convective Boost:** A temporary array and four objects were being created for every vent on every tick.
+4. **Iterator Allocation:** A remaining `for...of` loop in the outlet processing block was causing minor memory churn.
+
+**Action:**
+1. **Orientation Caching:** Implemented a `Map` cache for valve orientations.
+2. **Neighbor Pooling:** Pre-allocated a `_valveNeighborResult` object and implemented a fast-path for the 2-neighbor case in `_getInputOutputNeighbors`, avoiding `sort()`.
+3. **Allocation Removal:** Refactored convective boost calculation to use direct `getTile` calls instead of temporary arrays/objects.
+4. **Loop Optimization:** Replaced the final `for...of` loop in `_processTick` with a standard `for` loop.
