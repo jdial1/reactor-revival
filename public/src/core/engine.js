@@ -1,5 +1,11 @@
-import { performance } from "../utils/util.js";
+import { performance, safeGetItem, isTestEnv } from "../utils/util.js";
 import { HeatSystem } from "./heatSystem.js";
+import { runHeatStep } from "./heatCalculations.js";
+import { logger } from "../utils/logger.js";
+
+export const VISUAL_EVENT_POWER = 1;
+export const VISUAL_EVENT_HEAT = 2;
+export const VISUAL_EVENT_EXPLOSION = 3;
 
 export class Engine {
   constructor(game) {
@@ -26,12 +32,10 @@ export class Engine {
     this._valveNeighborCacheDirty = true;
     this._valveOrientationCache = new Map();
 
-    // Object Pooling & Memory Optimization
-    this._visualEventPool = [];
-    for (let i = 0; i < 200; i++) {
-      this._visualEventPool.push({ type: null, icon: null, tile: null, part: null });
-    }
-    this._visualEventCount = 0;
+    this.MAX_EVENTS = 500;
+    this._eventRingBuffer = new Uint32Array(this.MAX_EVENTS * 4);
+    this._eventHead = 0;
+    this._eventTail = 0;
 
     // Heat Manager Pre-allocation (Avoid GC)
     this._heatCalc_startHeat = new Map();
@@ -74,13 +78,275 @@ export class Engine {
 
     this.time_accumulator = 0;
     this._frameTimeAccumulator = 0;
+    this._timeFluxCatchupTotalTicks = 0;
+    this._timeFluxCatchupRemainingTicks = 0;
 
     this.heatManager = new HeatSystem(this);
     this._lastHeatFlowDebug = [];
+    this._worker = null;
+    this._workerPending = false;
+    this._workerHeartbeatId = null;
+    this._workerHeartbeatMs = 32;
+  }
+
+  _useWorker() {
+    if (typeof Worker === 'undefined') return false;
+    try {
+      const stored = safeGetItem("reactor_experimental_worker");
+      if (stored === "true") return true;
+      if (stored === "false") return false;
+      const cores = typeof navigator !== "undefined" && navigator.hardwareConcurrency;
+      return (cores || 0) > 4;
+    } catch {
+      return false;
+    }
+  }
+
+  _buildHeatPayload(multiplier) {
+    const game = this.game;
+    const ts = game.tileset;
+    const reactor = game.reactor;
+    const rows = game.rows;
+    const cols = game.cols;
+    const heatCopy = new Float32Array(ts.heatMap.length);
+    heatCopy.set(ts.heatMap);
+    const containment = new Float32Array(ts.heatMap.length);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const tile = ts.getTile(r, c);
+        if (tile?.part) containment[ts.gridIndex(r, c)] = tile.part.containment || 0;
+      }
+    }
+    const inlets = [];
+    for (let i = 0; i < this.active_inlets.length; i++) {
+      const tile = this.active_inlets[i];
+      if (!tile.part) continue;
+      const neighborIndices = [];
+      const neighbors = tile.containmentNeighborTiles;
+      for (let j = 0; j < neighbors.length; j++) {
+        const t = neighbors[j];
+        if (t.part) neighborIndices.push(ts.gridIndex(t.row, t.col));
+      }
+      inlets.push({ index: ts.gridIndex(tile.row, tile.col), transferRate: tile.getEffectiveTransferValue(), neighborIndices });
+    }
+    const valveNeighborIndices = [];
+    this._valveNeighborCache.forEach((t) => valveNeighborIndices.push(ts.gridIndex(t.row, t.col)));
+    const valves = [];
+    const neighbors = this._valveProcessing_neighbors;
+    for (let vIdx = 0; vIdx < this.active_valves.length; vIdx++) {
+      const valve = this.active_valves[vIdx];
+      const valvePart = valve.part;
+      if (!valvePart) continue;
+      neighbors.length = 0;
+      const valveNeighbors = valve.containmentNeighborTiles;
+      for (let j = 0; j < valveNeighbors.length; j++) {
+        const t = valveNeighbors[j];
+        if (t.part) neighbors.push(t);
+      }
+      if (neighbors.length < 2) continue;
+      const orientation = this._getValveOrientation(valvePart.id);
+      const { inputNeighbor, outputNeighbor } = this._getInputOutputNeighbors(valve, neighbors, orientation);
+      if (!inputNeighbor || !outputNeighbor) continue;
+      if (inputNeighbor.part?.category === 'valve') {
+        const inputValveOrientation = this._getValveOrientation(inputNeighbor.part.id);
+        const inputValveNeighbors = this._valve_inputValveNeighbors;
+        inputValveNeighbors.length = 0;
+        const inputNeighborNeighbors = inputNeighbor.containmentNeighborTiles;
+        for (let j = 0; j < inputNeighborNeighbors.length; j++) {
+          const t = inputNeighborNeighbors[j];
+          if (t.part && t !== valve) inputValveNeighbors.push(t);
+        }
+        const { outputNeighbor: inputValveOutput } = this._getInputOutputNeighbors(inputNeighbor, inputValveNeighbors, inputValveOrientation);
+        if (inputValveOutput !== valve) continue;
+      }
+      if (valvePart.type === 'overflow_valve') {
+        const inputRatio = (inputNeighbor.heat_contained || 0) / (inputNeighbor.part.containment || 1);
+        if (inputRatio < 0.8) continue;
+      } else if (valvePart.type === 'topup_valve') {
+        const outputRatio = (outputNeighbor.heat_contained || 0) / (outputNeighbor.part.containment || 1);
+        if (outputRatio > 0.2) continue;
+      }
+      const typeId = valvePart.type === 'overflow_valve' ? 1 : valvePart.type === 'topup_valve' ? 2 : 3;
+      valves.push({
+        index: ts.gridIndex(valve.row, valve.col),
+        type: typeId,
+        orientation,
+        transferRate: valve.getEffectiveTransferValue(),
+        inputIdx: ts.gridIndex(inputNeighbor.row, inputNeighbor.col),
+        outputIdx: ts.gridIndex(outputNeighbor.row, outputNeighbor.col)
+      });
+    }
+    const exchangers = [];
+    for (let i = 0; i < this.active_exchangers.length; i++) {
+      const tile = this.active_exchangers[i];
+      const part = tile.part;
+      if (!part || part.category === 'valve') continue;
+      const neighborIndices = [];
+      const neighborContainments = [];
+      const neighborCategories = [];
+      const neighborsAll = tile.containmentNeighborTiles;
+      for (let n = 0; n < neighborsAll.length; n++) {
+        const t = neighborsAll[n];
+        if (!t.part) continue;
+        neighborIndices.push(ts.gridIndex(t.row, t.col));
+        neighborContainments.push(t.part.containment || 0);
+        const cat = (t.part.category === 'vent' || t.part.category === 'coolant_cell') ? 2 : (t.part.category === 'heat_exchanger' ? 0 : 1);
+        neighborCategories.push(cat);
+      }
+      exchangers.push({
+        index: ts.gridIndex(tile.row, tile.col),
+        transferRate: tile.getEffectiveTransferValue(),
+        containment: part.containment || 1,
+        neighborIndices,
+        neighborContainments,
+        neighborCategories
+      });
+    }
+    const outlets = [];
+    const outNeighbors = this._outletProcessing_neighbors;
+    for (let i = 0; i < this.active_outlets.length; i++) {
+      const tile = this.active_outlets[i];
+      const part = tile.part;
+      if (!part) continue;
+      outNeighbors.length = 0;
+      const contNeighbors = tile.containmentNeighborTiles;
+      for (let j = 0; j < contNeighbors.length; j++) {
+        const t = contNeighbors[j];
+        if (t.part && t.part.category !== 'valve') outNeighbors.push(t);
+      }
+      const neighborIndices = outNeighbors.map((t) => ts.gridIndex(t.row, t.col));
+      const neighborContainments = outNeighbors.map((t) => t.part?.containment || 0);
+      outlets.push({
+        index: ts.gridIndex(tile.row, tile.col),
+        transferRate: tile.getEffectiveTransferValue(),
+        activated: tile.activated ? 1 : 0,
+        neighborIndices,
+        neighborContainments,
+        isOutlet6: part.id === 'heat_outlet6'
+      });
+    }
+    const payload = {
+      heat: heatCopy,
+      containment,
+      reactorHeat: reactor.current_heat,
+      multiplier,
+      inlets,
+      valves,
+      valveNeighborIndices,
+      exchangers,
+      outlets
+    };
+    return {
+      msg: {
+        heatBuffer: heatCopy.buffer,
+        containmentBuffer: containment.buffer,
+        reactorHeat: reactor.current_heat,
+        multiplier,
+        rows,
+        cols,
+        inlets,
+        valves,
+        valveNeighborIndices,
+        exchangers,
+        outlets
+      },
+      transferList: [heatCopy.buffer, containment.buffer],
+      payloadForSync: payload
+    };
+  }
+
+  _runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick) {
+    const build = this._buildHeatPayload(multiplier);
+    if (!build?.payloadForSync) return;
+    const { heat, containment, ...rest } = build.payloadForSync;
+    const recordTransfers = [];
+    const result = runHeatStep(heat, containment, { ...rest, recordTransfers });
+    this.game.tileset.heatMap = heat;
+    this.game.reactor.current_heat = result.reactorHeat;
+    this._lastHeatFlowDebug.length = 0;
+    const cols = this.game.cols;
+    for (const t of recordTransfers) {
+      this._lastHeatFlowDebug.push({
+        fromRow: (t.fromIdx / cols) | 0,
+        fromCol: t.fromIdx % cols,
+        toRow: (t.toIdx / cols) | 0,
+        toCol: t.toIdx % cols,
+        amount: t.amount
+      });
+    }
+    this._continueTickAfterHeat(multiplier, power_add, heat_add + result.heatFromInlets, powerBeforeTick, heatBeforeTick);
+  }
+
+  _getWorker() {
+    if (this._worker) return this._worker;
+    try {
+      const url = new URL("../worker/physics.worker.js", import.meta.url).href;
+      this._worker = new Worker(url, { type: "module" });
+        this._worker.onmessage = (e) => {
+        if (this._workerHeartbeatId) {
+          clearTimeout(this._workerHeartbeatId);
+          this._workerHeartbeatId = null;
+        }
+        const data = e.data;
+        if (!data?.heatBuffer || !this.game?.tileset) {
+          this._workerPending = false;
+          return;
+        }
+        if (!this._workerPending) return;
+        this.game.tileset.heatMap = new Float32Array(data.heatBuffer);
+        this.game.reactor.current_heat = data.reactorHeat ?? this.game.reactor.current_heat;
+        const ctx = this._workerTickContext;
+        this._workerPending = false;
+        this._workerTickContext = null;
+        if (ctx) {
+          const heat_add = ctx.heat_add + (data.heatFromInlets ?? 0);
+          this._lastHeatFlowDebug.length = 0;
+          const cols = this.game.cols;
+          for (const t of data.transfers || []) {
+            this._lastHeatFlowDebug.push({
+              fromRow: (t.fromIdx / cols) | 0,
+              fromCol: t.fromIdx % cols,
+              toRow: (t.toIdx / cols) | 0,
+              toCol: t.toIdx % cols,
+              amount: t.amount
+            });
+          }
+          this._continueTickAfterHeat(ctx.multiplier, ctx.power_add, heat_add, ctx.powerBeforeTick, ctx.heatBeforeTick);
+        }
+      };
+    } catch (err) {
+      this.game?.logger?.warn?.("[Worker] Failed to create physics worker", err);
+    }
+    return this._worker;
   }
 
   getLastHeatFlowVectors() {
     return this._lastHeatFlowDebug;
+  }
+
+  enqueueVisualEvent(typeId, row, col, value) {
+    const idx = this._eventHead * 4;
+    this._eventRingBuffer[idx] = typeId;
+    this._eventRingBuffer[idx + 1] = row;
+    this._eventRingBuffer[idx + 2] = col;
+    this._eventRingBuffer[idx + 3] = value;
+    this._eventHead = (this._eventHead + 1) % this.MAX_EVENTS;
+    if (this._eventHead === this._eventTail) {
+      this._eventTail = (this._eventTail + 1) % this.MAX_EVENTS;
+    }
+  }
+
+  getEventBuffer() {
+    return {
+      buffer: this._eventRingBuffer,
+      head: this._eventHead,
+      tail: this._eventTail,
+      max: this.MAX_EVENTS
+    };
+  }
+
+  ackEvents(newTail) {
+    this._eventTail = newTail;
   }
 
   _hasHeatActivity() {
@@ -283,11 +549,10 @@ export class Engine {
 
   loop(timestamp) {
     // CRITICAL: Prevent runaway loops in test environment by capping frames
-    const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') ||
-                      (typeof global !== 'undefined' && global.__VITEST__) ||
-                      (typeof window !== 'undefined' && window.__VITEST__);
+    const inTestEnv = isTestEnv();
+    const raf = (typeof window !== 'undefined' && window.requestAnimationFrame) ? window.requestAnimationFrame : globalThis.requestAnimationFrame;
 
-    if (isTestEnv) {
+    if (inTestEnv) {
       this._testFrameCount = (this._testFrameCount || 0) + 1;
       const maxFrames = this._maxTestFrames || 200;
       if (this._testFrameCount > maxFrames) {
@@ -306,8 +571,8 @@ export class Engine {
     }
     
     if (this.game.paused) {
-      if (!isTestEnv) {
-        this.animationFrameId = requestAnimationFrame(this.loop.bind(this));
+      if (!inTestEnv) {
+        this.animationFrameId = raf(this.loop.bind(this));
         this.last_timestamp = timestamp; 
       }
       return;
@@ -326,14 +591,34 @@ export class Engine {
 
     const targetTickDuration = this.game.loop_wait;
     const maxLiveTicks = 10;
+    const maxCatchupTicks = 500;
 
     if (deltaTime > 30000) {
       const previousAccumulator = this.time_accumulator || 0;
       this.time_accumulator = previousAccumulator + deltaTime;
+      const maxAccumulator = 100 * targetTickDuration;
+      if (this.time_accumulator > maxAccumulator) {
+        this.game.logger?.warn("Lag spike detected, clamping accumulator");
+        this.time_accumulator = maxAccumulator;
+      }
       this.game.logger?.debug(`[TIME FLUX] Offline time detected (${deltaTime.toFixed(0)}ms), accumulator: ${previousAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms`);
     } else if (this._hasHeatActivity()) {
       this._frameTimeAccumulator = (this._frameTimeAccumulator || 0) + deltaTime;
       const initialAccumulator = this.time_accumulator || 0;
+      const queuedTicksBefore = Math.floor(this.time_accumulator / targetTickDuration);
+      if (this.game.time_flux && queuedTicksBefore > 0) {
+        if (!this._timeFluxCatchupTotalTicks) {
+          this._timeFluxCatchupTotalTicks = queuedTicksBefore;
+          this._timeFluxCatchupRemainingTicks = queuedTicksBefore;
+        } else if (queuedTicksBefore > this._timeFluxCatchupRemainingTicks) {
+          const addedTicks = queuedTicksBefore - this._timeFluxCatchupRemainingTicks;
+          this._timeFluxCatchupRemainingTicks += addedTicks;
+          this._timeFluxCatchupTotalTicks += addedTicks;
+        }
+      } else {
+        this._timeFluxCatchupTotalTicks = 0;
+        this._timeFluxCatchupRemainingTicks = 0;
+      }
 
       if (this.game.time_flux && this.time_accumulator > 0) {
         const heatRatio = this.game.reactor.max_heat > 0 ? this.game.reactor.current_heat / this.game.reactor.max_heat : 0;
@@ -360,10 +645,14 @@ export class Engine {
 
         let fluxTicks = 0;
         if (this.game.time_flux && this.time_accumulator > 0) {
-          const maxFluxTicks = 10;
-          fluxTicks = Math.min(Math.floor(this.time_accumulator / targetTickDuration), maxFluxTicks);
+          const availableFluxTicks = Math.floor(this.time_accumulator / targetTickDuration);
+          const maxFluxTicks = Math.max(0, maxCatchupTicks - liveTicks);
+          fluxTicks = Math.min(availableFluxTicks, maxFluxTicks);
           this.time_accumulator -= fluxTicks * targetTickDuration;
           if (this.time_accumulator < 0.001) this.time_accumulator = 0;
+          if (fluxTicks > 0 && this._timeFluxCatchupRemainingTicks > 0) {
+            this._timeFluxCatchupRemainingTicks = Math.max(0, this._timeFluxCatchupRemainingTicks - fluxTicks);
+          }
           this.game.logger?.debug(`[TIME FLUX] Consuming banked time: ${fluxTicks} flux ticks, accumulator: ${initialAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms`);
         }
 
@@ -374,6 +663,30 @@ export class Engine {
         if (fluxTicks === 0 && initialAccumulator > 0) {
           this.game.logger?.debug(`[TIME FLUX] Processing live time only (${liveTicks} ticks), accumulator preserved at ${initialAccumulator.toFixed(0)}ms`);
         }
+        const queuedTicksAfter = Math.floor(this.time_accumulator / targetTickDuration);
+        if (queuedTicksAfter === 0 && this._timeFluxCatchupTotalTicks) {
+          this._timeFluxCatchupTotalTicks = 0;
+          this._timeFluxCatchupRemainingTicks = 0;
+        }
+      }
+    }
+
+    const queuedTicks = Math.floor(this.time_accumulator / targetTickDuration);
+    if (!this.game.time_flux || queuedTicks === 0) {
+      this._timeFluxCatchupTotalTicks = 0;
+      this._timeFluxCatchupRemainingTicks = 0;
+    } else if (!this._timeFluxCatchupTotalTicks) {
+      this._timeFluxCatchupTotalTicks = queuedTicks;
+      this._timeFluxCatchupRemainingTicks = queuedTicks;
+    }
+    if (this.game.ui && typeof this.game.ui.updateTimeFluxSimulation === "function") {
+      if (this.game.time_flux && queuedTicks > 0 && this._timeFluxCatchupTotalTicks > 0) {
+        const total = this._timeFluxCatchupTotalTicks;
+        const remaining = this._timeFluxCatchupRemainingTicks;
+        const progress = Math.min(100, Math.max(0, ((total - remaining) / total) * 100));
+        this.game.ui.updateTimeFluxSimulation(progress, true);
+      } else {
+        this.game.ui.updateTimeFluxSimulation(100, false);
       }
     }
 
@@ -388,12 +701,12 @@ export class Engine {
     }
 
     // Schedule next frame, respecting test frame cap
-    if (isTestEnv && (this._testFrameCount || 0) >= (this._maxTestFrames || 200)) {
+    if (inTestEnv && (this._testFrameCount || 0) >= (this._maxTestFrames || 200)) {
       this.running = false;
       this.animationFrameId = null;
       return;
     }
-    this.animationFrameId = requestAnimationFrame(this.loop.bind(this));
+    this.animationFrameId = raf(this.loop.bind(this));
   }
 
   tick() {
@@ -444,9 +757,6 @@ export class Engine {
     if (this.game.logger) {
       this.game.logger.debug(`[TICK START] Paused: ${this.game.paused}, Manual: ${manual}, Reactor Heat: ${reactor.current_heat.toFixed(2)}`);
     }
-    
-    // Reset Visual Event Pool
-    this._visualEventCount = 0;
     
     // Update engine status indicator for tick
     if (ui && ui.stateManager) {
@@ -527,14 +837,8 @@ export class Engine {
 
       if (tile.power > 0 && Math.random() < multiplier) {
         const count = tile.power >= 200 ? 3 : tile.power >= 50 ? 2 : 1;
-        for(let k=0; k<count; k++) {
-          if (this._visualEventCount < this._visualEventPool.length) {
-            const evt = this._visualEventPool[this._visualEventCount++];
-            evt.type = 'emit';
-            evt.icon = 'power';
-            evt.tile = tile;
-            evt.part = null;
-          }
+        for (let k = 0; k < count; k++) {
+          this.enqueueVisualEvent(VISUAL_EVENT_POWER, tile.row, tile.col, 0);
         }
       }
 
@@ -542,14 +846,8 @@ export class Engine {
 
       if (tile.heat > 0 && Math.random() < multiplier) {
         const countH = tile.heat >= 200 ? 3 : tile.heat >= 50 ? 2 : 1;
-        for(let k=0; k<countH; k++) {
-          if (this._visualEventCount < this._visualEventPool.length) {
-            const evt = this._visualEventPool[this._visualEventCount++];
-            evt.type = 'emit';
-            evt.icon = 'heat';
-            evt.tile = tile;
-            evt.part = null;
-          }
+        for (let k = 0; k < countH; k++) {
+          this.enqueueVisualEvent(VISUAL_EVENT_HEAT, tile.row, tile.col, 0);
         }
       }
       
@@ -609,21 +907,62 @@ export class Engine {
 
     // (Explosion checks occur after outlet transfer but before vents to allow overfill)
 
+    if (this._useWorker() && !this._workerPending) {
+      const payload = this._buildHeatPayload(multiplier);
+      if (payload) {
+        this._workerTickContext = { multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick };
+        this._workerPending = true;
+        const w = this._getWorker();
+        if (!w) {
+          this._workerPending = false;
+          this._workerTickContext = null;
+          this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+          return;
+        }
+        w.postMessage(payload.msg, payload.transferList);
+        if (this._workerHeartbeatId) clearTimeout(this._workerHeartbeatId);
+        this._workerHeartbeatId = setTimeout(() => {
+          if (!this._workerPending) return;
+          this._workerHeartbeatId = null;
+          this._workerPending = false;
+          const ctx = this._workerTickContext;
+          this._workerTickContext = null;
+          this.game?.logger?.warn?.("[Worker] Heat step timeout, falling back to main thread");
+          if (ctx) this._runHeatStepSync(ctx.multiplier, ctx.power_add, ctx.heat_add, ctx.powerBeforeTick, ctx.heatBeforeTick);
+        }, this._workerHeartbeatMs);
+        return;
+      }
+    }
     const heatResult = this.heatManager.processTick(multiplier);
     heat_add += heatResult.heatFromInlets;
     this._lastHeatFlowDebug.length = 0;
-    for (let i = 0; i < this._heatCalc_plannedCount; i++) {
-      const p = this._heatCalc_plannedPool[i];
-      if (p.from && p.to) {
-        this._lastHeatFlowDebug.push({
-          fromRow: p.from.row,
-          fromCol: p.from.col,
-          toRow: p.to.row,
-          toCol: p.to.col,
-          amount: p.amount
-        });
-      }
+    const cols = this.game.cols;
+    for (const t of heatResult.transfers || []) {
+      this._lastHeatFlowDebug.push({
+        fromRow: (t.fromIdx / cols) | 0,
+        fromCol: t.fromIdx % cols,
+        toRow: (t.toIdx / cols) | 0,
+        toCol: t.toIdx % cols,
+        amount: t.amount
+      });
     }
+    this._continueTickAfterHeat(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+    } catch (error) {
+      logger.error("Error in _processTick:", error);
+      if (this.game.ui && this.game.ui.stateManager) {
+        this.game.ui.stateManager.setVar("engine_status", "stopped");
+      }
+      throw error;
+    } finally {
+      this.game.logger?.groupEnd();
+    }
+    const tickDuration = performance.now() - tickStart;
+    this.game.debugHistory.add('engine', 'tick', { number: currentTickNumber, duration: tickDuration });
+  }
+
+  _continueTickAfterHeat(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick) {
+    const reactor = this.game.reactor;
+    const ui = this.game.ui;
 
     // Process Particle Accelerators and Extreme Capacitors
     if (this.game.performance && this.game.performance.shouldMeasure()) {
@@ -796,6 +1135,7 @@ export class Engine {
     }
 
     reactor.updateStats();
+    if (typeof reactor.recordClassificationStats === "function") reactor.recordClassificationStats();
 
     const powerMult = reactor.power_multiplier || 1;
     if (powerMult !== 1) {
@@ -821,6 +1161,18 @@ export class Engine {
         const value = sellAmount * (reactor.sell_price_multiplier || 1);
         this.game.current_money += value;
         ui.stateManager.setVar("current_money", this.game.current_money);
+        let capacitor6Overcharged = false;
+        for (let capIdx = 0; capIdx < this.active_capacitors.length; capIdx++) {
+          const capTile = this.active_capacitors[capIdx];
+          if (capTile?.part?.level === 6 || capTile?.part?.id === "capacitor6") {
+            const cap = capTile.part.containment || 1;
+            if (cap > 0 && (capTile.heat_contained || 0) / cap > 0.95) {
+              capacitor6Overcharged = true;
+              break;
+            }
+          }
+        }
+        if (capacitor6Overcharged) reactor.current_heat += sellAmount * 0.5;
       }
     }
     
@@ -911,6 +1263,9 @@ export class Engine {
     ui.stateManager.setVar("heat_delta_per_tick", rawHeatDelta / norm);
     ui.stateManager.setVar("current_power", reactor.current_power);
     ui.stateManager.setVar("current_heat", reactor.current_heat);
+    if (this.game.audio && typeof this.game.audio.updateAmbienceHeat === 'function') {
+      this.game.audio.updateAmbienceHeat(reactor.current_heat, reactor.max_heat);
+    }
 
     // Update heat visuals for immediate visual feedback
     if (ui.updateHeatVisuals) {
@@ -928,26 +1283,14 @@ export class Engine {
     }
     this.game.logger?.debug(`[TICK STAGE] Before final meltdown check: Reactor Heat = ${reactor.current_heat.toFixed(2)}`);
 
-    // Render Visual Events (Optimized)
-    if (this._visualEventCount > 0 && this.game.ui && typeof this.game.ui._renderVisualEvents === 'function') {
-      this.game.ui._renderVisualEvents(this._visualEventPool, this._visualEventCount);
+    if (this._eventHead !== this._eventTail && this.game.ui && typeof this.game.ui._renderVisualEvents === 'function') {
+      this.game.ui._renderVisualEvents(this.getEventBuffer());
     }
 
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("tick_total");
     }
     this.tick_count++;
-    } catch (error) {
-      console.error(`Error in _processTick:`, error);
-      if (this.game.ui && this.game.ui.stateManager) {
-        this.game.ui.stateManager.setVar("engine_status", "stopped");
-      }
-      throw error;
-    } finally {
-      this.game.logger?.groupEnd();
-    }
-    const tickDuration = performance.now() - tickStart;
-    this.game.debugHistory.add('engine', 'tick', { number: currentTickNumber, duration: tickDuration });
   }
 
   handleComponentDepletion(tile) {

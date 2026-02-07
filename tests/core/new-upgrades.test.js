@@ -509,17 +509,16 @@ describe("New Gameplay Upgrades", () => {
     });
 
     describe("Set 5: Advanced Synergy & Automation", () => {
-        it.skip("Flux Accumulators: should generate EP when power is high", async () => {
-            const capTile = await placePart(game, 0, 0, "capacitor1");
-            capTile.activated = true;
-            game.tileset.updateActiveTiles();
+        it("Flux Accumulators: should generate EP when power is high", async () => {
+            await placePart(game, 0, 0, "capacitor1");
+            game.reactor.updateStats();
             game.engine.markPartCacheAsDirty();
             game.reactor.max_power = 1000;
             game.reactor.current_power = 950;
             forcePurchaseUpgrade(game, "flux_accumulators");
             game.exotic_particles = 0;
             game.paused = false;
-            game.engine.manualTick();
+            game.engine.tick();
             expect(game.exotic_particles).toBeGreaterThan(0);
         });
 

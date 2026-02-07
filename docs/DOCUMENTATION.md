@@ -124,8 +124,7 @@ Valves are special components for advanced heat management, organized into three
 -   **Exotic Particle Generation:** Particle Accelerators generate Exotic Particles (EP), a prestige currency, based on the amount of heat transferred through them.
 
 ### 3.4. Save/Load System
-The game state is serializable to JSON for saving to Local Storage or Google Drive.
--   **Identified Issue:** The `heat_controlled` state is correctly saved but is not restored when loading a game. This requires a fix in the `applySaveState` method.
+The game state is serializable to JSON for saving to Local Storage or Google Drive. The `heat_controlled` and other toggle states (e.g. auto_sell, auto_buy, time_flux, pause) are saved in the `toggles` object and restored in `applySaveState` via the StateManager setVar chain, which triggers `onToggleStateChange` and correctly applies values to the Reactor instance.
 
 ## 4. UI/UX Specification
 

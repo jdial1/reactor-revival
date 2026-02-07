@@ -59,8 +59,6 @@ export class Game {
     this._suppressPlacementCounting = false;
     this._unlockStates = {}; // track previous unlock state per part to avoid duplicate logs
 
-    // Buffer for per-tick visual events produced by the engine
-    this._visualEvents = [];
     this.debugHistory = new DebugHistory();
     this.undoHistory = [];
     this.audio = null;
@@ -74,6 +72,10 @@ export class Game {
     this.tech_tree = null;
     this.bypass_tech_tree_restrictions = false;
     this.cheats_used = false; // Flag to track if cheats were used (hotkeys for money/EP)
+    this.grace_period_ticks = 0;
+    this.isSandbox = false;
+    this._sandboxState = null;
+    this._mainState = null;
   }
 
   getAuthenticatedUserId() {
@@ -231,38 +233,12 @@ export class Game {
     this.placedCounts[key] = (this.placedCounts[key] || 0) + 1;
   }
 
-  // Deprecated/Legacy support for old visual event system if needed, 
-  // but Engine now handles it internally with pooling.
-  enqueueVisualEvent(event) {
-    // no-op or legacy
-  }
-  enqueueVisualEvents(events) {
-    // no-op or legacy
-  }
+  enqueueVisualEvent() {}
+  enqueueVisualEvents() {}
   drainVisualEvents() {
     return [];
   }
 
-  enqueueVisualEvents(events) {
-    if (!Array.isArray(events) || events.length === 0) return;
-    // Avoid accidental huge spikes by soft-capping to a reasonable frame budget
-    const maxBatch = 1000;
-    if (this._visualEvents.length + events.length > maxBatch) {
-      const remaining = Math.max(0, maxBatch - this._visualEvents.length);
-      if (remaining > 0) this._visualEvents.push(...events.slice(0, remaining));
-    } else {
-      this._visualEvents.push(...events);
-    }
-  }
-
-  drainVisualEvents() {
-    if (!this._visualEvents || this._visualEvents.length === 0) {
-      return [];
-    }
-    const out = this._visualEvents;
-    this._visualEvents = [];
-    return out;
-  }
   async set_defaults() {
     const debugSetDefaults = typeof process !== 'undefined' && process.env.DEBUG_REBOOT === 'true';
     if (debugSetDefaults) {
@@ -353,16 +329,18 @@ export class Game {
   }
 
   get current_money() {
-    return this._current_money;
+    return this.isSandbox ? Infinity : this._current_money;
   }
 
   set current_money(value) {
-    this._current_money = value;
+    if (!this.isSandbox) this._current_money = value;
   }
 
   addMoney(amount) {
-    this._current_money += amount;
-    this.ui.stateManager.setVar("current_money", this._current_money);
+    if (!this.isSandbox) {
+      this._current_money += amount;
+      this.ui.stateManager.setVar("current_money", this._current_money);
+    }
   }
 
   async initialize_new_game_state() {
@@ -783,7 +761,10 @@ export class Game {
     this.debugHistory.add('game', 'Component depletion', { row: tile.row, col: tile.col, partId: tile.part.id, perpetual: tile.part.perpetual });
 
     const part = tile.part;
-    if (part.perpetual && this.ui.stateManager.getVar("auto_buy")) {
+    const hasProtiumLoader = this.upgradeset.getUpgrade("experimental_protium_loader")?.level > 0;
+    const isProtium = part.type === "protium";
+    const autoReplace = (part.perpetual || (isProtium && hasProtiumLoader)) && this.ui.stateManager.getVar("auto_buy");
+    if (autoReplace) {
       const cost = part.getAutoReplacementCost();
       this.logger?.debug(`[AUTO-BUY] Attempting to replace '${part.id}'. Cost: ${cost}, Current Money: ${this.current_money}`);
       if (this.current_money >= cost) {
@@ -823,6 +804,7 @@ export class Game {
       cols: this.cols,
       sold_power: this.sold_power,
       sold_heat: this.sold_heat,
+      grace_period_ticks: this.grace_period_ticks,
 
       total_played_time: this.total_played_time,
       last_save_time: Date.now(),
@@ -932,6 +914,7 @@ export class Game {
   }
 
   saveGame(slot = null, isAutoSave = false) {
+    if (this.isSandbox) return;
     if (this.logger) {
       this.logger.debug(`Attempting to save game. Meltdown state: ${this.reactor.has_melted_down}`);
     }
@@ -1144,6 +1127,7 @@ export class Game {
     this.cols = savedData.cols || this.base_cols;
     this.sold_power = savedData.sold_power || false;
     this.sold_heat = savedData.sold_heat || false;
+    this.grace_period_ticks = savedData.grace_period_ticks ?? (this._isRestoringSave ? 30 : 0);
 
     this.total_played_time = savedData.total_played_time || 0;
     this.last_save_time = savedData.last_save_time || null;

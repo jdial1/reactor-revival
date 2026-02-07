@@ -212,6 +212,7 @@ export class ObjectiveManager {
   }
 
   check_current_objective() {
+    if (this.game?.isSandbox) return;
     if (!this.game || this.game.paused || !this.current_objective_def) {
       this.scheduleNextCheck();
       return;
@@ -350,9 +351,8 @@ export class ObjectiveManager {
     }
   }
 
-  // Claim the current objective reward
   claimObjective() {
-    // Prevent multiple rapid claims
+    if (this.game?.isSandbox) return;
     if (this.claiming || !this.current_objective_def) {
       return;
     }

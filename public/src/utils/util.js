@@ -1,6 +1,4 @@
 export function numFormat(num, places = null, fixedDecimals = false) {
-    const cm_names = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
-
     if (num === null || typeof num === 'undefined') return '';
 
     num = Number(num);
@@ -8,6 +6,15 @@ export function numFormat(num, places = null, fixedDecimals = false) {
 
     if (num === Infinity || num === -Infinity) return num > 0 ? 'Infinity' : '-Infinity';
 
+    try {
+        const formatPref = typeof safeGetItem === 'function' ? safeGetItem("number_format") : null;
+        if (formatPref === "scientific") {
+            const p = places != null ? places : 2;
+            return num.toExponential(p);
+        }
+    } catch (_) {}
+
+    const cm_names = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
     const absNum = Math.abs(num);
 
     if (places === null) {
@@ -69,6 +76,12 @@ export const on = (parentElement, selector, eventType, handler) => {
 };
 
 export const performance = (typeof window !== 'undefined' && window.performance) || { now: () => new Date().getTime() };
+
+export function isTestEnv() {
+    return (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') ||
+        (typeof global !== 'undefined' && global.__VITEST__) ||
+        (typeof window !== 'undefined' && window.__VITEST__);
+}
 
 /**
  * Get the correct base path for GitHub Pages deployment

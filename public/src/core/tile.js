@@ -19,7 +19,7 @@ export class Tile {
     this.enabled = false;
     this.display_chance = 0;
     this.display_chance_percent_of_total = 0;
-    this.heat_contained = 0;
+    this._heatContained = 0;
     this.ticks = 0;
     this.exploded = false; // Initialize the exploded property
     this.$el = null;
@@ -28,6 +28,22 @@ export class Tile {
     this.$durabilityBar = null; // Direct reference to the durability bar
     this._neighborCache = null;
   }
+
+  get heat_contained() {
+    const ts = this.game?.tileset;
+    if (ts?.heatMap) return ts.heatMap[ts.gridIndex(this.row, this.col)];
+    return this._heatContained;
+  }
+
+  set heat_contained(v) {
+    const ts = this.game?.tileset;
+    if (ts?.heatMap) {
+      ts.heatMap[ts.gridIndex(this.row, this.col)] = v;
+      return;
+    }
+    this._heatContained = v;
+  }
+
   _calculateAndCacheNeighbors() {
     const p = this.part;
     if (!p) {
@@ -61,7 +77,8 @@ export class Tile {
   }
   invalidateNeighborCaches() {
     this._neighborCache = null;
-    for (const neighbor of this.game.tileset.getTilesInRange(this, 1)) {
+    const maxRange = 2;
+    for (const neighbor of this.game.tileset.getTilesInRange(this, maxRange)) {
       if (neighbor) neighbor._neighborCache = null;
     }
   }

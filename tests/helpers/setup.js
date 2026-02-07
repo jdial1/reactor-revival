@@ -389,11 +389,39 @@ export async function setupGameWithDOM() {
     runScripts: 'outside-only',
   });
 
-  // Assign JSDOM globals
   global.window = domInstance.window;
   global.document = domInstance.window.document;
-  
-  // Re-apply mocks to the new JSDOM window object
+
+  const noop = () => {};
+  const mock2DContext = {
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    clearRect: noop,
+    fillRect: noop,
+    strokeRect: noop,
+    drawImage: noop,
+    getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
+    putImageData: noop,
+    save: noop,
+    restore: noop,
+    translate: noop,
+    scale: noop,
+    beginPath: noop,
+    closePath: noop,
+    moveTo: noop,
+    lineTo: noop,
+    arc: noop,
+    fill: noop,
+    stroke: noop,
+    clip: noop,
+  };
+  const originalGetContext = domInstance.window.HTMLCanvasElement.prototype.getContext;
+  domInstance.window.HTMLCanvasElement.prototype.getContext = function (type) {
+    if (type === '2d') return mock2DContext;
+    return originalGetContext ? originalGetContext.call(this, type) : null;
+  };
+
   mockBrowserGlobals();
   window.AudioContext = vi.fn().mockImplementation(() => ({
     state: 'running',

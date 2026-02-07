@@ -124,7 +124,7 @@ export class UpgradeSet {
     if (!treeIds || treeIds.size !== 1) return null;
     const treeId = [...treeIds][0];
     const tree = (this.treeList || []).find(t => t.id === treeId);
-    return tree ? { id: tree.id, icon: tree.icon } : null;
+    return tree ? { id: tree.id, icon: tree.icon, title: tree.title } : null;
   }
 
   getAllUpgrades() {
@@ -153,24 +153,22 @@ export class UpgradeSet {
     wrapper.querySelectorAll(".upgrade-group").forEach((el) => (el.innerHTML = ""));
 
     this.upgradesArray.filter(filterFn).forEach((upgrade) => {
-      // Check if upgrade is available for current tech tree
-      if (!this.isUpgradeAvailable(upgrade.id)) {
-        return;
-      }
-
-      try {
-        const upgType = upgrade?.upgrade?.type || "";
-        const basePart = upgrade?.upgrade?.part;
-        const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
-        if (isCellUpgrade && basePart && basePart.category === "cell") {
-          const show = this.game && typeof this.game.isPartUnlocked === "function"
-            ? this.game.isPartUnlocked(basePart)
-            : true;
-          if (!show) {
-            return;
+      const available = this.isUpgradeAvailable(upgrade.id);
+      if (available) {
+        try {
+          const upgType = upgrade?.upgrade?.type || "";
+          const basePart = upgrade?.upgrade?.part;
+          const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
+          if (isCellUpgrade && basePart && basePart.category === "cell") {
+            const show = this.game && typeof this.game.isPartUnlocked === "function"
+              ? this.game.isPartUnlocked(basePart)
+              : true;
+            if (!show) {
+              return;
+            }
           }
-        }
-      } catch (_) { }
+        } catch (_) { }
+      }
 
       upgrade.$el = null;
       this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
@@ -191,6 +189,9 @@ export class UpgradeSet {
       this.game.logger?.warn(`[Upgrade] Purchase failed: Upgrade '${upgradeId}' not found.`);
       return false;
     }
+    if (!this.isUpgradeAvailable(upgradeId)) {
+      return false;
+    }
     if (!upgrade.affordable) {
       this.game.logger?.warn(`[Upgrade] Purchase failed: '${upgradeId}' not affordable. Money: ${this.game.current_money}, Cost: ${upgrade.getCost()}`);
       return false;
@@ -204,7 +205,9 @@ export class UpgradeSet {
     const ecost = upgrade.getEcost();
     let purchased = false;
 
-    if (ecost > 0) {
+    if (this.game.isSandbox) {
+      purchased = true;
+    } else if (ecost > 0) {
       if (this.game.current_exotic_particles >= ecost) {
         this.game.current_exotic_particles -= ecost;
         this.game.ui.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
@@ -221,10 +224,9 @@ export class UpgradeSet {
     if (purchased) {
       upgrade.setLevel(upgrade.level + 1);
 
-      // Visual feedback: trigger purchase success animation
       if (upgrade.$el) {
         upgrade.$el.classList.remove("upgrade-purchase-success");
-        void upgrade.$el.offsetWidth; // Force reflow to re-trigger animation
+        void upgrade.$el.offsetWidth;
         upgrade.$el.classList.add("upgrade-purchase-success");
       }
 
@@ -233,7 +235,7 @@ export class UpgradeSet {
         this.game.epart_onclick(upgrade);
       }
       this.updateSectionCounts();
-      this.game.saveGame(null, true); // true = isAutoSave
+      if (!this.game.isSandbox) this.game.saveGame(null, true);
     }
 
     return purchased;
@@ -246,6 +248,7 @@ export class UpgradeSet {
     const hideResearch = safeGetItem("reactor_hide_unaffordable_research", "true") !== "false";
     const hideMaxUpgrades = safeGetItem("reactor_hide_max_upgrades", "true") !== "false";
     const hideMaxResearch = safeGetItem("reactor_hide_max_research", "true") !== "false";
+    const hideOtherDoctrine = safeGetItem("reactor_hide_other_doctrine_upgrades", "false") === "true";
 
     let hasVisibleAffordableUpgrade = false;
     let hasVisibleAffordableResearch = false;
@@ -253,18 +256,28 @@ export class UpgradeSet {
     let hasAnyResearch = false;
 
     this.upgradesArray.forEach((upgrade) => {
-      // Visibility check based on tech tree
       if (!this.isUpgradeAvailable(upgrade.id)) {
         if (upgrade.$el) {
-          upgrade.$el.classList.add("hidden");
+          if (hideOtherDoctrine) {
+            upgrade.$el.classList.add("hidden");
+          } else {
+            upgrade.$el.classList.remove("hidden");
+            upgrade.$el.classList.add("doctrine-locked");
+          }
+          upgrade.setAffordable(false);
         }
         return;
       }
 
+      if (upgrade.$el) {
+        upgrade.$el.classList.remove("doctrine-locked");
+      }
+
       let isAffordable = false;
 
-      // During meltdown, make all upgrades unaffordable
-      if (game.reactor && game.reactor.has_melted_down) {
+      if (game.isSandbox) {
+        isAffordable = !upgrade.erequires || (this.getUpgrade(upgrade.erequires)?.level ?? 0) > 0;
+      } else if (game.reactor && game.reactor.has_melted_down) {
         isAffordable = false;
       } else {
         const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);

@@ -178,6 +178,12 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
 .splash-btn-load:hover { border-color: rgb(154 163 217) rgb(60 65 100) rgb(60 65 100) rgb(154 163 217); background: rgb(95 109 170);
 }
 
+.splash-btn-sandbox { border-color: rgb(100 180 200) rgb(30 80 90) rgb(30 80 90) rgb(100 180 200); background: rgb(0 140 160); color: white;
+}
+
+.splash-btn-sandbox:hover { border-color: rgb(140 210 225) rgb(50 110 120) rgb(50 110 120) rgb(140 210 225); background: rgb(0 170 190);
+}
+
 .save-slot-indicator { position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.7rem; opacity: 0.8;
 }
 /* Save slot button styles - based on splash buttons but standalone */
@@ -480,6 +486,21 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
 
 #reactor_background.heat-critical { box-shadow: inset 0 0 40px rgb(255 0 0 / 50%), 0 0 30px rgb(255 0 0 / 30%);
 }
+
+body.reactor-sandbox #reactor_background { box-shadow: inset 0 0 24px rgb(0 150 200 / 25%); background: rgb(0 80 120 / 8%);
+}
+
+body.reactor-sandbox #reactor_section { --sandbox-accent: rgb(0 180 220);
+}
+
+body.reactor-sandbox #reactor_wrapper { position: relative; background: linear-gradient(rgb(15 30 40 / 60%) 1px, transparent 1px), linear-gradient(90deg, rgb(15 30 40 / 60%) 1px, transparent 1px); background-size: var(--tile-size, 48px) var(--tile-size, 48px); background-position: center center; border-radius: 8px; box-shadow: inset 0 0 0 2px rgb(0 150 200 / 30%);
+}
+
+body.reactor-sandbox #reactor_section .tile { border-style: dashed; border-color: rgb(40 90 110); background-color: rgb(15 25 32); box-shadow: inset 0 1px 2px rgb(0 0 0 / 50%);
+}
+
+body.reactor-sandbox #reactor_section .tile:hover { border-color: var(--sandbox-accent);
+}
 /* Heat wiggle animation for individual tiles when heat gets too high */
 @keyframes tile-heat-wiggle { 0%, 100% { transform: translateX(0) translateY(0); }
  25% { transform: translateX(-1px) translateY(-1px); }
@@ -548,14 +569,7 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
  }
 }
 
-#reactor { display: grid; padding: 0; margin: 0; direction: ltr; grid-template-columns: repeat(var(--game-cols, 12), var(--tile-size, 48px)); grid-template-rows: repeat(var(--game-rows, 12), var(--tile-size, 48px));
-}
-
-#reactor button.tile { width: var(--tile-size, 48px); min-width: 0; max-width: 64px; height: var(--tile-size, 48px); min-height: 0; max-height: 64px; box-sizing: border-box;
-}
-
-@media (width >= 901px) { #reactor button.tile { width: var(--tile-size); height: var(--tile-size);
- }
+#reactor { display: block; padding: 0; margin: 0; direction: ltr;
 }
 
 .tile { position: relative; width: var(--tile-size); max-width: 64px; height: var(--tile-size); max-height: 64px; /* Ensure tiles are properly positioned in the grid */
@@ -619,6 +633,16 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
 }
 /* Overlay used for transient visual effects (flow arrows, emits) */
 .reactor-overlay { position: absolute; z-index: 22; inset: 0; pointer-events: none;
+}
+.time-flux-sim-overlay { position: fixed; z-index: 3000; inset: 0; display: none; align-items: center; justify-content: center; background: rgb(0 0 0 / 55%); pointer-events: none;
+}
+.time-flux-sim-panel { display: flex; min-width: 220px; max-width: 60vw; flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 16px; border: 2px solid var(--bevel-light); background: var(--panel-bg); box-shadow: 2px 2px 0 rgb(0 0 0 / 40%);
+}
+.time-flux-sim-label { font-size: 14px; color: var(--text-color); text-align: center;
+}
+.time-flux-sim-bar { width: 100%; height: 10px; border: 1px solid var(--bevel-dark); background: rgb(0 0 0 / 45%);
+}
+.time-flux-sim-fill { width: 0%; height: 100%; background: linear-gradient(to right, rgb(52 152 219), rgb(46 204 113)); transition: width 0.1s linear;
 }
 /* Enhanced part image styling for better scaling */
 .part .image { object-fit: contain; /* Ensures images scale properly within containers */
@@ -1654,6 +1678,18 @@ footer#bottom_nav button.active { border-color: rgb(100 200 255) rgb(40 100 150)
 }
 
 .upgrade-card.maxed-out:hover { filter: grayscale(0.8) brightness(1.05); transform: scale(0.87);
+}
+
+.upgrade-card.doctrine-locked { filter: grayscale(0.85); opacity: 0.7; cursor: default;
+}
+
+.upgrade-card.doctrine-locked:hover { filter: grayscale(0.85); opacity: 0.75;
+}
+
+.upgrade-card.doctrine-locked .upgrade-doctrine-icon { position: relative;
+}
+
+.upgrade-card.doctrine-locked .upgrade-doctrine-icon::after { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / 50%); content: "\1F512"; font-size: 1.25rem; line-height: 1;
 }
 
 .upgrade-header { display: flex; min-width: 0; box-sizing: border-box; flex-direction: row; align-items: flex-start; padding: 12px; border-bottom: 2px solid var(--bevel-dark); background-color: rgb(255 255 255 / 5%); gap: 12px;
@@ -3378,6 +3414,10 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 
 #my_layouts_modal .modal-content > *:not(.modal-header) { padding: 20px;
 }
+
+.my-layouts-toolbar { display: flex; padding: 12px 20px; border-bottom: 1px solid rgb(51 51 51); background: rgb(34 34 34);
+}
+
 #my_layouts_list { width: 100%; border-collapse: collapse; color: rgb(255 255 255);
 }
 #my_layouts_list tr { border-bottom: 1px solid rgb(51 51 51);
@@ -3801,21 +3841,6 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .quick-start-screen .bios-content { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; padding: 10px; gap: 0;
 }
 
-.quick-start-icon-area { display: flex; flex-direction: column; align-items: center; padding: 15px; border: 2px solid; border-color: rgb(0 0 0) rgb(68 68 68) rgb(68 68 68) rgb(0 0 0); margin-bottom: 10px; background-color: var(--inset-bg);
-}
-
-.quick-start-icon { display: flex; width: 3rem; height: 3rem; align-items: center; justify-content: center; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); margin-bottom: 0.5rem; background: rgb(51 51 51);
-}
-
-.quick-start-icon-inner { width: 1rem; height: 1rem; animation: pulse 2s ease-in-out infinite; background: rgb(249 115 22);
-}
-
-.quick-start-icon-title { margin-bottom: 0.25rem; color: rgb(255 255 255); font-size: 0.65rem;
-}
-
-.quick-start-icon-subtitle { color: rgb(107 114 128); font-size: 0.5rem;
-}
-
 .quick-start-section { padding: 15px; border: 2px solid; border-color: rgb(0 0 0) rgb(68 68 68) rgb(68 68 68) rgb(0 0 0); margin-bottom: 10px; background: var(--inset-bg);
 }
 
@@ -3899,15 +3924,6 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
  }
 
  .quick-start-screen .bios-content { padding: 8px;
- }
-
- .quick-start-icon { width: 2.5rem; height: 2.5rem;
- }
-
- .quick-start-icon-inner { width: 0.75rem; height: 0.75rem;
- }
-
- .quick-start-icon-title { font-size: 0.55rem;
  }
 
  .quick-start-section { padding: 0.6rem;
@@ -4487,13 +4503,19 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .setup-section { display: flex; flex-direction: column;
 }
 
-.setup-section .bios-title-vfd { padding: 0.25rem 0.5rem; border: none; margin-bottom: 0.75rem; background: transparent; box-shadow: none;
+.setup-section .bios-title-vfd { padding: 0.25rem 0.5rem 0 0.5rem; border: none; margin-bottom: 0.75rem; background: transparent; box-shadow: none;
 }
 
-.doctrine-cards { display: flex; flex-direction: column; gap: 0.75rem;
+.doctrine-cards { display: flex; flex-direction: column; gap: 0.5rem;
 }
 
-.doctrine-card { position: relative; width: 100%; padding: 1rem; border: 3px solid; border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102); border-radius: 0; background: rgb(51 51 51); color: rgb(200 220 180); cursor: pointer; font-family: "Press Start 2P", cursive, monospace; text-align: left; transition: background 0.1s;
+.doctrine-card { display: flex; align-items: center; gap: 0.5rem; position: relative; width: 100%; padding: 0.5rem 0.75rem; border: 3px solid; border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102); border-radius: 0; background: rgb(51 51 51); color: rgb(200 220 180); cursor: pointer; font-family: "Press Start 2P", cursive, monospace; text-align: left; transition: background 0.1s;
+}
+
+.doctrine-card-icon { width: 2rem; height: 2rem; flex-shrink: 0; object-fit: contain; image-rendering: pixelated; background: transparent;
+}
+
+.doctrine-card-text { display: flex; flex-direction: column; min-width: 0;
 }
 
 .doctrine-card:hover { background: rgb(68 68 68);
@@ -4502,8 +4524,6 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .doctrine-card.selected { border-color: rgb(74 222 128); background: rgb(55 65 55);
 }
 
-.doctrine-card.selected::after { position: absolute; top: 0.5rem; right: 0.5rem; color: rgb(74 222 128); content: "◄"; font-size: 0.6rem;
-}
 
 .doctrine-card.selected .doctrine-card-title { color: rgb(255 255 255);
 }
@@ -4517,31 +4537,31 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .doctrine-card:hover .doctrine-card-title { color: rgb(134 239 172);
 }
 
-.doctrine-card[data-doctrine="physicist"] .doctrine-card-title { color: rgb(96 165 250);
+.doctrine-card[data-doctrine="physicist"] .doctrine-card-title { color: rgb(255 140 90);
 }
 
-.doctrine-card[data-doctrine="physicist"]:hover .doctrine-card-title { color: rgb(147 197 253);
+.doctrine-card[data-doctrine="physicist"]:hover .doctrine-card-title { color: rgb(255 180 130);
 }
 
-.doctrine-card[data-doctrine="physicist"].selected { border-color: rgb(96 165 250);
+.doctrine-card[data-doctrine="physicist"].selected { border-color: rgb(255 120 70);
 }
 
-.doctrine-card[data-doctrine="engineer"] .doctrine-card-title { color: rgb(250 204 21);
+.doctrine-card[data-doctrine="engineer"] .doctrine-card-title { color: rgb(33 150 243);
 }
 
-.doctrine-card[data-doctrine="engineer"]:hover .doctrine-card-title { color: rgb(253 224 71);
+.doctrine-card[data-doctrine="engineer"]:hover .doctrine-card-title { color: rgb(100 180 240);
 }
 
-.doctrine-card[data-doctrine="engineer"].selected { border-color: rgb(250 204 21);
+.doctrine-card[data-doctrine="engineer"].selected { border-color: rgb(33 150 243);
 }
 
 .doctrine-card-subtitle { display: block; color: rgb(156 163 175); font-size: 0.5rem; line-height: 1.6;
 }
 
-.difficulty-cards { display: flex; flex-direction: column; gap: 0.75rem;
+.difficulty-cards { display: flex; flex-direction: column; gap: 0.5rem;
 }
 
-.difficulty-card { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border: 3px solid; border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102); border-radius: 0; background: rgb(51 51 51); color: rgb(255 255 255); cursor: pointer; font-family: "Press Start 2P", cursive, monospace; text-align: left; transition: background 0.1s;
+.difficulty-card { display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.5rem 0.75rem; border: 3px solid; border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102); border-radius: 0; background: rgb(51 51 51); color: rgb(255 255 255); cursor: pointer; font-family: "Press Start 2P", cursive, monospace; text-align: left; transition: background 0.1s;
 }
 
 .difficulty-card:hover { background: rgb(68 68 68);
@@ -4577,46 +4597,28 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .difficulty-card[data-difficulty="hard"].selected { border-color: rgb(239 68 68); background: rgb(127 29 29 / 20%);
 }
 
-.difficulty-card-info { display: flex; flex-direction: column; text-align: left;
+.difficulty-card-info { display: flex; flex-direction: column; min-width: 0; text-align: left;
 }
 
 .difficulty-name { display: block; margin-bottom: 0.25rem; font-size: 0.65rem; font-weight: bold; text-shadow: none;
 }
 
-.difficulty-desc { display: block; color: rgb(107 114 128); font-size: 0.45rem; line-height: 1.4; opacity: 1;
+.difficulty-desc { display: block; color: rgb(156 163 175); font-size: 0.5rem; line-height: 1.6; opacity: 1;
 }
 
-.difficulty-card.selected .difficulty-desc { color: rgb(156 163 175);
+.difficulty-card.selected .difficulty-desc { color: rgb(209 213 219);
 }
 
-.difficulty-indicator { width: 0.75rem; height: 0.75rem; flex-shrink: 0; border: 1px solid rgb(107 114 128); background: rgb(0 0 0);
+.difficulty-indicator { width: 2rem; height: 2rem; flex-shrink: 0; object-fit: contain; image-rendering: auto; background: transparent;
 }
 
-.difficulty-card[data-difficulty="easy"] .difficulty-indicator { border-color: rgb(34 197 94); background: rgb(20 83 45);
+.difficulty-card[data-difficulty="easy"].selected .difficulty-indicator { filter: drop-shadow(0 0 3px rgb(34 197 94)) drop-shadow(0 0 8px rgb(34 197 94 / 60%));
 }
 
-.difficulty-card[data-difficulty="easy"]:hover .difficulty-indicator { background: rgb(34 197 94);
+.difficulty-card[data-difficulty="medium"].selected .difficulty-indicator { filter: drop-shadow(0 0 4px rgb(250 204 21)) drop-shadow(0 0 10px rgb(250 204 21 / 70%)) drop-shadow(0 0 16px rgb(250 204 21 / 50%));
 }
 
-.difficulty-card[data-difficulty="easy"].selected .difficulty-indicator { background: rgb(34 197 94); box-shadow: 0 0 5px rgb(34 197 94 / 80%);
-}
-
-.difficulty-card[data-difficulty="medium"] .difficulty-indicator { border-color: rgb(234 179 8); background: rgb(113 63 18);
-}
-
-.difficulty-card[data-difficulty="medium"]:hover .difficulty-indicator { background: rgb(250 204 21);
-}
-
-.difficulty-card[data-difficulty="medium"].selected .difficulty-indicator { background: rgb(250 204 21); box-shadow: 0 0 5px rgb(250 204 21 / 80%);
-}
-
-.difficulty-card[data-difficulty="hard"] .difficulty-indicator { border-color: rgb(239 68 68); background: rgb(127 29 29);
-}
-
-.difficulty-card[data-difficulty="hard"]:hover .difficulty-indicator { background: rgb(239 68 68);
-}
-
-.difficulty-card[data-difficulty="hard"].selected .difficulty-indicator { background: rgb(239 68 68); box-shadow: 0 0 5px rgb(239 68 68 / 80%);
+.difficulty-card[data-difficulty="hard"].selected .difficulty-indicator { filter: drop-shadow(0 0 5px rgb(239 68 68)) drop-shadow(0 0 12px rgb(239 68 68 / 75%)) drop-shadow(0 0 20px rgb(239 68 68 / 55%)) drop-shadow(0 0 28px rgb(239 68 68 / 40%));
 }
 
 .setup-start-btn:disabled { cursor: not-allowed; filter: grayscale(0.5); opacity: 0.5;
@@ -4634,7 +4636,7 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
  .difficulty-cards { flex-direction: column;
  }
 
- .difficulty-card { padding: 1.25rem;
+ .difficulty-card { padding: 0.65rem 0.75rem;
  }
 }
 
@@ -4769,7 +4771,11 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .game-setup-selection .bios-footer { left: 50%; max-width: 520px; transform: translateX(-50%);
 }
 
-.bios-btn { max-width: 150px; flex: 1; padding: 0.75rem 1.5rem; border: 3px solid; border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102); border-radius: 0; background: rgb(51 51 51); color: rgb(255 255 255); cursor: pointer; font-family: "Press Start 2P", cursive, monospace; font-size: 0.55rem; text-shadow: var(--text-shadow); transition: background 0.1s;
+.game-setup-selection .bios-footer .setup-back-btn,
+.game-setup-selection .bios-footer .setup-start-btn { flex-shrink: 0;
+}
+
+.bios-btn { max-width: 150px; flex: 1; padding: 0.75rem 1.5rem; border: 3px solid; border-color: rgb(102 102 102) rgb(17 17 17) rgb(17 17 17) rgb(102 102 102); border-radius: 0; background: rgb(51 51 51); color: rgb(255 255 255); cursor: pointer; font-family: "Press Start 2P", cursive, monospace; font-size: 0.55rem; text-shadow: var(--text-shadow); transition: background 0.1s; white-space: nowrap;
 }
 
 .bios-btn:hover { background: rgb(68 68 68); filter: none; transform: none;

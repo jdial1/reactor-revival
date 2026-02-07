@@ -202,6 +202,20 @@ function setupButtonHandlers(pageRouter, ui, game) {
     };
   }
 
+  const sandboxBtn = document.getElementById("splash-sandbox-btn");
+  if (sandboxBtn) {
+    sandboxBtn.onclick = async () => {
+      if (window.splashManager) window.splashManager.hide();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      clearAllGameDataForNewGame(game);
+      safeSetItem("reactorGameQuickStartShown", "1");
+      await game.initialize_new_game_state();
+      await startGame(pageRouter, ui, game);
+      safeRemoveItem("reactorNewGamePending");
+      ui.enterSandbox();
+    };
+  }
+
 }
 
 /**
@@ -504,6 +518,8 @@ async function startGame(pageRouter, ui, game) {
 
   const finalizeGameStart = async () => {
     console.log(`[DEBUG] Finalizing game start. Initial paused state: ${game.paused}`);
+    game.pause();
+    ui.stateManager.setVar("pause", true);
     
     // Sync all toggle states from game properties to stateManager
     if (ui.syncToggleStatesFromGame) {

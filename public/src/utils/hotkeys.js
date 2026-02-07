@@ -7,6 +7,7 @@ export class Hotkeys {
   }
 
   *getTiles(tile, event) {
+    if (!this.game) return;
     const { shiftKey, ctrlKey, altKey } = event;
 
     if (ctrlKey && altKey) {

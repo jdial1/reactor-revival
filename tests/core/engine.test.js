@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM } from "../helpers/setup.js";
+import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Engine Mechanics", () => {
   let game;
@@ -691,6 +692,128 @@ describe("Engine Mechanics", () => {
 
       // Restore original handler
       game.engine.handleComponentDepletion = originalHandleComponentDepletion;
+    });
+  });
+
+  describe("Memory Leak Auditing", () => {
+    it("should trim active_cells and active_vessels to actual part count after _updatePartCaches", async () => {
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      await placePart(game, 1, 0, "vent1");
+      game.engine.markPartCacheAsDirty();
+      game.engine._updatePartCaches();
+
+      expect(game.engine.active_cells.length).toBe(1);
+      expect(game.engine.active_vessels.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("should clear cache arrays and not retain stale references when grid is cleared", async () => {
+      await placePart(game, 0, 0, "uranium1");
+      game.engine.markPartCacheAsDirty();
+      game.engine._updatePartCaches();
+
+      game.tileset.clearAllTiles();
+      game.engine.markPartCacheAsDirty();
+      game.engine._updatePartCaches();
+
+      expect(game.engine.active_cells.length).toBe(0);
+      expect(game.engine.active_vessels.length).toBe(0);
+    });
+
+    it("should cap cache array lengths to grid capacity", async () => {
+      game.tileset.clearAllTiles();
+      const maxParts = game._rows * game._cols;
+      game.engine.markPartCacheAsDirty();
+      game.engine._updatePartCaches();
+
+      expect(game.engine.active_cells.length).toBeLessThanOrEqual(maxParts);
+      expect(game.engine.active_vessels.length).toBeLessThanOrEqual(maxParts);
+    });
+
+    it("should restore invalid cache arrays via _ensureArraysValid", () => {
+      game.engine.active_cells = null;
+      game.engine.active_vessels = null;
+      game.engine._ensureArraysValid();
+
+      expect(Array.isArray(game.engine.active_cells)).toBe(true);
+      expect(Array.isArray(game.engine.active_vessels)).toBe(true);
+    });
+
+    it("should keep event ring buffer at fixed size and never grow", async () => {
+      const maxEvents = game.engine.MAX_EVENTS;
+      expect(game.engine._eventRingBuffer.length).toBe(maxEvents * 4);
+
+      await placePart(game, 0, 0, "uranium1");
+      for (let i = 0; i < 50; i++) {
+        game.engine.tick();
+      }
+
+      expect(game.engine._eventRingBuffer.length).toBe(maxEvents * 4);
+      expect(game.engine.MAX_EVENTS).toBe(maxEvents);
+    });
+
+    it("should keep event head/tail bounded (ring buffer wrap)", async () => {
+      await placePart(game, 0, 0, "uranium1");
+      game.engine.tick();
+
+      const headAfterTick = game.engine._eventHead;
+      game.engine.tick();
+
+      expect(game.engine._eventHead).toBeLessThanOrEqual(game.engine.MAX_EVENTS);
+      expect(game.engine._eventTail).toBeLessThanOrEqual(game.engine.MAX_EVENTS);
+    });
+
+    it("should not grow event ring buffer during Time Flux burst (many rapid ticks)", async () => {
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      game.engine.markPartCacheAsDirty();
+
+      const bufferLengthBefore = game.engine._eventRingBuffer.length;
+      const maxBefore = game.engine.MAX_EVENTS;
+      for (let i = 0; i < 100; i++) {
+        game.engine._processTick(1.0);
+      }
+
+      expect(game.engine._eventRingBuffer.length).toBe(bufferLengthBefore);
+      expect(game.engine.MAX_EVENTS).toBe(maxBefore);
+    });
+
+    it("should not accumulate unbounded pending events across ticks (ring buffer drain)", async () => {
+      await placePart(game, 0, 0, "uranium1");
+      game.engine.markPartCacheAsDirty();
+
+      game.engine._processTick(1.0);
+      const headAfterFirst = game.engine._eventHead;
+      const tailAfterFirst = game.engine._eventTail;
+
+      game.engine._processTick(1.0);
+      const headAfterSecond = game.engine._eventHead;
+      const tailAfterSecond = game.engine._eventTail;
+
+      const pendingFirst = (headAfterFirst - tailAfterFirst + game.engine.MAX_EVENTS) % game.engine.MAX_EVENTS;
+      const pendingSecond = (headAfterSecond - tailAfterSecond + game.engine.MAX_EVENTS) % game.engine.MAX_EVENTS;
+      expect(pendingFirst).toBeLessThanOrEqual(game.engine.MAX_EVENTS);
+      expect(pendingSecond).toBeLessThanOrEqual(game.engine.MAX_EVENTS);
+    });
+
+    it("should keep event ring buffer bounded after long idle then Time Flux catch-up", async () => {
+      game.tileset.clearAllTiles();
+      game.engine.time_accumulator = 50 * game.loop_wait;
+      game.time_flux = true;
+      await placePart(game, 0, 0, "uranium1");
+      game.engine.markPartCacheAsDirty();
+
+      const bufferLengthBefore = game.engine._eventRingBuffer.length;
+      const target = globalThis.window || globalThis;
+      const raf = target.requestAnimationFrame;
+      target.requestAnimationFrame = () => 1;
+      game.engine.running = true;
+      game.engine.last_timestamp = 0;
+      game.engine.loop(16);
+
+      expect(game.engine._eventRingBuffer.length).toBe(bufferLengthBefore);
+      expect(game.engine._eventRingBuffer.length).toBe(game.engine.MAX_EVENTS * 4);
+      target.requestAnimationFrame = raf;
     });
   });
 

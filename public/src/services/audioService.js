@@ -1,4 +1,4 @@
-import { safeGetItem, safeSetItem } from "../utils/util.js";
+import { safeGetItem, safeSetItem, getResourceUrl, isTestEnv } from "../utils/util.js";
 
 export class AudioService {
   constructor() {
@@ -28,6 +28,73 @@ export class AudioService {
   this._geigerActive = false;
   this._hasUnlocked = false;
   this._pendingAmbience = false;
+  this._soundLimiter = {
+  windowMs: 60,
+  lastWindowStart: 0,
+  counts: new Map(),
+  globalCap: 24,
+  perSoundCap: 3
+  };
+  this._activeLimiter = null;
+  this._uiBuffers = { click: null, placement: null, upgrade: null, error: null };
+  this._ambienceBuffers = [];
+  this._ambienceLayerGains = [];
+  this._ambienceFilter = null;
+  this._ambienceHeatRatio = 0;
+  }
+  async _loadSampleBuffers() {
+  if (!this.context || isTestEnv()) return;
+  const base = getResourceUrl('audio/');
+  const uiUrls = { click: base + 'ui_click.mp3', placement: base + 'placement.mp3', upgrade: base + 'upgrade.mp3', error: base + 'error.mp3' };
+  for (const [key, url] of Object.entries(uiUrls)) {
+  try {
+  const r = await fetch(url);
+  const ab = await r.arrayBuffer();
+  this._uiBuffers[key] = await this.context.decodeAudioData(ab);
+  } catch (e) {
+  console.warn('Audio load failed', url, e);
+  }
+  }
+  const layerUrls = [base + 'ambience_low.mp3', base + 'ambience_medium.mp3', base + 'ambience_high.mp3'];
+  for (const url of layerUrls) {
+  try {
+  const r = await fetch(url);
+  const ab = await r.arrayBuffer();
+  this._ambienceBuffers.push(await this.context.decodeAudioData(ab));
+  } catch (e) {
+  console.warn('Ambience load failed', url, e);
+  this._ambienceBuffers.push(null);
+  }
+  }
+  if (this._ambienceBuffers.length >= 3 && this._ambienceBuffers.every(Boolean) &&
+  this.enabled && this.ambienceGain?.gain.value > 0 && this._ambienceNodes.length > 0) {
+  this.stopAmbience();
+  this.startAmbience();
+  }
+  }
+  _playSample(type, category, pan) {
+  const buffer = this._uiBuffers[type];
+  if (!buffer || !this.context || this.context.state !== 'running') return;
+  const ctx = this.context;
+  const t = ctx.currentTime;
+  const categoryGain = this._getCategoryGain(category);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const cents = (Math.random() * 10 - 5) / 1200;
+  src.playbackRate.value = Math.pow(2, cents);
+  const gain = ctx.createGain();
+  gain.gain.value = 1;
+  src.connect(gain);
+  let dest = categoryGain;
+  if (pan !== null && pan !== undefined && ctx.createStereoPanner) {
+  const panner = ctx.createStereoPanner();
+  panner.pan.value = Math.max(-1, Math.min(1, pan));
+  panner.connect(dest);
+  dest = panner;
+  }
+  gain.connect(dest);
+  src.start(t);
+  src.stop(t + buffer.duration);
   }
   async init() {
   if (this._isInitialized) return;
@@ -74,6 +141,7 @@ export class AudioService {
   }
   this._distortionCurve = this._makeDistortionCurve(400);
   this._isInitialized = true;
+  this._loadSampleBuffers();
   if (safeGetItem("reactor_mute") === "true") {
   this.toggleMute(true);
   } else if (!isContextSuspended) {
@@ -366,10 +434,55 @@ export class AudioService {
   this.stopWarningLoop();
   }
   }
+  _ambienceLayerWeights(heatRatio) {
+  const r = Math.max(0, Math.min(1, heatRatio));
+  const l1 = r <= 0.3 ? 1 : Math.max(0, (0.5 - r) / 0.2);
+  const l2 = r < 0.3 ? 0 : (r > 0.7 ? Math.max(0, (1 - r) / 0.3) : 1);
+  const l3 = r < 0.7 ? 0 : Math.min(1, (r - 0.7) / 0.3);
+  return [l1, l2, l3];
+  }
+  updateAmbienceHeat(currentHeat, maxHeat) {
+  if (!this._ambienceLayerGains.length || !this.context) return;
+  const heatRatio = maxHeat > 0 ? Math.max(0, Math.min(1, currentHeat / maxHeat)) : 0;
+  this._ambienceHeatRatio = heatRatio;
+  const [l1, l2, l3] = this._ambienceLayerWeights(heatRatio);
+  const t = this.context.currentTime;
+  this._ambienceLayerGains[0].gain.setTargetAtTime(l1, t, 0.5);
+  this._ambienceLayerGains[1].gain.setTargetAtTime(l2, t, 0.5);
+  this._ambienceLayerGains[2].gain.setTargetAtTime(l3, t, 0.5);
+  if (this._ambienceFilter) {
+  const targetFreq = 100 * Math.pow(150, heatRatio);
+  this._ambienceFilter.frequency.setTargetAtTime(targetFreq, t, 0.5);
+  }
+  }
   startAmbience() {
   if (!this.enabled || !this.context || this._ambienceNodes.length > 0) return;
   const t = this.context.currentTime;
   const dest = this.ambienceGain || this.masterGain;
+  const useLayers = this._ambienceBuffers.length >= 3 &&
+  this._ambienceBuffers[0] && this._ambienceBuffers[1] && this._ambienceBuffers[2];
+  if (useLayers) {
+  this._ambienceFilter = this.context.createBiquadFilter();
+  this._ambienceFilter.type = 'lowpass';
+  this._ambienceFilter.frequency.value = 100;
+  this._ambienceFilter.Q.value = 1;
+  this._ambienceFilter.connect(dest);
+  const [l1, l2, l3] = this._ambienceLayerWeights(this._ambienceHeatRatio);
+  for (let i = 0; i < 3; i++) {
+  const src = this.context.createBufferSource();
+  src.buffer = this._ambienceBuffers[i];
+  src.loop = true;
+  const gain = this.context.createGain();
+  gain.gain.value = [l1, l2, l3][i];
+  src.connect(gain);
+  gain.connect(this._ambienceFilter);
+  src.start(t);
+  this._ambienceLayerGains.push(gain);
+  this._ambienceNodes.push(src, gain);
+  }
+  this._ambienceNodes.push(this._ambienceFilter);
+  return;
+  }
   const globalLFO = this.context.createOscillator();
   globalLFO.frequency.value = 0.15;
   const globalLFOGain = this.context.createGain();
@@ -479,6 +592,8 @@ export class AudioService {
   } catch (e) { }
   });
   this._ambienceNodes = [];
+  this._ambienceLayerGains = [];
+  this._ambienceFilter = null;
   }
   _osc(startTime, type, freq, volume, duration, options = {}) {
   if (!this.context) return null;
@@ -576,8 +691,29 @@ export class AudioService {
   lfo.stop(startTime + duration);
   return { osc: lfo, gain };
   }
+  _getLimiterScale(type, subtype, nowMs) {
+  const limiter = this._soundLimiter;
+  if (!limiter || !type) return 1;
+  if (nowMs - limiter.lastWindowStart >= limiter.windowMs) {
+  limiter.lastWindowStart = nowMs;
+  limiter.counts.clear();
+  }
+  const key = subtype ? `${type}:${subtype}` : type;
+  const globalCount = limiter.counts.get("global") || 0;
+  const soundCount = limiter.counts.get(key) || 0;
+  const nextGlobal = globalCount + 1;
+  const nextSound = soundCount + 1;
+  limiter.counts.set("global", nextGlobal);
+  limiter.counts.set(key, nextSound);
+  if (limiter.globalCap && nextGlobal > limiter.globalCap) return 0;
+  if (limiter.perSoundCap && nextSound > limiter.perSoundCap) return 0;
+  const globalScale = 1 / Math.max(1, Math.log2(nextGlobal + 1));
+  const soundScale = 1 / Math.max(1, Math.log2(nextSound + 1));
+  return Math.min(globalScale, soundScale);
+  }
   _getCategoryGain(category) {
   if (!this._isInitialized) return this.masterGain;
+  if (this._activeLimiter?.category === category) return this._activeLimiter.node;
   switch (category) {
   case 'effects':
   return this.effectsGain || this.masterGain;
@@ -611,10 +747,25 @@ export class AudioService {
   const subtype = typeof param === 'string' ? param : 'generic';
   const intensity = typeof param === 'number' ? Math.min(Math.max(param, 0), 1) : 0.5;
   const category = this._getSoundCategory(type);
-  const categoryGain = this._getCategoryGain(category);
+  let categoryGain = this._getCategoryGain(category);
+  const limiterScale = this._getLimiterScale(type, subtype, now);
+  if (!limiterScale) return;
+  let limiterNode = null;
+  if (limiterScale < 0.999) {
+  limiterNode = ctx.createGain();
+  limiterNode.gain.value = limiterScale;
+  limiterNode.connect(categoryGain);
+  this._activeLimiter = { category, node: limiterNode };
+  categoryGain = limiterNode;
+  }
   const spatialOpts = { category, pan, randomPitch: 0.08 };
+  try {
   switch (type) {
   case 'placement': {
+  if (this._uiBuffers.placement) {
+  this._playSample('placement', category, pan);
+  break;
+  }
   const basePitch = 140;
   const thud = this._osc(t, 'triangle', basePitch, 0, 0.25, { freqEnd: 40, volEnd: 0.01, ...spatialOpts });
   thud?.gain.gain.linearRampToValueAtTime(0.5, t + 0.02);
@@ -631,13 +782,11 @@ export class AudioService {
   break;
   }
   case 'sell': {
-  this._osc(t, 'square', 80, 0.4, 0.1, { freqEnd: 20, ...spatialOpts });
-  this._noise(t, 0.15, 0.15, { type: 'highpass', freq: 2000, ...spatialOpts });
-  const hum = this._osc(t, 'sawtooth', 60, 0, 0.4, { dist: true, volEnd: 0, ...spatialOpts });
-  hum?.gain.gain.linearRampToValueAtTime(0.3, t + 0.05);
-  hum?.gain.gain.setValueAtTime(0.3, t + 0.35);
-  this._osc(t + 0.3, 'sine', 400, 0, 0.5, { freqEnd: 50, ...spatialOpts })
-  ?.gain.gain.linearRampToValueAtTime(0.1, t + 0.35);
+  if (this._uiBuffers.click) {
+  this._playSample('click', category, pan);
+  break;
+  }
+  this._osc(t, 'sine', 400, 0.15, 0.08, { freqEnd: 200, volEnd: 0, ...spatialOpts });
   break;
   }
   case 'purge': {
@@ -650,6 +799,10 @@ export class AudioService {
   break;
   }
   case 'upgrade': {
+  if (this._uiBuffers.upgrade) {
+  this._playSample('upgrade', category, null);
+  break;
+  }
   const wrench = this._noise(t, 0, 0.3, { type: 'bandpass', freq: 1200, Q: 2, volEnd: 0, category });
   if (wrench?.gain) {
   wrench.gain.gain.linearRampToValueAtTime(0.2, t + 0.05);
@@ -671,6 +824,10 @@ export class AudioService {
   break;
   }
   case 'error':
+  if (this._uiBuffers.error) {
+  this._playSample('error', category, pan);
+  break;
+  }
   this._osc(t, 'sawtooth', 150, 0.15, 0.2, { freqEnd: 100, volEnd: 0, ...spatialOpts });
   break;
   case 'explosion':
@@ -827,6 +984,10 @@ export class AudioService {
   });
   break;
   case 'click':
+  if (this._uiBuffers.click) {
+  this._playSample('click', category, pan);
+  break;
+  }
   const buttonOsc = ctx.createOscillator();
   const buttonGain = ctx.createGain();
   const buttonFilter = ctx.createBiquadFilter();
@@ -866,6 +1027,12 @@ export class AudioService {
   }
   break;
   case 'ui_hover':
+  case 'tab_switch':
+  if (this._uiBuffers.click) {
+  this._playSample('click', category, pan);
+  break;
+  }
+  if (type === 'ui_hover') {
   const flyback = ctx.createOscillator();
   const flybackGain = ctx.createGain();
   flyback.type = 'sine';
@@ -891,8 +1058,7 @@ export class AudioService {
   staticGain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
   staticSrc.start(t, Math.random(), 0.03);
   }
-  break;
-  case 'tab_switch':
+  } else {
   const switchOsc = ctx.createOscillator();
   const switchGain = ctx.createGain();
   switchOsc.type = 'square';
@@ -904,6 +1070,7 @@ export class AudioService {
   switchGain.gain.linearRampToValueAtTime(0, t + 0.1);
   switchOsc.start(t);
   switchOsc.stop(t + 0.1);
+  }
   break;
   case 'reboot':
   const spin = ctx.createOscillator();
@@ -1144,6 +1311,11 @@ export class AudioService {
   break;
   default:
   break;
+  }
+  } finally {
+  if (limiterNode) {
+  this._activeLimiter = null;
+  }
   }
   }
 }

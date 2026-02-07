@@ -1,5 +1,7 @@
 import { Tile } from "./tile.js";
 
+const GRID_SIZE = 50 * 50;
+
 export class Tileset {
   constructor(game) {
     this.game = game;
@@ -11,6 +13,33 @@ export class Tileset {
     this.tiles_list = [];
     this.active_tiles = [];
     this.active_tiles_list = [];
+    this.heatMap = new Float32Array(GRID_SIZE);
+  }
+
+  gridIndex(row, col) {
+    return row * this.max_cols + col;
+  }
+
+  syncHeatFromTiles() {
+    const rows = this.game?.rows ?? this.max_rows;
+    const cols = this.game?.cols ?? this.max_cols;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const tile = this.tiles[r]?.[c];
+        if (tile) this.heatMap[this.gridIndex(r, c)] = tile.heat_contained;
+      }
+    }
+  }
+
+  syncHeatToTiles() {
+    const rows = this.game?.rows ?? this.max_rows;
+    const cols = this.game?.cols ?? this.max_cols;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const tile = this.tiles[r]?.[c];
+        if (tile) tile._heatContained = this.heatMap[this.gridIndex(r, c)];
+      }
+    }
   }
 
   initialize() {

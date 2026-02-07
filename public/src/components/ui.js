@@ -4,7 +4,10 @@ import { Hotkeys } from "../utils/hotkeys.js";
 import dataService from "../services/dataService.js";
 import { settingsModal } from "./settingsModal.js";
 import { GridScaler } from "./gridScaler.js";
+import { GridCanvasRenderer } from "./gridCanvasRenderer.js";
 import { leaderboardService } from "../services/leaderboardService.js";
+import { logger } from "../utils/logger.js";
+import { requestWakeLock, releaseWakeLock } from "../services/pwa.js";
 
 // Load help text
 let help_text = {};
@@ -16,7 +19,7 @@ async function ensureDataLoaded() {
       help_text = await dataService.loadHelpText();
       dataLoaded = true;
     } catch (error) {
-      console.warn("Failed to load help text:", error);
+      logger.warn("Failed to load help text:", error);
       help_text = {};
       dataLoaded = true;
     }
@@ -43,6 +46,7 @@ export class UI {
     this.stateManager = new StateManager(this);
     this.hotkeys = null;
     this.gridScaler = new GridScaler(this);
+    this.gridCanvasRenderer = new GridCanvasRenderer(this);
     this.isDragging = false;
     this.lastTileModified = null;
     this.longPressTimer = null;
@@ -75,7 +79,7 @@ export class UI {
     };
 
     // Animation state tracking to prevent spam
-    this._activeVentRotors = new Set(); // Track tiles with active vent rotor animations
+    this._activeVentRotors = new Map();
     // Flow indicators removed for performance
     this._activeTileIcons = new Map(); // Track active tile icons by tile and type
 
@@ -352,7 +356,7 @@ export class UI {
       } else {
         // Only warn for global elements that should always exist
         if (pageElements.global.includes(id)) {
-          console.warn(`[UI] Global element with id '${id}' not found in DOM.`);
+          logger.warn(`[UI] Global element with id '${id}' not found in DOM.`);
         }
         // For page-specific elements, don't warn as they may not be loaded yet
       }
@@ -390,12 +394,12 @@ export class UI {
           const currentState = this.stateManager.getVar(config.stateProperty);
           const newState = !currentState;
           
-          console.log(`[TOGGLE] Button "${config.stateProperty}" clicked: ${currentState ? 'ON' : 'OFF'} -> ${newState ? 'ON' : 'OFF'}`);
+          logger.debug(`[TOGGLE] Button "${config.stateProperty}" clicked: ${currentState ? 'ON' : 'OFF'} -> ${newState ? 'ON' : 'OFF'}`);
           
           if (config.stateProperty === "time_flux") {
             const accumulator = this.game?.engine?.time_accumulator || 0;
             const queuedTicks = accumulator > 0 ? Math.floor(accumulator / (this.game?.loop_wait || 1000)) : 0;
-            console.log(`[TIME FLUX] Button clicked: ${currentState ? 'ON' : 'OFF'} -> ${newState ? 'ON' : 'OFF'}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}, game.time_flux before: ${this.game?.time_flux}`);
+            logger.debug(`[TIME FLUX] Button clicked: ${currentState ? 'ON' : 'OFF'} -> ${newState ? 'ON' : 'OFF'}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}, game.time_flux before: ${this.game?.time_flux}`);
             if (this.game && this.game.logger) {
               this.game.logger.debug(`[TIME FLUX] Button toggled: ${currentState ? 'ON' : 'OFF'} -> ${newState ? 'ON' : 'OFF'}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}`);
             }
@@ -404,7 +408,7 @@ export class UI {
           this.stateManager.setVar(config.stateProperty, newState);
         };
       } else {
-        console.warn(`[UI] Toggle button #${config.id} not found.`);
+        logger.warn(`[UI] Toggle button #${config.id} not found.`);
       }
     }
     // Parts panel toggle is handled in initializePartsPanel() with pointer events
@@ -503,14 +507,14 @@ export class UI {
     for (const buttonKey in this.toggle_buttons_config) {
       const config = this.toggle_buttons_config[buttonKey];
       const isActive = this.stateManager.getVar(config.stateProperty);
-      console.log(`[TOGGLE] Updating button "${config.stateProperty}" to ${isActive ? 'ON' : 'OFF'}`);
+      logger.debug(`[TOGGLE] Updating button "${config.stateProperty}" to ${isActive ? 'ON' : 'OFF'}`);
       this.updateToggleButtonState(config, isActive);
     }
   }
   
   syncToggleStatesFromGame() {
     if (!this.game) {
-      console.warn(`[TOGGLE] syncToggleStatesFromGame called but game is not available`);
+      logger.warn(`[TOGGLE] syncToggleStatesFromGame called but game is not available`);
       return;
     }
     
@@ -526,7 +530,7 @@ export class UI {
       const gameValue = getValue();
       const currentState = this.stateManager.getVar(stateProperty);
       if (currentState !== gameValue) {
-        console.log(`[TOGGLE] Syncing "${stateProperty}" from game: ${currentState} -> ${gameValue}`);
+        logger.debug(`[TOGGLE] Syncing "${stateProperty}" from game: ${currentState} -> ${gameValue}`);
         this.stateManager.setVar(stateProperty, gameValue);
       }
     }
@@ -585,7 +589,7 @@ export class UI {
       const parts = this.game.partset.getPartsByCategory(partCategory);
 
       if (parts.length === 0) {
-        console.warn(`No parts found for category: ${partCategory}`);
+        logger.warn(`No parts found for category: ${partCategory}`);
       }
       parts.forEach((part) => {
 
@@ -712,9 +716,9 @@ export class UI {
       if (hasMeltedDown) {
         const resetReactorBtn = document.getElementById("reset_reactor_btn");
         if (resetReactorBtn && !resetReactorBtn.hasAttribute('data-listener-added')) {
-          console.log("Setting up reset reactor button event listener");
+          logger.debug("Setting up reset reactor button event listener");
           resetReactorBtn.addEventListener("click", async () => {
-            console.log("Reset reactor button clicked");
+            logger.debug("Reset reactor button clicked");
             await this.resetReactor();
           });
           resetReactorBtn.setAttribute('data-listener-added', 'true');
@@ -780,6 +784,17 @@ export class UI {
         navigator.clearAppBadge();
       }
     });
+  }
+
+  updateWakeLockState() {
+    if (!this.game) return;
+    const isPaused = this.stateManager?.getVar("pause");
+    const isRunning = this.game.engine?.running && !isPaused;
+    if (isRunning) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
   }
 
   updateLeaderboardIcon() {
@@ -886,12 +901,8 @@ export class UI {
         this.last_interface_update = timestamp;
         this.recordFrame();
 
-        if (this.game?.tileset.active_tiles_list) {
-            // We only update tiles that actually need a visual refresh (e.g. heat bar width)
-            // This forEach is okay at 10fps
-            this.game.tileset.active_tiles_list.forEach((tile) =>
-                tile.updateVisualState()
-            );
+        if (this.gridCanvasRenderer && this.game) {
+          this.gridCanvasRenderer.render(this.game);
         }
 
         // Check affordability only periodically to save CPU
@@ -941,30 +952,29 @@ export class UI {
     this.update_interface_task = requestAnimationFrame((ts) => this.runUpdateInterfaceLoop(ts));
   }
 
-  // Internal: render batched visual events - OPTIMIZED for performance
-  _renderVisualEvents(eventPool, count) {
-    // Support legacy array passing or new pool
-    const events = Array.isArray(eventPool) ? eventPool : [];
-    const loopCount = typeof count === 'number' ? count : events.length;
-
-    if (loopCount === 0) return;
-
-    for (let i = 0; i < loopCount; i++) {
-      const evt = events[i];
-      if (!evt) continue;
-
-      if (evt.type === 'emit') {
-        // evt.tile is now a Tile object reference, not [r,c]
-        const t = evt.tile;
-        if (t) {
-            if (evt.icon === 'power') {
-                this.spawnTileIcon('power', t, null);
-            } else if (evt.icon === 'heat' && t.part && t.part.category === 'vent') {
-                this.blinkVent(t);
-            }
+  _renderVisualEvents(eventBufferDescriptor) {
+    if (!eventBufferDescriptor || eventBufferDescriptor.head === eventBufferDescriptor.tail) return;
+    const { buffer, head, tail, max } = eventBufferDescriptor;
+    const tileset = this.game?.tileset;
+    if (!tileset || !buffer) return;
+    let pos = tail;
+    while (pos !== head) {
+      const idx = pos * 4;
+      const typeId = buffer[idx];
+      const row = buffer[idx + 1];
+      const col = buffer[idx + 2];
+      const t = tileset.getTile(row, col);
+      if (t) {
+        if (typeId === 1) {
+          this.spawnTileIcon('power', t, null);
+        } else if (typeId === 2 && t.part && t.part.category === 'vent') {
+          this.blinkVent(t);
         }
-      } 
-      // Reset event object for pooling? No, Engine does that by overwriting.
+      }
+      pos = (pos + 1) % max;
+    }
+    if (this.game?.engine && typeof this.game.engine.ackEvents === 'function') {
+      this.game.engine.ackEvents(head);
     }
   }
   // eslint-disable-next-line class-methods-use-this
@@ -1007,60 +1017,66 @@ export class UI {
     return svg;
   }
 
+  _ensureTimeFluxSimulationOverlay() {
+    if (this._timeFluxSimOverlay && this._timeFluxSimOverlay.parentElement) return this._timeFluxSimOverlay;
+    if (typeof document === "undefined" || !document.body) return null;
+    const overlay = document.createElement("div");
+    overlay.className = "time-flux-sim-overlay";
+    const panel = document.createElement("div");
+    panel.className = "time-flux-sim-panel";
+    const label = document.createElement("div");
+    label.className = "time-flux-sim-label";
+    label.textContent = "Simulating... 0%";
+    const bar = document.createElement("div");
+    bar.className = "time-flux-sim-bar";
+    const fill = document.createElement("div");
+    fill.className = "time-flux-sim-fill";
+    bar.appendChild(fill);
+    panel.appendChild(label);
+    panel.appendChild(bar);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    this._timeFluxSimOverlay = overlay;
+    this._timeFluxSimLabel = label;
+    this._timeFluxSimFill = fill;
+    return overlay;
+  }
+
+  updateTimeFluxSimulation(progressPercent, active) {
+    const overlay = this._ensureTimeFluxSimulationOverlay();
+    if (!overlay) return;
+    if (!active) {
+      overlay.style.display = "none";
+      return;
+    }
+    overlay.style.display = "flex";
+    const pct = Math.max(0, Math.min(100, Math.round(progressPercent || 0)));
+    if (this._timeFluxSimLabel) this._timeFluxSimLabel.textContent = `Simulating... ${pct}%`;
+    if (this._timeFluxSimFill) this._timeFluxSimFill.style.width = `${pct}%`;
+  }
+
   _tileCenterToOverlayPosition(row, col) {
-    const reactor = this.DOMElements.reactor;
     const overlay = this._ensureOverlay();
-    if (!reactor || !overlay) return { x: 0, y: 0 };
-
-    // Get the actual tile size from CSS custom property or fallback to measured size
-    const computedTileSize = getComputedStyle(reactor).getPropertyValue('--tile-size');
-    let tileSize = 48; // Default fallback
-
-    if (computedTileSize) {
-      // Parse the CSS value (e.g., "32px" -> 32)
-      tileSize = parseInt(computedTileSize) || 48;
-    } else {
-      // Fallback to measuring an actual tile
-      tileSize = reactor.querySelector('.tile')?.offsetWidth || 48;
-    }
-
-    // Get reactor and overlay positions
-    const reactorRect = reactor.getBoundingClientRect();
+    if (!overlay) return { x: 0, y: 0 };
+    const tileSize = this.gridCanvasRenderer?.getTileSize() ?? (parseInt(getComputedStyle(this.DOMElements.reactor || document.body).getPropertyValue('--tile-size'), 10) || 48);
+    const reactorEl = this.gridCanvasRenderer?.getCanvas() || this.DOMElements.reactor;
+    if (!reactorEl) return { x: 0, y: 0 };
+    const reactorRect = reactorEl.getBoundingClientRect();
     const overlayRect = overlay.getBoundingClientRect();
-
-    // Account for reactor padding (important for mobile grid alignment)
-    const reactorStyle = getComputedStyle(reactor);
-    const reactorPaddingLeft = parseFloat(reactorStyle.paddingLeft) || 0;
-    const reactorPaddingTop = parseFloat(reactorStyle.paddingTop) || 0;
-
-    // Account for tile border width (1px border on each side)
-    const tileBorderWidth = 1;
-    const totalTileSize = tileSize + (tileBorderWidth * 2);
-
-    // Check if there's a specific tile at this position to get exact coordinates
-    const targetTile = reactor.querySelector(`[data-row="${row}"][data-col="${col}"]`) ||
-      reactor.querySelector(`.tile:nth-child(${row * parseInt(getComputedStyle(reactor).getPropertyValue('--game-cols') || 12) + col + 1})`);
-
-    if (targetTile) {
-      // Use the actual tile position for perfect alignment
-      const tileRect = targetTile.getBoundingClientRect();
-      const x = tileRect.left + (tileRect.width / 2) - overlayRect.left;
-      const y = tileRect.top + (tileRect.height / 2) - overlayRect.top;
-      return { x, y };
-    }
-
-    // Fallback: Calculate position using the grid system
-    // The grid starts at the reactor's position, plus padding, plus the tile offset
-    const x = reactorRect.left + reactorPaddingLeft + (col * totalTileSize) + (totalTileSize / 2) - overlayRect.left;
-    const y = reactorRect.top + reactorPaddingTop + (row * totalTileSize) + (totalTileSize / 2) - overlayRect.top;
-
+    const x = reactorRect.left - overlayRect.left + (col + 0.5) * tileSize;
+    const y = reactorRect.top - overlayRect.top + (row + 0.5) * tileSize;
     return { x, y };
   }
 
 
 
+  getHeatFlowVisible() {
+    return safeGetItem("reactor_heat_flow_visible", "true") !== "false";
+  }
+
   drawHeatFlowOverlay() {
-    const enabled = safeGetItem("reactor_debug_heat_flow") === "true";
+    if (this.gridCanvasRenderer) return;
+    const enabled = this.getHeatFlowVisible();
     const overlay = this._ensureOverlay();
     if (!overlay) return;
     const svg = this._ensureHeatFlowOverlay();
@@ -1210,6 +1226,36 @@ export class UI {
         });
       }
     }
+
+    const maxPower = this.stateManager.getVar("max_power") || 0;
+    const maxHeat = this.stateManager.getVar("max_heat") || 0;
+    this.updateInfoBarFillIndicator("power", this.displayValues.power.current, maxPower);
+    this.updateInfoBarFillIndicator("heat", this.displayValues.heat.current, maxHeat);
+
+    if (window.innerWidth <= 900 && this.game?.reactor) {
+      const powerFill = document.querySelector(".power-fill");
+      const heatFill = document.querySelector(".heat-fill");
+      const heatVent = document.querySelector(".heat-vent");
+      const reactor = this.game.reactor;
+      if (powerFill && reactor.max_power > 0) {
+        const fillPercent = Math.min(100, Math.max(0, (this.displayValues.power.current / reactor.max_power) * 100));
+        powerFill.style.setProperty("--power-fill-height", `${fillPercent}%`);
+      }
+      if (heatFill && reactor.max_heat > 0) {
+        const fillPercent = Math.min(100, Math.max(0, (this.displayValues.heat.current / reactor.max_heat) * 100));
+        heatFill.style.setProperty("--heat-fill-height", `${fillPercent}%`);
+        if (heatVent) {
+          if (fillPercent >= 95) {
+            heatVent.classList.add("hazard", "critical");
+          } else if (fillPercent > 80) {
+            heatVent.classList.remove("hazard");
+            heatVent.classList.add("critical");
+          } else {
+            heatVent.classList.remove("hazard", "critical");
+          }
+        }
+      }
+    }
   }
 
   initVarObjsConfig() {
@@ -1236,9 +1282,7 @@ export class UI {
         num: true,
         onupdate: (val) => {
           this.displayValues.power.target = val;
-          const maxPower = this.stateManager.getVar("max_power") || 0;
           this.updatePowerDenom();
-          this.updateInfoBarFillIndicator("power", val, maxPower);
           this.updateControlDeckValues();
         },
       },
@@ -1255,9 +1299,7 @@ export class UI {
         places: 2,
         onupdate: (val) => {
           this.displayValues.heat.target = val;
-          const maxHeat = this.stateManager.getVar("max_heat") || 0;
           this.updateHeatDenom();
-          this.updateInfoBarFillIndicator("heat", val, maxHeat);
           this.updateControlDeckValues();
         },
       },
@@ -1388,6 +1430,11 @@ export class UI {
           this.updateHeatDenom();
         },
       },
+      stats_net_heat: {
+        onupdate: () => {
+          this.updateHeatDenom();
+        },
+      },
       stats_total_part_heat: {
         dom: this.DOMElements.stats_total_part_heat,
         num: true,
@@ -1455,6 +1502,7 @@ export class UI {
               this.stateManager.setVar("engine_status", "running");
             }
           }
+          this.updateWakeLockState();
         },
       },
       melting_down: {
@@ -1480,7 +1528,8 @@ export class UI {
   }
 
   updateHeatVisuals() {
-    const current = this.stateManager.getVar("current_heat") || 0;
+    const stateHeat = this.stateManager.getVar("current_heat");
+    const current = (stateHeat === null || stateHeat === undefined) ? this.displayValues.heat.current : stateHeat;
     const max = this.stateManager.getVar("max_heat") || 1;
     const background = this.DOMElements.reactor_background;
     if (!background) return;
@@ -1547,175 +1596,109 @@ export class UI {
   // toTile: optional Tile instance to travel to
   spawnTileIcon(kind, fromTile, toTile = null) {
     try {
-      // Early validation - most performance critical
-      if (
-        typeof document === "undefined" ||
-        !fromTile?.$el ||
-        (!this.DOMElements?.reactor_background && !document.getElementById)
-      )
-        return;
-
-      // Create a unique key for this animation
+      if (typeof document === "undefined" || !fromTile || (!this.DOMElements?.reactor_background && !document.getElementById)) return;
+      const container = this.DOMElements.reactor_background || document.getElementById("reactor_background");
+      if (!container || !this.gridCanvasRenderer) return;
       let animationKey = `${fromTile.row}-${fromTile.col}-${kind}`;
-      if (toTile) {
-        animationKey += `-to-${toTile.row}-${toTile.col}`;
-      }
-
-      // Check if this animation is already running - prevent duplicate animations
-      if (this._activeTileIcons.has(animationKey)) {
-        return;
-      }
-
-      const container =
-        this.DOMElements.reactor_background ||
-        document.getElementById("reactor_background");
-      if (!container) return;
-
-      // Use cached icon sources for better performance
-      const iconSrcMap = {
-        power: "img/ui/icons/icon_power.png",
-        heat: "img/ui/icons/icon_heat.png",
-        vent: "img/ui/icons/icon_vent.png",
-      };
+      if (toTile) animationKey += `-to-${toTile.row}-${toTile.col}`;
+      if (this._activeTileIcons.has(animationKey)) return;
+      const iconSrcMap = { power: "img/ui/icons/icon_power.png", heat: "img/ui/icons/icon_heat.png", vent: "img/ui/icons/icon_vent.png" };
       const src = iconSrcMap[kind];
       if (!src) return;
-
-      // Cache DOM measurements to avoid repeated getBoundingClientRect calls
-      const startRect = fromTile.$el.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
-
+      const fromRect = this.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, containerRect);
+      const tileSizePx = this.gridCanvasRenderer.getTileSize();
+      const iconSize = Math.max(12, Math.min(18, (tileSizePx / 3) | 0));
+      const startOffset = (kind === 'power') ? { x: 6, y: -6 } : (kind === 'heat') ? { x: -6, y: 6 } : { x: 0, y: 0 };
       const img = document.createElement("img");
       img.src = src;
       img.alt = kind;
       img.className = `tile-fx fx-${kind}`;
-
-      // Optimize size calculation - cache computed style
-      const tileSize = this._cachedTileSize ||
-        Math.max(12, Math.min(18, parseInt(getComputedStyle(this.DOMElements.reactor).getPropertyValue('--tile-size')) / 3 || 16));
-      if (!this._cachedTileSize) this._cachedTileSize = tileSize;
-
-      img.style.width = `${tileSize}px`;
-      img.style.height = `${tileSize}px`;
-
-      // Start at center of fromTile with optimized offset calculation
-      const startOffset = (kind === 'power') ? { x: 6, y: -6 } : (kind === 'heat') ? { x: -6, y: 6 } : { x: 0, y: 0 };
-      const startLeft = startRect.left - containerRect.left + startRect.width / 2 - tileSize / 2 + startOffset.x;
-      const startTop = startRect.top - containerRect.top + startRect.height / 2 - tileSize / 2 + startOffset.y;
-      img.style.left = `${startLeft}px`;
-      img.style.top = `${startTop}px`;
-
-      // Mark this animation as active
+      img.style.width = `${iconSize}px`;
+      img.style.height = `${iconSize}px`;
+      img.style.left = `${fromRect.centerX - iconSize / 2 + startOffset.x}px`;
+      img.style.top = `${fromRect.centerY - iconSize / 2 + startOffset.y}px`;
       this._activeTileIcons.set(animationKey, img);
       container.appendChild(img);
-
-      // Use requestAnimationFrame for smooth animation
       requestAnimationFrame(() => {
-        if (toTile?.$el) {
-          const endRect = toTile.$el.getBoundingClientRect();
-          const endLeft = endRect.left - containerRect.left + endRect.width / 2 - tileSize / 2;
-          const endTop = endRect.top - containerRect.top + endRect.height / 2 - tileSize / 2;
-
-          img.style.left = `${endLeft}px`;
-          img.style.top = `${endTop}px`;
-          // Slight fade on move for heat
+        if (toTile && this.gridCanvasRenderer) {
+          const endRect = this.gridCanvasRenderer.getTileRectInContainer(toTile.row, toTile.col, containerRect);
+          img.style.left = `${endRect.centerX - iconSize / 2}px`;
+          img.style.top = `${endRect.centerY - iconSize / 2}px`;
           if (kind === "heat") img.style.opacity = "0.75";
         } else {
-          // No destination: quick fade out in place (power)
           img.classList.add("fx-fade-out");
         }
-
-        // Cleanup after animation - use shorter timeout for better performance
         setTimeout(() => {
-          if (img && img.parentNode) img.parentNode.removeChild(img);
+          if (img?.parentNode) img.parentNode.removeChild(img);
           this._activeTileIcons.delete(animationKey);
-        }, 300); // Reduced from 450ms for better performance
+        }, 300);
       });
-    } catch (_) {
-      // No-op on environments without DOM
-    }
+    } catch (_) {}
   }
 
   // Ensure an animated vent rotor exists and trigger a brief spin - OPTIMIZED for performance
   blinkVent(tile) {
     try {
-      // Early validation
-      if (typeof document === "undefined" || !tile?.$el) return;
-
-      // Check if this tile already has an active vent rotor animation
-      if (this._activeVentRotors.has(tile)) {
-        return;
+      if (typeof document === "undefined" || !tile || !this.gridCanvasRenderer) return;
+      if (this._activeVentRotors.has(tile)) return;
+      const container = this.DOMElements.reactor_background || document.getElementById("reactor_background");
+      if (!container) return;
+      const containerRect = container.getBoundingClientRect();
+      const rect = this.gridCanvasRenderer.getTileRectInContainer(tile.row, tile.col, containerRect);
+      const inset = 0.2;
+      const size = 0.6;
+      const rotorW = rect.width * size;
+      const rotorH = rect.height * size;
+      const rotorLeft = rect.left + rect.width * inset;
+      const rotorTop = rect.top + rect.height * inset;
+      const rotor = document.createElement("span");
+      rotor.className = "vent-rotor";
+      rotor.style.position = "absolute";
+      rotor.style.left = `${rotorLeft}px`;
+      rotor.style.top = `${rotorTop}px`;
+      rotor.style.width = `${rotorW}px`;
+      rotor.style.height = `${rotorH}px`;
+      rotor.style.pointerEvents = "none";
+      if (tile?.part && typeof tile.part.getImagePath === 'function') {
+        const sprite = tile.part.getImagePath();
+        if (sprite) rotor.style.backgroundImage = `url('${sprite}')`;
       }
-
-      let rotor = tile.$el.querySelector(".vent-rotor");
-      if (!rotor) {
-        rotor = document.createElement("span");
-        rotor.className = "vent-rotor";
-        tile.$el.appendChild(rotor);
-
-        // Cache the sprite path to avoid repeated function calls
-        try {
-          if (tile?.part && typeof tile.part.getImagePath === 'function') {
-            const sprite = tile.part.getImagePath();
-            if (sprite) {
-              rotor.style.backgroundImage = `url('${sprite}')`;
-            }
-          }
-        } catch (_) { /* ignore */ }
-      }
-
-      // Mark this tile as having an active animation
-      this._activeVentRotors.add(tile);
-
-      // Optimize animation restart - use classList.toggle for better performance
+      rotor.style.backgroundSize = "166.66% 166.66%";
+      rotor.style.backgroundPosition = "center";
+      rotor.style.backgroundRepeat = "no-repeat";
+      rotor.style.imageRendering = "pixelated";
+      this._activeVentRotors.set(tile, rotor);
+      container.appendChild(rotor);
       rotor.classList.remove("spin");
-      // Force reflow for animation restart
       void rotor.offsetWidth;
       rotor.classList.add("spin");
-
-      // Auto-remove the class after a shorter duration for better performance
       setTimeout(() => {
-        if (!rotor || !rotor.parentNode) return;
-        rotor.classList.remove("spin");
-
-        // Remove from active animations set
-        this._activeVentRotors.delete(tile);
-
-        // If the tile is no longer a vent, remove the rotor element entirely
-        const isVent = tile?.part?.category === 'vent';
-        if (!isVent) {
+        if (rotor?.parentNode) {
+          rotor.classList.remove("spin");
           rotor.parentNode.removeChild(rotor);
         }
-      }, 300); // Reduced from 450ms for better performance
-    } catch (_) {
-      // ignore
-    }
+        this._activeVentRotors.delete(tile);
+      }, 300);
+    } catch (_) {}
   }
 
   // Utility: remove lingering vent rotor if present (e.g., after part removal)
   _cleanupVentRotor(tile) {
     try {
-      if (!tile?.$el) return;
-      const rotor = tile.$el.querySelector('.vent-rotor');
-      if (rotor && tile?.part?.category !== 'vent') {
-        rotor.parentNode.removeChild(rotor);
-      }
-      // Remove from active animations if present
+      const rotor = this._activeVentRotors.get(tile);
+      if (rotor?.parentNode) rotor.parentNode.removeChild(rotor);
       this._activeVentRotors.delete(tile);
-    } catch (_) { /* ignore */ }
+    } catch (_) {}
   }
 
-  // Clear all active animations (useful for cleanup or when game state changes)
   clearAllActiveAnimations() {
-    // Clear vent rotor animations
+    this._activeVentRotors.forEach((rotor) => {
+      if (rotor?.parentNode) rotor.parentNode.removeChild(rotor);
+    });
     this._activeVentRotors.clear();
-
-    // Flow indicators removed for performance
-
-    // Clear tile icon animations
     this._activeTileIcons.forEach((icon) => {
-      if (icon && icon.parentElement) {
-        icon.parentElement.removeChild(icon);
-      }
+      if (icon?.parentElement) icon.parentElement.removeChild(icon);
     });
     this._activeTileIcons.clear();
   }
@@ -1764,10 +1747,9 @@ export class UI {
       // Clear any active heat flow animations
       this.clearAllActiveAnimations();
 
-      // Optional: Show feedback to user
-      console.log("Reactor heat cleared!");
+      logger.debug("Reactor heat cleared!");
     } catch (error) {
-      console.error("Error clearing reactor heat:", error);
+      logger.error("Error clearing reactor heat:", error);
     }
   }
 
@@ -1852,15 +1834,28 @@ export class UI {
   }
 
   getHeatNetChange() {
+    const statsNetHeat = this.stateManager.getVar("stats_net_heat");
+    if (typeof statsNetHeat === "number" && !isNaN(statsNetHeat)) {
+      const manualReduce = this.game?.reactor?.manual_heat_reduce || this.game?.base_manual_heat_reduce || 1;
+      const currentPower = this.stateManager.getVar("current_power") || 0;
+      const statsPower = this.stateManager.getVar("stats_power") || 0;
+      const maxPower = this.stateManager.getVar("max_power") || 0;
+      const potentialPower = currentPower + statsPower;
+      const excessPower = Math.max(0, potentialPower - maxPower);
+      const overflowToHeat = this.game?.reactor?.power_overflow_to_heat_ratio ?? 0.5;
+      return statsNetHeat + excessPower * overflowToHeat - manualReduce;
+    }
     const totalHeat = this.stateManager.getVar("total_heat") || 0;
     const statsVent = this.stateManager.getVar("stats_vent") || 0;
+    const statsOutlet = this.stateManager.getVar("stats_outlet") || 0;
     const manualReduce = this.game?.reactor?.manual_heat_reduce || this.game?.base_manual_heat_reduce || 1;
     const currentPower = this.stateManager.getVar("current_power") || 0;
     const statsPower = this.stateManager.getVar("stats_power") || 0;
     const maxPower = this.stateManager.getVar("max_power") || 0;
     const potentialPower = currentPower + statsPower;
     const excessPower = Math.max(0, potentialPower - maxPower);
-    return totalHeat + excessPower - statsVent - manualReduce;
+    const overflowToHeat = this.game?.reactor?.power_overflow_to_heat_ratio ?? 0.5;
+    return totalHeat - statsVent - statsOutlet + excessPower * overflowToHeat - manualReduce;
   }
 
   updatePowerDenom() {
@@ -2010,7 +2005,7 @@ export class UI {
     this.game = game;
     this.stateManager = new StateManager(this);
     this.stateManager.setGame(game);
-    this.hotkeys = new Hotkeys();
+    this.hotkeys = new Hotkeys(game);
     this.help_text = data;
 
     // Clear any existing animations when initializing
@@ -2032,6 +2027,7 @@ export class UI {
     this.setupBuildTabButton();
     this.setupMenuTabButton();
     this.setupAppBadgeVisibilityHandler();
+    this.updateWakeLockState();
     if (this.DOMElements.basic_overview_section && this.help_text.basic_overview) {
       this.DOMElements.basic_overview_section.innerHTML = `
         <h3>${this.help_text.basic_overview.title}</h3>
@@ -2240,13 +2236,12 @@ export class UI {
             break;
           case "0":
             e.preventDefault();
-            console.log("CTRL+0 pressed");
-            // Add 10 ticks to time flux accumulator
+            logger.debug("CTRL+0 pressed");
             if (this.game.engine) {
-              console.log("Adding 10 ticks to time flux accumulator");
-              console.log("Time flux accumulator:", this.game.engine.time_accumulator);
+              logger.debug("Adding 10 ticks to time flux accumulator");
+              logger.debug("Time flux accumulator:", this.game.engine.time_accumulator);
               this.game.engine.addTimeTicks(1000);
-              console.log("Time flux accumulator after adding 10 ticks:", this.game.engine.time_accumulator);
+              logger.debug("Time flux accumulator after adding 10 ticks:", this.game.engine.time_accumulator);
             }
             break;
           default:
@@ -2340,7 +2335,7 @@ export class UI {
             }, 2000);
           })
           .catch((err) => {
-            console.error("Failed to copy game state: ", err);
+            logger.error("Failed to copy game state: ", err);
             const originalText = copyStateBtn.textContent;
             copyStateBtn.textContent = "Error!";
             setTimeout(() => {
@@ -2392,10 +2387,10 @@ export class UI {
           this.clearSegmentHighlight();
           return;
         }
-
-        const tileEl = e.target.closest('.tile');
-        if (tileEl && tileEl.tile) {
-          const currentSegment = this.game.engine.heatManager.getSegmentForTile(tileEl.tile);
+        const tile = (e.target === this.gridCanvasRenderer?.getCanvas() && this.gridCanvasRenderer)
+          ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : (e.target.closest?.('.tile')?.tile ?? null);
+        if (tile) {
+          const currentSegment = this.game.engine.heatManager.getSegmentForTile(tile);
 
           if (currentSegment !== this.highlightedSegment) {
             this.clearSegmentHighlight();
@@ -2443,8 +2438,20 @@ export class UI {
 
   // NEW METHOD to update the entire objectives display
   updateObjectiveDisplay() {
-    // Check if game and objectives_manager are properly initialized
     if (!this.game || !this.game.objectives_manager) {
+      return;
+    }
+    if (this.game.isSandbox) {
+      const toastTitleEl = this.DOMElements.objectives_toast_title;
+      const toastBtn = this.DOMElements.objectives_toast_btn;
+      if (toastTitleEl) toastTitleEl.textContent = "Sandbox";
+      if (toastBtn) {
+        toastBtn.classList.remove("is-complete", "is-active", "has-progress-bar");
+        const claimPill = toastBtn.querySelector(".objectives-claim-pill");
+        if (claimPill) claimPill.textContent = "";
+        const progressFill = toastBtn.querySelector(".objectives-toast-progress-fill");
+        if (progressFill) progressFill.style.width = "0%";
+      }
       return;
     }
 
@@ -2496,14 +2503,14 @@ export class UI {
     }, 2000);
   }
 
-  async handleGridInteraction(tileEl, event) {
-    if (!tileEl || !tileEl.tile) return;
+  async handleGridInteraction(tile, event) {
+    if (!tile) return;
 
     if (this.game && this.game.reactor && this.game.reactor.has_melted_down) {
       return;
     }
 
-    const startTile = tileEl.tile;
+    const startTile = tile;
     const isRightClick =
       (event.pointerType === "mouse" && event.button === 2) ||
       event.type === "contextmenu";
@@ -2521,6 +2528,7 @@ export class UI {
       if (isRightClick) {
         if (tile.part && tile.part.id && !tile.part.isSpecialTile) {
           this.game.sellPart(tile);
+          this.gridCanvasRenderer?.markStaticDirty();
           if (!soundPlayed && this.game && this.game.audio) {
             this.game.audio.play('sell');
             soundPlayed = true;
@@ -2540,6 +2548,7 @@ export class UI {
             this.game.current_money -= clicked_part.cost;
             const partPlaced = await tile.setPart(clicked_part);
             if (partPlaced) {
+              this.gridCanvasRenderer?.markStaticDirty();
               if (this.lightVibration) {
                 this.lightVibration();
               }
@@ -2612,7 +2621,7 @@ export class UI {
       document.body.classList.remove("parts-panel-right");
     }
     
-    console.log("[updatePartsPanelBodyClass] Panel collapsed:", partsSection?.classList.contains("collapsed"), "Body classes:", document.body.className);
+    logger.debug("[updatePartsPanelBodyClass] Panel collapsed:", partsSection?.classList.contains("collapsed"), "Body classes:", document.body.className);
   }
 
   togglePartsPanelForBuildButton() {
@@ -2634,12 +2643,12 @@ export class UI {
   toggleFullscreen() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch((err) => {
-        console.warn("Error attempting to enable fullscreen:", err);
+        logger.warn("Error attempting to enable fullscreen:", err);
       });
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen().catch((err) => {
-          console.warn("Error attempting to exit fullscreen:", err);
+          logger.warn("Error attempting to exit fullscreen:", err);
         });
       }
     }
@@ -2710,13 +2719,12 @@ export class UI {
       if (isMobileOnLoad) {
         // Start with panel collapsed on mobile for better UX
         panel.classList.add("collapsed");
-        console.log("[Parts Panel Init] Mobile detected - added collapsed class");
+        logger.debug("[Parts Panel Init] Mobile detected - added collapsed class");
       } else {
-        // Desktop: always start open and stay open
         panel.classList.remove("collapsed");
-        console.log("[Parts Panel Init] Desktop detected - removed collapsed class");
+        logger.debug("[Parts Panel Init] Desktop detected - removed collapsed class");
       }
-      console.log("[Parts Panel Init] Final state - collapsed:", panel.classList.contains("collapsed"));
+      logger.debug("[Parts Panel Init] Final state - collapsed:", panel.classList.contains("collapsed"));
       this.updatePartsPanelBodyClass();
 
       const closeBtn = document.getElementById("parts_close_btn");
@@ -2794,7 +2802,7 @@ export class UI {
       document.getElementById("quick-start-close").onclick = closeModal;
       document.getElementById("quick-start-close-2").onclick = closeModal;
     } catch (error) {
-      console.error("Failed to load quick start modal:", error);
+      logger.error("Failed to load quick start modal:", error);
       const modal = document.createElement("div");
       modal.id = "quick-start-modal";
       modal.innerHTML = `
@@ -2802,10 +2810,6 @@ export class UI {
           <div class="quick-start-screen">
             <div class="quick-start-header">[ REACTOR_BOOT_SEQ_v25 ]</div>
             <div class="bios-content">
-              <div class="quick-start-icon-area">
-                <div class="quick-start-icon"><div class="quick-start-icon-inner"></div></div>
-                <div class="quick-start-icon-title">INITIALIZING CORE</div>
-              </div>
               <div class="quick-start-section">
                 <div class="quick-start-section-head">>> SYSTEM LOGIC</div>
                 <div class="quick-start-list">
@@ -3111,7 +3115,7 @@ export class UI {
         return { success: true, method: 'clipboard-api' };
       }
     } catch (error) {
-      console.warn("Clipboard API failed:", error);
+      logger.warn("Clipboard API failed:", error);
     }
 
     // Fallback to document.execCommand for older browsers
@@ -3131,7 +3135,7 @@ export class UI {
         return { success: true, method: 'exec-command' };
       }
     } catch (error) {
-      console.warn("execCommand fallback failed:", error);
+      logger.warn("execCommand fallback failed:", error);
     }
 
     return { success: false, error: 'No clipboard method available' };
@@ -3145,7 +3149,7 @@ export class UI {
         return { success: true, data: text, method: 'clipboard-api' };
       }
     } catch (error) {
-      console.warn("Clipboard API read failed:", error);
+      logger.warn("Clipboard API read failed:", error);
       // Check if it's a permission error
       if (error.name === 'NotAllowedError') {
         return {
@@ -3225,7 +3229,7 @@ export class UI {
 
     // Check if all required elements exist
     if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) {
-      console.warn("[UI] Copy/paste UI elements not found, skipping initialization");
+      logger.warn("[UI] Copy/paste UI elements not found, skipping initialization");
     }
 
     // Early return only if critical copy/paste elements are missing
@@ -3257,9 +3261,10 @@ export class UI {
           const reactorEl = this.DOMElements.reactor;
           if (reactorEl && !this._dropperPointerHandler) {
             this._dropperPointerHandler = async (e) => {
-              const tileEl = e.target && e.target.closest ? e.target.closest(".tile") : null;
-              if (tileEl && tileEl.tile && tileEl.tile.part) {
-                const pickedPart = tileEl.tile.part;
+              const tile = this.gridCanvasRenderer && e.target === this.gridCanvasRenderer.getCanvas()
+                ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : (e.target?.closest?.(".tile")?.tile ?? null);
+              if (tile?.part) {
+                const pickedPart = tile.part;
                 document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
                 this.stateManager.setClickedPart(pickedPart, { skipOpenPanel: true });
                 if (pickedPart.$el) pickedPart.$el.classList.add("part_active");
@@ -3270,10 +3275,10 @@ export class UI {
                 this._dropperPointerHandler = null;
               }
             };
-            reactorEl.addEventListener("pointerdown", this._dropperPointerHandler, true);
+            (this.gridCanvasRenderer?.getCanvas() || reactorEl).addEventListener("pointerdown", this._dropperPointerHandler, true);
           }
         } else if (this._dropperPointerHandler && this.DOMElements.reactor) {
-          this.DOMElements.reactor.removeEventListener("pointerdown", this._dropperPointerHandler, true);
+          (this.gridCanvasRenderer?.getCanvas() || this.DOMElements.reactor).removeEventListener("pointerdown", this._dropperPointerHandler, true);
           this._dropperPointerHandler = null;
         }
       };
@@ -3605,8 +3610,9 @@ export class UI {
 
         const result = await this.writeToClipboard(filteredData);
         if (result.success) {
-          const name = `Layout ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-          this.addToMyLayouts(name, filteredData);
+          const defaultName = `Layout ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          const name = (typeof prompt === "function" ? prompt("Name for this layout:", defaultName) : null) || defaultName;
+          this.addToMyLayouts(name.trim() || defaultName, filteredData);
           confirmBtn.textContent = "Copied!";
           setTimeout(() => {
             this.hideModal();
@@ -3757,10 +3763,27 @@ export class UI {
         if (list.length === 0) {
           myLayoutsList.innerHTML = '<p style="color: rgb(180 180 180); margin: 0;">No saved layouts. Copy a reactor layout to add it here.</p>';
         } else {
-          let tableHtml = '<table id="my_layouts_list_table"><tbody>';
+          const getLayoutCost = (entryData) => {
+            try {
+              const parsed = typeof entryData === "string" ? JSON.parse(entryData) : entryData;
+              const layout2D = this.compactTo2DLayout(parsed);
+              if (!layout2D || !this.game?.partset) return "-";
+              let cost = 0;
+              for (const row of layout2D) {
+                for (const cell of row) {
+                  if (cell?.id) {
+                    const part = this.game.partset.parts.get(cell.id);
+                    if (part) cost += part.cost * (cell.lvl || 1);
+                  }
+                }
+              }
+              return cost > 0 ? fmt(cost) : "-";
+            } catch { return "-"; }
+          };
+          let tableHtml = '<table id="my_layouts_list_table"><thead><tr><th>Name</th><th>Cost</th><th></th></tr></thead><tbody>';
           list.forEach((entry) => {
-            const dateStr = entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '';
-            tableHtml += `<tr data-id="${escapeHtml(entry.id)}"><td>${escapeHtml(entry.name)}</td><td>${dateStr}</td><td class="my-layout-actions"><button class="pixel-btn my-layout-view-btn" type="button">View</button><button class="pixel-btn my-layout-load-btn" type="button">Load</button><button class="pixel-btn my-layout-delete-btn" type="button">Delete</button></td></tr>`;
+            const costStr = getLayoutCost(entry.data);
+            tableHtml += `<tr data-id="${escapeHtml(entry.id)}"><td>${escapeHtml(entry.name)}</td><td>${costStr}</td><td class="my-layout-actions"><button class="pixel-btn my-layout-view-btn" type="button">View</button><button class="pixel-btn my-layout-load-btn" type="button">Load</button><button class="pixel-btn my-layout-delete-btn" type="button">Delete</button></td></tr>`;
           });
           tableHtml += '</tbody></table>';
           myLayoutsList.innerHTML = tableHtml;
@@ -3795,9 +3818,147 @@ export class UI {
         myLayoutsModal.classList.remove("hidden");
       };
       if (myLayoutsCloseBtn) myLayoutsCloseBtn.onclick = () => myLayoutsModal.classList.add("hidden");
+
+      const saveFromClipboardBtn = document.getElementById("my_layouts_save_from_clipboard_btn");
+      if (saveFromClipboardBtn) {
+        saveFromClipboardBtn.onclick = async () => {
+          const result = await this.readFromClipboard();
+          const data = result.success ? result.data : "";
+          const layout = deserializeReactor(data);
+          if (!layout) {
+            const msg = !result.success ? (result.message || "Clipboard unavailable.") : (data ? "Invalid layout data in clipboard." : "Clipboard is empty.");
+            alert(msg);
+            return;
+          }
+          const defaultName = `Layout ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+          const name = (typeof prompt === "function" ? prompt("Name for this layout:", defaultName) : null) || defaultName;
+          this.addToMyLayouts(name.trim() || defaultName, data);
+          myLayoutsBtn.click();
+        };
+      }
+    }
+
+    const sandboxBtn = document.getElementById("reactor_sandbox_btn");
+    if (sandboxBtn) {
+      sandboxBtn.onclick = () => this.toggleSandbox();
+      const updateSandboxButton = () => {
+        if (!sandboxBtn) return;
+        sandboxBtn.title = this.game?.isSandbox ? "Exit Sandbox (Back to Main)" : "Enter Sandbox";
+        sandboxBtn.querySelector(".emoji-icon").textContent = this.game?.isSandbox ? "\u23EE" : "\u{1F9EA}";
+        sandboxBtn.classList.toggle("on", !!this.game?.isSandbox);
+      };
+      this._updateSandboxButton = updateSandboxButton;
+      updateSandboxButton();
     }
 
     closeBtn.onclick = this.hideModal.bind(this);
+  }
+
+  toggleSandbox() {
+    if (!this.game) return;
+    if (this.game.isSandbox) {
+      this.exitSandbox();
+    } else {
+      this.enterSandbox();
+    }
+  }
+
+  compactTo2DLayout(compact) {
+    if (!compact || !compact.size || !compact.parts) return null;
+    const { rows, cols } = compact.size;
+    const layout = [];
+    for (let r = 0; r < rows; r++) {
+      layout[r] = [];
+      for (let c = 0; c < cols; c++) layout[r][c] = null;
+    }
+    compact.parts.forEach((p) => {
+      if (p.r >= 0 && p.r < rows && p.c >= 0 && p.c < cols) {
+        layout[p.r][p.c] = { id: p.id, t: p.t, lvl: p.lvl || 1 };
+      }
+    });
+    return layout;
+  }
+
+  enterSandbox() {
+    if (!this.game || this.game.isSandbox) return;
+    const layout = this.game.getCompactLayout();
+    if (!layout) return;
+    this.game._mainState = {
+      layout,
+      money: this.game._current_money,
+      ep: this.game.current_exotic_particles,
+      rows: this.game.rows,
+      cols: this.game.cols
+    };
+    this.game.tileset.tiles_list.forEach((tile) => {
+      if (tile.enabled && tile.part) tile.clearPart(false);
+    });
+    if (this.game._sandboxState?.layout) {
+      const prevSuppress = this.game._suppressPlacementCounting;
+      this.game._suppressPlacementCounting = true;
+      const layout2D = this.compactTo2DLayout(this.game._sandboxState.layout);
+      if (layout2D && (this.game._sandboxState.rows === this.game.rows && this.game._sandboxState.cols === this.game.cols)) {
+        this.pasteReactorLayout(layout2D, { skipCostDeduction: true });
+      } else if (layout2D && (this.game._sandboxState.rows !== this.game.rows || this.game._sandboxState.cols !== this.game.cols)) {
+        this.game.rows = this.game._sandboxState.rows;
+        this.game.cols = this.game._sandboxState.cols;
+        this.pasteReactorLayout(layout2D, { skipCostDeduction: true });
+      }
+      this.game._suppressPlacementCounting = prevSuppress;
+    }
+    this.game.isSandbox = true;
+    this.game.reactor.current_heat = 0;
+    this.game.reactor.current_power = 0;
+    this.stateManager.setVar("current_money", Infinity);
+    this.stateManager.setVar("exotic_particles", Infinity);
+    this.stateManager.setVar("current_heat", 0);
+    this.stateManager.setVar("current_power", 0);
+    document.body.classList.add("reactor-sandbox");
+    this.game.partset.check_affordability(this.game);
+    this.game.upgradeset.check_affordability(this.game);
+    this.runUpdateInterfaceLoop();
+    if (this._updateSandboxButton) this._updateSandboxButton();
+  }
+
+  exitSandbox() {
+    if (!this.game || !this.game.isSandbox || !this.game._mainState) return;
+    const layout = this.game.getCompactLayout();
+    const hasParts = layout && layout.parts && layout.parts.length > 0;
+    if (hasParts && typeof confirm === "function" && confirm("Save blueprint layout before exiting? You can add it to My Layouts.")) {
+      const defaultName = `Sandbox ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      const name = (typeof prompt === "function" ? prompt("Name for this layout:", defaultName) : null) || defaultName;
+      this.addToMyLayouts(name.trim() || defaultName, JSON.stringify(layout, null, 2));
+    }
+    this.game._sandboxState = {
+      layout,
+      rows: this.game.rows,
+      cols: this.game.cols
+    };
+    const main = this.game._mainState;
+    if (main.rows !== this.game.rows || main.cols !== this.game.cols) {
+      this.game.rows = main.rows;
+      this.game.cols = main.cols;
+    }
+    this.game.tileset.tiles_list.forEach((tile) => {
+      if (tile.enabled && tile.part) tile.clearPart(false);
+    });
+    const prevSuppress = this.game._suppressPlacementCounting;
+    this.game._suppressPlacementCounting = true;
+    const layout2D = this.compactTo2DLayout(main.layout);
+    if (layout2D) this.pasteReactorLayout(layout2D, { skipCostDeduction: true });
+    this.game._suppressPlacementCounting = prevSuppress;
+    this.game._current_money = main.money;
+    this.game.exotic_particles = main.ep;
+    this.game.current_exotic_particles = main.ep;
+    this.game.isSandbox = false;
+    this.stateManager.setVar("current_money", main.money);
+    this.stateManager.setVar("exotic_particles", main.ep);
+    document.body.classList.remove("reactor-sandbox");
+    this.game.reactor.updateStats();
+    this.game.partset.check_affordability(this.game);
+    this.game.upgradeset.check_affordability(this.game);
+    this.runUpdateInterfaceLoop();
+    if (this._updateSandboxButton) this._updateSandboxButton();
   }
 
   // Initialize sell all button functionality
@@ -3990,9 +4151,9 @@ export class UI {
 
 
 
-  // Paste layout logic
-  pasteReactorLayout(layout) {
+  pasteReactorLayout(layout, options = {}) {
     if (!layout || !this.game || !this.game.tileset || !this.game.partset) return;
+    const skipCostDeduction = options.skipCostDeduction === true;
 
     // Helper: calculate total cost of a layout
     const calculateLayoutCost = (layout) => {
@@ -4009,11 +4170,8 @@ export class UI {
       return cost;
     };
 
-    // Clear existing parts first
     this.game.tileset.tiles_list.forEach(tile => {
-      if (tile.enabled && tile.part) {
-        tile.setPart(null);
-      }
+      if (tile.enabled && tile.part) tile.clearPart(false);
     });
 
     // Apply the new layout
@@ -4021,20 +4179,20 @@ export class UI {
       for (let c = 0; c < layout[r].length; c++) {
         const cell = layout[r][c];
         if (cell && cell.id) {
-          const part = this.game.partset.parts.get(cell.id);
+          const part = this.game.partset.getPartById(cell.id);
           if (part) {
             const tile = this.game.tileset.getTile(r, c);
-            if (tile && tile.enabled) {
-              tile.setPart(part);
-            }
+            if (tile && tile.enabled) tile.setPart(part);
           }
         }
       }
     }
 
-    // Deduct cost
-    const cost = calculateLayoutCost(layout);
-    this.game.current_money -= cost;
+    if (!skipCostDeduction) {
+      const cost = calculateLayoutCost(layout);
+      this.game.current_money -= cost;
+    }
+    this.gridCanvasRenderer?.markStaticDirty();
     this.runUpdateInterfaceLoop();
   }
 
@@ -4050,22 +4208,22 @@ export class UI {
       case "reactor_section":
         if (this.DOMElements.reactor) {
           this.DOMElements.reactor.innerHTML = "";
+          if (this.gridCanvasRenderer) {
+            this.gridCanvasRenderer.init(this.DOMElements.reactor);
+          }
         }
 
-        if (this.game && this.game.tileset && this.game.tileset.tiles_list) {
-          this.game.tileset.tiles_list.forEach((tile) => {
-            tile.enabled = true; // Ensure tile is enabled for visibility
-            this.stateManager.handleTileAdded(this.game, tile);
-          });
-
-          this.game.tileset.tiles_list.forEach((tile) => {
-            if (tile.part) {
-              tile.refreshVisualState();
-            }
-          });
-        }
         this.setupReactorEventListeners();
         this.gridScaler.resize();
+        if (this.gridCanvasRenderer) {
+          this.gridCanvasRenderer.setContainer(this.DOMElements.reactor_wrapper || this.DOMElements.reactor_background || null);
+        }
+        if (this.game?.tileset) {
+          this.game.tileset.updateActiveTiles();
+        }
+        if (this.gridCanvasRenderer && this.game) {
+          this.gridCanvasRenderer.render(this.game);
+        }
         this.initializeCopyPasteUI();
         this.initializeSellAllButton();
         // Prepare mobile top overlay that aligns stats with copy/paste/sell
@@ -4082,7 +4240,7 @@ export class UI {
             game.upgradeset.check_affordability(game);
           }
         } else {
-          console.warn(
+          logger.warn(
             "[UI] upgradeset.populateUpgrades is not a function or upgradeset missing"
           );
         }
@@ -4097,7 +4255,7 @@ export class UI {
             game.upgradeset.check_affordability(game);
           }
         } else {
-          console.warn(
+          logger.warn(
             "[UI] upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing"
           );
         }
@@ -4210,7 +4368,7 @@ export class UI {
             }
           }
         } catch (e) {
-          console.warn('Error formatting date:', e);
+          logger.warn('Error formatting date:', e);
         }
         const timeStr = this.game.formatTime ? this.game.formatTime(run.time_played) : 'N/A';
         const hasLayout = !!run.layout;
@@ -4343,7 +4501,7 @@ export class UI {
       if (layoutCloseBtn) layoutCloseBtn.onclick = () => { modal.classList.add("hidden"); modal.style.display = "none"; };
 
     } catch (e) {
-      console.error("Failed to render layout preview:", e);
+      logger.error("Failed to render layout preview:", e);
     }
   }
 
@@ -4446,7 +4604,7 @@ export class UI {
 
       this._lastIsMobileForTopBar = isMobile;
     } catch (err) {
-      console.warn("[UI] setupMobileTopBar error:", err);
+      logger.warn("[UI] setupMobileTopBar error:", err);
     }
   }
 
@@ -4464,7 +4622,7 @@ export class UI {
   setupReactorEventListeners() {
     const reactor = this.DOMElements.reactor;
     if (!reactor) {
-      console.error("Reactor element not found for event listeners.");
+      logger.error("Reactor element not found for event listeners.");
       return;
     }
 
@@ -4479,44 +4637,41 @@ export class UI {
         clearTimeout(this.longPressTimer);
         this.longPressTimer = null;
       }
-      if (longPressTargetTile) {
+      if (longPressTargetTile?.$el) {
         longPressTargetTile.$el.classList.remove("selling");
-        longPressTargetTile = null;
       }
+      longPressTargetTile = null;
+    };
+    const getTileFromEvent = (ev) => {
+      const target = ev.target;
+      if (target && target === this.gridCanvasRenderer?.getCanvas()) {
+        return this.gridCanvasRenderer.hitTest(ev.clientX, ev.clientY);
+      }
+      return null;
     };
     const pointerDownHandler = (e) => {
       if ((e.pointerType === "mouse" && e.button !== 0) || e.button > 0) return;
-      const tileEl = e.target.closest(".tile");
-      if (!tileEl?.tile?.enabled) return;
-      pointerDownTileEl = tileEl;
+      const tile = getTileFromEvent(e);
+      if (!tile?.enabled) return;
+      pointerDownTileEl = tile;
       e.preventDefault();
       this.isDragging = true;
-      this.lastTileModified = tileEl.tile;
+      this.lastTileModified = tile;
       pointerMoved = false;
       startX = e.clientX;
       startY = e.clientY;
-      const hasPart = tileEl.tile.part;
+      const hasPart = tile.part;
       const noModifiers = !e.ctrlKey && !e.altKey && !e.shiftKey;
       if (hasPart && noModifiers) {
-        longPressTargetTile = tileEl.tile;
+        longPressTargetTile = tile;
         this.longPressTimer = setTimeout(() => {
           this.longPressTimer = null;
           if (longPressTargetTile) {
-            longPressTargetTile.$el.classList.add("selling");
-            longPressTargetTile.$el.style.setProperty(
-              "--sell-duration",
-              `${this.longPressDuration}ms`
-            );
-            setTimeout(() => {
-              if (longPressTargetTile) {
-                longPressTargetTile.clearPart(true);
-                this.game.reactor.updateStats();
-                longPressTargetTile.$el.classList.remove("selling");
-                if (this.game && this.game.audio) {
-                  this.game.audio.play('sell');
-                }
-              }
-            }, this.longPressDuration);
+            longPressTargetTile.clearPart(true);
+            this.game.reactor.updateStats();
+            if (this.game && this.game.audio) {
+              this.game.audio.play('sell');
+            }
           }
           this.isDragging = false;
         }, 250);
@@ -4532,14 +4687,10 @@ export class UI {
           cancelLongPress();
         }
         if (!this.isDragging) return;
-        const moveTileEl = e_move.target && e_move.target.closest ? e_move.target.closest(".tile") : null;
-        if (
-          moveTileEl &&
-          moveTileEl.tile &&
-          moveTileEl.tile !== this.lastTileModified
-        ) {
-          await this.handleGridInteraction(moveTileEl, e_move);
-          this.lastTileModified = moveTileEl.tile;
+        const moveTile = getTileFromEvent(e_move);
+        if (moveTile && moveTile !== this.lastTileModified) {
+          await this.handleGridInteraction(moveTile, e_move);
+          this.lastTileModified = moveTile;
         }
       };
       const pointerUpHandler = async (e_up) => {
@@ -4564,43 +4715,31 @@ export class UI {
       window.addEventListener("pointerup", pointerUpHandler);
       window.addEventListener("pointercancel", pointerUpHandler);
     };
-    reactor.addEventListener("pointerdown", pointerDownHandler);
-    reactor.addEventListener("contextmenu", async (e) => {
+    const eventTarget = this.gridCanvasRenderer?.getCanvas() || reactor;
+    eventTarget.addEventListener("pointerdown", pointerDownHandler);
+    eventTarget.addEventListener("contextmenu", async (e) => {
       e.preventDefault();
-      await this.handleGridInteraction(e.target && e.target.closest ? e.target.closest(".tile") : null, e);
+      const tile = this.gridCanvasRenderer ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : null;
+      await this.handleGridInteraction(tile, e);
     });
 
-    reactor.addEventListener(
-      "mouseenter",
-      (e) => {
-        const tileEl = e.target && e.target.closest ? e.target.closest(".tile") : null;
-        if (
-          tileEl?.tile?.part &&
-          this.game?.tooltip_manager &&
-          !this.isDragging &&
-          this.help_mode_active
-        ) {
-          this.game.tooltip_manager.show(tileEl.tile.part, tileEl.tile, false);
-        }
-      },
-      true
-    );
+    eventTarget.addEventListener("mousemove", (e) => {
+      const tile = this.gridCanvasRenderer ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : null;
+      if (
+        tile?.part &&
+        this.game?.tooltip_manager &&
+        !this.isDragging &&
+        this.help_mode_active
+      ) {
+        this.game.tooltip_manager.show(tile.part, tile, false);
+      }
+    }, true);
 
-    reactor.addEventListener(
-      "mouseleave",
-      (e) => {
-        const tileEl = e.target && e.target.closest ? e.target.closest(".tile") : null;
-        if (
-          tileEl?.tile?.part &&
-          this.game?.tooltip_manager &&
-          !this.isDragging &&
-          this.help_mode_active
-        ) {
-          this.game.tooltip_manager.hide();
-        }
-      },
-      true
-    );
+    eventTarget.addEventListener("mouseleave", () => {
+      if (this.game?.tooltip_manager && this.help_mode_active) {
+        this.game.tooltip_manager.hide();
+      }
+    }, true);
   }
 
   async loadAndSetVersion() {
@@ -4628,19 +4767,19 @@ export class UI {
       if (appVersionEl) {
         appVersionEl.textContent = version;
       } else {
-        console.warn("[UI] app_version element not found in DOM");
+        logger.warn("[UI] app_version element not found in DOM");
         setTimeout(async () => {
           const retryEl = document.getElementById("app_version");
           if (retryEl) {
             retryEl.textContent = version;
           } else {
-            console.error("[UI] app_version element still not found after retry");
+            logger.error("[UI] app_version element still not found after retry");
           }
         }, 100);
       }
     } catch (error) {
       if (!error.message || !error.message.includes("Expected JSON")) {
-        console.warn("Could not load version info:", error.message || error);
+        logger.warn("Could not load version info:", error.message || error);
       }
       const appVersionEl = document.getElementById("app_version");
       if (appVersionEl) {
@@ -4927,18 +5066,16 @@ export class UI {
    */
 
   async resetReactor() {
-    console.log("resetReactor method called - deleting save and returning to splash");
+    logger.debug("resetReactor method called - deleting save and returning to splash");
 
-    // Delete the current save file
     try {
       safeRemoveItem("reactorGameSave");
-      console.log("Save file deleted from localStorage");
+      logger.debug("Save file deleted from localStorage");
     } catch (error) {
-      console.error("Error deleting save file:", error);
+      logger.error("Error deleting save file:", error);
     }
 
-    // Navigate to splash page (same as Back to Splash button)
-    console.log("Navigating to splash page");
+    logger.debug("Navigating to splash page");
     window.location.href = window.location.origin + window.location.pathname;
   }
 
@@ -4966,22 +5103,21 @@ export class UI {
           tile.clearPart(false);
         }
       });
-      console.log("All parts exploded!");
+      logger.debug("All parts exploded!");
       return;
     }
 
-    // Shuffle the tiles for random explosion order
     const shuffledTiles = [...tilesWithParts].sort(() => Math.random() - 0.5);
 
     // Explode each tile with a delay
     shuffledTiles.forEach((tile, index) => {
       setTimeout(() => {
-        if (tile.part && tile.$el) {
+        if (tile.part) {
           if (this.game.audio) {
             const pan = this.game.calculatePan ? this.game.calculatePan(tile.col) : 0;
             this.game.audio.play('explosion', null, pan);
           }
-          tile.$el.classList.add("exploding");
+          if (tile.$el) tile.$el.classList.add("exploding");
 
           // Add a brief delay before clearing the part
           setTimeout(() => {
@@ -4994,8 +5130,7 @@ export class UI {
     // Add a final delay to ensure all explosions complete before allowing new actions
     const totalExplosionTime = (shuffledTiles.length - 1) * 150 + 600;
     setTimeout(() => {
-      // Optional: Add any post-explosion cleanup or effects here
-      console.log("All parts exploded!");
+      logger.debug("All parts exploded!");
     }, totalExplosionTime);
   }
 
@@ -5037,7 +5172,7 @@ export class UI {
 
   initializePWADisplayModeButton(button) {
     if (!button) {
-      console.warn("[UI] PWA display mode button not found");
+      logger.warn("[UI] PWA display mode button not found");
       return;
     }
 
@@ -5143,7 +5278,7 @@ export class UI {
         document.head.appendChild(newLink);
       })
       .catch(error => {
-        console.warn("[UI] Failed to update manifest display mode:", error);
+        logger.warn("[UI] Failed to update manifest display mode:", error);
       });
   }
 
@@ -5216,10 +5351,216 @@ export class UI {
     const isSignedIn = googleSignedIn || supabaseSignedIn;
 
     if (isSignedIn) {
-      this.showLogoutModal();
+      this.showProfileModal();
     } else {
       this.showLoginModal();
     }
+  }
+
+  getDoctrineInfo() {
+    const game = this.game;
+    if (!game?.tech_tree || !game?.upgradeset?.treeList) return null;
+    const doctrine = game.upgradeset.treeList.find((t) => t.id === game.tech_tree);
+    return doctrine ? { id: doctrine.id, title: doctrine.title, subtitle: doctrine.subtitle } : null;
+  }
+
+  getReactorClassification() {
+    const game = this.game;
+    if (!game?.reactor || !game?.tileset) return null;
+    const reactor = game.reactor;
+    if (typeof reactor.updateStats === "function") reactor.updateStats();
+    const TICKS_FULL_CYCLE = 10000;
+    const TICKS_10_PCT = 1000;
+    const CRITICAL_HEAT_RATIO = 0.85;
+    const REFERENCE_POWER = 20;
+
+    const averaged = reactor.getAveragedClassificationStats && reactor.getAveragedClassificationStats();
+    const netHeat = averaged ? averaged.netHeat : (Number(reactor.stats_net_heat) || 0);
+    const maxHeat = Number(reactor.max_heat) || 1;
+    const cellCount = game.tileset.active_tiles_list.filter((t) => t.part && t.part.category === "cell").length;
+    const inletVal = averaged ? averaged.inlet : (Number(reactor.stats_inlet) || 0);
+    const outletVal = averaged ? averaged.outlet : (Number(reactor.stats_outlet) || 0);
+    const hasOutsideCooling = inletVal > 0 || outletVal > 0;
+    const statsPower = averaged ? averaged.power : (Number(reactor.stats_power) || 0);
+
+    let efficiencyNum = cellCount > 0 ? statsPower / (cellCount * REFERENCE_POWER) : 1;
+    if (!isFinite(efficiencyNum) || efficiencyNum < 1) efficiencyNum = 1;
+    let efficiencyLabel = "EE";
+    if (efficiencyNum >= 4) efficiencyLabel = "EA";
+    else if (efficiencyNum >= 3) efficiencyLabel = "EB";
+    else if (efficiencyNum >= 2) efficiencyLabel = "EC";
+    else if (efficiencyNum > 1) efficiencyLabel = "ED";
+
+    const suffixes = [];
+    if (hasOutsideCooling && netHeat <= 0) suffixes.push("SUC");
+
+    let markLabel;
+    let subClass = "";
+    let summary = "";
+
+    if (netHeat <= 0) {
+      markLabel = "Mark I";
+      subClass = hasOutsideCooling ? "O" : "I";
+      summary = "Generates no excess heat; safe to run continuously.";
+    } else {
+      const heatPerTick = netHeat;
+      const criticalHeat = CRITICAL_HEAT_RATIO * maxHeat;
+      const ticksToCritical = heatPerTick > 0 ? criticalHeat / heatPerTick : Infinity;
+
+      if (ticksToCritical >= TICKS_FULL_CYCLE) {
+        markLabel = "Mark II";
+        const fullCycles = Math.floor(ticksToCritical / TICKS_FULL_CYCLE);
+        subClass = fullCycles >= 16 ? "E" : String(Math.min(fullCycles, 15));
+        summary = fullCycles >= 16
+          ? "Runs 16+ cycles before critical heat; nearly Mark I."
+          : `Runs ${subClass} full cycle(s) before cooldown needed.`;
+      } else if (ticksToCritical >= TICKS_10_PCT) {
+        markLabel = "Mark III";
+        summary = "Cannot complete a full cycle; shutdown mid-cycle required.";
+      } else if (ticksToCritical > 0) {
+        markLabel = "Mark IV";
+        summary = "Reaches critical heat in under 10% of a cycle; component replacement may be needed.";
+      } else {
+        markLabel = "Mark V";
+        summary = "Very short run before cooldown; precise timing required.";
+      }
+    }
+
+    const mainLabel = subClass ? `${markLabel}-${subClass}` : markLabel;
+    const suffixStr = suffixes.length ? " -" + suffixes.join(" -") : "";
+    const classification = `${mainLabel} ${efficiencyLabel}${suffixStr}`.trim();
+    return { classification, efficiencyLabel, suffixes, summary, markLabel, subClass };
+  }
+
+  showProfileModal() {
+    const googleSignedIn = window.googleDriveSave && window.googleDriveSave.isSignedIn;
+    const supabaseSignedIn = window.supabaseAuth && window.supabaseAuth.isSignedIn();
+    const googleUserInfo = googleSignedIn ? window.googleDriveSave.getUserInfo() : null;
+    const supabaseUser = supabaseSignedIn ? window.supabaseAuth.getUser() : null;
+
+    const modal = document.createElement("div");
+    modal.id = "user_login_modal";
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+
+    const content = document.createElement("div");
+    content.style.cssText = `
+      background: rgb(45, 45, 45);
+      border: 4px solid var(--bevel-light);
+      padding: 1.5rem;
+      max-width: 440px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+      position: relative;
+    `;
+
+    const title = document.createElement("h2");
+    title.style.cssText = "margin: 0 0 1rem; font-size: 1rem; color: rgb(200 220 180); font-family: inherit;";
+    title.textContent = "Profile";
+    content.appendChild(title);
+
+    const accountLine = document.createElement("div");
+    accountLine.style.cssText = "font-size: 0.7rem; margin-bottom: 1rem; color: rgb(180 190 170);";
+    if (googleUserInfo?.email) accountLine.textContent = "Signed in with Google · " + googleUserInfo.email;
+    else if (supabaseUser?.email) accountLine.textContent = "Signed in with Email · " + supabaseUser.email;
+    else accountLine.textContent = "Signed in";
+    content.appendChild(accountLine);
+
+    const doctrineInfo = this.getDoctrineInfo();
+    if (doctrineInfo) {
+      const doctrineBlock = document.createElement("div");
+      doctrineBlock.style.cssText = "margin-bottom: 1rem; padding: 0.5rem 0; border-bottom: 1px solid rgb(60 60 60);";
+      doctrineBlock.innerHTML = `
+        <div style="font-size: 0.55rem; color: rgb(140 150 130); margin-bottom: 0.25rem;">Doctrine</div>
+        <div style="font-size: 0.75rem; color: rgb(200 220 180);">${escapeHtml(doctrineInfo.title)}</div>
+        <div style="font-size: 0.5rem; color: rgb(120 130 110);">${escapeHtml(doctrineInfo.subtitle || "")}</div>
+      `;
+      content.appendChild(doctrineBlock);
+    }
+
+    const classification = this.getReactorClassification();
+    if (classification) {
+      const classBlock = document.createElement("div");
+      classBlock.style.cssText = "margin-bottom: 1rem; padding: 0.5rem 0; border-bottom: 1px solid rgb(60 60 60);";
+      classBlock.innerHTML = `
+        <div style="font-size: 0.55rem; color: rgb(140 150 130); margin-bottom: 0.25rem;">Reactor classification</div>
+        <div style="font-size: 0.7rem; color: rgb(74 222 128); font-weight: bold; margin-bottom: 0.25rem;">${escapeHtml(classification.classification)}</div>
+        <div style="font-size: 0.5rem; color: rgb(150 160 140); line-height: 1.4;">${escapeHtml(classification.summary)}</div>
+      `;
+      content.appendChild(classBlock);
+    }
+
+    if (this.game?.reactor) {
+      const r = this.game.reactor;
+      const statsBlock = document.createElement("div");
+      statsBlock.style.cssText = "margin-bottom: 1rem; padding: 0.5rem 0; border-bottom: 1px solid rgb(60 60 60);";
+      statsBlock.innerHTML = `
+        <div style="font-size: 0.55rem; color: rgb(140 150 130); margin-bottom: 0.35rem;">Reactor stats</div>
+        <div style="font-size: 0.55rem; color: rgb(180 190 170); display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 1rem; line-height: 1.5;">
+          <span>Max heat</span><span>${fmt(Number(r.max_heat) || 0, 0)}</span>
+          <span>Max power</span><span>${fmt(Number(r.max_power) || 0, 0)}</span>
+          <span>Heat gen/tick</span><span>${fmt(Number(r.stats_heat_generation) || 0, 0)}</span>
+          <span>Vent</span><span>${fmt(Number(r.stats_vent) || 0, 0)}</span>
+          <span>Net heat/tick</span><span>${fmt(Number(r.stats_net_heat) || 0, 0)}</span>
+          <span>Inlet</span><span>${fmt(Number(r.stats_inlet) || 0, 0)}</span>
+          <span>Outlet</span><span>${fmt(Number(r.stats_outlet) || 0, 0)}</span>
+        </div>
+      `;
+      content.appendChild(statsBlock);
+    }
+
+    const logoutBtn = document.createElement("button");
+    logoutBtn.className = "splash-btn splash-btn-exit";
+    logoutBtn.style.width = "100%";
+    logoutBtn.textContent = "Sign Out";
+    logoutBtn.addEventListener("click", async () => {
+      if (supabaseSignedIn && window.supabaseAuth) window.supabaseAuth.signOut();
+      if (googleSignedIn && window.googleDriveSave) {
+        if (window.googleDriveSave.signOut) await window.googleDriveSave.signOut();
+        else {
+          window.googleDriveSave.isSignedIn = false;
+          window.googleDriveSave.authToken = null;
+          safeRemoveItem("google_drive_auth_token");
+        }
+      }
+      this.updateUserAccountIcon();
+      modal.remove();
+    });
+    content.appendChild(logoutBtn);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "✖";
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+    `;
+    closeBtn.addEventListener("click", () => modal.remove());
+    content.insertBefore(closeBtn, content.firstChild);
+
+    modal.appendChild(content);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    document.body.appendChild(modal);
   }
 
   showLoginModal() {
@@ -5276,7 +5617,7 @@ export class UI {
           this.updateUserAccountIcon();
           modal.remove();
         } catch (error) {
-          console.error("Google sign-in error:", error);
+          logger.error("Google sign-in error:", error);
         }
       }
     });
@@ -5532,7 +5873,7 @@ export class UI {
       try {
         navigator.vibrate(pattern);
       } catch (e) {
-        console.warn("Vibration failed:", e);
+        logger.warn("Vibration failed:", e);
       }
     }
   }
@@ -5622,12 +5963,12 @@ export class UI {
       const powerCapacitor = document.getElementById("control_deck_power_btn");
 
       if (powerFill && this.game.reactor.max_power > 0) {
-        const fillPercent = (this.game.reactor.current_power / this.game.reactor.max_power) * 100;
+        const fillPercent = Math.min(100, Math.max(0, (this.displayValues.power.current / this.game.reactor.max_power) * 100));
         powerFill.style.setProperty("--power-fill-height", `${fillPercent}%`);
       }
 
       if (heatFill && this.game.reactor.max_heat > 0) {
-        const fillPercent = (this.game.reactor.current_heat / this.game.reactor.max_heat) * 100;
+        const fillPercent = Math.min(100, Math.max(0, (this.displayValues.heat.current / this.game.reactor.max_heat) * 100));
         heatFill.style.setProperty("--heat-fill-height", `${fillPercent}%`);
 
         if (heatVent) {

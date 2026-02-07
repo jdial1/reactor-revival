@@ -1,4 +1,4 @@
-import { numFormat as fmt, safeGetItem, safeSetItem, safeRemoveItem, escapeHtml } from "../utils/util.js";
+import { numFormat as fmt, safeGetItem, safeSetItem, safeRemoveItem, escapeHtml, getResourceUrl, isTestEnv } from "../utils/util.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
 import { settingsModal } from "../components/settingsModal.js";
@@ -77,8 +77,14 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
     card.type = "button";
     card.className = "doctrine-card";
     card.dataset.treeId = tree.id;
+    card.dataset.doctrine = tree.id;
     card.setAttribute("role", "option");
     card.setAttribute("aria-selected", "false");
+
+    const icon = document.createElement("img");
+    icon.className = "doctrine-card-icon";
+    icon.src = `img/ui/icons/${tree.id}.png`;
+    icon.alt = "";
 
     const title = document.createElement("span");
     title.className = "doctrine-card-title";
@@ -88,8 +94,13 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
     subtitle.className = "doctrine-card-subtitle";
     subtitle.textContent = tree.subtitle;
 
-    card.appendChild(title);
-    card.appendChild(subtitle);
+    const textWrap = document.createElement("div");
+    textWrap.className = "doctrine-card-text";
+    textWrap.appendChild(title);
+    textWrap.appendChild(subtitle);
+
+    card.appendChild(icon);
+    card.appendChild(textWrap);
 
     card.onclick = () => {
       doctrineContainer.querySelectorAll(".doctrine-card").forEach((c) => {
@@ -180,6 +191,17 @@ async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId)
         if (techTreeId) {
             game.tech_tree = techTreeId;
             console.log(`[GAME] Started with tech tree: ${techTreeId}`);
+            try {
+                const treeList = await dataService.loadTechTree();
+                const treeData = treeList?.default ?? treeList ?? [];
+                const doctrine = Array.isArray(treeData) ? treeData.find((t) => t.id === techTreeId) : null;
+                const bonuses = doctrine?.bonuses;
+                if (bonuses && typeof bonuses.heat_tolerance_percent === "number") {
+                    game.reactor.base_max_heat *= 1 + bonuses.heat_tolerance_percent / 100;
+                }
+            } catch (err) {
+                console.warn("[TECH-TREE] Could not apply doctrine bonuses:", err);
+            }
         }
 
         if (typeof window.startGame === "function") {
@@ -436,11 +458,13 @@ class SplashScreenManager {
       console.log("[SPLASH] Generated new User ID for leaderboard tracking.");
     }
 
-    this.readyPromise = this.waitForDOMAndLoad();
+    this.readyPromise = isTestEnv() ? Promise.resolve(false) : this.waitForDOMAndLoad();
     this.socket = null;
     this.userCount = 0;
 
-    this.initSocketConnection();
+    if (!isTestEnv()) {
+      this.initSocketConnection();
+    }
 
     // Listen for service worker messages
     if ("serviceWorker" in navigator) {
@@ -527,8 +551,11 @@ class SplashScreenManager {
    * Load splash screen HTML from pages folder
    */
   async loadSplashScreen() {
+    if (isTestEnv()) {
+      return false;
+    }
     try {
-      const response = await fetch("./pages/splash.html");
+      const response = await fetch(getResourceUrl("pages/splash.html"));
       const html = await response.text();
 
       // Insert HTML into container
@@ -2053,7 +2080,13 @@ class SplashScreenManager {
 
       loadGameButton.onclick = () => this.showSaveSlotSelection(saveSlots);
       startOptionsSection.appendChild(loadGameButton);
-      
+
+      const sandboxButton = document.createElement("button");
+      sandboxButton.id = "splash-sandbox-btn";
+      sandboxButton.className = "splash-btn splash-btn-sandbox";
+      sandboxButton.textContent = "Sandbox";
+      startOptionsSection.appendChild(sandboxButton);
+
       const settingsButton = document.createElement("button");
       settingsButton.className = "splash-btn";
       settingsButton.textContent = "Settings";
@@ -3200,24 +3233,36 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 let wakeLock = null;
+let wakeLockEnabled = false;
+let wakeLockVisibilityListenerAttached = false;
 
-export async function requestWakeLock() {
+async function acquireWakeLock() {
+  if (!wakeLockEnabled) return;
   if (!('wakeLock' in navigator)) return;
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
   try {
     wakeLock = await navigator.wakeLock.request('screen');
     console.log('[PWA] Screen Wake Lock active');
-    
-    document.addEventListener('visibilitychange', async () => {
-      if (wakeLock !== null && document.visibilityState === 'visible') {
-        wakeLock = await navigator.wakeLock.request('screen');
-      }
-    });
   } catch (err) {
     console.log(`[PWA] Wake Lock failed: ${err.name}, ${err.message}`);
   }
 }
 
+export async function requestWakeLock() {
+  wakeLockEnabled = true;
+  if (!wakeLockVisibilityListenerAttached && typeof document !== "undefined") {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        acquireWakeLock();
+      }
+    });
+    wakeLockVisibilityListenerAttached = true;
+  }
+  await acquireWakeLock();
+}
+
 export function releaseWakeLock() {
+  wakeLockEnabled = false;
   if (wakeLock !== null) {
     wakeLock.release();
     wakeLock = null;

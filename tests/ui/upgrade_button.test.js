@@ -6,10 +6,10 @@ describe('Upgrade Button UX', () => {
   beforeEach(async () => {
     const setup = await setupGameWithDOM();
     game = setup.game;
+    game.bypass_tech_tree_restrictions = true;
   });
 
   it('should have a descriptive aria-label on the buy button', () => {
-    // Get a sample upgrade
     const upgrade = game.upgradeset.getUpgrade('improved_alloys');
     expect(upgrade).toBeDefined();
 

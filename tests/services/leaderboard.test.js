@@ -16,6 +16,7 @@ describe("Leaderboard Service & Integration", () => {
         leaderboardService.initialized = false;
         leaderboardService.initPromise = null;
         leaderboardService.apiBaseUrl = 'http://localhost:3000';
+        leaderboardService.disabled = false;
 
         global.fetch = vi.fn();
 

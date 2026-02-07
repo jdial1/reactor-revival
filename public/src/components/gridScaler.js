@@ -299,6 +299,12 @@ export class GridScaler {
         this.reactor.style.width = `${finalGridWidth}px`;
         this.reactor.style.height = `${finalGridHeight}px`;
 
+        if (this.ui.gridCanvasRenderer) {
+          this.ui.gridCanvasRenderer.setSize(finalGridWidth, finalGridHeight);
+          this.ui.gridCanvasRenderer.setGridDimensions(rows, cols);
+          this.ui.gridCanvasRenderer.markStaticDirty();
+        }
+
         // Align grid in wrapper (flex-start for mobile, center for desktop)
 
         if (this.wrapper) {

@@ -43,8 +43,12 @@ describe("Logger", () => {
     it("should not log in production mode", () => {
         logger.productionMode = true;
         logger.setLevel("DEBUG");
-        logger.error("Should not show");
-        expect(consoleSpy.error).not.toHaveBeenCalled();
+        logger.debug("Should not show");
+        expect(consoleSpy.debug).not.toHaveBeenCalled();
+        logger.info("Should not show");
+        expect(consoleSpy.info).not.toHaveBeenCalled();
+        logger.error("Should still show");
+        expect(consoleSpy.error).toHaveBeenCalled();
     });
 
     it("should support grouped logging", () => {

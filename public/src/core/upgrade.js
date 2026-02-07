@@ -89,11 +89,19 @@ export class Upgrade {
 
       const buyBtn = this.$el.querySelector(".upgrade-action-btn");
       if (buyBtn) {
-        buyBtn.disabled = !this.affordable || this.level >= this.max_level;
-        if (this.level >= this.max_level) {
-          buyBtn.setAttribute("aria-label", `${this.title} is maxed out`);
+        const doctrineLocked = this.$el.classList.contains("doctrine-locked");
+        if (doctrineLocked) {
+          buyBtn.disabled = true;
+          const doctrine = this.game.upgradeset?.getDoctrineForUpgrade(this.id);
+          const doctrineName = doctrine?.title || doctrine?.id || "other doctrine";
+          buyBtn.setAttribute("aria-label", `Locked – ${doctrineName}`);
         } else {
-          buyBtn.setAttribute("aria-label", `Buy ${this.title} for ${this.display_cost}`);
+          buyBtn.disabled = !this.affordable || this.level >= this.max_level;
+          if (this.level >= this.max_level) {
+            buyBtn.setAttribute("aria-label", `${this.title} is maxed out`);
+          } else {
+            buyBtn.setAttribute("aria-label", `Buy ${this.title} for ${this.display_cost}`);
+          }
         }
       }
 
@@ -163,6 +171,12 @@ export class Upgrade {
       doctrineIconEl.dataset.doctrine = doctrine ? doctrine.id : "base";
     }
 
+    const doctrineLocked = this.game.upgradeset && !this.game.upgradeset.isUpgradeAvailable(this.id);
+    if (doctrineLocked) {
+      this.$el.classList.add("doctrine-locked");
+      this.$el.dataset.doctrineLocked = "true";
+    }
+
     try {
       const classes = Array.isArray(this.upgrade.classList) ? this.upgrade.classList : [];
       const title = (this.title || "").toLowerCase();
@@ -225,11 +239,24 @@ export class Upgrade {
 
     const buyBtn = this.$el.querySelector(".upgrade-action-btn");
     if (buyBtn) {
-      buyBtn.setAttribute("aria-label", `Buy ${this.title} for ${this.display_cost}`);
+      if (doctrineLocked) {
+        const doctrine = this.game.upgradeset.getDoctrineForUpgrade(this.id);
+        const doctrineName = doctrine?.title || doctrine?.id || "other doctrine";
+        buyBtn.setAttribute("aria-label", `Locked – ${doctrineName}`);
+        buyBtn.disabled = true;
+      } else {
+        buyBtn.setAttribute("aria-label", `Buy ${this.title} for ${this.display_cost}`);
+      }
       buyBtn.onclick = (e) => {
         e.stopPropagation();
+        if (this.game.upgradeset && !this.game.upgradeset.isUpgradeAvailable(this.id)) {
+          return;
+        }
         if (this.game.upgradeset.purchaseUpgrade(this.id)) {
+          if (this.game.audio) this.game.audio.play('upgrade');
           this.game.upgradeset.check_affordability(this.game);
+        } else {
+          if (this.game.audio) this.game.audio.play('error');
         }
       };
     }

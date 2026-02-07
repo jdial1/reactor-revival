@@ -43,32 +43,36 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     }
     
     upgrade.updateDisplayCost();
-    
-    // Temporarily mark as affordable to bypass check_affordability restrictions
+
+    const wasBypass = game.bypass_tech_tree_restrictions;
+    game.bypass_tech_tree_restrictions = true;
     const wasAffordable = upgrade.affordable;
     upgrade.setAffordable(true);
-    
+
     // Verify we actually have enough resources
     const hasEnoughResources = upgrade.base_ecost 
         ? game.current_exotic_particles >= upgrade.getEcost()
         : game.current_money >= upgrade.getCost();
     
     if (!hasEnoughResources) {
+        game.bypass_tech_tree_restrictions = wasBypass;
         upgrade.setAffordable(wasAffordable);
         throw new Error(`Upgrade ${upgradeId} requires more resources. Money: ${game.current_money}, Cost: ${upgrade.getCost()}, EP: ${game.current_exotic_particles}, ECost: ${upgrade.getEcost()}`);
     }
-    
+
     const success = game.upgradeset.purchaseUpgrade(upgradeId);
-    
+
     if (!success) {
+        game.bypass_tech_tree_restrictions = wasBypass;
         upgrade.setAffordable(wasAffordable);
         throw new Error(`Failed to purchase upgrade ${upgradeId}. Level: ${upgrade.level}, Max Level: ${upgrade.max_level}`);
     }
-    
+
+    game.bypass_tech_tree_restrictions = wasBypass;
     if (level > 1 && success) {
         upgrade.setLevel(level);
     }
-    
+
     return success;
 }
 

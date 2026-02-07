@@ -62,7 +62,15 @@ class SettingsModal {
     const hideUnaffordableResearch = safeGetItem("reactor_hide_unaffordable_research", "true") !== "false";
     const hideMaxUpgrades = safeGetItem("reactor_hide_max_upgrades", "true") !== "false";
     const hideMaxResearch = safeGetItem("reactor_hide_max_research", "true") !== "false";
-    const debugHeatFlow = safeGetItem("reactor_debug_heat_flow") === "true";
+    const hideOtherDoctrineUpgrades = safeGetItem("reactor_hide_other_doctrine_upgrades", "false") === "true";
+    const heatFlowVisible = safeGetItem("reactor_heat_flow_visible", "true") !== "false";
+    const experimentalWorkerStored = safeGetItem("reactor_experimental_worker");
+    const experimentalWorker = experimentalWorkerStored === "true"
+      ? true
+      : experimentalWorkerStored === "false"
+        ? false
+        : (typeof navigator !== "undefined" && (navigator.hardwareConcurrency || 0) > 4);
+    const numberFormat = safeGetItem("number_format", "default");
     const masterVol = parseFloat(safeGetItem("reactor_volume_master", "0.25"));
     const effectsVol = parseFloat(safeGetItem("reactor_volume_effects", "0.50"));
     const alertsVol = parseFloat(safeGetItem("reactor_volume_alerts", "0.50"));
@@ -142,10 +150,22 @@ ${mechSwitch("setting-hide-max-upgrades", hideMaxUpgrades)}
 ${mechSwitch("setting-hide-max-research", hideMaxResearch)}
 </label>
 <label class="setting-row mech-switch-row">
-<span>Show heat flow arrows</span>
-<input type="checkbox" id="setting-debug-heat-flow" ${debugHeatFlow ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-debug-heat-flow", debugHeatFlow)}
+<span>Hide Other Doctrine Upgrades</span>
+<input type="checkbox" id="setting-hide-other-doctrine" ${hideOtherDoctrineUpgrades ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-hide-other-doctrine", hideOtherDoctrineUpgrades)}
 </label>
+<label class="setting-row mech-switch-row">
+<span>Heat flow arrows</span>
+<input type="checkbox" id="setting-heat-flow" ${heatFlowVisible ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-heat-flow", heatFlowVisible)}
+</label>
+<div class="setting-row">
+<span>Number format</span>
+<select id="setting-number-format" class="pixel-select">
+<option value="default" ${numberFormat === "default" ? "selected" : ""}>1,234 K</option>
+<option value="scientific" ${numberFormat === "scientific" ? "selected" : ""}>1.23e3</option>
+</select>
+</div>
 </div>
 <div class="settings-group">
 <h3>Data</h3>
@@ -165,6 +185,11 @@ ${mechSwitch("setting-debug-heat-flow", debugHeatFlow)}
 </div>
 <div class="settings-group">
 <h3>System</h3>
+<label class="setting-row mech-switch-row">
+<span>Physics Worker (offloads heat calculations)</span>
+<input type="checkbox" id="setting-experimental-worker" ${experimentalWorker ? "checked" : ""} style="display: none;">
+${mechSwitch("setting-experimental-worker", experimentalWorker)}
+</label>
 <label class="setting-row mech-switch-row">
 <span>Update Notifications</span>
 <input type="checkbox" id="setting-notifications" style="display: none;">
@@ -302,9 +327,26 @@ ${mechSwitch("setting-notifications", false)}
       if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
     });
 
-    setupMechSwitch("setting-debug-heat-flow", (checked) => {
-      safeSetItem("reactor_debug_heat_flow", checked ? "true" : "false");
+    setupMechSwitch("setting-hide-other-doctrine", () => {
+      safeSetItem("reactor_hide_other_doctrine_upgrades", this.overlay.querySelector("#setting-hide-other-doctrine").checked ? "true" : "false");
+      if (window.game && window.game.upgradeset) window.game.upgradeset.check_affordability(window.game);
     });
+
+    setupMechSwitch("setting-heat-flow", (checked) => {
+      safeSetItem("reactor_heat_flow_visible", checked ? "true" : "false");
+    });
+    setupMechSwitch("setting-experimental-worker", (checked) => {
+      safeSetItem("reactor_experimental_worker", checked ? "true" : "false");
+    });
+
+    const numberFormatSelect = this.overlay.querySelector("#setting-number-format");
+    if (numberFormatSelect) {
+      numberFormatSelect.addEventListener("change", () => {
+        const val = numberFormatSelect.value;
+        safeSetItem("number_format", val);
+        if (window.game?.ui?.runUpdateInterfaceLoop) window.game.ui.runUpdateInterfaceLoop();
+      });
+    }
 
     this.overlay.querySelectorAll(".mech-switch-row").forEach((row) => {
       const labelSpan = row.querySelector("span");

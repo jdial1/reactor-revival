@@ -211,8 +211,10 @@ export class PartSet {
     this.partsArray.forEach((part) => {
       let isAffordable = false;
 
-      // During meltdown, make all parts unaffordable
-      if (game.reactor && game.reactor.has_melted_down) {
+      if (game.isSandbox) {
+        const isUnlocked = typeof this.game.isPartUnlocked === 'function' ? this.game.isPartUnlocked(part) : true;
+        isAffordable = isUnlocked && (!part.erequires || (game.upgradeset.getUpgrade(part.erequires)?.level ?? 0) > 0);
+      } else if (game.reactor && game.reactor.has_melted_down) {
         isAffordable = false;
       } else {
         // Gating: a part must be unlocked to be affordable/selectable

@@ -835,8 +835,11 @@ export class TooltipManager {
         e.preventDefault();
         e.stopPropagation();
         if (this.game.upgradeset.purchaseUpgrade(obj.id)) {
+          if (this.game.audio) this.game.audio.play('upgrade');
           this.game.upgradeset.check_affordability(this.game);
           this.update();
+        } else {
+          if (this.game.audio) this.game.audio.play('error');
         }
       };
       actionsContainer.appendChild(buyButton);

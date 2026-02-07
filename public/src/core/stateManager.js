@@ -252,80 +252,7 @@ export class StateManager {
   }
   handleTileAdded(game, tile_data) {
     const tile = tile_data;
-    // Only add tiles within the current active area
-    if (tile.row >= game.rows || tile.col >= game.cols) {
-      // Remove from DOM if present
-      if (tile.$el && tile.$el.parentNode) {
-        tile.$el.parentNode.removeChild(tile.$el);
-      }
-      return;
-    }
-    // Create tile element if it doesn't exist
-    let tile_el = tile.$el;
-    if (!tile_el) {
-      tile_el = document.createElement("button");
-      tile_el.className = "tile";
-      tile_el.dataset.row = tile.row;
-      tile_el.dataset.col = tile.col;
-      tile.tile_index = tile.row * game.max_cols + tile.col;
-      tile_el.tile = tile;
-      tile.$el = tile_el;
-
-      // --- Begin: Updated percent bar logic ---
-      const percent_wrapper_wrapper = document.createElement("div");
-      percent_wrapper_wrapper.className = "percent_wrapper_wrapper";
-      const percent_wrapper = document.createElement("div");
-      percent_wrapper.className = "percent_wrapper";
-
-      // Add heat bar if part has base_containment or containment (but not for valves)
-      if (tile.part && (tile.part.base_containment > 0 || (tile.part.containment > 0 && tile.part.category !== "valve"))) {
-        const heatBar = document.createElement("div");
-        heatBar.className = "percent heat";
-        percent_wrapper.appendChild(heatBar);
-        tile.$heatBar = heatBar;
-      }
-
-      // Add durability bar if part has base_ticks
-      else if (tile.part && tile.part.base_ticks > 0) {
-        const durabilityBar = document.createElement("div");
-        durabilityBar.className = "percent durability";
-        percent_wrapper.appendChild(durabilityBar);
-        tile.$durabilityBar = durabilityBar;
-      }
-
-      percent_wrapper_wrapper.appendChild(percent_wrapper);
-      tile_el.appendChild(percent_wrapper_wrapper);
-      // --- End: Updated percent bar logic ---
-
-      // Add sell indicator element
-      const sellIndicator = document.createElement("div");
-      sellIndicator.className = "sell-indicator";
-      tile_el.appendChild(sellIndicator);
-      // Debug log for tile creation
-      // console.log(
-      //   "[StateManager] Created tile element for tile:",
-      //   tile.row,
-      //   tile.col,
-      //   tile
-      // );
-    }
-    // Add enabled class if needed
-    if (tile.enabled) {
-      tile.$el.classList.add("enabled");
-    } else {
-      tile.$el.classList.remove("enabled");
-    }
-    // Only append if not already in DOM
-    if (this.ui.DOMElements.reactor && !tile_el.parentNode) {
-      this.ui.DOMElements.reactor.appendChild(tile_el);
-      // Debug log for tile appending
-      // console.log(
-      //   "[StateManager] Appended tile to DOM:",
-      //   tile.row,
-      //   tile.col,
-      //   tile
-      // );
-    }
+    tile.tile_index = tile.row * game.max_cols + tile.col;
   }
   game_reset() {
     this.setVar("current_money", this.game.base_money);
@@ -463,10 +390,10 @@ export class StateManager {
 
   getObjectiveScrollDuration() {
     const baseWidth = 900;
-    const baseDuration = 14;
+   const baseDuration = 8;
     const screenWidth = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : baseWidth;
     const duration = baseDuration * (screenWidth / baseWidth);
-    return Math.max(10, Math.min(30, duration));
+    return Math.max(5, Math.min(18, duration));
   }
 
   // Always enable objective text scrolling

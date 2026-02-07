@@ -1,4 +1,5 @@
 import { LEADERBOARD_CONFIG } from './leaderboard-config.js';
+import { isTestEnv } from '../utils/util.js';
 
 export class LeaderboardService {
     constructor() {
@@ -8,11 +9,16 @@ export class LeaderboardService {
         this.lastSaveTime = 0;
         this.saveCooldownMs = 60000;
         this.pendingSave = null;
+        this.disabled = isTestEnv();
     }
 
     async init() {
         if (this.initialized) return;
         if (this.initPromise) return this.initPromise;
+        if (this.disabled) {
+            this.initialized = true;
+            return;
+        }
 
         this.initPromise = (async () => {
             try {
@@ -34,6 +40,7 @@ export class LeaderboardService {
     }
 
     async saveRun(stats) {
+        if (this.disabled) return;
         if (!this.initialized) {
             await this.init();
         }
@@ -84,6 +91,7 @@ export class LeaderboardService {
     }
 
     async getTopRuns(sortBy = 'power', limit = 10) {
+        if (this.disabled) return [];
         if (!this.initialized) {
             await this.init();
         }

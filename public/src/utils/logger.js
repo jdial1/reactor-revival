@@ -48,7 +48,7 @@ class Logger {
 
     shouldLog(level) {
         if (this.productionMode) {
-            return false;
+            return level <= this.levels.WARN;
         }
         return this.currentLevel >= level;
     }

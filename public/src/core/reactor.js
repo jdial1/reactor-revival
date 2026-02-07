@@ -47,6 +47,37 @@ export class Reactor {
 
     this._last_calculated_max_power = this.base_max_power;
     this._last_calculated_max_heat = this.base_max_heat;
+    this._classificationStatsHistory = [];
+  }
+
+  recordClassificationStats() {
+    const h = this._classificationStatsHistory;
+    h.push({
+      netHeat: Number(this.stats_net_heat) || 0,
+      power: Number(this.stats_power) || 0,
+      inlet: Number(this.stats_inlet) || 0,
+      outlet: Number(this.stats_outlet) || 0
+    });
+    if (h.length > 10) h.shift();
+  }
+
+  getAveragedClassificationStats() {
+    const h = this._classificationStatsHistory;
+    if (!h.length) return null;
+    const n = h.length;
+    let netHeat = 0, power = 0, inlet = 0, outlet = 0;
+    for (let i = 0; i < n; i++) {
+      netHeat += h[i].netHeat;
+      power += h[i].power;
+      inlet += h[i].inlet;
+      outlet += h[i].outlet;
+    }
+    return {
+      netHeat: netHeat / n,
+      power: power / n,
+      inlet: inlet / n,
+      outlet: outlet / n
+    };
   }
 
   updateStats() {
@@ -197,6 +228,7 @@ export class Reactor {
     this.stats_power = Number(this.stats_power || 0);
     this.stats_heat_generation = Number(this.stats_heat_generation || 0);
     this.stats_total_part_heat = Number(this.stats_total_part_heat || 0);
+    this.stats_net_heat = this.stats_heat_generation - this.stats_vent - this.stats_outlet;
     this.stats_cash = this.max_power * this.auto_sell_multiplier;
 
     // Ensure stats_power is valid
@@ -213,6 +245,7 @@ export class Reactor {
       this.game.ui.stateManager.setVar("stats_vent", this.stats_vent);
       this.game.ui.stateManager.setVar("stats_inlet", this.stats_inlet);
       this.game.ui.stateManager.setVar("stats_outlet", this.stats_outlet);
+      this.game.ui.stateManager.setVar("stats_net_heat", this.stats_net_heat);
       this.game.ui.stateManager.setVar("stats_cash", this.stats_cash);
       this.game.ui.stateManager.setVar("current_power", this.current_power);
       this.game.ui.stateManager.setVar("current_heat", this.current_heat);
@@ -335,7 +368,11 @@ export class Reactor {
   checkMeltdown() {
     if (this.has_melted_down) {
       this.game.logger?.debug(`[MELTDOWN-CHECK] Already in meltdown state.`);
-      return false; // Already melted down, don't re-trigger
+      return false;
+    }
+    if (this.game.grace_period_ticks > 0) {
+      this.game.grace_period_ticks--;
+      return false;
     }
     const isMeltdown = this.current_heat > 2 * this.max_heat;
     this.game.logger?.debug(`[MELTDOWN-CHECK] Inside checkMeltdown. isMeltdown condition evaluated to: ${isMeltdown}. (Heat: ${this.current_heat.toFixed(2)} > 2 * Max Heat: ${this.max_heat.toFixed(2)})`);

@@ -318,9 +318,9 @@ describe("Time Delta Physics Scaling", () => {
             game.engine.last_timestamp = 1000;
             game.engine.loop(1016);
 
-            expect(processSpy).toHaveBeenCalledTimes(10);
+            expect(processSpy).toHaveBeenCalledTimes(50);
             expect(processSpy).toHaveBeenCalledWith(1.0);
-            expect(game.engine.time_accumulator).toBeCloseTo(40000, -1);
+            expect(game.engine.time_accumulator).toBeCloseTo(0, -1);
             rafSpy.mockRestore();
         });
     });

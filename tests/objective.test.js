@@ -1515,14 +1515,13 @@ describe("Objective System", () => {
       cleanupGame();
     });
 
-    it.skip("should properly handle auto-completion reaching the last objective", async () => {
+    it("should properly handle auto-completion reaching the last objective", async () => {
       const testGame = await setupGame();
+      const objectivesLength = testGame.objectives_manager.objectives_data.length;
+      const placeExperimentalIndex = objectivesLength - 3;
+      testGame.objectives_manager.set_objective(placeExperimentalIndex, true);
 
-      // Set objective to the second-to-last objective
-      const secondToLastIndex = testGame.objectives_manager.objectives_data.length - 2;
-      testGame.objectives_manager.set_objective(secondToLastIndex, true);
-
-      // Satisfy the second-to-last objective (Place an experimental part)
+      // Satisfy the "Place an experimental part" objective
       // First unlock laboratory and protium cells
       const labUpgrade = testGame.upgradeset.getUpgrade("laboratory");
       labUpgrade.setLevel(1);
@@ -1533,51 +1532,34 @@ describe("Objective System", () => {
         .getTile(0, 0)
         .setPart(testGame.partset.getPartById("protium1"));
 
-      // Verify the objective is satisfied before saving
       const checkFn = getObjectiveCheck("placeExperimentalPart");
-      const isSatisfied = checkFn(testGame);
-      console.log(`[DEBUG] Experimental part objective satisfied: ${isSatisfied}`);
-      console.log(`[DEBUG] Protium part experimental: ${testGame.partset.getPartById("protium1")?.experimental}`);
+      expect(checkFn(testGame), "experimental part objective should be satisfied before save").toBe(true);
 
-      // Get the save state
       const saveData = testGame.getSaveState();
+      const savedProtiumTile = saveData.tiles?.find((t) => t.partId && (t.partId === "protium1" || t.partId === "protium"));
+      expect(savedProtiumTile, "save should contain experimental part tile").toBeDefined();
 
-      // Clean up the first game instance before creating the second
       cleanupGame();
 
-      // Create a new game instance and apply save state
       const newGame = await setupGame();
-      newGame.applySaveState(saveData);
+      newGame.bypass_tech_tree_restrictions = true;
+      await newGame.applySaveState(saveData);
 
-      // Verify the experimental part was restored
-      const restoredTile = newGame.tileset.getTile(0, 0);
-      console.log(`[DEBUG] Restored tile part: ${restoredTile?.part?.id}`);
-      console.log(`[DEBUG] Restored part experimental: ${restoredTile?.part?.experimental}`);
+      const restoredTile = newGame.tileset.getTile(savedProtiumTile.row, savedProtiumTile.col);
+      expect(restoredTile?.part, "restored tile should have part").toBeDefined();
+      expect(restoredTile?.part?.experimental).toBe(true);
 
-      // Wait for objective manager to initialize
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Manually trigger auto-completion on the loaded game
-      console.log(`[DEBUG] Manually triggering auto-completion on loaded game`);
-      console.log(`[DEBUG] Current objective index before auto-completion: ${newGame.objectives_manager.current_objective_index}`);
-      console.log(`[DEBUG] Current objective def before auto-completion:`, newGame.objectives_manager.current_objective_def);
-      console.log(`[DEBUG] _saved_objective_index before auto-completion: ${newGame._saved_objective_index}`);
-
-      // Verify the objective is still satisfied
       const checkFn2 = getObjectiveCheck("placeExperimentalPart");
-      const isStillSatisfied = checkFn2(newGame);
-      console.log(`[DEBUG] Experimental part objective still satisfied: ${isStillSatisfied}`);
+      expect(checkFn2(newGame), "objective should still be satisfied after load").toBe(true);
 
       newGame.objectives_manager.checkAndAutoComplete();
 
-      console.log(`[DEBUG] Current objective index after auto-completion: ${newGame.objectives_manager.current_objective_index}`);
+      expect(newGame.objectives_manager.current_objective_index).toBe(objectivesLength - 2);
 
-      // Verify the objective index is properly set to the last objective (not corrupted)
-      expect(newGame.objectives_manager.current_objective_index).toBe(testGame.objectives_manager.objectives_data.length - 1);
-
-      // Verify the objective is "All objectives completed!"
       const currentObjective = newGame.objectives_manager.getCurrentObjectiveInfo();
-      expect(currentObjective.title).toBe("All objectives completed!");
+      expect(currentObjective.checkId).toBe("completeChapter4");
 
       // Clean up the new game instance to prevent memory leaks
       cleanupGame();

@@ -413,6 +413,16 @@
       "icon": "img/parts/cells/xcell_1_1.png"
     },
     {
+      "id": "experimental_protium_loader",
+      "type": "experimental_boost",
+      "title": "Experimental Protium Loader",
+      "description": "Auto-replaces depleted Protium Cells when Auto-Buy is enabled.",
+      "erequires": "protium_cells",
+      "ecost": 100,
+      "levels": 1,
+      "icon": "img/parts/cells/xcell_1_1.png"
+    },
+    {
       "id": "quantum_buffering",
       "type": "experimental_boost",
       "title": "Quantum Buffering",

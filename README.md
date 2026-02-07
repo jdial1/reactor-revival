@@ -3,7 +3,7 @@
 [▶ Launch in browser](https://jdial1.github.io/reactor-revival/)
 
 <p align="center">
-  <img src="https://github.com/jdial1/reactor-revival/blob/master/img/misc/preview.png" width="250" alt="Reactor Revival preview">
+  <img src="https://raw.githubusercontent.com/jdial1/reactor-revival/master/public/img/misc/preview.png" width="250" alt="Reactor Revival preview">
 </p>
 
 **Reactor Revival** is a modern browser-based incremental reactor simulator.  

@@ -172,7 +172,7 @@ describe("Neighbor Interactions", () => {
         expect(game.reactor.current_heat).toBeGreaterThan(prevReactorHeat);
     });
 
-    it.skip("extreme heat outlet (range 2) pushes to two-tiles-away components", async () => {
+    it("extreme heat outlet (range 2) pushes to two-tiles-away components", async () => {
         await placePart(game, 6, 6, "heat_outlet6");
         const farNeighbor = await placePart(game, 6, 4, "vent1");
 

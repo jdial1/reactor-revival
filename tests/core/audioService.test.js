@@ -675,7 +675,7 @@ describe("AudioService", () => {
           pointerType: 'mouse',
           button: 0
         });
-        await ui.handleGridInteraction({ tile }, clickEvent);
+        await ui.handleGridInteraction(tile, clickEvent);
       }
       
       // Verify mute state is correct (this ensures play() will return early if called)

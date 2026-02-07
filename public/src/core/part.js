@@ -299,11 +299,29 @@ export class Part {
         this.range += quantumTunneling;
       }
     }
-    let epHeatAfter = this.base_ep_heat * epHeatMultiplier;
+    let epHeatScale = 1;
+    if (this.category === "particle_accelerator") {
+      const epSource = Number.isFinite(game.current_exotic_particles)
+        ? game.current_exotic_particles
+        : game.exotic_particles;
+      const epValue = Number.isFinite(epSource) ? epSource : 0;
+      if (epValue > 1000000) {
+        const ratio = epValue / 1000000;
+        const scale = 1 + Math.log10(ratio);
+        if (isFinite(scale) && !isNaN(scale)) {
+          epHeatScale = scale;
+        }
+      }
+    }
+    let epHeatAfter = this.base_ep_heat * epHeatMultiplier * epHeatScale;
     
     if (this.category === "particle_accelerator" && game.reactor.catalyst_reduction > 0) {
       const reduction = Math.min(0.75, game.reactor.catalyst_reduction);
       epHeatAfter *= (1 - reduction);
+    }
+    if (!isFinite(epHeatAfter) || isNaN(epHeatAfter)) {
+      const fallback = this.base_ep_heat * epHeatMultiplier;
+      epHeatAfter = Number.isFinite(fallback) ? fallback : (this.base_ep_heat || 0);
     }
     if (partId === 'particle_accelerator1' && epHeatBefore !== undefined && epHeatAfter !== epHeatBefore) {
       console.log(`[RECALC-STATS DEBUG] ep_heat changed for ${partId}: ${epHeatBefore} -> ${epHeatAfter} (base_ep_heat=${this.base_ep_heat}, multiplier=${epHeatMultiplier})`);

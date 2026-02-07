@@ -67,25 +67,21 @@ describe("Debug Tests", () => {
       }
     };
 
-    // Mock console.warn to capture the warning message
     const originalWarn = console.warn;
-    let warningMessage = "";
+    const warnings = [];
     console.warn = (msg) => {
-      warningMessage = msg;
+      warnings.push(String(msg));
       originalWarn(msg);
     };
 
-    // Apply save state with negative index
     await testGame.applySaveState(saveData);
 
-    // Wait a bit for async operations to complete
     await new Promise(resolve => setTimeout(resolve, 10));
 
-    // Verify the index was clamped to 0
-    console.log(`Expected: 0, Actual: ${testGame.objectives_manager.current_objective_index}`);
     expect(testGame.objectives_manager.current_objective_index).toBe(0);
-    expect(warningMessage).toContain("Negative");
-    expect(warningMessage).toContain("Clamping to 0");
+    const warningText = warnings.join(" ");
+    expect(warningText).toContain("Negative");
+    expect(warningText).toContain("Clamping to 0");
 
     // Restore console.warn
     console.warn = originalWarn;
