@@ -103,7 +103,7 @@
         "checkId": "autoSell500"
     },
     {
-        "title": "Achieve a steady power generation of 1,000 per tick for at least 30 seconds.",
+        "title": "Achieve a steady power generation of 1,000 per tick for at least 30 ticks.",
         "flavor_text": "Stability is proof of a well-designed system. You're maintaining a high, steady output.",
         "reward": 200000,
         "checkId": "sustainedPower1k"
@@ -164,7 +164,7 @@
         "checkId": "unlockSeaborgium"
     },
     {
-        "title": "Sustain a reactor heat level above 10,000,000 for 5 minutes without a meltdown.",
+        "title": "Sustain a reactor heat level above 10,000,000 for 30 ticks without a meltdown.",
         "flavor_text": "You've demonstrated mastery over extreme heat management, a dangerous but rewarding feat.",
         "reward": 2500000000000,
         "checkId": "masterHighHeat"

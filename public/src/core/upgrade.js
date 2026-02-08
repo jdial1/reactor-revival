@@ -149,6 +149,10 @@ export class Upgrade {
             <span class="action-text">Buy</span>
             <span class="cost-display"></span>
           </button>
+          <div class="sandbox-upgrade-actions">
+            <button class="pixel-btn sandbox-buy-max-btn" type="button">Buy Max</button>
+            <button class="pixel-btn sandbox-reset-btn" type="button">Reset</button>
+          </div>
         </div>
       `;
     }
@@ -259,6 +263,29 @@ export class Upgrade {
           if (this.game.audio) this.game.audio.play('error');
         }
       };
+    }
+
+    const sandboxActions = this.$el.querySelector(".sandbox-upgrade-actions");
+    if (sandboxActions && this.game) {
+      const buyMaxBtn = sandboxActions.querySelector(".sandbox-buy-max-btn");
+      const resetBtn = sandboxActions.querySelector(".sandbox-reset-btn");
+      if (buyMaxBtn) {
+        buyMaxBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (!this.game.isSandbox) return;
+          if (this.game.upgradeset && !this.game.upgradeset.isUpgradeAvailable(this.id)) return;
+          const count = this.game.upgradeset.purchaseUpgradeToMax(this.id);
+          if (count > 0 && this.game.audio) this.game.audio.play('upgrade');
+          this.game.upgradeset.check_affordability(this.game);
+        };
+      }
+      if (resetBtn) {
+        resetBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (!this.game.isSandbox) return;
+          this.game.upgradeset.resetUpgradeLevel(this.id);
+        };
+      }
     }
 
     this.updateDisplayCost();

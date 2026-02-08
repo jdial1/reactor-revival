@@ -592,22 +592,18 @@ export class ObjectiveManager {
         return { text: `$${totalMoney.toLocaleString()} / $10,000,000,000`, percent: Math.min(100, (totalMoney / 1e10) * 100) };
 
       case 'sustainedPower1k': {
-        const DURATION_MS = 30000;
-        if (!game.sustainedPower1k) game.sustainedPower1k = { startTime: 0 };
+        const TICKS_REQUIRED = 30;
+        if (!game.sustainedPower1k) game.sustainedPower1k = { startTick: 0 };
         const state = game.sustainedPower1k;
-        const powerOk = game.reactor.stats_power >= 1000 && !game.paused;
+        const powerOk = game.reactor.stats_power >= 1000 && !game.paused && game.engine;
         if (!powerOk) {
           const power = game.reactor.stats_power || 0;
-          return { text: `${power.toLocaleString()} / 1,000 Power (hold 30 sec)`, percent: 0 };
+          return { text: `${power.toLocaleString()} / 1,000 Power (hold 30 ticks)`, percent: 0 };
         }
-        if (state.startTime === 0) state.startTime = Date.now();
-        const elapsed = Date.now() - state.startTime;
-        const percent = Math.min(100, (elapsed / DURATION_MS) * 100);
-        const m = (x) => Math.floor(x / 60000);
-        const s = (x) => Math.floor((x % 60000) / 1000);
-        const elapsedStr = `${m(elapsed)}:${String(s(elapsed)).padStart(2, '0')}`;
-        const totalStr = `${m(DURATION_MS)}:${String(s(DURATION_MS)).padStart(2, '0')}`;
-        return { text: `${elapsedStr} / ${totalStr} steady`, percent };
+        if (state.startTick === 0) state.startTick = game.engine.tick_count;
+        const elapsedTicks = game.engine.tick_count - state.startTick;
+        const percent = Math.min(100, (elapsedTicks / TICKS_REQUIRED) * 100);
+        return { text: `${elapsedTicks} / ${TICKS_REQUIRED} ticks steady`, percent };
       }
 
       case 'heat10m':

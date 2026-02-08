@@ -598,7 +598,25 @@ export class UI {
     });
   }
 
-  // Allow other systems to trigger a refresh of the visible parts panel
+  unlockAllPartsForTesting() {
+    if (!this.game?.partset?.partsArray) return;
+    const typeLevelCombos = new Set();
+    this.game.partset.partsArray.forEach(part => {
+      if (part.type && part.level) {
+        typeLevelCombos.add(`${part.type}:${part.level}`);
+      }
+    });
+    typeLevelCombos.forEach(combo => {
+      this.game.placedCounts[combo] = 10;
+    });
+    this.game.partset.check_affordability(this.game);
+    if (this.stateManager && typeof this.stateManager.refreshPartsPanel === "function") {
+      this.stateManager.refreshPartsPanel();
+    } else {
+      this.refreshPartsDisplay();
+    }
+  }
+
   refreshPartsPanel() {
     const partsTabsContainer = document.querySelector(".parts_tabs");
     const activeTab = partsTabsContainer
@@ -688,42 +706,50 @@ export class UI {
   }
 
   updateMeltdownState() {
-    // Add this check to prevent errors when document is not available
-    if (typeof document === "undefined" || !document.body) {
-      return;
+    if (typeof document === "undefined" || !document.body) return;
+    if (!this.game || !this.game.reactor) return;
+    const hasMeltedDown = this.game.reactor.has_melted_down;
+    const isMeltdownClassPresent = document.body.classList.contains("reactor-meltdown");
+    const meltdownBanner = document.getElementById("meltdown_banner");
+
+    if (meltdownBanner) {
+      meltdownBanner.classList.toggle("hidden", !hasMeltedDown);
     }
-    if (this.game && this.game.reactor) {
-      const hasMeltedDown = this.game.reactor.has_melted_down;
-      const isMeltdownClassPresent =
-        document.body.classList.contains("reactor-meltdown");
 
-      // Show/hide meltdown banner
-      const meltdownBanner = document.getElementById("meltdown_banner");
-      if (meltdownBanner) {
-        meltdownBanner.classList.toggle("hidden", !hasMeltedDown);
-      }
+    if (hasMeltedDown && !isMeltdownClassPresent) {
+      document.body.classList.add("reactor-meltdown");
+    } else if (!hasMeltedDown && isMeltdownClassPresent) {
+      document.body.classList.remove("reactor-meltdown");
+    }
 
-      if (hasMeltedDown && !isMeltdownClassPresent) {
-        document.body.classList.add("reactor-meltdown");
-      } else if (!hasMeltedDown && isMeltdownClassPresent) {
-        document.body.classList.remove("reactor-meltdown");
-      }
+    this.updateProgressBarMeltdownState(hasMeltedDown);
 
-      // Update progress bar meltdown state
-      this.updateProgressBarMeltdownState(hasMeltedDown);
+    if (hasMeltedDown) {
+      const resetReactorBtn = document.getElementById("reset_reactor_btn");
+      const clearHeatSandboxBtn = document.getElementById("clear_heat_sandbox_btn");
+      const isSandbox = this.game.isSandbox;
 
-      // Set up reset button event listener when meltdown banner is shown
-      if (hasMeltedDown) {
-        const resetReactorBtn = document.getElementById("reset_reactor_btn");
-        if (resetReactorBtn && !resetReactorBtn.hasAttribute('data-listener-added')) {
-          logger.debug("Setting up reset reactor button event listener");
-          resetReactorBtn.addEventListener("click", async () => {
-            logger.debug("Reset reactor button clicked");
-            await this.resetReactor();
-          });
-          resetReactorBtn.setAttribute('data-listener-added', 'true');
+      if (isSandbox && clearHeatSandboxBtn) {
+        if (!clearHeatSandboxBtn.hasAttribute("data-listener-added")) {
+          clearHeatSandboxBtn.addEventListener("click", () => this.clearHeatAndMeltdownSandbox());
+          clearHeatSandboxBtn.setAttribute("data-listener-added", "true");
         }
+      } else if (resetReactorBtn && !resetReactorBtn.hasAttribute("data-listener-added")) {
+        resetReactorBtn.addEventListener("click", async () => await this.resetReactor());
+        resetReactorBtn.setAttribute("data-listener-added", "true");
       }
+    }
+  }
+
+  clearHeatAndMeltdownSandbox() {
+    if (!this.game?.isSandbox || !this.game.reactor) return;
+    this.game.reactor.current_heat = 0;
+    this.game.reactor.current_power = 0;
+    this.stateManager.setVar("current_heat", 0);
+    this.stateManager.setVar("current_power", 0);
+    this.game.reactor.clearMeltdownState();
+    if (this.game.engine) {
+      this.game.engine.start();
     }
   }
 
@@ -2199,34 +2225,7 @@ export class UI {
           case "u":
           case "U":
             e.preventDefault();
-            // Unlock all parts for testing by setting placement counts to 10
-            if (this.game.partset && this.game.partset.partsArray) {
-              // Get all unique type:level combinations from all parts
-              const typeLevelCombos = new Set();
-              this.game.partset.partsArray.forEach(part => {
-                if (part.type && part.level) {
-                  typeLevelCombos.add(`${part.type}:${part.level}`);
-                }
-              });
-
-              // Set all placement counts to 10 to unlock everything
-              typeLevelCombos.forEach(combo => {
-                this.game.placedCounts[combo] = 10;
-              });
-
-              // Refresh part affordability and UI
-              this.game.partset.check_affordability(this.game);
-
-              // Force refresh of parts panel to show all unlocked parts
-              if (this.stateManager && typeof this.stateManager.refreshPartsPanel === 'function') {
-                this.stateManager.refreshPartsPanel();
-              } else {
-                // Fallback: manually refresh the parts display
-                this.refreshPartsDisplay();
-              }
-
-
-            }
+            this.unlockAllPartsForTesting();
             break;
           case "h":
           case "H":
@@ -3843,7 +3842,7 @@ export class UI {
       sandboxBtn.onclick = () => this.toggleSandbox();
       const updateSandboxButton = () => {
         if (!sandboxBtn) return;
-        sandboxBtn.title = this.game?.isSandbox ? "Exit Sandbox (Back to Main)" : "Enter Sandbox";
+        sandboxBtn.title = this.game?.isSandbox ? "Return to Splash" : "Enter Sandbox";
         sandboxBtn.querySelector(".emoji-icon").textContent = this.game?.isSandbox ? "\u23EE" : "\u{1F9EA}";
         sandboxBtn.classList.toggle("on", !!this.game?.isSandbox);
       };
@@ -3857,7 +3856,7 @@ export class UI {
   toggleSandbox() {
     if (!this.game) return;
     if (this.game.isSandbox) {
-      this.exitSandbox();
+      window.location.href = window.location.origin + window.location.pathname;
     } else {
       this.enterSandbox();
     }
@@ -3914,7 +3913,7 @@ export class UI {
     this.stateManager.setVar("current_heat", 0);
     this.stateManager.setVar("current_power", 0);
     document.body.classList.add("reactor-sandbox");
-    this.game.partset.check_affordability(this.game);
+    this.unlockAllPartsForTesting();
     this.game.upgradeset.check_affordability(this.game);
     this.runUpdateInterfaceLoop();
     if (this._updateSandboxButton) this._updateSandboxButton();
@@ -3961,7 +3960,37 @@ export class UI {
     if (this._updateSandboxButton) this._updateSandboxButton();
   }
 
-  // Initialize sell all button functionality
+  initializeSandboxUpgradeButtons() {
+    const upgradesBuyAll = document.getElementById("upgrades_buy_all_btn");
+    const upgradesClearAll = document.getElementById("upgrades_clear_all_btn");
+    const researchBuyAll = document.getElementById("research_buy_all_btn");
+    const researchClearAll = document.getElementById("research_clear_all_btn");
+    if (upgradesBuyAll && this.game?.upgradeset) {
+      upgradesBuyAll.onclick = () => {
+        if (this.game.isSandbox) this.game.upgradeset.purchaseAllUpgrades();
+        this.game.upgradeset.check_affordability(this.game);
+      };
+    }
+    if (upgradesClearAll && this.game?.upgradeset) {
+      upgradesClearAll.onclick = () => {
+        if (this.game.isSandbox) this.game.upgradeset.clearAllUpgrades();
+        this.game.upgradeset.check_affordability(this.game);
+      };
+    }
+    if (researchBuyAll && this.game?.upgradeset) {
+      researchBuyAll.onclick = () => {
+        if (this.game.isSandbox) this.game.upgradeset.purchaseAllResearch();
+        this.game.upgradeset.check_affordability(this.game);
+      };
+    }
+    if (researchClearAll && this.game?.upgradeset) {
+      researchClearAll.onclick = () => {
+        if (this.game.isSandbox) this.game.upgradeset.clearAllResearch();
+        this.game.upgradeset.check_affordability(this.game);
+      };
+    }
+  }
+
   initializeSellAllButton() {
     const sellAllBtn = document.getElementById("reactor_sell_all_btn");
     if (sellAllBtn) {
@@ -4244,6 +4273,7 @@ export class UI {
             "[UI] upgradeset.populateUpgrades is not a function or upgradeset missing"
           );
         }
+        this.initializeSandboxUpgradeButtons();
         break;
       case "experimental_upgrades_section":
         if (
@@ -4259,6 +4289,7 @@ export class UI {
             "[UI] upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing"
           );
         }
+        this.initializeSandboxUpgradeButtons();
         break;
       case "about_section":
         const versionEl = document.getElementById("about_version");

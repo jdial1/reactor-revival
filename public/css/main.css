@@ -501,6 +501,20 @@ body.reactor-sandbox #reactor_section .tile { border-style: dashed; border-color
 
 body.reactor-sandbox #reactor_section .tile:hover { border-color: var(--sandbox-accent);
 }
+
+.sandbox-section-actions { display: none; flex-wrap: wrap; gap: 8px; padding: 8px 1rem; margin-bottom: 0.5rem; background-color: rgb(25 35 45); border-radius: 4px;
+}
+body.reactor-sandbox .sandbox-section-actions { display: flex;
+}
+.sandbox-section-actions .pixel-btn { padding: 6px 12px; font-size: 0.9rem;
+}
+
+.sandbox-upgrade-actions { display: none; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+}
+body.reactor-sandbox .sandbox-upgrade-actions { display: flex;
+}
+.sandbox-upgrade-actions .pixel-btn { padding: 4px 8px; font-size: 0.75rem;
+}
 /* Heat wiggle animation for individual tiles when heat gets too high */
 @keyframes tile-heat-wiggle { 0%, 100% { transform: translateX(0) translateY(0); }
  25% { transform: translateX(-1px) translateY(-1px); }
@@ -3102,11 +3116,15 @@ footer#bottom_nav button { overflow: hidden; width: 100% !important; min-width: 
 #meltdown_banner article { padding: 0 !important; margin: 0 !important; background: none !important; color: rgb(255 255 255) !important; font-weight: bold !important; text-shadow: 1px 0 0 rgb(0 0 0), -1px 0 0 rgb(0 0 0), 0 1px 0 rgb(0 0 0), 0 -1px 0 rgb(0 0 0) !important;
 }
 
-#meltdown_banner .reset-btn { display: none !important; /* Hidden by default */
+#meltdown_banner .reset-btn,
+#meltdown_banner .sandbox-only-btn { display: none !important;
  padding: 8px 16px !important; border: 2px solid rgb(255 255 255) !important; border-radius: 4px !important; margin-left: 20px !important; background: rgb(255 255 255 / 20%) !important; color: rgb(255 255 255) !important; cursor: pointer !important; font-size: 14px !important; font-weight: bold !important; text-shadow: 1px 1px 2px rgb(0 0 0 / 80%) !important; transition: all 0.3s ease !important;
 }
-/* Show reset button only when meltdown banner is visible */
 body.reactor-meltdown #meltdown_banner .reset-btn { display: inline-block !important;
+}
+body.reactor-meltdown.reactor-sandbox #meltdown_banner .reset-btn { display: none !important;
+}
+body.reactor-meltdown.reactor-sandbox #meltdown_banner .sandbox-only-btn { display: inline-block !important;
 }
 
 #meltdown_banner .reset-btn:hover { border-color: rgb(255 235 59) !important; background: rgb(255 255 255 / 30%) !important; box-shadow: 0 0 10px rgb(255 235 59 / 50%) !important; color: rgb(255 235 59) !important; transform: scale(1.05) !important;

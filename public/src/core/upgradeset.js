@@ -241,6 +241,49 @@ export class UpgradeSet {
     return purchased;
   }
 
+  purchaseUpgradeToMax(upgradeId) {
+    const upgrade = this.getUpgrade(upgradeId);
+    if (!upgrade || !this.game.isSandbox) return 0;
+    if (!this.isUpgradeAvailable(upgradeId)) return 0;
+    let count = 0;
+    while (upgrade.level < upgrade.max_level && this.purchaseUpgrade(upgradeId)) {
+      count++;
+    }
+    return count;
+  }
+
+  purchaseAllUpgrades() {
+    if (!this.game.isSandbox) return;
+    const filter = (u) => !u.base_ecost && this.isUpgradeAvailable(u.id);
+    this.upgradesArray.filter(filter).forEach((u) => this.purchaseUpgradeToMax(u.id));
+  }
+
+  purchaseAllResearch() {
+    if (!this.game.isSandbox) return;
+    const filter = (u) => !!u.base_ecost && this.isUpgradeAvailable(u.id);
+    this.upgradesArray.filter(filter).forEach((u) => this.purchaseUpgradeToMax(u.id));
+  }
+
+  clearAllUpgrades() {
+    if (!this.game.isSandbox) return;
+    const filter = (u) => !u.base_ecost;
+    this.upgradesArray.filter(filter).forEach((u) => this.resetUpgradeLevel(u.id));
+  }
+
+  clearAllResearch() {
+    if (!this.game.isSandbox) return;
+    const filter = (u) => !!u.base_ecost;
+    this.upgradesArray.filter(filter).forEach((u) => this.resetUpgradeLevel(u.id));
+  }
+
+  resetUpgradeLevel(upgradeId) {
+    const upgrade = this.getUpgrade(upgradeId);
+    if (!upgrade || !this.game.isSandbox) return;
+    if (upgrade.level === 0) return;
+    upgrade.setLevel(0);
+    this.updateSectionCounts();
+  }
+
   check_affordability(game) {
     if (!game) return;
 

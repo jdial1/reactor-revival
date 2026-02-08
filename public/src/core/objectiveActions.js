@@ -48,14 +48,15 @@ export const checkFunctions = {
 
   // New check functions for intermediary objectives
   sustainedPower1k: (game) => {
-    if (!game.sustainedPower1k) game.sustainedPower1k = { startTime: 0 };
-    if (game.reactor.stats_power >= 1000 && !game.paused) {
-      if (game.sustainedPower1k.startTime === 0) {
-        game.sustainedPower1k.startTime = Date.now();
+    const TICKS_REQUIRED = 30;
+    if (!game.sustainedPower1k) game.sustainedPower1k = { startTick: 0 };
+    if (game.reactor.stats_power >= 1000 && !game.paused && game.engine) {
+      if (game.sustainedPower1k.startTick === 0) {
+        game.sustainedPower1k.startTick = game.engine.tick_count;
       }
-      return Date.now() - game.sustainedPower1k.startTime >= 30000;
+      return game.engine.tick_count - game.sustainedPower1k.startTick >= TICKS_REQUIRED;
     } else {
-      game.sustainedPower1k.startTime = 0;
+      game.sustainedPower1k.startTick = 0;
       return false;
     }
   },
@@ -103,14 +104,15 @@ export const checkFunctions = {
     );
   },
   masterHighHeat: (game) => {
-    if (!game.masterHighHeat) game.masterHighHeat = { startTime: 0 };
-    if (game.reactor.current_heat > 10000000 && !game.paused && !game.reactor.has_melted_down) {
-      if (game.masterHighHeat.startTime === 0) {
-        game.masterHighHeat.startTime = Date.now();
+    const TICKS_REQUIRED = 30;
+    if (!game.masterHighHeat) game.masterHighHeat = { startTick: 0 };
+    if (game.reactor.current_heat > 10000000 && !game.paused && !game.reactor.has_melted_down && game.engine) {
+      if (game.masterHighHeat.startTick === 0) {
+        game.masterHighHeat.startTick = game.engine.tick_count;
       }
-      return Date.now() - game.masterHighHeat.startTime >= 300000; // 5 minutes
+      return game.engine.tick_count - game.masterHighHeat.startTick >= TICKS_REQUIRED;
     } else {
-      game.masterHighHeat.startTime = 0;
+      game.masterHighHeat.startTick = 0;
       return false;
     }
   },

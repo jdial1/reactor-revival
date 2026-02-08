@@ -818,6 +818,8 @@ class SplashScreenManager {
         <div class="splash-start-options">
           ${html}
           <div class="splash-btn-row">
+            <input type="file" id="load-from-file-input" accept=".json,.reactor,application/json" style="display: none;">
+            <button class="splash-btn splash-btn-load" id="load-from-file-btn">Load from file</button>
             <button class="splash-btn splash-btn-exit" id="back-to-splash">Back</button>
           </div>
         </div>
@@ -825,6 +827,34 @@ class SplashScreenManager {
     `;
 
     document.body.appendChild(saveSlotScreen);
+
+    const loadFromFileBtn = saveSlotScreen.querySelector('#load-from-file-btn');
+    const loadFromFileInput = saveSlotScreen.querySelector('#load-from-file-input');
+    if (loadFromFileBtn && loadFromFileInput) {
+      loadFromFileBtn.addEventListener('click', () => loadFromFileInput.click());
+      loadFromFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const saveData = event.target.result;
+            const parsed = typeof saveData === 'string' ? JSON.parse(saveData) : saveData;
+            if (!window.game?.validateSaveData?.(parsed)) {
+              alert('Invalid save file format.');
+              return;
+            }
+            safeSetItem('reactorGameSave_1', typeof saveData === 'string' ? saveData : JSON.stringify(parsed));
+            await this.loadFromSaveSlot(1);
+          } catch (err) {
+            console.error('Failed to load save from file:', err);
+            alert('Failed to load save file. Ensure it is a valid Reactor save.');
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
 
     saveSlotScreen.querySelectorAll('button[data-slot]:not([disabled])').forEach(button => {
       button.addEventListener('click', async (e) => {
@@ -893,6 +923,11 @@ class SplashScreenManager {
       return (n / 1000).toFixed(1) + "K";
     }
     return n.toString();
+  }
+
+  async loadFromData(saveData) {
+    safeSetItem('reactorGameSave_1', typeof saveData === 'string' ? saveData : JSON.stringify(saveData));
+    await this.loadFromSaveSlot(1);
   }
 
   async loadFromSaveSlot(slot) {

@@ -161,8 +161,7 @@ async function solveObjective(index, game) {
       game.tileset.updateActiveTiles();
       game.engine.markPartCacheAsDirty();
       game.reactor.updateStats();
-      game.sustainedPower1k = { startTime: Date.now() - 31000 };
-      await vi.advanceTimersByTimeAsync(31000);
+      game.sustainedPower1k = { startTick: game.engine.tick_count - 30 };
       game.objectives_manager.check_current_objective();
       break;
     }
@@ -266,8 +265,7 @@ async function solveObjective(index, game) {
       game.reactor.updateStats();
       game.reactor.current_heat = 15000000;
       game.reactor.has_melted_down = false;
-      game.masterHighHeat = { startTime: Date.now() - 301000 };
-      await vi.advanceTimersByTimeAsync(301000);
+      game.masterHighHeat = { startTick: game.engine.tick_count - 30 };
       break;
     case "ep10":
       game.exotic_particles = 10;

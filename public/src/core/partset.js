@@ -212,8 +212,7 @@ export class PartSet {
       let isAffordable = false;
 
       if (game.isSandbox) {
-        const isUnlocked = typeof this.game.isPartUnlocked === 'function' ? this.game.isPartUnlocked(part) : true;
-        isAffordable = isUnlocked && (!part.erequires || (game.upgradeset.getUpgrade(part.erequires)?.level ?? 0) > 0);
+        isAffordable = true;
       } else if (game.reactor && game.reactor.has_melted_down) {
         isAffordable = false;
       } else {

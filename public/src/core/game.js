@@ -198,6 +198,7 @@ export class Game {
   // Rule: level 1 is unlocked. Level 2+ unlocked after 10 of previous tier
   // Special case: valves are always unlocked from the start
   isPartUnlocked(part) {
+    if (this.isSandbox) return true;
     if (!part || part.category === 'valve') {
       this.logger?.debug(`[UNLOCK] Part ${part?.id || 'null'}: Valve or null, unlocked by default.`);
       return true; // Valves are always unlocked

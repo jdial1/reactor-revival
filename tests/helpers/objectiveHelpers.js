@@ -138,7 +138,7 @@ export async function satisfyObjective(game, idx) {
         case 17:
             for (let i = 0; i < 8; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("plutonium3"));
             game.reactor.updateStats();
-            game.sustainedPower1k = { startTime: Date.now() - 180000 };
+            game.sustainedPower1k = { startTick: game.engine.tick_count - 30 };
             break;
 
         case 18:
@@ -186,7 +186,7 @@ export async function satisfyObjective(game, idx) {
             for (let i = 0; i < 8; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("plutonium3"));
             game.reactor.updateStats();
             game.reactor.current_heat = 15000000;
-            game.masterHighHeat = { startTime: Date.now() - 350000 };
+            game.masterHighHeat = { startTick: game.engine.tick_count - 30 };
             break;
 
         case 28:

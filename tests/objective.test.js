@@ -880,15 +880,12 @@ describe("Objective System", () => {
       }
       testGame.reactor.updateStats();
 
-      // Reset sustained power state
-      testGame.sustainedPower1k = { startTime: 0 };
+      testGame.sustainedPower1k = { startTick: 0 };
 
-      // Test that it fails without sustained time
       const checkFn = getObjectiveCheck("sustainedPower1k");
       expect(checkFn(testGame)).toBe(false);
 
-      // Test that it passes with sustained time
-      testGame.sustainedPower1k = { startTime: Date.now() - 180000 };
+      testGame.sustainedPower1k = { startTick: testGame.engine.tick_count - 30 };
       expect(checkFn(testGame)).toBe(true);
 
       // Test that it fails if power drops below threshold
@@ -950,15 +947,12 @@ describe("Objective System", () => {
       // Manually set high heat level
       testGame.reactor.current_heat = 15000000;
 
-      // Reset high heat state
-      testGame.masterHighHeat = { startTime: 0 };
+      testGame.masterHighHeat = { startTick: 0 };
 
-      // Test that it fails without sustained time
       const checkFn = getObjectiveCheck("masterHighHeat");
       expect(checkFn(testGame)).toBe(false);
 
-      // Test that it passes with sustained time
-      testGame.masterHighHeat = { startTime: Date.now() - 300000 };
+      testGame.masterHighHeat = { startTick: testGame.engine.tick_count - 30 };
       expect(checkFn(testGame)).toBe(true);
 
       // Test that it fails if reactor melts down
