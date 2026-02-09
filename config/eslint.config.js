@@ -7,7 +7,6 @@ export default [
       ecmaVersion: 2022,
       sourceType: "module",
       globals: {
-        // Browser globals
         window: "readonly",
         document: "readonly",
         navigator: "readonly",
@@ -36,11 +35,9 @@ export default [
         MouseEvent: "readonly",
         TouchEvent: "readonly",
         CustomEvent: "readonly",
-        // Node.js environment (scripts, tests)
         process: "readonly",
         __dirname: "readonly",
         global: "readonly",
-        // For Vitest
         test: "readonly",
         expect: "readonly",
         describe: "readonly",
@@ -51,19 +48,17 @@ export default [
       }
     },
     rules: {
-      // Enforce strict equality
       "eqeqeq": ["error", "always"],
-      // Warn about console logs instead of failing
       "no-console": "warn"
     },
     ignores: [
-      "public/lib/*.js", // Ignore copied third-party libraries
-      "public/sw.js", // Generated service worker
-      "src-sw.js", // Service worker source
+      "public/lib/*.js",
+      "public/sw.js",
+      "src-sw.js",
       "eslint-results.sarif",
-      "workbox-config.cjs",
-      "node_modules/**/*", // Node modules
-      "tests/**/*" // Test files
+      "config/workbox-config.cjs",
+      "node_modules/**/*",
+      "tests/**/*"
     ]
   }
 ];

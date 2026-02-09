@@ -1,5 +1,37 @@
+import Decimal from "./decimal.js";
+
 export function numFormat(num, places = null, fixedDecimals = false) {
     if (num === null || typeof num === 'undefined') return '';
+
+    if (num instanceof Decimal) {
+        if (num.eq(0)) return '0';
+        try {
+            const formatPref = typeof safeGetItem === 'function' ? safeGetItem("number_format") : null;
+            if (formatPref === "scientific") {
+                const p = places != null ? places : 2;
+                return num.toExponential(p);
+            }
+        } catch (_) {}
+        if (num.lt(1000) && num.gt(-1000)) {
+            const p = places != null ? places : 0;
+            return num.toNumber().toFixed(p);
+        }
+        const cm_names = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
+        const exp = num.exponent;
+        if (exp >= 33) {
+            const p = places != null ? places : 2;
+            return num.toStringWithDecimalPlaces(p);
+        }
+        const pow = exp >= 3 ? Math.floor(exp / 3) * 3 : 0;
+        const suffix = pow > 0 ? (cm_names[(pow / 3) - 1] || '') : '';
+        const displayMantissa = pow > 0 ? num.mantissa * Math.pow(10, exp - pow) : num.toNumber();
+        const p = places !== null ? places : (pow >= 3 ? 2 : 0);
+        let mantissaStr = Number(displayMantissa).toFixed(p);
+        if (!fixedDecimals) {
+            mantissaStr = mantissaStr.replace(/\.(\d*?)0+$/, (match, digits) => (digits ? `.${digits}` : ''));
+        }
+        return mantissaStr + suffix;
+    }
 
     num = Number(num);
     if (Number.isNaN(num)) return '';
@@ -190,10 +222,49 @@ export function safeRemoveItem(key) {
     }
 }
 
+const SAVE_SLOT1_KEY = "reactorGameSave_1";
+const SAVE_PREVIOUS_KEY = "reactorGameSave_Previous";
+const SAVE_BACKUP_KEY = "reactorGameSave_Backup";
+
+export function rotateAndWriteSlot1(value) {
+    if (!isStorageAvailable()) return false;
+    try {
+        const current = localStorage.getItem(SAVE_SLOT1_KEY);
+        const previous = localStorage.getItem(SAVE_PREVIOUS_KEY);
+        if (previous != null) localStorage.setItem(SAVE_BACKUP_KEY, previous);
+        if (current != null) localStorage.setItem(SAVE_PREVIOUS_KEY, current);
+        localStorage.setItem(SAVE_SLOT1_KEY, value);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+export function getBackupSaveForSlot1() {
+    return safeGetItem(SAVE_BACKUP_KEY);
+}
+
+export function setSlot1FromBackup() {
+    const backup = safeGetItem(SAVE_BACKUP_KEY);
+    if (backup == null) return false;
+    safeSetItem(SAVE_SLOT1_KEY, backup);
+    return true;
+}
+
 export function safeJsonParse(jsonString, defaultValue = null) {
     try {
         return JSON.parse(jsonString);
     } catch (e) {
         return defaultValue;
     }
+}
+
+export function saveDataReplacer(_key, value) {
+    if (typeof value === "bigint") return value.toString();
+    if (value != null && typeof value === "object" && value instanceof Decimal) return value.toString();
+    return value;
+}
+
+export function stringifySaveData(obj, space) {
+    return JSON.stringify(obj, saveDataReplacer, space ?? undefined);
 }

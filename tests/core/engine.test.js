@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM } from "../helpers/setup.js";
 import { placePart } from "../helpers/gameHelpers.js";
 
+const toNum = (v) => (v != null && typeof v.toNumber === 'function' ? v.toNumber() : Number(v));
+
 describe("Engine Mechanics", () => {
   let game;
 
@@ -43,8 +45,8 @@ describe("Engine Mechanics", () => {
 
     game.engine.tick();
 
-    expect(game.reactor.current_power).toBe(initialPower + part.power);
-    expect(game.reactor.current_heat).toBeGreaterThan(0);
+    expect(toNum(game.reactor.current_power)).toBe(toNum(initialPower) + part.power);
+    expect(toNum(game.reactor.current_heat)).toBeGreaterThan(0);
     expect(tile.ticks).toBe(initialTicks - 1);
   });
 
@@ -89,7 +91,7 @@ describe("Engine Mechanics", () => {
     console.log(`[TEST] Final power: ${game.reactor.current_power}`);
 
     expect(autoSellCallCount).toBe(1);
-    expect(game.reactor.current_power).toBe(550);
+    expect(toNum(game.reactor.current_power)).toBe(550);
   });
 
   it("should correctly perform auto-sell during a tick", async () => {
@@ -103,15 +105,15 @@ describe("Engine Mechanics", () => {
     console.log(`[DIAGNOSTIC] Set altered_max_power=${game.reactor.altered_max_power} just before updateStats()`);
     game.reactor.updateStats();
     console.log(`[DIAGNOSTIC] After updateStats: altered_max_power=${game.reactor.altered_max_power}, max_power=${game.reactor.max_power}`);
-    game.engine.tick(); // First tick to generate power
-    expect(game.reactor.current_power).toBe(cell.power);
+    game.engine.tick();
+    expect(toNum(game.reactor.current_power)).toBe(cell.power);
 
     game.ui.stateManager.setVar("auto_sell", true);
     const initialMoney = game.current_money;
     game.engine.tick();
-    const expectedSell = Math.floor(game.reactor.max_power * game.reactor.auto_sell_multiplier);
-    expect(game.reactor.current_power).toBe(cell.power * 2 - expectedSell); // 150 (from tick 1) + 150 (from tick 2) - 100 (sold) = 200
-    expect(game.current_money).toBe(initialMoney + expectedSell);
+    const expectedSell = Math.floor(toNum(game.reactor.max_power) * game.reactor.auto_sell_multiplier);
+    expect(toNum(game.reactor.current_power)).toBe(cell.power * 2 - expectedSell);
+    expect(toNum(game.current_money)).toBe(toNum(initialMoney) + expectedSell);
   });
 
   it("should calculate auto-sell amount correctly", () => {
@@ -154,10 +156,8 @@ describe("Engine Mechanics", () => {
 
     console.log(`[TEST] After auto-sell: power=${game.reactor.current_power}, money=${game.current_money}`);
 
-    // The auto-sell should sell 100 power, but since no power was generated during this tick,
-    // the power should be exactly 650 - 100 = 550
-    expect(game.reactor.current_power).toBe(550);
-    expect(game.current_money).toBe(initialMoney + expectedSellAmount);
+    expect(toNum(game.reactor.current_power)).toBe(550);
+    expect(toNum(game.current_money)).toBe(toNum(initialMoney) + expectedSellAmount);
   });
 
   it("should generate power from plutonium cell", async () => {
@@ -173,8 +173,7 @@ describe("Engine Mechanics", () => {
     game.engine.tick();
     console.log(`[TEST] After tick: power=${game.reactor.current_power}`);
 
-    // The plutonium cell should generate power
-    expect(game.reactor.current_power).toBeGreaterThan(initialPower);
+    expect(toNum(game.reactor.current_power)).toBeGreaterThan(toNum(initialPower));
   });
 
   it("should handle auto-sell when enabled", async () => {
@@ -196,7 +195,7 @@ describe("Engine Mechanics", () => {
 
     game.engine.tick();
 
-    expect(game.current_money).toBe(initialMoney + sellAmount);
+    expect(toNum(game.current_money)).toBe(toNum(initialMoney) + sellAmount);
   });
 
   it("should handle component depletion for a perpetual part with auto-buy on", async () => {
@@ -228,15 +227,15 @@ describe("Engine Mechanics", () => {
     const cellTile = game.tileset.getTile(0, 1);
     await cellTile.setPart(game.partset.getPartById('uranium1'));
 
-    const replacementCost = part.cost * 1.5;
+    const replacementCost = toNum(part.cost) * 1.5;
     game.current_money = replacementCost * 2;
     const initialMoney = game.current_money;
-    tile.ticks = 1; // Set ticks to 1 to trigger depletion on next tick
+    tile.ticks = 1;
 
     game.engine.tick();
     expect(tile.part).not.toBeNull();
     expect(tile.ticks).toBe(part.ticks);
-    expect(game.current_money).toBe(initialMoney - replacementCost);
+    expect(toNum(game.current_money)).toBe(toNum(initialMoney) - replacementCost);
   });
 
   it("should clear part when a non-perpetual component is depleted", async () => {
@@ -263,22 +262,19 @@ describe("Engine Mechanics", () => {
 
     const initialEP = game.exotic_particles;
 
-    // Run a few ticks and check for EP generation
     for (let i = 0; i < 5; i++) {
       game.engine.tick();
-      if (game.exotic_particles > initialEP) {
-        break; // EP was generated, test passes
-      }
+      if (toNum(game.exotic_particles) > toNum(initialEP)) break;
     }
 
-    expect(game.exotic_particles).toBeGreaterThan(initialEP);
+    expect(toNum(game.exotic_particles)).toBeGreaterThan(toNum(initialEP));
   });
 
   it("should trigger reactor meltdown if a particle accelerator overheats", async () => {
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("particle_accelerator1");
     await tile.setPart(part);
-    game.reactor.current_heat = game.reactor.max_heat * 3; // Trigger meltdown
+    game.reactor.current_heat = toNum(game.reactor.max_heat) * 3;
     game.engine.tick();
     expect(game.reactor.has_melted_down).toBe(true);
   });
@@ -836,18 +832,14 @@ describe("Engine Mechanics", () => {
     // Process a tick while paused
     game.engine.tick();
 
-    // Heat should not change when game is paused
-    expect(game.reactor.current_heat).toBe(initialHeat);
+    expect(toNum(game.reactor.current_heat)).toBe(toNum(initialHeat));
 
-    // Unpause the game
     game.ui.stateManager.setVar("pause", false);
     game.onToggleStateChange("pause", false);
     expect(game.paused).toBe(false);
 
-    // Process a tick while unpaused
     game.engine.manualTick();
 
-    // Heat should now change when game is unpaused
-    expect(game.reactor.current_heat).toBeGreaterThan(initialHeat);
+    expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(initialHeat));
   });
 });

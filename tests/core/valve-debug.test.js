@@ -196,4 +196,79 @@ describe("Valve Debug Test", () => {
         // This allows proper heat flow through the system
         expect(ventTile.heat_contained).toBeGreaterThan(0); // Vent should retain some heat after processing
     });
+
+    it("should process valve at top-left corner without out-of-bounds", async () => {
+        game.tileset.clearAllTiles();
+        const coolantTile = await placePart(game, 1, 0, "coolant_cell1");
+        const valveTile = await placePart(game, 0, 0, "overflow_valve");
+        const ventTile = await placePart(game, 0, 1, "vent1");
+
+        coolantTile.heat_contained = 1700;
+        valveTile.heat_contained = 0;
+        ventTile.heat_contained = 0;
+
+        game.reactor.updateStats();
+        game.engine.markPartCacheAsDirty();
+        game.engine._updatePartCaches();
+        game.engine._updateValveNeighborCache();
+
+        expect(() => game.engine.tick()).not.toThrow();
+        expect(coolantTile.heat_contained).toBeLessThan(1700);
+    });
+
+    it("should process valve at bottom-right corner without out-of-bounds", async () => {
+        const rows = game.rows - 1;
+        const cols = game.cols - 1;
+        game.tileset.clearAllTiles();
+        const coolantTile = await placePart(game, rows, cols - 1, "coolant_cell1");
+        const valveTile = await placePart(game, rows, cols, "overflow_valve");
+        const ventTile = await placePart(game, rows - 1, cols, "vent1");
+
+        coolantTile.heat_contained = 1700;
+        valveTile.heat_contained = 0;
+        ventTile.heat_contained = 0;
+
+        game.reactor.updateStats();
+        game.engine.markPartCacheAsDirty();
+        game.engine._updatePartCaches();
+        game.engine._updateValveNeighborCache();
+
+        expect(() => game.engine.tick()).not.toThrow();
+        expect(coolantTile.heat_contained).toBeLessThan(1700);
+    });
+
+    it("should process valve at left edge (col 0) without out-of-bounds", async () => {
+        game.tileset.clearAllTiles();
+        const coolantTile = await placePart(game, 4, 0, "coolant_cell1");
+        const valveTile = await placePart(game, 5, 0, "overflow_valve2");
+        const ventTile = await placePart(game, 6, 0, "vent1");
+
+        coolantTile.heat_contained = 1700;
+        valveTile.heat_contained = 0;
+        ventTile.heat_contained = 0;
+
+        game.reactor.updateStats();
+        game.engine.markPartCacheAsDirty();
+        game.engine._updatePartCaches();
+        game.engine._updateValveNeighborCache();
+
+        expect(() => game.engine.tick()).not.toThrow();
+        expect(coolantTile.heat_contained).toBeLessThan(1700);
+    });
+
+    it("should invalidate valve orientation cache when parts change", async () => {
+        game.tileset.clearAllTiles();
+        const valveTile = await placePart(game, 5, 5, "overflow_valve");
+        game.engine._updatePartCaches();
+
+        const orient1 = game.engine._getValveOrientation("overflow_valve");
+        expect(orient1).toBe(1);
+        expect(game.engine._valveOrientationCache.size).toBe(1);
+
+        game.engine.markPartCacheAsDirty();
+        expect(game.engine._valveOrientationCache.size).toBe(0);
+
+        const orient2 = game.engine._getValveOrientation("overflow_valve2");
+        expect(orient2).toBe(2);
+    });
 });

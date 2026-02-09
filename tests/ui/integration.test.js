@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
 import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("UI Integration and Gameplay", () => {
@@ -65,8 +65,8 @@ describe("UI Integration and Gameplay", () => {
     game.engine.tick();
 
     // 7. Verify the state has changed
-    expect(game.reactor.current_power).toBeGreaterThan(0);
-    expect(game.reactor.current_heat).toBeGreaterThan(0);
+    expect(toNum(game.reactor.current_power)).toBeGreaterThan(0);
+    expect(toNum(game.reactor.current_heat)).toBeGreaterThan(0);
   });
 
   it("should refund money when trying to place part on occupied tile", async () => {
@@ -118,8 +118,8 @@ describe("UI Integration and Gameplay", () => {
 
     game.sell_action(); // Trigger the actual game action
 
-    expect(game.reactor.current_power).toBe(0);
-    expect(game.current_money).toBe(initialMoney + 1234);
+    expect(toNum(game.reactor.current_power)).toBe(0);
+    expect(toNum(game.current_money)).toBe(toNum(initialMoney) + 1234);
 
     const moneyDisplay = document.getElementById("info_money");
     expect(moneyDisplay, "Money display element should exist").not.toBeNull();

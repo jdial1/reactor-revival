@@ -106,6 +106,7 @@ export class PageRouter {
       this.pageCache.get(this.currentPageId).classList.add("hidden");
     }
 
+    const hadPreviousPage = this.currentPageId != null;
     this.currentPageId = pageId;
     window.location.hash = pageId;
     this.updateNavigation(pageId);
@@ -140,8 +141,8 @@ export class PageRouter {
         this.ui.loadAndSetVersion();
       }
 
-      // Always call showObjectivesForPage when switching pages, even cached ones
       this.ui.showObjectivesForPage(pageId);
+      if (hadPreviousPage && this.ui.game?.audio) this.ui.game.audio.play("tab_switch");
       return;
     }
 
@@ -212,6 +213,8 @@ export class PageRouter {
             }
           }, 100);
         }
+        if (hadPreviousPage && this.ui.game?.audio) this.ui.game.audio.play("tab_switch");
+        this.ui.showObjectivesForPage(pageId);
       } else {
         console.warn(
           `PageRouter: No .page element found in loaded content for ${pageId}`

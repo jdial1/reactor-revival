@@ -1,4 +1,4 @@
-import { numFormat as fmt, safeGetItem, safeSetItem, safeRemoveItem, escapeHtml, getResourceUrl, isTestEnv } from "../utils/util.js";
+import { numFormat as fmt, safeGetItem, safeSetItem, safeRemoveItem, escapeHtml, getResourceUrl, isTestEnv, stringifySaveData, rotateAndWriteSlot1, setSlot1FromBackup, getBackupSaveForSlot1 } from "../utils/util.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
 import { settingsModal } from "../components/settingsModal.js";
@@ -39,6 +39,161 @@ const DIFFICULTY_PRESETS = {
   hard: { base_money: 5, base_max_heat: 750, base_max_power: 80, base_loop_wait: 800, base_manual_heat_reduce: 0.5, power_overflow_to_heat_pct: 100 }
 };
 
+function getLocalSaveMaxTimestamp() {
+  let maxTime = 0;
+  let dataJSON = null;
+  for (let i = 1; i <= 3; i++) {
+    const raw = safeGetItem(`reactorGameSave_${i}`);
+    if (raw) {
+      try {
+        const data = JSON.parse(raw);
+        const t = data.last_save_time || 0;
+        if (t > maxTime) {
+          maxTime = t;
+          dataJSON = raw;
+        }
+      } catch (_) {}
+    }
+  }
+  const legacy = safeGetItem("reactorGameSave");
+  if (legacy) {
+    try {
+      const data = JSON.parse(legacy);
+      const t = data.last_save_time || 0;
+      if (t > maxTime) {
+        maxTime = t;
+        dataJSON = legacy;
+      }
+    } catch (_) {}
+  }
+  return { maxTime, dataJSON };
+}
+
+function formatPlayTime(ms) {
+  ms = Number(ms);
+  if (Number.isNaN(ms) || ms < 0) ms = 0;
+  const s = Math.floor(ms / 1000) % 60;
+  const m = Math.floor(ms / (1000 * 60)) % 60;
+  const h = Math.floor(ms / (1000 * 60 * 60)) % 24;
+  const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatStatNum(num) {
+  const n = Number(num);
+  if (Number.isNaN(n)) return "0";
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+  return String(n);
+}
+
+function getSaveStats(data) {
+  if (!data || typeof data !== "object") {
+    return { money: "0", ep: "0", playtime: "0", timestamp: "Unknown" };
+  }
+  const money = data.current_money != null ? formatStatNum(data.current_money) : "0";
+  const ep = data.exotic_particles != null ? formatStatNum(data.exotic_particles) : (data.total_exotic_particles != null ? formatStatNum(data.total_exotic_particles) : "0");
+  const playtime = data.total_played_time != null ? formatPlayTime(data.total_played_time) : "0";
+  const ts = data.last_save_time;
+  const timestamp = ts ? new Date(Number(ts)).toLocaleString() : "Unknown";
+  return { money, ep, playtime, timestamp };
+}
+
+function showCloudVsLocalConflictModal(cloudSaveData) {
+  const { dataJSON } = getLocalSaveMaxTimestamp();
+  let localData = null;
+  if (dataJSON) {
+    try {
+      localData = JSON.parse(dataJSON);
+    } catch (_) {}
+  }
+  const cloud = getSaveStats(cloudSaveData);
+  const local = getSaveStats(localData);
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "game-setup-overlay bios-overlay";
+    overlay.style.zIndex = "10001";
+    overlay.innerHTML = `
+      <div class="bios-overlay-content" style="max-width: 480px;">
+        <h2 style="margin-bottom: 0.75rem; font-size: 0.9rem;">Cloud vs Local save</h2>
+        <p style="font-size: 0.65rem; color: rgb(180 190 170); margin-bottom: 0.75rem;">Choose which save to use:</p>
+        <div class="cloud-local-comparison" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem 1rem; font-size: 0.65rem; margin-bottom: 1rem;">
+          <span style="color: rgb(150 160 240); font-weight: bold;">Cloud</span>
+          <span style="color: rgb(150 200 150); font-weight: bold;">Local</span>
+          <span>$${escapeHtml(cloud.money)}</span>
+          <span>$${escapeHtml(local.money)}</span>
+          <span>${escapeHtml(cloud.ep)} EP</span>
+          <span>${escapeHtml(local.ep)} EP</span>
+          <span>${escapeHtml(cloud.playtime)}</span>
+          <span>${escapeHtml(local.playtime)}</span>
+          <span>${escapeHtml(cloud.timestamp)}</span>
+          <span>${escapeHtml(local.timestamp)}</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <button type="button" class="splash-btn splash-btn-load" id="cloud-conflict-use-cloud">Use Cloud save</button>
+          <button type="button" class="splash-btn" id="cloud-conflict-use-local">Keep Local save</button>
+          <button type="button" class="splash-btn splash-btn-exit" id="cloud-conflict-cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    overlay.querySelector("#cloud-conflict-use-cloud").onclick = () => {
+      overlay.remove();
+      resolve("cloud");
+    };
+    overlay.querySelector("#cloud-conflict-use-local").onclick = () => {
+      overlay.remove();
+      resolve("local");
+    };
+    overlay.querySelector("#cloud-conflict-cancel").onclick = () => {
+      overlay.remove();
+      resolve("cancel");
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve("cancel");
+      }
+    });
+    document.body.appendChild(overlay);
+  });
+}
+
+function showLoadBackupModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "game-setup-overlay bios-overlay";
+    overlay.style.zIndex = "10001";
+    overlay.innerHTML = `
+      <div class="bios-overlay-content" style="max-width: 420px;">
+        <h2 style="margin-bottom: 0.75rem; font-size: 0.9rem;">Save file corrupted</h2>
+        <p style="font-size: 0.65rem; color: rgb(180 190 170); margin-bottom: 1rem;">The current save could not be read. Load from backup?</p>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <button type="button" class="splash-btn" id="backup-modal-load">Load backup</button>
+          <button type="button" class="splash-btn splash-btn-exit" id="backup-modal-cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    overlay.querySelector("#backup-modal-load").onclick = () => {
+      overlay.remove();
+      resolve(true);
+    };
+    overlay.querySelector("#backup-modal-cancel").onclick = () => {
+      overlay.remove();
+      resolve(false);
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve(false);
+      }
+    });
+    document.body.appendChild(overlay);
+  });
+}
+
 async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
   let overlay = document.getElementById("game-setup-overlay");
   if (!overlay) {
@@ -49,8 +204,9 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
   }
 
   const techTreeData = await dataService.loadTechTree();
-  if (!techTreeData || techTreeData.length === 0) {
-    startNewGameFlow(game, pageRouter, ui, splashManager, null);
+  const treeList = Array.isArray(techTreeData) ? techTreeData : (techTreeData?.default ?? []);
+  if (!treeList.length) {
+    await startNewGameFlow(game, pageRouter, ui, splashManager, null);
     return;
   }
 
@@ -72,12 +228,15 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
     startBtn.disabled = !canStart;
   };
 
-  techTreeData.forEach((tree) => {
+  treeList.forEach((tree) => {
     const card = document.createElement("button");
     card.type = "button";
     card.className = "doctrine-card";
     card.dataset.treeId = tree.id;
     card.dataset.doctrine = tree.id;
+    if (tree.color) {
+      card.style.setProperty("--doctrine-color", tree.color);
+    }
     card.setAttribute("role", "option");
     card.setAttribute("aria-selected", "false");
 
@@ -159,7 +318,7 @@ async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
   overlay.classList.remove("hidden");
 }
 
-window.showTechTreeSelection = showTechTreeSelection;
+if (typeof window !== "undefined") window.showTechTreeSelection = showTechTreeSelection;
 
 async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId) {
     try {
@@ -174,6 +333,8 @@ async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId)
             try {
                 safeRemoveItem("reactorGameSave");
                 for (let i = 1; i <= 3; i++) safeRemoveItem(`reactorGameSave_${i}`);
+                safeRemoveItem("reactorGameSave_Previous");
+                safeRemoveItem("reactorGameSave_Backup");
                 safeRemoveItem("reactorCurrentSaveSlot");
                 safeRemoveItem("reactorGameQuickStartShown");
                 safeRemoveItem("google_drive_save_file_id");
@@ -188,16 +349,22 @@ async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId)
             console.warn("[TECH-TREE] Error during game initialization (non-fatal):", error);
         }
 
-        if (techTreeId) {
-            game.tech_tree = techTreeId;
-            console.log(`[GAME] Started with tech tree: ${techTreeId}`);
+        let effectiveTreeId = techTreeId;
+        if (!effectiveTreeId) {
+            const treeList = await dataService.loadTechTree();
+            const treeData = Array.isArray(treeList) ? treeList : (treeList?.default ?? []);
+            effectiveTreeId = treeData[0]?.id ?? null;
+            if (effectiveTreeId) console.log(`[GAME] No doctrine selected; using first available: ${effectiveTreeId}`);
+        }
+        if (effectiveTreeId) {
+            game.tech_tree = effectiveTreeId;
+            console.log(`[GAME] Started with tech tree: ${effectiveTreeId}`);
             try {
-                const treeList = await dataService.loadTechTree();
-                const treeData = treeList?.default ?? treeList ?? [];
-                const doctrine = Array.isArray(treeData) ? treeData.find((t) => t.id === techTreeId) : null;
-                const bonuses = doctrine?.bonuses;
-                if (bonuses && typeof bonuses.heat_tolerance_percent === "number") {
-                    game.reactor.base_max_heat *= 1 + bonuses.heat_tolerance_percent / 100;
+                const loaded = await dataService.loadTechTree();
+                const treeData = Array.isArray(loaded) ? loaded : (loaded?.default ?? []);
+                const doctrine = treeData.find((t) => t.id === effectiveTreeId) ?? null;
+                if (doctrine && typeof game.applyDoctrineBonuses === "function") {
+                    game.applyDoctrineBonuses(doctrine);
                 }
             } catch (err) {
                 console.warn("[TECH-TREE] Could not apply doctrine bonuses:", err);
@@ -223,7 +390,6 @@ async function startNewGameFlow(game, pageRouter, ui, splashManager, techTreeId)
 }
 
 let deferredPrompt;
-const installButton = window.domMapper?.get("pwa.installButton");
 
 /**
  * Get list of critical UI icon assets that should be preloaded
@@ -475,22 +641,33 @@ class SplashScreenManager {
       });
     }
 
-    // Listen for beforeinstallprompt event and show install button
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       this.installPrompt = e;
-      console.log("Install prompt captured");
+      deferredPrompt = e;
       const btn = window.domMapper?.get("pwa.installButton");
-      if (btn) btn.classList.remove("hidden");
+      if (btn) {
+        btn.classList.remove("hidden");
+        if (!btn.dataset.installListenerAttached) {
+          btn.dataset.installListenerAttached = "1";
+          btn.addEventListener("click", async () => {
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+              try {
+                await deferredPrompt.userChoice;
+              } catch (_) {}
+              deferredPrompt = null;
+              btn.classList.add("hidden");
+            }
+          });
+        }
+      }
     });
   }
 
   async initSocketConnection() {
-    if (typeof io === 'undefined') {
-      console.warn('[SPLASH] Socket.IO not available');
-      return;
-    }
-
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    if (typeof io === 'undefined') return;
     try {
       const { LEADERBOARD_CONFIG } = await import('./leaderboard-config.js');
       const apiUrl = LEADERBOARD_CONFIG.API_URL;
@@ -819,7 +996,7 @@ class SplashScreenManager {
           ${html}
           <div class="splash-btn-row">
             <input type="file" id="load-from-file-input" accept=".json,.reactor,application/json" style="display: none;">
-            <button class="splash-btn splash-btn-load" id="load-from-file-btn">Load from file</button>
+            <button class="splash-btn splash-btn-load" id="load-from-file-btn">Load file</button>
             <button class="splash-btn splash-btn-exit" id="back-to-splash">Back</button>
           </div>
         </div>
@@ -845,7 +1022,8 @@ class SplashScreenManager {
               alert('Invalid save file format.');
               return;
             }
-            safeSetItem('reactorGameSave_1', typeof saveData === 'string' ? saveData : JSON.stringify(parsed));
+            const str = typeof saveData === 'string' ? saveData : JSON.stringify(parsed);
+            rotateAndWriteSlot1(str);
             await this.loadFromSaveSlot(1);
           } catch (err) {
             console.error('Failed to load save from file:', err);
@@ -926,7 +1104,8 @@ class SplashScreenManager {
   }
 
   async loadFromData(saveData) {
-    safeSetItem('reactorGameSave_1', typeof saveData === 'string' ? saveData : JSON.stringify(saveData));
+    const str = typeof saveData === 'string' ? saveData : stringifySaveData(saveData);
+    rotateAndWriteSlot1(str);
     await this.loadFromSaveSlot(1);
   }
 
@@ -946,10 +1125,17 @@ class SplashScreenManager {
       // Load the save data directly
       if (window.game) {
         
-        const loadSuccess = await window.game.loadGame(slot);
+        let loadSuccess = await window.game.loadGame(slot);
         console.log(`[DEBUG] Load result: ${loadSuccess}`);
 
-        if (loadSuccess && window.pageRouter && window.ui) {
+        if (loadSuccess && typeof loadSuccess === "object" && loadSuccess.backupAvailable) {
+          const useBackup = await showLoadBackupModal();
+          if (!useBackup) return;
+          setSlot1FromBackup();
+          loadSuccess = await window.game.loadGame(1);
+        }
+
+        if (loadSuccess === true && window.pageRouter && window.ui) {
           
           // Call the startGame function that should be available globally
           if (typeof window.startGame === "function") {
@@ -986,13 +1172,10 @@ class SplashScreenManager {
   }
 
   /**
-  * Start version checking for updates
+  * Start version checking for updates (SW-driven; client only shows toast on NEW_VERSION_AVAILABLE)
   */
   startVersionChecking() {
-    // Store current version for comparison
     this.currentVersion = null;
-
-    // Listen for service worker messages about new versions
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'NEW_VERSION_AVAILABLE') {
@@ -1000,14 +1183,6 @@ class SplashScreenManager {
         }
       });
     }
-
-    // Initial version check
-    this.checkForNewVersion();
-
-    // Set up periodic version checking (every 30 seconds)
-    this.versionCheckInterval = setInterval(() => {
-      this.checkForNewVersion();
-    }, 30000);
   }
 
   /**
@@ -1168,32 +1343,9 @@ class SplashScreenManager {
    * Handle new version detection
    */
   handleNewVersion(newVersion, currentVersion = null) {
-    console.log('New version detected:', newVersion, 'Current version:', currentVersion);
-
-    // Check if we've already notified about this version
     const lastNotifiedVersion = safeGetItem('reactor-last-notified-version');
-    if (lastNotifiedVersion === newVersion) {
-      console.log('Already notified about version:', newVersion);
-      return;
-    }
-
-    // Show toast notification
+    if (lastNotifiedVersion === newVersion) return;
     this.showUpdateToast(newVersion, currentVersion || this.currentVersion);
-
-    // Find the version section and add flashing class
-    const versionSection = this.splashScreen?.querySelector('.splash-version-section');
-    if (versionSection) {
-      versionSection.classList.add('new-version');
-      versionSection.title = `New version available: ${newVersion} (Current: ${currentVersion || this.currentVersion})`;
-
-      // Stop flashing after 30 seconds but keep the clickable state
-      setTimeout(() => {
-        versionSection.classList.remove('new-version');
-        versionSection.title = `New version available: ${newVersion} (Current: ${currentVersion || this.currentVersion})`;
-      }, 30000);
-    }
-
-    // Update current version and mark as notified
     this.currentVersion = newVersion;
     safeSetItem('reactor-last-notified-version', newVersion);
   }
@@ -1381,10 +1533,9 @@ class SplashScreenManager {
     toast.innerHTML = `
       <div class="update-toast-content">
         <div class="update-toast-message">
-          <span class="update-toast-icon">🚀</span>
-          <span class="update-toast-text">A new version is available!</span>
+          <span class="update-toast-text">New content available, click to reload.</span>
         </div>
-        <button id="refresh-button" class="update-toast-button">Refresh</button>
+        <button id="refresh-button" class="update-toast-button">Reload</button>
         <button class="update-toast-close" onclick="this.closest('.update-toast').remove()">×</button>
       </div>
     `;
@@ -2144,6 +2295,15 @@ class SplashScreenManager {
       };
       startOptionsSection.appendChild(exitButton);
 
+      const sabDisabled = typeof SharedArrayBuffer === "undefined" || typeof globalThis.crossOriginIsolated === "undefined" || globalThis.crossOriginIsolated !== true;
+      if (sabDisabled) {
+        const sabWarning = document.createElement("div");
+        sabWarning.className = "splash-sab-warning";
+        sabWarning.setAttribute("role", "status");
+        sabWarning.textContent = "High-Performance mode is disabled (missing COOP/COEP headers). Heat simulation may be slower on large grids.";
+        startOptionsSection.appendChild(sabWarning);
+      }
+
       const supabaseAuthArea = document.createElement("div");
       supabaseAuthArea.id = "splash-supabase-auth";
       this.setupSupabaseAuth(supabaseAuthArea);
@@ -2486,21 +2646,25 @@ class SplashScreenManager {
         if (fileId) {
           const cloudBtn = createLoadFromCloudButton(async () => {
             try {
-              
               const cloudSaveData = await window.googleDriveSave.load();
               if (cloudSaveData) {
-                
+                const { maxTime, dataJSON } = getLocalSaveMaxTimestamp();
+                const cloudTime = cloudSaveData.last_save_time || 0;
+                if (maxTime > 0 && cloudTime > maxTime) {
+                  const choice = await showCloudVsLocalConflictModal(cloudSaveData);
+                  if (choice === "cancel" || choice === "local") return;
+                }
+                if (dataJSON && typeof sessionStorage !== "undefined") {
+                  sessionStorage.setItem("reactorSaveBackupBeforeCloud", dataJSON);
+                  sessionStorage.setItem("reactorSaveBackupTimestamp", String(Date.now()));
+                }
                 if (window.splashManager) {
-                  
                   window.splashManager.hide();
                 }
                 await new Promise((resolve) => setTimeout(resolve, 600));
                 if (window.pageRouter && window.ui && window.game) {
-                  
                   window.game.applySaveState(cloudSaveData);
-                  // Call the startGame function that should be available globally
                   if (typeof window.startGame === "function") {
-                    
                     await window.startGame(
                       window.pageRouter,
                       window.ui,
@@ -2707,11 +2871,12 @@ class SplashScreenManager {
   }
 }
 
-// Global splash screen manager instance
-window.splashManager = new SplashScreenManager();
-
-// Configuration (can be overridden)
-window.reactorConfig = window.reactorConfig || {};
+if (typeof window !== "undefined") {
+  window.splashManager = new SplashScreenManager();
+  window.reactorConfig = window.reactorConfig || {};
+  window.showLoadBackupModal = showLoadBackupModal;
+  window.setSlot1FromBackup = setSlot1FromBackup;
+}
 
 
 
@@ -3033,43 +3198,25 @@ function listFlavors() {
   });
 }
 
-// Add keyboard shortcuts
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && window.splashManager) {
-    window.splashManager.forceHide();
-  }
-
-  // Ctrl+Shift+V: Trigger version check and show toast
-  if (e.ctrlKey && e.shiftKey && e.key === "V") {
-    e.preventDefault();
-    if (window.splashManager) {
-      window.splashManager.triggerVersionCheckToast();
+if (typeof document !== "undefined" && typeof window !== "undefined") {
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && window.splashManager) {
+      window.splashManager.forceHide();
     }
-  }
-});
-
-// Note: beforeinstallprompt is now handled in SplashScreenManager
-// to provide install option on the splash screen
-
-if (installButton) {
-  installButton.addEventListener("click", async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to the install prompt: ${outcome}`);
-      deferredPrompt = null;
-      installButton.classList.add("hidden");
+    if (e.ctrlKey && e.shiftKey && e.key === "V") {
+      e.preventDefault();
+      if (window.splashManager) {
+        window.splashManager.triggerVersionCheckToast();
+      }
     }
   });
-}
 
-window.addEventListener("appinstalled", () => {
-  console.log("PWA was installed");
-  deferredPrompt = null;
-  if (installButton) {
-    installButton.classList.add("hidden");
-  }
-});
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    const btn = window.domMapper?.get("pwa.installButton");
+    if (btn) btn.classList.add("hidden");
+  });
+}
 
 // --- Group part images by tier ---
 const partImagesByTier = {
@@ -3259,13 +3406,15 @@ function generateSplashBackground() {
 
 // CSS animation handles the background scrolling automatically
 
-window.addEventListener('DOMContentLoaded', () => {
-  if (document.getElementById('splash-screen')) {
-    generateSplashBackground();
-  } else {
-    console.warn("Splash screen element not found, skipping dynamic background generation.");
-  }
-});
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  window.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('splash-screen')) {
+      generateSplashBackground();
+    } else {
+      console.warn("Splash screen element not found, skipping dynamic background generation.");
+    }
+  });
+}
 
 let wakeLock = null;
 let wakeLockEnabled = false;
@@ -3343,6 +3492,7 @@ async function registerOneOffSync() {
 // -----------------------------
 // Connectivity-aware Google Drive UI state
 // -----------------------------
+if (typeof document !== "undefined" && typeof window !== "undefined") {
 (function setupConnectivityUI() {
   function updateGoogleDriveButtonState() {
     const isOnline = navigator.onLine;
@@ -3382,10 +3532,9 @@ async function registerOneOffSync() {
   window.addEventListener("online", updateGoogleDriveButtonState);
   window.addEventListener("offline", updateGoogleDriveButtonState);
 })();
+}
 
-
-
-// Help function to show available hotkeys
+if (typeof window !== "undefined") {
 window.showHotkeyHelp = function () {
   console.log(`
 Version Check Hotkeys Available:
@@ -3393,3 +3542,4 @@ Version Check Hotkeys Available:
   Escape        - Force hide splash screen (debug)
   `);
 };
+}

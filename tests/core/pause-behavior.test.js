@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, setupGame, setupGameWithDOM, cleanupGame, toNum } from "../helpers/setup.js";
 
 describe("Pause Behavior", () => {
     let game;
@@ -39,8 +39,7 @@ describe("Pause Behavior", () => {
         // Process a tick while unpaused
         game.engine.tick();
 
-        // Heat should now change when game is unpaused
-        expect(game.reactor.current_heat).toBeGreaterThan(initialHeat);
+        expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(initialHeat));
     });
 
     it("should prevent part explosions when game is paused", async () => {

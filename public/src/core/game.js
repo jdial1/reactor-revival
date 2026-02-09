@@ -7,7 +7,8 @@ import { ObjectiveManager } from "./objective.js";
 import { executeUpgradeAction } from "./upgradeActions.js";
 import { Performance } from "./performance.js";
 import { DebugHistory } from "../utils/debugHistory.js";
-import { numFormat, safeGetItem, safeSetItem, safeRemoveItem } from "../utils/util.js";
+import { toDecimal } from "../utils/decimal.js";
+import { numFormat, safeGetItem, safeSetItem, safeRemoveItem, stringifySaveData, rotateAndWriteSlot1, getBackupSaveForSlot1 } from "../utils/util.js";
 import { leaderboardService } from "../services/leaderboardService.js";
 
 export class Game {
@@ -29,11 +30,12 @@ export class Game {
     this.base_manual_heat_reduce = 1;
     this.upgrade_max_level = 32;
     this.base_money = 10;
-    this._current_money = 0;
+    this._current_money = toDecimal(0);
     this.protium_particles = 0;
-    this.total_exotic_particles = 0;
-    this.exotic_particles = 0;
-    this.current_exotic_particles = 0;
+    this._total_exotic_particles = toDecimal(0);
+    this._exotic_particles = toDecimal(0);
+    this._current_exotic_particles = toDecimal(0);
+    this._reality_flux = toDecimal(0);
 
     this.total_played_time = 0;
     this.session_start_time = null;
@@ -71,11 +73,31 @@ export class Game {
     this.run_id = crypto.randomUUID();
     this.tech_tree = null;
     this.bypass_tech_tree_restrictions = false;
+    this.RESPER_DOCTRINE_EP_COST = 50;
     this.cheats_used = false; // Flag to track if cheats were used (hotkeys for money/EP)
     this.grace_period_ticks = 0;
     this.isSandbox = false;
     this._sandboxState = null;
     this._mainState = null;
+    this._eventListeners = new Map();
+  }
+
+  on(eventName, handler) {
+    if (!this._eventListeners.has(eventName)) this._eventListeners.set(eventName, []);
+    this._eventListeners.get(eventName).push(handler);
+  }
+
+  off(eventName, handler) {
+    const list = this._eventListeners.get(eventName);
+    if (!list) return;
+    const i = list.indexOf(handler);
+    if (i !== -1) list.splice(i, 1);
+  }
+
+  emit(eventName, payload) {
+    const list = this._eventListeners.get(eventName);
+    if (!list) return;
+    list.forEach((fn) => { try { fn(payload); } catch (_) {} });
   }
 
   getAuthenticatedUserId() {
@@ -199,6 +221,7 @@ export class Game {
   // Special case: valves are always unlocked from the start
   isPartUnlocked(part) {
     if (this.isSandbox) return true;
+    if (this.partset?.isPartDoctrineLocked(part)) return false;
     if (!part || part.category === 'valve') {
       this.logger?.debug(`[UNLOCK] Part ${part?.id || 'null'}: Valve or null, unlocked by default.`);
       return true; // Valves are always unlocked
@@ -258,26 +281,27 @@ export class Game {
 
     this.rows = this.base_rows;
     this.cols = this.base_cols;
-    this._current_money = this.base_money;
+    this._current_money = toDecimal(this.base_money);
     this.protium_particles = 0;
-    this.total_exotic_particles = 0;
-    this.exotic_particles = 0;
-    this.current_exotic_particles = 0;
-    
+    this.total_exotic_particles = toDecimal(0);
+    this.exotic_particles = toDecimal(0);
+    this.current_exotic_particles = toDecimal(0);
+    this._reality_flux = toDecimal(0);
+
     if (debugSetDefaults) {
       console.log(`[SET-DEFAULTS DEBUG]   After reset: exotic_particles=${this.exotic_particles}, total_exotic_particles=${this.total_exotic_particles}, current_exotic_particles=${this.current_exotic_particles}`);
     }
-    // Preserve bypass flag (useful for tests)
     const bypass = this.bypass_tech_tree_restrictions;
+    const preservedTechTree = this.tech_tree;
 
     this.sold_power = false;
     this.sold_heat = false;
     this.reactor.setDefaults();
     this.upgradeset.reset();
     this.partset.reset();
-    this.tech_tree = null;
-    await this.partset.initialize(); // Await initialization
-    await this.upgradeset.initialize(); // Await initialization
+    this.tech_tree = preservedTechTree;
+    await this.partset.initialize();
+    await this.upgradeset.initialize();
     this.bypass_tech_tree_restrictions = bypass;
     // Recalculate all part stats after upgrades are freshly initialized to ensure no stale upgrade effects linger
     if (this.partset?.partsArray?.length) {
@@ -309,6 +333,9 @@ export class Game {
     this.loop_wait = this.base_loop_wait;
     this.paused = false;
 
+    const doctrine = this.getDoctrine();
+    if (doctrine) this.applyDoctrineBonuses(doctrine);
+
     this.session_start_time = null;
     this.total_played_time = 0;
     this.last_save_time = null;
@@ -334,14 +361,65 @@ export class Game {
   }
 
   set current_money(value) {
-    if (!this.isSandbox) this._current_money = value;
+    if (!this.isSandbox) this._current_money = toDecimal(value);
+  }
+
+  get total_exotic_particles() { return this._total_exotic_particles; }
+  set total_exotic_particles(v) { this._total_exotic_particles = (v != null && typeof v.gte === 'function') ? v : toDecimal(v ?? 0); }
+  get exotic_particles() { return this._exotic_particles; }
+  set exotic_particles(v) { this._exotic_particles = (v != null && typeof v.gte === 'function') ? v : toDecimal(v ?? 0); }
+  get current_exotic_particles() { return this._current_exotic_particles; }
+  set current_exotic_particles(v) { this._current_exotic_particles = (v != null && typeof v.gte === 'function') ? v : toDecimal(v ?? 0); }
+  get reality_flux() { return this._reality_flux; }
+  set reality_flux(v) { this._reality_flux = (v != null && typeof v.gte === 'function') ? v : toDecimal(v ?? 0); }
+
+  getPrestigeMultiplier() {
+    const ep = (this.total_exotic_particles && typeof this.total_exotic_particles.toNumber === 'function')
+      ? this.total_exotic_particles.toNumber() : Number(this.total_exotic_particles || 0);
+    return 1 + Math.min(ep * 0.001, 100);
   }
 
   addMoney(amount) {
     if (!this.isSandbox) {
-      this._current_money += amount;
+      const mult = this.getPrestigeMultiplier();
+      this._current_money = this._current_money.add(toDecimal(amount).mul(mult));
       this.ui.stateManager.setVar("current_money", this._current_money);
     }
+  }
+
+  getDoctrine() {
+    if (!this.tech_tree || !this.upgradeset?.treeList) return null;
+    return this.upgradeset.treeList.find((t) => t.id === this.tech_tree) ?? null;
+  }
+
+  applyDoctrineBonuses(doctrine) {
+    if (!doctrine?.bonuses || typeof doctrine.bonuses !== "object") return;
+    const b = doctrine.bonuses;
+    if (typeof b.heat_tolerance_percent === "number") {
+      const mult = 1 + b.heat_tolerance_percent / 100;
+      this.reactor.base_max_heat *= mult;
+      this.reactor.altered_max_heat = this.reactor.base_max_heat;
+    }
+  }
+
+  respecDoctrine() {
+    if (!this.tech_tree) return false;
+    const cost = this.RESPER_DOCTRINE_EP_COST ?? 50;
+    if (this.current_exotic_particles.lt(cost)) return false;
+    const doctrine = this.getDoctrine();
+    if (doctrine?.bonuses && typeof doctrine.bonuses.heat_tolerance_percent === "number") {
+      const mult = 1 + doctrine.bonuses.heat_tolerance_percent / 100;
+      this.reactor.base_max_heat /= mult;
+      this.reactor.altered_max_heat = this.reactor.base_max_heat;
+    }
+    this.current_exotic_particles = this.current_exotic_particles.sub(cost);
+    const previousTree = this.tech_tree;
+    this.tech_tree = null;
+    this.upgradeset.resetDoctrineUpgradeLevels(previousTree);
+    this.reactor.updateStats();
+    this.ui.stateManager.setVar("current_exotic_particles", this.current_exotic_particles);
+    this.saveGame(null, true);
+    return true;
   }
 
   async initialize_new_game_state() {
@@ -373,12 +451,13 @@ export class Game {
       this.ui.clearAllActiveAnimations();
     }
 
-    this._current_money = this.base_money;
+    this._current_money = toDecimal(this.base_money);
     this.ui.stateManager.setVar("current_money", this._current_money);
     this.ui.stateManager.setVar("stats_cash", this._current_money);
-    this.ui.stateManager.setVar("current_exotic_particles", 0);
-    this.ui.stateManager.setVar("total_exotic_particles", 0);
-    this.ui.stateManager.setVar("exotic_particles", 0);
+    this.ui.stateManager.setVar("current_exotic_particles", toDecimal(0));
+    this.ui.stateManager.setVar("total_exotic_particles", toDecimal(0));
+    this.ui.stateManager.setVar("exotic_particles", toDecimal(0));
+    this.ui.stateManager.setVar("reality_flux", toDecimal(0));
     this.ui.stateManager.setVar("auto_sell", false);
     this.ui.stateManager.setVar("auto_buy", false);
     this.ui.stateManager.setVar("time_flux", false);
@@ -492,7 +571,7 @@ export class Game {
     this.reactor.updateStats();
   }
   sell_action() {
-    if (this._current_money < 10 && this.reactor.current_power == 0) {
+    if (this._current_money.lt(10) && this.reactor.current_power == 0) {
       const hasPartsToSell = this.tileset.active_tiles_list.some(
         (tile) => tile.part && !tile.part.isSpecialTile
       );
@@ -525,6 +604,7 @@ export class Game {
     
     const savedTotalEp = this.total_exotic_particles;
     const savedCurrentEp = this.current_exotic_particles;
+    const savedProtiumParticles = this.protium_particles;
     if (debugReboot) {
       console.log(`[REBOOT DEBUG] Saved EP values for restoration:`);
       console.log(`[REBOOT DEBUG]   savedTotalEp=${savedTotalEp}`);
@@ -551,6 +631,7 @@ export class Game {
       console.log(`[REBOOT DEBUG] Calling set_defaults() - this will reset all EP values to 0`);
     }
     await this.set_defaults();
+    this.protium_particles = savedProtiumParticles;
     if (debugReboot) {
       console.log(`[REBOOT DEBUG] After set_defaults():`);
       console.log(`[REBOOT DEBUG]   exotic_particles=${this.exotic_particles} (should be 0)`);
@@ -581,8 +662,9 @@ export class Game {
         console.log(`[REBOOT DEBUG]   current_exotic_particles: ${beforeCurrent} -> ${this.current_exotic_particles} (from savedCurrentEp=${savedCurrentEp})`);
       }
     } else {
-      this.total_exotic_particles = 0;
-      this.current_exotic_particles = 0;
+      this.total_exotic_particles = toDecimal(0);
+      this.current_exotic_particles = toDecimal(0);
+      this.reality_flux = toDecimal(0);
       if (debugReboot) {
         console.log(`[REBOOT DEBUG]   REFUND mode: Setting all EP to 0`);
       }
@@ -768,10 +850,10 @@ export class Game {
     if (autoReplace) {
       const cost = part.getAutoReplacementCost();
       this.logger?.debug(`[AUTO-BUY] Attempting to replace '${part.id}'. Cost: ${cost}, Current Money: ${this.current_money}`);
-      if (this.current_money >= cost) {
-        this.current_money -= cost;
+      if (this.current_money.gte(cost)) {
+        this._current_money = this._current_money.sub(cost);
         this.logger?.debug(`[AUTO-BUY] Success. New Money: ${this.current_money}`);
-        this.ui.stateManager.setVar("current_money", this.current_money);
+        this.ui.stateManager.setVar("current_money", this._current_money);
         part.recalculate_stats();
         tile.ticks = part.ticks;
         this.reactor.updateStats();
@@ -796,11 +878,11 @@ export class Game {
       version: this.version,
       run_id: this.run_id,
       tech_tree: this.tech_tree,
-      current_money: this._current_money,
+      current_money: (this._current_money && typeof this._current_money.toString === 'function') ? this._current_money.toString() : this._current_money,
       protium_particles: this.protium_particles,
-      total_exotic_particles: this.total_exotic_particles,
-      exotic_particles: this.exotic_particles,
-      current_exotic_particles: this.current_exotic_particles,
+      total_exotic_particles: (this.total_exotic_particles && typeof this.total_exotic_particles.toString === 'function') ? this.total_exotic_particles.toString() : this.total_exotic_particles,
+      exotic_particles: (this.exotic_particles && typeof this.exotic_particles.toString === 'function') ? this.exotic_particles.toString() : this.exotic_particles,
+      current_exotic_particles: (this.current_exotic_particles && typeof this.current_exotic_particles.toString === 'function') ? this.current_exotic_particles.toString() : this.current_exotic_particles,
       rows: this.rows,
       cols: this.cols,
       sold_power: this.sold_power,
@@ -811,9 +893,13 @@ export class Game {
       last_save_time: Date.now(),
 
       reactor: {
-        current_heat: this.reactor.current_heat,
-        current_power: this.reactor.current_power,
+        current_heat: (this.reactor.current_heat != null && typeof this.reactor.current_heat.toString === "function") ? this.reactor.current_heat.toString() : this.reactor.current_heat,
+        current_power: (this.reactor.current_power != null && typeof this.reactor.current_power.toString === "function") ? this.reactor.current_power.toString() : this.reactor.current_power,
         has_melted_down: this.reactor.has_melted_down,
+        base_max_heat: this.reactor.base_max_heat,
+        base_max_power: this.reactor.base_max_power,
+        altered_max_heat: (this.reactor.altered_max_heat != null && typeof this.reactor.altered_max_heat.toString === "function") ? this.reactor.altered_max_heat.toString() : this.reactor.altered_max_heat,
+        altered_max_power: (this.reactor.altered_max_power != null && typeof this.reactor.altered_max_power.toString === "function") ? this.reactor.altered_max_power.toString() : this.reactor.altered_max_power,
       },
       // Persist cumulative placement progress used for tier gating
       placedCounts: this.placedCounts,
@@ -832,15 +918,21 @@ export class Game {
           id: upg.id,
           level: upg.level,
         })),
-      objectives: {
-        current_objective_index:
-          this.objectives_manager?.current_objective_index || 0,
-        completed_objectives: (() => {
-          const completed = this.objectives_manager?.objectives_data?.map(obj => obj.completed) || [];
-          this.logger?.debug(`Saving ${completed.filter(c => c).length} completed objectives out of ${completed.length} total`);
-          return completed;
-        })(),
-      },
+      objectives: (() => {
+        const om = this.objectives_manager;
+        const obj = {
+          current_objective_index: om?.current_objective_index ?? 0,
+          completed_objectives: (om?.objectives_data?.map(o => o.completed) ?? []),
+        };
+        if (om?.infiniteObjective) {
+          obj.infinite_objective = {
+            ...om.infiniteObjective,
+            _lastInfinitePowerTarget: om._lastInfinitePowerTarget,
+            _infiniteCompletedCount: om._infiniteCompletedCount,
+          };
+        }
+        return obj;
+      })(),
       toggles: {
         auto_sell: this.ui.stateManager.getVar("auto_sell"),
         auto_buy: this.ui.stateManager.getVar("auto_buy"),
@@ -877,6 +969,7 @@ export class Game {
       "total_exotic_particles",
       "exotic_particles",
       "current_exotic_particles",
+      "reality_flux",
       "rows",
       "cols",
       "sold_power",
@@ -928,7 +1021,7 @@ export class Game {
             run_id: this.run_id,
             heat: this.peak_heat,
             power: this.peak_power,
-            money: this.current_money,
+            money: (this.current_money && typeof this.current_money.toNumber === 'function' ? this.current_money.toNumber() : Number(this.current_money)),
             time: this.total_played_time,
             layout: JSON.stringify(this.getCompactLayout())
           });
@@ -944,7 +1037,7 @@ export class Game {
           run_id: this.run_id,
           heat: this.peak_heat,
           power: this.peak_power,
-          money: this.current_money,
+          money: (this.current_money && typeof this.current_money.toNumber === 'function' ? this.current_money.toNumber() : Number(this.current_money)),
           time: this.total_played_time,
           layout: JSON.stringify(this.getCompactLayout())
         });
@@ -959,10 +1052,14 @@ export class Game {
         }
 
         const saveKey = `reactorGameSave_${slot}`;
-
-        safeSetItem(saveKey, JSON.stringify(saveData));
-        this.logger?.debug(`Game state saved to slot ${slot}. Size: ${JSON.stringify(saveData).length} bytes.`);
-        this.debugHistory.add('game', 'Game saved', { slot, size: JSON.stringify(saveData).length });
+        const payload = stringifySaveData(saveData);
+        if (slot === 1) {
+          rotateAndWriteSlot1(payload);
+        } else {
+          safeSetItem(saveKey, payload);
+        }
+        this.logger?.debug(`Game state saved to slot ${slot}. Size: ${payload.length} bytes.`);
+        this.debugHistory.add('game', 'Game saved', { slot, size: stringifySaveData(saveData).length });
 
         // Update the current slot tracking
         safeSetItem("reactorCurrentSaveSlot", slot.toString());
@@ -975,7 +1072,7 @@ export class Game {
 
       // Only attempt Google Drive save if running in browser and googleDriveSave is defined
       if (typeof window !== "undefined" && window.googleDriveSave && window.googleDriveSave.isSignedIn) {
-        window.googleDriveSave.save(JSON.stringify(saveData)).catch((error) => {
+        window.googleDriveSave.save(stringifySaveData(saveData)).catch((error) => {
           console.error("Failed to auto-save to Google Drive:", error);
         });
       }
@@ -1034,21 +1131,16 @@ export class Game {
     this.debugHistory.add('game', 'loadGame called', { slot });
     try {
       let savedDataJSON;
+      let effectiveSlot = slot;
 
       if (slot !== null) {
-        // Load from specific slot
         const saveKey = `reactorGameSave_${slot}`;
         savedDataJSON = safeGetItem(saveKey);
       } else {
-        // Try to load from the most recent save (backward compatibility)
-        // First try the old single save format
         savedDataJSON = safeGetItem("reactorGameSave");
-
         if (!savedDataJSON) {
-          // If no old save, try to find the most recent slot
           let mostRecentSlot = null;
           let mostRecentTime = 0;
-
           for (let i = 1; i <= 3; i++) {
             const slotInfo = this.getSaveSlotInfo(i);
             if (slotInfo.exists && slotInfo.lastSaveTime > mostRecentTime) {
@@ -1056,23 +1148,35 @@ export class Game {
               mostRecentSlot = i;
             }
           }
-
           if (mostRecentSlot) {
-            const saveKey = `reactorGameSave_${mostRecentSlot}`;
-            savedDataJSON = safeGetItem(saveKey);
+            effectiveSlot = mostRecentSlot;
+            savedDataJSON = safeGetItem(`reactorGameSave_${mostRecentSlot}`);
           }
         }
       }
 
       if (savedDataJSON) {
-        const savedData = JSON.parse(savedDataJSON);
+        let savedData;
+        try {
+          savedData = JSON.parse(savedDataJSON);
+        } catch (parseErr) {
+          console.error("Error parsing save:", parseErr);
+          if (effectiveSlot === 1 && getBackupSaveForSlot1()) {
+            return { success: false, parseError: true, backupAvailable: true };
+          }
+          if (effectiveSlot !== null) {
+            safeRemoveItem(`reactorGameSave_${effectiveSlot}`);
+          } else {
+            safeRemoveItem("reactorGameSave");
+          }
+          return false;
+        }
         this.debugHistory.add('game', 'Applying save data from slot', { slot, version: savedData.version });
         await this.applySaveState(savedData);
         return true;
       }
     } catch (error) {
       console.error("Error loading game:", error);
-      // Clear potentially corrupted save data
       if (slot !== null) {
         safeRemoveItem(`reactorGameSave_${slot}`);
       } else {
@@ -1092,11 +1196,11 @@ export class Game {
     });
     this._isRestoringSave = true;
     try {
-    this._current_money = savedData.current_money !== undefined ? savedData.current_money : this.base_money;
+    this._current_money = toDecimal(savedData.current_money !== undefined ? savedData.current_money : this.base_money);
     this.run_id = savedData.run_id || crypto.randomUUID();
     this.tech_tree = savedData.tech_tree || null;
-    this.peak_power = savedData.reactor?.current_power || 0;
-    this.peak_heat = savedData.reactor?.current_heat || 0;
+    this.peak_power = (savedData.reactor?.current_power != null ? toDecimal(savedData.reactor.current_power).toNumber() : 0);
+    this.peak_heat = (savedData.reactor?.current_heat != null ? toDecimal(savedData.reactor.current_heat).toNumber() : 0);
 
     if (savedData.base_rows) {
       this.base_rows = savedData.base_rows;
@@ -1112,17 +1216,18 @@ export class Game {
       await this.partset.initialize();
     }
     this.protium_particles = savedData.protium_particles || 0;
-    this.total_exotic_particles = savedData.total_exotic_particles || 0;
+    this.total_exotic_particles = toDecimal(savedData.total_exotic_particles ?? 0);
     if (savedData.current_exotic_particles !== undefined) {
-      this.exotic_particles = savedData.current_exotic_particles;
-      this.current_exotic_particles = savedData.current_exotic_particles;
+      this.exotic_particles = toDecimal(savedData.current_exotic_particles);
+      this.current_exotic_particles = toDecimal(savedData.current_exotic_particles);
     } else if (savedData.exotic_particles !== undefined) {
-      this.exotic_particles = savedData.exotic_particles;
-      this.current_exotic_particles = savedData.exotic_particles;
+      this.exotic_particles = toDecimal(savedData.exotic_particles);
+      this.current_exotic_particles = toDecimal(savedData.exotic_particles);
     } else {
-      this.exotic_particles = 0;
-      this.current_exotic_particles = 0;
+      this.exotic_particles = toDecimal(0);
+      this.current_exotic_particles = toDecimal(0);
     }
+    this.reality_flux = toDecimal(savedData.reality_flux ?? 0);
     this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
     this.rows = savedData.rows || this.base_rows;
     this.cols = savedData.cols || this.base_cols;
@@ -1142,9 +1247,21 @@ export class Game {
     }
 
     if (savedData.reactor) {
-      this.reactor.current_heat = savedData.reactor.current_heat || 0;
-      this.reactor.current_power = savedData.reactor.current_power || 0;
+      this.reactor.current_heat = toDecimal(savedData.reactor.current_heat ?? 0);
+      this.reactor.current_power = toDecimal(savedData.reactor.current_power ?? 0);
       this.reactor.has_melted_down = savedData.reactor.has_melted_down || false;
+      if (typeof savedData.reactor.base_max_heat === "number") {
+        this.reactor.base_max_heat = savedData.reactor.base_max_heat;
+      }
+      if (typeof savedData.reactor.base_max_power === "number") {
+        this.reactor.base_max_power = savedData.reactor.base_max_power;
+      }
+      if (typeof savedData.reactor.altered_max_heat === "number") {
+        this.reactor.altered_max_heat = savedData.reactor.altered_max_heat;
+      }
+      if (typeof savedData.reactor.altered_max_power === "number") {
+        this.reactor.altered_max_power = savedData.reactor.altered_max_power;
+      }
 
       // Update UI meltdown state properly
       if (this.ui && typeof this.ui.updateMeltdownState === "function") {
@@ -1162,6 +1279,9 @@ export class Game {
           upgrade.setLevel(upgData.level);
         }
       });
+    }
+    if (this.upgradeset && this.tech_tree) {
+      this.upgradeset.sanitizeDoctrineUpgradeLevelsOnLoad(this.tech_tree);
     }
 
     // Update reactor stats after upgrades are loaded
@@ -1213,18 +1333,31 @@ export class Game {
         }
       }
 
-      // 2. Clamp the index to a valid range.
       if (this.objectives_manager && this.objectives_manager.objectives_data && this.objectives_manager.objectives_data.length > 0) {
         const objectivesData = this.objectives_manager.objectives_data;
-        const maxValidIndex = objectivesData.length - 2; // Last real objective (not "All objectives completed!")
+        const lastDef = objectivesData[objectivesData.length - 1];
+        const maxValidIndex = (lastDef && lastDef.checkId === "allObjectives") ? objectivesData.length - 2 : objectivesData.length - 1;
 
         if (savedIndex < 0) {
-          console.warn(`[Game] Negative objective index ${savedIndex} found in save. Clamping to 0.`);
+          console.warn(`[DEBUG] Saved objective index ${savedData.objectives.current_objective_index} is Negative. Clamping to 0.`);
           savedIndex = 0;
         } else if (savedIndex > maxValidIndex) {
-          console.warn(`[Game] Objective index ${savedIndex} is beyond valid range. Clamping to last real objective: ${maxValidIndex}.`);
+          console.warn(`[DEBUG] Saved objective index ${savedIndex} is beyond valid range (0-${maxValidIndex}). Clamping to ${maxValidIndex}.`);
           savedIndex = maxValidIndex;
         }
+      }
+
+      if (savedData.objectives.infinite_objective && this.objectives_manager) {
+        const inf = savedData.objectives.infinite_objective;
+        this.objectives_manager.infiniteObjective = {
+          title: inf.title,
+          checkId: inf.checkId,
+          target: inf.target,
+          reward: inf.reward,
+          completed: !!inf.completed,
+        };
+        if (inf._lastInfinitePowerTarget != null) this.objectives_manager._lastInfinitePowerTarget = inf._lastInfinitePowerTarget;
+        if (inf._infiniteCompletedCount != null) this.objectives_manager._infiniteCompletedCount = inf._infiniteCompletedCount;
       }
 
       // 3. Restore completion status first
@@ -1359,13 +1492,10 @@ export class Game {
         }
       }
 
-      // Validate data types
-      if (typeof data.current_money !== 'number' ||
-        typeof data.rows !== 'number' ||
-        typeof data.cols !== 'number') {
-        return false;
-      }
-
+      if (typeof data.rows !== 'number' || typeof data.cols !== 'number') return false;
+      const m = data.current_money;
+      if (m === undefined) return false;
+      if (typeof m !== 'number' && typeof m !== 'string' && (typeof m !== 'object' || m === null)) return false;
       return true;
     } catch (error) {
       return false;
@@ -1409,12 +1539,13 @@ export class Game {
 
     // Reset basic game state
     this.paused = false;
-    this.current_money = 0; // Reset to 0 for testing
+    this._current_money = toDecimal(0);
     this.tech_tree = null;
-    this.exotic_particles = 0;
-    this.current_exotic_particles = 0;
+    this.exotic_particles = toDecimal(0);
+    this.current_exotic_particles = toDecimal(0);
     this.protium_particles = 0;
-    this.total_exotic_particles = 0;
+    this.total_exotic_particles = toDecimal(0);
+    this.reality_flux = toDecimal(0);
 
     // Reset reactor dimensions to base values
     this.rows = this.base_rows;
@@ -1527,7 +1658,7 @@ export class Game {
 
   // Test compatibility methods
   save() {
-    return JSON.stringify(this.getSaveState());
+    return stringifySaveData(this.getSaveState());
   }
 
   async load(saveData) {

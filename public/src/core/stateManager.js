@@ -45,6 +45,7 @@ export class StateManager {
   }
   setClickedPart(part, options = {}) {
     this.clicked_part = part;
+    if (this.game?.emit) this.game.emit("partSelected", { part });
     const partActive = !!part;
     this.ui.DOMElements.main.classList.toggle("part_active", partActive);
 
@@ -147,9 +148,9 @@ export class StateManager {
       const required_upgrade = this.game?.upgradeset.getUpgrade(
         part_obj.erequires
       );
-      if (!required_upgrade || required_upgrade.level < 1) {
-        return;
-      }
+      if (!required_upgrade) return;
+      const doctrineLocked = this.game?.partset?.isPartDoctrineLocked(part_obj);
+      if (!doctrineLocked && required_upgrade.level < 1) return;
     }
 
     // Apply gating rules: show/hide and lock based on previous tier count
@@ -168,6 +169,9 @@ export class StateManager {
     const unlocked = this.ui?.game?.isPartUnlocked(part_obj);
     if (!unlocked) {
       part_el.classList.add("locked-by-tier");
+      if (this.game?.partset?.isPartDoctrineLocked(part_obj)) {
+        part_el.classList.add("doctrine-locked");
+      }
       let counter = part_el.querySelector(".tier-progress");
       if (!counter) {
         counter = document.createElement("div");

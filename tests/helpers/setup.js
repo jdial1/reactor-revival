@@ -16,6 +16,11 @@
 // --- Phase 1: Early Global Mocks ---
 // These must be defined BEFORE any application code is imported to prevent reference errors.
 
+import Decimal from 'break_infinity.js';
+import { toDecimal } from '../../public/src/utils/decimal.js';
+if (typeof global !== 'undefined') global.Decimal = Decimal;
+if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
+
 import { URL as NodeURL } from 'url';
 import { vi } from 'vitest';
 import fs from 'fs';
@@ -139,6 +144,7 @@ const mockBrowserGlobals = () => {
 
 // Immediately execute the mocking.
 mockBrowserGlobals();
+if (global.window) global.window.Decimal = Decimal;
 
 // --- Phase 2: Common Imports & Exports ---
 // Re-exporting common modules saves individual test files from importing them repeatedly.
@@ -154,20 +160,24 @@ import { ObjectiveManager } from '../../public/src/core/objective.js';
 import { PageRouter } from '../../public/src/components/pageRouter.js';
 import { TemplateLoader } from '../../public/src/services/templateLoader.js';
 
+export const toNum = (v) => {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v.toNumber === 'function') return Number(v.toNumber());
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export {
-  // Vitest
   describe,
   it,
   expect,
   beforeEach,
   afterEach,
   vi,
-  // Node.js
   fs,
   path,
-  // DOM
   JSDOM,
-  // Application
   Game,
   UI,
   Engine,
@@ -346,7 +356,7 @@ export async function setupGameLogicOnly() {
   // Set default state for logic tests
   globalGameInstance.bypass_tech_tree_restrictions = true;
   globalGameInstance.current_money = 1e30;
-  globalGameInstance.current_exotic_particles = 1e20;
+  globalGameInstance.current_exotic_particles = toDecimal(1e20);
   globalGameInstance.partset.check_affordability(globalGameInstance);
   globalGameInstance.upgradeset.check_affordability(globalGameInstance);
   globalGameInstance.paused = false;

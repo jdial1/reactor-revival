@@ -1,0 +1,33 @@
+export const MAX_NEIGHBORS = 8;
+export const INLET_STRIDE = 3 + MAX_NEIGHBORS;
+export const VALVE_STRIDE = 6;
+export const EXCHANGER_STRIDE = 4 + MAX_NEIGHBORS * 3;
+export const OUTLET_STRIDE = 5 + MAX_NEIGHBORS * 2;
+
+export const INLET_OFFSET_INDEX = 0;
+export const INLET_OFFSET_RATE = 1;
+export const INLET_OFFSET_N_COUNT = 2;
+export const INLET_OFFSET_NEIGHBORS = 3;
+
+export const VALVE_OFFSET_INDEX = 0;
+export const VALVE_OFFSET_TYPE = 1;
+export const VALVE_OFFSET_ORIENTATION = 2;
+export const VALVE_OFFSET_RATE = 3;
+export const VALVE_OFFSET_INPUT_IDX = 4;
+export const VALVE_OFFSET_OUTPUT_IDX = 5;
+
+export const EXCHANGER_OFFSET_INDEX = 0;
+export const EXCHANGER_OFFSET_RATE = 1;
+export const EXCHANGER_OFFSET_CONTAINMENT = 2;
+export const EXCHANGER_OFFSET_N_COUNT = 3;
+export const EXCHANGER_OFFSET_NEIGHBOR_INDICES = 4;
+export const EXCHANGER_OFFSET_NEIGHBOR_CAPS = 4 + MAX_NEIGHBORS;
+export const EXCHANGER_OFFSET_NEIGHBOR_CATS = 4 + MAX_NEIGHBORS * 2;
+
+export const OUTLET_OFFSET_INDEX = 0;
+export const OUTLET_OFFSET_RATE = 1;
+export const OUTLET_OFFSET_ACTIVATED = 2;
+export const OUTLET_OFFSET_IS_OUTLET6 = 3;
+export const OUTLET_OFFSET_N_COUNT = 4;
+export const OUTLET_OFFSET_NEIGHBOR_INDICES = 5;
+export const OUTLET_OFFSET_NEIGHBOR_CAPS = 5 + MAX_NEIGHBORS;

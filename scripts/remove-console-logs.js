@@ -12,7 +12,7 @@ let eslintInstance = null;
 
 async function initializeESLint() {
     if (!eslintInstance) {
-        const configPath = path.join(__dirname, '..', 'eslint.config.js');
+        const configPath = path.join(__dirname, '..', 'config', 'eslint.config.js');
         try {
             const configUrl = pathToFileURL(configPath).href;
             const config = await import(configUrl);

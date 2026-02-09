@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, setupGame, toNum } from '../helpers/setup.js';
 import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe('EP Upgrade Purchase Functionality', () => {
@@ -19,27 +19,27 @@ describe('EP Upgrade Purchase Functionality', () => {
         it('should calculate correct EP cost for experimental upgrades', () => {
             const infusedCells = game.upgradeset.getUpgrade("infused_cells");
             expect(infusedCells).not.toBeNull();
-            expect(infusedCells.base_ecost).toBe(100);
-            expect(infusedCells.current_ecost).toBe(100);
+            expect(toNum(infusedCells.base_ecost)).toBe(100);
+            expect(toNum(infusedCells.current_ecost)).toBe(100);
 
             // Level 1 should cost base_ecost * multiplier
             infusedCells.setLevel(1);
             infusedCells.updateDisplayCost();
-            expect(infusedCells.current_ecost).toBe(100 * 2); // 200
+            expect(toNum(infusedCells.current_ecost)).toBe(100 * 2);
         });
 
         it('should calculate correct EP cost for laboratory upgrade', () => {
             const laboratory = game.upgradeset.getUpgrade("laboratory");
             expect(laboratory).not.toBeNull();
-            expect(laboratory.base_ecost).toBe(1);
-            expect(laboratory.current_ecost).toBe(1);
+            expect(toNum(laboratory.base_ecost)).toBe(1);
+            expect(toNum(laboratory.current_ecost)).toBe(1);
         });
 
         it('should calculate correct EP cost for experimental boosts', () => {
             const fractalPiping = game.upgradeset.getUpgrade("fractal_piping");
             expect(fractalPiping).not.toBeNull();
-            expect(fractalPiping.base_ecost).toBe(50);
-            expect(fractalPiping.current_ecost).toBe(50);
+            expect(toNum(fractalPiping.base_ecost)).toBe(50);
+            expect(toNum(fractalPiping.current_ecost)).toBe(50);
         });
     });
 
@@ -55,7 +55,7 @@ describe('EP Upgrade Purchase Functionality', () => {
             paTile.heat_contained = 1000;
             for (let i = 0; i < 50; i++) game.engine.tick();
 
-            expect(game.current_exotic_particles).toBeGreaterThanOrEqual(laboratory.base_ecost);
+            expect(toNum(game.current_exotic_particles)).toBeGreaterThanOrEqual(toNum(laboratory.base_ecost));
             game.upgradeset.check_affordability(game);
             expect(laboratory.affordable).toBe(true);
         });
@@ -139,8 +139,8 @@ describe('EP Upgrade Purchase Functionality', () => {
             const purchased = game.upgradeset.purchaseUpgrade(labUpgrade.id);
             expect(purchased).toBe(true);
             expect(labUpgrade.level).toBe(1);
-            expect(game.current_exotic_particles).toBeGreaterThanOrEqual(0);
-            expect(game.ui.stateManager.getVar("current_exotic_particles")).toBe(game.current_exotic_particles);
+            expect(toNum(game.current_exotic_particles)).toBeGreaterThanOrEqual(0);
+            expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(toNum(game.current_exotic_particles));
         });
 
         it('should fail to purchase EP upgrade when insufficient EP', () => {
@@ -155,7 +155,7 @@ describe('EP Upgrade Purchase Functionality', () => {
 
             expect(purchased).toBe(false);
             expect(laboratory.level).toBe(0);
-            expect(game.current_exotic_particles).toBe(cost - 1); // EP should not change
+            expect(toNum(game.current_exotic_particles)).toBe(toNum(cost) - 1);
         });
 
         it('should fail to purchase EP upgrade when required upgrade is missing', () => {
@@ -217,7 +217,7 @@ describe('EP Upgrade Purchase Functionality', () => {
             laboratory.updateDisplayCost();
 
             expect(laboratory.display_cost).toBe("MAX");
-            expect(laboratory.current_ecost).toBe(Infinity);
+            expect(Number.isFinite(toNum(laboratory.current_ecost))).toBe(false);
         });
     });
 
@@ -250,7 +250,7 @@ describe('EP Upgrade Purchase Functionality', () => {
 
             const fractalPurchased = game.upgradeset.purchaseUpgrade("fractal_piping");
             expect(fractalPurchased).toBe(true);
-            expect(game.current_exotic_particles).toBe(0);
+            expect(toNum(game.current_exotic_particles)).toBe(0);
         });
     });
 
@@ -269,8 +269,8 @@ describe('EP Upgrade Purchase Functionality', () => {
             expect(purchased).toBe(true);
 
             // Verify both game state and UI state are updated
-            expect(game.current_exotic_particles).toBe(initialEP - cost);
-            expect(game.ui.stateManager.getVar("current_exotic_particles")).toBe(initialEP - cost);
+            expect(toNum(game.current_exotic_particles)).toBe(toNum(initialEP) - toNum(cost));
+            expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(toNum(initialEP) - toNum(cost));
         });
 
         it('should update all EP-related state variables correctly', () => {
@@ -292,9 +292,9 @@ describe('EP Upgrade Purchase Functionality', () => {
             expect(purchased).toBe(true);
 
             // Only current_exotic_particles should be reduced (for purchasing)
-            expect(game.current_exotic_particles).toBe(initialEP - cost);
-            expect(game.exotic_particles).toBe(initialEP); // Should remain unchanged
-            expect(game.total_exotic_particles).toBe(initialEP); // Should remain unchanged
+            expect(toNum(game.current_exotic_particles)).toBe(toNum(initialEP) - toNum(cost));
+            expect(toNum(game.exotic_particles)).toBe(toNum(initialEP));
+            expect(toNum(game.total_exotic_particles)).toBe(toNum(initialEP));
         });
     });
 }); 

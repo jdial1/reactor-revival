@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from '../helpers/setup.js';
 
 describe('EP Hotkey Functionality', () => {
     let game;
@@ -38,17 +38,14 @@ describe('EP Hotkey Functionality', () => {
 
         document.dispatchEvent(event);
 
-        // Verify that all EP values increased by 1
-        expect(game.exotic_particles).toBe(initialEP + 1);
-        expect(game.total_exotic_particles).toBe(initialTotalEP + 1);
-        expect(game.current_exotic_particles).toBe(initialCurrentEP + 1);
+        expect(toNum(game.exotic_particles)).toBe(toNum(initialEP) + 1);
+        expect(toNum(game.total_exotic_particles)).toBe(toNum(initialTotalEP) + 1);
+        expect(toNum(game.current_exotic_particles)).toBe(toNum(initialCurrentEP) + 1);
 
-        // Verify state manager values
-        expect(game.ui.stateManager.getVar("exotic_particles")).toBe(initialEP + 1);
-        expect(game.ui.stateManager.getVar("total_exotic_particles")).toBe(initialTotalEP + 1);
-        expect(game.ui.stateManager.getVar("current_exotic_particles")).toBe(initialCurrentEP + 1);
+        expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(toNum(initialEP) + 1);
+        expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(toNum(initialTotalEP) + 1);
+        expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(toNum(initialCurrentEP) + 1);
 
-        // Verify that affordability was checked
         expect(affordabilitySpy).toHaveBeenCalledWith(game);
     });
 
@@ -74,17 +71,14 @@ describe('EP Hotkey Functionality', () => {
 
         document.dispatchEvent(event);
 
-        // Verify that all EP values increased by 1
-        expect(game.exotic_particles).toBe(initialEP + 1);
-        expect(game.total_exotic_particles).toBe(initialTotalEP + 1);
-        expect(game.current_exotic_particles).toBe(initialCurrentEP + 1);
+        expect(toNum(game.exotic_particles)).toBe(toNum(initialEP) + 1);
+        expect(toNum(game.total_exotic_particles)).toBe(toNum(initialTotalEP) + 1);
+        expect(toNum(game.current_exotic_particles)).toBe(toNum(initialCurrentEP) + 1);
 
-        // Verify state manager values
-        expect(game.ui.stateManager.getVar("exotic_particles")).toBe(initialEP + 1);
-        expect(game.ui.stateManager.getVar("total_exotic_particles")).toBe(initialTotalEP + 1);
-        expect(game.ui.stateManager.getVar("current_exotic_particles")).toBe(initialCurrentEP + 1);
+        expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(toNum(initialEP) + 1);
+        expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(toNum(initialTotalEP) + 1);
+        expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(toNum(initialCurrentEP) + 1);
 
-        // Verify that affordability was checked
         expect(affordabilitySpy).toHaveBeenCalledWith(game);
     });
 
@@ -105,7 +99,7 @@ describe('EP Hotkey Functionality', () => {
         expect(affordabilitySpy).toHaveBeenCalledWith(game);
 
         // Verify that EP increased
-        expect(game.exotic_particles).toBeGreaterThan(0);
+        expect(toNum(game.exotic_particles)).toBeGreaterThan(0);
     });
 
     it('should prevent default behavior when CTRL+E is pressed', () => {

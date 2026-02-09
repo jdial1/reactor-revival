@@ -53,7 +53,7 @@ The project now uses `public/` as the single source of truth for both static ass
   - `utils/` - Utility functions and helpers
 
 ### Root - Project configuration
-- `workbox-config.js` - Service worker build configuration
-- `vitest.config.mjs` - Test configuration
-- `jsconfig.json` - JavaScript configuration
-- `src-sw.js` - Service worker source file
+- `config/workbox-config.cjs` - Service worker build configuration
+- `config/vitest.config.mjs` - Test configuration
+- `jsconfig.json` - JavaScript configuration (root)
+- `src-sw.js` - Service worker source file (root)

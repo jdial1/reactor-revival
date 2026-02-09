@@ -1,6 +1,0 @@
-
-> reactor-revival@1.0.0 dev
-> live-server public --port=8080 --open=/index.html --wait=100
-
-[32mServing "public" at http://127.0.0.1:8080[39m
-[36mReady for changes[39m

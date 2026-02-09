@@ -55,10 +55,9 @@ export const checkFunctions = {
         game.sustainedPower1k.startTick = game.engine.tick_count;
       }
       return game.engine.tick_count - game.sustainedPower1k.startTick >= TICKS_REQUIRED;
-    } else {
-      game.sustainedPower1k.startTick = 0;
-      return false;
     }
+    game.sustainedPower1k.startTick = 0;
+    return false;
   },
   infrastructureUpgrade1: (game) => {
     const advancedCapacitors = game.tileset.tiles_list.filter(
@@ -89,9 +88,9 @@ export const checkFunctions = {
     );
   },
   firstBillion: (game) => {
-    return game.current_money >= 1000000000;
+    return game.current_money && game.current_money.gte ? game.current_money.gte(1000000000) : game.current_money >= 1000000000;
   },
-  money10B: (game) => game.current_money >= 1e10,
+  money10B: (game) => game.current_money && game.current_money.gte ? game.current_money.gte(1e10) : game.current_money >= 1e10,
   unlockSeaborgium: (game) => {
     return (
       game.tileset.tiles_list.filter(
@@ -106,29 +105,31 @@ export const checkFunctions = {
   masterHighHeat: (game) => {
     const TICKS_REQUIRED = 30;
     if (!game.masterHighHeat) game.masterHighHeat = { startTick: 0 };
-    if (game.reactor.current_heat > 10000000 && !game.paused && !game.reactor.has_melted_down && game.engine) {
+    const heatOk = game.reactor.current_heat && game.reactor.current_heat.gt ? game.reactor.current_heat.gt(10000000) : game.reactor.current_heat > 10000000;
+    if (heatOk && !game.paused && !game.reactor.has_melted_down && game.engine) {
       if (game.masterHighHeat.startTick === 0) {
         game.masterHighHeat.startTick = game.engine.tick_count;
       }
       return game.engine.tick_count - game.masterHighHeat.startTick >= TICKS_REQUIRED;
-    } else {
-      game.masterHighHeat.startTick = 0;
-      return false;
     }
+    game.masterHighHeat.startTick = 0;
+    return false;
   },
-  ep10: (game) => game.exotic_particles >= 10,
-  ep51: (game) => game.exotic_particles >= 51,
-  ep250: (game) => game.exotic_particles >= 250,
+  ep10: (game) => game.exotic_particles && game.exotic_particles.gte ? game.exotic_particles.gte(10) : game.exotic_particles >= 10,
+  ep51: (game) => game.exotic_particles && game.exotic_particles.gte ? game.exotic_particles.gte(51) : game.exotic_particles >= 51,
+  ep250: (game) => game.exotic_particles && game.exotic_particles.gte ? game.exotic_particles.gte(250) : game.exotic_particles >= 250,
   investInResearch1: (game) => {
     return (
       game.upgradeset.getUpgrade("infused_cells")?.level > 0 &&
       game.upgradeset.getUpgrade("unleashed_cells")?.level > 0
     );
   },
-  reboot: (game) =>
-    game.total_exotic_particles > 0 &&
-    game.current_money < game.base_money * 2 &&
-    game.exotic_particles === 0,
+  reboot: (game) => {
+    const totalOk = game.total_exotic_particles && game.total_exotic_particles.gt ? game.total_exotic_particles.gt(0) : game.total_exotic_particles > 0;
+    const moneyOk = game.current_money && game.current_money.lt ? game.current_money.lt(game.base_money * 2) : game.current_money < game.base_money * 2;
+    const epZero = game.exotic_particles && game.exotic_particles.eq ? game.exotic_particles.eq(0) : game.exotic_particles === 0;
+    return totalOk && moneyOk && epZero;
+  },
   completeChapter1: (game) => {
     // Check if all regular objectives in chapter 1 (indices 0-8) are completed
     if (!game.objectives_manager?.objectives_data) return false;
@@ -193,17 +194,17 @@ export const checkFunctions = {
     game.tileset.tiles_list.filter(
       (t) => t.part?.id === "dolorium3" && t.ticks > 0
     ).length >= 5,
-  ep1000: (game) => game.exotic_particles >= 1000,
+  ep1000: (game) => game.exotic_particles && game.exotic_particles.gte ? game.exotic_particles.gte(1000) : game.exotic_particles >= 1000,
   fiveQuadNefastium: (game) =>
     game.tileset.tiles_list.filter(
       (t) => t.part?.id === "nefastium3" && t.ticks > 0
     ).length >= 5,
   placeExperimentalPart: (game) =>
     game.tileset.tiles_list.some((tile) => tile.part?.experimental === true),
-  allObjectives: (game) => {
-    // The "allObjectives" objective is automatically completed when we reach it
-    // since it's the final objective that appears after all others are done
-    return true;
+  allObjectives: (game) => true,
+  infinitePower: (game) => {
+    const obj = game.objectives_manager?.current_objective_def;
+    return obj?.target != null && game.reactor?.stats_power >= obj.target && !game.paused;
   },
 };
 

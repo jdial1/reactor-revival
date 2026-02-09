@@ -1,4 +1,5 @@
 import { Part } from "./part.js";
+import { toDecimal } from "../utils/decimal.js";
 import dataService from "../services/dataService.js";
 
 // Load part data
@@ -125,11 +126,11 @@ export class PartSet {
       }
     }
 
-    // Only apply cost multipliers for multi-level parts
     if (template.levels) {
-      partDef.base_cost = template.base_cost * Math.pow(template.cost_multi || 1, level - 1);
+      const baseCost = toDecimal(template.base_cost);
+      partDef.base_cost = baseCost.mul(Math.pow(Number(template.cost_multi) || 1, level - 1));
     } else {
-      partDef.base_cost = template.base_cost;
+      partDef.base_cost = toDecimal(template.base_cost ?? 0);
     }
 
     if (partDef.category === "cell") {
@@ -216,26 +217,36 @@ export class PartSet {
       } else if (game.reactor && game.reactor.has_melted_down) {
         isAffordable = false;
       } else {
-        // Gating: a part must be unlocked to be affordable/selectable
+        if (this.isPartDoctrineLocked(part)) {
+          part.setAffordable(false);
+          return;
+        }
         const isUnlocked = typeof this.game.isPartUnlocked === 'function' ? this.game.isPartUnlocked(part) : true;
         if (part.erequires) {
           const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
           if (requiredUpgrade && requiredUpgrade.level > 0 && isUnlocked) {
             // Distinguish between EP and Money cost
-            if (part.ecost > 0) {
-              isAffordable = Number(game.current_exotic_particles) >= Number(part.ecost || 0);
+            if (part.ecost && part.ecost.gt && part.ecost.gt(0)) {
+              isAffordable = game.current_exotic_particles.gte(part.ecost);
             } else {
-              isAffordable = Number(game.current_money) >= Number(part.cost);
+              isAffordable = game.current_money.gte(part.cost);
             }
           }
         } else {
           if (isUnlocked) {
-            isAffordable = Number(game.current_money) >= Number(part.cost);
+            isAffordable = game.current_money.gte(part.cost);
           }
         }
       }
       part.setAffordable(isAffordable);
     });
+  }
+
+  isPartDoctrineLocked(part) {
+    if (!part || this.game.bypass_tech_tree_restrictions) return false;
+    if (!this.game.tech_tree || !this.game.upgradeset) return false;
+    if (!part.erequires) return false;
+    return !this.game.upgradeset.isUpgradeAvailable(part.erequires);
   }
 
   getPartById(id) {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../helpers/setup.js";
 
 describe("Upgrade Mechanics", () => {
   let game;
@@ -9,17 +9,15 @@ describe("Upgrade Mechanics", () => {
 
   it("should calculate increasing cost based on level and multiplier", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
-    expect(upgrade.current_cost).toBe(upgrade.base_cost);
+    expect(toNum(upgrade.current_cost)).toBe(toNum(upgrade.base_cost));
 
-    game.current_money = upgrade.getCost() * 2;
+    game.current_money = toNum(upgrade.getCost()) * 2;
     game.ui.stateManager.setVar("current_money", game.current_money);
     game.upgradeset.check_affordability(game);
     game.upgradeset.purchaseUpgrade(upgrade.id);
 
     // After purchase, level is 1, so cost should be base_cost * cost_multiplier^1
-    expect(upgrade.current_cost).toBe(
-      upgrade.base_cost * upgrade.cost_multiplier
-    );
+    expect(toNum(upgrade.current_cost)).toBeCloseTo(toNum(upgrade.base_cost) * upgrade.cost_multiplier, 10);
   });
 
   it("should set level and trigger its action", () => {
@@ -60,7 +58,7 @@ describe("Upgrade Mechanics", () => {
     const upgrade = game.upgradeset.getUpgrade("heat_control_operator"); // max_level: 1
     upgrade.setLevel(1);
     expect(upgrade.display_cost).toBe("MAX");
-    expect(upgrade.current_cost).toBe(Infinity);
+    expect(Number.isFinite(toNum(upgrade.current_cost))).toBe(false);
   });
 
   it("should not allow purchase with insufficient funds", () => {
@@ -80,12 +78,12 @@ describe("Upgrade Mechanics", () => {
     game.current_money = cost + 1000;
     game.ui.stateManager.setVar("current_money", game.current_money);
     game.upgradeset.check_affordability(game);
-    const expectedMoney = game.current_money - cost;
-    
+    const expectedMoney = toNum(game.current_money) - toNum(cost);
+
     const result = game.upgradeset.purchaseUpgrade(upgrade.id);
 
     expect(result).toBe(true);
     expect(upgrade.level).toBe(1);
-    expect(game.current_money).toBe(expectedMoney);
+    expect(toNum(game.current_money)).toBeCloseTo(expectedMoney, 10);
   });
 });

@@ -1,6 +1,27 @@
 // src/services/dataService.js
 // Service for loading and managing game data from JSON files
 
+import { toDecimal } from "../utils/decimal.js";
+
+const PART_COST_KEYS = [
+  "base_cost",
+  "base_ecost",
+  "cell_tick_upgrade_cost",
+  "cell_power_upgrade_cost",
+  "cell_perpetual_upgrade_cost"
+];
+
+function normalizePartCosts(arr) {
+  if (!Array.isArray(arr)) return arr;
+  return arr.map((item) => {
+    const out = { ...item };
+    for (const key of PART_COST_KEYS) {
+      if (key in out && out[key] != null) out[key] = toDecimal(out[key]);
+    }
+    return out;
+  });
+}
+
 // Dynamic imports for Node.js compatibility
 let fs, path, fileURLToPath, __filename, __dirname;
 
@@ -96,9 +117,10 @@ class DataService {
     }
 
     async loadPartList() {
-        const data = await this.loadData('./data/part_list.json');
-        // Handle ES module format where data might be in the 'default' property
-        return data?.default || data;
+        const raw = await this.loadData('./data/part_list.json');
+        const data = Array.isArray(raw) ? raw : (raw?.default || raw);
+        const list = Array.isArray(data) ? data : [];
+        return normalizePartCosts(list);
     }
 
     async loadUpgradeList() {

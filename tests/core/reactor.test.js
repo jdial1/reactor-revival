@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../helpers/setup.js";
 
 describe("Reactor Mechanics", () => {
   let game;
@@ -8,10 +8,10 @@ describe("Reactor Mechanics", () => {
   });
 
   it("should initialize with correct default values", () => {
-    expect(game.reactor.current_power).toBe(0);
-    expect(game.reactor.current_heat).toBe(0);
-    expect(game.reactor.max_power).toBe(game.reactor.base_max_power);
-    expect(game.reactor.max_heat).toBe(game.reactor.base_max_heat);
+    expect(toNum(game.reactor.current_power)).toBe(0);
+    expect(toNum(game.reactor.current_heat)).toBe(0);
+    expect(toNum(game.reactor.max_power)).toBe(toNum(game.reactor.base_max_power));
+    expect(toNum(game.reactor.max_heat)).toBe(toNum(game.reactor.base_max_heat));
     expect(game.reactor.has_melted_down).toBe(false);
   });
 
@@ -71,7 +71,7 @@ describe("Reactor Mechanics", () => {
     const heatGenerated = part.heat; // Get actual heat from the part
     const expected = initialHeat + heatGenerated - naturalVenting;
 
-    expect(game.reactor.current_heat).toBeCloseTo(expected, 0);
+    expect(toNum(game.reactor.current_heat)).toBeCloseTo(expected, 0);
   });
 
   it("should not vent below zero heat", async () => {
@@ -85,7 +85,7 @@ describe("Reactor Mechanics", () => {
     game.engine.tick();
 
     // Should not go below zero, but may be a small positive value due to decay logic
-    expect(game.reactor.current_heat).toBeGreaterThanOrEqual(0);
+    expect(toNum(game.reactor.current_heat)).toBeGreaterThanOrEqual(0);
   });
 
   it("should handle reactor size changes", () => {
@@ -118,11 +118,11 @@ describe("Reactor Mechanics", () => {
     const cell = game.partset.getPartById('uranium1');
     await game.tileset.getTile(0, 0).setPart(cell);
     game.engine.tick();
-    expect(game.reactor.current_power).toBe(cell.power);
-    const initialMoney = game.current_money;
+    expect(toNum(game.reactor.current_power)).toBe(toNum(cell.power));
+    const initialMoney = toNum(game.current_money);
     game.reactor.sellPower();
-    expect(game.reactor.current_power).toBe(0);
-    expect(game.current_money).toBe(initialMoney + cell.power);
+    expect(toNum(game.reactor.current_power)).toBe(0);
+    expect(toNum(game.current_money)).toBe(initialMoney + toNum(cell.power));
     expect(game.sold_power).toBe(true);
   });
 
@@ -140,12 +140,12 @@ describe("Reactor Mechanics", () => {
   it("should manually reduce heat", () => {
     game.reactor.current_heat = 100;
     game.manual_reduce_heat_action();
-    expect(game.reactor.current_heat).toBe(100 - game.base_manual_heat_reduce);
+    expect(toNum(game.reactor.current_heat)).toBe(100 - game.base_manual_heat_reduce);
     expect(game.sold_heat).toBe(false);
 
     game.reactor.current_heat = 0.5;
     game.manual_reduce_heat_action();
-    expect(game.reactor.current_heat).toBe(0);
+    expect(toNum(game.reactor.current_heat)).toBe(0);
     expect(game.sold_heat).toBe(true);
   });
 
@@ -179,7 +179,7 @@ describe("Reactor Mechanics", () => {
     // Ensure EP for purchase
     const labUpgrade = game.upgradeset.getUpgrade('laboratory');
     const infusedUpgrade = game.upgradeset.getUpgrade('infused_cells');
-    game.current_exotic_particles = Math.max(labUpgrade.getEcost(), infusedUpgrade.getEcost()) + 1000;
+    game.current_exotic_particles = Math.max(toNum(labUpgrade.getEcost()), toNum(infusedUpgrade.getEcost())) + 1000;
     game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
     game.upgradeset.check_affordability(game);
     
@@ -192,7 +192,7 @@ describe("Reactor Mechanics", () => {
     part.recalculate_stats();
     game.reactor.updateStats();
     game.engine.tick();
-    expect(game.reactor.current_power).toBeCloseTo(part.base_power * 2, 0);
+    expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(part.base_power) * 2, 0);
   });
 
   it("should handle heat generation correctly", async () => {
@@ -201,7 +201,7 @@ describe("Reactor Mechanics", () => {
     await tile.setPart(part);
     game.reactor.heat_power_multiplier = 2;
     game.engine.tick();
-    expect(game.reactor.current_heat).toBeGreaterThan(0); // Should increase
+    expect(toNum(game.reactor.current_heat)).toBeGreaterThan(0);
   });
 
   it("should handle power generation correctly", async () => {
@@ -210,15 +210,15 @@ describe("Reactor Mechanics", () => {
     await tile.setPart(part);
     game.reactor.power_multiplier = 2;
     game.engine.tick();
-    expect(game.reactor.current_power).toBe(part.power * 2);
+    expect(toNum(game.reactor.current_power)).toBe(toNum(part.power) * 2);
   });
 
   it("should handle heat venting correctly", async () => {
     game.reactor.current_heat = 1000;
     game.reactor.heat_controlled = true;
     game.engine.tick();
-    expect(game.reactor.current_heat).toBeLessThan(1000);
-    expect(game.reactor.current_heat).toBeGreaterThan(0);
+    expect(toNum(game.reactor.current_heat)).toBeLessThan(1000);
+    expect(toNum(game.reactor.current_heat)).toBeGreaterThan(0);
   });
 
   it("should handle power storage correctly", async () => {
@@ -233,8 +233,8 @@ describe("Reactor Mechanics", () => {
     game.reactor.current_power = 500;
     game.reactor.has_melted_down = true;
     game.reactor.setDefaults();
-    expect(game.reactor.current_heat).toBe(0);
-    expect(game.reactor.current_power).toBe(0);
+    expect(toNum(game.reactor.current_heat)).toBe(0);
+    expect(toNum(game.reactor.current_power)).toBe(0);
     expect(game.reactor.has_melted_down).toBe(false);
   });
 
@@ -243,7 +243,7 @@ describe("Reactor Mechanics", () => {
     const plating = game.partset.getPartById('reactor_plating1');
     await game.tileset.getTile(0, 0).setPart(plating);
     game.reactor.updateStats();
-    expect(game.reactor.max_heat).toBe(initialMaxHeat + plating.reactor_heat);
+    expect(toNum(game.reactor.max_heat)).toBe(toNum(initialMaxHeat) + toNum(plating.reactor_heat));
   });
 
   it("should handle reactor tick correctly", () => {
@@ -257,8 +257,8 @@ describe("Reactor Mechanics", () => {
     game.reactor.current_power = 500;
     game.reactor.has_melted_down = true;
     game.reactor.setDefaults();
-    expect(game.reactor.current_heat).toBe(0);
-    expect(game.reactor.current_power).toBe(0);
+    expect(toNum(game.reactor.current_heat)).toBe(0);
+    expect(toNum(game.reactor.current_power)).toBe(0);
     expect(game.reactor.has_melted_down).toBe(false);
   });
 });

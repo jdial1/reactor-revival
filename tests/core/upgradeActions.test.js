@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGame, toNum } from "../helpers/setup.js";
 import { placePart, forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("Upgrade Actions Mechanics", () => {
@@ -44,8 +44,8 @@ describe("Upgrade Actions Mechanics", () => {
     game.reactor.altered_max_heat = game.reactor.base_max_heat;
     game.reactor.updateStats();
     
-    const expectedHeat = game.reactor.base_max_heat + (plating.base_reactor_heat * 2);
-    expect(game.reactor.max_heat).toBeCloseTo(expectedHeat);
+    const expectedHeat = toNum(game.reactor.base_max_heat) + toNum(plating.base_reactor_heat) * 2;
+    expect(toNum(game.reactor.max_heat)).toBeCloseTo(expectedHeat);
   });
 
   it("should apply quantum buffering upgrade correctly", async () => {
@@ -64,9 +64,8 @@ describe("Upgrade Actions Mechanics", () => {
     game.tileset.active_tiles_list.forEach(t => t.part && t.part.recalculate_stats());
     game.reactor.updateStats();
     
-    expect(game.reactor.max_heat).toBeGreaterThan(initialMaxHeat);
-    // Quantum buffering doubles plating contribution
-    expect(game.reactor.max_heat).toBe(game.reactor.base_max_heat + (plating.base_reactor_heat * 2));
+    expect(toNum(game.reactor.max_heat)).toBeGreaterThan(toNum(initialMaxHeat));
+    expect(toNum(game.reactor.max_heat)).toBe(toNum(game.reactor.base_max_heat) + toNum(plating.base_reactor_heat) * 2);
   });
 
   it("should apply active venting upgrade correctly", async () => {

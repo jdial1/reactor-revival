@@ -61,7 +61,7 @@ function runTests(options = {}) {
   const args = [
     'vitest',
     'run',
-    '--config', 'vitest.config.mjs',
+    '--config', 'config/vitest.config.mjs',
     '--reporter', 'default',
     '--maxConcurrency', '1',
     '--silent', 'false',

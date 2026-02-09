@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { setupGameWithDOM } from "../helpers/setup.js";
+import { setupGameWithDOM, toNum } from "../helpers/setup.js";
 
 describe("UI User Interaction Scenarios", () => {
     let game;
@@ -73,7 +73,7 @@ describe("UI User Interaction Scenarios", () => {
         await game.ui.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tile.$el });
         
         expect(tile.part).toBeNull();
-        expect(game.current_money).toBeGreaterThan(moneyBeforeSell);
+        expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
     });
 
     it("should navigate to the upgrades page when the upgrades tab is clicked", async () => {
@@ -131,7 +131,7 @@ describe("UI User Interaction Scenarios", () => {
             const moneyBeforeSell = game.current_money;
             game.sellPart(tile);
             expect(tile.part).toBeNull();
-            expect(game.current_money).toBeGreaterThan(moneyBeforeSell);
+            expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
 
         it("should sell a part when a tile is right-clicked via pointer event", async () => {
@@ -139,7 +139,7 @@ describe("UI User Interaction Scenarios", () => {
             
             await game.ui.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tileElement });
             expect(tile.part).toBeNull();
-            expect(game.current_money).toBeGreaterThan(moneyBeforeSell);
+            expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
 
         it("should NOT sell a part when right-clicking on a tile without a part", async () => {
@@ -182,7 +182,7 @@ describe("UI User Interaction Scenarios", () => {
 
             // Verify the part was sold
             expect(tile.part).toBeNull();
-            expect(game.current_money).toBeGreaterThan(moneyBeforeSell);
+            expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
 
         it("should NOT sell a part if pointer moves during long-press", async () => {
@@ -319,7 +319,7 @@ describe("UI User Interaction Scenarios", () => {
             expect(tile.part).toBeNull();
             expect(tile2.part).toBeNull();
             expect(tile3.part).toBeNull();
-            expect(game.current_money).toBeGreaterThan(moneyBeforeSell);
+            expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
     });
 
@@ -330,7 +330,8 @@ describe("UI User Interaction Scenarios", () => {
             document.body.appendChild(img);
             let defaultPrevented = false;
             img.addEventListener("contextmenu", (e) => { if (e.defaultPrevented) defaultPrevented = true; });
-            const ctx = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+            const MouseEventCtor = typeof window !== "undefined" && window.MouseEvent ? window.MouseEvent : Event;
+            const ctx = new MouseEventCtor("contextmenu", { bubbles: true, cancelable: true });
             img.dispatchEvent(ctx);
             document.body.removeChild(img);
             expect(typeof defaultPrevented).toBe("boolean");

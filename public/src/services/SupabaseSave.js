@@ -1,4 +1,5 @@
 import { LEADERBOARD_CONFIG } from './leaderboard-config.js';
+import { stringifySaveData } from '../utils/util.js';
 
 export class SupabaseSave {
     constructor() {
@@ -13,7 +14,7 @@ export class SupabaseSave {
         const payload = {
             user_id: userId,
             slot_id: slotId,
-            save_data: JSON.stringify(saveData),
+            save_data: stringifySaveData(saveData),
             timestamp: Date.now()
         };
 

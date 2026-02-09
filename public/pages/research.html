@@ -1,4 +1,11 @@
 <section id="experimental_upgrades_section" class="page">
+  <article id="doctrine_tree_viewer" class="doctrine-tree-viewer hidden">
+    <h2>Doctrine &amp; Tech Tree</h2>
+    <div id="doctrine_tree_viewer_content"></div>
+    <div class="doctrine-respec-row">
+      <button id="respec_doctrine_btn" class="pixel-btn nav-btn" type="button" title="Reset doctrine and that path&#39;s upgrades; costs Exotic Particles">Respec doctrine</button>
+    </div>
+  </article>
   <div id="research_no_affordable_banner" class="affordability-banner hidden">
     <article>No affordable research available</article>
   </div>
@@ -18,6 +25,32 @@
         </div>
       </div>
     </article>
+
+    <article id="reboot_section">
+      <h2>Prestige</h2>
+      <p class="explanitory">Refund resets everything including EP. Prestige keeps Total EP and Research and grants a money multiplier.</p>
+      <div class="research-buttons-container">
+        <button id="reboot_btn" class="pixel-btn nav-btn" type="button" title="Full Refund: Reset everything including EP">Refund</button>
+        <button id="refund_btn" class="pixel-btn nav-btn" type="button" title="Prestige: Keep EP and Research">Prestige</button>
+      </div>
+      <div id="reboot_exotic_particles" class="hidden" aria-hidden="true"></div>
+      <div id="refund_exotic_particles" class="hidden" aria-hidden="true"></div>
+    </article>
+
+    <div id="prestige_modal" class="prestige-modal-overlay hidden" aria-modal="true" aria-labelledby="prestige_modal_title" role="dialog">
+      <div class="prestige-modal pixel-panel">
+        <h2 id="prestige_modal_title">Prestige</h2>
+        <div id="prestige_modal_body">
+          <div id="prestige_carried_over"></div>
+          <div id="prestige_multiplier_line"></div>
+        </div>
+        <div class="prestige-modal-actions">
+          <button id="prestige_modal_cancel" class="pixel-btn nav-btn" type="button">Cancel</button>
+          <button id="prestige_modal_confirm_refund" class="pixel-btn nav-btn" type="button">Confirm Refund</button>
+          <button id="prestige_modal_confirm_prestige" class="pixel-btn nav-btn btn-start" type="button">Confirm Prestige</button>
+        </div>
+      </div>
+    </div>
     
     <article>
         <h2>Laboratory</h2>

@@ -307,13 +307,17 @@ describe("Large Grid Performance Stress Tests", () => {
   ];
 
   beforeEach(async () => {
-    // Restore native performance object for accurate timing
     global.performance = originalPerformance;
-
     game = await setupGame();
     game.performance.enable();
     game.performance.clearMarks();
     game.performance.clearMeasures();
+  });
+
+  afterEach(() => {
+    if (game?.engine) game.engine.stop?.();
+    game = null;
+    if (typeof globalThis.gc === "function") globalThis.gc();
   });
 
   gridSizes.forEach(({ size, description }) => {

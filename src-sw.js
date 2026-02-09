@@ -25,6 +25,30 @@ workbox.core.clientsClaim();
 // This line is a placeholder. Workbox will replace it with the precache manifest.
 workbox.precaching.precacheAndRoute(self.__WB_MANIFEST);
 
+const coopCoepPlugin = {
+  fetchDidSucceed: ({ response }) => {
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
+    newHeaders.set("Cross-Origin-Embedder-Policy", "credentialless");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
+  },
+  cachedResponseWillBeUsed: ({ cachedResponse }) => {
+    if (!cachedResponse) return null;
+    const newHeaders = new Headers(cachedResponse.headers);
+    newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
+    newHeaders.set("Cross-Origin-Embedder-Policy", "credentialless");
+    return new Response(cachedResponse.body, {
+      status: cachedResponse.status,
+      statusText: cachedResponse.statusText,
+      headers: newHeaders,
+    });
+  },
+};
+
 // Page Cache (Network First)
 workbox.routing.registerRoute(
   ({ request }) => request.mode === "navigate",
@@ -32,6 +56,7 @@ workbox.routing.registerRoute(
     cacheName: "pages",
     plugins: [
       new workbox.cacheableResponse.CacheableResponsePlugin({ statuses: [0, 200] }),
+      coopCoepPlugin,
     ],
   })
 );
@@ -114,9 +139,7 @@ async function checkForVersionUpdate() {
     console.log(`Version check: Local=${localVersion}, Deployed=${deployedVersion}`);
 
     if (deployedVersion !== localVersion) {
-      console.log(`New version detected: ${deployedVersion} (current: ${localVersion})`);
       notifyClientsOfNewVersion(deployedVersion, localVersion);
-      showUpdateNotification(deployedVersion);
     }
   } catch (error) {
     console.log("Version check failed:", error);

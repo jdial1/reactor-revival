@@ -21,11 +21,12 @@ export class AudioService {
   this.ambienceGain = null;
   this._testLoopInterval = null;
   this._testSoundType = null;
-  this._warningLoopInterval = null;
   this._warningLoopActive = false;
   this._warningIntensity = 0.5;
-  this._geigerInterval = null;
+  this._warningRefillTimeout = null;
   this._geigerActive = false;
+  this._geigerRefillTimeout = null;
+  this._geigerNextTime = 0;
   this._hasUnlocked = false;
   this._pendingAmbience = false;
   this._soundLimiter = {
@@ -36,16 +37,33 @@ export class AudioService {
   perSoundCap: 3
   };
   this._activeLimiter = null;
-  this._uiBuffers = { click: null, placement: null, upgrade: null, error: null };
+  this._uiBuffers = { click: null, placement: null, placement_cell: null, placement_plating: null, upgrade: null, error: null, sell: null, tab_switch: null };
   this._ambienceBuffers = [];
   this._ambienceLayerGains = [];
   this._ambienceFilter = null;
   this._ambienceHeatRatio = 0;
+  this._ambienceDuckGain = null;
+  }
+  _duckAmbience() {
+  if (!this._ambienceDuckGain || !this.context || this.context.state !== 'running') return;
+  const t = this.context.currentTime;
+  this._ambienceDuckGain.gain.setValueAtTime(this._ambienceDuckGain.gain.value, t);
+  this._ambienceDuckGain.gain.linearRampToValueAtTime(0.55, t + 0.03);
+  this._ambienceDuckGain.gain.linearRampToValueAtTime(1, t + 0.12);
   }
   async _loadSampleBuffers() {
   if (!this.context || isTestEnv()) return;
   const base = getResourceUrl('audio/');
-  const uiUrls = { click: base + 'ui_click.mp3', placement: base + 'placement.mp3', upgrade: base + 'upgrade.mp3', error: base + 'error.mp3' };
+  const uiUrls = {
+    click: base + 'ui_click.mp3',
+    placement: base + 'placement.mp3',
+    placement_cell: base + 'placement_cell.mp3',
+    placement_plating: base + 'placement_plating.mp3',
+    upgrade: base + 'upgrade.mp3',
+    error: base + 'error.mp3',
+    sell: base + 'sell.mp3',
+    tab_switch: base + 'tab_switch.mp3'
+  };
   for (const [key, url] of Object.entries(uiUrls)) {
   try {
   const r = await fetch(url);
@@ -119,10 +137,13 @@ export class AudioService {
   this.alertsGain = this.context.createGain();
   this.systemGain = this.context.createGain();
   this.ambienceGain = this.context.createGain();
+  this._ambienceDuckGain = this.context.createGain();
+  this._ambienceDuckGain.gain.value = 1;
   this.effectsGain.connect(this.masterGain);
   this.alertsGain.connect(this.masterGain);
   this.systemGain.connect(this.masterGain);
-  this.ambienceGain.connect(this.masterGain);
+  this.ambienceGain.connect(this._ambienceDuckGain);
+  this._ambienceDuckGain.connect(this.masterGain);
   this._loadVolumeSettings();
   if (isContextSuspended) {
   this.masterGain.gain.value = 0;
@@ -308,6 +329,21 @@ export class AudioService {
   getTestSoundCategory() {
   return this._testSoundType;
   }
+  _scheduleWarningBatch() {
+  if (!this._warningLoopActive || !this.context || this.context.state !== 'running') return;
+  const ctx = this.context;
+  const interval = 5;
+  const now = ctx.currentTime;
+  const count = 4;
+  let base = this._warningNextScheduleTime || now;
+  if (base < now - interval) base = Math.ceil(now / interval) * interval;
+  for (let i = 0; i < count; i++) {
+  const when = base + i * interval;
+  if (when >= now - 0.05) this._playWarningSoundAt(this._warningIntensity, when);
+  }
+  this._warningNextScheduleTime = base + count * interval;
+  this._warningRefillTimeout = setTimeout(() => this._scheduleWarningBatch(), (count - 1) * interval * 1000);
+  }
   startWarningLoop(intensity = 0.5) {
   if (this._warningLoopActive) {
   this._warningIntensity = intensity;
@@ -315,30 +351,23 @@ export class AudioService {
   }
   this._warningLoopActive = true;
   this._warningIntensity = intensity;
-  this._playWarningSound(intensity);
-  this._warningLoopInterval = setInterval(() => {
-  if (this._warningLoopActive) {
-  this._playWarningSound(this._warningIntensity);
-  }
-  }, 5000);
+  this._warningNextScheduleTime = this.context ? this.context.currentTime : 0;
+  this._scheduleWarningBatch();
   this._startGeigerTicks(intensity);
   }
   stopWarningLoop() {
   this._warningLoopActive = false;
-  if (this._warningLoopInterval) {
-  clearInterval(this._warningLoopInterval);
-  this._warningLoopInterval = null;
+  if (this._warningRefillTimeout) {
+  clearTimeout(this._warningRefillTimeout);
+  this._warningRefillTimeout = null;
   }
+  this._warningNextScheduleTime = 0;
   this._stopGeigerTicks();
   }
-  _startGeigerTicks(intensity = 0.5) {
-  if (this._geigerActive || !this.enabled || !this.context) return;
-  this._geigerActive = true;
-  const baseInterval = 200 + (1 - intensity) * 300;
-  const playTick = () => {
-  if (!this._geigerActive || !this.enabled || !this.context || this.context.state !== 'running') return;
+  _playGeigerTickAt(intensity, startTime) {
+  if (!this.enabled || !this.context || this.context.state !== 'running') return;
   const ctx = this.context;
-  const t = ctx.currentTime;
+  const t = startTime;
   const category = 'alerts';
   const categoryGain = this._getCategoryGain(category);
   const tickOsc = ctx.createOscillator();
@@ -356,22 +385,40 @@ export class AudioService {
   tickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.01);
   tickOsc.start(t);
   tickOsc.stop(t + 0.01);
-  const nextInterval = baseInterval + (Math.random() * 100 - 50);
-  this._geigerInterval = setTimeout(playTick, nextInterval);
-  };
-  playTick();
+  }
+  _scheduleGeigerBatch(intensity) {
+  if (!this._geigerActive || !this.context || this.context.state !== 'running') return;
+  const ctx = this.context;
+  const baseInterval = 200 + (1 - intensity) * 300;
+  const count = 25;
+  let t = this._geigerNextTime || ctx.currentTime;
+  if (t < ctx.currentTime - 1) t = ctx.currentTime;
+  for (let i = 0; i < count; i++) {
+  this._playGeigerTickAt(intensity, t);
+  t += (baseInterval + (Math.random() * 100 - 50)) / 1000;
+  }
+  this._geigerNextTime = t;
+  const refillMs = (count * baseInterval * 0.8) | 0;
+  this._geigerRefillTimeout = setTimeout(() => this._scheduleGeigerBatch(this._warningIntensity), refillMs);
+  }
+  _startGeigerTicks(intensity = 0.5) {
+  if (this._geigerActive || !this.enabled || !this.context) return;
+  this._geigerActive = true;
+  this._geigerNextTime = 0;
+  this._scheduleGeigerBatch(intensity);
   }
   _stopGeigerTicks() {
   this._geigerActive = false;
-  if (this._geigerInterval) {
-  clearTimeout(this._geigerInterval);
-  this._geigerInterval = null;
+  if (this._geigerRefillTimeout) {
+  clearTimeout(this._geigerRefillTimeout);
+  this._geigerRefillTimeout = null;
   }
+  this._geigerNextTime = 0;
   }
-  _playWarningSound(intensity = 0.5) {
+  _playWarningSoundAt(intensity, startTime) {
   if (!this.enabled || !this.context || this.context.state !== 'running') return;
   const ctx = this.context;
-  const t = ctx.currentTime;
+  const t = startTime;
   const category = 'alerts';
   const categoryGain = this._getCategoryGain(category);
   const alarmDuration = 2.5;
@@ -416,6 +463,10 @@ export class AudioService {
   oscTurbine.start(t);
   oscTurbine.stop(t + alarmDuration);
   }
+  _playWarningSound(intensity = 0.5) {
+  if (!this.context) return;
+  this._playWarningSoundAt(intensity, this.context.currentTime);
+  }
   toggleMute(muted) {
   if (!this._isInitialized) return;
   this.enabled = !muted;
@@ -451,7 +502,9 @@ export class AudioService {
   this._ambienceLayerGains[1].gain.setTargetAtTime(l2, t, 0.5);
   this._ambienceLayerGains[2].gain.setTargetAtTime(l3, t, 0.5);
   if (this._ambienceFilter) {
-  const targetFreq = 100 * Math.pow(150, heatRatio);
+  const minFreq = 80;
+  const maxFreq = 16000;
+  const targetFreq = minFreq * Math.pow(maxFreq / minFreq, heatRatio);
   this._ambienceFilter.frequency.setTargetAtTime(targetFreq, t, 0.5);
   }
   }
@@ -762,8 +815,9 @@ export class AudioService {
   try {
   switch (type) {
   case 'placement': {
-  if (this._uiBuffers.placement) {
-  this._playSample('placement', category, pan);
+  const placementType = subtype === 'cell' ? 'placement_cell' : subtype === 'plating' ? 'placement_plating' : 'placement';
+  if (this._uiBuffers[placementType]) {
+  this._playSample(placementType, category, pan);
   break;
   }
   const basePitch = 140;
@@ -782,6 +836,11 @@ export class AudioService {
   break;
   }
   case 'sell': {
+  this._duckAmbience();
+  if (this._uiBuffers.sell) {
+  this._playSample('sell', category, pan);
+  break;
+  }
   if (this._uiBuffers.click) {
   this._playSample('click', category, pan);
   break;
@@ -984,6 +1043,7 @@ export class AudioService {
   });
   break;
   case 'click':
+  this._duckAmbience();
   if (this._uiBuffers.click) {
   this._playSample('click', category, pan);
   break;
@@ -1026,13 +1086,35 @@ export class AudioService {
   springSrc.start(t, Math.random(), 0.04);
   }
   break;
-  case 'ui_hover':
   case 'tab_switch':
+  if (this._uiBuffers.tab_switch) {
+  this._playSample('tab_switch', category, pan);
+  break;
+  }
   if (this._uiBuffers.click) {
   this._playSample('click', category, pan);
   break;
   }
-  if (type === 'ui_hover') {
+  {
+  const switchOsc = ctx.createOscillator();
+  const switchGain = ctx.createGain();
+  switchOsc.type = 'square';
+  switchOsc.frequency.setValueAtTime(200, t);
+  switchOsc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+  switchOsc.connect(switchGain);
+  switchGain.connect(categoryGain);
+  switchGain.gain.setValueAtTime(0.15, t);
+  switchGain.gain.linearRampToValueAtTime(0, t + 0.1);
+  switchOsc.start(t);
+  switchOsc.stop(t + 0.1);
+  }
+  break;
+  case 'ui_hover':
+  if (this._uiBuffers.click) {
+  this._playSample('click', category, pan);
+  break;
+  }
+  {
   const flyback = ctx.createOscillator();
   const flybackGain = ctx.createGain();
   flyback.type = 'sine';
@@ -1058,18 +1140,6 @@ export class AudioService {
   staticGain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
   staticSrc.start(t, Math.random(), 0.03);
   }
-  } else {
-  const switchOsc = ctx.createOscillator();
-  const switchGain = ctx.createGain();
-  switchOsc.type = 'square';
-  switchOsc.frequency.setValueAtTime(200, t);
-  switchOsc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
-  switchOsc.connect(switchGain);
-  switchGain.connect(categoryGain);
-  switchGain.gain.setValueAtTime(0.15, t);
-  switchGain.gain.linearRampToValueAtTime(0, t + 0.1);
-  switchOsc.start(t);
-  switchOsc.stop(t + 0.1);
   }
   break;
   case 'reboot':

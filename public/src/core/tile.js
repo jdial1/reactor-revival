@@ -1,7 +1,5 @@
 import { Part } from "./part.js";
 
-const SHADOW_GRADIENT = "radial-gradient(ellipse 60% 25% at 50% 85%, rgba(0,0,0,0.4) 0%, transparent 70%)";
-
 export class Tile {
   constructor(row, col, game) {
     this.game = game;
@@ -21,11 +19,8 @@ export class Tile {
     this.display_chance_percent_of_total = 0;
     this._heatContained = 0;
     this.ticks = 0;
-    this.exploded = false; // Initialize the exploded property
-    this.$el = null;
-    this.$percent = null;
-    this.$heatBar = null;       // Direct reference to the heat bar element
-    this.$durabilityBar = null; // Direct reference to the durability bar
+    this.exploded = false;
+    this.exploding = false;
     this._neighborCache = null;
   }
 
@@ -135,28 +130,22 @@ export class Tile {
     return 0;
   }
   disable() {
-    if (this.enabled) {
-      this.enabled = false;
-      if (this.$el) this.$el.classList.remove("enabled");
-    }
+    if (this.enabled) this.enabled = false;
   }
   enable() {
-    if (!this.enabled) {
-      this.enabled = true;
-      if (this.$el) this.$el.classList.add("enabled");
-    }
+    if (!this.enabled) this.enabled = true;
   }
   async setPart(partInstance) {
-    // Validate part instance
     if (partInstance === null || partInstance === undefined) {
       throw new Error("Invalid part: part cannot be null or undefined");
     }
-
-    // Prevent overwriting existing parts
     if (this.part) {
-      return false; // Return false to indicate the part was not placed
+      return false;
     }
     const isRestoring = this.game?._isRestoringSave;
+    if (!isRestoring && this.game?.partset?.isPartDoctrineLocked(partInstance)) {
+      return false;
+    }
     if (!isRestoring && this.game.audio && this.game.audio.enabled) {
       this.game.logger?.debug(`Placing part '${partInstance.id}' on tile (${this.row}, ${this.col})`);
       this.game.debugHistory.add('tile', 'setPart', { row: this.row, col: this.col, partId: partInstance.id });
@@ -173,59 +162,10 @@ export class Tile {
       this.activated = true;
       this.ticks = this.part.ticks;
       this.heat_contained = 0;
-      this.exploded = false; // Reset explosion state when setting a new part
-      if (this.$el) {
-        this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
-
-        if (!isRestoring) {
-          this.$el.classList.remove("tile-placement-pop");
-          void this.$el.offsetWidth;
-          this.$el.classList.add("tile-placement-pop");
-          setTimeout(() => {
-            if (this.$el) {
-              this.$el.classList.remove("tile-placement-pop");
-            }
-          }, 300);
-        }
-
-        this.$el.style.backgroundImage = `url('${this.part.getImagePath()}'), ${SHADOW_GRADIENT}`;
-
-        if (this.part.category === "valve" && this.part.getOrientation) {
-          const orientation = this.part.getOrientation();
-          this.$el.classList.add(`orientation-${orientation}`);
-          this.$el.dataset.orientation = orientation;
-        }
-
-        this.updateVisualState();
-
-        // Remove old percent bars and set up new ones
-        const percentWrapperWrapper = this.$el.querySelector(
-          ".percent_wrapper_wrapper"
-        );
-        if (percentWrapperWrapper) {
-          percentWrapperWrapper.innerHTML = "";
-          const percentWrapper = document.createElement("div");
-          percentWrapper.className = "percent_wrapper";
-
-          // Add heat bar if part has base_containment or containment (but not for valves)
-          if (this.part && (this.part.base_containment > 0 || (this.part.containment > 0 && this.part.category !== "valve"))) {
-            const heatBar = document.createElement("div");
-            heatBar.className = "percent heat";
-            percentWrapper.appendChild(heatBar);
-            this.$heatBar = heatBar;
-          }
-
-          // Add durability bar if part has base_ticks
-          else if (this.part && this.part.base_ticks > 0) {
-            const durabilityBar = document.createElement("div");
-            durabilityBar.className = "percent durability";
-            percentWrapper.appendChild(durabilityBar);
-            this.$durabilityBar = durabilityBar;
-          }
-
-          percentWrapperWrapper.appendChild(percentWrapper);
-        }
-      }
+      this.exploded = false;
+      this.exploding = false;
+      this.game.ui?.gridCanvasRenderer?.markTileDirty(this.row, this.col);
+      this.game.ui?.gridCanvasRenderer?.markStaticDirty();
       // Cumulative placement tracking for gating
       try {
         if (this.game && this.part && typeof this.game.incrementPlacedCount === "function") {
@@ -326,130 +266,28 @@ export class Tile {
     this.heat = 0;
     this.display_power = 0;
     this.display_heat = 0;
-    this.exploded = false; // Reset explosion state when clearing part
-    if (this.$el) {
-      // Remove any lingering vent rotor element from UI
-      try {
-        const rotor = this.$el.querySelector('.vent-rotor');
-        if (rotor && rotor.parentNode) rotor.parentNode.removeChild(rotor);
-      } catch (_) { }
-      
-      // Remove all part-related classes
-      const classesToRemove = [
-        "is-processing",
-        "spent",
-        "exploding",
-        "segment-highlight",
-        "selling"
-      ];
-      classesToRemove.forEach(cls => this.$el.classList.remove(cls));
-      
-      // Remove orientation classes (for valves)
-      const orientationClasses = Array.from(this.$el.classList).filter(cls => cls.startsWith("orientation-"));
-      orientationClasses.forEach(cls => this.$el.classList.remove(cls));
-      
-      // Remove part and category classes
-      const partClasses = Array.from(this.$el.classList).filter(cls => cls.startsWith("part_") || cls.startsWith("category_"));
-      partClasses.forEach(cls => this.$el.classList.remove(cls));
-      
-      // Reset to base classes
-      const baseClasses = ["tile"];
-      if (this.enabled) baseClasses.push("enabled");
-      this.$el.className = baseClasses.join(" ");
-      
-      // Clear dataset attributes
-      if (this.$el.dataset.orientation) {
-        delete this.$el.dataset.orientation;
-      }
-      
-      // Remove all inline styles to let CSS handle default empty tile styling
-      this.$el.removeAttribute("style");
-      
-      // Clear percent bars - remove all bar elements from the wrapper
-      const percentWrapper = this.$el.querySelector(".percent_wrapper");
-      if (percentWrapper) {
-        percentWrapper.innerHTML = "";
-      }
-      
-      // Clear references
-      this.$heatBar = null;
-      this.$durabilityBar = null;
-      if (this.$percent) {
-        this.$percent.style.width = "0%";
-      }
-    }
+    this.exploded = false;
+    this.exploding = false;
+    this.game.ui?.gridCanvasRenderer?.markTileDirty(this.row, this.col);
+    this.game.ui?.gridCanvasRenderer?.markStaticDirty();
     if (this.game.tooltip_manager?.current_tile_context === this) {
       this.game.tooltip_manager.hide();
     }
     this.game.engine?.markPartCacheAsDirty();
     this.game.engine?.heatManager?.markSegmentsAsDirty();
     this.game.reactor.updateStats();
-    // Refresh parts panel to update tier gating after selling
     try {
       if (this.game && this.game.ui && typeof this.game.ui.refreshPartsPanel === "function") {
         this.game.ui.refreshPartsPanel();
       }
     } catch (_) { }
-    this.updateVisualState();
-    if (this.$el) {
-      this.$el.classList.remove("is-processing");
-    }
     if (this.game && typeof this.game.saveGame === "function") {
       this.game.saveGame(null, true); // true = isAutoSave
     }
   }
-  updateVisualState() {
-    if (!this.$el || !this.part || !this.activated) {
-      if (this.$heatBar) this.$heatBar.style.width = "0%";
-      if (this.$durabilityBar) this.$durabilityBar.style.width = "0%";
-      return;
-    }
+  highlight() {}
 
-    // Update heat bar if present - now reflects segment heat level
-    if (this.$heatBar && this.part && (this.part.base_containment > 0 || (this.part.containment > 0 && this.part.category !== "valve"))) {
-      const maxHeat = this.part.containment || 1;
-      const percent = Math.max(0, Math.min(1, this.heat_contained / maxHeat));
-      this.$heatBar.style.width = percent * 100 + "%";
-    }
-
-    // Update durability bar if present
-    if (this.$durabilityBar && this.part && this.part.base_ticks > 0) {
-      const maxTicks = this.part.ticks || 1;
-      const percent = Math.max(0, Math.min(1, this.ticks / maxTicks));
-      this.$durabilityBar.style.width = percent * 100 + "%";
-    }
-
-    // Fallback for legacy $percent
-    if (this.$percent && !this.$heatBar && !this.$durabilityBar) {
-      this.$percent.style.width = "0%";
-    }
-
-    if (this.part && this.part.category === "cell") {
-      const isPaused = this.game.ui.stateManager.getVar("pause");
-      const isProcessing = this.ticks > 0 && !isPaused;
-      this.$el.classList.toggle("is-processing", isProcessing);
-    } else if (this.part) {
-      this.$el.classList.remove("is-processing");
-    }
-  }
-
-  /**
-   * Adds the highlight class to the tile's element.
-   */
-  highlight() {
-    if (this.$el) {
-      this.$el.classList.add('segment-highlight');
-    }
-  }
-
-  /**
-   * Removes the highlight class from the tile's element.
-   */
-  unhighlight() {
-    if (this.$el) {
-      this.$el.classList.remove('segment-highlight');
-    }
-  }
+  unhighlight() {}
 
 
   calculateSellValue() {
@@ -470,29 +308,8 @@ export class Tile {
     }
     return Math.max(0, sellValue);
   }
-  updateTooltip(force = false) {
-    if (!this.part || !this.$el) {
-      this.$el.style.backgroundColor = "";
-      return;
-    }
-    if (this.game.tooltip.current_obj === this.part || force) {
-      const heat_percent = this.heat / this.part.containment;
-      this.$el.style.backgroundColor = `rgba(255, 0, 0, ${heat_percent})`;
-    } else {
-      this.$el.style.backgroundColor = "";
-    }
-    if (this.part && this.part.category === "cell") {
-      const isPaused = this.game.ui.stateManager.getVar("pause");
-      const isProcessing = this.ticks > 0 && !isPaused;
-      this.$el.classList.toggle("is-processing", isProcessing);
-    } else if (this.part) {
-      this.$el.classList.remove("is-processing");
-    }
-  }
   refreshVisualState() {
-    if (!this.$el || !this.part) return;
-    this.$el.className = `tile enabled part_${this.part.id} category_${this.part.category}`;
-    this.$el.style.backgroundImage = `url('${this.part.getImagePath()}'), ${SHADOW_GRADIENT}`;
-    this.updateVisualState();
+    this.game.ui?.gridCanvasRenderer?.markTileDirty(this.row, this.col);
+    this.game.ui?.gridCanvasRenderer?.markStaticDirty();
   }
 }

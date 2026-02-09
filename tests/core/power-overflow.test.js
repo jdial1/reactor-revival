@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, toNum } from "../helpers/setup.js";
 import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Power Overflow Mechanics", () => {
@@ -41,8 +41,8 @@ describe("Power Overflow Mechanics", () => {
         // Expected: 90 + 20 = 110. Cap is 100. Excess is 10.
         game.engine.tick();
 
-        expect(game.reactor.current_power).toBe(100);
-        expect(game.reactor.current_heat).toBe(10);
+        expect(toNum(game.reactor.current_power)).toBe(100);
+        expect(toNum(game.reactor.current_heat)).toBe(10);
     });
 
     it("should convert 100% of generated power to heat if starting at max power", async () => {
@@ -65,8 +65,8 @@ describe("Power Overflow Mechanics", () => {
         // Expected Heat: 0 + 5 (native) + 50 (overflow) = 55.
         game.engine.tick();
 
-        expect(game.reactor.current_power).toBe(100);
-        expect(game.reactor.current_heat).toBe(55);
+        expect(toNum(game.reactor.current_power)).toBe(100);
+        expect(toNum(game.reactor.current_heat)).toBe(55);
     });
 
     it("should handle power multipliers correctly with overflow", async () => {
@@ -102,8 +102,8 @@ describe("Power Overflow Mechanics", () => {
 
         game.engine.tick();
 
-        expect(game.reactor.current_power).toBe(100);
-        expect(game.reactor.current_heat).toBe(15);
+        expect(toNum(game.reactor.current_power)).toBe(100);
+        expect(toNum(game.reactor.current_heat)).toBe(15);
     });
 
     it("should NOT add extra heat if power is within capacity", async () => {
@@ -123,8 +123,8 @@ describe("Power Overflow Mechanics", () => {
 
         game.engine.tick();
 
-        expect(game.reactor.current_power).toBe(60);
-        expect(game.reactor.current_heat).toBe(5); // Only native heat
+        expect(toNum(game.reactor.current_power)).toBe(60);
+        expect(toNum(game.reactor.current_heat)).toBe(5);
     });
 });
 
@@ -159,8 +159,8 @@ describe("Difficulty power overflow to heat ratio", () => {
 
         game.engine.tick();
 
-        expect(game.reactor.current_power).toBe(100);
-        expect(game.reactor.current_heat).toBe(0);
+        expect(toNum(game.reactor.current_power)).toBe(100);
+        expect(toNum(game.reactor.current_heat)).toBe(0);
     });
 
     it("medium (ratio 0.5): 50% of overflow goes to heat", async () => {
@@ -177,8 +177,8 @@ describe("Difficulty power overflow to heat ratio", () => {
 
         game.engine.tick();
 
-        expect(game.reactor.current_power).toBe(100);
-        expect(game.reactor.current_heat).toBe(5);
+        expect(toNum(game.reactor.current_power)).toBe(100);
+        expect(toNum(game.reactor.current_heat)).toBe(5);
     });
 
     it("hard (ratio 1): 100% of overflow goes to heat", async () => {
@@ -195,8 +195,8 @@ describe("Difficulty power overflow to heat ratio", () => {
 
         game.engine.tick();
 
-        expect(game.reactor.current_power).toBe(100);
-        expect(game.reactor.current_heat).toBe(10);
+        expect(toNum(game.reactor.current_power)).toBe(100);
+        expect(toNum(game.reactor.current_heat)).toBe(10);
     });
 });
 

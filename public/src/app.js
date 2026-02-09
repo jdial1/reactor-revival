@@ -1,6 +1,7 @@
 import { Game } from "./core/game.js";
 import { ObjectiveManager } from "./core/objective.js";
 import { TooltipManager } from "./components/tooltip.js";
+import { TutorialManager } from "./components/tutorialManager.js";
 import { on, escapeHtml, safeGetItem, safeSetItem, safeRemoveItem } from "./utils/util.js";
 import { UI } from "./components/ui.js";
 import { Engine } from "./core/engine.js";
@@ -61,18 +62,24 @@ async function handleUserSession(game, pageRouter, ui) {
   let savedGame = false;
   if (!isNewGamePending) {
     if (loadSlot) {
-      // Load from specific slot
       console.log(`[DEBUG] Loading from slot: ${loadSlot}`);
       savedGame = await game.loadGame(parseInt(loadSlot));
       console.log(`[DEBUG] Load result: ${savedGame}`);
-      safeRemoveItem("reactorLoadSlot"); // Clear the load slot flag
+      safeRemoveItem("reactorLoadSlot");
     } else {
-      // Load from most recent save (backward compatibility)
-      
       savedGame = await game.loadGame();
       console.log(`[DEBUG] Load result: ${savedGame}`);
     }
-    if (savedGame) game.paused = true;
+    if (savedGame && typeof savedGame === "object" && savedGame.backupAvailable && window.showLoadBackupModal && window.setSlot1FromBackup) {
+      const useBackup = await window.showLoadBackupModal();
+      if (useBackup) {
+        window.setSlot1FromBackup();
+        savedGame = await game.loadGame(loadSlot ? parseInt(loadSlot) : null);
+      } else {
+        savedGame = false;
+      }
+    }
+    if (savedGame === true) game.paused = true;
   }
 
   const hash = window.location.hash.substring(1);
@@ -115,6 +122,8 @@ function clearAllGameDataForNewGame(game) {
   for (let i = 1; i <= 3; i++) {
     safeRemoveItem(`reactorGameSave_${i}`);
   }
+  safeRemoveItem("reactorGameSave_Previous");
+  safeRemoveItem("reactorGameSave_Backup");
   safeRemoveItem("reactorCurrentSaveSlot");
   safeRemoveItem("reactorGameQuickStartShown");
   safeRemoveItem("google_drive_save_file_id");
@@ -128,32 +137,11 @@ function setupButtonHandlers(pageRouter, ui, game) {
   const newGameBtn = document.getElementById("splash-new-game-btn");
   if (newGameBtn) {
     newGameBtn.onclick = async () => {
-      console.log("[TECH-TREE] splash-new-game-btn clicked in app.js");
-      if (window.showTechTreeSelection && window.splashManager) {
-        console.log("[TECH-TREE] Using tech tree selection flow");
-        try {
-          await window.showTechTreeSelection(game, pageRouter, ui, window.splashManager);
-        } catch (error) {
-          console.error("[TECH-TREE] Error in tech tree selection, falling back to direct start:", error);
-          if (window.splashManager) {
-            window.splashManager.hide();
-          }
-          await new Promise((resolve) => setTimeout(resolve, 600));
-          clearAllGameDataForNewGame(game);
-          await game.initialize_new_game_state();
-          await startGame(pageRouter, ui, game);
-          safeRemoveItem("reactorNewGamePending");
-        }
-      } else {
-        console.log("[TECH-TREE] Tech tree selection not available, using direct start");
-        if (window.splashManager) {
-          window.splashManager.hide();
-        }
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        clearAllGameDataForNewGame(game);
-        await game.initialize_new_game_state();
-        await startGame(pageRouter, ui, game);
-        safeRemoveItem("reactorNewGamePending");
+      if (!window.showTechTreeSelection) return;
+      try {
+        await window.showTechTreeSelection(game, pageRouter, ui, window.splashManager);
+      } catch (error) {
+        console.error("[TECH-TREE] Error in tech tree selection:", error);
       }
     };
   }
@@ -234,10 +222,9 @@ function showUpdateToast(newVersion, currentVersion) {
   toast.innerHTML = `
     <div class="update-toast-content">
       <div class="update-toast-message">
-        <span class="update-toast-icon">🚀</span>
-        <span class="update-toast-text">A new version is available!</span>
+        <span class="update-toast-text">New content available, click to reload.</span>
       </div>
-      <button id="refresh-button" class="update-toast-button">Refresh</button>
+      <button id="refresh-button" class="update-toast-button">Reload</button>
       <button class="update-toast-close" onclick="this.closest('.update-toast').remove()">×</button>
     </div>
   `;
@@ -509,6 +496,8 @@ async function startGame(pageRouter, ui, game) {
   
   game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
   game.engine = new Engine(game);
+  game.engine.setForceNoSAB(safeGetItem("reactor_force_no_sab") === "true");
+  game.tutorialManager = new TutorialManager(game);
 
   
   await game.startSession();
@@ -689,6 +678,9 @@ async function showQuickStartModal() {
     const closeModal = () => {
       modal.remove();
       safeSetItem("reactorGameQuickStartShown", "1");
+      if (window.game?.tutorialManager && !safeGetItem("reactorTutorialCompleted")) {
+        window.game.tutorialManager.start();
+      }
     };
 
     document.getElementById("quick-start-close").onclick = closeModal;

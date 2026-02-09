@@ -1,3 +1,4 @@
+import Decimal, { toDecimal } from "../utils/decimal.js";
 import { numFormat as fmt } from "../utils/util.js";
 import { executeUpgradeAction } from "./upgradeActions.js";
 
@@ -8,14 +9,13 @@ export class Upgrade {
     this.id = upgrade_definition.id;
     this.title = upgrade_definition.title;
     this.description = upgrade_definition.description;
-    this.base_cost = upgrade_definition.cost;
+    this.base_cost = toDecimal(upgrade_definition.cost ?? 0);
     this.cost_multiplier = upgrade_definition.multiplier || 1.5;
     this.max_level = upgrade_definition.levels || game.upgrade_max_level;
     this.type = upgrade_definition.type;
     this.category = upgrade_definition.category;
     this.erequires = upgrade_definition.erequires;
-    this.base_ecost = upgrade_definition.ecost;
-    // For EP upgrades, use multiplier if ecost_multiplier is not specified
+    this.base_ecost = toDecimal(upgrade_definition.ecost ?? 0);
     this.ecost_multiplier = upgrade_definition.ecost_multiplier || upgrade_definition.multiplier || 1.5;
     this.actionId = upgrade_definition.actionId;
     this.level = 0;
@@ -62,18 +62,26 @@ export class Upgrade {
     }
   }
 
-  updateDisplayCost() {
-    if (this.base_ecost) {
-      this.current_ecost = this.base_ecost * Math.pow(this.ecost_multiplier, this.level);
+  setAffordProgress(progress) {
+    const p = Math.max(0, Math.min(1, Number(progress)));
+    if (this.$el) {
+      const buyBtn = this.$el.querySelector(".upgrade-action-btn");
+      if (buyBtn) {
+        buyBtn.style.setProperty("--afford-progress", String(p));
+      }
     }
-    this.current_cost = this.base_cost * Math.pow(this.cost_multiplier, this.level);
+  }
+
+  updateDisplayCost() {
+    this.current_ecost = this.base_ecost.mul(Decimal.pow(this.ecost_multiplier, this.level));
+    this.current_cost = this.base_cost.mul(Decimal.pow(this.cost_multiplier, this.level));
 
     if (this.level >= this.max_level) {
       this.display_cost = "MAX";
-      this.current_cost = Infinity;
-      this.current_ecost = Infinity;
+      this.current_cost = Decimal.MAX_VALUE;
+      this.current_ecost = Decimal.MAX_VALUE;
     } else {
-      this.display_cost = this.base_ecost ? `${fmt(this.current_ecost)} EP` : `$${fmt(this.current_cost)}`;
+      this.display_cost = this.base_ecost.gt(0) ? `${fmt(this.current_ecost)} EP` : `$${fmt(this.current_cost)}`;
     }
 
     if (this.$el) {

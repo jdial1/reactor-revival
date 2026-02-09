@@ -1,5 +1,5 @@
 import { supabaseSave } from "../services/SupabaseSave.js";
-import { safeGetItem, safeSetItem } from "../utils/util.js";
+import { safeGetItem, safeSetItem, stringifySaveData, rotateAndWriteSlot1, setSlot1FromBackup } from "../utils/util.js";
 
 class SettingsModal {
   constructor() {
@@ -45,7 +45,7 @@ class SettingsModal {
     if (!handle || !window.game?.getSaveState) return;
     try {
       const writable = await handle.createWritable();
-      const data = JSON.stringify(window.game.getSaveState());
+      const data = stringifySaveData(window.game.getSaveState());
       await writable.write(data);
       await writable.close();
       console.log("[PWA] Saved directly to disk");
@@ -64,12 +64,7 @@ class SettingsModal {
     const hideMaxResearch = safeGetItem("reactor_hide_max_research", "true") !== "false";
     const hideOtherDoctrineUpgrades = safeGetItem("reactor_hide_other_doctrine_upgrades", "false") === "true";
     const heatFlowVisible = safeGetItem("reactor_heat_flow_visible", "true") !== "false";
-    const experimentalWorkerStored = safeGetItem("reactor_experimental_worker");
-    const experimentalWorker = experimentalWorkerStored === "true"
-      ? true
-      : experimentalWorkerStored === "false"
-        ? false
-        : (typeof navigator !== "undefined" && (navigator.hardwareConcurrency || 0) > 4);
+    const heatMapVisible = safeGetItem("reactor_heat_map_visible", "false") === "true";
     const numberFormat = safeGetItem("number_format", "default");
     const masterVol = parseFloat(safeGetItem("reactor_volume_master", "0.25"));
     const effectsVol = parseFloat(safeGetItem("reactor_volume_effects", "0.50"));
@@ -92,8 +87,9 @@ class SettingsModal {
     this.overlay.innerHTML = `
 <div class="settings-modal pixel-panel">
 <div class="settings-content">
-<div class="settings-group">
-<h3>Audio</h3>
+<div class="settings-group settings-group-collapsed">
+<button type="button" class="settings-group-header" aria-expanded="false"><h3>Audio</h3><span class="settings-group-chevron" aria-hidden="true"></span></button>
+<div class="settings-group-body">
 <label class="setting-row mute-toggle">
 <span>Mute</span>
 <button type="button" class="mute-btn" id="setting-mute-btn" aria-label="Toggle Mute">
@@ -122,90 +118,128 @@ ${volumeStepper("system", systemVol)}
 ${volumeStepper("ambience", ambienceVol)}
 </div>
 </div>
-<div class="settings-group">
-<h3>Visuals</h3>
-<label class="setting-row mech-switch-row">
-<span>Reduced Motion</span>
-<input type="checkbox" id="setting-motion" ${isReducedMotion ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-motion", isReducedMotion)}
-</label>
-<label class="setting-row mech-switch-row">
-<span>Hide Unaffordable Upgrades</span>
-<input type="checkbox" id="setting-hide-upgrades" ${hideUnaffordableUpgrades ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-hide-upgrades", hideUnaffordableUpgrades)}
-</label>
-<label class="setting-row mech-switch-row">
-<span>Hide Unaffordable Research</span>
-<input type="checkbox" id="setting-hide-research" ${hideUnaffordableResearch ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-hide-research", hideUnaffordableResearch)}
-</label>
-<label class="setting-row mech-switch-row">
-<span>Hide Max Upgrades</span>
-<input type="checkbox" id="setting-hide-max-upgrades" ${hideMaxUpgrades ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-hide-max-upgrades", hideMaxUpgrades)}
-</label>
-<label class="setting-row mech-switch-row">
-<span>Hide Max Research</span>
-<input type="checkbox" id="setting-hide-max-research" ${hideMaxResearch ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-hide-max-research", hideMaxResearch)}
-</label>
-<label class="setting-row mech-switch-row">
-<span>Hide Other Doctrine Upgrades</span>
-<input type="checkbox" id="setting-hide-other-doctrine" ${hideOtherDoctrineUpgrades ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-hide-other-doctrine", hideOtherDoctrineUpgrades)}
-</label>
-<label class="setting-row mech-switch-row">
-<span>Heat flow arrows</span>
-<input type="checkbox" id="setting-heat-flow" ${heatFlowVisible ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-heat-flow", heatFlowVisible)}
-</label>
-<div class="setting-row">
-<span>Number format</span>
-<select id="setting-number-format" class="pixel-select">
-<option value="default" ${numberFormat === "default" ? "selected" : ""}>1,234 K</option>
-<option value="scientific" ${numberFormat === "scientific" ? "selected" : ""}>1.23e3</option>
-</select>
+</div>
+<div class="settings-group settings-group-collapsed">
+<button type="button" class="settings-group-header" aria-expanded="false"><h3>Visuals</h3><span class="settings-group-chevron" aria-hidden="true"></span></button>
+<div class="settings-group-body">
+<table class="settings-visuals-table">
+<tr>
+<td class="settings-visuals-label"><span>Reduced Motion</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-motion" ${isReducedMotion ? "checked" : ""} style="display: none;">${mechSwitch("setting-motion", isReducedMotion)}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Hide Unaffordable Upgrades</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-hide-upgrades" ${hideUnaffordableUpgrades ? "checked" : ""} style="display: none;">${mechSwitch("setting-hide-upgrades", hideUnaffordableUpgrades)}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Hide Unaffordable Research</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-hide-research" ${hideUnaffordableResearch ? "checked" : ""} style="display: none;">${mechSwitch("setting-hide-research", hideUnaffordableResearch)}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Hide Max Upgrades</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-hide-max-upgrades" ${hideMaxUpgrades ? "checked" : ""} style="display: none;">${mechSwitch("setting-hide-max-upgrades", hideMaxUpgrades)}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Hide Max Research</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-hide-max-research" ${hideMaxResearch ? "checked" : ""} style="display: none;">${mechSwitch("setting-hide-max-research", hideMaxResearch)}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Hide Other Doctrine Upgrades</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-hide-other-doctrine" ${hideOtherDoctrineUpgrades ? "checked" : ""} style="display: none;">${mechSwitch("setting-hide-other-doctrine", hideOtherDoctrineUpgrades)}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Heat flow arrows</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-heat-flow" ${heatFlowVisible ? "checked" : ""} style="display: none;">${mechSwitch("setting-heat-flow", heatFlowVisible)}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Heat map</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-heat-map" ${heatMapVisible ? "checked" : ""} style="display: none;">${mechSwitch("setting-heat-map", heatMapVisible)}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Debug overlay (flow arrows)</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-debug-overlay" ${safeGetItem("reactor_debug_overlay") === "true" ? "checked" : ""} style="display: none;">${mechSwitch("setting-debug-overlay", safeGetItem("reactor_debug_overlay") === "true")}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Number format</span></td>
+<td class="settings-visuals-control"><select id="setting-number-format" class="pixel-select"><option value="default" ${numberFormat === "default" ? "selected" : ""}>1,234 K</option><option value="scientific" ${numberFormat === "scientific" ? "selected" : ""}>1.23e3</option></select></td>
+</tr>
+</table>
 </div>
 </div>
-<div class="settings-group">
-<h3>Data</h3>
+<div class="settings-group settings-group-collapsed">
+<button type="button" class="settings-group-header" aria-expanded="false"><h3>Data</h3><span class="settings-group-chevron" aria-hidden="true"></span></button>
+<div class="settings-group-body">
 <div class="data-buttons">
 <button class="pixel-btn" id="setting-export">Export</button>
 <button class="pixel-btn" id="setting-import">Import</button>
 <input type="file" id="setting-import-input" accept=".json" style="display: none;">
 </div>
-<div id="setting-cloud-saves" style="display: none; margin-top: 10px;">
-<h4 style=" margin-bottom: 5px;font-size: 0.8rem;">Cloud Saves</h4>
-<div class="data-buttons">
-<button class="pixel-btn" id="setting-save-cloud-1">Save Slot 1</button>
-<button class="pixel-btn" id="setting-save-cloud-2">Save Slot 2</button>
-<button class="pixel-btn" id="setting-save-cloud-3">Save Slot 3</button>
+<div id="setting-cloud-saves" class="settings-cloud-saves" style="display: none;">
+<h4 class="settings-cloud-heading">Cloud Saves</h4>
+<div class="cloud-slot-list">
+<div class="cloud-slot-row" data-slot="1">
+<div class="cloud-slot-info">
+<span class="cloud-slot-label">Slot 1</span>
+<span class="cloud-slot-meta">—</span>
+</div>
+<div class="cloud-slot-actions">
+<button type="button" class="pixel-btn pixel-btn-small setting-cloud-save" data-slot="1">Save</button>
+<button type="button" class="pixel-btn pixel-btn-small setting-cloud-load" data-slot="1" disabled>Load</button>
+</div>
+</div>
+<div class="cloud-slot-row" data-slot="2">
+<div class="cloud-slot-info">
+<span class="cloud-slot-label">Slot 2</span>
+<span class="cloud-slot-meta">—</span>
+</div>
+<div class="cloud-slot-actions">
+<button type="button" class="pixel-btn pixel-btn-small setting-cloud-save" data-slot="2">Save</button>
+<button type="button" class="pixel-btn pixel-btn-small setting-cloud-load" data-slot="2" disabled>Load</button>
+</div>
+</div>
+<div class="cloud-slot-row" data-slot="3">
+<div class="cloud-slot-info">
+<span class="cloud-slot-label">Slot 3</span>
+<span class="cloud-slot-meta">—</span>
+</div>
+<div class="cloud-slot-actions">
+<button type="button" class="pixel-btn pixel-btn-small setting-cloud-save" data-slot="3">Save</button>
+<button type="button" class="pixel-btn pixel-btn-small setting-cloud-load" data-slot="3" disabled>Load</button>
 </div>
 </div>
 </div>
-<div class="settings-group">
-<h3>System</h3>
-<label class="setting-row mech-switch-row">
-<span>Physics Worker (offloads heat calculations)</span>
-<input type="checkbox" id="setting-experimental-worker" ${experimentalWorker ? "checked" : ""} style="display: none;">
-${mechSwitch("setting-experimental-worker", experimentalWorker)}
-</label>
-<label class="setting-row mech-switch-row">
-<span>Update Notifications</span>
-<input type="checkbox" id="setting-notifications" style="display: none;">
-${mechSwitch("setting-notifications", false)}
-</label>
 </div>
-<div class="settings-group">
-<h3>Navigation</h3>
+</div>
+</div>
+<div class="settings-group settings-group-collapsed">
+<button type="button" class="settings-group-header" aria-expanded="false"><h3>System</h3><span class="settings-group-chevron" aria-hidden="true"></span></button>
+<div class="settings-group-body">
+<table class="settings-visuals-table">
+<tr>
+<td class="settings-visuals-label"><span>Force No-SAB</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-force-no-sab" ${safeGetItem("reactor_force_no_sab") === "true" ? "checked" : ""} style="display: none;">${mechSwitch("setting-force-no-sab", safeGetItem("reactor_force_no_sab") === "true")}</label></td>
+</tr>
+<tr>
+<td class="settings-visuals-label"><span>Update Notifications</span></td>
+<td class="settings-visuals-control"><label class="mech-switch-row"><input type="checkbox" id="setting-notifications" style="display: none;">${mechSwitch("setting-notifications", false)}</label></td>
+</tr>
+</table>
+</div>
+</div>
+<div class="settings-group settings-group-collapsed">
+<button type="button" class="settings-group-header" aria-expanded="false"><h3>Navigation</h3><span class="settings-group-chevron" aria-hidden="true"></span></button>
+<div class="settings-group-body">
 <div class="data-buttons">
 <button class="pixel-btn" id="research_back_to_splash_btn">Quit Game</button>
 </div>
 </div>
-<div class="settings-group">
-<h3>About</h3>
+</div>
+<div class="settings-group settings-group-collapsed">
+<button type="button" class="settings-group-header" aria-expanded="false"><h3>About</h3><span class="settings-group-chevron" aria-hidden="true"></span></button>
+<div class="settings-group-body">
 <p style=" margin: 0.5rem 0;font-size: 0.6rem;">Version: <span id="app_version">Loading...</span></p>
 <p style=" margin: 0.5rem 0;font-size: 0.6rem;">Display Mode: <span id="app_display_mode">Detecting...</span></p>
+</div>
 </div>
 </div>
 </div>
@@ -219,6 +253,19 @@ ${mechSwitch("setting-notifications", false)}
     this.overlay.addEventListener("click", (e) => {
       if (e.target === this.overlay) {
         this.hide();
+      }
+    });
+
+    this.overlay.addEventListener("click", (e) => {
+      const header = e.target.closest(".settings-group-header");
+      if (header) {
+        e.preventDefault();
+        const group = header.closest(".settings-group");
+        if (group) {
+          const collapsed = group.classList.toggle("settings-group-collapsed");
+          header.setAttribute("aria-expanded", String(!collapsed));
+          playClick();
+        }
       }
     });
 
@@ -335,8 +382,20 @@ ${mechSwitch("setting-notifications", false)}
     setupMechSwitch("setting-heat-flow", (checked) => {
       safeSetItem("reactor_heat_flow_visible", checked ? "true" : "false");
     });
-    setupMechSwitch("setting-experimental-worker", (checked) => {
-      safeSetItem("reactor_experimental_worker", checked ? "true" : "false");
+
+    setupMechSwitch("setting-heat-map", (checked) => {
+      safeSetItem("reactor_heat_map_visible", checked ? "true" : "false");
+    });
+
+    setupMechSwitch("setting-debug-overlay", (checked) => {
+      safeSetItem("reactor_debug_overlay", checked ? "true" : "false");
+    });
+
+    setupMechSwitch("setting-force-no-sab", (checked) => {
+      safeSetItem("reactor_force_no_sab", checked ? "true" : "false");
+      if (window.game?.engine && typeof window.game.engine.setForceNoSAB === "function") {
+        window.game.engine.setForceNoSAB(checked);
+      }
     });
 
     const numberFormatSelect = this.overlay.querySelector("#setting-number-format");
@@ -402,25 +461,29 @@ ${mechSwitch("setting-notifications", false)}
       importBtn.addEventListener("click", () => {
         importInput.click();
       });
-      importInput.addEventListener("change", (e) => {
+      importInput.addEventListener("change", async (e) => {
         const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            try {
-              const saveData = event.target.result;
-              safeSetItem("reactorGameSave_1", saveData);
-              if (window.game && typeof window.game.loadGame === "function") {
-                window.game.loadGame(1).then(() => {
-                  window.location.reload();
-                });
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const saveData = event.target.result;
+            rotateAndWriteSlot1(saveData);
+            if (!window.game || typeof window.game.loadGame !== "function") return;
+            let result = await window.game.loadGame(1);
+            if (result && typeof result === "object" && result.backupAvailable && window.showLoadBackupModal) {
+              const useBackup = await window.showLoadBackupModal();
+              if (useBackup) {
+                setSlot1FromBackup();
+                result = await window.game.loadGame(1);
               }
-            } catch (error) {
-              console.error("Failed to import save:", error);
             }
-          };
-          reader.readAsText(file);
-        }
+            if (result === true) window.location.reload();
+          } catch (error) {
+            console.error("Failed to import save:", error);
+          }
+        };
+        reader.readAsText(file);
       });
     }
 
@@ -494,33 +557,79 @@ ${mechSwitch("setting-notifications", false)}
         const cloudSection = this.overlay.querySelector("#setting-cloud-saves");
         if (cloudSection) {
             cloudSection.style.display = "block";
-            
-            [1, 2, 3].forEach(slotId => {
-                const btn = this.overlay.querySelector(`#setting-save-cloud-${slotId}`);
-                if (btn) {
-                    btn.addEventListener("click", async () => {
-                        try {
-                            btn.textContent = "Saving...";
-                            btn.disabled = true;
-                            if (window.game && typeof window.game.getSaveState === "function") {
-                                const saveData = window.game.getSaveState();
-                                await supabaseSave.saveGame(slotId, saveData);
-                                btn.textContent = "Saved!";
-                                setTimeout(() => { 
-                                    btn.textContent = `Save Slot ${slotId}`; 
-                                    btn.disabled = false; 
-                                }, 2000);
-                            }
-                        } catch (e) {
-                            console.error("Cloud save failed", e);
-                            btn.textContent = "Error";
-                            setTimeout(() => { 
-                                btn.textContent = `Save Slot ${slotId}`; 
-                                btn.disabled = false; 
-                            }, 2000);
-                        }
-                    });
+            const formatCloudDate = (ts) => {
+                if (!ts) return "—";
+                const date = new Date(Number(ts));
+                const diffMs = Date.now() - date;
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                if (diffHours < 1) return "Just now";
+                if (diffHours < 24) return `${diffHours}h ago`;
+                if (diffDays < 7) return `${diffDays}d ago`;
+                return date.toLocaleDateString();
+            };
+            const refreshCloudSlots = async () => {
+                let list = [];
+                try {
+                    list = await supabaseSave.getSaves();
+                } catch (e) {
+                    return;
                 }
+                const bySlot = new Map(list.map(s => [s.slot_id, s]));
+                [1, 2, 3].forEach(slotId => {
+                    const row = this.overlay.querySelector(`.cloud-slot-row[data-slot="${slotId}"]`);
+                    if (!row) return;
+                    const meta = row.querySelector(".cloud-slot-meta");
+                    const saveBtn = row.querySelector(".setting-cloud-save[data-slot=\"" + slotId + "\"]");
+                    const loadBtn = row.querySelector(".setting-cloud-load[data-slot=\"" + slotId + "\"]");
+                    const slotData = bySlot.get(slotId);
+                    if (meta) meta.textContent = slotData ? formatCloudDate(slotData.timestamp) : "—";
+                    if (loadBtn) loadBtn.disabled = !slotData;
+                });
+            };
+            refreshCloudSlots();
+            this.overlay.querySelectorAll(".setting-cloud-save").forEach(btn => {
+                const slotId = parseInt(btn.dataset.slot, 10);
+                btn.addEventListener("click", async () => {
+                    if (!window.game || typeof window.game.getSaveState !== "function") return;
+                    const label = btn.textContent;
+                    btn.textContent = "Saving...";
+                    btn.disabled = true;
+                    try {
+                        await supabaseSave.saveGame(slotId, window.game.getSaveState());
+                        btn.textContent = "Saved";
+                        await refreshCloudSlots();
+                        setTimeout(() => {
+                            btn.textContent = label;
+                            btn.disabled = false;
+                        }, 1500);
+                    } catch (e) {
+                        btn.textContent = "Error";
+                        setTimeout(() => {
+                            btn.textContent = label;
+                            btn.disabled = false;
+                        }, 2000);
+                    }
+                    playClick();
+                });
+            });
+            this.overlay.querySelectorAll(".setting-cloud-load").forEach(btn => {
+                const slotId = parseInt(btn.dataset.slot, 10);
+                btn.addEventListener("click", async () => {
+                    if (btn.disabled) return;
+                    let list = [];
+                    try {
+                        list = await supabaseSave.getSaves();
+                    } catch (e) {
+                        return;
+                    }
+                    const slotData = list.find(s => s.slot_id === slotId);
+                    if (!slotData || !slotData.save_data) return;
+                    safeSetItem(`reactorGameSave_${slotId}`, slotData.save_data);
+                    const loaded = await window.game.loadGame(slotId);
+                    if (loaded) window.location.reload();
+                    playClick();
+                });
             });
         }
     }

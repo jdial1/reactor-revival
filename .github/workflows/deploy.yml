@@ -38,7 +38,7 @@ jobs:
         # The excluded tests (clipboard, pasteModal, meltdown) work locally but fail on GitHub Actions
         # because the url-parse library tries to access window.location._location before our setup code runs
         # Performance tests are excluded as they take ~7+ minutes and are too slow for CI/CD
-        run: npx vitest run --exclude 'tests/ui/**|tests/core/performance.test.js|tests/core/clipboard.test.js|tests/core/pasteModal.test.js|tests/core/meltdown.test.js'
+        run: npx vitest run -c config/vitest.config.mjs --exclude 'tests/ui/**|tests/core/performance.test.js|tests/core/clipboard.test.js|tests/core/pasteModal.test.js|tests/core/meltdown.test.js'
 
       - name: Generate version.json
         run: npm run generate-version

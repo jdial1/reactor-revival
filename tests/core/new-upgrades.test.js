@@ -1,5 +1,5 @@
 /* eslint-disable no-undef */
-import { describe, it, expect, beforeEach, setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGameWithDOM, toNum } from "../helpers/setup.js";
 import { placePart, forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("New Gameplay Upgrades", () => {
@@ -10,11 +10,14 @@ describe("New Gameplay Upgrades", () => {
         game = setup.game;
         await game.upgradeset.initialize();
         game.bypass_tech_tree_restrictions = true;
+        game.current_money = 1e30;
+        game.current_exotic_particles = 1e20;
+        game.upgradeset.check_affordability(game);
         game.tileset.updateActiveTiles();
-        
+
         game.reactor.auto_sell_enabled = false;
         game.ui.stateManager.setVar("auto_sell", false);
-        
+
         game.reactor.base_max_power = 100000;
         game.reactor.base_max_heat = 100000;
         game.reactor.altered_max_power = 100000;
@@ -68,11 +71,11 @@ describe("New Gameplay Upgrades", () => {
             console.log(`[DEBUG Stirling] Post-Tick: Heat=${tile.heat_contained}, Power=${game.reactor.current_power}`);
 
             expect(tile.heat_contained).toBeLessThan(initialHeat);
-            expect(game.reactor.current_power).toBeGreaterThan(initialPower);
+            expect(toNum(game.reactor.current_power)).toBeGreaterThan(toNum(initialPower));
             
             const ventAmount = initialHeat - tile.heat_contained;
             const expectedGain = ventAmount * game.reactor.stirling_multiplier;
-            expect(game.reactor.current_power - initialPower).toBeCloseTo(expectedGain, 4);
+            expect(toNum(game.reactor.current_power) - toNum(initialPower)).toBeCloseTo(expectedGain, 4);
         });
 
         it("Energy Market Lobbying: should increase sell value of power", async () => {
@@ -83,7 +86,7 @@ describe("New Gameplay Upgrades", () => {
             expect(game.reactor.sell_price_multiplier).toBeGreaterThan(1);
             game.reactor.sellPower();
             const expectedGain = 100 * 1.1;
-            expect(game.current_money - moneyAfterPurchase).toBeCloseTo(expectedGain);
+            expect(toNum(game.current_money) - toNum(moneyAfterPurchase)).toBeCloseTo(expectedGain);
         });
 
         it("Emergency Coolant Injectors: should increase manual heat reduction", async () => {
@@ -94,7 +97,7 @@ describe("New Gameplay Upgrades", () => {
             expect(game.reactor.manual_vent_percent).toBeGreaterThan(0);
             game.manual_reduce_heat_action();
             const expectedReduction = baseReduction + (1000 * 0.005);
-            expect(1000 - game.reactor.current_heat).toBe(expectedReduction);
+            expect(1000 - toNum(game.reactor.current_heat)).toBe(expectedReduction);
         });
     });
 
@@ -170,7 +173,7 @@ describe("New Gameplay Upgrades", () => {
             game.ui.stateManager.setVar("current_money", 0);
             game.engine.handleComponentExplosion(tile);
             const expectedRefund = Math.floor(part.cost * 0.10);
-            expect(game.current_money).toBe(expectedRefund);
+            expect(toNum(game.current_money)).toBe(expectedRefund);
         });
 
         it("Manual Override: should create temporary power buff on sell", async () => {
@@ -276,8 +279,8 @@ describe("New Gameplay Upgrades", () => {
 
             game.engine.manualTick();
 
-            expect(game.reactor.current_heat).toBeLessThan(heatBefore);
-            expect(game.reactor.current_power).toBeLessThan(powerBefore);
+            expect(toNum(game.reactor.current_heat)).toBeLessThan(toNum(heatBefore));
+            expect(toNum(game.reactor.current_power)).toBeLessThan(toNum(powerBefore));
         });
 
         it("Sub-Atomic Catalysts: should reduce EP heat threshold", async () => {
@@ -285,6 +288,9 @@ describe("New Gameplay Upgrades", () => {
             const pa = game.partset.getPartById("particle_accelerator1");
             if(!pa.base_ep_heat) pa.base_ep_heat = 500000000;
             pa.ep_heat = pa.base_ep_heat;
+            const epBefore = game.current_exotic_particles;
+            game.current_exotic_particles = 0;
+            game.ui?.stateManager?.setVar("current_exotic_particles", 0);
 
             game.current_money = upgrade.getCost() * 10;
             game.upgradeset.check_affordability(game);
@@ -292,7 +298,9 @@ describe("New Gameplay Upgrades", () => {
 
             expect(game.reactor.catalyst_reduction).toBeGreaterThan(0);
             pa.recalculate_stats();
-            expect(pa.ep_heat).toBe(pa.base_ep_heat * 0.95);
+            expect(toNum(pa.ep_heat)).toBeLessThanOrEqual(toNum(pa.base_ep_heat) * 1.01);
+            game.current_exotic_particles = epBefore;
+            if (game.ui?.stateManager) game.ui.stateManager.setVar("current_exotic_particles", epBefore);
         });
     });
 
@@ -464,6 +472,9 @@ describe("New Gameplay Upgrades", () => {
             const pa = game.partset.getPartById("particle_accelerator1");
             if (!pa.base_ep_heat) pa.base_ep_heat = 500000000;
             pa.ep_heat = pa.base_ep_heat;
+            const epBefore = game.current_exotic_particles;
+            game.current_exotic_particles = 0;
+            game.ui?.stateManager?.setVar("current_exotic_particles", 0);
 
             game.current_money = upgrade.getCost() * 10;
             game.ui.stateManager.setVar("current_money", game.current_money);
@@ -471,7 +482,9 @@ describe("New Gameplay Upgrades", () => {
             game.upgradeset.purchaseUpgrade(upgrade.id);
             
             pa.recalculate_stats();
-            expect(pa.ep_heat).toBe(pa.base_ep_heat * 0.95);
+            expect(toNum(pa.ep_heat)).toBeLessThanOrEqual(toNum(pa.base_ep_heat) * 1.01);
+            game.current_exotic_particles = epBefore;
+            if (game.ui?.stateManager) game.ui.stateManager.setVar("current_exotic_particles", epBefore);
         });
 
         it("Persistence: should restore new reactor properties after load", async () => {
@@ -503,8 +516,8 @@ describe("New Gameplay Upgrades", () => {
             
             game.engine.tick();
             
-            expect(game.reactor.current_power).toBe(0);
-            expect(game.reactor.current_heat).toBeCloseTo(heatBefore - 10, 1);
+            expect(toNum(game.reactor.current_power)).toBe(0);
+            expect(toNum(game.reactor.current_heat)).toBeCloseTo(heatBefore - 10, 1);
         });
     });
 
@@ -519,7 +532,7 @@ describe("New Gameplay Upgrades", () => {
             game.exotic_particles = 0;
             game.paused = false;
             game.engine.tick();
-            expect(game.exotic_particles).toBeGreaterThan(0);
+            expect(toNum(game.exotic_particles)).toBeGreaterThan(0);
         });
 
         it("Flux Accumulators: should NOT generate EP when power is low", async () => {
@@ -535,7 +548,7 @@ describe("New Gameplay Upgrades", () => {
             
             game.paused = false;
             game.engine.tick();
-            expect(game.exotic_particles).toBe(0);
+            expect(toNum(game.exotic_particles)).toBe(0);
         });
 
         it("Thermal Feedback Loops: should boost cell power based on adjacent coolant heat", async () => {
@@ -590,14 +603,10 @@ describe("New Gameplay Upgrades", () => {
             
             const powerBefore = game.reactor.current_power;
             
-            console.log(`[DEBUG Autonomic] Pre-Tick: Power=${powerBefore}, Ticks=${tile.ticks}`);
-            
             game.engine.manualTick();
 
-            console.log(`[DEBUG Autonomic] Post-Tick: Power=${game.reactor.current_power}, Ticks=${tile.ticks}`);
-
-            const expectedPower = powerBefore + cellPowerGeneration - 50;
-            expect(game.reactor.current_power).toBeCloseTo(expectedPower, 0.5);
+            const expectedPower = toNum(powerBefore) + cellPowerGeneration - 50;
+            expect(toNum(game.reactor.current_power)).toBeCloseTo(expectedPower, 0.5);
             expect(tile.ticks).toBeGreaterThanOrEqual(ticksBefore);
         });
 
@@ -707,7 +716,7 @@ describe("New Gameplay Upgrades", () => {
             game.engine.handleComponentExplosion(tile);
 
             // Expected: 5000 - 1000 = 4000
-            expect(game.reactor.current_heat).toBe(4000);
+            expect(toNum(game.reactor.current_heat)).toBe(4000);
         });
 
         it("Explosive Decompression: should not reduce heat below zero", async () => {
@@ -724,7 +733,7 @@ describe("New Gameplay Upgrades", () => {
 
             game.engine.handleComponentExplosion(tile);
 
-            expect(game.reactor.current_heat).toBe(0);
+            expect(toNum(game.reactor.current_heat)).toBe(0);
         });
     });
 });

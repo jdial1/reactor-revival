@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, toNum } from "../helpers/setup.js";
 
 describe("Core Game Mechanics", () => {
   let game;
@@ -22,8 +22,8 @@ describe("Core Game Mechanics", () => {
   });
 
   it("should initialize with default values", () => {
-    expect(game.current_money).toBe(game.base_money);
-    expect(game.exotic_particles).toBe(0);
+    expect(toNum(game.current_money)).toBe(game.base_money);
+    expect(toNum(game.exotic_particles)).toBe(0);
     expect(game.tileset.tiles.length).toBe(game.max_rows);
   });
 
@@ -38,8 +38,8 @@ describe("Core Game Mechanics", () => {
     // Simulate power generation and sell
     game.reactor.current_power = 10;
     game.sell_action();
-    
-    expect(game.current_money).toBeGreaterThan(initialMoney);
+
+    expect(toNum(game.current_money)).toBeGreaterThan(toNum(initialMoney));
   });
 
   it("should handle reboot logic correctly", async () => {
@@ -53,9 +53,9 @@ describe("Core Game Mechanics", () => {
     // Reboot keeping EP (Prestige)
     await game.reboot_action(true);
     
-    expect(game.current_money).toBe(game.base_money);
-    expect(game.exotic_particles).toBe(0); // Resets spendable EP
-    expect(game.total_exotic_particles).toBe(100); 
+    expect(toNum(game.current_money)).toBe(game.base_money);
+    expect(toNum(game.exotic_particles)).toBe(0);
+    expect(toNum(game.total_exotic_particles)).toBe(100); 
     expect(tile.part).toBeNull();
   });
 });

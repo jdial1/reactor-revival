@@ -556,7 +556,7 @@ describe("AudioService", () => {
       audioService.startWarningLoop(0.5);
       audioService.stopWarningLoop();
       expect(audioService._warningLoopActive).toBe(false);
-      expect(audioService._warningLoopInterval).toBeNull();
+      expect(audioService._warningLoopInterval == null).toBe(true);
     });
 
     it("should start geiger ticks with warning loop", () => {
@@ -668,7 +668,10 @@ describe("AudioService", () => {
       const tile = game.tileset.getTile(5, 5);
       const part = game.partset.getPartById("uranium1");
       game.current_money = part.cost;
-      
+
+      if (ui.inputManager && !ui.inputManager.hotkeys && ui.game) {
+        ui.inputManager.setup();
+      }
       if (ui.handleGridInteraction) {
         ui.stateManager.setClickedPart(part);
         const clickEvent = new PointerEvent('pointerdown', {

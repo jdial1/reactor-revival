@@ -1,17 +1,19 @@
 import { defineConfig } from "vite";
+import { configDefaults } from "vitest/config";
 
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
 export default defineConfig({
   test: {
+    exclude: [...configDefaults.exclude, "**/performance.test.js"],
     globals: true,
     environment: "jsdom",
     environmentOptions: {
       jsdom: {
         url: "http://localhost:8080/",
       },
-    }, 
-    setupFiles: ["./tests/helpers/setup.js"],
+    },
+    setupFiles: ["./tests/helpers/setupDecimal.js", "./tests/helpers/setup.js"],
     reporters: ["default"],
     css: false,
     pool: "threads",
@@ -27,7 +29,7 @@ export default defineConfig({
     testTimeout: isCI ? 120000 : 10000,
     hookTimeout: isCI ? 60000 : 10000,
     silent: false,
-    forceRerunTriggers: ["**/package.json", "{vitest,vite}.config.*"],
+    forceRerunTriggers: ["**/package.json", "config/{vitest,vite}.config.*"],
     printConsoleTrace: false,
     outputTruncateLength: 80,
     chaiConfig: {

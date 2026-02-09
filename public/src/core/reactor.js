@@ -1,3 +1,6 @@
+import { toDecimal } from "../utils/decimal.js";
+import { HEAT_EPSILON } from "./heatCalculations.js";
+
 export class Reactor {
   constructor(game) {
     "use strict";
@@ -8,12 +11,12 @@ export class Reactor {
   }
 
   setDefaults() {
-    this.current_heat = 0;
-    this.current_power = 0;
-    this.max_heat = this.base_max_heat;
-    this.altered_max_heat = this.base_max_heat;
-    this.max_power = this.base_max_power;
-    this.altered_max_power = this.base_max_power;
+    this._current_heat = toDecimal(0);
+    this._current_power = toDecimal(0);
+    this._max_heat = toDecimal(this.base_max_heat);
+    this.altered_max_heat = toDecimal(this.base_max_heat);
+    this._max_power = toDecimal(this.base_max_power);
+    this.altered_max_power = toDecimal(this.base_max_power);
 
     this.auto_sell_multiplier = 0;
     this.heat_power_multiplier = 0;
@@ -45,10 +48,19 @@ export class Reactor {
     this.game.sold_power = false;
     this.game.sold_heat = false;
 
-    this._last_calculated_max_power = this.base_max_power;
-    this._last_calculated_max_heat = this.base_max_heat;
+    this._last_calculated_max_power = toDecimal(this.base_max_power);
+    this._last_calculated_max_heat = toDecimal(this.base_max_heat);
     this._classificationStatsHistory = [];
   }
+
+  get current_heat() { return this._current_heat; }
+  set current_heat(v) { this._current_heat = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
+  get current_power() { return this._current_power; }
+  set current_power(v) { this._current_power = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
+  get max_heat() { return this._max_heat; }
+  set max_heat(v) { this._max_heat = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
+  get max_power() { return this._max_power; }
+  set max_power(v) { this._max_power = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
 
   recordClassificationStats() {
     const h = this._classificationStatsHistory;
@@ -83,24 +95,21 @@ export class Reactor {
   updateStats() {
     this._resetStats();
 
-    // Treat max values as externally set only when they differ from both the last calculated values and the current base.
     const maxPowerSetExternally =
-      this.max_power !== this._last_calculated_max_power &&
-      this.max_power !== this.base_max_power;
+      this.max_power.neq(this._last_calculated_max_power) &&
+      this.max_power.neq(this.base_max_power);
     const maxHeatSetExternally =
-      this.max_heat !== this._last_calculated_max_heat &&
-      this.max_heat !== this.base_max_heat;
-    const alteredMaxPowerSet =
-      this.altered_max_power !== this.base_max_power;
-    const alteredMaxHeatSet =
-      this.altered_max_heat !== this.base_max_heat;
-    
+      this.max_heat.neq(this._last_calculated_max_heat) &&
+      this.max_heat.neq(this.base_max_heat);
+    const alteredMaxPowerSet = toDecimal(this.altered_max_power).neq(this.base_max_power);
+    const alteredMaxHeatSet = toDecimal(this.altered_max_heat).neq(this.base_max_heat);
+
     let current_max_power = maxPowerSetExternally
       ? this.max_power
-      : (alteredMaxPowerSet ? this.altered_max_power : this.base_max_power);
+      : (alteredMaxPowerSet ? toDecimal(this.altered_max_power) : toDecimal(this.base_max_power));
     let current_max_heat = maxHeatSetExternally
       ? this.max_heat
-      : (alteredMaxHeatSet ? this.altered_max_heat : this.base_max_heat);
+      : (alteredMaxHeatSet ? toDecimal(this.altered_max_heat) : toDecimal(this.base_max_heat));
     let temp_transfer_multiplier = 0;
     let temp_vent_multiplier = 0;
 
@@ -120,9 +129,12 @@ export class Reactor {
         if (tile.part.category === "cell" && tile.ticks > 0) {
           this._applyReflectorEffects(tile);
 
-          // Add Forceful Fusion power bonus
-          if (this.heat_power_multiplier > 0 && this.current_heat > 1000) {
-            tile.power *= 1 + (this.heat_power_multiplier * (Math.log(this.current_heat) / Math.log(1000) / 100));
+          if (this.heat_power_multiplier > 0 && this.current_heat.gt(1000)) {
+            const heatForLog = Math.min(this.current_heat.toNumber(), 1e100);
+            tile.power *= 1 + (this.heat_power_multiplier * (Math.log(heatForLog) / Math.log(1000) / 100));
+            if (!Number.isFinite(tile.power)) {
+              tile.power = (tile.part && Number.isFinite(tile.part.base_power)) ? tile.part.base_power : 0;
+            }
           }
 
           if (this.manual_override_mult > 0 && Date.now() < this.override_end_time) {
@@ -170,15 +182,15 @@ export class Reactor {
 
         if (!maxPowerSetExternally) {
           if (tile.part.reactor_power) {
-            current_max_power += tile.part.reactor_power;
+            current_max_power = current_max_power.add(tile.part.reactor_power);
           }
           if (tile.part.id === "reactor_plating6") {
-            current_max_power += tile.part.reactor_heat;
+            current_max_power = current_max_power.add(tile.part.reactor_heat);
           }
         }
         if (!maxHeatSetExternally) {
           if (tile.part.reactor_heat) {
-            current_max_heat += tile.part.reactor_heat;
+            current_max_heat = current_max_heat.add(tile.part.reactor_heat);
           }
         }
 
@@ -219,9 +231,8 @@ export class Reactor {
       }
     });
 
-    // Ensure all values are numbers
-    this.max_power = Number(current_max_power);
-    this.max_heat = Number(current_max_heat);
+    this.max_power = current_max_power;
+    this.max_heat = current_max_heat;
     this._last_calculated_max_power = this.max_power;
     this._last_calculated_max_heat = this.max_heat;
 
@@ -229,7 +240,7 @@ export class Reactor {
     this.stats_heat_generation = Number(this.stats_heat_generation || 0);
     this.stats_total_part_heat = Number(this.stats_total_part_heat || 0);
     this.stats_net_heat = this.stats_heat_generation - this.stats_vent - this.stats_outlet;
-    this.stats_cash = this.max_power * this.auto_sell_multiplier;
+    this.stats_cash = this.max_power.mul(this.auto_sell_multiplier);
 
     // Ensure stats_power is valid
     if (!isFinite(this.stats_power) || isNaN(this.stats_power)) {
@@ -317,18 +328,19 @@ export class Reactor {
   }
 
   manualReduceHeat() {
-    if (this.current_heat > 0) {
+    if (this.current_heat.gt(0)) {
       const previousHeat = this.current_heat;
       let reduction = this.manual_heat_reduce || this.game.base_manual_heat_reduce || 1;
-
       if (this.manual_vent_percent > 0) {
-        reduction += (this.max_heat * this.manual_vent_percent);
+        reduction += this.max_heat.toNumber() * this.manual_vent_percent;
       }
-
-      this.current_heat -= reduction;
-      if (this.current_heat < 0) this.current_heat = 0;
-      // Only set sold_heat to true if we actually reduced heat from a non-zero value
-      if (this.current_heat === 0 && previousHeat > 0) this.game.sold_heat = true;
+      this.current_heat = this.current_heat.sub(reduction);
+      if (this.current_heat.lt(0)) this.current_heat = toDecimal(0);
+      const eps = toDecimal(HEAT_EPSILON);
+      if (this.current_heat.lte(eps)) {
+        this.current_heat = toDecimal(0);
+        if (previousHeat.gt(eps)) this.game.sold_heat = true;
+      }
       this.game.ui.stateManager.setVar("current_heat", this.current_heat);
 
       // Update heat background tint for immediate visual feedback
@@ -346,12 +358,13 @@ export class Reactor {
   }
 
   sellPower() {
-    if (this.current_power > 0) {
-      const value = this.current_power * (this.sell_price_multiplier || 1);
+    if (this.current_power.gt(0)) {
+      const value = this.current_power.mul(this.sell_price_multiplier || 1);
       this.game.addMoney(value);
-      this.current_power = 0;
+      this.current_power = toDecimal(0);
       this.game.ui.stateManager.setVar("current_power", this.current_power);
       this.game.sold_power = true;
+      if (this.game.emit) this.game.emit("powerSold", {});
 
       if (this.manual_override_mult > 0) {
         this.override_end_time = Date.now() + 10000;
@@ -374,7 +387,7 @@ export class Reactor {
       this.game.grace_period_ticks--;
       return false;
     }
-    const isMeltdown = this.current_heat > 2 * this.max_heat;
+    const isMeltdown = this.current_heat.gt(this.max_heat.mul(2));
     this.game.logger?.debug(`[MELTDOWN-CHECK] Inside checkMeltdown. isMeltdown condition evaluated to: ${isMeltdown}. (Heat: ${this.current_heat.toFixed(2)} > 2 * Max Heat: ${this.max_heat.toFixed(2)})`);
     if (isMeltdown) {
       this.game.logger?.warn(`[MELTDOWN] Condition met! Initiating meltdown sequence.`);
@@ -397,7 +410,13 @@ export class Reactor {
       }
 
       if (!this.game.isSandbox) {
-        if (this.game.ui && typeof this.game.ui.explodeAllPartsSequentially === "function") {
+        if (this.game.ui && typeof this.game.ui.startMeltdownBuildup === "function") {
+          this.game.ui.startMeltdownBuildup(() => {
+            if (this.game.ui && typeof this.game.ui.explodeAllPartsSequentially === "function") {
+              this.game.ui.explodeAllPartsSequentially();
+            }
+          });
+        } else if (this.game.ui && typeof this.game.ui.explodeAllPartsSequentially === "function") {
           this.game.ui.explodeAllPartsSequentially();
         } else {
           this.game.tileset.active_tiles_list.forEach((tile) => {
@@ -440,9 +459,7 @@ export class Reactor {
   clearHeatVisualStates() {
     if (this.game.tileset && this.game.tileset.active_tiles_list) {
       this.game.tileset.active_tiles_list.forEach((tile) => {
-        if (tile.$el) {
-          tile.$el.classList.remove("segment-highlight", "exploding");
-        }
+        tile.exploding = false;
       });
     }
 

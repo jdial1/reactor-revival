@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, toNum } from '../helpers/setup.js';
 
 describe('EP Info Bar Display', () => {
     let game;
@@ -43,7 +43,7 @@ describe('EP Info Bar Display', () => {
         paTile.heat_contained = 1000;
 
         game.engine.tick();
-        expect(game.exotic_particles).toBeGreaterThan(0);
+        expect(toNum(game.exotic_particles)).toBeGreaterThan(0);
         game.ui.stateManager.setVar("current_exotic_particles", game.exotic_particles); // Explicitly update state var
         game.ui.processUpdateQueue();
         const mobileContent = mobileEl.querySelector('.ep-content');

@@ -22,10 +22,21 @@ export class GridScaler {
             initialDistance: 0,
             initialScale: 1,
             initialTranslate: { x: 0, y: 0 },
+            pinchMidpointInWrapper: { x: 0, y: 0 },
             currentTranslate: { x: 0, y: 0 },
             currentScale: 1,
+            targetTranslate: { x: 0, y: 0 },
+            targetScale: 1,
+            zoomDamping: 0.24,
             touches: [],
-            pinchDistanceThreshold: 10
+            pinchDistanceThreshold: 10,
+            lastTranslate: { x: 0, y: 0 },
+            lastMoveTime: 0,
+            velocity: { x: 0, y: 0 },
+            momentumDecay: 0.92,
+            snapBackThreshold: 0.4,
+            snapBackSpring: 0.12,
+            _animationId: null
         };
 
     }
@@ -80,8 +91,20 @@ export class GridScaler {
             this.gestureState.initialDistance = this.getDistance(e.touches[0], e.touches[1]);
             this.gestureState.initialScale = this.gestureState.currentScale || 1;
             this.gestureState.initialTranslate = { ...this.gestureState.currentTranslate };
+            this.gestureState.targetScale = this.gestureState.currentScale;
+            this.gestureState.targetTranslate = { ...this.gestureState.currentTranslate };
+            const midpoint = this.getMidpoint(e.touches[0], e.touches[1]);
+            const wrapperRect = this.wrapper.getBoundingClientRect();
+            const wrapperCenterX = wrapperRect.left + wrapperRect.width / 2;
+            const wrapperCenterY = wrapperRect.top + wrapperRect.height / 2;
+            this.gestureState.pinchMidpointInWrapper = {
+                x: midpoint.x - wrapperCenterX,
+                y: midpoint.y - wrapperCenterY
+            };
             this.gestureState.isPinching = false;
             this.gestureState.isPanning = false;
+            this.gestureState.lastMoveTime = performance.now();
+            this.gestureState.lastTranslate = { ...this.gestureState.currentTranslate };
         } else if (e.touches.length === 1) {
             this.gestureState.isPinching = false;
             this.gestureState.isPanning = false;
@@ -100,28 +123,36 @@ export class GridScaler {
             this.gestureState.isPanning = true;
         }
         e.preventDefault();
-        if (this.gestureState.isPinching) {
-            const scale = (currentDistance / this.gestureState.initialDistance) * this.gestureState.initialScale;
-            const clampedScale = Math.max(0.5, Math.min(2.0, scale));
-            this.gestureState.currentScale = clampedScale;
-            const midpoint = this.getMidpoint(e.touches[0], e.touches[1]);
-            const wrapperRect = this.wrapper.getBoundingClientRect();
-            const wrapperCenterX = wrapperRect.left + wrapperRect.width / 2;
-            const wrapperCenterY = wrapperRect.top + wrapperRect.height / 2;
-            this.gestureState.currentTranslate = {
-                x: midpoint.x - wrapperCenterX,
-                y: midpoint.y - wrapperCenterY
-            };
-        } else {
-            const currentMidpoint = this.getMidpoint(e.touches[0], e.touches[1]);
-            const previousMidpoint = this.getMidpoint(
-                this.gestureState.touches[0],
-                this.gestureState.touches[1]
-            );
-            this.gestureState.currentTranslate.x += currentMidpoint.x - previousMidpoint.x;
-            this.gestureState.currentTranslate.y += currentMidpoint.y - previousMidpoint.y;
+        const g = this.gestureState;
+        const now = performance.now();
+        const dt = Math.min(100, now - g.lastMoveTime) / 1000;
+        if (dt > 0) {
+            g.velocity.x = (g.currentTranslate.x - g.lastTranslate.x) / dt;
+            g.velocity.y = (g.currentTranslate.y - g.lastTranslate.y) / dt;
         }
-        this.gestureState.touches = Array.from(e.touches);
+        g.lastTranslate = { ...g.currentTranslate };
+        g.lastMoveTime = now;
+
+        const d = g.zoomDamping;
+        const scale = (currentDistance / g.initialDistance) * g.initialScale;
+        const clampedScale = Math.max(0.5, Math.min(2.0, scale));
+        g.targetScale = clampedScale;
+        const ratio = g.currentScale > 0 ? clampedScale / g.currentScale : 1;
+        const mx = g.pinchMidpointInWrapper.x;
+        const my = g.pinchMidpointInWrapper.y;
+        g.targetTranslate = {
+            x: g.currentTranslate.x * ratio + mx * (1 - ratio),
+            y: g.currentTranslate.y * ratio + my * (1 - ratio)
+        };
+        const currentMidpoint = this.getMidpoint(e.touches[0], e.touches[1]);
+        const previousMidpoint = this.getMidpoint(g.touches[0], g.touches[1]);
+        g.targetTranslate.x += currentMidpoint.x - previousMidpoint.x;
+        g.targetTranslate.y += currentMidpoint.y - previousMidpoint.y;
+
+        g.currentScale += (g.targetScale - g.currentScale) * d;
+        g.currentTranslate.x += (g.targetTranslate.x - g.currentTranslate.x) * d;
+        g.currentTranslate.y += (g.targetTranslate.y - g.currentTranslate.y) * d;
+        g.touches = Array.from(e.touches);
         this.applyTransform();
     }
 
@@ -130,7 +161,48 @@ export class GridScaler {
             this.gestureState.isPinching = false;
             this.gestureState.isPanning = false;
             this.gestureState.touches = [];
+            this.startInertiaOrSnapBack();
         }
+    }
+
+    startInertiaOrSnapBack() {
+        if (this.gestureState._animationId) cancelAnimationFrame(this.gestureState._animationId);
+        const g = this.gestureState;
+        const run = () => {
+            const w = this.wrapper;
+            if (!w || !this.reactor) return;
+            const wW = w.clientWidth || 1;
+            const wH = w.clientHeight || 1;
+            const limitX = wW * g.snapBackThreshold;
+            const limitY = wH * g.snapBackThreshold;
+            const needSnap = Math.abs(g.currentTranslate.x) > limitX || Math.abs(g.currentTranslate.y) > limitY;
+            const speed = Math.sqrt(g.velocity.x * g.velocity.x + g.velocity.y * g.velocity.y);
+            const stillMoving = speed > 5;
+
+            if (stillMoving && !needSnap) {
+                g.currentTranslate.x += g.velocity.x * 0.016;
+                g.currentTranslate.y += g.velocity.y * 0.016;
+                g.velocity.x *= g.momentumDecay;
+                g.velocity.y *= g.momentumDecay;
+            } else if (needSnap) {
+                g.velocity.x = 0;
+                g.velocity.y = 0;
+                g.currentTranslate.x += (0 - g.currentTranslate.x) * g.snapBackSpring;
+                g.currentTranslate.y += (0 - g.currentTranslate.y) * g.snapBackSpring;
+            } else {
+                g.velocity.x = 0;
+                g.velocity.y = 0;
+            }
+
+            this.applyTransform();
+            const stillSnapping = needSnap && (Math.abs(g.currentTranslate.x) > 1 || Math.abs(g.currentTranslate.y) > 1);
+            if (stillMoving || stillSnapping) {
+                g._animationId = requestAnimationFrame(run);
+            } else {
+                g._animationId = null;
+            }
+        };
+        g._animationId = requestAnimationFrame(run);
     }
 
     applyTransform() {
@@ -144,9 +216,11 @@ export class GridScaler {
 
     resetTransform() {
         if (!this.reactor) return;
-        
+
         this.gestureState.currentScale = 1;
+        this.gestureState.targetScale = 1;
         this.gestureState.currentTranslate = { x: 0, y: 0 };
+        this.gestureState.targetTranslate = { x: 0, y: 0 };
         this.reactor.style.transform = '';
         this.reactor.style.transformOrigin = '';
     }

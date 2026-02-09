@@ -16,6 +16,11 @@ const __dirname = path.dirname(__filename);
 
 const libraries = [
     {
+        name: "break_infinity.js",
+        source: "node_modules/break_infinity.js/dist/break_infinity.min.js",
+        target: "public/lib/break_infinity.min.js",
+    },
+    {
         name: "pako",
         source: "node_modules/pako/dist/pako.min.js",
         target: "public/lib/pako.min.js",

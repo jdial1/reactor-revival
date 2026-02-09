@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGame, toNum } from "../helpers/setup.js";
 import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Heat Transfer Debug", () => {
@@ -38,7 +38,7 @@ describe("Heat Transfer Debug", () => {
         expect(centerTile.getEffectiveTransferValue()).toBeGreaterThan(0);
         expect(neighborTile.part.containment).toBeGreaterThan(0);
         expect(centerTile.containmentNeighborTiles.length).toBe(1);
-        expect(game.reactor.current_heat).toBeLessThan(100); // Heat should be transferred
+        expect(toNum(game.reactor.current_heat)).toBeLessThan(100);
         expect(neighborTile.heat_contained).toBeGreaterThan(0);
 
         // Log the actual values
@@ -46,7 +46,7 @@ describe("Heat Transfer Debug", () => {
         console.log("Transfer multiplier from part:", outletPart.part.transfer_multiplier);
         console.log("Calculated transfer:", outletPart.transfer);
         console.log("Effective transfer value:", centerTile.getEffectiveTransferValue());
-        console.log("Heat transferred:", 100 - game.reactor.current_heat);
+        console.log("Heat transferred:", 100 - toNum(game.reactor.current_heat));
         console.log("Neighbor heat:", neighborTile.heat_contained);
     });
 }); 

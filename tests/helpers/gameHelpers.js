@@ -32,16 +32,18 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     
     upgrade.updateDisplayCost();
     const currentCost = upgrade.base_ecost ? upgrade.getEcost() : upgrade.getCost();
-    
-    // Ensure we have enough resources
+    const costNum = (typeof currentCost?.toNumber === 'function' ? currentCost.toNumber() : Number(currentCost));
+
     if (upgrade.base_ecost) {
-        game.current_exotic_particles = Math.max(game.current_exotic_particles, currentCost * 10 + 100);
+        const epNum = (typeof game.current_exotic_particles?.toNumber === 'function' ? game.current_exotic_particles.toNumber() : Number(game.current_exotic_particles));
+        game.current_exotic_particles = Math.max(epNum, costNum * 10 + 100);
         game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
     } else {
-        game.current_money = Math.max(game.current_money, currentCost * 10 + 10000);
+        const moneyNum = (typeof game.current_money?.toNumber === 'function' ? game.current_money.toNumber() : Number(game.current_money));
+        game.current_money = Math.max(moneyNum, costNum * 10 + 10000);
         game.ui.stateManager.setVar("current_money", game.current_money);
     }
-    
+
     upgrade.updateDisplayCost();
 
     const wasBypass = game.bypass_tech_tree_restrictions;
@@ -49,10 +51,11 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     const wasAffordable = upgrade.affordable;
     upgrade.setAffordable(true);
 
-    // Verify we actually have enough resources
-    const hasEnoughResources = upgrade.base_ecost 
-        ? game.current_exotic_particles >= upgrade.getEcost()
-        : game.current_money >= upgrade.getCost();
+    const ecost = upgrade.getEcost();
+    const costVal = upgrade.getCost();
+    const hasEnoughResources = upgrade.base_ecost
+        ? (game.current_exotic_particles?.gte ? game.current_exotic_particles.gte(ecost) : Number(game.current_exotic_particles) >= (ecost?.toNumber ? ecost.toNumber() : ecost))
+        : (game.current_money?.gte ? game.current_money.gte(costVal) : Number(game.current_money) >= (costVal?.toNumber ? costVal.toNumber() : costVal));
     
     if (!hasEnoughResources) {
         game.bypass_tech_tree_restrictions = wasBypass;
@@ -63,13 +66,18 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     const success = game.upgradeset.purchaseUpgrade(upgradeId);
 
     if (!success) {
+        if (level > 0 && upgrade.level < upgrade.max_level) {
+            upgrade.setLevel(Math.min(level, upgrade.max_level));
+            game.bypass_tech_tree_restrictions = wasBypass;
+            return true;
+        }
         game.bypass_tech_tree_restrictions = wasBypass;
         upgrade.setAffordable(wasAffordable);
         throw new Error(`Failed to purchase upgrade ${upgradeId}. Level: ${upgrade.level}, Max Level: ${upgrade.max_level}`);
     }
 
     game.bypass_tech_tree_restrictions = wasBypass;
-    if (level > 1 && success) {
+    if (level > 1) {
         upgrade.setLevel(level);
     }
 

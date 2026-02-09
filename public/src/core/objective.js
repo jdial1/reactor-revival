@@ -1,3 +1,4 @@
+import { toDecimal } from "../utils/decimal.js";
 import dataService from "../services/dataService.js";
 import { getObjectiveCheck } from "./objectiveActions.js";
 
@@ -31,6 +32,10 @@ async function ensureDataLoaded() {
   return objective_list_data;
 }
 
+const INFINITE_POWER_BASE = 5000;
+const INFINITE_POWER_STEP = 5000;
+const INFINITE_REWARD_BASE = 250;
+
 export class ObjectiveManager {
   constructor(gameInstance) {
     this.game = gameInstance;
@@ -43,6 +48,23 @@ export class ObjectiveManager {
     this.current_objective_def = null;
     this.claiming = false;
     this.disableTimers = false;
+    this.infiniteObjective = null;
+    this._lastInfinitePowerTarget = 0;
+  }
+
+  generateInfiniteObjective() {
+    this._lastInfinitePowerTarget += this._lastInfinitePowerTarget < INFINITE_POWER_BASE ? INFINITE_POWER_BASE : INFINITE_POWER_STEP;
+    const target = this._lastInfinitePowerTarget;
+    const completedCount = this._infiniteCompletedCount || 0;
+    const reward = INFINITE_REWARD_BASE + Math.min(completedCount * 50, 500);
+    this.infiniteObjective = {
+      title: `Generate ${target.toLocaleString()} Power`,
+      checkId: "infinitePower",
+      target,
+      reward,
+      completed: false,
+    };
+    return this.infiniteObjective;
   }
 
   async initialize() {
@@ -166,16 +188,16 @@ export class ObjectiveManager {
           if (this.current_objective_def.reward) {
             this.game.logger?.debug(`Giving money reward: ${this.current_objective_def.reward}`);
             this.game.debugHistory.add('objectives', 'Claiming money reward', { index: this.current_objective_index, reward: this.current_objective_def.reward });
-            this.game.current_money += this.current_objective_def.reward;
+            this.game._current_money = this.game._current_money.add(toDecimal(this.current_objective_def.reward));
             this.game.ui.stateManager.setVar(
               "current_money",
-              this.game.current_money,
+              this.game._current_money,
               true
             );
           } else if (this.current_objective_def.ep_reward) {
             console.log(`[DEBUG] Giving EP reward: ${this.current_objective_def.ep_reward}`);
             this.game.debugHistory.add('objectives', 'Claiming EP reward', { index: this.current_objective_index, ep_reward: this.current_objective_def.ep_reward });
-            this.game.exotic_particles += this.current_objective_def.ep_reward;
+            this.game.exotic_particles = this.game.exotic_particles.add(this.current_objective_def.ep_reward);
             this.game.ui.stateManager.setVar(
               "exotic_particles",
               this.game.exotic_particles,
@@ -298,10 +320,21 @@ export class ObjectiveManager {
     this.game.logger?.debug(`Setting objective ${objective_index}: ${nextObjective?.title || 'undefined'}`);
 
     const updateLogic = () => {
+      if (nextObjective && nextObjective.checkId === "allObjectives") {
+        const inf = this.infiniteObjective || this.generateInfiniteObjective();
+        this.current_objective_def = inf;
+        const displayObjective = { ...inf, title: inf.title };
+        this.game.ui.stateManager.handleObjectiveLoaded(displayObjective, this.current_objective_index);
+        if (this.game.ui && typeof this.game.ui.updateObjectiveDisplay === "function") {
+          this.game.ui.updateObjectiveDisplay();
+        }
+        this.objective_unloading = false;
+        this.scheduleNextCheck();
+        return;
+      }
       if (nextObjective) {
         this.current_objective_def = nextObjective;
 
-        // Auto-complete chapter completion objectives when they are reached
         if (this.current_objective_def.isChapterCompletion && !this.current_objective_def.completed) {
           this.current_objective_def.completed = true;
           // Also mark the corresponding entry in objectives_data as completed
@@ -309,6 +342,10 @@ export class ObjectiveManager {
             this.objectives_data[this.current_objective_index].completed = true;
           }
           this.game.logger?.debug(`Auto-completing chapter completion objective: ${this.current_objective_def.title}`);
+          const chapterIdx = [9, 19, 29, 36].indexOf(this.current_objective_index);
+          if (chapterIdx >= 0 && this.game.ui?.showChapterCelebration) {
+            this.game.ui.showChapterCelebration(chapterIdx);
+          }
         }
 
         const displayObjective = {
@@ -369,17 +406,21 @@ export class ObjectiveManager {
     }
 
     this.claiming = true;
+    const chapterIdx = [9, 19, 29, 36].indexOf(this.current_objective_index);
+    if (chapterIdx >= 0 && this.game.ui?.showChapterCelebration) {
+      this.game.ui.showChapterCelebration(chapterIdx);
+    }
 
     // Give the reward
     if (this.current_objective_def.reward) {
-      this.game.current_money += this.current_objective_def.reward;
+      this.game._current_money = this.game._current_money.add(toDecimal(this.current_objective_def.reward));
       this.game.ui.stateManager.setVar(
         "current_money",
-        this.game.current_money,
+        this.game._current_money,
         true
       );
     } else if (this.current_objective_def.ep_reward) {
-      this.game.exotic_particles += this.current_objective_def.ep_reward;
+      this.game.exotic_particles = this.game.exotic_particles.add(this.current_objective_def.ep_reward);
       this.game.ui.stateManager.setVar(
         "exotic_particles",
         this.game.exotic_particles,
@@ -387,24 +428,25 @@ export class ObjectiveManager {
       );
     }
 
-    // Advance to next objective immediately (skip wait)
-    this.current_objective_index++;
-
-    // Safeguard: Ensure we don't go beyond the valid range
-    const maxValidIndex = this.objectives_data.length - 1; // Include "All objectives completed!"
-    if (this.current_objective_index > maxValidIndex) {
-      console.warn(`[DEBUG] Claiming would advance beyond valid range (${this.current_objective_index} > ${maxValidIndex}). Clamping to ${maxValidIndex}.`);
-      this.current_objective_index = maxValidIndex;
+    if (this.current_objective_def.checkId === "infinitePower") {
+      this._infiniteCompletedCount = (this._infiniteCompletedCount || 0) + 1;
+      this.generateInfiniteObjective();
+      this.set_objective(this.current_objective_index, true);
+    } else {
+      this.current_objective_index++;
+      const maxValidIndex = this.objectives_data.length - 1;
+      if (this.current_objective_index > maxValidIndex) {
+        this.current_objective_index = maxValidIndex;
+      }
+      this.set_objective(this.current_objective_index, true);
     }
-
-    this.set_objective(this.current_objective_index, true);
 
     // Always save after claiming
     if (this.game && typeof this.game.saveGame === "function") {
       this.game.saveGame(null, true); // true = isAutoSave
     }
 
-    // Reset claiming flag after a short delay to prevent rapid clicking
+    if (this.game?.emit) this.game.emit("objectiveClaimed", {});
     setTimeout(() => {
       this.claiming = false;
     }, 500);
@@ -535,25 +577,26 @@ export class ObjectiveManager {
         const power500 = game.reactor.stats_power || 0;
         return { text: `${power500.toLocaleString()} / 500 Power`, percent: Math.min(100, (power500 / 500) * 100) };
 
-      case 'firstBillion':
-        const money = game.current_money || 0;
+      case 'firstBillion': {
+        const money = (game.current_money && typeof game.current_money.toNumber === 'function' ? game.current_money.toNumber() : Number(game.current_money)) || 0;
         return { text: `$${money.toLocaleString()} / $1,000,000,000`, percent: Math.min(100, (money / 1e9) * 100) };
-
-      case 'ep10':
-        const ep = game.exotic_particles || 0;
+      }
+      case 'ep10': {
+        const ep = (game.exotic_particles && typeof game.exotic_particles.toNumber === 'function' ? game.exotic_particles.toNumber() : Number(game.exotic_particles)) || 0;
         return { text: `${ep} / 10 EP Generated`, percent: Math.min(100, (ep / 10) * 100) };
-
-      case 'ep51':
-        const ep51 = game.exotic_particles || 0;
+      }
+      case 'ep51': {
+        const ep51 = (game.exotic_particles && typeof game.exotic_particles.toNumber === 'function' ? game.exotic_particles.toNumber() : Number(game.exotic_particles)) || 0;
         return { text: `${ep51} / 51 EP Generated`, percent: Math.min(100, (ep51 / 51) * 100) };
-
-      case 'ep250':
-        const ep250 = game.exotic_particles || 0;
+      }
+      case 'ep250': {
+        const ep250 = (game.exotic_particles && typeof game.exotic_particles.toNumber === 'function' ? game.exotic_particles.toNumber() : Number(game.exotic_particles)) || 0;
         return { text: `${ep250} / 250 EP Generated`, percent: Math.min(100, (ep250 / 250) * 100) };
-
-      case 'ep1000':
-        const ep1000 = game.exotic_particles || 0;
+      }
+      case 'ep1000': {
+        const ep1000 = (game.exotic_particles && typeof game.exotic_particles.toNumber === 'function' ? game.exotic_particles.toNumber() : Number(game.exotic_particles)) || 0;
         return { text: `${ep1000} / 1,000 EP Generated`, percent: Math.min(100, (ep1000 / 1000) * 100) };
+      }
 
       case 'capacitorCount10':
         const capacitorCount = game.tileset.getAllTiles().filter(tile => tile.part && tile.part.category === 'capacitor').length;
@@ -619,10 +662,16 @@ export class ObjectiveManager {
         return this.checkChapterCompletion(30, 7); // Chapter 4: objectives 30-36
 
       case 'allObjectives':
-        // All objectives completed - this is the final objective
         return { text: "All objectives completed!", percent: 100 };
 
-      // Add more cases for other objectives with quantifiable progress...
+      case 'infinitePower': {
+        const target = objective.target;
+        if (target == null) return { text: "Awaiting completion...", percent: 0 };
+        const power = game.reactor?.stats_power ?? 0;
+        const pct = Math.min(100, (power / target) * 100);
+        return { text: `${power.toLocaleString()} / ${target.toLocaleString()} Power`, percent: pct };
+      }
+
       default:
         // For objectives that are simple true/false checks
         return { text: "Awaiting completion...", percent: 0 };

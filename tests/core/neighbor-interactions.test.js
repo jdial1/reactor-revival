@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, setupGame, vi, afterEach } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGame, vi, afterEach, toNum } from "../helpers/setup.js";
 import { placePart } from "../helpers/gameHelpers.js";
 
 describe("Neighbor Interactions", () => {
@@ -90,7 +90,7 @@ describe("Neighbor Interactions", () => {
             expect(neighbor.part).toBeNull();
         }
         // Reactor heat should not be lower than before (transfer and/or explosion returns heat)
-        expect(game.reactor.current_heat).toBeGreaterThanOrEqual(prevReactorHeat);
+        expect(toNum(game.reactor.current_heat)).toBeGreaterThanOrEqual(toNum(prevReactorHeat));
     });
 
     it("heat exchanger balances heat with cooler cardinal neighbors only", async () => {
@@ -136,8 +136,8 @@ describe("Neighbor Interactions", () => {
 
         game.reactor.updateStats();
 
-        expect(game.reactor.max_power).toBeGreaterThanOrEqual(prevMaxPower);
-        expect(game.reactor.max_heat).toBeGreaterThanOrEqual(prevMaxHeat);
+        expect(toNum(game.reactor.max_power)).toBeGreaterThanOrEqual(toNum(prevMaxPower));
+        expect(toNum(game.reactor.max_heat)).toBeGreaterThanOrEqual(toNum(prevMaxHeat));
 
         game.engine.tick();
         // Neighbor should remain unaffected by cap/plate (no heat pushed/pulled)
@@ -155,7 +155,7 @@ describe("Neighbor Interactions", () => {
         game.engine.tick();
 
         expect(hotNeighbor.heat_contained).toBeLessThan(50);
-        expect(game.reactor.current_heat).toBeGreaterThan(prevReactorHeat);
+        expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(prevReactorHeat));
     });
 
     it("extreme heat inlet (range 2) pulls from two-tiles-away components", async () => {
@@ -169,7 +169,7 @@ describe("Neighbor Interactions", () => {
         game.engine.tick();
 
         expect(farHotNeighbor.heat_contained).toBeLessThan(50);
-        expect(game.reactor.current_heat).toBeGreaterThan(prevReactorHeat);
+        expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(prevReactorHeat));
     });
 
     it("extreme heat outlet (range 2) pushes to two-tiles-away components", async () => {

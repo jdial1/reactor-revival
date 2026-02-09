@@ -136,12 +136,12 @@ export class UpgradeSet {
   }
 
   populateUpgrades() {
-    this._populateUpgradeSection("upgrades_content_wrapper", (upgrade) => !upgrade.base_ecost);
+    this._populateUpgradeSection("upgrades_content_wrapper", (upgrade) => upgrade.base_ecost.eq ? upgrade.base_ecost.eq(0) : !upgrade.base_ecost);
     this.updateSectionCounts();
   }
 
   populateExperimentalUpgrades() {
-    this._populateUpgradeSection("experimental_upgrades_content_wrapper", (upgrade) => !!upgrade.base_ecost);
+    this._populateUpgradeSection("experimental_upgrades_content_wrapper", (upgrade) => upgrade.base_ecost.gt && upgrade.base_ecost.gt(0));
     this.updateSectionCounts();
   }
 
@@ -207,16 +207,16 @@ export class UpgradeSet {
 
     if (this.game.isSandbox) {
       purchased = true;
-    } else if (ecost > 0) {
-      if (this.game.current_exotic_particles >= ecost) {
-        this.game.current_exotic_particles -= ecost;
+    } else if (ecost.gt(0)) {
+      if (this.game.current_exotic_particles.gte(ecost)) {
+        this.game.current_exotic_particles = this.game.current_exotic_particles.sub(ecost);
         this.game.ui.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
         purchased = true;
       }
     } else {
-      if (this.game.current_money >= cost) {
-        this.game.current_money -= cost;
-        this.game.ui.stateManager.setVar("current_money", this.game.current_money);
+      if (this.game.current_money.gte(cost)) {
+        this.game._current_money = this.game._current_money.sub(cost);
+        this.game.ui.stateManager.setVar("current_money", this.game._current_money);
         purchased = true;
       }
     }
@@ -254,25 +254,25 @@ export class UpgradeSet {
 
   purchaseAllUpgrades() {
     if (!this.game.isSandbox) return;
-    const filter = (u) => !u.base_ecost && this.isUpgradeAvailable(u.id);
+    const filter = (u) => (u.base_ecost.eq ? u.base_ecost.eq(0) : !u.base_ecost) && this.isUpgradeAvailable(u.id);
     this.upgradesArray.filter(filter).forEach((u) => this.purchaseUpgradeToMax(u.id));
   }
 
   purchaseAllResearch() {
     if (!this.game.isSandbox) return;
-    const filter = (u) => !!u.base_ecost && this.isUpgradeAvailable(u.id);
+    const filter = (u) => u.base_ecost.gt && u.base_ecost.gt(0) && this.isUpgradeAvailable(u.id);
     this.upgradesArray.filter(filter).forEach((u) => this.purchaseUpgradeToMax(u.id));
   }
 
   clearAllUpgrades() {
     if (!this.game.isSandbox) return;
-    const filter = (u) => !u.base_ecost;
+    const filter = (u) => u.base_ecost.eq ? u.base_ecost.eq(0) : !u.base_ecost;
     this.upgradesArray.filter(filter).forEach((u) => this.resetUpgradeLevel(u.id));
   }
 
   clearAllResearch() {
     if (!this.game.isSandbox) return;
-    const filter = (u) => !!u.base_ecost;
+    const filter = (u) => u.base_ecost.gt && u.base_ecost.gt(0);
     this.upgradesArray.filter(filter).forEach((u) => this.resetUpgradeLevel(u.id));
   }
 
@@ -308,6 +308,7 @@ export class UpgradeSet {
             upgrade.$el.classList.add("doctrine-locked");
           }
           upgrade.setAffordable(false);
+          upgrade.setAffordProgress(0);
         }
         return;
       }
@@ -327,17 +328,39 @@ export class UpgradeSet {
 
         if (upgrade.erequires && (!requiredUpgrade || requiredUpgrade.level === 0)) {
           isAffordable = false;
-        } else if (upgrade.base_ecost) {
-          isAffordable = game.current_exotic_particles >= upgrade.current_ecost;
+        } else if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
+          isAffordable = game.current_exotic_particles.gte(upgrade.current_ecost);
         } else {
-          isAffordable = game.current_money >= upgrade.current_cost;
+          isAffordable = game.current_money.gte(upgrade.current_cost);
         }
       }
 
       upgrade.setAffordable(isAffordable);
 
+      let affordProgress = isAffordable ? 1 : 0;
+      if (!isAffordable && upgrade.level < upgrade.max_level && !game.reactor?.has_melted_down) {
+        if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
+          const ep = game.current_exotic_particles;
+          const cost = upgrade.current_ecost;
+          if (cost.gt(0)) {
+            const n = ep.toNumber ? ep.toNumber() : Number(ep);
+            const c = cost.toNumber ? cost.toNumber() : Number(cost);
+            affordProgress = Math.min(1, n / c);
+          }
+        } else {
+          const money = game.current_money;
+          const cost = upgrade.current_cost;
+          if (cost.gt(0)) {
+            const n = money.toNumber ? money.toNumber() : Number(money);
+            const c = cost.toNumber ? cost.toNumber() : Number(cost);
+            affordProgress = Math.min(1, n / c);
+          }
+        }
+      }
+      upgrade.setAffordProgress(affordProgress);
+
       if (upgrade.$el) {
-        const isResearch = !!upgrade.base_ecost;
+        const isResearch = upgrade.base_ecost.gt && upgrade.base_ecost.gt(0);
         const shouldHideUnaffordable = isResearch ? hideResearch : hideUpgrades;
         const shouldHideMaxed = isResearch ? hideMaxResearch : hideMaxUpgrades;
         const isMaxed = upgrade.level >= upgrade.max_level;
@@ -401,29 +424,57 @@ export class UpgradeSet {
     return false;
   }
 
+  isUpgradeDoctrineLocked(upgradeId) {
+    if (this.game.bypass_tech_tree_restrictions) return false;
+    if (!this.restrictedUpgrades.has(upgradeId)) return false;
+    if (!this.game.tech_tree) return false;
+    const allowedTrees = this.upgradeToTechTreeMap.get(upgradeId);
+    if (!allowedTrees || allowedTrees.has(this.game.tech_tree)) return false;
+    if (this._isUpgradeRequiredByIncompleteObjective(upgradeId)) return false;
+    return true;
+  }
+
   isUpgradeAvailable(upgradeId) {
     if (this.game.bypass_tech_tree_restrictions) return true;
-
-    if (!this.restrictedUpgrades.has(upgradeId)) {
-      return true;
-    }
-
+    if (this.isUpgradeDoctrineLocked(upgradeId)) return false;
+    if (!this.restrictedUpgrades.has(upgradeId)) return true;
     const allowedTrees = this.upgradeToTechTreeMap.get(upgradeId);
-    if (allowedTrees && allowedTrees.has(this.game.tech_tree)) {
-      return true;
-    }
-
-    if (this._isUpgradeRequiredByIncompleteObjective(upgradeId)) {
-      return true;
-    }
-
+    if (allowedTrees && allowedTrees.has(this.game.tech_tree)) return true;
+    if (this._isUpgradeRequiredByIncompleteObjective(upgradeId)) return true;
     return false;
+  }
+
+  getExclusiveUpgradeIdsForTree(treeId) {
+    if (!treeId) return [];
+    return [...this.upgradeToTechTreeMap.entries()]
+      .filter(([, treeSet]) => treeSet.size === 1 && treeSet.has(treeId))
+      .map(([id]) => id);
+  }
+
+  resetDoctrineUpgradeLevels(treeId) {
+    const ids = this.getExclusiveUpgradeIdsForTree(treeId);
+    ids.forEach((upgradeId) => {
+      const upgrade = this.getUpgrade(upgradeId);
+      if (upgrade && upgrade.level > 0) {
+        upgrade.setLevel(0);
+      }
+    });
+    this.updateSectionCounts();
+  }
+
+  sanitizeDoctrineUpgradeLevelsOnLoad(techTreeId) {
+    if (this.game.bypass_tech_tree_restrictions || !techTreeId) return;
+    this.upgradeToTechTreeMap.forEach((treeSet, upgradeId) => {
+      if (treeSet.size !== 1 || treeSet.has(techTreeId)) return;
+      const upgrade = this.getUpgrade(upgradeId);
+      if (upgrade && upgrade.level > 0) upgrade.setLevel(0);
+    });
   }
 
   hasAffordableUpgrades() {
     const expandUpgradeIds = ["expand_reactor_rows", "expand_reactor_cols"];
     return this.upgradesArray.some((upgrade) =>
-      !upgrade.base_ecost &&
+      (upgrade.base_ecost.eq ? upgrade.base_ecost.eq(0) : !upgrade.base_ecost) &&
       !expandUpgradeIds.includes(upgrade.id) &&
       upgrade.affordable &&
       upgrade.level < upgrade.max_level &&
@@ -433,7 +484,7 @@ export class UpgradeSet {
 
   hasAffordableResearch() {
     return this.upgradesArray.some((upgrade) => 
-      upgrade.base_ecost && 
+      upgrade.base_ecost.gt && upgrade.base_ecost.gt(0) && 
       upgrade.affordable && 
       upgrade.level < upgrade.max_level &&
       this.isUpgradeAvailable(upgrade.id)
@@ -441,7 +492,7 @@ export class UpgradeSet {
   }
 
   _getUpgradeContainerId(upgrade) {
-    if (upgrade.base_ecost) {
+    if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
       return upgrade.upgrade.type;
     }
     const normalizeKey = (key) => {
@@ -484,7 +535,7 @@ export class UpgradeSet {
       if (!container) return;
 
       const upgrades = this.upgradesArray.filter(upgrade => {
-        if (isResearch !== !!upgrade.base_ecost) return false;
+        if (isResearch !== (upgrade.base_ecost.gt && upgrade.base_ecost.gt(0))) return false;
         if (!this.isUpgradeAvailable(upgrade.id)) return false;
         
         const containerId = this._getUpgradeContainerId(upgrade);

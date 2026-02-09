@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, setupGame, toNum } from '../helpers/setup.js';
 
 describe('Global Boost Research Upgrades', () => {
     let game;
@@ -158,17 +158,17 @@ describe('Global Boost Research Upgrades', () => {
             // Test with empty grid first
             game.reactor.updateStats();
 
-            const multiplier = Math.pow(4, 5); // 1024x
-            expect(game.reactor.max_power).toBe(initialMaxPower * multiplier);
-            expect(game.reactor.max_heat).toBe(initialMaxHeat * multiplier);
+            const multiplier = Math.pow(4, 5);
+            expect(toNum(game.reactor.max_power)).toBeCloseTo(toNum(initialMaxPower) * multiplier, 5);
+            expect(toNum(game.reactor.max_heat)).toBeCloseTo(toNum(initialMaxHeat) * multiplier, 5);
 
             // Test with parts to ensure their values are added on top
             await game.tileset.getTile(0, 0).setPart(capacitor);
             await game.tileset.getTile(0, 1).setPart(plating);
             game.reactor.updateStats();
 
-            expect(game.reactor.max_power).toBe(initialMaxPower * multiplier + capacitor.reactor_power);
-            expect(game.reactor.max_heat).toBe(initialMaxHeat * multiplier + plating.reactor_heat);
+            expect(toNum(game.reactor.max_power)).toBeCloseTo(toNum(initialMaxPower) * multiplier + toNum(capacitor.reactor_power), 5);
+            expect(toNum(game.reactor.max_heat)).toBeCloseTo(toNum(initialMaxHeat) * multiplier + toNum(plating.reactor_heat), 5);
         });
     });
 
@@ -196,13 +196,13 @@ describe('Global Boost Research Upgrades', () => {
 
             // Sanity checks
             expect(isFinite(game.current_money)).toBe(true);
-            expect(game.current_money).toBeGreaterThanOrEqual(0);
+            expect(toNum(game.current_money)).toBeGreaterThanOrEqual(0);
 
             expect(isFinite(game.reactor.current_power)).toBe(true);
-            expect(game.reactor.current_power).toBeGreaterThanOrEqual(0);
+            expect(toNum(game.reactor.current_power)).toBeGreaterThanOrEqual(0);
 
             expect(isFinite(game.reactor.current_heat)).toBe(true);
-            expect(game.reactor.current_heat).toBeGreaterThanOrEqual(0);
+            expect(toNum(game.reactor.current_heat)).toBeGreaterThanOrEqual(0);
 
             expect(game.reactor.has_melted_down).toBe(false);
 

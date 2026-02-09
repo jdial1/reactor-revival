@@ -1,3 +1,4 @@
+import { toDecimal } from "../utils/decimal.js";
 import { numFormat as fmt } from "../utils/util.js";
 
 const SINGLE_CELL_DESC_TPL =
@@ -27,8 +28,8 @@ export class Part {
     this.base_ep_heat = part_definition.base_ep_heat || 0;
     this.base_power_increase = part_definition.base_power_increase || 0;
     this.base_heat_increase = part_definition.base_heat_increase || 0;
-    this.base_ecost = part_definition.base_ecost || 0;
-    this.base_cost = part_definition.base_cost || 0;
+    this.base_ecost = toDecimal(part_definition.base_ecost ?? 0);
+    this.base_cost = toDecimal(part_definition.base_cost ?? 0);
 
     // Add missing properties that are defined in part_list.json
     this.location = part_definition.location || null;
@@ -38,7 +39,7 @@ export class Part {
     this.transfer_direction = part_definition.transfer_direction || null;
 
     this.erequires = part_definition.erequires || null;
-    this.cost = part_definition.base_cost;
+    this.cost = toDecimal(part_definition.base_cost ?? 0);
     this.perpetual = false;
     this.description = "";
     this.cell_count = part_definition.cell_count || 0;
@@ -301,12 +302,11 @@ export class Part {
     }
     let epHeatScale = 1;
     if (this.category === "particle_accelerator") {
-      const epSource = Number.isFinite(game.current_exotic_particles)
-        ? game.current_exotic_particles
-        : game.exotic_particles;
-      const epValue = Number.isFinite(epSource) ? epSource : 0;
-      if (epValue > 1000000) {
-        const ratio = epValue / 1000000;
+      const epRaw = game.current_exotic_particles ?? game.exotic_particles;
+      const epValue = (epRaw != null && typeof epRaw.toNumber === 'function' ? epRaw.toNumber() : Number(epRaw));
+      const epValueFinite = Number.isFinite(epValue) ? epValue : 0;
+      if (epValueFinite > 1000000) {
+        const ratio = epValueFinite / 1000000;
         const scale = 1 + Math.log10(ratio);
         if (isFinite(scale) && !isNaN(scale)) {
           epHeatScale = scale;
@@ -357,10 +357,11 @@ export class Part {
 
 
     if (this.category === "cell" && game.reactor.heat_power_multiplier > 0 && game.reactor.current_heat > 0) {
+      const heatForLog = Math.min(game.reactor.current_heat, 1e100);
       const heatMultiplier =
         1 +
         game.reactor.heat_power_multiplier *
-        (Math.log(game.reactor.current_heat) / Math.log(1000) / 100);
+        (Math.log(heatForLog) / Math.log(1000) / 100);
       this.power *= heatMultiplier;
       if (!isFinite(this.power) || isNaN(this.power)) {
         this.power = this.base_power || 0;
@@ -845,16 +846,11 @@ export class Part {
     return ventValue;
   }
 
-  // Get the cost for auto-replacement (1.5x base cost for perpetual cells)
   getAutoReplacementCost() {
     if (this.perpetual) {
-      if (this.category === 'reflector') {
-        return this.base_cost * 1.5;
-      } else if (this.category === 'capacitor') {
-        return this.base_cost * 10;
-      } else if (this.category === 'cell') {
-        return this.base_cost * 1.5;
-      }
+      if (this.category === 'reflector') return this.base_cost.mul(1.5);
+      if (this.category === 'capacitor') return this.base_cost.mul(10);
+      if (this.category === 'cell') return this.base_cost.mul(1.5);
     }
     return this.base_cost;
   }

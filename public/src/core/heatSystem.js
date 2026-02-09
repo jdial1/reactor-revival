@@ -1,4 +1,4 @@
-import { runHeatStep } from "./heatCalculations.js";
+import { runHeatStepFromTyped } from "./heatCalculations.js";
 
 export class HeatSystem {
   constructor(engine) {
@@ -17,7 +17,7 @@ export class HeatSystem {
     }
     const { heat, containment, ...rest } = build.payloadForSync;
     const recordTransfers = [];
-    const result = runHeatStep(heat, containment, { ...rest, recordTransfers });
+    const result = runHeatStepFromTyped(heat, containment, rest, recordTransfers);
     engine.game.tileset.heatMap = heat;
     engine.game.reactor.current_heat = result.reactorHeat;
     if (game.performance && game.performance.shouldMeasure()) {

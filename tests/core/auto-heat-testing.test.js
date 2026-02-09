@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGameWithDOM, toNum } from "../helpers/setup.js";
 
 describe("Auto Heat Testing", () => {
     let game;
@@ -6,6 +6,9 @@ describe("Auto Heat Testing", () => {
     beforeEach(async () => {
         const setup = await setupGameWithDOM();
         game = setup.game;
+        game.current_money = 1e30;
+        game.current_exotic_particles = 1e20;
+        game.upgradeset.check_affordability(game);
     });
 
     it("should auto-reduce heat when 'Heat Control Operator' upgrade is purchased", async () => {
@@ -16,7 +19,7 @@ describe("Auto Heat Testing", () => {
         }
         game.reactor.max_heat = 10000; // Set explicit max heat for deterministic reduction
         game.reactor.current_heat = 150;
-        const initialHeat = game.reactor.current_heat;
+        const initialHeat = toNum(game.reactor.current_heat);
 
         // Ensure money and purchase upgrade
         const { forcePurchaseUpgrade } = await import("../helpers/gameHelpers.js");
@@ -26,15 +29,13 @@ describe("Auto Heat Testing", () => {
         // Run a tick
         game.engine.tick();
 
-        // Heat should be reduced
-        expect(game.reactor.current_heat).toBeLessThan(initialHeat);
+        expect(toNum(game.reactor.current_heat)).toBeLessThan(initialHeat);
     });
 
     it("should NOT auto-reduce heat when heat_controlled is false", () => {
         game.paused = false;
-        // Set initial heat
         game.reactor.current_heat = 1000;
-        const initialHeat = game.reactor.current_heat;
+        const initialHeat = toNum(game.reactor.current_heat);
 
         // Disable heat control (which disables auto heat reduction)
         game.reactor.heat_controlled = false;
@@ -42,8 +43,7 @@ describe("Auto Heat Testing", () => {
         // Run a tick
         game.engine.tick();
 
-        // Heat should remain exactly the same (no auto heat reduction)
-        expect(game.reactor.current_heat).toBe(initialHeat);
+        expect(toNum(game.reactor.current_heat)).toBe(initialHeat);
     });
 
     it("should toggle auto heat reduction when heat_control state changes", () => {
@@ -59,18 +59,16 @@ describe("Auto Heat Testing", () => {
         // Test with heat_controlled = false
         game.reactor.heat_controlled = false;
         game.ui.stateManager.setVar("heat_control", false);
-        const heatBeforeTick1 = game.reactor.current_heat;
+        const heatBeforeTick1 = toNum(game.reactor.current_heat);
         game.engine.tick();
-        const heatAfterTick1 = game.reactor.current_heat;
+        const heatAfterTick1 = toNum(game.reactor.current_heat);
         expect(heatAfterTick1).toBe(heatBeforeTick1);
 
-        // Test with heat_controlled = true
         game.reactor.heat_controlled = true;
         game.ui.stateManager.setVar("heat_control", true);
-        const heatBeforeTick2 = game.reactor.current_heat;
+        const heatBeforeTick2 = toNum(game.reactor.current_heat);
         game.engine.tick();
-        const heatAfterTick2 = game.reactor.current_heat;
-        // Should be reduced (auto heat reduction enabled)
+        const heatAfterTick2 = toNum(game.reactor.current_heat);
         expect(heatAfterTick2).toBeLessThan(heatBeforeTick2);
     });
 
@@ -88,19 +86,17 @@ describe("Auto Heat Testing", () => {
         game.onToggleStateChange("heat_control", true);
         expect(game.reactor.heat_controlled).toBe(true);
 
-        const heatBeforeTick = game.reactor.current_heat;
+        const heatBeforeTick = toNum(game.reactor.current_heat);
         game.engine.tick();
-        const heatAfterTick = game.reactor.current_heat;
-        // Should be reduced (auto heat reduction enabled)
+        const heatAfterTick = toNum(game.reactor.current_heat);
         expect(heatAfterTick).toBeLessThan(heatBeforeTick);
 
-        // Test turning heat control OFF
         game.onToggleStateChange("heat_control", false);
         expect(game.reactor.heat_controlled).toBe(false);
 
-        const heatBeforeTick2 = game.reactor.current_heat;
+        const heatBeforeTick2 = toNum(game.reactor.current_heat);
         game.engine.tick();
-        const heatAfterTick2 = game.reactor.current_heat;
+        const heatAfterTick2 = toNum(game.reactor.current_heat);
         expect(heatAfterTick2).toBe(heatBeforeTick2);
     });
 
@@ -113,8 +109,7 @@ describe("Auto Heat Testing", () => {
         // Run a tick
         game.engine.tick();
 
-        // Heat should remain 0
-        expect(game.reactor.current_heat).toBe(0);
+        expect(toNum(game.reactor.current_heat)).toBe(0);
     });
 
     it("should apply vent multiplier from Plating/Capacitor parts when auto-reducing heat", async () => {
@@ -139,12 +134,10 @@ describe("Auto Heat Testing", () => {
         game.reactor.current_heat = 1000;
         game.reactor.heat_controlled = true;
 
-        const heatBeforeTick = game.reactor.current_heat;
+        const heatBeforeTick = toNum(game.reactor.current_heat);
         game.engine.tick();
-        const heatAfterTick = game.reactor.current_heat;
-
-        // Heat should be reduced by more than base reduction due to multiplier
-        const baseReduction = (game.reactor.max_heat / 10000);
+        const heatAfterTick = toNum(game.reactor.current_heat);
+        const baseReduction = toNum(game.reactor.max_heat) / 10000;
         expect(heatBeforeTick - heatAfterTick).toBeGreaterThan(baseReduction);
     });
 
@@ -173,14 +166,11 @@ describe("Auto Heat Testing", () => {
         containmentTile.activated = true;
         game.reactor.updateStats();
 
-        const heatBeforeTick = game.reactor.current_heat;
+        const heatBeforeTick = toNum(game.reactor.current_heat);
         game.engine.tick();
-        const heatAfterTick = game.reactor.current_heat;
-
-        // Heat should be reduced by auto heat reduction + outlet transfer
-        // The outlet will transfer some heat to the containment tile, but auto heat reduction should still work
-        const autoHeatReduction = game.reactor.max_heat / 10000;
-        expect(heatAfterTick).toBeLessThanOrEqual(heatBeforeTick - autoHeatReduction);
+        const heatAfterTick = toNum(game.reactor.current_heat);
+        const autoHeatReduction = toNum(game.reactor.max_heat) / 10000;
+        expect(heatAfterTick).toBeLessThanOrEqual(heatBeforeTick - autoHeatReduction + 1e-6);
     });
 
     it("should maintain auto venting regardless of heat outlets", async () => {
@@ -208,22 +198,20 @@ describe("Auto Heat Testing", () => {
         containmentTile.activated = true;
         game.reactor.updateStats();
 
-        // Verify auto venting works with outlets present
-        const heatBeforeTick1 = game.reactor.current_heat;
+        const heatBeforeTick1 = toNum(game.reactor.current_heat);
         game.engine.tick();
-        const heatAfterTick1 = game.reactor.current_heat;
-        const autoHeatReduction = game.reactor.max_heat / 10000;
-        expect(heatAfterTick1).toBeLessThanOrEqual(heatBeforeTick1 - autoHeatReduction);
+        const heatAfterTick1 = toNum(game.reactor.current_heat);
+        const autoHeatReduction = toNum(game.reactor.max_heat) / 10000;
+        expect(heatAfterTick1).toBeLessThanOrEqual(heatBeforeTick1 - autoHeatReduction + 1e-6);
 
         // Remove the outlet
         if (outletTile.$el) {
             outletTile.clearPart();
         }
 
-        // Verify auto venting still works the same way
-        const heatBeforeTick2 = game.reactor.current_heat;
+        const heatBeforeTick2 = toNum(game.reactor.current_heat);
         game.engine.tick();
-        const heatAfterTick2 = game.reactor.current_heat;
+        const heatAfterTick2 = toNum(game.reactor.current_heat);
         expect(heatAfterTick2).toBeLessThan(heatBeforeTick2);
     });
 
@@ -239,31 +227,27 @@ describe("Auto Heat Testing", () => {
         game.reactor.heat_controlled = true;
         game.ui.stateManager.setVar("heat_control", true);
 
-        const initialHeat = game.reactor.current_heat;
+        const initialHeat = toNum(game.reactor.current_heat);
 
-        // Run multiple ticks
         for (let i = 0; i < 5; i++) {
             game.engine.tick();
         }
 
-        // Heat should be reduced after multiple ticks
-        expect(game.reactor.current_heat).toBeLessThan(initialHeat);
+        expect(toNum(game.reactor.current_heat)).toBeLessThan(initialHeat);
     });
 
     it("should handle multiple ticks correctly with heat_controlled = false", () => {
-        // Set initial heat
         game.reactor.current_heat = 1000;
         game.reactor.heat_controlled = false;
 
-        const initialHeat = game.reactor.current_heat;
+        const initialHeat = toNum(game.reactor.current_heat);
 
         // Run multiple ticks
         for (let i = 0; i < 5; i++) {
             game.engine.tick();
         }
 
-        // Heat should remain exactly the same after multiple ticks (no auto heat reduction)
-        expect(game.reactor.current_heat).toBe(initialHeat);
+        expect(toNum(game.reactor.current_heat)).toBe(initialHeat);
     });
 
     it("should correctly save and load the heat_control state via its upgrade", async () => {

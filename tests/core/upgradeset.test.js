@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGame, toNum } from "../helpers/setup.js";
 import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 
 describe("Upgradeset Mechanics", () => {
@@ -28,7 +28,7 @@ describe("Upgradeset Mechanics", () => {
     const upgrade = game.upgradeset.getUpgrade("uranium1_cell_power");
     expect(upgrade).toBeDefined();
     expect(upgrade.id).toBe("uranium1_cell_power");
-    expect(upgrade.base_cost).toBeGreaterThan(0);
+    expect(toNum(upgrade.base_cost)).toBeGreaterThan(0);
     expect(upgrade.level).toBe(0);
     expect(upgrade.max_level).toBeGreaterThan(0);
   });

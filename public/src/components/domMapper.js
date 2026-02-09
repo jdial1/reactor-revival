@@ -84,6 +84,20 @@ export class DOMMapper {
       pwa: {
         installButton: "#install_pwa_btn",
       },
+
+      tutorial: {
+        uraniumCell: "#part_btn_uranium1",
+        ventPart: "#part_btn_vent1",
+        cellsGrid: "#cells",
+        ventsGrid: "#vents",
+        heatTab: "#tab_heat",
+        partsSection: "#parts_section",
+        reactorWrapper: "#reactor_wrapper",
+        sellPowerBtn: "#control_deck_power_btn",
+        heatBtn: "#control_deck_heat_btn",
+        sellPowerBtnDesktop: "#info_bar_power_btn_desktop",
+        heatBtnDesktop: "#info_bar_heat_btn_desktop",
+      },
     };
   }
 

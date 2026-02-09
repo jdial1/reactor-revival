@@ -73,8 +73,7 @@ export class GoogleDriveSave {
         this.config = GOOGLE_DRIVE_CONFIG;
       }
       return !!(this.config && this.config.CLIENT_ID && this.config.API_KEY);
-    } catch (error) {
-      console.error("Error checking configuration:", error);
+    } catch (_) {
       return false;
     }
   }
@@ -83,19 +82,13 @@ export class GoogleDriveSave {
    * Initialize Google Drive integration
    */
   async init() {
-    if (!this.isConfigured()) {
-      console.log("Google Drive not configured - skipping initialization");
-      return false;
-    }
-
+    if (!this.isConfigured()) return false;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return false;
     try {
-      console.log("Starting Google Drive initialization...");
       await this.loadGapiScripts();
       await this.checkAuth(true);
-      console.log("Google Drive Save module initialized successfully.");
       return true;
-    } catch (error) {
-      console.error("Google Drive initialization failed:", error);
+    } catch (_) {
       return false;
     }
   }
@@ -104,42 +97,36 @@ export class GoogleDriveSave {
    * Load required Google API scripts
    */
   async loadGapiScripts() {
-    // Load Google Identity Services
+    if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
     if (!window.google?.accounts) {
       await new Promise((resolve, reject) => {
         const script = document.createElement("script");
         script.src = "https://accounts.google.com/gsi/client";
         script.onload = resolve;
-        script.onerror = reject;
+        script.onerror = () => reject(new Error("gsi load failed"));
         document.head.appendChild(script);
       });
     }
-
-    // Load GAPI
     if (!window.gapi) {
       await new Promise((resolve, reject) => {
         const script = document.createElement("script");
         script.src = "https://apis.google.com/js/api.js";
         script.onload = resolve;
-        script.onerror = reject;
+        script.onerror = () => reject(new Error("gapi load failed"));
         document.head.appendChild(script);
       });
     }
-
-    // Initialize GAPI client
     await new Promise((resolve, reject) => {
       gapi.load("client", async () => {
         try {
           await gapi.client.init({ apiKey: this.config.API_KEY });
           await gapi.client.load("drive", "v3");
           resolve();
-        } catch (error) {
-          reject(error);
+        } catch (e) {
+          reject(e);
         }
       });
     });
-
-    // Initialize OAuth
     this.tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: this.config.CLIENT_ID,
       scope:
@@ -158,37 +145,30 @@ export class GoogleDriveSave {
    * @returns {Promise<boolean>} - True if signed in
    */
   async checkAuth(silent = true) {
-    if (!this.isConfigured()) {
-      console.log("Google Drive not configured");
-      return false;
+    if (!this.isConfigured()) return false;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (this.authToken) this.isSignedIn = true;
+      return !!this.authToken;
     }
-
     try {
-      // First, try to restore token from localStorage if we don't have one
       if (!this.authToken) {
         const storedTokenData = safeGetItem("google_drive_auth_token");
         if (storedTokenData) {
           try {
             const tokenData = JSON.parse(storedTokenData);
-            // Check if token hasn't expired (with 5-minute buffer)
             if (
               tokenData.expires_at &&
               tokenData.expires_at > Date.now() + 300000
             ) {
               this.authToken = tokenData.access_token;
-              console.log("Restored auth token from localStorage");
             } else {
-              console.log("Stored token expired, removing from localStorage");
               safeRemoveItem("google_drive_auth_token");
             }
-          } catch (error) {
-            console.log("Invalid stored token data, removing");
+          } catch (_) {
             safeRemoveItem("google_drive_auth_token");
           }
         }
       }
-
-      // If we have a token (restored or existing), verify it's still valid
       if (this.authToken) {
         const response = await fetch(
           "https://www.googleapis.com/drive/v3/about?fields=user",
@@ -196,7 +176,6 @@ export class GoogleDriveSave {
             headers: { Authorization: `Bearer ${this.authToken}` },
           }
         );
-
         if (response.ok) {
           const data = await response.json();
           if (data.user) {
@@ -209,11 +188,8 @@ export class GoogleDriveSave {
             safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
           }
           this.isSignedIn = true;
-          console.log("Auth token validated successfully");
           return true;
         } else {
-          // Token is invalid, clear it from memory and localStorage
-          console.log("Auth token invalid, clearing stored credentials");
           this.authToken = null;
           this.isSignedIn = false;
           this.userInfo = null;
@@ -249,14 +225,12 @@ export class GoogleDriveSave {
             safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
           }
           
-          console.log("Silent auth successful");
           return true;
         }
       }
 
       return false;
-    } catch (error) {
-      console.error("Error checking auth status:", error);
+    } catch (_) {
       return false;
     }
   }

@@ -1,10 +1,13 @@
-import { numFormat as fmt, on, escapeHtml, safeGetItem, safeSetItem, safeRemoveItem } from "../utils/util.js";
+import { numFormat as fmt, on, escapeHtml, safeGetItem, safeSetItem, safeRemoveItem, stringifySaveData } from "../utils/util.js";
+import { toDecimal } from "../utils/decimal.js";
 import { StateManager } from "../core/stateManager.js";
-import { Hotkeys } from "../utils/hotkeys.js";
 import dataService from "../services/dataService.js";
+import { InputManager } from "./InputManager.js";
+import { ModalManager } from "./ModalManager.js";
 import { settingsModal } from "./settingsModal.js";
 import { GridScaler } from "./gridScaler.js";
 import { GridCanvasRenderer } from "./gridCanvasRenderer.js";
+import { ParticleSystem } from "./particleSystem.js";
 import { leaderboardService } from "../services/leaderboardService.js";
 import { logger } from "../utils/logger.js";
 import { requestWakeLock, releaseWakeLock } from "../services/pwa.js";
@@ -43,16 +46,14 @@ export class UI {
     this.last_interface_update = 0;
     this.update_interface_task = null;
     this._updateLoopRunning = false;
+    this._pendingDomUpdates = [];
     this.stateManager = new StateManager(this);
-    this.hotkeys = null;
+    this.inputManager = new InputManager(this);
+    this.modalManager = new ModalManager();
     this.gridScaler = new GridScaler(this);
     this.gridCanvasRenderer = new GridCanvasRenderer(this);
-    this.isDragging = false;
-    this.lastTileModified = null;
-    this.longPressTimer = null;
-    this.longPressDuration = 500;
-    this.help_mode_active = false; // Track help mode state
-    this.highlightedSegment = null; // Track the currently highlighted segment
+    this.help_mode_active = false;
+    this.highlightedSegment = null;
 
     // CTRL+9 exponential money variables
     this.ctrl9HoldTimer = null;
@@ -71,8 +72,10 @@ export class UI {
     };
     this._lastUiTime = 0;
 
-    // Visual event rendering pool (simplified - emit nodes removed)
-    this._visualPool = {};
+    this._visualPool = { floatingText: [], steamParticle: [], bolt: [] };
+    this._particleCanvas = null;
+    this._particleCtx = null;
+    this.particleSystem = null;
     this._icons = {
       power: "img/ui/icons/icon_power.png",
       heat: "img/ui/icons/icon_heat.png",
@@ -169,6 +172,14 @@ export class UI {
       "reboot_exotic_particles",
       "reboot_btn",
       "refund_btn",
+      "respec_doctrine_btn",
+      "prestige_modal",
+      "prestige_modal_title",
+      "prestige_carried_over",
+      "prestige_multiplier_line",
+      "prestige_modal_cancel",
+      "prestige_modal_confirm_refund",
+      "prestige_modal_confirm_prestige",
       "auto_sell_toggle",
       "auto_buy_toggle",
       "time_flux_toggle",
@@ -205,6 +216,9 @@ export class UI {
       "reactor_copy_paste_cost",
       "reactor_copy_paste_close_btn",
       "reactor_copy_paste_confirm_btn",
+      "reactor_copy_paste_preview_wrap",
+      "reactor_copy_paste_preview",
+      "reactor_copy_paste_partial_btn",
     ];
     this.toggle_buttons_config = {
       auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
@@ -383,6 +397,75 @@ export class UI {
     }
 
     return null;
+  }
+
+  getTutorialTarget(stepKey) {
+    if (!this.game) return null;
+    const mobile = typeof window !== "undefined" && window.innerWidth <= 900;
+    switch (stepKey) {
+      case "place_cell": {
+        const slots = this.stateManager?.getQuickSelectSlots?.() ?? [];
+        const uraniumSlotIndex = slots.findIndex((s) => s.partId === "uranium1");
+        const idx = uraniumSlotIndex >= 0 ? uraniumSlotIndex : 0;
+        return document.querySelector(`.quick-select-slot[data-index="${idx}"]`);
+      }
+      case "place_on_reactor":
+        return this.getElement("reactor_wrapper") || document.getElementById("reactor_wrapper");
+      case "see_heat_rise":
+        return document.getElementById("control_deck_heat_btn")?.offsetParent
+          ? document.getElementById("control_deck_heat_btn")
+          : document.getElementById("info_bar_heat_btn_desktop");
+      case "sell_power":
+        return document.getElementById("control_deck_power_btn")?.offsetParent
+          ? document.getElementById("control_deck_power_btn")
+          : document.getElementById("info_bar_power_btn_desktop");
+      case "place_vent":
+        return mobile
+          ? document.querySelector(".quick-select-slot[data-index=\"1\"]")
+          : document.getElementById("part_btn_vent1");
+      case "claim_objective": {
+        const toast = document.getElementById("objectives_toast_btn");
+        if (!toast?.classList.contains("is-complete")) return null;
+        return toast.classList.contains("is-expanded")
+          ? toast.querySelector(".objectives-claim-pill") || toast
+          : toast;
+      }
+      default:
+        return null;
+    }
+  }
+
+  getTutorialGridTile(stepKey) {
+    if (stepKey !== "place_on_reactor" || !this.game) return null;
+    const g = this.gridCanvasRenderer;
+    if (!g) return null;
+    const rows = g.getRows();
+    const cols = g.getCols();
+    if (!rows || !cols) return null;
+    return {
+      row: Math.floor(rows / 2),
+      col: Math.floor(cols / 2),
+    };
+  }
+
+  getTileRectInViewport(row, col) {
+    const g = this.gridCanvasRenderer;
+    const canvas = g?.getCanvas();
+    if (!canvas || row == null || col == null) return null;
+    const rect = canvas.getBoundingClientRect();
+    const rows = g.getRows();
+    const cols = g.getCols();
+    if (!rows || !cols) return null;
+    const width = rect.width / cols;
+    const height = rect.height / rows;
+    return {
+      top: rect.top + row * height,
+      left: rect.left + col * width,
+      width,
+      height,
+      bottom: rect.top + (row + 1) * height,
+      right: rect.left + (col + 1) * width,
+    };
   }
 
   initializeToggleButtons() {
@@ -721,6 +804,24 @@ export class UI {
     } else if (!hasMeltedDown && isMeltdownClassPresent) {
       document.body.classList.remove("reactor-meltdown");
     }
+    if (!hasMeltedDown) {
+      if (this._meltdownBuildupRafId != null) {
+        cancelAnimationFrame(this._meltdownBuildupRafId);
+        this._meltdownBuildupRafId = null;
+      }
+      const wrapper = this.DOMElements.reactor_wrapper || document.getElementById("reactor_wrapper");
+      if (wrapper) wrapper.style.transform = "";
+      const vignetteEl = document.getElementById("meltdown_vignette");
+      if (vignetteEl) {
+        vignetteEl.style.opacity = "0";
+        vignetteEl.style.display = "none";
+      }
+      const strobeEl = document.getElementById("meltdown_strobe");
+      if (strobeEl) {
+        strobeEl.style.opacity = "0";
+        strobeEl.style.display = "none";
+      }
+    }
 
     this.updateProgressBarMeltdownState(hasMeltedDown);
 
@@ -894,6 +995,10 @@ export class UI {
     });
   }
 
+  scheduleDomUpdate(fn) {
+    if (typeof fn === "function") this._pendingDomUpdates.push(fn);
+  }
+
   runUpdateInterfaceLoop(timestamp = 0) {
     if (this._updateLoopStopped || typeof document === 'undefined' || !document) {
       return;
@@ -908,11 +1013,17 @@ export class UI {
     const dt = timestamp - this._lastUiTime;
     this._lastUiTime = timestamp;
 
-    // 1. Smooth Rolling Numbers (Every Frame)
+    while (this._pendingDomUpdates.length) {
+      const fn = this._pendingDomUpdates.shift();
+      try { fn(); } catch (e) { logger.warn("[UI] pending DOM update error:", e); }
+    }
     this.updateRollingNumbers(dt);
-
-    // 2. Process Queue (Every Frame)
     this.processUpdateQueue();
+    if (this.particleSystem && this._particleCtx) {
+      this.particleSystem.update(dt);
+      this._particleCtx.clearRect(0, 0, this._particleCanvas.width, this._particleCanvas.height);
+      this.particleSystem.draw(this._particleCtx);
+    }
 
     if (this.game?.objectives_manager) {
       const checkId = this.game.objectives_manager.current_objective_def?.checkId;
@@ -931,15 +1042,16 @@ export class UI {
           this.gridCanvasRenderer.render(this.game);
         }
 
-        // Check affordability only periodically to save CPU
         if (this.game) {
-             this.game.current_money = Number(this.game.current_money);
-             const moneyChanged = this.last_money !== this.game.current_money;
-             const exoticParticlesChanged = this.last_exotic_particles !== this.game.current_exotic_particles;
-
+             const moneyChanged = this.game._current_money && this.game._current_money.eq
+               ? !this.game._current_money.eq(this.last_money)
+               : this.last_money !== this.game.current_money;
+             const exoticParticlesChanged = this.game.current_exotic_particles && this.game.current_exotic_particles.eq
+               ? !this.game.current_exotic_particles.eq(this.last_exotic_particles)
+               : this.last_exotic_particles !== this.game.current_exotic_particles;
              if (moneyChanged || exoticParticlesChanged) {
-                this.last_money = this.game.current_money;
-                this.last_exotic_particles = this.game.current_exotic_particles;
+                this.last_money = this.game._current_money != null ? this.game._current_money : this.game.current_money;
+                this.last_exotic_particles = this.game.current_exotic_particles != null ? this.game.current_exotic_particles : this.last_exotic_particles;
                 this.game.partset.check_affordability(this.game);
                 this.game.upgradeset.check_affordability(this.game);
                 if (this.game.tooltip_manager) {
@@ -1100,6 +1212,14 @@ export class UI {
     return safeGetItem("reactor_heat_flow_visible", "true") !== "false";
   }
 
+  getHeatMapVisible() {
+    return safeGetItem("reactor_heat_map_visible", "false") === "true";
+  }
+
+  getDebugOverlayVisible() {
+    return safeGetItem("reactor_debug_overlay", "false") === "true";
+  }
+
   drawHeatFlowOverlay() {
     if (this.gridCanvasRenderer) return;
     const enabled = this.getHeatFlowVisible();
@@ -1186,47 +1306,38 @@ export class UI {
   }
 
   updateRollingNumbers(dt) {
-    // Safety check: ensure document.getElementById exists before using it
-    if (typeof document === 'undefined' || !document || typeof document.getElementById !== 'function') {
-      return;
-    }
-    
-    // Normalize dt (expecting ~16ms for 60fps)
+    if (typeof document === 'undefined' || !document || typeof document.getElementById !== 'function') return;
     const timeScale = dt / 16.667;
-    // Lerp factor: 0.15 at 60fps. 
-    const lerpFactor = 0.15 * timeScale; 
+    const lerpFactor = 0.15 * timeScale;
     const epsilon = 0.1;
+    const toNum = (v) => (v != null && typeof v.toNumber === 'function' ? v.toNumber() : Number(v));
 
     for (const key in this.displayValues) {
       const obj = this.displayValues[key];
-      const diff = obj.target - obj.current;
-      
+      const targetNum = toNum(obj.target);
+      const currentNum = toNum(obj.current);
+      const diff = targetNum - currentNum;
       if (Math.abs(diff) > 0) {
-        if (Math.abs(diff) < epsilon && obj.target !== 0) {
+        if (Math.abs(diff) < epsilon && targetNum !== 0) {
           obj.current = obj.target;
         } else {
-          // Analog-like behavior: move faster when further away, but enforce a minimum speed so it settles
-          const minSpeed = Math.max(1, Math.abs(diff) * 0.05); 
+          const minSpeed = Math.max(1, Math.abs(diff) * 0.05);
           const change = diff * lerpFactor;
-          
-          // Apply change, ensuring we don't get stuck with tiny increments
           if (Math.abs(change) < minSpeed * timeScale) {
-               obj.current += Math.sign(diff) * minSpeed * timeScale;
+            obj.current = currentNum + Math.sign(diff) * minSpeed * timeScale;
           } else {
-               obj.current += change;
+            obj.current = currentNum + change;
           }
-
-          // Snap to target if we overshot or are very close
-          if ((diff > 0 && obj.current > obj.target) || (diff < 0 && obj.current < obj.target) || Math.abs(obj.target - obj.current) < epsilon) {
-              obj.current = obj.target;
+          const newCurrent = obj.current;
+          if ((diff > 0 && newCurrent >= targetNum) || (diff < 0 && newCurrent <= targetNum) || Math.abs(targetNum - newCurrent) < epsilon) {
+            obj.current = obj.target;
           }
         }
-
         const val = obj.current;
         const isDesktop = window.innerWidth > 900;
         let formatted;
         if (isDesktop && (key === 'heat' || key === 'power' || key === 'money')) {
-          const num = Number(val);
+          const num = toNum(val);
           if (!Number.isNaN(num)) {
             const absNum = Math.abs(num);
             if (absNum >= 1000) {
@@ -1253,22 +1364,28 @@ export class UI {
       }
     }
 
-    const maxPower = this.stateManager.getVar("max_power") || 0;
-    const maxHeat = this.stateManager.getVar("max_heat") || 0;
-    this.updateInfoBarFillIndicator("power", this.displayValues.power.current, maxPower);
-    this.updateInfoBarFillIndicator("heat", this.displayValues.heat.current, maxHeat);
+    const maxPowerRaw = this.stateManager.getVar("max_power");
+    const maxHeatRaw = this.stateManager.getVar("max_heat");
+    const maxPower = maxPowerRaw != null && typeof maxPowerRaw.toNumber === 'function' ? maxPowerRaw.toNumber() : Number(maxPowerRaw || 0);
+    const maxHeat = maxHeatRaw != null && typeof maxHeatRaw.toNumber === 'function' ? maxHeatRaw.toNumber() : Number(maxHeatRaw || 0);
+    const powerCurrent = this.displayValues.power && (typeof this.displayValues.power.current?.toNumber === 'function' ? this.displayValues.power.current.toNumber() : this.displayValues.power.current);
+    const heatCurrent = this.displayValues.heat && (typeof this.displayValues.heat.current?.toNumber === 'function' ? this.displayValues.heat.current.toNumber() : this.displayValues.heat.current);
+    this.updateInfoBarFillIndicator("power", powerCurrent, maxPower);
+    this.updateInfoBarFillIndicator("heat", heatCurrent, maxHeat);
 
     if (window.innerWidth <= 900 && this.game?.reactor) {
       const powerFill = document.querySelector(".power-fill");
       const heatFill = document.querySelector(".heat-fill");
       const heatVent = document.querySelector(".heat-vent");
       const reactor = this.game.reactor;
-      if (powerFill && reactor.max_power > 0) {
-        const fillPercent = Math.min(100, Math.max(0, (this.displayValues.power.current / reactor.max_power) * 100));
+      const maxP = reactor.max_power && typeof reactor.max_power.toNumber === 'function' ? reactor.max_power.toNumber() : reactor.max_power;
+      const maxH = reactor.max_heat && typeof reactor.max_heat.toNumber === 'function' ? reactor.max_heat.toNumber() : reactor.max_heat;
+      if (powerFill && maxP > 0) {
+        const fillPercent = Math.min(100, Math.max(0, ((typeof powerCurrent === 'number' ? powerCurrent : toNum(powerCurrent)) / maxP) * 100));
         powerFill.style.setProperty("--power-fill-height", `${fillPercent}%`);
       }
-      if (heatFill && reactor.max_heat > 0) {
-        const fillPercent = Math.min(100, Math.max(0, (this.displayValues.heat.current / reactor.max_heat) * 100));
+      if (heatFill && maxH > 0) {
+        const fillPercent = Math.min(100, Math.max(0, ((typeof heatCurrent === 'number' ? heatCurrent : toNum(heatCurrent)) / maxH) * 100));
         heatFill.style.setProperty("--heat-fill-height", `${fillPercent}%`);
         if (heatVent) {
           if (fillPercent >= 95) {
@@ -1601,19 +1718,22 @@ export class UI {
       background.classList.add("heat-critical");
     }
 
-    // NEW: Add wiggle effect to individual tiles nearing their heat capacity
-    if (this.game?.tileset?.active_tiles_list) {
-      this.game.tileset.active_tiles_list.forEach((tile) => {
-        if (tile.$el && tile.part && tile.part.containment > 0) {
-          const heatRatio = tile.heat_contained / tile.part.containment;
-          if (heatRatio >= 0.9) {
-            tile.$el.classList.add("heat-wiggle");
-          } else {
-            tile.$el.classList.remove("heat-wiggle");
-          }
-        }
-      });
-    }
+  }
+
+  getHighlightedTiles() {
+    return this.highlightedSegment?.components ?? [];
+  }
+
+  getSellingTile() {
+    return this.inputManager?.getSellingTile() ?? null;
+  }
+
+  getHoveredTile() {
+    return this.inputManager?.getHoveredTile() ?? null;
+  }
+
+  handleGridInteraction(tile, event) {
+    return this.inputManager?.handleGridInteraction(tile, event);
   }
 
   // Spawn a transient icon representing power/heat on the grid - OPTIMIZED for performance
@@ -1779,22 +1899,21 @@ export class UI {
     }
   }
 
-  // Pulse a subtle aura from a reflector towards a target cell
   pulseReflector(fromTile, toTile) {
     try {
-      if (!fromTile?.$el || !toTile?.$el) return;
+      if (!fromTile || !toTile || !this.gridCanvasRenderer) return;
       const container = this.DOMElements.reactor_background || document.getElementById('reactor_background');
       if (!container) return;
+      const cRect = container.getBoundingClientRect();
+      const fromRect = this.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, cRect);
+      const toRect = this.gridCanvasRenderer.getTileRectInContainer(toTile.row, toTile.col, cRect);
+      const x1 = fromRect.centerX;
+      const y1 = fromRect.centerY;
+      const x2 = toRect.centerX;
+      const y2 = toRect.centerY;
       const size = 12;
       const aura = document.createElement('div');
       aura.className = 'reflector-aura';
-      const fromRect = fromTile.$el.getBoundingClientRect();
-      const toRect = toTile.$el.getBoundingClientRect();
-      const cRect = container.getBoundingClientRect();
-      const x1 = fromRect.left - cRect.left + fromRect.width / 2;
-      const y1 = fromRect.top - cRect.top + fromRect.height / 2;
-      const x2 = toRect.left - cRect.left + toRect.width / 2;
-      const y2 = toRect.top - cRect.top + toRect.height / 2;
       const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
       aura.style.left = `${x1 - size / 2}px`;
       aura.style.top = `${y1 - size / 2}px`;
@@ -1807,24 +1926,23 @@ export class UI {
     } catch (_) { /* ignore */ }
   }
 
-  // Emit a transient EP icon that travels from a tile towards the EP display
   emitEP(fromTile) {
     try {
-      if (!fromTile?.$el) return;
+      if (!fromTile || !this.gridCanvasRenderer) return;
       const container = this.DOMElements.reactor_background || document.getElementById('reactor_background');
       if (!container) return;
-      const src = 'img/ui/icons/icon_power.png'; // reuse closest visual; custom EP icon can be added later
+      const cRect = container.getBoundingClientRect();
+      const startRect = this.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, cRect);
+      const src = 'img/ui/icons/icon_power.png';
       const img = document.createElement('img');
       img.src = src;
       img.alt = 'ep';
       img.className = 'tile-fx fx-ep';
-      const startRect = fromTile.$el.getBoundingClientRect();
-      const cRect = container.getBoundingClientRect();
       const size = 14;
       img.style.width = `${size}px`;
       img.style.height = `${size}px`;
-      const startLeft = startRect.left - cRect.left + startRect.width / 2 - size / 2;
-      const startTop = startRect.top - cRect.top + startRect.height / 2 - size / 2;
+      const startLeft = startRect.centerX - size / 2;
+      const startTop = startRect.centerY - size / 2;
       img.style.left = `${startLeft}px`;
       img.style.top = `${startTop}px`;
       container.appendChild(img);
@@ -2031,7 +2149,8 @@ export class UI {
     this.game = game;
     this.stateManager = new StateManager(this);
     this.stateManager.setGame(game);
-    this.hotkeys = new Hotkeys(game);
+    this.inputManager.setup();
+    this.modalManager.init(this);
     this.help_text = data;
 
     // Clear any existing animations when initializing
@@ -2062,8 +2181,7 @@ export class UI {
     }
     if (this.gridScaler) this.gridScaler.init();
     this.gridScaler.resize();
-    
-    // Start the loop
+    this._initParticleCanvas();
     requestAnimationFrame((ts) => this.runUpdateInterfaceLoop(ts));
 
     // Initialize engine status indicator
@@ -2076,11 +2194,30 @@ export class UI {
     this.startPerformanceTracking();
   }
 
+  _initParticleCanvas() {
+    if (typeof document === "undefined" || !document.body || this._particleCanvas?.parentNode) return;
+    this._particleCanvas = document.createElement("canvas");
+    this._particleCanvas.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:100;";
+    this._particleCanvas.width = window.innerWidth || 1;
+    this._particleCanvas.height = window.innerHeight || 1;
+    document.body.appendChild(this._particleCanvas);
+    this._particleCtx = this._particleCanvas.getContext("2d");
+    this.particleSystem = new ParticleSystem();
+    this.particleSystem.setSize(this._particleCanvas.width, this._particleCanvas.height);
+  }
+
+  _resizeParticleCanvas() {
+    if (!this._particleCanvas || !this.particleSystem) return;
+    const w = window.innerWidth || 1;
+    const h = window.innerHeight || 1;
+    this._particleCanvas.width = w;
+    this._particleCanvas.height = h;
+    this.particleSystem.setSize(w, h);
+  }
+
   resizeReactor() {
     this.gridScaler.resize();
   }
-
-
 
   forceReactorRealignment() {
     if (!this.game || !this.DOMElements.reactor) return;
@@ -2112,12 +2249,31 @@ export class UI {
     setupNav(this.DOMElements.bottom_nav, "div");
     setupNav(this.DOMElements.main_top_nav, "div");
     this.DOMElements.reboot_btn?.addEventListener("click", () =>
-      this.game.reboot_action(false)
+      this.modalManager.showPrestigeModal("refund")
     );
     this.DOMElements.refund_btn?.addEventListener("click", () =>
-      this.game.reboot_action(true)
+      this.modalManager.showPrestigeModal("prestige")
     );
+    this.DOMElements.prestige_modal_cancel?.addEventListener("click", () =>
+      this.modalManager.hidePrestigeModal()
+    );
+    this.DOMElements.prestige_modal_confirm_refund?.addEventListener("click", () => {
+      this.modalManager.hidePrestigeModal();
+      this.game.reboot_action(false);
+    });
+    this.DOMElements.prestige_modal_confirm_prestige?.addEventListener("click", () => {
+      this.modalManager.hidePrestigeModal();
+      this.game.reboot_action(true);
+    });
+    this.DOMElements.respec_doctrine_btn?.addEventListener("click", () => {
+      if (!this.game?.respecDoctrine?.()) return;
+      this.renderDoctrineTreeViewer();
+      this.game.upgradeset?.check_affordability(this.game);
+      this.game.partset?.check_affordability(this.game);
+      this.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
+    });
     this.updatePartsPanelBodyClass();
+    this._prestigeModalMode = null;
     document.addEventListener("keydown", (e) => {
       if (e.code === "Space") {
         if (!e.target.matches("input, textarea, [contenteditable]")) {
@@ -2186,10 +2342,9 @@ export class UI {
           case "E":
             e.preventDefault();
             this.game.cheats_used = true;
-            // Give user +1 EP
-            this.game.exotic_particles += 1;
-            this.game.total_exotic_particles += 1;
-            this.game.current_exotic_particles += 1;
+            this.game.exotic_particles = (this.game.exotic_particles && typeof this.game.exotic_particles.add === 'function' ? this.game.exotic_particles.add(1) : toDecimal((this.game.exotic_particles ?? 0) + 1));
+            this.game.total_exotic_particles = (this.game.total_exotic_particles && typeof this.game.total_exotic_particles.add === 'function' ? this.game.total_exotic_particles.add(1) : toDecimal((this.game.total_exotic_particles ?? 0) + 1));
+            this.game.current_exotic_particles = (this.game.current_exotic_particles && typeof this.game.current_exotic_particles.add === 'function' ? this.game.current_exotic_particles.add(1) : toDecimal((this.game.current_exotic_particles ?? 0) + 1));
             this.updateLeaderboardIcon();
 
             // Update state manager for all EP values
@@ -2269,7 +2424,7 @@ export class UI {
 
     const settingsBtn = this.DOMElements.settings_btn;
     if (settingsBtn) {
-      settingsBtn.addEventListener("click", () => settingsModal.show());
+      settingsBtn.addEventListener("click", () => this.modalManager.showSettings());
     }
 
     this.setupInfoBarButtons();
@@ -2277,17 +2432,17 @@ export class UI {
     let resizeTimeout;
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
+        resizeTimeout = setTimeout(() => {
         if (this.game && this.DOMElements.reactor && typeof window !== "undefined") {
           if (this.game.updateBaseDimensions) {
             this.game.updateBaseDimensions();
           }
           this.gridScaler.resize();
         }
-        // Check objective text scrolling on resize
         if (this.game && this.game.ui && this.game.ui.stateManager) {
           this.game.ui.stateManager.checkObjectiveTextScrolling();
         }
+        this._resizeParticleCanvas?.();
       }, 100);
     });
 
@@ -2308,6 +2463,7 @@ export class UI {
             }
             this.gridScaler.resize();
           }
+          this._resizeParticleCanvas?.();
         }, 150);
       });
     }
@@ -2323,22 +2479,22 @@ export class UI {
     if (copyStateBtn) {
       copyStateBtn.onclick = () => {
         const gameStateObject = this.game.getSaveState();
-        const gameStateString = JSON.stringify(gameStateObject, null, 2);
+        const gameStateString = stringifySaveData(gameStateObject, 2);
         navigator.clipboard
           .writeText(gameStateString)
           .then(() => {
             const originalText = copyStateBtn.textContent;
-            copyStateBtn.textContent = "Copied!";
+            this.scheduleDomUpdate(() => { copyStateBtn.textContent = "Copied!"; });
             setTimeout(() => {
-              copyStateBtn.textContent = originalText;
+              this.scheduleDomUpdate(() => { copyStateBtn.textContent = originalText; });
             }, 2000);
           })
           .catch((err) => {
             logger.error("Failed to copy game state: ", err);
             const originalText = copyStateBtn.textContent;
-            copyStateBtn.textContent = "Error!";
+            this.scheduleDomUpdate(() => { copyStateBtn.textContent = "Error!"; });
             setTimeout(() => {
-              copyStateBtn.textContent = originalText;
+              this.scheduleDomUpdate(() => { copyStateBtn.textContent = originalText; });
             }, 2000);
           });
       };
@@ -2374,40 +2530,6 @@ export class UI {
         if (window.game) window.game.sell_action();
       });
     });
-
-    // Add segment visualization event listeners
-    const reactorElement = this.DOMElements.reactor;
-    if (reactorElement) {
-      const heatComponentCategories = ['vent', 'heat_exchanger', 'heat_inlet', 'heat_outlet', 'coolant_cell', 'reactor_plating'];
-
-      reactorElement.addEventListener('pointermove', (e) => {
-        const clickedPart = this.stateManager.getClickedPart();
-        if (!clickedPart || !heatComponentCategories.includes(clickedPart.category)) {
-          this.clearSegmentHighlight();
-          return;
-        }
-        const tile = (e.target === this.gridCanvasRenderer?.getCanvas() && this.gridCanvasRenderer)
-          ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : (e.target.closest?.('.tile')?.tile ?? null);
-        if (tile) {
-          const currentSegment = this.game.engine.heatManager.getSegmentForTile(tile);
-
-          if (currentSegment !== this.highlightedSegment) {
-            this.clearSegmentHighlight();
-
-            if (currentSegment) {
-              for (const component of currentSegment.components) {
-                component.highlight();
-              }
-              this.highlightedSegment = currentSegment;
-            }
-          }
-        }
-      });
-
-      reactorElement.addEventListener('pointerleave', () => {
-        this.clearSegmentHighlight();
-      });
-    }
 
     // NEW: Objectives UI event listeners
     this.initObjectivesUIListeners();
@@ -2502,80 +2624,6 @@ export class UI {
     }, 2000);
   }
 
-  async handleGridInteraction(tile, event) {
-    if (!tile) return;
-
-    if (this.game && this.game.reactor && this.game.reactor.has_melted_down) {
-      return;
-    }
-
-    const startTile = tile;
-    const isRightClick =
-      (event.pointerType === "mouse" && event.button === 2) ||
-      event.type === "contextmenu";
-    const clicked_part = this.stateManager.getClickedPart();
-    const tilesToModify = this.hotkeys.getTiles(startTile, event);
-    let soundPlayed = false;
-
-    const isMobile = window.innerWidth <= 900;
-    if (isMobile && !isRightClick && startTile.part && !clicked_part) {
-      this.showContextModal(startTile);
-      return;
-    }
-
-    for (const tile of tilesToModify) {
-      if (isRightClick) {
-        if (tile.part && tile.part.id && !tile.part.isSpecialTile) {
-          this.game.sellPart(tile);
-          this.gridCanvasRenderer?.markStaticDirty();
-          if (!soundPlayed && this.game && this.game.audio) {
-            this.game.audio.play('sell');
-            soundPlayed = true;
-          }
-        }
-      } else {
-        if (tile.part && this.help_mode_active) {
-          if (this.game && this.game.tooltip_manager) {
-
-            this.game.tooltip_manager.show(tile.part, tile, true);
-          }
-          return;
-        }
-
-        if (clicked_part) {
-          if (this.game.current_money >= clicked_part.cost) {
-            this.game.current_money -= clicked_part.cost;
-            const partPlaced = await tile.setPart(clicked_part);
-            if (partPlaced) {
-              this.gridCanvasRenderer?.markStaticDirty();
-              if (this.lightVibration) {
-                this.lightVibration();
-              }
-              soundPlayed = true; // Sound is now handled in tile.setPart
-              
-              // Keep part selected for continuous placement (painting mode)
-              // The part remains selected via stateManager.getClickedPart()
-            } else {
-              // Refund the money if the part couldn't be placed (tile already occupied)
-              this.game.current_money += clicked_part.cost;
-              if (!soundPlayed && this.game && this.game.audio) {
-                const pan = this.game.calculatePan ? this.game.calculatePan(tile.col) : 0;
-                this.game.audio.play('error', null, pan);
-                soundPlayed = true;
-              }
-            }
-          } else {
-            if (!soundPlayed && this.game && this.game.audio) {
-              const pan = this.game.calculatePan ? this.game.calculatePan(tile.col) : 0;
-              this.game.audio.play('error', null, pan);
-              soundPlayed = true;
-            }
-          }
-        }
-      }
-    }
-  }
-
   updateQuickSelectSlots() {
     this.stateManager.normalizeQuickSelectSlotsForUnlock();
     const slots = this.stateManager.getQuickSelectSlots();
@@ -2621,6 +2669,31 @@ export class UI {
     }
     
     logger.debug("[updatePartsPanelBodyClass] Panel collapsed:", partsSection?.classList.contains("collapsed"), "Body classes:", document.body.className);
+  }
+
+  showPrestigeModal(mode) {
+    this.modalManager.showPrestigeModal(mode);
+  }
+
+  hidePrestigeModal() {
+    this.modalManager.hidePrestigeModal();
+  }
+
+  showChapterCelebration(chapterIndex) {
+    const names = ["First Fission", "Scaling Production", "High-Energy Systems", "The Experimental Frontier"];
+    const name = names[chapterIndex] || `Chapter ${chapterIndex + 1}`;
+    const overlay = document.createElement("div");
+    overlay.className = "chapter-celebration-overlay";
+    overlay.setAttribute("role", "alert");
+    overlay.innerHTML = `<div class="chapter-celebration-content"><div class="chapter-celebration-badge">Chapter Complete</div><h2 class="chapter-celebration-title">${name}</h2></div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("chapter-celebration-visible"));
+    if (this.game?.audio) this.game.audio.play("upgrade");
+    const t = setTimeout(() => {
+      overlay.classList.remove("chapter-celebration-visible");
+      setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 400);
+    }, 3200);
+    overlay._celebrationTimer = t;
   }
 
   togglePartsPanelForBuildButton() {
@@ -3017,12 +3090,12 @@ export class UI {
 
     vars["UI State"]["update_interface_interval"] =
       this.update_interface_interval;
-    vars["UI State"]["isDragging"] = this.isDragging;
-    vars["UI State"]["lastTileModified"] = this.lastTileModified
+    vars["UI State"]["isDragging"] = this.inputManager?.isDragging ?? false;
+    vars["UI State"]["lastTileModified"] = this.inputManager?.lastTileModified
       ? "Tile Object"
       : null;
-    vars["UI State"]["longPressTimer"] = this.longPressTimer ? "Active" : null;
-    vars["UI State"]["longPressDuration"] = this.longPressDuration;
+    vars["UI State"]["longPressTimer"] = this.inputManager?.longPressTimer ? "Active" : null;
+    vars["UI State"]["longPressDuration"] = this.inputManager?.longPressDuration ?? 500;
     vars["UI State"]["last_money"] = this.last_money;
     vars["UI State"]["last_exotic_particles"] = this.last_exotic_particles;
 
@@ -3260,8 +3333,8 @@ export class UI {
           const reactorEl = this.DOMElements.reactor;
           if (reactorEl && !this._dropperPointerHandler) {
             this._dropperPointerHandler = async (e) => {
-              const tile = this.gridCanvasRenderer && e.target === this.gridCanvasRenderer.getCanvas()
-                ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : (e.target?.closest?.(".tile")?.tile ?? null);
+              const tile = this.gridCanvasRenderer
+                ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : null;
               if (tile?.part) {
                 const pickedPart = tile.part;
                 document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
@@ -3370,6 +3443,117 @@ export class UI {
         }
       }
       return cost;
+    };
+
+    const calculateLayoutCostBreakdown = (layout) => {
+      const out = { money: 0, ep: 0 };
+      if (!layout || !this.game || !this.game.partset) return out;
+      for (const row of layout) {
+        for (const cell of row) {
+          if (!cell || !cell.id) continue;
+          const part = this.game.partset.parts.get(cell.id);
+          if (!part) continue;
+          const amount = (typeof part.cost !== "undefined" && part.cost != null)
+            ? (part.cost.gte ? part.cost.mul(cell.lvl || 1) : part.cost * (cell.lvl || 1))
+            : 0;
+          const num = amount != null && amount.gte != null ? amount.toNumber?.() ?? Number(amount) : Number(amount);
+          if (part.erequires) out.ep += num;
+          else out.money += num;
+        }
+      }
+      return out;
+    };
+
+    const buildAffordableLayout = (filteredLayout, sellCredit, gameRows, gameCols) => {
+      if (!filteredLayout || !this.game?.partset) return null;
+      let money = this.game._current_money;
+      let ep = this.game.current_exotic_particles ?? 0;
+      if (money != null && typeof money.add === "function") money = sellCredit > 0 ? money.add(sellCredit) : money;
+      else money = Number(money?.toNumber?.() ?? money ?? 0) + sellCredit;
+      if (ep && typeof ep.toNumber === "function") ep = ep.toNumber();
+      else ep = Number(ep ?? 0);
+      const rows = Math.min(gameRows, filteredLayout.length);
+      const cols = Math.min(gameCols, filteredLayout[0]?.length ?? 0);
+      const result = [];
+      for (let r = 0; r < rows; r++) {
+        result[r] = [];
+        for (let c = 0; c < cols; c++) result[r][c] = null;
+      }
+      const gte = (a, b) => (a != null && typeof a.gte === "function" ? a.gte(b) : a >= b);
+      const sub = (a, b) => (a != null && typeof a.sub === "function" ? a.sub(b) : a - b);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = filteredLayout[r]?.[c];
+          if (!cell || !cell.id) continue;
+          const part = this.game.partset.getPartById(cell.id);
+          if (!part) continue;
+          const cost = part.cost != null && part.cost.gte ? part.cost.mul(cell.lvl || 1) : (part.cost ?? 0) * (cell.lvl || 1);
+          const costNum = typeof cost === "number" ? cost : (cost?.toNumber?.() ?? Number(cost));
+          if (part.erequires) {
+            if (gte(ep, costNum)) {
+              ep = typeof ep === "number" ? ep - costNum : sub(ep, cost);
+              result[r][c] = cell;
+            }
+          } else {
+            if (gte(money, costNum)) {
+              money = typeof money === "number" ? money - costNum : sub(money, cost);
+              result[r][c] = cell;
+            }
+          }
+        }
+      }
+      return result;
+    };
+
+    const renderLayoutPreview = (layout, canvasEl, affordableSet) => {
+      if (!layout?.length || !canvasEl || !this.game?.partset) return;
+      const rows = layout.length;
+      const cols = layout[0]?.length ?? 0;
+      if (cols === 0) return;
+      const maxW = 160;
+      const maxH = 120;
+      const tileSize = Math.max(2, Math.min(Math.floor(maxW / cols), Math.floor(maxH / rows)));
+      const w = cols * tileSize;
+      const h = rows * tileSize;
+      canvasEl.width = w;
+      canvasEl.height = h;
+      const ctx = canvasEl.getContext("2d");
+      if (!ctx) return;
+      const imgCache = new Map();
+      const loadImg = (path) => {
+        if (imgCache.has(path)) return imgCache.get(path);
+        const img = new Image();
+        img.src = path;
+        imgCache.set(path, img);
+        return img;
+      };
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * tileSize;
+          const y = r * tileSize;
+          ctx.fillStyle = "rgb(20 20 20)";
+          ctx.strokeStyle = "rgb(40 40 40)";
+          ctx.fillRect(x, y, tileSize, tileSize);
+          ctx.strokeRect(x, y, tileSize, tileSize);
+          const cell = layout[r]?.[c];
+          if (cell?.id) {
+            const part = this.game.partset.getPartById(cell.id);
+            if (part) {
+              const path = typeof part.getImagePath === "function" ? part.getImagePath() : null;
+              const key = `${r},${c}`;
+              const ghost = affordableSet != null && !affordableSet.has(key);
+              if (path) {
+                const img = loadImg(path);
+                if (img.complete && img.naturalWidth) {
+                  if (ghost) ctx.globalAlpha = 0.35;
+                  ctx.drawImage(img, x, y, tileSize, tileSize);
+                  if (ghost) ctx.globalAlpha = 1;
+                }
+              }
+            }
+          }
+        }
+      }
     };
 
     // Helper: build part summary from layout
@@ -3497,6 +3681,11 @@ export class UI {
       }
 
       modal.classList.remove("hidden");
+
+      const previewWrap = document.getElementById("reactor_copy_paste_preview_wrap");
+      const partialBtn = document.getElementById("reactor_copy_paste_partial_btn");
+      if (previewWrap) previewWrap.classList.toggle("hidden", action !== "paste");
+      if (partialBtn) partialBtn.classList.toggle("hidden", action !== "paste");
 
       // Store the previous pause state to restore it when modal closes
       modal.dataset.previousPauseState = wasPaused;
@@ -3638,6 +3827,8 @@ export class UI {
       summary.forEach(item => { checkedTypes[item.id] = true; });
       const title = data ? "Paste Reactor Layout" : "Enter Reactor Layout Manually";
       showModal(title, data, 0, "paste", false, summary, { showCheckboxes: true, checkedTypes });
+      const previewCanvas = document.getElementById("reactor_copy_paste_preview");
+      const partialBtn = document.getElementById("reactor_copy_paste_partial_btn");
       const updateCostAndSummary = () => {
         const textareaData = modalText.value.trim();
         let layoutInner = deserializeReactor(textareaData);
@@ -3645,6 +3836,7 @@ export class UI {
           modalCost.innerHTML = !textareaData ? "Enter reactor layout JSON data in the text area above" : "Invalid layout data - please check the JSON format";
           confirmBtn.disabled = true;
           confirmBtn.classList.remove("hidden");
+          if (partialBtn) partialBtn.disabled = true;
           return;
         }
         const currentSellCheckboxState = document.getElementById('sell_existing_checkbox')?.checked || false;
@@ -3653,17 +3845,40 @@ export class UI {
           if (!cell) return null;
           return checkedTypes[cell.id] !== false ? cell : null;
         }));
-        const cost = calculateLayoutCost(filteredLayout);
+        const breakdown = calculateLayoutCostBreakdown(filteredLayout);
+        const costMoney = breakdown.money;
+        const costEp = breakdown.ep;
         const currentSellValue = calculateCurrentSellValue();
-        const netCost = cost - (currentSellCheckboxState ? currentSellValue : 0);
-        const canPaste = cost > 0 && this.game.current_money >= netCost;
+        const sellCredit = currentSellCheckboxState ? currentSellValue : 0;
+        const netMoney = costMoney - sellCredit;
+        const currentMoneyNum = this.game._current_money?.toNumber?.() ?? Number(this.game.current_money ?? 0);
+        const currentEpNum = this.game.current_exotic_particles?.toNumber?.() ?? Number(this.game.current_exotic_particles ?? 0);
+        const canAffordMoney = netMoney <= currentMoneyNum;
+        const canAffordEp = costEp <= currentEpNum;
+        const canPaste = (costMoney > 0 || costEp > 0) && canAffordMoney && canAffordEp;
+        const affordableLayout = buildAffordableLayout(filteredLayout, sellCredit, this.game.rows, this.game.cols);
+        const affordableSet = new Set();
+        if (affordableLayout) {
+          for (let r = 0; r < affordableLayout.length; r++) {
+            for (let c = 0; c < (affordableLayout[r]?.length ?? 0); c++) {
+              if (affordableLayout[r][c]) affordableSet.add(`${r},${c}`);
+            }
+          }
+        }
+        if (previewCanvas) {
+          renderLayoutPreview(layoutInner, previewCanvas, affordableSet);
+          setTimeout(() => renderLayoutPreview(layoutInner, previewCanvas, affordableSet), 180);
+        }
         let html = this.renderComponentIcons(originalSummary, { showCheckboxes: true, checkedTypes });
         const sellOptionHtml = modal.dataset.sellOptionHtml || '';
         if (sellOptionHtml) html += sellOptionHtml;
-        if (cost > 0) {
-          const finalCost = currentSellCheckboxState && currentSellValue > 0 ? Math.max(0, netCost) : cost;
-          const costColor = canPaste ? "#4caf50" : "#ff6b6b";
-          html += `<div style="margin-top: 10px; color: ${costColor}; font-weight: bold;">${canPaste ? `$${fmt(finalCost)}` : `$${fmt(finalCost)} - Not Enough Money`}</div>`;
+        if (costMoney > 0 || costEp > 0) {
+          const moneyColor = canAffordMoney ? "#4caf50" : "#ff6b6b";
+          const epColor = canAffordEp ? "#4caf50" : "#ff6b6b";
+          html += `<div style="margin-top: 10px; display: flex; flex-direction: column; gap: 4px;">`;
+          if (costMoney > 0) html += `<span style="color: ${moneyColor}; font-weight: bold;">Money: $${fmt(costMoney)} needed (you have $${fmt(currentMoneyNum)})</span>`;
+          if (costEp > 0) html += `<span style="color: ${epColor}; font-weight: bold;">EP: ${fmt(costEp)} needed (you have ${fmt(currentEpNum)})</span>`;
+          html += `</div>`;
         } else {
           html += `<div style="margin-top: 10px; color: rgb(255 107 107); font-weight: bold;">No parts found in layout</div>`;
         }
@@ -3677,6 +3892,11 @@ export class UI {
         }
         confirmBtn.disabled = !canPaste;
         confirmBtn.classList.remove("hidden");
+        const hasPartial = affordableLayout && affordableLayout.some(row => row?.some(cell => cell != null));
+        if (partialBtn) {
+          partialBtn.disabled = !hasPartial;
+          partialBtn.classList.remove("hidden");
+        }
       };
       modalCost.onclick = (e) => {
         const componentSlot = e.target.closest('.component-slot');
@@ -3709,6 +3929,7 @@ export class UI {
         updateCostAndSummary();
       };
       updateCostAndSummary();
+      const clipToGrid = (l, rows, cols) => l.slice(0, rows).map(row => (row || []).slice(0, cols));
       confirmBtn.onclick = () => {
         const textareaData = modalText.value.trim();
         const layoutToPaste = deserializeReactor(textareaData);
@@ -3720,16 +3941,19 @@ export class UI {
           if (!cell) return null;
           return checkedTypes[cell.id] !== false ? cell : null;
         }));
-        const cost = calculateLayoutCost(filteredLayout);
+        const breakdown = calculateLayoutCostBreakdown(filteredLayout);
         const currentSellValue = calculateCurrentSellValue();
         const sellExisting = document.getElementById('sell_existing_checkbox')?.checked || false;
-        const netCost = cost - (sellExisting ? currentSellValue : 0);
-        if (cost <= 0) {
+        const netMoney = breakdown.money - (sellExisting ? currentSellValue : 0);
+        const currentMoney = this.game._current_money ?? this.game.current_money;
+        const currentEp = this.game.current_exotic_particles ?? 0;
+        const gte = (a, b) => (a != null && typeof a.gte === "function" ? a.gte(b) : Number(a) >= b);
+        if (breakdown.money <= 0 && breakdown.ep <= 0) {
           alert("Invalid layout: no parts found.");
           return;
         }
-        if (this.game.current_money < netCost) {
-          alert(`Not enough money! Layout costs $${fmt(cost)}${sellExisting ? ` - $${fmt(currentSellValue)} (sell value) = $${fmt(netCost)}` : ''} but you only have $${fmt(this.game.current_money)}.`);
+        if (!gte(currentMoney, netMoney) || !gte(currentEp, breakdown.ep)) {
+          alert("Not enough resources for full layout.");
           return;
         }
         if (sellExisting) {
@@ -3738,9 +3962,31 @@ export class UI {
           });
           this.game.reactor.updateStats();
         }
-        this.pasteReactorLayout(filteredLayout);
+        const clipped = clipToGrid(filteredLayout, this.game.rows, this.game.cols);
+        this.pasteReactorLayout(clipped);
         this.hideModal();
       };
+      if (partialBtn) {
+        partialBtn.onclick = () => {
+          const textareaData = modalText.value.trim();
+          const layoutToPaste = deserializeReactor(textareaData);
+          if (!layoutToPaste) return;
+          const filteredLayout = layoutToPaste.map(row => row.map(cell => {
+            if (!cell) return null;
+            return checkedTypes[cell.id] !== false ? cell : null;
+          }));
+          const sellExisting = document.getElementById('sell_existing_checkbox')?.checked || false;
+          if (sellExisting) {
+            this.game.tileset.tiles_list.forEach(tile => {
+              if (tile.enabled && tile.part) tile.clearPart(true);
+            });
+            this.game.reactor.updateStats();
+          }
+          const affordableLayout = buildAffordableLayout(filteredLayout, 0, this.game.rows, this.game.cols);
+          if (affordableLayout) this.pasteReactorLayout(affordableLayout);
+          this.hideModal();
+        };
+      }
     };
 
     pasteBtn.onclick = async () => {
@@ -3946,9 +4192,9 @@ export class UI {
     const layout2D = this.compactTo2DLayout(main.layout);
     if (layout2D) this.pasteReactorLayout(layout2D, { skipCostDeduction: true });
     this.game._suppressPlacementCounting = prevSuppress;
-    this.game._current_money = main.money;
-    this.game.exotic_particles = main.ep;
-    this.game.current_exotic_particles = main.ep;
+    this.game._current_money = (main.money != null && typeof main.money.gt === 'function') ? main.money : toDecimal(main.money ?? 0);
+    this.game.exotic_particles = (main.ep != null && typeof main.ep.gt === 'function') ? main.ep : toDecimal(main.ep ?? 0);
+    this.game.current_exotic_particles = (main.ep != null && typeof main.ep.gt === 'function') ? main.ep : toDecimal(main.ep ?? 0);
     this.game.isSandbox = false;
     this.stateManager.setVar("current_money", main.money);
     this.stateManager.setVar("exotic_particles", main.ep);
@@ -4166,16 +4412,8 @@ export class UI {
     updateSellSummary();
   }
 
-  // Hide modal helper
   hideModal() {
-    const modal = document.getElementById("reactor_copy_paste_modal");
-    if (!modal) return;
-
-    modal.classList.add("hidden");
-
-    // Restore the previous pause state when modal closes
-    const previousPauseState = modal.dataset.previousPauseState === "true";
-    this.stateManager.setVar("pause", previousPauseState);
+    this.modalManager.hideCopyPasteModal();
   }
 
 
@@ -4183,31 +4421,35 @@ export class UI {
   pasteReactorLayout(layout, options = {}) {
     if (!layout || !this.game || !this.game.tileset || !this.game.partset) return;
     const skipCostDeduction = options.skipCostDeduction === true;
+    const clip = (arr, maxRows, maxCols) => arr.slice(0, maxRows).map(row => (row || []).slice(0, maxCols));
+    const maxR = this.game.rows ?? layout.length;
+    const maxC = this.game.cols ?? (layout[0]?.length ?? 0);
+    const clipped = clip(layout, maxR, maxC);
 
-    // Helper: calculate total cost of a layout
-    const calculateLayoutCost = (layout) => {
-      if (!layout || !this.game || !this.game.partset) return 0;
-      let cost = 0;
-      for (const row of layout) {
-        for (const cell of row) {
-          if (cell && cell.id) {
-            const part = this.game.partset.parts.get(cell.id);
-            if (part) cost += part.cost * (cell.lvl || 1);
-          }
+    const getCostBreakdown = (l) => {
+      const out = { money: 0, ep: 0 };
+      if (!l || !this.game.partset) return out;
+      for (const row of l) {
+        for (const cell of row || []) {
+          if (!cell?.id) continue;
+          const part = this.game.partset.parts.get(cell.id);
+          if (!part) continue;
+          const n = (part.cost?.toNumber?.() ?? Number(part.cost ?? 0)) * (cell.lvl || 1);
+          if (part.erequires) out.ep += n;
+          else out.money += n;
         }
       }
-      return cost;
+      return out;
     };
 
     this.game.tileset.tiles_list.forEach(tile => {
       if (tile.enabled && tile.part) tile.clearPart(false);
     });
 
-    // Apply the new layout
-    for (let r = 0; r < layout.length; r++) {
-      for (let c = 0; c < layout[r].length; c++) {
-        const cell = layout[r][c];
-        if (cell && cell.id) {
+    for (let r = 0; r < clipped.length; r++) {
+      for (let c = 0; c < (clipped[r]?.length ?? 0); c++) {
+        const cell = clipped[r][c];
+        if (cell?.id) {
           const part = this.game.partset.getPartById(cell.id);
           if (part) {
             const tile = this.game.tileset.getTile(r, c);
@@ -4218,8 +4460,15 @@ export class UI {
     }
 
     if (!skipCostDeduction) {
-      const cost = calculateLayoutCost(layout);
-      this.game.current_money -= cost;
+      const { money: costMoney, ep: costEp } = getCostBreakdown(clipped);
+      if (costMoney > 0 && this.game._current_money) {
+        this.game._current_money = this.game._current_money.sub(costMoney);
+        this.stateManager.setVar("current_money", this.game._current_money);
+      }
+      if (costEp > 0 && this.game.current_exotic_particles) {
+        this.game.current_exotic_particles = this.game.current_exotic_particles.sub(costEp);
+        this.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
+      }
     }
     this.gridCanvasRenderer?.markStaticDirty();
     this.runUpdateInterfaceLoop();
@@ -4242,7 +4491,8 @@ export class UI {
           }
         }
 
-        this.setupReactorEventListeners();
+        this.inputManager.setupReactorEventListeners();
+        this.inputManager.setupSegmentHighlight();
         this.gridScaler.resize();
         if (this.gridCanvasRenderer) {
           this.gridCanvasRenderer.setContainer(this.DOMElements.reactor_wrapper || this.DOMElements.reactor_background || null);
@@ -4289,6 +4539,7 @@ export class UI {
             "[UI] upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing"
           );
         }
+        this.renderDoctrineTreeViewer();
         this.initializeSandboxUpgradeButtons();
         break;
       case "about_section":
@@ -4650,129 +4901,6 @@ export class UI {
     });
   }
 
-  setupReactorEventListeners() {
-    const reactor = this.DOMElements.reactor;
-    if (!reactor) {
-      logger.error("Reactor element not found for event listeners.");
-      return;
-    }
-
-    let longPressTargetTile = null;
-    let pointerMoved = false;
-    let pointerDownTileEl = null;
-    let startX = 0;
-    let startY = 0;
-    const MOVE_THRESHOLD = 10;
-    const cancelLongPress = () => {
-      if (this.longPressTimer) {
-        clearTimeout(this.longPressTimer);
-        this.longPressTimer = null;
-      }
-      if (longPressTargetTile?.$el) {
-        longPressTargetTile.$el.classList.remove("selling");
-      }
-      longPressTargetTile = null;
-    };
-    const getTileFromEvent = (ev) => {
-      const target = ev.target;
-      if (target && target === this.gridCanvasRenderer?.getCanvas()) {
-        return this.gridCanvasRenderer.hitTest(ev.clientX, ev.clientY);
-      }
-      return null;
-    };
-    const pointerDownHandler = (e) => {
-      if ((e.pointerType === "mouse" && e.button !== 0) || e.button > 0) return;
-      const tile = getTileFromEvent(e);
-      if (!tile?.enabled) return;
-      pointerDownTileEl = tile;
-      e.preventDefault();
-      this.isDragging = true;
-      this.lastTileModified = tile;
-      pointerMoved = false;
-      startX = e.clientX;
-      startY = e.clientY;
-      const hasPart = tile.part;
-      const noModifiers = !e.ctrlKey && !e.altKey && !e.shiftKey;
-      if (hasPart && noModifiers) {
-        longPressTargetTile = tile;
-        this.longPressTimer = setTimeout(() => {
-          this.longPressTimer = null;
-          if (longPressTargetTile) {
-            longPressTargetTile.clearPart(true);
-            this.game.reactor.updateStats();
-            if (this.game && this.game.audio) {
-              this.game.audio.play('sell');
-            }
-          }
-          this.isDragging = false;
-        }, 250);
-      }
-      const pointerMoveHandler = async (e_move) => {
-        const dx = e_move.clientX - startX;
-        const dy = e_move.clientY - startY;
-        if (
-          !pointerMoved &&
-          (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD)
-        ) {
-          pointerMoved = true;
-          cancelLongPress();
-        }
-        if (!this.isDragging) return;
-        const moveTile = getTileFromEvent(e_move);
-        if (moveTile && moveTile !== this.lastTileModified) {
-          await this.handleGridInteraction(moveTile, e_move);
-          this.lastTileModified = moveTile;
-        }
-      };
-      const pointerUpHandler = async (e_up) => {
-        if (!pointerMoved && this.isDragging && pointerDownTileEl) {
-          cancelLongPress();
-          await this.handleGridInteraction(pointerDownTileEl, e_up || e);
-        } else if (this.longPressTimer) {
-          cancelLongPress();
-        }
-        if (this.isDragging) {
-          this.isDragging = false;
-          this.lastTileModified = null;
-          this.game.reactor.updateStats();
-          this.stateManager.setVar("current_money", this.game.current_money);
-        }
-        window.removeEventListener("pointermove", pointerMoveHandler);
-        window.removeEventListener("pointerup", pointerUpHandler);
-        window.removeEventListener("pointercancel", pointerUpHandler);
-        pointerDownTileEl = null;
-      };
-      window.addEventListener("pointermove", pointerMoveHandler);
-      window.addEventListener("pointerup", pointerUpHandler);
-      window.addEventListener("pointercancel", pointerUpHandler);
-    };
-    const eventTarget = this.gridCanvasRenderer?.getCanvas() || reactor;
-    eventTarget.addEventListener("pointerdown", pointerDownHandler);
-    eventTarget.addEventListener("contextmenu", async (e) => {
-      e.preventDefault();
-      const tile = this.gridCanvasRenderer ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : null;
-      await this.handleGridInteraction(tile, e);
-    });
-
-    eventTarget.addEventListener("mousemove", (e) => {
-      const tile = this.gridCanvasRenderer ? this.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : null;
-      if (
-        tile?.part &&
-        this.game?.tooltip_manager &&
-        !this.isDragging &&
-        this.help_mode_active
-      ) {
-        this.game.tooltip_manager.show(tile.part, tile, false);
-      }
-    }, true);
-
-    eventTarget.addEventListener("mouseleave", () => {
-      if (this.game?.tooltip_manager && this.help_mode_active) {
-        this.game.tooltip_manager.hide();
-      }
-    }, true);
-  }
-
   async loadAndSetVersion() {
     try {
       const { getResourceUrl } = await import("../utils/util.js");
@@ -5119,6 +5247,75 @@ export class UI {
       cancelAnimationFrame(this.update_interface_task);
       this.update_interface_task = null;
     }
+    if (this._meltdownBuildupRafId != null) {
+      cancelAnimationFrame(this._meltdownBuildupRafId);
+      this._meltdownBuildupRafId = null;
+    }
+  }
+
+  startMeltdownBuildup(onComplete) {
+    const BUILDUP_MS = 2500;
+    const wrapper = this.DOMElements.reactor_wrapper || document.getElementById("reactor_wrapper");
+    const section = document.getElementById("reactor_section");
+    if (this.particleSystem && wrapper) {
+      const rect = wrapper.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      this.particleSystem.createCriticalBuildupEmbers(cx, cy);
+    }
+    let vignetteEl = document.getElementById("meltdown_vignette");
+    if (!vignetteEl && section) {
+      vignetteEl = document.createElement("div");
+      vignetteEl.id = "meltdown_vignette";
+      vignetteEl.setAttribute("aria-hidden", "true");
+      section.appendChild(vignetteEl);
+    }
+    if (vignetteEl) vignetteEl.style.display = "block";
+    let strobeEl = document.getElementById("meltdown_strobe");
+    if (!strobeEl && section) {
+      strobeEl = document.createElement("div");
+      strobeEl.id = "meltdown_strobe";
+      strobeEl.setAttribute("aria-hidden", "true");
+      strobeEl.style.cssText = "position:absolute;inset:0;z-index:26;pointer-events:none;border-radius:8px;background:rgba(255,0,0,0.4);mix-blend-mode:overlay;opacity:0;";
+      section.appendChild(strobeEl);
+    }
+    if (strobeEl) strobeEl.style.display = "block";
+    const start = typeof performance !== "undefined" ? performance.now() : Date.now();
+    let rafId = null;
+    const tick = () => {
+      const elapsed = (typeof performance !== "undefined" ? performance.now() : Date.now()) - start;
+      const t = Math.min(1, elapsed / BUILDUP_MS);
+      const intensity = t * 8;
+      const shakeX = (Math.random() - 0.5) * 2 * intensity;
+      const shakeY = (Math.random() - 0.5) * 2 * intensity;
+      if (wrapper) {
+        wrapper.style.transform = `translate(${shakeX}px, ${shakeY}px)`;
+      }
+      if (vignetteEl) {
+        vignetteEl.style.opacity = String(t * 0.9);
+      }
+      if (strobeEl) {
+        const pulseIntervalMs = Math.max(40, 220 - 180 * t);
+        const strobePhase = (elapsed / pulseIntervalMs) % 1;
+        strobeEl.style.opacity = strobePhase < 0.5 ? "0.38" : "0";
+      }
+      if (t < 1) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        if (wrapper) wrapper.style.transform = "";
+        if (vignetteEl) {
+          vignetteEl.style.opacity = "0";
+          vignetteEl.style.display = "none";
+        }
+        if (strobeEl) {
+          strobeEl.style.opacity = "0";
+          strobeEl.style.display = "none";
+        }
+        if (typeof onComplete === "function") onComplete();
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+    this._meltdownBuildupRafId = rafId;
   }
 
   explodeAllPartsSequentially(forceAnimate = false) {
@@ -5140,29 +5337,44 @@ export class UI {
 
     const shuffledTiles = [...tilesWithParts].sort(() => Math.random() - 0.5);
 
-    // Explode each tile with a delay
     shuffledTiles.forEach((tile, index) => {
       setTimeout(() => {
-        if (tile.part) {
-          if (this.game.audio) {
-            const pan = this.game.calculatePan ? this.game.calculatePan(tile.col) : 0;
-            this.game.audio.play('explosion', null, pan);
-          }
-          if (tile.$el) tile.$el.classList.add("exploding");
-
-          // Add a brief delay before clearing the part
-          setTimeout(() => {
-            tile.clearPart(false);
-          }, 600); // Wait for explosion animation to complete (0.6s)
+        if (tile.part && this.game.engine) {
+          this.game.engine.handleComponentExplosion(tile);
         }
-      }, index * 150); // 150ms delay between each explosion
+      }, index * 150);
     });
 
-    // Add a final delay to ensure all explosions complete before allowing new actions
     const totalExplosionTime = (shuffledTiles.length - 1) * 150 + 600;
     setTimeout(() => {
       logger.debug("All parts exploded!");
+      const r = this.game.reactor;
+      if (r.decompression_enabled && r.current_heat <= 2 * r.max_heat && r.has_melted_down) {
+        r.clearMeltdownState();
+        this.stateManager.setVar("current_heat", r.current_heat);
+        if (this.updateHeatVisuals) this.updateHeatVisuals();
+        if (this.game.engine) this.game.engine.start();
+        this.showDecompressionSavedToast();
+      }
     }, totalExplosionTime);
+  }
+
+  showDecompressionSavedToast() {
+    const existing = document.querySelector(".decompression-saved-toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "decompression-saved-toast";
+    toast.setAttribute("role", "status");
+    toast.textContent = "Explosive decompression saved the reactor!";
+    toast.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1b5e20;border:2px solid #4caf50;border-radius:8px;padding:12px 20px;z-index:10000;font-family:'Minecraft',monospace;color:#fff;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.4);opacity:0;transition:opacity 0.2s ease-out;";
+    requestAnimationFrame(() => { toast.style.opacity = "1"; });
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 220);
+      }
+    }, 3500);
   }
 
   updateProgressBarMeltdownState(isMeltdown) {
@@ -5393,6 +5605,49 @@ export class UI {
     if (!game?.tech_tree || !game?.upgradeset?.treeList) return null;
     const doctrine = game.upgradeset.treeList.find((t) => t.id === game.tech_tree);
     return doctrine ? { id: doctrine.id, title: doctrine.title, subtitle: doctrine.subtitle } : null;
+  }
+
+  renderDoctrineTreeViewer() {
+    const game = this.game;
+    const container = document.getElementById("doctrine_tree_viewer_content");
+    const article = document.getElementById("doctrine_tree_viewer");
+    if (!container || !article) return;
+    if (!game?.upgradeset?.treeList?.length) {
+      article.classList.add("hidden");
+      return;
+    }
+    article.classList.remove("hidden");
+    const currentId = game.tech_tree || null;
+    let html = "";
+    game.upgradeset.treeList.forEach((tree) => {
+      const isCurrent = tree.id === currentId;
+      const label = isCurrent ? "Your doctrine" : "Locked";
+      const upgradeIds = tree.upgrades || [];
+      const names = upgradeIds.map((id) => {
+        const up = game.upgradeset.getUpgrade(id);
+        return up?.title ?? id;
+      });
+      html += `<div class="doctrine-tree-block" data-doctrine="${escapeHtml(tree.id)}" style="border-left: 3px solid ${escapeHtml(tree.color || "#666")}; margin-bottom: 0.75rem; padding: 0.5rem 0 0.5rem 0.75rem;">`;
+      html += `<div style="font-size: 0.7rem; font-weight: bold; color: ${isCurrent ? "rgb(200 220 180)" : "rgb(120 120 120)"};">${escapeHtml(tree.title)}</div>`;
+      html += `<div style="font-size: 0.55rem; color: rgb(140 150 130); margin-bottom: 0.35rem;">${escapeHtml(label)}</div>`;
+      html += `<ul style="font-size: 0.6rem; color: rgb(170 180 160); margin: 0; padding-left: 1.25rem; list-style: disc;">`;
+      names.slice(0, 24).forEach((name) => {
+        html += `<li>${escapeHtml(name)}</li>`;
+      });
+      if (names.length > 24) html += `<li style="color: rgb(120 130 110);">+${names.length - 24} more</li>`;
+      html += `</ul></div>`;
+    });
+    container.innerHTML = html;
+    const respecBtn = document.getElementById("respec_doctrine_btn");
+    if (respecBtn) {
+      const cost = game.RESPER_DOCTRINE_EP_COST ?? 50;
+      respecBtn.textContent = `Respec doctrine (${cost} EP)`;
+      const canRespec = !!game.tech_tree && (game.current_exotic_particles ?? 0) >= cost;
+      respecBtn.disabled = !canRespec;
+      respecBtn.title = canRespec
+        ? "Reset doctrine and that path's upgrades; costs Exotic Particles"
+        : (game.tech_tree ? `Requires ${cost} Exotic Particles` : "No doctrine selected");
+    }
   }
 
   getReactorClassification() {
@@ -6053,14 +6308,14 @@ export class UI {
 
   showFloatingText(container, amount) {
     if (!container || amount <= 0) return;
-
-    const textEl = document.createElement("div");
-    textEl.className = "floating-text";
+    const parent = container.querySelector(".floating-text-container");
+    if (!parent) return;
+    const textEl = this._visualPool.floatingText.pop() || Object.assign(document.createElement("div"), { className: "floating-text" });
     textEl.textContent = `+$${fmt(amount)}`;
-    container.querySelector(".floating-text-container")?.appendChild(textEl);
-
+    parent.appendChild(textEl);
     setTimeout(() => {
       textEl.remove();
+      this._visualPool.floatingText.push(textEl);
     }, 1000);
   }
 
@@ -6068,60 +6323,46 @@ export class UI {
     if (!tile || amount <= 0) return;
     const overlay = this._ensureOverlay();
     if (!overlay) return;
-
     const pos = this._tileCenterToOverlayPosition(tile.row, tile.col);
-
-    const textEl = document.createElement("div");
-    textEl.className = "floating-text";
+    const textEl = this._visualPool.floatingText.pop() || Object.assign(document.createElement("div"), { className: "floating-text" });
     textEl.textContent = `+$${fmt(amount)}`;
     textEl.style.left = `${pos.x}px`;
     textEl.style.top = `${pos.y}px`;
     overlay.appendChild(textEl);
-
     setTimeout(() => {
       textEl.remove();
+      this._visualPool.floatingText.push(textEl);
     }, 1000);
   }
 
-  createSteamParticles(container) {
-    if (!container) return;
-
-    const particlesContainer = container.querySelector(".steam-particles");
-    if (!particlesContainer) return;
-
-    for (let i = 0; i < 8; i++) {
-      const particle = document.createElement("div");
-      particle.className = "steam-particle";
-      const offsetX = (Math.random() - 0.5) * 40;
-      particle.style.setProperty("--steam-offset-x", `${offsetX}px`);
-      particle.style.left = `${50 + (Math.random() - 0.5) * 20}%`;
-      particlesContainer.appendChild(particle);
-
-      setTimeout(() => {
-        particle.remove();
-      }, 1500);
-    }
+  createSteamParticles(container, heatAmount) {
+    if (!container || !this.particleSystem) return;
+    const rect = container.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    this.particleSystem.createSteamParticles(cx, cy, heatAmount);
   }
 
   createBoltParticle(fromEl, toEl) {
-    if (!fromEl || !toEl) return;
+    if (!fromEl || !toEl || !this.particleSystem) return;
     const fromRect = fromEl.getBoundingClientRect();
     const toRect = toEl.getBoundingClientRect();
     const startX = fromRect.left + fromRect.width / 2;
     const startY = fromRect.top + fromRect.height / 2;
     const endX = toRect.left + toRect.width / 2;
     const endY = toRect.top + toRect.height / 2;
-    const el = document.createElement("div");
-    el.className = "particle-bolt";
-    el.textContent = "\u26A1";
-    el.style.setProperty("--bolt-start-x", "0px");
-    el.style.setProperty("--bolt-start-y", "0px");
-    el.style.setProperty("--bolt-end-x", `${endX - startX}px`);
-    el.style.setProperty("--bolt-end-y", `${endY - startY}px`);
-    el.style.left = `${startX}px`;
-    el.style.top = `${startY}px`;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 400);
+    this.particleSystem.createBoltParticle(startX, startY, endX, endY);
+  }
+
+  createSellSparks(fromEl, toEl) {
+    if (!fromEl || !toEl || !this.particleSystem) return;
+    const fromRect = fromEl.getBoundingClientRect();
+    const toRect = toEl.getBoundingClientRect();
+    const fromX = fromRect.left + fromRect.width / 2;
+    const fromY = fromRect.top + fromRect.height / 2;
+    const toX = toRect.left + toRect.width / 2;
+    const toY = toRect.top + toRect.height / 2;
+    this.particleSystem.createSellSparks(fromX, fromY, toX, toY);
   }
 
   setupInfoBarButtons() {
@@ -6132,7 +6373,7 @@ export class UI {
         if (this.game) {
           const moneyBefore = this.game.current_money;
           this.game.sell_action();
-          const moneyGained = this.game.current_money - moneyBefore;
+          const moneyGained = (this.game.current_money && this.game.current_money.sub ? this.game.current_money.sub(moneyBefore).toNumber() : (this.game.current_money - moneyBefore));
           if (moneyGained > 0) {
             const moneyDisplay = document.getElementById("control_deck_money");
             if (moneyDisplay) {
@@ -6144,6 +6385,7 @@ export class UI {
               : moneyDisplay;
             if (moneyTarget) {
               this.createBoltParticle(powerBtn, moneyTarget);
+              this.createSellSparks(powerBtn, moneyTarget);
             }
           }
         }
@@ -6155,8 +6397,10 @@ export class UI {
       heatBtn.setAttribute("data-listener-attached", "true");
       heatBtn.addEventListener("click", () => {
         if (this.game) {
+          const r = this.game.reactor;
+          const heatRatio = r?.max_heat?.gt(0) ? (r.current_heat?.toNumber?.() ?? Number(r.current_heat ?? 0)) / (r.max_heat?.toNumber?.() ?? Number(r.max_heat)) : 0;
           this.game.manual_reduce_heat_action();
-          this.createSteamParticles(heatBtn);
+          this.createSteamParticles(heatBtn, heatRatio);
           heatBtn.classList.add("venting");
           setTimeout(() => heatBtn.classList.remove("venting"), 400);
         }
@@ -6183,10 +6427,21 @@ export class UI {
     }
 
     const powerBtnDesktop = document.getElementById("info_bar_power_btn_desktop");
-    if (powerBtnDesktop) {
+    if (powerBtnDesktop && !powerBtnDesktop.hasAttribute("data-listener-attached")) {
+      powerBtnDesktop.setAttribute("data-listener-attached", "true");
       powerBtnDesktop.addEventListener("click", () => {
         if (this.game) {
+          const moneyBefore = this.game.current_money;
           this.game.sell_action();
+          const moneyGained = (this.game.current_money?.sub ? this.game.current_money.sub(moneyBefore).toNumber() : (Number(this.game.current_money) - Number(moneyBefore)));
+          if (moneyGained > 0) {
+            const moneyTargetDesktop = document.querySelector(".info-bar-desktop .info-item.money") || document.getElementById("info_money_desktop")?.closest(".info-item");
+            if (moneyTargetDesktop) {
+              this.showFloatingText(moneyTargetDesktop, moneyGained);
+              this.createBoltParticle(powerBtnDesktop, moneyTargetDesktop);
+              this.createSellSparks(powerBtnDesktop, moneyTargetDesktop);
+            }
+          }
         }
       });
     }
@@ -6195,7 +6450,10 @@ export class UI {
     if (heatBtnDesktop) {
       heatBtnDesktop.addEventListener("click", () => {
         if (this.game) {
+          const r = this.game.reactor;
+          const heatRatio = r?.max_heat?.gt(0) ? (r.current_heat?.toNumber?.() ?? Number(r.current_heat ?? 0)) / (r.max_heat?.toNumber?.() ?? Number(r.max_heat)) : 0;
           this.game.manual_reduce_heat_action();
+          this.createSteamParticles(heatBtnDesktop, heatRatio);
         }
       });
     }
@@ -6296,50 +6554,10 @@ export class UI {
   }
 
   showContextModal(tile) {
-    if (!tile || !tile.part) return;
-
-    const modal = document.getElementById("context_modal");
-    const titleEl = document.getElementById("context_modal_title");
-    const bodyEl = document.getElementById("context_modal_body");
-    const sellBtn = document.getElementById("context_modal_sell");
-    const closeBtn = document.getElementById("context_modal_close");
-
-    if (!modal || !titleEl || !bodyEl || !sellBtn) return;
-
-    titleEl.textContent = tile.part.title || "Part";
-    
-    const stats = [];
-    if (tile.part.power) stats.push(`Power: ${tile.part.power}`);
-    if (tile.part.heat) stats.push(`Heat: ${tile.part.heat}`);
-    if (tile.part.ticks) stats.push(`Ticks: ${tile.part.ticks}`);
-    
-    bodyEl.innerHTML = stats.length > 0 
-      ? `<div>${stats.map(s => escapeHtml(s)).join("<br>")}</div>`
-      : "<div>No stats available</div>";
-
-    sellBtn.onclick = () => {
-      this.heavyVibration();
-      if (this.game && tile.part) {
-        this.game.sellPart(tile);
-        this.hideContextModal();
-      }
-    };
-
-    if (closeBtn) {
-      closeBtn.onclick = () => {
-        this.lightVibration();
-        this.hideContextModal();
-      };
-    }
-
-    modal.classList.remove("hidden");
-    this.lightVibration();
+    this.modalManager.showContextModal(tile);
   }
 
   hideContextModal() {
-    const modal = document.getElementById("context_modal");
-    if (modal) {
-      modal.classList.add("hidden");
-    }
+    this.modalManager.hideContextModal();
   }
 }

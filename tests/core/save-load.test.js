@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, vi } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, vi, toNum } from "../helpers/setup.js";
 
 describe("Save and Load Functionality", () => {
   let game;
@@ -73,8 +73,8 @@ describe("Save and Load Functionality", () => {
     expect(savedJson).toBeTruthy();
     
     const savedData = JSON.parse(savedJson);
-    expect(savedData.current_money).toBe(5000);
-    expect(savedData.exotic_particles).toBe(10);
+    expect(Number(savedData.current_money)).toBe(5000);
+    expect(Number(savedData.exotic_particles)).toBe(10);
     expect(savedData.version).toBe(game.version);
   });
 
@@ -83,11 +83,11 @@ describe("Save and Load Functionality", () => {
     game.saveGame(1);
     
     await game.set_defaults();
-    expect(game.current_money).toBe(game.base_money);
-    
+    expect(toNum(game.current_money)).toBe(game.base_money);
+
     const loaded = await game.loadGame(1);
     expect(loaded).toBe(true);
-    expect(game.current_money).toBe(9999);
+    expect(toNum(game.current_money)).toBe(9999);
   });
 
   it("should restore complex grid state", async () => {
@@ -121,7 +121,7 @@ describe("Save and Load Functionality", () => {
     
     const loaded = await game.loadGame(1);
     expect(loaded).toBe(false);
-    expect(game.current_money).toBe(game.base_money);
+    expect(toNum(game.current_money)).toBe(game.base_money);
   });
 
   it("should clear all game data when starting new game so no stale save is loaded", () => {

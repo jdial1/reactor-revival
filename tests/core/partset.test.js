@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGame, toNum } from "../helpers/setup.js";
 
 describe("Partset Mechanics", () => {
   let game;
@@ -25,9 +25,9 @@ describe("Partset Mechanics", () => {
     const part = game.partset.getPartById("uranium1");
     expect(part).toBeDefined();
     expect(part.id).toBe("uranium1");
-    expect(part.power).toBeGreaterThan(0);
-    expect(part.heat).toBeGreaterThan(0);
-    expect(part.cost).toBeGreaterThan(0);
+    expect(toNum(part.power)).toBeGreaterThan(0);
+    expect(toNum(part.heat)).toBeGreaterThan(0);
+    expect(toNum(part.cost)).toBeGreaterThan(0);
   });
 
   it("should return undefined for invalid part ID", () => {
