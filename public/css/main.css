@@ -330,24 +330,30 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
 .parts_tabs { display: flex; width: 100%; height: 100%; flex-direction: row; align-items: center; gap: 4px;
 }
 
-.parts_tab { display: flex; min-width: 0; max-width: 100%; height: 100%; box-sizing: border-box; flex: 1 1 0; align-items: center; justify-content: center; padding: 0.1rem; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; margin: 0; background: var(--bevel-mid); color: white; font-family: inherit; font-size: 1em; transition: background 0.1s, border 0.1s;
+.parts_tab { display: flex; min-width: 0; max-width: 100%; height: 100%; box-sizing: border-box; flex: 1 1 0; align-items: center; justify-content: center; padding: 0.1rem; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; margin: 0; background: var(--bevel-mid); color: white; font-family: inherit; font-size: 1em; cursor: pointer; transition: transform 0.1s ease, background 0.1s, border 0.1s;
 }
 
 .parts_tab img { width: 36px; height: 36px; image-rendering: crisp-edges; object-fit: contain;
 }
 
+.parts_tab:hover { filter: brightness(1.1); transform: translateY(-2px);
+}
+
 .parts_tab.active,
-.parts_tab:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: rgb(80 80 80); color: rgb(255 255 160);
+.parts_tab:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: rgb(80 80 80); color: rgb(255 255 160); transform: translateY(1px);
 }
 
-.parts_tab[disabled] { cursor: not-allowed; opacity: 0.5;
+.parts_tab[disabled] { cursor: not-allowed; opacity: 0.5; transform: none !important;
 }
 
-.parts_help_btn { display: flex; min-width: 0; max-width: 100%; height: 100%; box-sizing: border-box; flex: 1 1 0; align-items: center; justify-content: center; padding: 0.1rem; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; margin: 0; background: var(--bevel-mid); color: white; font-family: inherit; font-size: 1em; transition: background 0.1s, border 0.1s;
+.parts_help_btn { display: flex; min-width: 0; max-width: 100%; height: 100%; box-sizing: border-box; flex: 1 1 0; align-items: center; justify-content: center; padding: 0.1rem; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; margin: 0; background: var(--bevel-mid); color: white; font-family: inherit; font-size: 1em; cursor: pointer; transition: transform 0.1s ease, background 0.1s, border 0.1s;
+}
+
+.parts_help_btn:hover { filter: brightness(1.1); transform: translateY(-2px);
 }
 
 .parts_help_btn.active,
-.parts_help_btn:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: var(--game-warning-color); color: white;
+.parts_help_btn:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: var(--game-warning-color); color: white; transform: translateY(1px);
 }
 
 .part-details { display: none;
@@ -601,6 +607,12 @@ body.reactor-sandbox .sandbox-upgrade-actions { display: flex;
 }
 
 .tile:hover { z-index: 10; border-color: white; background-color: var(--pico-primary-hover); box-shadow: 0 0 8px rgb(255 255 255 / 40%), inset 0 2px 4px rgb(0 0 0 / 30%); filter: brightness(1.1); transform: scale(1.05) translateY(-2px);
+}
+
+body.help-mode-active .tile { cursor: help !important;
+}
+
+body.help-mode-active .tile:hover { border-color: rgb(100 180 255) !important; background-color: rgb(0 80 120 / 30%) !important; box-shadow: 0 0 15px rgb(100 180 255 / 80%), inset 0 0 10px rgb(100 180 255 / 40%) !important;
 }
 
 .tile.enabled { opacity: 1;
