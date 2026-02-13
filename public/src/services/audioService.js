@@ -38,6 +38,10 @@ export class AudioService {
   };
   this._activeLimiter = null;
   this._uiBuffers = { click: null, placement: null, placement_cell: null, placement_plating: null, upgrade: null, error: null, sell: null, tab_switch: null };
+  this._industrialBuffers = { metal_clank: null, steam_hiss: null };
+  this._industrialAmbienceTimeout = null;
+  this._industrialAmbienceVentCount = 0;
+  this._industrialAmbienceExchangerCount = 0;
   this._ambienceBuffers = [];
   this._ambienceLayerGains = [];
   this._ambienceFilter = null;
@@ -71,6 +75,16 @@ export class AudioService {
   this._uiBuffers[key] = await this.context.decodeAudioData(ab);
   } catch (e) {
   console.warn('Audio load failed', url, e);
+  }
+  }
+  const industrialUrls = { metal_clank: base + 'metal_clank.mp3', steam_hiss: base + 'steam_hiss.mp3' };
+  for (const [key, url] of Object.entries(industrialUrls)) {
+  try {
+  const r = await fetch(url);
+  const ab = await r.arrayBuffer();
+  this._industrialBuffers[key] = await this.context.decodeAudioData(ab);
+  } catch (e) {
+  console.warn('Industrial audio load failed', url, e);
   }
   }
   const layerUrls = [base + 'ambience_low.mp3', base + 'ambience_medium.mp3', base + 'ambience_high.mp3'];
@@ -647,6 +661,66 @@ export class AudioService {
   this._ambienceNodes = [];
   this._ambienceLayerGains = [];
   this._ambienceFilter = null;
+  this.stopIndustrialAmbience();
+  }
+  stopIndustrialAmbience() {
+  if (this._industrialAmbienceTimeout) {
+  clearTimeout(this._industrialAmbienceTimeout);
+  this._industrialAmbienceTimeout = null;
+  }
+  this._industrialAmbienceVentCount = 0;
+  this._industrialAmbienceExchangerCount = 0;
+  }
+  scheduleIndustrialAmbience(ventCount, exchangerCount) {
+  this._industrialAmbienceVentCount = ventCount;
+  this._industrialAmbienceExchangerCount = exchangerCount;
+  if (ventCount + exchangerCount === 0) {
+  if (this._industrialAmbienceTimeout) {
+  clearTimeout(this._industrialAmbienceTimeout);
+  this._industrialAmbienceTimeout = null;
+  }
+  return;
+  }
+  if (this._industrialAmbienceTimeout) return;
+  this._scheduleNextIndustrialAmbience();
+  }
+  _scheduleNextIndustrialAmbience() {
+  const ventCount = this._industrialAmbienceVentCount;
+  const exchangerCount = this._industrialAmbienceExchangerCount;
+  if (ventCount + exchangerCount === 0) return;
+  const divisor = 1 + ventCount * 0.1 + exchangerCount * 0.1;
+  const intervalMs = (Math.random() * 5000) / divisor;
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+  this._industrialAmbienceTimeout = setTimeout(() => {
+  this._industrialAmbienceTimeout = null;
+  this._playIndustrialAmbienceAccent();
+  this._scheduleNextIndustrialAmbience();
+  }, clamp(intervalMs, 800, 12000));
+  }
+  _playIndustrialAmbienceAccent() {
+  const keys = ['metal_clank', 'steam_hiss'];
+  const key = keys[Math.floor(Math.random() * keys.length)];
+  const buffer = this._industrialBuffers[key];
+  if (!buffer || !this.context || this.context.state !== 'running' || !this.enabled || !this.ambienceGain) return;
+  const ctx = this.context;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.playbackRate.value = 0.85 + Math.random() * 0.3;
+  const gain = ctx.createGain();
+  const ambienceLevel = this.ambienceGain.gain.value;
+  gain.gain.value = ambienceLevel * 0.3;
+  src.connect(gain);
+  let dest = this.ambienceGain;
+  if (ctx.createStereoPanner) {
+  const panner = ctx.createStereoPanner();
+  panner.pan.value = -0.8 + Math.random() * 1.6;
+  panner.connect(dest);
+  dest = panner;
+  }
+  gain.connect(dest);
+  src.start(t);
+  src.stop(t + buffer.duration);
   }
   _osc(startTime, type, freq, volume, duration, options = {}) {
   if (!this.context) return null;

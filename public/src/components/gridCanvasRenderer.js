@@ -58,8 +58,13 @@ export class GridCanvasRenderer {
   }
 
   setGridDimensions(rows, cols) {
-    this._rows = Math.max(1, rows | 0);
-    this._cols = Math.max(1, cols | 0);
+    const newRows = Math.max(1, rows | 0);
+    const newCols = Math.max(1, cols | 0);
+    if (this._rows !== newRows || this._cols !== newCols) {
+      this.clearImageCache();
+    }
+    this._rows = newRows;
+    this._cols = newCols;
     this._tileSize = Math.min(
       this._width / this._cols,
       this._height / this._rows

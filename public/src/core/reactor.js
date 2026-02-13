@@ -393,6 +393,7 @@ export class Reactor {
       this.game.logger?.warn(`[MELTDOWN] Condition met! Initiating meltdown sequence.`);
       this.game.debugHistory.add('reactor', 'Meltdown triggered', { heat: this.current_heat, max_heat: this.max_heat });
       this.has_melted_down = true;
+      if (this.game.ui?.meltdownVibration) this.game.ui.meltdownVibration();
 
       // Hide any active tooltips before clearing parts
       if (this.game.tooltip_manager) {
@@ -476,10 +477,10 @@ export class Reactor {
       this.game.ui.clearSegmentHighlight();
     }
 
-    // Reset heat manager segments if it exists
     if (this.game.engine && this.game.engine.heatManager) {
       this.game.engine.heatManager.segments.clear();
       this.game.engine.heatManager.tileSegmentMap.clear();
+      this.game.engine.heatManager.markSegmentsAsDirty();
     }
   }
 

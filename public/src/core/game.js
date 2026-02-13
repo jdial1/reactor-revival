@@ -321,6 +321,7 @@ export class Game {
     this.placedCounts = {};
     this._suppressPlacementCounting = false;
     this.tileset.clearAllTiles();
+    this.ui?.gridCanvasRenderer?.clearImageCache();
     this.reactor.updateStats();
 
     // Clear all heat-related visual states after clearing tiles
@@ -432,12 +433,10 @@ export class Game {
     // Leaderboard initialization is optional - failures are non-fatal
     leaderboardService.init().catch(err => {
         const errorMsg = err?.message || String(err);
-        // Only log if it's not an expected SQLite3 initialization error
         const isExpectedError = [
             'SharedArrayBuffer',
             'Atomics',
             'COOP/COEP',
-            'sqlite3InitModuleState',
             'Cannot read properties',
             "can't access property"
         ].some(term => errorMsg.includes(term));
@@ -469,17 +468,15 @@ export class Game {
 
   async startSession() {
     this.session_start_time = Date.now();
-    this.last_save_time = Date.now();
+    if (!this.last_save_time) this.last_save_time = Date.now();
 
     // Leaderboard initialization is optional - failures are non-fatal
     leaderboardService.init().catch(err => {
         const errorMsg = err?.message || String(err);
-        // Only log if it's not an expected SQLite3 initialization error
         const isExpectedError = [
             'SharedArrayBuffer',
             'Atomics',
             'COOP/COEP',
-            'sqlite3InitModuleState',
             'Cannot read properties',
             "can't access property"
         ].some(term => errorMsg.includes(term));
@@ -928,6 +925,11 @@ export class Game {
           obj.infinite_objective = {
             ...om.infiniteObjective,
             _lastInfinitePowerTarget: om._lastInfinitePowerTarget,
+            _lastInfiniteHeatMaintain: om._lastInfiniteHeatMaintain,
+            _lastInfiniteMoneyThorium: om._lastInfiniteMoneyThorium,
+            _lastInfiniteHeat: om._lastInfiniteHeat,
+            _lastInfiniteEP: om._lastInfiniteEP,
+            _infiniteChallengeIndex: om._infiniteChallengeIndex,
             _infiniteCompletedCount: om._infiniteCompletedCount,
           };
         }
@@ -1357,6 +1359,11 @@ export class Game {
           completed: !!inf.completed,
         };
         if (inf._lastInfinitePowerTarget != null) this.objectives_manager._lastInfinitePowerTarget = inf._lastInfinitePowerTarget;
+        if (inf._lastInfiniteHeatMaintain != null) this.objectives_manager._lastInfiniteHeatMaintain = inf._lastInfiniteHeatMaintain;
+        if (inf._lastInfiniteMoneyThorium != null) this.objectives_manager._lastInfiniteMoneyThorium = inf._lastInfiniteMoneyThorium;
+        if (inf._lastInfiniteHeat != null) this.objectives_manager._lastInfiniteHeat = inf._lastInfiniteHeat;
+        if (inf._lastInfiniteEP != null) this.objectives_manager._lastInfiniteEP = inf._lastInfiniteEP;
+        if (inf._infiniteChallengeIndex != null) this.objectives_manager._infiniteChallengeIndex = inf._infiniteChallengeIndex;
         if (inf._infiniteCompletedCount != null) this.objectives_manager._infiniteCompletedCount = inf._infiniteCompletedCount;
       }
 

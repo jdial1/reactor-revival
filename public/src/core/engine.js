@@ -22,6 +22,7 @@ const GRID_SIZE_NO_SAB_THRESHOLD = 2500;
 const MAX_TICKS_PER_FRAME_NO_SAB = 2;
 const SLOW_MODE_TICKS_PER_FRAME = 2;
 const TIME_FLUX_CHUNK_TICKS = 100;
+const ANALYTICAL_CATCHUP_THRESHOLD = 5000;
 
 export const VISUAL_EVENT_POWER = 1;
 export const VISUAL_EVENT_HEAT = 2;
@@ -98,6 +99,7 @@ export class Engine {
     this._timeFluxCatchupTotalTicks = 0;
     this._timeFluxCatchupRemainingTicks = 0;
     this._timeFluxFastForward = false;
+    this._welcomeBackFastForward = false;
 
     this.heatManager = new HeatSystem(this);
     this._lastHeatFlowDebug = [];
@@ -879,7 +881,7 @@ export class Engine {
 
     const targetTickDuration = this.game.loop_wait;
     const maxLiveTicks = 10;
-    const maxCatchupTicks = 500;
+    const maxCatchupTicks = this._welcomeBackFastForward ? 100 : 500;
 
     if (deltaTime > 30000) {
       const previousAccumulator = this.time_accumulator || 0;
@@ -890,6 +892,10 @@ export class Engine {
         this.time_accumulator = maxAccumulator;
       }
       this.game.logger?.debug(`[TIME FLUX] Offline time detected (${deltaTime.toFixed(0)}ms), accumulator: ${previousAccumulator.toFixed(0)}ms -> ${this.time_accumulator.toFixed(0)}ms`);
+      const queuedTicks = Math.floor(this.time_accumulator / targetTickDuration);
+      if (queuedTicks > 0 && this._hasHeatActivity() && this.game.time_flux) {
+        this.game.ui?.modalManager?.showWelcomeBackModal(deltaTime, queuedTicks);
+      }
     } else if (this._hasHeatActivity()) {
       this._frameTimeAccumulator = (this._frameTimeAccumulator || 0) + deltaTime;
       const initialAccumulator = this.time_accumulator || 0;
@@ -1040,6 +1046,7 @@ export class Engine {
           this._timeFluxCatchupTotalTicks = 0;
           this._timeFluxCatchupRemainingTicks = 0;
         }
+        if (queuedTicksAfter === 0) this._welcomeBackFastForward = false;
       }
     }
 
@@ -1047,6 +1054,7 @@ export class Engine {
     if (!this.game.time_flux || queuedTicks === 0) {
       this._timeFluxCatchupTotalTicks = 0;
       this._timeFluxCatchupRemainingTicks = 0;
+      this._welcomeBackFastForward = false;
     } else if (!this._timeFluxCatchupTotalTicks) {
       this._timeFluxCatchupTotalTicks = queuedTicks;
       this._timeFluxCatchupRemainingTicks = queuedTicks;
@@ -1669,6 +1677,9 @@ export class Engine {
     if (this.game.audio && typeof this.game.audio.updateAmbienceHeat === 'function') {
       this.game.audio.updateAmbienceHeat(reactor.current_heat.toNumber(), reactor.max_heat.toNumber());
     }
+    if (this.game.audio && typeof this.game.audio.scheduleIndustrialAmbience === 'function') {
+      this.game.audio.scheduleIndustrialAmbience(this.active_vents.length, this.active_exchangers.length);
+    }
 
     // Update heat visuals for immediate visual feedback
     if (ui.updateHeatVisuals) {
@@ -1746,6 +1757,96 @@ export class Engine {
       ui.stateManager.setVar("current_power", reactor.current_power);
     }
     if (reactor.updateStats) reactor.updateStats();
+  }
+
+  runInstantCatchup() {
+    const targetTickDuration = this.game.loop_wait;
+    const queuedTicks = Math.floor(this.time_accumulator / targetTickDuration);
+    if (queuedTicks <= 0) {
+      this.time_accumulator = 0;
+      return;
+    }
+    this.time_accumulator = 0;
+    if (queuedTicks > ANALYTICAL_CATCHUP_THRESHOLD) {
+      this._runAnalyticalCatchup(queuedTicks);
+      return;
+    }
+    const reactor = this.game.reactor;
+    const sampleTicks = 5;
+    const stableHeatRatio = 0.8;
+    const maxProjectionPerChunk = Math.max(0, TIME_FLUX_CHUNK_TICKS - sampleTicks);
+    let remaining = queuedTicks;
+    this._timeFluxFastForward = true;
+    while (remaining > 0 && !reactor.has_melted_down) {
+      const chunk = Math.min(TIME_FLUX_CHUNK_TICKS, remaining);
+      const canProject = chunk > sampleTicks &&
+        (reactor.max_heat.lte(0) || reactor.current_heat.div(reactor.max_heat).toNumber() < stableHeatRatio);
+      if (canProject) {
+        const heat0 = reactor.current_heat;
+        const power0 = reactor.current_power;
+        const money0 = this.game.current_money;
+        for (let i = 0; i < sampleTicks; i++) this._processTick(1.0);
+        const heat1 = reactor.current_heat;
+        const power1 = reactor.current_power;
+        const money1 = this.game.current_money;
+        const avgHeatPerTick = heat1.sub(heat0).div(sampleTicks).toNumber();
+        const avgPowerPerTick = power1.sub(power0).div(sampleTicks).toNumber();
+        const avgMoneyPerTick = (money1 && money1.sub ? money1.sub(money0).div(sampleTicks).toNumber() : 0);
+        const heatRatioAfter = reactor.max_heat.gt(0) ? heat1.div(reactor.max_heat).toNumber() : 0;
+        const stable = heatRatioAfter < stableHeatRatio && !reactor.has_melted_down &&
+          Number.isFinite(avgHeatPerTick) && Number.isFinite(avgPowerPerTick);
+        const N = stable ? Math.min(chunk - sampleTicks, maxProjectionPerChunk) : 0;
+        if (N > 0) {
+          this._applyTimeFluxProjection(N, avgHeatPerTick, avgPowerPerTick, avgMoneyPerTick);
+          remaining -= sampleTicks + N;
+        } else {
+          for (let i = 0; i < chunk - sampleTicks; i++) this._processTick(1.0);
+          remaining -= chunk;
+        }
+      } else {
+        for (let i = 0; i < chunk; i++) this._processTick(1.0);
+        remaining -= chunk;
+      }
+    }
+    this._timeFluxFastForward = false;
+  }
+
+  _runAnalyticalCatchup(queuedTicks) {
+    const reactor = this.game.reactor;
+    const sampleTicks = 5;
+    const heat0 = reactor.current_heat;
+    const power0 = reactor.current_power;
+    const money0 = this.game.current_money;
+    for (let i = 0; i < sampleTicks; i++) this._processTick(1.0);
+    const heat1 = reactor.current_heat;
+    const power1 = reactor.current_power;
+    const money1 = this.game.current_money;
+    const avgHeatPerTick = heat1.sub(heat0).div(sampleTicks).toNumber();
+    const avgPowerPerTick = power1.sub(power0).div(sampleTicks).toNumber();
+    const avgMoneyPerTick = (money1 && money1.sub ? money1.sub(money0).div(sampleTicks).toNumber() : 0);
+    const projectTicksTotal = queuedTicks - sampleTicks;
+    let projectTicks = projectTicksTotal;
+    let wouldMeltdown = false;
+    if (Number.isFinite(avgHeatPerTick) && avgHeatPerTick > 0 && reactor.max_heat.gt(0)) {
+      const meltdownHeat = reactor.max_heat.mul(2).toNumber();
+      const heat1Num = heat1.toNumber();
+      const heatToMeltdown = meltdownHeat - heat1Num;
+      if (heatToMeltdown > 0) {
+        const ticksToMeltdown = Math.floor(heatToMeltdown / avgHeatPerTick);
+        if (ticksToMeltdown < projectTicksTotal) {
+          projectTicks = ticksToMeltdown;
+          wouldMeltdown = true;
+        }
+      }
+    }
+    if (projectTicks > 0 && Number.isFinite(avgHeatPerTick) && Number.isFinite(avgPowerPerTick)) {
+      this._applyTimeFluxProjection(projectTicks, avgHeatPerTick, avgPowerPerTick, avgMoneyPerTick);
+    }
+    if (wouldMeltdown) {
+      reactor.current_heat = reactor.max_heat.mul(2).add(1);
+      reactor.checkMeltdown();
+    }
+    this._timeFluxFastForward = false;
   }
 
   handleComponentExplosion(tile) {

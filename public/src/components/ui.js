@@ -881,13 +881,21 @@ export class UI {
   }
 
   updateAppBadge() {
-    if (!('setAppBadge' in navigator)) return;
-
     const reactor = this.game?.reactor;
     if (!reactor) return;
 
     const heatPercent = reactor.current_heat / reactor.max_heat;
     const isPaused = this.stateManager?.getVar("pause");
+
+    if (heatPercent > 0.9 && !isPaused && document.visibilityState === "visible") {
+      const now = performance.now();
+      if ((this._lastHeatRumbleTime ?? 0) + 600 < now) {
+        this._lastHeatRumbleTime = now;
+        this.heatRumbleVibration();
+      }
+    }
+
+    if (!('setAppBadge' in navigator)) return;
 
     if (heatPercent >= 0.95 && !isPaused) {
       navigator.setAppBadge(1);
@@ -6170,6 +6178,18 @@ export class UI {
 
   heavyVibration() {
     this.vibrate(50);
+  }
+
+  doublePulseVibration() {
+    this.vibrate([30, 80, 30]);
+  }
+
+  meltdownVibration() {
+    this.vibrate(200);
+  }
+
+  heatRumbleVibration() {
+    this.vibrate([80, 40, 80, 40, 80]);
   }
 
   initializeControlDeck() {

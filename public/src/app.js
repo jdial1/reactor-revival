@@ -509,7 +509,14 @@ async function startGame(pageRouter, ui, game) {
     console.log(`[DEBUG] Finalizing game start. Initial paused state: ${game.paused}`);
     game.pause();
     ui.stateManager.setVar("pause", true);
-    
+    const offlineMs = Date.now() - (game.last_save_time || 0);
+    if (offlineMs > 30000 && game.tileset.active_tiles_list.length > 0 && game.time_flux) {
+      const targetTickDuration = game.loop_wait;
+      const maxAccumulator = 100 * targetTickDuration;
+      game.engine.time_accumulator = Math.min(offlineMs, maxAccumulator);
+      const queuedTicks = Math.floor(game.engine.time_accumulator / targetTickDuration);
+      await ui.modalManager.showWelcomeBackModal(offlineMs, queuedTicks);
+    }
     // Sync all toggle states from game properties to stateManager
     if (ui.syncToggleStatesFromGame) {
       ui.syncToggleStatesFromGame();

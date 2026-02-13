@@ -539,7 +539,9 @@ describe("Objective System", () => {
       await satisfyObjective(testGame, 5, objective_list_data); // Purchase a Dual Cell
       await satisfyObjective(testGame, 6, objective_list_data); // Have at least 10 active Cells
 
-      // Verify objectives are actually satisfied
+      const perpetualUpgrade = testGame.upgradeset.getUpgrade("uranium1_cell_perpetual");
+      if (perpetualUpgrade) perpetualUpgrade.setLevel(0);
+
       const checkFn4 = getObjectiveCheck(objective_list_data[4].checkId);
       const checkFn5 = getObjectiveCheck(objective_list_data[5].checkId);
       const checkFn6 = getObjectiveCheck(objective_list_data[6].checkId);
@@ -547,7 +549,9 @@ describe("Objective System", () => {
       expect(checkFn5(testGame), "Objective 5 should be satisfied").toBe(true);
       expect(checkFn6(testGame), "Objective 6 should be satisfied").toBe(true);
 
-      // Ensure objectives are not already marked as completed
+      const checkFn7 = getObjectiveCheck(objective_list_data[7].checkId);
+      expect(checkFn7(testGame), "Objective 7 should NOT be satisfied").toBe(false);
+
       if (testGame.objectives_manager.objectives_data) {
         testGame.objectives_manager.objectives_data[4].completed = false;
         testGame.objectives_manager.objectives_data[5].completed = false;

@@ -206,6 +206,44 @@ export const checkFunctions = {
     const obj = game.objectives_manager?.current_objective_def;
     return obj?.target != null && game.reactor?.stats_power >= obj.target && !game.paused;
   },
+  infiniteHeatMaintain: (game) => {
+    const obj = game.objectives_manager?.current_objective_def;
+    if (obj?.target?.percent == null || !obj?.target?.ticks || !game.engine) return false;
+    const { percent, ticks } = obj.target;
+    const reactor = game.reactor;
+    const maxH = reactor.max_heat && typeof reactor.max_heat.toNumber === "function" ? reactor.max_heat.toNumber() : Number(reactor.max_heat ?? 0);
+    const curH = reactor.current_heat && typeof reactor.current_heat.toNumber === "function" ? reactor.current_heat.toNumber() : Number(reactor.current_heat ?? 0);
+    const heatOk = maxH > 0 && curH / maxH >= percent / 100 && !game.paused && !reactor.has_melted_down;
+    if (!game.infiniteHeatMaintain) game.infiniteHeatMaintain = { startTick: 0 };
+    if (heatOk) {
+      if (game.infiniteHeatMaintain.startTick === 0) game.infiniteHeatMaintain.startTick = game.engine.tick_count;
+      if (game.engine.tick_count - game.infiniteHeatMaintain.startTick >= ticks) return true;
+    } else {
+      game.infiniteHeatMaintain.startTick = 0;
+    }
+    return false;
+  },
+  infiniteMoneyThorium: (game) => {
+    const obj = game.objectives_manager?.current_objective_def;
+    if (obj?.target == null) return false;
+    const cells = game.tileset?.tiles_list?.filter((t) => t?.part?.category === "cell") ?? [];
+    const nonThorium = cells.some((t) => t.part?.id !== "thorium3" && t.part?.type !== "quad_thorium_cell");
+    if (cells.length === 0 || nonThorium) return false;
+    const money = game.current_money && typeof game.current_money.toNumber === "function" ? game.current_money.toNumber() : Number(game.current_money ?? 0);
+    return money >= obj.target;
+  },
+  infiniteHeat: (game) => {
+    const obj = game.objectives_manager?.current_objective_def;
+    if (!obj?.target != null) return false;
+    const heat = game.reactor?.stats_heat ?? 0;
+    return heat >= obj.target;
+  },
+  infiniteEP: (game) => {
+    const obj = game.objectives_manager?.current_objective_def;
+    if (!obj?.target != null) return false;
+    const ep = game.exotic_particles && typeof game.exotic_particles.toNumber === "function" ? game.exotic_particles.toNumber() : Number(game.exotic_particles ?? 0);
+    return ep >= obj.target;
+  },
 };
 
 export function getObjectiveCheck(checkId) {

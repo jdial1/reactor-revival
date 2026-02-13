@@ -478,7 +478,8 @@ describe("End-to-End Speed Run (DOM Simulation)", () => {
 
     expect(game.objectives_manager.current_objective_index).toBe(totalObjectives - 1);
     const checkId = game.objectives_manager.current_objective_def?.checkId;
-    expect(["allObjectives", "infinitePower"]).toContain(checkId);
+    const infiniteIds = ["infinitePower", "infiniteHeatMaintain", "infiniteMoneyThorium", "infiniteHeat", "infiniteEP"];
+    expect(checkId === "allObjectives" || infiniteIds.includes(checkId)).toBe(true);
 
     vi.useRealTimers();
   }, 120000);

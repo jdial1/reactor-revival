@@ -417,7 +417,9 @@ describe('Full Objective Run', () => {
         }
 
         expect(game.objectives_manager.current_objective_index).toBe(totalObjectives - 1);
-        expect(["allObjectives", "infinitePower"]).toContain(game.objectives_manager.current_objective_def.checkId);
+        const infIds = ["infinitePower", "infiniteHeatMaintain", "infiniteMoneyThorium", "infiniteHeat", "infiniteEP"];
+        const cid = game.objectives_manager.current_objective_def?.checkId;
+        expect(cid === "allObjectives" || infIds.includes(cid)).toBe(true);
         expect(saveCallCount).toBeGreaterThan(0);
 
         game.saveGame = originalSaveGame;

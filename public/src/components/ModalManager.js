@@ -1,4 +1,5 @@
 import { settingsModal } from "./settingsModal.js";
+import { welcomeBackModal } from "./welcomeBackModal.js";
 import { escapeHtml } from "../utils/util.js";
 
 export class ModalManager {
@@ -12,6 +13,13 @@ export class ModalManager {
 
   showSettings() {
     settingsModal.show();
+  }
+
+  showWelcomeBackModal(offlineMs, queuedTicks) {
+    if (!this.ui?.game) return Promise.resolve();
+    this.ui.game.pause();
+    this.ui.stateManager.setVar("pause", true);
+    return welcomeBackModal.show(offlineMs, queuedTicks, this.ui.game);
   }
 
   showPrestigeModal(mode) {

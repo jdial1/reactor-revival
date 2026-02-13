@@ -32,9 +32,45 @@ async function ensureDataLoaded() {
   return objective_list_data;
 }
 
-const INFINITE_POWER_BASE = 5000;
-const INFINITE_POWER_STEP = 5000;
 const INFINITE_REWARD_BASE = 250;
+
+const INFINITE_CHALLENGES = [
+  {
+    id: "infinitePower",
+    nextTarget: (last) => (last < 5000 ? 5000 : last + 5000),
+    title: (t) => `Generate ${Number(t).toLocaleString()} Power`,
+    getLastKey: () => "_lastInfinitePowerTarget",
+  },
+  {
+    id: "infiniteHeatMaintain",
+    nextTarget: (last) => {
+      const base = last ? last.ticks + 100 : 200;
+      return { percent: 50, ticks: Math.min(base, 2000) };
+    },
+    title: (t) => `Maintain ${t.percent}% heat for ${t.ticks} ticks`,
+    getLastKey: () => "_lastInfiniteHeatMaintain",
+  },
+  {
+    id: "infiniteMoneyThorium",
+    nextTarget: (last) => (last < 1e8 ? 1e8 : last * 2),
+    title: (t) => `Generate $${Number(t).toLocaleString()} with only Thorium cells`,
+    getLastKey: () => "_lastInfiniteMoneyThorium",
+  },
+  {
+    id: "infiniteHeat",
+    nextTarget: (last) => (last < 5e6 ? 5e6 : last * 2),
+    title: (t) => `Reach ${Number(t).toLocaleString()} Heat`,
+    getLastKey: () => "_lastInfiniteHeat",
+  },
+  {
+    id: "infiniteEP",
+    nextTarget: (last) => (last < 100 ? 100 : last * 2),
+    title: (t) => `Generate ${Number(t).toLocaleString()} Exotic Particles`,
+    getLastKey: () => "_lastInfiniteEP",
+  },
+];
+
+const INFINITE_CHALLENGE_IDS = new Set(INFINITE_CHALLENGES.map((c) => c.id));
 
 export class ObjectiveManager {
   constructor(gameInstance) {
@@ -50,16 +86,27 @@ export class ObjectiveManager {
     this.disableTimers = false;
     this.infiniteObjective = null;
     this._lastInfinitePowerTarget = 0;
+    this._lastInfiniteHeatMaintain = null;
+    this._lastInfiniteMoneyThorium = 0;
+    this._lastInfiniteHeat = 0;
+    this._lastInfiniteEP = 0;
+    this._infiniteChallengeIndex = 0;
   }
 
   generateInfiniteObjective() {
-    this._lastInfinitePowerTarget += this._lastInfinitePowerTarget < INFINITE_POWER_BASE ? INFINITE_POWER_BASE : INFINITE_POWER_STEP;
-    const target = this._lastInfinitePowerTarget;
+    const idx = this._infiniteChallengeIndex % INFINITE_CHALLENGES.length;
+    const challenge = INFINITE_CHALLENGES[idx];
+    this._infiniteChallengeIndex = (idx + 1) % INFINITE_CHALLENGES.length;
+    const lastKey = challenge.getLastKey();
+    const last = this[lastKey] ?? 0;
+    const target = challenge.nextTarget(last);
+    this[lastKey] = target;
     const completedCount = this._infiniteCompletedCount || 0;
     const reward = INFINITE_REWARD_BASE + Math.min(completedCount * 50, 500);
+    if (challenge.id === "infiniteHeatMaintain") this.game.infiniteHeatMaintain = { startTick: 0 };
     this.infiniteObjective = {
-      title: `Generate ${target.toLocaleString()} Power`,
-      checkId: "infinitePower",
+      title: challenge.title(target),
+      checkId: challenge.id,
       target,
       reward,
       completed: false,
@@ -406,6 +453,7 @@ export class ObjectiveManager {
     }
 
     this.claiming = true;
+    if (this.game.ui?.doublePulseVibration) this.game.ui.doublePulseVibration();
     const chapterIdx = [9, 19, 29, 36].indexOf(this.current_objective_index);
     if (chapterIdx >= 0 && this.game.ui?.showChapterCelebration) {
       this.game.ui.showChapterCelebration(chapterIdx);
@@ -428,7 +476,7 @@ export class ObjectiveManager {
       );
     }
 
-    if (this.current_objective_def.checkId === "infinitePower") {
+    if (INFINITE_CHALLENGE_IDS.has(this.current_objective_def.checkId)) {
       this._infiniteCompletedCount = (this._infiniteCompletedCount || 0) + 1;
       this.generateInfiniteObjective();
       this.set_objective(this.current_objective_index, true);
@@ -670,6 +718,49 @@ export class ObjectiveManager {
         const power = game.reactor?.stats_power ?? 0;
         const pct = Math.min(100, (power / target) * 100);
         return { text: `${power.toLocaleString()} / ${target.toLocaleString()} Power`, percent: pct };
+      }
+
+      case 'infiniteHeatMaintain': {
+        const t = objective.target;
+        if (!t?.percent || !t?.ticks || !game.engine) return { text: "Awaiting completion...", percent: 0 };
+        const reactor = game.reactor;
+        const maxH = reactor.max_heat && typeof reactor.max_heat.toNumber === "function" ? reactor.max_heat.toNumber() : Number(reactor.max_heat ?? 0);
+        const curH = reactor.current_heat && typeof reactor.current_heat.toNumber === "function" ? reactor.current_heat.toNumber() : Number(reactor.current_heat ?? 0);
+        const heatOk = maxH > 0 && curH / maxH >= t.percent / 100 && !game.paused && !reactor.has_melted_down;
+        if (!heatOk) return { text: `Maintain ${t.percent}% heat (${((curH / maxH) * 100 || 0).toFixed(0)}% now)`, percent: 0 };
+        if (!game.infiniteHeatMaintain) game.infiniteHeatMaintain = { startTick: 0 };
+        if (game.infiniteHeatMaintain.startTick === 0) game.infiniteHeatMaintain.startTick = game.engine.tick_count;
+        const elapsed = game.engine.tick_count - game.infiniteHeatMaintain.startTick;
+        const pct = Math.min(100, (elapsed / t.ticks) * 100);
+        return { text: `${elapsed} / ${t.ticks} ticks at ${t.percent}%`, percent: pct };
+      }
+
+      case 'infiniteMoneyThorium': {
+        const target = objective.target;
+        if (target == null) return { text: "Awaiting completion...", percent: 0 };
+        const cells = game.tileset?.tiles_list?.filter((t) => t?.part?.category === "cell") ?? [];
+        const nonThorium = cells.some((t) => t.part?.id !== "thorium3" && t.part?.type !== "quad_thorium_cell");
+        const money = game.current_money && typeof game.current_money.toNumber === "function" ? game.current_money.toNumber() : Number(game.current_money ?? 0);
+        if (cells.length === 0) return { text: "Add Thorium cells to generate", percent: 0 };
+        if (nonThorium) return { text: "Only Thorium cells allowed", percent: 0 };
+        const pct = Math.min(100, (money / target) * 100);
+        return { text: `$${money.toLocaleString()} / $${target.toLocaleString()} (Thorium only)`, percent: pct };
+      }
+
+      case 'infiniteHeat': {
+        const target = objective.target;
+        if (target == null) return { text: "Awaiting completion...", percent: 0 };
+        const heat = game.reactor?.stats_heat ?? 0;
+        const pct = Math.min(100, (heat / target) * 100);
+        return { text: `${heat.toLocaleString()} / ${target.toLocaleString()} Heat`, percent: pct };
+      }
+
+      case 'infiniteEP': {
+        const target = objective.target;
+        if (target == null) return { text: "Awaiting completion...", percent: 0 };
+        const ep = game.exotic_particles && typeof game.exotic_particles.toNumber === "function" ? game.exotic_particles.toNumber() : Number(game.exotic_particles ?? 0);
+        const pct = Math.min(100, (ep / target) * 100);
+        return { text: `${ep} / ${target} EP`, percent: pct };
       }
 
       default:
