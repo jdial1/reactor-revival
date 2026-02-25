@@ -1,5 +1,6 @@
 node_modules
 eslint-results.sarif
+dist-sw
 package-lock.json
 package-lock.json
 
@@ -13,3 +14,4 @@ public/reactor_leaderboard.sqlite3
 package-lock.json
 public/lib/pako.min.js
 *.log
+/public/lib

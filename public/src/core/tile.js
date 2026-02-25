@@ -1,4 +1,5 @@
 import { Part } from "./part.js";
+import { logger } from "../utils/logger.js";
 
 export class Tile {
   constructor(row, col, game) {
@@ -39,6 +40,14 @@ export class Tile {
     this._heatContained = v;
   }
 
+  addHeat(amount) {
+    this.heat_contained = (this.heat_contained || 0) + amount;
+  }
+
+  setTicks(value) {
+    this.ticks = value;
+  }
+
   _calculateAndCacheNeighbors() {
     const p = this.part;
     if (!p) {
@@ -65,7 +74,7 @@ export class Tile {
     }
 
     if (typeof process !== "undefined" && process.env.NODE_ENV === 'test' && this.part && this.part.category === 'heat_outlet') {
-      this.game.logger?.debug(`Outlet at (${this.row}, ${this.col}) has ${containment.length} containment neighbors: ${containment.map(t => `(${t.row}, ${t.col}) ${t.part?.id}`).join(', ')}`);
+      logger.log('debug', 'game', `Outlet at (${this.row}, ${this.col}) has ${containment.length} containment neighbors: ${containment.map(t => `(${t.row}, ${t.col}) ${t.part?.id}`).join(', ')}`);
     }
 
     this._neighborCache = { containment, cell, reflector };
@@ -135,6 +144,42 @@ export class Tile {
   enable() {
     if (!this.enabled) this.enabled = true;
   }
+
+  _clearMeltdownRecovery() {
+    const game = this.game;
+    logger.log('debug', 'game', '[Recovery] Clearing meltdown state after placing part:', this.part.id);
+    logger.log('debug', 'game', '[Recovery] Reactor heat before reset:', game.reactor.current_heat, "max:", game.reactor.max_heat);
+    game.reactor.current_heat = 0;
+    game.reactor.clearMeltdownState();
+    game.emit?.("reactorTick", { current_heat: game.reactor.current_heat, current_power: game.reactor.current_power });
+    const engineStopped = game.engine && !game.engine.running;
+    if (!engineStopped) {
+      logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
+      return;
+    }
+    const currentPauseState = game.state?.pause ?? game.paused;
+    logger.log('debug', 'game', '[Recovery] Current pause state:', currentPauseState);
+    logger.log('debug', 'game', '[Recovery] Engine running state:', game.engine.running);
+    logger.log('debug', 'game', '[Recovery] Game paused state:', game.paused);
+    if (currentPauseState) {
+      logger.log('info', 'game', '[Recovery] Unpausing game');
+      game.onToggleStateChange?.("pause", false);
+      logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
+      return;
+    }
+    const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') ||
+      (typeof global !== 'undefined' && global.__VITEST__) ||
+      (typeof window !== 'undefined' && window.__VITEST__);
+    if (isTestEnv) {
+      logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
+      return;
+    }
+    logger.log('info', 'game', '[Recovery] Force restarting engine');
+    game.paused = false;
+    game.engine.start();
+    logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
+  }
+
   async setPart(partInstance) {
     if (partInstance === null || partInstance === undefined) {
       throw new Error("Invalid part: part cannot be null or undefined");
@@ -147,7 +192,7 @@ export class Tile {
       return false;
     }
     if (!isRestoring && this.game.audio && this.game.audio.enabled) {
-      this.game.logger?.debug(`Placing part '${partInstance.id}' on tile (${this.row}, ${this.col})`);
+      logger.log('debug', 'game', `Placing part '${partInstance.id}' on tile (${this.row}, ${this.col})`);
       this.game.debugHistory.add('tile', 'setPart', { row: this.row, col: this.col, partId: partInstance.id });
       const subtype =
         partInstance.category === "cell"
@@ -164,60 +209,16 @@ export class Tile {
       this.heat_contained = 0;
       this.exploded = false;
       this.exploding = false;
-      this.game.ui?.gridCanvasRenderer?.markTileDirty(this.row, this.col);
-      this.game.ui?.gridCanvasRenderer?.markStaticDirty();
+      this.game.emit?.("markTileDirty", { row: this.row, col: this.col });
+      this.game.emit?.("markStaticDirty");
       // Cumulative placement tracking for gating
       try {
-        if (this.game && this.part && typeof this.game.incrementPlacedCount === "function") {
-          this.game.incrementPlacedCount(this.part.type, this.part.level);
+        if (this.game?.unlockManager && this.part && typeof this.game.unlockManager.incrementPlacedCount === "function") {
+          this.game.unlockManager.incrementPlacedCount(this.part.type, this.part.level);
         }
       } catch (_) { }
       if (this.game.reactor.has_melted_down) {
-        this.game.logger?.debug(
-          "[Recovery] Clearing meltdown state after placing part:",
-          this.part.id
-        );
-        this.game.logger?.debug(
-          "[Recovery] Reactor heat before reset:",
-          this.game.reactor.current_heat,
-          "max:",
-          this.game.reactor.max_heat
-        );
-        this.game.reactor.current_heat = 0;
-        this.game.reactor.clearMeltdownState();
-        this.game.ui.stateManager.setVar(
-          "current_heat",
-          this.game.reactor.current_heat
-        );
-        if (this.game.engine && !this.game.engine.running) {
-          const currentPauseState = this.game.ui.stateManager.getVar("pause");
-          this.game.logger?.debug("[Recovery] Current pause state:", currentPauseState);
-          this.game.logger?.debug(
-            "[Recovery] Engine running state:",
-            this.game.engine.running
-          );
-          this.game.logger?.debug("[Recovery] Game paused state:", this.game.paused);
-          if (currentPauseState) {
-            this.game.logger?.info("[Recovery] Unpausing game");
-            this.game.ui.stateManager.setVar("pause", false);
-          } else {
-            // Prevent auto-start in test environment
-            const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') ||
-                              (typeof global !== 'undefined' && global.__VITEST__) ||
-                              (typeof window !== 'undefined' && window.__VITEST__);
-            if (!isTestEnv) {
-              this.game.logger?.info("[Recovery] Force restarting engine");
-              this.game.paused = false;
-              this.game.engine.start();
-            }
-          }
-        }
-        this.game.logger?.debug(
-          "[Recovery] Meltdown state cleared, has_melted_down:",
-          this.game.reactor.has_melted_down,
-          "heat reset to:",
-          this.game.reactor.current_heat
-        );
+        this._clearMeltdownRecovery();
       }
     }
 
@@ -227,37 +228,21 @@ export class Tile {
       this.game.reactor.updateStats();
       // Refresh parts panel to update tier gating counters/visibility
       try {
-        if (this.game && this.game.ui && typeof this.game.ui.refreshPartsPanel === "function") {
-          this.game.ui.refreshPartsPanel();
-        }
+        this.game.emit?.("partsPanelRefresh");
         // Also refresh the upgrades section so gated cell upgrade columns
         // appear as soon as the corresponding cell becomes unlocked
         if (this.game && this.game.upgradeset && typeof this.game.upgradeset.populateUpgrades === "function") {
           this.game.upgradeset.populateUpgrades();
         }
       } catch (_) { }
-      if (this.game && typeof this.game.saveGame === "function") {
-        this.game.saveGame(null, true); // true = isAutoSave
+      if (this.game?.saveManager) {
+        this.game.saveManager.autoSave();
       }
     }
-    return true; // Return true to indicate the part was successfully placed
+    return true;
   }
-  clearPart(full_clear = true) {
-    if (!this.part) return;
-    const part_id = this.part.id;
-    if (typeof process !== "undefined" && process.env.NODE_ENV === 'test') {
-    }
-    this.game.logger?.debug(`Clearing part '${part_id}' from tile (${this.row}, ${this.col}). Full clear: ${full_clear}`);
-    this.game.debugHistory.add('tile', 'clearPart', { row: this.row, col: this.col, partId: this.part.id, fullClear: full_clear });
+  _clearPartReset() {
     this.invalidateNeighborCaches();
-    if (full_clear) {
-      const sell_value = this.calculateSellValue();
-      this.game.addMoney(sell_value);
-      if (this.game.ui && typeof this.game.ui.showFloatingTextAtTile === 'function') {
-        this.game.ui.showFloatingTextAtTile(this, sell_value);
-      }
-      // Note: do NOT decrement cumulative placedCounts; progress is permanent
-    }
     this.activated = false;
     this.part = null;
     this.ticks = 0;
@@ -268,22 +253,34 @@ export class Tile {
     this.display_heat = 0;
     this.exploded = false;
     this.exploding = false;
-    this.game.ui?.gridCanvasRenderer?.markTileDirty(this.row, this.col);
-    this.game.ui?.gridCanvasRenderer?.markStaticDirty();
-    if (this.game.tooltip_manager?.current_tile_context === this) {
-      this.game.tooltip_manager.hide();
-    }
+    this.game.emit?.("markTileDirty", { row: this.row, col: this.col });
+    this.game.emit?.("markStaticDirty");
+    if (this.game.tooltip_manager?.current_tile_context === this) this.game.tooltip_manager.hide();
     this.game.engine?.markPartCacheAsDirty();
     this.game.engine?.heatManager?.markSegmentsAsDirty();
     this.game.reactor.updateStats();
     try {
-      if (this.game && this.game.ui && typeof this.game.ui.refreshPartsPanel === "function") {
-        this.game.ui.refreshPartsPanel();
-      }
-    } catch (_) { }
-    if (this.game && typeof this.game.saveGame === "function") {
-      this.game.saveGame(null, true); // true = isAutoSave
-    }
+      this.game.emit?.("partsPanelRefresh");
+    } catch (_) {}
+    if (this.game?.saveManager) this.game.saveManager.autoSave();
+  }
+
+  clearPart() {
+    if (!this.part) return;
+    logger.log('debug', 'game', `Clearing part '${this.part.id}' from tile (${this.row}, ${this.col}).`);
+    this.game.debugHistory.add('tile', 'clearPart', { row: this.row, col: this.col, partId: this.part.id });
+    this._clearPartReset();
+  }
+
+  sellPart() {
+    if (!this.part) return;
+    const part_id = this.part.id;
+    logger.log('debug', 'game', `Selling part '${part_id}' from tile (${this.row}, ${this.col}).`);
+    this.game.debugHistory.add('tile', 'sellPart', { row: this.row, col: this.col, partId: part_id });
+    const sell_value = this.calculateSellValue();
+    this.game.addMoney(sell_value);
+    this.game.emit?.("showFloatingText", { tile: this, value: sell_value });
+    this._clearPartReset();
   }
   highlight() {}
 
@@ -309,7 +306,7 @@ export class Tile {
     return Math.max(0, sellValue);
   }
   refreshVisualState() {
-    this.game.ui?.gridCanvasRenderer?.markTileDirty(this.row, this.col);
-    this.game.ui?.gridCanvasRenderer?.markStaticDirty();
+    this.game.emit?.("markTileDirty", { row: this.row, col: this.col });
+    this.game.emit?.("markStaticDirty");
   }
 }

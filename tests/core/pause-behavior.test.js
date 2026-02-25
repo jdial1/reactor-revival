@@ -223,7 +223,7 @@ describe("Pause Behavior", () => {
         expect(game.paused).toBe(true);
 
         // Get save state
-        const saveData = game.getSaveState();
+        const saveData = game.saveManager.getSaveState();
 
         // Create new game and load save state
         const newGame = await setupGame();
@@ -291,12 +291,12 @@ describe("Pause Behavior", () => {
         expect(document.body.classList.contains("game-paused")).toBe(false);
 
         gameWithDOM.pause();
-        gameWithDOM.ui.updatePauseState();
+        gameWithDOM.ui.pauseStateUI.updatePauseState();
         expect(gameWithDOM.paused).toBe(true);
         expect(document.body.classList.contains("game-paused")).toBe(true);
 
         gameWithDOM.resume();
-        gameWithDOM.ui.updatePauseState();
+        gameWithDOM.ui.pauseStateUI.updatePauseState();
         expect(gameWithDOM.paused).toBe(false);
         expect(document.body.classList.contains("game-paused")).toBe(false);
     });

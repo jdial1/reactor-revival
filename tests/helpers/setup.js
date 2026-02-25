@@ -18,6 +18,7 @@
 
 import Decimal from 'break_infinity.js';
 import { toDecimal } from '../../public/src/utils/decimal.js';
+import { toNumber } from '../../public/src/utils/mathUtils.js';
 if (typeof global !== 'undefined') global.Decimal = Decimal;
 if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
 
@@ -122,16 +123,20 @@ const mockBrowserGlobals = () => {
   }
 
   if (typeof global.document === 'undefined') {
+    const createCommentShim = (data) => ({ nodeType: 8, data: String(data || ''), ownerDocument: null });
     global.document = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       body: { appendChild: vi.fn(), style: {}, classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() } },
-        createElement: () => ({
-            style: {},
+      createElement: () => ({
+        style: {},
         classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
         appendChild: vi.fn(),
         addEventListener: vi.fn(),
         setAttribute: vi.fn(),
+        ownerDocument: null,
       }),
-      // FIX: Make these functional mocks to prevent "is not a function" errors.
+      createComment: createCommentShim,
       getElementById: vi.fn(() => null),
       querySelector: vi.fn(() => null),
       querySelectorAll: vi.fn(() => []),
@@ -159,14 +164,9 @@ import { Engine } from '../../public/src/core/engine.js';
 import { ObjectiveManager } from '../../public/src/core/objective.js';
 import { PageRouter } from '../../public/src/components/pageRouter.js';
 import { TemplateLoader } from '../../public/src/services/templateLoader.js';
+import { attachGameEventListeners } from '../../public/src/app/gameEventListeners.js';
 
-export const toNum = (v) => {
-  if (v == null) return 0;
-  if (typeof v === 'number') return v;
-  if (typeof v.toNumber === 'function') return Number(v.toNumber());
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
+export const toNum = toNumber;
 
 export {
   describe,
@@ -401,6 +401,34 @@ export async function setupGameWithDOM() {
 
   global.window = domInstance.window;
   global.document = domInstance.window.document;
+  const helperDoc = global.document.implementation?.createHTMLDocument?.('');
+  const createCommentImpl = helperDoc?.createComment
+    ? function(data) {
+        const c = helperDoc.createComment(data);
+        return global.document.adoptNode ? global.document.adoptNode(c) : c;
+      }
+    : function(data) {
+        const t = global.document.createElement('template');
+        t.innerHTML = '<!--' + String(data || '').replace(/-->/g, '-\u0000->') + '-->';
+        return t.content.firstChild;
+      };
+  try {
+    global.document.createComment = createCommentImpl;
+  } catch (_) {
+    Object.defineProperty(global.document, 'createComment', { value: createCommentImpl, configurable: true });
+  }
+  if (domInstance.window.AbortController) {
+    global.AbortController = domInstance.window.AbortController;
+  }
+  if (domInstance.window.KeyboardEvent) {
+    global.KeyboardEvent = domInstance.window.KeyboardEvent;
+  }
+  if (domInstance.window.Image) {
+    global.Image = domInstance.window.Image;
+  }
+  if (domInstance.window.Event) {
+    global.Event = domInstance.window.Event;
+  }
 
   const noop = () => {};
   const mock2DContext = {
@@ -433,6 +461,7 @@ export async function setupGameWithDOM() {
   };
 
   mockBrowserGlobals();
+  global.localStorage = global.window.localStorage;
   window.AudioContext = vi.fn().mockImplementation(() => ({
     state: 'running',
     sampleRate: 44100,
@@ -586,9 +615,10 @@ export async function setupGameWithDOM() {
   game.audio = new AudioService();
   await game.audio.init();
   
-  // Manually trigger UI setup that would normally happen on page load
-     ui.initMainLayout();
-     ui.gridScaler.resize();
+  ui.detachGameEventListeners = attachGameEventListeners(game, ui);
+
+  ui.initMainLayout();
+  ui.gridScaler.resize();
 
   globalGameInstance = game;
   return { game, document: global.document, window: global.window };

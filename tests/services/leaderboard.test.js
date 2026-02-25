@@ -186,7 +186,7 @@ describe("Leaderboard Service & Integration", () => {
             game.user_id = "test_user";
             game.run_id = "test_run";
 
-            game.saveGame();
+            game.saveManager.autoSave();
 
             expect(saveSpy).toHaveBeenCalledWith({
                 user_id: "test_user",
@@ -205,7 +205,7 @@ describe("Leaderboard Service & Integration", () => {
             game.peak_heat = 0;
             game.peak_power = 0;
             
-            game.saveGame();
+            game.saveManager.autoSave();
 
             expect(saveSpy).not.toHaveBeenCalled();
         });
@@ -233,7 +233,7 @@ describe("Leaderboard Service & Integration", () => {
 
             vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue(mockData);
 
-            game.ui.setupLeaderboardPage();
+            game.ui.pageSetupUI.setupLeaderboardPage();
             
             await new Promise(r => setTimeout(r, 100));
 
@@ -254,7 +254,7 @@ describe("Leaderboard Service & Integration", () => {
 
             vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue([]);
 
-            game.ui.setupLeaderboardPage();
+            game.ui.pageSetupUI.setupLeaderboardPage();
             await new Promise(r => setTimeout(r, 100));
 
             const rows = document.querySelectorAll('#leaderboard_rows tr');
@@ -270,7 +270,7 @@ describe("Leaderboard Service & Integration", () => {
 
             vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue([]);
 
-            game.ui.setupLeaderboardPage();
+            game.ui.pageSetupUI.setupLeaderboardPage();
             
             const heatBtn = document.querySelector('[data-sort="heat"]');
             

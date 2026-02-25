@@ -30,8 +30,7 @@ describe("UI Info Bar updates for max power/heat", () => {
     });
 
     const flushUI = () => {
-        // Ensure any pending UI updates are applied immediately
-        game.ui.processUpdateQueue();
+        game.ui.coreLoopUI.applyStateToDom();
     };
 
     it("updates max power denominator when a capacitor is added", async () => {
@@ -40,8 +39,7 @@ describe("UI Info Bar updates for max power/heat", () => {
 
         const tile = game.tileset.getTile(5, 5);
         await tile.setPart(capacitor);
-
-        // Reactor.updateStats() is called by setPart; now flush UI updates
+        game.reactor.updateStats();
         flushUI();
 
         const mobileDenom = document.getElementById("info_power_denom");
@@ -72,7 +70,7 @@ describe("UI Info Bar updates for max power/heat", () => {
         game.reactor.updateStats();
         flushUI();
         // Force rolling numbers to settle for assertions
-        game.ui.updateRollingNumbers(10000);
+        game.ui.coreLoopUI.updateRollingNumbers(10000);
 
         const mobileDenom = document.getElementById("info_heat_denom");
         const desktopDenom = document.getElementById("info_heat_denom_desktop");

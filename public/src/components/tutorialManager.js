@@ -1,4 +1,5 @@
-import { safeSetItem, safeGetItem, safeRemoveItem } from "../utils/util.js";
+import { StorageUtils } from "../utils/util.js";
+import { MOBILE_BREAKPOINT_PX } from "../core/constants.js";
 
 const TUTORIAL_STEP_KEY = "reactorTutorialStep";
 const TUTORIAL_HARD_SKIP_KEY = "reactorTutorialHardSkipped";
@@ -23,7 +24,7 @@ export class TutorialManager {
     this.callout = null;
     this._resumeStepIndex = null;
     this._claimStepActive = false;
-    this.isMobile = () => typeof window !== "undefined" && window.innerWidth <= 900;
+    this.isMobile = () => typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
     this.steps = [
       {
         key: "place_cell",
@@ -77,7 +78,7 @@ export class TutorialManager {
       section.classList.remove("collapsed");
       if (section.previousElementSibling?.id === "control_deck_build_fab") return;
       const ui = this.game?.ui;
-      if (ui?.updatePartsPanelBodyClass) ui.updatePartsPanelBodyClass();
+      if (ui?.partsPanelUI?.updatePartsPanelBodyClass) ui.partsPanelUI.updatePartsPanelBodyClass();
     }
     if (tabPower && !tabPower.classList.contains("active")) {
       tabPower.click();
@@ -100,12 +101,12 @@ export class TutorialManager {
 
   persistStep(stepIndex) {
     if (stepIndex >= 0 && stepIndex < this.steps.length) {
-      safeSetItem(TUTORIAL_STEP_KEY, String(stepIndex));
+      StorageUtils.set(TUTORIAL_STEP_KEY, stepIndex);
     }
   }
 
   clearPersistedStep() {
-    safeRemoveItem(TUTORIAL_STEP_KEY);
+    StorageUtils.remove(TUTORIAL_STEP_KEY);
   }
 
   getSelectorForStep(step) {
@@ -339,7 +340,7 @@ export class TutorialManager {
     if (this.callout?.parentNode) this.callout.parentNode.removeChild(this.callout);
     this.overlay = null;
     this.callout = null;
-    safeSetItem("reactorTutorialCompleted", "1");
+    StorageUtils.set("reactorTutorialCompleted", 1);
   }
 
   skip() {
@@ -348,7 +349,7 @@ export class TutorialManager {
 
   hardSkip() {
     if (this.game) this.game.bypass_tech_tree_restrictions = true;
-    safeSetItem(TUTORIAL_HARD_SKIP_KEY, "1");
+    StorageUtils.set(TUTORIAL_HARD_SKIP_KEY, 1);
     this.complete().catch(() => {});
   }
 
@@ -379,8 +380,8 @@ export class TutorialManager {
       if (this._claimStepActive) this._exitClaimStepAndResume();
     };
     if (this.game?.on) this.game.on("objectiveClaimed", this._onObjectiveClaimed);
-    const saved = safeGetItem(TUTORIAL_STEP_KEY);
-    const stepIndex = saved !== null && saved !== undefined ? parseInt(saved, 10) : NaN;
+    const saved = StorageUtils.get(TUTORIAL_STEP_KEY);
+    const stepIndex = saved !== null && saved !== undefined ? Number(saved) : NaN;
     if (Number.isFinite(stepIndex) && stepIndex >= 0 && stepIndex < this.steps.length) {
       this.showStep(stepIndex);
     } else {

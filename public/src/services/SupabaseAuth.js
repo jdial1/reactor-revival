@@ -1,5 +1,11 @@
-import { SUPABASE_CONFIG } from './supabase-config.js';
-import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/util.js';
+import { getBasePath, StorageUtils } from '../utils/util.js';
+import { getSupabaseUrl, getSupabaseAnonKey } from './appConfig.js';
+
+function getStableRedirectUri() {
+    if (typeof window === 'undefined' || !window.location) return '';
+    const basePath = getBasePath();
+    return window.location.origin + (basePath || '/');
+}
 
 export class SupabaseAuth {
     constructor() {
@@ -11,10 +17,9 @@ export class SupabaseAuth {
     }
 
     init() {
-        const stored = safeGetItem('supabase_auth_session');
-        if (stored) {
+        const session = StorageUtils.get('supabase_auth_session');
+        if (session) {
             try {
-                const session = JSON.parse(stored);
                 if (session.expires_at > Date.now()) {
                     this.token = session.access_token;
                     this.user = session.user;
@@ -34,16 +39,16 @@ export class SupabaseAuth {
     }
 
     async refreshAccessToken() {
-        if (!this.refreshToken || !SUPABASE_CONFIG.ANON_KEY) {
+        if (!this.refreshToken || !getSupabaseAnonKey()) {
             return false;
         }
 
         try {
-            const response = await fetch(`${SUPABASE_CONFIG.PROJECT_URL}/auth/v1/token?grant_type=refresh_token`, {
+            const response = await fetch(`${getSupabaseUrl()}/auth/v1/token?grant_type=refresh_token`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_CONFIG.ANON_KEY
+                    'apikey': getSupabaseAnonKey()
                 },
                 body: JSON.stringify({ refresh_token: this.refreshToken })
             });
@@ -65,15 +70,15 @@ export class SupabaseAuth {
 
     async signUp(email, password) {
         try {
-            if (!SUPABASE_CONFIG.ANON_KEY) {
+            if (!getSupabaseAnonKey()) {
                 throw new Error('Supabase ANON_KEY is not configured');
             }
 
-            const response = await fetch(`${SUPABASE_CONFIG.PROJECT_URL}/auth/v1/signup`, {
+            const response = await fetch(`${getSupabaseUrl()}/auth/v1/signup`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_CONFIG.ANON_KEY
+                    'apikey': getSupabaseAnonKey()
                 },
                 body: JSON.stringify({
                     email: email,
@@ -95,15 +100,15 @@ export class SupabaseAuth {
 
     async signInWithPassword(email, password) {
         try {
-            if (!SUPABASE_CONFIG.ANON_KEY) {
+            if (!getSupabaseAnonKey()) {
                 throw new Error('Supabase ANON_KEY is not configured');
             }
 
-            const response = await fetch(`${SUPABASE_CONFIG.PROJECT_URL}/auth/v1/token?grant_type=password`, {
+            const response = await fetch(`${getSupabaseUrl()}/auth/v1/token?grant_type=password`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_CONFIG.ANON_KEY
+                    'apikey': getSupabaseAnonKey()
                 },
                 body: JSON.stringify({
                     email: email,
@@ -126,19 +131,19 @@ export class SupabaseAuth {
 
     async resetPasswordForEmail(email) {
         try {
-            if (!SUPABASE_CONFIG.ANON_KEY) {
+            if (!getSupabaseAnonKey()) {
                 throw new Error('Supabase ANON_KEY is not configured');
             }
 
-            const response = await fetch(`${SUPABASE_CONFIG.PROJECT_URL}/auth/v1/recover`, {
+            const response = await fetch(`${getSupabaseUrl()}/auth/v1/recover`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_CONFIG.ANON_KEY
+                    'apikey': getSupabaseAnonKey()
                 },
                 body: JSON.stringify({
                     email: email,
-                    redirect_to: `${SUPABASE_CONFIG.REDIRECT_URI}?type=recovery`
+                    redirect_to: `${getStableRedirectUri()}?type=recovery`
                 })
             });
 
@@ -160,15 +165,15 @@ export class SupabaseAuth {
                 throw new Error('Not authenticated');
             }
 
-            if (!SUPABASE_CONFIG.ANON_KEY) {
+            if (!getSupabaseAnonKey()) {
                 throw new Error('Supabase ANON_KEY is not configured');
             }
 
-            const response = await fetch(`${SUPABASE_CONFIG.PROJECT_URL}/auth/v1/user`, {
+            const response = await fetch(`${getSupabaseUrl()}/auth/v1/user`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_CONFIG.ANON_KEY,
+                    'apikey': getSupabaseAnonKey(),
                     'Authorization': `Bearer ${this.token}`
                 },
                 body: JSON.stringify({
@@ -190,15 +195,15 @@ export class SupabaseAuth {
 
     async handleEmailConfirmation(tokenHash, type) {
         try {
-            if (!SUPABASE_CONFIG.ANON_KEY) {
+            if (!getSupabaseAnonKey()) {
                 throw new Error('Supabase ANON_KEY is not configured');
             }
 
-            const response = await fetch(`${SUPABASE_CONFIG.PROJECT_URL}/auth/v1/verify`, {
+            const response = await fetch(`${getSupabaseUrl()}/auth/v1/verify`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_CONFIG.ANON_KEY
+                    'apikey': getSupabaseAnonKey()
                 },
                 body: JSON.stringify({
                     token_hash: tokenHash,
@@ -228,12 +233,12 @@ export class SupabaseAuth {
         this.user = data.user || { id: data.user_id, email: data.email };
         this.expiresAt = Date.now() + ((data.expires_in || 3600) * 1000);
         
-        safeSetItem('supabase_auth_session', JSON.stringify({
+        StorageUtils.set('supabase_auth_session', {
             access_token: this.token,
             refresh_token: this.refreshToken,
             user: this.user,
             expires_at: this.expiresAt
-        }));
+        });
     }
 
     signOut() {
@@ -241,7 +246,7 @@ export class SupabaseAuth {
         this.user = null;
         this.expiresAt = 0;
         this.refreshToken = null;
-        safeRemoveItem('supabase_auth_session');
+        StorageUtils.remove('supabase_auth_session');
     }
 
     isSignedIn() {

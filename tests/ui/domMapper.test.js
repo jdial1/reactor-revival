@@ -34,8 +34,8 @@ describe("DOMMapper", () => {
   });
 
   it("should initialize and query static elements", async () => {
-    // Wait for microtasks to clear so init() promise has a chance to run
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(global.window.document.querySelector).toHaveBeenCalled();
+    domMapperInstance.getRoot("#splash-container");
+    expect(global.window.document.querySelector).toHaveBeenCalledWith("#splash-container");
   });
 });

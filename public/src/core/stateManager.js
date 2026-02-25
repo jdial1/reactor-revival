@@ -1,28 +1,52 @@
-import { numFormat as fmt } from "../utils/util.js";
-export class StateManager {
+import { MOBILE_BREAKPOINT_PX } from "./constants.js";
+import { logger } from "../utils/logger.js";
+import { addPartIconsToTitle as addPartIconsToTitleHelper, getObjectiveScrollDuration as getObjectiveScrollDurationHelper, checkObjectiveTextScrolling as checkObjectiveTextScrollingHelper } from "./objective/objectiveUIHelper.js";
+import { BaseComponent } from "../components/BaseComponent.js";
+
+export class StateManager extends BaseComponent {
   constructor(ui) {
+    super();
     this.ui = ui;
     this.clicked_part = null;
     this.game = null;
     this.vars = new Map();
     this.quickSelectSlots = Array.from({ length: 5 }, () => ({ partId: null, locked: false }));
+    this._stateUnsubscribes = [];
+  }
+  teardown() {
+    const unsubs = this._stateUnsubscribes;
+    if (unsubs.length) {
+      unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+      unsubs.length = 0;
+    }
   }
   setGame(gameInstance) {
+    this.teardown();
     this.game = gameInstance;
+    const state = gameInstance?.state;
+    if (!state) return;
+    const storeKeys = [
+      "current_money", "current_power", "current_heat", "current_exotic_particles",
+      "total_exotic_particles", "reality_flux",
+      "max_power", "max_heat", "stats_power", "stats_heat_generation",
+      "stats_vent", "stats_inlet", "stats_outlet", "stats_net_heat",
+      "stats_total_part_heat", "stats_cash", "engine_status",
+      "power_delta_per_tick", "heat_delta_per_tick", "melting_down",
+      "auto_sell", "auto_buy", "heat_control", "time_flux", "pause",
+    ];
+    for (const key of storeKeys) {
+      if (state[key] !== undefined) this.setVar(key, state[key]);
+    }
+    const ep = gameInstance?.exoticParticleManager?.exotic_particles;
+    if (ep !== undefined) this.setVar("exotic_particles", ep);
   }
   setVar(key, value) {
     const oldValue = this.vars.get(key);
     if (oldValue === value) {
-      if (key === "time_flux") {
-        console.log(`[TIME FLUX] StateManager.setVar: value unchanged (${value}), skipping`);
-      }
       return;
     }
-    if (key === "time_flux") {
-      console.log(`[TIME FLUX] StateManager.setVar: ${oldValue} -> ${value}, game exists: ${!!this.game}, game.time_flux before: ${this.game?.time_flux}`);
-    }
     this.vars.set(key, value);
-    this.ui.update_vars.set(key, value);
+    if (this.ui?.update_vars) this.ui.update_vars.set(key, value);
     if (this.game && this.game.onToggleStateChange) {
       if (
         [
@@ -33,9 +57,6 @@ export class StateManager {
           "heat_control",
         ].includes(key)
       ) {
-        if (key === "time_flux") {
-          console.log(`[TIME FLUX] StateManager calling game.onToggleStateChange("${key}", ${value})`);
-        }
         this.game.onToggleStateChange(key, value);
       }
     }
@@ -52,27 +73,21 @@ export class StateManager {
     this.updatePartsPanelToggleIcon(part);
 
     const skipOpenPanel = options.skipOpenPanel === true;
-    const isMobile = typeof window !== "undefined" && window.innerWidth <= 900;
-    if (isMobile && !skipOpenPanel) {
-      const partsSection = document.getElementById("parts_section");
-      if (partsSection) {
-        if (partActive) {
-          partsSection.classList.remove("collapsed");
-        }
-        this.ui.updatePartsPanelBodyClass();
-        void partsSection.offsetHeight;
-      }
-    } else if (isMobile && skipOpenPanel) {
-      this.ui.updatePartsPanelBodyClass();
+    const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
+    if (isMobile) {
+      const partsSection = !skipOpenPanel ? document.getElementById("parts_section") : null;
+      if (partsSection && partActive) partsSection.classList.remove("collapsed");
+      this.ui.partsPanelUI.updatePartsPanelBodyClass();
+      if (partsSection) void partsSection.offsetHeight;
     }
     if (part) {
       const inQuickSelect = this.getQuickSelectSlots().some((s) => s.partId === part.id);
       if (!inQuickSelect) this.pushLastUsedPart(part);
     }
-    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+    if (typeof this.ui.partsPanelUI?.updateQuickSelectSlots === "function") this.ui.partsPanelUI.updateQuickSelectSlots();
     const heatComponentCategories = ['vent', 'heat_exchanger', 'heat_inlet', 'heat_outlet', 'coolant_cell', 'reactor_plating'];
     if (!part || !heatComponentCategories.includes(part.category)) {
-      this.ui.clearSegmentHighlight();
+      this.ui.gridInteractionUI.clearSegmentHighlight();
     }
   }
   getClickedPart() {
@@ -95,7 +110,7 @@ export class StateManager {
       if (slots[i].locked) continue;
       slots[i].partId = available.shift() ?? null;
     }
-    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+    if (typeof this.ui.partsPanelUI?.updateQuickSelectSlots === "function") this.ui.partsPanelUI.updateQuickSelectSlots();
   }
 
   getQuickSelectSlots() {
@@ -103,12 +118,13 @@ export class StateManager {
   }
 
   normalizeQuickSelectSlotsForUnlock() {
-    if (!this.game?.partset || typeof this.game.isPartUnlocked !== "function") return;
+    const unlockManager = this.game?.unlockManager;
+    if (!this.game?.partset || !unlockManager) return;
     for (let i = 0; i < this.quickSelectSlots.length; i++) {
       const s = this.quickSelectSlots[i];
       if (!s.partId) continue;
       const part = this.game.partset.getPartById(s.partId);
-      if (!part || !this.game.isPartUnlocked(part)) {
+      if (!part || !unlockManager.isPartUnlocked(part)) {
         this.quickSelectSlots[i] = { partId: null, locked: false };
       }
     }
@@ -117,7 +133,7 @@ export class StateManager {
   setQuickSelectLock(index, locked) {
     if (index < 0 || index > 4) return;
     this.quickSelectSlots[index].locked = locked;
-    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+    if (typeof this.ui.partsPanelUI?.updateQuickSelectSlots === "function") this.ui.partsPanelUI.updateQuickSelectSlots();
   }
 
   setQuickSelectSlots(slots) {
@@ -129,7 +145,7 @@ export class StateManager {
       };
     });
     this.quickSelectSlots = normalized;
-    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+    if (typeof this.ui.partsPanelUI?.updateQuickSelectSlots === "function") this.ui.partsPanelUI.updateQuickSelectSlots();
   }
 
   updatePartsPanelToggleIcon(_part) {}
@@ -139,8 +155,8 @@ export class StateManager {
     if (!toastBtn) return;
 
     toastBtn.classList.add("is-complete");
-    if (typeof this.ui.animateObjectiveCompletion === "function") {
-      this.ui.animateObjectiveCompletion();
+    if (typeof this.ui.objectivesUI?.animateObjectiveCompletion === "function") {
+      this.ui.objectivesUI.animateObjectiveCompletion();
     }
   }
   handlePartAdded(game, part_obj) {
@@ -154,19 +170,23 @@ export class StateManager {
     }
 
     // Apply gating rules: show/hide and lock based on previous tier count
-    const shouldShow = this.ui?.game?.shouldShowPart(part_obj);
+    const unlockManager = this.ui?.game?.unlockManager;
+    const shouldShow = unlockManager ? unlockManager.shouldShowPart(part_obj) : true;
     if (!shouldShow) {
       return; // Do not render this part in the panel yet
     }
 
     // Use the Part class's createElement method for consistent element creation
     const part_el = part_obj.createElement();
+    if (!part_el || typeof part_el.querySelector !== "function" || typeof part_el.classList?.add !== "function") {
+      return;
+    }
     part_obj.$el = part_el; // Assign the element back to the object
     part_el._part = part_obj; // Assign the object to the element for event handlers
 
     // Add/Update progress counter for parts that are shown but locked
-    const prevCount = this.ui?.game?.getPreviousTierCount(part_obj) || 0;
-    const unlocked = this.ui?.game?.isPartUnlocked(part_obj);
+    const prevCount = unlockManager ? unlockManager.getPreviousTierCount(part_obj) : 0;
+    const unlocked = unlockManager ? unlockManager.isPartUnlocked(part_obj) : true;
     if (!unlocked) {
       part_el.classList.add("locked-by-tier");
       if (this.game?.partset?.isPartDoctrineLocked(part_obj)) {
@@ -213,7 +233,7 @@ export class StateManager {
     } else {
       // Only log error in development mode or when debugging is explicitly enabled
       if (this.debugMode) {
-        console.warn(`Container ${containerKey} not found for part ${part_obj.id} (category: ${part_obj.category})`);
+        logger.log('warn', 'game', `Container ${containerKey} not found for part ${part_obj.id} (category: ${part_obj.category})`);
       }
     }
   }
@@ -238,7 +258,7 @@ export class StateManager {
     let container = this.ui.DOMElements?.[locationKey] || document.getElementById(locationKey);
     if (!container) {
       if (this.debugMode) {
-        console.warn(`Container with ID '${locationKey}' not found for upgrade '${upgrade_obj.id}'`);
+        logger.log('warn', 'game', `Container with ID '${locationKey}' not found for upgrade '${upgrade_obj.id}'`);
       }
       return;
     }
@@ -283,86 +303,7 @@ export class StateManager {
 
   // Function to add part icons to objective titles
   addPartIconsToTitle(title) {
-    if (typeof title !== 'string') return title;
-
-    const partMappings = {
-      'Quad Plutonium Cells': './img/parts/cells/cell_2_4.png',
-      'Quad Thorium Cells': './img/parts/cells/cell_3_4.png',
-      'Quad Seaborgium Cells': './img/parts/cells/cell_4_4.png',
-      'Quad Dolorium Cells': './img/parts/cells/cell_5_4.png',
-      'Quad Nefastium Cells': './img/parts/cells/cell_6_4.png',
-      'Particle Accelerators': './img/parts/accelerators/accelerator_1.png',
-      'Plutonium Cells': './img/parts/cells/cell_2_1.png',
-      'Thorium Cells': './img/parts/cells/cell_3_1.png',
-      'Seaborgium Cells': './img/parts/cells/cell_4_1.png',
-      'Dolorium Cells': './img/parts/cells/cell_5_1.png',
-      'Nefastium Cells': './img/parts/cells/cell_6_1.png',
-      'Heat Vent': './img/parts/vents/vent_1.png',
-      'Capacitors': './img/parts/capacitors/capacitor_1.png',
-      'Dual Cell': './img/parts/cells/cell_1_2.png',
-      'Uranium Cell': './img/parts/cells/cell_1_1.png',
-      'Capacitor': './img/parts/capacitors/capacitor_1.png',
-      'Cells': './img/parts/cells/cell_1_1.png',
-      'Cell': './img/parts/cells/cell_1_1.png',
-      'experimental part': './img/parts/cells/xcell_1_1.png',
-      'Improved Chronometers upgrade': './img/upgrades/upgrade_flux.png',
-      'Improved Chronometers': './img/upgrades/upgrade_flux.png',
-      'Power': './img/ui/icons/icon_power.png',
-      'Heat': './img/ui/icons/icon_heat.png',
-      'Exotic Particles': '🧬'
-    };
-
-    let processedTitle = title;
-
-    // Sort part mappings by length (longest first) to avoid partial matches
-    const sortedMappings = Object.entries(partMappings).sort((a, b) => b[0].length - a[0].length);
-
-    // Use a placeholder system to prevent nested replacements
-    const placeholders = new Map();
-    let placeholderCounter = 0;
-
-    // Replace part names with icons + names (only first occurrence)
-    for (const [partName, iconPath] of sortedMappings) {
-      const isEmoji = iconPath.length === 1 || iconPath.match(/^[^a-zA-Z0-9./]/);
-      const escapedPartName = partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`\\b${escapedPartName.replace(/\s+/g, '\\s+')}\\b`, 'i');
-      if (isEmoji) {
-        processedTitle = processedTitle.replace(regex, `${iconPath} ${partName}`);
-      } else {
-        // It's an image path, create img tag (only first occurrence)
-        const iconHtml = `<img src=\"${iconPath}\" class=\"objective-part-icon\" alt=\"${partName}\" title=\"${partName}\">`;
-        processedTitle = processedTitle.replace(regex, (match) => {
-          const placeholder = `__PLACEHOLDER_${placeholderCounter}__`;
-          placeholders.set(placeholder, `${iconHtml} ${partName}`);
-          placeholderCounter++;
-          return placeholder;
-        });
-      }
-    }
-
-    // Replace all placeholders with actual HTML
-    for (const [placeholder, replacement] of placeholders) {
-      processedTitle = processedTitle.replace(placeholder, replacement);
-    }
-
-    // Format all numbers in the title using numFormat
-    processedTitle = processedTitle.replace(/\$?\d{1,3}(?:,\d{3})+|\$?\d{4,}/g, (match) => {
-      // Remove $ for formatting, add back if present
-      const hasDollar = match.startsWith('$');
-      const numStr = match.replace(/[^\d]/g, '');
-      const formatted = fmt(Number(numStr));
-      return hasDollar ? ('$' + formatted) : formatted;
-    });
-
-    // Debug logging - only in development mode
-    if (processedTitle !== title && typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-      this.game.logger?.debug('Part icons added to objective title:', {
-        original: title,
-        processed: processedTitle
-      });
-    }
-
-    return processedTitle;
+    return addPartIconsToTitleHelper(this.game, title);
   }
 
   handleObjectiveLoaded(objective, objectiveIndex = null) {
@@ -393,19 +334,11 @@ export class StateManager {
   }
 
   getObjectiveScrollDuration() {
-    const baseWidth = 900;
-   const baseDuration = 8;
-    const screenWidth = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : baseWidth;
-    const duration = baseDuration * (screenWidth / baseWidth);
-    return Math.max(5, Math.min(18, duration));
+    return getObjectiveScrollDurationHelper();
   }
 
   // Always enable objective text scrolling
   checkObjectiveTextScrolling() {
-    const toastTitleEl = this.ui.DOMElements.objectives_toast_title;
-    if (toastTitleEl) {
-      const duration = this.getObjectiveScrollDuration();
-      toastTitleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`;
-    }
+    checkObjectiveTextScrollingHelper(this.ui.DOMElements);
   }
 }

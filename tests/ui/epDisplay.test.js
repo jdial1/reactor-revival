@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, toNum } from '../helpers/setup.js';
+import { setDecimal } from '../../public/src/core/store.js';
 
 describe('EP Info Bar Display', () => {
     let game;
@@ -44,8 +45,8 @@ describe('EP Info Bar Display', () => {
 
         game.engine.tick();
         expect(toNum(game.exotic_particles)).toBeGreaterThan(0);
-        game.ui.stateManager.setVar("current_exotic_particles", game.exotic_particles); // Explicitly update state var
-        game.ui.processUpdateQueue();
+        setDecimal(game.state, "current_exotic_particles", game.exotic_particles);
+        game.ui.coreLoopUI.processUpdateQueue();
         const mobileContent = mobileEl.querySelector('.ep-content');
         const desktopContent = desktopEl.querySelector('.ep-content');
         expect(mobileContent.style.display).not.toBe("none");
@@ -56,14 +57,14 @@ describe('EP Info Bar Display', () => {
         const mobileEl = document.getElementById("info_ep");
         const desktopEl = document.getElementById("info_ep_desktop");
 
-        game.ui.stateManager.setVar("current_exotic_particles", 10); // Use current_exotic_particles
-        game.ui.processUpdateQueue();
+        setDecimal(game.state, "current_exotic_particles", 10);
+        game.ui.coreLoopUI.processUpdateQueue();
 
         expect(mobileEl.querySelector('.ep-content').style.display).not.toBe("none");
         expect(desktopEl.querySelector('.ep-content').style.display).not.toBe("none");
 
-        game.ui.stateManager.setVar("current_exotic_particles", 0); // Use current_exotic_particles
-        game.ui.processUpdateQueue();
+        setDecimal(game.state, "current_exotic_particles", 0);
+        game.ui.coreLoopUI.processUpdateQueue();
 
         expect(mobileEl.querySelector('.ep-content').style.display).toBe("none");
         expect(desktopEl.querySelector('.ep-content').style.display).toBe("none");
@@ -98,11 +99,10 @@ describe('EP Info Bar Display', () => {
             game.ui.displayValues.ep.target = savedData.current_exotic_particles;
         }
 
-        // Explicitly update state var to ensure UI visibility logic runs
-        game.ui.stateManager.setVar("current_exotic_particles", savedData.current_exotic_particles);
+        setDecimal(game.state, "current_exotic_particles", savedData.current_exotic_particles);
 
-        game.ui.processUpdateQueue();
-        game.ui.updateRollingNumbers(10000);
+        game.ui.coreLoopUI.processUpdateQueue();
+        game.ui.coreLoopUI.updateRollingNumbers(10000);
 
         // Check that EP display elements are immediately visible
         expect(mobileEl.querySelector('.ep-content').style.display).not.toBe("none");

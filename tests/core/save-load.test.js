@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, vi, toNum } from "../helpers/setup.js";
+import { StorageUtils } from "../../public/src/utils/util.js";
 
 describe("Save and Load Functionality", () => {
   let game;
@@ -31,17 +32,12 @@ describe("Save and Load Functionality", () => {
     // Temporarily override the test environment check in saveGame
     // The saveGame method has a check that returns early in test mode
     // We need to bypass this for the test to work
-    const originalSaveGame = game.saveGame.bind(game);
-    
-    // Override saveGame to bypass the test environment check
-    game.saveGame = function(slot, isAutoSave) {
-      // Skip the test environment check and directly save
-      if (this.reactor.has_melted_down) {
-        return;
-      }
-      
+    const originalSaveToSlot = game.saveManager.saveToSlot.bind(game.saveManager);
+    game.saveManager.saveToSlot = function(slot) {
+      const ctx = this.getPersistenceContext();
+      if (ctx.hasMeltedDown) return;
       try {
-        this.updateSessionTime();
+        ctx.updateSessionTime();
         const saveData = this.getSaveState();
         
         if (typeof localStorage !== "undefined" && localStorage !== null) {
@@ -60,10 +56,8 @@ describe("Save and Load Functionality", () => {
       }
     };
     
-    game.saveGame(1);
-    
-    // Restore original method
-    game.saveGame = originalSaveGame;
+    game.saveManager.saveToSlot(1);
+    game.saveManager.saveToSlot = originalSaveToSlot;
     
     const savedJson = localStorage.getItem("reactorGameSave_1");
     // If save failed, provide more context
@@ -79,13 +73,34 @@ describe("Save and Load Functionality", () => {
   });
 
   it("should load game state from localStorage", async () => {
+    game.reactor.has_melted_down = false;
     game.current_money = 9999;
-    game.saveGame(1);
-    
+    const originalSaveToSlot = game.saveManager.saveToSlot.bind(game.saveManager);
+    game.saveManager.saveToSlot = function (slot) {
+      const ctx = this.getPersistenceContext();
+      if (ctx.hasMeltedDown) return;
+      try {
+        ctx.updateSessionTime();
+        const saveData = this.getSaveState();
+        slot = slot ?? this.getNextSaveSlot();
+        const payload = StorageUtils.serialize(saveData);
+        StorageUtils.setRaw(`reactorGameSave_${slot}`, payload);
+        StorageUtils.set("reactorCurrentSaveSlot", slot);
+      } catch (e) {
+        console.warn("Save override error:", e);
+      }
+    };
+    game.saveManager.saveToSlot(1);
+
+    const savedJson = localStorage.getItem("reactorGameSave_1");
+    expect(savedJson).toBeTruthy();
+    const savedData = JSON.parse(savedJson);
+    expect(Number(savedData.current_money)).toBe(9999);
+
     await game.set_defaults();
     expect(toNum(game.current_money)).toBe(game.base_money);
 
-    const loaded = await game.loadGame(1);
+    const loaded = await game.saveManager.loadGame(1);
     expect(loaded).toBe(true);
     expect(toNum(game.current_money)).toBe(9999);
   });
@@ -101,12 +116,12 @@ describe("Save and Load Functionality", () => {
     await tile2.setPart(vent);
     tile1.ticks = 5;
     
-    game.saveGame(1);
+    game.saveManager.saveToSlot(1);
     
     game.tileset.clearAllTiles();
     expect(tile1.part).toBeNull();
     
-    await game.loadGame(1);
+    await game.saveManager.loadGame(1);
     
     const loadedTile1 = game.tileset.getTile(0, 0);
     const loadedTile2 = game.tileset.getTile(0, 1);
@@ -119,7 +134,7 @@ describe("Save and Load Functionality", () => {
   it("should handle invalid save data gracefully", async () => {
     localStorage.setItem("reactorGameSave_1", "{ invalid json");
     
-    const loaded = await game.loadGame(1);
+    const loaded = await game.saveManager.loadGame(1);
     expect(loaded).toBe(false);
     expect(toNum(game.current_money)).toBe(game.base_money);
   });

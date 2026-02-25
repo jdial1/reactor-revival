@@ -328,10 +328,10 @@ describe('Full Objective Run', () => {
         }
 
         let saveCallCount = 0;
-        const originalSaveGame = game.saveGame;
-        game.saveGame = () => {
+        const originalAutoSave = game.saveManager.autoSave;
+        game.saveManager.autoSave = function () {
             saveCallCount++;
-            originalSaveGame.call(game);
+            return originalAutoSave.call(this);
         };
 
         try {
@@ -422,6 +422,6 @@ describe('Full Objective Run', () => {
         expect(cid === "allObjectives" || infIds.includes(cid)).toBe(true);
         expect(saveCallCount).toBeGreaterThan(0);
 
-        game.saveGame = originalSaveGame;
+        game.saveManager.autoSave = originalAutoSave;
     }, 120000);
 }); 

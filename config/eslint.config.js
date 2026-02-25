@@ -54,6 +54,7 @@ export default [
     ignores: [
       "public/lib/*.js",
       "public/sw.js",
+      "dist-sw/**",
       "src-sw.js",
       "eslint-results.sarif",
       "config/workbox-config.cjs",

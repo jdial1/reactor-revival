@@ -361,9 +361,9 @@ describe("Objective System", () => {
         const checkFn = getObjectiveCheck(obj.checkId);
         // For the last objective (All objectives completed), it should always return false
         if (idx === objective_list_data.length - 1) {
-          expect(checkFn(game)).toBe(false);
+          expect(checkFn(game).completed).toBe(false);
         } else {
-          expect(checkFn(game)).toBe(true);
+          expect(checkFn(game).completed).toBe(true);
         }
       });
   });
@@ -427,7 +427,7 @@ describe("Objective System", () => {
         }
 
         expect(
-          checkFn(testGame),
+          checkFn(testGame).completed,
           `Objective ${index} (${description}) should be satisfied`
         ).toBe(true);
 
@@ -465,12 +465,11 @@ describe("Objective System", () => {
           originalHandleLoaded.call(testGame.ui.stateManager, obj, index);
         };
 
-        // Mock saveGame to track if it's called
         let saveGameCalled = false;
-        const originalSaveGame = testGame.saveGame;
-        testGame.saveGame = () => {
+        const originalAutoSave = testGame.saveManager.autoSave.bind(testGame.saveManager);
+        testGame.saveManager.autoSave = () => {
           saveGameCalled = true;
-          originalSaveGame.call(testGame);
+          originalAutoSave();
         };
 
         // Start the objective manager (this should trigger auto-completion)
@@ -520,7 +519,7 @@ describe("Objective System", () => {
         testGame.ui.stateManager.handleObjectiveCompleted =
           originalHandleCompleted;
         testGame.ui.stateManager.handleObjectiveLoaded = originalHandleLoaded;
-        testGame.saveGame = originalSaveGame;
+        testGame.saveManager.autoSave = originalAutoSave;
       }
     });
 
@@ -545,12 +544,12 @@ describe("Objective System", () => {
       const checkFn4 = getObjectiveCheck(objective_list_data[4].checkId);
       const checkFn5 = getObjectiveCheck(objective_list_data[5].checkId);
       const checkFn6 = getObjectiveCheck(objective_list_data[6].checkId);
-      expect(checkFn4(testGame), "Objective 4 should be satisfied").toBe(true);
-      expect(checkFn5(testGame), "Objective 5 should be satisfied").toBe(true);
-      expect(checkFn6(testGame), "Objective 6 should be satisfied").toBe(true);
+      expect(checkFn4(testGame).completed, "Objective 4 should be satisfied").toBe(true);
+      expect(checkFn5(testGame).completed, "Objective 5 should be satisfied").toBe(true);
+      expect(checkFn6(testGame).completed, "Objective 6 should be satisfied").toBe(true);
 
       const checkFn7 = getObjectiveCheck(objective_list_data[7].checkId);
-      expect(checkFn7(testGame), "Objective 7 should NOT be satisfied").toBe(false);
+      expect(checkFn7(testGame).completed, "Objective 7 should NOT be satisfied").toBe(false);
 
       if (testGame.objectives_manager.objectives_data) {
         testGame.objectives_manager.objectives_data[4].completed = false;
@@ -582,12 +581,11 @@ describe("Objective System", () => {
         originalHandleCompleted.call(testGame.ui.stateManager);
       };
 
-      // Mock saveGame to track calls
       let saveCallCount = 0;
-      const originalSaveGame = testGame.saveGame;
-      testGame.saveGame = () => {
+      const originalAutoSave2 = testGame.saveManager.autoSave.bind(testGame.saveManager);
+      testGame.saveManager.autoSave = () => {
         saveCallCount++;
-        originalSaveGame.call(testGame);
+        originalAutoSave2();
       };
 
       // Start the objective manager (should auto-complete 4, 5, and 6)
@@ -604,7 +602,6 @@ describe("Objective System", () => {
         }
       }
 
-      // Should have completed 3 objectives and be on objective 7
       expect(
         completionCount,
         "Should have auto-completed 3 consecutive objectives"
@@ -620,7 +617,7 @@ describe("Objective System", () => {
       // Restore original methods
       testGame.ui.stateManager.handleObjectiveCompleted =
         originalHandleCompleted;
-      testGame.saveGame = originalSaveGame;
+      testGame.saveManager.autoSave = originalAutoSave2;
     });
   });
 
@@ -820,7 +817,7 @@ describe("Objective System", () => {
           console.log(`  [${i}]: ${obj.title} (${obj.checkId})`);
         }
 
-        expect(checkFn(testGame)).toBe(true);
+        expect(checkFn(testGame).completed).toBe(true);
 
         if (rewardType === 'money' && objective.reward) {
           const moneyBeforeReward = testGame.current_money;
@@ -875,17 +872,17 @@ describe("Objective System", () => {
       }
       testGame.reactor.updateStats();
 
-      testGame.sustainedPower1k = { startTick: 0 };
+      testGame.objectives_manager?.resetSustainedTracking("sustainedPower1k");
 
       const checkFn = getObjectiveCheck("sustainedPower1k");
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
 
-      testGame.sustainedPower1k = { startTick: testGame.engine.tick_count - 30 };
-      expect(checkFn(testGame)).toBe(true);
+      testGame.objectives_manager?.updateSustainedTracking("sustainedPower1k", testGame.engine.tick_count - 30);
+      expect(checkFn(testGame).completed).toBe(true);
 
       // Test that it fails if power drops below threshold
       testGame.reactor.stats_power = 500;
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
     });
 
     it("should test infrastructure upgrade objective", async () => {
@@ -893,7 +890,7 @@ describe("Objective System", () => {
 
       // Test that it fails without enough advanced components
       const checkFn = getObjectiveCheck("infrastructureUpgrade1");
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
 
       // Add advanced capacitors
       for (let i = 0; i < 10; i++) {
@@ -901,7 +898,7 @@ describe("Objective System", () => {
           .getTile(0, i)
           .setPart(testGame.partset.getPartById("capacitor2"));
       }
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
 
       // Add advanced heat vents
       for (let i = 0; i < 10; i++) {
@@ -909,23 +906,23 @@ describe("Objective System", () => {
           .getTile(1, i)
           .setPart(testGame.partset.getPartById("vent2"));
       }
-      expect(checkFn(testGame)).toBe(true);
+      expect(checkFn(testGame).completed).toBe(true);
     });
 
     it("should test powerPerTick10k objective", async () => {
       const testGame = await setupGame();
 
       const checkFn = getObjectiveCheck("powerPerTick10k");
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
 
       testGame.reactor.stats_power = 10000;
-      expect(checkFn(testGame)).toBe(true);
+      expect(checkFn(testGame).completed).toBe(true);
 
       testGame.paused = true;
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
 
       testGame.paused = false;
-      expect(checkFn(testGame)).toBe(true);
+      expect(checkFn(testGame).completed).toBe(true);
     });
 
     it("should test high heat mastery objective", async () => {
@@ -942,17 +939,17 @@ describe("Objective System", () => {
       // Manually set high heat level
       testGame.reactor.current_heat = 15000000;
 
-      testGame.masterHighHeat = { startTick: 0 };
+      testGame.objectives_manager?.resetSustainedTracking("masterHighHeat");
 
       const checkFn = getObjectiveCheck("masterHighHeat");
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
 
-      testGame.masterHighHeat = { startTick: testGame.engine.tick_count - 30 };
-      expect(checkFn(testGame)).toBe(true);
+      testGame.objectives_manager?.updateSustainedTracking("masterHighHeat", testGame.engine.tick_count - 30);
+      expect(checkFn(testGame).completed).toBe(true);
 
       // Test that it fails if reactor melts down
       testGame.reactor.has_melted_down = true;
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
     });
 
     it("should test research investment objective", async () => {
@@ -960,7 +957,7 @@ describe("Objective System", () => {
 
       // Test that it fails without upgrades
       const checkFn = getObjectiveCheck("investInResearch1");
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
 
       // Unlock laboratory
       const laboratoryUpgrade = testGame.upgradeset.getUpgrade("laboratory");
@@ -969,12 +966,12 @@ describe("Objective System", () => {
       // Purchase infused cells
       const infusedCellsUpgrade = testGame.upgradeset.getUpgrade("infused_cells");
       infusedCellsUpgrade.setLevel(1);
-      expect(checkFn(testGame)).toBe(false);
+      expect(checkFn(testGame).completed).toBe(false);
 
       // Purchase unleashed cells
       const unleashedCellsUpgrade = testGame.upgradeset.getUpgrade("unleashed_cells");
       unleashedCellsUpgrade.setLevel(1);
-      expect(checkFn(testGame)).toBe(true);
+      expect(checkFn(testGame).completed).toBe(true);
     });
   });
 
@@ -1164,7 +1161,7 @@ describe("Objective System", () => {
       expect(testGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
 
       // Get the save state
-      const saveData = testGame.getSaveState();
+      const saveData = testGame.saveManager.getSaveState();
 
       // Verify the objective index is saved
       expect(saveData.objectives.current_objective_index).toBe(targetObjectiveIndex);
@@ -1207,7 +1204,7 @@ describe("Objective System", () => {
       expect(testGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
 
       // Get the save state
-      const saveData = testGame.getSaveState();
+      const saveData = testGame.saveManager.getSaveState();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1237,7 +1234,7 @@ describe("Objective System", () => {
       expect(testGame.objectives_manager.current_objective_index).toBe(0);
 
       // Get the save state
-      const saveData = testGame.getSaveState();
+      const saveData = testGame.saveManager.getSaveState();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1274,7 +1271,7 @@ describe("Objective System", () => {
       expect(testGame.objectives_manager.objectives_data[targetObjectiveIndex].completed).toBe(false);
 
       // Get the save state
-      const saveData = testGame.getSaveState();
+      const saveData = testGame.saveManager.getSaveState();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1309,7 +1306,7 @@ describe("Objective System", () => {
       expect(testGame.objectives_manager.current_objective_index).toBe(lastRealObjectiveIndex);
 
       // Get the save state
-      const saveData = testGame.getSaveState();
+      const saveData = testGame.saveManager.getSaveState();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1347,7 +1344,7 @@ describe("Objective System", () => {
       expect(testGame.objectives_manager.current_objective_index).toBe(1);
 
       // Get the save state
-      const saveData = testGame.getSaveState();
+      const saveData = testGame.saveManager.getSaveState();
 
       // Create a new game instance and apply save state
       const newGame = await setupGame();
@@ -1373,13 +1370,13 @@ describe("Objective System", () => {
       const targetObjectiveIndex = 7;
       
       testGame.objectives_manager.set_objective(targetObjectiveIndex, true);
-      let currentSaveData = testGame.getSaveState();
+      let currentSaveData = testGame.saveManager.getSaveState();
       
       for (let cycle = 0; cycle < 3; cycle++) {
         const newGame = await setupGame();
         await newGame.applySaveState(currentSaveData);
         expect(newGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
-        currentSaveData = newGame.getSaveState();
+        currentSaveData = newGame.saveManager.getSaveState();
       }
     });
 
@@ -1475,7 +1472,7 @@ describe("Objective System", () => {
       testGame.objectives_manager.objectives_data[targetObjectiveIndex].completed = true;
 
       // Get the save state before auto-completion
-      const saveData = testGame.getSaveState();
+      const saveData = testGame.saveManager.getSaveState();
 
       // Verify the objective index is saved correctly
       expect(saveData.objectives.current_objective_index).toBe(targetObjectiveIndex);
@@ -1522,9 +1519,9 @@ describe("Objective System", () => {
         .setPart(testGame.partset.getPartById("protium1"));
 
       const checkFn = getObjectiveCheck("placeExperimentalPart");
-      expect(checkFn(testGame), "experimental part objective should be satisfied before save").toBe(true);
+      expect(checkFn(testGame).completed, "experimental part objective should be satisfied before save").toBe(true);
 
-      const saveData = testGame.getSaveState();
+      const saveData = testGame.saveManager.getSaveState();
       const savedProtiumTile = saveData.tiles?.find((t) => t.partId && (t.partId === "protium1" || t.partId === "protium"));
       expect(savedProtiumTile, "save should contain experimental part tile").toBeDefined();
 
@@ -1541,7 +1538,7 @@ describe("Objective System", () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const checkFn2 = getObjectiveCheck("placeExperimentalPart");
-      expect(checkFn2(newGame), "objective should still be satisfied after load").toBe(true);
+      expect(checkFn2(newGame).completed, "objective should still be satisfied after load").toBe(true);
 
       newGame.objectives_manager.checkAndAutoComplete();
 

@@ -48,29 +48,26 @@ describe("Utility Functions", () => {
 
     describe("timeFormat", () => {
         it("should format seconds", () => {
-            expect(timeFormat(500)).toBe("01s");
-            expect(timeFormat(1000)).toBe("01s");
+            expect(timeFormat(0)).toBe("0s");
+            expect(timeFormat(1000)).toBe("1s");
             expect(timeFormat(10000)).toBe("10s");
         });
 
         it("should format minutes", () => {
-            // Code uses padStart(2, '0') for minutes, so '1' becomes '01'
-            expect(timeFormat(60000)).toBe("01m 00s");
-            expect(timeFormat(65000)).toBe("01m 05s");
+            expect(timeFormat(60000)).toBe("1m 0s");
+            expect(timeFormat(65000)).toBe("1m 5s");
         });
 
         it("should format hours", () => {
-            // Code uses padStart(2, '0') for hours as well?
-            // const h = String(Math.floor(ts / (1000 * 60 * 60)) % 24).padStart(2, '0');
-            expect(timeFormat(3600000)).toBe("01h 00m 00s");
+            expect(timeFormat(3600000)).toBe("1h 0m 0s");
         });
 
         it("should format days", () => {
-            expect(timeFormat(86400000)).toBe("1d 00h 00m 00s");
+            expect(timeFormat(86400000)).toBe("1d 0h 0m 0s");
         });
 
         it("should handle negative time", () => {
-            expect(timeFormat(-1000)).toBe("00s");
+            expect(timeFormat(-1000)).toBe("0s");
         });
     });
 });

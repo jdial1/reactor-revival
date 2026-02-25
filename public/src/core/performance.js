@@ -1,4 +1,5 @@
-// Check if we're in a test environment or debugging mode
+import { logger } from "../utils/logger.js";
+
 // In browser, process is undefined, so we need a fallback
 const DEBUG_PERFORMANCE =
   (typeof process !== "undefined" && process.env?.NODE_ENV === "test") ||
@@ -206,42 +207,18 @@ export class Performance {
     }
 
     if (Object.keys(significantStats).length === 0) {
-      // Only show quiet message occasionally to reduce spam
       if (!this.quietMode || (now - this.lastQuietMessage) > this.quietMessageInterval) {
-        console.log("🎯 Performance: All operations within normal thresholds");
         this.lastQuietMessage = now;
       }
       return;
     }
-
-    console.group("🎯 Performance Report");
-    console.log(`📊 Sample period: ${this.displayInterval}ms`);
-
-    // Sort by average time (descending)
     const sortedStats = Object.entries(significantStats).sort(
       ([, a], [, b]) => b.average - a.average
     );
-
-    for (const [name, data] of sortedStats) {
-      const emoji = this.getPerformanceEmoji(data.average, data.max);
-      console.log(
-        `${emoji} ${name}:`,
-        `avg: ${data.average.toFixed(2)}ms,`,
-        `max: ${data.max.toFixed(2)}ms,`,
-        `min: ${data.min.toFixed(2)}ms,`,
-        `count: ${data.count}`
-      );
+    for (const [, data] of sortedStats) {
+      this.getPerformanceEmoji(data.average, data.max);
     }
-
-    // Check for potential issues
-    const issues = this.detectPerformanceIssues(significantStats);
-    if (issues.length > 0) {
-      console.group("⚠️ Potential Issues:");
-      issues.forEach((issue) => console.log(issue));
-      console.groupEnd();
-    }
-
-    console.groupEnd();
+    this.detectPerformanceIssues(significantStats);
   }
 
   getPerformanceEmoji(average, max) {
@@ -278,11 +255,7 @@ export class Performance {
     const count = this.getCount(name);
 
     if (avg > threshold || max > threshold * 2) {
-      console.warn(
-        `⚠️ Performance issue detected in ${name}: avg=${avg.toFixed(
-          2
-        )}ms, max=${max.toFixed(2)}ms, count=${count}`
-      );
+      logger.log('warn', 'game', `Performance issue detected in ${name}: avg=${avg.toFixed(2)}ms, max=${max.toFixed(2)}ms, count=${count}`);
       return false;
     }
     return true;
@@ -312,10 +285,6 @@ export class Performance {
   // New method to log performance summary to console
   logPerformanceSummary() {
     if (!this.enabled || !DEBUG_PERFORMANCE) return;
-
-    const summary = this.getPerformanceSummary();
-    if (!summary) return;
-
-    console.log("📊 Performance Summary:", summary);
+    this.getPerformanceSummary();
   }
 }

@@ -138,7 +138,7 @@ export async function satisfyObjective(game, idx) {
         case 17:
             for (let i = 0; i < 8; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("plutonium3"));
             game.reactor.updateStats();
-            game.sustainedPower1k = { startTick: game.engine.tick_count - 30 };
+            game.objectives_manager?.updateSustainedTracking("sustainedPower1k", game.engine.tick_count - 30);
             break;
 
         case 18:
@@ -185,8 +185,10 @@ export async function satisfyObjective(game, idx) {
         case 27:
             for (let i = 0; i < 8; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("plutonium3"));
             game.reactor.updateStats();
+            game.reactor.max_heat = 50000000;
             game.reactor.current_heat = 15000000;
-            game.masterHighHeat = { startTick: game.engine.tick_count - 30 };
+            game.reactor.has_melted_down = false;
+            game.objectives_manager?.updateSustainedTracking("masterHighHeat", game.engine.tick_count - 30);
             break;
 
         case 28:
@@ -212,7 +214,7 @@ export async function satisfyObjective(game, idx) {
             game.exotic_particles = 10;
             game.total_exotic_particles = 10;
             game.current_exotic_particles = 10;
-            await game.reboot_action(true);
+            await game.rebootActionKeepExoticParticles();
             // After reboot with keep_exotic_particles=true:
             // - total_exotic_particles is restored (should be > 0)
             // - exotic_particles is reset to 0 (which is what we need)

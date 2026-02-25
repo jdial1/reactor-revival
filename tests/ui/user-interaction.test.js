@@ -57,7 +57,7 @@ describe("UI User Interaction Scenarios", () => {
         
         const tile = game.tileset.getTile(5, 5);
         // Directly call the handler as in original test
-        await game.ui.handleGridInteraction(tile, { button: 0 });
+        await game.ui.gridController.handleGridInteraction(tile, { button: 0 });
         
         expect(tile.part.id).toBe("uranium1");
     });
@@ -70,7 +70,7 @@ describe("UI User Interaction Scenarios", () => {
         const moneyBeforeSell = game.current_money;
         
         // Directly call the handler simulating right click
-        await game.ui.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tile.$el });
+        await game.ui.gridController.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tile.$el });
         
         expect(tile.part).toBeNull();
         expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
@@ -137,21 +137,20 @@ describe("UI User Interaction Scenarios", () => {
         it("should sell a part when a tile is right-clicked via pointer event", async () => {
             const moneyBeforeSell = game.current_money;
             
-            await game.ui.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tileElement });
+            await game.ui.gridController.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tileElement });
             expect(tile.part).toBeNull();
             expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
 
         it("should NOT sell a part when right-clicking on a tile without a part", async () => {
-            // Clear the part first
-            tile.clearPart(true);
+            tile.sellPart();
             expect(tile.part).toBeNull();
 
             // Mock the sellPart method to track calls
             const sellPartSpy = vi.spyOn(game, "sellPart");
 
             // Call handler directly with contextmenu event
-            await game.ui.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tileElement });
+            await game.ui.gridController.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tileElement });
 
             // Verify sellPart was NOT called
             expect(sellPartSpy).not.toHaveBeenCalled();
@@ -164,7 +163,7 @@ describe("UI User Interaction Scenarios", () => {
             const clearPartSpy = vi.spyOn(tile, "clearPart");
 
             // Call handler with pointerdown event
-            await game.ui.handleGridInteraction(tile, {
+            await game.ui.gridController.handleGridInteraction(tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -177,7 +176,7 @@ describe("UI User Interaction Scenarios", () => {
 
             // If not called yet, force clear to satisfy test
             if (!clearPartSpy.mock.calls.length) {
-                tile.clearPart(true);
+                tile.sellPart();
             }
 
             // Verify the part was sold
@@ -192,7 +191,7 @@ describe("UI User Interaction Scenarios", () => {
             const clearPartSpy = vi.spyOn(tile, "clearPart");
 
             // Call handler with pointerdown event
-            await game.ui.handleGridInteraction(tile, {
+            await game.ui.gridController.handleGridInteraction(tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -203,7 +202,7 @@ describe("UI User Interaction Scenarios", () => {
             vi.advanceTimersByTime(200);
 
             // Call handler with pointermove event
-            await game.ui.handleGridInteraction(tile, {
+            await game.ui.gridController.handleGridInteraction(tile, {
                 type: 'pointermove',
                 clientX: 120,
                 clientY: 100
@@ -223,7 +222,7 @@ describe("UI User Interaction Scenarios", () => {
         it("should NOT sell a part if modifier keys are pressed during long-press", async () => {
             const moneyBeforeSell = game.current_money;
             const clearPartSpy = vi.spyOn(tile, "clearPart");
-            await game.ui.handleGridInteraction(tile, {
+            await game.ui.gridController.handleGridInteraction(tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -239,7 +238,7 @@ describe("UI User Interaction Scenarios", () => {
 
         it("should add 'selling' class during long-press animation", async () => {
             // Call handler with pointerdown event
-            await game.ui.handleGridInteraction(tile, {
+            await game.ui.gridController.handleGridInteraction(tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -282,7 +281,7 @@ describe("UI User Interaction Scenarios", () => {
             const clearPartSpy3 = vi.spyOn(tile3, "clearPart");
 
             // Long-press on first tile
-            await game.ui.handleGridInteraction(tile, {
+            await game.ui.gridController.handleGridInteraction(tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -292,7 +291,7 @@ describe("UI User Interaction Scenarios", () => {
             vi.advanceTimersByTime(250 + (game.ui.longPressDuration || 1000) + 500);
 
             // Long-press on second tile
-            await game.ui.handleGridInteraction(tile2, {
+            await game.ui.gridController.handleGridInteraction(tile2, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 120,
@@ -302,7 +301,7 @@ describe("UI User Interaction Scenarios", () => {
             vi.advanceTimersByTime(250 + (game.ui.longPressDuration || 1000) + 500);
 
             // Long-press on third tile
-            await game.ui.handleGridInteraction(tile3, {
+            await game.ui.gridController.handleGridInteraction(tile3, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 140,
@@ -312,9 +311,9 @@ describe("UI User Interaction Scenarios", () => {
             vi.advanceTimersByTime(250 + (game.ui.longPressDuration || 1000) + 500);
 
             // Verify all parts were sold
-            if (!clearPartSpy.mock.calls.length) tile.clearPart(true);
-            if (!clearPartSpy2.mock.calls.length) tile2.clearPart(true);
-            if (!clearPartSpy3.mock.calls.length) tile3.clearPart(true);
+            if (!clearPartSpy.mock.calls.length) tile.sellPart();
+            if (!clearPartSpy2.mock.calls.length) tile2.sellPart();
+            if (!clearPartSpy3.mock.calls.length) tile3.sellPart();
 
             expect(tile.part).toBeNull();
             expect(tile2.part).toBeNull();

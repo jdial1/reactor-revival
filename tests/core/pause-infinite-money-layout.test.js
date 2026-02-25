@@ -16,7 +16,7 @@ describe("Paused reactor should not generate money for provided layout", () => {
         const layoutGrid = buildLayoutGridFromCompact(infiniteMoneyLayout);
 
         // Apply layout to the reactor (deducts cost as well)
-        game.ui.pasteReactorLayout(layoutGrid);
+        game.ui.copyPaste.pasteReactorLayout(layoutGrid);
         game.reactor.updateStats();
 
         const moneyBefore = game.current_money;

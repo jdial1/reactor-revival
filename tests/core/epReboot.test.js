@@ -98,7 +98,7 @@ describe('EP Reboot Functionality', () => {
             
             const epBeforeReboot = game.exotic_particles;
             game.current_money = 5000;
-            await game.reboot_action(true);
+            await game.rebootActionKeepExoticParticles();
 
             expect(toNum(game.exotic_particles)).toBe(0);
             expect(toNum(game.total_exotic_particles)).toBe(toNum(epBeforeReboot));
@@ -120,7 +120,7 @@ describe('EP Reboot Functionality', () => {
             expect(standardUpgrade.level).toBe(1);
             expect(labUpgrade.level).toBe(1);
             
-            await game.reboot_action(true);
+            await game.rebootActionKeepExoticParticles();
 
             const chronometerLevel = game.upgradeset.getUpgrade("chronometer").level;
             expect(chronometerLevel === 0 || chronometerLevel === 1).toBe(true);
@@ -142,7 +142,7 @@ describe('EP Reboot Functionality', () => {
             
             game.current_money = 5000;
             await game.router.loadPage("experimental_upgrades_section");
-            await game.reboot_action(false);
+            await game.rebootActionDiscardExoticParticles();
 
             expect(toNum(game.exotic_particles)).toBe(0);
             expect(toNum(game.total_exotic_particles)).toBe(0);
@@ -155,7 +155,7 @@ describe('EP Reboot Functionality', () => {
             game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
             game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
 
-            await game.reboot_action(false);
+            await game.rebootActionDiscardExoticParticles();
 
             // Check that state manager is updated correctly
             expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(0);
@@ -166,14 +166,10 @@ describe('EP Reboot Functionality', () => {
 
     describe('UI Button Functionality', () => {
         it('should have correct reboot function signature', () => {
-            // Test that the reboot_action method exists and can be called with correct parameters
-            expect(typeof game.reboot_action).toBe('function');
-
-            // Test that it can be called with true (keep EP)
-            expect(() => game.reboot_action(true)).not.toThrow();
-
-            // Test that it can be called with false (refund EP)
-            expect(() => game.reboot_action(false)).not.toThrow();
+            expect(typeof game.rebootActionKeepExoticParticles).toBe('function');
+            expect(typeof game.rebootActionDiscardExoticParticles).toBe('function');
+            expect(() => game.rebootActionKeepExoticParticles()).not.toThrow();
+            expect(() => game.rebootActionDiscardExoticParticles()).not.toThrow();
         });
     });
 

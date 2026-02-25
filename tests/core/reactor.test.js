@@ -157,7 +157,7 @@ describe("Reactor Mechanics", () => {
     const meltdown = game.reactor.checkMeltdown();
     expect(meltdown).toBe(true);
     expect(game.reactor.has_melted_down).toBe(true);
-    expect(setVarSpy).toHaveBeenCalledWith("melting_down", true, true);
+    expect(setVarSpy).toHaveBeenCalledWith("melting_down", true);
 
     // Clean up spy
     setVarSpy.mockRestore();

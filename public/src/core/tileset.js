@@ -1,4 +1,5 @@
 import { Tile } from "./tile.js";
+import { getIndex } from "./logic/gridUtils.js";
 
 const GRID_SIZE = 50 * 50;
 
@@ -17,7 +18,7 @@ export class Tileset {
   }
 
   gridIndex(row, col) {
-    return row * this.max_cols + col;
+    return getIndex(row, col, this.max_cols);
   }
 
   syncHeatFromTiles() {
@@ -112,7 +113,7 @@ export class Tileset {
   clearAllTiles() {
     this.tiles_list.forEach((tile) => {
       if (tile.part) {
-        tile.clearPart(false);
+        tile.clearPart();
       }
     });
     // Mark segments as dirty after bulk operation
@@ -122,7 +123,7 @@ export class Tileset {
   clearAllParts() {
     this.active_tiles_list.forEach((tile) => {
       if (tile.part) {
-        tile.clearPart(false);
+        tile.clearPart();
       }
     });
     // Mark segments as dirty after bulk operation
@@ -131,5 +132,17 @@ export class Tileset {
 
   getAllTiles() {
     return this.active_tiles_list;
+  }
+
+  toSaveState() {
+    return this.active_tiles_list
+      .filter((tile) => tile.part)
+      .map((tile) => ({
+        row: tile.row,
+        col: tile.col,
+        partId: tile.part.id,
+        ticks: tile.ticks,
+        heat_contained: tile.heat_contained,
+      }));
   }
 }

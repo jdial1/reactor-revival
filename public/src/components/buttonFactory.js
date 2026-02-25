@@ -1,344 +1,281 @@
-// src/components/buttonFactory.js
-// Consolidated button creation logic for the Reactor Revival game
-
+import { html, render } from "lit-html";
 import { numFormat } from "../utils/util.js";
 
-// --- Splash Screen Buttons ---
-
-export function createNewGameButton(onClick) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "splash-new-game-btn-template"
-    );
-    if (btn && onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
+export function renderToNode(template) {
+  const container = document.createElement("div");
+  render(template, container);
+  return container.firstElementChild || container;
 }
 
-export function createLoadGameButton(
-    saveData,
-    playedTimeStr,
-    isCloudSynced,
-    onClick
-) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "splash-load-game-btn-template"
-    );
-    if (!btn) return null;
+export const StartButton = (disabled, onClick) => html`
+  <button id="splash-new-game-btn" class="splash-btn splash-btn-start" ?disabled=${disabled} @click=${onClick}>
+    New Game
+  </button>
+`;
 
-    // Set dynamic content
-    window.templateLoader.setText(
-        btn,
-        ".money",
-        `$${numFormat(saveData?.current_money ?? 0)}`
-    );
-    // Use innerHTML for played-time to allow HTML tags
-    const playedTimeEl = btn.querySelector(".played-time");
-    if (playedTimeEl) playedTimeEl.innerHTML = playedTimeStr;
-    window.templateLoader.setVisible(btn, ".synced-label", isCloudSynced);
+export const LoadGameButtonFullWidth = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
+  <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-full-width" @click=${onClick}>
+    <div class="load-game-header"><span>Load Local Game</span></div>
+    <div class="load-game-details">
+      <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
+      <div class="played-time">${playedTimeStr}</div>
+    </div>
+  </button>
+`;
 
-    if (onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
-}
+export const LoadGameButton = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
+  <button id="splash-load-game-btn" class="splash-btn splash-btn-load" @click=${onClick}>
+    <div class="load-game-header"><span>Load Local Game</span></div>
+    <div class="load-game-details">
+      <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
+      <div class="played-time">${playedTimeStr}</div>
+    </div>
+    <div class="synced-label" style="display: ${isCloudSynced ? "" : "none"}"></div>
+  </button>
+`;
 
-export function createLoadGameButtonFullWidth(
-    saveData,
-    playedTimeStr,
-    isCloudSynced,
-    onClick
-) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "splash-load-game-full-width-btn-template"
-    );
-    if (!btn) return null;
+export const LoadGameUploadRow = (saveData, playedTimeStr, isCloudSynced, onLoadClick, onUploadClick) => html`
+  <div class="splash-btn-group">
+    <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-left" @click=${onLoadClick}>
+      <div class="load-game-header"><span>Load Local Game</span></div>
+      <div class="load-game-details">
+        <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
+        <div class="played-time">${playedTimeStr}</div>
+      </div>
+      <div class="synced-label" style="display: ${isCloudSynced ? "" : "none"}"></div>
+    </button>
+    <button id="splash-upload-option-btn" class="splash-btn splash-btn-cloud upload-option-button splash-btn-right" title="Upload local save to Google Drive" @click=${onUploadClick}>
+      <div class="upload-text">Upload</div>
+    </button>
+  </div>
+`;
 
-    // Set dynamic content
-    window.templateLoader.setText(
-        btn,
-        ".money",
-        `$${numFormat(saveData?.current_money ?? 0)}`
-    );
-    const playedTimeEl = btn.querySelector(".played-time");
-    if (playedTimeEl) playedTimeEl.innerHTML = playedTimeStr;
-    window.templateLoader.setVisible(btn, ".synced-label", isCloudSynced);
+export const BuyButton = (upgrade, onClick) => {
+  const isEp = upgrade?.erequires || (upgrade?.base_ecost != null && Number(upgrade.base_ecost) > 0);
+  const costDisplay = isEp ? `${upgrade.current_ecost ?? 0} 🧬 EP` : (upgrade?.display_cost ?? upgrade?.current_cost ?? "");
+  const ariaLabel = upgrade?.title ? `Buy ${upgrade.title}` : "Buy";
+  const disabled = upgrade ? !upgrade.affordable : false;
+  return html`
+    <button class="pixel-btn" ?disabled=${disabled} aria-label=${ariaLabel} @click=${onClick}>
+      Buy
+      <img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="cash" style="display: ${isEp ? "none" : ""}" />
+      <span class="cost-text">${costDisplay}</span>
+    </button>
+  `;
+};
 
-    if (onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
-}
+export const TooltipCloseButton = (onClick) => html`
+  <button id="tooltip_close_btn" title="Close" aria-label="Close tooltip" @click=${onClick}>×</button>
+`;
 
-export function createUploadToCloudButton(onClick) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "splash-upload-option-btn-template"
-    );
-    if (btn && onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
-}
+export const HelpButton = (onClick, title = "Click for information") => html`
+  <button class="help-btn" title=${title} aria-label=${title} @click=${onClick}>?</button>
+`;
 
-export function createLoadFromCloudButton(onClick) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "splash-load-cloud-btn-template"
-    );
-    if (btn && onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
-}
+export const UploadToCloudButton = (onClick) => html`
+  <button class="splash-btn splash-btn-cloud upload-option-button" @click=${onClick}>
+    <div class="upload-text">Upload</div>
+  </button>
+`;
 
-export function createGoogleSignInButton(onClick) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "splash-google-signin-btn-template"
-    );
-    if (btn && onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
-}
+export const LoadFromCloudButton = (onClick) => html`
+  <button id="splash-load-cloud-btn" class="splash-btn splash-btn-cloud" @click=${onClick}>
+    Load Cloud Save
+  </button>
+`;
 
-export function createGoogleSignOutButton(onClick) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "splash-google-signout-btn-template"
-    );
-    if (btn && onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
-}
+export const GoogleSignInButton = (onClick) => html`
+  <button id="splash-signin-btn" class="splash-btn splash-btn-google google-signin-button" @click=${onClick}>
+    <span>Google Sign In</span>
+  </button>
+`;
 
-export function createLoadGameUploadRow(
-    saveData,
-    playedTimeStr,
-    isCloudSynced,
-    onLoadClick,
-    onUploadClick
-) {
-    const row = window.templateLoader.cloneTemplateElement(
-        "splash-load-game-upload-row-template"
-    );
-    if (!row) return null;
+export const GoogleSignOutButton = (onClick) => html`
+  <button id="splash-signout-btn" class="splash-btn splash-btn-cloud google-signout-button" @click=${onClick}>
+    Sign Out
+  </button>
+`;
 
-    // Set dynamic content for load game button
-    const loadGameBtn = row.querySelector("#splash-load-game-btn");
-    if (loadGameBtn) {
-        window.templateLoader.setText(
-            loadGameBtn,
-            ".money",
-            `$${numFormat(saveData?.current_money ?? 0)}`
-        );
-        const playedTimeEl = loadGameBtn.querySelector(".played-time");
-        if (playedTimeEl) playedTimeEl.innerHTML = playedTimeStr;
-        window.templateLoader.setVisible(loadGameBtn, ".synced-label", isCloudSynced);
-        if (onLoadClick) {
-            loadGameBtn.onclick = onLoadClick;
-        }
-    }
+export const CloudSaveButton = (saveData, playedTimeStr, onClick) => html`
+  <button class="contrast splash-cloud-button" @click=${onClick}>
+    <div class="load-game-header">Load Cloud Save</div>
+    <div class="load-game-details">
+      <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
+      <div class="played-time">${playedTimeStr}</div>
+    </div>
+  </button>
+`;
 
-    // Set up upload button
-    const uploadBtn = row.querySelector("#splash-upload-option-btn");
-    if (uploadBtn && onUploadClick) {
-        uploadBtn.onclick = onUploadClick;
-    }
+export const LoadingButton = (text, spinnerClass = "loading-spinner") => html`
+  <button class="splash-btn splash-btn-load" disabled>
+    <div class="loading-container">
+      <div class=${spinnerClass}></div>
+      <span class="loading-text">${text ?? ""}</span>
+    </div>
+  </button>
+`;
 
-    return row;
-}
-
-// --- General UI Buttons ---
-
-export function createTooltipCloseButton(onClick) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "tooltip-close-btn-template"
-    );
-    if (btn) {
-        btn.setAttribute("aria-label", "Close tooltip");
-        if (onClick) {
-            btn.onclick = onClick;
-        }
-    }
-    return btn;
-}
-
-export function createHelpButton(onClick, title = "Click for information") {
-    const btn = window.templateLoader.cloneTemplateElement("help-btn-template");
-    if (btn) {
-        btn.title = title;
-        btn.setAttribute("aria-label", title || "Help information");
-        if (onClick) {
-            btn.addEventListener("click", onClick);
-        }
-    }
-    return btn;
-}
+export const InstallButton = (onClick) => html`
+  <button class="contrast" @click=${onClick}>Install App</button>
+`;
 
 const BASE_DOCTRINE_ICON = "img/ui/status/status_star.png";
 
+function getDoctrineIcon(upgrade, doctrineSource) {
+  if (typeof doctrineSource === "string") return { icon: doctrineSource, id: "base" };
+  if (typeof doctrineSource === "function") {
+    const d = doctrineSource(upgrade.id);
+    return { icon: d?.icon ?? BASE_DOCTRINE_ICON, id: d?.id ?? "base" };
+  }
+  return { icon: BASE_DOCTRINE_ICON, id: "base" };
+}
+
+export const UpgradeCard = (upgrade, doctrineSource, onBuyClick) => {
+  const isMaxed = upgrade.level >= upgrade.max_level;
+  const { icon: doctrineIcon, id: doctrineId } = getDoctrineIcon(upgrade, doctrineSource);
+  const header = isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`;
+  const desc = isMaxed ? "" : upgrade.description;
+  const costDisplay = isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? "");
+  const ariaLabel = isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`;
+  const iconPath = upgrade.upgrade?.icon ?? upgrade.icon ?? "img/ui/status/status_star.png";
+  return html`
+    <div class="upgrade-card" data-id=${upgrade.id} data-doctrine=${doctrineId}>
+      <div class="upgrade-header">
+        <div class="upgrade-icon-wrapper">
+          <div class="image" style="background-image: url('${iconPath}')"></div>
+        </div>
+        <div class="upgrade-details">
+          <div class="upgrade-title">${upgrade.title}</div>
+          <div class="upgrade-description" style="display: ${isMaxed ? "none" : ""}">${desc}</div>
+        </div>
+        <div class="upgrade-doctrine-icon" style="background-image: url('${doctrineIcon}')"></div>
+      </div>
+      <div class="upgrade-footer">
+        <div class="upgrade-level-info">
+          <span class="level-text">${header}</span>
+        </div>
+        <button class="pixel-btn upgrade-action-btn" ?disabled=${isMaxed} aria-label=${ariaLabel} @click=${onBuyClick}>
+          <span class="action-text">Buy</span>
+          <span class="cost-display">${costDisplay}</span>
+        </button>
+        <div class="sandbox-upgrade-actions">
+          <button class="pixel-btn sandbox-buy-max-btn" type="button">Buy Max</button>
+          <button class="pixel-btn sandbox-reset-btn" type="button">Reset</button>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+export const PartButton = (part, onClick) => {
+  const costText = part.erequires ? `${part.cost} 🧬 EP` : `${part.cost}`;
+  return html`
+    <button class="part pixel-btn is-square ${!part.affordable ? "unaffordable" : ""}"
+            id="part_btn_${part.id}"
+            title=${part.title || ""}
+            aria-label="${part.title || "Part button"}, Cost: ${costText}"
+            ?disabled=${!part.affordable}
+            @click=${onClick}>
+      <div class="image" style="--bg-image: url('${part.getImagePath()}')"></div>
+      <div class="part-price">${costText}</div>
+      <div class="tier-progress" style="display: none;"></div>
+      <div class="part-details">
+        <div class="part-details-title"></div>
+        <div class="part-details-stats"></div>
+        <div class="part-details-desc"></div>
+        <div class="part-details-bonuses"></div>
+      </div>
+    </button>
+  `;
+};
+
+export const CloseButton = (modal, onClick) => html`
+  <button class="modal-close-btn" @click=${onClick}>
+    ✖
+  </button>
+`;
+
+export function createNewGameButton(onClick) {
+  return renderToNode(StartButton(false, onClick));
+}
+
+export function createLoadGameButton(saveData, playedTimeStr, isCloudSynced, onClick) {
+  return renderToNode(LoadGameButton(saveData, playedTimeStr, isCloudSynced, onClick));
+}
+
+export function createLoadGameButtonFullWidth(saveData, playedTimeStr, isCloudSynced, onClick) {
+  return renderToNode(LoadGameButtonFullWidth(saveData, playedTimeStr, isCloudSynced, onClick));
+}
+
+export function createUploadToCloudButton(onClick) {
+  return renderToNode(UploadToCloudButton(onClick));
+}
+
+export function createLoadFromCloudButton(onClick) {
+  return renderToNode(LoadFromCloudButton(onClick));
+}
+
+export function createGoogleSignInButton(onClick) {
+  return renderToNode(GoogleSignInButton(onClick));
+}
+
+export function createGoogleSignOutButton(onClick) {
+  return renderToNode(GoogleSignOutButton(onClick));
+}
+
+export function createLoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick, onUploadClick) {
+  return renderToNode(LoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick, onUploadClick));
+}
+
+export function createTooltipCloseButton(onClick) {
+  return renderToNode(TooltipCloseButton(onClick));
+}
+
+export function createHelpButton(onClick, title = "Click for information") {
+  return renderToNode(HelpButton(onClick, title));
+}
+
 export function createUpgradeButton(upgrade, doctrineSource) {
-    const card = window.templateLoader.cloneTemplateElement("upgrade-card-template");
-    if (!card) return null;
-
-    card.dataset.id = upgrade.id;
-
-    const imageDiv = card.querySelector(".image");
-    if (imageDiv) {
-        imageDiv.style.backgroundImage = `url('${upgrade.image}')`;
-    }
-
-    const doctrineIconEl = card.querySelector(".upgrade-doctrine-icon");
-    if (doctrineIconEl) {
-        let icon = BASE_DOCTRINE_ICON;
-        let doctrineId = "base";
-        if (typeof doctrineSource === "string") icon = doctrineSource;
-        else if (typeof doctrineSource === "function") {
-            const d = doctrineSource(upgrade.id);
-            if (d?.icon) icon = d.icon;
-            if (d?.id) doctrineId = d.id;
-        }
-        doctrineIconEl.style.backgroundImage = `url('${icon}')`;
-        doctrineIconEl.dataset.doctrine = doctrineId;
-    }
-
-    const titleEl = card.querySelector(".upgrade-title");
-    if (titleEl) titleEl.textContent = upgrade.title;
-
-    const descEl = card.querySelector(".upgrade-description");
-    const isMaxed = upgrade.level >= upgrade.max_level;
-    if (descEl) {
-      if (isMaxed) {
-        descEl.style.display = "none";
-      } else {
-        descEl.textContent = upgrade.description;
-        descEl.style.display = "";
-      }
-    }
-
-    const levelText = card.querySelector(".level-text");
-    if (levelText) {
-      levelText.textContent = isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`;
-      if (isMaxed) {
-        card.classList.add("maxed-out");
-      }
-    }
-
-    const costDisplay = card.querySelector(".cost-display");
-    if (costDisplay) costDisplay.textContent = upgrade.cost;
-
-    const buyBtn = card.querySelector(".upgrade-action-btn");
-    if (buyBtn) {
-      if (isMaxed) {
-        buyBtn.setAttribute("aria-label", `${upgrade.title} is maxed out`);
-      } else {
-        buyBtn.setAttribute("aria-label", `Buy ${upgrade.title} for ${upgrade.cost}`);
-      }
-    }
-
-    return card;
+  return renderToNode(UpgradeCard(upgrade, doctrineSource, () => {}));
 }
 
 export function createPartButton(part) {
-    const btn = window.templateLoader.cloneTemplateElement("part-btn-template");
-    if (!btn) return null;
-    btn.id = `part_btn_${part.id}`;
-    btn.title = part.title;
-    const costText = part.erequires ? `${part.cost} 🧬 EP` : `${part.cost}`;
-    btn.setAttribute("aria-label", `${part.title || "Part button"}, Cost: ${costText}`);
-    const imageDiv = btn.querySelector(".image");
-    if (imageDiv) {
-        imageDiv.style.setProperty("--bg-image", `url('${part.getImagePath()}')`);
-    }
-    const priceDiv = btn.querySelector(".part-price");
-    if (priceDiv) {
-        priceDiv.textContent = part.erequires ? `${part.cost} 🧬 EP` : `${part.cost}`;
-    }
-    btn.classList.toggle("unaffordable", !part.affordable);
-    btn.disabled = !part.affordable;
-    return btn;
+  return renderToNode(PartButton(part, () => {}));
 }
 
 export function createBuyButton(upgrade, onClick) {
-    const btn = window.templateLoader.cloneTemplateElement("buy-btn-template");
-    if (!btn) return null;
-
-    if (upgrade.title) {
-        btn.setAttribute("aria-label", `Buy ${upgrade.title}`);
-    }
-
-    btn.disabled = !upgrade.affordable;
-
-    // Set cost text
-    const costText = btn.querySelector(".cost-text");
-    const cashIcon = btn.querySelector(".icon-inline");
-
-    if (upgrade.current_cost !== undefined) {
-        if (cashIcon) cashIcon.style.display = "";
-        if (costText) costText.textContent = `${upgrade.current_cost}`;
-    } else if (upgrade.current_ecost !== undefined) {
-        if (cashIcon) cashIcon.style.display = "none";
-        if (costText) costText.textContent = `${upgrade.current_ecost} 🧬 EP`;
-    }
-
-    if (onClick) {
-        btn.onclick = onClick;
-    }
-
-    return btn;
+  return renderToNode(BuyButton(upgrade, onClick));
 }
 
 export function createCloudSaveButton(saveData, playedTimeStr, onClick) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "cloud-save-btn-template"
-    );
-    if (!btn) return null;
-
-    // Set dynamic content
-    window.templateLoader.setText(
-        btn,
-        ".money",
-        `$${numFormat(saveData?.current_money ?? 0)}`
-    );
-    const playedTimeEl = btn.querySelector(".played-time");
-    if (playedTimeEl) playedTimeEl.innerHTML = playedTimeStr;
-
-    if (onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
+  return renderToNode(CloudSaveButton(saveData, playedTimeStr, onClick));
 }
 
 export function createLoadingButton(text, spinnerClass = "loading-spinner") {
-    const btn = window.templateLoader.cloneTemplateElement("loading-btn-template");
-    if (!btn) return null;
-
-    const textEl = btn.querySelector(".loading-text");
-    if (textEl) {
-        textEl.textContent = text;
-    }
-
-    const spinner = btn.querySelector(`.${spinnerClass}`);
-    if (spinner) {
-        spinner.style.display = "";
-    }
-
-    return btn;
+  return renderToNode(LoadingButton(text, spinnerClass));
 }
 
-export function createGoogleSignInButtonWithIcon(onClick) {
-    const btn = window.templateLoader.cloneTemplateElement(
-        "google-signin-btn-template"
-    );
-    if (btn && onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
+export function createGoogleSignInButtonWithIcon(onClick = () => {}) {
+  const template = html`
+    <button @click=${onClick}>
+      <div class="google-signin-container">
+        <svg width="24" height="24" viewBox="0 0 24 24" class="google-icon">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        <span>Google Sign In</span>
+      </div>
+    </button>
+  `;
+  return renderToNode(template);
 }
 
 export function createInstallButton(onClick) {
-    const btn = window.templateLoader.cloneTemplateElement("install-btn-template");
-    if (btn && onClick) {
-        btn.onclick = onClick;
-    }
-    return btn;
-} 
+  return renderToNode(InstallButton(onClick));
+}
+
+export function createCloseButton(modal) {
+  return renderToNode(CloseButton(modal, () => modal.remove()));
+}

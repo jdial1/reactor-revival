@@ -1,18 +1,32 @@
 import { toDecimal } from "../utils/decimal.js";
+import { setDecimal } from "./store.js";
+import { logger } from "../utils/logger.js";
 import { HEAT_EPSILON } from "./heatCalculations.js";
+import {
+  TICKS_FULL_CYCLE, TICKS_10PCT, CRITICAL_HEAT_RATIO, REFERENCE_POWER, OVERRIDE_DURATION_MS,
+  BASE_MAX_HEAT, BASE_MAX_POWER,
+  CLASSIFICATION_HISTORY_MAX, MARK_II_E_THRESHOLD_CYCLES, MAX_SUBCLASS_CYCLES,
+} from "./constants.js";
+import { calculateStats, applyStatsToReactor, syncStatsToUI } from "./reactor/reactorStatsCalculator.js";
+import { shouldMeltdown, executeMeltdown, clearMeltdown, clearHeatVisualStates as clearHeatVisualStatesFromModule } from "./reactor/reactorMeltdownHandler.js";
 
 export class Reactor {
   constructor(game) {
     "use strict";
     this.game = game;
-    this.base_max_heat = 1000;
-    this.base_max_power = 100;
+    this.base_max_heat = BASE_MAX_HEAT;
+    this.base_max_power = BASE_MAX_POWER;
     this.setDefaults();
   }
 
   setDefaults() {
-    this._current_heat = toDecimal(0);
-    this._current_power = toDecimal(0);
+    const zero = toDecimal(0);
+    this._current_heat = zero;
+    this._current_power = zero;
+    if (this.game?.state) {
+      setDecimal(this.game.state, "current_heat", zero);
+      setDecimal(this.game.state, "current_power", zero);
+    }
     this._max_heat = toDecimal(this.base_max_heat);
     this.altered_max_heat = toDecimal(this.base_max_heat);
     this._max_power = toDecimal(this.base_max_power);
@@ -53,10 +67,34 @@ export class Reactor {
     this._classificationStatsHistory = [];
   }
 
-  get current_heat() { return this._current_heat; }
-  set current_heat(v) { this._current_heat = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
-  get current_power() { return this._current_power; }
-  set current_power(v) { this._current_power = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
+  get current_heat() { return this.game?.state?.current_heat != null ? this.game.state.current_heat : this._current_heat; }
+  set current_heat(v) {
+    const val = (v != null && typeof v.gt === 'function') ? v : toDecimal(v);
+    this._current_heat = val;
+    if (this.game?.state) setDecimal(this.game.state, "current_heat", val);
+    if (this.game?.emit) {
+      this.game.emit("reactorTick", {
+        current_heat: this.current_heat,
+        current_power: this.current_power,
+        max_heat: this.max_heat,
+        max_power: this.max_power
+      });
+    }
+  }
+  get current_power() { return this.game?.state?.current_power != null ? this.game.state.current_power : this._current_power; }
+  set current_power(v) {
+    const val = (v != null && typeof v.gt === 'function') ? v : toDecimal(v);
+    this._current_power = val;
+    if (this.game?.state) setDecimal(this.game.state, "current_power", val);
+    if (this.game?.emit) {
+      this.game.emit("reactorTick", {
+        current_heat: this.current_heat,
+        current_power: this.current_power,
+        max_heat: this.max_heat,
+        max_power: this.max_power
+      });
+    }
+  }
   get max_heat() { return this._max_heat; }
   set max_heat(v) { this._max_heat = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
   get max_power() { return this._max_power; }
@@ -70,7 +108,7 @@ export class Reactor {
       inlet: Number(this.stats_inlet) || 0,
       outlet: Number(this.stats_outlet) || 0
     });
-    if (h.length > 10) h.shift();
+    if (h.length > CLASSIFICATION_HISTORY_MAX) h.shift();
   }
 
   getAveragedClassificationStats() {
@@ -92,239 +130,66 @@ export class Reactor {
     };
   }
 
+  getClassification() {
+    if (!this.game?.tileset) return null;
+    if (typeof this.updateStats === "function") this.updateStats();
+    const averaged = this.getAveragedClassificationStats && this.getAveragedClassificationStats();
+    const netHeat = averaged ? averaged.netHeat : (Number(this.stats_net_heat) || 0);
+    const maxHeat = Number(this.max_heat) || 1;
+    const cellCount = this.game.tileset.active_tiles_list.filter((t) => t.part && t.part.category === "cell").length;
+    const inletVal = averaged ? averaged.inlet : (Number(this.stats_inlet) || 0);
+    const outletVal = averaged ? averaged.outlet : (Number(this.stats_outlet) || 0);
+    const hasOutsideCooling = inletVal > 0 || outletVal > 0;
+    const statsPower = averaged ? averaged.power : (Number(this.stats_power) || 0);
+    let efficiencyNum = cellCount > 0 ? statsPower / (cellCount * REFERENCE_POWER) : 1;
+    if (!isFinite(efficiencyNum) || efficiencyNum < 1) efficiencyNum = 1;
+    let efficiencyLabel = "EE";
+    if (efficiencyNum >= 4) efficiencyLabel = "EA";
+    else if (efficiencyNum >= 3) efficiencyLabel = "EB";
+    else if (efficiencyNum >= 2) efficiencyLabel = "EC";
+    else if (efficiencyNum > 1) efficiencyLabel = "ED";
+    const suffixes = [];
+    if (hasOutsideCooling && netHeat <= 0) suffixes.push("SUC");
+    let markLabel;
+    let subClass = "";
+    let summary = "";
+    if (netHeat <= 0) {
+      markLabel = "Mark I";
+      subClass = hasOutsideCooling ? "O" : "I";
+      summary = "Generates no excess heat; safe to run continuously.";
+    } else {
+      const heatPerTick = netHeat;
+      const criticalHeat = CRITICAL_HEAT_RATIO * maxHeat;
+      const ticksToCritical = heatPerTick > 0 ? criticalHeat / heatPerTick : Infinity;
+      if (ticksToCritical >= TICKS_FULL_CYCLE) {
+        markLabel = "Mark II";
+        const fullCycles = Math.floor(ticksToCritical / TICKS_FULL_CYCLE);
+        subClass = fullCycles >= MARK_II_E_THRESHOLD_CYCLES ? "E" : String(Math.min(fullCycles, MAX_SUBCLASS_CYCLES));
+        summary = fullCycles >= MARK_II_E_THRESHOLD_CYCLES
+          ? `Runs ${MARK_II_E_THRESHOLD_CYCLES}+ cycles before critical heat; nearly Mark I.`
+          : `Runs ${subClass} full cycle(s) before cooldown needed.`;
+      } else if (ticksToCritical >= TICKS_10PCT) {
+        markLabel = "Mark III";
+        summary = "Cannot complete a full cycle; shutdown mid-cycle required.";
+      } else if (ticksToCritical > 0) {
+        markLabel = "Mark IV";
+        summary = "Reaches critical heat in under 10% of a cycle; component replacement may be needed.";
+      } else {
+        markLabel = "Mark V";
+        summary = "Very short run before cooldown; precise timing required.";
+      }
+    }
+    const mainLabel = subClass ? `${markLabel}-${subClass}` : markLabel;
+    const suffixStr = suffixes.length ? " -" + suffixes.join(" -") : "";
+    const classification = `${mainLabel} ${efficiencyLabel}${suffixStr}`.trim();
+    return { classification, efficiencyLabel, suffixes, summary, markLabel, subClass };
+  }
+
   updateStats() {
-    this._resetStats();
-
-    const maxPowerSetExternally =
-      this.max_power.neq(this._last_calculated_max_power) &&
-      this.max_power.neq(this.base_max_power);
-    const maxHeatSetExternally =
-      this.max_heat.neq(this._last_calculated_max_heat) &&
-      this.max_heat.neq(this.base_max_heat);
-    const alteredMaxPowerSet = toDecimal(this.altered_max_power).neq(this.base_max_power);
-    const alteredMaxHeatSet = toDecimal(this.altered_max_heat).neq(this.base_max_heat);
-
-    let current_max_power = maxPowerSetExternally
-      ? this.max_power
-      : (alteredMaxPowerSet ? toDecimal(this.altered_max_power) : toDecimal(this.base_max_power));
-    let current_max_heat = maxHeatSetExternally
-      ? this.max_heat
-      : (alteredMaxHeatSet ? toDecimal(this.altered_max_heat) : toDecimal(this.base_max_heat));
-    let temp_transfer_multiplier = 0;
-    let temp_vent_multiplier = 0;
-
     if (!this.game.tileset) return;
-
-    // First pass: Initialize all tile stats
-    this.game.tileset.active_tiles_list.forEach((tile) => {
-      if (tile.activated && tile.part) {
-        this._resetTileStats(tile);
-        this._gatherNeighbors(tile); // Still needed for cell power/heat initialization
-      }
-    });
-
-    // Second pass: Calculate power and heat
-    this.game.tileset.active_tiles_list.forEach((tile) => {
-      if (tile.activated && tile.part) {
-        if (tile.part.category === "cell" && tile.ticks > 0) {
-          this._applyReflectorEffects(tile);
-
-          if (this.heat_power_multiplier > 0 && this.current_heat.gt(1000)) {
-            const heatForLog = Math.min(this.current_heat.toNumber(), 1e100);
-            tile.power *= 1 + (this.heat_power_multiplier * (Math.log(heatForLog) / Math.log(1000) / 100));
-            if (!Number.isFinite(tile.power)) {
-              tile.power = (tile.part && Number.isFinite(tile.part.base_power)) ? tile.part.base_power : 0;
-            }
-          }
-
-          if (this.manual_override_mult > 0 && Date.now() < this.override_end_time) {
-            tile.power *= (1 + this.manual_override_mult);
-          }
-
-          // Thermal Feedback Logic
-          if (this.thermal_feedback_rate > 0) {
-            let feedbackBonus = 0;
-            tile.containmentNeighborTiles.forEach(neighbor => {
-              if (neighbor.part && neighbor.part.category === "coolant_cell") {
-                const ratio = neighbor.heat_contained / neighbor.part.containment;
-                if (ratio > 0) {
-                  feedbackBonus += (ratio * 100) * this.thermal_feedback_rate;
-                }
-              }
-            });
-
-            if (feedbackBonus > 0) {
-              tile.power *= (1 + (feedbackBonus / 100));
-            }
-          }
-
-          // Volatile Tuning Logic
-          if (this.volatile_tuning_max > 0) {
-            const maxTicks = tile.part.ticks;
-            if (maxTicks > 0 && tile.ticks >= 0) {
-              const degradation = 1 - (tile.ticks / maxTicks);
-              const bonus = this.volatile_tuning_max * degradation;
-              
-              if (bonus > 0 && typeof tile.power === 'number' && !isNaN(tile.power)) {
-                tile.power *= (1 + bonus);
-              }
-            }
-          }
-
-          this.stats_power += tile.power || 0;
-          this.stats_heat_generation += tile.heat || 0;
-        }
-
-        // Add to total part heat for all activated parts
-        if (tile.heat_contained > 0) {
-          this.stats_total_part_heat += tile.heat_contained;
-        }
-
-        if (!maxPowerSetExternally) {
-          if (tile.part.reactor_power) {
-            current_max_power = current_max_power.add(tile.part.reactor_power);
-          }
-          if (tile.part.id === "reactor_plating6") {
-            current_max_power = current_max_power.add(tile.part.reactor_heat);
-          }
-        }
-        if (!maxHeatSetExternally) {
-          if (tile.part.reactor_heat) {
-            current_max_heat = current_max_heat.add(tile.part.reactor_heat);
-          }
-        }
-
-        if (tile.part.category === "capacitor") {
-          temp_transfer_multiplier +=
-            (tile.part.part.level || 1) * this.transfer_capacitor_multiplier;
-          temp_vent_multiplier +=
-            (tile.part.part.level || 1) * this.vent_capacitor_multiplier;
-        } else if (tile.part.category === "reactor_plating") {
-          temp_transfer_multiplier +=
-            (tile.part.part.level || 1) * this.transfer_plating_multiplier;
-          temp_vent_multiplier +=
-            (tile.part.part.level || 1) * this.vent_plating_multiplier;
-        }
-      }
-    });
-
-    this.vent_multiplier_eff = temp_vent_multiplier;
-    this.transfer_multiplier_eff = temp_transfer_multiplier;
-
-    // Legacy stat calculation
-    this.stats_vent = 0;
-    this.stats_inlet = 0;
-    this.stats_outlet = 0;
-
-    this.game.tileset.active_tiles_list.forEach(tile => {
-      if (!tile.part) return;
-      this.stats_vent += tile.getEffectiveVentValue();
-      if (tile.part.category === 'heat_inlet') this.stats_inlet += tile.getEffectiveTransferValue();
-      if (tile.part.category === 'heat_outlet') this.stats_outlet += tile.getEffectiveTransferValue();
-    });
-
-    // Set display values for tiles
-    this.game.tileset.active_tiles_list.forEach((tile) => {
-      if (tile.activated && tile.part) {
-        tile.display_power = tile.power || 0;
-        tile.display_heat = tile.heat || 0;
-      }
-    });
-
-    this.max_power = current_max_power;
-    this.max_heat = current_max_heat;
-    this._last_calculated_max_power = this.max_power;
-    this._last_calculated_max_heat = this.max_heat;
-
-    this.stats_power = Number(this.stats_power || 0);
-    this.stats_heat_generation = Number(this.stats_heat_generation || 0);
-    this.stats_total_part_heat = Number(this.stats_total_part_heat || 0);
-    this.stats_net_heat = this.stats_heat_generation - this.stats_vent - this.stats_outlet;
-    this.stats_cash = this.max_power.mul(this.auto_sell_multiplier);
-
-    // Ensure stats_power is valid
-    if (!isFinite(this.stats_power) || isNaN(this.stats_power)) {
-      this.stats_power = 0;
-    }
-
-    // Update UI state
-    if (this.game.ui && this.game.ui.stateManager) {
-      this.game.ui.stateManager.setVar("max_power", this.max_power);
-      this.game.ui.stateManager.setVar("max_heat", this.max_heat);
-      this.game.ui.stateManager.setVar("stats_power", this.stats_power);
-      this.game.ui.stateManager.setVar("total_heat", this.stats_heat_generation);
-      this.game.ui.stateManager.setVar("stats_vent", this.stats_vent);
-      this.game.ui.stateManager.setVar("stats_inlet", this.stats_inlet);
-      this.game.ui.stateManager.setVar("stats_outlet", this.stats_outlet);
-      this.game.ui.stateManager.setVar("stats_net_heat", this.stats_net_heat);
-      this.game.ui.stateManager.setVar("stats_cash", this.stats_cash);
-      this.game.ui.stateManager.setVar("current_power", this.current_power);
-      this.game.ui.stateManager.setVar("current_heat", this.current_heat);
-      this.game.ui.stateManager.setVar("stats_total_part_heat", this.stats_total_part_heat);
-    }
-
-    // Note: Heat background tint is updated by the engine tick for immediate feedback
-    // and by manual heat reduction for user actions
-  }
-
-  _resetStats() {
-    this.stats_power = 0;
-    this.stats_heat_generation = 0;
-    this.stats_vent = 0;
-    this.stats_inlet = 0;
-    this.stats_outlet = 0;
-    this.stats_total_part_heat = 0;
-  }
-
-  _resetTileStats(tile) {
-    tile.powerOutput = 0;
-    tile.heatOutput = 0;
-    tile.display_power = 0;
-    tile.display_heat = 0;
-    // Neighbor arrays are now handled by getters, don't reset them
-  }
-
-  _gatherNeighbors(tile) {
-    // This method is now simplified - neighbor gathering is handled by tile getters
-    const p = tile.part;
-    if (p.category === "cell" && tile.ticks > 0) {
-      // Ensure power and heat are valid numbers
-      tile.power = (typeof p.power === 'number' && !isNaN(p.power) && isFinite(p.power)) ? p.power : p.base_power || 0;
-      tile.heat = (typeof p.heat === 'number' && !isNaN(p.heat) && isFinite(p.heat)) ? p.heat : p.base_heat || 0;
-    }
-  }
-
-  _applyReflectorEffects(tile) {
-    let reflector_power_bonus = 0;
-    let reflector_heat_bonus = 0;
-    let reflector_count = 0;
-    tile.reflectorNeighborTiles.forEach((r_tile) => {
-      if (r_tile.ticks > 0) {
-        reflector_count++;
-        reflector_power_bonus += r_tile.part.power_increase || 0;
-        reflector_heat_bonus += r_tile.part.heat_increase || 0;
-        // Visual: pulse aura signaling boost
-        try {
-          if (this.game?.ui && typeof this.game.ui.pulseReflector === 'function') {
-            this.game.ui.pulseReflector(r_tile, tile);
-          }
-        } catch (_) { /* ignore */ }
-      }
-    });
-    // Ensure tile.power and tile.heat are valid numbers before applying multipliers
-    if (typeof tile.power === 'number' && !isNaN(tile.power)) {
-      tile.power *= Math.max(0, 1 + reflector_power_bonus / 100);
-    }
-    if (typeof tile.heat === 'number' && !isNaN(tile.heat)) {
-      let heatMult = Math.max(0, 1 + reflector_heat_bonus / 100);
-
-      if (this.reflector_cooling_factor > 0 && reflector_count > 0) {
-        const coolingReduction = reflector_count * this.reflector_cooling_factor;
-        heatMult *= Math.max(0.1, 1 - coolingReduction);
-      }
-
-      tile.heat *= heatMult;
-    }
+    const stats = calculateStats(this, this.game.tileset, this.game?.ui);
+    applyStatsToReactor(this, stats);
+    syncStatsToUI(this, this.game.ui?.stateManager);
   }
 
   manualReduceHeat() {
@@ -341,14 +206,6 @@ export class Reactor {
         this.current_heat = toDecimal(0);
         if (previousHeat.gt(eps)) this.game.sold_heat = true;
       }
-      this.game.ui.stateManager.setVar("current_heat", this.current_heat);
-
-      // Update heat background tint for immediate visual feedback
-      if (this.game.ui && typeof this.game.ui.updateHeatVisuals === "function") {
-        this.game.ui.updateHeatVisuals();
-      }
-
-      // Check objectives after heat reduction
       if (this.game.objectives_manager) {
         this.game.objectives_manager.check_current_objective();
       }
@@ -362,12 +219,11 @@ export class Reactor {
       const value = this.current_power.mul(this.sell_price_multiplier || 1);
       this.game.addMoney(value);
       this.current_power = toDecimal(0);
-      this.game.ui.stateManager.setVar("current_power", this.current_power);
       this.game.sold_power = true;
       if (this.game.emit) this.game.emit("powerSold", {});
 
       if (this.manual_override_mult > 0) {
-        this.override_end_time = Date.now() + 10000;
+        this.override_end_time = Date.now() + OVERRIDE_DURATION_MS;
         this.updateStats();
       }
 
@@ -378,111 +234,37 @@ export class Reactor {
     }
   }
 
+  toSaveState() {
+    return {
+      current_heat: (this.current_heat != null && typeof this.current_heat.toString === "function") ? this.current_heat.toString() : this.current_heat,
+      current_power: (this.current_power != null && typeof this.current_power.toString === "function") ? this.current_power.toString() : this.current_power,
+      has_melted_down: this.has_melted_down,
+      base_max_heat: this.base_max_heat,
+      base_max_power: this.base_max_power,
+      altered_max_heat: (this.altered_max_heat != null && typeof this.altered_max_heat.toString === "function") ? this.altered_max_heat.toString() : this.altered_max_heat,
+      altered_max_power: (this.altered_max_power != null && typeof this.altered_max_power.toString === "function") ? this.altered_max_power.toString() : this.altered_max_power,
+    };
+  }
+
   checkMeltdown() {
     if (this.has_melted_down) {
-      this.game.logger?.debug(`[MELTDOWN-CHECK] Already in meltdown state.`);
+      logger.log('debug', 'engine', '[MELTDOWN-CHECK] Already in meltdown state.');
       return false;
     }
-    if (this.game.grace_period_ticks > 0) {
-      this.game.grace_period_ticks--;
-      return false;
-    }
-    const isMeltdown = this.current_heat.gt(this.max_heat.mul(2));
-    this.game.logger?.debug(`[MELTDOWN-CHECK] Inside checkMeltdown. isMeltdown condition evaluated to: ${isMeltdown}. (Heat: ${this.current_heat.toFixed(2)} > 2 * Max Heat: ${this.max_heat.toFixed(2)})`);
+    const isMeltdown = shouldMeltdown(this);
+    logger.log('debug', 'engine', `[MELTDOWN-CHECK] Inside checkMeltdown. isMeltdown condition evaluated to: ${isMeltdown}. (Heat: ${this.current_heat.toFixed(2)} > 2 * Max Heat: ${this.max_heat.toFixed(2)})`);
     if (isMeltdown) {
-      this.game.logger?.warn(`[MELTDOWN] Condition met! Initiating meltdown sequence.`);
-      this.game.debugHistory.add('reactor', 'Meltdown triggered', { heat: this.current_heat, max_heat: this.max_heat });
-      this.has_melted_down = true;
-      if (this.game.ui?.meltdownVibration) this.game.ui.meltdownVibration();
-
-      // Hide any active tooltips before clearing parts
-      if (this.game.tooltip_manager) {
-        this.game.tooltip_manager.hide();
-      }
-
-      this.game.ui.stateManager.setVar("melting_down", true, true);
-
-      // Update UI to show meltdown state
-      if (typeof document !== "undefined" && document.body) {
-        document.body.classList.add("reactor-meltdown");
-      }
-      if (this.game.engine) {
-        this.game.engine.stop();
-      }
-
-      if (!this.game.isSandbox) {
-        if (this.game.ui && typeof this.game.ui.startMeltdownBuildup === "function") {
-          this.game.ui.startMeltdownBuildup(() => {
-            if (this.game.ui && typeof this.game.ui.explodeAllPartsSequentially === "function") {
-              this.game.ui.explodeAllPartsSequentially();
-            }
-          });
-        } else if (this.game.ui && typeof this.game.ui.explodeAllPartsSequentially === "function") {
-          this.game.ui.explodeAllPartsSequentially();
-        } else {
-          this.game.tileset.active_tiles_list.forEach((tile) => {
-            if (tile.part) {
-              tile.clearPart(false);
-            }
-          });
-        }
-      }
-
-      // Make all parts and upgrades unaffordable during meltdown
-      this.game.partset.check_affordability(this.game);
-      this.game.upgradeset.check_affordability(this.game);
-
-      return isMeltdown;
+      executeMeltdown(this);
+      return true;
     }
-    return isMeltdown;
+    return false;
   }
 
   clearMeltdownState() {
-    this.has_melted_down = false;
-    this.game.ui.stateManager.setVar("melting_down", false, true);
-    if (typeof document !== "undefined" && document.body) {
-      document.body.classList.remove("reactor-meltdown");
-    }
-    if (
-      this.game.ui &&
-      typeof this.game.ui.updateMeltdownState === "function"
-    ) {
-      this.game.ui.updateMeltdownState();
-    }
-
-    // Restore affordability when meltdown is cleared
-    this.game.partset.check_affordability(this.game);
-    this.game.upgradeset.check_affordability(this.game);
-
-    this.clearHeatVisualStates();
+    clearMeltdown(this);
   }
 
   clearHeatVisualStates() {
-    if (this.game.tileset && this.game.tileset.active_tiles_list) {
-      this.game.tileset.active_tiles_list.forEach((tile) => {
-        tile.exploding = false;
-      });
-    }
-
-    // Clear heat warning/critical states from reactor background
-    if (typeof document !== "undefined" && document.getElementById) {
-      const reactorBackground = document.getElementById("reactor_background");
-      if (reactorBackground) {
-        reactorBackground.classList.remove("heat-warning", "heat-critical");
-      }
-    }
-
-    // Clear any active segment highlights in UI
-    if (this.game.ui && typeof this.game.ui.clearSegmentHighlight === "function") {
-      this.game.ui.clearSegmentHighlight();
-    }
-
-    if (this.game.engine && this.game.engine.heatManager) {
-      this.game.engine.heatManager.segments.clear();
-      this.game.engine.heatManager.tileSegmentMap.clear();
-      this.game.engine.heatManager.markSegmentsAsDirty();
-    }
+    clearHeatVisualStatesFromModule(this);
   }
-
-
 }

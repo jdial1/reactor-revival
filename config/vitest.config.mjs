@@ -1,9 +1,17 @@
 import { defineConfig } from "vite";
 import { configDefaults } from "vitest/config";
+import path from "path";
+import { fileURLToPath } from "url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "lit-html": path.resolve(__dirname, "../node_modules/lit-html/lit-html.js"),
+    },
+  },
   test: {
     exclude: [...configDefaults.exclude, "**/performance.test.js"],
     globals: true,

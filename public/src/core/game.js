@@ -2,45 +2,74 @@ import { Reactor } from "./reactor.js";
 import { PartSet } from "./partset.js";
 import { UpgradeSet } from "./upgradeset.js";
 import { Tileset } from "./tileset.js";
-import { Engine } from "./engine.js";
 import { ObjectiveManager } from "./objective.js";
-import { executeUpgradeAction } from "./upgradeActions.js";
 import { Performance } from "./performance.js";
 import { DebugHistory } from "../utils/debugHistory.js";
 import { toDecimal } from "../utils/decimal.js";
-import { numFormat, safeGetItem, safeSetItem, safeRemoveItem, stringifySaveData, rotateAndWriteSlot1, getBackupSaveForSlot1 } from "../utils/util.js";
-import { leaderboardService } from "../services/leaderboardService.js";
+import { GameSaveManager } from "./gameSaveManager.js";
+import { SaveOrchestrator } from "./game/SaveOrchestrator.js";
+import { BlueprintService } from "./services/BlueprintService.js";
+import { getCompactLayout } from "../components/ui/copyPaste/layoutSerializer.js";
+import { UnlockManager } from "./game/unlockManager.js";
+import { SessionManager } from "./game/sessionManager.js";
+import { runRebootActionKeepEp, runRebootActionDiscardEp, runFullReboot } from "./game/rebootProcessor.js";
+import { getAuthenticatedUserId } from "./game/authHelper.js";
+import { setDefaults as setDefaultsFromModule } from "./game/defaultsManager.js";
+import { initLeaderboardSafe } from "./game/leaderboardInit.js";
+import { EconomyManager } from "./game/economyManager.js";
+import { TimeKeeper } from "./game/timeKeeper.js";
+import { LifecycleManager } from "./game/LifecycleManager.js";
+import { GridManager } from "./game/GridManager.js";
+import { ConfigManager } from "./game/ConfigManager.js";
+import { DoctrineManager } from "./game/DoctrineManager.js";
+import { ExoticParticleManager } from "./game/ExoticParticleManager.js";
+import { buildSaveContext, buildPersistenceContext } from "./game/SaveContextBuilder.js";
+import { handleComponentDepletion as runComponentDepletion } from "./game/ComponentDepletionHandler.js";
+import { runSellAction, runManualReduceHeatAction, runSellPart, runEpartOnclick } from "./game/playerActions.js";
+import { executeAction } from "./game/GameActionDispatcher.js";
+import { GameEventDispatcher } from "./game/GameEventDispatcher.js";
+import { logger } from "../utils/logger.js";
+import { createGameState } from "./store.js";
+import {
+  UPGRADE_MAX_LEVEL, MAX_GRID_DIMENSION, BASE_LOOP_WAIT_MS, BASE_MONEY,
+  PRESTIGE_MULTIPLIER_PER_EP,
+  PRESTIGE_MULTIPLIER_CAP, RESPEC_DOCTRINE_EP_COST,
+} from "./constants.js";
 
 export class Game {
   constructor(ui_instance) {
     this.ui = ui_instance;
     this.router = null;
+    this.saveOrchestrator = new SaveOrchestrator({
+      getContext: () => buildSaveContext(this, {
+        getToggles: () => ({
+          auto_sell: this.state?.auto_sell ?? false,
+          auto_buy: this.state?.auto_buy ?? true,
+          heat_control: this.state?.heat_control ?? false,
+          time_flux: this.state?.time_flux ?? true,
+          pause: this.state?.pause ?? false,
+        }),
+        getQuickSelectSlots: () => this.ui?.stateManager?.getQuickSelectSlots() ?? [],
+      }),
+      onBeforeSave: () => {
+        this.debugHistory.add('game', 'Generating save state');
+        this.updateSessionTime();
+      }
+    });
+    this.saveManager = new GameSaveManager(this.saveOrchestrator, () => buildPersistenceContext(this, () => getCompactLayout(this)));
     this.version = "1.4.0";
-    
-    const dimensions = this.calculateBaseDimensions();
-    this.base_cols = dimensions.base_cols;
-    this.base_rows = dimensions.base_rows;
 
-    this.max_cols = 50;
-    this.max_rows = 50;
-    this._rows = this.base_rows;
-    this._cols = this.base_cols;
+    this.gridManager = new GridManager(this);
+    this.max_cols = MAX_GRID_DIMENSION;
+    this.max_rows = MAX_GRID_DIMENSION;
     this.offline_tick = true;
-    this.base_loop_wait = 1000;
+    this.base_loop_wait = BASE_LOOP_WAIT_MS;
     this.base_manual_heat_reduce = 1;
-    this.upgrade_max_level = 32;
-    this.base_money = 10;
-    this._current_money = toDecimal(0);
+    this.upgrade_max_level = UPGRADE_MAX_LEVEL;
+    this.base_money = BASE_MONEY;
     this.protium_particles = 0;
-    this._total_exotic_particles = toDecimal(0);
-    this._exotic_particles = toDecimal(0);
-    this._current_exotic_particles = toDecimal(0);
-    this._reality_flux = toDecimal(0);
 
-    this.total_played_time = 0;
-    this.session_start_time = null;
-    this.last_save_time = null;
-
+    this.lifecycleManager = new LifecycleManager(this);
     this.tileset = new Tileset(this);
     this.partset = new PartSet(this);
     this.upgradeset = new UpgradeSet(this);
@@ -50,212 +79,93 @@ export class Game {
     this.performance.enable();
     this.loop_wait = this.base_loop_wait;
     this.paused = false;
-    this.auto_sell_disabled = false;
-    this.auto_buy_disabled = false;
+    this.autoSellEnabled = true;
+    this.isAutoBuyEnabled = true;
     this.time_flux = true;
     this.sold_power = false;
     this.sold_heat = false;
     this.objectives_manager = new ObjectiveManager(this);
     this.tooltip_manager = null;
-    this.placedCounts = {}; // cumulative placements per `${type}:${level}`
+    this.placedCounts = {};
     this._suppressPlacementCounting = false;
-    this._unlockStates = {}; // track previous unlock state per part to avoid duplicate logs
+    this._unlockStates = {};
+    this.unlockManager = new UnlockManager(this);
+    this.sessionManager = new SessionManager(this);
+    this.configManager = new ConfigManager(this);
+    this.doctrineManager = new DoctrineManager(this);
 
     this.debugHistory = new DebugHistory();
     this.undoHistory = [];
     this.audio = null;
+    this.logger = logger;
 
     this.peak_power = 0;
     this.peak_heat = 0;
     
-    this.user_id = this.getAuthenticatedUserId();
+    this.user_id = getAuthenticatedUserId();
     
     this.run_id = crypto.randomUUID();
     this.tech_tree = null;
     this.bypass_tech_tree_restrictions = false;
-    this.RESPER_DOCTRINE_EP_COST = 50;
-    this.cheats_used = false; // Flag to track if cheats were used (hotkeys for money/EP)
+    this.RESPER_DOCTRINE_EP_COST = RESPEC_DOCTRINE_EP_COST;
+    this.cheats_used = false;
     this.grace_period_ticks = 0;
     this.isSandbox = false;
     this._sandboxState = null;
     this._mainState = null;
-    this._eventListeners = new Map();
+    this.eventDispatcher = new GameEventDispatcher(logger);
+    this.economyManager = new EconomyManager(this, {
+      prestigePerEp: PRESTIGE_MULTIPLIER_PER_EP,
+      prestigeCap: PRESTIGE_MULTIPLIER_CAP
+    });
+    this.timeKeeper = new TimeKeeper(this);
+    this.state = createGameState({
+      current_money: toDecimal(0),
+      current_power: this.reactor._current_power ?? toDecimal(0),
+      current_heat: this.reactor._current_heat ?? toDecimal(0),
+      current_exotic_particles: toDecimal(0),
+      total_exotic_particles: toDecimal(0),
+      reality_flux: toDecimal(0),
+      max_power: this.reactor.base_max_power,
+      max_heat: this.reactor.base_max_heat,
+      stats_power: 0,
+      stats_heat_generation: 0,
+      stats_vent: 0,
+      stats_inlet: 0,
+      stats_outlet: 0,
+      stats_net_heat: 0,
+      stats_total_part_heat: 0,
+      stats_cash: 0,
+      engine_status: "stopped",
+      auto_sell: false,
+      auto_buy: true,
+      heat_control: false,
+      time_flux: true,
+      pause: false,
+    });
+    this.exoticParticleManager = new ExoticParticleManager(this);
   }
 
   on(eventName, handler) {
-    if (!this._eventListeners.has(eventName)) this._eventListeners.set(eventName, []);
-    this._eventListeners.get(eventName).push(handler);
+    this.eventDispatcher.on(eventName, handler);
   }
 
   off(eventName, handler) {
-    const list = this._eventListeners.get(eventName);
-    if (!list) return;
-    const i = list.indexOf(handler);
-    if (i !== -1) list.splice(i, 1);
+    this.eventDispatcher.off(eventName, handler);
   }
 
   emit(eventName, payload) {
-    const list = this._eventListeners.get(eventName);
-    if (!list) return;
-    list.forEach((fn) => { try { fn(payload); } catch (_) {} });
+    this.eventDispatcher.emit(eventName, payload);
   }
 
-  getAuthenticatedUserId() {
-    if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {
-      const googleUserId = window.googleDriveSave.getUserId();
-      if (googleUserId) {
-        return `google_${googleUserId}`;
-      }
-    }
-
-    if (window.supabaseAuth && window.supabaseAuth.isSignedIn()) {
-      const supabaseUserId = window.supabaseAuth.getUserId();
-      if (supabaseUserId) {
-        return `supabase_${supabaseUserId}`;
-      }
-    }
-
-    let existingUserId = safeGetItem("reactor_user_id");
-    if (!existingUserId) {
-      existingUserId = crypto.randomUUID();
-      safeSetItem("reactor_user_id", existingUserId);
-    }
-    return existingUserId;
-  }
-
-  getCompactLayout() {
-    if (!this.tileset || !this.tileset.tiles_list) return null;
-    const rows = this.rows;
-    const cols = this.cols;
-    const parts = [];
-    this.tileset.tiles_list.forEach(tile => {
-      if (tile.enabled && tile.part) {
-        parts.push({
-          r: tile.row,
-          c: tile.col,
-          t: tile.part.type,
-          id: tile.part.id,
-          lvl: tile.part.level || 1
-        });
-      }
-    });
-    return {
-      size: { rows, cols },
-      parts: parts
-    };
-  }
-
-  // Returns how many parts of a given type and level are currently placed
-  countPlacedParts(type, level) {
-    if (!this.tileset || !this.tileset.tiles_list) return 0;
-    let count = 0;
-    for (const tile of this.tileset.tiles_list) {
-      const tilePart = tile.part;
-      if (tilePart && tilePart.type === type && tilePart.level === level) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  // For a part, returns the number of previous-tier parts placed (cumulative)
-  getPreviousTierCount(part) {
-    const prevSpec = this.getPreviousTierSpec(part);
-    if (!prevSpec) return 0;
-    return this.getPlacedCount(prevSpec.type, prevSpec.level);
-  }
-
-  // Resolve the previous step in the linear chain across types and levels within a category
-  getPreviousTierSpec(part) {
-    if (!part) return null;
-    // Within the same type, previous level
-    if (part.level && part.level > 1) {
-      return { type: part.type, level: part.level - 1, category: part.category };
-    }
-    // For level 1, previous is the max level of the previous type within this category
-    const orderIdx = this.partset?.typeOrderIndex?.get(`${part.category}:${part.type}`);
-    const typeOrder = this.partset?.categoryTypeOrder?.get(part.category) || [];
-    if (typeof orderIdx !== 'number' || orderIdx <= 0) return null;
-    const prevType = typeOrder[orderIdx - 1];
-    const prevMaxLevel = Math.max(
-      1,
-      ...(this.partset?.getPartsByType(prevType)?.map((p) => p.level) || [1])
-    );
-    return { type: prevType, level: prevMaxLevel, category: part.category };
-  }
-
-  // Returns true if the provided spec is the very first item in the category chain
-  isFirstInChainSpec(spec) {
-    if (!spec) return false;
-    const idx = this.partset?.typeOrderIndex?.get(`${spec.category}:${spec.type}`);
-    return (idx === 0) && spec.level === 1;
-  }
-
-  // Determine if a spec (type+level within a category) is unlocked by the 10-previous rule
-  isSpecUnlocked(spec) {
-    if (!spec) return false;
-    const prev = this.getPreviousTierSpec({ type: spec.type, level: spec.level, category: spec.category });
-    if (!prev) return true; // first in chain
-    return this.getPlacedCount(prev.type, prev.level) >= 10;
-  }
-
-  // Determines if a part should be visible in the parts panel
-  // Rule: level 1 and level 2 are shown. Level 3+ shown only after 10 of previous tier placed
-  // Special case: valves are always visible and unlocked from the start
-  shouldShowPart(part) {
-    if (!part) return false;
-
-    // Valves are always visible and unlocked from the start
-    if (part.category === 'valve') return true;
-
-    const prevSpec = this.getPreviousTierSpec(part);
-    if (!prevSpec) return true; // first in chain is visible
-    // Show the immediate next item after any unlocked item
-    if (this.isSpecUnlocked(prevSpec)) return true;
-    // Otherwise, hide until previous tier is unlocked
-    return false;
-  }
-
-  // Determines if a part is unlocked (enabled) based on previous-tier progress
-  // Rule: level 1 is unlocked. Level 2+ unlocked after 10 of previous tier
-  // Special case: valves are always unlocked from the start
-  isPartUnlocked(part) {
-    if (this.isSandbox) return true;
-    if (this.partset?.isPartDoctrineLocked(part)) return false;
-    if (!part || part.category === 'valve') {
-      this.logger?.debug(`[UNLOCK] Part ${part?.id || 'null'}: Valve or null, unlocked by default.`);
-      return true; // Valves are always unlocked
-    }
-    const prevSpec = this.getPreviousTierSpec(part);
-    if (!prevSpec) {
-      this.logger?.debug(`[UNLOCK] Part '${part.id}' is a base part (no prerequisite). Unlocked by default.`);
-      return true; // It's a base part, so it's unlocked
-    }
-    const count = this.getPlacedCount(prevSpec.type, prevSpec.level);
-    const isUnlocked = count >= 10;
-    const partId = part.id;
-    const wasUnlocked = this._unlockStates[partId] || false;
-    
-    if (isUnlocked && !wasUnlocked) {
-      console.log(`[UNLOCK] '${partId}': ${count}/10 of '${prevSpec.type}:${prevSpec.level}' -> UNLOCKED`);
-    }
-    
-    this._unlockStates[partId] = isUnlocked;
-    this.logger?.debug(`[UNLOCK] Checking part '${part.id}': Requires 10 of '${prevSpec.type}:${prevSpec.level}'. Count: ${count}. Unlocked: ${isUnlocked}`);
-    return isUnlocked;
-  }
-
-  // Cumulative placement tracking
-  getPlacedCount(type, level) {
-    const key = `${type}:${level}`;
-    return this.placedCounts[key] || 0;
-  }
-
-  incrementPlacedCount(type, level) {
-    if (this._suppressPlacementCounting) return;
-    const key = `${type}:${level}`;
-    this.placedCounts[key] = (this.placedCounts[key] || 0) + 1;
-  }
+  getPreviousTierCount(part) { return this.unlockManager.getPreviousTierCount(part); }
+  getPreviousTierSpec(part) { return this.unlockManager.getPreviousTierSpec(part); }
+  isFirstInChainSpec(spec) { return this.unlockManager.isFirstInChainSpec(spec); }
+  isSpecUnlocked(spec) { return this.unlockManager.isSpecUnlocked(spec); }
+  shouldShowPart(part) { return this.unlockManager.shouldShowPart(part); }
+  isPartUnlocked(part) { return this.unlockManager.isPartUnlocked(part); }
+  getPlacedCount(type, level) { return this.unlockManager.getPlacedCount(type, level); }
+  incrementPlacedCount(type, level) { return this.unlockManager.incrementPlacedCount(type, level); }
 
   enqueueVisualEvent() {}
   enqueueVisualEvents() {}
@@ -264,277 +174,58 @@ export class Game {
   }
 
   async set_defaults() {
-    const debugSetDefaults = typeof process !== 'undefined' && process.env.DEBUG_REBOOT === 'true';
-    if (debugSetDefaults) {
-      const epBeforeReset = {
-        exotic_particles: this.exotic_particles,
-        total_exotic_particles: this.total_exotic_particles,
-        current_exotic_particles: this.current_exotic_particles
-      };
-      console.log(`[SET-DEFAULTS DEBUG] Resetting EP values:`);
-      console.log(`[SET-DEFAULTS DEBUG]   Before reset: exotic_particles=${epBeforeReset.exotic_particles}, total_exotic_particles=${epBeforeReset.total_exotic_particles}, current_exotic_particles=${epBeforeReset.current_exotic_particles}`);
-    }
-    
-    const dimensions = this.calculateBaseDimensions();
-    this.base_cols = dimensions.base_cols;
-    this.base_rows = dimensions.base_rows;
-
-    this.rows = this.base_rows;
-    this.cols = this.base_cols;
-    this._current_money = toDecimal(this.base_money);
-    this.protium_particles = 0;
-    this.total_exotic_particles = toDecimal(0);
-    this.exotic_particles = toDecimal(0);
-    this.current_exotic_particles = toDecimal(0);
-    this._reality_flux = toDecimal(0);
-
-    if (debugSetDefaults) {
-      console.log(`[SET-DEFAULTS DEBUG]   After reset: exotic_particles=${this.exotic_particles}, total_exotic_particles=${this.total_exotic_particles}, current_exotic_particles=${this.current_exotic_particles}`);
-    }
-    const bypass = this.bypass_tech_tree_restrictions;
-    const preservedTechTree = this.tech_tree;
-
-    this.sold_power = false;
-    this.sold_heat = false;
-    this.reactor.setDefaults();
-    this.upgradeset.reset();
-    this.partset.reset();
-    this.tech_tree = preservedTechTree;
-    await this.partset.initialize();
-    await this.upgradeset.initialize();
-    this.bypass_tech_tree_restrictions = bypass;
-    // Recalculate all part stats after upgrades are freshly initialized to ensure no stale upgrade effects linger
-    if (this.partset?.partsArray?.length) {
-      console.log(`[SET-DEFAULTS DEBUG] Recalculating stats for ${this.partset.partsArray.length} parts`);
-      this.partset.partsArray.forEach((part) => {
-        try { 
-          const epHeatBefore = part.ep_heat;
-          part.recalculate_stats();
-          if (part.id === 'particle_accelerator1' && epHeatBefore !== undefined && part.ep_heat !== epHeatBefore) {
-            console.log(`[SET-DEFAULTS DEBUG] ep_heat changed for ${part.id} during set_defaults: ${epHeatBefore} -> ${part.ep_heat}`);
-          }
-        } catch (_) { /* no-op */ }
-      });
-    }
-    this.upgradeset.check_affordability(this);
-    // Clear cumulative placement counters for a fresh run
-    this.placedCounts = {};
-    this._suppressPlacementCounting = false;
-    this.tileset.clearAllTiles();
-    this.ui?.gridCanvasRenderer?.clearImageCache();
-    this.reactor.updateStats();
-
-    // Clear all heat-related visual states after clearing tiles
-    this.reactor.clearHeatVisualStates();
-
-    // Clear all active animations to prevent visual spam after reset
-    if (this.ui && typeof this.ui.clearAllActiveAnimations === 'function') {
-      this.ui.clearAllActiveAnimations();
-    }
-    this.loop_wait = this.base_loop_wait;
-    this.paused = false;
-
-    const doctrine = this.getDoctrine();
-    if (doctrine) this.applyDoctrineBonuses(doctrine);
-
-    this.session_start_time = null;
-    this.total_played_time = 0;
-    this.last_save_time = null;
-
-    // Always reset objectives for a clean New Game state
-    if (this.objectives_manager) {
-      this.objectives_manager.current_objective_index = 0;
-      if (this.objectives_manager.objectives_data) {
-        this.objectives_manager.objectives_data.forEach(obj => {
-          obj.completed = false;
-        });
-      }
-      this.objectives_manager.set_objective(0, true);
-    }
-    if (this._saved_objective_index !== undefined) {
-      this.debugHistory.add('game', 'Validating objective state after default set');
-      this._validateObjectiveState();
-    }
+    await setDefaultsFromModule(this);
   }
 
-  get current_money() {
-    return this.isSandbox ? Infinity : this._current_money;
-  }
-
-  set current_money(value) {
-    if (!this.isSandbox) this._current_money = toDecimal(value);
-  }
-
-  get total_exotic_particles() { return this._total_exotic_particles; }
-  set total_exotic_particles(v) { this._total_exotic_particles = (v != null && typeof v.gte === 'function') ? v : toDecimal(v ?? 0); }
-  get exotic_particles() { return this._exotic_particles; }
-  set exotic_particles(v) { this._exotic_particles = (v != null && typeof v.gte === 'function') ? v : toDecimal(v ?? 0); }
-  get current_exotic_particles() { return this._current_exotic_particles; }
-  set current_exotic_particles(v) { this._current_exotic_particles = (v != null && typeof v.gte === 'function') ? v : toDecimal(v ?? 0); }
-  get reality_flux() { return this._reality_flux; }
-  set reality_flux(v) { this._reality_flux = (v != null && typeof v.gte === 'function') ? v : toDecimal(v ?? 0); }
+  get current_money() { return this.economyManager.getCurrentMoney(); }
+  set current_money(v) { this.economyManager.setCurrentMoney(v); }
+  get current_exotic_particles() { return this.state.current_exotic_particles; }
+  set current_exotic_particles(v) { this.exoticParticleManager.current_exotic_particles = v; }
+  get exotic_particles() { return this.exoticParticleManager.exotic_particles; }
+  set exotic_particles(v) { this.exoticParticleManager.exotic_particles = v; }
+  get total_exotic_particles() { return this.state.total_exotic_particles; }
+  set total_exotic_particles(v) { this.exoticParticleManager.total_exotic_particles = v; }
+  get session_start_time() { return this.lifecycleManager.session_start_time; }
+  set session_start_time(v) { this.lifecycleManager.session_start_time = v; }
+  get last_save_time() { return this.lifecycleManager.last_save_time; }
+  set last_save_time(v) { this.lifecycleManager.last_save_time = v; }
+  get total_played_time() { return this.lifecycleManager.total_played_time; }
+  set total_played_time(v) { this.lifecycleManager.total_played_time = v; }
 
   getPrestigeMultiplier() {
-    const ep = (this.total_exotic_particles && typeof this.total_exotic_particles.toNumber === 'function')
-      ? this.total_exotic_particles.toNumber() : Number(this.total_exotic_particles || 0);
-    return 1 + Math.min(ep * 0.001, 100);
+    return this.economyManager.getPrestigeMultiplier();
   }
 
   addMoney(amount) {
-    if (!this.isSandbox) {
-      const mult = this.getPrestigeMultiplier();
-      this._current_money = this._current_money.add(toDecimal(amount).mul(mult));
-      this.ui.stateManager.setVar("current_money", this._current_money);
-    }
+    this.economyManager.addMoney(amount);
   }
 
-  getDoctrine() {
-    if (!this.tech_tree || !this.upgradeset?.treeList) return null;
-    return this.upgradeset.treeList.find((t) => t.id === this.tech_tree) ?? null;
+  markCheatsUsed() {
+    this.cheats_used = true;
   }
 
-  applyDoctrineBonuses(doctrine) {
-    if (!doctrine?.bonuses || typeof doctrine.bonuses !== "object") return;
-    const b = doctrine.bonuses;
-    if (typeof b.heat_tolerance_percent === "number") {
-      const mult = 1 + b.heat_tolerance_percent / 100;
-      this.reactor.base_max_heat *= mult;
-      this.reactor.altered_max_heat = this.reactor.base_max_heat;
-    }
+  grantCheatExoticParticle(amount = 1) {
+    this.exoticParticleManager.grantCheatExoticParticle(amount);
   }
 
-  respecDoctrine() {
-    if (!this.tech_tree) return false;
-    const cost = this.RESPER_DOCTRINE_EP_COST ?? 50;
-    if (this.current_exotic_particles.lt(cost)) return false;
-    const doctrine = this.getDoctrine();
-    if (doctrine?.bonuses && typeof doctrine.bonuses.heat_tolerance_percent === "number") {
-      const mult = 1 + doctrine.bonuses.heat_tolerance_percent / 100;
-      this.reactor.base_max_heat /= mult;
-      this.reactor.altered_max_heat = this.reactor.base_max_heat;
-    }
-    this.current_exotic_particles = this.current_exotic_particles.sub(cost);
-    const previousTree = this.tech_tree;
-    this.tech_tree = null;
-    this.upgradeset.resetDoctrineUpgradeLevels(previousTree);
-    this.reactor.updateStats();
-    this.ui.stateManager.setVar("current_exotic_particles", this.current_exotic_particles);
-    this.saveGame(null, true);
-    return true;
-  }
+  getDoctrine() { return this.doctrineManager.getDoctrine(); }
+  applyDoctrineBonuses(doctrine) { this.doctrineManager.applyDoctrineBonuses(doctrine); }
+  respecDoctrine() { return this.doctrineManager.respecDoctrine(); }
 
   async initialize_new_game_state() {
-    this.debugHistory.clear();
-    await this.set_defaults();
-    this.run_id = crypto.randomUUID();
-    this.cheats_used = false; // Reset cheat flag for new game
-    this.reactor.clearMeltdownState();
-
-    // Leaderboard initialization is optional - failures are non-fatal
-    leaderboardService.init().catch(err => {
-        const errorMsg = err?.message || String(err);
-        const isExpectedError = [
-            'SharedArrayBuffer',
-            'Atomics',
-            'COOP/COEP',
-            'Cannot read properties',
-            "can't access property"
-        ].some(term => errorMsg.includes(term));
-        
-        if (!isExpectedError) {
-            console.warn("Leaderboard init failed:", errorMsg);
-        }
-    });
-
-    if (this.ui && typeof this.ui.clearAllActiveAnimations === 'function') {
-      this.ui.clearAllActiveAnimations();
-    }
-
-    this._current_money = toDecimal(this.base_money);
-    this.ui.stateManager.setVar("current_money", this._current_money);
-    this.ui.stateManager.setVar("stats_cash", this._current_money);
-    this.ui.stateManager.setVar("current_exotic_particles", toDecimal(0));
-    this.ui.stateManager.setVar("total_exotic_particles", toDecimal(0));
-    this.ui.stateManager.setVar("exotic_particles", toDecimal(0));
-    this.ui.stateManager.setVar("reality_flux", toDecimal(0));
-    this.ui.stateManager.setVar("auto_sell", false);
-    this.ui.stateManager.setVar("auto_buy", false);
-    this.ui.stateManager.setVar("time_flux", false);
-    const defaultQuickSelectIds = ["uranium1", "vent1", "heat_exchanger1", "heat_outlet1", "capacitor1"];
-    this.ui.stateManager.setQuickSelectSlots(
-      defaultQuickSelectIds.map((partId) => ({ partId, locked: false }))
-    );
+    await this.lifecycleManager.initialize_new_game_state();
   }
 
   async startSession() {
-    this.session_start_time = Date.now();
-    if (!this.last_save_time) this.last_save_time = Date.now();
-
-    // Leaderboard initialization is optional - failures are non-fatal
-    leaderboardService.init().catch(err => {
-        const errorMsg = err?.message || String(err);
-        const isExpectedError = [
-            'SharedArrayBuffer',
-            'Atomics',
-            'COOP/COEP',
-            'Cannot read properties',
-            "can't access property"
-        ].some(term => errorMsg.includes(term));
-        
-        if (!isExpectedError) {
-            console.warn("Leaderboard init failed:", errorMsg);
-        }
-    });
-
-    await this.objectives_manager.initialize();
-
-    // Set initial objective after initialization is complete
-    if (this._saved_objective_index === undefined) {
-      this.objectives_manager.set_objective(0, true);
-    }
-
-    this.reactor.updateStats();
-    this.upgradeset.check_affordability(this);
+    await this.lifecycleManager.startSession();
   }
 
   updateSessionTime() {
-    if (this.session_start_time) {
-      const sessionTime = Date.now() - this.session_start_time;
-      this.total_played_time += sessionTime;
-      this.session_start_time = Date.now();
-    }
-
-    if (this.reactor) {
-      if (this.reactor.current_power > this.peak_power) this.peak_power = this.reactor.current_power;
-      if (this.reactor.current_heat > this.peak_heat) this.peak_heat = this.reactor.current_heat;
-    }
+    this.lifecycleManager.updateSessionTime();
   }
 
   getFormattedTotalPlayedTime() {
-    let totalTime = this.total_played_time;
-    if (this.session_start_time) {
-      totalTime += Date.now() - this.session_start_time;
-    }
-    return this.formatTime(totalTime);
-  }
-
-  formatTime(ms) {
-    if (ms < 0) ms = 0;
-    const s = Math.floor(ms / 1000) % 60;
-    const m = Math.floor(ms / (1000 * 60)) % 60;
-    const h = Math.floor(ms / (1000 * 60 * 60)) % 24;
-    const d = Math.floor(ms / (1000 * 60 * 60 * 24));
-
-    if (d > 0)
-      return `${d}<span class="time-unit">d</span> ${h}<span class="time-unit">h</span> ${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
-
-    if (h > 0)
-      return `${h}<span class="time-unit">h</span> ${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
-
-    if (m > 0)
-      return `${m}<span class="time-unit">m</span> ${s}<span class="time-unit">s</span>`;
-
-    return `${s}<span class="time-unit">s</span>`;
+    return this.lifecycleManager.getFormattedTotalPlayedTime();
   }
 
   update_cell_power() {
@@ -543,1156 +234,88 @@ export class Game {
     this.reactor.updateStats();
   }
   epart_onclick(purchased_upgrade) {
-    if (
-      !purchased_upgrade ||
-      !purchased_upgrade.upgrade ||
-      purchased_upgrade.level <= 0
-    )
-      return;
-    this.upgradeset.getAllUpgrades().forEach((upg) => {
-      if (
-        upg.upgrade.type === "experimental_parts" &&
-        upg.upgrade.id !== purchased_upgrade.upgrade.id
-      ) {
-        upg.updateDisplayCost();
-      }
-    });
-    this.upgradeset.check_affordability(this);
+    runEpartOnclick(this, purchased_upgrade);
   }
   manual_reduce_heat_action() {
-    this.debugHistory.add('game', 'Manual heat reduction');
-    if (this.ui && this.ui.heavyVibration) {
-      this.ui.heavyVibration();
-    }
-    this.reactor.manualReduceHeat();
-    this.reactor.updateStats();
+    runManualReduceHeatAction(this);
   }
   sell_action() {
-    if (this._current_money.lt(10) && this.reactor.current_power == 0) {
-      const hasPartsToSell = this.tileset.active_tiles_list.some(
-        (tile) => tile.part && !tile.part.isSpecialTile
-      );
-
-      if (!hasPartsToSell) {
-        this.addMoney(10);
-        this.debugHistory.add('game', 'Failsafe: +$10 added');
-      }
-    } else {
-      this.reactor.sellPower();
-    }
-    this.reactor.updateStats();
+    runSellAction(this);
   }
-  async reboot_action(keep_exotic_particles = false) {
-    const debugReboot = typeof process !== 'undefined' && process.env.DEBUG_REBOOT === 'true';
-    if (debugReboot) {
-      console.log(`[REBOOT DEBUG] ========== Reboot Action Starting ==========`);
-      console.log(`[REBOOT DEBUG] keep_exotic_particles=${keep_exotic_particles}`);
-      console.log(`[REBOOT DEBUG] PRE-REBOOT STATE:`);
-      console.log(`[REBOOT DEBUG]   exotic_particles=${this.exotic_particles}`);
-      console.log(`[REBOOT DEBUG]   total_exotic_particles=${this.total_exotic_particles}`);
-      console.log(`[REBOOT DEBUG]   current_exotic_particles=${this.current_exotic_particles}`);
-    }
-    
-    this.debugHistory.add('game', 'Reboot action initiated', { keep_exotic_particles });
-    
-    if (this.audio) {
-      this.audio.play('reboot');
-    }
-    
-    const savedTotalEp = this.total_exotic_particles;
-    const savedCurrentEp = this.current_exotic_particles;
-    const savedProtiumParticles = this.protium_particles;
-    if (debugReboot) {
-      console.log(`[REBOOT DEBUG] Saved EP values for restoration:`);
-      console.log(`[REBOOT DEBUG]   savedTotalEp=${savedTotalEp}`);
-      console.log(`[REBOOT DEBUG]   savedCurrentEp=${savedCurrentEp}`);
-    }
-
-    // If keeping EP, capture currently purchased EP-based upgrades (research) to restore after reset
-    const preservedEpUpgrades = keep_exotic_particles
-      ? this.upgradeset.getAllUpgrades()
-        .filter((upg) => upg.base_ecost && upg.level > 0)
-        .map((upg) => ({ id: upg.id, level: upg.level }))
-      : [];
-    try {
-      if (keep_exotic_particles) {
-        if (debugReboot) {
-          console.log(`[REBOOT DEBUG] Preserving ${preservedEpUpgrades.length} EP-based upgrades:`, preservedEpUpgrades);
-        }
-        this.logger?.debug("[Reboot] Will preserve EP upgrades:", preservedEpUpgrades);
-      }
-    } catch (_) { }
-
-    // Fully reset game state, parts, tiles, and upgrades
-    if (debugReboot) {
-      console.log(`[REBOOT DEBUG] Calling set_defaults() - this will reset all EP values to 0`);
-    }
-    await this.set_defaults();
-    this.protium_particles = savedProtiumParticles;
-    if (debugReboot) {
-      console.log(`[REBOOT DEBUG] After set_defaults():`);
-      console.log(`[REBOOT DEBUG]   exotic_particles=${this.exotic_particles} (should be 0)`);
-      console.log(`[REBOOT DEBUG]   total_exotic_particles=${this.total_exotic_particles} (should be 0)`);
-      console.log(`[REBOOT DEBUG]   current_exotic_particles=${this.current_exotic_particles} (should be 0)`);
-    }
-
-    // Always clear meltdown state and update UI after reboot
-    this.reactor.clearMeltdownState();
-
-    // Clear all active animations to prevent visual spam after reboot
-    if (this.ui && typeof this.ui.clearAllActiveAnimations === 'function') {
-      this.ui.clearAllActiveAnimations();
-    }
-
-    // Re-apply EP amounts per reboot mode
-    if (debugReboot) {
-      console.log(`[REBOOT DEBUG] Restoring EP values (keep_exotic_particles=${keep_exotic_particles}):`);
-    }
-    if (keep_exotic_particles) {
-      const beforeTotal = this.total_exotic_particles;
-      const beforeCurrent = this.current_exotic_particles;
-      this.total_exotic_particles = savedTotalEp;
-      this.current_exotic_particles = savedCurrentEp;
-      if (debugReboot) {
-        console.log(`[REBOOT DEBUG]   KEEP mode: Restoring saved values`);
-        console.log(`[REBOOT DEBUG]   total_exotic_particles: ${beforeTotal} -> ${this.total_exotic_particles} (from savedTotalEp=${savedTotalEp})`);
-        console.log(`[REBOOT DEBUG]   current_exotic_particles: ${beforeCurrent} -> ${this.current_exotic_particles} (from savedCurrentEp=${savedCurrentEp})`);
-      }
-    } else {
-      this.total_exotic_particles = toDecimal(0);
-      this.current_exotic_particles = toDecimal(0);
-      this.reality_flux = toDecimal(0);
-      if (debugReboot) {
-        console.log(`[REBOOT DEBUG]   REFUND mode: Setting all EP to 0`);
-      }
-    }
-
-    // If keeping EP, restore previously purchased EP-based upgrades (research)
-    if (keep_exotic_particles && preservedEpUpgrades.length > 0) {
-      if (debugReboot) {
-        console.log(`[REBOOT DEBUG] Restoring ${preservedEpUpgrades.length} EP-based upgrades...`);
-      }
-      preservedEpUpgrades.forEach(({ id, level }) => {
-        const upg = this.upgradeset.getUpgrade(id);
-        if (upg) {
-          upg.setLevel(level);
-          if (debugReboot) {
-            console.log(`[REBOOT DEBUG]   Restored ${id} to level ${level}`);
-          }
-        }
-      });
-      try {
-        this.logger?.debug("[Reboot] Restored EP upgrade levels (e.g., lab):", this.upgradeset.getUpgrade("laboratory")?.level);
-      } catch (_) { }
-    }
-
-    if (debugReboot) {
-      console.log(`[REBOOT DEBUG] Updating StateManager with final EP values:`);
-      console.log(`[REBOOT DEBUG]   total_exotic_particles=${this.total_exotic_particles}`);
-      console.log(`[REBOOT DEBUG]   current_exotic_particles=${this.current_exotic_particles}`);
-      console.log(`[REBOOT DEBUG]   exotic_particles=${this.exotic_particles}`);
-    }
-    this.ui.stateManager.setVar(
-      "total_exotic_particles",
-      this.total_exotic_particles
-    );
-    this.ui.stateManager.setVar(
-      "current_exotic_particles",
-      this.current_exotic_particles
-    );
-    this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
-    if (debugReboot) {
-      console.log(`[REBOOT DEBUG] ========== Reboot Action Complete ==========`);
-    }
-
-    this.reactor.updateStats();
-    this.upgradeset.check_affordability(this);
-    this.partset.check_affordability(this);
-
-    // Refresh the UI to show updated affordability
-    if (this.ui) {
-      // Find the currently active tab and refresh it
-      if (typeof document !== "undefined" && document.querySelector && typeof window !== "undefined" && window.templateLoader) {
-        const activeTab = document.querySelector(".parts_tab.active");
-        if (activeTab) {
-          const tabId = activeTab.getAttribute("data-tab");
-          this.ui.populatePartsForTab(tabId);
-        } else {
-          // Fallback to power tab if no active tab found
-          this.ui.populatePartsForTab("power");
-        }
-      } else {
-        // Skip UI refresh if DOM or templateLoader is not available (e.g., in tests)
-        this.logger?.warn("[Game] Skipping UI refresh - DOM or templateLoader not available");
-      }
-    }
-
-    if (this.objectives_manager) {
-      this.objectives_manager.check_current_objective();
-    }
+  async rebootActionKeepExoticParticles() {
+    await runRebootActionKeepEp(this);
   }
-  onToggleStateChange(property, newState) {
-    if (this.ui.stateManager.getVar(property) !== undefined) {
-      this[property] = newState;
-    }
 
-    if (property === "pause") {
-      this.paused = newState;
-      if (this.engine) {
-        if (newState) {
-          this.engine.stop();
-        } else {
-          this.engine.start();
-        }
-      }
-    } else if (property === "heat_control") {
-      this.reactor.heat_controlled = newState;
-    } else if (property === "parts_panel") {
-      const partsPanel = document.getElementById("parts_section");
-      if (partsPanel) {
-        const isMobile = window.innerWidth <= 900;
-        if (isMobile) {
-          // Mobile: allow toggling
-          partsPanel.classList.toggle("collapsed", !newState);
-        } else {
-          // Desktop: always keep open
-          partsPanel.classList.remove("collapsed");
-        }
-        this.ui.updatePartsPanelBodyClass();
-      }
-    }
+  async rebootActionDiscardExoticParticles() {
+    await runRebootActionDiscardEp(this);
   }
-  calculateBaseDimensions() {
-    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
-    return {
-      base_cols: isMobile ? 10 : 12,
-      base_rows: isMobile ? 14 : 12
-    };
-  }
+
+  get base_cols() { return this.gridManager.base_cols; }
+  set base_cols(v) { this.gridManager.base_cols = v; }
+  get base_rows() { return this.gridManager.base_rows; }
+  set base_rows(v) { this.gridManager.base_rows = v; }
+  get _rows() { return this.gridManager._rows; }
+  get _cols() { return this.gridManager._cols; }
 
   updateBaseDimensions() {
-    const dimensions = this.calculateBaseDimensions();
-    const oldBaseCols = this.base_cols;
-    const oldBaseRows = this.base_rows;
-    
-    this.base_cols = dimensions.base_cols;
-    this.base_rows = dimensions.base_rows;
-    
-    if (this.rows === oldBaseRows && this.cols === oldBaseCols) {
-      this.rows = this.base_rows;
-      this.cols = this.base_cols;
-    } else {
-      const rowDiff = this.base_rows - oldBaseRows;
-      const colDiff = this.base_cols - oldBaseCols;
-      if (rowDiff !== 0 || colDiff !== 0) {
-        this.rows = Math.max(this.base_rows, this.rows + rowDiff);
-        this.cols = Math.max(this.base_cols, this.cols + colDiff);
-      }
-    }
+    this.gridManager.updateBaseDimensions();
   }
 
-  get rows() {
-    return this._rows;
-  }
-  set rows(value) {
-    if (this._rows !== value) {
-      this._rows = value;
-      this.tileset.updateActiveTiles();
-      this.reactor.updateStats();
-      if (this.ui) {
-        this.ui.resizeReactor();
-      }
-    }
-  }
-  get cols() {
-    return this._cols;
-  }
+  get rows() { return this.gridManager.rows; }
+  set rows(value) { this.gridManager.setRows(value); }
+  get cols() { return this.gridManager.cols; }
+  set cols(value) { this.gridManager.setCols(value); }
   calculatePan(col) {
     if (this.cols <= 1) return 0;
-    return ((col / (this.cols - 1)) * 2) - 1;
-  }
-  set cols(value) {
-    if (this._cols !== value) {
-      this._cols = value;
-      this.tileset.updateActiveTiles();
-      this.reactor.updateStats();
-      if (this.ui) {
-        this.ui.resizeReactor();
-      }
-    }
+    return (col / (this.cols - 1)) * 2 - 1;
   }
 
   sellPart(tile) {
-    if (tile && tile.part) {
-      const sellValue = tile.calculateSellValue();
-      this.debugHistory.add('game', 'sellPart', { row: tile.row, col: tile.col, partId: tile.part.id, value: sellValue });
-      if (this.ui && this.ui.heavyVibration) {
-        this.ui.heavyVibration();
-      }
-      if (this.audio) {
-        this.audio.play("sell", null, this.calculatePan(tile.col));
-      }
-      tile.clearPart(true);
-    }
+    runSellPart(this, tile);
   }
 
   handleComponentDepletion(tile) {
-    if (!tile.part) return;
-    this.debugHistory.add('game', 'Component depletion', { row: tile.row, col: tile.col, partId: tile.part.id, perpetual: tile.part.perpetual });
-
-    const part = tile.part;
-    const hasProtiumLoader = this.upgradeset.getUpgrade("experimental_protium_loader")?.level > 0;
-    const isProtium = part.type === "protium";
-    const autoReplace = (part.perpetual || (isProtium && hasProtiumLoader)) && this.ui.stateManager.getVar("auto_buy");
-    if (autoReplace) {
-      const cost = part.getAutoReplacementCost();
-      this.logger?.debug(`[AUTO-BUY] Attempting to replace '${part.id}'. Cost: ${cost}, Current Money: ${this.current_money}`);
-      if (this.current_money.gte(cost)) {
-        this._current_money = this._current_money.sub(cost);
-        this.logger?.debug(`[AUTO-BUY] Success. New Money: ${this.current_money}`);
-        this.ui.stateManager.setVar("current_money", this._current_money);
-        part.recalculate_stats();
-        tile.ticks = part.ticks;
-        this.reactor.updateStats();
-        return;
-      } else {
-        this.logger?.debug(`[AUTO-BUY] Failed. Insufficient funds.`);
-      }
-    }
-
-    if (this.tooltip_manager?.current_tile_context === tile) {
-      this.tooltip_manager.hide();
-    }
-
-    tile.clearPart(false);
-  }
-
-  getSaveState() {
-    this.debugHistory.add('game', 'Generating save state');
-    this.updateSessionTime();
-
-    const saveData = {
-      version: this.version,
-      run_id: this.run_id,
-      tech_tree: this.tech_tree,
-      current_money: (this._current_money && typeof this._current_money.toString === 'function') ? this._current_money.toString() : this._current_money,
-      protium_particles: this.protium_particles,
-      total_exotic_particles: (this.total_exotic_particles && typeof this.total_exotic_particles.toString === 'function') ? this.total_exotic_particles.toString() : this.total_exotic_particles,
-      exotic_particles: (this.exotic_particles && typeof this.exotic_particles.toString === 'function') ? this.exotic_particles.toString() : this.exotic_particles,
-      current_exotic_particles: (this.current_exotic_particles && typeof this.current_exotic_particles.toString === 'function') ? this.current_exotic_particles.toString() : this.current_exotic_particles,
-      rows: this.rows,
-      cols: this.cols,
-      sold_power: this.sold_power,
-      sold_heat: this.sold_heat,
-      grace_period_ticks: this.grace_period_ticks,
-
-      total_played_time: this.total_played_time,
-      last_save_time: Date.now(),
-
-      reactor: {
-        current_heat: (this.reactor.current_heat != null && typeof this.reactor.current_heat.toString === "function") ? this.reactor.current_heat.toString() : this.reactor.current_heat,
-        current_power: (this.reactor.current_power != null && typeof this.reactor.current_power.toString === "function") ? this.reactor.current_power.toString() : this.reactor.current_power,
-        has_melted_down: this.reactor.has_melted_down,
-        base_max_heat: this.reactor.base_max_heat,
-        base_max_power: this.reactor.base_max_power,
-        altered_max_heat: (this.reactor.altered_max_heat != null && typeof this.reactor.altered_max_heat.toString === "function") ? this.reactor.altered_max_heat.toString() : this.reactor.altered_max_heat,
-        altered_max_power: (this.reactor.altered_max_power != null && typeof this.reactor.altered_max_power.toString === "function") ? this.reactor.altered_max_power.toString() : this.reactor.altered_max_power,
-      },
-      // Persist cumulative placement progress used for tier gating
-      placedCounts: this.placedCounts,
-      tiles: this.tileset.active_tiles_list
-        .filter((tile) => tile.part)
-        .map((tile) => ({
-          row: tile.row,
-          col: tile.col,
-          partId: tile.part.id,
-          ticks: tile.ticks,
-          heat_contained: tile.heat_contained,
-        })),
-      upgrades: this.upgradeset.upgradesArray
-        .filter((upg) => upg.level > 0)
-        .map((upg) => ({
-          id: upg.id,
-          level: upg.level,
-        })),
-      objectives: (() => {
-        const om = this.objectives_manager;
-        const obj = {
-          current_objective_index: om?.current_objective_index ?? 0,
-          completed_objectives: (om?.objectives_data?.map(o => o.completed) ?? []),
-        };
-        if (om?.infiniteObjective) {
-          obj.infinite_objective = {
-            ...om.infiniteObjective,
-            _lastInfinitePowerTarget: om._lastInfinitePowerTarget,
-            _lastInfiniteHeatMaintain: om._lastInfiniteHeatMaintain,
-            _lastInfiniteMoneyThorium: om._lastInfiniteMoneyThorium,
-            _lastInfiniteHeat: om._lastInfiniteHeat,
-            _lastInfiniteEP: om._lastInfiniteEP,
-            _infiniteChallengeIndex: om._infiniteChallengeIndex,
-            _infiniteCompletedCount: om._infiniteCompletedCount,
-          };
-        }
-        return obj;
-      })(),
-      toggles: {
-        auto_sell: this.ui.stateManager.getVar("auto_sell"),
-        auto_buy: this.ui.stateManager.getVar("auto_buy"),
-        heat_control: this.ui.stateManager.getVar("heat_control"),
-        time_flux: this.ui.stateManager.getVar("time_flux"),
-        pause: this.ui.stateManager.getVar("pause"),
-      },
-      quick_select_slots: this.ui?.stateManager?.getQuickSelectSlots() ?? [],
-      ui: {},
-    };
-
-    try {
-      if (typeof localStorage !== "undefined" && localStorage !== null) {
-        const existingData = safeGetItem("reactorGameSave");
-        if (existingData) {
-          const existingSave = JSON.parse(existingData);
-          if (existingSave.isCloudSynced) {
-            saveData.isCloudSynced = existingSave.isCloudSynced;
-            saveData.cloudUploadedAt = existingSave.cloudUploadedAt;
-          }
-        }
-      }
-    } catch (error) {
-      console.warn("Could not preserve cloud sync flags:", error.message);
-    }
-
-    return saveData;
-  }
-
-  _hasCoreDataChanged(newData, existingData) {
-    const keyFields = [
-      "current_money",
-      "protium_particles",
-      "total_exotic_particles",
-      "exotic_particles",
-      "current_exotic_particles",
-      "reality_flux",
-      "rows",
-      "cols",
-      "sold_power",
-      "sold_heat",
-    ];
-
-    for (const field of keyFields) {
-      if (newData[field] !== existingData[field]) {
-        return true;
-      }
-    }
-
-    if (
-      newData.reactor?.has_melted_down !== existingData.reactor?.has_melted_down
-    ) {
-      return true;
-    }
-
-    if (newData.tiles?.length !== existingData.tiles?.length) {
-      return true;
-    }
-
-    if (newData.upgrades?.length !== existingData.upgrades?.length) {
-      return true;
-    }
-
-    // Compare objectives
-    if (
-      newData.objectives?.current_objective_index !==
-      existingData.objectives?.current_objective_index
-    ) {
-      return true;
-    }
-
-    return false;
-  }
-
-  saveGame(slot = null, isAutoSave = false) {
-    if (this.isSandbox) return;
-    if (this.logger) {
-      this.logger.debug(`Attempting to save game. Meltdown state: ${this.reactor.has_melted_down}`);
-    }
-    try {
-      this.debugHistory.add('game', 'saveGame called', { slot, isAutoSave, meltdown: this.reactor.has_melted_down });
-      if (this.reactor.has_melted_down) {
-        if ((this.peak_power > 0 || this.peak_heat > 0) && !this.cheats_used) {
-          leaderboardService.saveRun({
-            user_id: this.user_id,
-            run_id: this.run_id,
-            heat: this.peak_heat,
-            power: this.peak_power,
-            money: (this.current_money && typeof this.current_money.toNumber === 'function' ? this.current_money.toNumber() : Number(this.current_money)),
-            time: this.total_played_time,
-            layout: JSON.stringify(this.getCompactLayout())
-          });
-        }
-        return;
-      }
-
-      this.updateSessionTime();
-
-      if ((this.peak_power > 0 || this.peak_heat > 0) && !this.cheats_used) {
-        leaderboardService.saveRun({
-          user_id: this.user_id,
-          run_id: this.run_id,
-          heat: this.peak_heat,
-          power: this.peak_power,
-          money: (this.current_money && typeof this.current_money.toNumber === 'function' ? this.current_money.toNumber() : Number(this.current_money)),
-          time: this.total_played_time,
-          layout: JSON.stringify(this.getCompactLayout())
-        });
-      }
-
-      const saveData = this.getSaveState();
-
-      if (typeof localStorage !== "undefined" && localStorage !== null) {
-        // If no specific slot is requested, cycle through slots
-        if (slot === null) {
-          slot = this.getNextSaveSlot();
-        }
-
-        const saveKey = `reactorGameSave_${slot}`;
-        const payload = stringifySaveData(saveData);
-        if (slot === 1) {
-          rotateAndWriteSlot1(payload);
-        } else {
-          safeSetItem(saveKey, payload);
-        }
-        this.logger?.debug(`Game state saved to slot ${slot}. Size: ${payload.length} bytes.`);
-        this.debugHistory.add('game', 'Game saved', { slot, size: stringifySaveData(saveData).length });
-
-        // Update the current slot tracking
-        safeSetItem("reactorCurrentSaveSlot", slot.toString());
-      } else if (
-        typeof process !== "undefined" &&
-        process.env?.NODE_ENV === "test"
-      ) {
-        return;
-      }
-
-      // Only attempt Google Drive save if running in browser and googleDriveSave is defined
-      if (typeof window !== "undefined" && window.googleDriveSave && window.googleDriveSave.isSignedIn) {
-        window.googleDriveSave.save(stringifySaveData(saveData)).catch((error) => {
-          console.error("Failed to auto-save to Google Drive:", error);
-        });
-      }
-    } catch (error) {
-      if (
-        typeof process === "undefined" ||
-        process.env?.NODE_ENV !== "test" ||
-        !error.message.includes("localStorage")
-      ) {
-        console.error("Error saving game:", error);
-      }
-    }
-  }
-
-  getNextSaveSlot() {
-    // Get the current slot or default to 1
-    const currentSlot = parseInt(safeGetItem("reactorCurrentSaveSlot", "1"));
-    // Cycle through slots 1, 2, 3
-    return ((currentSlot % 3) + 1);
-  }
-
-  getSaveSlotInfo(slot) {
-    try {
-      const saveKey = `reactorGameSave_${slot}`;
-      const savedDataJSON = safeGetItem(saveKey);
-      if (savedDataJSON) {
-        const savedData = JSON.parse(savedDataJSON);
-        return {
-          exists: true,
-          lastSaveTime: savedData.last_save_time || null,
-          totalPlayedTime: savedData.total_played_time || 0,
-          currentMoney: savedData.current_money || 0,
-          exoticParticles: savedData.exotic_particles || 0,
-          data: savedData
-        };
-      }
-    } catch (error) {
-      console.error(`Error reading save slot ${slot}:`, error);
-    }
-    return { exists: false };
-  }
-
-  getAllSaveSlots() {
-    const slots = [];
-    for (let i = 1; i <= 3; i++) {
-      const slotInfo = this.getSaveSlotInfo(i);
-      slots.push({
-        slot: i,
-        ...slotInfo
-      });
-    }
-    return slots;
-  }
-
-  async loadGame(slot = null) {
-    this.debugHistory.add('game', 'loadGame called', { slot });
-    try {
-      let savedDataJSON;
-      let effectiveSlot = slot;
-
-      if (slot !== null) {
-        const saveKey = `reactorGameSave_${slot}`;
-        savedDataJSON = safeGetItem(saveKey);
-      } else {
-        savedDataJSON = safeGetItem("reactorGameSave");
-        if (!savedDataJSON) {
-          let mostRecentSlot = null;
-          let mostRecentTime = 0;
-          for (let i = 1; i <= 3; i++) {
-            const slotInfo = this.getSaveSlotInfo(i);
-            if (slotInfo.exists && slotInfo.lastSaveTime > mostRecentTime) {
-              mostRecentTime = slotInfo.lastSaveTime;
-              mostRecentSlot = i;
-            }
-          }
-          if (mostRecentSlot) {
-            effectiveSlot = mostRecentSlot;
-            savedDataJSON = safeGetItem(`reactorGameSave_${mostRecentSlot}`);
-          }
-        }
-      }
-
-      if (savedDataJSON) {
-        let savedData;
-        try {
-          savedData = JSON.parse(savedDataJSON);
-        } catch (parseErr) {
-          console.error("Error parsing save:", parseErr);
-          if (effectiveSlot === 1 && getBackupSaveForSlot1()) {
-            return { success: false, parseError: true, backupAvailable: true };
-          }
-          if (effectiveSlot !== null) {
-            safeRemoveItem(`reactorGameSave_${effectiveSlot}`);
-          } else {
-            safeRemoveItem("reactorGameSave");
-          }
-          return false;
-        }
-        this.debugHistory.add('game', 'Applying save data from slot', { slot, version: savedData.version });
-        await this.applySaveState(savedData);
-        return true;
-      }
-    } catch (error) {
-      console.error("Error loading game:", error);
-      if (slot !== null) {
-        safeRemoveItem(`reactorGameSave_${slot}`);
-      } else {
-        safeRemoveItem("reactorGameSave");
-      }
-    }
-    return false;
+    runComponentDepletion(this, tile);
   }
 
   async applySaveState(savedData) {
-    this.logger?.debug('Applying save state...', {
+    logger.log('debug', 'game', 'Applying save state...', {
       version: savedData.version,
       money: savedData.current_money,
       tiles: savedData.tiles?.length || 0,
       upgrades: savedData.upgrades?.length || 0,
       objectiveIndex: savedData.objectives?.current_objective_index
     });
-    this._isRestoringSave = true;
-    try {
-    this._current_money = toDecimal(savedData.current_money !== undefined ? savedData.current_money : this.base_money);
-    this.run_id = savedData.run_id || crypto.randomUUID();
-    this.tech_tree = savedData.tech_tree || null;
-    this.peak_power = (savedData.reactor?.current_power != null ? toDecimal(savedData.reactor.current_power).toNumber() : 0);
-    this.peak_heat = (savedData.reactor?.current_heat != null ? toDecimal(savedData.reactor.current_heat).toNumber() : 0);
-
-    if (savedData.base_rows) {
-      this.base_rows = savedData.base_rows;
-    } else {
-      this.base_rows = 12;
-    }
-    if (savedData.base_cols) {
-      this.base_cols = savedData.base_cols;
-    } else {
-      this.base_cols = 12;
-    }
-    if (!this.partset.initialized) {
-      await this.partset.initialize();
-    }
-    this.protium_particles = savedData.protium_particles || 0;
-    this.total_exotic_particles = toDecimal(savedData.total_exotic_particles ?? 0);
-    if (savedData.current_exotic_particles !== undefined) {
-      this.exotic_particles = toDecimal(savedData.current_exotic_particles);
-      this.current_exotic_particles = toDecimal(savedData.current_exotic_particles);
-    } else if (savedData.exotic_particles !== undefined) {
-      this.exotic_particles = toDecimal(savedData.exotic_particles);
-      this.current_exotic_particles = toDecimal(savedData.exotic_particles);
-    } else {
-      this.exotic_particles = toDecimal(0);
-      this.current_exotic_particles = toDecimal(0);
-    }
-    this.reality_flux = toDecimal(savedData.reality_flux ?? 0);
-    this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
-    this.rows = savedData.rows || this.base_rows;
-    this.cols = savedData.cols || this.base_cols;
-    this.sold_power = savedData.sold_power || false;
-    this.sold_heat = savedData.sold_heat || false;
-    this.grace_period_ticks = savedData.grace_period_ticks ?? (this._isRestoringSave ? 30 : 0);
-
-    this.total_played_time = savedData.total_played_time || 0;
-    this.last_save_time = savedData.last_save_time || null;
-    this.session_start_time = null;
-    // Restore cumulative placement history if present.
-    // If missing (older saves), backfill from current tiles to avoid locking users out.
-    if (savedData.placedCounts && typeof savedData.placedCounts === 'object') {
-      this.placedCounts = savedData.placedCounts;
-    } else {
-      this.placedCounts = {};
-    }
-
-    if (savedData.reactor) {
-      this.reactor.current_heat = toDecimal(savedData.reactor.current_heat ?? 0);
-      this.reactor.current_power = toDecimal(savedData.reactor.current_power ?? 0);
-      this.reactor.has_melted_down = savedData.reactor.has_melted_down || false;
-      if (typeof savedData.reactor.base_max_heat === "number") {
-        this.reactor.base_max_heat = savedData.reactor.base_max_heat;
-      }
-      if (typeof savedData.reactor.base_max_power === "number") {
-        this.reactor.base_max_power = savedData.reactor.base_max_power;
-      }
-      if (typeof savedData.reactor.altered_max_heat === "number") {
-        this.reactor.altered_max_heat = savedData.reactor.altered_max_heat;
-      }
-      if (typeof savedData.reactor.altered_max_power === "number") {
-        this.reactor.altered_max_power = savedData.reactor.altered_max_power;
-      }
-
-      // Update UI meltdown state properly
-      if (this.ui && typeof this.ui.updateMeltdownState === "function") {
-        this.ui.updateMeltdownState();
-      }
-    }
-
-    // Ensure upgradeset is properly initialized before loading upgrades
-    this.upgradeset.reset();
-    await this.upgradeset.initialize();
-    if (savedData.upgrades) {
-      savedData.upgrades.forEach((upgData) => {
-        const upgrade = this.upgradeset.getUpgrade(upgData.id);
-        if (upgrade) {
-          upgrade.setLevel(upgData.level);
-        }
-      });
-    }
-    if (this.upgradeset && this.tech_tree) {
-      this.upgradeset.sanitizeDoctrineUpgradeLevelsOnLoad(this.tech_tree);
-    }
-
-    // Update reactor stats after upgrades are loaded
-    this.reactor.updateStats();
-
-    // Ensure tileset is initialized before loading tiles
-    if (!this.tileset.initialized) {
-      this.tileset.initialize();
-    }
-    this.tileset.clearAllTiles();
-    if (savedData.tiles) {
-      const prevSuppress = this._suppressPlacementCounting;
-      this._suppressPlacementCounting = true;
-      for (const tileData of savedData.tiles) {
-        const tile = this.tileset.getTile(tileData.row, tileData.col);
-        const part = this.partset.getPartById(tileData.partId);
-        if (tile && part) {
-          await tile.setPart(part);
-          tile.ticks = tileData.ticks;
-          tile.heat_contained = tileData.heat_contained;
-        } else {
-        }
-      }
-      this._suppressPlacementCounting = prevSuppress;
-
-      // Backfill placedCounts if it was missing in save data
-      if (!savedData.placedCounts) {
-        for (const tile of this.tileset.tiles_list) {
-          if (tile.part) {
-            const key = `${tile.part.type}:${tile.part.level}`;
-            this.placedCounts[key] = (this.placedCounts[key] || 0) + 1;
-          }
-        }
-      }
-    }
-
-    // Restore objectives state
-    if (savedData.objectives) {
-      let savedIndex = savedData.objectives.current_objective_index;
-      if (savedIndex === null || savedIndex === undefined) {
-        savedIndex = 0;
-      } else {
-        const parsedIndex = parseInt(savedIndex, 10);
-        if (isNaN(parsedIndex)) {
-          console.warn(`[Game] Invalid objective index "${savedData.objectives.current_objective_index}" in save data. Defaulting to 0.`);
-          savedIndex = 0;
-        } else {
-          savedIndex = Math.floor(parsedIndex);
-        }
-      }
-
-      if (this.objectives_manager && this.objectives_manager.objectives_data && this.objectives_manager.objectives_data.length > 0) {
-        const objectivesData = this.objectives_manager.objectives_data;
-        const lastDef = objectivesData[objectivesData.length - 1];
-        const maxValidIndex = (lastDef && lastDef.checkId === "allObjectives") ? objectivesData.length - 2 : objectivesData.length - 1;
-
-        if (savedIndex < 0) {
-          console.warn(`[DEBUG] Saved objective index ${savedData.objectives.current_objective_index} is Negative. Clamping to 0.`);
-          savedIndex = 0;
-        } else if (savedIndex > maxValidIndex) {
-          console.warn(`[DEBUG] Saved objective index ${savedIndex} is beyond valid range (0-${maxValidIndex}). Clamping to ${maxValidIndex}.`);
-          savedIndex = maxValidIndex;
-        }
-      }
-
-      if (savedData.objectives.infinite_objective && this.objectives_manager) {
-        const inf = savedData.objectives.infinite_objective;
-        this.objectives_manager.infiniteObjective = {
-          title: inf.title,
-          checkId: inf.checkId,
-          target: inf.target,
-          reward: inf.reward,
-          completed: !!inf.completed,
-        };
-        if (inf._lastInfinitePowerTarget != null) this.objectives_manager._lastInfinitePowerTarget = inf._lastInfinitePowerTarget;
-        if (inf._lastInfiniteHeatMaintain != null) this.objectives_manager._lastInfiniteHeatMaintain = inf._lastInfiniteHeatMaintain;
-        if (inf._lastInfiniteMoneyThorium != null) this.objectives_manager._lastInfiniteMoneyThorium = inf._lastInfiniteMoneyThorium;
-        if (inf._lastInfiniteHeat != null) this.objectives_manager._lastInfiniteHeat = inf._lastInfiniteHeat;
-        if (inf._lastInfiniteEP != null) this.objectives_manager._lastInfiniteEP = inf._lastInfiniteEP;
-        if (inf._infiniteChallengeIndex != null) this.objectives_manager._infiniteChallengeIndex = inf._infiniteChallengeIndex;
-        if (inf._infiniteCompletedCount != null) this.objectives_manager._infiniteCompletedCount = inf._infiniteCompletedCount;
-      }
-
-      // 3. Restore completion status first
-      if (
-        savedData.objectives.completed_objectives &&
-        Array.isArray(savedData.objectives.completed_objectives)
-      ) {
-        console.log(`[DEBUG] Restoring ${savedData.objectives.completed_objectives.length} completed objectives`);
-        savedData.objectives.completed_objectives.forEach((completed, index) => {
-          if (this.objectives_manager.objectives_data[index]) {
-            this.objectives_manager.objectives_data[index].completed = completed;
-            if (completed) {
-              console.log(`[DEBUG] Restored objective ${index} as completed: ${this.objectives_manager.objectives_data[index].title}`);
-            }
-          }
-        });
-      } else {
-        console.log(`[DEBUG] No completed objectives data found in save`);
-      }
-
-      // 4. Apply the final, validated index.
-      this.objectives_manager.current_objective_index = savedIndex;
-      this._saved_objective_index = savedIndex;
-
-      // 5. Update the objective manager to reflect the new index
-      // Only call set_objective if objectives data is loaded
-      if (this.objectives_manager && this.objectives_manager.set_objective &&
-        this.objectives_manager.objectives_data && this.objectives_manager.objectives_data.length > 0) {
-        this.objectives_manager.set_objective(savedIndex, true);
-
-        // Check for chapter completion after loading save data
-        if (this.objectives_manager.checkForChapterCompletion) {
-          this.objectives_manager.checkForChapterCompletion();
-        }
-      }
-    } else {
-      // If no objectives object exists in the save, default to 0.
-      this._saved_objective_index = 0;
-      if (this.objectives_manager) {
-        this.objectives_manager.current_objective_index = 0;
-      }
-    }
-
-    this._pendingToggleStates = savedData.toggles;
-    if (savedData.toggles && this.ui && this.ui.stateManager) {
-      this.ui.stateManager.setGame(this);
-      Object.entries(savedData.toggles).forEach(([key, value]) => {
-        this.ui.stateManager.setVar(key, value);
-      });
-    }
-    if (savedData.quick_select_slots && this.ui?.stateManager) {
-      this.ui.stateManager.setQuickSelectSlots(savedData.quick_select_slots);
-    }
-    this.ui.updateAllToggleBtnStates();
-    this.reactor.updateStats();
-    
-    for (let r = 0; r < Math.min(this.rows, 5); r++) {
-      for (let c = 0; c < Math.min(this.cols, 5); c++) {
-        const tile = this.tileset.getTile(r, c);
-        if (tile?.part) {
-        }
-      }
-    }
-    } finally {
-      this._isRestoringSave = false;
-    }
+    await this.saveOrchestrator.applySaveState(this, savedData);
   }
 
-  /**
-   * Validates and restores objective state consistency
-   * This helps prevent objective resets when the app regains focus
-   */
-  _validateObjectiveState() {
-    if (!this.objectives_manager || this._saved_objective_index === undefined) {
-      return;
-    }
-
-    const currentIndex = this.objectives_manager.current_objective_index;
-    const savedIndex = this._saved_objective_index;
-
-    if (currentIndex !== savedIndex) {
-      console.warn(`[Game] Objective state inconsistency detected: current=${currentIndex}, saved=${savedIndex}. Restoring...`);
-
-      // Restore the saved objective index
-      this.objectives_manager.current_objective_index = savedIndex;
-
-      // Update the objective display if the method exists
-      if (this.objectives_manager.set_objective && this.objectives_manager.objectives_data) {
-        this.objectives_manager.set_objective(savedIndex, true);
-      }
-
-      // Force a save to persist the corrected state
-      setTimeout(() => {
-        if (typeof this.saveGame === "function") {
-          this.saveGame();
-        }
-      }, 100);
-    }
-  }
-
-  compressSaveData(data) {
-    try {
-      // Simple compression for testing - in real implementation would use proper compression
-      return btoa(encodeURIComponent(data));
-    } catch (error) {
-      console.error("Compression error:", error);
-      return data;
-    }
-  }
-
-  decompressSaveData(compressedData) {
-    try {
-      // Simple decompression for testing
-      return decodeURIComponent(atob(compressedData));
-    } catch (error) {
-      console.error("Decompression error:", error);
-      return compressedData;
-    }
-  }
-
-  validateSaveData(data) {
-    try {
-      if (typeof data === 'string') {
-        data = JSON.parse(data);
-      }
-
-      // Basic validation - check for required fields
-      const requiredFields = ['version', 'current_money', 'rows', 'cols'];
-      for (const field of requiredFields) {
-        if (!(field in data)) {
-          return false;
-        }
-      }
-
-      if (typeof data.rows !== 'number' || typeof data.cols !== 'number') return false;
-      const m = data.current_money;
-      if (m === undefined) return false;
-      if (typeof m !== 'number' && typeof m !== 'string' && (typeof m !== 'object' || m === null)) return false;
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  // Additional test compatibility methods
-  pause() {
-    this.paused = true;
-    if (this.ui && this.ui.stateManager) {
-      this.ui.stateManager.setVar("pause", true);
-    }
-    if (this.engine && this.engine.running) {
-      this.engine.stop();
-    }
-  }
-
-  resume() {
-    this.paused = false;
-    if (this.ui && this.ui.stateManager) {
-      this.ui.stateManager.setVar("pause", false);
-    }
-    if (this.engine && !this.engine.running) {
-      this.engine.start();
-    }
-  }
-
-  togglePause() {
-    if (this.paused) {
-      this.resume();
-    } else {
-      this.pause();
-    }
-  }
+  pause() { this.sessionManager.pause(); }
+  resume() { this.sessionManager.resume(); }
+  togglePause() { this.sessionManager.togglePause(); }
 
   async reboot() {
-    // Stop the engine
-    if (this.engine && this.engine.running) {
-      this.engine.stop();
-    }
-
-    // Reset basic game state
-    this.paused = false;
-    this._current_money = toDecimal(0);
-    this.tech_tree = null;
-    this.exotic_particles = toDecimal(0);
-    this.current_exotic_particles = toDecimal(0);
-    this.protium_particles = 0;
-    this.total_exotic_particles = toDecimal(0);
-    this.reality_flux = toDecimal(0);
-
-    // Reset reactor dimensions to base values
-    this.rows = this.base_rows;
-    this.cols = this.base_cols;
-
-    // For testing, reset to 5x5 grid if that's what was set up
-    if (this._test_grid_size) {
-      this.rows = this._test_grid_size.rows;
-      this.cols = this._test_grid_size.cols;
-    }
-
-    // Reset reactor
-    if (this.reactor) {
-      this.reactor.current_heat = 0;
-      this.reactor.current_power = 0;
-      this.reactor.has_melted_down = false;
-      this.reactor.updateStats();
-    }
-
-    // Clear all tiles
-    if (this.tileset) {
-      this.tileset.clearAllTiles();
-    }
-
-    // Reset upgrades (but preserve experimental ones)
-    if (this.upgradeset) {
-      this.upgradeset.upgradesArray.forEach(upgrade => {
-        if (!upgrade.upgrade.type.includes('experimental')) {
-          upgrade.level = 0;
-        }
-      });
-    }
-
-    // Update UI state
-    if (this.ui && this.ui.stateManager) {
-      this.ui.stateManager.setVar("current_money", this.current_money);
-      this.ui.stateManager.setVar("exotic_particles", this.exotic_particles);
-      this.ui.stateManager.setVar("current_exotic_particles", this.current_exotic_particles);
-    }
+    await runFullReboot(this);
   }
 
   onToggleStateChange(toggleName, value) {
-    console.log(`[TOGGLE] Game.onToggleStateChange called: "${toggleName}" = ${value}`);
-    
-    if (this.ui && this.ui.stateManager) {
-      this.ui.stateManager.setVar(toggleName, value);
-    }
-
-    // Handle specific toggle changes
-    switch (toggleName) {
-      case "auto_sell":
-        const prevAutoSell = this.reactor?.auto_sell_enabled;
-        if (this.reactor) {
-          this.reactor.auto_sell_enabled = value;
-          console.log(`[TOGGLE] reactor.auto_sell_enabled: ${prevAutoSell} -> ${this.reactor.auto_sell_enabled}`);
-        }
-        break;
-      case "auto_buy":
-        const prevAutoBuy = this.reactor?.auto_buy_enabled;
-        if (this.reactor) {
-          this.reactor.auto_buy_enabled = value;
-          console.log(`[TOGGLE] reactor.auto_buy_enabled: ${prevAutoBuy} -> ${this.reactor.auto_buy_enabled}`);
-        }
-        break;
-      case "heat_control":
-        const prevHeatControl = this.reactor?.heat_controlled;
-        if (this.reactor) {
-          this.reactor.heat_controlled = value;
-          console.log(`[TOGGLE] reactor.heat_controlled: ${prevHeatControl} -> ${this.reactor.heat_controlled}`);
-        }
-        break;
-      case "time_flux":
-        const previousValue = this.time_flux;
-        console.log(`[TIME FLUX] Game.onToggleStateChange called: previousValue=${previousValue}, newValue=${value}`);
-        this.time_flux = value;
-        console.log(`[TIME FLUX] Game.time_flux updated to: ${this.time_flux}`);
-        if (this.logger && previousValue !== value) {
-          const accumulator = this.engine?.time_accumulator || 0;
-          const queuedTicks = accumulator > 0 ? Math.floor(accumulator / this.loop_wait) : 0;
-          this.logger.debug(`[TIME FLUX] Toggle changed: ${previousValue ? 'ON' : 'OFF'} -> ${value ? 'ON' : 'OFF'}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}`);
-        }
-        break;
-      case "pause":
-        const prevPaused = this.paused;
-        this.paused = value;
-        console.log(`[TOGGLE] game.paused: ${prevPaused} -> ${this.paused}`);
-
-        // Fix for PageRouter auto-resume bug:
-        // If the pause state is manually toggled (not during navigation),
-        // we must clear the navigationPaused flag so we don't auto-resume later.
-        if (this.router && this.router.navigationPaused && !this.router.isNavigating) {
-          console.log("[TOGGLE] Clearing PageRouter.navigationPaused due to manual pause change");
-          this.router.navigationPaused = false;
-        }
-
-          if (this.engine) {
-          if (value) {
-            this.engine.stop();
-            console.log(`[TOGGLE] Engine stopped`);
-          } else {
-            this.engine.start();
-            console.log(`[TOGGLE] Engine started`);
-          }
-        }
-        break;
-      default:
-        break;
-    }
+    this.configManager.onToggleStateChange(toggleName, value);
   }
 
-  // Test compatibility methods
-  save() {
-    return stringifySaveData(this.getSaveState());
-  }
-
-  async load(saveData) {
-    try {
-      const parsed = JSON.parse(saveData);
-      await this.applySaveState(parsed);
-      return true;
-    } catch (error) {
-      console.error("Error loading save data:", error);
-      return false;
-    }
+  execute(action) {
+    return executeAction(this, action);
   }
 
   getConfiguration() {
-    return {
-      gameSpeed: this.loop_wait,
-      autoSave: this._config?.autoSave ?? true, // Use stored config or default
-      soundEnabled: this._config?.soundEnabled ?? true, // Use stored config or default
-      autoSaveInterval: this._config?.autoSaveInterval ?? 30000 // Use stored config or default
-    };
+    return this.configManager.getConfiguration();
   }
 
   setConfiguration(config) {
-    if (config.gameSpeed !== undefined) {
-      this.loop_wait = config.gameSpeed;
-    }
-    // Store other config values as needed
-    this._config = { ...this._config, ...config };
+    this.configManager.setConfiguration(config);
+  }
+
+  action_pasteLayout(layout, options = {}) {
+    const bp = new BlueprintService(this);
+    bp.applyLayout(layout, options.skipCostDeduction === true);
+    this.emit("layoutPasted", { layout });
   }
 }

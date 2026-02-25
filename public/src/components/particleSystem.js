@@ -33,10 +33,9 @@ export class ParticleSystem {
     const count = Math.max(2, Math.min(24, Math.round(STEAM_COUNT * scale)));
     const baseRadius = 1.5 + scale * 1.5;
     const maxLife = STEAM_DURATION_MS * (0.7 + scale * 0.3);
-    for (let i = 0; i < count; i++) {
-      if (this._steam.length >= STEAM_MAX) this._steam.shift();
+    const newParticles = Array.from({ length: count }, () => {
       const offsetX = (Math.random() - 0.5) * STEAM_SPREAD * scale;
-      this._steam.push({
+      return {
         x: clientX,
         y: clientY,
         vx: offsetX * 0.04,
@@ -46,13 +45,16 @@ export class ParticleSystem {
         radius: baseRadius * (0.7 + Math.random() * 0.6),
         startRadius: baseRadius * (0.7 + Math.random() * 0.6),
         opacityScale: Math.min(1, scale),
-      });
-    }
+      };
+    });
+    newParticles.forEach((p) => {
+      if (this._steam.length >= STEAM_MAX) this._steam.shift();
+      this._steam.push(p);
+    });
   }
 
   createSellSparks(fromClientX, fromClientY, toClientX, toClientY) {
-    for (let i = 0; i < SPARK_COUNT; i++) {
-      if (this._sparks.length >= SPARK_MAX) this._sparks.shift();
+    const newSparks = Array.from({ length: SPARK_COUNT }, (_, i) => {
       const t = (i + Math.random()) / SPARK_COUNT;
       const spread = 8 + Math.random() * 12;
       const fromX = fromClientX + (Math.random() - 0.5) * spread;
@@ -60,7 +62,7 @@ export class ParticleSystem {
       const toX = toClientX + (Math.random() - 0.5) * spread;
       const toY = toClientY + (Math.random() - 0.5) * spread;
       const delay = Math.random() * 80;
-      this._sparks.push({
+      return {
         fromX,
         fromY,
         toX,
@@ -68,8 +70,12 @@ export class ParticleSystem {
         life: -delay,
         maxLife: SPARK_DURATION_MS + delay,
         radius: 2 + Math.random() * 2,
-      });
-    }
+      };
+    });
+    newSparks.forEach((s) => {
+      if (this._sparks.length >= SPARK_MAX) this._sparks.shift();
+      this._sparks.push(s);
+    });
   }
 
   createBoltParticle(fromClientX, fromClientY, toClientX, toClientY) {
@@ -85,13 +91,12 @@ export class ParticleSystem {
   }
 
   createCriticalBuildupEmbers(centerX, centerY) {
-    for (let i = 0; i < CRITICAL_EMBER_COUNT; i++) {
-      if (this._embers.length >= EMBER_MAX) this._embers.shift();
+    const newEmbers = Array.from({ length: CRITICAL_EMBER_COUNT }, (_, i) => {
       const angle = (i / CRITICAL_EMBER_COUNT) * Math.PI * 2 + Math.random() * 0.5;
       const dist = Math.random() * CRITICAL_EMBER_SPREAD * 0.5;
       const vx = Math.cos(angle) * 0.08;
       const vy = -0.12 - Math.random() * 0.08;
-      this._embers.push({
+      return {
         x: centerX + Math.cos(angle) * dist,
         y: centerY + Math.sin(angle) * dist,
         vx,
@@ -100,40 +105,36 @@ export class ParticleSystem {
         maxLife: CRITICAL_EMBER_DURATION_MS,
         radius: 2.5 + Math.random() * 2,
         startRadius: 2.5,
-      });
-    }
+      };
+    });
+    newEmbers.forEach((e) => {
+      if (this._embers.length >= EMBER_MAX) this._embers.shift();
+      this._embers.push(e);
+    });
   }
 
   update(dtMs) {
-    for (let i = this._steam.length - 1; i >= 0; i--) {
-      const p = this._steam[i];
+    this._steam.forEach((p) => {
       p.life += dtMs;
       p.x += p.vx * dtMs;
       p.y += p.vy * dtMs;
-      if (p.life >= p.maxLife) this._steam.splice(i, 1);
-    }
-    for (let i = this._bolts.length - 1; i >= 0; i--) {
-      const b = this._bolts[i];
-      b.life += dtMs;
-      if (b.life >= b.maxLife) this._bolts.splice(i, 1);
-    }
-    for (let i = this._embers.length - 1; i >= 0; i--) {
-      const p = this._embers[i];
+    });
+    this._steam = this._steam.filter((p) => p.life < p.maxLife);
+    this._bolts.forEach((b) => { b.life += dtMs; });
+    this._bolts = this._bolts.filter((b) => b.life < b.maxLife);
+    this._embers.forEach((p) => {
       p.life += dtMs;
       p.x += p.vx * dtMs;
       p.y += p.vy * dtMs;
-      if (p.life >= p.maxLife) this._embers.splice(i, 1);
-    }
-    for (let i = this._sparks.length - 1; i >= 0; i--) {
-      const s = this._sparks[i];
-      s.life += dtMs;
-      if (s.life >= s.maxLife) this._sparks.splice(i, 1);
-    }
+    });
+    this._embers = this._embers.filter((p) => p.life < p.maxLife);
+    this._sparks.forEach((s) => { s.life += dtMs; });
+    this._sparks = this._sparks.filter((s) => s.life < s.maxLife);
   }
 
   draw(ctx) {
     if (!ctx || this._w <= 0 || this._h <= 0) return;
-    for (const p of this._steam) {
+    this._steam.forEach((p) => {
       const t = p.life / p.maxLife;
       const opacityScale = p.opacityScale != null ? p.opacityScale : 1;
       const alpha = 0.6 * opacityScale * (1 - t);
@@ -142,8 +143,8 @@ export class ParticleSystem {
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
-    }
-    for (const b of this._bolts) {
+    });
+    this._bolts.forEach((b) => {
       const t = Math.min(1, b.life / b.maxLife);
       const x = b.fromX + (b.toX - b.fromX) * t;
       const y = b.fromY + (b.toY - b.fromY) * t;
@@ -155,8 +156,8 @@ export class ParticleSystem {
       ctx.globalAlpha = alpha;
       ctx.fillText("\u26A1", x, y);
       ctx.restore();
-    }
-    for (const p of this._embers) {
+    });
+    this._embers.forEach((p) => {
       const t = p.life / p.maxLife;
       const alpha = 0.85 * (1 - t) * (0.5 + 0.5 * (1 - t));
       const r = p.startRadius + t * 2.5;
@@ -167,9 +168,9 @@ export class ParticleSystem {
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
-    }
-    for (const s of this._sparks) {
-      if (s.life < 0) continue;
+    });
+    this._sparks.forEach((s) => {
+      if (s.life < 0) return;
       const t = Math.min(1, s.life / s.maxLife);
       const x = s.fromX + (s.toX - s.fromX) * t;
       const y = s.fromY + (s.toY - s.fromY) * t;
@@ -179,6 +180,6 @@ export class ParticleSystem {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
-    }
+    });
   }
 }

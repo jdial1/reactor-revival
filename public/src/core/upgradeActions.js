@@ -1,3 +1,6 @@
+import { BALANCE } from "./balanceConfig.js";
+import { logger } from "../utils/logger.js";
+import { MOBILE_BREAKPOINT_PX, RESIZE_DELAY_MS, BASE_MAX_POWER, BASE_MAX_HEAT, MAX_PART_VARIANTS } from "./constants.js";
 function updateAllPartStats(game, partType) {
   "use strict";
   // First, update the templates in the partset
@@ -7,16 +10,14 @@ function updateAllPartStats(game, partType) {
     basePart.recalculate_stats();
   }
   // Update numbered parts
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= MAX_PART_VARIANTS; i++) {
     const part = game.partset.getPartById(`${partType}${i}`);
-    if (part) {
-      part.recalculate_stats();
-    }
+    if (part) part.recalculate_stats();
   }
   // Then, update the instances on the grid
   game.tileset.tiles_list.forEach(tile => {
     if (tile.part && tile.part.category === partType) {
-      game.logger?.debug(`Updating part ${tile.part.id} (category: ${tile.part.category}) on tile (${tile.row}, ${tile.col})`);
+      logger.log('debug', 'game', `Updating part ${tile.part.id} (category: ${tile.part.category}) on tile (${tile.row}, ${tile.col})`);
       tile.part.recalculate_stats();
     }
   });
@@ -25,9 +26,8 @@ function updateAllPartStats(game, partType) {
 const actions = {
   // Core Game Mechanics
   chronometer: (upgrade, game) => {
-    // The description implies halving the time
     game.loop_wait = game.base_loop_wait / (1 + upgrade.level);
-    game.ui.stateManager.setVar("loop_wait", game.loop_wait);
+    game.emit?.("statePatch", { loop_wait: game.loop_wait });
   },
   forceful_fusion: (upgrade, game) => {
     game.reactor.heat_power_multiplier = upgrade.level;
@@ -36,51 +36,33 @@ const actions = {
   heat_control_operator: (upgrade, game) => {
     const isEnabled = upgrade.level > 0;
     game.reactor.heat_controlled = isEnabled;
-    game.ui.stateManager.setVar("heat_control", isEnabled);
+    game.onToggleStateChange?.("heat_control", isEnabled);
   },
   heat_outlet_control_operator: (upgrade, game) => {
     game.reactor.heat_outlet_controlled = upgrade.level > 0;
   },
   expand_reactor_rows: (upgrade, game) => {
     game.rows = game.base_rows + upgrade.level;
-    if (
-      game.ui &&
-      typeof window !== "undefined" &&
-      window.innerWidth &&
-      window.innerWidth <= 900
-    ) {
-      setTimeout(() => {
-        game.ui.resizeReactor();
-      }, 50);
+    if (typeof window !== "undefined" && window.innerWidth && window.innerWidth <= MOBILE_BREAKPOINT_PX) {
+      setTimeout(() => game.emit?.("gridResized"), RESIZE_DELAY_MS);
     }
   },
   expand_reactor_cols: (upgrade, game) => {
     game.cols = game.base_cols + upgrade.level;
-    if (
-      game.ui &&
-      typeof window !== "undefined" &&
-      window.innerWidth &&
-      window.innerWidth <= 900
-    ) {
-      setTimeout(() => {
-        game.ui.resizeReactor();
-      }, 50);
+    if (typeof window !== "undefined" && window.innerWidth && window.innerWidth <= MOBILE_BREAKPOINT_PX) {
+      setTimeout(() => game.emit?.("gridResized"), RESIZE_DELAY_MS);
     }
   },
   improved_piping: (upgrade, game) => {
     game.reactor.manual_heat_reduce =
       game.base_manual_heat_reduce * Math.pow(10, upgrade.level);
-    game.ui.stateManager.setVar(
-      "manual_heat_reduce",
-      game.reactor.manual_heat_reduce,
-      true
-    );
+    game.emit?.("statePatch", { manual_heat_reduce: game.reactor.manual_heat_reduce });
   },
   improved_alloys: (upgrade, game) => {
     updateAllPartStats(game, "reactor_plating");
   },
   improved_power_lines: (upgrade, game) => {
-    game.reactor.auto_sell_multiplier = 0.01 * upgrade.level;
+    game.reactor.auto_sell_multiplier = BALANCE.autoSellMultiplierPerLevel * upgrade.level;
     game.reactor.updateStats();
   },
   improved_wiring: (upgrade, game) => {
@@ -101,7 +83,7 @@ const actions = {
     });
   },
   improved_heat_vents: (upgrade, game) => {
-    game.logger?.debug(`improved_heat_vents upgrade action called with level ${upgrade.level}`);
+    logger.log('debug', 'game', `improved_heat_vents upgrade action called with level ${upgrade.level}`);
     updateAllPartStats(game, "vent");
   },
 
@@ -110,7 +92,7 @@ const actions = {
   },
   perpetual_reflectors: (upgrade, game) => {
     game.reactor.perpetual_reflectors = upgrade.level > 0;
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= MAX_PART_VARIANTS; i++) {
       const part = game.partset.getPartById(`reflector${i}`);
       if (part) {
         part.perpetual = !!upgrade.level;
@@ -132,15 +114,15 @@ const actions = {
   },
 
   stirling_generators: (upgrade, game) => {
-    game.reactor.stirling_multiplier = upgrade.level * 0.01;
+    game.reactor.stirling_multiplier = upgrade.level * BALANCE.stirlingMultiplierPerLevel;
   },
 
   market_lobbying: (upgrade, game) => {
-    game.reactor.sell_price_multiplier = 1 + (upgrade.level * 0.1);
+    game.reactor.sell_price_multiplier = 1 + (upgrade.level * BALANCE.marketLobbyingMultPerLevel);
   },
 
   emergency_coolant: (upgrade, game) => {
-    game.reactor.manual_vent_percent = upgrade.level * 0.005;
+    game.reactor.manual_vent_percent = upgrade.level * BALANCE.emergencyCoolantMultPerLevel;
   },
 
   component_reinforcement: (upgrade, game) => {
@@ -160,7 +142,7 @@ const actions = {
   },
 
   reflector_cooling: (upgrade, game) => {
-    game.reactor.reflector_cooling_factor = upgrade.level * 0.02;
+    game.reactor.reflector_cooling_factor = upgrade.level * BALANCE.reflectorCoolingFactorPerLevel;
     game.reactor.updateStats();
   },
 
@@ -172,23 +154,23 @@ const actions = {
   },
 
   reactor_insurance: (upgrade, game) => {
-    game.reactor.insurance_percentage = upgrade.level * 0.10;
+    game.reactor.insurance_percentage = upgrade.level * BALANCE.insurancePercentPerLevel;
   },
 
   manual_override: (upgrade, game) => {
-    game.reactor.manual_override_mult = upgrade.level * 0.10;
+    game.reactor.manual_override_mult = upgrade.level * BALANCE.manualOverrideMultPerLevel;
   },
 
   convective_airflow: (upgrade, game) => {
-    game.reactor.convective_boost = upgrade.level * 0.10;
+    game.reactor.convective_boost = upgrade.level * BALANCE.convectiveBoostPerLevel;
   },
 
   electro_thermal_conversion: (upgrade, game) => {
-    game.reactor.power_to_heat_ratio = 2 + ((upgrade.level - 1) * 0.5);
+    game.reactor.power_to_heat_ratio = BALANCE.electroThermalBaseRatio + ((upgrade.level - 1) * BALANCE.electroThermalStep);
   },
 
   sub_atomic_catalysts: (upgrade, game) => {
-    game.reactor.catalyst_reduction = upgrade.level * 0.05;
+    game.reactor.catalyst_reduction = upgrade.level * BALANCE.catalystReductionPerLevel;
     updateAllPartStats(game, "particle_accelerator");
   },
 
@@ -197,7 +179,7 @@ const actions = {
   },
 
   thermal_feedback: (upgrade, game) => {
-    game.reactor.thermal_feedback_rate = upgrade.level * 0.1;
+    game.reactor.thermal_feedback_rate = upgrade.level * BALANCE.thermalFeedbackRatePerLevel;
   },
 
   autonomic_repair: (upgrade, game) => {
@@ -205,11 +187,11 @@ const actions = {
   },
 
   volatile_tuning: (upgrade, game) => {
-    game.reactor.volatile_tuning_max = upgrade.level * 0.05;
+    game.reactor.volatile_tuning_max = upgrade.level * BALANCE.volatileTuningMaxPerLevel;
   },
 
   ceramic_composite: (upgrade, game) => {
-    game.reactor.plating_transfer_rate = upgrade.level * 0.05;
+    game.reactor.plating_transfer_rate = upgrade.level * BALANCE.platingTransferRatePerLevel;
     updateAllPartStats(game, "reactor_plating");
     game.tileset.tiles_list.forEach(tile => {
       if (tile.part && tile.part.category === "reactor_plating") {
@@ -266,9 +248,9 @@ const actions = {
   },
   phlembotinum_core: (upgrade, game) => {
     game.reactor.base_max_power =
-      100 * Math.pow(4, upgrade.level);
+      BASE_MAX_POWER * Math.pow(BALANCE.phlembotinumMultiplier, upgrade.level);
     game.reactor.base_max_heat =
-      1000 * Math.pow(4, upgrade.level);
+      BASE_MAX_HEAT * Math.pow(BALANCE.phlembotinumMultiplier, upgrade.level);
     // Ensure altered stats track the new base so updateStats applies the boost
     game.reactor.altered_max_power = game.reactor.base_max_power;
     game.reactor.altered_max_heat = game.reactor.base_max_heat;

@@ -813,6 +813,58 @@ describe("Engine Mechanics", () => {
     });
   });
 
+  describe("Heat payload transfer buffers (detached ArrayBuffer regression)", () => {
+    it("should not transfer engine persistent buffers in transfer mode", async () => {
+      game.engine.setForceNoSAB(true);
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "heat_inlet1");
+      await placePart(game, 0, 1, "heat_exchanger1");
+      await placePart(game, 1, 0, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+      game.engine._updateValveNeighborCache();
+
+      const payload = game.engine._buildHeatPayload(1);
+      expect(payload).toBeDefined();
+      expect(payload.transferList).toBeDefined();
+
+      const engineInletBuf = game.engine._heatPayload_inlets?.buffer;
+      const engineValvesBuf = game.engine._heatPayload_valves?.buffer;
+      const engineValveNbrBuf = game.engine._heatPayload_valveNeighbors?.buffer;
+      const engineExchBuf = game.engine._heatPayload_exchangers?.buffer;
+      const engineOutBuf = game.engine._heatPayload_outlets?.buffer;
+
+      if (engineInletBuf) expect(payload.transferList).not.toContain(engineInletBuf);
+      if (engineValvesBuf) expect(payload.transferList).not.toContain(engineValvesBuf);
+      if (engineValveNbrBuf) expect(payload.transferList).not.toContain(engineValveNbrBuf);
+      if (engineExchBuf) expect(payload.transferList).not.toContain(engineExchBuf);
+      if (engineOutBuf) expect(payload.transferList).not.toContain(engineOutBuf);
+    });
+
+    it("should allow sync ticks after simulated transfer without detached ArrayBuffer error", async () => {
+      game.engine.setForceNoSAB(true);
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "heat_inlet1");
+      await placePart(game, 0, 1, "heat_exchanger1");
+      await placePart(game, 1, 0, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+      game.engine._updateValveNeighborCache();
+
+      const payload = game.engine._buildHeatPayload(1);
+      const ch = new MessageChannel();
+      ch.port1.postMessage({}, payload.transferList);
+
+      expect(() => {
+        game.engine.heatManager.processTick(1);
+      }).not.toThrow();
+
+      for (let i = 0; i < 5; i++) {
+        expect(() => game.engine.heatManager.processTick(1)).not.toThrow();
+      }
+    });
+  });
+
   it("should not process ticks when game is paused", () => {
     // Set up a simple scenario with a fuel cell
     const fuelPart = game.partset.getPartById("uranium1");

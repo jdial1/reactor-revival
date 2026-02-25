@@ -389,6 +389,7 @@
       "description": "Cells: +100% power.",
       "ecost": 100,
       "multiplier": 2,
+      "ecost_multiplier": 2,
       "levels": 10,
       "icon": "img/parts/cells/cell_5_2.png"
     },

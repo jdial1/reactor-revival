@@ -1,25 +1,18 @@
-// src/services/dataService.js
-// Service for loading and managing game data from JSON files
+import { z } from "../../lib/zod.js";
+import { logger } from "../utils/logger.js";
+import { PartDefinitionSchema, UpgradeDefinitionSchema, DifficultyPresetSchema } from "../core/schemas.js";
 
-import { toDecimal } from "../utils/decimal.js";
-
-const PART_COST_KEYS = [
-  "base_cost",
-  "base_ecost",
-  "cell_tick_upgrade_cost",
-  "cell_power_upgrade_cost",
-  "cell_perpetual_upgrade_cost"
-];
-
-function normalizePartCosts(arr) {
-  if (!Array.isArray(arr)) return arr;
-  return arr.map((item) => {
-    const out = { ...item };
-    for (const key of PART_COST_KEYS) {
-      if (key in out && out[key] != null) out[key] = toDecimal(out[key]);
+function failSafeParse(schema, data, context) {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    const msg = `Data validation failed for ${context}: ${result.error.message}`;
+    logger.log("error", "data", msg, result.error.issues);
+    if (typeof window !== "undefined" && typeof window.alert === "function") {
+      window.alert(`Failed to load game data. See console for details.`);
     }
-    return out;
-  });
+    throw new Error(msg);
+  }
+  return result.data;
 }
 
 // Dynamic imports for Node.js compatibility
@@ -29,9 +22,11 @@ let fs, path, fileURLToPath, __filename, __dirname;
 const initNodeModules = async () => {
     if (!fs) {
         try {
-            const fsModule = await import('fs');
-            const pathModule = await import('path');
-            const urlModule = await import('url');
+            const [fsModule, pathModule, urlModule] = await Promise.all([
+                import('fs'),
+                import('path'),
+                import('url')
+            ]);
 
             fs = fsModule.default;
             path = pathModule.default;
@@ -40,7 +35,7 @@ const initNodeModules = async () => {
             __filename = fileURLToPath(import.meta.url);
             __dirname = path.dirname(__filename);
         } catch (error) {
-            console.warn('Node.js modules not available:', error.message);
+            logger.log('warn', 'data', 'Node.js modules not available:', error.message);
         }
     }
 };
@@ -48,6 +43,26 @@ const initNodeModules = async () => {
 class DataService {
     constructor() {
         this.cache = new Map();
+        this._allDataLoadedPromise = null;
+    }
+
+    async ensureAllGameDataLoaded() {
+        if (!this._allDataLoadedPromise) {
+            this._allDataLoadedPromise = Promise.all([
+                this.loadPartList(),
+                this.loadUpgradeList(),
+                this.loadTechTree(),
+                this.loadObjectiveList(),
+                this.loadHelpText()
+            ]).then(([parts, upgrades, techTree, objectives, helpText]) => ({
+                parts,
+                upgrades,
+                techTree,
+                objectives,
+                helpText
+            }));
+        }
+        return this._allDataLoadedPromise;
     }
 
     async loadData(filePath) {
@@ -66,7 +81,6 @@ class DataService {
                         const content = fs.readFileSync(absolutePath, 'utf-8');
                         const data = JSON.parse(content);
                         this.cache.set(filePath, data);
-                        console.log(`Successfully loaded ${filePath} from ${absolutePath}`);
                         return data;
                     } catch (error) {
                         throw new Error(`Could not find ${filePath} at ${absolutePath}: ${error.message}`);
@@ -74,30 +88,16 @@ class DataService {
                 }
             }
 
-            // Browser environment - use fetch
-            console.log(`[DATA-SERVICE] Fetching ${filePath}...`);
             const response = await fetch(filePath);
-            console.log(`[DATA-SERVICE] Response for ${filePath}:`, {
-                ok: response.ok,
-                status: response.status,
-                statusText: response.statusText,
-                contentType: response.headers.get('content-type')
-            });
             if (!response.ok) {
                 throw new Error(`Failed to load ${filePath}: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
-            console.log(`[DATA-SERVICE] Successfully loaded ${filePath}:`, {
-                type: typeof data,
-                isArray: Array.isArray(data),
-                hasDefault: !!data?.default,
-                keys: data && typeof data === 'object' ? Object.keys(data) : 'N/A'
-            });
             this.cache.set(filePath, data);
             return data;
         } catch (error) {
-            console.error(`Error loading data from ${filePath}:`, error);
+            logger.log('error', 'data', `Error loading data from ${filePath}:`, error);
             throw error;
         }
     }
@@ -118,42 +118,41 @@ class DataService {
 
     async loadPartList() {
         const raw = await this.loadData('./data/part_list.json');
-        const data = Array.isArray(raw) ? raw : (raw?.default || raw);
-        const list = Array.isArray(data) ? data : [];
-        return normalizePartCosts(list);
+        const schema = z.union([
+            z.array(PartDefinitionSchema),
+            z.object({ default: z.array(PartDefinitionSchema) }),
+        ]).transform((v) => ("default" in v ? v.default : v));
+        return failSafeParse(schema, raw, "part_list.json");
     }
 
     async loadUpgradeList() {
-        console.log("Loading upgrade list...");
-        const data = await this.loadData('./data/upgrade_list.json');
-        // Handle ES module format where data might be in the 'default' property
-        const actualData = data?.default || data;
-        console.log("Upgrade list loaded:", actualData?.length, "items");
-        return actualData;
+        const raw = await this.loadData('./data/upgrade_list.json');
+        const schema = z.union([
+            z.array(UpgradeDefinitionSchema),
+            z.object({ default: z.array(UpgradeDefinitionSchema) }),
+        ]).transform((v) => ("default" in v ? v.default : v));
+        return failSafeParse(schema, raw, "upgrade_list.json");
     }
 
     async loadTechTree() {
-        console.log("[TECH-TREE] Loading tech tree data from ./data/tech_tree.json...");
         try {
             const data = await this.loadData('./data/tech_tree.json');
-            // Handle ES module format where data might be in the 'default' property
             const actualData = data?.default || data;
-            console.log("[TECH-TREE] Tech tree data loaded:", {
-                hasData: !!actualData,
-                isArray: Array.isArray(actualData),
-                length: actualData?.length,
-                data: actualData
-            });
             return actualData;
         } catch (error) {
-            console.error("[TECH-TREE] Error loading tech tree data:", error);
+            logger.log('error', 'data', 'Error loading tech tree data:', error);
             throw error;
         }
     }
 
-    // Clear cache if needed
+    async loadDifficultyCurves() {
+        const raw = await this.loadData('./data/difficulty_curves.json');
+        return failSafeParse(z.record(z.string(), DifficultyPresetSchema), raw, "difficulty_curves.json");
+    }
+
     clearCache() {
         this.cache.clear();
+        this._allDataLoadedPromise = null;
     }
 
     // Get cached data without loading

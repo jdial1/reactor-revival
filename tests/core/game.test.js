@@ -51,7 +51,7 @@ describe("Core Game Mechanics", () => {
     tile.setPart(game.partset.getPartById("uranium1"));
     
     // Reboot keeping EP (Prestige)
-    await game.reboot_action(true);
+    await game.rebootActionKeepExoticParticles();
     
     expect(toNum(game.current_money)).toBe(game.base_money);
     expect(toNum(game.exotic_particles)).toBe(0);

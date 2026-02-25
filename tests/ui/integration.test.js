@@ -172,7 +172,7 @@ describe("UI Integration and Gameplay", () => {
     game.ui.stateManager.setVar("max_heat", game.reactor.max_heat);
 
     // Test low heat (should be transparent)
-    game.ui.updateHeatVisuals();
+    game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.style.backgroundColor).toBe("transparent");
     expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
     expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
@@ -180,40 +180,40 @@ describe("UI Integration and Gameplay", () => {
     // Test moderate heat (50% of max)
     game.reactor.current_heat = 500;
     game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
-    game.ui.updateHeatVisuals();
+    game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.style.backgroundColor).toBe("transparent");
     expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
 
     // Test high heat (80% of max - should show warning)
     game.reactor.current_heat = 800;
     game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
-    game.ui.updateHeatVisuals();
+    game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
     expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
 
     // Test critical heat (130% of max - should show critical)
     game.reactor.current_heat = 1300;
     game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
-    game.ui.updateHeatVisuals();
+    game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
     expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
 
     // Test extreme heat (200% of max - should show maximum effect)
     game.reactor.current_heat = 2000;
     game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
-    game.ui.updateHeatVisuals();
+    game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
 
     const testPart = game.partset.getPartById("vent1");
     const testTile = game.tileset.getTile(0, 0);
     await testTile.setPart(testPart);
     testTile.heat_contained = testPart.containment * 0.95;
-    game.ui.updateHeatVisuals();
+    game.ui.heatVisualsUI.updateHeatVisuals();
 
     if (testTile.$el) {
       expect(testTile.$el.classList.contains("heat-wiggle")).toBe(true);
       testTile.heat_contained = testPart.containment * 0.5;
-      game.ui.updateHeatVisuals();
+      game.ui.heatVisualsUI.updateHeatVisuals();
       expect(testTile.$el.classList.contains("heat-wiggle")).toBe(false);
     }
   });

@@ -1,4 +1,5 @@
-import { runHeatStepFromTyped } from "./heatCalculations.js";
+import { runHeatTransferStep } from "./heatCalculations.js";
+import { logger } from "../utils/logger.js";
 
 const HEAT_CONDUCTING_CATEGORIES = ['heat_exchanger', 'heat_outlet', 'heat_inlet'];
 
@@ -25,15 +26,19 @@ export class HeatSystem {
     if (game.performance && game.performance.shouldMeasure()) {
       game.performance.markStart("tick_heat_transfer");
     }
-    const { heat, containment, ...rest } = build.payloadForSync;
+    const { heat, containment, reactorHeat, multiplier: payloadMultiplier, ...componentSet } = build.payloadForSync;
     const recordTransfers = [];
-    const result = runHeatStepFromTyped(heat, containment, rest, recordTransfers);
+    const result = runHeatTransferStep(componentSet, { heat, containment }, {
+      reactorHeat,
+      multiplier: payloadMultiplier ?? multiplier,
+      recordTransfers,
+    });
     engine.game.tileset.heatMap = heat;
     engine.game.reactor.current_heat = result.reactorHeat;
     if (game.performance && game.performance.shouldMeasure()) {
       game.performance.markEnd("tick_heat_transfer");
     }
-    game.logger?.debug(`[TICK STAGE] After heat transfer: Reactor Heat = ${result.reactorHeat.toFixed(2)}`);
+    logger.log('debug', 'engine', `[TICK STAGE] After heat transfer: Reactor Heat = ${result.reactorHeat.toFixed(2)}`);
     return { heatFromInlets: result.heatFromInlets, transfers: recordTransfers };
   }
 

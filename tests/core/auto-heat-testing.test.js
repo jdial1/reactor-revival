@@ -252,23 +252,26 @@ describe("Auto Heat Testing", () => {
 
     it("should correctly save and load the heat_control state via its upgrade", async () => {
         const { forcePurchaseUpgrade } = await import("../helpers/gameHelpers.js");
+        const { StorageUtils } = await import("../../public/src/utils/util.js");
         forcePurchaseUpgrade(game, 'heat_control_operator');
-        game.saveGame(1);
-        const savedData = JSON.parse(globalThis.localStorage.getItem('reactorGameSave_1'));
+        game.reactor.has_melted_down = false;
+        const saveData = game.saveOrchestrator.getSaveState();
+        StorageUtils.setRaw('reactorGameSave_1', StorageUtils.serialize(saveData));
+        StorageUtils.set('reactorCurrentSaveSlot', 1);
+        const savedData = StorageUtils.get('reactorGameSave_1');
         expect(savedData.toggles.heat_control).toBe(true);
 
         await game.set_defaults();
-        await game.loadGame(1);
+        await game.saveManager.loadGame(1);
         
-        // Apply pending toggle states (normally done in startGame)
         if (game._pendingToggleStates) {
-            game.ui.stateManager.setGame(game); // Ensure stateManager has game reference
+            game.ui.stateManager.setGame(game);
             Object.entries(game._pendingToggleStates).forEach(([key, value]) => {
                 game.ui.stateManager.setVar(key, value);
             });
             delete game._pendingToggleStates;
         }
-        
+
         expect(game.reactor.heat_controlled).toBe(true);
     });
 });

@@ -12,7 +12,7 @@ async function placePartViaUI(game, partId, row, col) {
   const tile = game.tileset.getTile(row, col);
   if (!tile) throw new Error(`Tile ${row},${col} not found`);
   game.ui.stateManager.setClickedPart(part);
-  await game.ui.handleGridInteraction(tile, { button: 0, pointerType: "mouse", type: "pointerdown" });
+  await game.ui.gridController.handleGridInteraction(tile, { button: 0, pointerType: "mouse", type: "pointerdown" });
   game.ui.stateManager.setClickedPart(null);
 }
 
@@ -114,17 +114,28 @@ async function solveObjective(index, game) {
       if (!chrono || chrono.level === 0) buyUpgradeViaUI(game, "chronometer");
       break;
     }
-    case "fiveComponentKinds":
-      await placePartViaUI(game, "uranium1", 0, 0);
-      await placePartViaUI(game, "vent1", 0, 1);
-      await placePartViaUI(game, "capacitor1", 0, 2);
-      await placePartViaUI(game, "reflector1", 0, 3);
-      await placePartViaUI(game, "heat_exchanger1", 0, 4);
+    case "fiveComponentKinds": {
+      const parts = ["uranium1", "vent1", "capacitor1", "reflector1", "heat_exchanger1"];
+      for (let i = 0; i < parts.length; i++) {
+        const part = game.partset.getPartById(parts[i]);
+        if (!part) throw new Error(`Part ${parts[i]} not found`);
+        const tile = game.tileset.getTile(0, i);
+        if (!tile) throw new Error(`Tile (0,${i}) not found`);
+        await tile.setPart(part);
+      }
+      game.tileset.updateActiveTiles();
+      game.engine.markPartCacheAsDirty();
+      game.reactor.updateStats();
+      game.objectives_manager.check_current_objective();
+      break;
+    }
+    case "tenCapacitors": {
+      const cap = game.partset.getPartById("capacitor1");
+      if (!cap) throw new Error("Part capacitor1 not found");
+      for (let i = 0; i < 10; i++) await game.tileset.getTile(1, i).setPart(cap);
       game.reactor.updateStats();
       break;
-    case "tenCapacitors":
-      for (let i = 0; i < 10; i++) await placePartViaUI(game, "capacitor1", 1, i);
-      break;
+    }
     case "powerPerTick500":
       for (let i = 0; i < 10; i++) {
         await placePartViaUI(game, "plutonium1", 0, i);
@@ -134,9 +145,14 @@ async function solveObjective(index, game) {
       game.engine.tick();
       game.reactor.updateStats();
       break;
-    case "potentUranium3":
-      buyUpgradeViaUI(game, "uranium1_cell_power", 3);
+    case "potentUranium3": {
+      const upgrade = game.upgradeset.getUpgrade("uranium1_cell_power");
+      if (!upgrade) throw new Error("Upgrade uranium1_cell_power not found");
+      upgrade.setLevel(3);
+      game.reactor.updateStats();
+      game.objectives_manager.check_current_objective();
       break;
+    }
     case "autoSell500":
       game.ui.stateManager.setVar("auto_sell", true);
       buyUpgradeViaUI(game, "improved_power_lines", 50);
@@ -161,21 +177,20 @@ async function solveObjective(index, game) {
       game.tileset.updateActiveTiles();
       game.engine.markPartCacheAsDirty();
       game.reactor.updateStats();
-      game.sustainedPower1k = { startTick: game.engine.tick_count - 30 };
+      game.objectives_manager?.updateSustainedTracking("sustainedPower1k", game.engine.tick_count - 30);
       game.objectives_manager.check_current_objective();
       break;
     }
-    case "infrastructureUpgrade1":
-      for (let i = 0; i < 10; i++) {
-        await placePartViaUI(game, "capacitor2", 0, i);
-        game.tileset.getTile(0, i).activated = true;
-      }
-      for (let i = 0; i < 10; i++) {
-        await placePartViaUI(game, "vent2", 1, i);
-        game.tileset.getTile(1, i).activated = true;
-      }
+    case "infrastructureUpgrade1": {
+      const cap2 = game.partset.getPartById("capacitor2");
+      const vent2 = game.partset.getPartById("vent2");
+      for (let i = 0; i < 10; i++) await game.tileset.getTile(0, i).setPart(cap2);
+      for (let i = 0; i < 10; i++) await game.tileset.getTile(1, i).setPart(vent2);
+      game.tileset.updateActiveTiles();
+      game.engine.markPartCacheAsDirty();
       game.reactor.updateStats();
       break;
+    }
     case "completeChapter2":
       break;
     case "fiveQuadPlutonium": {
@@ -265,7 +280,7 @@ async function solveObjective(index, game) {
       game.reactor.updateStats();
       game.reactor.current_heat = 15000000;
       game.reactor.has_melted_down = false;
-      game.masterHighHeat = { startTick: game.engine.tick_count - 30 };
+      game.objectives_manager?.updateSustainedTracking("masterHighHeat", game.engine.tick_count - 30);
       break;
     case "ep10":
       game.exotic_particles = 10;
@@ -295,7 +310,7 @@ async function solveObjective(index, game) {
       game.current_exotic_particles = 10;
       game.ui.stateManager.setVar("exotic_particles", 10);
       game.ui.stateManager.setVar("total_exotic_particles", 10);
-      await game.reboot_action(true);
+      await game.rebootActionKeepExoticParticles();
       game.exotic_particles = 0;
       game.current_money = game.base_money;
       game.ui.stateManager.setVar("exotic_particles", 0);

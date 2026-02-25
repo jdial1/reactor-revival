@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
+import { setDecimal } from "../../public/src/core/store.js";
 
 describe("Rolling Numbers UI", () => {
     let game;
@@ -28,14 +29,14 @@ describe("Rolling Numbers UI", () => {
         moneyObj.target = 1000;
 
         // Simulate 1 frame (approx 16ms)
-        ui.updateRollingNumbers(16.667);
+        ui.coreLoopUI.updateRollingNumbers(16.667);
 
         expect(moneyObj.current).toBeGreaterThan(0);
         expect(moneyObj.current).toBeLessThan(1000);
         
         // Simulate many frames
         for(let i=0; i<60; i++) {
-            ui.updateRollingNumbers(16.667);
+            ui.coreLoopUI.updateRollingNumbers(16.667);
         }
 
         // Should be very close or equal to target
@@ -47,7 +48,7 @@ describe("Rolling Numbers UI", () => {
         moneyObj.target = 100;
         moneyObj.current = 99.95; // Within epsilon
 
-        ui.updateRollingNumbers(16.667);
+        ui.coreLoopUI.updateRollingNumbers(16.667);
 
         expect(moneyObj.current).toBe(100);
     });
@@ -63,19 +64,17 @@ describe("Rolling Numbers UI", () => {
         // Spy on textContent assignment essentially by checking DOM after update
         const heatEl = document.getElementById('info_heat_desktop');
         
-        ui.updateRollingNumbers(16.667);
+        ui.coreLoopUI.updateRollingNumbers(16.667);
         
         expect(heatEl.textContent).toBe("1.50K");
     });
 
     it("should update target via state manager", () => {
-        ui.stateManager.setVar('current_money', 5000);
-        ui.processUpdateQueue();
-        
-        // The config onupdate should set the target
-        expect(ui.displayValues.money.target).toBe(5000);
-        // Current shouldn't change instantly
-        expect(ui.displayValues.money.current).not.toBe(5000);
+        setDecimal(game.state, "current_money", 5000);
+        ui.coreLoopUI.processUpdateQueue();
+
+        expect(toNum(ui.displayValues.money.target)).toBe(5000);
+        expect(toNum(ui.displayValues.money.current)).not.toBe(5000);
     });
 });
 

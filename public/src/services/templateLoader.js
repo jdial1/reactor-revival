@@ -1,7 +1,13 @@
 /**
- * Template Loader Utility
- * Loads HTML templates and provides methods to clone and customize them
+ * @deprecated Migrating to lit-html. DO NOT DELETE until consumers are migrated:
+ * - part.js: createElement() uses cloneTemplateElement("part-btn-template") -> migrate to PartButton from buttonFactory
+ * - upgrade.js: createElement() uses cloneTemplateElement("upgrade-card-template") -> migrate to UpgradeCard from buttonFactory
+ * - tooltip.js: cloneTemplate("tooltip-body-template") -> migrate to lit-html tooltip template
+ * - gameSetupFlow.js: cloneTemplateElement("game-setup-template") -> migrate to lit-html game setup template
+ * - public/components/templates.html: can be deleted only after above migrations complete
  */
+import { logger } from "../utils/logger.js";
+
 export class TemplateLoader {
   constructor() {
     this.templates = new Map();
@@ -22,9 +28,8 @@ export class TemplateLoader {
       const html = await response.text();
       this.parseAndStoreTemplates(html);
       this.loaded = true;
-      console.log("[TEMPLATES] All templates loaded successfully.");
     } catch (error) {
-      console.error("[TEMPLATES] Failed to load templates:", error);
+      logger.log('error', 'data', 'Failed to load templates:', error);
     }
   }
 
@@ -52,7 +57,7 @@ export class TemplateLoader {
   cloneTemplate(templateId) {
     const template = this.getTemplate(templateId);
     if (!template) {
-      console.warn(`[TEMPLATES] Template not found: ${templateId}`);
+      logger.log('warn', 'data', `Template not found: ${templateId}`);
       return null;
     }
     return template.content.cloneNode(true);
@@ -66,7 +71,7 @@ export class TemplateLoader {
     if (!clone) return null;
     const element = clone.firstElementChild;
     if (!element) {
-      console.warn(`[TEMPLATES] No element found in template: ${templateId}`);
+      logger.log('warn', 'data', `No element found in template: ${templateId}`);
       return null;
     }
     return element;

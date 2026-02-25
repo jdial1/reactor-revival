@@ -377,42 +377,67 @@ async function checkCriticalAssets() {
   }
 }
 
-async function runAllChecks() {
+const CHECK_REGISTRY = {
+  site: { name: "Site Availability", fn: checkSiteAvailability },
+  manifest: { name: "Manifest", fn: checkManifest },
+  sw: { name: "Service Worker", fn: checkServiceWorker },
+  main: { name: "Main Page", fn: checkMainPage },
+  assets: { name: "Critical Assets", fn: checkCriticalAssets },
+  browser: { name: "Browser Compatibility", fn: checkBrowserCompatibility },
+  swRegistration: { name: "SW Registration", fn: checkServiceWorkerRegistration },
+};
+
+const DEFAULT_CHECKS = ["site", "manifest", "sw", "main", "assets"];
+
+async function runDiagnostics(checksToRun = DEFAULT_CHECKS) {
+  const checkResults = [];
+  let passedChecks = 0;
+
+  const siteIdx = checksToRun.indexOf("site");
+  if (siteIdx >= 0) {
+    try {
+      await retryWithBackoff(checkSiteAvailability);
+      checkResults.push({ name: CHECK_REGISTRY.site.name, passed: true });
+      passedChecks++;
+    } catch (error) {
+      log(`💥 Site availability check failed after ${MAX_RETRIES} attempts: ${error.message}`, "red");
+      log("💡 This might be due to GitHub Pages deployment delay. Try again in a few minutes.", "yellow");
+      throw error;
+    }
+    checksToRun = checksToRun.filter((id, i) => i !== siteIdx);
+  }
+
+  for (const id of checksToRun) {
+    const entry = CHECK_REGISTRY[id];
+    if (!entry) continue;
+    try {
+      const result = await entry.fn();
+      checkResults.push({ name: entry.name, passed: result });
+      if (result) passedChecks++;
+    } catch (error) {
+      log(`❌ ${entry.name} check crashed: ${error.message}`, "red");
+      checkResults.push({ name: entry.name, passed: false });
+    }
+  }
+
+  return { checkResults, passedChecks };
+}
+
+async function runAllChecks(checksToRun = DEFAULT_CHECKS) {
   log(`${colors.bold}🚀 PWA Deployment Check${colors.reset}`, "blue");
   log(`Target URL: ${BASE_URL}`, "yellow");
   log("=".repeat(50), "blue");
 
-  // First, check if the site is available with retries
+  let checkResults;
+  let passedChecks;
   try {
-    await retryWithBackoff(checkSiteAvailability);
+    const result = await runDiagnostics(checksToRun);
+    checkResults = result.checkResults;
+    passedChecks = result.passedChecks;
   } catch (error) {
-    log(`💥 Site availability check failed after ${MAX_RETRIES} attempts: ${error.message}`, "red");
-    log("💡 This might be due to GitHub Pages deployment delay. Try again in a few minutes.", "yellow");
     process.exit(1);
   }
 
-  const checkFunctions = [
-    { name: "Manifest", fn: checkManifest },
-    { name: "Service Worker", fn: checkServiceWorker },
-    { name: "Main Page", fn: checkMainPage },
-    { name: "Critical Assets", fn: checkCriticalAssets },
-  ];
-
-  const checkResults = [];
-  let passedChecks = 0;
-
-  for (const check of checkFunctions) {
-    try {
-      const result = await check.fn();
-      checkResults.push({ name: check.name, passed: result });
-      if (result) passedChecks++;
-    } catch (error) {
-      log(`❌ ${check.name} check crashed: ${error.message}`, "red");
-      checkResults.push({ name: check.name, passed: false });
-    }
-  }
-
-  // Summary
   log("\n" + "=".repeat(50), "blue");
   log(`${colors.bold}📋 Summary${colors.reset}`, "blue");
 
@@ -436,17 +461,20 @@ async function runAllChecks() {
   }
 }
 
-// Handle command line arguments
-if (process.argv.length > 2) {
-  const customUrl = process.argv[2];
-  if (customUrl.startsWith("http")) {
-    process.env.GITHUB_PAGES_URL = customUrl;
-    log(`Using custom URL: ${customUrl}`, "yellow");
+let checksToRun = DEFAULT_CHECKS;
+for (const arg of process.argv.slice(2)) {
+  if (arg.startsWith("--checks=")) {
+    checksToRun = arg.slice(9).split(",").map((s) => s.trim()).filter(Boolean);
+    break;
+  }
+  if (arg.startsWith("http")) {
+    process.env.GITHUB_PAGES_URL = arg;
+    log(`Using custom URL: ${arg}`, "yellow");
+    break;
   }
 }
 
-// Run the checks
-runAllChecks()
+runAllChecks(checksToRun)
   .then((success) => {
     process.exit(success ? 0 : 1);
   })

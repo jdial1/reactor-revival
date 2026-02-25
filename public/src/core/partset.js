@@ -1,30 +1,15 @@
 import { Part } from "./part.js";
-import { toDecimal } from "../utils/decimal.js";
 import dataService from "../services/dataService.js";
+import { logger } from "../utils/logger.js";
 
-// Load part data
-let part_list_data = [];
-let dataLoaded = false;
-
-async function ensureDataLoaded() {
-  if (!dataLoaded) {
-    try {
-      console.log("Loading part list data...");
-      part_list_data = await dataService.loadPartList();
-      console.log("Part list data loaded:", {
-        type: typeof part_list_data,
-        isArray: Array.isArray(part_list_data),
-        length: Array.isArray(part_list_data) ? part_list_data.length : 'N/A'
-      });
-      dataLoaded = true;
-    } catch (error) {
-      console.warn("Failed to load part list:", error);
-      part_list_data = [];
-      dataLoaded = true;
-    }
-  }
-  return part_list_data;
-}
+export const PART_DEFINITION_TOUCH_POINTS = [
+  "dataService/part_list.json",
+  "core/part/partStatsRecalculator.js",
+  "components/ui/componentRenderingUI.js",
+  "core/engine.js",
+  "core/partset.js",
+  "core/tile.js",
+];
 
 // --- Constants for Part Generation ---
 
@@ -61,24 +46,15 @@ export class PartSet {
       return this.partsArray;
     }
 
-    await ensureDataLoaded();
+    const { parts } = await dataService.ensureAllGameDataLoaded();
 
-    this.game.logger?.info("Loading part list data...");
-
-    const data = part_list_data;
-
-    if (!Array.isArray(data)) {
-      this.game.logger?.error("part_list_data is not an array:", data);
-      this.game.logger?.error("part_list_data structure:", Object.keys(part_list_data || {}));
-      return;
-    }
-
-    this.game.logger?.debug("Part list data loaded:", {
-      count: data?.length,
-      categories: [...new Set(data?.map(p => p.category) || [])]
+    logger.log('info', 'game', 'Loading part list data...');
+    logger.log('debug', 'game', 'Part list data loaded:', {
+      count: parts.length,
+      categories: [...new Set(parts.map((p) => p.category))]
     });
 
-    data.forEach((template) => {
+    parts.forEach((template) => {
       // Build type order per category (skip experimental entries)
       if (template.category && !template.experimental) {
         const arr = this.categoryTypeOrder.get(template.category) || [];
@@ -127,18 +103,16 @@ export class PartSet {
     }
 
     if (template.levels) {
-      const baseCost = toDecimal(template.base_cost);
-      partDef.base_cost = baseCost.mul(Math.pow(Number(template.cost_multi) || 1, level - 1));
+      partDef.base_cost = template.base_cost.mul(Math.pow(template.cost_multi, level - 1));
     } else {
-      partDef.base_cost = toDecimal(template.base_cost ?? 0);
+      partDef.base_cost = template.base_cost;
     }
 
     if (partDef.category === "cell") {
       this._applyCellProperties(partDef, template, level);
-    } else {
-      this._applyGenericPartProperties(partDef, template, level);
+      return partDef;
     }
-
+    this._applyGenericPartProperties(partDef, template, level);
     return partDef;
   }
 
@@ -210,42 +184,38 @@ export class PartSet {
   check_affordability(game) {
     if (!game) return;
     this.partsArray.forEach((part) => {
-      let isAffordable = false;
-
       if (game.isSandbox) {
-        isAffordable = true;
-      } else if (game.reactor && game.reactor.has_melted_down) {
-        isAffordable = false;
-      } else {
-        if (this.isPartDoctrineLocked(part)) {
-          part.setAffordable(false);
-          return;
+        part.setAffordable(true);
+        return;
+      }
+      if (game.reactor && game.reactor.has_melted_down) {
+        part.setAffordable(false);
+        return;
+      }
+      if (this.isPartDoctrineLocked(part)) {
+        part.setAffordable(false);
+        return;
+      }
+      const isUnlocked = this.game?.unlockManager && typeof this.game.unlockManager.isPartUnlocked === "function" ? this.game.unlockManager.isPartUnlocked(part) : true;
+      let isAffordable = false;
+      if (part.erequires) {
+        const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
+        if (requiredUpgrade?.level > 0 && isUnlocked) {
+          isAffordable = part.ecost?.gt?.(0)
+            ? game.state.current_exotic_particles.gte(part.ecost)
+            : game.state.current_money.gte(part.cost);
         }
-        const isUnlocked = typeof this.game.isPartUnlocked === 'function' ? this.game.isPartUnlocked(part) : true;
-        if (part.erequires) {
-          const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
-          if (requiredUpgrade && requiredUpgrade.level > 0 && isUnlocked) {
-            // Distinguish between EP and Money cost
-            if (part.ecost && part.ecost.gt && part.ecost.gt(0)) {
-              isAffordable = game.current_exotic_particles.gte(part.ecost);
-            } else {
-              isAffordable = game.current_money.gte(part.cost);
-            }
-          }
-        } else {
-          if (isUnlocked) {
-            isAffordable = game.current_money.gte(part.cost);
-          }
-        }
+      } else if (isUnlocked) {
+        isAffordable = game.state.current_money.gte(part.cost);
       }
       part.setAffordable(isAffordable);
     });
   }
 
   isPartDoctrineLocked(part) {
-    if (!part || this.game.bypass_tech_tree_restrictions) return false;
+    if (!part?.erequires) return false;
+    if (this.game.bypass_tech_tree_restrictions) return false;
     if (!this.game.tech_tree || !this.game.upgradeset) return false;
-    if (!part.erequires) return false;
     return !this.game.upgradeset.isUpgradeAvailable(part.erequires);
   }
 

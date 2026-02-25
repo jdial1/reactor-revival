@@ -1,32 +1,25 @@
 import { Upgrade } from "./upgrade.js";
+import { logger } from "../utils/logger.js";
+import { generateCellUpgrades } from "./upgradeCellGenerator.js";
+import { runCheckAffordability } from "./upgradeset/affordabilityChecker.js";
 import dataService from "../services/dataService.js";
-import { safeGetItem } from "../utils/util.js";
-
-// Load upgrade data
-let upgrade_templates = [];
-let tech_tree_data = [];
-let dataLoaded = false;
-
-const OBJECTIVE_REQUIRED_UPGRADES = {
-  improvedChronometers: ["chronometer"],
-  investInResearch1: ["infused_cells", "unleashed_cells"],
-};
-
-async function ensureDataLoaded() {
-  if (!dataLoaded) {
-    try {
-      upgrade_templates = await dataService.loadUpgradeList();
-      tech_tree_data = await dataService.loadTechTree();
-      dataLoaded = true;
-    } catch (error) {
-      console.warn("Failed to load upgrade list or tech tree:", error);
-      upgrade_templates = [];
-      tech_tree_data = [];
-      dataLoaded = true;
-    }
-  }
-  return { upgrade_templates, tech_tree_data };
-}
+import {
+  isUpgradeAvailable as checkUpgradeAvailable,
+  isUpgradeDoctrineLocked as checkUpgradeDoctrineLocked,
+  getExclusiveUpgradeIdsForTree as fetchExclusiveUpgradeIdsForTree,
+  resetDoctrineUpgradeLevels as runResetDoctrineUpgradeLevels,
+  sanitizeDoctrineUpgradeLevelsOnLoad as runSanitizeDoctrineUpgradeLevelsOnLoad,
+} from "./upgradeset/techTreeRestrictions.js";
+import { calculateSectionCounts } from "./upgradeset/sectionCountCalculator.js";
+import {
+  runPurchaseUpgrade as doPurchaseUpgrade,
+  runPurchaseUpgradeToMax as doPurchaseUpgradeToMax,
+  runPurchaseAllUpgrades as doPurchaseAllUpgrades,
+  runPurchaseAllResearch as doPurchaseAllResearch,
+  runClearAllUpgrades as doClearAllUpgrades,
+  runClearAllResearch as doClearAllResearch,
+  runResetUpgradeLevel as doResetUpgradeLevel,
+} from "./upgradeset/upgradeTransactionProcessor.js";
 
 export class UpgradeSet {
   constructor(game) {
@@ -35,14 +28,18 @@ export class UpgradeSet {
     this.upgradesArray = [];
     this.upgradeToTechTreeMap = new Map();
     this.restrictedUpgrades = new Set();
+    this._populateSectionFn = null;
+  }
+
+  setPopulateSectionFn(fn) {
+    this._populateSectionFn = fn;
   }
 
   async initialize() {
-    await ensureDataLoaded();
+    const { upgrades, techTree } = await dataService.ensureAllGameDataLoaded();
+    const data = upgrades;
+    const treeData = techTree?.default || techTree || [];
     this.reset();
-    
-    // Process tech tree data to build restriction maps
-    const treeData = tech_tree_data.default || tech_tree_data || [];
     this.treeList = treeData;
     treeData.forEach(tree => {
       if (tree.upgrades) {
@@ -56,10 +53,9 @@ export class UpgradeSet {
       }
     });
 
-    const data = upgrade_templates;
-    this.game.logger?.debug("Upgrade data loaded:", data?.length, "upgrades");
+    logger.log('debug', 'game', 'Upgrade data loaded:', data?.length, "upgrades");
 
-    const fullUpgradeList = [...data, ...this._generateCellUpgrades()];
+    const fullUpgradeList = [...data, ...generateCellUpgrades(this.game)];
 
     fullUpgradeList.forEach((upgradeDef) => {
       const upgradeInstance = new Upgrade(upgradeDef, this.game);
@@ -70,45 +66,6 @@ export class UpgradeSet {
     return this.upgradesArray;
   }
 
-
-  _generateCellUpgrades() {
-    const generatedUpgrades = [];
-    const allParts = this.game.partset.getAllParts();
-    this.game.logger?.debug("All parts:", allParts.map(p => ({ id: p.id, level: p.level, hasCost: !!p.part.cell_tick_upgrade_cost })));
-
-    const baseCellParts = allParts
-      .filter((p) => p.part.cell_tick_upgrade_cost && p.level === 1);
-
-    this.game.logger?.debug("Base cell parts for upgrades:", baseCellParts.map(p => p.id));
-
-    const cellUpgradeTemplates = [
-      { type: "cell_power", title: "Potent ", description: "s: +100% power.", actionId: "cell_power" },
-      { type: "cell_tick", title: "Enriched ", description: "s: 2x duration.", actionId: "cell_tick" },
-      { type: "cell_perpetual", title: "Perpetual ", description: "s: auto-replace at 1.5x normal price.", levels: 1, actionId: "cell_perpetual" },
-    ];
-
-    for (const template of cellUpgradeTemplates) {
-      for (const part of baseCellParts) {
-        const upgradeDef = {
-          id: `${part.id}_${template.type}`,
-          type: `${template.type}_upgrades`,
-          title: template.title + part.title,
-          description: part.title + template.description,
-          levels: template.levels,
-          cost: part.part[`${template.type}_upgrade_cost`],
-          multiplier: part.part[`${template.type}_upgrade_multi`],
-          actionId: template.actionId,
-          classList: [part.id, template.type],
-          part: part,
-          icon: part.getImagePath(),
-        };
-        this.game.logger?.debug(`Generated upgrade: ${upgradeDef.id} with cost: ${upgradeDef.cost}`);
-        generatedUpgrades.push(upgradeDef);
-      }
-    }
-    this.game.logger?.debug("Total generated upgrades:", generatedUpgrades.length);
-    return generatedUpgrades;
-  }
 
   reset() {
     this.upgrades.clear();
@@ -146,329 +103,60 @@ export class UpgradeSet {
   }
 
   _populateUpgradeSection(wrapperId, filterFn) {
-    if (typeof document === "undefined") return;
-    const wrapper = document.getElementById(wrapperId);
-    if (!wrapper) return;
-
-    wrapper.querySelectorAll(".upgrade-group").forEach((el) => (el.innerHTML = ""));
-
-    this.upgradesArray.filter(filterFn).forEach((upgrade) => {
-      const available = this.isUpgradeAvailable(upgrade.id);
-      if (available) {
-        try {
-          const upgType = upgrade?.upgrade?.type || "";
-          const basePart = upgrade?.upgrade?.part;
-          const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
-          if (isCellUpgrade && basePart && basePart.category === "cell") {
-            const show = this.game && typeof this.game.isPartUnlocked === "function"
-              ? this.game.isPartUnlocked(basePart)
-              : true;
-            if (!show) {
-              return;
-            }
-          }
-        } catch (_) { }
-      }
-
-      upgrade.$el = null;
-      this.game.ui.stateManager.handleUpgradeAdded(this.game, upgrade);
-
-      if (upgrade.$el) {
-        upgrade.updateDisplayCost();
-      }
-    });
-
-    if (this.game) {
-      this.check_affordability(this.game);
-    }
+    if (this._populateSectionFn) this._populateSectionFn(this, wrapperId, filterFn);
   }
 
   purchaseUpgrade(upgradeId) {
-    const upgrade = this.getUpgrade(upgradeId);
-    if (!upgrade) {
-      this.game.logger?.warn(`[Upgrade] Purchase failed: Upgrade '${upgradeId}' not found.`);
-      return false;
-    }
-    if (!this.isUpgradeAvailable(upgradeId)) {
-      return false;
-    }
-    if (!upgrade.affordable) {
-      this.game.logger?.warn(`[Upgrade] Purchase failed: '${upgradeId}' not affordable. Money: ${this.game.current_money}, Cost: ${upgrade.getCost()}`);
-      return false;
-    }
-    if (upgrade.level >= upgrade.max_level) {
-      this.game.logger?.warn(`[Upgrade] Purchase failed: '${upgradeId}' already at max level (${upgrade.level})`);
-      return false;
-    }
-
-    const cost = upgrade.getCost();
-    const ecost = upgrade.getEcost();
-    let purchased = false;
-
-    if (this.game.isSandbox) {
-      purchased = true;
-    } else if (ecost.gt(0)) {
-      if (this.game.current_exotic_particles.gte(ecost)) {
-        this.game.current_exotic_particles = this.game.current_exotic_particles.sub(ecost);
-        this.game.ui.stateManager.setVar("current_exotic_particles", this.game.current_exotic_particles);
-        purchased = true;
-      }
-    } else {
-      if (this.game.current_money.gte(cost)) {
-        this.game._current_money = this.game._current_money.sub(cost);
-        this.game.ui.stateManager.setVar("current_money", this.game._current_money);
-        purchased = true;
-      }
-    }
-
-    if (purchased) {
-      upgrade.setLevel(upgrade.level + 1);
-
-      if (upgrade.$el) {
-        upgrade.$el.classList.remove("upgrade-purchase-success");
-        void upgrade.$el.offsetWidth;
-        upgrade.$el.classList.add("upgrade-purchase-success");
-      }
-
-      this.game.debugHistory.add('upgrades', 'Upgrade purchased', { id: upgradeId, level: upgrade.level });
-      if (upgrade.upgrade.type === "experimental_parts") {
-        this.game.epart_onclick(upgrade);
-      }
-      this.updateSectionCounts();
-      if (!this.game.isSandbox) this.game.saveGame(null, true);
-    }
-
-    return purchased;
+    return doPurchaseUpgrade(this, upgradeId);
   }
 
   purchaseUpgradeToMax(upgradeId) {
-    const upgrade = this.getUpgrade(upgradeId);
-    if (!upgrade || !this.game.isSandbox) return 0;
-    if (!this.isUpgradeAvailable(upgradeId)) return 0;
-    let count = 0;
-    while (upgrade.level < upgrade.max_level && this.purchaseUpgrade(upgradeId)) {
-      count++;
-    }
-    return count;
+    return doPurchaseUpgradeToMax(this, upgradeId);
   }
 
   purchaseAllUpgrades() {
-    if (!this.game.isSandbox) return;
-    const filter = (u) => (u.base_ecost.eq ? u.base_ecost.eq(0) : !u.base_ecost) && this.isUpgradeAvailable(u.id);
-    this.upgradesArray.filter(filter).forEach((u) => this.purchaseUpgradeToMax(u.id));
+    doPurchaseAllUpgrades(this);
   }
 
   purchaseAllResearch() {
-    if (!this.game.isSandbox) return;
-    const filter = (u) => u.base_ecost.gt && u.base_ecost.gt(0) && this.isUpgradeAvailable(u.id);
-    this.upgradesArray.filter(filter).forEach((u) => this.purchaseUpgradeToMax(u.id));
+    doPurchaseAllResearch(this);
   }
 
   clearAllUpgrades() {
-    if (!this.game.isSandbox) return;
-    const filter = (u) => u.base_ecost.eq ? u.base_ecost.eq(0) : !u.base_ecost;
-    this.upgradesArray.filter(filter).forEach((u) => this.resetUpgradeLevel(u.id));
+    doClearAllUpgrades(this);
   }
 
   clearAllResearch() {
-    if (!this.game.isSandbox) return;
-    const filter = (u) => u.base_ecost.gt && u.base_ecost.gt(0);
-    this.upgradesArray.filter(filter).forEach((u) => this.resetUpgradeLevel(u.id));
+    doClearAllResearch(this);
   }
 
   resetUpgradeLevel(upgradeId) {
-    const upgrade = this.getUpgrade(upgradeId);
-    if (!upgrade || !this.game.isSandbox) return;
-    if (upgrade.level === 0) return;
-    upgrade.setLevel(0);
-    this.updateSectionCounts();
+    doResetUpgradeLevel(this, upgradeId);
   }
 
   check_affordability(game) {
-    if (!game) return;
-
-    const hideUpgrades = safeGetItem("reactor_hide_unaffordable_upgrades", "true") !== "false";
-    const hideResearch = safeGetItem("reactor_hide_unaffordable_research", "true") !== "false";
-    const hideMaxUpgrades = safeGetItem("reactor_hide_max_upgrades", "true") !== "false";
-    const hideMaxResearch = safeGetItem("reactor_hide_max_research", "true") !== "false";
-    const hideOtherDoctrine = safeGetItem("reactor_hide_other_doctrine_upgrades", "false") === "true";
-
-    let hasVisibleAffordableUpgrade = false;
-    let hasVisibleAffordableResearch = false;
-    let hasAnyUpgrade = false;
-    let hasAnyResearch = false;
-
-    this.upgradesArray.forEach((upgrade) => {
-      if (!this.isUpgradeAvailable(upgrade.id)) {
-        if (upgrade.$el) {
-          if (hideOtherDoctrine) {
-            upgrade.$el.classList.add("hidden");
-          } else {
-            upgrade.$el.classList.remove("hidden");
-            upgrade.$el.classList.add("doctrine-locked");
-          }
-          upgrade.setAffordable(false);
-          upgrade.setAffordProgress(0);
-        }
-        return;
-      }
-
-      if (upgrade.$el) {
-        upgrade.$el.classList.remove("doctrine-locked");
-      }
-
-      let isAffordable = false;
-
-      if (game.isSandbox) {
-        isAffordable = !upgrade.erequires || (this.getUpgrade(upgrade.erequires)?.level ?? 0) > 0;
-      } else if (game.reactor && game.reactor.has_melted_down) {
-        isAffordable = false;
-      } else {
-        const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
-
-        if (upgrade.erequires && (!requiredUpgrade || requiredUpgrade.level === 0)) {
-          isAffordable = false;
-        } else if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
-          isAffordable = game.current_exotic_particles.gte(upgrade.current_ecost);
-        } else {
-          isAffordable = game.current_money.gte(upgrade.current_cost);
-        }
-      }
-
-      upgrade.setAffordable(isAffordable);
-
-      let affordProgress = isAffordable ? 1 : 0;
-      if (!isAffordable && upgrade.level < upgrade.max_level && !game.reactor?.has_melted_down) {
-        if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
-          const ep = game.current_exotic_particles;
-          const cost = upgrade.current_ecost;
-          if (cost.gt(0)) {
-            const n = ep.toNumber ? ep.toNumber() : Number(ep);
-            const c = cost.toNumber ? cost.toNumber() : Number(cost);
-            affordProgress = Math.min(1, n / c);
-          }
-        } else {
-          const money = game.current_money;
-          const cost = upgrade.current_cost;
-          if (cost.gt(0)) {
-            const n = money.toNumber ? money.toNumber() : Number(money);
-            const c = cost.toNumber ? cost.toNumber() : Number(cost);
-            affordProgress = Math.min(1, n / c);
-          }
-        }
-      }
-      upgrade.setAffordProgress(affordProgress);
-
-      if (upgrade.$el) {
-        const isResearch = upgrade.base_ecost.gt && upgrade.base_ecost.gt(0);
-        const shouldHideUnaffordable = isResearch ? hideResearch : hideUpgrades;
-        const shouldHideMaxed = isResearch ? hideMaxResearch : hideMaxUpgrades;
-        const isMaxed = upgrade.level >= upgrade.max_level;
-        const isInDOM = upgrade.$el.isConnected;
-
-        if (isInDOM) {
-          if (isResearch) {
-            hasAnyResearch = true;
-            if (isAffordable && !isMaxed) {
-              hasVisibleAffordableResearch = true;
-            }
-          } else {
-            hasAnyUpgrade = true;
-            if (isAffordable && !isMaxed) {
-              hasVisibleAffordableUpgrade = true;
-            }
-          }
-        }
-
-        const shouldHide = (shouldHideUnaffordable && !isAffordable && !isMaxed) || (shouldHideMaxed && isMaxed);
-        if (shouldHide) {
-          upgrade.$el.classList.add("hidden");
-        } else {
-          upgrade.$el.classList.remove("hidden");
-        }
-      }
-    });
-
-    const upgradesBanner = typeof document !== "undefined" ? document.getElementById("upgrades_no_affordable_banner") : null;
-    if (upgradesBanner) {
-      if (hasAnyUpgrade && !hasVisibleAffordableUpgrade) {
-        upgradesBanner.classList.remove("hidden");
-      } else {
-        upgradesBanner.classList.add("hidden");
-      }
-    }
-
-    const researchBanner = typeof document !== "undefined" ? document.getElementById("research_no_affordable_banner") : null;
-    if (researchBanner) {
-      if (hasAnyResearch && !hasVisibleAffordableResearch) {
-        researchBanner.classList.remove("hidden");
-      } else {
-        researchBanner.classList.add("hidden");
-      }
-    }
-  }
-
-  _isUpgradeRequiredByIncompleteObjective(upgradeId) {
-    const objectives = this.game.objectives_manager?.objectives_data;
-    if (!objectives?.length) return false;
-    for (const obj of objectives) {
-      if (obj.completed) continue;
-      const checkId = obj.checkId;
-      const required = OBJECTIVE_REQUIRED_UPGRADES[checkId];
-      if (required?.includes(upgradeId)) return true;
-      if (checkId === "experimentalUpgrade") {
-        const upg = this.getUpgrade(upgradeId);
-        if (upg?.upgrade?.type?.startsWith("experimental_")) return true;
-      }
-    }
-    return false;
-  }
-
-  isUpgradeDoctrineLocked(upgradeId) {
-    if (this.game.bypass_tech_tree_restrictions) return false;
-    if (!this.restrictedUpgrades.has(upgradeId)) return false;
-    if (!this.game.tech_tree) return false;
-    const allowedTrees = this.upgradeToTechTreeMap.get(upgradeId);
-    if (!allowedTrees || allowedTrees.has(this.game.tech_tree)) return false;
-    if (this._isUpgradeRequiredByIncompleteObjective(upgradeId)) return false;
-    return true;
+    runCheckAffordability(this, game);
   }
 
   isUpgradeAvailable(upgradeId) {
-    if (this.game.bypass_tech_tree_restrictions) return true;
-    if (this.isUpgradeDoctrineLocked(upgradeId)) return false;
-    if (!this.restrictedUpgrades.has(upgradeId)) return true;
-    const allowedTrees = this.upgradeToTechTreeMap.get(upgradeId);
-    if (allowedTrees && allowedTrees.has(this.game.tech_tree)) return true;
-    if (this._isUpgradeRequiredByIncompleteObjective(upgradeId)) return true;
-    return false;
+    return checkUpgradeAvailable(this, upgradeId);
+  }
+
+  isUpgradeDoctrineLocked(upgradeId) {
+    return checkUpgradeDoctrineLocked(this, upgradeId);
   }
 
   getExclusiveUpgradeIdsForTree(treeId) {
-    if (!treeId) return [];
-    return [...this.upgradeToTechTreeMap.entries()]
-      .filter(([, treeSet]) => treeSet.size === 1 && treeSet.has(treeId))
-      .map(([id]) => id);
+    return fetchExclusiveUpgradeIdsForTree(this, treeId);
   }
 
   resetDoctrineUpgradeLevels(treeId) {
-    const ids = this.getExclusiveUpgradeIdsForTree(treeId);
-    ids.forEach((upgradeId) => {
-      const upgrade = this.getUpgrade(upgradeId);
-      if (upgrade && upgrade.level > 0) {
-        upgrade.setLevel(0);
-      }
-    });
+    runResetDoctrineUpgradeLevels(this, treeId);
     this.updateSectionCounts();
   }
 
   sanitizeDoctrineUpgradeLevelsOnLoad(techTreeId) {
-    if (this.game.bypass_tech_tree_restrictions || !techTreeId) return;
-    this.upgradeToTechTreeMap.forEach((treeSet, upgradeId) => {
-      if (treeSet.size !== 1 || treeSet.has(techTreeId)) return;
-      const upgrade = this.getUpgrade(upgradeId);
-      if (upgrade && upgrade.level > 0) upgrade.setLevel(0);
-    });
+    runSanitizeDoctrineUpgradeLevelsOnLoad(this, techTreeId);
   }
 
   hasAffordableUpgrades() {
@@ -491,126 +179,20 @@ export class UpgradeSet {
     );
   }
 
-  _getUpgradeContainerId(upgrade) {
-    if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
-      return upgrade.upgrade.type;
-    }
-    const normalizeKey = (key) => {
-      if (key.endsWith("_upgrades")) {
-        return key;
-      }
-      const map = {
-        cell_power: "cell_power_upgrades",
-        cell_tick: "cell_tick_upgrades",
-        cell_perpetual: "cell_perpetual_upgrades",
-        exchangers: "exchanger_upgrades",
-        vents: "vent_upgrades",
-        other: "other_upgrades",
-      };
-      return map[key] || key;
-    };
-    return normalizeKey(upgrade.upgrade.type);
-  }
-
-  _getSectionUpgradeGroups(sectionName) {
-    const sectionMap = {
-      "Cell Upgrades": ["cell_power_upgrades", "cell_tick_upgrades", "cell_perpetual_upgrades"],
-      "Cooling Upgrades": ["vent_upgrades", "exchanger_upgrades"],
-      "General Upgrades": ["other_upgrades"],
-      "Laboratory": ["experimental_laboratory"],
-      "Global Boosts": ["experimental_boost"],
-      "Experimental Parts & Cells": ["experimental_parts", "experimental_cells", "experimental_cells_boost"],
-      "Particle Accelerators": ["experimental_particle_accelerators"],
-    };
-    return sectionMap[sectionName] || [];
-  }
-
-  _countUpgradesInGroups(groupIds, isResearch) {
-    if (typeof document === "undefined") return { total: 0, researched: 0 };
-    let total = 0;
-    let researched = 0;
-
-    groupIds.forEach(groupId => {
-      const container = document.getElementById(groupId);
-      if (!container) return;
-
-      const upgrades = this.upgradesArray.filter(upgrade => {
-        if (isResearch !== (upgrade.base_ecost.gt && upgrade.base_ecost.gt(0))) return false;
-        if (!this.isUpgradeAvailable(upgrade.id)) return false;
-        
-        const containerId = this._getUpgradeContainerId(upgrade);
-        if (containerId !== groupId) return false;
-
-        const upgType = upgrade?.upgrade?.type || "";
-        const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
-        if (isCellUpgrade) {
-          const basePart = upgrade?.upgrade?.part;
-          if (basePart && basePart.category === "cell") {
-            if (this.game && typeof this.game.isPartUnlocked === "function") {
-              return this.game.isPartUnlocked(basePart);
-            }
-            return true;
-          }
-        }
-        return true;
-      });
-
-      upgrades.forEach(upgrade => {
-        total += upgrade.max_level;
-        researched += upgrade.level;
-      });
-    });
-
-    return { total, researched };
+  getSectionCounts() {
+    return calculateSectionCounts(this);
   }
 
   updateSectionCounts() {
-    const upgradeSections = [
-      { name: "Cell Upgrades", isResearch: false },
-      { name: "Cooling Upgrades", isResearch: false },
-      { name: "General Upgrades", isResearch: false },
-      { name: "Laboratory", isResearch: true },
-      { name: "Global Boosts", isResearch: true },
-      { name: "Experimental Parts & Cells", isResearch: true },
-      { name: "Particle Accelerators", isResearch: true },
-    ];
+    this.game?.emit?.("upgradesChanged");
+  }
 
-    upgradeSections.forEach(section => {
-      const groupIds = this._getSectionUpgradeGroups(section.name);
-      if (groupIds.length === 0) return;
-
-      const { total, researched } = this._countUpgradesInGroups(groupIds, section.isResearch);
-      
-      if (typeof document === "undefined") return;
-      const wrapper = section.isResearch 
-        ? document.getElementById("experimental_upgrades_content_wrapper")
-        : document.getElementById("upgrades_content_wrapper");
-      
-      if (!wrapper) return;
-
-      const article = Array.from(wrapper.querySelectorAll("article")).find(art => {
-        const h2 = art.querySelector("h2");
-        if (!h2) return false;
-        let headerText = h2.textContent.trim();
-        const countSpan = h2.querySelector(".section-count");
-        if (countSpan) {
-          headerText = headerText.replace(countSpan.textContent, "").trim();
-        }
-        return headerText === section.name;
-      });
-
-      if (article) {
-        let h2 = article.querySelector("h2");
-        if (!h2) return;
-
-        let countSpan = h2.querySelector(".section-count");
-        if (!countSpan) {
-          countSpan = document.createElement("span");
-          countSpan.className = "section-count";
-          h2.appendChild(countSpan);
-        }
-        countSpan.textContent = ` ${researched}/${total}`;
-      }
-    });
+  toSaveState() {
+    return this.upgradesArray
+      .filter((upg) => upg.level > 0)
+      .map((upg) => ({
+        id: upg.id,
+        level: upg.level,
+      }));
   }
 }

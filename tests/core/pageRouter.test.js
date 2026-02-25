@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, PageRouter, setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, PageRouter, setupGameWithDOM } from "../helpers/setup.js";
 
 describe("PageRouter Grid Transition", () => {
     let pageRouter;

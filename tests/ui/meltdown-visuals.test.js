@@ -175,7 +175,7 @@ describe("Meltdown Visual Effects", () => {
     }
 
     // Trigger sequential explosion (forceAnimate = true for test)
-    ui.explodeAllPartsSequentially(true);
+    ui.meltdownUI.explodeAllPartsSequentially(true);
 
     // Fast forward enough for queued explosions
     vi.advanceTimersByTime(1000);

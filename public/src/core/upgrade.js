@@ -9,14 +9,14 @@ export class Upgrade {
     this.id = upgrade_definition.id;
     this.title = upgrade_definition.title;
     this.description = upgrade_definition.description;
-    this.base_cost = toDecimal(upgrade_definition.cost ?? 0);
-    this.cost_multiplier = upgrade_definition.multiplier || 1.5;
-    this.max_level = upgrade_definition.levels || game.upgrade_max_level;
+    this.base_cost = toDecimal(upgrade_definition.cost);
+    this.cost_multiplier = upgrade_definition.multiplier ?? 1;
+    this.max_level = upgrade_definition.levels ?? game.upgrade_max_level;
     this.type = upgrade_definition.type;
     this.category = upgrade_definition.category;
     this.erequires = upgrade_definition.erequires;
-    this.base_ecost = toDecimal(upgrade_definition.ecost ?? 0);
-    this.ecost_multiplier = upgrade_definition.ecost_multiplier || upgrade_definition.multiplier || 1.5;
+    this.base_ecost = toDecimal(upgrade_definition.ecost);
+    this.ecost_multiplier = upgrade_definition.ecost_multiplier ?? 1;
     this.actionId = upgrade_definition.actionId;
     this.level = 0;
     this.current_cost = this.base_cost;
@@ -53,11 +53,7 @@ export class Upgrade {
         if (buyBtn) {
           buyBtn.disabled = !isAffordable || this.level >= this.max_level;
         }
-        if (isAffordable) {
-          this.$el.classList.remove("unaffordable");
-        } else {
-          this.$el.classList.add("unaffordable");
-        }
+        this.$el.classList.toggle("unaffordable", !isAffordable);
       }
     }
   }
@@ -105,28 +101,16 @@ export class Upgrade {
           buyBtn.setAttribute("aria-label", `Locked – ${doctrineName}`);
         } else {
           buyBtn.disabled = !this.affordable || this.level >= this.max_level;
-          if (this.level >= this.max_level) {
-            buyBtn.setAttribute("aria-label", `${this.title} is maxed out`);
-          } else {
-            buyBtn.setAttribute("aria-label", `Buy ${this.title} for ${this.display_cost}`);
-          }
+          buyBtn.setAttribute("aria-label", this.level >= this.max_level ? `${this.title} is maxed out` : `Buy ${this.title} for ${this.display_cost}`);
         }
       }
 
       const descEl = this.$el.querySelector(".upgrade-description");
       if (descEl) {
-        if (this.level >= this.max_level) {
-          descEl.style.display = "none";
-        } else {
-          descEl.style.display = "";
-        }
+        descEl.style.display = this.level >= this.max_level ? "none" : "";
       }
 
-      if (this.level >= this.max_level) {
-        this.$el.classList.add("maxed-out");
-      } else {
-        this.$el.classList.remove("maxed-out");
-      }
+      this.$el.classList.toggle("maxed-out", this.level >= this.max_level);
     }
   }
 
@@ -242,10 +226,10 @@ export class Upgrade {
     const descEl = this.$el.querySelector(".upgrade-description");
     if (descEl) {
       const desc = this.description || "";
-      if (this.game.ui && this.game.ui.stateManager) {
-        descEl.innerHTML = this.game.ui.stateManager.addPartIconsToTitle(desc);
-      } else {
+      if (!this.game?.ui?.stateManager) {
         descEl.textContent = desc;
+      } else {
+        descEl.innerHTML = this.game.ui.stateManager.addPartIconsToTitle(desc);
       }
     }
 
@@ -264,12 +248,12 @@ export class Upgrade {
         if (this.game.upgradeset && !this.game.upgradeset.isUpgradeAvailable(this.id)) {
           return;
         }
-        if (this.game.upgradeset.purchaseUpgrade(this.id)) {
-          if (this.game.audio) this.game.audio.play('upgrade');
-          this.game.upgradeset.check_affordability(this.game);
-        } else {
+        if (!this.game.upgradeset.purchaseUpgrade(this.id)) {
           if (this.game.audio) this.game.audio.play('error');
+          return;
         }
+        if (this.game.audio) this.game.audio.play('upgrade');
+        this.game.upgradeset.check_affordability(this.game);
       };
     }
 

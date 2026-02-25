@@ -1,7 +1,10 @@
-class WelcomeBackModal {
+import { Format } from "../utils/formatUtils.js";
+import { BaseComponent } from "./BaseComponent.js";
+
+class WelcomeBackModal extends BaseComponent {
   constructor() {
+    super();
     this.overlay = null;
-    this.isVisible = false;
     this._resolve = null;
     this._queuedTicks = 0;
     this._offlineMs = 0;
@@ -35,10 +38,7 @@ class WelcomeBackModal {
     this.isVisible = false;
     this._game = null;
     document.removeEventListener("keydown", this.handleKeyDown);
-    if (this.overlay) {
-      this.overlay.remove();
-      this.overlay = null;
-    }
+    this.overlay = this.removeOverlay(this.overlay);
     if (this._resolve) {
       this._resolve(mode);
       this._resolve = null;
@@ -51,23 +51,9 @@ class WelcomeBackModal {
     }
   }
 
-  formatDuration(ms) {
-    if (ms < 0) ms = 0;
-    const s = Math.floor(ms / 1000) % 60;
-    const m = Math.floor(ms / (1000 * 60)) % 60;
-    const h = Math.floor(ms / (1000 * 60 * 60)) % 24;
-    const d = Math.floor(ms / (1000 * 60 * 60 * 24));
-    const parts = [];
-    if (d > 0) parts.push(`${d}d`);
-    if (h > 0 || parts.length) parts.push(`${h}h`);
-    if (m > 0 || parts.length) parts.push(`${m}m`);
-    parts.push(`${s}s`);
-    return parts.join(" ");
-  }
-
   createDOM() {
     if (this.overlay) return;
-    const durationStr = this.formatDuration(this._offlineMs);
+    const durationStr = Format.time(this._offlineMs, false);
     const tickStr = this._queuedTicks.toLocaleString();
     this.overlay = document.createElement("div");
     this.overlay.className = "welcome-back-modal-overlay";

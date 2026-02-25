@@ -31,94 +31,22 @@
     <script src="lib/zip.min.js"></script>
     <script src="lib/break_infinity.min.js"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script type="importmap">
+      {"imports":{"valtio/vanilla":"https://esm.sh/valtio@2.3.0/vanilla","lit-html":"./lib/lit-html.js"}}
+    </script>
   </head>
   <body>
     <div id="splash-container"></div>
     <div id="wrapper" class="hidden"></div>
-    <!-- Templates are now loaded via src/services/templateLoader.js -->
+    <div id="modal-root"></div>
+    <!-- Legacy templates (part-btn, upgrade-card, tooltip-body, game-setup) loaded via templateLoader.js. Splash/settings use lit-html. -->
     <script type="module" src="src/components/domMapper.js"></script>
     <script type="module" src="src/services/templateLoader.js"></script>
     <script type="module" src="src/utils/logger.js"></script>
-    <script type="module" src="src/utils/logging-controls.js"></script>
     <script type="module" src="src/app.js"></script>
-    
-
-    <script>
-      // Service Worker Registration for PWA
-      // This registration is detectable by PWA analyzers like PWABuilder
-      (function() {
-        // DEVELOPMENT CHECK: Disable Service Worker on localhost to ensure code freshness
-        // This prevents the browser from serving cached, stale versions of the game during development
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-        if (isLocalhost) {
-          console.log('[SW] Localhost detected. Skipping Service Worker registration.');
-
-          // Redirect from GitHub Pages path to local dev path to fix asset 404s/MIME errors
-          // This handles cases where the browser is stuck on /reactor-revival/ from previous SW cache
-          if (window.location.pathname.indexOf('/reactor-revival/') === 0) {
-            console.log('[SW] Redirecting from production path to local /public/ path...');
-            const newPath = window.location.pathname.replace('/reactor-revival/', '/public/');
-            window.location.replace(newPath + window.location.search + window.location.hash);
-            return;
-          }
-
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-              for(let registration of registrations) {
-                registration.unregister();
-                console.log('[SW] Unregistered existing service worker on localhost');
-              }
-            });
-          }
-          return;
-        }
-
-        if ('serviceWorker' in navigator) {
-          const pathParts = window.location.pathname.split('/').filter(p => p);
-          const repoName = pathParts.length > 0 ? pathParts[0] : '';
-          const basePath = repoName ? `/${repoName}` : '';
-          const swPath = `${basePath}/sw.js`;
-          const scope = `${basePath}/`;
-
-          function registerServiceWorker() {
-            navigator.serviceWorker.register(swPath, { scope: scope })
-              .then(function(registration) {
-                console.log('[SW] Service Worker registered successfully:', registration.scope);
-                if (!navigator.serviceWorker.controller) {
-                  navigator.serviceWorker.addEventListener('controllerchange', function() { window.location.reload(); }, { once: true });
-                }
-                registration.addEventListener('updatefound', function() {
-                  const newWorker = registration.installing;
-                  if (newWorker) {
-                    newWorker.addEventListener('statechange', function() {
-                      if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        console.log('[SW] New service worker available');
-                      }
-                    });
-                  }
-                });
-
-                if (registration.waiting) {
-                  console.log('[SW] Service worker waiting to activate');
-                }
-                if (registration.active) {
-                  console.log('[SW] Service worker active');
-                }
-              })
-              .catch(function(error) {
-                console.error('[SW] Service Worker registration failed:', error);
-              });
-          }
-
-          if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', registerServiceWorker);
-          } else {
-            registerServiceWorker();
-          }
-          window.addEventListener('load', registerServiceWorker);
-        }
-      })();
+    <script type="module">
+      import { initializePwa } from './src/services/pwa.js';
+      initializePwa();
     </script>
   </body>
 </html>

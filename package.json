@@ -17,6 +17,7 @@
     "generate-version": "node scripts/generate-version.js",
     "copy-libs": "node scripts/copy-libs.js",
     "build:sw": "workbox injectManifest config/workbox-config.cjs",
+    "quality-gate": "python analyze_review.py --fail-below=B",
     "lint": "npm run lint:js && npm run lint:css",
     "lint:js": "eslint . -c config/eslint.config.js --format @microsoft/eslint-formatter-sarif --output-file eslint-results.sarif",
     "lint:css": "stylelint \"public/**/*.css\" \"public/**/*.html\" \"public/**/*.js\" --config config/.stylelintrc.json --fix",
@@ -26,14 +27,20 @@
     "server": "node api/server.js"
   },
   "keywords": [],
+  "x-build": {
+    "sw": "public/sw.js is generated from src-sw.js by npm run build:sw. Do not edit public/sw.js manually."
+  },
   "author": "Justin Dial",
   "license": "ISC",
   "dependencies": {
     "break_infinity.js": "^2.2.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "lit-html": "^3.3.2",
     "pg": "^8.11.3",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "valtio": "^2.3.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

@@ -3,6 +3,8 @@
  * Provides consistent logging levels and easy control over verbosity
  */
 
+const VALID_LEVELS = ['error', 'warn', 'info', 'debug'];
+
 class Logger {
     constructor() {
         this.levels = {
@@ -12,26 +14,22 @@ class Logger {
             DEBUG: 3
         };
 
+        this.mutedContexts = new Set();
         this.productionMode = typeof window !== 'undefined' && window.PRODUCTION_BUILD === true;
 
-        // Default to INFO level in production, DEBUG in development
         this.currentLevel = this.levels.INFO;
 
-        // Check if we're in development mode
         if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
             this.currentLevel = this.levels.DEBUG;
         }
 
-        // Check for localStorage override (but not in production)
         if (!this.productionMode) {
             try {
                 const storedLevel = localStorage.getItem('reactor_log_level');
                 if (storedLevel && this.levels[storedLevel.toUpperCase()] !== undefined) {
                     this.currentLevel = this.levels[storedLevel.toUpperCase()];
                 }
-            } catch (e) {
-                // Ignore localStorage errors
-            }
+            } catch (e) {}
         }
     }
 
@@ -40,9 +38,7 @@ class Logger {
             this.currentLevel = this.levels[level.toUpperCase()];
             try {
                 localStorage.setItem('reactor_log_level', level.toUpperCase());
-            } catch (e) {
-                // Ignore localStorage errors
-            }
+            } catch (e) {}
         }
     }
 
@@ -89,20 +85,44 @@ class Logger {
         }
     }
 
+    log(level, context, message, ...args) {
+        const lvl = typeof level === 'string' ? level.toLowerCase() : level;
+        const ctx = typeof context === 'string' ? context.toLowerCase() : 'app';
+        if (!VALID_LEVELS.includes(lvl) || !ctx) return;
+        if (this.mutedContexts.has(ctx)) return;
+        const levelName = lvl.toUpperCase();
+        const levelVal = this.levels[levelName];
+        if (levelVal === undefined) return;
+        const contextPrefix = ctx !== 'app' ? `[${ctx.toUpperCase()}] ` : '';
+        this._log(levelName, levelVal, contextPrefix + message, ...args);
+    }
+
+    setMutedContexts(contexts) {
+        this.mutedContexts = new Set(contexts.map((c) => String(c).toLowerCase()));
+    }
+
+    muteContext(context) {
+        this.mutedContexts.add(String(context).toLowerCase());
+    }
+
+    unmuteContext(context) {
+        this.mutedContexts.delete(String(context).toLowerCase());
+    }
+
     error(message, ...args) {
-        this._log('ERROR', this.levels.ERROR, message, ...args);
+        this.log('error', 'app', message, ...args);
     }
 
     warn(message, ...args) {
-        this._log('WARN', this.levels.WARN, message, ...args);
+        this.log('warn', 'app', message, ...args);
     }
 
     info(message, ...args) {
-        this._log('INFO', this.levels.INFO, message, ...args);
+        this.log('info', 'app', message, ...args);
     }
 
     debug(message, ...args) {
-        this._log('DEBUG', this.levels.DEBUG, message, ...args);
+        this.log('debug', 'app', message, ...args);
     }
 
     group(label) {
@@ -123,31 +143,33 @@ class Logger {
         }
     }
 
-    // Convenience methods for specific contexts
-    game(message, ...args) {
-        this.info(`[GAME] ${message}`, ...args);
-    }
-
-    ui(message, ...args) {
-        this.info(`[UI] ${message}`, ...args);
-    }
-
-    engine(message, ...args) {
-        this.debug(`[ENGINE] ${message}`, ...args);
-    }
-
-    state(message, ...args) {
-        this.debug(`[STATE] ${message}`, ...args);
-    }
-
-    router(message, ...args) {
-        this.debug(`[ROUTER] ${message}`, ...args);
-    }
 }
 
-// Create singleton instance
 const logger = new Logger();
 
-// Export both the class and instance
+if (typeof window !== 'undefined') {
+    window.logger = logger;
+
+    window.setLogLevel = (level) => {
+        const validLevels = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
+        if (!validLevels.includes(level.toUpperCase())) {
+            console.warn(`Invalid level. Use: ${validLevels.join(', ')}`);
+            return;
+        }
+        logger.setLevel(level);
+        console.log(`Log level set to: ${level}`);
+    };
+
+    window.setDebug = () => window.setLogLevel('DEBUG');
+    window.setInfo = () => window.setLogLevel('INFO');
+    window.setWarn = () => window.setLogLevel('WARN');
+    window.setError = () => window.setLogLevel('ERROR');
+
+    window.getLogLevel = () => {
+        const levels = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
+        return levels[logger.currentLevel];
+    };
+}
+
 export { Logger, logger };
 export default logger;

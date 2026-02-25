@@ -16,6 +16,12 @@ const __dirname = path.dirname(__filename);
 
 const libraries = [
     {
+        name: "zod",
+        source: "https://cdn.jsdelivr.net/npm/zod@3.24.0/+esm",
+        target: "public/lib/zod.js",
+        isUrl: true,
+    },
+    {
         name: "break_infinity.js",
         source: "node_modules/break_infinity.js/dist/break_infinity.min.js",
         target: "public/lib/break_infinity.min.js",
@@ -30,32 +36,42 @@ const libraries = [
         source: "node_modules/@zip.js/zip.js/dist/zip.min.js",
         target: "public/lib/zip.min.js",
     },
+    {
+        name: "lit-html",
+        source: "node_modules/lit-html/lit-html.js",
+        target: "public/lib/lit-html.js",
+    },
 ];
 
-function copyFile(source, target) {
+async function copyFromUrl(url, target) {
+    console.log(`Downloading ${url}...`);
+    const targetDir = path.dirname(target);
+    if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(target, buffer);
+    console.log(`✓ Downloaded ${path.basename(target)} (${(buffer.length / 1024).toFixed(1)} KB)`);
+}
+
+function copyFile(source, target, isUrl = false) {
+    if (isUrl) return copyFromUrl(source, target);
     return new Promise((resolve, reject) => {
         console.log(`Copying ${source}...`);
-
-        // Ensure target directory exists
         const targetDir = path.dirname(target);
         if (!fs.existsSync(targetDir)) {
             fs.mkdirSync(targetDir, { recursive: true });
             console.log(`Created directory: ${targetDir}`);
         }
-
-        // Copy the file
         fs.copyFile(source, target, (err) => {
             if (err) {
                 reject(err);
                 return;
             }
-
             const stats = fs.statSync(target);
-            console.log(
-                `✓ Copied ${path.basename(target)} (${(
-                    stats.size / 1024
-                ).toFixed(1)} KB)`
-            );
+            console.log(`✓ Copied ${path.basename(target)} (${(stats.size / 1024).toFixed(1)} KB)`);
             resolve();
         });
     });
@@ -66,15 +82,17 @@ async function copyLibraries() {
 
     try {
         for (const lib of libraries) {
-            const sourcePath = path.join(__dirname, "..", lib.source);
             const targetPath = path.join(__dirname, "..", lib.target);
-
-            if (!fs.existsSync(sourcePath)) {
-                console.warn(`⚠️  Warning: ${lib.source} not found. Skipping...`);
-                continue;
+            if (lib.isUrl) {
+                await copyFile(lib.source, targetPath, true);
+            } else {
+                const sourcePath = path.join(__dirname, "..", lib.source);
+                if (!fs.existsSync(sourcePath)) {
+                    console.warn(`⚠️  Warning: ${lib.source} not found. Skipping...`);
+                    continue;
+                }
+                await copyFile(sourcePath, targetPath);
             }
-
-            await copyFile(sourcePath, targetPath);
         }
 
         console.log("\n✓ All libraries copied successfully!");

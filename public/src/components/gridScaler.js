@@ -1,19 +1,26 @@
-export class GridScaler {
+import {
+    GRID_TARGET_TOTAL_TILES, GRID_MIN_DIMENSION, GRID_MAX_DISPLAY_DIMENSION,
+    ZOOM_DAMPING_FACTOR, PINCH_DISTANCE_THRESHOLD_PX,
+    MOMENTUM_DECAY_FACTOR, SNAP_BACK_THRESHOLD_RATIO, SNAP_BACK_SPRING_CONSTANT,
+    ZOOM_SCALE_MIN, ZOOM_SCALE_MAX
+} from "../core/constants.js";
+import { BaseComponent } from "./BaseComponent.js";
+
+export class GridScaler extends BaseComponent {
 
     constructor(ui) {
-
+        super();
         this.ui = ui;
         this.wrapper = null;
         this.reactor = null;
         this.resizeObserver = null;
 
         this.config = {
-            targetTotalTiles: 144, // The goal (e.g., 12x12 = 144)
-            minCols: 6,            // Never narrower than this
-            minRows: 6,            // Never shorter than this
-            maxCols: 20,           // Sanity cap
-            maxRows: 20            // Sanity cap
-
+            targetTotalTiles: GRID_TARGET_TOTAL_TILES,
+            minCols: GRID_MIN_DIMENSION,
+            minRows: GRID_MIN_DIMENSION,
+            maxCols: GRID_MAX_DISPLAY_DIMENSION,
+            maxRows: GRID_MAX_DISPLAY_DIMENSION
         };
 
         this.gestureState = {
@@ -27,15 +34,15 @@ export class GridScaler {
             currentScale: 1,
             targetTranslate: { x: 0, y: 0 },
             targetScale: 1,
-            zoomDamping: 0.24,
+            zoomDamping: ZOOM_DAMPING_FACTOR,
             touches: [],
-            pinchDistanceThreshold: 10,
+            pinchDistanceThreshold: PINCH_DISTANCE_THRESHOLD_PX,
             lastTranslate: { x: 0, y: 0 },
             lastMoveTime: 0,
             velocity: { x: 0, y: 0 },
-            momentumDecay: 0.92,
-            snapBackThreshold: 0.4,
-            snapBackSpring: 0.12,
+            momentumDecay: MOMENTUM_DECAY_FACTOR,
+            snapBackThreshold: SNAP_BACK_THRESHOLD_RATIO,
+            snapBackSpring: SNAP_BACK_SPRING_CONSTANT,
             _animationId: null
         };
 
@@ -50,26 +57,44 @@ export class GridScaler {
 
         if (!this.wrapper) return;
 
-        // Observe wrapper size changes
         this.resizeObserver = new ResizeObserver(() => this.requestResize());
         this.resizeObserver.observe(this.wrapper);
 
         this.requestResize();
 
-        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= GridScaler.MOBILE_BREAKPOINT_PX;
         if (isMobile) {
             this.setupGestures();
         }
 
     }
 
+    teardown() {
+        if (this.resizeObserver && this.wrapper) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+        if (this._touchHandlers && this.wrapper) {
+            this.wrapper.removeEventListener('touchstart', this._touchHandlers.start);
+            this.wrapper.removeEventListener('touchmove', this._touchHandlers.move);
+            this.wrapper.removeEventListener('touchend', this._touchHandlers.end);
+            this.wrapper.removeEventListener('touchcancel', this._touchHandlers.end);
+            this._touchHandlers = null;
+        }
+    }
+
     setupGestures() {
         if (!this.wrapper) return;
 
-        this.wrapper.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        this.wrapper.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        this.wrapper.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
-        this.wrapper.addEventListener('touchcancel', (e) => this.handleTouchEnd(e), { passive: false });
+        this._touchHandlers = {
+            start: (e) => this.handleTouchStart(e),
+            move: (e) => this.handleTouchMove(e),
+            end: (e) => this.handleTouchEnd(e),
+        };
+        this.wrapper.addEventListener('touchstart', this._touchHandlers.start, { passive: false });
+        this.wrapper.addEventListener('touchmove', this._touchHandlers.move, { passive: false });
+        this.wrapper.addEventListener('touchend', this._touchHandlers.end, { passive: false });
+        this.wrapper.addEventListener('touchcancel', this._touchHandlers.end, { passive: false });
     }
 
     getDistance(touch1, touch2) {
@@ -135,7 +160,7 @@ export class GridScaler {
 
         const d = g.zoomDamping;
         const scale = (currentDistance / g.initialDistance) * g.initialScale;
-        const clampedScale = Math.max(0.5, Math.min(2.0, scale));
+        const clampedScale = Math.max(ZOOM_SCALE_MIN, Math.min(ZOOM_SCALE_MAX, scale));
         g.targetScale = clampedScale;
         const ratio = g.currentScale > 0 ? clampedScale / g.currentScale : 1;
         const mx = g.pinchMidpointInWrapper.x;
@@ -228,65 +253,53 @@ export class GridScaler {
 
 
     requestResize() {
-        if (this.ui.game && this.reactor && this.wrapper) {
+        if (this.ui?.game && this.reactor && this.wrapper) {
             requestAnimationFrame(() => this.resize());
         }
     }
 
 
-    /**
-     * Calculates grid dimensions for desktop (rectangular) or mobile (rectangular).
-     * Desktop: scales columns up to 16, calculates rows to maintain ~144 total tiles.
-     * Mobile: rectangular grid (8x10 or 8x14) based on screen space.
-     */
+    static get MOBILE_BREAKPOINT_PX() { return 900; }
+    static get MOBILE_MIN_TILE_PX() { return 40; }
+    static get DESKTOP_MIN_TILE_PX() { return 36; }
+    static get MAX_TILE_SIZE_PX() { return 64; }
+    static get MOBILE_PREF_COLS() { return 8; }
+    static get MOBILE_TALL_ROWS() { return 14; }
+    static get MOBILE_MED_ROWS() { return 10; }
+    static get MAX_DESKTOP_COLS() { return 16; }
+
+    getMobileGridDimensions(availWidth, availHeight) {
+        const minTileSize = GridScaler.MOBILE_MIN_TILE_PX;
+        const maxTilesX = Math.floor(availWidth / minTileSize);
+        const maxTilesY = Math.floor(availHeight / minTileSize);
+        let cols = GridScaler.MOBILE_PREF_COLS;
+        cols = Math.max(this.config.minCols, Math.min(cols, maxTilesX, this.config.maxCols));
+        let rows = maxTilesY >= GridScaler.MOBILE_TALL_ROWS ? GridScaler.MOBILE_TALL_ROWS : maxTilesY >= GridScaler.MOBILE_MED_ROWS ? GridScaler.MOBILE_MED_ROWS : Math.max(this.config.minRows, Math.min(maxTilesY, this.config.maxRows));
+        const actualTileSizeY = availHeight / rows;
+        if (actualTileSizeY < minTileSize) {
+            rows = Math.floor(availHeight / minTileSize);
+            rows = Math.max(this.config.minRows, Math.min(rows, this.config.maxRows));
+        }
+        return { rows, cols };
+    }
+
+    getDesktopGridDimensions(availWidth, availHeight) {
+        const maxDesktopCols = GridScaler.MAX_DESKTOP_COLS;
+        const minTileSize = GridScaler.DESKTOP_MIN_TILE_PX;
+        const targetTotalTiles = this.config.targetTotalTiles;
+        const maxTilesX = Math.floor(availWidth / minTileSize);
+        const maxTilesY = Math.floor(availHeight / minTileSize);
+        const idealCols = Math.ceil(Math.sqrt(targetTotalTiles));
+        const cols = Math.min(maxTilesX, maxDesktopCols, Math.max(idealCols, this.config.minCols));
+        let rows = Math.round(targetTotalTiles / cols);
+        rows = Math.max(this.config.minRows, Math.min(rows, maxTilesY, this.config.maxRows));
+        return { rows, cols };
+    }
 
     calculateGridDimensions(availWidth, availHeight, maxTileSize) {
-
-        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
-
-        if (isMobile) {
-            const minTileSize = 40;
-            const maxTilesX = Math.floor(availWidth / minTileSize);
-            const maxTilesY = Math.floor(availHeight / minTileSize);
-
-            let cols = 8;
-            cols = Math.max(this.config.minCols, Math.min(cols, maxTilesX, this.config.maxCols));
-
-            let rows;
-            if (maxTilesY >= 14) {
-                rows = 14;
-            } else if (maxTilesY >= 10) {
-                rows = 10;
-            } else {
-                rows = Math.max(this.config.minRows, Math.min(maxTilesY, this.config.maxRows));
-            }
-            
-            const actualTileSizeY = availHeight / rows;
-            if (actualTileSizeY < minTileSize) {
-                rows = Math.floor(availHeight / minTileSize);
-                rows = Math.max(this.config.minRows, Math.min(rows, this.config.maxRows));
-            }
-
-            return { rows, cols };
-        } else {
-            const maxDesktopCols = 16;
-            const minTileSize = 36;
-            const targetTotalTiles = this.config.targetTotalTiles;
-
-            const maxTilesX = Math.floor(availWidth / minTileSize);
-            const maxTilesY = Math.floor(availHeight / minTileSize);
-
-            const idealCols = Math.ceil(Math.sqrt(targetTotalTiles));
-            
-            let cols = Math.min(maxTilesX, maxDesktopCols, Math.max(idealCols, this.config.minCols));
-            
-            let rows = Math.round(targetTotalTiles / cols);
-            
-            rows = Math.max(this.config.minRows, Math.min(rows, maxTilesY, this.config.maxRows));
-            
-            return { rows, cols };
-        }
-
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= GridScaler.MOBILE_BREAKPOINT_PX;
+        if (isMobile) return this.getMobileGridDimensions(availWidth, availHeight);
+        return this.getDesktopGridDimensions(availWidth, availHeight);
     }
 
 
@@ -304,7 +317,6 @@ export class GridScaler {
 
 
 
-        // 1. Get Available Space
         const availWidth = this.wrapper.clientWidth;
         const availHeight = this.wrapper.clientHeight;
 
@@ -312,20 +324,17 @@ export class GridScaler {
             return;
         }
 
-        // 2. Calculate grid dimensions (rectangular for desktop and mobile)
-        const maxTileSize = 64;
-        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 900;
+        const maxTileSize = GridScaler.MAX_TILE_SIZE_PX;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= GridScaler.MOBILE_BREAKPOINT_PX;
         const dims = this.calculateGridDimensions(availWidth, availHeight, maxTileSize);
 
         let cols = dims.cols;
         let rows = dims.rows;
 
-        // 3. Calculate tile size to fit the grid perfectly (max 64px)
         const sizeXFinal = availWidth / cols;
         const sizeYFinal = availHeight / rows;
         let tileSize = Math.floor(Math.min(sizeXFinal, sizeYFinal, maxTileSize));
         
-        // 4. Verify grid fits and adjust rows if needed (especially for mobile)
         const calculatedGridHeight = rows * tileSize;
         if (calculatedGridHeight > availHeight && isMobile) {
             const maxRowsForHeight = Math.floor(availHeight / tileSize);
@@ -335,40 +344,20 @@ export class GridScaler {
             }
         }
 
-        // console.groupCollapsed(`[GridScaler] Resized to ${cols}x${rows}`);
-        // console.log(`Wrapper Size:   ${availWidth}px x ${availHeight}px`);
-        // console.log(`Grid Logic:     ${cols} Cols x ${rows} Rows (${gridType})`);
-        // console.log(`Tile Size:      ${tileSize}px (Fit Width: ${sizeXFinal.toFixed(1)}, Fit Height: ${sizeYFinal.toFixed(1)})`);
-        // console.log(`Final Size:     ${cols * tileSize}px x ${rows * tileSize}px`);
-        // console.groupEnd();
-
-        // ---------------------
-
-        // 5. Update Game Logic
-        if (!this.ui.game) {
-            return;
-        }
-
+        if (!this.ui?.game) return;
         if (this.ui.game.resizeGrid) {
-
             this.ui.game.resizeGrid(rows, cols);
-
         } else {
-
             this.ui.game.rows = rows;
             this.ui.game.cols = cols;
-
         }
 
-        // 6. Apply CSS
         const finalGridWidth = cols * tileSize;
         const finalGridHeight = rows * tileSize;
 
         this.reactor.style.setProperty('--tile-size', `${tileSize}px`);
         this.reactor.style.setProperty('--game-cols', cols);
         this.reactor.style.setProperty('--game-rows', rows);
-
-        // Explicit size sets the container for centering
 
         this.reactor.style.width = `${finalGridWidth}px`;
         this.reactor.style.height = `${finalGridHeight}px`;
@@ -379,36 +368,37 @@ export class GridScaler {
           this.ui.gridCanvasRenderer.markStaticDirty();
         }
 
-        // Align grid in wrapper (flex-start for mobile, center for desktop)
+        this.applyWrapperAndSectionStyles(isMobile);
+    }
 
-        if (this.wrapper) {
-            this.wrapper.style.display = 'flex';
-            this.wrapper.style.alignItems = 'center';
-            this.wrapper.style.justifyContent = 'center';
-            const section = document.getElementById('reactor_section') || this.wrapper.parentElement;
-            if (isMobile && section) {
-                const topBar = document.getElementById('mobile_passive_top_bar');
-                const topOffset = topBar ? topBar.offsetHeight : 0;
-                const buildRow = document.getElementById('build_above_deck_row');
-                const controlDeck = document.getElementById('reactor_control_deck');
-                const bottomNav = document.getElementById('bottom_nav');
-                const bottomOffset = (buildRow?.offsetHeight || 0) + (controlDeck?.offsetHeight || 0) + (bottomNav?.offsetHeight || 0);
-                section.style.paddingTop = `${topOffset}px`;
-                section.style.paddingRight = '5px';
-                section.style.paddingBottom = `${bottomOffset}px`;
-                section.style.paddingLeft = '5px';
-            } else if (section) {
-                section.style.paddingTop = '';
-                section.style.paddingRight = '';
-                section.style.paddingBottom = '';
-                section.style.paddingLeft = '';
-            }
-            this.wrapper.style.paddingTop = '';
-            this.wrapper.style.paddingRight = '';
-            this.wrapper.style.paddingBottom = '';
-            this.wrapper.style.paddingLeft = '';
+    applyWrapperAndSectionStyles(isMobile) {
+        if (!this.wrapper) return;
+        this.wrapper.style.display = 'flex';
+        this.wrapper.style.alignItems = 'center';
+        this.wrapper.style.justifyContent = 'center';
+        const section = document.getElementById('reactor_section') || this.wrapper.parentElement;
+        if (section && isMobile) {
+            const topBar = document.getElementById('mobile_passive_top_bar');
+            const topOffset = topBar ? topBar.offsetHeight : 0;
+            const buildRow = document.getElementById('build_above_deck_row');
+            const controlDeck = document.getElementById('reactor_control_deck');
+            const bottomNav = document.getElementById('bottom_nav');
+            const bottomOffset = (buildRow?.offsetHeight || 0) + (controlDeck?.offsetHeight || 0) + (bottomNav?.offsetHeight || 0);
+            section.style.paddingTop = `${topOffset}px`;
+            section.style.paddingRight = '5px';
+            section.style.paddingBottom = `${bottomOffset}px`;
+            section.style.paddingLeft = '5px';
         }
-
+        if (section && !isMobile) {
+            section.style.paddingTop = '';
+            section.style.paddingRight = '';
+            section.style.paddingBottom = '';
+            section.style.paddingLeft = '';
+        }
+        this.wrapper.style.paddingTop = '';
+        this.wrapper.style.paddingRight = '';
+        this.wrapper.style.paddingBottom = '';
+        this.wrapper.style.paddingLeft = '';
     }
 
 }

@@ -1,0 +1,326 @@
+import { StorageUtils } from "../../utils/util.js";
+import { logger } from "../../utils/logger.js";
+import { supabaseSave } from "../../services/SupabaseSave.js";
+import { createSupabaseProvider, createGoogleDriveProvider } from "../../services/cloudSaveProvider.js";
+import { bindEvents } from "../../utils/bindEvents.js";
+
+let _activeAbortController = null;
+
+export function getAbortSignal() {
+  if (_activeAbortController) _activeAbortController.abort();
+  _activeAbortController = new AbortController();
+  return _activeAbortController.signal;
+}
+
+export function abortSettingsListeners() {
+  if (_activeAbortController) {
+    _activeAbortController.abort();
+    _activeAbortController = null;
+  }
+}
+
+function getCloudSaveProvider() {
+  if (typeof window !== "undefined" && window.supabaseAuth?.isSignedIn?.()) {
+    return createSupabaseProvider(supabaseSave);
+  }
+  if (typeof window !== "undefined" && window.googleDriveSave?.isSignedIn) {
+    return createGoogleDriveProvider(window.googleDriveSave);
+  }
+  return null;
+}
+
+const SAVED_BUTTON_RESET_MS = 1500;
+const ERROR_BUTTON_RESET_MS = 2000;
+
+const STORAGE_KEYS = {
+  master: "reactor_volume_master",
+  effects: "reactor_volume_effects",
+  alerts: "reactor_volume_alerts",
+  system: "reactor_volume_system",
+  ambience: "reactor_volume_ambience"
+};
+
+function stepToVal(s) {
+  return s / 10;
+}
+
+const VOLUME_STEP_MIN = 0;
+const VOLUME_STEP_MAX = 10;
+
+function applyStepperState(blocks, valSpan, key, step, modal) {
+  const value = stepToVal(step);
+  blocks.setAttribute("aria-valuenow", step);
+  blocks.querySelectorAll(".volume-block").forEach((b, i) => {
+    if (i <= step) b.setAttribute("data-active", "");
+    else b.removeAttribute("data-active");
+  });
+  if (valSpan) valSpan.textContent = `${step * 10}%`;
+  StorageUtils.set(STORAGE_KEYS[key], value);
+  const game = modal?.getGame?.();
+  if (game?.audio) game.audio.setVolume(key, value);
+}
+
+function handleVolumeKeydown(e, blocks, updateStepper, modal) {
+  const step = parseInt(blocks.getAttribute("aria-valuenow"), 10);
+  const isDecrease = e.key === "ArrowLeft" || e.key === "ArrowDown";
+  const isIncrease = e.key === "ArrowRight" || e.key === "ArrowUp";
+  if (isDecrease && step > VOLUME_STEP_MIN) {
+    e.preventDefault();
+    updateStepper(step - 1);
+    modal.playClick();
+  } else if (isIncrease && step < VOLUME_STEP_MAX) {
+    e.preventDefault();
+    updateStepper(step + 1);
+    modal.playClick();
+  }
+}
+
+function setupVolumeSteppers(overlay, modal, signal) {
+  overlay.querySelectorAll(".volume-stepper").forEach((stepper) => {
+    const key = stepper.dataset.volumeKey;
+    const blocks = stepper.querySelector(".volume-blocks");
+    const valSpan = stepper.querySelector(".volume-stepper-val");
+    if (!blocks) return;
+    const updateStepper = (step) => applyStepperState(blocks, valSpan, key, step, modal);
+    blocks.querySelectorAll(".volume-block").forEach((block) => {
+      block.addEventListener("click", (e) => {
+        e.stopPropagation();
+        updateStepper(parseInt(block.dataset.step, 10));
+        modal.playClick();
+      }, { signal });
+    });
+    blocks.addEventListener("keydown", (e) => handleVolumeKeydown(e, blocks, updateStepper, modal), { signal });
+  });
+}
+
+function createSyncMechSwitch(overlay) {
+  return (checkboxId, checked) => {
+    const btn = overlay.querySelector(`.mech-switch[data-checkbox-id="${checkboxId}"]`);
+    if (btn) {
+      btn.setAttribute("aria-checked", checked);
+      btn.classList.toggle("mech-switch-on-active", checked);
+    }
+  };
+}
+
+function createSetupMechSwitch(overlay, modal, syncMechSwitch, signal) {
+  return (checkboxId, onChange) => {
+    const checkbox = overlay.querySelector(`#${checkboxId}`);
+    const btn = overlay.querySelector(`.mech-switch[data-checkbox-id="${checkboxId}"]`);
+    if (!checkbox || !btn) return;
+    syncMechSwitch(checkboxId, checkbox.checked);
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      checkbox.checked = !checkbox.checked;
+      syncMechSwitch(checkboxId, checkbox.checked);
+      modal.playClick();
+      onChange(checkbox.checked);
+    }, { signal });
+  };
+}
+
+function setupMechSwitches(overlay, modal, signal) {
+  const syncMechSwitch = createSyncMechSwitch(overlay);
+  const setupMechSwitch = createSetupMechSwitch(overlay, modal, syncMechSwitch, signal);
+  const game = modal.getGame?.();
+  const affordIds = [
+    "setting-hide-upgrades",
+    "setting-hide-research",
+    "setting-hide-max-upgrades",
+    "setting-hide-max-research",
+    "setting-hide-other-doctrine"
+  ];
+  const storageKeys = {
+    "setting-hide-upgrades": "reactor_hide_unaffordable_upgrades",
+    "setting-hide-research": "reactor_hide_unaffordable_research",
+    "setting-hide-max-upgrades": "reactor_hide_max_upgrades",
+    "setting-hide-max-research": "reactor_hide_max_research",
+    "setting-hide-other-doctrine": "reactor_hide_other_doctrine_upgrades"
+  };
+  affordIds.forEach((id) => {
+    setupMechSwitch(id, () => {
+      StorageUtils.set(storageKeys[id], overlay.querySelector(`#${id}`).checked);
+      if (game?.upgradeset) game.upgradeset.check_affordability(game);
+    });
+  });
+  setupMechSwitch("setting-motion", (checked) => {
+    StorageUtils.set("reactor_reduced_motion", checked);
+    document.documentElement.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
+  });
+  setupMechSwitch("setting-heat-flow", (checked) => StorageUtils.set("reactor_heat_flow_visible", checked));
+  setupMechSwitch("setting-heat-map", (checked) => StorageUtils.set("reactor_heat_map_visible", checked));
+  setupMechSwitch("setting-debug-overlay", (checked) => StorageUtils.set("reactor_debug_overlay", checked));
+  setupMechSwitch("setting-force-no-sab", (checked) => {
+    StorageUtils.set("reactor_force_no_sab", checked);
+    if (game?.engine && typeof game.engine.setForceNoSAB === "function") {
+      game.engine.setForceNoSAB(checked);
+    }
+  });
+  const numberFormatSelect = overlay.querySelector("#setting-number-format");
+  if (numberFormatSelect) {
+    numberFormatSelect.addEventListener("change", () => {
+      StorageUtils.set("number_format", numberFormatSelect.value);
+      if (game?.ui?.coreLoopUI?.runUpdateInterfaceLoop) game.ui.coreLoopUI.runUpdateInterfaceLoop();
+    }, { signal });
+  }
+  bindEvents(overlay, {
+    ".mech-switch-row span": (e) => {
+      e.preventDefault();
+      e.target.closest(".mech-switch-row")?.querySelector(".mech-switch")?.click();
+    }
+  }, { signal });
+  const notifCheckbox = overlay.querySelector("#setting-notifications");
+  if (notifCheckbox && "Notification" in window) {
+    notifCheckbox.checked = Notification.permission === "granted";
+    setupMechSwitch("setting-notifications", (checked) => modal._handleNotificationSwitch(checked, notifCheckbox, syncMechSwitch));
+    syncMechSwitch("setting-notifications", notifCheckbox.checked);
+  }
+  if (notifCheckbox && !("Notification" in window)) {
+    const row = notifCheckbox.closest(".setting-row");
+    if (row) row.style.display = "none";
+  }
+}
+
+function formatCloudDate(ts) {
+  if (!ts) return "—";
+  const date = new Date(Number(ts));
+  const diffMs = Date.now() - date;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffHours < 1) return "Just now";
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+const CLOUD_SLOT_IDS = [1, 2, 3];
+
+function createRefreshCloudSlots(overlay) {
+  return async () => {
+    const provider = getCloudSaveProvider();
+    if (!provider) return;
+    let list = [];
+    try {
+      list = await provider.getSaves();
+    } catch (e) {
+      return;
+    }
+    const bySlot = new Map(list.map((s) => [s.slot_id, s]));
+    CLOUD_SLOT_IDS.forEach((slotId) => {
+      const row = overlay.querySelector(`.cloud-slot-row[data-slot="${slotId}"]`);
+      if (!row) return;
+      const meta = row.querySelector(".cloud-slot-meta");
+      const loadBtn = row.querySelector(`.setting-cloud-load[data-slot="${slotId}"]`);
+      const slotData = bySlot.get(slotId);
+      if (meta) meta.textContent = slotData ? formatCloudDate(slotData.timestamp) : "—";
+      if (loadBtn) loadBtn.disabled = !slotData;
+    });
+  };
+}
+
+function setupCloudSaves(overlay, modal, signal) {
+  if (!getCloudSaveProvider()) return;
+  const cloudSection = overlay.querySelector("#setting-cloud-saves");
+  if (!cloudSection) return;
+  cloudSection.style.display = "block";
+  const refreshCloudSlots = createRefreshCloudSlots(overlay);
+  refreshCloudSlots();
+  const handleCloudSave = async (e) => {
+    const btn = e.currentTarget;
+    const slotId = parseInt(btn.dataset.slot, 10);
+    const game = modal.getGame?.();
+    if (!game?.saveManager) return;
+    const label = btn.textContent;
+    btn.textContent = "Saving...";
+    btn.disabled = true;
+    try {
+      const provider = getCloudSaveProvider();
+      if (!provider) return;
+      await provider.saveGame(slotId, game.saveManager.getSaveState());
+      btn.textContent = "Saved";
+      await refreshCloudSlots();
+      setTimeout(() => {
+        btn.textContent = label;
+        btn.disabled = false;
+      }, SAVED_BUTTON_RESET_MS);
+    } catch (e) {
+      btn.textContent = "Error";
+      setTimeout(() => {
+        btn.textContent = label;
+        btn.disabled = false;
+      }, ERROR_BUTTON_RESET_MS);
+    }
+    modal.playClick();
+  };
+  const handleCloudLoad = async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    const slotId = parseInt(btn.dataset.slot, 10);
+    const provider = getCloudSaveProvider();
+    if (!provider) return;
+    let list = [];
+    try {
+      list = await provider.getSaves();
+    } catch (e) {
+      return;
+    }
+    const slotData = list.find((s) => s.slot_id === slotId);
+    if (!slotData?.save_data) return;
+    StorageUtils.setRaw(`reactorGameSave_${slotId}`, slotData.save_data);
+    const game = modal.getGame?.();
+    try {
+      const loaded = game?.saveManager ? await game.saveManager.loadGame(slotId) : false;
+      if (loaded) window.location.reload();
+    } catch (err) {
+      logger.log('error', 'ui', 'Failed to load cloud save:', err);
+    }
+    modal.playClick();
+  };
+  bindEvents(overlay, {
+    ".setting-cloud-save": handleCloudSave,
+    ".setting-cloud-load": handleCloudLoad
+  }, { signal });
+}
+
+function setupNavAndAbout(overlay) {
+  const versionSpan = overlay.querySelector("#app_version");
+  if (versionSpan) {
+    fetch("version.json")
+      .then((res) => res.json())
+      .then((data) => { versionSpan.textContent = data.version || "Unknown"; })
+      .catch(() => { versionSpan.textContent = "Unknown"; });
+  }
+  const displayModeSpan = overlay.querySelector("#app_display_mode");
+  if (displayModeSpan) {
+    const modes = ["standalone", "minimal-ui", "browser"];
+    const activeMode = modes.find((m) => window.matchMedia(`(display-mode: ${m})`).matches) || "browser";
+    displayModeSpan.textContent = activeMode;
+  }
+}
+
+export function bindSettingsEvents(overlay, modal, signal) {
+  const muteBtn = overlay.querySelector("#setting-mute-btn");
+  const muteCheckbox = overlay.querySelector("#setting-mute");
+  const importInput = overlay.querySelector("#setting-import-input");
+  bindEvents(overlay, {
+    "#setting-mute-btn": () => {
+      if (!muteCheckbox || !muteBtn) return;
+      muteCheckbox.checked = !muteCheckbox.checked;
+      StorageUtils.set("reactor_mute", muteCheckbox.checked);
+      const icon = muteBtn.querySelector(".mute-icon");
+      if (icon) icon.textContent = muteCheckbox.checked ? "🔇" : "🔊";
+      const game = modal.getGame?.();
+      if (game?.audio) game.audio.toggleMute(muteCheckbox.checked);
+      modal.playClick();
+    },
+    "#setting-export": () => modal._handleExportClick(),
+    "#setting-import": () => importInput?.click(),
+    "#setting-import-input": { change: (e) => modal._handleImportFile(e.target.files[0]) },
+    "#research_back_to_splash_btn": () => { window.location.href = window.location.origin + window.location.pathname; }
+  }, { signal });
+  setupVolumeSteppers(overlay, modal, signal);
+  setupMechSwitches(overlay, modal, signal);
+  setupNavAndAbout(overlay);
+  setupCloudSaves(overlay, modal, signal);
+}

@@ -23,12 +23,11 @@ describe("Debug Tests", () => {
     // Simulate a saved game with an invalid objective index (beyond the valid range)
     const invalidIndex = testGame.objectives_manager.objectives_data.length + 5; // Way beyond valid range
 
-    // Mock console.warn to capture the warning message
     const originalWarn = console.warn;
     let warningMessage = "";
-    console.warn = (msg) => {
-      warningMessage = msg;
-      originalWarn(msg);
+    console.warn = (...args) => {
+      warningMessage = args.map((a) => (typeof a === "string" ? a : String(a))).join(" ");
+      originalWarn.apply(console, args);
     };
 
     // Apply save state with invalid index
@@ -69,9 +68,9 @@ describe("Debug Tests", () => {
 
     const originalWarn = console.warn;
     const warnings = [];
-    console.warn = (msg) => {
-      warnings.push(String(msg));
-      originalWarn(msg);
+    console.warn = (...args) => {
+      warnings.push(args.map((a) => (typeof a === "string" ? a : String(a))).join(" "));
+      originalWarn.apply(console, args);
     };
 
     await testGame.applySaveState(saveData);

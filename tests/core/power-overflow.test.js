@@ -1,5 +1,7 @@
+import Decimal from "break_infinity.js";
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, toNum } from "../helpers/setup.js";
 import { placePart } from "../helpers/gameHelpers.js";
+import { getHeatNetChange, getPowerNetChange } from "../../public/src/components/ui/statsCalculatorUI.js";
 
 describe("Power Overflow Mechanics", () => {
     let game;
@@ -227,6 +229,93 @@ describe("Difficulty settings persist after init", () => {
         expect(game.base_money).toBe(25);
         expect(game.reactor.base_max_heat).toBe(1500);
         expect(game.reactor.base_max_power).toBe(120);
+    });
+});
+
+describe("StatsCalculatorUI Decimal coercion", () => {
+    function mockUi(vars, gameOverrides = {}) {
+        const stateManager = { getVar: (k) => vars[k] };
+        const game = { reactor: { power_overflow_to_heat_ratio: 0.5, manual_heat_reduce: 1, base_manual_heat_reduce: 1, auto_sell_multiplier: 0 }, ...gameOverrides };
+        return { stateManager, game };
+    }
+
+    it("getHeatNetChange uses numeric addition when current_power and max_power are Decimal", () => {
+        const ui = mockUi({
+            current_power: new Decimal(60),
+            stats_power: 1000,
+            max_power: new Decimal(120),
+            stats_net_heat: 500,
+        });
+        const result = getHeatNetChange(ui);
+        const expectedOverflow = Math.max(0, 60 + 1000 - 120) * 0.5;
+        const expected = 500 + expectedOverflow - 1;
+        expect(result).toBe(expected);
+        expect(typeof result).toBe("number");
+        expect(result).not.toBeNaN();
+    });
+
+    it("getHeatNetChange overflow heat is not string-concatenated (60+1000 must equal 1060, not 601000)", () => {
+        const ui = mockUi({
+            current_power: new Decimal(60),
+            stats_power: 1000,
+            max_power: new Decimal(120),
+            stats_net_heat: 0,
+        });
+        const result = getHeatNetChange(ui);
+        const overflowHeat = Math.max(0, 60 + 1000 - 120) * 0.5;
+        expect(overflowHeat).toBe(470);
+        expect(result).toBe(overflowHeat - 1);
+        expect(result).toBeLessThan(1000);
+    });
+
+    it("getPowerNetChange returns number when stats_power is Decimal", () => {
+        const ui = mockUi({ stats_power: new Decimal(500) }, { reactor: { auto_sell_multiplier: 0 } });
+        const result = getPowerNetChange(ui);
+        expect(result).toBe(500);
+        expect(typeof result).toBe("number");
+    });
+
+    it("getPowerNetChange with auto_sell uses numeric math when values are Decimal", () => {
+        const ui = mockUi(
+            { stats_power: new Decimal(100), auto_sell: true },
+            { reactor: { auto_sell_multiplier: new Decimal(0.5) } }
+        );
+        const result = getPowerNetChange(ui);
+        expect(result).toBe(50);
+        expect(typeof result).toBe("number");
+    });
+
+    it("getHeatNetChange uses numeric addition when total_heat, stats_vent, stats_outlet are Decimal", () => {
+        const ui = mockUi({
+            stats_net_heat: undefined,
+            total_heat: new Decimal(1000),
+            stats_vent: new Decimal(300),
+            stats_outlet: new Decimal(100),
+            current_power: 0,
+            stats_power: 0,
+            max_power: 100,
+        });
+        const result = getHeatNetChange(ui);
+        const baseNetHeat = 1000 - 300 - 100;
+        expect(result).toBe(baseNetHeat - 1);
+        expect(typeof result).toBe("number");
+    });
+
+    it("getHeatNetChange returns number when manual_heat_reduce is Decimal", () => {
+        const ui = mockUi(
+            { stats_net_heat: 100, current_power: 0, stats_power: 0, max_power: 100 },
+            { reactor: { power_overflow_to_heat_ratio: 0.5, manual_heat_reduce: new Decimal(10), base_manual_heat_reduce: 1 } }
+        );
+        const result = getHeatNetChange(ui);
+        expect(result).toBe(90);
+        expect(typeof result).toBe("number");
+    });
+
+    it("getPowerNetChange handles string stats_power without producing concatenation", () => {
+        const ui = mockUi({ stats_power: "1000" }, { reactor: { auto_sell_multiplier: 0 } });
+        const result = getPowerNetChange(ui);
+        expect(result).toBe(1000);
+        expect(typeof result).toBe("number");
     });
 });
 

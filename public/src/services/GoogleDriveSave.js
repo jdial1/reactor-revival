@@ -1,877 +1,123 @@
+import { GOOGLE_DRIVE_CONFIG } from "./appConfig.js";
+import { StorageUtils } from "../utils/util.js";
 import {
-  GOOGLE_DRIVE_CONFIG,
-  ENABLE_GOOGLE_DRIVE,
-} from "./google-drive-config.js";
-import { safeGetItem, safeSetItem, safeRemoveItem } from "../utils/util.js";
+  restoreAuthToken,
+  restoreUserInfo,
+  isConfigured,
+  loadGapiScripts,
+  checkAuth,
+  handleAuthSuccess,
+  getUserInfo,
+  getUserId,
+  signOut,
+  signIn,
+} from "./googleDrive/googleDriveAuth.js";
+import {
+  findSaveFile,
+  load as loadFile,
+  performSave,
+  save as saveFile,
+  uploadLocalSave as uploadLocalSaveFile,
+  canUploadLocalSave as canUploadLocalSaveFile,
+  offerLocalSaveUpload as offerLocalSaveUploadFile,
+  flushPendingSave as flushPendingSaveFile,
+  testBasicFileOperations,
+  deleteSave as deleteSaveFile,
+} from "./googleDrive/googleDriveFileOps.js";
 
-/**
- * Google Drive Save Integration
- * Simplified version focusing on core functionality
- */
 export class GoogleDriveSave {
   constructor() {
-    this.enabled = ENABLE_GOOGLE_DRIVE;
+    this.enabled = GOOGLE_DRIVE_CONFIG.ENABLE_GOOGLE_DRIVE;
     this.isSignedIn = false;
     this.authToken = null;
     this.userInfo = null;
-    this.saveFileId = null;
+    this.saveFileId = StorageUtils.get("google_drive_save_file_id") || null;
     this.lastSaveTime = 0;
     this.pendingSaveData = null;
     this.saveTimeoutId = null;
     this.config = null;
-
-    // Restore save file ID from localStorage if available
-    const storedSaveFileId = safeGetItem("google_drive_save_file_id");
-    if (storedSaveFileId) {
-      this.saveFileId = storedSaveFileId;
-    }
-
-    // Restore auth token and user info from localStorage immediately
-    this.restoreAuthToken();
-    this.restoreUserInfo();
-
-    if (this.enabled) {
-      this.init();
-    }
+    restoreAuthToken(this);
+    restoreUserInfo(this);
+    if (this.enabled) this.init();
   }
 
-  restoreAuthToken() {
-    try {
-      const storedTokenData = safeGetItem("google_drive_auth_token");
-      if (storedTokenData) {
-        const tokenData = JSON.parse(storedTokenData);
-        if (tokenData.expires_at && tokenData.expires_at > Date.now() + 300000) {
-          this.authToken = tokenData.access_token;
-          this.isSignedIn = true;
-        } else {
-          safeRemoveItem("google_drive_auth_token");
-        }
-      }
-    } catch (error) {
-      safeRemoveItem("google_drive_auth_token");
-    }
-  }
-
-  restoreUserInfo() {
-    try {
-      const storedUserInfo = safeGetItem("google_drive_user_info");
-      if (storedUserInfo) {
-        this.userInfo = JSON.parse(storedUserInfo);
-      }
-    } catch (error) {
-      safeRemoveItem("google_drive_user_info");
-    }
-  }
-
-  /**
-   * Check if Google Drive is properly configured
-   * @returns {boolean} - True if configured
-   */
   isConfigured() {
-    try {
-      if (!this.config) {
-        this.config = GOOGLE_DRIVE_CONFIG;
-      }
-      return !!(this.config && this.config.CLIENT_ID && this.config.API_KEY);
-    } catch (_) {
-      return false;
-    }
+    return isConfigured(this);
   }
 
-  /**
-   * Initialize Google Drive integration
-   */
   async init() {
     if (!this.isConfigured()) return false;
     if (typeof navigator !== "undefined" && !navigator.onLine) return false;
     try {
-      await this.loadGapiScripts();
-      await this.checkAuth(true);
+      await loadGapiScripts(this);
+      await checkAuth(this, true);
       return true;
-    } catch (_) {
+    } catch {
       return false;
     }
   }
 
-  /**
-   * Load required Google API scripts
-   */
-  async loadGapiScripts() {
-    if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
-    if (!window.google?.accounts) {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = "https://accounts.google.com/gsi/client";
-        script.onload = resolve;
-        script.onerror = () => reject(new Error("gsi load failed"));
-        document.head.appendChild(script);
-      });
-    }
-    if (!window.gapi) {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = "https://apis.google.com/js/api.js";
-        script.onload = resolve;
-        script.onerror = () => reject(new Error("gapi load failed"));
-        document.head.appendChild(script);
-      });
-    }
-    await new Promise((resolve, reject) => {
-      gapi.load("client", async () => {
-        try {
-          await gapi.client.init({ apiKey: this.config.API_KEY });
-          await gapi.client.load("drive", "v3");
-          resolve();
-        } catch (e) {
-          reject(e);
-        }
-      });
-    });
-    this.tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: this.config.CLIENT_ID,
-      scope:
-        "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata",
-      callback: async (response) => {
-        if (response.access_token) {
-          await this.handleAuthSuccess(response);
-        }
-      },
-    });
-  }
-
-  /**
-   * Check authentication status without triggering sign-in popup
-   * @param {boolean} silent - Whether to perform silent check
-   * @returns {Promise<boolean>} - True if signed in
-   */
   async checkAuth(silent = true) {
-    if (!this.isConfigured()) return false;
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      if (this.authToken) this.isSignedIn = true;
-      return !!this.authToken;
-    }
-    try {
-      if (!this.authToken) {
-        const storedTokenData = safeGetItem("google_drive_auth_token");
-        if (storedTokenData) {
-          try {
-            const tokenData = JSON.parse(storedTokenData);
-            if (
-              tokenData.expires_at &&
-              tokenData.expires_at > Date.now() + 300000
-            ) {
-              this.authToken = tokenData.access_token;
-            } else {
-              safeRemoveItem("google_drive_auth_token");
-            }
-          } catch (_) {
-            safeRemoveItem("google_drive_auth_token");
-          }
-        }
-      }
-      if (this.authToken) {
-        const response = await fetch(
-          "https://www.googleapis.com/drive/v3/about?fields=user",
-          {
-            headers: { Authorization: `Bearer ${this.authToken}` },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user) {
-            this.userInfo = {
-              id: data.user.permissionId || data.user.emailAddress,
-              email: data.user.emailAddress,
-              name: data.user.displayName,
-              imageUrl: data.user.photoLink
-            };
-            safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
-          }
-          this.isSignedIn = true;
-          return true;
-        } else {
-          this.authToken = null;
-          this.isSignedIn = false;
-          this.userInfo = null;
-          safeRemoveItem("google_drive_auth_token");
-          safeRemoveItem("google_drive_user_info");
-        }
-      }
-
-      // Check if gapi is available and try silent auth
-      if (window.gapi && window.gapi.auth2) {
-        const authInstance = window.gapi.auth2.getAuthInstance();
-        if (authInstance && authInstance.isSignedIn.get()) {
-          const user = authInstance.currentUser.get();
-          const authResponse = user.getAuthResponse();
-          this.authToken = authResponse.access_token;
-          this.isSignedIn = true;
-          
-          const expiresAt = Date.now() + (authResponse.expires_in || 3600) * 1000;
-          const tokenData = {
-            access_token: authResponse.access_token,
-            expires_at: expiresAt,
-          };
-          safeSetItem("google_drive_auth_token", JSON.stringify(tokenData));
-          
-          const profile = user.getBasicProfile();
-          if (profile) {
-            this.userInfo = {
-              id: profile.getId(),
-              email: profile.getEmail(),
-              name: profile.getName(),
-              imageUrl: profile.getImageUrl()
-            };
-            safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
-          }
-          
-          return true;
-        }
-      }
-
-      return false;
-    } catch (_) {
-      return false;
-    }
+    return checkAuth(this, silent);
   }
 
-  /**
-   * Get user info from Google auth
-   */
   getUserInfo() {
-    if (!this.isSignedIn) {
-      return null;
-    }
-
-    if (this.userInfo) {
-      return this.userInfo;
-    }
-
-    try {
-      if (window.gapi && window.gapi.auth2) {
-        const authInstance = window.gapi.auth2.getAuthInstance();
-        if (authInstance && authInstance.isSignedIn.get()) {
-          const user = authInstance.currentUser.get();
-          const profile = user.getBasicProfile();
-          if (profile) {
-            this.userInfo = {
-              id: profile.getId(),
-              email: profile.getEmail(),
-              name: profile.getName(),
-              imageUrl: profile.getImageUrl()
-            };
-            safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
-            return this.userInfo;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error getting Google user info:", error);
-    }
-
-    return null;
+    return getUserInfo(this);
   }
 
-  /**
-   * Get user ID for leaderboard
-   */
   getUserId() {
-    const userInfo = this.getUserInfo();
-    return userInfo ? userInfo.id : null;
+    return getUserId(this);
   }
 
-  /**
-   * Handle successful authentication
-   */
   async handleAuthSuccess(response) {
-    const expiresAt = Date.now() + (response.expires_in || 3600) * 1000;
-    const tokenData = {
-      access_token: response.access_token,
-      expires_at: expiresAt,
-    };
-
-    safeSetItem("google_drive_auth_token", JSON.stringify(tokenData));
-    this.authToken = response.access_token;
-    this.isSignedIn = true;
-
-    try {
-      const userResponse = await fetch(
-        "https://www.googleapis.com/drive/v3/about?fields=user",
-        {
-          headers: { Authorization: `Bearer ${this.authToken}` },
-        }
-      );
-
-      if (userResponse.ok) {
-        const userData = await userResponse.json();
-        if (userData.user) {
-          this.userInfo = {
-            id: userData.user.permissionId || userData.user.emailAddress,
-            email: userData.user.emailAddress,
-            name: userData.user.displayName,
-            imageUrl: userData.user.photoLink
-          };
-          safeSetItem("google_drive_user_info", JSON.stringify(this.userInfo));
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching user info:", error);
-    }
-
-    console.log("Google Drive sign-in successful.");
+    return handleAuthSuccess(this, response);
   }
 
-  /**
-   * Sign in to Google Drive
-   */
   async signIn() {
-    if (!this.tokenClient) {
-      throw new Error("Google Drive not initialized");
-    }
-
-    return new Promise((resolve, reject) => {
-      this.tokenClient.callback = (response) => {
-        if (response.error) {
-          reject(new Error(response.error));
-        } else {
-          this.handleAuthSuccess(response).then(() => {
-            resolve();
-          }).catch((error) => {
-            reject(error);
-          });
-        }
-      };
-
-      this.tokenClient.requestAccessToken({ prompt: "consent" });
-    });
+    return signIn(this);
   }
 
-  /**
-   * Sign out of Google Drive
-   */
   signOut() {
-    if (this.authToken) {
-      google.accounts.oauth2.revoke(this.authToken);
-    }
-
-    safeRemoveItem("google_drive_auth_token");
-    safeRemoveItem("google_drive_save_file_id");
-    safeRemoveItem("google_drive_user_info");
-    this.isSignedIn = false;
-    this.authToken = null;
-    this.saveFileId = null;
-    this.userInfo = null;
-
-    console.log("User signed out from Google Drive.");
+    signOut(this);
   }
 
-  /**
-   * Find existing save file
-   */
   async findSaveFile() {
-    if (!this.isSignedIn) return false;
-
-    try {
-      
-
-      // Search for reactor revival save files by name (simpler approach)
-      const searchQuery = encodeURIComponent(
-        "name contains 'reactor-revival-save'"
-      );
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${searchQuery}&fields=files(id,name,modifiedTime,parents)&orderBy=modifiedTime desc`,
-        {
-          headers: { Authorization: `Bearer ${this.authToken}` },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        
-
-        if (data.files && data.files.length > 0) {
-          // Use most recent file (already sorted by modifiedTime desc)
-          const mostRecent = data.files[0];
-          this.saveFileId = mostRecent.id;
-          safeSetItem("google_drive_save_file_id", mostRecent.id);
-          
-          return true;
-        } else {
-          
-        }
-      } else {
-        console.error(
-          "[DEBUG] Search failed:",
-          response.status,
-          await response.text()
-        );
-      }
-
-      // Check cached file ID
-      if (this.saveFileId) {
-        
-        const verifyResponse = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${this.saveFileId}?fields=id,name,parents`,
-          { headers: { Authorization: `Bearer ${this.authToken}` } }
-        );
-
-        if (verifyResponse.ok) {
-          const fileData = await verifyResponse.json();
-          
-          return true;
-        } else {
-          
-          this.saveFileId = null;
-          safeRemoveItem("google_drive_save_file_id");
-        }
-      }
-
-      
-      return false;
-    } catch (error) {
-      console.error("Error finding save file:", error);
-      return false;
-    }
+    return findSaveFile(this);
   }
 
-  /**
-   * Load game data from Google Drive
-   */
   async load() {
-    if (!this.isSignedIn || !this.saveFileId) {
-      throw new Error("No save file available");
-    }
-
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${this.saveFileId}?alt=media`,
-        { headers: { Authorization: `Bearer ${this.authToken}` } }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to download save file: ${response.status}`);
-      }
-
-      const encryptedData = await response.arrayBuffer();
-      const saveData = await this.decompressAndDecrypt(encryptedData);
-
-      console.log("Game loaded from Google Drive");
-      return saveData;
-    } catch (error) {
-      console.error("Failed to load from Google Drive:", error);
-      throw error;
-    }
+    return loadFile(this);
   }
 
-  /**
-   * Save game data to Google Drive
-   */
   async save(saveData, immediate = false) {
-    if (!this.isSignedIn) {
-      throw new Error("Not signed in to Google Drive");
-    }
-
-    // Throttle saves unless immediate
-    if (!immediate) {
-      this.pendingSaveData = saveData;
-      if (this.saveTimeoutId) {
-        clearTimeout(this.saveTimeoutId);
-      }
-      this.saveTimeoutId = setTimeout(() => {
-        if (this.pendingSaveData) {
-          const data = this.pendingSaveData;
-          this.pendingSaveData = null;
-          this._performSave(data);
-        }
-      }, 2000);
-      return true;
-    }
-
-    return await this._performSave(saveData);
+    return saveFile(this, saveData, immediate);
   }
 
-  /**
-   * Perform the actual save operation
-   */
   async _performSave(saveData) {
-    try {
-      const encryptedBlob = await this.compressAndEncrypt(saveData);
-      let response;
-
-      if (this.saveFileId) {
-        // Update existing file
-        response = await fetch(
-          `https://www.googleapis.com/upload/drive/v3/files/${this.saveFileId}?uploadType=media`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${this.authToken}`,
-              "Content-Type": "application/zip",
-            },
-            body: encryptedBlob,
-          }
-        );
-      } else {
-        // Create new file with descriptive name
-        const timestamp = new Date()
-          .toISOString()
-          .slice(0, 16)
-          .replace(/:/g, "-");
-        const fileName = `reactor-revival-save-${timestamp}.zip`;
-
-        
-
-        const metadata = {
-          name: fileName,
-          description: "Reactor Revival game save (encrypted)",
-        };
-
-        const metadataResponse = await fetch(
-          "https://www.googleapis.com/drive/v3/files",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${this.authToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(metadata),
-          }
-        );
-
-        if (!metadataResponse.ok) {
-          throw new Error(`File creation failed: ${metadataResponse.status}`);
-        }
-
-        const fileMetadata = await metadataResponse.json();
-        
-
-        // Upload file content
-        
-
-        response = await fetch(
-          `https://www.googleapis.com/upload/drive/v3/files/${fileMetadata.id}?uploadType=media`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${this.authToken}`,
-              "Content-Type": "application/zip",
-            },
-            body: encryptedBlob,
-          }
-        );
-
-        
-      }
-
-      if (!response.ok) {
-        if (response.status === 404 && this.saveFileId) {
-          // File was deleted, create new one
-          this.saveFileId = null;
-          return await this._performSave(saveData);
-        }
-        throw new Error(`Save failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-
-      this.saveFileId = result.id;
-      safeSetItem("google_drive_save_file_id", result.id);
-
-      console.log("Game saved to Google Drive:", result.id);
-
-      // Verify the file can be found
-      
-      setTimeout(async () => {
-        try {
-          const found = await this.findSaveFile();
-          console.log(
-            "[DEBUG] Post-upload search verification:",
-            found ? "SUCCESS" : "FAILED"
-          );
-        } catch (error) {
-          console.error("[DEBUG] Post-upload verification error:", error);
-        }
-      }, 1000);
-
-      return true;
-    } catch (error) {
-      console.error("Save failed:", error);
-      throw error;
-    }
+    return performSave(this, saveData);
   }
 
-  /**
-   * Upload local save to cloud
-   */
   async uploadLocalSave(saveDataString) {
-    if (!this.isSignedIn) {
-      throw new Error("User is not signed in to Google Drive");
-    }
-    console.log("Uploading local save to Google Drive...");
-
-    const success = await this._performSave(saveDataString);
-
-    if (success) {
-      console.log("Local save uploaded to cloud successfully");
-      // Mark the local save as synced
-      try {
-        const localSave = JSON.parse(saveDataString);
-        localSave.isCloudSynced = true;
-        localSave.cloudUploadedAt = new Date().toISOString();
-        safeSetItem("reactorGameSave", JSON.stringify(localSave));
-      } catch (e) {
-        console.error("Failed to mark local save as synced after upload.", e);
-      }
-    }
-    return success;
+    return uploadLocalSaveFile(this, saveDataString);
   }
 
   async canUploadLocalSave() {
-    if (!this.isSignedIn) {
-      return { showUpload: false };
-    }
-    const localSaveJSON = safeGetItem("reactorGameSave");
-    if (!localSaveJSON) {
-      return { showUpload: false };
-    }
-    try {
-      const localSave = JSON.parse(localSaveJSON);
-      if (localSave.isCloudSynced) {
-        return { showUpload: false };
-      }
-      // Check if a cloud save already exists. If so, we shouldn't offer an upload.
-      const hasCloudSave = await this.findSaveFile();
-      if (hasCloudSave) {
-        return { showUpload: false };
-      }
-      return { showUpload: true, gameState: localSave };
-    } catch (e) {
-      console.error("Error checking if local save can be uploaded:", e);
-      return { showUpload: false };
-    }
+    return canUploadLocalSaveFile(this);
   }
 
-  /**
-   * Check if local save should be offered for upload
-   */
   async offerLocalSaveUpload() {
-    if (!this.isSignedIn) return { hasLocalSave: false };
-
-    const localSave = safeGetItem("reactorGameSave");
-    if (!localSave) return { hasLocalSave: false };
-
-    try {
-      const gameState = JSON.parse(localSave);
-      const saveSize = `${(localSave.length / 1024).toFixed(1)}KB`;
-
-      // Check if there's already a cloud save (regardless of local sync status)
-      const hasCloudSave = await this.findSaveFile();
-      if (hasCloudSave) {
-        
-        return { hasLocalSave: false }; // Cloud save exists
-      }
-
-      // Check if already synced
-      if (gameState.isCloudSynced) {
-        console.log(
-          "[DEBUG] Local save marked as synced but no cloud save found, clearing sync flags"
-        );
-        // Orphaned local save - clear sync flags
-        delete gameState.isCloudSynced;
-        delete gameState.cloudUploadedAt;
-        safeSetItem("reactorGameSave", JSON.stringify(gameState));
-      }
-
-      
-      return {
-        hasLocalSave: true,
-        gameState: gameState,
-        saveSize: saveSize,
-      };
-    } catch (error) {
-      console.error("Error checking local save:", error);
-      return { hasLocalSave: false };
-    }
-  }
-
-  /**
-   * Compress and encrypt save data
-   */
-  async compressAndEncrypt(saveData) {
-    await this.loadZipLibrary();
-
-    if (!window.zip) {
-      throw new Error("zip.js library failed to load");
-    }
-
-    const password = "reactor-revival-secure-save-2024";
-    const zipWriter = new zip.ZipWriter(new zip.BlobWriter("application/zip"), {
-      password: password,
-      zipCrypto: true,
-    });
-
-    await zipWriter.add("save.json", new zip.TextReader(saveData));
-    const encryptedBlob = await zipWriter.close();
-
-    console.log(
-      `Save data compressed and encrypted: ${saveData.length} → ${encryptedBlob.size} bytes`
-    );
-    return encryptedBlob;
-  }
-
-  /**
-   * Decrypt and decompress save data
-   */
-  async decompressAndDecrypt(encryptedData) {
-    await this.loadZipLibrary();
-
-    if (!window.zip) {
-      throw new Error("zip.js library failed to load");
-    }
-
-    try {
-      const blob = new Blob([encryptedData], { type: "application/zip" });
-      const zipReader = new zip.ZipReader(new zip.BlobReader(blob));
-
-      const password = "reactor-revival-secure-save-2024";
-      const entries = await zipReader.getEntries({ password });
-
-      if (entries.length > 0) {
-        const writer = new zip.TextWriter();
-        const jsonText = await entries[0].getData(writer, { password });
-        await zipReader.close();
-        return JSON.parse(jsonText);
-      } else {
-        await zipReader.close();
-        throw new Error("No data found in save file.");
-      }
-    } catch (error) {
-      console.error("Decryption/Decompression failed:", error);
-      // Fallback for old save format for compatibility
-      if (error.message.includes("password")) {
-        console.log("Password decryption failed, trying old format...");
-        return this.decompressAndDecryptLegacy(encryptedData);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Decrypt and decompress save data from old XOR format
-   */
-  async decompressAndDecryptLegacy(encryptedData) {
-    if (!(encryptedData instanceof ArrayBuffer)) {
-      throw new Error("Encrypted data must be an ArrayBuffer.");
-    }
-
-    const key = "a_very_secure_key";
-    const encryptedBytes = new Uint8Array(encryptedData);
-    const decryptedBytes = new Uint8Array(encryptedBytes.length);
-
-    // Apply XOR decryption
-    for (let i = 0; i < encryptedBytes.length; i++) {
-      decryptedBytes[i] = encryptedBytes[i] ^ key.charCodeAt(i % key.length);
-    }
-
-    // Decompress the decrypted data
-    if (typeof pako === "undefined") {
-      throw new Error("pako is not defined");
-    }
-    const decompressedData = pako.inflate(decryptedBytes, { to: "string" });
-    return JSON.parse(decompressedData);
-  }
-
-  /**
-   * Load zip.js library for encryption
-   */
-  async loadZipLibrary() {
-    // Libraries are now loaded in HTML head, just verify they're available
-    if (typeof pako === "undefined") {
-      throw new Error(
-        "pako library not loaded. Check that lib/pako.min.js is included in HTML."
-      );
-    }
-
-    if (typeof window.zip === "undefined") {
-      throw new Error(
-        "zip.js library not loaded. Check that lib/zip.min.js is included in HTML."
-      );
-    }
-
-    // Configure zip.js to not use web workers for better compatibility
-    if (window.zip) {
-      zip.configure({ useWebWorkers: false });
-    }
+    return offerLocalSaveUploadFile(this);
   }
 
   async flushPendingSave() {
-    if (this.pendingSaveData && this.isSignedIn) {
-      const dataToSave = this.pendingSaveData;
-      this.pendingSaveData = null;
-      if (this.saveTimeoutId) {
-        clearTimeout(this.saveTimeoutId);
-        this.saveTimeoutId = null;
-      }
-      console.log("Flushing pending Google Drive save...");
-      return await this._performSave(dataToSave);
-    }
-    return true;
+    return flushPendingSaveFile(this);
   }
 
   async testBasicFileOperations() {
-    console.log("Testing basic Google Drive operations...");
-
-    try {
-      if (!this.isSignedIn) {
-        console.log("Not signed in - test skipped");
-        return false;
-      }
-
-      const response = await fetch(
-        "https://www.googleapis.com/drive/v3/files?pageSize=1",
-        {
-          headers: { Authorization: `Bearer ${this.authToken}` },
-        }
-      );
-
-      if (response.ok) {
-        console.log("Basic operations test passed");
-        return true;
-      } else {
-        console.log("Basic operations test failed:", response.status);
-        return false;
-      }
-    } catch (error) {
-      console.error("Basic operations test error:", error);
-      return false;
-    }
+    return testBasicFileOperations(this);
   }
 
   async deleteSave() {
-    if (!this.isSignedIn || !this.saveFileId) {
-      throw new Error("No save file to delete");
-    }
-
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${this.saveFileId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${this.authToken}` },
-        }
-      );
-
-      if (response.ok) {
-        console.log("Save file deleted from Google Drive");
-        this.saveFileId = null;
-        return true;
-      } else {
-        throw new Error(`Failed to delete save file: ${response.status}`);
-      }
-    } catch (error) {
-      console.error("Failed to delete save file:", error);
-      throw error;
-    }
+    return deleteSaveFile(this);
   }
 }

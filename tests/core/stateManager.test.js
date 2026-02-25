@@ -105,11 +105,10 @@ describe("State Manager Mechanics", () => {
 
   it("should not trigger unnecessary updates for same values", () => {
     game.ui.stateManager.setVar("test_var", 123);
-    const initialSize = game.ui.update_vars.size;
+    const initialSize = game.ui.stateManager.vars.size;
 
-    // Setting the same value again should not add to update queue
     game.ui.stateManager.setVar("test_var", 123);
-    expect(game.ui.update_vars.size).toBe(initialSize);
+    expect(game.ui.stateManager.vars.size).toBe(initialSize);
   });
 
   it("should return all variables with getAllVars", () => {

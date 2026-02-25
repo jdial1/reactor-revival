@@ -1,101 +1,9 @@
 import Decimal from "./decimal.js";
+import { formatDuration, formatRelativeTime } from "./formatUtils.js";
 
-export function numFormat(num, places = null, fixedDecimals = false) {
-    if (num === null || typeof num === 'undefined') return '';
-
-    if (num instanceof Decimal) {
-        if (num.eq(0)) return '0';
-        try {
-            const formatPref = typeof safeGetItem === 'function' ? safeGetItem("number_format") : null;
-            if (formatPref === "scientific") {
-                const p = places != null ? places : 2;
-                return num.toExponential(p);
-            }
-        } catch (_) {}
-        if (num.lt(1000) && num.gt(-1000)) {
-            const p = places != null ? places : 0;
-            return num.toNumber().toFixed(p);
-        }
-        const cm_names = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
-        const exp = num.exponent;
-        if (exp >= 33) {
-            const p = places != null ? places : 2;
-            return num.toStringWithDecimalPlaces(p);
-        }
-        const pow = exp >= 3 ? Math.floor(exp / 3) * 3 : 0;
-        const suffix = pow > 0 ? (cm_names[(pow / 3) - 1] || '') : '';
-        const displayMantissa = pow > 0 ? num.mantissa * Math.pow(10, exp - pow) : num.toNumber();
-        const p = places !== null ? places : (pow >= 3 ? 2 : 0);
-        let mantissaStr = Number(displayMantissa).toFixed(p);
-        if (!fixedDecimals) {
-            mantissaStr = mantissaStr.replace(/\.(\d*?)0+$/, (match, digits) => (digits ? `.${digits}` : ''));
-        }
-        return mantissaStr + suffix;
-    }
-
-    num = Number(num);
-    if (Number.isNaN(num)) return '';
-
-    if (num === Infinity || num === -Infinity) return num > 0 ? 'Infinity' : '-Infinity';
-
-    try {
-        const formatPref = typeof safeGetItem === 'function' ? safeGetItem("number_format") : null;
-        if (formatPref === "scientific") {
-            const p = places != null ? places : 2;
-            return num.toExponential(p);
-        }
-    } catch (_) {}
-
-    const cm_names = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
-    const absNum = Math.abs(num);
-
-    if (places === null) {
-        places = absNum >= 1000 ? 2 : 0;
-    }
-    if (absNum >= 1e36) {
-        let expStr = num.toExponential(places);
-        expStr = expStr.replace(/\.0+e/, 'e');
-        return expStr;
-    }
-
-    let pow = 0;
-    if (absNum >= 1000) {
-        pow = Math.floor(Math.log10(absNum) / 3) * 3;
-    }
-
-    let mantissa = num;
-    let suffix = '';
-    if (pow > 0) {
-        mantissa = num / Math.pow(10, pow);
-        suffix = cm_names[(pow / 3) - 1] || '';
-    }
-
-    mantissa = Number(mantissa);
-    if (Number.isNaN(mantissa)) return '';
-
-    let mantissaStr = mantissa.toFixed(places);
-
-    if (!fixedDecimals) {
-        mantissaStr = mantissaStr.replace(/\.(\d*?)0+$/, (match, digits) => {
-            return digits ? `.${digits}` : '';
-        });
-    }
-
-    return mantissaStr + suffix;
-}
-
-export function timeFormat(ts) {
-    if (ts < 0) ts = 0;
-    const s = String(Math.round(ts / 1000) % 60).padStart(2, '0');
-    const m = String(Math.floor(ts / (1000 * 60)) % 60).padStart(2, '0');
-    const h = String(Math.floor(ts / (1000 * 60 * 60)) % 24).padStart(2, '0');
-    const d = String(Math.floor(ts / (1000 * 60 * 60 * 24)));
-
-    if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
-    if (h > 0) return `${h}h ${m}m ${s}s`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-}
+export { Formatter, Formatter as Format, numFormat, formatStatNum } from "./formatUtils.js";
+export const timeFormat = (ms) => formatDuration(ms, false);
+export { formatTime } from "./formatUtils.js";
 
 export const on = (parentElement, selector, eventType, handler) => {
     if (!parentElement) return;
@@ -117,6 +25,7 @@ export function isTestEnv() {
 
 /**
  * Get the correct base path for GitHub Pages deployment
+ * Must stay in sync with src-sw.js getBasePath (SW uses self.location, this uses window.location)
  * @returns {string} The base path for the current deployment
  */
 export function getBasePath() {
@@ -160,23 +69,6 @@ export function getResourceUrl(resourcePath) {
     }
 }
 
-/**
- * Escapes HTML special characters in a string to prevent XSS.
- * This version escapes &, <, >, ", and ' to be safe in both HTML content and attributes.
- * @param {string} text - The text to escape.
- * @returns {string} The escaped HTML string.
- */
-export function escapeHtml(text) {
-    if (typeof text !== 'string') return text;
-    return text.replace(/[&<>"']/g, (m) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-    }[m]));
-}
-
 let storageAvailable = null;
 
 function isStorageAvailable() {
@@ -192,48 +84,83 @@ function isStorageAvailable() {
     return storageAvailable;
 }
 
-export function safeGetItem(key, defaultValue = null) {
-    if (!isStorageAvailable()) return defaultValue;
-    try {
-        const value = localStorage.getItem(key);
-        return value !== null ? value : defaultValue;
-    } catch (e) {
-        return defaultValue;
-    }
+function saveDataReplacer(_key, value) {
+    if (typeof value === "bigint") return value.toString();
+    if (value != null && typeof value === "object" && value instanceof Decimal) return value.toString();
+    return value;
 }
 
-export function safeSetItem(key, value) {
-    if (!isStorageAvailable()) return false;
-    try {
-        localStorage.setItem(key, value);
-        return true;
-    } catch (e) {
-        return false;
+export const StorageUtils = {
+    get(key, defaultValue = null) {
+        if (!isStorageAvailable()) return defaultValue;
+        try {
+            const raw = localStorage.getItem(key);
+            if (raw === null) return defaultValue;
+            try {
+                return JSON.parse(raw);
+            } catch (_) {
+                return raw;
+            }
+        } catch (e) {
+            return defaultValue;
+        }
+    },
+    set(key, value) {
+        if (!isStorageAvailable()) return false;
+        try {
+            const str = typeof value === "object" && value !== null
+                ? JSON.stringify(value, saveDataReplacer)
+                : JSON.stringify(value);
+            localStorage.setItem(key, str);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    },
+    remove(key) {
+        if (!isStorageAvailable()) return false;
+        try {
+            localStorage.removeItem(key);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    },
+    getRaw(key, defaultValue = null) {
+        if (!isStorageAvailable()) return defaultValue;
+        try {
+            const value = localStorage.getItem(key);
+            return value !== null ? value : defaultValue;
+        } catch (e) {
+            return defaultValue;
+        }
+    },
+    setRaw(key, value) {
+        if (!isStorageAvailable()) return false;
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    },
+    serialize(obj, space) {
+        return JSON.stringify(obj, saveDataReplacer, space ?? undefined);
     }
-}
-
-export function safeRemoveItem(key) {
-    if (!isStorageAvailable()) return false;
-    try {
-        localStorage.removeItem(key);
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
+};
 
 const SAVE_SLOT1_KEY = "reactorGameSave_1";
 const SAVE_PREVIOUS_KEY = "reactorGameSave_Previous";
 const SAVE_BACKUP_KEY = "reactorGameSave_Backup";
 
-export function rotateAndWriteSlot1(value) {
+export function rotateSlot1ToBackup(value) {
     if (!isStorageAvailable()) return false;
     try {
-        const current = localStorage.getItem(SAVE_SLOT1_KEY);
-        const previous = localStorage.getItem(SAVE_PREVIOUS_KEY);
-        if (previous != null) localStorage.setItem(SAVE_BACKUP_KEY, previous);
-        if (current != null) localStorage.setItem(SAVE_PREVIOUS_KEY, current);
-        localStorage.setItem(SAVE_SLOT1_KEY, value);
+        const current = StorageUtils.getRaw(SAVE_SLOT1_KEY);
+        const previous = StorageUtils.getRaw(SAVE_PREVIOUS_KEY);
+        if (previous != null) StorageUtils.setRaw(SAVE_BACKUP_KEY, previous);
+        if (current != null) StorageUtils.setRaw(SAVE_PREVIOUS_KEY, current);
+        StorageUtils.setRaw(SAVE_SLOT1_KEY, value);
         return true;
     } catch (e) {
         return false;
@@ -241,30 +168,14 @@ export function rotateAndWriteSlot1(value) {
 }
 
 export function getBackupSaveForSlot1() {
-    return safeGetItem(SAVE_BACKUP_KEY);
+    return StorageUtils.getRaw(SAVE_BACKUP_KEY);
 }
 
 export function setSlot1FromBackup() {
-    const backup = safeGetItem(SAVE_BACKUP_KEY);
+    const backup = StorageUtils.getRaw(SAVE_BACKUP_KEY);
     if (backup == null) return false;
-    safeSetItem(SAVE_SLOT1_KEY, backup);
+    StorageUtils.setRaw(SAVE_SLOT1_KEY, backup);
     return true;
 }
 
-export function safeJsonParse(jsonString, defaultValue = null) {
-    try {
-        return JSON.parse(jsonString);
-    } catch (e) {
-        return defaultValue;
-    }
-}
-
-export function saveDataReplacer(_key, value) {
-    if (typeof value === "bigint") return value.toString();
-    if (value != null && typeof value === "object" && value instanceof Decimal) return value.toString();
-    return value;
-}
-
-export function stringifySaveData(obj, space) {
-    return JSON.stringify(obj, saveDataReplacer, space ?? undefined);
-}
+export const formatDateTime = formatRelativeTime;

@@ -462,29 +462,29 @@ describe("AudioService", () => {
     });
 
     it("should start ambience", () => {
-      audioService.stopAmbience();
-      audioService.startAmbience();
+      audioService.ambienceManager.stopAmbience();
+      audioService.ambienceManager.startAmbience();
       expect(mockAudioContext.createOscillator).toHaveBeenCalled();
     });
 
     it("should not start ambience if already playing", () => {
       audioService._ambienceNodes = [{ source: mockOscillator }];
       const oscillatorCalls = mockAudioContext.createOscillator.mock.calls.length;
-      audioService.startAmbience();
+      audioService.ambienceManager.startAmbience();
       expect(mockAudioContext.createOscillator.mock.calls.length).toBe(oscillatorCalls);
     });
 
     it("should stop ambience", () => {
       audioService._ambienceNodes = [{ source: mockOscillator }];
-      audioService.stopAmbience();
+      audioService.ambienceManager.stopAmbience();
       expect(audioService._ambienceNodes.length).toBe(0);
     });
 
     it("should not start ambience when muted", () => {
       audioService.toggleMute(true);
-      audioService.stopAmbience();
+      audioService.ambienceManager.stopAmbience();
       const oscillatorCalls = mockAudioContext.createOscillator.mock.calls.length;
-      audioService.startAmbience();
+      audioService.ambienceManager.startAmbience();
       expect(mockAudioContext.createOscillator.mock.calls.length).toBe(oscillatorCalls);
     });
   });
@@ -547,26 +547,26 @@ describe("AudioService", () => {
     });
 
     it("should start warning loop", () => {
-      audioService.startWarningLoop(0.6);
+      audioService.warningManager.startWarningLoop(0.6);
       expect(audioService._warningLoopActive).toBe(true);
       expect(audioService._warningIntensity).toBe(0.6);
     });
 
     it("should stop warning loop", () => {
-      audioService.startWarningLoop(0.5);
-      audioService.stopWarningLoop();
+      audioService.warningManager.startWarningLoop(0.5);
+      audioService.warningManager.stopWarningLoop();
       expect(audioService._warningLoopActive).toBe(false);
       expect(audioService._warningLoopInterval == null).toBe(true);
     });
 
     it("should start geiger ticks with warning loop", () => {
-      audioService.startWarningLoop(0.7);
+      audioService.warningManager.startWarningLoop(0.7);
       expect(audioService._geigerActive).toBe(true);
     });
 
     it("should stop geiger ticks when warning loop stops", () => {
-      audioService.startWarningLoop(0.5);
-      audioService.stopWarningLoop();
+      audioService.warningManager.startWarningLoop(0.5);
+      audioService.warningManager.stopWarningLoop();
       expect(audioService._geigerActive).toBe(false);
     });
   });
@@ -669,8 +669,8 @@ describe("AudioService", () => {
       const part = game.partset.getPartById("uranium1");
       game.current_money = part.cost;
 
-      if (ui.inputManager && !ui.inputManager.hotkeys && ui.game) {
-        ui.inputManager.setup();
+      if (ui.inputHandler && !ui.inputHandler.hotkeys && ui.game) {
+        ui.inputHandler.setup();
       }
       if (ui.handleGridInteraction) {
         ui.stateManager.setClickedPart(part);

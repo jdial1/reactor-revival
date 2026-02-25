@@ -13,7 +13,7 @@ describe("Tile Mechanics", () => {
     const part = tile.part;
 
     const moneyBeforeSell = toNum(game.current_money);
-    tile.clearPart(true);
+    tile.sellPart();
 
     expect(tile.part).toBeNull();
     expect(toNum(game.current_money)).toBe(moneyBeforeSell + toNum(part.cost));
@@ -35,7 +35,7 @@ describe("Tile Mechanics", () => {
     const moneyBeforeSell = toNum(game.current_money);
     const expectedRefund = Math.ceil(toNum(part.cost) * (tile.ticks / part.ticks));
 
-    tile.clearPart(true);
+    tile.sellPart();
 
     expect(toNum(game.current_money)).toBe(moneyBeforeSell + expectedRefund);
   });

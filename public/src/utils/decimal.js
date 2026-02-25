@@ -15,6 +15,13 @@ export function toDecimal(value) {
   const n = Number(value);
   return new Decimal(Number.isNaN(n) || !Number.isFinite(n) ? 0 : n);
 }
+export { toNumber } from "./mathUtils.js";
+export function safeAdd(a, b) {
+  return toDecimal(a).add(toDecimal(b));
+}
+export function safeSub(a, b) {
+  return toDecimal(a).sub(toDecimal(b));
+}
 const DecimalProxy = new Proxy(function () {}, {
   construct(_, args) { return new (getDecimal())(...args); },
   get(_, prop) { return getDecimal()[prop]; },

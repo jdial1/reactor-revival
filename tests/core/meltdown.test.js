@@ -73,7 +73,7 @@ describe("Reactor Meltdown Scenarios", () => {
         game.reactor.current_heat = game.reactor.max_heat * 2.1;
         game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
-        game.ui.updateMeltdownState();
+        game.ui.meltdownUI.updateMeltdownState();
         if (typeof document !== 'undefined' && document && document.body) {
             expect(document.body.classList.contains("reactor-meltdown")).toBe(true);
         }
@@ -85,7 +85,7 @@ describe("Reactor Meltdown Scenarios", () => {
         game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
 
-        await game.reboot_action(false);
+        await game.rebootActionDiscardExoticParticles();
         expect(game.reactor.has_melted_down).toBe(false);
         expect(game.ui.stateManager.getVar("melting_down")).toBe(false);
     });
@@ -108,7 +108,7 @@ describe("Reactor Meltdown Scenarios", () => {
         }
 
         // Perform reboot
-        await game.reboot_action(false);
+        await game.rebootActionDiscardExoticParticles();
 
         // Verify meltdown state is cleared
         expect(game.reactor.has_melted_down).toBe(false);
@@ -130,11 +130,32 @@ describe("Reactor Meltdown Scenarios", () => {
         
         expect(game.reactor.has_melted_down).toBe(false);
         expect(toNum(game.reactor.current_heat)).toBe(0);
-        // Engine should be running after placing part (it restarts automatically)
-        // But in test environment, we may need to start it manually
         if (!game.engine.running) {
             game.engine.start();
         }
         expect(game.engine.running).toBe(true);
+    });
+
+    it("should block meltdown while grace_period_ticks > 0", () => {
+        game.paused = false;
+        game.grace_period_ticks = 5;
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
+        for (let i = 0; i < 5; i++) {
+            game.engine.tick();
+            expect(game.reactor.has_melted_down).toBe(false);
+        }
+        game.engine.tick();
+        expect(game.reactor.has_melted_down).toBe(true);
+    });
+
+    it("should trigger meltdown with populated grid when heat exceeds 2x max_heat", async () => {
+        game.paused = false;
+        await placePart(game, 0, 0, "capacitor1");
+        await placePart(game, 0, 1, "capacitor1");
+        game.reactor.updateStats();
+        const threshold = toNum(game.reactor.max_heat) * 2.1;
+        game.reactor.current_heat = threshold;
+        game.engine.tick();
+        expect(game.reactor.has_melted_down).toBe(true);
     });
 }); 

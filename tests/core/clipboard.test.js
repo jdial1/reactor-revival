@@ -58,7 +58,7 @@ describe('Clipboard Functionality', () => {
         it('should return success when clipboard API works', async () => {
             mockNavigator.clipboard.readText.mockResolvedValue('{"test": "data"}');
 
-            const result = await ui.readFromClipboard();
+            const result = await ui.clipboardUI.readFromClipboard();
 
             expect(result.success).toBe(true);
             expect(result.data).toBe('{"test": "data"}');
@@ -70,7 +70,7 @@ describe('Clipboard Functionality', () => {
             permissionError.name = 'NotAllowedError';
             mockNavigator.clipboard.readText.mockRejectedValue(permissionError);
 
-            const result = await ui.readFromClipboard();
+            const result = await ui.clipboardUI.readFromClipboard();
 
             expect(result.success).toBe(false);
             expect(result.error).toBe('permission-denied');
@@ -80,7 +80,7 @@ describe('Clipboard Functionality', () => {
         it('should handle other clipboard errors', async () => {
             mockNavigator.clipboard.readText.mockRejectedValue(new Error('Other error'));
 
-            const result = await ui.readFromClipboard();
+            const result = await ui.clipboardUI.readFromClipboard();
 
             expect(result.success).toBe(false);
             expect(result.error).toBe('no-clipboard-api');
