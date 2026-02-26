@@ -1,4 +1,4 @@
-import { StorageUtils } from "../utils/util.js";
+import { StorageUtils, StorageUtilsAsync } from "../utils/util.js";
 import dataService from "./dataService.js";
 import { logger } from "../utils/logger.js";
 
@@ -162,16 +162,16 @@ async function waitForSplashHide() {
   await delay(SPLASH_HIDE_DELAY_MS);
 }
 
-function clearStorageForNewGame(game) {
+async function clearStorageForNewGame(game) {
   if (typeof window.clearAllGameDataForNewGame === "function") {
-    window.clearAllGameDataForNewGame(game);
+    await window.clearAllGameDataForNewGame(game);
   } else {
     try {
-      StorageUtils.remove("reactorGameSave");
-      for (let i = 1; i <= 3; i++) StorageUtils.remove(`reactorGameSave_${i}`);
-      StorageUtils.remove("reactorGameSave_Previous");
-      StorageUtils.remove("reactorGameSave_Backup");
-      StorageUtils.remove("reactorCurrentSaveSlot");
+      await StorageUtilsAsync.remove("reactorGameSave");
+      for (let i = 1; i <= 3; i++) await StorageUtilsAsync.remove(`reactorGameSave_${i}`);
+      await StorageUtilsAsync.remove("reactorGameSave_Previous");
+      await StorageUtilsAsync.remove("reactorGameSave_Backup");
+      await StorageUtilsAsync.remove("reactorCurrentSaveSlot");
       StorageUtils.remove("reactorGameQuickStartShown");
       StorageUtils.remove("google_drive_save_file_id");
       StorageUtils.set("reactorNewGamePending", 1);
@@ -234,7 +234,7 @@ export async function startNewGameFlow(game, pageRouter, ui, splashManager, tech
   try {
     hideSplash(splashManager);
     await waitForSplashHide();
-    clearStorageForNewGame(game);
+    await clearStorageForNewGame(game);
     await initializeGameState(game);
     const effectiveTreeId = await resolveDoctrine(techTreeId);
     await applyDoctrine(game, effectiveTreeId);

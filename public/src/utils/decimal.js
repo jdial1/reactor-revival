@@ -1,4 +1,4 @@
-function getDecimal() {
+export function getDecimal() {
   const D = (typeof window !== "undefined" && window.Decimal) || (typeof global !== "undefined" && global.Decimal);
   if (!D) throw new Error("break_infinity.js must be loaded before decimal.js (script tag or test setup)");
   return D;

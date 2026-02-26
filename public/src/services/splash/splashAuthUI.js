@@ -1,3 +1,5 @@
+import { html, render } from "lit-html";
+import { unsafeHTML } from "../../utils/litHelpers.js";
 import { StorageUtils } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 
@@ -72,35 +74,8 @@ function truncateEmail(email) {
   return full.length > 10 ? full.substring(0, 10) + "..." : full;
 }
 
-function createSignedInContainer() {
-  const div = document.createElement("div");
-  div.style.cssText = "display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1rem; border: 2px solid rgb(62, 207, 142); border-radius: 4px; background-color: rgba(62, 207, 142, 0.1);";
-  return div;
-}
-
-function buildEmailRow(userEmail, authIcon, onLogout) {
-  const emailDisplay = document.createElement("div");
-  emailDisplay.style.cssText = "display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 0.8rem; font-weight: bold; color: rgb(62, 207, 142); gap: 0.5rem;";
-  const emailContent = document.createElement("div");
-  emailContent.style.cssText = "display: flex; align-items: center; flex: 1; min-width: 0;";
-  emailContent.innerHTML = authIcon;
-  const emailSpan = document.createElement("span");
-  emailSpan.style.cssText = "white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
-  emailSpan.textContent = userEmail;
-  emailContent.appendChild(emailSpan);
-  emailDisplay.appendChild(emailContent);
-  const logoutBtn = document.createElement("button");
-  logoutBtn.innerHTML = "✕";
-  logoutBtn.style.cssText = "background-color: #d32f2f; color: white; border: 1px solid #b71c1c; border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 1rem; cursor: pointer; font-weight: bold; flex-shrink: 0; line-height: 1; min-width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;";
-  logoutBtn.addEventListener("click", onLogout);
-  emailDisplay.appendChild(logoutBtn);
-  return emailDisplay;
-}
-
 async function handleAuthLogout(container, splashManager, { supabaseSignedIn, googleSignedIn }) {
-  if (supabaseSignedIn && window.supabaseAuth) {
-    window.supabaseAuth.signOut();
-  }
+  if (supabaseSignedIn && window.supabaseAuth) window.supabaseAuth.signOut();
   if (googleSignedIn && window.googleDriveSave) {
     if (window.googleDriveSave.signOut) {
       await window.googleDriveSave.signOut();
@@ -111,184 +86,126 @@ async function handleAuthLogout(container, splashManager, { supabaseSignedIn, go
       StorageUtils.remove("google_drive_user_info");
     }
   }
-  container.innerHTML = "";
+  render(html``, container);
   await splashManager.setupSupabaseAuth(container);
 }
 
-function renderSignedInUI(container, splashManager, { googleSignedIn, googleUserInfo, supabaseSignedIn, supabaseUser }) {
-  const signedInDiv = createSignedInContainer();
-  const userEmail = googleUserInfo
-    ? truncateEmail(googleUserInfo.email)
-    : supabaseUser
-      ? truncateEmail(supabaseUser.email)
-      : "";
+function signedInTemplate(container, splashManager, { googleSignedIn, googleUserInfo, supabaseSignedIn, supabaseUser }) {
+  const userEmail = googleUserInfo ? truncateEmail(googleUserInfo.email) : supabaseUser ? truncateEmail(supabaseUser.email) : "";
   const authIcon = googleUserInfo ? GOOGLE_ICON_SVG : supabaseUser ? EMAIL_ICON_SVG : "";
-  if (userEmail) {
-    const onLogout = () => handleAuthLogout(container, splashManager, { supabaseSignedIn, googleSignedIn });
-    signedInDiv.appendChild(buildEmailRow(userEmail, authIcon, onLogout));
-  }
-  container.appendChild(signedInDiv);
-}
-
-function createGoogleSignInButton(container, splashManager) {
-  const googleBtn = document.createElement("button");
-  googleBtn.className = "splash-btn splash-btn-google";
-  googleBtn.style.flex = "1";
-  googleBtn.innerHTML = `
-    <div class="google-signin-container">
-      ${GOOGLE_BUTTON_SVG}
-      <span>Google</span>
+  const onLogout = () => handleAuthLogout(container, splashManager, { supabaseSignedIn, googleSignedIn });
+  return html`
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1rem; border: 2px solid rgb(62, 207, 142); border-radius: 4px; background-color: rgba(62, 207, 142, 0.1);">
+      ${userEmail ? html`
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 0.8rem; font-weight: bold; color: rgb(62, 207, 142); gap: 0.5rem;">
+          <div style="display: flex; align-items: center; flex: 1; min-width: 0;">${unsafeHTML(authIcon)}<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${userEmail}</span></div>
+          <button @click=${onLogout} style="background-color: #d32f2f; color: white; border: 1px solid #b71c1c; border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 1rem; cursor: pointer; font-weight: bold; flex-shrink: 0; line-height: 1; min-width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">✕</button>
+        </div>
+      ` : ""}
     </div>
   `;
-  googleBtn.addEventListener("click", async () => {
-    if (window.googleDriveSave) {
-      try {
-        await window.googleDriveSave.signIn();
-        await window.googleDriveSave.checkAuth(false);
-        container.innerHTML = "";
-        splashManager.setupSupabaseAuth(container);
-      } catch (error) {
-        logger.error("Google sign-in error:", error);
-      }
-    }
-  });
-  return googleBtn;
 }
 
-function createEmailFormDom() {
-  const authForm = document.createElement("div");
-  authForm.id = "splash-email-auth-form";
-  authForm.style.display = "none";
-  authForm.style.flexDirection = "column";
-  authForm.style.gap = "0.5rem";
-  authForm.innerHTML = `
-    <input type="email" id="splash-supabase-email" placeholder="Email" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
-    <input type="password" id="splash-supabase-password" placeholder="Password" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
-    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-      <button class="splash-btn" id="splash-supabase-signin" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Sign In</button>
-      <button class="splash-btn" id="splash-supabase-signup" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Sign Up</button>
-      <button class="splash-btn" id="splash-supabase-reset" style=" min-width: 100px;flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);">Reset</button>
-    </div>
-    <div id="splash-supabase-message" style=" min-height: 1.5rem;font-size: 0.7rem; text-align: center;"></div>
-  `;
-  return authForm;
-}
-
-function showAuthMessage(messageDiv, text, isError = false) {
-  if (messageDiv) {
-    messageDiv.textContent = text;
-    messageDiv.style.color = isError ? "#ff4444" : "#44ff44";
-  }
-}
-
-function wireSignInHandler(container, splashManager, emailInput, passwordInput, messageDiv) {
-  const showMessage = (text, isError) => showAuthMessage(messageDiv, text, isError);
-  return async () => {
-    if (!emailInput || !passwordInput) return;
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-    if (!email || !password) {
-      showMessage("Please enter email and password", true);
-      return;
-    }
-    showMessage("Signing in...");
-    const { error } = await window.supabaseAuth.signInWithPassword(email, password);
-    if (error) {
-      showMessage(error, true);
-    } else {
-      showMessage("Signed in successfully!");
-      if (passwordInput) passwordInput.value = "";
-      setTimeout(() => {
-        container.innerHTML = "";
-        splashManager.setupSupabaseAuth(container);
-      }, 1000);
+function signInTemplate(container, splashManager) {
+  const onGoogleClick = async () => {
+    if (!window.googleDriveSave) return;
+    try {
+      await window.googleDriveSave.signIn();
+      await window.googleDriveSave.checkAuth(false);
+      render(html``, container);
+      splashManager.setupSupabaseAuth(container);
+    } catch (error) {
+      logger.error("Google sign-in error:", error);
     }
   };
-}
-
-function wireSignUpHandler(emailInput, passwordInput, messageDiv) {
-  const showMessage = (text, isError) => showAuthMessage(messageDiv, text, isError);
-  return async () => {
+  const onSignIn = async () => {
+    const emailInput = container.querySelector("#splash-supabase-email");
+    const passwordInput = container.querySelector("#splash-supabase-password");
+    const messageDiv = container.querySelector("#splash-supabase-message");
     if (!emailInput || !passwordInput) return;
     const email = emailInput.value.trim();
     const password = passwordInput.value;
     if (!email || !password) {
-      showMessage("Please enter email and password", true);
+      if (messageDiv) { messageDiv.textContent = "Please enter email and password"; messageDiv.style.color = "#ff4444"; }
+      return;
+    }
+    if (messageDiv) { messageDiv.textContent = "Signing in..."; messageDiv.style.color = "#44ff44"; }
+    const { error } = await window.supabaseAuth.signInWithPassword(email, password);
+    if (error) {
+      if (messageDiv) { messageDiv.textContent = error; messageDiv.style.color = "#ff4444"; }
+    } else {
+      if (messageDiv) messageDiv.textContent = "Signed in successfully!";
+      if (passwordInput) passwordInput.value = "";
+      setTimeout(() => { render(html``, container); splashManager.setupSupabaseAuth(container); }, 1000);
+    }
+  };
+  const onSignUp = async () => {
+    const emailInput = container.querySelector("#splash-supabase-email");
+    const passwordInput = container.querySelector("#splash-supabase-password");
+    const messageDiv = container.querySelector("#splash-supabase-message");
+    if (!emailInput || !passwordInput) return;
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!email || !password) {
+      if (messageDiv) { messageDiv.textContent = "Please enter email and password"; messageDiv.style.color = "#ff4444"; }
       return;
     }
     if (password.length < 6) {
-      showMessage("Password must be at least 6 characters", true);
+      if (messageDiv) { messageDiv.textContent = "Password must be at least 6 characters"; messageDiv.style.color = "#ff4444"; }
       return;
     }
-    showMessage("Signing up...");
+    if (messageDiv) { messageDiv.textContent = "Signing up..."; messageDiv.style.color = "#44ff44"; }
     const { error } = await window.supabaseAuth.signUp(email, password);
     if (error) {
-      showMessage(error, true);
+      if (messageDiv) { messageDiv.textContent = error; messageDiv.style.color = "#ff4444"; }
     } else {
-      showMessage("Sign up successful! Please check your email to confirm your account.");
+      if (messageDiv) messageDiv.textContent = "Sign up successful! Please check your email to confirm your account.";
       if (passwordInput) passwordInput.value = "";
     }
   };
-}
-
-function wireResetHandler(emailInput, messageDiv) {
-  const showMessage = (text, isError) => showAuthMessage(messageDiv, text, isError);
-  return async () => {
+  const onReset = async () => {
+    const emailInput = container.querySelector("#splash-supabase-email");
+    const messageDiv = container.querySelector("#splash-supabase-message");
     if (!emailInput) return;
     const email = emailInput.value.trim();
     if (!email) {
-      showMessage("Please enter your email address", true);
+      if (messageDiv) { messageDiv.textContent = "Please enter your email address"; messageDiv.style.color = "#ff4444"; }
       return;
     }
-    showMessage("Sending password reset email...");
+    if (messageDiv) { messageDiv.textContent = "Sending password reset email..."; messageDiv.style.color = "#44ff44"; }
     const { error } = await window.supabaseAuth.resetPasswordForEmail(email);
     if (error) {
-      showMessage(error, true);
+      if (messageDiv) { messageDiv.textContent = error; messageDiv.style.color = "#ff4444"; }
     } else {
-      showMessage("Password reset email sent! Please check your email.");
+      if (messageDiv) messageDiv.textContent = "Password reset email sent! Please check your email.";
     }
   };
-}
-
-function createEmailAuthForm(container, splashManager) {
-  const authForm = createEmailFormDom();
-  const emailInput = authForm.querySelector("#splash-supabase-email");
-  const passwordInput = authForm.querySelector("#splash-supabase-password");
-  const signInBtn = authForm.querySelector("#splash-supabase-signin");
-  const signUpBtn = authForm.querySelector("#splash-supabase-signup");
-  const resetBtn = authForm.querySelector("#splash-supabase-reset");
-  const messageDiv = authForm.querySelector("#splash-supabase-message");
-  if (signInBtn) signInBtn.addEventListener("click", wireSignInHandler(container, splashManager, emailInput, passwordInput, messageDiv));
-  if (signUpBtn) signUpBtn.addEventListener("click", wireSignUpHandler(emailInput, passwordInput, messageDiv));
-  if (resetBtn) resetBtn.addEventListener("click", wireResetHandler(emailInput, messageDiv));
-  return authForm;
-}
-
-function renderSignInUI(container, splashManager) {
-  const buttonRow = document.createElement("div");
-  buttonRow.className = "splash-auth-buttons";
-
-  const googleBtn = createGoogleSignInButton(container, splashManager);
-  buttonRow.appendChild(googleBtn);
-
-  const emailBtn = document.createElement("button");
-  emailBtn.className = "splash-btn";
-  emailBtn.style.flex = "1";
-  emailBtn.textContent = "Email";
-  buttonRow.appendChild(emailBtn);
-  container.appendChild(buttonRow);
-
-  const authForm = createEmailAuthForm(container, splashManager);
-  container.appendChild(authForm);
-
-  emailBtn.addEventListener("click", () => {
-    const isVisible = authForm.style.display !== "none";
-    authForm.style.display = isVisible ? "none" : "flex";
-    const messageDiv = authForm.querySelector("#splash-supabase-message");
-    if (messageDiv && !isVisible) {
-      messageDiv.textContent = "";
-    }
-  });
+  const onEmailToggle = () => {
+    const form = container.querySelector("#splash-email-auth-form");
+    const msg = container.querySelector("#splash-supabase-message");
+    if (!form) return;
+    const isVisible = form.style.display !== "none";
+    form.style.display = isVisible ? "none" : "flex";
+    if (msg && !isVisible) msg.textContent = "";
+  };
+  return html`
+    <div class="splash-auth-buttons">
+      <button class="splash-btn splash-btn-google" style="flex: 1" @click=${onGoogleClick}>
+        <div class="google-signin-container">${unsafeHTML(GOOGLE_BUTTON_SVG)}<span>Google</span></div>
+      </button>
+      <button class="splash-btn" style="flex: 1" @click=${onEmailToggle}>Email</button>
+    </div>
+    <div id="splash-email-auth-form" style="display: none; flex-direction: column; gap: 0.5rem;">
+      <input type="email" id="splash-supabase-email" placeholder="Email" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
+      <input type="password" id="splash-supabase-password" placeholder="Password" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
+      <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        <button class="splash-btn" style="min-width: 100px; flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);" @click=${onSignIn}>Sign In</button>
+        <button class="splash-btn" style="min-width: 100px; flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);" @click=${onSignUp}>Sign Up</button>
+        <button class="splash-btn" style="min-width: 100px; flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);" @click=${onReset}>Reset</button>
+      </div>
+      <div id="splash-supabase-message" style="min-height: 1.5rem; font-size: 0.7rem; text-align: center;"></div>
+    </div>
+  `;
 }
 
 export async function setupSplashAuth(container, splashManager) {
@@ -299,8 +216,8 @@ export async function setupSplashAuth(container, splashManager) {
   const isAnySignedIn = googleSignedIn || supabaseSignedIn;
 
   if (isAnySignedIn) {
-    renderSignedInUI(container, splashManager, { googleSignedIn, googleUserInfo, supabaseSignedIn, supabaseUser });
+    render(signedInTemplate(container, splashManager, { googleSignedIn, googleUserInfo, supabaseSignedIn, supabaseUser }), container);
   } else {
-    renderSignInUI(container, splashManager);
+    render(signInTemplate(container, splashManager), container);
   }
 }

@@ -46,6 +46,7 @@
             <span id="tps_display">0</span>
         </strong>
      </li>
+     <li id="engine_status_indicator_root"></li>
   </ul>
 
   <!-- Right Group: System Controls -->
@@ -65,19 +66,8 @@
   </ul>
 </nav>
 
-<!-- MOBILE PASSIVE TOP BAR (EP | Money | Pause) - visible only when width <= 900px -->
 <div id="mobile_passive_top_bar" class="mobile-passive-top-bar" aria-hidden="true">
-  <span class="passive-top-ep">
-    <span class="passive-top-icon" aria-hidden="true">&#129516;</span>
-    <span id="mobile_passive_ep">0</span>
-  </span>
-  <span class="passive-top-money">
-    <span id="mobile_passive_money_value">0</span>
-  </span>
-  <button type="button" id="mobile_passive_pause_btn" class="passive-top-pause" aria-label="Pause" title="Pause">
-    <img src="img/ui/nav/nav_pause.png" alt="" class="passive-pause-icon pause-icon" />
-    <img src="img/ui/nav/nav_play.png" alt="" class="passive-pause-icon play-icon" />
-  </button>
+  <div id="mobile_passive_root"></div>
 </div>
 
 <!-- MAIN CONTENT -->
@@ -191,31 +181,7 @@
       </div>
     </div>
     <nav id="controls_nav">
-      <button id="auto_sell_toggle" class="pixel-btn" title="Auto Sell">
-        <img src="img/ui/icons/icon_cash.png" alt="Auto Sell" class="control-icon" />
-        <span class="control-text">Auto Sell</span>
-      </button>
-      <button id="auto_buy_toggle" class="pixel-btn" title="Auto Buy">
-        <img src="img/ui/icons/icon_cash_outline.svg" alt="Auto Buy" class="control-icon" />
-        <span class="control-text">Auto Buy</span>
-      </button>
-      <button id="time_flux_toggle" class="pixel-btn" title="Time Flux">
-        <img src="img/ui/icons/icon_time.png" alt="Time Flux" class="control-icon" />
-        <span class="control-text">Time Flux</span>
-      </button>
-      <button id="heat_control_toggle" class="pixel-btn" title="Heat Ctrl">
-        <img src="img/ui/icons/icon_heat.png" alt="Auto Heat" class="control-icon" />
-        <span class="control-text">Auto Heat</span>
-      </button>
-      <button id="pause_toggle" class="pixel-btn" title="Pause/Play">
-        <img src="img/ui/nav/nav_pause.png" alt="Pause" class="control-icon pause-icon" />
-        <img src="img/ui/nav/nav_play.png" alt="Resume" class="control-icon play-icon" />
-        <span class="control-text">Pause</span>
-      </button>
-      <button id="user_account_btn_mobile" class="pixel-btn" title="Account">
-        <span class="control-icon" style="font-size: 1.5em;">👤</span>
-        <span class="control-text">Account</span>
-      </button>
+      <div id="controls_nav_root"></div>
     </nav>
     <button id="parts_close_btn" class="pixel-btn contrast parts-close-btn" type="button">Close</button>
   </aside>
@@ -223,14 +189,7 @@
       <div id="main_content_wrapper">
       <!-- Only show objectives on reactor page -->
 
-      <button id="objectives_toast_btn" class="objectives-toast-btn" aria-label="Show Objectives" aria-expanded="false" type="button">
-        <span class="objectives-toast-row">
-          <span class="objectives-toast-icon">?</span>
-          <span class="objectives-toast-title" id="objectives_toast_title"></span>
-          <span class="objectives-claim-pill">Claim</span>
-        </span>
-        <span class="objectives-toast-progress" aria-hidden="true"><span class="objectives-toast-progress-fill"></span></span>
-      </button>
+      <div id="objectives_toast_root"></div>
 
     <!-- End reactor-only objectives -->
 
@@ -303,157 +262,22 @@
 
 <!-- BUILD ROW (Above Control Deck, Reactor Page Only): 5 quick-select slots + build FAB -->
 <div id="build_above_deck_row" class="build-above-deck-row">
-  <div class="quick-select-slots" aria-label="Recent parts">
-    <button type="button" class="quick-select-slot" data-index="0" aria-label="Recent part 1"></button>
-    <button type="button" class="quick-select-slot" data-index="1" aria-label="Recent part 2"></button>
-    <button type="button" class="quick-select-slot" data-index="2" aria-label="Recent part 3"></button>
-    <button type="button" class="quick-select-slot" data-index="3" aria-label="Recent part 4"></button>
-    <button type="button" class="quick-select-slot" data-index="4" aria-label="Recent part 5"></button>
+  <div class="quick-select-slots" id="quick_select_slots_container" aria-label="Recent parts">
+    <div id="quick_select_slots_root"></div>
     <button id="control_deck_build_fab" class="control-deck-fab" type="button" aria-label="Build Parts" title="Build Parts">
       <span class="control-deck-fab-icon" aria-hidden="true">…</span>
     </button>
   </div>
 </div>
 
-<!-- REACTOR CONTROL DECK (Bottom Anchor) -->
 <footer id="reactor_control_deck" class="reactor-control-deck">
   <div class="control-deck-inner">
-    <div class="control-deck-grid">
-      <button
-        class="control-deck-item power-capacitor"
-        id="control_deck_power_btn"
-        type="button"
-        tabindex="0"
-        aria-label="Sell Power"
-      >
-        <div class="control-deck-auto-sell-led" id="control_deck_auto_sell_led" aria-hidden="true"></div>
-        <span class="control-deck-rate" id="control_deck_power_rate" aria-hidden="true"></span>
-        <span class="control-deck-auto-rate" id="control_deck_auto_sell_rate" aria-hidden="true"></span>
-        <div class="control-deck-fill power-fill"></div>
-        <div class="control-deck-content">
-          <img src="img/ui/icons/icon_power.png" alt="Power" class="control-deck-icon" />
-          <span class="control-deck-value" id="control_deck_power">100</span>
-          <span class="control-deck-denom" id="control_deck_power_denom">/100</span>
-        </div>
-      </button>
-
-      <div class="control-deck-item money-scoreboard" id="control_deck_money">
-        <div class="control-deck-content">
-          <img src="img/ui/icons/icon_cash.png" alt="Cash" class="control-deck-icon" />
-          <span class="control-deck-value" id="control_deck_money_value">20.6K</span>
-        </div>
-        <div class="floating-text-container" id="floating_text_container"></div>
-      </div>
-
-      <button
-        class="control-deck-item heat-vent"
-        id="control_deck_heat_btn"
-        type="button"
-        tabindex="0"
-        aria-label="Vent Heat"
-      >
-        <span class="control-deck-rate" id="control_deck_heat_rate" aria-hidden="true"></span>
-        <span class="control-deck-auto-rate" id="control_deck_auto_heat_rate" aria-hidden="true"></span>
-        <div class="control-deck-fill heat-fill"></div>
-        <div class="control-deck-hazard-stripes"></div>
-        <div class="control-deck-content">
-          <img src="img/ui/icons/icon_heat.png" alt="Heat" class="control-deck-icon" />
-          <span class="control-deck-value" id="control_deck_heat">496</span>
-          <span class="control-deck-denom" id="control_deck_heat_denom">/1K</span>
-        </div>
-        <div class="steam-particles" id="steam_particles"></div>
-      </button>
-    </div>
+    <div id="control_deck_root" class="control-deck-grid"></div>
   </div>
 </footer>
 
-<!-- INFO BAR (Legacy - for desktop compatibility) -->
 <footer id="info_bar" class="info-bar-legacy">
-  <!-- Desktop Layout (Single Row) -->
-  <div class="info-bar-desktop">
-    <button
-      class="info-item power"
-      id="info_bar_power_btn_desktop"
-      type="button"
-      tabindex="0"
-      aria-label="Sell Power"
-    >
-      <img src="img/ui/icons/icon_power.png" alt="Power" class="icon" />
-      <span class="value" id="info_power_desktop">100</span>
-      <span class="denom" id="info_power_denom_desktop">/100</span>
-    </button>
-    <span class="info-item money"
-      ><img src="img/ui/icons/icon_cash.png" alt="Cash" class="icon" />
-      <span class="value" id="info_money_desktop">20.6K</span></span
-    >
-        <span class="info-item ep" id="info_ep_desktop">
-      <span class="ep-content" style="display: none;">
-        <span class="icon">🧬</span>
-        <span class="value" id="info_ep_value_desktop">0</span>
-      </span>
-    </span>
-    <button
-      class="info-item heat"
-      id="info_bar_heat_btn_desktop"
-      type="button"
-      tabindex="0"
-      aria-label="Reduce Heat"
-    >
-      <img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon" />
-      <span class="value" id="info_heat_desktop">496</span>
-      <span class="denom" id="info_heat_denom_desktop">/1K</span>
-    </button>
-    <div class="info-item buffs" id="info_bar_buffs_desktop">
-    </div>
-  </div>
-
-  <!-- Mobile Layout (Two Rows) - Hidden, using control deck instead -->
-  <div class="info-bar-mobile" style="display: none;">
-    <div class="info-row info-main">
-      <button
-        class="info-item power"
-        id="info_bar_power_btn"
-        type="button"
-        tabindex="0"
-        aria-label="Sell Power"
-      >
-        <img src="img/ui/icons/icon_power.png" alt="Power" class="icon" />
-        <span class="value" id="info_power">100</span>
-      </button>
-      <span class="info-item money"
-        ><img src="img/ui/icons/icon_cash.png" alt="Cash" class="icon" />
-        <span class="value" id="info_money">20.6K</span></span
-      >
-      <button
-        class="info-item heat"
-        id="info_bar_heat_btn"
-        type="button"
-        tabindex="0"
-        aria-label="Reduce Heat"
-      >
-        <img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon" />
-        <span class="value" id="info_heat">496</span>
-      </button>
-    </div>
-    <div class="info-row info-denom">
-      <span class="info-item power"
-        ><span class="denom" id="info_power_denom">/100</span></span
-      >
-      <div class="info-item center-content">
-        <span class="info-item ep" id="info_ep">
-          <span class="ep-content" style="display: none;">
-            <span class="icon">🧬</span>
-            <span class="value" id="info_ep_value">0</span>
-          </span>
-        </span>
-        <div class="info-item buffs" id="info_bar_buffs">
-        </div>
-      </div>
-      <span class="info-item heat"
-        ><span class="denom" id="info_heat_denom">/1K</span></span
-      >
-    </div>
-  </div>
+  <div id="info_bar_root"></div>
 </footer>
 
 <!-- BOTTOM NAV (Global Navigation Bar) -->

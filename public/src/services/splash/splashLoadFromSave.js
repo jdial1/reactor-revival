@@ -1,12 +1,12 @@
-import { StorageUtils, rotateSlot1ToBackup, setSlot1FromBackup } from "../../utils/util.js";
+import { serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync } from "../../utils/util.js";
 import { showLoadBackupModal } from "../saveModals.js";
 import { logger } from "../../utils/logger.js";
 
 const SPLASH_HIDE_DELAY_MS = 600;
 
 export async function loadFromData(splashManager, saveData, ctx) {
-  const str = typeof saveData === "string" ? saveData : StorageUtils.serialize(saveData);
-  rotateSlot1ToBackup(str);
+  const str = typeof saveData === "string" ? saveData : serializeSave(saveData);
+  await rotateSlot1ToBackupAsync(str);
   await loadFromSaveSlot(splashManager, 1, ctx);
 }
 
@@ -23,7 +23,7 @@ async function handleBackupLoadFlow(ctx, slot) {
   if (loadSuccess && typeof loadSuccess === "object" && loadSuccess.backupAvailable) {
     const useBackup = await showLoadBackupModal();
     if (!useBackup) return null;
-    setSlot1FromBackup();
+    await setSlot1FromBackupAsync();
     loadSuccess = await ctx.game.saveManager.loadGame(1);
   }
   return loadSuccess;

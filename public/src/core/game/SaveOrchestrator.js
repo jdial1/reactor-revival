@@ -1,6 +1,6 @@
-import { StorageUtils } from "../../utils/util.js";
+import { StorageUtilsAsync } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
-import { toPlainObject } from "../store.js";
+import { snapshot } from "../store.js";
 import { applySaveState as applySaveStateFromModule } from "../saveStateApplier.js";
 
 export class SaveOrchestrator {
@@ -9,18 +9,18 @@ export class SaveOrchestrator {
     this.onBeforeSave = onBeforeSave;
   }
 
-  getSaveState() {
+  async getSaveState() {
     this.onBeforeSave?.();
     const ctx = this.getContext();
-    const statePlain = ctx.state ? toPlainObject(ctx.state) : null;
+    const stateSnap = ctx.state ? snapshot(ctx.state) : null;
     const reactorState = typeof ctx.reactor?.toSaveState === "function" ? ctx.reactor.toSaveState() : {
-      current_heat: (ctx.reactor.current_heat != null && typeof ctx.reactor.current_heat.toString === "function") ? ctx.reactor.current_heat.toString() : ctx.reactor.current_heat,
-      current_power: (ctx.reactor.current_power != null && typeof ctx.reactor.current_power.toString === "function") ? ctx.reactor.current_power.toString() : ctx.reactor.current_power,
+      current_heat: ctx.reactor.current_heat,
+      current_power: ctx.reactor.current_power,
       has_melted_down: ctx.reactor.has_melted_down,
       base_max_heat: ctx.reactor.base_max_heat,
       base_max_power: ctx.reactor.base_max_power,
-      altered_max_heat: (ctx.reactor.altered_max_heat != null && typeof ctx.reactor.altered_max_heat.toString === "function") ? ctx.reactor.altered_max_heat.toString() : ctx.reactor.altered_max_heat,
-      altered_max_power: (ctx.reactor.altered_max_power != null && typeof ctx.reactor.altered_max_power.toString === "function") ? ctx.reactor.altered_max_power.toString() : ctx.reactor.altered_max_power,
+      altered_max_heat: ctx.reactor.altered_max_heat,
+      altered_max_power: ctx.reactor.altered_max_power,
     };
     const tileState = typeof ctx.tileset?.toSaveState === "function"
       ? ctx.tileset.toSaveState()
@@ -45,11 +45,11 @@ export class SaveOrchestrator {
       version: ctx.version,
       run_id: ctx.run_id,
       tech_tree: ctx.tech_tree,
-      current_money: statePlain?.current_money ?? ((ctx.state?.current_money != null && typeof ctx.state.current_money.toString === "function") ? ctx.state.current_money.toString() : ctx.state?.current_money),
+      current_money: stateSnap?.current_money ?? ctx.state?.current_money,
       protium_particles: ctx.protium_particles,
-      total_exotic_particles: (ctx.total_exotic_particles && typeof ctx.total_exotic_particles.toString === 'function') ? ctx.total_exotic_particles.toString() : ctx.total_exotic_particles,
-      exotic_particles: (ctx.exotic_particles && typeof ctx.exotic_particles.toString === 'function') ? ctx.exotic_particles.toString() : ctx.exotic_particles,
-      current_exotic_particles: (ctx.current_exotic_particles && typeof ctx.current_exotic_particles.toString === 'function') ? ctx.current_exotic_particles.toString() : ctx.current_exotic_particles,
+      total_exotic_particles: ctx.total_exotic_particles,
+      exotic_particles: ctx.exotic_particles,
+      current_exotic_particles: ctx.current_exotic_particles,
       rows: ctx.rows,
       cols: ctx.cols,
       sold_power: ctx.sold_power,
@@ -68,12 +68,14 @@ export class SaveOrchestrator {
     };
 
     try {
-      if (typeof localStorage !== "undefined" && localStorage !== null) {
-        const existingSave = StorageUtils.get("reactorGameSave");
-        if (existingSave && typeof existingSave === "object") {
-          if (existingSave.isCloudSynced) {
+      if (typeof indexedDB !== "undefined") {
+        const keysToCheck = ["reactorGameSave", "reactorGameSave_1", "reactorGameSave_2", "reactorGameSave_3"];
+        for (const key of keysToCheck) {
+          const existingSave = await StorageUtilsAsync.get(key);
+          if (existingSave && typeof existingSave === "object" && existingSave.isCloudSynced) {
             saveData.isCloudSynced = existingSave.isCloudSynced;
             saveData.cloudUploadedAt = existingSave.cloudUploadedAt;
+            break;
           }
         }
       }

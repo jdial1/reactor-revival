@@ -1,5 +1,8 @@
+import { html, render } from "lit-html";
 import { numFormat as fmt } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
+import { classMap } from "../../utils/litHelpers.js";
+import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
 
 export class ControlDeckUI {
   constructor(ui) {
@@ -16,6 +19,46 @@ export class ControlDeckUI {
     };
   }
 
+  _statsBarTemplate(state) {
+    const vent = fmt(state.stats_vent ?? 0, 0);
+    const power = fmt(state.stats_power ?? 0, 0);
+    const heat = fmt(state.stats_heat_generation ?? 0, 0);
+    return html`
+      <li><strong title="Total heat venting per tick"><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent">${vent}</span></strong></li>
+      <li><strong title="Power per tick"><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power">${power}</span></strong></li>
+      <li><strong title="Heat per tick"><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat">${heat}</span></strong></li>
+    `;
+  }
+
+  _mountStatsBarReactive(ui) {
+    const root = document.getElementById("reactor_stats");
+    if (!root || !ui.game?.state) return;
+    const renderFn = (state) => this._statsBarTemplate(state);
+    this._statsBarComponent = new ReactiveLitComponent(
+      ui.game.state,
+      ["stats_vent", "stats_power", "stats_heat_generation"],
+      renderFn,
+      root
+    );
+    this._statsBarUnmount = this._statsBarComponent.mount();
+    const epRoot = document.getElementById("exotic_particles_display");
+    if (epRoot && ui.game?.state) {
+      const epRenderFn = (state) => html`
+        <div class="grid">
+          <div>Current 🧬 EP: <strong><span id="current_exotic_particles">${fmt(state.current_exotic_particles ?? 0)}</span></strong></div>
+          <div>Total 🧬 EP: <strong><span id="total_exotic_particles">${fmt(state.total_exotic_particles ?? 0)}</span></strong></div>
+        </div>
+      `;
+      this._epComponent = new ReactiveLitComponent(
+        ui.game.state,
+        ["current_exotic_particles", "total_exotic_particles"],
+        epRenderFn,
+        epRoot
+      );
+      this._epUnmount = this._epComponent.mount();
+    }
+  }
+
   initVarObjsConfig() {
     const ui = this.ui;
     const controlDeck = this;
@@ -25,6 +68,7 @@ export class ControlDeckUI {
       return document.getElementById(elementId);
     };
 
+    this._mountStatsBarReactive(ui);
     ui.var_objs_config = {
       current_money: {
         rolling: true,
@@ -44,7 +88,6 @@ export class ControlDeckUI {
         },
       },
       max_power: {
-        dom: getInfoElement("info_power_denom", "info_power_denom_desktop"),
         num: true,
         onupdate: () => ui.infoBarUI.updatePowerDenom(),
       },
@@ -59,7 +102,6 @@ export class ControlDeckUI {
         },
       },
       max_heat: {
-        dom: getInfoElement("info_heat_denom", "info_heat_denom_desktop"),
         num: true,
         onupdate: () => ui.infoBarUI.updateHeatDenom(),
       },
@@ -94,12 +136,8 @@ export class ControlDeckUI {
         },
       },
       total_exotic_particles: {
-        dom: ui.DOMElements.total_exotic_particles,
         num: true,
         onupdate: (val) => {
-          if (ui.DOMElements.total_exotic_particles) {
-            ui.DOMElements.total_exotic_particles.textContent = fmt(val);
-          }
           const rebootVal = ui.game?.exoticParticleManager?.exotic_particles ?? 0;
           const valNum = typeof val?.toNumber === "function" ? val.toNumber() : Number(val ?? 0);
           const rebootNum = typeof rebootVal?.toNumber === "function" ? rebootVal.toNumber() : Number(rebootVal ?? 0);
@@ -108,90 +146,26 @@ export class ControlDeckUI {
           }
         },
       },
-      stats_power: {
-        dom: ui.DOMElements.stats_power,
-        num: true,
-        onupdate: () => ui.infoBarUI.updatePowerDenom(),
-      },
-      total_heat: {
-        dom: ui.DOMElements.stats_heat,
-        num: true,
-        places: 0,
-        onupdate: () => ui.infoBarUI.updateHeatDenom(),
-      },
+      stats_power: { num: true, onupdate: () => ui.infoBarUI.updatePowerDenom() },
+      total_heat: { num: true, places: 0, onupdate: () => ui.infoBarUI.updateHeatDenom() },
       engine_status: {
         onupdate: (val) => {
-          const indicator = ui.DOMElements.engine_status_indicator;
-          if (!indicator) return;
-          indicator.classList.remove("engine-running", "engine-paused", "engine-stopped", "engine-tick");
-          if (val === "running") indicator.classList.add("engine-running");
-          else if (val === "paused") indicator.classList.add("engine-paused");
-          else if (val === "stopped") indicator.classList.add("engine-stopped");
-          else if (val === "tick") {
-            indicator.classList.add("engine-tick");
-            setTimeout(() => {
-              if (indicator.classList.contains("engine-tick")) {
-                indicator.classList.remove("engine-tick");
-                const currentStatus = ui.game.engine.running
-                  ? (ui.game.paused ? "paused" : "running")
-                  : "stopped";
-                indicator.classList.add(`engine-${currentStatus}`);
-              }
-            }, 100);
-          }
+          controlDeck._renderEngineStatus(val);
         },
       },
-      stats_outlet: {
-        dom: ui.DOMElements.stats_outlet,
-        num: true,
-        places: 0,
-      },
-      stats_inlet: { dom: ui.DOMElements.stats_inlet, num: true, places: 0 },
-      stats_vent: {
-        dom: ui.DOMElements.stats_vent,
-        num: true,
-        places: 0,
-        onupdate: () => ui.infoBarUI.updateHeatDenom(),
-      },
-      stats_net_heat: {
-        onupdate: () => ui.infoBarUI.updateHeatDenom(),
-      },
-      stats_total_part_heat: {
-        dom: ui.DOMElements.stats_total_part_heat,
-        num: true,
-        places: 0,
-      },
-      auto_sell: {
-        onupdate: (val) =>
-          controlDeck.updateToggleButtonState(controlDeck.toggle_buttons_config.auto_sell, val),
-      },
-      auto_buy: {
-        onupdate: (val) =>
-          controlDeck.updateToggleButtonState(controlDeck.toggle_buttons_config.auto_buy, val),
-      },
-      heat_control: {
-        onupdate: (val) =>
-          controlDeck.updateToggleButtonState(controlDeck.toggle_buttons_config.heat_control, val),
-      },
-      time_flux: {
-        onupdate: (val) =>
-          controlDeck.updateToggleButtonState(controlDeck.toggle_buttons_config.time_flux, val),
-      },
+      stats_outlet: { num: true, places: 0 },
+      stats_inlet: { num: true, places: 0 },
+      stats_vent: { num: true, places: 0, onupdate: () => ui.infoBarUI.updateHeatDenom() },
+      stats_net_heat: { onupdate: () => ui.infoBarUI.updateHeatDenom() },
+      stats_total_part_heat: { num: true, places: 0 },
+      auto_sell: {},
+      auto_buy: {},
+      heat_control: {},
+      time_flux: {},
       pause: {
         id: "pause_toggle",
         stateProperty: "pause",
         onupdate: (val) => {
-          controlDeck.updateToggleButtonState(controlDeck.toggle_buttons_config.pause, val);
-          const pauseBtn = ui.DOMElements.pause_toggle;
-          if (pauseBtn) {
-            if (val) {
-              pauseBtn.classList.add("paused");
-              pauseBtn.title = "Resume";
-            } else {
-              pauseBtn.classList.remove("paused");
-              pauseBtn.title = "Pause";
-            }
-          }
           if (val) ui.gridInteractionUI.clearAllActiveAnimations();
           if (ui.game && ui.game.engine) {
             if (val) {
@@ -203,6 +177,7 @@ export class ControlDeckUI {
             }
           }
           ui.deviceFeatures.updateWakeLockState();
+          ui.pauseStateUI?.updatePauseState?.();
         },
       },
       melting_down: {
@@ -211,62 +186,71 @@ export class ControlDeckUI {
         },
       },
     };
+    ui.stateManager?.setupStateSubscriptions?.();
+  }
+
+  _controlsNavTemplate(state) {
+    const ui = this.ui;
+    const toggleHandler = (stateProperty) => () => {
+      const currentState = state[stateProperty];
+      const newState = !currentState;
+      logger.log("debug", "ui", `[TOGGLE] Button "${stateProperty}" clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}`);
+      if (stateProperty === "time_flux" && ui.game) {
+        const accumulator = ui.game.engine?.time_accumulator || 0;
+        const queuedTicks = accumulator > 0 ? Math.floor(accumulator / (ui.game.loop_wait || 1000)) : 0;
+        logger.log("debug", "ui", `[TIME FLUX] Button clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}`);
+      }
+      ui.stateManager.setVar(stateProperty, newState);
+    };
+    return html`
+      <button id="auto_sell_toggle" class=${classMap({ "pixel-btn": true, on: !!state.auto_sell })} title="Auto Sell" @click=${toggleHandler("auto_sell")}>
+        <img src="img/ui/icons/icon_cash.png" alt="Auto Sell" class="control-icon" />
+        <span class="control-text">Auto Sell</span>
+      </button>
+      <button id="auto_buy_toggle" class=${classMap({ "pixel-btn": true, on: !!state.auto_buy })} title="Auto Buy" @click=${toggleHandler("auto_buy")}>
+        <img src="img/ui/icons/icon_cash_outline.svg" alt="Auto Buy" class="control-icon" />
+        <span class="control-text">Auto Buy</span>
+      </button>
+      <button id="time_flux_toggle" class=${classMap({ "pixel-btn": true, on: !!state.time_flux })} title="Time Flux" @click=${toggleHandler("time_flux")}>
+        <img src="img/ui/icons/icon_time.png" alt="Time Flux" class="control-icon" />
+        <span class="control-text">Time Flux</span>
+      </button>
+      <button id="heat_control_toggle" class=${classMap({ "pixel-btn": true, on: !!state.heat_control })} title="Heat Ctrl" @click=${toggleHandler("heat_control")}>
+        <img src="img/ui/icons/icon_heat.png" alt="Auto Heat" class="control-icon" />
+        <span class="control-text">Auto Heat</span>
+      </button>
+      <button id="pause_toggle" class=${classMap({ "pixel-btn": true, on: !!state.pause, paused: !!state.pause })} title=${state.pause ? "Resume" : "Pause"} @click=${toggleHandler("pause")}>
+        <img src="img/ui/nav/nav_pause.png" alt="Pause" class="control-icon pause-icon" />
+        <img src="img/ui/nav/nav_play.png" alt="Resume" class="control-icon play-icon" />
+        <span class="control-text">Pause</span>
+      </button>
+      <button id="user_account_btn_mobile" class="pixel-btn" title="Account">
+        <span class="control-icon" style="font-size: 1.5em;">👤</span>
+        <span class="control-text">Account</span>
+      </button>
+    `;
   }
 
   initializeToggleButtons() {
     const ui = this.ui;
-    for (const buttonKey in this.toggle_buttons_config) {
-      const config = this.toggle_buttons_config[buttonKey];
-      const button = ui.DOMElements[config.id];
-      if (button) {
-        button.onclick = () => {
-          const currentState = ui.stateManager.getVar(config.stateProperty);
-          const newState = !currentState;
-          logger.log('debug', 'ui', `[TOGGLE] Button "${config.stateProperty}" clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}`);
-          if (config.stateProperty === "time_flux") {
-            const accumulator = ui.game?.engine?.time_accumulator || 0;
-            const queuedTicks = accumulator > 0 ? Math.floor(accumulator / (ui.game?.loop_wait || 1000)) : 0;
-            logger.log('debug', 'ui', `[TIME FLUX] Button clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}, game.time_flux before: ${ui.game?.time_flux}`);
-          }
-          ui.stateManager.setVar(config.stateProperty, newState);
-        };
-      } else {
-        logger.log('warn', 'ui', `Toggle button #${config.id} not found.`);
-      }
+    const root = document.getElementById("controls_nav_root");
+    if (root && ui.game?.state) {
+      const renderFn = (state) => this._controlsNavTemplate(state);
+      this._controlsNavComponent = new ReactiveLitComponent(
+        ui.game.state,
+        ["auto_sell", "auto_buy", "heat_control", "time_flux", "pause"],
+        renderFn,
+        root
+      );
+      this._controlsNavUnmount = this._controlsNavComponent.mount();
+    } else if (root) {
+      render(this._controlsNavTemplate({ auto_sell: false, auto_buy: true, time_flux: true, heat_control: false, pause: false }), root);
     }
-    this.updateAllToggleBtnStates();
-    const updatePauseButtonText = () => {
-      const isPaused = ui.stateManager.getVar("pause");
-      const pauseBtn = ui.DOMElements.pause_toggle;
-      if (pauseBtn) {
-        if (isPaused) {
-          pauseBtn.classList.add("paused");
-          pauseBtn.title = "Resume";
-        } else {
-          pauseBtn.classList.remove("paused");
-          pauseBtn.title = "Pause";
-        }
-      }
-    };
-    updatePauseButtonText();
     const origSetVar = ui.stateManager.setVar.bind(ui.stateManager);
     ui.stateManager.setVar = (key, value, ...args) => {
       origSetVar(key, value, ...args);
-      if (key === "pause") {
-        this.updateAllToggleBtnStates();
-        updatePauseButtonText();
-        ui.mobileInfoBarUI.updateMobilePassiveTopBar();
-      }
+      if (key === "pause") ui.mobileInfoBarUI.updateMobilePassiveTopBar();
     };
-  }
-
-  updateAllToggleBtnStates() {
-    for (const buttonKey in this.toggle_buttons_config) {
-      const config = this.toggle_buttons_config[buttonKey];
-      const isActive = this.ui.stateManager.getVar(config.stateProperty);
-      logger.log('debug', 'ui', `Updating button "${config.stateProperty}" to ${isActive ? "ON" : "OFF"}`);
-      this.updateToggleButtonState(config, isActive);
-    }
   }
 
   syncToggleStatesFromGame() {
@@ -292,10 +276,24 @@ export class ControlDeckUI {
     }
   }
 
-  updateToggleButtonState(config, isActive) {
-    const button = this.ui.DOMElements[config.id];
-    if (!button) return;
-    button.classList.toggle("on", isActive);
+  _renderEngineStatus(val) {
+    const root = document.getElementById("engine_status_indicator_root");
+    if (!root) return;
+    const ui = this.ui;
+    const statusClass = classMap({
+      "engine-running": val === "running",
+      "engine-paused": val === "paused",
+      "engine-stopped": val === "stopped",
+      "engine-tick": val === "tick",
+    });
+    const template = html`<span id="engine_status_indicator" class=${statusClass}></span>`;
+    render(template, root);
+    if (val === "tick") {
+      setTimeout(() => {
+        const currentStatus = ui.game?.engine?.running ? (ui.game.paused ? "paused" : "running") : "stopped";
+        ui.stateManager.setVar("engine_status", currentStatus);
+      }, 100);
+    }
   }
 
   updatePercentageBar(currentKey, maxKey, domElement) {

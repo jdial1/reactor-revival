@@ -49,5 +49,4 @@ export function runEpartOnclick(game, purchased_upgrade) {
       upg.updateDisplayCost();
     }
   });
-  game.upgradeset.check_affordability(game);
 }

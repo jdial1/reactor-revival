@@ -47,7 +47,7 @@ export function runPurchaseUpgrade(upgradeset, upgradeId) {
       upgradeset.game.epart_onclick(upgrade);
     }
     upgradeset.updateSectionCounts();
-    if (!upgradeset.game.isSandbox) upgradeset.game.saveManager.autoSave();
+    if (!upgradeset.game.isSandbox) void upgradeset.game.saveManager.autoSave();
   }
 
   return purchased;

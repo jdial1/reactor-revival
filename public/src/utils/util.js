@@ -1,5 +1,29 @@
 import Decimal from "./decimal.js";
 import { formatDuration, formatRelativeTime } from "./formatUtils.js";
+import { serializeSave as superjsonStringify, parseSave as superjsonParse } from "../config/superjsonSetup.js";
+import { get as idbGet, set as idbSet, del as idbDel } from "idb-keyval";
+
+const GAME_SAVE_KEYS = new Set([
+  "reactorGameSave",
+  "reactorGameSave_1",
+  "reactorGameSave_2",
+  "reactorGameSave_3",
+  "reactorGameSave_Previous",
+  "reactorGameSave_Backup",
+]);
+
+export function serializeSave(obj) {
+  return superjsonStringify(obj);
+}
+
+export function deserializeSave(raw) {
+  if (typeof raw !== "string") return raw;
+  const parsed = JSON.parse(raw);
+  if (parsed && typeof parsed === "object" && "json" in parsed && "meta" in parsed) {
+    return superjsonParse(raw);
+  }
+  return parsed;
+}
 
 export { Formatter, Formatter as Format, numFormat, formatStatNum } from "./formatUtils.js";
 export const timeFormat = (ms) => formatDuration(ms, false);
@@ -97,7 +121,7 @@ export const StorageUtils = {
             const raw = localStorage.getItem(key);
             if (raw === null) return defaultValue;
             try {
-                return JSON.parse(raw);
+                return GAME_SAVE_KEYS.has(key) ? deserializeSave(raw) : JSON.parse(raw);
             } catch (_) {
                 return raw;
             }
@@ -153,6 +177,29 @@ const SAVE_SLOT1_KEY = "reactorGameSave_1";
 const SAVE_PREVIOUS_KEY = "reactorGameSave_Previous";
 const SAVE_BACKUP_KEY = "reactorGameSave_Backup";
 
+const MIGRATION_KEYS = [
+    "reactorGameSave",
+    "reactorGameSave_1",
+    "reactorGameSave_2",
+    "reactorGameSave_3",
+    "reactorGameSave_Previous",
+    "reactorGameSave_Backup",
+    "reactorCurrentSaveSlot"
+];
+
+export async function migrateLocalStorageToIndexedDB() {
+    if (typeof indexedDB === "undefined" || !isStorageAvailable()) return;
+    try {
+        for (const key of MIGRATION_KEYS) {
+            const fromLS = localStorage.getItem(key);
+            if (fromLS === null) continue;
+            const fromIDB = await idbGet(key);
+            if (fromIDB !== undefined) continue;
+            await idbSet(key, fromLS);
+        }
+    } catch (_) {}
+}
+
 export function rotateSlot1ToBackup(value) {
     if (!isStorageAvailable()) return false;
     try {
@@ -175,6 +222,72 @@ export function setSlot1FromBackup() {
     const backup = StorageUtils.getRaw(SAVE_BACKUP_KEY);
     if (backup == null) return false;
     StorageUtils.setRaw(SAVE_SLOT1_KEY, backup);
+    return true;
+}
+
+export const StorageUtilsAsync = {
+    async get(key, defaultValue = null) {
+        try {
+            const raw = await idbGet(key);
+            if (raw === undefined) return defaultValue;
+            try {
+                return GAME_SAVE_KEYS.has(key) ? deserializeSave(raw) : JSON.parse(raw);
+            } catch (_) {
+                return raw;
+            }
+        } catch (_) {
+            return defaultValue;
+        }
+    },
+    async set(key, value) {
+        try {
+            const str = typeof value === "object" && value !== null
+                ? JSON.stringify(value, saveDataReplacer)
+                : JSON.stringify(value);
+            await idbSet(key, str);
+        } catch (_) {}
+    },
+    async remove(key) {
+        try {
+            await idbDel(key);
+        } catch (_) {}
+    },
+    async getRaw(key, defaultValue = null) {
+        try {
+            const value = await idbGet(key);
+            return value !== undefined ? value : defaultValue;
+        } catch (_) {
+            return defaultValue;
+        }
+    },
+    async setRaw(key, value) {
+        try {
+            await idbSet(key, value);
+        } catch (_) {}
+    }
+};
+
+export async function rotateSlot1ToBackupAsync(value) {
+    try {
+        const current = await StorageUtilsAsync.getRaw(SAVE_SLOT1_KEY);
+        const previous = await StorageUtilsAsync.getRaw(SAVE_PREVIOUS_KEY);
+        if (previous != null) await StorageUtilsAsync.setRaw(SAVE_BACKUP_KEY, previous);
+        if (current != null) await StorageUtilsAsync.setRaw(SAVE_PREVIOUS_KEY, current);
+        await StorageUtilsAsync.setRaw(SAVE_SLOT1_KEY, value);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+export async function getBackupSaveForSlot1Async() {
+    return await StorageUtilsAsync.getRaw(SAVE_BACKUP_KEY);
+}
+
+export async function setSlot1FromBackupAsync() {
+    const backup = await StorageUtilsAsync.getRaw(SAVE_BACKUP_KEY);
+    if (backup == null) return false;
+    await StorageUtilsAsync.setRaw(SAVE_SLOT1_KEY, backup);
     return true;
 }
 

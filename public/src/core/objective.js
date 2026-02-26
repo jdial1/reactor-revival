@@ -54,9 +54,34 @@ export class ObjectiveManager {
     if (t) t.startTick = 0;
   }
 
+  _syncActiveObjectiveToState() {
+    const state = this.game?.state;
+    if (!state?.active_objective) return;
+    if (this.game?.isSandbox) {
+      state.active_objective.title = "Sandbox";
+      state.active_objective.index = 0;
+      state.active_objective.isComplete = false;
+      state.active_objective.isChapterCompletion = false;
+      state.active_objective.progressPercent = 0;
+      state.active_objective.hasProgressBar = false;
+      state.active_objective.checkId = null;
+      return;
+    }
+    const info = this.getCurrentObjectiveDisplayInfo();
+    if (!info) return;
+    const checkId = this.current_objective_def?.checkId ?? null;
+    state.active_objective.title = info.title ?? "";
+    state.active_objective.index = this.current_objective_index;
+    state.active_objective.isComplete = !!info.isComplete;
+    state.active_objective.isChapterCompletion = !!info.isChapterCompletion;
+    state.active_objective.progressPercent = info.progressPercent ?? 0;
+    state.active_objective.hasProgressBar = checkId === "sustainedPower1k" && !info.isComplete;
+    state.active_objective.checkId = checkId;
+  }
+
   _emitObjectiveLoaded(displayObjective) {
+    this._syncActiveObjectiveToState();
     this.game?.ui?.stateManager?.handleObjectiveLoaded?.(displayObjective, this.current_objective_index);
-    this.game?.ui?.objectivesUI?.updateObjectiveDisplay?.();
     if (this.game?.emit) {
       this.game.emit("objectiveLoaded", {
         objective: displayObjective,
@@ -66,7 +91,7 @@ export class ObjectiveManager {
   }
 
   _emitObjectiveCompleted() {
-    this.game?.ui?.objectivesUI?.updateObjectiveDisplay?.();
+    this._syncActiveObjectiveToState();
     if (this.game?.emit) this.game.emit("objectiveCompleted", {});
   }
 
@@ -259,7 +284,7 @@ export class ObjectiveManager {
 
     // Always save after claiming
     if (this.game?.saveManager) {
-      this.game.saveManager.autoSave();
+      void this.game.saveManager.autoSave();
     }
 
     if (this.game?.emit) this.game.emit("objectiveClaimed", {});

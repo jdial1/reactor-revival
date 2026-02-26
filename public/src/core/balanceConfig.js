@@ -1,4 +1,6 @@
-export const BALANCE = {
+import { BalanceConfigSchema } from "./schemas.js";
+
+const rawBalance = {
   valveTopupCapRatio: 0.2,
   autoSellMultiplierPerLevel: 0.01,
   stirlingMultiplierPerLevel: 0.01,
@@ -22,3 +24,6 @@ export const BALANCE = {
   phlembotinumHeatBase: 1000,
   phlembotinumMultiplier: 4,
 };
+
+const result = BalanceConfigSchema.safeParse(rawBalance);
+export const BALANCE = result.success ? result.data : rawBalance;

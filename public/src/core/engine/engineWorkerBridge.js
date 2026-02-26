@@ -1,7 +1,9 @@
+import { fromError } from "zod-validation-error";
 import { toDecimal } from "../../utils/decimal.js";
 import { logger } from "../../utils/logger.js";
 import { HEAT_EPSILON } from "../heatCalculations.js";
 import { applyGameLoopTickResult } from "../gameLoopWorkerBridge.js";
+import { PhysicsTickResultSchema } from "../schemas.js";
 
 function onGameLoopWorkerMessage(engine, e) {
   const data = e.data;
@@ -54,6 +56,12 @@ function recordHeatFlowVectors(engine, transfers) {
 function handlePhysicsWorkerMessage(engine, data) {
   const result = validateWorkerResponse(engine, data);
   if (!result) return;
+  const parseResult = PhysicsTickResultSchema.safeParse(data);
+  if (!parseResult.success) {
+    logger.log("warn", "engine", "[PhysicsWorker] Result validation failed:", fromError(parseResult.error).toString());
+    return;
+  }
+  data = parseResult.data;
   const { ctx, useSAB } = result;
   if (!useSAB) applyTransferredBuffers(engine, data);
   const rawHeat = data.reactorHeat ?? engine.game.reactor.current_heat.toNumber();

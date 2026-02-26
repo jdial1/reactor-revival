@@ -1,5 +1,8 @@
 import { html } from "lit-html";
-import { StorageUtils } from "../../utils/util.js";
+import { styleMap } from "../../utils/litHelpers.js";
+import { getValidatedPreferences } from "../../services/appConfig.js";
+
+const HIDDEN_STYLE = { display: "none" };
 
 function volToStep(v) {
   return Math.min(10, Math.round(v * 10));
@@ -35,7 +38,7 @@ function switchRow(id, label, checked) {
       <td class="settings-visuals-label"><span>${label}</span></td>
       <td class="settings-visuals-control">
         <label class="mech-switch-row">
-          <input type="checkbox" id=${id} ?checked=${checked} style="display: none;">
+          <input type="checkbox" id=${id} ?checked=${checked} style=${styleMap(HIDDEN_STYLE)}>
           ${mechSwitch(id, checked)}
         </label>
       </td>
@@ -44,12 +47,13 @@ function switchRow(id, label, checked) {
 }
 
 export function createVolumeSection() {
-  const isMuted = StorageUtils.get("reactor_mute") === true;
-  const masterVol = Number(StorageUtils.get("reactor_volume_master", 0.25));
-  const effectsVol = Number(StorageUtils.get("reactor_volume_effects", 0.50));
-  const alertsVol = Number(StorageUtils.get("reactor_volume_alerts", 0.50));
-  const systemVol = Number(StorageUtils.get("reactor_volume_system", 0.50));
-  const ambienceVol = Number(StorageUtils.get("reactor_volume_ambience", 0.12));
+  const vol = getValidatedPreferences();
+  const isMuted = vol.mute;
+  const masterVol = vol.volumeMaster;
+  const effectsVol = vol.volumeEffects;
+  const alertsVol = vol.volumeAlerts;
+  const systemVol = vol.volumeSystem;
+  const ambienceVol = vol.volumeAmbience;
   return html`
     <div class="settings-group settings-group-collapsed">
       <button type="button" class="settings-group-header" aria-expanded="false">
@@ -62,7 +66,7 @@ export function createVolumeSection() {
           <button type="button" class="mute-btn" id="setting-mute-btn" aria-label="Toggle Mute">
             <span class="mute-icon">${isMuted ? "🔇" : "🔊"}</span>
           </button>
-          <input type="checkbox" id="setting-mute" ?checked=${isMuted} style="display: none;">
+          <input type="checkbox" id="setting-mute" ?checked=${isMuted} style=${styleMap(HIDDEN_STYLE)}>
         </label>
         <div class="volume-setting"><label class="volume-label">Master Volume</label>${volumeStepper("master", masterVol)}</div>
         <div class="volume-setting"><label class="volume-label">Effects Volume</label>${volumeStepper("effects", effectsVol)}</div>
@@ -75,17 +79,18 @@ export function createVolumeSection() {
 }
 
 export function createToggleSection() {
-  const isReducedMotion = StorageUtils.get("reactor_reduced_motion") === true;
-  const hideUnaffordableUpgrades = StorageUtils.get("reactor_hide_unaffordable_upgrades", true) !== false;
-  const hideUnaffordableResearch = StorageUtils.get("reactor_hide_unaffordable_research", true) !== false;
-  const hideMaxUpgrades = StorageUtils.get("reactor_hide_max_upgrades", true) !== false;
-  const hideMaxResearch = StorageUtils.get("reactor_hide_max_research", true) !== false;
-  const hideOtherDoctrineUpgrades = StorageUtils.get("reactor_hide_other_doctrine_upgrades", false) === true;
-  const heatFlowVisible = StorageUtils.get("reactor_heat_flow_visible", true) !== false;
-  const heatMapVisible = StorageUtils.get("reactor_heat_map_visible", false) === true;
-  const numberFormat = StorageUtils.get("number_format", "default");
-  const debugOverlay = StorageUtils.get("reactor_debug_overlay") === true;
-  const forceNoSab = StorageUtils.get("reactor_force_no_sab") === true;
+  const prefs = getValidatedPreferences();
+  const isReducedMotion = prefs.reducedMotion;
+  const hideUnaffordableUpgrades = prefs.hideUnaffordableUpgrades;
+  const hideUnaffordableResearch = prefs.hideUnaffordableResearch;
+  const hideMaxUpgrades = prefs.hideMaxUpgrades;
+  const hideMaxResearch = prefs.hideMaxResearch;
+  const hideOtherDoctrineUpgrades = prefs.hideOtherDoctrineUpgrades;
+  const heatFlowVisible = prefs.heatFlowVisible;
+  const heatMapVisible = prefs.heatMapVisible;
+  const numberFormat = prefs.numberFormat;
+  const debugOverlay = prefs.debugOverlay;
+  const forceNoSab = prefs.forceNoSAB;
   return html`
     <div class="settings-group settings-group-collapsed">
       <button type="button" class="settings-group-header" aria-expanded="false">
@@ -141,9 +146,9 @@ export function createExportSection() {
         <div class="data-buttons">
           <button class="pixel-btn" id="setting-export">Export</button>
           <button class="pixel-btn" id="setting-import">Import</button>
-          <input type="file" id="setting-import-input" accept=".json" style="display: none;">
+          <input type="file" id="setting-import-input" accept=".json" style=${styleMap(HIDDEN_STYLE)}>
         </div>
-        <div id="setting-cloud-saves" class="settings-cloud-saves" style="display: none;">
+        <div id="setting-cloud-saves" class="settings-cloud-saves" style=${styleMap(HIDDEN_STYLE)}>
           <h4 class="settings-cloud-heading">Cloud Saves</h4>
           <div class="cloud-slot-list">
             ${[1, 2, 3].map(slot => html`
@@ -184,8 +189,8 @@ export function createNavAboutSection() {
         <span class="settings-group-chevron" aria-hidden="true"></span>
       </button>
       <div class="settings-group-body">
-        <p style="margin: 0.5rem 0; font-size: 0.6rem;">Version: <span id="app_version">Loading...</span></p>
-        <p style="margin: 0.5rem 0; font-size: 0.6rem;">Display Mode: <span id="app_display_mode">Detecting...</span></p>
+        <p style=${styleMap({ margin: "0.5rem 0", fontSize: "0.6rem" })}>Version: <span id="app_version">Loading...</span></p>
+        <p style=${styleMap({ margin: "0.5rem 0", fontSize: "0.6rem" })}>Display Mode: <span id="app_display_mode">Detecting...</span></p>
       </div>
     </div>
   `;

@@ -1,13 +1,12 @@
-import { StorageUtils, formatTime } from "../../utils/util.js";
-import { logger } from "../../utils/logger.js";
+import { formatTime } from "../../utils/util.js";
 import {
   createNewGameButton,
   createLoadGameButtonFullWidth,
 } from "../../components/buttonFactory.js";
 import { showTechTreeSelection } from "../gameSetupFlow.js";
 import { settingsModal } from "../../components/settingsModal.js";
-import { setupSplashAuth } from "./splashAuthUI.js";
 import { MODAL_IDS } from "../../components/ModalManager.js";
+import { fetchResolvedSaves } from "../savesQuery.js";
 
 export class SplashStartOptionsBuilder {
   constructor(splashManager, ctx = null) {
@@ -16,82 +15,10 @@ export class SplashStartOptionsBuilder {
   }
 
   async buildSaveSlotList(canLoadGame) {
-    let hasSave = false;
-    let saveSlots = [];
-
-    if (canLoadGame) {
-      for (let i = 1; i <= 3; i++) {
-        const slotData = StorageUtils.get(`reactorGameSave_${i}`);
-        if (slotData && typeof slotData === "object") {
-          try {
-            saveSlots.push({
-              slot: i,
-              exists: true,
-              lastSaveTime: slotData.last_save_time || null,
-              totalPlayedTime: slotData.total_played_time || 0,
-              currentMoney: slotData.current_money || 0,
-              exoticParticles: slotData.exotic_particles || 0,
-              data: slotData
-            });
-            hasSave = true;
-          } catch (e) {
-            logger.log('error', 'splash', `Error parsing save slot ${i}:`, e);
-          }
-        }
-      }
-
-      if (!hasSave) {
-        const oldSaveData = StorageUtils.get("reactorGameSave");
-        if (oldSaveData && typeof oldSaveData === "object") {
-          try {
-            saveSlots.push({
-              slot: 'legacy',
-              exists: true,
-              lastSaveTime: oldSaveData.last_save_time || null,
-              totalPlayedTime: oldSaveData.total_played_time || 0,
-              currentMoney: oldSaveData.current_money || 0,
-              exoticParticles: oldSaveData.exotic_particles || 0,
-              data: oldSaveData
-            });
-            hasSave = true;
-          } catch (e) {
-            logger.error("Error parsing legacy save:", e);
-          }
-        }
-      }
+    if (!canLoadGame) {
+      return { hasSave: false, saveSlots: [], cloudSaveOnly: false, cloudSaveData: null, mostRecentSave: null };
     }
-
-    let cloudSaveOnly = false;
-    let cloudSaveData = null;
-    if (!hasSave && window.googleDriveSave?.isConfigured) {
-      try {
-        const isSignedIn = await window.googleDriveSave.checkAuth(true);
-        if (isSignedIn) {
-          const fileFound = await window.googleDriveSave.findSaveFile();
-          if (fileFound) {
-            cloudSaveOnly = true;
-            try {
-              cloudSaveData = await window.googleDriveSave.load();
-            } catch {
-              cloudSaveData = null;
-            }
-          }
-        }
-      } catch {
-        // Ignore errors during cloud save check
-      }
-    }
-
-    let mostRecentSave = null;
-    let mostRecentTime = 0;
-    for (const saveSlot of saveSlots) {
-      if (saveSlot.lastSaveTime && saveSlot.lastSaveTime > mostRecentTime) {
-        mostRecentTime = saveSlot.lastSaveTime;
-        mostRecentSave = saveSlot;
-      }
-    }
-
-    return { hasSave, saveSlots, cloudSaveOnly, cloudSaveData, mostRecentSave };
+    return fetchResolvedSaves();
   }
 
   buildContinueButton(mostRecentSave) {

@@ -1,12 +1,13 @@
 import { createLoadFromCloudButton, createGoogleSignInButton } from "../../components/buttonFactory.js";
-import { getLocalSaveMaxTimestamp, showCloudVsLocalConflictModal } from "../saveModals.js";
+import { showCloudVsLocalConflictModal } from "../saveModals.js";
 import { logger } from "../../utils/logger.js";
 import { MODAL_IDS } from "../../components/ModalManager.js";
+import { fetchResolvedSaves } from "../savesQuery.js";
 
 async function shouldAbortDueToConflict(cloudSaveData) {
-  const { maxTime } = getLocalSaveMaxTimestamp();
+  const { maxLocalTime } = await fetchResolvedSaves();
   const cloudTime = cloudSaveData.last_save_time || 0;
-  if (maxTime <= 0 || cloudTime <= maxTime) return false;
+  if (maxLocalTime <= 0 || cloudTime <= maxLocalTime) return false;
   const orchestrator = window.ui?.modalOrchestrator;
   const choice = orchestrator
     ? await orchestrator.showModal(MODAL_IDS.CLOUD_VS_LOCAL_CONFLICT, { cloudSaveData })
@@ -24,7 +25,8 @@ function backupLocalSaveToSession(dataJSON) {
 async function applyCloudSaveAndLaunch(cloudSaveData) {
   const { pageRouter, ui, game } = window;
   if (!pageRouter || !ui || !game) return;
-  game.applySaveState(cloudSaveData);
+  const validated = game.saveManager.validateSaveData(cloudSaveData);
+  await game.applySaveState(validated);
   if (typeof window.startGame === "function") {
     await window.startGame({ pageRouter, ui, game });
     return;
@@ -46,7 +48,7 @@ async function handleCloudLoadClick() {
       return;
     }
     if (await shouldAbortDueToConflict(cloudSaveData)) return;
-    const { dataJSON } = getLocalSaveMaxTimestamp();
+    const { dataJSON } = await fetchResolvedSaves();
     backupLocalSaveToSession(dataJSON);
     if (window.splashManager) window.splashManager.hide();
     await new Promise((resolve) => setTimeout(resolve, 600));

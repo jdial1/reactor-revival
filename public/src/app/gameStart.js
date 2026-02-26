@@ -3,6 +3,7 @@ import { TutorialManager } from "../components/tutorialManager.js";
 import { Engine } from "../core/engine.js";
 import { requestWakeLock } from "../services/pwa.js";
 import { StorageUtils } from "../utils/util.js";
+import { preferences } from "../core/preferencesStore.js";
 import { logger } from "../utils/logger.js";
 import { MODAL_IDS } from "../components/ModalManager.js";
 
@@ -27,7 +28,7 @@ async function tryLoadStatelessPage(pageRouter, initialPage) {
 function initGameComponents(game) {
   game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
   game.engine = new Engine(game);
-  game.engine.setForceNoSAB(StorageUtils.get("reactor_force_no_sab") === true);
+  game.engine.setForceNoSAB(preferences.forceNoSAB === true);
   game.tutorialManager = new TutorialManager(game);
 }
 
@@ -67,9 +68,11 @@ function syncUIAfterEngineStart(game, ui) {
   ui.stateManager.setVar("max_power", game.reactor.max_power);
   if (ui.heatVisualsUI) ui.heatVisualsUI.updateHeatVisuals();
   StorageUtils.remove("reactorNewGamePending");
+  game.objectives_manager?._syncActiveObjectiveToState?.();
+  ui.pauseStateUI?.updatePauseState?.();
   setTimeout(() => {
     game.reactor.updateStats();
-    if (ui.objectivesUI?.updateObjectiveDisplay) ui.objectivesUI.updateObjectiveDisplay();
+    if (ui.objectivesUI?.updateObjectiveDisplayFromState) ui.objectivesUI.updateObjectiveDisplayFromState();
   }, SYNC_UI_DELAY_MS);
 }
 

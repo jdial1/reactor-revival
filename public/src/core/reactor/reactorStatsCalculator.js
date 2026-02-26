@@ -1,4 +1,5 @@
-import { toDecimal } from "../../utils/decimal.js";
+import { toDecimal, toNumber } from "../../utils/decimal.js";
+import { FLUX_ACCUMULATOR_POWER_RATIO_MIN } from "../constants.js";
 import {
   applyReflectorEffects,
   applyCellMultipliers,
@@ -109,7 +110,31 @@ export function applyStatsToReactor(reactor, stats) {
   reactor._last_calculated_max_heat = reactor.max_heat;
 }
 
-export function syncStatsToUI(reactor, stateManager) {
+function computeActiveBuffs(state) {
+  const buffs = [];
+  const manualOverride = (state.manual_override_mult || 0) > 0 && Date.now() < (state.override_end_time || 0);
+  if (manualOverride) {
+    buffs.push({ id: "manual_override", icon: "img/ui/nav/nav_play.png", title: "Manual Override" });
+  }
+  if ((state.power_to_heat_ratio || 0) > 0) {
+    const maxHeat = toNumber(state.max_heat ?? 0);
+    const currentHeat = toNumber(state.current_heat ?? 0);
+    const heatPercent = maxHeat > 0 ? currentHeat / maxHeat : 0;
+    if (heatPercent > 0.8 && (toNumber(state.current_power ?? 0) || 0) > 0) {
+      buffs.push({ id: "electro_thermal_conversion", icon: "img/parts/capacitors/capacitor_4.png", title: "Electro-Thermal Conversion" });
+    }
+  }
+  const maxPower = toNumber(state.max_power ?? 0);
+  if ((state.flux_accumulator_level || 0) > 0 && maxPower > 0) {
+    const powerRatio = toNumber(state.current_power ?? 0) / maxPower;
+    if (powerRatio >= FLUX_ACCUMULATOR_POWER_RATIO_MIN) {
+      buffs.push({ id: "flux_accumulators", icon: "img/parts/capacitors/capacitor_6.png", title: "Flux Accumulators" });
+    }
+  }
+  return buffs;
+}
+
+export function syncStatsToUI(reactor, _stateManager) {
   const state = reactor.game?.state;
   if (state) {
     state.max_power = reactor.max_power;
@@ -122,19 +147,16 @@ export function syncStatsToUI(reactor, stateManager) {
     state.stats_net_heat = reactor.stats_net_heat;
     state.stats_cash = reactor.stats_cash;
     state.stats_total_part_heat = reactor.stats_total_part_heat;
-  }
-  if (stateManager) {
-    stateManager.setVar("max_power", reactor.max_power);
-    stateManager.setVar("max_heat", reactor.max_heat);
-    stateManager.setVar("total_heat", reactor.stats_heat_generation);
-    stateManager.setVar("current_power", reactor.current_power);
-    stateManager.setVar("current_heat", reactor.current_heat);
-    stateManager.setVar("auto_sell_multiplier", reactor.auto_sell_multiplier);
-    stateManager.setVar("vent_multiplier_eff", reactor.vent_multiplier_eff);
-    stateManager.setVar("heat_controlled", reactor.heat_controlled);
-    stateManager.setVar("manual_override_mult", reactor.manual_override_mult);
-    stateManager.setVar("override_end_time", reactor.override_end_time);
-    stateManager.setVar("power_to_heat_ratio", reactor.power_to_heat_ratio);
-    stateManager.setVar("flux_accumulator_level", reactor.flux_accumulator_level);
+    state.manual_override_mult = reactor.manual_override_mult;
+    state.override_end_time = reactor.override_end_time;
+    state.power_to_heat_ratio = reactor.power_to_heat_ratio;
+    state.flux_accumulator_level = reactor.flux_accumulator_level;
+    state.auto_sell_multiplier = reactor.auto_sell_multiplier;
+    state.heat_controlled = reactor.heat_controlled;
+    state.vent_multiplier_eff = reactor.vent_multiplier_eff;
+    state.power_overflow_to_heat_ratio = reactor.power_overflow_to_heat_ratio ?? 0.5;
+    state.manual_heat_reduce = toNumber(reactor.manual_heat_reduce ?? reactor.game?.base_manual_heat_reduce ?? 1);
+    state.active_buffs.length = 0;
+    state.active_buffs.push(...computeActiveBuffs(state));
   }
 }

@@ -40,7 +40,7 @@ function attachBeforeUnloadListener(game) {
     } catch (_) {}
     if (game && typeof game.updateSessionTime === "function") {
       game.updateSessionTime();
-      game.saveManager.autoSave();
+      void game.saveManager.autoSave();
       if (window.googleDriveSave?.isSignedIn) {
         window.googleDriveSave.flushPendingSave().catch((e) => logger.log('error', 'game', 'Flush pending save failed', e));
       }

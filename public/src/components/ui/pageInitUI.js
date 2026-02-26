@@ -45,9 +45,6 @@ export class PageInitUI {
           typeof game.upgradeset.populateUpgrades === "function"
         ) {
           game.upgradeset.populateUpgrades();
-          if (typeof game.upgradeset.check_affordability === "function") {
-            game.upgradeset.check_affordability(game);
-          }
         } else {
           logger.log('warn', 'ui', 'upgradeset.populateUpgrades is not a function or upgradeset missing');
         }
@@ -59,9 +56,6 @@ export class PageInitUI {
           typeof game.upgradeset.populateExperimentalUpgrades === "function"
         ) {
           game.upgradeset.populateExperimentalUpgrades();
-          if (typeof game.upgradeset.check_affordability === "function") {
-            game.upgradeset.check_affordability(game);
-          }
         } else {
           logger.log('warn', 'ui', 'upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing');
         }

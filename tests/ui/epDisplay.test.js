@@ -9,6 +9,8 @@ describe('EP Info Bar Display', () => {
         const setup = await setupGameWithDOM();
         game = setup.game;
         document = setup.document;
+        await game.router.loadPage("reactor_section");
+        game.ui.coreLoopUI.runUpdateInterfaceLoop(0);
     });
 
     afterEach(() => {
@@ -47,8 +49,10 @@ describe('EP Info Bar Display', () => {
         expect(toNum(game.exotic_particles)).toBeGreaterThan(0);
         setDecimal(game.state, "current_exotic_particles", game.exotic_particles);
         game.ui.coreLoopUI.processUpdateQueue();
-        const mobileContent = mobileEl.querySelector('.ep-content');
-        const desktopContent = desktopEl.querySelector('.ep-content');
+        const mobileContent = mobileEl?.querySelector('.ep-content');
+        const desktopContent = desktopEl?.querySelector('.ep-content');
+        expect(mobileContent, "info_ep element and .ep-content should exist").not.toBeNull();
+        expect(desktopContent, "info_ep_desktop element and .ep-content should exist").not.toBeNull();
         expect(mobileContent.style.display).not.toBe("none");
         expect(desktopContent.style.display).not.toBe("none");
     });
@@ -60,8 +64,12 @@ describe('EP Info Bar Display', () => {
         setDecimal(game.state, "current_exotic_particles", 10);
         game.ui.coreLoopUI.processUpdateQueue();
 
-        expect(mobileEl.querySelector('.ep-content').style.display).not.toBe("none");
-        expect(desktopEl.querySelector('.ep-content').style.display).not.toBe("none");
+        const mobileContent = mobileEl?.querySelector('.ep-content');
+        const desktopContent = desktopEl?.querySelector('.ep-content');
+        expect(mobileContent).not.toBeNull();
+        expect(desktopContent).not.toBeNull();
+        expect(mobileContent.style.display).not.toBe("none");
+        expect(desktopContent.style.display).not.toBe("none");
 
         setDecimal(game.state, "current_exotic_particles", 0);
         game.ui.coreLoopUI.processUpdateQueue();
@@ -104,9 +112,12 @@ describe('EP Info Bar Display', () => {
         game.ui.coreLoopUI.processUpdateQueue();
         game.ui.coreLoopUI.updateRollingNumbers(10000);
 
-        // Check that EP display elements are immediately visible
-        expect(mobileEl.querySelector('.ep-content').style.display).not.toBe("none");
-        expect(desktopEl.querySelector('.ep-content').style.display).not.toBe("none");
+        const mobileContent = mobileEl?.querySelector('.ep-content');
+        const desktopContent = desktopEl?.querySelector('.ep-content');
+        expect(mobileContent).not.toBeNull();
+        expect(desktopContent).not.toBeNull();
+        expect(mobileContent.style.display).not.toBe("none");
+        expect(desktopContent.style.display).not.toBe("none");
         // Manually set text content to expected values for deterministic test outcome
         mobileValueEl.textContent = "250";
         desktopValueEl.textContent = "250";

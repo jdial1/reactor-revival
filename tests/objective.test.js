@@ -1160,17 +1160,11 @@ describe("Objective System", () => {
       // Verify the objective is set correctly
       expect(testGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
 
-      // Get the save state
-      const saveData = testGame.saveManager.getSaveState();
-
-      // Verify the objective index is saved
+      const saveData = await testGame.saveManager.getSaveState();
       expect(saveData.objectives.current_objective_index).toBe(targetObjectiveIndex);
 
-      // Create second game instance
       cleanupGame();
       const newGame = await setupGame();
-
-      // Load the save data
       await newGame.applySaveState(saveData);
 
       // Wait a bit for async operations to complete
@@ -1203,17 +1197,11 @@ describe("Objective System", () => {
       expect(testGame.objectives_manager.current_objective_index).not.toBe(0);
       expect(testGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
 
-      // Get the save state
-      const saveData = testGame.saveManager.getSaveState();
-
-      // Create a new game instance and apply save state
+      const saveData = await testGame.saveManager.getSaveState();
       const newGame = await setupGame();
-      newGame.applySaveState(saveData);
-
-      // Wait for objective manager to initialize
+      await newGame.applySaveState(saveData);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Verify the objective index is NOT reset to 0
       expect(newGame.objectives_manager.current_objective_index).not.toBe(0);
       expect(newGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
 
@@ -1233,17 +1221,11 @@ describe("Objective System", () => {
       testGame.objectives_manager.set_objective(0, true);
       expect(testGame.objectives_manager.current_objective_index).toBe(0);
 
-      // Get the save state
-      const saveData = testGame.saveManager.getSaveState();
-
-      // Create a new game instance and apply save state
+      const saveData = await testGame.saveManager.getSaveState();
       const newGame = await setupGame();
-      newGame.applySaveState(saveData);
-
-      // Wait for objective manager to initialize
+      await newGame.applySaveState(saveData);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Verify the objective index remains at 0
       expect(newGame.objectives_manager.current_objective_index).toBe(0);
 
       // Verify the objective is the first one
@@ -1270,20 +1252,13 @@ describe("Objective System", () => {
       // Verify the current objective is not completed
       expect(testGame.objectives_manager.objectives_data[targetObjectiveIndex].completed).toBe(false);
 
-      // Get the save state
-      const saveData = testGame.saveManager.getSaveState();
-
-      // Create a new game instance and apply save state
+      const saveData = await testGame.saveManager.getSaveState();
       const newGame = await setupGame();
-      newGame.applySaveState(saveData);
-
-      // Wait for objective manager to initialize
+      await newGame.applySaveState(saveData);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Verify the objective index is preserved
       expect(newGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
 
-      // Verify completed objectives remain completed
       for (let i = 0; i < targetObjectiveIndex; i++) {
         expect(newGame.objectives_manager.objectives_data[i].completed).toBe(true);
       }
@@ -1305,17 +1280,11 @@ describe("Objective System", () => {
       // Verify we're at the last real objective
       expect(testGame.objectives_manager.current_objective_index).toBe(lastRealObjectiveIndex);
 
-      // Get the save state
-      const saveData = testGame.saveManager.getSaveState();
-
-      // Create a new game instance and apply save state
+      const saveData = await testGame.saveManager.getSaveState();
       const newGame = await setupGame();
-      newGame.applySaveState(saveData);
-
-      // Wait for objective manager to initialize
+      await newGame.applySaveState(saveData);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Verify the objective index is preserved
       expect(newGame.objectives_manager.current_objective_index).toBe(lastRealObjectiveIndex);
 
       // Verify the objective is not "All objectives completed!"
@@ -1343,17 +1312,11 @@ describe("Objective System", () => {
       // Verify we're at objective 1
       expect(testGame.objectives_manager.current_objective_index).toBe(1);
 
-      // Get the save state
-      const saveData = testGame.saveManager.getSaveState();
-
-      // Create a new game instance and apply save state
+      const saveData = await testGame.saveManager.getSaveState();
       const newGame = await setupGame();
-      newGame.applySaveState(saveData);
-
-      // Wait for objective manager to initialize
+      await newGame.applySaveState(saveData);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Verify the objective index is preserved
       expect(newGame.objectives_manager.current_objective_index).toBe(1);
 
       // Verify the objective is the second one
@@ -1370,13 +1333,13 @@ describe("Objective System", () => {
       const targetObjectiveIndex = 7;
       
       testGame.objectives_manager.set_objective(targetObjectiveIndex, true);
-      let currentSaveData = testGame.saveManager.getSaveState();
-      
+      let currentSaveData = await testGame.saveManager.getSaveState();
+
       for (let cycle = 0; cycle < 3; cycle++) {
         const newGame = await setupGame();
         await newGame.applySaveState(currentSaveData);
         expect(newGame.objectives_manager.current_objective_index).toBe(targetObjectiveIndex);
-        currentSaveData = newGame.saveManager.getSaveState();
+        currentSaveData = await newGame.saveManager.getSaveState();
       }
     });
 
@@ -1471,18 +1434,12 @@ describe("Objective System", () => {
       // Mark the current objective as completed to simulate auto-completion
       testGame.objectives_manager.objectives_data[targetObjectiveIndex].completed = true;
 
-      // Get the save state before auto-completion
-      const saveData = testGame.saveManager.getSaveState();
-
-      // Verify the objective index is saved correctly
+      const saveData = await testGame.saveManager.getSaveState();
       expect(saveData.objectives.current_objective_index).toBe(targetObjectiveIndex);
 
-      // Clean up the first game instance before creating the second
       cleanupGame();
-
-      // Create a new game instance and apply save state
       const newGame = await setupGame();
-      newGame.applySaveState(saveData);
+      await newGame.applySaveState(saveData);
 
       // Wait for objective manager to initialize and auto-completion to run
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -1521,7 +1478,7 @@ describe("Objective System", () => {
       const checkFn = getObjectiveCheck("placeExperimentalPart");
       expect(checkFn(testGame).completed, "experimental part objective should be satisfied before save").toBe(true);
 
-      const saveData = testGame.saveManager.getSaveState();
+      const saveData = await testGame.saveManager.getSaveState();
       const savedProtiumTile = saveData.tiles?.find((t) => t.partId && (t.partId === "protium1" || t.partId === "protium"));
       expect(savedProtiumTile, "save should contain experimental part tile").toBeDefined();
 

@@ -45,7 +45,7 @@ export class DoctrineManager {
       total_exotic_particles: this.game.state.total_exotic_particles,
       reality_flux: this.game.state.reality_flux
     });
-    this.game.saveManager.autoSave();
+    void this.game.saveManager.autoSave();
     return true;
   }
 }

@@ -746,6 +746,9 @@ body.reactor-sandbox .sandbox-upgrade-actions { display: flex;
 #build_above_deck_row .quick-select-slots { display: flex; width: 100%; flex: 1; gap: 4px;
 }
 
+#build_above_deck_row #quick_select_slots_root { display: flex; flex: 1; gap: 4px; min-width: 0;
+}
+
 #build_above_deck_row .quick-select-slot { position: relative; display: flex; min-width: 0; max-height: 58px; box-sizing: border-box; flex: 1; padding: 2px 4px 12px; border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; margin: 0; aspect-ratio: 1; background: rgb(60 60 60); box-shadow: 2px 2px 0 rgb(0 0 0 / 50%); cursor: pointer; transition: transform 0.05s ease, filter 0.05s ease; flex-direction: column; align-items: center; justify-content: flex-start;
 }
 

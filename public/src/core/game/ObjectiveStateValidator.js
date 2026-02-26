@@ -15,7 +15,7 @@ export function validateObjectiveState(game) {
       game.objectives_manager.set_objective(savedIndex, true);
     }
     setTimeout(() => {
-      game.saveManager.autoSave();
+      void game.saveManager.autoSave();
     }, 100);
   }
 }

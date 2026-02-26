@@ -1,5 +1,5 @@
 import { LEADERBOARD_CONFIG } from './leaderboardService.js';
-import { StorageUtils } from '../utils/util.js';
+import { serializeSave } from '../utils/util.js';
 
 export class SupabaseSave {
     constructor() {
@@ -14,7 +14,7 @@ export class SupabaseSave {
         const payload = {
             user_id: userId,
             slot_id: slotId,
-            save_data: StorageUtils.serialize(saveData),
+            save_data: serializeSave(saveData),
             timestamp: Date.now()
         };
 

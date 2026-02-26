@@ -25,7 +25,10 @@ export class ObjectiveTracker {
     }
 
     if (typeof objective_index !== "number" || Number.isNaN(objective_index)) {
-      objective_index = 0;
+      const parsed = parseInt(objective_index, 10);
+      objective_index = Number.isNaN(parsed) ? 0 : Math.max(0, parsed);
+    } else {
+      objective_index = Math.floor(objective_index);
     }
 
     if (objective_index < 0) {

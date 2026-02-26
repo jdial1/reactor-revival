@@ -1,4 +1,5 @@
 import Decimal from "./decimal.js";
+import { getValidatedPreferences } from "../services/appConfig.js";
 
 const COMPACT_SUFFIXES = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
 const FORMAT_COMPACT_THRESHOLD = 1000;
@@ -14,8 +15,8 @@ const HOURS_PER_DAY = 24;
 
 function getNumberFormatPreference() {
   try {
-    const item = typeof localStorage !== "undefined" ? localStorage.getItem("number_format") : null;
-    return item;
+    if (typeof window === "undefined") return null;
+    return getValidatedPreferences().numberFormat ?? null;
   } catch (_) {
     return null;
   }

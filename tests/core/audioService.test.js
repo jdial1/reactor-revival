@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "../helpers/setup.js";
 import { AudioService } from "../../public/src/services/audioService.js";
+import { initPreferencesStore, preferences } from "../../public/src/core/preferencesStore.js";
 
 describe("AudioService", () => {
   let audioService;
@@ -14,9 +15,6 @@ describe("AudioService", () => {
   let mockLocalStorage;
 
   beforeEach(async () => {
-    // This test DOES NOT need a full game instance.
-    // We mock the dependencies of AudioService directly.
-    
     mockLocalStorage = {
       data: {},
       getItem: vi.fn((key) => mockLocalStorage.data[key] || null),
@@ -33,6 +31,7 @@ describe("AudioService", () => {
     global.localStorage = mockLocalStorage;
     global.window = global.window || {};
     global.window.localStorage = mockLocalStorage;
+    initPreferencesStore();
 
     // Mock AudioContext and related Web Audio API
     mockGainNode = {
@@ -248,10 +247,10 @@ describe("AudioService", () => {
     });
 
     it("should load volume settings from localStorage on init", async () => {
-      // Create a fresh audioService instance for this test to ensure clean state
+      const { preferences } = await import("../../public/src/core/preferencesStore.js");
+      preferences.volumeMaster = 0.5;
+      preferences.volumeEffects = 0.75;
       const testAudioService = new AudioService();
-      localStorage.setItem("reactor_volume_master", "0.5");
-      localStorage.setItem("reactor_volume_effects", "0.75");
       await testAudioService.init();
       if (testAudioService.masterGain) {
         expect(testAudioService.masterGain.gain.value).toBe(0.5);
@@ -264,9 +263,9 @@ describe("AudioService", () => {
     });
 
     it("should not start ambience if muted on init", async () => {
-      // Create a fresh audioService instance for this test to ensure clean state
+      const { preferences } = await import("../../public/src/core/preferencesStore.js");
+      preferences.mute = true;
       const testAudioService = new AudioService();
-      localStorage.setItem("reactor_mute", "true");
       await testAudioService.init();
       expect(testAudioService.enabled).toBe(false);
     });
@@ -285,11 +284,12 @@ describe("AudioService", () => {
       }
     });
 
-    it("should unmute audio when toggleMute(false) is called", () => {
+    it("should unmute audio when toggleMute(false) is called", async () => {
+      const { getVolumePreferences } = await import("../../public/src/services/appConfig.js");
       audioService.toggleMute(true);
       audioService.toggleMute(false);
       expect(audioService.enabled).toBe(true);
-      const savedVol = parseFloat(localStorage.getItem("reactor_volume_master") || "0.12");
+      const savedVol = getVolumePreferences().master ?? 0.25;
       if (audioService.masterGain) {
         expect(audioService.masterGain.gain.setTargetAtTime).toHaveBeenCalledWith(savedVol, expect.any(Number), 0.1);
       }
@@ -324,32 +324,32 @@ describe("AudioService", () => {
       if (audioService.masterGain) {
         expect(audioService.masterGain.gain.value).toBe(0.75);
       }
-      expect(localStorage.getItem("reactor_volume_master")).toBe("0.75");
+      expect(preferences.volumeMaster).toBe(0.75);
     });
 
     it("should set effects volume", () => {
       audioService.setVolume("effects", 0.5);
-      expect(localStorage.getItem("reactor_volume_effects")).toBe("0.5");
+      expect(preferences.volumeEffects).toBe(0.5);
     });
 
     it("should set alerts volume", () => {
       audioService.setVolume("alerts", 0.8);
-      expect(localStorage.getItem("reactor_volume_alerts")).toBe("0.8");
+      expect(preferences.volumeAlerts).toBe(0.8);
     });
 
     it("should set system volume", () => {
       audioService.setVolume("system", 0.6);
-      expect(localStorage.getItem("reactor_volume_system")).toBe("0.6");
+      expect(preferences.volumeSystem).toBe(0.6);
     });
 
     it("should set ambience volume", () => {
       audioService.setVolume("ambience", 0.3);
-      expect(localStorage.getItem("reactor_volume_ambience")).toBe("0.3");
+      expect(preferences.volumeAmbience).toBe(0.3);
     });
 
     it("should persist volume settings to localStorage", () => {
       audioService.setVolume("master", 0.9);
-      expect(localStorage.getItem("reactor_volume_master")).toBe("0.9");
+      expect(preferences.volumeMaster).toBe(0.9);
     });
 
     it("should update gain node when setting volume", () => {
@@ -702,31 +702,31 @@ describe("AudioService", () => {
       if (audioService.masterGain) {
         expect(audioService.masterGain.gain.value).toBe(newVolume);
       }
-      expect(localStorage.getItem("reactor_volume_master")).toBe("0.85");
+      expect(preferences.volumeMaster).toBe(0.85);
     });
 
     it("should update effects volume when slider changes", () => {
       const newVolume = 0.6;
       audioService.setVolume("effects", newVolume);
-      expect(localStorage.getItem("reactor_volume_effects")).toBe("0.6");
+      expect(preferences.volumeEffects).toBe(0.6);
     });
 
     it("should update alerts volume when slider changes", () => {
       const newVolume = 0.9;
       audioService.setVolume("alerts", newVolume);
-      expect(localStorage.getItem("reactor_volume_alerts")).toBe("0.9");
+      expect(preferences.volumeAlerts).toBe(0.9);
     });
 
     it("should update system volume when slider changes", () => {
       const newVolume = 0.4;
       audioService.setVolume("system", newVolume);
-      expect(localStorage.getItem("reactor_volume_system")).toBe("0.4");
+      expect(preferences.volumeSystem).toBe(0.4);
     });
 
     it("should update ambience volume when slider changes", () => {
       const newVolume = 0.2;
       audioService.setVolume("ambience", newVolume);
-      expect(localStorage.getItem("reactor_volume_ambience")).toBe("0.2");
+      expect(preferences.volumeAmbience).toBe(0.2);
     });
 
     it("should clamp volume values between 0 and 1", () => {

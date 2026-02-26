@@ -1,4 +1,5 @@
 import { StorageUtils } from "../utils/util.js";
+import { preferences } from "../core/preferencesStore.js";
 const env = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
 const winConfig = typeof window !== "undefined" && window.__APP_CONFIG__ ? window.__APP_CONFIG__ : {};
 
@@ -11,6 +12,23 @@ export const USER_PREF_KEYS = {
   forceNoSAB: "reactor_force_no_sab",
   numberFormat: "number_format",
 };
+
+export function getValidatedPreferences() {
+  return { ...preferences };
+}
+
+export function getVolumePreferences() {
+  const prefs = getValidatedPreferences();
+  return {
+    mute: prefs.mute,
+    master: prefs.volumeMaster,
+    effects: prefs.volumeEffects,
+    alerts: prefs.volumeAlerts,
+    system: prefs.volumeSystem,
+    ambience: prefs.volumeAmbience,
+  };
+}
+
 export function getPref(key) { return StorageUtils.get(key); }
 export function setPref(key, value) { StorageUtils.set(key, value); }
 

@@ -1,4 +1,5 @@
 import { MOBILE_BREAKPOINT_PX } from "./constants.js";
+import { subscribe, subscribeKey, setDecimal } from "./store.js";
 import { logger } from "../utils/logger.js";
 import { addPartIconsToTitle as addPartIconsToTitleHelper, getObjectiveScrollDuration as getObjectiveScrollDurationHelper, checkObjectiveTextScrolling as checkObjectiveTextScrollingHelper } from "./objective/objectiveUIHelper.js";
 import { BaseComponent } from "../components/BaseComponent.js";
@@ -23,6 +24,7 @@ export class StateManager extends BaseComponent {
   setGame(gameInstance) {
     this.teardown();
     this.game = gameInstance;
+    if (this.ui) this.ui._firstFrameSyncDone = false;
     const state = gameInstance?.state;
     if (!state) return;
     const storeKeys = [
@@ -39,6 +41,66 @@ export class StateManager extends BaseComponent {
     }
     const ep = gameInstance?.exoticParticleManager?.exotic_particles;
     if (ep !== undefined) this.setVar("exotic_particles", ep);
+    this.setupStateSubscriptions();
+  }
+
+  setupStateSubscriptions() {
+    this.teardown();
+    const state = this.game?.state;
+    const ui = this.ui;
+    const config = ui?.var_objs_config;
+    if (!state || !config) return;
+    const coreLoopUI = ui?.coreLoopUI;
+    const getDisplayValue = (key) => coreLoopUI?.getDisplayValue?.(this.game, key);
+    const stateKeyMap = {
+      total_heat: "stats_heat_generation",
+    };
+    for (const configKey of Object.keys(config)) {
+      const stateKey = stateKeyMap[configKey] ?? configKey;
+      if (state[stateKey] === undefined) continue;
+      const cfg = config[configKey];
+      if (!cfg?.onupdate) continue;
+      const unsub = subscribeKey(state, stateKey, () => {
+        const val = getDisplayValue(configKey);
+        if (val !== undefined) {
+          if (this.vars) this.vars.set(configKey, val);
+          cfg.onupdate(val);
+        }
+      });
+      this._stateUnsubscribes.push(unsub);
+    }
+    if (state.active_buffs) {
+      const buffsUnsub = subscribe(state.active_buffs, () => {
+        ui.infoBarUI?.updateActiveBuffs?.();
+      });
+      this._stateUnsubscribes.push(buffsUnsub);
+    }
+    const heatKeys = ["current_heat", "max_heat"];
+    for (const key of heatKeys) {
+      if (state[key] !== undefined) {
+        this._stateUnsubscribes.push(subscribeKey(state, key, () => ui.heatVisualsUI?.updateHeatVisuals?.()));
+      }
+    }
+    const runAffordabilityCascade = () => {
+      const g = this.game;
+      if (!g) return;
+      const moneyVal = g.state?.current_money;
+      const epVal = g.state?.current_exotic_particles;
+      if (ui.last_money !== undefined) ui.last_money = moneyVal;
+      if (ui.last_exotic_particles !== undefined) ui.last_exotic_particles = epVal;
+      g.partset?.check_affordability?.(g);
+      g.upgradeset?.check_affordability?.(g);
+      if (g.tooltip_manager) g.tooltip_manager.updateUpgradeAffordability?.();
+      ui.navIndicatorsUI?.updateNavIndicators?.();
+      if (typeof ui.partsPanelUI?.updateQuickSelectSlots === "function") ui.partsPanelUI.updateQuickSelectSlots();
+    };
+    if (state.current_money !== undefined) {
+      this._stateUnsubscribes.push(subscribeKey(state, "current_money", runAffordabilityCascade));
+    }
+    if (state.current_exotic_particles !== undefined) {
+      this._stateUnsubscribes.push(subscribeKey(state, "current_exotic_particles", runAffordabilityCascade));
+    }
+    runAffordabilityCascade();
   }
   setVar(key, value) {
     const oldValue = this.vars.get(key);
@@ -46,7 +108,6 @@ export class StateManager extends BaseComponent {
       return;
     }
     this.vars.set(key, value);
-    if (this.ui?.update_vars) this.ui.update_vars.set(key, value);
     if (this.game && this.game.onToggleStateChange) {
       if (
         [
@@ -62,10 +123,21 @@ export class StateManager extends BaseComponent {
     }
   }
   getVar(key) {
-    return this.vars.get(key);
+    if (this.game?.state && Object.prototype.hasOwnProperty.call(this.game.state, key)) {
+      const val = this.game.state[key];
+      if (val !== undefined) return val;
+    }
+    const fromVars = this.vars.get(key);
+    if (fromVars !== undefined) return fromVars;
+    if (key === "exotic_particles") return this.game?.exoticParticleManager?.exotic_particles;
+    if (key === "total_heat") return this.game?.state?.stats_heat_generation;
+    return undefined;
   }
   setClickedPart(part, options = {}) {
     this.clicked_part = part;
+    if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
+      this.game.state.parts_panel_version++;
+    }
     if (this.game?.emit) this.game.emit("partSelected", { part });
     const partActive = !!part;
     this.ui.DOMElements.main.classList.toggle("part_active", partActive);
@@ -74,10 +146,15 @@ export class StateManager extends BaseComponent {
 
     const skipOpenPanel = options.skipOpenPanel === true;
     const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
-    if (isMobile) {
-      const partsSection = !skipOpenPanel ? document.getElementById("parts_section") : null;
-      if (partsSection && partActive) partsSection.classList.remove("collapsed");
+    if (isMobile && partActive && !skipOpenPanel) {
+      const uiState = this.ui?.uiState;
+      if (uiState) uiState.parts_panel_collapsed = false;
+      else {
+        const partsSection = document.getElementById("parts_section");
+        if (partsSection) partsSection.classList.remove("collapsed");
+      }
       this.ui.partsPanelUI.updatePartsPanelBodyClass();
+      const partsSection = document.getElementById("parts_section");
       if (partsSection) void partsSection.offsetHeight;
     }
     if (part) {
@@ -159,84 +236,6 @@ export class StateManager extends BaseComponent {
       this.ui.objectivesUI.animateObjectiveCompletion();
     }
   }
-  handlePartAdded(game, part_obj) {
-    if (part_obj.erequires) {
-      const required_upgrade = this.game?.upgradeset.getUpgrade(
-        part_obj.erequires
-      );
-      if (!required_upgrade) return;
-      const doctrineLocked = this.game?.partset?.isPartDoctrineLocked(part_obj);
-      if (!doctrineLocked && required_upgrade.level < 1) return;
-    }
-
-    // Apply gating rules: show/hide and lock based on previous tier count
-    const unlockManager = this.ui?.game?.unlockManager;
-    const shouldShow = unlockManager ? unlockManager.shouldShowPart(part_obj) : true;
-    if (!shouldShow) {
-      return; // Do not render this part in the panel yet
-    }
-
-    // Use the Part class's createElement method for consistent element creation
-    const part_el = part_obj.createElement();
-    if (!part_el || typeof part_el.querySelector !== "function" || typeof part_el.classList?.add !== "function") {
-      return;
-    }
-    part_obj.$el = part_el; // Assign the element back to the object
-    part_el._part = part_obj; // Assign the object to the element for event handlers
-
-    // Add/Update progress counter for parts that are shown but locked
-    const prevCount = unlockManager ? unlockManager.getPreviousTierCount(part_obj) : 0;
-    const unlocked = unlockManager ? unlockManager.isPartUnlocked(part_obj) : true;
-    if (!unlocked) {
-      part_el.classList.add("locked-by-tier");
-      if (this.game?.partset?.isPartDoctrineLocked(part_obj)) {
-        part_el.classList.add("doctrine-locked");
-      }
-      let counter = part_el.querySelector(".tier-progress");
-      if (!counter) {
-        counter = document.createElement("div");
-        counter.className = "tier-progress";
-        part_el.appendChild(counter);
-      }
-      counter.textContent = `${Math.min(prevCount, 10)}/10`;
-      counter.style.display = "block";
-      part_el.disabled = true;
-    }
-    else {
-      // If this part just became unlocked, ensure the next tier becomes visible with its own counter
-      // We simply hide this part's counter, as the next item will be handled separately when rendered
-      const counter = part_el.querySelector(".tier-progress");
-      if (counter) counter.style.display = "none";
-    }
-
-    let containerKey = part_obj.category + "s";
-    const categoryToContainerMap = {
-      coolant_cell: "coolantCells",
-      reactor_plating: "reactorPlatings",
-      heat_exchanger: "heatExchangers",
-      heat_inlet: "heatInlets",
-      heat_outlet: "heatOutlets",
-      particle_accelerator: "particleAccelerators",
-      valve: part_obj.valve_group ? part_obj.valve_group + "Valves" : "valves",
-    };
-    if (categoryToContainerMap[part_obj.category]) {
-      containerKey = categoryToContainerMap[part_obj.category];
-    }
-
-    let container = this.ui.DOMElements[containerKey] || document.getElementById(containerKey);
-    if (container && !this.ui.DOMElements[containerKey]) {
-      this.ui.DOMElements[containerKey] = container;
-    }
-
-    if (container) {
-      container.appendChild(part_el);
-    } else {
-      // Only log error in development mode or when debugging is explicitly enabled
-      if (this.debugMode) {
-        logger.log('warn', 'game', `Container ${containerKey} not found for part ${part_obj.id} (category: ${part_obj.category})`);
-      }
-    }
-  }
   handleUpgradeAdded(game, upgrade_obj) {
     const expandUpgradeIds = ["expand_reactor_rows", "expand_reactor_cols"];
     if (expandUpgradeIds.includes(upgrade_obj.upgrade.id)) {
@@ -279,11 +278,13 @@ export class StateManager extends BaseComponent {
     tile.tile_index = tile.row * game.max_cols + tile.col;
   }
   game_reset() {
-    this.setVar("current_money", this.game.base_money);
-    this.setVar("current_power", 0);
-    this.setVar("current_heat", 0);
-    this.setVar("max_power", this.game.reactor.base_max_power);
-    this.setVar("max_heat", this.game.reactor.base_max_heat);
+    if (this.game?.state) {
+      setDecimal(this.game.state, "current_money", this.game.base_money);
+      setDecimal(this.game.state, "current_power", 0);
+      setDecimal(this.game.state, "current_heat", 0);
+      this.game.state.max_power = this.game.reactor.base_max_power;
+      this.game.state.max_heat = this.game.reactor.base_max_heat;
+    }
     // Ensure any progress-based gating resets as well
     try {
       if (this.game) {

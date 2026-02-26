@@ -1,3 +1,5 @@
+import { html, render } from "lit-html";
+import { repeat } from "../../utils/litHelpers.js";
 import { numFormat as fmt } from "../../utils/util.js";
 import { formatTime } from "../../utils/formatUtils.js";
 import { logger } from "../../utils/logger.js";
@@ -69,11 +71,21 @@ export class PageSetupUI {
       return date;
     };
 
-    const buildRecordRowHtml = (run, index) => {
+    const leaderboardRowTemplate = (run, index) => {
       const date = formatRecordDate(run);
       const timeStr = formatTime(run.time_played ?? 0);
       const hasLayout = !!run.layout;
-      return `
+      const onView = () => {
+        if (run.layout) {
+          ui.layoutModalUI.showLayoutModal(run.layout, {
+            money: run.money || 0,
+            ep: run.exotic_particles || 0,
+            heat: run.heat || 0,
+            power: run.power || 0
+          });
+        }
+      };
+      return html`
         <tr>
           <td>${index + 1}</td>
           <td>${date}</td>
@@ -82,42 +94,29 @@ export class PageSetupUI {
           <td class="leaderboard-col-money">$${fmt(run.money)}</td>
           <td class="leaderboard-col-time" style="display: none;">${timeStr}</td>
           <td>
-            ${hasLayout ? `<button class="pixel-btn layout-view-btn" data-index="${index}" style="padding: 2px 6px; font-size: 0.6em;">View</button>` : '<span style="opacity: 0.5;">-</span>'}
+            ${hasLayout ? html`<button class="pixel-btn layout-view-btn" style="padding: 2px 6px; font-size: 0.6em;" @click=${onView}>View</button>` : html`<span style="opacity: 0.5;">-</span>`}
           </td>
         </tr>
       `;
     };
 
-    const attachLayoutViewHandlers = (records) => {
-      container.querySelectorAll('.layout-view-btn').forEach(btn => {
-        btn.onclick = () => {
-          const index = parseInt(btn.dataset.index);
-          const run = records[index];
-          if (run && run.layout) {
-            ui.layoutModalUI.showLayoutModal(run.layout, {
-              money: run.money || 0,
-              ep: run.exotic_particles || 0,
-              heat: run.heat || 0,
-              power: run.power || 0
-            });
-          }
-        };
-      });
+    const leaderboardTemplate = (records, status) => {
+      if (status === "loading") {
+        return html`<tr><td colspan="7" style="text-align: center;">Loading...</td></tr>`;
+      }
+      if (records.length === 0) {
+        return html`<tr><td colspan="7" style="text-align: center;">No records found yet. Play to save scores!</td></tr>`;
+      }
+      return repeat(records, (r, i) => `${r.timestamp}-${i}`, (run, index) => leaderboardRowTemplate(run, index));
     };
 
     const loadRecords = async (sortBy) => {
       if (!container) return;
-      container.innerHTML = '<tr><td colspan="7" style="text-align: center;">Loading...</td></tr>';
+      render(leaderboardTemplate([], "loading"), container);
       await leaderboardService.init();
       const records = await leaderboardService.getTopRuns(sortBy, 20);
-      if (records.length === 0) {
-        container.innerHTML = '<tr><td colspan="7" style="text-align: center;">No records found yet. Play to save scores!</td></tr>';
-        showColumn(sortBy);
-        return;
-      }
-      container.innerHTML = records.map((run, index) => buildRecordRowHtml(run, index)).join('');
+      render(leaderboardTemplate(records, "loaded"), container);
       showColumn(sortBy);
-      attachLayoutViewHandlers(records);
     };
 
     const activeButton = document.querySelector('.leaderboard-sort.active');
@@ -129,7 +128,7 @@ export class PageSetupUI {
         loadRecords(btn.dataset.sort);
       };
     });
-    loadRecords(initialSort);
+    return loadRecords(initialSort);
   }
 
   setupSoundboardPage() {

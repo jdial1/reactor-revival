@@ -1,5 +1,7 @@
+import { render } from "lit-html";
 import { StorageUtils } from "../utils/util.js";
 import { MOBILE_BREAKPOINT_PX } from "../core/constants.js";
+import { tutorialOverlayTemplate, renderTutorialCallout } from "./tutorial/tutorialTemplates.js";
 
 const TUTORIAL_STEP_KEY = "reactorTutorialStep";
 const TUTORIAL_HARD_SKIP_KEY = "reactorTutorialHardSkipped";
@@ -7,9 +9,12 @@ const TUTORIAL_HARD_SKIP_KEY = "reactorTutorialHardSkipped";
 const CLAIM_STEP = {
   key: "claim_objective",
   message: "Click Claim to complete the objective",
-  onEnter: () => {
+  onEnter(game) {
     const toast = document.getElementById("objectives_toast_btn");
-    if (toast && !toast.classList.contains("is-expanded")) {
+    const uiState = game?.ui?.uiState;
+    if (uiState && !uiState.objectives_toast_expanded) {
+      uiState.objectives_toast_expanded = true;
+    } else if (toast && !toast.classList.contains("is-expanded")) {
       toast.classList.add("is-expanded");
       toast.setAttribute("aria-expanded", "true");
     }
@@ -74,10 +79,12 @@ export class TutorialManager {
   ensurePartsPanelOpen(expand) {
     const section = document.getElementById("parts_section");
     const tabPower = document.getElementById("tab_power");
-    if (section?.classList.contains("collapsed") && expand) {
-      section.classList.remove("collapsed");
-      if (section.previousElementSibling?.id === "control_deck_build_fab") return;
-      const ui = this.game?.ui;
+    const ui = this.game?.ui;
+    const collapsed = ui?.uiState?.parts_panel_collapsed ?? section?.classList.contains("collapsed");
+    if (collapsed && expand) {
+      if (ui?.uiState) ui.uiState.parts_panel_collapsed = false;
+      else if (section) section.classList.remove("collapsed");
+      if (section?.previousElementSibling?.id === "control_deck_build_fab") return;
       if (ui?.partsPanelUI?.updatePartsPanelBodyClass) ui.partsPanelUI.updatePartsPanelBodyClass();
     }
     if (tabPower && !tabPower.classList.contains("active")) {
@@ -221,8 +228,7 @@ export class TutorialManager {
 
   updateCallout(message, targetRect) {
     if (!this.callout) return;
-    const msgEl = this.callout.querySelector(".tutorial-message");
-    if (msgEl) msgEl.textContent = message;
+    renderTutorialCallout(this.callout, message, () => this.skip(), () => this.hardSkip());
     const rect = this.callout.getBoundingClientRect();
     let top = 16;
     let left = 16;
@@ -298,7 +304,7 @@ export class TutorialManager {
   showClaimStep() {
     this.currentStep = -1;
     document.body.classList.add("tutorial-claim-step");
-    CLAIM_STEP.onEnter();
+    CLAIM_STEP.onEnter(this.game);
     const target = this.game?.ui?.getTutorialTarget?.("claim_objective");
     if (!target) {
       document.body.classList.remove("tutorial-claim-step");

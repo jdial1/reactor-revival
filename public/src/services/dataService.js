@@ -1,12 +1,14 @@
-import { z } from "../../lib/zod.js";
+import { fromError } from "zod-validation-error";
+import { z } from "zod";
 import { logger } from "../utils/logger.js";
-import { PartDefinitionSchema, UpgradeDefinitionSchema, DifficultyPresetSchema } from "../core/schemas.js";
+import { PartDefinitionSchema, UpgradeDefinitionSchema, DifficultyPresetSchema, TechTreeSchema, ObjectiveListSchema } from "../core/schemas.js";
+import { queryClient, queryKeys } from "./queryClient.js";
 
 function failSafeParse(schema, data, context) {
   const result = schema.safeParse(data);
   if (!result.success) {
-    const msg = `Data validation failed for ${context}: ${result.error.message}`;
-    logger.log("error", "data", msg, result.error.issues);
+    const msg = `Data validation failed for ${context}: ${fromError(result.error).toString()}`;
+    logger.log("error", "data", msg);
     if (typeof window !== "undefined" && typeof window.alert === "function") {
       window.alert(`Failed to load game data. See console for details.`);
     }
@@ -15,153 +17,171 @@ function failSafeParse(schema, data, context) {
   return result.data;
 }
 
-// Dynamic imports for Node.js compatibility
 let fs, path, fileURLToPath, __filename, __dirname;
 
-// Initialize Node.js modules only when needed
 const initNodeModules = async () => {
-    if (!fs) {
-        try {
-            const [fsModule, pathModule, urlModule] = await Promise.all([
-                import('fs'),
-                import('path'),
-                import('url')
-            ]);
-
-            fs = fsModule.default;
-            path = pathModule.default;
-            fileURLToPath = urlModule.fileURLToPath;
-
-            __filename = fileURLToPath(import.meta.url);
-            __dirname = path.dirname(__filename);
-        } catch (error) {
-            logger.log('warn', 'data', 'Node.js modules not available:', error.message);
-        }
+  if (!fs) {
+    try {
+      const [fsModule, pathModule, urlModule] = await Promise.all([
+        import("fs"),
+        import("path"),
+        import("url"),
+      ]);
+      fs = fsModule.default;
+      path = pathModule.default;
+      fileURLToPath = urlModule.fileURLToPath;
+      __filename = fileURLToPath(import.meta.url);
+      __dirname = path.dirname(__filename);
+    } catch (error) {
+      logger.log("warn", "data", "Node.js modules not available:", error.message);
     }
+  }
+};
+
+async function fetchData(filePath) {
+  if (typeof process !== "undefined" && process.versions?.node) {
+    await initNodeModules();
+    if (fs && path && __dirname) {
+      const absolutePath = path.resolve(__dirname, "../../../public/", filePath.replace("./", ""));
+      const content = fs.readFileSync(absolutePath, "utf-8");
+      return JSON.parse(content);
+    }
+  }
+  const response = await fetch(filePath);
+  if (!response.ok) {
+    throw new Error(`Failed to load ${filePath}: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+const queryOptions = {
+  staleTime: 5 * 60 * 1000,
+  gcTime: 30 * 60 * 1000,
+  retry: 2,
 };
 
 class DataService {
-    constructor() {
-        this.cache = new Map();
-        this._allDataLoadedPromise = null;
-    }
+  async ensureAllGameDataLoaded() {
+    const [parts, upgrades, techTree, objectives, helpText] = await Promise.all([
+      queryClient.ensureQueryData({ queryKey: queryKeys.gameData("parts"), queryFn: () => this._loadPartList(), ...queryOptions }),
+      queryClient.ensureQueryData({ queryKey: queryKeys.gameData("upgrades"), queryFn: () => this._loadUpgradeList(), ...queryOptions }),
+      queryClient.ensureQueryData({ queryKey: queryKeys.gameData("techTree"), queryFn: () => this._loadTechTree(), ...queryOptions }),
+      queryClient.ensureQueryData({ queryKey: queryKeys.gameData("objectives"), queryFn: () => this._loadObjectiveList(), ...queryOptions }),
+      queryClient.ensureQueryData({ queryKey: queryKeys.gameData("helpText"), queryFn: () => this._loadHelpText(), ...queryOptions }),
+    ]);
+    return { parts, upgrades, techTree, objectives, helpText };
+  }
 
-    async ensureAllGameDataLoaded() {
-        if (!this._allDataLoadedPromise) {
-            this._allDataLoadedPromise = Promise.all([
-                this.loadPartList(),
-                this.loadUpgradeList(),
-                this.loadTechTree(),
-                this.loadObjectiveList(),
-                this.loadHelpText()
-            ]).then(([parts, upgrades, techTree, objectives, helpText]) => ({
-                parts,
-                upgrades,
-                techTree,
-                objectives,
-                helpText
-            }));
-        }
-        return this._allDataLoadedPromise;
-    }
+  async loadData(filePath) {
+    return queryClient.fetchQuery({
+      queryKey: [...queryKeys.gameData(), "raw", filePath],
+      queryFn: () => fetchData(filePath),
+      ...queryOptions,
+    });
+  }
 
-    async loadData(filePath) {
-        if (this.cache.has(filePath)) {
-            return this.cache.get(filePath);
-        }
+  async loadFlavorText() {
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.gameData("flavorText"),
+      queryFn: () => fetchData("./data/flavor_text.json"),
+      ...queryOptions,
+    });
+  }
 
-        try {
-            // Check if we're in a Node.js environment (like tests)
-            if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-                // Node.js environment - use file system
-                await initNodeModules();
-                if (fs && path && __dirname) {
-                    const absolutePath = path.resolve(__dirname, '../../../public/', filePath.replace('./', ''));
-                    try {
-                        const content = fs.readFileSync(absolutePath, 'utf-8');
-                        const data = JSON.parse(content);
-                        this.cache.set(filePath, data);
-                        return data;
-                    } catch (error) {
-                        throw new Error(`Could not find ${filePath} at ${absolutePath}: ${error.message}`);
-                    }
-                }
-            }
+  async loadHelpText() {
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.gameData("helpText"),
+      queryFn: () => this._loadHelpText(),
+      ...queryOptions,
+    });
+  }
 
-            const response = await fetch(filePath);
-            if (!response.ok) {
-                throw new Error(`Failed to load ${filePath}: ${response.status} ${response.statusText}`);
-            }
+  async _loadHelpText() {
+    const data = await fetchData("./data/help_text.json");
+    return data?.default ?? data;
+  }
 
-            const data = await response.json();
-            this.cache.set(filePath, data);
-            return data;
-        } catch (error) {
-            logger.log('error', 'data', `Error loading data from ${filePath}:`, error);
-            throw error;
-        }
-    }
+  async loadObjectiveList() {
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.gameData("objectives"),
+      queryFn: () => this._loadObjectiveList(),
+      ...queryOptions,
+    });
+  }
 
-    async loadFlavorText() {
-        return this.loadData('./data/flavor_text.json');
-    }
+  async _loadObjectiveList() {
+    const raw = await fetchData("./data/objective_list.json");
+    const actualData = raw?.default ?? raw;
+    return failSafeParse(ObjectiveListSchema, actualData, "objective_list.json");
+  }
 
-    async loadHelpText() {
-        return this.loadData('./data/help_text.json');
-    }
+  async loadPartList() {
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.gameData("parts"),
+      queryFn: () => this._loadPartList(),
+      ...queryOptions,
+    });
+  }
 
-    async loadObjectiveList() {
-        const data = await this.loadData('./data/objective_list.json');
-        // Handle ES module format where data might be in the 'default' property
-        return data?.default || data;
-    }
+  async _loadPartList() {
+    const raw = await fetchData("./data/part_list.json");
+    const schema = z
+      .union([z.array(PartDefinitionSchema), z.object({ default: z.array(PartDefinitionSchema) })])
+      .transform((v) => ("default" in v ? v.default : v));
+    return failSafeParse(schema, raw, "part_list.json");
+  }
 
-    async loadPartList() {
-        const raw = await this.loadData('./data/part_list.json');
-        const schema = z.union([
-            z.array(PartDefinitionSchema),
-            z.object({ default: z.array(PartDefinitionSchema) }),
-        ]).transform((v) => ("default" in v ? v.default : v));
-        return failSafeParse(schema, raw, "part_list.json");
-    }
+  async loadUpgradeList() {
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.gameData("upgrades"),
+      queryFn: () => this._loadUpgradeList(),
+      ...queryOptions,
+    });
+  }
 
-    async loadUpgradeList() {
-        const raw = await this.loadData('./data/upgrade_list.json');
-        const schema = z.union([
-            z.array(UpgradeDefinitionSchema),
-            z.object({ default: z.array(UpgradeDefinitionSchema) }),
-        ]).transform((v) => ("default" in v ? v.default : v));
-        return failSafeParse(schema, raw, "upgrade_list.json");
-    }
+  async _loadUpgradeList() {
+    const raw = await fetchData("./data/upgrade_list.json");
+    const schema = z
+      .union([z.array(UpgradeDefinitionSchema), z.object({ default: z.array(UpgradeDefinitionSchema) })])
+      .transform((v) => ("default" in v ? v.default : v));
+    return failSafeParse(schema, raw, "upgrade_list.json");
+  }
 
-    async loadTechTree() {
-        try {
-            const data = await this.loadData('./data/tech_tree.json');
-            const actualData = data?.default || data;
-            return actualData;
-        } catch (error) {
-            logger.log('error', 'data', 'Error loading tech tree data:', error);
-            throw error;
-        }
-    }
+  async loadTechTree() {
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.gameData("techTree"),
+      queryFn: () => this._loadTechTree(),
+      ...queryOptions,
+    });
+  }
 
-    async loadDifficultyCurves() {
-        const raw = await this.loadData('./data/difficulty_curves.json');
+  async _loadTechTree() {
+    const raw = await fetchData("./data/tech_tree.json");
+    const actualData = raw?.default ?? raw;
+    return failSafeParse(TechTreeSchema, actualData, "tech_tree.json");
+  }
+
+  async loadDifficultyCurves() {
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.gameData("difficultyCurves"),
+      queryFn: async () => {
+        const raw = await fetchData("./data/difficulty_curves.json");
         return failSafeParse(z.record(z.string(), DifficultyPresetSchema), raw, "difficulty_curves.json");
-    }
+      },
+      ...queryOptions,
+    });
+  }
 
-    clearCache() {
-        this.cache.clear();
-        this._allDataLoadedPromise = null;
-    }
+  clearCache() {
+    queryClient.clear();
+  }
 
-    // Get cached data without loading
-    getCachedData(filePath) {
-        return this.cache.get(filePath);
-    }
+  getCachedData(resource) {
+    const key = resource ? queryKeys.gameData(resource) : queryKeys.gameData();
+    return queryClient.getQueryData(key);
+  }
 }
 
-// Create singleton instance
 const dataService = new DataService();
 
-export default dataService; 
+export default dataService;

@@ -13,6 +13,8 @@ describe("Rolling Numbers UI", () => {
         ui = game.ui;
         window = setup.window;
         document = setup.document;
+        await game.router.loadPage("reactor_section");
+        game.ui.coreLoopUI.runUpdateInterfaceLoop(0);
     });
 
     it("should initialize display values structure", () => {
@@ -63,9 +65,10 @@ describe("Rolling Numbers UI", () => {
         
         // Spy on textContent assignment essentially by checking DOM after update
         const heatEl = document.getElementById('info_heat_desktop');
-        
+        expect(heatEl, "info_heat_desktop element should exist after info bar render").not.toBeNull();
+
         ui.coreLoopUI.updateRollingNumbers(16.667);
-        
+
         expect(heatEl.textContent).toBe("1.50K");
     });
 

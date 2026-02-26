@@ -24,6 +24,7 @@ export class ObjectiveEvaluator {
     }
 
     while (manager.current_objective_def && manager.current_objective_def.checkId !== "allObjectives") {
+      manager._syncActiveObjectiveToState?.();
       const checkFn = getObjectiveCheck(manager.current_objective_def.checkId);
       const autoResult = checkFn?.(manager.game);
       if (autoResult?.completed) {
@@ -37,7 +38,7 @@ export class ObjectiveEvaluator {
         }
 
         if (manager.game?.saveManager) {
-          manager.game.saveManager.autoSave();
+          void manager.game.saveManager.autoSave();
         }
 
         if (!wasAlreadyCompleted) {
@@ -73,7 +74,7 @@ export class ObjectiveEvaluator {
         manager.set_objective(manager.current_objective_index, true);
 
         if (manager.game?.saveManager) {
-          manager.game.saveManager.autoSave();
+          void manager.game.saveManager.autoSave();
         }
       } else {
         manager.scheduleNextCheck();
@@ -101,7 +102,7 @@ export class ObjectiveEvaluator {
     if (manager.objectives_data && manager.objectives_data[manager.current_objective_index]) {
       manager.objectives_data[manager.current_objective_index].completed = true;
     }
-    if (manager.game?.saveManager) manager.game.saveManager.autoSave();
+    if (manager.game?.saveManager) void manager.game.saveManager.autoSave();
 
     manager._emitObjectiveCompleted();
     const displayObjective = {

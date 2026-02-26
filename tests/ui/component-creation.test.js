@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
+import { numFormat } from "../../public/src/utils/util.js";
 import {
     createNewGameButton,
     createLoadGameButton,
@@ -70,8 +71,8 @@ describe("UI Component Creation and State", () => {
             expect(btn.title).toBe(part.title);
             expect(btn.getAttribute("aria-label")).toContain(part.title);
             expect(btn.getAttribute("aria-label")).toContain(part.cost.toString());
-            expect(btn.querySelector(".image").style.getPropertyValue("--bg-image")).toContain(part.getImagePath());
-            expect(btn.querySelector(".part-price").textContent).toBe(part.cost.toString());
+            expect(btn.querySelector(".image").style.backgroundImage).toContain(part.getImagePath());
+            expect(btn.querySelector(".part-price").textContent).toContain(numFormat(part.cost));
             expect(btn.classList.contains("unaffordable")).toBe(false);
             expect(btn.disabled).toBe(false);
 

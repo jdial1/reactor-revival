@@ -1,4 +1,4 @@
-import { StorageUtils } from "../../utils/util.js";
+import { StorageUtils, StorageUtilsAsync, serializeSave, deserializeSave } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 
 export async function findSaveFile(service) {
@@ -70,7 +70,8 @@ export async function compressAndEncrypt(service, saveData) {
     password,
     zipCrypto: true,
   });
-  await zipWriter.add("save.json", new window.zip.TextReader(saveData));
+  const text = typeof saveData === "string" ? saveData : serializeSave(saveData);
+  await zipWriter.add("save.json", new window.zip.TextReader(text));
   return await zipWriter.close();
 }
 
@@ -86,7 +87,7 @@ export async function decompressAndDecrypt(service, encryptedData) {
       const writer = new window.zip.TextWriter();
       const jsonText = await entries[0].getData(writer, { password });
       await zipReader.close();
-      return JSON.parse(jsonText);
+      return deserializeSave(jsonText);
     }
     await zipReader.close();
     throw new Error("No data found in save file.");
@@ -108,7 +109,7 @@ export async function decompressAndDecryptLegacy(service, encryptedData) {
   }
   if (typeof pako === "undefined") throw new Error("pako is not defined");
   const decompressedData = pako.inflate(decryptedBytes, { to: "string" });
-  return JSON.parse(decompressedData);
+  return deserializeSave(decompressedData);
 }
 
 async function uploadToExistingFile(service, fileId, encryptedBlob) {
@@ -140,7 +141,7 @@ async function uploadToNewFile(service, encryptedBlob) {
 }
 
 export async function performSave(service, saveData) {
-  const encryptedBlob = await compressAndEncrypt(service, typeof saveData === "string" ? saveData : JSON.stringify(saveData));
+  const encryptedBlob = await compressAndEncrypt(service, saveData);
   
   let response;
   if (service.saveFileId) {
@@ -185,10 +186,10 @@ export async function uploadLocalSave(service, saveDataString) {
   const success = await performSave(service, saveDataString);
   if (success) {
     try {
-      const localSave = JSON.parse(saveDataString);
+      const localSave = deserializeSave(saveDataString);
       localSave.isCloudSynced = true;
       localSave.cloudUploadedAt = new Date().toISOString();
-      StorageUtils.set("reactorGameSave", localSave);
+      await StorageUtilsAsync.set("reactorGameSave", localSave);
     } catch (e) {
       logger.log('error', 'game', 'Failed to mark local save as synced after upload.', e);
     }
@@ -198,7 +199,7 @@ export async function uploadLocalSave(service, saveDataString) {
 
 export async function canUploadLocalSave(service) {
   if (!service.isSignedIn) return { showUpload: false };
-  const localSave = StorageUtils.get("reactorGameSave");
+  const localSave = await StorageUtilsAsync.get("reactorGameSave");
   if (!localSave) return { showUpload: false };
   try {
     if (localSave.isCloudSynced) return { showUpload: false };
@@ -212,16 +213,16 @@ export async function canUploadLocalSave(service) {
 
 export async function offerLocalSaveUpload(service) {
   if (!service.isSignedIn) return { hasLocalSave: false };
-  const gameState = StorageUtils.get("reactorGameSave");
+  const gameState = await StorageUtilsAsync.get("reactorGameSave");
   if (!gameState) return { hasLocalSave: false };
   try {
-    const saveSize = `${(StorageUtils.serialize(gameState).length / 1024).toFixed(1)}KB`;
+    const saveSize = `${(serializeSave(gameState).length / 1024).toFixed(1)}KB`;
     const hasCloudSave = await findSaveFile(service);
     if (hasCloudSave) return { hasLocalSave: false };
     if (gameState.isCloudSynced) {
       delete gameState.isCloudSynced;
       delete gameState.cloudUploadedAt;
-      StorageUtils.set("reactorGameSave", gameState);
+      await StorageUtilsAsync.set("reactorGameSave", gameState);
     }
     return { hasLocalSave: true, gameState, saveSize };
   } catch {

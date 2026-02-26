@@ -1,37 +1,10 @@
-import { numFormat as fmt } from "../../utils/util.js";
+import { html, render } from "lit-html";
 import { escapeHtml } from "../../utils/stringUtils.js";
+import { repeat, unsafeHTML } from "../../utils/litHelpers.js";
 
 export class UpgradesUI {
   constructor(ui) {
     this.ui = ui;
-  }
-
-  renderUpgrade(upgrade) {
-    const btn = document.createElement("button");
-    btn.className = "upgrade";
-    btn.dataset.id = upgrade.id;
-
-    const image = document.createElement("div");
-    image.className = "image";
-    image.style.backgroundImage = `url(${upgrade.image})`;
-    btn.appendChild(image);
-
-    if (upgrade.cost !== undefined) {
-      const price = document.createElement("div");
-      price.className = "upgrade-price";
-      price.textContent = fmt(upgrade.cost);
-      btn.appendChild(price);
-    }
-
-    if (upgrade.level !== undefined) {
-      const levels = document.createElement("div");
-      levels.className = "levels";
-      const isMaxed = upgrade.level >= upgrade.max_level;
-      levels.textContent = isMaxed ? "MAX" : `${upgrade.level}/${upgrade.max_level}`;
-      btn.appendChild(levels);
-    }
-
-    return btn;
   }
 
   showDebugPanel() {
@@ -58,31 +31,26 @@ export class UpgradesUI {
   updateDebugVariables() {
     const ui = this.ui;
     if (!ui.game || !ui.DOMElements.debug_variables) return;
-    const debugContainer = ui.DOMElements.debug_variables;
-    debugContainer.innerHTML = "";
     const gameVars = this.collectGameVariables();
-    Object.entries(gameVars).forEach(([fileName, variables]) => {
-      const section = document.createElement("div");
-      section.className = "debug-section";
-      const title = document.createElement("h4");
-      title.textContent = fileName;
-      section.appendChild(title);
-      const varList = document.createElement("div");
-      varList.className = "debug-variables-list";
-      Object.entries(variables)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .forEach(([key, value]) => {
-          const varItem = document.createElement("div");
-          varItem.className = "debug-variable";
-          varItem.innerHTML = `
-            <span class="debug-key">${escapeHtml(key)}:</span>
-            <span class="debug-value">${this.formatDebugValue(value)}</span>
-          `;
-          varList.appendChild(varItem);
-        });
-      section.appendChild(varList);
-      debugContainer.appendChild(section);
-    });
+    const sectionTemplate = ([fileName, variables]) => {
+      const sortedEntries = Object.entries(variables).sort(([a], [b]) => a.localeCompare(b));
+      return html`
+        <div class="debug-section">
+          <h4>${fileName}</h4>
+          <div class="debug-variables-list">
+            ${repeat(sortedEntries, ([k]) => k, ([key, value]) => html`
+              <div class="debug-variable">
+                <span class="debug-key">${escapeHtml(key)}:</span>
+                <span class="debug-value">${unsafeHTML(this.formatDebugValue(value))}</span>
+              </div>
+            `)}
+          </div>
+        </div>
+      `;
+    };
+    const entries = Object.entries(gameVars);
+    const template = html`${repeat(entries, ([f]) => f, sectionTemplate)}`;
+    render(template, ui.DOMElements.debug_variables);
   }
 
   collectGameVariables() {

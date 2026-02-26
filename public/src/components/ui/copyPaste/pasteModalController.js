@@ -1,4 +1,5 @@
 import { html, render } from "lit-html";
+import { styleMap } from "../../../utils/litHelpers.js";
 import { renderComponentIcons } from "../componentRenderingUI.js";
 import { numFormat as fmt } from "../../../utils/util.js";
 import { logger } from "../../../utils/logger.js";
@@ -46,24 +47,33 @@ export function setModalTextareaVisibility(modalText, isPaste) {
 function buildCostDisplayTemplate(breakdown, affordability) {
   const { money: costMoney, ep: costEp } = breakdown;
   if (costMoney <= 0 && costEp <= 0) {
-    return html`<div style="margin-top: ${MODAL_COST_MARGIN_TOP_PX}px; color: ${COLOR_ERROR}; font-weight: bold;">No parts found in layout</div>`;
+    return html`<div style=${styleMap({ marginTop: `${MODAL_COST_MARGIN_TOP_PX}px`, color: COLOR_ERROR, fontWeight: "bold" })}>No parts found in layout</div>`;
   }
   const moneyColor = affordability.canAffordMoney ? COLOR_AFFORD : COLOR_CANNOT_AFFORD;
   const epColor = affordability.canAffordEp ? COLOR_AFFORD : COLOR_CANNOT_AFFORD;
+  const containerStyle = styleMap({ marginTop: `${MODAL_COST_MARGIN_TOP_PX}px`, display: "flex", flexDirection: "column", gap: `${MODAL_GAP_PX}px` });
   return html`
-    <div style="margin-top: ${MODAL_COST_MARGIN_TOP_PX}px; display: flex; flex-direction: column; gap: ${MODAL_GAP_PX}px;">
-      ${costMoney > 0 ? html`<span style="color: ${moneyColor}; font-weight: bold;">Money: $${fmt(costMoney)} needed (you have $${fmt(affordability.currentMoneyNum)})</span>` : ""}
-      ${costEp > 0 ? html`<span style="color: ${epColor}; font-weight: bold;">EP: ${fmt(costEp)} needed (you have ${fmt(affordability.currentEpNum)})</span>` : ""}
+    <div style=${containerStyle}>
+      ${costMoney > 0 ? html`<span style=${styleMap({ color: moneyColor, fontWeight: "bold" })}>Money: $${fmt(costMoney)} needed (you have $${fmt(affordability.currentMoneyNum)})</span>` : ""}
+      ${costEp > 0 ? html`<span style=${styleMap({ color: epColor, fontWeight: "bold" })}>EP: ${fmt(costEp)} needed (you have ${fmt(affordability.currentEpNum)})</span>` : ""}
     </div>
   `;
 }
 
 function buildSellOptionTemplate(currentSellValue, checked, onSellChange) {
+  const boxStyle = styleMap({
+    padding: `${MODAL_PADDING_PX}px`,
+    border: `1px solid ${MODAL_BORDER_COLOR}`,
+    borderRadius: `${MODAL_BORDER_RADIUS_PX}px`,
+    marginTop: `${MODAL_SECTION_MARGIN_TOP_PX}px`,
+    backgroundColor: MODAL_BG_DARK,
+  });
+  const labelStyle = styleMap({ display: "flex", alignItems: "center", cursor: "pointer", gap: `${MODAL_INNER_GAP_PX}px` });
   return html`
-    <div style="padding: ${MODAL_PADDING_PX}px; border: 1px solid ${MODAL_BORDER_COLOR}; border-radius: ${MODAL_BORDER_RADIUS_PX}px; margin-top: ${MODAL_SECTION_MARGIN_TOP_PX}px; background-color: ${MODAL_BG_DARK};">
-      <label style="display: flex; align-items: center; cursor: pointer; gap: ${MODAL_INNER_GAP_PX}px;">
-        <input type="checkbox" id="sell_existing_checkbox" style="margin: 0;" ?checked=${checked} @change=${onSellChange}>
-        <span style="color: ${COLOR_GOLD};">Sell existing grid for $${fmt(currentSellValue)}</span>
+    <div style=${boxStyle}>
+      <label style=${labelStyle}>
+        <input type="checkbox" id="sell_existing_checkbox" style=${styleMap({ margin: 0 })} ?checked=${checked} @change=${onSellChange}>
+        <span style=${styleMap({ color: COLOR_GOLD })}>Sell existing grid for $${fmt(currentSellValue)}</span>
       </label>
     </div>
   `;
@@ -71,7 +81,7 @@ function buildSellOptionTemplate(currentSellValue, checked, onSellChange) {
 
 export function renderModalCostContent(modalCost, cost, summary, ui, options, onSlotClick) {
   const componentTemplate = summary.length ? renderComponentIcons(summary, options, onSlotClick) : html``;
-  const costTemplate = cost > 0 ? html`<div style="margin-top: ${MODAL_COST_MARGIN_TOP_PX}px; color: ${COLOR_SUCCESS}; font-weight: bold;">Total Cost: $${fmt(cost)}</div>` : html``;
+  const costTemplate = cost > 0 ? html`<div style=${styleMap({ marginTop: `${MODAL_COST_MARGIN_TOP_PX}px`, color: COLOR_SUCCESS, fontWeight: "bold" })}>Total Cost: $${fmt(cost)}</div>` : html``;
   render(html`${componentTemplate}${costTemplate}`, modalCost);
 }
 
@@ -120,7 +130,7 @@ function renderCopySummary(modalCost, bp, layout, summary, checkedTypes, updateC
   const componentTemplate = renderComponentIcons(summary, { showCheckboxes: true, checkedTypes }, onSlotClick);
   const filteredLayout = bp().filterByTypes(layout, checkedTypes);
   const filteredCost = bp().getTotalCost(filteredLayout);
-  const costTemplate = html`<div style="margin-top: ${MODAL_COST_MARGIN_TOP_PX}px; color: ${COLOR_SUCCESS}; font-weight: bold;">Selected Parts Cost: $${fmt(filteredCost)}</div>`;
+  const costTemplate = html`<div style=${styleMap({ marginTop: `${MODAL_COST_MARGIN_TOP_PX}px`, color: COLOR_SUCCESS, fontWeight: "bold" })}>Selected Parts Cost: $${fmt(filteredCost)}</div>`;
   render(html`${componentTemplate}${costTemplate}`, modalCost);
 }
 

@@ -1,4 +1,4 @@
-import { StorageUtils } from "../../utils/util.js";
+import { preferences } from "../../core/preferencesStore.js";
 
 export class HeatVisualsUI {
   constructor(ui) {
@@ -103,15 +103,15 @@ export class HeatVisualsUI {
   }
 
   getHeatFlowVisible() {
-    return StorageUtils.get("reactor_heat_flow_visible", true) !== false;
+    return preferences.heatFlowVisible !== false;
   }
 
   getHeatMapVisible() {
-    return StorageUtils.get("reactor_heat_map_visible", false) === true;
+    return preferences.heatMapVisible === true;
   }
 
   getDebugOverlayVisible() {
-    return StorageUtils.get("reactor_debug_overlay", false) === true;
+    return preferences.debugOverlay === true;
   }
 
   drawHeatFlowOverlay() {

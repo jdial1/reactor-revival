@@ -13,8 +13,7 @@ Welcome to the Reactor Revival documentation. This collection provides comprehen
 ## 🎯 Key Development Guidelines
 
 ### Asset Management
-- **Large Numbers:** Values exceeding `Number.MAX_SAFE_INTEGER` must be stored as strings in JSON files
-- **BigInt Parsing:** Core logic automatically parses string numbers into `BigInt` for precise calculations
+- **Large Numbers:** The game uses Break Infinity (`break_infinity.js`) for arbitrary-precision arithmetic. Values from JSON are converted via `toDecimal()` in `utils/decimal.js` to `Decimal` instances.
 - **Data-Driven Design:** All game content is externalized into JSON files for easy modification
 
 ### Architecture Principles

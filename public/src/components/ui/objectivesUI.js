@@ -8,11 +8,16 @@ export class ObjectivesUI {
     if (this.controller) return this.controller.updateDisplay();
   }
 
+  updateObjectiveDisplayFromState() {
+    if (this.controller) return this.controller.updateDisplayFromState();
+  }
+
   animateObjectiveCompletion() {
     if (this.controller) return this.controller.animateCompletion();
   }
 
   showObjectivesForPage(pageId) {
+    if (this.ui?.uiState) this.ui.uiState.active_page = pageId;
     if (this.controller) return this.controller.showForPage(pageId);
   }
 

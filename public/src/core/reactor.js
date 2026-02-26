@@ -21,8 +21,6 @@ export class Reactor {
 
   setDefaults() {
     const zero = toDecimal(0);
-    this._current_heat = zero;
-    this._current_power = zero;
     if (this.game?.state) {
       setDecimal(this.game.state, "current_heat", zero);
       setDecimal(this.game.state, "current_power", zero);
@@ -67,10 +65,12 @@ export class Reactor {
     this._classificationStatsHistory = [];
   }
 
-  get current_heat() { return this.game?.state?.current_heat != null ? this.game.state.current_heat : this._current_heat; }
+  get current_heat() {
+    const val = this.game?.state?.current_heat;
+    return val != null ? val : toDecimal(0);
+  }
   set current_heat(v) {
     const val = (v != null && typeof v.gt === 'function') ? v : toDecimal(v);
-    this._current_heat = val;
     if (this.game?.state) setDecimal(this.game.state, "current_heat", val);
     if (this.game?.emit) {
       this.game.emit("reactorTick", {
@@ -81,10 +81,12 @@ export class Reactor {
       });
     }
   }
-  get current_power() { return this.game?.state?.current_power != null ? this.game.state.current_power : this._current_power; }
+  get current_power() {
+    const val = this.game?.state?.current_power;
+    return val != null ? val : toDecimal(0);
+  }
   set current_power(v) {
     const val = (v != null && typeof v.gt === 'function') ? v : toDecimal(v);
-    this._current_power = val;
     if (this.game?.state) setDecimal(this.game.state, "current_power", val);
     if (this.game?.emit) {
       this.game.emit("reactorTick", {
@@ -236,13 +238,13 @@ export class Reactor {
 
   toSaveState() {
     return {
-      current_heat: (this.current_heat != null && typeof this.current_heat.toString === "function") ? this.current_heat.toString() : this.current_heat,
-      current_power: (this.current_power != null && typeof this.current_power.toString === "function") ? this.current_power.toString() : this.current_power,
+      current_heat: this.current_heat,
+      current_power: this.current_power,
       has_melted_down: this.has_melted_down,
       base_max_heat: this.base_max_heat,
       base_max_power: this.base_max_power,
-      altered_max_heat: (this.altered_max_heat != null && typeof this.altered_max_heat.toString === "function") ? this.altered_max_heat.toString() : this.altered_max_heat,
-      altered_max_power: (this.altered_max_power != null && typeof this.altered_max_power.toString === "function") ? this.altered_max_power.toString() : this.altered_max_power,
+      altered_max_heat: this.altered_max_heat,
+      altered_max_power: this.altered_max_power,
     };
   }
 

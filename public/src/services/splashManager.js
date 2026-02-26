@@ -1,4 +1,4 @@
-import { StorageUtils, isTestEnv } from "../utils/util.js";
+import { StorageUtils, StorageUtilsAsync, isTestEnv } from "../utils/util.js";
 import { escapeHtml } from "../utils/stringUtils.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
@@ -383,7 +383,7 @@ class SplashScreenManager extends BaseComponent {
 
   // Refresh save options after upload/download operations
   async refreshSaveOptions() {
-    await this.showStartOptions(!!StorageUtils.getRaw("reactorGameSave"));
+    await this.showStartOptions(!!(await StorageUtilsAsync.getRaw("reactorGameSave")));
   }
 }
 

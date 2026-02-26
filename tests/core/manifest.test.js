@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, fs, path } from "../helpers/setup.js";
+import path from 'path';
+import fs from 'fs';
+import { describe, it, expect, beforeEach } from "../helpers/setup.js";
 
 describe("Manifest Validation", () => {
     let manifest;

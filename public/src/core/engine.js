@@ -1,3 +1,4 @@
+import { fromError } from "zod-validation-error";
 import { toDecimal } from "../utils/decimal.js";
 import { performance, isTestEnv } from "../utils/util.js";
 import { HeatSystem } from "./heatSystem.js";
@@ -26,6 +27,7 @@ import {
   SESSION_UPDATE_INTERVAL_MS,
   MAX_VISUAL_EVENTS,
 } from "./constants.js";
+import { PhysicsTickInputSchema } from "./schemas.js";
 
 export const VISUAL_EVENT_POWER = 1;
 export const VISUAL_EVENT_HEAT = 2;
@@ -359,7 +361,19 @@ export class Engine {
           this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
           return;
         }
-        w.postMessage(payload.msg, payload.transferList);
+        const result = PhysicsTickInputSchema.safeParse(payload.msg);
+        if (!result.success) {
+          logger.log("warn", "engine", "[PhysicsWorker] Input validation failed:", fromError(result.error).toString());
+          this._workerPending = false;
+          this._workerTickContext = null;
+          this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+          return;
+        }
+        w.postMessage(result.data, payload.transferList);
+        if (!this._heatUseSAB) {
+          this._heatTransferHeat = null;
+          this._heatTransferContainment = null;
+        }
         if (this._workerHeartbeatId) clearTimeout(this._workerHeartbeatId);
         this._workerHeartbeatId = setTimeout(() => {
           if (!this._workerPending) return;

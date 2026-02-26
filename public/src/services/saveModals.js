@@ -1,34 +1,7 @@
-import { StorageUtils } from "../utils/util.js";
-import { escapeHtml } from "../utils/stringUtils.js";
+import { html, render } from "lit-html";
+import { deserializeSave } from "../utils/util.js";
 import { formatDuration, formatStatNum } from "../utils/formatUtils.js";
-
-export function getLocalSaveMaxTimestamp() {
-  let maxTime = 0;
-  let dataJSON = null;
-  for (let i = 1; i <= 3; i++) {
-    const data = StorageUtils.get(`reactorGameSave_${i}`);
-    if (data) {
-      try {
-        const t = data.last_save_time || 0;
-        if (t > maxTime) {
-          maxTime = t;
-          dataJSON = StorageUtils.getRaw(`reactorGameSave_${i}`);
-        }
-      } catch (_) {}
-    }
-  }
-  const legacyData = StorageUtils.get("reactorGameSave");
-  if (legacyData) {
-    try {
-      const t = legacyData.last_save_time || 0;
-      if (t > maxTime) {
-        maxTime = t;
-        dataJSON = StorageUtils.getRaw("reactorGameSave");
-      }
-    } catch (_) {}
-  }
-  return { maxTime, dataJSON };
-}
+import { fetchResolvedSaves } from "./savesQuery.js";
 
 export function getSaveStats(data) {
   if (!data || typeof data !== "object") {
@@ -42,64 +15,81 @@ export function getSaveStats(data) {
   return { money, ep, playtime, timestamp };
 }
 
-function buildComparisonHtml(cloud, local) {
-  return `
+function cloudConflictTemplate(cloud, local, onUseCloud, onUseLocal, onCancel) {
+  return html`
     <div class="bios-overlay-content" style="max-width: 480px;">
       <h2 style="margin-bottom: 0.75rem; font-size: 0.9rem;">Cloud vs Local save</h2>
       <p style="font-size: 0.65rem; color: rgb(180 190 170); margin-bottom: 0.75rem;">Choose which save to use:</p>
       <div class="cloud-local-comparison" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem 1rem; font-size: 0.65rem; margin-bottom: 1rem;">
         <span style="color: rgb(150 160 240); font-weight: bold;">Cloud</span>
         <span style="color: rgb(150 200 150); font-weight: bold;">Local</span>
-        <span>$${escapeHtml(cloud.money)}</span>
-        <span>$${escapeHtml(local.money)}</span>
-        <span>${escapeHtml(cloud.ep)} EP</span>
-        <span>${escapeHtml(local.ep)} EP</span>
-        <span>${escapeHtml(cloud.playtime)}</span>
-        <span>${escapeHtml(local.playtime)}</span>
-        <span>${escapeHtml(cloud.timestamp)}</span>
-        <span>${escapeHtml(local.timestamp)}</span>
+        <span>$${cloud.money}</span>
+        <span>$${local.money}</span>
+        <span>${cloud.ep} EP</span>
+        <span>${local.ep} EP</span>
+        <span>${cloud.playtime}</span>
+        <span>${local.playtime}</span>
+        <span>${cloud.timestamp}</span>
+        <span>${local.timestamp}</span>
       </div>
       <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <button type="button" class="splash-btn splash-btn-load" id="cloud-conflict-use-cloud">Use Cloud save</button>
-        <button type="button" class="splash-btn" id="cloud-conflict-use-local">Keep Local save</button>
-        <button type="button" class="splash-btn splash-btn-exit" id="cloud-conflict-cancel">Cancel</button>
+        <button type="button" class="splash-btn splash-btn-load" @click=${onUseCloud}>Use Cloud save</button>
+        <button type="button" class="splash-btn" @click=${onUseLocal}>Keep Local save</button>
+        <button type="button" class="splash-btn splash-btn-exit" @click=${onCancel}>Cancel</button>
       </div>
     </div>
   `;
 }
 
-function bindOverlayActions(overlay, resolve) {
-  const resolveAndClose = (value) => {
-    overlay.remove();
-    resolve(value);
-  };
-  overlay.querySelector("#cloud-conflict-use-cloud").onclick = () => resolveAndClose("cloud");
-  overlay.querySelector("#cloud-conflict-use-local").onclick = () => resolveAndClose("local");
-  overlay.querySelector("#cloud-conflict-cancel").onclick = () => resolveAndClose("cancel");
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) resolveAndClose("cancel");
-  });
+function backupModalTemplate(onLoad, onCancel) {
+  return html`
+    <div class="bios-overlay-content" style="max-width: 420px;">
+      <h2 style="margin-bottom: 0.75rem; font-size: 0.9rem;">Save file corrupted</h2>
+      <p style="font-size: 0.65rem; color: rgb(180 190 170); margin-bottom: 1rem;">The current save could not be read. Load from backup?</p>
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <button type="button" class="splash-btn" @click=${onLoad}>Load backup</button>
+        <button type="button" class="splash-btn splash-btn-exit" @click=${onCancel}>Cancel</button>
+      </div>
+    </div>
+  `;
 }
 
-function parseLocalSaveData() {
-  const { dataJSON } = getLocalSaveMaxTimestamp();
+async function parseLocalSaveData() {
+  const { dataJSON } = await fetchResolvedSaves();
   if (!dataJSON) return null;
   try {
-    return JSON.parse(dataJSON);
+    return deserializeSave(dataJSON);
   } catch (_) {
     return null;
   }
 }
 
-export function showCloudVsLocalConflictModal(cloudSaveData) {
+export async function showCloudVsLocalConflictModal(cloudSaveData) {
   const cloud = getSaveStats(cloudSaveData);
-  const local = getSaveStats(parseLocalSaveData());
+  const local = getSaveStats(await parseLocalSaveData());
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "game-setup-overlay bios-overlay";
     overlay.style.zIndex = "10001";
-    overlay.innerHTML = buildComparisonHtml(cloud, local);
-    bindOverlayActions(overlay, resolve);
+    const resolveAndClose = (value) => {
+      overlay.remove();
+      resolve(value);
+    };
+    const content = document.createElement("div");
+    overlay.appendChild(content);
+    render(
+      cloudConflictTemplate(
+        cloud,
+        local,
+        () => resolveAndClose("cloud"),
+        () => resolveAndClose("local"),
+        () => resolveAndClose("cancel")
+      ),
+      content
+    );
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) resolveAndClose("cancel");
+    });
     document.body.appendChild(overlay);
   });
 }
@@ -109,29 +99,18 @@ export function showLoadBackupModal() {
     const overlay = document.createElement("div");
     overlay.className = "game-setup-overlay bios-overlay";
     overlay.style.zIndex = "10001";
-    overlay.innerHTML = `
-      <div class="bios-overlay-content" style="max-width: 420px;">
-        <h2 style="margin-bottom: 0.75rem; font-size: 0.9rem;">Save file corrupted</h2>
-        <p style="font-size: 0.65rem; color: rgb(180 190 170); margin-bottom: 1rem;">The current save could not be read. Load from backup?</p>
-        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-          <button type="button" class="splash-btn" id="backup-modal-load">Load backup</button>
-          <button type="button" class="splash-btn splash-btn-exit" id="backup-modal-cancel">Cancel</button>
-        </div>
-      </div>
-    `;
-    overlay.querySelector("#backup-modal-load").onclick = () => {
+    const content = document.createElement("div");
+    overlay.appendChild(content);
+    const resolveAndClose = (value) => {
       overlay.remove();
-      resolve(true);
+      resolve(value);
     };
-    overlay.querySelector("#backup-modal-cancel").onclick = () => {
-      overlay.remove();
-      resolve(false);
-    };
+    render(
+      backupModalTemplate(() => resolveAndClose(true), () => resolveAndClose(false)),
+      content
+    );
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) {
-        overlay.remove();
-        resolve(false);
-      }
+      if (e.target === overlay) resolveAndClose(false);
     });
     document.body.appendChild(overlay);
   });

@@ -12,13 +12,16 @@ export class UnlockManager {
   }
 
   getPlacedCount(type, level) {
-    return this.game.placedCounts[`${type}:${level}`] || 0;
+    const counts = this.game.placedCounts ?? {};
+    return counts[`${type}:${level}`] || 0;
   }
 
   incrementPlacedCount(type, level) {
     if (this.game._suppressPlacementCounting) return;
+    const counts = this.game.placedCounts ?? {};
     const key = `${type}:${level}`;
-    this.game.placedCounts[key] = (this.game.placedCounts[key] || 0) + 1;
+    counts[key] = (counts[key] || 0) + 1;
+    this.game.placedCounts = counts;
   }
 
   getPreviousTierCount(part) {

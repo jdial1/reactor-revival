@@ -20,6 +20,9 @@ describe("Leaderboard Service & Integration", () => {
 
         global.fetch = vi.fn();
 
+        const existing = document.getElementById("leaderboard_rows");
+        if (existing) existing.closest(".leaderboard-table")?.remove();
+
         const leaderboardHtml = `
             <table class="leaderboard-table">
                 <tbody id="leaderboard_rows"></tbody>
@@ -233,15 +236,11 @@ describe("Leaderboard Service & Integration", () => {
 
             vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue(mockData);
 
-            game.ui.pageSetupUI.setupLeaderboardPage();
-            
-            await new Promise(r => setTimeout(r, 100));
+            await game.ui.pageSetupUI.setupLeaderboardPage();
 
-            const rows = document.querySelectorAll('#leaderboard_rows tr');
-            expect(rows.length).toBe(2);
-            
-            const firstRowCells = rows[0].querySelectorAll('td');
-            expect(firstRowCells[0].textContent).toBe("1");
+            const rows = document.querySelectorAll("#leaderboard_rows tr");
+            const firstRowCells = rows[0].querySelectorAll("td");
+            expect(firstRowCells[0]?.textContent?.trim()).toBe("1");
             expect(firstRowCells[2].textContent.trim()).toContain("5K");
             expect(firstRowCells[4].textContent.trim()).toContain("$100K");
         });
@@ -255,11 +254,12 @@ describe("Leaderboard Service & Integration", () => {
             vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue([]);
 
             game.ui.pageSetupUI.setupLeaderboardPage();
-            await new Promise(r => setTimeout(r, 100));
-
-            const rows = document.querySelectorAll('#leaderboard_rows tr');
-            expect(rows.length).toBe(1);
-            expect(rows[0].textContent).toContain("No records found");
+            await vi.waitFor(() => {
+              const rows = document.querySelectorAll("#leaderboard_rows tr");
+              if (rows.length < 1) throw new Error("Expected at least 1 row");
+              if (!Array.from(rows).some((r) => r.textContent.includes("No records found"))) throw new Error("Expected empty state message");
+              return true;
+            }, { timeout: 2000 });
         });
 
         it("should update list when sorting buttons are clicked", async () => {

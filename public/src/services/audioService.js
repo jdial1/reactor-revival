@@ -1,4 +1,6 @@
-import { StorageUtils, getResourceUrl, isTestEnv } from "../utils/util.js";
+import { getResourceUrl, isTestEnv } from "../utils/util.js";
+import { getVolumePreferences } from "./appConfig.js";
+import { preferences } from "../core/preferencesStore.js";
 import { logger } from "../utils/logger.js";
 import { loadSampleBuffers } from "./audio/audioBufferLoader.js";
 import { AudioAmbienceManager } from "./audio/audioAmbienceManager.js";
@@ -110,7 +112,8 @@ export class AudioService {
   }
   this.context = new AudioContext();
   this.masterGain = this.context.createGain();
-  const savedMasterVol = Number(StorageUtils.get("reactor_volume_master", AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume));
+  const volPrefs = getVolumePreferences();
+  const savedMasterVol = volPrefs.master ?? AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume;
   const isContextSuspended = this.context.state === 'suspended';
   if (isContextSuspended) {
   this.masterGain.gain.value = 0;
@@ -149,7 +152,7 @@ export class AudioService {
   this._distortionCurve = this._makeDistortionCurve(400);
   this._isInitialized = true;
   this._loadSampleBuffers();
-  if (StorageUtils.get("reactor_mute") === true) {
+  if (volPrefs.mute) {
   this.toggleMute(true);
   } else if (!isContextSuspended) {
   this.ambienceManager.startAmbience();
@@ -163,7 +166,8 @@ export class AudioService {
   await this.context.resume();
   }
   this._hasUnlocked = true;
-  const savedMasterVol = Number(StorageUtils.get("reactor_volume_master", AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume));
+  const volPrefs = getVolumePreferences();
+  const savedMasterVol = volPrefs.master ?? AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume;
   const t = this.context.currentTime;
   const currentVol = this.masterGain.gain.value;
   if (wasSuspended || currentVol < 0.001) {
@@ -190,7 +194,8 @@ export class AudioService {
   } else {
   this.context.resume().then(() => {
   if (this._hasUnlocked && !document.hidden) {
-  const savedMasterVol = Number(StorageUtils.get("reactor_volume_master", AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume));
+  const volPrefs = getVolumePreferences();
+  const savedMasterVol = volPrefs.master ?? AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume;
   const currentVol = this.masterGain.gain.value;
   if (currentVol < savedMasterVol * 0.1) {
   const t = this.context.currentTime;
@@ -217,11 +222,12 @@ export class AudioService {
   }
   _loadVolumeSettings() {
   if (!this._isInitialized) return;
-  const masterVol = Number(StorageUtils.get("reactor_volume_master", AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume));
-  const effectsVol = Number(StorageUtils.get("reactor_volume_effects", AUDIO_RUNTIME_DEFAULTS.defaultEffectsVolume));
-  const alertsVol = Number(StorageUtils.get("reactor_volume_alerts", AUDIO_RUNTIME_DEFAULTS.defaultAlertsVolume));
-  const systemVol = Number(StorageUtils.get("reactor_volume_system", AUDIO_RUNTIME_DEFAULTS.defaultSystemVolume));
-  const ambienceVol = Number(StorageUtils.get("reactor_volume_ambience", AUDIO_RUNTIME_DEFAULTS.defaultAmbienceVolume) ?? AUDIO_RUNTIME_DEFAULTS.defaultAmbienceVolume);
+  const vol = getVolumePreferences();
+  const masterVol = vol.master ?? AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume;
+  const effectsVol = vol.effects ?? AUDIO_RUNTIME_DEFAULTS.defaultEffectsVolume;
+  const alertsVol = vol.alerts ?? AUDIO_RUNTIME_DEFAULTS.defaultAlertsVolume;
+  const systemVol = vol.system ?? AUDIO_RUNTIME_DEFAULTS.defaultSystemVolume;
+  const ambienceVol = vol.ambience ?? AUDIO_RUNTIME_DEFAULTS.defaultAmbienceVolume;
   if (this.masterGain) this.masterGain.gain.value = masterVol;
   if (this.effectsGain) this.effectsGain.gain.value = effectsVol;
   if (this.alertsGain) this.alertsGain.gain.value = alertsVol;
@@ -231,7 +237,8 @@ export class AudioService {
   setVolume(category, value) {
   if (!this._isInitialized) return;
   const clampedValue = Math.max(0, Math.min(1, value));
-  StorageUtils.set(`reactor_volume_${category}`, clampedValue);
+  const prefKey = { master: "volumeMaster", effects: "volumeEffects", alerts: "volumeAlerts", system: "volumeSystem", ambience: "volumeAmbience" }[category];
+  if (prefKey) preferences[prefKey] = clampedValue;
   switch (category) {
   case 'master':
   if (this.masterGain) this.masterGain.gain.value = clampedValue;
@@ -318,9 +325,9 @@ export class AudioService {
   toggleMute(muted) {
     if (!this._isInitialized) return;
     this.enabled = !muted;
-    StorageUtils.set("reactor_mute", muted);
+    preferences.mute = muted;
     if (this.masterGain) {
-      const targetVol = this.enabled ? Number(StorageUtils.get("reactor_volume_master", AUDIO_RUNTIME_DEFAULTS.defaultMutedMasterVolume)) : 0;
+      const targetVol = this.enabled ? (getVolumePreferences().master ?? AUDIO_RUNTIME_DEFAULTS.defaultMutedMasterVolume) : 0;
       this.masterGain.gain.setTargetAtTime(targetVol, this.context.currentTime, 0.1);
     }
     if (this.enabled) {

@@ -9,10 +9,10 @@ describe("UI Integration and Gameplay", () => {
     game = setup.game;
     document = setup.document;
 
-    // Pre-load all pages to ensure all DOM elements are available for update listeners
     await game.router.loadPage("upgrades_section");
     await game.router.loadPage("experimental_upgrades_section");
-    await game.router.loadPage("reactor_section"); // Return to the main page
+    await game.router.loadPage("reactor_section");
+    game.ui.coreLoopUI.runUpdateInterfaceLoop(0);
 
     vi.useFakeTimers();
   });
@@ -146,13 +146,13 @@ describe("UI Integration and Gameplay", () => {
     expect(objectivesToast, "Objectives toast should exist").not.toBeNull();
     expect(objectivesToast.classList.contains("hidden")).toBe(false);
 
-    // Navigate to upgrades page
     await game.router.loadPage("upgrades_section");
-
+    await vi.advanceTimersByTimeAsync(100);
     expect(objectivesToast.classList.contains("hidden")).toBe(true);
 
     // Navigate back to reactor page
     await game.router.loadPage("reactor_section");
+    await vi.advanceTimersByTimeAsync(100);
 
     expect(objectivesToast.classList.contains("hidden")).toBe(false);
   });

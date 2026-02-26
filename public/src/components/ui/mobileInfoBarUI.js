@@ -1,112 +1,211 @@
+import { html, render } from "lit-html";
 import { numFormat as fmt } from "../../utils/util.js";
 import { toNumber } from "../../utils/decimal.js";
 import { REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, MOBILE_BREAKPOINT_PX } from "../../core/constants.js";
+import { classMap } from "../../utils/litHelpers.js";
+import { styleMap } from "../../utils/litHelpers.js";
 
 const PERCENT_FULL = 100;
 const HAZARD_FILL_PERCENT = 95;
 const CRITICAL_FILL_PERCENT = 80;
 
+const VENTING_ANIM_MS = 400;
+
 export class MobileInfoBarUI {
   constructor(ui) {
     this.ui = ui;
+    this._onPauseClick = () => {
+      const currentState = this.ui.stateManager.getVar("pause");
+      this.ui.stateManager.setVar("pause", !currentState);
+    };
+    this._onSellPower = (e) => {
+      const ui = this.ui;
+      if (!ui.game) return;
+      const powerBtn = e.currentTarget;
+      const moneyBefore = ui.game.state.current_money;
+      ui.game.sell_action();
+      const moneyAfter = ui.game.state.current_money;
+      const moneyGained = moneyAfter?.sub ? moneyAfter.sub(moneyBefore).toNumber() : Number(moneyAfter) - Number(moneyBefore);
+      if (moneyGained <= 0) return;
+      const moneyDisplay = document.getElementById("control_deck_money");
+      const moneyTarget = document.getElementById("mobile_passive_money_value")?.closest(".passive-top-money") ?? document.getElementById("mobile_passive_top_bar");
+      if (moneyDisplay) ui.particleEffectsUI.showFloatingText(moneyDisplay, moneyGained);
+      if (moneyTarget) {
+        ui.particleEffectsUI.createBoltParticle(powerBtn, moneyTarget);
+        ui.particleEffectsUI.createSellSparks(powerBtn, moneyTarget);
+      }
+    };
+    this._onVentHeat = (e) => {
+      const ui = this.ui;
+      if (!ui.game) return;
+      const heatBtn = e.currentTarget;
+      const maxH = ui.stateManager.getVar("max_heat") || 0;
+      const curH = ui.stateManager.getVar("current_heat") || 0;
+      const heatRatio = maxH > 0 ? curH / maxH : 0;
+      ui.game.manual_reduce_heat_action();
+      ui.particleEffectsUI.createSteamParticles(heatBtn, heatRatio);
+      heatBtn.classList.add("venting");
+      setTimeout(() => heatBtn.classList.remove("venting"), VENTING_ANIM_MS);
+    };
   }
 
-  updateMobilePassiveTopBar() {
-    const { ui } = this;
-    if (window.innerWidth > MOBILE_BREAKPOINT_PX) return;
-    const epEl = document.getElementById("mobile_passive_ep");
-    const moneyEl = document.getElementById("mobile_passive_money_value");
-    const pauseBtn = document.getElementById("mobile_passive_pause_btn");
-    const passiveBar = document.getElementById("mobile_passive_top_bar");
-    if (passiveBar) passiveBar.setAttribute("aria-hidden", "false");
-    if (epEl && ui.stateManager) {
-      const ep = ui.stateManager.getVar("current_exotic_particles") ?? ui.stateManager.getVar("exotic_particles") ?? 0;
-      epEl.textContent = fmt(ep);
-    }
-    if (moneyEl && ui.stateManager) {
-      moneyEl.textContent = fmt(ui.stateManager.getVar("current_money") ?? 0, 0);
-    }
-    if (pauseBtn) {
-      const paused = ui.stateManager.getVar("pause") === true;
-      pauseBtn.classList.toggle("paused", paused);
-      pauseBtn.setAttribute("aria-label", paused ? "Resume" : "Pause");
-      pauseBtn.setAttribute("title", paused ? "Resume" : "Pause");
-    }
+  _renderMobilePassive(state) {
+    const root = document.getElementById("mobile_passive_root");
+    if (!root) return;
+    const template = html`
+      <span class="passive-top-ep">
+        <span class="passive-top-icon" aria-hidden="true">&#129516;</span>
+        <span id="mobile_passive_ep">${fmt(state.ep)}</span>
+      </span>
+      <span class="passive-top-money">
+        <span id="mobile_passive_money_value">${fmt(state.money, 0)}</span>
+      </span>
+      <button
+        type="button"
+        id="mobile_passive_pause_btn"
+        class=${classMap({ "passive-top-pause": true, paused: state.paused })}
+        aria-label=${state.paused ? "Resume" : "Pause"}
+        title=${state.paused ? "Resume" : "Pause"}
+        @click=${this._onPauseClick}
+      >
+        <img src="img/ui/nav/nav_pause.png" alt="" class="passive-pause-icon pause-icon" />
+        <img src="img/ui/nav/nav_play.png" alt="" class="passive-pause-icon play-icon" />
+      </button>
+    `;
+    render(template, root);
   }
 
-  updateControlDeckValues() {
+  _renderControlDeck(state) {
+    const root = document.getElementById("control_deck_root");
+    if (!root) return;
+    const powerFillStyle = styleMap({ "--power-fill-height": `${state.powerFillPercent}%` });
+    const heatFillStyle = styleMap({ "--heat-fill-height": `${state.heatFillPercent}%` });
+    const heatVentClass = classMap({ "control-deck-item": true, "heat-vent": true, hazard: state.heatHazard, critical: state.heatCritical });
+    const powerCapacitorClass = classMap({ "control-deck-item": true, "power-capacitor": true, "auto-sell-active": state.autoSell });
+    const autoSellRateContent = state.showAutoSell
+      ? html`<img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="$">${fmt(state.autoSellRate, 0)}`
+      : "";
+    const autoHeatRateContent = state.showHeatRate
+      ? html`<img src="img/ui/icons/icon_heat.png" class="icon-inline" alt="heat">\u2193${fmt(Math.round(state.autoHeatRate), 0)}`
+      : "";
+    const autoRateClass = classMap({ "control-deck-auto-rate": true, visible: state.showAutoSell });
+    const autoHeatRateClass = classMap({ "control-deck-auto-rate": true, visible: state.showHeatRate });
+
+    const template = html`
+      <button
+        class=${powerCapacitorClass}
+        id="control_deck_power_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Sell Power"
+        @click=${this._onSellPower}
+      >
+        <div class="control-deck-auto-sell-led" id="control_deck_auto_sell_led" aria-hidden="true"></div>
+        <span class="control-deck-rate" id="control_deck_power_rate" aria-hidden="true">${state.powerRateText}</span>
+        <span class=${autoRateClass} id="control_deck_auto_sell_rate" aria-hidden="true">${autoSellRateContent}</span>
+        <div class="control-deck-fill power-fill" style=${powerFillStyle}></div>
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_power.png" alt="Power" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_power">${state.power}</span>
+          <span class="control-deck-denom" id="control_deck_power_denom">/${state.maxPower ? fmt(state.maxPower, 0) : ""}</span>
+        </div>
+      </button>
+
+      <div class="control-deck-item money-scoreboard" id="control_deck_money">
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_cash.png" alt="Cash" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_money_value">${state.money}</span>
+        </div>
+        <div class="floating-text-container" id="floating_text_container"></div>
+      </div>
+
+      <button
+        class=${heatVentClass}
+        id="control_deck_heat_btn"
+        type="button"
+        tabindex="0"
+        aria-label="Vent Heat"
+        @click=${this._onVentHeat}
+      >
+        <span class="control-deck-rate" id="control_deck_heat_rate" aria-hidden="true">${state.heatRateText}</span>
+        <span class=${autoHeatRateClass} id="control_deck_auto_heat_rate" aria-hidden="true">${autoHeatRateContent}</span>
+        <div class="control-deck-fill heat-fill" style=${heatFillStyle}></div>
+        <div class="control-deck-hazard-stripes"></div>
+        <div class="control-deck-content">
+          <img src="img/ui/icons/icon_heat.png" alt="Heat" class="control-deck-icon" />
+          <span class="control-deck-value" id="control_deck_heat">${state.heat}</span>
+          <span class="control-deck-denom" id="control_deck_heat_denom">/${state.maxHeat ? fmt(state.maxHeat, 0) : ""}</span>
+        </div>
+        <div class="steam-particles" id="steam_particles"></div>
+      </button>
+    `;
+    render(template, root);
+  }
+
+  _getRenderState() {
     const { ui } = this;
-    if (window.innerWidth > MOBILE_BREAKPOINT_PX) return;
+    if (window.innerWidth > MOBILE_BREAKPOINT_PX) return null;
     const sm = ui.stateManager;
-    if (!sm) return;
+    if (!sm) return null;
 
-    const maxPower = sm.getVar("max_power") || 0;
-    const maxHeat = sm.getVar("max_heat") || 0;
-
-    const el = (id) => document.getElementById(id);
-    if (el("control_deck_power")) el("control_deck_power").textContent = fmt(sm.getVar("current_power") || 0, 0);
-    if (el("control_deck_power_denom") && maxPower) el("control_deck_power_denom").textContent = `/${fmt(maxPower, 0)}`;
-    if (el("control_deck_money_value")) el("control_deck_money_value").textContent = fmt(sm.getVar("current_money") || 0);
-    if (el("control_deck_heat")) el("control_deck_heat").textContent = fmt(sm.getVar("current_heat") || 0, 0);
-    if (el("control_deck_heat_denom") && maxHeat) el("control_deck_heat_denom").textContent = `/${fmt(maxHeat, 0)}`;
+    const maxPower = toNumber(sm.getVar("max_power") ?? 0);
+    const maxHeat = toNumber(sm.getVar("max_heat") ?? 0);
+    const powerCurrent = toNumber(ui.displayValues?.power?.current ?? 0);
+    const heatCurrent = toNumber(ui.displayValues?.heat?.current ?? 0);
+    const powerFillPercent = maxPower > 0 ? Math.min(PERCENT_FULL, Math.max(0, (powerCurrent / maxPower) * PERCENT_FULL)) : 0;
+    const heatFillPercent = maxHeat > 0 ? Math.min(PERCENT_FULL, Math.max(0, (heatCurrent / maxHeat) * PERCENT_FULL)) : 0;
+    const heatHazard = heatFillPercent >= HAZARD_FILL_PERCENT;
+    const heatCritical = heatFillPercent > CRITICAL_FILL_PERCENT;
 
     const powerDelta = ui.getPowerNetChange();
     const heatDelta = ui.getHeatNetChange();
-    const powerRateEl = el("control_deck_power_rate");
-    const heatRateEl = el("control_deck_heat_rate");
-    if (powerRateEl) {
-      const d = Math.round(powerDelta);
-      powerRateEl.textContent = d === 0 ? "0" : (d > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(d), 0);
-    }
-    if (heatRateEl) {
-      const d = Math.round(heatDelta);
-      heatRateEl.textContent = d === 0 ? "0" : (d > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(d), 0);
-    }
+    const powerRateText = powerDelta === 0 ? "0" : (powerDelta > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(powerDelta), 0);
+    const heatRateText = heatDelta === 0 ? "0" : (heatDelta > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(heatDelta), 0);
 
-    const autoSellRateEl = el("control_deck_auto_sell_rate");
-    if (autoSellRateEl) {
-      const autoSellEnabled = sm.getVar("auto_sell");
-      const multiplier = sm.getVar("auto_sell_multiplier") || 0;
-      const showAutoSell = autoSellEnabled && multiplier > 0;
-      if (showAutoSell) {
-        const rate = Math.floor(maxPower * multiplier);
-        autoSellRateEl.innerHTML = "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='$'>" + fmt(rate, 0);
-      }
-      autoSellRateEl.classList.toggle("visible", !!showAutoSell);
-    }
+    const autoSellEnabled = sm.getVar("auto_sell");
+    const multiplier = sm.getVar("auto_sell_multiplier") || 0;
+    const showAutoSell = autoSellEnabled && multiplier > 0;
+    const autoSellRate = showAutoSell ? Math.floor(maxPower * multiplier) : 0;
 
-    const autoHeatRateEl = el("control_deck_auto_heat_rate");
-    if (autoHeatRateEl) {
-      const heatControlEnabled = sm.getVar("heat_controlled");
-      const showHeatRate = heatControlEnabled && maxHeat > 0;
-      if (showHeatRate) {
-        const ventBonus = sm.getVar("vent_multiplier_eff") || 0;
-        const rate = (maxHeat / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + ventBonus / VENT_BONUS_PERCENT_DIVISOR);
-        autoHeatRateEl.innerHTML = "<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>\u2193" + fmt(Math.round(rate), 0);
-      }
-      autoHeatRateEl.classList.toggle("visible", !!showHeatRate);
-    }
+    const heatControlEnabled = sm.getVar("heat_controlled");
+    const showHeatRate = heatControlEnabled && maxHeat > 0;
+    const ventBonus = sm.getVar("vent_multiplier_eff") || 0;
+    const autoHeatRate = showHeatRate ? (maxHeat / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + ventBonus / VENT_BONUS_PERCENT_DIVISOR) : 0;
 
-    const powerFill = document.querySelector(".power-fill");
-    const heatFill = document.querySelector(".heat-fill");
-    const heatVent = document.querySelector(".heat-vent");
-    const powerCapacitor = el("control_deck_power_btn");
+    return {
+      ep: sm.getVar("current_exotic_particles") ?? sm.getVar("exotic_particles") ?? 0,
+      money: fmt(sm.getVar("current_money") ?? 0, 0),
+      paused: sm.getVar("pause") === true,
+      power: fmt(sm.getVar("current_power") ?? 0, 0),
+      heat: fmt(sm.getVar("current_heat") ?? 0, 0),
+      maxPower,
+      maxHeat,
+      powerFillPercent,
+      heatFillPercent,
+      heatHazard,
+      heatCritical,
+      powerRateText,
+      heatRateText,
+      autoSell: !!autoSellEnabled,
+      showAutoSell,
+      autoSellRate,
+      showHeatRate,
+      autoHeatRate,
+    };
+  }
 
-    if (powerFill && maxPower > 0) {
-      const fillPercent = Math.min(PERCENT_FULL, Math.max(0, (toNumber(ui.displayValues.power.current) / maxPower) * PERCENT_FULL));
-      powerFill.style.setProperty("--power-fill-height", `${fillPercent}%`);
-    }
-    if (heatFill && maxHeat > 0) {
-      const fillPercent = Math.min(PERCENT_FULL, Math.max(0, (toNumber(ui.displayValues.heat.current) / maxHeat) * PERCENT_FULL));
-      heatFill.style.setProperty("--heat-fill-height", `${fillPercent}%`);
-      if (heatVent) {
-        heatVent.classList.remove("hazard", "critical");
-        if (fillPercent >= HAZARD_FILL_PERCENT) heatVent.classList.add("hazard", "critical");
-        else if (fillPercent > CRITICAL_FILL_PERCENT) heatVent.classList.add("critical");
-      }
-    }
-    if (powerCapacitor) powerCapacitor.classList.toggle("auto-sell-active", !!sm.getVar("auto_sell"));
+  updateMobilePassiveTopBar() {
+    if (window.innerWidth > MOBILE_BREAKPOINT_PX) return;
+    const passiveBar = document.getElementById("mobile_passive_top_bar");
+    if (passiveBar) passiveBar.setAttribute("aria-hidden", "false");
+    const state = this._getRenderState();
+    if (state) this._renderMobilePassive(state);
+  }
 
+  updateControlDeckValues() {
+    const state = this._getRenderState();
+    if (!state) return;
+    this._renderControlDeck(state);
     this.updateMobilePassiveTopBar();
   }
 }

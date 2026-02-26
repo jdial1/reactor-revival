@@ -191,16 +191,15 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         resizeWindow(window, 800, 600);
         const isMobile = window.innerWidth <= 900;
 
-        if (game && game.ui && game.ui.initializePartsPanel) {
+        if (game?.ui?.initializePartsPanel) {
           game.ui.initializePartsPanel();
         }
 
+        const collapsed = game?.ui?.uiState?.parts_panel_collapsed ?? partsPanel?.classList.contains("collapsed");
         if (isMobile) {
-          expect(partsPanel.classList.contains("collapsed"),
-            "Mobile: Parts panel should start collapsed").toBe(true);
+          expect(collapsed, "Mobile: Parts panel should start collapsed").toBe(true);
         } else {
-          expect(partsPanel.classList.contains("collapsed"),
-            "Desktop: Parts panel should start open").toBe(false);
+          expect(collapsed, "Desktop: Parts panel should start open").toBe(false);
         }
       });
     });
@@ -336,26 +335,28 @@ describe("Responsive UI Layout and Overlap Checks", () => {
     });
 
     it("should hide objectives toast on non-reactor pages", async () => {
-      // Test on upgrades page
       await game.router.loadPage("upgrades_section");
       const objectivesToast = document.getElementById("objectives_toast_btn");
 
       if (objectivesToast) {
-        expect(objectivesToast.style.display === "none" ||
-          objectivesToast.classList.contains("hidden") ||
-          !isElementPresent(objectivesToast),
-          "Objectives toast should be hidden on upgrades page").toBe(true);
+        await vi.waitFor(() => {
+          expect(objectivesToast.style.display === "none" ||
+            objectivesToast.classList.contains("hidden") ||
+            !isElementPresent(objectivesToast),
+            "Objectives toast should be hidden on upgrades page").toBe(true);
+        }, { timeout: 500 });
       }
 
-      // Test on research page
       await game.router.loadPage("experimental_upgrades_section");
       const objectivesToast2 = document.getElementById("objectives_toast_btn");
 
       if (objectivesToast2) {
-        expect(objectivesToast2.style.display === "none" ||
-          objectivesToast2.classList.contains("hidden") ||
-          !isElementPresent(objectivesToast2),
-          "Objectives toast should be hidden on research page").toBe(true);
+        await vi.waitFor(() => {
+          expect(objectivesToast2.style.display === "none" ||
+            objectivesToast2.classList.contains("hidden") ||
+            !isElementPresent(objectivesToast2),
+            "Objectives toast should be hidden on research page").toBe(true);
+        }, { timeout: 500 });
       }
     });
 

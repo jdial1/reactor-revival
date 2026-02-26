@@ -4,6 +4,7 @@ import { getUpgradeBonusLines } from "./part/partUpgradeBonusBuilder.js";
 import { getPartImagePath } from "../utils/partImageUtils.js";
 import { buildPartDescription } from "./part/partDescription.js";
 import { recalculatePartStats } from "./part/partStatsRecalculator.js";
+import { renderToNode, PartButton } from "../components/buttonFactory.js";
 
 const REACTOR_PLATING_DEFAULT_CONTAINMENT = 1000;
 const PERCENT_DIVISOR = 100;
@@ -79,168 +80,35 @@ export class Part {
   }
 
   createElement() {
-    const templateLoader = typeof window !== "undefined" ? window.templateLoader : null;
-    this.$el = typeof templateLoader?.cloneTemplateElement === "function"
-      ? templateLoader.cloneTemplateElement("part-btn-template")
-      : null;
-    if (!this.$el || typeof this.$el.querySelector !== "function") this.$el = null;
-    if (!this.$el) {
-      this.$el = document.createElement("button");
-      this.$el.className = "part";
-      if (this.className) this.$el.classList.add(this.className);
-      this.$el.classList.add(`part_${this.id}`);
-      this.$el.classList.add(`category_${this.category}`);
-      this.$el.id = `part_btn_${this.id}`;
-      this.$el.title = this.title;
-      const costText = this.erequires ? `${fmt(this.cost)} EP` : `${fmt(this.cost)}`;
-      this.$el.setAttribute("aria-label", `${this.title || "Part button"}, Cost: ${costText}`);
-
-      const imageDiv = document.createElement("div");
-      imageDiv.className = "image";
-      imageDiv.style.backgroundImage = `url('${this.getImagePath()}')`;
-      this.$el.appendChild(imageDiv);
-
-      const priceDiv = document.createElement("div");
-      priceDiv.className = "part-price";
-      priceDiv.textContent = this.erequires
-        ? `${fmt(this.cost)} EP`
-        : `${fmt(this.cost)}`;
-      this.$el.appendChild(priceDiv);
-
-      const detailsDiv = document.createElement("div");
-      detailsDiv.className = "part-details";
-      detailsDiv.innerHTML = '<div class="part-details-title"></div><div class="part-details-stats"></div><div class="part-details-desc"></div><div class="part-details-bonuses"></div>';
-      this.$el.appendChild(detailsDiv);
-
-      this.$el.classList.toggle("unaffordable", !this.affordable);
-      this.$el.disabled = !this.affordable;
-
-      this.$el.addEventListener("click", (e) => {
-        if (this.game?.ui?.help_mode_active) {
-          if (this.game?.tooltip_manager) {
-            this.game.tooltip_manager.show(this, null, true, this.$el);
-          }
-          return;
-        }
-
-        if (this.affordable) {
-          document
-            .querySelectorAll(".part.part_active")
-            .forEach((el) => el.classList.remove("part_active"));
-
-          this.game.emit?.("partClicked", { part: this });
-
-          this.$el.classList.add("part_active");
-        } else {
-          if (this.game?.tooltip_manager) {
-            this.game.tooltip_manager.show(this, null, true, this.$el);
-          }
-        }
-      });
-
-      this.$el.addEventListener("mouseenter", (e) => {
-        if (
-          this.game?.ui?.help_mode_active &&
-          this.game?.tooltip_manager
-        ) {
-          this.game.tooltip_manager.show(this, null, false, this.$el);
-        }
-      });
-
-      this.$el.addEventListener("mouseleave", (e) => {
-        if (
-          this.game?.ui?.help_mode_active &&
-          this.game?.tooltip_manager
-        ) {
-          this.game.tooltip_manager.hide();
-        }
-      });
-
-      this.populatePartDetails();
-      return this.$el;
-    }
-
-    if (this.className) this.$el.classList.add(this.className);
-    this.$el.classList.add(`part_${this.id}`);
-    this.$el.classList.add(`category_${this.category}`);
-    this.$el.id = `part_btn_${this.id}`;
-    this.$el.title = this.title;
-    const costText = this.erequires ? `${fmt(this.cost)} EP` : `${fmt(this.cost)}`;
-    this.$el.setAttribute("aria-label", `${this.title || "Part button"}, Cost: ${costText}`);
-
-    const imageDiv = this.$el.querySelector(".image");
-    if (imageDiv) {
-      imageDiv.style.backgroundImage = `url('${this.getImagePath()}')`;
-    }
-
-    const priceDiv = this.$el.querySelector(".part-price");
-    if (priceDiv) {
-      priceDiv.textContent = this.erequires
-        ? `${fmt(this.cost)} EP`
-        : `${fmt(this.cost)}`;
-    }
-
-    this.$el.classList.toggle("unaffordable", !this.affordable);
-    this.$el.disabled = !this.affordable;
-
-    let tp = this.$el.querySelector('.tier-progress');
-    if (!tp) {
-      tp = document.createElement('div');
-      tp.className = 'tier-progress';
-      this.$el.appendChild(tp);
-    }
-    tp.style.display = 'none';
-
-    this.$el.addEventListener("click", (e) => {
+    const onClick = () => {
       if (this.game?.ui?.help_mode_active) {
         if (this.game?.tooltip_manager) {
           this.game.tooltip_manager.show(this, null, true, this.$el);
         }
         return;
       }
-
       if (this.affordable) {
-        // Remove active class from all parts
-        document
-          .querySelectorAll(".part.part_active")
-          .forEach((el) => el.classList.remove("part_active"));
-
-        // Set the clicked part in state manager (this will update the toggle icon)
+        document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
         this.game.emit?.("partClicked", { part: this });
-
-        // Add active class to this part
         this.$el.classList.add("part_active");
       } else {
-        // Show tooltip for unaffordable parts when clicked
         if (this.game?.tooltip_manager) {
           this.game.tooltip_manager.show(this, null, true, this.$el);
         }
       }
-    });
-
-    // Add hover tooltips for parts
-    this.$el.addEventListener("mouseenter", (e) => {
-      // Only show hover tooltips when help mode is active
-      if (
-        this.game?.ui?.help_mode_active &&
-        this.game?.tooltip_manager
-      ) {
+    };
+    const onMouseEnter = () => {
+      if (this.game?.ui?.help_mode_active && this.game?.tooltip_manager) {
         this.game.tooltip_manager.show(this, null, false, this.$el);
       }
-    });
-
-    this.$el.addEventListener("mouseleave", (e) => {
-      // Only hide tooltips if help mode is active (since we only show them in help mode)
-      if (
-        this.game?.ui?.help_mode_active &&
-        this.game?.tooltip_manager
-      ) {
+    };
+    const onMouseLeave = () => {
+      if (this.game?.ui?.help_mode_active && this.game?.tooltip_manager) {
         this.game.tooltip_manager.hide();
       }
-    });
-
+    };
+    this.$el = renderToNode(PartButton(this, onClick, onMouseEnter, onMouseLeave));
     this.populatePartDetails();
-
     return this.$el;
   }
 

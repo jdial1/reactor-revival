@@ -1,7 +1,5 @@
 /**
  * @deprecated Migrating to lit-html. DO NOT DELETE until consumers are migrated:
- * - part.js: createElement() uses cloneTemplateElement("part-btn-template") -> migrate to PartButton from buttonFactory
- * - upgrade.js: createElement() uses cloneTemplateElement("upgrade-card-template") -> migrate to UpgradeCard from buttonFactory
  * - tooltip.js: cloneTemplate("tooltip-body-template") -> migrate to lit-html tooltip template
  * - gameSetupFlow.js: cloneTemplateElement("game-setup-template") -> migrate to lit-html game setup template
  * - public/components/templates.html: can be deleted only after above migrations complete

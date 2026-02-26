@@ -1,6 +1,7 @@
+import "./config/superjsonSetup.js";
 import { Game } from "./core/game.js";
 import { escapeHtml } from "./utils/stringUtils.js";
-import { StorageUtils, isTestEnv } from "./utils/util.js";
+import { StorageUtils, StorageUtilsAsync, isTestEnv, migrateLocalStorageToIndexedDB } from "./utils/util.js";
 import { UI } from "./components/ui.js";
 import "./services/pwa.js";
 import { PageRouter } from "./components/pageRouter.js";
@@ -15,6 +16,8 @@ import { startGame } from "./app/gameStart.js";
 import { setupGlobalListeners } from "./app/globalListeners.js";
 import { GameBootstrapper } from "./app/GameBootstrapper.js";
 import { settingsModal } from "./components/settingsModal.js";
+import { initPreferencesStore } from "./core/preferencesStore.js";
+import { initCloudSyncQueue } from "./services/saveMutations.js";
 
 const SAVE_SLOT_COUNT = 3;
 const SPLASH_HIDE_DELAY_MS = 600;
@@ -32,7 +35,7 @@ async function resolveBackupIfRequested(game, savedGame, loadSlot) {
   if (!savedGame || typeof savedGame !== "object" || !savedGame.backupAvailable || !window.showLoadBackupModal || !window.setSlot1FromBackup) return savedGame;
   const useBackup = await window.showLoadBackupModal();
   if (!useBackup) return false;
-  window.setSlot1FromBackup();
+  await window.setSlot1FromBackup();
   return game.saveManager.loadGame(loadSlot ? parseInt(loadSlot) : null);
 }
 
@@ -86,14 +89,14 @@ async function handleUserSession(ctx) {
   else await handleNoAutoStart(ctx);
 }
 
-function clearAllGameDataForNewGame(game) {
-  StorageUtils.remove("reactorGameSave");
+async function clearAllGameDataForNewGame(game) {
+  await StorageUtilsAsync.remove("reactorGameSave");
   for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {
-    StorageUtils.remove(`reactorGameSave_${i}`);
+    await StorageUtilsAsync.remove(`reactorGameSave_${i}`);
   }
-  StorageUtils.remove("reactorGameSave_Previous");
-  StorageUtils.remove("reactorGameSave_Backup");
-  StorageUtils.remove("reactorCurrentSaveSlot");
+  await StorageUtilsAsync.remove("reactorGameSave_Previous");
+  await StorageUtilsAsync.remove("reactorGameSave_Backup");
+  await StorageUtilsAsync.remove("reactorCurrentSaveSlot");
   StorageUtils.remove("reactorGameQuickStartShown");
   StorageUtils.remove("google_drive_save_file_id");
   StorageUtils.set("reactorNewGamePending", 1);
@@ -145,7 +148,7 @@ function bindSandboxButton(ctx) {
   btn.onclick = async () => {
     if (window.splashManager) window.splashManager.hide();
     await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
-    clearAllGameDataForNewGame(ctx.game);
+    await clearAllGameDataForNewGame(ctx.game);
     StorageUtils.set("reactorGameQuickStartShown", 1);
     await ctx.game.initialize_new_game_state();
     await startGame(ctx);
@@ -193,12 +196,15 @@ function createAppInstances() {
 
 async function main() {
   "use strict";
+  await migrateLocalStorageToIndexedDB();
+  initPreferencesStore();
   const googleDriveSave = new GoogleDriveSave();
   const supabaseAuth = new SupabaseAuth();
   window.googleDriveSave = googleDriveSave;
   window.supabaseAuth = supabaseAuth;
   await handleEmailConfirmationFromUrl(supabaseAuth);
   await ensureAuthReady(googleDriveSave, supabaseAuth);
+  initCloudSyncQueue();
   const { ui, game, pageRouter } = createAppInstances();
   if (!isTestEnv()) {
     window.pageRouter = pageRouter;
@@ -232,8 +238,7 @@ function setupLaunchQueueHandler(game) {
     const text = await file.text();
 
     try {
-      const saveData = JSON.parse(text);
-      const validated = game?.saveManager?.validateSaveData(saveData);
+      const validated = game?.saveManager?.validateSaveData(text);
 
       if (game.engine?.running) game.pause();
 

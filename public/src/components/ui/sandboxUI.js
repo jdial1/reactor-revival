@@ -110,8 +110,6 @@ export class SandboxUI {
     ui.stateManager.setVar("exotic_particles", main.ep);
     document.body.classList.remove("reactor-sandbox");
     ui.game.reactor.updateStats();
-    ui.game.partset.check_affordability(ui.game);
-    ui.game.upgradeset.check_affordability(ui.game);
     ui.coreLoopUI.runUpdateInterfaceLoop();
     if (ui._updateSandboxButton) ui._updateSandboxButton();
   }

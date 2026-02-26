@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, setupGame } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../helpers/setup.js";
 
 describe("State Manager Mechanics", () => {
   let game;
@@ -14,7 +14,7 @@ describe("State Manager Mechanics", () => {
 
   it("should add variable to UI update queue", () => {
     game.ui.stateManager.setVar("test_var", "abc");
-    expect(game.ui.update_vars.get("test_var")).toBe("abc");
+    expect(game.ui.stateManager.vars.get("test_var")).toBe("abc");
   });
 
   it("should trigger onToggleStateChange for specific game properties", () => {
@@ -45,9 +45,9 @@ describe("State Manager Mechanics", () => {
 
     game.ui.stateManager.game_reset();
 
-    expect(game.ui.stateManager.getVar("current_money")).toBe(game.base_money);
-    expect(game.ui.stateManager.getVar("current_power")).toBe(0);
-    expect(game.ui.stateManager.getVar("current_heat")).toBe(0);
+    expect(toNum(game.ui.stateManager.getVar("current_money"))).toBe(toNum(game.base_money));
+    expect(toNum(game.ui.stateManager.getVar("current_power"))).toBe(0);
+    expect(toNum(game.ui.stateManager.getVar("current_heat"))).toBe(0);
   });
 
   it("should handle boolean variables correctly", () => {

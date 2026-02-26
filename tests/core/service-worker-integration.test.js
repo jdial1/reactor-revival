@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, fs, path } from '../helpers/setup.js';
+import path from 'path';
+import fs from 'fs';
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from '../helpers/setup.js';
 
 describe('Service Worker Real File Integration Tests', () => {
     let swContent;

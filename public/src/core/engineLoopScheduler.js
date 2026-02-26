@@ -1,4 +1,7 @@
+import { fromError } from "zod-validation-error";
 import { logger } from "../utils/logger.js";
+import { GameLoopTickInputSchema } from "./schemas.js";
+
 import {
   VALVE_OVERFLOW_THRESHOLD,
   MAX_TICKS_PER_FRAME_NO_SAB,
@@ -275,7 +278,19 @@ export function runLoopIteration(engine, timestamp) {
         engine._gameLoopWorkerPending = true;
         const w = engine._getGameLoopWorker?.();
         if (w) {
-          w.postMessage({ type: "tick", ...state });
+          const msg = { type: "tick", ...state };
+          const result = GameLoopTickInputSchema.safeParse(msg);
+          if (!result.success) {
+            logger.log("warn", "engine", "[GameLoopWorker] Input validation failed:", fromError(result.error).toString());
+            engine._gameLoopWorkerPending = false;
+            engine._gameLoopTickContext = null;
+            for (let i = 0; i < totalTicks; i++) engine._processTick(1.0);
+            if (fluxTicks > 0) engine._timeFluxFastForward = false;
+            syncCatchupStateFromQueuedTicks(engine);
+            updateTimeFluxUI(engine);
+            return;
+          }
+          w.postMessage(result.data);
         } else {
           engine._gameLoopWorkerPending = false;
           engine._gameLoopTickContext = null;

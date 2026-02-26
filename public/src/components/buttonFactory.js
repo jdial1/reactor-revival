@@ -1,5 +1,46 @@
-import { html, render } from "lit-html";
+import { html, render, nothing } from "lit-html";
 import { numFormat } from "../utils/util.js";
+import { classMap, styleMap } from "../utils/litHelpers.js";
+
+function getUpgradeIconOverlay(upgrade) {
+  try {
+    const classes = Array.isArray(upgrade.upgrade?.classList) ? upgrade.upgrade.classList : [];
+    const title = (upgrade.title || "").toLowerCase();
+    const desc = (upgrade.description || "").toLowerCase();
+    const type = (upgrade.type || upgrade.upgrade?.type || "").toLowerCase();
+    const actionId = (upgrade.actionId || upgrade.upgrade?.actionId || "").toLowerCase();
+
+    let iconPath = null;
+    let isHeat = false;
+
+    if (classes.includes("cell_perpetual") || title.includes("perpetual") || actionId.includes("perpetual")) {
+      iconPath = "img/ui/status/status_infinity.png";
+    }
+
+    if (!iconPath && (classes.includes("cell_tick") || title.includes("enriched") || actionId.includes("tick") ||
+      desc.includes("tick") || desc.includes("duration") || desc.includes("last") || desc.includes("per second") || title.includes("clock") || title.includes("chronometer"))) {
+      iconPath = "img/ui/icons/icon_time.png";
+    }
+
+    if (!iconPath) {
+      const heatTerms = ["heat", "vent", "exchange", "containment", "hold", "heatsink", "coolant", "thermal", "inlet", "outlet", "exchanger", "venting"];
+      const powerTerms = ["power", "potent", "reflection", "transformer", "grid", "capacitor", "capacitance", "accelerator"];
+      const hasHeat = heatTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t));
+      const hasPower = powerTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t) || classes.includes("cell_power"));
+      if (hasHeat) {
+        iconPath = "img/ui/icons/icon_heat.png";
+        isHeat = true;
+      } else if (hasPower) {
+        iconPath = "img/ui/icons/icon_power.png";
+      }
+    }
+
+    if (!iconPath) iconPath = "img/ui/status/status_star.png";
+    return { iconPath, isHeat };
+  } catch (_) {
+    return { iconPath: null, isHeat: false };
+  }
+}
 
 export function renderToNode(template) {
   const container = document.createElement("div");
@@ -30,7 +71,7 @@ export const LoadGameButton = (saveData, playedTimeStr, isCloudSynced, onClick) 
       <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
       <div class="played-time">${playedTimeStr}</div>
     </div>
-    <div class="synced-label" style="display: ${isCloudSynced ? "" : "none"}"></div>
+    <div class="synced-label" style=${styleMap({ display: isCloudSynced ? "" : "none" })}></div>
   </button>
 `;
 
@@ -42,7 +83,7 @@ export const LoadGameUploadRow = (saveData, playedTimeStr, isCloudSynced, onLoad
         <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
         <div class="played-time">${playedTimeStr}</div>
       </div>
-      <div class="synced-label" style="display: ${isCloudSynced ? "" : "none"}"></div>
+      <div class="synced-label" style=${styleMap({ display: isCloudSynced ? "" : "none" })}></div>
     </button>
     <button id="splash-upload-option-btn" class="splash-btn splash-btn-cloud upload-option-button splash-btn-right" title="Upload local save to Google Drive" @click=${onUploadClick}>
       <div class="upload-text">Upload</div>
@@ -58,7 +99,7 @@ export const BuyButton = (upgrade, onClick) => {
   return html`
     <button class="pixel-btn" ?disabled=${disabled} aria-label=${ariaLabel} @click=${onClick}>
       Buy
-      <img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="cash" style="display: ${isEp ? "none" : ""}" />
+      <img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="cash" style=${styleMap({ display: isEp ? "none" : "" })} />
       <span class="cost-text">${costDisplay}</span>
     </button>
   `;
@@ -130,55 +171,90 @@ function getDoctrineIcon(upgrade, doctrineSource) {
   return { icon: BASE_DOCTRINE_ICON, id: "base" };
 }
 
-export const UpgradeCard = (upgrade, doctrineSource, onBuyClick) => {
+export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick } = {}) => {
   const isMaxed = upgrade.level >= upgrade.max_level;
   const { icon: doctrineIcon, id: doctrineId } = getDoctrineIcon(upgrade, doctrineSource);
+  const doctrineLocked = upgrade.game?.upgradeset && !upgrade.game.upgradeset.isUpgradeAvailable(upgrade.id);
+  const isSandbox = !!upgrade.game?.isSandbox;
   const header = isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`;
-  const desc = isMaxed ? "" : upgrade.description;
+  const desc = isMaxed ? "" : (upgrade.description || "");
   const costDisplay = isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? "");
-  const ariaLabel = isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`;
+  const ariaLabel = doctrineLocked
+    ? `Locked – ${upgrade.game?.upgradeset?.getDoctrineForUpgrade(upgrade.id)?.title || upgrade.game?.upgradeset?.getDoctrineForUpgrade(upgrade.id)?.id || "other doctrine"}`
+    : isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`;
   const iconPath = upgrade.upgrade?.icon ?? upgrade.icon ?? "img/ui/status/status_star.png";
+  const { iconPath: overlayPath, isHeat } = getUpgradeIconOverlay(upgrade);
+  const extraClasses = (upgrade.upgrade?.classList ?? []).join(" ");
+  const cardClassMap = { "upgrade-card": true, "doctrine-locked": doctrineLocked, unaffordable: doctrineLocked };
+  extraClasses.split(" ").filter(Boolean).forEach((c) => (cardClassMap[c] = true));
+  const cardClass = classMap(cardClassMap);
   return html`
-    <div class="upgrade-card" data-id=${upgrade.id} data-doctrine=${doctrineId}>
+    <div class=${cardClass}
+         data-id=${upgrade.id}
+         data-doctrine=${doctrineId}
+         data-doctrine-locked=${doctrineLocked ? "true" : nothing}>
       <div class="upgrade-header">
         <div class="upgrade-icon-wrapper">
           <div class="image" style="background-image: url('${iconPath}')"></div>
+          ${overlayPath ? html`<img class="status-overlay ${isHeat ? "status-heat" : ""}" src=${overlayPath} alt="">` : nothing}
         </div>
         <div class="upgrade-details">
           <div class="upgrade-title">${upgrade.title}</div>
-          <div class="upgrade-description" style="display: ${isMaxed ? "none" : ""}">${desc}</div>
+          <div class="upgrade-description" style=${styleMap({ display: isMaxed ? "none" : "" })}>${desc}</div>
         </div>
-        <div class="upgrade-doctrine-icon" style="background-image: url('${doctrineIcon}')"></div>
+        <div class="upgrade-doctrine-icon" style="background-image: url('${doctrineIcon}')" data-doctrine=${doctrineId}></div>
       </div>
       <div class="upgrade-footer">
         <div class="upgrade-level-info">
           <span class="level-text">${header}</span>
         </div>
-        <button class="pixel-btn upgrade-action-btn" ?disabled=${isMaxed} aria-label=${ariaLabel} @click=${onBuyClick}>
+        <button class="pixel-btn upgrade-action-btn"
+                ?disabled=${doctrineLocked || isMaxed}
+                aria-label=${ariaLabel}
+                @click=${onBuyClick}>
           <span class="action-text">Buy</span>
           <span class="cost-display">${costDisplay}</span>
         </button>
-        <div class="sandbox-upgrade-actions">
-          <button class="pixel-btn sandbox-buy-max-btn" type="button">Buy Max</button>
-          <button class="pixel-btn sandbox-reset-btn" type="button">Reset</button>
+        <div class="sandbox-upgrade-actions" style=${styleMap({ display: isSandbox ? "" : "none" })}>
+          <button class="pixel-btn sandbox-buy-max-btn" type="button" @click=${onBuyMaxClick ?? (() => {})}>Buy Max</button>
+          <button class="pixel-btn sandbox-reset-btn" type="button" @click=${onResetClick ?? (() => {})}>Reset</button>
         </div>
       </div>
     </div>
   `;
 };
 
-export const PartButton = (part, onClick) => {
-  const costText = part.erequires ? `${part.cost} 🧬 EP` : `${part.cost}`;
+export const PartButton = (part, onClick, onMouseEnter = () => {}, onMouseLeave = () => {}, opts = {}) => {
+  const costText = part.erequires ? `${numFormat(part.cost)} EP` : numFormat(part.cost);
+  const locked = opts.locked ?? false;
+  const doctrineLocked = opts.doctrineLocked ?? false;
+  const tierProgress = opts.tierProgress ?? "";
+  const partActive = opts.partActive ?? false;
+  const btnClass = classMap({
+    part: true,
+    "pixel-btn": true,
+    "is-square": true,
+    part_active: partActive,
+    [part.className]: !!part.className,
+    [`part_${part.id}`]: true,
+    [`category_${part.category}`]: !!part.category,
+    unaffordable: !part.affordable,
+    "locked-by-tier": locked,
+    "doctrine-locked": doctrineLocked,
+  });
+  const tierStyle = styleMap({ display: locked ? "block" : "none" });
   return html`
-    <button class="part pixel-btn is-square ${!part.affordable ? "unaffordable" : ""}"
+    <button class=${btnClass}
             id="part_btn_${part.id}"
             title=${part.title || ""}
             aria-label="${part.title || "Part button"}, Cost: ${costText}"
-            ?disabled=${!part.affordable}
-            @click=${onClick}>
-      <div class="image" style="--bg-image: url('${part.getImagePath()}')"></div>
+            ?disabled=${!part.affordable || locked}
+            @click=${onClick}
+            @mouseenter=${onMouseEnter}
+            @mouseleave=${onMouseLeave}>
+      <div class="image" style="background-image: url('${part.getImagePath()}')"></div>
       <div class="part-price">${costText}</div>
-      <div class="tier-progress" style="display: none;"></div>
+      <div class="tier-progress" style=${tierStyle}>${tierProgress}</div>
       <div class="part-details">
         <div class="part-details-title"></div>
         <div class="part-details-stats"></div>

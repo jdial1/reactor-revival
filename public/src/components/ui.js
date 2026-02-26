@@ -1,6 +1,6 @@
-import { numFormat as fmt, on, StorageUtils } from "../utils/util.js";
-import { MOBILE_BREAKPOINT_PX } from "../core/constants.js";
+import { numFormat as fmt, on, StorageUtils, StorageUtilsAsync } from "../utils/util.js";
 import { StateManager } from "../core/stateManager.js";
+import { createUIState, initUIStateSubscriptions } from "../core/uiStore.js";
 import { InputHandler } from "./InputManager.js";
 import { ModalOrchestrator } from "./ModalManager.js";
 import { GridScaler } from "./gridScaler.js";
@@ -39,6 +39,7 @@ import { NavIndicatorsUI } from "./ui/navIndicatorsUI.js";
 import { PauseStateUI } from "./ui/pauseStateUI.js";
 import { ClipboardUI } from "./ui/clipboardUI.js";
 import { DOM_IDS } from "./ui/domIdsConfig.js";
+import { MOBILE_BREAKPOINT_PX } from "../core/constants.js";
 import { runPopulateUpgradeSection } from "./ui/upgrades/domPopulatorUI.js";
 import { getPowerNetChange as getPowerNetChangeFromStats, getHeatNetChange as getHeatNetChangeFromStats } from "./ui/statsCalculatorUI.js";
 import { TabSetupUI } from "./ui/tabSetupUI.js";
@@ -52,13 +53,11 @@ export class UI {
   constructor() {
     this.game = null;
     this.DOMElements = {};
-    this.update_vars = new Map();
     this.var_objs_config = {};
     this.last_money = 0;
     this.last_exotic_particles = 0;
-    const isMobileOnInit = typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT_PX;
-    this.parts_panel_collapsed = isMobileOnInit;
-    this.parts_panel_right_side = false;
+    this.uiState = createUIState();
+    this._uiStateTeardown = null;
     this.update_interface_interval = 100;
     this.last_interface_update = 0;
     this.update_interface_task = null;
@@ -79,6 +78,7 @@ export class UI {
     this.partsPanelUI = new PartsPanelUI(this);
     this.objectiveController = new ObjectiveController({
       getGame: () => this.game,
+      getUI: () => this,
       getDOMElements: () => this.DOMElements,
       getStateManager: () => this.stateManager,
       cacheDOMElements: () => this.coreLoopUI.cacheDOMElements(),
@@ -188,6 +188,12 @@ export class UI {
 
   initMainLayout() {
     initMainLayoutFromModule(this);
+    this._uiStateTeardown = initUIStateSubscriptions(this.uiState, this);
+    const btns = document.getElementById("reactor_copy_paste_btns");
+    if (btns) btns.classList.toggle("collapsed", !!this.uiState.copy_paste_collapsed);
+    const partsSection = document.getElementById("parts_section");
+    if (partsSection) partsSection.classList.toggle("collapsed", !!this.uiState.parts_panel_collapsed);
+    this.objectivesUI?.updateObjectiveDisplay?.();
   }
 
   startCtrl9MoneyIncrease() {
@@ -250,7 +256,7 @@ export class UI {
   async resetReactor() {
     logger.log('debug', 'game', 'resetReactor method called - deleting save and returning to splash');
     try {
-      StorageUtils.remove("reactorGameSave");
+      await StorageUtilsAsync.remove("reactorGameSave");
       logger.debug("Save file deleted from localStorage");
     } catch (error) {
       logger.log('error', 'game', 'Error deleting save file:', error);
@@ -273,6 +279,23 @@ export class UI {
       cancelAnimationFrame(this.update_interface_task);
       this.update_interface_task = null;
     }
+    if (typeof this.controlDeckUI?._controlsNavUnmount === "function") {
+      this.controlDeckUI._controlsNavUnmount();
+      this.controlDeckUI._controlsNavUnmount = null;
+    }
+    if (typeof this.controlDeckUI?._statsBarUnmount === "function") {
+      this.controlDeckUI._statsBarUnmount();
+      this.controlDeckUI._statsBarUnmount = null;
+    }
+    if (typeof this.controlDeckUI?._epUnmount === "function") {
+      this.controlDeckUI._epUnmount();
+      this.controlDeckUI._epUnmount = null;
+    }
+    if (this.objectiveController?.unmount) this.objectiveController.unmount();
+    if (typeof this.partsPanelUI?._partsPanelUnmount === "function") {
+      this.partsPanelUI._partsPanelUnmount();
+      this.partsPanelUI._partsPanelUnmount = null;
+    }
     this.meltdownUI.cleanup();
     if (this.game && this.modalOrchestrationUI.unsubscribeContextModal) this.modalOrchestrationUI.unsubscribeContextModal(this.game);
     if (typeof this.detachGameEventListeners === "function") {
@@ -280,6 +303,10 @@ export class UI {
       this.detachGameEventListeners = null;
     }
     if (this.stateManager?.teardown) this.stateManager.teardown();
+    if (typeof this._uiStateTeardown === "function") {
+      this._uiStateTeardown();
+      this._uiStateTeardown = null;
+    }
     if (this.game?.tooltip_manager?.teardown) this.game.tooltip_manager.teardown();
   }
 }

@@ -1,5 +1,6 @@
-import { StorageUtils } from "../../utils/util.js";
+import { StorageUtilsAsync } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
+import { preferences } from "../../core/preferencesStore.js";
 import { supabaseSave } from "../../services/SupabaseSave.js";
 import { createSupabaseProvider, createGoogleDriveProvider } from "../../services/cloudSaveProvider.js";
 import { bindEvents } from "../../utils/bindEvents.js";
@@ -32,12 +33,12 @@ function getCloudSaveProvider() {
 const SAVED_BUTTON_RESET_MS = 1500;
 const ERROR_BUTTON_RESET_MS = 2000;
 
-const STORAGE_KEYS = {
-  master: "reactor_volume_master",
-  effects: "reactor_volume_effects",
-  alerts: "reactor_volume_alerts",
-  system: "reactor_volume_system",
-  ambience: "reactor_volume_ambience"
+const VOLUME_PREF_KEYS = {
+  master: "volumeMaster",
+  effects: "volumeEffects",
+  alerts: "volumeAlerts",
+  system: "volumeSystem",
+  ambience: "volumeAmbience",
 };
 
 function stepToVal(s) {
@@ -55,7 +56,8 @@ function applyStepperState(blocks, valSpan, key, step, modal) {
     else b.removeAttribute("data-active");
   });
   if (valSpan) valSpan.textContent = `${step * 10}%`;
-  StorageUtils.set(STORAGE_KEYS[key], value);
+  const prefKey = VOLUME_PREF_KEYS[key];
+  if (prefKey) preferences[prefKey] = value;
   const game = modal?.getGame?.();
   if (game?.audio) game.audio.setVolume(key, value);
 }
@@ -124,35 +126,28 @@ function setupMechSwitches(overlay, modal, signal) {
   const syncMechSwitch = createSyncMechSwitch(overlay);
   const setupMechSwitch = createSetupMechSwitch(overlay, modal, syncMechSwitch, signal);
   const game = modal.getGame?.();
-  const affordIds = [
-    "setting-hide-upgrades",
-    "setting-hide-research",
-    "setting-hide-max-upgrades",
-    "setting-hide-max-research",
-    "setting-hide-other-doctrine"
-  ];
-  const storageKeys = {
-    "setting-hide-upgrades": "reactor_hide_unaffordable_upgrades",
-    "setting-hide-research": "reactor_hide_unaffordable_research",
-    "setting-hide-max-upgrades": "reactor_hide_max_upgrades",
-    "setting-hide-max-research": "reactor_hide_max_research",
-    "setting-hide-other-doctrine": "reactor_hide_other_doctrine_upgrades"
+  const affordPrefMap = {
+    "setting-hide-upgrades": "hideUnaffordableUpgrades",
+    "setting-hide-research": "hideUnaffordableResearch",
+    "setting-hide-max-upgrades": "hideMaxUpgrades",
+    "setting-hide-max-research": "hideMaxResearch",
+    "setting-hide-other-doctrine": "hideOtherDoctrineUpgrades",
   };
-  affordIds.forEach((id) => {
+  Object.entries(affordPrefMap).forEach(([id, prefKey]) => {
     setupMechSwitch(id, () => {
-      StorageUtils.set(storageKeys[id], overlay.querySelector(`#${id}`).checked);
+      preferences[prefKey] = overlay.querySelector(`#${id}`).checked;
       if (game?.upgradeset) game.upgradeset.check_affordability(game);
     });
   });
   setupMechSwitch("setting-motion", (checked) => {
-    StorageUtils.set("reactor_reduced_motion", checked);
+    preferences.reducedMotion = checked;
     document.documentElement.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
   });
-  setupMechSwitch("setting-heat-flow", (checked) => StorageUtils.set("reactor_heat_flow_visible", checked));
-  setupMechSwitch("setting-heat-map", (checked) => StorageUtils.set("reactor_heat_map_visible", checked));
-  setupMechSwitch("setting-debug-overlay", (checked) => StorageUtils.set("reactor_debug_overlay", checked));
+  setupMechSwitch("setting-heat-flow", (checked) => { preferences.heatFlowVisible = checked; });
+  setupMechSwitch("setting-heat-map", (checked) => { preferences.heatMapVisible = checked; });
+  setupMechSwitch("setting-debug-overlay", (checked) => { preferences.debugOverlay = checked; });
   setupMechSwitch("setting-force-no-sab", (checked) => {
-    StorageUtils.set("reactor_force_no_sab", checked);
+    preferences.forceNoSAB = checked;
     if (game?.engine && typeof game.engine.setForceNoSAB === "function") {
       game.engine.setForceNoSAB(checked);
     }
@@ -160,7 +155,7 @@ function setupMechSwitches(overlay, modal, signal) {
   const numberFormatSelect = overlay.querySelector("#setting-number-format");
   if (numberFormatSelect) {
     numberFormatSelect.addEventListener("change", () => {
-      StorageUtils.set("number_format", numberFormatSelect.value);
+      preferences.numberFormat = numberFormatSelect.value;
       if (game?.ui?.coreLoopUI?.runUpdateInterfaceLoop) game.ui.coreLoopUI.runUpdateInterfaceLoop();
     }, { signal });
   }
@@ -237,7 +232,7 @@ function setupCloudSaves(overlay, modal, signal) {
     try {
       const provider = getCloudSaveProvider();
       if (!provider) return;
-      await provider.saveGame(slotId, game.saveManager.getSaveState());
+      await provider.saveGame(slotId, await game.saveManager.getSaveState());
       btn.textContent = "Saved";
       await refreshCloudSlots();
       setTimeout(() => {
@@ -267,7 +262,7 @@ function setupCloudSaves(overlay, modal, signal) {
     }
     const slotData = list.find((s) => s.slot_id === slotId);
     if (!slotData?.save_data) return;
-    StorageUtils.setRaw(`reactorGameSave_${slotId}`, slotData.save_data);
+    await StorageUtilsAsync.setRaw(`reactorGameSave_${slotId}`, slotData.save_data);
     const game = modal.getGame?.();
     try {
       const loaded = game?.saveManager ? await game.saveManager.loadGame(slotId) : false;
@@ -307,7 +302,7 @@ export function bindSettingsEvents(overlay, modal, signal) {
     "#setting-mute-btn": () => {
       if (!muteCheckbox || !muteBtn) return;
       muteCheckbox.checked = !muteCheckbox.checked;
-      StorageUtils.set("reactor_mute", muteCheckbox.checked);
+      preferences.mute = muteCheckbox.checked;
       const icon = muteBtn.querySelector(".mute-icon");
       if (icon) icon.textContent = muteCheckbox.checked ? "🔇" : "🔊";
       const game = modal.getGame?.();

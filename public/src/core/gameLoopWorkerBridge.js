@@ -1,7 +1,10 @@
+import { fromError } from "zod-validation-error";
 import { toDecimal } from "../utils/decimal.js";
 import { setDecimal, toPlainObject } from "./store.js";
 import { toNumber } from "../utils/mathUtils.js";
 import { HEAT_EPSILON } from "./heatCalculations.js";
+import { GameLoopTickResultSchema } from "./schemas.js";
+import { logger } from "../utils/logger.js";
 
 const SAB_BYTES_PER_FLOAT = 4;
 
@@ -189,6 +192,12 @@ function syncSessionAfterTick(engine, data) {
 
 export function applyGameLoopTickResult(engine, data) {
   if (!data || data.error) return;
+  const result = GameLoopTickResultSchema.safeParse(data);
+  if (!result.success) {
+    logger.log("warn", "engine", "[GameLoopWorker] Result validation failed:", fromError(result.error).toString());
+    return;
+  }
+  data = result.data;
   const game = engine.game;
   const reactor = game.reactor;
   const ts = game.tileset;

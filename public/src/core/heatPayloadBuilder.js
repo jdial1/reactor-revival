@@ -40,8 +40,14 @@ function prepareHeatContainmentSAB(engine, ts, rows, cols, gridLen) {
 }
 
 function prepareHeatContainmentTransfer(engine, ts, rows, cols, gridLen) {
-  const needNew = !engine._heatTransferHeat || engine._heatTransferHeat.length !== gridLen ||
-    engine._heatTransferHeat.buffer.byteLength === 0;
+  let needNew = !engine._heatTransferHeat || engine._heatTransferHeat.length !== gridLen;
+  if (!needNew) {
+    try {
+      needNew = engine._heatTransferHeat.buffer.byteLength === 0;
+    } catch {
+      needNew = true;
+    }
+  }
   if (needNew) {
     engine._heatTransferHeat = new Float32Array(gridLen);
     engine._heatTransferContainment = new Float32Array(gridLen);

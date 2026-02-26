@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, Game, UI, setupGame, toNum } from "../helpers/setup.js";
+import { Game } from "../../public/src/core/game.js";
+import { UI } from "../../public/src/components/ui.js";
+import { describe, it, expect, beforeEach, setupGame, toNum } from "../helpers/setup.js";
 
 // Create a temporary game instance just to generate the list of tests.
 // This is NOT the instance that will be used in the `it` blocks.

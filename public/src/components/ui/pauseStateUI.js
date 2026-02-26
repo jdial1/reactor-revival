@@ -4,11 +4,12 @@ export class PauseStateUI {
   }
 
   updatePauseState() {
-    if (typeof document === "undefined" || !document.body) return;
+    if (typeof document === "undefined" || !document.body?.classList) return;
     if (!this.ui.stateManager) return;
     const statePaused = this.ui.stateManager.getVar("pause");
     const isPaused = statePaused === undefined ? !!this.ui.game?.paused : !!statePaused;
-    const isPauseClassPresent = document.body.classList.contains("game-paused");
+    const cls = document.body.classList;
+    const isPauseClassPresent = typeof cls.contains === "function" ? cls.contains("game-paused") : (document.body.className || "").includes("game-paused");
     if (isPaused && !isPauseClassPresent) {
       document.body.classList.add("game-paused");
     } else if (!isPaused && isPauseClassPresent) {

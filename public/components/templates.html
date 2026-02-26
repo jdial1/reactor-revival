@@ -1,44 +1,4 @@
-<!-- Legacy templates still used by part.js, upgrade.js, tooltip.js, gameSetupFlow.js. Migrating to lit-html. -->
-<template id="part-btn-template">
-  <button class="part pixel-btn is-square" title="">
-    <div class="image"></div>
-    <div class="part-price"></div>
-    <div class="tier-progress" style="display: none;"></div>
-    <div class="part-details">
-      <div class="part-details-title"></div>
-      <div class="part-details-stats"></div>
-      <div class="part-details-desc"></div>
-      <div class="part-details-bonuses"></div>
-    </div>
-  </button>
-</template>
-<template id="upgrade-card-template">
-  <div class="upgrade-card" data-id="">
-    <div class="upgrade-header">
-      <div class="upgrade-icon-wrapper">
-        <div class="image"></div>
-      </div>
-      <div class="upgrade-details">
-        <div class="upgrade-title"></div>
-        <div class="upgrade-description"></div>
-      </div>
-      <div class="upgrade-doctrine-icon"></div>
-    </div>
-    <div class="upgrade-footer">
-      <div class="upgrade-level-info">
-        <span class="level-text"></span>
-      </div>
-      <button class="pixel-btn upgrade-action-btn">
-        <span class="action-text">Buy</span>
-        <span class="cost-display"></span>
-      </button>
-      <div class="sandbox-upgrade-actions">
-        <button class="pixel-btn sandbox-buy-max-btn" type="button">Buy Max</button>
-        <button class="pixel-btn sandbox-reset-btn" type="button">Reset</button>
-      </div>
-    </div>
-  </div>
-</template>
+<!-- Legacy templates still used by tooltip.js, gameSetupFlow.js. part.js and upgrade.js migrated to lit-html. -->
 <template id="tooltip-body-template">
   <div
     data-role="title"

@@ -22,6 +22,11 @@ const libraries = [
         isUrl: true,
     },
     {
+        name: "zod-validation-error",
+        source: "node_modules/zod-validation-error/v3/index.mjs",
+        target: "public/lib/zod-validation-error.js",
+    },
+    {
         name: "break_infinity.js",
         source: "node_modules/break_infinity.js/dist/break_infinity.min.js",
         target: "public/lib/break_infinity.min.js",
@@ -40,6 +45,17 @@ const libraries = [
         name: "lit-html",
         source: "node_modules/lit-html/lit-html.js",
         target: "public/lib/lit-html.js",
+    },
+    {
+        name: "lit-html-directives",
+        source: "node_modules/lit-html",
+        target: "public/lib/lit-html",
+        isDirectory: true,
+    },
+    {
+        name: "idb-keyval",
+        source: "node_modules/idb-keyval/dist/index.js",
+        target: "public/lib/idb-keyval.js",
     },
 ];
 
@@ -77,6 +93,18 @@ function copyFile(source, target, isUrl = false) {
     });
 }
 
+function copyDirectory(source, target) {
+    if (!fs.existsSync(source)) return Promise.resolve();
+    if (!fs.existsSync(target)) fs.mkdirSync(target, { recursive: true });
+    const entries = fs.readdirSync(source, { withFileTypes: true });
+    const jsFiles = entries.filter((e) => e.isFile() && e.name.endsWith(".js"));
+    const dirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith("."));
+    return Promise.all([
+        ...jsFiles.map((e) => copyFile(path.join(source, e.name), path.join(target, e.name))),
+        ...dirs.map((d) => copyDirectory(path.join(source, d.name), path.join(target, d.name))),
+    ]);
+}
+
 async function copyLibraries() {
     console.log("Copying external libraries...\n");
 
@@ -85,6 +113,15 @@ async function copyLibraries() {
             const targetPath = path.join(__dirname, "..", lib.target);
             if (lib.isUrl) {
                 await copyFile(lib.source, targetPath, true);
+            } else if (lib.isDirectory) {
+                const sourcePath = path.join(__dirname, "..", lib.source);
+                if (!fs.existsSync(sourcePath)) {
+                    console.warn(`⚠️  Warning: ${lib.source} not found. Skipping...`);
+                    continue;
+                }
+                console.log(`Copying directory ${lib.source}...`);
+                await copyDirectory(sourcePath, targetPath);
+                console.log(`✓ Copied ${lib.name} directory`);
             } else {
                 const sourcePath = path.join(__dirname, "..", lib.source);
                 if (!fs.existsSync(sourcePath)) {

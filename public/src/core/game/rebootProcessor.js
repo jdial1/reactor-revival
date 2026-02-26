@@ -49,8 +49,6 @@ function refreshUI(game) {
   };
   game.emit?.("exoticParticlesChanged", payload);
   game.reactor.updateStats();
-  game.upgradeset.check_affordability(game);
-  game.partset.check_affordability(game);
   game.emit?.("partsPanelRefresh");
 }
 

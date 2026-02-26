@@ -145,9 +145,9 @@ export class CoreLoopUI {
     if (!state) return undefined;
     if (configKey === "exotic_particles") return game?.exoticParticleManager?.exotic_particles;
     if (configKey === "total_heat") return state.stats_heat_generation;
-    if (configKey === "heat_controlled") return reactor?.heat_controlled;
+    if (configKey === "heat_controlled") return state.heat_controlled ?? reactor?.heat_controlled;
     if (configKey === "auto_sell_multiplier") return reactor?.auto_sell_multiplier;
-    if (configKey === "vent_multiplier_eff") return reactor?.vent_multiplier_eff;
+    if (configKey === "vent_multiplier_eff") return state.vent_multiplier_eff ?? reactor?.vent_multiplier_eff;
     if (configKey === "manual_override_mult") return reactor?.manual_override_mult;
     if (configKey === "override_end_time") return reactor?.override_end_time;
     if (configKey === "power_to_heat_ratio") return reactor?.power_to_heat_ratio;
@@ -174,7 +174,28 @@ export class CoreLoopUI {
       }
       cfg.onupdate?.(val);
     }
-    ui.objectivesUI.updateObjectiveDisplay();
+    ui.objectivesUI.updateObjectiveDisplayFromState?.();
+  }
+
+  applyStateToDomForKeys(keys) {
+    const ui = this.ui;
+    const game = ui.game;
+    const config = ui.var_objs_config;
+    if (!config || !game) return;
+    const sm = ui.stateManager;
+    for (const configKey of keys) {
+      const cfg = config[configKey];
+      if (!cfg) continue;
+      const val = this.getDisplayValue(game, configKey);
+      if (val === undefined) continue;
+      if (sm) sm.vars.set(configKey, val);
+      if (!cfg.rolling && cfg.dom) {
+        let textContent = cfg.num ? fmt(val, cfg.places) : val;
+        if (cfg.prefix) textContent = cfg.prefix + textContent;
+        cfg.dom.textContent = textContent;
+      }
+      cfg.onupdate?.(val);
+    }
   }
 
   updateRollingNumbers(dt) {
@@ -198,20 +219,12 @@ export class CoreLoopUI {
       const fn = ui._pendingDomUpdates.shift();
       try { fn(); } catch (e) { logger.log('warn', 'ui', 'pending DOM update error:', e); }
     }
-    this.applyStateToDom();
+    ui._firstFrameSyncDone = true;
     this.updateRollingNumbers(dt);
     if (ui.particleSystem && ui._particleCtx) {
       ui.particleSystem.update(dt);
       ui._particleCtx.clearRect(0, 0, ui._particleCanvas.width, ui._particleCanvas.height);
       ui.particleSystem.draw(ui._particleCtx);
-    }
-
-    if (ui.game?.objectives_manager) {
-      const checkId = ui.game.objectives_manager.current_objective_def?.checkId;
-      const toastBtn = ui.DOMElements.objectives_toast_btn;
-      if (checkId === "sustainedPower1k" && toastBtn?.classList.contains("is-expanded")) {
-        ui.objectivesUI.updateObjectiveDisplay();
-      }
     }
 
     if (timestamp - ui.last_interface_update > ui.update_interface_interval) {
@@ -223,24 +236,9 @@ export class CoreLoopUI {
       }
 
       if (ui.game) {
-        const moneyVal = ui.game.state.current_money;
-        const exoticVal = ui.game.state.current_exotic_particles;
-        const moneyChanged = moneyVal && typeof moneyVal.eq === "function" ? !moneyVal.eq(ui.last_money) : ui.last_money !== moneyVal;
-        const exoticParticlesChanged = exoticVal && exoticVal.eq ? !exoticVal.eq(ui.last_exotic_particles) : ui.last_exotic_particles !== exoticVal;
-        if (moneyChanged || exoticParticlesChanged) {
-          ui.last_money = moneyVal != null ? moneyVal : ui.game.state.current_money;
-          ui.last_exotic_particles = exoticVal != null ? exoticVal : ui.game.state.current_exotic_particles;
-          ui.game.partset.check_affordability(ui.game);
-          ui.game.upgradeset.check_affordability(ui.game);
-          if (ui.game.tooltip_manager) ui.game.tooltip_manager.updateUpgradeAffordability();
-          ui.navIndicatorsUI.updateNavIndicators();
-          if (typeof ui.partsPanelUI?.updateQuickSelectSlots === "function") ui.partsPanelUI.updateQuickSelectSlots();
-        }
         ui.navIndicatorsUI.updateLeaderboardIcon();
       }
 
-      ui.pauseStateUI.updatePauseState();
-      ui.infoBarUI.updateActiveBuffs();
       ui.deviceFeatures.updateAppBadge();
 
       if (ui.game?.tooltip_manager?.tooltip_showing && ui.game?.tooltip_manager?.needsLiveUpdates) {

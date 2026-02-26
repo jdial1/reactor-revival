@@ -1,6 +1,8 @@
+import { render } from "lit-html";
 import { numFormat as fmt } from "../utils/util.js";
 import { applyMobileTooltipPosition, clearDesktopTooltipPosition } from "./tooltip/tooltipPositioning.js";
 import { populateMobileTooltip, populateDesktopTooltip } from "./tooltip/tooltipContentRenderer.js";
+import { tooltipContentTemplate } from "./tooltip/tooltipLitRenderer.js";
 import { logger } from "../utils/logger.js";
 import { BaseComponent } from "./BaseComponent.js";
 
@@ -101,6 +103,8 @@ export class TooltipManager extends BaseComponent {
     this.current_obj = obj;
     this.current_tile_context = tile_context;
     this.needsLiveUpdates = this._shouldTooltipUpdateLive(obj, tile_context);
+    const uiState = this.game?.ui?.uiState;
+    if (uiState) uiState.hovered_entity = { obj, tile: tile_context, game: this.game, isMobile: this.isMobile };
 
     if (!this.tooltip_showing) {
       this.isVisible = true;
@@ -145,6 +149,8 @@ export class TooltipManager extends BaseComponent {
   }
 
   _hide() {
+    const uiState = this.game?.ui?.uiState;
+    if (uiState) uiState.hovered_entity = null;
     this.current_obj = null;
     this.current_tile_context = null;
     if (this.tooltip_showing) {
@@ -157,49 +163,53 @@ export class TooltipManager extends BaseComponent {
 
   async update() {
     this.game.performance.markStart("tooltip_update_total");
-    if (!this.tooltip_showing || !this.current_obj) {
-      return;
-    }
+    if (!this.tooltip_showing || !this.current_obj) return;
 
-    let tooltipBody = null;
-
-    if (window.templateLoader?.loaded) {
-      tooltipBody = window.templateLoader.cloneTemplate(
-        "tooltip-body-template"
-      );
-    }
-
-    if (!tooltipBody) {
-      const fallbackDiv = document.createElement("div");
-      fallbackDiv.innerHTML = `
-        <div data-role="title" class="tooltip-title" style="margin-bottom: 0.5em;font-size: 1.1em;font-weight: bold;"></div>
-        <div data-role="desktop-summary" class="tooltip-summary-row"></div>
-        <p data-role="description"></p>
-        <dl class="tooltip-stats" data-role="desktop-stats"></dl>
-        <footer id="tooltip_actions"></footer>
-      `;
-      tooltipBody = fallbackDiv;
-    }
-
-    if (tooltipBody) {
+    const useLit = this.game?.ui?.uiState != null;
+    if (!useLit) {
+      let tooltipBody = null;
+      if (window.templateLoader?.loaded) tooltipBody = window.templateLoader.cloneTemplate("tooltip-body-template");
+      if (!tooltipBody) {
+        const fallbackDiv = document.createElement("div");
+        fallbackDiv.innerHTML = `<div data-role="title" class="tooltip-title" style="margin-bottom: 0.5em;font-size: 1.1em;font-weight: bold;"></div><div data-role="desktop-summary" class="tooltip-summary-row"></div><p data-role="description"></p><dl class="tooltip-stats" data-role="desktop-stats"></dl><footer id="tooltip_actions"></footer>`;
+        tooltipBody = fallbackDiv;
+      }
+      if (tooltipBody) {
+        this.$tooltipContent.innerHTML = "";
+        this.$tooltipContent.appendChild(tooltipBody);
+      } else {
+        this.$tooltipContent.innerHTML = "Error: Tooltip template not found.";
+        this.game.performance.markEnd("tooltip_update_total");
+        return;
+      }
+    } else {
       this.$tooltipContent.innerHTML = "";
-      this.$tooltipContent.appendChild(tooltipBody);
+    }
+    if (useLit) {
+      const onBuy = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.game.upgradeset.purchaseUpgrade(this.current_obj.id)) {
+          if (this.game.audio) this.game.audio.play("upgrade");
+          this.update();
+        } else {
+          if (this.game.audio) this.game.audio.play("error");
+        }
+      };
+      const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, this.isMobile, onBuy);
+      try {
+        render(template, this.$tooltipContent);
+      } catch (_) {}
     } else {
-      this.$tooltipContent.innerHTML = "Error: Tooltip template not found.";
-      return;
+      const titleEl = this.$tooltipContent.querySelector('[data-role="title"]');
+      if (titleEl && this.current_obj?.title) titleEl.textContent = this.current_obj.title;
+      if (this.isMobile) {
+        populateMobileTooltip(this.$tooltipContent, this.current_obj, this.current_tile_context, this.game);
+      } else {
+        populateDesktopTooltip(this.$tooltipContent, this.current_obj, this.current_tile_context, this.game);
+      }
+      this.updateActionButtons(this.current_obj);
     }
-
-    const titleEl = this.$tooltipContent.querySelector('[data-role="title"]');
-    if (titleEl && this.current_obj?.title) {
-      titleEl.textContent = this.current_obj.title;
-    }
-
-    if (this.isMobile) {
-      populateMobileTooltip(this.$tooltipContent, this.current_obj, this.current_tile_context, this.game);
-    } else {
-      populateDesktopTooltip(this.$tooltipContent, this.current_obj, this.current_tile_context, this.game);
-    }
-    this.updateActionButtons(this.current_obj);
     this.game.performance.markEnd("tooltip_update_total");
   }
 
@@ -241,7 +251,6 @@ export class TooltipManager extends BaseComponent {
         e.stopPropagation();
         if (this.game.upgradeset.purchaseUpgrade(obj.id)) {
           if (this.game.audio) this.game.audio.play('upgrade');
-          this.game.upgradeset.check_affordability(this.game);
           this.update();
         } else {
           if (this.game.audio) this.game.audio.play('error');

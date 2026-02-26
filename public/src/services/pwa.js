@@ -1,4 +1,4 @@
-import { StorageUtils, setSlot1FromBackup } from "../utils/util.js";
+import { StorageUtils, setSlot1FromBackupAsync } from "../utils/util.js";
 import { showLoadBackupModal } from "./saveModals.js";
 import { showTechTreeSelection } from "./gameSetupFlow.js";
 import { createSplashManager, getFlavorMessages } from "./splashManager.js";
@@ -91,7 +91,7 @@ if (typeof window !== "undefined") {
   setupInstallPrompt(window.splashManager);
   window.showTechTreeSelection = showTechTreeSelection;
   window.showLoadBackupModal = showLoadBackupModal;
-  window.setSlot1FromBackup = setSlot1FromBackup;
+  window.setSlot1FromBackup = () => setSlot1FromBackupAsync();
 }
 
 let wakeLock = null;

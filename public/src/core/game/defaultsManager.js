@@ -1,5 +1,6 @@
 import { toDecimal } from "../../utils/decimal.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants.js";
+import { GameDimensionsSchema } from "../schemas.js";
 import { setDecimal } from "../store.js";
 import { validateObjectiveState } from "./ObjectiveStateValidator.js";
 
@@ -109,11 +110,9 @@ function validateObjectiveStateIfNeeded(game) {
 }
 
 function calculateBaseDimensions() {
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT_PX;
-  return {
-    base_cols: isMobile ? 10 : 12,
-    base_rows: isMobile ? 14 : 12
-  };
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
+  const raw = { base_cols: isMobile ? 10 : 12, base_rows: isMobile ? 14 : 12 };
+  return GameDimensionsSchema.parse(raw);
 }
 
 export async function setDefaults(game) {

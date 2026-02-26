@@ -1,3 +1,9 @@
+import { fromError } from "zod-validation-error";
+import { z } from "zod";
+import { EVENT_SCHEMA_REGISTRY } from "../schemas.js";
+
+const DEFAULT_PAYLOAD_SCHEMA = z.object({}).passthrough();
+
 export class GameEventDispatcher {
   constructor(logger) {
     this._listeners = new Map();
@@ -17,6 +23,13 @@ export class GameEventDispatcher {
   }
 
   emit(eventName, payload) {
+    const schema = EVENT_SCHEMA_REGISTRY[eventName] ?? DEFAULT_PAYLOAD_SCHEMA;
+    const result = schema.safeParse(payload ?? {});
+    if (!result.success) {
+      this._logger?.warn?.(`[Game] Event "${eventName}" payload validation failed:`, fromError(result.error).toString());
+      return;
+    }
+    payload = result.data;
     const list = this._listeners.get(eventName);
     if (!list) return;
     list.forEach((fn) => {

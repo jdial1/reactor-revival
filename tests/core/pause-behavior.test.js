@@ -222,10 +222,7 @@ describe("Pause Behavior", () => {
         game.pause();
         expect(game.paused).toBe(true);
 
-        // Get save state
-        const saveData = game.saveManager.getSaveState();
-
-        // Create new game and load save state
+        const saveData = await game.saveManager.getSaveState();
         const newGame = await setupGame();
         await newGame.applySaveState(saveData);
 

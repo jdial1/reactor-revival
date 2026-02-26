@@ -11,12 +11,12 @@ function applyStatePatch(ui, patch) {
 function handleObjectiveLoaded(ui, payload) {
   if (!payload?.objective) return;
   ui.stateManager.handleObjectiveLoaded(payload.objective, payload.objectiveIndex);
-  if (ui.objectivesUI?.updateObjectiveDisplay) ui.objectivesUI.updateObjectiveDisplay();
+  ui.objectivesUI?.updateObjectiveDisplayFromState?.();
 }
 
 function handleObjectiveCompleted(ui) {
   ui.stateManager.handleObjectiveCompleted();
-  if (ui.objectivesUI?.updateObjectiveDisplay) ui.objectivesUI.updateObjectiveDisplay();
+  ui.objectivesUI?.updateObjectiveDisplayFromState?.();
 }
 
 function handleObjectiveUnloaded(ui) {
@@ -139,7 +139,10 @@ export function attachGameEventListeners(game, ui) {
   on("showFloatingText", ({ tile, value }) => {
     if (ui.particleEffectsUI?.showFloatingTextAtTile && tile) ui.particleEffectsUI.showFloatingTextAtTile(tile, value);
   });
-  on("exoticParticlesChanged", (payload) => applyStatePatch(ui, payload));
+  on("exoticParticlesChanged", (payload) => {
+    applyStatePatch(ui, payload);
+    ui.coreLoopUI?.applyStateToDomForKeys?.(["exotic_particles", "current_exotic_particles", "total_exotic_particles"]);
+  });
   on("objectiveLoaded", (payload) => handleObjectiveLoaded(ui, payload));
   on("objectiveCompleted", () => handleObjectiveCompleted(ui));
   on("objectiveUnloaded", () => handleObjectiveUnloaded(ui));

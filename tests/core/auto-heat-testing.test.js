@@ -255,7 +255,8 @@ describe("Auto Heat Testing", () => {
         const { StorageUtils } = await import("../../public/src/utils/util.js");
         forcePurchaseUpgrade(game, 'heat_control_operator');
         game.reactor.has_melted_down = false;
-        const saveData = game.saveOrchestrator.getSaveState();
+        game.state.heat_control = true;
+        const saveData = await game.saveOrchestrator.getSaveState();
         StorageUtils.setRaw('reactorGameSave_1', StorageUtils.serialize(saveData));
         StorageUtils.set('reactorCurrentSaveSlot', 1);
         const savedData = StorageUtils.get('reactorGameSave_1');

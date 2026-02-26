@@ -490,7 +490,7 @@ describe("New Gameplay Upgrades", () => {
         it("Persistence: should restore new reactor properties after load", async () => {
             game.reactor.stirling_multiplier = 0.05;
             game.reactor.convective_boost = 0.2;
-            const saveData = game.saveManager.getSaveState();
+            const saveData = await game.saveManager.getSaveState();
             
             await game.set_defaults();
             expect(game.reactor.stirling_multiplier).toBe(0);

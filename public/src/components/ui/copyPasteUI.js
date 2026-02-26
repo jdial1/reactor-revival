@@ -1,5 +1,4 @@
-import { numFormat as fmt, StorageUtils } from "../../utils/util.js";
-import { escapeHtml } from "../../utils/stringUtils.js";
+import { numFormat as fmt, StorageUtils, serializeSave } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 import { BlueprintService } from "../../core/services/BlueprintService.js";
 import { renderMyLayoutsList } from "./copyPaste/myLayoutsListUI.js";
@@ -61,11 +60,19 @@ export class CopyPasteUI {
 
   _setupToggleCollapse(copyPasteBtns, toggleBtn) {
     if (!toggleBtn || !copyPasteBtns) return;
+    const uiState = this.ui.uiState;
     toggleBtn.onclick = () => {
-      copyPasteBtns.classList.toggle("collapsed");
-      StorageUtils.set("reactor_copy_paste_collapsed", copyPasteBtns.classList.contains("collapsed"));
+      if (uiState) uiState.copy_paste_collapsed = !uiState.copy_paste_collapsed;
+      else {
+        copyPasteBtns.classList.toggle("collapsed");
+        StorageUtils.set("reactor_copy_paste_collapsed", copyPasteBtns.classList.contains("collapsed"));
+      }
     };
-    if (StorageUtils.get("reactor_copy_paste_collapsed") === true) copyPasteBtns.classList.add("collapsed");
+    if (uiState) {
+      copyPasteBtns.classList.toggle("collapsed", uiState.copy_paste_collapsed);
+    } else if (StorageUtils.get("reactor_copy_paste_collapsed") === true) {
+      copyPasteBtns.classList.add("collapsed");
+    }
   }
 
   _setupDeselect(deselectBtn) {
@@ -115,7 +122,7 @@ export class CopyPasteUI {
     const myLayoutsCloseBtn = document.getElementById("my_layouts_close_btn");
     if (!myLayoutsBtn || !myLayoutsModal || !myLayoutsList) return;
     myLayoutsBtn.onclick = () => {
-      renderMyLayoutsList(ui, ui.layoutStorageUI.getMyLayouts(), myLayoutsList, myLayoutsModal, fmt, escapeHtml, () => myLayoutsBtn.click());
+      renderMyLayoutsList(ui, ui.layoutStorageUI.getMyLayouts(), myLayoutsList, myLayoutsModal, fmt, () => myLayoutsBtn.click());
       myLayoutsModal.classList.remove("hidden");
     };
     if (myLayoutsCloseBtn) myLayoutsCloseBtn.onclick = () => myLayoutsModal.classList.add("hidden");
@@ -156,9 +163,9 @@ export class CopyPasteUI {
     const ui = this.ui;
     const copyStateBtn = document.getElementById("copy_state_btn");
     if (!copyStateBtn) return;
-    copyStateBtn.onclick = () => {
-      const gameStateObject = ui.game.saveManager.getSaveState();
-      const gameStateString = StorageUtils.serialize(gameStateObject, JSON_INDENT_SPACES);
+    copyStateBtn.onclick = async () => {
+      const gameStateObject = await ui.game.saveManager.getSaveState();
+      const gameStateString = serializeSave(gameStateObject);
       navigator.clipboard
         .writeText(gameStateString)
         .then(() => {

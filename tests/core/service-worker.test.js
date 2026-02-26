@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi, fs, path } from '../helpers/setup.js';
+import path from 'path';
+import fs from 'fs';
+import { describe, it, expect, beforeEach, afterEach, vi } from '../helpers/setup.js';
 
 // Mock service worker registration
 const mockServiceWorkerRegistration = {

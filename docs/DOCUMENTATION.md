@@ -5,7 +5,7 @@ Welcome to the Reactor Revival documentation. This document provides comprehensi
 ## 1. System and Architecture
 
 ### 1.1. Overview
-Reactor Revival is a modern, browser-based incremental game built with vanilla JavaScript, HTML5, and CSS3. The architecture emphasizes modularity, performance, and maintainability through clear separation of concerns and data-driven design.
+Reactor Revival is a modern, browser-based incremental game built with vanilla JavaScript, HTML5, and CSS3. It uses Break Infinity for arbitrary-precision numeric calculations. The architecture emphasizes modularity, performance, and maintainability through clear separation of concerns and data-driven design.
 
 ### 1.2. Core Architecture Principles
 - **Modular Design:** Each module has a single, well-defined responsibility, promoting high cohesion and loose coupling. Dependencies are injected rather than hard-coded.
@@ -16,16 +16,19 @@ Reactor Revival is a modern, browser-based incremental game built with vanilla J
 The architecture is a modular, event-driven system composed of three distinct layers:
 
 #### 1.3.1. Core Logic Layer (`public/src/core/`)
--   **StateManager.js**: The single source of truth for all game state (e.g., `current_money`, `current_heat`, `protium_particles`, `pause`). It uses an observer pattern to notify subscribers of changes and is the only module authorized to directly mutate state.
+-   **StateManager.js**: Abstraction layer over game state. Reactive state is backed by valtio in `store.js`; `StateManager` syncs with it, manages UI-facing vars (e.g., `current_money`, `current_heat`, `pause`), and notifies subscribers of changes.
 -   **Game.js**: The central orchestrator. It provides a public API for high-level actions (`reboot_action`, `sell_action`) and delegates tasks to other core modules. It does not hold its own state.
 -   **Engine.js**: Manages the main game loop (tick), delegating per-tick operations to specialized subsystems. It implements performance optimizations like part categorization and caching.
--   **HeatManager.js**: A dedicated subsystem to handle all heat transfer logic, abstracting this complexity away from the main `Engine`.
+-   **heatSystem.js**: A dedicated subsystem to handle all heat transfer logic, abstracting this complexity away from the main `Engine`.
 -   **PartSet.js / UpgradeSet.js**: Manages the collections of all available parts and upgrades, handling creation, retrieval, and global state updates (e.g., affordability checks).
 
 #### 1.3.2. UI Layer (`public/src/components/`)
--   **UI.js**: The primary UI manager. It subscribes to the `StateManager` and orchestrates DOM updates in response to state changes.
--   **PageRouter.js**: Handles navigation between game screens (Reactor, Upgrades, Research), loading and unloading page-specific components.
--   **Page Components (`*Page.js`)**: Encapsulated components for each major UI view, built from HTML templates.
+The UI uses a component-based architecture with specialized modules in `public/src/components/ui/`. Each module manages a discrete UI concern.
+
+-   **ui.js**: Aggregator that initializes and holds references to all UI modules. It creates the `StateManager`, `InputHandler`, `ModalOrchestrator`, and instantiates specialized UI components (e.g., `InfoBarUI`, `PartsPanelUI`, `MeltdownUI`, `ObjectivesUI`).
+-   **PageRouter.js**: Handles navigation between game screens (Reactor, Upgrades, Research, etc.), loading HTML from `pages/*.html` and coordinating page-specific initialization.
+-   **pageSetupUI.js / pageInitUI.js**: Page lifecycle and setup logic; invoked by `PageRouter` when loading or unloading screens.
+-   **Specialized UI Modules** (`ui/`): Each feature has its own module—`infoBarUI.js`, `partsPanelUI.js`, `meltdownUI.js`, `objectivesUI.js`, `heatVisualsUI.js`, `gridInteractionUI.js`, `upgradesUI.js`, `copyPasteUI.js`, and others—allowing focused changes without touching a central manager.
 
 #### 1.3.3. Services Layer (`public/src/services/`)
 -   **dataService.js**: A centralized service for fetching and caching all game content from JSON files.
@@ -37,35 +40,35 @@ The architecture is a modular, event-driven system composed of three distinct la
 All game content is externalized into JSON files to create a data-driven architecture. The `dataService` is responsible for loading, caching, and validating this data at runtime.
 
 ### 2.2. Handling Large Numbers
-To prevent precision loss with numbers exceeding `Number.MAX_SAFE_INTEGER` (~9e15), any such value **must be stored as a string** in the JSON files. The `dataService` automatically parses these into `BigInt` for precise calculations.
+The game uses **Break Infinity** (`break_infinity.js`) for arbitrary-precision arithmetic. Values from JSON are converted via `toDecimal()` in `utils/decimal.js`, which accepts numbers or strings and yields a `Decimal` instance for precise calculations.
 
--   **Standard:** Store large numbers as full numeric strings (e.g., `"1000000000000000000"`), not in scientific notation.
--   **Scope:** Applies to fields like `base_cost`, `reward_money`, `power_output`, `heat_output`, etc.
+-   **Runtime:** All monetary values, heat, power, and similar quantities use `Decimal` instances internally.
+-   **Scope:** Applies to fields like `base_cost`, `reward`, `power_output`, `heat_output`, etc.
 
 ### 2.3. Data File Specifications
 
 #### 2.3.1. `part_list.json`
 An array of part templates defining the base type and rules for generating different levels.
--   **Required Fields:** `id`, `type`, `title`, `base_description`, `category`, `levels`, `base_cost` (string), `cost_multi`.
+-   **Required Fields:** `id`, `type`, `title`, `base_description`, `category`, `levels`, `base_cost` (number or string), `cost_multi`.
 -   **Category-Specific Fields:**
     -   **Cells:** `power_output`, `heat_output`, `base_ticks`, and associated multipliers and upgrade costs.
-    -   **Reflectors:** `power_boost`, `heat_boost`, `base_ticks`, and multipliers.
-    -   **Cooling Parts:** `base_vent`, `base_transfer` (string), `base_containment` (string), and multipliers.
+    -   **Reflectors:** `base_power_increase`, `base_heat_increase`, `base_ticks`, and multipliers.
+    -   **Cooling Parts:** `base_vent`, `base_transfer`, `base_containment`, and multipliers.
     -   **Capacity Parts:** `base_reactor_power`, `base_reactor_heat`, and multipliers.
     -   **Accelerators:** `ep_generation` and multipliers.
--   **Experimental Fields (Optional):** `experimental` (boolean), `experimental_level`, `experimental_erequires`, `experimental_cost` (string), and stat overrides.
+-   **Experimental Fields (Optional):** `experimental` (boolean), `experimental_level`, `experimental_erequires`, `experimental_cost` (number or string), and stat overrides.
 
 #### 2.3.2. `upgrade_list.json`
 An array of upgrade templates.
 -   **Required Fields:** `id`, `type`, `title`, `description`, `icon` (full path from `/public`), `multiplier`.
--   **Cost Fields (One Required):** `cost` (string, for Money) or `ecost` (string, for EP).
+-   **Cost Fields (One Required):** `cost` (number or string, for Money) or `ecost` (number or string, for EP).
 -   **Optional Fields:** `actionId`, `prerequisite`, `erequires`, `levels`.
 
 #### 2.3.3. `objective_list.json`
 An array of objective definitions.
--   **Required Fields:** `id`, `title`, `checkId`.
--   **Reward Fields (At Least One Required):** `reward_money` (string, optional) or `reward_ep` (number, optional).
--   **Optional Fields:** `description`, `prerequisite`.
+-   **Required Fields:** `title`, `checkId`.
+-   **Reward Fields (At Least One Required):** `reward` (number, optional, money reward) or `ep_reward` (number, optional).
+-   **Optional Fields:** `flavor_text`, `prerequisite`, `isChapterCompletion`.
 
 #### 2.3.4. `flavor_text.json` & `help_text.json`
 Objects containing UI text strings for tooltips, messages, and structured in-game help content.
@@ -75,7 +78,7 @@ Objects containing UI text strings for tooltips, messages, and structured in-gam
 ### 3.1. Heat Management System
 
 #### 3.1.1. Overview
-Heat is a core mechanic, existing in two forms: **Component Heat** (stored in a Part) and **Reactor Heat** (global). A dedicated `HeatManager` simulates heat transfer between adjacent components.
+Heat is a core mechanic, existing in two forms: **Component Heat** (stored in a Part) and **Reactor Heat** (global). The heat system (`heatSystem.js`) simulates heat transfer between adjacent components.
 
 #### 3.1.2. Heat Transfer
 Heat transfer follows a deterministic algorithm:
@@ -121,7 +124,7 @@ Valves are special components for advanced heat management, organized into three
 ### 3.3. Part Mechanics
 -   **Lifespan & Degradation:** Parts with finite lifespans (e.g., Cells, Reflectors) degrade over time. Their effectiveness (power, heat, bonuses) is proportional to their remaining ticks.
 -   **Protium Cell Bonus:** The "Protium Cell" provides a persistent, stacking power bonus. When its lifespan ends, a global `protium_particles` counter is incremented, boosting the power of all current and future Protium Cells.
--   **Exotic Particle Generation:** Particle Accelerators generate Exotic Particles (EP), a prestige currency, based on the amount of heat transferred through them.
+-   **Exotic Particle Generation:** Particle Accelerators generate Exotic Particles (EP), a prestige currency, based on the heat contained within the accelerator component.
 
 ### 3.4. Save/Load System
 The game state is serializable to JSON for saving to Local Storage or Google Drive. The `heat_controlled` and other toggle states (e.g. auto_sell, auto_buy, time_flux, pause) are saved in the `toggles` object and restored in `applySaveState` via the StateManager setVar chain, which triggers `onToggleStateChange` and correctly applies values to the Reactor instance.
@@ -181,104 +184,18 @@ A centralized logger is attached to the game object (`game.logger`) to reduce co
 -   **Usage:** Components should use `this.game.logger?.debug()`, `info()`, `warn()`, and `error()` for logging.
 -   **Console Controls:** Users can control the logging verbosity via functions available in the browser console (e.g., `setDebug()`, `setInfo()`).
 
-Chapter 1: First Fission: Mastering the Basics
+### 7.3. Game Progression
 
-This chapter introduces the fundamental concepts of power generation, heat management, and component interaction. It ensures the player understands the core loop of placing parts, earning money, and managing the immediate consequences.
+Objectives are defined in `objective_list.json` and follow a four-chapter structure. The list below reflects the current implementation.
 
-Existing Objectives:
+#### Chapter 1: First Fission
+Place your first Cell; Sell all your power; Reduce Heat to 0; Put a Heat Vent next to a Cell; Purchase an Upgrade; Purchase a Dual Cell; Have at least 10 Cells; Purchase a Perpetual Cell upgrade; Purchase a Capacitor; Complete Chapter 1.
 
-    First Cell: Place your first Cell in the reactor.
+#### Chapter 2: Scaling Production
+Generate at least 200 power per tick; Purchase Improved Chronometers; Have 5 different kinds of components; Have at least 10 Capacitors; Generate at least 500 power per tick; Upgrade Potent Uranium Cell to level 3 or higher; Auto-sell at least 500 power per tick; Sustain 1,000 power per tick for 30 ticks; Have at least 10 Advanced Capacitors and 10 Advanced Heat Vents; Complete Chapter 2.
 
-    Sell Power: Sell all your power by clicking 'Power'.
+#### Chapter 3: High-Energy Systems
+Have at least 5 Quad Plutonium Cells; Achieve passive income of $50,000 per tick; Generate at least 10,000 power per tick; Have at least 5 Quad Thorium Cells; Reach $1,000,000,000; Have at least $10,000,000,000; Have at least 5 Quad Seaborgium Cells; Sustain reactor heat above 10,000,000 for 30 ticks without meltdown; Complete Chapter 3.
 
-    Reduce Heat: Reduce your Current Heat to 0 by clicking 'Heat'.
-
-    Component Synergy: Put a Heat Vent next to a Cell.
-
-    First Upgrade: Purchase any upgrade from the Upgrades screen.
-
-    Store Power: Increase your Max Power using a Capacitor.
-
-    Component Diversity: Use at least 5 different kinds of components in your reactor.
-
-New Padded Objectives:
-8. Boosted Power: Place a Reflector next to a Cell to boost its power output.
-9. First Payday: Accumulate a total of $1,000.
-10. Heat Transfer: Place a Heat Exchanger between a hot component and a cooler one.
-Chapter 2: Scaling Production: Automation and Efficiency
-
-This chapter focuses on moving beyond basic setups to more complex and sustainable designs. It introduces automation, tiered components, and the necessity of scaling up both power generation and support systems.
-
-Existing Objectives:
-
-    Tier 2 Power: Purchase a Dual Uranium Cell.
-
-    Cell Expansion: Have at least 10 active Cells in your reactor.
-
-    Power Milestone I: Generate 200 Power per tick.
-
-    Faster Ticks: Purchase the 'Improved Chronometers' upgrade.
-
-    Capacitor Bank: Have at least 10 Capacitors in your reactor.
-
-    Perpetual Motion: Research Perpetual Uranium Cells to automate cell replacement.
-
-    Automated Income: Auto-sell 500 Power per tick.
-
-    Power Milestone II: Generate 500 Power per tick.
-
-    Potent Fuel: Research 'Potent Uranium III' to enhance Uranium Cells.
-
-    Initial Expansion: Expand the reactor grid twice.
-
-Chapter 3: High-Energy Systems: Advanced Power and Expansion
-
-This chapter challenges the player to manage larger, more powerful reactors. It introduces higher-tier fuel sources, significant income goals, and the challenge of managing massive amounts of heat.
-
-Existing Objectives:
-
-    Sustained Output: Sustain 1,000 Power per tick for 3 minutes without interruption.
-
-    Infrastructure Upgrade: Have at least 10 Capacitors II and 10 Vents II.
-
-    Plutonium Power: Have at least 5 active Quad Plutonium Cells in your reactor.
-
-    Economic Milestone I: Reach an income of 50k per tick.
-
-    Major Expansion: Expand the reactor grid four times.
-
-    Thorium Power: Have at least 5 active Quad Thorium Cells in your reactor.
-
-    First Billion: Earn your first billion dollars.
-
-    Seaborgium Power: Have at least 5 active Quad Seaborgium Cells in your reactor.
-
-    Economic Milestone II: Earn a total of 10 billion dollars.
-
-    Master of Heat: Sustain 10 Million Reactor Heat for 5 minutes without a meltdown.
-
-Chapter 4: The Experimental Frontier: Exotic Particles and Prestige
-
-This final chapter introduces the prestige mechanic of Exotic Particles (EP). Objectives focus on generating EP, purchasing powerful experimental upgrades, and utilizing endgame-tier components that redefine the limits of the reactor.
-
-Existing Objectives:
-
-    First Particle: Generate 10 Exotic Particles (EP).
-
-    First Research: Purchase the 'Infused Cells' and 'Unleashed Cells' experimental upgrades.
-
-    Reboot: Perform a Reboot for EP to reset your progress and gain prestige.
-
-    Particle Milestone I: Generate 51 EP in a single run.
-
-    Experimental Tech: Purchase any Experimental Upgrade.
-
-    Particle Milestone II: Generate 250 EP in a single run.
-
-    Place Experimental Part: Place an Experimental Part, like a Protium Cell, in your reactor.
-
-    Dolorium Power: Have at least 5 active Quad Dolorium Cells in your reactor.
-
-    Particle Milestone III: Generate 1,000 EP in a single run.
-
-    Nefastium Power: Have at least 5 active Quad Nefastium Cells in your reactor.
+#### Chapter 4: The Experimental Frontier
+Generate 10 Exotic Particles; Generate 51 EP; Generate 250 EP; Purchase Infused Cells and Unleashed Cells; Reboot in Research tab; Purchase an Experimental Upgrade; Have at least 5 Quad Dolorium Cells; Generate 1,000 EP; Have at least 5 Quad Nefastium Cells; Place an experimental part; Complete Chapter 4.

@@ -1,5 +1,5 @@
-import { Format, formatTime, formatDateTime, rotateSlot1ToBackup } from "../utils/util.js";
-import { supabaseSave } from "./SupabaseSave.js";
+import { Format, formatTime, formatDateTime, rotateSlot1ToBackupAsync, deserializeSave, serializeSave } from "../utils/util.js";
+import { fetchCloudSaveSlots } from "./savesQuery.js";
 import { logger } from "../utils/logger.js";
 import { SaveDataSchema } from "../core/schemas.js";
 
@@ -49,28 +49,12 @@ export class SplashSaveSlotUI {
     let cloudSaveSlots = [];
     let isCloudAvailable = false;
 
-    if (window.supabaseAuth && window.supabaseAuth.isSignedIn()) {
+    if (window.supabaseAuth?.isSignedIn?.()) {
       try {
-        const rawCloudSaves = await supabaseSave.getSaves();
-        cloudSaveSlots = rawCloudSaves.map((s) => {
-          let data = {};
-          try {
-            data = JSON.parse(s.save_data);
-          } catch (e) {}
-          return {
-            slot: s.slot_id,
-            exists: true,
-            lastSaveTime: parseInt(s.timestamp),
-            totalPlayedTime: data.total_played_time || 0,
-            currentMoney: data.current_money || 0,
-            exoticParticles: data.exotic_particles || 0,
-            data,
-            isCloud: true,
-          };
-        });
+        cloudSaveSlots = await fetchCloudSaveSlots();
         isCloudAvailable = true;
       } catch (e) {
-        logger.log('error', 'splash', 'Failed to load cloud saves', e);
+        logger.log("error", "splash", "Failed to load cloud saves", e);
       }
     }
 
@@ -116,12 +100,11 @@ export class SplashSaveSlotUI {
         reader.onload = async (event) => {
           try {
             const saveData = event.target.result;
-            const parsed = typeof saveData === "string" ? JSON.parse(saveData) : saveData;
+            const parsed = typeof saveData === "string" ? deserializeSave(saveData) : saveData;
             const result = SaveDataSchema.safeParse(parsed);
             if (!result.success) throw new Error('Save corrupted: validation failed');
             const validated = result.data;
-            const str = typeof saveData === "string" ? saveData : JSON.stringify(validated);
-            rotateSlot1ToBackup(str);
+            await rotateSlot1ToBackupAsync(serializeSave(validated));
             await sm.loadFromSaveSlot(1);
           } catch (err) {
             logger.log('error', 'splash', 'Failed to load save from file:', err);

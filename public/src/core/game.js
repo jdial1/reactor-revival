@@ -34,6 +34,7 @@ import {
   UPGRADE_MAX_LEVEL, MAX_GRID_DIMENSION, BASE_LOOP_WAIT_MS, BASE_MONEY,
   PRESTIGE_MULTIPLIER_PER_EP,
   PRESTIGE_MULTIPLIER_CAP, RESPEC_DOCTRINE_EP_COST,
+  BASE_MAX_HEAT, BASE_MAX_POWER,
 } from "./constants.js";
 
 export class Game {
@@ -73,6 +74,30 @@ export class Game {
     this.tileset = new Tileset(this);
     this.partset = new PartSet(this);
     this.upgradeset = new UpgradeSet(this);
+    this.state = createGameState({
+      current_money: toDecimal(0),
+      current_power: toDecimal(0),
+      current_heat: toDecimal(0),
+      current_exotic_particles: toDecimal(0),
+      total_exotic_particles: toDecimal(0),
+      reality_flux: toDecimal(0),
+      max_power: BASE_MAX_POWER,
+      max_heat: BASE_MAX_HEAT,
+      stats_power: 0,
+      stats_heat_generation: 0,
+      stats_vent: 0,
+      stats_inlet: 0,
+      stats_outlet: 0,
+      stats_net_heat: 0,
+      stats_total_part_heat: 0,
+      stats_cash: 0,
+      engine_status: "stopped",
+      auto_sell: false,
+      auto_buy: true,
+      heat_control: false,
+      time_flux: true,
+      pause: false,
+    });
     this.reactor = new Reactor(this);
     this.engine = null;
     this.performance = new Performance(this);
@@ -119,30 +144,6 @@ export class Game {
       prestigeCap: PRESTIGE_MULTIPLIER_CAP
     });
     this.timeKeeper = new TimeKeeper(this);
-    this.state = createGameState({
-      current_money: toDecimal(0),
-      current_power: this.reactor._current_power ?? toDecimal(0),
-      current_heat: this.reactor._current_heat ?? toDecimal(0),
-      current_exotic_particles: toDecimal(0),
-      total_exotic_particles: toDecimal(0),
-      reality_flux: toDecimal(0),
-      max_power: this.reactor.base_max_power,
-      max_heat: this.reactor.base_max_heat,
-      stats_power: 0,
-      stats_heat_generation: 0,
-      stats_vent: 0,
-      stats_inlet: 0,
-      stats_outlet: 0,
-      stats_net_heat: 0,
-      stats_total_part_heat: 0,
-      stats_cash: 0,
-      engine_status: "stopped",
-      auto_sell: false,
-      auto_buy: true,
-      heat_control: false,
-      time_flux: true,
-      pause: false,
-    });
     this.exoticParticleManager = new ExoticParticleManager(this);
   }
 

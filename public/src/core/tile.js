@@ -236,7 +236,7 @@ export class Tile {
         }
       } catch (_) { }
       if (this.game?.saveManager) {
-        this.game.saveManager.autoSave();
+        void this.game.saveManager.autoSave();
       }
     }
     return true;
@@ -262,7 +262,7 @@ export class Tile {
     try {
       this.game.emit?.("partsPanelRefresh");
     } catch (_) {}
-    if (this.game?.saveManager) this.game.saveManager.autoSave();
+    if (this.game?.saveManager) void this.game.saveManager.autoSave();
   }
 
   clearPart() {

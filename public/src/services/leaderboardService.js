@@ -1,5 +1,6 @@
 import { isTestEnv } from '../utils/util.js';
 import { logger } from '../utils/logger.js';
+import { queryClient, queryKeys } from './queryClient.js';
 
 function getLeaderboardApiUrl() {
     try {
@@ -103,29 +104,27 @@ export class LeaderboardService {
 
     async getTopRuns(sortBy = 'power', limit = 10) {
         if (this.disabled) return [];
-        if (!this.initialized) {
-            await this.init();
-        }
+        if (!this.initialized) await this.init();
 
         const validSorts = ['heat', 'power', 'money', 'timestamp'];
-        if (!validSorts.includes(sortBy)) sortBy = 'power';
+        const safeSort = validSorts.includes(sortBy) ? sortBy : 'power';
 
-        try {
-            const response = await fetch(
-                `${this.apiBaseUrl}/api/leaderboard/top?sortBy=${sortBy}&limit=${limit}`
-            );
-
-            if (!response.ok) {
-                logger.log('error', 'game', 'Error getting top runs:', response.statusText);
-                return [];
-            }
-
-            const data = await response.json();
-            return data.success ? data.data : [];
-        } catch (e) {
-            logger.log('error', 'game', 'Error getting top runs', e);
-            return [];
-        }
+        return queryClient.fetchQuery({
+            queryKey: queryKeys.leaderboard(safeSort, limit),
+            queryFn: async () => {
+                const response = await fetch(
+                    `${this.apiBaseUrl}/api/leaderboard/top?sortBy=${safeSort}&limit=${limit}`
+                );
+                if (!response.ok) {
+                    logger.log('error', 'game', 'Error getting top runs:', response.statusText);
+                    return [];
+                }
+                const data = await response.json();
+                return data.success ? data.data : [];
+            },
+            staleTime: 60 * 1000,
+            retry: 2,
+        });
     }
 }
 

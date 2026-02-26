@@ -1,5 +1,15 @@
-import { proxy, ref, snapshot } from "valtio/vanilla";
-import { toDecimal } from "../utils/decimal.js";
+import { proxy, ref, snapshot, subscribe } from "valtio/vanilla";
+import { subscribeKey } from "valtio/vanilla/utils";
+import { toDecimal, toNumber } from "../utils/decimal.js";
+
+/**
+ * State boundaries (Phase 3 Reactive Game Loop):
+ * - MACRO-STATE (Valtio): Money, Exotic Particles, Upgrades (via stats), total Reactor Heat,
+ *   current Objective, toggles. Updates a few times per second. UI subscribes via subscribeKey.
+ * - MICRO-STATE (Non-Valtio): Per-tile heat (tileset.heatMap Float32Array/SharedArrayBuffer),
+ *   particle effect coords, visual event buffer. Do NOT put in Valtio; proxy overhead at 60fps
+ *   causes stuttering. Only push aggregate results (e.g. current_heat) to Valtio.
+ */
 
 function toSerializable(value) {
   if (value == null) return value;
@@ -40,6 +50,53 @@ export function createGameState(initial = {}) {
     time_flux: initial.time_flux ?? true,
     pause: initial.pause ?? false,
     melting_down: initial.melting_down ?? false,
+    manual_override_mult: initial.manual_override_mult ?? 0,
+    override_end_time: initial.override_end_time ?? 0,
+    power_to_heat_ratio: initial.power_to_heat_ratio ?? 0,
+    flux_accumulator_level: initial.flux_accumulator_level ?? 0,
+    active_objective: {
+      title: "",
+      index: 0,
+      isComplete: false,
+      isChapterCompletion: false,
+      progressPercent: 0,
+      hasProgressBar: false,
+      checkId: null,
+    },
+    active_buffs: [],
+    parts_panel_version: initial.parts_panel_version ?? 0,
+    power_overflow_to_heat_ratio: initial.power_overflow_to_heat_ratio ?? 0.5,
+    manual_heat_reduce: initial.manual_heat_reduce ?? initial.base_manual_heat_reduce ?? 1,
+    auto_sell_multiplier: initial.auto_sell_multiplier ?? 0,
+    heat_controlled: initial.heat_controlled ?? false,
+    vent_multiplier_eff: initial.vent_multiplier_eff ?? 0,
+    get power_net_change() {
+      const statsPower = toNumber(this.stats_power ?? 0);
+      const autoSellEnabled = !!this.auto_sell;
+      const autoSellMultiplier = toNumber(this.auto_sell_multiplier ?? 0);
+      if (autoSellEnabled && autoSellMultiplier > 0) return statsPower - statsPower * autoSellMultiplier;
+      return statsPower;
+    },
+    get heat_net_change() {
+      const statsNetHeat = this.stats_net_heat;
+      let baseNetHeat;
+      if (typeof statsNetHeat === "number" && !isNaN(statsNetHeat)) baseNetHeat = statsNetHeat;
+      else {
+        const totalHeat = toNumber(this.stats_heat_generation ?? 0);
+        const statsVent = toNumber(this.stats_vent ?? 0);
+        const statsOutlet = toNumber(this.stats_outlet ?? 0);
+        baseNetHeat = totalHeat - statsVent - statsOutlet;
+      }
+      const currentPower = toNumber(this.current_power ?? 0);
+      const statsPower = toNumber(this.stats_power ?? 0);
+      const maxPower = toNumber(this.max_power ?? 0);
+      const potentialPower = currentPower + statsPower;
+      const excessPower = Math.max(0, potentialPower - maxPower);
+      const overflowToHeat = Number(this.power_overflow_to_heat_ratio ?? 0.5) || 0.5;
+      const overflowHeat = excessPower * overflowToHeat;
+      const manualReduce = toNumber(this.manual_heat_reduce ?? 1);
+      return baseNetHeat + overflowHeat - manualReduce;
+    },
   });
 }
 
@@ -60,3 +117,5 @@ export function updateDecimal(state, key, fn) {
 export function setDecimal(state, key, value) {
   state[key] = ref(toDecimal(value));
 }
+
+export { snapshot, subscribe, subscribeKey };

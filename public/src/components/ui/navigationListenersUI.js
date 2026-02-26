@@ -35,8 +35,6 @@ const setupDoctrineAndMiscListeners = (ui, signal) => {
   ui.DOMElements.respec_doctrine_btn?.addEventListener("click", () => {
     if (!ui.game?.respecDoctrine?.()) return;
     ui.userAccountUI.renderDoctrineTreeViewer();
-    ui.game.upgradeset?.check_affordability(ui.game);
-    ui.game.partset?.check_affordability(ui.game);
     ui.stateManager.setVar("current_exotic_particles", ui.game.state.current_exotic_particles);
   }, { signal });
   
@@ -87,6 +85,7 @@ export function setupResizeListeners(ui) {
       }
       ui.game?.ui?.stateManager?.checkObjectiveTextScrolling();
       ui._resizeParticleCanvas?.();
+      ui.mobileInfoBarUI?.updateControlDeckValues?.();
     }, 100);
   }, { signal });
 

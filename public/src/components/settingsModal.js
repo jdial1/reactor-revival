@@ -1,5 +1,5 @@
 import { html, render } from "lit-html";
-import { StorageUtils, rotateSlot1ToBackup, setSlot1FromBackup } from "../utils/util.js";
+import { StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync } from "../utils/util.js";
 import { logger } from "../utils/logger.js";
 import {
   createVolumeSection as createVolumeSectionFromModule,
@@ -95,9 +95,9 @@ class SettingsModal extends BaseComponent {
       }
       return;
     }
-    game.saveManager.autoSave();
-    const slot = Number(StorageUtils.get("reactorCurrentSaveSlot", 1));
-    const saveData = StorageUtils.getRaw(`reactorGameSave_${slot}`) || StorageUtils.getRaw("reactorGameSave");
+    await game.saveManager.autoSave();
+    const slot = Number(await StorageUtilsAsync.get("reactorCurrentSaveSlot", 1));
+    const saveData = await StorageUtilsAsync.getRaw(`reactorGameSave_${slot}`) || await StorageUtilsAsync.getRaw("reactorGameSave");
     if (!saveData) return;
     const blob = new Blob([saveData], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -110,7 +110,7 @@ class SettingsModal extends BaseComponent {
 
   async _applyImportedSaveData(saveData) {
     if (!saveData) return;
-    rotateSlot1ToBackup(saveData);
+    await rotateSlot1ToBackupAsync(saveData);
     const game = this.getGame();
     if (!game?.saveManager) return;
     let result = await game.saveManager.loadGame(1);
@@ -118,7 +118,7 @@ class SettingsModal extends BaseComponent {
     if (hasBackup) {
       const useBackup = await window.showLoadBackupModal();
       if (useBackup) {
-        setSlot1FromBackup();
+        await setSlot1FromBackupAsync();
         result = await game.saveManager.loadGame(1);
       }
     }
@@ -171,7 +171,7 @@ class SettingsModal extends BaseComponent {
     if (!handle || !game?.saveManager) return;
     try {
       const writable = await handle.createWritable();
-      const data = StorageUtils.serialize(game.saveManager.getSaveState());
+      const data = serializeSave(await game.saveManager.getSaveState());
       await writable.write(data);
       await writable.close();
     } catch (e) {

@@ -297,12 +297,9 @@ async function solveObjective(index, game) {
       game.ui.stateManager.setVar("exotic_particles", 250);
       break;
     case "investInResearch1":
-      buyUpgradeViaUI(game, "laboratory");
-      game.current_exotic_particles = 1000;
-      game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
-      game.upgradeset.check_affordability(game);
-      buyUpgradeViaUI(game, "infused_cells");
-      buyUpgradeViaUI(game, "unleashed_cells");
+      game.upgradeset.getUpgrade("laboratory")?.setLevel(1);
+      game.upgradeset.getUpgrade("infused_cells")?.setLevel(1);
+      game.upgradeset.getUpgrade("unleashed_cells")?.setLevel(1);
       break;
     case "reboot":
       game.exotic_particles = 10;

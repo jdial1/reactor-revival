@@ -32,14 +32,14 @@
     <script src="lib/break_infinity.min.js"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script type="importmap">
-      {"imports":{"valtio/vanilla":"https://esm.sh/valtio@2.3.0/vanilla","lit-html":"./lib/lit-html.js"}}
+      {"imports":{"zod":"./lib/zod.js","zod/v3":"./lib/zod.js","zod-validation-error":"./lib/zod-validation-error.js","idb-keyval":"./lib/idb-keyval.js","valtio/vanilla":"https://esm.sh/valtio@2.3.0/vanilla","valtio/vanilla/utils":"https://esm.sh/valtio@2.3.0/vanilla/utils","lit-html":"./lib/lit-html.js","lit-html/directives/class-map.js":"./lib/lit-html/directives/class-map.js","lit-html/directives/style-map.js":"./lib/lit-html/directives/style-map.js","lit-html/directives/repeat.js":"./lib/lit-html/directives/repeat.js","lit-html/directives/when.js":"./lib/lit-html/directives/when.js","lit-html/directives/unsafe-html.js":"./lib/lit-html/directives/unsafe-html.js","superjson":"https://esm.sh/superjson@2.2.6","@tanstack/query-core":"https://esm.sh/@tanstack/query-core@5.90.20"}}
     </script>
   </head>
   <body>
     <div id="splash-container"></div>
     <div id="wrapper" class="hidden"></div>
     <div id="modal-root"></div>
-    <!-- Legacy templates (part-btn, upgrade-card, tooltip-body, game-setup) loaded via templateLoader.js. Splash/settings use lit-html. -->
+    <!-- Legacy templates (tooltip-body, game-setup) loaded via templateLoader.js. Parts/upgrades/splash/settings use lit-html. -->
     <script type="module" src="src/components/domMapper.js"></script>
     <script type="module" src="src/services/templateLoader.js"></script>
     <script type="module" src="src/utils/logger.js"></script>

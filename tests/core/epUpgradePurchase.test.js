@@ -247,6 +247,7 @@ describe('EP Upgrade Purchase Functionality', () => {
 
             game.current_exotic_particles = fractalPiping.base_ecost;
             game.ui.stateManager.setVar("current_exotic_particles", fractalPiping.base_ecost);
+            game.upgradeset.check_affordability(game);
 
             const fractalPurchased = game.upgradeset.purchaseUpgrade("fractal_piping");
             expect(fractalPurchased).toBe(true);

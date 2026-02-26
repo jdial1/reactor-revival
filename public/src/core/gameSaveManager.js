@@ -1,7 +1,18 @@
-import { StorageUtils, rotateSlot1ToBackup, getBackupSaveForSlot1 } from "../utils/util.js";
+import { fromError } from "zod-validation-error";
+import { StorageUtilsAsync, serializeSave, deserializeSave, rotateSlot1ToBackupAsync, getBackupSaveForSlot1Async } from "../utils/util.js";
 import { leaderboardService } from "../services/leaderboardService.js";
 import { logger } from "../utils/logger.js";
 import { SaveDataSchema } from "./schemas.js";
+
+export function parseAndValidateSave(raw) {
+  const parsed = typeof raw === "string" ? deserializeSave(raw) : raw;
+  const result = SaveDataSchema.safeParse(parsed);
+  if (!result.success) {
+    logger.log("error", "game", "Save validation failed:", fromError(result.error).toString());
+    throw new Error("Save corrupted: validation failed");
+  }
+  return result.data;
+}
 
 export class GameSaveManager {
   constructor(saveOrchestrator, getPersistenceContext) {
@@ -9,8 +20,8 @@ export class GameSaveManager {
     this.getPersistenceContext = getPersistenceContext;
   }
 
-  getSaveState() {
-    return this.saveOrchestrator.getSaveState();
+  async getSaveState() {
+    return await this.saveOrchestrator.getSaveState();
   }
 
   _hasCoreDataChanged(newData, existingData) {
@@ -57,15 +68,15 @@ export class GameSaveManager {
     return false;
   }
 
-  saveToSlot(slot) {
-    this._saveGame(slot ?? this.getNextSaveSlot(), false);
+  async saveToSlot(slot) {
+    await this._saveGame(slot ?? await this.getNextSaveSlot(), false);
   }
 
-  autoSave() {
-    this._saveGame(null, true);
+  async autoSave() {
+    await this._saveGame(null, true);
   }
 
-  _saveGame(slot = null, isAutoSave = false) {
+  async _saveGame(slot = null, isAutoSave = false) {
     const ctx = this.getPersistenceContext();
     if (ctx.isSandbox) return;
     logger.log('debug', 'game', `Attempting to save game. Meltdown state: ${ctx.hasMeltedDown}`);
@@ -100,56 +111,45 @@ export class GameSaveManager {
         });
       }
 
-      const saveData = this.getSaveState();
+      const saveData = await this.getSaveState();
 
-      if (typeof localStorage !== "undefined" && localStorage !== null) {
-        if (slot === null) {
-          slot = this.getNextSaveSlot();
+      if (typeof indexedDB !== "undefined") {
+        const effectiveSlot = await saveGameMutation({
+          slot,
+          saveData,
+          getNextSaveSlot: () => this.getNextSaveSlot(),
+        });
+        if (effectiveSlot != null) {
+          const payload = serializeSave(saveData);
+          logger.log("debug", "game", `Game state saved to slot ${effectiveSlot}. Size: ${payload.length} bytes.`);
+          ctx.debugHistory.add("game", "Game saved", { slot: effectiveSlot, size: payload.length });
         }
-
-        const saveKey = `reactorGameSave_${slot}`;
-        const payload = StorageUtils.serialize(saveData);
-        if (slot === 1) {
-          rotateSlot1ToBackup(payload);
-        } else {
-          StorageUtils.setRaw(saveKey, payload);
-        }
-        logger.log('debug', 'game', `Game state saved to slot ${slot}. Size: ${payload.length} bytes.`);
-        ctx.debugHistory.add('game', 'Game saved', { slot, size: payload.length });
-
-        StorageUtils.set("reactorCurrentSaveSlot", slot);
       } else if (
         typeof process !== "undefined" &&
         process.env?.NODE_ENV === "test"
       ) {
         return;
       }
-
-      if (typeof window !== "undefined" && window.googleDriveSave && window.googleDriveSave.isSignedIn) {
-        window.googleDriveSave.save(StorageUtils.serialize(saveData)).catch((error) => {
-          logger.log('error', 'game', 'Failed to auto-save to Google Drive:', error);
-        });
-      }
     } catch (error) {
       if (
         typeof process === "undefined" ||
         process.env?.NODE_ENV !== "test" ||
-        !error.message.includes("localStorage")
+        !error.message.includes("indexedDB")
       ) {
         logger.log('error', 'game', 'Error saving game:', error);
       }
     }
   }
 
-  getNextSaveSlot() {
-    const currentSlot = Number(StorageUtils.get("reactorCurrentSaveSlot", 1));
+  async getNextSaveSlot() {
+    const currentSlot = Number(await StorageUtilsAsync.get("reactorCurrentSaveSlot", 1));
     return ((currentSlot % 3) + 1);
   }
 
-  getSaveSlotInfo(slot) {
+  async getSaveSlotInfo(slot) {
     try {
       const saveKey = `reactorGameSave_${slot}`;
-      const savedData = StorageUtils.get(saveKey);
+      const savedData = await StorageUtilsAsync.get(saveKey);
       if (savedData != null) {
         return {
           exists: true,
@@ -166,10 +166,10 @@ export class GameSaveManager {
     return { exists: false };
   }
 
-  getAllSaveSlots() {
+  async getAllSaveSlots() {
     const slots = [];
     for (let i = 1; i <= 3; i++) {
-      const slotInfo = this.getSaveSlotInfo(i);
+      const slotInfo = await this.getSaveSlotInfo(i);
       slots.push({
         slot: i,
         ...slotInfo
@@ -186,14 +186,14 @@ export class GameSaveManager {
       let savedData;
       if (slot !== null) {
         const saveKey = `reactorGameSave_${slot}`;
-        savedData = StorageUtils.get(saveKey);
+        savedData = await StorageUtilsAsync.get(saveKey);
       } else {
-        savedData = StorageUtils.get("reactorGameSave");
+        savedData = await StorageUtilsAsync.get("reactorGameSave");
         if (savedData == null) {
           let mostRecentSlot = null;
           let mostRecentTime = 0;
           for (let i = 1; i <= 3; i++) {
-            const slotInfo = this.getSaveSlotInfo(i);
+            const slotInfo = await this.getSaveSlotInfo(i);
             if (slotInfo.exists && slotInfo.lastSaveTime > mostRecentTime) {
               mostRecentTime = slotInfo.lastSaveTime;
               mostRecentSlot = i;
@@ -201,7 +201,7 @@ export class GameSaveManager {
           }
           if (mostRecentSlot) {
             effectiveSlot = mostRecentSlot;
-            savedData = StorageUtils.get(`reactorGameSave_${mostRecentSlot}`);
+            savedData = await StorageUtilsAsync.get(`reactorGameSave_${mostRecentSlot}`);
           }
         }
       }
@@ -209,9 +209,8 @@ export class GameSaveManager {
       if (savedData != null) {
         const result = SaveDataSchema.safeParse(savedData);
         if (!result.success) {
-          const readable = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-          logger.log('error', 'game', 'Save validation failed:', readable || result.error.message);
-          if (effectiveSlot === 1 && getBackupSaveForSlot1()) {
+          logger.log('error', 'game', 'Save validation failed:', fromError(result.error).toString());
+          if (effectiveSlot === 1 && await getBackupSaveForSlot1Async()) {
             return { success: false, parseError: true, backupAvailable: true };
           }
           throw new Error('Save corrupted: validation failed');
@@ -220,21 +219,21 @@ export class GameSaveManager {
         await ctx.applySaveState(result.data);
         return true;
       }
-      if (effectiveSlot === 1 && getBackupSaveForSlot1()) {
+      if (effectiveSlot === 1 && await getBackupSaveForSlot1Async()) {
         return { success: false, parseError: true, backupAvailable: true };
       }
       if (effectiveSlot !== null) {
-        StorageUtils.remove(`reactorGameSave_${effectiveSlot}`);
+        await StorageUtilsAsync.remove(`reactorGameSave_${effectiveSlot}`);
       } else {
-        StorageUtils.remove("reactorGameSave");
+        await StorageUtilsAsync.remove("reactorGameSave");
       }
       throw new Error(`Save corrupted: invalid JSON in slot ${effectiveSlot ?? 'default'}`);
     } catch (error) {
       logger.log('error', 'game', 'Error loading game:', error);
       if (slot !== null) {
-        StorageUtils.remove(`reactorGameSave_${slot}`);
+        await StorageUtilsAsync.remove(`reactorGameSave_${slot}`);
       } else {
-        StorageUtils.remove("reactorGameSave");
+        await StorageUtilsAsync.remove("reactorGameSave");
       }
     }
     return false;
@@ -259,13 +258,6 @@ export class GameSaveManager {
   }
 
   validateSaveData(data) {
-    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-    const result = SaveDataSchema.safeParse(parsed);
-    if (!result.success) {
-      const readable = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-      logger.log('error', 'game', 'Save validation failed:', readable || result.error.message);
-      throw new Error('Save corrupted: validation failed');
-    }
-    return result.data;
+    return parseAndValidateSave(data);
   }
 }

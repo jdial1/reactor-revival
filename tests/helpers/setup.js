@@ -25,8 +25,29 @@ if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
 import { URL as NodeURL } from 'url';
 import { vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
+import pathModule from 'path';
 import { JSDOM, ResourceLoader } from 'jsdom';
+
+vi.mock('idb-keyval', () => {
+  const getStorage = () => (typeof global !== 'undefined' && global.localStorage) || (typeof window !== 'undefined' && window.localStorage);
+  return {
+    get: (key) => {
+      const s = getStorage();
+      const v = s?.getItem?.(key);
+      return Promise.resolve(v !== undefined && v !== null ? v : undefined);
+    },
+    set: (key, value) => {
+      const s = getStorage();
+      if (s?.setItem) s.setItem(key, value);
+      return Promise.resolve();
+    },
+    del: (key) => {
+      const s = getStorage();
+      if (s?.removeItem) s.removeItem(key);
+      return Promise.resolve();
+    },
+  };
+});
 
 // Helper to create a mock localStorage implementation.
 function createMockLocalStorage() {
@@ -127,7 +148,7 @@ const mockBrowserGlobals = () => {
     global.document = {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
-      body: { appendChild: vi.fn(), style: {}, classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() } },
+      body: { appendChild: vi.fn(), style: {}, classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), contains: vi.fn(() => false) } },
       createElement: () => ({
         style: {},
         classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
@@ -176,7 +197,6 @@ export {
   afterEach,
   vi,
   fs,
-  path,
   JSDOM,
   Game,
   UI,
@@ -213,13 +233,13 @@ console.error = createLogger('error');
 // Helper to get the full test name (e.g., "describe > describe > it").
 const getFullTestName = (task) => {
   if (!task) return 'global';
-  const path = [];
+  const pathParts = [];
   let current = task;
   while (current && current.name) {
-    path.unshift(current.name);
+    pathParts.unshift(current.name);
     current = current.suite;
   }
-  return path.join(' > ');
+  return pathParts.join(' > ');
 };
 
 // Helper for diffing game state before and after a test.
@@ -368,7 +388,7 @@ export async function setupGameLogicOnly() {
  * Sets up a game instance with a full JSDOM environment for UI tests.
  */
 export async function setupGameWithDOM() {
-  const indexHtmlPath = path.resolve(__dirname, '../../public/index.html');
+  const indexHtmlPath = pathModule.resolve(__dirname, '../../public/index.html');
   let indexHtml = fs.readFileSync(indexHtmlPath, 'utf-8');
   
   // Remove script tags to prevent JSDOM from trying to load external scripts
@@ -384,7 +404,7 @@ export async function setupGameWithDOM() {
       }
       // For other resources, try to serve from filesystem
       const cleanPath = urlStr.replace(/^http:\/\/localhost:8080\//, '').split('?')[0];
-      const filePath = path.resolve(__dirname, '../../public', cleanPath);
+      const filePath = pathModule.resolve(__dirname, '../../public', cleanPath);
       if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         return Promise.resolve(fs.readFileSync(filePath));
       }
@@ -547,10 +567,10 @@ export async function setupGameWithDOM() {
     }
     
     const cleanPath = urlStr.replace(/^http:\/\/localhost:8080\//, '').split('?')[0];
-    const filePath = path.resolve(__dirname, '../../public', cleanPath);
+    const filePath = pathModule.resolve(__dirname, '../../public', cleanPath);
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const content = fs.readFileSync(filePath, 'utf-8');
-      const contentType = path.extname(filePath) === '.json' ? 'application/json' : 'text/plain';
+      const contentType = pathModule.extname(filePath) === '.json' ? 'application/json' : 'text/plain';
       return { 
         ok: true, 
         text: () => Promise.resolve(content), 
@@ -563,17 +583,17 @@ export async function setupGameWithDOM() {
 
   // Pre-load and inject HTML partials to build a complete DOM for UI tests.
   try {
-    const pagesDir = path.resolve(__dirname, '../../public/pages');
-    const componentDir = path.resolve(__dirname, '../../public/components');
+    const pagesDir = pathModule.resolve(__dirname, '../../public/pages');
+    const componentDir = pathModule.resolve(__dirname, '../../public/components');
 
     // List all HTML partials that define UI layout
     const partials = [
-      path.join(pagesDir, 'reactor.html'),
-      path.join(pagesDir, 'upgrades.html'),
-      path.join(pagesDir, 'research.html'),
-      path.join(pagesDir, 'game.html'),
-      path.join(pagesDir, 'leaderboard.html'),
-      path.join(componentDir, 'templates.html'),
+      pathModule.join(pagesDir, 'reactor.html'),
+      pathModule.join(pagesDir, 'upgrades.html'),
+      pathModule.join(pagesDir, 'research.html'),
+      pathModule.join(pagesDir, 'game.html'),
+      pathModule.join(pagesDir, 'leaderboard.html'),
+      pathModule.join(componentDir, 'templates.html'),
       // Add any other HTML files that define your UI layout
     ];
 

@@ -1,15 +1,5 @@
-import { StorageUtils } from "../../utils/util.js";
 import { toNumber } from "../../utils/mathUtils.js";
-
-function getAffordabilitySettings() {
-  return {
-    hideUpgrades: StorageUtils.get("reactor_hide_unaffordable_upgrades", true) !== false,
-    hideResearch: StorageUtils.get("reactor_hide_unaffordable_research", true) !== false,
-    hideMaxUpgrades: StorageUtils.get("reactor_hide_max_upgrades", true) !== false,
-    hideMaxResearch: StorageUtils.get("reactor_hide_max_research", true) !== false,
-    hideOtherDoctrine: StorageUtils.get("reactor_hide_other_doctrine_upgrades", false) === true,
-  };
-}
+import { getAffordabilitySettings } from "../../core/preferencesStore.js";
 
 function handleUnavailableUpgrade(upgrade, hideOtherDoctrine) {
   if (!upgrade.$el) return;
