@@ -1,7 +1,6 @@
 import { html, render } from "lit-html";
 import { runCheckAffordability } from "../../../core/upgradeset/affordabilityChecker.js";
 import { UpgradeCard } from "../../buttonFactory.js";
-import { repeat } from "../../../utils/litHelpers.js";
 
 const EXPAND_UPGRADE_IDS = ["expand_reactor_rows", "expand_reactor_cols"];
 
@@ -40,7 +39,7 @@ function shouldSkipCellUpgrade(upgrade, upgradeset) {
 export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
   if (typeof document === "undefined") return;
   const wrapper = document.getElementById(wrapperId);
-  if (!wrapper) return;
+  if (!wrapper?.isConnected) return;
 
   const filtered = upgradeset.upgradesArray
     .filter(filterFn)
@@ -58,43 +57,45 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
 
   byContainer.forEach((upgrades, containerId) => {
     const container = document.getElementById(containerId);
-    if (!container) return;
+    if (!container?.isConnected) return;
 
-    const template = html`${repeat(
-      upgrades,
-      (u) => u.id,
-      (upgrade) => {
-        const onBuyClick = (e) => {
-          e.stopPropagation();
-          if (!upgradeset.isUpgradeAvailable(upgrade.id)) return;
-          if (!upgradeset.purchaseUpgrade(upgrade.id)) {
-            if (upgradeset.game?.audio) upgradeset.game.audio.play("error");
-            return;
-          }
-          if (upgradeset.game?.audio) upgradeset.game.audio.play("upgrade");
-        };
-        const onBuyMaxClick = (e) => {
-          e.stopPropagation();
-          if (!upgradeset.game?.isSandbox) return;
-          if (upgradeset.isUpgradeAvailable(upgrade.id)) {
-            const count = upgradeset.purchaseUpgradeToMax(upgrade.id);
-            if (count > 0 && upgradeset.game?.audio) upgradeset.game.audio.play("upgrade");
-          }
-        };
-        const onResetClick = (e) => {
-          e.stopPropagation();
-          if (upgradeset.game?.isSandbox) upgradeset.resetUpgradeLevel(upgrade.id);
-        };
-        return UpgradeCard(upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick });
-      }
-    )}`;
-    render(template, container);
+    const cards = upgrades.map((upgrade) => {
+      const onBuyClick = (e) => {
+        e.stopPropagation();
+        if (!upgradeset.isUpgradeAvailable(upgrade.id)) return;
+        if (!upgradeset.purchaseUpgrade(upgrade.id)) {
+          if (upgradeset.game?.audio) upgradeset.game.audio.play("error");
+          return;
+        }
+        if (upgradeset.game?.audio) upgradeset.game.audio.play("upgrade");
+      };
+      const onBuyMaxClick = (e) => {
+        e.stopPropagation();
+        if (!upgradeset.game?.isSandbox) return;
+        if (upgradeset.isUpgradeAvailable(upgrade.id)) {
+          const count = upgradeset.purchaseUpgradeToMax(upgrade.id);
+          if (count > 0 && upgradeset.game?.audio) upgradeset.game.audio.play("upgrade");
+        }
+      };
+      const onResetClick = (e) => {
+        e.stopPropagation();
+        if (upgradeset.game?.isSandbox) upgradeset.resetUpgradeLevel(upgrade.id);
+      };
+      return UpgradeCard(upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick });
+    });
+    try {
+      render(html`${cards}`, container);
+    } catch (err) {
+      const msg = String(err?.message ?? "");
+      if (msg.includes("nextSibling") || msg.includes("parentNode")) return;
+      throw err;
+    }
   });
 
   filtered.forEach((upgrade) => {
     const container = document.getElementById(getUpgradeContainerId(upgrade));
-    if (!container) return;
-    upgrade.$el = container.querySelector(`[data-id="${upgrade.id}"]`);
+    if (!container?.isConnected) return;
+    upgrade.$el = container?.querySelector(`[data-id="${upgrade.id}"]`);
     if (upgrade.$el) {
       const descEl = upgrade.$el.querySelector(".upgrade-description");
       if (descEl) {

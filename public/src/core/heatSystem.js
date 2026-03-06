@@ -1,3 +1,4 @@
+import { toDecimal } from "../utils/decimal.js";
 import { runHeatTransferStep } from "./heatCalculations.js";
 import { logger } from "../utils/logger.js";
 
@@ -34,7 +35,7 @@ export class HeatSystem {
       recordTransfers,
     });
     engine.game.tileset.heatMap = heat;
-    engine.game.reactor.current_heat = result.reactorHeat;
+    engine.game.reactor.current_heat = toDecimal(result.reactorHeat);
     if (game.performance && game.performance.shouldMeasure()) {
       game.performance.markEnd("tick_heat_transfer");
     }

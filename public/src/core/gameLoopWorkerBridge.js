@@ -1,7 +1,6 @@
 import { fromError } from "zod-validation-error";
-import { toDecimal } from "../utils/decimal.js";
-import { setDecimal, toPlainObject } from "./store.js";
-import { toNumber } from "../utils/mathUtils.js";
+import { toDecimal, toNumber } from "../utils/decimal.js";
+import { setDecimal, snapshot } from "./store.js";
 import { HEAT_EPSILON } from "./heatCalculations.js";
 import { GameLoopTickResultSchema } from "./schemas.js";
 import { logger } from "../utils/logger.js";
@@ -100,10 +99,10 @@ function buildPartSnapshot(ts) {
 
 function buildReactorStatePayload(reactor) {
   return {
-    current_heat: toNumber(reactor.current_heat),
-    current_power: toNumber(reactor.current_power),
-    max_heat: toNumber(reactor.max_heat),
-    max_power: toNumber(reactor.max_power),
+    current_heat: reactor.current_heat,
+    current_power: reactor.current_power,
+    max_heat: toNumber(reactor.max_heat ?? 0),
+    max_power: toNumber(reactor.max_power ?? 0),
     auto_sell_multiplier: reactor.auto_sell_multiplier ?? 0,
     sell_price_multiplier: reactor.sell_price_multiplier ?? 1,
     power_overflow_to_heat_ratio: reactor.power_overflow_to_heat_ratio ?? 0.5,
@@ -122,13 +121,15 @@ export function serializeStateForGameLoopWorker(engine) {
   const gridLen = ts.heatMap.length;
   if (!engine._heatUseSAB) return null;
   ensureSABsReady(engine, game, gridLen);
-  const stateSnapshot = game.state ? toPlainObject(game.state) : {};
+  const stateSnapshot = game.state ? snapshot(game.state) : null;
 
   const { partTable, partLayout } = buildPartSnapshot(ts);
-  const autoSellFromStore = stateSnapshot.auto_sell !== undefined;
+  const autoSellFromStore = stateSnapshot?.auto_sell !== undefined;
 
+  const rawMoney = stateSnapshot?.current_money;
+  const currentMoney = rawMoney != null ? (typeof rawMoney === "number" || typeof rawMoney === "string" ? rawMoney : toNumber(rawMoney)) : undefined;
   return {
-    current_money: stateSnapshot.current_money,
+    current_money: currentMoney,
     heatBuffer: engine._heatSABView.buffer,
     partLayout,
     partTable,
@@ -136,7 +137,7 @@ export function serializeStateForGameLoopWorker(engine) {
     rows: game.gridManager.rows,
     cols: game.gridManager.cols,
     maxCols: ts.max_cols ?? game.gridManager.cols,
-    autoSell: autoSellFromStore ? !!stateSnapshot.auto_sell : !!game.ui?.stateManager?.getVar?.("auto_sell"),
+    autoSell: autoSellFromStore ? !!stateSnapshot?.auto_sell : !!game.ui?.stateManager?.getVar?.("auto_sell"),
     multiplier: 1,
     tickCount: 1,
   };
@@ -164,7 +165,8 @@ function applyTileUpdates(ts, tileUpdates) {
   if (!Array.isArray(tileUpdates)) return;
   tileUpdates.forEach((u) => {
     const tile = ts.getTile(u.r, u.c);
-    if (tile && typeof u.ticks === "number") tile.ticks = u.ticks;
+    if (!tile) return;
+    if (typeof u.ticks === "number") tile.ticks = u.ticks;
   });
 }
 
@@ -209,6 +211,7 @@ export function applyGameLoopTickResult(engine, data) {
   applyDepletionIndices(engine, ts, data.depletionIndices, maxCols);
   applyTileUpdates(ts, data.tileUpdates);
   if (Number(data.moneyEarned) > 0) game.addMoney(data.moneyEarned);
+  reactor.checkMeltdown();
   syncUIAfterTick(engine, data, reactor);
   syncSessionAfterTick(engine, data);
 }

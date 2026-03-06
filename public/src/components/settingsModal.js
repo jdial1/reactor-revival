@@ -3,9 +3,9 @@ import { StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1Fro
 import { logger } from "../utils/logger.js";
 import {
   createVolumeSection as createVolumeSectionFromModule,
-  createToggleSection as createToggleSectionFromModule,
-  createExportSection as createExportSectionFromModule,
-  createNavAboutSection as createNavAboutSectionFromModule
+  createVisualSection as createVisualSectionFromModule,
+  createSystemSection as createSystemSectionFromModule,
+  createDataSection as createDataSectionFromModule
 } from "./settingsmodal/sectionBuilders.js";
 import {
   bindSettingsEvents,
@@ -20,8 +20,9 @@ class SettingsModal extends BaseComponent {
     this.overlay = null;
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this._overlayClickClose = null;
-    this._overlayClickGroup = null;
+    this._tabClickHandler = null;
     this._appContext = null;
+    this.activeTab = "audio";
   }
 
   setAppContext(ctx) {
@@ -42,6 +43,7 @@ class SettingsModal extends BaseComponent {
     this.createDOM();
     document.addEventListener("keydown", this.handleKeyDown);
   }
+
   hide() {
     if (!this.isVisible) return;
     this.isVisible = false;
@@ -57,9 +59,9 @@ class SettingsModal extends BaseComponent {
         this.overlay.removeEventListener("click", this._overlayClickClose);
         this._overlayClickClose = null;
       }
-      if (this._overlayClickGroup) {
-        this.overlay.removeEventListener("click", this._overlayClickGroup);
-        this._overlayClickGroup = null;
+      if (this._tabClickHandler) {
+        this.overlay.removeEventListener("click", this._tabClickHandler);
+        this._tabClickHandler = null;
       }
       this.overlay = this.removeOverlay(this.overlay);
     }
@@ -74,6 +76,7 @@ class SettingsModal extends BaseComponent {
       }
     }
   }
+
   handleKeyDown(e) {
     if (e.key === "Escape") this.hide();
   }
@@ -189,12 +192,16 @@ class SettingsModal extends BaseComponent {
     return createVolumeSectionFromModule();
   }
 
-  createToggleSection() {
-    return createToggleSectionFromModule();
+  createVisualSection() {
+    return createVisualSectionFromModule();
   }
 
-  createExportSection() {
-    return createExportSectionFromModule();
+  createSystemSection() {
+    return createSystemSectionFromModule();
+  }
+
+  createDataSection() {
+    return createDataSectionFromModule();
   }
 
   createDOM() {
@@ -203,37 +210,81 @@ class SettingsModal extends BaseComponent {
     this.overlay.className = "settings-modal-overlay";
     document.body.appendChild(this.overlay);
     const volumeTemplate = this.createVolumeSection();
-    const toggleTemplate = this.createToggleSection();
-    const exportTemplate = this.createExportSection();
-    const navAboutTemplate = createNavAboutSectionFromModule();
+    const visualTemplate = this.createVisualSection();
+    const systemTemplate = this.createSystemSection();
+    const dataTemplate = this.createDataSection();
     const modalTemplate = html`
-      <div class="settings-modal pixel-panel">
-        <div class="settings-content">
-          ${volumeTemplate}
-          ${toggleTemplate}
-          ${exportTemplate}
-          ${navAboutTemplate}
+      <div class="settings-modal pixel-panel" style="padding: 0; display: flex; flex-direction: column;">
+        <div class="modal-swipe-handle" aria-hidden="true"></div>
+        <div class="settings-header" style="background: rgb(35, 39, 35); border-bottom: 4px solid var(--bevel-dark); padding: 12px 16px;">
+          <h2 style="margin: 0; color: var(--game-success-color, rgb(143, 214, 148)); font-size: 1rem; text-shadow: 2px 2px 0px rgba(0,0,0,0.8);">[ DIAGNOSTIC TERMINAL ]</h2>
+          <button class="close-btn modal-close-btn" aria-label="Close">✖</button>
+        </div>
+
+        <div class="settings-tabs" role="tablist">
+          <button class="settings-tab ${this.activeTab === 'audio' ? 'active' : ''}" role="tab" aria-selected=${this.activeTab === 'audio'} aria-controls="settings_tab_audio" data-tab="audio" id="settings_tab_audio_btn">AUDIO</button>
+          <button class="settings-tab ${this.activeTab === 'visuals' ? 'active' : ''}" role="tab" aria-selected=${this.activeTab === 'visuals'} aria-controls="settings_tab_visuals" data-tab="visuals" id="settings_tab_visuals_btn">VISUALS</button>
+          <button class="settings-tab ${this.activeTab === 'system' ? 'active' : ''}" role="tab" aria-selected=${this.activeTab === 'system'} aria-controls="settings_tab_system" data-tab="system" id="settings_tab_system_btn">SYS</button>
+          <button class="settings-tab ${this.activeTab === 'data' ? 'active' : ''}" role="tab" aria-selected=${this.activeTab === 'data'} aria-controls="settings_tab_data" data-tab="data" id="settings_tab_data_btn">DATA</button>
+        </div>
+
+        <div class="settings-content pixel-panel is-inset">
+          <div id="settings_tab_audio" class="settings_tab_content ${this.activeTab === 'audio' ? 'active' : ''}" role="tabpanel" aria-labelledby="settings_tab_audio_btn" aria-hidden=${this.activeTab !== 'audio'}>
+            ${volumeTemplate}
+          </div>
+          <div id="settings_tab_visuals" class="settings_tab_content ${this.activeTab === 'visuals' ? 'active' : ''}" role="tabpanel" aria-labelledby="settings_tab_visuals_btn" aria-hidden=${this.activeTab !== 'visuals'}>
+            ${visualTemplate}
+          </div>
+          <div id="settings_tab_system" class="settings_tab_content ${this.activeTab === 'system' ? 'active' : ''}" role="tabpanel" aria-labelledby="settings_tab_system_btn" aria-hidden=${this.activeTab !== 'system'}>
+            ${systemTemplate}
+          </div>
+          <div id="settings_tab_data" class="settings_tab_content ${this.activeTab === 'data' ? 'active' : ''}" role="tabpanel" aria-labelledby="settings_tab_data_btn" aria-hidden=${this.activeTab !== 'data'}>
+            ${dataTemplate}
+          </div>
         </div>
       </div>
     `;
     render(modalTemplate, this.overlay);
     this._overlayClickClose = (e) => {
-      if (e.target === this.overlay) this.hide();
+      if (e.target === this.overlay || e.target.closest(".modal-close-btn")) this.hide();
     };
-    this._overlayClickGroup = (e) => {
-      const header = e.target.closest(".settings-group-header");
-      if (header) {
+    this._tabClickHandler = (e) => {
+      const tab = e.target.closest(".settings-tab");
+      if (tab) {
         e.preventDefault();
-        const group = header.closest(".settings-group");
-        if (group) {
-          group.classList.toggle("settings-group-collapsed");
-          header.setAttribute("aria-expanded", String(!group.classList.contains("settings-group-collapsed")));
-          this.playClick();
+        const tabId = tab.dataset.tab;
+        if (this.activeTab === tabId) return;
+        this.activeTab = tabId;
+        this.overlay.querySelectorAll(".settings-tab").forEach((t) => {
+          t.classList.remove("active");
+          t.setAttribute("aria-selected", "false");
+        });
+        tab.classList.add("active");
+        tab.setAttribute("aria-selected", "true");
+        this.overlay.querySelectorAll(".settings_tab_content").forEach((c) => {
+          c.classList.remove("active");
+          c.setAttribute("aria-hidden", "true");
+        });
+        const content = this.overlay.querySelector(`#settings_tab_${tabId}`);
+        if (content) {
+          content.classList.add("active");
+          content.setAttribute("aria-hidden", "false");
+          const container = this.overlay.querySelector(".settings-content");
+          if (container) container.scrollTop = 0;
         }
+        this.playClick();
       }
     };
     this.overlay.addEventListener("click", this._overlayClickClose);
-    this.overlay.addEventListener("click", this._overlayClickGroup);
+    this.overlay.addEventListener("click", this._tabClickHandler);
+    const header = this.overlay.querySelector(".settings-header");
+    if (header) {
+      let startY = 0;
+      header.addEventListener("touchstart", (e) => { startY = e.touches[0].clientY; }, { passive: true });
+      header.addEventListener("touchend", (e) => {
+        if (e.changedTouches[0].clientY - startY > 60) this.hide();
+      }, { passive: true });
+    }
     const signal = getAbortSignal();
     bindSettingsEvents(this.overlay, this, signal);
   }

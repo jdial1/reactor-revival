@@ -56,6 +56,7 @@ function recordHeatFlowVectors(engine, transfers) {
 function handlePhysicsWorkerMessage(engine, data) {
   const result = validateWorkerResponse(engine, data);
   if (!result) return;
+  engine._heatWorkerConsecutiveTimeouts = 0;
   const parseResult = PhysicsTickResultSchema.safeParse(data);
   if (!parseResult.success) {
     logger.log("warn", "engine", "[PhysicsWorker] Result validation failed:", fromError(parseResult.error).toString());

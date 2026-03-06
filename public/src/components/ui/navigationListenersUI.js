@@ -38,22 +38,23 @@ const setupDoctrineAndMiscListeners = (ui, signal) => {
     ui.stateManager.setVar("current_exotic_particles", ui.game.state.current_exotic_particles);
   }, { signal });
   
-  const fullscreenButton = ui.DOMElements.fullscreen_toggle;
+  const fullscreenButton = ui.coreLoopUI.getElement("fullscreen_toggle");
   if (fullscreenButton) {
     fullscreenButton.addEventListener("click", () => ui.deviceFeatures.toggleFullscreen(), { signal });
     document.addEventListener("fullscreenchange", () => ui.deviceFeatures.updateFullscreenButtonState(), { signal });
     ui.deviceFeatures.updateFullscreenButtonState();
   }
 
-  const settingsBtn = ui.DOMElements.settings_btn;
+  const settingsBtn = ui.coreLoopUI.getElement("settings_btn");
   if (settingsBtn) {
     settingsBtn.addEventListener("click", () => ui.modalOrchestrator.showModal(MODAL_IDS.SETTINGS), { signal });
   }
 
-  if (ui.DOMElements.splash_close_btn) {
-    ui.DOMElements.splash_close_btn.onclick = () => {
+  const splashCloseBtn = ui.coreLoopUI.getElement("splash_close_btn");
+  if (splashCloseBtn) {
+    splashCloseBtn.addEventListener("click", () => {
       window.location.href = window.location.origin + window.location.pathname;
-    };
+    }, { signal });
   }
 };
 

@@ -1,21 +1,24 @@
-import { getResourceUrl, isTestEnv } from "../../utils/util.js";
+import { isTestEnv } from "../../utils/util.js";
 import { getCriticalUiIconAssets, warmImageCache, preloadAllPartImages } from "../imagePreloadService.js";
-import { generateSplashBackground } from "../splashBackground.js";
 import { fetchVersionForSplash, addSplashStats as addSplashStatsFromModule } from "./splashVersionStats.js";
 import { logger } from "../../utils/logger.js";
+
+async function waitForSplashElement(selector, maxAttempts = 20) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const el = document.querySelector(selector);
+    if (el) return el;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return null;
+}
 
 export async function runLoadSplashScreen(manager) {
   if (isTestEnv()) return false;
   try {
-    const response = await fetch(getResourceUrl("pages/splash.html"));
-    const html = await response.text();
-    const container = document.querySelector("#splash-container");
-    if (!container) throw new Error("Splash container not found");
-    container.innerHTML = html;
-    manager.splashScreen = container.querySelector("#splash-screen");
-    manager.statusElement = container.querySelector("#splash-status");
-    manager.flavorElement = container.querySelector("#splash-flavor");
-    manager.uiManager?.setRefs({ statusElement: manager.statusElement, flavorElement: manager.flavorElement, splashScreen: manager.splashScreen });
+    manager.splashScreen = document.querySelector("#splash-screen") ?? await waitForSplashElement("#splash-screen");
+    manager.statusElement = document.querySelector("#splash-status") ?? manager.splashScreen?.querySelector("#splash-status");
+    if (!manager.splashScreen) throw new Error("Splash screen not found (AppRoot must render first)");
+    manager.uiManager?.setRefs({ statusElement: manager.statusElement, splashScreen: manager.splashScreen });
     await manager.initializeSplashStats();
     manager.updateUserCountDisplay();
     try {
@@ -24,7 +27,6 @@ export async function runLoadSplashScreen(manager) {
     } catch (e) {
       logger.log('warn', 'splash', '[PWA] Failed to warm image cache:', e);
     }
-    if (manager.splashScreen) generateSplashBackground();
     return true;
   } catch (error) {
     logger.log('error', 'splash', 'Error loading splash screen:', error);
@@ -32,30 +34,21 @@ export async function runLoadSplashScreen(manager) {
   }
 }
 
-export function runSetStep(manager, stepId, flavorMessages) {
+export function runSetStep(manager, stepId) {
   const stepIndex = manager.loadingSteps.findIndex((step) => step.id === stepId);
   if (stepIndex === -1) return;
   manager.currentStep = stepIndex;
   const step = manager.loadingSteps[manager.currentStep];
-  if (manager.statusElement) manager.statusElement.classList.add("splash-element-hidden");
-  if (flavorMessages?.length > 0 && manager.flavorElement) {
-    const flavorMessage = flavorMessages[Math.floor(Math.random() * flavorMessages.length)];
-    manager.flavorElement.textContent = flavorMessage;
-    manager.flavorElement.classList.remove("splash-element-hidden");
-    manager.flavorElement.classList.add("splash-element-visible");
-  } else if (manager.statusElement) {
+  if (manager.statusElement) {
+    manager.statusElement.classList.remove("splash-element-hidden");
     manager.statusElement.classList.add("splash-element-visible");
     manager.statusElement.textContent = step.message;
   }
 }
 
-export function runSetSubStep(manager, message, flavorMessages) {
-  if (manager.statusElement) manager.statusElement.classList.add("splash-element-hidden");
-  if (flavorMessages?.length > 0 && manager.flavorElement) {
-    manager.flavorElement.textContent = flavorMessages[Math.floor(Math.random() * flavorMessages.length)];
-    manager.flavorElement.classList.remove("splash-element-hidden");
-    manager.flavorElement.classList.add("splash-element-visible");
-  } else if (manager.statusElement) {
+export function runSetSubStep(manager, message) {
+  if (manager.statusElement) {
+    manager.statusElement.classList.remove("splash-element-hidden");
     manager.statusElement.classList.add("splash-element-visible");
     manager.statusElement.textContent = message;
   }

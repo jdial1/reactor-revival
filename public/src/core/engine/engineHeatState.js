@@ -62,6 +62,8 @@ export function initWorkerState(engine) {
   engine._workerHeartbeatId = null;
   engine._workerFailed = false;
   engine._workerTickId = 0;
+  engine._lastHeatTimeoutWarn = 0;
+  engine._heatWorkerConsecutiveTimeouts = 0;
   engine._gameLoopWorker = null;
   engine._gameLoopWorkerPending = false;
   engine._gameLoopTickContext = null;

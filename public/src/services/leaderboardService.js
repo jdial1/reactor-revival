@@ -3,12 +3,6 @@ import { logger } from '../utils/logger.js';
 import { queryClient, queryKeys } from './queryClient.js';
 
 function getLeaderboardApiUrl() {
-    try {
-        if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-            const hostname = window.location.hostname;
-            if (hostname === 'localhost' || hostname === '127.0.0.1') return 'http://localhost:3000';
-        }
-    } catch (e) {}
     return 'https://reactor-revival.onrender.com';
 }
 
@@ -71,7 +65,7 @@ export class LeaderboardService {
                 }
             } catch (e) {
                 const errorMsg = e.message || String(e);
-                logger.log('warn', 'game', 'Leaderboard service unavailable:', errorMsg);
+                logger.log('debug', 'game', 'Leaderboard service unavailable:', errorMsg);
             } finally {
                 this.initPromise = null;
             }
@@ -112,15 +106,20 @@ export class LeaderboardService {
         return queryClient.fetchQuery({
             queryKey: queryKeys.leaderboard(safeSort, limit),
             queryFn: async () => {
-                const response = await fetch(
-                    `${this.apiBaseUrl}/api/leaderboard/top?sortBy=${safeSort}&limit=${limit}`
-                );
-                if (!response.ok) {
-                    logger.log('error', 'game', 'Error getting top runs:', response.statusText);
+                try {
+                    const response = await fetch(
+                        `${this.apiBaseUrl}/api/leaderboard/top?sortBy=${safeSort}&limit=${limit}`
+                    );
+                    if (!response.ok) {
+                        logger.log('error', 'game', 'Error getting top runs:', response.statusText);
+                        return [];
+                    }
+                    const data = await response.json();
+                    return data.success ? data.data : [];
+                } catch (e) {
+                    logger.log('debug', 'game', 'Leaderboard fetch failed (503/CORS/network):', e?.message || e);
                     return [];
                 }
-                const data = await response.json();
-                return data.success ? data.data : [];
             },
             staleTime: 60 * 1000,
             retry: 2,

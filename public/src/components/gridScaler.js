@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import {
     GRID_TARGET_TOTAL_TILES, GRID_MIN_DIMENSION, GRID_MAX_DISPLAY_DIMENSION,
     ZOOM_DAMPING_FACTOR, PINCH_DISTANCE_THRESHOLD_PX,
@@ -253,7 +254,7 @@ export class GridScaler extends BaseComponent {
 
 
     requestResize() {
-        if (this.ui?.game && this.reactor && this.wrapper) {
+        if (this.ui?.game) {
             requestAnimationFrame(() => this.resize());
         }
     }
@@ -304,7 +305,7 @@ export class GridScaler extends BaseComponent {
 
 
 
-    resize() {
+    resize(_layoutRetry) {
 
         if (!this.reactor || !this.wrapper) {
             this.reactor = this.ui.DOMElements.reactor || document.getElementById('reactor');
@@ -312,17 +313,30 @@ export class GridScaler extends BaseComponent {
         }
 
         if (!this.reactor || !this.wrapper) {
+            if (!this._resizeBailLogged && this.ui?.game) {
+                this._resizeBailLogged = true;
+                logger.log('debug', 'ui', '[GridScaler] resize skipped: reactor/wrapper not in DOM yet');
+            }
             return;
         }
-
-
+        this._resizeBailLogged = false;
 
         const availWidth = this.wrapper.clientWidth;
         const availHeight = this.wrapper.clientHeight;
 
         if (availWidth <= 0 || availHeight <= 0) {
+            const retry = (_layoutRetry | 0) + 1;
+            if (retry <= 4) {
+                requestAnimationFrame(() => this.resize(retry));
+            } else if (retry === 5 && this.ui?.game) {
+                setTimeout(() => this.resize(5), 200);
+            } else if (!this._layoutExhaustedLogged) {
+                this._layoutExhaustedLogged = true;
+                logger.log('debug', 'ui', '[GridScaler] zero dimensions after retries, will retry on next resize trigger');
+            }
             return;
         }
+        this._layoutExhaustedLogged = false;
 
         const maxTileSize = GridScaler.MAX_TILE_SIZE_PX;
         const isMobile = typeof window !== 'undefined' && window.innerWidth <= GridScaler.MOBILE_BREAKPOINT_PX;
@@ -344,7 +358,10 @@ export class GridScaler extends BaseComponent {
             }
         }
 
-        if (!this.ui?.game) return;
+        if (!this.ui?.game) {
+            logger.log('warn', 'ui', '[GridScaler] resize bailed: no game instance');
+            return;
+        }
         if (this.ui.game.resizeGrid) {
             this.ui.game.resizeGrid(rows, cols);
         } else {
@@ -366,6 +383,9 @@ export class GridScaler extends BaseComponent {
           this.ui.gridCanvasRenderer.setSize(finalGridWidth, finalGridHeight);
           this.ui.gridCanvasRenderer.setGridDimensions(rows, cols);
           this.ui.gridCanvasRenderer.markStaticDirty();
+          logger.log('debug', 'ui', `[GridScaler] resize complete: ${cols}x${rows} grid, ${finalGridWidth}x${finalGridHeight}px`);
+        } else {
+          logger.log('warn', 'ui', '[GridScaler] resize complete but gridCanvasRenderer missing');
         }
 
         this.applyWrapperAndSectionStyles(isMobile);

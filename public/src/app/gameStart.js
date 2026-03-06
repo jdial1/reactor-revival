@@ -76,12 +76,18 @@ function syncUIAfterEngineStart(game, ui) {
   }, SYNC_UI_DELAY_MS);
 }
 
+function initializeEngineViaPauseToggle(ui) {
+  ui.stateManager.setVar("pause", false);
+  ui.stateManager.setVar("pause", true);
+}
+
 async function finalizeGameStart(game, ui) {
   game.pause();
   ui.stateManager.setVar("pause", true);
   await applyOfflineWelcomeBack(game, ui);
   syncToggleStatesFromGame(game, ui);
   startEngine(game);
+  initializeEngineViaPauseToggle(ui);
   syncUIAfterEngineStart(game, ui);
   if (!StorageUtils.get("reactorGameQuickStartShown")) {
     try {
@@ -140,6 +146,13 @@ export async function startGame(appContext) {
   await pageRouter.loadPage(initialPage);
   initGameComponents(game);
   await game.startSession();
+  if (typeof window !== "undefined" && window.appRoot) window.appRoot.render();
+  if (initialPage === "reactor_section" && ui.resizeReactor) {
+    ui.resizeReactor();
+    requestAnimationFrame(() => ui.resizeReactor());
+    setTimeout(() => ui.resizeReactor(), 50);
+    setTimeout(() => ui.resizeReactor(), 150);
+  }
   ui.partsPanelUI.initializePartsPanel();
   applyPendingToggleStates(game);
   if (game._saved_objective_index !== undefined) {

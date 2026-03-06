@@ -31,9 +31,10 @@ Welcome to the Reactor Revival documentation. This collection provides comprehen
 
 For new developers, we recommend reading the documentation in this order:
 1. **System and Architecture** - Understand the overall structure
-2. **Data Content Management** - Learn about data files and asset requirements
-3. **Critical Game Mechanics** - Understand core gameplay systems
-4. **UI/UX Specification** - Learn about interface requirements and optimization
+2. **Application Lifecycle Processes** (§1.3.4) - Splash Load, New Game Load, Load Game flows
+3. **Data Content Management** - Learn about data files and asset requirements
+4. **Critical Game Mechanics** - Understand core gameplay systems
+5. **UI/UX Specification** - Learn about interface requirements and optimization
 
 ## 🔧 Development Tools
 

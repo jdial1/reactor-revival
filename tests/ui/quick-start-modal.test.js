@@ -1,47 +1,48 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
 
 describe('Quick Start Modal', () => {
-    beforeEach(async () => {
-        const setup = await setupGameWithDOM();
-        localStorage.clear();
-    });
+    describe('localStorage flag behavior', () => {
+        beforeEach(() => {
+            localStorage.clear();
+        });
 
-    afterEach(() => {
-        vi.clearAllMocks();
-    });
+        afterEach(() => {
+            vi.clearAllMocks();
+        });
 
-    it('should clear quick start modal flag when starting new game', () => {
-        localStorage.setItem("reactorGameQuickStartShown", "1");
-        localStorage.removeItem("reactorGameQuickStartShown");
-        expect(localStorage.getItem("reactorGameQuickStartShown")).toBeNull();
-    });
-
-    it('should set quick start modal flag when modal is closed', () => {
-        const closeModal = () => {
+        it('should clear quick start modal flag when starting new game', () => {
             localStorage.setItem("reactorGameQuickStartShown", "1");
-        };
-        closeModal();
-        expect(localStorage.getItem("reactorGameQuickStartShown")).toBe("1");
-    });
+            localStorage.removeItem("reactorGameQuickStartShown");
+            expect(localStorage.getItem("reactorGameQuickStartShown")).toBeNull();
+        });
 
-    it('should check for quick start modal flag correctly', () => {
-        const shouldShowModal = !localStorage.getItem("reactorGameQuickStartShown");
-        expect(shouldShowModal).toBe(true);
+        it('should set quick start modal flag when modal is closed', () => {
+            const closeModal = () => {
+                localStorage.setItem("reactorGameQuickStartShown", "1");
+            };
+            closeModal();
+            expect(localStorage.getItem("reactorGameQuickStartShown")).toBe("1");
+        });
 
-        localStorage.setItem("reactorGameQuickStartShown", "1");
-        const shouldNotShowModal = !localStorage.getItem("reactorGameQuickStartShown");
-        expect(shouldNotShowModal).toBe(false);
-    });
+        it('should check for quick start modal flag correctly', () => {
+            const shouldShowModal = !localStorage.getItem("reactorGameQuickStartShown");
+            expect(shouldShowModal).toBe(true);
 
-    it('should handle new game flow correctly', () => {
-        localStorage.setItem("reactorGameQuickStartShown", "1");
-        localStorage.removeItem("reactorGameQuickStartShown");
-        expect(localStorage.getItem("reactorGameQuickStartShown")).toBeNull();
-    });
+            localStorage.setItem("reactorGameQuickStartShown", "1");
+            const shouldNotShowModal = !localStorage.getItem("reactorGameQuickStartShown");
+            expect(shouldNotShowModal).toBe(false);
+        });
 
-    it('should handle loaded game flow correctly', () => {
-        localStorage.setItem("reactorGameQuickStartShown", "1");
-        expect(localStorage.getItem("reactorGameQuickStartShown")).toBe("1");
+        it('should handle new game flow correctly', () => {
+            localStorage.setItem("reactorGameQuickStartShown", "1");
+            localStorage.removeItem("reactorGameQuickStartShown");
+            expect(localStorage.getItem("reactorGameQuickStartShown")).toBeNull();
+        });
+
+        it('should handle loaded game flow correctly', () => {
+            localStorage.setItem("reactorGameQuickStartShown", "1");
+            expect(localStorage.getItem("reactorGameQuickStartShown")).toBe("1");
+        });
     });
 
     describe('Integration with actual game code', () => {

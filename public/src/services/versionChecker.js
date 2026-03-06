@@ -1,3 +1,4 @@
+import { html, render } from "lit-html";
 import { StorageUtils } from "../utils/util.js";
 import { escapeHtml } from "../utils/stringUtils.js";
 import { logger } from "../utils/logger.js";
@@ -157,7 +158,8 @@ export class VersionChecker {
   showUpdateNotification(newVersion, currentVersion) {
     const modal = document.createElement("div");
     modal.className = "update-notification-modal";
-    modal.innerHTML = `
+    const onDismiss = () => modal.remove();
+    render(html`
       <div class="update-notification-content">
         <h3>🚀 Update Available!</h3>
         <p>A new version of Reactor Revival is available:</p>
@@ -175,15 +177,15 @@ export class VersionChecker {
           To get the latest version, refresh your browser or check for updates.
         </p>
         <div class="update-actions">
-          <button class="update-btn refresh" onclick="window.location.reload()">
+          <button class="update-btn refresh" @click=${() => window.location.reload()}>
             🔄 Refresh Now
           </button>
-          <button class="update-btn dismiss" onclick="this.closest('.update-notification-modal').remove()">
+          <button class="update-btn dismiss" @click=${onDismiss}>
             ✕ Dismiss
           </button>
         </div>
       </div>
-    `;
+    `, modal);
 
     const style = document.createElement('style');
     style.textContent = `
@@ -246,15 +248,22 @@ export class VersionChecker {
 
     const toast = document.createElement('div');
     toast.className = 'update-toast';
-    toast.innerHTML = `
+    const onRefresh = () => {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+      }
+      window.location.reload();
+    };
+    const onClose = () => toast.remove();
+    render(html`
       <div class="update-toast-content">
         <div class="update-toast-message">
           <span class="update-toast-text">New content available, click to reload.</span>
         </div>
-        <button id="refresh-button" class="update-toast-button">Reload</button>
-        <button class="update-toast-close" onclick="this.closest('.update-toast').remove()">×</button>
+        <button class="update-toast-button" @click=${onRefresh}>Reload</button>
+        <button class="update-toast-close" @click=${onClose}>×</button>
       </div>
-    `;
+    `, toast);
 
     if (!document.querySelector('#update-toast-styles')) {
       const style = document.createElement('style');
@@ -275,14 +284,6 @@ export class VersionChecker {
     }
 
     document.body.appendChild(toast);
-
-    const refreshButton = toast.querySelector('#refresh-button');
-    refreshButton.addEventListener('click', () => {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
-      }
-      window.location.reload();
-    });
 
     setTimeout(() => {
       if (document.body.contains(toast)) {
@@ -323,15 +324,17 @@ export class VersionChecker {
 
     const toast = document.createElement("div");
     toast.className = "version-check-toast";
-    toast.innerHTML = `
+    const icon = type === "info" ? "ℹ️" : type === "warning" ? "⚠️" : "❌";
+    const onClose = () => toast.remove();
+    render(html`
       <div class="version-check-toast-content">
         <div class="version-check-toast-message">
-          <span class="version-check-toast-icon">${type === "info" ? "ℹ️" : type === "warning" ? "⚠️" : "❌"}</span>
-          <span class="version-check-toast-text">${escapeHtml(message)}</span>
+          <span class="version-check-toast-icon">${icon}</span>
+          <span class="version-check-toast-text">${message}</span>
         </div>
-        <button class="version-check-toast-close" onclick="this.closest('.version-check-toast').remove()">×</button>
+        <button class="version-check-toast-close" @click=${onClose}>×</button>
       </div>
-    `;
+    `, toast);
 
     if (!document.querySelector('#version-check-toast-styles')) {
       const style = document.createElement('style');
@@ -365,10 +368,10 @@ export class VersionChecker {
 
   clearVersionNotification() {
     StorageUtils.remove('reactor-last-notified-version');
-    const versionSection = this.splashManagerRef.splashScreen?.querySelector('.splash-version-section');
-    if (versionSection) {
-      versionSection.classList.remove('new-version');
-      versionSection.title = 'Click to check for updates';
+    const versionEl = this.splashManagerRef.splashScreen?.querySelector('#splash-version-text');
+    if (versionEl) {
+      versionEl.classList.remove('new-version');
+      versionEl.title = 'Click to check for updates';
     }
   }
 }

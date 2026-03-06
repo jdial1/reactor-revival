@@ -69,18 +69,11 @@ export async function fetchVersionForSplash(versionChecker) {
 }
 
 export function addSplashStats(splashScreen, version, versionChecker) {
-  const existingBottomRow = splashScreen.querySelector(".splash-bottom-row");
-  if (existingBottomRow) existingBottomRow.remove();
-  const versionSection = document.createElement("div");
-  versionSection.className = "splash-version-section";
-  versionSection.title = "Click to check for updates";
-  versionSection.style.cursor = "pointer";
-  versionSection.onclick = () => {
-    versionChecker.triggerVersionCheckToast();
-  };
-  const versionDiv = document.createElement("span");
-  versionDiv.className = "splash-version";
-  versionDiv.textContent = `Version ${version}`;
-  versionSection.appendChild(versionDiv);
-  splashScreen.appendChild(versionSection);
+  const versionText = splashScreen.querySelector("#splash-version-text");
+  if (versionText) {
+    versionText.textContent = `v.${version}`;
+    versionText.title = "Click to check for updates";
+    versionText.style.cursor = "pointer";
+    versionText.onclick = () => versionChecker.triggerVersionCheckToast();
+  }
 }

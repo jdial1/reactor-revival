@@ -48,49 +48,6 @@ export class PartsPanelUI {
     this._partsPanelUnmount = null;
   }
 
-  clearPartContainers() {
-    const containerIds = [
-      "cells",
-      "reflectors",
-      "capacitors",
-      "particleAccelerators",
-      "vents",
-      "heatExchangers",
-      "heatInlets",
-      "heatOutlets",
-      "coolantCells",
-      "reactorPlatings",
-      "overflowValves",
-      "topupValves",
-      "checkValves",
-    ];
-    const ui = this.ui;
-    containerIds.forEach((id) => {
-      const el = ui.DOMElements[id];
-      if (el) el.innerHTML = "";
-    });
-  }
-
-  populatePartsForTab(_tabId) {
-    if (this._partsPanelUnmount) return;
-    const ui = this.ui;
-    if (!ui.game?.partset) return;
-    this.clearPartContainers();
-    const categories = CATEGORY_MAP[_tabId] || [];
-    for (const cat of categories) {
-      const parts = ui.game.partset.getPartsByCategory(cat);
-      const unlockManager = ui.game.unlockManager;
-      for (const part of parts) {
-        if (unlockManager && !unlockManager.shouldShowPart(part)) continue;
-        const partEl = part.createElement();
-        if (!partEl) continue;
-        const key = getContainerKey(part);
-        const container = ui.DOMElements[key] || document.getElementById(key);
-        if (container) container.appendChild(partEl);
-      }
-    }
-  }
-
   unlockAllPartsForTesting() {
     const ui = this.ui;
     if (!ui.game?.partset?.partsArray) return;
@@ -104,11 +61,7 @@ export class PartsPanelUI {
       ui.game.placedCounts[combo] = 10;
     });
     ui.game.partset.check_affordability(ui.game);
-    if (ui.stateManager && typeof ui.stateManager.refreshPartsPanel === "function") {
-      ui.stateManager.refreshPartsPanel();
-    } else {
-      this.refreshPartsDisplay();
-    }
+    this.refreshPartsPanel();
   }
 
   populateActiveTab() {
@@ -120,20 +73,10 @@ export class PartsPanelUI {
     if (ui.game?.state && typeof ui.game.state.parts_panel_version === "number") {
       ui.game.state.parts_panel_version++;
     }
-    if (this._partsPanelUnmount) return;
-    const activeTabId = ui.uiState?.active_parts_tab ?? "power";
-    this.populatePartsForTab(activeTabId);
   }
 
-  refreshPartsDisplay() {
-    const activeTabId = this.ui.uiState?.active_parts_tab ?? "power";
-    const tabContents = document.querySelector(".parts_tab_contents");
-    if (tabContents) tabContents.innerHTML = "";
-    this.populatePartsForTab(activeTabId);
-  }
-
-  onActiveTabChanged(tabId) {
-    if (!this._partsPanelUnmount) this.populatePartsForTab(tabId);
+  onActiveTabChanged(_tabId) {
+    this.refreshPartsPanel();
   }
 
   _partsPanelTemplate() {
@@ -157,7 +100,6 @@ export class PartsPanelUI {
           return;
         }
         if (part.affordable) {
-          document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
           game?.emit?.("partClicked", { part });
           ui.stateManager.setClickedPart(part);
         } else if (game?.tooltip_manager) {
@@ -225,7 +167,6 @@ export class PartsPanelUI {
       if (!btn || btn.disabled) return;
       const clickedTabId = btn.getAttribute("data-tab");
       if (ui.uiState) ui.uiState.active_parts_tab = clickedTabId;
-      else this.populatePartsForTab(clickedTabId);
     });
 
     const helpToggleBtn = document.getElementById("parts_help_toggle");
@@ -233,18 +174,11 @@ export class PartsPanelUI {
       helpToggleBtn.addEventListener("click", () => {
         ui.help_mode_active = !ui.help_mode_active;
         helpToggleBtn.classList.toggle("active", ui.help_mode_active);
-        document.body.classList.toggle(
-          "help-mode-active",
-          ui.help_mode_active
-        );
-
+        document.body.classList.toggle("help-mode-active", ui.help_mode_active);
         if (ui.help_mode_active) {
-          document.querySelectorAll(".part.part_active").forEach((el) => {
-            el.classList.remove("part_active");
-          });
-
           ui.stateManager.setClickedPart(null);
         }
+        this.refreshPartsPanel();
       });
     }
 
@@ -256,9 +190,6 @@ export class PartsPanelUI {
       ];
       const renderFn = () => this._partsPanelTemplate();
       this._partsPanelUnmount = ReactiveLitComponent.mountMulti(subscriptions, renderFn, root);
-    } else {
-      const initialTab = ui.uiState?.active_parts_tab ?? "power";
-      this.populatePartsForTab(initialTab);
     }
     ui.updateCollapsedControlsNav();
   }
@@ -291,7 +222,17 @@ export class PartsPanelUI {
       `;
     };
     const template = html`${repeat(slots, (_, i) => i, slotTemplate)}`;
-    render(template, root);
+    try {
+      render(template, root);
+    } catch (err) {
+      const msg = err?.message ?? "";
+      if (msg.includes("ChildPart") && msg.includes("parentNode")) {
+        render(html``, root);
+        render(template, root);
+      } else {
+        throw err;
+      }
+    }
   }
 
   updatePartsPanelBodyClass() {

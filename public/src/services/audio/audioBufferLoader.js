@@ -50,7 +50,11 @@ export async function loadSampleBuffers(svc) {
     upgrade: base + 'upgrade.mp3',
     error: base + 'error.mp3',
     sell: base + 'sell.mp3',
-    tab_switch: base + 'tab_switch.mp3'
+    tab_switch: base + 'tab_switch.mp3',
+    explosion: base + 'explosion.mp3',
+    meltdown: base + 'meltdown.mp3',
+    depletion: base + 'depletion.mp3',
+    reboot: base + 'reboot.mp3'
   };
   const industrialUrls = { metal_clank: base + 'metal_clank.mp3', steam_hiss: base + 'steam_hiss.mp3' };
   const [, , ambienceResults] = await Promise.all([

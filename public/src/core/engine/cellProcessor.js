@@ -1,4 +1,5 @@
 import { VISUAL_EVENT_POWER, VISUAL_EVENT_HEAT } from "../engine.js";
+import { logger } from "../../utils/logger.js";
 import {
   VISUAL_PARTICLE_HIGH_THRESHOLD,
   VISUAL_PARTICLE_MED_THRESHOLD,
@@ -73,6 +74,9 @@ export function processCells(engine, multiplier) {
   for (let i = 0; i < engine.active_cells.length; i++) {
     const tile = engine.active_cells[i];
     if (!tile.part || tile.exploded || tile.ticks <= 0) continue;
+    if (typeof tile.part.base_ticks === "undefined" && tile.part.category === "cell") {
+      logger.log("debug", "engine", `Cell at (${tile.row},${tile.col}) missing base_ticks; part.ticks=${tile.part.ticks}`);
+    }
 
     power_add += tile.power * multiplier;
 

@@ -1,15 +1,16 @@
 import "./config/superjsonSetup.js";
 import { Game } from "./core/game.js";
 import { escapeHtml } from "./utils/stringUtils.js";
-import { StorageUtils, StorageUtilsAsync, isTestEnv, migrateLocalStorageToIndexedDB } from "./utils/util.js";
+import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB } from "./utils/util.js";
 import { UI } from "./components/ui.js";
+import { AppRoot } from "./components/AppRoot.js";
 import "./services/pwa.js";
 import { PageRouter } from "./components/pageRouter.js";
 import { GoogleDriveSave } from "./services/GoogleDriveSave.js";
 import { SupabaseAuth } from "./services/SupabaseAuth.js";
 import { SupabaseSave } from "./services/SupabaseSave.js";
 import { AudioService } from "./services/audioService.js";
-import { requestWakeLock } from "./services/pwa.js";
+import { requestWakeLock, initializePwa } from "./services/pwa.js";
 import { logger } from "./utils/logger.js";
 import { registerServiceWorkerUpdateListener } from "./app/updateToast.js";
 import { startGame } from "./app/gameStart.js";
@@ -90,13 +91,13 @@ async function handleUserSession(ctx) {
 }
 
 async function clearAllGameDataForNewGame(game) {
-  await StorageUtilsAsync.remove("reactorGameSave");
+  await StorageAdapter.remove("reactorGameSave");
   for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {
-    await StorageUtilsAsync.remove(`reactorGameSave_${i}`);
+    await StorageAdapter.remove(`reactorGameSave_${i}`);
   }
-  await StorageUtilsAsync.remove("reactorGameSave_Previous");
-  await StorageUtilsAsync.remove("reactorGameSave_Backup");
-  await StorageUtilsAsync.remove("reactorCurrentSaveSlot");
+  await StorageAdapter.remove("reactorGameSave_Previous");
+  await StorageAdapter.remove("reactorGameSave_Backup");
+  await StorageAdapter.remove("reactorCurrentSaveSlot");
   StorageUtils.remove("reactorGameQuickStartShown");
   StorageUtils.remove("google_drive_save_file_id");
   StorageUtils.set("reactorNewGamePending", 1);
@@ -188,7 +189,10 @@ function createAppInstances() {
   const ui = new UI();
   const game = new Game(ui);
   game.audio = new AudioService();
-  game.audio.init();
+  const initAudioOnGesture = () => game.audio.init();
+  document.addEventListener("click", initAudioOnGesture, { once: true });
+  document.addEventListener("keydown", initAudioOnGesture, { once: true });
+  document.addEventListener("touchstart", initAudioOnGesture, { once: true });
   const pageRouter = new PageRouter(ui);
   game.router = pageRouter;
   return { ui, game, pageRouter };
@@ -196,8 +200,18 @@ function createAppInstances() {
 
 async function main() {
   "use strict";
-  await migrateLocalStorageToIndexedDB();
+  initializePwa();
   initPreferencesStore();
+  const { ui, game, pageRouter } = createAppInstances();
+  const appRoot = new AppRoot(document.getElementById("app_root"), game, ui);
+  appRoot.render();
+  if (!isTestEnv()) {
+    window.pageRouter = pageRouter;
+    window.ui = ui;
+    window.game = game;
+    window.appRoot = appRoot;
+  }
+  await migrateLocalStorageToIndexedDB();
   const googleDriveSave = new GoogleDriveSave();
   const supabaseAuth = new SupabaseAuth();
   window.googleDriveSave = googleDriveSave;
@@ -205,16 +219,10 @@ async function main() {
   await handleEmailConfirmationFromUrl(supabaseAuth);
   await ensureAuthReady(googleDriveSave, supabaseAuth);
   initCloudSyncQueue();
-  const { ui, game, pageRouter } = createAppInstances();
-  if (!isTestEnv()) {
-    window.pageRouter = pageRouter;
-    window.ui = ui;
-    window.game = game;
-  }
   const ctx = { game, pageRouter, ui, googleDriveSave, supabaseAuth };
   if (window.splashManager) window.splashManager.setAppContext(ctx);
   settingsModal.setAppContext(ctx);
-  const bootstrapper = new GameBootstrapper({ game, ui, pageRouter, splashManager: window.splashManager });
+  const bootstrapper = new GameBootstrapper({ game, ui, pageRouter, splashManager: window.splashManager, appRoot });
   await bootstrapper.bootstrap();
   await handleUserSession(ctx);
   setupButtonHandlers(ctx);

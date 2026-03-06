@@ -8,7 +8,8 @@ export function handleComponentDepletion(game, tile) {
   const part = tile.part;
   const hasProtiumLoader = game.upgradeset.getUpgrade("experimental_protium_loader")?.level > 0;
   const isProtium = part.type === "protium";
-  const autoReplace = (part.perpetual || (isProtium && hasProtiumLoader)) && !!game.reactor?.auto_buy_enabled;
+  const autoBuyEnabled = game.reactor?.auto_buy_enabled ?? game.state?.auto_buy ?? false;
+  const autoReplace = (part.perpetual || (isProtium && hasProtiumLoader)) && !!autoBuyEnabled;
   if (autoReplace) {
     const cost = part.getAutoReplacementCost();
     const money = game.state.current_money;

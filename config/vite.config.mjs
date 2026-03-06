@@ -4,16 +4,15 @@ import { resolve } from "path";
 
 const globPatterns = [
   "index.html",
+  "manifest.json",
+  "version.json",
   "css/**/*.css",
   "data/**/*.json",
   "img/**/*.{png,svg,jpg,jpeg}",
   "pages/**/*.html",
   "components/**/*.html",
-  "manifest.json",
-  "version.json",
   "lib/**/*.js",
-  "src/**/*.js",
-  "components/**/*.js",
+  "src/**/*.js"
 ];
 
 const globIgnores = [

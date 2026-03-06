@@ -66,7 +66,7 @@ export class SplashStartOptionsBuilder {
     if (continueButton) {
       continueButton.classList.add("splash-btn-continue");
       const header = continueButton.querySelector(".load-game-header span");
-      if (header) header.textContent = "Continue";
+      if (header) header.textContent = "RESUME";
       const detailsElement = continueButton.querySelector(".load-game-details");
       if (detailsElement) detailsElement.remove();
     }
@@ -87,7 +87,7 @@ export class SplashStartOptionsBuilder {
       const syncedLabel = cloudLoadButton.querySelector('.synced-label');
       if (syncedLabel) syncedLabel.remove();
       const header = cloudLoadButton.querySelector(".load-game-header span");
-      if (header) header.textContent = "Continue from Cloud";
+      if (header) header.textContent = "RESUME";
       const detailsElement = cloudLoadButton.querySelector(".load-game-details");
       if (detailsElement) detailsElement.remove();
       const labelElement = document.createElement("div");
@@ -114,9 +114,7 @@ export class SplashStartOptionsBuilder {
         logger.log('error', 'game', 'Error showing tech tree selection:', error);
       }
     });
-    if (newGameButton) {
-      newGameButton.textContent = "New Game";
-    }
+    if (newGameButton) newGameButton.textContent = "NEW RUN";
     return newGameButton;
   }
 
@@ -125,7 +123,7 @@ export class SplashStartOptionsBuilder {
     loadGameButton.className = "splash-btn splash-btn-load";
     loadGameButton.innerHTML = `
         <div class="load-game-header">
-          <span>Load Game</span>
+          <span>LOAD</span>
         </div>
       `;
     loadGameButton.onclick = () => this.splashManager.showSaveSlotSelection(saveSlots);
@@ -138,26 +136,26 @@ export class SplashStartOptionsBuilder {
     const sandboxButton = document.createElement("button");
     sandboxButton.id = "splash-sandbox-btn";
     sandboxButton.className = "splash-btn splash-btn-sandbox";
-    sandboxButton.textContent = "Sandbox";
+    sandboxButton.textContent = "SANDBOX";
+    sandboxButton.title = "Sandbox";
     fragment.appendChild(sandboxButton);
 
     const settingsButton = document.createElement("button");
-    settingsButton.className = "splash-btn";
-    settingsButton.textContent = "Settings";
+    settingsButton.className = "splash-btn splash-btn-icon splash-btn-config";
+    settingsButton.innerHTML = "&#x2699;<span class=\"splash-btn-util-label\">SYS</span>";
+    settingsButton.title = "System configuration";
     settingsButton.onclick = () => this.ctx?.ui?.modalOrchestrator?.showModal(MODAL_IDS.SETTINGS) ?? settingsModal.show();
     fragment.appendChild(settingsButton);
 
     const exitButton = document.createElement("button");
-    exitButton.className = "splash-btn splash-btn-exit";
-    exitButton.textContent = "Exit";
+    exitButton.className = "splash-btn splash-btn-exit splash-btn-quit";
+    exitButton.textContent = "QUIT";
+    exitButton.title = "Quit";
     exitButton.onclick = () => {
       if (confirm("Are you sure you want to exit?")) {
         window.close();
-        if (window.opener) {
-          window.opener.focus();
-        } else {
-          window.location.href = 'about:blank';
-        }
+        if (window.opener) window.opener.focus();
+        else window.location.href = "about:blank";
       }
     };
     fragment.appendChild(exitButton);

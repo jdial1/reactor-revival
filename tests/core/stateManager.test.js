@@ -12,9 +12,10 @@ describe("State Manager Mechanics", () => {
     expect(game.ui.stateManager.getVar("test_var")).toBe(123);
   });
 
-  it("should add variable to UI update queue", () => {
-    game.ui.stateManager.setVar("test_var", "abc");
-    expect(game.ui.stateManager.vars.get("test_var")).toBe("abc");
+  it("should update game state when setVar is called", () => {
+    game.ui.stateManager.setVar("pause", true);
+    expect(game.ui.stateManager.getVar("pause")).toBe(true);
+    expect(game.state.pause).toBe(true);
   });
 
   it("should trigger onToggleStateChange for specific game properties", () => {
@@ -104,11 +105,11 @@ describe("State Manager Mechanics", () => {
   });
 
   it("should not trigger unnecessary updates for same values", () => {
-    game.ui.stateManager.setVar("test_var", 123);
-    const initialSize = game.ui.stateManager.vars.size;
+    game.ui.stateManager.setVar("pause", true);
+    const valueBefore = game.ui.stateManager.getVar("pause");
 
-    game.ui.stateManager.setVar("test_var", 123);
-    expect(game.ui.stateManager.vars.size).toBe(initialSize);
+    game.ui.stateManager.setVar("pause", true);
+    expect(game.ui.stateManager.getVar("pause")).toBe(valueBefore);
   });
 
   it("should return all variables with getAllVars", () => {
@@ -123,11 +124,10 @@ describe("State Manager Mechanics", () => {
   });
 
   it("should properly initialize with game instance", () => {
-    // Ensure the state manager has a reference to the game
     game.ui.stateManager.setGame(game);
 
     expect(game.ui.stateManager.game).toBe(game);
     expect(game.ui.stateManager.ui).toBe(game.ui);
-    expect(game.ui.stateManager.vars).toBeInstanceOf(Map);
+    expect(game.ui.stateManager.getAllVars()).toEqual(expect.any(Object));
   });
 });

@@ -59,12 +59,6 @@ export class ObjectiveEvaluator {
             manager.game.exoticParticleManager.exotic_particles = manager.game.exoticParticleManager.exotic_particles.add(manager.current_objective_def.ep_reward);
             updateDecimal(manager.game.state, "total_exotic_particles", (d) => d.add(manager.current_objective_def.ep_reward));
             updateDecimal(manager.game.state, "current_exotic_particles", (d) => d.add(manager.current_objective_def.ep_reward));
-            manager.game.emit("exoticParticlesChanged", {
-              exotic_particles: manager.game.exoticParticleManager.exotic_particles,
-              current_exotic_particles: manager.game.state.current_exotic_particles,
-              total_exotic_particles: manager.game.state.total_exotic_particles,
-              reality_flux: manager.game.state.reality_flux
-            });
           }
         }
 

@@ -1,4 +1,5 @@
 import { logger } from "../../utils/logger.js";
+import { toDecimal } from "../../utils/decimal.js";
 import { updateDecimal } from "../store.js";
 
 export function runPurchaseUpgrade(upgradeset, upgradeId) {
@@ -26,13 +27,13 @@ export function runPurchaseUpgrade(upgradeset, upgradeId) {
   if (upgradeset.game.isSandbox) {
     purchased = true;
   } else   if (ecost.gt(0)) {
-    if (upgradeset.game.state.current_exotic_particles.gte(ecost)) {
+    if (toDecimal(upgradeset.game.state.current_exotic_particles).gte(ecost)) {
       updateDecimal(upgradeset.game.state, "current_exotic_particles", (d) => d.sub(ecost));
       upgradeset.game.ui?.stateManager?.setVar("current_exotic_particles", upgradeset.game.state.current_exotic_particles);
       purchased = true;
     }
   } else {
-    if (upgradeset.game.state.current_money.gte(cost)) {
+    if (toDecimal(upgradeset.game.state.current_money).gte(cost)) {
       updateDecimal(upgradeset.game.state, "current_money", (d) => d.sub(cost));
       upgradeset.game.ui?.stateManager?.setVar("current_money", upgradeset.game.state.current_money);
       purchased = true;

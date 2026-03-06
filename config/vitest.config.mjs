@@ -1,26 +1,11 @@
 import { defineConfig } from "vite";
 import { configDefaults } from "vitest/config";
-import path from "path";
-import { fileURLToPath } from "url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
 export default defineConfig({
   resolve: {
-    alias: [
-      { find: "zod", replacement: path.resolve(__dirname, "../public/lib/zod.js") },
-      { find: "zod/v3", replacement: path.resolve(__dirname, "../public/lib/zod.js") },
-      { find: "zod-validation-error", replacement: path.resolve(__dirname, "../public/lib/zod-validation-error.js") },
-      { find: "lit-html/directives/class-map.js", replacement: path.resolve(__dirname, "../node_modules/lit-html/directives/class-map.js") },
-      { find: "lit-html/directives/style-map.js", replacement: path.resolve(__dirname, "../node_modules/lit-html/directives/style-map.js") },
-      { find: "lit-html/directives/repeat.js", replacement: path.resolve(__dirname, "../node_modules/lit-html/directives/repeat.js") },
-      { find: "lit-html/directives/when.js", replacement: path.resolve(__dirname, "../node_modules/lit-html/directives/when.js") },
-      { find: "lit-html/directives/unsafe-html.js", replacement: path.resolve(__dirname, "../node_modules/lit-html/directives/unsafe-html.js") },
-      { find: "lit-html", replacement: path.resolve(__dirname, "../node_modules/lit-html/lit-html.js") },
-      { find: "superjson", replacement: path.resolve(__dirname, "../node_modules/superjson/dist/index.js") },
-      { find: "@tanstack/query-core", replacement: path.resolve(__dirname, "../node_modules/@tanstack/query-core/build/modern/index.js") },
-    ],
+    alias: [],
   },
   test: {
     exclude: [...configDefaults.exclude, "**/performance.test.js"],

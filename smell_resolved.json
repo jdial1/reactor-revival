@@ -3,304 +3,304 @@
     "functions": [],
     "resolved": [
         {
-            "path": "components\\tooltip\\tooltipUpgradeBonusBuilder.js",
+            "path": "services\\saveModals.js",
             "smell": "God File",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574812"
+            "resolved_at": "2026-02-27T09:31:48.804105"
         },
         {
-            "path": "app\\gameStart.js",
-            "smell": "Low Cohesion",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574813"
-        },
-        {
-            "path": "services\\audio\\handlers\\interfaceHandlers.js",
-            "smell": "Inappropriate Intimacy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574814"
-        },
-        {
-            "path": "services\\audio\\handlers\\actionHandlers.js",
-            "smell": "Feature Envy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574818"
-        },
-        {
-            "path": "services\\audio\\handlers\\reactorHandlers.js",
-            "smell": "Swiss Army Knife",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574820"
-        },
-        {
-            "path": "services\\audio\\handlers\\reactorHandlers.js",
-            "smell": "Data Clump",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574821"
-        },
-        {
-            "path": "services\\audio\\handlers\\reactorHandlers.js",
-            "smell": "Inappropriate Intimacy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574822"
-        },
-        {
-            "path": "components\\welcomeBackModal.js",
-            "smell": "Magic Numbers",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574823"
-        },
-        {
-            "path": "services\\audio\\handlers\\interfaceHandlers.js",
-            "smell": "Divergent Change",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574824"
-        },
-        {
-            "path": "utils\\util.js",
-            "smell": "Magic Numbers",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574825"
-        },
-        {
-            "path": "utils\\timeFormatter.js",
-            "smell": "Divergent Change",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574826"
-        },
-        {
-            "path": "components\\settingsmodal\\eventBindings.js",
-            "smell": "Cognitive Complexity",
-            "func_name": "bindCloudLoadButtons",
-            "resolved_at": "2026-02-25T13:25:57.574827"
-        },
-        {
-            "path": "services\\audio\\handlers\\actionHandlers.js",
-            "smell": "Ghost State",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574828"
-        },
-        {
-            "path": "components\\ui\\modalOrchestrationUI.js",
-            "smell": "God File",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574829"
-        },
-        {
-            "path": "services\\audio\\handlers\\actionHandlers.js",
-            "smell": "Data Clump",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574830"
-        },
-        {
-            "path": "core\\heat\\heatStepRunner.js",
-            "smell": "Imperative Loops",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574832"
-        },
-        {
-            "path": "components\\tooltip\\tooltipUpgradeBonusBuilder.js",
-            "smell": "High Complexity",
-            "func_name": "addVentBonusLines",
-            "resolved_at": "2026-02-25T13:25:57.574834"
-        },
-        {
-            "path": "core\\heat\\heatStepRunner.js",
-            "smell": "Feature Envy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574835"
-        },
-        {
-            "path": "services\\audio\\handlers\\reactorHandlers.js",
-            "smell": "Divergent Change",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574836"
-        },
-        {
-            "path": "services\\audio\\handlers\\actionHandlers.js",
-            "smell": "Inappropriate Intimacy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574836"
-        },
-        {
-            "path": "core\\heat\\heatStepRunner.js",
-            "smell": "Ghost State",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574837"
-        },
-        {
-            "path": "components\\tooltip\\tooltipUpgradeBonusBuilder.js",
-            "smell": "Mutant Arguments",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574838"
-        },
-        {
-            "path": "services\\audio\\handlers\\reactorHandlers.js",
-            "smell": "Long Parameter List",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574839"
-        },
-        {
-            "path": "components\\tooltip\\tooltipUpgradeBonusBuilder.js",
-            "smell": "Feature Envy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574840"
-        },
-        {
-            "path": "core\\upgradeset\\upgradeDataLoader.js",
-            "smell": "Fragment",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574841"
-        },
-        {
-            "path": "core\\heat\\heatStepRunner.js",
-            "smell": "Mutant Arguments",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574842"
-        },
-        {
-            "path": "core\\heat\\heatStepRunner.js",
-            "smell": "Cognitive Complexity",
-            "func_name": "runOutlets",
-            "resolved_at": "2026-02-25T13:25:57.574843"
-        },
-        {
-            "path": "core\\heat\\heatStepRunner.js",
-            "smell": "Data Clump",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574844"
-        },
-        {
-            "path": "services\\audio\\handlers\\reactorHandlers.js",
-            "smell": "God File",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574845"
-        },
-        {
-            "path": "components\\buttonFactory.js",
+            "path": "components\\ui\\copyPaste\\pasteModalController.js",
             "smell": "Memory Leaks",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574846"
+            "resolved_at": "2026-02-27T09:31:48.804106"
         },
         {
-            "path": "app\\GameBootstrapper.js",
-            "smell": "Fragment",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574847"
-        },
-        {
-            "path": "components\\tooltip\\tooltipUpgradeBonusBuilder.js",
-            "smell": "Magic Numbers",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574848"
-        },
-        {
-            "path": "services\\audio\\handlers\\actionHandlers.js",
-            "smell": "Divergent Change",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574849"
-        },
-        {
-            "path": "core\\heat\\heatStepRunner.js",
-            "smell": "High Complexity",
-            "func_name": "runOutlets",
-            "resolved_at": "2026-02-25T13:25:57.574850"
-        },
-        {
-            "path": "components\\tooltip\\tooltipUpgradeBonusBuilder.js",
-            "smell": "Ghost State",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574851"
-        },
-        {
-            "path": "services\\audio\\handlers\\interfaceHandlers.js",
+            "path": "components\\domMapper.js",
             "smell": "Feature Envy",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574852"
+            "resolved_at": "2026-02-27T09:31:48.804108"
         },
         {
-            "path": "services\\audio\\handlers\\reactorHandlers.js",
-            "smell": "Imperative Loops",
+            "path": "components\\tooltip\\tooltipContentRenderer.js",
+            "smell": "Divergent Change",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574854"
+            "resolved_at": "2026-02-27T09:31:48.804109"
         },
         {
-            "path": "services\\audio\\handlers\\actionHandlers.js",
-            "smell": "God File",
+            "path": "services\\dataService.js",
+            "smell": "Ghost State",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574855"
+            "resolved_at": "2026-02-27T09:31:48.804110"
         },
         {
-            "path": "services\\audio\\handlers\\actionHandlers.js",
+            "path": "services\\splash\\splashAuthUI.js",
+            "smell": "Memory Leaks",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804111"
+        },
+        {
+            "path": "core\\part.js",
+            "smell": "Data Clump",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804112"
+        },
+        {
+            "path": "app\\updateToast.js",
+            "smell": "Ghost State",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804114"
+        },
+        {
+            "path": "core\\upgrade.js",
+            "smell": "Ghost State",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804115"
+        },
+        {
+            "path": "app\\updateToast.js",
+            "smell": "Feature Envy",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804116"
+        },
+        {
+            "path": "components\\tooltip\\tooltipContentRenderer.js",
             "smell": "Long Parameter List",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574856"
+            "resolved_at": "2026-02-27T09:31:48.804117"
+        },
+        {
+            "path": "utils\\formatter.js",
+            "smell": "Ghost State",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804118"
+        },
+        {
+            "path": "core\\game.js",
+            "smell": "Ghost State",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804119"
+        },
+        {
+            "path": "components\\controllers\\ObjectiveController.js",
+            "smell": "Memory Leaks",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804120"
+        },
+        {
+            "path": "app\\updateToast.js",
+            "smell": "Memory Leaks",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804121"
         },
         {
             "path": "utils\\timeFormatter.js",
-            "smell": "Feature Envy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574857"
-        },
-        {
-            "path": "core\\heat\\heatStepRunner.js",
-            "smell": "Divergent Change",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574858"
-        },
-        {
-            "path": "services\\audio\\handlers\\interfaceHandlers.js",
-            "smell": "Mutant Arguments",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:25:57.574859"
-        },
-        {
-            "path": "utils\\decimal.js",
-            "smell": "Feature Envy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:54:22.332613"
-        },
-        {
-            "path": "utils\\logger.js",
-            "smell": "Inappropriate Intimacy",
-            "func_name": "",
-            "resolved_at": "2026-02-25T13:54:22.332675"
-        },
-        {
-            "path": "utils\\util.js",
             "smell": "Data Clump",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:54:22.332682"
+            "resolved_at": "2026-02-27T09:31:48.804122"
         },
         {
-            "path": "components\\settingsmodal\\eventBindings.js",
-            "smell": "Cognitive Complexity",
-            "func_name": "bindSettingsEvents",
-            "resolved_at": "2026-02-25T13:54:22.332687"
-        },
-        {
-            "path": "core\\objective\\objectiveGridUtils.js",
+            "path": "core\\game\\SaveOrchestrator.js",
             "smell": "Ghost State",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:54:22.332691"
+            "resolved_at": "2026-02-27T09:31:48.804123"
         },
         {
-            "path": "services\\audio\\playbackHandlers.js",
-            "smell": "Fragment",
+            "path": "components\\tooltip\\tooltipContentRenderer.js",
+            "smell": "God File",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:54:22.332694"
+            "resolved_at": "2026-02-27T09:31:48.804124"
         },
         {
-            "path": "services\\audio\\playbackHandlers.js",
-            "smell": "Long Parameter List",
+            "path": "components\\domMapper.js",
+            "smell": "Ghost State",
             "func_name": "",
-            "resolved_at": "2026-02-25T13:54:22.332697"
+            "resolved_at": "2026-02-27T09:31:48.804126"
         },
         {
-            "path": "core\\game\\ComponentDepletionHandler.js",
-            "smell": "Fragment",
+            "path": "services\\splash\\splashAuthUI.js",
+            "smell": "Mutant Arguments",
             "func_name": "",
-            "resolved_at": "2026-02-25T14:09:48.258270"
+            "resolved_at": "2026-02-27T09:31:48.804127"
+        },
+        {
+            "path": "components\\tooltip\\tooltipContentRenderer.js",
+            "smell": "Data Clump",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804128"
+        },
+        {
+            "path": "components\\ui\\infoBarUI.js",
+            "smell": "Memory Leaks",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804129"
+        },
+        {
+            "path": "components\\domMapper.js",
+            "smell": "Middle Man",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804130"
+        },
+        {
+            "path": "utils\\formatter.js",
+            "smell": "Magic Numbers",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804131"
+        },
+        {
+            "path": "core\\upgrade.js",
+            "smell": "Divergent Change",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804132"
+        },
+        {
+            "path": "core\\game\\ExoticParticleManager.js",
+            "smell": "Feature Envy",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804133"
+        },
+        {
+            "path": "core\\game\\economyManager.js",
+            "smell": "Feature Envy",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804134"
+        },
+        {
+            "path": "core\\store.js",
+            "smell": "Long Method",
+            "func_name": "createStore",
+            "resolved_at": "2026-02-27T09:31:48.804135"
+        },
+        {
+            "path": "components\\tooltip\\tooltipContentRenderer.js",
+            "smell": "Feature Envy",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804136"
+        },
+        {
+            "path": "components\\ui\\copyPaste\\myLayoutsListUI.js",
+            "smell": "Ghost State",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804137"
+        },
+        {
+            "path": "core\\part.js",
+            "smell": "Memory Leaks",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804138"
+        },
+        {
+            "path": "components\\ui\\infoBarUI.js",
+            "smell": "Mutant Arguments",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804140"
+        },
+        {
+            "path": "core\\saveStateApplier.js",
+            "smell": "High Complexity",
+            "func_name": "applyCoreGameState",
+            "resolved_at": "2026-02-27T09:31:48.804141"
+        },
+        {
+            "path": "services\\dataService.js",
+            "smell": "Sequential Async",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:31:48.804142"
+        },
+        {
+            "path": "core\\store.js",
+            "smell": "High Complexity",
+            "func_name": "createGameState",
+            "resolved_at": "2026-02-27T09:37:36.454952"
+        },
+        {
+            "path": "core\\schemas.js",
+            "smell": "Divergent Change",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:50:51.728519"
+        },
+        {
+            "path": "core\\schemas.js",
+            "smell": "God File",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:50:51.728537"
+        },
+        {
+            "path": "utils\\storageAdapter.js",
+            "smell": "Else Obsession",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:50:51.728539"
+        },
+        {
+            "path": "core\\schemas.js",
+            "smell": "Callback Hell",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:50:51.728540"
+        },
+        {
+            "path": "core\\schemas.js",
+            "smell": "Magic Numbers",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:50:51.728541"
+        },
+        {
+            "path": "core\\schemas.js",
+            "smell": "Ghost State",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:50:51.728542"
+        },
+        {
+            "path": "utils\\storageAdapter.js",
+            "smell": "Ghost State",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:50:51.728543"
+        },
+        {
+            "path": "core\\schemas.js",
+            "smell": "Message Chains",
+            "func_name": "",
+            "resolved_at": "2026-02-27T09:50:51.728544"
+        },
+        {
+            "path": "core\\gameSaveManager.js",
+            "smell": "Afraid to Fail",
+            "func_name": "",
+            "resolved_at": "2026-02-27T10:05:55.746771"
+        },
+        {
+            "path": "core\\gameSaveManager.js",
+            "smell": "Data Clump",
+            "func_name": "",
+            "resolved_at": "2026-02-27T10:05:55.746798"
+        },
+        {
+            "path": "utils\\storageAdapter.js",
+            "smell": "God File",
+            "func_name": "",
+            "resolved_at": "2026-02-27T13:09:10.768048"
+        },
+        {
+            "path": "utils\\storageAdapter.js",
+            "smell": "Divergent Change",
+            "func_name": "",
+            "resolved_at": "2026-02-27T13:09:10.768085"
+        },
+        {
+            "path": "components\\ui\\coreLoopUI.js",
+            "smell": "Magic Numbers",
+            "func_name": "",
+            "resolved_at": "2026-02-27T13:09:10.768087"
+        },
+        {
+            "path": "utils\\storageAdapter.js",
+            "smell": "Cognitive Complexity",
+            "func_name": "safeParse",
+            "resolved_at": "2026-02-27T13:09:10.768089"
+        },
+        {
+            "path": "components\\ui\\coreLoopUI.js",
+            "smell": "Data Clump",
+            "func_name": "",
+            "resolved_at": "2026-02-27T13:09:10.768090"
         }
     ]
 }

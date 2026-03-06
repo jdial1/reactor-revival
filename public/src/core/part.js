@@ -108,58 +108,7 @@ export class Part {
       }
     };
     this.$el = renderToNode(PartButton(this, onClick, onMouseEnter, onMouseLeave));
-    this.populatePartDetails();
     return this.$el;
-  }
-
-  populatePartDetails() {
-    if (!this.$el) return;
-    if (typeof this.$el.querySelector !== "function") return;
-    const detailsEl = this.$el.querySelector(".part-details");
-    if (!detailsEl) return;
-
-    const titleEl = detailsEl.querySelector(".part-details-title");
-    if (titleEl) {
-      titleEl.textContent = this.title;
-    }
-
-    const statsEl = detailsEl.querySelector(".part-details-stats");
-    if (statsEl) {
-      const stats = [];
-      const cashIcon = "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='$'>";
-      const powerIcon = "<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='pwr'>";
-      const heatIcon = "<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>";
-      const tickIcon = "<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>";
-      if (this.erequires) {
-        stats.push(`<span class="stat-cost">${fmt(this.cost)} EP</span>`);
-      } else {
-        stats.push(`<span class="stat-cost">${cashIcon}${fmt(this.cost)}</span>`);
-      }
-      if (this.power > 0) stats.push(`<span class="stat-power">${powerIcon}${fmt(this.power)}</span>`);
-      if (this.heat > 0) stats.push(`<span class="stat-heat">${heatIcon}${fmt(this.heat, 0)}</span>`);
-      if (this.vent > 0) stats.push(`<span class="stat-vent">${fmt(this.vent, 0)} vent</span>`);
-      if (this.containment > 0) stats.push(`<span class="stat-cont">${heatIcon}${fmt(this.containment, 0)} cap</span>`);
-      if (this.transfer > 0) stats.push(`<span class="stat-xfer">${fmt(this.transfer, 0)} xfer</span>`);
-      if (this.ticks > 0) stats.push(`<span class="stat-tick">${tickIcon}${fmt(this.ticks)}</span>`);
-      if (this.reactor_power > 0) stats.push(`<span class="stat-rpower">${powerIcon}${fmt(this.reactor_power)} cap</span>`);
-      if (this.power_increase > 0) stats.push(`<span class="stat-boost">+${fmt(this.power_increase)}%${powerIcon}</span>`);
-      statsEl.innerHTML = stats.join("");
-    }
-
-    const descEl = detailsEl.querySelector(".part-details-desc");
-    if (descEl) {
-      descEl.textContent = this.description;
-    }
-
-    const bonusEl = detailsEl.querySelector(".part-details-bonuses");
-    if (bonusEl) {
-      const bonuses = this.getUpgradeBonusLines();
-      if (bonuses.length > 0) {
-        bonusEl.innerHTML = bonuses.map(line => `<span class="bonus-line">${line}</span>`).join("");
-      } else {
-        bonusEl.innerHTML = "";
-      }
-    }
   }
 
   getUpgradeBonusLines() {

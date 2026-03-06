@@ -83,9 +83,7 @@ describe("AudioService", () => {
       disconnect: vi.fn()
     };
 
-    mockBuffer = {
-      getChannelData: vi.fn(() => new Float32Array(100))
-    };
+    mockBuffer = null;
 
     mockAudioContext = {
       state: 'running',
@@ -130,6 +128,12 @@ describe("AudioService", () => {
         const src = {
           buffer: null,
           loop: false,
+          playbackRate: {
+            value: 1,
+            setValueAtTime: vi.fn(),
+            linearRampToValueAtTime: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn()
+          },
           connect: vi.fn(),
           disconnect: vi.fn(),
           start: vi.fn(),
@@ -160,9 +164,9 @@ describe("AudioService", () => {
           length: length,
           numberOfChannels: channels,
           sampleRate: sampleRate,
+          duration: length / sampleRate,
           getChannelData: vi.fn((channelIndex) => {
             const data = new Float32Array(length);
-            // Fill with some data for testing
             for (let i = 0; i < length; i++) {
               data[i] = Math.random() * 2 - 1;
             }
@@ -171,6 +175,11 @@ describe("AudioService", () => {
         };
         return buffer;
       }),
+      createStereoPanner: vi.fn(() => ({
+        pan: { value: 0 },
+        connect: vi.fn(),
+        disconnect: vi.fn()
+      })),
       suspend: vi.fn(),
       resume: vi.fn()
     };
@@ -212,8 +221,11 @@ describe("AudioService", () => {
       getElementById: vi.fn(() => null), // Prevent "is not a function" errors
     };
 
-    // Initialize the service with the mock game object
     await audioService.init();
+    const buf = audioService.context.createBuffer(1, 44100, 44100);
+    const uiKeys = ["click", "placement", "placement_cell", "placement_plating", "upgrade", "error", "sell", "tab_switch", "explosion", "meltdown", "depletion", "reboot"];
+    uiKeys.forEach((k) => { audioService._uiBuffers[k] = buf; });
+    audioService._ambienceBuffers = [buf, buf, buf];
   });
 
   afterEach(() => {
@@ -257,9 +269,10 @@ describe("AudioService", () => {
       }
     });
 
-    it("should start ambience if not muted on init", async () => {
-      await audioService.init();
-      expect(mockAudioContext.createOscillator).toHaveBeenCalled();
+    it("should start ambience if not muted on init", () => {
+      audioService.ambienceManager.stopAmbience();
+      audioService.ambienceManager.startAmbience();
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
     });
 
     it("should not start ambience if muted on init", async () => {
@@ -296,15 +309,16 @@ describe("AudioService", () => {
     });
 
     it("should stop ambience when muted", () => {
-      audioService._ambienceNodes = [{ source: mockOscillator }];
+      audioService._ambienceNodes = [{ connect: vi.fn(), disconnect: vi.fn(), stop: vi.fn() }];
       audioService.toggleMute(true);
       expect(audioService._ambienceNodes.length).toBe(0);
     });
 
     it("should start ambience when unmuted", () => {
       audioService.toggleMute(true);
+      audioService.ambienceManager.stopAmbience();
       audioService.toggleMute(false);
-      expect(mockAudioContext.createOscillator).toHaveBeenCalled();
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
     });
 
     it("should not toggle mute if not initialized", () => {
@@ -367,29 +381,29 @@ describe("AudioService", () => {
 
     it("should play placement sound", () => {
       audioService.play("placement");
-      expect(mockAudioContext.createOscillator).toHaveBeenCalled();
-      expect(mockOscillator.start).toHaveBeenCalled();
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
+      expect(mockBufferSource.start).toHaveBeenCalled();
     });
 
     it("should play placement sound with subtype", () => {
       audioService.play("placement", "cell");
-      expect(mockAudioContext.createOscillator).toHaveBeenCalled();
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
     });
 
     it("should play sell sound", () => {
       audioService.play("sell");
-      expect(mockAudioContext.createOscillator).toHaveBeenCalled();
-      expect(mockOscillator.start).toHaveBeenCalled();
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
+      expect(mockBufferSource.start).toHaveBeenCalled();
     });
 
     it("should play upgrade sound", () => {
       audioService.play("upgrade");
-      expect(mockAudioContext.createOscillator).toHaveBeenCalled();
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
     });
 
     it("should play error sound", () => {
       audioService.play("error");
-      expect(mockAudioContext.createOscillator).toHaveBeenCalled();
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
     });
 
     it("should play explosion sound", () => {
@@ -410,16 +424,16 @@ describe("AudioService", () => {
 
     it("should not play sounds when muted", () => {
       audioService.toggleMute(true);
-      const oscillatorCalls = mockAudioContext.createOscillator.mock.calls.length;
+      const bufferSourceCalls = mockAudioContext.createBufferSource.mock.calls.length;
       audioService.play("placement");
-      expect(mockAudioContext.createOscillator.mock.calls.length).toBe(oscillatorCalls);
+      expect(mockAudioContext.createBufferSource.mock.calls.length).toBe(bufferSourceCalls);
     });
 
     it("should not play sounds when context is not running", () => {
       mockAudioContext.state = 'suspended';
-      const oscillatorCalls = mockAudioContext.createOscillator.mock.calls.length;
+      const bufferSourceCalls = mockAudioContext.createBufferSource.mock.calls.length;
       audioService.play("placement");
-      expect(mockAudioContext.createOscillator.mock.calls.length).toBe(oscillatorCalls);
+      expect(mockAudioContext.createBufferSource.mock.calls.length).toBe(bufferSourceCalls);
     });
 
     it("should throttle explosion sounds based on interval", () => {
@@ -464,18 +478,20 @@ describe("AudioService", () => {
     it("should start ambience", () => {
       audioService.ambienceManager.stopAmbience();
       audioService.ambienceManager.startAmbience();
-      expect(mockAudioContext.createOscillator).toHaveBeenCalled();
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
     });
 
     it("should not start ambience if already playing", () => {
-      audioService._ambienceNodes = [{ source: mockOscillator }];
-      const oscillatorCalls = mockAudioContext.createOscillator.mock.calls.length;
+      const mockSrc = { connect: vi.fn(), disconnect: vi.fn(), stop: vi.fn() };
+      audioService._ambienceNodes = [mockSrc, mockAudioContext.createGain()];
+      const bufferSourceCalls = mockAudioContext.createBufferSource.mock.calls.length;
       audioService.ambienceManager.startAmbience();
-      expect(mockAudioContext.createOscillator.mock.calls.length).toBe(oscillatorCalls);
+      expect(mockAudioContext.createBufferSource.mock.calls.length).toBe(bufferSourceCalls);
     });
 
     it("should stop ambience", () => {
-      audioService._ambienceNodes = [{ source: mockOscillator }];
+      const mockSrc = { connect: vi.fn(), disconnect: vi.fn(), stop: vi.fn() };
+      audioService._ambienceNodes = [mockSrc, mockAudioContext.createGain()];
       audioService.ambienceManager.stopAmbience();
       expect(audioService._ambienceNodes.length).toBe(0);
     });
@@ -483,9 +499,9 @@ describe("AudioService", () => {
     it("should not start ambience when muted", () => {
       audioService.toggleMute(true);
       audioService.ambienceManager.stopAmbience();
-      const oscillatorCalls = mockAudioContext.createOscillator.mock.calls.length;
+      const bufferSourceCalls = mockAudioContext.createBufferSource.mock.calls.length;
       audioService.ambienceManager.startAmbience();
-      expect(mockAudioContext.createOscillator.mock.calls.length).toBe(oscillatorCalls);
+      expect(mockAudioContext.createBufferSource.mock.calls.length).toBe(bufferSourceCalls);
     });
   });
 

@@ -18,26 +18,7 @@
   </ul>
 
   <!-- Center Group: Stats (Desktop) -->
-  <ul id="reactor_stats" class="desktop-only">
-    <li>
-      <strong title="Total heat venting per tick">
-        <img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" />
-        <span id="stats_vent">0</span>
-      </strong>
-    </li>
-    <li>
-      <strong title="Power per tick">
-        <img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" />
-        <span id="stats_power">0</span>
-      </strong>
-    </li>
-    <li>
-      <strong title="Heat per tick">
-        <img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" />
-        <span id="stats_heat">0</span>
-      </strong>
-    </li>
-  </ul>
+  <ul id="reactor_stats" class="desktop-only"></ul>
 
   <ul id="engine_status" class="desktop-only">
      <li>
@@ -107,79 +88,7 @@
         </button>
       </div>
     </div>
-    <div id="parts_tab_contents">
-      <div id="parts_tab_power" class="parts_tab_content active">
-        <hgroup>
-          <h4>Cells</h4>
-          <h6>Generate power and heat.</h6>
-        </hgroup>
-        <div id="cells" class="item-grid"></div>
-        <hgroup>
-          <h4>Reflectors</h4>
-          <h6>Boost adjacent cell output.</h6>
-        </hgroup>
-        <div id="reflectors" class="item-grid"></div>
-        <hgroup>
-          <h4>Capacitors</h4>
-          <h6>Increase reactor power capacity.</h6>
-        </hgroup>
-        <div id="capacitors" class="item-grid"></div>
-        <hgroup>
-          <h4>Particle Accelerators</h4>
-          <h6>Generate Exotic Particles from heat.</h6>
-        </hgroup>
-        <div id="particleAccelerators" class="item-grid"></div>
-      </div>
-      <div id="parts_tab_heat" class="parts_tab_content">
-        <hgroup>
-          <h4>Vents</h4>
-          <h6>Actively cool components.</h6>
-        </hgroup>
-        <div id="vents" class="item-grid"></div>
-        <hgroup>
-          <h4>Heat Exchangers</h4>
-          <h6>Distribute heat between components.</h6>
-        </hgroup>
-        <div id="heatExchangers" class="item-grid"></div>
-        <hgroup>
-          <h4>Heat Inlets</h4>
-          <h6>Move heat into the reactor core.</h6>
-        </hgroup>
-        <div id="heatInlets" class="item-grid"></div>
-        <hgroup>
-          <h4>Heat Outlets</h4>
-          <h6>Move heat out of the reactor core.</h6>
-        </hgroup>
-        <div id="heatOutlets" class="item-grid"></div>
-        <hgroup>
-          <h4>Coolant Cells</h4>
-          <h6>Absorb and contain heat.</h6>
-        </hgroup>
-        <div id="coolantCells" class="item-grid"></div>
-        <hgroup>
-          <h4>Reactor Plating</h4>
-          <h6>Increase reactor heat capacity.</h6>
-        </hgroup>
-        <div id="reactorPlatings" class="item-grid"></div>
-        <hgroup>
-          <h4>Overflow Valves</h4>
-          <h6>Transfer heat when input exceeds 80% containment.</h6>
-        </hgroup>
-        <div id="overflowValves" class="item-grid"></div>
-        
-        <hgroup>
-          <h4>Top-up Valves</h4>
-          <h6>Transfer heat when output drops below 20% containment.</h6>
-        </hgroup>
-        <div id="topupValves" class="item-grid"></div>
-        
-        <hgroup>
-          <h4>Check Valves</h4>
-          <h6>Transfer heat in one direction only.</h6>
-        </hgroup>
-        <div id="checkValves" class="item-grid"></div>
-      </div>
-    </div>
+    <div id="parts_tab_contents"></div>
     <nav id="controls_nav">
       <div id="controls_nav_root"></div>
     </nav>

@@ -1,6 +1,22 @@
-import { numFormat as fmt } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
+import { MODAL_IDS } from "../ModalManager.js";
+import { toNumber } from "../../utils/decimal.js";
 import { MOBILE_BREAKPOINT_PX } from "../../core/constants.js";
+
+const MS_PER_FRAME_60FPS = 16.667;
+const LERP_FACTOR = 0.15;
+const LERP_EPSILON = 0.1;
+const MIN_SPEED_FACTOR = 0.05;
+
+const MOBILE_ONLY_IDS = new Set([
+  "control_deck_power_btn", "control_deck_heat_btn", "control_deck_money", "control_deck_power", "control_deck_heat",
+  "mobile_passive_top_bar", "mobile_passive_ep", "mobile_passive_money_value", "mobile_passive_pause_btn",
+]);
+
+const REACTOR_LAZY_IDS = new Set([
+  "info_power", "mobile_passive_ep", "mobile_passive_money_value", "mobile_passive_pause_btn",
+  "control_deck_power_btn", "control_deck_heat_btn", "control_deck_money", "control_deck_power", "control_deck_heat",
+]);
 
 const pageElements = {
   global: [
@@ -50,16 +66,20 @@ export class CoreLoopUI {
       const domIdsElements = ui.dom_ids || [];
       elementsToCache = [...new Set([...pageElements.global, ...domIdsElements])];
     }
+    const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
+    const onReactorPage = pageId === "reactor_section";
     elementsToCache.forEach((id) => {
       const el = document.getElementById(id);
       if (el) {
         ui.DOMElements[id] = el;
         const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
         ui.DOMElements[camelCaseKey] = el;
-      } else {
-        if (pageElements.global.includes(id)) {
-          logger.log('warn', 'ui', `Global element with id '${id}' not found in DOM.`);
-        }
+      } else if (
+        pageElements.global.includes(id) &&
+        !(MOBILE_ONLY_IDS.has(id) && !isMobile) &&
+        !(REACTOR_LAZY_IDS.has(id) && !onReactorPage)
+      ) {
+        logger.log('warn', 'ui', `Global element with id '${id}' not found in DOM.`);
       }
     });
     return true;
@@ -160,19 +180,11 @@ export class CoreLoopUI {
     const game = ui.game;
     const config = ui.var_objs_config;
     if (!config || !game?.state) return;
-    const sm = ui.stateManager;
     for (const configKey of Object.keys(config)) {
       const val = this.getDisplayValue(game, configKey);
       if (val === undefined) continue;
-      if (sm) sm.vars.set(configKey, val);
       const cfg = config[configKey];
-      if (!cfg) continue;
-      if (!cfg.rolling && cfg.dom) {
-        let textContent = cfg.num ? fmt(val, cfg.places) : val;
-        if (cfg.prefix) textContent = cfg.prefix + textContent;
-        cfg.dom.textContent = textContent;
-      }
-      cfg.onupdate?.(val);
+      if (cfg) cfg.onupdate?.(val);
     }
     ui.objectivesUI.updateObjectiveDisplayFromState?.();
   }
@@ -182,24 +194,44 @@ export class CoreLoopUI {
     const game = ui.game;
     const config = ui.var_objs_config;
     if (!config || !game) return;
-    const sm = ui.stateManager;
     for (const configKey of keys) {
       const cfg = config[configKey];
       if (!cfg) continue;
       const val = this.getDisplayValue(game, configKey);
       if (val === undefined) continue;
-      if (sm) sm.vars.set(configKey, val);
-      if (!cfg.rolling && cfg.dom) {
-        let textContent = cfg.num ? fmt(val, cfg.places) : val;
-        if (cfg.prefix) textContent = cfg.prefix + textContent;
-        cfg.dom.textContent = textContent;
-      }
       cfg.onupdate?.(val);
     }
   }
 
   updateRollingNumbers(dt) {
-    this.ui.infoBarUI.updateRollingNumbers(dt);
+    const ui = this.ui;
+    if (!ui.displayValues) return;
+    const timeScale = dt / MS_PER_FRAME_60FPS;
+    const lerpFactor = LERP_FACTOR * timeScale;
+    const epsilon = LERP_EPSILON;
+    for (const key in ui.displayValues) {
+      const obj = ui.displayValues[key];
+      const targetNum = toNumber(obj.target);
+      const currentNum = toNumber(obj.current);
+      const diff = targetNum - currentNum;
+      if (Math.abs(diff) > 0) {
+        if (Math.abs(diff) < epsilon && targetNum !== 0) {
+          obj.current = obj.target;
+        } else {
+          const minSpeed = Math.max(1, Math.abs(diff) * MIN_SPEED_FACTOR);
+          const change = diff * lerpFactor;
+          if (Math.abs(change) < minSpeed * timeScale) {
+            obj.current = currentNum + Math.sign(diff) * minSpeed * timeScale;
+          } else {
+            obj.current = currentNum + change;
+          }
+          const newCurrent = obj.current;
+          if ((diff > 0 && newCurrent >= targetNum) || (diff < 0 && newCurrent <= targetNum) || Math.abs(targetNum - newCurrent) < epsilon) {
+            obj.current = obj.target;
+          }
+        }
+      }
+    }
   }
 
   initVarObjsConfig() {
@@ -233,6 +265,17 @@ export class CoreLoopUI {
 
       if (ui.gridCanvasRenderer && ui.game) {
         ui.gridCanvasRenderer.render(ui.game);
+      }
+
+      const onReactorPage = ui.game?.router?.currentPageId === "reactor_section";
+      const engineShouldBeRunning = ui.game && !ui.game.paused && onReactorPage;
+      if (engineShouldBeRunning && ui.game?.engine && !ui.game.engine.running) {
+        if (!ui._reactorFailedModalShown) {
+          ui._reactorFailedModalShown = true;
+          ui.modalOrchestrator?.showModal(MODAL_IDS.REACTOR_FAILED_TO_START, { game: ui.game });
+        }
+      } else if (ui.game?.engine?.running || ui.game?.paused || !onReactorPage) {
+        ui._reactorFailedModalShown = false;
       }
 
       if (ui.game) {

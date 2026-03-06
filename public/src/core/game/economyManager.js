@@ -15,7 +15,6 @@ export class EconomyManager {
   setCurrentMoney(value) {
     if (this.game.isSandbox) return;
     setDecimal(this.game.state, "current_money", value);
-    this.game.emit("moneyChanged", { current_money: this.game.state.current_money });
   }
 
   getPrestigeMultiplier() {
@@ -28,6 +27,5 @@ export class EconomyManager {
     if (this.game.isSandbox) return;
     const multiplier = this.getPrestigeMultiplier();
     updateDecimal(this.game.state, "current_money", (d) => d.add(toDecimal(amount).mul(multiplier)));
-    this.game.emit("moneyChanged", { current_money: this.game.state.current_money });
   }
 }

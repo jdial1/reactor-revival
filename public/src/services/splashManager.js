@@ -1,4 +1,4 @@
-import { StorageUtils, StorageUtilsAsync, isTestEnv } from "../utils/util.js";
+import { StorageUtils, StorageAdapter, isTestEnv } from "../utils/util.js";
 import { escapeHtml } from "../utils/stringUtils.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
@@ -35,7 +35,6 @@ class SplashScreenManager extends BaseComponent {
     super();
     this.splashScreen = null;
     this.statusElement = null;
-    this.flavorElement = null;
     this._appContext = null;
 
 
@@ -46,7 +45,7 @@ class SplashScreenManager extends BaseComponent {
     this.isReady = false;
     this.errorTimeout = null;
     this.installPrompt = null;
-    this.uiManager = new SplashUIManager({ statusElement: null, flavorElement: null, splashScreen: null });
+    this.uiManager = new SplashUIManager({ statusElement: null, splashScreen: null });
     this.versionChecker = new VersionChecker(this);
     this.saveSlotUI = new SplashSaveSlotUI(this);
 
@@ -77,10 +76,8 @@ class SplashScreenManager extends BaseComponent {
   }
 
   updateUserCountDisplay() {
-    const userCountElement = document.getElementById('user-count-text');
-    if (userCountElement) {
-        userCountElement.textContent = `${this.userCount}`;
-    }
+    const userCountElement = document.getElementById("user-count-text");
+    if (userCountElement) userCountElement.textContent = `${this.userCount}`;
   }
 
   /**
@@ -142,17 +139,8 @@ class SplashScreenManager extends BaseComponent {
   }
 
   updateStatus(message) {
-    this.uiManager.setRefs({ statusElement: this.statusElement, flavorElement: this.flavorElement, splashScreen: this.splashScreen });
-    this.uiManager.updateStatus(message, flavorMessages);
-  }
-
-  startFlavorText() {
-    this.uiManager.setRefs({ statusElement: this.statusElement, flavorElement: this.flavorElement, splashScreen: this.splashScreen });
-    this.uiManager.startFlavorText(flavorMessages);
-  }
-
-  showRandomFlavorText() {
-    this.uiManager.showRandomFlavorText(flavorMessages);
+    this.uiManager.setRefs({ statusElement: this.statusElement, splashScreen: this.splashScreen });
+    this.uiManager.updateStatus(message);
   }
 
   stopFlavorText() {
@@ -166,12 +154,12 @@ class SplashScreenManager extends BaseComponent {
 
   async setStep(stepId) {
     await this.ensureReady();
-    runSetStep(this, stepId, flavorMessages);
+    runSetStep(this, stepId);
   }
 
   async setSubStep(message) {
     await this.ensureReady();
-    runSetSubStep(this, message, flavorMessages);
+    runSetSubStep(this, message);
   }
 
   async showStartOptions(canLoadGame = true) {
@@ -182,15 +170,6 @@ class SplashScreenManager extends BaseComponent {
     const spinner = this.splashScreen?.querySelector(".splash-spinner");
     if (spinner) spinner.classList.add("splash-element-hidden");
     if (this.statusElement) this.statusElement.classList.add("splash-element-hidden");
-    if (this.flavorElement && flavorMessages && flavorMessages.length > 0) {
-      if (!this.flavorElement.textContent) {
-        const randomIndex = Math.floor(Math.random() * flavorMessages.length);
-        this.flavorElement.textContent = flavorMessages[randomIndex];
-      }
-      this.flavorElement.classList.remove("splash-element-hidden");
-      this.flavorElement.classList.add("splash-element-visible");
-    }
-
     let startOptionsSection = this.splashScreen?.querySelector(".splash-start-options");
     if (!startOptionsSection) {
       startOptionsSection = document.createElement("div");
@@ -204,31 +183,46 @@ class SplashScreenManager extends BaseComponent {
     const { hasSave, saveSlots, cloudSaveOnly, cloudSaveData, mostRecentSave } = await builder.buildSaveSlotList(canLoadGame);
 
     const continueBtn = builder.buildContinueButton(mostRecentSave);
-    if (continueBtn) startOptionsSection.appendChild(continueBtn);
+    const hasResume = !!(continueBtn || (cloudSaveOnly && cloudSaveData && !hasSave));
+    if (continueBtn) {
+      continueBtn.classList.add("splash-btn-resume-primary");
+      startOptionsSection.appendChild(continueBtn);
+    }
 
     if (cloudSaveOnly && cloudSaveData && !hasSave) {
       const cloudBtn = builder.buildCloudContinueButton(cloudSaveData);
-      if (cloudBtn) startOptionsSection.appendChild(cloudBtn);
+      if (cloudBtn) {
+        cloudBtn.classList.add("splash-btn-resume-primary");
+        startOptionsSection.appendChild(cloudBtn);
+      }
     }
 
-    if (hasSave || (cloudSaveOnly && cloudSaveData)) {
-      startOptionsSection.appendChild(builder.buildSpacer());
-    }
-
+    const actionsGrid = document.createElement("div");
+    actionsGrid.className = "splash-btn-actions-grid";
+    const secondaryRow = document.createElement("div");
+    secondaryRow.className = "splash-btn-row-secondary";
     const newGameBtn = builder.buildNewGameButton(hasSave);
-    if (newGameBtn) startOptionsSection.appendChild(newGameBtn);
-
-    startOptionsSection.appendChild(builder.buildLoadGameButton(saveSlots));
-    startOptionsSection.appendChild(builder.buildStandardButtons());
+    if (newGameBtn) {
+      if (!hasResume) newGameBtn.classList.add("splash-btn-resume-primary");
+      secondaryRow.appendChild(newGameBtn);
+    }
+    secondaryRow.appendChild(builder.buildLoadGameButton(saveSlots));
+    actionsGrid.appendChild(secondaryRow);
+    const tertiaryRow = document.createElement("div");
+    tertiaryRow.className = "splash-btn-row-tertiary";
+    const standardFragment = builder.buildStandardButtons();
+    standardFragment.childNodes.forEach((n) => tertiaryRow.appendChild(n));
+    actionsGrid.appendChild(tertiaryRow);
+    startOptionsSection.appendChild(actionsGrid);
 
     const sabWarning = builder.buildSabWarning();
     if (sabWarning) startOptionsSection.appendChild(sabWarning);
 
     const authArea = builder.buildAuthArea();
-    const authRow = this.splashScreen.querySelector("#splash-auth-row");
-    if (authRow) {
-      authRow.innerHTML = "";
-      authRow.appendChild(authArea);
+    const authSlot = document.querySelector("#splash-auth-in-footer");
+    if (authSlot) {
+      authSlot.innerHTML = "";
+      authSlot.appendChild(authArea);
     } else {
       authArea.style.marginTop = "1rem";
       startOptionsSection.appendChild(authArea);
@@ -299,7 +293,7 @@ class SplashScreenManager extends BaseComponent {
       clearTimeout(this.errorTimeout);
       this.errorTimeout = null;
     }
-    this.uiManager.setRefs({ statusElement: this.statusElement, flavorElement: this.flavorElement, splashScreen: this.splashScreen });
+    this.uiManager.setRefs({ statusElement: this.statusElement, splashScreen: this.splashScreen });
     this.uiManager.hide(() => {
       if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: "SPLASH_HIDDEN" });
@@ -309,7 +303,7 @@ class SplashScreenManager extends BaseComponent {
 
   show() {
     if (this.splashScreen) {
-      this.uiManager.setRefs({ statusElement: this.statusElement, flavorElement: this.flavorElement, splashScreen: this.splashScreen });
+      this.uiManager.setRefs({ statusElement: this.statusElement, splashScreen: this.splashScreen });
       this.uiManager.show();
       this.isReady = false;
     }
@@ -383,19 +377,10 @@ class SplashScreenManager extends BaseComponent {
 
   // Refresh save options after upload/download operations
   async refreshSaveOptions() {
-    await this.showStartOptions(!!(await StorageUtilsAsync.getRaw("reactorGameSave")));
+    await this.showStartOptions(!!(await StorageAdapter.getRaw("reactorGameSave")));
   }
 }
 
-if (typeof window !== "undefined" && typeof document !== "undefined") {
-  window.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('splash-screen')) {
-      generateSplashBackground();
-    } else {
-      logger.log('warn', 'splash', 'Splash screen element not found, skipping dynamic background generation.');
-    }
-  });
-}
 
 export function getFlavorMessages() {
   return flavorMessages;

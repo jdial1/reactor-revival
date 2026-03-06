@@ -48,6 +48,7 @@ describe('EP Info Bar Display', () => {
         game.engine.tick();
         expect(toNum(game.exotic_particles)).toBeGreaterThan(0);
         setDecimal(game.state, "current_exotic_particles", game.exotic_particles);
+        await new Promise((r) => setTimeout(r, 0));
         game.ui.coreLoopUI.processUpdateQueue();
         const mobileContent = mobileEl?.querySelector('.ep-content');
         const desktopContent = desktopEl?.querySelector('.ep-content');
@@ -57,11 +58,12 @@ describe('EP Info Bar Display', () => {
         expect(desktopContent.style.display).not.toBe("none");
     });
 
-    it('should hide EP display when EP is zero', () => {
+    it('should hide EP display when EP is zero', async () => {
         const mobileEl = document.getElementById("info_ep");
         const desktopEl = document.getElementById("info_ep_desktop");
 
         setDecimal(game.state, "current_exotic_particles", 10);
+        await new Promise((r) => setTimeout(r, 0));
         game.ui.coreLoopUI.processUpdateQueue();
 
         const mobileContent = mobileEl?.querySelector('.ep-content');
@@ -72,6 +74,7 @@ describe('EP Info Bar Display', () => {
         expect(desktopContent.style.display).not.toBe("none");
 
         setDecimal(game.state, "current_exotic_particles", 0);
+        await new Promise((r) => setTimeout(r, 0));
         game.ui.coreLoopUI.processUpdateQueue();
 
         expect(mobileEl.querySelector('.ep-content').style.display).toBe("none");
@@ -109,6 +112,7 @@ describe('EP Info Bar Display', () => {
 
         setDecimal(game.state, "current_exotic_particles", savedData.current_exotic_particles);
 
+        await new Promise((r) => setTimeout(r, 0));
         game.ui.coreLoopUI.processUpdateQueue();
         game.ui.coreLoopUI.updateRollingNumbers(10000);
 

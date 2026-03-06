@@ -17,8 +17,20 @@ export function applyPowerOverflowCalc(reactorPower, effectiveMaxPower, overflow
   return { reactorPower: effectiveMaxPower, overflowHeat: overflow * overflowRatio };
 }
 
+export function applyPowerOverflowCalcDecimal(reactorPower, effectiveMaxPower, overflowRatio) {
+  if (reactorPower.lte(effectiveMaxPower)) return { reactorPower, overflowHeat: reactorPower.constructor(0) };
+  const overflow = reactorPower.sub(effectiveMaxPower);
+  return { reactorPower: effectiveMaxPower, overflowHeat: overflow.mul(overflowRatio) };
+}
+
 export function clampHeat(heat, maxHeat) {
   if (heat > maxHeat && maxHeat > 0) return maxHeat;
   if (heat < 0) return 0;
+  return heat;
+}
+
+export function clampHeatDecimal(heat, maxHeat) {
+  if (heat.gt(maxHeat) && maxHeat.gt(0)) return maxHeat;
+  if (heat.lt(0)) return heat.constructor(0);
   return heat;
 }

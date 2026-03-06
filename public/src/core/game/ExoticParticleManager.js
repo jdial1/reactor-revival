@@ -49,11 +49,5 @@ export class ExoticParticleManager {
     this.exotic_particles = this.exotic_particles.add(delta);
     this.total_exotic_particles = this.total_exotic_particles.add(delta);
     this.current_exotic_particles = this.current_exotic_particles.add(delta);
-    this.game.emit("exoticParticlesChanged", {
-      exotic_particles: this.exotic_particles,
-      current_exotic_particles: this.current_exotic_particles,
-      total_exotic_particles: this.total_exotic_particles,
-      reality_flux: this.reality_flux
-    });
   }
 }
