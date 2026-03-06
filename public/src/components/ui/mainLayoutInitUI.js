@@ -1,13 +1,13 @@
 export function initMainLayout(ui) {
-  ui.coreLoopUI.cacheDOMElements();
-  ui.coreLoopUI.initVarObjsConfig();
   ui.setupEventListeners();
   ui.controlDeckUI.initializeToggleButtons();
+  ui.initializeControlDeck();
   ui.partsPanelUI.setupPartsTabs();
   ui.partsPanelUI.initializePartsPanel();
+  ui.coreLoopUI.cacheDOMElements();
+  ui.coreLoopUI.initVarObjsConfig();
   ui.quickStartUI.addHelpButtonToMainPage();
   ui.userAccountUI.setupUserAccountButton();
-  ui.initializeControlDeck();
   ui.tabSetupUI.setupBuildTabButton();
   ui.tabSetupUI.setupMenuTabButton();
   ui.deviceFeatures.setupAppBadgeVisibilityHandler();
@@ -19,7 +19,9 @@ export function initMainLayout(ui) {
         `;
   }
   if (ui.gridScaler) ui.gridScaler.init();
-  ui.gridScaler.resize();
+  if (document.getElementById("reactor_wrapper")) {
+    ui.gridScaler.resize();
+  }
   ui.particleEffectsUI.initParticleCanvas();
   requestAnimationFrame((ts) => ui.coreLoopUI.runUpdateInterfaceLoop(ts));
   if (ui.game && ui.game.engine) {

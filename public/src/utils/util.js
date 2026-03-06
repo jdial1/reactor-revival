@@ -1,7 +1,9 @@
 import Decimal from "./decimal.js";
 import { formatDuration, formatRelativeTime } from "./formatUtils.js";
 import { serializeSave as superjsonStringify, parseSave as superjsonParse } from "../config/superjsonSetup.js";
-import { get as idbGet, set as idbSet, del as idbDel } from "idb-keyval";
+import { StorageAdapter } from "./storageAdapter.js";
+
+export { StorageAdapter };
 
 const GAME_SAVE_KEYS = new Set([
   "reactorGameSave",
@@ -27,7 +29,7 @@ export function deserializeSave(raw) {
 
 export { Formatter, Formatter as Format, numFormat, formatStatNum } from "./formatUtils.js";
 export const timeFormat = (ms) => formatDuration(ms, false);
-export { formatTime } from "./formatUtils.js";
+export { formatTime, formatPlaytimeLog } from "./formatUtils.js";
 
 export const on = (parentElement, selector, eventType, handler) => {
     if (!parentElement) return;
@@ -193,9 +195,9 @@ export async function migrateLocalStorageToIndexedDB() {
         for (const key of MIGRATION_KEYS) {
             const fromLS = localStorage.getItem(key);
             if (fromLS === null) continue;
-            const fromIDB = await idbGet(key);
-            if (fromIDB !== undefined) continue;
-            await idbSet(key, fromLS);
+            const fromIDB = await StorageAdapter.getRaw(key);
+            if (fromIDB != null) continue;
+            await StorageAdapter.setRaw(key, fromLS);
         }
     } catch (_) {}
 }
@@ -227,53 +229,30 @@ export function setSlot1FromBackup() {
 
 export const StorageUtilsAsync = {
     async get(key, defaultValue = null) {
-        try {
-            const raw = await idbGet(key);
-            if (raw === undefined) return defaultValue;
-            try {
-                return GAME_SAVE_KEYS.has(key) ? deserializeSave(raw) : JSON.parse(raw);
-            } catch (_) {
-                return raw;
-            }
-        } catch (_) {
-            return defaultValue;
-        }
+        const result = await StorageAdapter.get(key);
+        return result ?? defaultValue;
     },
     async set(key, value) {
-        try {
-            const str = typeof value === "object" && value !== null
-                ? JSON.stringify(value, saveDataReplacer)
-                : JSON.stringify(value);
-            await idbSet(key, str);
-        } catch (_) {}
+        await StorageAdapter.set(key, value);
     },
     async remove(key) {
-        try {
-            await idbDel(key);
-        } catch (_) {}
+        await StorageAdapter.remove(key);
     },
     async getRaw(key, defaultValue = null) {
-        try {
-            const value = await idbGet(key);
-            return value !== undefined ? value : defaultValue;
-        } catch (_) {
-            return defaultValue;
-        }
+        return await StorageAdapter.getRaw(key, defaultValue);
     },
     async setRaw(key, value) {
-        try {
-            await idbSet(key, value);
-        } catch (_) {}
-    }
+        await StorageAdapter.setRaw(key, value);
+    },
 };
 
 export async function rotateSlot1ToBackupAsync(value) {
     try {
-        const current = await StorageUtilsAsync.getRaw(SAVE_SLOT1_KEY);
-        const previous = await StorageUtilsAsync.getRaw(SAVE_PREVIOUS_KEY);
-        if (previous != null) await StorageUtilsAsync.setRaw(SAVE_BACKUP_KEY, previous);
-        if (current != null) await StorageUtilsAsync.setRaw(SAVE_PREVIOUS_KEY, current);
-        await StorageUtilsAsync.setRaw(SAVE_SLOT1_KEY, value);
+        const current = await StorageAdapter.getRaw(SAVE_SLOT1_KEY);
+        const previous = await StorageAdapter.getRaw(SAVE_PREVIOUS_KEY);
+        if (previous != null) await StorageAdapter.setRaw(SAVE_BACKUP_KEY, previous);
+        if (current != null) await StorageAdapter.setRaw(SAVE_PREVIOUS_KEY, current);
+        await StorageAdapter.setRaw(SAVE_SLOT1_KEY, value);
         return true;
     } catch (_) {
         return false;
@@ -281,13 +260,13 @@ export async function rotateSlot1ToBackupAsync(value) {
 }
 
 export async function getBackupSaveForSlot1Async() {
-    return await StorageUtilsAsync.getRaw(SAVE_BACKUP_KEY);
+    return await StorageAdapter.getRaw(SAVE_BACKUP_KEY);
 }
 
 export async function setSlot1FromBackupAsync() {
-    const backup = await StorageUtilsAsync.getRaw(SAVE_BACKUP_KEY);
+    const backup = await StorageAdapter.getRaw(SAVE_BACKUP_KEY);
     if (backup == null) return false;
-    await StorageUtilsAsync.setRaw(SAVE_SLOT1_KEY, backup);
+    await StorageAdapter.setRaw(SAVE_SLOT1_KEY, backup);
     return true;
 }
 

@@ -2,16 +2,15 @@ module.exports = {
   globDirectory: "public",
   globPatterns: [
     "index.html",
+    "manifest.json",
+    "version.json",
     "css/**/*.css",
     "data/**/*.json",
     "img/**/*.{png,svg,jpg,jpeg}",
     "pages/**/*.html",
     "components/**/*.html",
-    "manifest.json",
-    "version.json",
     "lib/**/*.js",
-    "src/**/*.js",
-    "components/**/*.js",
+    "src/**/*.js"
   ],
   globIgnores: [
     "**/node_modules/**/*",

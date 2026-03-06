@@ -10,25 +10,27 @@ export class TemplateLoader {
   constructor() {
     this.templates = new Map();
     this.loaded = false;
+    this._loadPromise = null;
   }
 
-  /**
-   * Load all template files
-   */
   async loadTemplates() {
     if (this.loaded) return;
+    if (this._loadPromise) return this._loadPromise;
 
-    try {
-      const response = await fetch("components/templates.html");
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    this._loadPromise = (async () => {
+      try {
+        const response = await fetch("components/templates.html");
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const html = await response.text();
+        this.parseAndStoreTemplates(html);
+        this.loaded = true;
+      } catch (error) {
+        logger.log('error', 'data', 'Failed to load templates:', error);
+      } finally {
+        this._loadPromise = null;
       }
-      const html = await response.text();
-      this.parseAndStoreTemplates(html);
-      this.loaded = true;
-    } catch (error) {
-      logger.log('error', 'data', 'Failed to load templates:', error);
-    }
+    })();
+    return this._loadPromise;
   }
 
   parseAndStoreTemplates(html) {

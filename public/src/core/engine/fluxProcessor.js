@@ -36,12 +36,6 @@ export function processFluxAccumulators(engine, multiplier) {
     game.exoticParticleManager.exotic_particles = game.exoticParticleManager.exotic_particles.add(epGain);
     updateDecimal(game.state, "total_exotic_particles", (d) => d.add(epGain));
     updateDecimal(game.state, "current_exotic_particles", (d) => d.add(epGain));
-    game.emit?.("exoticParticlesChanged", {
-      exotic_particles: game.exoticParticleManager.exotic_particles,
-      total_exotic_particles: game.state.total_exotic_particles,
-      current_exotic_particles: game.state.current_exotic_particles,
-      reality_flux: game.state.reality_flux
-    });
   }
 }
 
@@ -62,11 +56,5 @@ export function processRealityFlux(engine, multiplier) {
   if (realityFluxGain > 0) {
     const add = toDecimal(realityFluxGain);
     updateDecimal(game.state, "reality_flux", (d) => d.add(add));
-    game.emit?.("exoticParticlesChanged", {
-      exotic_particles: game.exoticParticleManager.exotic_particles,
-      total_exotic_particles: game.state.total_exotic_particles,
-      current_exotic_particles: game.state.current_exotic_particles,
-      reality_flux: game.state.reality_flux
-    });
   }
 }

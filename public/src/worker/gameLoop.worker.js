@@ -1,3 +1,6 @@
+import "../../lib/break_infinity.min.js";
+import "../config/superjsonSetup.js";
+import superjson from "superjson";
 import { runHeatStepFromTyped } from "../core/heatCalculations.js";
 import { buildHeatPayloadFromLayout } from "./buildHeatPayloadFromLayout.js";
 import {
@@ -8,7 +11,7 @@ import {
   VENT_BONUS_PERCENT_DIVISOR,
 } from "../core/constants.js";
 import { getIndex, isInBounds } from "../core/logic/gridUtils.js";
-import { getNeighborKeys, applyPowerOverflowCalc, clampHeat } from "../core/logic/gridUtils.js";
+import { getNeighborKeys, applyPowerOverflowCalcDecimal, clampHeatDecimal } from "../core/logic/gridUtils.js";
 
 function buildContainmentArray(partLayout, partTable, stride, gridLen) {
   const containment = new Float32Array(gridLen);
@@ -104,53 +107,53 @@ function processVents(partLayout, partTable, heat, reactorState, multiplier, gid
   return power_add;
 }
 
-const applyPowerOverflow = applyPowerOverflowCalc;
+const applyPowerOverflow = applyPowerOverflowCalcDecimal;
 
 function applyReactorPowerUpdates(reactorPower, power_add, reactorState, effectiveMaxPower, multiplier, autoSell) {
   const overflowRatio = Number(reactorState.power_overflow_to_heat_ratio ?? DEFAULT_OVERFLOW_RATIO) || DEFAULT_OVERFLOW_RATIO;
-  let reactorHeat = 0;
+  const Decimal = reactorPower.constructor;
 
-  reactorPower += power_add;
+  reactorPower = reactorPower.add(power_add);
   let result = applyPowerOverflow(reactorPower, effectiveMaxPower, overflowRatio);
   reactorPower = result.reactorPower;
-  reactorHeat += result.overflowHeat;
+  let reactorHeat = result.overflowHeat;
 
   const powerMult = Number(reactorState.power_multiplier ?? DEFAULT_POWER_MULTIPLIER) || DEFAULT_POWER_MULTIPLIER;
   if (powerMult !== 1) {
-    reactorPower += power_add * (powerMult - 1);
+    reactorPower = reactorPower.add(power_add * (powerMult - 1));
     result = applyPowerOverflow(reactorPower, effectiveMaxPower, overflowRatio);
     reactorPower = result.reactorPower;
-    reactorHeat += result.overflowHeat;
+    reactorHeat = reactorHeat.add(result.overflowHeat);
   }
 
-  let moneyEarned = 0;
+  let moneyEarned = new Decimal(0);
   const autoSellMult = reactorState.auto_sell_multiplier ?? 0;
   if (autoSell && autoSellMult > 0) {
-    const sellCap = effectiveMaxPower * autoSellMult * multiplier;
-    const sellAmount = Math.min(reactorPower, sellCap);
-    if (sellAmount > 0) {
-      reactorPower -= sellAmount;
-      moneyEarned = sellAmount * (Number(reactorState.sell_price_multiplier ?? DEFAULT_SELL_PRICE_MULTIPLIER) || DEFAULT_SELL_PRICE_MULTIPLIER);
+    const sellCap = effectiveMaxPower.mul(autoSellMult).mul(multiplier);
+    const sellAmount = Decimal.min(reactorPower, sellCap);
+    if (sellAmount.gt(0)) {
+      reactorPower = reactorPower.sub(sellAmount);
+      moneyEarned = sellAmount.mul(Number(reactorState.sell_price_multiplier ?? DEFAULT_SELL_PRICE_MULTIPLIER) || DEFAULT_SELL_PRICE_MULTIPLIER);
     }
   }
 
-  if (reactorPower > effectiveMaxPower) reactorPower = effectiveMaxPower;
+  if (reactorPower.gt(effectiveMaxPower)) reactorPower = effectiveMaxPower;
 
   return { reactorPower, reactorHeat, moneyEarned };
 }
 
-function applyReactorHeatUpdates(reactorHeat, reactorState, effectiveMaxPower, multiplier) {
+function applyReactorHeatUpdates(reactorHeat, reactorState, maxHeat, multiplier) {
   const heatReduction = Number(reactorState.heat_controlled)
-    ? (effectiveMaxPower ? (effectiveMaxPower / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + (Number(reactorState.vent_multiplier_eff ?? 0) / VENT_BONUS_PERCENT_DIVISOR)) * multiplier : 0)
+    ? (maxHeat.gt(0) ? maxHeat.div(REACTOR_HEAT_STANDARD_DIVISOR).mul(1 + (Number(reactorState.vent_multiplier_eff ?? 0) / VENT_BONUS_PERCENT_DIVISOR)).mul(multiplier) : reactorHeat.constructor(0))
     : 0;
-  if (heatReduction > 0) reactorHeat = Math.max(0, reactorHeat - heatReduction);
-  return clampHeat(reactorHeat, Number(reactorState.max_heat ?? 0));
+  if (heatReduction > 0) reactorHeat = reactorHeat.sub(heatReduction).max(0);
+  return clampHeatDecimal(reactorHeat, maxHeat);
 }
 
 function processHeatPhase(heat, containment, payload, reactorHeat, multiplier) {
   const recordTransfers = [];
   const heatResult = runHeatStepFromTyped(heat, containment, {
-    reactorHeat,
+    reactorHeat: reactorHeat.toNumber(),
     multiplier,
     inletsData: payload.inletsData,
     nInlets: payload.nInlets,
@@ -164,7 +167,7 @@ function processHeatPhase(heat, containment, payload, reactorHeat, multiplier) {
     nOutlets: payload.nOutlets,
     recordTransfers
   });
-  return { reactorHeat: heatResult.reactorHeat, heatFromInlets: heatResult.heatFromInlets ?? 0 };
+  return { reactorHeat: new (reactorHeat.constructor)(heatResult.reactorHeat), heatFromInlets: heatResult.heatFromInlets ?? 0 };
 }
 
 function createGridContext(data) {
@@ -191,10 +194,10 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower) 
   const containment = buildContainmentArray(partLayout, partTable, stride, gridLen);
   const payload = buildHeatPayloadFromLayout({ partLayout, partTable, rows, cols, heat, containment, maxCols: stride });
   const heatPhaseResult = processHeatPhase(heat, containment, payload, reactorHeat, multiplier);
-  reactorHeat = heatPhaseResult.reactorHeat + heatPhaseResult.heatFromInlets;
+  reactorHeat = heatPhaseResult.reactorHeat.add(heatPhaseResult.heatFromInlets);
 
   const cellResult = processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx);
-  reactorHeat += cellResult.heat_add;
+  reactorHeat = reactorHeat.add(cellResult.heat_add);
 
   const explosionIndices = findExplosionIndices(partLayout, partTable, heat, gidx);
   const ventPower = processVents(partLayout, partTable, heat, reactorState, multiplier, gidx);
@@ -207,8 +210,8 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower) 
     multiplier,
     autoSell
   );
-  reactorHeat += powerResult.reactorHeat;
-  reactorHeat = applyReactorHeatUpdates(reactorHeat, reactorState, effectiveMaxPower, multiplier);
+  reactorHeat = reactorHeat.add(powerResult.reactorHeat);
+  reactorHeat = applyReactorHeatUpdates(reactorHeat, reactorState, new (reactorHeat.constructor)(reactorState.max_heat ?? 0), multiplier);
 
   return {
     reactorHeat,
@@ -224,21 +227,24 @@ function runOneTick(data) {
   const heat = new Float32Array(data.heatBuffer);
   const gridLen = heat.length;
   const ctx = createGridContext(data);
-  let reactorHeat = Number(data.reactorState.current_heat ?? 0);
-  let reactorPower = Number(data.reactorState.current_power ?? 0);
+  const Decimal = ctx.effectiveMaxPower.constructor;
+  let reactorHeat = data.reactorState.current_heat;
+  let reactorPower = data.reactorState.current_power;
+  if (typeof reactorHeat?.toNumber !== "function") reactorHeat = new Decimal(reactorHeat ?? 0);
+  if (typeof reactorPower?.toNumber !== "function") reactorPower = new Decimal(reactorPower ?? 0);
   const powerBeforeTick = reactorPower;
   const heatBeforeTick = reactorHeat;
   const allExplosionIndices = [];
   const allDepletionIndices = [];
   const tileUpdatesMap = new Map();
-  let totalMoneyEarned = 0;
+  let totalMoneyEarned = new Decimal(0);
   const n = Math.max(1, data.tickCount || 1);
 
   for (let tick = 0; tick < n; tick++) {
     const result = processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower);
     reactorHeat = result.reactorHeat;
     reactorPower = result.reactorPower;
-    totalMoneyEarned += result.moneyEarned;
+    totalMoneyEarned = totalMoneyEarned.add(result.moneyEarned);
     for (let e = 0; e < result.explosionIndices.length; e++) allExplosionIndices.push(result.explosionIndices[e]);
     for (let d = 0; d < result.depletionIndices.length; d++) allDepletionIndices.push(result.depletionIndices[d]);
     for (let u = 0; u < result.tileUpdates.length; u++) {
@@ -248,15 +254,15 @@ function runOneTick(data) {
   }
 
   return {
-    reactorHeat,
-    reactorPower,
+    reactorHeat: reactorHeat.toNumber(),
+    reactorPower: reactorPower.toNumber(),
     explosionIndices: allExplosionIndices,
     depletionIndices: allDepletionIndices,
     tileUpdates: Array.from(tileUpdatesMap.values()),
-    moneyEarned: totalMoneyEarned,
+    moneyEarned: totalMoneyEarned.toNumber(),
     epGained: 0,
-    powerDelta: reactorPower - powerBeforeTick,
-    heatDelta: reactorHeat - heatBeforeTick,
+    powerDelta: reactorPower.sub(powerBeforeTick).toNumber(),
+    heatDelta: reactorHeat.sub(heatBeforeTick).toNumber(),
     transfers: [],
     tickCount: n
   };
@@ -268,20 +274,23 @@ let busy = false;
 function runStep() {
   const d = pending;
   pending = null;
-  if (!d || d.type !== "tick") {
+  const isSuperjson = d?.json != null && d?.meta != null;
+  const isTick = d?.type === "tick" || isSuperjson;
+  if (!d || !isTick) {
     busy = false;
     if (d) self.postMessage({ type: "tickResult", tickId: d.tickId, error: true });
     return;
   }
   busy = true;
   try {
-    const result = runOneTick(d);
+    const data = isSuperjson ? { ...superjson.deserialize({ json: d.json, meta: d.meta }), heatBuffer: d.heatBuffer } : d;
+    const result = runOneTick(data);
     result.type = "tickResult";
-    result.tickId = d.tickId;
-    result.useSAB = !!d.heatBuffer && typeof SharedArrayBuffer !== "undefined" && d.heatBuffer instanceof SharedArrayBuffer;
+    result.tickId = data.tickId ?? d.tickId;
+    result.useSAB = !!data.heatBuffer && typeof SharedArrayBuffer !== "undefined" && data.heatBuffer instanceof SharedArrayBuffer;
     self.postMessage(result);
   } catch (err) {
-    self.postMessage({ type: "tickResult", tickId: d.tickId, error: true, message: String(err?.message || err) });
+    self.postMessage({ type: "tickResult", tickId: d?.tickId ?? 0, error: true, message: String(err?.message || err) });
   }
   busy = false;
   if (pending) runStep();
@@ -289,7 +298,8 @@ function runStep() {
 
 self.onmessage = function (e) {
   const d = e.data;
-  if (d?.type === "tick") {
+  const isTick = d?.type === "tick" || (d?.json != null && d?.meta != null);
+  if (isTick) {
     if (busy) {
       pending = d;
       return;

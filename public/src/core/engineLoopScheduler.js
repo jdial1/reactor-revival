@@ -1,4 +1,5 @@
 import { fromError } from "zod-validation-error";
+import superjson from "superjson";
 import { logger } from "../utils/logger.js";
 import { GameLoopTickInputSchema } from "./schemas.js";
 
@@ -185,8 +186,8 @@ export function updateTimeFluxUI(engine) {
 
   let progress = 100;
   let isCatchingUp = false;
-  if (engine.game.time_flux && queuedTicks > 0 && engine._timeFluxCatchupTotalTicks > 0) {
-    const total = engine._timeFluxCatchupTotalTicks;
+  if (engine.game.time_flux && !engine.game.paused && queuedTicks > 0 && engine._timeFluxCatchupTotalTicks > 0) {
+    const total     = engine._timeFluxCatchupTotalTicks;
     const remaining = engine._timeFluxCatchupRemainingTicks;
     progress = Math.min(100, Math.max(0, ((total - remaining) / total) * 100));
     isCatchingUp = true;
@@ -290,7 +291,9 @@ export function runLoopIteration(engine, timestamp) {
             updateTimeFluxUI(engine);
             return;
           }
-          w.postMessage(result.data);
+          const { heatBuffer, ...rest } = result.data;
+          const serialized = superjson.serialize(rest);
+          w.postMessage({ ...serialized, heatBuffer });
         } else {
           engine._gameLoopWorkerPending = false;
           engine._gameLoopTickContext = null;

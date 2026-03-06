@@ -36,7 +36,8 @@ export class GameEventDispatcher {
       try {
         fn(payload);
       } catch (err) {
-        this._logger?.warn?.(`[Game] Event handler error for "${eventName}":`, err);
+        const msg = err?.message ?? String(err);
+        this._logger?.warn?.(`[Game] Event handler error for "${eventName}":`, msg);
       }
     });
   }

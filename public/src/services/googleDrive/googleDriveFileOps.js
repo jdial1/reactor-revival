@@ -1,4 +1,4 @@
-import { StorageUtils, StorageUtilsAsync, serializeSave, deserializeSave } from "../../utils/util.js";
+import { StorageUtils, StorageAdapter, serializeSave, deserializeSave } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 
 export async function findSaveFile(service) {
@@ -189,7 +189,7 @@ export async function uploadLocalSave(service, saveDataString) {
       const localSave = deserializeSave(saveDataString);
       localSave.isCloudSynced = true;
       localSave.cloudUploadedAt = new Date().toISOString();
-      await StorageUtilsAsync.set("reactorGameSave", localSave);
+      await StorageAdapter.set("reactorGameSave", localSave);
     } catch (e) {
       logger.log('error', 'game', 'Failed to mark local save as synced after upload.', e);
     }
@@ -199,7 +199,7 @@ export async function uploadLocalSave(service, saveDataString) {
 
 export async function canUploadLocalSave(service) {
   if (!service.isSignedIn) return { showUpload: false };
-  const localSave = await StorageUtilsAsync.get("reactorGameSave");
+  const localSave = await StorageAdapter.get("reactorGameSave");
   if (!localSave) return { showUpload: false };
   try {
     if (localSave.isCloudSynced) return { showUpload: false };
@@ -213,7 +213,7 @@ export async function canUploadLocalSave(service) {
 
 export async function offerLocalSaveUpload(service) {
   if (!service.isSignedIn) return { hasLocalSave: false };
-  const gameState = await StorageUtilsAsync.get("reactorGameSave");
+  const gameState = await StorageAdapter.get("reactorGameSave");
   if (!gameState) return { hasLocalSave: false };
   try {
     const saveSize = `${(serializeSave(gameState).length / 1024).toFixed(1)}KB`;
@@ -222,7 +222,7 @@ export async function offerLocalSaveUpload(service) {
     if (gameState.isCloudSynced) {
       delete gameState.isCloudSynced;
       delete gameState.cloudUploadedAt;
-      await StorageUtilsAsync.set("reactorGameSave", gameState);
+      await StorageAdapter.set("reactorGameSave", gameState);
     }
     return { hasLocalSave: true, gameState, saveSize };
   } catch {

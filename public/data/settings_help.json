@@ -1,0 +1,14 @@
+{
+  "reducedMotion": "Reduces or removes animations throughout the game for users sensitive to motion.",
+  "numberFormat": "Choose how large numbers display: compact notation (1,234 K) or scientific notation (1.23e3).",
+  "hideUnaffordableUpgrades": "Hides upgrades you cannot yet afford from the upgrades panel.",
+  "hideUnaffordableResearch": "Hides research items you cannot yet afford from the research panel.",
+  "hideMaxUpgrades": "Hides upgrades you have already purchased at maximum level.",
+  "hideMaxResearch": "Hides research items you have already completed.",
+  "hideOtherDoctrineUpgrades": "Hides upgrades that belong to doctrines other than your current one.",
+  "heatFlowVisible": "Shows arrows on the reactor grid indicating heat flow direction between components.",
+  "heatMapVisible": "Displays a color overlay on the grid showing relative heat levels (cool to hot).",
+  "debugOverlay": "Shows debug flow arrows for developer diagnostics.",
+  "forceNoSAB": "Forces the engine to disable Spatial Adaptation Buffer. Use only if experiencing simulation issues.",
+  "notifications": "Enables browser notifications for game update alerts when the app is updated."
+}

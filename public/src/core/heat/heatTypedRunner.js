@@ -9,7 +9,7 @@ import {
 import { BALANCE } from "../balanceConfig.js";
 import { VALVE_TOPUP } from "./heatTransferFormulas.js";
 import { transferHeatBetweenNeighbors } from "./heatTransferFormulas.js";
-import { HEAT_EPSILON, HEAT_TRANSFER_DIFF_DIVISOR, EXCHANGER_MIN_HEADROOM } from "../constants.js";
+import { HEAT_EPSILON, HEAT_TRANSFER_DIFF_DIVISOR, EXCHANGER_MIN_HEADROOM, HEAT_TRANSFER_MAX_ITERATIONS } from "../constants.js";
 
 function cloneHeatState(heat) {
   return ArrayBuffer.isView(heat) ? new Float32Array(heat) : heat.slice();
@@ -256,6 +256,10 @@ function runHeatTransferCore(heat, containment, componentSet, options) {
     outletsData,
     nOutlets = 0,
   } = componentSet;
+  const totalComponents = nInlets + nValves + nExchangers + nOutlets;
+  if (totalComponents > HEAT_TRANSFER_MAX_ITERATIONS) {
+    throw new Error(`Heat transfer payload too large: ${totalComponents} components`);
+  }
   const r1 = runInletsFromTyped(nextHeat, reactorHeat, inletsData, nInlets, multiplier);
   reactorHeat = r1.reactorHeat;
   runValvesFromTyped(nextHeat, containment, valvesData, nValves, multiplier, recordTransfers);

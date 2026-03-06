@@ -1,3 +1,11 @@
+export function setGridDimensions(game, { rows, cols }) {
+  game.rows = rows;
+  game.cols = cols;
+  game.base_rows = rows;
+  game.base_cols = cols;
+  game.tileset.updateActiveTiles();
+}
+
 export async function placePart(game, row, col, partId) {
     const tile = game.tileset.getTile(row, col);
     if (!tile) throw new Error(`Tile at ${row},${col} does not exist`);

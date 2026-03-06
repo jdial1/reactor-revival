@@ -10,7 +10,6 @@ export class StateManager extends BaseComponent {
     this.ui = ui;
     this.clicked_part = null;
     this.game = null;
-    this.vars = new Map();
     this.quickSelectSlots = Array.from({ length: 5 }, () => ({ partId: null, locked: false }));
     this._stateUnsubscribes = [];
   }
@@ -25,22 +24,7 @@ export class StateManager extends BaseComponent {
     this.teardown();
     this.game = gameInstance;
     if (this.ui) this.ui._firstFrameSyncDone = false;
-    const state = gameInstance?.state;
-    if (!state) return;
-    const storeKeys = [
-      "current_money", "current_power", "current_heat", "current_exotic_particles",
-      "total_exotic_particles", "reality_flux",
-      "max_power", "max_heat", "stats_power", "stats_heat_generation",
-      "stats_vent", "stats_inlet", "stats_outlet", "stats_net_heat",
-      "stats_total_part_heat", "stats_cash", "engine_status",
-      "power_delta_per_tick", "heat_delta_per_tick", "melting_down",
-      "auto_sell", "auto_buy", "heat_control", "time_flux", "pause",
-    ];
-    for (const key of storeKeys) {
-      if (state[key] !== undefined) this.setVar(key, state[key]);
-    }
-    const ep = gameInstance?.exoticParticleManager?.exotic_particles;
-    if (ep !== undefined) this.setVar("exotic_particles", ep);
+    if (!gameInstance?.state) return;
     this.setupStateSubscriptions();
   }
 
@@ -62,10 +46,7 @@ export class StateManager extends BaseComponent {
       if (!cfg?.onupdate) continue;
       const unsub = subscribeKey(state, stateKey, () => {
         const val = getDisplayValue(configKey);
-        if (val !== undefined) {
-          if (this.vars) this.vars.set(configKey, val);
-          cfg.onupdate(val);
-        }
+        if (val !== undefined) cfg.onupdate(val);
       });
       this._stateUnsubscribes.push(unsub);
     }
@@ -84,15 +65,20 @@ export class StateManager extends BaseComponent {
     const runAffordabilityCascade = () => {
       const g = this.game;
       if (!g) return;
-      const moneyVal = g.state?.current_money;
-      const epVal = g.state?.current_exotic_particles;
-      if (ui.last_money !== undefined) ui.last_money = moneyVal;
-      if (ui.last_exotic_particles !== undefined) ui.last_exotic_particles = epVal;
-      g.partset?.check_affordability?.(g);
-      g.upgradeset?.check_affordability?.(g);
-      if (g.tooltip_manager) g.tooltip_manager.updateUpgradeAffordability?.();
-      ui.navIndicatorsUI?.updateNavIndicators?.();
-      if (typeof ui.partsPanelUI?.updateQuickSelectSlots === "function") ui.partsPanelUI.updateQuickSelectSlots();
+      try {
+        const moneyVal = g.state?.current_money;
+        const epVal = g.state?.current_exotic_particles;
+        if (ui.last_money !== undefined) ui.last_money = moneyVal;
+        if (ui.last_exotic_particles !== undefined) ui.last_exotic_particles = epVal;
+        g.partset?.check_affordability?.(g);
+        g.upgradeset?.check_affordability?.(g);
+        if (g.tooltip_manager) g.tooltip_manager.updateUpgradeAffordability?.();
+        ui.navIndicatorsUI?.updateNavIndicators?.();
+        if (typeof ui.partsPanelUI?.updateQuickSelectSlots === "function") ui.partsPanelUI.updateQuickSelectSlots();
+      } catch (err) {
+        const msg = err?.message ?? "";
+        if (!msg.includes("ChildPart") || !msg.includes("parentNode")) throw err;
+      }
     };
     if (state.current_money !== undefined) {
       this._stateUnsubscribes.push(subscribeKey(state, "current_money", runAffordabilityCascade));
@@ -103,35 +89,38 @@ export class StateManager extends BaseComponent {
     runAffordabilityCascade();
   }
   setVar(key, value) {
-    const oldValue = this.vars.get(key);
-    if (oldValue === value) {
+    if (!this.game?.state) return;
+    if (key === "exotic_particles") {
+      this.game.exoticParticleManager.exotic_particles = value;
       return;
     }
-    this.vars.set(key, value);
-    if (this.game && this.game.onToggleStateChange) {
-      if (
-        [
-          "pause",
-          "auto_sell",
-          "auto_buy",
-          "time_flux",
-          "heat_control",
-        ].includes(key)
-      ) {
-        this.game.onToggleStateChange(key, value);
-      }
+    if (key === "total_heat") {
+      this.game.state.stats_heat_generation = value;
+      return;
+    }
+    const oldValue = this.game.state[key];
+    const toggleKeys = ["pause", "auto_sell", "auto_buy", "time_flux", "heat_control"];
+    const decimalKeys = ["current_heat", "current_power", "current_money", "current_exotic_particles", "total_exotic_particles", "reality_flux"];
+    const isToggle = toggleKeys.includes(key);
+    if (isToggle) value = Boolean(value);
+    const isDecimalKey = decimalKeys.includes(key);
+    if (!isDecimalKey && oldValue === value) return;
+
+    if (isDecimalKey || (value != null && typeof value.gte === "function")) {
+      setDecimal(this.game.state, key, value);
+    } else {
+      this.game.state[key] = value;
+    }
+
+    if (isToggle) {
+      this.game.onToggleStateChange?.(key, value);
     }
   }
   getVar(key) {
-    if (this.game?.state && Object.prototype.hasOwnProperty.call(this.game.state, key)) {
-      const val = this.game.state[key];
-      if (val !== undefined) return val;
-    }
-    const fromVars = this.vars.get(key);
-    if (fromVars !== undefined) return fromVars;
-    if (key === "exotic_particles") return this.game?.exoticParticleManager?.exotic_particles;
-    if (key === "total_heat") return this.game?.state?.stats_heat_generation;
-    return undefined;
+    if (!this.game?.state) return undefined;
+    if (key === "exotic_particles") return this.game.exoticParticleManager?.exotic_particles;
+    if (key === "total_heat") return this.game.state.stats_heat_generation;
+    return this.game.state[key];
   }
   setClickedPart(part, options = {}) {
     this.clicked_part = part;
@@ -295,11 +284,7 @@ export class StateManager extends BaseComponent {
   }
 
   getAllVars() {
-    const vars = {};
-    for (const [key, value] of this.vars.entries()) {
-      vars[key] = value;
-    }
-    return vars;
+    return { ...this.game?.state };
   }
 
   // Function to add part icons to objective titles

@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
 import { GridScaler } from "../../public/src/components/gridScaler.js";
 
-// Helper to resize the window for responsive testing
-const resizeWindow = (window, width, height) => {
-  window.innerWidth = width;
-  window.innerHeight = height;
-  window.dispatchEvent(new window.Event("resize"));
+const resizeWindow = (w, width, height) => {
+  Object.defineProperty(w, "innerWidth", { configurable: true, writable: true, value: width });
+  Object.defineProperty(w, "innerHeight", { configurable: true, writable: true, value: height });
+  w.dispatchEvent(new w.Event("resize"));
 };
 
 // Helper to check if an element exists and is not explicitly hidden
@@ -191,8 +190,8 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         resizeWindow(window, 800, 600);
         const isMobile = window.innerWidth <= 900;
 
-        if (game?.ui?.initializePartsPanel) {
-          game.ui.initializePartsPanel();
+        if (game?.ui?.partsPanelUI?.initializePartsPanel) {
+          game.ui.partsPanelUI.initializePartsPanel();
         }
 
         const collapsed = game?.ui?.uiState?.parts_panel_collapsed ?? partsPanel?.classList.contains("collapsed");

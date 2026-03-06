@@ -38,124 +38,26 @@ export class AudioAmbienceManager {
     const dest = this.svc.ambienceGain || this.svc.masterGain;
     const useLayers = this.svc._ambienceBuffers.length >= 3 &&
       this.svc._ambienceBuffers[0] && this.svc._ambienceBuffers[1] && this.svc._ambienceBuffers[2];
-    if (useLayers) {
-      this._ambienceFilter = this.svc.context.createBiquadFilter();
-      this._ambienceFilter.type = 'lowpass';
-      this._ambienceFilter.frequency.value = 100;
-      this._ambienceFilter.Q.value = 1;
-      this._ambienceFilter.connect(dest);
-      const [l1, l2, l3] = this._ambienceLayerWeights(this._ambienceHeatRatio);
-      for (let i = 0; i < 3; i++) {
-        const src = this.svc.context.createBufferSource();
-        src.buffer = this.svc._ambienceBuffers[i];
-        src.loop = true;
-        const gain = this.svc.context.createGain();
-        gain.gain.value = [l1, l2, l3][i];
-        src.connect(gain);
-        gain.connect(this._ambienceFilter);
-        src.start(t);
-        this._ambienceLayerGains.push(gain);
-        this._ambienceNodes.push(src, gain);
-      }
-      this._ambienceNodes.push(this._ambienceFilter);
-      return;
+    if (!useLayers) return;
+    this._ambienceFilter = this.svc.context.createBiquadFilter();
+    this._ambienceFilter.type = 'lowpass';
+    this._ambienceFilter.frequency.value = 100;
+    this._ambienceFilter.Q.value = 1;
+    this._ambienceFilter.connect(dest);
+    const [l1, l2, l3] = this._ambienceLayerWeights(this._ambienceHeatRatio);
+    for (let i = 0; i < 3; i++) {
+      const src = this.svc.context.createBufferSource();
+      src.buffer = this.svc._ambienceBuffers[i];
+      src.loop = true;
+      const gain = this.svc.context.createGain();
+      gain.gain.value = [l1, l2, l3][i];
+      src.connect(gain);
+      gain.connect(this._ambienceFilter);
+      src.start(t);
+      this._ambienceLayerGains.push(gain);
+      this._ambienceNodes.push(src, gain);
     }
-    const globalLFO = this.svc.context.createOscillator();
-    globalLFO.frequency.value = 0.15;
-    const globalLFOGain = this.svc.context.createGain();
-    globalLFOGain.gain.value = 0.1;
-    globalLFO.connect(globalLFOGain);
-    const humOsc1 = this.svc.context.createOscillator();
-    const humOsc2 = this.svc.context.createOscillator();
-    humOsc1.type = 'sawtooth';
-    humOsc2.type = 'square';
-    humOsc1.frequency.value = 50;
-    humOsc2.frequency.value = 50.35;
-    const humShaper = this.svc.context.createWaveShaper();
-    humShaper.curve = this.svc._distortionCurve || this.svc._makeDistortionCurve(400);
-    const humFilter = this.svc.context.createBiquadFilter();
-    humFilter.type = 'lowpass';
-    humFilter.frequency.value = 280;
-    humFilter.Q.value = 4;
-    const humGain = this.svc.context.createGain();
-    humGain.gain.value = 0.25;
-    humOsc1.connect(humShaper);
-    humOsc2.connect(humShaper);
-    humShaper.connect(humFilter);
-    humFilter.connect(humGain);
-    humGain.connect(dest);
-    globalLFOGain.connect(humGain.gain);
-    const subOsc = this.svc.context.createOscillator();
-    subOsc.type = 'sine';
-    subOsc.frequency.value = 32;
-    const subGain = this.svc.context.createGain();
-    subGain.gain.value = 0.3;
-    subOsc.connect(subGain);
-    subGain.connect(dest);
-    if (this.svc._noiseBuffer) {
-      const pumpSrc = this.svc.context.createBufferSource();
-      pumpSrc.buffer = this.svc._noiseBuffer;
-      pumpSrc.loop = true;
-      const pumpFilter = this.svc.context.createBiquadFilter();
-      pumpFilter.type = 'lowpass';
-      pumpFilter.frequency.value = 120;
-      pumpFilter.Q.value = 2;
-      const pumpGain = this.svc.context.createGain();
-      pumpGain.gain.value = 0;
-      const pumpLFO1 = this.svc.context.createOscillator();
-      pumpLFO1.frequency.value = 0.8;
-      const pumpLFO2 = this.svc.context.createOscillator();
-      pumpLFO2.frequency.value = 0.67;
-      const lfoMixGain = this.svc.context.createGain();
-      lfoMixGain.gain.value = 0.3;
-      pumpLFO1.connect(lfoMixGain);
-      pumpLFO2.connect(lfoMixGain);
-      lfoMixGain.connect(pumpGain.gain);
-      pumpSrc.connect(pumpFilter);
-      pumpFilter.connect(pumpGain);
-      pumpGain.connect(dest);
-      pumpSrc.start(t);
-      pumpLFO1.start(t);
-      pumpLFO2.start(t);
-      this._ambienceNodes.push(pumpSrc, pumpFilter, pumpGain, pumpLFO1, pumpLFO2, lfoMixGain);
-    }
-    if (this.svc._noiseBuffer) {
-      const rattleSrc = this.svc.context.createBufferSource();
-      rattleSrc.buffer = this.svc._noiseBuffer;
-      rattleSrc.loop = true;
-      const rattleFilter = this.svc.context.createBiquadFilter();
-      rattleFilter.type = 'bandpass';
-      rattleFilter.frequency.value = 220;
-      rattleFilter.Q.value = 15;
-      const rattleGain = this.svc.context.createGain();
-      rattleGain.gain.value = 0;
-      const vibrationLFO = this.svc.context.createOscillator();
-      vibrationLFO.type = 'triangle';
-      vibrationLFO.frequency.value = 25;
-      const driftLFO = this.svc.context.createOscillator();
-      driftLFO.frequency.value = 0.1;
-      const driftGain = this.svc.context.createGain();
-      driftGain.gain.value = 0.04;
-      vibrationLFO.connect(rattleGain.gain);
-      driftLFO.connect(driftGain);
-      driftGain.connect(rattleGain.gain);
-      rattleSrc.connect(rattleFilter);
-      rattleFilter.connect(rattleGain);
-      rattleGain.connect(dest);
-      rattleSrc.start(t);
-      vibrationLFO.start(t);
-      driftLFO.start(t);
-      this._ambienceNodes.push(rattleSrc, rattleFilter, rattleGain, vibrationLFO, driftLFO, driftGain);
-    }
-    humOsc1.start(t);
-    humOsc2.start(t);
-    subOsc.start(t);
-    globalLFO.start(t);
-    this._ambienceNodes.push(
-      globalLFO, globalLFOGain,
-      humOsc1, humOsc2, humShaper, humFilter, humGain,
-      subOsc, subGain
-    );
+    this._ambienceNodes.push(this._ambienceFilter);
   }
 
   hasActiveAmbience() {

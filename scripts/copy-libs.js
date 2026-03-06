@@ -1,147 +1,69 @@
 #!/usr/bin/env node
 
-/**
- * Copy external libraries from node_modules to public/lib
- * This script copies the required external libraries to the public/lib directory
- * so they can be served directly to the browser.
- */
-
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { build } from "esbuild";
 
-// Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const libDir = path.join(__dirname, "..", "public", "lib");
 
-const libraries = [
-    {
-        name: "zod",
-        source: "https://cdn.jsdelivr.net/npm/zod@3.24.0/+esm",
-        target: "public/lib/zod.js",
-        isUrl: true,
-    },
-    {
-        name: "zod-validation-error",
-        source: "node_modules/zod-validation-error/v3/index.mjs",
-        target: "public/lib/zod-validation-error.js",
-    },
-    {
-        name: "break_infinity.js",
-        source: "node_modules/break_infinity.js/dist/break_infinity.min.js",
-        target: "public/lib/break_infinity.min.js",
-    },
-    {
-        name: "pako",
-        source: "node_modules/pako/dist/pako.min.js",
-        target: "public/lib/pako.min.js",
-    },
-    {
-        name: "zip.js",
-        source: "node_modules/@zip.js/zip.js/dist/zip.min.js",
-        target: "public/lib/zip.min.js",
-    },
-    {
-        name: "lit-html",
-        source: "node_modules/lit-html/lit-html.js",
-        target: "public/lib/lit-html.js",
-    },
-    {
-        name: "lit-html-directives",
-        source: "node_modules/lit-html",
-        target: "public/lib/lit-html",
-        isDirectory: true,
-    },
-    {
-        name: "idb-keyval",
-        source: "node_modules/idb-keyval/dist/index.js",
-        target: "public/lib/idb-keyval.js",
-    },
+if (fs.existsSync(libDir)) {
+  fs.rmSync(libDir, { recursive: true, force: true });
+}
+fs.mkdirSync(libDir, { recursive: true });
+
+const rawCopies = [
+  { source: "node_modules/break_infinity.js/dist/break_infinity.min.js", target: "break_infinity.min.js" },
+  { source: "node_modules/pako/dist/pako.min.js", target: "pako.min.js" },
+  { source: "node_modules/@zip.js/zip.js/dist/zip.min.js", target: "zip.min.js" }
 ];
 
-async function copyFromUrl(url, target) {
-    console.log(`Downloading ${url}...`);
-    const targetDir = path.dirname(target);
-    if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-    }
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
-    const buffer = Buffer.from(await response.arrayBuffer());
-    fs.writeFileSync(target, buffer);
-    console.log(`✓ Downloaded ${path.basename(target)} (${(buffer.length / 1024).toFixed(1)} KB)`);
+rawCopies.forEach(({ source, target }) => {
+  const srcPath = path.join(__dirname, "..", source);
+  const destPath = path.join(libDir, target);
+  if (fs.existsSync(srcPath)) {
+    fs.copyFileSync(srcPath, destPath);
+    console.log(`✓ Copied ${target}`);
+  } else {
+    console.warn(`⚠️ Source not found: ${source}`);
+  }
+});
+
+const esmEntryPoints = {
+  "derive-valtio": "derive-valtio",
+  "query-core": "@tanstack/query-core",
+  "idb-keyval": "idb-keyval",
+  "superjson": "superjson",
+  "zod": "zod",
+  "zod-validation-error": "zod-validation-error",
+  "valtio-vanilla": "valtio/vanilla",
+  "valtio-utils": "valtio/vanilla/utils",
+  "lit-html": "lit-html",
+  "lit-class-map": "lit-html/directives/class-map.js",
+  "lit-style-map": "lit-html/directives/style-map.js",
+  "lit-repeat": "lit-html/directives/repeat.js",
+  "lit-when": "lit-html/directives/when.js",
+  "lit-unsafe-html": "lit-html/directives/unsafe-html.js"
+};
+
+console.log("\nBundling ESM dependencies using esbuild...");
+
+try {
+  await build({
+    entryPoints: esmEntryPoints,
+    bundle: true,
+    format: "esm",
+    splitting: true,
+    outdir: libDir,
+    minify: true,
+    sourcemap: false,
+    target: ["es2022"],
+    chunkNames: "chunk-[hash]"
+  });
+  console.log("✓ All ESM packages bundled successfully into public/lib!");
+} catch (err) {
+  console.error("✗ Error bundling packages:", err);
+  process.exit(1);
 }
-
-function copyFile(source, target, isUrl = false) {
-    if (isUrl) return copyFromUrl(source, target);
-    return new Promise((resolve, reject) => {
-        console.log(`Copying ${source}...`);
-        const targetDir = path.dirname(target);
-        if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
-            console.log(`Created directory: ${targetDir}`);
-        }
-        fs.copyFile(source, target, (err) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-            const stats = fs.statSync(target);
-            console.log(`✓ Copied ${path.basename(target)} (${(stats.size / 1024).toFixed(1)} KB)`);
-            resolve();
-        });
-    });
-}
-
-function copyDirectory(source, target) {
-    if (!fs.existsSync(source)) return Promise.resolve();
-    if (!fs.existsSync(target)) fs.mkdirSync(target, { recursive: true });
-    const entries = fs.readdirSync(source, { withFileTypes: true });
-    const jsFiles = entries.filter((e) => e.isFile() && e.name.endsWith(".js"));
-    const dirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith("."));
-    return Promise.all([
-        ...jsFiles.map((e) => copyFile(path.join(source, e.name), path.join(target, e.name))),
-        ...dirs.map((d) => copyDirectory(path.join(source, d.name), path.join(target, d.name))),
-    ]);
-}
-
-async function copyLibraries() {
-    console.log("Copying external libraries...\n");
-
-    try {
-        for (const lib of libraries) {
-            const targetPath = path.join(__dirname, "..", lib.target);
-            if (lib.isUrl) {
-                await copyFile(lib.source, targetPath, true);
-            } else if (lib.isDirectory) {
-                const sourcePath = path.join(__dirname, "..", lib.source);
-                if (!fs.existsSync(sourcePath)) {
-                    console.warn(`⚠️  Warning: ${lib.source} not found. Skipping...`);
-                    continue;
-                }
-                console.log(`Copying directory ${lib.source}...`);
-                await copyDirectory(sourcePath, targetPath);
-                console.log(`✓ Copied ${lib.name} directory`);
-            } else {
-                const sourcePath = path.join(__dirname, "..", lib.source);
-                if (!fs.existsSync(sourcePath)) {
-                    console.warn(`⚠️  Warning: ${lib.source} not found. Skipping...`);
-                    continue;
-                }
-                await copyFile(sourcePath, targetPath);
-            }
-        }
-
-        console.log("\n✓ All libraries copied successfully!");
-        console.log("\nLibraries are now available in public/lib:");
-        libraries.forEach((lib) => {
-            console.log(`  - ${lib.target}`);
-        });
-    } catch (error) {
-        console.error("\n✗ Error copying libraries:", error.message);
-        process.exit(1);
-    }
-}
-
-// Run the script
-copyLibraries(); 

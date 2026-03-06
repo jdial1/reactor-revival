@@ -1,4 +1,4 @@
-import { numFormat as fmt, on, StorageUtils, StorageUtilsAsync } from "../utils/util.js";
+import { numFormat as fmt, on, StorageUtils, StorageAdapter } from "../utils/util.js";
 import { StateManager } from "../core/stateManager.js";
 import { createUIState, initUIStateSubscriptions } from "../core/uiStore.js";
 import { InputHandler } from "./InputManager.js";
@@ -256,7 +256,7 @@ export class UI {
   async resetReactor() {
     logger.log('debug', 'game', 'resetReactor method called - deleting save and returning to splash');
     try {
-      await StorageUtilsAsync.remove("reactorGameSave");
+      await StorageAdapter.remove("reactorGameSave");
       logger.debug("Save file deleted from localStorage");
     } catch (error) {
       logger.log('error', 'game', 'Error deleting save file:', error);
@@ -297,6 +297,8 @@ export class UI {
       this.partsPanelUI._partsPanelUnmount = null;
     }
     this.meltdownUI.cleanup();
+    this.mobileInfoBarUI?.cleanup?.();
+    this.infoBarUI?.teardown?.();
     if (this.game && this.modalOrchestrationUI.unsubscribeContextModal) this.modalOrchestrationUI.unsubscribeContextModal(this.game);
     if (typeof this.detachGameEventListeners === "function") {
       this.detachGameEventListeners();

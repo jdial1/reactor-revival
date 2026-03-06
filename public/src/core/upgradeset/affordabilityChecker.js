@@ -1,4 +1,5 @@
 import { toNumber } from "../../utils/mathUtils.js";
+import { toDecimal } from "../../utils/decimal.js";
 import { getAffordabilitySettings } from "../../core/preferencesStore.js";
 
 function handleUnavailableUpgrade(upgrade, hideOtherDoctrine) {
@@ -20,9 +21,9 @@ function computeAffordable(upgrade, upgradeset, game) {
   const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
   if (upgrade.erequires && (!requiredUpgrade || requiredUpgrade.level === 0)) return false;
   if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
-    return game.state.current_exotic_particles.gte(upgrade.current_ecost);
+    return toDecimal(game.state.current_exotic_particles).gte(upgrade.current_ecost);
   }
-  return game.state.current_money.gte(upgrade.current_cost);
+  return toDecimal(game.state.current_money).gte(upgrade.current_cost);
 }
 
 function isMaxLevelOrMeltedDown(upgrade, game) {
@@ -41,7 +42,8 @@ function getProgressRatio(current, cost) {
 
 function getCurrentAndCost(upgrade, game) {
   const useEp = usesExoticParticles(upgrade);
-  const current = useEp ? game.state.current_exotic_particles : game.state.current_money;
+  const raw = useEp ? game.state.current_exotic_particles : game.state.current_money;
+  const current = toDecimal(raw);
   const cost = useEp ? upgrade.current_ecost : upgrade.current_cost;
   if (!cost || !cost.gt(0)) return null;
   return { current, cost };

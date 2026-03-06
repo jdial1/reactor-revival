@@ -1,3 +1,4 @@
+import { html, render } from "lit-html";
 import { MODAL_IDS } from "../ModalManager.js";
 
 export class ModalOrchestrationUI {
@@ -23,7 +24,12 @@ export class ModalOrchestrationUI {
     const overlay = document.createElement("div");
     overlay.className = "chapter-celebration-overlay";
     overlay.setAttribute("role", "alert");
-    overlay.innerHTML = `<div class="chapter-celebration-content"><div class="chapter-celebration-badge">Chapter Complete</div><h2 class="chapter-celebration-title">${name}</h2></div>`;
+    render(html`
+      <div class="chapter-celebration-content">
+        <div class="chapter-celebration-badge">Chapter Complete</div>
+        <h2 class="chapter-celebration-title">${name}</h2>
+      </div>
+    `, overlay);
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add("chapter-celebration-visible"));
     if (this.ui.game?.audio) this.ui.game.audio.play("upgrade");

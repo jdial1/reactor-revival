@@ -93,12 +93,12 @@ function applyDoctrineThenSession(game) {
 function resetObjectives(game) {
   if (game.objectives_manager) {
     game.objectives_manager.current_objective_index = 0;
-    if (game.objectives_manager.objectives_data) {
+    if (game.objectives_manager.objectives_data?.length) {
       game.objectives_manager.objectives_data.forEach((obj) => {
         obj.completed = false;
       });
+      game.objectives_manager.set_objective(0, true);
     }
-    game.objectives_manager.set_objective(0, true);
   }
 }
 

@@ -178,7 +178,8 @@ export class UserAccountUI {
 
     const modal = modalOverlay("user_login_modal", () => modal.remove());
     const content = document.createElement("div");
-    content.style.cssText = "background: rgb(45, 45, 45); border: 4px solid var(--bevel-light); padding: 1.5rem; max-width: 440px; width: 90%; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5); position: relative; max-height: 90vh; overflow-y: auto;";
+    content.className = "nav-auth-modal nav-auth-terminal";
+    content.style.cssText = "max-width: 440px; max-height: 90vh; overflow-y: auto;";
     modal.appendChild(content);
 
     const onClose = () => modal.remove();
@@ -227,7 +228,7 @@ export class UserAccountUI {
   showLoginModal() {
     const modal = modalOverlay("user_login_modal", () => modal.remove());
     const content = document.createElement("div");
-    content.style.cssText = "background: rgb(45, 45, 45); border: 4px solid var(--bevel-light); padding: 1.5rem; max-width: 400px; width: 90%; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5); position: relative;";
+    content.className = "nav-auth-modal nav-auth-terminal";
     modal.appendChild(content);
 
     const onGoogleClick = async () => {
@@ -243,7 +244,7 @@ export class UserAccountUI {
     };
     const onEmailToggle = () => {
       const form = content.querySelector("#nav-email-auth-form");
-      if (form) form.style.display = form.style.display !== "none" ? "none" : "flex";
+      if (form) form.classList.toggle("hidden");
     };
     const getCredentials = () => {
       const emailInput = content.querySelector("#nav-supabase-email");
@@ -287,35 +288,24 @@ export class UserAccountUI {
 
     const tpl = html`
       ${CloseButton(modal, () => modal.remove())}
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-        <button class="splash-btn splash-btn-google" style="flex: 1" @click=${onGoogleClick}>
-          <div class="google-signin-container">
-            <svg width="24" height="24" viewBox="0 0 24 24" class="google-icon">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-            </svg>
-            <span>Google</span>
-          </div>
+      <div class="nav-auth-terminal-prompt">> AWAITING OPERATOR CREDENTIALS</div>
+      <div class="nav-auth-options">
+        <button class="splash-btn nav-auth-option-btn" @click=${onGoogleClick}>
+          <span class="splash-auth-comms-icon">[G]</span> Sign in with Google
         </button>
-        <button class="splash-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;" @click=${onEmailToggle}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-            <polyline points="22,6 12,13 2,6"></polyline>
-          </svg>
-          <span>Email</span>
+        <button class="splash-btn nav-auth-option-btn" @click=${onEmailToggle}>
+          <span class="splash-auth-comms-icon">[M]</span> Sign in with Email
         </button>
       </div>
-      <div id="nav-email-auth-form" style="display: none; flex-direction: column; gap: 0.5rem;">
-        <input type="email" id="nav-supabase-email" placeholder="Email" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
-        <input type="password" id="nav-supabase-password" placeholder="Password" class="pixel-input" style="padding: 0.5rem; font-size: 0.8rem;">
-        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-          <button class="splash-btn" style="min-width: 100px; flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);" @click=${onSignIn}>Sign In</button>
-          <button class="splash-btn" style="min-width: 100px; flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);" @click=${onSignUp}>Sign Up</button>
-          <button class="splash-btn" style="min-width: 100px; flex: 1; border-color: rgb(43 158 107); background-color: rgb(62 207 142);" @click=${onReset}>Reset</button>
+      <div id="nav-email-auth-form" class="nav-auth-email-form hidden">
+        <input type="email" id="nav-supabase-email" placeholder="Email" class="pixel-input nav-auth-input">
+        <input type="password" id="nav-supabase-password" placeholder="Password" class="pixel-input nav-auth-input">
+        <div class="splash-auth-form-actions">
+          <button class="splash-btn splash-auth-form-btn" @click=${onSignIn}>Sign In</button>
+          <button class="splash-btn splash-auth-form-btn" @click=${onSignUp}>Sign Up</button>
+          <button class="splash-btn splash-auth-form-btn" @click=${onReset}>Reset</button>
         </div>
-        <div id="nav-supabase-message" style="min-height: 1.5rem; font-size: 0.7rem; text-align: center;"></div>
+        <div id="nav-supabase-message" class="splash-auth-message"></div>
       </div>
     `;
     render(tpl, content);
@@ -331,7 +321,7 @@ export class UserAccountUI {
 
     const modal = modalOverlay("user_logout_modal", () => modal.remove());
     const content = document.createElement("div");
-    content.style.cssText = "background: rgb(45, 45, 45); border: 4px solid var(--bevel-light); padding: 1.5rem; max-width: 400px; width: 90%; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5); position: relative;";
+    content.className = "nav-auth-modal";
     modal.appendChild(content);
 
     const onLogout = () => performSignOut(modal, googleSignedIn, supabaseSignedIn, () => this.updateUserAccountIcon());

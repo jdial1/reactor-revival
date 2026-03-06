@@ -317,11 +317,7 @@ function disable() {
   StorageUtils.remove("debug-splash");
 }
 
-function showRandomFlavor() {
-  if (window.splashManager?.flavorElement) {
-    window.splashManager.showRandomFlavorText();
-  }
-}
+function showRandomFlavor() {}
 
 function listFlavors() {
   getFlavorMessages();

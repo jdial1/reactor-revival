@@ -75,7 +75,6 @@ export class ControlDeckUI {
         num: true,
         onupdate: (val) => {
           ui.displayValues.money.target = val;
-          ui.mobileInfoBarUI.updateControlDeckValues();
         },
       },
       current_power: {
@@ -84,7 +83,6 @@ export class ControlDeckUI {
         onupdate: (val) => {
           ui.displayValues.power.target = val;
           ui.infoBarUI.updatePowerDenom();
-          ui.mobileInfoBarUI.updateControlDeckValues();
         },
       },
       max_power: {
@@ -98,7 +96,6 @@ export class ControlDeckUI {
         onupdate: (val) => {
           ui.displayValues.heat.target = val;
           ui.infoBarUI.updateHeatDenom();
-          ui.mobileInfoBarUI.updateControlDeckValues();
         },
       },
       max_heat: {
@@ -118,21 +115,6 @@ export class ControlDeckUI {
         num: true,
         onupdate: (val) => {
           ui.displayValues.ep.target = val;
-          const shouldShow = val > 0;
-          const mobileEl = document.getElementById("info_ep");
-          const desktopEl = document.getElementById("info_ep_desktop");
-          if (mobileEl) {
-            const content = mobileEl.querySelector(".ep-content");
-            if (content) content.style.display = shouldShow ? "flex" : "none";
-          }
-          if (desktopEl) {
-            const content = desktopEl.querySelector(".ep-content");
-            if (content) content.style.display = shouldShow ? "flex" : "none";
-          }
-          if (ui.DOMElements.current_exotic_particles) {
-            ui.DOMElements.current_exotic_particles.textContent = fmt(val);
-          }
-          ui.mobileInfoBarUI.updateMobilePassiveTopBar();
         },
       },
       total_exotic_particles: {
@@ -246,11 +228,6 @@ export class ControlDeckUI {
     } else if (root) {
       render(this._controlsNavTemplate({ auto_sell: false, auto_buy: true, time_flux: true, heat_control: false, pause: false }), root);
     }
-    const origSetVar = ui.stateManager.setVar.bind(ui.stateManager);
-    ui.stateManager.setVar = (key, value, ...args) => {
-      origSetVar(key, value, ...args);
-      if (key === "pause") ui.mobileInfoBarUI.updateMobilePassiveTopBar();
-    };
   }
 
   syncToggleStatesFromGame() {

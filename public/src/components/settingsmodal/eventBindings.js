@@ -95,6 +95,35 @@ function setupVolumeSteppers(overlay, modal, signal) {
   });
 }
 
+function handleToggleRowClick(e, overlay, modal) {
+  if (e.target.closest(".setting-help-icon")) return;
+  e.preventDefault();
+  const tr = e.target.closest("tr");
+  const id = tr?.dataset.checkboxId;
+  if (!id) return;
+  const switchEl = overlay.querySelector(`.mech-switch[data-checkbox-id="${id}"]`);
+  if (switchEl) {
+    switchEl.click();
+    modal.playClick();
+  }
+}
+
+function handleSelectRowClick(e, overlay, modal) {
+  if (e.target.closest(".setting-help-icon") || e.target.closest("select")) return;
+  e.preventDefault();
+  const tr = e.target.closest("tr");
+  const id = tr?.dataset.selectId;
+  if (id) {
+    const select = overlay.querySelector(`#${id}`);
+    if (select) {
+          select.focus();
+          if (typeof select.showPicker === "function") select.showPicker();
+          else select.click();
+          modal.playClick();
+        }
+  }
+}
+
 function createSyncMechSwitch(overlay) {
   return (checkboxId, checked) => {
     const btn = overlay.querySelector(`.mech-switch[data-checkbox-id="${checkboxId}"]`);
@@ -163,8 +192,33 @@ function setupMechSwitches(overlay, modal, signal) {
     ".mech-switch-row span": (e) => {
       e.preventDefault();
       e.target.closest(".mech-switch-row")?.querySelector(".mech-switch")?.click();
+    },
+    "tr.settings-option-row[data-checkbox-id]": {
+      click: (e) => handleToggleRowClick(e, overlay, modal),
+      keydown: (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleToggleRowClick(e, overlay, modal);
+        }
+      }
+    },
+    "tr.settings-option-row.settings-option-select[data-select-id]": {
+      click: (e) => handleSelectRowClick(e, overlay, modal),
+      keydown: (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleSelectRowClick(e, overlay, modal);
+        }
+      }
+    },
+    ".setting-row.mute-toggle": (e) => {
+      if (e.target.closest("#setting-mute-btn")) return;
+      e.preventDefault();
+      const btn = overlay.querySelector("#setting-mute-btn");
+      if (btn) btn.click();
     }
   }, { signal });
+  setupSettingsHelpModal(overlay, modal, signal);
   const notifCheckbox = overlay.querySelector("#setting-notifications");
   if (notifCheckbox && "Notification" in window) {
     notifCheckbox.checked = Notification.permission === "granted";
@@ -278,13 +332,93 @@ function setupCloudSaves(overlay, modal, signal) {
   }, { signal });
 }
 
+let _settingsHelpCache = null;
+
+async function loadSettingsHelp() {
+  if (_settingsHelpCache) return _settingsHelpCache;
+  try {
+    const res = await fetch("./data/settings_help.json");
+    if (!res.ok) return {};
+    _settingsHelpCache = await res.json();
+    return _settingsHelpCache;
+  } catch {
+    return {};
+  }
+}
+
+function setupSettingsHelpModal(overlay, modal, signal) {
+  let helpEl = overlay.querySelector(".settings-help-modal");
+  if (!helpEl) {
+    helpEl = document.createElement("div");
+    helpEl.className = "settings-help-modal hidden";
+    helpEl.innerHTML = `
+      <div class="settings-help-backdrop"></div>
+      <div class="settings-help-content pixel-panel">
+        <div class="settings-help-body"></div>
+        <button type="button" class="settings-help-close" aria-label="Close">×</button>
+      </div>
+    `;
+    overlay.appendChild(helpEl);
+  }
+  const backdrop = helpEl.querySelector(".settings-help-backdrop");
+  const body = helpEl.querySelector(".settings-help-body");
+  const closeBtn = helpEl.querySelector(".settings-help-close");
+
+  let escapeHandler = null;
+  const hide = () => {
+    helpEl.classList.add("hidden");
+    if (escapeHandler) {
+      document.removeEventListener("keydown", escapeHandler);
+      escapeHandler = null;
+    }
+  };
+
+  const escapeHtml = (s) => String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  const show = (title, content) => {
+    body.innerHTML = `<h4 class="settings-help-title">${escapeHtml(title)}</h4><p class="settings-help-text">${escapeHtml(content)}</p>`;
+    helpEl.classList.remove("hidden");
+    escapeHandler = (e) => {
+      if (e.key === "Escape") hide();
+    };
+    document.addEventListener("keydown", escapeHandler, { signal });
+  };
+
+  backdrop.addEventListener("click", hide, { signal });
+  closeBtn.addEventListener("click", hide, { signal });
+
+  overlay.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".setting-help-icon");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const key = btn.dataset.settingKey;
+    if (!key) return;
+    modal.playClick();
+    const data = await loadSettingsHelp();
+    const text = data[key] || "No description available.";
+    const row = btn.closest("tr");
+    const labelSpan = row?.querySelector(".settings-visuals-label span");
+    const title = labelSpan?.textContent?.trim() || key;
+    show(title, text);
+  }, { signal });
+}
+
 function setupNavAndAbout(overlay) {
   const versionSpan = overlay.querySelector("#app_version");
   if (versionSpan) {
-    fetch("version.json")
-      .then((res) => res.json())
-      .then((data) => { versionSpan.textContent = data.version || "Unknown"; })
-      .catch(() => { versionSpan.textContent = "Unknown"; });
+    const cached = window.ui?.pageInitUI?._cachedVersion;
+    if (cached) {
+      versionSpan.textContent = cached;
+    } else {
+      fetch("version.json")
+        .then((res) => res.json())
+        .then((data) => { versionSpan.textContent = data.version || "Unknown"; })
+        .catch(() => { versionSpan.textContent = "Unknown"; });
+    }
   }
   const displayModeSpan = overlay.querySelector("#app_display_mode");
   if (displayModeSpan) {

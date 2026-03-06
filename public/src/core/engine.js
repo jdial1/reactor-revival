@@ -9,7 +9,7 @@ import { getValveOrientation as getValveOrientationFromModule, getInputOutputNei
 import { createVisualEventBuffer } from "./visualEventBuffer.js";
 import { TimeManager } from "./TimeManager.js";
 import { runInstantCatchup as runInstantCatchupFromModule } from "./timeFluxProcessor.js";
-import { runLoopIteration } from "./engineLoopScheduler.js";
+import { runLoopIteration, updateTimeFluxUI } from "./engineLoopScheduler.js";
 import { ensureArraysValid, updatePartCaches, updateValveNeighborCache } from "./partCacheManager.js";
 import { serializeStateForGameLoopWorker, applyGameLoopTickResult } from "./gameLoopWorkerBridge.js";
 import { handleComponentExplosion as handleComponentExplosionFromModule } from "./engine/componentExplosionHandler.js";
@@ -22,6 +22,7 @@ import { HeatFlowVisualizer } from "./engine/HeatFlowVisualizer.js";
 import {
   GRID_SIZE_NO_SAB_THRESHOLD,
   WORKER_HEARTBEAT_MS,
+  WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK,
   PAUSED_POLL_MS,
   MAX_TEST_FRAMES,
   SESSION_UPDATE_INTERVAL_MS,
@@ -177,7 +178,11 @@ export class Engine {
   }
 
   start() {
-    if (this.running) return;
+    const stalled = typeof document !== "undefined" && !document.hidden &&
+      this.running && !this.game.paused &&
+      (performance.now() - (this.last_timestamp || 0)) > 1500;
+    if (this.running && !stalled) return;
+    if (stalled) this.running = false;
     this.running = true;
     this._testFrameCount = 0;
     this.last_timestamp = performance.now();
@@ -251,6 +256,7 @@ export class Engine {
     }
     
     if (this.game.paused) {
+      updateTimeFluxUI(this);
       if (this.game.tutorialManager?.currentStep >= 0 || this.game.tutorialManager?._claimStepActive) this.game.tutorialManager.tick();
       if (!inTestEnv) {
         this.last_timestamp = timestamp;
@@ -381,7 +387,19 @@ export class Engine {
           this._workerPending = false;
           const ctx = this._workerTickContext;
           this._workerTickContext = null;
-          logger.log('warn', 'engine', '[Worker] Heat step timeout, falling back to main thread');
+          this._heatWorkerConsecutiveTimeouts = (this._heatWorkerConsecutiveTimeouts || 0) + 1;
+          if (this._heatWorkerConsecutiveTimeouts >= WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK) {
+            this._workerFailed = true;
+            this._heatWorkerConsecutiveTimeouts = 0;
+            logger.log('warn', 'engine', `[Worker] Heat step timeout (${WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK}x), disabling worker for this session`);
+          } else {
+            const now = performance.now();
+            const throttleMs = 5000;
+            if (now - (this._lastHeatTimeoutWarn || 0) >= throttleMs) {
+              this._lastHeatTimeoutWarn = now;
+              logger.log('warn', 'engine', '[Worker] Heat step timeout, falling back to main thread');
+            }
+          }
           if (ctx) this._runHeatStepSync(ctx.multiplier, ctx.power_add, ctx.heat_add, ctx.powerBeforeTick, ctx.heatBeforeTick);
         }, this._workerHeartbeatMs);
         return;

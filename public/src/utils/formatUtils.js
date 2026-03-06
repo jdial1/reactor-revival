@@ -157,6 +157,14 @@ export function formatDuration(ms, useHtml = false) {
   return Formatter.time(ms, useHtml);
 }
 
+export function formatPlaytimeLog(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "--:--:--";
+  const s = Math.floor(ms / MS_PER_SECOND) % SECONDS_PER_MINUTE;
+  const m = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE)) % MINUTES_PER_HOUR;
+  const h = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR));
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
 export function formatRelativeTime(timestamp) {
   if (!timestamp) return "Unknown";
   const date = new Date(Number(timestamp) || timestamp);

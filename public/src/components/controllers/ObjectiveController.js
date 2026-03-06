@@ -119,7 +119,10 @@ export class ObjectiveController {
     if (template) {
       try {
         render(template, root);
-      } catch (_) {}
+      } catch (err) {
+        const msg = String(err?.message ?? "");
+        if ((msg.includes("parentNode") || msg.includes("nextSibling")) && msg.includes("null")) return;
+      }
     }
     if (state.title) this.api.getStateManager()?.checkObjectiveTextScrolling?.();
   }

@@ -50,6 +50,32 @@ describe("Engine Mechanics", () => {
     expect(tile.ticks).toBe(initialTicks - 1);
   });
 
+  it("cell ticks decrement on manual tick with vent neighbor", async () => {
+    await placePart(game, 0, 0, "uranium1");
+    await placePart(game, 0, 1, "vent1");
+    const cellTile = game.tileset.getTile(0, 0);
+    const initialTicks = cellTile.ticks;
+
+    game.engine.manualTick();
+
+    expect(cellTile.ticks).toBe(initialTicks - 1);
+  });
+
+  it("heat payload builds successfully for non-square grid", async () => {
+    game.engine.setForceNoSAB(true);
+    game.gridManager.setRows(14);
+    game.gridManager.setCols(8);
+    game.tileset.updateActiveTiles();
+    await placePart(game, 9, 4, "uranium1");
+    await placePart(game, 10, 4, "vent1");
+    game.reactor.updateStats();
+    game.engine._updatePartCaches();
+
+    expect(() => game.engine._buildHeatPayload(1)).not.toThrow();
+    const payload = game.engine._buildHeatPayload(1);
+    expect(payload).toBeDefined();
+  });
+
   it("should track auto-sell calls", async () => {
     // Set up auto-sell
     game.ui.stateManager.setVar("auto_sell", true);

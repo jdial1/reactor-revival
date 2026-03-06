@@ -67,7 +67,7 @@ export class Reactor {
 
   get current_heat() {
     const val = this.game?.state?.current_heat;
-    return val != null ? val : toDecimal(0);
+    return (val != null && typeof val.gt === "function") ? val : toDecimal(val ?? 0);
   }
   set current_heat(v) {
     const val = (v != null && typeof v.gt === 'function') ? v : toDecimal(v);
@@ -83,7 +83,7 @@ export class Reactor {
   }
   get current_power() {
     const val = this.game?.state?.current_power;
-    return val != null ? val : toDecimal(0);
+    return (val != null && typeof val.gt === "function") ? val : toDecimal(val ?? 0);
   }
   set current_power(v) {
     const val = (v != null && typeof v.gt === 'function') ? v : toDecimal(v);

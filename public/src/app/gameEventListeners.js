@@ -33,8 +33,12 @@ export function attachGameEventListeners(game, ui) {
   };
 
   on("statePatch", (patch) => applyStatePatch(ui, patch));
-  on("moneyChanged", ({ current_money }) => ui.stateManager.setVar("current_money", current_money));
-  on("toggleStateChanged", ({ toggleName, value }) => ui.stateManager.setVar(toggleName, value));
+  on("toggleStateChanged", ({ toggleName, value }) => {
+    if (!ui?.stateManager) return;
+    const toggleKeys = ["pause", "auto_sell", "auto_buy", "time_flux", "heat_control"];
+    const coerced = toggleKeys.includes(toggleName) ? Boolean(value) : value;
+    ui.stateManager.setVar(toggleName, coerced);
+  });
   on("quickSelectSlotsChanged", ({ slots }) => ui.stateManager.setQuickSelectSlots(slots));
   on("reactorTick", (payload) => {
     applyStatePatch(ui, payload);
@@ -138,10 +142,6 @@ export function attachGameEventListeners(game, ui) {
   });
   on("showFloatingText", ({ tile, value }) => {
     if (ui.particleEffectsUI?.showFloatingTextAtTile && tile) ui.particleEffectsUI.showFloatingTextAtTile(tile, value);
-  });
-  on("exoticParticlesChanged", (payload) => {
-    applyStatePatch(ui, payload);
-    ui.coreLoopUI?.applyStateToDomForKeys?.(["exotic_particles", "current_exotic_particles", "total_exotic_particles"]);
   });
   on("objectiveLoaded", (payload) => handleObjectiveLoaded(ui, payload));
   on("objectiveCompleted", () => handleObjectiveCompleted(ui));

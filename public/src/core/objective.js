@@ -261,12 +261,6 @@ export class ObjectiveManager {
       this.game.exoticParticleManager.exotic_particles = this.game.exoticParticleManager.exotic_particles.add(this.current_objective_def.ep_reward);
       updateDecimal(this.game.state, "total_exotic_particles", (d) => d.add(this.current_objective_def.ep_reward));
       updateDecimal(this.game.state, "current_exotic_particles", (d) => d.add(this.current_objective_def.ep_reward));
-      this.game.emit("exoticParticlesChanged", {
-        exotic_particles: this.game.exoticParticleManager.exotic_particles,
-        current_exotic_particles: this.game.state.current_exotic_particles,
-        total_exotic_particles: this.game.state.total_exotic_particles,
-        reality_flux: this.game.state.reality_flux
-      });
     }
 
     if (INFINITE_CHALLENGE_IDS.has(this.current_objective_def.checkId)) {

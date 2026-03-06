@@ -1,6 +1,9 @@
-import { StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync } from "../utils/util.js";
+import { MutationObserver } from "@tanstack/query-core";
 import { queryClient, queryKeys } from "./queryClient.js";
+import { StorageAdapter } from "../utils/storageAdapter.js";
+import { SaveDataSchema } from "../core/schemas.js";
 import { logger } from "../utils/logger.js";
+import { StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync } from "../utils/util.js";
 import { createSupabaseProvider, createGoogleDriveProvider } from "./cloudSaveProvider.js";
 import { supabaseSave } from "./SupabaseSave.js";
 
@@ -54,32 +57,48 @@ export function initCloudSyncQueue() {
   drain();
 }
 
+async function performSave(slot, saveData, cloudProvider) {
+  const validatedData = SaveDataSchema.parse(saveData);
+  const saveKey = `reactorGameSave_${slot}`;
+  await StorageAdapter.set(saveKey, validatedData);
+  if (slot === 1) {
+    await rotateSlot1ToBackupAsync(serializeSave(validatedData));
+  }
+  await StorageAdapter.set("reactorCurrentSaveSlot", slot);
+  if (cloudProvider?.isSignedIn?.()) {
+    try {
+      await cloudProvider.saveGame(slot, validatedData);
+    } catch (e) {
+      logger.log("error", "game", "Cloud save failed, queuing for retry:", e);
+      await pushPendingSync({ slot, saveData: validatedData });
+    }
+  }
+  return slot;
+}
+
+export function createSaveMutation(cloudProvider = null) {
+  const provider = cloudProvider ?? getCloudSaveProvider();
+  return new MutationObserver(queryClient, {
+    mutationFn: async ({ slot, saveData }) => {
+      return performSave(slot, saveData, provider);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.saves.resolved() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.saves.cloud("supabase") });
+    },
+    onError: (error) => {
+      logger.log("error", "game", "Save mutation failed:", error);
+    },
+  });
+}
+
 export async function saveGameMutation({ slot, saveData, getNextSaveSlot }) {
   if (typeof indexedDB === "undefined") return null;
   if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") return null;
 
   const effectiveSlot = slot ?? (await getNextSaveSlot());
-  const saveKey = `reactorGameSave_${effectiveSlot}`;
-  const payload = serializeSave(saveData);
-
-  if (effectiveSlot === 1) {
-    await rotateSlot1ToBackupAsync(payload);
-  } else {
-    await StorageUtilsAsync.setRaw(saveKey, payload);
-  }
-
-  await StorageUtilsAsync.set("reactorCurrentSaveSlot", effectiveSlot);
+  await performSave(effectiveSlot, saveData, getCloudSaveProvider());
   queryClient.invalidateQueries({ queryKey: queryKeys.saves.resolved() });
   queryClient.invalidateQueries({ queryKey: queryKeys.saves.cloud("supabase") });
-
-  const provider = getCloudSaveProvider();
-  if (provider?.isSignedIn?.()) {
-    try {
-      await provider.saveGame(effectiveSlot, saveData);
-    } catch (e) {
-      logger.log("error", "game", "Cloud save failed, queuing for retry:", e);
-      await pushPendingSync({ slot: effectiveSlot, saveData });
-    }
-  }
   return effectiveSlot;
 }

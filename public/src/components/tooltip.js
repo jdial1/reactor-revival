@@ -1,7 +1,5 @@
 import { render } from "lit-html";
-import { numFormat as fmt } from "../utils/util.js";
 import { applyMobileTooltipPosition, clearDesktopTooltipPosition } from "./tooltip/tooltipPositioning.js";
-import { populateMobileTooltip, populateDesktopTooltip } from "./tooltip/tooltipContentRenderer.js";
 import { tooltipContentTemplate } from "./tooltip/tooltipLitRenderer.js";
 import { logger } from "../utils/logger.js";
 import { BaseComponent } from "./BaseComponent.js";
@@ -165,99 +163,21 @@ export class TooltipManager extends BaseComponent {
     this.game.performance.markStart("tooltip_update_total");
     if (!this.tooltip_showing || !this.current_obj) return;
 
-    const useLit = this.game?.ui?.uiState != null;
-    if (!useLit) {
-      let tooltipBody = null;
-      if (window.templateLoader?.loaded) tooltipBody = window.templateLoader.cloneTemplate("tooltip-body-template");
-      if (!tooltipBody) {
-        const fallbackDiv = document.createElement("div");
-        fallbackDiv.innerHTML = `<div data-role="title" class="tooltip-title" style="margin-bottom: 0.5em;font-size: 1.1em;font-weight: bold;"></div><div data-role="desktop-summary" class="tooltip-summary-row"></div><p data-role="description"></p><dl class="tooltip-stats" data-role="desktop-stats"></dl><footer id="tooltip_actions"></footer>`;
-        tooltipBody = fallbackDiv;
-      }
-      if (tooltipBody) {
-        this.$tooltipContent.innerHTML = "";
-        this.$tooltipContent.appendChild(tooltipBody);
+    const onBuy = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this.game.upgradeset.purchaseUpgrade(this.current_obj.id)) {
+        if (this.game.audio) this.game.audio.play("upgrade");
+        this.update();
       } else {
-        this.$tooltipContent.innerHTML = "Error: Tooltip template not found.";
-        this.game.performance.markEnd("tooltip_update_total");
-        return;
+        if (this.game.audio) this.game.audio.play("error");
       }
-    } else {
-      this.$tooltipContent.innerHTML = "";
-    }
-    if (useLit) {
-      const onBuy = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (this.game.upgradeset.purchaseUpgrade(this.current_obj.id)) {
-          if (this.game.audio) this.game.audio.play("upgrade");
-          this.update();
-        } else {
-          if (this.game.audio) this.game.audio.play("error");
-        }
-      };
-      const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, this.isMobile, onBuy);
-      try {
-        render(template, this.$tooltipContent);
-      } catch (_) {}
-    } else {
-      const titleEl = this.$tooltipContent.querySelector('[data-role="title"]');
-      if (titleEl && this.current_obj?.title) titleEl.textContent = this.current_obj.title;
-      if (this.isMobile) {
-        populateMobileTooltip(this.$tooltipContent, this.current_obj, this.current_tile_context, this.game);
-      } else {
-        populateDesktopTooltip(this.$tooltipContent, this.current_obj, this.current_tile_context, this.game);
-      }
-      this.updateActionButtons(this.current_obj);
-    }
+    };
+    const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, this.isMobile, onBuy);
+    try {
+      render(template, this.$tooltipContent);
+    } catch (_) {}
     this.game.performance.markEnd("tooltip_update_total");
-  }
-
-  updateActionButtons(obj) {
-    let actionsContainer =
-      this.$tooltipContent.querySelector("#tooltip_actions");
-    if (!actionsContainer) {
-      actionsContainer = document.createElement("div");
-      actionsContainer.id = "tooltip_actions";
-      this.$tooltipContent.appendChild(actionsContainer);
-    }
-    actionsContainer.innerHTML = "";
-
-    if (obj.upgrade && obj.level < obj.max_level) {
-      const buyButton = document.createElement("button");
-      let costText = "";
-
-      if (obj.current_ecost !== undefined) {
-        costText = ` 🧬 ${fmt(obj.current_ecost)} EP`;
-      } else if (obj.ecost !== undefined) {
-        costText = ` 🧬 ${fmt(obj.ecost)} EP`;
-      } else if (obj.base_ecost !== undefined) {
-        costText = ` 🧬 ${fmt(obj.base_ecost)} EP`;
-      } else if (obj.current_cost !== undefined) {
-        costText = ` <img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
-          obj.current_cost
-        )}`;
-      } else if (obj.cost !== undefined) {
-        costText = ` <img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(
-          obj.cost
-        )}`;
-      }
-
-      buyButton.innerHTML = `Buy${costText} `;
-      buyButton.className = "";
-      buyButton.disabled = !obj.affordable;
-      buyButton.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (this.game.upgradeset.purchaseUpgrade(obj.id)) {
-          if (this.game.audio) this.game.audio.play('upgrade');
-          this.update();
-        } else {
-          if (this.game.audio) this.game.audio.play('error');
-        }
-      };
-      actionsContainer.appendChild(buyButton);
-    }
   }
 
   _shouldTooltipUpdateLive(obj, tile_context) {

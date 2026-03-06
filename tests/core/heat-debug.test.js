@@ -49,4 +49,32 @@ describe("Heat Transfer Debug", () => {
         console.log("Heat transferred:", 100 - toNum(game.reactor.current_heat));
         console.log("Neighbor heat:", neighborTile.heat_contained);
     });
+
+  it("containmentNeighborTiles excludes empty tiles", async () => {
+    const centerTile = await placePart(game, 5, 5, "uranium1");
+    await placePart(game, 5, 6, "vent1");
+
+    centerTile._neighborCache = null;
+    const neighbors = centerTile.containmentNeighborTiles;
+
+    expect(neighbors.length).toBe(1);
+    expect(neighbors[0].part?.category).toBe("vent");
+  });
+
+  it("neighbor cache invalidated after updateActiveTiles", async () => {
+    const centerTile = await placePart(game, 5, 5, "uranium1");
+    await placePart(game, 5, 6, "vent1");
+
+    centerTile._neighborCache = null;
+    const before = centerTile.containmentNeighborTiles.length;
+
+    game.rows = 6;
+    game.cols = 6;
+    game.tileset.updateActiveTiles();
+
+    expect(centerTile._neighborCache).toBeNull();
+    const after = centerTile.containmentNeighborTiles.length;
+    expect(typeof after).toBe("number");
+    expect(after).toBeGreaterThanOrEqual(0);
+  });
 }); 

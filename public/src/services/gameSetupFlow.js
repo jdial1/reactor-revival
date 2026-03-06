@@ -28,7 +28,7 @@ function buildDoctrineCard(tree) {
   icon.alt = "";
   const title = document.createElement("span");
   title.className = "doctrine-card-title";
-  title.textContent = tree.title;
+  title.textContent = tree.shortTitle ?? tree.title;
   const subtitle = document.createElement("span");
   subtitle.className = "doctrine-card-subtitle";
   subtitle.textContent = tree.subtitle;
@@ -36,6 +36,10 @@ function buildDoctrineCard(tree) {
   textWrap.className = "doctrine-card-text";
   textWrap.appendChild(title);
   textWrap.appendChild(subtitle);
+  const led = document.createElement("span");
+  led.className = "doctrine-led";
+  led.setAttribute("aria-hidden", "true");
+  card.appendChild(led);
   card.appendChild(icon);
   card.appendChild(textWrap);
   return card;
@@ -116,6 +120,7 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
   }
   overlay.innerHTML = "";
   if (!window.templateLoader) return;
+  await window.templateLoader.loadTemplates();
   const screen = window.templateLoader.cloneTemplateElement("game-setup-template");
   if (!screen) return;
   const doctrineContainer = screen.querySelector(".doctrine-cards");

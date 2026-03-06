@@ -34,6 +34,51 @@ The UI uses a component-based architecture with specialized modules in `public/s
 -   **dataService.js**: A centralized service for fetching and caching all game content from JSON files.
 -   **GoogleDriveSave.js**: Encapsulates all logic for interacting with the Google Drive API for cloud saves.
 
+#### 1.3.4. Application Lifecycle Processes
+Three core processes govern application boot and game entry: Splash Screen Load, New Game Load, and Load Game. Each has a distinct entry point and sequence.
+
+**1. Splash Screen Load** (entry: `public/src/app.js` → `main()` on DOMContentLoaded)
+
+Initializes core services, fetches required JSON data, determines user state, and presents the main menu.
+
+| Phase | Steps |
+|-------|-------|
+| Environment | `initializePwa()` registers service worker (non-localhost); `window.splashManager` created via `createSplashManager()` in `splashManager.js`. |
+| Preferences | `initPreferencesStore()` initializes Valtio preferences store. |
+| Core Instances | `createAppInstances()` creates UI, Game, and PageRouter. AudioService initializes on first user gesture. |
+| Base Layout | `AppRoot.render()` (lit-html) renders splash skeleton; rendered again after bootstrapping. |
+| Database | `migrateLocalStorageToIndexedDB()` copies save keys from localStorage to IndexedDB. |
+| Cloud | GoogleDriveSave and SupabaseAuth instantiated. SupabaseSave via `savesQuery.js`. `handleEmailConfirmationFromUrl()` processes token confirmations. `ensureAuthReady()` prepares auth. `initCloudSyncQueue()` processes pending cloud writes. |
+| Data Bootstrap | `GameBootstrapper.bootstrap()` → `dataService.ensureAllGameDataLoaded()` (Zod-validated: `part_list.json`, `upgrade_list.json`, `tech_tree.json`, `objective_list.json`, `difficulty_curves.json`, `help_text.json`). `templateLoader` fetches `components/templates.html`. Bootstrapper wires `ui.init()`, attaches listeners, initializes Tileset/PartSet/UpgradeSet, calls `game.set_defaults()`. |
+| Splash Visuals | `splashFlow.js` / `splashBackground.js`: `waitForDOMAndLoad()` → `loadSplashScreen()` → `runLoadSplashScreen()` (stats, version, `warmImageCache()`, `preloadAllPartImages()`, `generateSplashBackground()`). |
+| Version | `fetchVersionForSplash()` reads `version.json`. `splashSocketService.initSocketConnection()` updates live player count. |
+| Session | `handleUserSession()` → `loadSavedGame()` → `game.saveManager.loadGame()`. If corrupt, `resolveBackupIfRequested()` offers restore. Auto-start if saved game exists, not new-game-pending, and valid `pageInfo`; else `splashManager.showStartOptions()`. |
+| Start Options | `SplashStartOptionsBuilder.js`: `fetchResolvedSaves()` gathers local/cloud slots; renders RESUME, Cloud RESUME, START, LOAD, TEST, CONFIG; SAB warning if applicable. `setupSplashAuth()`, `setupGoogleDriveButtons()`. |
+
+**2. New Game Load** (entry: `public/src/services/gameSetupFlow.js` → `startNewGameFlow`)
+
+Triggered when the user clicks "START" on the splash.
+
+| Phase | Steps |
+|-------|-------|
+| Doctrine Selection | `showTechTreeSelection()` presents BIOS overlay; doctrine trees from `dataService.loadTechTree()`, difficulty from `dataService.loadDifficultyCurves()`. User selects and clicks "INITIATE SEQUENCE". |
+| State Cleansing | `splashManager.hide()`. `clearStorageForNewGame()` → `window.clearAllGameDataForNewGame()`: removes save keys via `StorageAdapter.remove()`, clears `reactorGameQuickStartShown`, `google_drive_save_file_id`, sets `reactorNewGamePending`. |
+| Core Init | `LifecycleManager.initialize_new_game_state()`: clears debug history, new `run_id`, resets cheats/meltdowns, leaderboard. Base money, toggles revert. `game.set_defaults()` sets grid dimensions (Mobile 10×14, Desktop 12×12). `applyDoctrine()` applies initial stat multipliers. |
+| Transition | `launchGame()` → `startGame()`. `pageRouter.loadGameLayout()` injects `pages/game.html`. `ui.initMainLayout()` wires control deck, nav, grid canvas. TooltipManager and Engine created. `game.startSession()`. |
+| Finalize | `finalizeGameStart()`: pause, `applyOfflineWelcomeBack()`, sync UI toggles, start Engine. Quick Start modal if `reactorGameQuickStartShown` is false. |
+
+**3. Load Game** (entry: `public/src/core/gameSaveManager.js` → `loadGame`)
+
+Invoked by Auto-Start, RESUME, LOAD menu, or PWA file launch (`setupLaunchQueueHandler`).
+
+| Phase | Steps |
+|-------|-------|
+| Retrieval | `StorageAdapter.getRaw()` from IndexedDB. If no slot, picks most recent of slots 1–3 or legacy `reactorGameSave`. |
+| Validation | Parse JSON → `parseAndValidateSave()` → `SaveDataSchema` (Zod, `core/schemas/save.js`). Preprocessor migrates legacy formats (e.g. 2D grid → flat tile list). If parse fails and slot is 1, returns `{ success: false, backupAvailable: true }`; `resolveBackupIfRequested()` prompts restore. |
+| Hydration | `saveStateApplier.js`: Sync hydrators (`applyCoreGameState`, `applySessionMetadata`, `applyReactorState`) restore money, run_id, tech_tree, grid, lifecycle stats, heat/power, meltdown. Async hydrators restore upgrades (with `sanitizeDoctrineUpgradeLevelsOnLoad`) and tiles (instantiate via PartSet, restore ticks/heat_contained). Post-async: objectives, UI toggles (`_pendingToggleStates`), Quick Select slots. |
+| Engine Sync | Same `startGame()` flow as New Game. `loadGameLayout()`, `initMainLayout()`. If `game._saved_objective_index` exists, `runObjectiveRestoreFlow()` before `finalizeGameStart()`. |
+| Offline Catchup | `applyOfflineWelcomeBack()`: if `Date.now() - last_save_time > 30_000ms`, active tiles > 0, time_flux enabled → computes `queuedTicks`. Welcome Back Modal: **Instant** (`runInstantCatchup()`; >5000 ticks uses `runAnalyticalCatchup()`) or **Fast-Forward** (`engine._welcomeBackFastForward`, up to `WELCOME_BACK_FF_MAX_TICKS` per frame). |
+
 ## 2. Data and Content Management
 
 ### 2.1. Overview
@@ -127,7 +172,9 @@ Valves are special components for advanced heat management, organized into three
 -   **Exotic Particle Generation:** Particle Accelerators generate Exotic Particles (EP), a prestige currency, based on the heat contained within the accelerator component.
 
 ### 3.4. Save/Load System
-The game state is serializable to JSON for saving to Local Storage or Google Drive. The `heat_controlled` and other toggle states (e.g. auto_sell, auto_buy, time_flux, pause) are saved in the `toggles` object and restored in `applySaveState` via the StateManager setVar chain, which triggers `onToggleStateChange` and correctly applies values to the Reactor instance.
+The game state is serializable to JSON for saving to IndexedDB or cloud (Google Drive, Supabase). Full boot and load flows are documented in **§1.3.4 Application Lifecycle Processes**.
+
+Serialization and restoration: The `heat_controlled` and other toggle states (auto_sell, auto_buy, time_flux, pause) are saved in the `toggles` object and restored in `applySaveState` via the StateManager setVar chain, which triggers `onToggleStateChange` and correctly applies values to the Reactor instance. Save data is validated against `SaveDataSchema` (Zod) and migrated from legacy formats before hydration in `saveStateApplier.js`.
 
 ## 4. UI/UX Specification
 
@@ -145,6 +192,75 @@ The game state is serializable to JSON for saving to Local Storage or Google Dri
 -   **Parts & Upgrades Panels:** Dynamically display all purchasable items from data files. Buttons must visually indicate their affordability state (e.g., grayscale). Unaffordable items remain clickable to show a tooltip.
 -   **Reactor Grid:** Visually represents the `Tileset`, showing placed parts and their condition (lifespan, heat) via status bars.
 -   **Visual Feedback:** The UI provides clear warnings for rising heat (glowing grid) and meltdowns (screen-wide effect). Objective completions trigger a visual flash.
+
+### 4.4. G.O.S.T. TERMINAL Design System
+Design paradigm: **Muted Industrial / Cold War SCADA / Brutalism**. Target: mobile (touch-first). The interface simulates heavy state-issued machinery translated to a screen.
+
+#### 4.4.1. Core Philosophy
+-   **Utilitarian over Beautiful:** Function dictates form. No decorative elements, only data and control.
+-   **Tactile and Heavy:** Everything must look like it requires physical force to push, slide, or toggle.
+-   **Unforgiving and Bureaucratic:** Information is categorized rigidly into boxes, tabs, and lines.
+-   **Static and Snappy:** Zero smooth animations, zero kinetic scrolling. State changes happen instantly (1 frame).
+
+#### 4.4.2. Global Color Palette
+Abandon bright, neon, or cyberpunk colors. Use low-contrast darks and specific muted status indicators.
+
+| Token | Hex | Use |
+|-------|-----|-----|
+| Base Chassis | `#1A1D1A` | Backgrounds (unlit plastic/metal casing) |
+| Panel Fill | `#2C302E` | Interior of windows and dialogs |
+| Primary Text | `#E6E6E6` | Bone white / pale gray. Never pure `#FFFFFF` |
+| Nominal/Info | `#6E8B3D` | Headers, active toggle states |
+| Active/Selected | `#DAA520` | Selected tab, active numerical input |
+| Critical/Action | `#A53A3A` | Destructive or major state-change actions (e.g., QUIT TO TITLE) |
+
+#### 4.4.3. Component Architecture
+-   **Flat Bevel Rule:** All interactive surfaces use a strict 2–3px flat bevel. Top/Left borders: lighter gray (highlight). Bottom/Right borders: darker gray/black (shadow). On tap/active: bevels invert and content shifts down/right by 2px to simulate mechanical press.
+-   **Hardware Toggles:** Replicate OFF [ ] ON sliding switches. Do not use iOS/Android switch components. Entire row (label + switch) is a single clickable hitbox (min 48px vertical).
+-   **Segmented Data Displays:** Use discrete block progress bars, not fluid loading bars. Empty: dark gray inset. Filled: flat Olive Green.
+-   **Panel Framing:** Enclose data in heavy dark borders. Use thin 1px medium-gray horizontal lines to separate list items.
+
+#### 4.4.4. Typography
+-   Font: Legible, chunky, pixelated typeface (monospace or pseudo-monospace).
+-   Headers & Tabs: ALL CAPS (e.g., AUDIO, SYSTEM INFO).
+-   Sub-labels & Data: Title Case or Sentence case (e.g., Master Mute, Version: 25_07...).
+-   System Identifiers: Frame in brackets for machine readout (e.g., [ DIAGNOSTIC TERMINAL ]).
+
+#### 4.4.5. Mobile-First Ergonomics
+-   **Thumb Hitbox:** No interactive element smaller than 48px vertically.
+-   **Vertical Stacking:** Stack settings and controls vertically. Use tabs to keep scroll manageable.
+-   **Spacing:** At least 16px vertical gap between major interaction zones.
+-   **Edge-to-Edge:** Terminal panel stretches nearly to screen edges on mobile.
+
+#### 4.4.6. Forbidden Patterns
+-   Gradients
+-   Soft drop-shadows
+-   Smooth animations (use instant 1-frame transitions only)
+-   border-radius on panels/buttons
+-   Native iOS/Android switch components
+
+#### 4.4.7. Canonical Reference: SCADA Button
+```css
+.btn-scada {
+    background-color: #555855;
+    color: #E6E6E6;
+    font-family: 'YourPixelFont', monospace;
+    text-transform: uppercase;
+    border-top: 3px solid #7A7D7A;
+    border-left: 3px solid #7A7D7A;
+    border-bottom: 3px solid #222422;
+    border-right: 3px solid #222422;
+    padding: 16px 24px;
+}
+.btn-scada:active {
+    border-top: 3px solid #222422;
+    border-left: 3px solid #222422;
+    border-bottom: 3px solid #7A7D7A;
+    border-right: 3px solid #7A7D7A;
+    background-color: #4A4D4A;
+}
+```
+Design tokens are defined as CSS variables in `public/css/main.css` (`--gost-*`).
 
 ## 5. Asset Management
 A comprehensive asset management strategy is in place to optimize performance.

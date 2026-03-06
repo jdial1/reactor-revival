@@ -20,7 +20,7 @@ export class ObjectiveTracker {
     logger.log('debug', 'game', `set_objective called with index: ${objective_index}, skip_wait: ${skip_wait}, current_objective_index: ${manager.current_objective_index}`);
 
     if (!manager.objectives_data || manager.objectives_data.length === 0) {
-      logger.log('warn', 'game', `Cannot set objective ${objective_index}: objectives_data not loaded yet (length: ${manager.objectives_data?.length || 0})`);
+      logger.log('debug', 'game', `Cannot set objective ${objective_index}: objectives_data not loaded yet (length: ${manager.objectives_data?.length || 0})`);
       return;
     }
 

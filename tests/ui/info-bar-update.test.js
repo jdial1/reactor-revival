@@ -33,6 +33,8 @@ describe("UI Info Bar updates for max power/heat", () => {
         game.ui.coreLoopUI.applyStateToDom();
     };
 
+    const waitForInfoBarRender = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
     it("updates max power denominator when a capacitor is added", async () => {
         const capacitor = game.partset.getPartById("capacitor1");
         expect(capacitor).toBeTruthy();
@@ -41,13 +43,13 @@ describe("UI Info Bar updates for max power/heat", () => {
         await tile.setPart(capacitor);
         game.reactor.updateStats();
         flushUI();
+        await waitForInfoBarRender();
 
         const mobileDenom = document.getElementById("info_power_denom");
         const desktopDenom = document.getElementById("info_power_denom_desktop");
         expect(mobileDenom).toBeTruthy();
         expect(desktopDenom).toBeTruthy();
 
-        // Text content contains "/200" plus the change indicator (e.g. "↑ 0")
         expect(mobileDenom.textContent).toContain("/200");
         expect(desktopDenom.textContent).toContain("/200");
     });
@@ -69,8 +71,8 @@ describe("UI Info Bar updates for max power/heat", () => {
         }
         game.reactor.updateStats();
         flushUI();
-        // Force rolling numbers to settle for assertions
         game.ui.coreLoopUI.updateRollingNumbers(10000);
+        await waitForInfoBarRender();
 
         const mobileDenom = document.getElementById("info_heat_denom");
         const desktopDenom = document.getElementById("info_heat_denom_desktop");

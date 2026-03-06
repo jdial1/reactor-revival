@@ -46,6 +46,11 @@ vi.mock('idb-keyval', () => {
       if (s?.removeItem) s.removeItem(key);
       return Promise.resolve();
     },
+    clear: () => {
+      const s = getStorage();
+      if (s?.clear) s.clear();
+      return Promise.resolve();
+    },
   };
 });
 
@@ -581,7 +586,8 @@ export async function setupGameWithDOM() {
     return { ok: false, status: 404 };
   };
 
-  // Pre-load and inject HTML partials to build a complete DOM for UI tests.
+  injectHTMLContent(global.document, '<div id="app_root" class="theme-dark"><div id="splash-container"></div><div id="wrapper" class="hidden"></div><div id="modal-root"></div></div>');
+
   try {
     const pagesDir = pathModule.resolve(__dirname, '../../public/pages');
     const componentDir = pathModule.resolve(__dirname, '../../public/components');

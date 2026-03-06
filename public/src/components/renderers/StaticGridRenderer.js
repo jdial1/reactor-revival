@@ -1,4 +1,5 @@
 import { COLORS } from "../../core/rendererConstants.js";
+import { logger } from "../../utils/logger.js";
 
 export class StaticGridRenderer {
   constructor(shared) {
@@ -26,7 +27,14 @@ export class StaticGridRenderer {
 
   render(game, viewport) {
     const { ctx, _width, _height, _rows: rows, _cols: cols, _tileSize: ts, _staticDirty, _staticDirtyTiles } = this._shared;
-    if (!ctx || _width <= 0 || _height <= 0) return;
+    if (!ctx || _width <= 0 || _height <= 0) {
+      if (!this._shared._staticBailLogged) {
+        this._shared._staticBailLogged = true;
+        logger.log('warn', 'ui', '[StaticGrid] render bailed', { hasCtx: !!ctx, width: _width, height: _height });
+      }
+      return;
+    }
+    this._shared._staticBailLogged = false;
     const cull = viewport != null;
 
     if (_staticDirty) {

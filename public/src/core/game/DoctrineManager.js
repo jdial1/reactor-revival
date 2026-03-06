@@ -39,12 +39,6 @@ export class DoctrineManager {
     this.game.tech_tree = null;
     this.game.upgradeset.resetDoctrineUpgradeLevels(previousTree);
     this.game.reactor.updateStats();
-    this.game.emit("exoticParticlesChanged", {
-      current_exotic_particles: this.game.state.current_exotic_particles,
-      exotic_particles: this.game.exoticParticleManager.exotic_particles,
-      total_exotic_particles: this.game.state.total_exotic_particles,
-      reality_flux: this.game.state.reality_flux
-    });
     void this.game.saveManager.autoSave();
     return true;
   }

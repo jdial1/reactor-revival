@@ -10,7 +10,6 @@ describe("Save and Load Functionality", () => {
     game = setup.game;
     localStorage = setup.window.localStorage;
     localStorage.clear();
-    // Restore explicit mock in beforeEach as per original file
     game.googleDriveSave = {
       saveToCloud: vi.fn(() => Promise.resolve()),
       loadFromCloud: vi.fn(() => Promise.resolve({})),
@@ -107,6 +106,64 @@ describe("Save and Load Functionality", () => {
     expect(loadedTile1.part?.id).toBe("uranium1");
     expect(loadedTile1.ticks).toBe(5);
     expect(loadedTile2.part?.id).toBe("vent1");
+  });
+
+  it("should save and load non-square grid (14x8)", async () => {
+    game.gridManager.setRows(14);
+    game.gridManager.setCols(8);
+    game.base_rows = 14;
+    game.base_cols = 8;
+    game.tileset.updateActiveTiles();
+
+    const tile94 = game.tileset.getTile(9, 4);
+    const tile104 = game.tileset.getTile(10, 4);
+    const uranium = game.partset.getPartById("uranium1");
+    const vent = game.partset.getPartById("vent1");
+
+    await tile94.setPart(uranium);
+    await tile104.setPart(vent);
+
+    const rawSave = await game.saveOrchestrator.getSaveState();
+    const saveData = { ...rawSave, rows: 14, cols: 8 };
+    const payload = serializeSave(saveData);
+    await StorageUtilsAsync.setRaw("reactorGameSave_1", payload);
+    await StorageUtilsAsync.set("reactorCurrentSaveSlot", 1);
+
+    game.tileset.clearAllTiles();
+    game.gridManager.setRows(12);
+    game.gridManager.setCols(12);
+
+    const loaded = await game.saveManager.loadGame(1);
+    expect(loaded).toBe(true);
+    expect(game.rows).toBe(14);
+    expect(game.cols).toBe(8);
+
+    const loaded94 = game.tileset.getTile(9, 4);
+    const loaded104 = game.tileset.getTile(10, 4);
+    expect(loaded94?.part?.id).toBe("uranium1");
+    expect(loaded104?.part?.id).toBe("vent1");
+  });
+
+  it("should persist and restore ticks", async () => {
+    const uranium = game.partset.getPartById("uranium1");
+    const tile = game.tileset.getTile(0, 0);
+    await tile.setPart(uranium);
+    tile.ticks = 5;
+
+    const rawSave = await game.saveOrchestrator.getSaveState();
+    const payload = serializeSave(rawSave);
+    await StorageUtilsAsync.setRaw("reactorGameSave_1", payload);
+    await StorageUtilsAsync.set("reactorCurrentSaveSlot", 1);
+
+    game.tileset.clearAllTiles();
+
+    const loaded = await game.saveManager.loadGame(1);
+    expect(loaded).toBe(true);
+    const loadedTile = game.tileset.getTile(0, 0);
+    expect(loadedTile.ticks).toBe(5);
+
+    game.engine.manualTick();
+    expect(loadedTile.ticks).toBe(4);
   });
 
   it("should handle invalid save data gracefully", async () => {

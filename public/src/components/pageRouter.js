@@ -40,11 +40,18 @@ export class PageRouter {
       }
       return;
     }
-    if (!wasOnReactorPage && goingToReactorPage && this.navigationPaused) {
-      this.navigationPaused = false;
-      this.isNavigating = true;
-      this.ui.game.resume();
-      this.isNavigating = false;
+    if (!wasOnReactorPage && goingToReactorPage) {
+      if (this.navigationPaused) {
+        this.navigationPaused = false;
+        this.isNavigating = true;
+        this.ui.game.resume();
+        this.isNavigating = false;
+      } else {
+        const shouldBePaused = !!this.ui.stateManager.getVar("pause");
+        if (shouldBePaused && !this.ui.game.paused) {
+          this.ui.game.pause();
+        }
+      }
     }
   }
 
@@ -60,18 +67,13 @@ export class PageRouter {
     const goingToReactorPage = pageId === "reactor_section";
     this._applyPauseStateForNavigation(wasOnReactorPage, goingToReactorPage);
 
-    // Handle grid hiding for smooth transitions from upgrades to reactor
     if (this.currentPageId === "upgrades_section" && goingToReactorPage) {
-      const reactorElement = this.ui.DOMElements.reactor;
+      const reactorElement = this.ui.DOMElements.reactor ?? document.getElementById("reactor");
       if (reactorElement) {
         reactorElement.style.visibility = "hidden";
         setTimeout(() => {
-          if (reactorElement) {
-            reactorElement.style.visibility = "visible";
-          }
+          if (reactorElement) reactorElement.style.visibility = "visible";
         }, 250);
-      } else {
-        logger.log('warn', 'ui', 'PageRouter: Reactor element not found for grid hiding');
       }
     }
 
@@ -99,6 +101,7 @@ export class PageRouter {
     this.currentPageId = pageId;
     window.location.hash = pageId;
     this.updateNavigation(pageId);
+    this.ui.objectivesUI.showObjectivesForPage(pageId);
 
     // Clean up UI for stateless pages (like privacy policy)
     this.cleanupUIForStatelessPage(pageId);
@@ -128,7 +131,6 @@ export class PageRouter {
         this.ui.pageInitUI.loadAndSetVersion();
       }
 
-      this.ui.objectivesUI.showObjectivesForPage(pageId);
       if (hadPreviousPage && this.ui.game?.audio) this.ui.game.audio.play("tab_switch");
       return;
     }

@@ -98,12 +98,6 @@ function applyEpToGame(engine, ep_gain) {
   game.exoticParticleManager.exotic_particles = game.exoticParticleManager.exotic_particles.add(ep_gain);
   updateDecimal(game.state, "total_exotic_particles", (d) => d.add(ep_gain));
   updateDecimal(game.state, "current_exotic_particles", (d) => d.add(ep_gain));
-  game.emit("exoticParticlesChanged", {
-    exotic_particles: game.exoticParticleManager.exotic_particles,
-    current_exotic_particles: game.state.current_exotic_particles,
-    total_exotic_particles: game.state.total_exotic_particles,
-    reality_flux: game.state.reality_flux,
-  });
 }
 
 function emitParticleVisuals(engine) {

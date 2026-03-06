@@ -1,6 +1,7 @@
 import { html, render, nothing } from "lit-html";
 import { numFormat } from "../utils/util.js";
-import { classMap, styleMap } from "../utils/litHelpers.js";
+import { classMap, styleMap, unsafeHTML } from "../utils/litHelpers.js";
+import { getUpgradeBonusLines } from "../core/part/partUpgradeBonusBuilder.js";
 
 function getUpgradeIconOverlay(upgrade) {
   try {
@@ -224,6 +225,29 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick
   `;
 };
 
+function buildPartStats(part) {
+  const fmt = numFormat;
+  const cashIcon = html`<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='$'>`;
+  const powerIcon = html`<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='pwr'>`;
+  const heatIcon = html`<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>`;
+  const tickIcon = html`<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>`;
+  const stats = [];
+  if (part.erequires) {
+    stats.push(html`<span class="stat-cost">${fmt(part.cost)} EP</span>`);
+  } else {
+    stats.push(html`<span class="stat-cost">${cashIcon}${fmt(part.cost)}</span>`);
+  }
+  if (part.power > 0) stats.push(html`<span class="stat-power">${powerIcon}${fmt(part.power)}</span>`);
+  if (part.heat > 0) stats.push(html`<span class="stat-heat">${heatIcon}${fmt(part.heat, 0)}</span>`);
+  if (part.vent > 0) stats.push(html`<span class="stat-vent">${fmt(part.vent, 0)} vent</span>`);
+  if (part.containment > 0) stats.push(html`<span class="stat-cont">${heatIcon}${fmt(part.containment, 0)} cap</span>`);
+  if (part.transfer > 0) stats.push(html`<span class="stat-xfer">${fmt(part.transfer, 0)} xfer</span>`);
+  if (part.ticks > 0) stats.push(html`<span class="stat-tick">${tickIcon}${fmt(part.ticks)}</span>`);
+  if (part.reactor_power > 0) stats.push(html`<span class="stat-rpower">${powerIcon}${fmt(part.reactor_power)} cap</span>`);
+  if (part.power_increase > 0) stats.push(html`<span class="stat-boost">+${fmt(part.power_increase)}%${powerIcon}</span>`);
+  return stats;
+}
+
 export const PartButton = (part, onClick, onMouseEnter = () => {}, onMouseLeave = () => {}, opts = {}) => {
   const costText = part.erequires ? `${numFormat(part.cost)} EP` : numFormat(part.cost);
   const locked = opts.locked ?? false;
@@ -243,6 +267,11 @@ export const PartButton = (part, onClick, onMouseEnter = () => {}, onMouseLeave 
     "doctrine-locked": doctrineLocked,
   });
   const tierStyle = styleMap({ display: locked ? "block" : "none" });
+  const stats = buildPartStats(part);
+  const bonusLines = getUpgradeBonusLines(part, { tile: null, game: part.game });
+  const bonusHtml = bonusLines.length > 0
+    ? bonusLines.map((line) => `<span class="bonus-line">${line}</span>`).join("")
+    : "";
   return html`
     <button class=${btnClass}
             id="part_btn_${part.id}"
@@ -256,10 +285,10 @@ export const PartButton = (part, onClick, onMouseEnter = () => {}, onMouseLeave 
       <div class="part-price">${costText}</div>
       <div class="tier-progress" style=${tierStyle}>${tierProgress}</div>
       <div class="part-details">
-        <div class="part-details-title"></div>
-        <div class="part-details-stats"></div>
-        <div class="part-details-desc"></div>
-        <div class="part-details-bonuses"></div>
+        <div class="part-details-title">${part.title || ""}</div>
+        <div class="part-details-stats">${stats}</div>
+        <div class="part-details-desc">${part.description || ""}</div>
+        <div class="part-details-bonuses">${bonusHtml ? unsafeHTML(bonusHtml) : nothing}</div>
       </div>
     </button>
   `;

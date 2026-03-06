@@ -7,6 +7,7 @@ import { Format, numFormat as fmt } from "../utils/util.js";
 import { StorageUtils } from "../utils/util.js";
 import { logger } from "../utils/logger.js";
 import { showCloudVsLocalConflictModal as showCloudConflictModal } from "../services/saveModals.js";
+import { reactorFailedToStartModal } from "./reactorFailedToStartModal.js";
 
 function contextModalTemplate(tile, onSell, onClose) {
   const part = tile?.part;
@@ -42,6 +43,7 @@ export const MODAL_IDS = {
   WELCOME_BACK: "welcomeBack",
   QUICK_START: "quickStart",
   DETAILED_QUICK_START: "detailedQuickStart",
+  REACTOR_FAILED_TO_START: "reactorFailedToStart",
   LOGIN: "login",
   PROFILE: "profile",
   LOGOUT: "logout",
@@ -89,6 +91,10 @@ export class ModalOrchestrator {
     this._handlers.set(MODAL_IDS.DETAILED_QUICK_START, {
       show: () => ui?.quickStartUI?.showDetailedQuickStart?.(),
       hide: () => {},
+    });
+    this._handlers.set(MODAL_IDS.REACTOR_FAILED_TO_START, {
+      show: (p) => reactorFailedToStartModal.show(p?.game),
+      hide: () => reactorFailedToStartModal.hide(),
     });
     this._handlers.set(MODAL_IDS.LOGIN, {
       show: () => ui?.userAccountUI?.showLoginModal?.(),
@@ -146,6 +152,15 @@ export class ModalOrchestrator {
     this._activeContextTile = tile;
     this._renderContextModal();
     this.ui.deviceFeatures?.lightVibration?.();
+    const handle = this._modalRoot?.querySelector(".context-modal-handle");
+    if (handle) {
+      let startY = 0;
+      const onEnd = (e) => {
+        if (e.changedTouches[0].clientY - startY > 60) this.hideModal(MODAL_IDS.CONTEXT);
+      };
+      handle.addEventListener("touchstart", (e) => { startY = e.touches[0].clientY; }, { passive: true });
+      handle.addEventListener("touchend", onEnd, { passive: true });
+    }
   }
 
   _hideContextModal() {
@@ -331,6 +346,31 @@ export class ModalOrchestrator {
 
       document.getElementById("quick-start-close").onclick = closeModal;
       document.getElementById("quick-start-close-2").onclick = closeModal;
+
+      const attachSwipeToDismiss = (el, onDismiss) => {
+        if (!el || !onDismiss) return;
+        let startY = 0;
+        const threshold = 60;
+        el.addEventListener("touchstart", (e) => { startY = e.touches[0].clientY; }, { passive: true });
+        el.addEventListener("touchend", (e) => {
+          const endY = e.changedTouches[0].clientY;
+          if (endY - startY > threshold) onDismiss();
+        }, { passive: true });
+      };
+      const overlay = modal.querySelector(".quick-start-overlay");
+      if (overlay) attachSwipeToDismiss(overlay, closeModal);
+
+      const bindAccordions = (container) => {
+        container?.querySelectorAll(".qs-accordion").forEach((section) => {
+          const head = section.querySelector(".qs-accordion-head");
+          if (head) {
+            head.addEventListener("click", () => section.classList.toggle("qs-accordion-expanded"));
+            head.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); section.classList.toggle("qs-accordion-expanded"); } });
+          }
+        });
+      };
+      bindAccordions(document.getElementById("quick-start-page-1"));
+      bindAccordions(document.getElementById("quick-start-page-2"));
     } catch (error) {
       logger.log('error', 'ui', 'Failed to load quick start modal:', error);
     }

@@ -23,6 +23,12 @@ function applyCoreGameState(game, savedData) {
   });
   if (savedData.rows != null) game.gridManager.setRows(savedData.rows);
   if (savedData.cols != null) game.gridManager.setCols(savedData.cols);
+  if (savedData.rows != null && game.rows !== savedData.rows) {
+    game.gridManager.setRows(savedData.rows);
+  }
+  if (savedData.cols != null && game.cols !== savedData.cols) {
+    game.gridManager.setCols(savedData.cols);
+  }
   game.sold_power = savedData.sold_power;
   game.sold_heat = savedData.sold_heat;
   game.grace_period_ticks = savedData.grace_period_ticks ?? (game._isRestoringSave ? 30 : 0);
@@ -87,6 +93,7 @@ async function restoreTiles(game, savedData) {
       }
     }
   }
+  game.reactor.updateStats();
 }
 
 function parseObjectiveIndex(v) {

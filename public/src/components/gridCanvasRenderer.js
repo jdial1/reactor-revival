@@ -1,5 +1,6 @@
 import { GRID } from "../core/rendererConstants.js";
 import { StaticGridRenderer } from "./renderers/StaticGridRenderer.js";
+import { logger } from "../utils/logger.js";
 import { DynamicOverlayRenderer } from "./renderers/DynamicOverlayRenderer.js";
 import { HeatEffectsRenderer } from "./renderers/HeatEffectsRenderer.js";
 
@@ -21,6 +22,7 @@ export class GridCanvasRenderer {
     this._container = null;
     this._staticDirty = true;
     this._staticDirtyTiles = new Set();
+    this._lastResizeRequest = 0;
 
     this._staticRenderer = new StaticGridRenderer(this);
     this._dynamicRenderer = new DynamicOverlayRenderer(this);
@@ -54,7 +56,10 @@ export class GridCanvasRenderer {
   }
 
   init(containerElement) {
-    if (!containerElement) return;
+    if (!containerElement) {
+      logger.log('warn', 'ui', '[Grid] init skipped: no container element');
+      return;
+    }
     const wrapper = document.createElement("div");
     wrapper.style.position = "relative";
     wrapper.style.width = "100%";
@@ -76,12 +81,18 @@ export class GridCanvasRenderer {
     containerElement.appendChild(wrapper);
     this.ctx = this.canvas.getContext("2d");
     this._dynamicCtx = this._dynamicCanvas.getContext("2d");
+    logger.log('debug', 'ui', '[Grid] init done, canvas attached to container');
     return this.canvas;
   }
 
   setSize(widthPx, heightPx) {
+    const prevW = this._width;
+    const prevH = this._height;
     this._width = Math.max(1, widthPx | 0);
     this._height = Math.max(1, heightPx | 0);
+    if (prevW !== this._width || prevH !== this._height) {
+      logger.log('debug', 'ui', `[Grid] setSize ${this._width}x${this._height}`);
+    }
     if (this.canvas) {
       this.canvas.width = this._width;
       this.canvas.height = this._height;
@@ -166,7 +177,26 @@ export class GridCanvasRenderer {
   }
 
   render(game) {
-    if (!game?.tileset || this._width <= 0 || this._height <= 0) return;
+    if (!game?.tileset) {
+      if (!this._renderBailLogged) {
+        this._renderBailLogged = true;
+        logger.log('warn', 'ui', '[Grid] render bailed: no game.tileset');
+      }
+      return;
+    }
+    if (this._width <= 0 || this._height <= 0) {
+      const wrapperExists = typeof document !== "undefined" && document.getElementById("reactor_wrapper");
+      if (wrapperExists) {
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        if (now - this._lastResizeRequest > 100) {
+          this._lastResizeRequest = now;
+          logger.log('warn', 'ui', `[Grid] render bailed: zero dimensions ${this._width}x${this._height}, requesting resize`);
+          this.ui?.gridScaler?.requestResize?.();
+        }
+      }
+      return;
+    }
+    this._renderBailLogged = false;
     const viewport = this._getViewport();
     const containerRect = this._container && typeof this._container.getBoundingClientRect === "function"
       ? this._container.getBoundingClientRect()

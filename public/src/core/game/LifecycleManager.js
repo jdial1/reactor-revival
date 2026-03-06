@@ -20,12 +20,6 @@ export class LifecycleManager {
     this.game.emit?.("clearAnimations");
     setDecimal(this.game.state, "current_money", this.game.base_money);
     this.game.state.stats_cash = this.game.state.current_money;
-    this.game.emit("exoticParticlesChanged", {
-      current_exotic_particles: toDecimal(0),
-      total_exotic_particles: toDecimal(0),
-      exotic_particles: toDecimal(0),
-      reality_flux: toDecimal(0),
-    });
     this.game.emit("toggleStateChanged", { toggleName: "auto_sell", value: false });
     this.game.emit("toggleStateChanged", { toggleName: "auto_buy", value: false });
     this.game.emit("toggleStateChanged", { toggleName: "time_flux", value: false });

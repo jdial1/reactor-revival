@@ -169,37 +169,11 @@ export class TutorialManager {
     this.overlay = document.createElement("div");
     this.overlay.id = "tutorial-overlay";
     this.overlay.className = "tutorial-overlay";
-    this.overlay.innerHTML = `
-      <div class="tutorial-spotlight-top"></div>
-      <div class="tutorial-spotlight-left"></div>
-      <div class="tutorial-spotlight-right"></div>
-      <div class="tutorial-spotlight-bottom"></div>
-      <div class="tutorial-focus-border"></div>
-      <div class="tutorial-pointer" aria-hidden="true">
-        <svg class="tutorial-pointer-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M8 4l4 8-2 2 2 10 4-6 4 8 4-12-6-4-4-2-4-4z" fill="rgb(255 220 160)" stroke="rgb(180 140 80)" stroke-width="1.5" stroke-linejoin="round"/>
-        </svg>
-      </div>
-    `;
+    render(tutorialOverlayTemplate, this.overlay);
     this.pointer = this.overlay.querySelector(".tutorial-pointer");
     this.callout = document.createElement("div");
     this.callout.id = "tutorial-callout";
     this.callout.className = "tutorial-callout";
-    const msgEl = document.createElement("div");
-    msgEl.className = "tutorial-message";
-    this.callout.appendChild(msgEl);
-    const skipBtn = document.createElement("button");
-    skipBtn.type = "button";
-    skipBtn.className = "tutorial-skip-btn";
-    skipBtn.textContent = "Skip";
-    skipBtn.onclick = () => this.skip();
-    this.callout.appendChild(skipBtn);
-    const hardSkipBtn = document.createElement("button");
-    hardSkipBtn.type = "button";
-    hardSkipBtn.className = "tutorial-hard-skip-btn";
-    hardSkipBtn.textContent = "Hard Skip";
-    hardSkipBtn.onclick = () => this.hardSkip();
-    this.callout.appendChild(hardSkipBtn);
     document.body.appendChild(this.overlay);
     document.body.appendChild(this.callout);
   }

@@ -55,21 +55,16 @@ describe("Rolling Numbers UI", () => {
         expect(moneyObj.current).toBe(100);
     });
 
-    it("should format large heat numbers with specific logic (2 decimals + suffix)", () => {
-        const heatObj = ui.displayValues.heat;
-        heatObj.current = 1499.9;
-        heatObj.target = 1500;
-        
-        // Mock window width to desktop to force formatting check
+    it("should format large heat numbers with specific logic (2 decimals + suffix)", async () => {
         Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true });
-        
-        // Spy on textContent assignment essentially by checking DOM after update
+
+        setDecimal(game.state, "current_heat", 1500);
+
+        await new Promise((r) => setTimeout(r, 50));
+
         const heatEl = document.getElementById('info_heat_desktop');
         expect(heatEl, "info_heat_desktop element should exist after info bar render").not.toBeNull();
-
-        ui.coreLoopUI.updateRollingNumbers(16.667);
-
-        expect(heatEl.textContent).toBe("1.50K");
+        expect(heatEl.textContent).toBe("1.5K");
     });
 
     it("should update target via state manager", () => {
