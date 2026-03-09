@@ -31,6 +31,7 @@ export class AppRoot {
             <p id="splash-status" class="hidden splash-element-hidden">Ready!</p>
           </div>
           <div class="splash-menu-panel splash-control-deck">
+            <div class="splash-menu-inner">
             <header class="splash-panel-header">
               <h1 class="splash-title">REACTOR REVIVAL</h1>
             </header>
@@ -42,6 +43,7 @@ export class AppRoot {
                 <span id="user-count-text">-</span>
               </span>
             </footer>
+            </div>
           </div>
         </main>
       </div>

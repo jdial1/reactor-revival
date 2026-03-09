@@ -19,6 +19,7 @@ import { setupSplashAuth } from "./splash/splashAuthUI.js";
 import { updateSplashGoogleDriveUI } from "./splash/splashGoogleDriveUI.js";
 import { fetchVersionForSplash, addSplashStats as addSplashStatsFromModule } from "./splash/splashVersionStats.js";
 import { loadFromSaveSlot as loadFromSaveSlotFromModule, loadFromData as loadFromDataFromModule } from "./splash/splashLoadFromSave.js";
+import { initSplashMenuIdleFade } from "./splash/splashMenuIdleFade.js";
 import { logger } from "../utils/logger.js";
 import { BaseComponent } from "../components/BaseComponent.js";
 
@@ -175,7 +176,8 @@ class SplashScreenManager extends BaseComponent {
       startOptionsSection = document.createElement("div");
       startOptionsSection.id = "splash-start-options";
       startOptionsSection.className = "splash-start-options";
-      this.splashScreen.querySelector(".splash-menu-panel").appendChild(startOptionsSection);
+      const inner = this.splashScreen.querySelector(".splash-menu-inner");
+      (inner ?? this.splashScreen.querySelector(".splash-menu-panel"))?.appendChild(startOptionsSection);
     }
     startOptionsSection.innerHTML = "";
 
@@ -230,6 +232,10 @@ class SplashScreenManager extends BaseComponent {
 
     startOptionsSection.classList.add("visible");
     setTimeout(() => startOptionsSection.classList.add("show"), 100);
+
+    this.teardownIdleFade?.();
+    const panel = this.splashScreen?.querySelector(".splash-menu-panel");
+    if (panel) this.teardownIdleFade = initSplashMenuIdleFade(panel);
   }
 
   async setupSupabaseAuth(container) {
@@ -284,6 +290,8 @@ class SplashScreenManager extends BaseComponent {
   hide() {
     if (!this.splashScreen || this.isReady) return;
     this.isReady = true;
+    this.teardownIdleFade?.();
+    this.teardownIdleFade = null;
     this.stopFlavorText();
     if (this.versionCheckInterval) {
       clearInterval(this.versionCheckInterval);

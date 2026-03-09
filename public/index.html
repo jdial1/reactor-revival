@@ -11,11 +11,42 @@
     <script>
       (function(){
         var USE_STALENHAG_BG = true;
-        var n = Math.floor(Math.random() * 10) + 1;
-        var path = USE_STALENHAG_BG
-          ? '../img/misc/stalenhag_bg/bg_img' + n + '.png'
-          : '../img/misc/backgrounds/splash_bg' + n + '.png';
-        document.documentElement.style.setProperty('--splash-bg-url', 'url("' + path + '")');
+        var STORAGE_KEY = 'splash-bg-counts';
+        var CAROUSEL_INTERVAL_MS = 30000;
+        var prefix = USE_STALENHAG_BG ? 'stalenhag' : 'splash';
+        var counts = {};
+        try {
+          var stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) counts = JSON.parse(stored);
+        } catch (e) {}
+        var minCount = Infinity;
+        var minIndices = [];
+        for (var i = 1; i <= 10; i++) {
+          var key = prefix + '_' + i;
+          var c = counts[key] || 0;
+          if (c < minCount) {
+            minCount = c;
+            minIndices = [i];
+          } else if (c === minCount) {
+            minIndices.push(i);
+          }
+        }
+        var n = minIndices[Math.floor(Math.random() * minIndices.length)];
+        function setBg(idx) {
+          var path = USE_STALENHAG_BG
+            ? '../img/misc/stalenhag_bg/bg_img' + idx + '.png'
+            : '../img/misc/backgrounds/splash_bg' + idx + '.png';
+          document.documentElement.style.setProperty('--splash-bg-url', 'url("' + path + '")');
+          counts[prefix + '_' + idx] = (counts[prefix + '_' + idx] || 0) + 1;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(counts));
+          } catch (e) {}
+        }
+        setBg(n);
+        setInterval(function() {
+          n = (n % 10) + 1;
+          setBg(n);
+        }, CAROUSEL_INTERVAL_MS);
       })();
     </script>
     <script src="lib/pako.min.js"></script>

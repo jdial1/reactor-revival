@@ -83,7 +83,7 @@ body { overflow: hidden; width: 100%; height: 100dvh; padding: env(safe-area-ins
 #splash-container { flex: 1; display: flex; width: 100%; min-width: 0; min-height: 0; background: var(--sovietwave-slate); padding: 1.5%;
 }
 
-#splash-screen { position: relative; display: flex; overflow: hidden; flex: 1; width: 100%; max-width: none; min-height: 0; flex-direction: column; align-items: stretch; justify-content: flex-end; padding: 0; margin: 0; background-color: var(--sovietwave-slate); background-image: var(--splash-bg-url, url("../img/misc/backgrounds/splash_bg1.png")); background-repeat: no-repeat; background-position: 10% 15%; background-size: 115vmax 115vmax; animation: splash-ken-burns 60s ease-in-out infinite; font-family: var(--splash-font) !important; text-align: center; letter-spacing: 1px; border-radius: 3%; transform: translateZ(0); backface-visibility: hidden;
+#splash-screen { position: relative; display: flex; overflow: hidden; flex: 1; width: 100%; max-width: none; min-height: 0; flex-direction: column; align-items: stretch; justify-content: flex-end; padding: 0; margin: 0; background-color: var(--sovietwave-slate); background-image: var(--splash-bg-url, url("../img/misc/backgrounds/splash_bg1.png")); background-repeat: no-repeat; background-position: 10% 15%; background-size: min(110vmax, 4096px) min(110vmax, 4096px); animation: splash-ken-burns 40s linear infinite; font-family: var(--splash-font) !important; text-align: center; letter-spacing: 1px; border-radius: 3%; transform: translateZ(0); backface-visibility: hidden;
 }
 #splash-screen::before { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; background: radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgba(31, 33, 32, 0.7) 100%); z-index: 0;
 }
@@ -138,13 +138,13 @@ body { overflow: hidden; width: 100%; height: 100dvh; padding: env(safe-area-ins
  }
 }
 
-@keyframes splash-ken-burns { 0%, 100% { background-position: 10% 15%; background-size: 115vmax 115vmax; animation-timing-function: ease-out;
+@keyframes splash-ken-burns { 0%, 100% { background-position: 10% 15%; background-size: min(110vmax, 4096px) min(110vmax, 4096px);
  }
- 25% { background-position: 35% 25%; background-size: 120vmax 120vmax; animation-timing-function: ease-in-out;
+ 25% { background-position: 35% 25%; background-size: min(112vmax, 4096px) min(112vmax, 4096px);
  }
- 50% { background-position: 80% 40%; background-size: 130vmax 130vmax; animation-timing-function: ease-in-out;
+ 50% { background-position: 80% 40%; background-size: min(115vmax, 4096px) min(115vmax, 4096px);
  }
- 75% { background-position: 45% 28%; background-size: 122vmax 122vmax; animation-timing-function: ease-in;
+ 75% { background-position: 45% 28%; background-size: min(113vmax, 4096px) min(113vmax, 4096px);
  }
 }
 
@@ -3946,7 +3946,10 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
  }
 }
 
-.splash-menu-panel { position: relative; display: flex; width: 100%; max-width: 480px; flex-direction: column; padding: 0; margin: 0; border: 6px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; background: var(--splash-panel-bg); box-shadow: 4px 4px 0 var(--bevel-shadow), inset 0 2px 4px rgba(0 0 0 / 0.3); overflow: hidden; align-self: center;
+.splash-menu-panel { position: relative; display: flex; width: 100%; max-width: 480px; flex-direction: column; padding: 0; margin: 0; border: 6px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; box-shadow: 4px 4px 0 var(--bevel-shadow); overflow: hidden; align-self: center;
+}
+
+.splash-menu-inner { display: flex; flex-direction: column; flex: 1; background: var(--splash-panel-bg); box-shadow: inset 0 2px 4px rgba(0 0 0 / 0.3); transition: opacity 0.5s ease;
 }
 
 .splash-menu-panel::before { content: ""; position: absolute; top: 8px; left: 8px; width: 6px; height: 6px; background: radial-gradient(circle, var(--bevel-mid) 30%, var(--bevel-dark) 100%); border-radius: 50%; pointer-events: none;
@@ -3958,9 +3961,15 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .splash-control-deck { min-height: 35vh; max-height: 45vh;
 }
 
+.splash-menu-panel.splash-menu-fade-slight .splash-menu-inner { opacity: 0.55;
+}
+
+.splash-menu-panel.splash-menu-fade-full .splash-menu-inner { opacity: 0;
+}
+
 @media (min-width: 601px) { #splash-screen { padding: 0; align-items: center;
  }
- .splash-menu-panel { max-width: 480px; margin: 16px; box-shadow: 6px 6px 0 rgb(0 0 0 / 40%), inset 0 2px 4px rgba(0 0 0 / 0.3);
+ .splash-menu-panel { max-width: 480px; margin: 16px; box-shadow: 6px 6px 0 rgb(0 0 0 / 40%);
  }
 }
 
@@ -4101,14 +4110,14 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
  }
 }
 /* --- Ensure background animation works on all widths --- */
-@media (width <= 1024px) { #splash-screen { animation: splash-ken-burns 60s ease-in-out infinite;
+@media (width <= 1024px) { #splash-screen { animation: splash-ken-burns 40s linear infinite;
  }
  /* Ensure objective text scrolling works on tablets */
  #objective_title span { animation: scroll-objective-title 14s linear infinite;
  }
 }
 
-@media (width <= 768px) { #splash-screen { animation: splash-ken-burns 60s ease-in-out infinite;
+@media (width <= 768px) { #splash-screen { animation: splash-ken-burns 40s linear infinite;
  }
  /* Ensure objective text scrolling works on tablets */
  #objective_title span { animation: scroll-objective-title 14s linear infinite;
