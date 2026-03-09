@@ -1,3 +1,4 @@
+import { html, render } from "lit-html";
 import { logger } from "../../utils/logger.js";
 
 export class MeltdownUI {
@@ -202,16 +203,19 @@ export class MeltdownUI {
     const toast = document.createElement("div");
     toast.className = "decompression-saved-toast";
     toast.setAttribute("role", "status");
-    toast.textContent = "Explosive decompression saved the reactor!";
-    toast.style.cssText =
-      "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1b5e20;border:2px solid #4caf50;border-radius:8px;padding:12px 20px;z-index:10000;font-family:'Minecraft',monospace;color:#fff;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.4);opacity:0;transition:opacity 0.2s ease-out;";
-    requestAnimationFrame(() => {
-      toast.style.opacity = "1";
-    });
+    render(html`
+      <div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1b5e20;border:2px solid #4caf50;border-radius:8px;padding:12px 20px;z-index:10000;font-family:'Press Start 2P',monospace;color:#fff;font-size:0.8rem;box-shadow:0 4px 12px rgba(0,0,0,0.6);opacity:0;transition:opacity 0.2s ease-out;" id="decompression_inner">
+        Explosive decompression saved the reactor!
+      </div>
+    `, toast);
     document.body.appendChild(toast);
+    const inner = toast.querySelector("#decompression_inner");
+    requestAnimationFrame(() => {
+      if (inner) inner.style.opacity = "1";
+    });
     setTimeout(() => {
       if (toast.parentNode) {
-        toast.style.opacity = "0";
+        if (inner) inner.style.opacity = "0";
         setTimeout(() => toast.remove(), 220);
       }
     }, 3500);

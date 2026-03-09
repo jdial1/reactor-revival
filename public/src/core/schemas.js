@@ -95,6 +95,9 @@ export const EVENT_SCHEMA_REGISTRY = {
   statePatch: StatePatchPayloadSchema,
   quickSelectSlotsChanged: z.object({ slots: z.array(z.unknown()).optional() }).passthrough(),
   upgradePurchased: z.object({ upgrade: z.any().optional() }).passthrough(),
+  heatWarning: z.object({ heatRatio: z.number().optional(), tickCount: z.number().optional() }).passthrough(),
+  pipeIntegrityWarning: z.object({ heatRatio: z.number().optional(), tickCount: z.number().optional() }).passthrough(),
+  firstHighHeat: z.object({ heatRatio: z.number().optional(), tickCount: z.number().optional() }).passthrough(),
 };
 
 const TileRefSchema = z.custom((val) => val != null && typeof val.row === "number" && typeof val.col === "number");

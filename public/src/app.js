@@ -1,7 +1,7 @@
 import "./config/superjsonSetup.js";
 import { Game } from "./core/game.js";
-import { escapeHtml } from "./utils/stringUtils.js";
 import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB } from "./utils/util.js";
+import { html, render } from "lit-html";
 import { UI } from "./components/ui.js";
 import { AppRoot } from "./components/AppRoot.js";
 import "./services/pwa.js";
@@ -269,17 +269,20 @@ window.clearAllGameDataForNewGame = clearAllGameDataForNewGame;
 
 async function createFallbackStartInterface(pageRouter, ui, game) {
   try {
-    const response = await fetch("pages/fallback-start.html");
-    const html = await response.text();
     const container = document.createElement("div");
-    container.innerHTML = html;
-    const fallbackDiv = container.firstChild;
-    document.body.appendChild(fallbackDiv);
-
-    document.getElementById("fallback-start-btn").onclick = async () => {
-      fallbackDiv.remove();
+    container.id = "fallback-start-interface";
+    document.body.appendChild(container);
+    const onStart = async () => {
+      container.remove();
       await startGame({ pageRouter, ui, game });
     };
+    render(html`
+      <div style="position:fixed;inset:0;background:#1a1a1a;display:flex;align-items:center;justify-content:center;z-index:99999;flex-direction:column;color:white;font-family:monospace;">
+        <h1 style="color:#e74c3c;">Splash UI Failed to Load</h1>
+        <p style="margin-bottom:20px;color:#ccc;">You can still start the game in fallback mode.</p>
+        <button class="pixel-btn btn-start" @click=${onStart} style="padding:10px 20px;font-size:16px;">START GAME</button>
+      </div>
+    `, container);
   } catch (error) {
     logger.log('error', 'game', 'Could not load fallback start interface', error);
   }
@@ -288,27 +291,24 @@ async function createFallbackStartInterface(pageRouter, ui, game) {
 function showCriticalError(error) {
   const errorMessage = error?.message || error?.toString() || "Unknown error";
   const errorStack = error?.stack || "";
-  
   const errorOverlay = document.createElement("div");
   errorOverlay.id = "critical-error-overlay";
   errorOverlay.className = "critical-error-overlay";
-  errorOverlay.innerHTML = `
-    <div class="critical-error-content pixel-panel">
-      <h1 class="critical-error-title">REACTOR FAILED TO START</h1>
-      <div class="critical-error-message">
-        <p class="error-text">${escapeHtml(errorMessage)}</p>
-        ${errorStack ? `<details class="error-details"><summary>Error Details</summary><pre class="error-stack">${escapeHtml(errorStack)}</pre></details>` : ""}
+  render(html`
+    <style>
+      .critical-error-overlay { position: fixed; z-index: 99999; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.95); }
+      .error-stack { max-height: 200px; overflow: auto; text-align: left; padding: 10px; background: #222; }
+    </style>
+    <div class="critical-error-content pixel-panel" style="max-width:600px; text-align:center;">
+      <h1 class="critical-error-title" style="color:#ff4444;">REACTOR FAILED TO START</h1>
+      <div class="critical-error-message" style="margin:20px 0;">
+        <p class="error-text" style="color:#ffcccc;">${errorMessage}</p>
+        ${errorStack ? html`<details class="error-details"><summary style="cursor:pointer;color:#aaa;">Error Details</summary><pre class="error-stack">${errorStack}</pre></details>` : ""}
       </div>
-      <button id="critical-error-reload" class="pixel-btn btn-start">Reload Page</button>
+      <button id="critical-error-reload" class="pixel-btn btn-start" @click=${() => window.location.reload()}>Reload Page</button>
     </div>
-  `;
-  
+  `, errorOverlay);
   document.body.appendChild(errorOverlay);
-  
-  document.getElementById("critical-error-reload").onclick = () => {
-    window.location.reload();
-  };
-  
   document.body.style.overflow = "hidden";
 }
 

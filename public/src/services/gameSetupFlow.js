@@ -1,3 +1,5 @@
+import { html, render } from "lit-html";
+import { classMap, styleMap } from "../utils/litHelpers.js";
 import { StorageUtils, StorageUtilsAsync } from "../utils/util.js";
 import dataService from "./dataService.js";
 import { logger } from "../utils/logger.js";
@@ -13,96 +15,72 @@ function ensureGameSetupOverlay() {
   return overlay;
 }
 
-function buildDoctrineCard(tree) {
-  const card = document.createElement("button");
-  card.type = "button";
-  card.className = "doctrine-card";
-  card.dataset.treeId = tree.id;
-  card.dataset.doctrine = tree.id;
-  if (tree.color) card.style.setProperty("--doctrine-color", tree.color);
-  card.setAttribute("role", "option");
-  card.setAttribute("aria-selected", "false");
-  const icon = document.createElement("img");
-  icon.className = "doctrine-card-icon";
-  icon.src = `img/ui/icons/${tree.id}.png`;
-  icon.alt = "";
-  const title = document.createElement("span");
-  title.className = "doctrine-card-title";
-  title.textContent = tree.shortTitle ?? tree.title;
-  const subtitle = document.createElement("span");
-  subtitle.className = "doctrine-card-subtitle";
-  subtitle.textContent = tree.subtitle;
-  const textWrap = document.createElement("div");
-  textWrap.className = "doctrine-card-text";
-  textWrap.appendChild(title);
-  textWrap.appendChild(subtitle);
-  const led = document.createElement("span");
-  led.className = "doctrine-led";
-  led.setAttribute("aria-hidden", "true");
-  card.appendChild(led);
-  card.appendChild(icon);
-  card.appendChild(textWrap);
-  return card;
-}
-
-function appendDoctrineCards(doctrineContainer, treeList, onDoctrineSelect, updateStartButton) {
-  treeList.forEach((tree) => {
-    const card = buildDoctrineCard(tree);
-    card.onclick = () => {
-      doctrineContainer.querySelectorAll(".doctrine-card").forEach((c) => {
-        c.classList.remove("selected");
-        c.setAttribute("aria-selected", "false");
-      });
-      card.classList.add("selected");
-      card.setAttribute("aria-selected", "true");
-      onDoctrineSelect(tree.id);
-      updateStartButton();
-    };
-    doctrineContainer.appendChild(card);
+function doctrineCardTemplate(tree, selectedDoctrine, onSelect) {
+  const isSelected = tree.id === selectedDoctrine;
+  const classes = classMap({
+    "doctrine-card": true,
+    "selected": isSelected
   });
-}
-
-function attachDifficultyCardHandlers(difficultyCards, onDifficultySelect, updateStartButton) {
-  difficultyCards.forEach((card) => {
-    card.onclick = () => {
-      difficultyCards.forEach((c) => c.classList.remove("selected"));
-      card.classList.add("selected");
-      onDifficultySelect(card.dataset.difficulty);
-      updateStartButton();
-    };
+  const styles = styleMap({
+    ...(tree.color ? { "--doctrine-color": tree.color } : {})
   });
+  return html`
+    <button type="button" class=${classes} style=${styles} role="option" aria-selected=${isSelected ? "true" : "false"} data-tree-id=${tree.id} data-doctrine=${tree.id} @click=${() => onSelect(tree.id)}>
+      <span class="doctrine-led" aria-hidden="true"></span>
+      <img class="doctrine-card-icon" src="img/ui/icons/${tree.id}.png" alt="" />
+      <div class="doctrine-card-text">
+        <span class="doctrine-card-title">${tree.shortTitle ?? tree.title}</span>
+        <span class="doctrine-card-subtitle">${tree.subtitle}</span>
+      </div>
+    </button>
+  `;
 }
 
-function attachBackButtonHandler(backBtn, overlay) {
-  if (!backBtn) return;
-  backBtn.onclick = () => {
-    overlay.classList.add("hidden");
-    setTimeout(() => overlay.remove(), 300);
-  };
+function difficultyCardTemplate(diffKey, diffLabel, diffDesc, selectedDifficulty, onSelect) {
+  const isSelected = diffKey === selectedDifficulty;
+  const classes = classMap({
+    "difficulty-card": true,
+    "selected": isSelected
+  });
+  return html`
+    <button type="button" class=${classes} data-difficulty=${diffKey} @click=${() => onSelect(diffKey)}>
+      <span class="difficulty-led" aria-hidden="true"></span>
+      <img class="difficulty-indicator" src="img/ui/icons/${diffKey}.png" alt="" />
+      <div class="difficulty-card-info">
+        <span class="difficulty-name">${diffLabel}</span>
+        <span class="difficulty-desc">${diffDesc}</span>
+      </div>
+    </button>
+  `;
 }
 
-function attachStartButtonHandler(startBtn, game, overlay, getSelection, startNewGameFlowFn, difficultyPresets) {
-  if (!startBtn) return;
-  startBtn.onclick = async () => {
-    const { selectedDoctrine, selectedDifficulty } = getSelection();
-    if (!selectedDoctrine || !selectedDifficulty) return;
-    const preset = difficultyPresets[selectedDifficulty];
-    if (!preset) return;
-    game.base_money = Number(preset.base_money);
-    game.base_loop_wait = Number(preset.base_loop_wait);
-    game.base_manual_heat_reduce = Number(preset.base_manual_heat_reduce);
-    game.reactor.base_max_heat = Number(preset.base_max_heat);
-    game.reactor.base_max_power = Number(preset.base_max_power);
-    game.reactor.power_overflow_to_heat_ratio = Number(preset.power_overflow_to_heat_pct) / 100;
-    overlay.classList.add("hidden");
-    setTimeout(() => overlay.remove(), 300);
-    try {
-      await startNewGameFlowFn(selectedDoctrine);
-    } catch (error) {
-      logger.log('error', 'game', 'Failed to start game:', error);
-      logger.log('warn', 'game', 'Failed to start game. Please try again.');
-    }
-  };
+function gameSetupTemplate(treeList, selectedDoctrine, selectedDifficulty, onDoctrineSelect, onDifficultySelect, onBack, onStart) {
+  const canStart = selectedDoctrine !== null && selectedDifficulty !== null;
+  return html`
+    <div class="bios-screen game-setup-selection">
+      <h1 class="game-setup-header">NEW GAME</h1>
+      <div class="bios-content">
+        <section class="setup-section setup-doctrine">
+          <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DOCTRINE ]</h2></div>
+          <div class="doctrine-cards" role="listbox" aria-label="Select doctrine">
+            ${treeList.map(tree => doctrineCardTemplate(tree, selectedDoctrine, onDoctrineSelect))}
+          </div>
+        </section>
+        <section class="setup-section setup-difficulty">
+          <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DIFFICULTY ]</h2></div>
+          <div class="difficulty-cards" role="radiogroup" aria-label="Select difficulty">
+            ${difficultyCardTemplate("easy", "EASY", "Forgiving heat margins", selectedDifficulty, onDifficultySelect)}
+            ${difficultyCardTemplate("medium", "MEDIUM", "Balanced challenge", selectedDifficulty, onDifficultySelect)}
+            ${difficultyCardTemplate("hard", "HARD", "Tight margins, fast ticks", selectedDifficulty, onDifficultySelect)}
+          </div>
+        </section>
+      </div>
+      <footer class="bios-footer">
+        <button type="button" class="bios-btn setup-back-btn" @click=${onBack}>[ BACK ]</button>
+        <button type="button" class="bios-btn setup-start-btn" ?disabled=${!canStart} @click=${onStart}>[ START ]</button>
+      </footer>
+    </div>
+  `;
 }
 
 let _showTechTreeInProgress = false;
@@ -113,41 +91,60 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
   try {
     const overlay = ensureGameSetupOverlay();
     const techTreeData = await dataService.loadTechTree();
-  const treeList = Array.isArray(techTreeData) ? techTreeData : (techTreeData?.default ?? []);
-  if (!treeList.length) {
-    await startNewGameFlow(game, pageRouter, ui, splashManager, null);
-    return;
-  }
-  overlay.innerHTML = "";
-  if (!window.templateLoader) return;
-  await window.templateLoader.loadTemplates();
-  const screen = window.templateLoader.cloneTemplateElement("game-setup-template");
-  if (!screen) return;
-  const doctrineContainer = screen.querySelector(".doctrine-cards");
-  const difficultyCards = screen.querySelectorAll(".difficulty-card");
-  const startBtn = screen.querySelector(".setup-start-btn");
-  const backBtn = screen.querySelector(".setup-back-btn");
-  let selectedDoctrine = null;
-  let selectedDifficulty = null;
-  const updateStartButton = () => {
-    startBtn.disabled = !(selectedDoctrine !== null && selectedDifficulty !== null);
-  };
-  const getSelection = () => ({ selectedDoctrine, selectedDifficulty });
-  const startNewGameFlowWithDoctrine = (doctrineId) => startNewGameFlow(game, pageRouter, ui, splashManager, doctrineId);
-  let difficultyPresets;
-  try {
-    difficultyPresets = await dataService.loadDifficultyCurves();
-  } catch (err) {
-    logger.log('error', 'game', 'Failed to load difficulty curves:', err);
-    overlay.appendChild(screen);
-    return;
-  }
-  appendDoctrineCards(doctrineContainer, treeList, (id) => { selectedDoctrine = id; }, updateStartButton);
-  attachDifficultyCardHandlers(difficultyCards, (d) => { selectedDifficulty = d; }, updateStartButton);
-  attachBackButtonHandler(backBtn, overlay);
-  attachStartButtonHandler(startBtn, game, overlay, getSelection, startNewGameFlowWithDoctrine, difficultyPresets);
-  overlay.appendChild(screen);
-  overlay.classList.remove("hidden");
+    const treeList = Array.isArray(techTreeData) ? techTreeData : (techTreeData?.default ?? []);
+
+    if (!treeList.length) {
+      await startNewGameFlow(game, pageRouter, ui, splashManager, null);
+      return;
+    }
+
+    let selectedDoctrine = null;
+    let selectedDifficulty = null;
+    let difficultyPresets;
+
+    try {
+      difficultyPresets = await dataService.loadDifficultyCurves();
+    } catch (err) {
+      logger.log('error', 'game', 'Failed to load difficulty curves:', err);
+      return;
+    }
+
+    const renderSetup = () => {
+      render(gameSetupTemplate(
+        treeList,
+        selectedDoctrine,
+        selectedDifficulty,
+        (id) => { selectedDoctrine = id; renderSetup(); },
+        (diff) => { selectedDifficulty = diff; renderSetup(); },
+        () => {
+          overlay.classList.add("hidden");
+          setTimeout(() => overlay.remove(), 300);
+        },
+        async () => {
+          const preset = difficultyPresets[selectedDifficulty];
+          if (!preset) return;
+
+          game.base_money = Number(preset.base_money);
+          game.base_loop_wait = Number(preset.base_loop_wait);
+          game.base_manual_heat_reduce = Number(preset.base_manual_heat_reduce);
+          game.reactor.base_max_heat = Number(preset.base_max_heat);
+          game.reactor.base_max_power = Number(preset.base_max_power);
+          game.reactor.power_overflow_to_heat_ratio = Number(preset.power_overflow_to_heat_pct) / 100;
+
+          overlay.classList.add("hidden");
+          setTimeout(() => overlay.remove(), 300);
+
+          try {
+            await startNewGameFlow(game, pageRouter, ui, splashManager, selectedDoctrine);
+          } catch (error) {
+            logger.log('error', 'game', 'Failed to start game:', error);
+          }
+        }
+      ), overlay);
+    };
+
+    renderSetup();
+    overlay.classList.remove("hidden");
   } finally {
     _showTechTreeInProgress = false;
   }

@@ -96,14 +96,7 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
     const container = document.getElementById(getUpgradeContainerId(upgrade));
     if (!container?.isConnected) return;
     upgrade.$el = container?.querySelector(`[data-id="${upgrade.id}"]`);
-    if (upgrade.$el) {
-      const descEl = upgrade.$el.querySelector(".upgrade-description");
-      if (descEl) {
-        const desc = upgrade.description || "";
-        descEl.innerHTML = upgrade.game?.ui?.stateManager ? upgrade.game.ui.stateManager.addPartIconsToTitle(desc) : desc;
-      }
-      upgrade.updateDisplayCost();
-    }
+    if (upgrade.$el) upgrade.updateDisplayCost();
   });
 
   if (upgradeset.game) runCheckAffordability(upgradeset, upgradeset.game);

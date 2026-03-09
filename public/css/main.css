@@ -257,8 +257,7 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
 }
 
 .splash-btn-config,
-.splash-btn-sandbox,
-.splash-btn-quit { flex: 1 1 0 !important; min-width: 0 !important;
+.splash-btn-sandbox { flex: 1 1 0 !important; min-width: 0 !important;
 }
 
 

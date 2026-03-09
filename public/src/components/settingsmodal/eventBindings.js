@@ -4,6 +4,7 @@ import { preferences } from "../../core/preferencesStore.js";
 import { supabaseSave } from "../../services/SupabaseSave.js";
 import { createSupabaseProvider, createGoogleDriveProvider } from "../../services/cloudSaveProvider.js";
 import { bindEvents } from "../../utils/bindEvents.js";
+import dataService from "../../services/dataService.js";
 
 let _activeAbortController = null;
 
@@ -332,20 +333,6 @@ function setupCloudSaves(overlay, modal, signal) {
   }, { signal });
 }
 
-let _settingsHelpCache = null;
-
-async function loadSettingsHelp() {
-  if (_settingsHelpCache) return _settingsHelpCache;
-  try {
-    const res = await fetch("./data/settings_help.json");
-    if (!res.ok) return {};
-    _settingsHelpCache = await res.json();
-    return _settingsHelpCache;
-  } catch {
-    return {};
-  }
-}
-
 function setupSettingsHelpModal(overlay, modal, signal) {
   let helpEl = overlay.querySelector(".settings-help-modal");
   if (!helpEl) {
@@ -398,7 +385,10 @@ function setupSettingsHelpModal(overlay, modal, signal) {
     const key = btn.dataset.settingKey;
     if (!key) return;
     modal.playClick();
-    const data = await loadSettingsHelp();
+    let data = {};
+    try {
+      data = await dataService.loadSettingsHelp();
+    } catch (err) {}
     const text = data[key] || "No description available.";
     const row = btn.closest("tr");
     const labelSpan = row?.querySelector(".settings-visuals-label span");

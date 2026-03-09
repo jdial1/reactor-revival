@@ -1,4 +1,6 @@
 import { preferences } from "../../core/preferencesStore.js";
+import { html, render } from "lit-html";
+import { styleMap } from "../../utils/litHelpers.js";
 
 export class HeatVisualsUI {
   constructor(ui) {
@@ -6,8 +8,6 @@ export class HeatVisualsUI {
     this._overlay = null;
     this._heatFlowOverlay = null;
     this._timeFluxSimOverlay = null;
-    this._timeFluxSimLabel = null;
-    this._timeFluxSimFill = null;
   }
 
   _ensureOverlay() {
@@ -50,28 +50,13 @@ export class HeatVisualsUI {
   }
 
   _ensureTimeFluxSimulationOverlay() {
-    const ui = this.ui;
     if (this._timeFluxSimOverlay && this._timeFluxSimOverlay.parentElement) return this._timeFluxSimOverlay;
     if (typeof document === "undefined" || !document.body) return null;
     const overlay = document.createElement("div");
     overlay.className = "time-flux-sim-overlay";
-    const panel = document.createElement("div");
-    panel.className = "time-flux-sim-panel";
-    const label = document.createElement("div");
-    label.className = "time-flux-sim-label";
-    label.textContent = "Simulating... 0%";
-    const bar = document.createElement("div");
-    bar.className = "time-flux-sim-bar";
-    const fill = document.createElement("div");
-    fill.className = "time-flux-sim-fill";
-    bar.appendChild(fill);
-    panel.appendChild(label);
-    panel.appendChild(bar);
-    overlay.appendChild(panel);
     document.body.appendChild(overlay);
     this._timeFluxSimOverlay = overlay;
-    this._timeFluxSimLabel = label;
-    this._timeFluxSimFill = fill;
+    this.updateTimeFluxSimulation(0, false);
     return overlay;
   }
 
@@ -84,8 +69,14 @@ export class HeatVisualsUI {
     }
     overlay.style.display = "flex";
     const pct = Math.max(0, Math.min(100, Math.round(progressPercent || 0)));
-    if (this._timeFluxSimLabel) this._timeFluxSimLabel.textContent = `Simulating... ${pct}%`;
-    if (this._timeFluxSimFill) this._timeFluxSimFill.style.width = `${pct}%`;
+    render(html`
+      <div class="time-flux-sim-panel">
+        <div class="time-flux-sim-label">Simulating... ${pct}%</div>
+        <div class="time-flux-sim-bar">
+          <div class="time-flux-sim-fill" style=${styleMap({ width: `${pct}%` })}></div>
+        </div>
+      </div>
+    `, overlay);
   }
 
   _tileCenterToOverlayPosition(row, col) {

@@ -59,6 +59,13 @@ export function attachGameEventListeners(game, ui) {
     if (type === "meltdown" && ui.deviceFeatures?.meltdownVibration) ui.deviceFeatures.meltdownVibration();
     if (type === "doublePulse" && ui.deviceFeatures?.doublePulseVibration) ui.deviceFeatures.doublePulseVibration();
   });
+  on("heatWarning", ({ heatRatio }) => {
+    if (game.audio) game.audio.play("warning", heatRatio ?? 0.85);
+  });
+  on("pipeIntegrityWarning", ({ heatRatio }) => {
+    if (game.audio) game.audio.play("warning", heatRatio ?? 0.85);
+  });
+  on("firstHighHeat", () => {});
   on("heatWarningCleared", () => {
     if (ui.heatVisualsUI?.clearHeatWarningClasses) ui.heatVisualsUI.clearHeatWarningClasses();
     if (ui.gridInteractionUI) ui.gridInteractionUI.clearSegmentHighlight();
@@ -99,6 +106,7 @@ export function attachGameEventListeners(game, ui) {
     }
     if (quick_select_slots && ui.stateManager?.setQuickSelectSlots) ui.stateManager.setQuickSelectSlots(quick_select_slots);
     if (ui.controlDeckUI?.updateAllToggleBtnStates) ui.controlDeckUI.updateAllToggleBtnStates();
+    game.eventRouter?.clearState?.(game);
   });
   on("meltdown", () => ui.stateManager?.setVar("melting_down", true));
   on("meltdownResolved", () => ui.stateManager?.setVar("melting_down", false));

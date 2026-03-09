@@ -1,3 +1,6 @@
+import { html, render } from "lit-html";
+import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
+
 export function initMainLayout(ui) {
   ui.setupEventListeners();
   ui.controlDeckUI.initializeToggleButtons();
@@ -13,10 +16,10 @@ export function initMainLayout(ui) {
   ui.deviceFeatures.setupAppBadgeVisibilityHandler();
   ui.deviceFeatures.updateWakeLockState();
   if (ui.DOMElements.basic_overview_section && ui.help_text?.basic_overview) {
-    ui.DOMElements.basic_overview_section.innerHTML = `
-        <h3>${ui.help_text.basic_overview.title}</h3>
-        <p>${ui.help_text.basic_overview.content}</p>
-        `;
+    render(html`
+      <h3>${ui.help_text.basic_overview.title}</h3>
+      <p>${unsafeHTML(ui.help_text.basic_overview.content)}</p>
+    `, ui.DOMElements.basic_overview_section);
   }
   if (ui.gridScaler) ui.gridScaler.init();
   if (document.getElementById("reactor_wrapper")) {

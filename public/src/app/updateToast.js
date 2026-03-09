@@ -10,19 +10,12 @@ function removeExistingUpdateToast() {
   _toastContainer = null;
 }
 
-function injectUpdateToastStyles() {
-  if (document.querySelector("#update-toast-styles")) return;
-  const style = document.createElement("style");
-  style.id = "update-toast-styles";
-  style.textContent = UPDATE_TOAST_STYLES;
-  document.head.appendChild(style);
-}
-
 const UPDATE_TOAST_AUTO_REMOVE_MS = 10000;
 const TOAST_ANIMATION_MS = 300;
 
 function updateToastTemplate(onRefresh, onClose) {
   return html`
+    <style>${UPDATE_TOAST_STYLES}</style>
     <div class="update-toast">
       <div class="update-toast-content">
         <div class="update-toast-message">
@@ -37,7 +30,6 @@ function updateToastTemplate(onRefresh, onClose) {
 
 export function showUpdateToast(newVersion, currentVersion) {
   removeExistingUpdateToast();
-  injectUpdateToastStyles();
   _toastContainer = document.createElement("div");
   document.body.appendChild(_toastContainer);
 

@@ -5,15 +5,6 @@ import { StorageAdapter } from "./storageAdapter.js";
 
 export { StorageAdapter };
 
-const GAME_SAVE_KEYS = new Set([
-  "reactorGameSave",
-  "reactorGameSave_1",
-  "reactorGameSave_2",
-  "reactorGameSave_3",
-  "reactorGameSave_Previous",
-  "reactorGameSave_Backup",
-]);
-
 export function serializeSave(obj) {
   return superjsonStringify(obj);
 }
@@ -123,7 +114,7 @@ export const StorageUtils = {
             const raw = localStorage.getItem(key);
             if (raw === null) return defaultValue;
             try {
-                return GAME_SAVE_KEYS.has(key) ? deserializeSave(raw) : JSON.parse(raw);
+                return deserializeSave(raw);
             } catch (_) {
                 return raw;
             }
@@ -134,8 +125,8 @@ export const StorageUtils = {
     set(key, value) {
         if (!isStorageAvailable()) return false;
         try {
-            const str = typeof value === "object" && value !== null
-                ? JSON.stringify(value, saveDataReplacer)
+            const str = (typeof value === "object" && value !== null) || typeof value === "bigint"
+                ? serializeSave(value)
                 : JSON.stringify(value);
             localStorage.setItem(key, str);
             return true;

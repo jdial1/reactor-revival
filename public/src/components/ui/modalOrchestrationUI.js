@@ -22,19 +22,20 @@ export class ModalOrchestrationUI {
     const names = ["First Fission", "Scaling Production", "High-Energy Systems", "The Experimental Frontier"];
     const name = names[chapterIndex] || `Chapter ${chapterIndex + 1}`;
     const overlay = document.createElement("div");
-    overlay.className = "chapter-celebration-overlay";
     overlay.setAttribute("role", "alert");
     render(html`
-      <div class="chapter-celebration-content">
-        <div class="chapter-celebration-badge">Chapter Complete</div>
-        <h2 class="chapter-celebration-title">${name}</h2>
+      <div class="chapter-celebration-overlay chapter-celebration-visible">
+        <div class="chapter-celebration-content">
+          <div class="chapter-celebration-badge">Chapter Complete</div>
+          <h2 class="chapter-celebration-title">${name}</h2>
+        </div>
       </div>
     `, overlay);
     document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add("chapter-celebration-visible"));
     if (this.ui.game?.audio) this.ui.game.audio.play("upgrade");
+    const inner = overlay.querySelector(".chapter-celebration-overlay");
     const t = setTimeout(() => {
-      overlay.classList.remove("chapter-celebration-visible");
+      if (inner) inner.classList.remove("chapter-celebration-visible");
       setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 400);
     }, 3200);
     overlay._celebrationTimer = t;

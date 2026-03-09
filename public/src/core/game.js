@@ -28,6 +28,7 @@ import { handleComponentDepletion as runComponentDepletion } from "./game/Compon
 import { runSellAction, runManualReduceHeatAction, runSellPart, runEpartOnclick } from "./game/playerActions.js";
 import { executeAction } from "./game/GameActionDispatcher.js";
 import { GameEventDispatcher } from "./game/GameEventDispatcher.js";
+import { GameEventRouter } from "./game/GameEventRouter.js";
 import { logger } from "../utils/logger.js";
 import { createGameState } from "./store.js";
 import {
@@ -40,7 +41,6 @@ import {
 export class Game {
   constructor(ui_instance) {
     this.ui = ui_instance;
-    this.router = null;
     this.saveOrchestrator = new SaveOrchestrator({
       getContext: () => buildSaveContext(this, {
         getToggles: () => ({
@@ -139,6 +139,7 @@ export class Game {
     this._sandboxState = null;
     this._mainState = null;
     this.eventDispatcher = new GameEventDispatcher(logger);
+    this.eventRouter = new GameEventRouter();
     this.economyManager = new EconomyManager(this, {
       prestigePerEp: PRESTIGE_MULTIPLIER_PER_EP,
       prestigeCap: PRESTIGE_MULTIPLIER_CAP

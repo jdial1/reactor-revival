@@ -178,7 +178,8 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick
   const doctrineLocked = upgrade.game?.upgradeset && !upgrade.game.upgradeset.isUpgradeAvailable(upgrade.id);
   const isSandbox = !!upgrade.game?.isSandbox;
   const header = isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`;
-  const desc = isMaxed ? "" : (upgrade.description || "");
+  const rawDesc = isMaxed ? "" : (upgrade.description || "");
+  const descHtml = upgrade.game?.ui?.stateManager ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc) : rawDesc;
   const costDisplay = isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? "");
   const ariaLabel = doctrineLocked
     ? `Locked – ${upgrade.game?.upgradeset?.getDoctrineForUpgrade(upgrade.id)?.title || upgrade.game?.upgradeset?.getDoctrineForUpgrade(upgrade.id)?.id || "other doctrine"}`
@@ -201,7 +202,7 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick
         </div>
         <div class="upgrade-details">
           <div class="upgrade-title">${upgrade.title}</div>
-          <div class="upgrade-description" style=${styleMap({ display: isMaxed ? "none" : "" })}>${desc}</div>
+          <div class="upgrade-description" style=${styleMap({ display: isMaxed ? "none" : "" })}>${unsafeHTML(descHtml)}</div>
         </div>
         <div class="upgrade-doctrine-icon" style="background-image: url('${doctrineIcon}')" data-doctrine=${doctrineId}></div>
       </div>

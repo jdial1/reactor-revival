@@ -1,4 +1,5 @@
 import { html, render } from "lit-html";
+import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { logger } from "../../utils/logger.js";
 import { MODAL_IDS } from "../ModalManager.js";
 
@@ -11,10 +12,10 @@ export class QuickStartUI {
     try {
       const response = await fetch("pages/quick-start-modal.html");
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const html = await response.text();
+      const htmlContent = await response.text();
       const modal = document.createElement("div");
       modal.id = "quick-start-modal";
-      modal.innerHTML = html;
+      render(html`${unsafeHTML(htmlContent)}`, modal);
       document.body.appendChild(modal);
       const page1 = document.getElementById("quick-start-page-1");
       const page2 = document.getElementById("quick-start-page-2");

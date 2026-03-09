@@ -139,11 +139,6 @@ export class Upgrade {
       this.game.upgradeset.resetUpgradeLevel(this.id);
     };
     this.$el = renderToNode(UpgradeCard(this, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick }));
-    const descEl = this.$el.querySelector(".upgrade-description");
-    if (descEl) {
-      const desc = this.description || "";
-      descEl.innerHTML = this.game?.ui?.stateManager ? this.game.ui.stateManager.addPartIconsToTitle(desc) : desc;
-    }
     this.updateDisplayCost();
     return this.$el;
   }

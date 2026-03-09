@@ -75,15 +75,15 @@ class DataService {
   }
 
   async loadFlavorText() {
-    return queryClient.fetchQuery({
-      queryKey: queryKeys.gameData("flavorText"),
-      queryFn: () => fetchJson("./data/flavor_text.json"),
-      ...prefetchOptions,
-    });
+    return this._getQuery("flavorText", "./data/flavor_text.json", z.array(z.string()));
   }
 
   async loadHelpText() {
     return this._getQuery("helpText", "./data/help_text.json", HelpTextSchema);
+  }
+
+  async loadSettingsHelp() {
+    return this._getQuery("settingsHelp", "./data/settings_help.json", z.record(z.string(), z.string()));
   }
 
   async loadObjectiveList() {

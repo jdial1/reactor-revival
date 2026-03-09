@@ -8,6 +8,19 @@ const isTestEnv = () =>
   (typeof global !== "undefined" && global.__VITEST__) ||
   (typeof window !== "undefined" && window.__VITEST__);
 
+function safeDeserialize(raw) {
+  if (typeof raw !== "string") return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && "json" in parsed && "meta" in parsed) {
+      return parseSave(raw);
+    }
+    return parsed;
+  } catch {
+    return raw;
+  }
+}
+
 export const StorageAdapter = {
   async set(key, value) {
     try {
@@ -26,7 +39,7 @@ export const StorageAdapter = {
       const raw = await get(key);
       if (raw == null) return null;
 
-      const parsed = typeof raw === "string" ? parseSave(raw) : raw;
+      const parsed = safeDeserialize(raw);
 
       if (schema) {
         if (parsed == null || typeof parsed !== "object") return null;

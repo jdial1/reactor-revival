@@ -1,6 +1,23 @@
+import { z } from 'zod';
 import { isTestEnv } from '../utils/util.js';
 import { logger } from '../utils/logger.js';
 import { queryClient, queryKeys } from './queryClient.js';
+
+const LeaderboardEntrySchema = z.object({
+    user_id: z.string(),
+    run_id: z.string().optional(),
+    heat: z.number().optional().default(0),
+    power: z.number().optional().default(0),
+    money: z.number().optional().default(0),
+    time: z.number().optional(),
+    layout: z.string().nullable().optional(),
+    timestamp: z.union([z.number(), z.string()]).optional()
+}).passthrough();
+
+const LeaderboardResponseSchema = z.object({
+    success: z.boolean(),
+    data: z.array(LeaderboardEntrySchema).optional().default([])
+}).passthrough();
 
 function getLeaderboardApiUrl() {
     return 'https://reactor-revival.onrender.com';
@@ -115,7 +132,12 @@ export class LeaderboardService {
                         return [];
                     }
                     const data = await response.json();
-                    return data.success ? data.data : [];
+                    const parsed = LeaderboardResponseSchema.safeParse(data);
+                    if (!parsed.success) {
+                        logger.log('warn', 'game', 'Invalid leaderboard data format');
+                        return [];
+                    }
+                    return parsed.data.success ? parsed.data.data : [];
                 } catch (e) {
                     logger.log('debug', 'game', 'Leaderboard fetch failed (503/CORS/network):', e?.message || e);
                     return [];

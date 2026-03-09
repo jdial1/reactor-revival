@@ -1,3 +1,5 @@
+import { html, render } from "lit-html";
+import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { logger } from "../utils/logger.js";
 
 export class PageRouter {
@@ -18,10 +20,7 @@ export class PageRouter {
     this.pageCache = new Map();
     this.initializedPages = new Set();
     this.currentPageId = null;
-    // Track if pause was applied automatically due to navigation away from reactor
-    // so we can safely auto-unpause when returning.
     this.navigationPaused = false;
-    // Track if we are currently navigating to prevent clearing navigationPaused during auto-pause
     this.isNavigating = false;
     this.contentAreaSelector = "#page_content_area";
   }
@@ -77,7 +76,6 @@ export class PageRouter {
       }
     }
 
-    // Ensure game layout is loaded for stateless pages
     const earlyPageDef = this.pages[pageId];
     if (earlyPageDef && earlyPageDef.stateless) {
       const wrapper = document.getElementById("wrapper");
@@ -92,7 +90,6 @@ export class PageRouter {
       return;
     }
 
-    // Hide the currently showing page
     if (this.currentPageId && this.pageCache.has(this.currentPageId)) {
       this.pageCache.get(this.currentPageId).classList.add("hidden");
     }
@@ -103,31 +100,24 @@ export class PageRouter {
     this.updateNavigation(pageId);
     this.ui.objectivesUI.showObjectivesForPage(pageId);
 
-    // Clean up UI for stateless pages (like privacy policy)
     this.cleanupUIForStatelessPage(pageId);
 
-    // If page is already cached, just show it and we're done.
     if (this.pageCache.has(pageId)) {
       const cachedPage = this.pageCache.get(pageId);
       cachedPage.classList.remove("hidden");
 
-      // Initialize UI for the cached page to ensure DOM elements are properly cached
       this.ui.pageInitUI.initializePage(pageId);
 
       if (pageId === "reactor_section" && this.ui.resizeReactor) {
-        // For reactor page, do an immediate resize and then a delayed resize to handle any layout shifts
         this.ui.resizeReactor();
-        // Add a small delay to ensure the page transition is complete before recalculating
         setTimeout(() => {
           this.ui.resizeReactor();
-          // Ensure grid is visible after transition
           const reactorElement = this.ui.DOMElements.reactor;
           if (reactorElement) {
             reactorElement.style.visibility = "visible";
           }
         }, 100);
       } else if (pageId === "experimental_upgrades_section") {
-        // For research page, always load version when showing the page
         this.ui.pageInitUI.loadAndSetVersion();
       }
 
@@ -135,8 +125,6 @@ export class PageRouter {
       return;
     }
 
-    // --- START SCROLL TO TOP ---
-    // Scroll to top for specific pages
     const pagesToScroll = [
       "reactor_section",
       "upgrades_section",
@@ -148,9 +136,7 @@ export class PageRouter {
         contentArea.scrollTop = 0;
       }
     }
-    // --- END SCROLL TO TOP ---
 
-    // Page not cached, so load, build, and initialize it.
     const pageDef = this.pages[pageId];
     if (!pageDef) {
       logger.error(
@@ -166,18 +152,15 @@ export class PageRouter {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const html = await response.text();
-
+      const htmlText = await response.text();
       const tempContainer = document.createElement("div");
-      tempContainer.innerHTML = html;
+      render(html`${unsafeHTML(htmlText)}`, tempContainer);
       const newPageElement = tempContainer.firstElementChild;
 
       if (newPageElement && newPageElement.classList.contains("page")) {
-        // Reset animation state by forcing reflow if needed, but just appending works with css animation
         pageContentArea.appendChild(newPageElement);
         this.pageCache.set(pageId, newPageElement);
         
-        // Small delay to allow DOM to register before removing hidden (triggers animation)
         requestAnimationFrame(() => {
              newPageElement.classList.remove("hidden");
         });
@@ -187,12 +170,9 @@ export class PageRouter {
           this.initializedPages.add(pageId);
         }
 
-        // For reactor page, ensure proper sizing after page load
         if (pageId === "reactor_section" && this.ui.resizeReactor) {
-          // Add a small delay to ensure the page transition is complete before recalculating
           setTimeout(() => {
             this.ui.resizeReactor();
-            // Ensure grid is visible after transition
             const reactorElement = this.ui.DOMElements.reactor;
             if (reactorElement) {
               reactorElement.style.visibility = "visible";
@@ -214,13 +194,13 @@ export class PageRouter {
       try {
         const errorResponse = await fetch("pages/error-page.html");
         if (errorResponse.ok) {
-          pageContentArea.innerHTML = await errorResponse.text();
+          render(html`${unsafeHTML(await errorResponse.text())}`, pageContentArea);
         } else {
-          pageContentArea.innerHTML = `<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`;
+          render(html`<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`, pageContentArea);
         }
       } catch (errorPageError) {
         logger.log('error', 'ui', 'Failed to load error page:', errorPageError);
-        pageContentArea.innerHTML = `<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`;
+        render(html`<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`, pageContentArea);
       }
       if (this.currentPageId) this.updateNavigation(this.currentPageId);
     }
@@ -237,7 +217,6 @@ export class PageRouter {
       }
     });
 
-    // Add page-specific class to body for conditional styling
     document.body.className = document.body.className.replace(
       /\bpage-\w+\b/g,
       ""
@@ -263,7 +242,6 @@ export class PageRouter {
         quickStartModal.style.display = "none";
       }
 
-      // Programmatically hide navigation elements as fallback
       const navElements = ["main_top_nav", "bottom_nav", "info_bar"];
 
       navElements.forEach((id) => {
@@ -277,12 +255,10 @@ export class PageRouter {
         }
       });
 
-      // Populate privacy policy date if on privacy policy page
       if (pageId === "privacy_policy_section") {
         this.populatePrivacyPolicyDate();
       }
 
-      // Remove game-state classes from body, keep only the page class
       const bodyClasses = document.body.className.split(" ");
       const cleanClasses = bodyClasses.filter(
         (cls) =>
@@ -293,7 +269,6 @@ export class PageRouter {
       );
       document.body.className = cleanClasses.join(" ");
 
-      // Ensure the page class is present
       if (
         !document.body.classList.contains(
           `page-${pageId.replace("_section", "")}`
@@ -311,12 +286,11 @@ export class PageRouter {
         const versionData = await response.json();
         const version = versionData.version;
 
-        // Parse version format: "25_06_23-1539" -> "June 25, 2023"
         const parts = version.split("-")[0].split("_");
         if (parts.length === 3) {
           const day = parts[0];
           const month = parts[1];
-          const year = "20" + parts[2]; // Convert YY to YYYY
+          const year = "20" + parts[2];
 
           const monthNames = [
             "January",
@@ -344,7 +318,6 @@ export class PageRouter {
       }
     } catch (error) {
       logger.error("Failed to load version for privacy policy date:", error);
-      // Fallback to current date if version loading fails
       const dateElement = document.getElementById("privacy-policy-date");
       if (dateElement) {
         dateElement.textContent = new Date().toLocaleDateString("en-US", {
@@ -365,10 +338,10 @@ export class PageRouter {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const html = await response.text();
+      const htmlText = await response.text();
       const wrapper = document.getElementById("wrapper");
       if (wrapper) {
-        wrapper.innerHTML = html;
+        render(html`${unsafeHTML(htmlText)}`, wrapper);
         wrapper.classList.remove("hidden");
       } else {
         logger.log('error', 'ui', 'PageRouter: #wrapper element not found to load game layout.');

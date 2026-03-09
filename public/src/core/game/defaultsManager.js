@@ -128,4 +128,5 @@ export async function setDefaults(game) {
   applyDoctrineThenSession(game);
   resetObjectives(game);
   validateObjectiveStateIfNeeded(game);
+  game.eventRouter?.clearState?.(game);
 }

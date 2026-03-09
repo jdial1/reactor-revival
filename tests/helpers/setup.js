@@ -189,7 +189,6 @@ import { UI } from '../../public/src/components/ui.js';
 import { Engine } from '../../public/src/core/engine.js';
 import { ObjectiveManager } from '../../public/src/core/objective.js';
 import { PageRouter } from '../../public/src/components/pageRouter.js';
-import { TemplateLoader } from '../../public/src/services/templateLoader.js';
 import { attachGameEventListeners } from '../../public/src/app/gameEventListeners.js';
 
 export const toNum = toNumber;
@@ -208,7 +207,6 @@ export {
   Engine,
   ObjectiveManager,
   PageRouter,
-  TemplateLoader,
 };
 
 // --- Phase 3: Test Utilities & Enhanced Debugging ---
@@ -599,7 +597,6 @@ export async function setupGameWithDOM() {
       pathModule.join(pagesDir, 'research.html'),
       pathModule.join(pagesDir, 'game.html'),
       pathModule.join(pagesDir, 'leaderboard.html'),
-      pathModule.join(componentDir, 'templates.html'),
       // Add any other HTML files that define your UI layout
     ];
 
@@ -619,9 +616,6 @@ export async function setupGameWithDOM() {
   const ui = new UI();
   const game = new Game(ui);
   game.router = new PageRouter(ui);
-  window.templateLoader = new TemplateLoader();
-
-  await window.templateLoader.loadTemplates();
   await ui.init(game);
   await game.partset.initialize();
   await game.upgradeset.initialize();

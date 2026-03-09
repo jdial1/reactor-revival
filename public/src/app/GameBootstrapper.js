@@ -14,9 +14,6 @@ export class GameBootstrapper {
 
   async bootstrap() {
     await dataService.ensureAllGameDataLoaded();
-    if (typeof window !== "undefined" && window.templateLoader) {
-      await window.templateLoader.loadTemplates();
-    }
     this.ui.init(this.game);
 
     this.appRoot.render();

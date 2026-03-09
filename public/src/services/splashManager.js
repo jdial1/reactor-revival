@@ -3,7 +3,9 @@ import { escapeHtml } from "../utils/stringUtils.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
 import { settingsModal } from "../components/settingsModal.js";
+import { html, render } from "lit-html";
 import {
+  GoogleSignInButton,
   createGoogleSignInButton,
   createLoadingButton,
   createGoogleSignInButtonWithIcon,
@@ -171,6 +173,7 @@ class SplashScreenManager extends BaseComponent {
     const spinner = this.splashScreen?.querySelector(".splash-spinner");
     if (spinner) spinner.classList.add("splash-element-hidden");
     if (this.statusElement) this.statusElement.classList.add("splash-element-hidden");
+
     let startOptionsSection = this.splashScreen?.querySelector(".splash-start-options");
     if (!startOptionsSection) {
       startOptionsSection = document.createElement("div");
@@ -179,56 +182,10 @@ class SplashScreenManager extends BaseComponent {
       const inner = this.splashScreen.querySelector(".splash-menu-inner");
       (inner ?? this.splashScreen.querySelector(".splash-menu-panel"))?.appendChild(startOptionsSection);
     }
-    startOptionsSection.innerHTML = "";
 
     const builder = new SplashStartOptionsBuilder(this, this._appContext);
-    const { hasSave, saveSlots, cloudSaveOnly, cloudSaveData, mostRecentSave } = await builder.buildSaveSlotList(canLoadGame);
-
-    const continueBtn = builder.buildContinueButton(mostRecentSave);
-    const hasResume = !!(continueBtn || (cloudSaveOnly && cloudSaveData && !hasSave));
-    if (continueBtn) {
-      continueBtn.classList.add("splash-btn-resume-primary");
-      startOptionsSection.appendChild(continueBtn);
-    }
-
-    if (cloudSaveOnly && cloudSaveData && !hasSave) {
-      const cloudBtn = builder.buildCloudContinueButton(cloudSaveData);
-      if (cloudBtn) {
-        cloudBtn.classList.add("splash-btn-resume-primary");
-        startOptionsSection.appendChild(cloudBtn);
-      }
-    }
-
-    const actionsGrid = document.createElement("div");
-    actionsGrid.className = "splash-btn-actions-grid";
-    const secondaryRow = document.createElement("div");
-    secondaryRow.className = "splash-btn-row-secondary";
-    const newGameBtn = builder.buildNewGameButton(hasSave);
-    if (newGameBtn) {
-      if (!hasResume) newGameBtn.classList.add("splash-btn-resume-primary");
-      secondaryRow.appendChild(newGameBtn);
-    }
-    secondaryRow.appendChild(builder.buildLoadGameButton(saveSlots));
-    actionsGrid.appendChild(secondaryRow);
-    const tertiaryRow = document.createElement("div");
-    tertiaryRow.className = "splash-btn-row-tertiary";
-    const standardFragment = builder.buildStandardButtons();
-    standardFragment.childNodes.forEach((n) => tertiaryRow.appendChild(n));
-    actionsGrid.appendChild(tertiaryRow);
-    startOptionsSection.appendChild(actionsGrid);
-
-    const sabWarning = builder.buildSabWarning();
-    if (sabWarning) startOptionsSection.appendChild(sabWarning);
-
-    const authArea = builder.buildAuthArea();
-    const authSlot = document.querySelector("#splash-auth-in-footer");
-    if (authSlot) {
-      authSlot.innerHTML = "";
-      authSlot.appendChild(authArea);
-    } else {
-      authArea.style.marginTop = "1rem";
-      startOptionsSection.appendChild(authArea);
-    }
+    const state = await builder.buildSaveSlotList(canLoadGame);
+    builder.renderTo(startOptionsSection, state);
 
     startOptionsSection.classList.add("visible");
     setTimeout(() => startOptionsSection.classList.add("show"), 100);
@@ -247,39 +204,38 @@ class SplashScreenManager extends BaseComponent {
       logger.warn("GoogleDriveSave not initialized.");
       return;
     }
-    // Check if Google Drive is properly configured
     if (!window.googleDriveSave.isConfigured()) {
-      cloudButtonArea.innerHTML = "";
+      render(html``, cloudButtonArea);
       return;
     }
-    // If offline, show disabled button with tooltip and skip network calls
     if (!navigator.onLine) {
-      cloudButtonArea.innerHTML = "";
-      const signInBtn = createGoogleSignInButton(() => { });
-      if (signInBtn) {
-        signInBtn.disabled = true;
-        signInBtn.title = "Requires an internet connection";
-        cloudButtonArea.appendChild(signInBtn);
+      render(GoogleSignInButton(() => {}), cloudButtonArea);
+      const btn = cloudButtonArea.firstElementChild;
+      if (btn) {
+        btn.disabled = true;
+        btn.title = "Requires an internet connection";
       }
       return;
     }
-    // Show loading state while initializing
-    cloudButtonArea.innerHTML = "";
-    const loadingBtn = createLoadingButton("Checking ...");
-    loadingBtn.classList.add("splash-btn-google"); // Ensure margin is consistent
-    cloudButtonArea.appendChild(loadingBtn);
+    render(html`
+      <button class="splash-btn splash-btn-google" disabled>
+        <div class="loading-container">
+          <div class="loading-spinner"></div>
+          <span class="loading-text">Checking ...</span>
+        </div>
+      </button>
+    `, cloudButtonArea);
     try {
       const initialized = await window.googleDriveSave.init();
       if (!initialized) {
-        cloudButtonArea.innerHTML = "";
+        render(html``, cloudButtonArea);
         return;
       }
-      // Check auth status without triggering popup
       const isSignedIn = await window.googleDriveSave.checkAuth(true);
       await this.updateGoogleDriveUI(isSignedIn, cloudButtonArea);
     } catch (error) {
       logger.log('error', 'splash', 'Failed to setup Google Drive buttons:', error);
-      cloudButtonArea.innerHTML = "Google Drive Error";
+      render(html`<div>Google Drive Error</div>`, cloudButtonArea);
     }
   }
 

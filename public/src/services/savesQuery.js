@@ -136,7 +136,9 @@ async function fetchCloudSaveSlotsFn() {
   return rawCloudSaves.map((s) => {
     let data = {};
     try {
-      data = deserializeSave(s.save_data);
+      const deserialized = deserializeSave(s.save_data);
+      const parsed = SaveDataSchema.safeParse(deserialized);
+      if (parsed.success) data = parsed.data;
     } catch (_) {}
     return {
       slot: s.slot_id,

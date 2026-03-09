@@ -1,5 +1,6 @@
 import { fromError } from "zod-validation-error";
 import { toDecimal, toNumber } from "../utils/decimal.js";
+import { buildFacts } from "./game/gameEventRules.js";
 import { setDecimal, snapshot } from "./store.js";
 import { HEAT_EPSILON } from "./heatCalculations.js";
 import { GameLoopTickResultSchema } from "./schemas.js";
@@ -212,6 +213,8 @@ export function applyGameLoopTickResult(engine, data) {
   applyTileUpdates(ts, data.tileUpdates);
   if (Number(data.moneyEarned) > 0) game.addMoney(data.moneyEarned);
   reactor.checkMeltdown();
+  const facts = buildFacts(game, engine, data);
+  if (!facts.isSandbox && typeof game.eventRouter?.evaluate === "function") game.eventRouter.evaluate(facts, game);
   syncUIAfterTick(engine, data, reactor);
   syncSessionAfterTick(engine, data);
 }

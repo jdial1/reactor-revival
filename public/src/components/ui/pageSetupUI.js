@@ -48,7 +48,7 @@ export class PageSetupUI {
     };
 
     if (!ui.game) {
-      if (container) container.innerHTML = '<tr><td colspan="7" style="text-align: center;">Game not initialized</td></tr>';
+      if (container) render(html`<tr><td colspan="7" style="text-align: center;">Game not initialized</td></tr>`, container);
       return;
     }
 

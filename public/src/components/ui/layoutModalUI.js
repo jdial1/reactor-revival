@@ -1,5 +1,8 @@
+import { html, render } from "lit-html";
+import { styleMap } from "../../utils/litHelpers.js";
 import { numFormat as fmt } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
+import { BlueprintSchema } from "../../core/schemas.js";
 
 export class LayoutModalUI {
   constructor(ui) {
@@ -13,62 +16,71 @@ export class LayoutModalUI {
     if (!modal || !gridContainer) return;
 
     try {
-      const layout = JSON.parse(layoutJson);
-      const { size, parts } = layout;
+      const parsed = JSON.parse(layoutJson);
+      const validation = BlueprintSchema.safeParse(parsed);
+      if (!validation.success) {
+        logger.log('error', 'ui', 'Invalid blueprint format:', validation.error);
+        return;
+      }
+
+      const { size, parts } = validation.data;
       const rows = size.rows;
       const cols = size.cols;
 
-      gridContainer.innerHTML = '';
-      gridContainer.style.display = 'grid';
-      gridContainer.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
-      gridContainer.style.gridTemplateRows = `repeat(${rows}, 32px)`;
-      gridContainer.style.gap = '1px';
-      gridContainer.style.backgroundColor = '#222';
-      gridContainer.style.border = '2px solid #444';
-      gridContainer.style.padding = '2px';
+      const gridStyle = styleMap({
+        display: 'grid',
+        gridTemplateColumns: `repeat(${cols}, 32px)`,
+        gridTemplateRows: `repeat(${rows}, 32px)`,
+        gap: '1px',
+        backgroundColor: '#222',
+        border: '2px solid #444',
+        padding: '2px'
+      });
 
       const partMap = new Map();
       parts.forEach(p => partMap.set(`${p.r},${p.c}`, p));
 
+      const cells = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const cell = document.createElement('div');
-          cell.style.width = '32px';
-          cell.style.height = '32px';
-          cell.style.backgroundColor = '#333';
-          cell.style.border = '1px solid #111';
-          cell.style.boxSizing = 'border-box';
-          cell.title = `(${r}, ${c})`;
+          let cellContent = '';
+          const cellStyle = {
+            width: '32px',
+            height: '32px',
+            backgroundColor: '#333',
+            border: '1px solid #111',
+            boxSizing: 'border-box'
+          };
+          let title = `(${r}, ${c})`;
 
           const partData = partMap.get(`${r},${c}`);
           if (partData) {
             const partId = partData.id;
             const partDef = ui.game?.partset?.getPartById(partId);
-
             if (partDef) {
               const imgPath = partDef.getImagePath();
-              cell.style.backgroundImage = `url('${imgPath}')`;
-              cell.style.backgroundSize = 'contain';
-              cell.style.backgroundPosition = 'center';
-              cell.style.backgroundRepeat = 'no-repeat';
-              cell.title = `${partDef.title} (${r}, ${c})`;
-
+              cellStyle.backgroundImage = `url('${imgPath}')`;
+              cellStyle.backgroundSize = 'contain';
+              cellStyle.backgroundPosition = 'center';
+              cellStyle.backgroundRepeat = 'no-repeat';
+              title = `${partDef.title} (${r}, ${c})`;
               if (partDef.category === 'cell') {
-                cell.style.backgroundColor = '#2a2a2a';
+                cellStyle.backgroundColor = '#2a2a2a';
               }
             } else {
-              cell.textContent = '?';
-              cell.style.display = 'flex';
-              cell.style.alignItems = 'center';
-              cell.style.justifyContent = 'center';
-              cell.style.color = '#666';
-              cell.style.fontSize = '10px';
+              cellContent = '?';
+              cellStyle.display = 'flex';
+              cellStyle.alignItems = 'center';
+              cellStyle.justifyContent = 'center';
+              cellStyle.color = '#666';
+              cellStyle.fontSize = '10px';
             }
           }
-
-          gridContainer.appendChild(cell);
+          cells.push(html`<div style=${styleMap(cellStyle)} title=${title}>${cellContent}</div>`);
         }
       }
+
+      render(html`<div style=${gridStyle}>${cells}</div>`, gridContainer);
 
       const moneyEl = document.getElementById("layout_stats_money");
       const epEl = document.getElementById("layout_stats_ep");

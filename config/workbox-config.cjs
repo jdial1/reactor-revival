@@ -8,7 +8,6 @@ module.exports = {
     "data/**/*.json",
     "img/**/*.{png,svg,jpg,jpeg}",
     "pages/**/*.html",
-    "components/**/*.html",
     "lib/**/*.js",
     "src/**/*.js"
   ],

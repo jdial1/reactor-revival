@@ -1,3 +1,4 @@
+import { html, render } from "lit-html";
 import { StorageUtils } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 
@@ -37,29 +38,18 @@ export class PwaDisplayModeUI {
       const nextIndex = (currentIndex + 1) % displayModes.length;
       const nextMode = displayModes[nextIndex];
       setDisplayMode(nextMode);
-      const toast = document.createElement("div");
-      toast.style.cssText = `
-        position: fixed;
-        bottom: 80px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #2a2a2a;
-        border: 2px solid #4CAF50;
-        border-radius: 8px;
-        padding: 12px 20px;
-        z-index: 10000;
-        font-family: 'Minecraft', monospace;
-        font-size: 0.9em;
-        color: #fff;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        animation: toast-slide-up 0.3s ease-out;
-      `;
-      toast.textContent = `PWA Display Mode: ${modeLabels[nextMode]} - Reload to apply`;
-      document.body.appendChild(toast);
+      const toastContainer = document.createElement("div");
+      render(html`
+        <div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#2a2a2a;border:2px solid #4CAF50;border-radius:8px;padding:12px 20px;z-index:10000;font-family:'Press Start 2P',monospace;font-size:0.8rem;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.5);animation:toast-slide-up 0.3s ease-out;" id="pwa_toast_inner">
+          PWA Display Mode: ${modeLabels[nextMode]} - Reload to apply
+        </div>
+      `, toastContainer);
+      document.body.appendChild(toastContainer);
       setTimeout(() => {
-        if (document.body.contains(toast)) {
-          toast.style.animation = "toast-slide-up 0.3s ease-out reverse";
-          setTimeout(() => toast.remove(), 300);
+        if (document.body.contains(toastContainer)) {
+          const inner = toastContainer.querySelector("#pwa_toast_inner");
+          if (inner) inner.style.animation = "toast-slide-up 0.3s ease-out reverse";
+          setTimeout(() => toastContainer.remove(), 300);
         }
       }, 3000);
     };

@@ -1,4 +1,5 @@
 import { toDecimal } from "../../utils/decimal.js";
+import { buildFacts } from "../game/gameEventRules.js";
 import { setDecimal, updateDecimal } from "../store.js";
 import { logger } from "../../utils/logger.js";
 import {
@@ -226,6 +227,9 @@ function finalizeTick(engine) {
     engine.game.performance.markEnd("tick_total");
   }
   emitTickCompleteEvent(engine, engine.game.reactor);
+  const game = engine.game;
+  const facts = buildFacts(game, engine);
+  if (!facts.isSandbox && typeof game.eventRouter?.evaluate === "function") game.eventRouter.evaluate(facts, game);
   engine.tick_count++;
 }
 

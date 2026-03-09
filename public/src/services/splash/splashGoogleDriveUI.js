@@ -1,4 +1,5 @@
-import { createLoadFromCloudButton, createGoogleSignInButton } from "../../components/buttonFactory.js";
+import { html, render } from "lit-html";
+import { LoadFromCloudButton, GoogleSignInButton } from "../../components/buttonFactory.js";
 import { showCloudVsLocalConflictModal } from "../saveModals.js";
 import { logger } from "../../utils/logger.js";
 import { MODAL_IDS } from "../../components/ModalManager.js";
@@ -71,16 +72,14 @@ async function renderSignedInCloudUI(cloudButtonArea) {
     await window.googleDriveSave.findSaveFile();
     const fileId = window.googleDriveSave.saveFileId;
     if (fileId) {
-      const cloudBtn = createLoadFromCloudButton(handleCloudLoadClick);
-      applyOfflineStateToButton(cloudBtn);
-      cloudButtonArea.appendChild(cloudBtn);
+      render(LoadFromCloudButton(handleCloudLoadClick), cloudButtonArea);
+      const btn = cloudButtonArea.firstElementChild;
+      if (btn) applyOfflineStateToButton(btn);
     } else {
-      const info = document.createElement("div");
-      info.textContent = "No cloud save found.";
-      cloudButtonArea.appendChild(info);
+      render(html`<div>No cloud save found.</div>`, cloudButtonArea);
     }
   } catch (_) {
-    cloudButtonArea.innerHTML = "Cloud check failed.";
+    render(html`<div>Cloud check failed.</div>`, cloudButtonArea);
   }
 }
 
@@ -102,18 +101,20 @@ async function handleSignInClick(manager, cloudButtonArea) {
 }
 
 function renderSignedOutSignInUI(manager, cloudButtonArea) {
-  const signInBtn = createGoogleSignInButton(async () => {
-    signInBtn.disabled = true;
-    const span = signInBtn.querySelector("span");
+  const onClick = async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const span = btn.querySelector("span");
     if (span) span.textContent = "Signing in...";
     await handleSignInClick(manager, cloudButtonArea);
-  });
-  applyOfflineStateToButton(signInBtn);
-  cloudButtonArea.appendChild(signInBtn);
+  };
+  render(GoogleSignInButton(onClick), cloudButtonArea);
+  const btn = cloudButtonArea.firstElementChild;
+  if (btn) applyOfflineStateToButton(btn);
 }
 
 export async function updateSplashGoogleDriveUI(manager, isSignedIn, cloudButtonArea) {
-  cloudButtonArea.innerHTML = "";
+  render(html``, cloudButtonArea);
   if (isSignedIn) {
     await renderSignedInCloudUI(cloudButtonArea);
   } else {
