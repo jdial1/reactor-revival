@@ -24,6 +24,7 @@
     "check-pwa-root-files": "node scripts/check-pwa-root-files.js",
     "remove-console-logs": "node scripts/remove-console-logs.js",
     "compress-images": "node scripts/compress-images.js",
+    "generate-bg-count": "node scripts/generate-bg-count.js",
     "postinstall": "npm run copy-libs",
     "server": "node api/server.js"
   },

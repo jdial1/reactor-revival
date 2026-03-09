@@ -1,5 +1,6 @@
 import { html, render } from "lit-html";
 import { classMap } from "lit-html/directives/class-map.js";
+import { preferences } from "../core/preferencesStore.js";
 
 export class AppRoot {
   constructor(container, game, ui) {
@@ -23,9 +24,20 @@ export class AppRoot {
   renderSplash(hasSession) {
     if (hasSession) return null;
 
+    const isMuted = !!preferences.mute;
+    const handleMuteClick = (e) => {
+      e.stopPropagation();
+      preferences.mute = !preferences.mute;
+      this.game?.audio?.toggleMute(preferences.mute);
+      const icon = e.currentTarget.querySelector(".splash-mute-icon");
+      if (icon) icon.textContent = preferences.mute ? "🔇" : "🔊";
+    };
     return html`
       <div id="splash-container">
         <main id="splash-screen">
+          <button type="button" class="splash-mute-btn" title=${isMuted ? "Unmute" : "Mute"} aria-label=${isMuted ? "Unmute" : "Mute"} @click=${handleMuteClick}>
+            <span class="splash-mute-icon">${isMuted ? "🔇" : "🔊"}</span>
+          </button>
           <div class="splash-loading">
             <div class="splash-spinner hidden splash-element-hidden"></div>
             <p id="splash-status" class="hidden splash-element-hidden">Ready!</p>
@@ -34,6 +46,11 @@ export class AppRoot {
             <div class="splash-menu-inner">
             <header class="splash-panel-header">
               <h1 class="splash-title">REACTOR REVIVAL</h1>
+              <button type="button" class="splash-menu-hide-btn" title="Hide menu" aria-label="Hide menu" @click=${(e) => {
+                e.stopPropagation();
+                const panel = e.currentTarget.closest(".splash-menu-panel");
+                if (panel) panel.classList.add("splash-menu-fade-full");
+              }}>−</button>
             </header>
             <div id="splash-start-options" class="splash-start-options"></div>
             <footer class="splash-panel-footer">

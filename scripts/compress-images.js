@@ -50,6 +50,8 @@ async function run() {
     const totalPct = totalBefore > 0 ? Math.round((1 - totalAfter / totalBefore) * 100) : 0;
     console.log(`${path.basename(dir)}: ${(totalBefore / 1024 / 1024).toFixed(2)} MB → ${(totalAfter / 1024 / 1024).toFixed(2)} MB (${totalPct}% total)`);
   }
+  const { execSync } = await import("child_process");
+  execSync("node scripts/generate-bg-count.js", { cwd: root });
 }
 
 run().catch((e) => {
