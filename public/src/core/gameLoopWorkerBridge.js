@@ -46,12 +46,20 @@ function ensureSABsReady(engine, game, gridLen) {
 }
 
 function partToRow(part) {
+  const power = (typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power))
+    ? part.power
+    : (part.base_power ?? 0);
+  const heat = (typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat))
+    ? part.heat
+    : (part.base_heat ?? 0);
   return {
     id: part.id,
     containment: part.containment ?? 0,
     vent: part.vent ?? 0,
-    power: part.power ?? 0,
-    heat: part.heat ?? 0,
+    power,
+    heat,
+    base_power: part.base_power ?? 0,
+    base_heat: part.base_heat ?? 0,
     category: part.category ?? "",
     ticks: part.ticks ?? 0,
     type: part.type ?? "",
@@ -80,6 +88,12 @@ function buildPartLayout(ts, partIdToIndex) {
     const part = tile.part;
     const transferRate = typeof tile.getEffectiveTransferValue === "function" ? tile.getEffectiveTransferValue() : 0;
     const ventRate = typeof tile.getEffectiveVentValue === "function" ? tile.getEffectiveVentValue() : 0;
+    const partPower = (typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)) ? part.power : (part.base_power ?? 0);
+    const partHeat = (typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat)) ? part.heat : (part.base_heat ?? 0);
+    const rawPower = (typeof tile.power === "number" && !isNaN(tile.power) && isFinite(tile.power)) ? tile.power : partPower;
+    const rawHeat = (typeof tile.heat === "number" && !isNaN(tile.heat) && isFinite(tile.heat)) ? tile.heat : partHeat;
+    const tilePower = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawPower === 0) ? partPower : rawPower;
+    const tileHeat = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawHeat === 0) ? partHeat : rawHeat;
     return {
       r: tile.row,
       c: tile.col,
@@ -88,6 +102,8 @@ function buildPartLayout(ts, partIdToIndex) {
       activated: !!tile.activated,
       transferRate,
       ventRate,
+      power: tilePower,
+      heat: tileHeat,
     };
   });
 }
@@ -155,10 +171,17 @@ function applyExplosionIndices(engine, ts, indices, maxCols) {
 
 function applyDepletionIndices(engine, ts, indices, maxCols) {
   if (!Array.isArray(indices)) return;
+  const game = engine.game;
   indices.forEach((rawIdx) => {
     const idx = rawIdx | 0;
     const tile = ts.getTile((idx / maxCols) | 0, idx % maxCols);
-    if (tile?.part) engine.handleComponentDepletion(tile);
+    if (!tile?.part) return;
+    const part = tile.part;
+    if (part.type === "protium") {
+      game.protium_particles += part.cell_count ?? 0;
+      game.update_cell_power();
+    }
+    engine.handleComponentDepletion(tile);
   });
 }
 
@@ -179,6 +202,11 @@ function syncUIAfterTick(engine, data, reactor) {
     game.state.heat_delta_per_tick = (data.heatDelta ?? 0) / norm;
     setDecimal(game.state, "current_power", reactor.current_power);
     setDecimal(game.state, "current_heat", reactor.current_heat);
+    logger.log("debug", "engine", "[GameLoopWorker] syncUIAfterTick state updated:", {
+      current_power: reactor.current_power?.toNumber?.() ?? reactor.current_power,
+      power_delta_per_tick: game.state.power_delta_per_tick,
+      tickCount: data.tickCount
+    });
   }
   game?.emit?.("tickRecorded");
   reactor.updateStats();
@@ -206,8 +234,20 @@ export function applyGameLoopTickResult(engine, data) {
   const ts = game.tileset;
   const maxCols = ts?.max_cols ?? game.gridManager.cols;
   const rawHeat = data.reactorHeat ?? 0;
+  const rawPower = data.reactorPower ?? 0;
+  logger.log("debug", "engine", "[GameLoopWorker] applyGameLoopTickResult received:", {
+    reactorPower: rawPower,
+    reactorHeat: rawHeat,
+    powerDelta: data.powerDelta,
+    tickCount: data.tickCount,
+    tickId: data.tickId
+  });
   reactor.current_heat = toDecimal(rawHeat < HEAT_EPSILON ? 0 : rawHeat);
-  reactor.current_power = toDecimal(data.reactorPower ?? 0);
+  reactor.current_power = toDecimal(rawPower);
+  logger.log("debug", "engine", "[GameLoopWorker] reactor state after apply:", {
+    current_power: reactor.current_power?.toNumber?.() ?? reactor.current_power,
+    game_state_current_power: game.state?.current_power?.toNumber?.() ?? game.state?.current_power
+  });
   applyExplosionIndices(engine, ts, data.explosionIndices, maxCols);
   applyDepletionIndices(engine, ts, data.depletionIndices, maxCols);
   applyTileUpdates(ts, data.tileUpdates);

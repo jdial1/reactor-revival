@@ -16,7 +16,6 @@ import { registerServiceWorkerUpdateListener } from "./app/updateToast.js";
 import { startGame } from "./app/gameStart.js";
 import { setupGlobalListeners } from "./app/globalListeners.js";
 import { GameBootstrapper } from "./app/GameBootstrapper.js";
-import { settingsModal } from "./components/settingsModal.js";
 import { initPreferencesStore } from "./core/preferencesStore.js";
 import { initCloudSyncQueue } from "./services/saveMutations.js";
 
@@ -221,7 +220,6 @@ async function main() {
   initCloudSyncQueue();
   const ctx = { game, pageRouter, ui, googleDriveSave, supabaseAuth };
   if (window.splashManager) window.splashManager.setAppContext(ctx);
-  settingsModal.setAppContext(ctx);
   const bootstrapper = new GameBootstrapper({ game, ui, pageRouter, splashManager: window.splashManager, appRoot });
   await bootstrapper.bootstrap();
   await handleUserSession(ctx);

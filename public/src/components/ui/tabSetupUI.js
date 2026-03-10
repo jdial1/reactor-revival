@@ -1,4 +1,3 @@
-import { settingsModal } from "../settingsModal.js";
 import { MOBILE_BREAKPOINT_PX } from "../../core/constants.js";
 import { MODAL_IDS } from "../ModalManager.js";
 import { BaseComponent } from "../BaseComponent.js";
@@ -26,7 +25,7 @@ export class TabSetupUI extends BaseComponent {
     if (buildBtn) {
       buildBtn.addEventListener("click", () => {
         this.ui.deviceFeatures.lightVibration();
-        const partsSection = this.ui.DOMElements.parts_section;
+        const partsSection = this.ui.registry?.get?.("PartsPanel")?.getPartsSection?.() ?? this.ui.DOMElements?.parts_section;
         if (partsSection) {
           const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
           const hasSelectedPart = this.ui.stateManager.getClickedPart() !== null;
@@ -108,7 +107,7 @@ export class TabSetupUI extends BaseComponent {
     if (menuBtn) {
       menuBtn.addEventListener("click", () => {
         this.ui.deviceFeatures.lightVibration();
-        if (settingsModal.isVisible) {
+        if (this.ui.modalOrchestrator.isModalVisible(MODAL_IDS.SETTINGS)) {
           this.ui.modalOrchestrator.hideModal(MODAL_IDS.SETTINGS);
         } else {
           const bottomNav = document.getElementById("bottom_nav");

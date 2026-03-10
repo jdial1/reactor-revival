@@ -1,6 +1,7 @@
 import { html, render } from "lit-html";
 import { runCheckAffordability } from "../../../core/upgradeset/affordabilityChecker.js";
 import { UpgradeCard } from "../../buttonFactory.js";
+import { ReactiveLitComponent } from "../../ReactiveLitComponent.js";
 
 const EXPAND_UPGRADE_IDS = ["expand_reactor_rows", "expand_reactor_cols"];
 
@@ -54,6 +55,8 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
   });
 
   const doctrineSource = (id) => upgradeset.game?.upgradeset?.getDoctrineForUpgrade(id);
+  const state = upgradeset.game?.state;
+  const useReactiveLevelAndCost = !!state?.upgrade_display;
 
   byContainer.forEach((upgrades, containerId) => {
     const container = document.getElementById(containerId);
@@ -81,7 +84,7 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
         e.stopPropagation();
         if (upgradeset.game?.isSandbox) upgradeset.resetUpgradeLevel(upgrade.id);
       };
-      return UpgradeCard(upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick });
+      return UpgradeCard(upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick, useReactiveLevelAndCost });
     });
     try {
       render(html`${cards}`, container);
@@ -92,12 +95,47 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
     }
   });
 
+  const game = upgradeset.game;
   filtered.forEach((upgrade) => {
     const container = document.getElementById(getUpgradeContainerId(upgrade));
     if (!container?.isConnected) return;
     upgrade.$el = container?.querySelector(`[data-id="${upgrade.id}"]`);
-    if (upgrade.$el) upgrade.updateDisplayCost();
+    if (upgrade.$el) {
+      upgrade.updateDisplayCost();
+      const display = state?.upgrade_display;
+      if (display) {
+        if (!display[upgrade.id]) display[upgrade.id] = { level: upgrade.level, display_cost: upgrade.display_cost };
+        const levelContainer = upgrade.$el.querySelector(".upgrade-level-info");
+        const costContainer = upgrade.$el.querySelector(".cost-display");
+        if (levelContainer) {
+          levelContainer.replaceChildren();
+          const levelRenderFn = () => {
+            const d = display[upgrade.id] ?? upgrade;
+            const lvl = d.level ?? upgrade.level;
+            const header = lvl >= upgrade.max_level ? "MAX" : `Level ${lvl}/${upgrade.max_level}`;
+            return html`<span class="level-text">${header}</span>`;
+          };
+          ReactiveLitComponent.mountMulti(
+            [{ state: display, keys: [upgrade.id] }],
+            levelRenderFn,
+            levelContainer
+          );
+        }
+        if (costContainer) {
+          costContainer.replaceChildren();
+          const costRenderFn = () => {
+            const d = display[upgrade.id] ?? upgrade;
+            return html`${d.display_cost ?? upgrade.display_cost}`;
+          };
+          ReactiveLitComponent.mountMulti(
+            [{ state: display, keys: [upgrade.id] }],
+            costRenderFn,
+            costContainer
+          );
+        }
+      }
+    }
   });
 
-  if (upgradeset.game) runCheckAffordability(upgradeset, upgradeset.game);
+  if (game) runCheckAffordability(upgradeset, game);
 }

@@ -10,13 +10,14 @@ export class ObjectiveController {
     this._objectivesUnmount = null;
   }
 
+  _handleClaimClick(event) {
+    event.stopPropagation();
+    this.api.getGame()?.objectives_manager?.claimObjective?.();
+  }
+
   _handleToastClick(event) {
+    if (event.target?.closest?.(".objectives-claim-pill")) return;
     const toastBtn = event.currentTarget;
-    const claimPill = event.target.closest(".objectives-claim-pill");
-    if (claimPill && toastBtn.classList.contains("is-complete")) {
-      this.api.getGame()?.objectives_manager?.claimObjective?.();
-      return;
-    }
     const uiState = this.api.getUI()?.uiState;
     if (uiState) {
       uiState.objectives_toast_expanded = !uiState.objectives_toast_expanded;
@@ -94,21 +95,23 @@ export class ObjectiveController {
     });
     const progressStyle = styleMap({ width: state.hasProgressBar ? `${state.progressPercent}%` : "0%" });
     return html`
-      <button
+      <div
         id="objectives_toast_btn"
         class=${btnClass}
+        role="button"
+        tabindex="0"
         aria-label="Show Objectives"
         aria-expanded=${state.isExpanded ? "true" : "false"}
-        type="button"
         @click=${this._onToastClick}
+        @keydown=${(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this._handleToastClick(e); } }}
       >
         <span class="objectives-toast-row">
           <span class="objectives-toast-icon">${state.isComplete ? "!" : "?"}</span>
           <span class="objectives-toast-title" id="objectives_toast_title">${state.title}</span>
-          <span class="objectives-claim-pill">${state.claimText}</span>
+          <button type="button" class="objectives-claim-pill" ?disabled=${!state.isComplete} @click=${(e) => this._handleClaimClick(e)}>${state.claimText}</button>
         </span>
         <span class="objectives-toast-progress" aria-hidden="true"><span class="objectives-toast-progress-fill" style=${progressStyle}></span></span>
-      </button>
+      </div>
     `;
   }
 

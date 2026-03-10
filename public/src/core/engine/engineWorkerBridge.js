@@ -11,18 +11,27 @@ function onGameLoopWorkerMessage(engine, e) {
   engine._gameLoopWorkerPending = false;
   const ctx = engine._gameLoopTickContext;
   engine._gameLoopTickContext = null;
-  if (data.error) return;
-  if (!ctx || data.tickId !== ctx.tickId) return;
+  if (data.error) {
+    logger.log("warn", "engine", "[GameLoopWorker] received error result:", data.message);
+    return;
+  }
+  if (!ctx || data.tickId !== ctx.tickId) {
+    logger.log("debug", "engine", "[GameLoopWorker] tickId mismatch or no context, skipping:", { received: data.tickId, expected: ctx?.tickId });
+    return;
+  }
+  logger.log("debug", "engine", "[GameLoopWorker] applying tickResult:", { tickId: data.tickId, reactorPower: data.reactorPower });
   applyGameLoopTickResult(engine, data);
 }
 
 function validateWorkerResponse(engine, data) {
   const useSAB = data?.useSAB === true;
   if (!useSAB && !data?.heatBuffer) {
+    logger.log("debug", "engine", "[PhysicsWorker] validateWorkerResponse rejected: no useSAB and no heatBuffer");
     engine._workerPending = false;
     return null;
   }
   if (!engine.game?.tileset) {
+    logger.log("debug", "engine", "[PhysicsWorker] validateWorkerResponse rejected: no tileset");
     engine._workerPending = false;
     return null;
   }
@@ -30,7 +39,10 @@ function validateWorkerResponse(engine, data) {
   const ctx = engine._workerTickContext;
   engine._workerPending = false;
   engine._workerTickContext = null;
-  if (!ctx || data.tickId !== ctx.tickId) return null;
+  if (!ctx || data.tickId !== ctx.tickId) {
+    logger.log("debug", "engine", "[PhysicsWorker] validateWorkerResponse rejected: tickId mismatch", { received: data.tickId, expected: ctx?.tickId });
+    return null;
+  }
   return { ctx, useSAB };
 }
 
@@ -64,6 +76,7 @@ function handlePhysicsWorkerMessage(engine, data) {
   }
   data = parseResult.data;
   const { ctx, useSAB } = result;
+  logger.log("debug", "engine", "[PhysicsWorker] received valid response, applying power:", { power_add: ctx.power_add, tickId: data.tickId });
   if (!useSAB) applyTransferredBuffers(engine, data);
   const rawHeat = data.reactorHeat ?? engine.game.reactor.current_heat.toNumber();
   engine.game.reactor.current_heat = toDecimal(rawHeat < HEAT_EPSILON ? 0 : rawHeat);

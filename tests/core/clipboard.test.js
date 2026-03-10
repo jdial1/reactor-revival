@@ -11,7 +11,8 @@ describe('Clipboard Functionality', () => {
         game = setup.game;
         ui = game.ui;
 
-        // Add the modal elements to the DOM
+        const existingModal = document.getElementById('reactor_copy_paste_modal');
+        if (existingModal) existingModal.remove();
         const modalHtml = `
       <div id="reactor_copy_paste_modal" class="hidden">
         <div id="reactor_copy_paste_modal_title"></div>

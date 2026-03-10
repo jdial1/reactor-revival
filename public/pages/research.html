@@ -3,9 +3,6 @@
     <h2 class="research-section-header" role="button" tabindex="0" aria-expanded="false">Doctrine &amp; Tech Tree</h2>
     <div class="research-section-body">
       <div id="doctrine_tree_viewer_content"></div>
-      <div class="doctrine-respec-row">
-        <button id="respec_doctrine_btn" class="pixel-btn nav-btn" type="button" title="Reset doctrine and that path&#39;s upgrades; costs Exotic Particles">Respec doctrine</button>
-      </div>
     </div>
   </article>
   <div id="research_no_affordable_banner" class="affordability-banner hidden">
@@ -36,33 +33,16 @@
           <button id="reboot_btn" class="pixel-btn nav-btn" type="button" title="Full Refund: Reset everything including EP">Refund</button>
           <button id="refund_btn" class="pixel-btn nav-btn" type="button" title="Prestige: Keep EP and Research">Prestige</button>
         </div>
-        <div id="reboot_exotic_particles" class="hidden" aria-hidden="true"></div>
-        <div id="refund_exotic_particles" class="hidden" aria-hidden="true"></div>
       </div>
     </article>
 
-    <div id="prestige_modal" class="prestige-modal-overlay hidden" aria-modal="true" aria-labelledby="prestige_modal_title" role="dialog">
-      <div class="prestige-modal pixel-panel">
-        <h2 id="prestige_modal_title">Prestige</h2>
-        <div id="prestige_modal_body">
-          <div id="prestige_carried_over"></div>
-          <div id="prestige_multiplier_line"></div>
-        </div>
-        <div class="prestige-modal-actions">
-          <button id="prestige_modal_cancel" class="pixel-btn nav-btn" type="button">Cancel</button>
-          <button id="prestige_modal_confirm_refund" class="pixel-btn nav-btn" type="button">Confirm Refund</button>
-          <button id="prestige_modal_confirm_prestige" class="pixel-btn nav-btn btn-start" type="button">Confirm Prestige</button>
-        </div>
-      </div>
-    </div>
-    
     <article>
-        <h2>Laboratory</h2>
+        <h2 data-section-name="Laboratory">Laboratory</h2>
         <div id="experimental_laboratory" class="upgrade-group"></div>
     </article>
 
     <article>
-        <h2>Global Boosts</h2>
+        <h2 data-section-name="Global Boosts">Global Boosts</h2>
         <div id="experimental_boost" class="upgrade-group"></div>
     </article>
 
@@ -74,7 +54,7 @@
     </article>
 
     <article>
-        <h2>Particle Accelerators</h2>
+        <h2 data-section-name="Particle Accelerators">Particle Accelerators</h2>
         <div id="experimental_particle_accelerators" class="upgrade-group"></div>
     </article>
   </div>

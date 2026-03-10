@@ -5,6 +5,8 @@ import { formatTime } from "../../utils/formatUtils.js";
 import { logger } from "../../utils/logger.js";
 import { leaderboardService } from "../../services/leaderboardService.js";
 import { MOBILE_BREAKPOINT_PX } from "../../core/constants.js";
+import { MODAL_IDS } from "../ModalManager.js";
+import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
 
 export class PageSetupUI {
   constructor(ui) {
@@ -17,15 +19,6 @@ export class PageSetupUI {
     const ui = this.ui;
     const container = document.getElementById("leaderboard_rows");
     const sortButtons = document.querySelectorAll(".leaderboard-sort");
-    const modal = document.getElementById("layout_view_modal");
-    const closeBtn = document.getElementById("layout_view_close_btn");
-
-    if (closeBtn) {
-      closeBtn.onclick = () => {
-        modal.classList.add("hidden");
-        modal.style.display = 'none';
-      };
-    }
 
     const showColumn = (sortBy) => {
       const table = container?.closest('.leaderboard-table');
@@ -77,11 +70,14 @@ export class PageSetupUI {
       const hasLayout = !!run.layout;
       const onView = () => {
         if (run.layout) {
-          ui.layoutModalUI.showLayoutModal(run.layout, {
-            money: run.money || 0,
-            ep: run.exotic_particles || 0,
-            heat: run.heat || 0,
-            power: run.power || 0
+          ui.modalOrchestrator.showModal(MODAL_IDS.LAYOUT_VIEW, {
+            layoutJson: run.layout,
+            stats: {
+              money: run.money || 0,
+              ep: run.exotic_particles || 0,
+              heat: run.heat || 0,
+              power: run.power || 0,
+            },
           });
         }
       };
@@ -131,6 +127,34 @@ export class PageSetupUI {
     return loadRecords(initialSort);
   }
 
+  setupAffordabilityBanners(bannerId) {
+    const ui = this.ui;
+    if (!ui?.uiState) return;
+    const flag = bannerId === "upgrades_no_affordable_banner" ? "_affordabilityBannerMountedUpgrades" : "_affordabilityBannerMountedResearch";
+    if (ui[flag]) return;
+    const container = document.getElementById(bannerId);
+    if (!container?.isConnected) return;
+    ui[flag] = true;
+    const isUpgrades = bannerId === "upgrades_no_affordable_banner";
+    const key = isUpgrades ? "upgradesHidden" : "researchHidden";
+    const message = isUpgrades ? "No affordable upgrades available" : "No affordable research available";
+    const unmount = ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["upgrades_banner_visibility"] }],
+      () => {
+        const visibility = ui.uiState?.upgrades_banner_visibility ?? { upgradesHidden: true, researchHidden: true };
+        const hidden = visibility[key];
+        return html`
+          <div class="affordability-banner ${hidden ? "hidden" : ""}">
+            <article>${message}</article>
+          </div>
+        `;
+      },
+      container
+    );
+    if (ui._affordabilityBannerUnmounts) ui._affordabilityBannerUnmounts.push(unmount);
+    else ui._affordabilityBannerUnmounts = [unmount];
+  }
+
   setupSoundboardPage() {
     const ui = this.ui;
     if (!ui.game?.audio) return;
@@ -139,14 +163,19 @@ export class PageSetupUI {
 
     const warningSlider = ui.DOMElements.sound_warning_intensity || document.getElementById("sound_warning_intensity");
     const warningValue = ui.DOMElements.sound_warning_value || document.getElementById("sound_warning_value");
-
-    const updateWarningValue = () => {
-      if (warningSlider && warningValue) warningValue.textContent = `${warningSlider.value}%`;
-    };
-
-    if (warningSlider) {
-      warningSlider.oninput = updateWarningValue;
-      updateWarningValue();
+    if (warningSlider && ui.uiState) {
+      const initial = Number(warningSlider.value) || 50;
+      ui.uiState.sound_warning_value = initial;
+      warningSlider.oninput = () => {
+        if (ui.uiState) ui.uiState.sound_warning_value = Number(warningSlider.value) || 50;
+      };
+    }
+    if (warningValue && ui.uiState) {
+      ReactiveLitComponent.mountMulti(
+        [{ state: ui.uiState, keys: ["sound_warning_value"] }],
+        () => html`${ui.uiState?.sound_warning_value ?? 50}%`,
+        warningValue
+      );
     }
 
     const playSound = (button) => {

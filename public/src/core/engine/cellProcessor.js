@@ -78,11 +78,18 @@ export function processCells(engine, multiplier) {
       logger.log("debug", "engine", `Cell at (${tile.row},${tile.col}) missing base_ticks; part.ticks=${tile.part.ticks}`);
     }
 
-    power_add += tile.power * multiplier;
+    const p = tile.part;
+    const tilePower = (typeof tile.power === "number" && !isNaN(tile.power) && isFinite(tile.power))
+      ? tile.power
+      : (typeof p?.power === "number" && !isNaN(p.power) && isFinite(p.power) ? p.power : p?.base_power ?? 0);
+    power_add += tilePower * multiplier;
 
     emitCellVisualEvents(engine, tile, multiplier);
 
-    const generatedHeat = tile.heat * multiplier;
+    const tileHeat = (typeof tile.heat === "number" && !isNaN(tile.heat) && isFinite(tile.heat))
+      ? tile.heat
+      : (typeof p?.heat === "number" && !isNaN(p.heat) && isFinite(p.heat) ? p.heat : p?.base_heat ?? 0);
+    const generatedHeat = tileHeat * multiplier;
     const neighbors = tile.containmentNeighborTiles;
     const validCount = countValidContainmentNeighbors(neighbors);
 

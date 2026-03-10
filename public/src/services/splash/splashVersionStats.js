@@ -1,6 +1,8 @@
 import { getResourceUrl } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 import { VersionSchema } from "../../core/schemas.js";
+import { ReactiveLitComponent } from "../../components/ReactiveLitComponent.js";
+import { html } from "lit-html";
 
 async function fetchVersionFromUrl(url) {
   const response = await fetch(url);
@@ -68,12 +70,29 @@ export async function fetchVersionForSplash(versionChecker) {
   }
 }
 
-export function addSplashStats(splashScreen, version, versionChecker) {
+export function mountSplashUserCountReactive(splashScreen, ui) {
+  const userCountEl = splashScreen?.querySelector("#user-count-text");
+  if (!userCountEl || !ui?.uiState) return;
+  ReactiveLitComponent.mountMulti(
+    [{ state: ui.uiState, keys: ["user_count"] }],
+    () => html`${ui.uiState?.user_count ?? 0}`,
+    userCountEl
+  );
+}
+
+export function addSplashStats(splashScreen, version, versionChecker, ui) {
   const versionText = splashScreen.querySelector("#splash-version-text");
-  if (versionText) {
+  if (!versionText) return;
+  versionText.title = "Click to check for updates";
+  versionText.style.cursor = "pointer";
+  versionText.onclick = () => versionChecker.triggerVersionCheckToast();
+  if (ui?.uiState) {
+    ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["version"] }],
+      () => html`v.${ui.uiState?.version ?? ""}`,
+      versionText
+    );
+  } else {
     versionText.textContent = `v.${version}`;
-    versionText.title = "Click to check for updates";
-    versionText.style.cursor = "pointer";
-    versionText.onclick = () => versionChecker.triggerVersionCheckToast();
   }
 }

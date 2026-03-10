@@ -4,13 +4,13 @@ import { numFormat as fmt } from "../../utils/util.js";
 import { toNumber } from "../../utils/decimal.js";
 import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
 import { MOBILE_BREAKPOINT_PX } from "../../core/constants.js";
-import { logger } from "../../utils/logger.js";
 
 const VENTING_ANIM_MS = 400;
 
 export class InfoBarUI {
   constructor(ui) {
     this.ui = ui;
+    this.ui.registry.register('InfoBar', this);
     this._unmount = null;
     this._infoBarAbortController = null;
   }
@@ -25,7 +25,7 @@ export class InfoBarUI {
 
     const subscriptions = [{
       state: this.ui.game.state,
-      keys: ["current_power", "max_power", "current_heat", "max_heat", "current_money", "current_exotic_particles", "active_buffs"],
+      keys: ["current_power", "max_power", "current_heat", "max_heat", "current_money", "current_exotic_particles", "active_buffs", "melting_down"],
     }];
     this._unmount = ReactiveLitComponent.mountMulti(subscriptions, () => this._infoBarTemplate(this.ui.game.state), root);
 
@@ -93,8 +93,11 @@ export class InfoBarUI {
     const powerPct = Math.min(100, Math.max(0, (power / maxP) * 100));
     const heatPct = Math.min(100, Math.max(0, (heat / maxH) * 100));
 
-    const powerClass = classMap({ "info-item": true, power: true, full: powerPct >= 100 });
-    const heatClass = classMap({ "info-item": true, heat: true, full: heatPct >= 100 });
+    const meltdown = !!state.melting_down;
+    const powerClass = classMap({ "info-item": true, power: true, full: powerPct >= 100, meltdown });
+    const heatClass = classMap({ "info-item": true, heat: true, full: heatPct >= 100, meltdown });
+    const moneyDisplay = meltdown ? "☢️" : `$${fmt(state.current_money, 2)}`;
+    const moneyDisplayMobile = meltdown ? "☢️" : fmt(state.current_money, 0);
 
     const onSell = (e) => this._handleSellPower(e.currentTarget);
     const onVent = (e) => this._handleHeat(e.currentTarget);
@@ -119,7 +122,7 @@ export class InfoBarUI {
         </button>
         <span class="info-item money">
           <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
-          <span class="value" id="info_money_desktop">$${fmt(state.current_money, 2)}</span>
+          <span class="value" id="info_money_desktop">${moneyDisplay}</span>
         </span>
         <span class="info-item ep" id="info_ep_desktop">
           <span class="ep-content" style=${epContentStyle}>
@@ -142,7 +145,7 @@ export class InfoBarUI {
           </button>
           <span class="info-item money">
             <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
-            <span class="value" id="info_money">${fmt(state.current_money, 0)}</span>
+            <span class="value" id="info_money">${moneyDisplayMobile}</span>
           </span>
           <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${styleMap({ "--fill-height": `${heatPct}%` })} @click=${onVentMobile}>
             <img src="img/ui/icons/icon_heat.png" class="icon" alt="Heat" />
@@ -166,27 +169,4 @@ export class InfoBarUI {
     `;
   }
 
-  updatePowerDenom() {}
-  updateHeatDenom() {}
-  updateInfoBarFillIndicator() {}
-  updateActiveBuffs() {}
-  updateRollingNumbers() {}
-
-  updateTimeFluxButton(count) {
-    const ui = this.ui;
-    const btn = ui.DOMElements?.time_flux_toggle;
-    if (!btn) return;
-    const label = btn.querySelector(".control-text");
-    if (label) {
-      const previousText = label.textContent;
-      const previousHasQueue = btn.classList.contains("has-queue");
-      const hasQueue = count > 1;
-      label.textContent = hasQueue ? `Time Flux (${count})` : `Time Flux`;
-      btn.classList.toggle("has-queue", hasQueue);
-      const hasQueueChanged = previousHasQueue !== btn.classList.contains("has-queue");
-      if (ui.game && (previousText !== label.textContent || hasQueueChanged)) {
-        logger.log("debug", "ui", `[TIME FLUX UI] Button state: "${label.textContent}", Queued ticks: ${count}, Time Flux: ${ui.game.time_flux ? "ON" : "OFF"}, Has queue class: ${btn.classList.contains("has-queue")}`);
-      }
-    }
-  }
 }

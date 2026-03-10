@@ -1,3 +1,4 @@
+export { render } from "lit-html";
 export { classMap } from "lit-html/directives/class-map.js";
 export { styleMap } from "lit-html/directives/style-map.js";
 export { repeat } from "lit-html/directives/repeat.js";

@@ -61,15 +61,10 @@ export class DeviceFeaturesUI {
   }
 
   updateFullscreenButtonState() {
-    const fullscreenButton = this.ui.DOMElements?.fullscreen_toggle;
-    if (!fullscreenButton) return;
-    if (document.fullscreenElement) {
-      fullscreenButton.textContent = "⛶";
-      fullscreenButton.title = "Exit Fullscreen";
-    } else {
-      fullscreenButton.textContent = "⛶";
-      fullscreenButton.title = "Enter Fullscreen";
-    }
+    const ui = this.ui;
+    if (!ui?.uiState) return;
+    const title = document.fullscreenElement ? "Exit Fullscreen" : "Enter Fullscreen";
+    ui.uiState.fullscreen_display = { icon: "⛶", title };
   }
 
   vibrate(pattern) {

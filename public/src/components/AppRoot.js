@@ -1,12 +1,31 @@
+import { subscribeKey } from "../core/store.js";
 import { html, render } from "lit-html";
 import { classMap } from "lit-html/directives/class-map.js";
 import { preferences } from "../core/preferencesStore.js";
+import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
 
 export class AppRoot {
   constructor(container, game, ui) {
     this.container = container;
     this.game = game;
     this.ui = ui;
+    this._bodyClassUnmount = null;
+  }
+
+  _setupBodyClassObserver() {
+    if (!this.ui?.uiState || this._bodyClassUnmount) return;
+    const syncBodyClasses = () => {
+      if (typeof document !== "undefined" && document.body) {
+        document.body.classList.toggle("game-paused", !!this.ui.uiState.is_paused);
+        document.body.classList.toggle("reactor-meltdown", !!this.ui.uiState.is_melting_down);
+      }
+      const banner = typeof document !== "undefined" ? document.getElementById("meltdown_banner") : null;
+      if (banner) banner.classList.toggle("hidden", !this.ui.uiState.is_melting_down);
+    };
+    syncBodyClasses();
+    const unsub1 = subscribeKey(this.ui.uiState, "is_paused", syncBodyClasses);
+    const unsub2 = subscribeKey(this.ui.uiState, "is_melting_down", syncBodyClasses);
+    this._bodyClassUnmount = () => { try { unsub1(); } catch (_) {} try { unsub2(); } catch (_) {} };
   }
 
   render() {
@@ -19,6 +38,19 @@ export class AppRoot {
     `;
 
     render(template, this.container);
+    if (!hasSession) {
+      const iconEl = this.container.querySelector(".splash-mute-icon");
+      if (iconEl) {
+        this._splashMuteUnmount = ReactiveLitComponent.mountMulti(
+          [{ state: preferences, keys: ["mute"] }],
+          () => html`${preferences.mute ? "🔇" : "🔊"}`,
+          iconEl
+        );
+      }
+    } else if (this._splashMuteUnmount) {
+      this._splashMuteUnmount();
+      this._splashMuteUnmount = null;
+    }
   }
 
   renderSplash(hasSession) {
@@ -27,16 +59,17 @@ export class AppRoot {
     const isMuted = !!preferences.mute;
     const handleMuteClick = (e) => {
       e.stopPropagation();
-      preferences.mute = !preferences.mute;
-      this.game?.audio?.toggleMute(preferences.mute);
-      const icon = e.currentTarget.querySelector(".splash-mute-icon");
-      if (icon) icon.textContent = preferences.mute ? "🔇" : "🔊";
+      if (this.ui?.uiState) this.ui.uiState.audio_muted = !this.ui.uiState.audio_muted;
+      else {
+        preferences.mute = !preferences.mute;
+        this.game?.audio?.toggleMute(preferences.mute);
+      }
     };
     return html`
       <div id="splash-container">
         <main id="splash-screen">
           <button type="button" class="splash-mute-btn" title=${isMuted ? "Unmute" : "Mute"} aria-label=${isMuted ? "Unmute" : "Mute"} @click=${handleMuteClick}>
-            <span class="splash-mute-icon">${isMuted ? "🔇" : "🔊"}</span>
+            <span class="splash-mute-icon"></span>
           </button>
           <div class="splash-loading">
             <div class="splash-spinner hidden splash-element-hidden"></div>
@@ -67,5 +100,10 @@ export class AppRoot {
     `;
   }
 
-  teardown() {}
+  teardown() {
+    if (this._bodyClassUnmount) {
+      this._bodyClassUnmount();
+      this._bodyClassUnmount = null;
+    }
+  }
 }

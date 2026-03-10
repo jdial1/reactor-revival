@@ -67,12 +67,10 @@ export class PageRouter {
     this._applyPauseStateForNavigation(wasOnReactorPage, goingToReactorPage);
 
     if (this.currentPageId === "upgrades_section" && goingToReactorPage) {
-      const reactorElement = this.ui.DOMElements.reactor ?? document.getElementById("reactor");
-      if (reactorElement) {
-        reactorElement.style.visibility = "hidden";
-        setTimeout(() => {
-          if (reactorElement) reactorElement.style.visibility = "visible";
-        }, 250);
+      const pageInit = this.ui.registry?.get?.("PageInit");
+      if (pageInit) {
+        pageInit.setReactorVisibility(false);
+        setTimeout(() => pageInit.setReactorVisibility(true), 250);
       }
     }
 
@@ -97,8 +95,7 @@ export class PageRouter {
     const hadPreviousPage = this.currentPageId != null;
     this.currentPageId = pageId;
     window.location.hash = pageId;
-    this.updateNavigation(pageId);
-    this.ui.objectivesUI.showObjectivesForPage(pageId);
+    if (this.ui?.uiState) this.ui.uiState.active_page = pageId;
 
     this.cleanupUIForStatelessPage(pageId);
 
@@ -112,10 +109,7 @@ export class PageRouter {
         this.ui.resizeReactor();
         setTimeout(() => {
           this.ui.resizeReactor();
-          const reactorElement = this.ui.DOMElements.reactor;
-          if (reactorElement) {
-            reactorElement.style.visibility = "visible";
-          }
+          this.ui.registry?.get?.("PageInit")?.setReactorVisibility(true);
         }, 100);
       } else if (pageId === "experimental_upgrades_section") {
         this.ui.pageInitUI.loadAndSetVersion();
@@ -173,10 +167,7 @@ export class PageRouter {
         if (pageId === "reactor_section" && this.ui.resizeReactor) {
           setTimeout(() => {
             this.ui.resizeReactor();
-            const reactorElement = this.ui.DOMElements.reactor;
-            if (reactorElement) {
-              reactorElement.style.visibility = "visible";
-            }
+            this.ui.registry?.get?.("PageInit")?.setReactorVisibility(true);
           }, 100);
         }
         if (hadPreviousPage && this.ui.game?.audio) this.ui.game.audio.play("tab_switch");
@@ -202,29 +193,7 @@ export class PageRouter {
         logger.log('error', 'ui', 'Failed to load error page:', errorPageError);
         render(html`<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`, pageContentArea);
       }
-      if (this.currentPageId) this.updateNavigation(this.currentPageId);
-    }
-  }
-
-  updateNavigation(activePageId) {
-    const navSelectors = ["#main_top_nav", "#bottom_nav"];
-    navSelectors.forEach((selector) => {
-      const navContainer = document.querySelector(selector);
-      if (navContainer) {
-        navContainer.querySelectorAll("button[data-page]").forEach((btn) => {
-          btn.classList.toggle("active", btn.dataset.page === activePageId);
-        });
-      }
-    });
-
-    document.body.className = document.body.className.replace(
-      /\bpage-\w+\b/g,
-      ""
-    );
-    if (activePageId) {
-      document.body.classList.add(
-        `page-${activePageId.replace("_section", "")}`
-      );
+      if (this.currentPageId && this.ui?.uiState) this.ui.uiState.active_page = this.currentPageId;
     }
   }
 

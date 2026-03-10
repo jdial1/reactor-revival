@@ -49,22 +49,22 @@ function stepToVal(s) {
 const VOLUME_STEP_MIN = 0;
 const VOLUME_STEP_MAX = 10;
 
-function applyStepperState(blocks, valSpan, key, step, modal) {
+function applyStepperState(key, step, modal) {
   const value = stepToVal(step);
-  blocks.setAttribute("aria-valuenow", step);
-  blocks.querySelectorAll(".volume-block").forEach((b, i) => {
-    if (i <= step) b.setAttribute("data-active", "");
-    else b.removeAttribute("data-active");
-  });
-  if (valSpan) valSpan.textContent = `${step * 10}%`;
   const prefKey = VOLUME_PREF_KEYS[key];
   if (prefKey) preferences[prefKey] = value;
-  const game = modal?.getGame?.();
-  if (game?.audio) game.audio.setVolume(key, value);
+  const ui = modal?.getUi?.();
+  if (ui?.uiState) {
+    const uiKey = { master: "volume_master", effects: "volume_effects", alerts: "volume_alerts", system: "volume_system", ambience: "volume_ambience" }[key];
+    if (uiKey) ui.uiState[uiKey] = value;
+  }
 }
 
 function handleVolumeKeydown(e, blocks, updateStepper, modal) {
-  const step = parseInt(blocks.getAttribute("aria-valuenow"), 10);
+  const blocksContainer = blocks.closest(".volume-stepper");
+  const key = blocksContainer?.dataset?.volumeKey;
+  const prefKey = key ? VOLUME_PREF_KEYS[key] : null;
+  const step = prefKey ? Math.round((preferences[prefKey] ?? 0) * 10) : 0;
   const isDecrease = e.key === "ArrowLeft" || e.key === "ArrowDown";
   const isIncrease = e.key === "ArrowRight" || e.key === "ArrowUp";
   if (isDecrease && step > VOLUME_STEP_MIN) {
@@ -82,9 +82,8 @@ function setupVolumeSteppers(overlay, modal, signal) {
   overlay.querySelectorAll(".volume-stepper").forEach((stepper) => {
     const key = stepper.dataset.volumeKey;
     const blocks = stepper.querySelector(".volume-blocks");
-    const valSpan = stepper.querySelector(".volume-stepper-val");
     if (!blocks) return;
-    const updateStepper = (step) => applyStepperState(blocks, valSpan, key, step, modal);
+    const updateStepper = (step) => applyStepperState(key, step, modal);
     blocks.querySelectorAll(".volume-block").forEach((block) => {
       block.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -125,27 +124,15 @@ function handleSelectRowClick(e, overlay, modal) {
   }
 }
 
-function createSyncMechSwitch(overlay) {
-  return (checkboxId, checked) => {
-    const btn = overlay.querySelector(`.mech-switch[data-checkbox-id="${checkboxId}"]`);
-    if (btn) {
-      btn.setAttribute("aria-checked", checked);
-      btn.classList.toggle("mech-switch-on-active", checked);
-    }
-  };
-}
-
-function createSetupMechSwitch(overlay, modal, syncMechSwitch, signal) {
+function createSetupMechSwitch(overlay, modal, signal) {
   return (checkboxId, onChange) => {
     const checkbox = overlay.querySelector(`#${checkboxId}`);
     const btn = overlay.querySelector(`.mech-switch[data-checkbox-id="${checkboxId}"]`);
     if (!checkbox || !btn) return;
-    syncMechSwitch(checkboxId, checkbox.checked);
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       checkbox.checked = !checkbox.checked;
-      syncMechSwitch(checkboxId, checkbox.checked);
       modal.playClick();
       onChange(checkbox.checked);
     }, { signal });
@@ -153,8 +140,7 @@ function createSetupMechSwitch(overlay, modal, syncMechSwitch, signal) {
 }
 
 function setupMechSwitches(overlay, modal, signal) {
-  const syncMechSwitch = createSyncMechSwitch(overlay);
-  const setupMechSwitch = createSetupMechSwitch(overlay, modal, syncMechSwitch, signal);
+  const setupMechSwitch = createSetupMechSwitch(overlay, modal, signal);
   const game = modal.getGame?.();
   const affordPrefMap = {
     "setting-hide-upgrades": "hideUnaffordableUpgrades",
@@ -220,11 +206,8 @@ function setupMechSwitches(overlay, modal, signal) {
     }
   }, { signal });
   setupSettingsHelpModal(overlay, modal, signal);
-  const notifCheckbox = overlay.querySelector("#setting-notifications");
-  if (notifCheckbox && "Notification" in window) {
-    notifCheckbox.checked = Notification.permission === "granted";
-    setupMechSwitch("setting-notifications", (checked) => modal._handleNotificationSwitch(checked, notifCheckbox, syncMechSwitch));
-    syncMechSwitch("setting-notifications", notifCheckbox.checked);
+  if (overlay.querySelector("#setting-notifications") && "Notification" in window) {
+    setupMechSwitch("setting-notifications", (checked) => modal._handleNotificationSwitch(checked));
   }
   if (notifCheckbox && !("Notification" in window)) {
     const row = notifCheckbox.closest(".setting-row");
@@ -425,12 +408,15 @@ export function bindSettingsEvents(overlay, modal, signal) {
   bindEvents(overlay, {
     "#setting-mute-btn": () => {
       if (!muteCheckbox || !muteBtn) return;
-      muteCheckbox.checked = !muteCheckbox.checked;
-      preferences.mute = muteCheckbox.checked;
-      const icon = muteBtn.querySelector(".mute-icon");
-      if (icon) icon.textContent = muteCheckbox.checked ? "🔇" : "🔊";
-      const game = modal.getGame?.();
-      if (game?.audio) game.audio.toggleMute(muteCheckbox.checked);
+      const ui = modal.getUi?.();
+      if (ui?.uiState) {
+        ui.uiState.audio_muted = !ui.uiState.audio_muted;
+      } else {
+        muteCheckbox.checked = !muteCheckbox.checked;
+        preferences.mute = muteCheckbox.checked;
+        const game = modal.getGame?.();
+        if (game?.audio) game.audio.toggleMute(muteCheckbox.checked);
+      }
       modal.playClick();
     },
     "#setting-export": () => modal._handleExportClick(),

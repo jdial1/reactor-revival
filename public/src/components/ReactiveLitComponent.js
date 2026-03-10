@@ -6,13 +6,14 @@ const isTestEnv = () =>
   (typeof window !== "undefined" && window.__VITEST__);
 
 export class ReactiveLitComponent {
-  static mount(state, renderFn, container) {
+  static mount(state, renderFn, container, onAfterRender) {
     let raf = null;
 
     const executeRender = () => {
       if (!container?.isConnected) return;
       try {
         render(renderFn(state), container);
+        onAfterRender?.();
       } catch (err) {
         const msg = String(err?.message ?? "");
         if ((msg.includes("parentNode") || msg.includes("nextSibling")) && msg.includes("null")) return;
@@ -38,6 +39,38 @@ export class ReactiveLitComponent {
 
     return () => {
       unsubscribe();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }
+
+  static mountMultiStates(states, renderFn, container, onAfterRender) {
+    let raf = null;
+    const executeRender = () => {
+      if (!container?.isConnected) return;
+      try {
+        render(renderFn(), container);
+        onAfterRender?.();
+      } catch (err) {
+        const msg = String(err?.message ?? "");
+        if ((msg.includes("parentNode") || msg.includes("nextSibling")) && msg.includes("null")) return;
+        console.error("Lit render error:", err);
+      }
+    };
+    const scheduleRender = () => {
+      if (raf) return;
+      if (isTestEnv()) {
+        executeRender();
+        return;
+      }
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        executeRender();
+      });
+    };
+    const unsubs = states.map((s) => subscribe(s, scheduleRender));
+    executeRender();
+    return () => {
+      unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
       if (raf) cancelAnimationFrame(raf);
     };
   }

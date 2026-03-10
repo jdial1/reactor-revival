@@ -20,6 +20,14 @@ describe("Leaderboard Service & Integration", () => {
 
         global.fetch = vi.fn();
 
+        if (!game.ui) game.ui = {};
+        if (!game.ui.modalOrchestrator) {
+          game.ui.modalOrchestrator = {
+            showModal: vi.fn(),
+            hideModal: vi.fn(),
+          };
+        }
+
         const existing = document.getElementById("leaderboard_rows");
         if (existing) existing.closest(".leaderboard-table")?.remove();
 

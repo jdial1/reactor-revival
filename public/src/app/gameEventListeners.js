@@ -1,4 +1,4 @@
-import { renderSectionCounts } from "../components/ui/upgrades/sectionCountUpdaterUI.js";
+import { updateSectionCountsState } from "../components/ui/upgrades/sectionCountUpdaterUI.js";
 import { MODAL_IDS } from "../components/ModalManager.js";
 
 function applyStatePatch(ui, patch) {
@@ -11,12 +11,10 @@ function applyStatePatch(ui, patch) {
 function handleObjectiveLoaded(ui, payload) {
   if (!payload?.objective) return;
   ui.stateManager.handleObjectiveLoaded(payload.objective, payload.objectiveIndex);
-  ui.objectivesUI?.updateObjectiveDisplayFromState?.();
 }
 
 function handleObjectiveCompleted(ui) {
   ui.stateManager.handleObjectiveCompleted();
-  ui.objectivesUI?.updateObjectiveDisplayFromState?.();
 }
 
 function handleObjectiveUnloaded(ui) {
@@ -86,19 +84,13 @@ export function attachGameEventListeners(game, ui) {
       upgrade.$el.classList.add("upgrade-purchase-success");
     }
   });
-  on("upgradesChanged", () => renderSectionCounts(game));
+  on("upgradesChanged", () => updateSectionCountsState(ui, game));
   on("upgradesAffordabilityChanged", ({ hasAnyUpgrade, hasVisibleAffordableUpgrade, hasAnyResearch, hasVisibleAffordableResearch }) => {
-    if (typeof document === "undefined") return;
-    const upgradesBanner = document.getElementById("upgrades_no_affordable_banner");
-    if (upgradesBanner) {
-      if (hasAnyUpgrade && !hasVisibleAffordableUpgrade) upgradesBanner.classList.remove("hidden");
-      else upgradesBanner.classList.add("hidden");
-    }
-    const researchBanner = document.getElementById("research_no_affordable_banner");
-    if (researchBanner) {
-      if (hasAnyResearch && !hasVisibleAffordableResearch) researchBanner.classList.remove("hidden");
-      else researchBanner.classList.add("hidden");
-    }
+    if (!ui?.uiState) return;
+    ui.uiState.upgrades_banner_visibility = {
+      upgradesHidden: !(hasAnyUpgrade && !hasVisibleAffordableUpgrade),
+      researchHidden: !(hasAnyResearch && !hasVisibleAffordableResearch),
+    };
   });
   on("saveLoaded", ({ toggles, quick_select_slots }) => {
     if (toggles && ui.stateManager) {
@@ -127,7 +119,7 @@ export function attachGameEventListeners(game, ui) {
     if (ui.heatVisualsUI?.updateTimeFluxSimulation) ui.heatVisualsUI.updateTimeFluxSimulation(progress, isCatchingUp);
   });
   on("timeFluxButtonUpdate", ({ queuedTicks }) => {
-    if (ui.infoBarUI?.updateTimeFluxButton) ui.infoBarUI.updateTimeFluxButton(queuedTicks);
+    if (ui.uiState) ui.uiState.time_flux_queued_ticks = queuedTicks ?? 0;
   });
   on("tileCleared", ({ tile }) => {
     if (game.tooltip_manager?.current_tile_context === tile) game.tooltip_manager.hide();

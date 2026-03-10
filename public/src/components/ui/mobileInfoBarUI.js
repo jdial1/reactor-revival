@@ -14,6 +14,7 @@ const VENTING_ANIM_MS = 400;
 export class MobileInfoBarUI {
   constructor(ui) {
     this.ui = ui;
+    this.ui.registry.register('MobileInfoBar', this);
     this._unmountControlDeck = null;
     this._unmountPassiveBar = null;
 
@@ -107,7 +108,7 @@ export class MobileInfoBarUI {
       <div class="control-deck-item money-scoreboard" id="control_deck_money">
         <div class="control-deck-content">
           <img src="img/ui/icons/icon_cash.png" alt="Cash" class="control-deck-icon" />
-          <span class="control-deck-value" id="control_deck_money_value">${fmt(state.current_money ?? 0, 0)}</span>
+          <span class="control-deck-value" id="control_deck_money_value">${state.melting_down ? "☢️" : fmt(state.current_money ?? 0, 0)}</span>
         </div>
         <div class="floating-text-container" id="floating_text_container"></div>
       </div>
@@ -134,7 +135,7 @@ export class MobileInfoBarUI {
         <span id="mobile_passive_ep">${fmt(state.current_exotic_particles ?? 0)}</span>
       </span>
       <span class="passive-top-money">
-        <span id="mobile_passive_money_value">${fmt(state.current_money ?? 0, 0)}</span>
+        <span id="mobile_passive_money_value">${state.melting_down ? "☢️" : fmt(state.current_money ?? 0, 0)}</span>
       </span>
       <button
         type="button"
@@ -158,7 +159,7 @@ export class MobileInfoBarUI {
 
     const subscriptions = [{
       state: this.ui.game.state,
-      keys: ["max_power", "max_heat", "current_power", "current_heat", "power_net_change", "heat_net_change", "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff", "current_money"],
+      keys: ["max_power", "max_heat", "current_power", "current_heat", "power_net_change", "heat_net_change", "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff", "current_money", "melting_down"],
     }];
     this._unmountControlDeck = ReactiveLitComponent.mountMulti(subscriptions, () => this._controlDeckTemplate(this.ui.game.state), root);
     this.updateMobilePassiveTopBar();
@@ -174,7 +175,7 @@ export class MobileInfoBarUI {
 
     const subscriptions = [{
       state: this.ui.game.state,
-      keys: ["current_exotic_particles", "current_money", "pause"],
+      keys: ["current_exotic_particles", "current_money", "pause", "melting_down"],
     }];
     this._unmountPassiveBar = ReactiveLitComponent.mountMulti(subscriptions, () => this._passiveBarTemplate(this.ui.game.state), root);
   }

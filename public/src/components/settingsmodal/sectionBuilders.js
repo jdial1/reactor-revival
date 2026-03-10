@@ -26,7 +26,7 @@ function volumeStepper(key, value) {
 
 function mechSwitch(id, checked) {
   return html`
-    <button type="button" class="mech-switch" role="switch" aria-checked=${checked} data-checkbox-id=${id} tabindex="0">
+    <button type="button" class="mech-switch ${checked ? "mech-switch-on-active" : ""}" role="switch" aria-checked=${checked} data-checkbox-id=${id} tabindex="0">
       <span class="mech-switch-off">OFF</span>
       <span class="mech-switch-track"><span class="mech-switch-thumb"></span></span>
       <span class="mech-switch-on">ON</span>
@@ -125,14 +125,15 @@ export function createVisualSection() {
   `;
 }
 
-export function createSystemSection() {
+export function createSystemSection(notificationPermission = "default") {
   const prefs = getValidatedPreferences();
+  const notificationsChecked = notificationPermission === "granted";
   return html`
     <div class="settings-section">
       <h4 style=${SECTION_HEAD}>ENGINE & NOTIFICATIONS</h4>
       <table class="settings-visuals-table">
         ${switchRow("setting-force-no-sab", "Force No-SAB", prefs.forceNoSAB, "forceNoSAB")}
-        ${switchRow("setting-notifications", "Update Notifications", false, "notifications")}
+        ${switchRow("setting-notifications", "Update Notifications", notificationsChecked, "notifications")}
       </table>
 
       <h4 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-warning-color, rgb(255, 160, 0)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;">POWER CYCLING</h4>

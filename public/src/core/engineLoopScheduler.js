@@ -7,6 +7,7 @@ import {
   VALVE_OVERFLOW_THRESHOLD,
   MAX_TICKS_PER_FRAME_NO_SAB,
   SLOW_MODE_TICKS_PER_FRAME,
+  GAME_LOOP_WORKER_MIN_TICKS,
   TIME_FLUX_CHUNK_TICKS,
   SAMPLE_TICKS,
   OFFLINE_TIME_THRESHOLD_MS,
@@ -267,7 +268,7 @@ export function runLoopIteration(engine, timestamp) {
   const budget = computeTickBudget(engine, deltaTime);
   const { liveTicks, fluxTicks, totalTicks, initialAccumulator } = budget;
   if (totalTicks > 0) {
-    if (engine._useGameLoopWorker?.() && !engine._gameLoopWorkerPending) {
+    if (engine._useGameLoopWorker?.() && !engine._gameLoopWorkerPending && totalTicks >= GAME_LOOP_WORKER_MIN_TICKS) {
       const state = engine._serializeStateForGameLoopWorker?.();
       if (state) {
         engine._gameLoopWorkerTickId = (engine._gameLoopWorkerTickId || 0) + 1;

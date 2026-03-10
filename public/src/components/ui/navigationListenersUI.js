@@ -1,45 +1,54 @@
+import { html } from "lit-html";
+import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
 import { MOBILE_BREAKPOINT_PX } from "../../core/constants.js";
 import { MODAL_IDS } from "../ModalManager.js";
 
 const setupNavGroup = (ui, signal) => {
-  const setupNav = (container, buttonClass) => {
+  const setupNav = (container) => {
     if (!container) return;
     container.addEventListener("click", (event) => {
-      const button = event.target.closest(buttonClass);
-      if (button?.dataset.page) {
-        ui.game.router.loadPage(button.dataset.page);
-        container.querySelectorAll(buttonClass).forEach((tab) => tab.classList.remove("active"));
-        button.classList.add("active");
-      }
+      const btn = event.target.closest("[data-page]");
+      if (btn?.dataset.page) ui.game.router.loadPage(btn.dataset.page);
     }, { signal });
   };
-  setupNav(ui.DOMElements.bottom_nav, "div");
-  setupNav(ui.DOMElements.main_top_nav, "div");
+  const coreLoop = ui.registry?.get?.("CoreLoop");
+  const getEl = (id) => coreLoop?.getElement?.(id) ?? ui.DOMElements?.[id] ?? document.getElementById(id);
+  setupNav(getEl("bottom_nav"));
+  setupNav(getEl("main_top_nav"));
 };
 
 const setupPrestigeListeners = (ui, signal) => {
-  ui.DOMElements.reboot_btn?.addEventListener("click", () => ui.modalOrchestrator.showModal(MODAL_IDS.PRESTIGE, { mode: "refund" }), { signal });
-  ui.DOMElements.refund_btn?.addEventListener("click", () => ui.modalOrchestrator.showModal(MODAL_IDS.PRESTIGE, { mode: "prestige" }), { signal });
-  ui.DOMElements.prestige_modal_cancel?.addEventListener("click", () => ui.modalOrchestrator.hideModal(MODAL_IDS.PRESTIGE), { signal });
-  ui.DOMElements.prestige_modal_confirm_refund?.addEventListener("click", () => {
-    ui.modalOrchestrator.hideModal(MODAL_IDS.PRESTIGE);
-    ui.game.rebootActionDiscardExoticParticles();
-  }, { signal });
-  ui.DOMElements.prestige_modal_confirm_prestige?.addEventListener("click", () => {
-    ui.modalOrchestrator.hideModal(MODAL_IDS.PRESTIGE);
-    ui.game.rebootActionKeepExoticParticles();
-  }, { signal });
+  const coreLoop = ui.registry?.get?.("CoreLoop");
+  const getEl = (id) => coreLoop?.getElement?.(id) ?? ui.DOMElements?.[id] ?? document.getElementById(id);
+  getEl("reboot_btn")?.addEventListener("click", () => ui.modalOrchestrator.showModal(MODAL_IDS.PRESTIGE, { mode: "refund" }), { signal });
+  getEl("refund_btn")?.addEventListener("click", () => ui.modalOrchestrator.showModal(MODAL_IDS.PRESTIGE, { mode: "prestige" }), { signal });
 };
 
 const setupDoctrineAndMiscListeners = (ui, signal) => {
-  ui.DOMElements.respec_doctrine_btn?.addEventListener("click", () => {
+  const getEl = (id) => ui.registry?.get?.("CoreLoop")?.getElement?.(id) ?? ui.DOMElements?.[id] ?? document.getElementById(id);
+  getEl("respec_doctrine_btn")?.addEventListener("click", () => {
     if (!ui.game?.respecDoctrine?.()) return;
     ui.userAccountUI.renderDoctrineTreeViewer();
     ui.stateManager.setVar("current_exotic_particles", ui.game.state.current_exotic_particles);
   }, { signal });
   
   const fullscreenButton = ui.coreLoopUI.getElement("fullscreen_toggle");
-  if (fullscreenButton) {
+  if (fullscreenButton && ui.uiState) {
+    ui._fullscreenReactiveUnmount?.();
+    fullscreenButton.addEventListener("click", () => ui.deviceFeatures.toggleFullscreen(), { signal });
+    document.addEventListener("fullscreenchange", () => ui.deviceFeatures.updateFullscreenButtonState(), { signal });
+    ui.deviceFeatures.updateFullscreenButtonState();
+    ui._fullscreenReactiveUnmount = ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["fullscreen_display"] }],
+      () => {
+        const d = ui.uiState?.fullscreen_display ?? { icon: "⛶", title: "Toggle Fullscreen" };
+        if (fullscreenButton.title !== d.title) fullscreenButton.title = d.title;
+        fullscreenButton.textContent = d.icon ?? "⛶";
+        return null;
+      },
+      fullscreenButton
+    );
+  } else if (fullscreenButton) {
     fullscreenButton.addEventListener("click", () => ui.deviceFeatures.toggleFullscreen(), { signal });
     document.addEventListener("fullscreenchange", () => ui.deviceFeatures.updateFullscreenButtonState(), { signal });
     ui.deviceFeatures.updateFullscreenButtonState();
@@ -68,7 +77,6 @@ export function setupNavListeners(ui) {
   setupDoctrineAndMiscListeners(ui, signal);
 
   ui.partsPanelUI.updatePartsPanelBodyClass();
-  ui._prestigeModalMode = null;
 }
 
 export function setupResizeListeners(ui) {
@@ -80,7 +88,8 @@ export function setupResizeListeners(ui) {
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      if (ui.game && ui.DOMElements.reactor && typeof window !== "undefined") {
+      const reactor = ui.registry?.get?.("PageInit")?.getReactor?.() ?? ui.DOMElements?.reactor;
+      if (ui.game && reactor && typeof window !== "undefined") {
         if (ui.game.updateBaseDimensions) ui.game.updateBaseDimensions();
         ui.gridScaler.resize();
       }
@@ -95,7 +104,8 @@ export function setupResizeListeners(ui) {
     window.visualViewport.addEventListener("resize", () => {
       clearTimeout(viewportTimeout);
       viewportTimeout = setTimeout(() => {
-        if (ui.game && ui.DOMElements.reactor && typeof window !== "undefined" && window.innerWidth && window.innerWidth <= MOBILE_BREAKPOINT_PX) {
+        const reactor = ui.registry?.get?.("PageInit")?.getReactor?.() ?? ui.DOMElements?.reactor;
+        if (ui.game && reactor && typeof window !== "undefined" && window.innerWidth && window.innerWidth <= MOBILE_BREAKPOINT_PX) {
           if (ui.game.updateBaseDimensions) ui.game.updateBaseDimensions();
           ui.gridScaler.resize();
         }

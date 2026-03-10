@@ -1,13 +1,26 @@
+import { proxy } from "valtio/vanilla";
 import { html, render, nothing } from "lit-html";
+import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
 import { renderComponentIcons } from "./ui/componentRenderingUI.js";
-import { settingsModal } from "./settingsModal.js";
-import { welcomeBackModal } from "./welcomeBackModal.js";
+import {
+  settingsModalTemplate,
+  createSettingsContext,
+  bindSettingsEvents,
+  getAbortSignal,
+  abortSettingsListeners,
+} from "./settingsModal.js";
+import { preferences } from "../core/preferencesStore.js";
+import { prestigeModalTemplate } from "./prestigeModal.js";
+import { welcomeBackModalTemplate } from "./welcomeBackModal.js";
+import { layoutViewTemplate } from "./ui/layoutModalUI.js";
+import { myLayoutsTemplate } from "./ui/copyPaste/myLayoutsListUI.js";
+import { quickStartTemplate } from "./ui/quickStartUI.js";
 import { escapeHtml } from "../utils/stringUtils.js";
 import { Format, numFormat as fmt } from "../utils/util.js";
 import { StorageUtils } from "../utils/util.js";
 import { logger } from "../utils/logger.js";
 import { showCloudVsLocalConflictModal as showCloudConflictModal } from "../services/saveModals.js";
-import { reactorFailedToStartModal } from "./reactorFailedToStartModal.js";
+import { reactorFailedToStartTemplate } from "./reactorFailedToStartModal.js";
 
 function contextModalTemplate(tile, onSell, onClose) {
   const part = tile?.part;
@@ -49,9 +62,9 @@ export const MODAL_IDS = {
   LOGOUT: "logout",
   CLOUD_VS_LOCAL_CONFLICT: "cloudVsLocalConflict",
   SETTINGS: "settings",
+  LAYOUT_VIEW: "layoutView",
+  MY_LAYOUTS: "myLayouts",
 };
-
-const formatPrestigeNumber = (n) => Format.number(n, { places: 2, infinitySymbol: "∞" });
 
 export class ModalOrchestrator {
   constructor() {
@@ -59,6 +72,12 @@ export class ModalOrchestrator {
     this._handlers = new Map();
     this._activeContextTile = null;
     this._modalRoot = null;
+    this._settingsActiveTab = "audio";
+    this._settingsState = proxy({ activeTab: "audio", notificationPermission: "default" });
+    this._settingsUnmount = null;
+    this._quickStartPage = 1;
+    this._quickStartGame = null;
+    this._settingsVisible = false;
   }
 
   init(ui) {
@@ -73,7 +92,7 @@ export class ModalOrchestrator {
       hide: () => this._hideContextModal(),
     });
     this._handlers.set(MODAL_IDS.PRESTIGE, {
-      show: (p) => this._showPrestigeModal(p?.mode),
+      show: (p) => this._showPrestigeModal(p),
       hide: () => this._hidePrestigeModal(),
     });
     this._handlers.set(MODAL_IDS.COPY_PASTE, {
@@ -81,20 +100,20 @@ export class ModalOrchestrator {
       hide: () => this._hideCopyPasteModal(),
     });
     this._handlers.set(MODAL_IDS.WELCOME_BACK, {
-      show: (p) => this._showWelcomeBackModal(p?.offlineMs, p?.queuedTicks),
+      show: (p) => this._showWelcomeBackModal(p),
       hide: () => {},
     });
     this._handlers.set(MODAL_IDS.QUICK_START, {
       show: (p) => this._showQuickStartModal(p?.game),
-      hide: () => {},
+      hide: () => this._hideQuickStartModal(),
     });
     this._handlers.set(MODAL_IDS.DETAILED_QUICK_START, {
-      show: () => ui?.quickStartUI?.showDetailedQuickStart?.(),
-      hide: () => {},
+      show: () => this._showQuickStartModal(ui?.game, true),
+      hide: () => this._hideQuickStartModal(),
     });
     this._handlers.set(MODAL_IDS.REACTOR_FAILED_TO_START, {
-      show: (p) => reactorFailedToStartModal.show(p?.game),
-      hide: () => reactorFailedToStartModal.hide(),
+      show: (p) => this._showReactorFailedToStartModal(p),
+      hide: () => this._hideReactorFailedToStartModal(),
     });
     this._handlers.set(MODAL_IDS.LOGIN, {
       show: () => ui?.userAccountUI?.showLoginModal?.(),
@@ -113,8 +132,16 @@ export class ModalOrchestrator {
       hide: () => {},
     });
     this._handlers.set(MODAL_IDS.SETTINGS, {
-      show: () => settingsModal.show(),
-      hide: () => settingsModal.hide(),
+      show: () => this._showSettingsModal(),
+      hide: () => this._hideSettingsModal(),
+    });
+    this._handlers.set(MODAL_IDS.LAYOUT_VIEW, {
+      show: (p) => this._showLayoutViewModal(p),
+      hide: () => this._hideLayoutViewModal(),
+    });
+    this._handlers.set(MODAL_IDS.MY_LAYOUTS, {
+      show: () => this._showMyLayoutsModal(),
+      hide: () => this._hideMyLayoutsModal(),
     });
   }
 
@@ -128,6 +155,11 @@ export class ModalOrchestrator {
     const handler = this._handlers.get(modalId);
     if (!handler?.hide) return;
     handler.hide();
+  }
+
+  isModalVisible(modalId) {
+    if (modalId === MODAL_IDS.SETTINGS) return this._settingsVisible;
+    return false;
   }
 
   _renderContextModal() {
@@ -149,6 +181,7 @@ export class ModalOrchestrator {
 
   _showContextModal(tile) {
     if (!this.ui || !tile?.part) return;
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
     this._activeContextTile = tile;
     this._renderContextModal();
     this.ui.deviceFeatures?.lightVibration?.();
@@ -168,50 +201,40 @@ export class ModalOrchestrator {
     this._renderContextModal();
   }
 
-  _showPrestigeModal(mode) {
-    if (!this.ui) return;
-    this.ui._prestigeModalMode = mode;
-    const modal = this.ui.DOMElements.prestige_modal;
-    const titleEl = this.ui.DOMElements.prestige_modal_title;
-    const carriedEl = this.ui.DOMElements.prestige_carried_over;
-    const multEl = this.ui.DOMElements.prestige_multiplier_line;
-    const confirmRefund = this.ui.DOMElements.prestige_modal_confirm_refund;
-    const confirmPrestige = this.ui.DOMElements.prestige_modal_confirm_prestige;
-    if (!modal) return;
+  _showPrestigeModal(payload) {
+    const { mode } = payload ?? {};
+    if (!this.ui?.game) return;
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (!this._modalRoot) return;
+
     const game = this.ui.game;
-    const formatNum = formatPrestigeNumber;
-    if (mode === "refund") {
-      if (titleEl) titleEl.textContent = "Full Refund";
-      if (carriedEl)
-        carriedEl.innerHTML =
-          "You will reset: all Exotic Particles, all progress, reactor, and money.";
-      if (multEl) multEl.textContent = "";
-      if (confirmRefund) confirmRefund.style.display = "";
-      if (confirmPrestige) confirmPrestige.style.display = "none";
-    } else {
-      if (titleEl) titleEl.textContent = "Prestige";
-      const totalEp = game.state.total_exotic_particles || 0;
-      const preserved = game.upgradeset
-        .getAllUpgrades()
-        .filter((u) => u.base_ecost && u.level > 0).length;
-      if (carriedEl)
-        carriedEl.innerHTML = `You will keep: <strong>${formatNum(totalEp)} Total EP</strong>, <strong>${preserved} Research</strong>. Reactor and money reset.`;
-      const mult = game.getPrestigeMultiplier
-        ? game.getPrestigeMultiplier()
-        : 1;
-      if (multEl)
-        multEl.textContent = `Money multiplier: ×${mult.toFixed(2)} (from Total EP)`;
-      if (confirmRefund) confirmRefund.style.display = "none";
-      if (confirmPrestige) confirmPrestige.style.display = "";
-    }
-    modal.classList.remove("hidden");
+    const totalEp = game.state.total_exotic_particles || 0;
+    const preservedUpgrades = game.upgradeset.getAllUpgrades().filter((u) => u.base_ecost && u.level > 0).length;
+    const prestigeMultiplier = game.getPrestigeMultiplier ? game.getPrestigeMultiplier() : 1;
+
+    const onCancel = () => this._hidePrestigeModal();
+    const onConfirm = (confirmedMode) => {
+      this._hidePrestigeModal();
+      if (confirmedMode === "refund") {
+        game.rebootActionDiscardExoticParticles();
+      } else {
+        game.rebootActionKeepExoticParticles();
+      }
+    };
+
+    render(
+      prestigeModalTemplate(
+        { mode, totalEp, preservedUpgrades, prestigeMultiplier },
+        onConfirm,
+        onCancel
+      ),
+      this._modalRoot
+    );
   }
 
   _hidePrestigeModal() {
-    if (!this.ui) return;
-    this.ui._prestigeModalMode = null;
-    const modal = this.ui.DOMElements.prestige_modal;
-    if (modal) modal.classList.add("hidden");
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui?.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (this._modalRoot) render(nothing, this._modalRoot);
   }
 
   _showCopyPasteModal(payload) {
@@ -232,7 +255,19 @@ export class ModalOrchestrator {
 
     if (!modal || !modalTitle || !modalCost || !confirmBtn || !closeBtn) return;
 
-    modalTitle.textContent = "Sell Reactor Parts";
+    this._sellModalReactiveUnmount?.();
+    ui.uiState.sell_modal_display = { title: "Sell Reactor Parts", confirmLabel: "Sell Selected" };
+    const titleUnmount = ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["sell_modal_display"] }],
+      () => html`${ui.uiState?.sell_modal_display?.title ?? ""}`,
+      modalTitle
+    );
+    const btnUnmount = ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["sell_modal_display"] }],
+      () => html`${ui.uiState?.sell_modal_display?.confirmLabel ?? ""}`,
+      confirmBtn
+    );
+    this._sellModalReactiveUnmount = () => { titleUnmount(); btnUnmount(); };
 
     if (modalText) {
       modalText.classList.add("hidden");
@@ -261,7 +296,6 @@ export class ModalOrchestrator {
       confirmBtn.disabled = totalSellValue === 0;
     };
 
-    confirmBtn.textContent = "Sell Selected";
     confirmBtn.classList.remove("hidden");
     confirmBtn.disabled = false;
     confirmBtn.style.backgroundColor = '#e74c3c';
@@ -277,7 +311,7 @@ export class ModalOrchestrator {
         tile.sellPart();
       });
       ui.game.reactor.updateStats();
-      confirmBtn.textContent = `Sold $${fmt(totalSellValue)}`;
+      ui.uiState.sell_modal_display = { ...ui.uiState.sell_modal_display, confirmLabel: `Sold $${fmt(totalSellValue)}` };
       confirmBtn.style.backgroundColor = '#27ae60';
       setTimeout(() => {
         this.hideModal(MODAL_IDS.COPY_PASTE);
@@ -296,6 +330,10 @@ export class ModalOrchestrator {
   }
 
   _hideCopyPasteModal() {
+    this._sellModalReactiveUnmount?.();
+    this._sellModalReactiveUnmount = null;
+    this.ui?._copyPasteModalReactiveUnmount?.();
+    if (this.ui) this.ui._copyPasteModalReactiveUnmount = null;
     const modal = document.getElementById("reactor_copy_paste_modal");
     if (!modal) return;
     if (modal._sellModalOutsideClick) {
@@ -309,75 +347,196 @@ export class ModalOrchestrator {
     }
   }
 
-  _showWelcomeBackModal(offlineMs, queuedTicks) {
+  _showWelcomeBackModal(payload) {
     if (!this.ui?.game) return Promise.resolve();
-    this.ui.game.pause();
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (!this._modalRoot) return Promise.resolve();
+
+    const game = this.ui.game;
+    game.pause();
     this.ui.stateManager.setVar("pause", true);
-    return welcomeBackModal.show(offlineMs, queuedTicks, this.ui.game);
-  }
 
-  async _showQuickStartModal(game) {
-    try {
-      const response = await fetch("pages/quick-start-modal.html");
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const html = await response.text();
-      const modal = document.createElement("div");
-      modal.id = "quick-start-modal";
-      modal.innerHTML = html;
-      document.body.appendChild(modal);
+    return new Promise((resolve) => {
+      const handleClose = (mode) => {
+        if (mode === "instant" && game.engine) game.engine.runInstantCatchup();
+        else if (mode === "fast-forward" && game.engine) game.engine._welcomeBackFastForward = true;
 
-      document.getElementById("quick-start-more-details").onclick = () => {
-        document.getElementById("quick-start-page-1").classList.add("hidden");
-        document.getElementById("quick-start-page-2").classList.remove("hidden");
+        if (game) {
+          game.paused = false;
+          this.ui.stateManager.setVar("pause", false);
+        }
+        render(nothing, this._modalRoot);
+        resolve(mode);
       };
 
-      document.getElementById("quick-start-back").onclick = () => {
-        document.getElementById("quick-start-page-2").classList.add("hidden");
-        document.getElementById("quick-start-page-1").classList.remove("hidden");
-      };
+      const onInstant = () => handleClose("instant");
+      const onFastForward = () => handleClose("fast-forward");
+      const onDismiss = () => handleClose("fast-forward");
 
-      const closeModal = () => {
-        modal.remove();
-        StorageUtils.set("reactorGameQuickStartShown", 1);
-        if (game?.tutorialManager && !StorageUtils.get("reactorTutorialCompleted")) {
-          game.tutorialManager.start();
+      const keyHandler = (e) => {
+        if (e.key === "Escape") {
+          document.removeEventListener("keydown", keyHandler);
+          onDismiss();
         }
       };
+      document.addEventListener("keydown", keyHandler);
 
-      document.getElementById("quick-start-close").onclick = closeModal;
-      document.getElementById("quick-start-close-2").onclick = closeModal;
-
-      const attachSwipeToDismiss = (el, onDismiss) => {
-        if (!el || !onDismiss) return;
-        let startY = 0;
-        const threshold = 60;
-        el.addEventListener("touchstart", (e) => { startY = e.touches[0].clientY; }, { passive: true });
-        el.addEventListener("touchend", (e) => {
-          const endY = e.changedTouches[0].clientY;
-          if (endY - startY > threshold) onDismiss();
-        }, { passive: true });
+      const wrappedClose = (mode) => {
+        document.removeEventListener("keydown", keyHandler);
+        handleClose(mode);
       };
-      const overlay = modal.querySelector(".quick-start-overlay");
-      if (overlay) attachSwipeToDismiss(overlay, closeModal);
 
-      const bindAccordions = (container) => {
-        container?.querySelectorAll(".qs-accordion").forEach((section) => {
-          const head = section.querySelector(".qs-accordion-head");
-          if (head) {
-            head.addEventListener("click", () => section.classList.toggle("qs-accordion-expanded"));
-            head.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); section.classList.toggle("qs-accordion-expanded"); } });
-          }
-        });
-      };
-      bindAccordions(document.getElementById("quick-start-page-1"));
-      bindAccordions(document.getElementById("quick-start-page-2"));
-    } catch (error) {
-      logger.log('error', 'ui', 'Failed to load quick start modal:', error);
+      render(
+        welcomeBackModalTemplate(
+          payload,
+          () => wrappedClose("instant"),
+          () => wrappedClose("fast-forward"),
+          () => wrappedClose("fast-forward")
+        ),
+        this._modalRoot
+      );
+    });
+  }
+
+  _renderSettingsModal() {
+    if (!this._modalRoot) return;
+    if (this._settingsUnmount) {
+      this._settingsUnmount();
+      this._settingsUnmount = null;
+    }
+    const onClose = () => this._hideSettingsModal();
+    const onTabClick = (tabId) => {
+      if (this._settingsState.activeTab === tabId) return;
+      this._settingsState.activeTab = tabId;
+    };
+    const onAfterRender = () => {
+      abortSettingsListeners();
+      const signal = getAbortSignal();
+      const overlay = this._modalRoot?.firstElementChild;
+      if (overlay) {
+        bindSettingsEvents(overlay, this._settingsContext, signal);
+        const header = overlay.querySelector(".settings-header");
+        if (header) {
+          let startY = 0;
+          header.addEventListener("touchstart", (e) => { startY = e.touches[0].clientY; }, { passive: true });
+          header.addEventListener("touchend", (e) => {
+            if (e.changedTouches[0].clientY - startY > 60) onClose();
+          }, { passive: true });
+        }
+      }
+    };
+    this._settingsUnmount = ReactiveLitComponent.mountMultiStates(
+      [preferences, this._settingsState],
+      () => settingsModalTemplate(this._settingsState, onTabClick, onClose),
+      this._modalRoot,
+      onAfterRender
+    );
+  }
+
+  _showSettingsModal() {
+    if (!this.ui) return;
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (!this._modalRoot) return;
+    this._settingsState.activeTab = "audio";
+    this._settingsState.notificationPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
+    this._settingsContext = createSettingsContext(this.ui, this);
+    const keyHandler = (e) => {
+      if (e.key === "Escape") {
+        document.removeEventListener("keydown", keyHandler);
+        this._hideSettingsModal();
+      }
+    };
+    document.addEventListener("keydown", keyHandler);
+    this._settingsKeyHandler = keyHandler;
+    this._settingsVisible = true;
+    this._renderSettingsModal();
+  }
+
+  _hideSettingsModal() {
+    this._settingsVisible = false;
+    if (this._settingsUnmount) {
+      this._settingsUnmount();
+      this._settingsUnmount = null;
+    }
+    abortSettingsListeners();
+    if (this._settingsKeyHandler) {
+      document.removeEventListener("keydown", this._settingsKeyHandler);
+      this._settingsKeyHandler = null;
+    }
+    const game = this.ui?.game;
+    if (game?.audio) {
+      game.audio.stopTestSound();
+      game.audio.warningManager?.stopWarningLoop?.();
+    }
+    if (this._modalRoot) render(nothing, this._modalRoot);
+    const menuBtn = document.getElementById("menu_tab_btn");
+    if (menuBtn) menuBtn.classList.remove("active");
+    const currentPageId = game?.router?.currentPageId;
+    if (currentPageId) {
+      const bottomNav = document.getElementById("bottom_nav");
+      if (bottomNav) {
+        const pageBtn = bottomNav.querySelector(`button[data-page="${currentPageId}"]`);
+        if (pageBtn) pageBtn.classList.add("active");
+      }
     }
   }
 
+  _showReactorFailedToStartModal(payload) {
+    const game = payload?.game ?? this.ui?.game;
+    if (!game) return;
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (!this._modalRoot) return;
+
+    const errorMessage = payload?.error ?? null;
+    if (this.ui?.uiState) this.ui.uiState.reactor_failed_error = errorMessage;
+
+    const onTryAgain = () => {
+      if (game.engine) game.engine.start();
+      this._hideReactorFailedToStartModal(false);
+    };
+    const onDismiss = () => this._hideReactorFailedToStartModal(true);
+    render(reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }), this._modalRoot);
+  }
+
+  _showQuickStartModal(game, isDetailed = false) {
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui?.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (!this._modalRoot) return;
+
+    this._quickStartPage = 1;
+    this._quickStartGame = game;
+
+    const onClose = () => {
+      StorageUtils.set("reactorGameQuickStartShown", 1);
+      if (this._quickStartGame?.tutorialManager && !StorageUtils.get("reactorTutorialCompleted")) {
+        this._quickStartGame.tutorialManager.start();
+      }
+      this._hideQuickStartModal();
+    };
+    const onMoreDetails = () => {
+      this._quickStartPage = 2;
+      render(
+        quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack),
+        this._modalRoot
+      );
+    };
+    const onBack = () => {
+      this._quickStartPage = 1;
+      render(
+        quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack),
+        this._modalRoot
+      );
+    };
+
+    render(quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack), this._modalRoot);
+  }
+
+  _hideQuickStartModal() {
+    this._quickStartGame = null;
+    if (this._modalRoot) render(nothing, this._modalRoot);
+  }
+
   showSettings() {
-    settingsModal.show();
+    this.showModal(MODAL_IDS.SETTINGS);
   }
 
   showWelcomeBackModal(offlineMs, queuedTicks) {
@@ -402,5 +561,43 @@ export class ModalOrchestrator {
 
   hideCopyPasteModal() {
     this.hideModal(MODAL_IDS.COPY_PASTE);
+  }
+
+  _hideReactorFailedToStartModal(pauseGame = false) {
+    const game = this.ui?.game;
+    if (pauseGame && game) {
+      game.pause();
+      game.ui?.stateManager?.setVar?.("pause", true);
+    }
+    if (this.ui?.uiState) this.ui.uiState.reactor_failed_error = null;
+    if (this._modalRoot) render(nothing, this._modalRoot);
+  }
+
+  _showLayoutViewModal(payload) {
+    const { layoutJson, stats } = payload ?? {};
+    if (!this.ui?.game) return;
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (!this._modalRoot) return;
+
+    const onClose = () => this._hideLayoutViewModal();
+    render(layoutViewTemplate(layoutJson, stats, this.ui.game, onClose), this._modalRoot);
+  }
+
+  _hideLayoutViewModal() {
+    if (this._modalRoot) render(nothing, this._modalRoot);
+  }
+
+  _showMyLayoutsModal() {
+    if (!this.ui) return;
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (!this._modalRoot) return;
+
+    const onClose = () => this._hideMyLayoutsModal();
+    const list = this.ui.layoutStorageUI.getMyLayouts();
+    render(myLayoutsTemplate(this.ui, list, fmt, onClose), this._modalRoot);
+  }
+
+  _hideMyLayoutsModal() {
+    if (this._modalRoot) render(nothing, this._modalRoot);
   }
 }

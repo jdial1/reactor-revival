@@ -182,6 +182,11 @@ function syncStateVars(reactor, game, ctx) {
     game.state.heat_delta_per_tick = rawHeatDelta / norm;
     setDecimal(game.state, "current_power", reactor.current_power);
     setDecimal(game.state, "current_heat", reactor.current_heat);
+    logger.log("debug", "engine", "[Tick] syncStateVars UI state updated:", {
+      current_power: reactor.current_power?.toNumber?.() ?? reactor.current_power,
+      power_delta: rawPowerDelta,
+      power_delta_per_tick: game.state.power_delta_per_tick
+    });
   }
 }
 

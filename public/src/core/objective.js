@@ -234,21 +234,46 @@ export class ObjectiveManager {
   }
 
   claimObjective() {
-    if (this.game?.isSandbox) return;
+    logger.log("info", "objectives", "[Claim] claimObjective called", {
+      sandbox: this.game?.isSandbox,
+      claiming: this.claiming,
+      hasDef: !!this.current_objective_def,
+      defId: this.current_objective_def?.checkId,
+    });
+    if (this.game?.isSandbox) {
+      logger.log("info", "objectives", "[Claim] early return: sandbox");
+      return;
+    }
     if (this.claiming || !this.current_objective_def) {
+      logger.log("info", "objectives", "[Claim] early return: claiming or no def", {
+        claiming: this.claiming,
+        hasDef: !!this.current_objective_def,
+      });
       return;
     }
 
-    // For chapter completion objectives, check the chapter completion status
-    // For regular objectives, check the normal completed status
-    const isComplete = this.current_objective_def.isChapterCompletion ?
+    let isComplete = this.current_objective_def.isChapterCompletion ?
       this.getChapterCompletionStatus(this.current_objective_def, this.current_objective_index) :
       this.current_objective_def.completed;
 
+    if (!isComplete && this.current_objective_def.checkId) {
+      const checkFn = getObjectiveCheck(this.current_objective_def.checkId);
+      const result = checkFn?.(this.game);
+      isComplete = !!result?.completed;
+    }
+
+    logger.log("info", "objectives", "[Claim] isComplete check", {
+      isChapterCompletion: this.current_objective_def.isChapterCompletion,
+      defCompleted: this.current_objective_def.completed,
+      isComplete,
+    });
+
     if (!isComplete) {
+      logger.log("info", "objectives", "[Claim] early return: objective not complete");
       return;
     }
 
+    logger.log("info", "objectives", "[Claim] claiming objective", { index: this.current_objective_index });
     this.claiming = true;
     this.game.emit?.("vibrationRequest", { type: "doublePulse" });
     const chapterIdx = CHAPTER_COMPLETION_OBJECTIVE_INDICES.indexOf(this.current_objective_index);

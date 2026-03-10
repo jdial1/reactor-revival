@@ -920,4 +920,126 @@ describe("Engine Mechanics", () => {
 
     expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(initialHeat));
   });
+
+  describe("Cell power and UI state sync (regression: power only on timeout)", () => {
+    beforeEach(() => {
+      game.engine.setForceNoSAB(true);
+      game.engine._workerFailed = true;
+      game.engine._gameLoopWorkerFailed = true;
+      game.reactor.current_power = 0;
+      game.reactor.current_heat = 0;
+    });
+
+    it("power accrues on every tick when cells present", async () => {
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      await placePart(game, 0, 1, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+
+      const cellPart = game.partset.getPartById("uranium1");
+      const expectedPowerPerTick = cellPart.power ?? cellPart.base_power ?? 1;
+
+      for (let i = 0; i < 5; i++) {
+        const powerBefore = toNum(game.reactor.current_power);
+        game.engine._processTick(1.0);
+        const powerAfter = toNum(game.reactor.current_power);
+        expect(powerAfter).toBeGreaterThan(powerBefore);
+        expect(powerAfter - powerBefore).toBeCloseTo(expectedPowerPerTick, 0);
+      }
+    });
+
+    it("game.state.current_power updated when tick completes", async () => {
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      await placePart(game, 0, 1, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+
+      const initialStatePower = toNum(game.state?.current_power ?? 0);
+      game.engine._processTick(1.0);
+      const afterStatePower = toNum(game.state?.current_power ?? 0);
+
+      expect(afterStatePower).toBeGreaterThan(initialStatePower);
+    });
+
+    it("power_delta_per_tick set when tick completes", async () => {
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      await placePart(game, 0, 1, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+
+      game.engine._processTick(1.0);
+
+      const delta = game.state?.power_delta_per_tick ?? 0;
+      expect(typeof delta).toBe("number");
+      expect(delta).toBeGreaterThan(0);
+    });
+
+    it("power accrues every tick without worker timeout", async () => {
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      await placePart(game, 0, 1, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+
+      const powerHistory = [];
+      for (let i = 0; i < 10; i++) {
+        game.engine._processTick(1.0);
+        powerHistory.push(toNum(game.reactor.current_power));
+      }
+
+      for (let i = 1; i < powerHistory.length; i++) {
+        expect(powerHistory[i]).toBeGreaterThan(powerHistory[i - 1]);
+      }
+    });
+
+    it("reactor and game.state current_power stay in sync", async () => {
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      await placePart(game, 0, 1, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+
+      for (let i = 0; i < 3; i++) {
+        game.engine._processTick(1.0);
+        const reactorPower = toNum(game.reactor.current_power);
+        const statePower = toNum(game.state?.current_power ?? 0);
+        expect(statePower).toBe(reactorPower);
+      }
+    });
+
+    it("sync path used when SAB disabled (canSendWorker false)", async () => {
+      game.engine.setForceNoSAB(true);
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      await placePart(game, 0, 1, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+
+      const canSendWorker =
+        game.engine._useWorker() &&
+        game.engine._heatUseSAB &&
+        !game.engine._workerPending;
+      expect(canSendWorker).toBe(false);
+
+      game.engine._processTick(1.0);
+      expect(toNum(game.reactor.current_power)).toBeGreaterThan(0);
+    });
+
+    it("tick_count increments when tick completes", async () => {
+      game.tileset.clearAllTiles();
+      await placePart(game, 0, 0, "uranium1");
+      await placePart(game, 0, 1, "vent1");
+      game.reactor.updateStats();
+      game.engine._updatePartCaches();
+
+      const initialCount = game.engine.tick_count;
+      game.engine._processTick(1.0);
+      expect(game.engine.tick_count).toBe(initialCount + 1);
+      game.engine._processTick(1.0);
+      expect(game.engine.tick_count).toBe(initialCount + 2);
+    });
+  });
 });

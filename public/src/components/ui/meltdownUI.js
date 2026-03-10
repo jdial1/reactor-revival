@@ -4,6 +4,7 @@ import { logger } from "../../utils/logger.js";
 export class MeltdownUI {
   constructor(ui) {
     this.ui = ui;
+    this.ui.registry.register('Meltdown', this);
     this._meltdownBuildupRafId = null;
     this._meltdownHandler = null;
     this._meltdownResolvedHandler = null;
@@ -15,6 +16,7 @@ export class MeltdownUI {
     this._meltdownResolvedHandler = () => this.updateMeltdownState();
     game.on("meltdown", this._meltdownHandler);
     game.on("meltdownResolved", this._meltdownResolvedHandler);
+    this.updateMeltdownState();
   }
 
   cleanup() {
@@ -32,28 +34,21 @@ export class MeltdownUI {
 
   updateMeltdownState() {
     const ui = this.ui;
-    if (typeof document === "undefined" || !document.body) return;
     if (!ui.game || !ui.game.reactor) return;
     const hasMeltedDown = ui.game.reactor.has_melted_down;
-    const cl = document.body.classList;
-    const isMeltdownClassPresent = cl && typeof cl.contains === "function" && cl.contains("reactor-meltdown");
-    const meltdownBanner = document.getElementById("meltdown_banner");
-
-    if (meltdownBanner) {
-      meltdownBanner.classList.toggle("hidden", !hasMeltedDown);
-    }
-
-    if (hasMeltedDown && !isMeltdownClassPresent) {
-      document.body.classList.add("reactor-meltdown");
-    } else if (!hasMeltedDown && isMeltdownClassPresent) {
-      document.body.classList.remove("reactor-meltdown");
+    if (ui.uiState) ui.uiState.is_melting_down = hasMeltedDown;
+    const doc = (typeof globalThis !== "undefined" && globalThis.document) || (typeof document !== "undefined" && document);
+    if (doc?.body) {
+      doc.body.classList.toggle("reactor-meltdown", !!hasMeltedDown);
+      const banner = doc.getElementById("meltdown_banner");
+      if (banner) banner.classList.toggle("hidden", !hasMeltedDown);
     }
     if (!hasMeltedDown) {
       if (this._meltdownBuildupRafId != null) {
         cancelAnimationFrame(this._meltdownBuildupRafId);
         this._meltdownBuildupRafId = null;
       }
-      const wrapper = ui.DOMElements.reactor_wrapper || document.getElementById("reactor_wrapper");
+      const wrapper = ui.registry?.get?.("PageInit")?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
       if (wrapper) wrapper.style.transform = "";
       const vignetteEl = document.getElementById("meltdown_vignette");
       if (vignetteEl) {
@@ -100,7 +95,7 @@ export class MeltdownUI {
   startMeltdownBuildup(onComplete) {
     const ui = this.ui;
     const BUILDUP_MS = 2500;
-    const wrapper = ui.DOMElements.reactor_wrapper || document.getElementById("reactor_wrapper");
+    const wrapper = ui.registry?.get?.("PageInit")?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
     const section = document.getElementById("reactor_section");
     if (ui.particleSystem && wrapper) {
       const rect = wrapper.getBoundingClientRect();
@@ -221,22 +216,6 @@ export class MeltdownUI {
     }, 3500);
   }
 
-  updateProgressBarMeltdownState(isMeltdown) {
-    const ui = this.ui;
-    const desktopPowerElement = document.querySelector(".info-bar-desktop .info-item.power");
-    const desktopHeatElement = document.querySelector(".info-bar-desktop .info-item.heat");
-    if (desktopPowerElement) desktopPowerElement.classList.toggle("meltdown", isMeltdown);
-    if (desktopHeatElement) desktopHeatElement.classList.toggle("meltdown", isMeltdown);
-    const mobilePowerElement = document.querySelector("#info_bar .info-row.info-main .info-item.power");
-    const mobileHeatElement = document.querySelector("#info_bar .info-row.info-main .info-item.heat");
-    if (mobilePowerElement) mobilePowerElement.classList.toggle("meltdown", isMeltdown);
-    if (mobileHeatElement) mobileHeatElement.classList.toggle("meltdown", isMeltdown);
-    const mobileEl = document.getElementById("info_money");
-    const desktopEl = document.getElementById("info_money_desktop");
-    if (isMeltdown) {
-      if (mobileEl) mobileEl.textContent = "☢️";
-      if (desktopEl) desktopEl.textContent = "☢️";
-    } else {
-    }
+  updateProgressBarMeltdownState(_isMeltdown) {
   }
 }

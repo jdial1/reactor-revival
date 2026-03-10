@@ -172,15 +172,15 @@ function getDoctrineIcon(upgrade, doctrineSource) {
   return { icon: BASE_DOCTRINE_ICON, id: "base" };
 }
 
-export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick } = {}) => {
+export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick, useReactiveLevelAndCost } = {}) => {
   const isMaxed = upgrade.level >= upgrade.max_level;
   const { icon: doctrineIcon, id: doctrineId } = getDoctrineIcon(upgrade, doctrineSource);
   const doctrineLocked = upgrade.game?.upgradeset && !upgrade.game.upgradeset.isUpgradeAvailable(upgrade.id);
   const isSandbox = !!upgrade.game?.isSandbox;
-  const header = isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`;
+  const header = useReactiveLevelAndCost ? "" : (isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`);
   const rawDesc = isMaxed ? "" : (upgrade.description || "");
   const descHtml = upgrade.game?.ui?.stateManager ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc) : rawDesc;
-  const costDisplay = isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? "");
+  const costDisplay = useReactiveLevelAndCost ? "" : (isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? ""));
   const ariaLabel = doctrineLocked
     ? `Locked – ${upgrade.game?.upgradeset?.getDoctrineForUpgrade(upgrade.id)?.title || upgrade.game?.upgradeset?.getDoctrineForUpgrade(upgrade.id)?.id || "other doctrine"}`
     : isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`;
@@ -208,7 +208,7 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick
       </div>
       <div class="upgrade-footer">
         <div class="upgrade-level-info">
-          <span class="level-text">${header}</span>
+          ${header ? html`<span class="level-text">${header}</span>` : html`<span class="level-text"></span>`}
         </div>
         <button class="pixel-btn upgrade-action-btn"
                 ?disabled=${doctrineLocked || isMaxed}

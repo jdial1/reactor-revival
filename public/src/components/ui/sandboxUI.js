@@ -70,7 +70,7 @@ export class SandboxUI {
     ui.partsPanelUI.unlockAllPartsForTesting();
     ui.game.upgradeset.check_affordability(ui.game);
     ui.coreLoopUI.runUpdateInterfaceLoop();
-    if (ui._updateSandboxButton) ui._updateSandboxButton();
+    if (ui.uiState?.copy_paste_display) ui.uiState.copy_paste_display = { isSandbox: true };
   }
 
   exitSandbox() {
@@ -111,7 +111,7 @@ export class SandboxUI {
     document.body.classList.remove("reactor-sandbox");
     ui.game.reactor.updateStats();
     ui.coreLoopUI.runUpdateInterfaceLoop();
-    if (ui._updateSandboxButton) ui._updateSandboxButton();
+    if (ui.uiState?.copy_paste_display) ui.uiState.copy_paste_display = { isSandbox: false };
   }
 
   initializeSandboxUpgradeButtons() {

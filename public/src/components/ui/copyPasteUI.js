@@ -1,8 +1,11 @@
+import { html } from "lit-html";
+import { classMap } from "../../utils/litHelpers.js";
 import { numFormat as fmt, StorageUtils, serializeSave } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 import { BlueprintService } from "../../core/services/BlueprintService.js";
-import { renderMyLayoutsList } from "./copyPaste/myLayoutsListUI.js";
 import { setupCopyAction, setupPasteAction } from "./copyPaste/pasteModalController.js";
+import { MODAL_IDS } from "../ModalManager.js";
+import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
 
 const TOAST_DURATION_MS = 2000;
 const JSON_INDENT_SPACES = 2;
@@ -10,6 +13,7 @@ const JSON_INDENT_SPACES = 2;
 export class CopyPasteUI {
   constructor(ui) {
     this.ui = ui;
+    this.ui.registry.register('CopyPaste', this);
     this._blueprint = null;
   }
 
@@ -68,9 +72,7 @@ export class CopyPasteUI {
         StorageUtils.set("reactor_copy_paste_collapsed", copyPasteBtns.classList.contains("collapsed"));
       }
     };
-    if (uiState) {
-      copyPasteBtns.classList.toggle("collapsed", uiState.copy_paste_collapsed);
-    } else if (StorageUtils.get("reactor_copy_paste_collapsed") === true) {
+    if (!uiState && StorageUtils.get("reactor_copy_paste_collapsed") === true) {
       copyPasteBtns.classList.add("collapsed");
     }
   }
@@ -91,7 +93,7 @@ export class CopyPasteUI {
       dropperBtn.classList.toggle("on", ui._dropperModeActive);
       if (ui._dropperModeActive) {
         document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
-        const reactorEl = ui.DOMElements.reactor;
+        const reactorEl = ui.registry?.get?.("PageInit")?.getReactor?.() ?? ui.DOMElements?.reactor;
         if (reactorEl && !ui._dropperPointerHandler) {
           ui._dropperPointerHandler = (e) => {
             const tile = ui.gridCanvasRenderer ? ui.gridCanvasRenderer.hitTest(e.clientX, e.clientY) : null;
@@ -107,8 +109,9 @@ export class CopyPasteUI {
           };
           (ui.gridCanvasRenderer?.getCanvas() || reactorEl).addEventListener("pointerdown", ui._dropperPointerHandler, true);
         }
-      } else if (ui._dropperPointerHandler && ui.DOMElements.reactor) {
-        (ui.gridCanvasRenderer?.getCanvas() || ui.DOMElements.reactor).removeEventListener("pointerdown", ui._dropperPointerHandler, true);
+      } else if (ui._dropperPointerHandler) {
+        const reactorEl = ui.registry?.get?.("PageInit")?.getReactor?.() ?? ui.DOMElements?.reactor;
+        if (reactorEl) (ui.gridCanvasRenderer?.getCanvas() || reactorEl).removeEventListener("pointerdown", ui._dropperPointerHandler, true);
         ui._dropperPointerHandler = null;
       }
     };
@@ -117,70 +120,70 @@ export class CopyPasteUI {
   _setupMyLayouts() {
     const ui = this.ui;
     const myLayoutsBtn = document.getElementById("reactor_my_layouts_btn");
-    const myLayoutsModal = document.getElementById("my_layouts_modal");
-    const myLayoutsList = document.getElementById("my_layouts_list");
-    const myLayoutsCloseBtn = document.getElementById("my_layouts_close_btn");
-    if (!myLayoutsBtn || !myLayoutsModal || !myLayoutsList) return;
-    myLayoutsBtn.onclick = () => {
-      renderMyLayoutsList(ui, ui.layoutStorageUI.getMyLayouts(), myLayoutsList, myLayoutsModal, fmt, () => myLayoutsBtn.click());
-      myLayoutsModal.classList.remove("hidden");
-    };
-    if (myLayoutsCloseBtn) myLayoutsCloseBtn.onclick = () => myLayoutsModal.classList.add("hidden");
-    const saveFromClipboardBtn = document.getElementById("my_layouts_save_from_clipboard_btn");
-    if (saveFromClipboardBtn) {
-      saveFromClipboardBtn.onclick = async () => {
-        const result = await ui.clipboardUI.readFromClipboard();
-        const data = result.success ? result.data : "";
-        const layout = this._getBlueprint()?.deserialize(data);
-        if (!layout) {
-          logger.log('warn', 'ui', !result.success ? (result.message || "Clipboard unavailable.") : (data ? "Invalid layout data in clipboard." : "Clipboard is empty."));
-          return;
-        }
-        const defaultName = `Layout ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-        const name = (typeof prompt === "function" ? prompt("Name for this layout:", defaultName) : null) || defaultName;
-        ui.layoutStorageUI.addToMyLayouts(name.trim() || defaultName, data);
-        myLayoutsBtn.click();
-      };
-    }
+    if (!myLayoutsBtn) return;
+    myLayoutsBtn.onclick = () => ui.modalOrchestrator.showModal(MODAL_IDS.MY_LAYOUTS);
   }
 
   _setupSandboxButton() {
     const ui = this.ui;
-    const sandboxBtn = document.getElementById("reactor_sandbox_btn");
-    if (!sandboxBtn) return;
-    sandboxBtn.onclick = () => ui.sandboxUI.toggleSandbox();
-    const updateSandboxButton = () => {
-      if (!sandboxBtn) return;
-      sandboxBtn.title = ui.game?.isSandbox ? "Return to Splash" : "Enter Sandbox";
-      sandboxBtn.querySelector(".emoji-icon").textContent = ui.game?.isSandbox ? "\u23EE" : "\u{1F9EA}";
-      sandboxBtn.classList.toggle("on", !!ui.game?.isSandbox);
+    const root = document.getElementById("reactor_sandbox_btn_root");
+    if (!root || !ui.uiState) return;
+    if (this._sandboxUnmount) {
+      this._sandboxUnmount();
+      this._sandboxUnmount = null;
+    }
+    if (ui.game) ui.uiState.copy_paste_display = { isSandbox: !!ui.game.isSandbox };
+    const template = () => {
+      const isSandbox = ui.uiState.copy_paste_display.isSandbox;
+      const icon = isSandbox ? "\u23EE" : "\u{1F9EA}";
+      const title = isSandbox ? "Return to Splash" : "Enter Sandbox";
+      return html`
+        <button id="reactor_sandbox_btn" title=${title} tabindex="0" aria-label="Sandbox" class=${classMap({ on: isSandbox })} @click=${() => ui.sandboxUI.toggleSandbox()}>
+          <span class="emoji-icon">${icon}</span>
+        </button>
+      `;
     };
-    ui._updateSandboxButton = updateSandboxButton;
-    updateSandboxButton();
+    this._sandboxUnmount = ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["copy_paste_display"] }],
+      template,
+      root
+    );
   }
 
   setupCopyStateButton() {
     const ui = this.ui;
     const copyStateBtn = document.getElementById("copy_state_btn");
-    if (!copyStateBtn) return;
+    if (!copyStateBtn || !ui.uiState) return;
+    const defaultLabel = "Copy State";
+    if (this._copyStateUnmount) {
+      this._copyStateUnmount();
+      this._copyStateUnmount = null;
+    }
+    const renderFn = () => {
+      const label = ui.uiState.copy_state_feedback ?? defaultLabel;
+      return html`${label}`;
+    };
+    this._copyStateUnmount = ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["copy_state_feedback"] }],
+      renderFn,
+      copyStateBtn
+    );
     copyStateBtn.onclick = async () => {
       const gameStateObject = await ui.game.saveManager.getSaveState();
       const gameStateString = serializeSave(gameStateObject);
       navigator.clipboard
         .writeText(gameStateString)
         .then(() => {
-          const originalText = copyStateBtn.textContent;
-          ui.coreLoopUI.scheduleDomUpdate(() => { copyStateBtn.textContent = "Copied!"; });
+          ui.uiState.copy_state_feedback = "Copied!";
           setTimeout(() => {
-            ui.coreLoopUI.scheduleDomUpdate(() => { copyStateBtn.textContent = originalText; });
+            ui.uiState.copy_state_feedback = null;
           }, TOAST_DURATION_MS);
         })
         .catch((err) => {
           logger.log('error', 'ui', 'Failed to copy game state: ', err);
-          const originalText = copyStateBtn.textContent;
-          ui.coreLoopUI.scheduleDomUpdate(() => { copyStateBtn.textContent = "Error!"; });
+          ui.uiState.copy_state_feedback = "Error!";
           setTimeout(() => {
-            ui.coreLoopUI.scheduleDomUpdate(() => { copyStateBtn.textContent = originalText; });
+            ui.uiState.copy_state_feedback = null;
           }, TOAST_DURATION_MS);
         });
     };

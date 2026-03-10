@@ -17,7 +17,6 @@ import { PartsPanelUI } from "./ui/partsPanelUI.js";
 import { ObjectivesUI } from "./ui/objectivesUI.js";
 import { HeatVisualsUI } from "./ui/heatVisualsUI.js";
 import { GridInteractionUI } from "./ui/gridInteractionUI.js";
-import { LayoutModalUI } from "./ui/layoutModalUI.js";
 import { ControlDeckUI } from "./ui/controlDeckUI.js";
 import { UpgradesUI } from "./ui/upgradesUI.js";
 import { PerformanceUI } from "./ui/performanceUI.js";
@@ -38,7 +37,7 @@ import { QuickStartUI } from "./ui/quickStartUI.js";
 import { NavIndicatorsUI } from "./ui/navIndicatorsUI.js";
 import { PauseStateUI } from "./ui/pauseStateUI.js";
 import { ClipboardUI } from "./ui/clipboardUI.js";
-import { DOM_IDS } from "./ui/domIdsConfig.js";
+import { ComponentRegistry } from "../utils/ComponentRegistry.js";
 import { MOBILE_BREAKPOINT_PX } from "../core/constants.js";
 import { runPopulateUpgradeSection } from "./ui/upgrades/domPopulatorUI.js";
 import { getPowerNetChange as getPowerNetChangeFromStats, getHeatNetChange as getHeatNetChangeFromStats } from "./ui/statsCalculatorUI.js";
@@ -52,6 +51,7 @@ import { AudioController } from "./controllers/AudioController.js";
 export class UI {
   constructor() {
     this.game = null;
+    this.registry = new ComponentRegistry();
     this.DOMElements = {};
     this.var_objs_config = {};
     this.last_money = 0;
@@ -62,7 +62,6 @@ export class UI {
     this.last_interface_update = 0;
     this.update_interface_task = null;
     this._updateLoopRunning = false;
-    this._pendingDomUpdates = [];
     this.stateManager = new StateManager(this);
     this.inputHandler = new InputHandler(this);
     this.modalOrchestrator = new ModalOrchestrator();
@@ -79,7 +78,6 @@ export class UI {
     this.objectiveController = new ObjectiveController({
       getGame: () => this.game,
       getUI: () => this,
-      getDOMElements: () => this.DOMElements,
       getStateManager: () => this.stateManager,
       cacheDOMElements: () => this.coreLoopUI.cacheDOMElements(),
       lightVibration: () => this.deviceFeatures?.lightVibration?.(),
@@ -97,12 +95,11 @@ export class UI {
       clearAllActiveAnimations: () => this.gridInteractionUI.clearAllActiveAnimations(),
       getAnimationStatus: () => this.gridInteractionUI.getAnimationStatus(),
       clearReactorHeat: () => this.gridInteractionUI.clearReactorHeat(),
-      pulseReflector: (a, b) => this.gridInteractionUI.pulseReflector(a, b),
-      emitEP: (t) => this.gridInteractionUI.emitEP(t),
-    });
-    this.audioController = new AudioController({ getAudioService: () => this.game?.audio });
-    this.layoutModalUI = new LayoutModalUI(this);
-    this.controlDeckUI = new ControlDeckUI(this);
+    pulseReflector: (a, b) => this.gridInteractionUI.pulseReflector(a, b),
+    emitEP: (t) => this.gridInteractionUI.emitEP(t),
+  });
+  this.audioController = new AudioController({ getAudioService: () => this.game?.audio, getUI: () => this });
+  this.controlDeckUI = new ControlDeckUI(this);
     this.upgradesUI = new UpgradesUI(this);
     this.performanceUI = new PerformanceUI(this);
     this.meltdownUI = new MeltdownUI(this);
@@ -122,8 +119,6 @@ export class UI {
     this.tabSetupUI = new TabSetupUI(this);
     this.visualEventRendererUI = new VisualEventRendererUI(this);
 
-    this.dom_ids = DOM_IDS;
-
     this.ctrl9HoldTimer = null;
     this.ctrl9HoldStartTime = null;
     this.ctrl9MoneyInterval = null;
@@ -131,13 +126,14 @@ export class UI {
     this.ctrl9ExponentialRate = 5;
     this.ctrl9IntervalMs = 100;
 
-    this.displayValues = {
-      money: { current: 0, target: 0, domId: ['info_money', 'info_money_desktop', 'control_deck_money_value'] },
-      heat: { current: 0, target: 0, domId: ['info_heat', 'info_heat_desktop', 'control_deck_heat'], format0: true },
-      power: { current: 0, target: 0, domId: ['info_power', 'info_power_desktop', 'control_deck_power'] },
-      ep: { current: 0, target: 0, domId: ['info_ep_value', 'info_ep_value_desktop'] }
-    };
     this._lastUiTime = 0;
+
+    this.displayValues = {
+      money: { current: 0, target: 0 },
+      heat: { current: 0, target: 0 },
+      power: { current: 0, target: 0 },
+      ep: { current: 0, target: 0 },
+    };
 
     this._visualPool = { floatingText: [], steamParticle: [], bolt: [] };
     this._particleCanvas = null;
@@ -170,6 +166,18 @@ export class UI {
     return getHeatNetChangeFromStats(this);
   }
 
+  getSellingTile() {
+    return this.gridInteractionUI?.getSellingTile?.() ?? null;
+  }
+
+  getHoveredTile() {
+    return this.gridInteractionUI?.getHoveredTile?.() ?? null;
+  }
+
+  getHighlightedTiles() {
+    return this.gridInteractionUI?.getHighlightedTiles?.() ?? [];
+  }
+
   resizeReactor() {
     this.gridScaler.resize();
   }
@@ -189,11 +197,6 @@ export class UI {
   initMainLayout() {
     initMainLayoutFromModule(this);
     this._uiStateTeardown = initUIStateSubscriptions(this.uiState, this);
-    const btns = document.getElementById("reactor_copy_paste_btns");
-    if (btns) btns.classList.toggle("collapsed", !!this.uiState.copy_paste_collapsed);
-    const partsSection = document.getElementById("parts_section");
-    if (partsSection) partsSection.classList.toggle("collapsed", !!this.uiState.parts_panel_collapsed);
-    this.objectivesUI?.updateObjectiveDisplay?.();
   }
 
   startCtrl9MoneyIncrease() {
@@ -224,8 +227,8 @@ export class UI {
   }
 
   forceReactorRealignment() {
-    if (!this.game || !this.DOMElements.reactor) return;
-    const reactor = this.DOMElements.reactor;
+    const reactor = this.registry?.get?.("PageInit")?.getReactor?.() ?? this.DOMElements?.reactor;
+    if (!this.game || !reactor) return;
     const originalDisplay = reactor.style.display;
     reactor.style.display = "none";
     reactor.offsetHeight;
@@ -270,7 +273,7 @@ export class UI {
       getGame: () => this.game,
       getUI: () => this,
       getStateManager: () => this.stateManager,
-      getDOMElements: () => this.DOMElements,
+      getRegistry: () => this.registry,
     };
   }
 
@@ -291,6 +294,10 @@ export class UI {
       this.controlDeckUI._epUnmount();
       this.controlDeckUI._epUnmount = null;
     }
+    if (typeof this.controlDeckUI?._engineStatusUnmount === "function") {
+      this.controlDeckUI._engineStatusUnmount();
+      this.controlDeckUI._engineStatusUnmount = null;
+    }
     if (this.objectiveController?.unmount) this.objectiveController.unmount();
     if (typeof this.partsPanelUI?._partsPanelUnmount === "function") {
       this.partsPanelUI._partsPanelUnmount();
@@ -298,7 +305,34 @@ export class UI {
     }
     this.meltdownUI.cleanup();
     this.mobileInfoBarUI?.cleanup?.();
+    if (typeof this.copyPasteUI?._sandboxUnmount === "function") {
+      this.copyPasteUI._sandboxUnmount();
+      this.copyPasteUI._sandboxUnmount = null;
+    }
+    if (typeof this.copyPasteUI?._copyStateUnmount === "function") {
+      this.copyPasteUI._copyStateUnmount();
+      this.copyPasteUI._copyStateUnmount = null;
+    }
+    if (typeof this._sectionCountsUnmountUpgrades === "function") {
+      this._sectionCountsUnmountUpgrades();
+      this._sectionCountsUnmountUpgrades = null;
+    }
+    this._sectionCountsMountedUpgrades = false;
+    if (typeof this._sectionCountsUnmountResearch === "function") {
+      this._sectionCountsUnmountResearch();
+      this._sectionCountsUnmountResearch = null;
+    }
+    this._sectionCountsMountedResearch = false;
+    if (this._affordabilityBannerUnmounts?.length) {
+      this._affordabilityBannerUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+      this._affordabilityBannerUnmounts = [];
+    }
+    this._affordabilityBannerMountedUpgrades = false;
+    this._affordabilityBannerMountedResearch = false;
+    this._versionDisplayMounted = false;
+    this.navIndicatorsUI?.teardownAffordabilityIndicators?.();
     this.infoBarUI?.teardown?.();
+    this.userAccountUI?.teardownUserAccountButton?.();
     if (this.game && this.modalOrchestrationUI.unsubscribeContextModal) this.modalOrchestrationUI.unsubscribeContextModal(this.game);
     if (typeof this.detachGameEventListeners === "function") {
       this.detachGameEventListeners();

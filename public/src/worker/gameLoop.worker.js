@@ -10,6 +10,7 @@ import {
   DEFAULT_SELL_PRICE_MULTIPLIER,
   VENT_BONUS_PERCENT_DIVISOR,
 } from "../core/constants.js";
+import { toDecimal } from "../utils/decimal.js";
 import { getIndex, isInBounds } from "../core/logic/gridUtils.js";
 import { getNeighborKeys, applyPowerOverflowCalcDecimal, clampHeatDecimal } from "../core/logic/gridUtils.js";
 
@@ -42,8 +43,14 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
     const part = partTable[t.partIndex];
     if (!part || part.category !== "cell" || t.ticks <= 0) continue;
 
-    power_add += (part.power ?? 0) * multiplier;
-    const generatedHeat = (part.heat ?? 0) * multiplier;
+    const layoutPower = (typeof t.power === "number" && !isNaN(t.power) && isFinite(t.power))
+      ? t.power
+      : ((typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)) ? part.power : (part.base_power ?? 0));
+    power_add += layoutPower * multiplier;
+    const layoutHeat = (typeof t.heat === "number" && !isNaN(t.heat) && isFinite(t.heat))
+      ? t.heat
+      : (part.heat ?? 0);
+    const generatedHeat = layoutHeat * multiplier;
     const neighbors = getNeighborKeys(t.r, t.c).filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc));
 
     let validCount = 0;
@@ -71,6 +78,10 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
     if (t.ticks <= 0) depletionIndices.push(gidx(t.r, t.c));
   }
 
+  if (power_add > 0 || depletionIndices.length > 0) {
+    const cellCount = partLayout.filter((t) => partTable[t.partIndex]?.category === "cell" && (t.ticks ?? 0) > 0).length;
+    console.debug("[GameLoopWorker] processCells:", { power_add, heat_add, cellCount, depletionCount: depletionIndices.length });
+  }
   return { power_add, heat_add, depletionIndices, tileUpdates };
 }
 
@@ -182,7 +193,7 @@ function createGridContext(data) {
     multiplier,
     reactorState,
     autoSell,
-    effectiveMaxPower: Number(reactorState.max_power ?? 0),
+    effectiveMaxPower: toDecimal(reactorState.max_power ?? 0),
     partAt: buildCellLookup(partLayout),
     gidx: (r, c) => getIndex(r, c, stride),
   };
@@ -201,6 +212,11 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower) 
 
   const explosionIndices = findExplosionIndices(partLayout, partTable, heat, gidx);
   const ventPower = processVents(partLayout, partTable, heat, reactorState, multiplier, gidx);
+
+  const totalPowerAdd = cellResult.power_add + ventPower;
+  if (totalPowerAdd > 0) {
+    console.debug("[GameLoopWorker] power sources:", { cellPower: cellResult.power_add, ventPower, totalPowerAdd });
+  }
 
   const powerResult = applyReactorPowerUpdates(
     reactorPower,
@@ -253,15 +269,25 @@ function runOneTick(data) {
     }
   }
 
+  const powerDelta = reactorPower.sub(powerBeforeTick).toNumber();
+  const reactorPowerNum = reactorPower.toNumber();
+  console.debug("[GameLoopWorker] runOneTick result:", {
+    tickCount: n,
+    powerBefore: powerBeforeTick?.toNumber?.() ?? powerBeforeTick,
+    powerAfter: reactorPowerNum,
+    powerDelta,
+    reactorHeat: reactorHeat.toNumber()
+  });
+
   return {
     reactorHeat: reactorHeat.toNumber(),
-    reactorPower: reactorPower.toNumber(),
+    reactorPower: reactorPowerNum,
     explosionIndices: allExplosionIndices,
     depletionIndices: allDepletionIndices,
     tileUpdates: Array.from(tileUpdatesMap.values()),
     moneyEarned: totalMoneyEarned.toNumber(),
     epGained: 0,
-    powerDelta: reactorPower.sub(powerBeforeTick).toNumber(),
+    powerDelta,
     heatDelta: reactorHeat.sub(heatBeforeTick).toNumber(),
     transfers: [],
     tickCount: n
@@ -288,8 +314,10 @@ function runStep() {
     result.type = "tickResult";
     result.tickId = data.tickId ?? d.tickId;
     result.useSAB = !!data.heatBuffer && typeof SharedArrayBuffer !== "undefined" && data.heatBuffer instanceof SharedArrayBuffer;
+    console.debug("[GameLoopWorker] postMessage tickResult:", { tickId: result.tickId, reactorPower: result.reactorPower, powerDelta: result.powerDelta });
     self.postMessage(result);
   } catch (err) {
+    console.error("[GameLoopWorker] runStep error:", err);
     self.postMessage({ type: "tickResult", tickId: d?.tickId ?? 0, error: true, message: String(err?.message || err) });
   }
   busy = false;

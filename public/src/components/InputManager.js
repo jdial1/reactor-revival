@@ -1,17 +1,19 @@
 import { Hotkeys } from "../utils/hotkeys.js";
+import { tileKey, resolveTileFromKey } from "../core/uiStore.js";
 
 export class InputHandler {
   constructor(ui) {
     this.ui = ui;
     this.hotkeys = null;
-    this.isDragging = false;
     this.lastTileModified = null;
     this.longPressTimer = null;
     this.longPressDuration = 500;
-    this._sellingTile = null;
-    this._hoveredTile = null;
     this._reactorEventTarget = null;
     this._reactorHandlers = null;
+  }
+
+  get isDragging() {
+    return this.ui?.uiState?.interaction?.isDragging ?? false;
   }
 
   setup() {
@@ -24,18 +26,18 @@ export class InputHandler {
     return () => {
       this.longPressTimer = null;
       if (state.longPressTargetTile) {
-        this._sellingTile = null;
+        if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.sellingTileKey = null;
         state.longPressTargetTile.sellPart();
         this.ui.game.reactor.updateStats();
         if (this.ui.game?.audio) this.ui.game.audio.play("sell");
       }
-      this.isDragging = false;
+      if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.isDragging = false;
     };
   }
 
   _scheduleLongPressForTile(state, tile) {
     state.longPressTargetTile = tile;
-    this._sellingTile = tile;
+    if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.sellingTileKey = tileKey(tile.row, tile.col);
     this.longPressTimer = setTimeout(
       this._createLongPressCallback(state),
       this.longPressDuration
@@ -71,7 +73,8 @@ export class InputHandler {
         cancelLongPress();
       }
       if (this.isDragging) {
-        this.isDragging = false;
+        if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.isDragging = false;
+        if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.sellingTileKey = null;
         this.lastTileModified = null;
         this.ui.game.reactor.updateStats();
       }
@@ -97,7 +100,7 @@ export class InputHandler {
         clearTimeout(this.longPressTimer);
         this.longPressTimer = null;
       }
-      this._sellingTile = null;
+      if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.sellingTileKey = null;
       state.longPressTargetTile = null;
     };
   }
@@ -116,7 +119,7 @@ export class InputHandler {
   }
 
   setupReactorEventListeners() {
-    const reactor = this.ui.DOMElements.reactor;
+    const reactor = this.ui.registry?.get?.("PageInit")?.getReactor?.() ?? this.ui.DOMElements?.reactor;
     if (!reactor) return;
 
     const MOVE_THRESHOLD = 18;
@@ -136,7 +139,7 @@ export class InputHandler {
       const state = this._buildPointerState(tile, e);
       const cancelLongPress = this._getCancelLongPress(state);
       e.preventDefault();
-      this.isDragging = true;
+      if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.isDragging = true;
       this.lastTileModified = tile;
       if (tile.part && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         this._scheduleLongPressForTile(state, tile);
@@ -156,7 +159,10 @@ export class InputHandler {
       const tile = this.ui.gridCanvasRenderer
         ? this.ui.gridCanvasRenderer.hitTest(e.clientX, e.clientY)
         : null;
-      this._hoveredTile = tile?.enabled ? tile : null;
+      const next = tile?.enabled ? tile : null;
+      if (this.ui?.uiState?.interaction) {
+        this.ui.uiState.interaction.hoveredTileKey = next ? tileKey(next.row, next.col) : null;
+      }
       if (
         tile?.part &&
         this.ui.game?.tooltip_manager &&
@@ -167,7 +173,7 @@ export class InputHandler {
       }
     };
     const mouseLeaveHandler = () => {
-      this._hoveredTile = null;
+      if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.hoveredTileKey = null;
       if (this.ui?.game?.tooltip_manager && this.ui?.help_mode_active) {
         this.ui.game.tooltip_manager.hide();
       }
@@ -198,7 +204,7 @@ export class InputHandler {
   }
 
   setupSegmentHighlight() {
-    const reactorElement = this.ui.DOMElements.reactor;
+    const reactorElement = this.ui.registry?.get?.("PageInit")?.getReactor?.() ?? this.ui.DOMElements?.reactor;
     if (!reactorElement) return;
 
     const heatComponentCategories = [
@@ -245,10 +251,12 @@ export class InputHandler {
   }
 
   getHoveredTile() {
-    return this._hoveredTile ?? null;
+    const key = this.ui?.uiState?.interaction?.hoveredTileKey;
+    return resolveTileFromKey(this.ui?.game, key);
   }
 
   getSellingTile() {
-    return this._sellingTile ?? null;
+    const key = this.ui?.uiState?.interaction?.sellingTileKey;
+    return resolveTileFromKey(this.ui?.game, key);
   }
 }

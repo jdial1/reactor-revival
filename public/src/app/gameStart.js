@@ -72,7 +72,6 @@ function syncUIAfterEngineStart(game, ui) {
   ui.pauseStateUI?.updatePauseState?.();
   setTimeout(() => {
     game.reactor.updateStats();
-    if (ui.objectivesUI?.updateObjectiveDisplayFromState) ui.objectivesUI.updateObjectiveDisplayFromState();
   }, SYNC_UI_DELAY_MS);
 }
 

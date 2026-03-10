@@ -1,8 +1,8 @@
-import { html, render } from "lit-html";
+import { html } from "lit-html";
 import { numFormat as fmt } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 import { MOBILE_BREAKPOINT_PX } from "../../core/constants.js";
-import { classMap, styleMap, repeat } from "../../utils/litHelpers.js";
+import { classMap, styleMap, repeat, render } from "../../utils/litHelpers.js";
 import { PartButton } from "../buttonFactory.js";
 import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
 
@@ -44,8 +44,12 @@ function getPartsByContainer(partset, tabId, unlockManager) {
 export class PartsPanelUI {
   constructor(ui) {
     this.ui = ui;
-    this._resizeHandler = null;
+    this.ui.registry.register('PartsPanel', this);
     this._partsPanelUnmount = null;
+  }
+
+  getPartsSection() {
+    return this.ui.coreLoopUI?.getElement?.("parts_section") ?? this.ui.DOMElements?.parts_section ?? document.getElementById("parts_section");
   }
 
   unlockAllPartsForTesting() {
@@ -79,52 +83,61 @@ export class PartsPanelUI {
     this.refreshPartsPanel();
   }
 
-  _partsPanelTemplate() {
+  _partsPanelTemplate(uiState) {
     const ui = this.ui;
     const game = ui.game;
     const partset = game?.partset;
     const unlockManager = game?.unlockManager;
-    const activeTab = ui.uiState?.active_parts_tab ?? "power";
-    if (!partset) {
-      return html`
-        <div id="parts_tab_power" class="parts_tab_content active"><div id="cells" class="item-grid"></div><div id="reflectors" class="item-grid"></div><div id="capacitors" class="item-grid"></div><div id="particleAccelerators" class="item-grid"></div></div>
-        <div id="parts_tab_heat" class="parts_tab_content"><div id="vents" class="item-grid"></div><div id="heatExchangers" class="item-grid"></div><div id="heatInlets" class="item-grid"></div><div id="heatOutlets" class="item-grid"></div><div id="coolantCells" class="item-grid"></div><div id="reactorPlatings" class="item-grid"></div><div id="overflowValves" class="item-grid"></div><div id="topupValves" class="item-grid"></div><div id="checkValves" class="item-grid"></div></div>
-      `;
-    }
-    const byContainer = getPartsByContainer(partset, activeTab, unlockManager);
-    const selectedPartId = ui.stateManager.getClickedPart()?.id ?? null;
-    const partHandlers = (part) => {
-      const onClick = () => {
-        if (ui.help_mode_active) {
-          if (game?.tooltip_manager) game.tooltip_manager.show(part, null, true);
-          return;
-        }
-        if (part.affordable) {
-          game?.emit?.("partClicked", { part });
-          ui.stateManager.setClickedPart(part);
-        } else if (game?.tooltip_manager) {
-          game.tooltip_manager.show(part, null, true);
-        }
-      };
-      const onMouseEnter = () => {
-        if (ui.help_mode_active && game?.tooltip_manager) game.tooltip_manager.show(part, null, false);
-      };
-      const onMouseLeave = () => {
-        if (ui.help_mode_active && game?.tooltip_manager) game.tooltip_manager.hide();
-      };
-      const unlocked = !unlockManager || unlockManager.isPartUnlocked(part);
-      const opts = {
-        locked: !unlocked,
-        doctrineLocked: !unlocked && partset?.isPartDoctrineLocked?.(part),
-        tierProgress: !unlocked ? `${Math.min(unlockManager?.getPreviousTierCount(part) ?? 0, 10)}/10` : "",
-        partActive: part.id === selectedPartId,
-      };
-      return PartButton(part, onClick, onMouseEnter, onMouseLeave, opts);
+    const activeTab = uiState?.active_parts_tab ?? "power";
+    const switchTab = (tabId) => { if (ui.uiState) ui.uiState.active_parts_tab = tabId; };
+    const onHelpToggle = () => {
+      ui.help_mode_active = !ui.help_mode_active;
+      document.body.classList.toggle("help-mode-active", ui.help_mode_active);
+      if (ui.help_mode_active) ui.stateManager.setClickedPart(null);
+      this.refreshPartsPanel();
     };
     const powerActive = activeTab === "power";
     const heatActive = activeTab === "heat";
-    const grid = (id) => html`<div id=${id} class="item-grid">${repeat(byContainer.get(id) ?? [], (p) => p.id, partHandlers)}</div>`;
-    return html`
+
+    let tabContent;
+    if (!partset) {
+      tabContent = html`
+        <div id="parts_tab_power" class="parts_tab_content active"><div id="cells" class="item-grid"></div><div id="reflectors" class="item-grid"></div><div id="capacitors" class="item-grid"></div><div id="particleAccelerators" class="item-grid"></div></div>
+        <div id="parts_tab_heat" class="parts_tab_content"><div id="vents" class="item-grid"></div><div id="heatExchangers" class="item-grid"></div><div id="heatInlets" class="item-grid"></div><div id="heatOutlets" class="item-grid"></div><div id="coolantCells" class="item-grid"></div><div id="reactorPlatings" class="item-grid"></div><div id="overflowValves" class="item-grid"></div><div id="topupValves" class="item-grid"></div><div id="checkValves" class="item-grid"></div></div>
+      `;
+    } else {
+      const byContainer = getPartsByContainer(partset, activeTab, unlockManager);
+      const selectedPartId = ui.stateManager.getClickedPart()?.id ?? null;
+      const partHandlers = (part) => {
+        const onClick = () => {
+          if (ui.help_mode_active) {
+            if (game?.tooltip_manager) game.tooltip_manager.show(part, null, true);
+            return;
+          }
+          if (part.affordable) {
+            game?.emit?.("partClicked", { part });
+            ui.stateManager.setClickedPart(part);
+          } else if (game?.tooltip_manager) {
+            game.tooltip_manager.show(part, null, true);
+          }
+        };
+        const onMouseEnter = () => {
+          if (ui.help_mode_active && game?.tooltip_manager) game.tooltip_manager.show(part, null, false);
+        };
+        const onMouseLeave = () => {
+          if (ui.help_mode_active && game?.tooltip_manager) game.tooltip_manager.hide();
+        };
+        const unlocked = !unlockManager || unlockManager.isPartUnlocked(part);
+        const opts = {
+          locked: !unlocked,
+          doctrineLocked: !unlocked && partset?.isPartDoctrineLocked?.(part),
+          tierProgress: !unlocked ? `${Math.min(unlockManager?.getPreviousTierCount(part) ?? 0, 10)}/10` : "",
+          partActive: part.id === selectedPartId,
+        };
+        return PartButton(part, onClick, onMouseEnter, onMouseLeave, opts);
+      };
+      const grid = (id) => html`<div id=${id} class="item-grid">${repeat(byContainer.get(id) ?? [], (p) => p.id, partHandlers)}</div>`;
+      tabContent = html`
         <div id="parts_tab_power" class="parts_tab_content ${powerActive ? "active" : ""}">
           <hgroup><h4>Cells</h4><h6>Generate power and heat.</h6></hgroup>
           ${grid("cells")}
@@ -155,42 +168,58 @@ export class PartsPanelUI {
           <hgroup><h4>Check Valves</h4><h6>Transfer heat in one direction only.</h6></hgroup>
           ${grid("checkValves")}
         </div>
+      `;
+    }
+
+    return html`
+      <div class="parts_header">
+        <div class="parts_tabs parts_categories_carousel">
+          <button
+            class="parts_tab ${powerActive ? "active" : ""}"
+            @click=${() => switchTab("power")}
+            title="Power Creation"
+            aria-label="Power Creation"
+          >
+            <img src="img/ui/icons/icon_power.png" alt="Power" />
+            <span class="parts_tab_label">Power</span>
+          </button>
+          <button
+            class="parts_tab ${heatActive ? "active" : ""}"
+            @click=${() => switchTab("heat")}
+            title="Heat Management"
+            aria-label="Heat Management"
+          >
+            <img src="img/ui/icons/icon_heat.png" alt="Heat" />
+            <span class="parts_tab_label">Heat</span>
+          </button>
+          <button
+            id="parts_help_toggle"
+            class="parts_help_btn ${ui.help_mode_active ? "active" : ""}"
+            title="Toggle help mode - click to show part information instead of placing parts"
+            aria-label="Toggle help mode"
+            @click=${onHelpToggle}
+          >
+            ?
+          </button>
+        </div>
+      </div>
+      <div id="parts_tab_contents">
+        ${tabContent}
+      </div>
     `;
   }
 
   setupPartsTabs() {
     const ui = this.ui;
-    const partsTabsContainer = document.querySelector(".parts_tabs");
-    if (!partsTabsContainer) return;
-    partsTabsContainer.addEventListener("click", (event) => {
-      const btn = event.target.closest(".parts_tab");
-      if (!btn || btn.disabled) return;
-      const clickedTabId = btn.getAttribute("data-tab");
-      if (ui.uiState) ui.uiState.active_parts_tab = clickedTabId;
-    });
-
-    const helpToggleBtn = document.getElementById("parts_help_toggle");
-    if (helpToggleBtn) {
-      helpToggleBtn.addEventListener("click", () => {
-        ui.help_mode_active = !ui.help_mode_active;
-        helpToggleBtn.classList.toggle("active", ui.help_mode_active);
-        document.body.classList.toggle("help-mode-active", ui.help_mode_active);
-        if (ui.help_mode_active) {
-          ui.stateManager.setClickedPart(null);
-        }
-        this.refreshPartsPanel();
-      });
-    }
-
-    const root = document.getElementById("parts_tab_contents");
-    if (root && ui.game?.state && ui.uiState) {
-      const subscriptions = [
-        { state: ui.game.state, keys: ["current_money", "current_exotic_particles", "parts_panel_version"] },
-        { state: ui.uiState, keys: ["active_parts_tab"] },
-      ];
-      const renderFn = () => this._partsPanelTemplate();
-      this._partsPanelUnmount = ReactiveLitComponent.mountMulti(subscriptions, renderFn, root);
-    }
+    const root = document.getElementById("parts_panel_reactive_root");
+    if (!root || !ui.uiState) return;
+    const subscriptions = [
+      { state: ui.game?.state, keys: ["current_money", "current_exotic_particles", "parts_panel_version"] },
+      { state: ui.uiState, keys: ["active_parts_tab", "parts_panel_collapsed"] },
+    ].filter((s) => s.state != null);
+    if (subscriptions.length === 0) return;
+    const renderFn = () => this._partsPanelTemplate(ui.uiState);
+    this._partsPanelUnmount = ReactiveLitComponent.mountMulti(subscriptions, renderFn, root);
     ui.updateCollapsedControlsNav();
   }
 
@@ -236,7 +265,7 @@ export class PartsPanelUI {
   }
 
   updatePartsPanelBodyClass() {
-    const partsSection = document.getElementById("parts_section");
+    const partsSection = this.getPartsSection();
     const collapsed = this.ui.uiState?.parts_panel_collapsed ?? partsSection?.classList.contains("collapsed");
     document.body.classList.toggle("parts-panel-open", !!(partsSection && !collapsed));
     document.body.classList.toggle("parts-panel-right", !!partsSection?.classList.contains("right-side"));
@@ -247,7 +276,7 @@ export class PartsPanelUI {
   togglePartsPanelForBuildButton() {
     const ui = this.ui;
     ui.deviceFeatures.lightVibration();
-    const partsSection = document.getElementById("parts_section");
+    const partsSection = this.getPartsSection();
     if (partsSection && ui.uiState) {
       const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
       if (isMobile) {
@@ -270,40 +299,35 @@ export class PartsPanelUI {
 
   initializePartsPanel() {
     const ui = this.ui;
-    const panel = ui.DOMElements.parts_section;
+    const panel = this.getPartsSection();
+    if (!panel) return;
 
-    if (panel) {
-      if (this._resizeHandler) {
-        window.removeEventListener("resize", this._resizeHandler);
-      }
-
-      this._resizeHandler = () => {
-        const isCurrentlyMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-        if (ui.uiState) ui.uiState.parts_panel_collapsed = isCurrentlyMobile;
-        else panel.classList.toggle("collapsed", isCurrentlyMobile);
-        this.updatePartsPanelBodyClass();
-      };
-
-      window.addEventListener("resize", this._resizeHandler);
-
-      const isMobileOnLoad = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-      if (ui.uiState) ui.uiState.parts_panel_collapsed = isMobileOnLoad;
-      panel.classList.toggle("collapsed", ui.uiState?.parts_panel_collapsed ?? isMobileOnLoad);
-      logger.log('debug', 'ui', '[Parts Panel Init]', isMobileOnLoad ? "Mobile detected - added collapsed class" : "Desktop detected - removed collapsed class");
-      logger.log('debug', 'ui', '[Parts Panel Init] Final state - collapsed:', panel.classList.contains("collapsed"));
+    if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);
+    this._resizeHandler = () => {
+      const isCurrentlyMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
+      if (ui.uiState) ui.uiState.parts_panel_collapsed = isCurrentlyMobile;
+      else panel.classList.toggle("collapsed", isCurrentlyMobile);
       this.updatePartsPanelBodyClass();
+    };
+    window.addEventListener("resize", this._resizeHandler);
 
-      const closeBtn = document.getElementById("parts_close_btn");
-      if (closeBtn && !closeBtn.hasAttribute("data-listener-attached")) {
-        closeBtn.setAttribute("data-listener-attached", "true");
-        closeBtn.addEventListener("click", () => {
-          if (ui.uiState) ui.uiState.parts_panel_collapsed = true;
-          else panel.classList.add("collapsed");
-          this.updatePartsPanelBodyClass();
-        });
-      }
+    const isMobileOnLoad = window.innerWidth <= MOBILE_BREAKPOINT_PX;
+    if (ui.uiState) ui.uiState.parts_panel_collapsed = isMobileOnLoad;
+    panel.classList.toggle("collapsed", ui.uiState?.parts_panel_collapsed ?? isMobileOnLoad);
+    logger.log('debug', 'ui', '[Parts Panel Init]', isMobileOnLoad ? "Mobile detected - added collapsed class" : "Desktop detected - removed collapsed class");
+    logger.log('debug', 'ui', '[Parts Panel Init] Final state - collapsed:', panel.classList.contains("collapsed"));
+    this.updatePartsPanelBodyClass();
 
-      ui.stateManager.updatePartsPanelToggleIcon(null);
+    const closeBtn = document.getElementById("parts_close_btn");
+    if (closeBtn && !closeBtn.hasAttribute("data-listener-attached")) {
+      closeBtn.setAttribute("data-listener-attached", "true");
+      closeBtn.addEventListener("click", () => {
+        if (ui.uiState) ui.uiState.parts_panel_collapsed = true;
+        else panel.classList.add("collapsed");
+        this.updatePartsPanelBodyClass();
+      });
     }
+
+    ui.stateManager.updatePartsPanelToggleIcon(null);
   }
 }

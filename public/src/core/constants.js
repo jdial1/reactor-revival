@@ -61,6 +61,7 @@ export const HEAT_CALC_POOL_SIZE = 500;
 
 export const MAX_TICKS_PER_FRAME_NO_SAB = 2;
 export const SLOW_MODE_TICKS_PER_FRAME = 2;
+export const GAME_LOOP_WORKER_MIN_TICKS = 3;
 export const TIME_FLUX_CHUNK_TICKS = 100;
 export const SAMPLE_TICKS = 5;
 export const OFFLINE_TIME_THRESHOLD_MS = 30000;

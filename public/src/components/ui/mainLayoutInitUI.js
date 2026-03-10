@@ -15,11 +15,12 @@ export function initMainLayout(ui) {
   ui.tabSetupUI.setupMenuTabButton();
   ui.deviceFeatures.setupAppBadgeVisibilityHandler();
   ui.deviceFeatures.updateWakeLockState();
-  if (ui.DOMElements.basic_overview_section && ui.help_text?.basic_overview) {
+  const basicOverview = ui.coreLoopUI?.getElement?.("basic_overview_section") ?? ui.DOMElements?.basic_overview_section;
+  if (basicOverview && ui.help_text?.basic_overview) {
     render(html`
       <h3>${ui.help_text.basic_overview.title}</h3>
       <p>${unsafeHTML(ui.help_text.basic_overview.content)}</p>
-    `, ui.DOMElements.basic_overview_section);
+    `, basicOverview);
   }
   if (ui.gridScaler) ui.gridScaler.init();
   if (document.getElementById("reactor_wrapper")) {

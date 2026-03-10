@@ -5,6 +5,7 @@ import { styleMap } from "../../utils/litHelpers.js";
 export class HeatVisualsUI {
   constructor(ui) {
     this.ui = ui;
+    this.ui.registry.register('HeatVisuals', this);
     this._overlay = null;
     this._heatFlowOverlay = null;
     this._timeFluxSimOverlay = null;
@@ -13,7 +14,7 @@ export class HeatVisualsUI {
   _ensureOverlay() {
     const ui = this.ui;
     if (this._overlay && this._overlay.parentElement) return this._overlay;
-    const reactorWrapper = ui.DOMElements.reactor_wrapper || document.getElementById('reactor_wrapper');
+    const reactorWrapper = ui.registry?.get?.("PageInit")?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
     if (!reactorWrapper) {
       return null;
     }
@@ -83,8 +84,8 @@ export class HeatVisualsUI {
     const ui = this.ui;
     const overlay = this._ensureOverlay();
     if (!overlay) return { x: 0, y: 0 };
-    const tileSize = ui.gridCanvasRenderer?.getTileSize() ?? (parseInt(getComputedStyle(ui.DOMElements.reactor || document.body).getPropertyValue('--tile-size'), 10) || 48);
-    const reactorEl = ui.gridCanvasRenderer?.getCanvas() || ui.DOMElements.reactor;
+    const reactorEl = (ui.gridCanvasRenderer?.getCanvas() || ui.registry?.get?.("PageInit")?.getReactor?.()) ?? ui.DOMElements?.reactor;
+    const tileSize = ui.gridCanvasRenderer?.getTileSize() ?? (parseInt(getComputedStyle(reactorEl || document.body).getPropertyValue('--tile-size'), 10) || 48);
     if (!reactorEl) return { x: 0, y: 0 };
     const reactorRect = reactorEl.getBoundingClientRect();
     const overlayRect = overlay.getBoundingClientRect();
@@ -160,16 +161,16 @@ export class HeatVisualsUI {
   }
 
   clearHeatWarningClasses() {
-    const bg = this.ui.DOMElements.reactor_background || document.getElementById("reactor_background");
+    const bg = this.ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
     if (bg) bg.classList.remove("heat-warning", "heat-critical");
   }
 
   updateHeatVisuals() {
     const ui = this.ui;
     const stateHeat = ui.stateManager.getVar("current_heat");
-    const current = (stateHeat === null || stateHeat === undefined) ? ui.displayValues.heat.current : stateHeat;
+    const current = stateHeat ?? 0;
     const max = ui.stateManager.getVar("max_heat") || 1;
-    const background = ui.DOMElements.reactor_background;
+    const background = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background;
     if (!background) return;
 
     const heatRatio = current / max;

@@ -33,6 +33,7 @@ export class Upgrade {
     if (this.level !== level) {
       this.level = level;
       this.updateDisplayCost();
+      this._syncDisplayToState();
       if (this.actionId) {
         executeUpgradeAction(this.actionId, this, this.game);
       }
@@ -81,16 +82,6 @@ export class Upgrade {
     }
 
     if (this.$el) {
-      const costDisplay = this.$el.querySelector(".cost-display");
-      if (costDisplay) {
-        costDisplay.textContent = this.display_cost;
-      }
-
-      const levelText = this.$el.querySelector(".level-text");
-      if (levelText) {
-        levelText.textContent = this.level >= this.max_level ? "MAX" : `Level ${this.level}/${this.max_level}`;
-      }
-
       const buyBtn = this.$el.querySelector(".upgrade-action-btn");
       if (buyBtn) {
         const doctrineLocked = this.$el.classList.contains("doctrine-locked");
@@ -141,6 +132,11 @@ export class Upgrade {
     this.$el = renderToNode(UpgradeCard(this, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick }));
     this.updateDisplayCost();
     return this.$el;
+  }
+
+  _syncDisplayToState() {
+    const st = this.game?.state?.upgrade_display;
+    if (st) st[this.id] = { level: this.level, display_cost: this.display_cost };
   }
 
   getCost() {

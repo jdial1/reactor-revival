@@ -355,7 +355,8 @@ export async function setupGameLogicOnly() {
     const mockedUI = new UI();
     // Ensure the mocked UI is completely inert and won't try to access the DOM.
     mockedUI.cacheDOMElements = vi.fn(() => true);
-    mockedUI.DOMElements = { main: { classList: { toggle: vi.fn() } } }; // Provide minimal required elements
+    mockedUI.registry = { get: () => null };
+    mockedUI.DOMElements = { main: { classList: { toggle: vi.fn() } } };
     mockedUI.resizeReactor = vi.fn();
     mockedUI.showPage = vi.fn();
     mockedUI.runUpdateInterfaceLoop = vi.fn(); // Prevent UI update loops from accessing DOM

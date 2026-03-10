@@ -5,12 +5,25 @@ import { repeat, unsafeHTML } from "../../utils/litHelpers.js";
 export class UpgradesUI {
   constructor(ui) {
     this.ui = ui;
+    this.ui.registry.register('Upgrades', this);
+  }
+
+  getUpgradeContainer(locationKey) {
+    return this.ui.DOMElements?.[locationKey] ?? this.ui.coreLoopUI?.getElement?.(locationKey) ?? document.getElementById(locationKey);
+  }
+
+  appendUpgrade(locationKey, upgradeEl) {
+    const container = this.getUpgradeContainer(locationKey);
+    if (container && upgradeEl) {
+      container.appendChild(upgradeEl);
+    }
   }
 
   showDebugPanel() {
     const ui = this.ui;
-    const debugSection = ui.DOMElements.debug_section;
-    const debugToggleBtn = ui.DOMElements.debug_toggle_btn;
+    const getEl = (id) => ui.coreLoopUI?.getElement?.(id) ?? ui.DOMElements?.[id];
+    const debugSection = getEl("debug_section");
+    const debugToggleBtn = getEl("debug_toggle_btn");
     if (debugSection && debugToggleBtn) {
       debugSection.classList.remove("hidden");
       debugToggleBtn.textContent = "Hide Debug Info";
@@ -20,8 +33,9 @@ export class UpgradesUI {
 
   hideDebugPanel() {
     const ui = this.ui;
-    const debugSection = ui.DOMElements.debug_section;
-    const debugToggleBtn = ui.DOMElements.debug_toggle_btn;
+    const getEl = (id) => ui.coreLoopUI?.getElement?.(id) ?? ui.DOMElements?.[id];
+    const debugSection = getEl("debug_section");
+    const debugToggleBtn = getEl("debug_toggle_btn");
     if (debugSection && debugToggleBtn) {
       debugSection.classList.add("hidden");
       debugToggleBtn.textContent = "Show Debug Info";
@@ -30,7 +44,8 @@ export class UpgradesUI {
 
   updateDebugVariables() {
     const ui = this.ui;
-    if (!ui.game || !ui.DOMElements.debug_variables) return;
+    const debugVariables = ui.coreLoopUI?.getElement?.("debug_variables") ?? ui.DOMElements?.debug_variables;
+    if (!ui.game || !debugVariables) return;
     const gameVars = this.collectGameVariables();
     const sectionTemplate = ([fileName, variables]) => {
       const sortedEntries = Object.entries(variables).sort(([a], [b]) => a.localeCompare(b));
@@ -50,7 +65,7 @@ export class UpgradesUI {
     };
     const entries = Object.entries(gameVars);
     const template = html`${repeat(entries, ([f]) => f, sectionTemplate)}`;
-    render(template, ui.DOMElements.debug_variables);
+    render(template, debugVariables);
   }
 
   collectGameVariables() {

@@ -1,63 +1,104 @@
+import { html } from "lit-html";
+import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
+
 export class NavIndicatorsUI {
   constructor(ui) {
     this.ui = ui;
+    this._leaderboardUnmounts = [];
   }
 
   updateLeaderboardIcon() {
     if (typeof document === "undefined" || !this.ui.game) return;
+    this._mountLeaderboardButtons();
+    if (!this.ui.uiState) return;
     const icon = this.ui.game.cheats_used ? "🚷" : "🏆";
-    const isDisabled = this.ui.game.cheats_used;
-    const topNavButton = document.querySelector('#main_top_nav button[data-page="leaderboard_section"]');
-    if (topNavButton) {
-      topNavButton.textContent = icon;
-      topNavButton.disabled = isDisabled;
-      topNavButton.style.opacity = isDisabled ? "0.5" : "1";
-      topNavButton.style.cursor = isDisabled ? "not-allowed" : "pointer";
-      topNavButton.style.pointerEvents = isDisabled ? "none" : "auto";
+    const disabled = !!this.ui.game.cheats_used;
+    this.ui.uiState.leaderboard_display = { icon, disabled };
+  }
+
+  _mountLeaderboardButtons() {
+    const ui = this.ui;
+    if (!ui.uiState || this._leaderboardUnmounts.length > 0) return;
+    const topBtn = document.querySelector('#main_top_nav button[data-page="leaderboard_section"]');
+    const bottomBtn = document.querySelector('#bottom_nav button[data-page="leaderboard_section"]');
+    const applyProps = (btn, d) => {
+      if (!btn || !d) return;
+      btn.disabled = d.disabled;
+      btn.style.opacity = d.disabled ? "0.5" : "1";
+      btn.style.cursor = d.disabled ? "not-allowed" : "pointer";
+      btn.style.pointerEvents = d.disabled ? "none" : "auto";
+    };
+    const template = () => html`${ui.uiState?.leaderboard_display?.icon ?? "🏆"}`;
+    const renderTop = () => {
+      const d = ui.uiState?.leaderboard_display ?? { icon: "🏆", disabled: false };
+      applyProps(topBtn, d);
+      return template();
+    };
+    const renderBottom = () => {
+      const d = ui.uiState?.leaderboard_display ?? { icon: "🏆", disabled: false };
+      applyProps(bottomBtn, d);
+      return template();
+    };
+    if (topBtn) {
+      const span = document.createElement("span");
+      span.setAttribute("aria-hidden", "true");
+      topBtn.textContent = "";
+      topBtn.appendChild(span);
+      this._leaderboardUnmounts.push(ReactiveLitComponent.mountMulti(
+        [{ state: ui.uiState, keys: ["leaderboard_display"] }],
+        renderTop,
+        span
+      ));
     }
-    const bottomNavButton = document.querySelector('#bottom_nav button[data-page="leaderboard_section"], footer#bottom_nav button[data-page="leaderboard_section"]');
-    if (bottomNavButton) {
-      bottomNavButton.textContent = icon;
-      bottomNavButton.disabled = isDisabled;
-      bottomNavButton.style.opacity = isDisabled ? "0.5" : "1";
-      bottomNavButton.style.cursor = isDisabled ? "not-allowed" : "pointer";
-      bottomNavButton.style.pointerEvents = isDisabled ? "none" : "auto";
+    if (bottomBtn && bottomBtn !== topBtn) {
+      const span = document.createElement("span");
+      span.setAttribute("aria-hidden", "true");
+      bottomBtn.textContent = "";
+      bottomBtn.appendChild(span);
+      this._leaderboardUnmounts.push(ReactiveLitComponent.mountMulti(
+        [{ state: ui.uiState, keys: ["leaderboard_display"] }],
+        renderBottom,
+        span
+      ));
     }
   }
 
   updateNavIndicators() {
-    if (typeof document === "undefined" || !this.ui.game?.upgradeset) return;
-    const hasAffordableUpgrades = this.ui.game.upgradeset.hasAffordableUpgrades();
-    const hasAffordableResearch = this.ui.game.upgradeset.hasAffordableResearch();
-    const upgradeButtons = document.querySelectorAll('[data-page="upgrades_section"]');
-    const researchButtons = document.querySelectorAll('[data-page="experimental_upgrades_section"]');
-    upgradeButtons.forEach((button) => {
-      let indicator = button.querySelector('.nav-indicator');
-      if (!hasAffordableUpgrades) {
-        if (indicator) indicator.style.display = 'none';
-        return;
+    if (typeof document === "undefined" || !this.ui.uiState) return;
+    if (this._affordabilityUnmounts?.length) return;
+    const ui = this.ui;
+    const mountIndicator = (button, key) => {
+      if (!button || button.style.position !== "relative") button.style.position = "relative";
+      let container = button.querySelector(".nav-indicator-mount");
+      if (!container) {
+        container = document.createElement("span");
+        container.className = "nav-indicator-mount";
+        button.appendChild(container);
       }
-      if (!indicator) {
-        indicator = document.createElement('span');
-        indicator.className = 'nav-indicator';
-        button.style.position = 'relative';
-        button.appendChild(indicator);
-      }
-      indicator.style.display = 'block';
+      const renderFn = () => {
+        const visible = !!ui.uiState?.[key];
+        return html`<span class="nav-indicator" style="display: ${visible ? "block" : "none"}"></span>`;
+      };
+      return ReactiveLitComponent.mountMulti(
+        [{ state: ui.uiState, keys: [key] }],
+        renderFn,
+        container
+      );
+    };
+    const unmounts = [];
+    document.querySelectorAll('[data-page="upgrades_section"]').forEach((btn) => {
+      unmounts.push(mountIndicator(btn, "has_affordable_upgrades"));
     });
-    researchButtons.forEach((button) => {
-      let indicator = button.querySelector('.nav-indicator');
-      if (!hasAffordableResearch) {
-        if (indicator) indicator.style.display = 'none';
-        return;
-      }
-      if (!indicator) {
-        indicator = document.createElement('span');
-        indicator.className = 'nav-indicator';
-        button.style.position = 'relative';
-        button.appendChild(indicator);
-      }
-      indicator.style.display = 'block';
+    document.querySelectorAll('[data-page="experimental_upgrades_section"]').forEach((btn) => {
+      unmounts.push(mountIndicator(btn, "has_affordable_research"));
     });
+    this._affordabilityUnmounts = unmounts;
+  }
+
+  teardownAffordabilityIndicators() {
+    if (this._affordabilityUnmounts?.length) {
+      this._affordabilityUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+      this._affordabilityUnmounts = [];
+    }
   }
 }

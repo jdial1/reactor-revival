@@ -1,5 +1,5 @@
 import { MOBILE_BREAKPOINT_PX } from "./constants.js";
-import { subscribe, subscribeKey, setDecimal } from "./store.js";
+import { subscribeKey, setDecimal } from "./store.js";
 import { logger } from "../utils/logger.js";
 import { addPartIconsToTitle as addPartIconsToTitleHelper, getObjectiveScrollDuration as getObjectiveScrollDurationHelper, checkObjectiveTextScrolling as checkObjectiveTextScrollingHelper } from "./objective/objectiveUIHelper.js";
 import { BaseComponent } from "../components/BaseComponent.js";
@@ -50,18 +50,30 @@ export class StateManager extends BaseComponent {
       });
       this._stateUnsubscribes.push(unsub);
     }
-    if (state.active_buffs) {
-      const buffsUnsub = subscribe(state.active_buffs, () => {
-        ui.infoBarUI?.updateActiveBuffs?.();
-      });
-      this._stateUnsubscribes.push(buffsUnsub);
+    if (state.engine_status !== undefined) {
+      this._stateUnsubscribes.push(subscribeKey(state, "engine_status", (val) => {
+        if (val === "tick") {
+          setTimeout(() => {
+            const g = this.game;
+            const status = g?.engine?.running ? (g?.paused ? "paused" : "running") : "stopped";
+            this.setVar("engine_status", status);
+          }, 100);
+        }
+      }));
     }
     const heatKeys = ["current_heat", "max_heat"];
     for (const key of heatKeys) {
       if (state[key] !== undefined) {
-        this._stateUnsubscribes.push(subscribeKey(state, key, () => ui.heatVisualsUI?.updateHeatVisuals?.()));
+        this._stateUnsubscribes.push(subscribeKey(state, key, () => {
+          ui.heatVisualsUI?.updateHeatVisuals?.();
+          ui.deviceFeatures?.updateAppBadge?.();
+        }));
       }
     }
+    if (state.pause !== undefined) {
+      this._stateUnsubscribes.push(subscribeKey(state, "pause", () => ui.deviceFeatures?.updateAppBadge?.()));
+    }
+    ui.deviceFeatures?.updateAppBadge?.();
     const runAffordabilityCascade = () => {
       const g = this.game;
       if (!g) return;
@@ -73,6 +85,10 @@ export class StateManager extends BaseComponent {
         g.partset?.check_affordability?.(g);
         g.upgradeset?.check_affordability?.(g);
         if (g.tooltip_manager) g.tooltip_manager.updateUpgradeAffordability?.();
+        if (ui.uiState) {
+          ui.uiState.has_affordable_upgrades = g.upgradeset?.hasAffordableUpgrades?.() ?? false;
+          ui.uiState.has_affordable_research = g.upgradeset?.hasAffordableResearch?.() ?? false;
+        }
         ui.navIndicatorsUI?.updateNavIndicators?.();
         if (typeof ui.partsPanelUI?.updateQuickSelectSlots === "function") ui.partsPanelUI.updateQuickSelectSlots();
       } catch (err) {
@@ -124,13 +140,13 @@ export class StateManager extends BaseComponent {
   }
   setClickedPart(part, options = {}) {
     this.clicked_part = part;
+    if (this.ui?.uiState?.interaction) {
+      this.ui.uiState.interaction.selectedPartId = part?.id ?? null;
+    }
     if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
       this.game.state.parts_panel_version++;
     }
     if (this.game?.emit) this.game.emit("partSelected", { part });
-    const partActive = !!part;
-    this.ui.DOMElements.main.classList.toggle("part_active", partActive);
-
     this.updatePartsPanelToggleIcon(part);
 
     const skipOpenPanel = options.skipOpenPanel === true;
@@ -217,13 +233,8 @@ export class StateManager extends BaseComponent {
   updatePartsPanelToggleIcon(_part) {}
 
   handleObjectiveCompleted() {
-    const toastBtn = this.ui.DOMElements.objectives_toast_btn;
-    if (!toastBtn) return;
-
-    toastBtn.classList.add("is-complete");
-    if (typeof this.ui.objectivesUI?.animateObjectiveCompletion === "function") {
-      this.ui.objectivesUI.animateObjectiveCompletion();
-    }
+    const objectives = this.ui.registry?.get?.("Objectives");
+    if (objectives?.markComplete) objectives.markComplete();
   }
   handleUpgradeAdded(game, upgrade_obj) {
     const expandUpgradeIds = ["expand_reactor_rows", "expand_reactor_cols"];
@@ -241,25 +252,19 @@ export class StateManager extends BaseComponent {
       };
       return map[key] || key;
     };
-    let locationKey = normalizeKey(upgrade_obj.upgrade.type);
-    
-    let container = this.ui.DOMElements?.[locationKey] || document.getElementById(locationKey);
-    if (!container) {
+    const locationKey = normalizeKey(upgrade_obj.upgrade.type);
+    const upgrades = this.ui.registry?.get?.("Upgrades");
+    if (!upgrades?.getUpgradeContainer?.(locationKey)) {
       if (this.debugMode) {
         logger.log('warn', 'game', `Container with ID '${locationKey}' not found for upgrade '${upgrade_obj.id}'`);
       }
       return;
     }
-    
-    if (container && !this.ui.DOMElements?.[locationKey]) {
-      this.ui.DOMElements[locationKey] = container;
-    }
-    
     const upgradeEl = upgrade_obj.createElement();
     if (upgradeEl) {
       upgrade_obj.$el = upgradeEl;
       upgradeEl.upgrade_object = upgrade_obj;
-      container.appendChild(upgradeEl);
+      upgrades.appendUpgrade(locationKey, upgradeEl);
     }
   }
   handleTileAdded(game, tile_data) {
@@ -293,25 +298,16 @@ export class StateManager extends BaseComponent {
   }
 
   handleObjectiveLoaded(objective, objectiveIndex = null) {
-    const toastTitleEl = this.ui.DOMElements.objectives_toast_title;
-    const toastBtn = this.ui.DOMElements.objectives_toast_btn;
-    if (toastTitleEl && objective.title) {
-      const currentIndex = objectiveIndex !== null ? objectiveIndex : (this.game?.objectives_manager?.current_objective_index ?? 0);
-      const objectiveNumber = currentIndex + 1;
-      const displayTitle = `${objectiveNumber}: ${objective.title}`;
-      toastTitleEl.textContent = displayTitle;
-      this.checkObjectiveTextScrolling();
+    const isNewGame = objectiveIndex === 0 && !this.game?._saved_objective_index;
+    if (isNewGame && this.ui.uiState) {
+      this.ui.uiState.objectives_toast_expanded = true;
     }
-    if (toastBtn) {
-      toastBtn.classList.toggle("is-complete", !!objective.completed);
-      toastBtn.classList.toggle("is-active", !objective.completed);
-      const iconEl = toastBtn.querySelector(".objectives-toast-icon");
-      if (iconEl) iconEl.textContent = objective.completed ? "!" : "?";
-      const isNewGame = objectiveIndex === 0 && !this.game?._saved_objective_index;
-      if (isNewGame && !toastBtn.classList.contains("is-expanded")) {
-        toastBtn.classList.add("is-expanded");
-        toastBtn.setAttribute("aria-expanded", "true");
-      }
+    if (!objective?.completed) {
+      const toastBtn = this.ui.coreLoopUI?.getElement?.("objectives_toast_btn") ?? (typeof document !== "undefined" ? document.getElementById("objectives_toast_btn") : null);
+      if (toastBtn) toastBtn.classList.remove("is-complete", "objective-completed");
+    }
+    if (objective?.title) {
+      setTimeout(() => this.checkObjectiveTextScrolling(), 0);
     }
   }
 
@@ -323,8 +319,9 @@ export class StateManager extends BaseComponent {
     return getObjectiveScrollDurationHelper();
   }
 
-  // Always enable objective text scrolling
   checkObjectiveTextScrolling() {
-    checkObjectiveTextScrollingHelper(this.ui.DOMElements);
+    const objectives = this.ui.registry?.get?.("Objectives");
+    if (objectives?.checkTextScrolling) objectives.checkTextScrolling();
+    else checkObjectiveTextScrollingHelper(this.ui.DOMElements);
   }
 }

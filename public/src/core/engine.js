@@ -350,9 +350,11 @@ export class Engine {
       this.game.performance.markEnd("tick_cells");
     }
 
+    logger.log("debug", "engine", "[PhysicsWorker path] cell power_add:", { power_add, heat_add, tickId: this.tick_count });
+
     reactor.current_heat = reactor.current_heat.add(heat_add);
 
-    const canSendWorker = this._useWorker() && (this._heatUseSAB || !this._workerPending);
+    const canSendWorker = this._useWorker() && this._heatUseSAB && !this._workerPending;
     if (canSendWorker) {
       const payload = this._buildHeatPayload(multiplier);
       if (payload) {
@@ -375,6 +377,7 @@ export class Engine {
           this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
           return;
         }
+        logger.log("debug", "engine", "[PhysicsWorker] posting heat step, awaiting response:", { power_add, tickId: this._workerTickId, heatUseSAB: this._heatUseSAB });
         w.postMessage(result.data, payload.transferList);
         if (!this._heatUseSAB) {
           this._heatTransferHeat = null;
@@ -400,7 +403,10 @@ export class Engine {
               logger.log('warn', 'engine', '[Worker] Heat step timeout, falling back to main thread');
             }
           }
-          if (ctx) this._runHeatStepSync(ctx.multiplier, ctx.power_add, ctx.heat_add, ctx.powerBeforeTick, ctx.heatBeforeTick);
+          if (ctx) {
+            logger.log("debug", "engine", "[PhysicsWorker] timeout fallback applying power:", { power_add: ctx.power_add, tickId: ctx.tickId });
+            this._runHeatStepSync(ctx.multiplier, ctx.power_add, ctx.heat_add, ctx.powerBeforeTick, ctx.heatBeforeTick);
+          }
         }, this._workerHeartbeatMs);
         return;
       }
@@ -412,6 +418,7 @@ export class Engine {
     for (const t of heatResult.transfers || []) {
       this.heatFlowVisualizer.addTransfer(t.fromIdx, t.toIdx, t.amount, cols);
     }
+    logger.log("debug", "engine", "[PhysicsWorker] sync path (no worker), applying power:", { power_add });
     this._continueTickAfterHeat(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
     } catch (error) {
       logger.log('error', 'engine', 'Error in _processTick:', error);

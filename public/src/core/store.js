@@ -48,6 +48,7 @@ export function createGameState(initial = {}) {
     },
     active_buffs: initial.active_buffs ?? [],
     parts_panel_version: initial.parts_panel_version ?? 0,
+    upgrade_display: initial.upgrade_display ?? {},
     power_overflow_to_heat_ratio: initial.power_overflow_to_heat_ratio ?? 0.5,
     manual_heat_reduce: initial.manual_heat_reduce ?? initial.base_manual_heat_reduce ?? 1,
     auto_sell_multiplier: initial.auto_sell_multiplier ?? 0,

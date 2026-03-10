@@ -1,12 +1,6 @@
 import { logger } from "../../utils/logger.js";
 import { MODAL_IDS } from "../ModalManager.js";
-import { toNumber } from "../../utils/decimal.js";
 import { MOBILE_BREAKPOINT_PX } from "../../core/constants.js";
-
-const MS_PER_FRAME_60FPS = 16.667;
-const LERP_FACTOR = 0.15;
-const LERP_EPSILON = 0.1;
-const MIN_SPEED_FACTOR = 0.05;
 
 const MOBILE_ONLY_IDS = new Set([
   "control_deck_power_btn", "control_deck_heat_btn", "control_deck_money", "control_deck_power", "control_deck_heat",
@@ -29,10 +23,11 @@ const pageElements = {
     "objectives_toast_btn", "objectives_toast_title", "reactor_control_deck", "control_deck_power_btn",
     "control_deck_heat_btn", "control_deck_money", "control_deck_power", "control_deck_heat",
     "mobile_passive_top_bar", "mobile_passive_ep", "mobile_passive_money_value", "mobile_passive_pause_btn",
-    "control_deck_build_fab", "tooltip", "tooltip_data"
+    "control_deck_build_fab", "tooltip", "tooltip_data", "basic_overview_section", "modal-root",
+    "bottom_nav", "main_top_nav", "reboot_btn", "refund_btn", "respec_doctrine_btn", "fullscreen_toggle", "settings_btn", "splash_close_btn"
   ],
   reactor_section: ["reactor", "reactor_background", "reactor_wrapper", "reactor_section", "parts_section", "meltdown_banner"],
-  upgrades_section: ["upgrades_section", "upgrades_content_wrapper", "cell_power_upgrades", "cell_tick_upgrades", "cell_perpetual_upgrades", "vent_upgrades", "exchanger_upgrades"],
+  upgrades_section: ["upgrades_section", "upgrades_content_wrapper", "cell_power_upgrades", "cell_tick_upgrades", "cell_perpetual_upgrades", "vent_upgrades", "exchanger_upgrades", "debug_section", "debug_toggle_btn", "debug_variables"],
   experimental_upgrades_section: ["experimental_upgrades_section", "experimental_upgrades_content_wrapper", "exotic_particles_display", "current_exotic_particles", "total_exotic_particles", "experimental_laboratory", "experimental_boost", "experimental_particle_accelerators", "experimental_cells", "experimental_cells_boost", "experimental_parts"],
   about_section: ["about_section"],
   privacy_policy_section: ["privacy_policy_section"],
@@ -42,19 +37,41 @@ const pageElements = {
 export class CoreLoopUI {
   constructor(ui) {
     this.ui = ui;
-  }
-
-  scheduleDomUpdate(fn) {
-    if (typeof fn === "function") this.ui._pendingDomUpdates.push(fn);
+    this.ui.registry.register('CoreLoop', this);
   }
 
   processUpdateQueue() {
-    const ui = this.ui;
-    while (ui._pendingDomUpdates?.length) {
-      const fn = ui._pendingDomUpdates.shift();
-      try { fn(); } catch (e) { logger.log('warn', 'ui', 'pending DOM update error:', e); }
-    }
+    this._syncDisplayValuesFromState();
     this.applyStateToDom();
+  }
+
+  _syncDisplayValuesFromState() {
+    const ui = this.ui;
+    const game = ui.game;
+    if (!game?.state || !ui.displayValues) return;
+    const s = game.state;
+    const d = ui.displayValues;
+    const toNum = (v) => (v != null && typeof v.toNumber === "function" ? v.toNumber() : Number(v ?? 0));
+    if (d.money) d.money.target = toNum(s.current_money);
+    if (d.heat) d.heat.target = toNum(s.current_heat);
+    if (d.power) d.power.target = toNum(s.current_power);
+    if (d.ep) d.ep.target = toNum(game.exoticParticleManager?.exotic_particles ?? s.current_exotic_particles ?? 0);
+  }
+
+  updateRollingNumbers(dt) {
+    const ui = this.ui;
+    if (!ui.displayValues) return;
+    const LERP_SPEED = 8;
+    const lerp = (obj, epsilon = 0.06) => {
+      if (!obj || typeof obj.current !== "number" || typeof obj.target !== "number") return;
+      const diff = obj.target - obj.current;
+      if (Math.abs(diff) < epsilon) obj.current = obj.target;
+      else obj.current += diff * Math.min(1, (dt / 1000) * LERP_SPEED);
+    };
+    lerp(ui.displayValues.money);
+    lerp(ui.displayValues.heat);
+    lerp(ui.displayValues.power, 0.02);
+    lerp(ui.displayValues.ep);
   }
 
   cacheDOMElements(pageId = null) {
@@ -62,9 +79,6 @@ export class CoreLoopUI {
     let elementsToCache = [...pageElements.global];
     if (pageId && pageElements[pageId]) {
       elementsToCache = [...elementsToCache, ...pageElements[pageId]];
-    } else if (!pageId) {
-      const domIdsElements = ui.dom_ids || [];
-      elementsToCache = [...new Set([...pageElements.global, ...domIdsElements])];
     }
     const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
     const onReactorPage = pageId === "reactor_section";
@@ -186,7 +200,6 @@ export class CoreLoopUI {
       const cfg = config[configKey];
       if (cfg) cfg.onupdate?.(val);
     }
-    ui.objectivesUI.updateObjectiveDisplayFromState?.();
   }
 
   applyStateToDomForKeys(keys) {
@@ -203,37 +216,6 @@ export class CoreLoopUI {
     }
   }
 
-  updateRollingNumbers(dt) {
-    const ui = this.ui;
-    if (!ui.displayValues) return;
-    const timeScale = dt / MS_PER_FRAME_60FPS;
-    const lerpFactor = LERP_FACTOR * timeScale;
-    const epsilon = LERP_EPSILON;
-    for (const key in ui.displayValues) {
-      const obj = ui.displayValues[key];
-      const targetNum = toNumber(obj.target);
-      const currentNum = toNumber(obj.current);
-      const diff = targetNum - currentNum;
-      if (Math.abs(diff) > 0) {
-        if (Math.abs(diff) < epsilon && targetNum !== 0) {
-          obj.current = obj.target;
-        } else {
-          const minSpeed = Math.max(1, Math.abs(diff) * MIN_SPEED_FACTOR);
-          const change = diff * lerpFactor;
-          if (Math.abs(change) < minSpeed * timeScale) {
-            obj.current = currentNum + Math.sign(diff) * minSpeed * timeScale;
-          } else {
-            obj.current = currentNum + change;
-          }
-          const newCurrent = obj.current;
-          if ((diff > 0 && newCurrent >= targetNum) || (diff < 0 && newCurrent <= targetNum) || Math.abs(targetNum - newCurrent) < epsilon) {
-            obj.current = obj.target;
-          }
-        }
-      }
-    }
-  }
-
   initVarObjsConfig() {
     this.ui.controlDeckUI.initVarObjsConfig();
   }
@@ -247,12 +229,7 @@ export class CoreLoopUI {
     const dt = timestamp - ui._lastUiTime;
     ui._lastUiTime = timestamp;
 
-    while (ui._pendingDomUpdates.length) {
-      const fn = ui._pendingDomUpdates.shift();
-      try { fn(); } catch (e) { logger.log('warn', 'ui', 'pending DOM update error:', e); }
-    }
     ui._firstFrameSyncDone = true;
-    this.updateRollingNumbers(dt);
     if (ui.particleSystem && ui._particleCtx) {
       ui.particleSystem.update(dt);
       ui._particleCtx.clearRect(0, 0, ui._particleCanvas.width, ui._particleCanvas.height);
@@ -281,8 +258,6 @@ export class CoreLoopUI {
       if (ui.game) {
         ui.navIndicatorsUI.updateLeaderboardIcon();
       }
-
-      ui.deviceFeatures.updateAppBadge();
 
       if (ui.game?.tooltip_manager?.tooltip_showing && ui.game?.tooltip_manager?.needsLiveUpdates) {
         ui.game.tooltip_manager.update();

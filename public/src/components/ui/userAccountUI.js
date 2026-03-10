@@ -1,9 +1,10 @@
 import { html, render } from "lit-html";
-import { repeat } from "../../utils/litHelpers.js";
+import { repeat, styleMap } from "../../utils/litHelpers.js";
 import { numFormat as fmt, StorageUtils } from "../../utils/util.js";
 import { logger } from "../../utils/logger.js";
 import { MODAL_IDS } from "../ModalManager.js";
 import { CloseButton } from "../buttonFactory.js";
+import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
 
 function getAuthState() {
   const googleSignedIn = !!(window.googleDriveSave && window.googleDriveSave.isSignedIn);
@@ -40,18 +41,33 @@ export class UserAccountUI {
   }
 
   setupUserAccountButton() {
-    const userAccountBtn = document.getElementById("user_account_btn");
-    const userAccountBtnMobile = document.getElementById("user_account_btn_mobile");
-    if (!userAccountBtn && !userAccountBtnMobile) return;
+    const ui = this.ui;
+    const root = document.getElementById("user_account_btn_root");
+    if (!root || !ui.uiState) return;
 
     this.teardownUserAccountButton();
     this._buttonAbortController = new AbortController();
     const { signal } = this._buttonAbortController;
 
-    this.updateUserAccountIcon();
+    this._syncUserAccountDisplay();
     const clickHandler = () => this.handleUserAccountClick();
 
-    if (userAccountBtn) userAccountBtn.addEventListener("click", clickHandler, { signal });
+    if (this._userAccountUnmount) {
+      this._userAccountUnmount();
+      this._userAccountUnmount = null;
+    }
+    const template = () => {
+      const { icon, title } = ui.uiState.user_account_display ?? { icon: "🔐", title: "Sign In" };
+      return html`
+        <button id="user_account_btn" title=${title} aria-label=${title} @click=${clickHandler}>${icon}</button>
+      `;
+    };
+    this._userAccountUnmount = ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["user_account_display"] }],
+      template,
+      root
+    );
+    const userAccountBtnMobile = document.getElementById("user_account_btn_mobile");
     if (userAccountBtnMobile) userAccountBtnMobile.addEventListener("click", clickHandler, { signal });
 
     if (window.googleDriveSave) {
@@ -72,6 +88,10 @@ export class UserAccountUI {
   }
 
   teardownUserAccountButton() {
+    if (this._userAccountUnmount) {
+      this._userAccountUnmount();
+      this._userAccountUnmount = null;
+    }
     if (this._buttonAbortController) {
       this._buttonAbortController.abort();
       this._buttonAbortController = null;
@@ -86,22 +106,17 @@ export class UserAccountUI {
     }
   }
 
-  updateUserAccountIcon() {
+  _syncUserAccountDisplay() {
     const { isSignedIn } = getAuthState();
     const icon = isSignedIn ? "👤" : "🔐";
     const title = isSignedIn ? "Account (Signed In)" : "Sign In";
+    if (this.ui.uiState?.user_account_display) {
+      this.ui.uiState.user_account_display = { icon, title };
+    }
+  }
 
-    const userAccountBtn = document.getElementById("user_account_btn");
-    const userAccountBtnMobile = document.getElementById("user_account_btn_mobile");
-    if (userAccountBtn) {
-      userAccountBtn.textContent = icon;
-      userAccountBtn.title = title;
-    }
-    if (userAccountBtnMobile) {
-      const iconSpan = userAccountBtnMobile.querySelector(".control-icon");
-      if (iconSpan) iconSpan.textContent = icon;
-      userAccountBtnMobile.title = title;
-    }
+  updateUserAccountIcon() {
+    this._syncUserAccountDisplay();
   }
 
   handleUserAccountClick() {
@@ -128,6 +143,12 @@ export class UserAccountUI {
     }
     article.classList.remove("hidden");
     const currentId = game.tech_tree || null;
+    const cost = game.RESPER_DOCTRINE_EP_COST ?? 50;
+    const canRespec = !!game.tech_tree && (game.state.current_exotic_particles ?? 0) >= cost;
+    const respecLabel = `Respec doctrine (${cost} EP)`;
+    const respecTitle = canRespec
+      ? "Reset doctrine and that path's upgrades; costs Exotic Particles"
+      : (game.tech_tree ? `Requires ${cost} Exotic Particles` : "No doctrine selected");
     const tpl = html`
       ${repeat(
         game.upgradeset.treeList,
@@ -148,18 +169,15 @@ export class UserAccountUI {
           `;
         }
       )}
+      <div class="doctrine-respec-row">
+        <button id="respec_doctrine_btn" class="pixel-btn nav-btn" type="button" title=${respecTitle} ?disabled=${!canRespec} @click=${() => {
+          if (!game?.respecDoctrine?.()) return;
+          this.renderDoctrineTreeViewer();
+          this.ui.stateManager.setVar("current_exotic_particles", game.state.current_exotic_particles);
+        }}>${respecLabel}</button>
+      </div>
     `;
     render(tpl, container);
-    const respecBtn = document.getElementById("respec_doctrine_btn");
-    if (respecBtn) {
-      const cost = game.RESPER_DOCTRINE_EP_COST ?? 50;
-      const canRespec = !!game.tech_tree && (game.state.current_exotic_particles ?? 0) >= cost;
-      respecBtn.textContent = `Respec doctrine (${cost} EP)`;
-      respecBtn.disabled = !canRespec;
-      respecBtn.title = canRespec
-        ? "Reset doctrine and that path's upgrades; costs Exotic Particles"
-        : (game.tech_tree ? `Requires ${cost} Exotic Particles` : "No doctrine selected");
-    }
   }
 
   getReactorClassification() {
@@ -226,7 +244,8 @@ export class UserAccountUI {
   }
 
   showLoginModal() {
-    const modal = modalOverlay("user_login_modal", () => modal.remove());
+    let removeModal;
+    const modal = modalOverlay("user_login_modal", () => removeModal?.());
     const content = document.createElement("div");
     content.className = "nav-auth-modal nav-auth-terminal";
     modal.appendChild(content);
@@ -237,7 +256,7 @@ export class UserAccountUI {
         await window.googleDriveSave.signIn();
         await window.googleDriveSave.checkAuth(false);
         this.updateUserAccountIcon();
-        modal.remove();
+        removeModal();
       } catch (error) {
         logger.error("Google sign-in error:", error);
       }
@@ -251,9 +270,13 @@ export class UserAccountUI {
       const passwordInput = content.querySelector("#nav-supabase-password");
       return { email: emailInput?.value.trim(), password: passwordInput?.value };
     };
+    removeModal = () => {
+      this._loginModalFeedbackUnmount?.();
+      this._loginModalFeedbackUnmount = null;
+      modal.remove();
+    };
     const showMessage = (text, isError) => {
-      const msg = content.querySelector("#nav-supabase-message");
-      if (msg) { msg.textContent = text; msg.style.color = isError ? "#ff4444" : "#44ff44"; }
+      this.ui.uiState.user_account_feedback = { text, isError };
     };
     const onSignIn = async () => {
       const { email, password } = getCredentials();
@@ -264,7 +287,7 @@ export class UserAccountUI {
       showMessage("Signed in successfully!");
       const pw = content.querySelector("#nav-supabase-password");
       if (pw) pw.value = "";
-      setTimeout(() => { this.updateUserAccountIcon(); modal.remove(); }, 1000);
+      setTimeout(() => { this.updateUserAccountIcon(); removeModal(); }, 1000);
     };
     const onSignUp = async () => {
       const { email, password } = getCredentials();
@@ -287,7 +310,7 @@ export class UserAccountUI {
     };
 
     const tpl = html`
-      ${CloseButton(modal, () => modal.remove())}
+      ${CloseButton(modal, removeModal)}
       <div class="nav-auth-terminal-prompt">> AWAITING OPERATOR CREDENTIALS</div>
       <div class="nav-auth-options">
         <button class="splash-btn nav-auth-option-btn" @click=${onGoogleClick}>
@@ -310,6 +333,18 @@ export class UserAccountUI {
     `;
     render(tpl, content);
     document.body.appendChild(modal);
+    this.ui.uiState.user_account_feedback = { text: "", isError: false };
+    const msgEl = content.querySelector("#nav-supabase-message");
+    if (msgEl) {
+      this._loginModalFeedbackUnmount = ReactiveLitComponent.mountMulti(
+        [{ state: this.ui.uiState, keys: ["user_account_feedback"] }],
+        () => {
+          const { text, isError } = this.ui.uiState?.user_account_feedback ?? { text: "", isError: false };
+          return html`<span style=${styleMap({ color: isError ? "#ff4444" : "#44ff44" })}>${text}</span>`;
+        },
+        msgEl
+      );
+    }
   }
 
   showLogoutModal() {

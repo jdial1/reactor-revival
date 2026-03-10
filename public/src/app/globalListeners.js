@@ -1,6 +1,6 @@
 import { StorageUtils } from "../utils/util.js";
 import { logger } from "../utils/logger.js";
-import { settingsModal } from "../components/settingsModal.js";
+import { MODAL_IDS } from "../components/ModalManager.js";
 
 let _pageClickHandler = null;
 let _tooltipCloseHandler = null;
@@ -11,7 +11,7 @@ function attachPageClickListeners(game) {
     const pageBtn = e.target.closest("[data-page]");
     if (!pageBtn) return;
     e.preventDefault();
-    settingsModal.hide();
+    game.ui?.modalOrchestrator?.hideModal(MODAL_IDS.SETTINGS);
     await game.router.loadPage(pageBtn.dataset.page);
   };
   document.addEventListener("click", _pageClickHandler);

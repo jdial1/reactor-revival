@@ -72,10 +72,12 @@ function runStep() {
   const d = pending;
   pending = null;
   if (!d || !d.heatBuffer) {
+    console.debug("[PhysicsWorker] runStep: no heatBuffer, posting null response", { tickId: d?.tickId, hasData: !!d });
     busy = false;
     self.postMessage({ heatBuffer: null, reactorHeat: 0, heatFromInlets: 0, tickId: d?.tickId });
     return;
   }
+  console.debug("[PhysicsWorker] runStep: received heat step", { tickId: d.tickId, useSAB: d.useSAB });
   const heat = new Float32Array(d.heatBuffer);
   const containment = d.containmentBuffer ? new Float32Array(d.containmentBuffer) : new Float32Array(heat.length);
   const recordTransfers = [];
@@ -88,6 +90,7 @@ function runStep() {
       setTimeout(continueOrPost, 0);
       return;
     }
+    console.debug("[PhysicsWorker] posting heat result", { tickId: out.lastMessage.tickId, useSAB: d.useSAB === true });
     finishAndPost(heat, containment, out.result, recordTransfers, out.lastMessage.tickId, d.useSAB === true, out.lastMessage);
     busy = false;
   }

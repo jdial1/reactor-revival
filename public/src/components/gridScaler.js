@@ -53,8 +53,9 @@ export class GridScaler extends BaseComponent {
 
     init() {
 
-        this.reactor = this.ui.DOMElements.reactor || document.getElementById('reactor');
-        this.wrapper = this.ui.DOMElements.reactor_wrapper || document.getElementById('reactor_wrapper');
+        const pageInit = this.ui.registry?.get?.("PageInit");
+        this.reactor = pageInit?.getReactor?.() ?? this.ui.DOMElements?.reactor ?? document.getElementById('reactor');
+        this.wrapper = pageInit?.getReactorWrapper?.() ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
 
         if (!this.wrapper) return;
 
@@ -308,8 +309,9 @@ export class GridScaler extends BaseComponent {
     resize(_layoutRetry) {
 
         if (!this.reactor || !this.wrapper) {
-            this.reactor = this.ui.DOMElements.reactor || document.getElementById('reactor');
-            this.wrapper = this.ui.DOMElements.reactor_wrapper || document.getElementById('reactor_wrapper');
+            const pageInit = this.ui.registry?.get?.("PageInit");
+            this.reactor = pageInit?.getReactor?.() ?? this.ui.DOMElements?.reactor ?? document.getElementById('reactor');
+            this.wrapper = pageInit?.getReactorWrapper?.() ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
         }
 
         if (!this.reactor || !this.wrapper) {

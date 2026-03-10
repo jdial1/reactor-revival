@@ -1,8 +1,38 @@
+import { html } from "lit-html";
 import { logger } from "../../utils/logger.js";
+import { mountSectionCountsReactive, updateSectionCountsState } from "./upgrades/sectionCountUpdaterUI.js";
+import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
 
 export class PageInitUI {
   constructor(ui) {
     this.ui = ui;
+    this.ui.registry.register('PageInit', this);
+  }
+
+  clearReactor() {
+    const reactor = this.getReactor();
+    if (reactor) reactor.innerHTML = "";
+  }
+
+  getReactor() {
+    return this.ui.coreLoopUI?.getElement?.("reactor") ?? this.ui.DOMElements?.reactor ?? document.getElementById("reactor");
+  }
+
+  getReactorWrapper() {
+    return this.ui.coreLoopUI?.getElement?.("reactor_wrapper") ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
+  }
+
+  getReactorBackground() {
+    return this.ui.coreLoopUI?.getElement?.("reactor_background") ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+  }
+
+  setGridContainer(container) {
+    if (this.ui.gridCanvasRenderer) this.ui.gridCanvasRenderer.setContainer(container);
+  }
+
+  setReactorVisibility(visible) {
+    const reactor = this.getReactor();
+    if (reactor) reactor.style.visibility = visible ? "visible" : "hidden";
   }
 
   initializePage(pageId) {
@@ -18,10 +48,11 @@ export class PageInitUI {
 
     switch (pageId) {
       case "reactor_section":
+        const reactor = this.getReactor();
         logger.log('debug', 'ui', '[PageInit] reactor_section init start', {
           hasGridScaler: !!this.ui.gridScaler,
           hasWrapper: !!this.ui.gridScaler?.wrapper,
-          hasReactor: !!this.ui.DOMElements.reactor,
+          hasReactor: !!reactor,
           hasGridRenderer: !!this.ui.gridCanvasRenderer,
           hasGame: !!this.ui.game,
           hasTileset: !!this.ui.game?.tileset
@@ -29,19 +60,18 @@ export class PageInitUI {
         if (this.ui.gridScaler && !this.ui.gridScaler.wrapper) {
           this.ui.gridScaler.init();
         }
-        if (this.ui.DOMElements.reactor) {
-          this.ui.DOMElements.reactor.innerHTML = "";
+        if (reactor) {
+          this.clearReactor();
           if (this.ui.gridCanvasRenderer) {
-            this.ui.gridCanvasRenderer.init(this.ui.DOMElements.reactor);
+            this.ui.gridCanvasRenderer.init(reactor);
           }
         }
 
         this.ui.inputHandler.setupReactorEventListeners();
         this.ui.inputHandler.setupSegmentHighlight();
         this.ui.gridScaler.resize();
-        if (this.ui.gridCanvasRenderer) {
-          this.ui.gridCanvasRenderer.setContainer(this.ui.DOMElements.reactor_wrapper || this.ui.DOMElements.reactor_background || null);
-        }
+        const container = this.getReactorWrapper() || this.getReactorBackground();
+        this.setGridContainer(container);
         if (this.ui.game?.tileset) {
           this.ui.game.tileset.updateActiveTiles();
         }
@@ -55,6 +85,12 @@ export class PageInitUI {
         this.ui.pageSetupUI.setupMobileTopBarResizeListener();
         break;
       case "upgrades_section":
+        this.ui.pageSetupUI.setupAffordabilityBanners("upgrades_no_affordable_banner");
+        if (!this.ui._sectionCountsMountedUpgrades && document.getElementById("upgrades_content_wrapper")) {
+          this.ui._sectionCountsUnmountUpgrades = mountSectionCountsReactive(this.ui, "upgrades_content_wrapper");
+          this.ui._sectionCountsMountedUpgrades = true;
+        }
+        if (game?.upgradeset) updateSectionCountsState(this.ui, game);
         requestAnimationFrame(() => {
           if (
             game.upgradeset &&
@@ -68,6 +104,12 @@ export class PageInitUI {
         });
         break;
       case "experimental_upgrades_section":
+        this.ui.pageSetupUI.setupAffordabilityBanners("research_no_affordable_banner");
+        if (!this.ui._sectionCountsMountedResearch && document.getElementById("experimental_upgrades_content_wrapper")) {
+          this.ui._sectionCountsUnmountResearch = mountSectionCountsReactive(this.ui, "experimental_upgrades_content_wrapper");
+          this.ui._sectionCountsMountedResearch = true;
+        }
+        if (game?.upgradeset) updateSectionCountsState(this.ui, game);
         if (
           game.upgradeset &&
           typeof game.upgradeset.populateExperimentalUpgrades === "function"
@@ -82,10 +124,8 @@ export class PageInitUI {
         this.loadAndSetVersion();
         break;
       case "about_section":
-        const versionEl = document.getElementById("about_version");
-        const appVersionEl = document.getElementById("app_version");
-        const versionSource = appVersionEl?.textContent || this._cachedVersion;
-        if (versionEl && versionSource) versionEl.textContent = versionSource;
+        this.setupVersionDisplay();
+        if (!this.ui.uiState?.version_display?.app) this.loadAndSetVersion();
         break;
       case "leaderboard_section":
         this.ui.pageSetupUI.setupLeaderboardPage();
@@ -123,7 +163,26 @@ export class PageInitUI {
     });
   }
 
+  setupVersionDisplay() {
+    const ui = this.ui;
+    if (!ui?.uiState || ui._versionDisplayMounted) return;
+    const aboutEl = document.getElementById("about_version");
+    const appEl = document.getElementById("app_version");
+    const renderVersion = (el) => {
+      if (!el?.isConnected) return;
+      ReactiveLitComponent.mountMulti(
+        [{ state: ui.uiState, keys: ["version_display"] }],
+        () => html`${ui.uiState?.version_display?.app ?? ui.uiState?.version_display?.about ?? ""}`,
+        el
+      );
+    };
+    if (aboutEl) renderVersion(aboutEl);
+    if (appEl && appEl !== aboutEl) renderVersion(appEl);
+    ui._versionDisplayMounted = true;
+  }
+
   async loadAndSetVersion() {
+    const ui = this.ui;
     try {
       const { getResourceUrl } = await import("../../utils/util.js");
       const response = await fetch(getResourceUrl("version.json"));
@@ -144,22 +203,16 @@ export class PageInitUI {
       const versionData = await response.json();
       const version = versionData.version || "Unknown";
 
-      const appVersionEl = document.getElementById("app_version");
-      if (appVersionEl) {
-        appVersionEl.textContent = version;
-      } else {
-        this._cachedVersion = version;
-        setTimeout(() => {
-          const retryEl = document.getElementById("app_version");
-          if (retryEl) retryEl.textContent = version;
-        }, 100);
+      if (ui?.uiState) {
+        ui.uiState.version_display = { ...ui.uiState.version_display, app: version, about: version };
       }
     } catch (error) {
       if (!error.message || !error.message.includes("Expected JSON")) {
         logger.log('warn', 'ui', 'Could not load version info:', error.message || error);
       }
-      const appVersionEl = document.getElementById("app_version");
-      if (appVersionEl) appVersionEl.textContent = "Unknown";
+      if (ui?.uiState) {
+        ui.uiState.version_display = { ...ui.uiState.version_display, app: "Unknown", about: "Unknown" };
+      }
     }
   }
 }

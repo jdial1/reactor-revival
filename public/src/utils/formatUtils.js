@@ -148,6 +148,7 @@ export class Formatter {
 export const Format = Formatter;
 export const numFormat = (n, p, f) => Formatter.number(n, { places: p, fixedDecimals: f });
 export const formatStatNum = (n) => Formatter.number(n, { places: 1 }) || "0";
+export const formatPrestigeNumber = (n) => Formatter.number(n, { places: 2, infinitySymbol: "∞" });
 
 export function formatTime(ms) {
   return Formatter.time(ms, true);

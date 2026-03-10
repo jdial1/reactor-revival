@@ -1,7 +1,6 @@
 import { html, render } from "lit-html";
 import { formatTime } from "../../utils/util.js";
 import { showTechTreeSelection } from "../gameSetupFlow.js";
-import { settingsModal } from "../../components/settingsModal.js";
 import { MODAL_IDS } from "../../components/ModalManager.js";
 import { fetchResolvedSaves } from "../savesQuery.js";
 import { logger } from "../../utils/logger.js";
@@ -98,7 +97,7 @@ export class SplashStartOptionsBuilder {
         </div>
         <div class="splash-btn-row-tertiary">
           <button id="splash-sandbox-btn" class="splash-btn splash-btn-sandbox" title="Sandbox">SANDBOX</button>
-          <button class="splash-btn splash-btn-config" title="System configuration" @click=${() => this.ctx?.ui?.modalOrchestrator?.showModal(MODAL_IDS.SETTINGS) ?? settingsModal.show()}>SYS</button>
+          <button class="splash-btn splash-btn-config" title="System configuration" @click=${() => this.ctx?.ui?.modalOrchestrator?.showModal(MODAL_IDS.SETTINGS)}>SYS</button>
         </div>
       </div>
 

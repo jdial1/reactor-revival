@@ -1,5 +1,6 @@
 import { html, render } from "lit-html";
 import { proxy, subscribe } from "valtio/vanilla";
+import { ReactiveLitComponent } from "../../ReactiveLitComponent.js";
 import { styleMap } from "../../../utils/litHelpers.js";
 import { renderComponentIcons } from "../componentRenderingUI.js";
 import { numFormat as fmt } from "../../../utils/util.js";
@@ -94,7 +95,20 @@ export function renderModalCostContent(modalCost, cost, summary, ui, options, on
 export function showModal(ui, refs, opts) {
   const { modal, modalTitle, modalText, modalCost, confirmBtn } = refs;
   const { title, data, cost, action, canPaste = false, summary = [], ...options } = opts;
-  modalTitle.textContent = title;
+  const confirmLabel = action === "copy" ? "Copy" : "Paste";
+  ui._copyPasteModalReactiveUnmount?.();
+  ui.uiState.copy_paste_modal_display = { title, confirmLabel };
+  const titleUnmount = ReactiveLitComponent.mountMulti(
+    [{ state: ui.uiState, keys: ["copy_paste_modal_display"] }],
+    () => html`${ui.uiState?.copy_paste_modal_display?.title ?? ""}`,
+    modalTitle
+  );
+  const btnUnmount = ReactiveLitComponent.mountMulti(
+    [{ state: ui.uiState, keys: ["copy_paste_modal_display"] }],
+    () => html`${ui.uiState?.copy_paste_modal_display?.confirmLabel ?? ""}`,
+    confirmBtn
+  );
+  ui._copyPasteModalReactiveUnmount = () => { titleUnmount(); btnUnmount(); };
   modalText.value = data;
   setModalTextareaVisibility(modalText, action === "paste");
   const wasPaused = ui.stateManager.getVar("pause");
@@ -103,13 +117,11 @@ export function showModal(ui, refs, opts) {
   if (action === "copy") {
     modalText.readOnly = true;
     modalText.placeholder = "Reactor layout data (read-only)";
-    confirmBtn.textContent = "Copy";
     confirmBtn.classList.remove("hidden");
     confirmBtn.disabled = false;
   } else if (action === "paste") {
     modalText.readOnly = false;
     modalText.placeholder = (data && data.trim()) ? "Paste reactor layout data here..." : "Enter reactor layout JSON data manually...";
-    confirmBtn.textContent = "Paste";
     confirmBtn.classList.remove("hidden");
     confirmBtn.disabled = !canPaste;
   }
@@ -170,9 +182,9 @@ export function setupCopyAction(ui, bp, refs) {
       const name = (typeof prompt === "function" ? prompt("Name for this layout:", defaultName) : null) || defaultName;
       if (result.success) {
         ui.layoutStorageUI.addToMyLayouts(name.trim() || defaultName, filteredData);
-        confirmBtn.textContent = "Copied!";
+        ui.uiState.copy_paste_modal_display = { ...ui.uiState.copy_paste_modal_display, confirmLabel: "Copied!" };
       } else {
-        confirmBtn.textContent = "Failed to Copy";
+        ui.uiState.copy_paste_modal_display = { ...ui.uiState.copy_paste_modal_display, confirmLabel: "Failed to Copy" };
       }
       setTimeout(() => ui.modalOrchestrationUI.hideModal(), MODAL_HIDE_DELAY_MS);
     };

@@ -2,7 +2,6 @@ import { StorageUtils, StorageAdapter, isTestEnv } from "../utils/util.js";
 import { escapeHtml } from "../utils/stringUtils.js";
 import dataService from "./dataService.js";
 import { supabaseSave } from "./SupabaseSave.js";
-import { settingsModal } from "../components/settingsModal.js";
 import { html, render } from "lit-html";
 import {
   GoogleSignInButton,
@@ -19,7 +18,7 @@ import { initSocketConnection as initSplashSocket } from "./splashSocketService.
 import { SplashStartOptionsBuilder } from "./splash/splashStartOptionsBuilder.js";
 import { setupSplashAuth } from "./splash/splashAuthUI.js";
 import { updateSplashGoogleDriveUI } from "./splash/splashGoogleDriveUI.js";
-import { fetchVersionForSplash, addSplashStats as addSplashStatsFromModule } from "./splash/splashVersionStats.js";
+import { fetchVersionForSplash, addSplashStats as addSplashStatsFromModule, mountSplashUserCountReactive } from "./splash/splashVersionStats.js";
 import { loadFromSaveSlot as loadFromSaveSlotFromModule, loadFromData as loadFromDataFromModule } from "./splash/splashLoadFromSave.js";
 import { initSplashMenuIdleFade } from "./splash/splashMenuIdleFade.js";
 import { logger } from "../utils/logger.js";
@@ -79,8 +78,8 @@ class SplashScreenManager extends BaseComponent {
   }
 
   updateUserCountDisplay() {
-    const userCountElement = document.getElementById("user-count-text");
-    if (userCountElement) userCountElement.textContent = `${this.userCount}`;
+    const ui = this._appContext?.ui;
+    if (ui?.uiState) ui.uiState.user_count = this.userCount;
   }
 
   /**
@@ -108,7 +107,13 @@ class SplashScreenManager extends BaseComponent {
   async initializeSplashStats() {
     if (!this.splashScreen) return;
     const version = await fetchVersionForSplash(this.versionChecker);
-    addSplashStatsFromModule(this.splashScreen, version, this.versionChecker);
+    const ui = this._appContext?.ui;
+    if (ui?.uiState) {
+      ui.uiState.version = version;
+      ui.uiState.user_count = this.userCount;
+    }
+    addSplashStatsFromModule(this.splashScreen, version, this.versionChecker, ui);
+    mountSplashUserCountReactive(this.splashScreen, ui);
     this.versionChecker.startVersionChecking();
   }
 

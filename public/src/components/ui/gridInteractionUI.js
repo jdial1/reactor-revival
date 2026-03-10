@@ -3,6 +3,7 @@ import { logger } from "../../utils/logger.js";
 export class GridInteractionUI {
   constructor(ui) {
     this.ui = ui;
+    this.ui.registry.register('GridInteraction', this);
     this._activeVentRotors = new Map();
     this._activeTileIcons = new Map();
     this.highlightedSegment = null;
@@ -29,6 +30,10 @@ export class GridInteractionUI {
     return this.ui.inputHandler?.getHoveredTile() ?? null;
   }
 
+  getInteractionState() {
+    return this.ui?.uiState?.interaction ?? null;
+  }
+
   handleGridInteraction(tile, event) {
     return this.ui.gridController?.handleGridInteraction?.(tile, event);
   }
@@ -36,8 +41,8 @@ export class GridInteractionUI {
   spawnTileIcon(kind, fromTile, toTile = null) {
     const ui = this.ui;
     try {
-      if (typeof document === "undefined" || !fromTile || (!ui.DOMElements?.reactor_background && !document.getElementById)) return;
-      const container = ui.DOMElements.reactor_background || document.getElementById("reactor_background");
+      const container = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+      if (typeof document === "undefined" || !fromTile || !container) return;
       if (!container || !ui.gridCanvasRenderer) return;
       let animationKey = `${fromTile.row}-${fromTile.col}-${kind}`;
       if (toTile) animationKey += `-to-${toTile.row}-${toTile.col}`;
@@ -82,7 +87,7 @@ export class GridInteractionUI {
     try {
       if (typeof document === "undefined" || !tile || !ui.gridCanvasRenderer) return;
       if (this._activeVentRotors.has(tile)) return;
-      const container = ui.DOMElements.reactor_background || document.getElementById("reactor_background");
+      const container = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
       if (!container) return;
       const containerRect = container.getBoundingClientRect();
       const rect = ui.gridCanvasRenderer.getTileRectInContainer(tile.row, tile.col, containerRect);
@@ -191,7 +196,7 @@ export class GridInteractionUI {
     const ui = this.ui;
     try {
       if (!fromTile || !toTile || !ui.gridCanvasRenderer) return;
-      const container = ui.DOMElements.reactor_background || document.getElementById('reactor_background');
+      const container = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
       if (!container) return;
       const cRect = container.getBoundingClientRect();
       const fromRect = ui.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, cRect);
@@ -219,7 +224,7 @@ export class GridInteractionUI {
     const ui = this.ui;
     try {
       if (!fromTile || !ui.gridCanvasRenderer) return;
-      const container = ui.DOMElements.reactor_background || document.getElementById('reactor_background');
+      const container = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
       if (!container) return;
       const cRect = container.getBoundingClientRect();
       const startRect = ui.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, cRect);

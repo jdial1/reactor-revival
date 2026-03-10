@@ -3,8 +3,11 @@ import { logger } from "../../utils/logger.js";
 function handleSpacePause(ui, e) {
   if (!e.target.matches("input, textarea, [contenteditable]")) {
     e.preventDefault();
-    const currentPauseState = ui.stateManager.getVar("pause");
-    ui.stateManager.setVar("pause", !currentPauseState);
+    if (ui.uiState) ui.uiState.is_paused = !ui.uiState.is_paused;
+    else {
+      const currentPauseState = ui.stateManager.getVar("pause");
+      ui.stateManager.setVar("pause", !currentPauseState);
+    }
   }
 }
 
