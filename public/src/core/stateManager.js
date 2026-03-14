@@ -151,7 +151,7 @@ export class StateManager extends BaseComponent {
 
     const skipOpenPanel = options.skipOpenPanel === true;
     const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
-    if (isMobile && partActive && !skipOpenPanel) {
+    if (isMobile && part && !skipOpenPanel) {
       const uiState = this.ui?.uiState;
       if (uiState) uiState.parts_panel_collapsed = false;
       else {
