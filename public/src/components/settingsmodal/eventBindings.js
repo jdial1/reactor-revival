@@ -206,7 +206,8 @@ function setupMechSwitches(overlay, modal, signal) {
     }
   }, { signal });
   setupSettingsHelpModal(overlay, modal, signal);
-  if (overlay.querySelector("#setting-notifications") && "Notification" in window) {
+  const notifCheckbox = overlay.querySelector("#setting-notifications");
+  if (notifCheckbox && "Notification" in window) {
     setupMechSwitch("setting-notifications", (checked) => modal._handleNotificationSwitch(checked));
   }
   if (notifCheckbox && !("Notification" in window)) {
