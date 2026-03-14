@@ -31,6 +31,28 @@ export class ControlDeckUI {
     `;
   }
 
+  _exoticParticlesTemplate(state) {
+    return html`
+      <div class="grid">
+        <div>Current 🧬 EP: <strong><span id="current_exotic_particles">${fmt(state.current_exotic_particles ?? 0)}</span></strong></div>
+        <div>Total 🧬 EP: <strong><span id="total_exotic_particles">${fmt(state.total_exotic_particles ?? 0)}</span></strong></div>
+      </div>
+    `;
+  }
+
+  mountExoticParticlesDisplayIfNeeded(ui) {
+    if (this._epComponent) return;
+    const epRoot = document.getElementById("exotic_particles_display");
+    if (!epRoot || !ui.game?.state) return;
+    this._epComponent = new ReactiveLitComponent(
+      ui.game.state,
+      ["current_exotic_particles", "total_exotic_particles"],
+      (state) => this._exoticParticlesTemplate(state),
+      epRoot
+    );
+    this._epUnmount = this._epComponent.mount();
+  }
+
   _mountStatsBarReactive(ui) {
     const root = document.getElementById("reactor_stats");
     if (!root || !ui.game?.state) return;
@@ -42,22 +64,7 @@ export class ControlDeckUI {
       root
     );
     this._statsBarUnmount = this._statsBarComponent.mount();
-    const epRoot = document.getElementById("exotic_particles_display");
-    if (epRoot && ui.game?.state) {
-      const epRenderFn = (state) => html`
-        <div class="grid">
-          <div>Current 🧬 EP: <strong><span id="current_exotic_particles">${fmt(state.current_exotic_particles ?? 0)}</span></strong></div>
-          <div>Total 🧬 EP: <strong><span id="total_exotic_particles">${fmt(state.total_exotic_particles ?? 0)}</span></strong></div>
-        </div>
-      `;
-      this._epComponent = new ReactiveLitComponent(
-        ui.game.state,
-        ["current_exotic_particles", "total_exotic_particles"],
-        epRenderFn,
-        epRoot
-      );
-      this._epUnmount = this._epComponent.mount();
-    }
+    this.mountExoticParticlesDisplayIfNeeded(ui);
   }
 
   _mountEngineStatusReactive(ui) {

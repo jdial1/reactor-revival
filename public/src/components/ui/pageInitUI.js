@@ -104,6 +104,7 @@ export class PageInitUI {
         });
         break;
       case "experimental_upgrades_section":
+        this.ui.controlDeckUI.mountExoticParticlesDisplayIfNeeded(this.ui);
         this.ui.pageSetupUI.setupAffordabilityBanners("research_no_affordable_banner");
         if (!this.ui._sectionCountsMountedResearch && document.getElementById("experimental_upgrades_content_wrapper")) {
           this.ui._sectionCountsUnmountResearch = mountSectionCountsReactive(this.ui, "experimental_upgrades_content_wrapper");
