@@ -58,25 +58,29 @@ export class ObjectiveManager {
     const state = this.game?.state;
     if (!state?.active_objective) return;
     if (this.game?.isSandbox) {
-      state.active_objective.title = "Sandbox";
-      state.active_objective.index = 0;
-      state.active_objective.isComplete = false;
-      state.active_objective.isChapterCompletion = false;
-      state.active_objective.progressPercent = 0;
-      state.active_objective.hasProgressBar = false;
-      state.active_objective.checkId = null;
+      state.active_objective = {
+        title: "Sandbox",
+        index: 0,
+        isComplete: false,
+        isChapterCompletion: false,
+        progressPercent: 0,
+        hasProgressBar: false,
+        checkId: null,
+      };
       return;
     }
     const info = this.getCurrentObjectiveDisplayInfo();
     if (!info) return;
     const checkId = this.current_objective_def?.checkId ?? null;
-    state.active_objective.title = info.title ?? "";
-    state.active_objective.index = this.current_objective_index;
-    state.active_objective.isComplete = !!info.isComplete;
-    state.active_objective.isChapterCompletion = !!info.isChapterCompletion;
-    state.active_objective.progressPercent = info.progressPercent ?? 0;
-    state.active_objective.hasProgressBar = checkId === "sustainedPower1k" && !info.isComplete;
-    state.active_objective.checkId = checkId;
+    state.active_objective = {
+      title: info.title ?? "",
+      index: this.current_objective_index,
+      isComplete: !!info.isComplete,
+      isChapterCompletion: !!info.isChapterCompletion,
+      progressPercent: info.progressPercent ?? 0,
+      hasProgressBar: checkId === "sustainedPower1k" && !info.isComplete,
+      checkId,
+    };
   }
 
   _emitObjectiveLoaded(displayObjective) {
