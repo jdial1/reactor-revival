@@ -272,9 +272,6 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
 .splash-btn-continue:active .continue-label { color: var(--sovietwave-amber);
 }
 
-.splash-sab-warning { margin-top: 0.75rem; padding: 0.5rem 0.75rem; font-size: 0.55rem; color: var(--game-success-color); background: rgb(30 38 28); border: 2px solid var(--bevel-dark); opacity: 0.95;
-}
-
 .save-slot-indicator { position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.65rem; color: var(--splash-accent-olive); font-family: var(--splash-font); opacity: 0.9;
 }
 .splash-menu-header { margin-bottom: 0.75rem; padding-bottom: 4px; color: var(--splash-accent-olive); font-family: var(--splash-font); font-size: 0.8rem; text-align: center; text-transform: uppercase; border-bottom: 2px solid rgb(68 68 68);

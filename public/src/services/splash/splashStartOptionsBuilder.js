@@ -72,8 +72,6 @@ export class SplashStartOptionsBuilder {
       }
     };
 
-    const sabDisabled = typeof SharedArrayBuffer === "undefined" || typeof globalThis.crossOriginIsolated === "undefined" || globalThis.crossOriginIsolated !== true;
-
     const template = html`
       ${mostRecentSave ? html`
         <button class="splash-btn splash-btn-load splash-btn-full-width splash-btn-resume-primary splash-btn-continue" @click=${onResume}>
@@ -100,10 +98,6 @@ export class SplashStartOptionsBuilder {
           <button class="splash-btn splash-btn-config" title="System configuration" @click=${() => this.ctx?.ui?.modalOrchestrator?.showModal(MODAL_IDS.SETTINGS)}>SYS</button>
         </div>
       </div>
-
-      ${sabDisabled ? html`
-        <div class="splash-sab-warning" role="status">High-Performance mode is disabled (missing COOP/COEP headers). Heat simulation may be slower on large grids.</div>
-      ` : ""}
 
       <div id="splash-auth-in-footer" style="margin-top: 1rem;"></div>
     `;
