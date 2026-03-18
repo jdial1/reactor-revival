@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../helpers/setup.js";
 import objective_list_data from "../../public/data/objective_list.json";
-import { getObjectiveCheck } from "../../public/src/core/objectiveActions.js";
+import { getObjectiveCheck } from "../../public/src/core/objective_system.js";
 import { satisfyObjective } from "../helpers/objectiveHelpers.js";
 
 let previousStats = null;

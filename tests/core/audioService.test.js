@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "../helpers/setup.js";
 import { AudioService } from "../../public/src/services/audioService.js";
-import { initPreferencesStore, preferences } from "../../public/src/core/preferencesStore.js";
+import { initPreferencesStore, preferences } from "../../public/src/core/store.js";
 
 describe("AudioService", () => {
   let audioService;
@@ -259,7 +259,7 @@ describe("AudioService", () => {
     });
 
     it("should load volume settings from localStorage on init", async () => {
-      const { preferences } = await import("../../public/src/core/preferencesStore.js");
+      const { preferences } = await import("../../public/src/core/store.js");
       preferences.volumeMaster = 0.5;
       preferences.volumeEffects = 0.75;
       const testAudioService = new AudioService();
@@ -276,7 +276,7 @@ describe("AudioService", () => {
     });
 
     it("should not start ambience if muted on init", async () => {
-      const { preferences } = await import("../../public/src/core/preferencesStore.js");
+      const { preferences } = await import("../../public/src/core/store.js");
       preferences.mute = true;
       const testAudioService = new AudioService();
       await testAudioService.init();
@@ -298,7 +298,7 @@ describe("AudioService", () => {
     });
 
     it("should unmute audio when toggleMute(false) is called", async () => {
-      const { getVolumePreferences } = await import("../../public/src/services/appConfig.js");
+      const { getVolumePreferences } = await import("../../public/src/core/store.js");
       audioService.toggleMute(true);
       audioService.toggleMute(false);
       expect(audioService.enabled).toBe(true);

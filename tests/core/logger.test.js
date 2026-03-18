@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "../helpers/setup.js";
-import { Logger } from "../../public/src/utils/logger.js";
+import { Logger } from "../../public/src/utils/utils_constants.js";
 
 describe("Logger", () => {
     let logger;

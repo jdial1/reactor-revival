@@ -17,8 +17,7 @@
 // These must be defined BEFORE any application code is imported to prevent reference errors.
 
 import Decimal from 'break_infinity.js';
-import { toDecimal } from '../../public/src/utils/decimal.js';
-import { toNumber } from '../../public/src/utils/mathUtils.js';
+import { toDecimal, toNumber } from '../../public/src/utils/utils_constants.js';
 if (typeof global !== 'undefined') global.Decimal = Decimal;
 if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
 
@@ -187,9 +186,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Game } from '../../public/src/core/game.js';
 import { UI } from '../../public/src/components/ui.js';
 import { Engine } from '../../public/src/core/engine.js';
-import { ObjectiveManager } from '../../public/src/core/objective.js';
-import { PageRouter } from '../../public/src/components/pageRouter.js';
-import { attachGameEventListeners } from '../../public/src/app/gameEventListeners.js';
+import { ObjectiveManager } from '../../public/src/core/objective_system.js';
+import { PageRouter } from '../../public/src/app_core.js';
+import { attachGameEventListeners } from '../../public/src/app_core.js';
 
 export const toNum = toNumber;
 

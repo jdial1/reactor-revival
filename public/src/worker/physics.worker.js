@@ -1,4 +1,4 @@
-import { runHeatStepFromTyped } from "../core/heatCalculations.js";
+import { runHeatStepFromTyped } from "../core/heat_system.js";
 
 let pending = null;
 let busy = false;

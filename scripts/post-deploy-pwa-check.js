@@ -14,7 +14,7 @@ let validateManifestFromFile;
 const initManifestValidator = async () => {
   if (!validateManifestFromFile) {
     try {
-      const manifestValidatorModule = await import("../src/utils/manifestValidator.js");
+      const manifestValidatorModule = await import("../public/src/utils/index.js");
       validateManifestFromFile = manifestValidatorModule.validateManifestFromFile;
     } catch (error) {
       console.warn("Could not load manifest validator:", error.message);

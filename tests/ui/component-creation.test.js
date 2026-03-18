@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
-import { numFormat } from "../../public/src/utils/util.js";
+import { numFormat } from "../../public/src/utils/utils_constants.js";
 import { render } from "lit-html";
 import {
   StartButton,

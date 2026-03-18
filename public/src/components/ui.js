@@ -1,52 +1,469 @@
-import { numFormat as fmt, on, StorageUtils, StorageAdapter } from "../utils/util.js";
-import { StateManager } from "../core/stateManager.js";
-import { createUIState, initUIStateSubscriptions } from "../core/uiStore.js";
+import { numFormat as fmt, on, StorageUtils, StorageAdapter, toNumber } from "../utils/utils_constants.js";
+import { html, render } from "lit-html";
+import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
+import { StateManager } from "../core/reactor_state.js";
+import { createUIState, initUIStateSubscriptions } from "../core/store.js";
 import { InputHandler } from "./InputManager.js";
-import { ModalOrchestrator } from "./ModalManager.js";
-import { GridScaler } from "./gridScaler.js";
-import { GridCanvasRenderer } from "./gridCanvasRenderer.js";
-import { ParticleSystem } from "./particleSystem.js";
-import { leaderboardService } from "../services/leaderboardService.js";
-import { logger } from "../utils/logger.js";
-import { CopyPasteUI } from "./ui/copyPasteUI.js";
-import { UserAccountUI } from "./ui/userAccountUI.js";
-import { InfoBarUI } from "./ui/infoBarUI.js";
-import { MobileInfoBarUI } from "./ui/mobileInfoBarUI.js";
-import { PageSetupUI } from "./ui/pageSetupUI.js";
-import { PartsPanelUI } from "./ui/partsPanelUI.js";
-import { ObjectivesUI } from "./ui/objectivesUI.js";
-import { HeatVisualsUI } from "./ui/heatVisualsUI.js";
-import { GridInteractionUI } from "./ui/gridInteractionUI.js";
-import { ControlDeckUI } from "./ui/controlDeckUI.js";
-import { UpgradesUI } from "./ui/upgradesUI.js";
-import { PerformanceUI } from "./ui/performanceUI.js";
-import { MeltdownUI } from "./ui/meltdownUI.js";
-import { ModalOrchestrationUI } from "./ui/modalOrchestrationUI.js";
-import { SandboxUI } from "./ui/sandboxUI.js";
-import { CoreLoopUI } from "./ui/coreLoopUI.js";
-import { LayoutStorageUI } from "./ui/layoutStorageUI.js";
-import { PageInitUI } from "./ui/pageInitUI.js";
-import { ParticleEffectsUI } from "./ui/particleEffectsUI.js";
-import { ComponentRenderingUI } from "./ui/componentRenderingUI.js";
-import { DeviceFeaturesUI } from "./ui/deviceFeaturesUI.js";
-import { setupKeyboardShortcuts, setupCtrl9Handlers, startCtrl9MoneyIncrease, stopCtrl9MoneyIncrease } from "./ui/keyboardShortcutsUI.js";
-import { setupNavListeners, setupResizeListeners } from "./ui/navigationListenersUI.js";
+import { ModalOrchestrator } from "./ui_modals.js";
+import { GridScaler, GridCanvasRenderer } from "./ui_grid.js";
+import { ParticleSystem, ParticleEffectsUI, VisualEventRendererUI } from "./VisualEffectsManager.js";
+import { leaderboardService } from "../services/services_cloud.js";
+import { logger } from "../utils/utils_constants.js";
+import { UpgradesUI, ComponentRenderingUI, runPopulateUpgradeSection, mountSectionCountsReactive, updateSectionCountsState } from "./ui/ui_upgrades.js";
+import {
+  CopyPasteUI,
+  UserAccountUI,
+  InfoBarUI,
+  MobileInfoBarUI,
+  PageSetupUI,
+  PartsPanelUI,
+  HeatVisualsUI,
+  GridInteractionUI,
+  ControlDeckUI,
+  PerformanceUI,
+  MeltdownUI,
+  ModalOrchestrationUI,
+  SandboxUI,
+  CoreLoopUI,
+  DeviceFeaturesUI,
+  setupKeyboardShortcuts,
+  setupCtrl9Handlers,
+  startCtrl9MoneyIncrease,
+  stopCtrl9MoneyIncrease,
+  setupNavListeners,
+  setupResizeListeners,
+  PwaDisplayModeUI,
+  QuickStartUI,
+  NavIndicatorsUI,
+  TabSetupUI,
+  ClipboardUI,
+} from "./ui/uiModule.js";
+import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
 import dataService from "../services/dataService.js";
-import { PwaDisplayModeUI } from "./ui/pwaDisplayModeUI.js";
-import { QuickStartUI } from "./ui/quickStartUI.js";
-import { NavIndicatorsUI } from "./ui/navIndicatorsUI.js";
-import { PauseStateUI } from "./ui/pauseStateUI.js";
-import { ClipboardUI } from "./ui/clipboardUI.js";
-import { ComponentRegistry } from "../utils/ComponentRegistry.js";
-import { MOBILE_BREAKPOINT_PX } from "../core/constants.js";
-import { runPopulateUpgradeSection } from "./ui/upgrades/domPopulatorUI.js";
-import { getPowerNetChange as getPowerNetChangeFromStats, getHeatNetChange as getHeatNetChangeFromStats } from "./ui/statsCalculatorUI.js";
-import { TabSetupUI } from "./ui/tabSetupUI.js";
-import { VisualEventRendererUI } from "./ui/visualEventRendererUI.js";
-import { initMainLayout as initMainLayoutFromModule } from "./ui/mainLayoutInitUI.js";
-import { ObjectiveController } from "./controllers/ObjectiveController.js";
-import { GridController } from "./controllers/GridController.js";
-import { AudioController } from "./controllers/AudioController.js";
+import { ComponentRegistry } from "../utils/utils_constants.js";
+import { MOBILE_BREAKPOINT_PX } from "../utils/utils_constants.js";
+import { ObjectiveController, getObjectiveScrollDuration } from "../core/objective_system.js";
+import { GridController, AudioController } from "./controllers/controllers.js";
+
+export function getRoot(selector) {
+  return document.querySelector(selector);
+}
+
+export function getSplashContainer() {
+  return getRoot("#splash-container");
+}
+
+export function getWrapper() {
+  return getRoot("#wrapper");
+}
+
+export function getReactor() {
+  return getRoot("#reactor");
+}
+
+let _domMapperInitPromise = null;
+
+export async function init() {
+  if (_domMapperInitPromise) return _domMapperInitPromise;
+  if (document.readyState === "loading") {
+    _domMapperInitPromise = new Promise((resolve) => {
+      document.addEventListener("DOMContentLoaded", resolve, { once: true });
+    });
+  } else {
+    _domMapperInitPromise = Promise.resolve();
+  }
+  return _domMapperInitPromise;
+}
+
+if (typeof window !== "undefined") {
+  window.domMapper = { getRoot, getSplashContainer, getWrapper, getReactor, init };
+}
+
+export const domMapper = typeof window !== "undefined" ? window.domMapper : null;
+export default domMapper;
+
+const MY_LAYOUTS_STORAGE_KEY = 'reactor_my_layouts';
+
+class PageInitUI {
+  constructor(ui) {
+    this.ui = ui;
+    this.ui.registry.register('PageInit', this);
+  }
+
+  clearReactor() {
+    const reactor = this.getReactor();
+    if (reactor) reactor.innerHTML = "";
+  }
+
+  getReactor() {
+    return this.ui.coreLoopUI?.getElement?.("reactor") ?? this.ui.DOMElements?.reactor ?? document.getElementById("reactor");
+  }
+
+  getReactorWrapper() {
+    return this.ui.coreLoopUI?.getElement?.("reactor_wrapper") ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
+  }
+
+  getReactorBackground() {
+    return this.ui.coreLoopUI?.getElement?.("reactor_background") ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+  }
+
+  setGridContainer(container) {
+    if (this.ui.gridCanvasRenderer) this.ui.gridCanvasRenderer.setContainer(container);
+  }
+
+  setReactorVisibility(visible) {
+    const reactor = this.getReactor();
+    if (reactor) reactor.style.visibility = visible ? "visible" : "hidden";
+  }
+
+  initializePage(pageId) {
+    const game = this.ui.game;
+    this.ui.coreLoopUI.cacheDOMElements(pageId);
+
+    if (pageId === "reactor_section") {
+      this.ui.coreLoopUI.initVarObjsConfig();
+      const pauseCfg = this.ui.var_objs_config?.pause;
+      const paused = !!this.ui.stateManager?.getVar("pause");
+      if (pauseCfg?.onupdate) pauseCfg.onupdate(paused);
+    }
+
+    switch (pageId) {
+      case "reactor_section":
+        const reactor = this.getReactor();
+        logger.log('debug', 'ui', '[PageInit] reactor_section init start', {
+          hasGridScaler: !!this.ui.gridScaler,
+          hasWrapper: !!this.ui.gridScaler?.wrapper,
+          hasReactor: !!reactor,
+          hasGridRenderer: !!this.ui.gridCanvasRenderer,
+          hasGame: !!this.ui.game,
+          hasTileset: !!this.ui.game?.tileset
+        });
+        if (this.ui.gridScaler && !this.ui.gridScaler.wrapper) {
+          this.ui.gridScaler.init();
+        }
+        if (reactor) {
+          this.clearReactor();
+          if (this.ui.gridCanvasRenderer) {
+            this.ui.gridCanvasRenderer.init(reactor);
+          }
+        }
+
+        this.ui.inputHandler.setupReactorEventListeners();
+        this.ui.inputHandler.setupSegmentHighlight();
+        this.ui.gridScaler.resize();
+        const container = this.getReactorWrapper() || this.getReactorBackground();
+        this.setGridContainer(container);
+        if (this.ui.game?.tileset) {
+          this.ui.game.tileset.updateActiveTiles();
+        }
+        if (this.ui.gridCanvasRenderer && this.ui.game) {
+          this.ui.gridCanvasRenderer.render(this.ui.game);
+        }
+        logger.log('debug', 'ui', '[PageInit] reactor_section init done');
+        this.ui.initializeCopyPasteUI();
+        this.ui.modalOrchestrationUI.initializeSellAllButton();
+        this.ui.pageSetupUI.setupMobileTopBar();
+        this.ui.pageSetupUI.setupMobileTopBarResizeListener();
+        break;
+      case "upgrades_section":
+        this.ui.pageSetupUI.setupAffordabilityBanners("upgrades_no_affordable_banner");
+        if (!this.ui._sectionCountsMountedUpgrades && document.getElementById("upgrades_content_wrapper")) {
+          this.ui._sectionCountsUnmountUpgrades = mountSectionCountsReactive(this.ui, "upgrades_content_wrapper");
+          this.ui._sectionCountsMountedUpgrades = true;
+        }
+        if (game?.upgradeset) updateSectionCountsState(this.ui, game);
+        requestAnimationFrame(() => {
+          if (
+            game.upgradeset &&
+            typeof game.upgradeset.populateUpgrades === "function"
+          ) {
+            game.upgradeset.populateUpgrades();
+          } else {
+            logger.log('warn', 'ui', 'upgradeset.populateUpgrades is not a function or upgradeset missing');
+          }
+          this.ui.sandboxUI.initializeSandboxUpgradeButtons();
+        });
+        break;
+      case "experimental_upgrades_section":
+        this.ui.controlDeckUI.mountExoticParticlesDisplayIfNeeded(this.ui);
+        this.ui.pageSetupUI.setupAffordabilityBanners("research_no_affordable_banner");
+        if (!this.ui._sectionCountsMountedResearch && document.getElementById("experimental_upgrades_content_wrapper")) {
+          this.ui._sectionCountsUnmountResearch = mountSectionCountsReactive(this.ui, "experimental_upgrades_content_wrapper");
+          this.ui._sectionCountsMountedResearch = true;
+        }
+        if (game?.upgradeset) updateSectionCountsState(this.ui, game);
+        if (
+          game.upgradeset &&
+          typeof game.upgradeset.populateExperimentalUpgrades === "function"
+        ) {
+          game.upgradeset.populateExperimentalUpgrades();
+        } else {
+          logger.log('warn', 'ui', 'upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing');
+        }
+        this.ui.userAccountUI.renderDoctrineTreeViewer();
+        this.setupResearchCollapsibleSections();
+        this.ui.sandboxUI.initializeSandboxUpgradeButtons();
+        this.loadAndSetVersion();
+        break;
+      case "about_section":
+        this.setupVersionDisplay();
+        if (!this.ui.uiState?.version_display?.app) this.loadAndSetVersion();
+        break;
+      case "leaderboard_section":
+        this.ui.pageSetupUI.setupLeaderboardPage();
+        break;
+      case "soundboard_section":
+        this.ui.pageSetupUI.setupSoundboardPage();
+        break;
+      default:
+        break;
+    }
+
+    this.ui.objectivesUI.showObjectivesForPage(pageId);
+  }
+
+  setupResearchCollapsibleSections() {
+    if (this._researchCollapsibleSetup) return;
+    this._researchCollapsibleSetup = true;
+    const section = document.getElementById("experimental_upgrades_section");
+    if (!section) return;
+    section.addEventListener("click", (e) => {
+      const header = e.target.closest(".research-section-header");
+      if (!header) return;
+      const article = header.closest(".research-collapsible");
+      if (!article) return;
+      e.preventDefault();
+      const collapsed = article.classList.toggle("section-collapsed");
+      header.setAttribute("aria-expanded", String(!collapsed));
+    });
+    section.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const header = e.target.closest(".research-section-header");
+      if (!header) return;
+      e.preventDefault();
+      header.click();
+    });
+  }
+
+  setupVersionDisplay() {
+    const ui = this.ui;
+    if (!ui?.uiState || ui._versionDisplayMounted) return;
+    const aboutEl = document.getElementById("about_version");
+    const appEl = document.getElementById("app_version");
+    const renderVersion = (el) => {
+      if (!el?.isConnected) return;
+      ReactiveLitComponent.mountMulti(
+        [{ state: ui.uiState, keys: ["version_display"] }],
+        () => html`${ui.uiState?.version_display?.app ?? ui.uiState?.version_display?.about ?? ""}`,
+        el
+      );
+    };
+    if (aboutEl) renderVersion(aboutEl);
+    if (appEl && appEl !== aboutEl) renderVersion(appEl);
+    ui._versionDisplayMounted = true;
+  }
+
+  async loadAndSetVersion() {
+    const ui = this.ui;
+    try {
+      const { getResourceUrl } = await import("../utils/utils_constants.js");
+      const response = await fetch(getResourceUrl("version.json"));
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+          throw new Error("HTML response received (likely 404 fallback)");
+        }
+        throw new Error(`Expected JSON but got ${contentType || "unknown content type"}`);
+      }
+
+      const versionData = await response.json();
+      const version = versionData.version || "Unknown";
+
+      if (ui?.uiState) {
+        ui.uiState.version_display = { ...ui.uiState.version_display, app: version, about: version };
+      }
+    } catch (error) {
+      if (!error.message || !error.message.includes("Expected JSON")) {
+        logger.log('warn', 'ui', 'Could not load version info:', error.message || error);
+      }
+      if (ui?.uiState) {
+        ui.uiState.version_display = { ...ui.uiState.version_display, app: "Unknown", about: "Unknown" };
+      }
+    }
+  }
+}
+
+function getPowerNetChangeFromStats(ui) {
+  const fromState = ui.game?.state?.power_net_change;
+  if (fromState !== undefined && typeof fromState === "number" && !isNaN(fromState)) return fromState;
+  const statsPower = toNumber(ui.stateManager.getVar("stats_power") || 0);
+  const autoSellEnabled = ui.stateManager.getVar("auto_sell") || false;
+  const autoSellMultiplier = toNumber(ui.game?.reactor?.auto_sell_multiplier || 0);
+  if (autoSellEnabled && autoSellMultiplier > 0) {
+    return statsPower - statsPower * autoSellMultiplier;
+  }
+  return statsPower;
+}
+
+function getHeatNetChangeFromStats(ui) {
+  const fromState = ui.game?.state?.heat_net_change;
+  if (fromState !== undefined && typeof fromState === "number" && !isNaN(fromState)) return fromState;
+  const statsNetHeat = ui.stateManager.getVar("stats_net_heat");
+  let baseNetHeat;
+  if (typeof statsNetHeat === "number" && !isNaN(statsNetHeat)) {
+    baseNetHeat = statsNetHeat;
+  } else {
+    const totalHeat = toNumber(ui.stateManager.getVar("total_heat") || 0);
+    const statsVent = toNumber(ui.stateManager.getVar("stats_vent") || 0);
+    const statsOutlet = toNumber(ui.stateManager.getVar("stats_outlet") || 0);
+    baseNetHeat = totalHeat - statsVent - statsOutlet;
+  }
+  const currentPower = toNumber(ui.stateManager.getVar("current_power") || 0);
+  const statsPower = toNumber(ui.stateManager.getVar("stats_power") || 0);
+  const maxPower = toNumber(ui.stateManager.getVar("max_power") || 0);
+  const potentialPower = currentPower + statsPower;
+  const excessPower = Math.max(0, potentialPower - maxPower);
+  const overflowToHeat = ui.game?.reactor?.power_overflow_to_heat_ratio ?? 0.5;
+  const overflowHeat = excessPower * overflowToHeat;
+  const manualReduce = toNumber(ui.game?.reactor?.manual_heat_reduce || ui.game?.base_manual_heat_reduce || 1);
+  return baseNetHeat + overflowHeat - manualReduce;
+}
+
+function initMainLayoutInner(ui) {
+  ui.setupEventListeners();
+  ui.controlDeckUI.initializeToggleButtons();
+  ui.initializeControlDeck();
+  ui.partsPanelUI.setupPartsTabs();
+  ui.partsPanelUI.initializePartsPanel();
+  ui.coreLoopUI.cacheDOMElements();
+  ui.coreLoopUI.initVarObjsConfig();
+  ui.quickStartUI.addHelpButtonToMainPage();
+  ui.userAccountUI.setupUserAccountButton();
+  ui.tabSetupUI.setupBuildTabButton();
+  ui.tabSetupUI.setupMenuTabButton();
+  ui.deviceFeatures.setupAppBadgeVisibilityHandler();
+  ui.deviceFeatures.updateWakeLockState();
+  const basicOverview = ui.coreLoopUI?.getElement?.("basic_overview_section") ?? ui.DOMElements?.basic_overview_section;
+  if (basicOverview && ui.help_text?.basic_overview) {
+    render(html`
+      <h3>${ui.help_text.basic_overview.title}</h3>
+      <p>${unsafeHTML(ui.help_text.basic_overview.content)}</p>
+    `, basicOverview);
+  }
+  if (ui.gridScaler) ui.gridScaler.init();
+  if (document.getElementById("reactor_wrapper")) {
+    ui.gridScaler.resize();
+  }
+  ui.particleEffectsUI.initParticleCanvas();
+  requestAnimationFrame((ts) => ui.coreLoopUI.runUpdateInterfaceLoop(ts));
+  if (ui.game && ui.game.engine) {
+    const status = ui.game.paused ? "paused" : (ui.game.engine.running ? "running" : "stopped");
+    ui.stateManager.setVar("engine_status", status);
+  }
+  ui.performanceUI.startPerformanceTracking();
+}
+
+class LayoutStorageUI {
+  constructor(ui) {
+    this.ui = ui;
+  }
+  static get MY_LAYOUTS_STORAGE_KEY() {
+    return MY_LAYOUTS_STORAGE_KEY;
+  }
+  getMyLayouts() {
+    try {
+      const arr = StorageUtils.get(MY_LAYOUTS_STORAGE_KEY);
+      if (!arr) return [];
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+  saveMyLayouts(layouts) {
+    StorageUtils.set(MY_LAYOUTS_STORAGE_KEY, layouts);
+  }
+  addToMyLayouts(name, data) {
+    const list = this.getMyLayouts();
+    list.unshift({
+      id: String(Date.now()),
+      name: name || `Layout ${list.length + 1}`,
+      data,
+      createdAt: Date.now()
+    });
+    this.saveMyLayouts(list);
+  }
+  removeFromMyLayouts(id) {
+    const list = this.getMyLayouts().filter((e) => e.id !== id);
+    this.saveMyLayouts(list);
+  }
+}
+
+class ObjectivesUI {
+  constructor(ui, controller = null) {
+    this.ui = ui;
+    this.ui.registry.register('Objectives', this);
+    this.controller = controller;
+  }
+  checkTextScrolling() {
+    const toastTitleEl = this.ui.coreLoopUI?.getElement?.("objectives_toast_title") ?? document.getElementById("objectives_toast_title");
+    if (!toastTitleEl) return;
+    const duration = getObjectiveScrollDuration();
+    toastTitleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`;
+  }
+  markComplete() {
+    const toastBtn = this.ui.coreLoopUI?.getElement?.("objectives_toast_btn") ?? document.getElementById("objectives_toast_btn");
+    if (!toastBtn) return;
+    toastBtn.classList.add("is-complete");
+    if (typeof this.animateObjectiveCompletion === "function") this.animateObjectiveCompletion();
+  }
+  updateObjectiveDisplay() {
+    if (this.controller) return this.controller.updateDisplay();
+  }
+  updateObjectiveDisplayFromState() {
+    if (this.controller) return this.controller.updateDisplayFromState();
+  }
+  animateObjectiveCompletion() {
+    if (this.controller) return this.controller.animateCompletion();
+  }
+  showObjectivesForPage(pageId) {
+    if (this.ui?.uiState) this.ui.uiState.active_page = pageId;
+    if (this.controller) return this.controller.showForPage(pageId);
+  }
+  setupObjectivesListeners() {
+    if (this.controller) return this.controller.setupListeners();
+  }
+}
+
+class PauseStateUI {
+  constructor(ui) {
+    this.ui = ui;
+  }
+  updatePauseState() {
+    if (!this.ui.stateManager) return;
+    const statePaused = this.ui.stateManager.getVar("pause");
+    const isPaused = statePaused === undefined ? !!this.ui.game?.paused : !!statePaused;
+    if (this.ui.uiState) this.ui.uiState.is_paused = !!isPaused;
+    const doc = (typeof globalThis !== "undefined" && globalThis.document) || (typeof document !== "undefined" && document);
+    if (doc?.body) doc.body.classList.toggle("game-paused", !!isPaused);
+    if (isPaused) {
+      const unpauseBtn = document.getElementById("unpause_btn");
+      if (unpauseBtn && !unpauseBtn.hasAttribute("data-listener-added")) {
+        unpauseBtn.addEventListener("click", () => {
+          this.ui.stateManager.setVar("pause", false);
+        });
+        unpauseBtn.setAttribute("data-listener-added", "true");
+      }
+    }
+  }
+}
+
+export { getPowerNetChangeFromStats as getPowerNetChange, getHeatNetChangeFromStats as getHeatNetChange };
 
 export class UI {
   constructor() {
@@ -195,7 +612,7 @@ export class UI {
   }
 
   initMainLayout() {
-    initMainLayoutFromModule(this);
+    initMainLayoutInner(this);
     this._uiStateTeardown = initUIStateSubscriptions(this.uiState, this);
   }
 
@@ -227,7 +644,7 @@ export class UI {
   }
 
   forceReactorRealignment() {
-    const reactor = this.registry?.get?.("PageInit")?.getReactor?.() ?? this.DOMElements?.reactor;
+    const reactor = this.pageInitUI?.getReactor?.() ?? this.DOMElements?.reactor;
     if (!this.game || !reactor) return;
     const originalDisplay = reactor.style.display;
     reactor.style.display = "none";

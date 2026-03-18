@@ -1,6 +1,7 @@
 import { fromError } from "zod-validation-error";
 import { z } from "zod";
-import { logger } from "../utils/logger.js";
+import { QueryClient } from "@tanstack/query-core";
+import { logger } from "../utils/utils_constants.js";
 import {
   PartDefinitionSchema,
   UpgradeDefinitionSchema,
@@ -8,8 +9,27 @@ import {
   ObjectiveListSchema,
   DifficultyPresetSchema,
   HelpTextSchema,
-} from "../core/schemas.js";
-import { queryClient, queryKeys } from "./queryClient.js";
+} from "../utils/utils_constants.js";
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      retry: 2,
+    },
+  },
+});
+
+export const queryKeys = {
+  gameData: (resource) => (resource ? ["gameData", resource] : ["gameData"]),
+  leaderboard: (sortBy, limit) => ["leaderboard", "top", sortBy, limit],
+  saves: {
+    resolved: () => ["saves", "resolved"],
+    local: (slot) => ["saves", "local", slot],
+    cloud: (provider) => ["saves", "cloud", provider],
+  },
+};
 
 const fetchAndValidate = async (path, schema) => {
   const response = await fetch(path);

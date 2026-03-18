@@ -10,17 +10,18 @@ describe("DOMMapper", () => {
     global.window = {
       document: {
         querySelector: vi.fn(),
-        getElementById: vi.fn(() => null), // Prevent "is not a function" errors
+        getElementById: vi.fn(() => null),
         addEventListener: vi.fn(),
-        // FIX: Change 'loading' to 'complete' to prevent init() from waiting forever for an event that won't fire
         readyState: 'complete'
       },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       location: { href: '' }
     };
     global.document = global.window.document;
 
     // Now import the module which will auto-execute init()
-    const module = await import("../../public/src/components/domMapper.js");
+    const module = await import("../../public/src/components/ui.js");
     domMapperInstance = module.default;
   });
 

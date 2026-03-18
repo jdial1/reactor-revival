@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
-import { GridScaler } from "../../public/src/components/gridScaler.js";
+import { GridScaler } from "../../public/src/components/ui_grid.js";
 
 const resizeWindow = (w, width, height) => {
   Object.defineProperty(w, "innerWidth", { configurable: true, writable: true, value: width });

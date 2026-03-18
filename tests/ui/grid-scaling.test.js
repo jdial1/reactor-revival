@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, setupGameWithDOM } from "../helpers/setup.js";
 
-import { GridScaler } from "../../public/src/components/gridScaler.js";
+import { GridScaler } from "../../public/src/components/ui_grid.js";
 
 describe("Grid Scaling Logic (Reshaping)", () => {
     let game, ui, wrapper, reactor, window;

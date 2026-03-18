@@ -1,7 +1,7 @@
 import Decimal from "break_infinity.js";
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, toNum } from "../helpers/setup.js";
 import { placePart } from "../helpers/gameHelpers.js";
-import { getHeatNetChange, getPowerNetChange } from "../../public/src/components/ui/statsCalculatorUI.js";
+import { getHeatNetChange, getPowerNetChange } from "../../public/src/components/ui.js";
 
 describe("Power Overflow Mechanics", () => {
     let game;

@@ -1,14 +1,15 @@
-import { getResourceUrl, isTestEnv } from "../utils/util.js";
-import { getVolumePreferences } from "./appConfig.js";
-import { preferences } from "../core/preferencesStore.js";
-import { logger } from "../utils/logger.js";
-import { loadSampleBuffers } from "./audio/audioBufferLoader.js";
-import { AudioAmbienceManager } from "./audio/audioAmbienceManager.js";
-import { AudioWarningManager } from "./audio/audioWarningManager.js";
-import { AudioIndustrialManager } from "./audio/audioIndustrialManager.js";
-import { AudioSynthesizer } from "./audio/audioSynthesizer.js";
-import { handleAudioEvent } from "./audio/eventAudioRouter.js";
-import { AUDIO_RUNTIME_DEFAULTS } from "./audio/audioConfig.js";
+import { getResourceUrl, isTestEnv } from "../utils/utils_constants.js";
+import { getVolumePreferences, preferences } from "../core/store.js";
+import { logger } from "../utils/utils_constants.js";
+import {
+  loadSampleBuffers,
+  AudioAmbienceManager,
+  AudioWarningManager,
+  AudioIndustrialManager,
+  AudioSynthesizer,
+  handleAudioEvent,
+  AUDIO_RUNTIME_DEFAULTS,
+} from "./audio/audioModule.js";
 
 export class AudioService {
   constructor() {

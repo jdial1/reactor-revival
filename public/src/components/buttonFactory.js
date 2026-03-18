@@ -1,7 +1,6 @@
 import { html, render, nothing } from "lit-html";
-import { numFormat } from "../utils/util.js";
-import { classMap, styleMap, unsafeHTML } from "../utils/litHelpers.js";
-import { getUpgradeBonusLines } from "../core/part/partUpgradeBonusBuilder.js";
+import { numFormat, classMap, styleMap, unsafeHTML } from "../utils/utils_constants.js";
+import { getUpgradeBonusLines } from "../core/parts_system.js";
 
 function getUpgradeIconOverlay(upgrade) {
   try {

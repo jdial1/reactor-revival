@@ -15,3 +15,5 @@ package-lock.json
 public/lib/pako.min.js
 *.log
 /public/lib
+/output_js_files
+*.py
