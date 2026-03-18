@@ -14,7 +14,7 @@ import {
   SESSION_UPDATE_INTERVAL_MS,
   MAX_VISUAL_EVENTS,
 } from "../utils/utils_constants.js";
-import { PhysicsTickInputSchema } from "../utils/utils_constants.js";
+import { PhysicsTickInputSchema, PhysicsTickResultSchema } from "../utils/utils_constants.js";
 import {
   AUTONOMIC_REPAIR_POWER_COST,
   AUTONOMIC_REPAIR_POWER_MIN,

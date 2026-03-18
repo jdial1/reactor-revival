@@ -20,7 +20,7 @@ async function initializeESLint() {
                 baseConfig: config.default,
                 ignore: false
             });
-        } catch (error) {
+        } catch {
             eslintInstance = new ESLint({
                 overrideConfigFile: configPath,
                 ignore: false

@@ -1,28 +1,5 @@
 import https from "https";
-import fs from "fs";
-import path from "path";
 import http from "http";
-import { fileURLToPath } from "url";
-
-// Get __dirname equivalent for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Import our manifest validator (using dynamic import for ESM compatibility)
-let validateManifestFromFile;
-
-const initManifestValidator = async () => {
-  if (!validateManifestFromFile) {
-    try {
-      const manifestValidatorModule = await import("../public/src/utils/index.js");
-      validateManifestFromFile = manifestValidatorModule.validateManifestFromFile;
-    } catch (error) {
-      console.warn("Could not load manifest validator:", error.message);
-      // Fallback to basic validation
-      validateManifestFromFile = async () => ({ isValid: true, score: 100, errors: [], warnings: [] });
-    }
-  }
-};
 
 // Configuration
 const GITHUB_PAGES_URL = process.env.GITHUB_PAGES_URL || "https://jdial1.github.io/reactor-revival/";
@@ -434,7 +411,7 @@ async function runAllChecks(checksToRun = DEFAULT_CHECKS) {
     const result = await runDiagnostics(checksToRun);
     checkResults = result.checkResults;
     passedChecks = result.passedChecks;
-  } catch (error) {
+  } catch {
     process.exit(1);
   }
 

@@ -1,9 +1,10 @@
 import { fromError } from "zod-validation-error";
 import superjson from "superjson";
-import Decimal, { toDecimal } from "../utils/utils_constants.js";
-import { logger } from "../utils/utils_constants.js";
-import { GameLoopTickInputSchema, VALVE_OVERFLOW_THRESHOLD } from "../utils/utils_constants.js";
-import {
+import Decimal, {
+  toDecimal,
+  logger,
+  GameLoopTickInputSchema,
+  VALVE_OVERFLOW_THRESHOLD,
   MAX_TICKS_PER_FRAME_NO_SAB,
   SLOW_MODE_TICKS_PER_FRAME,
   GAME_LOOP_WORKER_MIN_TICKS,
@@ -18,11 +19,8 @@ import {
   MAX_CATCHUP_TICKS,
 } from "../utils/utils_constants.js";
 
-
-const TIME_FLUX_CHUNK_TICKS = 100;
 const ANALYTICAL_CATCHUP_THRESHOLD = 5000;
 const STABLE_HEAT_RATIO = VALVE_OVERFLOW_THRESHOLD;
-const SAMPLE_TICKS = 5;
 
 function applyReactorStateProjection(engine, N, avgHeatPerTick, avgPowerPerTick, avgMoneyPerTick) {
   const reactor = engine.game.reactor;

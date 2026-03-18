@@ -43,7 +43,7 @@ export {
   getCompactLayout,
   myLayoutsTemplate,
 } from "./ui_upgrades.js";
-import { setupCopyAction, setupPasteAction } from "./ui_upgrades.js";
+import { setupCopyAction, setupPasteAction, getCompactLayout } from "./ui_upgrades.js";
 
 const TOAST_DURATION_MS = 2000;
 
