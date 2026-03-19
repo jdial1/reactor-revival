@@ -28,9 +28,7 @@ export class GridController {
     if (game.reactor?.has_melted_down) return;
 
     const startTile = tile;
-    const isRightClick =
-      (event.pointerType === "mouse" && event.button === 2) ||
-      event.type === "contextmenu";
+    const isSellAction = event.type === "longpress";
     const clicked_part = ui.stateManager.getClickedPart();
 
     const inputManager = this.api.getInputManager?.();
@@ -44,13 +42,13 @@ export class GridController {
     let soundPlayed = false;
     const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
 
-    if (isMobile && !isRightClick && startTile.part && !clicked_part) {
+    if (isMobile && !isSellAction && startTile.part && !clicked_part) {
       game.emit("showContextModal", { tile: startTile });
       return;
     }
 
     for (const t of tilesToModify) {
-      if (isRightClick) {
+      if (isSellAction) {
         if (t.part && t.part.id && !t.part.isSpecialTile) {
           game.sellPart(t);
           ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
@@ -60,10 +58,9 @@ export class GridController {
           }
         }
       } else {
-        if (t.part && ui.help_mode_active) {
-          if (game.tooltip_manager) {
-            game.tooltip_manager.show(t.part, t, true);
-          }
+        if (ui.help_mode_active) {
+          const helpTargetPart = t.part ?? clicked_part;
+          if (helpTargetPart && game.tooltip_manager) game.tooltip_manager.show(helpTargetPart, t, true);
           return;
         }
 

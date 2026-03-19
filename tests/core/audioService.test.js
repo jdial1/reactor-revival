@@ -691,7 +691,7 @@ describe("AudioService", () => {
       if (ui.handleGridInteraction) {
         ui.stateManager.setClickedPart(part);
         const clickEvent = new PointerEvent('pointerdown', {
-          pointerType: 'mouse',
+          pointerType: 'touch',
           button: 0
         });
         await ui.handleGridInteraction(tile, clickEvent);

@@ -62,15 +62,14 @@ describe("UI User Interaction Scenarios", () => {
         expect(tile.part.id).toBe("uranium1");
     });
 
-    it("should sell a part when a tile is right-clicked", async () => {
+    it("should sell a part when a tile receives a longpress action", async () => {
         const part = game.partset.getPartById("uranium1");
         const tile = game.tileset.getTile(5, 5);
         await tile.setPart(part);
         
         const moneyBeforeSell = game.current_money;
         
-        // Directly call the handler simulating right click
-        await game.ui.gridController.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tile.$el });
+        await game.ui.gridController.handleGridInteraction(tile, { type: "longpress", button: 0, target: tile.$el });
         
         expect(tile.part).toBeNull();
         expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
@@ -99,12 +98,12 @@ describe("UI User Interaction Scenarios", () => {
         expect(spent >= 0).toBe(true);
     });
 
-    it("should display a tooltip when hovering over a part button in help mode", async () => {
+    it("should display a tooltip when tapping a part button in help mode", async () => {
         game.ui.stateManager.setVar("help_mode", true);
         const partBtn = document.querySelector(".parts_tab_content.active .part-btn, .item-grid .part-btn, [data-part-id]");
         const tooltipEl = document.getElementById("tooltip");
         if (!partBtn || !tooltipEl) return;
-        partBtn.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+        partBtn.click();
         await vi.advanceTimersByTimeAsync(100);
         const visible = !tooltipEl.classList.contains("hidden");
         expect(visible || tooltipEl.style.display !== "none").toBeTruthy();
@@ -127,32 +126,29 @@ describe("UI User Interaction Scenarios", () => {
             expect(tileElement).not.toBeNull();
         });
 
-        it("should sell a part when a tile is right-clicked via contextmenu event", () => {
+        it("should sell a part when a tile is sold directly", () => {
             const moneyBeforeSell = game.current_money;
             game.sellPart(tile);
             expect(tile.part).toBeNull();
             expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
 
-        it("should sell a part when a tile is right-clicked via pointer event", async () => {
+        it("should sell a part when a tile receives a longpress event", async () => {
             const moneyBeforeSell = game.current_money;
             
-            await game.ui.gridController.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tileElement });
+            await game.ui.gridController.handleGridInteraction(tile, { type: "longpress", button: 0, target: tileElement });
             expect(tile.part).toBeNull();
             expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
 
-        it("should NOT sell a part when right-clicking on a tile without a part", async () => {
+        it("should NOT sell a part on longpress when tile has no part", async () => {
             tile.sellPart();
             expect(tile.part).toBeNull();
 
-            // Mock the sellPart method to track calls
             const sellPartSpy = vi.spyOn(game, "sellPart");
 
-            // Call handler directly with contextmenu event
-            await game.ui.gridController.handleGridInteraction(tile, { type: 'contextmenu', button: 2, target: tileElement });
+            await game.ui.gridController.handleGridInteraction(tile, { type: "longpress", button: 0, target: tileElement });
 
-            // Verify sellPart was NOT called
             expect(sellPartSpy).not.toHaveBeenCalled();
         });
 

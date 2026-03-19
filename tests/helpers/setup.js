@@ -184,7 +184,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Core application imports
 import { Game, Engine, ObjectiveManager } from '../../public/src/logic.js';
-import { UI } from '../../public/src/ui.js';
+import { UI } from '../../public/src/components/ui.js';
 import { PageRouter } from '../../public/src/app.js';
 import { attachGameEventListeners } from '../../public/src/app.js';
 

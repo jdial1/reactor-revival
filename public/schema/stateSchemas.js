@@ -1,30 +1,12 @@
 import { z } from "zod";
-import { toDecimal } from "../utils.js";
-
-export const NumericLike = z.union([z.number(), z.string()]);
-export const DecimalLike = z.union([
-  z.number(),
-  z.string(),
-  z.custom((v) => v == null || (typeof v?.gte === "function")),
-]);
-export const GridCoordinate = z.number().int().min(0);
-
-export const DecimalSchema = NumericLike.transform((v) => (v != null && v !== "" ? toDecimal(v) : toDecimal(0)));
-
-export const SaveDecimalSchema = z
-  .union([DecimalLike, z.undefined()])
-  .transform((v) => (v != null && v !== "" ? toDecimal(v) : toDecimal(0)));
-
-export const ObjectiveIndexSchema = z
-  .union([z.number(), z.string()])
-  .optional()
-  .transform((v) => {
-    if (v === undefined || v === null) return 0;
-    const n = parseInt(v, 10);
-    return Number.isNaN(n) ? 0 : Math.floor(n);
-  });
-
-export const NumericToNumber = DecimalLike.transform((v) => (v != null && v !== "" ? toDecimal(v).toNumber() : undefined));
+import { toDecimal } from "../src/utils.js";
+import {
+  DecimalSchema,
+  SaveDecimalSchema,
+  ObjectiveIndexSchema,
+  NumericToNumber,
+} from "./numberLikeSchema.js";
+import { BalanceConfigSchema } from "./balanceConfigSchema.js";
 
 export const TechTreeDoctrineSchema = z
   .object({
@@ -511,27 +493,4 @@ export const UserPreferencesSchema = z.object({
   hideOtherDoctrineUpgrades: z.boolean().optional().default(false),
 }).passthrough();
 
-export const BalanceConfigSchema = z.object({
-  valveTopupCapRatio: z.number().min(0).max(1),
-  autoSellMultiplierPerLevel: z.number().min(0),
-  stirlingMultiplierPerLevel: z.number().min(0),
-  defaultCostMultiplier: z.number().min(1),
-  reflectorSellMultiplier: z.number().min(0),
-  cellSellMultiplier: z.number().min(0),
-  powerThreshold10k: z.number().min(0),
-  marketLobbyingMultPerLevel: z.number().min(0),
-  emergencyCoolantMultPerLevel: z.number().min(0),
-  reflectorCoolingFactorPerLevel: z.number().min(0),
-  insurancePercentPerLevel: z.number().min(0).max(1),
-  manualOverrideMultPerLevel: z.number().min(0),
-  convectiveBoostPerLevel: z.number().min(0),
-  electroThermalBaseRatio: z.number().min(0),
-  electroThermalStep: z.number().min(0),
-  catalystReductionPerLevel: z.number().min(0).max(1),
-  thermalFeedbackRatePerLevel: z.number().min(0),
-  volatileTuningMaxPerLevel: z.number().min(0).max(1),
-  platingTransferRatePerLevel: z.number().min(0).max(1),
-  phlembotinumPowerBase: z.number().min(0),
-  phlembotinumHeatBase: z.number().min(0),
-  phlembotinumMultiplier: z.number().min(1),
-}).passthrough();
+export { BalanceConfigSchema };

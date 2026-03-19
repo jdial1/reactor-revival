@@ -2,8 +2,7 @@ import { fromError } from "zod-validation-error";
 import { z } from "zod";
 import superjson from "superjson";
 import { html, render } from "lit-html";
-import { GameActionSchema, ACTION_SCHEMA_REGISTRY, EVENT_SCHEMA_REGISTRY } from "./state.js";
-import {
+import Decimal, {
   toDecimal,
   toNumber,
   getDecimal,
@@ -101,37 +100,43 @@ import {
   PRESTIGE_MULTIPLIER_CAP,
   RESPEC_DOCTRINE_EP_COST,
 } from "./utils.js";
-import Decimal from "./utils.js";
-import { updateDecimal, setDecimal, snapshot, createGameState, GameSaveManager, SaveOrchestrator, UnlockManager, runRebootActionKeepEp, runRebootActionDiscardEp, runFullReboot, setDefaults as setDefaultsFromModule, LifecycleManager, GridManager, ConfigManager, ExoticParticleManager, runSellAction, runManualReduceHeatAction, runSellPart, runEpartOnclick, getAffordabilitySettings, Reactor } from "./state.js";
+import {
+  GameActionSchema,
+  ACTION_SCHEMA_REGISTRY,
+  EVENT_SCHEMA_REGISTRY,
+  updateDecimal,
+  setDecimal,
+  snapshot,
+  createGameState,
+  GameSaveManager,
+  SaveOrchestrator,
+  UnlockManager,
+  runRebootActionKeepEp,
+  runRebootActionDiscardEp,
+  runFullReboot,
+  setDefaults as setDefaultsFromModule,
+  LifecycleManager,
+  GridManager,
+  ConfigManager,
+  ExoticParticleManager,
+  runSellAction,
+  runManualReduceHeatAction,
+  runSellPart,
+  runEpartOnclick,
+  getAffordabilitySettings,
+  Reactor,
+} from "./state.js";
+import {
+  BalanceConfigSchema,
+  GameLoopTickInputSchema,
+  GameLoopTickResultSchema,
+  PhysicsTickInputSchema,
+  PhysicsTickResultSchema,
+} from "../schema/index.js";
 import { renderToNode, PartButton, UpgradeCard } from "./components/buttonFactory.js";
 import dataService from "./services.js";
 import { ReactiveLitComponent } from "./components/ReactiveLitComponent.js";
-import { serializeReactor, deserializeReactor, calculateLayoutCostBreakdown, calculateLayoutCost, renderLayoutPreview, buildPartSummary, buildAffordableSet, filterLayoutByCheckedTypes, clipToGrid as clipToGridFn, calculateCurrentSellValue, buildAffordableLayout as buildAffordableLayoutFn, buildPasteState as buildPasteStateFn, validatePasteResources, getCostBreakdown } from "./components/ui/uiModule.js";
-
-const BalanceConfigSchema = z.object({
-  valveTopupCapRatio: z.number().min(0).max(1),
-  autoSellMultiplierPerLevel: z.number().min(0),
-  stirlingMultiplierPerLevel: z.number().min(0),
-  defaultCostMultiplier: z.number().min(1),
-  reflectorSellMultiplier: z.number().min(0),
-  cellSellMultiplier: z.number().min(0),
-  powerThreshold10k: z.number().min(0),
-  marketLobbyingMultPerLevel: z.number().min(0),
-  emergencyCoolantMultPerLevel: z.number().min(0),
-  reflectorCoolingFactorPerLevel: z.number().min(0),
-  insurancePercentPerLevel: z.number().min(0).max(1),
-  manualOverrideMultPerLevel: z.number().min(0),
-  convectiveBoostPerLevel: z.number().min(0),
-  electroThermalBaseRatio: z.number().min(0),
-  electroThermalStep: z.number().min(0),
-  catalystReductionPerLevel: z.number().min(0).max(1),
-  thermalFeedbackRatePerLevel: z.number().min(0),
-  volatileTuningMaxPerLevel: z.number().min(0).max(1),
-  platingTransferRatePerLevel: z.number().min(0).max(1),
-  phlembotinumPowerBase: z.number().min(0),
-  phlembotinumHeatBase: z.number().min(0),
-  phlembotinumMultiplier: z.number().min(1),
-}).passthrough();
+import { serializeReactor, deserializeReactor, calculateLayoutCostBreakdown, calculateLayoutCost, renderLayoutPreview, buildPartSummary, buildAffordableSet, filterLayoutByCheckedTypes, clipToGrid as clipToGridFn, calculateCurrentSellValue, buildAffordableLayout as buildAffordableLayoutFn, buildPasteState as buildPasteStateFn, validatePasteResources, getCostBreakdown } from "./components/ui-components.js";
 
 const rawBalance = {
   valveTopupCapRatio: 0.2,
@@ -735,13 +740,10 @@ export class Part {
 
   createElement() {
     const onClick = () => {
-      if (this.game?.ui?.help_mode_active) {
-        if (this.game?.tooltip_manager) {
+      if (this.affordable) {
+        if (this.game?.ui?.help_mode_active && this.game?.tooltip_manager) {
           this.game.tooltip_manager.show(this, null, true, this.$el);
         }
-        return;
-      }
-      if (this.affordable) {
         document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
         this.game.emit?.("partClicked", { part: this });
         this.$el.classList.add("part_active");
@@ -751,17 +753,7 @@ export class Part {
         }
       }
     };
-    const onMouseEnter = () => {
-      if (this.game?.ui?.help_mode_active && this.game?.tooltip_manager) {
-        this.game.tooltip_manager.show(this, null, false, this.$el);
-      }
-    };
-    const onMouseLeave = () => {
-      if (this.game?.ui?.help_mode_active && this.game?.tooltip_manager) {
-        this.game.tooltip_manager.hide();
-      }
-    };
-    this.$el = renderToNode(PartButton(this, onClick, onMouseEnter, onMouseLeave));
+    this.$el = renderToNode(PartButton(this, onClick));
     return this.$el;
   }
 
@@ -853,7 +845,7 @@ export class PartSet {
     });
 
     parts.forEach((template) => {
-      if (template.category && !template.experimental) {
+      if (template.category) {
         const arr = this.categoryTypeOrder.get(template.category) || [];
         if (!arr.includes(template.type)) {
           arr.push(template.type);
@@ -3300,9 +3292,6 @@ export class Tile {
     this.game.emit?.("showFloatingText", { tile: this, value: sell_value });
     this._clearPartReset();
   }
-  highlight() {}
-
-  unhighlight() {}
 
 
   calculateSellValue() {

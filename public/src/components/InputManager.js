@@ -38,22 +38,26 @@ export class InputHandler {
     }
   }
 
+  _setInteractionState(patch) {
+    const interaction = this.ui?.uiState?.interaction;
+    if (!interaction) return;
+    this.ui.uiState.interaction = { ...interaction, ...patch };
+  }
+
   _createLongPressCallback(state) {
     return () => {
       this.longPressTimer = null;
       if (state.longPressTargetTile) {
-        if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.sellingTileKey = null;
-        state.longPressTargetTile.sellPart();
-        this.ui.game.reactor.updateStats();
-        if (this.ui.game?.audio) this.ui.game.audio.play("sell");
+        this._setInteractionState({ sellingTileKey: null });
+        void this.ui.gridController.handleGridInteraction(state.longPressTargetTile, { type: "longpress", button: 0 });
       }
-      if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.isDragging = false;
+      this._setInteractionState({ isDragging: false });
     };
   }
 
   _scheduleLongPressForTile(state, tile) {
     state.longPressTargetTile = tile;
-    if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.sellingTileKey = tileKey(tile.row, tile.col);
+    this._setInteractionState({ sellingTileKey: tileKey(tile.row, tile.col) });
     this.longPressTimer = setTimeout(
       this._createLongPressCallback(state),
       this.longPressDuration
@@ -89,8 +93,7 @@ export class InputHandler {
         cancelLongPress();
       }
       if (this.isDragging) {
-        if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.isDragging = false;
-        if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.sellingTileKey = null;
+        this._setInteractionState({ isDragging: false, sellingTileKey: null });
         this.lastTileModified = null;
         this.ui.game.reactor.updateStats();
       }
@@ -116,7 +119,7 @@ export class InputHandler {
         clearTimeout(this.longPressTimer);
         this.longPressTimer = null;
       }
-      if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.sellingTileKey = null;
+      this._setInteractionState({ sellingTileKey: null });
       state.longPressTargetTile = null;
     };
   }
@@ -149,13 +152,13 @@ export class InputHandler {
     };
 
     const pointerDownHandler = (e) => {
-      if ((e.pointerType === "mouse" && e.button !== 0) || e.button > 0) return;
+      if (e.button > 0) return;
       const tile = getTileFromEvent(e);
       if (!tile?.enabled) return;
       const state = this._buildPointerState(tile, e);
       const cancelLongPress = this._getCancelLongPress(state);
       e.preventDefault();
-      if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.isDragging = true;
+      this._setInteractionState({ isDragging: true });
       this.lastTileModified = tile;
       if (tile.part && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         this._scheduleLongPressForTile(state, tile);
@@ -164,47 +167,11 @@ export class InputHandler {
     };
 
     const eventTarget = this.ui.gridCanvasRenderer?.getCanvas() || reactor;
-    const contextMenuHandler = async (e) => {
-      e.preventDefault();
-      const tile = this.ui.gridCanvasRenderer
-        ? this.ui.gridCanvasRenderer.hitTest(e.clientX, e.clientY)
-        : null;
-      await this.ui.gridController.handleGridInteraction(tile, e);
-    };
-    const mouseMoveHandler = (e) => {
-      const tile = this.ui.gridCanvasRenderer
-        ? this.ui.gridCanvasRenderer.hitTest(e.clientX, e.clientY)
-        : null;
-      const next = tile?.enabled ? tile : null;
-      if (this.ui?.uiState?.interaction) {
-        this.ui.uiState.interaction.hoveredTileKey = next ? tileKey(next.row, next.col) : null;
-      }
-      if (
-        tile?.part &&
-        this.ui.game?.tooltip_manager &&
-        !this.isDragging &&
-        this.ui.help_mode_active
-      ) {
-        this.ui.game.tooltip_manager.show(tile.part, tile, false);
-      }
-    };
-    const mouseLeaveHandler = () => {
-      if (this.ui?.uiState?.interaction) this.ui.uiState.interaction.hoveredTileKey = null;
-      if (this.ui?.game?.tooltip_manager && this.ui?.help_mode_active) {
-        this.ui.game.tooltip_manager.hide();
-      }
-    };
     this._reactorEventTarget = eventTarget;
     this._reactorHandlers = {
       pointerdown: pointerDownHandler,
-      contextmenu: contextMenuHandler,
-      mousemove: mouseMoveHandler,
-      mouseleave: mouseLeaveHandler,
     };
     eventTarget.addEventListener("pointerdown", pointerDownHandler);
-    eventTarget.addEventListener("contextmenu", contextMenuHandler);
-    eventTarget.addEventListener("mousemove", mouseMoveHandler, true);
-    eventTarget.addEventListener("mouseleave", mouseLeaveHandler, true);
   }
 
   teardownReactorEventListeners() {
@@ -212,9 +179,6 @@ export class InputHandler {
     const t = this._reactorEventTarget;
     const h = this._reactorHandlers;
     t.removeEventListener("pointerdown", h.pointerdown);
-    t.removeEventListener("contextmenu", h.contextmenu);
-    t.removeEventListener("mousemove", h.mousemove, true);
-    t.removeEventListener("mouseleave", h.mouseleave, true);
     this._reactorEventTarget = null;
     this._reactorHandlers = null;
   }
@@ -252,9 +216,6 @@ export class InputHandler {
           this.ui.gridInteractionUI.clearSegmentHighlight();
 
           if (currentSegment) {
-            for (const component of currentSegment.components) {
-              component.highlight();
-            }
             this.ui.gridInteractionUI.highlightedSegment = currentSegment;
           }
         }

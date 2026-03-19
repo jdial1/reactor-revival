@@ -1,6 +1,43 @@
 import { html, render, nothing } from "lit-html";
 import { numFormat, classMap, styleMap, unsafeHTML } from "../utils.js";
 import { getUpgradeBonusLines } from "../logic.js";
+import { interpolateTemplate } from "../templates/templateUtils.js";
+import {
+  startButtonTemplate,
+  loadGameButtonFullWidthTemplate,
+  loadGameButtonTemplate,
+  loadGameUploadRowTemplate,
+  tooltipCloseButtonTemplate,
+  helpButtonTemplate,
+  uploadToCloudButtonTemplate,
+  loadFromCloudButtonTemplate,
+  googleSignInButtonTemplate,
+  googleSignOutButtonTemplate,
+  cloudSaveButtonTemplate,
+  loadingButtonTemplate,
+  installButtonTemplate,
+  googleSignInIconButtonTemplate,
+} from "../templates/buttonTemplates.js";
+import {
+  upgradeCardTemplate,
+  partButtonTemplate,
+  partStatIconTemplate,
+  partStatTemplate,
+  closeButtonTemplate,
+  googleSignInIconButtonWrapperTemplate,
+} from "../templates/buttonFactoryTemplates.js";
+
+function toTemplateHtml(template, values) {
+  return unsafeHTML(interpolateTemplate(template, values));
+}
+
+function withTemplateTarget(e, selector, onClick) {
+  const target = e.target.closest(selector);
+  if (!target) return;
+  const wrappedEvent = Object.create(e);
+  Object.defineProperty(wrappedEvent, "currentTarget", { value: target });
+  onClick(wrappedEvent);
+}
 
 function getUpgradeIconOverlay(upgrade) {
   try {
@@ -49,46 +86,43 @@ export function renderToNode(template) {
 }
 
 export const StartButton = (disabled, onClick) => html`
-  <button id="splash-new-game-btn" class="splash-btn splash-btn-start" ?disabled=${disabled} @click=${onClick}>
-    New Game
-  </button>
+  <span @click=${(e) => withTemplateTarget(e, "#splash-new-game-btn", onClick)}>
+    ${toTemplateHtml(startButtonTemplate, { disabledAttr: disabled ? " disabled" : "" })}
+  </span>
 `;
 
 export const LoadGameButtonFullWidth = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
-  <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-full-width" @click=${onClick}>
-    <div class="load-game-header"><span>Load Local Game</span></div>
-    <div class="load-game-details">
-      <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
-      <div class="played-time">${playedTimeStr}</div>
-    </div>
-  </button>
+  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onClick)}>
+    ${toTemplateHtml(loadGameButtonFullWidthTemplate, {
+      currentMoney: numFormat(saveData?.current_money ?? 0),
+      playedTime: playedTimeStr,
+    })}
+  </span>
 `;
 
 export const LoadGameButton = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
-  <button id="splash-load-game-btn" class="splash-btn splash-btn-load" @click=${onClick}>
-    <div class="load-game-header"><span>Load Local Game</span></div>
-    <div class="load-game-details">
-      <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
-      <div class="played-time">${playedTimeStr}</div>
-    </div>
-    <div class="synced-label" style=${styleMap({ display: isCloudSynced ? "" : "none" })}></div>
-  </button>
+  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onClick)}>
+    ${toTemplateHtml(loadGameButtonTemplate, {
+      currentMoney: numFormat(saveData?.current_money ?? 0),
+      playedTime: playedTimeStr,
+      syncedStyle: isCloudSynced ? "" : "display:none;",
+    })}
+  </span>
 `;
 
 export const LoadGameUploadRow = (saveData, playedTimeStr, isCloudSynced, onLoadClick, onUploadClick) => html`
-  <div class="splash-btn-group">
-    <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-left" @click=${onLoadClick}>
-      <div class="load-game-header"><span>Load Local Game</span></div>
-      <div class="load-game-details">
-        <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
-        <div class="played-time">${playedTimeStr}</div>
-      </div>
-      <div class="synced-label" style=${styleMap({ display: isCloudSynced ? "" : "none" })}></div>
-    </button>
-    <button id="splash-upload-option-btn" class="splash-btn splash-btn-cloud upload-option-button splash-btn-right" title="Upload local save to Google Drive" @click=${onUploadClick}>
-      <div class="upload-text">Upload</div>
-    </button>
-  </div>
+  <span
+    @click=${(e) => {
+      withTemplateTarget(e, "#splash-load-game-btn", onLoadClick);
+      withTemplateTarget(e, "#splash-upload-option-btn", onUploadClick);
+    }}
+  >
+    ${toTemplateHtml(loadGameUploadRowTemplate, {
+      currentMoney: numFormat(saveData?.current_money ?? 0),
+      playedTime: playedTimeStr,
+      syncedStyle: isCloudSynced ? "" : "display:none;",
+    })}
+  </span>
 `;
 
 export const BuyButton = (upgrade, onClick) => {
@@ -106,58 +140,58 @@ export const BuyButton = (upgrade, onClick) => {
 };
 
 export const TooltipCloseButton = (onClick) => html`
-  <button id="tooltip_close_btn" title="Close" aria-label="Close tooltip" @click=${onClick}>×</button>
+  <span @click=${(e) => withTemplateTarget(e, "#tooltip_close_btn", onClick)}>
+    ${toTemplateHtml(tooltipCloseButtonTemplate)}
+  </span>
 `;
 
 export const HelpButton = (onClick, title = "Click for information") => html`
-  <button class="help-btn" title=${title} aria-label=${title} @click=${onClick}>?</button>
+  <span @click=${(e) => withTemplateTarget(e, "button.help-btn", onClick)}>
+    ${toTemplateHtml(helpButtonTemplate, { title })}
+  </span>
 `;
 
 export const UploadToCloudButton = (onClick) => html`
-  <button class="splash-btn splash-btn-cloud upload-option-button" @click=${onClick}>
-    <div class="upload-text">Upload</div>
-  </button>
+  <span @click=${(e) => withTemplateTarget(e, "button.upload-option-button", onClick)}>
+    ${toTemplateHtml(uploadToCloudButtonTemplate)}
+  </span>
 `;
 
 export const LoadFromCloudButton = (onClick) => html`
-  <button id="splash-load-cloud-btn" class="splash-btn splash-btn-cloud" @click=${onClick}>
-    Load Cloud Save
-  </button>
+  <span @click=${(e) => withTemplateTarget(e, "#splash-load-cloud-btn", onClick)}>
+    ${toTemplateHtml(loadFromCloudButtonTemplate)}
+  </span>
 `;
 
 export const GoogleSignInButton = (onClick) => html`
-  <button id="splash-signin-btn" class="splash-btn splash-btn-google google-signin-button" @click=${onClick}>
-    <span>Google Sign In</span>
-  </button>
+  <span @click=${(e) => withTemplateTarget(e, "#splash-signin-btn", onClick)}>
+    ${toTemplateHtml(googleSignInButtonTemplate)}
+  </span>
 `;
 
 export const GoogleSignOutButton = (onClick) => html`
-  <button id="splash-signout-btn" class="splash-btn splash-btn-cloud google-signout-button" @click=${onClick}>
-    Sign Out
-  </button>
+  <span @click=${(e) => withTemplateTarget(e, "#splash-signout-btn", onClick)}>
+    ${toTemplateHtml(googleSignOutButtonTemplate)}
+  </span>
 `;
 
 export const CloudSaveButton = (saveData, playedTimeStr, onClick) => html`
-  <button class="contrast splash-cloud-button" @click=${onClick}>
-    <div class="load-game-header">Load Cloud Save</div>
-    <div class="load-game-details">
-      <div class="money">$${numFormat(saveData?.current_money ?? 0)}</div>
-      <div class="played-time">${playedTimeStr}</div>
-    </div>
-  </button>
+  <span @click=${(e) => withTemplateTarget(e, "button.splash-cloud-button", onClick)}>
+    ${toTemplateHtml(cloudSaveButtonTemplate, {
+      currentMoney: numFormat(saveData?.current_money ?? 0),
+      playedTime: playedTimeStr,
+    })}
+  </span>
 `;
 
 export const LoadingButton = (text, spinnerClass = "loading-spinner") => html`
-  <button class="splash-btn splash-btn-load" disabled>
-    <div class="loading-container">
-      <div class=${spinnerClass}></div>
-      <span class="loading-text">${text ?? ""}</span>
-    </div>
-  </button>
+  ${toTemplateHtml(loadingButtonTemplate, { spinnerClass, text: text ?? "" })}
 `;
 
 export const InstallButton = (onClick) => html`
-  <button class="contrast" @click=${onClick}>Install App</button>
+  <span @click=${(e) => withTemplateTarget(e, "button.contrast", onClick)}>
+    ${toTemplateHtml(installButtonTemplate)}
+  </span>
 `;
 
 const BASE_DOCTRINE_ICON = "img/ui/status/status_star.png";
@@ -189,66 +223,52 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick
   const cardClassMap = { "upgrade-card": true, "doctrine-locked": doctrineLocked, unaffordable: doctrineLocked };
   extraClasses.split(" ").filter(Boolean).forEach((c) => (cardClassMap[c] = true));
   const cardClass = classMap(cardClassMap);
-  return html`
-    <div class=${cardClass}
-         data-id=${upgrade.id}
-         data-doctrine=${doctrineId}
-         data-doctrine-locked=${doctrineLocked ? "true" : nothing}>
-      <div class="upgrade-header">
-        <div class="upgrade-icon-wrapper">
-          <div class="image" style="background-image: url('${iconPath}')"></div>
-          ${overlayPath ? html`<img class="status-overlay ${isHeat ? "status-heat" : ""}" src=${overlayPath} alt="">` : nothing}
-        </div>
-        <div class="upgrade-details">
-          <div class="upgrade-title">${upgrade.title}</div>
-          <div class="upgrade-description" style=${styleMap({ display: isMaxed ? "none" : "" })}>${unsafeHTML(descHtml)}</div>
-        </div>
-        <div class="upgrade-doctrine-icon" style="background-image: url('${doctrineIcon}')" data-doctrine=${doctrineId}></div>
-      </div>
-      <div class="upgrade-footer">
-        <div class="upgrade-level-info">
-          ${header ? html`<span class="level-text">${header}</span>` : html`<span class="level-text"></span>`}
-        </div>
-        <button class="pixel-btn upgrade-action-btn"
-                ?disabled=${doctrineLocked || isMaxed}
-                aria-label=${ariaLabel}
-                @click=${onBuyClick}>
-          <span class="action-text">Buy</span>
-          <span class="cost-display">${costDisplay}</span>
-        </button>
-        <div class="sandbox-upgrade-actions" style=${styleMap({ display: isSandbox ? "" : "none" })}>
-          <button class="pixel-btn sandbox-buy-max-btn" type="button" @click=${onBuyMaxClick ?? (() => {})}>Buy Max</button>
-          <button class="pixel-btn sandbox-reset-btn" type="button" @click=${onResetClick ?? (() => {})}>Reset</button>
-        </div>
-      </div>
-    </div>
-  `;
+  return upgradeCardTemplate({
+    cardClass,
+    upgradeId: upgrade.id,
+    doctrineId,
+    doctrineLocked,
+    iconPath,
+    overlayPath,
+    isHeat,
+    title: upgrade.title,
+    isMaxed,
+    descContent: unsafeHTML(descHtml),
+    doctrineIcon,
+    header,
+    ariaLabel,
+    onBuyClick,
+    costDisplay,
+    isSandbox,
+    onBuyMaxClick,
+    onResetClick,
+  });
 };
 
 function buildPartStats(part) {
   const fmt = numFormat;
-  const cashIcon = html`<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='$'>`;
-  const powerIcon = html`<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='pwr'>`;
-  const heatIcon = html`<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>`;
-  const tickIcon = html`<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>`;
+  const cashIcon = partStatIconTemplate({ src: "img/ui/icons/icon_cash.png", alt: "$" });
+  const powerIcon = partStatIconTemplate({ src: "img/ui/icons/icon_power.png", alt: "pwr" });
+  const heatIcon = partStatIconTemplate({ src: "img/ui/icons/icon_heat.png", alt: "heat" });
+  const tickIcon = partStatIconTemplate({ src: "img/ui/icons/icon_time.png", alt: "tick" });
   const stats = [];
   if (part.erequires) {
-    stats.push(html`<span class="stat-cost">${fmt(part.cost)} EP</span>`);
+    stats.push(partStatTemplate({ className: "stat-cost", content: `${fmt(part.cost)} EP` }));
   } else {
-    stats.push(html`<span class="stat-cost">${cashIcon}${fmt(part.cost)}</span>`);
+    stats.push(partStatTemplate({ className: "stat-cost", content: html`${cashIcon}${fmt(part.cost)}` }));
   }
-  if (part.power > 0) stats.push(html`<span class="stat-power">${powerIcon}${fmt(part.power)}</span>`);
-  if (part.heat > 0) stats.push(html`<span class="stat-heat">${heatIcon}${fmt(part.heat, 0)}</span>`);
-  if (part.vent > 0) stats.push(html`<span class="stat-vent">${fmt(part.vent, 0)} vent</span>`);
-  if (part.containment > 0) stats.push(html`<span class="stat-cont">${heatIcon}${fmt(part.containment, 0)} cap</span>`);
-  if (part.transfer > 0) stats.push(html`<span class="stat-xfer">${fmt(part.transfer, 0)} xfer</span>`);
-  if (part.ticks > 0) stats.push(html`<span class="stat-tick">${tickIcon}${fmt(part.ticks)}</span>`);
-  if (part.reactor_power > 0) stats.push(html`<span class="stat-rpower">${powerIcon}${fmt(part.reactor_power)} cap</span>`);
-  if (part.power_increase > 0) stats.push(html`<span class="stat-boost">+${fmt(part.power_increase)}%${powerIcon}</span>`);
+  if (part.power > 0) stats.push(partStatTemplate({ className: "stat-power", content: html`${powerIcon}${fmt(part.power)}` }));
+  if (part.heat > 0) stats.push(partStatTemplate({ className: "stat-heat", content: html`${heatIcon}${fmt(part.heat, 0)}` }));
+  if (part.vent > 0) stats.push(partStatTemplate({ className: "stat-vent", content: `${fmt(part.vent, 0)} vent` }));
+  if (part.containment > 0) stats.push(partStatTemplate({ className: "stat-cont", content: html`${heatIcon}${fmt(part.containment, 0)} cap` }));
+  if (part.transfer > 0) stats.push(partStatTemplate({ className: "stat-xfer", content: `${fmt(part.transfer, 0)} xfer` }));
+  if (part.ticks > 0) stats.push(partStatTemplate({ className: "stat-tick", content: html`${tickIcon}${fmt(part.ticks)}` }));
+  if (part.reactor_power > 0) stats.push(partStatTemplate({ className: "stat-rpower", content: html`${powerIcon}${fmt(part.reactor_power)} cap` }));
+  if (part.power_increase > 0) stats.push(partStatTemplate({ className: "stat-boost", content: html`+${fmt(part.power_increase)}%${powerIcon}` }));
   return stats;
 }
 
-export const PartButton = (part, onClick, onMouseEnter = () => {}, onMouseLeave = () => {}, opts = {}) => {
+export const PartButton = (part, onClick, opts = {}) => {
   const costText = part.erequires ? `${numFormat(part.cost)} EP` : numFormat(part.cost);
   const locked = opts.locked ?? false;
   const doctrineLocked = opts.doctrineLocked ?? false;
@@ -269,36 +289,25 @@ export const PartButton = (part, onClick, onMouseEnter = () => {}, onMouseLeave 
   const tierStyle = styleMap({ display: locked ? "block" : "none" });
   const stats = buildPartStats(part);
   const bonusLines = getUpgradeBonusLines(part, { tile: null, game: part.game });
-  const bonusHtml = bonusLines.length > 0
-    ? bonusLines.map((line) => `<span class="bonus-line">${line}</span>`).join("")
-    : "";
-  return html`
-    <button class=${btnClass}
-            id="part_btn_${part.id}"
-            title=${part.title || ""}
-            aria-label="${part.title || "Part button"}, Cost: ${costText}"
-            ?disabled=${!part.affordable || locked}
-            @click=${onClick}
-            @mouseenter=${onMouseEnter}
-            @mouseleave=${onMouseLeave}>
-      <div class="image" style="background-image: url('${part.getImagePath()}')"></div>
-      <div class="part-price">${costText}</div>
-      <div class="tier-progress" style=${tierStyle}>${tierProgress}</div>
-      <div class="part-details">
-        <div class="part-details-title">${part.title || ""}</div>
-        <div class="part-details-stats">${stats}</div>
-        <div class="part-details-desc">${part.description || ""}</div>
-        <div class="part-details-bonuses">${bonusHtml ? unsafeHTML(bonusHtml) : nothing}</div>
-      </div>
-    </button>
-  `;
+  return partButtonTemplate({
+    btnClass,
+    id: `part_btn_${part.id}`,
+    title: part.title || "",
+    ariaLabel: `${part.title || "Part button"}, Cost: ${costText}`,
+    disabled: !part.affordable || locked,
+    onClick,
+    imagePath: part.getImagePath(),
+    costText,
+    tierStyle,
+    tierProgress,
+    partTitle: part.title || "",
+    stats,
+    description: part.description || "",
+    bonusLines,
+  });
 };
 
-export const CloseButton = (modal, onClick) => html`
-  <button class="modal-close-btn" @click=${onClick}>
-    ✖
-  </button>
-`;
+export const CloseButton = (modal, onClick) => closeButtonTemplate({ onClick });
 
 export function createNewGameButton(onClick) {
   return renderToNode(StartButton(false, onClick));
@@ -361,19 +370,10 @@ export function createLoadingButton(text, spinnerClass = "loading-spinner") {
 }
 
 export function createGoogleSignInButtonWithIcon(onClick = () => {}) {
-  const template = html`
-    <button @click=${onClick}>
-      <div class="google-signin-container">
-        <svg width="24" height="24" viewBox="0 0 24 24" class="google-icon">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-        </svg>
-        <span>Google Sign In</span>
-      </div>
-    </button>
-  `;
+  const template = googleSignInIconButtonWrapperTemplate({
+    onWrapperClick: (e) => withTemplateTarget(e, "button", onClick),
+    iconButtonContent: toTemplateHtml(googleSignInIconButtonTemplate),
+  });
   return renderToNode(template);
 }
 

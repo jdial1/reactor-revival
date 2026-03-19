@@ -12,7 +12,7 @@ async function placePartViaUI(game, partId, row, col) {
   const tile = game.tileset.getTile(row, col);
   if (!tile) throw new Error(`Tile ${row},${col} not found`);
   game.ui.stateManager.setClickedPart(part);
-  await game.ui.gridController.handleGridInteraction(tile, { button: 0, pointerType: "mouse", type: "pointerdown" });
+  await game.ui.gridController.handleGridInteraction(tile, { button: 0, pointerType: "touch", type: "pointerdown" });
   game.ui.stateManager.setClickedPart(null);
 }
 

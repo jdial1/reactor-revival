@@ -1009,10 +1009,10 @@ export const UPDATE_TOAST_STYLES = `
 export class BaseComponent {
   constructor() {
     this.isVisible = false;
+    this.teardown = () => {};
+    this.show = () => {};
+    this.hide = () => {};
   }
-  teardown() {}
-  show() {}
-  hide() {}
   setElementVisible(el, visible) {
     if (!el?.classList) return;
     el.classList.toggle("hidden", !visible);

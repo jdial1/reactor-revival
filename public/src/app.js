@@ -1,15 +1,21 @@
-import { Game } from "./logic.js";
-import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, styleMap, StorageUtilsAsync, setSlot1FromBackupAsync } from "./utils.js";
+import { Game, Engine } from "./logic.js";
+import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, StorageUtilsAsync, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES } from "./utils.js";
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { UI, MODAL_IDS, updateSectionCountsState, getCompactLayout } from "./ui.js";
-import { GoogleDriveSave, SupabaseAuth, SupabaseSave, AudioService, createSplashManager } from "./services.js";
+import { UI } from "./components/ui.js";
+import { MODAL_IDS } from "./components/ui_modals.js";
+import { updateSectionCountsState, getCompactLayout } from "./components/ui-components.js";
+import dataService, { GoogleDriveSave, SupabaseAuth, SupabaseSave, AudioService, createSplashManager } from "./services.js";
 import { getValidatedPreferences, initPreferencesStore, preferences, subscribeKey, initCloudSyncQueue, showLoadBackupModal } from "./state.js";
-import dataService from "./services.js";
-import { UPDATE_TOAST_STYLES } from "./utils.js";
 import { TooltipManager, TutorialManager } from "./components/ui_tooltips_tutorial.js";
-import { Engine } from "./logic.js";
 import { ReactiveLitComponent } from "./components/ReactiveLitComponent.js";
+import {
+  renderSplashTemplate,
+  gameSetupTemplate,
+  updateToastTemplate,
+  fallbackStartTemplate,
+  criticalErrorTemplate,
+} from "./templates/appTemplates.js";
 
 setFormatPreferencesGetter(getValidatedPreferences);
 
@@ -18,7 +24,6 @@ if (typeof window !== "undefined") {
   window.showLoadBackupModal = showLoadBackupModal;
   window.setSlot1FromBackup = () => setSlot1FromBackupAsync();
 }
-
 
 export class PageRouter {
   constructor(ui) {
@@ -46,6 +51,7 @@ export class PageRouter {
   _applyPauseStateForNavigation(wasOnReactorPage, goingToReactorPage) {
     if (!this.ui.game?.engine) return;
     if (wasOnReactorPage && !goingToReactorPage) {
+      this.ui.partsPanelUI?.closePartsPanel?.();
       const currentlyPaused = this.ui.stateManager.getVar("pause");
       if (!currentlyPaused) {
         this.navigationPaused = true;
@@ -400,39 +406,12 @@ export class AppRoot {
         this.game?.audio?.toggleMute(preferences.mute);
       }
     };
-    return html`
-      <div id="splash-container">
-        <main id="splash-screen">
-          <button type="button" class="splash-mute-btn" title=${isMuted ? "Unmute" : "Mute"} aria-label=${isMuted ? "Unmute" : "Mute"} @click=${handleMuteClick}>
-            <span class="splash-mute-icon"></span>
-          </button>
-          <div class="splash-loading">
-            <div class="splash-spinner hidden splash-element-hidden"></div>
-            <p id="splash-status" class="hidden splash-element-hidden">Ready!</p>
-          </div>
-          <div class="splash-menu-panel splash-control-deck">
-            <div class="splash-menu-inner">
-            <header class="splash-panel-header">
-              <h1 class="splash-title">REACTOR REVIVAL</h1>
-              <button type="button" class="splash-menu-hide-btn" title="Hide menu" aria-label="Hide menu" @click=${(e) => {
-                e.stopPropagation();
-                const panel = e.currentTarget.closest(".splash-menu-panel");
-                if (panel) panel.classList.add("splash-menu-fade-full");
-              }}>−</button>
-            </header>
-            <div id="splash-start-options" class="splash-start-options"></div>
-            <footer class="splash-panel-footer">
-              <div id="splash-auth-in-footer" class="splash-auth-in-footer"></div>
-              <span id="splash-version-text" class="splash-version-text"></span>
-              <span id="splash-user-count" class="splash-user-count-inline">
-                <span id="user-count-text">-</span>
-              </span>
-            </footer>
-            </div>
-          </div>
-        </main>
-      </div>
-    `;
+    const onHideMenuClick = (e) => {
+      e.stopPropagation();
+      const panel = e.currentTarget.closest(".splash-menu-panel");
+      if (panel) panel.classList.add("splash-menu-fade-full");
+    };
+    return renderSplashTemplate(isMuted, handleMuteClick, onHideMenuClick);
   }
 
   teardown() {
@@ -456,73 +435,6 @@ function ensureGameSetupOverlay() {
   return overlay;
 }
 
-function doctrineCardTemplate(tree, selectedDoctrine, onSelect) {
-  const isSelected = tree.id === selectedDoctrine;
-  const classes = classMap({
-    "doctrine-card": true,
-    "selected": isSelected
-  });
-  const styles = styleMap({
-    ...(tree.color ? { "--doctrine-color": tree.color } : {})
-  });
-  return html`
-    <button type="button" class=${classes} style=${styles} role="option" aria-selected=${isSelected ? "true" : "false"} data-tree-id=${tree.id} data-doctrine=${tree.id} @click=${() => onSelect(tree.id)}>
-      <span class="doctrine-led" aria-hidden="true"></span>
-      <img class="doctrine-card-icon" src="img/ui/icons/${tree.id}.png" alt="" />
-      <div class="doctrine-card-text">
-        <span class="doctrine-card-title">${tree.shortTitle ?? tree.title}</span>
-        <span class="doctrine-card-subtitle">${tree.subtitle}</span>
-      </div>
-    </button>
-  `;
-}
-
-function difficultyCardTemplate(diffKey, diffLabel, diffDesc, selectedDifficulty, onSelect) {
-  const isSelected = diffKey === selectedDifficulty;
-  const classes = classMap({
-    "difficulty-card": true,
-    "selected": isSelected
-  });
-  return html`
-    <button type="button" class=${classes} data-difficulty=${diffKey} @click=${() => onSelect(diffKey)}>
-      <span class="difficulty-led" aria-hidden="true"></span>
-      <img class="difficulty-indicator" src="img/ui/icons/${diffKey}.png" alt="" />
-      <div class="difficulty-card-info">
-        <span class="difficulty-name">${diffLabel}</span>
-        <span class="difficulty-desc">${diffDesc}</span>
-      </div>
-    </button>
-  `;
-}
-
-function gameSetupTemplate(treeList, selectedDoctrine, selectedDifficulty, onDoctrineSelect, onDifficultySelect, onBack, onStart) {
-  const canStart = selectedDoctrine !== null && selectedDifficulty !== null;
-  return html`
-    <div class="bios-screen game-setup-selection">
-      <h1 class="game-setup-header">NEW GAME</h1>
-      <div class="bios-content">
-        <section class="setup-section setup-doctrine">
-          <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DOCTRINE ]</h2></div>
-          <div class="doctrine-cards" role="listbox" aria-label="Select doctrine">
-            ${treeList.map(tree => doctrineCardTemplate(tree, selectedDoctrine, onDoctrineSelect))}
-          </div>
-        </section>
-        <section class="setup-section setup-difficulty">
-          <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DIFFICULTY ]</h2></div>
-          <div class="difficulty-cards" role="radiogroup" aria-label="Select difficulty">
-            ${difficultyCardTemplate("easy", "EASY", "Forgiving heat margins", selectedDifficulty, onDifficultySelect)}
-            ${difficultyCardTemplate("medium", "MEDIUM", "Balanced challenge", selectedDifficulty, onDifficultySelect)}
-            ${difficultyCardTemplate("hard", "HARD", "Tight margins, fast ticks", selectedDifficulty, onDifficultySelect)}
-          </div>
-        </section>
-      </div>
-      <footer class="bios-footer">
-        <button type="button" class="bios-btn setup-back-btn" @click=${onBack}>[ BACK ]</button>
-        <button type="button" class="bios-btn setup-start-btn" ?disabled=${!canStart} @click=${onStart}>[ START ]</button>
-      </footer>
-    </div>
-  `;
-}
 
 let _showTechTreeInProgress = false;
 
@@ -679,6 +591,8 @@ export async function startNewGameFlow(game, pageRouter, ui, splashManager, tech
     await waitForSplashHide();
     await clearStorageForNewGameFlow(game);
     await initializeGameState(game);
+    ui.stateManager?.setClickedPart?.(null);
+    ui.setHelpModeActive?.(true);
     const effectiveTreeId = await resolveDoctrine(techTreeId);
     await applyDoctrine(game, effectiveTreeId);
     await launchGame(pageRouter, ui, game);
@@ -704,20 +618,6 @@ function removeExistingUpdateToast() {
 const UPDATE_TOAST_AUTO_REMOVE_MS = 10000;
 const TOAST_ANIMATION_MS = 300;
 
-function updateToastTemplate(onRefresh, onClose) {
-  return html`
-    <style>${UPDATE_TOAST_STYLES}</style>
-    <div class="update-toast">
-      <div class="update-toast-content">
-        <div class="update-toast-message">
-          <span class="update-toast-text">New content available, click to reload.</span>
-        </div>
-        <button id="refresh-button" class="update-toast-button" @click=${onRefresh}>Reload</button>
-        <button class="update-toast-close" @click=${onClose}>×</button>
-      </div>
-    </div>
-  `;
-}
 
 function showUpdateToast(newVersion, currentVersion) {
   removeExistingUpdateToast();
@@ -738,7 +638,7 @@ function showUpdateToast(newVersion, currentVersion) {
     }
   };
 
-  render(updateToastTemplate(onRefresh, onClose), _toastContainer);
+  render(updateToastTemplate(UPDATE_TOAST_STYLES, onRefresh, onClose), _toastContainer);
 
   setTimeout(() => {
     const toast = _toastContainer?.querySelector(".update-toast");
@@ -1405,13 +1305,7 @@ async function createFallbackStartInterface(pageRouter, ui, game) {
       container.remove();
       await startGame({ pageRouter, ui, game });
     };
-    render(html`
-      <div style="position:fixed;inset:0;background:#1a1a1a;display:flex;align-items:center;justify-content:center;z-index:99999;flex-direction:column;color:white;font-family:monospace;">
-        <h1 style="color:#e74c3c;">Splash UI Failed to Load</h1>
-        <p style="margin-bottom:20px;color:#ccc;">You can still start the game in fallback mode.</p>
-        <button class="pixel-btn btn-start" @click=${onStart} style="padding:10px 20px;font-size:16px;">START GAME</button>
-      </div>
-    `, container);
+    render(fallbackStartTemplate(onStart), container);
   } catch (error) {
     logger.log('error', 'game', 'Could not load fallback start interface', error);
   }
@@ -1423,20 +1317,7 @@ function showCriticalError(error) {
   const errorOverlay = document.createElement("div");
   errorOverlay.id = "critical-error-overlay";
   errorOverlay.className = "critical-error-overlay";
-  render(html`
-    <style>
-      .critical-error-overlay { position: fixed; z-index: 99999; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.95); }
-      .error-stack { max-height: 200px; overflow: auto; text-align: left; padding: 10px; background: #222; }
-    </style>
-    <div class="critical-error-content pixel-panel" style="max-width:600px; text-align:center;">
-      <h1 class="critical-error-title" style="color:#ff4444;">REACTOR FAILED TO START</h1>
-      <div class="critical-error-message" style="margin:20px 0;">
-        <p class="error-text" style="color:#ffcccc;">${errorMessage}</p>
-        ${errorStack ? html`<details class="error-details"><summary style="cursor:pointer;color:#aaa;">Error Details</summary><pre class="error-stack">${errorStack}</pre></details>` : ""}
-      </div>
-      <button id="critical-error-reload" class="pixel-btn btn-start" @click=${() => window.location.reload()}>Reload Page</button>
-    </div>
-  `, errorOverlay);
+  render(criticalErrorTemplate(errorMessage, errorStack, () => window.location.reload()), errorOverlay);
   document.body.appendChild(errorOverlay);
   document.body.style.overflow = "hidden";
 }

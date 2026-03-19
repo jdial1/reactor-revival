@@ -1,27 +1,12 @@
 import { html, render } from "lit-html";
-import { StorageUtils, numFormat as fmt, unsafeHTML, styleMap, logger, MOBILE_BREAKPOINT_PX, BaseComponent } from "../utils.js";
+import { StorageUtils, numFormat as fmt, unsafeHTML, logger, MOBILE_BREAKPOINT_PX, BaseComponent } from "../utils.js";
 import { getUpgradeBonusLines as getUpgradeBonusLinesCore } from "../logic.js";
-
-const tutorialOverlayTemplate = html`
-  <div class="tutorial-spotlight-top"></div>
-  <div class="tutorial-spotlight-left"></div>
-  <div class="tutorial-spotlight-right"></div>
-  <div class="tutorial-spotlight-bottom"></div>
-  <div class="tutorial-focus-border"></div>
-  <div class="tutorial-pointer" aria-hidden="true">
-    <svg class="tutorial-pointer-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M8 4l4 8-2 2 2 10 4-6 4 8 4-12-6-4-4-2-4-4z" fill="rgb(255 220 160)" stroke="rgb(180 140 80)" stroke-width="1.5" stroke-linejoin="round"/>
-    </svg>
-  </div>
-`;
-
-function tutorialCalloutTemplate(message, onSkip, onHardSkip) {
-  return html`
-    <div class="tutorial-message">${message}</div>
-    <button type="button" class="tutorial-skip-btn" @click=${onSkip}>Skip</button>
-    <button type="button" class="tutorial-hard-skip-btn" @click=${onHardSkip}>Hard Skip</button>
-  `;
-}
+import {
+  tutorialOverlayTemplate,
+  tutorialCalloutTemplate,
+  mobileTooltipContentTemplate,
+  desktopTooltipContentTemplate,
+} from "../templates/uiTooltipTemplates.js";
 
 function renderTutorialCallout(container, message, onSkip, onHardSkip) {
   if (!container?.isConnected) return;
@@ -620,14 +605,15 @@ function tooltipContentTemplate(obj, tile, game, isMobile, onBuy) {
       if (obj.level >= obj.max_level) upgradeStatus = "Maximum Level Reached";
       else if (!obj.affordable) upgradeStatus = '<span class="tooltip-mobile-unaffordable">Cannot Afford Upgrade</span>';
     }
-    return html`
-      <div data-role="title" class="tooltip-title" style="margin-bottom: 0.5em; font-size: 1.1em; font-weight: bold;">${title}</div>
-      <div data-role="mobile-stats" class="tooltip-summary-row" style=${obj.upgrade ? "" : "display: none"}>${unsafeHTML(statsHtml)}</div>
-      <p data-role="description" class=${obj.upgrade ? "is-inset" : ""}>${unsafeHTML(descHtml)}</p>
-      ${bonusLines.length ? html`<div data-role="bonus-lines" class="tooltip-bonuses">${unsafeHTML(bonusHtml)}</div>` : ""}
-      <div data-role="mobile-upgrade-status" style="min-height: 1rem; font-size: 0.7rem;">${unsafeHTML(upgradeStatus)}</div>
-      <footer id="tooltip_actions"></footer>
-    `;
+    return mobileTooltipContentTemplate({
+      title,
+      hasUpgrade: !!obj.upgrade,
+      statsHtml,
+      descHtml,
+      hasBonusLines: bonusLines.length > 0,
+      bonusHtml,
+      upgradeStatus,
+    });
   }
 
   const summaryItems = buildDesktopSummaryItems(obj, tile);
@@ -639,14 +625,16 @@ function tooltipContentTemplate(obj, tile, game, isMobile, onBuy) {
   const stats = getDetailedStats(obj, tile, game);
   const statsHtml = Array.from(stats.entries()).map(([k, v]) => `<dt>${iconify(k)}</dt><dd>${iconify(v)}</dd>`).join("");
   const buyBtn = obj.upgrade && obj.level < obj.max_level && onBuy ? html`<button class="" ?disabled=${!obj.affordable} @click=${onBuy}>Buy ${unsafeHTML(getBuyCostText(obj))}</button>` : "";
-  return html`
-    <div data-role="title" class="tooltip-title" style="margin-bottom: 0.5em; font-size: 1.1em; font-weight: bold;">${title}</div>
-    <div data-role="desktop-summary" class="tooltip-summary-row" style=${styleMap({ display: obj.upgrade ? "" : "none" })}>${unsafeHTML(summaryHtml)}</div>
-    <p data-role="description" class=${obj.upgrade ? "is-inset" : ""}>${unsafeHTML(descHtml)}</p>
-    ${bonusLines.length ? html`<div data-role="bonus-lines" class="tooltip-bonuses">${unsafeHTML(bonusHtml)}</div>` : ""}
-    <dl class="tooltip-stats" data-role="desktop-stats">${unsafeHTML(statsHtml)}</dl>
-    <footer id="tooltip_actions">${buyBtn}</footer>
-  `;
+  return desktopTooltipContentTemplate({
+    title,
+    hasUpgrade: !!obj.upgrade,
+    summaryHtml,
+    descHtml,
+    hasBonusLines: bonusLines.length > 0,
+    bonusHtml,
+    statsHtml,
+    buyBtn,
+  });
 }
 
 export class TooltipManager extends BaseComponent {
@@ -677,24 +665,6 @@ export class TooltipManager extends BaseComponent {
       if (wasMobile !== this.isMobile && this.current_obj) {
         this.update();
       }
-      const isDesktop = window.innerWidth > 768;
-      if (isDesktop) {
-        if (!this.$tooltip._hasMouseEvents) {
-          this.$tooltip._mouseEnterHandler = () => clearTimeout(this.tooltip_task);
-          this.$tooltip._mouseLeaveHandler = () => {
-            if (!this.isLocked) this.hide();
-          };
-          this.$tooltip.addEventListener("mouseenter", this.$tooltip._mouseEnterHandler);
-          this.$tooltip.addEventListener("mouseleave", this.$tooltip._mouseLeaveHandler);
-          this.$tooltip._hasMouseEvents = true;
-        }
-      } else {
-        if (this.$tooltip._hasMouseEvents) {
-          this.$tooltip.removeEventListener("mouseenter", this.$tooltip._mouseEnterHandler);
-          this.$tooltip.removeEventListener("mouseleave", this.$tooltip._mouseLeaveHandler);
-          this.$tooltip._hasMouseEvents = false;
-        }
-      }
     };
     this._tooltipClickHandler = (e) => {
       if (e.target.id === "tooltip_close_btn") this.closeView();
@@ -702,16 +672,6 @@ export class TooltipManager extends BaseComponent {
 
     window.addEventListener("resize", this._resizeHandler);
     this.$tooltip.addEventListener("click", this._tooltipClickHandler);
-
-    if (window.innerWidth > 768) {
-      this.$tooltip._mouseEnterHandler = () => clearTimeout(this.tooltip_task);
-      this.$tooltip._mouseLeaveHandler = () => {
-        if (!this.isLocked) this.hide();
-      };
-      this.$tooltip.addEventListener("mouseenter", this.$tooltip._mouseEnterHandler);
-      this.$tooltip.addEventListener("mouseleave", this.$tooltip._mouseLeaveHandler);
-      this.$tooltip._hasMouseEvents = true;
-    }
   }
 
   teardown() {
@@ -720,11 +680,6 @@ export class TooltipManager extends BaseComponent {
     }
     if (this.$tooltip) {
       this.$tooltip.removeEventListener("click", this._tooltipClickHandler);
-      if (this.$tooltip._hasMouseEvents) {
-        this.$tooltip.removeEventListener("mouseenter", this.$tooltip._mouseEnterHandler);
-        this.$tooltip.removeEventListener("mouseleave", this.$tooltip._mouseLeaveHandler);
-        this.$tooltip._hasMouseEvents = false;
-      }
     }
   }
 

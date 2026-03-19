@@ -8,7 +8,7 @@ import { GridScaler, GridCanvasRenderer } from "./ui_grid.js";
 import { ParticleSystem, ParticleEffectsUI, VisualEventRendererUI } from "./VisualEffectsManager.js";
 import { leaderboardService } from "../services.js";
 import { logger } from "../utils.js";
-import { UpgradesUI, ComponentRenderingUI, runPopulateUpgradeSection, mountSectionCountsReactive, updateSectionCountsState } from "./ui/ui_upgrades.js";
+import { UpgradesUI, ComponentRenderingUI, runPopulateUpgradeSection, mountSectionCountsReactive, updateSectionCountsState } from "./ui-components.js";
 import {
   CopyPasteUI,
   UserAccountUI,
@@ -36,7 +36,7 @@ import {
   NavIndicatorsUI,
   TabSetupUI,
   ClipboardUI,
-} from "./ui/uiModule.js";
+} from "./ui-components.js";
 import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
 import dataService from "../services.js";
 import { ComponentRegistry } from "../utils.js";
@@ -160,7 +160,6 @@ class PageInitUI {
         }
         logger.log('debug', 'ui', '[PageInit] reactor_section init done');
         this.ui.initializeCopyPasteUI();
-        this.ui.modalOrchestrationUI.initializeSellAllButton();
         this.ui.pageSetupUI.setupMobileTopBar();
         this.ui.pageSetupUI.setupMobileTopBarResizeListener();
         break;
@@ -199,7 +198,6 @@ class PageInitUI {
         } else {
           logger.log('warn', 'ui', 'upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing');
         }
-        this.ui.userAccountUI.renderDoctrineTreeViewer();
         this.setupResearchCollapsibleSections();
         this.ui.sandboxUI.initializeSandboxUpgradeButtons();
         this.loadAndSetVersion();
@@ -346,7 +344,6 @@ function initMainLayoutInner(ui) {
   ui.userAccountUI.setupUserAccountButton();
   ui.tabSetupUI.setupBuildTabButton();
   ui.tabSetupUI.setupMenuTabButton();
-  ui.deviceFeatures.setupAppBadgeVisibilityHandler();
   ui.deviceFeatures.updateWakeLockState();
   const basicOverview = ui.coreLoopUI?.getElement?.("basic_overview_section") ?? ui.DOMElements?.basic_overview_section;
   if (basicOverview && ui.help_text?.basic_overview) {
@@ -365,7 +362,6 @@ function initMainLayoutInner(ui) {
     const status = ui.game.paused ? "paused" : (ui.game.engine.running ? "running" : "stopped");
     ui.stateManager.setVar("engine_status", status);
   }
-  ui.performanceUI.startPerformanceTracking();
 }
 
 class LayoutStorageUI {
@@ -570,10 +566,6 @@ export class UI {
     this.gridInteractionUI._cleanupVentRotor(tile);
   }
 
-  logAnimationStatus() {
-    this.gridInteractionUI.logAnimationStatus();
-  }
-
   getPowerNetChange() {
     return getPowerNetChangeFromStats(this);
   }
@@ -592,6 +584,11 @@ export class UI {
 
   getHighlightedTiles() {
     return this.gridInteractionUI?.getHighlightedTiles?.() ?? [];
+  }
+
+  setHelpModeActive(active) {
+    this.help_mode_active = !!active;
+    document.body?.classList.toggle("help-mode-active", this.help_mode_active);
   }
 
   resizeReactor() {
@@ -659,11 +656,8 @@ export class UI {
     setupResizeListeners(this);
     this.infoBarUI.setupInfoBarButtons();
     this.copyPaste.setupCopyStateButton();
-    this.infoBarUI.setupHeatPowerListeners();
     this.objectivesUI.setupObjectivesListeners();
   }
-
-  updateCollapsedControlsNav() {}
 
   static get MY_LAYOUTS_STORAGE_KEY() { return LayoutStorageUI.MY_LAYOUTS_STORAGE_KEY; }
 
