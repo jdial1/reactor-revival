@@ -252,7 +252,7 @@ describe("Auto Heat Testing", () => {
 
     it("should correctly save and load the heat_control state via its upgrade", async () => {
         const { forcePurchaseUpgrade } = await import("../helpers/gameHelpers.js");
-        const { StorageUtils } = await import("../../public/src/utils/utils_constants.js");
+        const { StorageUtils } = await import("../../public/src/utils.js");
         forcePurchaseUpgrade(game, 'heat_control_operator');
         game.reactor.has_melted_down = false;
         game.state.heat_control = true;

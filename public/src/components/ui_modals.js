@@ -1,10 +1,9 @@
 import { html, render, nothing } from "lit-html";
 import { proxy } from "valtio/vanilla";
-import { styleMap, StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, Format, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils/utils_constants.js";
-import { getValidatedPreferences, preferences } from "../core/store.js";
-import { supabaseSave } from "../services/services_cloud.js";
-import { createSupabaseProvider, createGoogleDriveProvider, showCloudVsLocalConflictModal as showCloudConflictModal } from "../core/save_system.js";
-import dataService from "../services/dataService.js";
+import { styleMap, StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, Format, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
+import { getValidatedPreferences, preferences, createSupabaseProvider, createGoogleDriveProvider, showCloudVsLocalConflictModal as showCloudConflictModal } from "../state.js";
+import { supabaseSave } from "../services.js";
+import dataService from "../services.js";
 import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
 import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate } from "./ui/uiModule.js";
 

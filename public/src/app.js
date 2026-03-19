@@ -1,22 +1,23 @@
-import { Game } from "./core/game.js";
-import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, styleMap, StorageUtilsAsync } from "./utils/utils_constants.js";
+import { Game } from "./logic.js";
+import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, styleMap, StorageUtilsAsync, setSlot1FromBackupAsync } from "./utils.js";
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { UI } from "./components/ui.js";
-import { GoogleDriveSave } from "./services/services_cloud.js";
-import { SupabaseAuth, SupabaseSave } from "./services/services_cloud.js";
-import { AudioService } from "./services/audioService.js";
-import { getValidatedPreferences, initPreferencesStore, preferences, subscribeKey } from "./core/store.js";
-import { initCloudSyncQueue } from "./core/save_system.js";
-import dataService from "./services/dataService.js";
-import { UPDATE_TOAST_STYLES } from "./utils/utils_constants.js";
-import { MODAL_IDS } from "./components/ui_modals.js";
-import { updateSectionCountsState } from "./components/ui/uiModule.js";
+import { UI, MODAL_IDS, updateSectionCountsState, getCompactLayout } from "./ui.js";
+import { GoogleDriveSave, SupabaseAuth, SupabaseSave, AudioService, createSplashManager } from "./services.js";
+import { getValidatedPreferences, initPreferencesStore, preferences, subscribeKey, initCloudSyncQueue, showLoadBackupModal } from "./state.js";
+import dataService from "./services.js";
+import { UPDATE_TOAST_STYLES } from "./utils.js";
 import { TooltipManager, TutorialManager } from "./components/ui_tooltips_tutorial.js";
-import { Engine } from "./core/engine.js";
+import { Engine } from "./logic.js";
 import { ReactiveLitComponent } from "./components/ReactiveLitComponent.js";
 
 setFormatPreferencesGetter(getValidatedPreferences);
+
+if (typeof window !== "undefined") {
+  window.splashManager ??= createSplashManager();
+  window.showLoadBackupModal = showLoadBackupModal;
+  window.setSlot1FromBackup = () => setSlot1FromBackupAsync();
+}
 
 
 export class PageRouter {
@@ -1314,7 +1315,7 @@ async function ensureAuthReady(googleDriveSave, supabaseAuth) {
 
 function createAppInstances() {
   const ui = new UI();
-  const game = new Game(ui);
+  const game = new Game(ui, getCompactLayout);
   game.audio = new AudioService();
   const initAudioOnGesture = () => game.audio.init();
   document.addEventListener("click", initAudioOnGesture, { once: true });
@@ -1327,7 +1328,7 @@ function createAppInstances() {
 
 async function main() {
   "use strict";
-  const pwaModule = await import("./services/services_pwa.js");
+  const pwaModule = await import("./services.js");
   _requestWakeLock = pwaModule.requestWakeLock;
   pwaModule.initializePwa();
   initPreferencesStore();

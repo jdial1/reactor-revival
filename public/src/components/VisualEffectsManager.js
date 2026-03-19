@@ -1,4 +1,4 @@
-import { numFormat as fmt } from "../utils/utils_constants.js";
+import { numFormat as fmt } from "../utils.js";
 
 const STEAM_COUNT = 8;
 const STEAM_DURATION_MS = 1500;

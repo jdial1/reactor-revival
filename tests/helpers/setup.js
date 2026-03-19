@@ -17,7 +17,7 @@
 // These must be defined BEFORE any application code is imported to prevent reference errors.
 
 import Decimal from 'break_infinity.js';
-import { toDecimal, toNumber } from '../../public/src/utils/utils_constants.js';
+import { toDecimal, toNumber } from '../../public/src/utils.js';
 if (typeof global !== 'undefined') global.Decimal = Decimal;
 if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
 
@@ -183,12 +183,10 @@ if (global.window) global.window.Decimal = Decimal;
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Core application imports
-import { Game } from '../../public/src/core/game.js';
-import { UI } from '../../public/src/components/ui.js';
-import { Engine } from '../../public/src/core/engine.js';
-import { ObjectiveManager } from '../../public/src/core/objective_system.js';
-import { PageRouter } from '../../public/src/app_core.js';
-import { attachGameEventListeners } from '../../public/src/app_core.js';
+import { Game, Engine, ObjectiveManager } from '../../public/src/logic.js';
+import { UI } from '../../public/src/ui.js';
+import { PageRouter } from '../../public/src/app.js';
+import { attachGameEventListeners } from '../../public/src/app.js';
 
 export const toNum = toNumber;
 
@@ -631,7 +629,7 @@ export async function setupGameWithDOM() {
   game.engine = new Engine(game);
   
   // CRITICAL: Initialize audio service like in app.js
-  const { AudioService } = await import("../../public/src/services/audioService.js");
+  const { AudioService } = await import("../../public/src/services.js");
   game.audio = new AudioService();
   await game.audio.init();
   

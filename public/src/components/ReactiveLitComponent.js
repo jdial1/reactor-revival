@@ -1,5 +1,5 @@
 import { render, html } from "lit-html";
-import { subscribe, subscribeKey } from "../core/store.js";
+import { subscribe, subscribeKey } from "../state.js";
 
 const isTestEnv = () =>
   (typeof global !== "undefined" && global.__VITEST__) ||

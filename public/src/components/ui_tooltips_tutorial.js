@@ -1,9 +1,6 @@
 import { html, render } from "lit-html";
-import { StorageUtils, numFormat as fmt, unsafeHTML, styleMap } from "../utils/utils_constants.js";
-import { logger } from "../utils/utils_constants.js";
-import { BaseComponent } from "../core/reactor_state.js";
-import { MOBILE_BREAKPOINT_PX } from "../utils/utils_constants.js";
-import { getUpgradeBonusLines as getUpgradeBonusLinesCore } from "../core/parts_system.js";
+import { StorageUtils, numFormat as fmt, unsafeHTML, styleMap, logger, MOBILE_BREAKPOINT_PX, BaseComponent } from "../utils.js";
+import { getUpgradeBonusLines as getUpgradeBonusLinesCore } from "../logic.js";
 
 const tutorialOverlayTemplate = html`
   <div class="tutorial-spotlight-top"></div>

@@ -1,12 +1,9 @@
-import { Reactor } from "./reactor_state.js";
-import { PartSet } from "./parts_system.js";
-import { UpgradeSet } from "./upgrades_system.js";
+import { PartSet, UpgradeSet, ObjectiveManager, BlueprintService, buildFacts, rules } from "./registry.js";
 import { Tileset } from "../components/ui_grid.js";
-import { ObjectiveManager } from "./objective_system.js";
-import { Performance } from "./engine_scheduler.js";
-import { DebugHistory, toDecimal, StorageUtils, Formatter } from "../utils/utils_constants.js";
-import { GameSaveManager } from "./save_system.js";
+import { Performance } from "./simulation.js";
+import { DebugHistory, toDecimal, StorageUtils, Formatter } from "../utils.js";
 import {
+  GameSaveManager,
   SaveOrchestrator,
   UnlockManager,
   runRebootActionKeepEp,
@@ -21,13 +18,14 @@ import {
   runManualReduceHeatAction,
   runSellPart,
   runEpartOnclick,
-  rules,
-} from "./game/GameModule.js";
-import { BlueprintService } from "./parts_system.js";
-import { getCompactLayout } from "../components/ui/uiModule.js";
-import { logger } from "../utils/utils_constants.js";
-import { createGameState, setDecimal, updateDecimal } from "./store.js";
-import { GameActionSchema, ACTION_SCHEMA_REGISTRY, EVENT_SCHEMA_REGISTRY } from "../utils/utils_constants.js";
+  createGameState,
+  setDecimal,
+  updateDecimal,
+  Reactor,
+} from "../state.js";
+import { getCompactLayout } from "../components/interface.js";
+import { logger } from "../utils.js";
+import { GameActionSchema, ACTION_SCHEMA_REGISTRY, EVENT_SCHEMA_REGISTRY } from "./schemas.js";
 import { fromError } from "zod-validation-error";
 import { z } from "zod";
 import {
@@ -35,7 +33,7 @@ import {
   PRESTIGE_MULTIPLIER_PER_EP,
   PRESTIGE_MULTIPLIER_CAP, RESPEC_DOCTRINE_EP_COST, PERCENT_DIVISOR,
   BASE_MAX_HEAT, BASE_MAX_POWER,
-} from "../utils/utils_constants.js";
+} from "../utils.js";
 
 function getAuthenticatedUserId() {
   if (window.googleDriveSave && window.googleDriveSave.isSignedIn) {

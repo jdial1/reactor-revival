@@ -1,14 +1,13 @@
-import { numFormat as fmt, on, StorageUtils, StorageAdapter, toNumber } from "../utils/utils_constants.js";
+import { numFormat as fmt, on, StorageUtils, StorageAdapter, toNumber } from "../utils.js";
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { StateManager } from "../core/reactor_state.js";
-import { createUIState, initUIStateSubscriptions } from "../core/store.js";
+import { StateManager, createUIState, initUIStateSubscriptions } from "../state.js";
 import { InputHandler } from "./InputManager.js";
 import { ModalOrchestrator } from "./ui_modals.js";
 import { GridScaler, GridCanvasRenderer } from "./ui_grid.js";
 import { ParticleSystem, ParticleEffectsUI, VisualEventRendererUI } from "./VisualEffectsManager.js";
-import { leaderboardService } from "../services/services_cloud.js";
-import { logger } from "../utils/utils_constants.js";
+import { leaderboardService } from "../services.js";
+import { logger } from "../utils.js";
 import { UpgradesUI, ComponentRenderingUI, runPopulateUpgradeSection, mountSectionCountsReactive, updateSectionCountsState } from "./ui/ui_upgrades.js";
 import {
   CopyPasteUI,
@@ -39,10 +38,10 @@ import {
   ClipboardUI,
 } from "./ui/uiModule.js";
 import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
-import dataService from "../services/dataService.js";
-import { ComponentRegistry } from "../utils/utils_constants.js";
-import { MOBILE_BREAKPOINT_PX } from "../utils/utils_constants.js";
-import { ObjectiveController, getObjectiveScrollDuration } from "../core/objective_system.js";
+import dataService from "../services.js";
+import { ComponentRegistry } from "../utils.js";
+import { MOBILE_BREAKPOINT_PX } from "../utils.js";
+import { ObjectiveController, getObjectiveScrollDuration } from "../logic.js";
 import { GridController, AudioController } from "./controllers/controllers.js";
 
 export function getRoot(selector) {
@@ -266,7 +265,7 @@ class PageInitUI {
   async loadAndSetVersion() {
     const ui = this.ui;
     try {
-      const { getResourceUrl } = await import("../utils/utils_constants.js");
+      const { getResourceUrl } = await import("../utils.js");
       const response = await fetch(getResourceUrl("version.json"));
 
       if (!response.ok) {

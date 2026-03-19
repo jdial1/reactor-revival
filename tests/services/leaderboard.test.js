@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from "../helpers/setup.js";
 
-import { leaderboardService } from "../../public/src/services/services_cloud.js";
+import { leaderboardService } from "../../public/src/services.js";
 
 describe("Leaderboard Service & Integration", () => {
     let game;

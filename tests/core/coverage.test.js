@@ -1,4 +1,4 @@
-import { Game } from "../../public/src/core/game.js";
+import { Game } from "../../public/src/logic.js";
 import { UI } from "../../public/src/components/ui.js";
 import { describe, it, expect, beforeEach, setupGame, toNum } from "../helpers/setup.js";
 

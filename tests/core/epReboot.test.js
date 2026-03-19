@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from '../helpers/setup.js';
-import { AudioService } from '../../public/src/services/audioService.js';
+import { AudioService } from '../../public/src/services.js';
 import { placePart, forcePurchaseUpgrade, runTicks } from "../helpers/gameHelpers.js";
 
 describe('EP Reboot Functionality', () => {

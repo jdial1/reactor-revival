@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, UI, Game, Engine, ObjectiveManager } from "./helpers/setup.js";
-import dataService from "../public/src/services/dataService.js";
-import { getObjectiveCheck } from "../public/src/core/objective_system.js";
+import dataService from "../public/src/services.js";
+import { getObjectiveCheck } from "../public/src/logic.js";
 
 // Load objective data
 let objective_list_data = [];

@@ -1,5 +1,5 @@
 import { html, render } from "lit-html";
-import { logger } from "../../utils/utils_constants.js";
+import { logger } from "../../utils.js";
 
 class ClipboardUI {
   constructor(ui) {

@@ -1,4 +1,4 @@
-import { tileKey, resolveTileFromKey } from "../core/store.js";
+import { tileKey, resolveTileFromKey } from "../state.js";
 
 class Hotkeys {
   constructor(game) { this.game = game; }
@@ -11,10 +11,10 @@ class Hotkeys {
     else if (shiftKey && tile.part) yield* this.fillSame(tile.part);
     else yield tile;
   }
-  *row(tile) { for (let c = 0; c < this.game.cols; c++) { const t = this.game.tileset.getTile(tile.row, c); if (t?.enabled) yield t; } }
-  *column(tile) { for (let r = 0; r < this.game.rows; r++) { const t = this.game.tileset.getTile(r, tile.col); if (t?.enabled) yield t; } }
+  *row(tile)          { for (let c = 0; c < this.game.cols; c++) { const t = this.game.tileset.getTile(tile.row, c); if (t?.enabled) yield t; } }
+  *column(tile)       { for (let r = 0; r < this.game.rows; r++) { const t = this.game.tileset.getTile(r, tile.col); if (t?.enabled) yield t; } }
   *checker(startTile) { const startIsOdd = (startTile.row + startTile.col) % 2; for (const tile of this.game.tileset.active_tiles_list) { if ((tile.row + tile.col) % 2 === startIsOdd) yield tile; } }
-  *fillSame(part) { for (const tile of this.game.tileset.active_tiles_list) { if (tile.part === part) yield tile; } }
+  *fillSame(part)     { for (const tile of this.game.tileset.active_tiles_list) { if (tile.part === part) yield tile; } }
 }
 
 export class InputHandler {

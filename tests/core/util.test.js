@@ -1,5 +1,5 @@
 import { describe, it, expect } from "../helpers/setup.js";
-import { numFormat, timeFormat } from "../../public/src/utils/utils_constants.js";
+import { numFormat, timeFormat } from "../../public/src/utils.js";
 
 describe("Utility Functions", () => {
     describe("numFormat", () => {

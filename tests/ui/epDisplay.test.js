@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, toNum } from '../helpers/setup.js';
-import { setDecimal } from '../../public/src/core/store.js';
+import { setDecimal } from '../../public/src/state.js';
 
 describe('EP Info Bar Display', () => {
     let game;

@@ -1,4 +1,4 @@
-import { runHeatStepFromTyped } from "../core/heat_system.js";
+import { runHeatStepFromTyped } from "../logic.js";
 
 let pending = null;
 let busy = false;

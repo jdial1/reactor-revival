@@ -1,19 +1,18 @@
 import { html, render } from "lit-html";
 import { proxy, subscribe } from "valtio/vanilla";
-import { BlueprintSchema, LegacyGridSchema } from "../../utils/utils_constants.js";
-import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal } from "../../utils/utils_constants.js";
+import { BlueprintSchema, LegacyGridSchema } from "../../state.js";
+import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal } from "../../utils.js";
 import { MODAL_IDS } from "../ui_modals.js";
 import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
-import { runCheckAffordability, calculateSectionCounts } from "../../core/upgrades_system.js";
+import { runCheckAffordability, calculateSectionCounts } from "../../logic.js";
 import { UpgradeCard, CloseButton, PartButton } from "../buttonFactory.js";
-import { BlueprintService } from "../../core/parts_system.js";
-import { setDecimal, preferences } from "../../core/store.js";
-import { MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR } from "../../utils/utils_constants.js";
-import { leaderboardService } from "../../services/services_cloud.js";
-import { BaseComponent } from "../../core/reactor_state.js";
+import { BlueprintService } from "../../logic.js";
+import { setDecimal, preferences } from "../../state.js";
+import { MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent } from "../../utils.js";
+import { leaderboardService } from "../../services.js";
 import { HeatVisualsUI, GridInteractionUI, ParticleEffectsUI, VisualEventRendererUI } from "./ui_visuals.js";
 import { MeltdownUI, ClipboardUI } from "./ui_tools.js";
-import { requestWakeLock, releaseWakeLock } from "../../services/services_pwa.js";
+import { requestWakeLock, releaseWakeLock } from "../../services.js";
 import { InfoBarUI, MobileInfoBarUI, PageSetupUI, PartsPanelUI, ControlDeckUI, NavIndicatorsUI, TabSetupUI } from "./ui_panels.js";
 
 export {

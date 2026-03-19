@@ -1,5 +1,5 @@
 import "../../lib/break_infinity.min.js";
-import "../utils/utils_constants.js";
+import "../utils.js";
 import superjson from "superjson";
 import {
   runHeatStepFromTyped,
@@ -10,7 +10,7 @@ import {
   OUTLET_STRIDE, OUTLET_OFFSET_INDEX, OUTLET_OFFSET_RATE, OUTLET_OFFSET_ACTIVATED, OUTLET_OFFSET_IS_OUTLET6, OUTLET_OFFSET_N_COUNT,
   OUTLET_OFFSET_NEIGHBOR_INDICES, OUTLET_OFFSET_NEIGHBOR_CAPS,
   MAX_NEIGHBORS,
-} from "../core/heat_system.js";
+} from "../logic.js";
 import {
   REACTOR_HEAT_STANDARD_DIVISOR,
   DEFAULT_OVERFLOW_RATIO,
@@ -29,8 +29,8 @@ import {
   getNeighborKeys,
   applyPowerOverflowCalcDecimal,
   clampHeatDecimal,
-} from "../utils/utils_constants.js";
-import { toDecimal } from "../utils/utils_constants.js";
+} from "../utils.js";
+import { toDecimal } from "../utils.js";
 
 const MAX_INLETS = HEAT_PAYLOAD_MAX_INLETS;
 const MAX_VALVES = HEAT_PAYLOAD_MAX_VALVES;

@@ -1,7 +1,7 @@
 import { html, render } from "lit-html";
-import { styleMap } from "../../utils/utils_constants.js";
-import { preferences } from "../../core/store.js";
-import { logger } from "../../utils/utils_constants.js";
+import { styleMap } from "../../utils.js";
+import { preferences } from "../../state.js";
+import { logger } from "../../utils.js";
 import { ParticleEffectsUI, VisualEventRendererUI } from "../VisualEffectsManager.js";
 
 class HeatVisualsUI {

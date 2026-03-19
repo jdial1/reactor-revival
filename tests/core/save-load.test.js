@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, vi, toNum } from "../helpers/setup.js";
-import { StorageUtils, StorageUtilsAsync, serializeSave, deserializeSave } from "../../public/src/utils/utils_constants.js";
+import { StorageUtils, StorageUtilsAsync, serializeSave, deserializeSave } from "../../public/src/utils.js";
 
 describe("Save and Load Functionality", () => {
   let game;
