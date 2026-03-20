@@ -24,6 +24,7 @@ import {
   welcomeBackModalTemplate as welcomeBackLayoutTemplate,
   prestigeModalTemplate as prestigeLayoutTemplate,
   contextModalTemplate as contextLayoutTemplate,
+  harmonicDiagnosticsModalTemplate as harmonicDiagnosticsLayoutTemplate,
 } from "../templates/uiModalTemplates.js";
 
 const HIDDEN_STYLE = { display: "none" };
@@ -708,6 +709,7 @@ export const MODAL_IDS = {
   SETTINGS: "settings",
   LAYOUT_VIEW: "layoutView",
   MY_LAYOUTS: "myLayouts",
+  HARMONIC_DIAGNOSTICS: "harmonicDiagnostics",
 };
 
 export class ModalOrchestrator {
@@ -786,6 +788,10 @@ export class ModalOrchestrator {
     this._handlers.set(MODAL_IDS.MY_LAYOUTS, {
       show: () => this._showMyLayoutsModal(),
       hide: () => this._hideMyLayoutsModal(),
+    });
+    this._handlers.set(MODAL_IDS.HARMONIC_DIAGNOSTICS, {
+      show: (p) => this._showHarmonicDiagnosticsModal(p),
+      hide: () => this._hideHarmonicDiagnosticsModal(),
     });
   }
 
@@ -1242,6 +1248,26 @@ export class ModalOrchestrator {
   }
 
   _hideMyLayoutsModal() {
+    if (this._modalRoot) render(nothing, this._modalRoot);
+  }
+
+  _showHarmonicDiagnosticsModal(payload = {}) {
+    if (!this.ui) return;
+    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    if (!this._modalRoot) return;
+    const onClose = () => this._hideHarmonicDiagnosticsModal();
+    render(
+      harmonicDiagnosticsLayoutTemplate({
+        waveType: payload.waveType ?? "power",
+        healthLabel: payload.healthLabel ?? "Stable",
+        samples: payload.history ?? [],
+        onClose,
+      }),
+      this._modalRoot
+    );
+  }
+
+  _hideHarmonicDiagnosticsModal() {
     if (this._modalRoot) render(nothing, this._modalRoot);
   }
 }

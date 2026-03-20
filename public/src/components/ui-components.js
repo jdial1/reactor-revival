@@ -50,6 +50,161 @@ import {
 } from "../templates/uiComponentsTemplates.js";
 
 const VENTING_ANIM_MS = 400;
+const WAVE_SAMPLE_INTERVAL_MS = 120;
+const WAVE_HISTORY_CAP = 300;
+const WAVE_LONG_PRESS_MS = 500;
+const WAVE_TRACE_POINTS = 120;
+
+const waveformDiagnosticsState = {
+  lastSampleAt: 0,
+  history: [],
+  render: {
+    power: { currentPoints: "", previousPoints: "" },
+    heat: { currentPoints: "", previousPoints: "" },
+  },
+};
+
+function clampWave(value) {
+  return Math.min(1, Math.max(0, Number(value) || 0));
+}
+
+function sampleReactorDiagnostics(ui, state) {
+  const now = Date.now();
+  if (now - waveformDiagnosticsState.lastSampleAt < WAVE_SAMPLE_INTERVAL_MS) return;
+  waveformDiagnosticsState.lastSampleAt = now;
+  const maxPower = toNumber(state.max_power) || 1;
+  const maxHeat = toNumber(state.max_heat) || 1;
+  const powerLevel = clampWave((toNumber(state.current_power) || 0) / maxPower);
+  const heatLevel = clampWave((toNumber(state.current_heat) || 0) / maxHeat);
+  const powerNet = toNumber(state.stats_power ?? state.power_net_change ?? 0);
+  const heatNet = toNumber(state.stats_net_heat ?? state.heat_net_change ?? 0);
+  const ventEff = toNumber(state.vent_multiplier_eff ?? 0);
+  const overflowRatio = toNumber(state.power_overflow_to_heat_ratio ?? 0.5);
+  waveformDiagnosticsState.history.push({ t: now, powerLevel, heatLevel, powerNet, heatNet, ventEff, overflowRatio });
+  console.log("[waveform-tick]", {
+    t: now,
+    power_per_tick: powerNet,
+    heat_per_tick: heatNet,
+    stats_power: toNumber(state.stats_power ?? 0),
+    stats_net_heat: toNumber(state.stats_net_heat ?? 0),
+    heat_net_change: toNumber(state.heat_net_change ?? 0),
+    current_heat: toNumber(state.current_heat ?? 0),
+    max_heat: toNumber(state.max_heat ?? 0),
+  });
+  if (waveformDiagnosticsState.history.length > WAVE_HISTORY_CAP) {
+    waveformDiagnosticsState.history.splice(0, waveformDiagnosticsState.history.length - WAVE_HISTORY_CAP);
+  }
+}
+
+function getTickSeries(ui, state, channel) {
+  if (channel === "heat") {
+    const fromSamples = waveformDiagnosticsState.history
+      .slice(-WAVE_TRACE_POINTS)
+      .map((item) => toNumber(item?.heatNet ?? 0));
+    if (fromSamples.length) {
+      const liveValue = toNumber(state.stats_net_heat ?? state.heat_net_change ?? 0);
+      fromSamples.push(liveValue);
+      return fromSamples;
+    }
+  }
+  const reactorHistory = ui?.game?.reactor?._classificationStatsHistory;
+  const key = channel === "power" ? "power" : "netHeat";
+  if (Array.isArray(reactorHistory) && reactorHistory.length > 1) {
+    const series = reactorHistory.slice(-WAVE_TRACE_POINTS).map((item) => toNumber(item?.[key] ?? 0));
+    const liveValue = toNumber(channel === "power"
+      ? state.stats_power ?? state.power_net_change
+      : state.stats_net_heat ?? state.heat_net_change);
+    series.push(liveValue);
+    return series;
+  }
+  const fallbackKey = channel === "power" ? "powerNet" : "heatNet";
+  return waveformDiagnosticsState.history.slice(-WAVE_TRACE_POINTS).map((item) => toNumber(item?.[fallbackKey] ?? 0));
+}
+
+function getRumbleState(game) {
+  const tiles = game?.tileset?.active_tiles_list;
+  if (!Array.isArray(tiles) || tiles.length === 0) return false;
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i];
+    const part = tile?.part;
+    if (!part) continue;
+    const maxTicks = toNumber(part.ticks ?? 0);
+    if (maxTicks > 0 && toNumber(tile.ticks ?? 0) / maxTicks < 0.05) return true;
+    const containment = toNumber(part.containment ?? 0);
+    if (containment > 0 && toNumber(tile.heat_contained ?? 0) / containment >= 0.95) return true;
+  }
+  return false;
+}
+
+function createWaveformVisualState(ui, state, channel) {
+  const net = toNumber(channel === "power"
+    ? state.stats_power ?? state.power_net_change
+    : state.stats_net_heat ?? state.heat_net_change);
+  const isRumbling = getRumbleState(ui?.game);
+  const series = getTickSeries(ui, state, channel);
+  const source = series.length ? series : [net, net];
+  const absValues = source.map((value) => Math.abs(toNumber(value)));
+  const avgAbs = absValues.reduce((sum, value) => sum + value, 0) / Math.max(1, absValues.length);
+  const scale = channel === "heat"
+    ? Math.max(0.25, avgAbs * 1.2)
+    : Math.max(1, avgAbs * 2);
+  const points = source
+    .map((value, index, arr) => {
+      const x = arr.length <= 1 ? 100 : (index / (arr.length - 1)) * 100;
+      const raw = toNumber(value) / scale;
+      const negativeBoost = channel === "heat" && raw < 0 ? 1.6 : 1;
+      const normalized = Math.tanh(raw * negativeBoost);
+      const zeroBaseline = channel === "heat" ? 50 : 90;
+      const positiveSpan = channel === "heat" ? 42 : 80;
+      const negativeSpan = channel === "heat" ? 42 : 8;
+      const y = normalized >= 0
+        ? zeroBaseline - normalized * positiveSpan
+        : zeroBaseline - normalized * negativeSpan;
+      const clampedY = Math.max(2, Math.min(98, y));
+      return `${x.toFixed(2)},${clampedY.toFixed(2)}`;
+    })
+    .join(" ");
+  const renderState = waveformDiagnosticsState.render[channel];
+  if (renderState.currentPoints !== points) {
+    renderState.previousPoints = renderState.currentPoints || points;
+    renderState.currentPoints = points;
+  }
+  const highBandCrossed = source.some((value) => Math.tanh(toNumber(value) / scale) >= 0.8);
+  return {
+    className: classMap({
+      "info-waveform": true,
+      [`wave-${channel}`]: true,
+      rumble: isRumbling,
+      rising: net > 0,
+      falling: net < 0,
+      glitch: highBandCrossed,
+    }),
+    style: styleMap({}),
+    points,
+    trailPoints: renderState.previousPoints || points,
+    isRumbling,
+  };
+}
+
+function buildHarmonicHealth(state) {
+  const history = waveformDiagnosticsState.history;
+  if (!history.length) return "Stable";
+  const span = history.slice(-40);
+  let powerFlux = 0;
+  let heatFlux = 0;
+  for (let i = 1; i < span.length; i++) {
+    powerFlux += Math.abs(span[i].powerLevel - span[i - 1].powerLevel);
+    heatFlux += Math.abs(span[i].heatLevel - span[i - 1].heatLevel);
+  }
+  const netHeat = toNumber(state.heat_net_change ?? 0);
+  const ventEff = toNumber(state.vent_multiplier_eff ?? 0);
+  const leakBias = Math.max(0, netHeat) + Math.max(0, toNumber(state.power_overflow_to_heat_ratio ?? 0.5) * 0.2);
+  const turbulence = powerFlux + heatFlux + leakBias - ventEff * 0.01;
+  if (turbulence >= 10) return "Critical";
+  if (turbulence >= 6) return "Unstable";
+  if (turbulence >= 3) return "Watch";
+  return "Stable";
+}
 
 class InfoBarUI {
   constructor(ui) {
@@ -69,7 +224,7 @@ class InfoBarUI {
 
     const subscriptions = [{
       state: this.ui.game.state,
-      keys: ["current_power", "max_power", "current_heat", "max_heat", "current_money", "current_exotic_particles", "active_buffs", "melting_down"],
+      keys: ["current_power", "max_power", "current_heat", "max_heat", "current_money", "current_exotic_particles", "active_buffs", "melting_down", "power_net_change", "heat_net_change", "stats_power", "stats_net_heat"],
     }];
     this._unmount = ReactiveLitComponent.mountMulti(subscriptions, () => this._infoBarTemplate(this.ui.game.state), root);
 
@@ -126,6 +281,7 @@ class InfoBarUI {
   }
 
   _infoBarTemplate(state) {
+    sampleReactorDiagnostics(this.ui, state);
     const power = toNumber(state.current_power);
     const heat = toNumber(state.current_heat);
     const maxP = toNumber(state.max_power) || 1;
@@ -145,6 +301,8 @@ class InfoBarUI {
     const onVentMobile = (e) => this._handleHeat(e.currentTarget, true);
 
     const activeBuffs = state.active_buffs ?? [];
+    const powerWave = createWaveformVisualState(this.ui, state, "power");
+    const heatWave = createWaveformVisualState(this.ui, state, "heat");
 
     const epVisible = toNumber(state.current_exotic_particles) > 0;
     const epContentStyle = styleMap({ display: epVisible ? "flex" : "none" });
@@ -154,6 +312,14 @@ class InfoBarUI {
       heatClass,
       powerPct,
       heatPct,
+      powerWaveStyle: powerWave.style,
+      heatWaveStyle: heatWave.style,
+      powerWaveClass: powerWave.className,
+      heatWaveClass: heatWave.className,
+      powerWavePoints: powerWave.points,
+      powerWaveTrailPoints: powerWave.trailPoints,
+      heatWavePoints: heatWave.points,
+      heatWaveTrailPoints: heatWave.trailPoints,
       powerTextDesktop: fmt(power, 2),
       powerTextMobile: fmt(power, 0),
       maxPowerDesktop: fmt(maxP, 2),
@@ -221,9 +387,52 @@ class MobileInfoBarUI {
       btn.classList.add("venting");
       setTimeout(() => btn.classList.remove("venting"), VENTING_ANIM_MS);
     };
+    this._waveLongPressTimer = null;
+    this._waveDidLongPress = false;
+    this._openDiagnostics = (waveType) => {
+      this.ui.modalOrchestrator?.showModal(MODAL_IDS.HARMONIC_DIAGNOSTICS, {
+        waveType,
+        healthLabel: buildHarmonicHealth(this.ui.game?.state ?? {}),
+        history: waveformDiagnosticsState.history.slice(-80),
+      });
+    };
+    this._handleWavePointerDown = (waveType) => (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._waveDidLongPress = false;
+      if (this._waveLongPressTimer) clearTimeout(this._waveLongPressTimer);
+      this._waveLongPressTimer = setTimeout(() => {
+        this._waveLongPressTimer = null;
+        this._waveDidLongPress = true;
+        this.ui.deviceFeatures.heavyVibration();
+        this._openDiagnostics(waveType);
+      }, WAVE_LONG_PRESS_MS);
+    };
+    this._handleWavePointerCancel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this._waveLongPressTimer) {
+        clearTimeout(this._waveLongPressTimer);
+        this._waveLongPressTimer = null;
+      }
+    };
+    this._handleWavePointerUp = (actionHandler) => (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this._waveLongPressTimer) {
+        clearTimeout(this._waveLongPressTimer);
+        this._waveLongPressTimer = null;
+      }
+      if (this._waveDidLongPress) {
+        this._waveDidLongPress = false;
+        return;
+      }
+      actionHandler(e);
+    };
   }
 
   _controlDeckTemplate(state) {
+    sampleReactorDiagnostics(this.ui, state);
     const maxPower = toNumber(state.max_power ?? 0);
     const maxHeat = toNumber(state.max_heat ?? 0);
     const powerCurrent = toNumber(state.current_power ?? 0);
@@ -259,6 +468,8 @@ class MobileInfoBarUI {
     const autoHeatRateContent = showHeatRate ? html`<img src="img/ui/icons/icon_heat.png" class="icon-inline" alt="heat">\u2193${fmt(Math.round(autoHeatRate), 0)}` : "";
     const autoRateClass = classMap({ "control-deck-auto-rate": true, visible: showAutoSell });
     const autoHeatRateClass = classMap({ "control-deck-auto-rate": true, visible: showHeatRate });
+    const powerWave = createWaveformVisualState(this.ui, state, "power");
+    const heatWave = createWaveformVisualState(this.ui, state, "heat");
 
     return mobileControlDeckTemplate({
       powerCapacitorClass,
@@ -271,6 +482,14 @@ class MobileInfoBarUI {
       autoHeatRateContent,
       powerFillStyle,
       heatFillStyle,
+      powerWaveStyle: powerWave.style,
+      heatWaveStyle: heatWave.style,
+      powerWaveClass: powerWave.className,
+      heatWaveClass: heatWave.className,
+      powerWavePoints: powerWave.points,
+      powerWaveTrailPoints: powerWave.trailPoints,
+      heatWavePoints: heatWave.points,
+      heatWaveTrailPoints: heatWave.trailPoints,
       powerCurrentText: fmt(powerCurrent, 0),
       heatCurrentText: fmt(heatCurrent, 0),
       maxPowerText: maxPower ? fmt(maxPower, 0) : "",
@@ -278,6 +497,12 @@ class MobileInfoBarUI {
       moneyValueText: state.melting_down ? "☢️" : fmt(state.current_money ?? 0, 0),
       onSellPower: this._onSellPower,
       onVentHeat: this._onVentHeat,
+      onPowerWavePointerDown: this._handleWavePointerDown("power"),
+      onPowerWavePointerUp: this._handleWavePointerUp(this._onSellPower),
+      onPowerWavePointerCancel: this._handleWavePointerCancel,
+      onHeatWavePointerDown: this._handleWavePointerDown("heat"),
+      onHeatWavePointerUp: this._handleWavePointerUp(this._onVentHeat),
+      onHeatWavePointerCancel: this._handleWavePointerCancel,
     });
   }
 
@@ -300,7 +525,7 @@ class MobileInfoBarUI {
 
     const subscriptions = [{
       state: this.ui.game.state,
-      keys: ["max_power", "max_heat", "current_power", "current_heat", "power_net_change", "heat_net_change", "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff", "current_money", "melting_down"],
+      keys: ["max_power", "max_heat", "current_power", "current_heat", "power_net_change", "heat_net_change", "stats_power", "stats_net_heat", "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff", "current_money", "melting_down"],
     }];
     this._unmountControlDeck = ReactiveLitComponent.mountMulti(subscriptions, () => this._controlDeckTemplate(this.ui.game.state), root);
     this.updateMobilePassiveTopBar();
@@ -322,6 +547,10 @@ class MobileInfoBarUI {
   }
 
   cleanup() {
+    if (this._waveLongPressTimer) {
+      clearTimeout(this._waveLongPressTimer);
+      this._waveLongPressTimer = null;
+    }
     if (this._unmountControlDeck) {
       this._unmountControlDeck();
       this._unmountControlDeck = null;

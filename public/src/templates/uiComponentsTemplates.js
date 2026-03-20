@@ -6,6 +6,14 @@ export function infoBarTemplate({
   heatClass,
   powerPct,
   heatPct,
+  powerWaveStyle,
+  heatWaveStyle,
+  powerWaveClass,
+  heatWaveClass,
+  powerWavePoints,
+  powerWaveTrailPoints,
+  heatWavePoints,
+  heatWaveTrailPoints,
   powerTextDesktop,
   powerTextMobile,
   maxPowerDesktop,
@@ -32,6 +40,14 @@ export function infoBarTemplate({
   return html`
     <div class="info-bar-desktop">
       <button class=${powerClass} id="info_bar_power_btn_desktop" type="button" tabindex="0" aria-label="Sell Power" style=${styleMap({ "--fill-height": `${powerPct}%` })} @click=${onSell}>
+        <div class=${powerWaveClass} style=${powerWaveStyle} aria-hidden="true">
+          <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+            <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
+            <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
+            <polyline class="info-waveform-trace-trail" points=${powerWaveTrailPoints}></polyline>
+            <polyline class="info-waveform-trace" points=${powerWavePoints}></polyline>
+          </svg>
+        </div>
         <img src="img/ui/icons/icon_power.png" class="icon" alt="Power" />
         <span class="value" id="info_power_desktop">${powerTextDesktop}</span>
         <span class="denom" id="info_power_denom_desktop">/${maxPowerDesktop}</span>
@@ -48,6 +64,14 @@ export function infoBarTemplate({
       </span>
       <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
       <button class=${heatClass} id="info_bar_heat_btn_desktop" type="button" tabindex="0" aria-label="Reduce Heat" style=${styleMap({ "--fill-height": `${heatPct}%` })} @click=${onVent}>
+        <div class=${heatWaveClass} style=${heatWaveStyle} aria-hidden="true">
+          <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+            <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
+            <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
+            <polyline class="info-waveform-trace-trail" points=${heatWaveTrailPoints}></polyline>
+            <polyline class="info-waveform-trace" points=${heatWavePoints}></polyline>
+          </svg>
+        </div>
         <img src="img/ui/icons/icon_heat.png" class="icon" alt="Heat" />
         <span class="value" id="info_heat_desktop">${heatTextDesktop}</span>
         <span class="denom" id="info_heat_denom_desktop">/${maxHeatDesktop}</span>
@@ -56,6 +80,14 @@ export function infoBarTemplate({
     <div class="info-bar-mobile" style="display: none;">
       <div class="info-row info-main">
         <button class=${powerClass} id="info_bar_power_btn" type="button" tabindex="0" aria-label="Sell Power" style=${styleMap({ "--fill-height": `${powerPct}%` })} @click=${onSell}>
+          <div class=${powerWaveClass} style=${powerWaveStyle} aria-hidden="true">
+            <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+              <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
+              <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
+              <polyline class="info-waveform-trace-trail" points=${powerWaveTrailPoints}></polyline>
+              <polyline class="info-waveform-trace" points=${powerWavePoints}></polyline>
+            </svg>
+          </div>
           <img src="img/ui/icons/icon_power.png" class="icon" alt="Power" />
           <span class="value" id="info_power">${powerTextMobile}</span>
         </button>
@@ -64,6 +96,14 @@ export function infoBarTemplate({
           <span class="value" id="info_money">${moneyDisplayMobile}</span>
         </span>
         <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${styleMap({ "--fill-height": `${heatPct}%` })} @click=${onVentMobile}>
+          <div class=${heatWaveClass} style=${heatWaveStyle} aria-hidden="true">
+            <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+              <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
+              <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
+              <polyline class="info-waveform-trace-trail" points=${heatWaveTrailPoints}></polyline>
+              <polyline class="info-waveform-trace" points=${heatWavePoints}></polyline>
+            </svg>
+          </div>
           <img src="img/ui/icons/icon_heat.png" class="icon" alt="Heat" />
           <span class="value" id="info_heat">${heatTextMobile}</span>
         </button>
@@ -96,6 +136,14 @@ export function mobileControlDeckTemplate({
   autoHeatRateContent,
   powerFillStyle,
   heatFillStyle,
+  powerWaveStyle,
+  heatWaveStyle,
+  powerWaveClass,
+  heatWaveClass,
+  powerWavePoints,
+  powerWaveTrailPoints,
+  heatWavePoints,
+  heatWaveTrailPoints,
   powerCurrentText,
   heatCurrentText,
   maxPowerText,
@@ -103,6 +151,12 @@ export function mobileControlDeckTemplate({
   moneyValueText,
   onSellPower,
   onVentHeat,
+  onPowerWavePointerDown,
+  onPowerWavePointerUp,
+  onPowerWavePointerCancel,
+  onHeatWavePointerDown,
+  onHeatWavePointerUp,
+  onHeatWavePointerCancel,
 }) {
   return html`
     <button class=${powerCapacitorClass} id="control_deck_power_btn" type="button" tabindex="0" aria-label="Sell Power" @click=${onSellPower}>
@@ -111,6 +165,22 @@ export function mobileControlDeckTemplate({
       <span class=${autoRateClass} id="control_deck_auto_sell_rate" aria-hidden="true">${autoSellRateContent}</span>
       <div class="control-deck-fill power-fill" style=${powerFillStyle}></div>
       <div class="control-deck-content">
+        <div
+          class=${powerWaveClass}
+          style=${powerWaveStyle}
+          aria-hidden="true"
+          @pointerdown=${onPowerWavePointerDown}
+          @pointerup=${onPowerWavePointerUp}
+          @pointercancel=${onPowerWavePointerCancel}
+          @pointerleave=${onPowerWavePointerCancel}
+        >
+          <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+            <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
+            <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
+            <polyline class="info-waveform-trace-trail" points=${powerWaveTrailPoints}></polyline>
+            <polyline class="info-waveform-trace" points=${powerWavePoints}></polyline>
+          </svg>
+        </div>
         <img src="img/ui/icons/icon_power.png" alt="Power" class="control-deck-icon" />
         <span class="control-deck-value" id="control_deck_power">${powerCurrentText}</span>
         <span class="control-deck-denom" id="control_deck_power_denom">/${maxPowerText}</span>
@@ -131,6 +201,22 @@ export function mobileControlDeckTemplate({
       <div class="control-deck-fill heat-fill" style=${heatFillStyle}></div>
       <div class="control-deck-hazard-stripes"></div>
       <div class="control-deck-content">
+        <div
+          class=${heatWaveClass}
+          style=${heatWaveStyle}
+          aria-hidden="true"
+          @pointerdown=${onHeatWavePointerDown}
+          @pointerup=${onHeatWavePointerUp}
+          @pointercancel=${onHeatWavePointerCancel}
+          @pointerleave=${onHeatWavePointerCancel}
+        >
+          <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+            <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
+            <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
+            <polyline class="info-waveform-trace-trail" points=${heatWaveTrailPoints}></polyline>
+            <polyline class="info-waveform-trace" points=${heatWavePoints}></polyline>
+          </svg>
+        </div>
         <img src="img/ui/icons/icon_heat.png" alt="Heat" class="control-deck-icon" />
         <span class="control-deck-value" id="control_deck_heat">${heatCurrentText}</span>
         <span class="control-deck-denom" id="control_deck_heat_denom">/${maxHeatText}</span>

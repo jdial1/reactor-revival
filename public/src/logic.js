@@ -2381,6 +2381,19 @@ export function getObjectiveScrollDuration() { const baseWidth = 900; const base
 
 export function checkObjectiveTextScrolling(domElements) { const toastTitleEl = domElements.objectives_toast_title; if (!toastTitleEl) return; const duration = getObjectiveScrollDuration(); toastTitleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`; }
 
+function formatObjectiveRewardLabel(reward) {
+  const money = Number(reward?.money ?? 0);
+  const ep = Number(reward?.ep ?? 0);
+  if (money > 0) return `$${fmt(money)}`;
+  if (ep > 0) return `${fmt(ep)} EP`;
+  return "";
+}
+
+function getObjectiveClaimText(reward) {
+  const rewardLabel = formatObjectiveRewardLabel(reward);
+  return rewardLabel ? `Claim ${rewardLabel}` : "Claim";
+}
+
 export class ObjectiveManager {
   constructor(gameInstance) {
     this.game = gameInstance;
@@ -2434,6 +2447,7 @@ export class ObjectiveManager {
         index: 0,
         isComplete: false,
         isChapterCompletion: false,
+        reward: null,
         progressPercent: 0,
         hasProgressBar: false,
         checkId: null,
@@ -2448,6 +2462,7 @@ export class ObjectiveManager {
       index: this.current_objective_index,
       isComplete: !!info.isComplete,
       isChapterCompletion: !!info.isChapterCompletion,
+      reward: info.reward ?? null,
       progressPercent: info.progressPercent ?? 0,
       hasProgressBar: checkId === "sustainedPower1k" && !info.isComplete,
       checkId,
@@ -2767,9 +2782,9 @@ export class ObjectiveController {
   _getRenderState() {
     const game = this.api.getGame();
     const uiState = this.api.getUI()?.uiState;
-    if (!game) return { sandbox: false, title: "", claimText: "Claim", progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: false, hidden: true };
+    if (!game) return { sandbox: false, title: "", claimText: "Claim", reward: null, progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: false, hidden: true };
     if (game.isSandbox) {
-      return { sandbox: true, title: "Sandbox", claimText: "", progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: false, hidden: true };
+      return { sandbox: true, title: "Sandbox", claimText: "", reward: null, progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: false, hidden: true };
     }
     const obj = game.state?.active_objective;
     const om = game.objectives_manager;
@@ -2779,7 +2794,8 @@ export class ObjectiveController {
       return {
         sandbox: false,
         title: obj.title ? `${(obj.index ?? 0) + 1}: ${obj.title}` : "",
-        claimText: obj.isChapterCompletion ? "Complete" : "Claim",
+        claimText: getObjectiveClaimText(obj.reward),
+        reward: obj.reward ?? null,
         progressPercent: showProgressBar ? (obj.progressPercent ?? 0) : 0,
         isComplete: !!obj.isComplete,
         isActive: !obj.isComplete,
@@ -2789,9 +2805,9 @@ export class ObjectiveController {
       };
     }
     const hidden = uiState?.active_page !== "reactor_section";
-    if (!om) return { sandbox: false, title: "", claimText: "Claim", progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: uiState?.objectives_toast_expanded ?? false, hidden };
+    if (!om) return { sandbox: false, title: "", claimText: "Claim", reward: null, progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: uiState?.objectives_toast_expanded ?? false, hidden };
     const info = om.getCurrentObjectiveDisplayInfo();
-    if (!info) return { sandbox: false, title: "", claimText: "Claim", progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: uiState?.objectives_toast_expanded ?? false, hidden };
+    if (!info) return { sandbox: false, title: "", claimText: "Claim", reward: null, progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: uiState?.objectives_toast_expanded ?? false, hidden };
     const objectiveIndex = om.current_objective_index ?? 0;
     const displayTitle = info.title ? `${objectiveIndex + 1}: ${info.title}` : "";
     const checkId = om.current_objective_def?.checkId;
@@ -2800,7 +2816,8 @@ export class ObjectiveController {
     return {
       sandbox: false,
       title: displayTitle,
-      claimText: info.isChapterCompletion ? "Complete" : "Claim",
+      claimText: getObjectiveClaimText(info.reward),
+      reward: info.reward ?? null,
       progressPercent: info.progressPercent ?? 0,
       isComplete: !!info.isComplete,
       isActive: !info.isComplete,
@@ -2840,11 +2857,22 @@ export class ObjectiveController {
         @keydown=${(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this._handleToastClick(e); } }}
       >
         <span class="objectives-toast-row">
-          <span class="objectives-toast-icon">${state.isComplete ? "!" : "?"}</span>
-          <span class="objectives-toast-title" id="objectives_toast_title">${state.title}</span>
-          <button type="button" class="objectives-claim-pill" ?disabled=${!state.isComplete} @click=${(e) => this._handleClaimClick(e)}>${state.claimText}</button>
+          <span class="objectives-toast-printer" aria-hidden="true">
+            <span class="objectives-toast-printer-head">
+              <span class="objectives-toast-icon">${state.isComplete ? "!" : "?"}</span>
+            </span>
+            <span class="objectives-toast-printer-slot"></span>
+          </span>
+          <span class="objectives-toast-paper">
+            <span class="objectives-toast-paper-head">
+              <button type="button" class="objectives-claim-pill" ?disabled=${!state.isComplete} @click=${(e) => this._handleClaimClick(e)}>${state.claimText}</button>
+            </span>
+            <span class="objectives-toast-paper-line">
+              <span class="objectives-toast-title" id="objectives_toast_title">${state.title}</span>
+            </span>
+            <span class="objectives-toast-progress" aria-hidden="true"><span class="objectives-toast-progress-fill" style=${progressStyle}></span></span>
+          </span>
         </span>
-        <span class="objectives-toast-progress" aria-hidden="true"><span class="objectives-toast-progress-fill" style=${progressStyle}></span></span>
       </div>
     `;
   }
@@ -2889,7 +2917,8 @@ export class ObjectiveController {
     const renderState = {
       sandbox: false,
       title: obj.title ? `${obj.index + 1}: ${obj.title}` : "",
-      claimText: obj.isChapterCompletion ? "Complete" : "Claim",
+      claimText: getObjectiveClaimText(obj.reward),
+      reward: obj.reward ?? null,
       progressPercent: showProgressBar ? obj.progressPercent : 0,
       isComplete: !!obj.isComplete,
       isActive: !obj.isComplete,
@@ -2906,7 +2935,7 @@ export class ObjectiveController {
     const game = this.api.getGame();
     if (!game?.objectives_manager) return;
     if (game.isSandbox) {
-      this._render({ sandbox: true, title: "Sandbox", claimText: "", progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: false, hidden: false });
+      this._render({ sandbox: true, title: "Sandbox", claimText: "", reward: null, progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: false, hidden: false });
       return;
     }
     const info = game.objectives_manager.getCurrentObjectiveDisplayInfo();
@@ -5487,7 +5516,8 @@ function computeLiveTicks(engine, targetTickDuration, maxLiveTicks) {
     return maxLiveTicks;
   }
 
-  const liveTicks = Math.floor(rawLiveTicks);
+  const tickEpsilon = Math.max(Number.EPSILON, ACCUMULATOR_EPSILON / Math.max(1, targetTickDuration));
+  const liveTicks = Math.floor(rawLiveTicks + tickEpsilon);
   engine._frameTimeAccumulator -= liveTicks * targetTickDuration;
   return liveTicks;
 }
