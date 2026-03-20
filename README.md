@@ -34,3 +34,13 @@ If you are the original creator and have concerns or attribution preferences, pl
 No assets or code from IndustrialCraft² or Reactor Incremental are used in this project.
 
 ---
+
+## Development
+
+Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm install`** then **`npm run dev`** to serve `public/` locally with COOP/COEP headers (needed for workers and shared-memory paths).
+
+- **`npm run build:sw`** — Workbox injects the precache manifest from root `src-sw.js` into `public/sw.js` (`config/workbox-config.cjs`).
+- **Tests** — `npm test` / `npm run test:ci` (full suite); `npm run test:deploy` matches the CI subset (see `package.json`).
+- **`scripts/`** — version stamp, vendor copy/bundle, PWA checks, image helpers, and workflow-only helpers (`fix-github-pages-manifest.js`, `post-deploy-pwa-check.js`). **`config/`** — ESLint, Vitest, Workbox, Stylelint. See `package.json` `scripts` for the full list.
+
+---

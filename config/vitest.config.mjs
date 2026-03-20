@@ -3,9 +3,6 @@ import { defineConfig, configDefaults } from "vitest/config";
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
 export default defineConfig({
-  resolve: {
-    alias: [],
-  },
   test: {
     exclude: [...configDefaults.exclude, "**/performance.test.js"],
     globals: true,
