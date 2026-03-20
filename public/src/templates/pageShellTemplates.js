@@ -1,13 +1,14 @@
-<!-- TOP NAVIGATION -->
+import { html } from "lit-html";
+
+export function gameShellTemplate() {
+  return html`
 <nav id="main_top_nav" class="nav-bar-row">
-  <!-- Left Group: Navigation Links -->
   <ul class="nav-group-left">
     <li>
       <button data-page="reactor_section" class="active">Reactor</button>
     </li>
     <li>
       <button data-page="upgrades_section">Upgrades</button>
-      <!-- Indicator dot injected via JS -->
     </li>
     <li>
       <button data-page="experimental_upgrades_section">Research</button>
@@ -16,21 +17,16 @@
       <button data-page="leaderboard_section" title="Leaderboard" aria-label="Leaderboard">🏆</button>
     </li>
   </ul>
-
-  <!-- Center Group: Stats (Desktop) -->
   <ul id="reactor_stats" class="desktop-only"></ul>
-
   <ul id="engine_status" class="desktop-only">
-     <li>
-        <strong title="Tick Rate">
-            <img src="img/ui/icons/icon_time.png" alt="TPS" class="icon-inline" />
-            <span id="tps_display">0</span>
-        </strong>
-     </li>
-     <li id="engine_status_indicator_root"></li>
+    <li>
+      <strong title="Tick Rate">
+        <img src="img/ui/icons/icon_time.png" alt="TPS" class="icon-inline" />
+        <span id="tps_display">0</span>
+      </strong>
+    </li>
+    <li id="engine_status_indicator_root"></li>
   </ul>
-
-  <!-- Right Group: System Controls -->
   <ul class="nav-group-right">
     <li>
       <span id="user_account_btn_root"></span>
@@ -46,14 +42,10 @@
     </li>
   </ul>
 </nav>
-
 <div id="mobile_passive_top_bar" class="mobile-passive-top-bar" aria-hidden="true">
   <div id="mobile_passive_root"></div>
 </div>
-
-<!-- MAIN CONTENT -->
 <main id="main">
-  <!-- PARTS SIDEBAR / BOTTOM SHEET -->
   <aside id="parts_section" class="collapsed">
     <div class="parts_sheet_handle" id="parts_sheet_handle"></div>
     <div id="parts_panel_reactive_root"></div>
@@ -62,30 +54,15 @@
     </nav>
     <button id="parts_close_btn" class="pixel-btn contrast parts-close-btn" type="button">Close</button>
   </aside>
-
-      <div id="main_content_wrapper">
-      <!-- Only show objectives on reactor page -->
-
-      <div id="objectives_toast_root"></div>
-
-    <!-- End reactor-only objectives -->
-
-    <div id="page_content_area">
-      <!-- Content will be loaded dynamically -->
-    </div>
-
-    <!-- TOOLTIP -->
+  <div id="main_content_wrapper">
+    <div id="objectives_toast_root"></div>
+    <div id="page_content_area"></div>
     <div id="tooltip" class="hidden">
-      <div id="tooltip_data">
-        <!-- Content injected by TooltipManager -->
-      </div>
+      <div id="tooltip_data"></div>
       <button id="tooltip_close_btn" title="Close" aria-label="Close tooltip">×</button>
     </div>
-
   </div>
 </main>
-
-<!-- Modal for Copy/Paste Data -->
 <div id="reactor_copy_paste_modal" class="hidden">
   <div class="modal-content">
     <div class="modal-header">
@@ -104,9 +81,6 @@
     </div>
   </div>
 </div>
-<!-- End Copy/Paste UI -->
-
-<!-- BUILD ROW (Above Control Deck, Reactor Page Only): 5 quick-select slots + build FAB -->
 <div id="build_above_deck_row" class="build-above-deck-row">
   <div class="quick-select-slots" id="quick_select_slots_container" aria-label="Recent parts">
     <div id="quick_select_slots_root"></div>
@@ -115,39 +89,31 @@
     </button>
   </div>
 </div>
-
 <footer id="reactor_control_deck" class="reactor-control-deck">
   <div class="control-deck-inner">
     <div id="control_deck_root" class="control-deck-grid"></div>
   </div>
 </footer>
-
 <footer id="info_bar" class="info-bar-legacy">
   <div id="info_bar_root"></div>
 </footer>
-
-<!-- BOTTOM NAV (Global Navigation Bar) -->
 <footer id="bottom_nav">
   <nav>
     <ul>
       <li>
-        <button data-page="reactor_section" class="secondary active">
-          CORE
-        </button>
+        <button data-page="reactor_section" class="secondary active">CORE</button>
       </li>
       <li>
         <button data-page="upgrades_section" class="secondary">MODS</button>
       </li>
       <li>
-        <button data-page="experimental_upgrades_section" class="secondary">
-          TECH
-        </button>
+        <button data-page="experimental_upgrades_section" class="secondary">TECH</button>
       </li>
       <li>
-        <button id="menu_tab_btn" class="secondary" aria-label="System Menu">
-          SYS
-        </button>
+        <button id="menu_tab_btn" class="secondary" aria-label="System Menu">SYS</button>
       </li>
     </ul>
   </nav>
 </footer>
+  `;
+}

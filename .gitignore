@@ -1,9 +1,5 @@
 node_modules
 eslint-results.sarif
-dist-sw
-package-lock.json
-package-lock.json
-
 
 # Database
 *.db
@@ -11,9 +7,7 @@ package-lock.json
 *.sqlite3
 *.db-journal
 public/reactor_leaderboard.sqlite3
-package-lock.json
 public/lib/pako.min.js
 *.log
 /public/lib
-/output_js_files
 *.py

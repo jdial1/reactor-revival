@@ -140,9 +140,9 @@ export function systemSectionTemplate(prefs, notificationsChecked, sectionHead, 
 
       <h4 style=${sectionHeadMargin}>LEGAL</h4>
       <div class="settings-legal-links" style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <a href="pages/about.html" class="settings-legal-link">About</a>
-        <a href="pages/privacy-policy.html" class="settings-legal-link" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
-        <a href="pages/terms-of-service.html" class="settings-legal-link" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+        <a href="#about_section" data-page="about_section" class="settings-legal-link">About</a>
+        <a href="privacy-policy.html" class="settings-legal-link" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        <a href="terms-of-service.html" class="settings-legal-link" target="_blank" rel="noopener noreferrer">Terms of Service</a>
       </div>
     </div>
   `;

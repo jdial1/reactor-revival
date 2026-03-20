@@ -1,5 +1,5 @@
 import { html } from "lit-html";
-import { repeat, styleMap } from "../utils.js";
+import { repeat, styleMap, classMap } from "../utils.js";
 
 export function infoBarTemplate({
   powerClass,
@@ -693,23 +693,106 @@ export function quickStartTemplate({
   onMoreDetails,
   onBack,
 }) {
+  const p1 = classMap({ "quick-start-screen": true, hidden: page !== 1 });
+  const p2 = classMap({ "quick-start-screen": true, hidden: page !== 2 });
   return html`
-    <div class="quick-start-overlay" @click=${(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
-      <div class="quick-start-content" style="max-width: 680px; width: 92vw; background: rgb(26,26,26); border: 2px solid rgb(51,51,51); padding: 16px; border-radius: 10px; color: white;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div style="font-family: inherit; font-size: 0.9rem; opacity: 0.9;">QUICK START (Page ${page})</div>
-          <button type="button" @click=${() => onClose?.()} style="padding: 4px 10px;">×</button>
+    <div
+      id="quick-start-modal"
+      class="quick-start-overlay"
+      @click=${(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div id="quick-start-page-1" class=${p1}>
+        <div class="modal-swipe-handle" id="quick-start-swipe-handle" aria-hidden="true"></div>
+        <div class="quick-start-header">
+          <span>PROTOCOL_01</span>
+          <span class="quick-start-version">v25.07</span>
         </div>
-        <div style="margin-top: 12px; opacity: 0.85; font-size: 0.85rem;">
-          Press the button below to begin.
+        <div class="bios-content">
+          <div class="qs-section qs-accordion qs-accordion-expanded">
+            <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">1. OUTPUT CYCLE</div>
+            <div class="qs-accordion-body">
+              <div class="qs-flow">
+                <div class="qs-flow-diagram">
+                  <span class="qs-flow-icon qs-flow-fuel"><img src="img/parts/cells/cell_1_1.png" alt="FUEL" class="qs-icon" /></span>
+                  <span class="qs-flow-arrow">▶</span>
+                  <span class="qs-flow-icon qs-flow-power"><img src="img/ui/icons/icon_power.png" alt="POWER" class="qs-icon" /></span>
+                  <span class="qs-flow-plus">+</span>
+                  <span class="qs-flow-icon qs-flow-heat"><img src="img/ui/icons/icon_heat.png" alt="HEAT" class="qs-icon" /></span>
+                </div>
+                <div class="qs-flow-caption">Generates Power & Heat</div>
+              </div>
+            </div>
+          </div>
+          <div class="qs-section qs-accordion">
+            <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">2. MANUAL OVERRIDE</div>
+            <div class="qs-accordion-body">
+              <div class="qs-action-cards">
+                <div class="qs-action-row qs-action-depressible">
+                  <span class="qs-action-icon qs-power"><img src="img/ui/icons/icon_power.png" alt="" class="qs-icon" /></span>
+                  <span class="qs-action-arrow">▶</span>
+                  <span class="qs-action-result">SELL ($)</span>
+                </div>
+                <div class="qs-action-row qs-action-depressible">
+                  <span class="qs-action-icon qs-heat"><img src="img/ui/icons/icon_heat.png" alt="" class="qs-icon" /></span>
+                  <span class="qs-action-arrow">▶</span>
+                  <span class="qs-action-result">VENT HEAT</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="qs-warning">Excess Heat causes Critical Failure.</div>
         </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 16px; gap: 10px;">
-          <button type="button" class="qs-btn-ghost" @click=${() => onBack?.()}>BACK</button>
-          <div style="display: flex; gap: 10px;">
-            <button type="button" class="qs-btn-ghost" @click=${() => onMoreDetails?.()}>MORE DETAILS</button>
-            <button type="button" class="qs-btn-primary" @click=${() => onClose?.()}>INITIATE REACTOR</button>
+        <footer class="qs-footer">
+          <button type="button" id="quick-start-close" class="qs-btn-primary" @click=${() => onClose?.()}>INITIATE REACTOR</button>
+          <button type="button" id="quick-start-more-details" class="qs-btn-ghost" @click=${() => onMoreDetails?.()}>READ FULL MANUAL</button>
+        </footer>
+      </div>
+      <div id="quick-start-page-2" class=${p2}>
+        <div class="modal-swipe-handle" aria-hidden="true"></div>
+        <div class="quick-start-header">
+          <span>OPERATOR_MANUAL</span>
+          <span class="quick-start-version">v25.07</span>
+        </div>
+        <div class="bios-content">
+          <div class="qs-section qs-accordion qs-accordion-expanded">
+            <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">[ FIRST STEPS ]</div>
+            <div class="quick-start-list qs-accordion-body">
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Start with $10 - buy a <img src="img/parts/cells/cell_1_1.png" class="objective-part-icon" alt="Uranium Cell" title="Uranium Cell" />URANIUM CELL</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Open Parts panel to find components</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Cells: Single, Dual, Quad configs</span></div>
+            </div>
+          </div>
+          <div class="qs-section qs-accordion">
+            <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">[ POWER SYSTEM ]</div>
+            <div class="quick-start-list qs-accordion-body">
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/ui/icons/icon_power.png" class="objective-part-icon" alt="POWER" title="POWER" /><span class="qs-amber">POWER</span>: Generated by cells</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/capacitors/capacitor_1.png" class="objective-part-icon" alt="Capacitors" title="Capacitors" />CAPACITORS increase storage</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Sell power before capacity fills!</span></div>
+            </div>
+          </div>
+          <div class="qs-section qs-accordion">
+            <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">[ HEAT SYSTEM ]</div>
+            <div class="quick-start-list qs-accordion-body">
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/ui/icons/icon_heat.png" class="objective-part-icon" alt="HEAT" title="HEAT" /><span class="qs-orange">HEAT</span>: Also generated by cells</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/platings/plating_1.png" class="objective-part-icon" alt="Reactor Plating" title="Reactor Plating" />Plating: Max Heat Up</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>200% heat = MELTDOWN!</span></div>
+            </div>
+          </div>
+          <div class="qs-section qs-accordion">
+            <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">[ HEAT MANAGEMENT ]</div>
+            <div class="quick-start-list qs-accordion-body">
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/vents/vent_1.png" class="objective-part-icon" alt="Heat Vent" title="Heat Vent" />VENTS: Remove heat from components</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/exchangers/exchanger_1.png" class="objective-part-icon" alt="Heat Exchanger" title="Heat Exchanger" />EXCHANGERS: Balance heat between parts</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/coolants/coolant_cell_1.png" class="objective-part-icon" alt="Coolant Cell" title="Coolant Cell" />COOLANT CELLS: Passive heat sinks</span></div>
+            </div>
           </div>
         </div>
+        <footer class="qs-footer">
+          <button type="button" id="quick-start-back" class="qs-btn-ghost" @click=${() => onBack?.()}>BACK</button>
+          <button type="button" id="quick-start-close-2" class="qs-btn-primary" @click=${() => onClose?.()}>INITIATE REACTOR</button>
+        </footer>
       </div>
     </div>
   `;

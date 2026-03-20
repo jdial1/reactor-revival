@@ -584,33 +584,6 @@ export async function setupGameWithDOM() {
 
   injectHTMLContent(global.document, '<div id="app_root" class="theme-dark"><div id="splash-container"></div><div id="wrapper" class="hidden"></div><div id="modal-root"></div></div>');
 
-  try {
-    const pagesDir = pathModule.resolve(__dirname, '../../public/pages');
-    const componentDir = pathModule.resolve(__dirname, '../../public/components');
-
-    // List all HTML partials that define UI layout
-    const partials = [
-      pathModule.join(pagesDir, 'reactor.html'),
-      pathModule.join(pagesDir, 'upgrades.html'),
-      pathModule.join(pagesDir, 'research.html'),
-      pathModule.join(pagesDir, 'game.html'),
-      pathModule.join(pagesDir, 'leaderboard.html'),
-      // Add any other HTML files that define your UI layout
-    ];
-
-    partials.forEach(filePath => {
-      if (fs.existsSync(filePath)) {
-        const htmlContent = fs.readFileSync(filePath, 'utf-8');
-        injectHTMLContent(global.document, htmlContent);
-                  } else {
-        console.warn(`[Test Setup] HTML partial not found: ${filePath}`);
-                  }
-    });
-                } catch (e) {
-    console.error('[Test Setup] Error injecting HTML partials:', e);
-  }
-
-  // Initialize game stack
   const ui = new UI();
   const game = new Game(ui);
   game.router = new PageRouter(ui);
@@ -618,11 +591,12 @@ export async function setupGameWithDOM() {
   await game.partset.initialize();
   await game.upgradeset.initialize();
   await game.set_defaults();
-  
-  // CRITICAL: Initialize tileset after set_defaults() to ensure dimensions are correct
-  // initialize() is safe to call multiple times - it recreates the grid
+
   game.tileset.initialize();
-  
+
+  game.router.loadGameLayout();
+  await game.router.loadPage("reactor_section", true);
+
   game.objectives_manager = new ObjectiveManager(game);
   await game.objectives_manager.initialize();
   

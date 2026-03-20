@@ -1,5 +1,4 @@
-import { defineConfig } from "vite";
-import { configDefaults } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
@@ -32,7 +31,7 @@ export default defineConfig({
     testTimeout: isCI ? 120000 : 10000,
     hookTimeout: isCI ? 60000 : 10000,
     silent: false,
-    forceRerunTriggers: ["**/package.json", "config/{vitest,vite}.config.*"],
+    forceRerunTriggers: ["**/package.json", "config/vitest.config.mjs"],
     printConsoleTrace: false,
     outputTruncateLength: 80,
     chaiConfig: {

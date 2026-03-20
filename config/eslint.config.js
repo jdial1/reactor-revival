@@ -36,7 +36,6 @@ export default [
       "**/public/lib/*.js",
       "**/public/sw.js",
       "**/public/sw-temp.js",
-      "**/dist-sw/**",
       "**/src-sw.js",
       "**/eslint-results.sarif",
       "**/config/workbox-config.cjs",
@@ -128,7 +127,7 @@ export default [
     }
   },
   {
-    files: ["**/public/sw.js", "**/src-sw.js", "**/dist-sw/**", "**/public/sw-temp.js"],
+    files: ["**/public/sw.js", "**/src-sw.js", "**/public/sw-temp.js"],
     languageOptions: {
       globals: { ...workerGlobals }
     },

@@ -3535,32 +3535,47 @@ body.page-reactor #reactor_section { padding-top: calc(70px + 16px);
 }
 
 body.page-privacy_policy nav#main_top_nav,
+body.page-terms_of_service nav#main_top_nav,
 body.page-privacy_policy footer#bottom_nav,
+body.page-terms_of_service footer#bottom_nav,
 body.page-privacy_policy footer#info_bar,
+body.page-terms_of_service footer#info_bar,
 body.page-privacy_policy #main_top_nav,
+body.page-terms_of_service #main_top_nav,
 body.page-privacy_policy #bottom_nav,
-body.page-privacy_policy #info_bar { display: none !important; overflow: hidden; height: 0 !important; opacity: 0 !important; visibility: hidden !important;
+body.page-terms_of_service #bottom_nav,
+body.page-privacy_policy #info_bar,
+body.page-terms_of_service #info_bar { display: none !important; overflow: hidden; height: 0 !important; opacity: 0 !important; visibility: hidden !important;
 }
 
 body.page-privacy_policy #splash-container,
-body.page-privacy_policy #quick-start-modal { display: none !important;
+body.page-terms_of_service #splash-container,
+body.page-privacy_policy #quick-start-modal,
+body.page-terms_of_service #quick-start-modal { display: none !important;
 }
 
 body.page-privacy_policy #wrapper #main_top_nav,
+body.page-terms_of_service #wrapper #main_top_nav,
 body.page-privacy_policy #wrapper #bottom_nav,
-body.page-privacy_policy #wrapper #info_bar { display: none !important; overflow: hidden; height: 0 !important; opacity: 0 !important; visibility: hidden !important;
+body.page-terms_of_service #wrapper #bottom_nav,
+body.page-privacy_policy #wrapper #info_bar,
+body.page-terms_of_service #wrapper #info_bar { display: none !important; overflow: hidden; height: 0 !important; opacity: 0 !important; visibility: hidden !important;
 }
 
-body.page-privacy_policy .about-content { font-size: 0.9rem; line-height: 1.5;
+body.page-privacy_policy .about-content,
+body.page-terms_of_service .about-content { font-size: 0.9rem; line-height: 1.5;
 }
 
-body.page-privacy_policy .about-content h2 { margin-bottom: 1rem; font-size: 1.5rem;
+body.page-privacy_policy .about-content h2,
+body.page-terms_of_service .about-content h2 { margin-bottom: 1rem; font-size: 1.5rem;
 }
 
-body.page-privacy_policy .about-content h3 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.2rem;
+body.page-privacy_policy .about-content h3,
+body.page-terms_of_service .about-content h3 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.2rem;
 }
 
-body.page-privacy_policy .about-content p { margin-bottom: 0.75rem;
+body.page-privacy_policy .about-content p,
+body.page-terms_of_service .about-content p { margin-bottom: 0.75rem;
 }
 
 .affordability-banner { position: relative; z-index: 100; display: flex; width: 100%; align-items: center; justify-content: center; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; background-color: rgb(255 200 0); box-shadow: 0 2px 4px rgb(0 0 0 / 20%); color: rgb(0 0 0); font-size: 1.1rem; font-weight: bold; text-align: center;
@@ -3572,30 +3587,38 @@ body.page-privacy_policy .about-content p { margin-bottom: 0.75rem;
 .affordability-banner article { padding: 0; margin: 0; background: none; color: rgb(0 0 0); font-weight: bold; text-shadow: 1px 1px 2px rgb(255 255 255 / 50%);
 }
 
-body.page-privacy_policy .about-content ul { margin-bottom: 0.75rem;
+body.page-privacy_policy .about-content ul,
+body.page-terms_of_service .about-content ul { margin-bottom: 0.75rem;
 }
 
-body.page-privacy_policy .about-content li { margin-bottom: 0.25rem;
+body.page-privacy_policy .about-content li,
+body.page-terms_of_service .about-content li { margin-bottom: 0.25rem;
 }
 
-body.page-privacy_policy #wrapper { overflow: visible !important; min-height: calc(100vh - 30px) !important; padding: 15px !important; margin: 15px !important; overflow-y: auto !important;
+body.page-privacy_policy #wrapper,
+body.page-terms_of_service #wrapper { overflow: visible !important; min-height: calc(100vh - 30px) !important; padding: 15px !important; margin: 15px !important; overflow-y: auto !important;
 }
 
-body.page-privacy_policy { height: 100vh !important; font-family:
+body.page-privacy_policy,
+body.page-terms_of_service { height: 100vh !important; font-family:
   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   "Helvetica Neue", Arial, sans-serif !important; overflow-y: auto !important;
 }
 
-body.page-privacy_policy #main { width: 100% !important; height: 100% !important; min-height: calc(100vh - 100px) !important; overflow-y: auto !important;
+body.page-privacy_policy #main,
+body.page-terms_of_service #main { width: 100% !important; height: 100% !important; min-height: calc(100vh - 100px) !important; overflow-y: auto !important;
 }
 
-body.page-privacy_policy #main_content_wrapper { width: 100% !important; height: 100% !important; overflow-y: auto !important;
+body.page-privacy_policy #main_content_wrapper,
+body.page-terms_of_service #main_content_wrapper { width: 100% !important; height: 100% !important; overflow-y: auto !important;
 }
 
-body.page-privacy_policy #page_content_area { width: 100% !important; height: 100% !important; overflow-y: visible !important;
+body.page-privacy_policy #page_content_area,
+body.page-terms_of_service #page_content_area { width: 100% !important; height: 100% !important; overflow-y: visible !important;
 }
 
-body.page-privacy_policy .highlight { padding: 2px 4px; border-radius: 4px; background: rgb(253 232 45 / 84.3%); box-shadow: 0 1px 2px rgb(0 0 0 / 3%); color: rgb(34 34 34); font-weight: 500;
+body.page-privacy_policy .highlight,
+body.page-terms_of_service .highlight { padding: 2px 4px; border-radius: 4px; background: rgb(253 232 45 / 84.3%); box-shadow: 0 1px 2px rgb(0 0 0 / 3%); color: rgb(34 34 34); font-weight: 500;
 }
 /* Terms of Service Page Styles */
 html:has(body > .page-container) { overflow-y: auto !important;

@@ -1,7 +1,6 @@
 import { Game, Engine } from "./logic.js";
 import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, StorageUtilsAsync, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES } from "./utils.js";
 import { html, render } from "lit-html";
-import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { UI } from "./components/ui.js";
 import { MODAL_IDS } from "./components/ui_modals.js";
 import { updateSectionCountsState, getCompactLayout } from "./components/ui-components.js";
@@ -16,6 +15,11 @@ import {
   fallbackStartTemplate,
   criticalErrorTemplate,
 } from "./templates/appTemplates.js";
+import {
+  gameShellTemplate,
+  pageSectionTemplates,
+  pageLoadErrorTemplate,
+} from "./templates/pageTemplates.js";
 
 setFormatPreferencesGetter(getValidatedPreferences);
 
@@ -29,16 +33,22 @@ export class PageRouter {
   constructor(ui) {
     this.ui = ui;
     this.pages = {
-      reactor_section: { path: "pages/reactor.html" },
-      upgrades_section: { path: "pages/upgrades.html" },
-      experimental_upgrades_section: { path: "pages/research.html" },
-      soundboard_section: { path: "pages/debug-soundboard.html" },
-      about_section: { path: "pages/about.html" },
+      reactor_section: { template: pageSectionTemplates.reactor_section },
+      upgrades_section: { template: pageSectionTemplates.upgrades_section },
+      experimental_upgrades_section: {
+        template: pageSectionTemplates.experimental_upgrades_section,
+      },
+      soundboard_section: { template: pageSectionTemplates.soundboard_section },
+      about_section: { template: pageSectionTemplates.about_section },
       privacy_policy_section: {
-        path: "pages/privacy-policy.html",
+        template: pageSectionTemplates.privacy_policy_section,
         stateless: true,
       },
-      leaderboard_section: { path: "pages/leaderboard.html" },
+      terms_of_service_section: {
+        template: pageSectionTemplates.terms_of_service_section,
+        stateless: true,
+      },
+      leaderboard_section: { template: pageSectionTemplates.leaderboard_section },
     };
     this.pageCache = new Map();
     this.initializedPages = new Set();
@@ -166,21 +176,16 @@ export class PageRouter {
 
 
     try {
-      const response = await fetch(pageDef.path);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const htmlText = await response.text();
       const tempContainer = document.createElement("div");
-      render(html`${unsafeHTML(htmlText)}`, tempContainer);
+      render(pageDef.template(), tempContainer);
       const newPageElement = tempContainer.firstElementChild;
 
       if (newPageElement && newPageElement.classList.contains("page")) {
         pageContentArea.appendChild(newPageElement);
         this.pageCache.set(pageId, newPageElement);
-        
+
         requestAnimationFrame(() => {
-             newPageElement.classList.remove("hidden");
+          newPageElement.classList.remove("hidden");
         });
 
         if (!this.initializedPages.has(pageId)) {
@@ -197,26 +202,11 @@ export class PageRouter {
         if (hadPreviousPage && this.ui.game?.audio) this.ui.game.audio.play("tab_switch");
         this.ui.objectivesUI.showObjectivesForPage(pageId);
       } else {
-        logger.log('warn', 'ui', `PageRouter: No .page element found in loaded content for ${pageId}`);
+        logger.log("warn", "ui", `PageRouter: No .page element found in loaded content for ${pageId}`);
       }
     } catch (error) {
-      logger.error(
-        "PageRouter: Failed to load page \"%s\" from \"%s\":",
-        pageId,
-        pageDef.path,
-        error
-      );
-      try {
-        const errorResponse = await fetch("pages/error-page.html");
-        if (errorResponse.ok) {
-          render(html`${unsafeHTML(await errorResponse.text())}`, pageContentArea);
-        } else {
-          render(html`<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`, pageContentArea);
-        }
-      } catch (errorPageError) {
-        logger.log('error', 'ui', 'Failed to load error page:', errorPageError);
-        render(html`<div class="explanitory"><h3>Error</h3><p>Could not load page. Please check your connection and try again.</p></div>`, pageContentArea);
-      }
+      logger.error("PageRouter: Failed to render page \"%s\":", pageId, error);
+      render(pageLoadErrorTemplate(), pageContentArea);
       if (this.currentPageId && this.ui?.uiState) this.ui.uiState.active_page = this.currentPageId;
     }
   }
@@ -324,23 +314,17 @@ export class PageRouter {
 
 
 
-  async loadGameLayout() {
+  loadGameLayout() {
     try {
-      
-      const response = await fetch("pages/game.html");
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const htmlText = await response.text();
       const wrapper = document.getElementById("wrapper");
       if (wrapper) {
-        render(html`${unsafeHTML(htmlText)}`, wrapper);
+        render(gameShellTemplate(), wrapper);
         wrapper.classList.remove("hidden");
       } else {
-        logger.log('error', 'ui', 'PageRouter: #wrapper element not found to load game layout.');
+        logger.log("error", "ui", "PageRouter: #wrapper element not found to load game layout.");
       }
     } catch (error) {
-      logger.log('error', 'ui', 'PageRouter: Failed to load game layout:', error);
+      logger.log("error", "ui", "PageRouter: Failed to render game layout:", error);
     }
   }
 }

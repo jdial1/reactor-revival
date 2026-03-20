@@ -9,15 +9,12 @@
     "test": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192 --expose-gc\" vitest --run -c config/vitest.config.mjs",
     "test:performance": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192 --expose-gc\" CI=true vitest run tests/core/performance.test.js -c config/vitest.config.mjs --testTimeout=120000 --hookTimeout=60000",
     "test:ci": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192 --expose-gc\" vitest --run -c config/vitest.config.mjs",
-    "ci:test": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192 --expose-gc\" vitest --run -c config/vitest.config.mjs",
-    "start": "node api/server.js",
+    "test:deploy": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" vitest run -c config/vitest.config.mjs --exclude \"tests/ui/**|tests/core/performance.test.js|tests/core/clipboard.test.js|tests/core/pasteModal.test.js\"",
     "dev": "node scripts/serve-with-coop.js",
-    "dev:live": "live-server public",
     "setup": "npm run generate-version && npm run copy-libs && npm run build:sw",
     "generate-version": "node scripts/generate-version.js",
     "copy-libs": "node scripts/copy-libs.js",
     "build:sw": "workbox injectManifest config/workbox-config.cjs",
-    "quality-gate": "python analyze_review.py --fail-below=B",
     "lint": "npm run lint:js && npm run lint:css",
     "lint:js": "eslint . -c config/eslint.config.js --format @microsoft/eslint-formatter-sarif --output-file eslint-results.sarif",
     "lint:css": "stylelint \"public/**/*.css\" \"public/**/*.html\" \"public/**/*.js\" --config config/.stylelintrc.json --fix",
@@ -25,8 +22,7 @@
     "remove-console-logs": "node scripts/remove-console-logs.js",
     "compress-images": "node scripts/compress-images.js",
     "generate-bg-count": "node scripts/generate-bg-count.js",
-    "postinstall": "npm run copy-libs",
-    "server": "node api/server.js"
+    "postinstall": "npm run copy-libs"
   },
   "keywords": [],
   "x-build": {
@@ -37,13 +33,10 @@
   "dependencies": {
     "@tanstack/query-core": "^5.90.20",
     "break_infinity.js": "^2.2.0",
-    "cors": "^2.8.5",
     "derive-valtio": "^0.2.0",
     "express": "^4.18.2",
     "idb-keyval": "^6.2.2",
     "lit-html": "^3.3.2",
-    "pg": "^8.11.3",
-    "socket.io": "^4.7.5",
     "superjson": "^2.2.6",
     "valtio": "^2.3.0",
     "zod": "^4.3.6",
@@ -57,11 +50,9 @@
     "cross-env": "^7.0.3",
     "esbuild": "^0.27.0",
     "eslint": "^9.32.0",
-    "gh-pages": "^6.3.0",
     "glob": "^11.0.3",
     "happy-dom": "^20.0.11",
     "jsdom": "^24.1.0",
-    "live-server": "^1.2.2",
     "pako": "^2.1.0",
     "postcss": "^8.5.6",
     "postcss-combine-duplicated-selectors": "^10.0.3",
@@ -92,15 +83,11 @@
     "stylelint-stylus": "^1.0.0",
     "stylelint-use-nesting": "^6.0.0",
     "stylelint-value-no-unknown-custom-properties": "^6.0.1",
-    "vite": "^7.3.1",
     "vitest": "^1.6.1",
     "workbox-cli": "^7.3.0"
   },
-  "pnpm": {
-    "overrides": {
-      "braces": ">=3.0.3",
-      "micromatch": ">=4.0.8",
-      "esbuild": ">=0.25.0"
-    }
+  "overrides": {
+    "braces": ">=3.0.3",
+    "micromatch": ">=4.0.8"
   }
 }
