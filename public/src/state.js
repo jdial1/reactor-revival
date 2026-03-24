@@ -388,9 +388,11 @@ export const preferences = proxy({ ...PREF_DEFAULTS });
 
 export function syncReducedMotionDOM() {
   if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (!root?.style || !root?.classList) return;
   const checked = !!preferences.reducedMotion;
-  document.documentElement.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
-  document.documentElement.classList.toggle("reduced-motion-app", checked);
+  root.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
+  root.classList.toggle("reduced-motion-app", checked);
 }
 
 export function initPreferencesStore() {

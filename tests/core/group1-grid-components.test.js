@@ -154,6 +154,8 @@ describe("Group 1: Core Grid & Component Generation", () => {
       save: vi.fn(),
       restore: vi.fn(),
       beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
       arc: vi.fn(),
       fill: vi.fn(),
       stroke: vi.fn(),
