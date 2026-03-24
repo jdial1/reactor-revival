@@ -34,17 +34,32 @@ class StaticGridRenderer {
     const { ctx, _tileSize: ts } = this._shared;
     const x = c * ts;
     const y = r * ts;
+    const tile = game.tileset?.getTile(r, c);
+    const occupied = tile?.enabled && tile.part;
     ctx.fillStyle = COLORS.tileBg;
     ctx.strokeStyle = COLORS.tileStroke;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 3;
     ctx.fillRect(x, y, ts, ts);
-    ctx.strokeRect(x, y, ts, ts);
-    const tile = game.tileset?.getTile(r, c);
-    if (tile?.enabled && tile.part) {
+    if (!occupied) {
+      ctx.strokeStyle = COLORS.tileMachinedLine;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + ts, y + ts);
+      ctx.moveTo(x + ts, y);
+      ctx.lineTo(x, y + ts);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = COLORS.tileStroke;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x + 1.5, y + 1.5, ts - 3, ts - 3);
+    if (occupied) {
       const path = typeof tile.part.getImagePath === "function" ? tile.part.getImagePath() : null;
       if (path) {
+        ctx.fillStyle = COLORS.tileOccDropShadow;
+        ctx.fillRect(x + 1, y + 5, ts - 2, ts - 2);
         const img = this._shared.loadImage(path);
-        if (img.complete && img.naturalWidth) ctx.drawImage(img, x, y, ts, ts);
+        if (img.complete && img.naturalWidth) ctx.drawImage(img, x, y - 3, ts, ts);
       }
     }
   }
@@ -163,6 +178,16 @@ class DynamicOverlayRenderer {
       if (this._isTileBuffedByGlobalBoost(game, tile)) {
         ctx.fillStyle = COLORS.boostPulse(pulseAlpha);
         ctx.fillRect(x, y, ts, ts);
+      }
+
+      if (tile.part?.category === "cell" && tile.ticks > 0) {
+        const flick = Math.floor(now / 75) % 2;
+        const a = 0.12 + flick * 0.28;
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.fillStyle = `rgba(0, 242, 255, ${a})`;
+        ctx.fillRect(x, y, ts, ts);
+        ctx.restore();
       }
 
       const maxHeat = tile.part.containment || 1;
@@ -719,6 +744,8 @@ export class GridScaler extends BaseComponent {
         this.wrapper = null;
         this.reactor = null;
         this.resizeObserver = null;
+        this._lastResizeSig = undefined;
+        this._reseatTimeoutId = null;
 
         this.config = {
             targetTotalTiles: GRID_TARGET_TOTAL_TILES,
@@ -1092,6 +1119,20 @@ export class GridScaler extends BaseComponent {
           logger.log('debug', 'ui', `[GridScaler] resize complete: ${cols}x${rows} grid, ${finalGridWidth}x${finalGridHeight}px`);
         } else {
           logger.log('warn', 'ui', '[GridScaler] resize complete but gridCanvasRenderer missing');
+        }
+
+        const sig = `${rows}|${cols}|${tileSize}`;
+        const layoutChanged = this._lastResizeSig !== undefined && this._lastResizeSig !== sig;
+        this._lastResizeSig = sig;
+        if (layoutChanged) {
+            this.reactor.style.filter = "brightness(2) contrast(2)";
+            this.ui.deviceFeatures?.heavyVibration?.();
+            if (this._reseatTimeoutId != null) clearTimeout(this._reseatTimeoutId);
+            this._reseatTimeoutId = setTimeout(() => {
+                this._reseatTimeoutId = null;
+                if (this.reactor) this.reactor.style.filter = "";
+                if (this.ui.game?.audio) this.ui.game.audio.play("reboot", 0.5);
+            }, 150);
         }
 
         this.applyWrapperAndSectionStyles(isMobile);

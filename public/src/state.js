@@ -386,12 +386,21 @@ function hydrateFromStorage() {
 
 export const preferences = proxy({ ...PREF_DEFAULTS });
 
+export function syncReducedMotionDOM() {
+  if (typeof document === "undefined") return;
+  const checked = !!preferences.reducedMotion;
+  document.documentElement.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
+  document.documentElement.classList.toggle("reduced-motion-app", checked);
+}
+
 export function initPreferencesStore() {
   const hydrated = hydrateFromStorage();
   Object.keys(PREF_DEFAULTS).forEach((k) => {
     if (hydrated[k] !== undefined) preferences[k] = hydrated[k];
   });
+  syncReducedMotionDOM();
   subscribe(preferences, () => {
+    syncReducedMotionDOM();
     Object.entries(PREF_STORAGE_MAP).forEach(([schemaKey, storageKey]) => {
       const val = preferences[schemaKey];
       if (val !== undefined) StorageUtils.set(storageKey, val);
@@ -2356,7 +2365,7 @@ function captureRebootState(game, keep_exotic_particles) {
   const savedProtiumParticles = game.protium_particles;
   const preservedEpUpgrades = keep_exotic_particles
     ? game.upgradeset.getAllUpgrades()
-        .filter((upg) => upg.base_ecost && upg.level > 0)
+        .filter((upg) => upg.base_ecost?.gt?.(0) && upg.level > 0)
         .map((upg) => ({ id: upg.id, level: upg.level }))
     : [];
   return { savedTotalEp, savedCurrentEp, savedProtiumParticles, preservedEpUpgrades };

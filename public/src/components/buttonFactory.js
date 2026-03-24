@@ -213,7 +213,7 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick
   const header = useReactiveLevelAndCost ? "" : (isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`);
   const rawDesc = isMaxed ? "" : (upgrade.description || "");
   const descHtml = upgrade.game?.ui?.stateManager ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc) : rawDesc;
-  const costDisplay = useReactiveLevelAndCost ? "" : (isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? ""));
+  const costDisplay = isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? "");
   const ariaLabel = doctrineLocked
     ? `Locked – ${upgrade.game?.upgradeset?.getDoctrineForUpgrade(upgrade.id)?.title || upgrade.game?.upgradeset?.getDoctrineForUpgrade(upgrade.id)?.id || "other doctrine"}`
     : isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`;

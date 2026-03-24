@@ -1,7 +1,7 @@
 import { html, render } from "lit-html";
 import { proxy, subscribe } from "valtio/vanilla";
-import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences } from "../state.js";
-import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when } from "../utils.js";
+import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey } from "../state.js";
+import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble } from "../utils.js";
 import { runCheckAffordability, calculateSectionCounts, BlueprintService } from "../logic.js";
 import { UpgradeCard, CloseButton, PartButton } from "./buttonFactory.js";
 import { MODAL_IDS } from "./ui_modals.js";
@@ -41,7 +41,6 @@ import {
   engineStatusIndicatorTemplate,
   navIndicatorTemplate,
   upgradeLevelTextTemplate,
-  upgradeCostTextTemplate,
   sectionCountTextTemplate,
   plainTextTemplate,
   quickSelectSlotTemplate,
@@ -50,6 +49,7 @@ import {
 } from "../templates/uiComponentsTemplates.js";
 
 const VENTING_ANIM_MS = 400;
+const INFO_BAR_CATHODE_IDS = ["info_money_desktop", "info_money", "info_ep_value_desktop", "info_ep_value"];
 const WAVE_SAMPLE_INTERVAL_MS = 120;
 const WAVE_HISTORY_CAP = 300;
 const WAVE_LONG_PRESS_MS = 500;
@@ -212,6 +212,33 @@ class InfoBarUI {
     this.ui.registry.register('InfoBar', this);
     this._unmount = null;
     this._infoBarAbortController = null;
+    this._cathodeInfoBarFirst = Object.fromEntries(INFO_BAR_CATHODE_IDS.map((id) => [id, true]));
+    this._cathodeInfoBarLast = {};
+    this._cathodeInfoBarTargets = null;
+  }
+
+  _resetInfoBarCathodeState() {
+    this._cathodeInfoBarFirst = Object.fromEntries(INFO_BAR_CATHODE_IDS.map((id) => [id, true]));
+    this._cathodeInfoBarLast = {};
+    this._cathodeInfoBarTargets = null;
+  }
+
+  _infoBarCathodeAfterRender() {
+    const targets = this._cathodeInfoBarTargets;
+    if (!targets) return;
+    for (const id of INFO_BAR_CATHODE_IDS) {
+      const el = document.getElementById(id);
+      const text = targets[id];
+      if (!el || typeof text !== "string") continue;
+      if (this._cathodeInfoBarFirst[id]) {
+        this._cathodeInfoBarFirst[id] = false;
+        this._cathodeInfoBarLast[id] = text;
+        continue;
+      }
+      if (this._cathodeInfoBarLast[id] === text) continue;
+      this._cathodeInfoBarLast[id] = text;
+      runCathodeScramble(el, text, { durationMs: 150 });
+    }
   }
 
   setupInfoBarButtons() {
@@ -219,6 +246,7 @@ class InfoBarUI {
     if (!root || !this.ui.game?.state) return;
 
     this.teardown();
+    this._resetInfoBarCathodeState();
     this._infoBarAbortController = new AbortController();
     const signal = this._infoBarAbortController.signal;
 
@@ -226,7 +254,12 @@ class InfoBarUI {
       state: this.ui.game.state,
       keys: ["current_power", "max_power", "current_heat", "max_heat", "current_money", "current_exotic_particles", "active_buffs", "melting_down", "power_net_change", "heat_net_change", "stats_power", "stats_net_heat"],
     }];
-    this._unmount = ReactiveLitComponent.mountMulti(subscriptions, () => this._infoBarTemplate(this.ui.game.state), root);
+    this._unmount = ReactiveLitComponent.mountMulti(
+      subscriptions,
+      () => this._infoBarTemplate(this.ui.game.state),
+      root,
+      () => this._infoBarCathodeAfterRender()
+    );
 
     document.getElementById("control_deck_build_fab")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -237,6 +270,7 @@ class InfoBarUI {
 
   teardown() {
     if (this._unmount) {
+      INFO_BAR_CATHODE_IDS.forEach((id) => cancelCathodeScramble(document.getElementById(id)));
       this._unmount();
       this._unmount = null;
     }
@@ -287,12 +321,16 @@ class InfoBarUI {
     const maxP = toNumber(state.max_power) || 1;
     const maxH = toNumber(state.max_heat) || 1;
 
-    const powerPct = Math.min(100, Math.max(0, (power / maxP) * 100));
-    const heatPct = Math.min(100, Math.max(0, (heat / maxH) * 100));
+    const rawPowerPct = Math.min(100, Math.max(0, (power / maxP) * 100));
+    const rawHeatPct = Math.min(100, Math.max(0, (heat / maxH) * 100));
+    const stepSize = 100 / 12;
+    const quantizePct = (raw, atMax) => (atMax ? 100 : Math.floor(raw / stepSize) * stepSize);
+    const powerPct = quantizePct(rawPowerPct, maxP > 0 && power >= maxP);
+    const heatPct = quantizePct(rawHeatPct, maxH > 0 && heat >= maxH);
 
     const meltdown = !!state.melting_down;
-    const powerClass = classMap({ "info-item": true, power: true, full: powerPct >= 100, meltdown });
-    const heatClass = classMap({ "info-item": true, heat: true, full: heatPct >= 100, meltdown });
+    const powerClass = classMap({ "info-item": true, power: true, full: maxP > 0 && power >= maxP, meltdown });
+    const heatClass = classMap({ "info-item": true, heat: true, full: maxH > 0 && heat >= maxH, meltdown });
     const moneyDisplay = meltdown ? "☢️" : `$${fmt(state.current_money, 2)}`;
     const moneyDisplayMobile = meltdown ? "☢️" : fmt(state.current_money, 0);
 
@@ -306,6 +344,13 @@ class InfoBarUI {
 
     const epVisible = toNumber(state.current_exotic_particles) > 0;
     const epContentStyle = styleMap({ display: epVisible ? "flex" : "none" });
+    const epText = fmt(state.current_exotic_particles);
+    this._cathodeInfoBarTargets = {
+      info_money_desktop: moneyDisplay,
+      info_money: moneyDisplayMobile,
+      info_ep_value_desktop: epText,
+      info_ep_value: epText,
+    };
 
     return infoBarTemplate({
       powerClass,
@@ -331,8 +376,8 @@ class InfoBarUI {
       maxHeatDesktop: fmt(maxH, 2),
       maxHeatMobile: fmt(maxH),
       epContentStyle,
-      epValueDesktop: fmt(state.current_exotic_particles),
-      epValueMobile: fmt(state.current_exotic_particles),
+      epValueDesktop: epText,
+      epValueMobile: epText,
       activeBuffs,
       onSell,
       onVent,
@@ -743,7 +788,9 @@ class PageSetupUI {
       const stats = document.getElementById("reactor_stats");
       const topNav = document.getElementById("main_top_nav");
       const reactorWrapper = document.getElementById("reactor_wrapper");
+      const reactorSection = document.getElementById("reactor_section");
       const copyPasteBtns = document.getElementById("reactor_copy_paste_btns");
+      const copyPasteToggle = document.getElementById("reactor_copy_paste_toggle");
       if (!mobileTopBar || !stats) return;
 
       const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
@@ -758,8 +805,13 @@ class PageSetupUI {
           mobileTopBar.appendChild(statsWrap);
         }
         if (stats && stats.parentElement !== statsWrap) statsWrap.appendChild(stats);
-        if (copyPasteBtns && reactorWrapper && copyPasteBtns.parentElement !== reactorWrapper) {
-          reactorWrapper.appendChild(copyPasteBtns);
+        if (copyPasteBtns && reactorSection && reactorWrapper && copyPasteBtns.parentElement === reactorWrapper) {
+          reactorSection.insertBefore(copyPasteBtns, reactorWrapper);
+        }
+        const isCollapsed = ui?.uiState?.copy_paste_collapsed === true || copyPasteBtns?.classList.contains("collapsed");
+        if (isCollapsed && copyPasteToggle) {
+          copyPasteToggle.style.display = "inline-flex";
+          copyPasteToggle.style.visibility = "visible";
         }
       } else {
         mobileTopBar.classList.remove("active");
@@ -771,6 +823,10 @@ class PageSetupUI {
         }
         if (reactorWrapper && copyPasteBtns && copyPasteBtns.parentElement !== reactorWrapper) {
           reactorWrapper.appendChild(copyPasteBtns);
+        }
+        if (copyPasteToggle) {
+          copyPasteToggle.style.removeProperty("display");
+          copyPasteToggle.style.removeProperty("visibility");
         }
       }
 
@@ -1005,7 +1061,8 @@ class PartsPanelUI {
 
   togglePartsPanelForBuildButton() {
     const ui = this.ui;
-    ui.deviceFeatures.lightVibration();
+    ui.deviceFeatures?.heavyVibration?.();
+    if (ui.game?.audio) ui.game.audio.play("metal_clank", 0.8, -0.7);
     const partsSection = this.getPartsSection();
     if (partsSection && ui.uiState) {
       const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
@@ -1076,13 +1133,6 @@ class ControlDeckUI {
     };
   }
 
-  _statsBarTemplate(state) {
-    const vent = fmt(state.stats_vent ?? 0, 0);
-    const power = fmt(state.stats_power ?? 0, 0);
-    const heat = fmt(state.stats_heat_generation ?? 0, 0);
-    return controlDeckStatsBarTemplate({ vent, power, heat });
-  }
-
   _exoticParticlesTemplate(state) {
     return controlDeckExoticParticlesTemplate({
       currentEp: fmt(state.current_exotic_particles ?? 0),
@@ -1106,14 +1156,52 @@ class ControlDeckUI {
   _mountStatsBarReactive(ui) {
     const root = document.getElementById("reactor_stats");
     if (!root || !ui.game?.state) return;
-    const renderFn = (state) => this._statsBarTemplate(state);
-    this._statsBarComponent = new ReactiveLitComponent(
-      ui.game.state,
-      ["stats_vent", "stats_power", "stats_heat_generation"],
-      renderFn,
-      root
-    );
-    this._statsBarUnmount = this._statsBarComponent.mount();
+    const state = ui.game.state;
+    render(controlDeckStatsBarTemplate(), root);
+    const ventEl = document.getElementById("stats_vent");
+    const powerEl = document.getElementById("stats_power");
+    const heatEl = document.getElementById("stats_heat");
+    const last = { vent: null, power: null, heat: null };
+    const first = { vent: true, power: true, heat: true };
+    const sync = () => {
+      const v = fmt(state.stats_vent ?? 0, 0);
+      const p = fmt(state.stats_power ?? 0, 0);
+      const h = fmt(state.stats_heat_generation ?? 0, 0);
+      const apply = (el, key, text) => {
+        if (!el) return;
+        if (first[key]) {
+          el.textContent = text;
+          first[key] = false;
+          last[key] = text;
+          return;
+        }
+        if (last[key] === text) return;
+        last[key] = text;
+        runCathodeScramble(el, text, { durationMs: 150 });
+      };
+      apply(ventEl, "vent", v);
+      apply(powerEl, "power", p);
+      apply(heatEl, "heat", h);
+    };
+    let scheduled = false;
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        sync();
+      });
+    };
+    const unsubs = [
+      subscribeKey(state, "stats_vent", schedule),
+      subscribeKey(state, "stats_power", schedule),
+      subscribeKey(state, "stats_heat_generation", schedule),
+    ];
+    sync();
+    this._statsBarUnmount = () => {
+      unsubs.forEach((u) => { try { u(); } catch (_) {} });
+      [ventEl, powerEl, heatEl].forEach((el) => cancelCathodeScramble(el));
+    };
     this.mountExoticParticlesDisplayIfNeeded(ui);
   }
 
@@ -1736,11 +1824,11 @@ class MeltdownUI {
     document.body.appendChild(toast);
     const inner = toast.querySelector("#decompression_inner");
     requestAnimationFrame(() => {
-      if (inner) inner.style.opacity = "1";
+      if (inner) inner.classList.add("decompression-saved-toast__panel--visible");
     });
     setTimeout(() => {
       if (toast.parentNode) {
-        if (inner) inner.style.opacity = "0";
+        if (inner) inner.classList.remove("decompression-saved-toast__panel--visible");
         setTimeout(() => toast.remove(), 220);
       }
     }, 3500);
@@ -1864,7 +1952,6 @@ function renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useRe
 
 function mountUpgradeReactiveDisplay(upgrade, display) {
   const levelContainer = upgrade.$el.querySelector(".upgrade-level-info");
-  const costContainer = upgrade.$el.querySelector(".cost-display");
   if (levelContainer) {
     levelContainer.replaceChildren();
     const levelRenderFn = () => {
@@ -1877,18 +1964,6 @@ function mountUpgradeReactiveDisplay(upgrade, display) {
       [{ state: display, keys: [upgrade.id] }],
       levelRenderFn,
       levelContainer
-    );
-  }
-  if (costContainer) {
-    costContainer.replaceChildren();
-    const costRenderFn = () => {
-      const d = display[upgrade.id] ?? upgrade;
-      return upgradeCostTextTemplate({ value: d.display_cost ?? upgrade.display_cost });
-    };
-    ReactiveLitComponent.mountMulti(
-      [{ state: display, keys: [upgrade.id] }],
-      costRenderFn,
-      costContainer
     );
   }
 }
@@ -1929,7 +2004,6 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
       upgrade.updateDisplayCost();
       const display = state?.upgrade_display;
       if (display) {
-        if (!display[upgrade.id]) display[upgrade.id] = { level: upgrade.level, display_cost: upgrade.display_cost };
         mountUpgradeReactiveDisplay(upgrade, display);
       }
     }

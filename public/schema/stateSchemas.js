@@ -192,7 +192,7 @@ export const SaveDataSchema = z.preprocess((raw) => {
   return data;
 }, z.object({
   version: z.string().optional().default("1.0.0"),
-  current_money: SaveDecimalSchema.optional().default(toDecimal(0)),
+  current_money: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
   rows: z.number().int().min(1).optional().default(12),
   cols: z.number().int().min(1).optional().default(12),
   run_id: z
@@ -221,7 +221,7 @@ export const SaveDataSchema = z.preprocess((raw) => {
     current_objective_index: ObjectiveIndexSchema,
     completed_objectives: z.array(z.union([z.boolean(), z.null(), z.undefined()]).transform((v) => v === true)).optional().default([]),
     infinite_objective: InfiniteObjectiveSchema,
-  }).passthrough().catch({}).optional().default({}),
+  }).passthrough().catch({}).optional().default({ current_objective_index: 0, completed_objectives: [] }),
   toggles: z.record(z.string(), z.unknown()).catch({}).optional().default({}),
   quick_select_slots: z.array(z.unknown()).catch([]).optional().default([]),
   ui: z.object({}).passthrough().catch({}).optional().default({}),

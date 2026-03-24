@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, setupGame } from "../helpers/setup.js";
 import { placePart } from "../helpers/gameHelpers.js";
 
+function refreshHeatSegments(game) {
+  game.engine.markPartCacheAsDirty();
+  game.engine._updatePartCaches();
+  game.engine.heatManager.markSegmentsAsDirty();
+}
+
 const toNum = (v) => (v != null && typeof v.toNumber === "function" ? v.toNumber() : Number(v));
 
 describe("Heat Network Topology", () => {
@@ -92,5 +98,43 @@ describe("Heat Network Topology", () => {
   it("gridIndex consistent across tileset and worker stride", () => {
     expect(game.tileset.gridIndex(9, 4)).toBe(9 * 50 + 4);
     expect(game.tileset.gridIndex(9, 4)).toBe(454);
+  });
+
+  it("union-find merges two vent segments when a conducting tile bridges them", async () => {
+    const leftVent = await placePart(game, 9, 4, "vent1");
+    const rightVent = await placePart(game, 11, 4, "vent1");
+    refreshHeatSegments(game);
+    const hm = game.engine.heatManager;
+    expect(hm.getSegmentForTile(leftVent)).not.toBe(hm.getSegmentForTile(rightVent));
+    await placePart(game, 10, 4, "heat_exchanger1");
+    refreshHeatSegments(game);
+    expect(hm.getSegmentForTile(leftVent)).toBe(hm.getSegmentForTile(rightVent));
+  });
+
+  it("union-find splits one segment when the keystone bridge tile is sold", async () => {
+    await placePart(game, 9, 4, "vent1");
+    const mid = await placePart(game, 10, 4, "heat_exchanger1");
+    const rightVent = await placePart(game, 11, 4, "vent1");
+    refreshHeatSegments(game);
+    const hm = game.engine.heatManager;
+    expect(hm.getSegmentForTile(mid)).toBe(hm.getSegmentForTile(rightVent));
+    game.sellPart(mid);
+    refreshHeatSegments(game);
+    const left = game.tileset.getTile(9, 4);
+    const right = game.tileset.getTile(11, 4);
+    expect(hm.getSegmentForTile(left)).not.toBe(hm.getSegmentForTile(right));
+  });
+
+  it("segment fullnessRatio aggregates heat across merged components", async () => {
+    const v1 = await placePart(game, 5, 2, "vent1");
+    const v2 = await placePart(game, 5, 4, "vent1");
+    await placePart(game, 5, 3, "heat_exchanger1");
+    v1.heat_contained = 100;
+    v2.heat_contained = 100;
+    refreshHeatSegments(game);
+    const seg = game.engine.heatManager.getSegmentForTile(v1);
+    expect(seg.components.length).toBe(3);
+    expect(seg.totalHeat).toBe(200);
+    expect(seg.fullnessRatio).toBeGreaterThan(0);
   });
 });

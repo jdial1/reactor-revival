@@ -1501,7 +1501,13 @@ export class Upgrade {
       }
 
       this.$el.classList.toggle("maxed-out", this.level >= this.max_level);
+
+      const costEl = this.$el.querySelector(".cost-display");
+      if (costEl) {
+        costEl.textContent = this.level >= this.max_level ? "" : this.display_cost;
+      }
     }
+    this._syncDisplayToState();
   }
 
   createElement() {

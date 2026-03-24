@@ -447,6 +447,50 @@ export class Formatter {
 }
 export const Format = Formatter;
 export const numFormat = (n, p, f) => Formatter.number(n, { places: p, fixedDecimals: f });
+
+const cathodeScrambleGen = new WeakMap();
+
+function cathodeScrambleString(target) {
+  let out = "";
+  for (let i = 0; i < target.length; i++) {
+    const c = target[i];
+    out += c >= "0" && c <= "9" ? String(Math.floor(Math.random() * 10)) : c;
+  }
+  return out;
+}
+
+export function cancelCathodeScramble(el) {
+  if (!el) return;
+  cathodeScrambleGen.set(el, (cathodeScrambleGen.get(el) || 0) + 1);
+}
+
+export function runCathodeScramble(el, nextText, opts = {}) {
+  if (!el || typeof nextText !== "string") return;
+  const durationMs = opts.durationMs ?? 150;
+  const myGen = (cathodeScrambleGen.get(el) || 0) + 1;
+  cathodeScrambleGen.set(el, myGen);
+  const start = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const step = (now) => {
+    if (cathodeScrambleGen.get(el) !== myGen) return;
+    const elapsed = now - start;
+    if (elapsed >= durationMs) {
+      el.textContent = nextText;
+      return;
+    }
+    el.textContent = cathodeScrambleString(nextText);
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(step);
+    } else {
+      setTimeout(() => step(Date.now()), 16);
+    }
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(step);
+  } else {
+    setTimeout(() => step(Date.now()), 0);
+  }
+}
+
 export const formatStatNum = (n) => Formatter.number(n, { places: 1 }) || "0";
 export const formatPrestigeNumber = (n) => Formatter.number(n, { places: 2, infinitySymbol: "∞" });
 export function formatTime(ms) { return Formatter.time(ms, true); }
@@ -801,8 +845,10 @@ export const GRID = {
 };
 
 export const COLORS = {
-  tileBg: "rgb(20 20 20)",
-  tileStroke: "rgb(30 30 30)",
+  tileBg: "#1a1d1a",
+  tileStroke: "#000000",
+  tileMachinedLine: "rgba(20, 22, 20, 0.45)",
+  tileOccDropShadow: "rgba(0, 0, 0, 0.55)",
   heatBarBg: "rgba(0,0,0,0.85)",
   heatBarFill: "rgb(231 76 60)",
   durabilityBarFill: "rgb(89 196 53)",

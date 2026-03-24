@@ -130,7 +130,7 @@ export class ReactiveLitComponent {
     }
   }
 
-  static mountMulti(subscriptions, renderFn, container) {
+  static mountMulti(subscriptions, renderFn, container, onAfterRender) {
     let _raf = null;
     const scheduleRender = () => {
       if (_raf) return;
@@ -139,6 +139,7 @@ export class ReactiveLitComponent {
         try {
           const template = renderFn();
           if (template) render(template, container);
+          onAfterRender?.();
         } catch (err) {
           const msg = String(err?.message ?? "");
           if ((msg.includes("parentNode") || msg.includes("nextSibling")) && msg.includes("null")) return;
@@ -165,6 +166,7 @@ export class ReactiveLitComponent {
       try {
         const template = renderFn();
         if (template) render(template, container);
+        onAfterRender?.();
       } catch (err) {
         const msg = String(err?.message ?? "");
         if ((msg.includes("parentNode") || msg.includes("nextSibling")) && msg.includes("null")) return;

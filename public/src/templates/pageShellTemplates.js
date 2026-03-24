@@ -69,7 +69,7 @@ export function gameShellTemplate() {
       <h3 id="reactor_copy_paste_modal_title">Reactor Layout</h3>
       <button id="reactor_copy_paste_close_btn" title="Close" aria-label="Close Modal">×</button>
     </div>
-    <textarea id="reactor_copy_paste_text" style="width: 100%;min-height: 80px;" placeholder="Paste reactor layout data here..."></textarea>
+    <textarea id="reactor_copy_paste_text" placeholder="Paste reactor layout data here..."></textarea>
     <div id="reactor_copy_paste_preview_wrap" class="hidden">
       <div id="reactor_copy_paste_preview_label">Preview</div>
       <canvas id="reactor_copy_paste_preview"></canvas>

@@ -1,5 +1,5 @@
 import { html } from "lit-html";
-import { repeat, styleMap } from "../utils.js";
+import { repeat, styleMap, numFormat } from "../utils.js";
 
 export const settingsHelpShellTemplate = `<div class="settings-help-backdrop"></div>
 <div class="settings-help-content pixel-panel">
@@ -303,6 +303,10 @@ export function harmonicDiagnosticsModalTemplate({ waveType, healthLabel, sample
   });
   const powerPolyline = dataPoints.map((point) => point.split(" ")[0]).join(" ");
   const heatPolyline = dataPoints.map((point) => point.split(" ")[1]).join(" ");
+  const netPowerText = numFormat(lastSample.powerNet);
+  const netHeatText = numFormat(lastSample.heatNet);
+  const ventEffText = numFormat(lastSample.ventEff);
+  const overflowRatioText = `${(lastSample.overflowRatio * 100).toFixed(0)}%`;
   return html`
     <div class="harmonic-modal-overlay" @click=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="harmonic-modal pixel-panel" role="dialog" aria-modal="true" aria-label="Harmonic diagnostics">
@@ -313,10 +317,10 @@ export function harmonicDiagnosticsModalTemplate({ waveType, healthLabel, sample
         <div class="harmonic-modal-body">
           <div class="harmonic-readout-grid">
             <span>Channel</span><span>${waveType === "heat" ? "Heat" : "Power"}</span>
-            <span>Net Power</span><span>${(lastSample.powerNet ?? 0).toFixed(2)}</span>
-            <span>Net Heat</span><span>${(lastSample.heatNet ?? 0).toFixed(2)}</span>
-            <span>Vent Eff.</span><span>${(lastSample.ventEff ?? 0).toFixed(2)}%</span>
-            <span>Overflow Ratio</span><span>${(lastSample.overflowRatio ?? 0.5).toFixed(2)}</span>
+            <span>Net Power</span><span>${netPowerText}</span>
+            <span>Net Heat</span><span>${netHeatText}</span>
+            <span>Vent Eff.</span><span>${ventEffText}</span>
+            <span>Overflow Ratio</span><span>${overflowRatioText}</span>
           </div>
           <div class="harmonic-scope">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Power and heat waveform history">

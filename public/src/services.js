@@ -909,6 +909,11 @@ function handleWarning(svc, opts) {
   svc.warningManager.startWarningLoop(intensity);
 }
 
+function handleMetalClank(svc, opts) {
+  const g = typeof opts.param === "number" ? opts.param : 0.8;
+  svc._playIndustrialSample("metal_clank", opts.category, opts.pan, g);
+}
+
 const EVENT_HANDLERS = {
   click: handleClick,
   error: handleError,
@@ -926,6 +931,7 @@ const EVENT_HANDLERS = {
   component_overheat: handleComponentOverheat,
   depletion: handleDepletion,
   warning: handleWarning,
+  metal_clank: handleMetalClank,
 };
 
 export function handleAudioEvent(svc, eventType, context, options = {}) {
@@ -1526,6 +1532,30 @@ export class AudioService {
   dest = panner;
   }
   gain.connect(dest);
+  src.start(t);
+  src.stop(t + buffer.duration);
+  }
+  _playIndustrialSample(key, category, pan, gain) {
+  const buffer = this._industrialBuffers[key];
+  if (!buffer || !this.context || this.context.state !== "running") return;
+  const ctx = this.context;
+  const t = ctx.currentTime;
+  const categoryGain = this._getCategoryGain(category);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const cents = (Math.random() * 10 - 5) / 1200;
+  src.playbackRate.value = Math.pow(2, cents);
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = typeof gain === "number" ? Math.min(1, Math.max(0, gain)) : 0.8;
+  src.connect(gainNode);
+  let dest = categoryGain;
+  if (pan !== null && pan !== undefined && ctx.createStereoPanner) {
+  const panner = ctx.createStereoPanner();
+  panner.pan.value = Math.max(-1, Math.min(1, pan));
+  panner.connect(dest);
+  dest = panner;
+  }
+  gainNode.connect(dest);
   src.start(t);
   src.stop(t + buffer.duration);
   }

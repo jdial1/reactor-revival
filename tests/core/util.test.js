@@ -1,5 +1,7 @@
 import { describe, it, expect } from "../helpers/setup.js";
-import { numFormat, timeFormat } from "../../public/src/utils.js";
+import { Formatter, numFormat, timeFormat, setFormatPreferencesGetter, getDecimal } from "../../public/src/utils.js";
+
+const Decimal = getDecimal();
 
 describe("Utility Functions", () => {
     describe("numFormat", () => {
@@ -43,6 +45,36 @@ describe("Utility Functions", () => {
 
         it("should handle scientific notation for very large numbers", () => {
              expect(numFormat(1e36)).toMatch(/1.*e\+?36/);
+        });
+
+        it("formats Decimal instances without object coercion", () => {
+            const d = new Decimal("1e150");
+            const s = Formatter.number(d, { places: 2 });
+            expect(s).not.toMatch(/Object/);
+            expect(s).not.toBe("");
+            expect(s).not.toContain("NaN");
+            expect(s).toMatch(/e\+?150/);
+        });
+
+        it("formats Decimal compact suffixes for mid-range magnitudes", () => {
+            const d = new Decimal("2.5e24");
+            const s = Formatter.number(d, { places: 2 });
+            expect(s).toContain("Sp");
+        });
+
+        it("respects explicit scientific style for Decimal", () => {
+            const d = new Decimal("5000000");
+            expect(Formatter.number(d, { style: "scientific", places: 2 })).toBe("5.00e+6");
+        });
+
+        it("uses preference getter for number format when style omitted", () => {
+            setFormatPreferencesGetter(() => ({ numberFormat: "scientific" }));
+            try {
+                const d = new Decimal("4000");
+                expect(Formatter.number(d)).toMatch(/e\+/);
+            } finally {
+                setFormatPreferencesGetter(null);
+            }
         });
     });
 

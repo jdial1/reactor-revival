@@ -54,12 +54,12 @@ export function infoBarTemplate({
       </button>
       <span class="info-item money">
         <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
-        <span class="value" id="info_money_desktop">${moneyDisplayDesktop}</span>
+        <span class="value cathode-readout" id="info_money_desktop">${moneyDisplayDesktop}</span>
       </span>
       <span class="info-item ep" id="info_ep_desktop">
         <span class="ep-content" style=${epContentStyle}>
           <span class="icon">🧬</span>
-          <span class="value" id="info_ep_value_desktop">${epValueDesktop}</span>
+          <span class="value cathode-readout" id="info_ep_value_desktop">${epValueDesktop}</span>
         </span>
       </span>
       <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
@@ -93,7 +93,7 @@ export function infoBarTemplate({
         </button>
         <span class="info-item money">
           <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
-          <span class="value" id="info_money">${moneyDisplayMobile}</span>
+          <span class="value cathode-readout" id="info_money">${moneyDisplayMobile}</span>
         </span>
         <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${styleMap({ "--fill-height": `${heatPct}%` })} @click=${onVentMobile}>
           <div class=${heatWaveClass} style=${heatWaveStyle} aria-hidden="true">
@@ -114,7 +114,7 @@ export function infoBarTemplate({
           <span class="info-item ep" id="info_ep">
             <span class="ep-content" style=${epContentStyle}>
               <span class="icon">🧬</span>
-              <span class="value" id="info_ep_value">${epValueMobile}</span>
+              <span class="value cathode-readout" id="info_ep_value">${epValueMobile}</span>
             </span>
           </span>
           <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
@@ -349,15 +349,11 @@ export function partsPanelTabContentTemplate({
   `;
 }
 
-export function controlDeckStatsBarTemplate({
-  vent,
-  power,
-  heat,
-}) {
+export function controlDeckStatsBarTemplate() {
   return html`
-    <li><strong title="Total heat venting per tick"><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent">${vent}</span></strong></li>
-    <li><strong title="Power per tick"><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power">${power}</span></strong></li>
-    <li><strong title="Heat per tick"><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat">${heat}</span></strong></li>
+    <li><strong title="Total heat venting per tick"><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent" class="cathode-readout"></span></strong></li>
+    <li><strong title="Power per tick"><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power" class="cathode-readout"></span></strong></li>
+    <li><strong title="Heat per tick"><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat" class="cathode-readout"></span></strong></li>
   `;
 }
 
@@ -473,20 +469,19 @@ export function myLayoutsModalTemplate({
     <div
       id="my_layouts_modal"
       class="modal-overlay"
-      style="position: fixed; z-index: 1000; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: rgb(0 0 0 / 80%);"
       @click=${(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div class="modal-content" style="position: relative; max-width: 90%; max-height: 90%; padding: 0; border: 2px solid rgb(51, 51, 51); border-radius: 8px; background-color: rgb(26, 26, 26); overflow-y: auto;">
-        <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-radius: 8px 8px 0 0; border-bottom: 1px solid rgb(51, 51, 51); background: rgb(34, 34, 34);">
-          <h3 style="margin: 0; color: rgb(74, 158, 255); font-size: 18px;">My Layouts</h3>
-          <button id="my_layouts_close_btn" title="Close" aria-label="Close" style="background:transparent; border:none; color:white; font-size:1.2rem; cursor:pointer;" @click=${onClose}>×</button>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>My Layouts</h3>
+          <button id="my_layouts_close_btn" title="Close" aria-label="Close" @click=${onClose}>×</button>
         </div>
-        <div class="my-layouts-toolbar" style="display: flex; padding: 12px 20px; border-bottom: 1px solid rgb(51, 51, 51); background: rgb(34, 34, 34);">
+        <div class="my-layouts-toolbar">
           <button id="my_layouts_save_from_clipboard_btn" class="pixel-btn" type="button" @click=${onSaveFromClipboard}>Save from Clipboard</button>
         </div>
-        <div id="my_layouts_list" style="padding: 20px;">
+        <div id="my_layouts_list">
           ${listContent}
         </div>
       </div>
@@ -670,7 +665,6 @@ export function layoutViewModalTemplate({
   return html`
     <div
       class="layout-view-modal-overlay"
-      style="position: fixed; z-index: 10000; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.9);"
       @click=${(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
@@ -871,8 +865,9 @@ export function quickSelectSlotTemplate({
 
 export function decompressionSavedToastTemplate() {
   return html`
-    <div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1b5e20;border:2px solid #4caf50;border-radius:8px;padding:12px 20px;z-index:10000;font-family:'Press Start 2P',monospace;color:#fff;font-size:0.8rem;box-shadow:0 4px 12px rgba(0,0,0,0.6);opacity:0;transition:opacity 0.2s ease-out;" id="decompression_inner">
-      Explosive decompression saved the reactor!
+    <div class="decompression-saved-toast__panel" id="decompression_inner">
+      <div class="decompression-saved-toast__tag">STATUS // VENT BLOWDOWN</div>
+      <div class="decompression-saved-toast__body">Explosive decompression saved the reactor!</div>
     </div>
   `;
 }

@@ -1,7 +1,7 @@
 import { html, render, nothing } from "lit-html";
 import { proxy } from "valtio/vanilla";
 import { styleMap, StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, Format, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
-import { getValidatedPreferences, preferences, createSupabaseProvider, createGoogleDriveProvider, showCloudVsLocalConflictModal as showCloudConflictModal } from "../state.js";
+import { getValidatedPreferences, preferences, createSupabaseProvider, createGoogleDriveProvider, showCloudVsLocalConflictModal as showCloudConflictModal, syncReducedMotionDOM } from "../state.js";
 import { supabaseSave } from "../services.js";
 import dataService from "../services.js";
 import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
@@ -229,7 +229,7 @@ function setupMechSwitches(overlay, modal, signal) {
   });
   setupMechSwitch("setting-motion", (checked) => {
     preferences.reducedMotion = checked;
-    document.documentElement.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
+    syncReducedMotionDOM();
   });
   setupMechSwitch("setting-heat-flow", (checked) => { preferences.heatFlowVisible = checked; });
   setupMechSwitch("setting-heat-map", (checked) => { preferences.heatMapVisible = checked; });

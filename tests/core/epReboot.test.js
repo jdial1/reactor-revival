@@ -122,8 +122,7 @@ describe('EP Reboot Functionality', () => {
             
             await game.rebootActionKeepExoticParticles();
 
-            const chronometerLevel = game.upgradeset.getUpgrade("chronometer").level;
-            expect(chronometerLevel === 0 || chronometerLevel === 1).toBe(true);
+            expect(game.upgradeset.getUpgrade("chronometer").level).toBe(0);
             expect(game.upgradeset.getUpgrade("laboratory").level).toBe(1);
         });
     });
