@@ -1,7 +1,7 @@
 import { html, render } from "lit-html";
 import { proxy, subscribe } from "valtio/vanilla";
 import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey } from "../state.js";
-import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble } from "../utils.js";
+import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
 import { runCheckAffordability, calculateSectionCounts, BlueprintService } from "../logic.js";
 import { UpgradeCard, CloseButton, PartButton } from "./buttonFactory.js";
 import { MODAL_IDS } from "./ui_modals.js";
@@ -323,14 +323,25 @@ class InfoBarUI {
 
     const rawPowerPct = Math.min(100, Math.max(0, (power / maxP) * 100));
     const rawHeatPct = Math.min(100, Math.max(0, (heat / maxH) * 100));
-    const stepSize = 100 / 12;
-    const quantizePct = (raw, atMax) => (atMax ? 100 : Math.floor(raw / stepSize) * stepSize);
-    const powerPct = quantizePct(rawPowerPct, maxP > 0 && power >= maxP);
-    const heatPct = quantizePct(rawHeatPct, maxH > 0 && heat >= maxH);
+    const powerPct = vuQuantizePercent(rawPowerPct, maxP > 0 && power >= maxP);
+    const heatPct = vuQuantizePercent(rawHeatPct, maxH > 0 && heat >= maxH);
+    const vuLitPower = vuLitFromPercent(rawPowerPct, maxP > 0 && power >= maxP);
+    const vuLitHeat = vuLitFromPercent(rawHeatPct, maxH > 0 && heat >= maxH);
+    const heatRatio = maxH > 0 ? heat / maxH : 0;
+    const heatLedWarning = heatRatio >= 0.8;
+    const powerBarStyle = styleMap({
+      "--fill-height": `${powerPct}%`,
+      "--vu-lit": String(vuLitPower),
+    });
+    const heatBarStyle = styleMap({
+      "--fill-height": `${heatPct}%`,
+      "--vu-lit": String(vuLitHeat),
+      "--vu-red-width": vuHeatRedWidthPercent(vuLitHeat, heatLedWarning),
+    });
 
     const meltdown = !!state.melting_down;
     const powerClass = classMap({ "info-item": true, power: true, full: maxP > 0 && power >= maxP, meltdown });
-    const heatClass = classMap({ "info-item": true, heat: true, full: maxH > 0 && heat >= maxH, meltdown });
+    const heatClass = classMap({ "info-item": true, heat: true, full: maxH > 0 && heat >= maxH, meltdown, "heat-led-warning": heatLedWarning });
     const moneyDisplay = meltdown ? "☢️" : `$${fmt(state.current_money, 2)}`;
     const moneyDisplayMobile = meltdown ? "☢️" : fmt(state.current_money, 0);
 
@@ -357,6 +368,8 @@ class InfoBarUI {
       heatClass,
       powerPct,
       heatPct,
+      powerBarStyle,
+      heatBarStyle,
       powerWaveStyle: powerWave.style,
       heatWaveStyle: heatWave.style,
       powerWaveClass: powerWave.className,
@@ -376,6 +389,7 @@ class InfoBarUI {
       maxHeatDesktop: fmt(maxH, 2),
       maxHeatMobile: fmt(maxH),
       epContentStyle,
+      epVisible,
       epValueDesktop: epText,
       epValueMobile: epText,
       activeBuffs,
@@ -483,8 +497,10 @@ class MobileInfoBarUI {
     const powerCurrent = toNumber(state.current_power ?? 0);
     const heatCurrent = toNumber(state.current_heat ?? 0);
 
-    const powerFillPercent = maxPower > 0 ? Math.min(PERCENT_FULL, Math.max(0, (powerCurrent / maxPower) * PERCENT_FULL)) : 0;
-    const heatFillPercent = maxHeat > 0 ? Math.min(PERCENT_FULL, Math.max(0, (heatCurrent / maxHeat) * PERCENT_FULL)) : 0;
+    const rawPowerFill = maxPower > 0 ? Math.min(PERCENT_FULL, Math.max(0, (powerCurrent / maxPower) * PERCENT_FULL)) : 0;
+    const rawHeatFill = maxHeat > 0 ? Math.min(PERCENT_FULL, Math.max(0, (heatCurrent / maxHeat) * PERCENT_FULL)) : 0;
+    const powerFillPercent = vuQuantizePercent(rawPowerFill, maxPower > 0 && powerCurrent >= maxPower);
+    const heatFillPercent = vuQuantizePercent(rawHeatFill, maxHeat > 0 && heatCurrent >= maxHeat);
 
     const heatHazard = heatFillPercent >= HAZARD_FILL_PERCENT;
     const heatCritical = heatFillPercent > CRITICAL_FILL_PERCENT;
@@ -974,6 +990,15 @@ class PartsPanelUI {
     const heatActive = activeTab === "heat";
     const tabContent = this._buildPartsTabContent(partset, unlockManager, activeTab, powerActive, heatActive);
 
+    const selectedPartId = uiState?.interaction?.selectedPartId ?? null;
+    const selPart = selectedPartId && partset ? partset.getPartById(selectedPartId) : null;
+    const moduleInfoContent = selPart
+      ? html`<div class="parts-module-info-inner">
+          <span class="parts-module-info-title">${selPart.title}</span>
+          <span class="parts-module-info-stats">${fmt(selPart.cost ?? 0, 0)}${selPart.erequires ? " EP" : " $"} · ${selPart.category ?? ""}</span>
+        </div>`
+      : html`<span class="parts-module-info-empty">— Select a module —</span>`;
+
     return partsPanelLayoutTemplate({
       powerActive,
       heatActive,
@@ -982,6 +1007,7 @@ class PartsPanelUI {
       onSwitchHeat: () => switchTab("heat"),
       onHelpToggle,
       tabContent,
+      moduleInfoContent,
     });
   }
 
@@ -992,6 +1018,7 @@ class PartsPanelUI {
     const subscriptions = [
       { state: ui.game?.state, keys: ["current_money", "current_exotic_particles", "parts_panel_version"] },
       { state: ui.uiState, keys: ["active_parts_tab", "parts_panel_collapsed"] },
+      { state: ui.uiState?.interaction, keys: ["selectedPartId"] },
     ].filter((s) => s.state != null);
     if (subscriptions.length === 0) return;
     const renderFn = () => this._partsPanelTemplate(ui.uiState);
@@ -1277,11 +1304,12 @@ class ControlDeckUI {
       ui.stateManager.setVar(stateProperty, newState);
     };
     return controlDeckControlsNavTemplate({
-      autoSellClass: classMap({ "pixel-btn": true, on: !!state.auto_sell }),
-      autoBuyClass: classMap({ "pixel-btn": true, on: !!state.auto_buy }),
-      timeFluxClass: classMap({ "pixel-btn": true, on: !!state.time_flux, "has-queue": timeFluxHasQueue }),
-      heatControlClass: classMap({ "pixel-btn": true, on: !!state.heat_control }),
-      pauseClass: classMap({ "pixel-btn": true, on: !!state.pause, paused: !!state.pause }),
+      autoSellOn: !!state.auto_sell,
+      autoBuyOn: !!state.auto_buy,
+      timeFluxOn: !!state.time_flux,
+      heatControlOn: !!state.heat_control,
+      pauseOn: !!state.pause,
+      timeFluxClass: timeFluxHasQueue ? "time-flux-queue" : "",
       timeFluxLabel,
       pauseTitle: state.pause ? "Resume" : "Pause",
       accountTitle: ui.uiState?.user_account_display?.title ?? "Account",
@@ -1308,7 +1336,13 @@ class ControlDeckUI {
         root
       );
     } else if (root) {
-      render(this._controlsNavTemplate({ auto_sell: false, auto_buy: true, time_flux: true, heat_control: false, pause: false }), root);
+      render(this._controlsNavTemplate({
+        auto_sell: false,
+        auto_buy: true,
+        time_flux: true,
+        heat_control: false,
+        pause: false,
+      }), root);
     }
   }
 
@@ -1630,15 +1664,34 @@ class MeltdownUI {
     this._meltdownBuildupRafId = null;
     this._meltdownHandler = null;
     this._meltdownResolvedHandler = null;
+    this._explosionHandler = null;
   }
 
   subscribeToMeltdownEvents(game) {
     if (!game?.on || !game?.off) return;
     this._meltdownHandler = () => this.updateMeltdownState();
     this._meltdownResolvedHandler = () => this.updateMeltdownState();
+    this._explosionHandler = () => this._flashExplosionBurst();
     game.on("meltdown", this._meltdownHandler);
     game.on("meltdownResolved", this._meltdownResolvedHandler);
+    game.on("component_explosion", this._explosionHandler);
     this.updateMeltdownState();
+  }
+
+  _flashExplosionBurst() {
+    const doc = typeof document !== "undefined" ? document : null;
+    if (!doc?.body) return;
+    const mq = typeof globalThis.matchMedia === "function" ? globalThis.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    if (mq?.matches) return;
+    const el = doc.createElement("div");
+    el.className = "explosion-emf-overlay";
+    doc.body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.classList.add("explosion-emf-overlay--on");
+    });
+    setTimeout(() => {
+      el.remove();
+    }, 110);
   }
 
   cleanup() {
@@ -1646,8 +1699,12 @@ class MeltdownUI {
       this.ui.game.off("meltdown", this._meltdownHandler);
       this.ui.game.off("meltdownResolved", this._meltdownResolvedHandler);
     }
+    if (this.ui?.game?.off && this._explosionHandler) {
+      this.ui.game.off("component_explosion", this._explosionHandler);
+    }
     this._meltdownHandler = null;
     this._meltdownResolvedHandler = null;
+    this._explosionHandler = null;
     if (this._meltdownBuildupRafId != null) {
       cancelAnimationFrame(this._meltdownBuildupRafId);
       this._meltdownBuildupRafId = null;
@@ -1960,10 +2017,18 @@ function mountUpgradeReactiveDisplay(upgrade, display) {
       const header = lvl >= upgrade.max_level ? "MAX" : `Level ${lvl}/${upgrade.max_level}`;
       return upgradeLevelTextTemplate({ header });
     };
+    const afterLevelReadout = () => {
+      const el = levelContainer.querySelector(".cathode-readout");
+      const d = display[upgrade.id] ?? upgrade;
+      const lvl = d.level ?? upgrade.level;
+      const header = lvl >= upgrade.max_level ? "MAX" : `Level ${lvl}/${upgrade.max_level}`;
+      if (el && typeof header === "string") runCathodeScramble(el, header, { durationMs: 150 });
+    };
     ReactiveLitComponent.mountMulti(
       [{ state: display, keys: [upgrade.id] }],
       levelRenderFn,
-      levelContainer
+      levelContainer,
+      afterLevelReadout
     );
   }
 }
@@ -2005,6 +2070,10 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
       const display = state?.upgrade_display;
       if (display) {
         mountUpgradeReactiveDisplay(upgrade, display);
+      } else {
+        const lr = upgrade.$el.querySelector(".upgrade-level-info .cathode-readout");
+        const t = lr?.textContent?.trim();
+        if (lr && t) runCathodeScramble(lr, t, { durationMs: 150 });
       }
     }
   });
@@ -3028,6 +3097,7 @@ class HeatVisualsUI {
     this.ui.registry.register('HeatVisuals', this);
     this._overlay = null;
     this._heatFlowOverlay = null;
+    this._voltageOverlaySvg = null;
     this._timeFluxSimOverlay = null;
   }
 
@@ -3068,6 +3138,59 @@ class HeatVisualsUI {
     overlay.appendChild(svg);
     this._heatFlowOverlay = svg;
     return svg;
+  }
+
+  _ensureVoltageOverlay() {
+    const overlay = this._ensureOverlay();
+    if (!overlay) return null;
+    if (this._voltageOverlaySvg && this._voltageOverlaySvg.parentElement) return this._voltageOverlaySvg;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "voltage-placement-overlay");
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+    svg.style.position = "absolute";
+    svg.style.left = "0";
+    svg.style.top = "0";
+    svg.style.pointerEvents = "none";
+    overlay.appendChild(svg);
+    this._voltageOverlaySvg = svg;
+    return svg;
+  }
+
+  drawVoltagePlacementOverlay() {
+    const ui = this.ui;
+    const svg = this._ensureVoltageOverlay();
+    if (!svg) return;
+    const part = ui.stateManager?.getClickedPart?.();
+    const hoverTile = ui.gridInteractionUI?.getHoveredTile?.();
+    const tileset = ui.game?.tileset;
+    if (!part || !hoverTile?.enabled || !tileset) {
+      svg.style.display = "none";
+      svg.innerHTML = "";
+      return;
+    }
+    svg.style.display = "";
+    const overlay = this._ensureOverlay();
+    if (!overlay) return;
+    const rect = overlay.getBoundingClientRect();
+    const w = Math.max(1, rect.width);
+    const h = Math.max(1, rect.height);
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.innerHTML = "";
+    const from = this._tileCenterToOverlayPosition(hoverTile.row, hoverTile.col);
+    for (const neighbor of tileset.getTilesInRange(hoverTile, 1)) {
+      if (!neighbor?.enabled) continue;
+      const to = this._tileCenterToOverlayPosition(neighbor.row, neighbor.col);
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", from.x);
+      line.setAttribute("y1", from.y);
+      line.setAttribute("x2", to.x);
+      line.setAttribute("y2", to.y);
+      line.setAttribute("stroke", "rgba(90, 210, 255, 0.42)");
+      line.setAttribute("stroke-width", "1.5");
+      line.setAttribute("stroke-dasharray", "4 5");
+      svg.appendChild(line);
+    }
   }
 
   _ensureTimeFluxSimulationOverlay() {
@@ -3214,6 +3337,15 @@ class HeatVisualsUI {
       background.style.backgroundColor = "rgba(255, 0, 0, 0.5)";
 
       background.classList.add("heat-critical");
+    }
+
+    const appRoot = typeof document !== "undefined" ? document.getElementById("app_root") : null;
+    if (appRoot) {
+      const heatNorm = Math.min(1, Math.max(0, heatRatio / 1.5));
+      appRoot.style.setProperty("--crt-heat", String(heatNorm));
+      const dur = 20 - heatNorm * 12;
+      appRoot.style.setProperty("--crt-jitter-duration", `${dur}s`);
+      appRoot.classList.toggle("crt-heat-tearing", heatRatio >= 1.3);
     }
   }
 }
@@ -3783,6 +3915,7 @@ export class CoreLoopUI {
       if (ui.gridCanvasRenderer && ui.game) ui.gridCanvasRenderer.render(ui.game);
       ui.navIndicatorsUI?.updateLeaderboardIcon?.();
       ui.heatVisualsUI?.drawHeatFlowOverlay?.();
+      ui.heatVisualsUI?.drawVoltagePlacementOverlay?.();
     }
 
     ui.update_interface_task = requestAnimationFrame((ts) => ui.coreLoopUI.runUpdateInterfaceLoop(ts));
@@ -3949,6 +4082,10 @@ export class DeviceFeaturesUI {
 
   heavyVibration() {
     this.vibrate(50);
+  }
+
+  upgradeCardHoverBuzz() {
+    this.vibrate([8, 12, 10]);
   }
 
   doublePulseVibration() {

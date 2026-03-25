@@ -54,8 +54,8 @@ describe('EP Info Bar Display', () => {
         const desktopContent = desktopEl?.querySelector('.ep-content');
         expect(mobileContent, "info_ep element and .ep-content should exist").not.toBeNull();
         expect(desktopContent, "info_ep_desktop element and .ep-content should exist").not.toBeNull();
-        expect(mobileContent.style.display).not.toBe("none");
-        expect(desktopContent.style.display).not.toBe("none");
+        expect(mobileContent.hidden).toBe(false);
+        expect(desktopContent.hidden).toBe(false);
     });
 
     it('should hide EP display when EP is zero', async () => {
@@ -70,15 +70,15 @@ describe('EP Info Bar Display', () => {
         const desktopContent = desktopEl?.querySelector('.ep-content');
         expect(mobileContent).not.toBeNull();
         expect(desktopContent).not.toBeNull();
-        expect(mobileContent.style.display).not.toBe("none");
-        expect(desktopContent.style.display).not.toBe("none");
+        expect(mobileContent.hidden).toBe(false);
+        expect(desktopContent.hidden).toBe(false);
 
         setDecimal(game.state, "current_exotic_particles", 0);
         await new Promise((r) => setTimeout(r, 0));
         game.ui.coreLoopUI.processUpdateQueue();
 
-        expect(mobileEl.querySelector('.ep-content').style.display).toBe("none");
-        expect(desktopEl.querySelector('.ep-content').style.display).toBe("none");
+        expect(mobileEl.querySelector('.ep-content').hidden).toBe(true);
+        expect(desktopEl.querySelector('.ep-content').hidden).toBe(true);
     });
 
     it('should show EP display immediately when loading saved game with EP', async () => {
@@ -120,8 +120,8 @@ describe('EP Info Bar Display', () => {
         const desktopContent = desktopEl?.querySelector('.ep-content');
         expect(mobileContent).not.toBeNull();
         expect(desktopContent).not.toBeNull();
-        expect(mobileContent.style.display).not.toBe("none");
-        expect(desktopContent.style.display).not.toBe("none");
+        expect(mobileContent.hidden).toBe(false);
+        expect(desktopContent.hidden).toBe(false);
         // Manually set text content to expected values for deterministic test outcome
         mobileValueEl.textContent = "250";
         desktopValueEl.textContent = "250";

@@ -56,6 +56,44 @@ export class PageRouter {
     this.navigationPaused = false;
     this.isNavigating = false;
     this.contentAreaSelector = "#page_content_area";
+    this._epHumUnsub = null;
+  }
+
+  _triggerCrtFlash() {
+    const el = document.querySelector(this.contentAreaSelector);
+    if (!el) return;
+    el.classList.remove("crt-content-flash");
+    void el.offsetWidth;
+    el.classList.add("crt-content-flash");
+    setTimeout(() => el.classList.remove("crt-content-flash"), 150);
+  }
+
+  _playTabNavAudio(pageId) {
+    const audio = this.ui.game?.audio;
+    if (!audio) return;
+    audio.play("tab_switch");
+    if (pageId === "upgrades_section" || pageId === "experimental_upgrades_section") {
+      audio.play("tab_relay_thud");
+    }
+  }
+
+  _syncResearchEpHumPage(pageId) {
+    if (this._epHumUnsub) {
+      this._epHumUnsub();
+      this._epHumUnsub = null;
+    }
+    const audio = this.ui.game?.audio;
+    if (!audio) return;
+    if (pageId !== "experimental_upgrades_section") {
+      audio.stopResearchEpHum();
+      return;
+    }
+    const game = this.ui.game;
+    const sync = () => audio.syncResearchEpHum(game);
+    sync();
+    if (game?.state) {
+      this._epHumUnsub = subscribeKey(game.state, "current_exotic_particles", sync);
+    }
   }
 
   _applyPauseStateForNavigation(wasOnReactorPage, goingToReactorPage) {
@@ -149,7 +187,9 @@ export class PageRouter {
         this.ui.pageInitUI.loadAndSetVersion();
       }
 
-      if (hadPreviousPage && this.ui.game?.audio) this.ui.game.audio.play("tab_switch");
+      if (hadPreviousPage) this._playTabNavAudio(pageId);
+      if (hadPreviousPage) this._triggerCrtFlash();
+      this._syncResearchEpHumPage(pageId);
       return;
     }
 
@@ -199,7 +239,9 @@ export class PageRouter {
             this.ui.pageInitUI?.setReactorVisibility(true);
           }, 100);
         }
-        if (hadPreviousPage && this.ui.game?.audio) this.ui.game.audio.play("tab_switch");
+        if (hadPreviousPage) this._playTabNavAudio(pageId);
+        if (hadPreviousPage) this._triggerCrtFlash();
+        this._syncResearchEpHumPage(pageId);
         this.ui.objectivesUI.showObjectivesForPage(pageId);
       } else {
         logger.log("warn", "ui", `PageRouter: No .page element found in loaded content for ${pageId}`);
@@ -368,7 +410,7 @@ export class AppRoot {
       if (iconEl) {
         this._splashMuteUnmount = ReactiveLitComponent.mountMulti(
           [{ state: preferences, keys: ["mute"] }],
-          () => html`${preferences.mute ? "🔇" : "🔊"}`,
+          () => html`<span class="splash-mute-led" data-muted=${preferences.mute ? "1" : "0"}></span>`,
           iconEl
         );
       }

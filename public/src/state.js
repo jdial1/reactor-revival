@@ -289,6 +289,8 @@ export function initUIStateSubscriptions(uiState, ui) {
     const section = document.getElementById("parts_section");
     if (section) section.classList.toggle("collapsed", uiState.parts_panel_collapsed);
     ui.partsPanelUI?.updatePartsPanelBodyClass?.();
+    const bg = document.getElementById("reactor_background");
+    if (bg) bg.classList.toggle("engineering-mode", !uiState.parts_panel_collapsed);
   };
   syncCopyPasteCollapsed();
   syncPartsPanelCollapsed();

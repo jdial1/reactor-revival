@@ -52,14 +52,14 @@ export function gameShellTemplate() {
     <nav id="controls_nav">
       <div id="controls_nav_root"></div>
     </nav>
-    <button id="parts_close_btn" class="pixel-btn contrast parts-close-btn" type="button">Close</button>
+    <button id="parts_close_btn" class="pixel-btn contrast parts-close-btn modal-latch-close" type="button" aria-label="Close parts panel"><span class="modal-latch-arm" aria-hidden="true"></span><span class="modal-latch-body"></span></button>
   </aside>
   <div id="main_content_wrapper">
     <div id="objectives_toast_root"></div>
     <div id="page_content_area"></div>
     <div id="tooltip" class="hidden">
       <div id="tooltip_data"></div>
-      <button id="tooltip_close_btn" title="Close" aria-label="Close tooltip">×</button>
+      <button id="tooltip_close_btn" class="modal-latch-close modal-latch-close--small" type="button" title="Close" aria-label="Close tooltip"><span class="modal-latch-arm" aria-hidden="true"></span><span class="modal-latch-body"></span></button>
     </div>
   </div>
 </main>

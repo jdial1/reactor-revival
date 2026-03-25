@@ -43,14 +43,14 @@ export function upgradeCardTemplate({
       </div>
       <div class="upgrade-footer">
         <div class="upgrade-level-info">
-          ${header ? html`<span class="level-text">${header}</span>` : html`<span class="level-text"></span>`}
+          ${header ? html`<span class="level-text cathode-readout">${header}</span>` : html`<span class="level-text cathode-readout"></span>`}
         </div>
-        <button class="pixel-btn upgrade-action-btn"
+        <button class="pixel-btn upgrade-action-btn industrial-btn"
                 ?disabled=${doctrineLocked || isMaxed}
                 aria-label=${ariaLabel}
                 @click=${onBuyClick}>
           <span class="action-text">Buy</span>
-          <span class="cost-display">${costDisplay}</span>
+          <span class="cost-display cathode-readout">${costDisplay}</span>
         </button>
         <div class="sandbox-upgrade-actions" style="display: ${isSandbox ? "" : "none"}">
           <button class="pixel-btn sandbox-buy-max-btn" type="button" @click=${onBuyMaxClick ?? (() => {})}>Buy Max</button>

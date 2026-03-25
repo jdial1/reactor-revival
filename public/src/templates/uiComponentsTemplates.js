@@ -6,6 +6,8 @@ export function infoBarTemplate({
   heatClass,
   powerPct,
   heatPct,
+  powerBarStyle,
+  heatBarStyle,
   powerWaveStyle,
   heatWaveStyle,
   powerWaveClass,
@@ -25,6 +27,7 @@ export function infoBarTemplate({
   maxHeatDesktop,
   maxHeatMobile,
   epContentStyle,
+  epVisible,
   epValueDesktop,
   epValueMobile,
   activeBuffs,
@@ -57,13 +60,13 @@ export function infoBarTemplate({
         <span class="value cathode-readout" id="info_money_desktop">${moneyDisplayDesktop}</span>
       </span>
       <span class="info-item ep" id="info_ep_desktop">
-        <span class="ep-content" style=${epContentStyle}>
+        <span class="ep-content" style=${epContentStyle} ?hidden=${!epVisible}>
           <span class="icon">🧬</span>
           <span class="value cathode-readout" id="info_ep_value_desktop">${epValueDesktop}</span>
         </span>
       </span>
       <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
-      <button class=${heatClass} id="info_bar_heat_btn_desktop" type="button" tabindex="0" aria-label="Reduce Heat" style=${styleMap({ "--fill-height": `${heatPct}%` })} @click=${onVent}>
+      <button class=${heatClass} id="info_bar_heat_btn_desktop" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} @click=${onVent}>
         <div class=${heatWaveClass} style=${heatWaveStyle} aria-hidden="true">
           <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
             <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
@@ -95,7 +98,7 @@ export function infoBarTemplate({
           <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
           <span class="value cathode-readout" id="info_money">${moneyDisplayMobile}</span>
         </span>
-        <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${styleMap({ "--fill-height": `${heatPct}%` })} @click=${onVentMobile}>
+        <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} @click=${onVentMobile}>
           <div class=${heatWaveClass} style=${heatWaveStyle} aria-hidden="true">
             <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
               <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
@@ -112,7 +115,7 @@ export function infoBarTemplate({
         <span class="info-item power"><span class="denom" id="info_power_denom">/${maxPowerMobile}</span></span>
         <div class="info-item center-content">
           <span class="info-item ep" id="info_ep">
-            <span class="ep-content" style=${epContentStyle}>
+            <span class="ep-content" style=${epContentStyle} ?hidden=${!epVisible}>
               <span class="icon">🧬</span>
               <span class="value cathode-readout" id="info_ep_value">${epValueMobile}</span>
             </span>
@@ -264,6 +267,7 @@ export function partsPanelLayoutTemplate({
   onSwitchHeat,
   onHelpToggle,
   tabContent,
+  moduleInfoContent,
 }) {
   return html`
     <div class="parts_header">
@@ -299,6 +303,9 @@ export function partsPanelLayoutTemplate({
     </div>
     <div id="parts_tab_contents">
       ${tabContent}
+    </div>
+    <div id="parts_module_info" class="parts-module-info-panel" aria-live="polite">
+      ${moduleInfoContent}
     </div>
   `;
 }
@@ -369,12 +376,26 @@ export function controlDeckExoticParticlesTemplate({
   `;
 }
 
+function controlDeckMechSwitch(id, checked, onClick, caption, title, wrapClass) {
+  return html`
+    <div class=${`control-deck-mech-wrap ${wrapClass || ""}`} title=${title}>
+      <button type="button" class=${`mech-switch ${checked ? "mech-switch-on-active" : ""}`} id=${id} role="switch" aria-checked=${checked} @click=${onClick}>
+        <span class="mech-switch-off">OFF</span>
+        <span class="mech-switch-track"><span class="mech-switch-thumb"></span></span>
+        <span class="mech-switch-on">ON</span>
+      </button>
+      <span class="control-deck-mech-cap">${caption}</span>
+    </div>
+  `;
+}
+
 export function controlDeckControlsNavTemplate({
-  autoSellClass,
-  autoBuyClass,
+  autoSellOn,
+  autoBuyOn,
+  timeFluxOn,
+  heatControlOn,
+  pauseOn,
   timeFluxClass,
-  heatControlClass,
-  pauseClass,
   timeFluxLabel,
   pauseTitle,
   accountTitle,
@@ -386,27 +407,11 @@ export function controlDeckControlsNavTemplate({
   onTogglePause,
 }) {
   return html`
-    <button id="auto_sell_toggle" class=${autoSellClass} title="Auto Sell" @click=${onToggleAutoSell}>
-      <img src="img/ui/icons/icon_cash.png" alt="Auto Sell" class="control-icon" />
-      <span class="control-text">Auto Sell</span>
-    </button>
-    <button id="auto_buy_toggle" class=${autoBuyClass} title="Auto Buy" @click=${onToggleAutoBuy}>
-      <img src="img/ui/icons/icon_cash_outline.svg" alt="Auto Buy" class="control-icon" />
-      <span class="control-text">Auto Buy</span>
-    </button>
-    <button id="time_flux_toggle" class=${timeFluxClass} title=${timeFluxLabel} @click=${onToggleTimeFlux}>
-      <img src="img/ui/icons/icon_time.png" alt="Time Flux" class="control-icon" />
-      <span class="control-text">${timeFluxLabel}</span>
-    </button>
-    <button id="heat_control_toggle" class=${heatControlClass} title="Heat Ctrl" @click=${onToggleHeatControl}>
-      <img src="img/ui/icons/icon_heat.png" alt="Auto Heat" class="control-icon" />
-      <span class="control-text">Auto Heat</span>
-    </button>
-    <button id="pause_toggle" class=${pauseClass} title=${pauseTitle} @click=${onTogglePause}>
-      <img src="img/ui/nav/nav_pause.png" alt="Pause" class="control-icon pause-icon" />
-      <img src="img/ui/nav/nav_play.png" alt="Resume" class="control-icon play-icon" />
-      <span class="control-text">Pause</span>
-    </button>
+    ${controlDeckMechSwitch("auto_sell_toggle", autoSellOn, onToggleAutoSell, "Auto Sell", "Auto Sell", "")}
+    ${controlDeckMechSwitch("auto_buy_toggle", autoBuyOn, onToggleAutoBuy, "Auto Buy", "Auto Buy", "")}
+    ${controlDeckMechSwitch("time_flux_toggle", timeFluxOn, onToggleTimeFlux, timeFluxLabel, timeFluxLabel, timeFluxClass)}
+    ${controlDeckMechSwitch("heat_control_toggle", heatControlOn, onToggleHeatControl, "Auto Heat", "Heat Ctrl", "")}
+    ${controlDeckMechSwitch("pause_toggle", pauseOn, onTogglePause, "Pause", pauseTitle, pauseOn ? "paused" : "")}
     <button id="user_account_btn_mobile" class="pixel-btn" title=${accountTitle}>
       <span class="control-icon" style="font-size: 1.5em;">${accountIcon}</span>
       <span class="control-text">Account</span>
@@ -468,12 +473,11 @@ export function myLayoutsModalTemplate({
   return html`
     <div
       id="my_layouts_modal"
-      class="modal-overlay"
-      @click=${(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      class="modal-overlay modal-drawer-overlay"
     >
-      <div class="modal-content">
+      <div class="modal-drawer-scrim" @click=${onClose}></div>
+      <div class="modal-content modal-drawer-panel" @click=${(e) => e.stopPropagation()}>
+        <div class="modal-drawer-metal-handle" aria-hidden="true"></div>
         <div class="modal-header">
           <h3>My Layouts</h3>
           <button id="my_layouts_close_btn" title="Close" aria-label="Close" @click=${onClose}>×</button>
@@ -824,7 +828,7 @@ export function navIndicatorTemplate({
 export function upgradeLevelTextTemplate({
   header,
 }) {
-  return html`<span class="level-text">${header}</span>`;
+  return html`<span class="level-text cathode-readout">${header}</span>`;
 }
 
 export function upgradeCostTextTemplate({

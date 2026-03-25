@@ -28,6 +28,12 @@ import {
 } from "../templates/uiModalTemplates.js";
 
 const HIDDEN_STYLE = { display: "none" };
+const DRAWER_BODY_CLASS = "modal-drawer-open";
+
+function setModalDrawerOpen(open) {
+  if (typeof document === "undefined") return;
+  document.body.classList.toggle(DRAWER_BODY_CLASS, !!open);
+}
 const SECTION_HEAD = "margin-top: 0; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
 const SECTION_HEAD_MARGIN = "margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
 
@@ -796,6 +802,9 @@ export class ModalOrchestrator {
   }
 
   showModal(modalId, payload = {}) {
+    if (modalId !== MODAL_IDS.SETTINGS && modalId !== MODAL_IDS.MY_LAYOUTS) {
+      setModalDrawerOpen(false);
+    }
     const handler = this._handlers.get(modalId);
     if (!handler?.show) return undefined;
     return handler.show(payload);
@@ -1099,11 +1108,13 @@ export class ModalOrchestrator {
     document.addEventListener("keydown", keyHandler);
     this._settingsKeyHandler = keyHandler;
     this._settingsVisible = true;
+    setModalDrawerOpen(true);
     this._renderSettingsModal();
   }
 
   _hideSettingsModal() {
     this._settingsVisible = false;
+    setModalDrawerOpen(false);
     if (this._settingsUnmount) {
       this._settingsUnmount();
       this._settingsUnmount = null;
@@ -1248,6 +1259,7 @@ export class ModalOrchestrator {
   }
 
   _hideMyLayoutsModal() {
+    setModalDrawerOpen(false);
     if (this._modalRoot) render(nothing, this._modalRoot);
   }
 

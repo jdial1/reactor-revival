@@ -5,26 +5,53 @@ export function renderSplashTemplate(isMuted, onMuteClick, onHideMenuClick) {
   return html`
     <div id="splash-container">
       <main id="splash-screen">
-        <button type="button" class="splash-mute-btn" title=${isMuted ? "Unmute" : "Mute"} aria-label=${isMuted ? "Unmute" : "Mute"} @click=${onMuteClick}>
-          <span class="splash-mute-icon"></span>
-        </button>
         <div class="splash-loading">
           <div class="splash-spinner hidden splash-element-hidden"></div>
           <p id="splash-status" class="hidden splash-element-hidden">Ready!</p>
         </div>
+        <div class="splash-vhold-mask" aria-hidden="true"></div>
         <div class="splash-menu-panel splash-control-deck">
+          <div class="splash-screw splash-screw-tl" aria-hidden="true"></div>
+          <div class="splash-screw splash-screw-tr" aria-hidden="true"></div>
+          <div class="splash-screw splash-screw-bl" aria-hidden="true"></div>
+          <div class="splash-screw splash-screw-br" aria-hidden="true"></div>
           <div class="splash-menu-inner">
           <header class="splash-panel-header">
             <h1 class="splash-title">REACTOR REVIVAL</h1>
-            <button type="button" class="splash-menu-hide-btn" title="Hide menu" aria-label="Hide menu" @click=${onHideMenuClick}>−</button>
+            <div class="splash-panel-header-controls">
+              <button
+                type="button"
+                class="splash-mute-btn"
+                title=${isMuted ? "Unmute" : "Mute"}
+                aria-label=${isMuted ? "Unmute" : "Mute"}
+                @click=${onMuteClick}
+              >
+                <span class="splash-mute-icon" aria-hidden="true"></span>
+                <span class="splash-mute-label">AUDIO RELAY</span>
+              </button>
+              <button
+                type="button"
+                class="splash-menu-hide-btn"
+                title="Hide menu"
+                aria-label="Hide menu"
+                @click=${onHideMenuClick}
+              >
+                −
+              </button>
+            </div>
           </header>
           <div id="splash-start-options" class="splash-start-options"></div>
           <footer class="splash-panel-footer">
-            <div id="splash-auth-in-footer" class="splash-auth-in-footer"></div>
-            <span id="splash-version-text" class="splash-version-text"></span>
-            <span id="splash-user-count" class="splash-user-count-inline">
-              <span id="user-count-text">-</span>
-            </span>
+            <div class="splash-module splash-module-extcomm">
+              <div class="splash-module-corner-label">EXT_COMM_LINK</div>
+              <div id="splash-auth-in-footer" class="splash-auth-in-footer"></div>
+              <div class="splash-module-stats">
+                <span id="splash-version-text" class="splash-version-text"></span>
+                <span id="splash-user-count" class="splash-user-count-inline">
+                  <span id="user-count-text">-</span>
+                </span>
+              </div>
+            </div>
           </footer>
           </div>
         </div>

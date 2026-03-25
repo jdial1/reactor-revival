@@ -35,6 +35,7 @@ import {
   classMap,
   Format,
   formatPlaytimeLog,
+  runCathodeScramble,
   rotateSlot1ToBackupAsync,
   GOOGLE_DRIVE_CONFIG,
   getGoogleDriveAuth as getGoogleDriveConfig,
@@ -252,6 +253,17 @@ export const AUDIO_SPECS = {
     staticGain: 0.03,
     staticDurationS: 0.03,
   },
+  crtWhine: {
+    freqHz: 1650,
+    freqEndHz: 980,
+    gain: 0.10,
+    durationS: 0.85,
+    filterFreqHz: 2400,
+    filterQ: 1.2,
+    noiseGain: 0.02,
+    noiseDurationS: 0.28,
+    noiseFilterHz: 1200,
+  },
   explosion: {
     snapFilterHz: 1500,
     boomFreqHz: 150,
@@ -433,6 +445,7 @@ const O = AUDIO_SPECS.objective;
 const SV = AUDIO_SPECS.save;
 const F = AUDIO_SPECS.flux;
 const OH = AUDIO_SPECS.overheat;
+const CW = AUDIO_SPECS.crtWhine;
 
 const EFFECT_PROFILES = {
   purge_saw: {
@@ -465,6 +478,7 @@ const EFFECT_PROFILES = {
   objective_air: { type: "objective_air", spec: O },
   objective_stamp: { type: "objective_stamp", spec: O },
   objective_print: { type: "objective_print", spec: O },
+  crt_whine: { type: "crt_whine", spec: CW },
   save_motor: { type: "save_motor", spec: SV },
   save_seeks: { type: "save_seeks", spec: SV },
   save_latch: { type: "save_latch", spec: SV },
@@ -480,6 +494,7 @@ const EVENT_TO_EFFECTS = {
   error: { sampleKey: "error" },
   tab_switch: { sampleKey: "tab_switch", sampleFallback: "click" },
   ui_hover: { sampleKey: "click" },
+  crt_whine: { effects: ["crt_whine"], duckAmbience: true },
   sell: { sampleKey: "sell", sampleFallback: "click", duckAmbience: true },
   placement: {
     sampleMap: { cell: "placement_cell", plating: "placement_plating", vent: "placement", default: "placement" },
@@ -621,6 +636,48 @@ const effectHandlers = {
       headOsc.start(charTime);
       headOsc.stop(charTime + spec.headDurationS);
     }
+    return null;
+  },
+  crt_whine: ({ svc, ctx, categoryGain, spec, t }) => {
+    const durationS = spec.durationS ?? 0.85;
+    const noiseDurationS = spec.noiseDurationS ?? 0.28;
+
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(spec.freqHz, t);
+    osc.frequency.exponentialRampToValueAtTime(spec.freqEndHz, t + durationS);
+
+    filter.type = "bandpass";
+    filter.frequency.value = spec.filterFreqHz;
+    filter.Q.value = spec.filterQ ?? 1.2;
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(categoryGain);
+    gain.gain.setValueAtTime(spec.gain, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + durationS);
+
+    osc.start(t);
+    osc.stop(t + durationS);
+
+    if (svc?._noiseBuffer) {
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = svc._noiseBuffer;
+      const noiseFilter = ctx.createBiquadFilter();
+      const noiseGain = ctx.createGain();
+      noiseFilter.type = "highpass";
+      noiseFilter.frequency.value = spec.noiseFilterHz ?? 1200;
+      noiseGain.gain.setValueAtTime(spec.noiseGain ?? 0.02, t);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, t + noiseDurationS);
+      noiseSrc.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(categoryGain);
+      noiseSrc.start(t);
+      noiseSrc.stop(t + noiseDurationS);
+    }
+
     return null;
   },
   save_motor: ({ ctx, categoryGain, spec, t }) => {
@@ -833,9 +890,31 @@ function handleTabSwitch(svc, opts) {
   if (config.sampleFallback) trySample(svc, config.sampleFallback, opts.category, opts.pan);
 }
 
+function handleTabRelayThud(svc, opts) {
+  const { t, ctx, categoryGain } = opts;
+  if (!ctx || !categoryGain) return;
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.value = 52;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.13, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  osc.connect(g);
+  g.connect(categoryGain);
+  osc.start(t);
+  osc.stop(t + 0.15);
+}
+
 function handleUiHover(svc, opts) {
   const config = EVENT_TO_EFFECTS.ui_hover;
   trySample(svc, config.sampleKey, opts.category, opts.pan);
+}
+
+function handleCrtWhine(svc, opts) {
+  const config = EVENT_TO_EFFECTS.crt_whine;
+  if (config.duckAmbience) svc._duckAmbience();
+  config.effects.forEach((id) => playSoundEffect(svc, id, opts, opts));
 }
 
 function handleSell(svc, opts) {
@@ -918,7 +997,9 @@ const EVENT_HANDLERS = {
   click: handleClick,
   error: handleError,
   tab_switch: handleTabSwitch,
+  tab_relay_thud: handleTabRelayThud,
   ui_hover: handleUiHover,
+  crt_whine: handleCrtWhine,
   sell: handleSell,
   placement: handlePlacement,
   purge: handlePurge,
@@ -1481,6 +1562,7 @@ export class AudioService {
   this._industrialBuffers = { metal_clank: null, steam_hiss: null };
   this._ambienceBuffers = [];
   this._ambienceDuckGain = null;
+  this._researchEpHum = null;
   }
 
   get _ambienceNodes() {
@@ -1795,6 +1877,7 @@ export class AudioService {
     } else {
       this.ambienceManager.stopAmbience();
       this.warningManager.stopWarningLoop();
+      this.stopResearchEpHum();
     }
   }
   _osc(startTime, type, freq, volume, duration, options = {}) {
@@ -1884,6 +1967,42 @@ export class AudioService {
 
   play(type, param = null, pan = null) {
     this.trigger(type, { param, pan });
+  }
+
+  syncResearchEpHum(game) {
+    if (!this.enabled || !this.context || this.context.state !== "running") return;
+    const ep = game?.state?.current_exotic_particles;
+    const n = typeof ep?.toNumber === "function" ? ep.toNumber() : Number(ep) || 0;
+    const targetGain = Math.min(0.055, 0.0015 + Math.log1p(Math.max(0, n)) * 0.0035);
+    const ctx = this.context;
+    const t = ctx.currentTime;
+    const dest = this._getCategoryGain("effects");
+    if (!this._researchEpHum) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = 60;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      osc.connect(g);
+      g.connect(dest);
+      osc.start(t);
+      this._researchEpHum = { osc, gain: g };
+    }
+    this._researchEpHum.gain.gain.linearRampToValueAtTime(targetGain, t + 0.05);
+  }
+
+  stopResearchEpHum() {
+    if (!this._researchEpHum || !this.context) {
+      this._researchEpHum = null;
+      return;
+    }
+    const { osc, gain } = this._researchEpHum;
+    const t = this.context.currentTime;
+    try {
+      gain.gain.linearRampToValueAtTime(0.0001, t + 0.08);
+      osc.stop(t + 0.1);
+    } catch (_) {}
+    this._researchEpHum = null;
   }
 }
 
@@ -4385,10 +4504,8 @@ class SplashStartOptionsBuilder {
 
     render(template, container);
 
-    const authArea = container.querySelector("#splash-auth-in-footer");
-    if (authArea) {
-      this.splashManager.setupSupabaseAuth(authArea);
-    }
+    const authArea = this.splashManager.splashScreen?.querySelector("#splash-auth-in-footer");
+    if (authArea) this.splashManager.setupSupabaseAuth(authArea);
   }
 }
 
@@ -4676,6 +4793,11 @@ class SplashScreenManager extends BaseComponent {
     this.readyPromise = isTestEnv() ? Promise.resolve(false) : this.waitForDOMAndLoad();
     this.socket = null;
     this.userCount = 0;
+    this._signalJumpEnabled = false;
+    this._signalJumpLoopTimeout = null;
+    this._signalJumpResetTimeout = null;
+    this._vholdBootTimeout = null;
+    this._resumeGlowHandlers = [];
 
     if (!isTestEnv()) {
       this.initSocketConnection();
@@ -4803,6 +4925,48 @@ class SplashScreenManager extends BaseComponent {
     await this.ensureReady();
     if (!this.splashScreen || this.isReady) return;
 
+    const splashScreen = this.splashScreen;
+    splashScreen.classList.remove("splash-vhold-booting");
+    void splashScreen.offsetHeight;
+    splashScreen.classList.add("splash-vhold-booting");
+    if (this._vholdBootTimeout) clearTimeout(this._vholdBootTimeout);
+    this._vholdBootTimeout = setTimeout(() => splashScreen.classList.remove("splash-vhold-booting"), 900);
+    const audio = this._appContext?.game?.audio ?? window.game?.audio;
+    audio?.play?.("crt_whine");
+
+    const versionEl = splashScreen.querySelector("#splash-version-text");
+    const userCountEl = splashScreen.querySelector("#user-count-text");
+    runCathodeScramble(versionEl, versionEl?.textContent ?? "", { durationMs: 200 });
+    runCathodeScramble(userCountEl, userCountEl?.textContent ?? "", { durationMs: 220 });
+
+    this._signalJumpEnabled = false;
+    if (this._signalJumpLoopTimeout) clearTimeout(this._signalJumpLoopTimeout);
+    if (this._signalJumpResetTimeout) clearTimeout(this._signalJumpResetTimeout);
+    this._signalJumpLoopTimeout = null;
+    this._signalJumpResetTimeout = null;
+    const panelEl = splashScreen.querySelector(".splash-menu-panel");
+    panelEl?.classList.remove("splash-signal-jump");
+
+    this._signalJumpEnabled = true;
+    const jumpOnce = () => {
+      if (!this._signalJumpEnabled) return;
+      const panel = splashScreen.querySelector(".splash-menu-panel");
+      if (panel) {
+        const amp = 2 + Math.random();
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        panel.style.setProperty("--splash-jump-y", `${dir * amp}px`);
+        panel.classList.remove("splash-signal-jump");
+        void panel.offsetHeight;
+        panel.classList.add("splash-signal-jump");
+        if (this._signalJumpResetTimeout) clearTimeout(this._signalJumpResetTimeout);
+        this._signalJumpResetTimeout = setTimeout(() => panel.classList.remove("splash-signal-jump"), 230);
+      }
+      const nextDelayMs = 1200 + Math.random() * 2600;
+      this._signalJumpLoopTimeout = setTimeout(jumpOnce, nextDelayMs);
+    };
+    const initialDelayMs = 1100 + Math.random() * 1500;
+    this._signalJumpLoopTimeout = setTimeout(jumpOnce, initialDelayMs);
+
     this.stopFlavorText();
     const spinner = this.splashScreen?.querySelector(".splash-spinner");
     if (spinner) spinner.classList.add("splash-element-hidden");
@@ -4820,6 +4984,38 @@ class SplashScreenManager extends BaseComponent {
     const builder = new SplashStartOptionsBuilder(this, this._appContext);
     const state = await builder.buildSaveSlotList(canLoadGame);
     builder.renderTo(startOptionsSection, state);
+
+    this._resumeGlowHandlers.forEach(({ el, onEnter, onLeave }) => {
+      el.removeEventListener("pointerenter", onEnter);
+      el.removeEventListener("pointerleave", onLeave);
+      el.removeEventListener("focus", onEnter);
+      el.removeEventListener("blur", onLeave);
+    });
+    this._resumeGlowHandlers.length = 0;
+    const splashRoot = splashScreen;
+    const active = new Set();
+    const updateGlow = () => {
+      if (active.size > 0) splashRoot.classList.add("splash-bezel-glow-hot");
+      else splashRoot.classList.remove("splash-bezel-glow-hot");
+    };
+    const resumeButtons = splashRoot?.querySelectorAll(".splash-btn-resume-primary") ?? [];
+    const onEnter = (e) => {
+      active.add(e.currentTarget);
+      updateGlow();
+    };
+    const onLeave = (e) => {
+      active.delete(e.currentTarget);
+      updateGlow();
+    };
+    resumeButtons.forEach((btn) => {
+      btn.addEventListener("pointerenter", onEnter);
+      btn.addEventListener("pointerleave", onLeave);
+      btn.addEventListener("focus", onEnter);
+      btn.addEventListener("blur", onLeave);
+      if (btn.matches(":hover")) active.add(btn);
+      this._resumeGlowHandlers.push({ el: btn, onEnter, onLeave });
+    });
+    updateGlow();
 
     startOptionsSection.classList.add("visible");
     setTimeout(() => startOptionsSection.classList.add("show"), 100);
@@ -4883,6 +5079,25 @@ class SplashScreenManager extends BaseComponent {
   hide() {
     if (!this.splashScreen || this.isReady) return;
     this.isReady = true;
+
+    this._signalJumpEnabled = false;
+    if (this._signalJumpLoopTimeout) clearTimeout(this._signalJumpLoopTimeout);
+    if (this._signalJumpResetTimeout) clearTimeout(this._signalJumpResetTimeout);
+    this._signalJumpLoopTimeout = null;
+    this._signalJumpResetTimeout = null;
+    if (this._vholdBootTimeout) clearTimeout(this._vholdBootTimeout);
+    this._vholdBootTimeout = null;
+    this.splashScreen.classList.remove("splash-vhold-booting");
+    this.splashScreen?.querySelector(".splash-menu-panel")?.classList.remove("splash-signal-jump");
+    this.splashScreen.classList.remove("splash-bezel-glow-hot");
+    this._resumeGlowHandlers.forEach(({ el, onEnter, onLeave }) => {
+      el.removeEventListener("pointerenter", onEnter);
+      el.removeEventListener("pointerleave", onLeave);
+      el.removeEventListener("focus", onEnter);
+      el.removeEventListener("blur", onLeave);
+    });
+    this._resumeGlowHandlers.length = 0;
+
     this.teardownIdleFade?.();
     this.teardownIdleFade = null;
     this.stopFlavorText();

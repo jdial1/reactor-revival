@@ -41,7 +41,7 @@ import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
 import dataService from "../services.js";
 import { ComponentRegistry } from "../utils.js";
 import { MOBILE_BREAKPOINT_PX } from "../utils.js";
-import { ObjectiveController, getObjectiveScrollDuration } from "../logic.js";
+import { ObjectiveController, checkObjectiveTextScrolling as applyObjectiveToastTitle } from "../logic.js";
 import { GridController, AudioController } from "./controllers/controllers.js";
 
 export function getRoot(selector) {
@@ -201,6 +201,7 @@ class PageInitUI {
         this.setupResearchCollapsibleSections();
         this.ui.sandboxUI.initializeSandboxUpgradeButtons();
         this.loadAndSetVersion();
+        this.ui.setupUpgradeCardHoverBuzz();
         break;
       case "about_section":
         this.setupVersionDisplay();
@@ -240,6 +241,32 @@ class PageInitUI {
       e.preventDefault();
       header.click();
     });
+    const coverWrap = document.querySelector(".refund-safety-cover-wrap");
+    const coverBtn = document.getElementById("refund_safety_cover");
+    if (coverBtn && coverWrap) {
+      coverBtn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        coverWrap.classList.toggle("cover-open");
+      });
+    }
+    const rebootBtn = document.getElementById("reboot_btn");
+    const refundBtn = document.getElementById("refund_btn");
+    const orchestrator = this.ui.modalOrchestrator;
+    if (rebootBtn) {
+      rebootBtn.addEventListener("click", (e) => {
+        if (!coverWrap?.classList.contains("cover-open")) {
+          e.preventDefault();
+          e.stopPropagation();
+        } else {
+          orchestrator?.showPrestigeModal?.("refund");
+        }
+      });
+    }
+    if (refundBtn) {
+      refundBtn.addEventListener("click", () => {
+        orchestrator?.showPrestigeModal?.("prestige");
+      });
+    }
   }
 
   setupVersionDisplay() {
@@ -408,8 +435,7 @@ class ObjectivesUI {
   checkTextScrolling() {
     const toastTitleEl = this.ui.coreLoopUI?.getElement?.("objectives_toast_title") ?? document.getElementById("objectives_toast_title");
     if (!toastTitleEl) return;
-    const duration = getObjectiveScrollDuration();
-    toastTitleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`;
+    applyObjectiveToastTitle({ objectives_toast_title: toastTitleEl });
   }
   markComplete() {
     const toastBtn = this.ui.coreLoopUI?.getElement?.("objectives_toast_btn") ?? document.getElementById("objectives_toast_btn");
@@ -605,6 +631,20 @@ export class UI {
 
   initializeCopyPasteUI() {
     this.copyPaste.init();
+  }
+
+  setupUpgradeCardHoverBuzz() {
+    if (this._upgradeBuzzSetup) return;
+    this._upgradeBuzzSetup = true;
+    const onMouseOver = (e) => {
+      const card = e.target.closest(".upgrade-card");
+      if (!card) return;
+      const prev = e.relatedTarget;
+      if (prev && card.contains(prev)) return;
+      this.deviceFeatures?.upgradeCardHoverBuzz?.();
+    };
+    document.getElementById("upgrades_content_wrapper")?.addEventListener("mouseover", onMouseOver);
+    document.getElementById("experimental_upgrades_content_wrapper")?.addEventListener("mouseover", onMouseOver);
   }
 
   initMainLayout() {

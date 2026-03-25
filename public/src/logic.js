@@ -99,6 +99,8 @@ import Decimal, {
   PRESTIGE_MULTIPLIER_PER_EP,
   PRESTIGE_MULTIPLIER_CAP,
   RESPEC_DOCTRINE_EP_COST,
+  runCathodeScramble,
+  vuSegmentRatio01,
 } from "./utils.js";
 import {
   GameActionSchema,
@@ -1504,7 +1506,10 @@ export class Upgrade {
 
       const costEl = this.$el.querySelector(".cost-display");
       if (costEl) {
-        costEl.textContent = this.level >= this.max_level ? "" : this.display_cost;
+        const next = this.level >= this.max_level ? "" : String(this.display_cost ?? "");
+        if (costEl.textContent !== next) {
+          runCathodeScramble(costEl, next, { durationMs: 150 });
+        }
       }
     }
     this._syncDisplayToState();
@@ -2385,7 +2390,43 @@ export function addPartIconsToTitle(game, title) {
 
 export function getObjectiveScrollDuration() { const baseWidth = 900; const baseDuration = 8; const screenWidth = (typeof window !== "undefined" && window.innerWidth) ? window.innerWidth : baseWidth; const duration = baseDuration * (screenWidth / baseWidth); return Math.max(5, Math.min(18, duration)); }
 
-export function checkObjectiveTextScrolling(domElements) { const toastTitleEl = domElements.objectives_toast_title; if (!toastTitleEl) return; const duration = getObjectiveScrollDuration(); toastTitleEl.style.animation = `scroll-objective-title ${duration}s linear infinite`; }
+export function checkObjectiveTextScrolling(domElements) {
+  const toastTitleEl = domElements.objectives_toast_title;
+  if (!toastTitleEl) return;
+  toastTitleEl.style.animation = "none";
+  const text = toastTitleEl.textContent || "";
+  if (!text.trim()) return;
+  const mq = typeof globalThis.matchMedia === "function" ? globalThis.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  if (mq?.matches) return;
+  toastTitleEl.classList.add("objectives-toast-title--typewriter");
+  toastTitleEl.innerHTML = "";
+  const ownerDoc = toastTitleEl.ownerDocument || (typeof document !== "undefined" ? document : null);
+  if (!ownerDoc?.createElement) {
+    toastTitleEl.textContent = text;
+    return;
+  }
+  try {
+    for (let i = 0; i < text.length; i++) {
+      const span = ownerDoc.createElement("span");
+      if (typeof span?.appendChild !== "function") {
+        toastTitleEl.textContent = text;
+        return;
+      }
+      span.className = "objective-char";
+      const o = String(i);
+      if (typeof span.style?.setProperty === "function") {
+        span.style.setProperty("--o", o);
+      } else {
+        span.setAttribute("style", `--o: ${o};`);
+      }
+      const ch = text[i];
+      span.textContent = ch === " " ? "\u00a0" : ch;
+      toastTitleEl.appendChild(span);
+    }
+  } catch {
+    toastTitleEl.textContent = text;
+  }
+}
 
 function formatObjectiveRewardLabel(reward) {
   const money = Number(reward?.money ?? 0);
@@ -3638,7 +3679,7 @@ class DynamicOverlayRenderer {
       const maxHeat = tile.part.containment || 1;
       const hasHeatBar = tile.part.base_containment > 0 || (tile.part.containment > 0 && tile.part.category !== "valve");
       if (hasHeatBar && tile.heat_contained != null) {
-        const pct = Math.max(0, Math.min(1, tile.heat_contained / maxHeat));
+        const pct = vuSegmentRatio01(Math.max(0, Math.min(1, tile.heat_contained / maxHeat)));
         const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
         const by = y + ts - barH;
         ctx.fillStyle = COLORS.heatBarBg;
@@ -3649,7 +3690,7 @@ class DynamicOverlayRenderer {
 
       const hasDurability = tile.part.base_ticks > 0;
       if (hasDurability && tile.ticks != null && tile.part.ticks > 0) {
-        const pct = Math.max(0, Math.min(1, tile.ticks / tile.part.ticks));
+        const pct = vuSegmentRatio01(Math.max(0, Math.min(1, tile.ticks / tile.part.ticks)));
         const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
         const by = y + ts - barH;
         if (!hasHeatBar) {

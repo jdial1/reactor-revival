@@ -106,7 +106,10 @@ export function researchSectionTemplate() {
       <div class="research-section-body">
         <p class="explanitory">Refund resets everything including EP. Prestige keeps Total EP and Research and grants a money multiplier.</p>
         <div class="research-buttons-container">
-          <button id="reboot_btn" class="pixel-btn nav-btn" type="button" title="Full Refund: Reset everything including EP">Refund</button>
+          <div class="refund-safety-cover-wrap">
+            <button type="button" class="refund-safety-cover" id="refund_safety_cover" aria-label="Lift safety cover to enable full refund"></button>
+            <button id="reboot_btn" class="pixel-btn nav-btn refund-danger-btn" type="button" title="Full Refund: Reset everything including EP">Refund</button>
+          </div>
           <button id="refund_btn" class="pixel-btn nav-btn" type="button" title="Prestige: Keep EP and Research">Prestige</button>
         </div>
       </div>

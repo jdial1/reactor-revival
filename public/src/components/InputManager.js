@@ -166,12 +166,26 @@ export class InputHandler {
       this._attachPointerListeners(state, e, getTileFromEvent, cancelLongPress, MOVE_THRESHOLD);
     };
 
+    const pointerMoveHandler = (e) => {
+      const tile = getTileFromEvent(e);
+      const key = tile?.enabled ? tileKey(tile.row, tile.col) : null;
+      this._setInteractionState({ hoveredTileKey: key });
+    };
+
+    const pointerLeaveHandler = () => {
+      this._setInteractionState({ hoveredTileKey: null });
+    };
+
     const eventTarget = this.ui.gridCanvasRenderer?.getCanvas() || reactor;
     this._reactorEventTarget = eventTarget;
     this._reactorHandlers = {
       pointerdown: pointerDownHandler,
+      pointermove: pointerMoveHandler,
+      pointerleave: pointerLeaveHandler,
     };
     eventTarget.addEventListener("pointerdown", pointerDownHandler);
+    eventTarget.addEventListener("pointermove", pointerMoveHandler);
+    eventTarget.addEventListener("pointerleave", pointerLeaveHandler);
   }
 
   teardownReactorEventListeners() {
@@ -179,6 +193,8 @@ export class InputHandler {
     const t = this._reactorEventTarget;
     const h = this._reactorHandlers;
     t.removeEventListener("pointerdown", h.pointerdown);
+    t.removeEventListener("pointermove", h.pointermove);
+    t.removeEventListener("pointerleave", h.pointerleave);
     this._reactorEventTarget = null;
     this._reactorHandlers = null;
   }

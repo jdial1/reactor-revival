@@ -189,14 +189,14 @@ export function settingsModalTemplate({
   onClose,
 }) {
   return html`
-    <div class="settings-modal-overlay" @click=${(e) => {
-      if (e.target === e.currentTarget || e.target.closest(".modal-close-btn")) onClose();
-    }}>
-      <div class="settings-modal pixel-panel" style="padding: 0; display: flex; flex-direction: column;">
+    <div class="settings-modal-overlay modal-drawer-overlay">
+      <div class="modal-drawer-scrim" @click=${onClose}></div>
+      <div class="settings-modal pixel-panel modal-drawer-panel" style="padding: 0; display: flex; flex-direction: column;" @click=${(e) => e.stopPropagation()}>
+        <div class="modal-drawer-metal-handle" aria-hidden="true"></div>
         <div class="modal-swipe-handle" aria-hidden="true"></div>
         <div class="settings-header" style="background: rgb(35, 39, 35); border-bottom: 4px solid var(--bevel-dark); padding: 12px 16px;">
           <h2 style="margin: 0; color: var(--game-success-color, rgb(143, 214, 148)); font-size: 1rem; text-shadow: 2px 2px 0px rgba(0,0,0,0.8);">[ DIAGNOSTIC TERMINAL ]</h2>
-          <button class="close-btn modal-close-btn" aria-label="Close" @click=${onClose}>✖</button>
+          <button type="button" class="close-btn modal-close-btn modal-latch-close" aria-label="Close" @click=${onClose}><span class="modal-latch-arm" aria-hidden="true"></span><span class="modal-latch-body"></span></button>
         </div>
 
         <div class="settings-tabs" role="tablist">

@@ -125,8 +125,6 @@ export function splashStartOptionsTemplate({
         </button>
       </div>
     </div>
-
-    <div id="splash-auth-in-footer" style="margin-top: 1rem;"></div>
   `;
 }
 

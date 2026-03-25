@@ -21,6 +21,7 @@ import {
   ZOOM_SCALE_MAX,
   logger,
   BaseComponent,
+  vuSegmentRatio01,
 } from "../utils.js";
 
 export { Tileset } from "../logic.js";
@@ -193,7 +194,7 @@ class DynamicOverlayRenderer {
       const maxHeat = tile.part.containment || 1;
       const hasHeatBar = tile.part.base_containment > 0 || (tile.part.containment > 0 && tile.part.category !== "valve");
       if (hasHeatBar && tile.heat_contained != null) {
-        const pct = Math.max(0, Math.min(1, tile.heat_contained / maxHeat));
+        const pct = vuSegmentRatio01(Math.max(0, Math.min(1, tile.heat_contained / maxHeat)));
         const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
         const by = y + ts - barH;
         ctx.fillStyle = COLORS.heatBarBg;
@@ -204,7 +205,7 @@ class DynamicOverlayRenderer {
 
       const hasDurability = tile.part.base_ticks > 0;
       if (hasDurability && tile.ticks != null && tile.part.ticks > 0) {
-        const pct = Math.max(0, Math.min(1, tile.ticks / tile.part.ticks));
+        const pct = vuSegmentRatio01(Math.max(0, Math.min(1, tile.ticks / tile.part.ticks)));
         const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
         const by = y + ts - barH;
         if (!hasHeatBar) {
