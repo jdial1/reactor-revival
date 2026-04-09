@@ -41,6 +41,18 @@ Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm 
 
 - **`npm run build:sw`** — Workbox injects the precache manifest from root `src-sw.js` into `public/sw.js` (`config/workbox-config.cjs`).
 - **Tests** — `npm test` / `npm run test:ci` (full suite); `npm run test:deploy` matches the CI subset (see `package.json`).
-- **`scripts/`** — version stamp, vendor copy/bundle, PWA checks, image helpers, and workflow-only helpers (`fix-github-pages-manifest.js`, `post-deploy-pwa-check.js`). **`config/`** — ESLint, Vitest, Workbox, Stylelint. See `package.json` `scripts` for the full list.
+- **`scripts/`** — `generate-metadata.js` (version + splash BG counts), vendor copy/bundle (`copy-libs.js`), unified `pwa-check.js` (local root files, `--fix-manifest`, `--remote` post-deploy checks), image compression, console stripping, and the dev server. **`config/`** — ESLint, Vitest, Workbox, Stylelint. See `package.json` `scripts` for the full list.
+
+### Repository layout
+
+- **`public/`** — Everything the host/CDN serves: HTML, CSS, assets, `manifest.json`, and application code as native ES modules under `public/src/` (there is no separate top-level `src/` for app code; that keeps the static-site root obvious).
+- **`src-sw.js` (repo root)** — Service worker **source** for Workbox. `npm run build:sw` injects the precache manifest into **`public/sw.js`**, which is what browsers load. Do not edit `public/sw.js` by hand.
+- **`config/`** — ESLint, Vitest, Workbox, Stylelint configs.
+- **`tests/`** — Vitest suites. `tests/core/` uses domain subfolders (`grid/`, `thermodynamics/`, `engine/`, …); see `tests/README.md`. Tests import app modules via the `@app/` alias (see `jsconfig.json`).
+
+```
+repo root:  src-sw.js, config/, scripts/, tests/
+ship:       public/   (index.html, sw.js built, public/src/*.js, data/, schema/, …)
+```
 
 ---

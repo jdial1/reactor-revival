@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from '../helpers/setup.js';
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum, simulateKeyPress, buildKeyboardEvent } from '../helpers/setup.js';
 
 describe('EP Hotkey Functionality', () => {
     let game;
@@ -29,14 +29,7 @@ describe('EP Hotkey Functionality', () => {
         // Mock the affordability check
         const affordabilitySpy = vi.spyOn(game.upgradeset, 'check_affordability');
 
-        // Simulate CTRL+E keypress
-        const event = new KeyboardEvent('keydown', {
-            key: 'e',
-            ctrlKey: true,
-            bubbles: true
-        });
-
-        document.dispatchEvent(event);
+        simulateKeyPress(document, 'e', { ctrlKey: true });
 
         expect(toNum(game.exotic_particles)).toBe(toNum(initialEP) + 1);
         expect(toNum(game.total_exotic_particles)).toBe(toNum(initialTotalEP) + 1);
@@ -62,14 +55,7 @@ describe('EP Hotkey Functionality', () => {
         // Mock the affordability check
         const affordabilitySpy = vi.spyOn(game.upgradeset, 'check_affordability');
 
-        // Simulate CTRL+E (uppercase) keypress
-        const event = new KeyboardEvent('keydown', {
-            key: 'E',
-            ctrlKey: true,
-            bubbles: true
-        });
-
-        document.dispatchEvent(event);
+        simulateKeyPress(document, 'E', { ctrlKey: true });
 
         expect(toNum(game.exotic_particles)).toBe(toNum(initialEP) + 1);
         expect(toNum(game.total_exotic_particles)).toBe(toNum(initialTotalEP) + 1);
@@ -86,14 +72,7 @@ describe('EP Hotkey Functionality', () => {
         // Mock the affordability check
         const affordabilitySpy = vi.spyOn(game.upgradeset, 'check_affordability');
 
-        // Simulate CTRL+E keypress
-        const event = new KeyboardEvent('keydown', {
-            key: 'e',
-            ctrlKey: true,
-            bubbles: true
-        });
-
-        document.dispatchEvent(event);
+        simulateKeyPress(document, 'e', { ctrlKey: true });
 
         // Verify that affordability was checked after adding EP
         expect(affordabilitySpy).toHaveBeenCalledWith(game);
@@ -103,16 +82,8 @@ describe('EP Hotkey Functionality', () => {
     });
 
     it('should prevent default behavior when CTRL+E is pressed', () => {
-        // Simulate CTRL+E keypress
-        const event = new KeyboardEvent('keydown', {
-            key: 'e',
-            ctrlKey: true,
-            bubbles: true
-        });
-
-        // Mock preventDefault
+        const event = buildKeyboardEvent('e', { ctrlKey: true });
         const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
-
         document.dispatchEvent(event);
 
         // Verify that preventDefault was called
@@ -124,14 +95,7 @@ describe('EP Hotkey Functionality', () => {
         const initialEP = game.exotic_particles;
         game.ui.stateManager.setVar("exotic_particles", initialEP);
 
-        // Simulate E keypress without CTRL
-        const event = new KeyboardEvent('keydown', {
-            key: 'e',
-            ctrlKey: false,
-            bubbles: true
-        });
-
-        document.dispatchEvent(event);
+        simulateKeyPress(document, 'e', { ctrlKey: false });
 
         // Verify that EP did not change
         expect(game.exotic_particles).toBe(initialEP);
@@ -146,16 +110,8 @@ describe('EP Hotkey Functionality', () => {
         // Mock the exponential money methods
         const startSpy = vi.spyOn(game.ui, 'startCtrl9MoneyIncrease');
 
-        // Simulate CTRL+9 keypress
-        const event = new KeyboardEvent('keydown', {
-            key: '9',
-            ctrlKey: true,
-            bubbles: true
-        });
-
-        // Mock preventDefault
+        const event = buildKeyboardEvent('9', { ctrlKey: true });
         const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
-
         document.dispatchEvent(event);
 
         // Verify that startCtrl9MoneyIncrease was called
@@ -169,13 +125,7 @@ describe('EP Hotkey Functionality', () => {
         // Mock the exponential money methods
         const stopSpy = vi.spyOn(game.ui, 'stopCtrl9MoneyIncrease');
 
-        // Simulate CTRL+9 keyup
-        const event = new KeyboardEvent('keyup', {
-            key: '9',
-            ctrlKey: true,
-            bubbles: true
-        });
-
+        const event = buildKeyboardEvent('9', { type: 'keyup', ctrlKey: true });
         document.dispatchEvent(event);
 
         // Verify that stopCtrl9MoneyIncrease was called

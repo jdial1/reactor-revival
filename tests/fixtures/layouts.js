@@ -174,3 +174,55 @@ export function generateDenseLayout(rows, cols) {
     return { size: { rows, cols }, parts };
 }
 
+function partTypeFromPartId(partId) {
+    const s = String(partId);
+    return s.replace(/\d+$/, "") || s;
+}
+
+const layoutPatterns = {
+    dense: (rows, cols) => generateDenseLayout(rows, cols),
+    empty: (rows, cols) => ({ size: { rows, cols }, parts: [] }),
+    solid: (rows, cols, opts = {}) => {
+        const partId = opts.partId ?? "uranium1";
+        const lvl = opts.lvl ?? 1;
+        const t = opts.t ?? partTypeFromPartId(partId);
+        const parts = [];
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                parts.push({ r, c, t, id: partId, lvl });
+            }
+        }
+        return { size: { rows, cols }, parts };
+    },
+    striped: (rows, cols, opts = {}) => {
+        const a = opts.partIdA ?? "uranium1";
+        const b = opts.partIdB ?? "vent1";
+        const ta = opts.tA ?? partTypeFromPartId(a);
+        const tb = opts.tB ?? partTypeFromPartId(b);
+        const parts = [];
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const useA = (r + c) % 2 === 0;
+                parts.push({
+                    r,
+                    c,
+                    t: useA ? ta : tb,
+                    id: useA ? a : b,
+                    lvl: useA ? opts.lvlA ?? 1 : opts.lvlB ?? 1,
+                });
+            }
+        }
+        return { size: { rows, cols }, parts };
+    },
+};
+
+export function generateTestLayout(patternType, dimensions, options = {}) {
+    const rows = typeof dimensions === "number" ? dimensions : dimensions.rows;
+    const cols = typeof dimensions === "number" ? dimensions : dimensions.cols;
+    const builder = layoutPatterns[patternType];
+    if (!builder) {
+        throw new Error(`generateTestLayout: unknown pattern "${patternType}"`);
+    }
+    return builder(rows, cols, options);
+}
+

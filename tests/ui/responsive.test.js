@@ -1,11 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
-import { GridScaler } from "../../public/src/components/ui_grid.js";
-
-const resizeWindow = (w, width, height) => {
-  Object.defineProperty(w, "innerWidth", { configurable: true, writable: true, value: width });
-  Object.defineProperty(w, "innerHeight", { configurable: true, writable: true, value: height });
-  w.dispatchEvent(new w.Event("resize"));
-};
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame, simulateViewportResize } from "../helpers/setup.js";
+import { GridScaler } from "@app/components/ui-grid.js";
 
 // Helper to check if an element exists and is not explicitly hidden
 // Note: JSDOM doesn't apply CSS, so we check for explicit style attributes and classes
@@ -53,7 +47,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         document = setup.document;
         window = setup.window;
         await game.router.loadPage("reactor_section");
-        resizeWindow(window, width, height);
+        simulateViewportResize(width, height);
         await new Promise((res) => setTimeout(res, 50));
       });
 
@@ -187,7 +181,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
         expect(partsPanel, "Parts panel should exist").not.toBeNull();
         expect(toggle, "Parts panel toggle (build FAB) should exist").not.toBeNull();
 
-        resizeWindow(window, 800, 600);
+        simulateViewportResize(800, 600);
         const isMobile = window.innerWidth <= 900;
 
         if (game?.ui?.partsPanelUI?.initializePartsPanel) {
@@ -416,7 +410,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
     });
 
     it("should have scrollable sections with proper CSS on mobile viewport", async () => {
-      resizeWindow(window, 480, 800);
+      simulateViewportResize(480, 800);
       
       await game.router.loadPage("upgrades_section");
       
@@ -483,7 +477,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
 
     it("should scale down reactor grid by 15% and center it on desktop", () => {
       // Set desktop viewport
-      resizeWindow(window, 1280, 800);
+      simulateViewportResize(1280, 800);
 
       const reactor = document.getElementById("reactor");
       const reactorWrapper = document.getElementById("reactor_wrapper");
@@ -578,7 +572,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
 
     it("should fill height and allow horizontal scrolling on mobile", () => {
       // Set mobile viewport
-      resizeWindow(window, 480, 800);
+      simulateViewportResize(480, 800);
 
       const reactor = document.getElementById("reactor");
       const reactorWrapper = document.getElementById("reactor_wrapper");
@@ -630,7 +624,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
 
     it("should maintain minimum tile size on very small screens", () => {
       // Set very small mobile viewport
-      resizeWindow(window, 320, 600);
+      simulateViewportResize(320, 600);
 
       const reactor = document.getElementById("reactor");
       expect(reactor, "Reactor should exist").not.toBeNull();
@@ -672,7 +666,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
     });
 
     it("should reshape grid for Mobile Portrait (Tall) screens", () => {
-      resizeWindow(window, 400, 800); // Mobile dimensions
+      simulateViewportResize(400, 800);
       
       // Manually trigger logic because JSDOM resize events are tricky with Observers
       const scaler = new GridScaler(game.ui);
@@ -693,7 +687,7 @@ describe("Responsive UI Layout and Overlap Checks", () => {
     });
 
     it("should reshape grid for Desktop Landscape (Wide) screens", () => {
-      resizeWindow(window, 1280, 800);
+      simulateViewportResize(1280, 800);
 
       // Trigger resize
       if (game.ui.gridScaler) {

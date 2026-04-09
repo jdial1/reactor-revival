@@ -3,9 +3,9 @@ import { proxy, subscribe } from "valtio/vanilla";
 import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey } from "../state.js";
 import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
 import { runCheckAffordability, calculateSectionCounts, BlueprintService } from "../logic.js";
-import { UpgradeCard, CloseButton, PartButton } from "./buttonFactory.js";
-import { MODAL_IDS } from "./ui_modals.js";
-import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
+import { UpgradeCard, CloseButton, PartButton } from "./button-factory.js";
+import { MODAL_IDS } from "./ui-modals.js";
+import { ReactiveLitComponent } from "./reactive-lit-component.js";
 import { leaderboardService, requestWakeLock, releaseWakeLock } from "../services.js";
 import {
   infoBarTemplate,
@@ -40,7 +40,6 @@ import {
   soundWarningValueTemplate,
   engineStatusIndicatorTemplate,
   navIndicatorTemplate,
-  upgradeLevelTextTemplate,
   sectionCountTextTemplate,
   plainTextTemplate,
   quickSelectSlotTemplate,
@@ -232,6 +231,7 @@ class InfoBarUI {
       if (!el || typeof text !== "string") continue;
       if (this._cathodeInfoBarFirst[id]) {
         this._cathodeInfoBarFirst[id] = false;
+        el.textContent = text;
         this._cathodeInfoBarLast[id] = text;
         continue;
       }
@@ -382,16 +382,12 @@ class InfoBarUI {
       powerTextMobile: fmt(power, 0),
       maxPowerDesktop: fmt(maxP, 2),
       maxPowerMobile: fmt(maxP),
-      moneyDisplayDesktop: moneyDisplay,
-      moneyDisplayMobile,
       heatTextDesktop: fmt(heat, 2),
       heatTextMobile: fmt(heat, 0),
       maxHeatDesktop: fmt(maxH, 2),
       maxHeatMobile: fmt(maxH),
       epContentStyle,
       epVisible,
-      epValueDesktop: epText,
-      epValueMobile: epText,
       activeBuffs,
       onSell,
       onVent,
@@ -1311,7 +1307,6 @@ class ControlDeckUI {
       pauseOn: !!state.pause,
       timeFluxClass: timeFluxHasQueue ? "time-flux-queue" : "",
       timeFluxLabel,
-      pauseTitle: state.pause ? "Resume" : "Pause",
       accountTitle: ui.uiState?.user_account_display?.title ?? "Account",
       accountIcon: ui.uiState?.user_account_display?.icon ?? "👤",
       onToggleAutoSell: toggleHandler("auto_sell"),
@@ -1594,11 +1589,64 @@ class TabSetupUI extends BaseComponent {
               btn.classList.remove("active");
             });
           }
+          document.getElementById("settings_btn")?.classList.remove("active");
           menuBtn.classList.add("active");
           this.ui.modalOrchestrator.showModal(MODAL_IDS.SETTINGS);
         }
       }, { signal });
     }
+  }
+
+  setupDesktopTopNavButtons() {
+    if (!this._abortController) this._abortController = new AbortController();
+    const { signal } = this._abortController;
+    const ui = this.ui;
+    const settingsTop = document.getElementById("settings_btn");
+    if (settingsTop) {
+      settingsTop.addEventListener("click", () => {
+        ui.deviceFeatures.lightVibration();
+        if (ui.modalOrchestrator.isModalVisible(MODAL_IDS.SETTINGS)) {
+          ui.modalOrchestrator.hideModal(MODAL_IDS.SETTINGS);
+        } else {
+          if (ui.game?.router?.currentPageId === "reactor_section") ui.partsPanelUI?.closePartsPanel?.();
+          const bottomNav = document.getElementById("bottom_nav");
+          if (bottomNav) {
+            bottomNav.querySelectorAll("button[data-page]").forEach((btn) => {
+              btn.classList.remove("active");
+            });
+          }
+          document.getElementById("menu_tab_btn")?.classList.remove("active");
+          settingsTop.classList.add("active");
+          ui.modalOrchestrator.showModal(MODAL_IDS.SETTINGS);
+        }
+      }, { signal });
+    }
+    const fsBtn = document.getElementById("fullscreen_toggle");
+    if (fsBtn) {
+      fsBtn.addEventListener("click", () => {
+        ui.deviceFeatures.toggleFullscreen();
+        ui.deviceFeatures.updateFullscreenButtonState();
+      }, { signal });
+    }
+    if (!ui._fullscreenSyncAttached) {
+      ui._fullscreenSyncAttached = true;
+      document.addEventListener("fullscreenchange", () => {
+        ui.deviceFeatures?.updateFullscreenButtonState?.();
+      });
+    }
+    const splashClose = document.getElementById("splash_close_btn");
+    if (splashClose) {
+      splashClose.addEventListener("click", async () => {
+        ui.deviceFeatures.lightVibration();
+        const sm = window.splashManager;
+        if (!sm) return;
+        ui.modalOrchestrator?.hideModal(MODAL_IDS.SETTINGS);
+        if (ui.game?.engine?.running) ui.game.engine.stop();
+        sm.show();
+        await sm.refreshSaveOptions();
+      }, { signal });
+    }
+    ui.deviceFeatures?.updateFullscreenButtonState?.();
   }
 }
 
@@ -1896,7 +1944,7 @@ class MeltdownUI {
 }
 
 export { ClipboardUI, MeltdownUI };
-export { InputHandler } from "./InputManager.js";
+export { InputHandler } from "./input-manager.js";
 export function mergeComponents(summary, checkedTypes) {
   const merged = {};
   summary.forEach(item => {
@@ -2010,21 +2058,31 @@ function renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useRe
 function mountUpgradeReactiveDisplay(upgrade, display) {
   const levelContainer = upgrade.$el.querySelector(".upgrade-level-info");
   if (levelContainer) {
+    if (typeof upgrade._levelReactiveUnmount === "function") {
+      try {
+        upgrade._levelReactiveUnmount();
+      } catch (_) {}
+      upgrade._levelReactiveUnmount = null;
+    }
     levelContainer.replaceChildren();
-    const levelRenderFn = () => {
-      const d = display[upgrade.id] ?? upgrade;
-      const lvl = d.level ?? upgrade.level;
-      const header = lvl >= upgrade.max_level ? "MAX" : `Level ${lvl}/${upgrade.max_level}`;
-      return upgradeLevelTextTemplate({ header });
-    };
+    let lastLevelHeader;
+    const levelRenderFn = () => html`<span class="level-text cathode-readout"></span>`;
     const afterLevelReadout = () => {
       const el = levelContainer.querySelector(".cathode-readout");
       const d = display[upgrade.id] ?? upgrade;
       const lvl = d.level ?? upgrade.level;
       const header = lvl >= upgrade.max_level ? "MAX" : `Level ${lvl}/${upgrade.max_level}`;
-      if (el && typeof header === "string") runCathodeScramble(el, header, { durationMs: 150 });
+      if (!el || typeof header !== "string") return;
+      if (lastLevelHeader === undefined) {
+        el.textContent = header;
+        lastLevelHeader = header;
+        return;
+      }
+      if (lastLevelHeader === header) return;
+      lastLevelHeader = header;
+      runCathodeScramble(el, header, { durationMs: 150 });
     };
-    ReactiveLitComponent.mountMulti(
+    upgrade._levelReactiveUnmount = ReactiveLitComponent.mountMulti(
       [{ state: display, keys: [upgrade.id] }],
       levelRenderFn,
       levelContainer,
@@ -3699,6 +3757,15 @@ export class SandboxUI {
     this.ui = ui;
   }
 
+  enterSandbox() {
+    const ui = this.ui;
+    if (!ui.game) return;
+    if (!ui.game.isSandbox) ui.game.isSandbox = true;
+    document.body.classList.add("reactor-sandbox");
+    this.initializeSandboxUpgradeButtons();
+    ui.coreLoopUI?.runUpdateInterfaceLoop?.();
+  }
+
   toggleSandbox() {
     const ui = this.ui;
     if (!ui.game) return;
@@ -4102,6 +4169,6 @@ export class DeviceFeaturesUI {
 }
 
 export { HeatVisualsUI, GridInteractionUI };
-export { ParticleEffectsUI, VisualEventRendererUI } from "./VisualEffectsManager.js";
+export { ParticleEffectsUI, VisualEventRendererUI } from "./visual-effects-manager.js";
  
 

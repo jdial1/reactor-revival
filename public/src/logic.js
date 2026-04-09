@@ -135,9 +135,9 @@ import {
   PhysicsTickInputSchema,
   PhysicsTickResultSchema,
 } from "../schema/index.js";
-import { renderToNode, PartButton, UpgradeCard } from "./components/buttonFactory.js";
+import { renderToNode, PartButton, UpgradeCard } from "./components/button-factory.js";
 import dataService from "./services.js";
-import { ReactiveLitComponent } from "./components/ReactiveLitComponent.js";
+import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 import { serializeReactor, deserializeReactor, calculateLayoutCostBreakdown, calculateLayoutCost, renderLayoutPreview, buildPartSummary, buildAffordableSet, filterLayoutByCheckedTypes, clipToGrid as clipToGridFn, calculateCurrentSellValue, buildAffordableLayout as buildAffordableLayoutFn, buildPasteState as buildPasteStateFn, validatePasteResources, getCostBreakdown } from "./components/ui-components.js";
 
 const rawBalance = {
@@ -2915,13 +2915,22 @@ export class ObjectiveController {
               <button type="button" class="objectives-claim-pill" ?disabled=${!state.isComplete} @click=${(e) => this._handleClaimClick(e)}>${state.claimText}</button>
             </span>
             <span class="objectives-toast-paper-line">
-              <span class="objectives-toast-title" id="objectives_toast_title">${state.title}</span>
+              <span class="objectives-toast-title" id="objectives_toast_title"></span>
             </span>
             <span class="objectives-toast-progress" aria-hidden="true"><span class="objectives-toast-progress-fill" style=${progressStyle}></span></span>
           </span>
         </span>
       </div>
     `;
+  }
+
+  _syncObjectivesToastTitle(state) {
+    const titleEl = typeof document !== "undefined" ? document.getElementById("objectives_toast_title") : null;
+    if (!titleEl) return;
+    titleEl.textContent = state?.title ?? "";
+    if (state?.title?.trim()) {
+      setTimeout(() => this.api.getStateManager()?.checkObjectiveTextScrolling?.(), 0);
+    }
   }
 
   _render(state) {
@@ -2936,7 +2945,7 @@ export class ObjectiveController {
         if ((msg.includes("parentNode") || msg.includes("nextSibling")) && msg.includes("null")) return;
       }
     }
-    if (state.title) this.api.getStateManager()?.checkObjectiveTextScrolling?.();
+    this._syncObjectivesToastTitle(state);
   }
 
   _renderReactive() {
@@ -2948,7 +2957,6 @@ export class ObjectiveController {
     } else if (state && !state.isComplete) {
       this._lastObjectiveComplete = false;
     }
-    if (template && state?.title) setTimeout(() => this.api.getStateManager()?.checkObjectiveTextScrolling?.(), 0);
     return template;
   }
 
@@ -3024,7 +3032,15 @@ export class ObjectiveController {
         { state: ui.uiState, keys: ["objectives_toast_expanded", "active_page"] },
       ];
       const renderFn = () => this._renderReactive();
-      this._objectivesUnmount = ReactiveLitComponent.mountMulti(subscriptions, renderFn, root);
+      this._objectivesUnmount = ReactiveLitComponent.mountMulti(
+        subscriptions,
+        renderFn,
+        root,
+        () => {
+          const s = this._getRenderState();
+          this._syncObjectivesToastTitle(s);
+        }
+      );
     } else if (root) {
       this._render(this._getRenderState());
     }

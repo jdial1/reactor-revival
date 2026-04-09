@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
-import { numFormat } from "../../public/src/utils.js";
+import { numFormat } from "@app/utils.js";
 import { render } from "lit-html";
 import {
   StartButton,
@@ -9,7 +9,7 @@ import {
   UpgradeCard,
   BuyButton,
   TooltipCloseButton
-} from "../../public/src/components/buttonFactory.js";
+} from "@app/components/button-factory.js";
 
 describe("UI Component Creation and State", () => {
   const itWithDOM = it.skip;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { setupGameWithDOM, toNum } from "../helpers/setup.js";
+import { setupGameWithDOM, toNum, attachMockDOMToTiles } from "../helpers/setup.js";
 
 describe("UI User Interaction Scenarios", () => {
     let game;
@@ -9,15 +9,7 @@ describe("UI User Interaction Scenarios", () => {
         const setup = await setupGameWithDOM();
         game = setup.game;
         document = setup.document;
-    // Ensure tiles have DOM elements linked for interaction tests
-    game.tileset.tiles_list.forEach(tile => {
-      if (!tile.$el) {
-        const el = document.createElement('div');
-        el.className = 'tile';
-        el.tile = tile;
-        tile.$el = el;
-      }
-    });
+    attachMockDOMToTiles(game, document);
         vi.useFakeTimers();
     });
 

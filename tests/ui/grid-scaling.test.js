@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi, setupGameWithDOM } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, setupGameWithDOM, simulateViewportResize } from "../helpers/setup.js";
 
-import { GridScaler } from "../../public/src/components/ui_grid.js";
+import { GridScaler } from "@app/components/ui-grid.js";
 
 describe("Grid Scaling Logic (Reshaping)", () => {
     let game, ui, wrapper, reactor, window;
@@ -49,7 +49,7 @@ describe("Grid Scaling Logic (Reshaping)", () => {
 
     it("should calculate correct dimensions for Square Aspect Ratio (1:1)", () => {
         mockDimensions(800, 800);
-        Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+        simulateViewportResize(1024);
         
         ui.gridScaler.resize();
 
@@ -66,7 +66,7 @@ describe("Grid Scaling Logic (Reshaping)", () => {
 
     it("should reshape to Portrait (Mobile) Aspect Ratio", () => {
         mockDimensions(400, 800);
-        Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
+        simulateViewportResize(400);
         
         ui.gridScaler.resize();
 
@@ -80,7 +80,7 @@ describe("Grid Scaling Logic (Reshaping)", () => {
 
     it("should reshape to Landscape (Desktop) Aspect Ratio", () => {
         mockDimensions(1200, 600);
-        Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true });
+        simulateViewportResize(1200);
         ui.gridScaler.resize();
 
         // Desktop uses square grid logic
@@ -96,7 +96,7 @@ describe("Grid Scaling Logic (Reshaping)", () => {
 
     it("should apply CSS variables correctly", () => {
         mockDimensions(800, 800); // Use sufficient size for default grid
-        Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+        simulateViewportResize(1024);
         
         // Force grid size for test consistency
         game.rows = 12;
@@ -126,7 +126,7 @@ describe("Grid Scaling Logic (Reshaping)", () => {
 
     it("should center the grid via wrapper styles on desktop", () => {
         mockDimensions(800, 600);
-        Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+        simulateViewportResize(1024);
         ui.gridScaler.resize();
         
         // Desktop: The scaler enforces flex centering on the wrapper
@@ -137,7 +137,7 @@ describe("Grid Scaling Logic (Reshaping)", () => {
 
     it("should use flex-start alignment on mobile", () => {
         mockDimensions(400, 800);
-        Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
+        simulateViewportResize(400);
         ui.gridScaler.resize();
         
         // Mobile: The scaler uses center alignment

@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import sharp from "sharp";
+import { writeSplashBgCount } from "./generate-metadata.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -50,8 +51,7 @@ async function run() {
     const totalPct = totalBefore > 0 ? Math.round((1 - totalAfter / totalBefore) * 100) : 0;
     console.log(`${path.basename(dir)}: ${(totalBefore / 1024 / 1024).toFixed(2)} MB → ${(totalAfter / 1024 / 1024).toFixed(2)} MB (${totalPct}% total)`);
   }
-  const { execSync } = await import("child_process");
-  execSync("node scripts/generate-bg-count.js", { cwd: root });
+  writeSplashBgCount();
 }
 
 run().catch((e) => {

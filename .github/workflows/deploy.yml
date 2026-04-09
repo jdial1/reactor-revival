@@ -34,14 +34,14 @@ jobs:
 
       # public/src is the single source of truth; no copy step needed
 
-      - name: Generate version.json
-        run: npm run generate-version
+      - name: Generate version.json and splash counts
+        run: npm run generate-metadata
 
       - name: Copy external libraries
         run: npm run copy-libs
 
       - name: Fix manifest.json for GitHub Pages
-        run: node scripts/fix-github-pages-manifest.js
+        run: node scripts/pwa-check.js --fix-manifest
 
       - name: Build Service Worker
         run: npm run build:sw
@@ -93,7 +93,7 @@ jobs:
           GITHUB_PAGES_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
           echo "Running PWA checks for: ${{ needs.deploy.outputs.page_url }}"
-          node scripts/post-deploy-pwa-check.js
+          node scripts/pwa-check.js --remote
 
       - name: Create check status comment (on failure)
         if: failure()

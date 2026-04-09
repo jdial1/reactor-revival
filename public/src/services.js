@@ -57,14 +57,14 @@ import {
   updateToastTemplate as updateToastTemplateView,
   versionCheckToastTemplate,
 } from "./templates/servicesTemplates.js";
-import { MODAL_IDS } from "./components/ui_modals.js";
+import { MODAL_IDS } from "./components/ui-modals.js";
 import {
   LoadFromCloudButton,
   GoogleSignInButton,
   createLoadingButton,
   createGoogleSignInButtonWithIcon,
-} from "./components/buttonFactory.js";
-import { ReactiveLitComponent } from "./components/ReactiveLitComponent.js";
+} from "./components/button-factory.js";
+import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -4042,7 +4042,7 @@ async function startGameOrFallback(ctx) {
   await ctx.pageRouter.loadGameLayout();
   ctx.ui.initMainLayout();
   await ctx.pageRouter.loadPage("reactor_section");
-  ctx.game.tooltip_manager = new (await import("./components/ui_tooltips_tutorial.js")).TooltipManager(
+  ctx.game.tooltip_manager = new (await import("./components/ui-tooltips-tutorial.js")).TooltipManager(
     "#main",
     "#tooltip",
     ctx.game
@@ -4331,7 +4331,7 @@ async function applyCloudSaveAndLaunch(cloudSaveData) {
   await pageRouter.loadGameLayout();
   ui.initMainLayout();
   await pageRouter.loadPage("reactor_section");
-  game.tooltip_manager = new (await import("./components/ui_tooltips_tutorial.js")).TooltipManager("#main", "#tooltip", game);
+  game.tooltip_manager = new (await import("./components/ui-tooltips-tutorial.js")).TooltipManager("#main", "#tooltip", game);
   game.engine = new (await import("./logic.js")).Engine(game);
   await game.startSession();
   game.engine.start();
@@ -4454,7 +4454,7 @@ class SplashStartOptionsBuilder {
               ui.initMainLayout();
               await pageRouter.loadPage("reactor_section");
 
-              game.tooltip_manager = new (await import("./components/ui_tooltips_tutorial.js")).TooltipManager(
+              game.tooltip_manager = new (await import("./components/ui-tooltips-tutorial.js")).TooltipManager(
                 "#main",
                 "#tooltip",
                 game

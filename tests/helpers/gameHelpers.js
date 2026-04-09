@@ -1,3 +1,36 @@
+import { toDecimal } from "@app/utils.js";
+
+export function grantInfiniteResources(game) {
+  game.current_money = 1e30;
+  game.current_exotic_particles = toDecimal(1e20);
+  if (game.ui?.stateManager) {
+    game.ui.stateManager.setVar("current_money", game.current_money);
+    game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+  }
+  game.partset?.check_affordability?.(game);
+  game.upgradeset?.check_affordability?.(game);
+}
+
+export function syncGridState(game, { activeTiles = false } = {}) {
+  game.reactor.updateStats();
+  game.engine.markPartCacheAsDirty();
+  game.engine._updatePartCaches();
+  if (activeTiles) {
+    game.tileset.updateActiveTiles();
+  }
+}
+
+export function getFlatIndex(gameOrRow, rowOrCol, colOrCols) {
+  const g = gameOrRow;
+  if (g?.tileset?.gridIndex && typeof rowOrCol === "number" && typeof colOrCols === "number") {
+    return g.tileset.gridIndex(rowOrCol, colOrCols);
+  }
+  const row = gameOrRow;
+  const col = rowOrCol;
+  const cols = colOrCols;
+  return row * cols + col;
+}
+
 export function setGridDimensions(game, { rows, cols }) {
   game.rows = rows;
   game.cols = cols;
@@ -6,16 +39,24 @@ export function setGridDimensions(game, { rows, cols }) {
   game.tileset.updateActiveTiles();
 }
 
-export async function placePart(game, row, col, partId) {
+export async function placePart(game, row, col, partId, tileState) {
     const tile = game.tileset.getTile(row, col);
     if (!tile) throw new Error(`Tile at ${row},${col} does not exist`);
     const part = game.partset.getPartById(partId);
     if (!part) throw new Error(`Part ${partId} does not exist`);
-    
+
     await tile.setPart(part);
-    tile.activated = true;
-    if (part.category === "cell") {
-        tile.ticks = part.ticks;
+    if (tileState) {
+        if (tileState.heat !== undefined) tile.heat_contained = tileState.heat;
+        if (tileState.heat_contained !== undefined) tile.heat_contained = tileState.heat_contained;
+        if (tileState.ticks !== undefined) tile.ticks = tileState.ticks;
+        else if (part.category === "cell") tile.ticks = part.ticks;
+        tile.activated = tileState.activated !== undefined ? tileState.activated : true;
+    } else {
+        tile.activated = true;
+        if (part.category === "cell") {
+            tile.ticks = part.ticks;
+        }
     }
     return tile;
 }
@@ -116,8 +157,67 @@ export function maxOutUpgrades(game, filterFn = null) {
 }
 
 export async function clearGrid(game) {
-    game.tileset.clearAllTiles();
-    game.engine.markPartCacheAsDirty();
-    game.engine._updatePartCaches();
+  game.tileset.clearAllTiles();
+  syncGridState(game);
+}
+
+export function setTechTreeState(game, { doctrineId, bypassRestrictions } = {}) {
+  if (doctrineId !== undefined) {
+    game.tech_tree = doctrineId;
+  }
+  if (bypassRestrictions !== undefined) {
+    game.bypass_tech_tree_restrictions = bypassRestrictions;
+  }
+  game.partset?.check_affordability?.(game);
+  game.upgradeset?.check_affordability?.(game);
+}
+
+export function withTechTree(game, doctrineId, fn) {
+  const prevTree = game.tech_tree;
+  const prevBypass = game.bypass_tech_tree_restrictions;
+  game.tech_tree = doctrineId;
+  game.bypass_tech_tree_restrictions = false;
+  game.upgradeset.check_affordability(game);
+  try {
+    return fn();
+  } finally {
+    game.tech_tree = prevTree;
+    game.bypass_tech_tree_restrictions = prevBypass;
+    game.upgradeset.check_affordability(game);
+  }
+}
+
+export async function assembleHeatChain(
+  game,
+  partIds,
+  startRow,
+  startCol,
+  { axis = "horizontal", heatByIndex } = {}
+) {
+  const tiles = [];
+  for (let i = 0; i < partIds.length; i++) {
+    const row = axis === "horizontal" ? startRow : startRow + i;
+    const col = axis === "horizontal" ? startCol + i : startCol;
+    const tile = await placePart(game, row, col, partIds[i]);
+    if (heatByIndex && heatByIndex[i] !== undefined) {
+      tile.heat_contained = heatByIndex[i];
+    }
+    tiles.push(tile);
+  }
+  game.reactor?.updateStats?.();
+  game.engine?._updatePartCaches?.();
+  return tiles;
+}
+
+export function runManualActionUntil(game, action, predicate, { maxSteps = 100000 } = {}) {
+  let steps = 0;
+  while (!predicate(game) && steps < maxSteps) {
+    action(game);
+    steps++;
+  }
+  if (steps >= maxSteps) {
+    throw new Error(`runManualActionUntil: exceeded ${maxSteps} steps`);
+  }
+  return steps;
 }
 

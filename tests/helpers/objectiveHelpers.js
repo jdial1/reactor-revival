@@ -1,11 +1,12 @@
+import { syncGridState } from "./gameHelpers.js";
+
 export async function satisfyObjective(game, idx) {
 
     switch (idx) {
         case 0:
             await game.tileset.getTile(0, 0).setPart(game.partset.getPartById("uranium1"));
             game.engine?.tick?.();
-            game.reactor.updateStats();
-            game.tileset.updateActiveTiles();
+            syncGridState(game, { activeTiles: true });
             break;
 
         case 1:
@@ -263,3 +264,8 @@ export async function satisfyObjective(game, idx) {
     }
 }
 
+export function forceActiveObjective(game, index) {
+    game.objectives_manager.current_objective_index = index;
+    game.objectives_manager.set_objective(index, true);
+    game.objectives_manager.check_current_objective();
+}

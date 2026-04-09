@@ -17,7 +17,7 @@
 // These must be defined BEFORE any application code is imported to prevent reference errors.
 
 import Decimal from 'break_infinity.js';
-import { toDecimal, toNumber } from '../../public/src/utils.js';
+import { toNumber } from '@app/utils.js';
 if (typeof global !== 'undefined') global.Decimal = Decimal;
 if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
 
@@ -26,6 +26,12 @@ import { vi } from 'vitest';
 import fs from 'fs';
 import pathModule from 'path';
 import { JSDOM, ResourceLoader } from 'jsdom';
+import {
+  createJSDOMAudioContextMock,
+  attachMockDOMToTiles,
+  simulateViewportResize,
+  mockHardwareAPIs,
+} from './testUtils.js';
 
 vi.mock('idb-keyval', () => {
   const getStorage = () => (typeof global !== 'undefined' && global.localStorage) || (typeof window !== 'undefined' && window.localStorage);
@@ -183,12 +189,74 @@ if (global.window) global.window.Decimal = Decimal;
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Core application imports
-import { Game, Engine, ObjectiveManager } from '../../public/src/logic.js';
-import { UI } from '../../public/src/components/ui.js';
-import { PageRouter } from '../../public/src/app.js';
-import { attachGameEventListeners } from '../../public/src/app.js';
+import { Game, Engine, ObjectiveManager } from '@app/logic.js';
+import { UI } from '@app/components/ui.js';
+import { PageRouter } from '@app/app.js';
+import { attachGameEventListeners } from '@app/app.js';
+import { grantInfiniteResources, syncGridState } from './gameHelpers.js';
+import { mockFetchJsonResponse } from './suiteHelpers.js';
 
 export const toNum = toNumber;
+
+export {
+  grantInfiniteResources,
+  syncGridState,
+  runTicks,
+  setTechTreeState,
+  withTechTree,
+  assembleHeatChain,
+  runManualActionUntil,
+  getFlatIndex,
+  setGridDimensions as reshapeGrid,
+} from './gameHelpers.js';
+
+export { runManualActionUntil as runUntil } from './gameHelpers.js';
+
+export {
+  grantInfiniteResources as grantInfinite,
+  assembleHeatChain as assembleChain,
+} from './gameHelpers.js';
+
+export {
+  simulateViewportResize as setViewport,
+  flushUIUpdates as flushUI,
+  mockPerformanceAPI as mockPerformance,
+  mockClipboardAPI as mockClipboard,
+  setupWorkerContext as setupWorkerCtx,
+  captureOutput,
+  setupMockAudio,
+  mockThrottle,
+  stressParticleSystem,
+} from './testUtils.js';
+
+export { createServiceWorkerTestMocks as setupMockSW } from './testUtils.js';
+
+export {
+  mockCloudAPI,
+  mockGoogleDriveArrayBufferResponse,
+  mockSupabaseSaveSuccessPayload,
+  assertProcessedObjectiveTitleHasIcon as expectTitleToHaveIcon,
+  getPartByCriteria as findPart,
+  setupModalEnvironment as setupModalDOM,
+} from './suiteHelpers.js';
+
+export {
+  setResourcesAndRefreshAffordability as setResources,
+  setUpgradeLevelAndRefresh as levelUpgrade,
+  assertActivePage as assertPage,
+  attachMockDOMToTiles as attachMockEl,
+  setupPage,
+} from './testUtils.js';
+
+export { simulateSaveAndLoad as testSaveLoad } from './testUtils.js';
+
+export {
+  infiniteMoneyLayout,
+  buildLayoutGridFromCompact,
+  generateDenseLayout,
+  generateTestLayout,
+  generateTestLayout as getTestLayout,
+} from '../fixtures/layouts.js';
 
 export {
   describe,
@@ -205,6 +273,12 @@ export {
   ObjectiveManager,
   PageRouter,
 };
+
+export * from "./testUtils.js";
+export { forceActiveObjective, forceActiveObjective as forceObjective } from "./objectiveHelpers.js";
+export * from "./suiteHelpers.js";
+export { performTestRespec as testRespec, clearGracePeriod as skipGrace } from "./suiteHelpers.js";
+export { MemoryAuditor } from "./memoryAuditor.js";
 
 // --- Phase 3: Test Utilities & Enhanced Debugging ---
 
@@ -308,6 +382,63 @@ expect.extend({
         `Expected tile heat to be ~${expectedHeat}, but found ${actualHeat}`,
     };
   },
+  toBeEquivalentTo(received, expected, precision = 7) {
+    const a = toNumber(received);
+    const e = Number(expected);
+    const threshold = Math.max(1e-12, Math.abs(e) * Math.pow(10, -precision));
+    const pass = Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= threshold;
+    return {
+      pass,
+      message: () =>
+        `expected ${a} to be equivalent to ${e} within relative precision ${precision} (threshold ${threshold})`,
+    };
+  },
+  toWithinGameTolerance(received, expected, tolerance = 1e-6) {
+    const a = toNumber(received);
+    const e = Number(expected);
+    const pass = Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= tolerance;
+    return {
+      pass,
+      message: () =>
+        `expected ${a} to be within ${tolerance} of ${e}`,
+    };
+  },
+  toBeDecimal(received, expected, precision = 7) {
+    const a = toNumber(received);
+    const e = Number(expected);
+    const threshold = Math.max(1e-12, Math.abs(e) * Math.pow(10, -precision));
+    const pass = Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= threshold;
+    return {
+      pass,
+      message: () =>
+        `expected ${a} to match decimal ${e} within precision ${precision}`,
+    };
+  },
+  toBeCloseToG(received, expected, tolerance = 1e-6) {
+    const a = toNumber(received);
+    const e = Number(expected);
+    const pass = Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= tolerance;
+    return {
+      pass,
+      message: () =>
+        `expected ${a} to be within game tolerance ${tolerance} of ${e}`,
+    };
+  },
+  toHaveTitleIcon(received, iconId) {
+    const s = String(received ?? "");
+    if (iconId.startsWith("./img/") || iconId.startsWith("img/")) {
+      const pass = s.includes("<img") && s.includes("objective-part-icon") && s.includes(iconId);
+      return {
+        pass,
+        message: () => `expected title HTML to include img icon ${iconId}`,
+      };
+    }
+    const pass = s.includes(iconId);
+    return {
+      pass,
+      message: () => `expected title HTML to include ${iconId}`,
+    };
+  },
 });
 
 // --- Phase 4: Core Test Setup Functions ---
@@ -376,10 +507,7 @@ export async function setupGameLogicOnly() {
 
   // Set default state for logic tests
   globalGameInstance.bypass_tech_tree_restrictions = true;
-  globalGameInstance.current_money = 1e30;
-  globalGameInstance.current_exotic_particles = toDecimal(1e20);
-  globalGameInstance.partset.check_affordability(globalGameInstance);
-  globalGameInstance.upgradeset.check_affordability(globalGameInstance);
+  grantInfiniteResources(globalGameInstance);
   globalGameInstance.paused = false;
 
   return globalGameInstance;
@@ -483,72 +611,7 @@ export async function setupGameWithDOM() {
 
   mockBrowserGlobals();
   global.localStorage = global.window.localStorage;
-  window.AudioContext = vi.fn().mockImplementation(() => ({
-    state: 'running',
-    sampleRate: 44100,
-    currentTime: 0,
-    destination: {},
-    createGain: () => ({
-      gain: {
-        value: 1,
-        setValueAtTime: vi.fn(),
-        linearRampToValueAtTime: vi.fn(),
-        exponentialRampToValueAtTime: vi.fn(),
-        setTargetAtTime: vi.fn(),
-      },
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-    }),
-    createOscillator: () => ({
-      type: 'sine',
-      frequency: {
-        value: 440,
-        setValueAtTime: vi.fn(),
-        exponentialRampToValueAtTime: vi.fn(),
-        linearRampToValueAtTime: vi.fn(),
-      },
-      connect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-    }),
-    createBufferSource: () => ({
-      buffer: null,
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-    }),
-    createBuffer: (channels, length, sampleRate) => ({
-      numberOfChannels: channels,
-      length: length,
-      sampleRate: sampleRate,
-      getChannelData: (channelIndex) => new Float32Array(length),
-    }),
-    createWaveShaper: () => ({
-      curve: null,
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-    }),
-    createBiquadFilter: () => ({
-      type: 'lowpass',
-      frequency: {
-        value: 1000,
-        setValueAtTime: vi.fn(),
-        linearRampToValueAtTime: vi.fn(),
-        exponentialRampToValueAtTime: vi.fn(),
-      },
-      Q: { value: 1 },
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-    }),
-    createStereoPanner: () => ({
-      pan: { value: 0 },
-      connect: vi.fn(),
-    }),
-    suspend: vi.fn().mockResolvedValue(),
-    resume: vi.fn().mockResolvedValue(),
-    close: vi.fn().mockResolvedValue(),
-  }));
+  window.AudioContext = vi.fn().mockImplementation(createJSDOMAudioContextMock(vi));
   
   // Mock fetch to serve local files and prevent script loading
   global.fetch = window.fetch = async (url) => {
@@ -603,7 +666,7 @@ export async function setupGameWithDOM() {
   game.engine = new Engine(game);
   
   // CRITICAL: Initialize audio service like in app.js
-  const { AudioService } = await import("../../public/src/services.js");
+  const { AudioService } = await import("@app/services.js");
   game.audio = new AudioService();
   await game.audio.init();
   
@@ -625,6 +688,37 @@ export async function setupGame() {
     game.engine.start();
   }
   return game;
+}
+
+export async function setupStandardReactor() {
+  const ctx = await setupGameWithDOM();
+  syncGridState(ctx.game);
+  attachMockDOMToTiles(ctx.game, ctx.document);
+  return ctx;
+}
+
+export async function setupProgressionTest() {
+  const ctx = await setupStandardReactor();
+  const { game } = ctx;
+  game.bypass_tech_tree_restrictions = true;
+  grantInfiniteResources(game);
+  const innerFetch = globalThis.fetch;
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (req, init) => {
+    const u = typeof req === "string" ? req : req?.url ?? "";
+    const s = String(u);
+    if (/googleapis\.com|supabase\.co|oauth2|accounts\.google/.test(s)) {
+      return mockFetchJsonResponse({ access_token: "test-token", success: true });
+    }
+    return innerFetch.call(globalThis, req, init);
+  });
+  return { ...ctx, restoreCloudFetch: () => fetchSpy.mockRestore() };
+}
+
+export async function setupMobileInteraction() {
+  const ctx = await setupStandardReactor();
+  const hw = mockHardwareAPIs({ visibilityState: "visible" });
+  simulateViewportResize(390, 844);
+  return { ...ctx, restoreHardware: hw.restore };
 }
 
 /**

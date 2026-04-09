@@ -11,4 +11,6 @@ public/reactor_leaderboard.sqlite3
 public/lib/pako.min.js
 *.log
 /public/lib
-*.py
+**/__pycache__/
+**/*.pyc
+scripts/playtest_failure.png

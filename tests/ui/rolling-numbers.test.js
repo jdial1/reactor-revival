@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
-import { setDecimal } from "../../public/src/state.js";
+import { setDecimal } from "@app/state.js";
 
 describe("Rolling Numbers UI", () => {
     let game;

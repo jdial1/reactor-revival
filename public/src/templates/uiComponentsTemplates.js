@@ -20,16 +20,12 @@ export function infoBarTemplate({
   powerTextMobile,
   maxPowerDesktop,
   maxPowerMobile,
-  moneyDisplayDesktop,
-  moneyDisplayMobile,
   heatTextDesktop,
   heatTextMobile,
   maxHeatDesktop,
   maxHeatMobile,
   epContentStyle,
   epVisible,
-  epValueDesktop,
-  epValueMobile,
   activeBuffs,
   onSell,
   onVent,
@@ -57,12 +53,12 @@ export function infoBarTemplate({
       </button>
       <span class="info-item money">
         <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
-        <span class="value cathode-readout" id="info_money_desktop">${moneyDisplayDesktop}</span>
+        <span class="value cathode-readout" id="info_money_desktop"></span>
       </span>
       <span class="info-item ep" id="info_ep_desktop">
         <span class="ep-content" style=${epContentStyle} ?hidden=${!epVisible}>
           <span class="icon">🧬</span>
-          <span class="value cathode-readout" id="info_ep_value_desktop">${epValueDesktop}</span>
+          <span class="value cathode-readout" id="info_ep_value_desktop"></span>
         </span>
       </span>
       <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
@@ -96,7 +92,7 @@ export function infoBarTemplate({
         </button>
         <span class="info-item money">
           <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
-          <span class="value cathode-readout" id="info_money">${moneyDisplayMobile}</span>
+          <span class="value cathode-readout" id="info_money"></span>
         </span>
         <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} @click=${onVentMobile}>
           <div class=${heatWaveClass} style=${heatWaveStyle} aria-hidden="true">
@@ -117,7 +113,7 @@ export function infoBarTemplate({
           <span class="info-item ep" id="info_ep">
             <span class="ep-content" style=${epContentStyle} ?hidden=${!epVisible}>
               <span class="icon">🧬</span>
-              <span class="value cathode-readout" id="info_ep_value">${epValueMobile}</span>
+              <span class="value cathode-readout" id="info_ep_value"></span>
             </span>
           </span>
           <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
@@ -377,14 +373,15 @@ export function controlDeckExoticParticlesTemplate({
 }
 
 function controlDeckMechSwitch(id, checked, onClick, caption, title, wrapClass) {
+  const aria = `${caption}, ${checked ? "on" : "off"}`;
   return html`
     <div class=${`control-deck-mech-wrap ${wrapClass || ""}`} title=${title}>
-      <button type="button" class=${`mech-switch ${checked ? "mech-switch-on-active" : ""}`} id=${id} role="switch" aria-checked=${checked} @click=${onClick}>
+      <span class="control-deck-mech-cap">${caption}</span>
+      <button type="button" class=${`mech-switch mech-switch--compact ${checked ? "mech-switch-on-active" : ""}`} id=${id} role="switch" aria-checked=${checked} aria-label=${aria} @click=${onClick}>
         <span class="mech-switch-off">OFF</span>
         <span class="mech-switch-track"><span class="mech-switch-thumb"></span></span>
         <span class="mech-switch-on">ON</span>
       </button>
-      <span class="control-deck-mech-cap">${caption}</span>
     </div>
   `;
 }
@@ -397,7 +394,6 @@ export function controlDeckControlsNavTemplate({
   pauseOn,
   timeFluxClass,
   timeFluxLabel,
-  pauseTitle,
   accountTitle,
   accountIcon,
   onToggleAutoSell,
@@ -406,12 +402,14 @@ export function controlDeckControlsNavTemplate({
   onToggleHeatControl,
   onTogglePause,
 }) {
+  const pauseCaption = pauseOn ? "Paused" : "Running";
+  const pauseHint = pauseOn ? "Resume simulation" : "Pause simulation";
   return html`
-    ${controlDeckMechSwitch("auto_sell_toggle", autoSellOn, onToggleAutoSell, "Auto Sell", "Auto Sell", "")}
-    ${controlDeckMechSwitch("auto_buy_toggle", autoBuyOn, onToggleAutoBuy, "Auto Buy", "Auto Buy", "")}
-    ${controlDeckMechSwitch("time_flux_toggle", timeFluxOn, onToggleTimeFlux, timeFluxLabel, timeFluxLabel, timeFluxClass)}
-    ${controlDeckMechSwitch("heat_control_toggle", heatControlOn, onToggleHeatControl, "Auto Heat", "Heat Ctrl", "")}
-    ${controlDeckMechSwitch("pause_toggle", pauseOn, onTogglePause, "Pause", pauseTitle, pauseOn ? "paused" : "")}
+    ${controlDeckMechSwitch("auto_sell_toggle", autoSellOn, onToggleAutoSell, "Auto sell", "Sell power automatically when the capacitor is full", "")}
+    ${controlDeckMechSwitch("auto_buy_toggle", autoBuyOn, onToggleAutoBuy, "Auto buy", "Buy fuel and parts automatically when affordable", "")}
+    ${controlDeckMechSwitch("time_flux_toggle", timeFluxOn, onToggleTimeFlux, timeFluxLabel, "Accelerate time: process ticks faster than real time", timeFluxClass)}
+    ${controlDeckMechSwitch("heat_control_toggle", heatControlOn, onToggleHeatControl, "Auto heat", "Automatically vent heat toward the target level", "")}
+    ${controlDeckMechSwitch("pause_toggle", pauseOn, onTogglePause, pauseCaption, pauseHint, pauseOn ? "paused" : "")}
     <button id="user_account_btn_mobile" class="pixel-btn" title=${accountTitle}>
       <span class="control-icon" style="font-size: 1.5em;">${accountIcon}</span>
       <span class="control-text">Account</span>
@@ -823,12 +821,6 @@ export function navIndicatorTemplate({
   visible,
 }) {
   return html`<span class="nav-indicator" style="display: ${visible ? "block" : "none"}"></span>`;
-}
-
-export function upgradeLevelTextTemplate({
-  header,
-}) {
-  return html`<span class="level-text cathode-readout">${header}</span>`;
 }
 
 export function upgradeCostTextTemplate({

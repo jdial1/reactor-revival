@@ -1,6 +1,6 @@
 import { html, render } from "lit-html";
 import { classMap, styleMap } from "../../utils.js";
-import { ReactiveLitComponent } from "../ReactiveLitComponent.js";
+import { ReactiveLitComponent } from "../reactive-lit-component.js";
 import { MOBILE_BREAKPOINT_PX } from "../../utils.js";
 import { updateDecimal, subscribeKey, preferences } from "../../state.js";
 

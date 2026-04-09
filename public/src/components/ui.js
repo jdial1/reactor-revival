@@ -2,10 +2,10 @@ import { numFormat as fmt, on, StorageUtils, StorageAdapter, toNumber } from "..
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { StateManager, createUIState, initUIStateSubscriptions } from "../state.js";
-import { InputHandler } from "./InputManager.js";
-import { ModalOrchestrator } from "./ui_modals.js";
-import { GridScaler, GridCanvasRenderer } from "./ui_grid.js";
-import { ParticleSystem, ParticleEffectsUI, VisualEventRendererUI } from "./VisualEffectsManager.js";
+import { InputHandler } from "./input-manager.js";
+import { ModalOrchestrator } from "./ui-modals.js";
+import { GridScaler, GridCanvasRenderer } from "./ui-grid.js";
+import { ParticleSystem, ParticleEffectsUI, VisualEventRendererUI } from "./visual-effects-manager.js";
 import { leaderboardService } from "../services.js";
 import { logger } from "../utils.js";
 import { UpgradesUI, ComponentRenderingUI, runPopulateUpgradeSection, mountSectionCountsReactive, updateSectionCountsState } from "./ui-components.js";
@@ -37,7 +37,7 @@ import {
   TabSetupUI,
   ClipboardUI,
 } from "./ui-components.js";
-import { ReactiveLitComponent } from "./ReactiveLitComponent.js";
+import { ReactiveLitComponent } from "./reactive-lit-component.js";
 import dataService from "../services.js";
 import { ComponentRegistry } from "../utils.js";
 import { MOBILE_BREAKPOINT_PX } from "../utils.js";
@@ -371,6 +371,7 @@ function initMainLayoutInner(ui) {
   ui.userAccountUI.setupUserAccountButton();
   ui.tabSetupUI.setupBuildTabButton();
   ui.tabSetupUI.setupMenuTabButton();
+  ui.tabSetupUI.setupDesktopTopNavButtons();
   ui.deviceFeatures.updateWakeLockState();
   const basicOverview = ui.coreLoopUI?.getElement?.("basic_overview_section") ?? ui.DOMElements?.basic_overview_section;
   if (basicOverview && ui.help_text?.basic_overview) {

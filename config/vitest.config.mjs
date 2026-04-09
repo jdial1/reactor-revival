@@ -1,8 +1,17 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, configDefaults } from "vitest/config";
 
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@app": path.resolve(repoRoot, "public/src"),
+      "@test-helpers": path.resolve(repoRoot, "tests/helpers/setup.js"),
+    },
+  },
   test: {
     exclude: [...configDefaults.exclude, "**/performance.test.js"],
     globals: true,

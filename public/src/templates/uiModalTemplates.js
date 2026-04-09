@@ -39,7 +39,7 @@ export function helpIconTemplate(settingKey) {
   `;
 }
 
-export function switchRowTemplate(id, label, checked, key, hiddenStyle, helpIcon, mechSwitch) {
+export function switchRowTemplate(id, label, checked, key, helpIcon, mechSwitch) {
   return html`
     <tr class="settings-option-row" data-checkbox-id=${id} role="button" tabindex="0">
       <td class="settings-visuals-label">
@@ -48,7 +48,7 @@ export function switchRowTemplate(id, label, checked, key, hiddenStyle, helpIcon
       </td>
       <td class="settings-visuals-control">
         <label class="mech-switch-row">
-          <input type="checkbox" id=${id} ?checked=${checked} style=${styleMap(hiddenStyle)}>
+          <input type="checkbox" class="settings-mech-checkbox" id=${id} ?checked=${checked}>
           ${mechSwitch(id, checked)}
         </label>
       </td>
@@ -68,7 +68,7 @@ export function selectRowTemplate(id, label, helpKey, content, helpIcon) {
   `;
 }
 
-export function volumeSectionTemplate(isMuted, vol, hiddenStyle, volumeStepper) {
+export function volumeSectionTemplate(isMuted, vol, volumeStepper) {
   return html`
     <div class="settings-section">
       <label class="setting-row mute-toggle settings-option-row" style="margin-bottom: 1.5rem;" role="button" tabindex="0">
@@ -76,7 +76,7 @@ export function volumeSectionTemplate(isMuted, vol, hiddenStyle, volumeStepper) 
         <button type="button" class="mute-btn" id="setting-mute-btn" aria-label="Toggle Mute">
           <span class="mute-icon">${isMuted ? "🔇" : "🔊"}</span>
         </button>
-        <input type="checkbox" id="setting-mute" ?checked=${isMuted} style=${styleMap(hiddenStyle)}>
+        <input type="checkbox" class="settings-mech-checkbox" id="setting-mute" ?checked=${isMuted}>
       </label>
       <div class="volume-setting"><label class="volume-label">Master Volume</label>${volumeStepper("master", vol.volumeMaster)}</div>
       <div class="volume-setting"><label class="volume-label">Effects Volume</label>${volumeStepper("effects", vol.volumeEffects)}</div>

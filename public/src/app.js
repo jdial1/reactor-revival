@@ -2,12 +2,12 @@ import { Game, Engine } from "./logic.js";
 import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, StorageUtilsAsync, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES } from "./utils.js";
 import { html, render } from "lit-html";
 import { UI } from "./components/ui.js";
-import { MODAL_IDS } from "./components/ui_modals.js";
+import { MODAL_IDS } from "./components/ui-modals.js";
 import { updateSectionCountsState, getCompactLayout } from "./components/ui-components.js";
 import dataService, { GoogleDriveSave, SupabaseAuth, SupabaseSave, AudioService, createSplashManager } from "./services.js";
 import { getValidatedPreferences, initPreferencesStore, preferences, subscribeKey, initCloudSyncQueue, showLoadBackupModal } from "./state.js";
-import { TooltipManager, TutorialManager } from "./components/ui_tooltips_tutorial.js";
-import { ReactiveLitComponent } from "./components/ReactiveLitComponent.js";
+import { TooltipManager, TutorialManager } from "./components/ui-tooltips-tutorial.js";
+import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 import {
   renderSplashTemplate,
   gameSetupTemplate,

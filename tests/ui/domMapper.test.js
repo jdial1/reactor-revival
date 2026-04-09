@@ -21,7 +21,7 @@ describe("DOMMapper", () => {
     global.document = global.window.document;
 
     // Now import the module which will auto-execute init()
-    const module = await import("../../public/src/components/ui.js");
+    const module = await import("@app/components/ui.js");
     domMapperInstance = module.default;
   });
 
