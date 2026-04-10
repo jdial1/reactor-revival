@@ -127,57 +127,6 @@ class DynamicOverlayRenderer {
     this._shared = shared;
   }
 
-  _getGlobalBoostCategories() {
-    return {
-      infused_cells: ["cell"],
-      unleashed_cells: ["cell"],
-      quantum_buffering: ["capacitor", "reactor_plating"],
-      full_spectrum_reflectors: ["reflector"],
-      fluid_hyperdynamics: ["heat_inlet", "heat_outlet", "heat_exchanger", "vent"],
-      fractal_piping: ["vent", "heat_exchanger"],
-      ultracryonics: ["coolant_cell"],
-    };
-  }
-
-  _isTileBuffedByGlobalBoost(game, tile) {
-    const part = tile?.part;
-    if (!part || !game?.upgradeset) return false;
-    const mapping = this._getGlobalBoostCategories();
-    for (const [upgradeId, categories] of Object.entries(mapping)) {
-      if (!categories.includes(part.category)) continue;
-      const level = game.upgradeset.getUpgrade(upgradeId)?.level ?? 0;
-      if (level > 0) return true;
-    }
-    return false;
-  }
-
-  _drawSingularityOverlay(ctx, x, y, ts, now) {
-    const cx = x + ts * 0.5;
-    const cy = y + ts * 0.5;
-    const rMax = Math.hypot(ts * 0.5, ts * 0.5);
-    const ringR = rMax * (0.5 + Math.sin(now * 0.003) * 0.15);
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rMax);
-    grad.addColorStop(0, `rgba(0, 0, 0, ${SINGULARITY.blackHoleAlpha})`);
-    grad.addColorStop(0.2, SINGULARITY.innerTint);
-    grad.addColorStop(0.6, SINGULARITY.midTint);
-    grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, rMax, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = `rgba(180, 100, 255, ${SINGULARITY.ringBaseAlpha + Math.sin(now * SINGULARITY.ringTimeScale) * SINGULARITY.ringPulseAmplitude})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-    ctx.stroke();
-    const orbitT = (now * SINGULARITY.orbitTimeScale) % (Math.PI * 2);
-    ctx.strokeStyle = `rgba(220, 150, 255, ${0.35 + Math.sin(now * 0.01) * 0.2})`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, ringR * 0.7, ringR * 0.35, orbitT * 0.5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
   render(game, viewport, ui) {
     const { _dynamicCtx: ctx, _width, _height, _tileSize: ts } = this._shared;
     if (!ctx || !game?.tileset || _width <= 0 || _height <= 0) return;
@@ -196,11 +145,6 @@ class DynamicOverlayRenderer {
       if (cull && !this._shared.tileInViewport(r, c, viewport)) continue;
       const x = c * ts;
       const y = r * ts;
-
-      if (this._isTileBuffedByGlobalBoost(game, tile)) {
-        ctx.fillStyle = COLORS.boostPulse(pulseAlpha);
-        ctx.fillRect(x, y, ts, ts);
-      }
 
       if (tile.part?.category === "cell" && tile.ticks > 0) {
         const flick = Math.floor(now / 75) % 2;
@@ -264,10 +208,6 @@ class DynamicOverlayRenderer {
         ctx.strokeStyle = COLORS.sellingStroke;
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, ts, ts);
-      }
-
-      if (tile.part?.id === "particle_accelerator6") {
-        this._drawSingularityOverlay(ctx, x, y, ts, now);
       }
     }
 
@@ -374,80 +314,6 @@ class HeatEffectsRenderer {
     }
   }
 
-  _drawHeatShimmerLayer(game, viewport) {
-    const hd = this._prepareHeatData(game);
-    if (!hd) return;
-    const { smoothed, maxHeat, gridIndex, rows, cols } = hd;
-    const ts = this._shared._tileSize;
-    const now = typeof performance !== "undefined" ? performance.now() : 0;
-    const cull = viewport != null && viewport.width > 0 && viewport.height > 0;
-    const ctx = this._shared._dynamicCtx;
-    const threshold = HEAT_SHIMMER.threshold;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (cull && !this._shared.tileInViewport(r, c, viewport)) continue;
-        const heat = smoothed[gridIndex(r, c)] || 0;
-        const t = heat / maxHeat;
-        if (t < threshold) continue;
-        const x = c * ts;
-        const y = r * ts;
-        const cx = x + ts * 0.5;
-        const cy = y + ts * 0.5;
-        const intensity = (t - threshold) / (1 - threshold);
-        const baseAlpha = HEAT_SHIMMER.baseAlphaMultiplier * intensity;
-        for (let i = 0; i < HEAT_SHIMMER.layerCount; i++) {
-          const phase = (now * HEAT_SHIMMER.timeScale + i * HEAT_SHIMMER.phaseSpacing) % (Math.PI * 2);
-          const offsetX = Math.sin(phase) * (ts * 0.12);
-          const offsetY = Math.cos(phase * 0.7) * (ts * 0.1);
-          const rx = ts * (0.35 + Math.sin(phase * 1.3) * 0.08);
-          const ry = ts * (0.25 + Math.cos(phase * 0.9) * 0.06);
-          const alpha = baseAlpha * (0.6 + 0.4 * Math.sin(phase * 2));
-          ctx.fillStyle = COLORS.shimmerTint(alpha);
-          ctx.beginPath();
-          ctx.ellipse(cx + offsetX, cy + offsetY, rx, ry, phase * 0.3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-  }
-
-  _drawHeatHazeLayer(game, viewport) {
-    const hd = this._prepareHeatData(game);
-    if (!hd) return;
-    const { smoothed, maxHeat, gridIndex, rows, cols } = hd;
-    const ts = this._shared._tileSize;
-    const now = typeof performance !== "undefined" ? performance.now() : 0;
-    const cull = viewport != null && viewport.width > 0 && viewport.height > 0;
-    const ctx = this._shared._dynamicCtx;
-    const threshold = HEAT_HAZE.threshold;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (cull && !this._shared.tileInViewport(r, c, viewport)) continue;
-        const heat = smoothed[gridIndex(r, c)] || 0;
-        const t = heat / maxHeat;
-        if (t < threshold) continue;
-        const x = c * ts;
-        const y = r * ts;
-        const cx = x + ts * 0.5;
-        const cy = y + ts * 0.5;
-        const intensity = (t - threshold) / (1 - threshold);
-        const rise = (now * HEAT_HAZE.riseSpeedPx) % (ts * 1.2);
-        const wobble = Math.sin(now * HEAT_HAZE.wobbleFreq + r * 0.5 + c * 0.5) * ts * 0.15;
-        const hazeCy = cy - rise + wobble;
-        const hazeCx = cx + Math.sin(now * 0.002 + c) * ts * 0.12;
-        const rMax = ts * HEAT_HAZE.maxRadiusRatio;
-        const grad = ctx.createRadialGradient(hazeCx, hazeCy, 0, hazeCx, hazeCy, rMax);
-        grad.addColorStop(0, `rgba(255, 220, 180, ${0.12 * intensity})`);
-        grad.addColorStop(0.4, `rgba(255, 200, 150, ${0.06 * intensity})`);
-        grad.addColorStop(1, "rgba(255, 200, 150, 0)");
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(cx, cy, rMax, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }
-
   _drawHeatFlowLayer(game, viewport) {
     const engine = game?.engine;
     if (!this._shared._dynamicCtx || !engine || typeof engine.getLastHeatFlowVectors !== "function") return;
@@ -537,8 +403,6 @@ class HeatEffectsRenderer {
   render(game, viewport, ui) {
     if (ui?.getHeatMapVisible?.()) {
       this._drawHeatMapLayer(game, viewport);
-      this._drawHeatShimmerLayer(game, viewport);
-      this._drawHeatHazeLayer(game, viewport);
     }
     if (ui?.getHeatFlowVisible?.() || ui?.getDebugOverlayVisible?.()) {
       this._drawHeatFlowLayer(game, viewport);

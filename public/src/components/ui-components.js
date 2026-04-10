@@ -325,10 +325,12 @@ class MobileInfoBarUI {
 
     const autoSellEnabled = !!state.auto_sell;
     const multiplier = toNumber(state.auto_sell_multiplier ?? 0);
-    const showAutoSell = autoSellEnabled && multiplier > 0;
+    const hasAutoSellUpgrade = this.ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
+    const showAutoSell = autoSellEnabled && multiplier > 0 && hasAutoSellUpgrade;
     const autoSellRate = showAutoSell ? Math.floor(maxPower * multiplier) : 0;
-
-    const heatControlEnabled = !!state.heat_controlled;
+    
+    const hasHeatControlUpgrade = this.ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
+    const heatControlEnabled = !!state.heat_controlled && hasHeatControlUpgrade;
     const showHeatRate = heatControlEnabled && maxHeat > 0;
     const ventBonus = toNumber(state.vent_multiplier_eff ?? 0);
     const autoHeatRate = showHeatRate ? (maxHeat / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + ventBonus / VENT_BONUS_PERCENT_DIVISOR) : 0;
@@ -1142,16 +1144,19 @@ class ControlDeckUI {
       logger.log("debug", "ui", `[TOGGLE] Button "${stateProperty}" clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}`);
       ui.stateManager.setVar(stateProperty, newState);
     };
+    const hasAutoSellUpgrade = ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
+    const hasAutoBuyUpgrade = ui.game?.upgradeset?.getUpgrade("auto_buy_operator")?.level > 0;
+    const hasHeatControlUpgrade = ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
     return controlDeckControlsNavTemplate({
-      autoSellOn: !!state.auto_sell,
-      autoBuyOn: !!state.auto_buy,
-      heatControlOn: !!state.heat_control,
+      autoSellOn: !!state.auto_sell && hasAutoSellUpgrade,
+      autoBuyOn: !!state.auto_buy && hasAutoBuyUpgrade,
+      heatControlOn: !!state.heat_control && hasHeatControlUpgrade,
       pauseOn: !!state.pause,
       accountTitle: ui.uiState?.user_account_display?.title ?? "Account",
       accountIcon: ui.uiState?.user_account_display?.icon ?? "👤",
-      onToggleAutoSell: toggleHandler("auto_sell"),
-      onToggleAutoBuy: toggleHandler("auto_buy"),
-      onToggleHeatControl: toggleHandler("heat_control"),
+      onToggleAutoSell: hasAutoSellUpgrade ? toggleHandler("auto_sell") : null,
+      onToggleAutoBuy: hasAutoBuyUpgrade ? toggleHandler("auto_buy") : null,
+      onToggleHeatControl: hasHeatControlUpgrade ? toggleHandler("heat_control") : null,
       onTogglePause: toggleHandler("pause"),
     });
   }

@@ -465,53 +465,40 @@ function ensureGameSetupOverlay() {
 let _showTechTreeInProgress = false;
 
 export async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
-  if (_showTechTreeInProgress) return;
-  _showTechTreeInProgress = true;
+  const overlay = ensureGameSetupOverlay();
+  let selectedDifficulty = null;
+  let difficultyPresets;
+
   try {
-    const overlay = ensureGameSetupOverlay();
-    const techTreeData = await dataService.loadTechTree();
-    const treeList = Array.isArray(techTreeData) ? techTreeData : (techTreeData?.default ?? []);
+    difficultyPresets = await dataService.loadDifficultyCurves();
+  } catch (err) {
+    logger.log('error', 'game', 'Failed to load difficulty curves:', err);
+    return;
+  }
 
-    if (!treeList.length) {
-      await startNewGameFlow(game, pageRouter, ui, splashManager, null);
-      return;
-    }
+  const renderSetup = () => {
+    render(gameSetupTemplate(
+      [],
+      null,
+      selectedDifficulty,
+      () => {},
+      (diff) => { selectedDifficulty = diff; renderSetup(); },
+      () => {
+        overlay.classList.add("hidden");
+        setTimeout(() => overlay.remove(), 300);
+      },
+      async () => {
+        const preset = difficultyPresets[selectedDifficulty];
+        if (!preset) return;
 
-    let selectedDifficulty = null;
-    let difficultyPresets;
-
-    try {
-      difficultyPresets = await dataService.loadDifficultyCurves();
-    } catch (err) {
-      logger.log('error', 'game', 'Failed to load difficulty curves:', err);
-      return;
-    }
-
-    const renderSetup = () => {
-      render(gameSetupTemplate(
-        treeList,
-        null,
-        selectedDifficulty,
-        () => {},
-        (diff) => { selectedDifficulty = diff; renderSetup(); },
-        () => {
-          overlay.classList.add("hidden");
-          setTimeout(() => overlay.remove(), 300);
-        },
-        async () => {
-          const preset = difficultyPresets[selectedDifficulty];
-          if (!preset) return;
-
-          game.base_money = Number(preset.base_money);
-          game.base_loop_wait = Number(preset.base_loop_wait);
-          game.base_manual_heat_reduce = Number(preset.base_manual_heat_reduce);
-          game.reactor.base_max_heat = BASE_MAX_HEAT;
-          game.reactor.base_max_power = BASE_MAX_POWER;
-          game.reactor.power_overflow_to_heat_ratio = Number(preset.power_overflow_to_heat_pct) / 100;
-          game.tech_tree = treeList[0]?.id ?? null;
-
-          overlay.classList.add("hidden");
-          setTimeout(() => overlay.remove(), 300);
+        game.base_money = Number(preset.base_money);
+        game.base_loop_wait = Number(preset.base_loop_wait);
+        game.base_manual_heat_reduce = Number(preset.base_manual_heat_reduce);
+        game.reactor.base_max_heat = BASE_MAX_HEAT;
+        game.reactor.base_max_power = BASE_MAX_POWER;
+        game.reactor.power_overflow_to_heat_ratio = Number(preset.power_overflow_to_heat_pct) / 100;
+        overlay.classList.add("hidden");
+        setTimeout(() => overlay.remove(), 300);
 
           try {
             await startNewGameFlow(game, pageRouter, ui, splashManager, null);
@@ -524,9 +511,7 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
 
     renderSetup();
     overlay.classList.remove("hidden");
-  } finally {
-    _showTechTreeInProgress = false;
-  }
+  
 }
 
 const SPLASH_HIDE_DELAY_MS_GAME = 600;

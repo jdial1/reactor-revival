@@ -320,9 +320,9 @@ export function controlDeckControlsNavTemplate({
   const pauseCaption = pauseOn ? "Paused" : "Running";
   const pauseHint = pauseOn ? "Resume simulation" : "Pause simulation";
   return html`
-    ${controlDeckMechSwitch("auto_sell_toggle", autoSellOn, onToggleAutoSell, "Auto sell", "Sell power automatically when the capacitor is full", "")}
-    ${controlDeckMechSwitch("auto_buy_toggle", autoBuyOn, onToggleAutoBuy, "Auto buy", "Buy fuel and parts automatically when affordable", "")}
-    ${controlDeckMechSwitch("heat_control_toggle", heatControlOn, onToggleHeatControl, "Auto heat", "Automatically vent heat toward the target level", "")}
+    ${onToggleAutoSell ? controlDeckMechSwitch("auto_sell_toggle", autoSellOn, onToggleAutoSell, "Auto sell", "Sell power automatically when the capacitor is full", "") : ""}
+    ${onToggleAutoBuy ? controlDeckMechSwitch("auto_buy_toggle", autoBuyOn, onToggleAutoBuy, "Auto buy", "Buy fuel and parts automatically when affordable", "") : ""}
+    ${onToggleHeatControl ? controlDeckMechSwitch("heat_control_toggle", heatControlOn, onToggleHeatControl, "Auto heat", "Automatically vent heat toward the target level", "") : ""}
     ${controlDeckMechSwitch("pause_toggle", pauseOn, onTogglePause, pauseCaption, pauseHint, pauseOn ? "paused" : "")}
     <button id="user_account_btn_mobile" class="pixel-btn" title=${accountTitle}>
       <span class="control-icon" style="font-size: 1.5em;">${accountIcon}</span>

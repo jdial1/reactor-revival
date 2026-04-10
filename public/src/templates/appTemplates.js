@@ -106,15 +106,6 @@ export function gameSetupTemplate(treeList, selectedDoctrine, selectedDifficulty
     <div class="bios-screen game-setup-selection">
       <h1 class="game-setup-header">NEW GAME</h1>
       <div class="bios-content">
-        ${doctrinePickRequired
-          ? html`
-        <section class="setup-section setup-doctrine">
-          <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DOCTRINE ]</h2></div>
-          <div class="doctrine-cards" role="listbox" aria-label="Select doctrine">
-            ${repeat(treeList, (tree) => tree.id, (tree) => doctrineCardTemplate(tree, selectedDoctrine, onDoctrineSelect))}
-          </div>
-        </section>`
-          : ""}
         <section class="setup-section setup-difficulty">
           <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DIFFICULTY ]</h2></div>
           <div class="difficulty-cards" role="radiogroup" aria-label="Select difficulty">

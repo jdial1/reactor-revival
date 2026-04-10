@@ -146,7 +146,7 @@ export function createGameState(initial = {}) {
     power_delta_per_tick: initial.power_delta_per_tick ?? 0,
     heat_delta_per_tick: initial.heat_delta_per_tick ?? 0,
     auto_sell: initial.auto_sell ?? false,
-    auto_buy: initial.auto_buy ?? true,
+    auto_buy: initial.auto_buy ?? false,
     heat_control: initial.heat_control ?? false,
     pause: initial.pause ?? false,
     melting_down: initial.melting_down ?? false,
@@ -1363,7 +1363,6 @@ function normalizeSavedTechTreeId(id) {
 function applyCoreGameState(game, savedData) {
   setDecimal(game.state, "current_money", savedData.current_money);
   game.run_id = savedData.run_id;
-  game.tech_tree = normalizeSavedTechTreeId(savedData.tech_tree ?? null);
   game.peak_power = savedData.reactor?.current_power != null ? savedData.reactor.current_power.toNumber() : 0;
   game.peak_heat = savedData.reactor?.current_heat != null ? savedData.reactor.current_heat.toNumber() : 0;
   game.base_rows = savedData.base_rows;
@@ -1548,12 +1547,7 @@ export async function applySaveState(game, savedData) {
   for (const fn of ASYNC_HYDRATORS) await fn(game, savedData);
   for (const fn of POST_ASYNC_HYDRATORS) fn(game, savedData);
   game.reactor.hull_heat_doctrine_mult = 1;
-  const doctrine = typeof game.getDoctrine === "function" ? game.getDoctrine() : null;
-  if (doctrine && typeof game.applyDoctrineBonuses === "function") {
-    game.applyDoctrineBonuses(doctrine);
-  } else {
-    game.reactor.updateStats();
-  }
+  game.reactor.updateStats();
 }
 
 
@@ -2401,11 +2395,6 @@ function applyLoopThenPause(game) {
   setPausedState(game);
 }
 
-function applyDoctrineFromTree(game) {
-  const doctrine = game.getDoctrine();
-  if (doctrine) game.applyDoctrineBonuses(doctrine);
-}
-
 function resetSessionTimes(game) {
   game.lifecycleManager.session_start_time = null;
   game.lifecycleManager.total_played_time = 0;
@@ -2413,7 +2402,6 @@ function resetSessionTimes(game) {
 }
 
 function applyDoctrineThenSession(game) {
-  applyDoctrineFromTree(game);
   resetSessionTimes(game);
 }
 
