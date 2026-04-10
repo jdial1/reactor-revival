@@ -29,10 +29,16 @@ export function reactorSectionTemplate() {
       <button id="reactor_my_layouts_btn" title="My Layouts" tabindex="0" aria-label="My Layouts">
         <span class="emoji-icon">&#128193;</span>
       </button>
-      <span id="reactor_sandbox_btn_root"></span>
+      <button id="reactor_blueprint_toggle" type="button" class="pixel-btn reactor-toolbar-btn" title="Blueprint planner" tabindex="0" aria-label="Toggle blueprint planner">Plan</button>
       <button id="reactor_sell_all_btn" title="Sell All Parts" tabindex="0" aria-label="Sell All Parts">
         <img src="img/ui/icons/icon_cash_outline.svg" alt="Sell" />
       </button>
+    </div>
+    <div id="blueprint_planner_hud" class="blueprint-planner-hud" aria-live="polite">
+      <span id="blueprint_planner_power" class="blueprint-planner-stat"></span>
+      <span id="blueprint_planner_net_heat" class="blueprint-planner-stat"></span>
+      <button type="button" id="blueprint_planner_apply" class="pixel-btn">Apply</button>
+      <button type="button" id="blueprint_planner_discard" class="pixel-btn">Clear</button>
     </div>
   </div>
   <div id="pause_banner" class="container">
@@ -42,7 +48,6 @@ export function reactorSectionTemplate() {
   <div id="meltdown_banner" class="container hidden">
     <article>MELTDOWN</article>
     <button id="reset_reactor_btn" class="reset-btn">Reset Reactor</button>
-    <button id="clear_heat_sandbox_btn" class="reset-btn sandbox-only-btn">Clear Heat</button>
   </div>
   <div id="reactor_wrapper">
     <div id="reactor"></div>
@@ -57,10 +62,6 @@ export function upgradesSectionTemplate() {
 <section id="upgrades_section" class="page">
   <div id="upgrades_no_affordable_banner" class="affordability-banner hidden">
     <article>No affordable upgrades available</article>
-  </div>
-  <div id="upgrades_sandbox_actions" class="sandbox-section-actions">
-    <button id="upgrades_buy_all_btn" class="pixel-btn">Buy All</button>
-    <button id="upgrades_clear_all_btn" class="pixel-btn">Clear All</button>
   </div>
   <div id="upgrades_content_wrapper">
     <article>
@@ -94,10 +95,6 @@ export function researchSectionTemplate() {
   </article>
   <div id="research_no_affordable_banner" class="affordability-banner hidden">
     <article>No affordable research available</article>
-  </div>
-  <div id="research_sandbox_actions" class="sandbox-section-actions">
-    <button id="research_buy_all_btn" class="pixel-btn">Buy All</button>
-    <button id="research_clear_all_btn" class="pixel-btn">Clear All</button>
   </div>
   <div id="experimental_upgrades_content_wrapper">
     <article id="exotic_particles_display"></article>

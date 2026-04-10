@@ -1,6 +1,6 @@
 import { html, render } from "lit-html";
 import { StorageUtils, numFormat as fmt, unsafeHTML, logger, MOBILE_BREAKPOINT_PX, BaseComponent } from "../utils.js";
-import { getUpgradeBonusLines as getUpgradeBonusLinesCore } from "../logic.js";
+import { getUpgradeBonusLines as getUpgradeBonusLinesCore, computeNeighborPulseNFromTile } from "../logic.js";
 import {
   tutorialOverlayTemplate,
   tutorialCalloutTemplate,
@@ -113,7 +113,6 @@ export class TutorialManager {
   }
 
   hasClaimableObjective() {
-    if (this.game?.isSandbox) return false;
     const def = this.game?.objectives_manager?.current_objective_def;
     return !!def?.completed;
   }
@@ -532,8 +531,7 @@ function setTransferSellAndEpStats(stats, obj, tile) {
     stats.set("Sells for", `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(Math.max(0, sell_value))}`);
   }
   if (obj.category === "particle_accelerator") {
-    stats.set("EP Chance", `${fmt(tile.display_chance, 2)}%`);
-    stats.set("EP Heat %", `${fmt(tile.display_chance_percent_of_total, 2)}% of max`);
+    stats.set("EP scaling", "min(power sold, heat vented) / session");
   }
 }
 
@@ -579,6 +577,19 @@ function buildDesktopSummaryItems(obj, tile) {
   return items;
 }
 
+function formatCellSubstrateLines(tile, part) {
+  if (!tile || part.category !== "cell") return "";
+  const M = part.cell_pack_M ?? 1;
+  const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
+  const N = computeNeighborPulseNFromTile(tile);
+  const H = part.base_heat ?? 0;
+  const P = part.base_power ?? 0;
+  const pulse = M + N;
+  const heatVal = (H * pulse * pulse) / C;
+  const powVal = P * pulse;
+  return `[P: ${fmt(P, 0)}] × ([M: ${M}] + [N: ${fmt(N, 0)}]) = ${fmt(powVal, 0)} Power/tick; [H: ${fmt(H, 0)}] × ([M: ${M}] + [N: ${fmt(N, 0)}])² / [C: ${C}] = ${fmt(heatVal, 0)} Heat/tick`;
+}
+
 function getBuyCostText(obj) {
   if (obj.current_ecost !== undefined) return ` 🧬 ${fmt(obj.current_ecost)} EP`;
   if (obj.ecost !== undefined) return ` 🧬 ${fmt(obj.ecost)} EP`;
@@ -596,7 +607,10 @@ function tooltipContentTemplate(obj, tile, game, isMobile, onBuy) {
   if (isMobile) {
     const stats = buildMobileStatsArray(obj, tile);
     const statsHtml = obj.upgrade ? stats.join(" ") : "";
-    const description = obj.description || obj.upgrade?.description;
+    const description =
+      obj.category === "cell" && !obj.upgrade && tile
+        ? formatCellSubstrateLines(tile, obj)
+        : obj.description || obj.upgrade?.description;
     const descHtml = description ? formatDescriptionBulleted(description, iconify) : "";
     const bonusLines = getUpgradeBonusLines(obj, tile, game);
     const bonusHtml = bonusLines.map((line) => `<div class="tooltip-bonus-line">${colorizeBonus(line, iconify)}</div>`).join("");
@@ -618,7 +632,10 @@ function tooltipContentTemplate(obj, tile, game, isMobile, onBuy) {
 
   const summaryItems = buildDesktopSummaryItems(obj, tile);
   const summaryHtml = obj.upgrade ? summaryItems.join("") : "";
-  const description = obj.description || obj.upgrade?.description;
+  const description =
+    obj.category === "cell" && !obj.upgrade && tile
+      ? formatCellSubstrateLines(tile, obj)
+      : obj.description || obj.upgrade?.description;
   const descHtml = description ? formatDescriptionBulleted(description, iconify) : "";
   const bonusLines = getUpgradeBonusLines(obj, tile, game);
   const bonusHtml = bonusLines.map((line) => `<div class="tooltip-bonus-line">${colorizeBonus(line, iconify)}</div>`).join("");

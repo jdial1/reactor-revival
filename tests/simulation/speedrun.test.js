@@ -155,7 +155,6 @@ async function solveObjective(index, game) {
     }
     case "autoSell500":
       game.ui.stateManager.setVar("auto_sell", true);
-      buyUpgradeViaUI(game, "improved_power_lines", 50);
       for (let i = 0; i < 10; i++) await placePartViaUI(game, "capacitor1", 0, i);
       for (let i = 0; i < 5; i++) {
         await placePartViaUI(game, "plutonium1", 1, i);
@@ -209,7 +208,6 @@ async function solveObjective(index, game) {
     }
     case "incomeMilestone50k":
       game.ui.stateManager.setVar("auto_sell", true);
-      buyUpgradeViaUI(game, "improved_power_lines", 50);
       for (let i = 0; i < 8; i++) {
         await placePartViaUI(game, "plutonium3", 0, i);
         game.tileset.getTile(0, i).activated = true;

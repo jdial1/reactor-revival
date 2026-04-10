@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGame, toNum } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, setupGame, toNum } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
+import { setDecimal } from "@app/state.js";
+import { toDecimal } from "@app/utils.js";
 import {
-  EP_CHANCE_LOG_BASE,
   PRESTIGE_MULTIPLIER_CAP,
   PRESTIGE_MULTIPLIER_PER_EP,
 } from "@app/utils.js";
 import {
   cappedPrestigeEpContribution,
-  expectedParticleAcceleratorEpChance,
   expectedPrestigeMultiplierFromTotalEp,
 } from "../../helpers/setup.js";
 
@@ -23,116 +23,34 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     if (game?.engine) game.engine.stop();
   });
 
-  it("locks particle accelerator EP logarithmic conversion", async () => {
-    const acceleratorTile = await placePart(game, 0, 0, "particle_accelerator1");
-    const targetHeat = Math.pow(EP_CHANCE_LOG_BASE, 2);
-    acceleratorTile.part.ep_heat = targetHeat;
-    acceleratorTile.heat_contained = targetHeat;
-
-    const curBefore = toNum(game.state.current_exotic_particles);
-    const totalBefore = toNum(game.state.total_exotic_particles);
-    const sessionBefore = toNum(game.exotic_particles);
-    const expectedChance = expectedParticleAcceleratorEpChance(
-      targetHeat,
-      acceleratorTile.part.ep_heat,
-      EP_CHANCE_LOG_BASE
-    );
-    const expectedGain = Math.floor(expectedChance);
-
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.999999);
-    game.engine.tick();
-    randomSpy.mockRestore();
-
-    const deltaCurrent = toNum(game.state.current_exotic_particles) - curBefore;
-    const deltaTotal = toNum(game.state.total_exotic_particles) - totalBefore;
-    const deltaSession = toNum(game.exotic_particles) - sessionBefore;
-    expect(expectedChance).toBe(2);
-    expect(deltaCurrent).toBe(expectedGain);
-    expect(deltaTotal).toBe(expectedGain);
-    expect(deltaSession).toBe(expectedGain);
+  it("locks defining weave EP on keep-EP reboot from session min", async () => {
+    setDecimal(game.state, "total_exotic_particles", 0);
+    setDecimal(game.state, "current_exotic_particles", 0);
+    game.exoticParticleManager.exotic_particles = toDecimal(0);
+    setDecimal(game.state, "session_power_sold", 4_000_000);
+    setDecimal(game.state, "session_heat_dissipated", 5_000_000);
+    await game.rebootActionKeepExoticParticles();
+    expect(toNum(game.state.total_exotic_particles)).toBe(4);
+    expect(toNum(game.state.current_exotic_particles)).toBe(4);
   });
 
-  it("locks stacked particle accelerators summing EP chance add", async () => {
-    const a = await placePart(game, 0, 0, "particle_accelerator1");
-    const b = await placePart(game, 0, 1, "particle_accelerator1");
-    const targetHeat = Math.pow(EP_CHANCE_LOG_BASE, 2);
-    a.part.ep_heat = targetHeat;
-    b.part.ep_heat = targetHeat;
-    a.heat_contained = targetHeat;
-    b.heat_contained = targetHeat;
-
-    const curBefore = toNum(game.state.current_exotic_particles);
-    const totalBefore = toNum(game.state.total_exotic_particles);
-    const sessionBefore = toNum(game.exotic_particles);
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.999999);
-    game.engine.tick();
-    randomSpy.mockRestore();
-
-    const singleChance = expectedParticleAcceleratorEpChance(targetHeat, targetHeat, EP_CHANCE_LOG_BASE);
-    expect(singleChance).toBe(2);
-    const expectedGain = Math.floor(singleChance) * 2;
-    expect(toNum(game.state.current_exotic_particles) - curBefore).toBe(expectedGain);
-    expect(toNum(game.state.total_exotic_particles) - totalBefore).toBe(expectedGain);
-    expect(toNum(game.exotic_particles) - sessionBefore).toBe(expectedGain);
+  it("locks no EP weave grant when session min is below 1e6", async () => {
+    setDecimal(game.state, "total_exotic_particles", 10);
+    setDecimal(game.state, "current_exotic_particles", 10);
+    game.exoticParticleManager.exotic_particles = toDecimal(10);
+    setDecimal(game.state, "session_power_sold", 500_000);
+    setDecimal(game.state, "session_heat_dissipated", 600_000);
+    await game.rebootActionKeepExoticParticles();
+    expect(toNum(game.state.total_exotic_particles)).toBe(10);
   });
 
-  it("locks repeated engine ticks deterministically stacking EP when heat persists", async () => {
+  it("locks engine ticks do not grant EP from particle accelerators alone", async () => {
     const acceleratorTile = await placePart(game, 0, 0, "particle_accelerator1");
-    const targetHeat = Math.pow(EP_CHANCE_LOG_BASE, 2);
-    acceleratorTile.part.ep_heat = targetHeat;
-    acceleratorTile.heat_contained = targetHeat;
-    const perTickGain = 2;
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.999999);
-    const cur0 = toNum(game.state.current_exotic_particles);
-    game.engine.tick();
-    expect(toNum(game.state.current_exotic_particles) - cur0).toBe(perTickGain);
-    const cur1 = toNum(game.state.current_exotic_particles);
-    game.engine.tick();
-    expect(toNum(game.state.current_exotic_particles) - cur1).toBe(perTickGain);
-    randomSpy.mockRestore();
-  });
-
-  it("locks particle accelerator fractional EP chance with stochastic rounding", async () => {
-    const acceleratorTile = await placePart(game, 0, 0, "particle_accelerator1");
-    const lowerHeat = 1000;
-    acceleratorTile.heat_contained = lowerHeat;
-    acceleratorTile.part.ep_heat = (lowerHeat * 3) / 2.3;
-    const expectedChance = expectedParticleAcceleratorEpChance(
-      lowerHeat,
-      acceleratorTile.part.ep_heat,
-      EP_CHANCE_LOG_BASE
-    );
-    expect(Math.floor(expectedChance)).toBe(2);
-    expect(Math.round(expectedChance * 10)).toBe(23);
-
+    acceleratorTile.part.ep_heat = 1000;
+    acceleratorTile.heat_contained = 1000;
     const curBefore = toNum(game.state.current_exotic_particles);
-    const totalBefore = toNum(game.state.total_exotic_particles);
-    const sessionBefore = toNum(game.exotic_particles);
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.1);
     game.engine.tick();
-    randomSpy.mockRestore();
-
-    expect(toNum(game.state.current_exotic_particles) - curBefore).toBe(3);
-    expect(toNum(game.state.total_exotic_particles) - totalBefore).toBe(3);
-    expect(toNum(game.exotic_particles) - sessionBefore).toBe(3);
-  });
-
-  it("locks particle accelerator fractional EP chance without stochastic rounding", async () => {
-    const acceleratorTile = await placePart(game, 0, 0, "particle_accelerator1");
-    const lowerHeat = 1000;
-    acceleratorTile.heat_contained = lowerHeat;
-    acceleratorTile.part.ep_heat = (lowerHeat * 3) / 2.3;
-
-    const curBefore = toNum(game.state.current_exotic_particles);
-    const totalBefore = toNum(game.state.total_exotic_particles);
-    const sessionBefore = toNum(game.exotic_particles);
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
-    game.engine.tick();
-    randomSpy.mockRestore();
-
-    expect(toNum(game.state.current_exotic_particles) - curBefore).toBe(2);
-    expect(toNum(game.state.total_exotic_particles) - totalBefore).toBe(2);
-    expect(toNum(game.exotic_particles) - sessionBefore).toBe(2);
+    expect(toNum(game.state.current_exotic_particles)).toBe(curBefore);
   });
 
   it("locks particle accelerator to zero EP gain when heat is zero", async () => {
@@ -181,6 +99,9 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     const laboratory = game.upgradeset.getUpgrade("laboratory");
     laboratory.setLevel(1);
 
+    setDecimal(game.state, "session_power_sold", 0);
+    setDecimal(game.state, "session_heat_dissipated", 0);
+
     await game.rebootActionKeepExoticParticles();
 
     expect(toNum(game.exotic_particles)).toBe(0);
@@ -218,7 +139,6 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     expect(toNum(game.state.current_exotic_particles)).toBe(0);
     expect(toNum(game.state.total_exotic_particles)).toBe(0);
     expect(toNum(game.exotic_particles)).toBe(0);
-    expect(toNum(game.state.reality_flux)).toBe(0);
     expect(toNum(game.current_money)).toBe(toNum(game.base_money));
     expect(game.tileset.getTile(0, 0).part).toBeNull();
     expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(0);

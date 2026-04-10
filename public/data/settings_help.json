@@ -5,7 +5,6 @@
   "hideUnaffordableResearch": "Hides research items you cannot yet afford from the research panel.",
   "hideMaxUpgrades": "Hides upgrades you have already purchased at maximum level.",
   "hideMaxResearch": "Hides research items you have already completed.",
-  "hideOtherDoctrineUpgrades": "Hides upgrades that belong to doctrines other than your current one.",
   "heatFlowVisible": "Shows arrows on the reactor grid indicating heat flow direction between components.",
   "heatMapVisible": "Displays a color overlay on the grid showing relative heat levels (cool to hot).",
   "debugOverlay": "Shows debug flow arrows for developer diagnostics.",

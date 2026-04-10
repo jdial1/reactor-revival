@@ -10,11 +10,6 @@ describe("Save and Load Functionality", () => {
     game = setup.game;
     localStorage = setup.window.localStorage;
     localStorage.clear();
-    game.googleDriveSave = {
-      saveToCloud: vi.fn(() => Promise.resolve()),
-      loadFromCloud: vi.fn(() => Promise.resolve({})),
-      isSignedIn: vi.fn(() => false)
-    };
   });
 
   afterEach(() => {

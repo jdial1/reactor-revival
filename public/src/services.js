@@ -2,7 +2,6 @@ import { fromError } from "zod-validation-error";
 import { z } from "zod";
 import { QueryClient } from "@tanstack/query-core";
 import { html, render } from "lit-html";
-import { proxy, subscribe } from "valtio/vanilla";
 import {
   PartDefinitionSchema,
   UpgradeDefinitionSchema,
@@ -15,9 +14,7 @@ import {
   getVolumePreferences,
   preferences,
   fetchResolvedSaves,
-  showCloudVsLocalConflictModal,
   showLoadBackupModal,
-  fetchCloudSaveSlots,
 } from "./state.js";
 import { LeaderboardEntrySchema, LeaderboardResponseSchema } from "../schema/index.js";
 import {
@@ -37,19 +34,10 @@ import {
   formatPlaytimeLog,
   runCathodeScramble,
   rotateSlot1ToBackupAsync,
-  GOOGLE_DRIVE_CONFIG,
-  getGoogleDriveAuth as getGoogleDriveConfig,
-  getSupabaseUrl,
-  getSupabaseAnonKey,
   BaseComponent,
+  LEADERBOARD_CONFIG,
 } from "./utils.js";
 import {
-  signedInTemplate as signedInTemplateView,
-  commsButtonTemplate,
-  authFormTemplate,
-  noCloudSaveFoundTemplate,
-  cloudCheckFailedTemplate,
-  googleDriveErrorTemplate,
   splashStartOptionsTemplate,
   saveSlotRowTemplate,
   saveSlotMainTemplate,
@@ -58,12 +46,6 @@ import {
   versionCheckToastTemplate,
 } from "./templates/servicesTemplates.js";
 import { MODAL_IDS } from "./components/ui-modals.js";
-import {
-  LoadFromCloudButton,
-  GoogleSignInButton,
-  createLoadingButton,
-  createGoogleSignInButtonWithIcon,
-} from "./components/button-factory.js";
 import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 
 export const queryClient = new QueryClient({
@@ -82,7 +64,6 @@ export const queryKeys = {
   saves: {
     resolved: () => ["saves", "resolved"],
     local: (slot) => ["saves", "local", slot],
-    cloud: (provider) => ["saves", "cloud", provider],
   },
 };
 
@@ -209,660 +190,32 @@ export const AUDIO_RUNTIME_DEFAULTS = {
   defaultMutedMasterVolume: "0.12",
 };
 
-export const AUDIO_SPECS = {
-  placement: {
-    basePitchHz: 140,
-    freqEndHz: 40,
-    cellFreqHz: 55,
-    cellFreqEndHz: 45,
-    platingGain: 0.7,
-    platingFreqHz: 1200,
-    clickFreqHz: 800,
-    thudDurationS: 0.25,
-    thudRampGain: 0.5,
-    thudRampTimeS: 0.02,
-    clickGain: 0.15,
-    clickDurationS: 0.05,
-    cellDurationS: 0.3,
-    cellGain: 0.15,
-    platingDurationS: 0.4,
-    platingBurstGain: 0.1,
-    ventGain: 0.3,
-    ventNoiseDurationS: 0.3,
-    ventNoiseGain: 0.25,
-  },
-  click: {
-    baseFreqHz: 300,
-    filterFreqHz: 800,
-    freqEndHz: 50,
-    springFilterFreqHz: 2500,
-    clickDurationS: 0.08,
-    clickGain: 0.2,
-    randomPitchRange: 0.1,
-    randomPitchBase: 0.95,
-    springGain: 0.1,
-    springDurationS: 0.04,
-  },
-  tabSwitch: { freqHz: 200, freqEndHz: 50, gain: 0.15, durationS: 0.1 },
-  uiHover: {
-    freqHz: 8000,
-    freqEndHz: 10000,
-    staticFilterHz: 5000,
-    flybackGain: 0.015,
-    flybackDurationS: 0.05,
-    staticGain: 0.03,
-    staticDurationS: 0.03,
-  },
-  crtWhine: {
-    freqHz: 1650,
-    freqEndHz: 980,
-    gain: 0.10,
-    durationS: 0.85,
-    filterFreqHz: 2400,
-    filterQ: 1.2,
-    noiseGain: 0.02,
-    noiseDurationS: 0.28,
-    noiseFilterHz: 1200,
-  },
-  explosion: {
-    snapFilterHz: 1500,
-    boomFreqHz: 150,
-    boomFreqEndHz: 40,
-    hissFilterHzStart: 3000,
-    hissFilterHzEnd: 1000,
-    meltdownSpinFreqHz: 300,
-    debrisFreqMinHz: 2000,
-    debrisFreqMaxHz: 5000,
-    debrisCount: 5,
-    meltdownDebrisCount: 12,
-    hissDurationS: 2,
-    meltdownHissDurationS: 4,
-    snapDurationS: 0.1,
-    boomDurationS: 0.4,
-    boomDecayS: 0.3,
-    masterVolNormal: 0.5,
-    masterVolMeltdown: 0.8,
-    hissGainRatio: 0.4,
-    debrisGain: 0.05,
-    debrisDurationS: 0.05,
-    debrisDelayS: 0.1,
-    debrisSpreadS: 1.5,
-    meltdownSpinDurationS: 3,
-    meltdownSpinGain: 0.3,
-    meltdownSpinEndHz: 10,
-  },
-  flux: {
-    suckDurationS: 0.12,
-    arcFreqHz: 400,
-    fmFreqHz: 60,
-    fmGain: 800,
-    filterFreqHz: 2500,
-    shimFreqsHz: [2200, 3150, 4800, 6200],
-    noiseGain: 0.25,
-    noiseFilterStartHz: 500,
-    arcGain: 0.2,
-    arcDurationS: 0.15,
-    shimGain: 0.04,
-    shimDurationS: 1.5,
-    shimDriftRange: 40,
-    shimDriftBias: 20,
-    shimDriftTimeS: 1.2,
-  },
-  upgrade: {
-    filterFreqHz: 1200,
-    impactFreqHz: 18,
-    toneStartHz: 200,
-    toneEndHz: 600,
-    crunchFreqHz: 880,
-    wrenchDurationS: 0.3,
-    wrenchRampGain: 0.2,
-    wrenchRampTimeS: 0.05,
-    toneDurationS: 0.4,
-    toneGain: 0.05,
-    crunchDelayS: 0.2,
-    crunchGain: 0.05,
-    crunchRampTimeS: 0.25,
-  },
-  reboot: {
-    spinFreqHz: 200,
-    relayFreqHz: 150,
-    relayOffsetsS: [0.5, 1.2, 1.9],
-    vacFilterHz: 400,
-    kickFreqHz: 120,
-    kickFreqEndHz: 30,
-    padFreqsHz: [220, 277.18, 329.63],
-    spinDurationS: 2.5,
-    spinGain: 0.3,
-    spinEndHz: 10,
-    relayGain: 0.4,
-    relayDurationS: 0.1,
-    vacStartDelayS: 2,
-    vacFadeInEndS: 2.5,
-    vacGain: 0.1,
-    vacFadeOutStartS: 3.4,
-    vacFadeOutEndS: 3.5,
-    vacDurationS: 1.5,
-    ignitionDelayS: 3.5,
-    kickGain: 0.8,
-    kickDurationS: 0.5,
-    kickDecayS: 0.2,
-    padDurationS: 4,
-    padDetuneRatio: 1.02,
-    padPeakGain: 0.1,
-    padFadeInS: 1,
-  },
-  objective: {
-    thudFreqHz: 120,
-    clankFreqHz: 400,
-    headFreqMinHz: 1800,
-    printCharCount: 8,
-    airFilterHz: 800,
-    airGain: 0.2,
-    airDurationS: 0.1,
-    stampDelayS: 0.12,
-    thudEndHz: 30,
-    thudDecayS: 0.15,
-    thudPeakGain: 0.6,
-    thudAttackS: 0.01,
-    thudDurationS: 0.2,
-    clankGain: 0.15,
-    clankDurationS: 0.05,
-    printStartDelayS: 0.35,
-    printCharSpacingS: 0.06,
-    headFreqRangeHz: 200,
-    headGain: 0.08,
-    headDurationS: 0.03,
-  },
-  overheat: {
-    filterFreqStartHz: 450,
-    filterFreqEndHz: 300,
-    pingFreqMinHz: 2500,
-    pingFreqMaxHz: 3500,
-    groanQ: 15,
-    groanDurationS: 1.5,
-    groanPeakGain: 0.25,
-    groanFadeInS: 0.2,
-    maxPingCount: 2,
-    pingDelayBaseS: 0.2,
-    pingDelayRangeS: 0.8,
-    pingGain: 0.1,
-    pingDurationS: 0.3,
-    pingAttackS: 0.001,
-  },
-  sell: { toneFreqHz: 400, toneFreqEndHz: 200, gain: 0.15, durationS: 0.08 },
-  error: { freqHz: 150, freqEndHz: 100, gain: 0.15, durationS: 0.2 },
-  purge: {
-    freqHz: 1200,
-    freqEndHz: 600,
-    boilFilterHz: 400,
-    lfoRateHz: 12,
-    lfoDepthHz: 300,
-    sawGain: 0.1,
-    sawDurationS: 0.15,
-    noiseGain: 0.25,
-    noiseDurationS: 0.6,
-    boilGain: 0.15,
-    boilDurationS: 0.5,
-  },
-  depletion: {
-    fizzFilterStartHz: 4000,
-    fizzFilterEndHz: 100,
-    fizzDurationS: 0.4,
-    fizzGain: 0.2,
-    rattleCount: 4,
-    rattleBaseDelayS: 0.15,
-    rattleSpacingS: 0.07,
-    rattleJitterS: 0.02,
-    rattleBaseFreqHz: 600,
-    rattleFreqRangeHz: 200,
-    rattleFilterHz: 800,
-    rattleFilterQ: 8,
-    rattleGain: 0.05,
-    rattleDurationS: 0.05,
-  },
-  save: {
-    motorFreqEndHz: 800,
-    seekFilterHz: 2500,
-    latchFreqHz: 150,
-    latchFreqEndHz: 40,
-    seekCount: 12,
-    motorStartHz: 100,
-    motorDurationS: 1.2,
-    motorFadeInS: 0.5,
-    motorGain: 0.1,
-    seekDelayBaseS: 0.3,
-    seekDelayRangeS: 0.8,
-    seekGain: 0.12,
-    seekDurationS: 0.05,
-    latchDelayS: 1.3,
-    latchGain: 0.15,
-    latchDurationS: 0.1,
-  },
-};
-
-const PU = AUDIO_SPECS.purge;
-const O = AUDIO_SPECS.objective;
-const SV = AUDIO_SPECS.save;
-const F = AUDIO_SPECS.flux;
-const OH = AUDIO_SPECS.overheat;
-const CW = AUDIO_SPECS.crtWhine;
-
-const EFFECT_PROFILES = {
-  purge_saw: {
-    type: "osc",
-    wave: "sawtooth",
-    freq: PU.freqHz,
-    freqEnd: PU.freqEndHz,
-    gain: PU.sawGain,
-    duration: PU.sawDurationS,
-    volEnd: 0,
-  },
-  purge_noise: {
-    type: "noise",
-    filterType: "highpass",
-    freq: 1000,
-    gain: PU.noiseGain,
-    duration: PU.noiseDurationS,
-  },
-  purge_boil: {
-    type: "noise",
-    filterType: "bandpass",
-    freq: PU.boilFilterHz,
-    Q: 8,
-    gain: PU.boilGain,
-    duration: PU.boilDurationS,
-    volEnd: 0,
-    lfoRate: PU.lfoRateHz,
-    lfoDepth: PU.lfoDepthHz,
-  },
-  objective_air: { type: "objective_air", spec: O },
-  objective_stamp: { type: "objective_stamp", spec: O },
-  objective_print: { type: "objective_print", spec: O },
-  crt_whine: { type: "crt_whine", spec: CW },
-  save_motor: { type: "save_motor", spec: SV },
-  save_seeks: { type: "save_seeks", spec: SV },
-  save_latch: { type: "save_latch", spec: SV },
-  flux_noise: { type: "flux_noise", spec: F },
-  flux_arc: { type: "flux_arc", spec: F },
-  flux_shims: { type: "flux_shims", spec: F },
-  overheat_groan: { type: "overheat_groan", spec: OH },
-  overheat_pings: { type: "overheat_pings", spec: OH },
-};
 
 const EVENT_TO_EFFECTS = {
   click: { sampleKey: "click", duckAmbience: true },
   error: { sampleKey: "error" },
   tab_switch: { sampleKey: "tab_switch", sampleFallback: "click" },
+  tab_relay_thud: { sampleKey: "tab_switch" },
   ui_hover: { sampleKey: "click" },
-  crt_whine: { effects: ["crt_whine"], duckAmbience: true },
+  crt_whine: { sampleKey: "click", duckAmbience: true },
   sell: { sampleKey: "sell", sampleFallback: "click", duckAmbience: true },
   placement: {
     sampleMap: { cell: "placement_cell", plating: "placement_plating", vent: "placement", default: "placement" },
   },
-  purge: { effects: ["purge_saw", "purge_noise", "purge_boil"] },
+  purge: { sampleKey: "click" },
   upgrade: { sampleKey: "upgrade" },
   reboot: { sampleKey: "reboot" },
-  objective: { effects: ["objective_air", "objective_stamp", "objective_print"] },
-  save: { effects: ["save_motor", "save_seeks", "save_latch"] },
+  objective: { sampleKey: "click" },
+  save: { sampleKey: "click" },
   explosion: {
     sampleKey: "explosion",
     meltdownSampleKey: "meltdown",
     throttle: true,
   },
-  flux: { effects: ["flux_noise", "flux_arc", "flux_shims"] },
-  component_overheat: { effects: ["overheat_groan", "overheat_pings"] },
+  flux: { sampleKey: "click" },
+  component_overheat: { sampleKey: "error" },
   depletion: { sampleKey: "depletion" },
 };
-
-const UI_HOVER = AUDIO_SPECS.uiHover;
-
-function runOsc(svc, profile, opts) {
-  const { ctx, t, category, pan, spatialOpts } = opts;
-  let freq = profile.freq;
-  if (profile.randomPitch) {
-    const { base, range } = profile.randomPitch;
-    freq *= (base || 0.95) + Math.random() * (range || 0.1);
-  }
-  let startTime = t;
-  if (profile.delay) startTime += profile.delay;
-  const oscOpts = {
-    freqEnd: profile.freqEnd,
-    volEnd: profile.volEnd ?? 0.001,
-    category: category ?? "effects",
-    pan,
-    ...spatialOpts,
-  };
-  if (profile.dist) oscOpts.dist = true;
-  if (profile.filterFreq != null) {
-    oscOpts.filterFreq = profile.filterFreq;
-    oscOpts.filterType = profile.filterType || "lowpass";
-  }
-  const result = svc._osc(startTime, profile.wave || "sine", freq, profile.gain ?? 0, profile.duration, oscOpts);
-  if (result?.gain && profile.thudRampGain != null) {
-    result.gain.gain.linearRampToValueAtTime(profile.thudRampGain, startTime + profile.thudRampTimeS);
-  }
-  if (result?.gain && profile.rampGain != null) {
-    result.gain.gain.linearRampToValueAtTime(profile.rampGain, startTime + (profile.rampTime ?? 0.05));
-  }
-  return result;
-}
-
-function runNoise(svc, profile, opts) {
-  const { category } = opts;
-  const noiseOpts = {
-    type: profile.filterType || "highpass",
-    freq: profile.freq ?? 1000,
-    Q: profile.Q,
-    volEnd: profile.volEnd ?? 0.001,
-    category: category ?? "effects",
-  };
-  const result = svc._noise(opts.t, profile.gain ?? 0, profile.duration, noiseOpts);
-  if (result?.gain && profile.rampGain != null) {
-    result.gain.gain.linearRampToValueAtTime(profile.rampGain, opts.t + (profile.rampTime ?? 0.05));
-  }
-  if (result?.filter && profile.lfoRate != null && profile.lfoDepth != null) {
-    svc._lfo(opts.t, profile.lfoRate, profile.lfoDepth, result.filter.frequency, profile.duration);
-  }
-  if (result?.gain && profile.impactFreq != null) {
-    const impact = opts.ctx.createOscillator();
-    const impactGain = opts.ctx.createGain();
-    impact.type = "square";
-    impact.frequency.value = profile.impactFreq;
-    impactGain.gain.value = 1;
-    impact.connect(impactGain);
-    impactGain.connect(result.gain.gain);
-    impact.start(opts.t);
-    impact.stop(opts.t + profile.duration);
-  }
-  return result;
-}
-
-const effectHandlers = {
-  objective_air: ({ svc, ctx, categoryGain, spec, t }) => {
-    if (!svc._noiseBuffer) return null;
-    const airSrc = ctx.createBufferSource();
-    airSrc.buffer = svc._noiseBuffer;
-    const airGain = ctx.createGain();
-    const airFilter = ctx.createBiquadFilter();
-    airFilter.type = "lowpass";
-    airFilter.frequency.value = spec.airFilterHz;
-    airSrc.connect(airFilter);
-    airFilter.connect(airGain);
-    airGain.connect(categoryGain);
-    airGain.gain.setValueAtTime(spec.airGain, t);
-    airGain.gain.linearRampToValueAtTime(0, t + spec.airDurationS);
-    airSrc.start(t);
-    airSrc.stop(t + spec.airDurationS);
-    return null;
-  },
-  objective_stamp: ({ ctx, categoryGain, spec, t }) => {
-    const stampTime = t + spec.stampDelayS;
-    const thudOsc = ctx.createOscillator();
-    const thudGain = ctx.createGain();
-    thudOsc.type = "triangle";
-    thudOsc.frequency.setValueAtTime(spec.thudFreqHz, stampTime);
-    thudOsc.frequency.exponentialRampToValueAtTime(spec.thudEndHz, stampTime + spec.thudDecayS);
-    thudOsc.connect(thudGain);
-    thudGain.connect(categoryGain);
-    thudGain.gain.setValueAtTime(0, stampTime);
-    thudGain.gain.linearRampToValueAtTime(spec.thudPeakGain, stampTime + spec.thudAttackS);
-    thudGain.gain.exponentialRampToValueAtTime(0.01, stampTime + spec.thudDurationS);
-    thudOsc.start(stampTime);
-    thudOsc.stop(stampTime + spec.thudDurationS);
-    const clankOsc = ctx.createOscillator();
-    const clankGain = ctx.createGain();
-    clankOsc.type = "square";
-    clankOsc.frequency.setValueAtTime(spec.clankFreqHz, stampTime);
-    clankOsc.connect(clankGain);
-    clankGain.connect(categoryGain);
-    clankGain.gain.setValueAtTime(spec.clankGain, stampTime);
-    clankGain.gain.exponentialRampToValueAtTime(0.001, stampTime + spec.clankDurationS);
-    clankOsc.start(stampTime);
-    clankOsc.stop(stampTime + spec.clankDurationS);
-    return null;
-  },
-  objective_print: ({ ctx, categoryGain, spec, t }) => {
-    const printStart = t + spec.printStartDelayS;
-    for (let i = 0; i < spec.printCharCount; i++) {
-      const charTime = printStart + i * spec.printCharSpacingS;
-      const headOsc = ctx.createOscillator();
-      const headGain = ctx.createGain();
-      headOsc.type = "square";
-      headOsc.frequency.setValueAtTime(spec.headFreqMinHz + Math.random() * spec.headFreqRangeHz, charTime);
-      headOsc.connect(headGain);
-      headGain.connect(categoryGain);
-      headGain.gain.setValueAtTime(spec.headGain, charTime);
-      headGain.gain.exponentialRampToValueAtTime(0.001, charTime + spec.headDurationS);
-      headOsc.start(charTime);
-      headOsc.stop(charTime + spec.headDurationS);
-    }
-    return null;
-  },
-  crt_whine: ({ svc, ctx, categoryGain, spec, t }) => {
-    const durationS = spec.durationS ?? 0.85;
-    const noiseDurationS = spec.noiseDurationS ?? 0.28;
-
-    const osc = ctx.createOscillator();
-    const filter = ctx.createBiquadFilter();
-    const gain = ctx.createGain();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(spec.freqHz, t);
-    osc.frequency.exponentialRampToValueAtTime(spec.freqEndHz, t + durationS);
-
-    filter.type = "bandpass";
-    filter.frequency.value = spec.filterFreqHz;
-    filter.Q.value = spec.filterQ ?? 1.2;
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(categoryGain);
-    gain.gain.setValueAtTime(spec.gain, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + durationS);
-
-    osc.start(t);
-    osc.stop(t + durationS);
-
-    if (svc?._noiseBuffer) {
-      const noiseSrc = ctx.createBufferSource();
-      noiseSrc.buffer = svc._noiseBuffer;
-      const noiseFilter = ctx.createBiquadFilter();
-      const noiseGain = ctx.createGain();
-      noiseFilter.type = "highpass";
-      noiseFilter.frequency.value = spec.noiseFilterHz ?? 1200;
-      noiseGain.gain.setValueAtTime(spec.noiseGain ?? 0.02, t);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, t + noiseDurationS);
-      noiseSrc.connect(noiseFilter);
-      noiseFilter.connect(noiseGain);
-      noiseGain.connect(categoryGain);
-      noiseSrc.start(t);
-      noiseSrc.stop(t + noiseDurationS);
-    }
-
-    return null;
-  },
-  save_motor: ({ ctx, categoryGain, spec, t }) => {
-    const motor = ctx.createOscillator();
-    const motorGain = ctx.createGain();
-    motor.type = "triangle";
-    motor.frequency.setValueAtTime(spec.motorStartHz, t);
-    motor.frequency.exponentialRampToValueAtTime(spec.motorFreqEndHz, t + spec.motorDurationS);
-    motor.connect(motorGain);
-    motorGain.connect(categoryGain);
-    motorGain.gain.setValueAtTime(0, t);
-    motorGain.gain.linearRampToValueAtTime(spec.motorGain, t + spec.motorFadeInS);
-    motorGain.gain.linearRampToValueAtTime(0, t + spec.motorDurationS);
-    motor.start(t);
-    motor.stop(t + spec.motorDurationS);
-    return null;
-  },
-  save_seeks: ({ svc, ctx, categoryGain, spec, t }) => {
-    if (!svc._noiseBuffer) return null;
-    for (let i = 0; i < spec.seekCount; i++) {
-      const seekTime = t + spec.seekDelayBaseS + Math.random() * spec.seekDelayRangeS;
-      const seekSrc = ctx.createBufferSource();
-      seekSrc.buffer = svc._noiseBuffer;
-      const seekFilter = ctx.createBiquadFilter();
-      const seekGain = ctx.createGain();
-      seekFilter.type = "bandpass";
-      seekFilter.frequency.value = spec.seekFilterHz;
-      seekFilter.Q.value = 2;
-      seekSrc.connect(seekFilter);
-      seekFilter.connect(seekGain);
-      seekGain.connect(categoryGain);
-      seekGain.gain.setValueAtTime(spec.seekGain, seekTime);
-      seekGain.gain.exponentialRampToValueAtTime(0.001, seekTime + spec.seekDurationS);
-      seekSrc.start(seekTime, Math.random(), spec.seekDurationS);
-    }
-    return null;
-  },
-  save_latch: ({ ctx, categoryGain, spec, t }) => {
-    const parkTime = t + spec.latchDelayS;
-    const saveLatch = ctx.createOscillator();
-    const saveLatchGain = ctx.createGain();
-    saveLatch.type = "square";
-    saveLatch.frequency.setValueAtTime(spec.latchFreqHz, parkTime);
-    saveLatch.frequency.exponentialRampToValueAtTime(spec.latchFreqEndHz, parkTime + spec.latchDurationS);
-    saveLatch.connect(saveLatchGain);
-    saveLatchGain.connect(categoryGain);
-    saveLatchGain.gain.setValueAtTime(spec.latchGain, parkTime);
-    saveLatchGain.gain.exponentialRampToValueAtTime(0.001, parkTime + spec.latchDurationS);
-    saveLatch.start(parkTime);
-    saveLatch.stop(parkTime + spec.latchDurationS);
-    return null;
-  },
-  flux_noise: ({ svc, ctx, categoryGain, spec, t }) => {
-    if (!svc._noiseBuffer) return null;
-    const src = ctx.createBufferSource();
-    src.buffer = svc._noiseBuffer;
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-    filter.type = "highpass";
-    filter.frequency.setValueAtTime(UI_HOVER.freqHz, t);
-    filter.frequency.exponentialRampToValueAtTime(spec.noiseFilterStartHz, t + spec.suckDurationS);
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(categoryGain);
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(spec.noiseGain, t + spec.suckDurationS);
-    src.start(t);
-    src.stop(t + spec.suckDurationS);
-    return null;
-  },
-  flux_arc: ({ ctx, categoryGain, spec, t }) => {
-    const impactT = t + spec.suckDurationS;
-    const arcOsc = ctx.createOscillator();
-    const arcGain = ctx.createGain();
-    const arcFilter = ctx.createBiquadFilter();
-    arcOsc.type = "sawtooth";
-    arcOsc.frequency.setValueAtTime(spec.arcFreqHz, impactT);
-    const fmOsc = ctx.createOscillator();
-    fmOsc.type = "square";
-    fmOsc.frequency.value = spec.fmFreqHz;
-    const fmGain = ctx.createGain();
-    fmGain.gain.value = spec.fmGain;
-    fmOsc.connect(fmGain);
-    fmGain.connect(arcOsc.frequency);
-    arcFilter.type = "highpass";
-    arcFilter.frequency.value = spec.filterFreqHz;
-    arcOsc.connect(arcFilter);
-    arcFilter.connect(arcGain);
-    arcGain.connect(categoryGain);
-    arcGain.gain.setValueAtTime(spec.arcGain, impactT);
-    arcGain.gain.exponentialRampToValueAtTime(0.01, impactT + spec.arcDurationS);
-    arcOsc.start(impactT);
-    arcOsc.stop(impactT + spec.arcDurationS);
-    fmOsc.start(impactT);
-    fmOsc.stop(impactT + spec.arcDurationS);
-    return null;
-  },
-  flux_shims: ({ ctx, categoryGain, spec, t }) => {
-    const impactT = t + spec.suckDurationS;
-    spec.shimFreqsHz.forEach((freq) => {
-      const shim = ctx.createOscillator();
-      const shimGain = ctx.createGain();
-      shim.type = "sine";
-      shim.frequency.setValueAtTime(freq, impactT);
-      const drift = freq + (Math.random() * spec.shimDriftRange - spec.shimDriftBias);
-      shim.frequency.linearRampToValueAtTime(drift, impactT + spec.shimDriftTimeS);
-      shim.connect(shimGain);
-      shimGain.connect(categoryGain);
-      shimGain.gain.setValueAtTime(spec.shimGain, impactT);
-      shimGain.gain.exponentialRampToValueAtTime(0.001, impactT + spec.shimDurationS);
-      shim.start(impactT);
-      shim.stop(impactT + spec.shimDurationS);
-    });
-    return null;
-  },
-  overheat_groan: ({ svc, ctx, categoryGain, spec, t }) => {
-    if (!svc._noiseBuffer) return null;
-    const groanSrc = ctx.createBufferSource();
-    groanSrc.buffer = svc._noiseBuffer;
-    const groanFilter = ctx.createBiquadFilter();
-    const groanGain = ctx.createGain();
-    groanFilter.type = "bandpass";
-    groanFilter.Q.value = spec.groanQ;
-    groanFilter.frequency.setValueAtTime(spec.filterFreqStartHz, t);
-    groanFilter.frequency.exponentialRampToValueAtTime(spec.filterFreqEndHz, t + spec.groanDurationS);
-    groanSrc.connect(groanFilter);
-    groanFilter.connect(groanGain);
-    groanGain.connect(categoryGain);
-    groanGain.gain.setValueAtTime(0, t);
-    groanGain.gain.linearRampToValueAtTime(spec.groanPeakGain, t + spec.groanFadeInS);
-    groanGain.gain.linearRampToValueAtTime(0, t + spec.groanDurationS);
-    groanSrc.start(t, Math.random() * 5, spec.groanDurationS);
-    return null;
-  },
-  overheat_pings: ({ ctx, categoryGain, spec, t }) => {
-    const pingCount = 1 + Math.floor(Math.random() * spec.maxPingCount);
-    for (let i = 0; i < pingCount; i++) {
-      const pingTime = t + spec.pingDelayBaseS + Math.random() * spec.pingDelayRangeS;
-      const pingOsc = ctx.createOscillator();
-      const pingGain = ctx.createGain();
-      pingOsc.type = "sine";
-      pingOsc.frequency.setValueAtTime(
-        spec.pingFreqMinHz + Math.random() * (spec.pingFreqMaxHz - spec.pingFreqMinHz),
-        pingTime
-      );
-      pingOsc.connect(pingGain);
-      pingGain.connect(categoryGain);
-      pingGain.gain.setValueAtTime(0, pingTime);
-      pingGain.gain.setValueAtTime(spec.pingGain, pingTime + spec.pingAttackS);
-      pingGain.gain.exponentialRampToValueAtTime(0.001, pingTime + spec.pingDurationS);
-      pingOsc.start(pingTime);
-      pingOsc.stop(pingTime + spec.pingDurationS);
-    }
-    return null;
-  },
-};
-
-function runEffect(effectId, opts) {
-  const t = opts.t ?? opts.time;
-  const o = { ...opts, t };
-  const handler = effectHandlers[effectId];
-  if (handler) return handler(o);
-  return null;
-}
-
-function playAudioEffect(effectId, context, spec, time, options = {}) {
-  const opts = { ...context, spec, time, t: time, ...options };
-  return runEffect(effectId, opts);
-}
-
-function playSoundEffect(svc, effectId, context, audioOptions = {}) {
-  const profile = EFFECT_PROFILES[effectId];
-  if (!profile || !svc.context || svc.context.state !== "running") return null;
-  const { t, ctx, categoryGain, category, pan, spatialOpts } = context;
-  const contextShape = { svc, ctx, categoryGain, category, pan, spatialOpts };
-  const spec = profile.spec ?? profile;
-
-  if (profile.type === "osc") {
-    return runOsc(svc, profile, { ...contextShape, t, category, pan, spatialOpts });
-  }
-  if (profile.type === "noise") {
-    return runNoise(svc, profile, { ...contextShape, t, category });
-  }
-  return playAudioEffect(effectId, contextShape, spec, t, audioOptions);
-}
 
 function trySample(svc, sampleKey, category, pan) {
   const buf = svc._uiBuffers?.[sampleKey];
@@ -891,19 +244,8 @@ function handleTabSwitch(svc, opts) {
 }
 
 function handleTabRelayThud(svc, opts) {
-  const { t, ctx, categoryGain } = opts;
-  if (!ctx || !categoryGain) return;
-  const osc = ctx.createOscillator();
-  osc.type = "sine";
-  osc.frequency.value = 52;
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.13, t + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-  osc.connect(g);
-  g.connect(categoryGain);
-  osc.start(t);
-  osc.stop(t + 0.15);
+  const config = EVENT_TO_EFFECTS.tab_relay_thud;
+  trySample(svc, config.sampleKey, opts.category, opts.pan);
 }
 
 function handleUiHover(svc, opts) {
@@ -914,7 +256,7 @@ function handleUiHover(svc, opts) {
 function handleCrtWhine(svc, opts) {
   const config = EVENT_TO_EFFECTS.crt_whine;
   if (config.duckAmbience) svc._duckAmbience();
-  config.effects.forEach((id) => playSoundEffect(svc, id, opts, opts));
+  trySample(svc, config.sampleKey, opts.category, opts.pan);
 }
 
 function handleSell(svc, opts) {
@@ -933,7 +275,7 @@ function handlePlacement(svc, opts) {
 
 function handlePurge(svc, opts) {
   const config = EVENT_TO_EFFECTS.purge;
-  config.effects.forEach((id) => playSoundEffect(svc, id, opts, opts));
+  trySample(svc, config.sampleKey, opts.category, opts.pan);
 }
 
 function handleUpgrade(svc, opts) {
@@ -948,12 +290,12 @@ function handleReboot(svc, opts) {
 
 function handleObjective(svc, opts) {
   const config = EVENT_TO_EFFECTS.objective;
-  config.effects.forEach((id) => playSoundEffect(svc, id, opts, opts));
+  trySample(svc, config.sampleKey, opts.category, opts.pan);
 }
 
 function handleSave(svc, opts) {
   const config = EVENT_TO_EFFECTS.save;
-  config.effects.forEach((id) => playSoundEffect(svc, id, opts, opts));
+  trySample(svc, config.sampleKey, opts.category, opts.pan);
 }
 
 function handleExplosion(svc, opts) {
@@ -970,12 +312,12 @@ function handleExplosion(svc, opts) {
 
 function handleFlux(svc, opts) {
   const config = EVENT_TO_EFFECTS.flux;
-  config.effects.forEach((id) => playSoundEffect(svc, id, opts, opts));
+  trySample(svc, config.sampleKey, opts.category, opts.pan);
 }
 
 function handleComponentOverheat(svc, opts) {
   const config = EVENT_TO_EFFECTS.component_overheat;
-  config.effects.forEach((id) => playSoundEffect(svc, id, opts, opts));
+  trySample(svc, config.sampleKey, opts.category, opts.pan);
 }
 
 function handleDepletion(svc, opts) {
@@ -1075,7 +417,8 @@ export async function loadSampleBuffers(svc) {
     explosion: base + 'explosion.mp3',
     meltdown: base + 'meltdown.mp3',
     depletion: base + 'depletion.mp3',
-    reboot: base + 'reboot.mp3'
+    reboot: base + 'reboot.mp3',
+    ep_spark: base + 'ep_spark.mp3',
   };
   const industrialUrls = { metal_clank: base + 'metal_clank.mp3', steam_hiss: base + 'steam_hiss.mp3' };
   const [, , ambienceResults] = await Promise.all([
@@ -1298,7 +641,7 @@ export class AudioWarningManager {
     lfoGain.connect(oscKlaxon.frequency);
     lfo.start(t);
     lfo.stop(t + alarmDuration);
-    shaper.curve = this.svc._distortionCurve || this.svc._makeDistortionCurve(800);
+    shaper.curve = this.svc._makeDistortionCurve(800);
     klaxonFilter.type = 'lowpass';
     klaxonFilter.frequency.value = 800;
     klaxonFilter.Q.value = 1;
@@ -1409,129 +752,12 @@ export class AudioIndustrialManager {
   }
 }
 
-export class AudioSynthesizer {
-  constructor(service) {
-    this.service = service;
-  }
-
-  osc(startTime, type, freq, volume, duration, options = {}) {
-    const context = this.service.context;
-    if (!context) return null;
-    const osc = context.createOscillator();
-    const gain = context.createGain();
-    let source = osc;
-    let resolvedFreq = freq;
-    if (options.randomPitch) {
-      const variation = typeof options.randomPitch === "number" ? options.randomPitch : 0.05;
-      resolvedFreq *= (1 - variation) + Math.random() * (variation * 2);
-    }
-    osc.type = type;
-    osc.frequency.setValueAtTime(resolvedFreq, startTime);
-    if (options.freqEnd) {
-      osc.frequency.exponentialRampToValueAtTime(options.freqEnd, startTime + duration);
-    }
-    if (options.dist) {
-      const shaper = context.createWaveShaper();
-      shaper.curve = this.service._distortionCurve || this.service._makeDistortionCurve(400);
-      osc.connect(shaper);
-      source = shaper;
-    }
-    if (options.filterFreq != null) {
-      const filter = context.createBiquadFilter();
-      filter.type = options.filterType || "lowpass";
-      filter.frequency.value = options.filterFreq;
-      source.connect(filter);
-      source = filter;
-    }
-    source.connect(gain);
-    let dest = this.service._getCategoryGain(options.category);
-    if (options.pan !== undefined && options.pan !== null && context.createStereoPanner) {
-      const panner = context.createStereoPanner();
-      panner.pan.value = Math.max(-1, Math.min(1, options.pan));
-      panner.connect(dest);
-      dest = panner;
-    }
-    gain.connect(dest);
-    gain.gain.setValueAtTime(volume, startTime);
-    const endVol = options.volEnd ?? 0.001;
-    if (volume <= 0 || endVol <= 0) {
-      gain.gain.linearRampToValueAtTime(endVol, startTime + duration);
-    } else {
-      gain.gain.exponentialRampToValueAtTime(endVol, startTime + duration);
-    }
-    osc.start(startTime);
-    osc.stop(startTime + duration);
-    return { osc, gain };
-  }
-
-  noise(startTime, volume, duration, options = {}) {
-    const context = this.service.context;
-    if (!this.service._noiseBuffer || !context) return null;
-    const src = context.createBufferSource();
-    src.buffer = this.service._noiseBuffer;
-    const gain = context.createGain();
-    let node = src;
-    let filter = null;
-    if (options.type || options.freq || options.freqEnd || options.Q) {
-      filter = context.createBiquadFilter();
-      filter.type = options.type || "highpass";
-      const freq = options.freq ?? 1000;
-      filter.frequency.setValueAtTime(freq, startTime);
-      if (options.freqEnd) {
-        const rampFn = options.linearFreq ? "linearRampToValueAtTime" : "exponentialRampToValueAtTime";
-        filter.frequency[rampFn](options.freqEnd, startTime + duration);
-      }
-      if (options.Q) filter.Q.value = options.Q;
-      node.connect(filter);
-      node = filter;
-    }
-    node.connect(gain);
-    let dest = this.service._getCategoryGain(options.category);
-    if (options.pan !== undefined && options.pan !== null && context.createStereoPanner) {
-      const panner = context.createStereoPanner();
-      panner.pan.value = Math.max(-1, Math.min(1, options.pan));
-      panner.connect(dest);
-      dest = panner;
-    }
-    gain.connect(dest);
-    const available = Math.max(this.service._noiseBuffer.duration - duration, 0);
-    const offset = Math.random() * available;
-    gain.gain.setValueAtTime(volume, startTime);
-    const endVol = options.volEnd ?? 0.001;
-    if (volume <= 0 || endVol <= 0) {
-      gain.gain.linearRampToValueAtTime(endVol, startTime + duration);
-    } else {
-      gain.gain.exponentialRampToValueAtTime(endVol, startTime + duration);
-    }
-    src.start(startTime, offset, duration);
-    src.stop(startTime + duration);
-    return { src, gain, filter };
-  }
-
-  lfo(startTime, frequency, depth, target, duration) {
-    const context = this.service.context;
-    if (!context || !target) return null;
-    const lfo = context.createOscillator();
-    const gain = context.createGain();
-    lfo.frequency.value = frequency;
-    gain.gain.value = depth;
-    lfo.connect(gain);
-    gain.connect(target);
-    lfo.start(startTime);
-    lfo.stop(startTime + duration);
-    return { osc: lfo, gain };
-  }
-}
-
-
 export class AudioService {
   constructor() {
   this.context = null;
   this.enabled = true;
   this.masterGain = null;
   this._isInitialized = false;
-  this._noiseBuffer = null;
-  this._distortionCurve = null;
   this._lastWarningTime = 0;
   this._lastExplosionTime = 0;
   this._config = {
@@ -1549,7 +775,6 @@ export class AudioService {
   this.ambienceManager = new AudioAmbienceManager(this);
   this.warningManager = new AudioWarningManager(this);
   this.industrialManager = new AudioIndustrialManager(this);
-  this.synthesizer = new AudioSynthesizer(this);
   this._soundLimiter = {
   windowMs: AUDIO_RUNTIME_DEFAULTS.limiterWindowMs,
   lastWindowStart: 0,
@@ -1558,7 +783,7 @@ export class AudioService {
   perSoundCap: AUDIO_RUNTIME_DEFAULTS.limiterPerSoundCap
   };
   this._activeLimiter = null;
-  this._uiBuffers = { click: null, placement: null, placement_cell: null, placement_plating: null, upgrade: null, error: null, sell: null, tab_switch: null };
+  this._uiBuffers = { click: null, placement: null, placement_cell: null, placement_plating: null, upgrade: null, error: null, sell: null, tab_switch: null, ep_spark: null };
   this._industrialBuffers = { metal_clank: null, steam_hiss: null };
   this._ambienceBuffers = [];
   this._ambienceDuckGain = null;
@@ -1676,19 +901,6 @@ export class AudioService {
   if (isContextSuspended) {
   this.masterGain.gain.value = 0;
   }
-  const bufferSize = this.context.sampleRate * 4;
-  this._noiseBuffer = this.context.createBuffer(1, bufferSize, this.context.sampleRate);
-  const data = this._noiseBuffer.getChannelData(0);
-  let lastOut = 0;
-  for (let i = 0; i < bufferSize; i++) {
-  const white = Math.random() * 2 - 1;
-  data[i] = (lastOut + (0.02 * white)) / 1.02;
-  lastOut = data[i];
-  data[i] *= 3.5;
-  if (i < 500) data[i] *= (i / 500);
-  if (i > bufferSize - 500) data[i] *= ((bufferSize - i) / 500);
-  }
-  this._distortionCurve = this._makeDistortionCurve(400);
   this._isInitialized = true;
   this._loadSampleBuffers();
   if (volPrefs.mute) {
@@ -1880,15 +1092,6 @@ export class AudioService {
       this.stopResearchEpHum();
     }
   }
-  _osc(startTime, type, freq, volume, duration, options = {}) {
-  return this.synthesizer.osc(startTime, type, freq, volume, duration, options);
-  }
-  _noise(startTime, volume, duration, options = {}) {
-  return this.synthesizer.noise(startTime, volume, duration, options);
-  }
-  _lfo(startTime, frequency, depth, target, duration) {
-  return this.synthesizer.lfo(startTime, frequency, depth, target, duration);
-  }
   _getLimiterScale(type, subtype, nowMs) {
   const limiter = this._soundLimiter;
   if (!limiter || !type) return 1;
@@ -1973,20 +1176,25 @@ export class AudioService {
     if (!this.enabled || !this.context || this.context.state !== "running") return;
     const ep = game?.state?.current_exotic_particles;
     const n = typeof ep?.toNumber === "function" ? ep.toNumber() : Number(ep) || 0;
+    const buf = this._uiBuffers?.ep_spark;
+    if (n <= 0 || !buf) {
+      this.stopResearchEpHum();
+      return;
+    }
     const targetGain = Math.min(0.055, 0.0015 + Math.log1p(Math.max(0, n)) * 0.0035);
     const ctx = this.context;
     const t = ctx.currentTime;
     const dest = this._getCategoryGain("effects");
     if (!this._researchEpHum) {
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = 60;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
       const g = ctx.createGain();
       g.gain.value = 0;
-      osc.connect(g);
+      src.connect(g);
       g.connect(dest);
-      osc.start(t);
-      this._researchEpHum = { osc, gain: g };
+      src.start(t);
+      this._researchEpHum = { source: src, gain: g };
     }
     this._researchEpHum.gain.gain.linearRampToValueAtTime(targetGain, t + 0.05);
   }
@@ -1996,11 +1204,11 @@ export class AudioService {
       this._researchEpHum = null;
       return;
     }
-    const { osc, gain } = this._researchEpHum;
+    const { source, gain } = this._researchEpHum;
     const t = this.context.currentTime;
     try {
       gain.gain.linearRampToValueAtTime(0.0001, t + 0.08);
-      osc.stop(t + 0.1);
+      source.stop(t + 0.1);
     } catch (_) {}
     this._researchEpHum = null;
   }
@@ -2141,45 +1349,6 @@ if (typeof document !== "undefined" && typeof window !== "undefined") {
     const btn = document.querySelector("#install_pwa_btn");
     if (btn) btn.classList.add("hidden");
   });
-}
-
-if (typeof document !== "undefined" && typeof window !== "undefined") {
-  (function setupConnectivityUI() {
-    function updateGoogleDriveButtonState() {
-      const isOnline = navigator.onLine;
-      const selectors = [
-        "#splash-load-cloud-btn",
-        "#splash-google-signin-btn",
-        "#splash-google-signout-btn",
-        "#splash-signin-btn",
-        "#splash-signout-btn",
-        "#splash-upload-option-btn",
-      ];
-      selectors.forEach((sel) => {
-        const el = document.querySelector(sel);
-        if (el) {
-          el.disabled = !isOnline;
-          el.title = isOnline ? "Requires Google Drive permissions" : "Requires an internet connection";
-        }
-      });
-      const cloudArea = document.getElementById("splash-cloud-button-area");
-      if (cloudArea) {
-        cloudArea.querySelectorAll("button").forEach((btn) => {
-          btn.disabled = !isOnline;
-          btn.title = isOnline ? btn.title || "" : "Requires an internet connection";
-        });
-      }
-    }
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", updateGoogleDriveButtonState, { once: true });
-    } else {
-      updateGoogleDriveButtonState();
-    }
-
-    window.addEventListener("online", updateGoogleDriveButtonState);
-    window.addEventListener("offline", updateGoogleDriveButtonState);
-  })();
 }
 
 if (typeof window !== "undefined") {
@@ -2598,9 +1767,10 @@ function getPartAssets() {
     'img/parts/coolants/coolant_cell_1.png', 'img/parts/exchangers/exchanger_1.png',
     'img/parts/inlets/inlet_1.png', 'img/parts/outlets/outlet_1.png',
     'img/parts/platings/plating_1.png', 'img/parts/reflectors/reflector_1.png',
-    'img/parts/vents/vent_1.png', 'img/parts/valves/valve_1_1.png',
-    'img/parts/valves/valve_1_2.png', 'img/parts/valves/valve_1_3.png',
-    'img/parts/valves/valve_1_4.png',
+    'img/parts/vents/vent_1.png',
+    'img/parts/valves/valve_1_1.png',
+    'img/parts/valves/valve_2_1.png',
+    'img/parts/valves/valve_3_1.png',
   ];
 }
 
@@ -2678,951 +1848,6 @@ export function getMaxTier() {
   return maxTier;
 }
 
-
-function restoreAuthToken(service) {
-  try {
-    const tokenData = StorageUtils.get("google_drive_auth_token");
-    if (tokenData) {
-      if (tokenData.expires_at && tokenData.expires_at > Date.now() + 300000) {
-        service.authToken = tokenData.access_token;
-        service.isSignedIn = true;
-      } else {
-        StorageUtils.remove("google_drive_auth_token");
-      }
-    }
-  } catch {
-    StorageUtils.remove("google_drive_auth_token");
-  }
-}
-
-function restoreUserInfo(service) {
-  try {
-    const userInfo = StorageUtils.get("google_drive_user_info");
-    if (userInfo) service.userInfo = userInfo;
-  } catch {
-    StorageUtils.remove("google_drive_user_info");
-  }
-}
-
-function isConfigured(service) {
-  try {
-    if (!service.config) {
-      service.config = getGoogleDriveConfig();
-    }
-    return !!(service.config && service.config.CLIENT_ID && service.config.API_KEY);
-  } catch {
-    return false;
-  }
-}
-
-function loadScript(src, errorName) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = src;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error(errorName));
-    document.head.appendChild(script);
-  });
-}
-
-async function loadGsiClientIfNeeded() {
-  if (window.google?.accounts) return;
-  await loadScript("https://accounts.google.com/gsi/client", "gsi load failed");
-}
-
-async function loadGapiApiIfNeeded() {
-  if (window.gapi) return;
-  await loadScript("https://apis.google.com/js/api.js", "gapi load failed");
-}
-
-async function loadGapiClientAndDrive(service) {
-  await new Promise((resolve, reject) => {
-    gapi.load("client", async () => {
-      try {
-        await gapi.client.init({ apiKey: service.config.API_KEY });
-        await gapi.client.load("drive", "v3");
-        resolve();
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
-}
-
-function initTokenClient(service) {
-  service.tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: service.config.CLIENT_ID,
-    scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata",
-    callback: async (response) => {
-      if (response.access_token) {
-        await handleAuthSuccess(service, response);
-      }
-    },
-  });
-}
-
-async function loadGapiScripts(service) {
-  if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
-  await loadGsiClientIfNeeded();
-  await loadGapiApiIfNeeded();
-  await loadGapiClientAndDrive(service);
-  initTokenClient(service);
-}
-
-async function handleAuthSuccess(service, response) {
-  const expiresAt = Date.now() + (response.expires_in || 3600) * 1000;
-  const tokenData = { access_token: response.access_token, expires_at: expiresAt };
-  StorageUtils.set("google_drive_auth_token", tokenData);
-  service.authToken = response.access_token;
-  service.isSignedIn = true;
-  try {
-    const userResponse = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
-      headers: { Authorization: `Bearer ${service.authToken}` },
-    });
-    if (userResponse.ok) {
-      const userData = await userResponse.json();
-      if (userData.user) {
-        service.userInfo = {
-          id: userData.user.permissionId || userData.user.emailAddress,
-          email: userData.user.emailAddress,
-          name: userData.user.displayName,
-          imageUrl: userData.user.photoLink,
-        };
-        StorageUtils.set("google_drive_user_info", service.userInfo);
-      }
-    }
-  } catch (err) {
-    logger.log('error', 'game', 'Error fetching user info:', err);
-  }
-}
-
-function tryRestoreTokenFromStorage(service) {
-  if (service.authToken) return;
-  const tokenData = StorageUtils.get("google_drive_auth_token");
-  if (!tokenData) return;
-  try {
-    if (tokenData.expires_at && tokenData.expires_at > Date.now() + 300000) {
-      service.authToken = tokenData.access_token;
-    } else {
-      StorageUtils.remove("google_drive_auth_token");
-    }
-  } catch {
-    StorageUtils.remove("google_drive_auth_token");
-  }
-}
-
-async function validateTokenWithDriveApi(service) {
-  const response = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
-    headers: { Authorization: `Bearer ${service.authToken}` },
-  });
-  if (!response.ok) return false;
-  const data = await response.json();
-  if (!data.user) return false;
-  service.userInfo = {
-    id: data.user.permissionId || data.user.emailAddress,
-    email: data.user.emailAddress,
-    name: data.user.displayName,
-    imageUrl: data.user.photoLink,
-  };
-  StorageUtils.set("google_drive_user_info", service.userInfo);
-  service.isSignedIn = true;
-  return true;
-}
-
-function clearAuthState(service) {
-  service.authToken = null;
-  service.isSignedIn = false;
-  service.userInfo = null;
-  StorageUtils.remove("google_drive_auth_token");
-  StorageUtils.remove("google_drive_user_info");
-}
-
-function tryLegacyGapiAuth(service) {
-  if (!window.gapi?.auth2) return false;
-  const authInstance = window.gapi.auth2.getAuthInstance();
-  if (!authInstance || !authInstance.isSignedIn.get()) return false;
-  const user = authInstance.currentUser.get();
-  const authResponse = user.getAuthResponse();
-  service.authToken = authResponse.access_token;
-  service.isSignedIn = true;
-  const expiresAt = Date.now() + (authResponse.expires_in || 3600) * 1000;
-  StorageUtils.set("google_drive_auth_token", { access_token: authResponse.access_token, expires_at: expiresAt });
-  const profile = user.getBasicProfile();
-  if (profile) {
-    service.userInfo = {
-      id: profile.getId(),
-      email: profile.getEmail(),
-      name: profile.getName(),
-      imageUrl: profile.getImageUrl(),
-    };
-    StorageUtils.set("google_drive_user_info", service.userInfo);
-  }
-  return true;
-}
-
-async function checkAuth(service, silent = true) {
-  if (!isConfigured(service)) return false;
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    if (service.authToken) service.isSignedIn = true;
-    return !!service.authToken;
-  }
-  try {
-    tryRestoreTokenFromStorage(service);
-    if (service.authToken) {
-      const valid = await validateTokenWithDriveApi(service);
-      if (valid) return true;
-      clearAuthState(service);
-    }
-    if (tryLegacyGapiAuth(service)) return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-function getUserInfo(service) {
-  if (!service.isSignedIn) return null;
-  if (service.userInfo) return service.userInfo;
-  try {
-    if (window.gapi && window.gapi.auth2) {
-      const authInstance = window.gapi.auth2.getAuthInstance();
-      if (authInstance && authInstance.isSignedIn.get()) {
-        const user = authInstance.currentUser.get();
-        const profile = user.getBasicProfile();
-        if (profile) {
-          service.userInfo = {
-            id: profile.getId(),
-            email: profile.getEmail(),
-            name: profile.getName(),
-            imageUrl: profile.getImageUrl(),
-          };
-          StorageUtils.set("google_drive_user_info", service.userInfo);
-          return service.userInfo;
-        }
-      }
-    }
-  } catch (err) {
-    logger.log('error', 'game', 'Error getting Google user info:', err);
-  }
-  return null;
-}
-
-function getUserId(service) {
-  const userInfo = getUserInfo(service);
-  return userInfo ? userInfo.id : null;
-}
-
-function signOut(service) {
-  if (service.authToken && typeof google !== "undefined" && google.accounts?.oauth2?.revoke) {
-    google.accounts.oauth2.revoke(service.authToken);
-  }
-  StorageUtils.remove("google_drive_auth_token");
-  StorageUtils.remove("google_drive_save_file_id");
-  StorageUtils.remove("google_drive_user_info");
-  service.isSignedIn = false;
-  service.authToken = null;
-  service.saveFileId = null;
-  service.userInfo = null;
-}
-
-function signIn(service) {
-  if (!service.tokenClient) throw new Error("Google Drive not initialized");
-  return new Promise((resolve, reject) => {
-    service.tokenClient.callback = (response) => {
-      if (response.error) {
-        reject(new Error(response.error));
-      } else {
-        handleAuthSuccess(service, response).then(resolve).catch(reject);
-      }
-    };
-    service.tokenClient.requestAccessToken({ prompt: "consent" });
-  });
-}
-
-async function findSaveFile(service) {
-  if (!service.isSignedIn) return false;
-  try {
-    const searchQuery = encodeURIComponent("name contains 'reactor-revival-save'");
-    const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${searchQuery}&orderBy=createdTime desc&spaces=drive`,
-      { headers: { Authorization: `Bearer ${service.authToken}` } }
-    );
-    if (response.ok) {
-      const data = await response.json();
-      if (data.files && data.files.length > 0) {
-        const mostRecent = data.files[0];
-        service.saveFileId = mostRecent.id;
-        StorageUtils.set("google_drive_save_file_id", mostRecent.id);
-        return true;
-      }
-    }
-    if (service.saveFileId) {
-      const verifyResponse = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${service.saveFileId}`,
-        { headers: { Authorization: `Bearer ${service.authToken}` } }
-      );
-      if (verifyResponse.ok) return true;
-      service.saveFileId = null;
-      StorageUtils.remove("google_drive_save_file_id");
-    }
-    return false;
-  } catch (err) {
-    logger.log('error', 'game', 'Error finding save file:', err);
-    return false;
-  }
-}
-
-async function loadZipLibrary(service) {
-  if (typeof pako === "undefined") {
-    throw new Error("pako library not loaded. Check that lib/pako.min.js is included in HTML.");
-  }
-  if (typeof window.zip === "undefined") {
-    throw new Error("zip.js library not loaded. Check that lib/zip.min.js is included in HTML.");
-  }
-  if (window.zip) {
-    window.zip.configure({ useWebWorkers: false });
-  }
-}
-
-async function compressAndEncrypt(service, saveData) {
-  await loadZipLibrary(service);
-  if (!window.zip) throw new Error("zip.js library failed to load");
-  const password = "reactor-revival-secure-save-2024";
-  const zipWriter = new window.zip.ZipWriter(new window.zip.BlobWriter("application/zip"), {
-    password,
-    zipCrypto: true,
-  });
-  const text = typeof saveData === "string" ? saveData : serializeSave(saveData);
-  await zipWriter.add("save.json", new window.zip.TextReader(text));
-  return await zipWriter.close();
-}
-
-async function decompressAndDecryptLegacy(service, encryptedData) {
-  if (!(encryptedData instanceof ArrayBuffer)) throw new Error("Encrypted data must be an ArrayBuffer.");
-  const key = "a_very_secure_key";
-  const encryptedBytes = new Uint8Array(encryptedData);
-  const decryptedBytes = new Uint8Array(encryptedBytes.length);
-  for (let i = 0; i < encryptedBytes.length; i++) {
-    decryptedBytes[i] = encryptedBytes[i] ^ key.charCodeAt(i % key.length);
-  }
-  if (typeof pako === "undefined") throw new Error("pako is not defined");
-  const decompressedData = pako.inflate(decryptedBytes, { to: "string" });
-  return deserializeSave(decompressedData);
-}
-
-async function decompressAndDecrypt(service, encryptedData) {
-  await loadZipLibrary(service);
-  if (!window.zip) throw new Error("zip.js library failed to load");
-  try {
-    const blob = new Blob([encryptedData], { type: "application/zip" });
-    const zipReader = new window.zip.ZipReader(new window.zip.BlobReader(blob));
-    const password = "reactor-revival-secure-save-2024";
-    const entries = await zipReader.getEntries({ password });
-    if (entries.length > 0) {
-      const writer = new window.zip.TextWriter();
-      const jsonText = await entries[0].getData(writer, { password });
-      await zipReader.close();
-      return deserializeSave(jsonText);
-    }
-    await zipReader.close();
-    throw new Error("No data found in save file.");
-  } catch (err) {
-    if (err.message && err.message.includes("password")) {
-      return decompressAndDecryptLegacy(service, encryptedData);
-    }
-    throw err;
-  }
-}
-
-async function load(service) {
-  if (!service.isSignedIn || !service.saveFileId) throw new Error("No save file available");
-  try {
-    const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${service.saveFileId}?alt=media`,
-      { headers: { Authorization: `Bearer ${service.authToken}` } }
-    );
-    if (!response.ok) throw new Error(`Failed to download save file: ${response.status}`);
-    const encryptedData = await response.arrayBuffer();
-    return await decompressAndDecrypt(service, encryptedData);
-  } catch (err) {
-    logger.log('error', 'game', 'Failed to load from Google Drive:', err);
-    throw err;
-  }
-}
-
-async function uploadToExistingFile(service, fileId, encryptedBlob) {
-  return await fetch(
-    `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
-    {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${service.authToken}`, "Content-Type": "application/zip" },
-      body: encryptedBlob,
-    }
-  );
-}
-
-async function createNewSaveFile(service) {
-  const timestamp = new Date().toISOString().slice(0, 16).replace(/:/g, "-");
-  const fileName = `reactor-revival-save-${timestamp}.zip`;
-  const metadataResponse = await fetch("https://www.googleapis.com/drive/v3/files", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${service.authToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ name: fileName, description: "Reactor Revival game save (encrypted)" }),
-  });
-  if (!metadataResponse.ok) throw new Error(`File creation failed: ${metadataResponse.status}`);
-  return await metadataResponse.json();
-}
-
-async function uploadToNewFile(service, encryptedBlob) {
-  const fileMetadata = await createNewSaveFile(service);
-  return await uploadToExistingFile(service, fileMetadata.id, encryptedBlob);
-}
-
-async function performSave(service, saveData) {
-  const encryptedBlob = await compressAndEncrypt(service, saveData);
-
-  let response;
-  if (service.saveFileId) {
-    response = await uploadToExistingFile(service, service.saveFileId, encryptedBlob);
-  } else {
-    response = await uploadToNewFile(service, encryptedBlob);
-  }
-
-  if (!response.ok) {
-    if (response.status === 404 && service.saveFileId) {
-      service.saveFileId = null;
-      return await performSave(service, saveData);
-    }
-    throw new Error(`Save failed: ${response.status}`);
-  }
-
-  const result = await response.json();
-  service.saveFileId = result.id;
-  StorageUtils.set("google_drive_save_file_id", result.id);
-  return true;
-}
-
-async function save(service, saveData, immediate = false) {
-  if (!service.isSignedIn) throw new Error("Not signed in to Google Drive");
-  if (!immediate) {
-    service.pendingSaveData = saveData;
-    if (service.saveTimeoutId) clearTimeout(service.saveTimeoutId);
-    service.saveTimeoutId = setTimeout(() => {
-      if (service.pendingSaveData) {
-        const data = service.pendingSaveData;
-        service.pendingSaveData = null;
-        performSave(service, data);
-      }
-    }, 2000);
-    return true;
-  }
-  return await performSave(service, saveData);
-}
-
-async function uploadLocalSave(service, saveDataString) {
-  if (!service.isSignedIn) throw new Error("User is not signed in to Google Drive");
-  const success = await performSave(service, saveDataString);
-  if (success) {
-    try {
-      const localSave = deserializeSave(saveDataString);
-      localSave.isCloudSynced = true;
-      localSave.cloudUploadedAt = new Date().toISOString();
-      await StorageAdapter.set("reactorGameSave", localSave);
-    } catch (e) {
-      logger.log('error', 'game', 'Failed to mark local save as synced after upload.', e);
-    }
-  }
-  return success;
-}
-
-async function canUploadLocalSave(service) {
-  if (!service.isSignedIn) return { showUpload: false };
-  const localSave = await StorageAdapter.get("reactorGameSave");
-  if (!localSave) return { showUpload: false };
-  try {
-    if (localSave.isCloudSynced) return { showUpload: false };
-    const hasCloudSave = await findSaveFile(service);
-    if (hasCloudSave) return { showUpload: false };
-    return { showUpload: true, gameState: localSave };
-  } catch {
-    return { showUpload: false };
-  }
-}
-
-async function offerLocalSaveUpload(service) {
-  if (!service.isSignedIn) return { hasLocalSave: false };
-  const gameState = await StorageAdapter.get("reactorGameSave");
-  if (!gameState) return { hasLocalSave: false };
-  try {
-    const saveSize = `${(serializeSave(gameState).length / 1024).toFixed(1)}KB`;
-    const hasCloudSave = await findSaveFile(service);
-    if (hasCloudSave) return { hasLocalSave: false };
-    if (gameState.isCloudSynced) {
-      delete gameState.isCloudSynced;
-      delete gameState.cloudUploadedAt;
-      await StorageAdapter.set("reactorGameSave", gameState);
-    }
-    return { hasLocalSave: true, gameState, saveSize };
-  } catch {
-    return { hasLocalSave: false };
-  }
-}
-
-async function flushPendingSave(service) {
-  if (service.pendingSaveData && service.isSignedIn) {
-    const dataToSave = service.pendingSaveData;
-    service.pendingSaveData = null;
-    if (service.saveTimeoutId) {
-      clearTimeout(service.saveTimeoutId);
-      service.saveTimeoutId = null;
-    }
-    return await performSave(service, dataToSave);
-  }
-  return true;
-}
-
-async function testBasicFileOperations(service) {
-  if (!service.isSignedIn) return false;
-  try {
-    const response = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
-      headers: { Authorization: `Bearer ${service.authToken}` },
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-async function deleteSave(service) {
-  if (!service.isSignedIn || !service.saveFileId) throw new Error("No save file to delete");
-  const response = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${service.saveFileId}`,
-    { method: "DELETE", headers: { Authorization: `Bearer ${service.authToken}` } }
-  );
-  if (response.ok) {
-    service.saveFileId = null;
-    return true;
-  }
-  throw new Error(`Failed to delete save file: ${response.status}`);
-}
-
-export class GoogleDriveSave {
-  constructor() {
-    this.enabled = GOOGLE_DRIVE_CONFIG.ENABLE_GOOGLE_DRIVE;
-    this.isSignedIn = false;
-    this.authToken = null;
-    this.userInfo = null;
-    this.saveFileId = StorageUtils.get("google_drive_save_file_id") || null;
-    this.lastSaveTime = 0;
-    this.pendingSaveData = null;
-    this.saveTimeoutId = null;
-    this.config = null;
-    restoreAuthToken(this);
-    restoreUserInfo(this);
-    if (this.enabled) this.init();
-  }
-
-  isConfigured() {
-    return isConfigured(this);
-  }
-
-  async init() {
-    if (!this.isConfigured()) return false;
-    if (typeof navigator !== "undefined" && !navigator.onLine) return false;
-    try {
-      await loadGapiScripts(this);
-      await checkAuth(this, true);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  async checkAuth(silent = true) {
-    return checkAuth(this, silent);
-  }
-
-  getUserInfo() {
-    return getUserInfo(this);
-  }
-
-  getUserId() {
-    return getUserId(this);
-  }
-
-  async handleAuthSuccess(response) {
-    return handleAuthSuccess(this, response);
-  }
-
-  async signIn() {
-    return signIn(this);
-  }
-
-  signOut() {
-    signOut(this);
-  }
-
-  async findSaveFile() {
-    return findSaveFile(this);
-  }
-
-  async load() {
-    return load(this);
-  }
-
-  async save(saveData, immediate = false) {
-    return save(this, saveData, immediate);
-  }
-
-  async _performSave(saveData) {
-    return performSave(this, saveData);
-  }
-
-  async uploadLocalSave(saveDataString) {
-    return uploadLocalSave(this, saveDataString);
-  }
-
-  async canUploadLocalSave() {
-    return canUploadLocalSave(this);
-  }
-
-  async offerLocalSaveUpload() {
-    return offerLocalSaveUpload(this);
-  }
-
-  async flushPendingSave() {
-    return flushPendingSave(this);
-  }
-
-  async testBasicFileOperations() {
-    return testBasicFileOperations(this);
-  }
-
-  async deleteSave() {
-    return deleteSave(this);
-  }
-}
-
-function getStableRedirectUri() {
-  if (typeof window === 'undefined' || !window.location) return '';
-  const basePath = getBasePath();
-  return window.location.origin + (basePath || '/');
-}
-
-export class SupabaseAuth {
-  constructor() {
-    this.token = null;
-    this.user = null;
-    this.expiresAt = 0;
-    this.refreshToken = null;
-    this.init();
-  }
-
-  init() {
-    const session = StorageUtils.get('supabase_auth_session');
-    if (session) {
-      try {
-        if (session.expires_at > Date.now()) {
-          this.token = session.access_token;
-          this.user = session.user;
-          this.expiresAt = session.expires_at;
-          this.refreshToken = session.refresh_token;
-        } else if (session.refresh_token) {
-          this.refreshToken = session.refresh_token;
-          this.user = session.user;
-          this.refreshAccessToken();
-        } else {
-          this.signOut();
-        }
-      } catch {
-        this.signOut();
-      }
-    }
-  }
-
-  async refreshAccessToken() {
-    if (!this.refreshToken || !getSupabaseAnonKey()) {
-      return false;
-    }
-
-    try {
-      const response = await fetch(`${getSupabaseUrl()}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': getSupabaseAnonKey()
-        },
-        body: JSON.stringify({ refresh_token: this.refreshToken })
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.access_token) {
-        this.setSession(data);
-        return true;
-      } else {
-        this.signOut();
-        return false;
-      }
-    } catch (error) {
-      this.signOut();
-      return false;
-    }
-  }
-
-  async signUp(email, password) {
-    try {
-      if (!getSupabaseAnonKey()) {
-        throw new Error('Supabase ANON_KEY is not configured');
-      }
-
-      const response = await fetch(`${getSupabaseUrl()}/auth/v1/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': getSupabaseAnonKey()
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error_description || data.msg || 'Sign up failed');
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: error.message || 'Sign up failed' };
-    }
-  }
-
-  async signInWithPassword(email, password) {
-    try {
-      if (!getSupabaseAnonKey()) {
-        throw new Error('Supabase ANON_KEY is not configured');
-      }
-
-      const response = await fetch(`${getSupabaseUrl()}/auth/v1/token?grant_type=password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': getSupabaseAnonKey()
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error_description || data.msg || 'Sign in failed');
-      }
-
-      this.setSession(data);
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: error.message || 'Sign in failed' };
-    }
-  }
-
-  async resetPasswordForEmail(email) {
-    try {
-      if (!getSupabaseAnonKey()) {
-        throw new Error('Supabase ANON_KEY is not configured');
-      }
-
-      const response = await fetch(`${getSupabaseUrl()}/auth/v1/recover`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': getSupabaseAnonKey()
-        },
-        body: JSON.stringify({
-          email: email,
-          redirect_to: `${getStableRedirectUri()}?type=recovery`
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error_description || data.msg || 'Password reset failed');
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: error.message || 'Password reset failed' };
-    }
-  }
-
-  async updatePassword(newPassword) {
-    try {
-      if (!this.token) {
-        throw new Error('Not authenticated');
-      }
-
-      if (!getSupabaseAnonKey()) {
-        throw new Error('Supabase ANON_KEY is not configured');
-      }
-
-      const response = await fetch(`${getSupabaseUrl()}/auth/v1/user`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': getSupabaseAnonKey(),
-          'Authorization': `Bearer ${this.token}`
-        },
-        body: JSON.stringify({
-          password: newPassword
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error_description || data.msg || 'Password update failed');
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: error.message || 'Password update failed' };
-    }
-  }
-
-  async handleEmailConfirmation(tokenHash, type) {
-    try {
-      if (!getSupabaseAnonKey()) {
-        throw new Error('Supabase ANON_KEY is not configured');
-      }
-
-      const response = await fetch(`${getSupabaseUrl()}/auth/v1/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': getSupabaseAnonKey()
-        },
-        body: JSON.stringify({
-          token_hash: tokenHash,
-          type: type
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error_description || data.msg || 'Verification failed');
-      }
-
-      if (data.access_token) {
-        this.setSession(data);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: error.message || 'Verification failed' };
-    }
-  }
-
-  setSession(data) {
-    this.token = data.access_token;
-    this.refreshToken = data.refresh_token;
-    this.user = data.user || { id: data.user_id, email: data.email };
-    this.expiresAt = Date.now() + ((data.expires_in || 3600) * 1000);
-
-    StorageUtils.set('supabase_auth_session', {
-      access_token: this.token,
-      refresh_token: this.refreshToken,
-      user: this.user,
-      expires_at: this.expiresAt
-    });
-  }
-
-  signOut() {
-    this.token = null;
-    this.user = null;
-    this.expiresAt = 0;
-    this.refreshToken = null;
-    StorageUtils.remove('supabase_auth_session');
-  }
-
-  isSignedIn() {
-    if (this.token && this.expiresAt > Date.now()) {
-      return true;
-    }
-    if (this.refreshToken && this.expiresAt <= Date.now()) {
-      this.refreshAccessToken();
-      return !!this.token && this.expiresAt > Date.now();
-    }
-    return false;
-  }
-
-  getUser() {
-    return this.user;
-  }
-
-  getUserId() {
-    return this.user ? this.user.id : null;
-  }
-}
-
-function getLeaderboardApiUrl() {
-  return 'https://reactor-revival.onrender.com';
-}
-
-export const LEADERBOARD_CONFIG = { get API_URL() { return getLeaderboardApiUrl(); } };
-
-export class SupabaseSave {
-  constructor() {
-    this.apiBaseUrl = LEADERBOARD_CONFIG.API_URL;
-  }
-
-  async saveGame(slotId, saveData) {
-    if (!window.supabaseAuth?.isSignedIn()) throw new Error("Not signed in");
-
-    const userId = window.supabaseAuth.getUserId();
-    const token = window.supabaseAuth.token;
-    const payload = {
-      user_id: userId,
-      slot_id: slotId,
-      save_data: serializeSave(saveData),
-      timestamp: Date.now()
-    };
-
-    const response = await fetch(`${this.apiBaseUrl}/api/saves`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) throw new Error("Failed to save to cloud");
-    return await response.json();
-  }
-
-  async getSaves() {
-    if (!window.supabaseAuth?.isSignedIn()) return [];
-
-    const userId = window.supabaseAuth.getUserId();
-    const token = window.supabaseAuth.token;
-    const response = await fetch(`${this.apiBaseUrl}/api/saves/${userId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (!response.ok) throw new Error("Failed to fetch saves");
-    const json = await response.json();
-    return json.success ? json.data : [];
-  }
-}
-
-export const supabaseSave = new SupabaseSave();
 
 export class LeaderboardService {
   constructor() {
@@ -4072,352 +2297,6 @@ async function loadFromSaveSlotImpl(splashManager, slot, ctx) {
   }
 }
 
-const GOOGLE_LABEL = "[G]";
-const EMAIL_LABEL = "[M]";
-
-const authState = proxy({
-  email: "",
-  password: "",
-  message: "",
-  isError: false,
-  showEmailForm: false,
-});
-
-function showMessage(msg, isError = false) {
-  authState.message = msg;
-  authState.isError = isError;
-}
-
-async function refreshAuthTokens() {
-  if (window.googleDriveSave) {
-    await window.googleDriveSave.checkAuth(true);
-  }
-  if (window.supabaseAuth && window.supabaseAuth.refreshToken && !window.supabaseAuth.isSignedIn()) {
-    await window.supabaseAuth.refreshAccessToken();
-  }
-}
-
-async function fetchGoogleUserInfo() {
-  const googleSignedIn = window.googleDriveSave && window.googleDriveSave.isSignedIn;
-  let googleUserInfo = null;
-  if (googleSignedIn) {
-    googleUserInfo = window.googleDriveSave.getUserInfo();
-    if (!googleUserInfo && window.googleDriveSave.authToken) {
-      try {
-        const userResponse = await fetch(
-          "https://www.googleapis.com/drive/v3/about?fields=user",
-          { headers: { Authorization: `Bearer ${window.googleDriveSave.authToken}` } }
-        );
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          if (userData.user) {
-            googleUserInfo = {
-              id: userData.user.permissionId || userData.user.emailAddress,
-              email: userData.user.emailAddress,
-              name: userData.user.displayName,
-              imageUrl: userData.user.photoLink,
-            };
-            window.googleDriveSave.userInfo = googleUserInfo;
-            StorageUtils.set("google_drive_user_info", googleUserInfo);
-          }
-        }
-      } catch (error) {
-        logger.log("error", "splash", "Error fetching Google user info:", error);
-      }
-    }
-  }
-  return { googleSignedIn, googleUserInfo };
-}
-
-async function handleAuthLogout(container, splashManager, { supabaseSignedIn, googleSignedIn }) {
-  if (supabaseSignedIn && window.supabaseAuth) window.supabaseAuth.signOut();
-  if (googleSignedIn && window.googleDriveSave) {
-    if (window.googleDriveSave.signOut) {
-      await window.googleDriveSave.signOut();
-    } else {
-      window.googleDriveSave.isSignedIn = false;
-      window.googleDriveSave.authToken = null;
-      StorageUtils.remove("google_drive_auth_token");
-      StorageUtils.remove("google_drive_user_info");
-    }
-  }
-  render(html``, container);
-  await splashManager.setupSupabaseAuth(container);
-}
-
-function signedInTemplate(container, splashManager, { googleSignedIn, googleUserInfo, supabaseSignedIn, supabaseUser }) {
-  const authLabel = googleUserInfo ? GOOGLE_LABEL : supabaseUser ? EMAIL_LABEL : "";
-  const onLogout = () => handleAuthLogout(container, splashManager, { supabaseSignedIn, googleSignedIn });
-  return signedInTemplateView(authLabel, onLogout);
-}
-
-async function handleGoogleSignIn(container, splashManager) {
-  if (!window.googleDriveSave) return;
-  try {
-    await window.googleDriveSave.signIn();
-    await window.googleDriveSave.checkAuth(false);
-    render(html``, container);
-    splashManager.setupSupabaseAuth(container);
-  } catch (error) {
-    logger.log("error", "splash", "Google sign-in error:", error);
-  }
-}
-
-const getCredentials = () => ({ email: authState.email, password: authState.password });
-
-async function executeSignIn(container, splashManager) {
-  const { email, password } = getCredentials();
-  if (!email || !password) return showMessage("Please enter email and password", true);
-  showMessage("Signing in...");
-  const { error } = await window.supabaseAuth.signInWithPassword(email, password);
-  if (error) {
-    showMessage(error, true);
-  } else {
-    showMessage("Signed in successfully!");
-    authState.password = "";
-    setTimeout(() => {
-      render(html``, container);
-      splashManager.setupSupabaseAuth(container);
-    }, 1000);
-  }
-}
-
-async function executeSignUp() {
-  const { email, password } = getCredentials();
-  if (!email || !password) return showMessage("Please enter email and password", true);
-  if (password.length < 6) return showMessage("Password must be at least 6 characters", true);
-  showMessage("Signing up...");
-  const { error } = await window.supabaseAuth.signUp(email, password);
-  if (error) {
-    showMessage(error, true);
-  } else {
-    showMessage("Sign up successful! Please check your email to confirm your account.");
-    authState.password = "";
-  }
-}
-
-async function executeReset() {
-  const { email } = getCredentials();
-  if (!email) return showMessage("Please enter your email address", true);
-  showMessage("Sending password reset email...");
-  const { error } = await window.supabaseAuth.resetPasswordForEmail(email);
-  if (error) {
-    showMessage(error, true);
-  } else {
-    showMessage("Password reset email sent! Please check your email.");
-  }
-}
-
-function CommsButton(container, splashManager) {
-  const onGoogleSignIn = () => handleGoogleSignIn(container, splashManager);
-  const onEmailSignIn = () => {
-    authState.showEmailForm = true;
-    authState.message = "";
-    renderSignInForm(container, splashManager);
-  };
-  return commsButtonTemplate(GOOGLE_LABEL, EMAIL_LABEL, onGoogleSignIn, onEmailSignIn);
-}
-
-function AuthForm(state, handlers, onBack) {
-  return authFormTemplate(state, handlers, onBack);
-}
-
-function renderSignInForm(container, splashManager) {
-  const onInput = (e, field) => {
-    authState[field] = e.target.value;
-  };
-  const goBack = () => {
-    authState.showEmailForm = false;
-    authState.message = "";
-    renderSignInForm(container, splashManager);
-  };
-
-  const handlers = {
-    onInput,
-    onSignIn: () => executeSignIn(container, splashManager),
-    onSignUp: executeSignUp,
-    onReset: executeReset,
-  };
-
-  const template = html`
-    <div class="splash-auth-buttons">
-      ${authState.showEmailForm ? AuthForm(authState, handlers, goBack) : CommsButton(container, splashManager)}
-    </div>
-  `;
-  render(template, container);
-  const wrap = container.querySelector(".splash-auth-comms-wrap");
-  if (wrap) {
-    const btn = wrap.querySelector(".splash-auth-comms-btn");
-    const dropdown = wrap.querySelector(".splash-auth-comms-dropdown");
-    const closeDropdown = () => {
-      dropdown?.classList.add("hidden");
-      btn?.setAttribute("aria-expanded", "false");
-      document.removeEventListener("click", closeDropdown);
-    };
-    const onDocumentClick = (e) => {
-      if (!wrap.contains(e.target)) closeDropdown();
-    };
-    btn?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isHidden = dropdown?.classList.toggle("hidden");
-      btn?.setAttribute("aria-expanded", isHidden ? "false" : "true");
-      if (!isHidden) setTimeout(() => document.addEventListener("click", onDocumentClick), 0);
-    });
-  }
-}
-
-async function setupSplashAuth(container, splashManager) {
-  await refreshAuthTokens();
-  const { googleSignedIn, googleUserInfo } = await fetchGoogleUserInfo();
-  const supabaseSignedIn = window.supabaseAuth && window.supabaseAuth.isSignedIn();
-  const supabaseUser = supabaseSignedIn ? window.supabaseAuth.getUser() : null;
-  const isAnySignedIn = googleSignedIn || supabaseSignedIn;
-
-  if (isAnySignedIn) {
-    render(
-      signedInTemplate(container, splashManager, {
-        googleSignedIn,
-        googleUserInfo,
-        supabaseSignedIn,
-        supabaseUser,
-      }),
-      container
-    );
-  } else {
-    authState.email = "";
-    authState.password = "";
-    authState.message = "";
-    authState.isError = false;
-    authState.showEmailForm = false;
-    if (!container._hasValtioSub) {
-      container._hasValtioSub = true;
-      subscribe(authState, () => {
-        if (document.body.contains(container) && !window.supabaseAuth?.isSignedIn?.()) {
-          renderSignInForm(container, splashManager);
-        }
-      });
-    }
-    renderSignInForm(container, splashManager);
-  }
-}
-
-async function shouldAbortDueToConflict(cloudSaveData) {
-  const { maxLocalTime } = await fetchResolvedSaves();
-  const cloudTime = cloudSaveData.last_save_time || 0;
-  if (maxLocalTime <= 0 || cloudTime <= maxLocalTime) return false;
-  const orchestrator = window.ui?.modalOrchestrator;
-  const choice = orchestrator
-    ? await orchestrator.showModal(MODAL_IDS.CLOUD_VS_LOCAL_CONFLICT, { cloudSaveData })
-    : await showCloudVsLocalConflictModal(cloudSaveData);
-  return choice === "cancel" || choice === "local";
-}
-
-function backupLocalSaveToSession(dataJSON) {
-  if (dataJSON && typeof sessionStorage !== "undefined") {
-    sessionStorage.setItem("reactorSaveBackupBeforeCloud", dataJSON);
-    sessionStorage.setItem("reactorSaveBackupTimestamp", String(Date.now()));
-  }
-}
-
-async function applyCloudSaveAndLaunch(cloudSaveData) {
-  const { pageRouter, ui, game } = window;
-  if (!pageRouter || !ui || !game) return;
-  const validated = game.saveManager.validateSaveData(cloudSaveData);
-  await game.applySaveState(validated);
-  if (typeof window.startGame === "function") {
-    await window.startGame({ pageRouter, ui, game });
-    return;
-  }
-  await pageRouter.loadGameLayout();
-  ui.initMainLayout();
-  await pageRouter.loadPage("reactor_section");
-  game.tooltip_manager = new (await import("./components/ui-tooltips-tutorial.js")).TooltipManager("#main", "#tooltip", game);
-  game.engine = new (await import("./logic.js")).Engine(game);
-  await game.startSession();
-  game.engine.start();
-}
-
-async function handleCloudLoadClick() {
-  try {
-    const cloudSaveData = await window.googleDriveSave.load();
-    if (!cloudSaveData) {
-      logger.log("warn", "splash", "Could not find a save file in Google Drive.");
-      return;
-    }
-    if (await shouldAbortDueToConflict(cloudSaveData)) return;
-    const { dataJSON } = await fetchResolvedSaves();
-    backupLocalSaveToSession(dataJSON);
-    if (window.splashManager) window.splashManager.hide();
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    await applyCloudSaveAndLaunch(cloudSaveData);
-  } catch (error) {
-    logger.log("error", "splash", "Failed to load from Google Drive:", error);
-    logger.log("warn", "splash", `Error loading from Google Drive: ${error.message}`);
-  }
-}
-
-function applyOfflineStateToButton(btn) {
-  if (btn && !navigator.onLine) {
-    btn.disabled = true;
-    btn.title = "Requires an internet connection";
-  }
-}
-
-async function renderSignedInCloudUI(cloudButtonArea) {
-  try {
-    await window.googleDriveSave.findSaveFile();
-    const fileId = window.googleDriveSave.saveFileId;
-    if (fileId) {
-      render(LoadFromCloudButton(handleCloudLoadClick), cloudButtonArea);
-      const btn = cloudButtonArea.firstElementChild;
-      if (btn) applyOfflineStateToButton(btn);
-    } else {
-      render(noCloudSaveFoundTemplate, cloudButtonArea);
-    }
-  } catch (_) {
-    render(cloudCheckFailedTemplate, cloudButtonArea);
-  }
-}
-
-async function handleSignInClick(manager, cloudButtonArea) {
-  try {
-    await window.googleDriveSave.signIn();
-    await updateSplashGoogleDriveUI(manager, true, cloudButtonArea);
-  } catch (_) {
-    const signInBtn = cloudButtonArea.querySelector("button");
-    if (signInBtn) {
-      const span = signInBtn.querySelector("span");
-      if (span) span.textContent = "Sign in Failed";
-      setTimeout(() => {
-        if (span) span.textContent = "Google Sign In";
-        signInBtn.disabled = false;
-      }, 2000);
-    }
-  }
-}
-
-function renderSignedOutSignInUI(manager, cloudButtonArea) {
-  const onClick = async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    const span = btn.querySelector("span");
-    if (span) span.textContent = "Signing in...";
-    await handleSignInClick(manager, cloudButtonArea);
-  };
-  render(GoogleSignInButton(onClick), cloudButtonArea);
-  const btn = cloudButtonArea.firstElementChild;
-  if (btn) applyOfflineStateToButton(btn);
-}
-
-async function updateSplashGoogleDriveUI(manager, isSignedIn, cloudButtonArea) {
-  render(html``, cloudButtonArea);
-  if (isSignedIn) {
-    await renderSignedInCloudUI(cloudButtonArea);
-  } else {
-    renderSignedOutSignInUI(manager, cloudButtonArea);
-  }
-}
-
 class SplashStartOptionsBuilder {
   constructor(splashManager, ctx = null) {
     this.splashManager = splashManager;
@@ -4432,7 +2311,7 @@ class SplashStartOptionsBuilder {
   }
 
   renderTo(container, state) {
-    const { hasSave, saveSlots, cloudSaveOnly, cloudSaveData, mostRecentSave } = state;
+    const { hasSave, saveSlots, mostRecentSave } = state;
 
     const onResume = async () => {
       try {
@@ -4471,12 +2350,6 @@ class SplashStartOptionsBuilder {
       }
     };
 
-    const onCloudResume = () => {
-      this.splashManager.hide();
-      const btn = document.getElementById("splash-load-cloud-btn");
-      if (btn) btn.click();
-    };
-
     const onNewRun = async () => {
       if (hasSave && !confirm("Are you sure you want to start a new game? Your saved progress will be overwritten."))
         return;
@@ -4492,20 +2365,14 @@ class SplashStartOptionsBuilder {
 
     const template = splashStartOptionsTemplate({
       mostRecentSave,
-      cloudSaveOnly,
-      cloudSaveData,
       hasSave,
       onResume,
-      onCloudResume,
       onNewRun,
       onShowLoad: () => this.splashManager.showSaveSlotSelection(saveSlots),
       onShowSettings: () => this.ctx?.ui?.modalOrchestrator?.showModal(MODAL_IDS.SETTINGS),
     });
 
     render(template, container);
-
-    const authArea = this.splashManager.splashScreen?.querySelector("#splash-auth-in-footer");
-    if (authArea) this.splashManager.setupSupabaseAuth(authArea);
   }
 }
 
@@ -4517,25 +2384,21 @@ class SplashSaveSlotUI {
     this.container = null;
     this.state = {
       localSaveSlots: [],
-      cloudSaveSlots: [],
-      isCloudAvailable: false,
       selectedSlot: null,
-      selectedIsCloud: false,
       swipedSlots: new Set(),
     };
   }
 
-  _slotTemplate(slotData, i, isCloud) {
+  _slotTemplate(slotData, i) {
     const isEmpty = !slotData || !slotData.exists;
-    const prefix = isCloud ? "CLD" : "LOG";
-    const logId = `${prefix} ${String(i).padStart(2, "0")}`;
-    const swipeKey = `${isCloud ? "c" : "l"}_${i}`;
+    const logId = `LOG ${String(i).padStart(2, "0")}`;
+    const swipeKey = `l_${i}`;
     const isSwiped = this.state.swipedSlots.has(swipeKey);
-    const isSelected = this.state.selectedSlot === i && this.state.selectedIsCloud === isCloud;
+    const isSelected = this.state.selectedSlot === i;
 
     const rowClasses = classMap({
       "save-slot-row": true,
-      "save-slot-row-deletable": !isCloud && !isEmpty,
+      "save-slot-row-deletable": !isEmpty,
       swiped: isSwiped,
     });
 
@@ -4558,18 +2421,17 @@ class SplashSaveSlotUI {
         this._handleRestore();
       } else {
         this.state.selectedSlot = isSelected ? null : i;
-        this.state.selectedIsCloud = isCloud;
         this.render();
       }
     };
 
     const onSwipeStart = (e) => {
-      if (isCloud || isEmpty) return;
+      if (isEmpty) return;
       this._swipeStartX = e.touches[0].clientX;
     };
 
     const onSwipeEnd = (e) => {
-      if (isCloud || isEmpty) return;
+      if (isEmpty) return;
       const endX = e.changedTouches[0].clientX;
       if (this._swipeStartX - endX > 80) {
         this.state.swipedSlots.add(swipeKey);
@@ -4590,7 +2452,7 @@ class SplashSaveSlotUI {
         const targetSlot = this.state.localSaveSlots.find((s) => s.slot === i);
         if (targetSlot) targetSlot.exists = false;
 
-        if (this.state.selectedSlot === i && !this.state.selectedIsCloud) {
+        if (this.state.selectedSlot === i) {
           this.state.selectedSlot = null;
         }
         this.render();
@@ -4603,7 +2465,7 @@ class SplashSaveSlotUI {
       rowClasses,
       btnClasses,
       i,
-      isCloud,
+      isCloud: false,
       isEmpty,
       logId,
       isSelected,
@@ -4618,7 +2480,6 @@ class SplashSaveSlotUI {
   }
 
   _mainTemplate() {
-    const cloudSlots = [1, 2, 3].map((i) => this.state.cloudSaveSlots.find((s) => s.slot === i));
     const localSlots = [1, 2, 3].map((i) => this.state.localSaveSlots.find((s) => s.slot === i));
 
     const onFileChange = async (e) => {
@@ -4648,8 +2509,8 @@ class SplashSaveSlotUI {
     };
 
     return saveSlotMainTemplate({
-      isCloudAvailable: this.state.isCloudAvailable,
-      cloudSlots,
+      isCloudAvailable: false,
+      cloudSlots: [],
       localSlots,
       selectedSlot: this.state.selectedSlot,
       onHeaderTouchStart: (e) => {
@@ -4662,22 +2523,15 @@ class SplashSaveSlotUI {
       onFileChange,
       onRestore: () => this._handleRestore(),
       onImportBackup: triggerFileInput,
-      renderSlot: (slot, idx, cloud) => this._slotTemplate(slot, idx, cloud),
+      renderSlot: (slot, idx) => this._slotTemplate(slot, idx),
     });
   }
 
   async _handleRestore() {
     if (this.state.selectedSlot == null) return;
-    const prefix = this.state.selectedIsCloud ? "CLD" : "LOG";
-    const logId = `${prefix} ${String(this.state.selectedSlot).padStart(2, "0")}`;
+    const logId = `LOG ${String(this.state.selectedSlot).padStart(2, "0")}`;
     if (!confirm(`Restore ${logId}? Current unsaved progress will be lost.`)) return;
-
-    if (this.state.selectedIsCloud) {
-      const save = this.state.cloudSaveSlots.find((s) => s.slot === this.state.selectedSlot);
-      if (save) await this.splashManager.loadFromData(save.data);
-    } else {
-      await this.splashManager.loadFromSaveSlot(this.state.selectedSlot);
-    }
+    await this.splashManager.loadFromSaveSlot(this.state.selectedSlot);
   }
 
   _close() {
@@ -4700,21 +2554,9 @@ class SplashSaveSlotUI {
 
     this.state = {
       localSaveSlots,
-      cloudSaveSlots: [],
-      isCloudAvailable: false,
       selectedSlot: null,
-      selectedIsCloud: false,
       swipedSlots: new Set(),
     };
-
-    if (window.supabaseAuth?.isSignedIn?.()) {
-      try {
-        this.state.cloudSaveSlots = await fetchCloudSaveSlots();
-        this.state.isCloudAvailable = true;
-      } catch (e) {
-        logger.log("error", "splash", "Failed to load cloud saves", e);
-      }
-    }
 
     this.container = document.createElement("main");
     this.container.id = "save-slot-screen";
@@ -4722,14 +2564,9 @@ class SplashSaveSlotUI {
     this.container.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:999;";
     document.body.appendChild(this.container);
 
-    const allSlots = [
-      ...(this.state.isCloudAvailable ? this.state.cloudSaveSlots : []),
-      ...this.state.localSaveSlots,
-    ];
-    const firstFilled = allSlots.find((s) => s && s.exists);
+    const firstFilled = this.state.localSaveSlots.find((s) => s && s.exists);
     if (firstFilled) {
       this.state.selectedSlot = firstFilled.slot;
-      this.state.selectedIsCloud = !!firstFilled.isCloud;
     }
 
     this.render();
@@ -4787,7 +2624,7 @@ class SplashScreenManager extends BaseComponent {
     this.saveSlotUI = new SplashSaveSlotUI(this);
 
     if (!StorageUtils.get("reactor_user_id")) {
-      StorageUtils.set("reactor_user_id", crypto.randomUUID());
+      StorageUtils.set("reactor_user_id", "local_architect");
     }
 
     this.readyPromise = isTestEnv() ? Promise.resolve(false) : this.waitForDOMAndLoad();
@@ -5025,57 +2862,6 @@ class SplashScreenManager extends BaseComponent {
     if (panel) this.teardownIdleFade = initSplashMenuIdleFade(panel);
   }
 
-  async setupSupabaseAuth(container) {
-    return setupSplashAuth(container, this);
-  }
-
-  async setupGoogleDriveButtons(cloudButtonArea) {
-    if (!window.googleDriveSave) {
-      logger.warn("GoogleDriveSave not initialized.");
-      return;
-    }
-    if (!window.googleDriveSave.isConfigured()) {
-      render(html``, cloudButtonArea);
-      return;
-    }
-    if (!navigator.onLine) {
-      render(GoogleSignInButton(() => {}), cloudButtonArea);
-      const btn = cloudButtonArea.firstElementChild;
-      if (btn) {
-        btn.disabled = true;
-        btn.title = "Requires an internet connection";
-      }
-      return;
-    }
-    render(
-      html`
-        <button class="splash-btn splash-btn-google" disabled>
-          <div class="loading-container">
-            <div class="loading-spinner"></div>
-            <span class="loading-text">Checking ...</span>
-          </div>
-        </button>
-      `,
-      cloudButtonArea
-    );
-    try {
-      const initialized = await window.googleDriveSave.init();
-      if (!initialized) {
-        render(html``, cloudButtonArea);
-        return;
-      }
-      const isSignedIn = await window.googleDriveSave.checkAuth(true);
-      await this.updateGoogleDriveUI(isSignedIn, cloudButtonArea);
-    } catch (error) {
-      logger.log("error", "splash", "Failed to setup Google Drive buttons:", error);
-      render(googleDriveErrorTemplate, cloudButtonArea);
-    }
-  }
-
-  async updateGoogleDriveUI(isSignedIn, cloudButtonArea) {
-    await updateSplashGoogleDriveUI(this, isSignedIn, cloudButtonArea);
-  }
-
   hide() {
     if (!this.splashScreen || this.isReady) return;
     this.isReady = true;
@@ -5142,41 +2928,6 @@ class SplashScreenManager extends BaseComponent {
         clearTimeout(this.errorTimeout);
         this.errorTimeout = null;
       }
-    }
-  }
-
-  showCloudSaveLoading(loadFromCloudButton) {
-    if (!loadFromCloudButton) return;
-    loadFromCloudButton.classList.add("visible", "cloud-loading");
-    const loadingButton = createLoadingButton("Checking...");
-    loadFromCloudButton.innerHTML = loadingButton.innerHTML;
-    loadFromCloudButton.disabled = true;
-  }
-
-  hideCloudSaveLoading(loadFromCloudButton) {
-    if (!loadFromCloudButton) return;
-    loadFromCloudButton.classList.remove("cloud-loading");
-    loadFromCloudButton.disabled = false;
-  }
-
-  showGoogleDriveInitializing(signInButton, loadFromCloudButton) {
-    if (signInButton) {
-      signInButton.classList.add("visible", "google-loading");
-      const loadingButton = createLoadingButton("Initializing...");
-      signInButton.innerHTML = loadingButton.innerHTML;
-      signInButton.disabled = true;
-    }
-    if (loadFromCloudButton) {
-      loadFromCloudButton.classList.remove("visible");
-    }
-  }
-
-  hideGoogleDriveInitializing(signInButton, loadFromCloudButton) {
-    if (signInButton) {
-      signInButton.classList.remove("google-loading");
-      signInButton.disabled = false;
-      const newButton = createGoogleSignInButtonWithIcon();
-      signInButton.innerHTML = newButton.innerHTML;
     }
   }
 

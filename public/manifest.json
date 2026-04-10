@@ -2,7 +2,7 @@
   "id": "com.jdial.reactor",
   "name": "Reactor Revival",
   "short_name": "Reactor Revival",
-  "description": "An incremental reactor simulation game. Build and optimize your reactor, balance power output against heat, unlock upgrades, and harness exotic particles to push your reactor further. Features offline progression and Time Flux acceleration.",
+  "description": "An incremental reactor simulation game. Build and optimize your reactor, balance power output against heat, unlock upgrades, and harness exotic particles to push your reactor further. Features deterministic offline progression.",
   "start_url": "/reactor-revival/",
   "display": "standalone",
   "display_override": [

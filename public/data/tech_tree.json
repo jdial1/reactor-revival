@@ -1,56 +1,27 @@
 [
     {
-        "id": "architect",
-        "title": "Systems Architect",
-        "shortTitle": "SYSTEMS",
-        "subtitle": "Automation & Stability",
-        "playstyle": "Passive / Idle",
-        "focus": "Self-sustaining reactors, safety nets, long component life, and automatic resource management.",
+        "id": "unified",
+        "title": "Reactor Research",
+        "shortTitle": "RESEARCH",
+        "subtitle": "Unified progression",
+        "playstyle": "Grid optimization",
+        "focus": "All upgrades available; optimal builds follow layout and thermodynamics.",
         "mechanics": [
-            "Automatic cooling & selling",
-            "Durability repair",
-            "Damage mitigation",
-            "Smart regulation"
+            "Full upgrade access",
+            "Adjacency-driven fuel scaling",
+            "Heat transfer and cooling"
         ],
-        "color": "#4CAF50",
-        "icon": "img/upgrades/upgrade_computer.png",
+        "color": "#9C27B0",
+        "icon": "img/parts/exchangers/exchanger_1.png",
         "upgrades": [
             "heat_control_operator",
             "heat_outlet_control_operator",
-            "improved_power_lines",
             "perpetual_capacitors",
             "perpetual_reflectors",
-            "reactor_insurance",
-            "autonomic_repair",
             "isotope_stabilization",
             "component_reinforcement",
-            "improved_alloys",
-            "improved_wiring",
-            "market_lobbying",
-            "phlembotinum_core",
-            "quantum_buffering"
-        ],
-        "bonuses": {}
-    },
-    {
-        "id": "physicist",
-        "title": "Particle Physicist",
-        "shortTitle": "PHYSICS",
-        "subtitle": "High Energy & Risk",
-        "playstyle": "Active / Burst",
-        "focus": "Maximizing raw power generation at the cost of heat and safety.",
-        "mechanics": [
-            "Bonuses for high heat",
-            "Manual click buffs",
-            "Short-lived powerful cells",
-            "Weaponized explosions"
-        ],
-        "color": "#FF5252",
-        "icon": "img/parts/accelerators/accelerator_1.png",
-        "upgrades": [
             "forceful_fusion",
             "manual_override",
-            "improved_power_lines",
             "improved_piping",
             "emergency_coolant",
             "chronometer",
@@ -67,28 +38,8 @@
             "improved_particle_accelerators5",
             "improved_particle_accelerators6",
             "sub_atomic_catalysts",
-            "singularity_harnessing"
-        ],
-        "bonuses": { "heat_tolerance_percent": 10 }
-    },
-    {
-        "id": "engineer",
-        "title": "Thermodynamic Engineer",
-        "shortTitle": "THERMO",
-        "subtitle": "Conversion & Efficiency",
-        "playstyle": "Puzzle / Layout Optimization",
-        "focus": "Manipulation of heat and complex interactions between adjacent parts.",
-        "mechanics": [
-            "Convert heat to power",
-            "Adjacency bonuses",
-            "Extended range",
-            "Specialized heat moving"
-        ],
-        "color": "#2196F3",
-        "icon": "img/parts/exchangers/exchanger_1.png",
-        "upgrades": [
+            "singularity_harnessing",
             "stirling_generators",
-            "improved_power_lines",
             "electro_thermal_conversion",
             "quantum_tunneling",
             "convective_airflow",
@@ -99,7 +50,6 @@
             "fluid_hyperdynamics",
             "active_exchangers",
             "active_venting",
-            "flux_accumulators",
             "expand_reactor_rows",
             "expand_reactor_cols",
             "fractal_piping",

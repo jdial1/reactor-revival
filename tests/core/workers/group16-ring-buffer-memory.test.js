@@ -7,11 +7,9 @@ import {
   vi,
   setupGame,
   setupGameWithDOM,
-  burstParticlePools,
   monitorFloatingTextPooling,
 } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
-import { ParticleSystem } from "@app/components/visual-effects-manager.js";
 
 describe("Group 16: Visual Event Ring Buffer and Pooling", () => {
   let game;
@@ -46,33 +44,6 @@ describe("Group 16: Visual Event Ring Buffer and Pooling", () => {
     g.ui._renderVisualEvents(desc2);
     const desc3 = g.engine.getEventBuffer();
     expect(desc3.head).toBe(desc3.tail);
-  });
-
-  it("caps particle steam array size under burst creation", () => {
-    const ps = new ParticleSystem();
-    ps.setSize(100, 100);
-    burstParticlePools(ps, { iterations: 2000, steamArgs: [50, 50, 10] });
-    expect(ps._steam.length).toBeLessThanOrEqual(512);
-  });
-
-  it("removes dead particles after update and respects hard limits across all pools", () => {
-    const ps = new ParticleSystem();
-    ps.setSize(200, 200);
-    burstParticlePools(ps, {
-      iterations: 2000,
-      steamArgs: [10, 10, 4],
-      emberArgs: [10, 10],
-      sparkArgs: [0, 0, 100, 100],
-    });
-    expect(ps._steam.length).toBeLessThanOrEqual(512);
-    expect(ps._embers.length).toBeLessThanOrEqual(256);
-    expect(ps._sparks.length).toBeLessThanOrEqual(192);
-    ps.createBoltParticle(0, 0, 1, 1);
-    ps.update(5000);
-    expect(ps._steam.length).toBe(0);
-    expect(ps._embers.length).toBe(0);
-    expect(ps._sparks.length).toBe(0);
-    expect(ps._bolts.length).toBe(0);
   });
 
   it("reuses floating text nodes via pool after timed recycle", () => {

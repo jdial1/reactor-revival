@@ -82,7 +82,6 @@ export const PartDefinitionSchema = z.object({
   base_reactor_heat: z.number().optional().default(0),
   base_power_increase: z.number().optional().default(0),
   base_heat_increase: z.number().optional().default(0),
-  base_range: z.number().optional().default(1),
   base_ep_heat: z.number().optional().default(0),
   base_description: z.string().optional().default(""),
   erequires: z.string().optional().nullable(),
@@ -205,7 +204,10 @@ export const SaveDataSchema = z.preprocess((raw) => {
   total_exotic_particles: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
   exotic_particles: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
   current_exotic_particles: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
-  reality_flux: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
+  session_power_produced: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
+  session_power_sold: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
+  session_heat_dissipated: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
+  session_ep_from_engine: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
   sold_power: z.boolean().optional().default(false),
   sold_heat: z.boolean().optional().default(false),
   grace_period_ticks: z.number().optional().default(0),
@@ -262,7 +264,7 @@ const GameLoopReactorStateSchema = z.object({
   max_power: z.number().optional().default(0),
   auto_sell_multiplier: z.number().optional().default(0),
   sell_price_multiplier: z.number().optional().default(1),
-  power_overflow_to_heat_ratio: z.number().optional().default(0.5),
+  power_overflow_to_heat_ratio: z.number().optional().default(1),
   power_multiplier: z.number().optional().default(1),
   heat_controlled: z.number().optional().default(0),
   vent_multiplier_eff: z.number().optional().default(0),
@@ -294,11 +296,15 @@ export const GameLoopTickResultSchema = z.object({
   depletionIndices: z.array(z.number().int().min(0)).optional().default([]),
   tileUpdates: z.array(z.object({ r: z.number().int(), c: z.number().int(), ticks: z.number() })).optional().default([]),
   moneyEarned: z.number().optional().default(0),
+  powerSold: z.number().optional().default(0),
+  ventHeatDissipated: z.number().optional().default(0),
   powerDelta: z.number().optional().default(0),
   heatDelta: z.number().optional().default(0),
   tickCount: z.number().int().min(1).optional().default(1),
   transfers: z.array(z.unknown()).optional().default([]),
   error: z.boolean().optional(),
+  heatBuffer: z.any().optional(),
+  useSAB: z.boolean().optional(),
 }).passthrough();
 
 export const PhysicsTickInputSchema = z.object({
@@ -388,6 +394,7 @@ const ReactorTickPayloadSchema = z.object({
 }).passthrough();
 
 const TimeFluxPayloadSchema = z.object({
+  tickEquivalent: z.number().optional(),
   queuedTicks: z.number().optional(),
   progress: z.number().optional(),
   isCatchingUp: z.boolean().optional(),
@@ -420,8 +427,6 @@ export const EVENT_SCHEMA_REGISTRY = {
   gridResized: z.object({}).passthrough(),
   grid_changed: z.object({}).passthrough(),
   tickRecorded: z.object({}).passthrough(),
-  timeFluxButtonUpdate: TimeFluxPayloadSchema,
-  timeFluxSimulationUpdate: TimeFluxPayloadSchema,
   welcomeBackOffline: TimeFluxPayloadSchema,
   moneyChanged: MoneyChangedPayloadSchema,
   statePatch: StatePatchPayloadSchema,
@@ -490,7 +495,6 @@ export const UserPreferencesSchema = z.object({
   hideUnaffordableResearch: z.boolean().optional().default(true),
   hideMaxUpgrades: z.boolean().optional().default(true),
   hideMaxResearch: z.boolean().optional().default(true),
-  hideOtherDoctrineUpgrades: z.boolean().optional().default(false),
 }).passthrough();
 
 export { BalanceConfigSchema };

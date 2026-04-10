@@ -154,10 +154,10 @@ describe("Full Part and Upgrade Coverage", () => {
             const cellPart = game.partset.getPartById("uranium1");
             await game.tileset.getTile(5, 6).setPart(cellPart);
             game.reactor.updateStats();
-            const expectedReflectorPower =
-              cellPart.power * (1 + part.power_increase / 100);
-            const expectedReflectorHeat =
-              cellPart.heat * (1 + part.heat_increase / 100);
+            const rflPulse = 1 + part.power_increase / 100;
+            const pulse = 1 + rflPulse;
+            const expectedReflectorPower = cellPart.power * pulse;
+            const expectedReflectorHeat = cellPart.heat * pulse * pulse;
             expect(game.reactor.stats_power).toBeCloseTo(
               expectedReflectorPower
             );
@@ -336,8 +336,9 @@ describe("Full Part and Upgrade Coverage", () => {
           case "chronometer":
             preValue = game.loop_wait;
             break;
-          case "improved_power_lines":
-            preValue = game.reactor.auto_sell_multiplier;
+          case "component_reinforcement":
+            part = game.partset.getPartById("vent1");
+            preValue = part.containment;
             break;
           case "heat_control_operator":
             preValue = game.reactor.heat_controlled;
@@ -402,9 +403,10 @@ describe("Full Part and Upgrade Coverage", () => {
             postValue = game.loop_wait;
             expect(postValue).toBe(preValue / 2);
             break;
-          case "improved_power_lines":
-            postValue = game.reactor.auto_sell_multiplier;
-            expect(postValue).toBe(preValue + 0.01);
+          case "component_reinforcement":
+            part = game.partset.getPartById("vent1");
+            postValue = part.containment;
+            expect(postValue).toBeGreaterThan(preValue);
             break;
           case "heat_control_operator":
             postValue = game.reactor.heat_controlled;

@@ -63,6 +63,27 @@ class StaticGridRenderer {
         if (img.complete && img.naturalWidth) ctx.drawImage(img, x, y - 3, ts, ts);
       }
     }
+    if (game.blueprintPlanner?.active && game.partset && typeof game.getBlueprintPlannerPartId === "function") {
+      const ghostId = game.getBlueprintPlannerPartId(r, c);
+      if (ghostId) {
+        const ghostPart = game.partset.getPartById(ghostId);
+        const gpath = ghostPart && typeof ghostPart.getImagePath === "function" ? ghostPart.getImagePath() : null;
+        if (gpath) {
+          const gimg = this._shared.loadImage(gpath);
+          ctx.save();
+          ctx.globalAlpha = 0.5;
+          if (gimg.complete && gimg.naturalWidth) ctx.drawImage(gimg, x, y - 3, ts, ts);
+          ctx.restore();
+          ctx.save();
+          ctx.strokeStyle = "rgb(0 200 255)";
+          ctx.setLineDash([5, 4]);
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 2, y + 2, ts - 4, ts - 4);
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
+    }
   }
 
   render(game, viewport) {

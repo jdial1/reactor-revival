@@ -98,48 +98,6 @@ describe("Time Delta Physics Scaling", () => {
         }
     });
 
-    it("should calculate correct multiplier from timestamps in the loop", async () => {
-        vi.useFakeTimers();
-        await placePart(game, 0, 0, "uranium1");
-        game.engine.markPartCacheAsDirty();
-        
-        game.engine.start();
-        
-        const initialTime = game.engine.last_timestamp;
-        const tickDuration = game.loop_wait;
-        
-        const tickSpy = vi.spyOn(game.engine, '_processTick');
-        
-        const nextTime = initialTime + (tickDuration * 1.5);
-        game.engine.loop(nextTime);
-        
-        expect(tickSpy).toHaveBeenCalledTimes(1);
-        expect(tickSpy).toHaveBeenCalledWith(1.0);
-        
-        vi.useRealTimers();
-    });
-
-    it("should clamp maximum multiplier to avoid spiral of death on massive lag spikes", async () => {
-        await placePart(game, 0, 0, "uranium1");
-        game.engine.markPartCacheAsDirty();
-        
-        game.time_flux = false;
-        
-        const tickSpy = vi.spyOn(game.engine, '_processTick');
-        game.engine.start();
-        
-        const initialTime = game.engine.last_timestamp;
-        const targetTickDuration = game.loop_wait;
-        const nextTime = initialTime + (targetTickDuration * 15);
-        
-        game.engine.loop(nextTime);
-        
-        expect(tickSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
-        for (let i = 0; i < tickSpy.mock.calls.length; i++) {
-            expect(tickSpy).toHaveBeenNthCalledWith(i + 1, 1.0);
-        }
-    });
-
     it("should generate fractional power for small multipliers (prevent stalling at high FPS)", async () => {
         const tile = await placePart(game, 0, 0, "uranium1");
         const part = tile.part;
@@ -153,177 +111,33 @@ describe("Time Delta Physics Scaling", () => {
         expect(toNum(game.reactor.current_power)).toBeGreaterThan(0);
     });
 
-    it("should correctly handle Clock Cycle Accelerator upgrade (+1 tick/sec)", async () => {
-        vi.useFakeTimers();
+    it("keeps loop_wait at foundational tick after chronometer upgrade", async () => {
         game.bypass_tech_tree_restrictions = true;
-        await placePart(game, 0, 0, "uranium1");
-        game.engine.markPartCacheAsDirty();
-        
         const upgrade = game.upgradeset.getUpgrade("chronometer");
         expect(upgrade.level).toBe(0);
         expect(game.loop_wait).toBe(1000);
-        
-        game.engine.last_timestamp = 0;
-        game.engine.start();
-        
-        const t0 = game.engine.last_timestamp;
-        const tickSpy = vi.spyOn(game.engine, '_processTick');
-        game.engine.loop(t0 + 1000);
-        expect(tickSpy).toHaveBeenCalledTimes(1);
-        expect(tickSpy).toHaveBeenCalledWith(1.0);
-        tickSpy.mockClear();
-        
         forcePurchaseUpgrade(game, "chronometer");
         expect(upgrade.level).toBe(1);
-        expect(game.loop_wait).toBe(500); 
-
-        const t1 = game.engine.last_timestamp;
-        
-        game.engine.loop(t1 + 1000);
-
-        const callsAfterLevel1 = tickSpy.mock.calls.length;
-        expect(callsAfterLevel1).toBeGreaterThanOrEqual(2);
-        for (let i = 0; i < callsAfterLevel1; i++) {
-            expect(tickSpy).toHaveBeenNthCalledWith(i + 1, 1.0);
-        }
-        tickSpy.mockClear();
-
-        forcePurchaseUpgrade(game, "chronometer", 2);
-        forcePurchaseUpgrade(game, "chronometer", 3);
-
-        expect(upgrade.level).toBe(3);
-        expect(game.loop_wait).toBe(250);
-
-        const t2 = game.engine.last_timestamp;
-        game.engine.loop(t2 + 1000);
-
-        const callsAfterLevel3 = tickSpy.mock.calls.length;
-        expect(callsAfterLevel3).toBeGreaterThanOrEqual(2);
-        for (let i = 0; i < callsAfterLevel3; i++) {
-            expect(tickSpy).toHaveBeenNthCalledWith(i + 1, 1.0);
-        }
-
-        vi.useRealTimers();
+        expect(game.loop_wait).toBe(1000);
     });
 
-    describe("Time Banking Logic", () => {
-        it("should NOT accumulate time when reactor is empty during normal play (small delta)", () => {
+    describe("Offline accumulator", () => {
+        it("does not change accumulator from RAF loop alone", () => {
             game.tileset.clearAllTiles();
             game.engine.markPartCacheAsDirty();
-            // Ensure caches are updated so active_cells is 0
             game.engine._updatePartCaches();
-
             game.engine.time_accumulator = 5000;
-            const processSpy = vi.spyOn(game.engine, '_processTick');
-
+            const processSpy = vi.spyOn(game.engine, "_processTick");
             const target = globalThis.window || globalThis;
             if (!target.requestAnimationFrame) {
                 target.requestAnimationFrame = vi.fn().mockReturnValue(123);
             }
-            const rafSpy = vi.spyOn(target, 'requestAnimationFrame').mockReturnValue(123);
+            const rafSpy = vi.spyOn(target, "requestAnimationFrame").mockReturnValue(123);
             game.engine.running = true;
             game.engine.last_timestamp = 1000;
-            game.engine.loop(1016); // Delta 16ms (standard frame)
-
+            game.engine.loop(130001);
             expect(processSpy).not.toHaveBeenCalled();
-            // Should NOT have added the 16ms to the existing 5000
             expect(game.engine.time_accumulator).toBe(5000);
-            rafSpy.mockRestore();
-        });
-
-        it("should accumulate time when reactor is empty IF delta is large (>30s)", () => {
-            game.tileset.clearAllTiles();
-            game.engine.markPartCacheAsDirty();
-            // Ensure caches are updated
-            game.engine._updatePartCaches();
-
-            game.engine.time_accumulator = 5000;
-            const processSpy = vi.spyOn(game.engine, '_processTick');
-
-            const target = globalThis.window || globalThis;
-            if (!target.requestAnimationFrame) {
-                target.requestAnimationFrame = vi.fn().mockReturnValue(123);
-            }
-            const rafSpy = vi.spyOn(target, 'requestAnimationFrame').mockReturnValue(123);
-            game.engine.running = true;
-            game.engine.last_timestamp = 100000;
-            game.engine.loop(130001); // Delta 30001ms
-
-            expect(processSpy).not.toHaveBeenCalled();
-            // Should HAVE added the 30001ms because it exceeds threshold
-            expect(game.engine.time_accumulator).toBe(35001);
-            rafSpy.mockRestore();
-        });
-
-        it("should spend banked time rapidly once a cell is placed", async () => {
-            game.tileset.clearAllTiles();
-            game.engine.time_accumulator = 5000;
-            game.time_flux = true;
-            await placePart(game, 0, 0, "uranium1");
-            game.engine.markPartCacheAsDirty();
-
-            const processSpy = vi.spyOn(game.engine, '_processTick');
-            const target = globalThis.window || globalThis;
-            if (!target.requestAnimationFrame) {
-                target.requestAnimationFrame = vi.fn().mockReturnValue(123);
-            }
-            const rafSpy = vi.spyOn(target, 'requestAnimationFrame').mockReturnValue(123);
-            game.engine.running = true;
-            game.engine.last_timestamp = 1000;
-            game.engine.loop(1016);
-
-            expect(processSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
-            expect(processSpy).toHaveBeenCalledWith(1.0);
-            expect(game.engine.time_accumulator).toBeLessThan(5016);
-            rafSpy.mockRestore();
-        });
-
-        it("should preserve banked time if Time Flux is disabled", async () => {
-            game.tileset.clearAllTiles();
-            game.engine.time_accumulator = 50000;
-            game.time_flux = false;
-            game.loop_wait = 1000;
-            await placePart(game, 0, 0, "uranium1");
-            game.engine.markPartCacheAsDirty();
-
-            const processSpy = vi.spyOn(game.engine, '_processTick');
-            const target = globalThis.window || globalThis;
-            if (!target.requestAnimationFrame) {
-                target.requestAnimationFrame = vi.fn().mockReturnValue(123);
-            }
-            const rafSpy = vi.spyOn(target, 'requestAnimationFrame').mockReturnValue(123);
-            
-            game.engine.running = true;
-            game.engine.last_timestamp = 1000;
-            game.engine.loop(1016);
-
-            expect(processSpy).not.toHaveBeenCalled();
-            expect(game.engine.time_accumulator).toBe(50000);
-            rafSpy.mockRestore();
-        });
-
-        it("should consume banked time if Time Flux is enabled", async () => {
-            game.tileset.clearAllTiles();
-            game.engine.time_accumulator = 50000;
-            game.time_flux = true;
-            game.loop_wait = 1000;
-            await placePart(game, 0, 0, "uranium1");
-            game.engine.markPartCacheAsDirty();
-
-            const processSpy = vi.spyOn(game.engine, '_processTick');
-            const target = globalThis.window || globalThis;
-            if (!target.requestAnimationFrame) {
-                target.requestAnimationFrame = vi.fn().mockReturnValue(123);
-            }
-            const rafSpy = vi.spyOn(target, 'requestAnimationFrame').mockReturnValue(123);
-            
-            game.engine.running = true;
-            game.engine.last_timestamp = 1000;
-            game.engine.loop(1016);
-
-            expect(processSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
-            expect(processSpy).toHaveBeenCalledWith(1.0);
-            expect(game.engine.time_accumulator).toBeLessThan(50000);
             rafSpy.mockRestore();
         });
     });

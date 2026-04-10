@@ -1,5 +1,4 @@
 import "../../lib/break_infinity.min.js";
-import "../utils.js";
 import superjson from "superjson";
 import {
   runHeatStepFromTyped,
@@ -10,6 +9,7 @@ import {
   OUTLET_STRIDE, OUTLET_OFFSET_INDEX, OUTLET_OFFSET_RATE, OUTLET_OFFSET_ACTIVATED, OUTLET_OFFSET_IS_OUTLET6, OUTLET_OFFSET_N_COUNT,
   OUTLET_OFFSET_NEIGHBOR_INDICES, OUTLET_OFFSET_NEIGHBOR_CAPS,
   MAX_NEIGHBORS,
+  computeWorkerNeighborPulseN,
 } from "../logic.js";
 import {
   REACTOR_HEAT_STANDARD_DIVISOR,
@@ -28,7 +28,8 @@ import {
   isInBounds,
   getNeighborKeys,
   applyPowerOverflowCalcDecimal,
-  clampHeatDecimal,
+  HULL_REPEL_FRACTION,
+  FOUNDATIONAL_TICK_MS,
 } from "../utils.js";
 import { toDecimal } from "../utils.js";
 
@@ -304,13 +305,23 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
     const part = partTable[t.partIndex];
     if (!part || part.category !== "cell" || t.ticks <= 0) continue;
 
-    const layoutPower = (typeof t.power === "number" && !isNaN(t.power) && isFinite(t.power))
-      ? t.power
-      : ((typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)) ? part.power : (part.base_power ?? 0));
+    const M = part.cell_pack_M ?? 1;
+    const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
+    const N = computeWorkerNeighborPulseN(t.r, t.c, partTable, partAt, rows, cols);
+    const pulse = M + N;
+    const LP =
+      typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)
+        ? part.power
+        : part.base_power ?? 0;
+    const H_eff =
+      typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat)
+        ? part.heat
+        : part.base_heat ?? 0;
+    const layoutPower =
+      typeof t.power === "number" && !isNaN(t.power) && isFinite(t.power) ? t.power : LP * pulse;
     power_add += layoutPower * multiplier;
-    const layoutHeat = (typeof t.heat === "number" && !isNaN(t.heat) && isFinite(t.heat))
-      ? t.heat
-      : (part.heat ?? 0);
+    const layoutHeat =
+      typeof t.heat === "number" && !isNaN(t.heat) && isFinite(t.heat) ? t.heat : (H_eff * pulse * pulse) / C;
     const generatedHeat = layoutHeat * multiplier;
     const neighbors = getNeighborKeys(t.r, t.c).filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc));
 
@@ -353,13 +364,37 @@ function findExplosionIndices(partLayout, partTable, heat, gidx) {
     const part = partTable[t.partIndex];
     if (!part?.containment) continue;
     const idx = gidx(t.r, t.c);
-    if (heat[idx] > part.containment) explosionIndices.push(idx);
+    if (heat[idx] > part.containment) {
+      const capSort = part.category === "capacitor" ? 0 : 1;
+      explosionIndices.push({ idx, capSort });
+    }
   }
-  return explosionIndices;
+  explosionIndices.sort((a, b) => a.capSort - b.capSort);
+  return explosionIndices.map((e) => e.idx);
+}
+
+function applyHullRepulsionWorker(reactorHeat, maxHeat, heat, partLayout, partTable, gidx) {
+  if (!reactorHeat.gt(maxHeat)) return reactorHeat;
+  const excess = reactorHeat.sub(maxHeat);
+  const totalRepel = excess.mul(HULL_REPEL_FRACTION);
+  let n = 0;
+  for (let i = 0; i < partLayout.length; i++) {
+    if (partTable[partLayout[i].partIndex]) n++;
+  }
+  if (n === 0) return reactorHeat.sub(totalRepel);
+  const per = totalRepel.div(n).toNumber();
+  for (let j = 0; j < partLayout.length; j++) {
+    const t = partLayout[j];
+    if (!partTable[t.partIndex]) continue;
+    const gi = gidx(t.r, t.c);
+    heat[gi] = (heat[gi] || 0) + per;
+  }
+  return reactorHeat.sub(totalRepel);
 }
 
 function processVents(partLayout, partTable, heat, reactorState, multiplier, gidx) {
   let power_add = 0;
+  let ventHeatDissipated = 0;
   const ventEntries = partLayout.filter((t) => partTable[t.partIndex]?.category === "vent");
   const stirling = Number(reactorState.stirling_multiplier ?? 0) || 0;
 
@@ -372,11 +407,12 @@ function processVents(partLayout, partTable, heat, reactorState, multiplier, gid
     const h = heat[idx] || 0;
     const ventReduce = Math.min(ventRate, h);
     heat[idx] = h - ventReduce;
+    ventHeatDissipated += ventReduce;
 
     if (stirling > 0 && ventReduce > 0) power_add += ventReduce * stirling;
   }
 
-  return power_add;
+  return { power_add, ventHeatDissipated };
 }
 
 const applyPowerOverflow = applyPowerOverflowCalcDecimal;
@@ -399,19 +435,21 @@ function applyReactorPowerUpdates(reactorPower, power_add, reactorState, effecti
   }
 
   let moneyEarned = new Decimal(0);
+  let powerSold = new Decimal(0);
   const autoSellMult = reactorState.auto_sell_multiplier ?? 0;
   if (autoSell && autoSellMult > 0) {
     const sellCap = effectiveMaxPower.mul(autoSellMult).mul(multiplier);
     const sellAmount = Decimal.min(reactorPower, sellCap);
     if (sellAmount.gt(0)) {
       reactorPower = reactorPower.sub(sellAmount);
+      powerSold = sellAmount;
       moneyEarned = sellAmount.mul(Number(reactorState.sell_price_multiplier ?? DEFAULT_SELL_PRICE_MULTIPLIER) || DEFAULT_SELL_PRICE_MULTIPLIER);
     }
   }
 
   if (reactorPower.gt(effectiveMaxPower)) reactorPower = effectiveMaxPower;
 
-  return { reactorPower, reactorHeat, moneyEarned };
+  return { reactorPower, reactorHeat, moneyEarned, powerSold };
 }
 
 function applyReactorHeatUpdates(reactorHeat, reactorState, maxHeat, multiplier) {
@@ -419,7 +457,8 @@ function applyReactorHeatUpdates(reactorHeat, reactorState, maxHeat, multiplier)
     ? (maxHeat.gt(0) ? maxHeat.div(REACTOR_HEAT_STANDARD_DIVISOR).mul(1 + (Number(reactorState.vent_multiplier_eff ?? 0) / VENT_BONUS_PERCENT_DIVISOR)).mul(multiplier) : reactorHeat.constructor(0))
     : 0;
   if (heatReduction > 0) reactorHeat = reactorHeat.sub(heatReduction).max(0);
-  return clampHeatDecimal(reactorHeat, maxHeat);
+  if (reactorHeat.lt(0)) return reactorHeat.constructor(0);
+  return reactorHeat;
 }
 
 function processHeatPhase(heat, containment, payload, reactorHeat, multiplier) {
@@ -470,9 +509,18 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower) 
 
   const cellResult = processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx);
   reactorHeat = reactorHeat.add(cellResult.heat_add);
+  reactorHeat = applyHullRepulsionWorker(
+    reactorHeat,
+    new (reactorHeat.constructor)(reactorState.max_heat ?? 0),
+    heat,
+    partLayout,
+    partTable,
+    gidx
+  );
 
   const explosionIndices = findExplosionIndices(partLayout, partTable, heat, gidx);
-  const ventPower = processVents(partLayout, partTable, heat, reactorState, multiplier, gidx);
+  const ventOut = processVents(partLayout, partTable, heat, reactorState, multiplier, gidx);
+  const ventPower = ventOut.power_add;
 
   const totalPowerAdd = cellResult.power_add + ventPower;
   if (totalPowerAdd > 0) {
@@ -494,6 +542,8 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower) 
     reactorHeat,
     reactorPower: powerResult.reactorPower,
     moneyEarned: powerResult.moneyEarned,
+    powerSold: powerResult.powerSold?.toNumber?.() ?? Number(powerResult.powerSold ?? 0),
+    ventHeatDissipated: ventOut.ventHeatDissipated,
     explosionIndices,
     depletionIndices: cellResult.depletionIndices,
     tileUpdates: cellResult.tileUpdates,
@@ -515,6 +565,8 @@ function runOneTick(data) {
   const allDepletionIndices = [];
   const tileUpdatesMap = new Map();
   let totalMoneyEarned = new Decimal(0);
+  let totalPowerSold = 0;
+  let totalVentHeat = 0;
   const n = Math.max(1, data.tickCount || 1);
 
   for (let tick = 0; tick < n; tick++) {
@@ -522,6 +574,8 @@ function runOneTick(data) {
     reactorHeat = result.reactorHeat;
     reactorPower = result.reactorPower;
     totalMoneyEarned = totalMoneyEarned.add(result.moneyEarned);
+    totalPowerSold += result.powerSold || 0;
+    totalVentHeat += result.ventHeatDissipated || 0;
     for (let e = 0; e < result.explosionIndices.length; e++) allExplosionIndices.push(result.explosionIndices[e]);
     for (let d = 0; d < result.depletionIndices.length; d++) allDepletionIndices.push(result.depletionIndices[d]);
     for (let u = 0; u < result.tileUpdates.length; u++) {
@@ -540,6 +594,12 @@ function runOneTick(data) {
     reactorHeat: reactorHeat.toNumber()
   });
 
+  const useSAB = !!data.heatBuffer && typeof SharedArrayBuffer !== "undefined" && data.heatBuffer instanceof SharedArrayBuffer;
+  let heatBufferOut = null;
+  if (!useSAB && heat.buffer) {
+    heatBufferOut = heat.buffer.slice(heat.byteOffset, heat.byteOffset + heat.byteLength);
+  }
+
   return {
     reactorHeat: reactorHeat.toNumber(),
     reactorPower: reactorPowerNum,
@@ -547,16 +607,35 @@ function runOneTick(data) {
     depletionIndices: allDepletionIndices,
     tileUpdates: Array.from(tileUpdatesMap.values()),
     moneyEarned: totalMoneyEarned.toNumber(),
+    powerSold: totalPowerSold,
+    ventHeatDissipated: totalVentHeat,
     epGained: 0,
     powerDelta,
     heatDelta: reactorHeat.sub(heatBeforeTick).toNumber(),
     transfers: [],
-    tickCount: n
+    tickCount: n,
+    heatBuffer: heatBufferOut,
+    useSAB
   };
 }
 
+let timerId = null;
 let pending = null;
 let busy = false;
+
+function clearSimulationTimer() {
+  if (timerId != null) {
+    clearInterval(timerId);
+    timerId = null;
+  }
+}
+
+function startSimulationTimer() {
+  clearSimulationTimer();
+  timerId = setInterval(() => {
+    self.postMessage({ type: "timerPulse" });
+  }, FOUNDATIONAL_TICK_MS);
+}
 
 function runStep() {
   const d = pending;
@@ -574,9 +653,9 @@ function runStep() {
     const result = runOneTick(data);
     result.type = "tickResult";
     result.tickId = data.tickId ?? d.tickId;
-    result.useSAB = !!data.heatBuffer && typeof SharedArrayBuffer !== "undefined" && data.heatBuffer instanceof SharedArrayBuffer;
-    console.debug("[GameLoopWorker] postMessage tickResult:", { tickId: result.tickId, reactorPower: result.reactorPower, powerDelta: result.powerDelta });
-    self.postMessage(result);
+    const transfer = [];
+    if (result.heatBuffer && !result.useSAB) transfer.push(result.heatBuffer);
+    self.postMessage(result, transfer);
   } catch (err) {
     console.error("[GameLoopWorker] runStep error:", err);
     self.postMessage({ type: "tickResult", tickId: d?.tickId ?? 0, error: true, message: String(err?.message || err) });
@@ -587,6 +666,11 @@ function runStep() {
 
 self.onmessage = function (e) {
   const d = e.data;
+  if (d?.type === "timerControl") {
+    if (d.action === "start") startSimulationTimer();
+    else clearSimulationTimer();
+    return;
+  }
   const isTick = d?.type === "tick" || (d?.json != null && d?.meta != null);
   if (isTick) {
     if (busy) {

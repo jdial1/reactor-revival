@@ -25,24 +25,14 @@ describe("Rolling Numbers UI", () => {
         expect(ui.displayValues.ep).toBeDefined();
     });
 
-    it("should interpolate current value towards target value", () => {
+    it("should snap display current to target after rolling update", () => {
         const moneyObj = ui.displayValues.money;
         moneyObj.current = 0;
         moneyObj.target = 1000;
 
-        // Simulate 1 frame (approx 16ms)
         ui.coreLoopUI.updateRollingNumbers(16.667);
 
-        expect(moneyObj.current).toBeGreaterThan(0);
-        expect(moneyObj.current).toBeLessThan(1000);
-        
-        // Simulate many frames
-        for(let i=0; i<60; i++) {
-            ui.coreLoopUI.updateRollingNumbers(16.667);
-        }
-
-        // Should be very close or equal to target
-        expect(moneyObj.current).toBeCloseTo(1000, -1); 
+        expect(moneyObj.current).toBe(1000);
     });
 
     it("should snap to target when difference is small", () => {
@@ -72,7 +62,7 @@ describe("Rolling Numbers UI", () => {
         ui.coreLoopUI.processUpdateQueue();
 
         expect(toNum(ui.displayValues.money.target)).toBe(5000);
-        expect(toNum(ui.displayValues.money.current)).not.toBe(5000);
+        expect(toNum(ui.displayValues.money.current)).toBe(5000);
     });
 });
 

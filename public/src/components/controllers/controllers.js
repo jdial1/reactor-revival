@@ -47,6 +47,33 @@ export class GridController {
       return;
     }
 
+    if (!isSellAction && ui.help_mode_active) {
+      const t0 = tilesToModify[0];
+      const helpTargetPart = t0?.part ?? clicked_part;
+      if (helpTargetPart && game.tooltip_manager) game.tooltip_manager.show(helpTargetPart, t0, true);
+      return;
+    }
+
+    if (game.blueprintPlanner?.active) {
+      for (const t of tilesToModify) {
+        if (isSellAction) {
+          game.setBlueprintPlannerSlot(t.row, t.col, null);
+          ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
+        } else if (clicked_part) {
+          const cur = game.getBlueprintPlannerPartId(t.row, t.col);
+          const id = clicked_part.id;
+          if (cur === id) game.setBlueprintPlannerSlot(t.row, t.col, null);
+          else game.setBlueprintPlannerSlot(t.row, t.col, id);
+          ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
+          if (!soundPlayed && game.audio?.play) {
+            game.audio.play("placement");
+            soundPlayed = true;
+          }
+        }
+      }
+      return;
+    }
+
     for (const t of tilesToModify) {
       if (isSellAction) {
         if (t.part && t.part.id && !t.part.isSpecialTile) {
@@ -57,50 +84,38 @@ export class GridController {
             soundPlayed = true;
           }
         }
-      } else {
-        if (ui.help_mode_active) {
-          const helpTargetPart = t.part ?? clicked_part;
-          if (helpTargetPart && game.tooltip_manager) game.tooltip_manager.show(helpTargetPart, t, true);
-          return;
-        }
+      } else if (clicked_part) {
+        const money = game.state.current_money;
+        const canAfford = money != null && typeof money.gte === "function"
+          ? money.gte(clicked_part.cost)
+          : Number(money) >= Number(clicked_part.cost);
 
-        if (clicked_part) {
-          const money = game.state.current_money;
-          const canAfford = money != null && typeof money.gte === "function"
-            ? money.gte(clicked_part.cost)
-            : Number(money) >= Number(clicked_part.cost);
+        if (canAfford) {
+          updateDecimal(game.state, "current_money", (d) => d.sub(clicked_part.cost));
+          const partPlaced = await t.setPart(clicked_part);
 
-          if (canAfford) {
-            if (!game.isSandbox) {
-              updateDecimal(game.state, "current_money", (d) => d.sub(clicked_part.cost));
+          if (partPlaced) {
+            ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
+            if (ui.deviceFeatures?.lightVibration) {
+              ui.deviceFeatures.lightVibration();
             }
-            const partPlaced = await t.setPart(clicked_part);
-
-            if (partPlaced) {
-              ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
-              if (ui.deviceFeatures?.lightVibration) {
-                ui.deviceFeatures.lightVibration();
-              }
-              soundPlayed = true;
-              if (game.emit) {
-                game.emit("partPlaced", { part: clicked_part, tile: t });
-              }
-            } else {
-              if (!game.isSandbox) {
-                updateDecimal(game.state, "current_money", (d) => d.add(clicked_part.cost));
-              }
-              if (!soundPlayed && game.audio) {
-                const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
-                game.audio.play("error", null, pan);
-                soundPlayed = true;
-              }
+            soundPlayed = true;
+            if (game.emit) {
+              game.emit("partPlaced", { part: clicked_part, tile: t });
             }
           } else {
+            updateDecimal(game.state, "current_money", (d) => d.add(clicked_part.cost));
             if (!soundPlayed && game.audio) {
               const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
               game.audio.play("error", null, pan);
               soundPlayed = true;
             }
+          }
+        } else {
+          if (!soundPlayed && game.audio) {
+            const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
+            game.audio.play("error", null, pan);
+            soundPlayed = true;
           }
         }
       }

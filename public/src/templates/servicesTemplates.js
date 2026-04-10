@@ -1,78 +1,9 @@
 import { html } from "lit-html";
 
-export function signedInTemplate(authLabel, onLogout) {
-  return html`
-    <div class="splash-auth-signed-in">
-      ${authLabel ? html`<span class="splash-auth-signed-in-icon">${authLabel}</span>` : ""}
-      <button class="splash-auth-icon-btn" title="Sign out" aria-label="Sign out" @click=${onLogout}>✕</button>
-    </div>
-  `;
-}
-
-export function commsButtonTemplate(googleLabel, emailLabel, onGoogleSignIn, onEmailSignIn) {
-  return html`
-    <div class="splash-auth-comms-wrap">
-      <button class="splash-auth-comms-btn" title="Sign in" aria-label="Sign in options" aria-haspopup="true" aria-expanded="false">
-        [ COMMS ]
-      </button>
-      <div class="splash-auth-comms-dropdown hidden">
-        <div class="splash-auth-comms-prompt">> AWAITING OPERATOR CREDENTIALS</div>
-        <button class="splash-auth-comms-option" @click=${onGoogleSignIn}>
-          <span class="splash-auth-comms-icon">${googleLabel}</span> Sign in with Google
-        </button>
-        <button class="splash-auth-comms-option" @click=${onEmailSignIn}>
-          <span class="splash-auth-comms-icon">${emailLabel}</span> Sign in with Email
-        </button>
-      </div>
-    </div>
-  `;
-}
-
-export function authFormTemplate(state, handlers, onBack) {
-  const { onInput, onSignIn, onSignUp, onReset } = handlers;
-  const { email, password, message, isError } = state;
-  const msgColor = isError ? "#ff6666" : "var(--game-success-color)";
-  return html`
-    <div id="splash-email-auth-form" class="splash-auth-terminal-form">
-      <div class="splash-auth-terminal-prompt">> AWAITING OPERATOR CREDENTIALS</div>
-      ${onBack ? html`<button class="splash-auth-back-btn" @click=${onBack} type="button">&lt; Back</button>` : ""}
-      <input
-        type="email"
-        id="splash-supabase-email"
-        placeholder="Email"
-        class="pixel-input splash-auth-input"
-        .value=${email}
-        @input=${(e) => onInput(e, "email")}
-      />
-      <input
-        type="password"
-        id="splash-supabase-password"
-        placeholder="Password"
-        class="pixel-input splash-auth-input"
-        .value=${password}
-        @input=${(e) => onInput(e, "password")}
-      />
-      <div class="splash-auth-form-actions">
-        <button class="splash-btn splash-auth-form-btn" @click=${onSignIn}>Sign In</button>
-        <button class="splash-btn splash-auth-form-btn" @click=${onSignUp}>Sign Up</button>
-        <button class="splash-btn splash-auth-form-btn" @click=${onReset}>Reset</button>
-      </div>
-      <div id="splash-supabase-message" class="splash-auth-message" style="color: ${msgColor}">${message}</div>
-    </div>
-  `;
-}
-
-export const noCloudSaveFoundTemplate = html`<div>No cloud save found.</div>`;
-export const cloudCheckFailedTemplate = html`<div>Cloud check failed.</div>`;
-export const googleDriveErrorTemplate = html`<div>Google Drive Error</div>`;
-
 export function splashStartOptionsTemplate({
   mostRecentSave,
-  cloudSaveOnly,
-  cloudSaveData,
   hasSave,
   onResume,
-  onCloudResume,
   onNewRun,
   onShowLoad,
   onShowSettings,
@@ -85,18 +16,6 @@ export function splashStartOptionsTemplate({
             @click=${onResume}
           >
             <div class="load-game-header"><span>RESUME</span></div>
-          </button>
-        `
-      : ""}
-
-    ${cloudSaveOnly && cloudSaveData && !hasSave
-      ? html`
-          <button
-            class="splash-btn splash-btn-load splash-btn-full-width splash-btn-resume-primary splash-btn-continue"
-            @click=${onCloudResume}
-          >
-            <div class="load-game-header"><span>RESUME</span></div>
-            <div class="continue-label"></div>
           </button>
         `
       : ""}
@@ -115,9 +34,8 @@ export function splashStartOptionsTemplate({
         </button>
       </div>
       <div class="splash-btn-row-tertiary">
-        <button id="splash-sandbox-btn" class="splash-btn splash-btn-sandbox" title="Sandbox">SANDBOX</button>
         <button
-          class="splash-btn splash-btn-config"
+          class="splash-btn splash-btn-config splash-btn-row-tertiary-single"
           title="System configuration"
           @click=${onShowSettings}
         >

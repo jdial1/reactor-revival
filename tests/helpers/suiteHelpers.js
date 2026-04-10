@@ -83,25 +83,6 @@ export function mockFetchJsonResponse(data, { ok = true } = {}) {
   };
 }
 
-export function mockSupabaseSaveSuccessPayload(extra = {}) {
-  return mockFetchJsonResponse({ success: true, ...extra });
-}
-
-export function mockGoogleDriveArrayBufferResponse(buffer) {
-  return {
-    ok: true,
-    arrayBuffer: async () => buffer,
-  };
-}
-
-export function mockCloudAPI() {
-  return {
-    driveBuffer: mockGoogleDriveArrayBufferResponse,
-    supabaseSave: mockSupabaseSaveSuccessPayload,
-    json: mockFetchJsonResponse,
-  };
-}
-
 export function assertProcessedObjectiveTitleHasIcon(processedTitle, expectedIcon) {
   if (expectedIcon.startsWith("./img/") || expectedIcon.startsWith("img/")) {
     expect(processedTitle).toContain("<img");
@@ -120,7 +101,7 @@ export function assertGridIndexMatchesTileset(tileset, row, col, expectedIndex) 
 export function performTestRespec(
   game,
   {
-    doctrine = "physicist",
+    doctrine = "unified",
     exclusiveUpgradeId = "forceful_fusion",
     bypassTechTree = false,
   } = {}

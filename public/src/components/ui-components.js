@@ -1,6 +1,6 @@
 import { html, render } from "lit-html";
 import { proxy, subscribe } from "valtio/vanilla";
-import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey } from "../state.js";
+import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey, previewBlueprintPlannerStats } from "../state.js";
 import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
 import { runCheckAffordability, calculateSectionCounts, BlueprintService } from "../logic.js";
 import { UpgradeCard, CloseButton, PartButton } from "./button-factory.js";
@@ -44,165 +44,28 @@ import {
   plainTextTemplate,
   quickSelectSlotTemplate,
   decompressionSavedToastTemplate,
-  timeFluxSimulationTemplate,
 } from "../templates/uiComponentsTemplates.js";
 
 const VENTING_ANIM_MS = 400;
 const INFO_BAR_CATHODE_IDS = ["info_money_desktop", "info_money", "info_ep_value_desktop", "info_ep_value"];
-const WAVE_SAMPLE_INTERVAL_MS = 120;
-const WAVE_HISTORY_CAP = 300;
-const WAVE_LONG_PRESS_MS = 500;
-const WAVE_TRACE_POINTS = 120;
 
-const waveformDiagnosticsState = {
-  lastSampleAt: 0,
-  history: [],
-  render: {
-    power: { currentPoints: "", previousPoints: "" },
-    heat: { currentPoints: "", previousPoints: "" },
-  },
-};
-
-function clampWave(value) {
-  return Math.min(1, Math.max(0, Number(value) || 0));
+function formatSimulationTickLine(game) {
+  if (!game) return "—";
+  const period = (game.loop_wait || 1000) / 1000;
+  const periodStr = period >= 10 ? period.toFixed(1) : period.toFixed(2);
+  const n = game.engine?.tick_count ?? 0;
+  return `${periodStr}s #${n}`;
 }
 
-function sampleReactorDiagnostics(ui, state) {
-  const now = Date.now();
-  if (now - waveformDiagnosticsState.lastSampleAt < WAVE_SAMPLE_INTERVAL_MS) return;
-  waveformDiagnosticsState.lastSampleAt = now;
-  const maxPower = toNumber(state.max_power) || 1;
-  const maxHeat = toNumber(state.max_heat) || 1;
-  const powerLevel = clampWave((toNumber(state.current_power) || 0) / maxPower);
-  const heatLevel = clampWave((toNumber(state.current_heat) || 0) / maxHeat);
-  const powerNet = toNumber(state.stats_power ?? state.power_net_change ?? 0);
-  const heatNet = toNumber(state.stats_net_heat ?? state.heat_net_change ?? 0);
-  const ventEff = toNumber(state.vent_multiplier_eff ?? 0);
-  const overflowRatio = toNumber(state.power_overflow_to_heat_ratio ?? 0.5);
-  waveformDiagnosticsState.history.push({ t: now, powerLevel, heatLevel, powerNet, heatNet, ventEff, overflowRatio });
-  console.log("[waveform-tick]", {
-    t: now,
-    power_per_tick: powerNet,
-    heat_per_tick: heatNet,
-    stats_power: toNumber(state.stats_power ?? 0),
-    stats_net_heat: toNumber(state.stats_net_heat ?? 0),
-    heat_net_change: toNumber(state.heat_net_change ?? 0),
-    current_heat: toNumber(state.current_heat ?? 0),
-    max_heat: toNumber(state.max_heat ?? 0),
-  });
-  if (waveformDiagnosticsState.history.length > WAVE_HISTORY_CAP) {
-    waveformDiagnosticsState.history.splice(0, waveformDiagnosticsState.history.length - WAVE_HISTORY_CAP);
-  }
-}
-
-function getTickSeries(ui, state, channel) {
-  if (channel === "heat") {
-    const fromSamples = waveformDiagnosticsState.history
-      .slice(-WAVE_TRACE_POINTS)
-      .map((item) => toNumber(item?.heatNet ?? 0));
-    if (fromSamples.length) {
-      const liveValue = toNumber(state.stats_net_heat ?? state.heat_net_change ?? 0);
-      fromSamples.push(liveValue);
-      return fromSamples;
-    }
-  }
-  const reactorHistory = ui?.game?.reactor?._classificationStatsHistory;
-  const key = channel === "power" ? "power" : "netHeat";
-  if (Array.isArray(reactorHistory) && reactorHistory.length > 1) {
-    const series = reactorHistory.slice(-WAVE_TRACE_POINTS).map((item) => toNumber(item?.[key] ?? 0));
-    const liveValue = toNumber(channel === "power"
-      ? state.stats_power ?? state.power_net_change
-      : state.stats_net_heat ?? state.heat_net_change);
-    series.push(liveValue);
-    return series;
-  }
-  const fallbackKey = channel === "power" ? "powerNet" : "heatNet";
-  return waveformDiagnosticsState.history.slice(-WAVE_TRACE_POINTS).map((item) => toNumber(item?.[fallbackKey] ?? 0));
-}
-
-function getRumbleState(game) {
-  const tiles = game?.tileset?.active_tiles_list;
-  if (!Array.isArray(tiles) || tiles.length === 0) return false;
-  for (let i = 0; i < tiles.length; i++) {
-    const tile = tiles[i];
-    const part = tile?.part;
-    if (!part) continue;
-    const maxTicks = toNumber(part.ticks ?? 0);
-    if (maxTicks > 0 && toNumber(tile.ticks ?? 0) / maxTicks < 0.05) return true;
-    const containment = toNumber(part.containment ?? 0);
-    if (containment > 0 && toNumber(tile.heat_contained ?? 0) / containment >= 0.95) return true;
-  }
-  return false;
-}
-
-function createWaveformVisualState(ui, state, channel) {
-  const net = toNumber(channel === "power"
-    ? state.stats_power ?? state.power_net_change
-    : state.stats_net_heat ?? state.heat_net_change);
-  const isRumbling = getRumbleState(ui?.game);
-  const series = getTickSeries(ui, state, channel);
-  const source = series.length ? series : [net, net];
-  const absValues = source.map((value) => Math.abs(toNumber(value)));
-  const avgAbs = absValues.reduce((sum, value) => sum + value, 0) / Math.max(1, absValues.length);
-  const scale = channel === "heat"
-    ? Math.max(0.25, avgAbs * 1.2)
-    : Math.max(1, avgAbs * 2);
-  const points = source
-    .map((value, index, arr) => {
-      const x = arr.length <= 1 ? 100 : (index / (arr.length - 1)) * 100;
-      const raw = toNumber(value) / scale;
-      const negativeBoost = channel === "heat" && raw < 0 ? 1.6 : 1;
-      const normalized = Math.tanh(raw * negativeBoost);
-      const zeroBaseline = channel === "heat" ? 50 : 90;
-      const positiveSpan = channel === "heat" ? 42 : 80;
-      const negativeSpan = channel === "heat" ? 42 : 8;
-      const y = normalized >= 0
-        ? zeroBaseline - normalized * positiveSpan
-        : zeroBaseline - normalized * negativeSpan;
-      const clampedY = Math.max(2, Math.min(98, y));
-      return `${x.toFixed(2)},${clampedY.toFixed(2)}`;
-    })
-    .join(" ");
-  const renderState = waveformDiagnosticsState.render[channel];
-  if (renderState.currentPoints !== points) {
-    renderState.previousPoints = renderState.currentPoints || points;
-    renderState.currentPoints = points;
-  }
-  const highBandCrossed = source.some((value) => Math.tanh(toNumber(value) / scale) >= 0.8);
-  return {
-    className: classMap({
-      "info-waveform": true,
-      [`wave-${channel}`]: true,
-      rumble: isRumbling,
-      rising: net > 0,
-      falling: net < 0,
-      glitch: highBandCrossed,
-    }),
-    style: styleMap({}),
-    points,
-    trailPoints: renderState.previousPoints || points,
-    isRumbling,
-  };
-}
-
-function buildHarmonicHealth(state) {
-  const history = waveformDiagnosticsState.history;
-  if (!history.length) return "Stable";
-  const span = history.slice(-40);
-  let powerFlux = 0;
-  let heatFlux = 0;
-  for (let i = 1; i < span.length; i++) {
-    powerFlux += Math.abs(span[i].powerLevel - span[i - 1].powerLevel);
-    heatFlux += Math.abs(span[i].heatLevel - span[i - 1].heatLevel);
-  }
-  const netHeat = toNumber(state.heat_net_change ?? 0);
-  const ventEff = toNumber(state.vent_multiplier_eff ?? 0);
-  const leakBias = Math.max(0, netHeat) + Math.max(0, toNumber(state.power_overflow_to_heat_ratio ?? 0.5) * 0.2);
-  const turbulence = powerFlux + heatFlux + leakBias - ventEff * 0.01;
-  if (turbulence >= 10) return "Critical";
-  if (turbulence >= 6) return "Unstable";
-  if (turbulence >= 3) return "Watch";
-  return "Stable";
+function formatArchitectMetricsLine(state) {
+  const p = fmt(toNumber(state.stats_power ?? 0), 0);
+  const h = fmt(toNumber(state.stats_heat_generation ?? 0), 0);
+  const v = fmt(toNumber(state.stats_vent ?? 0), 0);
+  const maxH = toNumber(state.max_heat ?? 0);
+  const cur = toNumber(state.current_heat ?? 0);
+  const hullPct = maxH > 0 ? (cur / maxH) * 100 : 0;
+  const hullStr = `${fmt(hullPct, 1)}%`;
+  return `P/t ${p} · H/t ${h} · V ${v} · Hull ${hullStr}`;
 }
 
 class InfoBarUI {
@@ -315,7 +178,6 @@ class InfoBarUI {
   }
 
   _infoBarTemplate(state) {
-    sampleReactorDiagnostics(this.ui, state);
     const power = toNumber(state.current_power);
     const heat = toNumber(state.current_heat);
     const maxP = toNumber(state.max_power) || 1;
@@ -350,8 +212,6 @@ class InfoBarUI {
     const onVentMobile = (e) => this._handleHeat(e.currentTarget, true);
 
     const activeBuffs = state.active_buffs ?? [];
-    const powerWave = createWaveformVisualState(this.ui, state, "power");
-    const heatWave = createWaveformVisualState(this.ui, state, "heat");
 
     const epVisible = toNumber(state.current_exotic_particles) > 0;
     const epContentStyle = styleMap({ display: epVisible ? "flex" : "none" });
@@ -366,18 +226,8 @@ class InfoBarUI {
     return infoBarTemplate({
       powerClass,
       heatClass,
-      powerPct,
-      heatPct,
       powerBarStyle,
       heatBarStyle,
-      powerWaveStyle: powerWave.style,
-      heatWaveStyle: heatWave.style,
-      powerWaveClass: powerWave.className,
-      heatWaveClass: heatWave.className,
-      powerWavePoints: powerWave.points,
-      powerWaveTrailPoints: powerWave.trailPoints,
-      heatWavePoints: heatWave.points,
-      heatWaveTrailPoints: heatWave.trailPoints,
       powerTextDesktop: fmt(power, 2),
       powerTextMobile: fmt(power, 0),
       maxPowerDesktop: fmt(maxP, 2),
@@ -442,52 +292,19 @@ class MobileInfoBarUI {
       btn.classList.add("venting");
       setTimeout(() => btn.classList.remove("venting"), VENTING_ANIM_MS);
     };
-    this._waveLongPressTimer = null;
-    this._waveDidLongPress = false;
-    this._openDiagnostics = (waveType) => {
-      this.ui.modalOrchestrator?.showModal(MODAL_IDS.HARMONIC_DIAGNOSTICS, {
-        waveType,
-        healthLabel: buildHarmonicHealth(this.ui.game?.state ?? {}),
-        history: waveformDiagnosticsState.history.slice(-80),
-      });
+    this._tickLineUpdateControlDeck = () => {
+      const el = document.getElementById("control_deck_tick_line");
+      const g = this.ui.game;
+      if (el && g) el.textContent = formatSimulationTickLine(g);
     };
-    this._handleWavePointerDown = (waveType) => (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this._waveDidLongPress = false;
-      if (this._waveLongPressTimer) clearTimeout(this._waveLongPressTimer);
-      this._waveLongPressTimer = setTimeout(() => {
-        this._waveLongPressTimer = null;
-        this._waveDidLongPress = true;
-        this.ui.deviceFeatures.heavyVibration();
-        this._openDiagnostics(waveType);
-      }, WAVE_LONG_PRESS_MS);
-    };
-    this._handleWavePointerCancel = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (this._waveLongPressTimer) {
-        clearTimeout(this._waveLongPressTimer);
-        this._waveLongPressTimer = null;
+    this._controlDeckStatePatchHandler = (patch) => {
+      if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) {
+        this._tickLineUpdateControlDeck();
       }
-    };
-    this._handleWavePointerUp = (actionHandler) => (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (this._waveLongPressTimer) {
-        clearTimeout(this._waveLongPressTimer);
-        this._waveLongPressTimer = null;
-      }
-      if (this._waveDidLongPress) {
-        this._waveDidLongPress = false;
-        return;
-      }
-      actionHandler(e);
     };
   }
 
   _controlDeckTemplate(state) {
-    sampleReactorDiagnostics(this.ui, state);
     const maxPower = toNumber(state.max_power ?? 0);
     const maxHeat = toNumber(state.max_heat ?? 0);
     const powerCurrent = toNumber(state.current_power ?? 0);
@@ -525,8 +342,6 @@ class MobileInfoBarUI {
     const autoHeatRateContent = showHeatRate ? html`<img src="img/ui/icons/icon_heat.png" class="icon-inline" alt="heat">\u2193${fmt(Math.round(autoHeatRate), 0)}` : "";
     const autoRateClass = classMap({ "control-deck-auto-rate": true, visible: showAutoSell });
     const autoHeatRateClass = classMap({ "control-deck-auto-rate": true, visible: showHeatRate });
-    const powerWave = createWaveformVisualState(this.ui, state, "power");
-    const heatWave = createWaveformVisualState(this.ui, state, "heat");
 
     return mobileControlDeckTemplate({
       powerCapacitorClass,
@@ -539,14 +354,8 @@ class MobileInfoBarUI {
       autoHeatRateContent,
       powerFillStyle,
       heatFillStyle,
-      powerWaveStyle: powerWave.style,
-      heatWaveStyle: heatWave.style,
-      powerWaveClass: powerWave.className,
-      heatWaveClass: heatWave.className,
-      powerWavePoints: powerWave.points,
-      powerWaveTrailPoints: powerWave.trailPoints,
-      heatWavePoints: heatWave.points,
-      heatWaveTrailPoints: heatWave.trailPoints,
+      architectMetricsText: formatArchitectMetricsLine(state),
+      tickCadenceText: formatSimulationTickLine(this.ui.game),
       powerCurrentText: fmt(powerCurrent, 0),
       heatCurrentText: fmt(heatCurrent, 0),
       maxPowerText: maxPower ? fmt(maxPower, 0) : "",
@@ -554,12 +363,6 @@ class MobileInfoBarUI {
       moneyValueText: state.melting_down ? "☢️" : fmt(state.current_money ?? 0, 0),
       onSellPower: this._onSellPower,
       onVentHeat: this._onVentHeat,
-      onPowerWavePointerDown: this._handleWavePointerDown("power"),
-      onPowerWavePointerUp: this._handleWavePointerUp(this._onSellPower),
-      onPowerWavePointerCancel: this._handleWavePointerCancel,
-      onHeatWavePointerDown: this._handleWavePointerDown("heat"),
-      onHeatWavePointerUp: this._handleWavePointerUp(this._onVentHeat),
-      onHeatWavePointerCancel: this._handleWavePointerCancel,
     });
   }
 
@@ -582,9 +385,30 @@ class MobileInfoBarUI {
 
     const subscriptions = [{
       state: this.ui.game.state,
-      keys: ["max_power", "max_heat", "current_power", "current_heat", "power_net_change", "heat_net_change", "stats_power", "stats_net_heat", "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff", "current_money", "melting_down"],
+      keys: [
+        "max_power", "max_heat", "current_power", "current_heat",
+        "power_net_change", "heat_net_change", "stats_power", "stats_net_heat",
+        "stats_heat_generation", "stats_vent",
+        "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff",
+        "current_money", "melting_down",
+      ],
     }];
-    this._unmountControlDeck = ReactiveLitComponent.mountMulti(subscriptions, () => this._controlDeckTemplate(this.ui.game.state), root);
+    const innerUnmount = ReactiveLitComponent.mountMulti(subscriptions, () => this._controlDeckTemplate(this.ui.game.state), root);
+    const g = this.ui.game;
+    if (!this._controlDeckTickListenersAttached && g?.on) {
+      this._controlDeckTickListenersAttached = true;
+      g.on("tickRecorded", this._tickLineUpdateControlDeck);
+      g.on("statePatch", this._controlDeckStatePatchHandler);
+    }
+    this._tickLineUpdateControlDeck();
+    this._unmountControlDeck = () => {
+      innerUnmount();
+      if (this._controlDeckTickListenersAttached && this.ui.game?.off) {
+        this.ui.game.off("tickRecorded", this._tickLineUpdateControlDeck);
+        this.ui.game.off("statePatch", this._controlDeckStatePatchHandler);
+        this._controlDeckTickListenersAttached = false;
+      }
+    };
     this.updateMobilePassiveTopBar();
   }
 
@@ -604,10 +428,6 @@ class MobileInfoBarUI {
   }
 
   cleanup() {
-    if (this._waveLongPressTimer) {
-      clearTimeout(this._waveLongPressTimer);
-      this._waveLongPressTimer = null;
-    }
     if (this._unmountControlDeck) {
       this._unmountControlDeck();
       this._unmountControlDeck = null;
@@ -1147,7 +967,6 @@ class ControlDeckUI {
     this.toggle_buttons_config = {
       auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
       auto_buy: { id: "auto_buy_toggle", stateProperty: "auto_buy" },
-      time_flux: { id: "time_flux_toggle", stateProperty: "time_flux" },
       heat_control: {
         id: "heat_control_toggle",
         stateProperty: "heat_control",
@@ -1184,12 +1003,17 @@ class ControlDeckUI {
     const ventEl = document.getElementById("stats_vent");
     const powerEl = document.getElementById("stats_power");
     const heatEl = document.getElementById("stats_heat");
-    const last = { vent: null, power: null, heat: null };
-    const first = { vent: true, power: true, heat: true };
+    const hullEl = document.getElementById("stats_hull");
+    const last = { vent: null, power: null, heat: null, hull: null };
+    const first = { vent: true, power: true, heat: true, hull: true };
     const sync = () => {
       const v = fmt(state.stats_vent ?? 0, 0);
       const p = fmt(state.stats_power ?? 0, 0);
       const h = fmt(state.stats_heat_generation ?? 0, 0);
+      const maxH = toNumber(state.max_heat ?? 0);
+      const cur = toNumber(state.current_heat ?? 0);
+      const hullPct = maxH > 0 ? (cur / maxH) * 100 : 0;
+      const hullText = `${fmt(hullPct, 1)}%`;
       const apply = (el, key, text) => {
         if (!el) return;
         if (first[key]) {
@@ -1205,6 +1029,7 @@ class ControlDeckUI {
       apply(ventEl, "vent", v);
       apply(powerEl, "power", p);
       apply(heatEl, "heat", h);
+      apply(hullEl, "hull", hullText);
     };
     let scheduled = false;
     const schedule = () => {
@@ -1219,11 +1044,13 @@ class ControlDeckUI {
       subscribeKey(state, "stats_vent", schedule),
       subscribeKey(state, "stats_power", schedule),
       subscribeKey(state, "stats_heat_generation", schedule),
+      subscribeKey(state, "current_heat", schedule),
+      subscribeKey(state, "max_heat", schedule),
     ];
     sync();
     this._statsBarUnmount = () => {
       unsubs.forEach((u) => { try { u(); } catch (_) {} });
-      [ventEl, powerEl, heatEl].forEach((el) => cancelCathodeScramble(el));
+      [ventEl, powerEl, heatEl, hullEl].forEach((el) => cancelCathodeScramble(el));
     };
     this.mountExoticParticlesDisplayIfNeeded(ui);
   }
@@ -1237,16 +1064,39 @@ class ControlDeckUI {
         "engine-paused": state.engine_status === "paused",
         "engine-stopped": state.engine_status === "stopped",
         "engine-tick": state.engine_status === "tick",
+        "engine-simulation-error": state.engine_status === "simulation_error",
       });
       return engineStatusIndicatorTemplate({ statusClass });
     };
     this._engineStatusComponent = new ReactiveLitComponent(
       ui.game.state,
-      ["engine_status"],
+      ["engine_status", "simulation_error_message"],
       renderFn,
       root
     );
     this._engineStatusUnmount = this._engineStatusComponent.mount();
+  }
+
+  _mountTickCadenceNav(ui) {
+    if (typeof this._tickCadenceNavUnmount === "function") {
+      this._tickCadenceNavUnmount();
+      this._tickCadenceNavUnmount = null;
+    }
+    const el = document.getElementById("tps_display");
+    if (!el || !ui.game?.on) return;
+    const update = () => {
+      el.textContent = formatSimulationTickLine(ui.game);
+    };
+    update();
+    ui.game.on("tickRecorded", update);
+    const onPatch = (patch) => {
+      if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) update();
+    };
+    ui.game.on("statePatch", onPatch);
+    this._tickCadenceNavUnmount = () => {
+      ui.game.off("tickRecorded", update);
+      ui.game.off("statePatch", onPatch);
+    };
   }
 
   initVarObjsConfig() {
@@ -1254,6 +1104,7 @@ class ControlDeckUI {
 
     this._mountStatsBarReactive(ui);
     this._mountEngineStatusReactive(ui);
+    this._mountTickCadenceNav(ui);
     ui.var_objs_config = {
       pause: {
         id: "pause_toggle",
@@ -1285,33 +1136,21 @@ class ControlDeckUI {
 
   _controlsNavTemplate(state) {
     const ui = this.ui;
-    const queuedTicks = ui.uiState?.time_flux_queued_ticks ?? 0;
-    const timeFluxLabel = queuedTicks > 1 ? `Time Flux (${queuedTicks})` : "Time Flux";
-    const timeFluxHasQueue = queuedTicks > 1;
     const toggleHandler = (stateProperty) => () => {
       const currentState = state[stateProperty];
       const newState = !currentState;
       logger.log("debug", "ui", `[TOGGLE] Button "${stateProperty}" clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}`);
-      if (stateProperty === "time_flux" && ui.game) {
-        const accumulator = ui.game.engine?.time_accumulator || 0;
-        const queuedTicks = accumulator > 0 ? Math.floor(accumulator / (ui.game.loop_wait || 1000)) : 0;
-        logger.log("debug", "ui", `[TIME FLUX] Button clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}, Accumulator: ${accumulator.toFixed(0)}ms, Queued ticks: ${queuedTicks}`);
-      }
       ui.stateManager.setVar(stateProperty, newState);
     };
     return controlDeckControlsNavTemplate({
       autoSellOn: !!state.auto_sell,
       autoBuyOn: !!state.auto_buy,
-      timeFluxOn: !!state.time_flux,
       heatControlOn: !!state.heat_control,
       pauseOn: !!state.pause,
-      timeFluxClass: timeFluxHasQueue ? "time-flux-queue" : "",
-      timeFluxLabel,
       accountTitle: ui.uiState?.user_account_display?.title ?? "Account",
       accountIcon: ui.uiState?.user_account_display?.icon ?? "👤",
       onToggleAutoSell: toggleHandler("auto_sell"),
       onToggleAutoBuy: toggleHandler("auto_buy"),
-      onToggleTimeFlux: toggleHandler("time_flux"),
       onToggleHeatControl: toggleHandler("heat_control"),
       onTogglePause: toggleHandler("pause"),
     });
@@ -1324,8 +1163,8 @@ class ControlDeckUI {
       const renderFn = () => this._controlsNavTemplate(ui.game.state);
       this._controlsNavUnmount = ReactiveLitComponent.mountMulti(
         [
-          { state: ui.game.state, keys: ["auto_sell", "auto_buy", "heat_control", "time_flux", "pause"] },
-          ...(ui.uiState ? [{ state: ui.uiState, keys: ["time_flux_queued_ticks", "user_account_display"] }] : []),
+          { state: ui.game.state, keys: ["auto_sell", "auto_buy", "heat_control", "pause"] },
+          ...(ui.uiState ? [{ state: ui.uiState, keys: ["user_account_display"] }] : []),
         ],
         renderFn,
         root
@@ -1334,7 +1173,6 @@ class ControlDeckUI {
       render(this._controlsNavTemplate({
         auto_sell: false,
         auto_buy: true,
-        time_flux: true,
         heat_control: false,
         pause: false,
       }), root);
@@ -1351,7 +1189,6 @@ class ControlDeckUI {
       auto_sell: () => ui.game.reactor?.auto_sell_enabled ?? false,
       auto_buy: () => ui.game.reactor?.auto_buy_enabled ?? false,
       heat_control: () => ui.game.reactor?.heat_controlled ?? false,
-      time_flux: () => ui.game.time_flux ?? true,
       pause: () => ui.game.paused ?? false,
     };
     for (const [stateProperty, getValue] of Object.entries(toggleMappings)) {
@@ -1793,43 +1630,19 @@ class MeltdownUI {
 
     if (hasMeltedDown) {
       const resetReactorBtn = document.getElementById("reset_reactor_btn");
-      const clearHeatSandboxBtn = document.getElementById("clear_heat_sandbox_btn");
-      const isSandbox = ui.game.isSandbox;
-
-      if (isSandbox && clearHeatSandboxBtn) {
-        if (!clearHeatSandboxBtn.hasAttribute("data-listener-added")) {
-          clearHeatSandboxBtn.addEventListener("click", () => this.clearHeatAndMeltdownSandbox());
-          clearHeatSandboxBtn.setAttribute("data-listener-added", "true");
-        }
-      } else if (resetReactorBtn && !resetReactorBtn.hasAttribute("data-listener-added")) {
+      if (resetReactorBtn && !resetReactorBtn.hasAttribute("data-listener-added")) {
         resetReactorBtn.addEventListener("click", async () => await ui.resetReactor());
         resetReactorBtn.setAttribute("data-listener-added", "true");
       }
     }
   }
 
-  clearHeatAndMeltdownSandbox() {
-    const ui = this.ui;
-    if (!ui.game?.isSandbox || !ui.game.reactor) return;
-    ui.game.reactor.current_heat = 0;
-    ui.game.reactor.current_power = 0;
-    ui.stateManager.setVar("current_heat", 0);
-    ui.stateManager.setVar("current_power", 0);
-    ui.game.reactor.clearMeltdownState();
-    if (ui.game.engine) ui.game.engine.start();
-  }
-
   startMeltdownBuildup(onComplete) {
     const ui = this.ui;
     const BUILDUP_MS = 2500;
-    const wrapper = ui.registry?.get?.("PageInit")?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
+    const wrapper =
+      ui.registry?.get?.("PageInit")?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
     const section = document.getElementById("reactor_section");
-    if (ui.particleSystem && wrapper) {
-      const rect = wrapper.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      ui.particleSystem.createCriticalBuildupEmbers(cx, cy);
-    }
     let vignetteEl = document.getElementById("meltdown_vignette");
     if (!vignetteEl && section) {
       vignetteEl = document.createElement("div");
@@ -2029,19 +1842,7 @@ function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReacti
     }
     if (upgradeset.game?.audio) upgradeset.game.audio.play("upgrade");
   };
-  const onBuyMaxClick = (e) => {
-    e.stopPropagation();
-    if (!upgradeset.game?.isSandbox) return;
-    if (upgradeset.isUpgradeAvailable(upgrade.id)) {
-      const count = upgradeset.purchaseUpgradeToMax(upgrade.id);
-      if (count > 0 && upgradeset.game?.audio) upgradeset.game.audio.play("upgrade");
-    }
-  };
-  const onResetClick = (e) => {
-    e.stopPropagation();
-    if (upgradeset.game?.isSandbox) upgradeset.resetUpgradeLevel(upgrade.id);
-  };
-  return UpgradeCard(upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick, useReactiveLevelAndCost });
+  return UpgradeCard(upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost });
 }
 
 function renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container) {
@@ -2280,7 +2081,6 @@ export class UpgradesUI {
     vars["Game (game.js)"]["paused"] = game.paused;
     vars["Game (game.js)"]["autoSellEnabled"] = game.autoSellEnabled;
     vars["Game (game.js)"]["isAutoBuyEnabled"] = game.isAutoBuyEnabled;
-    vars["Game (game.js)"]["time_flux"] = game.time_flux;
     vars["Game (game.js)"]["sold_power"] = game.sold_power;
     vars["Game (game.js)"]["sold_heat"] = game.sold_heat;
 
@@ -2742,14 +2542,16 @@ export function getCostBreakdown(layout, partset) {
   }, { money: 0, ep: 0 });
 }
 
-function getLayoutCost(entryData, ui, fmtFn) {
+function getLayoutCost(entryData, game, fmtFn) {
   try {
-    const parsed = typeof entryData === "string" ? JSON.parse(entryData) : entryData;
-    const layout2D = ui.sandboxUI.compactTo2DLayout(parsed);
-    if (!layout2D || !ui.game?.partset) return "-";
+    const str = typeof entryData === "string" ? entryData : JSON.stringify(entryData);
+    const layout2D = deserializeReactor(str);
+    if (!layout2D || !game?.partset) return "-";
     const cost = layout2D.flatMap((row) => row || []).filter((cell) => cell?.id).reduce((sum, cell) => {
-      const part = ui.game.partset.parts.get(cell.id);
-      return sum + (part ? part.cost * (cell.lvl || 1) : 0);
+      const part = game.partset.parts.get(cell.id);
+      if (!part) return sum;
+      const c = part.cost?.toNumber?.() ?? Number(part.cost ?? 0);
+      return sum + c * (cell.lvl || 1);
     }, 0);
     return cost > 0 ? fmtFn(cost) : "-";
   } catch {
@@ -3110,7 +2912,7 @@ function layoutsListTemplate(ui, list, fmtFn, onAfterDelete) {
   return myLayoutsListTemplate({
     list,
     renderRow: (entry) => {
-      const costStr = getLayoutCost(entry.data, ui, fmtFn);
+      const costStr = getLayoutCost(entry.data, ui.game, fmtFn);
       return myLayoutsTableRowTemplate({
         entryId: entry.id,
         name: entry.name,
@@ -3156,7 +2958,6 @@ class HeatVisualsUI {
     this._overlay = null;
     this._heatFlowOverlay = null;
     this._voltageOverlaySvg = null;
-    this._timeFluxSimOverlay = null;
   }
 
   _ensureOverlay() {
@@ -3216,62 +3017,11 @@ class HeatVisualsUI {
   }
 
   drawVoltagePlacementOverlay() {
-    const ui = this.ui;
     const svg = this._ensureVoltageOverlay();
-    if (!svg) return;
-    const part = ui.stateManager?.getClickedPart?.();
-    const hoverTile = ui.gridInteractionUI?.getHoveredTile?.();
-    const tileset = ui.game?.tileset;
-    if (!part || !hoverTile?.enabled || !tileset) {
+    if (svg) {
       svg.style.display = "none";
       svg.innerHTML = "";
-      return;
     }
-    svg.style.display = "";
-    const overlay = this._ensureOverlay();
-    if (!overlay) return;
-    const rect = overlay.getBoundingClientRect();
-    const w = Math.max(1, rect.width);
-    const h = Math.max(1, rect.height);
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    svg.innerHTML = "";
-    const from = this._tileCenterToOverlayPosition(hoverTile.row, hoverTile.col);
-    for (const neighbor of tileset.getTilesInRange(hoverTile, 1)) {
-      if (!neighbor?.enabled) continue;
-      const to = this._tileCenterToOverlayPosition(neighbor.row, neighbor.col);
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.setAttribute("x1", from.x);
-      line.setAttribute("y1", from.y);
-      line.setAttribute("x2", to.x);
-      line.setAttribute("y2", to.y);
-      line.setAttribute("stroke", "rgba(90, 210, 255, 0.42)");
-      line.setAttribute("stroke-width", "1.5");
-      line.setAttribute("stroke-dasharray", "4 5");
-      svg.appendChild(line);
-    }
-  }
-
-  _ensureTimeFluxSimulationOverlay() {
-    if (this._timeFluxSimOverlay && this._timeFluxSimOverlay.parentElement) return this._timeFluxSimOverlay;
-    if (typeof document === "undefined" || !document.body) return null;
-    const overlay = document.createElement("div");
-    overlay.className = "time-flux-sim-overlay";
-    document.body.appendChild(overlay);
-    this._timeFluxSimOverlay = overlay;
-    this.updateTimeFluxSimulation(0, false);
-    return overlay;
-  }
-
-  updateTimeFluxSimulation(progressPercent, active) {
-    const overlay = this._ensureTimeFluxSimulationOverlay();
-    if (!overlay) return;
-    if (!active) {
-      overlay.style.display = "none";
-      return;
-    }
-    overlay.style.display = "flex";
-    const pct = Math.max(0, Math.min(100, Math.round(progressPercent || 0)));
-    render(timeFluxSimulationTemplate({ pct }), overlay);
   }
 
   _tileCenterToOverlayPosition(row, col) {
@@ -3696,6 +3446,8 @@ export class CopyPasteUI {
       };
     }
 
+    this.setupBlueprintPlannerControls();
+
     if (!copyBtn || !pasteBtn || !modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) return;
 
     if (deselectBtn) {
@@ -3750,38 +3502,51 @@ export class CopyPasteUI {
     ui.gridCanvasRenderer?.markStaticDirty?.();
     ui.coreLoopUI?.runUpdateInterfaceLoop?.();
   }
-}
 
-export class SandboxUI {
-  constructor(ui) {
-    this.ui = ui;
-  }
-
-  enterSandbox() {
+  setupBlueprintPlannerControls() {
     const ui = this.ui;
-    if (!ui.game) return;
-    if (!ui.game.isSandbox) ui.game.isSandbox = true;
-    document.body.classList.add("reactor-sandbox");
-    this.initializeSandboxUpgradeButtons();
-    ui.coreLoopUI?.runUpdateInterfaceLoop?.();
+    const game = ui.game;
+    const toggle = document.getElementById("reactor_blueprint_toggle");
+    const applyBtn = document.getElementById("blueprint_planner_apply");
+    const discardBtn = document.getElementById("blueprint_planner_discard");
+    if (!toggle || !game) return;
+    if (typeof this._teardownBlueprintPlanner === "function") this._teardownBlueprintPlanner();
+    const syncHud = () => {
+      const pEl = document.getElementById("blueprint_planner_power");
+      const hEl = document.getElementById("blueprint_planner_net_heat");
+      const st = previewBlueprintPlannerStats(game);
+      if (pEl) pEl.textContent = st ? `Pwr ${fmt(st.stats_power, 0)}` : "";
+      if (hEl) hEl.textContent = st ? `ΔHeat ${fmt(st.stats_net_heat, 0)}` : "";
+      ui.gridCanvasRenderer?.markStaticDirty?.();
+    };
+    const onChanged = () => syncHud();
+    if (game.on) game.on("blueprintPlannerChanged", onChanged);
+    this._teardownBlueprintPlanner = () => {
+      if (game.off) game.off("blueprintPlannerChanged", onChanged);
+      this._teardownBlueprintPlanner = null;
+    };
+    toggle.onclick = () => {
+      game.toggleBlueprintPlanner?.();
+      syncHud();
+    };
+    if (applyBtn) {
+      applyBtn.onclick = () => {
+        game.applyBlueprintPlannerLayout?.();
+        syncHud();
+        ui.coreLoopUI?.runUpdateInterfaceLoop?.();
+      };
+    }
+    if (discardBtn) {
+      discardBtn.onclick = () => {
+        game.clearBlueprintPlannerSlots?.();
+        syncHud();
+      };
+    }
   }
 
-  toggleSandbox() {
-    const ui = this.ui;
-    if (!ui.game) return;
-    ui.game.isSandbox = !ui.game.isSandbox;
-    if (ui.game.isSandbox) document.body.classList.add("reactor-sandbox");
-    else document.body.classList.remove("reactor-sandbox");
-    ui.coreLoopUI?.runUpdateInterfaceLoop?.();
+  teardownBlueprintPlanner() {
+    if (typeof this._teardownBlueprintPlanner === "function") this._teardownBlueprintPlanner();
   }
-
-  initializeSandboxUpgradeButtons() {}
-}
-
-function getAuthStateForUI() {
-  const googleSignedIn = !!(window.googleDriveSave && window.googleDriveSave.isSignedIn);
-  const supabaseSignedIn = !!(window.supabaseAuth && window.supabaseAuth.isSignedIn());
-  return { googleSignedIn, supabaseSignedIn, isSignedIn: googleSignedIn || supabaseSignedIn };
 }
 
 export class UserAccountUI {
@@ -3799,15 +3564,10 @@ export class UserAccountUI {
     this._buttonAbortController = new AbortController();
     const btn = document.getElementById("user_account_btn");
     if (btn) {
-      btn.onclick = () => {
-        const { isSignedIn } = getAuthStateForUI();
-        if (isSignedIn) ui.modalOrchestrationUI?.showProfileModal?.();
-        else ui.modalOrchestrator?.showModal?.(MODAL_IDS.LOGIN);
-      };
+      btn.onclick = null;
     }
 
-    const { isSignedIn } = getAuthStateForUI();
-    ui.uiState.user_account_display = isSignedIn ? { icon: "👤", title: "Account (Signed In)" } : { icon: "🔐", title: "Sign In" };
+    ui.uiState.user_account_display = { icon: "💾", title: "Local saves" };
   }
 
   showProfileModal() {}
@@ -3883,7 +3643,18 @@ export class CoreLoopUI {
 
   processUpdateQueue() {
     this._syncDisplayValuesFromState();
+    this.snapDisplayValuesFromState();
     this.applyStateToDom();
+  }
+
+  snapDisplayValuesFromState() {
+    const ui = this.ui;
+    if (!ui.displayValues) return;
+    const d = ui.displayValues;
+    ["money", "heat", "power", "ep"].forEach((k) => {
+      const o = d[k];
+      if (o && typeof o.current === "number" && typeof o.target === "number") o.current = o.target;
+    });
   }
 
   _syncDisplayValuesFromState() {
@@ -3899,19 +3670,8 @@ export class CoreLoopUI {
     if (d.ep) d.ep.target = toNum(game.exoticParticleManager?.exotic_particles ?? s.current_exotic_particles ?? 0);
   }
 
-  updateRollingNumbers(dt) {
-    const ui = this.ui;
-    if (!ui.displayValues) return;
-    const lerp = (obj, epsilon = 0.06) => {
-      if (!obj || typeof obj.current !== "number" || typeof obj.target !== "number") return;
-      const diff = obj.target - obj.current;
-      if (Math.abs(diff) < epsilon) obj.current = obj.target;
-      else obj.current += diff * Math.min(1, (dt / 1000) * 8);
-    };
-    lerp(ui.displayValues.money);
-    lerp(ui.displayValues.heat);
-    lerp(ui.displayValues.power, 0.02);
-    lerp(ui.displayValues.ep);
+  updateRollingNumbers(_dt) {
+    this.snapDisplayValuesFromState();
   }
 
   cacheDOMElements() {

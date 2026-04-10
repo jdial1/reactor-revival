@@ -9,14 +9,7 @@ import {
   loadGameUploadRowTemplate,
   tooltipCloseButtonTemplate,
   helpButtonTemplate,
-  uploadToCloudButtonTemplate,
-  loadFromCloudButtonTemplate,
-  googleSignInButtonTemplate,
-  googleSignOutButtonTemplate,
-  cloudSaveButtonTemplate,
-  loadingButtonTemplate,
   installButtonTemplate,
-  googleSignInIconButtonTemplate,
 } from "../templates/buttonTemplates.js";
 import {
   upgradeCardTemplate,
@@ -24,7 +17,6 @@ import {
   partStatIconTemplate,
   partStatTemplate,
   closeButtonTemplate,
-  googleSignInIconButtonWrapperTemplate,
 } from "../templates/buttonFactoryTemplates.js";
 
 function toTemplateHtml(template, values) {
@@ -110,13 +102,8 @@ export const LoadGameButton = (saveData, playedTimeStr, isCloudSynced, onClick) 
   </span>
 `;
 
-export const LoadGameUploadRow = (saveData, playedTimeStr, isCloudSynced, onLoadClick, onUploadClick) => html`
-  <span
-    @click=${(e) => {
-      withTemplateTarget(e, "#splash-load-game-btn", onLoadClick);
-      withTemplateTarget(e, "#splash-upload-option-btn", onUploadClick);
-    }}
-  >
+export const LoadGameUploadRow = (saveData, playedTimeStr, isCloudSynced, onLoadClick) => html`
+  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onLoadClick)}>
     ${toTemplateHtml(loadGameUploadRowTemplate, {
       currentMoney: numFormat(saveData?.current_money ?? 0),
       playedTime: playedTimeStr,
@@ -151,43 +138,6 @@ export const HelpButton = (onClick, title = "Click for information") => html`
   </span>
 `;
 
-export const UploadToCloudButton = (onClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "button.upload-option-button", onClick)}>
-    ${toTemplateHtml(uploadToCloudButtonTemplate)}
-  </span>
-`;
-
-export const LoadFromCloudButton = (onClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "#splash-load-cloud-btn", onClick)}>
-    ${toTemplateHtml(loadFromCloudButtonTemplate)}
-  </span>
-`;
-
-export const GoogleSignInButton = (onClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "#splash-signin-btn", onClick)}>
-    ${toTemplateHtml(googleSignInButtonTemplate)}
-  </span>
-`;
-
-export const GoogleSignOutButton = (onClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "#splash-signout-btn", onClick)}>
-    ${toTemplateHtml(googleSignOutButtonTemplate)}
-  </span>
-`;
-
-export const CloudSaveButton = (saveData, playedTimeStr, onClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "button.splash-cloud-button", onClick)}>
-    ${toTemplateHtml(cloudSaveButtonTemplate, {
-      currentMoney: numFormat(saveData?.current_money ?? 0),
-      playedTime: playedTimeStr,
-    })}
-  </span>
-`;
-
-export const LoadingButton = (text, spinnerClass = "loading-spinner") => html`
-  ${toTemplateHtml(loadingButtonTemplate, { spinnerClass, text: text ?? "" })}
-`;
-
 export const InstallButton = (onClick) => html`
   <span @click=${(e) => withTemplateTarget(e, "button.contrast", onClick)}>
     ${toTemplateHtml(installButtonTemplate)}
@@ -205,11 +155,10 @@ function getDoctrineIcon(upgrade, doctrineSource) {
   return { icon: BASE_DOCTRINE_ICON, id: "base" };
 }
 
-export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick, useReactiveLevelAndCost } = {}) => {
+export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost } = {}) => {
   const isMaxed = upgrade.level >= upgrade.max_level;
   const { icon: doctrineIcon, id: doctrineId } = getDoctrineIcon(upgrade, doctrineSource);
   const doctrineLocked = upgrade.game?.upgradeset && !upgrade.game.upgradeset.isUpgradeAvailable(upgrade.id);
-  const isSandbox = !!upgrade.game?.isSandbox;
   const header = useReactiveLevelAndCost ? "" : (isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`);
   const rawDesc = isMaxed ? "" : (upgrade.description || "");
   const descHtml = upgrade.game?.ui?.stateManager ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc) : rawDesc;
@@ -239,9 +188,6 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { onBuyMaxClick
     ariaLabel,
     onBuyClick,
     costDisplay,
-    isSandbox,
-    onBuyMaxClick,
-    onResetClick,
   });
 };
 
@@ -321,24 +267,8 @@ export function createLoadGameButtonFullWidth(saveData, playedTimeStr, isCloudSy
   return renderToNode(LoadGameButtonFullWidth(saveData, playedTimeStr, isCloudSynced, onClick));
 }
 
-export function createUploadToCloudButton(onClick) {
-  return renderToNode(UploadToCloudButton(onClick));
-}
-
-export function createLoadFromCloudButton(onClick) {
-  return renderToNode(LoadFromCloudButton(onClick));
-}
-
-export function createGoogleSignInButton(onClick) {
-  return renderToNode(GoogleSignInButton(onClick));
-}
-
-export function createGoogleSignOutButton(onClick) {
-  return renderToNode(GoogleSignOutButton(onClick));
-}
-
-export function createLoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick, onUploadClick) {
-  return renderToNode(LoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick, onUploadClick));
+export function createLoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick) {
+  return renderToNode(LoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick));
 }
 
 export function createTooltipCloseButton(onClick) {
@@ -359,22 +289,6 @@ export function createPartButton(part) {
 
 export function createBuyButton(upgrade, onClick) {
   return renderToNode(BuyButton(upgrade, onClick));
-}
-
-export function createCloudSaveButton(saveData, playedTimeStr, onClick) {
-  return renderToNode(CloudSaveButton(saveData, playedTimeStr, onClick));
-}
-
-export function createLoadingButton(text, spinnerClass = "loading-spinner") {
-  return renderToNode(LoadingButton(text, spinnerClass));
-}
-
-export function createGoogleSignInButtonWithIcon(onClick = () => {}) {
-  const template = googleSignInIconButtonWrapperTemplate({
-    onWrapperClick: (e) => withTemplateTarget(e, "button", onClick),
-    iconButtonContent: toTemplateHtml(googleSignInIconButtonTemplate),
-  });
-  return renderToNode(template);
 }
 
 export function createInstallButton(onClick) {

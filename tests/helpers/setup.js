@@ -226,15 +226,11 @@ export {
   captureOutput,
   setupMockAudio,
   mockThrottle,
-  stressParticleSystem,
 } from './testUtils.js';
 
 export { createServiceWorkerTestMocks as setupMockSW } from './testUtils.js';
 
 export {
-  mockCloudAPI,
-  mockGoogleDriveArrayBufferResponse,
-  mockSupabaseSaveSuccessPayload,
   assertProcessedObjectiveTitleHasIcon as expectTitleToHaveIcon,
   getPartByCriteria as findPart,
   setupModalEnvironment as setupModalDOM,
@@ -663,8 +659,26 @@ export async function setupGameWithDOM() {
   game.objectives_manager = new ObjectiveManager(game);
   await game.objectives_manager.initialize();
   
+  if (typeof globalThis.crossOriginIsolated === "undefined") {
+    Object.defineProperty(globalThis, "crossOriginIsolated", { value: true, configurable: true, writable: true });
+  }
+  if (global.window && typeof global.window.crossOriginIsolated === "undefined") {
+    Object.defineProperty(global.window, "crossOriginIsolated", { value: true, configurable: true, writable: true });
+  }
+  if (typeof global.Worker === "undefined") {
+    global.Worker = class MockWorker {
+      constructor() {
+        this.onmessage = null;
+      }
+      postMessage() {}
+      terminate() {}
+    };
+    if (global.window) global.window.Worker = global.Worker;
+  }
+
   game.engine = new Engine(game);
-  
+  game.engine._workerFailed = true;
+
   // CRITICAL: Initialize audio service like in app.js
   const { AudioService } = await import("@app/services.js");
   game.audio = new AudioService();

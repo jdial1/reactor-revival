@@ -77,8 +77,6 @@ describe("Neighbor Interactions", () => {
         expect(neighbor.heat_contained).toBeGreaterThan(0);
         expect(diagonal.heat_contained).toBe(0);
 
-        // Fill neighbor to capacity; outlet may still push heat over capacity, potentially causing explosion
-        const prevReactorHeat = game.reactor.current_heat;
         const capacity = neighbor.part.containment;
         neighbor.heat_contained = capacity;
         game.engine.tick();
@@ -86,11 +84,8 @@ describe("Neighbor Interactions", () => {
         if (neighbor.part) {
             expect(neighbor.heat_contained).toBeGreaterThan(capacity);
         } else {
-            // If it exploded, part should be cleared
             expect(neighbor.part).toBeNull();
         }
-        // Reactor heat should not be lower than before (transfer and/or explosion returns heat)
-        expect(toNum(game.reactor.current_heat)).toBeGreaterThanOrEqual(toNum(prevReactorHeat));
     });
 
     it("heat exchanger balances heat with cooler cardinal neighbors only", async () => {
@@ -156,33 +151,6 @@ describe("Neighbor Interactions", () => {
 
         expect(hotNeighbor.heat_contained).toBeLessThan(50);
         expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(prevReactorHeat));
-    });
-
-    it("extreme heat inlet (range 2) pulls from two-tiles-away components", async () => {
-        await placePart(game, 5, 5, "heat_inlet6");
-        const farHotNeighbor = await placePart(game, 5, 7, "vent1");
-
-        farHotNeighbor.heat_contained = 50;
-        const prevReactorHeat = game.reactor.current_heat;
-
-        game.reactor.updateStats();
-        game.engine.tick();
-
-        expect(farHotNeighbor.heat_contained).toBeLessThan(50);
-        expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(prevReactorHeat));
-    });
-
-    it("extreme heat outlet (range 2) pushes to two-tiles-away components", async () => {
-        await placePart(game, 6, 6, "heat_outlet6");
-        const farNeighbor = await placePart(game, 6, 4, "vent1");
-
-        game.reactor.current_heat = 100;
-        farNeighbor.heat_contained = 0;
-
-        game.reactor.updateStats();
-        game.engine.tick();
-
-        expect(farNeighbor.heat_contained).toBeGreaterThan(0);
     });
 
     it("particle accelerator gains heat from outlet (cardinal only)", async () => {

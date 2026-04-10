@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
+import { setDecimal } from "@app/state.js";
+import { toDecimal } from "@app/utils.js";
 
 const toNum = (v) => (v != null && typeof v.toNumber === 'function' ? v.toNumber() : Number(v));
 
@@ -137,7 +139,8 @@ describe("Engine Mechanics", () => {
     game.ui.stateManager.setVar("auto_sell", true);
     const initialMoney = game.current_money;
     game.engine.tick();
-    const expectedSell = Math.floor(toNum(game.reactor.max_power) * game.reactor.auto_sell_multiplier);
+    const sellCapBasis = Math.max(toNum(game.reactor.max_power), toNum(game.reactor.altered_max_power));
+    const expectedSell = Math.floor(sellCapBasis * game.reactor.auto_sell_multiplier);
     expect(toNum(game.reactor.current_power)).toBe(cell.power * 2 - expectedSell);
     expect(toNum(game.current_money)).toBe(toNum(initialMoney) + expectedSell);
   });
@@ -275,25 +278,14 @@ describe("Engine Mechanics", () => {
     expect(tile.part).toBeNull();
   });
 
-  it("should generate exotic particles from particle accelerators", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("particle_accelerator1");
-    await tile.setPart(part);
-
-    // Reset EP to 0 to make generation easier to detect
-    game.exotic_particles = 0;
-
-    // Set heat to exactly the EP threshold
-    tile.heat_contained = part.ep_heat;
-
-    const initialEP = game.exotic_particles;
-
-    for (let i = 0; i < 5; i++) {
-      game.engine.tick();
-      if (toNum(game.exotic_particles) > toNum(initialEP)) break;
-    }
-
-    expect(toNum(game.exotic_particles)).toBeGreaterThan(toNum(initialEP));
+  it("grants exotic particles from session min weave on reboot", async () => {
+    setDecimal(game.state, "total_exotic_particles", 0);
+    setDecimal(game.state, "current_exotic_particles", 0);
+    game.exoticParticleManager.exotic_particles = toDecimal(0);
+    setDecimal(game.state, "session_power_sold", 3_000_000);
+    setDecimal(game.state, "session_heat_dissipated", 4_000_000);
+    await game.rebootActionKeepExoticParticles();
+    expect(toNum(game.state.total_exotic_particles)).toBe(3);
   });
 
   it("should trigger reactor meltdown if a particle accelerator overheats", async () => {
@@ -577,7 +569,7 @@ describe("Engine Mechanics", () => {
       game.tileset.clearAllTiles();
 
       const tile1 = game.tileset.getTile(0, 0);
-      const tile2 = game.tileset.getTile(1, 0);
+      const tile2 = game.tileset.getTile(2, 0);
       const part = game.partset.getPartById("vent1");
 
       await tile1.setPart(part);
@@ -818,24 +810,16 @@ describe("Engine Mechanics", () => {
       expect(pendingSecond).toBeLessThanOrEqual(game.engine.MAX_EVENTS);
     });
 
-    it("should keep event ring buffer bounded after long idle then Time Flux catch-up", async () => {
+    it("should keep event ring buffer bounded after many deterministic ticks", async () => {
       game.tileset.clearAllTiles();
-      game.engine.time_accumulator = 50 * game.loop_wait;
-      game.time_flux = true;
       await placePart(game, 0, 0, "uranium1");
       game.engine.markPartCacheAsDirty();
-
       const bufferLengthBefore = game.engine._eventRingBuffer.length;
-      const target = globalThis.window || globalThis;
-      const raf = target.requestAnimationFrame;
-      target.requestAnimationFrame = () => 1;
-      game.engine.running = true;
-      game.engine.last_timestamp = 0;
-      game.engine.loop(16);
-
+      for (let i = 0; i < 200; i++) {
+        game.engine._processTick(1);
+      }
       expect(game.engine._eventRingBuffer.length).toBe(bufferLengthBefore);
       expect(game.engine._eventRingBuffer.length).toBe(game.engine.MAX_EVENTS * 4);
-      target.requestAnimationFrame = raf;
     });
   });
 

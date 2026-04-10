@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, toNum, flushUIUpdates } from '../helpers/setup.js';
 import { setDecimal } from '@app/state.js';
+import { toDecimal } from '@app/utils.js';
 
 describe('EP Info Bar Display', () => {
     let game;
@@ -39,13 +40,12 @@ describe('EP Info Bar Display', () => {
         const mobileValueEl = document.getElementById("info_ep_value");
         const desktopValueEl = document.getElementById("info_ep_value_desktop");
 
-        const pa = game.partset.getPartById('particle_accelerator1');
-        const paTile = game.tileset.getTile(0, 2);
-        pa.ep_heat = 1000;
-        await paTile.setPart(pa);
-        paTile.heat_contained = 1000;
-
-        game.engine.tick();
+        setDecimal(game.state, "total_exotic_particles", 0);
+        setDecimal(game.state, "current_exotic_particles", 0);
+        game.exoticParticleManager.exotic_particles = toDecimal(0);
+        setDecimal(game.state, "session_power_sold", 2_000_000);
+        setDecimal(game.state, "session_heat_dissipated", 2_000_000);
+        await game.rebootActionKeepExoticParticles();
         expect(toNum(game.exotic_particles)).toBeGreaterThan(0);
         setDecimal(game.state, "current_exotic_particles", game.exotic_particles);
         await flushUIUpdates(game, { rolling: false });

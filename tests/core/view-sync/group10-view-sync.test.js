@@ -33,16 +33,16 @@ describe("Group 10: State-to-DOM Synchronization", () => {
     expect(reactorBg.classList.contains("heat-critical")).toBe(true);
   });
 
-  it("locks rolling-number interpolation and near-target snap", () => {
+  it("locks rolling-number snap to target", () => {
     const moneyDisplay = ui.displayValues.money;
     moneyDisplay.current = 0;
     moneyDisplay.target = 1000;
 
     ui.coreLoopUI.updateRollingNumbers(16.667);
-    expect(toNum(moneyDisplay.current)).toBeGreaterThan(0);
-    expect(toNum(moneyDisplay.current)).toBeLessThan(1000);
+    expect(toNum(moneyDisplay.current)).toBe(1000);
 
     moneyDisplay.current = 999.95;
+    moneyDisplay.target = 1000;
     ui.coreLoopUI.updateRollingNumbers(16.667);
     expect(toNum(moneyDisplay.current)).toBe(1000);
   });

@@ -5,7 +5,7 @@ import { StateManager, createUIState, initUIStateSubscriptions } from "../state.
 import { InputHandler } from "./input-manager.js";
 import { ModalOrchestrator } from "./ui-modals.js";
 import { GridScaler, GridCanvasRenderer } from "./ui-grid.js";
-import { ParticleSystem, ParticleEffectsUI, VisualEventRendererUI } from "./visual-effects-manager.js";
+import { ParticleEffectsUI, VisualEventRendererUI } from "./visual-effects-manager.js";
 import { leaderboardService } from "../services.js";
 import { logger } from "../utils.js";
 import { UpgradesUI, ComponentRenderingUI, runPopulateUpgradeSection, mountSectionCountsReactive, updateSectionCountsState } from "./ui-components.js";
@@ -22,7 +22,6 @@ import {
   PerformanceUI,
   MeltdownUI,
   ModalOrchestrationUI,
-  SandboxUI,
   CoreLoopUI,
   DeviceFeaturesUI,
   setupKeyboardShortcuts,
@@ -179,7 +178,6 @@ class PageInitUI {
           } else {
             logger.log('warn', 'ui', 'upgradeset.populateUpgrades is not a function or upgradeset missing');
           }
-          this.ui.sandboxUI.initializeSandboxUpgradeButtons();
         });
         break;
       case "experimental_upgrades_section":
@@ -199,7 +197,6 @@ class PageInitUI {
           logger.log('warn', 'ui', 'upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing');
         }
         this.setupResearchCollapsibleSections();
-        this.ui.sandboxUI.initializeSandboxUpgradeButtons();
         this.loadAndSetVersion();
         this.ui.setupUpgradeCardHoverBuzz();
         break;
@@ -353,7 +350,7 @@ function getHeatNetChangeFromStats(ui) {
   const maxPower = toNumber(ui.stateManager.getVar("max_power") || 0);
   const potentialPower = currentPower + statsPower;
   const excessPower = Math.max(0, potentialPower - maxPower);
-  const overflowToHeat = ui.game?.reactor?.power_overflow_to_heat_ratio ?? 0.5;
+  const overflowToHeat = ui.game?.reactor?.power_overflow_to_heat_ratio ?? 1;
   const overflowHeat = excessPower * overflowToHeat;
   const manualReduce = toNumber(ui.game?.reactor?.manual_heat_reduce || ui.game?.base_manual_heat_reduce || 1);
   return baseNetHeat + overflowHeat - manualReduce;
@@ -384,7 +381,6 @@ function initMainLayoutInner(ui) {
   if (document.getElementById("reactor_wrapper")) {
     ui.gridScaler.resize();
   }
-  ui.particleEffectsUI.initParticleCanvas();
   requestAnimationFrame((ts) => ui.coreLoopUI.runUpdateInterfaceLoop(ts));
   if (ui.game && ui.game.engine) {
     const status = ui.game.paused ? "paused" : (ui.game.engine.running ? "running" : "stopped");
@@ -543,7 +539,6 @@ export class UI {
     this.performanceUI = new PerformanceUI(this);
     this.meltdownUI = new MeltdownUI(this);
     this.modalOrchestrationUI = new ModalOrchestrationUI(this);
-    this.sandboxUI = new SandboxUI(this);
     this.coreLoopUI = new CoreLoopUI(this);
     this.layoutStorageUI = new LayoutStorageUI(this);
     this.pageInitUI = new PageInitUI(this);
@@ -575,9 +570,6 @@ export class UI {
     };
 
     this._visualPool = { floatingText: [], steamParticle: [], bolt: [] };
-    this._particleCanvas = null;
-    this._particleCtx = null;
-    this.particleSystem = null;
     this.detachGameEventListeners = null;
     this._icons = {
       power: "img/ui/icons/icon_power.png",
@@ -620,14 +612,6 @@ export class UI {
 
   resizeReactor() {
     this.gridScaler.resize();
-  }
-
-  _initParticleCanvas() {
-    this.particleEffectsUI.initParticleCanvas();
-  }
-
-  _resizeParticleCanvas() {
-    this.particleEffectsUI.resizeParticleCanvas();
   }
 
   initializeCopyPasteUI() {
@@ -749,6 +733,10 @@ export class UI {
       this.controlDeckUI._engineStatusUnmount();
       this.controlDeckUI._engineStatusUnmount = null;
     }
+    if (typeof this.controlDeckUI?._tickCadenceNavUnmount === "function") {
+      this.controlDeckUI._tickCadenceNavUnmount();
+      this.controlDeckUI._tickCadenceNavUnmount = null;
+    }
     if (this.objectiveController?.unmount) this.objectiveController.unmount();
     if (typeof this.partsPanelUI?._partsPanelUnmount === "function") {
       this.partsPanelUI._partsPanelUnmount();
@@ -756,9 +744,8 @@ export class UI {
     }
     this.meltdownUI.cleanup();
     this.mobileInfoBarUI?.cleanup?.();
-    if (typeof this.copyPasteUI?._sandboxUnmount === "function") {
-      this.copyPasteUI._sandboxUnmount();
-      this.copyPasteUI._sandboxUnmount = null;
+    if (typeof this.copyPasteUI?.teardownBlueprintPlanner === "function") {
+      this.copyPasteUI.teardownBlueprintPlanner();
     }
     if (typeof this.copyPasteUI?._copyStateUnmount === "function") {
       this.copyPasteUI._copyStateUnmount();

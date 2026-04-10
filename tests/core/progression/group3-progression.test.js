@@ -80,11 +80,11 @@ describe("Group 3: Progression & Tech Tree", () => {
   });
 
   it("resolves doctrine metadata from DoctrineManager for the active tech tree", () => {
-    game.tech_tree = "engineer";
+    game.tech_tree = "unified";
     const doctrine = game.getDoctrine();
     expect(doctrine).not.toBeNull();
-    expect(doctrine.id).toBe("engineer");
-    expect(doctrine.title).toBe("Thermodynamic Engineer");
+    expect(doctrine.id).toBe("unified");
+    expect(doctrine.title).toBe("Reactor Research");
   });
 
   it("locks auto-sell power reduction when sell cap is below stored power", () => {
@@ -183,86 +183,24 @@ describe("Group 3: Progression & Tech Tree", () => {
     expect(toNum(game.current_money)).toBe(initialMoney);
   });
 
-  it("locks doctrine exclusivity when bypass is disabled", () => {
+  it("allows unified-tree upgrades when bypass is disabled and tech_tree matches", () => {
     game.bypass_tech_tree_restrictions = false;
-    game.tech_tree = "physicist";
+    game.tech_tree = "unified";
     game.current_money = 1e30;
     game.ui.stateManager.setVar("current_money", game.current_money);
     game.upgradeset.check_affordability(game);
-
-    const physicistUpgradeId = "chronometer";
-    const architectUpgradeId = "heat_control_operator";
-    const engineerUpgradeId = "stirling_generators";
-
-    expect(game.upgradeset.isUpgradeAvailable(physicistUpgradeId)).toBe(true);
-    expect(game.upgradeset.isUpgradeDoctrineLocked(architectUpgradeId)).toBe(true);
-    expect(game.upgradeset.isUpgradeDoctrineLocked(engineerUpgradeId)).toBe(true);
-    expect(game.upgradeset.isUpgradeAvailable(architectUpgradeId)).toBe(false);
-    expect(game.upgradeset.isUpgradeAvailable(engineerUpgradeId)).toBe(false);
-
-    const purchasedPhysicist = game.upgradeset.purchaseUpgrade(physicistUpgradeId);
-    expect(purchasedPhysicist).toBe(true);
-
-    game.upgradeset.check_affordability(game);
-    expect(game.upgradeset.purchaseUpgrade(architectUpgradeId)).toBe(false);
-    expect(game.upgradeset.purchaseUpgrade(engineerUpgradeId)).toBe(false);
+    expect(game.upgradeset.isUpgradeAvailable("chronometer")).toBe(true);
+    expect(game.upgradeset.isUpgradeAvailable("heat_control_operator")).toBe(true);
+    expect(game.upgradeset.isUpgradeAvailable("stirling_generators")).toBe(true);
   });
 
-  it("locks physicist exclusives when architect doctrine is selected", () => {
+  it("locks restricted upgrades when tech_tree id does not match loaded trees", () => {
     game.bypass_tech_tree_restrictions = false;
-    game.tech_tree = "architect";
+    game.tech_tree = "__nonexistent_doctrine__";
     game.current_money = 1e30;
     game.ui.stateManager.setVar("current_money", game.current_money);
     game.upgradeset.check_affordability(game);
-
-    const physicistOnlyUpgradeId = "forceful_fusion";
-    const architectUpgradeId = "heat_control_operator";
-
-    expect(game.upgradeset.isUpgradeDoctrineLocked(physicistOnlyUpgradeId)).toBe(true);
-    expect(game.upgradeset.isUpgradeAvailable(physicistOnlyUpgradeId)).toBe(false);
-    expect(game.upgradeset.isUpgradeAvailable(architectUpgradeId)).toBe(true);
-
-    expect(game.upgradeset.purchaseUpgrade(architectUpgradeId)).toBe(true);
-    game.upgradeset.check_affordability(game);
-    expect(game.upgradeset.purchaseUpgrade(physicistOnlyUpgradeId)).toBe(false);
-  });
-
-  it("locks physicist exclusives when engineer doctrine is selected", () => {
-    game.bypass_tech_tree_restrictions = false;
-    game.tech_tree = "engineer";
-    game.current_money = 1e30;
-    game.ui.stateManager.setVar("current_money", game.current_money);
-    game.upgradeset.check_affordability(game);
-
-    const physicistOnlyUpgradeId = "forceful_fusion";
-    const engineerUpgradeId = "stirling_generators";
-
-    expect(game.upgradeset.isUpgradeDoctrineLocked(physicistOnlyUpgradeId)).toBe(true);
-    expect(game.upgradeset.isUpgradeAvailable(physicistOnlyUpgradeId)).toBe(false);
-    expect(game.upgradeset.isUpgradeAvailable(engineerUpgradeId)).toBe(true);
-
-    expect(game.upgradeset.purchaseUpgrade(engineerUpgradeId)).toBe(true);
-    game.upgradeset.check_affordability(game);
-    expect(game.upgradeset.purchaseUpgrade(physicistOnlyUpgradeId)).toBe(false);
-  });
-
-  it("locks architect exclusives when engineer doctrine is selected", () => {
-    game.bypass_tech_tree_restrictions = false;
-    game.tech_tree = "engineer";
-    game.current_money = 1e30;
-    game.ui.stateManager.setVar("current_money", game.current_money);
-    game.upgradeset.check_affordability(game);
-
-    const architectOnlyUpgradeId = "reactor_insurance";
-    const engineerUpgradeId = "stirling_generators";
-
-    expect(game.upgradeset.isUpgradeDoctrineLocked(architectOnlyUpgradeId)).toBe(true);
-    expect(game.upgradeset.isUpgradeAvailable(architectOnlyUpgradeId)).toBe(false);
-    expect(game.upgradeset.isUpgradeAvailable(engineerUpgradeId)).toBe(true);
-
-    expect(game.upgradeset.purchaseUpgrade(engineerUpgradeId)).toBe(true);
-    game.upgradeset.check_affordability(game);
-    expect(game.upgradeset.purchaseUpgrade(architectOnlyUpgradeId)).toBe(false);
+    expect(game.upgradeset.isUpgradeAvailable("ceramic_composite")).toBe(false);
   });
 
   it("rejects purchase when upgrade is at max level", () => {
@@ -279,27 +217,27 @@ describe("Group 3: Progression & Tech Tree", () => {
     expect(upgrade.level).toBe(1);
   });
 
-  it("resets exclusive doctrine upgrade levels on respec", () => {
+  it("clears tech tree on respec without resetting levels in single-tree mode", () => {
     const r = performTestRespec(game);
     expect(r.purchased).toBe(true);
     expect(r.respecOk).toBe(true);
     expect(r.techTreeAfter).toBe(null);
-    expect(r.exclusiveLevelAfter).toBe(0);
+    expect(r.exclusiveLevelAfter).toBe(1);
   });
 
-  it("shared tree upgrades stay available under any doctrine", () => {
+  it("shared tree upgrades map to the unified tree only", () => {
     game.bypass_tech_tree_restrictions = false;
-    game.tech_tree = "engineer";
+    game.tech_tree = "unified";
     game.upgradeset.check_affordability(game);
-    const sharedId = "improved_power_lines";
-    expect(game.upgradeset.upgradeToTechTreeMap.get(sharedId).size).toBe(3);
+    const sharedId = "chronometer";
+    expect(game.upgradeset.upgradeToTechTreeMap.get(sharedId).size).toBe(1);
     expect(game.upgradeset.isUpgradeDoctrineLocked(sharedId)).toBe(false);
     expect(game.upgradeset.isUpgradeAvailable(sharedId)).toBe(true);
   });
 
   it("allows cross-doctrine purchasing when bypass is enabled", () => {
     game.bypass_tech_tree_restrictions = true;
-    game.tech_tree = "physicist";
+    game.tech_tree = "unified";
 
     const architectUpgradeId = "heat_control_operator";
     const engineerUpgradeId = "stirling_generators";
@@ -330,12 +268,12 @@ describe("Group 3: Progression & Tech Tree", () => {
 
   it("respec doctrine fails without enough EP and succeeds with exact cost", () => {
     game.bypass_tech_tree_restrictions = false;
-    game.tech_tree = "physicist";
+    game.tech_tree = "unified";
     game.current_exotic_particles = 0;
     game.ui.stateManager.setVar("current_exotic_particles", 0);
 
     expect(game.respecDoctrine()).toBe(false);
-    expect(game.tech_tree).toBe("physicist");
+    expect(game.tech_tree).toBe("unified");
 
     game.current_exotic_particles = game.RESPER_DOCTRINE_EP_COST;
     game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);

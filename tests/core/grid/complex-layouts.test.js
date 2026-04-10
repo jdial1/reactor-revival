@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame, toNum } from "../../helpers/setup.js";
 import { placePart, forcePurchaseUpgrade, runTicks } from "../../helpers/gameHelpers.js";
+import { computeNeighborPulseNFromTile } from "@app/logic.js";
 
 describe("Complex Layouts and Advanced Interactions", () => {
     let game;
@@ -37,45 +38,30 @@ describe("Complex Layouts and Advanced Interactions", () => {
         expect(cellTile.ticks).toBeGreaterThan(0);
     });
 
-    it("should increase cell power with high sustained heat when Forceful Fusion is active", async () => {
+    it("stats_power uses base_power times M+N pulse (fusion does not scale cell coefficient)", async () => {
         game.bypass_tech_tree_restrictions = true;
-        
+        game.reactor.auto_sell_enabled = false;
+        if (game.ui?.stateManager) game.ui.stateManager.setVar("auto_sell", false);
+
         forcePurchaseUpgrade(game, "forceful_fusion");
-        forcePurchaseUpgrade(game, "heat_control_operator");
         expect(game.reactor.heat_power_multiplier).toBe(1);
-        expect(game.reactor.heat_controlled).toBe(true);
 
         const cellPart = game.partset.getPartById("uranium1");
-        game.upgradeset.getUpgrade("uranium1_cell_perpetual").setLevel(1);
-        
-        const cellTile = await placePart(game, 5, 5, "uranium1");
+        await placePart(game, 5, 5, "uranium1");
 
-        // Artificially set a high heat level (but not so high it causes meltdown)
-        game.reactor.current_heat = 10000; // 10K heat
-        game.reactor.max_heat = 100000; // Increase max heat to prevent meltdown
-        game.reactor.altered_max_heat = 100000; // Prevent updateStats() from resetting max_heat
+        game.reactor.current_heat = 10000;
+        game.reactor.max_heat = 100000;
+        game.reactor.altered_max_heat = 100000;
 
-        // Ensure the tile's power is properly initialized
-        cellTile.power = cellPart.base_power; // Use base_power instead of power
-        cellTile.heat = cellPart.heat;
-
-        // Update stats to apply the bonus AFTER setting heat
         game.reactor.updateStats();
 
-        // Check the power bonus calculation in updateStats
-        const expectedMultiplier = 1 + (1 * (Math.log(10000) / Math.log(1000) / 100));
-        const expectedPower = cellPart.base_power * expectedMultiplier;
-
-        expect(game.reactor.stats_power).toBeCloseTo(expectedPower, 1);
-        game.engine._updatePartCaches(); // Ensure active_cells is populated
-        // Run a tick to see the effect on power generation
+        const expectedStatsPower = cellPart.base_power * 1;
+        expect(game.reactor.stats_power).toBeCloseTo(expectedStatsPower, 1);
+        game.engine._updatePartCaches();
         game.engine.tick();
-
-        expect(toNum(game.reactor.current_power)).toBeGreaterThanOrEqual(toNum(cellPart.base_power));
-        expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(expectedPower), 1);
     });
 
-    it("should correctly apply the power bonus from depleted Protium Cells", async () => {
+    it("protium stats_power follows base_power times M+N pulse (no particle multiplier on P)", async () => {
         const protiumPart = game.partset.getPartById("protium1");
         game.upgradeset.getUpgrade("laboratory").setLevel(1);
         game.upgradeset.getUpgrade("protium_cells").setLevel(1);
@@ -83,17 +69,17 @@ describe("Complex Layouts and Advanced Interactions", () => {
         const firstTile = await placePart(game, 0, 0, "protium1");
         firstTile.ticks = 1;
         game.engine.tick();
-        
+
         expect(firstTile.part).toBeNull();
         expect(game.protium_particles).toBe(protiumPart.cell_count);
 
         await placePart(game, 1, 0, "protium1");
+        const protiumTile = game.tileset.getTile(1, 0);
+        const catalogProtium = game.partset.getPartById("protium1");
+        const M = catalogProtium.cell_pack_M ?? 1;
+        const N = computeNeighborPulseNFromTile(protiumTile);
+        const expectedPower = catalogProtium.base_power * (M + N);
 
-        // The new part instance should have its power recalculated
-        const newProtiumInstance = game.partset.getPartById("protium1");
-        const expectedPower = newProtiumInstance.base_power * (1 + (game.protium_particles * 0.1));
-
-        // Update stats and check
         game.reactor.updateStats();
 
         expect(game.reactor.stats_power).toBeCloseTo(expectedPower, 1);

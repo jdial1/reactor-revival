@@ -10,8 +10,9 @@ describe("Reactor Mechanics", () => {
   it("should initialize with correct default values", () => {
     expect(toNum(game.reactor.current_power)).toBe(0);
     expect(toNum(game.reactor.current_heat)).toBe(0);
-    expect(toNum(game.reactor.max_power)).toBe(toNum(game.reactor.base_max_power));
-    expect(toNum(game.reactor.max_heat)).toBe(toNum(game.reactor.base_max_heat));
+    game.reactor.updateStats();
+    expect(toNum(game.reactor.max_power)).toBe(100);
+    expect(toNum(game.reactor.max_heat)).toBe(1000);
     expect(game.reactor.has_melted_down).toBe(false);
   });
 
@@ -133,7 +134,9 @@ describe("Reactor Mechanics", () => {
     await game.tileset.getTile(0, 1).setPart(reflector);
     game.reactor.updateStats();
 
-    const expectedPower = cell.power * (1 + reflector.power_increase / 100);
+    const reflectorPulse = 1 + reflector.power_increase / 100;
+    const pulse = 1 + reflectorPulse;
+    const expectedPower = cell.base_power * pulse;
     expect(game.reactor.stats_power).toBeCloseTo(expectedPower);
   });
 
@@ -170,29 +173,25 @@ describe("Reactor Mechanics", () => {
     expect(game.reactor.has_melted_down).toBe(false);
   });
 
-  it("should apply Infused Cells power multiplier correctly", async () => {
+  it("does not apply infused cells as a separate power multiplier on harmonic output", async () => {
     game.bypass_tech_tree_restrictions = true;
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("uranium1");
     await tile.setPart(part);
-    
-    // Ensure EP for purchase
-    const labUpgrade = game.upgradeset.getUpgrade('laboratory');
-    const infusedUpgrade = game.upgradeset.getUpgrade('infused_cells');
+
+    const labUpgrade = game.upgradeset.getUpgrade("laboratory");
+    const infusedUpgrade = game.upgradeset.getUpgrade("infused_cells");
     game.current_exotic_particles = Math.max(toNum(labUpgrade.getEcost()), toNum(infusedUpgrade.getEcost())) + 1000;
     game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
     game.upgradeset.check_affordability(game);
-    
-    const labPurchased = game.upgradeset.purchaseUpgrade('laboratory');
-    expect(labPurchased).toBe(true);
+
+    expect(game.upgradeset.purchaseUpgrade("laboratory")).toBe(true);
     game.upgradeset.check_affordability(game);
-    const infusedPurchased = game.upgradeset.purchaseUpgrade('infused_cells');
-    expect(infusedPurchased).toBe(true);
-    expect(game.upgradeset.getUpgrade('infused_cells').level).toBe(1);
+    expect(game.upgradeset.purchaseUpgrade("infused_cells")).toBe(true);
     part.recalculate_stats();
     game.reactor.updateStats();
     game.engine.tick();
-    expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(part.base_power) * 2, 0);
+    expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(part.base_power), 0);
   });
 
   it("should handle heat generation correctly", async () => {

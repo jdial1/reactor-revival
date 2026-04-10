@@ -4,11 +4,14 @@ import { render } from "lit-html";
 import { subscribe, proxy, ref, snapshot } from "valtio/vanilla";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { fromError } from "zod-validation-error";
-import { queryClient, queryKeys, leaderboardService, supabaseSave } from "./services.js";
+import { queryClient, queryKeys, leaderboardService } from "./services.js";
 import {
   addPartIconsToTitle as addPartIconsToTitleHelper,
   getObjectiveScrollDuration as getObjectiveScrollDurationHelper,
   checkObjectiveTextScrolling as checkObjectiveTextScrollingHelper,
+  computeNeighborPulseNFromTile,
+  getCellPowerCoefficientLP,
+  getCellHeatCoefficientH,
 } from "./logic.js";
 import {
   toDecimal,
@@ -31,8 +34,6 @@ import {
   CRITICAL_HEAT_RATIO,
   REFERENCE_POWER,
   OVERRIDE_DURATION_MS,
-  BASE_MAX_HEAT,
-  BASE_MAX_POWER,
   CLASSIFICATION_HISTORY_MAX,
   MARK_II_E_THRESHOLD_CYCLES,
   MAX_SUBCLASS_CYCLES,
@@ -41,16 +42,16 @@ import {
   HEAT_POWER_LOG_BASE,
   PERCENT_DIVISOR,
   MELTDOWN_HEAT_MULTIPLIER,
-  FLUX_ACCUMULATOR_POWER_RATIO_MIN,
   DEFAULT_AUTOSAVE_INTERVAL_MS,
   FAILSAFE_MONEY_THRESHOLD,
   BASE_COLS_MOBILE,
   BASE_COLS_DESKTOP,
   BASE_ROWS_MOBILE,
   BASE_ROWS_DESKTOP,
+  BASE_MAX_POWER,
+  BASE_MAX_HEAT,
 } from "./utils.js";
-import { interpolateTemplate } from "./templates/templateUtils.js";
-import { cloudConflictModalTemplate, backupModalTemplate } from "./templates/stateTemplates.js";
+import { backupModalTemplate } from "./templates/stateTemplates.js";
 import {
   NumericLike,
   DecimalLike,
@@ -127,7 +128,10 @@ export function createGameState(initial = {}) {
     current_heat: initDec(initial.current_heat),
     current_exotic_particles: initDec(initial.current_exotic_particles),
     total_exotic_particles: initDec(initial.total_exotic_particles),
-    reality_flux: initDec(initial.reality_flux),
+    session_power_produced: initDec(initial.session_power_produced),
+    session_power_sold: initDec(initial.session_power_sold),
+    session_heat_dissipated: initDec(initial.session_heat_dissipated),
+    session_ep_from_engine: initDec(initial.session_ep_from_engine),
     max_power: initial.max_power ?? 0,
     max_heat: initial.max_heat ?? 0,
     stats_power: initial.stats_power ?? 0,
@@ -144,13 +148,11 @@ export function createGameState(initial = {}) {
     auto_sell: initial.auto_sell ?? false,
     auto_buy: initial.auto_buy ?? true,
     heat_control: initial.heat_control ?? false,
-    time_flux: initial.time_flux ?? true,
     pause: initial.pause ?? false,
     melting_down: initial.melting_down ?? false,
     manual_override_mult: initial.manual_override_mult ?? 0,
     override_end_time: initial.override_end_time ?? 0,
     power_to_heat_ratio: initial.power_to_heat_ratio ?? 0,
-    flux_accumulator_level: initial.flux_accumulator_level ?? 0,
     active_objective: initial.active_objective ?? {
       title: "",
       index: 0,
@@ -163,7 +165,7 @@ export function createGameState(initial = {}) {
     active_buffs: initial.active_buffs ?? [],
     parts_panel_version: initial.parts_panel_version ?? 0,
     upgrade_display: initial.upgrade_display ?? {},
-    power_overflow_to_heat_ratio: initial.power_overflow_to_heat_ratio ?? 0.5,
+    power_overflow_to_heat_ratio: initial.power_overflow_to_heat_ratio ?? 1,
     manual_heat_reduce: initial.manual_heat_reduce ?? initial.base_manual_heat_reduce ?? 1,
     auto_sell_multiplier: initial.auto_sell_multiplier ?? 0,
     heat_controlled: initial.heat_controlled ?? false,
@@ -194,7 +196,7 @@ export function createGameState(initial = {}) {
       const maxPower = toNumber(state.max_power ?? 0);
       const potentialPower = currentPower + statsPower;
       const excessPower = Math.max(0, potentialPower - maxPower);
-      const overflowToHeat = Number(state.power_overflow_to_heat_ratio ?? 0.5) || 0.5;
+      const overflowToHeat = Number(state.power_overflow_to_heat_ratio ?? 1) || 1;
       const overflowHeat = excessPower * overflowToHeat;
       const manualReduce = toNumber(state.manual_heat_reduce ?? 1);
       return baseNetHeat + overflowHeat - manualReduce;
@@ -224,7 +226,6 @@ export function createUIState() {
   const isMobileOnInit = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
   const copyPasteCollapsed = StorageUtils.get("reactor_copy_paste_collapsed") === true;
   return proxy({
-    time_flux_queued_ticks: 0,
     performance_stats: { fps: 0, tps: 0, fps_color: "#4CAF50", tps_color: "#4CAF50" },
     stats: { vent: 0, power: 0, heat: 0, money: 0, ep: 0 },
     is_paused: false,
@@ -253,8 +254,8 @@ export function createUIState() {
       sellingTileKey: null,
       selectedPartId: null,
     },
-    copy_paste_display: { isSandbox: false },
-    user_account_display: { icon: "🔐", title: "Sign In" },
+    copy_paste_display: { blueprintPlannerActive: false },
+    user_account_display: { icon: "💾", title: "Local saves" },
     copy_state_feedback: null,
     section_counts: {},
     has_affordable_upgrades: false,
@@ -371,7 +372,6 @@ const PREF_STORAGE_MAP = {
   hideUnaffordableResearch: "reactor_hide_unaffordable_research",
   hideMaxUpgrades: "reactor_hide_max_upgrades",
   hideMaxResearch: "reactor_hide_max_research",
-  hideOtherDoctrineUpgrades: "reactor_hide_other_doctrine_upgrades",
 };
 
 const PREF_DEFAULTS = UserPreferencesSchema.parse({});
@@ -418,7 +418,6 @@ export function getAffordabilitySettings() {
     hideResearch: preferences.hideUnaffordableResearch !== false,
     hideMaxUpgrades: preferences.hideMaxUpgrades !== false,
     hideMaxResearch: preferences.hideMaxResearch !== false,
-    hideOtherDoctrine: preferences.hideOtherDoctrineUpgrades === true,
   };
 }
 
@@ -440,14 +439,10 @@ export function getVolumePreferences() {
 
 
 function applyReflectorEffects(tile, reactor, onReflectorPulse) {
-  let reflector_power_bonus = 0;
-  let reflector_heat_bonus = 0;
   let reflector_count = 0;
   tile.reflectorNeighborTiles.forEach((r_tile) => {
     if (r_tile.ticks > 0) {
       reflector_count++;
-      reflector_power_bonus += r_tile.part.power_increase || 0;
-      reflector_heat_bonus += r_tile.part.heat_increase || 0;
       if (onReflectorPulse) {
         try {
           onReflectorPulse(r_tile, tile);
@@ -455,63 +450,34 @@ function applyReflectorEffects(tile, reactor, onReflectorPulse) {
       }
     }
   });
-  if (typeof tile.power === "number" && !isNaN(tile.power)) {
-    tile.power *= Math.max(0, 1 + reflector_power_bonus / PERCENT_DIVISOR);
-  }
-  if (typeof tile.heat === "number" && !isNaN(tile.heat)) {
-    let heatMult = Math.max(0, 1 + reflector_heat_bonus / PERCENT_DIVISOR);
+  if (tile.part?.category === "cell" && typeof tile.heat === "number" && !isNaN(tile.heat)) {
     if (reactor.reflector_cooling_factor > 0 && reflector_count > 0) {
       const coolingReduction = reflector_count * reactor.reflector_cooling_factor;
-      heatMult *= Math.max(REFLECTOR_COOLING_MIN_MULTIPLIER, 1 - coolingReduction);
+      const heatMult = Math.max(REFLECTOR_COOLING_MIN_MULTIPLIER, 1 - coolingReduction);
+      tile.heat *= heatMult;
     }
-    tile.heat *= heatMult;
   }
 }
 
 function applyCellMultipliers(tile, reactor) {
-  if (reactor.heat_power_multiplier > 0 && reactor.current_heat.gt(HEAT_POWER_LOG_BASE)) {
-    const heatForLog = Math.min(reactor.current_heat.toNumber(), HEAT_POWER_LOG_CAP);
-    tile.power *= 1 + (reactor.heat_power_multiplier * (Math.log(heatForLog) / Math.log(HEAT_POWER_LOG_BASE) / PERCENT_DIVISOR));
-    if (!Number.isFinite(tile.power)) {
-      tile.power = (tile.part && Number.isFinite(tile.part.base_power)) ? tile.part.base_power : 0;
-    }
-  }
-  if (reactor.manual_override_mult > 0 && Date.now() < reactor.override_end_time) {
-    tile.power *= (1 + reactor.manual_override_mult);
-  }
-  if (reactor.thermal_feedback_rate > 0) {
-    let feedbackBonus = 0;
-    tile.containmentNeighborTiles.forEach((neighbor) => {
-      if (neighbor.part && neighbor.part.category === "coolant_cell") {
-        const ratio = neighbor.heat_contained / neighbor.part.containment;
-        if (ratio > 0) feedbackBonus += (ratio * PERCENT_DIVISOR) * reactor.thermal_feedback_rate;
-      }
-    });
-    if (feedbackBonus > 0) tile.power *= (1 + (feedbackBonus / PERCENT_DIVISOR));
-  }
-  if (reactor.volatile_tuning_max > 0) {
-    const maxTicks = tile.part.ticks;
-    if (maxTicks > 0 && tile.ticks >= 0) {
-      const degradation = 1 - (tile.ticks / maxTicks);
-      const bonus = reactor.volatile_tuning_max * degradation;
-      if (bonus > 0 && typeof tile.power === "number" && !isNaN(tile.power)) tile.power *= (1 + bonus);
-    }
+  if (!tile.part || tile.part.category !== "cell" || !tile.ticks || tile.ticks <= 0) return;
+  const hpm = reactor.heat_power_multiplier;
+  if (!hpm || hpm <= 0) return;
+  const cur = reactor.current_heat;
+  if (!cur || !cur.gt(0)) return;
+  const heatNum = Math.min(cur.toNumber(), 1e100);
+  const mult = 1 + hpm * (Math.log(heatNum) / Math.log(1000) / PERCENT_DIVISOR);
+  if (Number.isFinite(mult) && mult > 0 && typeof tile.power === "number") {
+    tile.power *= mult;
   }
 }
 
-function computeTileContributions(tile, reactor, maxPowerSetExternally, maxHeatSetExternally, accum) {
+function computeTileContributions(tile, reactor, accum) {
   if (tile.part.category === "cell" && tile.ticks > 0) {
     accum.stats_power += tile.power || 0;
     accum.stats_heat_generation += tile.heat || 0;
   }
   if (tile.heat_contained > 0) accum.stats_total_part_heat += tile.heat_contained;
-  if (!maxPowerSetExternally) {
-    if (tile.part.reactor_power) accum.current_max_power = accum.current_max_power.add(tile.part.reactor_power);
-    if (tile.part.id === "reactor_plating6") accum.current_max_power = accum.current_max_power.add(tile.part.reactor_heat);
-  }
-  if (!maxHeatSetExternally && tile.part.reactor_heat) {
-    accum.current_max_heat = accum.current_max_heat.add(tile.part.reactor_heat);
-  }
   if (tile.part.category === "capacitor") {
     accum.temp_transfer_multiplier += (tile.part.part.level || 1) * reactor.transfer_capacitor_multiplier;
     accum.temp_vent_multiplier += (tile.part.part.level || 1) * reactor.vent_capacitor_multiplier;
@@ -522,15 +488,21 @@ function computeTileContributions(tile, reactor, maxPowerSetExternally, maxHeatS
 }
 
 function calculateStats(reactor, tileset, ui) {
-  const maxPowerSetExternally =
-    reactor.max_power.neq(reactor._last_calculated_max_power) &&
-    reactor.max_power.neq(reactor.base_max_power);
-  const maxHeatSetExternally =
-    reactor.max_heat.neq(reactor._last_calculated_max_heat) &&
-    reactor.max_heat.neq(reactor.base_max_heat);
-  const alteredMaxPowerSet = toDecimal(reactor.altered_max_power).neq(reactor.base_max_power);
-  const alteredMaxHeatSet = toDecimal(reactor.altered_max_heat).neq(reactor.base_max_heat);
-
+  let gridMaxPower = toDecimal(BASE_MAX_POWER);
+  let gridMaxHeat = toDecimal(BASE_MAX_HEAT);
+  const capTiles = tileset.active_tiles_list;
+  for (let i = 0; i < capTiles.length; i++) {
+    const tile = capTiles[i];
+    if (!tile.activated || !tile.part) continue;
+    const p = tile.part;
+    if (p.category === "capacitor") {
+      gridMaxPower = gridMaxPower.add(toDecimal(p.reactor_power ?? 0));
+    } else if (p.category === "reactor_plating") {
+      gridMaxHeat = gridMaxHeat.add(toDecimal(p.reactor_heat ?? 0));
+      const rp = toDecimal(p.reactor_power ?? 0);
+      if (rp.gt(0)) gridMaxPower = gridMaxPower.add(rp);
+    }
+  }
   const accum = {
     stats_power: 0,
     stats_heat_generation: 0,
@@ -538,12 +510,8 @@ function calculateStats(reactor, tileset, ui) {
     stats_vent: 0,
     stats_inlet: 0,
     stats_outlet: 0,
-    current_max_power: maxPowerSetExternally
-      ? reactor.max_power
-      : (alteredMaxPowerSet ? toDecimal(reactor.altered_max_power) : toDecimal(reactor.base_max_power)),
-    current_max_heat: maxHeatSetExternally
-      ? reactor.max_heat
-      : (alteredMaxHeatSet ? toDecimal(reactor.altered_max_heat) : toDecimal(reactor.base_max_heat)),
+    current_max_power: gridMaxPower,
+    current_max_heat: gridMaxHeat,
     temp_transfer_multiplier: 0,
     temp_vent_multiplier: 0,
   };
@@ -560,8 +528,15 @@ function calculateStats(reactor, tileset, ui) {
       tile.display_heat = 0;
       const p = tile.part;
       if (p.category === "cell" && tile.ticks > 0) {
-        tile.power = (typeof p.power === "number" && !isNaN(p.power) && isFinite(p.power)) ? p.power : p.base_power || 0;
-        tile.heat = (typeof p.heat === "number" && !isNaN(p.heat) && isFinite(p.heat)) ? p.heat : p.base_heat || 0;
+        const game = reactor.game;
+        const pow = game ? getCellPowerCoefficientLP(p, game) : p.base_power || 0;
+        const ht = game ? getCellHeatCoefficientH(p, game) : p.base_heat || 0;
+        const M = p.cell_pack_M ?? 1;
+        const C = Math.max(1, p.cell_count_C ?? p.cell_count ?? 1);
+        const N = computeNeighborPulseNFromTile(tile);
+        const pulse = M + N;
+        tile.power = pow * pulse;
+        tile.heat = (ht * pulse * pulse) / C;
       }
     }
   });
@@ -572,7 +547,7 @@ function calculateStats(reactor, tileset, ui) {
         applyReflectorEffects(tile, reactor, onReflectorPulse);
         applyCellMultipliers(tile, reactor);
       }
-      computeTileContributions(tile, reactor, maxPowerSetExternally, maxHeatSetExternally, accum);
+      computeTileContributions(tile, reactor, accum);
     }
   });
 
@@ -598,6 +573,71 @@ function calculateStats(reactor, tileset, ui) {
   accum.stats_cash = accum.current_max_power.mul(reactor.auto_sell_multiplier);
 
   return accum;
+}
+
+export function previewBlueprintPlannerStats(game) {
+  if (!game?.blueprintPlanner?.active) return null;
+  const reactor = game.reactor;
+  const tileset = game.tileset;
+  const slots = game.blueprintPlanner.slots || {};
+  const getEffective = (tile) => {
+    const id = slots[`${tile.row},${tile.col}`];
+    if (!id) return { part: tile.part, ticks: tile.ticks };
+    const p = game.partset.getPartById(id);
+    if (!p) return { part: tile.part, ticks: tile.ticks };
+    const ticks = p.category === "cell" ? Math.max(1, Number(p.ticks ?? p.base_ticks) || 1) : tile.ticks;
+    return { part: p, ticks };
+  };
+  let stats_power = 0;
+  let stats_heat_generation = 0;
+  const onReflectorPulse = () => {};
+  tileset.active_tiles_list.forEach((tile) => {
+    const { part: p, ticks: effTicks } = getEffective(tile);
+    if (!tile.activated || !p || p.category !== "cell" || effTicks <= 0) return;
+    const pow = getCellPowerCoefficientLP(p, game);
+    const ht = game ? getCellHeatCoefficientH(p, game) : p.base_heat || 0;
+    const M = p.cell_pack_M ?? 1;
+    const C = Math.max(1, p.cell_count_C ?? p.cell_count ?? 1);
+    let N = 0;
+    const cellNeighbors = tile.cellNeighborTiles || [];
+    for (let ni = 0; ni < cellNeighbors.length; ni++) {
+      const nb = cellNeighbors[ni];
+      const nbG = getEffective(nb);
+      if (nbG.part?.category === "cell" && (nbG.ticks ?? 0) > 0) {
+        N += nbG.part.cell_count || 1;
+      }
+    }
+    const reflectors = tile.reflectorNeighborTiles || [];
+    for (let ri = 0; ri < reflectors.length; ri++) {
+      const rb = reflectors[ri];
+      if ((rb.ticks ?? 0) > 0 && rb.part?.category === "reflector") {
+        const v = rb.part.neighbor_pulse_value;
+        N += typeof v === "number" && isFinite(v) && v >= 0 ? v : 1;
+      }
+    }
+    const pulse = M + N;
+    let power = pow * pulse;
+    let heat = (ht * pulse * pulse) / C;
+    const fakeTile = {
+      power,
+      heat,
+      part: p,
+      ticks: effTicks,
+      reflectorNeighborTiles: tile.reflectorNeighborTiles,
+      containmentNeighborTiles: tile.containmentNeighborTiles,
+    };
+    applyReflectorEffects(fakeTile, reactor, onReflectorPulse);
+    applyCellMultipliers(fakeTile, reactor);
+    stats_power += fakeTile.power || 0;
+    stats_heat_generation += fakeTile.heat || 0;
+  });
+  const stats_vent = Number(reactor.stats_vent) || 0;
+  const stats_outlet = Number(reactor.stats_outlet) || 0;
+  return {
+    stats_power,
+    stats_heat_generation,
+    stats_net_heat: stats_heat_generation - stats_vent - stats_outlet,
+  };
 }
 
 function applyStatsToReactor(reactor, stats) {
@@ -631,13 +671,6 @@ function computeActiveBuffs(state) {
       buffs.push({ id: "electro_thermal_conversion", icon: "img/parts/capacitors/capacitor_4.png", title: "Electro-Thermal Conversion" });
     }
   }
-  const maxPower = toNumber(state.max_power ?? 0);
-  if ((state.flux_accumulator_level || 0) > 0 && maxPower > 0) {
-    const powerRatio = toNumber(state.current_power ?? 0) / maxPower;
-    if (powerRatio >= FLUX_ACCUMULATOR_POWER_RATIO_MIN) {
-      buffs.push({ id: "flux_accumulators", icon: "img/parts/capacitors/capacitor_6.png", title: "Flux Accumulators" });
-    }
-  }
   return buffs;
 }
 
@@ -657,11 +690,10 @@ function syncStatsToUI(reactor, _stateManager) {
     state.manual_override_mult = reactor.manual_override_mult;
     state.override_end_time = reactor.override_end_time;
     state.power_to_heat_ratio = reactor.power_to_heat_ratio;
-    state.flux_accumulator_level = reactor.flux_accumulator_level;
     state.auto_sell_multiplier = reactor.auto_sell_multiplier;
     state.heat_controlled = reactor.heat_controlled;
     state.vent_multiplier_eff = reactor.vent_multiplier_eff;
-    state.power_overflow_to_heat_ratio = reactor.power_overflow_to_heat_ratio ?? 0.5;
+    state.power_overflow_to_heat_ratio = reactor.power_overflow_to_heat_ratio ?? 1;
     state.manual_heat_reduce = toNumber(reactor.manual_heat_reduce ?? reactor.game?.base_manual_heat_reduce ?? 1);
     state.active_buffs = computeActiveBuffs(state);
   }
@@ -690,10 +722,8 @@ function executeMeltdown(reactor) {
 
   if (game.engine) game.engine.stop();
 
-  if (!game.isSandbox) {
-    game.emit?.("meltdownStarted", {});
-  }
-  if (!game.isSandbox && !game.ui?.meltdownUI) {
+  game.emit?.("meltdownStarted", {});
+  if (!game.ui?.meltdownUI) {
     game.tileset.active_tiles_list.forEach((tile) => {
       if (tile.part) tile.clearPart();
     });
@@ -759,18 +789,16 @@ export class Reactor {
     this.sell_price_multiplier = 1;
     this.manual_vent_percent = 0;
     this.reflector_cooling_factor = 0;
-    this.insurance_percentage = 0;
     this.manual_override_mult = 0;
     this.override_end_time = 0;
     this.convective_boost = 0;
     this.power_to_heat_ratio = 0;
     this.catalyst_reduction = 0;
-    this.flux_accumulator_level = 0;
     this.thermal_feedback_rate = 0;
-    this.auto_repair_rate = 0;
     this.volatile_tuning_max = 0;
     this.decompression_enabled = false;
     this.plating_transfer_rate = 0;
+    this.hull_heat_doctrine_mult = 1;
 
     this.has_melted_down = false;
     this.game.sold_power = false;
@@ -934,7 +962,11 @@ export class Reactor {
 
   sellPower() {
     if (this.current_power.gt(0)) {
-      const value = this.current_power.mul(this.sell_price_multiplier || 1);
+      const soldAmt = this.current_power;
+      const value = soldAmt.mul(this.sell_price_multiplier || 1);
+      if (this.game.state) {
+        updateDecimal(this.game.state, "session_power_sold", (d) => d.add(soldAmt));
+      }
       this.game.addMoney(value);
       this.current_power = toDecimal(0);
       this.game.sold_power = true;
@@ -1099,8 +1131,8 @@ export class StateManager extends BaseComponent {
       return;
     }
     const oldValue = this.game.state[key];
-    const toggleKeys = ["pause", "auto_sell", "auto_buy", "time_flux", "heat_control"];
-    const decimalKeys = ["current_heat", "current_power", "current_money", "current_exotic_particles", "total_exotic_particles", "reality_flux"];
+    const toggleKeys = ["pause", "auto_sell", "auto_buy", "heat_control"];
+    const decimalKeys = ["current_heat", "current_power", "current_money", "current_exotic_particles", "total_exotic_particles", "session_power_produced", "session_power_sold", "session_heat_dissipated", "session_ep_from_engine"];
     const isToggle = toggleKeys.includes(key);
     if (isToggle) value = Boolean(value);
     const isDecimalKey = decimalKeys.includes(key);
@@ -1260,8 +1292,7 @@ export class StateManager extends BaseComponent {
       setDecimal(this.game.state, "current_money", this.game.base_money);
       setDecimal(this.game.state, "current_power", 0);
       setDecimal(this.game.state, "current_heat", 0);
-      this.game.state.max_power = this.game.reactor.base_max_power;
-      this.game.state.max_heat = this.game.reactor.base_max_heat;
+      this.game.reactor.updateStats();
     }
     // Ensure any progress-based gating resets as well
     try {
@@ -1312,7 +1343,6 @@ export class StateManager extends BaseComponent {
 
 
 const LOCAL_SLOTS = [1, 2, 3];
-const PENDING_SYNC_KEY = "reactor_pending_cloud_sync";
 export function parseAndValidateSave(raw) {
   const parsed = typeof raw === "string" ? deserializeSave(raw) : raw;
   const result = SaveDataSchema.safeParse(parsed);
@@ -1323,10 +1353,17 @@ export function parseAndValidateSave(raw) {
   return result.data;
 }
 
+const LEGACY_TECH_TREE_IDS = new Set(["architect", "physicist", "engineer"]);
+
+function normalizeSavedTechTreeId(id) {
+  if (!id || LEGACY_TECH_TREE_IDS.has(id)) return "unified";
+  return id;
+}
+
 function applyCoreGameState(game, savedData) {
   setDecimal(game.state, "current_money", savedData.current_money);
   game.run_id = savedData.run_id;
-  game.tech_tree = savedData.tech_tree ?? null;
+  game.tech_tree = normalizeSavedTechTreeId(savedData.tech_tree ?? null);
   game.peak_power = savedData.reactor?.current_power != null ? savedData.reactor.current_power.toNumber() : 0;
   game.peak_heat = savedData.reactor?.current_heat != null ? savedData.reactor.current_heat.toNumber() : 0;
   game.base_rows = savedData.base_rows;
@@ -1336,12 +1373,14 @@ function applyCoreGameState(game, savedData) {
   const epRaw = savedData.current_exotic_particles ?? savedData.exotic_particles;
   game.exoticParticleManager.exotic_particles = epRaw;
   setDecimal(game.state, "current_exotic_particles", epRaw);
-  setDecimal(game.state, "reality_flux", savedData.reality_flux);
+  setDecimal(game.state, "session_power_produced", savedData.session_power_produced ?? 0);
+  setDecimal(game.state, "session_power_sold", savedData.session_power_sold ?? 0);
+  setDecimal(game.state, "session_heat_dissipated", savedData.session_heat_dissipated ?? 0);
+  setDecimal(game.state, "session_ep_from_engine", savedData.session_ep_from_engine ?? 0);
   game.emit?.("exoticParticlesChanged", {
     exotic_particles: game.exoticParticleManager.exotic_particles,
     current_exotic_particles: game.state.current_exotic_particles,
     total_exotic_particles: game.state.total_exotic_particles,
-    reality_flux: game.state.reality_flux,
   });
   if (savedData.rows != null) game.gridManager.setRows(savedData.rows);
   if (savedData.cols != null) game.gridManager.setCols(savedData.cols);
@@ -1370,8 +1409,6 @@ function applyReactorState(game, savedData) {
   game.reactor.has_melted_down = savedData.reactor.has_melted_down ?? false;
   if (savedData.reactor.base_max_heat != null) game.reactor.base_max_heat = savedData.reactor.base_max_heat;
   if (savedData.reactor.base_max_power != null) game.reactor.base_max_power = savedData.reactor.base_max_power;
-  if (savedData.reactor.altered_max_heat != null) game.reactor.altered_max_heat = savedData.reactor.altered_max_heat;
-  if (savedData.reactor.altered_max_power != null) game.reactor.altered_max_power = savedData.reactor.altered_max_power;
   game.emit?.("meltdownStateChanged");
 }
 
@@ -1510,94 +1547,17 @@ export async function applySaveState(game, savedData) {
   if (!game.partset.initialized) await game.partset.initialize();
   for (const fn of ASYNC_HYDRATORS) await fn(game, savedData);
   for (const fn of POST_ASYNC_HYDRATORS) fn(game, savedData);
-}
-
-function getCloudSaveProvider() {
-  if (typeof window !== "undefined" && window.supabaseAuth?.isSignedIn?.()) {
-    return createSupabaseProvider(supabaseSave);
-  }
-  if (typeof window !== "undefined" && window.googleDriveSave?.isSignedIn) {
-    return createGoogleDriveProvider(window.googleDriveSave);
-  }
-  return null;
-}
-
-export function createSupabaseProvider(supabaseSaveInstance) {
-  return {
-    async getSaves() {
-      return supabaseSaveInstance.getSaves();
-    },
-    async saveGame(slotId, saveData) {
-      return supabaseSaveInstance.saveGame(slotId, saveData);
-    },
-    isSignedIn() {
-      return typeof window !== "undefined" && window.supabaseAuth?.isSignedIn?.() === true;
-    },
-  };
-}
-
-export function createGoogleDriveProvider(googleDriveSaveInstance) {
-  const DEFAULT_SLOT = 1;
-  return {
-    async getSaves() {
-      if (!googleDriveSaveInstance?.isSignedIn) return [];
-      try {
-        const data = await googleDriveSaveInstance.load();
-        if (!data) return [];
-        return [{ slot_id: DEFAULT_SLOT, save_data: data, timestamp: Date.now() }];
-      } catch {
-        return [];
-      }
-    },
-    async saveGame(slotId, saveData) {
-      if (slotId !== DEFAULT_SLOT) return;
-      await googleDriveSaveInstance.save(saveData, true);
-    },
-    isSignedIn() {
-      return googleDriveSaveInstance?.isSignedIn === true;
-    },
-  };
-}
-
-async function pushPendingSync(entry) {
-  try {
-    const queue = (await StorageUtilsAsync.get(PENDING_SYNC_KEY)) || [];
-    queue.push(entry);
-    await StorageUtilsAsync.set(PENDING_SYNC_KEY, queue);
-  } catch (e) {
-    logger.log("error", "game", "Failed to queue cloud sync:", e);
+  game.reactor.hull_heat_doctrine_mult = 1;
+  const doctrine = typeof game.getDoctrine === "function" ? game.getDoctrine() : null;
+  if (doctrine && typeof game.applyDoctrineBonuses === "function") {
+    game.applyDoctrineBonuses(doctrine);
+  } else {
+    game.reactor.updateStats();
   }
 }
 
-async function drainPendingSyncQueue() {
-  try {
-    const queue = (await StorageUtilsAsync.get(PENDING_SYNC_KEY)) || [];
-    if (queue.length === 0) return;
-    const provider = getCloudSaveProvider();
-    if (!provider?.isSignedIn?.()) return;
-    await StorageUtilsAsync.set(PENDING_SYNC_KEY, []);
-    for (const { slot, saveData } of queue) {
-      try {
-        await provider.saveGame(slot, saveData);
-      } catch (e) {
-        logger.log("error", "game", "Failed to sync queued save to cloud:", e);
-        await pushPendingSync({ slot, saveData });
-        break;
-      }
-    }
-  } catch (e) {
-    logger.log("error", "game", "Failed to drain sync queue:", e);
-  }
-}
 
-export function initCloudSyncQueue() {
-  if (typeof window === "undefined") return;
-  const drain = () => drainPendingSyncQueue();
-  window.addEventListener("online", drain);
-  drain();
-}
-
-async function performSave(slot, saveData, cloudProvider) {
+async function performSave(slot, saveData) {
   const validatedData = SaveDataSchema.parse(saveData);
   const saveKey = `reactorGameSave_${slot}`;
   await StorageAdapter.set(saveKey, validatedData);
@@ -1605,24 +1565,14 @@ async function performSave(slot, saveData, cloudProvider) {
     await rotateSlot1ToBackupAsync(serializeSave(validatedData));
   }
   await StorageAdapter.set("reactorCurrentSaveSlot", slot);
-  if (cloudProvider?.isSignedIn?.()) {
-    try {
-      await cloudProvider.saveGame(slot, validatedData);
-    } catch (e) {
-      logger.log("error", "game", "Cloud save failed, queuing for retry:", e);
-      await pushPendingSync({ slot, saveData: validatedData });
-    }
-  }
   return slot;
 }
 
-export function createSaveMutation(cloudProvider = null) {
-  const provider = cloudProvider ?? getCloudSaveProvider();
+export function createSaveMutation() {
   return new MutationObserver(queryClient, {
-    mutationFn: async ({ slot, saveData }) => performSave(slot, saveData, provider),
+    mutationFn: async ({ slot, saveData }) => performSave(slot, saveData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.saves.resolved() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.saves.cloud("supabase") });
     },
     onError: (error) => {
       logger.log("error", "game", "Save mutation failed:", error);
@@ -1635,9 +1585,8 @@ export async function saveGameMutation({ slot, saveData, getNextSaveSlot }) {
   if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") return null;
 
   const effectiveSlot = slot ?? (await getNextSaveSlot());
-  await performSave(effectiveSlot, saveData, getCloudSaveProvider());
+  await performSave(effectiveSlot, saveData);
   queryClient.invalidateQueries({ queryKey: queryKeys.saves.resolved() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.saves.cloud("supabase") });
   return effectiveSlot;
 }
 
@@ -1679,28 +1628,6 @@ async function fetchLegacySlotData() {
   }
 }
 
-async function fetchCloudSaveData() {
-  if (typeof window === "undefined" || !window.googleDriveSave?.isConfigured) {
-    return { cloudSaveOnly: false, cloudSaveData: null };
-  }
-  try {
-    const isSignedIn = await window.googleDriveSave.checkAuth(true);
-    if (!isSignedIn) return { cloudSaveOnly: false, cloudSaveData: null };
-    const fileFound = await window.googleDriveSave.findSaveFile();
-    if (!fileFound) return { cloudSaveOnly: false, cloudSaveData: null };
-    try {
-      const cloudSaveData = await window.googleDriveSave.load();
-      return { cloudSaveOnly: true, cloudSaveData };
-    } catch (error) {
-      logger.log("warn", "saves", "Failed to load found cloud save", error);
-      return { cloudSaveOnly: true, cloudSaveData: null };
-    }
-  } catch (error) {
-    logger.log("warn", "saves", "Error checking cloud auth", error);
-    return { cloudSaveOnly: false, cloudSaveData: null };
-  }
-}
-
 async function fetchResolvedSavesFn() {
   const slotPromises = LOCAL_SLOTS.map(fetchLocalSlotData);
   const results = await Promise.all(slotPromises);
@@ -1729,11 +1656,6 @@ async function fetchResolvedSavesFn() {
     dataJSON = await StorageAdapter.getRaw(key);
   }
 
-  let cloudInfo = { cloudSaveOnly: false, cloudSaveData: null };
-  if (!hasSave) {
-    cloudInfo = await fetchCloudSaveData();
-  }
-
   let mostRecentSave = null;
   let recentTime = 0;
   for (const saveSlot of saveSlots) {
@@ -1746,8 +1668,8 @@ async function fetchResolvedSavesFn() {
   return {
     hasSave,
     saveSlots,
-    cloudSaveOnly: cloudInfo.cloudSaveOnly,
-    cloudSaveData: cloudInfo.cloudSaveData,
+    cloudSaveOnly: false,
+    cloudSaveData: null,
     mostRecentSave,
     maxLocalTime,
     dataJSON,
@@ -1758,37 +1680,6 @@ export function fetchResolvedSaves() {
   return queryClient.fetchQuery({
     queryKey: queryKeys.saves.resolved(),
     queryFn: fetchResolvedSavesFn,
-    staleTime: 10 * 1000,
-  });
-}
-
-async function fetchCloudSaveSlotsFn() {
-  if (!window.supabaseAuth?.isSignedIn?.()) return [];
-  const rawCloudSaves = await supabaseSave.getSaves();
-  return rawCloudSaves.map((s) => {
-    let data = {};
-    try {
-      const deserialized = deserializeSave(s.save_data);
-      const parsed = SaveDataSchema.safeParse(deserialized);
-      if (parsed.success) data = parsed.data;
-    } catch (_) {}
-    return {
-      slot: s.slot_id,
-      exists: true,
-      lastSaveTime: parseInt(s.timestamp),
-      totalPlayedTime: data.total_played_time || 0,
-      currentMoney: data.current_money || 0,
-      exoticParticles: data.exotic_particles ?? data.total_exotic_particles ?? 0,
-      data,
-      isCloud: true,
-    };
-  });
-}
-
-export function fetchCloudSaveSlots() {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.saves.cloud("supabase"),
-    queryFn: fetchCloudSaveSlotsFn,
     staleTime: 10 * 1000,
   });
 }
@@ -1810,64 +1701,10 @@ export function getSaveStats(data) {
   return { money, ep, playtime, timestamp };
 }
 
-function renderCloudConflictTemplate(content, cloud, local, onUseCloud, onUseLocal, onCancel) {
-  content.innerHTML = interpolateTemplate(cloudConflictModalTemplate, {
-    cloudMoney: cloud.money,
-    localMoney: local.money,
-    cloudEp: cloud.ep,
-    localEp: local.ep,
-    cloudPlaytime: cloud.playtime,
-    localPlaytime: local.playtime,
-    cloudTimestamp: cloud.timestamp,
-    localTimestamp: local.timestamp,
-  });
-  content.querySelector('[data-action="use-cloud"]')?.addEventListener("click", onUseCloud);
-  content.querySelector('[data-action="use-local"]')?.addEventListener("click", onUseLocal);
-  content.querySelector('[data-action="cancel"]')?.addEventListener("click", onCancel);
-}
-
 function renderBackupModalTemplate(content, onLoad, onCancel) {
   content.innerHTML = backupModalTemplate;
   content.querySelector('[data-action="load-backup"]')?.addEventListener("click", onLoad);
   content.querySelector('[data-action="cancel"]')?.addEventListener("click", onCancel);
-}
-
-async function parseLocalSaveData() {
-  const { dataJSON } = await fetchResolvedSaves();
-  if (!dataJSON) return null;
-  try {
-    return deserializeSave(dataJSON);
-  } catch (_) {
-    return null;
-  }
-}
-
-export async function showCloudVsLocalConflictModal(cloudSaveData) {
-  const cloud = getSaveStats(cloudSaveData);
-  const local = getSaveStats(await parseLocalSaveData());
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "game-setup-overlay bios-overlay";
-    overlay.style.zIndex = "10001";
-    const resolveAndClose = (value) => {
-      overlay.remove();
-      resolve(value);
-    };
-    const content = document.createElement("div");
-    overlay.appendChild(content);
-    renderCloudConflictTemplate(
-      content,
-      cloud,
-      local,
-      () => resolveAndClose("cloud"),
-      () => resolveAndClose("local"),
-      () => resolveAndClose("cancel")
-    );
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) resolveAndClose("cancel");
-    });
-    document.body.appendChild(overlay);
-  });
 }
 
 export function showLoadBackupModal() {
@@ -1910,8 +1747,6 @@ export class GameSaveManager {
 
   async _saveGame(slot = null, isAutoSave = false) {
     const ctx = this.getPersistenceContext();
-    if (ctx.isSandbox) return;
-
     logger.log("debug", "game", `Attempting to save game. Meltdown state: ${ctx.hasMeltedDown}`);
     try {
       ctx.debugHistory.add("game", "saveGame called", { slot, isAutoSave, meltdown: ctx.hasMeltedDown });
@@ -2088,7 +1923,6 @@ function shouldShowPart(part, partset, getPlacedCount) {
 }
 
 function isPartUnlocked(part, ctx) {
-  if (ctx.isSandbox) return true;
   if (ctx.partset?.isPartDoctrineLocked(part)) return false;
   if (!part || part.category === 'valve') {
     ctx.logger?.debug(`[UNLOCK] Part ${part?.id || 'null'}: Valve or null, unlocked by default.`);
@@ -2247,6 +2081,10 @@ export class SaveOrchestrator {
       total_exotic_particles: ctx.total_exotic_particles,
       exotic_particles: ctx.exotic_particles,
       current_exotic_particles: ctx.current_exotic_particles,
+      session_power_produced: stateSnap?.session_power_produced ?? ctx.state?.session_power_produced,
+      session_power_sold: stateSnap?.session_power_sold ?? ctx.state?.session_power_sold,
+      session_heat_dissipated: stateSnap?.session_heat_dissipated ?? ctx.state?.session_heat_dissipated,
+      session_ep_from_engine: stateSnap?.session_ep_from_engine ?? ctx.state?.session_ep_from_engine,
       rows: ctx.rows,
       cols: ctx.cols,
       sold_power: ctx.sold_power,
@@ -2354,13 +2192,20 @@ export class UnlockManager {
 
   isPartUnlocked(part) {
     return isPartUnlocked(part, {
-      isSandbox: this.game.isSandbox,
       partset: this.game.partset,
       getPlacedCount: (type, level) => this.getPlacedCount(type, level),
       _unlockStates: this.game._unlockStates,
       logger: this.game.logger,
     });
   }
+}
+
+export function resetSessionCriticalityCounters(game) {
+  if (!game?.state) return;
+  setDecimal(game.state, "session_power_produced", 0);
+  setDecimal(game.state, "session_power_sold", 0);
+  setDecimal(game.state, "session_heat_dissipated", 0);
+  setDecimal(game.state, "session_ep_from_engine", 0);
 }
 
 function captureRebootState(game, keep_exotic_particles) {
@@ -2392,7 +2237,6 @@ function restoreExoticParticles(game, keep_exotic_particles, savedTotalEp, saved
   } else {
     setDecimal(game.state, "total_exotic_particles", toDecimal(0));
     setDecimal(game.state, "current_exotic_particles", toDecimal(0));
-    setDecimal(game.state, "reality_flux", toDecimal(0));
   }
   if (keep_exotic_particles && preservedEpUpgrades.length > 0) {
     preservedEpUpgrades.forEach(({ id, level }) => {
@@ -2407,7 +2251,6 @@ function refreshUI(game) {
     exotic_particles: game.exoticParticleManager.exotic_particles,
     total_exotic_particles: game.state.total_exotic_particles,
     current_exotic_particles: game.state.current_exotic_particles,
-    reality_flux: game.state.reality_flux,
   };
   game.emit?.("exoticParticlesChanged", payload);
   game.reactor.updateStats();
@@ -2421,10 +2264,20 @@ function refreshObjective(game) {
 async function runRebootActionInternal(game, keep_exotic_particles) {
   game.debugHistory.add("game", "Reboot action initiated", { keep_exotic_particles });
   if (game.audio) game.audio.play("reboot");
+  const sessionP = toNumber(game.state?.session_power_sold ?? 0);
+  const sessionH = toNumber(game.state?.session_heat_dissipated ?? 0);
+  const epFromWeave = Math.floor(Math.min(sessionP, sessionH) / 1_000_000);
   const { savedTotalEp, savedCurrentEp, savedProtiumParticles, preservedEpUpgrades } = captureRebootState(game, keep_exotic_particles);
   await applyDefaults(game, savedProtiumParticles);
   clearState(game);
   restoreExoticParticles(game, keep_exotic_particles, savedTotalEp, savedCurrentEp, preservedEpUpgrades);
+  if (keep_exotic_particles && epFromWeave > 0) {
+    const d = toDecimal(epFromWeave);
+    updateDecimal(game.state, "current_exotic_particles", (x) => x.add(d));
+    updateDecimal(game.state, "total_exotic_particles", (x) => x.add(d));
+    game.exoticParticleManager.exotic_particles = game.exoticParticleManager.exotic_particles.add(d);
+  }
+  resetSessionCriticalityCounters(game);
   refreshUI(game);
   refreshObjective(game);
 }
@@ -2450,7 +2303,7 @@ export async function runFullReboot(game) {
   setDecimal(game.state, "current_exotic_particles", 0);
   game.protium_particles = 0;
   setDecimal(game.state, "total_exotic_particles", 0);
-  setDecimal(game.state, "reality_flux", 0);
+  resetSessionCriticalityCounters(game);
   game.gridManager.setRows(game.base_rows);
   game.gridManager.setCols(game.base_cols);
   if (game._test_grid_size) {
@@ -2474,7 +2327,6 @@ export async function runFullReboot(game) {
     exotic_particles: game.exoticParticleManager.exotic_particles,
     total_exotic_particles: game.state.total_exotic_particles,
     current_exotic_particles: game.state.current_exotic_particles,
-    reality_flux: game.state.reality_flux,
   };
   game.emit?.("exoticParticlesChanged", payload);
 }
@@ -2492,7 +2344,7 @@ function applyBaseResources(game) {
   setDecimal(game.state, "total_exotic_particles", 0);
   game.exoticParticleManager.exotic_particles = toDecimal(0);
   setDecimal(game.state, "current_exotic_particles", 0);
-  setDecimal(game.state, "reality_flux", 0);
+  resetSessionCriticalityCounters(game);
   game.sold_power = false;
   game.sold_heat = false;
 }
@@ -2501,7 +2353,7 @@ async function resetSubsystems(game, bypass, preservedTechTree) {
   game.reactor.setDefaults();
   game.upgradeset.reset();
   game.partset.reset();
-  game.tech_tree = preservedTechTree;
+  game.tech_tree = normalizeSavedTechTreeId(preservedTechTree ?? null);
   await game.partset.initialize();
   await game.upgradeset.initialize();
   game.bypass_tech_tree_restrictions = bypass;
@@ -2620,7 +2472,6 @@ export class LifecycleManager {
     this.game.state.stats_cash = this.game.state.current_money;
     this.game.emit("toggleStateChanged", { toggleName: "auto_sell", value: false });
     this.game.emit("toggleStateChanged", { toggleName: "auto_buy", value: false });
-    this.game.emit("toggleStateChanged", { toggleName: "time_flux", value: false });
     const defaultQuickSelectIds = ["uranium1", "vent1", "heat_exchanger1", "heat_outlet1", "capacitor1"];
     const slots = defaultQuickSelectIds.map((partId) => ({ partId, locked: false }));
     this.game.emit("quickSelectSlotsChanged", { slots });
@@ -2679,9 +2530,6 @@ export class ConfigManager {
       case "heat_control":
         if (this.game.reactor) this.game.reactor.heat_controlled = value;
         break;
-      case "time_flux":
-        this.game.time_flux = value;
-        break;
       case "pause":
         this.game.paused = value;
         if (this.game.router?.navigationPaused && !this.game.router.isNavigating) this.game.router.navigationPaused = false;
@@ -2729,14 +2577,6 @@ export class ExoticParticleManager {
 
   set current_exotic_particles(v) {
     setDecimal(this.game.state, "current_exotic_particles", ensureDecimal(v));
-  }
-
-  get reality_flux() {
-    return this.game.state.reality_flux ?? toDecimal(0);
-  }
-
-  set reality_flux(v) {
-    setDecimal(this.game.state, "reality_flux", ensureDecimal(v));
   }
 
   grantCheatExoticParticle(amount = 1) {

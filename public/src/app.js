@@ -1,11 +1,11 @@
 import { Game, Engine } from "./logic.js";
-import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, StorageUtilsAsync, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES } from "./utils.js";
+import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, StorageUtilsAsync, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES, FOUNDATIONAL_TICK_MS, MAX_ACCUMULATOR_MULTIPLIER, BASE_MAX_HEAT, BASE_MAX_POWER } from "./utils.js";
 import { html, render } from "lit-html";
 import { UI } from "./components/ui.js";
 import { MODAL_IDS } from "./components/ui-modals.js";
 import { updateSectionCountsState, getCompactLayout } from "./components/ui-components.js";
-import dataService, { GoogleDriveSave, SupabaseAuth, SupabaseSave, AudioService, createSplashManager } from "./services.js";
-import { getValidatedPreferences, initPreferencesStore, preferences, subscribeKey, initCloudSyncQueue, showLoadBackupModal } from "./state.js";
+import dataService, { AudioService, createSplashManager } from "./services.js";
+import { getValidatedPreferences, initPreferencesStore, preferences, subscribeKey, showLoadBackupModal } from "./state.js";
 import { TooltipManager, TutorialManager } from "./components/ui-tooltips-tutorial.js";
 import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 import {
@@ -477,7 +477,6 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
       return;
     }
 
-    let selectedDoctrine = null;
     let selectedDifficulty = null;
     let difficultyPresets;
 
@@ -491,9 +490,9 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
     const renderSetup = () => {
       render(gameSetupTemplate(
         treeList,
-        selectedDoctrine,
+        null,
         selectedDifficulty,
-        (id) => { selectedDoctrine = id; renderSetup(); },
+        () => {},
         (diff) => { selectedDifficulty = diff; renderSetup(); },
         () => {
           overlay.classList.add("hidden");
@@ -506,15 +505,16 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
           game.base_money = Number(preset.base_money);
           game.base_loop_wait = Number(preset.base_loop_wait);
           game.base_manual_heat_reduce = Number(preset.base_manual_heat_reduce);
-          game.reactor.base_max_heat = Number(preset.base_max_heat);
-          game.reactor.base_max_power = Number(preset.base_max_power);
+          game.reactor.base_max_heat = BASE_MAX_HEAT;
+          game.reactor.base_max_power = BASE_MAX_POWER;
           game.reactor.power_overflow_to_heat_ratio = Number(preset.power_overflow_to_heat_pct) / 100;
+          game.tech_tree = treeList[0]?.id ?? null;
 
           overlay.classList.add("hidden");
           setTimeout(() => overlay.remove(), 300);
 
           try {
-            await startNewGameFlow(game, pageRouter, ui, splashManager, selectedDoctrine);
+            await startNewGameFlow(game, pageRouter, ui, splashManager, null);
           } catch (error) {
             logger.log('error', 'game', 'Failed to start game:', error);
           }
@@ -569,36 +569,6 @@ async function initializeGameState(game) {
   }
 }
 
-async function resolveTechTreeId(techTreeId) {
-  if (techTreeId) return techTreeId;
-  const treeList = await dataService.loadTechTree();
-  const treeData = Array.isArray(treeList) ? treeList : (treeList?.default ?? []);
-  return treeData[0]?.id ?? null;
-}
-
-async function applyDoctrineToGame(game, effectiveTreeId) {
-  if (!effectiveTreeId) return;
-  game.tech_tree = effectiveTreeId;
-  try {
-    const loaded = await dataService.loadTechTree();
-    const treeData = Array.isArray(loaded) ? loaded : (loaded?.default ?? []);
-    const doctrine = treeData.find((t) => t.id === effectiveTreeId) ?? null;
-    if (doctrine && typeof game.applyDoctrineBonuses === "function") {
-      game.applyDoctrineBonuses(doctrine);
-    }
-  } catch (err) {
-    logger.log('warn', 'game', 'Could not apply doctrine bonuses:', err);
-  }
-}
-
-async function resolveDoctrine(techTreeId) {
-  return resolveTechTreeId(techTreeId);
-}
-
-async function applyDoctrine(game, techTreeId) {
-  await applyDoctrineToGame(game, techTreeId);
-}
-
 async function launchGame(pageRouter, ui, game) {
   if (typeof window.startGame === "function") {
     await window.startGame({ pageRouter, ui, game });
@@ -619,8 +589,6 @@ export async function startNewGameFlow(game, pageRouter, ui, splashManager, tech
     await initializeGameState(game);
     ui.stateManager?.setClickedPart?.(null);
     ui.setHelpModeActive?.(true);
-    const effectiveTreeId = await resolveDoctrine(techTreeId);
-    await applyDoctrine(game, effectiveTreeId);
     await launchGame(pageRouter, ui, game);
     StorageUtils.remove("reactorNewGamePending");
   } catch (error) {
@@ -726,9 +694,6 @@ function attachBeforeUnloadListener(game) {
     if (game && typeof game.updateSessionTime === "function") {
       game.updateSessionTime();
       void game.saveManager.autoSave();
-      if (window.googleDriveSave?.isSignedIn) {
-        window.googleDriveSave.flushPendingSave().catch((e) => logger.log('error', 'game', 'Flush pending save failed', e));
-      }
     }
   };
   window.addEventListener("beforeunload", _beforeUnloadHandler);
@@ -772,7 +737,7 @@ export function attachGameEventListeners(game, ui) {
   on("statePatch", (patch) => applyStatePatch(ui, patch));
   on("toggleStateChanged", ({ toggleName, value }) => {
     if (!ui?.stateManager) return;
-    const toggleKeys = ["pause", "auto_sell", "auto_buy", "time_flux", "heat_control"];
+    const toggleKeys = ["pause", "auto_sell", "auto_buy", "heat_control"];
     const coerced = toggleKeys.includes(toggleName) ? Boolean(value) : value;
     ui.stateManager.setVar(toggleName, coerced);
   });
@@ -810,8 +775,17 @@ export function attachGameEventListeners(game, ui) {
   on("chapterCelebration", ({ chapterIdx }) => {
     if (ui.modalOrchestrationUI?.showChapterCelebration && chapterIdx >= 0) ui.modalOrchestrationUI.showChapterCelebration(chapterIdx);
   });
-  on("welcomeBackOffline", ({ deltaTime, queuedTicks }) => {
-    if (ui.modalOrchestrator?.showModal) ui.modalOrchestrator.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs: deltaTime, queuedTicks });
+  on("welcomeBackOffline", ({ deltaTime, offlineMs, tickEquivalent }) => {
+    const ms = offlineMs ?? deltaTime;
+    const te = tickEquivalent ?? Math.floor(ms / FOUNDATIONAL_TICK_MS);
+    if (ui.modalOrchestrator?.showModal) ui.modalOrchestrator.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs: ms, tickEquivalent: te });
+  });
+  on("gameLoopWorkerFatal", ({ detail }) => {
+    logger.log("error", "engine", "Game loop worker fatal:", detail);
+  });
+  on("simulationHardwareError", ({ message }) => {
+    ui.stateManager?.setVar?.("engine_status", "simulation_error");
+    ui.stateManager?.setVar?.("simulation_error_message", message ?? "");
   });
   on("upgradeAdded", ({ upgrade, game: g }) => {
     if (ui.stateManager?.handleUpgradeAdded && upgrade) ui.stateManager.handleUpgradeAdded(g, upgrade);
@@ -853,12 +827,6 @@ export function attachGameEventListeners(game, ui) {
   });
   on("visualEventsReady", (eventBuffer) => {
     if (ui._renderVisualEvents && eventBuffer) ui._renderVisualEvents(eventBuffer);
-  });
-  on("timeFluxSimulationUpdate", ({ progress, isCatchingUp }) => {
-    if (ui.heatVisualsUI?.updateTimeFluxSimulation) ui.heatVisualsUI.updateTimeFluxSimulation(progress, isCatchingUp);
-  });
-  on("timeFluxButtonUpdate", ({ queuedTicks }) => {
-    if (ui.uiState) ui.uiState.time_flux_queued_ticks = queuedTicks ?? 0;
   });
   on("tileCleared", ({ tile }) => {
     if (game.tooltip_manager?.current_tile_context === tile) game.tooltip_manager.hide();
@@ -923,12 +891,12 @@ function initGameComponents(game) {
 
 async function applyOfflineWelcomeBack(game, ui) {
   const offlineMs = Date.now() - (game.lifecycleManager.last_save_time || 0);
-  if (offlineMs <= OFFLINE_WELCOME_BACK_MS || !game.tileset.active_tiles_list.length || !game.time_flux) return;
-  const targetTickDuration = game.loop_wait;
-  const maxAccumulator = 100 * targetTickDuration;
-  game.engine.time_accumulator = Math.min(offlineMs, maxAccumulator);
-  const queuedTicks = Math.floor(game.engine.time_accumulator / targetTickDuration);
-  await ui.modalOrchestrator.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs, queuedTicks });
+  if (offlineMs <= OFFLINE_WELCOME_BACK_MS || !game.tileset.active_tiles_list.length) return;
+  const maxMs = MAX_ACCUMULATOR_MULTIPLIER * FOUNDATIONAL_TICK_MS;
+  const span = Math.min(offlineMs, maxMs);
+  game._offlineCatchupMs = span;
+  const tickEquivalent = Math.floor(span / FOUNDATIONAL_TICK_MS);
+  await ui.modalOrchestrator.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs: span, tickEquivalent });
 }
 
 function syncToggleStatesFromGame(game, ui) {
@@ -941,7 +909,6 @@ function syncToggleStatesFromGame(game, ui) {
     ui.stateManager.setVar("auto_sell", game.reactor?.auto_sell_enabled ?? false);
     ui.stateManager.setVar("auto_buy", game.reactor?.auto_buy_enabled ?? false);
     ui.stateManager.setVar("heat_control", game.reactor?.heat_controlled ?? false);
-    ui.stateManager.setVar("time_flux", game.time_flux ?? true);
   } catch (_) {}
 }
 
@@ -1171,72 +1138,20 @@ function bindLoadGameButton(ctx) {
 }
 
 function bindLoadGameUploadRow(ctx) {
-  const row = document.getElementById("splash-load-game-upload-row");
-  if (!row) return;
-  const loadBtn = row.querySelector("#splash-load-game-btn");
-  const uploadBtn = row.querySelector("#splash-upload-option-btn");
-  if (loadBtn) {
-    loadBtn.onclick = async () => {
-      if (window.splashManager) window.splashManager.hide();
-      await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
-      await startGame(ctx);
-    };
-  }
-  if (uploadBtn) {
-    uploadBtn.onclick = async () => {
-      if (ctx.googleDriveSave) await ctx.googleDriveSave.uploadSave();
-    };
-  }
-}
-
-function bindLoadFromCloudButton(ctx) {
-  const btn = document.getElementById("splash-load-cloud-btn");
-  if (!btn) return;
-  btn.onclick = async () => {
-    if (ctx.googleDriveSave) await ctx.googleDriveSave.downloadSave();
-  };
-}
-
-function bindSandboxButton(ctx) {
-  const btn = document.getElementById("splash-sandbox-btn");
-  if (!btn) return;
-  btn.onclick = async () => {
+  const loadBtn =
+    document.querySelector("#splash-load-game-upload-row #splash-load-game-btn") ??
+    document.getElementById("splash-load-game-btn");
+  if (!loadBtn) return;
+  loadBtn.onclick = async () => {
     if (window.splashManager) window.splashManager.hide();
     await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
-    await clearAllGameDataForNewGame(ctx.game);
-    StorageUtils.set("reactorGameQuickStartShown", 1);
-    await ctx.game.initialize_new_game_state();
     await startGame(ctx);
-    StorageUtils.remove("reactorNewGamePending");
-    ctx.ui.sandboxUI.enterSandbox();
   };
 }
 
 function setupButtonHandlers(ctx) {
   bindLoadGameButton(ctx);
   bindLoadGameUploadRow(ctx);
-  bindLoadFromCloudButton(ctx);
-  bindSandboxButton(ctx);
-}
-
-async function handleEmailConfirmationFromUrl(supabaseAuth) {
-  const urlParams = new URLSearchParams(window.location.search);
-  const tokenHash = urlParams.get("token_hash");
-  const type = urlParams.get("type");
-  if (!tokenHash || !type) return;
-  await supabaseAuth.handleEmailConfirmation(tokenHash, type);
-  const cleanUrl = new URL(window.location.href);
-  cleanUrl.searchParams.delete("token_hash");
-  cleanUrl.searchParams.delete("type");
-  cleanUrl.searchParams.delete("next");
-  window.history.replaceState({}, document.title, cleanUrl.toString());
-}
-
-async function ensureAuthReady(googleDriveSave, supabaseAuth) {
-  await googleDriveSave.checkAuth(true);
-  if (supabaseAuth.refreshToken && !supabaseAuth.isSignedIn()) {
-    await supabaseAuth.refreshAccessToken();
-  }
 }
 
 function createAppInstances() {
@@ -1268,14 +1183,7 @@ async function main() {
     window.appRoot = appRoot;
   }
   await migrateLocalStorageToIndexedDB();
-  const googleDriveSave = new GoogleDriveSave();
-  const supabaseAuth = new SupabaseAuth();
-  window.googleDriveSave = googleDriveSave;
-  window.supabaseAuth = supabaseAuth;
-  await handleEmailConfirmationFromUrl(supabaseAuth);
-  await ensureAuthReady(googleDriveSave, supabaseAuth);
-  initCloudSyncQueue();
-  const ctx = { game, pageRouter, ui, googleDriveSave, supabaseAuth };
+  const ctx = { game, pageRouter, ui };
   if (window.splashManager) window.splashManager.setAppContext(ctx);
   const bootstrapper = new GameBootstrapper({ game, ui, pageRouter, splashManager: window.splashManager, appRoot });
   await bootstrapper.bootstrap();

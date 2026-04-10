@@ -21,9 +21,6 @@ export function upgradeCardTemplate({
   ariaLabel,
   onBuyClick,
   costDisplay,
-  isSandbox,
-  onBuyMaxClick,
-  onResetClick,
 }) {
   return html`
     <div class=${cardClass}
@@ -52,10 +49,6 @@ export function upgradeCardTemplate({
           <span class="action-text">Buy</span>
           <span class="cost-display cathode-readout">${costDisplay}</span>
         </button>
-        <div class="sandbox-upgrade-actions" style="display: ${isSandbox ? "" : "none"}">
-          <button class="pixel-btn sandbox-buy-max-btn" type="button" @click=${onBuyMaxClick ?? (() => {})}>Buy Max</button>
-          <button class="pixel-btn sandbox-reset-btn" type="button" @click=${onResetClick ?? (() => {})}>Reset</button>
-        </div>
       </div>
     </div>
   `;
@@ -120,16 +113,5 @@ export function closeButtonTemplate({
     <button class="modal-close-btn" @click=${onClick}>
       ✖
     </button>
-  `;
-}
-
-export function googleSignInIconButtonWrapperTemplate({
-  onWrapperClick,
-  iconButtonContent,
-}) {
-  return html`
-    <span @click=${onWrapperClick}>
-      ${iconButtonContent}
-    </span>
   `;
 }

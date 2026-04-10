@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from '../../helpers/setup.js';
 import { AudioService } from '@app/services.js';
-import { placePart, forcePurchaseUpgrade, runTicks } from "../../helpers/gameHelpers.js";
+import { setDecimal } from '@app/state.js';
+import { toDecimal } from '@app/utils.js';
+import { forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
 
 describe('EP Reboot Functionality', () => {
     let game;
@@ -31,24 +33,15 @@ describe('EP Reboot Functionality', () => {
     });
 
     describe('EP Generation and Display', () => {
-        it('should generate EP from particle accelerators', async () => {
-            game.paused = false;
-            if (!game.engine.running) {
-                game.engine.start();
-            }
-            const part = game.partset.getPartById("particle_accelerator1");
-            const tile = await placePart(game, 0, 0, "particle_accelerator1");
-            tile.heat_contained = part.ep_heat * 10;
-            
-            game.reactor.updateStats();
-            const initialEP = game.exotic_particles;
-            
-            for (let i = 0; i < 20; i++) {
-                game.engine.tick();
-                game.reactor.updateStats();
-                if (game.exotic_particles > initialEP) break;
-            }
-            expect(toNum(game.exotic_particles)).toBeGreaterThan(toNum(initialEP));
+        it('grants EP at reboot from session power and heat (defining weave)', async () => {
+            setDecimal(game.state, "total_exotic_particles", 0);
+            setDecimal(game.state, "current_exotic_particles", 0);
+            game.exoticParticleManager.exotic_particles = toDecimal(0);
+            setDecimal(game.state, "session_power_sold", 5_000_000);
+            setDecimal(game.state, "session_heat_dissipated", 6_000_000);
+            await game.rebootActionKeepExoticParticles();
+            expect(toNum(game.state.total_exotic_particles)).toBe(5);
+            expect(toNum(game.state.current_exotic_particles)).toBe(5);
         });
 
         it('should update EP state manager correctly', () => {
@@ -88,16 +81,15 @@ describe('EP Reboot Functionality', () => {
             game.paused = false;
             game.engine.start();
             const playSpy = vi.spyOn(game.audio, 'play');
-            
-            const pa_tile = await placePart(game, 0, 2, "particle_accelerator1");
-            pa_tile.part.ep_heat = 1000;
-            pa_tile.heat_contained = 1000;
-            
-            runTicks(game, 20);
-            expect(toNum(game.exotic_particles)).toBeGreaterThan(50);
-            
+
+            setDecimal(game.state, "total_exotic_particles", 75);
+            setDecimal(game.state, "current_exotic_particles", 75);
+            game.exoticParticleManager.exotic_particles = toDecimal(75);
+
             const epBeforeReboot = game.exotic_particles;
             game.current_money = 5000;
+            setDecimal(game.state, "session_power_sold", 0);
+            setDecimal(game.state, "session_heat_dissipated", 0);
             await game.rebootActionKeepExoticParticles();
 
             expect(toNum(game.exotic_particles)).toBe(0);
@@ -131,14 +123,11 @@ describe('EP Reboot Functionality', () => {
         it('should reset all EP to zero on a full refund reboot', async () => {
             game.paused = false;
             game.engine.start();
-            
-            const paTile = await placePart(game, 0, 2, "particle_accelerator1");
-            paTile.part.ep_heat = 1000;
-            paTile.heat_contained = 1000;
-            
-            runTicks(game, 10);
-            expect(toNum(game.exotic_particles)).toBeGreaterThan(0);
-            
+
+            setDecimal(game.state, "total_exotic_particles", 10);
+            setDecimal(game.state, "current_exotic_particles", 10);
+            game.exoticParticleManager.exotic_particles = toDecimal(10);
+
             game.current_money = 5000;
             await game.router.loadPage("experimental_upgrades_section");
             await game.rebootActionDiscardExoticParticles();

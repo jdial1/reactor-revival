@@ -1,5 +1,5 @@
 import { html } from "lit-html";
-import { repeat, styleMap, numFormat } from "../utils.js";
+import { repeat, styleMap } from "../utils.js";
 
 export const settingsHelpShellTemplate = `<div class="settings-help-backdrop"></div>
 <div class="settings-help-content pixel-panel">
@@ -107,7 +107,6 @@ export function visualSectionTemplate(prefs, sectionHead, sectionHeadMargin, swi
         ${switchRow("setting-hide-research", "Hide Unaffordable Research", prefs.hideUnaffordableResearch, "hideUnaffordableResearch")}
         ${switchRow("setting-hide-max-upgrades", "Hide Max Upgrades", prefs.hideMaxUpgrades, "hideMaxUpgrades")}
         ${switchRow("setting-hide-max-research", "Hide Max Research", prefs.hideMaxResearch, "hideMaxResearch")}
-        ${switchRow("setting-hide-other-doctrine", "Hide Other Doctrine Upgrades", prefs.hideOtherDoctrineUpgrades, "hideOtherDoctrineUpgrades")}
       </table>
 
       <h4 style=${sectionHeadMargin}>REACTOR VIEW</h4>
@@ -293,43 +292,3 @@ export function contextModalTemplate({ partTitle, bodyContent, onClose, onSell }
   `;
 }
 
-export function harmonicDiagnosticsModalTemplate({ waveType, healthLabel, samples, onClose }) {
-  const lastSample = samples[samples.length - 1] ?? { powerLevel: 0, heatLevel: 0, powerNet: 0, heatNet: 0, ventEff: 0, overflowRatio: 0.5 };
-  const dataPoints = samples.map((sample, index) => {
-    const x = samples.length > 1 ? (index / (samples.length - 1)) * 100 : 0;
-    const powerY = 92 - Math.min(90, Math.max(0, sample.powerLevel * 90));
-    const heatY = 92 - Math.min(90, Math.max(0, sample.heatLevel * 90));
-    return `${x.toFixed(2)},${powerY.toFixed(2)} ${x.toFixed(2)},${heatY.toFixed(2)}`;
-  });
-  const powerPolyline = dataPoints.map((point) => point.split(" ")[0]).join(" ");
-  const heatPolyline = dataPoints.map((point) => point.split(" ")[1]).join(" ");
-  const netPowerText = numFormat(lastSample.powerNet);
-  const netHeatText = numFormat(lastSample.heatNet);
-  const ventEffText = numFormat(lastSample.ventEff);
-  const overflowRatioText = `${(lastSample.overflowRatio * 100).toFixed(0)}%`;
-  return html`
-    <div class="harmonic-modal-overlay" @click=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div class="harmonic-modal pixel-panel" role="dialog" aria-modal="true" aria-label="Harmonic diagnostics">
-        <div class="harmonic-modal-header">
-          <h2>Harmonic Health: ${healthLabel}</h2>
-          <button type="button" class="close-btn" aria-label="Close diagnostics" @click=${onClose}>✖</button>
-        </div>
-        <div class="harmonic-modal-body">
-          <div class="harmonic-readout-grid">
-            <span>Channel</span><span>${waveType === "heat" ? "Heat" : "Power"}</span>
-            <span>Net Power</span><span>${netPowerText}</span>
-            <span>Net Heat</span><span>${netHeatText}</span>
-            <span>Vent Eff.</span><span>${ventEffText}</span>
-            <span>Overflow Ratio</span><span>${overflowRatioText}</span>
-          </div>
-          <div class="harmonic-scope">
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Power and heat waveform history">
-              <polyline class="harmonic-trace-power" points=${powerPolyline}></polyline>
-              <polyline class="harmonic-trace-heat" points=${heatPolyline}></polyline>
-            </svg>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}

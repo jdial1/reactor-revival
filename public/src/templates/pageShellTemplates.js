@@ -20,9 +20,9 @@ export function gameShellTemplate() {
   <ul id="reactor_stats" class="desktop-only"></ul>
   <ul id="engine_status" class="desktop-only">
     <li>
-      <strong title="Tick Rate">
-        <img src="img/ui/icons/icon_time.png" alt="TPS" class="icon-inline" />
-        <span id="tps_display">0</span>
+      <strong title="Discrete simulation tick: period and tick index">
+        <img src="img/ui/icons/icon_time.png" alt="Tick" class="icon-inline" />
+        <span id="tps_display">—</span>
       </strong>
     </li>
     <li id="engine_status_indicator_root"></li>

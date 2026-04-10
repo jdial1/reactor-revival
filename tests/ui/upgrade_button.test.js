@@ -10,7 +10,7 @@ describe('Upgrade Button UX', () => {
   });
 
   it('should have a descriptive aria-label on the buy button', () => {
-    const upgrade = game.upgradeset.getUpgrade('improved_alloys');
+    const upgrade = game.upgradeset.getUpgrade('forceful_fusion');
     expect(upgrade).toBeDefined();
 
     // Create the element

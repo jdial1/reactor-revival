@@ -1,8 +1,7 @@
 import { html, render, nothing } from "lit-html";
 import { proxy } from "valtio/vanilla";
 import { styleMap, StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, Format, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
-import { getValidatedPreferences, preferences, createSupabaseProvider, createGoogleDriveProvider, showCloudVsLocalConflictModal as showCloudConflictModal, syncReducedMotionDOM } from "../state.js";
-import { supabaseSave } from "../services.js";
+import { getValidatedPreferences, preferences, syncReducedMotionDOM } from "../state.js";
 import dataService from "../services.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
 import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate } from "./ui-components.js";
@@ -24,7 +23,6 @@ import {
   welcomeBackModalTemplate as welcomeBackLayoutTemplate,
   prestigeModalTemplate as prestigeLayoutTemplate,
   contextModalTemplate as contextLayoutTemplate,
-  harmonicDiagnosticsModalTemplate as harmonicDiagnosticsLayoutTemplate,
 } from "../templates/uiModalTemplates.js";
 
 const HIDDEN_STYLE = { display: "none" };
@@ -97,16 +95,6 @@ export function abortSettingsListeners() {
     _activeAbortController.abort();
     _activeAbortController = null;
   }
-}
-
-function getCloudSaveProvider() {
-  if (typeof window !== "undefined" && window.supabaseAuth?.isSignedIn?.()) {
-    return createSupabaseProvider(supabaseSave);
-  }
-  if (typeof window !== "undefined" && window.googleDriveSave?.isSignedIn) {
-    return createGoogleDriveProvider(window.googleDriveSave);
-  }
-  return null;
 }
 
 const SAVED_BUTTON_RESET_MS = 1500;
@@ -225,7 +213,6 @@ function setupMechSwitches(overlay, modal, signal) {
     "setting-hide-research": "hideUnaffordableResearch",
     "setting-hide-max-upgrades": "hideMaxUpgrades",
     "setting-hide-max-research": "hideMaxResearch",
-    "setting-hide-other-doctrine": "hideOtherDoctrineUpgrades",
   };
   Object.entries(affordPrefMap).forEach(([id, prefKey]) => {
     setupMechSwitch(id, () => {
@@ -294,106 +281,7 @@ function setupMechSwitches(overlay, modal, signal) {
   }
 }
 
-function formatCloudDate(ts) {
-  if (!ts) return "—";
-  const date = new Date(Number(ts));
-  const diffMs = Date.now() - date;
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffHours < 1) return "Just now";
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
-
-const CLOUD_SLOT_IDS = [1, 2, 3];
-
-function createRefreshCloudSlots(overlay) {
-  return async () => {
-    const provider = getCloudSaveProvider();
-    if (!provider) return;
-    let list = [];
-    try {
-      list = await provider.getSaves();
-    } catch (e) {
-      return;
-    }
-    const bySlot = new Map(list.map((s) => [s.slot_id, s]));
-    CLOUD_SLOT_IDS.forEach((slotId) => {
-      const row = overlay.querySelector(`.cloud-slot-row[data-slot="${slotId}"]`);
-      if (!row) return;
-      const meta = row.querySelector(".cloud-slot-meta");
-      const loadBtn = row.querySelector(`.setting-cloud-load[data-slot="${slotId}"]`);
-      const slotData = bySlot.get(slotId);
-      if (meta) meta.textContent = slotData ? formatCloudDate(slotData.timestamp) : "—";
-      if (loadBtn) loadBtn.disabled = !slotData;
-    });
-  };
-}
-
-function setupCloudSaves(overlay, modal, signal) {
-  if (!getCloudSaveProvider()) return;
-  const cloudSection = overlay.querySelector("#setting-cloud-saves");
-  if (!cloudSection) return;
-  cloudSection.style.display = "block";
-  const refreshCloudSlots = createRefreshCloudSlots(overlay);
-  refreshCloudSlots();
-  const handleCloudSave = async (e) => {
-    const btn = e.currentTarget;
-    const slotId = parseInt(btn.dataset.slot, 10);
-    const game = modal.getGame?.();
-    if (!game?.saveManager) return;
-    const label = btn.textContent;
-    btn.textContent = "Saving...";
-    btn.disabled = true;
-    try {
-      const provider = getCloudSaveProvider();
-      if (!provider) return;
-      await provider.saveGame(slotId, await game.saveManager.getSaveState());
-      btn.textContent = "Saved";
-      await refreshCloudSlots();
-      setTimeout(() => {
-        btn.textContent = label;
-        btn.disabled = false;
-      }, SAVED_BUTTON_RESET_MS);
-    } catch (e) {
-      btn.textContent = "Error";
-      setTimeout(() => {
-        btn.textContent = label;
-        btn.disabled = false;
-      }, ERROR_BUTTON_RESET_MS);
-    }
-    modal.playClick();
-  };
-  const handleCloudLoad = async (e) => {
-    const btn = e.currentTarget;
-    if (btn.disabled) return;
-    const slotId = parseInt(btn.dataset.slot, 10);
-    const provider = getCloudSaveProvider();
-    if (!provider) return;
-    let list = [];
-    try {
-      list = await provider.getSaves();
-    } catch (e) {
-      return;
-    }
-    const slotData = list.find((s) => s.slot_id === slotId);
-    if (!slotData?.save_data) return;
-    await StorageUtilsAsync.setRaw(`reactorGameSave_${slotId}`, slotData.save_data);
-    const game = modal.getGame?.();
-    try {
-      const loaded = game?.saveManager ? await game.saveManager.loadGame(slotId) : false;
-      if (loaded) window.location.reload();
-    } catch (err) {
-      logger.log('error', 'ui', 'Failed to load cloud save:', err);
-    }
-    modal.playClick();
-  };
-  bindEvents(overlay, {
-    ".setting-cloud-save": handleCloudSave,
-    ".setting-cloud-load": handleCloudLoad
-  }, { signal });
-}
+function setupCloudSaves() {}
 
 function setupSettingsHelpModal(overlay, modal, signal) {
   let helpEl = overlay.querySelector(".settings-help-modal");
@@ -658,9 +546,9 @@ function reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }) {
 }
 
 function welcomeBackModalTemplate(payload, onInstant, onFastForward, onDismiss) {
-  const { offlineMs = 0, queuedTicks = 0 } = payload ?? {};
+  const { offlineMs = 0, tickEquivalent = 0, queuedTicks = 0 } = payload ?? {};
   const durationStr = Format.time(offlineMs, false);
-  const tickStr = queuedTicks.toLocaleString();
+  const tickStr = (tickEquivalent || queuedTicks).toLocaleString();
   return welcomeBackLayoutTemplate({
     durationStr,
     tickStr,
@@ -711,11 +599,9 @@ export const MODAL_IDS = {
   LOGIN: "login",
   PROFILE: "profile",
   LOGOUT: "logout",
-  CLOUD_VS_LOCAL_CONFLICT: "cloudVsLocalConflict",
   SETTINGS: "settings",
   LAYOUT_VIEW: "layoutView",
   MY_LAYOUTS: "myLayouts",
-  HARMONIC_DIAGNOSTICS: "harmonicDiagnostics",
 };
 
 export class ModalOrchestrator {
@@ -779,10 +665,6 @@ export class ModalOrchestrator {
       show: () => ui?.userAccountUI?.showLogoutModal?.(),
       hide: () => {},
     });
-    this._handlers.set(MODAL_IDS.CLOUD_VS_LOCAL_CONFLICT, {
-      show: (p) => showCloudConflictModal(p?.cloudSaveData),
-      hide: () => {},
-    });
     this._handlers.set(MODAL_IDS.SETTINGS, {
       show: () => this._showSettingsModal(),
       hide: () => this._hideSettingsModal(),
@@ -794,10 +676,6 @@ export class ModalOrchestrator {
     this._handlers.set(MODAL_IDS.MY_LAYOUTS, {
       show: () => this._showMyLayoutsModal(),
       hide: () => this._hideMyLayoutsModal(),
-    });
-    this._handlers.set(MODAL_IDS.HARMONIC_DIAGNOSTICS, {
-      show: (p) => this._showHarmonicDiagnosticsModal(p),
-      hide: () => this._hideHarmonicDiagnosticsModal(),
     });
   }
 
@@ -1017,8 +895,7 @@ export class ModalOrchestrator {
 
     return new Promise((resolve) => {
       const handleClose = (mode) => {
-        if (mode === "instant" && game.engine) game.engine.runInstantCatchup();
-        else if (mode === "fast-forward" && game.engine) game.engine._welcomeBackFastForward = true;
+        if ((mode === "instant" || mode === "fast-forward") && game.engine) game.engine.runInstantCatchup();
 
         if (game) {
           game.paused = false;
@@ -1202,8 +1079,8 @@ export class ModalOrchestrator {
     this.showModal(MODAL_IDS.SETTINGS);
   }
 
-  showWelcomeBackModal(offlineMs, queuedTicks) {
-    return this.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs, queuedTicks });
+  showWelcomeBackModal(offlineMs, tickEquivalent) {
+    return this.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs, tickEquivalent });
   }
 
   showPrestigeModal(mode) {
@@ -1262,26 +1139,6 @@ export class ModalOrchestrator {
 
   _hideMyLayoutsModal() {
     setModalDrawerOpen(false);
-    if (this._modalRoot) render(nothing, this._modalRoot);
-  }
-
-  _showHarmonicDiagnosticsModal(payload = {}) {
-    if (!this.ui) return;
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (!this._modalRoot) return;
-    const onClose = () => this._hideHarmonicDiagnosticsModal();
-    render(
-      harmonicDiagnosticsLayoutTemplate({
-        waveType: payload.waveType ?? "power",
-        healthLabel: payload.healthLabel ?? "Stable",
-        samples: payload.history ?? [],
-        onClose,
-      }),
-      this._modalRoot
-    );
-  }
-
-  _hideHarmonicDiagnosticsModal() {
     if (this._modalRoot) render(nothing, this._modalRoot);
   }
 }

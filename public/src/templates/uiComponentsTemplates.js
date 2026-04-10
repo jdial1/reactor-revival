@@ -1,21 +1,11 @@
 import { html } from "lit-html";
-import { repeat, styleMap, classMap } from "../utils.js";
+import { repeat, classMap } from "../utils.js";
 
 export function infoBarTemplate({
   powerClass,
   heatClass,
-  powerPct,
-  heatPct,
   powerBarStyle,
   heatBarStyle,
-  powerWaveStyle,
-  heatWaveStyle,
-  powerWaveClass,
-  heatWaveClass,
-  powerWavePoints,
-  powerWaveTrailPoints,
-  heatWavePoints,
-  heatWaveTrailPoints,
   powerTextDesktop,
   powerTextMobile,
   maxPowerDesktop,
@@ -38,15 +28,7 @@ export function infoBarTemplate({
   `;
   return html`
     <div class="info-bar-desktop">
-      <button class=${powerClass} id="info_bar_power_btn_desktop" type="button" tabindex="0" aria-label="Sell Power" style=${styleMap({ "--fill-height": `${powerPct}%` })} @click=${onSell}>
-        <div class=${powerWaveClass} style=${powerWaveStyle} aria-hidden="true">
-          <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-            <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
-            <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
-            <polyline class="info-waveform-trace-trail" points=${powerWaveTrailPoints}></polyline>
-            <polyline class="info-waveform-trace" points=${powerWavePoints}></polyline>
-          </svg>
-        </div>
+      <button class=${powerClass} id="info_bar_power_btn_desktop" type="button" tabindex="0" aria-label="Sell Power" style=${powerBarStyle} @click=${onSell}>
         <img src="img/ui/icons/icon_power.png" class="icon" alt="Power" />
         <span class="value" id="info_power_desktop">${powerTextDesktop}</span>
         <span class="denom" id="info_power_denom_desktop">/${maxPowerDesktop}</span>
@@ -63,14 +45,6 @@ export function infoBarTemplate({
       </span>
       <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
       <button class=${heatClass} id="info_bar_heat_btn_desktop" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} @click=${onVent}>
-        <div class=${heatWaveClass} style=${heatWaveStyle} aria-hidden="true">
-          <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-            <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
-            <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
-            <polyline class="info-waveform-trace-trail" points=${heatWaveTrailPoints}></polyline>
-            <polyline class="info-waveform-trace" points=${heatWavePoints}></polyline>
-          </svg>
-        </div>
         <img src="img/ui/icons/icon_heat.png" class="icon" alt="Heat" />
         <span class="value" id="info_heat_desktop">${heatTextDesktop}</span>
         <span class="denom" id="info_heat_denom_desktop">/${maxHeatDesktop}</span>
@@ -78,15 +52,7 @@ export function infoBarTemplate({
     </div>
     <div class="info-bar-mobile" style="display: none;">
       <div class="info-row info-main">
-        <button class=${powerClass} id="info_bar_power_btn" type="button" tabindex="0" aria-label="Sell Power" style=${styleMap({ "--fill-height": `${powerPct}%` })} @click=${onSell}>
-          <div class=${powerWaveClass} style=${powerWaveStyle} aria-hidden="true">
-            <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-              <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
-              <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
-              <polyline class="info-waveform-trace-trail" points=${powerWaveTrailPoints}></polyline>
-              <polyline class="info-waveform-trace" points=${powerWavePoints}></polyline>
-            </svg>
-          </div>
+        <button class=${powerClass} id="info_bar_power_btn" type="button" tabindex="0" aria-label="Sell Power" style=${powerBarStyle} @click=${onSell}>
           <img src="img/ui/icons/icon_power.png" class="icon" alt="Power" />
           <span class="value" id="info_power">${powerTextMobile}</span>
         </button>
@@ -95,14 +61,6 @@ export function infoBarTemplate({
           <span class="value cathode-readout" id="info_money"></span>
         </span>
         <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} @click=${onVentMobile}>
-          <div class=${heatWaveClass} style=${heatWaveStyle} aria-hidden="true">
-            <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-              <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
-              <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
-              <polyline class="info-waveform-trace-trail" points=${heatWaveTrailPoints}></polyline>
-              <polyline class="info-waveform-trace" points=${heatWavePoints}></polyline>
-            </svg>
-          </div>
           <img src="img/ui/icons/icon_heat.png" class="icon" alt="Heat" />
           <span class="value" id="info_heat">${heatTextMobile}</span>
         </button>
@@ -135,14 +93,8 @@ export function mobileControlDeckTemplate({
   autoHeatRateContent,
   powerFillStyle,
   heatFillStyle,
-  powerWaveStyle,
-  heatWaveStyle,
-  powerWaveClass,
-  heatWaveClass,
-  powerWavePoints,
-  powerWaveTrailPoints,
-  heatWavePoints,
-  heatWaveTrailPoints,
+  architectMetricsText,
+  tickCadenceText,
   powerCurrentText,
   heatCurrentText,
   maxPowerText,
@@ -150,36 +102,18 @@ export function mobileControlDeckTemplate({
   moneyValueText,
   onSellPower,
   onVentHeat,
-  onPowerWavePointerDown,
-  onPowerWavePointerUp,
-  onPowerWavePointerCancel,
-  onHeatWavePointerDown,
-  onHeatWavePointerUp,
-  onHeatWavePointerCancel,
 }) {
   return html`
+    <div class="control-deck-architect" aria-label="Per-tick reactor metrics">
+      <span class="control-deck-architect-metrics">${architectMetricsText}</span>
+      <span id="control_deck_tick_line" class="control-deck-tick-line">${tickCadenceText}</span>
+    </div>
     <button class=${powerCapacitorClass} id="control_deck_power_btn" type="button" tabindex="0" aria-label="Sell Power" @click=${onSellPower}>
       <div class="control-deck-auto-sell-led" id="control_deck_auto_sell_led" aria-hidden="true"></div>
       <span class="control-deck-rate" id="control_deck_power_rate" aria-hidden="true">${powerRateText}</span>
       <span class=${autoRateClass} id="control_deck_auto_sell_rate" aria-hidden="true">${autoSellRateContent}</span>
       <div class="control-deck-fill power-fill" style=${powerFillStyle}></div>
       <div class="control-deck-content">
-        <div
-          class=${powerWaveClass}
-          style=${powerWaveStyle}
-          aria-hidden="true"
-          @pointerdown=${onPowerWavePointerDown}
-          @pointerup=${onPowerWavePointerUp}
-          @pointercancel=${onPowerWavePointerCancel}
-          @pointerleave=${onPowerWavePointerCancel}
-        >
-          <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-            <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
-            <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
-            <polyline class="info-waveform-trace-trail" points=${powerWaveTrailPoints}></polyline>
-            <polyline class="info-waveform-trace" points=${powerWavePoints}></polyline>
-          </svg>
-        </div>
         <img src="img/ui/icons/icon_power.png" alt="Power" class="control-deck-icon" />
         <span class="control-deck-value" id="control_deck_power">${powerCurrentText}</span>
         <span class="control-deck-denom" id="control_deck_power_denom">/${maxPowerText}</span>
@@ -200,22 +134,6 @@ export function mobileControlDeckTemplate({
       <div class="control-deck-fill heat-fill" style=${heatFillStyle}></div>
       <div class="control-deck-hazard-stripes"></div>
       <div class="control-deck-content">
-        <div
-          class=${heatWaveClass}
-          style=${heatWaveStyle}
-          aria-hidden="true"
-          @pointerdown=${onHeatWavePointerDown}
-          @pointerup=${onHeatWavePointerUp}
-          @pointercancel=${onHeatWavePointerCancel}
-          @pointerleave=${onHeatWavePointerCancel}
-        >
-          <svg class="info-waveform-svg" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-            <line class="info-waveform-guide-mid" x1="0" y1="50" x2="100" y2="50"></line>
-            <line class="info-waveform-guide-high" x1="0" y1="20" x2="100" y2="20"></line>
-            <polyline class="info-waveform-trace-trail" points=${heatWaveTrailPoints}></polyline>
-            <polyline class="info-waveform-trace" points=${heatWavePoints}></polyline>
-          </svg>
-        </div>
         <img src="img/ui/icons/icon_heat.png" alt="Heat" class="control-deck-icon" />
         <span class="control-deck-value" id="control_deck_heat">${heatCurrentText}</span>
         <span class="control-deck-denom" id="control_deck_heat_denom">/${maxHeatText}</span>
@@ -357,6 +275,7 @@ export function controlDeckStatsBarTemplate() {
     <li><strong title="Total heat venting per tick"><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent" class="cathode-readout"></span></strong></li>
     <li><strong title="Power per tick"><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power" class="cathode-readout"></span></strong></li>
     <li><strong title="Heat per tick"><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat" class="cathode-readout"></span></strong></li>
+    <li><strong title="Reactor hull fill"><span class="stats-inline-label">Hull</span> <span id="stats_hull" class="cathode-readout"></span></strong></li>
   `;
 }
 
@@ -389,16 +308,12 @@ function controlDeckMechSwitch(id, checked, onClick, caption, title, wrapClass) 
 export function controlDeckControlsNavTemplate({
   autoSellOn,
   autoBuyOn,
-  timeFluxOn,
   heatControlOn,
   pauseOn,
-  timeFluxClass,
-  timeFluxLabel,
   accountTitle,
   accountIcon,
   onToggleAutoSell,
   onToggleAutoBuy,
-  onToggleTimeFlux,
   onToggleHeatControl,
   onTogglePause,
 }) {
@@ -407,7 +322,6 @@ export function controlDeckControlsNavTemplate({
   return html`
     ${controlDeckMechSwitch("auto_sell_toggle", autoSellOn, onToggleAutoSell, "Auto sell", "Sell power automatically when the capacitor is full", "")}
     ${controlDeckMechSwitch("auto_buy_toggle", autoBuyOn, onToggleAutoBuy, "Auto buy", "Buy fuel and parts automatically when affordable", "")}
-    ${controlDeckMechSwitch("time_flux_toggle", timeFluxOn, onToggleTimeFlux, timeFluxLabel, "Accelerate time: process ticks faster than real time", timeFluxClass)}
     ${controlDeckMechSwitch("heat_control_toggle", heatControlOn, onToggleHeatControl, "Auto heat", "Automatically vent heat toward the target level", "")}
     ${controlDeckMechSwitch("pause_toggle", pauseOn, onTogglePause, pauseCaption, pauseHint, pauseOn ? "paused" : "")}
     <button id="user_account_btn_mobile" class="pixel-btn" title=${accountTitle}>
@@ -868,15 +782,3 @@ export function decompressionSavedToastTemplate() {
   `;
 }
 
-export function timeFluxSimulationTemplate({
-  pct,
-}) {
-  return html`
-    <div class="time-flux-sim-panel">
-      <div class="time-flux-sim-label">Simulating... ${pct}%</div>
-      <div class="time-flux-sim-bar">
-        <div class="time-flux-sim-fill" style=${styleMap({ width: `${pct}%` })}></div>
-      </div>
-    </div>
-  `;
-}

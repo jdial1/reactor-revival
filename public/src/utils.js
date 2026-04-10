@@ -5,6 +5,13 @@ import superjson from "superjson";
 
 export const VU_LED_SEGMENTS = 16;
 
+export const LEADERBOARD_CONFIG = Object.freeze({
+  API_URL: "http://localhost:3000",
+});
+
+export const AUTONOMIC_REPAIR_POWER_COST = 50;
+export const AUTONOMIC_REPAIR_POWER_MIN = 50;
+
 export function vuQuantizePercent(rawPercent, atMax) {
   if (atMax) return 100;
   const lit = Math.min(VU_LED_SEGMENTS, Math.max(0, Math.round((rawPercent / 100) * VU_LED_SEGMENTS)));
@@ -195,9 +202,9 @@ const CELL_LEVEL_TILES = { 1: 1, 2: 2, 3: 4 };
 const CELL_TYPE_TO_NUM = { uranium: 1, plutonium: 2, thorium: 3, seaborgium: 4, dolorium: 5, nefastium: 6, protium: 1 };
 const CELL_TYPES = new Set(Object.keys(CELL_TYPE_TO_NUM));
 const VALVE_IMAGE_MAP = {
-  overflow_valve: "valve_1_1", overflow_valve2: "valve_1_2", overflow_valve3: "valve_1_3", overflow_valve4: "valve_1_4",
-  topup_valve: "valve_2_1", topup_valve2: "valve_2_2", topup_valve3: "valve_2_3", topup_valve4: "valve_2_4",
-  check_valve: "valve_3_1", check_valve2: "valve_3_2", check_valve3: "valve_3_3", check_valve4: "valve_3_4",
+  overflow_valve: "valve_1_1",
+  topup_valve: "valve_2_1",
+  check_valve: "valve_3_1",
 };
 const CATEGORY_FOLDERS = {
   cell: "cells", reflector: "reflectors", capacitor: "capacitors", vent: "vents",
@@ -728,19 +735,15 @@ export const WORKER_HEARTBEAT_MS = 2000;
 export const WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK = 3;
 export const UPGRADE_MAX_LEVEL = 32;
 
-export const AUTONOMIC_REPAIR_POWER_COST = 50;
-export const AUTONOMIC_REPAIR_POWER_MIN = 50;
 export const EP_HEAT_SAFE_CAP = 1e100;
 export const EP_CHANCE_LOG_BASE = 10;
 export const HEAT_REMOVAL_TARGET_RATIO = 0.1;
 export const MULTIPLIER_FLOOR = 0.001;
 export const MAX_EP_EMIT_PER_TICK = 5;
 
-export const FLUX_ACCUMULATOR_POWER_RATIO_MIN = 0.90;
-export const FLUX_ACCUMULATOR_EP_RATE = 0.0001;
-export const REALITY_FLUX_RATE_PROTIUM = 0.0005;
-export const REALITY_FLUX_RATE_NEFASTIUM = 0.001;
-export const REALITY_FLUX_RATE_BLACK_HOLE = 0.002;
+export const EP_SESSION_MIN_UNITS_PER_EP = 2500;
+
+export const HULL_REPEL_FRACTION = 0.05;
 
 export const VISUAL_PARTICLE_HIGH_THRESHOLD = 200;
 export const VISUAL_PARTICLE_MED_THRESHOLD = 50;
@@ -749,14 +752,18 @@ export const VISUAL_PARTICLE_MED_COUNT = 2;
 
 export const PAUSED_POLL_MS = 500;
 
-export const DEFAULT_OVERFLOW_RATIO = 0.5;
+export const DEFAULT_OVERFLOW_RATIO = 1;
 export const DEFAULT_POWER_MULTIPLIER = 1;
 export const DEFAULT_SELL_PRICE_MULTIPLIER = 1;
 export const VENT_BONUS_PERCENT_DIVISOR = 100;
 
 export const BASE_MAX_HEAT = 1000;
 export const BASE_MAX_POWER = 100;
+export const HULL_HEAT_PER_PLATING_TILE = 100;
+export const POWER_STORAGE_PER_CAPACITOR_TILE = 100;
+export const POWER_STORAGE_CHARGED_PLATING_EXTRA = 100;
 export const MELTDOWN_HEAT_MULTIPLIER = 2;
+export const SIMULATION_ERROR_MESSAGE = "SIMULATION ERROR: HARDWARE INCOMPATIBILITY";
 export const CLASSIFICATION_HISTORY_MAX = 10;
 export const MARK_II_E_THRESHOLD_CYCLES = 16;
 export const MAX_SUBCLASS_CYCLES = 15;
@@ -785,6 +792,7 @@ export const MAX_CATCHUP_TICKS = 500;
 
 export const MAX_GRID_DIMENSION = 50;
 export const BASE_LOOP_WAIT_MS = 1000;
+export const FOUNDATIONAL_TICK_MS = BASE_LOOP_WAIT_MS;
 export const BASE_MONEY = 10;
 export const MOBILE_BREAKPOINT_PX = 900;
 export const RESIZE_DELAY_MS = 50;
@@ -965,36 +973,6 @@ export const USER_PREF_KEYS = {
 
 export function getPref(key) { return StorageUtils.get(key); }
 export function setPref(key, value) { return StorageUtils.set(key, value); }
-
-export function getSupabaseUrl() {
-  return env.VITE_SUPABASE_URL ?? winConfig.supabaseUrl ?? "";
-}
-
-export function getSupabaseAnonKey() {
-  return env.VITE_SUPABASE_ANON_KEY ?? winConfig.supabaseAnonKey ?? "";
-}
-
-export function getGoogleDriveApiKey() {
-  return env.VITE_GOOGLE_DRIVE_API_KEY ?? winConfig.googleDriveApiKey ?? "";
-}
-
-export function getGoogleDriveClientId() {
-  return env.VITE_GOOGLE_DRIVE_CLIENT_ID ?? winConfig.googleDriveClientId ?? "";
-}
-
-export const GOOGLE_DRIVE_CONFIG = {
-  SCOPES: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata",
-  FALLBACK_SCOPES: "https://www.googleapis.com/auth/drive.file",
-  ENABLE_GOOGLE_DRIVE: true
-};
-
-export function getGoogleDriveAuth() {
-  return {
-    API_KEY: getGoogleDriveApiKey(),
-    CLIENT_ID: getGoogleDriveClientId(),
-    ...GOOGLE_DRIVE_CONFIG
-  };
-}
 
 export const UPDATE_TOAST_STYLES = `
   .update-toast {

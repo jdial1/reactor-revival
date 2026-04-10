@@ -12,12 +12,15 @@ describe("Upgrade Actions Mechanics", () => {
     const initialWait = game.base_loop_wait;
     const purchased = forcePurchaseUpgrade(game, "chronometer");
     expect(purchased).toBe(true);
-    expect(game.loop_wait).toBe(initialWait / 2);
+    expect(game.loop_wait).toBe(initialWait);
   });
 
-  it("should apply power lines upgrade correctly", () => {
-    forcePurchaseUpgrade(game, "improved_power_lines");
-    expect(game.reactor.auto_sell_multiplier).toBe(0.01);
+  it("should apply component reinforcement upgrade correctly", () => {
+    const vent = game.partset.getPartById("vent1");
+    const before = vent.containment;
+    forcePurchaseUpgrade(game, "component_reinforcement");
+    vent.recalculate_stats();
+    expect(vent.containment).toBeGreaterThan(before);
   });
 
   it("should apply reactor rows upgrade correctly", () => {
@@ -29,43 +32,6 @@ describe("Upgrade Actions Mechanics", () => {
   it("should apply forceful fusion upgrade correctly", () => {
     forcePurchaseUpgrade(game, "forceful_fusion");
     expect(game.reactor.heat_power_multiplier).toBe(1);
-  });
-
-  it("should apply improved alloys upgrade correctly", async () => {
-    const plating = game.partset.getPartById("reactor_plating1");
-    await placePart(game, 0, 0, "reactor_plating1");
-    
-    game.reactor.updateStats();
-    
-    forcePurchaseUpgrade(game, "improved_alloys");
-    // Force recalculation on placed parts and reset altered stats
-    game.partset.getPartById("reactor_plating1").recalculate_stats();
-    game.tileset.active_tiles_list.forEach(t => t.part && t.part.recalculate_stats());
-    game.reactor.altered_max_heat = game.reactor.base_max_heat;
-    game.reactor.updateStats();
-    
-    const expectedHeat = toNum(game.reactor.base_max_heat) + toNum(plating.base_reactor_heat) * 2;
-    expect(toNum(game.reactor.max_heat)).toBeCloseTo(expectedHeat);
-  });
-
-  it("should apply quantum buffering upgrade correctly", async () => {
-    const plating = game.partset.getPartById("reactor_plating1");
-    await placePart(game, 0, 0, "reactor_plating1");
-    game.reactor.updateStats();
-    
-    const initialMaxHeat = game.reactor.max_heat;
-    forcePurchaseUpgrade(game, "laboratory");
-    const bought = forcePurchaseUpgrade(game, "quantum_buffering");
-    expect(bought).toBe(true);
-    
-    // Reset altered stats and force recalculation on placed parts
-    game.reactor.altered_max_heat = game.reactor.base_max_heat;
-    game.partset.getPartById("reactor_plating1").recalculate_stats();
-    game.tileset.active_tiles_list.forEach(t => t.part && t.part.recalculate_stats());
-    game.reactor.updateStats();
-    
-    expect(toNum(game.reactor.max_heat)).toBeGreaterThan(toNum(initialMaxHeat));
-    expect(toNum(game.reactor.max_heat)).toBe(toNum(game.reactor.base_max_heat) + toNum(plating.base_reactor_heat) * 2);
   });
 
   it("should apply active venting upgrade correctly", async () => {

@@ -26,9 +26,10 @@ describe("Complex Grid Scenarios and Interactions", () => {
 
         game.reactor.updateStats();
         const powerWithoutReflectors = cell.power;
-        const expectedPower = powerWithoutReflectors * (1 + (reflector.power_increase * 4) / 100);
+        const rflPulse = 1 + reflector.power_increase / 100;
+        const pulse = 1 + 4 * rflPulse;
+        const expectedPower = powerWithoutReflectors * pulse;
 
-        // ACT & ASSERT
         expect(game.reactor.stats_power).toBeCloseTo(expectedPower);
     });
 
@@ -147,13 +148,13 @@ describe("Complex Grid Scenarios and Interactions", () => {
         const neighborOfCorner = await placePart(game, initialRows, initialCols - 1, "uranium1");
         game.reactor.updateStats();
 
-        // ASSERT
         expect(newEdgeTileRow.part.id).toBe("uranium1");
         expect(cornerTile.part.id).toBe("reflector1");
-        // Check if the reflector is affecting the cell placed next to it on the new edge
-        const expectedPower = cell.power * (1 + reflector.power_increase / 100);
-        expect(game.reactor.stats_power).toBeGreaterThan(cell.power * 2); // Two cells, one is boosted
-        expect(game.reactor.stats_power).toBeCloseTo(cell.power + expectedPower);
+        const rflPulse = 1 + reflector.power_increase / 100;
+        const boostedCellPower = cell.power * (1 + rflPulse);
+        const plainCellPower = cell.power;
+        expect(game.reactor.stats_power).toBeGreaterThan(cell.power * 2);
+        expect(game.reactor.stats_power).toBeCloseTo(boostedCellPower + plainCellPower);
     });
 
     it("should handle Forceful Fusion upgrade with high heat", async () => {

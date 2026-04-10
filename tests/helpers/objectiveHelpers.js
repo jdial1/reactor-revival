@@ -126,11 +126,17 @@ export async function satisfyObjective(game, idx) {
         }
 
         case 16: {
-            const improvedPowerLinesUpgrade = game.upgradeset.getUpgrade("improved_power_lines");
-            improvedPowerLinesUpgrade.setLevel(50);
             game.ui.stateManager.setVar("auto_sell", true);
-            for (let i = 0; i < 10; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("capacitor1"));
-            for (let i = 0; i < 5; i++) await game.tileset.getTile(1, i).setPart(game.partset.getPartById("plutonium1"));
+            const capCols = Math.min(10, game.cols);
+            for (let i = 0; i < capCols; i++) {
+                const t = game.tileset.getTile(0, i);
+                if (t) await t.setPart(game.partset.getPartById("capacitor1"));
+            }
+            const puCols = Math.min(5, game.cols);
+            for (let i = 0; i < puCols; i++) {
+                const t = game.tileset.getTile(1, i);
+                if (t) await t.setPart(game.partset.getPartById("plutonium1"));
+            }
             game.reactor.updateStats();
             game.reactor.stats_cash = 501;
             break;
@@ -155,7 +161,6 @@ export async function satisfyObjective(game, idx) {
             for (let i = 0; i < 8; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("plutonium3"));
             for (let i = 0; i < 10; i++) await game.tileset.getTile(1, i).setPart(game.partset.getPartById("capacitor1"));
             game.ui.stateManager.setVar("auto_sell", true);
-            game.upgradeset.getUpgrade("improved_power_lines").setLevel(50);
             game.reactor.updateStats();
             game.reactor.stats_cash = 60000;
             break;

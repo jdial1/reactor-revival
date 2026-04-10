@@ -57,9 +57,8 @@ describe("UI Component Creation and State", () => {
       const saveData = { current_money: 789 };
       const playedTime = "10m 5s";
 
-      const row = renderToDiv(LoadGameUploadRow(saveData, playedTime, false, () => { }, () => { }));
+      const row = renderToDiv(LoadGameUploadRow(saveData, playedTime, false, () => { }));
       expect(row.querySelector("#splash-load-game-btn")).not.toBeNull();
-      expect(row.querySelector("#splash-upload-option-btn")).not.toBeNull();
       expect(row.querySelector(".money").textContent).toContain("789");
     });
   });

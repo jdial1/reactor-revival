@@ -679,22 +679,3 @@ export function assertActivePage(game, pageId) {
   expect(document.body.classList.contains(`page-${slug}`)).toBe(true);
 }
 
-export function burstParticlePools(ps, profile = {}) {
-  const { iterations = 2000, steamArgs, emberArgs, sparkArgs, updateMs } = profile;
-  for (let i = 0; i < iterations; i++) {
-    if (steamArgs) ps.createSteamParticles(...steamArgs);
-    if (emberArgs) ps.createCriticalBuildupEmbers(...emberArgs);
-    if (sparkArgs) ps.createSellSparks(...sparkArgs);
-  }
-  if (updateMs !== undefined) {
-    ps.update(updateMs);
-  }
-}
-
-export function stressParticleSystem(ps, profile = {}, count = 2000) {
-  if (typeof profile === "number") {
-    return burstParticlePools(ps, { iterations: profile });
-  }
-  const iterations = profile.iterations ?? count;
-  return burstParticlePools(ps, { ...profile, iterations });
-}

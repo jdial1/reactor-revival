@@ -47,8 +47,10 @@ describe("Group 1: Core Grid & Component Generation", () => {
 
     const cellPart = game.partset.getPartById("uranium1");
     const reflectorPart = game.partset.getPartById("reflector1");
-    const expectedPower = cellPart.base_power * (1 + reflectorPart.power_increase / 100);
-    const expectedHeat = cellPart.base_heat * (1 + reflectorPart.heat_increase / 100);
+    const reflectorPulse = 1 + reflectorPart.power_increase / 100;
+    const pulse = 1 + reflectorPulse;
+    const expectedPower = cellPart.base_power * pulse;
+    const expectedHeat = cellPart.base_heat * pulse * pulse;
 
     game.reactor.updateStats();
 
