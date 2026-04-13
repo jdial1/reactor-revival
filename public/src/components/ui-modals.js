@@ -1,7 +1,7 @@
 import { html, render, nothing } from "lit-html";
 import { proxy } from "valtio/vanilla";
 import { styleMap, StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, Format, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
-import { getValidatedPreferences, preferences, syncReducedMotionDOM } from "../state.js";
+import { getValidatedPreferences, preferences, syncReducedMotionDOM, enqueueGameEffect } from "../state.js";
 import dataService from "../services.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
 import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate } from "./ui-components.js";
@@ -416,7 +416,7 @@ export function createSettingsContext(ui, modal) {
   const getUi = () => ui ?? window.ui;
   const playClick = () => {
     const game = getGame();
-    if (game?.audio) game.audio.play("click");
+    if (game) enqueueGameEffect(game, { kind: "sfx", id: "click", context: "global" });
   };
 
   const saveToHandle = async (handle) => {

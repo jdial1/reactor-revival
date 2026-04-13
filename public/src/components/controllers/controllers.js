@@ -2,7 +2,8 @@ import { html, render } from "lit-html";
 import { classMap, styleMap } from "../../utils.js";
 import { ReactiveLitComponent } from "../reactive-lit-component.js";
 import { MOBILE_BREAKPOINT_PX } from "../../utils.js";
-import { updateDecimal, subscribeKey, preferences } from "../../state.js";
+import { subscribeKey, preferences } from "../../state.js";
+import { buildGridIntents, dispatchGridIntents } from "../../grid-intent-pipeline.js";
 
 export class GridController {
   constructor(api) {
@@ -39,7 +40,6 @@ export class GridController {
         ? [...inputManager.hotkeys.getTiles(startTile, event)]
         : [startTile];
 
-    let soundPlayed = false;
     const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
 
     if (isMobile && !isSellAction && startTile.part && !clicked_part) {
@@ -54,72 +54,13 @@ export class GridController {
       return;
     }
 
-    if (game.blueprintPlanner?.active) {
-      for (const t of tilesToModify) {
-        if (isSellAction) {
-          game.setBlueprintPlannerSlot(t.row, t.col, null);
-          ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
-        } else if (clicked_part) {
-          const cur = game.getBlueprintPlannerPartId(t.row, t.col);
-          const id = clicked_part.id;
-          if (cur === id) game.setBlueprintPlannerSlot(t.row, t.col, null);
-          else game.setBlueprintPlannerSlot(t.row, t.col, id);
-          ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
-          if (!soundPlayed && game.audio?.play) {
-            game.audio.play("placement");
-            soundPlayed = true;
-          }
-        }
-      }
-      return;
-    }
-
-    for (const t of tilesToModify) {
-      if (isSellAction) {
-        if (t.part && t.part.id && !t.part.isSpecialTile) {
-          game.sellPart(t);
-          ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
-          if (!soundPlayed && game.audio) {
-            game.audio.play("sell");
-            soundPlayed = true;
-          }
-        }
-      } else if (clicked_part) {
-        const money = game.state.current_money;
-        const canAfford = money != null && typeof money.gte === "function"
-          ? money.gte(clicked_part.cost)
-          : Number(money) >= Number(clicked_part.cost);
-
-        if (canAfford) {
-          updateDecimal(game.state, "current_money", (d) => d.sub(clicked_part.cost));
-          const partPlaced = await t.setPart(clicked_part);
-
-          if (partPlaced) {
-            ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
-            if (ui.deviceFeatures?.lightVibration) {
-              ui.deviceFeatures.lightVibration();
-            }
-            soundPlayed = true;
-            if (game.emit) {
-              game.emit("partPlaced", { part: clicked_part, tile: t });
-            }
-          } else {
-            updateDecimal(game.state, "current_money", (d) => d.add(clicked_part.cost));
-            if (!soundPlayed && game.audio) {
-              const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
-              game.audio.play("error", null, pan);
-              soundPlayed = true;
-            }
-          }
-        } else {
-          if (!soundPlayed && game.audio) {
-            const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
-            game.audio.play("error", null, pan);
-            soundPlayed = true;
-          }
-        }
-      }
-    }
+    const intents = buildGridIntents({
+      game,
+      tilesToModify,
+      event,
+      clicked_part,
+    });
+    await dispatchGridIntents(game, ui, intents);
   }
 
   spawnTileIcon(kind, fromTile, toTile = null) {

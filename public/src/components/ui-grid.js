@@ -23,6 +23,7 @@ import {
   BaseComponent,
   vuSegmentRatio01,
 } from "../utils.js";
+import { enqueueGameEffect } from "../state.js";
 
 export { Tileset } from "../logic.js";
 
@@ -59,8 +60,7 @@ class StaticGridRenderer {
       if (path) {
         ctx.fillStyle = COLORS.tileOccDropShadow;
         ctx.fillRect(x + 1, y + 5, ts - 2, ts - 2);
-        const img = this._shared.loadImage(path);
-        if (img.complete && img.naturalWidth) ctx.drawImage(img, x, y - 3, ts, ts);
+        this._shared.drawPartSprite(ctx, path, x, y, ts);
       }
     }
     if (game.blueprintPlanner?.active && game.partset && typeof game.getBlueprintPlannerPartId === "function") {
@@ -69,13 +69,14 @@ class StaticGridRenderer {
         const ghostPart = game.partset.getPartById(ghostId);
         const gpath = ghostPart && typeof ghostPart.getImagePath === "function" ? ghostPart.getImagePath() : null;
         if (gpath) {
-          const gimg = this._shared.loadImage(gpath);
           ctx.save();
           ctx.globalAlpha = 0.5;
-          if (gimg.complete && gimg.naturalWidth) ctx.drawImage(gimg, x, y - 3, ts, ts);
+          this._shared.drawPartSprite(ctx, gpath, x, y, ts);
           ctx.restore();
           ctx.save();
-          ctx.strokeStyle = "rgb(0 200 255)";
+          const liveId = occupied ? tile.part?.id : null;
+          const isDiff = liveId !== ghostId;
+          ctx.strokeStyle = isDiff ? "rgb(255 160 60)" : "rgb(0 200 255)";
           ctx.setLineDash([5, 4]);
           ctx.lineWidth = 2;
           ctx.strokeRect(x + 2, y + 2, ts - 4, ts - 4);
@@ -433,6 +434,36 @@ export class GridCanvasRenderer {
     this._staticRenderer = new StaticGridRenderer(this);
     this._dynamicRenderer = new DynamicOverlayRenderer(this);
     this._heatRenderer = new HeatEffectsRenderer(this);
+    this._atlasFrames = null;
+    this._atlasImg = null;
+    this._startAtlasLoad();
+  }
+
+  _startAtlasLoad() {
+    if (typeof fetch === "undefined") return;
+    fetch("data/sprite-atlas.json")
+      .then((r) => r.json())
+      .then((data) => {
+        this._atlasFrames = data.frames || null;
+        const img = new Image();
+        img.onload = () => {
+          this._atlasImg = img;
+          this.markStaticDirty();
+        };
+        img.src = data.atlas || "img/reactor-parts-atlas.png";
+      })
+      .catch(() => {});
+  }
+
+  drawPartSprite(ctx, imagePath, dx, dy, ts) {
+    const uv = this._atlasFrames?.[imagePath];
+    const atlas = this._atlasImg;
+    if (uv && atlas && atlas.complete && atlas.naturalWidth) {
+      ctx.drawImage(atlas, uv.x, uv.y, uv.w, uv.h, dx, dy - 3, ts, ts);
+      return;
+    }
+    const img = this.loadImage(imagePath);
+    if (img.complete && img.naturalWidth) ctx.drawImage(img, dx, dy - 3, ts, ts);
   }
 
   loadImage(path) {
@@ -1025,7 +1056,7 @@ export class GridScaler extends BaseComponent {
             this._reseatTimeoutId = setTimeout(() => {
                 this._reseatTimeoutId = null;
                 if (this.reactor) this.reactor.style.filter = "";
-                if (this.ui.game?.audio) this.ui.game.audio.play("reboot", 0.5);
+                if (this.ui.game) enqueueGameEffect(this.ui.game, { kind: "sfx", id: "reboot", vol: 0.5, context: "global" });
             }, 150);
         }
 

@@ -1,5 +1,7 @@
 import { tileKey, resolveTileFromKey } from "../state.js";
 
+// Pointer paths resolve to a tile + DOM event; GridController maps those to grid intents (grid-intent-pipeline.js).
+
 class Hotkeys {
   constructor(game) { this.game = game; }
   *getTiles(tile, event) {
@@ -138,7 +140,7 @@ export class InputHandler {
   }
 
   setupReactorEventListeners() {
-    const reactor = this.ui.pageInitUI?.getReactor?.() ?? this.ui.DOMElements?.reactor;
+    const reactor = this.ui.pageInitUI?.getReactor?.() ?? this.ui.coreLoopUI?.getElement?.("reactor") ?? this.ui.DOMElements?.reactor;
     if (!reactor) return;
 
     const MOVE_THRESHOLD = 18;
@@ -200,7 +202,7 @@ export class InputHandler {
   }
 
   setupSegmentHighlight() {
-    const reactorElement = this.ui.pageInitUI?.getReactor?.() ?? this.ui.DOMElements?.reactor;
+    const reactorElement = this.ui.pageInitUI?.getReactor?.() ?? this.ui.coreLoopUI?.getElement?.("reactor") ?? this.ui.DOMElements?.reactor;
     if (!reactorElement) return;
 
     const heatComponentCategories = [

@@ -450,7 +450,10 @@ class ObjectivesUI {
     if (this.controller) return this.controller.animateCompletion();
   }
   showObjectivesForPage(pageId) {
-    if (this.ui?.uiState) this.ui.uiState.active_page = pageId;
+    if (this.ui?.uiState) {
+      this.ui.uiState.active_page = pageId;
+      this.ui.uiState.active_route = pageId;
+    }
     if (this.controller) return this.controller.showForPage(pageId);
   }
   setupObjectivesListeners() {

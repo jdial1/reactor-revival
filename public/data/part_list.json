@@ -125,6 +125,7 @@
   {
     "id": "reflector",
     "type": "reflector",
+    "traits": ["REFLECTOR"],
     "title": "Neutron Reflector",
     "base_description": "+%power_increase% adjacent power. Lasts %ticks ticks.",
     "levels": 5,
@@ -140,6 +141,7 @@
   {
     "id": "reflector6",
     "type": "reflector",
+    "traits": ["REFLECTOR"],
     "title": "Thermal Neutron Reflector",
     "base_description": "+%power_increase% adjacent power. +%heat_increase% adjacent heat. Lasts %ticks ticks.",
     "category": "reflector",
@@ -154,6 +156,7 @@
   {
     "id": "capacitor",
     "type": "capacitor",
+    "traits": ["CAPACITOR"],
     "title": "Capacitor",
     "base_description": "+%reactor_power reactor power storage (grid tile).",
     "levels": 5,
@@ -169,6 +172,7 @@
   {
     "id": "capacitor6",
     "type": "capacitor",
+    "traits": ["CAPACITOR"],
     "title": "Extreme Capacitor",
     "base_description": "+%reactor_power reactor power storage (grid tile). Adds 50% of auto-sold power as heat.",
     "category": "capacitor",
@@ -177,11 +181,13 @@
     "level": 6,
     "base_cost": 105000000000000,
     "base_reactor_power": 2100000000000000,
-    "base_containment": 5400000000000
+    "base_containment": 5400000000000,
+    "capacitor_autosell_heat_ratio": 0.5
   },
   {
     "id": "vent",
     "type": "vent",
+    "traits": ["VENT", "HEAT_DISSIPATION"],
     "title": "Heat Vent",
     "base_description": "Vents %vent heat. Holds %containment heat.",
     "levels": 5,
@@ -198,6 +204,7 @@
   {
     "id": "vent6",
     "type": "vent",
+    "traits": ["VENT", "HEAT_DISSIPATION"],
     "title": "Extreme Vent",
     "base_description": "Vents %vent heat. Holds %containment heat. Consumes power equal to heat removed.",
     "category": "vent",
@@ -206,11 +213,13 @@
     "level": 6,
     "base_cost": 50000000000000,
     "base_containment": 100000000000,
-    "base_vent": 5000000000
+    "base_vent": 5000000000,
+    "vent_consumes_power": true
   },
   {
     "id": "heat_exchanger",
     "type": "heat_exchanger",
+    "traits": ["HEAT_EXCHANGER"],
     "title": "Heat Exchanger",
     "base_description": "Transfers %transfer heat per neighbor. Holds %containment heat.",
     "levels": 5,
@@ -227,6 +236,7 @@
   {
     "id": "heat_exchanger6",
     "type": "heat_exchanger",
+    "traits": ["HEAT_EXCHANGER"],
     "title": "Extreme Heat Exchanger",
     "base_description": "Transfers %transfer heat per part in row. Holds %containment heat.",
     "category": "heat_exchanger",
@@ -240,6 +250,7 @@
   {
     "id": "heat_inlet",
     "type": "heat_inlet",
+    "traits": ["HEAT_INLET"],
     "title": "Heat Inlet",
     "base_description": "Pulls %transfer heat per neighbor into the reactor.",
     "levels": 5,
@@ -254,6 +265,7 @@
   {
     "id": "heat_inlet6",
     "type": "heat_inlet",
+    "traits": ["HEAT_INLET"],
     "title": "Extreme Heat Inlet",
     "base_description": "Pulls %transfer heat per neighbor into the reactor. Range: %range tiles.",
     "category": "heat_inlet",
@@ -266,6 +278,7 @@
   {
     "id": "heat_outlet",
     "type": "heat_outlet",
+    "traits": ["HEAT_OUTLET"],
     "title": "Heat Outlet",
     "base_description": "Pushes %transfer heat from reactor to neighbors.",
     "levels": 5,
@@ -280,6 +293,7 @@
   {
     "id": "heat_outlet6",
     "type": "heat_outlet",
+    "traits": ["HEAT_OUTLET"],
     "title": "Extreme Heat Outlet",
     "base_description": "Pushes %transfer heat from reactor to neighbors. Range: %range tiles.",
     "category": "heat_outlet",
@@ -287,11 +301,13 @@
     "erequires": "explosive_ejection",
     "level": 6,
     "base_cost": 50000000000000,
-    "base_transfer": 20000000000
+    "base_transfer": 20000000000,
+    "outlet_respect_neighbor_cap": true
   },
   {
     "id": "coolant_cell",
     "type": "coolant_cell",
+    "traits": ["COOLANT_CELL"],
     "title": "Coolant Cell",
     "base_description": "Holds %containment heat.",
     "levels": 5,
@@ -306,6 +322,7 @@
   {
     "id": "coolant_cell6",
     "type": "coolant_cell",
+    "traits": ["COOLANT_CELL"],
     "title": "Thermionic Coolant Cell",
     "base_description": "Holds %containment heat. Converts 50% of added heat into power.",
     "category": "coolant_cell",
@@ -318,6 +335,7 @@
   {
     "id": "reactor_plating",
     "type": "reactor_plating",
+    "traits": ["REACTOR_PLATING"],
     "title": "Reactor Plating",
     "base_description": "+%reactor_heat reactor heat capacity (grid tile).",
     "levels": 5,
@@ -332,6 +350,7 @@
   {
     "id": "reactor_plating6",
     "type": "reactor_plating",
+    "traits": ["REACTOR_PLATING"],
     "title": "Charged Reactor Plating",
     "base_description": "+%reactor_heat reactor heat capacity (grid tile). +%reactor_power reactor power storage (charged plating).",
     "category": "reactor_plating",
@@ -345,6 +364,7 @@
   {
     "id": "particle_accelerator",
     "type": "particle_accelerator",
+    "traits": ["PARTICLE_ACCELERATOR"],
     "title": "Particle Accelerator",
     "base_description": "Creates Exotic Particles from heat. Meltdown on explosion. Holds %containment heat.",
     "levels": 5,
@@ -361,6 +381,7 @@
   {
     "id": "particle_accelerator6",
     "type": "particle_accelerator",
+    "traits": ["PARTICLE_ACCELERATOR"],
     "title": "Black Hole Particle Accelerator",
     "base_description": "Creates Exotic Particles from heat. Actively pulls %transfer heat from the reactor at 1 power per heat. Meltdown on explosion. Holds %containment heat.",
     "category": "particle_accelerator",
@@ -375,6 +396,12 @@
   {
     "id": "overflow_valve",
     "type": "overflow_valve",
+    "traits": [
+      "VALVE_UNIT",
+      "VALVE_OVERFLOW",
+      "DIRECTIONAL_FLOW",
+      "THRESHOLD_ACTIVATION"
+    ],
     "title": "Overflow Valve",
     "base_description": "Transfers %transfer heat when input exceeds 80% containment.",
     "category": "valve",
@@ -391,6 +418,12 @@
   {
     "id": "topup_valve",
     "type": "topup_valve",
+    "traits": [
+      "VALVE_UNIT",
+      "VALVE_TOPUP",
+      "DIRECTIONAL_FLOW",
+      "THRESHOLD_ACTIVATION"
+    ],
     "title": "Top-up Valve",
     "base_description": "Transfers %transfer heat when output drops below 20% containment.",
     "category": "valve",
@@ -407,6 +440,7 @@
   {
     "id": "check_valve",
     "type": "check_valve",
+    "traits": ["VALVE_UNIT", "VALVE_CHECK", "DIRECTIONAL_FLOW"],
     "title": "Check Valve",
     "base_description": "Transfers %transfer heat in one direction only.",
     "category": "valve",

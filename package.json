@@ -22,6 +22,7 @@
     "check-pwa-root-files": "node scripts/pwa-check.js",
     "remove-console-logs": "node scripts/remove-console-logs.js",
     "compress-images": "node scripts/compress-images.js",
+    "build:atlas": "node scripts/build-sprite-atlas.js",
     "postinstall": "npm run copy-libs"
   },
   "keywords": [],

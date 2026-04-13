@@ -7,6 +7,7 @@ import {
   NumericToNumber,
 } from "./numberLikeSchema.js";
 import { BalanceConfigSchema } from "./balanceConfigSchema.js";
+import { migrateSave } from "./saveMigration.js";
 
 export const TechTreeDoctrineSchema = z
   .object({
@@ -91,18 +92,24 @@ export const PartDefinitionSchema = z.object({
   activation_threshold: z.union([z.number(), z.string()]).optional().nullable(),
   transfer_direction: z.string().optional().nullable(),
   cell_count: z.number().optional().default(0),
-  cost_multi: z.number().optional().default(1),
+  cost_multi: z.number().optional().default(1).describe("Economy: per-level shop price multiplier"),
   ticks_multiplier: z.number().optional(),
-  containment_multi: z.number().optional(),
-  reactor_power_multi: z.number().optional(),
+  containment_multi: z.number().optional().describe("Stats: per-level containment scaling on parts"),
+  reactor_power_multi: z.number().optional().describe("Stats: per-level reactor power storage scaling"),
   reactor_heat_multiplier: z.number().optional(),
-  vent_multiplier: z.number().optional(),
-  transfer_multiplier: z.number().optional(),
+  vent_multiplier: z.number().optional().describe("Stats: per-level vent rate scaling"),
+  transfer_multiplier: z.number().optional().describe("Stats: per-level heat transfer scaling"),
   power_increase_add: z.number().optional(),
   containment_multiplier: z.number().optional(),
   ep_heat_multiplier: z.number().optional(),
-  cell_tick_upgrade_multi: z.number().optional(),
-  cell_power_upgrade_multi: z.number().optional(),
+  cell_tick_upgrade_multi: z.number().optional().describe("Economy: cell tick upgrade price multiplier per level"),
+  cell_power_upgrade_multi: z.number().optional().describe("Economy: cell power upgrade price multiplier per level"),
+  range: z.number().int().min(1).optional(),
+  topologyType: z.enum(["Manhattan", "Orthogonal", "Cross", "Radial", "Global"]).optional(),
+  vent_consumes_power: z.boolean().optional(),
+  outlet_respect_neighbor_cap: z.boolean().optional(),
+  capacitor_autosell_heat_ratio: z.number().optional(),
+  traits: z.array(z.string()).optional().default([]),
 }).strict();
 
 export const UpgradeDefinitionSchema = z.object({
@@ -164,32 +171,19 @@ const InfiniteObjectiveSchema = z
   .passthrough()
   .optional();
 
-export const SaveDataSchema = z.preprocess((raw) => {
-  if (!raw || typeof raw !== "object") return raw;
-  const data = { ...raw };
-  if (!data.version) data.version = "1.0.0";
-  if (data.tiles && Array.isArray(data.tiles) && data.tiles.length > 0) {
-    const first = data.tiles[0];
-    if (Array.isArray(first)) {
-      const migrated = [];
-      (data.tiles || []).forEach((row, r) => {
-        (row || []).forEach((cell, c) => {
-          if (cell && (cell.partId || cell.id)) {
-            migrated.push({
-              row: r,
-              col: c,
-              partId: cell.partId ?? cell.id,
-              ticks: cell.ticks ?? 0,
-              heat_contained: cell.heat_contained ?? 0,
-            });
-          }
-        });
-      });
-      data.tiles = migrated;
-    }
-  }
-  return data;
-}, z.object({
+const TilesCompactSchema = z.object({
+  encoding: z.literal("u16_f32f32"),
+  rows: z.number().int().min(1),
+  cols: z.number().int().min(1),
+  ids_b64: z.string(),
+  ticks_b64: z.string(),
+  heat_b64: z.string(),
+});
+
+const LatestSaveBodySchema = z.object({
+  save_format_version: z.number().int().min(1).optional().default(1),
+  part_table: z.array(z.string()).optional().default([]),
+  tiles_compact: TilesCompactSchema.optional(),
   version: z.string().optional().default("1.0.0"),
   current_money: SaveDecimalSchema.catch(toDecimal(0)).optional().default(toDecimal(0)),
   rows: z.number().int().min(1).optional().default(12),
@@ -227,7 +221,11 @@ export const SaveDataSchema = z.preprocess((raw) => {
   toggles: z.record(z.string(), z.unknown()).catch({}).optional().default({}),
   quick_select_slots: z.array(z.unknown()).catch([]).optional().default([]),
   ui: z.object({}).passthrough().catch({}).optional().default({}),
-}).passthrough());
+}).passthrough();
+
+export const SaveDataWriteSchema = LatestSaveBodySchema;
+export const SaveDataReadSchema = z.preprocess(migrateSave, LatestSaveBodySchema);
+export const SaveDataSchema = SaveDataReadSchema;
 
 const ArrayBufferLike = typeof SharedArrayBuffer !== "undefined"
   ? z.union([z.instanceof(ArrayBuffer), z.instanceof(SharedArrayBuffer)])
@@ -245,6 +243,7 @@ const GameLoopPartRowSchema = z.object({
   ep_heat: z.number().optional().default(0),
   level: z.number().optional().default(1),
   transfer: z.number().optional().default(0),
+  traits: z.array(z.string()).optional().default([]),
 }).passthrough();
 
 const GameLoopLayoutRowSchema = z.object({
@@ -269,6 +268,7 @@ const GameLoopReactorStateSchema = z.object({
   heat_controlled: z.number().optional().default(0),
   vent_multiplier_eff: z.number().optional().default(0),
   stirling_multiplier: z.number().optional().default(0),
+  use_thermal_graph: z.boolean().optional().default(false),
 }).passthrough();
 
 export const GameLoopTickInputSchema = z.object({
@@ -285,17 +285,22 @@ export const GameLoopTickInputSchema = z.object({
   maxCols: z.number().int().min(1).optional(),
   autoSell: z.boolean().optional().default(false),
   current_money: z.union([z.number(), z.string()]).optional(),
+  auto_buy: z.boolean().optional().default(false),
+  auto_buy_unlocked: z.boolean().optional().default(false),
+  prestigeMoneyMultiplier: z.number().optional().default(1),
 }).passthrough();
 
 export const GameLoopTickResultSchema = z.object({
   type: z.literal("tickResult").optional(),
-  tickId: z.number().int().min(0),
+  tickId: z.number().int(),
   reactorHeat: z.number().optional().default(0),
   reactorPower: z.number().optional().default(0),
   explosionIndices: z.array(z.number().int().min(0)).optional().default([]),
   depletionIndices: z.array(z.number().int().min(0)).optional().default([]),
   tileUpdates: z.array(z.object({ r: z.number().int(), c: z.number().int(), ticks: z.number() })).optional().default([]),
   moneyEarned: z.number().optional().default(0),
+  authoritativeCurrentMoney: z.number().optional(),
+  moneySpentAutoBuy: z.number().optional().default(0),
   powerSold: z.number().optional().default(0),
   ventHeatDissipated: z.number().optional().default(0),
   powerDelta: z.number().optional().default(0),

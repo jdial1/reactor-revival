@@ -1,6 +1,14 @@
 import { html, render } from "lit-html";
 import { StorageUtils, numFormat as fmt, unsafeHTML, logger, MOBILE_BREAKPOINT_PX, BaseComponent } from "../utils.js";
-import { getUpgradeBonusLines as getUpgradeBonusLinesCore, computeNeighborPulseNFromTile } from "../logic.js";
+import {
+  getUpgradeBonusLines as getUpgradeBonusLinesCore,
+  computeNeighborPulseNFromTile,
+  calculateCellPulsePower,
+  calculateCellPulseHeat,
+  collectPartSemanticSegments,
+} from "../logic.js";
+import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
+import { enqueueGameEffect } from "../state.js";
 import {
   tutorialOverlayTemplate,
   tutorialCalloutTemplate,
@@ -584,9 +592,8 @@ function formatCellSubstrateLines(tile, part) {
   const N = computeNeighborPulseNFromTile(tile);
   const H = part.base_heat ?? 0;
   const P = part.base_power ?? 0;
-  const pulse = M + N;
-  const heatVal = (H * pulse * pulse) / C;
-  const powVal = P * pulse;
+  const heatVal = calculateCellPulseHeat(H, M, N, C);
+  const powVal = calculateCellPulsePower(P, M, N);
   return `[P: ${fmt(P, 0)}] × ([M: ${M}] + [N: ${fmt(N, 0)}]) = ${fmt(powVal, 0)} Power/tick; [H: ${fmt(H, 0)}] × ([M: ${M}] + [N: ${fmt(N, 0)}])² / [C: ${C}] = ${fmt(heatVal, 0)} Heat/tick`;
 }
 
@@ -607,11 +614,15 @@ function tooltipContentTemplate(obj, tile, game, isMobile, onBuy) {
   if (isMobile) {
     const stats = buildMobileStatsArray(obj, tile);
     const statsHtml = obj.upgrade ? stats.join(" ") : "";
-    const description =
-      obj.category === "cell" && !obj.upgrade && tile
-        ? formatCellSubstrateLines(tile, obj)
-        : obj.description || obj.upgrade?.description;
-    const descHtml = description ? formatDescriptionBulleted(description, iconify) : "";
+    let descHtml = "";
+    if (obj.category === "cell" && !obj.upgrade && tile) {
+      descHtml = formatDescriptionBulleted(formatCellSubstrateLines(tile, obj), iconify);
+    } else if (!obj.upgrade) {
+      descHtml = formatSemanticSegmentsForTooltip(collectPartSemanticSegments(obj, tile), fmt, iconify);
+    } else {
+      const description = obj.description || obj.upgrade?.description;
+      descHtml = description ? formatDescriptionBulleted(description, iconify) : "";
+    }
     const bonusLines = getUpgradeBonusLines(obj, tile, game);
     const bonusHtml = bonusLines.map((line) => `<div class="tooltip-bonus-line">${colorizeBonus(line, iconify)}</div>`).join("");
     let upgradeStatus = "";
@@ -632,11 +643,15 @@ function tooltipContentTemplate(obj, tile, game, isMobile, onBuy) {
 
   const summaryItems = buildDesktopSummaryItems(obj, tile);
   const summaryHtml = obj.upgrade ? summaryItems.join("") : "";
-  const description =
-    obj.category === "cell" && !obj.upgrade && tile
-      ? formatCellSubstrateLines(tile, obj)
-      : obj.description || obj.upgrade?.description;
-  const descHtml = description ? formatDescriptionBulleted(description, iconify) : "";
+  let descHtml = "";
+  if (obj.category === "cell" && !obj.upgrade && tile) {
+    descHtml = formatDescriptionBulleted(formatCellSubstrateLines(tile, obj), iconify);
+  } else if (!obj.upgrade) {
+    descHtml = formatSemanticSegmentsForTooltip(collectPartSemanticSegments(obj, tile), fmt, iconify);
+  } else {
+    const description = obj.description || obj.upgrade?.description;
+    descHtml = description ? formatDescriptionBulleted(description, iconify) : "";
+  }
   const bonusLines = getUpgradeBonusLines(obj, tile, game);
   const bonusHtml = bonusLines.map((line) => `<div class="tooltip-bonus-line">${colorizeBonus(line, iconify)}</div>`).join("");
   const stats = getDetailedStats(obj, tile, game);
@@ -784,10 +799,10 @@ export class TooltipManager extends BaseComponent {
       e.preventDefault();
       e.stopPropagation();
       if (this.game.upgradeset.purchaseUpgrade(this.current_obj.id)) {
-        if (this.game.audio) this.game.audio.play("upgrade");
+        enqueueGameEffect(this.game, { kind: "sfx", id: "upgrade", context: "global" });
         this.update();
       } else {
-        if (this.game.audio) this.game.audio.play("error");
+        enqueueGameEffect(this.game, { kind: "sfx", id: "error", context: "global" });
       }
     };
     const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, this.isMobile, onBuy);

@@ -2,6 +2,7 @@ import { fromError } from "../lib/zod-validation-error.js";
 import { z } from "../lib/zod.js";
 import superjson from "../lib/superjson.js";
 import { html, render } from "lit-html";
+import { subscribeKey } from "valtio/vanilla/utils";
 import Decimal, {
   toDecimal,
   toNumber,
@@ -31,6 +32,8 @@ import Decimal, {
   MAX_TEST_FRAMES,
   SESSION_UPDATE_INTERVAL_MS,
   MAX_VISUAL_EVENTS,
+  MAX_VISUAL_REFLECTOR_PAIRS_PER_FRAME,
+  MAX_VISUAL_EXPLOSION_FLASHES_PER_FRAME,
   HEAT_CALC_POOL_SIZE,
   AUTONOMIC_REPAIR_POWER_COST,
   AUTONOMIC_REPAIR_POWER_MIN,
@@ -45,6 +48,8 @@ import Decimal, {
   VISUAL_PARTICLE_MED_COUNT,
   OFFLINE_TIME_THRESHOLD_MS,
   MAX_ACCUMULATOR_MULTIPLIER,
+  MAX_LIVE_TICKS,
+  MAX_CATCHUP_TICKS,
   getIndex,
   GRID,
   COLORS,
@@ -94,6 +99,8 @@ import Decimal, {
   runCathodeScramble,
   vuSegmentRatio01,
 } from "./utils.js";
+import { buildOrthogonalAdjacencyCSR, adjacencyKey } from "./spatial-adjacency.js";
+import { runPartStatMiddlewares, snapshotPartStats } from "./part-stat-pipeline.js";
 import {
   GameActionSchema,
   ACTION_SCHEMA_REGISTRY,
@@ -119,6 +126,8 @@ import {
   runEpartOnclick,
   getAffordabilitySettings,
   Reactor,
+  enqueueGameEffect,
+  previewBlueprintPlannerStats,
 } from "./state.js";
 import {
   BalanceConfigSchema,
@@ -174,10 +183,15 @@ const CATALYST_REDUCTION_CAP = 0.75;
 const PCT_BASE = 100;
 const SINGLE_CELL_DESC_TPL = "Creates %power power. Creates %heat heat. Lasts %ticks ticks.";
 const MULTI_CELL_DESC_TPL = "Acts as %count %type cells. Creates %power power. Creates %heat heat. Lasts %ticks ticks";
-const CELL_COUNTS_BY_LEVEL = [1, 2, 4];
 const TITLE_PREFIX_STRIP = /Dual |Quad /;
 
-const CELL_POWER_MULTIPLIERS = [1, 4, 12];
+export const CELL_FORM_FACTORS = [
+  { titlePrefix: "", cellPackM: 1, cellCount: 1 },
+  { titlePrefix: "Dual ", cellPackM: 4, cellCount: 2 },
+  { titlePrefix: "Quad ", cellPackM: 12, cellCount: 4 },
+];
+
+const CELL_COUNTS_BY_LEVEL = CELL_FORM_FACTORS.map((f) => f.cellCount);
 
 function migrateLegacyValvePartId(partId) {
   if (partId === "overflow_valve2" || partId === "overflow_valve3" || partId === "overflow_valve4") return "overflow_valve";
@@ -185,9 +199,11 @@ function migrateLegacyValvePartId(partId) {
   if (partId === "check_valve2" || partId === "check_valve3" || partId === "check_valve4") return "check_valve";
   return partId;
 }
-const CELL_COUNTS = [1, 2, 4];
 const PART_TITLE_PREFIXES = ["Basic ", "Advanced ", "Super ", "Wonderous ", "Ultimate "];
-const CELL_TITLE_PREFIXES = ["", "Dual ", "Quad "];
+
+export function resolveCellTierPartId(type, level) {
+  return `${type}${level}`;
+}
 
 function getUpgradeLevel(us, id) {
   return us.getUpgrade(id)?.level || 0;
@@ -209,6 +225,99 @@ function gatherUpgradeLevels(game) {
         fractalPiping: level("fractal_piping"),
         ultracryonics: level("ultracryonics"),
     };
+}
+
+export function computeModifiers(game) {
+  const us = game?.upgradeset;
+  if (!us) return null;
+  const lv = (id) => getUpgradeLevel(us, id);
+  const electroLvl = lv("electro_thermal_conversion");
+  const baseMhr = game.base_manual_heat_reduce ?? 1;
+  return {
+    gridRows: game.base_rows + lv("expand_reactor_rows"),
+    gridCols: game.base_cols + lv("expand_reactor_cols"),
+    heat_power_multiplier: lv("forceful_fusion"),
+    heat_controlled: lv("heat_control_operator") > 0,
+    heat_outlet_controlled: lv("heat_outlet_control_operator") > 0,
+    manual_heat_reduce: baseMhr * Math.pow(10, lv("improved_piping")),
+    transfer_plating_multiplier: lv("reinforced_heat_exchangers"),
+    transfer_capacitor_multiplier: lv("active_exchangers"),
+    vent_plating_multiplier: lv("improved_heatsinks"),
+    stirling_multiplier: lv("stirling_generators") * BALANCE.stirlingMultiplierPerLevel,
+    manual_vent_percent: lv("emergency_coolant") * BALANCE.emergencyCoolantMultPerLevel,
+    perpetual_capacitors: lv("perpetual_capacitors") > 0,
+    perpetual_reflectors: lv("perpetual_reflectors") > 0,
+    manual_override_mult: lv("manual_override") * BALANCE.manualOverrideMultPerLevel,
+    convective_boost: lv("convective_airflow") * BALANCE.convectiveBoostPerLevel,
+    power_to_heat_ratio:
+      electroLvl < 1 ? 0 : BALANCE.electroThermalBaseRatio + (electroLvl - 1) * BALANCE.electroThermalStep,
+    catalyst_reduction: lv("sub_atomic_catalysts") * BALANCE.catalystReductionPerLevel,
+    thermal_feedback_rate: lv("thermal_feedback") * BALANCE.thermalFeedbackRatePerLevel,
+    volatile_tuning_max: lv("volatile_tuning") * BALANCE.volatileTuningMaxPerLevel,
+    plating_transfer_rate: lv("ceramic_composite") * BALANCE.platingTransferRatePerLevel,
+    decompression_enabled: lv("explosive_decompression") > 0,
+    reflector_cooling_factor: lv("reflector_cooling") * BALANCE.reflectorCoolingFactorPerLevel,
+    auto_sell_from_upgrade: lv("auto_sell_operator") > 0,
+    auto_buy_from_upgrade: lv("auto_buy_operator") > 0,
+  };
+}
+
+export function applyComputedModifiers(game, opts = {}) {
+  if (!game?.upgradeset || !game.reactor) return;
+  const skipGrid = opts.skipGrid === true;
+  const m = computeModifiers(game);
+  if (!m) return;
+  const r = game.reactor;
+  if (!skipGrid) {
+    const rowsChanged = game.rows !== m.gridRows;
+    const colsChanged = game.cols !== m.gridCols;
+    if (rowsChanged) game.gridManager.setRows(m.gridRows);
+    if (colsChanged) game.gridManager.setCols(m.gridCols);
+    if (
+      (rowsChanged || colsChanged) &&
+      typeof window !== "undefined" &&
+      window.innerWidth &&
+      window.innerWidth <= MOBILE_BREAKPOINT_PX
+    ) {
+      setTimeout(() => game.emit?.("gridResized"), RESIZE_DELAY_MS);
+    }
+  }
+
+  r.heat_power_multiplier = m.heat_power_multiplier;
+  r.heat_outlet_controlled = m.heat_outlet_controlled;
+  r.transfer_plating_multiplier = m.transfer_plating_multiplier;
+  r.transfer_capacitor_multiplier = m.transfer_capacitor_multiplier;
+  r.vent_plating_multiplier = m.vent_plating_multiplier;
+  r.stirling_multiplier = m.stirling_multiplier;
+  r.manual_vent_percent = m.manual_vent_percent;
+  r.perpetual_capacitors = m.perpetual_capacitors;
+  r.perpetual_reflectors = m.perpetual_reflectors;
+  r.manual_override_mult = m.manual_override_mult;
+  r.convective_boost = m.convective_boost;
+  r.power_to_heat_ratio = m.power_to_heat_ratio;
+  r.catalyst_reduction = m.catalyst_reduction;
+  r.thermal_feedback_rate = m.thermal_feedback_rate;
+  r.volatile_tuning_max = m.volatile_tuning_max;
+  r.plating_transfer_rate = m.plating_transfer_rate;
+  r.decompression_enabled = m.decompression_enabled;
+  r.reflector_cooling_factor = m.reflector_cooling_factor;
+
+  if (r.manual_heat_reduce !== m.manual_heat_reduce) {
+    r.manual_heat_reduce = m.manual_heat_reduce;
+    game.emit?.("statePatch", { manual_heat_reduce: m.manual_heat_reduce });
+  } else {
+    r.manual_heat_reduce = m.manual_heat_reduce;
+  }
+
+  if (!!r.auto_sell_enabled !== m.auto_sell_from_upgrade) {
+    game.onToggleStateChange?.("auto_sell", m.auto_sell_from_upgrade);
+  }
+  if (!!r.auto_buy_enabled !== m.auto_buy_from_upgrade) {
+    game.onToggleStateChange?.("auto_buy", m.auto_buy_from_upgrade);
+  }
+  if (!!r.heat_controlled !== m.heat_controlled) {
+    game.onToggleStateChange?.("heat_control", m.heat_controlled);
+  }
 }
 
 function computeTickMultiplier(part, game, levels) {
@@ -264,23 +373,103 @@ export function computeNeighborPulseNFromTile(tile) {
 }
 
 export function computeWorkerNeighborPulseN(r, c, partTable, partAt, rows, cols) {
+  const self = partAt(r, c);
+  if (!self) return 0;
+  const cp = partTable[self.partIndex];
+  if (!cp || cp.category !== "cell") return 0;
+  const range = cp.range ?? 1;
+  const topo = cp.topologyType || "Manhattan";
+  const coords = topologyNeighborCoords(topo, r, c, range, rows, cols);
   let N = 0;
-  const keys = getNeighborKeys(r, c);
-  for (let k = 0; k < keys.length; k++) {
-    const [nr, nc] = keys[k];
-    if (!isInBounds(nr, nc, rows, cols)) continue;
-    const cell = partAt(nr, nc);
-    if (!cell) continue;
-    const np = partTable[cell.partIndex];
+  for (let i = 0; i < coords.length; i++) {
+    const [nr, nc] = coords[i];
+    const nb = partAt(nr, nc);
+    if (!nb) continue;
+    const np = partTable[nb.partIndex];
     if (!np) continue;
-    if (np.category === "cell" && (cell.ticks ?? 0) > 0) N += np.cell_count || 1;
-    if (np.category === "reflector" && (cell.ticks ?? 0) > 0) {
+    if (np.category === "cell" && (nb.ticks ?? 0) > 0) N += np.cell_count || 1;
+    if (np.category === "reflector" && (nb.ticks ?? 0) > 0) {
       const v = np.neighbor_pulse_value;
       N += typeof v === "number" && isFinite(v) && v >= 0 ? v : 1;
     }
   }
   return N;
 }
+
+export function calculateCellPulsePower(coefficient, M, N) {
+  return coefficient * (M + N);
+}
+
+export function calculateCellPulseHeat(Hbase, M, N, C) {
+  const pulse = M + N;
+  return (Hbase * pulse * pulse) / Math.max(1, C);
+}
+
+export const TOPOLOGY_TYPES = ["Manhattan", "Orthogonal", "Cross", "Radial", "Global"];
+
+export function topologyNeighborCoords(topologyType, row, col, range, rows, cols) {
+  const t = topologyType || "Manhattan";
+  const rng = Math.max(1, Number(range) || 1);
+  const out = [];
+  if (t === "Global") {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (r !== row || c !== col) out.push([r, c]);
+      }
+    }
+    return out;
+  }
+  if (t === "Cross") {
+    for (let c = 0; c < cols; c++) {
+      if (c !== col) out.push([row, c]);
+    }
+    for (let r = 0; r < rows; r++) {
+      if (r !== row) out.push([r, col]);
+    }
+    return out;
+  }
+  if (t === "Orthogonal") {
+    const d = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (let i = 0; i < d.length; i++) {
+      const r = row + d[i][0];
+      const c = col + d[i][1];
+      if (isInBounds(r, c, rows, cols)) out.push([r, c]);
+    }
+    return out;
+  }
+  if (t === "Radial") {
+    const rmax = Math.ceil(rng);
+    for (let dr = -rmax; dr <= rmax; dr++) {
+      for (let dc = -rmax; dc <= rmax; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        if (Math.hypot(dr, dc) <= rng + 1e-9) {
+          const r = row + dr;
+          const c = col + dc;
+          if (isInBounds(r, c, rows, cols)) out.push([r, c]);
+        }
+      }
+    }
+    return out;
+  }
+  for (let r_offset = -rng; r_offset <= rng; r_offset++) {
+    for (let c_offset = -rng; c_offset <= rng; c_offset++) {
+      if (r_offset === 0 && c_offset === 0) continue;
+      if (Math.abs(r_offset) + Math.abs(c_offset) > rng) continue;
+      const r = row + r_offset;
+      const c = col + c_offset;
+      if (isInBounds(r, c, rows, cols)) out.push([r, c]);
+    }
+  }
+  return out;
+}
+
+export const Topology = {
+  Manhattan: (row, col, range, rows, cols) => topologyNeighborCoords("Manhattan", row, col, range, rows, cols),
+  Orthogonal: (row, col, _range, rows, cols) => topologyNeighborCoords("Orthogonal", row, col, 1, rows, cols),
+  Cross: (row, col, _range, rows, cols) => topologyNeighborCoords("Cross", row, col, 1, rows, cols),
+  Radial: (row, col, range, rows, cols) => topologyNeighborCoords("Radial", row, col, range, rows, cols),
+  Global: (row, col, _range, rows, cols) => topologyNeighborCoords("Global", row, col, 1, rows, cols),
+};
 
 function computeCapacitorMultipliers(part, _levels) {
   const capacitorPowerMultiplier = 1;
@@ -401,9 +590,8 @@ function applyBaseCellStats(part, game, levels, m) {
     const M = part.cell_pack_M ?? 1;
     const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
     const N = m.neighborPulses ?? 0;
-    const pulse = M + N;
-    part.power = part.base_power * pulse;
-    part.heat = part.base_heat * (Math.pow(pulse, 2) / C);
+    part.power = calculateCellPulsePower(part.base_power, M, N);
+    part.heat = calculateCellPulseHeat(part.base_heat, M, N, C);
   } else {
     part.power = part.base_power;
     part.heat = part.base_heat;
@@ -433,7 +621,10 @@ function applyTransferPlating(part, game, m) {
 }
 
 function applyRangeWithTunneling(part, _levels) {
-  part.range = 1;
+  const def = part.part;
+  const r = def?.range;
+  part.range = typeof r === "number" && r > 0 ? r : 1;
+  part.topologyType = def?.topologyType || "Manhattan";
 }
 
 function applyEpHeatWithFallback(part, game, m) {
@@ -509,9 +700,7 @@ function applyHeatPowerMultiplier(part, game) {
   if (!isFinite(part.power) || isNaN(part.power)) part.power = part.base_power || 0;
 }
 
-function recalculatePartStats(part) {
-  const game = part.game;
-  const levels = gatherUpgradeLevels(game);
+function stagePartStatMultipliers(part, game, levels) {
   const tickMultiplier = computeTickMultiplier(part, game, levels);
   const { capacitorPowerMultiplier, capacitorContainmentMultiplier } = computeCapacitorMultipliers(part, levels);
   const { transferMultiplier, heatExchangerContainmentMultiplier } =
@@ -521,14 +710,30 @@ function recalculatePartStats(part) {
     computeCoolantReflectorMultipliers(part, levels);
   const epHeatMultiplier = computeEpHeatMultiplier(part, game);
   const epHeatScale = computeEpHeatScale(part, game);
-  const m = {
-    tickMultiplier, capacitorPowerMultiplier, capacitorContainmentMultiplier,
-    transferMultiplier, heatExchangerContainmentMultiplier, ventMultiplier, ventContainmentMultiplier,
-    coolantContainmentMultiplier, reflectorPowerIncreaseMultiplier, epHeatMultiplier, epHeatScale,
+  return {
+    tickMultiplier,
+    capacitorPowerMultiplier,
+    capacitorContainmentMultiplier,
+    transferMultiplier,
+    heatExchangerContainmentMultiplier,
+    ventMultiplier,
+    ventContainmentMultiplier,
+    coolantContainmentMultiplier,
+    reflectorPowerIncreaseMultiplier,
+    epHeatMultiplier,
+    epHeatScale,
   };
+}
+
+function recalculatePartStats(part) {
+  const game = part.game;
+  const levels = gatherUpgradeLevels(game);
+  const m = stagePartStatMultipliers(part, game, levels);
   applyMultipliersToPart(part, game, levels, m);
   applyPerpetualFlag(part, game);
   applyHeatPowerMultiplier(part, game);
+  part._statPipelineTrace = { levels, multipliers: m, output: snapshotPartStats(part) };
+  runPartStatMiddlewares(part, { game, levels, multipliers: m });
 }
 
 function getBaseDescriptionTemplate(part) {
@@ -577,6 +782,30 @@ function buildPartDescription(part, fmtFn, tile_context = null) {
   const effectiveVent = getEffectiveVent(part, tile_context);
   const cellCountForDesc = getCellCountForDesc(part);
   return applyReplacements(baseDescTpl, part, fmtFn, effectiveTransfer, effectiveVent, cellCountForDesc);
+}
+
+export function collectPartSemanticSegments(part, tile_context = null) {
+  const tpl = getBaseDescriptionTemplate(part);
+  const effectiveTransfer = getEffectiveTransfer(part, tile_context);
+  const effectiveVent = getEffectiveVent(part, tile_context);
+  const cellCountForDesc = getCellCountForDesc(part);
+  const typeLabel = part.part.title.replace(TITLE_PREFIX_STRIP, "");
+  const segments = [];
+  if (tpl.includes("%count")) segments.push({ kind: "text", unitKey: "CELL_COUNT", value: cellCountForDesc });
+  if (tpl.includes("%type")) segments.push({ kind: "text", unitKey: "CELL_TYPE", value: typeLabel });
+  if (tpl.includes("%power_increase")) segments.push({ kind: "stat", unitKey: "POWER_INCREASE_UNITS", value: part.power_increase });
+  if (tpl.includes("%heat_increase")) segments.push({ kind: "stat", unitKey: "HEAT_INCREASE_UNITS", value: part.heat_increase, places: 0 });
+  if (tpl.includes("%reactor_power")) segments.push({ kind: "stat", unitKey: "REACTOR_POWER_UNITS", value: part.reactor_power });
+  if (tpl.includes("%reactor_heat")) segments.push({ kind: "stat", unitKey: "REACTOR_HEAT_UNITS", value: part.reactor_heat, places: 0 });
+  if (tpl.includes("%ticks")) segments.push({ kind: "stat", unitKey: "TICKS_UNITS", value: part.ticks });
+  if (tpl.includes("%containment")) segments.push({ kind: "stat", unitKey: "CONTAINMENT_UNITS", value: part.containment, places: 0 });
+  if (tpl.includes("%ep_heat")) segments.push({ kind: "stat", unitKey: "EP_HEAT_UNITS", value: part.ep_heat, places: 0 });
+  if (tpl.includes("%range")) segments.push({ kind: "stat", unitKey: "RANGE_UNITS", value: part.range });
+  if (tpl.includes("%power")) segments.push({ kind: "stat", unitKey: "POWER_UNITS", value: part.power });
+  if (tpl.includes("%heat")) segments.push({ kind: "stat", unitKey: "HEAT_UNITS", value: part.heat, places: 0 });
+  if (tpl.includes("%transfer")) segments.push({ kind: "stat", unitKey: "TRANSFER_UNITS", value: effectiveTransfer });
+  if (tpl.includes("%vent")) segments.push({ kind: "stat", unitKey: "VENT_UNITS", value: effectiveVent });
+  return segments;
 }
 
 function pctFromMultiplier(mult) {
@@ -716,6 +945,11 @@ export class Part {
     this.affordable = false;
     this.$el = null;
     this.className = "";
+    this.vent_consumes_power = !!part_definition.vent_consumes_power;
+    this.outlet_respect_neighbor_cap = !!part_definition.outlet_respect_neighbor_cap;
+    this.capacitor_autosell_heat_ratio =
+      typeof part_definition.capacitor_autosell_heat_ratio === "number" ? part_definition.capacitor_autosell_heat_ratio : 0;
+    this.traits = Array.isArray(part_definition.traits) ? part_definition.traits : [];
 
     this.recalculate_stats();
     this.updateDescription();
@@ -887,7 +1121,7 @@ export class PartSet {
     const partDef = { ...template, level };
 
     if (template.levels) {
-      partDef.id = `${template.type}${level}`;
+      partDef.id = resolveCellTierPartId(template.type, level);
     } else {
       if (template.id) {
         partDef.id = template.id;
@@ -912,13 +1146,14 @@ export class PartSet {
 
 
   _applyCellProperties(partDef, template, level) {
-    partDef.title = `${CELL_TITLE_PREFIXES[level - 1] || ""}${template.title}`;
+    const form = CELL_FORM_FACTORS[level - 1] || CELL_FORM_FACTORS[0];
+    partDef.title = `${form.titlePrefix}${template.title}`;
     partDef.base_description = template.base_description || (level > 1 ? MULTI_CELL_DESC_TPL : SINGLE_CELL_DESC_TPL);
     partDef.base_power = template.base_power;
     partDef.base_heat = template.base_heat;
-    partDef.cell_pack_M = CELL_POWER_MULTIPLIERS[level - 1] || 1;
-    partDef.cell_count_C = CELL_COUNTS[level - 1] || 1;
-    partDef.cell_count = CELL_COUNTS[level - 1] || 1;
+    partDef.cell_pack_M = form.cellPackM;
+    partDef.cell_count_C = form.cellCount;
+    partDef.cell_count = form.cellCount;
   }
 
 
@@ -1146,35 +1381,12 @@ const upgradeActions = {
     game.loop_wait = game.base_loop_wait;
     game.emit?.("statePatch", { loop_wait: game.loop_wait });
   },
-  forceful_fusion: (upgrade, game) => {
-    game.reactor.heat_power_multiplier = upgrade.level;
-    game.reactor.updateStats();
-  },
-  heat_control_operator: (upgrade, game) => {
-    const isEnabled = upgrade.level > 0;
-    game.reactor.heat_controlled = isEnabled;
-    game.onToggleStateChange?.("heat_control", isEnabled);
-  },
-  heat_outlet_control_operator: (upgrade, game) => {
-    game.reactor.heat_outlet_controlled = upgrade.level > 0;
-  },
-  expand_reactor_rows: (upgrade, game) => {
-    game.rows = game.base_rows + upgrade.level;
-    if (typeof window !== "undefined" && window.innerWidth && window.innerWidth <= MOBILE_BREAKPOINT_PX) {
-      setTimeout(() => game.emit?.("gridResized"), RESIZE_DELAY_MS);
-    }
-  },
-  expand_reactor_cols: (upgrade, game) => {
-    game.cols = game.base_cols + upgrade.level;
-    if (typeof window !== "undefined" && window.innerWidth && window.innerWidth <= MOBILE_BREAKPOINT_PX) {
-      setTimeout(() => game.emit?.("gridResized"), RESIZE_DELAY_MS);
-    }
-  },
-  improved_piping: (upgrade, game) => {
-    game.reactor.manual_heat_reduce =
-      game.base_manual_heat_reduce * Math.pow(10, upgrade.level);
-    game.emit?.("statePatch", { manual_heat_reduce: game.reactor.manual_heat_reduce });
-  },
+  forceful_fusion: () => {},
+  heat_control_operator: () => {},
+  heat_outlet_control_operator: () => {},
+  expand_reactor_rows: () => {},
+  expand_reactor_cols: () => {},
+  improved_piping: () => {},
   improved_alloys: (upgrade, game) => {
     updateAllPartStats(game, "reactor_plating");
   },
@@ -1199,11 +1411,8 @@ const upgradeActions = {
     logger.log('debug', 'game', `improved_heat_vents upgrade action called with level ${upgrade.level}`);
     updateAllPartStats(game, "vent");
   },
-  perpetual_capacitors: (upgrade, game) => {
-    game.reactor.perpetual_capacitors = upgrade.level > 0;
-  },
+  perpetual_capacitors: () => {},
   perpetual_reflectors: (upgrade, game) => {
-    game.reactor.perpetual_reflectors = upgrade.level > 0;
     for (let i = 1; i <= MAX_PART_VARIANTS; i++) {
       const part = game.partset.getPartById(`reflector${i}`);
       if (part) {
@@ -1212,24 +1421,12 @@ const upgradeActions = {
       }
     }
   },
-  reinforced_heat_exchangers: (upgrade, game) => {
-    game.reactor.transfer_plating_multiplier = upgrade.level;
-  },
-  active_exchangers: (upgrade, game) => {
-    game.reactor.transfer_capacitor_multiplier = upgrade.level;
-  },
-  improved_heatsinks: (upgrade, game) => {
-    game.reactor.vent_plating_multiplier = upgrade.level;
-  },
-  active_venting: (upgrade, game) => {
-    game.reactor.updateStats();
-  },
-  stirling_generators: (upgrade, game) => {
-    game.reactor.stirling_multiplier = upgrade.level * BALANCE.stirlingMultiplierPerLevel;
-  },
-  emergency_coolant: (upgrade, game) => {
-    game.reactor.manual_vent_percent = upgrade.level * BALANCE.emergencyCoolantMultPerLevel;
-  },
+  reinforced_heat_exchangers: () => {},
+  active_exchangers: () => {},
+  improved_heatsinks: () => {},
+  active_venting: () => {},
+  stirling_generators: () => {},
+  emergency_coolant: () => {},
   component_reinforcement: (upgrade, game) => {
     game.partset.partsArray.forEach(part => part.recalculate_stats());
     game.tileset.active_tiles_list.forEach(tile => {
@@ -1244,37 +1441,22 @@ const upgradeActions = {
       }
     });
   },
-  reflector_cooling: (upgrade, game) => {
-    game.reactor.reflector_cooling_factor = upgrade.level * BALANCE.reflectorCoolingFactorPerLevel;
-    game.reactor.updateStats();
-  },
+  reflector_cooling: () => {},
   quantum_tunneling: (upgrade, game) => {
     ["heat_inlet", "heat_outlet"].forEach((cat) => {
       updateAllPartStats(game, cat);
     });
     game.tileset.tiles_list.forEach(tile => tile.invalidateNeighborCaches());
   },
-  manual_override: (upgrade, game) => {
-    game.reactor.manual_override_mult = upgrade.level * BALANCE.manualOverrideMultPerLevel;
-  },
-  convective_airflow: (upgrade, game) => {
-    game.reactor.convective_boost = upgrade.level * BALANCE.convectiveBoostPerLevel;
-  },
-  electro_thermal_conversion: (upgrade, game) => {
-    game.reactor.power_to_heat_ratio = BALANCE.electroThermalBaseRatio + ((upgrade.level - 1) * BALANCE.electroThermalStep);
-  },
+  manual_override: () => {},
+  convective_airflow: () => {},
+  electro_thermal_conversion: () => {},
   sub_atomic_catalysts: (upgrade, game) => {
-    game.reactor.catalyst_reduction = upgrade.level * BALANCE.catalystReductionPerLevel;
     updateAllPartStats(game, "particle_accelerator");
   },
-  thermal_feedback: (upgrade, game) => {
-    game.reactor.thermal_feedback_rate = upgrade.level * BALANCE.thermalFeedbackRatePerLevel;
-  },
-  volatile_tuning: (upgrade, game) => {
-    game.reactor.volatile_tuning_max = upgrade.level * BALANCE.volatileTuningMaxPerLevel;
-  },
+  thermal_feedback: () => {},
+  volatile_tuning: () => {},
   ceramic_composite: (upgrade, game) => {
-    game.reactor.plating_transfer_rate = upgrade.level * BALANCE.platingTransferRatePerLevel;
     updateAllPartStats(game, "reactor_plating");
     game.tileset.tiles_list.forEach(tile => {
       if (tile.part && tile.part.category === "reactor_plating") {
@@ -1285,17 +1467,9 @@ const upgradeActions = {
       game.engine.markPartCacheAsDirty();
     }
   },
-  explosive_decompression: (upgrade, game) => {
-    game.reactor.decompression_enabled = upgrade.level > 0;
-  },
-  auto_sell_operator: (upgrade, game) => {
-    const isEnabled = upgrade.level > 0;
-    game.onToggleStateChange?.("auto_sell", isEnabled);
-  },
-  auto_buy_operator: (upgrade, game) => {
-    const isEnabled = upgrade.level > 0;
-    game.onToggleStateChange?.("auto_buy", isEnabled);
-  },
+  explosive_decompression: () => {},
+  auto_sell_operator: () => {},
+  auto_buy_operator: () => {},
   protium_cells: (upgrade, game) => {
   },
   cell_power: (upgrade, game) => {
@@ -1397,6 +1571,9 @@ export class Upgrade {
     if (this.type.includes("cell")) {
       this.game.update_cell_power();
     }
+    if (!this.game._suppressModifierSync) {
+      applyComputedModifiers(this.game);
+    }
   }
 
   setAffordable(isAffordable) {
@@ -1473,17 +1650,17 @@ export class Upgrade {
       e.stopPropagation();
       if (this.game.upgradeset && !this.game.upgradeset.isUpgradeAvailable(this.id)) return;
       if (!this.game.upgradeset.purchaseUpgrade(this.id)) {
-        if (this.game.audio) this.game.audio.play('error');
+        enqueueGameEffect(this.game, { kind: "sfx", id: "error", context: "global" });
         return;
       }
-      if (this.game.audio) this.game.audio.play('upgrade');
+      enqueueGameEffect(this.game, { kind: "sfx", id: "upgrade", context: "global" });
       this.game.upgradeset.check_affordability(this.game);
     };
     const onBuyMaxClick = (e) => {
       e.stopPropagation();
       if (this.game.upgradeset && !this.game.upgradeset.isUpgradeAvailable(this.id)) return;
       const count = this.game.upgradeset.purchaseUpgradeToMax(this.id);
-      if (count > 0 && this.game.audio) this.game.audio.play('upgrade');
+      if (count > 0) enqueueGameEffect(this.game, { kind: "sfx", id: "upgrade", context: "global" });
     };
     const onResetClick = (e) => {
       e.stopPropagation();
@@ -2171,6 +2348,18 @@ const checkFunctions = Object.assign({}, cellChecks, powerChecks, milestoneCheck
 
 export function getObjectiveCheck(checkId) { const fn = checkFunctions[checkId]; if (!fn) return null; return (game) => { const result = fn(game); if (typeof result === "boolean") return { completed: result, percent: result ? PERCENT_COMPLETE_MAX : 0, text: result ? "Complete" : "Incomplete" }; return result; }; }
 
+const OBJECTIVE_VALTIO_WATCH_KEYS = [
+  "current_money",
+  "current_exotic_particles",
+  "total_exotic_particles",
+  "stats_power",
+  "stats_heat_generation",
+  "stats_cash",
+  "current_heat",
+  "current_power",
+];
+const OBJECTIVE_WATCH_THROTTLE_MS = 200;
+
 function buildLoadingDisplayInfo(objective) { return { chapterName: "Loading...", chapterProgressText: "0 / 10", chapterProgressPercent: 0, title: objective.title || "Loading...", description: objective.description || "", flavor_text: objective.flavor_text, progressText: "Loading...", progressPercent: 0, reward: { money: objective.reward || 0, ep: objective.ep_reward || 0 }, isComplete: objective.completed || false, isChapterCompletion: objective.isChapterCompletion || false }; }
 function getChapterSize(chapterIndex) { return chapterIndex === 3 ? CHAPTER_4_SIZE : CHAPTER_SIZE_DEFAULT; }
 function computeCompletedInChapter(manager, chapterStart, index, objective) { let completed = 0; for (let i = chapterStart; i < index; i++) { if (manager.objectives_data[i] && manager.objectives_data[i].completed) completed++; } if (objective.completed) completed++; return completed; }
@@ -2344,6 +2533,34 @@ export class ObjectiveManager {
       masterHighHeat: { startTick: 0 },
       infiniteHeatMaintain: { startTick: 0 },
     };
+    this._objectiveWatchUnsubs = [];
+    this._objectiveWatchLastFire = 0;
+  }
+
+  _clearObjectiveStateWatchers() {
+    const u = this._objectiveWatchUnsubs;
+    for (let i = 0; i < u.length; i++) {
+      if (typeof u[i] === "function") u[i]();
+    }
+    this._objectiveWatchUnsubs = [];
+  }
+
+  _bindObjectiveStateWatchers() {
+    this._clearObjectiveStateWatchers();
+    const st = this.game?.state;
+    if (!st || this.disableTimers) return;
+    const fire = () => {
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (now - this._objectiveWatchLastFire < OBJECTIVE_WATCH_THROTTLE_MS) return;
+      this._objectiveWatchLastFire = now;
+      this.check_current_objective();
+    };
+    for (let i = 0; i < OBJECTIVE_VALTIO_WATCH_KEYS.length; i++) {
+      const key = OBJECTIVE_VALTIO_WATCH_KEYS[i];
+      try {
+        this._objectiveWatchUnsubs.push(subscribeKey(st, key, fire));
+      } catch (_) {}
+    }
   }
 
   getSustainedTracking(key) {
@@ -2397,6 +2614,7 @@ export class ObjectiveManager {
   }
 
   _emitObjectiveUnloaded() {
+    this._clearObjectiveStateWatchers();
     this.game?.ui?.stateManager?.handleObjectiveUnloaded?.();
     if (this.game?.emit) this.game.emit("objectiveUnloaded", {});
   }
@@ -2492,6 +2710,7 @@ export class ObjectiveManager {
     this.current_objective_def = inf;
     this._emitObjectiveLoaded({ ...inf, title: inf.title });
     this.objective_unloading = false;
+    this._bindObjectiveStateWatchers();
     this.scheduleNextCheck();
   }
 
@@ -2516,10 +2735,12 @@ export class ObjectiveManager {
     logger.log('debug', 'game', `Loading objective: ${displayObjective.title}`);
     this._emitObjectiveLoaded(displayObjective);
     this.objective_unloading = false;
+    this._bindObjectiveStateWatchers();
     this.scheduleNextCheck();
   }
 
   _loadAllCompletedObjective() {
+    this._clearObjectiveStateWatchers();
     this.current_objective_def = {
       title: "All objectives completed!",
       reward: 0,
@@ -3042,9 +3263,30 @@ export class Tile {
   }
   invalidateNeighborCaches() {
     this._neighborCache = null;
-    const maxRange = 2;
-    for (const neighbor of this.game.tileset.getTilesInRange(this, maxRange)) {
-      if (neighbor) neighbor._neighborCache = null;
+    const ts = this.game?.tileset;
+    if (!ts) return;
+    const rows = this.game.rows;
+    const cols = this.game.cols;
+    const p = this.part;
+    const range = p?.range ?? 1;
+    const topo = p?.topologyType || "Manhattan";
+    const mark = (r, c) => {
+      const t = ts.getTile(r, c);
+      if (t) t._neighborCache = null;
+    };
+    if (topo === "Global") {
+      for (let i = 0; i < ts.tiles_list.length; i++) ts.tiles_list[i]._neighborCache = null;
+      return;
+    }
+    const invalidateRadius = Math.max(2, range + 2);
+    const man = topologyNeighborCoords("Manhattan", this.row, this.col, invalidateRadius, rows, cols);
+    for (let i = 0; i < man.length; i++) mark(man[i][0], man[i][1]);
+    if (topo === "Cross") {
+      for (let c = 0; c < cols; c++) mark(this.row, c);
+      for (let r = 0; r < rows; r++) mark(r, this.col);
+    } else {
+      const extra = topologyNeighborCoords(topo, this.row, this.col, Math.max(range, invalidateRadius), rows, cols);
+      for (let j = 0; j < extra.length; j++) mark(extra[j][0], extra[j][1]);
     }
   }
   get containmentNeighborTiles() {
@@ -3148,7 +3390,7 @@ export class Tile {
     if (!isRestoring && this.game?.partset?.isPartDoctrineLocked(partInstance)) {
       return false;
     }
-    if (!isRestoring && this.game.audio && this.game.audio.enabled) {
+    if (!isRestoring && this.game?.audio?.enabled) {
       logger.log('debug', 'game', `Placing part '${partInstance.id}' on tile (${this.row}, ${this.col})`);
       this.game.debugHistory.add('tile', 'setPart', { row: this.row, col: this.col, partId: partInstance.id });
       const subtype =
@@ -3156,7 +3398,7 @@ export class Tile {
           ? "cell"
           : partInstance.category === "reactor_plating" ? "plating" : partInstance.category === "vent" ? "vent" : null;
       const pan = this.game.calculatePan ? this.game.calculatePan(this.col) : 0;
-      this.game.audio.play("placement", subtype, pan);
+      enqueueGameEffect(this.game, { kind: "sfx", id: "placement", subtype, pan, context: "reactor" });
     }
     this.part = partInstance;
     this.invalidateNeighborCaches();
@@ -3350,21 +3592,19 @@ export class Tileset {
     return null;
   }
 
-  *getTilesInRange(centerTile, range) {
+  *getTilesInRange(centerTile, range, topologyTypeOverride) {
     if (!centerTile) return;
-    for (let r_offset = -range; r_offset <= range; r_offset++) {
-      for (let c_offset = -range; c_offset <= range; c_offset++) {
-        if (r_offset === 0 && c_offset === 0) continue;
-        if (Math.abs(r_offset) + Math.abs(c_offset) > range) continue;
-
-        const r = centerTile.row + r_offset;
-        const c = centerTile.col + c_offset;
-
-        if (r >= 0 && r < this.game.rows && c >= 0 && c < this.game.cols) {
-          const tile = this.tiles[r]?.[c];
-          if (tile) yield tile;
-        }
-      }
+    const rows = this.game.rows;
+    const cols = this.game.cols;
+    const p = centerTile.part;
+    const topo = topologyTypeOverride ?? p?.topologyType ?? "Manhattan";
+    const rng = range != null ? range : p?.range ?? 1;
+    const coords = topologyNeighborCoords(topo, centerTile.row, centerTile.col, rng, rows, cols);
+    for (let i = 0; i < coords.length; i++) {
+      const r = coords[i][0];
+      const c = coords[i][1];
+      const tile = this.tiles[r]?.[c];
+      if (tile) yield tile;
     }
   }
 
@@ -4424,7 +4664,7 @@ function writeOutletEntry(outBuf, base, ts, tile, part, outNeighbors) {
   outBuf[base + OUTLET_OFFSET_INDEX] = ts.gridIndex(tile.row, tile.col);
   outBuf[base + OUTLET_OFFSET_RATE] = tile.getEffectiveTransferValue();
   outBuf[base + OUTLET_OFFSET_ACTIVATED] = tile.activated ? 1 : 0;
-  outBuf[base + OUTLET_OFFSET_IS_OUTLET6] = part.id === 'heat_outlet6' ? 1 : 0;
+  outBuf[base + OUTLET_OFFSET_IS_OUTLET6] = part.outlet_respect_neighbor_cap ? 1 : 0;
   outBuf[base + OUTLET_OFFSET_N_COUNT] = outNeighbors.length;
   for (let j = 0; j < outNeighbors.length && j < MAX_NEIGHBORS; j++) {
     const t = outNeighbors[j];
@@ -4735,6 +4975,11 @@ function partToRow(part) {
     const v = part.neighbor_pulse_value;
     row.neighbor_pulse_value = typeof v === "number" && isFinite(v) && v >= 0 ? v : 1;
   }
+  row.range = part.range ?? 1;
+  row.topologyType = part.topologyType || "Manhattan";
+  row.vent_consumes_power = !!part.vent_consumes_power;
+  row.outlet_respect_neighbor_cap = !!part.outlet_respect_neighbor_cap;
+  row.traits = part.traits ?? [];
   return row;
 }
 
@@ -4777,6 +5022,16 @@ function buildPartLayout(ts, partIdToIndex) {
       const rawHeat = (typeof tile.heat === "number" && !isNaN(tile.heat) && isFinite(tile.heat)) ? tile.heat : partHeat;
       const tilePower = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawPower === 0) ? partPower : rawPower;
       const tileHeat = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawHeat === 0) ? partHeat : rawHeat;
+      const game = ts.game;
+      const hasProtiumLoader = game?.upgradeset?.getUpgrade("experimental_protium_loader")?.level > 0;
+      const isProtium = part.type === "protium";
+      const autoBuyEligible = !!(part.perpetual || (isProtium && hasProtiumLoader));
+      let autoBuyReplaceCost = 0;
+      if (autoBuyEligible && typeof part.getAutoReplacementCost === "function") {
+        const c = part.getAutoReplacementCost();
+        autoBuyReplaceCost = typeof c?.toNumber === "function" ? c.toNumber() : Number(c) || 0;
+      }
+      const maxTicks = part.ticks ?? 0;
       layout.push({
         r: tile.row,
         c: tile.col,
@@ -4787,6 +5042,9 @@ function buildPartLayout(ts, partIdToIndex) {
         ventRate,
         power: tilePower,
         heat: tileHeat,
+        autoBuyEligible,
+        autoBuyReplaceCost,
+        maxTicks,
       });
     }
   }
@@ -4797,6 +5055,149 @@ function buildPartSnapshot(ts) {
   const { partIdToIndex, partTable } = buildPartTable(ts);
   const partLayout = buildPartLayout(ts, partIdToIndex);
   return { partTable, partLayout };
+}
+
+function cloneHeatBufferForWorkerPost(buf) {
+  if (!buf) return new ArrayBuffer(0);
+  if (typeof SharedArrayBuffer !== "undefined" && buf instanceof SharedArrayBuffer) {
+    const f = new Float32Array(buf);
+    const c = new Float32Array(f.length);
+    c.set(f);
+    return c.buffer;
+  }
+  if (buf instanceof ArrayBuffer) return buf.slice(0);
+  return new Float32Array(new Float32Array(buf)).buffer;
+}
+
+function mergeBlueprintPlannerIntoWorkerPayload(payload, game) {
+  const slots = game.blueprintPlanner?.slots;
+  if (!slots || typeof slots !== "object") return payload;
+  const partIdToIndex = {};
+  for (let i = 0; i < payload.partTable.length; i++) {
+    partIdToIndex[payload.partTable[i].id] = i;
+  }
+  const layoutMap = new Map();
+  for (let j = 0; j < payload.partLayout.length; j++) {
+    const e = payload.partLayout[j];
+    layoutMap.set(`${e.r},${e.c}`, { ...e });
+  }
+  for (const key of Object.keys(slots)) {
+    const partId = slots[key];
+    if (!partId) continue;
+    const part = game.partset.getPartById(partId);
+    if (!part) continue;
+    const [rs, cs] = key.split(",");
+    const r = Number(rs);
+    const c = Number(cs);
+    if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
+    let idx = partIdToIndex[part.id];
+    if (idx === undefined) {
+      idx = payload.partTable.length;
+      partIdToIndex[part.id] = idx;
+      payload.partTable.push(partToRow(part));
+    }
+    const tile = game.tileset.getTile(r, c);
+    const transferRate = tile?.enabled && typeof tile.getEffectiveTransferValue === "function" ? tile.getEffectiveTransferValue() : 0;
+    const ventRate = tile?.enabled && typeof tile.getEffectiveVentValue === "function" ? tile.getEffectiveVentValue() : 0;
+    const partPower = (typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)) ? part.power : (part.base_power ?? 0);
+    const partHeat = (typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat)) ? part.heat : (part.base_heat ?? 0);
+    const ticks = part.category === "cell"
+      ? Math.max(1, Number(part.ticks ?? part.base_ticks) || 1)
+      : (tile?.ticks ?? 0);
+    const activated = tile?.activated !== false;
+    const isProtium = part.type === "protium";
+    const hasProtiumLoader = game?.upgradeset?.getUpgrade("experimental_protium_loader")?.level > 0;
+    const autoBuyEligible = !!(part.perpetual || (isProtium && hasProtiumLoader));
+    let autoBuyReplaceCost = 0;
+    if (autoBuyEligible && typeof part.getAutoReplacementCost === "function") {
+      const c0 = part.getAutoReplacementCost();
+      autoBuyReplaceCost = typeof c0?.toNumber === "function" ? c0.toNumber() : Number(c0) || 0;
+    }
+    const maxTicks = part.ticks ?? 0;
+    const tilePower = part.category === "cell" && ticks > 0 ? partPower : (typeof tile?.power === "number" ? tile.power : partPower);
+    const tileHeat = part.category === "cell" && ticks > 0 ? partHeat : (typeof tile?.heat === "number" ? tile.heat : partHeat);
+    layoutMap.set(`${r},${c}`, {
+      r,
+      c,
+      partIndex: idx,
+      ticks,
+      activated,
+      transferRate,
+      ventRate,
+      power: tilePower,
+      heat: tileHeat,
+      autoBuyEligible,
+      autoBuyReplaceCost,
+      maxTicks,
+    });
+  }
+  payload.partLayout = Array.from(layoutMap.values());
+  return payload;
+}
+
+function buildProjectionTickPayload(engine, game, base) {
+  const payload = {
+    ...base,
+    heatBuffer: cloneHeatBufferForWorkerPost(base.heatBuffer),
+    partTable: base.partTable.map((row) => ({ ...row })),
+    partLayout: base.partLayout.map((e) => ({ ...e })),
+    tickCount: 1,
+    multiplier: 1,
+    mode: "projection",
+    auto_buy: false,
+    autoSell: false,
+  };
+  mergeBlueprintPlannerIntoWorkerPayload(payload, game);
+  return payload;
+}
+
+export function postGameLoopProjectionQuery(engine, game) {
+  return new Promise((resolve) => {
+    if (!engine._useGameLoopWorker() || engine._gameLoopWorkerFailed) {
+      resolve(null);
+      return;
+    }
+    const done = (data) => {
+      if (!data || data.error) resolve(null);
+      else resolve(data);
+    };
+    const trySend = () => {
+      if (engine._gameLoopWorkerPending) {
+        queueMicrotask(trySend);
+        return;
+      }
+      const w = engine._getGameLoopWorker();
+      if (!w) {
+        resolve(null);
+        return;
+      }
+      const base = serializeStateForGameLoopWorker(engine);
+      if (!base) {
+        resolve(null);
+        return;
+      }
+      const payload = buildProjectionTickPayload(engine, game, base);
+      engine._projectionQueryTickId = (engine._projectionQueryTickId || 0) + 1;
+      const tickId = 1_000_000_000 + engine._projectionQueryTickId;
+      payload.tickId = tickId;
+      payload.type = "tick";
+      engine._projectionResolvers.set(tickId, done);
+      const result = GameLoopTickInputSchema.safeParse(payload);
+      if (!result.success) {
+        engine._projectionResolvers.delete(tickId);
+        resolve(null);
+        return;
+      }
+      const { heatBuffer, orthoNeighborOffsets, orthoNeighborIndices, ...rest } = result.data;
+      const serialized = superjson.serialize(rest);
+      const transfer = [];
+      if (heatBuffer && !(heatBuffer instanceof SharedArrayBuffer)) transfer.push(heatBuffer);
+      if (orthoNeighborOffsets && !(orthoNeighborOffsets instanceof SharedArrayBuffer)) transfer.push(orthoNeighborOffsets);
+      if (orthoNeighborIndices && !(orthoNeighborIndices instanceof SharedArrayBuffer)) transfer.push(orthoNeighborIndices);
+      w.postMessage({ ...serialized, heatBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
+    };
+    trySend();
+  });
 }
 
 function buildReactorStatePayload(reactor) {
@@ -4812,7 +5213,24 @@ function buildReactorStatePayload(reactor) {
     heat_controlled: reactor.heat_controlled ? 1 : 0,
     vent_multiplier_eff: reactor.vent_multiplier_eff ?? 0,
     stirling_multiplier: reactor.stirling_multiplier ?? 0,
+    use_thermal_graph: !!reactor.use_thermal_graph,
   };
+}
+
+function ensureOrthoAdjacencyForEngine(engine) {
+  const game = engine.game;
+  const ts = game.tileset;
+  if (!ts?.heatMap) return;
+  const rows = game.gridManager.rows;
+  const cols = game.gridManager.cols;
+  const stride = ts.max_cols ?? game.gridManager.cols;
+  const gridLen = ts.heatMap.length;
+  const key = adjacencyKey(rows, cols, stride, gridLen);
+  if (engine._orthoAdjacencyKey === key && engine._orthoNeighborOffsets?.length === gridLen + 1) return;
+  const { neighborOffsets, neighborIndices } = buildOrthogonalAdjacencyCSR(rows, cols, stride, gridLen);
+  engine._orthoAdjacencyKey = key;
+  engine._orthoNeighborOffsets = neighborOffsets;
+  engine._orthoNeighborIndices = neighborIndices;
 }
 
 export function serializeStateForGameLoopWorker(engine) {
@@ -4820,6 +5238,7 @@ export function serializeStateForGameLoopWorker(engine) {
   const ts = game.tileset;
   const reactor = game.reactor;
   if (!ts?.heatMap) return null;
+  ensureOrthoAdjacencyForEngine(engine);
   const stateSnapshot = game.state ? snapshot(game.state) : null;
   const { partTable, partLayout } = buildPartSnapshot(ts);
   const autoSellFromStore = stateSnapshot?.auto_sell !== undefined;
@@ -4833,9 +5252,21 @@ export function serializeStateForGameLoopWorker(engine) {
   } else {
     heatBuffer = new Float32Array(ts.heatMap).buffer.slice(0);
   }
+  const oo = engine._orthoNeighborOffsets;
+  const oi = engine._orthoNeighborIndices;
+  const orthoNeighborOffsets = oo.buffer.slice(oo.byteOffset, oo.byteOffset + oo.byteLength);
+  const orthoNeighborIndices = oi.buffer.slice(oi.byteOffset, oi.byteOffset + oi.byteLength);
+  const autoBuyOn = autoSellFromStore
+    ? !!stateSnapshot?.auto_buy
+    : !!(game.reactor?.auto_buy_enabled ?? game.ui?.stateManager?.getVar?.("auto_buy"));
+  const autoBuyUnlocked = (game.upgradeset?.getUpgrade("auto_buy_operator")?.level ?? 0) > 0;
+  const prestigeMoneyMultiplier =
+    typeof game.getPrestigeMultiplier === "function" ? game.getPrestigeMultiplier() : 1;
   return {
     current_money: currentMoney,
     heatBuffer,
+    orthoNeighborOffsets,
+    orthoNeighborIndices,
     partLayout,
     partTable,
     reactorState: buildReactorStatePayload(reactor),
@@ -4843,6 +5274,9 @@ export function serializeStateForGameLoopWorker(engine) {
     cols: game.gridManager.cols,
     maxCols: ts.max_cols ?? game.gridManager.cols,
     autoSell: autoSellFromStore ? !!stateSnapshot?.auto_sell : !!game.ui?.stateManager?.getVar?.("auto_sell"),
+    auto_buy: autoBuyOn,
+    auto_buy_unlocked: autoBuyUnlocked,
+    prestigeMoneyMultiplier,
     multiplier: 1,
     tickCount: 1,
   };
@@ -4909,6 +5343,74 @@ function syncSessionAfterTick(engine, data) {
   }
 }
 
+export function tryDeductMoneyGameLoop(game, amount) {
+  const engine = game?.engine;
+  const n = Number(amount);
+  if (!engine || !(n > 0)) {
+    return Promise.resolve({ ok: true, balanceAfter: toNumber(game?.state?.current_money) });
+  }
+  const syncDeduct = () => {
+    const d0 = toDecimal(game.state.current_money);
+    if (d0.gte(n)) {
+      updateDecimal(game.state, "current_money", (d) => d.sub(n));
+      return { ok: true, balanceAfter: toNumber(game.state.current_money) };
+    }
+    return { ok: false, balanceAfter: toNumber(game.state.current_money) };
+  };
+  if (!engine._gameLoopWorkerTickSeen || !engine._useGameLoopWorker() || engine._gameLoopWorkerFailed) {
+    return Promise.resolve(syncDeduct());
+  }
+  return new Promise((resolve) => {
+    const id = ++engine._economyCmdSeq;
+    engine._economyResolvers.set(id, resolve);
+    const w = engine._getGameLoopWorker();
+    if (!w) {
+      engine._economyResolvers.delete(id);
+      resolve(syncDeduct());
+      return;
+    }
+    w.postMessage({
+      type: "economyCommand",
+      cmd: "TRY_DEDUCT",
+      id,
+      amount: n,
+      balanceHint: toNumber(game.state.current_money),
+    });
+  });
+}
+
+export function tryCreditMoneyGameLoop(game, amount) {
+  const engine = game?.engine;
+  const n = Number(amount);
+  if (!engine || !(n > 0)) {
+    return Promise.resolve({ ok: true, balanceAfter: toNumber(game?.state?.current_money) });
+  }
+  const syncCredit = () => {
+    updateDecimal(game.state, "current_money", (d) => d.add(n));
+    return { ok: true, balanceAfter: toNumber(game.state.current_money) };
+  };
+  if (!engine._gameLoopWorkerTickSeen || !engine._useGameLoopWorker() || engine._gameLoopWorkerFailed) {
+    return Promise.resolve(syncCredit());
+  }
+  return new Promise((resolve) => {
+    const id = ++engine._economyCmdSeq;
+    engine._economyResolvers.set(id, resolve);
+    const w = engine._getGameLoopWorker();
+    if (!w) {
+      engine._economyResolvers.delete(id);
+      resolve(syncCredit());
+      return;
+    }
+    w.postMessage({
+      type: "economyCommand",
+      cmd: "CREDIT",
+      id,
+      amount: n,
+      balanceHint: toNumber(game.state.current_money),
+    });
+  });
+}
+
 export function applyGameLoopTickResult(engine, data) {
   if (!data || data.error) return;
   const result = GameLoopTickResultSchema.safeParse(data);
@@ -4941,9 +5443,12 @@ export function applyGameLoopTickResult(engine, data) {
     if (incoming.length === ts.heatMap.length) ts.heatMap.set(incoming);
   }
   applyExplosionIndices(engine, ts, data.explosionIndices, maxCols);
-  applyDepletionIndices(engine, ts, data.depletionIndices, maxCols);
   applyTileUpdates(ts, data.tileUpdates);
-  if (Number(data.moneyEarned) > 0) game.addMoney(data.moneyEarned);
+  applyDepletionIndices(engine, ts, data.depletionIndices, maxCols);
+  if (game.state && data.authoritativeCurrentMoney != null) {
+    setDecimal(game.state, "current_money", toDecimal(data.authoritativeCurrentMoney));
+  }
+  engine._gameLoopWorkerTickSeen = true;
   reactor.checkMeltdown();
   const facts = buildFacts(game, engine, data);
   if (typeof game.eventRouter?.evaluate === "function") game.eventRouter.evaluate(facts, game);
@@ -4953,9 +5458,11 @@ export function applyGameLoopTickResult(engine, data) {
     if (ps > 0) updateDecimal(game.state, "session_power_sold", (d) => d.add(toDecimal(ps)));
     if (vh > 0) updateDecimal(game.state, "session_heat_dissipated", (d) => d.add(toDecimal(vh)));
   }
-  syncUIAfterTick(engine, data, reactor);
   syncSessionAfterTick(engine, data);
-  game.ui?.coreLoopUI?.snapDisplayValuesFromState?.();
+  queueMicrotask(() => {
+    syncUIAfterTick(engine, data, reactor);
+    game.ui?.coreLoopUI?.snapDisplayValuesFromState?.();
+  });
 }
 
 
@@ -5325,6 +5832,7 @@ function failGameLoopWorker(engine, detail) {
   engine._gameLoopWorkerPending = false;
   engine._gameLoopWorkerPendingSince = 0;
   engine._gameLoopTickContext = null;
+  engine._gameLoopWorkerTickSeen = false;
   engine.stop();
   engine.game.emit?.("gameLoopWorkerFatal", { detail: String(detail ?? "") });
 }
@@ -5376,9 +5884,21 @@ export function pushGameLoopWorkerTickFromPulse(engine) {
     engine._gameLoopWorkerMissedPulses = (engine._gameLoopWorkerMissedPulses || 0) + 1;
     return;
   }
+  const nowPulse = typeof performance !== "undefined" ? performance.now() : 0;
+  if (!engine._workerPulsePrevTs) engine._workerPulsePrevTs = nowPulse;
+  const dPulse =
+    nowPulse > 0 && engine._workerPulsePrevTs > 0 ? Math.max(0, nowPulse - engine._workerPulsePrevTs) : 0;
+  engine._workerPulsePrevTs = nowPulse;
+  const tickMs = Math.max(1, Number(engine.game.loop_wait) || FOUNDATIONAL_TICK_MS);
+  const capMs = MAX_ACCUMULATOR_MULTIPLIER * tickMs;
+  engine._workerSimAccumMs = Math.min((engine._workerSimAccumMs || 0) + dPulse, capMs);
   const extra = engine._gameLoopWorkerMissedPulses || 0;
   engine._gameLoopWorkerMissedPulses = 0;
-  const tickCount = 1 + extra;
+  let tickCount = Math.floor(engine._workerSimAccumMs / tickMs);
+  if (tickCount < 1) tickCount = 1;
+  tickCount = Math.min(MAX_CATCHUP_TICKS, Math.max(tickCount, 1 + extra));
+  engine._workerSimAccumMs -= tickCount * tickMs;
+  if (engine._workerSimAccumMs < 0) engine._workerSimAccumMs = 0;
   if (!engine._useGameLoopWorker()) {
     failGameLoopWorker(engine, "gameLoopWorkerUnavailable");
     return;
@@ -5420,12 +5940,14 @@ export function pushGameLoopWorkerTickFromPulse(engine) {
     failGameLoopWorker(engine, "gameLoopWorkerInputValidation");
     return;
   }
-  const { heatBuffer, ...rest } = result.data;
+  const { heatBuffer, orthoNeighborOffsets, orthoNeighborIndices, ...rest } = result.data;
   const serialized = superjson.serialize(rest);
   const transfer = [];
   if (heatBuffer && !(heatBuffer instanceof SharedArrayBuffer)) transfer.push(heatBuffer);
+  if (orthoNeighborOffsets && !(orthoNeighborOffsets instanceof SharedArrayBuffer)) transfer.push(orthoNeighborOffsets);
+  if (orthoNeighborIndices && !(orthoNeighborIndices instanceof SharedArrayBuffer)) transfer.push(orthoNeighborIndices);
   logger.log("info", "engine", "[ReactorTick] worker tick sent", { tickId: state.tickId, tickCount, gridCells: engine.active_cells.length });
-  w.postMessage({ ...serialized, heatBuffer }, transfer);
+  w.postMessage({ ...serialized, heatBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
 }
 
 function ensureArraysValid(engine) {
@@ -5662,6 +6184,14 @@ function initWorkerState(engine) {
   engine._gameLoopWorkerFailed = false;
   engine._gameLoopWorkerTickId = 0;
   engine._gameLoopWorkerMissedPulses = 0;
+  engine._workerSimAccumMs = 0;
+  engine._workerPulsePrevTs = 0;
+  engine._economyCmdSeq = 0;
+  engine._economyResolvers = new Map();
+  engine._projectionResolvers = new Map();
+  engine._projectionQueryTickId = 0;
+  engine._orthoAdjacencyKey = null;
+  engine._gameLoopWorkerTickSeen = false;
   engine._updatePartCaches = () => updatePartCaches(engine);
   engine._updateValveNeighborCache = () => updateValveNeighborCache(engine);
 }
@@ -5676,9 +6206,9 @@ function initAllEngineState(engine) {
 
 function handleComponentExplosion(engine, tile) {
   tile.exploded = true;
-  if (engine.game.audio) {
+  if (engine.game) {
     const pan = engine.game.calculatePan ? engine.game.calculatePan(tile.col) : 0;
-    engine.game.audio.play('explosion', null, pan);
+    enqueueGameEffect(engine.game, { kind: "sfx", id: "explosion", subtype: null, pan, context: "reactor" });
   }
 
   if (tile && tile.heat_contained > 0) {
@@ -5692,9 +6222,7 @@ function handleComponentExplosion(engine, tile) {
     }
   }
   tile.exploding = true;
-  if (typeof engine.game.emit === "function") {
-    engine.game.emit("component_explosion", { row: tile.row, col: tile.col, partId: tile.part?.id });
-  }
+  engine.noteExplosionVisualPending();
   setTimeout(() => {
     engine.handleComponentDepletion(tile);
     tile.exploding = false;
@@ -5726,22 +6254,19 @@ function processAutoSell(engine, multiplier) {
     }
     const value = sellAmount.mul(reactor.sell_price_multiplier || 1);
     engine.game.addMoney(value);
-    let capacitor6Overcharged = false;
+    let autosellHeatRatio = 0;
     for (let capIdx = 0; capIdx < engine.active_capacitors.length; capIdx++) {
       const capTile = engine.active_capacitors[capIdx];
-      if (capTile?.part?.level === 6 || capTile?.part?.id === "capacitor6") {
-        const cap = capTile.part.containment || 1;
-        if (cap > 0 && (capTile.heat_contained || 0) / cap > 0.95) {
-          capacitor6Overcharged = true;
-          break;
-        }
+      const ratio = capTile?.part?.capacitor_autosell_heat_ratio ?? 0;
+      if (ratio <= 0) continue;
+      const cap = capTile.part.containment || 1;
+      if (cap > 0 && (capTile.heat_contained || 0) / cap > 0.95) {
+        autosellHeatRatio = Math.max(autosellHeatRatio, ratio);
       }
     }
-    if (capacitor6Overcharged) reactor.current_heat = reactor.current_heat.add(sellAmount.mul(0.5));
+    if (autosellHeatRatio > 0) reactor.current_heat = reactor.current_heat.add(sellAmount.mul(autosellHeatRatio));
   }
 }
-
-const VENT6_ID = "vent6";
 
 function countEmptyNeighbors(tileset, r, c) {
   let count = 0;
@@ -5781,7 +6306,7 @@ function processVents(engine, multiplier) {
     ventRate = applyConvectiveBoost(ventRate, reactor, tileset, tile.row, tile.col);
     const heat = tile.heat_contained;
     let vent_reduce = Math.min(ventRate, heat);
-    if (tile.part.id === VENT6_ID) vent_reduce = applyVent6PowerCost(reactor, vent_reduce);
+    if (tile.part.vent_consumes_power) vent_reduce = applyVent6PowerCost(reactor, vent_reduce);
     tile.heat_contained -= vent_reduce;
     ventHeatDissipated += vent_reduce;
     if (reactor.stirling_multiplier > 0 && vent_reduce > 0)
@@ -6194,6 +6719,17 @@ function runPostHeatPhase(engine, ctx, explosionIndices = null) {
 
 function onGameLoopWorkerMessage(engine, e) {
   const data = e.data;
+  if (data?.type === "economyCommandResult") {
+    const fn = engine._economyResolvers?.get(data.id);
+    if (engine._economyResolvers) engine._economyResolvers.delete(data.id);
+    if (fn) {
+      fn({
+        ok: !!data.ok,
+        balanceAfter: data.balanceAfter != null ? data.balanceAfter : toNumber(engine.game.state?.current_money),
+      });
+    }
+    return;
+  }
   if (data?.type === "timerPulse") {
     logger.log("debug", "engine", "[ReactorTick] timerPulse", {
       pending: engine._gameLoopWorkerPending,
@@ -6204,6 +6740,12 @@ function onGameLoopWorkerMessage(engine, e) {
     return;
   }
   if (data?.type !== "tickResult") return;
+  if (data.tickId >= 1_000_000_000) {
+    const fn = engine._projectionResolvers?.get(data.tickId);
+    if (engine._projectionResolvers) engine._projectionResolvers.delete(data.tickId);
+    if (fn) fn(data.error ? null : data);
+    return;
+  }
   const pendingSince = engine._gameLoopWorkerPendingSince || 0;
   const now = typeof performance !== "undefined" ? performance.now() : 0;
   const waitMs = pendingSince > 0 && now > 0 ? now - pendingSince : 0;
@@ -6387,6 +6929,8 @@ export class Engine {
     this.last_session_update = 0;
     this.session_update_interval = SESSION_UPDATE_INTERVAL_MS;
     this.tick_count = 0;
+    this._simAccumulatorMs = 0;
+    this._rAfPrevTs = 0;
     this.active_cells = [];
     this.active_vessels = [];
     this.active_inlets = [];
@@ -6402,6 +6946,9 @@ export class Engine {
 
     this.MAX_EVENTS = MAX_VISUAL_EVENTS;
     this._visualEventBuffer = createVisualEventBuffer(this.MAX_EVENTS);
+    this._reflectorPairBuf = new Uint32Array(MAX_VISUAL_REFLECTOR_PAIRS_PER_FRAME * 2);
+    this._reflectorPairCount = 0;
+    this._explosionFlashPending = 0;
 
     initAllEngineState(this);
     ensureArraysValid(this);
@@ -6492,6 +7039,47 @@ export class Engine {
     this._visualEventBuffer.enqueue(typeId, row, col, value);
   }
 
+  enqueueReflectorVisualPulse(reflectorRow, reflectorCol, cellRow, cellCol) {
+    const c = this._reflectorPairCount | 0;
+    if (c >= MAX_VISUAL_REFLECTOR_PAIRS_PER_FRAME) return;
+    const b = this._reflectorPairBuf;
+    b[c * 2] = ((reflectorRow & 0xffff) << 16) | (reflectorCol & 0xffff);
+    b[c * 2 + 1] = ((cellRow & 0xffff) << 16) | (cellCol & 0xffff);
+    this._reflectorPairCount = c + 1;
+  }
+
+  noteExplosionVisualPending() {
+    const n = (this._explosionFlashPending | 0) + 1;
+    this._explosionFlashPending = Math.min(n, MAX_VISUAL_EXPLOSION_FLASHES_PER_FRAME);
+  }
+
+  _drainVisualDeltaFrame() {
+    const ui = this.game?.ui;
+    const pulse = ui?.gridController?.pulseReflector;
+    const ts = this.game?.tileset;
+    const nR = this._reflectorPairCount | 0;
+    if (pulse && ts && nR > 0) {
+      const b = this._reflectorPairBuf;
+      for (let i = 0; i < nR; i++) {
+        const a = b[i * 2];
+        const d = b[i * 2 + 1];
+        const rr = (a >>> 16) & 0xffff;
+        const rc = a & 0xffff;
+        const tr = (d >>> 16) & 0xffff;
+        const tc = d & 0xffff;
+        const fromTile = ts.getTile(rr, rc);
+        const toTile = ts.getTile(tr, tc);
+        if (fromTile && toTile) pulse(fromTile, toTile);
+      }
+    }
+    this._reflectorPairCount = 0;
+    const nE = this._explosionFlashPending | 0;
+    if (nE > 0 && ui?.meltdownUI?.flashExplosionBurst) {
+      for (let k = 0; k < nE; k++) ui.meltdownUI.flashExplosionBurst();
+    }
+    this._explosionFlashPending = 0;
+  }
+
   getEventBuffer() {
     return this._visualEventBuffer.getEventBuffer();
   }
@@ -6569,6 +7157,13 @@ _hasSimulationActivity() {
     this.last_timestamp = performance.now();
     this.last_session_update = Date.now();
     this._lastSyncTickTime = performance.now();
+    this._simAccumulatorMs = 0;
+    this._rAfPrevTs = 0;
+    this._workerSimAccumMs = 0;
+    this._workerPulsePrevTs = 0;
+    this._reflectorPairCount = 0;
+    this._explosionFlashPending = 0;
+    this._gameLoopWorkerTickSeen = false;
 
     this._bindVisibilityForOffline();
     this.loop(this.last_timestamp);
@@ -6663,11 +7258,23 @@ _hasSimulationActivity() {
     if (this._partCacheDirty) this._updatePartCaches?.();
 
     if (!this._useGameLoopWorker()) {
-      const elapsed = timestamp - (this._lastSyncTickTime || 0);
-      if (elapsed >= this.game.loop_wait) {
-        logger.log("debug", "engine", "[Main-Thread] Executing synchronous tick fallback");
+      const tickMs = Math.max(1, Number(this.game.loop_wait) || FOUNDATIONAL_TICK_MS);
+      const capMs = MAX_ACCUMULATOR_MULTIPLIER * tickMs;
+      if (!this._rAfPrevTs) this._rAfPrevTs = timestamp;
+      else {
+        const dFrame = Math.max(0, timestamp - this._rAfPrevTs);
+        this._simAccumulatorMs = Math.min(this._simAccumulatorMs + dFrame, capMs);
+      }
+      this._rAfPrevTs = timestamp;
+      let n = 0;
+      while (this._simAccumulatorMs >= tickMs && n < MAX_LIVE_TICKS) {
+        this._simAccumulatorMs -= tickMs;
         this._lastSyncTickTime = timestamp;
         this.tick();
+        n++;
+      }
+      if (n > 0) {
+        logger.log("debug", "engine", "[Main-Thread] Synchronous tick batch", { ticks: n });
       }
     }
 
@@ -6684,6 +7291,7 @@ _hasSimulationActivity() {
       clearTimeout(this._pausedTimeoutId);
       this._pausedTimeoutId = null;
     }
+    if (this.running) this._drainVisualDeltaFrame();
     this.animationFrameId = raf(this.loop.bind(this));
   }
 
@@ -7213,6 +7821,10 @@ export class Game {
     await setDefaultsFromModule(this);
   }
 
+  syncModifiersFromUpgrades(opts) {
+    applyComputedModifiers(this, opts);
+  }
+
   get current_money() { return this.economyManager.getCurrentMoney(); }
   set current_money(v) { this.economyManager.setCurrentMoney(v); }
   get current_exotic_particles() { return this.state.current_exotic_particles; }
@@ -7374,6 +7986,26 @@ export class Game {
 
   getBlueprintPlannerPartId(row, col) {
     return this.blueprintPlanner?.slots?.[`${row},${col}`] ?? null;
+  }
+
+  buildGridProjectionSnapshot() {
+    const rows = this.rows;
+    const cols = this.cols;
+    const partIds = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        partIds.push(this.getBlueprintPlannerPartId(r, c));
+      }
+    }
+    return { rows, cols, partIds };
+  }
+
+  runBlueprintProjectionStats() {
+    return previewBlueprintPlannerStats(this);
+  }
+
+  requestBlueprintProjectionSample() {
+    return postGameLoopProjectionQuery(this.engine, this);
   }
 
   applyBlueprintPlannerLayout() {

@@ -1,6 +1,6 @@
 import { html, render } from "lit-html";
 import { proxy, subscribe } from "valtio/vanilla";
-import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey, previewBlueprintPlannerStats } from "../state.js";
+import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey, previewBlueprintPlannerStats, enqueueGameEffect } from "../state.js";
 import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
 import { runCheckAffordability, calculateSectionCounts, BlueprintService } from "../logic.js";
 import { UpgradeCard, CloseButton, PartButton, partsModuleInfoCardTemplate } from "./button-factory.js";
@@ -520,6 +520,9 @@ class PageSetupUI {
       if (status === "loading") {
         return leaderboardStatusRowTemplate({ text: "Loading..." });
       }
+      if (status === "offline") {
+        return leaderboardStatusRowTemplate({ text: "Leaderboard unavailable. Try again later." });
+      }
       if (records.length === 0) {
         return leaderboardStatusRowTemplate({ text: "No records found yet. Play to save scores!" });
       }
@@ -530,8 +533,22 @@ class PageSetupUI {
       if (!container) return;
       render(leaderboardTemplate([], "loading", sortBy), container);
       await leaderboardService.init();
+      const st = leaderboardService.getStatus();
+      if (st.state === "open") {
+        render(leaderboardTemplate([], "offline", sortBy), container);
+        sortButtons.forEach((b) => {
+          b.disabled = true;
+          b.style.opacity = "0.5";
+        });
+        return;
+      }
+      sortButtons.forEach((b) => {
+        b.disabled = false;
+        b.style.opacity = "";
+      });
       const records = await leaderboardService.getTopRuns(sortBy, 20);
       render(leaderboardTemplate(records, "loaded", sortBy), container);
+      ui.navIndicatorsUI?.updateLeaderboardIcon?.();
     };
 
     const activeButton = document.querySelector('.leaderboard-sort.active');
@@ -595,19 +612,19 @@ class PageSetupUI {
 
     const playSound = (button) => {
       const sound = button.dataset.sound;
-      if (!sound) return;
+      if (!sound || !ui.game) return;
       if (sound === "warning") {
         const intensity = warningSlider ? Number(warningSlider.value) / 100 : 0.5;
-        ui.game.audio.play("warning", intensity);
+        enqueueGameEffect(ui.game, { kind: "sfx", id: "warning", intensity, context: "global" });
         return;
       }
       if (sound === "explosion") {
-        if (button.dataset.variant === "meltdown") ui.game.audio.play("explosion", "meltdown");
-        else ui.game.audio.play("explosion");
+        const subtype = button.dataset.variant === "meltdown" ? "meltdown" : null;
+        enqueueGameEffect(ui.game, { kind: "sfx", id: "explosion", subtype, pan: 0, context: "global" });
         return;
       }
       const subtype = button.dataset.subtype || null;
-      ui.game.audio.play(sound, subtype);
+      enqueueGameEffect(ui.game, { kind: "sfx", id: sound, a: subtype, b: undefined, context: "global" });
     };
 
     page.querySelectorAll("button.sound-btn").forEach((button) => {
@@ -904,7 +921,7 @@ class PartsPanelUI {
   togglePartsPanelForBuildButton() {
     const ui = this.ui;
     ui.deviceFeatures?.heavyVibration?.();
-    if (ui.game?.audio) ui.game.audio.play("metal_clank", 0.8, -0.7);
+    if (ui.game) enqueueGameEffect(ui.game, { kind: "sfx", id: "metal_clank", a: 0.8, b: -0.7, context: "global" });
     const partsSection = this.getPartsSection();
     if (partsSection && ui.uiState) {
       const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
@@ -1221,8 +1238,10 @@ class NavIndicatorsUI {
     if (typeof document === "undefined" || !this.ui.game) return;
     this._mountLeaderboardButtons();
     if (!this.ui.uiState) return;
-    const icon = this.ui.game.cheats_used ? "🚷" : "🏆";
-    const disabled = !!this.ui.game.cheats_used;
+    const lb = leaderboardService.getStatus();
+    const circuitOff = lb.state === "open";
+    const icon = this.ui.game.cheats_used ? "🚷" : circuitOff ? "📴" : "🏆";
+    const disabled = !!this.ui.game.cheats_used || circuitOff;
     this.ui.uiState.leaderboard_display = { icon, disabled };
   }
 
@@ -1551,18 +1570,19 @@ class MeltdownUI {
     this._meltdownBuildupRafId = null;
     this._meltdownHandler = null;
     this._meltdownResolvedHandler = null;
-    this._explosionHandler = null;
   }
 
   subscribeToMeltdownEvents(game) {
     if (!game?.on || !game?.off) return;
     this._meltdownHandler = () => this.updateMeltdownState();
     this._meltdownResolvedHandler = () => this.updateMeltdownState();
-    this._explosionHandler = () => this._flashExplosionBurst();
     game.on("meltdown", this._meltdownHandler);
     game.on("meltdownResolved", this._meltdownResolvedHandler);
-    game.on("component_explosion", this._explosionHandler);
     this.updateMeltdownState();
+  }
+
+  flashExplosionBurst() {
+    this._flashExplosionBurst();
   }
 
   _flashExplosionBurst() {
@@ -1586,12 +1606,8 @@ class MeltdownUI {
       this.ui.game.off("meltdown", this._meltdownHandler);
       this.ui.game.off("meltdownResolved", this._meltdownResolvedHandler);
     }
-    if (this.ui?.game?.off && this._explosionHandler) {
-      this.ui.game.off("component_explosion", this._explosionHandler);
-    }
     this._meltdownHandler = null;
     this._meltdownResolvedHandler = null;
-    this._explosionHandler = null;
     if (this._meltdownBuildupRafId != null) {
       cancelAnimationFrame(this._meltdownBuildupRafId);
       this._meltdownBuildupRafId = null;
@@ -1839,10 +1855,10 @@ function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReacti
     e.stopPropagation();
     if (!upgradeset.isUpgradeAvailable(upgrade.id)) return;
     if (!upgradeset.purchaseUpgrade(upgrade.id)) {
-      if (upgradeset.game?.audio) upgradeset.game.audio.play("error");
+      if (upgradeset.game) enqueueGameEffect(upgradeset.game, { kind: "sfx", id: "error", context: "global" });
       return;
     }
-    if (upgradeset.game?.audio) upgradeset.game.audio.play("upgrade");
+    if (upgradeset.game) enqueueGameEffect(upgradeset.game, { kind: "sfx", id: "upgrade", context: "global" });
   };
   return UpgradeCard(upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost });
 }
@@ -2960,6 +2976,43 @@ class HeatVisualsUI {
     this._overlay = null;
     this._heatFlowOverlay = null;
     this._voltageOverlaySvg = null;
+    const st = ui.game?.state;
+    if (st) {
+      subscribeKey(st, "heat_ratio", (r) => this._applyHeatFromRatio(typeof r === "number" && isFinite(r) ? r : 0));
+    }
+  }
+
+  _applyHeatFromRatio(heatRatio) {
+    const ui = this.ui;
+    const background = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+    if (!background) return;
+    const root = typeof document !== "undefined" ? document.documentElement : null;
+    const cd = Math.min(1.5, Math.max(0, heatRatio));
+    if (root) root.style.setProperty("--core-danger", String(cd));
+    background.style.setProperty("--heat-ratio", String(cd));
+    background.style.setProperty("--core-danger", String(cd));
+    let alpha = 0;
+    if (heatRatio <= 0.5) alpha = 0;
+    else if (heatRatio <= 1.0) alpha = Math.min((heatRatio - 0.5) * 2 * 0.2, 0.2);
+    else if (heatRatio <= 1.5) alpha = 0.2 + Math.min((heatRatio - 1.0) * 2 * 0.3, 0.3);
+    else alpha = 0.5;
+    background.style.setProperty("--heat-bg-alpha", String(alpha));
+    if (heatRatio <= 0.5) {
+      background.style.backgroundColor = "transparent";
+    } else {
+      background.style.removeProperty("background-color");
+    }
+    background.classList.remove("heat-warning", "heat-critical");
+    if (heatRatio >= 1.3) background.classList.add("heat-warning", "heat-critical");
+    else if (heatRatio >= 0.8) background.classList.add("heat-warning");
+    const appRoot = typeof document !== "undefined" ? document.getElementById("app_root") : null;
+    if (appRoot) {
+      const heatNorm = Math.min(1, Math.max(0, heatRatio / 1.5));
+      appRoot.style.setProperty("--crt-heat", String(heatNorm));
+      const dur = 20 - heatNorm * 12;
+      appRoot.style.setProperty("--crt-jitter-duration", `${dur}s`);
+      appRoot.classList.toggle("crt-heat-tearing", heatRatio >= 1.3);
+    }
   }
 
   _ensureOverlay() {
@@ -3108,55 +3161,36 @@ class HeatVisualsUI {
 
   clearHeatWarningClasses() {
     const bg = this.ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
-    if (bg) bg.classList.remove("heat-warning", "heat-critical");
+    if (bg) {
+      bg.classList.remove("heat-warning", "heat-critical");
+      bg.style.setProperty("--heat-bg-alpha", "0");
+      bg.style.setProperty("--heat-ratio", "0");
+      bg.style.setProperty("--core-danger", "0");
+    }
+    const root = typeof document !== "undefined" ? document.documentElement : null;
+    if (root) root.style.setProperty("--core-danger", "0");
+    const appRoot = typeof document !== "undefined" ? document.getElementById("app_root") : null;
+    if (appRoot) {
+      appRoot.style.setProperty("--crt-heat", "0");
+      appRoot.style.setProperty("--crt-jitter-duration", "20s");
+      appRoot.classList.remove("crt-heat-tearing");
+    }
   }
 
   updateHeatVisuals() {
     const ui = this.ui;
-    const stateHeat = ui.stateManager.getVar("current_heat");
-    const current = stateHeat ?? 0;
-    const max = ui.stateManager.getVar("max_heat") || 1;
-    const background = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background;
-    if (!background) return;
-
-    const heatRatio = current / max;
-
-    background.classList.remove("heat-warning", "heat-critical");
-
-    if (heatRatio <= 0.5) {
-      background.style.backgroundColor = "transparent";
-    } else if (heatRatio <= 1.0) {
-      const intensity = (heatRatio - 0.5) * 2;
-      const alpha = Math.min(intensity * 0.2, 0.2);
-      background.style.backgroundColor = `rgba(255, 0, 0, ${alpha})`;
-
-      if (heatRatio >= 0.8) {
-        background.classList.add("heat-warning");
-      }
-    } else if (heatRatio <= 1.5) {
-      const intensity = (heatRatio - 1.0) * 2;
-      const alpha = 0.2 + (intensity * 0.3);
-      background.style.backgroundColor = `rgba(255, 0, 0, ${alpha})`;
-
-      background.classList.add("heat-warning");
-
-      if (heatRatio >= 1.3) {
-        background.classList.add("heat-critical");
-      }
+    const r = ui.game?.reactor;
+    let heatRatio;
+    if (r) {
+      const current = toNumber(r.current_heat);
+      const max = Math.max(1e-12, toNumber(r.max_heat));
+      heatRatio = current / max;
     } else {
-      background.style.backgroundColor = "rgba(255, 0, 0, 0.5)";
-
-      background.classList.add("heat-critical");
+      const current = toNumber(ui.stateManager.getVar("current_heat") ?? 0);
+      const max = Math.max(1e-12, toNumber(ui.stateManager.getVar("max_heat") ?? 1));
+      heatRatio = current / max;
     }
-
-    const appRoot = typeof document !== "undefined" ? document.getElementById("app_root") : null;
-    if (appRoot) {
-      const heatNorm = Math.min(1, Math.max(0, heatRatio / 1.5));
-      appRoot.style.setProperty("--crt-heat", String(heatNorm));
-      const dur = 20 - heatNorm * 12;
-      appRoot.style.setProperty("--crt-jitter-duration", `${dur}s`);
-      appRoot.classList.toggle("crt-heat-tearing", heatRatio >= 1.3);
-    }
+    this._applyHeatFromRatio(heatRatio);
   }
 }
 
@@ -3513,17 +3547,32 @@ export class CopyPasteUI {
     const discardBtn = document.getElementById("blueprint_planner_discard");
     if (!toggle || !game) return;
     if (typeof this._teardownBlueprintPlanner === "function") this._teardownBlueprintPlanner();
+    let blueprintHudTimer = null;
     const syncHud = () => {
-      const pEl = document.getElementById("blueprint_planner_power");
-      const hEl = document.getElementById("blueprint_planner_net_heat");
-      const st = previewBlueprintPlannerStats(game);
-      if (pEl) pEl.textContent = st ? `Pwr ${fmt(st.stats_power, 0)}` : "";
-      if (hEl) hEl.textContent = st ? `ΔHeat ${fmt(st.stats_net_heat, 0)}` : "";
-      ui.gridCanvasRenderer?.markStaticDirty?.();
+      if (blueprintHudTimer) clearTimeout(blueprintHudTimer);
+      blueprintHudTimer = setTimeout(async () => {
+        blueprintHudTimer = null;
+        const pEl = document.getElementById("blueprint_planner_power");
+        const hEl = document.getElementById("blueprint_planner_net_heat");
+        const ana = previewBlueprintPlannerStats(game);
+        let pwr = ana?.stats_power;
+        let net = ana?.stats_net_heat;
+        if (typeof game.requestBlueprintProjectionSample === "function") {
+          const res = await game.requestBlueprintProjectionSample();
+          const sample = res?.projectionPlannerSample;
+          if (sample && typeof sample.stats_power === "number") pwr = sample.stats_power;
+          if (sample && typeof sample.stats_net_heat === "number") net = sample.stats_net_heat;
+        }
+        if (pEl) pEl.textContent = ana || pwr != null ? `Pwr ${fmt(pwr ?? 0, 0)}` : "";
+        if (hEl) hEl.textContent = ana || net != null ? `ΔHeat ${fmt(net ?? 0, 0)}` : "";
+        ui.gridCanvasRenderer?.markStaticDirty?.();
+      }, 90);
     };
     const onChanged = () => syncHud();
     if (game.on) game.on("blueprintPlannerChanged", onChanged);
     this._teardownBlueprintPlanner = () => {
+      if (blueprintHudTimer) clearTimeout(blueprintHudTimer);
+      blueprintHudTimer = null;
       if (game.off) game.off("blueprintPlannerChanged", onChanged);
       this._teardownBlueprintPlanner = null;
     };

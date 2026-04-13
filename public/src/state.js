@@ -12,6 +12,8 @@ import {
   computeNeighborPulseNFromTile,
   getCellPowerCoefficientLP,
   getCellHeatCoefficientH,
+  calculateCellPulsePower,
+  calculateCellPulseHeat,
 } from "./logic.js";
 import {
   toDecimal,
@@ -52,6 +54,7 @@ import {
   BASE_MAX_HEAT,
 } from "./utils.js";
 import { backupModalTemplate } from "./templates/stateTemplates.js";
+import { drainGameEffects } from "./effect-orchestrator.js";
 import {
   NumericLike,
   DecimalLike,
@@ -83,7 +86,9 @@ import {
   GameActionSchema,
   UserPreferencesSchema,
   BalanceConfigSchema,
+  SaveDataWriteSchema,
 } from "../schema/index.js";
+import { SAVE_FORMAT_VERSION_LATEST, buildPartTable, encodeTilesCompact } from "../schema/saveMigration.js";
 
 export {
   NumericLike,
@@ -105,6 +110,7 @@ export {
   UpgradeDefinitionSchema,
   TileSchema,
   SaveDataSchema,
+  SaveDataWriteSchema,
   GameLoopTickInputSchema,
   GameLoopTickResultSchema,
   PhysicsTickInputSchema,
@@ -170,6 +176,7 @@ export function createGameState(initial = {}) {
     auto_sell_multiplier: initial.auto_sell_multiplier ?? 0,
     heat_controlled: initial.heat_controlled ?? false,
     vent_multiplier_eff: initial.vent_multiplier_eff ?? 0,
+    effect_queue: [],
   });
 
   derive({
@@ -201,9 +208,22 @@ export function createGameState(initial = {}) {
       const manualReduce = toNumber(state.manual_heat_reduce ?? 1);
       return baseNetHeat + overflowHeat - manualReduce;
     },
+    heat_ratio: (get) => {
+      const state = get(baseState);
+      const ch = toNumber(state.current_heat ?? 0);
+      const mh = Math.max(1e-12, toNumber(state.max_heat ?? 1));
+      return ch / mh;
+    },
   }, { proxy: baseState });
 
   return baseState;
+}
+
+export function enqueueGameEffect(game, effect) {
+  const st = game?.state;
+  if (!st || !Array.isArray(st.effect_queue)) return;
+  st.effect_queue.push(effect);
+  drainGameEffects(game, () => game?.ui);
 }
 
 export function updateDecimal(state, key, fn) {
@@ -248,6 +268,7 @@ export function createUIState() {
     hovered_entity: null,
     active_parts_tab: "power",
     active_page: "reactor_section",
+    active_route: "reactor_section",
     interaction: {
       isDragging: false,
       hoveredTileKey: null,
@@ -301,7 +322,7 @@ export function initUIStateSubscriptions(uiState, ui) {
     ui.partsPanelUI?.onActiveTabChanged?.(tabId);
   }));
   const syncPartActive = () => {
-    const main = ui.registry?.get?.("CoreLoop")?.getElement?.("main") ?? ui.DOMElements?.main ?? document.getElementById("main");
+    const main = ui.coreLoopUI?.getElement?.("main") ?? ui.registry?.get?.("CoreLoop")?.getElement?.("main") ?? ui.DOMElements?.main ?? document.getElementById("main");
     if (main) main.classList.toggle("part_active", !!uiState.interaction?.selectedPartId);
   };
   syncPartActive();
@@ -324,6 +345,11 @@ export function initUIStateSubscriptions(uiState, ui) {
     }
   };
   syncNavAndPageClass();
+  unsubs.push(subscribeKey(uiState, "active_route", (route) => {
+    if (typeof window === "undefined" || !route) return;
+    const cur = window.location.hash.replace(/^#/, "");
+    if (cur !== route) window.location.hash = route;
+  }));
   unsubs.push(subscribeKey(uiState, "active_page", (pageId) => {
     syncNavAndPageClass();
     if (pageId === "reactor_section") {
@@ -517,7 +543,10 @@ function calculateStats(reactor, tileset, ui) {
   };
 
   const onReflectorPulse = (r_tile, tile) => {
-    reactor.game?.emit?.("reflectorPulse", { r_tile, tile });
+    const eng = reactor.game?.engine;
+    if (eng?.enqueueReflectorVisualPulse) {
+      eng.enqueueReflectorVisualPulse(r_tile.row, r_tile.col, tile.row, tile.col);
+    }
   };
 
   tileset.active_tiles_list.forEach((tile) => {
@@ -534,9 +563,8 @@ function calculateStats(reactor, tileset, ui) {
         const M = p.cell_pack_M ?? 1;
         const C = Math.max(1, p.cell_count_C ?? p.cell_count ?? 1);
         const N = computeNeighborPulseNFromTile(tile);
-        const pulse = M + N;
-        tile.power = pow * pulse;
-        tile.heat = (ht * pulse * pulse) / C;
+        tile.power = calculateCellPulsePower(pow, M, N);
+        tile.heat = calculateCellPulseHeat(ht, M, N, C);
       }
     }
   });
@@ -615,9 +643,8 @@ export function previewBlueprintPlannerStats(game) {
         N += typeof v === "number" && isFinite(v) && v >= 0 ? v : 1;
       }
     }
-    const pulse = M + N;
-    let power = pow * pulse;
-    let heat = (ht * pulse * pulse) / C;
+    let power = calculateCellPulsePower(pow, M, N);
+    let heat = calculateCellPulseHeat(ht, M, N, C);
     const fakeTile = {
       power,
       heat,
@@ -775,6 +802,9 @@ export class Reactor {
     this.altered_max_heat = toDecimal(this.base_max_heat);
     this._max_power = toDecimal(this.base_max_power);
     this.altered_max_power = toDecimal(this.base_max_power);
+    if (this.game?.state) {
+      this.game.state.max_heat = this._max_heat;
+    }
 
     this.auto_sell_multiplier = 0;
     this.heat_power_multiplier = 0;
@@ -842,7 +872,12 @@ export class Reactor {
     }
   }
   get max_heat() { return this._max_heat; }
-  set max_heat(v) { this._max_heat = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
+  set max_heat(v) {
+    this._max_heat = (v != null && typeof v.gt === 'function') ? v : toDecimal(v);
+    if (this.game?.state) {
+      this.game.state.max_heat = this._max_heat;
+    }
+  }
   get max_power() { return this._max_power; }
   set max_power(v) { this._max_power = (v != null && typeof v.gt === 'function') ? v : toDecimal(v); }
 
@@ -1412,15 +1447,21 @@ function applyReactorState(game, savedData) {
 }
 
 async function applyUpgrades(game, savedData) {
-  game.upgradeset.reset();
-  await game.upgradeset.initialize();
-  if (savedData.upgrades) {
-    savedData.upgrades.forEach((upgData) => {
-      const upgrade = game.upgradeset.getUpgrade(upgData.id);
-      if (upgrade) upgrade.setLevel(upgData.level);
-    });
+  game._suppressModifierSync = true;
+  try {
+    game.upgradeset.reset();
+    await game.upgradeset.initialize();
+    if (savedData.upgrades) {
+      savedData.upgrades.forEach((upgData) => {
+        const upgrade = game.upgradeset.getUpgrade(upgData.id);
+        if (upgrade) upgrade.setLevel(upgData.level);
+      });
+    }
+    if (game.upgradeset && game.tech_tree) game.upgradeset.sanitizeDoctrineUpgradeLevelsOnLoad(game.tech_tree);
+  } finally {
+    game._suppressModifierSync = false;
   }
-  if (game.upgradeset && game.tech_tree) game.upgradeset.sanitizeDoctrineUpgradeLevelsOnLoad(game.tech_tree);
+  game.syncModifiersFromUpgrades({ skipGrid: true });
   game.reactor.updateStats();
 }
 
@@ -1552,7 +1593,11 @@ export async function applySaveState(game, savedData) {
 
 
 async function performSave(slot, saveData) {
-  const validatedData = SaveDataSchema.parse(saveData);
+  const forDisk = { ...saveData };
+  if (forDisk.tiles_compact?.encoding && Array.isArray(forDisk.part_table) && forDisk.part_table.length > 0) {
+    forDisk.tiles = [];
+  }
+  const validatedData = SaveDataWriteSchema.parse(forDisk);
   const saveKey = `reactorGameSave_${slot}`;
   await StorageAdapter.set(saveKey, validatedData);
   if (slot === 1) {
@@ -2066,7 +2111,21 @@ export class SaveOrchestrator {
       : ctx.upgradeset.upgradesArray
         .filter((upg) => upg.level > 0)
         .map((upg) => ({ id: upg.id, level: upg.level }));
+    let part_table = [];
+    let tiles_compact = undefined;
+    try {
+      if (ctx.partset?.partsArray?.length) {
+        const built = buildPartTable(ctx.partset);
+        part_table = built.part_table;
+        tiles_compact = encodeTilesCompact(tileState, ctx.rows, ctx.cols, built.idToIndex);
+      }
+    } catch (err) {
+      logger.log("warn", "game", "tiles_compact encode skipped:", err?.message || err);
+    }
     const saveData = {
+      save_format_version: SAVE_FORMAT_VERSION_LATEST,
+      part_table,
+      tiles_compact,
       version: ctx.version,
       run_id: ctx.run_id,
       tech_tree: ctx.tech_tree,
@@ -2233,10 +2292,17 @@ function restoreExoticParticles(game, keep_exotic_particles, savedTotalEp, saved
     setDecimal(game.state, "current_exotic_particles", toDecimal(0));
   }
   if (keep_exotic_particles && preservedEpUpgrades.length > 0) {
-    preservedEpUpgrades.forEach(({ id, level }) => {
-      const upg = game.upgradeset.getUpgrade(id);
-      if (upg) upg.setLevel(level);
-    });
+    game._suppressModifierSync = true;
+    try {
+      preservedEpUpgrades.forEach(({ id, level }) => {
+        const upg = game.upgradeset.getUpgrade(id);
+        if (upg) upg.setLevel(level);
+      });
+    } finally {
+      game._suppressModifierSync = false;
+    }
+    game.syncModifiersFromUpgrades({ skipGrid: true });
+    game.reactor.updateStats();
   }
 }
 
@@ -2257,7 +2323,7 @@ function refreshObjective(game) {
 
 async function runRebootActionInternal(game, keep_exotic_particles) {
   game.debugHistory.add("game", "Reboot action initiated", { keep_exotic_particles });
-  if (game.audio) game.audio.play("reboot");
+  enqueueGameEffect(game, { kind: "sfx", id: "reboot", vol: 0.5, context: "global" });
   const sessionP = toNumber(game.state?.session_power_sold ?? 0);
   const sessionH = toNumber(game.state?.session_heat_dissipated ?? 0);
   const epFromWeave = Math.floor(Math.min(sessionP, sessionH) / 1_000_000);
@@ -2317,6 +2383,7 @@ export async function runFullReboot(game) {
       if (!upgrade.upgrade.type.includes("experimental")) upgrade.level = 0;
     });
   }
+  game.syncModifiersFromUpgrades();
   const payload = {
     exotic_particles: game.exoticParticleManager.exotic_particles,
     total_exotic_particles: game.state.total_exotic_particles,
@@ -2353,7 +2420,7 @@ async function resetSubsystems(game, bypass, preservedTechTree) {
   game.bypass_tech_tree_restrictions = bypass;
 }
 
-function recalculatePartStats(game) {
+function refreshAllPartStatsForGame(game) {
   if (game.partset?.partsArray?.length) {
     game.partset.partsArray.forEach((part) => {
       try {
@@ -2431,7 +2498,8 @@ export async function setDefaults(game) {
   const bypass = game.bypass_tech_tree_restrictions;
   const preservedTechTree = game.tech_tree;
   await resetSubsystems(game, bypass, preservedTechTree);
-  recalculatePartStats(game);
+  game.syncModifiersFromUpgrades();
+  refreshAllPartStatsForGame(game);
   applyPlacementThenTiles(game);
   applyLoopThenPause(game);
   applyDoctrineThenSession(game);
@@ -2605,7 +2673,7 @@ export function runSellPart(game, tile) {
     const sellValue = tile.calculateSellValue();
     game.debugHistory.add("game", "sellPart", { row: tile.row, col: tile.col, partId: tile.part.id, value: sellValue });
     game.emit("vibrationRequest", { type: "heavy" });
-    if (game.audio) game.audio.play("sell", null, game.calculatePan(tile.col));
+    enqueueGameEffect(game, { kind: "sfx", id: "sell", pan: game.calculatePan(tile.col), context: "reactor" });
     tile.sellPart();
   }
 }

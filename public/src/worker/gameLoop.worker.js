@@ -19,6 +19,8 @@ import {
   OUTLET_OFFSET_NEIGHBOR_INDICES, OUTLET_OFFSET_NEIGHBOR_CAPS,
   MAX_NEIGHBORS,
   computeWorkerNeighborPulseN,
+  calculateCellPulsePower,
+  calculateCellPulseHeat,
 } from "../logic.js";
 import {
   REACTOR_HEAT_STANDARD_DIVISOR,
@@ -35,12 +37,12 @@ import {
   VALVE_TOPUP_THRESHOLD,
   getIndex,
   isInBounds,
-  getNeighborKeys,
   applyPowerOverflowCalcDecimal,
   HULL_REPEL_FRACTION,
   FOUNDATIONAL_TICK_MS,
 } from "../utils.js";
 import { toDecimal } from "../utils.js";
+import { buildThermalPressureEdges, solveThermalGraphSinglePass } from "../thermalGraph.js";
 
 const MAX_INLETS = HEAT_PAYLOAD_MAX_INLETS;
 const MAX_VALVES = HEAT_PAYLOAD_MAX_VALVES;
@@ -55,6 +57,21 @@ function getValveOrientation(id) {
   return match ? parseInt(match[1], 10) : 1;
 }
 
+function orthoNeighborPairs(gidx, ctx) {
+  const { orthoOff, orthoIdx, stride } = ctx;
+  const out = [];
+  if (!orthoOff || !orthoIdx) return out;
+  const a = orthoOff[gidx];
+  const b = orthoOff[gidx + 1];
+  for (let i = a; i < b; i++) {
+    const nidx = orthoIdx[i];
+    const nr = (nidx / stride) | 0;
+    const nc = nidx % stride;
+    out.push([nr, nc]);
+  }
+  return out;
+}
+
 function buildPayloadCellLookup(partLayout, stride) {
   const cellByKey = new Map();
   for (let i = 0; i < partLayout.length; i++) {
@@ -66,15 +83,23 @@ function buildPayloadCellLookup(partLayout, stride) {
   return { partAt, gidx };
 }
 
+function partHasTrait(part, trait) {
+  return Array.isArray(part?.traits) && part.traits.includes(trait);
+}
+
+function isValveLikePart(p) {
+  return p && (p.category === "valve" || partHasTrait(p, "VALVE_UNIT"));
+}
+
 function getValveTypeId(part) {
-  if (part.type === "overflow_valve") return 1;
-  if (part.type === "topup_valve") return 2;
+  if (partHasTrait(part, "VALVE_OVERFLOW") || part.type === "overflow_valve") return 1;
+  if (partHasTrait(part, "VALVE_TOPUP") || part.type === "topup_valve") return 2;
   return 3;
 }
 
 function getExchangerNeighborCategory(nPart) {
-  if (nPart.category === "vent" || nPart.category === "coolant_cell") return 2;
-  if (nPart.category === "heat_exchanger") return 0;
+  if (nPart.category === "vent" || partHasTrait(nPart, "VENT") || nPart.category === "coolant_cell") return 2;
+  if (nPart.category === "heat_exchanger" || partHasTrait(nPart, "HEAT_EXCHANGER")) return 0;
   return 1;
 }
 
@@ -85,12 +110,12 @@ function fillInletsBuffer(ctx) {
   for (let i = 0; i < partLayout.length && nInlets < MAX_INLETS; i++) {
     const t = partLayout[i];
     const part = partTable[t.partIndex];
-    if (!part || part.category !== "heat_inlet") continue;
-    const neighbors = getNeighborKeys(t.r, t.c);
+    if (!part || (part.category !== "heat_inlet" && !partHasTrait(part, "HEAT_INLET"))) continue;
+    const neighbors = orthoNeighborPairs(gidx(t.r, t.c), ctx);
     let nCount = 0;
     for (let k = 0; k < neighbors.length && nCount < MAX_NEIGHBORS; k++) {
       const [nr, nc] = neighbors[k];
-      if (isInBounds(nr, nc, rows, cols) && partAt(nr, nc)) {
+      if (partAt(nr, nc)) {
         buf[nInlets * INLET_STRIDE + INLET_OFFSET_NEIGHBORS + nCount] = gidx(nr, nc);
         nCount++;
       }
@@ -108,12 +133,12 @@ function collectValveNeighborIndices(valveEntries, ctx) {
   const valveNeighborSet = new Set();
   for (let v = 0; v < valveEntries.length; v++) {
     const t = valveEntries[v];
-    const neighbors = getNeighborKeys(t.r, t.c);
+    const neighbors = orthoNeighborPairs(gidx(t.r, t.c), ctx);
     for (let k = 0; k < neighbors.length; k++) {
       const [nr, nc] = neighbors[k];
       if (!isInBounds(nr, nc, rows, cols) || !partAt(nr, nc)) continue;
       const p = partTable[partAt(nr, nc).partIndex];
-      if (p && p.category !== "valve") valveNeighborSet.add(gidx(nr, nc));
+      if (p && !isValveLikePart(p)) valveNeighborSet.add(gidx(nr, nc));
     }
   }
   const valveNbrBuf = new Float32Array(MAX_VALVE_NEIGHBORS);
@@ -125,11 +150,11 @@ function collectValveNeighborIndices(valveEntries, ctx) {
 }
 
 function shouldSkipValve(part, inputNeighbor, outputNeighbor) {
-  if (part.type === "overflow_valve") {
+  if (partHasTrait(part, "VALVE_OVERFLOW") || part.type === "overflow_valve") {
     const inputRatio = inputNeighbor.cap > 0 ? (inputNeighbor.heat / inputNeighbor.cap) : 0;
     return inputRatio < OVERFLOW_VALVE_RATIO_MIN;
   }
-  if (part.type === "topup_valve") {
+  if (partHasTrait(part, "VALVE_TOPUP") || part.type === "topup_valve") {
     const outputRatio = outputNeighbor.cap > 0 ? (outputNeighbor.heat / outputNeighbor.cap) : 0;
     return outputRatio > TOPUP_VALVE_RATIO_MAX;
   }
@@ -145,7 +170,7 @@ function getInputOutputNeighbors(neighbors, orientation) {
 
 function buildValveNeighbors(t, ctx) {
   const { partTable, rows, cols, heat, partAt, gidx } = ctx;
-  return getNeighborKeys(t.r, t.c)
+  return orthoNeighborPairs(gidx(t.r, t.c), ctx)
     .filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc))
     .map(([nr, nc]) => ({ r: nr, c: nc, idx: gidx(nr, nc), heat: heat[gidx(nr, nc)] || 0, cap: partTable[partAt(nr, nc).partIndex]?.containment || 0 }));
 }
@@ -180,7 +205,7 @@ function fillValvesBuffer(valveEntries, ctx) {
 }
 
 function isExchangerPart(p) {
-  return p && (p.category === "heat_exchanger" || p.category === "valve" || (p.category === "reactor_plating" && (p.transfer || 0) > 0));
+  return p && (p.category === "heat_exchanger" || partHasTrait(p, "HEAT_EXCHANGER") || isValveLikePart(p) || (p.category === "reactor_plating" && (p.transfer || 0) > 0));
 }
 
 function fillExchangersBuffer(exchangerEntries, ctx) {
@@ -191,7 +216,7 @@ function fillExchangersBuffer(exchangerEntries, ctx) {
     const t = exchangerEntries[i];
     const part = partTable[t.partIndex];
     if (!part || part.category === "valve") continue;
-    const neighbors = getNeighborKeys(t.r, t.c).filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc));
+    const neighbors = orthoNeighborPairs(gidx(t.r, t.c), ctx).filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc));
     let nCount = 0;
     for (let n = 0; n < neighbors.length && nCount < MAX_NEIGHBORS; n++) {
       const [nr, nc] = neighbors[n];
@@ -214,8 +239,8 @@ function fillExchangersBuffer(exchangerEntries, ctx) {
 }
 
 function collectOutletNeighbors(t, ctx) {
-  const { partTable, rows, cols, partAt } = ctx;
-  return getNeighborKeys(t.r, t.c).filter(([nr, nc]) => {
+  const { partTable, rows, cols, partAt, gidx } = ctx;
+  return orthoNeighborPairs(gidx(t.r, t.c), ctx).filter(([nr, nc]) => {
     if (!isInBounds(nr, nc, rows, cols)) return false;
     const np = partAt(nr, nc);
     return np && partTable[np.partIndex]?.category !== "valve";
@@ -227,7 +252,7 @@ function writeOutletEntry(buf, base, ctx, t, part, neighbors) {
   buf[base + OUTLET_OFFSET_INDEX] = gidx(t.r, t.c);
   buf[base + OUTLET_OFFSET_RATE] = t.transferRate ?? 0;
   buf[base + OUTLET_OFFSET_ACTIVATED] = t.activated ? 1 : 0;
-  buf[base + OUTLET_OFFSET_IS_OUTLET6] = part.id === "heat_outlet6" ? 1 : 0;
+  buf[base + OUTLET_OFFSET_IS_OUTLET6] = part.outlet_respect_neighbor_cap ? 1 : 0;
   buf[base + OUTLET_OFFSET_N_COUNT] = neighbors.length;
   for (let j = 0; j < neighbors.length && j < MAX_NEIGHBORS; j++) {
     const [nr, nc] = neighbors[j];
@@ -254,21 +279,24 @@ function fillOutletsBuffer(outletEntries, ctx) {
 }
 
 function buildHeatPayloadFromLayout(layoutContext) {
-  const { partLayout, partTable, rows, cols, heat, containment } = layoutContext;
+  const { partLayout, partTable, rows, cols, heat, containment, orthoOff, orthoIdx } = layoutContext;
   const stride = layoutContext.maxCols ?? cols;
   const { partAt, gidx } = buildPayloadCellLookup(partLayout, stride);
-  const ctx = { partLayout, partTable, rows, cols, heat, containment, partAt, gidx };
+  const ctx = { partLayout, partTable, rows, cols, heat, containment, partAt, gidx, orthoOff, orthoIdx, stride };
 
   const { buf: inletsBuf, nInlets } = fillInletsBuffer(ctx);
 
-  const valveEntries = partLayout.filter((t) => partTable[t.partIndex]?.category === "valve");
+  const valveEntries = partLayout.filter((t) => isValveLikePart(partTable[t.partIndex]));
   const { valveNbrBuf, nValveNeighbors } = collectValveNeighborIndices(valveEntries, ctx);
   const { buf: valvesBuf, nValves } = fillValvesBuffer(valveEntries, ctx);
 
   const exchangerEntries = partLayout.filter((t) => isExchangerPart(partTable[t.partIndex]));
   const { buf: exchBuf, nExchangers } = fillExchangersBuffer(exchangerEntries, ctx);
 
-  const outletEntries = partLayout.filter((t) => partTable[t.partIndex]?.category === "heat_outlet");
+  const outletEntries = partLayout.filter((t) => {
+    const p = partTable[t.partIndex];
+    return p && (p.category === "heat_outlet" || partHasTrait(p, "HEAT_OUTLET"));
+  });
   const { buf: outBuf, nOutlets } = fillOutletsBuffer(outletEntries, ctx);
 
   return {
@@ -304,11 +332,12 @@ function buildCellLookup(partLayout) {
   return (r, c) => cellByKey.get(`${r},${c}`);
 }
 
-function processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx) {
+function processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx, moneyRef, ctx) {
   let power_add = 0;
   let heat_add = 0;
   const depletionIndices = [];
   const tileUpdates = [];
+  const autoOn = ctx?.auto_buy && ctx?.auto_buy_unlocked && moneyRef;
   for (let i = 0; i < partLayout.length; i++) {
     const t = partLayout[i];
     const part = partTable[t.partIndex];
@@ -317,7 +346,6 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
     const M = part.cell_pack_M ?? 1;
     const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
     const N = computeWorkerNeighborPulseN(t.r, t.c, partTable, partAt, rows, cols);
-    const pulse = M + N;
     const LP =
       typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)
         ? part.power
@@ -327,12 +355,16 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
         ? part.heat
         : part.base_heat ?? 0;
     const layoutPower =
-      typeof t.power === "number" && !isNaN(t.power) && isFinite(t.power) ? t.power : LP * pulse;
+      typeof t.power === "number" && !isNaN(t.power) && isFinite(t.power)
+        ? t.power
+        : calculateCellPulsePower(LP, M, N);
     power_add += layoutPower * multiplier;
     const layoutHeat =
-      typeof t.heat === "number" && !isNaN(t.heat) && isFinite(t.heat) ? t.heat : (H_eff * pulse * pulse) / C;
+      typeof t.heat === "number" && !isNaN(t.heat) && isFinite(t.heat)
+        ? t.heat
+        : calculateCellPulseHeat(H_eff, M, N, C);
     const generatedHeat = layoutHeat * multiplier;
-    const neighbors = getNeighborKeys(t.r, t.c).filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc));
+    const neighbors = orthoNeighborPairs(gidx(t.r, t.c), ctx).filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc));
 
     let validCount = 0;
     for (let k = 0; k < neighbors.length; k++) {
@@ -355,8 +387,19 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
     }
 
     t.ticks = (t.ticks ?? 0) - multiplier;
+    if (t.ticks <= 0) {
+      const costNum = Number(t.autoBuyReplaceCost ?? 0);
+      const eligible = !!t.autoBuyEligible && costNum > 0;
+      if (autoOn && eligible && moneyRef.value.gte(costNum)) {
+        moneyRef.value = moneyRef.value.sub(costNum);
+        moneyRef.spentAutoBuy = moneyRef.spentAutoBuy.add(costNum);
+        const resetTicks = t.maxTicks ?? partTable[t.partIndex]?.ticks ?? 0;
+        t.ticks = resetTicks;
+      } else {
+        depletionIndices.push(gidx(t.r, t.c));
+      }
+    }
     tileUpdates.push({ r: t.r, c: t.c, ticks: t.ticks });
-    if (t.ticks <= 0) depletionIndices.push(gidx(t.r, t.c));
   }
 
   if (power_add > 0 || depletionIndices.length > 0) {
@@ -401,27 +444,38 @@ function applyHullRepulsionWorker(reactorHeat, maxHeat, heat, partLayout, partTa
   return reactorHeat.sub(totalRepel);
 }
 
-function processVents(partLayout, partTable, heat, reactorState, multiplier, gidx) {
+function processVents(partLayout, partTable, heat, reactorState, multiplier, gidx, reactorPower) {
   let power_add = 0;
   let ventHeatDissipated = 0;
-  const ventEntries = partLayout.filter((t) => partTable[t.partIndex]?.category === "vent");
+  let rp = reactorPower;
+  const ventEntries = partLayout.filter((t) => {
+    const p = partTable[t.partIndex];
+    return p && (p.category === "vent" || partHasTrait(p, "VENT"));
+  });
   const stirling = Number(reactorState.stirling_multiplier ?? 0) || 0;
 
   for (let i = 0; i < ventEntries.length; i++) {
     const t = ventEntries[i];
+    const part = partTable[t.partIndex];
     const ventRate = (t.ventRate ?? 0) * multiplier;
     if (ventRate <= 0) continue;
 
     const idx = gidx(t.r, t.c);
     const h = heat[idx] || 0;
-    const ventReduce = Math.min(ventRate, h);
+    let ventReduce = Math.min(ventRate, h);
+    if (part?.vent_consumes_power && ventReduce > 0 && rp) {
+      const avail = rp.toNumber();
+      const cap = avail < ventReduce ? avail : ventReduce;
+      ventReduce = cap;
+      rp = rp.sub(cap);
+    }
     heat[idx] = h - ventReduce;
     ventHeatDissipated += ventReduce;
 
     if (stirling > 0 && ventReduce > 0) power_add += ventReduce * stirling;
   }
 
-  return { power_add, ventHeatDissipated };
+  return { power_add, ventHeatDissipated, reactorPower: rp };
 }
 
 const applyPowerOverflow = applyPowerOverflowCalcDecimal;
@@ -470,7 +524,7 @@ function applyReactorHeatUpdates(reactorHeat, reactorState, maxHeat, multiplier)
   return reactorHeat;
 }
 
-function processHeatPhase(heat, containment, payload, reactorHeat, multiplier) {
+function processHeatPhase(heat, containment, payload, reactorHeat, multiplier, ctx) {
   const recordTransfers = [];
   const heatResult = runHeatStepFromTyped(heat, containment, {
     reactorHeat: reactorHeat.toNumber(),
@@ -487,12 +541,19 @@ function processHeatPhase(heat, containment, payload, reactorHeat, multiplier) {
     nOutlets: payload.nOutlets,
     recordTransfers
   });
+  if (ctx?.reactorState?.use_thermal_graph) {
+    const { partLayout, partTable, rows, cols, stride, partAt, gidx } = ctx;
+    const edges = buildThermalPressureEdges(partLayout, partTable, partAt, rows, cols, stride);
+    if (edges.length > 0) solveThermalGraphSinglePass(heat, containment, edges, multiplier);
+  }
   return { reactorHeat: new (reactorHeat.constructor)(heatResult.reactorHeat), heatFromInlets: heatResult.heatFromInlets ?? 0 };
 }
 
 function createGridContext(data) {
-  const { partLayout, partTable, rows, cols, maxCols, multiplier, reactorState, autoSell } = data;
+  const { partLayout, partTable, rows, cols, maxCols, multiplier, reactorState, autoSell, auto_buy, auto_buy_unlocked } = data;
   const stride = maxCols ?? cols;
+  const orthoOff = data.orthoNeighborOffsets ? new Int32Array(data.orthoNeighborOffsets) : null;
+  const orthoIdx = data.orthoNeighborIndices ? new Int32Array(data.orthoNeighborIndices) : null;
   return {
     partLayout,
     partTable,
@@ -502,21 +563,25 @@ function createGridContext(data) {
     multiplier,
     reactorState,
     autoSell,
+    auto_buy: !!auto_buy,
+    auto_buy_unlocked: !!auto_buy_unlocked,
     effectiveMaxPower: toDecimal(reactorState.max_power ?? 0),
     partAt: buildCellLookup(partLayout),
     gidx: (r, c) => getIndex(r, c, stride),
+    orthoOff,
+    orthoIdx,
   };
 }
 
-function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower) {
-  const { partLayout, partTable, rows, cols, stride, multiplier, reactorState, autoSell, effectiveMaxPower, partAt, gidx } = ctx;
+function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, moneyRef) {
+  const { partLayout, partTable, rows, cols, stride, multiplier, reactorState, autoSell, effectiveMaxPower, partAt, gidx, orthoOff, orthoIdx } = ctx;
 
   const containment = buildContainmentArray(partLayout, partTable, stride, gridLen);
-  const payload = buildHeatPayloadFromLayout({ partLayout, partTable, rows, cols, heat, containment, maxCols: stride });
-  const heatPhaseResult = processHeatPhase(heat, containment, payload, reactorHeat, multiplier);
+  const payload = buildHeatPayloadFromLayout({ partLayout, partTable, rows, cols, heat, containment, maxCols: stride, orthoOff, orthoIdx });
+  const heatPhaseResult = processHeatPhase(heat, containment, payload, reactorHeat, multiplier, ctx);
   reactorHeat = heatPhaseResult.reactorHeat.add(heatPhaseResult.heatFromInlets);
 
-  const cellResult = processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx);
+  const cellResult = processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx, moneyRef, ctx);
   reactorHeat = reactorHeat.add(cellResult.heat_add);
   reactorHeat = applyHullRepulsionWorker(
     reactorHeat,
@@ -528,7 +593,8 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower) 
   );
 
   const explosionIndices = findExplosionIndices(partLayout, partTable, heat, gidx);
-  const ventOut = processVents(partLayout, partTable, heat, reactorState, multiplier, gidx);
+  const ventOut = processVents(partLayout, partTable, heat, reactorState, multiplier, gidx, reactorPower);
+  reactorPower = ventOut.reactorPower;
   const ventPower = ventOut.power_add;
 
   const totalPowerAdd = cellResult.power_add + ventPower;
@@ -553,6 +619,8 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower) 
     moneyEarned: powerResult.moneyEarned,
     powerSold: powerResult.powerSold?.toNumber?.() ?? Number(powerResult.powerSold ?? 0),
     ventHeatDissipated: ventOut.ventHeatDissipated,
+    cellPowerAdd: cellResult.power_add,
+    cellHeatAdd: cellResult.heat_add,
     explosionIndices,
     depletionIndices: cellResult.depletionIndices,
     tileUpdates: cellResult.tileUpdates,
@@ -576,16 +644,31 @@ function runOneTick(data) {
   let totalMoneyEarned = new Decimal(0);
   let totalPowerSold = 0;
   let totalVentHeat = 0;
-  const n = Math.max(1, data.tickCount || 1);
+  const isProjection = data.mode === "projection";
+  const n = isProjection ? 1 : Math.max(1, data.tickCount || 1);
   const tick0 = typeof performance !== "undefined" ? performance.now() : 0;
+  const rawMoney = data.current_money;
+  const moneyRef = {
+    value: new Decimal(rawMoney != null ? (typeof rawMoney === "number" ? rawMoney : String(rawMoney)) : 0),
+    spentAutoBuy: new Decimal(0),
+  };
+  const prestigeMult = new Decimal(Number(data.prestigeMoneyMultiplier ?? 1) || 1);
+  const initialMoneyNum = moneyRef.value.toNumber();
+  let projectionPlannerSample = null;
 
   for (let tick = 0; tick < n; tick++) {
     if (tick > 0 && tick % 50 === 0 && typeof console !== "undefined" && console.info) {
       console.info("[GameLoopWorker] runOneTick progress", { tick, total: n, tickId: data.tickId });
     }
-    const result = processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower);
+    const result = processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, moneyRef);
     reactorHeat = result.reactorHeat;
     reactorPower = result.reactorPower;
+    if (isProjection && tick === 0) {
+      projectionPlannerSample = {
+        stats_power: result.cellPowerAdd ?? 0,
+        stats_net_heat: (result.cellHeatAdd ?? 0) - (result.ventHeatDissipated ?? 0),
+      };
+    }
     totalMoneyEarned = totalMoneyEarned.add(result.moneyEarned);
     totalPowerSold += result.powerSold || 0;
     totalVentHeat += result.ventHeatDissipated || 0;
@@ -617,13 +700,19 @@ function runOneTick(data) {
     heatBufferOut = heat.buffer.slice(heat.byteOffset, heat.byteOffset + heat.byteLength);
   }
 
+  const authoritativeCurrentMoney = isProjection
+    ? initialMoneyNum
+    : moneyRef.value.add(totalMoneyEarned.mul(prestigeMult)).toNumber();
+
   return {
     reactorHeat: reactorHeat.toNumber(),
     reactorPower: reactorPowerNum,
     explosionIndices: allExplosionIndices,
     depletionIndices: allDepletionIndices,
     tileUpdates: Array.from(tileUpdatesMap.values()),
-    moneyEarned: totalMoneyEarned.toNumber(),
+    moneyEarned: isProjection ? 0 : totalMoneyEarned.toNumber(),
+    authoritativeCurrentMoney,
+    moneySpentAutoBuy: moneyRef.spentAutoBuy.toNumber(),
     powerSold: totalPowerSold,
     ventHeatDissipated: totalVentHeat,
     epGained: 0,
@@ -632,13 +721,38 @@ function runOneTick(data) {
     transfers: [],
     tickCount: n,
     heatBuffer: heatBufferOut,
-    useSAB
+    useSAB,
+    projection: isProjection ? true : undefined,
+    projectionPlannerSample: isProjection ? projectionPlannerSample : undefined,
   };
 }
 
 let timerId = null;
 let pending = null;
 let busy = false;
+let carriedBalance = null;
+const deferredEcon = [];
+
+function handleEconomyCommand(d) {
+  const Dec = globalThis.Decimal;
+  if (!Dec || d?.type !== "economyCommand") return;
+  if (d.cmd === "TRY_DEDUCT") {
+    const amt = new Dec(d.amount ?? 0);
+    const b0 = carriedBalance != null ? new Dec(carriedBalance) : new Dec(Number(d.balanceHint ?? 0));
+    const ok = amt.gt(0) && b0.gte(amt);
+    const b = ok ? b0.sub(amt) : b0;
+    carriedBalance = b.toNumber();
+    self.postMessage({ type: "economyCommandResult", id: d.id, ok, balanceAfter: carriedBalance });
+    return;
+  }
+  if (d.cmd === "CREDIT") {
+    const amt = new Dec(d.amount ?? 0);
+    const b0 = carriedBalance != null ? new Dec(carriedBalance) : new Dec(Number(d.balanceHint ?? 0));
+    const b = amt.gt(0) ? b0.add(amt) : b0;
+    carriedBalance = b.toNumber();
+    self.postMessage({ type: "economyCommandResult", id: d.id, ok: true, balanceAfter: carriedBalance });
+  }
+}
 
 function clearSimulationTimer() {
   if (timerId != null) {
@@ -671,8 +785,21 @@ function runStep() {
     console.info("[GameLoopWorker] runStep start", { tickId: d?.tickId, superjson: isSuperjson });
   }
   try {
-    const data = isSuperjson ? { ...superjson.deserialize({ json: d.json, meta: d.meta }), heatBuffer: d.heatBuffer } : d;
+    const data = isSuperjson
+      ? {
+          ...superjson.deserialize({ json: d.json, meta: d.meta }),
+          heatBuffer: d.heatBuffer,
+          orthoNeighborOffsets: d.orthoNeighborOffsets,
+          orthoNeighborIndices: d.orthoNeighborIndices,
+        }
+      : d;
     const result = runOneTick(data);
+    if (data.mode !== "projection") {
+      carriedBalance = result.authoritativeCurrentMoney;
+    }
+    while (deferredEcon.length) {
+      handleEconomyCommand(deferredEcon.shift());
+    }
     result.type = "tickResult";
     result.tickId = data.tickId ?? d.tickId;
     const transfer = [];
@@ -682,6 +809,7 @@ function runStep() {
       console.info("[GameLoopWorker] runStep posted", { tickId: result.tickId, stepMs: Math.round(performance.now() - step0) });
     }
   } catch (err) {
+    deferredEcon.length = 0;
     console.error("[GameLoopWorker] runStep error:", err);
     self.postMessage({ type: "tickResult", tickId: d?.tickId ?? 0, error: true, message: String(err?.message || err) });
   }
@@ -694,6 +822,14 @@ self.onmessage = function (e) {
   if (d?.type === "timerControl") {
     if (d.action === "start") startSimulationTimer();
     else clearSimulationTimer();
+    return;
+  }
+  if (d?.type === "economyCommand") {
+    if (busy) {
+      deferredEcon.push(d);
+      return;
+    }
+    handleEconomyCommand(d);
     return;
   }
   const isTick = d?.type === "tick" || (d?.json != null && d?.meta != null);

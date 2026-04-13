@@ -80,7 +80,7 @@ body::before { content: ""; position: fixed; inset: 0; width: 100%; height: 100%
 .page-leaderboard { overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
 }
 
-#app_root { display: flex; width: 100%; min-width: 100%; height: 100dvh; flex-direction: column; --crt-heat: 0; --crt-jitter-duration: 20s; animation: app-root-jitter var(--crt-jitter-duration) steps(1) infinite;
+#app_root { display: flex; width: 100%; min-width: 100%; height: 100dvh; flex-direction: column; --crt-heat: 0; --core-danger: 0; --crt-jitter-duration: 20s; animation: app-root-jitter var(--crt-jitter-duration) steps(1) infinite;
 }
 
 #app_root.crt-heat-tearing { animation: app-root-jitter var(--crt-jitter-duration) steps(1) infinite, crt-horizontal-tear 0.42s steps(2, end) infinite;
@@ -921,7 +921,7 @@ body.help-mode-active .item-grid .part .part-details-desc { display: -webkit-box
 
 }
 
-#reactor_background { position: absolute; z-index: 20; overflow: hidden; width: 100%; height: 100%; border-radius: 0; background: rgb(255 0 0 / 0%); inset: 0; pointer-events: none; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light); transition: background-color 0.35s steps(6, end), box-shadow 0.35s steps(6, end);
+#reactor_background { position: absolute; z-index: 20; overflow: hidden; width: 100%; height: 100%; border-radius: 0; --heat-bg-alpha: 0; --heat-ratio: 0; --core-danger: 0; background-color: rgb(255 0 0 / var(--heat-bg-alpha)); inset: 0; pointer-events: none; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light); transition: background-color 0.35s steps(6, end), box-shadow 0.35s steps(6, end); filter: saturate(calc(1 + var(--core-danger) * 0.35));
 }
 
 #reactor_background.engineering-mode { background-color: rgb(0 90 110 / 14%); background-image: linear-gradient(rgb(0 220 255 / 10%) 1px, transparent 1px), linear-gradient(90deg, rgb(0 220 255 / 10%) 1px, transparent 1px); background-size: 22px 22px; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px rgb(0 200 220 / 28%), inset 0 0 48px rgb(0 160 200 / 18%);
