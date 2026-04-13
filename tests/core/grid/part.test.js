@@ -113,12 +113,12 @@ describe("Part Mechanics", () => {
 
   it("should generate the correct image path for a multi-level part", () => {
     const part = game.partset.getPartById("capacitor3");
-    expect(part.getImagePath()).toBe("img/parts/capacitors/capacitor_3.png");
+    expect(part.getImagePath()).toBe("img/parts/capacitor_3.png");
   });
 
   it("should generate the correct image path for a cell", () => {
     const part = game.partset.getPartById("plutonium2");
-    expect(part.getImagePath()).toBe("img/parts/cells/cell_2_2.png");
+    expect(part.getImagePath()).toBe("img/parts/cell_2_2.png");
   });
 
   it("should generate a descriptive text", () => {

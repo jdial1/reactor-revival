@@ -206,27 +206,21 @@ const VALVE_IMAGE_MAP = {
   topup_valve: "valve_2_1",
   check_valve: "valve_3_1",
 };
-const CATEGORY_FOLDERS = {
-  cell: "cells", reflector: "reflectors", capacitor: "capacitors", vent: "vents",
-  heat_exchanger: "exchangers", heat_inlet: "inlets", heat_outlet: "outlets", coolant_cell: "coolants",
-  reactor_plating: "platings", particle_accelerator: "accelerators", accelerator: "accelerators", valve: "valves",
-};
 const FILENAME_PREFIX = { heat_exchanger: "exchanger", heat_inlet: "inlet", heat_outlet: "outlet", reactor_plating: "plating", particle_accelerator: "accelerator" };
 export function getPartImagePath({ type, category, level = 1, id = null }) {
   const resolvedCategory = category || (CELL_TYPES.has(type) ? "cell" : type);
-  const folder = CATEGORY_FOLDERS[resolvedCategory] || resolvedCategory;
   if (resolvedCategory === "cell") {
     const cellType = type === "protium" ? "xcell" : "cell";
     const cellNum = CELL_TYPE_TO_NUM[type] || 1;
     const count = CELL_LEVEL_TILES[level] || 1;
-    return `img/parts/${folder}/${cellType}_${cellNum}_${count}.png`;
+    return `img/parts/${cellType}_${cellNum}_${count}.png`;
   }
   if (resolvedCategory === "valve") {
-    const filename = (id && VALVE_IMAGE_MAP[id]) || "valve_1";
-    return `img/parts/${folder}/${filename}.png`;
+    const stem = (id && VALVE_IMAGE_MAP[id]) || "valve_1";
+    return `img/parts/${stem}.png`;
   }
   const prefix = FILENAME_PREFIX[resolvedCategory] || type;
-  return `img/parts/${folder}/${prefix}_${level}.png`;
+  return `img/parts/${prefix}_${level}.png`;
 }
 
 const FIELD_RULES = {
@@ -336,13 +330,6 @@ export async function validateManifestFromFile(filePath) {
 }
 export function validateManifest(manifest) { return new ManifestValidator(manifest).getReport(); }
 
-export class ComponentRegistry {
-  constructor() { this._registry = new Map(); }
-  register(name, componentInstance) { this._registry.set(name, componentInstance); }
-  get(name) { return this._registry.get(name); }
-  unregister(name) { this._registry.delete(name); }
-}
-
 export async function runWithConcurrencyLimit(tasks, limit) {
   const results = [];
   const executing = [];
@@ -440,7 +427,7 @@ function formatNumberWithIntl(num, places, fixedDecimals) {
   if (!fixedDecimals) result = result.replace(/\.(\d*?)0+([KMBT])/, (_, digits, suffix) => digits ? `.${digits}${suffix}` : suffix);
   return result;
 }
-function formatNumber(num, places, fixedDecimals, style) {
+function formatFiniteNumber(num, places, fixedDecimals, style) {
   const absNum = Math.abs(num);
   let p = places;
   if (p === null) p = absNum >= FORMAT_COMPACT_THRESHOLD ? FORMAT_DEFAULT_PLACES : 0;
@@ -452,33 +439,32 @@ function formatNumber(num, places, fixedDecimals, style) {
   return formatNumberCompact(num, p, fixedDecimals);
 }
 
-export class Formatter {
-  static number(value, options = {}) {
-    const { style, places, fixedDecimals = false, infinitySymbol } = options;
-    if (value === null || typeof value === "undefined") return "";
-    const Decimal = getDecimal();
-    if (value instanceof Decimal) return formatDecimal(value, places, fixedDecimals, style);
-    const n = Number(value);
-    if (!Number.isFinite(n)) return infinitySymbol ?? (Number.isNaN(n) ? "" : (n > 0 ? "Infinity" : "-Infinity"));
-    return formatNumber(n, places, fixedDecimals, style);
-  }
-  static time(ms, useHtml = false) {
-    if (!Number.isFinite(ms) || ms < 0) ms = 0;
-    const s = Math.floor(ms / MS_PER_SECOND) % SECONDS_PER_MINUTE;
-    const m = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE)) % SECONDS_PER_MINUTE;
-    const h = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR)) % HOURS_PER_DAY;
-    const d = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY));
-    const unit = (val, label) => useHtml ? `${val}<span class="time-unit">${label}</span>` : `${val}${label}`;
-    const parts = [];
-    if (d > 0) parts.push(unit(d, "d"));
-    if (h > 0 || parts.length > 0) parts.push(unit(h, "h"));
-    if (m > 0 || parts.length > 0) parts.push(unit(m, "m"));
-    parts.push(unit(s, "s"));
-    return parts.join(" ");
-  }
+export function formatNumber(value, options = {}) {
+  const { style, places, fixedDecimals = false, infinitySymbol } = options;
+  if (value === null || typeof value === "undefined") return "";
+  const Decimal = getDecimal();
+  if (value instanceof Decimal) return formatDecimal(value, places, fixedDecimals, style);
+  const n = Number(value);
+  if (!Number.isFinite(n)) return infinitySymbol ?? (Number.isNaN(n) ? "" : (n > 0 ? "Infinity" : "-Infinity"));
+  return formatFiniteNumber(n, places, fixedDecimals, style);
 }
-export const Format = Formatter;
-export const numFormat = (n, p, f) => Formatter.number(n, { places: p, fixedDecimals: f });
+
+function formatDurationParts(ms, useHtml = false) {
+  if (!Number.isFinite(ms) || ms < 0) ms = 0;
+  const s = Math.floor(ms / MS_PER_SECOND) % SECONDS_PER_MINUTE;
+  const m = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE)) % SECONDS_PER_MINUTE;
+  const h = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR)) % HOURS_PER_DAY;
+  const d = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY));
+  const unit = (val, label) => useHtml ? `${val}<span class="time-unit">${label}</span>` : `${val}${label}`;
+  const parts = [];
+  if (d > 0) parts.push(unit(d, "d"));
+  if (h > 0 || parts.length > 0) parts.push(unit(h, "h"));
+  if (m > 0 || parts.length > 0) parts.push(unit(m, "m"));
+  parts.push(unit(s, "s"));
+  return parts.join(" ");
+}
+
+export const numFormat = (n, p, f) => formatNumber(n, { places: p, fixedDecimals: f });
 
 export function cancelCathodeScramble(el) {
   if (!el) return;
@@ -488,10 +474,10 @@ export function runCathodeScramble(el, nextText, opts = {}) {
   if (el) el.textContent = nextText;
 }
 
-export const formatStatNum = (n) => Formatter.number(n, { places: 1 }) || "0";
-export const formatPrestigeNumber = (n) => Formatter.number(n, { places: 2, infinitySymbol: "∞" });
-export function formatTime(ms) { return Formatter.time(ms, true); }
-export function formatDuration(ms, useHtml = false) { return Formatter.time(ms, useHtml); }
+export const formatStatNum = (n) => formatNumber(n, { places: 1 }) || "0";
+export const formatPrestigeNumber = (n) => formatNumber(n, { places: 2, infinitySymbol: "∞" });
+export function formatTime(ms) { return formatDurationParts(ms, true); }
+export function formatDuration(ms, useHtml = false) { return formatDurationParts(ms, useHtml); }
 export function formatPlaytimeLog(ms) {
   if (!Number.isFinite(ms) || ms < 0) return "--:--:--";
   const s = Math.floor(ms / MS_PER_SECOND) % SECONDS_PER_MINUTE;

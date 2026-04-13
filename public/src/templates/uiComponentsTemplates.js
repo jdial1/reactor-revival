@@ -17,9 +17,6 @@ export function infoBarTemplate({
   epContentStyle,
   epVisible,
   activeBuffs,
-  onSell,
-  onVent,
-  onVentMobile,
 }) {
   const buffIcons = (buff) => html`
     <div class="buff-icon active" title=${buff.title} aria-label=${buff.title}>
@@ -28,7 +25,7 @@ export function infoBarTemplate({
   `;
   return html`
     <div class="info-bar-desktop">
-      <button class=${powerClass} id="info_bar_power_btn_desktop" type="button" tabindex="0" aria-label="Sell Power" style=${powerBarStyle} @click=${onSell}>
+      <button class=${powerClass} id="info_bar_power_btn_desktop" type="button" tabindex="0" aria-label="Sell Power" style=${powerBarStyle} data-intent="SELL_POWER">
         <img src="img/ui/icons/icon_power.png" class="icon" alt="Power" />
         <span class="value" id="info_power_desktop">${powerTextDesktop}</span>
         <span class="denom" id="info_power_denom_desktop">/${maxPowerDesktop}</span>
@@ -44,7 +41,7 @@ export function infoBarTemplate({
         </span>
       </span>
       <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
-      <button class=${heatClass} id="info_bar_heat_btn_desktop" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} @click=${onVent}>
+      <button class=${heatClass} id="info_bar_heat_btn_desktop" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} data-intent="VENT_HEAT">
         <img src="img/ui/icons/icon_heat.png" class="icon" alt="Heat" />
         <span class="value" id="info_heat_desktop">${heatTextDesktop}</span>
         <span class="denom" id="info_heat_denom_desktop">/${maxHeatDesktop}</span>
@@ -52,7 +49,7 @@ export function infoBarTemplate({
     </div>
     <div class="info-bar-mobile" style="display: none;">
       <div class="info-row info-main">
-        <button class=${powerClass} id="info_bar_power_btn" type="button" tabindex="0" aria-label="Sell Power" style=${powerBarStyle} @click=${onSell}>
+        <button class=${powerClass} id="info_bar_power_btn" type="button" tabindex="0" aria-label="Sell Power" style=${powerBarStyle} data-intent="SELL_POWER">
           <img src="img/ui/icons/icon_power.png" class="icon" alt="Power" />
           <span class="value" id="info_power">${powerTextMobile}</span>
         </button>
@@ -60,7 +57,7 @@ export function infoBarTemplate({
           <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
           <span class="value cathode-readout" id="info_money"></span>
         </span>
-        <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} @click=${onVentMobile}>
+        <button class=${heatClass} id="info_bar_heat_btn" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} data-intent="VENT_HEAT" data-vent-animate>
           <img src="img/ui/icons/icon_heat.png" class="icon" alt="Heat" />
           <span class="value" id="info_heat">${heatTextMobile}</span>
         </button>
@@ -100,11 +97,9 @@ export function mobileControlDeckTemplate({
   maxPowerText,
   maxHeatText,
   moneyValueText,
-  onSellPower,
-  onVentHeat,
 }) {
   return html`
-    <button class=${powerCapacitorClass} id="control_deck_power_btn" type="button" tabindex="0" aria-label="Sell Power" @click=${onSellPower}>
+    <button class=${powerCapacitorClass} id="control_deck_power_btn" type="button" tabindex="0" aria-label="Sell Power" data-intent="SELL_POWER">
       <div class="control-deck-auto-sell-led" id="control_deck_auto_sell_led" aria-hidden="true"></div>
       <span class="control-deck-rate" id="control_deck_power_rate" aria-hidden="true">${powerRateText}</span>
       <span class=${autoRateClass} id="control_deck_auto_sell_rate" aria-hidden="true">${autoSellRateContent}</span>
@@ -124,7 +119,7 @@ export function mobileControlDeckTemplate({
       <div class="floating-text-container" id="floating_text_container"></div>
     </div>
 
-    <button class=${heatVentClass} id="control_deck_heat_btn" type="button" tabindex="0" aria-label="Vent Heat" @click=${onVentHeat}>
+    <button class=${heatVentClass} id="control_deck_heat_btn" type="button" tabindex="0" aria-label="Vent Heat" data-intent="VENT_HEAT" data-vent-animate>
       <span class="control-deck-rate" id="control_deck_heat_rate" aria-hidden="true">${heatRateText}</span>
       <span class=${autoHeatRateClass} id="control_deck_auto_heat_rate" aria-hidden="true">${autoHeatRateContent}</span>
       <div class="control-deck-fill heat-fill" style=${heatFillStyle}></div>
@@ -150,7 +145,6 @@ export function mobilePassiveBarTemplate({
   pauseClass,
   pauseAriaLabel,
   pauseTitle,
-  onPauseClick,
 }) {
   return html`
     <span class="passive-top-ep">
@@ -166,7 +160,7 @@ export function mobilePassiveBarTemplate({
       class=${pauseClass}
       aria-label=${pauseAriaLabel}
       title=${pauseTitle}
-      @click=${onPauseClick}
+      data-intent="PAUSE_TOGGLE"
     >
       <img src="img/ui/nav/nav_pause.png" alt="" class="passive-pause-icon pause-icon" />
       <img src="img/ui/nav/nav_play.png" alt="" class="passive-pause-icon play-icon" />
@@ -626,7 +620,7 @@ export function quickStartTemplate({
             <div class="qs-accordion-body">
               <div class="qs-flow">
                 <div class="qs-flow-diagram">
-                  <span class="qs-flow-icon qs-flow-fuel"><img src="img/parts/cells/cell_1_1.png" alt="FUEL" class="qs-icon" /></span>
+                  <span class="qs-flow-icon qs-flow-fuel"><img src="img/parts/cell_1_1.png" alt="FUEL" class="qs-icon" /></span>
                   <span class="qs-flow-arrow">▶</span>
                   <span class="qs-flow-icon qs-flow-power"><img src="img/ui/icons/icon_power.png" alt="POWER" class="qs-icon" /></span>
                   <span class="qs-flow-plus">+</span>
@@ -670,7 +664,7 @@ export function quickStartTemplate({
           <div class="qs-section qs-accordion qs-accordion-expanded">
             <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">[ FIRST STEPS ]</div>
             <div class="quick-start-list qs-accordion-body">
-              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Start with $10 - buy a <img src="img/parts/cells/cell_1_1.png" class="objective-part-icon" alt="Uranium Cell" title="Uranium Cell" />URANIUM CELL</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Start with $10 - buy a <img src="img/parts/cell_1_1.png" class="objective-part-icon" alt="Uranium Cell" title="Uranium Cell" />URANIUM CELL</span></div>
               <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Open Parts panel to find components</span></div>
               <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Cells: Single, Dual, Quad configs</span></div>
             </div>
@@ -679,7 +673,7 @@ export function quickStartTemplate({
             <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">[ POWER SYSTEM ]</div>
             <div class="quick-start-list qs-accordion-body">
               <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/ui/icons/icon_power.png" class="objective-part-icon" alt="POWER" title="POWER" /><span class="qs-amber">POWER</span>: Generated by cells</span></div>
-              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/capacitors/capacitor_1.png" class="objective-part-icon" alt="Capacitors" title="Capacitors" />CAPACITORS increase storage</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/capacitor_1.png" class="objective-part-icon" alt="Capacitors" title="Capacitors" />CAPACITORS increase storage</span></div>
               <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>Sell power before capacity fills!</span></div>
             </div>
           </div>
@@ -687,16 +681,16 @@ export function quickStartTemplate({
             <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">[ HEAT SYSTEM ]</div>
             <div class="quick-start-list qs-accordion-body">
               <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/ui/icons/icon_heat.png" class="objective-part-icon" alt="HEAT" title="HEAT" /><span class="qs-orange">HEAT</span>: Also generated by cells</span></div>
-              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/platings/plating_1.png" class="objective-part-icon" alt="Reactor Plating" title="Reactor Plating" />Plating: Max Heat Up</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/plating_1.png" class="objective-part-icon" alt="Reactor Plating" title="Reactor Plating" />Plating: Max Heat Up</span></div>
               <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span>200% heat = MELTDOWN!</span></div>
             </div>
           </div>
           <div class="qs-section qs-accordion">
             <div class="qs-section-head qs-accordion-head" role="button" tabindex="0">[ HEAT MANAGEMENT ]</div>
             <div class="quick-start-list qs-accordion-body">
-              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/vents/vent_1.png" class="objective-part-icon" alt="Heat Vent" title="Heat Vent" />VENTS: Remove heat from components</span></div>
-              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/exchangers/exchanger_1.png" class="objective-part-icon" alt="Heat Exchanger" title="Heat Exchanger" />EXCHANGERS: Balance heat between parts</span></div>
-              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/coolants/coolant_cell_1.png" class="objective-part-icon" alt="Coolant Cell" title="Coolant Cell" />COOLANT CELLS: Passive heat sinks</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/vent_1.png" class="objective-part-icon" alt="Heat Vent" title="Heat Vent" />VENTS: Remove heat from components</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/exchanger_1.png" class="objective-part-icon" alt="Heat Exchanger" title="Heat Exchanger" />EXCHANGERS: Balance heat between parts</span></div>
+              <div class="quick-start-line"><span class="quick-start-line-prompt">></span><span><img src="img/parts/coolant_cell_1.png" class="objective-part-icon" alt="Coolant Cell" title="Coolant Cell" />COOLANT CELLS: Passive heat sinks</span></div>
             </div>
           </div>
         </div>

@@ -42,7 +42,7 @@
       },
       "icons": [
         {
-          "src": "img/parts/cells/cell_1_1-192x192.png",
+          "src": "img/parts/cell_1_1-192x192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -80,38 +80,38 @@
   },
   "icons": [
     {
-      "src": "img/parts/cells/cell_1_1-192x192.png",
+      "src": "img/parts/cell_1_1-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "img/parts/cells/cell_1_1-512x512.png",
+      "src": "img/parts/cell_1_1-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "img/parts/cells/cell_1_1-512x512-maskable.png",
+      "src": "img/parts/cell_1_1-512x512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "img/parts/cells/cell_1_1-192x192-maskable.png",
+      "src": "img/parts/cell_1_1-192x192-maskable.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "img/parts/cells/cell_1_1-192x192.png",
+      "src": "img/parts/cell_1_1-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any",
       "platform": "ios"
     },
     {
-      "src": "img/parts/cells/cell_1_1-512x512.png",
+      "src": "img/parts/cell_1_1-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any",
@@ -126,7 +126,7 @@
       "url": "/reactor-revival/?action=new",
       "icons": [
         {
-          "src": "img/parts/cells/cell_1_1-192x192.png",
+          "src": "img/parts/cell_1_1-192x192.png",
           "sizes": "192x192",
           "type": "image/png"
         }

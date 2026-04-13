@@ -2282,6 +2282,22 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 .pixel-panel > * { position: relative; z-index: 6;
 }
 
+#modal-root.game-modal-host {
+  border: none;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+#modal-root.game-modal-host::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
 .upgrade-group,
 .research-group { display: grid; width: 100%; max-width: 100%; box-sizing: border-box; padding: 0; border: none; margin-bottom: 2rem; background: transparent; gap: 2rem; grid-template-columns: 1fr;
 }
@@ -4010,6 +4026,15 @@ body.game-paused #objectives_toast_btn,
 body.reactor-meltdown #objectives_toast_btn { display: none !important;
 }
 body.tutorial-claim-step #objectives_toast_btn { display: flex !important;
+}
+
+body[data-tutorial-step] #tutorial-callout.visible {
+  border-color: rgb(255 210 120);
+}
+
+body[data-tutorial-step="place_cell"] #parts_section,
+body[data-tutorial-step="place_vent"] #parts_section,
+body[data-tutorial-step="sell_power"] #parts_section { position: relative; z-index: 1993;
 }
 
 @keyframes meltdownFlash { 0% { background-color: rgb(244 67 54); box-shadow: 0 2px 4px rgb(0 0 0 / 30%); opacity: 1;
@@ -6449,4 +6474,10 @@ html.reduced-motion-app #my_layouts_modal .modal-header::after { animation: none
 
  .critical-error-message { font-size: 10px;
  }
+}
+
+#reactor[data-heat-ratio^="0.9"],
+#reactor[data-heat-ratio^="1"],
+#reactor[data-heat-ratio^="1."] {
+ filter: saturate(1.08);
 }

@@ -8,7 +8,6 @@ import "../../lib/break_infinity.min.js";
     if (typeof self !== "undefined") self.Decimal = Dec;
   }
 }
-import superjson from "../../lib/superjson.js";
 import {
   runHeatStepFromTyped,
   INLET_STRIDE, INLET_OFFSET_INDEX, INLET_OFFSET_RATE, INLET_OFFSET_N_COUNT, INLET_OFFSET_NEIGHBORS,
@@ -36,7 +35,6 @@ import {
   VALVE_OVERFLOW_THRESHOLD,
   VALVE_TOPUP_THRESHOLD,
   getIndex,
-  isInBounds,
   applyPowerOverflowCalcDecimal,
   HULL_REPEL_FRACTION,
   FOUNDATIONAL_TICK_MS,
@@ -52,22 +50,30 @@ const MAX_OUTLETS = HEAT_PAYLOAD_MAX_OUTLETS;
 const OVERFLOW_VALVE_RATIO_MIN = VALVE_OVERFLOW_THRESHOLD;
 const TOPUP_VALVE_RATIO_MAX = VALVE_TOPUP_THRESHOLD;
 
-function getValveOrientation(id) {
-  const match = String(id).match(/(\d+)$/);
-  return match ? parseInt(match[1], 10) : 1;
+function getValveOrientation(part) {
+  const v = Number(part?.level);
+  return Number.isFinite(v) && v > 0 ? v | 0 : 1;
 }
 
-function orthoNeighborPairs(gidx, ctx) {
-  const { orthoOff, orthoIdx, stride } = ctx;
+function buildGridPartIndices(partLayout, gridLen, stride) {
+  const arr = new Int32Array(gridLen);
+  arr.fill(-1);
+  for (let i = 0; i < partLayout.length; i++) {
+    const t = partLayout[i];
+    arr[getIndex(t.r, t.c, stride)] = t.partIndex;
+  }
+  return arr;
+}
+
+function orthoNeighborNidxList(gidx, ctx) {
+  const { orthoOff, orthoIdx, gridPartIdx } = ctx;
   const out = [];
-  if (!orthoOff || !orthoIdx) return out;
+  if (!orthoOff || !orthoIdx || !gridPartIdx) return out;
   const a = orthoOff[gidx];
   const b = orthoOff[gidx + 1];
   for (let i = a; i < b; i++) {
     const nidx = orthoIdx[i];
-    const nr = (nidx / stride) | 0;
-    const nc = nidx % stride;
-    out.push([nr, nc]);
+    if (gridPartIdx[nidx] >= 0) out.push(nidx);
   }
   return out;
 }
@@ -88,37 +94,35 @@ function partHasTrait(part, trait) {
 }
 
 function isValveLikePart(p) {
-  return p && (p.category === "valve" || partHasTrait(p, "VALVE_UNIT"));
+  return !!(p && partHasTrait(p, "VALVE_UNIT"));
 }
 
 function getValveTypeId(part) {
-  if (partHasTrait(part, "VALVE_OVERFLOW") || part.type === "overflow_valve") return 1;
-  if (partHasTrait(part, "VALVE_TOPUP") || part.type === "topup_valve") return 2;
+  if (partHasTrait(part, "VALVE_OVERFLOW")) return 1;
+  if (partHasTrait(part, "VALVE_TOPUP")) return 2;
   return 3;
 }
 
 function getExchangerNeighborCategory(nPart) {
-  if (nPart.category === "vent" || partHasTrait(nPart, "VENT") || nPart.category === "coolant_cell") return 2;
-  if (nPart.category === "heat_exchanger" || partHasTrait(nPart, "HEAT_EXCHANGER")) return 0;
+  if (partHasTrait(nPart, "VENT") || partHasTrait(nPart, "COOLANT_CELL")) return 2;
+  if (partHasTrait(nPart, "HEAT_EXCHANGER")) return 0;
   return 1;
 }
 
 function fillInletsBuffer(ctx) {
-  const { partLayout, partTable, rows, cols, partAt, gidx } = ctx;
+  const { partLayout, partTable, gidx } = ctx;
   const buf = new Float32Array(MAX_INLETS * INLET_STRIDE);
   let nInlets = 0;
   for (let i = 0; i < partLayout.length && nInlets < MAX_INLETS; i++) {
     const t = partLayout[i];
     const part = partTable[t.partIndex];
-    if (!part || (part.category !== "heat_inlet" && !partHasTrait(part, "HEAT_INLET"))) continue;
-    const neighbors = orthoNeighborPairs(gidx(t.r, t.c), ctx);
+    if (!part || !partHasTrait(part, "HEAT_INLET")) continue;
+    const neighbors = orthoNeighborNidxList(gidx(t.r, t.c), ctx);
     let nCount = 0;
     for (let k = 0; k < neighbors.length && nCount < MAX_NEIGHBORS; k++) {
-      const [nr, nc] = neighbors[k];
-      if (partAt(nr, nc)) {
-        buf[nInlets * INLET_STRIDE + INLET_OFFSET_NEIGHBORS + nCount] = gidx(nr, nc);
-        nCount++;
-      }
+      const nidx = neighbors[k];
+      buf[nInlets * INLET_STRIDE + INLET_OFFSET_NEIGHBORS + nCount] = nidx;
+      nCount++;
     }
     buf[nInlets * INLET_STRIDE + INLET_OFFSET_INDEX] = gidx(t.r, t.c);
     buf[nInlets * INLET_STRIDE + INLET_OFFSET_RATE] = t.transferRate ?? 0;
@@ -129,16 +133,17 @@ function fillInletsBuffer(ctx) {
 }
 
 function collectValveNeighborIndices(valveEntries, ctx) {
-  const { partTable, rows, cols, partAt, gidx } = ctx;
+  const { partTable, gidx, gridPartIdx } = ctx;
   const valveNeighborSet = new Set();
   for (let v = 0; v < valveEntries.length; v++) {
     const t = valveEntries[v];
-    const neighbors = orthoNeighborPairs(gidx(t.r, t.c), ctx);
+    const neighbors = orthoNeighborNidxList(gidx(t.r, t.c), ctx);
     for (let k = 0; k < neighbors.length; k++) {
-      const [nr, nc] = neighbors[k];
-      if (!isInBounds(nr, nc, rows, cols) || !partAt(nr, nc)) continue;
-      const p = partTable[partAt(nr, nc).partIndex];
-      if (p && !isValveLikePart(p)) valveNeighborSet.add(gidx(nr, nc));
+      const nidx = neighbors[k];
+      const pi = gridPartIdx[nidx];
+      if (pi < 0) continue;
+      const p = partTable[pi];
+      if (p && !isValveLikePart(p)) valveNeighborSet.add(nidx);
     }
   }
   const valveNbrBuf = new Float32Array(MAX_VALVE_NEIGHBORS);
@@ -150,11 +155,11 @@ function collectValveNeighborIndices(valveEntries, ctx) {
 }
 
 function shouldSkipValve(part, inputNeighbor, outputNeighbor) {
-  if (partHasTrait(part, "VALVE_OVERFLOW") || part.type === "overflow_valve") {
+  if (partHasTrait(part, "VALVE_OVERFLOW")) {
     const inputRatio = inputNeighbor.cap > 0 ? (inputNeighbor.heat / inputNeighbor.cap) : 0;
     return inputRatio < OVERFLOW_VALVE_RATIO_MIN;
   }
-  if (partHasTrait(part, "VALVE_TOPUP") || part.type === "topup_valve") {
+  if (partHasTrait(part, "VALVE_TOPUP")) {
     const outputRatio = outputNeighbor.cap > 0 ? (outputNeighbor.heat / outputNeighbor.cap) : 0;
     return outputRatio > TOPUP_VALVE_RATIO_MAX;
   }
@@ -169,10 +174,19 @@ function getInputOutputNeighbors(neighbors, orientation) {
 }
 
 function buildValveNeighbors(t, ctx) {
-  const { partTable, rows, cols, heat, partAt, gidx } = ctx;
-  return orthoNeighborPairs(gidx(t.r, t.c), ctx)
-    .filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc))
-    .map(([nr, nc]) => ({ r: nr, c: nc, idx: gidx(nr, nc), heat: heat[gidx(nr, nc)] || 0, cap: partTable[partAt(nr, nc).partIndex]?.containment || 0 }));
+  const { partTable, heat, gridPartIdx, stride, gidx } = ctx;
+  return orthoNeighborNidxList(gidx(t.r, t.c), ctx).map((nidx) => {
+    const nr = (nidx / stride) | 0;
+    const nc = nidx % stride;
+    const pi = gridPartIdx[nidx];
+    return {
+      r: nr,
+      c: nc,
+      idx: nidx,
+      heat: heat[nidx] || 0,
+      cap: pi >= 0 ? partTable[pi]?.containment || 0 : 0,
+    };
+  });
 }
 
 function writeValveEntry(buf, base, gidx, t, part, orientation, inputNeighbor, outputNeighbor) {
@@ -194,7 +208,7 @@ function fillValvesBuffer(valveEntries, ctx) {
     if (!part) continue;
     const neighbors = buildValveNeighbors(t, ctx);
     if (neighbors.length < 2) continue;
-    const orientation = getValveOrientation(part.id);
+    const orientation = getValveOrientation(part);
     const { inputNeighbor, outputNeighbor } = getInputOutputNeighbors(neighbors, orientation);
     if (shouldSkipValve(part, inputNeighbor, outputNeighbor)) continue;
     const base = nValves * VALVE_STRIDE;
@@ -205,25 +219,30 @@ function fillValvesBuffer(valveEntries, ctx) {
 }
 
 function isExchangerPart(p) {
-  return p && (p.category === "heat_exchanger" || partHasTrait(p, "HEAT_EXCHANGER") || isValveLikePart(p) || (p.category === "reactor_plating" && (p.transfer || 0) > 0));
+  return (
+    p &&
+    (partHasTrait(p, "HEAT_EXCHANGER") ||
+      isValveLikePart(p) ||
+      (partHasTrait(p, "REACTOR_PLATING") && (p.transfer || 0) > 0))
+  );
 }
 
 function fillExchangersBuffer(exchangerEntries, ctx) {
-  const { partTable, rows, cols, partAt, gidx } = ctx;
+  const { partTable, gidx, gridPartIdx } = ctx;
   const buf = new Float32Array(MAX_EXCHANGERS * EXCHANGER_STRIDE);
   let nExchangers = 0;
   for (let i = 0; i < exchangerEntries.length && nExchangers < MAX_EXCHANGERS; i++) {
     const t = exchangerEntries[i];
     const part = partTable[t.partIndex];
-    if (!part || part.category === "valve") continue;
-    const neighbors = orthoNeighborPairs(gidx(t.r, t.c), ctx).filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc));
+    if (!part || isValveLikePart(part)) continue;
+    const neighbors = orthoNeighborNidxList(gidx(t.r, t.c), ctx);
     let nCount = 0;
     for (let n = 0; n < neighbors.length && nCount < MAX_NEIGHBORS; n++) {
-      const [nr, nc] = neighbors[n];
-      const nPart = partTable[partAt(nr, nc).partIndex];
+      const nidx = neighbors[n];
+      const nPart = partTable[gridPartIdx[nidx]];
       if (!nPart) continue;
       const base = nExchangers * EXCHANGER_STRIDE;
-      buf[base + EXCHANGER_OFFSET_NEIGHBOR_INDICES + nCount] = gidx(nr, nc);
+      buf[base + EXCHANGER_OFFSET_NEIGHBOR_INDICES + nCount] = nidx;
       buf[base + EXCHANGER_OFFSET_NEIGHBOR_CAPS + nCount] = nPart.containment || 0;
       buf[base + EXCHANGER_OFFSET_NEIGHBOR_CATS + nCount] = getExchangerNeighborCategory(nPart);
       nCount++;
@@ -239,25 +258,25 @@ function fillExchangersBuffer(exchangerEntries, ctx) {
 }
 
 function collectOutletNeighbors(t, ctx) {
-  const { partTable, rows, cols, partAt, gidx } = ctx;
-  return orthoNeighborPairs(gidx(t.r, t.c), ctx).filter(([nr, nc]) => {
-    if (!isInBounds(nr, nc, rows, cols)) return false;
-    const np = partAt(nr, nc);
-    return np && partTable[np.partIndex]?.category !== "valve";
+  const { partTable, gidx, gridPartIdx } = ctx;
+  return orthoNeighborNidxList(gidx(t.r, t.c), ctx).filter((nidx) => {
+    const pi = gridPartIdx[nidx];
+    if (pi < 0) return false;
+    return !isValveLikePart(partTable[pi]);
   });
 }
 
 function writeOutletEntry(buf, base, ctx, t, part, neighbors) {
-  const { partAt, gidx } = ctx;
+  const { gidx, gridPartIdx, partTable } = ctx;
   buf[base + OUTLET_OFFSET_INDEX] = gidx(t.r, t.c);
   buf[base + OUTLET_OFFSET_RATE] = t.transferRate ?? 0;
   buf[base + OUTLET_OFFSET_ACTIVATED] = t.activated ? 1 : 0;
   buf[base + OUTLET_OFFSET_IS_OUTLET6] = part.outlet_respect_neighbor_cap ? 1 : 0;
   buf[base + OUTLET_OFFSET_N_COUNT] = neighbors.length;
   for (let j = 0; j < neighbors.length && j < MAX_NEIGHBORS; j++) {
-    const [nr, nc] = neighbors[j];
-    const nPart = ctx.partTable[partAt(nr, nc).partIndex];
-    buf[base + OUTLET_OFFSET_NEIGHBOR_INDICES + j] = gidx(nr, nc);
+    const nidx = neighbors[j];
+    const nPart = partTable[gridPartIdx[nidx]];
+    buf[base + OUTLET_OFFSET_NEIGHBOR_INDICES + j] = nidx;
     buf[base + OUTLET_OFFSET_NEIGHBOR_CAPS + j] = nPart?.containment || 0;
   }
 }
@@ -281,8 +300,23 @@ function fillOutletsBuffer(outletEntries, ctx) {
 function buildHeatPayloadFromLayout(layoutContext) {
   const { partLayout, partTable, rows, cols, heat, containment, orthoOff, orthoIdx } = layoutContext;
   const stride = layoutContext.maxCols ?? cols;
+  const gridLen = heat.length;
+  const gridPartIdx = buildGridPartIndices(partLayout, gridLen, stride);
   const { partAt, gidx } = buildPayloadCellLookup(partLayout, stride);
-  const ctx = { partLayout, partTable, rows, cols, heat, containment, partAt, gidx, orthoOff, orthoIdx, stride };
+  const ctx = {
+    partLayout,
+    partTable,
+    rows,
+    cols,
+    heat,
+    containment,
+    partAt,
+    gidx,
+    orthoOff,
+    orthoIdx,
+    stride,
+    gridPartIdx,
+  };
 
   const { buf: inletsBuf, nInlets } = fillInletsBuffer(ctx);
 
@@ -295,7 +329,7 @@ function buildHeatPayloadFromLayout(layoutContext) {
 
   const outletEntries = partLayout.filter((t) => {
     const p = partTable[t.partIndex];
-    return p && (p.category === "heat_outlet" || partHasTrait(p, "HEAT_OUTLET"));
+    return p && partHasTrait(p, "HEAT_OUTLET");
   });
   const { buf: outBuf, nOutlets } = fillOutletsBuffer(outletEntries, ctx);
 
@@ -341,7 +375,7 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
   for (let i = 0; i < partLayout.length; i++) {
     const t = partLayout[i];
     const part = partTable[t.partIndex];
-    if (!part || part.category !== "cell" || t.ticks <= 0) continue;
+    if (!part || !partHasTrait(part, "FUEL_CELL") || t.ticks <= 0) continue;
 
     const M = part.cell_pack_M ?? 1;
     const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
@@ -364,22 +398,22 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
         ? t.heat
         : calculateCellPulseHeat(H_eff, M, N, C);
     const generatedHeat = layoutHeat * multiplier;
-    const neighbors = orthoNeighborPairs(gidx(t.r, t.c), ctx).filter(([nr, nc]) => isInBounds(nr, nc, rows, cols) && partAt(nr, nc));
+    const { gridPartIdx } = ctx;
+    const neighbors = orthoNeighborNidxList(gidx(t.r, t.c), ctx);
 
     let validCount = 0;
     for (let k = 0; k < neighbors.length; k++) {
-      const nPart = partTable[partAt(neighbors[k][0], neighbors[k][1]).partIndex];
+      const nPart = partTable[gridPartIdx[neighbors[k]]];
       if (nPart?.containment > 0) validCount++;
     }
 
     if (validCount > 0) {
       const perN = generatedHeat / validCount;
       for (let k = 0; k < neighbors.length; k++) {
-        const [nr, nc] = neighbors[k];
-        const nPart = partTable[partAt(nr, nc).partIndex];
+        const nidx = neighbors[k];
+        const nPart = partTable[gridPartIdx[nidx]];
         if (nPart?.containment > 0) {
-          const idx = gidx(nr, nc);
-          heat[idx] = (heat[idx] || 0) + perN;
+          heat[nidx] = (heat[nidx] || 0) + perN;
         }
       }
     } else {
@@ -403,7 +437,9 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
   }
 
   if (power_add > 0 || depletionIndices.length > 0) {
-    const cellCount = partLayout.filter((t) => partTable[t.partIndex]?.category === "cell" && (t.ticks ?? 0) > 0).length;
+    const cellCount = partLayout.filter(
+      (t) => partHasTrait(partTable[t.partIndex], "FUEL_CELL") && (t.ticks ?? 0) > 0
+    ).length;
     console.debug("[GameLoopWorker] processCells:", { power_add, heat_add, cellCount, depletionCount: depletionIndices.length });
   }
   return { power_add, heat_add, depletionIndices, tileUpdates };
@@ -417,7 +453,7 @@ function findExplosionIndices(partLayout, partTable, heat, gidx) {
     if (!part?.containment) continue;
     const idx = gidx(t.r, t.c);
     if (heat[idx] > part.containment) {
-      const capSort = part.category === "capacitor" ? 0 : 1;
+      const capSort = partHasTrait(part, "CAPACITOR") ? 0 : 1;
       explosionIndices.push({ idx, capSort });
     }
   }
@@ -450,7 +486,7 @@ function processVents(partLayout, partTable, heat, reactorState, multiplier, gid
   let rp = reactorPower;
   const ventEntries = partLayout.filter((t) => {
     const p = partTable[t.partIndex];
-    return p && (p.category === "vent" || partHasTrait(p, "VENT"));
+    return p && partHasTrait(p, "VENT");
   });
   const stirling = Number(reactorState.stirling_multiplier ?? 0) || 0;
 
@@ -575,9 +611,20 @@ function createGridContext(data) {
 
 function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, moneyRef) {
   const { partLayout, partTable, rows, cols, stride, multiplier, reactorState, autoSell, effectiveMaxPower, partAt, gidx, orthoOff, orthoIdx } = ctx;
+  ctx.gridPartIdx = buildGridPartIndices(partLayout, gridLen, stride);
 
   const containment = buildContainmentArray(partLayout, partTable, stride, gridLen);
-  const payload = buildHeatPayloadFromLayout({ partLayout, partTable, rows, cols, heat, containment, maxCols: stride, orthoOff, orthoIdx });
+  const payload = buildHeatPayloadFromLayout({
+    partLayout,
+    partTable,
+    rows,
+    cols,
+    heat,
+    containment,
+    maxCols: stride,
+    orthoOff,
+    orthoIdx,
+  });
   const heatPhaseResult = processHeatPhase(heat, containment, payload, reactorHeat, multiplier, ctx);
   reactorHeat = heatPhaseResult.reactorHeat.add(heatPhaseResult.heatFromInlets);
 
@@ -772,8 +819,7 @@ function startSimulationTimer() {
 function runStep() {
   const d = pending;
   pending = null;
-  const isSuperjson = d?.json != null && d?.meta != null;
-  const isTick = d?.type === "tick" || isSuperjson;
+  const isTick = d?.type === "tick";
   if (!d || !isTick) {
     busy = false;
     if (d) self.postMessage({ type: "tickResult", tickId: d.tickId, error: true });
@@ -782,17 +828,10 @@ function runStep() {
   busy = true;
   const step0 = typeof performance !== "undefined" ? performance.now() : 0;
   if (typeof console !== "undefined" && console.info) {
-    console.info("[GameLoopWorker] runStep start", { tickId: d?.tickId, superjson: isSuperjson });
+    console.info("[GameLoopWorker] runStep start", { tickId: d?.tickId });
   }
   try {
-    const data = isSuperjson
-      ? {
-          ...superjson.deserialize({ json: d.json, meta: d.meta }),
-          heatBuffer: d.heatBuffer,
-          orthoNeighborOffsets: d.orthoNeighborOffsets,
-          orthoNeighborIndices: d.orthoNeighborIndices,
-        }
-      : d;
+    const data = d;
     const result = runOneTick(data);
     if (data.mode !== "projection") {
       carriedBalance = result.authoritativeCurrentMoney;
@@ -832,7 +871,7 @@ self.onmessage = function (e) {
     handleEconomyCommand(d);
     return;
   }
-  const isTick = d?.type === "tick" || (d?.json != null && d?.meta != null);
+  const isTick = d?.type === "tick";
   if (isTick) {
     if (busy) {
       pending = d;

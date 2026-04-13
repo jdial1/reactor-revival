@@ -41,7 +41,7 @@ const CLAIM_STEP = {
   },
 };
 
-export class TutorialManager {
+class TutorialRuntime {
   constructor(game) {
     this.game = game;
     this.currentStep = -1;
@@ -238,10 +238,17 @@ export class TutorialManager {
     this.callout.style.left = `${Math.max(8, Math.min(left, window.innerWidth - rect.width - 8))}px`;
   }
 
+  _syncTutorialBodyDataset(value) {
+    if (typeof document === "undefined") return;
+    if (value === null || value === undefined || value === "") delete document.body.dataset.tutorialStep;
+    else document.body.dataset.tutorialStep = String(value);
+  }
+
   showStep(stepIndex) {
     const step = this.steps[stepIndex];
     if (!step) return this.complete();
     this.currentStep = stepIndex;
+    this._syncTutorialBodyDataset(step.key ?? String(stepIndex));
     if (typeof step.onEnter === "function") step.onEnter();
     const target = this.getTargetElement(step);
     if (!target) {
@@ -296,6 +303,7 @@ export class TutorialManager {
 
   showClaimStep() {
     this.currentStep = -1;
+    this._syncTutorialBodyDataset("claim");
     document.body.classList.add("tutorial-claim-step");
     CLAIM_STEP.onEnter(this.game);
     const target = this.game?.ui?.getTutorialTarget?.("claim_objective");
@@ -330,6 +338,7 @@ export class TutorialManager {
     document.body.classList.remove("tutorial-claim-step");
     this.hideSpotlight();
     this.currentStep = -1;
+    this._syncTutorialBodyDataset(null);
     this._claimStepActive = false;
     this._resumeStepIndex = null;
     if (this.game?.off && this._onObjectiveClaimed) this.game.off("objectiveClaimed", this._onObjectiveClaimed);
@@ -387,6 +396,10 @@ export class TutorialManager {
       this.showStep(0);
     }
   }
+}
+
+export function createTutorialManager(game) {
+  return new TutorialRuntime(game);
 }
 
 function applyMobileTooltipPosition(tooltipEl) {

@@ -3,7 +3,7 @@ import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { StateManager, createUIState, initUIStateSubscriptions } from "../state.js";
 import { InputHandler } from "./input-manager.js";
-import { ModalOrchestrator } from "./ui-modals.js";
+import { createModalOrchestrator } from "./ui-modals.js";
 import { GridScaler, GridCanvasRenderer } from "./ui-grid.js";
 import { ParticleEffectsUI, VisualEventRendererUI } from "./visual-effects-manager.js";
 import { leaderboardService } from "../services.js";
@@ -37,8 +37,7 @@ import {
   ClipboardUI,
 } from "./ui-components.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
-import dataService from "../services.js";
-import { ComponentRegistry } from "../utils.js";
+import { getValidatedGameData } from "../services.js";
 import { MOBILE_BREAKPOINT_PX } from "../utils.js";
 import { ObjectiveController, checkObjectiveTextScrolling as applyObjectiveToastTitle } from "../logic.js";
 import { GridController, AudioController } from "./controllers/controllers.js";
@@ -85,7 +84,6 @@ const MY_LAYOUTS_STORAGE_KEY = 'reactor_my_layouts';
 class PageInitUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('PageInit', this);
   }
 
   clearReactor() {
@@ -426,7 +424,6 @@ class LayoutStorageUI {
 class ObjectivesUI {
   constructor(ui, controller = null) {
     this.ui = ui;
-    this.ui.registry.register('Objectives', this);
     this.controller = controller;
   }
   checkTextScrolling() {
@@ -489,7 +486,6 @@ export { getPowerNetChangeFromStats as getPowerNetChange, getHeatNetChangeFromSt
 export class UI {
   constructor() {
     this.game = null;
-    this.registry = new ComponentRegistry();
     this.DOMElements = {};
     this.var_objs_config = {};
     this.last_money = 0;
@@ -502,7 +498,7 @@ export class UI {
     this._updateLoopRunning = false;
     this.stateManager = new StateManager(this);
     this.inputHandler = new InputHandler(this);
-    this.modalOrchestrator = new ModalOrchestrator();
+    this.modalOrchestrator = createModalOrchestrator();
     this.gridScaler = new GridScaler(this);
     this.gridCanvasRenderer = new GridCanvasRenderer(this);
     this.help_mode_active = false;
@@ -649,7 +645,7 @@ export class UI {
   }
 
   async init(game) {
-    const { helpText } = await dataService.ensureAllGameDataLoaded();
+    const { helpText } = getValidatedGameData();
     this.help_text = helpText?.default || helpText;
     this.game = game;
     if (game?.upgradeset?.setPopulateSectionFn) {
@@ -711,7 +707,6 @@ export class UI {
       getGame: () => this.game,
       getUI: () => this,
       getStateManager: () => this.stateManager,
-      getRegistry: () => this.registry,
     };
   }
 

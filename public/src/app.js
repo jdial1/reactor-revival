@@ -1,12 +1,13 @@
-import { Game, Engine } from "./logic.js";
+import { Game, Engine, resetHeatThresholdSignalState } from "./logic.js";
 import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, StorageUtilsAsync, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES, FOUNDATIONAL_TICK_MS, MAX_ACCUMULATOR_MULTIPLIER, BASE_MAX_HEAT, BASE_MAX_POWER } from "./utils.js";
 import { html, render } from "lit-html";
 import { UI } from "./components/ui.js";
 import { MODAL_IDS } from "./components/ui-modals.js";
 import { updateSectionCountsState, getCompactLayout } from "./components/ui-components.js";
-import dataService, { AudioService, createSplashManager } from "./services.js";
+import { AudioService, createSplashManager, getValidatedGameData } from "./services.js";
+import { installAppRootIntentDelegation } from "./ui-intent-dispatch.js";
 import { getValidatedPreferences, initPreferencesStore, preferences, subscribeKey, showLoadBackupModal, enqueueGameEffect } from "./state.js";
-import { TooltipManager, TutorialManager } from "./components/ui-tooltips-tutorial.js";
+import { TooltipManager, createTutorialManager } from "./components/ui-tooltips-tutorial.js";
 import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 import {
   renderSplashTemplate,
@@ -61,7 +62,7 @@ export class AppRoot {
     const template = html`
       ${this.renderSplash(hasSession)}
       <div id="wrapper" class=${classMap({ hidden: !hasSession })}></div>
-      <div id="modal-root"></div>
+      <dialog id="modal-root" class="game-modal-host"></dialog>
     `;
 
     try {
@@ -136,7 +137,7 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
   let difficultyPresets;
 
   try {
-    difficultyPresets = await dataService.loadDifficultyCurves();
+    difficultyPresets = getValidatedGameData().difficulty;
   } catch (err) {
     logger.log('error', 'game', 'Failed to load difficulty curves:', err);
     return;
@@ -412,13 +413,6 @@ export function attachGameEventListeners(game, ui) {
     const pattern = patterns[type];
     if (pattern != null) enqueueGameEffect(game, { kind: "haptic", pattern });
   });
-  on("heatWarning", ({ heatRatio }) => {
-    enqueueGameEffect(game, { kind: "sfx", id: "warning", intensity: heatRatio ?? 0.85, context: "reactor" });
-  });
-  on("pipeIntegrityWarning", ({ heatRatio }) => {
-    enqueueGameEffect(game, { kind: "sfx", id: "warning", intensity: heatRatio ?? 0.85, context: "reactor" });
-  });
-  on("firstHighHeat", () => {});
   on("heatWarningCleared", () => {
     if (ui.heatVisualsUI?.clearHeatWarningClasses) ui.heatVisualsUI.clearHeatWarningClasses();
     if (ui.gridInteractionUI) ui.gridInteractionUI.clearSegmentHighlight();
@@ -462,7 +456,7 @@ export function attachGameEventListeners(game, ui) {
     }
     if (quick_select_slots && ui.stateManager?.setQuickSelectSlots) ui.stateManager.setQuickSelectSlots(quick_select_slots);
     if (ui.controlDeckUI?.updateAllToggleBtnStates) ui.controlDeckUI.updateAllToggleBtnStates();
-    game.eventRouter?.clearState?.(game);
+    resetHeatThresholdSignalState(game);
   });
   on("meltdown", () => ui.stateManager?.setVar("melting_down", true));
   on("meltdownResolved", () => ui.stateManager?.setVar("melting_down", false));
@@ -537,7 +531,7 @@ function initGameComponents(game) {
   game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
   game.engine = new Engine(game);
   game.engine.setForceNoSAB(preferences.forceNoSAB === true);
-  game.tutorialManager = new TutorialManager(game);
+  game.tutorialManager = createTutorialManager(game);
 }
 
 async function applyOfflineWelcomeBack(game, ui) {
@@ -678,8 +672,7 @@ class GameBootstrapper {
     this.appRoot = appRoot;
   }
   async bootstrap() {
-    console.log("[ReactorBoot] bootstrap: ensureAllGameDataLoaded …");
-    await dataService.ensureAllGameDataLoaded();
+    getValidatedGameData();
     console.log("[ReactorBoot] bootstrap: ui.init …");
     await this.ui.init(this.game);
     console.log("[ReactorBoot] bootstrap: appRoot.render …");
@@ -688,6 +681,7 @@ class GameBootstrapper {
       this.ui.detachGameEventListeners();
     }
     this.ui.detachGameEventListeners = attachGameEventListeners(this.game, this.ui);
+    this.ui._teardownIntentDelegation = installAppRootIntentDelegation(this.game, this.ui);
     console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset …");
     this.game.tileset.initialize();
     await this.game.partset.initialize();

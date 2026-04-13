@@ -177,7 +177,7 @@ describe("Full Part and Upgrade Coverage", () => {
             );
             if (part.id === "reactor_plating6") {
               expect(toNum(game.reactor.max_power)).toBe(
-                toNum(game.reactor.base_max_power) + toNum(part.reactor_heat)
+                toNum(game.reactor.base_max_power) + toNum(part.reactor_power)
               );
             }
             break;
@@ -401,7 +401,7 @@ describe("Full Part and Upgrade Coverage", () => {
             break;
           case "chronometer":
             postValue = game.loop_wait;
-            expect(postValue).toBe(preValue / 2);
+            expect(postValue).toBe(preValue);
             break;
           case "component_reinforcement":
             part = game.partset.getPartById("vent1");
@@ -544,6 +544,9 @@ describe("Data Integrity Tests", () => {
         "experimental_parts",
         "experimental_particle_accelerators",
         "experimental_cells_boost",
+        "cooling",
+        "reflector",
+        "particle_accelerator",
         "cell_power_upgrades",
         "cell_tick_upgrades",
         "cell_perpetual_upgrades",

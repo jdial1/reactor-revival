@@ -71,7 +71,6 @@ function formatArchitectMetricsLine(state) {
 class InfoBarUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('InfoBar', this);
     this._unmount = null;
     this._infoBarAbortController = null;
     this._cathodeInfoBarFirst = Object.fromEntries(INFO_BAR_CATHODE_IDS.map((id) => [id, true]));
@@ -143,40 +142,6 @@ class InfoBarUI {
     }
   }
 
-  _handleSellPower(powerBtn) {
-    const ui = this.ui;
-    if (!ui.game) return;
-    const moneyBefore = ui.game.state.current_money;
-    ui.game.sell_action();
-    const moneyAfter = ui.game.state.current_money;
-    const moneyGained = moneyAfter?.sub ? moneyAfter.sub(moneyBefore).toNumber() : Number(moneyAfter) - Number(moneyBefore);
-    if (moneyGained <= 0) return;
-    const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-    const moneyDisplay = document.getElementById("control_deck_money");
-    const moneyTarget = isMobile
-      ? document.getElementById("mobile_passive_money_value")?.closest(".passive-top-money") ?? document.getElementById("mobile_passive_top_bar")
-      : moneyDisplay;
-    if (moneyDisplay) ui.particleEffectsUI.showFloatingText(moneyDisplay, moneyGained);
-    if (moneyTarget) {
-      ui.particleEffectsUI.createBoltParticle(powerBtn, moneyTarget);
-      ui.particleEffectsUI.createSellSparks(powerBtn, moneyTarget);
-    }
-  }
-
-  _handleHeat(heatBtn, venting = false) {
-    const ui = this.ui;
-    if (!ui.game) return;
-    const maxH = ui.stateManager.getVar("max_heat") || 0;
-    const curH = ui.stateManager.getVar("current_heat") || 0;
-    const heatRatio = maxH > 0 ? curH / maxH : 0;
-    ui.game.manual_reduce_heat_action();
-    ui.particleEffectsUI.createSteamParticles(heatBtn, heatRatio);
-    if (venting) {
-      heatBtn.classList.add("venting");
-      setTimeout(() => heatBtn.classList.remove("venting"), VENTING_ANIM_MS);
-    }
-  }
-
   _infoBarTemplate(state) {
     const power = toNumber(state.current_power);
     const heat = toNumber(state.current_heat);
@@ -207,10 +172,6 @@ class InfoBarUI {
     const moneyDisplay = meltdown ? "☢️" : `$${fmt(state.current_money, 2)}`;
     const moneyDisplayMobile = meltdown ? "☢️" : fmt(state.current_money, 0);
 
-    const onSell = (e) => this._handleSellPower(e.currentTarget);
-    const onVent = (e) => this._handleHeat(e.currentTarget);
-    const onVentMobile = (e) => this._handleHeat(e.currentTarget, true);
-
     const activeBuffs = state.active_buffs ?? [];
 
     const epVisible = toNumber(state.current_exotic_particles) > 0;
@@ -239,9 +200,6 @@ class InfoBarUI {
       epContentStyle,
       epVisible,
       activeBuffs,
-      onSell,
-      onVent,
-      onVentMobile,
     });
   }
 }
@@ -253,45 +211,9 @@ const CRITICAL_FILL_PERCENT = 80;
 class MobileInfoBarUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('MobileInfoBar', this);
     this._unmountControlDeck = null;
     this._unmountPassiveBar = null;
 
-    this._onPauseClick = () => {
-      const currentState = this.ui.stateManager.getVar("pause");
-      this.ui.stateManager.setVar("pause", !currentState);
-    };
-
-    this._onSellPower = (e) => {
-      const ui = this.ui;
-      if (!ui.game) return;
-      const moneyBefore = ui.game.state.current_money;
-      ui.game.sell_action();
-      const moneyAfter = ui.game.state.current_money;
-      const moneyGained = moneyAfter?.sub ? moneyAfter.sub(moneyBefore).toNumber() : Number(moneyAfter) - Number(moneyBefore);
-      if (moneyGained <= 0) return;
-      const moneyTarget = document.getElementById("mobile_passive_money_value")?.closest(".passive-top-money");
-      if (moneyTarget) {
-        ui.particleEffectsUI.createBoltParticle(e.currentTarget, moneyTarget);
-        ui.particleEffectsUI.createSellSparks(e.currentTarget, moneyTarget);
-      }
-      const moneyDisplay = document.getElementById("control_deck_money");
-      if (moneyDisplay) ui.particleEffectsUI.showFloatingText(moneyDisplay, moneyGained);
-    };
-
-    this._onVentHeat = (e) => {
-      const ui = this.ui;
-      if (!ui.game) return;
-      const btn = e.currentTarget;
-      if (!btn) return;
-      const maxH = ui.stateManager.getVar("max_heat") || 0;
-      const curH = ui.stateManager.getVar("current_heat") || 0;
-      const heatRatio = maxH > 0 ? curH / maxH : 0;
-      ui.game.manual_reduce_heat_action();
-      ui.particleEffectsUI.createSteamParticles(btn, heatRatio);
-      btn.classList.add("venting");
-      setTimeout(() => btn.classList.remove("venting"), VENTING_ANIM_MS);
-    };
     this._tickLineUpdateControlDeck = () => {
       const el = document.getElementById("control_deck_tick_line");
       const g = this.ui.game;
@@ -363,8 +285,6 @@ class MobileInfoBarUI {
       maxPowerText: maxPower ? fmt(maxPower, 0) : "",
       maxHeatText: maxHeat ? fmt(maxHeat, 0) : "",
       moneyValueText: state.melting_down ? "☢️" : fmt(state.current_money ?? 0, 0),
-      onSellPower: this._onSellPower,
-      onVentHeat: this._onVentHeat,
     });
   }
 
@@ -375,7 +295,6 @@ class MobileInfoBarUI {
       pauseClass: classMap({ "passive-top-pause": true, paused: !!state.pause }),
       pauseAriaLabel: state.pause ? "Resume" : "Pause",
       pauseTitle: state.pause ? "Resume" : "Pause",
-      onPauseClick: this._onPauseClick,
     });
   }
 
@@ -738,7 +657,6 @@ function getPartsByContainer(partset, tabId, unlockManager) {
 class PartsPanelUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('PartsPanel', this);
     this._partsPanelUnmount = null;
   }
 
@@ -979,7 +897,6 @@ class PartsPanelUI {
 class ControlDeckUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('ControlDeck', this);
     this.toggle_buttons_config = {
       auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
       auto_buy: { id: "auto_buy_toggle", stateProperty: "auto_buy" },
@@ -1355,7 +1272,7 @@ class TabSetupUI extends BaseComponent {
     if (buildBtn) {
       buildBtn.addEventListener("click", () => {
         this.ui.deviceFeatures.lightVibration();
-        const partsSection = this.ui.registry?.get?.("PartsPanel")?.getPartsSection?.() ?? this.ui.DOMElements?.parts_section;
+        const partsSection = this.ui.partsPanelUI?.getPartsSection?.() ?? this.ui.DOMElements?.parts_section;
         if (partsSection) {
           const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
           const hasSelectedPart = this.ui.stateManager.getClickedPart() !== null;
@@ -1566,7 +1483,6 @@ class ClipboardUI {
 class MeltdownUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('Meltdown', this);
     this._meltdownBuildupRafId = null;
     this._meltdownHandler = null;
     this._meltdownResolvedHandler = null;
@@ -1630,7 +1546,7 @@ class MeltdownUI {
         cancelAnimationFrame(this._meltdownBuildupRafId);
         this._meltdownBuildupRafId = null;
       }
-      const wrapper = ui.registry?.get?.("PageInit")?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
+      const wrapper = ui.pageInitUI?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
       if (wrapper) wrapper.style.transform = "";
       const vignetteEl = document.getElementById("meltdown_vignette");
       if (vignetteEl) {
@@ -1659,7 +1575,7 @@ class MeltdownUI {
     const ui = this.ui;
     const BUILDUP_MS = 2500;
     const wrapper =
-      ui.registry?.get?.("PageInit")?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
+      ui.pageInitUI?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
     const section = document.getElementById("reactor_section");
     let vignetteEl = document.getElementById("meltdown_vignette");
     if (!vignetteEl && section) {
@@ -2010,7 +1926,6 @@ export function mountSectionCountsReactive(ui, wrapperId) {
 export class UpgradesUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('Upgrades', this);
   }
 
   getUpgradeContainer(locationKey) {
@@ -2972,7 +2887,6 @@ export function myLayoutsTemplate(ui, list, fmtFn, onClose) {
 class HeatVisualsUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('HeatVisuals', this);
     this._overlay = null;
     this._heatFlowOverlay = null;
     this._voltageOverlaySvg = null;
@@ -2984,7 +2898,7 @@ class HeatVisualsUI {
 
   _applyHeatFromRatio(heatRatio) {
     const ui = this.ui;
-    const background = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+    const background = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
     if (!background) return;
     const root = typeof document !== "undefined" ? document.documentElement : null;
     const cd = Math.min(1.5, Math.max(0, heatRatio));
@@ -3013,12 +2927,17 @@ class HeatVisualsUI {
       appRoot.style.setProperty("--crt-jitter-duration", `${dur}s`);
       appRoot.classList.toggle("crt-heat-tearing", heatRatio >= 1.3);
     }
+    const reactorEl = ui.pageInitUI?.getReactor?.() ?? document.getElementById("reactor");
+    if (reactorEl) {
+      const hr = Math.round(Math.min(1.5, Math.max(0, heatRatio)) * 1000) / 1000;
+      reactorEl.setAttribute("data-heat-ratio", String(hr));
+    }
   }
 
   _ensureOverlay() {
     const ui = this.ui;
     if (this._overlay && this._overlay.parentElement) return this._overlay;
-    const reactorWrapper = ui.registry?.get?.("PageInit")?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
+    const reactorWrapper = ui.pageInitUI?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
     if (!reactorWrapper) {
       return null;
     }
@@ -3083,7 +3002,7 @@ class HeatVisualsUI {
     const ui = this.ui;
     const overlay = this._ensureOverlay();
     if (!overlay) return { x: 0, y: 0 };
-    const reactorEl = (ui.gridCanvasRenderer?.getCanvas() || ui.registry?.get?.("PageInit")?.getReactor?.()) ?? ui.DOMElements?.reactor;
+    const reactorEl = (ui.gridCanvasRenderer?.getCanvas() || ui.pageInitUI?.getReactor?.()) ?? ui.DOMElements?.reactor;
     const tileSize = ui.gridCanvasRenderer?.getTileSize() ?? (parseInt(getComputedStyle(reactorEl || document.body).getPropertyValue('--tile-size'), 10) || 48);
     if (!reactorEl) return { x: 0, y: 0 };
     const reactorRect = reactorEl.getBoundingClientRect();
@@ -3160,7 +3079,7 @@ class HeatVisualsUI {
   }
 
   clearHeatWarningClasses() {
-    const bg = this.ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+    const bg = this.ui.pageInitUI?.getReactorBackground?.() ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
     if (bg) {
       bg.classList.remove("heat-warning", "heat-critical");
       bg.style.setProperty("--heat-bg-alpha", "0");
@@ -3175,6 +3094,8 @@ class HeatVisualsUI {
       appRoot.style.setProperty("--crt-jitter-duration", "20s");
       appRoot.classList.remove("crt-heat-tearing");
     }
+    const reactorEl = this.ui.pageInitUI?.getReactor?.() ?? document.getElementById("reactor");
+    if (reactorEl) reactorEl.setAttribute("data-heat-ratio", "0");
   }
 
   updateHeatVisuals() {
@@ -3197,7 +3118,6 @@ class HeatVisualsUI {
 class GridInteractionUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register('GridInteraction', this);
     this._activeVentRotors = new Map();
     this._activeTileIcons = new Map();
     this.highlightedSegment = null;
@@ -3230,7 +3150,7 @@ class GridInteractionUI {
   spawnTileIcon(kind, fromTile, toTile = null) {
     const ui = this.ui;
     try {
-      const container = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+      const container = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
       if (typeof document === "undefined" || !fromTile || !container) return;
       if (!container || !ui.gridCanvasRenderer) return;
       let animationKey = `${fromTile.row}-${fromTile.col}-${kind}`;
@@ -3276,7 +3196,7 @@ class GridInteractionUI {
     try {
       if (typeof document === "undefined" || !tile || !ui.gridCanvasRenderer) return;
       if (this._activeVentRotors.has(tile)) return;
-      const container = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+      const container = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
       if (!container) return;
       const containerRect = container.getBoundingClientRect();
       const rect = ui.gridCanvasRenderer.getTileRectInContainer(tile.row, tile.col, containerRect);
@@ -3382,7 +3302,7 @@ class GridInteractionUI {
     const ui = this.ui;
     try {
       if (!fromTile || !toTile || !ui.gridCanvasRenderer) return;
-      const container = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
+      const container = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
       if (!container) return;
       const cRect = container.getBoundingClientRect();
       const fromRect = ui.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, cRect);
@@ -3410,7 +3330,7 @@ class GridInteractionUI {
     const ui = this.ui;
     try {
       if (!fromTile || !ui.gridCanvasRenderer) return;
-      const container = ui.registry?.get?.("PageInit")?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
+      const container = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
       if (!container) return;
       const cRect = container.getBoundingClientRect();
       const startRect = ui.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, cRect);
@@ -3450,7 +3370,6 @@ class GridInteractionUI {
 export class CopyPasteUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register("CopyPaste", this);
     this._blueprint = null;
   }
 
@@ -3689,7 +3608,6 @@ export class ModalOrchestrationUI {
 export class CoreLoopUI {
   constructor(ui) {
     this.ui = ui;
-    this.ui.registry.register("CoreLoop", this);
   }
 
   processUpdateQueue() {

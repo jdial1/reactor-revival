@@ -152,8 +152,8 @@ function showUpdateNotification(version) {
     const title = 'Reactor Revival Update';
     const options = {
       body: `Version ${version} is available! Click to reload.`,
-      icon: 'img/parts/cells/cell_1_1.png',
-      badge: 'img/parts/cells/cell_1_1-192x192-maskable.png',
+      icon: 'img/parts/cell_1_1.png',
+      badge: 'img/parts/cell_1_1-192x192-maskable.png',
       tag: 'reactor-update',
       renotify: true,
       data: {

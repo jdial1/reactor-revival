@@ -1,14 +1,12 @@
 import { html, render, nothing } from "lit-html";
 import { proxy } from "valtio/vanilla";
-import { styleMap, StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, Format, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
-import { getValidatedPreferences, preferences, syncReducedMotionDOM, enqueueGameEffect } from "../state.js";
-import dataService from "../services.js";
+import { styleMap, StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, formatDuration, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
+import { getValidatedPreferences, preferences, modalUi, syncReducedMotionDOM, enqueueGameEffect } from "../state.js";
+import { getValidatedGameData } from "../services.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
 import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate } from "./ui-components.js";
-import { interpolateTemplate } from "../templates/templateUtils.js";
 import {
   settingsHelpShellTemplate,
-  settingsHelpBodyTemplate,
   volumeStepperTemplate,
   mechSwitchTemplate,
   helpIconTemplate,
@@ -31,6 +29,14 @@ const DRAWER_BODY_CLASS = "modal-drawer-open";
 function setModalDrawerOpen(open) {
   if (typeof document === "undefined") return;
   document.body.classList.toggle(DRAWER_BODY_CLASS, !!open);
+}
+
+function syncModalDialogOpen(root, open) {
+  if (!root || typeof HTMLDialogElement === "undefined" || !(root instanceof HTMLDialogElement)) return;
+  try {
+    if (open && !root.open) root.showModal();
+    else if (!open && root.open) root.close();
+  } catch (_) {}
 }
 const SECTION_HEAD = "margin-top: 0; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
 const SECTION_HEAD_MARGIN = "margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
@@ -304,16 +310,11 @@ function setupSettingsHelpModal(overlay, modal, signal) {
     }
   };
 
-  const escapeHtml = (s) => String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
   const show = (title, content) => {
-    body.innerHTML = interpolateTemplate(settingsHelpBodyTemplate, {
-      title,
-      content,
-    });
+    render(html`
+      <h4 class="settings-help-title">${title}</h4>
+      <p class="settings-help-text">${content}</p>
+    `, body);
     helpEl.classList.remove("hidden");
     escapeHandler = (e) => {
       if (e.key === "Escape") hide();
@@ -334,7 +335,7 @@ function setupSettingsHelpModal(overlay, modal, signal) {
     modal.playClick();
     let data = {};
     try {
-      data = await dataService.loadSettingsHelp();
+      data = getValidatedGameData().settingsHelp;
     } catch (err) {}
     const text = data[key] || "No description available.";
     const row = btn.closest("tr");
@@ -547,7 +548,7 @@ function reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }) {
 
 function welcomeBackModalTemplate(payload, onInstant, onFastForward, onDismiss) {
   const { offlineMs = 0, tickEquivalent = 0, queuedTicks = 0 } = payload ?? {};
-  const durationStr = Format.time(offlineMs, false);
+  const durationStr = formatDuration(offlineMs, false);
   const tickStr = (tickEquivalent || queuedTicks).toLocaleString();
   return welcomeBackLayoutTemplate({
     durationStr,
@@ -604,7 +605,7 @@ export const MODAL_IDS = {
   MY_LAYOUTS: "myLayouts",
 };
 
-export class ModalOrchestrator {
+class ModalOrchestration {
   constructor() {
     this.ui = null;
     this._handlers = new Map();
@@ -620,7 +621,36 @@ export class ModalOrchestrator {
 
   init(ui) {
     this.ui = ui;
+    const root = typeof document !== "undefined" ? document.getElementById("modal-root") : null;
+    if (root instanceof HTMLDialogElement && !root.dataset.boundGameCancel) {
+      root.dataset.boundGameCancel = "1";
+      root.addEventListener("cancel", (e) => {
+        e.preventDefault();
+        ui?.modalOrchestrator?.hideModal?.(modalUi.activeModal);
+      });
+    }
     this._registerHandlers();
+  }
+
+  _resolveModalRoot() {
+    if (!this._modalRoot) {
+      this._modalRoot = this.ui?.coreLoopUI?.getElement?.("modal-root") ?? this.ui?.DOMElements?.modal_root ?? (typeof document !== "undefined" ? document.getElementById("modal-root") : null);
+    }
+    return this._modalRoot;
+  }
+
+  _openLitModal(template) {
+    const root = this._resolveModalRoot();
+    if (!root) return;
+    render(template, root);
+    syncModalDialogOpen(root, true);
+  }
+
+  _closeLitModal() {
+    const root = this._resolveModalRoot();
+    if (!root) return;
+    render(nothing, root);
+    syncModalDialogOpen(root, false);
   }
 
   _registerHandlers() {
@@ -639,7 +669,7 @@ export class ModalOrchestrator {
     });
     this._handlers.set(MODAL_IDS.WELCOME_BACK, {
       show: (p) => this._showWelcomeBackModal(p),
-      hide: () => {},
+      hide: () => this._closeLitModal(),
     });
     this._handlers.set(MODAL_IDS.QUICK_START, {
       show: (p) => this._showQuickStartModal(p?.game),
@@ -683,24 +713,31 @@ export class ModalOrchestrator {
     if (modalId !== MODAL_IDS.SETTINGS && modalId !== MODAL_IDS.MY_LAYOUTS) {
       setModalDrawerOpen(false);
     }
+    modalUi.activeModal = modalId;
+    modalUi.payload = payload ?? null;
     const handler = this._handlers.get(modalId);
     if (!handler?.show) return undefined;
     return handler.show(payload);
   }
 
   hideModal(modalId) {
+    if (modalId == null) return;
     const handler = this._handlers.get(modalId);
     if (!handler?.hide) return;
     handler.hide();
+    if (modalUi.activeModal === modalId) {
+      modalUi.activeModal = null;
+      modalUi.payload = null;
+    }
   }
 
   isModalVisible(modalId) {
     if (modalId === MODAL_IDS.SETTINGS) return this._settingsVisible;
-    return false;
+    return modalUi.activeModal === modalId;
   }
 
   _renderContextModal() {
-    if (!this._modalRoot) return;
+    if (!this._resolveModalRoot()) return;
     const tile = this._activeContextTile;
     const onSell = () => {
       this.ui?.deviceFeatures?.heavyVibration?.();
@@ -713,12 +750,13 @@ export class ModalOrchestrator {
       this.ui?.deviceFeatures?.lightVibration?.();
       this.hideModal(MODAL_IDS.CONTEXT);
     };
-    render(tile ? contextModalTemplate(tile, onSell, onClose) : nothing, this._modalRoot);
+    if (tile) this._openLitModal(contextModalTemplate(tile, onSell, onClose));
+    else this._closeLitModal();
   }
 
   _showContextModal(tile) {
     if (!this.ui || !tile?.part) return;
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
+    this._resolveModalRoot();
     this._activeContextTile = tile;
     this._renderContextModal();
     this.ui.deviceFeatures?.lightVibration?.();
@@ -741,17 +779,15 @@ export class ModalOrchestrator {
   _showPrestigeModal(payload) {
     const { mode } = payload ?? {};
     if (!this.ui?.game) return;
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (!this._modalRoot) return;
 
     const game = this.ui.game;
     const totalEp = game.state.total_exotic_particles || 0;
     const preservedUpgrades = game.upgradeset.getAllUpgrades().filter((u) => u.base_ecost && u.level > 0).length;
     const prestigeMultiplier = game.getPrestigeMultiplier ? game.getPrestigeMultiplier() : 1;
 
-    const onCancel = () => this._hidePrestigeModal();
+    const onCancel = () => this.hideModal(MODAL_IDS.PRESTIGE);
     const onConfirm = (confirmedMode) => {
-      this._hidePrestigeModal();
+      this.hideModal(MODAL_IDS.PRESTIGE);
       if (confirmedMode === "refund") {
         game.rebootActionDiscardExoticParticles();
       } else {
@@ -759,19 +795,17 @@ export class ModalOrchestrator {
       }
     };
 
-    render(
+    this._openLitModal(
       prestigeModalTemplate(
         { mode, totalEp, preservedUpgrades, prestigeMultiplier },
         onConfirm,
         onCancel
-      ),
-      this._modalRoot
+      )
     );
   }
 
   _hidePrestigeModal() {
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui?.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (this._modalRoot) render(nothing, this._modalRoot);
+    this._closeLitModal();
   }
 
   _showCopyPasteModal(payload) {
@@ -886,8 +920,7 @@ export class ModalOrchestrator {
 
   _showWelcomeBackModal(payload) {
     if (!this.ui?.game) return Promise.resolve();
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (!this._modalRoot) return Promise.resolve();
+    if (!this._resolveModalRoot()) return Promise.resolve();
 
     const game = this.ui.game;
     game.pause();
@@ -901,7 +934,7 @@ export class ModalOrchestrator {
           game.paused = false;
           this.ui.stateManager.setVar("pause", false);
         }
-        render(nothing, this._modalRoot);
+        this.hideModal(MODAL_IDS.WELCOME_BACK);
         resolve(mode);
       };
 
@@ -922,25 +955,24 @@ export class ModalOrchestrator {
         handleClose(mode);
       };
 
-      render(
+      this._openLitModal(
         welcomeBackModalTemplate(
           payload,
           () => wrappedClose("instant"),
           () => wrappedClose("fast-forward"),
           () => wrappedClose("fast-forward")
-        ),
-        this._modalRoot
+        )
       );
     });
   }
 
   _renderSettingsModal() {
-    if (!this._modalRoot) return;
+    if (!this._resolveModalRoot()) return;
     if (this._settingsUnmount) {
       this._settingsUnmount();
       this._settingsUnmount = null;
     }
-    const onClose = () => this._hideSettingsModal();
+    const onClose = () => this.hideModal(MODAL_IDS.SETTINGS);
     const onTabClick = (tabId) => {
       if (this._settingsState.activeTab === tabId) return;
       this._settingsState.activeTab = tabId;
@@ -971,15 +1003,14 @@ export class ModalOrchestrator {
 
   _showSettingsModal() {
     if (!this.ui) return;
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (!this._modalRoot) return;
+    if (!this._resolveModalRoot()) return;
     this._settingsState.activeTab = "audio";
     this._settingsState.notificationPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
     this._settingsContext = createSettingsContext(this.ui, this);
     const keyHandler = (e) => {
       if (e.key === "Escape") {
         document.removeEventListener("keydown", keyHandler);
-        this._hideSettingsModal();
+        this.hideModal(MODAL_IDS.SETTINGS);
       }
     };
     document.addEventListener("keydown", keyHandler);
@@ -987,6 +1018,7 @@ export class ModalOrchestrator {
     this._settingsVisible = true;
     setModalDrawerOpen(true);
     this._renderSettingsModal();
+    syncModalDialogOpen(this._modalRoot, true);
   }
 
   _hideSettingsModal() {
@@ -1006,7 +1038,7 @@ export class ModalOrchestrator {
       game.audio.stopTestSound();
       game.audio.warningManager?.stopWarningLoop?.();
     }
-    if (this._modalRoot) render(nothing, this._modalRoot);
+    this._closeLitModal();
     const menuBtn = document.getElementById("menu_tab_btn");
     if (menuBtn) menuBtn.classList.remove("active");
     const settingsTopBtn = document.getElementById("settings_btn");
@@ -1024,8 +1056,7 @@ export class ModalOrchestrator {
   _showReactorFailedToStartModal(payload) {
     const game = payload?.game ?? this.ui?.game;
     if (!game) return;
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (!this._modalRoot) return;
+    if (!this._resolveModalRoot()) return;
 
     const errorMessage = payload?.error ?? null;
     if (this.ui?.uiState) this.ui.uiState.reactor_failed_error = errorMessage;
@@ -1035,12 +1066,11 @@ export class ModalOrchestrator {
       this._hideReactorFailedToStartModal(false);
     };
     const onDismiss = () => this._hideReactorFailedToStartModal(true);
-    render(reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }), this._modalRoot);
+    this._openLitModal(reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }));
   }
 
   _showQuickStartModal(game, isDetailed = false) {
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui?.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (!this._modalRoot) return;
+    if (!this._resolveModalRoot()) return;
 
     this._quickStartPage = 1;
     this._quickStartGame = game;
@@ -1050,29 +1080,27 @@ export class ModalOrchestrator {
       if (this._quickStartGame?.tutorialManager && !StorageUtils.get("reactorTutorialCompleted")) {
         this._quickStartGame.tutorialManager.start();
       }
-      this._hideQuickStartModal();
+      this.hideModal(MODAL_IDS.QUICK_START);
     };
     const onMoreDetails = () => {
       this._quickStartPage = 2;
-      render(
-        quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack),
-        this._modalRoot
+      this._openLitModal(
+        quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack)
       );
     };
     const onBack = () => {
       this._quickStartPage = 1;
-      render(
-        quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack),
-        this._modalRoot
+      this._openLitModal(
+        quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack)
       );
     };
 
-    render(quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack), this._modalRoot);
+    this._openLitModal(quickStartTemplate(this._quickStartPage, onClose, onMoreDetails, onBack));
   }
 
   _hideQuickStartModal() {
     this._quickStartGame = null;
-    if (this._modalRoot) render(nothing, this._modalRoot);
+    this._closeLitModal();
   }
 
   showSettings() {
@@ -1110,35 +1138,41 @@ export class ModalOrchestrator {
       game.ui?.stateManager?.setVar?.("pause", true);
     }
     if (this.ui?.uiState) this.ui.uiState.reactor_failed_error = null;
-    if (this._modalRoot) render(nothing, this._modalRoot);
+    this._closeLitModal();
+    if (modalUi.activeModal === MODAL_IDS.REACTOR_FAILED_TO_START) {
+      modalUi.activeModal = null;
+      modalUi.payload = null;
+    }
   }
 
   _showLayoutViewModal(payload) {
     const { layoutJson, stats } = payload ?? {};
     if (!this.ui?.game) return;
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (!this._modalRoot) return;
+    if (!this._resolveModalRoot()) return;
 
-    const onClose = () => this._hideLayoutViewModal();
-    render(layoutViewTemplate(layoutJson, stats, this.ui.game, onClose), this._modalRoot);
+    const onClose = () => this.hideModal(MODAL_IDS.LAYOUT_VIEW);
+    this._openLitModal(layoutViewTemplate(layoutJson, stats, this.ui.game, onClose));
   }
 
   _hideLayoutViewModal() {
-    if (this._modalRoot) render(nothing, this._modalRoot);
+    this._closeLitModal();
   }
 
   _showMyLayoutsModal() {
     if (!this.ui) return;
-    if (!this._modalRoot) this._modalRoot = this.ui.coreLoopUI?.getElement?.("modal-root") ?? this.ui.DOMElements?.modal_root ?? document.getElementById("modal-root");
-    if (!this._modalRoot) return;
+    if (!this._resolveModalRoot()) return;
 
-    const onClose = () => this._hideMyLayoutsModal();
+    const onClose = () => this.hideModal(MODAL_IDS.MY_LAYOUTS);
     const list = this.ui.layoutStorageUI.getMyLayouts();
-    render(myLayoutsTemplate(this.ui, list, fmt, onClose), this._modalRoot);
+    this._openLitModal(myLayoutsTemplate(this.ui, list, fmt, onClose));
   }
 
   _hideMyLayoutsModal() {
     setModalDrawerOpen(false);
-    if (this._modalRoot) render(nothing, this._modalRoot);
+    this._closeLitModal();
   }
+}
+
+export function createModalOrchestrator() {
+  return new ModalOrchestration();
 }

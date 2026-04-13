@@ -16,7 +16,7 @@
     "description": "Cells: +1% power at 1k heat, +2% at 2m, etc.",
     "cost": 10000,
     "multiplier": 100,
-    "icon": "img/parts/cells/cell_1_1.png",
+    "icon": "img/parts/cell_1_1.png",
     "actionId": "forceful_fusion"
   },
   {
@@ -46,7 +46,7 @@
     "description": "Manual venting is 10x more effective.",
     "cost": 100,
     "multiplier": 20,
-    "icon": "img/parts/platings/plating_1.png",
+    "icon": "img/parts/plating_1.png",
     "actionId": "improved_piping"
   },
   {
@@ -57,7 +57,7 @@
     "cost": 1000000000000000000,
     "multiplier": 5,
     "levels": 1,
-    "icon": "img/parts/capacitors/capacitor_1.png",
+    "icon": "img/parts/capacitor_1.png",
     "actionId": "perpetual_capacitors"
   },
   {
@@ -67,7 +67,7 @@
     "description": "Coolant Cells: heat capacity +100%.",
     "cost": 5000,
     "multiplier": 100,
-    "icon": "img/parts/coolants/coolant_cell_1.png",
+    "icon": "img/parts/coolant_cell_1.png",
     "actionId": "improved_coolant_cells"
   },
   {
@@ -77,7 +77,7 @@
     "description": "Reflectors: duration +100%.",
     "cost": 5000,
     "multiplier": 100,
-    "icon": "img/parts/reflectors/reflector_1.png"
+    "icon": "img/parts/reflector_1.png"
   },
   {
     "id": "improved_neutron_reflection",
@@ -86,7 +86,7 @@
     "description": "Reflectors: +1% power.",
     "cost": 5000,
     "multiplier": 100,
-    "icon": "img/parts/reflectors/reflector_1.png",
+    "icon": "img/parts/reflector_1.png",
     "actionId": "improved_neutron_reflection"
   },
   {
@@ -96,7 +96,7 @@
     "description": "Reflectors: auto-replace at 1.5x cost.",
     "cost": 1000000000,
     "levels": 1,
-    "icon": "img/parts/reflectors/reflector_1.png",
+    "icon": "img/parts/reflector_1.png",
     "actionId": "perpetual_reflectors"
   },
   {
@@ -106,7 +106,7 @@
     "description": "Exchangers, Inlets, Outlets: +100% capacity and exchange.",
     "cost": 600,
     "multiplier": 100,
-    "icon": "img/parts/exchangers/exchanger_1.png",
+    "icon": "img/parts/exchanger_1.png",
     "actionId": "improved_heat_exchangers"
   },
   {
@@ -116,7 +116,7 @@
     "description": "Exchangers: +1% transfer per Plating level per upgrade level.",
     "cost": 1000,
     "multiplier": 100,
-    "icon": "img/parts/platings/plating_1.png"
+    "icon": "img/parts/plating_1.png"
   },
   {
     "id": "active_exchangers",
@@ -125,7 +125,7 @@
     "description": "Exchangers: +1% transfer per Capacitor level per upgrade level.",
     "cost": 1000,
     "multiplier": 100,
-    "icon": "img/parts/capacitors/capacitor_1.png"
+    "icon": "img/parts/capacitor_1.png"
   },
   {
     "id": "improved_heat_vents",
@@ -134,7 +134,7 @@
     "description": "Vents: +100% vent rate and capacity.",
     "cost": 250,
     "multiplier": 100,
-    "icon": "img/parts/vents/vent_1.png",
+    "icon": "img/parts/vent_1.png",
     "actionId": "improved_heat_vents"
   },
   {
@@ -144,7 +144,7 @@
     "description": "Vents: +1% vent rate per Plating level.",
     "cost": 1000,
     "multiplier": 100,
-    "icon": "img/parts/platings/plating_1.png",
+    "icon": "img/parts/plating_1.png",
     "actionId": "improved_heatsinks"
   },
   {
@@ -154,7 +154,7 @@
     "description": "Vents: +1% vent rate per Capacitor level.",
     "cost": 1000,
     "multiplier": 100,
-    "icon": "img/parts/capacitors/capacitor_1.png"
+    "icon": "img/parts/capacitor_1.png"
   },
   {
     "id": "stirling_generators",
@@ -164,7 +164,7 @@
     "cost": 25000,
     "multiplier": 4,
     "levels": 10,
-    "icon": "img/parts/vents/vent_3.png",
+    "icon": "img/parts/vent_3.png",
     "actionId": "stirling_generators"
   },
   {
@@ -175,7 +175,7 @@
     "cost": 5000,
     "multiplier": 3,
     "levels": 10,
-    "icon": "img/parts/coolants/coolant_cell_3.png",
+    "icon": "img/parts/coolant_cell_3.png",
     "actionId": "emergency_coolant"
   },
   {
@@ -208,7 +208,7 @@
     "cost": 100000,
     "multiplier": 4.0,
     "levels": 10,
-    "icon": "img/parts/reflectors/reflector_2.png",
+    "icon": "img/parts/reflector_2.png",
     "actionId": "reflector_cooling"
   },
   {
@@ -219,7 +219,7 @@
     "cost": 500000,
     "multiplier": 10.0,
     "levels": 2,
-    "icon": "img/parts/inlets/inlet_4.png",
+    "icon": "img/parts/inlet_4.png",
     "actionId": "quantum_tunneling"
   },
   {
@@ -241,7 +241,7 @@
     "cost": 15000,
     "multiplier": 3.0,
     "levels": 5,
-    "icon": "img/parts/vents/vent_1.png",
+    "icon": "img/parts/vent_1.png",
     "actionId": "convective_airflow"
   },
   {
@@ -252,7 +252,7 @@
     "cost": 75000,
     "multiplier": 2.5,
     "levels": 5,
-    "icon": "img/parts/capacitors/capacitor_4.png",
+    "icon": "img/parts/capacitor_4.png",
     "actionId": "electro_thermal_conversion"
   },
   {
@@ -263,7 +263,7 @@
     "cost": 1000000,
     "multiplier": 5.0,
     "levels": 10,
-    "icon": "img/parts/accelerators/accelerator_2.png",
+    "icon": "img/parts/accelerator_2.png",
     "actionId": "sub_atomic_catalysts"
   },
   {
@@ -274,7 +274,7 @@
     "cost": 25000,
     "multiplier": 2.5,
     "levels": 10,
-    "icon": "img/parts/coolants/coolant_cell_4.png",
+    "icon": "img/parts/coolant_cell_4.png",
     "actionId": "thermal_feedback"
   },
   {
@@ -317,7 +317,7 @@
     "multiplier": 2,
     "ecost_multiplier": 2,
     "levels": 10,
-    "icon": "img/parts/cells/cell_5_2.png"
+    "icon": "img/parts/cell_5_2.png"
   },
   {
     "id": "unleashed_cells",
@@ -327,7 +327,7 @@
     "ecost": 500,
     "multiplier": 2,
     "levels": 10,
-    "icon": "img/parts/cells/cell_6_4.png"
+    "icon": "img/parts/cell_6_4.png"
   },
   {
     "id": "protium_cells",
@@ -337,7 +337,7 @@
     "erequires": "laboratory",
     "ecost": 50,
     "levels": 1,
-    "icon": "img/parts/cells/xcell_1_1.png"
+    "icon": "img/parts/xcell_1_1.png"
   },
   {
     "id": "experimental_protium_loader",
@@ -347,7 +347,7 @@
     "erequires": "protium_cells",
     "ecost": 100,
     "levels": 1,
-    "icon": "img/parts/cells/xcell_1_1.png"
+    "icon": "img/parts/xcell_1_1.png"
   },
   {
     "id": "full_spectrum_reflectors",
@@ -357,7 +357,7 @@
     "erequires": "laboratory",
     "ecost": 50,
     "multiplier": 2,
-    "icon": "img/parts/reflectors/reflector_6.png",
+    "icon": "img/parts/reflector_6.png",
     "actionId": "full_spectrum_reflectors"
   },
   {
@@ -368,7 +368,7 @@
     "erequires": "laboratory",
     "ecost": 50,
     "multiplier": 2,
-    "icon": "img/parts/exchangers/exchanger_6.png",
+    "icon": "img/parts/exchanger_6.png",
     "actionId": "fluid_hyperdynamics"
   },
   {
@@ -379,7 +379,7 @@
     "erequires": "laboratory",
     "ecost": 50,
     "multiplier": 2,
-    "icon": "img/parts/exchangers/exchanger_6.png",
+    "icon": "img/parts/exchanger_6.png",
     "actionId": "fractal_piping"
   },
   {
@@ -390,7 +390,7 @@
     "erequires": "laboratory",
     "ecost": 50,
     "multiplier": 2,
-    "icon": "img/parts/coolants/coolant_cell_6.png",
+    "icon": "img/parts/coolant_cell_6.png",
     "actionId": "ultracryonics"
   },
   {
@@ -401,7 +401,7 @@
     "erequires": "protium_cells",
     "ecost": 500,
     "multiplier": 2,
-    "icon": "img/parts/cells/xcell_1_2.png",
+    "icon": "img/parts/xcell_1_2.png",
     "actionId": "unstable_protium"
   },
   {
@@ -412,7 +412,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/reflectors/reflector_6.png"
+    "icon": "img/parts/reflector_6.png"
   },
   {
     "id": "experimental_capacitance",
@@ -422,7 +422,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/capacitors/capacitor_6.png"
+    "icon": "img/parts/capacitor_6.png"
   },
   {
     "id": "vortex_cooling",
@@ -432,7 +432,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/vents/vent_6.png"
+    "icon": "img/parts/vent_6.png"
   },
   {
     "id": "underground_heat_extraction",
@@ -442,7 +442,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/exchangers/exchanger_6.png"
+    "icon": "img/parts/exchanger_6.png"
   },
   {
     "id": "vortex_extraction",
@@ -452,7 +452,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/inlets/inlet_6.png"
+    "icon": "img/parts/inlet_6.png"
   },
   {
     "id": "explosive_ejection",
@@ -462,7 +462,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/outlets/outlet_6.png"
+    "icon": "img/parts/outlet_6.png"
   },
   {
     "id": "thermionic_conversion",
@@ -472,7 +472,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/coolants/coolant_6.png"
+    "icon": "img/parts/coolant_6.png"
   },
   {
     "id": "micro_capacitance",
@@ -482,7 +482,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/platings/plating_6.png"
+    "icon": "img/parts/plating_6.png"
   },
   {
     "id": "singularity_harnessing",
@@ -492,7 +492,7 @@
     "erequires": "laboratory",
     "ecost": 10000,
     "levels": 1,
-    "icon": "img/parts/accelerators/accelerator_6.png"
+    "icon": "img/parts/accelerator_6.png"
   },
   {
     "id": "improved_particle_accelerators1",
@@ -503,7 +503,7 @@
     "ecost": 200,
     "multiplier": 2,
     "part_level": 1,
-    "icon": "img/parts/accelerators/accelerator_1.png"
+    "icon": "img/parts/accelerator_1.png"
   },
   {
     "id": "improved_particle_accelerators6",
@@ -514,7 +514,7 @@
     "ecost": 1200,
     "multiplier": 2,
     "part_level": 6,
-    "icon": "img/parts/accelerators/accelerator_6.png"
+    "icon": "img/parts/accelerator_6.png"
   },
   {
     "id": "volatile_tuning",
@@ -524,7 +524,7 @@
     "cost": 150000,
     "multiplier": 2.5,
     "levels": 10,
-    "icon": "img/parts/cells/cell_3_1.png",
+    "icon": "img/parts/cell_3_1.png",
     "actionId": "volatile_tuning"
   },
   {
@@ -535,7 +535,7 @@
     "cost": 50000,
     "multiplier": 3.0,
     "levels": 5,
-    "icon": "img/parts/platings/plating_2.png",
+    "icon": "img/parts/plating_2.png",
     "actionId": "ceramic_composite"
   },
   {

@@ -30,7 +30,7 @@ import {
   setSlot1FromBackupAsync,
   escapeHtml,
   classMap,
-  Format,
+  formatNumber,
   formatPlaytimeLog,
   runCathodeScramble,
   rotateSlot1ToBackupAsync,
@@ -53,6 +53,7 @@ import {
   outboxRemoveById,
   outboxUpdateById,
 } from "./network-outbox.js";
+import { bundledGameData } from "./bundledStaticData.js";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,114 +74,63 @@ export const queryKeys = {
   },
 };
 
-const fetchAndValidate = async (path, schema) => {
-  const response = await fetch(path);
-  if (!response.ok) throw new Error(`Failed to load ${path}`);
-  const json = await response.json();
-  const data = json.default ?? json;
-  try {
-    return schema.parse(data);
-  } catch (err) {
-    const msg = `Data corruption in ${path}: ${fromError(err).toString()}`;
-    logger.log("error", "data", msg);
-    throw new Error(msg);
+let _validatedGameData;
+export function getValidatedGameData() {
+  if (!_validatedGameData) {
+    try {
+      _validatedGameData = {
+        parts: z.array(PartDefinitionSchema).parse(bundledGameData.parts),
+        upgrades: z.array(UpgradeDefinitionSchema).parse(bundledGameData.upgrades),
+        techTree: TechTreeSchema.parse(bundledGameData.techTree),
+        objectives: ObjectiveListSchema.parse(bundledGameData.objectives),
+        difficulty: z.record(z.string(), DifficultyPresetSchema).parse(bundledGameData.difficulty),
+        helpText: HelpTextSchema.parse(bundledGameData.helpText),
+        settingsHelp: z.record(z.string(), z.string()).parse(bundledGameData.settingsHelp),
+        flavorText: z.array(z.string()).parse(bundledGameData.flavorText),
+      };
+    } catch (err) {
+      const msg = `Bundled game data invalid: ${fromError(err)}`;
+      logger.log("error", "data", msg);
+      throw new Error(msg);
+    }
   }
-};
-
-async function fetchJson(path) {
-  const response = await fetch(path);
-  if (!response.ok) throw new Error(`Failed to load ${path}`);
-  const json = await response.json();
-  return json.default ?? json;
+  return _validatedGameData;
 }
 
-const prefetchOptions = {
-  staleTime: Infinity,
-  gcTime: Infinity,
-  networkMode: "offlineFirst",
-};
-
-class DataService {
-  _getQuery(key, path, schema) {
-    return queryClient.fetchQuery({
-      queryKey: queryKeys.gameData(key),
-      queryFn: () => fetchAndValidate(path, schema),
-      ...prefetchOptions,
-    });
-  }
-
+const dataService = {
   async ensureAllGameDataLoaded() {
-    console.log("[ReactorBoot] DataService.ensureAllGameDataLoaded start");
-    const results = await Promise.all([
-      this._getQuery("parts", "./data/part_list.json", z.array(PartDefinitionSchema)),
-      this._getQuery("upgrades", "./data/upgrade_list.json", z.array(UpgradeDefinitionSchema)),
-      this._getQuery("techTree", "./data/tech_tree.json", TechTreeSchema),
-      this._getQuery("objectives", "./data/objective_list.json", ObjectiveListSchema),
-      this._getQuery("difficulty", "./data/difficulty_curves.json", z.record(z.string(), DifficultyPresetSchema)),
-      this._getQuery("helpText", "./data/help_text.json", HelpTextSchema),
-    ]);
-    console.log("[ReactorBoot] DataService.ensureAllGameDataLoaded done");
-    return {
-      parts: results[0],
-      upgrades: results[1],
-      techTree: results[2],
-      objectives: results[3],
-      difficulty: results[4],
-      helpText: results[5],
-    };
-  }
-
-  async loadData(filePath) {
-    return queryClient.fetchQuery({
-      queryKey: [...queryKeys.gameData(), "raw", filePath],
-      queryFn: () => fetchJson(filePath),
-      ...prefetchOptions,
-    });
-  }
-
+    console.log("[ReactorBoot] game data (bundled) validated");
+    return getValidatedGameData();
+  },
   async loadFlavorText() {
-    return this._getQuery("flavorText", "./data/flavor_text.json", z.array(z.string()));
-  }
-
+    return getValidatedGameData().flavorText;
+  },
   async loadHelpText() {
-    return this._getQuery("helpText", "./data/help_text.json", HelpTextSchema);
-  }
-
+    return getValidatedGameData().helpText;
+  },
   async loadSettingsHelp() {
-    return this._getQuery("settingsHelp", "./data/settings_help.json", z.record(z.string(), z.string()));
-  }
-
+    return getValidatedGameData().settingsHelp;
+  },
   async loadObjectiveList() {
-    return this._getQuery("objectives", "./data/objective_list.json", ObjectiveListSchema);
-  }
-
+    return getValidatedGameData().objectives;
+  },
   async loadPartList() {
-    return this._getQuery("parts", "./data/part_list.json", z.array(PartDefinitionSchema));
-  }
-
+    return getValidatedGameData().parts;
+  },
   async loadUpgradeList() {
-    return this._getQuery("upgrades", "./data/upgrade_list.json", z.array(UpgradeDefinitionSchema));
-  }
-
+    return getValidatedGameData().upgrades;
+  },
   async loadTechTree() {
-    return this._getQuery("techTree", "./data/tech_tree.json", TechTreeSchema);
-  }
-
+    return getValidatedGameData().techTree;
+  },
   async loadDifficultyCurves() {
-    return this._getQuery("difficulty", "./data/difficulty_curves.json", z.record(z.string(), DifficultyPresetSchema));
-  }
-
-  clearCache() {
-    queryClient.clear();
-  }
-
-  getCachedData(resource) {
-    const key = resource ? queryKeys.gameData(resource) : queryKeys.gameData();
-    return queryClient.getQueryData(key);
-  }
-}
-
-const dataService = new DataService();
+    return getValidatedGameData().difficulty;
+  },
+  clearCache() {},
+  getCachedData() {
+    return getValidatedGameData();
+  },
+};
 
 export default dataService;
 
@@ -1632,91 +1582,91 @@ export class VersionChecker {
 
 const partImagesByTier = {
   1: [
-    'img/parts/accelerators/accelerator_1.png',
-    'img/parts/capacitors/capacitor_1.png',
-    'img/parts/cells/cell_1_1.png',
-    'img/parts/cells/cell_1_2.png',
-    'img/parts/cells/cell_1_4.png',
-    'img/parts/coolants/coolant_cell_1.png',
-    'img/parts/exchangers/exchanger_1.png',
-    'img/parts/inlets/inlet_1.png',
-    'img/parts/outlets/outlet_1.png',
-    'img/parts/platings/plating_1.png',
-    'img/parts/reflectors/reflector_1.png',
-    'img/parts/vents/vent_1.png',
+    'img/parts/accelerator_1.png',
+    'img/parts/capacitor_1.png',
+    'img/parts/cell_1_1.png',
+    'img/parts/cell_1_2.png',
+    'img/parts/cell_1_4.png',
+    'img/parts/coolant_cell_1.png',
+    'img/parts/exchanger_1.png',
+    'img/parts/inlet_1.png',
+    'img/parts/outlet_1.png',
+    'img/parts/plating_1.png',
+    'img/parts/reflector_1.png',
+    'img/parts/vent_1.png',
   ],
   2: [
-    'img/parts/accelerators/accelerator_2.png',
-    'img/parts/capacitors/capacitor_2.png',
-    'img/parts/cells/cell_2_1.png',
-    'img/parts/cells/cell_2_2.png',
-    'img/parts/cells/cell_2_4.png',
-    'img/parts/coolants/coolant_cell_2.png',
-    'img/parts/exchangers/exchanger_2.png',
-    'img/parts/inlets/inlet_2.png',
-    'img/parts/outlets/outlet_2.png',
-    'img/parts/platings/plating_2.png',
-    'img/parts/reflectors/reflector_2.png',
-    'img/parts/vents/vent_2.png',
+    'img/parts/accelerator_2.png',
+    'img/parts/capacitor_2.png',
+    'img/parts/cell_2_1.png',
+    'img/parts/cell_2_2.png',
+    'img/parts/cell_2_4.png',
+    'img/parts/coolant_cell_2.png',
+    'img/parts/exchanger_2.png',
+    'img/parts/inlet_2.png',
+    'img/parts/outlet_2.png',
+    'img/parts/plating_2.png',
+    'img/parts/reflector_2.png',
+    'img/parts/vent_2.png',
   ],
   3: [
-    'img/parts/accelerators/accelerator_3.png',
-    'img/parts/capacitors/capacitor_3.png',
-    'img/parts/cells/cell_3_1.png',
-    'img/parts/cells/cell_3_2.png',
-    'img/parts/cells/cell_3_4.png',
-    'img/parts/coolants/coolant_cell_3.png',
-    'img/parts/exchangers/exchanger_3.png',
-    'img/parts/inlets/inlet_3.png',
-    'img/parts/outlets/outlet_3.png',
-    'img/parts/platings/plating_3.png',
-    'img/parts/reflectors/reflector_3.png',
-    'img/parts/vents/vent_3.png',
+    'img/parts/accelerator_3.png',
+    'img/parts/capacitor_3.png',
+    'img/parts/cell_3_1.png',
+    'img/parts/cell_3_2.png',
+    'img/parts/cell_3_4.png',
+    'img/parts/coolant_cell_3.png',
+    'img/parts/exchanger_3.png',
+    'img/parts/inlet_3.png',
+    'img/parts/outlet_3.png',
+    'img/parts/plating_3.png',
+    'img/parts/reflector_3.png',
+    'img/parts/vent_3.png',
   ],
   4: [
-    'img/parts/accelerators/accelerator_4.png',
-    'img/parts/capacitors/capacitor_4.png',
-    'img/parts/cells/cell_4_1.png',
-    'img/parts/cells/cell_4_2.png',
-    'img/parts/cells/cell_4_4.png',
-    'img/parts/coolants/coolant_cell_4.png',
-    'img/parts/exchangers/exchanger_4.png',
-    'img/parts/inlets/inlet_4.png',
-    'img/parts/outlets/outlet_4.png',
-    'img/parts/platings/plating_4.png',
-    'img/parts/reflectors/reflector_4.png',
-    'img/parts/vents/vent_4.png',
+    'img/parts/accelerator_4.png',
+    'img/parts/capacitor_4.png',
+    'img/parts/cell_4_1.png',
+    'img/parts/cell_4_2.png',
+    'img/parts/cell_4_4.png',
+    'img/parts/coolant_cell_4.png',
+    'img/parts/exchanger_4.png',
+    'img/parts/inlet_4.png',
+    'img/parts/outlet_4.png',
+    'img/parts/plating_4.png',
+    'img/parts/reflector_4.png',
+    'img/parts/vent_4.png',
   ],
   5: [
-    'img/parts/accelerators/accelerator_5.png',
-    'img/parts/capacitors/capacitor_5.png',
-    'img/parts/coolants/coolant_cell_5.png',
-    'img/parts/exchangers/exchanger_5.png',
-    'img/parts/inlets/inlet_5.png',
-    'img/parts/outlets/outlet_5.png',
-    'img/parts/platings/plating_5.png',
-    'img/parts/cells/cell_5_1.png',
-    'img/parts/cells/cell_5_2.png',
-    'img/parts/cells/cell_5_4.png',
-    'img/parts/reflectors/reflector_5.png',
-    'img/parts/vents/vent_5.png',
+    'img/parts/accelerator_5.png',
+    'img/parts/capacitor_5.png',
+    'img/parts/coolant_cell_5.png',
+    'img/parts/exchanger_5.png',
+    'img/parts/inlet_5.png',
+    'img/parts/outlet_5.png',
+    'img/parts/plating_5.png',
+    'img/parts/cell_5_1.png',
+    'img/parts/cell_5_2.png',
+    'img/parts/cell_5_4.png',
+    'img/parts/reflector_5.png',
+    'img/parts/vent_5.png',
   ],
   6: [
-    'img/parts/accelerators/accelerator_6.png',
-    'img/parts/capacitors/capacitor_6.png',
-    'img/parts/cells/cell_6_1.png',
-    'img/parts/cells/cell_6_2.png',
-    'img/parts/cells/cell_6_4.png',
-    'img/parts/cells/xcell_1_1.png',
-    'img/parts/cells/xcell_1_2.png',
-    'img/parts/cells/xcell_1_4.png',
-    'img/parts/coolants/coolant_cell_6.png',
-    'img/parts/exchangers/exchanger_6.png',
-    'img/parts/inlets/inlet_6.png',
-    'img/parts/outlets/outlet_6.png',
-    'img/parts/platings/plating_6.png',
-    'img/parts/reflectors/reflector_6.png',
-    'img/parts/vents/vent_6.png',
+    'img/parts/accelerator_6.png',
+    'img/parts/capacitor_6.png',
+    'img/parts/cell_6_1.png',
+    'img/parts/cell_6_2.png',
+    'img/parts/cell_6_4.png',
+    'img/parts/xcell_1_1.png',
+    'img/parts/xcell_1_2.png',
+    'img/parts/xcell_1_4.png',
+    'img/parts/coolant_cell_6.png',
+    'img/parts/exchanger_6.png',
+    'img/parts/inlet_6.png',
+    'img/parts/outlet_6.png',
+    'img/parts/plating_6.png',
+    'img/parts/reflector_6.png',
+    'img/parts/vent_6.png',
   ],
 };
 
@@ -1771,15 +1721,15 @@ function getInnerAndFlowAssets() {
 
 function getPartAssets() {
   return [
-    'img/parts/cells/cell_1_1.png', 'img/parts/cells/cell_1_2.png', 'img/parts/cells/cell_1_4.png',
-    'img/parts/accelerators/accelerator_1.png', 'img/parts/capacitors/capacitor_1.png',
-    'img/parts/coolants/coolant_cell_1.png', 'img/parts/exchangers/exchanger_1.png',
-    'img/parts/inlets/inlet_1.png', 'img/parts/outlets/outlet_1.png',
-    'img/parts/platings/plating_1.png', 'img/parts/reflectors/reflector_1.png',
-    'img/parts/vents/vent_1.png',
-    'img/parts/valves/valve_1_1.png',
-    'img/parts/valves/valve_2_1.png',
-    'img/parts/valves/valve_3_1.png',
+    'img/parts/cell_1_1.png', 'img/parts/cell_1_2.png', 'img/parts/cell_1_4.png',
+    'img/parts/accelerator_1.png', 'img/parts/capacitor_1.png',
+    'img/parts/coolant_cell_1.png', 'img/parts/exchanger_1.png',
+    'img/parts/inlet_1.png', 'img/parts/outlet_1.png',
+    'img/parts/plating_1.png', 'img/parts/reflector_1.png',
+    'img/parts/vent_1.png',
+    'img/parts/valve_1_1.png',
+    'img/parts/valve_2_1.png',
+    'img/parts/valve_3_1.png',
   ];
 }
 
@@ -2542,7 +2492,7 @@ class SplashStartOptionsBuilder {
   }
 }
 
-const formatSlotNumber = (n) => Format.number(n, { places: 1 });
+const formatSlotNumber = (n) => formatNumber(n, { places: 1 });
 
 class SplashSaveSlotUI {
   constructor(splashManager) {
@@ -2764,13 +2714,12 @@ class SplashFlowController {
   }
 }
 
-let flavorMessages = [];
-dataService.loadFlavorText().then((messages) => {
-  flavorMessages = messages;
-}).catch((error) => {
-  logger.log("warn", "splash", "Failed to load flavor text:", error);
-  flavorMessages = ["Loading..."];
-});
+let flavorMessages = ["Loading..."];
+try {
+  flavorMessages = getValidatedGameData().flavorText;
+} catch (error) {
+  logger.log("warn", "splash", "Flavor text init:", error);
+}
 
 class SplashScreenManager extends BaseComponent {
   constructor() {

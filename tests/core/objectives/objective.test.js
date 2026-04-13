@@ -984,22 +984,22 @@ describe("Objective System", () => {
         {
           title: "Place your first Cell in the reactor by clicking 'Parts'",
           shouldHaveIcon: true,
-          expectedIcon: 'img/parts/cells/cell_1_1.png'
+          expectedIcon: 'img/parts/cell_1_1.png'
         },
         {
           title: "Purchase a Dual Cell",
           shouldHaveIcon: true,
-          expectedIcon: 'img/parts/cells/cell_1_2.png'
+          expectedIcon: 'img/parts/cell_1_2.png'
         },
         {
           title: "Put a Heat Vent next to a Cell",
           shouldHaveIcon: true,
-          expectedIcon: 'img/parts/vents/vent_1.png'
+          expectedIcon: 'img/parts/vent_1.png'
         },
         {
           title: "Have at least 10 Capacitors",
           shouldHaveIcon: true,
-          expectedIcon: 'img/parts/capacitors/capacitor_1.png'
+          expectedIcon: 'img/parts/capacitor_1.png'
         },
         {
           title: "Generate 10 Exotic Particles",
@@ -1009,7 +1009,7 @@ describe("Objective System", () => {
         {
           title: "Have at least 5 active Quad Plutonium Cells in your reactor",
           shouldHaveIcon: true,
-          expectedIcon: 'img/parts/cells/cell_2_4.png'
+          expectedIcon: 'img/parts/cell_2_4.png'
         },
         {
           title: "Sell all your power by clicking 'Power'",
@@ -1040,8 +1040,8 @@ describe("Objective System", () => {
       const processedTitle = stateManager.addPartIconsToTitle(title);
 
       // Should have icons for both "Heat Vent" and "Cell"
-      expect(processedTitle).toContain('img/parts/vents/vent_1.png');
-      expect(processedTitle).toContain('img/parts/cells/cell_1_1.png');
+      expect(processedTitle).toContain('img/parts/vent_1.png');
+      expect(processedTitle).toContain('img/parts/cell_1_1.png');
       expect(processedTitle).toContain('Heat Vent');
       expect(processedTitle).toContain('Cell');
     });

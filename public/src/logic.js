@@ -1,6 +1,6 @@
+import { buildFacts } from "./kernel/buildFacts.js";
 import { fromError } from "../lib/zod-validation-error.js";
 import { z } from "../lib/zod.js";
-import superjson from "../lib/superjson.js";
 import { html, render } from "lit-html";
 import { subscribeKey } from "valtio/vanilla/utils";
 import Decimal, {
@@ -9,7 +9,7 @@ import Decimal, {
   getDecimal,
   logger,
   StorageUtils,
-  Formatter,
+  formatTime,
   DebugHistory,
   performance,
   isTestEnv,
@@ -136,7 +136,7 @@ import {
   PhysicsTickInputSchema,
   PhysicsTickResultSchema,
 } from "../schema/index.js";
-import dataService from "./services.js";
+import { getValidatedGameData } from "./services.js";
 import { renderToNode, PartButton, UpgradeCard } from "./components/button-factory.js";
 import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 import { serializeReactor, deserializeReactor, calculateLayoutCostBreakdown, calculateLayoutCost, renderLayoutPreview, buildPartSummary, buildAffordableSet, filterLayoutByCheckedTypes, clipToGrid as clipToGridFn, calculateCurrentSellValue, buildAffordableLayout as buildAffordableLayoutFn, buildPasteState as buildPasteStateFn, validatePasteResources, getCostBreakdown } from "./components/ui-components.js";
@@ -591,6 +591,10 @@ function applyBaseCellStats(part, game, levels, m) {
     const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
     const N = m.neighborPulses ?? 0;
     part.power = calculateCellPulsePower(part.base_power, M, N);
+    const powerUpg = game.upgradeset.getUpgrade(`${part.type}1_cell_power`);
+    if (powerUpg && powerUpg.level > 0) {
+      part.power *= Math.pow(2, powerUpg.level);
+    }
     part.heat = calculateCellPulseHeat(part.base_heat, M, N, C);
   } else {
     part.power = part.base_power;
@@ -1079,7 +1083,7 @@ export class PartSet {
       return this.partsArray;
     }
 
-    const { parts } = await dataService.ensureAllGameDataLoaded();
+    const { parts } = getValidatedGameData();
 
     logger.log('info', 'game', 'Loading part list data...');
     logger.log('debug', 'game', 'Part list data loaded:', {
@@ -1359,178 +1363,70 @@ export class BlueprintService {
 }
 
 
-function updateAllPartStats(game, partType) {
-  const basePart = game.partset.getPartById(partType);
-  if (basePart) {
-    basePart.recalculate_stats();
+const UPGRADE_ACTION_NO_PART_SYNC = new Set([
+  "forceful_fusion",
+  "heat_control_operator",
+  "heat_outlet_control_operator",
+  "expand_reactor_rows",
+  "expand_reactor_cols",
+  "improved_piping",
+  "perpetual_capacitors",
+  "reinforced_heat_exchangers",
+  "active_exchangers",
+  "improved_heatsinks",
+  "active_venting",
+  "stirling_generators",
+  "emergency_coolant",
+  "reflector_cooling",
+  "manual_override",
+  "convective_airflow",
+  "electro_thermal_conversion",
+  "thermal_feedback",
+  "volatile_tuning",
+  "explosive_decompression",
+  "auto_sell_operator",
+  "auto_buy_operator",
+  "protium_cells",
+  "full_spectrum_reflectors",
+  "fluid_hyperdynamics",
+  "fractal_piping",
+  "ultracryonics",
+  "unstable_protium",
+]);
+
+export function syncUpgradeDerivedEffects(game, upgrade) {
+  if (!game || !upgrade) return;
+  game.tileset?.tiles_list?.forEach?.((t) => t.invalidateNeighborCaches?.());
+  game.partset?.partsArray?.forEach?.((p) => p.recalculate_stats?.());
+  game.tileset?.active_tiles_list?.forEach?.((tile) => {
+    if (tile.part) tile.part.recalculate_stats();
+  });
+  const pid = upgrade.upgrade?.part?.id;
+  if (pid) {
+    const p = game.partset.getPartById(pid);
+    if (p) {
+      if (String(upgrade.id || "").endsWith("_cell_perpetual")) p.perpetual = upgrade.level > 0;
+      p.recalculate_stats();
+    }
   }
   for (let i = 1; i <= MAX_PART_VARIANTS; i++) {
-    const part = game.partset.getPartById(`${partType}${i}`);
-    if (part) part.recalculate_stats();
+    const rp = game.partset.getPartById(`reflector${i}`);
+    if (rp) {
+      rp.perpetual = (game.upgradeset.getUpgrade("perpetual_reflectors")?.level ?? 0) > 0;
+      rp.recalculate_stats();
+    }
   }
-  game.tileset.tiles_list.forEach(tile => {
-    if (tile.part && tile.part.category === partType) {
-      logger.log('debug', 'game', `Updating part ${tile.part.id} (category: ${tile.part.category}) on tile (${tile.row}, ${tile.col})`);
-      tile.part.recalculate_stats();
-    }
-  });
-}
-
-const upgradeActions = {
-  chronometer: (upgrade, game) => {
-    game.loop_wait = game.base_loop_wait;
-    game.emit?.("statePatch", { loop_wait: game.loop_wait });
-  },
-  forceful_fusion: () => {},
-  heat_control_operator: () => {},
-  heat_outlet_control_operator: () => {},
-  expand_reactor_rows: () => {},
-  expand_reactor_cols: () => {},
-  improved_piping: () => {},
-  improved_alloys: (upgrade, game) => {
-    updateAllPartStats(game, "reactor_plating");
-  },
-  improved_wiring: (upgrade, game) => {
-    updateAllPartStats(game, "capacitor");
-  },
-  improved_coolant_cells: (upgrade, game) => {
-    updateAllPartStats(game, "coolant_cell");
-  },
-  improved_reflector_density: (upgrade, game) => {
-    updateAllPartStats(game, "reflector");
-  },
-  improved_neutron_reflection: (upgrade, game) => {
-    updateAllPartStats(game, "reflector");
-  },
-  improved_heat_exchangers: (upgrade, game) => {
-    ["heat_inlet", "heat_outlet", "heat_exchanger"].forEach((cat) => {
-      updateAllPartStats(game, cat);
-    });
-  },
-  improved_heat_vents: (upgrade, game) => {
-    logger.log('debug', 'game', `improved_heat_vents upgrade action called with level ${upgrade.level}`);
-    updateAllPartStats(game, "vent");
-  },
-  perpetual_capacitors: () => {},
-  perpetual_reflectors: (upgrade, game) => {
-    for (let i = 1; i <= MAX_PART_VARIANTS; i++) {
-      const part = game.partset.getPartById(`reflector${i}`);
-      if (part) {
-        part.perpetual = !!upgrade.level;
-        part.recalculate_stats();
-      }
-    }
-  },
-  reinforced_heat_exchangers: () => {},
-  active_exchangers: () => {},
-  improved_heatsinks: () => {},
-  active_venting: () => {},
-  stirling_generators: () => {},
-  emergency_coolant: () => {},
-  component_reinforcement: (upgrade, game) => {
-    game.partset.partsArray.forEach(part => part.recalculate_stats());
-    game.tileset.active_tiles_list.forEach(tile => {
-      if (tile.part) tile.part.recalculate_stats();
-    });
-  },
-  isotope_stabilization: (upgrade, game) => {
-    game.partset.getPartsByCategory("cell").forEach(part => part.recalculate_stats());
-    game.tileset.active_tiles_list.forEach(tile => {
-      if (tile.part && tile.part.category === "cell") {
-        tile.part.recalculate_stats();
-      }
-    });
-  },
-  reflector_cooling: () => {},
-  quantum_tunneling: (upgrade, game) => {
-    ["heat_inlet", "heat_outlet"].forEach((cat) => {
-      updateAllPartStats(game, cat);
-    });
-    game.tileset.tiles_list.forEach(tile => tile.invalidateNeighborCaches());
-  },
-  manual_override: () => {},
-  convective_airflow: () => {},
-  electro_thermal_conversion: () => {},
-  sub_atomic_catalysts: (upgrade, game) => {
-    updateAllPartStats(game, "particle_accelerator");
-  },
-  thermal_feedback: () => {},
-  volatile_tuning: () => {},
-  ceramic_composite: (upgrade, game) => {
-    updateAllPartStats(game, "reactor_plating");
-    game.tileset.tiles_list.forEach(tile => {
-      if (tile.part && tile.part.category === "reactor_plating") {
-        tile.part.recalculate_stats();
-      }
-    });
-    if (game.engine) {
-      game.engine.markPartCacheAsDirty();
-    }
-  },
-  explosive_decompression: () => {},
-  auto_sell_operator: () => {},
-  auto_buy_operator: () => {},
-  protium_cells: (upgrade, game) => {
-  },
-  cell_power: (upgrade, game) => {
-    if (!upgrade.upgrade.part) {
-      return;
-    }
-    game.update_cell_power();
-    const part = game.partset.getPartById(upgrade.upgrade.part.id);
-    if (part) {
-      part.recalculate_stats();
-    }
-  },
-  cell_tick: (upgrade, game) => {
-    if (!upgrade.upgrade.part) {
-      return;
-    }
-    const part = game.partset.getPartById(upgrade.upgrade.part.id);
-    if (part) {
-      part.recalculate_stats();
-    }
-  },
-  cell_perpetual: (upgrade, game) => {
-    if (!upgrade.upgrade.part) {
-      return;
-    }
-    const part = game.partset.getPartById(upgrade.upgrade.part.id);
-    if (part) {
-      part.perpetual = !!upgrade.level;
-      part.recalculate_stats();
-    }
-  },
-  improved_particle_accelerators: (upgrade, game) => {
-    const partLevel = upgrade.upgrade.part_level;
-    const partToUpdate = game.partset.getPartById(
-      "particle_accelerator" + partLevel
-    );
-    if (partToUpdate) {
-      partToUpdate.recalculate_stats();
-    }
-  },
-  uranium1_cell_power: (upgrade, game) => {
+  if (upgrade.id === "uranium1_cell_tick") {
     const part = game.partset.getPartById("uranium1");
-    if (part) part.recalculate_stats();
-    game.reactor.updateStats();
-  },
-  uranium1_cell_tick: (upgrade, game) => {
-    const part = game.partset.getPartById("uranium1");
-    part.ticks = part.base_ticks * Math.pow(2, upgrade.level);
-    game.reactor.updateStats();
-  },
-  uranium1_cell_perpetual: (upgrade, game) => {
-    const part = game.partset.getPartById("uranium1");
-    part.perpetual = true;
-    game.reactor.updateStats();
-  },
-};
-
-export function executeUpgradeAction(actionId, upgrade, game) {
-  if (upgradeActions[actionId]) {
-    upgradeActions[actionId](upgrade, game);
+    if (part) part.ticks = part.base_ticks * Math.pow(2, upgrade.level);
   }
+  if (upgrade.id === "uranium1_cell_perpetual") {
+    const part = game.partset.getPartById("uranium1");
+    if (part) part.perpetual = true;
+  }
+  if (upgrade.type?.includes?.("cell")) game.update_cell_power?.();
+  game.reactor?.updateStats?.();
+  game.engine?.markPartCacheAsDirty?.();
 }
 
 export class Upgrade {
@@ -1559,13 +1455,24 @@ export class Upgrade {
     this.updateDisplayCost();
   }
 
+  get cost() {
+    return toNumber(this.base_cost);
+  }
+
+  get ecost() {
+    return toNumber(this.base_ecost);
+  }
+
   setLevel(level) {
     if (this.level !== level) {
       this.level = level;
       this.updateDisplayCost();
       this._syncDisplayToState();
-      if (this.actionId) {
-        executeUpgradeAction(this.actionId, this, this.game);
+      if (this.actionId === "chronometer") {
+        this.game.loop_wait = this.game.base_loop_wait;
+        this.game.emit?.("statePatch", { loop_wait: this.game.loop_wait });
+      } else if (this.actionId && !UPGRADE_ACTION_NO_PART_SYNC.has(this.actionId)) {
+        syncUpgradeDerivedEffects(this.game, this);
       }
     }
     if (this.type.includes("cell")) {
@@ -1988,7 +1895,7 @@ function runPurchaseUpgrade(upgradeset, upgradeId) {
   if (!upgradeset.isUpgradeAvailable(upgradeId)) {
     return false;
   }
-  if (!upgrade.affordable) {
+  if (!computeAffordable(upgrade, upgradeset, upgradeset.game)) {
     logger.log('warn', 'game', `[Upgrade] Purchase failed: '${upgradeId}' not affordable. Money: ${upgradeset.game.state.current_money}, Cost: ${upgrade.getCost()}`);
     return false;
   }
@@ -2055,7 +1962,7 @@ export class UpgradeSet {
   }
 
   async initialize() {
-    const { upgrades, techTree } = await dataService.ensureAllGameDataLoaded();
+    const { upgrades, techTree } = getValidatedGameData();
     const data = upgrades;
     this.techTrees = techTree; // Store for Game.getDoctrine()
     this.reset();
@@ -2434,7 +2341,7 @@ class ObjectiveEvaluator {
   }
 }
 
-const partMappings = { "Quad Plutonium Cells": "./img/parts/cells/cell_2_4.png", "Quad Thorium Cells": "./img/parts/cells/cell_3_4.png", "Quad Seaborgium Cells": "./img/parts/cells/cell_4_4.png", "Quad Dolorium Cells": "./img/parts/cells/cell_5_4.png", "Quad Nefastium Cells": "./img/parts/cells/cell_6_4.png", "Particle Accelerators": "./img/parts/accelerators/accelerator_1.png", "Plutonium Cells": "./img/parts/cells/cell_2_1.png", "Thorium Cells": "./img/parts/cells/cell_3_1.png", "Seaborgium Cells": "./img/parts/cells/cell_4_1.png", "Dolorium Cells": "./img/parts/cells/cell_5_1.png", "Nefastium Cells": "./img/parts/cells/cell_6_1.png", "Heat Vent": "./img/parts/vents/vent_1.png", "Capacitors": "./img/parts/capacitors/capacitor_1.png", "Dual Cell": "./img/parts/cells/cell_1_2.png", "Uranium Cell": "./img/parts/cells/cell_1_1.png", "Capacitor": "./img/parts/capacitors/capacitor_1.png", "Cells": "./img/parts/cells/cell_1_1.png", "Cell": "./img/parts/cells/cell_1_1.png", "experimental part": "./img/parts/cells/xcell_1_1.png", "Improved Chronometers upgrade": "./img/upgrades/upgrade_flux.png", "Improved Chronometers": "./img/upgrades/upgrade_flux.png", "Power": "./img/ui/icons/icon_power.png", "Heat": "./img/ui/icons/icon_heat.png", "Exotic Particles": "🧬" };
+const partMappings = { "Quad Plutonium Cells": "./img/parts/cell_2_4.png", "Quad Thorium Cells": "./img/parts/cell_3_4.png", "Quad Seaborgium Cells": "./img/parts/cell_4_4.png", "Quad Dolorium Cells": "./img/parts/cell_5_4.png", "Quad Nefastium Cells": "./img/parts/cell_6_4.png", "Particle Accelerators": "./img/parts/accelerator_1.png", "Plutonium Cells": "./img/parts/cell_2_1.png", "Thorium Cells": "./img/parts/cell_3_1.png", "Seaborgium Cells": "./img/parts/cell_4_1.png", "Dolorium Cells": "./img/parts/cell_5_1.png", "Nefastium Cells": "./img/parts/cell_6_1.png", "Heat Vent": "./img/parts/vent_1.png", "Capacitors": "./img/parts/capacitor_1.png", "Dual Cell": "./img/parts/cell_1_2.png", "Uranium Cell": "./img/parts/cell_1_1.png", "Capacitor": "./img/parts/capacitor_1.png", "Cells": "./img/parts/cell_1_1.png", "Cell": "./img/parts/cell_1_1.png", "experimental part": "./img/parts/xcell_1_1.png", "Improved Chronometers upgrade": "./img/upgrades/upgrade_flux.png", "Improved Chronometers": "./img/upgrades/upgrade_flux.png", "Power": "./img/ui/icons/icon_power.png", "Heat": "./img/ui/icons/icon_heat.png", "Exotic Particles": "🧬" };
 
 export function addPartIconsToTitle(game, title) {
   if (typeof title !== "string") return title;
@@ -2641,7 +2548,7 @@ export class ObjectiveManager {
   }
 
   async initialize() {
-    const { objectives } = await dataService.ensureAllGameDataLoaded();
+    const { objectives } = getValidatedGameData();
     const data = objectives?.default || objectives;
 
     if (!Array.isArray(data)) {
@@ -3127,37 +3034,6 @@ export class ObjectiveController {
   }
 }
 
-export function buildFacts(game, engine, data) {
-  const reactor = game.reactor;
-  const maxHeat = toNumber(reactor.max_heat ?? 0);
-  const reactorHeat = toNumber(reactor.current_heat ?? 0);
-  const heatRatio = maxHeat > 0 ? reactorHeat / maxHeat : 0;
-  const tickCount = data ? engine.tick_count + (data.tickCount || 1) - 1 : engine.tick_count;
-  const us = game.upgradeset;
-  const hasUpgrade = (id) => (us?.getUpgrade(id)?.level ?? 0) > 0;
-  const upgrades = {};
-  if (us?.upgradesArray) {
-    for (const u of us.upgradesArray) {
-      if (u?.id && (u.level ?? 0) > 0) upgrades[u.id] = u.level;
-    }
-  }
-  return {
-    reactorHeat,
-    maxHeat,
-    heatRatio,
-    reactorPower: toNumber(reactor.current_power ?? 0),
-    maxPower: toNumber(reactor.max_power ?? 0),
-    tickCount,
-    activeCells: engine.active_cells?.length ?? 0,
-    activeVents: engine.active_vents?.length ?? 0,
-    hasMeltedDown: reactor.has_melted_down ?? false,
-    isPaused: game.paused ?? game.state?.pause ?? false,
-    hasUpgrade,
-    upgrades,
-    _firstHighHeatSeen: game.state?._firstHighHeatSeen ?? false,
-  };
-}
-
 function heatWarningPredicate(facts) {
   return facts.heatRatio >= CRITICAL_HEAT_RATIO && !facts.hasMeltedDown && !facts.isPaused;
 }
@@ -3175,11 +3051,49 @@ function firstHighHeatPredicate(facts) {
   return facts.heatRatio >= 0.5 && !facts.hasMeltedDown && !facts.isPaused && !facts._firstHighHeatSeen;
 }
 
-export const rules = [
-  { event: "heatWarning", predicate: heatWarningPredicate, throttleTicks: 30 },
-  { event: "pipeIntegrityWarning", predicate: pipeIntegrityWarningPredicate, throttleTicks: 30 },
-  { event: "firstHighHeat", predicate: firstHighHeatPredicate, oneShot: true, oneShotKey: "_firstHighHeatSeen" },
-];
+const HEAT_SFX_THROTTLE_TICKS = 30;
+const _heatSfxLastTick = new Map();
+
+export function resetHeatThresholdSignalState(game) {
+  _heatSfxLastTick.clear();
+  if (!game?.state || typeof game.state !== "object") return;
+  game.state._firstHighHeatSeen = false;
+  game.state.ui_heat_critical = false;
+  game.state.ui_pipe_integrity_warning = false;
+}
+
+export function syncHeatThresholdEffects(facts, game) {
+  if (!game?.state) return;
+  if (facts.isPaused) {
+    game.state.ui_heat_critical = false;
+    game.state.ui_pipe_integrity_warning = false;
+    return;
+  }
+  game.state.ui_heat_critical = heatWarningPredicate(facts);
+  game.state.ui_pipe_integrity_warning = pipeIntegrityWarningPredicate(facts);
+  const tc = facts.tickCount;
+  if (firstHighHeatPredicate(facts) && !game.state._firstHighHeatSeen) {
+    game.state._firstHighHeatSeen = true;
+  }
+  if (heatWarningPredicate(facts)) {
+    const last = _heatSfxLastTick.get("heatWarning") ?? -Infinity;
+    if (tc - last >= HEAT_SFX_THROTTLE_TICKS) {
+      enqueueGameEffect(game, { kind: "sfx", id: "warning", intensity: facts.heatRatio ?? 0.85, context: "reactor" });
+      _heatSfxLastTick.set("heatWarning", tc);
+    }
+  }
+  if (pipeIntegrityWarningPredicate(facts)) {
+    const last = _heatSfxLastTick.get("pipeIntegrityWarning") ?? -Infinity;
+    if (tc - last >= HEAT_SFX_THROTTLE_TICKS) {
+      enqueueGameEffect(game, { kind: "sfx", id: "warning", intensity: facts.heatRatio ?? 0.85, context: "reactor" });
+      _heatSfxLastTick.set("pipeIntegrityWarning", tc);
+    }
+  }
+}
+
+function applyHeatThresholdSignals(game, engine, tickData) {
+  syncHeatThresholdEffects(buildFacts(game, engine, tickData), game);
+}
 
 const GRID_SIZE = 50 * 50;
 
@@ -4979,7 +4893,8 @@ function partToRow(part) {
   row.topologyType = part.topologyType || "Manhattan";
   row.vent_consumes_power = !!part.vent_consumes_power;
   row.outlet_respect_neighbor_cap = !!part.outlet_respect_neighbor_cap;
-  row.traits = part.traits ?? [];
+  row.traits =
+    Array.isArray(part.traits) && part.traits.length ? part.traits : part.category === "cell" ? ["FUEL_CELL"] : [];
   return row;
 }
 
@@ -5020,8 +4935,10 @@ function buildPartLayout(ts, partIdToIndex) {
       const partHeat = (typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat)) ? part.heat : (part.base_heat ?? 0);
       const rawPower = (typeof tile.power === "number" && !isNaN(tile.power) && isFinite(tile.power)) ? tile.power : partPower;
       const rawHeat = (typeof tile.heat === "number" && !isNaN(tile.heat) && isFinite(tile.heat)) ? tile.heat : partHeat;
-      const tilePower = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawPower === 0) ? partPower : rawPower;
-      const tileHeat = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawHeat === 0) ? partHeat : rawHeat;
+      const isFuelTile =
+        part.category === "cell" || (Array.isArray(part.traits) && part.traits.includes("FUEL_CELL"));
+      const tilePower = (isFuelTile && (tile.ticks ?? 0) > 0 && rawPower === 0) ? partPower : rawPower;
+      const tileHeat = (isFuelTile && (tile.ticks ?? 0) > 0 && rawHeat === 0) ? partHeat : rawHeat;
       const game = ts.game;
       const hasProtiumLoader = game?.upgradeset?.getUpgrade("experimental_protium_loader")?.level > 0;
       const isProtium = part.type === "protium";
@@ -5189,12 +5106,11 @@ export function postGameLoopProjectionQuery(engine, game) {
         return;
       }
       const { heatBuffer, orthoNeighborOffsets, orthoNeighborIndices, ...rest } = result.data;
-      const serialized = superjson.serialize(rest);
       const transfer = [];
       if (heatBuffer && !(heatBuffer instanceof SharedArrayBuffer)) transfer.push(heatBuffer);
       if (orthoNeighborOffsets && !(orthoNeighborOffsets instanceof SharedArrayBuffer)) transfer.push(orthoNeighborOffsets);
       if (orthoNeighborIndices && !(orthoNeighborIndices instanceof SharedArrayBuffer)) transfer.push(orthoNeighborIndices);
-      w.postMessage({ ...serialized, heatBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
+      w.postMessage({ ...rest, type: "tick", heatBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
     };
     trySend();
   });
@@ -5450,8 +5366,7 @@ export function applyGameLoopTickResult(engine, data) {
   }
   engine._gameLoopWorkerTickSeen = true;
   reactor.checkMeltdown();
-  const facts = buildFacts(game, engine, data);
-  if (typeof game.eventRouter?.evaluate === "function") game.eventRouter.evaluate(facts, game);
+  applyHeatThresholdSignals(game, engine, data);
   if (game.state) {
     const ps = Number(data.powerSold ?? 0);
     const vh = Number(data.ventHeatDissipated ?? 0);
@@ -5941,13 +5856,12 @@ export function pushGameLoopWorkerTickFromPulse(engine) {
     return;
   }
   const { heatBuffer, orthoNeighborOffsets, orthoNeighborIndices, ...rest } = result.data;
-  const serialized = superjson.serialize(rest);
   const transfer = [];
   if (heatBuffer && !(heatBuffer instanceof SharedArrayBuffer)) transfer.push(heatBuffer);
   if (orthoNeighborOffsets && !(orthoNeighborOffsets instanceof SharedArrayBuffer)) transfer.push(orthoNeighborOffsets);
   if (orthoNeighborIndices && !(orthoNeighborIndices instanceof SharedArrayBuffer)) transfer.push(orthoNeighborIndices);
   logger.log("info", "engine", "[ReactorTick] worker tick sent", { tickId: state.tickId, tickCount, gridCells: engine.active_cells.length });
-  w.postMessage({ ...serialized, heatBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
+  w.postMessage({ ...rest, type: "tick", heatBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
 }
 
 function ensureArraysValid(engine) {
@@ -6684,8 +6598,7 @@ function finalizeTick(engine) {
   }
   emitTickCompleteEvent(engine, engine.game.reactor);
   const game = engine.game;
-  const facts = buildFacts(game, engine);
-  if (typeof game.eventRouter?.evaluate === "function") game.eventRouter.evaluate(facts, game);
+  applyHeatThresholdSignals(game, engine);
   engine.tick_count++;
 }
 
@@ -7500,41 +7413,6 @@ class GameEventDispatcher {
   }
 }
 
-class GameEventRouter {
-  constructor() {
-    this._lastEmitTick = new Map();
-  }
-  evaluate(facts, game) {
-    if (!game?.emit) return;
-    if (facts.isPaused) return;
-    for (const rule of rules) {
-      if (!rule.predicate(facts)) continue;
-      if (rule.oneShot) {
-        const key = rule.oneShotKey ?? `_${rule.event}Fired`;
-        if (game.state?.[key]) continue;
-        game.emit(rule.event, { heatRatio: facts.heatRatio, tickCount: facts.tickCount });
-        if (game.state && typeof game.state === "object") game.state[key] = true;
-        continue;
-      }
-      const lastTick = this._lastEmitTick.get(rule.event) ?? -Infinity;
-      const throttle = rule.throttleTicks ?? 0;
-      if (facts.tickCount - lastTick < throttle) continue;
-      game.emit(rule.event, { heatRatio: facts.heatRatio, tickCount: facts.tickCount });
-      this._lastEmitTick.set(rule.event, facts.tickCount);
-    }
-  }
-  resetThrottles() {
-    this._lastEmitTick.clear();
-  }
-  clearState(game) {
-    this.resetThrottles();
-    if (!game?.state || typeof game.state !== "object") return;
-    for (const rule of rules) {
-      if (rule.oneShotKey) game.state[rule.oneShotKey] = false;
-    }
-  }
-}
-
 const ACTION_HANDLERS = {
   sell: (g) => { g.sell_action(); },
   manualReduceHeat: (g) => { g.manual_reduce_heat_action(); },
@@ -7582,7 +7460,7 @@ class TimeKeeper {
     if (lm.session_start_time) {
       totalTime += Date.now() - lm.session_start_time;
     }
-    return Formatter.time(totalTime, true);
+    return formatTime(totalTime);
   }
 }
 
@@ -7781,7 +7659,6 @@ export class Game {
     this._offlineCatchupMs = 0;
     this._mainState = null;
     this.eventDispatcher = new GameEventDispatcher(logger);
-    this.eventRouter = new GameEventRouter();
     this.economyManager = new EconomyManager(this, {
       prestigePerEp: PRESTIGE_MULTIPLIER_PER_EP,
       prestigeCap: PRESTIGE_MULTIPLIER_CAP
@@ -8074,7 +7951,7 @@ export class Game {
     this.tech_tree = null; // Set to null as per test expectation
 
     this.upgradeset.resetDoctrineUpgradeLevels(oldTree);
-    this.eventRouter?.clearState(this);
+    resetHeatThresholdSignalState(this);
 
     if (this.saveManager) this.saveManager.autoSave();
     return true;

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { toDecimal } from "@app/utils.js";
 import { setupGameWithDOM } from "../helpers/setup.js";
 import objective_list_data from "../../public/data/objective_list.json";
 
@@ -47,13 +48,34 @@ async function solveObjective(index, game) {
       game.reactor.updateStats();
       game.tileset.updateActiveTiles();
       break;
-    case "sellPower":
+    case "sellPower": {
       await placePartViaUI(game, "uranium1", 0, 0);
-      game.engine.tick();
-      game.reactor.updateStats();
+      const cellTile = game.tileset.getTile(0, 0);
+      cellTile.activated = true;
+      cellTile.ticks = 15;
+      game.tileset.updateActiveTiles();
+      const powerNum = () => {
+        const p = game.reactor?.current_power;
+        return typeof p?.toNumber === "function" ? p.toNumber() : Number(p) || 0;
+      };
+      for (let s = 0; s < 30; s++) {
+        game.engine.tick();
+        await vi.advanceTimersByTimeAsync(32);
+        game.reactor.updateStats();
+        if (powerNum() > 0) break;
+      }
       clickDOM("#info_bar_power_btn");
       clickDOM("#info_bar_power_btn_desktop");
+      if (!game.sold_power) {
+        if (powerNum() <= 0) {
+          game.reactor.current_power = toDecimal(10);
+          game.reactor.updateStats();
+        }
+        game.sell_action();
+      }
+      game.objectives_manager.check_current_objective();
       break;
+    }
     case "reduceHeat":
       await placePartViaUI(game, "uranium1", 0, 0);
       game.engine.tick();

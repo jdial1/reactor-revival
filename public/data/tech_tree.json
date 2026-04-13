@@ -12,7 +12,7 @@
             "Heat transfer and cooling"
         ],
         "color": "#9C27B0",
-        "icon": "img/parts/exchangers/exchanger_1.png",
+        "icon": "img/parts/exchanger_1.png",
         "upgrades": [
             "heat_control_operator",
             "heat_outlet_control_operator",

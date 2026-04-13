@@ -14,6 +14,7 @@ import {
   getCellHeatCoefficientH,
   calculateCellPulsePower,
   calculateCellPulseHeat,
+  resetHeatThresholdSignalState,
 } from "./logic.js";
 import {
   toDecimal,
@@ -177,6 +178,8 @@ export function createGameState(initial = {}) {
     heat_controlled: initial.heat_controlled ?? false,
     vent_multiplier_eff: initial.vent_multiplier_eff ?? 0,
     effect_queue: [],
+    ui_heat_critical: false,
+    ui_pipe_integrity_warning: false,
   });
 
   derive({
@@ -322,7 +325,7 @@ export function initUIStateSubscriptions(uiState, ui) {
     ui.partsPanelUI?.onActiveTabChanged?.(tabId);
   }));
   const syncPartActive = () => {
-    const main = ui.coreLoopUI?.getElement?.("main") ?? ui.registry?.get?.("CoreLoop")?.getElement?.("main") ?? ui.DOMElements?.main ?? document.getElementById("main");
+    const main = ui.coreLoopUI?.getElement?.("main") ?? ui.DOMElements?.main ?? document.getElementById("main");
     if (main) main.classList.toggle("part_active", !!uiState.interaction?.selectedPartId);
   };
   syncPartActive();
@@ -413,6 +416,8 @@ function hydrateFromStorage() {
 }
 
 export const preferences = proxy({ ...PREF_DEFAULTS });
+
+export const modalUi = proxy({ activeModal: null, payload: null });
 
 export function syncReducedMotionDOM() {
   if (typeof document === "undefined") return;
@@ -695,7 +700,7 @@ function computeActiveBuffs(state) {
     const currentHeat = toNumber(state.current_heat ?? 0);
     const heatPercent = maxHeat > 0 ? currentHeat / maxHeat : 0;
     if (heatPercent > 0.8 && (toNumber(state.current_power ?? 0) || 0) > 0) {
-      buffs.push({ id: "electro_thermal_conversion", icon: "img/parts/capacitors/capacitor_4.png", title: "Electro-Thermal Conversion" });
+      buffs.push({ id: "electro_thermal_conversion", icon: "img/parts/capacitor_4.png", title: "Electro-Thermal Conversion" });
     }
   }
   return buffs;
@@ -1284,7 +1289,7 @@ export class StateManager extends BaseComponent {
   updatePartsPanelToggleIcon(_part) {}
 
   handleObjectiveCompleted() {
-    const objectives = this.ui.registry?.get?.("Objectives");
+    const objectives = this.ui.objectivesUI;
     if (objectives?.markComplete) objectives.markComplete();
   }
   handleUpgradeAdded(game, upgrade_obj) {
@@ -1304,7 +1309,7 @@ export class StateManager extends BaseComponent {
       return map[key] || key;
     };
     const locationKey = normalizeKey(upgrade_obj.upgrade.type);
-    const upgrades = this.ui.registry?.get?.("Upgrades");
+    const upgrades = this.ui.upgradesUI;
     if (!upgrades?.getUpgradeContainer?.(locationKey)) {
       if (this.debugMode) {
         logger.log('warn', 'game', `Container with ID '${locationKey}' not found for upgrade '${upgrade_obj.id}'`);
@@ -1370,7 +1375,7 @@ export class StateManager extends BaseComponent {
   }
 
   checkObjectiveTextScrolling() {
-    const objectives = this.ui.registry?.get?.("Objectives");
+    const objectives = this.ui.objectivesUI;
     if (objectives?.checkTextScrolling) objectives.checkTextScrolling();
     else checkObjectiveTextScrollingHelper(this.ui.DOMElements);
   }
@@ -2505,7 +2510,7 @@ export async function setDefaults(game) {
   applyDoctrineThenSession(game);
   resetObjectives(game);
   validateObjectiveStateIfNeeded(game);
-  game.eventRouter?.clearState?.(game);
+  resetHeatThresholdSignalState(game);
 }
 
 export class LifecycleManager {

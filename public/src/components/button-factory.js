@@ -1,16 +1,6 @@
 import { html, render, nothing } from "lit-html";
 import { numFormat, classMap, styleMap, unsafeHTML } from "../utils.js";
 import { getUpgradeBonusLines } from "../logic.js";
-import { interpolateTemplate } from "../templates/templateUtils.js";
-import {
-  startButtonTemplate,
-  loadGameButtonFullWidthTemplate,
-  loadGameButtonTemplate,
-  loadGameUploadRowTemplate,
-  tooltipCloseButtonTemplate,
-  helpButtonTemplate,
-  installButtonTemplate,
-} from "../templates/buttonTemplates.js";
 import {
   upgradeCardTemplate,
   partButtonTemplate,
@@ -19,10 +9,6 @@ import {
   partStatTemplate,
   closeButtonTemplate,
 } from "../templates/buttonFactoryTemplates.js";
-
-function toTemplateHtml(template, values) {
-  return unsafeHTML(interpolateTemplate(template, values));
-}
 
 function withTemplateTarget(e, selector, onClick) {
   const target = e.target.closest(selector);
@@ -80,36 +66,47 @@ export function renderToNode(template) {
 
 export const StartButton = (disabled, onClick) => html`
   <span @click=${(e) => withTemplateTarget(e, "#splash-new-game-btn", onClick)}>
-    ${toTemplateHtml(startButtonTemplate, { disabledAttr: disabled ? " disabled" : "" })}
+    <button id="splash-new-game-btn" class="splash-btn splash-btn-start" ?disabled=${disabled}>
+      New Game
+    </button>
   </span>
 `;
 
 export const LoadGameButtonFullWidth = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
   <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onClick)}>
-    ${toTemplateHtml(loadGameButtonFullWidthTemplate, {
-      currentMoney: numFormat(saveData?.current_money ?? 0),
-      playedTime: playedTimeStr,
-    })}
+    <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-full-width">
+      <div class="load-game-header"><span>Load Local Game</span></div>
+      <div class="load-game-details">
+        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
+        <div class="played-time">${playedTimeStr}</div>
+      </div>
+    </button>
   </span>
 `;
 
 export const LoadGameButton = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
   <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onClick)}>
-    ${toTemplateHtml(loadGameButtonTemplate, {
-      currentMoney: numFormat(saveData?.current_money ?? 0),
-      playedTime: playedTimeStr,
-      syncedStyle: isCloudSynced ? "" : "display:none;",
-    })}
+    <button id="splash-load-game-btn" class="splash-btn splash-btn-load">
+      <div class="load-game-header"><span>Load Local Game</span></div>
+      <div class="load-game-details">
+        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
+        <div class="played-time">${playedTimeStr}</div>
+      </div>
+      <div class="synced-label" style=${isCloudSynced ? "" : "display:none;"}></div>
+    </button>
   </span>
 `;
 
 export const LoadGameUploadRow = (saveData, playedTimeStr, isCloudSynced, onLoadClick) => html`
   <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onLoadClick)}>
-    ${toTemplateHtml(loadGameUploadRowTemplate, {
-      currentMoney: numFormat(saveData?.current_money ?? 0),
-      playedTime: playedTimeStr,
-      syncedStyle: isCloudSynced ? "" : "display:none;",
-    })}
+    <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-full-width">
+      <div class="load-game-header"><span>Load Local Game</span></div>
+      <div class="load-game-details">
+        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
+        <div class="played-time">${playedTimeStr}</div>
+      </div>
+      <div class="synced-label" style=${isCloudSynced ? "" : "display:none;"}></div>
+    </button>
   </span>
 `;
 
@@ -129,19 +126,19 @@ export const BuyButton = (upgrade, onClick) => {
 
 export const TooltipCloseButton = (onClick) => html`
   <span @click=${(e) => withTemplateTarget(e, "#tooltip_close_btn", onClick)}>
-    ${toTemplateHtml(tooltipCloseButtonTemplate)}
+    <button id="tooltip_close_btn" title="Close" aria-label="Close tooltip">×</button>
   </span>
 `;
 
 export const HelpButton = (onClick, title = "Click for information") => html`
   <span @click=${(e) => withTemplateTarget(e, "button.help-btn", onClick)}>
-    ${toTemplateHtml(helpButtonTemplate, { title })}
+    <button class="help-btn" title=${title} aria-label=${title}>?</button>
   </span>
 `;
 
 export const InstallButton = (onClick) => html`
   <span @click=${(e) => withTemplateTarget(e, "button.contrast", onClick)}>
-    ${toTemplateHtml(installButtonTemplate)}
+    <button class="contrast">Install App</button>
   </span>
 `;
 

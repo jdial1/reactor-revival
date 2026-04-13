@@ -7,9 +7,6 @@ export const settingsHelpShellTemplate = `<div class="settings-help-backdrop"></
   <button type="button" class="settings-help-close" aria-label="Close">×</button>
 </div>`;
 
-export const settingsHelpBodyTemplate = `<h4 class="settings-help-title">{{title}}</h4>
-<p class="settings-help-text">{{content}}</p>`;
-
 export function volumeStepperTemplate(key, step) {
   return html`
     <div class="volume-stepper" data-volume-key=${key}>

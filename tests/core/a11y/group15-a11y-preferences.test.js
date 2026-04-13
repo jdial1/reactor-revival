@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, vi } from "../../helpers/setup.js";
-import { Formatter, StorageUtils } from "@app/utils.js";
+import { formatNumber, StorageUtils } from "@app/utils.js";
 import { preferences } from "@app/state.js";
-import { TutorialManager } from "@app/components/ui-tooltips-tutorial.js";
+import { createTutorialManager } from "@app/components/ui-tooltips-tutorial.js";
 
 describe("Group 15: Accessibility and Dynamic Preferences", () => {
   let game;
@@ -60,20 +60,20 @@ describe("Group 15: Accessibility and Dynamic Preferences", () => {
   });
 
   it("formats scientific numbers without NaN for large magnitudes", () => {
-    const s = Formatter.number(1500000, { style: "scientific", places: 2 });
+    const s = formatNumber(1500000, { style: "scientific", places: 2 });
     expect(s).toBe("1.50e+6");
-    const huge = Formatter.number(Number.MAX_VALUE, { style: "scientific", places: 2 });
+    const huge = formatNumber(Number.MAX_VALUE, { style: "scientific", places: 2 });
     expect(huge).not.toContain("NaN");
   });
 
-  describe("TutorialManager", () => {
+  describe("Tutorial runtime", () => {
     it("positions spotlight border from getBoundingClientRect math", () => {
       const game = {
         ui: {
           getTutorialTarget: () => null,
         },
       };
-      const tm = new TutorialManager(game);
+      const tm = createTutorialManager(game);
       tm.steps = [{ key: "spot", message: "m", completion: () => false, onEnter: () => {} }];
       tm.createOverlay();
       tm.updateSpotlight({ top: 10, left: 20, width: 100, height: 40, right: 120, bottom: 50 });
@@ -96,7 +96,7 @@ describe("Group 15: Accessibility and Dynamic Preferences", () => {
         bottom: 24,
       });
       const game = { ui: { getTutorialTarget: (key) => (key === "spot" ? target : null) } };
-      const tm = new TutorialManager(game);
+      const tm = createTutorialManager(game);
       tm.steps = [{ key: "spot", message: "m", completion: () => false, onEnter: () => {} }];
       const addSpy = vi.spyOn(window, "addEventListener");
       const removeSpy = vi.spyOn(window, "removeEventListener");
@@ -120,7 +120,7 @@ describe("Group 15: Accessibility and Dynamic Preferences", () => {
         bottom: 8,
       });
       const game = { ui: { getTutorialTarget: (key) => (key === "b" ? target : null) } };
-      const tm = new TutorialManager(game);
+      const tm = createTutorialManager(game);
       tm.steps = [
         { key: "a", message: "m", completion: () => false, onEnter: () => {} },
         { key: "b", message: "m2", completion: () => false, onEnter: () => {} },
@@ -144,7 +144,7 @@ describe("Group 15: Accessibility and Dynamic Preferences", () => {
         bottom: 10,
       });
       const game = { ui: { getTutorialTarget: () => target }, off: () => {}, on: () => {} };
-      const tm = new TutorialManager(game);
+      const tm = createTutorialManager(game);
       tm.steps = [{ key: "x", message: "m", completion: () => false, onEnter: () => {} }];
       tm.showStep(0);
       await tm.complete();
