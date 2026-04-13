@@ -14,6 +14,7 @@ import {
 import {
   upgradeCardTemplate,
   partButtonTemplate,
+  partDetailsBlockTemplate,
   partStatIconTemplate,
   partStatTemplate,
   closeButtonTemplate,
@@ -201,6 +202,23 @@ function buildPartStats(part) {
   if (part.reactor_power > 0) stats.push(partStatTemplate({ className: "stat-rpower", content: html`${powerIcon}${fmt(part.reactor_power)} cap` }));
   if (part.power_increase > 0) stats.push(partStatTemplate({ className: "stat-boost", content: html`+${fmt(part.power_increase)}%${powerIcon}` }));
   return stats;
+}
+
+export function partsModuleInfoCardTemplate(part) {
+  if (!part?.getImagePath) return html``;
+  const stats = buildPartStats(part);
+  const bonusLines = getUpgradeBonusLines(part, { tile: null, game: part.game });
+  return html`
+    <div class="parts-module-info-inner">
+      <div class="image" style=${styleMap({ backgroundImage: `url('${part.getImagePath()}')` })}></div>
+      ${partDetailsBlockTemplate({
+        partTitle: part.title || "",
+        stats,
+        description: part.description || "",
+        bonusLines,
+      })}
+    </div>
+  `;
 }
 
 export const PartButton = (part, onClick, opts = {}) => {

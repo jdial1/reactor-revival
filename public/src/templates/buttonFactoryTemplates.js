@@ -54,6 +54,24 @@ export function upgradeCardTemplate({
   `;
 }
 
+export function partDetailsBlockTemplate({
+  partTitle,
+  stats,
+  description,
+  bonusLines,
+}) {
+  return html`
+    <div class="part-details">
+      <div class="part-details-title">${partTitle}</div>
+      <div class="part-details-stats">${stats}</div>
+      <div class="part-details-desc">${formatPartDescription(description)}</div>
+      <div class="part-details-bonuses">
+        ${repeat(bonusLines, (line, index) => `${index}-${line}`, (line) => html`<span class="bonus-line">${line}</span>`)}
+      </div>
+    </div>
+  `;
+}
+
 export function partButtonTemplate({
   btnClass,
   id,
@@ -80,14 +98,7 @@ export function partButtonTemplate({
       <div class="image" style="background-image: url('${imagePath}')"></div>
       <div class="part-price">${costText}</div>
       <div class="tier-progress" style=${tierStyle}>${tierProgress}</div>
-      <div class="part-details">
-        <div class="part-details-title">${partTitle}</div>
-        <div class="part-details-stats">${stats}</div>
-        <div class="part-details-desc">${formatPartDescription(description)}</div>
-        <div class="part-details-bonuses">
-          ${repeat(bonusLines, (line, index) => `${index}-${line}`, (line) => html`<span class="bonus-line">${line}</span>`)}
-        </div>
-      </div>
+      ${partDetailsBlockTemplate({ partTitle, stats, description, bonusLines })}
     </button>
   `;
 }

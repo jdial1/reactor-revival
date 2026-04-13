@@ -999,9 +999,9 @@ body.page-reactor #reactor_copy_paste_btns.collapsed .blueprint-planner-hud { di
 .tile-fx.fx-power.fx-fade-out { opacity: 0; }
 .tile-fx.fx-heat { opacity: 0.9; }
 /* Vent rotor: rotate center area while venting */
-.vent-rotor { position: absolute; z-index: 3; top: 20%; left: 20%; width: 60%; height: 60%; background-position: center; background-repeat: no-repeat; background-size: 166.66% 166.66%; image-rendering: pixelated; opacity: 1.0; pointer-events: none;
+.vent-rotor { position: absolute; z-index: 3; background-position: center; background-repeat: no-repeat; background-size: 166.66% 166.66%; image-rendering: pixelated; opacity: 1.0; pointer-events: none; transform-origin: center center;
 }
-.vent-rotor.spin { animation: vent-rotate 0.45s linear; }
+.vent-rotor.spin { animation: vent-rotate 0.45s linear; transform-origin: center center; }
 
 @keyframes vent-rotate { from { transform: rotate(0deg); }
  to { transform: rotate(360deg); }
@@ -1194,7 +1194,7 @@ body.page-reactor #reactor_copy_paste_btns.collapsed .blueprint-planner-hud { di
 .tile.selling .sell-indicator { display: none; opacity: 0; /* Keep opacity at 0 even when selling */
 }
 /* BUILD ROW (Above Control Deck, Reactor Page Only): 5 quick-select slots full width */
-#build_above_deck_row { position: fixed; z-index: 26; right: env(safe-area-inset-right); bottom: calc(var(--bottom-nav-height, 40px) + 90px + env(safe-area-inset-bottom)); left: env(safe-area-inset-left); display: none; height: 58px; box-sizing: border-box; align-items: stretch; padding-right: 4px; padding-left: 4px; gap: 4px;
+#build_above_deck_row { position: fixed; z-index: 26; right: env(safe-area-inset-right); bottom: calc(var(--bottom-nav-height, 40px) + 120px + env(safe-area-inset-bottom)); left: env(safe-area-inset-left); display: none; height: 58px; box-sizing: border-box; align-items: stretch; padding-right: 4px; padding-left: 4px; gap: 4px;
 }
 
 #build_above_deck_row .quick-select-slots { display: flex; width: 100%; flex: 1; gap: 4px;
@@ -1866,13 +1866,64 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  .parts-module-info-panel { flex: 0 0 auto; padding: 10px 12px; border-top: 3px solid var(--bevel-dark); background: rgb(18 22 20); box-shadow: var(--well-depth); font-size: 0.55rem; line-height: 1.5;
  }
 
- .parts-module-info-inner { display: flex; min-height: 2.2em; flex-direction: column; gap: 4px;
+ .parts-module-info-inner { display: flex; align-items: flex-start; gap: 8px; min-height: auto; flex-direction: row; text-align: left;
  }
 
- .parts-module-info-title { color: rgb(180 255 200); text-shadow: 1px 1px 0 rgb(0 0 0 / 80%);
+ .parts-module-info-inner .image { width: 40px; height: 40px; flex-shrink: 0; background-position: center; background-repeat: no-repeat; background-size: contain;
  }
 
- .parts-module-info-stats { color: rgb(160 160 160); font-size: 0.5rem;
+ .parts-module-info-inner .part-details { display: flex; overflow: hidden; min-width: 0; flex: 1; flex-direction: column; gap: 2px; text-align: left;
+ }
+
+ .parts-module-info-inner .part-details-title { overflow: hidden; color: rgb(255 255 255); font-size: 0.95em; font-weight: bold; text-overflow: ellipsis; white-space: nowrap;
+ }
+
+ .parts-module-info-inner .part-details-stats { display: flex; flex-wrap: wrap; color: rgb(204 204 204); font-size: 0.8em; gap: 4px 8px;
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-cost { color: rgb(153 255 153);
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-power { color: rgb(255 255 0);
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-heat { color: rgb(255 136 0);
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-vent { color: rgb(136 204 255);
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-cont { color: rgb(255 170 0);
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-xfer { color: rgb(136 170 255);
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-tick { color: rgb(170 170 170);
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-rpower { color: rgb(255 255 0);
+ }
+
+ .parts-module-info-inner .part-details-stats .stat-boost { color: rgb(0 255 0);
+ }
+
+ .parts-module-info-inner .part-details-desc { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; color: rgb(170 170 170); font-size: 0.75em; -webkit-line-clamp: 3; line-clamp: 3; line-height: 1.3; white-space: pre-line;
+ }
+
+ .parts-module-info-inner .part-details-bonuses { display: flex; flex-wrap: wrap; margin-top: 2px; font-size: 0.75em; gap: 4px 8px;
+ }
+
+ .parts-module-info-inner .part-details-bonuses:empty { display: none;
+ }
+
+ .parts-module-info-inner .part-details-bonuses .bonus-line { color: rgb(204 255 204); white-space: nowrap;
+ }
+
+ .parts-module-info-inner .part-details-bonuses .pos { color: rgb(0 255 0);
+ }
+
+ .parts-module-info-inner .part-details-bonuses .neg { color: rgb(255 68 68);
  }
 
  .parts-module-info-empty { display: block; color: rgb(100 110 105); font-size: 0.5rem; text-align: center;

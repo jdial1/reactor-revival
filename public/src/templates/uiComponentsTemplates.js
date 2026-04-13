@@ -104,10 +104,6 @@ export function mobileControlDeckTemplate({
   onVentHeat,
 }) {
   return html`
-    <div class="control-deck-architect" aria-label="Per-tick reactor metrics">
-      <span class="control-deck-architect-metrics">${architectMetricsText}</span>
-      <span id="control_deck_tick_line" class="control-deck-tick-line">${tickCadenceText}</span>
-    </div>
     <button class=${powerCapacitorClass} id="control_deck_power_btn" type="button" tabindex="0" aria-label="Sell Power" @click=${onSellPower}>
       <div class="control-deck-auto-sell-led" id="control_deck_auto_sell_led" aria-hidden="true"></div>
       <span class="control-deck-rate" id="control_deck_power_rate" aria-hidden="true">${powerRateText}</span>
@@ -140,6 +136,11 @@ export function mobileControlDeckTemplate({
       </div>
       <div class="steam-particles" id="steam_particles"></div>
     </button>
+
+    <div class="control-deck-architect" aria-label="Per-tick reactor metrics">
+      <span class="control-deck-architect-metrics">${architectMetricsText}</span>
+      <span id="control_deck_tick_line" class="control-deck-tick-line">${tickCadenceText}</span>
+    </div>
   `;
 }
 

@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/main.css" />
     <script>
       (function(){
+        console.log("[ReactorBoot] inline: splash bg script start");
         var USE_STALENHAG_BG = true;
         var STORAGE_KEY = 'splash-bg-counts';
         var CAROUSEL_INTERVAL_MS = 30000;
@@ -36,8 +37,8 @@
           var n = minIndices[Math.floor(Math.random() * minIndices.length)];
           function setBg(idx) {
             var path = USE_STALENHAG_BG
-              ? '../img/misc/stalenhag_bg/bg_img' + idx + '.png'
-              : '../img/misc/backgrounds/splash_bg' + idx + '.png';
+              ? '/img/misc/stalenhag_bg/bg_img' + idx + '.png'
+              : '/img/misc/backgrounds/splash_bg' + idx + '.png';
             document.documentElement.style.setProperty('--splash-bg-url', 'url("' + path + '")');
             counts[prefix + '_' + idx] = (counts[prefix + '_' + idx] || 0) + 1;
             try {
@@ -57,11 +58,18 @@
           }, CAROUSEL_INTERVAL_MS);
         }
         fetch('data/splash_bg_count.json')
-          .then(function(r) { return r.json(); })
+          .then(function(r) {
+            console.log("[ReactorBoot] splash_bg_count fetch status", r.status, r.ok);
+            return r.json();
+          })
           .then(function(data) {
+            console.log("[ReactorBoot] splash_bg_count parsed", data);
             init(USE_STALENHAG_BG ? data.stalenhag : data.splash);
           })
-          .catch(function() { init(10); });
+          .catch(function(e) {
+            console.warn("[ReactorBoot] splash_bg_count failed, using default count", e);
+            init(10);
+          });
       })();
     </script>
     <script src="lib/pako.min.js"></script>
@@ -92,6 +100,9 @@
 </head>
 <body>
     <div id="app_root" class="theme-dark"></div>
+    <script>
+      console.log("[ReactorBoot] body parsed, app_root present", !!document.getElementById("app_root"));
+    </script>
     <script type="module" src="src/app.js"></script>
 </body>
 </html>

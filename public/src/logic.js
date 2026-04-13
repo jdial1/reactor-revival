@@ -1,6 +1,6 @@
-import { fromError } from "zod-validation-error";
-import { z } from "zod";
-import superjson from "superjson";
+import { fromError } from "../lib/zod-validation-error.js";
+import { z } from "../lib/zod.js";
+import superjson from "../lib/superjson.js";
 import { html, render } from "lit-html";
 import Decimal, {
   toDecimal,
@@ -127,8 +127,8 @@ import {
   PhysicsTickInputSchema,
   PhysicsTickResultSchema,
 } from "../schema/index.js";
-import { renderToNode, PartButton, UpgradeCard } from "./components/button-factory.js";
 import dataService from "./services.js";
+import { renderToNode, PartButton, UpgradeCard } from "./components/button-factory.js";
 import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 import { serializeReactor, deserializeReactor, calculateLayoutCostBreakdown, calculateLayoutCost, renderLayoutPreview, buildPartSummary, buildAffordableSet, filterLayoutByCheckedTypes, clipToGrid as clipToGridFn, calculateCurrentSellValue, buildAffordableLayout as buildAffordableLayoutFn, buildPasteState as buildPasteStateFn, validatePasteResources, getCostBreakdown } from "./components/ui-components.js";
 
@@ -1766,13 +1766,13 @@ function isUpgradeRequiredByIncompleteObjective(upgradeset, upgradeId) {
 
 function isUpgradeAvailable(upgradeset, upgradeId) {
     if (upgradeset.game.bypass_tech_tree_restrictions) return true;
-    const activeTree = upgradeset.game.tech_tree || "unified";
-    const allowedTrees = upgradeset.upgradeToTechTreeMap.get(upgradeId);
 
-    // If the upgrade is not in any tree, it's globally available.
-    // If it is in trees, it must be in the active one.
-    if (!allowedTrees) return true;
-    return allowedTrees.has(activeTree);
+    const allowedTrees = upgradeset.upgradeToTechTreeMap.get(upgradeId);
+    // If an upgrade isn't in any tech tree definitions, it is a global/base upgrade
+    if (!allowedTrees || allowedTrees.size === 0) return true;
+
+    // If it is in a tree, the game must have that specific tree active
+    return allowedTrees.has(upgradeset.game.tech_tree);
 }
 
 function getExclusiveUpgradeIdsForTree(upgradeset, treeId) {
@@ -1867,10 +1867,10 @@ export class UpgradeSet {
     this.game = game;
     this.upgrades = new Map();
     this.upgradesArray = [];
-    this.upgradeToTechTreeMap = new Map();
+    this.upgradeToTechTreeMap = new Map(); // upgradeId -> Set of treeIds
+    this.techTrees = []; // Store raw doctrine data
     this.restrictedUpgrades = new Set();
     this._populateSectionFn = null;
-    this.techTree = [];
   }
 
   setPopulateSectionFn(fn) {
@@ -1880,11 +1880,10 @@ export class UpgradeSet {
   async initialize() {
     const { upgrades, techTree } = await dataService.ensureAllGameDataLoaded();
     const data = upgrades;
-    this.techTree = techTree;
-
+    this.techTrees = techTree; // Store for Game.getDoctrine()
     this.reset();
 
-    // 1. Build the mapping
+    // Populate the Tech Tree Mapping
     this.upgradeToTechTreeMap.clear();
     techTree.forEach(tree => {
         tree.upgrades.forEach(upgId => {
@@ -1896,7 +1895,7 @@ export class UpgradeSet {
     });
 
     logger.log('debug', 'game', 'Upgrade data loaded:', data?.length, "upgrades");
-    
+
     const fullUpgradeList = [...data, ...generateCellUpgrades(this.game)];
     fullUpgradeList.forEach((upgradeDef) => {
       const upgradeInstance = new Upgrade(upgradeDef, this.game);
@@ -4740,42 +4739,58 @@ function partToRow(part) {
 }
 
 function buildPartTable(ts) {
+  const game = ts.game;
+  const rows = game.rows;
+  const cols = game.cols;
   const partIdToIndex = {};
   const partTable = [];
-  const list = (ts.active_tiles_list || []).filter((tile) => tile?.enabled && tile.part);
-  for (const tile of list) {
-    const part = tile.part;
-    if (partIdToIndex[part.id] !== undefined) continue;
-    partIdToIndex[part.id] = partTable.length;
-    partTable.push(partToRow(part));
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const tile = ts.getTile(row, col);
+      if (!tile?.part) continue;
+      const part = tile.part;
+      if (partIdToIndex[part.id] !== undefined) continue;
+      partIdToIndex[part.id] = partTable.length;
+      partTable.push(partToRow(part));
+    }
   }
   return { partIdToIndex, partTable };
 }
 
 function buildPartLayout(ts, partIdToIndex) {
-  const list = (ts.active_tiles_list || []).filter((tile) => tile?.enabled && tile.part);
-  return list.map((tile) => {
-    const part = tile.part;
-    const transferRate = typeof tile.getEffectiveTransferValue === "function" ? tile.getEffectiveTransferValue() : 0;
-    const ventRate = typeof tile.getEffectiveVentValue === "function" ? tile.getEffectiveVentValue() : 0;
-    const partPower = (typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)) ? part.power : (part.base_power ?? 0);
-    const partHeat = (typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat)) ? part.heat : (part.base_heat ?? 0);
-    const rawPower = (typeof tile.power === "number" && !isNaN(tile.power) && isFinite(tile.power)) ? tile.power : partPower;
-    const rawHeat = (typeof tile.heat === "number" && !isNaN(tile.heat) && isFinite(tile.heat)) ? tile.heat : partHeat;
-    const tilePower = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawPower === 0) ? partPower : rawPower;
-    const tileHeat = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawHeat === 0) ? partHeat : rawHeat;
-    return {
-      r: tile.row,
-      c: tile.col,
-      partIndex: partIdToIndex[part.id],
-      ticks: tile.ticks ?? 0,
-      activated: !!tile.activated,
-      transferRate,
-      ventRate,
-      power: tilePower,
-      heat: tileHeat,
-    };
-  });
+  const game = ts.game;
+  const rows = game.rows;
+  const cols = game.cols;
+  const layout = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const tile = ts.getTile(row, col);
+      if (!tile?.part) continue;
+      const part = tile.part;
+      const idx = partIdToIndex[part.id];
+      if (idx === undefined) continue;
+      const transferRate = typeof tile.getEffectiveTransferValue === "function" ? tile.getEffectiveTransferValue() : 0;
+      const ventRate = typeof tile.getEffectiveVentValue === "function" ? tile.getEffectiveVentValue() : 0;
+      const partPower = (typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)) ? part.power : (part.base_power ?? 0);
+      const partHeat = (typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat)) ? part.heat : (part.base_heat ?? 0);
+      const rawPower = (typeof tile.power === "number" && !isNaN(tile.power) && isFinite(tile.power)) ? tile.power : partPower;
+      const rawHeat = (typeof tile.heat === "number" && !isNaN(tile.heat) && isFinite(tile.heat)) ? tile.heat : partHeat;
+      const tilePower = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawPower === 0) ? partPower : rawPower;
+      const tileHeat = (part.category === "cell" && (tile.ticks ?? 0) > 0 && rawHeat === 0) ? partHeat : rawHeat;
+      layout.push({
+        r: tile.row,
+        c: tile.col,
+        partIndex: idx,
+        ticks: tile.ticks ?? 0,
+        activated: !!tile.activated,
+        transferRate,
+        ventRate,
+        power: tilePower,
+        heat: tileHeat,
+      });
+    }
+  }
+  return layout;
 }
 
 function buildPartSnapshot(ts) {
@@ -4908,12 +4923,12 @@ export function applyGameLoopTickResult(engine, data) {
   const maxCols = ts?.max_cols ?? game.gridManager.cols;
   const rawHeat = data.reactorHeat ?? 0;
   const rawPower = data.reactorPower ?? 0;
-  logger.log("debug", "engine", "[GameLoopWorker] applyGameLoopTickResult received:", {
-    reactorPower: rawPower,
-    reactorHeat: rawHeat,
-    powerDelta: data.powerDelta,
-    tickCount: data.tickCount,
-    tickId: data.tickId
+  logger.log("debug", "engine", `[Worker-In] Received Tick #${data.tickId}`, {
+    pwr: rawPower,
+    ht: rawHeat,
+    earned: data.moneyEarned,
+    deltas: { p: data.powerDelta, h: data.heatDelta },
+    burst: data.tickCount
   });
   reactor.current_heat = toDecimal(rawHeat < HEAT_EPSILON ? 0 : rawHeat);
   reactor.current_power = toDecimal(rawPower);
@@ -4963,7 +4978,7 @@ export function runInstantCatchup(engine) {
     Math.floor(offlineMs / FOUNDATIONAL_TICK_MS),
     MAX_ACCUMULATOR_MULTIPLIER
   );
-  if (ticks <= 0 || !engine._hasHeatActivity()) return;
+  if (ticks <= 0 || !engine._hasSimulationActivity()) return;
   const reactor = game.reactor;
   reactor.updateStats();
   const gen = Number(reactor.stats_heat_generation ?? 0);
@@ -5286,7 +5301,7 @@ export function processOfflineTime(engine, deltaTime) {
   const span = Math.min(deltaTime, capMs);
   engine.game._offlineCatchupMs = span;
   const tickEquivalent = Math.floor(span / FOUNDATIONAL_TICK_MS);
-  if (tickEquivalent > 0 && engine._hasHeatActivity()) {
+  if (tickEquivalent > 0 && engine._hasSimulationActivity()) {
     engine.game.emit?.("welcomeBackOffline", { deltaTime: span, offlineMs: span, tickEquivalent });
   }
   return true;
@@ -5308,15 +5323,56 @@ export function failSimulationHardwareIncompatible(engine, detail) {
 function failGameLoopWorker(engine, detail) {
   engine._gameLoopWorkerFailed = true;
   engine._gameLoopWorkerPending = false;
+  engine._gameLoopWorkerPendingSince = 0;
   engine._gameLoopTickContext = null;
   engine.stop();
   engine.game.emit?.("gameLoopWorkerFatal", { detail: String(detail ?? "") });
 }
 
+function queueGameLoopWorkerKick(engine) {
+  if (!engine._useGameLoopWorker() || engine._gameLoopWorkerFailed) return;
+  queueMicrotask(() => {
+    if (!engine.running || engine.game.paused) return;
+    pushGameLoopWorkerTickFromPulse(engine);
+  });
+}
+
 export function pushGameLoopWorkerTickFromPulse(engine) {
-  if (!engine.running || engine.game.paused) return;
-  if (!engine._hasHeatActivity()) return;
+  if (!engine.running || engine.game.paused) {
+    logger.log("debug", "engine", "[ReactorTick] pulse skipped (not running or paused)", { running: engine.running, paused: engine.game.paused });
+    return;
+  }
+
+  if (engine._partCacheDirty) engine._updatePartCaches();
+  if (engine._valveNeighborCacheDirty) engine._updateValveNeighborCache();
+
+  if (!engine._hasSimulationActivity()) return;
+
   if (engine._gameLoopWorkerPending) {
+    const since = engine._gameLoopWorkerPendingSince || 0;
+    const now = typeof performance !== "undefined" ? performance.now() : 0;
+    const overdueMs = since > 0 && now > 0 ? now - since : 0;
+    if (overdueMs > 5000) {
+      logger.log("error", "engine", "[ReactorTick] GameLoopWorker timeout; failing worker path.", {
+        overdueMs: Math.round(overdueMs),
+        tickId: engine._gameLoopTickContext?.tickId,
+      });
+      failGameLoopWorker(engine, "workerTimeout");
+      return;
+    }
+    const lastWarn = engine._gameLoopWorkerLastStallWarnAt || 0;
+    if (overdueMs > 2500 && (now - lastWarn > 2000 || !lastWarn)) {
+      engine._gameLoopWorkerLastStallWarnAt = now;
+      logger.log("warn", "engine", "[ReactorTick] worker result overdue", {
+        overdueMs: Math.round(overdueMs),
+        tickId: engine._gameLoopTickContext?.tickId,
+        missedPulses: engine._gameLoopWorkerMissedPulses ?? 0,
+      });
+    }
+    logger.log("debug", "engine", "[ReactorTick] pulse while worker pending (catch-up queued)", {
+      overdueMs: Math.round(overdueMs),
+      tickId: engine._gameLoopTickContext?.tickId,
+    });
     engine._gameLoopWorkerMissedPulses = (engine._gameLoopWorkerMissedPulses || 0) + 1;
     return;
   }
@@ -5327,21 +5383,29 @@ export function pushGameLoopWorkerTickFromPulse(engine) {
     failGameLoopWorker(engine, "gameLoopWorkerUnavailable");
     return;
   }
-  if (engine._partCacheDirty) engine._updatePartCaches?.();
   const state = engine._serializeStateForGameLoopWorker();
   if (!state) {
     failGameLoopWorker(engine, "serializeStateForGameLoopWorker");
     return;
   }
+
+  logger.log("debug", "engine", `[Worker-Out] Sending Tick #${engine._gameLoopWorkerTickId}`, {
+    ticks: tickCount,
+    cells: engine.active_cells.length,
+    heat: state.reactorState.current_heat
+  });
+
   engine._gameLoopWorkerTickId = (engine._gameLoopWorkerTickId || 0) + 1;
   engine._gameLoopTickContext = { tickId: engine._gameLoopWorkerTickId };
   state.tickId = engine._gameLoopWorkerTickId;
   state.tickCount = tickCount;
   state.multiplier = 1;
   engine._gameLoopWorkerPending = true;
+  engine._gameLoopWorkerPendingSince = typeof performance !== "undefined" ? performance.now() : 0;
   const w = engine._getGameLoopWorker();
   if (!w || engine._gameLoopWorkerFailed) {
     engine._gameLoopWorkerPending = false;
+    engine._gameLoopWorkerPendingSince = 0;
     engine._gameLoopTickContext = null;
     failGameLoopWorker(engine, "gameLoopWorkerCreateFailed");
     return;
@@ -5351,6 +5415,7 @@ export function pushGameLoopWorkerTickFromPulse(engine) {
   if (!result.success) {
     logger.log("warn", "engine", "[GameLoopWorker] Input validation failed:", fromError(result.error).toString());
     engine._gameLoopWorkerPending = false;
+    engine._gameLoopWorkerPendingSince = 0;
     engine._gameLoopTickContext = null;
     failGameLoopWorker(engine, "gameLoopWorkerInputValidation");
     return;
@@ -5359,6 +5424,7 @@ export function pushGameLoopWorkerTickFromPulse(engine) {
   const serialized = superjson.serialize(rest);
   const transfer = [];
   if (heatBuffer && !(heatBuffer instanceof SharedArrayBuffer)) transfer.push(heatBuffer);
+  logger.log("info", "engine", "[ReactorTick] worker tick sent", { tickId: state.tickId, tickCount, gridCells: engine.active_cells.length });
   w.postMessage({ ...serialized, heatBuffer }, transfer);
 }
 
@@ -5368,6 +5434,9 @@ function ensureArraysValid(engine) {
   if (!Array.isArray(engine.active_inlets)) engine.active_inlets = [];
   if (!Array.isArray(engine.active_exchangers)) engine.active_exchangers = [];
   if (!Array.isArray(engine.active_outlets)) engine.active_outlets = [];
+  if (!Array.isArray(engine.active_valves)) engine.active_valves = [];
+  if (!Array.isArray(engine.active_vents)) engine.active_vents = [];
+  if (!Array.isArray(engine.active_capacitors)) engine.active_capacitors = [];
 }
 
 function updatePartCaches(engine) {
@@ -5383,22 +5452,20 @@ function updatePartCaches(engine) {
   engine.active_vents.length = 0;
   engine.active_capacitors.length = 0;
 
-  for (let row = 0; row < engine.game._rows; row++) {
-    for (let col = 0; col < engine.game._cols; col++) {
-      const tile = engine.game.tileset.getTile(row, col);
-      if (!tile?.part) continue;
-
-      const part = tile.part;
-      const k = part.getCacheKinds(tile);
-      if (k.cells) engine.active_cells.push(tile);
-      if (k.inlets) engine.active_inlets.push(tile);
-      if (k.exchangers) engine.active_exchangers.push(tile);
-      if (k.valves) engine.active_valves.push(tile);
-      if (k.outlets) engine.active_outlets.push(tile);
-      if (k.vents) engine.active_vents.push(tile);
-      if (k.capacitors) engine.active_capacitors.push(tile);
-      if (k.vessels) engine.active_vessels.push(tile);
-    }
+  const tiles = engine.game.tileset.active_tiles_list;
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i];
+    if (!tile?.part) continue;
+    const part = tile.part;
+    const k = part.getCacheKinds(tile);
+    if (k.cells) engine.active_cells.push(tile);
+    if (k.inlets) engine.active_inlets.push(tile);
+    if (k.exchangers) engine.active_exchangers.push(tile);
+    if (k.valves) engine.active_valves.push(tile);
+    if (k.outlets) engine.active_outlets.push(tile);
+    if (k.vents) engine.active_vents.push(tile);
+    if (k.capacitors) engine.active_capacitors.push(tile);
+    if (k.vessels) engine.active_vessels.push(tile);
   }
 
   engine._partCacheDirty = false;
@@ -5589,10 +5656,14 @@ function initWorkerState(engine) {
   engine._heatWorkerConsecutiveTimeouts = 0;
   engine._gameLoopWorker = null;
   engine._gameLoopWorkerPending = false;
+  engine._gameLoopWorkerPendingSince = 0;
+  engine._gameLoopWorkerLastStallWarnAt = 0;
   engine._gameLoopTickContext = null;
   engine._gameLoopWorkerFailed = false;
   engine._gameLoopWorkerTickId = 0;
   engine._gameLoopWorkerMissedPulses = 0;
+  engine._updatePartCaches = () => updatePartCaches(engine);
+  engine._updateValveNeighborCache = () => updateValveNeighborCache(engine);
 }
 
 function initAllEngineState(engine) {
@@ -6124,22 +6195,32 @@ function runPostHeatPhase(engine, ctx, explosionIndices = null) {
 function onGameLoopWorkerMessage(engine, e) {
   const data = e.data;
   if (data?.type === "timerPulse") {
+    logger.log("debug", "engine", "[ReactorTick] timerPulse", {
+      pending: engine._gameLoopWorkerPending,
+      tickId: engine._gameLoopTickContext?.tickId,
+      missed: engine._gameLoopWorkerMissedPulses ?? 0,
+    });
     pushGameLoopWorkerTickFromPulse(engine);
     return;
   }
   if (data?.type !== "tickResult") return;
+  const pendingSince = engine._gameLoopWorkerPendingSince || 0;
+  const now = typeof performance !== "undefined" ? performance.now() : 0;
+  const waitMs = pendingSince > 0 && now > 0 ? now - pendingSince : 0;
   engine._gameLoopWorkerPending = false;
+  engine._gameLoopWorkerPendingSince = 0;
   const ctx = engine._gameLoopTickContext;
   engine._gameLoopTickContext = null;
   if (data.error) {
-    logger.log("warn", "engine", "[GameLoopWorker] received error result:", data.message);
+    logger.log("warn", "engine", "[GameLoopWorker] received error result:", data.message, { waitMs: Math.round(waitMs), tickId: data.tickId });
     failGameLoopWorker(engine, data.message || "tickResultError");
     return;
   }
   if (!ctx || data.tickId !== ctx.tickId) {
-    logger.log("debug", "engine", "[GameLoopWorker] tickId mismatch or no context, skipping:", { received: data.tickId, expected: ctx?.tickId });
+    logger.log("warn", "engine", "[ReactorTick] tickResult ignored (stale or no context)", { received: data.tickId, expected: ctx?.tickId, waitMs: Math.round(waitMs) });
     return;
   }
+  logger.log("info", "engine", "[ReactorTick] worker tick applied", { tickId: data.tickId, waitMs: Math.round(waitMs), reactorPower: data.reactorPower });
   logger.log("debug", "engine", "[GameLoopWorker] applying tickResult:", { tickId: data.tickId, reactorPower: data.reactorPower });
   applyGameLoopTickResult(engine, data);
   if ((engine._gameLoopWorkerMissedPulses || 0) > 0) {
@@ -6208,6 +6289,57 @@ function handlePhysicsWorkerMessage(engine, data) {
   recordHeatFlowVectors(engine, data.transfers);
   const heat_add = ctx.heat_add + (data.heatFromInlets ?? 0);
   engine._continueTickAfterHeat(ctx.multiplier, ctx.power_add, heat_add, ctx.powerBeforeTick, ctx.heatBeforeTick, data.explosionIndices);
+}
+
+function logEngineStartSnapshot(engine) {
+  const game = engine.game;
+  const ts = game?.tileset;
+  engine._partCacheDirty = true;
+  engine._valveNeighborCacheDirty = true;
+  engine._updatePartCaches();
+  engine._updateValveNeighborCache();
+  const byId = new Map();
+  let placedParts = 0;
+  if (Array.isArray(ts?.tiles_list)) {
+    for (let i = 0; i < ts.tiles_list.length; i++) {
+      const tile = ts.tiles_list[i];
+      const id = tile?.part?.id;
+      if (!id) continue;
+      placedParts++;
+      byId.set(id, (byId.get(id) || 0) + 1);
+    }
+  }
+  const partsById = Object.fromEntries(
+    [...byId.entries()].sort((a, b) => (b[1] !== a[1] ? b[1] - a[1] : a[0].localeCompare(b[0])))
+  );
+  const activeBuckets = {
+    cells: engine.active_cells.length,
+    vessels: engine.active_vessels.length,
+    inlets: engine.active_inlets.length,
+    exchangers: engine.active_exchangers.length,
+    outlets: engine.active_outlets.length,
+    valves: engine.active_valves.length,
+    vents: engine.active_vents.length,
+    capacitors: engine.active_capacitors.length,
+  };
+  const reactor = game?.reactor;
+  logger.log("info", "engine", "[EngineStart] reactor parts", {
+    grid: `${game.rows}x${game.cols}`,
+    placedParts,
+    partsById,
+    activeBuckets,
+    power: reactor?.current_power?.toNumber?.() ?? null,
+    heat: reactor?.current_heat?.toNumber?.() ?? null,
+    paused: !!game.paused,
+  });
+  logger.log("info", "engine", "[EngineStart] tick processing", {
+    gameLoopWorker: engine._useGameLoopWorker() && !engine._gameLoopWorkerFailed,
+    physicsWorkerHeat: engine._useWorker() && engine._heatUseSAB,
+    heatUseSAB: engine._heatUseSAB,
+    loopWaitMs: game.loop_wait,
+    simulationTickMs: FOUNDATIONAL_TICK_MS,
+    tickCount: engine.tick_count,
+  });
 }
 
 function ensureGameLoopWorker(engine) {
@@ -6288,8 +6420,7 @@ export class Engine {
   }
 
   _useGameLoopWorker() {
-    if (typeof Worker === "undefined" || this._gameLoopWorkerFailed) return false;
-    if (this._heatUseSABOverride || !this._heatUseSAB) return false;
+    if (typeof Worker === "undefined" || this._gameLoopWorkerFailed || this._heatUseSABOverride) return false;
     return true;
   }
 
@@ -6379,13 +6510,16 @@ export class Engine {
     return this.getEventBuffer().tail;
   }
 
-  _hasHeatActivity() {
-    return this.active_cells.length > 0 ||
-      this.active_exchangers.length > 0 ||
-      this.active_inlets.length > 0 ||
-      this.active_outlets.length > 0 ||
-      this.active_valves.length > 0 ||
-      this.active_vents.length > 0;
+_hasSimulationActivity() {
+    if (this._partCacheDirty) this._updatePartCaches();
+    const hasParts = this.active_cells.length > 0 ||
+                     this.active_vents.length > 0 ||
+                     this.active_exchangers.length > 0 ||
+                     this.active_valves.length > 0;
+    const currentPower = toNumber(this.game.reactor.current_power);
+    const autoSell = this.game.state?.auto_sell || this.game.reactor?.auto_sell_enabled;
+    const hasPowerToSell = currentPower > 0 && autoSell;
+    return hasParts || hasPowerToSell;
   }
 
   _ensureArraysValid() {
@@ -6393,6 +6527,7 @@ export class Engine {
   }
 
   _syncGameLoopWorkerTimerControl(start) {
+    if (!this._useGameLoopWorker()) return;
     const w = this._getGameLoopWorker?.();
     if (w && !this._gameLoopWorkerFailed) {
       w.postMessage({ type: "timerControl", action: start ? "start" : "stop" });
@@ -6416,15 +6551,16 @@ export class Engine {
   }
 
   start() {
-    if (typeof Worker === "undefined" || !this._heatUseSAB) {
-      failSimulationHardwareIncompatible(this, "startRequiresWorkerAndSAB");
-      return;
-    }
+    logger.log("info", "engine", "Engine starting...");
+    logEngineStartSnapshot(this);
     const stalled = typeof document !== "undefined" && !document.hidden &&
       this.running && !this.game.paused &&
       (performance.now() - (this.last_timestamp || 0)) > 1500;
     if (this.running && !stalled) {
-      if (!this.game.paused) this._syncGameLoopWorkerTimerControl(true);
+      if (!this.game.paused) {
+        this._syncGameLoopWorkerTimerControl(true);
+        queueGameLoopWorkerKick(this);
+      }
       return;
     }
     if (stalled) this.running = false;
@@ -6432,15 +6568,21 @@ export class Engine {
     this._testFrameCount = 0;
     this.last_timestamp = performance.now();
     this.last_session_update = Date.now();
+    this._lastSyncTickTime = performance.now();
+
     this._bindVisibilityForOffline();
     this.loop(this.last_timestamp);
-    if (!this.game.paused) this._syncGameLoopWorkerTimerControl(true);
+    if (!this.game.paused) {
+      this._syncGameLoopWorkerTimerControl(true);
+      queueGameLoopWorkerKick(this);
+    }
 
     if (this.game.state) this.game.state.engine_status = "running";
   }
 
   stop() {
     if (!this.running) return;
+    logger.log("info", "engine", "Engine stopping.");
     this._syncGameLoopWorkerTimerControl(false);
     this.running = false;
     this._testFrameCount = 0;
@@ -6519,6 +6661,15 @@ export class Engine {
 
     this.last_timestamp = timestamp;
     if (this._partCacheDirty) this._updatePartCaches?.();
+
+    if (!this._useGameLoopWorker()) {
+      const elapsed = timestamp - (this._lastSyncTickTime || 0);
+      if (elapsed >= this.game.loop_wait) {
+        logger.log("debug", "engine", "[Main-Thread] Executing synchronous tick fallback");
+        this._lastSyncTickTime = timestamp;
+        this.tick();
+      }
+    }
 
     if (this.game.performance && this.game.performance.shouldMeasure()) {
       this.game.performance.markEnd("engine_loop");
@@ -7276,24 +7427,24 @@ export class Game {
 
   getDoctrine() {
     if (!this.tech_tree) return null;
-    return this.upgradeset.techTree?.find(t => t.id === this.tech_tree) || null;
+    return this.upgradeset.techTrees?.find(t => t.id === this.tech_tree) || null;
   }
 
   respecDoctrine() {
-    const cost = this.RESPER_DOCTRINE_EP_COST;
-    if (this.state.current_exotic_particles.lt(cost)) return false;
+    const cost = this.RESPER_DOCTRINE_EP_COST; // Ensure using the property name in class
+    const currentEp = this.state.current_exotic_particles;
+
+    if (currentEp.lt(cost)) return false;
 
     updateDecimal(this.state, "current_exotic_particles", (d) => d.sub(cost));
 
-    // Reset the tree
     const oldTree = this.tech_tree;
-    this.tech_tree = null;
+    this.tech_tree = null; // Set to null as per test expectation
 
-    // Reset levels if necessary (depends on game rules, but tests expect reset Throttles)
     this.upgradeset.resetDoctrineUpgradeLevels(oldTree);
     this.eventRouter?.clearState(this);
 
-    this.saveManager.autoSave();
+    if (this.saveManager) this.saveManager.autoSave();
     return true;
   }
 }

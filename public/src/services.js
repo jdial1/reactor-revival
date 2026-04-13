@@ -104,6 +104,7 @@ class DataService {
   }
 
   async ensureAllGameDataLoaded() {
+    console.log("[ReactorBoot] DataService.ensureAllGameDataLoaded start");
     const results = await Promise.all([
       this._getQuery("parts", "./data/part_list.json", z.array(PartDefinitionSchema)),
       this._getQuery("upgrades", "./data/upgrade_list.json", z.array(UpgradeDefinitionSchema)),
@@ -112,6 +113,7 @@ class DataService {
       this._getQuery("difficulty", "./data/difficulty_curves.json", z.record(z.string(), DifficultyPresetSchema)),
       this._getQuery("helpText", "./data/help_text.json", HelpTextSchema),
     ]);
+    console.log("[ReactorBoot] DataService.ensureAllGameDataLoaded done");
     return {
       parts: results[0],
       upgrades: results[1],
@@ -1246,6 +1248,7 @@ function registerServiceWorker() {
 }
 
 export function initializePwa() {
+  console.log("[ReactorBoot] initializePwa", window.location.hostname);
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   if (isLocalhost) {
     logger.log('info', 'ui', '[SW] Localhost detected. Skipping Service Worker registration.');

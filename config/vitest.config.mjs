@@ -7,10 +7,16 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "@app": path.resolve(repoRoot, "public/src"),
-      "@test-helpers": path.resolve(repoRoot, "tests/helpers/setup.js"),
-    },
+    alias: [
+      { find: "@app", replacement: path.resolve(repoRoot, "public/src") },
+      { find: "@test-helpers", replacement: path.resolve(repoRoot, "tests/helpers/setup.js") },
+      { find: "lit-html/directives/class-map.js", replacement: path.resolve(repoRoot, "public/lib/lit-class-map.js") },
+      { find: "lit-html/directives/style-map.js", replacement: path.resolve(repoRoot, "public/lib/lit-style-map.js") },
+      { find: "lit-html/directives/repeat.js", replacement: path.resolve(repoRoot, "public/lib/lit-repeat.js") },
+      { find: "lit-html/directives/when.js", replacement: path.resolve(repoRoot, "public/lib/lit-when.js") },
+      { find: "lit-html/directives/unsafe-html.js", replacement: path.resolve(repoRoot, "public/lib/lit-unsafe-html.js") },
+      { find: "lit-html", replacement: path.resolve(repoRoot, "public/lib/lit-html.js") },
+    ],
   },
   test: {
     exclude: [...configDefaults.exclude, "**/performance.test.js"],

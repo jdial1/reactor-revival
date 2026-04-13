@@ -3,7 +3,7 @@ import { proxy, subscribe } from "valtio/vanilla";
 import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey, previewBlueprintPlannerStats } from "../state.js";
 import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
 import { runCheckAffordability, calculateSectionCounts, BlueprintService } from "../logic.js";
-import { UpgradeCard, CloseButton, PartButton } from "./button-factory.js";
+import { UpgradeCard, CloseButton, PartButton, partsModuleInfoCardTemplate } from "./button-factory.js";
 import { MODAL_IDS } from "./ui-modals.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
 import { leaderboardService, requestWakeLock, releaseWakeLock } from "../services.js";
@@ -811,10 +811,7 @@ class PartsPanelUI {
     const selectedPartId = uiState?.interaction?.selectedPartId ?? null;
     const selPart = selectedPartId && partset ? partset.getPartById(selectedPartId) : null;
     const moduleInfoContent = selPart
-      ? html`<div class="parts-module-info-inner">
-          <span class="parts-module-info-title">${selPart.title}</span>
-          <span class="parts-module-info-stats">${fmt(selPart.cost ?? 0, 0)}${selPart.erequires ? " EP" : " $"} · ${selPart.category ?? ""}</span>
-        </div>`
+      ? partsModuleInfoCardTemplate(selPart)
       : html`<span class="parts-module-info-empty">— Select a module —</span>`;
 
     return partsPanelLayoutTemplate({

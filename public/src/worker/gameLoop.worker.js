@@ -1,5 +1,14 @@
 import "../../lib/break_infinity.min.js";
-import superjson from "superjson";
+{
+  const Dec =
+    (typeof globalThis !== "undefined" && globalThis.Decimal) ||
+    (typeof self !== "undefined" && self.Decimal);
+  if (typeof Dec === "function") {
+    if (typeof globalThis !== "undefined") globalThis.Decimal = Dec;
+    if (typeof self !== "undefined") self.Decimal = Dec;
+  }
+}
+import superjson from "../../lib/superjson.js";
 import {
   runHeatStepFromTyped,
   INLET_STRIDE, INLET_OFFSET_INDEX, INLET_OFFSET_RATE, INLET_OFFSET_N_COUNT, INLET_OFFSET_NEIGHBORS,
@@ -568,8 +577,12 @@ function runOneTick(data) {
   let totalPowerSold = 0;
   let totalVentHeat = 0;
   const n = Math.max(1, data.tickCount || 1);
+  const tick0 = typeof performance !== "undefined" ? performance.now() : 0;
 
   for (let tick = 0; tick < n; tick++) {
+    if (tick > 0 && tick % 50 === 0 && typeof console !== "undefined" && console.info) {
+      console.info("[GameLoopWorker] runOneTick progress", { tick, total: n, tickId: data.tickId });
+    }
     const result = processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower);
     reactorHeat = result.reactorHeat;
     reactorPower = result.reactorPower;
@@ -586,6 +599,7 @@ function runOneTick(data) {
 
   const powerDelta = reactorPower.sub(powerBeforeTick).toNumber();
   const reactorPowerNum = reactorPower.toNumber();
+  const batchMs = tick0 > 0 && typeof performance !== "undefined" ? performance.now() - tick0 : 0;
   console.debug("[GameLoopWorker] runOneTick result:", {
     tickCount: n,
     powerBefore: powerBeforeTick?.toNumber?.() ?? powerBeforeTick,
@@ -593,6 +607,9 @@ function runOneTick(data) {
     powerDelta,
     reactorHeat: reactorHeat.toNumber()
   });
+  if (typeof console !== "undefined" && console.info) {
+    console.info("[GameLoopWorker] runOneTick finished", { tickId: data.tickId, innerTicks: n, batchMs: Math.round(batchMs) });
+  }
 
   const useSAB = !!data.heatBuffer && typeof SharedArrayBuffer !== "undefined" && data.heatBuffer instanceof SharedArrayBuffer;
   let heatBufferOut = null;
@@ -631,7 +648,8 @@ function clearSimulationTimer() {
 }
 
 function startSimulationTimer() {
-  clearSimulationTimer();
+  if (timerId != null) return;
+  self.postMessage({ type: "timerPulse" });
   timerId = setInterval(() => {
     self.postMessage({ type: "timerPulse" });
   }, FOUNDATIONAL_TICK_MS);
@@ -648,6 +666,10 @@ function runStep() {
     return;
   }
   busy = true;
+  const step0 = typeof performance !== "undefined" ? performance.now() : 0;
+  if (typeof console !== "undefined" && console.info) {
+    console.info("[GameLoopWorker] runStep start", { tickId: d?.tickId, superjson: isSuperjson });
+  }
   try {
     const data = isSuperjson ? { ...superjson.deserialize({ json: d.json, meta: d.meta }), heatBuffer: d.heatBuffer } : d;
     const result = runOneTick(data);
@@ -656,6 +678,9 @@ function runStep() {
     const transfer = [];
     if (result.heatBuffer && !result.useSAB) transfer.push(result.heatBuffer);
     self.postMessage(result, transfer);
+    if (step0 > 0 && typeof performance !== "undefined" && typeof console !== "undefined" && console.info) {
+      console.info("[GameLoopWorker] runStep posted", { tickId: result.tickId, stepMs: Math.round(performance.now() - step0) });
+    }
   } catch (err) {
     console.error("[GameLoopWorker] runStep error:", err);
     self.postMessage({ type: "tickResult", tickId: d?.tickId ?? 0, error: true, message: String(err?.message || err) });
@@ -675,6 +700,9 @@ self.onmessage = function (e) {
   if (isTick) {
     if (busy) {
       pending = d;
+      if (typeof console !== "undefined" && console.info) {
+        console.info("[GameLoopWorker] tick queued (worker busy)", { tickId: d?.tickId });
+      }
       return;
     }
     pending = d;

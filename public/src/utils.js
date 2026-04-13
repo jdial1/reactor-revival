@@ -1,6 +1,6 @@
 import { get, set, del, clear } from "idb-keyval";
-import { z, prettifyError } from "zod";
-import superjson from "superjson";
+import { z, prettifyError } from "../lib/zod.js";
+import superjson from "../lib/superjson.js";
 
 
 export const VU_LED_SEGMENTS = 16;
@@ -191,12 +191,12 @@ if (typeof window !== 'undefined') {
 }
 export { Logger, logger };
 
-export { render } from "lit-html";
-export { classMap } from "lit-html/directives/class-map.js";
-export { styleMap } from "lit-html/directives/style-map.js";
-export { repeat } from "lit-html/directives/repeat.js";
-export { when } from "lit-html/directives/when.js";
-export { unsafeHTML } from "lit-html/directives/unsafe-html.js";
+export const render = (typeof window !== 'undefined') ? (await import("lit-html")).render : () => {};
+export const classMap = (typeof window !== 'undefined') ? (await import("lit-html/directives/class-map.js")).classMap : () => "";
+export const styleMap = (typeof window !== 'undefined') ? (await import("lit-html/directives/style-map.js")).styleMap : () => "";
+export const repeat = (typeof window !== 'undefined') ? (await import("lit-html/directives/repeat.js")).repeat : (a, b, c) => (a || []).map(c);
+export const when = (typeof window !== 'undefined') ? (await import("lit-html/directives/when.js")).when : (a, b, c) => (a ? b() : (c ? c() : ''));
+export const unsafeHTML = (typeof window !== 'undefined') ? (await import("lit-html/directives/unsafe-html.js")).unsafeHTML : (s) => s;
 
 const CELL_LEVEL_TILES = { 1: 1, 2: 2, 3: 4 };
 const CELL_TYPE_TO_NUM = { uranium: 1, plutonium: 2, thorium: 3, seaborgium: 4, dolorium: 5, nefastium: 6, protium: 1 };
@@ -527,26 +527,101 @@ function safeDeserialize(raw) {
 }
 
 export const StorageAdapter = {
-  async set(key, value) { try { if (!isTestEnvStorage() && typeof indexedDB === "undefined") return false; await set(key, superjsonStringify(value)); return true; } catch (err) { logger.log("error", "StorageAdapter", `Failed to set key ${key}`, err); return false; } },
+  async set(key, value) {
+    try {
+      if (!isTestEnvStorage() && typeof indexedDB === "undefined") return false;
+      const serialized = superjsonStringify(value);
+      if (isTestEnvStorage()) {
+        if (!isStorageAvailable()) return false;
+        localStorage.setItem(key, serialized);
+        return true;
+      }
+      await set(key, serialized);
+      return true;
+    } catch (err) {
+      logger.log("error", "StorageAdapter", `Failed to set key ${key}`, err);
+      return false;
+    }
+  },
   async get(key, schema = null) {
     try {
       if (!isTestEnvStorage() && typeof indexedDB === "undefined") return null;
-      const raw = await get(key);
+      let raw;
+      if (isTestEnvStorage()) {
+        if (!isStorageAvailable()) return null;
+        raw = localStorage.getItem(key);
+      } else {
+        raw = await get(key);
+      }
       if (raw == null) return null;
       const parsed = safeDeserialize(raw);
       if (schema) {
         if (parsed == null || typeof parsed !== "object") return null;
         const validation = schema.safeParse(parsed);
-        if (!validation.success) { logger.log("warn", "StorageAdapter", `Zod Schema validation failed for ${key}`, prettifyError(validation.error)); return null; }
+        if (!validation.success) {
+          logger.log("warn", "StorageAdapter", `Zod Schema validation failed for ${key}`, prettifyError(validation.error));
+          return null;
+        }
         return validation.data;
       }
       return parsed;
-    } catch (err) { logger.log("error", "StorageAdapter", `Failed to get key ${key}`, err); return null; }
+    } catch (err) {
+      logger.log("error", "StorageAdapter", `Failed to get key ${key}`, err);
+      return null;
+    }
   },
-  async getRaw(key, defaultValue = null) { try { if (!isTestEnvStorage() && typeof indexedDB === "undefined") return defaultValue; const raw = await get(key); return raw ?? defaultValue; } catch (err) { logger.log("error", "StorageAdapter", `Failed to get key ${key}`, err); return defaultValue; } },
-  async setRaw(key, value) { try { if (!isTestEnvStorage() && typeof indexedDB === "undefined") return false; await set(key, typeof value === "string" ? value : JSON.stringify(value)); return true; } catch (err) { logger.log("error", "StorageAdapter", `Failed to set raw key ${key}`, err); return false; } },
-  async remove(key) { try { if (!isTestEnvStorage() && typeof indexedDB === "undefined") return; await del(key); } catch (err) { logger.log("error", "StorageAdapter", `Failed to remove key ${key}`, err); } },
-  async clearAll() { try { if (!isTestEnvStorage() && typeof indexedDB === "undefined") return; await clear(); } catch (err) { logger.log("error", "StorageAdapter", "Failed to clear storage", err); } },
+  async getRaw(key, defaultValue = null) {
+    try {
+      if (!isTestEnvStorage() && typeof indexedDB === "undefined") return defaultValue;
+      const raw = isTestEnvStorage()
+        ? (isStorageAvailable() ? localStorage.getItem(key) : null)
+        : await get(key);
+      return raw ?? defaultValue;
+    } catch (err) {
+      logger.log("error", "StorageAdapter", `Failed to get key ${key}`, err);
+      return defaultValue;
+    }
+  },
+  async setRaw(key, value) {
+    try {
+      if (!isTestEnvStorage() && typeof indexedDB === "undefined") return false;
+      const str = typeof value === "string" ? value : JSON.stringify(value);
+      if (isTestEnvStorage()) {
+        if (!isStorageAvailable()) return false;
+        localStorage.setItem(key, str);
+        return true;
+      }
+      await set(key, str);
+      return true;
+    } catch (err) {
+      logger.log("error", "StorageAdapter", `Failed to set raw key ${key}`, err);
+      return false;
+    }
+  },
+  async remove(key) {
+    try {
+      if (!isTestEnvStorage() && typeof indexedDB === "undefined") return;
+      if (isTestEnvStorage()) {
+        if (isStorageAvailable()) localStorage.removeItem(key);
+        return;
+      }
+      await del(key);
+    } catch (err) {
+      logger.log("error", "StorageAdapter", `Failed to remove key ${key}`, err);
+    }
+  },
+  async clearAll() {
+    try {
+      if (!isTestEnvStorage() && typeof indexedDB === "undefined") return;
+      if (isTestEnvStorage()) {
+        if (isStorageAvailable()) localStorage.clear();
+        return;
+      }
+      await clear();
+    } catch (err) {
+      logger.log("error", "StorageAdapter", "Failed to clear storage", err);
+    }
+  },
 };
 
 export function serializeSave(obj) { return superjsonStringify(obj); }

@@ -552,8 +552,12 @@ export class GridCanvasRenderer {
     const rect = this.canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    const col = (x / this._tileSize) | 0;
-    const row = (y / this._tileSize) | 0;
+    const cols = Math.max(1, this._cols);
+    const rows = Math.max(1, this._rows);
+    const tileW = rect.width / cols;
+    const tileH = rect.height / rows;
+    const col = (x / tileW) | 0;
+    const row = (y / tileH) | 0;
     if (row < 0 || row >= this._rows || col < 0 || col >= this._cols) return null;
     return this.ui.game.tileset.getTile(row, col);
   }
@@ -561,15 +565,19 @@ export class GridCanvasRenderer {
   getTileRectInContainer(row, col, containerRect) {
     if (!this.canvas || !containerRect) return { left: 0, top: 0, width: 0, height: 0 };
     const reactorRect = this.canvas.getBoundingClientRect();
-    const left = reactorRect.left - containerRect.left + col * this._tileSize;
-    const top = reactorRect.top - containerRect.top + row * this._tileSize;
+    const cols = Math.max(1, this._cols);
+    const rows = Math.max(1, this._rows);
+    const tw = reactorRect.width / cols;
+    const th = reactorRect.height / rows;
+    const left = reactorRect.left - containerRect.left + col * tw;
+    const top = reactorRect.top - containerRect.top + row * th;
     return {
       left,
       top,
-      width: this._tileSize,
-      height: this._tileSize,
-      centerX: left + this._tileSize / 2,
-      centerY: top + this._tileSize / 2,
+      width: tw,
+      height: th,
+      centerX: left + tw / 2,
+      centerY: top + th / 2,
     };
   }
 

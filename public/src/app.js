@@ -22,6 +22,9 @@ import {
 } from "./templates/pageTemplates.js";
 
 setFormatPreferencesGetter(getValidatedPreferences);
+if (typeof console !== "undefined" && typeof document !== "undefined") {
+  console.log("[ReactorBoot] app.js evaluated (static imports finished)");
+}
 
 if (typeof window !== "undefined") {
   window.splashManager ??= createSplashManager();
@@ -397,6 +400,7 @@ export class AppRoot {
 
   render() {
     const hasSession = !!this.game?.lifecycleManager?.session_start_time;
+    console.log("[ReactorBoot] AppRoot.render", { hasSession, container: !!this.container });
 
     const template = html`
       ${this.renderSplash(hasSession)}
@@ -404,7 +408,13 @@ export class AppRoot {
       <div id="modal-root"></div>
     `;
 
-    render(template, this.container);
+    try {
+      render(template, this.container);
+      console.log("[ReactorBoot] AppRoot lit render committed");
+    } catch (err) {
+      console.error("[ReactorBoot] AppRoot lit render threw", err);
+      throw err;
+    }
     if (!hasSession) {
       const iconEl = this.container.querySelector(".splash-mute-icon");
       if (iconEl) {
@@ -723,8 +733,11 @@ export function attachGameEventListeners(game, ui) {
   on("toggleStateChanged", ({ toggleName, value }) => {
     if (!ui?.stateManager) return;
     const toggleKeys = ["pause", "auto_sell", "auto_buy", "heat_control"];
-    const coerced = toggleKeys.includes(toggleName) ? Boolean(value) : value;
-    ui.stateManager.setVar(toggleName, coerced);
+    if (!toggleKeys.includes(toggleName)) return;
+    const coerced = Boolean(value);
+    if (ui.stateManager.getVar(toggleName) !== coerced) {
+      ui.stateManager.setVar(toggleName, coerced);
+    }
   });
   on("quickSelectSlotsChanged", ({ slots }) => ui.stateManager.setQuickSelectSlots(slots));
   on("reactorTick", (payload) => {
@@ -1012,17 +1025,22 @@ class GameBootstrapper {
     this.appRoot = appRoot;
   }
   async bootstrap() {
+    console.log("[ReactorBoot] bootstrap: ensureAllGameDataLoaded …");
     await dataService.ensureAllGameDataLoaded();
-    this.ui.init(this.game);
+    console.log("[ReactorBoot] bootstrap: ui.init …");
+    await this.ui.init(this.game);
+    console.log("[ReactorBoot] bootstrap: appRoot.render …");
     this.appRoot.render();
     if (typeof this.ui.detachGameEventListeners === "function") {
       this.ui.detachGameEventListeners();
     }
     this.ui.detachGameEventListeners = attachGameEventListeners(this.game, this.ui);
+    console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset …");
     this.game.tileset.initialize();
     await this.game.partset.initialize();
     await this.game.upgradeset.initialize();
     await this.game.set_defaults();
+    console.log("[ReactorBoot] bootstrap: complete");
   }
 }
 
@@ -1088,7 +1106,10 @@ async function handleUserSession(ctx) {
   const isNewGamePending = StorageUtils.get("reactorNewGamePending") === 1;
   const loadSlot = StorageUtils.get("reactorLoadSlot");
   const { resolved: savedGame, shouldPause } = await loadSavedGame(ctx.game, loadSlot, isNewGamePending);
-  if (shouldPause) ctx.game.paused = true;
+  if (shouldPause) {
+    ctx.game.paused = true;
+    if (ctx.game.state) ctx.game.state.pause = true;
+  }
   const hash = window.location.hash.substring(1);
   const pageInfo = ctx.pageRouter.pages[hash];
   const autoStart = shouldAutoStart(savedGame, isNewGamePending, pageInfo);
@@ -1154,12 +1175,17 @@ function createAppInstances() {
 
 async function main() {
   "use strict";
+  console.log("[ReactorBoot] main() start");
   const pwaModule = await import("./services.js");
+  console.log("[ReactorBoot] services.js loaded");
   _requestWakeLock = pwaModule.requestWakeLock;
   pwaModule.initializePwa();
   initPreferencesStore();
   const { ui, game, pageRouter } = createAppInstances();
-  const appRoot = new AppRoot(document.getElementById("app_root"), game, ui);
+  console.log("[ReactorBoot] createAppInstances ok");
+  const appRootEl = document.getElementById("app_root");
+  console.log("[ReactorBoot] #app_root", appRootEl ? "found" : "MISSING");
+  const appRoot = new AppRoot(appRootEl, game, ui);
   appRoot.render();
   if (!isTestEnv()) {
     window.pageRouter = pageRouter;
@@ -1167,11 +1193,13 @@ async function main() {
     window.game = game;
     window.appRoot = appRoot;
   }
+  console.log("[ReactorBoot] migrateLocalStorageToIndexedDB …");
   await migrateLocalStorageToIndexedDB();
   const ctx = { game, pageRouter, ui };
   if (window.splashManager) window.splashManager.setAppContext(ctx);
   const bootstrapper = new GameBootstrapper({ game, ui, pageRouter, splashManager: window.splashManager, appRoot });
   await bootstrapper.bootstrap();
+  console.log("[ReactorBoot] handleUserSession …");
   await handleUserSession(ctx);
   setupButtonHandlers(ctx);
   setupGlobalListeners(game);
@@ -1181,6 +1209,7 @@ async function main() {
     if (typeof registerOneOffSync === "function") registerOneOffSync();
   }
   setupLaunchQueueHandler(game);
+  console.log("[ReactorBoot] main() finished");
 }
 
 function setupLaunchQueueHandler(game) {
@@ -1231,6 +1260,7 @@ async function createFallbackStartInterface(pageRouter, ui, game) {
 }
 
 function showCriticalError(error) {
+  console.error("[ReactorBoot] showCriticalError", error);
   const errorMessage = error?.message || error?.toString() || "Unknown error";
   const errorStack = error?.stack || "";
   const errorOverlay = document.createElement("div");
@@ -1245,20 +1275,32 @@ function showCriticalError(error) {
 let _windowErrorHandler = null;
 let _unhandledRejectionHandler = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-  try {
-    main().catch((error) => {
-      logger.log('error', 'game', 'Critical startup error:', error);
+function scheduleMain() {
+  const run = () => {
+    console.log("[ReactorBoot] DOM ready → main()", document.readyState);
+    try {
+      main().catch((error) => {
+        console.error("[ReactorBoot] main() rejected", error);
+        logger.log('error', 'game', 'Critical startup error:', error);
+        showCriticalError(error);
+      });
+    } catch (error) {
+      console.error("[ReactorBoot] main() sync throw", error);
+      logger.error("Critical startup error:", error);
       showCriticalError(error);
-    });
-  } catch (error) {
-    logger.error("Critical startup error:", error);
-    showCriticalError(error);
+    }
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run);
+  } else {
+    run();
   }
-});
+}
+scheduleMain();
 
 _windowErrorHandler = (event) => {
   if (event.error && !document.getElementById("critical-error-overlay")) {
+    console.error("[ReactorBoot] window error event", event.error);
     logger.log('error', 'game', 'Uncaught error:', event.error);
     showCriticalError(event.error);
   }
@@ -1267,6 +1309,7 @@ window.addEventListener("error", _windowErrorHandler);
 
 _unhandledRejectionHandler = (event) => {
   if (event.reason && !document.getElementById("critical-error-overlay")) {
+    console.error("[ReactorBoot] unhandledrejection", event.reason);
     logger.log('error', 'game', 'Unhandled promise rejection:', event.reason);
     showCriticalError(event.reason);
   }

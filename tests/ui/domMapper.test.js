@@ -1,26 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 
 describe("DOMMapper", () => {
   let domMapperInstance;
 
-  beforeEach(async () => {
-    vi.resetModules();
-    
-    // Mock window and document before importing the module
-    global.window = {
-      document: {
-        querySelector: vi.fn(),
-        getElementById: vi.fn(() => null),
-        addEventListener: vi.fn(),
-        readyState: 'complete'
-      },
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      location: { href: '' }
-    };
-    global.document = global.window.document;
-
-    // Now import the module which will auto-execute init()
+  beforeAll(async () => {
     const module = await import("@app/components/ui.js");
     domMapperInstance = module.default;
   });
@@ -35,8 +18,13 @@ describe("DOMMapper", () => {
   });
 
   it("should initialize and query static elements", async () => {
-    await new Promise(resolve => setTimeout(resolve, 0));
-    domMapperInstance.getRoot("#splash-container");
-    expect(global.window.document.querySelector).toHaveBeenCalledWith("#splash-container");
+    const querySpy = vi.spyOn(document, "querySelector");
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      domMapperInstance.getRoot("#splash-container");
+      expect(querySpy).toHaveBeenCalledWith("#splash-container");
+    } finally {
+      querySpy.mockRestore();
+    }
   });
 });
