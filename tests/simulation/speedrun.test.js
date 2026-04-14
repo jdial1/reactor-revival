@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { patchGameState } from "@app/state.js";
 import { toDecimal } from "@app/utils.js";
 import { setupGameWithDOM } from "../helpers/setup.js";
 import objective_list_data from "../../public/data/objective_list.json";
@@ -20,8 +21,7 @@ async function placePartViaUI(game, partId, row, col) {
 function buyUpgradeViaUI(game, upgradeId, level = 1) {
   game.current_money = Math.max(game.current_money, 1e30);
   game.current_exotic_particles = Math.max(game.current_exotic_particles, 1e20);
-  game.ui.stateManager.setVar("current_money", game.current_money);
-  game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+  patchGameState(game, { current_money: game.current_money, current_exotic_particles: game.current_exotic_particles });
   game.upgradeset.check_affordability(game);
   const upgrade = game.upgradeset.getUpgrade(upgradeId);
   if (!upgrade) throw new Error(`Upgrade ${upgradeId} not found`);
@@ -33,10 +33,8 @@ function buyUpgradeViaUI(game, upgradeId, level = 1) {
 async function solveObjective(index, game) {
   game.current_money = 1e30;
   game.current_exotic_particles = 1e20;
-  game.ui.stateManager.setVar("current_money", game.current_money);
-  game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
-  game.paused = false;
-  game.ui.stateManager.setVar("pause", false);
+  patchGameState(game, { current_money: game.current_money, current_exotic_particles: game.current_exotic_particles });
+  game.onToggleStateChange?.("pause", false);
 
   const obj = game.objectives_manager.objectives_data[index];
   const checkId = obj?.checkId;
@@ -176,7 +174,7 @@ async function solveObjective(index, game) {
       break;
     }
     case "autoSell500":
-      game.ui.stateManager.setVar("auto_sell", true);
+      game.onToggleStateChange?.("auto_sell", true);
       for (let i = 0; i < 10; i++) await placePartViaUI(game, "capacitor1", 0, i);
       for (let i = 0; i < 5; i++) {
         await placePartViaUI(game, "plutonium1", 1, i);
@@ -229,7 +227,7 @@ async function solveObjective(index, game) {
       break;
     }
     case "incomeMilestone50k":
-      game.ui.stateManager.setVar("auto_sell", true);
+      game.onToggleStateChange?.("auto_sell", true);
       for (let i = 0; i < 8; i++) {
         await placePartViaUI(game, "plutonium3", 0, i);
         game.tileset.getTile(0, i).activated = true;
@@ -270,11 +268,11 @@ async function solveObjective(index, game) {
     }
     case "firstBillion":
       game.current_money = 1e9;
-      game.ui.stateManager.setVar("current_money", game.current_money);
+      patchGameState(game, { current_money: game.current_money });
       break;
     case "money10B":
       game.current_money = 1e10;
-      game.ui.stateManager.setVar("current_money", game.current_money);
+      patchGameState(game, { current_money: game.current_money });
       break;
     case "unlockSeaborgium": {
       const seaborgium3 = game.partset.getPartById("seaborgium3");
@@ -304,17 +302,17 @@ async function solveObjective(index, game) {
       break;
     case "ep10":
       game.exotic_particles = 10;
-      game.ui.stateManager.setVar("exotic_particles", 10);
+      patchGameState(game, { exotic_particles: 10 });
       break;
     case "completeChapter3":
       break;
     case "ep51":
       game.exotic_particles = 51;
-      game.ui.stateManager.setVar("exotic_particles", 51);
+      patchGameState(game, { exotic_particles: 51 });
       break;
     case "ep250":
       game.exotic_particles = 250;
-      game.ui.stateManager.setVar("exotic_particles", 250);
+      patchGameState(game, { exotic_particles: 250 });
       break;
     case "investInResearch1":
       game.upgradeset.getUpgrade("laboratory")?.setLevel(1);
@@ -325,13 +323,11 @@ async function solveObjective(index, game) {
       game.exotic_particles = 10;
       game.total_exotic_particles = 10;
       game.current_exotic_particles = 10;
-      game.ui.stateManager.setVar("exotic_particles", 10);
-      game.ui.stateManager.setVar("total_exotic_particles", 10);
+      patchGameState(game, { exotic_particles: 10, total_exotic_particles: 10, current_exotic_particles: 10 });
       await game.rebootActionKeepExoticParticles();
       game.exotic_particles = 0;
       game.current_money = game.base_money;
-      game.ui.stateManager.setVar("exotic_particles", 0);
-      game.ui.stateManager.setVar("current_money", game.current_money);
+      patchGameState(game, { exotic_particles: 0, current_money: game.current_money });
       game.objectives_manager.current_objective_index = index;
       game.objectives_manager.set_objective(index, true);
       game.objectives_manager.check_current_objective();
@@ -339,7 +335,7 @@ async function solveObjective(index, game) {
     case "experimentalUpgrade":
       buyUpgradeViaUI(game, "laboratory");
       game.current_exotic_particles = 10000;
-      game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+      patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
       game.upgradeset.check_affordability(game);
       buyUpgradeViaUI(game, "infused_cells");
       break;
@@ -359,7 +355,7 @@ async function solveObjective(index, game) {
     }
     case "ep1000":
       game.exotic_particles = 1000;
-      game.ui.stateManager.setVar("exotic_particles", 1000);
+      patchGameState(game, { exotic_particles: 1000 });
       break;
     case "fiveQuadNefastium": {
       const nefastium3 = game.partset.getPartById("nefastium3");
@@ -378,7 +374,7 @@ async function solveObjective(index, game) {
     case "placeExperimentalPart":
       buyUpgradeViaUI(game, "laboratory");
       game.current_exotic_particles = 100;
-      game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+      patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
       game.upgradeset.check_affordability(game);
       buyUpgradeViaUI(game, "protium_cells");
       await game.tileset.getTile(0, 0).setPart(game.partset.getPartById("protium1"));
@@ -444,8 +440,7 @@ describe("End-to-End Speed Run (DOM Simulation)", () => {
     game.bypass_tech_tree_restrictions = true;
     game.current_money = 1e30;
     game.current_exotic_particles = 1e20;
-    game.ui.stateManager.setVar("current_money", game.current_money);
-    game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+    patchGameState(game, { current_money: game.current_money, current_exotic_particles: game.current_exotic_particles });
     game.partset.check_affordability(game);
     game.upgradeset.check_affordability(game);
 

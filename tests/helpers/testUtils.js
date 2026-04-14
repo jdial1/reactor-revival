@@ -1,5 +1,6 @@
 import { vi, expect } from "vitest";
-import { serializeSave, toDecimal, StorageUtilsAsync } from "@app/utils.js";
+import { serializeSave, toDecimal, StorageAdapter } from "@app/utils.js";
+import { patchGameState } from "@app/state.js";
 import { clearGrid } from "./gameHelpers.js";
 
 export function simulateViewportResize(width, height) {
@@ -43,11 +44,11 @@ export function mockClipboardAPI(options = {}) {
 export async function simulateSaveAndLoad(game, stateOverrides = {}, options = {}) {
   const slot = options.slot ?? 1;
   const shouldClear = options.clearGrid !== false;
-  const rawSave = await game.saveOrchestrator.getSaveState();
+  const rawSave = await game.saveManager.getSaveState();
   const saveData = { ...rawSave, ...stateOverrides };
   const payload = serializeSave(saveData);
-  await StorageUtilsAsync.setRaw(`reactorGameSave_${slot}`, payload);
-  await StorageUtilsAsync.set("reactorCurrentSaveSlot", slot);
+  await StorageAdapter.setRaw(`reactorGameSave_${slot}`, payload);
+  await StorageAdapter.set("reactorCurrentSaveSlot", slot);
   if (shouldClear) {
     await clearGrid(game);
   }
@@ -105,12 +106,12 @@ export function setupMockAudio(vi) {
 export function setResourcesAndRefreshAffordability(game, money, ep) {
   if (money !== undefined && money !== null) {
     game.current_money = money;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
   }
   if (ep !== undefined && ep !== null) {
     const epVal = typeof ep === "object" && ep !== null && typeof ep.toNumber === "function" ? ep : toDecimal(ep);
     game.current_exotic_particles = epVal;
-    game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+    patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
   }
   game.partset.check_affordability(game);
   game.upgradeset.check_affordability(game);
@@ -125,9 +126,7 @@ export async function setupPage(game, pageId) {
       throw err;
     }
   }
-  if (game.ui?.coreLoopUI?.runUpdateInterfaceLoop) {
-    game.ui.coreLoopUI.runUpdateInterfaceLoop(0);
-  }
+  game.ui?.startRenderLoop?.(0);
   await new Promise((r) => setTimeout(r, 0));
 }
 
@@ -616,11 +615,11 @@ export function mockPerformanceAPI(vi, { stepMs = 10 } = {}) {
 
 export async function flushUIUpdates(game, { deltaMs = 16.667, rolling = true } = {}) {
   await new Promise((r) => setTimeout(r, 0));
-  const core = game?.ui?.coreLoopUI;
-  if (!core) return;
-  core.processUpdateQueue?.();
+  const ui = game?.ui;
+  if (!ui) return;
+  ui.processUiUpdateQueue?.();
   if (rolling) {
-    core.updateRollingNumbers?.(deltaMs);
+    ui.updateUiRollingNumbers?.(deltaMs);
   }
 }
 

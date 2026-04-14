@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, toNum } from '../helpers/setup.js';
+import { patchGameState } from "@app/state.js";
 
 describe('EP Price Display and Affordability Synchronization', () => {
     let game;
@@ -70,7 +71,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
             // Set user to have exactly enough EP
             game.current_exotic_particles = cost;
             game.exotic_particles = cost;
-            game.ui.stateManager.setVar("current_exotic_particles", cost);
+            patchGameState(game, { current_exotic_particles: cost });
 
             game.upgradeset.check_affordability(game);
             expect(laboratory.affordable).toBe(true);
@@ -82,7 +83,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
 
             // Set user to have less than required EP
             game.current_exotic_particles = cost - 1;
-            game.ui.stateManager.setVar("current_exotic_particles", cost - 1);
+            patchGameState(game, { current_exotic_particles: cost - 1 });
 
             game.upgradeset.check_affordability(game);
             expect(laboratory.affordable).toBe(false);
@@ -95,21 +96,21 @@ describe('EP Price Display and Affordability Synchronization', () => {
             // Initially no EP
             game.current_exotic_particles = 0;
             game.exotic_particles = 0;
-            game.ui.stateManager.setVar("current_exotic_particles", 0);
+            patchGameState(game, { current_exotic_particles: 0 });
             game.upgradeset.check_affordability(game);
             expect(laboratory.affordable).toBe(false);
 
             // Add enough EP
             game.current_exotic_particles = cost;
             game.exotic_particles = cost;
-            game.ui.stateManager.setVar("current_exotic_particles", cost);
+            patchGameState(game, { current_exotic_particles: cost });
             game.upgradeset.check_affordability(game);
             expect(laboratory.affordable).toBe(true);
 
             // Remove EP again
             game.current_exotic_particles = 0;
             game.exotic_particles = 0;
-            game.ui.stateManager.setVar("current_exotic_particles", 0);
+            patchGameState(game, { current_exotic_particles: 0 });
             game.upgradeset.check_affordability(game);
             expect(laboratory.affordable).toBe(false);
         });
@@ -122,7 +123,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
 
             // Give enough EP but don't have laboratory
             game.current_exotic_particles = protiumCells.base_ecost;
-            game.ui.stateManager.setVar("current_exotic_particles", protiumCells.base_ecost);
+            patchGameState(game, { current_exotic_particles: protiumCells.base_ecost });
 
             game.upgradeset.check_affordability(game);
             expect(protiumCells.affordable).toBe(false);
@@ -135,7 +136,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
             // Ensure bypass is enabled and purchase laboratory first
             game.bypass_tech_tree_restrictions = true;
             game.current_exotic_particles = laboratory.base_ecost;
-            game.ui.stateManager.setVar("current_exotic_particles", laboratory.base_ecost);
+            patchGameState(game, { current_exotic_particles: laboratory.base_ecost });
             game.upgradeset.check_affordability(game);
             const labPurchased = game.upgradeset.purchaseUpgrade("laboratory");
             expect(labPurchased, "Laboratory should be purchased").toBe(true);
@@ -143,7 +144,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
 
             // Now give enough EP for protium cells
             game.current_exotic_particles = protiumCells.base_ecost;
-            game.ui.stateManager.setVar("current_exotic_particles", protiumCells.base_ecost);
+            patchGameState(game, { current_exotic_particles: protiumCells.base_ecost });
             protiumCells.updateDisplayCost(); // Ensure cost display is updated
             game.upgradeset.check_affordability(game);
             expect(protiumCells.affordable).toBe(true);
@@ -157,7 +158,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
 
             // Give enough EP but don't have laboratory
             game.current_exotic_particles = cost;
-            game.ui.stateManager.setVar("current_exotic_particles", cost);
+            patchGameState(game, { current_exotic_particles: cost });
 
             const purchased = game.upgradeset.purchaseUpgrade("protium_cells");
             expect(purchased).toBe(false);
@@ -171,7 +172,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
 
             // Give less EP than required
             game.current_exotic_particles = cost - 1;
-            game.ui.stateManager.setVar("current_exotic_particles", cost - 1);
+            patchGameState(game, { current_exotic_particles: cost - 1 });
 
             const purchased = game.upgradeset.purchaseUpgrade("laboratory");
             expect(purchased).toBe(false);
@@ -185,7 +186,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
             const initialEP = cost + 50;
 
             game.current_exotic_particles = initialEP;
-            game.ui.stateManager.setVar("current_exotic_particles", initialEP);
+            patchGameState(game, { current_exotic_particles: initialEP });
             game.upgradeset.check_affordability(game);
 
             const purchased = game.upgradeset.purchaseUpgrade("laboratory");

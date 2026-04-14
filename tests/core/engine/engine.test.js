@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
-import { setDecimal } from "@app/state.js";
+import { setDecimal } from "@app/store.js";
 import { toDecimal } from "@app/utils.js";
 
 const toNum = (v) => (v != null && typeof v.toNumber === 'function' ? v.toNumber() : Number(v));
@@ -80,7 +80,7 @@ describe("Engine Mechanics", () => {
 
   it("should track auto-sell calls", async () => {
     // Set up auto-sell
-    game.ui.stateManager.setVar("auto_sell", true);
+    game.onToggleStateChange?.("auto_sell", true);
     game.reactor.auto_sell_multiplier = 0.1;
     game.reactor.current_power = 649; // Start with 649 so after +1 from uranium = 650, then -100 from auto-sell = 550
     game.reactor.altered_max_power = 1000; // Set altered_max_power instead of max_power
@@ -103,7 +103,7 @@ describe("Engine Mechanics", () => {
       originalAutoSellLogic.call(this);
 
       // Track auto-sell calls
-      if (this.game.ui.stateManager.getVar("auto_sell")) {
+      if (this.game.state.auto_sell) {
         autoSellCallCount++;
         console.log(`[TEST] Auto-sell call #${autoSellCallCount}: power=${this.game.reactor.current_power}`);
       }
@@ -136,7 +136,7 @@ describe("Engine Mechanics", () => {
     game.engine.tick();
     expect(toNum(game.reactor.current_power)).toBe(cell.power);
 
-    game.ui.stateManager.setVar("auto_sell", true);
+    game.onToggleStateChange?.("auto_sell", true);
     const initialMoney = game.current_money;
     game.engine.tick();
     const sellCapBasis = Math.max(toNum(game.reactor.max_power), toNum(game.reactor.altered_max_power));
@@ -164,7 +164,7 @@ describe("Engine Mechanics", () => {
 
   it("should calculate auto-sell correctly", async () => {
     // Set up auto-sell
-    game.ui.stateManager.setVar("auto_sell", true);
+    game.onToggleStateChange?.("auto_sell", true);
     game.reactor.auto_sell_multiplier = 0.1; // 10%
     game.reactor.current_power = 650; // Set power to expected value after plutonium generation
     game.reactor.altered_max_power = 1000; // Set altered_max_power instead of max_power
@@ -207,7 +207,7 @@ describe("Engine Mechanics", () => {
 
   it("should handle auto-sell when enabled", async () => {
     game.tileset.clearAllTiles();
-    game.ui.stateManager.setVar("auto_sell", true);
+    game.onToggleStateChange?.("auto_sell", true);
     game.reactor.auto_sell_multiplier = 0.1;
     game.reactor.altered_max_power = 1000;
     game.reactor.current_power = 0;
@@ -248,7 +248,7 @@ describe("Engine Mechanics", () => {
     expect(partRef.perpetual, "Reflector should be perpetual after upgrade").toBe(true);
 
     // Set auto-buy state directly
-    game.ui.stateManager.setVar("auto_buy", true);
+    game.onToggleStateChange?.("auto_buy", true);
 
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("reflector1");
@@ -887,7 +887,7 @@ describe("Engine Mechanics", () => {
     const initialHeat = game.reactor.current_heat;
 
     // Pause the game
-    game.ui.stateManager.setVar("pause", true);
+    game.onToggleStateChange?.("pause", true);
     game.onToggleStateChange("pause", true);
     expect(game.paused).toBe(true);
 
@@ -896,7 +896,7 @@ describe("Engine Mechanics", () => {
 
     expect(toNum(game.reactor.current_heat)).toBe(toNum(initialHeat));
 
-    game.ui.stateManager.setVar("pause", false);
+    game.onToggleStateChange?.("pause", false);
     game.onToggleStateChange("pause", false);
     expect(game.paused).toBe(false);
 

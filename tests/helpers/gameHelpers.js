@@ -1,12 +1,13 @@
 import { toDecimal } from "@app/utils.js";
+import { patchGameState } from "@app/state.js";
 
 export function grantInfiniteResources(game) {
   game.current_money = 1e30;
   game.current_exotic_particles = toDecimal(1e20);
-  if (game.ui?.stateManager) {
-    game.ui.stateManager.setVar("current_money", game.current_money);
-    game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
-  }
+  patchGameState(game, {
+    current_money: game.current_money,
+    current_exotic_particles: game.current_exotic_particles,
+  });
   game.partset?.check_affordability?.(game);
   game.upgradeset?.check_affordability?.(game);
 }
@@ -86,11 +87,11 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     if (upgrade.base_ecost) {
         const epNum = (typeof game.current_exotic_particles?.toNumber === 'function' ? game.current_exotic_particles.toNumber() : Number(game.current_exotic_particles));
         game.current_exotic_particles = Math.max(epNum, costNum * 10 + 100);
-        game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+        patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
     } else {
         const moneyNum = (typeof game.current_money?.toNumber === 'function' ? game.current_money.toNumber() : Number(game.current_money));
         game.current_money = Math.max(moneyNum, costNum * 10 + 10000);
-        game.ui.stateManager.setVar("current_money", game.current_money);
+        patchGameState(game, { current_money: game.current_money });
     }
 
     upgrade.updateDisplayCost();

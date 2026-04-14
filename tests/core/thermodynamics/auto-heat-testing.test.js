@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGameWithDOM, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 
 describe("Auto Heat Testing", () => {
     let game;
@@ -58,14 +59,14 @@ describe("Auto Heat Testing", () => {
 
         // Test with heat_controlled = false
         game.reactor.heat_controlled = false;
-        game.ui.stateManager.setVar("heat_control", false);
+        game.onToggleStateChange?.("heat_control", false);
         const heatBeforeTick1 = toNum(game.reactor.current_heat);
         game.engine.tick();
         const heatAfterTick1 = toNum(game.reactor.current_heat);
         expect(heatAfterTick1).toBe(heatBeforeTick1);
 
         game.reactor.heat_controlled = true;
-        game.ui.stateManager.setVar("heat_control", true);
+        game.onToggleStateChange?.("heat_control", true);
         const heatBeforeTick2 = toNum(game.reactor.current_heat);
         game.engine.tick();
         const heatAfterTick2 = toNum(game.reactor.current_heat);
@@ -121,7 +122,7 @@ describe("Auto Heat Testing", () => {
 
         // Purchase upgrade that enables vent_plating_multiplier
         game.current_money = 1e9;
-        game.ui.stateManager.setVar("current_money", game.current_money);
+        patchGameState(game, { current_money: game.current_money });
         game.upgradeset.check_affordability(game);
         game.upgradeset.purchaseUpgrade('improved_heatsinks');
         expect(game.reactor.vent_plating_multiplier).toBe(1);
@@ -151,7 +152,7 @@ describe("Auto Heat Testing", () => {
         // Set initial heat
         game.reactor.current_heat = 1000;
         game.reactor.heat_controlled = true;
-        game.ui.stateManager.setVar("heat_control", true);
+        game.onToggleStateChange?.("heat_control", true);
 
         // Add a heat outlet with a containment neighbor
         const outletPart = game.partset.getPartById("vent1");
@@ -183,7 +184,7 @@ describe("Auto Heat Testing", () => {
         // Set initial heat
         game.reactor.current_heat = 1000;
         game.reactor.heat_controlled = true;
-        game.ui.stateManager.setVar("heat_control", true);
+        game.onToggleStateChange?.("heat_control", true);
 
         // Add a heat outlet with a containment neighbor
         const outletPart = game.partset.getPartById("vent1");
@@ -225,7 +226,7 @@ describe("Auto Heat Testing", () => {
         // Set initial heat
         game.reactor.current_heat = 1000;
         game.reactor.heat_controlled = true;
-        game.ui.stateManager.setVar("heat_control", true);
+        game.onToggleStateChange?.("heat_control", true);
 
         const initialHeat = toNum(game.reactor.current_heat);
 
@@ -256,7 +257,7 @@ describe("Auto Heat Testing", () => {
         forcePurchaseUpgrade(game, 'heat_control_operator');
         game.reactor.has_melted_down = false;
         game.state.heat_control = true;
-        const saveData = await game.saveOrchestrator.getSaveState();
+        const saveData = await game.saveManager.getSaveState();
         StorageUtils.setRaw('reactorGameSave_1', StorageUtils.serialize(saveData));
         StorageUtils.set('reactorCurrentSaveSlot', 1);
         const savedData = StorageUtils.get('reactorGameSave_1');
@@ -268,7 +269,7 @@ describe("Auto Heat Testing", () => {
         if (game._pendingToggleStates) {
             game.ui.stateManager.setGame(game);
             Object.entries(game._pendingToggleStates).forEach(([key, value]) => {
-                game.ui.stateManager.setVar(key, value);
+                game.onToggleStateChange?.(key, value);
             });
             delete game._pendingToggleStates;
         }

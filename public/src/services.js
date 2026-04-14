@@ -33,7 +33,7 @@ import {
   formatNumber,
   formatPlaytimeLog,
   runCathodeScramble,
-  rotateSlot1ToBackupAsync,
+  rotateSlot1ToBackup,
   BaseComponent,
   LEADERBOARD_CONFIG,
 } from "./utils.js";
@@ -2350,7 +2350,7 @@ const SPLASH_HIDE_DELAY_MS = 600;
 
 async function loadFromDataImpl(splashManager, saveData, ctx) {
   const str = typeof saveData === "string" ? saveData : serializeSave(saveData);
-  await rotateSlot1ToBackupAsync(str);
+  await rotateSlot1ToBackup(str);
   await loadFromSaveSlotImpl(splashManager, 1, ctx);
 }
 
@@ -2610,7 +2610,7 @@ class SplashSaveSlotUI {
           const result = SaveDataSchema.safeParse(parsed);
           if (!result.success) throw new Error("Save corrupted: validation failed");
           const validated = result.data;
-          await rotateSlot1ToBackupAsync(serializeSave(validated));
+          await rotateSlot1ToBackup(serializeSave(validated));
           await this.splashManager.loadFromSaveSlot(1);
         } catch (err) {
           logger.log("error", "splash", "Failed to load save from file:", err);

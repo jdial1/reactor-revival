@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 
 describe("Core Game Mechanics", () => {
   let game;
@@ -10,11 +11,8 @@ describe("Core Game Mechanics", () => {
       game.engine.running = false;
       game.engine.animationFrameId = null;
     }
-    game.paused = true;
-    if (game.ui && game.ui.stateManager) {
-      game.ui.stateManager.setVar("pause", true);
-      game.ui.stateManager.setVar("engine_status", "stopped");
-    }
+    game.onToggleStateChange?.("pause", true);
+    patchGameState(game, { engine_status: "stopped" });
   });
 
   afterEach(() => {

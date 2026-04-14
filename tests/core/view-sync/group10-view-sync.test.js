@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi, setupGameWithDOM, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 import { PartButton } from "@app/components/button-factory.js";
 import { render } from "lit-html";
-import * as stateModule from "@app/state.js";
+import * as stateModule from "@app/store.js";
 import { ReactiveLitComponent } from "@app/components/reactive-lit-component.js";
 
 describe("Group 10: State-to-DOM Synchronization", () => {
@@ -22,13 +23,13 @@ describe("Group 10: State-to-DOM Synchronization", () => {
 
     game.reactor.max_heat = 1000;
     game.reactor.current_heat = 850;
-    ui.stateManager.setVar("current_heat", 850);
+    patchGameState(game, { current_heat: 850 });
     ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBg.classList.contains("heat-warning")).toBe(true);
     expect(reactorBg.classList.contains("heat-critical")).toBe(false);
 
     game.reactor.current_heat = 1400;
-    ui.stateManager.setVar("current_heat", 1400);
+    patchGameState(game, { current_heat: 1400 });
     ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBg.classList.contains("heat-critical")).toBe(true);
   });
@@ -38,12 +39,12 @@ describe("Group 10: State-to-DOM Synchronization", () => {
     moneyDisplay.current = 0;
     moneyDisplay.target = 1000;
 
-    ui.coreLoopUI.updateRollingNumbers(16.667);
+    ui.updateUiRollingNumbers(16.667);
     expect(toNum(moneyDisplay.current)).toBe(1000);
 
     moneyDisplay.current = 999.95;
     moneyDisplay.target = 1000;
-    ui.coreLoopUI.updateRollingNumbers(16.667);
+    ui.updateUiRollingNumbers(16.667);
     expect(toNum(moneyDisplay.current)).toBe(1000);
   });
 
@@ -54,7 +55,7 @@ describe("Group 10: State-to-DOM Synchronization", () => {
     const mount = document.createElement("div");
 
     game.current_money = cost;
-    ui.stateManager.setVar("current_money", cost);
+    patchGameState(game, { current_money: cost });
     game.partset.check_affordability(game);
     render(PartButton(part, () => {}), mount);
     let buyButton = mount.querySelector("button");
@@ -62,7 +63,7 @@ describe("Group 10: State-to-DOM Synchronization", () => {
     expect(buyButton.disabled).toBe(false);
 
     game.current_money = 0;
-    ui.stateManager.setVar("current_money", 0);
+    patchGameState(game, { current_money: 0 });
     game.partset.check_affordability(game);
     render(PartButton(part, () => {}), mount);
     buyButton = mount.querySelector("button");

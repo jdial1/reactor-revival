@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
 import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
+import { patchGameState } from "@app/state.js";
 
 describe("UI Integration and Gameplay", () => {
   let game, document;
@@ -12,7 +13,7 @@ describe("UI Integration and Gameplay", () => {
     await game.router.loadPage("upgrades_section");
     await game.router.loadPage("experimental_upgrades_section");
     await game.router.loadPage("reactor_section");
-    game.ui.coreLoopUI.runUpdateInterfaceLoop(0);
+    game.ui.startRenderLoop(0);
 
     vi.useFakeTimers();
   });
@@ -53,7 +54,7 @@ describe("UI Integration and Gameplay", () => {
 
       // Ensure the engine is running and game is unpaused so it can process the part
       game.paused = false;
-      game.ui.stateManager.setVar("pause", false);
+      game.onToggleStateChange?.("pause", false);
       game.engine.running = true;
     }
 
@@ -173,8 +174,7 @@ describe("UI Integration and Gameplay", () => {
     // Set initial heat values
     game.reactor.current_heat = 0;
     game.reactor.max_heat = 1000;
-    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
-    game.ui.stateManager.setVar("max_heat", game.reactor.max_heat);
+    patchGameState(game, { current_heat: game.reactor.current_heat, max_heat: game.reactor.max_heat });
 
     // Test low heat (should be transparent)
     game.ui.heatVisualsUI.updateHeatVisuals();
@@ -184,28 +184,28 @@ describe("UI Integration and Gameplay", () => {
 
     // Test moderate heat (50% of max)
     game.reactor.current_heat = 500;
-    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    patchGameState(game, { current_heat: game.reactor.current_heat });
     game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.style.backgroundColor).toBe("transparent");
     expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
 
     // Test high heat (80% of max - should show warning)
     game.reactor.current_heat = 800;
-    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    patchGameState(game, { current_heat: game.reactor.current_heat });
     game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
     expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
 
     // Test critical heat (130% of max - should show critical)
     game.reactor.current_heat = 1300;
-    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    patchGameState(game, { current_heat: game.reactor.current_heat });
     game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
     expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
 
     // Test extreme heat (200% of max - should show maximum effect)
     game.reactor.current_heat = 2000;
-    game.ui.stateManager.setVar("current_heat", game.reactor.current_heat);
+    patchGameState(game, { current_heat: game.reactor.current_heat });
     game.ui.heatVisualsUI.updateHeatVisuals();
     expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
 

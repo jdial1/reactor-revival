@@ -1,6 +1,13 @@
 import { html } from "lit-html";
 import { repeat, styleMap } from "../utils.js";
 
+const SETTINGS_MODAL_TABS = [
+  { tab: "audio", label: "AUDIO", panelId: "settings_tab_audio", btnId: "settings_tab_audio_btn" },
+  { tab: "visuals", label: "VISUALS", panelId: "settings_tab_visuals", btnId: "settings_tab_visuals_btn" },
+  { tab: "system", label: "SYS", panelId: "settings_tab_system", btnId: "settings_tab_system_btn" },
+  { tab: "data", label: "DATA", panelId: "settings_tab_data", btnId: "settings_tab_data_btn" },
+];
+
 export const settingsHelpShellTemplate = `<div class="settings-help-backdrop"></div>
 <div class="settings-help-content pixel-panel">
   <div class="settings-help-body"></div>
@@ -184,6 +191,7 @@ export function settingsModalTemplate({
   onTabClick,
   onClose,
 }) {
+  const panelByTab = { audio: volumeTemplate, visuals: visualTemplate, system: systemTemplate, data: dataTemplate };
   return html`
     <div class="settings-modal-overlay modal-drawer-overlay">
       <div class="modal-drawer-scrim" @click=${onClose}></div>
@@ -196,25 +204,35 @@ export function settingsModalTemplate({
         </div>
 
         <div class="settings-tabs" role="tablist">
-          <button class="settings-tab ${activeTab === "audio" ? "active" : ""}" role="tab" aria-selected=${activeTab === "audio"} aria-controls="settings_tab_audio" data-tab="audio" id="settings_tab_audio_btn" @click=${() => onTabClick("audio")}>AUDIO</button>
-          <button class="settings-tab ${activeTab === "visuals" ? "active" : ""}" role="tab" aria-selected=${activeTab === "visuals"} aria-controls="settings_tab_visuals" data-tab="visuals" id="settings_tab_visuals_btn" @click=${() => onTabClick("visuals")}>VISUALS</button>
-          <button class="settings-tab ${activeTab === "system" ? "active" : ""}" role="tab" aria-selected=${activeTab === "system"} aria-controls="settings_tab_system" data-tab="system" id="settings_tab_system_btn" @click=${() => onTabClick("system")}>SYS</button>
-          <button class="settings-tab ${activeTab === "data" ? "active" : ""}" role="tab" aria-selected=${activeTab === "data"} aria-controls="settings_tab_data" data-tab="data" id="settings_tab_data_btn" @click=${() => onTabClick("data")}>DATA</button>
+          ${SETTINGS_MODAL_TABS.map(
+            ({ tab, label, panelId, btnId }) => html`
+              <button
+                class="settings-tab ${activeTab === tab ? "active" : ""}"
+                role="tab"
+                aria-selected=${activeTab === tab}
+                aria-controls=${panelId}
+                data-tab=${tab}
+                id=${btnId}
+                @click=${() => onTabClick(tab)}
+              >${label}</button>
+            `
+          )}
         </div>
 
         <div class="settings-content pixel-panel is-inset">
-          <div id="settings_tab_audio" class="settings_tab_content ${activeTab === "audio" ? "active" : ""}" role="tabpanel" aria-labelledby="settings_tab_audio_btn" aria-hidden=${activeTab !== "audio"}>
-            ${volumeTemplate}
-          </div>
-          <div id="settings_tab_visuals" class="settings_tab_content ${activeTab === "visuals" ? "active" : ""}" role="tabpanel" aria-labelledby="settings_tab_visuals_btn" aria-hidden=${activeTab !== "visuals"}>
-            ${visualTemplate}
-          </div>
-          <div id="settings_tab_system" class="settings_tab_content ${activeTab === "system" ? "active" : ""}" role="tabpanel" aria-labelledby="settings_tab_system_btn" aria-hidden=${activeTab !== "system"}>
-            ${systemTemplate}
-          </div>
-          <div id="settings_tab_data" class="settings_tab_content ${activeTab === "data" ? "active" : ""}" role="tabpanel" aria-labelledby="settings_tab_data_btn" aria-hidden=${activeTab !== "data"}>
-            ${dataTemplate}
-          </div>
+          ${SETTINGS_MODAL_TABS.map(
+            ({ tab, panelId, btnId }) => html`
+              <div
+                id=${panelId}
+                class="settings_tab_content ${activeTab === tab ? "active" : ""}"
+                role="tabpanel"
+                aria-labelledby=${btnId}
+                aria-hidden=${activeTab !== tab}
+              >
+                ${panelByTab[tab]}
+              </div>
+            `
+          )}
         </div>
       </div>
     </div>

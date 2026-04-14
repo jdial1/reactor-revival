@@ -1,7 +1,8 @@
 /* eslint-disable no-undef */
 import { describe, it, expect, beforeEach, setupGameWithDOM, toNum, vi, createNowController } from "../../helpers/setup.js";
 import { placePart, forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
-import { setDecimal } from "@app/state.js";
+import { setDecimal } from "@app/store.js";
+import { patchGameState } from "@app/state.js";
 
 describe("New Gameplay Upgrades", () => {
     let game;
@@ -16,8 +17,7 @@ describe("New Gameplay Upgrades", () => {
         game.upgradeset.check_affordability(game);
         game.tileset.updateActiveTiles();
 
-        game.reactor.auto_sell_enabled = false;
-        game.ui.stateManager.setVar("auto_sell", false);
+        game.onToggleStateChange?.("auto_sell", false);
 
         game.reactor.base_max_power = 100000;
         game.reactor.base_max_heat = 100000;
@@ -59,7 +59,7 @@ describe("New Gameplay Upgrades", () => {
             expect(game.reactor.stirling_multiplier).toBeGreaterThan(0);
             
             game.paused = false;
-            game.ui.stateManager.setVar("pause", false);
+            game.onToggleStateChange?.("pause", false);
             
             const initialPower = game.reactor.current_power;
             const initialHeat = tile.heat_contained;
@@ -129,7 +129,7 @@ describe("New Gameplay Upgrades", () => {
             try {
                 const upgrade = game.upgradeset.getUpgrade("manual_override");
                 game.current_money = upgrade.getCost() * 10;
-                game.ui.stateManager.setVar("current_money", game.current_money);
+                patchGameState(game, { current_money: game.current_money });
                 game.upgradeset.check_affordability(game);
                 game.upgradeset.purchaseUpgrade(upgrade.id);
                 expect(game.reactor.manual_override_mult).toBeGreaterThan(0);
@@ -194,7 +194,7 @@ describe("New Gameplay Upgrades", () => {
             };
             
             game.paused = false;
-            game.ui.stateManager.setVar("pause", false);
+            game.onToggleStateChange?.("pause", false);
             
             const heatBefore = ventTile.heat_contained;
             game.engine.manualTick();
@@ -225,7 +225,7 @@ describe("New Gameplay Upgrades", () => {
             expect(game.reactor.power_to_heat_ratio).toBeGreaterThan(0);
 
             game.paused = false;
-            game.ui.stateManager.setVar("pause", false);
+            game.onToggleStateChange?.("pause", false);
 
             const heatBefore = game.reactor.current_heat;
             const powerBefore = game.reactor.current_power;
@@ -243,7 +243,7 @@ describe("New Gameplay Upgrades", () => {
             pa.ep_heat = pa.base_ep_heat;
             const epBefore = game.current_exotic_particles;
             game.current_exotic_particles = 0;
-            game.ui?.stateManager?.setVar("current_exotic_particles", 0);
+            patchGameState(game, { current_exotic_particles: 0 });
 
             game.current_money = upgrade.getCost() * 10;
             game.upgradeset.check_affordability(game);
@@ -253,7 +253,7 @@ describe("New Gameplay Upgrades", () => {
             pa.recalculate_stats();
             expect(toNum(pa.ep_heat)).toBeLessThanOrEqual(toNum(pa.base_ep_heat) * 1.01);
             game.current_exotic_particles = epBefore;
-            if (game.ui?.stateManager) game.ui.stateManager.setVar("current_exotic_particles", epBefore);
+            patchGameState(game, { current_exotic_particles: epBefore });
         });
     });
 
@@ -331,7 +331,7 @@ describe("New Gameplay Upgrades", () => {
             }
 
             game.paused = false;
-            game.ui.stateManager.setVar("pause", false);
+            game.onToggleStateChange?.("pause", false);
             
             let heatBefore = ventTile.heat_contained;
             game.engine.manualTick();
@@ -427,17 +427,17 @@ describe("New Gameplay Upgrades", () => {
             pa.ep_heat = pa.base_ep_heat;
             const epBefore = game.current_exotic_particles;
             game.current_exotic_particles = 0;
-            game.ui?.stateManager?.setVar("current_exotic_particles", 0);
+            patchGameState(game, { current_exotic_particles: 0 });
 
             game.current_money = upgrade.getCost() * 10;
-            game.ui.stateManager.setVar("current_money", game.current_money);
+            patchGameState(game, { current_money: game.current_money });
             game.upgradeset.check_affordability(game);
             game.upgradeset.purchaseUpgrade(upgrade.id);
             
             pa.recalculate_stats();
             expect(toNum(pa.ep_heat)).toBeLessThanOrEqual(toNum(pa.base_ep_heat) * 1.01);
             game.current_exotic_particles = epBefore;
-            if (game.ui?.stateManager) game.ui.stateManager.setVar("current_exotic_particles", epBefore);
+            patchGameState(game, { current_exotic_particles: epBefore });
         });
 
         it("Persistence: should restore new reactor properties after load", async () => {

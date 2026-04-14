@@ -6,6 +6,7 @@ import {
   toNumber as toNum,
 } from "@app/utils.js";
 import { runTicks } from "./gameHelpers.js";
+import { patchGameState } from "@app/state.js";
 
 export const REACTOR_COPY_PASTE_MODAL_MARKUP = `
       <div id="reactor_copy_paste_modal" class="hidden">
@@ -113,11 +114,11 @@ export function performTestRespec(
   upg.updateDisplayCost();
   const cost = toNum(upg.getCost());
   game.current_money = cost;
-  game.ui.stateManager.setVar("current_money", game.current_money);
+  patchGameState(game, { current_money: game.current_money });
   game.upgradeset.check_affordability(game);
   const purchased = game.upgradeset.purchaseUpgrade(exclusiveUpgradeId);
   game.current_exotic_particles = game.RESPER_DOCTRINE_EP_COST;
-  game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+  patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
   const respecOk = game.respecDoctrine();
   return {
     purchased,

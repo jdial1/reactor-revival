@@ -24,9 +24,8 @@ import {
   StorageAdapter,
   deserializeSave,
   getBackupSaveForSlot1Async,
-  StorageUtilsAsync,
   serializeSave,
-  rotateSlot1ToBackupAsync,
+  rotateSlot1ToBackup,
   formatDuration,
   formatStatNum,
   BaseComponent,
@@ -239,6 +238,45 @@ export function setDecimal(state, key, value) {
   state[key] = ref(toDecimal(value));
 }
 
+const PATCH_TOGGLE_KEYS = new Set(["pause", "auto_sell", "auto_buy", "heat_control"]);
+const PATCH_DECIMAL_KEYS = new Set([
+  "current_heat",
+  "current_power",
+  "current_money",
+  "current_exotic_particles",
+  "total_exotic_particles",
+  "session_power_produced",
+  "session_power_sold",
+  "session_heat_dissipated",
+  "session_ep_from_engine",
+]);
+
+export function patchGameState(game, patch) {
+  if (!game?.state || !patch || typeof patch !== "object") return;
+  const st = game.state;
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === "exotic_particles") {
+      if (game.exoticParticleManager) game.exoticParticleManager.exotic_particles = value;
+      continue;
+    }
+    if (key === "total_heat") {
+      st.stats_heat_generation = value;
+      continue;
+    }
+    let v = value;
+    if (PATCH_TOGGLE_KEYS.has(key)) v = Boolean(v);
+    const oldValue = st[key];
+    const isDecimalKey = PATCH_DECIMAL_KEYS.has(key);
+    if (!isDecimalKey && oldValue === v) continue;
+    if (isDecimalKey || (v != null && typeof v?.gte === "function")) {
+      setDecimal(st, key, v);
+    } else {
+      st[key] = v;
+    }
+    if (PATCH_TOGGLE_KEYS.has(key)) game.onToggleStateChange?.(key, st[key]);
+  }
+}
+
 export { snapshot, subscribe, subscribeKey };
 
 function tileKey(row, col) {
@@ -313,7 +351,7 @@ export function initUIStateSubscriptions(uiState, ui) {
   const syncPartsPanelCollapsed = () => {
     const section = document.getElementById("parts_section");
     if (section) section.classList.toggle("collapsed", uiState.parts_panel_collapsed);
-    ui.partsPanelUI?.updatePartsPanelBodyClass?.();
+    ui.updatePartsPanelBodyClass?.();
     const bg = document.getElementById("reactor_background");
     if (bg) bg.classList.toggle("engineering-mode", !uiState.parts_panel_collapsed);
   };
@@ -322,10 +360,10 @@ export function initUIStateSubscriptions(uiState, ui) {
   unsubs.push(subscribeKey(uiState, "copy_paste_collapsed", syncCopyPasteCollapsed));
   unsubs.push(subscribeKey(uiState, "parts_panel_collapsed", syncPartsPanelCollapsed));
   unsubs.push(subscribeKey(uiState, "active_parts_tab", (tabId) => {
-    ui.partsPanelUI?.onActiveTabChanged?.(tabId);
+    ui.refreshPartsPanel?.();
   }));
   const syncPartActive = () => {
-    const main = ui.coreLoopUI?.getElement?.("main") ?? ui.DOMElements?.main ?? document.getElementById("main");
+    const main = ui.getUiElement?.("main") ?? ui.DOMElements?.main ?? document.getElementById("main");
     if (main) main.classList.toggle("part_active", !!uiState.interaction?.selectedPartId);
   };
   syncPartActive();
@@ -356,7 +394,7 @@ export function initUIStateSubscriptions(uiState, ui) {
   unsubs.push(subscribeKey(uiState, "active_page", (pageId) => {
     syncNavAndPageClass();
     if (pageId === "reactor_section") {
-      ui.coreLoopUI?.cacheDOMElements?.();
+      ui.cacheDomElements?.();
       const om = ui.game?.objectives_manager;
       if (om?.current_objective_def) {
         om._syncActiveObjectiveToState?.();
@@ -379,7 +417,7 @@ export function initUIStateSubscriptions(uiState, ui) {
   unsubs.push(subscribeKey(uiState, "is_paused", syncBodyClasses));
   unsubs.push(subscribeKey(uiState, "is_melting_down", syncBodyClasses));
   unsubs.push(subscribeKey(uiState, "is_paused", () => {
-    ui.stateManager?.setVar?.("pause", !!uiState.is_paused);
+    ui.game?.onToggleStateChange?.("pause", !!uiState.is_paused);
   }));
   return () => unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
 }
@@ -1090,8 +1128,10 @@ export class StateManager extends BaseComponent {
     const ui = this.ui;
     const config = ui?.var_objs_config;
     if (!state || !config) return;
-    const coreLoopUI = ui?.coreLoopUI;
-    const getDisplayValue = (key) => coreLoopUI?.getDisplayValue?.(this.game, key);
+    const getDisplayValue = (key) => {
+      if (key === "exotic_particles") return this.game?.exoticParticleManager?.exotic_particles;
+      return this.game?.state?.[key];
+    };
     const stateKeyMap = {
       total_heat: "stats_heat_generation",
     };
@@ -1112,7 +1152,7 @@ export class StateManager extends BaseComponent {
           setTimeout(() => {
             const g = this.game;
             const status = g?.engine?.running ? (g?.paused ? "paused" : "running") : "stopped";
-            this.setVar("engine_status", status);
+            this.game.state.engine_status = status;
           }, 100);
         }
       }));
@@ -1145,8 +1185,8 @@ export class StateManager extends BaseComponent {
           ui.uiState.has_affordable_upgrades = g.upgradeset?.hasAffordableUpgrades?.() ?? false;
           ui.uiState.has_affordable_research = g.upgradeset?.hasAffordableResearch?.() ?? false;
         }
-        ui.navIndicatorsUI?.updateNavIndicators?.();
-        if (typeof ui.partsPanelUI?.updateQuickSelectSlots === "function") ui.partsPanelUI.updateQuickSelectSlots();
+        ui.updateNavIndicators?.();
+        if (typeof ui.updateQuickSelectSlots === "function") ui.updateQuickSelectSlots();
       } catch (err) {
         const msg = err?.message ?? "";
         if (!msg.includes("ChildPart") || !msg.includes("parentNode")) throw err;
@@ -1159,40 +1199,6 @@ export class StateManager extends BaseComponent {
       this._stateUnsubscribes.push(subscribeKey(state, "current_exotic_particles", runAffordabilityCascade));
     }
     runAffordabilityCascade();
-  }
-  setVar(key, value) {
-    if (!this.game?.state) return;
-    if (key === "exotic_particles") {
-      this.game.exoticParticleManager.exotic_particles = value;
-      return;
-    }
-    if (key === "total_heat") {
-      this.game.state.stats_heat_generation = value;
-      return;
-    }
-    const oldValue = this.game.state[key];
-    const toggleKeys = ["pause", "auto_sell", "auto_buy", "heat_control"];
-    const decimalKeys = ["current_heat", "current_power", "current_money", "current_exotic_particles", "total_exotic_particles", "session_power_produced", "session_power_sold", "session_heat_dissipated", "session_ep_from_engine"];
-    const isToggle = toggleKeys.includes(key);
-    if (isToggle) value = Boolean(value);
-    const isDecimalKey = decimalKeys.includes(key);
-    if (!isDecimalKey && oldValue === value) return;
-
-    if (isDecimalKey || (value != null && typeof value.gte === "function")) {
-      setDecimal(this.game.state, key, value);
-    } else {
-      this.game.state[key] = value;
-    }
-
-    if (isToggle) {
-      this.game.onToggleStateChange?.(key, value);
-    }
-  }
-  getVar(key) {
-    if (!this.game?.state) return undefined;
-    if (key === "exotic_particles") return this.game.exoticParticleManager?.exotic_particles;
-    if (key === "total_heat") return this.game.state.stats_heat_generation;
-    return this.game.state[key];
   }
   setClickedPart(part, options = {}) {
     this.clicked_part = part;
@@ -1214,7 +1220,7 @@ export class StateManager extends BaseComponent {
         const partsSection = document.getElementById("parts_section");
         if (partsSection) partsSection.classList.remove("collapsed");
       }
-      this.ui.partsPanelUI.updatePartsPanelBodyClass();
+      this.ui.updatePartsPanelBodyClass();
       const partsSection = document.getElementById("parts_section");
       if (partsSection) void partsSection.offsetHeight;
     }
@@ -1222,7 +1228,7 @@ export class StateManager extends BaseComponent {
       const inQuickSelect = this.getQuickSelectSlots().some((s) => s.partId === part.id);
       if (!inQuickSelect) this.pushLastUsedPart(part);
     }
-    if (typeof this.ui.partsPanelUI?.updateQuickSelectSlots === "function") this.ui.partsPanelUI.updateQuickSelectSlots();
+    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
     const heatComponentCategories = ['vent', 'heat_exchanger', 'heat_inlet', 'heat_outlet', 'coolant_cell', 'reactor_plating'];
     if (!part || !heatComponentCategories.includes(part.category)) {
       this.ui.gridInteractionUI.clearSegmentHighlight();
@@ -1248,7 +1254,7 @@ export class StateManager extends BaseComponent {
       if (slots[i].locked) continue;
       slots[i].partId = available.shift() ?? null;
     }
-    if (typeof this.ui.partsPanelUI?.updateQuickSelectSlots === "function") this.ui.partsPanelUI.updateQuickSelectSlots();
+    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
   }
 
   getQuickSelectSlots() {
@@ -1271,7 +1277,7 @@ export class StateManager extends BaseComponent {
   setQuickSelectLock(index, locked) {
     if (index < 0 || index > 4) return;
     this.quickSelectSlots[index].locked = locked;
-    if (typeof this.ui.partsPanelUI?.updateQuickSelectSlots === "function") this.ui.partsPanelUI.updateQuickSelectSlots();
+    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
   }
 
   setQuickSelectSlots(slots) {
@@ -1283,7 +1289,7 @@ export class StateManager extends BaseComponent {
       };
     });
     this.quickSelectSlots = normalized;
-    if (typeof this.ui.partsPanelUI?.updateQuickSelectSlots === "function") this.ui.partsPanelUI.updateQuickSelectSlots();
+    if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
   }
 
   updatePartsPanelToggleIcon(_part) {}
@@ -1309,8 +1315,7 @@ export class StateManager extends BaseComponent {
       return map[key] || key;
     };
     const locationKey = normalizeKey(upgrade_obj.upgrade.type);
-    const upgrades = this.ui.upgradesUI;
-    if (!upgrades?.getUpgradeContainer?.(locationKey)) {
+    if (!this.ui.getUpgradeContainer?.(locationKey)) {
       if (this.debugMode) {
         logger.log('warn', 'game', `Container with ID '${locationKey}' not found for upgrade '${upgrade_obj.id}'`);
       }
@@ -1320,7 +1325,7 @@ export class StateManager extends BaseComponent {
     if (upgradeEl) {
       upgrade_obj.$el = upgradeEl;
       upgradeEl.upgrade_object = upgrade_obj;
-      upgrades.appendUpgrade(locationKey, upgradeEl);
+      this.ui.appendUpgrade(locationKey, upgradeEl);
     }
   }
   handleTileAdded(game, tile_data) {
@@ -1358,7 +1363,7 @@ export class StateManager extends BaseComponent {
       this.ui.uiState.objectives_toast_expanded = true;
     }
     if (!objective?.completed) {
-      const toastBtn = this.ui.coreLoopUI?.getElement?.("objectives_toast_btn") ?? (typeof document !== "undefined" ? document.getElementById("objectives_toast_btn") : null);
+      const toastBtn = this.ui.getUiElement?.("objectives_toast_btn") ?? (typeof document !== "undefined" ? document.getElementById("objectives_toast_btn") : null);
       if (toastBtn) toastBtn.classList.remove("is-complete", "objective-completed");
     }
     if (objective?.title) {
@@ -1606,7 +1611,7 @@ async function performSave(slot, saveData) {
   const saveKey = `reactorGameSave_${slot}`;
   await StorageAdapter.set(saveKey, validatedData);
   if (slot === 1) {
-    await rotateSlot1ToBackupAsync(serializeSave(validatedData));
+    await rotateSlot1ToBackup(serializeSave(validatedData));
   }
   await StorageAdapter.set("reactorCurrentSaveSlot", slot);
   return slot;
@@ -1770,14 +1775,130 @@ export function showLoadBackupModal() {
   });
 }
 
+function buildObjectivesStateForSave(ctx) {
+  const om = ctx.objectives_manager;
+  const obj = {
+    current_objective_index: om?.current_objective_index ?? 0,
+    completed_objectives: (om?.objectives_data?.map((o) => o.completed) ?? []),
+  };
+  if (om?.infiniteObjective) {
+    obj.infinite_objective = {
+      ...om.infiniteObjective,
+      _lastInfinitePowerTarget: om._lastInfinitePowerTarget,
+      _lastInfiniteHeatMaintain: om._lastInfiniteHeatMaintain,
+      _lastInfiniteMoneyThorium: om._lastInfiniteMoneyThorium,
+      _lastInfiniteHeat: om._lastInfiniteHeat,
+      _lastInfiniteEP: om._lastInfiniteEP,
+      _infiniteChallengeIndex: om._infiniteChallengeIndex,
+      _infiniteCompletedCount: om._infiniteCompletedCount,
+    };
+  }
+  return obj;
+}
+
 export class GameSaveManager {
-  constructor(saveOrchestrator, getPersistenceContext) {
-    this.saveOrchestrator = saveOrchestrator;
+  constructor(getPersistenceContext, getSaveContext) {
     this.getPersistenceContext = getPersistenceContext;
+    this.getSaveContext = getSaveContext;
   }
 
   async getSaveState() {
-    return await this.saveOrchestrator.getSaveState();
+    const ctx = this.getSaveContext();
+    ctx.onBeforeSave?.();
+    const stateSnap = ctx.state ? snapshot(ctx.state) : null;
+    const reactorState = typeof ctx.reactor?.toSaveState === "function" ? ctx.reactor.toSaveState() : {
+      current_heat: ctx.reactor.current_heat,
+      current_power: ctx.reactor.current_power,
+      has_melted_down: ctx.reactor.has_melted_down,
+      base_max_heat: ctx.reactor.base_max_heat,
+      base_max_power: ctx.reactor.base_max_power,
+      altered_max_heat: ctx.reactor.altered_max_heat,
+      altered_max_power: ctx.reactor.altered_max_power,
+    };
+    const tileState = typeof ctx.tileset?.toSaveState === "function"
+      ? ctx.tileset.toSaveState()
+      : ctx.tileset.active_tiles_list
+        .filter((tile) => tile.part)
+        .map((tile) => ({
+          row: tile.row,
+          col: tile.col,
+          partId: tile.part.id,
+          ticks: tile.ticks,
+          heat_contained: tile.heat_contained,
+        }));
+    const upgradeState = typeof ctx.upgradeset?.toSaveState === "function"
+      ? ctx.upgradeset.toSaveState()
+      : ctx.upgradeset.upgradesArray
+        .filter((upg) => upg.level > 0)
+        .map((upg) => ({ id: upg.id, level: upg.level }));
+    let part_table = [];
+    let tiles_compact = undefined;
+    try {
+      if (ctx.partset?.partsArray?.length) {
+        const built = buildPartTable(ctx.partset);
+        part_table = built.part_table;
+        tiles_compact = encodeTilesCompact(tileState, ctx.rows, ctx.cols, built.idToIndex);
+      }
+    } catch (err) {
+      logger.log("warn", "game", "tiles_compact encode skipped:", err?.message || err);
+    }
+    const saveData = {
+      save_format_version: SAVE_FORMAT_VERSION_LATEST,
+      part_table,
+      tiles_compact,
+      version: ctx.version,
+      run_id: ctx.run_id,
+      tech_tree: ctx.tech_tree,
+      current_money: stateSnap?.current_money ?? ctx.state?.current_money,
+      protium_particles: ctx.protium_particles,
+      total_exotic_particles: ctx.total_exotic_particles,
+      exotic_particles: ctx.exotic_particles,
+      current_exotic_particles: ctx.current_exotic_particles,
+      session_power_produced: stateSnap?.session_power_produced ?? ctx.state?.session_power_produced,
+      session_power_sold: stateSnap?.session_power_sold ?? ctx.state?.session_power_sold,
+      session_heat_dissipated: stateSnap?.session_heat_dissipated ?? ctx.state?.session_heat_dissipated,
+      session_ep_from_engine: stateSnap?.session_ep_from_engine ?? ctx.state?.session_ep_from_engine,
+      rows: ctx.rows,
+      cols: ctx.cols,
+      sold_power: ctx.sold_power,
+      sold_heat: ctx.sold_heat,
+      grace_period_ticks: ctx.grace_period_ticks,
+      total_played_time: ctx.total_played_time,
+      last_save_time: Date.now(),
+      reactor: reactorState,
+      placedCounts: ctx.placedCounts,
+      tiles: tileState,
+      upgrades: upgradeState,
+      objectives: buildObjectivesStateForSave(ctx),
+      toggles: ctx.getToggles?.() ?? {},
+      quick_select_slots: ctx.getQuickSelectSlots?.() ?? [],
+      ui: {},
+    };
+    try {
+      if (typeof indexedDB !== "undefined") {
+        const keysToCheck = ["reactorGameSave", "reactorGameSave_1", "reactorGameSave_2", "reactorGameSave_3"];
+        for (const key of keysToCheck) {
+          const existingSave = await StorageAdapter.get(key);
+          if (existingSave && typeof existingSave === "object" && existingSave.isCloudSynced) {
+            saveData.isCloudSynced = existingSave.isCloudSynced;
+            saveData.cloudUploadedAt = existingSave.cloudUploadedAt;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      logger.log("warn", "game", "Could not preserve cloud sync flags:", error.message);
+    }
+    return saveData;
+  }
+
+  async applySaveState(game, savedData) {
+    game._isRestoringSave = true;
+    try {
+      await applySaveState(game, savedData);
+    } finally {
+      game._isRestoringSave = false;
+    }
   }
 
   async saveToSlot(slot) {
@@ -2078,133 +2199,6 @@ export class GridManager {
 
   get cols() {
     return this._cols;
-  }
-}
-
-export class SaveOrchestrator {
-  constructor({ getContext, onBeforeSave }) {
-    this.getContext = getContext;
-    this.onBeforeSave = onBeforeSave;
-  }
-
-  async getSaveState() {
-    this.onBeforeSave?.();
-    const ctx = this.getContext();
-    const stateSnap = ctx.state ? snapshot(ctx.state) : null;
-    const reactorState = typeof ctx.reactor?.toSaveState === "function" ? ctx.reactor.toSaveState() : {
-      current_heat: ctx.reactor.current_heat,
-      current_power: ctx.reactor.current_power,
-      has_melted_down: ctx.reactor.has_melted_down,
-      base_max_heat: ctx.reactor.base_max_heat,
-      base_max_power: ctx.reactor.base_max_power,
-      altered_max_heat: ctx.reactor.altered_max_heat,
-      altered_max_power: ctx.reactor.altered_max_power,
-    };
-    const tileState = typeof ctx.tileset?.toSaveState === "function"
-      ? ctx.tileset.toSaveState()
-      : ctx.tileset.active_tiles_list
-        .filter((tile) => tile.part)
-        .map((tile) => ({
-          row: tile.row,
-          col: tile.col,
-          partId: tile.part.id,
-          ticks: tile.ticks,
-          heat_contained: tile.heat_contained,
-        }));
-    const upgradeState = typeof ctx.upgradeset?.toSaveState === "function"
-      ? ctx.upgradeset.toSaveState()
-      : ctx.upgradeset.upgradesArray
-        .filter((upg) => upg.level > 0)
-        .map((upg) => ({ id: upg.id, level: upg.level }));
-    let part_table = [];
-    let tiles_compact = undefined;
-    try {
-      if (ctx.partset?.partsArray?.length) {
-        const built = buildPartTable(ctx.partset);
-        part_table = built.part_table;
-        tiles_compact = encodeTilesCompact(tileState, ctx.rows, ctx.cols, built.idToIndex);
-      }
-    } catch (err) {
-      logger.log("warn", "game", "tiles_compact encode skipped:", err?.message || err);
-    }
-    const saveData = {
-      save_format_version: SAVE_FORMAT_VERSION_LATEST,
-      part_table,
-      tiles_compact,
-      version: ctx.version,
-      run_id: ctx.run_id,
-      tech_tree: ctx.tech_tree,
-      current_money: stateSnap?.current_money ?? ctx.state?.current_money,
-      protium_particles: ctx.protium_particles,
-      total_exotic_particles: ctx.total_exotic_particles,
-      exotic_particles: ctx.exotic_particles,
-      current_exotic_particles: ctx.current_exotic_particles,
-      session_power_produced: stateSnap?.session_power_produced ?? ctx.state?.session_power_produced,
-      session_power_sold: stateSnap?.session_power_sold ?? ctx.state?.session_power_sold,
-      session_heat_dissipated: stateSnap?.session_heat_dissipated ?? ctx.state?.session_heat_dissipated,
-      session_ep_from_engine: stateSnap?.session_ep_from_engine ?? ctx.state?.session_ep_from_engine,
-      rows: ctx.rows,
-      cols: ctx.cols,
-      sold_power: ctx.sold_power,
-      sold_heat: ctx.sold_heat,
-      grace_period_ticks: ctx.grace_period_ticks,
-      total_played_time: ctx.total_played_time,
-      last_save_time: Date.now(),
-      reactor: reactorState,
-      placedCounts: ctx.placedCounts,
-      tiles: tileState,
-      upgrades: upgradeState,
-      objectives: this._buildObjectivesState(ctx),
-      toggles: ctx.getToggles?.() ?? {},
-      quick_select_slots: ctx.getQuickSelectSlots?.() ?? [],
-      ui: {},
-    };
-    try {
-      if (typeof indexedDB !== "undefined") {
-        const keysToCheck = ["reactorGameSave", "reactorGameSave_1", "reactorGameSave_2", "reactorGameSave_3"];
-        for (const key of keysToCheck) {
-          const existingSave = await StorageUtilsAsync.get(key);
-          if (existingSave && typeof existingSave === "object" && existingSave.isCloudSynced) {
-            saveData.isCloudSynced = existingSave.isCloudSynced;
-            saveData.cloudUploadedAt = existingSave.cloudUploadedAt;
-            break;
-          }
-        }
-      }
-    } catch (error) {
-      logger.log("warn", "game", "Could not preserve cloud sync flags:", error.message);
-    }
-    return saveData;
-  }
-
-  _buildObjectivesState(ctx) {
-    const om = ctx.objectives_manager;
-    const obj = {
-      current_objective_index: om?.current_objective_index ?? 0,
-      completed_objectives: (om?.objectives_data?.map((o) => o.completed) ?? []),
-    };
-    if (om?.infiniteObjective) {
-      obj.infinite_objective = {
-        ...om.infiniteObjective,
-        _lastInfinitePowerTarget: om._lastInfinitePowerTarget,
-        _lastInfiniteHeatMaintain: om._lastInfiniteHeatMaintain,
-        _lastInfiniteMoneyThorium: om._lastInfiniteMoneyThorium,
-        _lastInfiniteHeat: om._lastInfiniteHeat,
-        _lastInfiniteEP: om._lastInfiniteEP,
-        _infiniteChallengeIndex: om._infiniteChallengeIndex,
-        _infiniteCompletedCount: om._infiniteCompletedCount,
-      };
-    }
-    return obj;
-  }
-
-  async applySaveState(game, savedData) {
-    game._isRestoringSave = true;
-    try {
-      await applySaveState(game, savedData);
-    } finally {
-      game._isRestoringSave = false;
-    }
   }
 }
 

@@ -24,7 +24,7 @@ describe("Reactor Meltdown Scenarios", () => {
         game.reactor.current_heat = game.reactor.max_heat * 2.1;
         game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
-        expect(game.ui.stateManager.getVar("melting_down")).toBe(true);
+        expect(game.state.melting_down).toBe(true);
     });
 
     it.skip("should destroy all parts on the grid upon meltdown", async () => {
@@ -87,7 +87,7 @@ describe("Reactor Meltdown Scenarios", () => {
 
         await game.rebootActionDiscardExoticParticles();
         expect(game.reactor.has_melted_down).toBe(false);
-        expect(game.ui.stateManager.getVar("melting_down")).toBe(false);
+        expect(game.state.melting_down).toBe(false);
     });
 
     it("should clear the meltdown CSS class from body upon reboot", async () => {
@@ -112,7 +112,7 @@ describe("Reactor Meltdown Scenarios", () => {
 
         // Verify meltdown state is cleared
         expect(game.reactor.has_melted_down).toBe(false);
-        expect(game.ui.stateManager.getVar("melting_down")).toBe(false);
+        expect(game.state.melting_down).toBe(false);
 
         // Verify CSS class is removed from body
         if (typeof document !== 'undefined' && document && document.body) {

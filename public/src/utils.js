@@ -424,7 +424,7 @@ function formatNumberWithIntl(num, places, fixedDecimals) {
   const minimumFractionDigits = fixedDecimals ? maximumFractionDigits : 0;
   const formatter = new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short", maximumFractionDigits, minimumFractionDigits: fixedDecimals ? minimumFractionDigits : undefined });
   let result = formatter.format(num);
-  if (!fixedDecimals) result = result.replace(/\.(\d*?)0+([KMBT])/, (_, digits, suffix) => digits ? `.${digits}${suffix}` : suffix);
+  if (!fixedDecimals) result = result.replace(/\.(\d*?)0+([a-zA-Z]+)/, (_, digits, suffix) => (digits ? `.${digits}${suffix}` : suffix));
   return result;
 }
 function formatFiniteNumber(num, places, fixedDecimals, style) {
@@ -449,19 +449,26 @@ export function formatNumber(value, options = {}) {
   return formatFiniteNumber(n, places, fixedDecimals, style);
 }
 
+const intlCompactPilot = new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short", maximumFractionDigits: 2 });
+const intlStandardPilot = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
+export function formatNumberCompactIntl(value, options = {}) {
+  const n = typeof value === "number" ? value : toNumber(value);
+  if (!Number.isFinite(n)) return "";
+  if (options.scientific && Math.abs(n) >= 1e6) return n.toExponential(2);
+  if (Math.abs(n) >= 1e6) return intlCompactPilot.format(n);
+  return intlStandardPilot.format(n);
+}
+
 function formatDurationParts(ms, useHtml = false) {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
-  const s = Math.floor(ms / MS_PER_SECOND) % SECONDS_PER_MINUTE;
-  const m = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE)) % SECONDS_PER_MINUTE;
-  const h = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR)) % HOURS_PER_DAY;
-  const d = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY));
-  const unit = (val, label) => useHtml ? `${val}<span class="time-unit">${label}</span>` : `${val}${label}`;
-  const parts = [];
-  if (d > 0) parts.push(unit(d, "d"));
-  if (h > 0 || parts.length > 0) parts.push(unit(h, "h"));
-  if (m > 0 || parts.length > 0) parts.push(unit(m, "m"));
-  parts.push(unit(s, "s"));
-  return parts.join(" ");
+  const sec = Math.floor(ms / MS_PER_SECOND);
+  const s = sec % SECONDS_PER_MINUTE;
+  const m = Math.floor(sec / SECONDS_PER_MINUTE) % SECONDS_PER_MINUTE;
+  const h = Math.floor(sec / (SECONDS_PER_MINUTE * MINUTES_PER_HOUR)) % HOURS_PER_DAY;
+  const d = Math.floor(sec / (SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY));
+  const unit = (val, label) => (useHtml ? `${val}<span class="time-unit">${label}</span>` : `${val}${label}`);
+  return [d > 0 ? unit(d, "d") : "", h > 0 || d > 0 ? unit(h, "h") : "", m > 0 || h > 0 || d > 0 ? unit(m, "m") : "", unit(s, "s")].filter(Boolean).join(" ");
 }
 
 export const numFormat = (n, p, f) => formatNumber(n, { places: p, fixedDecimals: f });
@@ -691,18 +698,6 @@ export async function migrateLocalStorageToIndexedDB() {
   } catch (_) {}
 }
 
-export function rotateSlot1ToBackup(value) {
-  if (!isStorageAvailable()) return false;
-  try {
-    const current = StorageUtils.getRaw(SAVE_SLOT1_KEY);
-    const previous = StorageUtils.getRaw(SAVE_PREVIOUS_KEY);
-    if (previous != null) StorageUtils.setRaw(SAVE_BACKUP_KEY, previous);
-    if (current != null) StorageUtils.setRaw(SAVE_PREVIOUS_KEY, current);
-    StorageUtils.setRaw(SAVE_SLOT1_KEY, value);
-    return true;
-  } catch (e) { return false; }
-}
-
 export function getBackupSaveForSlot1() { return StorageUtils.getRaw(SAVE_BACKUP_KEY); }
 
 export function setSlot1FromBackup() {
@@ -712,15 +707,7 @@ export function setSlot1FromBackup() {
   return true;
 }
 
-export const StorageUtilsAsync = {
-  async get(key, defaultValue = null) { const result = await StorageAdapter.get(key); return result ?? defaultValue; },
-  async set(key, value) { await StorageAdapter.set(key, value); },
-  async remove(key) { await StorageAdapter.remove(key); },
-  async getRaw(key, defaultValue = null) { return await StorageAdapter.getRaw(key, defaultValue); },
-  async setRaw(key, value) { await StorageAdapter.setRaw(key, value); },
-};
-
-export async function rotateSlot1ToBackupAsync(value) {
+export async function rotateSlot1ToBackup(value) {
   try {
     const current = await StorageAdapter.getRaw(SAVE_SLOT1_KEY);
     const previous = await StorageAdapter.getRaw(SAVE_PREVIOUS_KEY);

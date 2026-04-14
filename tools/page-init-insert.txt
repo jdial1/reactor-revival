@@ -1,0 +1,220 @@
+
+export function clearPageReactor(ui) {
+  const reactor = getPageReactor(ui);
+  if (reactor) reactor.innerHTML = "";
+}
+
+export function setPageGridContainer(ui, container) {
+  if (ui.gridCanvasRenderer) ui.gridCanvasRenderer.setContainer(container);
+}
+
+export function setPageReactorVisibility(ui, visible) {
+  const reactor = getPageReactor(ui);
+  if (reactor) reactor.style.visibility = visible ? "visible" : "hidden";
+}
+
+export function setupResearchCollapsibleSections(ui) {
+  if (ui._researchCollapsibleSetup) return;
+  ui._researchCollapsibleSetup = true;
+  const section = document.getElementById("experimental_upgrades_section");
+  if (!section) return;
+  section.addEventListener("click", (e) => {
+    const header = e.target.closest(".research-section-header");
+    if (!header) return;
+    const article = header.closest(".research-collapsible");
+    if (!article) return;
+    e.preventDefault();
+    const collapsed = article.classList.toggle("section-collapsed");
+    header.setAttribute("aria-expanded", String(!collapsed));
+  });
+  section.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const header = e.target.closest(".research-section-header");
+    if (!header) return;
+    e.preventDefault();
+    header.click();
+  });
+  const coverWrap = document.querySelector(".refund-safety-cover-wrap");
+  const coverBtn = document.getElementById("refund_safety_cover");
+  if (coverBtn && coverWrap) {
+    coverBtn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      coverWrap.classList.toggle("cover-open");
+    });
+  }
+  const rebootBtn = document.getElementById("reboot_btn");
+  const refundBtn = document.getElementById("refund_btn");
+  const orchestrator = ui.modalOrchestrator;
+  if (rebootBtn) {
+    rebootBtn.addEventListener("click", (e) => {
+      if (!coverWrap?.classList.contains("cover-open")) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else {
+        orchestrator?.showPrestigeModal?.("refund");
+      }
+    });
+  }
+  if (refundBtn) {
+    refundBtn.addEventListener("click", () => {
+      orchestrator?.showPrestigeModal?.("prestige");
+    });
+  }
+}
+
+export function setupVersionDisplayForPage(ui) {
+  if (!ui?.uiState || ui._versionDisplayMounted) return;
+  const aboutEl = document.getElementById("about_version");
+  const appEl = document.getElementById("app_version");
+  const renderVersion = (el) => {
+    if (!el?.isConnected) return;
+    ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["version_display"] }],
+      () => html`${ui.uiState?.version_display?.app ?? ui.uiState?.version_display?.about ?? ""}`,
+      el
+    );
+  };
+  if (aboutEl) renderVersion(aboutEl);
+  if (appEl && appEl !== aboutEl) renderVersion(appEl);
+  ui._versionDisplayMounted = true;
+}
+
+export async function loadAndSetVersionForPage(ui) {
+  try {
+    const { getResourceUrl } = await import("../utils.js");
+    const response = await fetch(getResourceUrl("version.json"));
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await response.text();
+      if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+        throw new Error("HTML response received (likely 404 fallback)");
+      }
+      throw new Error(`Expected JSON but got ${contentType || "unknown content type"}`);
+    }
+
+    const versionData = await response.json();
+    const version = versionData.version || "Unknown";
+    ui._cachedVersion = version;
+
+    if (ui?.uiState) {
+      ui.uiState.version_display = { ...ui.uiState.version_display, app: version, about: version };
+    }
+  } catch (error) {
+    if (!error.message || !error.message.includes("Expected JSON")) {
+      logger.log("warn", "ui", "Could not load version info:", error.message || error);
+    }
+    if (ui?.uiState) {
+      ui.uiState.version_display = { ...ui.uiState.version_display, app: "Unknown", about: "Unknown" };
+    }
+  }
+}
+
+export function initializePage(ui, pageId) {
+  const game = ui.game;
+  cacheDomElements(ui, pageId);
+
+  if (pageId === "reactor_section") {
+    initControlDeckVarObjs(ui);
+    const pauseCfg = ui.var_objs_config?.pause;
+    const paused = !!ui.game?.state?.pause;
+    if (pauseCfg?.onupdate) pauseCfg.onupdate(paused);
+  }
+
+  switch (pageId) {
+    case "reactor_section": {
+      const reactor = getPageReactor(ui);
+      logger.log("debug", "ui", "[PageInit] reactor_section init start", {
+        hasGridScaler: !!ui.gridScaler,
+        hasWrapper: !!ui.gridScaler?.wrapper,
+        hasReactor: !!reactor,
+        hasGridRenderer: !!ui.gridCanvasRenderer,
+        hasGame: !!ui.game,
+        hasTileset: !!ui.game?.tileset,
+      });
+      if (ui.gridScaler && !ui.gridScaler.wrapper) {
+        ui.gridScaler.init();
+      }
+      if (reactor) {
+        clearPageReactor(ui);
+        if (ui.gridCanvasRenderer) {
+          ui.gridCanvasRenderer.init(reactor);
+        }
+      }
+
+      ui.inputHandler.setupReactorEventListeners();
+      ui.inputHandler.setupSegmentHighlight();
+      ui.gridScaler.resize();
+      const container = getPageReactorWrapper(ui) || getPageReactorBackground(ui);
+      setPageGridContainer(ui, container);
+      if (ui.game?.tileset) {
+        ui.game.tileset.updateActiveTiles();
+      }
+      if (ui.gridCanvasRenderer && ui.game) {
+        ui.gridCanvasRenderer.render(ui.game);
+      }
+      logger.log("debug", "ui", "[PageInit] reactor_section init done");
+      ui.initializeCopyPasteUI();
+      ui.pageSetupUI.setupMobileTopBar();
+      ui.pageSetupUI.setupMobileTopBarResizeListener();
+      break;
+    }
+    case "upgrades_section":
+      ui.pageSetupUI.setupAffordabilityBanners("upgrades_no_affordable_banner");
+      if (!ui._sectionCountsMountedUpgrades && document.getElementById("upgrades_content_wrapper")) {
+        ui._unmounts.push(mountSectionCountsReactive(ui, "upgrades_content_wrapper"));
+        ui._sectionCountsMountedUpgrades = true;
+      }
+      if (game?.upgradeset) updateSectionCountsState(ui, game);
+      requestAnimationFrame(() => {
+        if (
+          game.upgradeset &&
+          typeof game.upgradeset.populateUpgrades === "function"
+        ) {
+          game.upgradeset.populateUpgrades();
+        } else {
+          logger.log("warn", "ui", "upgradeset.populateUpgrades is not a function or upgradeset missing");
+        }
+      });
+      break;
+    case "experimental_upgrades_section":
+      mountExoticParticlesDisplayIfNeeded(ui);
+      ui.pageSetupUI.setupAffordabilityBanners("research_no_affordable_banner");
+      if (!ui._sectionCountsMountedResearch && document.getElementById("experimental_upgrades_content_wrapper")) {
+        ui._unmounts.push(mountSectionCountsReactive(ui, "experimental_upgrades_content_wrapper"));
+        ui._sectionCountsMountedResearch = true;
+      }
+      if (game?.upgradeset) updateSectionCountsState(ui, game);
+      if (
+        game.upgradeset &&
+        typeof game.upgradeset.populateExperimentalUpgrades === "function"
+      ) {
+        game.upgradeset.populateExperimentalUpgrades();
+      } else {
+        logger.log("warn", "ui", "upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing");
+      }
+      setupResearchCollapsibleSections(ui);
+      void loadAndSetVersionForPage(ui);
+      ui.setupUpgradeCardHoverBuzz();
+      break;
+    case "about_section":
+      setupVersionDisplayForPage(ui);
+      if (!ui.uiState?.version_display?.app) void loadAndSetVersionForPage(ui);
+      break;
+    case "leaderboard_section":
+      ui.pageSetupUI.setupLeaderboardPage();
+      break;
+    case "soundboard_section":
+      ui.pageSetupUI.setupSoundboardPage();
+      break;
+    default:
+      break;
+  }
+
+  ui.objectivesUI.showObjectivesForPage(pageId);
+}
+

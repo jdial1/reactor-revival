@@ -8,7 +8,7 @@ import {
   collectPartSemanticSegments,
 } from "../logic.js";
 import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
-import { enqueueGameEffect } from "../state.js";
+import { actions } from "../store.js";
 import {
   tutorialOverlayTemplate,
   tutorialCalloutTemplate,
@@ -431,22 +431,28 @@ function clearDesktopTooltipPosition(tooltipEl) {
 }
 
 function getIconifyFn() {
+  const numWithUnit = "(?:\\d[\\d,.]*?(?:\\s*[kKmMbBtTqQ])?|\\d[\\d,.]*?(?:e[+\\-]?\\d+)?)";
+  const unitSpanSpecs = [
+    ["power", "power-num", "power"],
+    ["heat", "heat-num", "heat"],
+    ["ticks?", "tick-num", "tick"],
+  ];
   return (str) => {
     if (!str) return str;
-    const withIcons = str
-      .replace(/\bpower\b/gi, "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>")
-      .replace(/\bheat\b/gi, "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>")
-      .replace(/\bticks?\b/gi, (match) => `${match} <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>`)
+    let s = str
+      .replace(/\b(power|heat|ticks?)\b/gi, (m) => {
+        const low = m.toLowerCase();
+        const icon = low === "power" ? "power" : low === "heat" ? "heat" : "time";
+        const alt = low.startsWith("tick") ? "tick" : low;
+        return `${m} <img src='img/ui/icons/icon_${icon}.png' class='icon-inline' alt='${alt}'>`;
+      })
       .replace(/\$(\d+)/g, "<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'> $1")
       .replace(/\bEP\b/g, "🧬 $&");
-    const numWithUnit = "(?:\\d[\\d,.]*?(?:\\s*[kKmMbBtTqQ])?|\\d[\\d,.]*?(?:e[+\\-]?\\d+)?)";
-    const rePower = new RegExp(`(\\b${numWithUnit}\\b)\\s+(power)\\s+(<img[^>]+alt=['\" ]power['\"][^>]*>)`, 'gi');
-    const reHeat = new RegExp(`(\\b${numWithUnit}\\b)\\s+(heat)\\s+(<img[^>]+alt=['\" ]heat['\"][^>]*>)`, 'gi');
-    const reTick = new RegExp(`(\\b${numWithUnit}\\b)\\s+(ticks?)\\s+(<img[^>]+alt=['\" ]tick['\"][^>]*>)`, 'gi');
-    return withIcons
-      .replace(rePower, '<span class="num power-num">$1</span> $2 $3')
-      .replace(reHeat, '<span class="num heat-num">$1</span> $2 $3')
-      .replace(reTick, '<span class="num tick-num">$1</span> $2 $3');
+    for (const [unitPat, cls, altLit] of unitSpanSpecs) {
+      const re = new RegExp(`(\\b${numWithUnit}\\b)\\s+(${unitPat})\\s+(<img[^>]+alt=['\" ]${altLit}['\"][^>]*>)`, "gi");
+      s = s.replace(re, `<span class="num ${cls}">$1</span> $2 $3`);
+    }
+    return s;
   };
 }
 
@@ -464,17 +470,12 @@ function formatDescriptionBulleted(description, iconifyFn) {
 
 function colorizeBonus(line, iconifyFn) {
   if (!line) return line;
-  let result = line
-    .replace(/([+][0-9]+(?:\.[0-9]+)?%?)/g, '<span class="pos">$1</span>')
-    .replace(/([-][0-9]+(?:\.[0-9]+)?%?)/g, '<span class="neg">$1</span>')
-    .replace(/([+][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="pos">$1</span>')
-    .replace(/([-][0-9]+(?:\.[0-9]+)?(?:\/[a-z]+)?)/gi, '<span class="neg">$1</span>');
+  let result = line.replace(/([+-][0-9]+(?:\.[0-9]+)?(?:%|\/[a-z]+)?)/gi, (m) => `<span class="${m.startsWith("-") ? "neg" : "pos"}">${m}</span>`);
   result = result.replace(/\b(venting|max heat|transfer|EP heat cap)\b/gi, (m) => iconifyFn(m));
-  result = result
-    .replace(/\bpower\b/gi, "$& <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>")
-    .replace(/(?<!max\s)\bheat\b/gi, "$& <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>")
-    .replace(/\bduration\b/gi, "$& <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='time'>");
-  return result;
+  return result
+    .replace(/\bpower\b/gi, (m) => `${m} <img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>`)
+    .replace(/(?<!max\s)\bheat\b/gi, (m) => `${m} <img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>`)
+    .replace(/\bduration\b/gi, (m) => `${m} <img src='img/ui/icons/icon_time.png' class='icon-inline' alt='time'>`);
 }
 
 function getUpgradeBonusLines(obj, tile, game) {
@@ -812,10 +813,10 @@ export class TooltipManager extends BaseComponent {
       e.preventDefault();
       e.stopPropagation();
       if (this.game.upgradeset.purchaseUpgrade(this.current_obj.id)) {
-        enqueueGameEffect(this.game, { kind: "sfx", id: "upgrade", context: "global" });
+        actions.enqueueEffect(this.game, { kind: "sfx", id: "upgrade", context: "global" });
         this.update();
       } else {
-        enqueueGameEffect(this.game, { kind: "sfx", id: "error", context: "global" });
+        actions.enqueueEffect(this.game, { kind: "sfx", id: "error", context: "global" });
       }
     };
     const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, this.isMobile, onBuy);

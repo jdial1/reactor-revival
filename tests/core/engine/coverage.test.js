@@ -1,6 +1,7 @@
 import { Game } from "@app/logic.js";
 import { UI } from "@app/components/ui.js";
 import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 
 // Create a temporary game instance just to generate the list of tests.
 // This is NOT the instance that will be used in the `it` blocks.
@@ -46,7 +47,7 @@ describe("Full Part and Upgrade Coverage", () => {
           // Set EP high enough to purchase both upgrades
           game.current_exotic_particles = Math.max(labCost + reqCost + 100000, 100000);
           game.exotic_particles = game.current_exotic_particles;
-          game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+          patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
           game.upgradeset.check_affordability(game);
           
           if (labUpgrade && labUpgrade.level === 0) {
@@ -94,7 +95,7 @@ describe("Full Part and Upgrade Coverage", () => {
             // Part costs EP
             game.current_exotic_particles = Math.max(requiredEP + 10000, 100000);
             game.exotic_particles = game.current_exotic_particles;
-            game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+            patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
             // Recalculate again after setting EP to ensure ecost is updated
             part.recalculate_stats();
           } else {
@@ -102,7 +103,7 @@ describe("Full Part and Upgrade Coverage", () => {
             // Ensure cost is set - use base_cost if cost is 0
             const partCost = toNum(part.cost) > 0 ? toNum(part.cost) : toNum(part.base_cost || 0);
             game.current_money = Math.max(partCost * 2, 1000000);
-            game.ui.stateManager.setVar("current_money", game.current_money);
+            patchGameState(game, { current_money: game.current_money });
           }
         } else {
           // Ensure part is unlocked before setting resources
@@ -118,7 +119,7 @@ describe("Full Part and Upgrade Coverage", () => {
           
           const partCost = toNum(part.cost) > 0 ? toNum(part.cost) : toNum(part.base_cost || 0);
           game.current_money = Math.max(partCost, 1000000);
-          game.ui.stateManager.setVar("current_money", game.current_money);
+          patchGameState(game, { current_money: game.current_money });
         }
 
         game.partset.check_affordability(game);
@@ -378,12 +379,12 @@ describe("Full Part and Upgrade Coverage", () => {
             const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
             if (requiredUpgrade && requiredUpgrade.level === 0) {
               game.current_money = requiredUpgrade.getCost();
-              game.ui.stateManager.setVar("current_money", game.current_money);
+              patchGameState(game, { current_money: game.current_money });
               game.upgradeset.purchaseUpgrade(upgrade.erequires);
             }
           }
           game.current_money = upgrade.getCost();
-          game.ui.stateManager.setVar("current_money", game.current_money);
+          patchGameState(game, { current_money: game.current_money });
         }
 
         const purchased = game.upgradeset.purchaseUpgrade(upgrade.id);

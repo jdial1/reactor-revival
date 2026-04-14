@@ -9,7 +9,7 @@ import {
   attachAudioContextToWindow,
 } from "../../helpers/setup.js";
 import { AudioService } from "@app/services.js";
-import { initPreferencesStore, preferences } from "@app/state.js";
+import { initPreferencesStore, preferences } from "@app/store.js";
 
 describe("AudioService", () => {
   let audioService;
@@ -50,12 +50,8 @@ describe("AudioService", () => {
       audio: audioService, // Attach the instance immediately
       ui: {
         stateManager: {
-          getVar: vi.fn((key) => {
-            if (key === 'sound_enabled') return true;
-            if (key === 'sound_volume') return 1.0;
-            return null;
-          }),
-          setVar: vi.fn(),
+          setClickedPart: vi.fn(),
+          getClickedPart: vi.fn(() => null),
         },
       },
       tileset: {
@@ -112,7 +108,7 @@ describe("AudioService", () => {
     });
 
     it("should load volume settings from localStorage on init", async () => {
-      const { preferences } = await import("@app/state.js");
+      const { preferences } = await import("@app/store.js");
       preferences.volumeMaster = 0.5;
       preferences.volumeEffects = 0.75;
       const testAudioService = new AudioService();
@@ -129,7 +125,7 @@ describe("AudioService", () => {
     });
 
     it("should not start ambience if muted on init", async () => {
-      const { preferences } = await import("@app/state.js");
+      const { preferences } = await import("@app/store.js");
       preferences.mute = true;
       const testAudioService = new AudioService();
       await testAudioService.init();
@@ -151,7 +147,7 @@ describe("AudioService", () => {
     });
 
     it("should unmute audio when toggleMute(false) is called", async () => {
-      const { getVolumePreferences } = await import("@app/state.js");
+      const { getVolumePreferences } = await import("@app/store.js");
       audioService.toggleMute(true);
       audioService.toggleMute(false);
       expect(audioService.enabled).toBe(true);

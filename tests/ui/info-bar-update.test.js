@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, vi } from "../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 
 describe("UI Info Bar updates for max power/heat", () => {
     let game, document;
@@ -16,11 +17,8 @@ describe("UI Info Bar updates for max power/heat", () => {
                 game.engine.interval = null;
             }
         }
-        game.paused = true;
-        if (game.ui && game.ui.stateManager) {
-            game.ui.stateManager.setVar("pause", true);
-            game.ui.stateManager.setVar("engine_status", "stopped");
-        }
+        game.onToggleStateChange?.("pause", true);
+        patchGameState(game, { engine_status: "stopped" });
         game.bypass_tech_tree_restrictions = true;
         game.tileset.updateActiveTiles();
     });
@@ -30,7 +28,7 @@ describe("UI Info Bar updates for max power/heat", () => {
     });
 
     const flushUI = () => {
-        game.ui.coreLoopUI.applyStateToDom();
+        game.ui.applyUiStateToDom();
     };
 
     const waitForInfoBarRender = () => new Promise((resolve) => requestAnimationFrame(resolve));
@@ -71,7 +69,7 @@ describe("UI Info Bar updates for max power/heat", () => {
         }
         game.reactor.updateStats();
         flushUI();
-        game.ui.coreLoopUI.updateRollingNumbers(10000);
+        game.ui.updateUiRollingNumbers(10000);
         await waitForInfoBarRender();
 
         const mobileDenom = document.getElementById("info_heat_denom");

@@ -80,7 +80,7 @@ body::before { content: ""; position: fixed; inset: 0; width: 100%; height: 100%
 .page-leaderboard { overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
 }
 
-#app_root { display: flex; width: 100%; min-width: 100%; height: 100dvh; flex-direction: column; --crt-heat: 0; --core-danger: 0; --crt-jitter-duration: 20s; animation: app-root-jitter var(--crt-jitter-duration) steps(1) infinite;
+#app_root { display: flex; width: 100%; min-width: 100%; height: 100dvh; flex-direction: column; --crt-heat: 0; --core-danger: 0; --crt-jitter-duration: 20s; filter: saturate(calc(1 + var(--core-danger, 0) * 0.45)) hue-rotate(calc(var(--core-danger, 0) * -18deg)); animation: app-root-jitter var(--crt-jitter-duration) steps(1) infinite;
 }
 
 #app_root.crt-heat-tearing { animation: app-root-jitter var(--crt-jitter-duration) steps(1) infinite, crt-horizontal-tear 0.42s steps(2, end) infinite;
@@ -1692,6 +1692,30 @@ button.info-item:active { border-color: var(--bevel-dark) !important; background
 }
 
 #info_bar_root { display: flex; width: 100%; justify-content: center; align-items: stretch;
+}
+
+#info_bar .ui-views-heat-strip-host { display: flex; flex-shrink: 0; align-items: center; margin-inline-end: 0.35rem;
+}
+
+#info_bar .ui-views-heat-strip { font-size: 0.7rem; font-weight: 600; color: rgb(255 200 120); opacity: 0.9;
+}
+
+#info_bar .ui-views-engine-chip-host { display: flex; flex-shrink: 0; align-items: center; margin-inline-end: 0.35rem;
+}
+
+#info_bar .ui-views-engine-chip { padding: 0.1rem 0.35rem; border: 1px solid var(--bevel-dark); font-size: 0.65rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: rgb(180 220 160); background: rgb(30 36 28);
+}
+
+#info_bar .ui-views-engine-chip.paused { color: rgb(255 200 120); border-color: rgb(120 90 40);
+}
+
+#info_bar .ui-views-engine-chip.idle { color: rgb(160 160 170);
+}
+
+#info_bar .ui-views-mute-host { display: flex; flex-shrink: 0; align-items: center; margin-inline-end: 0.35rem;
+}
+
+#info_bar .ui-views-mute { font-size: 0.85rem; line-height: 1; opacity: 0.9; filter: grayscale(0.2);
 }
 
 footer#bottom_nav { position: fixed; z-index: 10001; right: env(safe-area-inset-right); bottom: 0; left: env(safe-area-inset-left); height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom)); box-sizing: border-box; padding: 4px; padding-right: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); border-top: 3px solid var(--bevel-light) !important; margin: 0 !important; background: rgb(35 35 35) !important; box-shadow: 0 -2px 8px rgb(0 0 0 / 50%);

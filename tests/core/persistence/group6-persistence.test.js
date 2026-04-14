@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../he
 import { SaveDataSchema } from "../../../public/schema/index.js";
 import { ObjectiveIndexSchema, SaveDecimalSchema } from "../../../public/schema/numberLikeSchema.js";
 import { toDecimal, serializeSave, deserializeSave, migrateLocalStorageToIndexedDB } from "@app/utils.js";
-import { parseAndValidateSave } from "@app/state.js";
+import { parseAndValidateSave } from "@app/store.js";
 
 const STABLE_RUN_ID = "11111111-1111-1111-1111-111111111111";
 

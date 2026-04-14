@@ -193,7 +193,6 @@ import { Game, Engine, ObjectiveManager } from '@app/logic.js';
 import { UI } from '@app/components/ui.js';
 import { PageRouter } from '@app/app.js';
 import { attachGameEventListeners } from '@app/app.js';
-import { installAppRootIntentDelegation } from '@app/ui-intent-dispatch.js';
 import { grantInfiniteResources, syncGridState } from './gameHelpers.js';
 import { mockFetchJsonResponse } from './suiteHelpers.js';
 
@@ -689,7 +688,6 @@ export async function setupGameWithDOM() {
 
   ui.initMainLayout();
   ui.gridScaler.resize();
-  installAppRootIntentDelegation(game, ui);
 
   globalGameInstance = game;
   return { game, document: global.document, window: global.window };

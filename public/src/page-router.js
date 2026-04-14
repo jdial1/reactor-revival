@@ -1,11 +1,17 @@
 import { render } from "lit-html";
 import { logger } from "./utils.js";
-import { subscribeKey, enqueueGameEffect } from "./state.js";
+import { subscribeKey, actions } from "./store.js";
 import {
   gameShellTemplate,
   pageSectionTemplates,
   pageLoadErrorTemplate,
 } from "./templates/pageTemplates.js";
+import {
+  initializePage,
+  setPageReactorVisibility,
+  loadAndSetVersionForPage,
+  closePartsPanel,
+} from "./components/ui-components.js";
 
 export const PAGE_STATES = {
   reactor_section: { template: pageSectionTemplates.reactor_section },
@@ -51,9 +57,9 @@ export class PageRouter {
   _playTabNavAudio(pageId) {
     const game = this.ui.game;
     if (!game) return;
-    enqueueGameEffect(game, { kind: "sfx", id: "tab_switch", context: "global" });
+    actions.enqueueEffect(game, { kind: "sfx", id: "tab_switch", context: "global" });
     if (pageId === "upgrades_section" || pageId === "experimental_upgrades_section") {
-      enqueueGameEffect(game, { kind: "sfx", id: "tab_relay_thud", context: "global" });
+      actions.enqueueEffect(game, { kind: "sfx", id: "tab_relay_thud", context: "global" });
     }
   }
 
@@ -79,8 +85,8 @@ export class PageRouter {
   _applyPauseStateForNavigation(wasOnReactorPage, goingToReactorPage) {
     if (!this.ui.game?.engine) return;
     if (wasOnReactorPage && !goingToReactorPage) {
-      this.ui.partsPanelUI?.closePartsPanel?.();
-      const currentlyPaused = this.ui.stateManager.getVar("pause");
+      closePartsPanel(this.ui);
+      const currentlyPaused = !!this.ui.game?.state?.pause;
       if (!currentlyPaused) {
         this.navigationPaused = true;
         this.isNavigating = true;
@@ -98,7 +104,7 @@ export class PageRouter {
         this.ui.game.resume();
         this.isNavigating = false;
       } else {
-        const shouldBePaused = !!this.ui.stateManager.getVar("pause");
+        const shouldBePaused = !!this.ui.game?.state?.pause;
         if (shouldBePaused && !this.ui.game.paused) {
           this.ui.game.pause();
         }
@@ -119,11 +125,8 @@ export class PageRouter {
     this._applyPauseStateForNavigation(wasOnReactorPage, goingToReactorPage);
 
     if (this.currentPageId === "upgrades_section" && goingToReactorPage) {
-      const pageInit = this.ui.pageInitUI;
-      if (pageInit) {
-        pageInit.setReactorVisibility(false);
-        setTimeout(() => pageInit.setReactorVisibility(true), 250);
-      }
+      setPageReactorVisibility(this.ui, false);
+      setTimeout(() => setPageReactorVisibility(this.ui, true), 250);
     }
 
     const earlyPageDef = this.pages[pageId];
@@ -158,16 +161,16 @@ export class PageRouter {
       const cachedPage = this.pageCache.get(pageId);
       cachedPage.classList.remove("hidden");
 
-      this.ui.pageInitUI.initializePage(pageId);
+      initializePage(this.ui, pageId);
 
       if (pageId === "reactor_section" && this.ui.resizeReactor) {
         this.ui.resizeReactor();
         setTimeout(() => {
           this.ui.resizeReactor();
-          this.ui.pageInitUI?.setReactorVisibility(true);
+          setPageReactorVisibility(this.ui, true);
         }, 100);
       } else if (pageId === "experimental_upgrades_section") {
-        this.ui.pageInitUI.loadAndSetVersion();
+        void loadAndSetVersionForPage(this.ui);
       }
 
       if (hadPreviousPage) this._playTabNavAudio(pageId);
@@ -210,14 +213,14 @@ export class PageRouter {
         });
 
         if (!this.initializedPages.has(pageId)) {
-          this.ui.pageInitUI.initializePage(pageId);
+          initializePage(this.ui, pageId);
           this.initializedPages.add(pageId);
         }
 
         if (pageId === "reactor_section" && this.ui.resizeReactor) {
           setTimeout(() => {
             this.ui.resizeReactor();
-            this.ui.pageInitUI?.setReactorVisibility(true);
+            setPageReactorVisibility(this.ui, true);
           }, 100);
         }
         if (hadPreviousPage) this._playTabNavAudio(pageId);

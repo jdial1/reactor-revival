@@ -84,6 +84,39 @@ describe("Group 13: Web Worker Concurrency and Fallbacks", () => {
     ctx.restore();
   });
 
+  it("engine.worker routes tick messages to game loop and emits tickResult", async () => {
+    vi.resetModules();
+    const ctx = setupWorkerContext(vi);
+    await import("@app/worker/engine.worker.js");
+    const heat = new Float32Array(4);
+    self.onmessage({
+      data: {
+        type: "tick",
+        tickId: 7,
+        tickCount: 1,
+        heatBuffer: heat.buffer,
+        partLayout: [],
+        partTable: [],
+        rows: 2,
+        cols: 2,
+        maxCols: 2,
+        multiplier: 1,
+        autoSell: false,
+        reactorState: {
+          current_heat: 0,
+          current_power: 0,
+          max_power: 100,
+          max_heat: 1000,
+        },
+      },
+    });
+    expect(ctx.postMessage).toHaveBeenCalledTimes(1);
+    const result = ctx.postMessage.mock.calls[0][0];
+    expect(result.type).toBe("tickResult");
+    expect(result.tickId).toBe(7);
+    ctx.restore();
+  });
+
   it("gameLoop.worker processes a tick message and emits tickResult", async () => {
     vi.resetModules();
     const ctx = setupWorkerContext(vi);

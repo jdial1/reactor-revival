@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 import { forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
 
 describe("Upgradeset Mechanics", () => {
@@ -68,12 +69,12 @@ describe("Upgradeset Mechanics", () => {
     const cost = upgrade.getCost();
     
     game.current_money = cost;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
     expect(upgrade.affordable, `Expected affordable at money ${cost}`).toBe(true);
     
     game.current_money = cost - 1;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
     expect(upgrade.affordable, `Expected unaffordable at money ${cost - 1}`).toBe(false);
   });

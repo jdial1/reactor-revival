@@ -41,7 +41,7 @@ describe("Complex Layouts and Advanced Interactions", () => {
     it("stats_power uses base_power times M+N pulse (fusion does not scale cell coefficient)", async () => {
         game.bypass_tech_tree_restrictions = true;
         game.reactor.auto_sell_enabled = false;
-        if (game.ui?.stateManager) game.ui.stateManager.setVar("auto_sell", false);
+        game.onToggleStateChange?.("auto_sell", false);
 
         forcePurchaseUpgrade(game, "forceful_fusion");
         expect(game.reactor.heat_power_multiplier).toBe(1);
@@ -141,7 +141,7 @@ describe("Complex Layouts and Advanced Interactions", () => {
     it("should handle auto-buy for multiple depleted perpetual parts in the same tick", async () => {
         game.upgradeset.getUpgrade("uranium1_cell_perpetual").setLevel(1);
         game.upgradeset.getUpgrade("perpetual_reflectors").setLevel(1);
-        game.ui.stateManager.setVar("auto_buy", true);
+        game.onToggleStateChange?.("auto_buy", true);
 
         const cellTile = await placePart(game, 0, 0, "uranium1");
         const reflectorTile = await placePart(game, 0, 1, "reflector1");

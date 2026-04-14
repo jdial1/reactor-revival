@@ -9,7 +9,7 @@ describe("Power Overflow Mechanics", () => {
     beforeEach(async () => {
         game = await setupGame();
         game.reactor.heat_controlled = false;
-        game.ui.stateManager.setVar("heat_control", false);
+        game.onToggleStateChange?.("heat_control", false);
         game.reactor.base_max_power = 100;
         game.reactor.max_power = 100;
         game.reactor.current_heat = 0;
@@ -136,7 +136,7 @@ describe("Difficulty power overflow to heat ratio", () => {
     beforeEach(async () => {
         game = await setupGame();
         game.reactor.heat_controlled = false;
-        game.ui.stateManager.setVar("heat_control", false);
+        game.onToggleStateChange?.("heat_control", false);
         game.reactor.base_max_power = 100;
         game.reactor.max_power = 100;
         game.reactor.current_heat = 0;
@@ -234,9 +234,10 @@ describe("Difficulty settings persist after init", () => {
 
 describe("StatsCalculatorUI Decimal coercion", () => {
     function mockUi(vars, gameOverrides = {}) {
-        const stateManager = { getVar: (k) => vars[k] };
-        const game = { reactor: { power_overflow_to_heat_ratio: 0.5, manual_heat_reduce: 1, base_manual_heat_reduce: 1, auto_sell_multiplier: 0 }, ...gameOverrides };
-        return { stateManager, game };
+        const baseReactor = { power_overflow_to_heat_ratio: 0.5, manual_heat_reduce: 1, base_manual_heat_reduce: 1, auto_sell_multiplier: 0 };
+        const reactor = { ...baseReactor, ...gameOverrides.reactor };
+        const { reactor: _omitReactor, ...restOverrides } = gameOverrides;
+        return { game: { state: { ...vars }, reactor, ...restOverrides } };
     }
 
     it("getHeatNetChange uses numeric addition when current_power and max_power are Decimal", () => {
@@ -288,7 +289,7 @@ describe("StatsCalculatorUI Decimal coercion", () => {
     it("getHeatNetChange uses numeric addition when total_heat, stats_vent, stats_outlet are Decimal", () => {
         const ui = mockUi({
             stats_net_heat: undefined,
-            total_heat: new Decimal(1000),
+            stats_heat_generation: new Decimal(1000),
             stats_vent: new Decimal(300),
             stats_outlet: new Decimal(100),
             current_power: 0,

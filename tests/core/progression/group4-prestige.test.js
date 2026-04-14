@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 import { placePart } from "../../helpers/gameHelpers.js";
-import { setDecimal } from "@app/state.js";
+import { setDecimal } from "@app/store.js";
 import { toDecimal } from "@app/utils.js";
 import {
   PRESTIGE_MULTIPLIER_CAP,
@@ -113,8 +114,6 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     expect(game.tileset.getTile(0, 0).part).toBeNull();
     expect(game.upgradeset.getUpgrade("laboratory").level).toBe(1);
     expect(game.upgradeset.getUpgrade("chronometer").level).toBe(0);
-    expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(epTotalBefore);
-    expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(epCurrentBefore);
     expect(game.getPrestigeMultiplier()).toBe(expectedPrestigeMultiplierFromTotalEp(epTotalBefore));
   });
 
@@ -141,8 +140,6 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     expect(toNum(game.exotic_particles)).toBe(0);
     expect(toNum(game.current_money)).toBe(toNum(game.base_money));
     expect(game.tileset.getTile(0, 0).part).toBeNull();
-    expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(0);
-    expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(0);
     expect(game.getPrestigeMultiplier()).toBe(1);
     expect(game.upgradeset.getUpgrade("laboratory").level).toBe(0);
   });
@@ -156,8 +153,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
 
     game.current_money = 250000;
     game.current_exotic_particles = epCost + 50;
-    game.ui.stateManager.setVar("current_money", game.current_money);
-    game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+    patchGameState(game, { current_money: game.current_money, current_exotic_particles: game.current_exotic_particles });
     game.upgradeset.check_affordability(game);
 
     const moneyBefore = toNum(game.current_money);
@@ -173,6 +169,5 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     expect(toNum(game.state.total_exotic_particles)).toBe(totalBefore);
     expect(toNum(game.exotic_particles)).toBe(sessionEpBefore);
     expect(toNum(game.current_money)).toBe(moneyBefore);
-    expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(toNum(game.state.current_exotic_particles));
   });
 });

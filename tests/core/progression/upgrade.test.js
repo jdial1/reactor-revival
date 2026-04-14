@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 
 describe("Upgrade Mechanics", () => {
   let game;
@@ -12,7 +13,7 @@ describe("Upgrade Mechanics", () => {
     expect(toNum(upgrade.current_cost)).toBe(toNum(upgrade.base_cost));
 
     game.current_money = toNum(upgrade.getCost()) * 2;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
     game.upgradeset.purchaseUpgrade(upgrade.id);
 
@@ -76,7 +77,7 @@ describe("Upgrade Mechanics", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
     const cost = upgrade.getCost();
     game.current_money = cost + 1000;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
     const expectedMoney = toNum(game.current_money) - toNum(cost);
 

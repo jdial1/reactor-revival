@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
-import { setDecimal } from "@app/state.js";
+import { setDecimal } from "@app/store.js";
 
 describe("Rolling Numbers UI", () => {
     let game;
@@ -14,7 +14,7 @@ describe("Rolling Numbers UI", () => {
         window = setup.window;
         document = setup.document;
         await game.router.loadPage("reactor_section");
-        game.ui.coreLoopUI.runUpdateInterfaceLoop(0);
+        game.ui.startRenderLoop(0);
     });
 
     it("should initialize display values structure", () => {
@@ -30,7 +30,7 @@ describe("Rolling Numbers UI", () => {
         moneyObj.current = 0;
         moneyObj.target = 1000;
 
-        ui.coreLoopUI.updateRollingNumbers(16.667);
+        ui.updateUiRollingNumbers(16.667);
 
         expect(moneyObj.current).toBe(1000);
     });
@@ -40,7 +40,7 @@ describe("Rolling Numbers UI", () => {
         moneyObj.target = 100;
         moneyObj.current = 99.95; // Within epsilon
 
-        ui.coreLoopUI.updateRollingNumbers(16.667);
+        ui.updateUiRollingNumbers(16.667);
 
         expect(moneyObj.current).toBe(100);
     });
@@ -59,7 +59,7 @@ describe("Rolling Numbers UI", () => {
 
     it("should update target via state manager", () => {
         setDecimal(game.state, "current_money", 5000);
-        ui.coreLoopUI.processUpdateQueue();
+        ui.processUiUpdateQueue();
 
         expect(toNum(ui.displayValues.money.target)).toBe(5000);
         expect(toNum(ui.displayValues.money.current)).toBe(5000);

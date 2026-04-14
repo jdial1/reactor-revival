@@ -57,7 +57,7 @@ describe("Group 16: Visual Event Ring Buffer and Pooling", () => {
     const initialPool = pool.length;
     const mon = monitorFloatingTextPooling(vi, document);
     for (let i = 0; i < 25; i++) {
-      game.ui.particleEffectsUI.showFloatingText(div, 10);
+      game.ui.showFloatingText(div, 10);
       vi.advanceTimersByTime(1001);
     }
     expect(mon.counts.div).toBeLessThanOrEqual(2);

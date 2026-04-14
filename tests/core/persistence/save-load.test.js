@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, vi, toNum } from "../../helpers/setup.js";
-import { StorageUtils, StorageUtilsAsync, serializeSave, deserializeSave } from "@app/utils.js";
+import { StorageUtils, StorageAdapter, serializeSave, deserializeSave } from "@app/utils.js";
 
 describe("Save and Load Functionality", () => {
   let game;
@@ -79,15 +79,15 @@ describe("Save and Load Functionality", () => {
     await tile2.setPart(vent);
     tile1.ticks = 5;
 
-    const rawSave = await game.saveOrchestrator.getSaveState();
+    const rawSave = await game.saveManager.getSaveState();
     const saveData = {
       ...rawSave,
       tiles: rawSave.tiles ?? [],
       current_money: rawSave.current_money ?? 0,
     };
     const payload = serializeSave(saveData);
-    await StorageUtilsAsync.setRaw("reactorGameSave_1", payload);
-    await StorageUtilsAsync.set("reactorCurrentSaveSlot", 1);
+    await StorageAdapter.setRaw("reactorGameSave_1", payload);
+    await StorageAdapter.set("reactorCurrentSaveSlot", 1);
 
     game.tileset.clearAllTiles();
     expect(tile1.part).toBeNull();
@@ -118,11 +118,11 @@ describe("Save and Load Functionality", () => {
     await tile94.setPart(uranium);
     await tile104.setPart(vent);
 
-    const rawSave = await game.saveOrchestrator.getSaveState();
+    const rawSave = await game.saveManager.getSaveState();
     const saveData = { ...rawSave, rows: 14, cols: 8 };
     const payload = serializeSave(saveData);
-    await StorageUtilsAsync.setRaw("reactorGameSave_1", payload);
-    await StorageUtilsAsync.set("reactorCurrentSaveSlot", 1);
+    await StorageAdapter.setRaw("reactorGameSave_1", payload);
+    await StorageAdapter.set("reactorCurrentSaveSlot", 1);
 
     game.tileset.clearAllTiles();
     game.gridManager.setRows(12);
@@ -145,10 +145,10 @@ describe("Save and Load Functionality", () => {
     await tile.setPart(uranium);
     tile.ticks = 5;
 
-    const rawSave = await game.saveOrchestrator.getSaveState();
+    const rawSave = await game.saveManager.getSaveState();
     const payload = serializeSave(rawSave);
-    await StorageUtilsAsync.setRaw("reactorGameSave_1", payload);
-    await StorageUtilsAsync.set("reactorCurrentSaveSlot", 1);
+    await StorageAdapter.setRaw("reactorGameSave_1", payload);
+    await StorageAdapter.set("reactorCurrentSaveSlot", 1);
 
     game.tileset.clearAllTiles();
 

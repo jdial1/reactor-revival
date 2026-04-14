@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 
 describe("Reactor Mechanics", () => {
   let game;
@@ -153,17 +154,12 @@ describe("Reactor Mechanics", () => {
   });
 
   it("should go into meltdown when heat > 2 * max_heat", () => {
-    // Set up spy on setVar method
-    const setVarSpy = vi.spyOn(game.ui.stateManager, "setVar");
-
+    // Meltdown syncs game.state.melting_down
     game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
     const meltdown = game.reactor.checkMeltdown();
     expect(meltdown).toBe(true);
     expect(game.reactor.has_melted_down).toBe(true);
-    expect(setVarSpy).toHaveBeenCalledWith("melting_down", true);
-
-    // Clean up spy
-    setVarSpy.mockRestore();
+    expect(game.state.melting_down).toBe(true);
   });
 
   it("should not meltdown when heat is high but not critical", () => {
@@ -182,7 +178,7 @@ describe("Reactor Mechanics", () => {
     const labUpgrade = game.upgradeset.getUpgrade("laboratory");
     const infusedUpgrade = game.upgradeset.getUpgrade("infused_cells");
     game.current_exotic_particles = Math.max(toNum(labUpgrade.getEcost()), toNum(infusedUpgrade.getEcost())) + 1000;
-    game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+    patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
     game.upgradeset.check_affordability(game);
 
     expect(game.upgradeset.purchaseUpgrade("laboratory")).toBe(true);

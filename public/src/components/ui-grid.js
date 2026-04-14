@@ -23,7 +23,8 @@ import {
   BaseComponent,
   vuSegmentRatio01,
 } from "../utils.js";
-import { enqueueGameEffect } from "../state.js";
+import { actions } from "../store.js";
+import { getPageReactor, getPageReactorWrapper } from "./ui-components.js";
 
 export { Tileset } from "../logic.js";
 
@@ -288,29 +289,64 @@ class HeatEffectsRenderer {
     return { smoothed, maxHeat, gridIndex, rows, cols };
   }
 
-  _drawHeatMapLayer(game, viewport) {
+  _drawHeatEffectsLayers(game, viewport) {
     const hd = this._prepareHeatData(game);
     if (!hd) return;
     const { smoothed, maxHeat, gridIndex, rows, cols } = hd;
     const ts = this._shared._tileSize;
+    const now = typeof performance !== "undefined" ? performance.now() : 0;
     const cull = viewport != null && viewport.width > 0 && viewport.height > 0;
     const ctx = this._shared._dynamicCtx;
-    const blobRx = ts * HEAT_MAP.blobRadiusRatio;
-    const blobRy = ts * HEAT_MAP.blobRadiusRatio;
+    const blobR = ts * HEAT_MAP.blobRadiusRatio;
+    const sThresh = HEAT_SHIMMER.threshold;
+    const hThresh = HEAT_HAZE.threshold;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if (cull && !this._shared.tileInViewport(r, c, viewport)) continue;
         const heat = smoothed[gridIndex(r, c)] || 0;
         const t = Math.max(0, Math.min(1, heat / maxHeat));
-        const alpha = HEAT_MAP.baseAlpha + HEAT_MAP.alphaRange * t;
-        const x = c * ts;
-        const y = r * ts;
-        const cx = x + ts * 0.5;
-        const cy = y + ts * 0.5;
-        ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+        if (t === 0) continue;
+        const cx = c * ts + ts * 0.5;
+        const cy = r * ts + ts * 0.5;
+        ctx.fillStyle = `rgba(0,0,0,${HEAT_MAP.baseAlpha + HEAT_MAP.alphaRange * t})`;
         ctx.beginPath();
-        ctx.ellipse(cx, cy, blobRx, blobRy, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, blobR, blobR, 0, 0, Math.PI * 2);
         ctx.fill();
+        if (t >= sThresh) {
+          const baseA = HEAT_SHIMMER.baseAlphaMultiplier * ((t - sThresh) / (1 - sThresh));
+          for (let i = 0; i < HEAT_SHIMMER.layerCount; i++) {
+            const phase = (now * HEAT_SHIMMER.timeScale + i * HEAT_SHIMMER.phaseSpacing) % (Math.PI * 2);
+            const ox = Math.sin(phase) * (ts * 0.12);
+            const oy = Math.cos(phase * 0.7) * (ts * 0.1);
+            ctx.fillStyle = COLORS.shimmerTint(baseA * (0.6 + 0.4 * Math.sin(phase * 2)));
+            ctx.beginPath();
+            ctx.ellipse(
+              cx + ox,
+              cy + oy,
+              ts * (0.35 + Math.sin(phase * 1.3) * 0.08),
+              ts * (0.25 + Math.cos(phase * 0.9) * 0.06),
+              phase * 0.3,
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
+          }
+        }
+        if (t >= hThresh) {
+          const rise = (now * HEAT_HAZE.riseSpeedPx) % (ts * 1.2);
+          const hCy = cy - rise + Math.sin(now * HEAT_HAZE.wobbleFreq + r * 0.5 + c * 0.5) * ts * 0.15;
+          const hCx = cx + Math.sin(now * 0.002 + c) * ts * 0.12;
+          const rMax = ts * HEAT_HAZE.maxRadiusRatio;
+          const grad = ctx.createRadialGradient(hCx, hCy, 0, hCx, hCy, rMax);
+          const int = (t - hThresh) / (1 - hThresh);
+          grad.addColorStop(0, `rgba(255, 220, 180, ${0.12 * int})`);
+          grad.addColorStop(0.4, `rgba(255, 200, 150, ${0.06 * int})`);
+          grad.addColorStop(1, "rgba(255, 200, 150, 0)");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, rMax, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
   }
@@ -403,7 +439,7 @@ class HeatEffectsRenderer {
 
   render(game, viewport, ui) {
     if (ui?.getHeatMapVisible?.()) {
-      this._drawHeatMapLayer(game, viewport);
+      this._drawHeatEffectsLayers(game, viewport);
     }
     if (ui?.getHeatFlowVisible?.() || ui?.getDebugOverlayVisible?.()) {
       this._drawHeatFlowLayer(game, viewport);
@@ -709,9 +745,8 @@ export class GridScaler extends BaseComponent {
 
     init() {
 
-        const pageInit = this.ui.pageInitUI;
-        this.reactor = pageInit?.getReactor?.() ?? this.ui.DOMElements?.reactor ?? document.getElementById('reactor');
-        this.wrapper = pageInit?.getReactorWrapper?.() ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
+        this.reactor = getPageReactor(this.ui) ?? this.ui.DOMElements?.reactor ?? document.getElementById('reactor');
+        this.wrapper = getPageReactorWrapper(this.ui) ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
 
         if (!this.wrapper) return;
 
@@ -965,9 +1000,8 @@ export class GridScaler extends BaseComponent {
     resize(_layoutRetry) {
 
         if (!this.reactor || !this.wrapper) {
-            const pageInit = this.ui.pageInitUI;
-            this.reactor = pageInit?.getReactor?.() ?? this.ui.DOMElements?.reactor ?? document.getElementById('reactor');
-            this.wrapper = pageInit?.getReactorWrapper?.() ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
+            this.reactor = getPageReactor(this.ui) ?? this.ui.DOMElements?.reactor ?? document.getElementById('reactor');
+            this.wrapper = getPageReactorWrapper(this.ui) ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
         }
 
         if (!this.reactor || !this.wrapper) {
@@ -1056,7 +1090,7 @@ export class GridScaler extends BaseComponent {
             this._reseatTimeoutId = setTimeout(() => {
                 this._reseatTimeoutId = null;
                 if (this.reactor) this.reactor.style.filter = "";
-                if (this.ui.game) enqueueGameEffect(this.ui.game, { kind: "sfx", id: "reboot", vol: 0.5, context: "global" });
+                if (this.ui.game) actions.enqueueEffect(this.ui.game, { kind: "sfx", id: "reboot", vol: 0.5, context: "global" });
             }, 150);
         }
 

@@ -1,12 +1,24 @@
 import { Game, Engine, resetHeatThresholdSignalState } from "./logic.js";
-import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, StorageUtilsAsync, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES, FOUNDATIONAL_TICK_MS, MAX_ACCUMULATOR_MULTIPLIER, BASE_MAX_HEAT, BASE_MAX_POWER } from "./utils.js";
+import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES, FOUNDATIONAL_TICK_MS, MAX_ACCUMULATOR_MULTIPLIER, BASE_MAX_HEAT, BASE_MAX_POWER } from "./utils.js";
 import { html, render } from "lit-html";
 import { UI } from "./components/ui.js";
 import { MODAL_IDS } from "./components/ui-modals.js";
-import { updateSectionCountsState, getCompactLayout } from "./components/ui-components.js";
+import {
+  updateSectionCountsState,
+  getCompactLayout,
+  syncToggleStatesFromGame as applyControlDeckToggleSync,
+  initializePartsPanel,
+} from "./components/ui-components.js";
 import { AudioService, createSplashManager, getValidatedGameData } from "./services.js";
-import { installAppRootIntentDelegation } from "./ui-intent-dispatch.js";
-import { getValidatedPreferences, initPreferencesStore, preferences, subscribeKey, showLoadBackupModal, enqueueGameEffect } from "./state.js";
+import {
+  getValidatedPreferences,
+  initPreferencesStore,
+  preferences,
+  showLoadBackupModal,
+  actions,
+  patchGameState,
+  setDecimal,
+} from "./store.js";
 import { TooltipManager, createTutorialManager } from "./components/ui-tooltips-tutorial.js";
 import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 import {
@@ -31,88 +43,74 @@ if (typeof window !== "undefined") {
   window.setSlot1FromBackup = () => setSlot1FromBackupAsync();
 }
 
-export class AppRoot {
-  constructor(container, game, ui) {
-    this.container = container;
-    this.game = game;
-    this.ui = ui;
-    this._bodyClassUnmount = null;
-  }
+let _appRootSplashMuteUnmount = null;
 
-  _setupBodyClassObserver() {
-    if (!this.ui?.uiState || this._bodyClassUnmount) return;
-    const syncBodyClasses = () => {
-      if (typeof document !== "undefined" && document.body) {
-        document.body.classList.toggle("game-paused", !!this.ui.uiState.is_paused);
-        document.body.classList.toggle("reactor-meltdown", !!this.ui.uiState.is_melting_down);
-      }
-      const banner = typeof document !== "undefined" ? document.getElementById("meltdown_banner") : null;
-      if (banner) banner.classList.toggle("hidden", !this.ui.uiState.is_melting_down);
-    };
-    syncBodyClasses();
-    const unsub1 = subscribeKey(this.ui.uiState, "is_paused", syncBodyClasses);
-    const unsub2 = subscribeKey(this.ui.uiState, "is_melting_down", syncBodyClasses);
-    this._bodyClassUnmount = () => { try { unsub1(); } catch (_) {} try { unsub2(); } catch (_) {} };
-  }
-
-  render() {
-    const hasSession = !!this.game?.lifecycleManager?.session_start_time;
-    console.log("[ReactorBoot] AppRoot.render", { hasSession, container: !!this.container });
-
-    const template = html`
-      ${this.renderSplash(hasSession)}
-      <div id="wrapper" class=${classMap({ hidden: !hasSession })}></div>
-      <dialog id="modal-root" class="game-modal-host"></dialog>
-    `;
-
-    try {
-      render(template, this.container);
-      console.log("[ReactorBoot] AppRoot lit render committed");
-    } catch (err) {
-      console.error("[ReactorBoot] AppRoot lit render threw", err);
-      throw err;
+function renderSplashSection(hasSession, game, ui) {
+  if (hasSession) return null;
+  const isMuted = !!preferences.mute;
+  const handleMuteClick = (e) => {
+    e.stopPropagation();
+    if (ui?.uiState) ui.uiState.audio_muted = !ui.uiState.audio_muted;
+    else {
+      preferences.mute = !preferences.mute;
+      game?.audio?.toggleMute(preferences.mute);
     }
-    if (!hasSession) {
-      const iconEl = this.container.querySelector(".splash-mute-icon");
-      if (iconEl) {
-        this._splashMuteUnmount = ReactiveLitComponent.mountMulti(
-          [{ state: preferences, keys: ["mute"] }],
-          () => html`<span class="splash-mute-led" data-muted=${preferences.mute ? "1" : "0"}></span>`,
-          iconEl
-        );
-      }
-    } else if (this._splashMuteUnmount) {
-      this._splashMuteUnmount();
-      this._splashMuteUnmount = null;
+  };
+  const onHideMenuClick = (e) => {
+    e.stopPropagation();
+    const panel = e.currentTarget.closest(".splash-menu-panel");
+    if (panel) panel.classList.add("splash-menu-fade-full");
+  };
+  return renderSplashTemplate(isMuted, handleMuteClick, onHideMenuClick);
+}
+
+function renderAppRoot(container, game, ui) {
+  if (!container) return;
+  const hasSession = !!game?.lifecycleManager?.session_start_time;
+  console.log("[ReactorBoot] renderAppRoot", { hasSession, container: true });
+  const template = html`
+    ${renderSplashSection(hasSession, game, ui)}
+    <div id="wrapper" class=${classMap({ hidden: !hasSession })}></div>
+    <dialog id="modal-root" class="game-modal-host"></dialog>
+  `;
+  try {
+    render(template, container);
+    console.log("[ReactorBoot] app root lit render committed");
+  } catch (err) {
+    console.error("[ReactorBoot] app root lit render threw", err);
+    throw err;
+  }
+  if (!hasSession) {
+    const iconEl = container.querySelector(".splash-mute-icon");
+    if (iconEl) {
+      _appRootSplashMuteUnmount = ReactiveLitComponent.mountMulti(
+        [{ state: preferences, keys: ["mute"] }],
+        () => html`<span class="splash-mute-led" data-muted=${preferences.mute ? "1" : "0"}></span>`,
+        iconEl
+      );
     }
+  } else if (_appRootSplashMuteUnmount) {
+    _appRootSplashMuteUnmount();
+    _appRootSplashMuteUnmount = null;
   }
+}
 
-  renderSplash(hasSession) {
-    if (hasSession) return null;
-
-    const isMuted = !!preferences.mute;
-    const handleMuteClick = (e) => {
-      e.stopPropagation();
-      if (this.ui?.uiState) this.ui.uiState.audio_muted = !this.ui.uiState.audio_muted;
-      else {
-        preferences.mute = !preferences.mute;
-        this.game?.audio?.toggleMute(preferences.mute);
-      }
-    };
-    const onHideMenuClick = (e) => {
-      e.stopPropagation();
-      const panel = e.currentTarget.closest(".splash-menu-panel");
-      if (panel) panel.classList.add("splash-menu-fade-full");
-    };
-    return renderSplashTemplate(isMuted, handleMuteClick, onHideMenuClick);
+async function bootstrapGame(game, ui) {
+  getValidatedGameData();
+  console.log("[ReactorBoot] bootstrap: ui.init …");
+  await ui.init(game);
+  const appRootEl = document.getElementById("app_root");
+  renderAppRoot(appRootEl, game, ui);
+  if (typeof ui.detachGameEventListeners === "function") {
+    ui.detachGameEventListeners();
   }
-
-  teardown() {
-    if (this._bodyClassUnmount) {
-      this._bodyClassUnmount();
-      this._bodyClassUnmount = null;
-    }
-  }
+  ui.detachGameEventListeners = attachGameEventListeners(game, ui);
+  console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset …");
+  game.tileset.initialize();
+  await game.partset.initialize();
+  await game.upgradeset.initialize();
+  await game.set_defaults();
+  console.log("[ReactorBoot] bootstrap: complete");
 }
 
 let _requestWakeLock = () => {};
@@ -200,11 +198,11 @@ async function clearStorageForNewGameFlow(game) {
     await window.clearAllGameDataForNewGame(game);
   } else {
     try {
-      await StorageUtilsAsync.remove("reactorGameSave");
-      for (let i = 1; i <= 3; i++) await StorageUtilsAsync.remove(`reactorGameSave_${i}`);
-      await StorageUtilsAsync.remove("reactorGameSave_Previous");
-      await StorageUtilsAsync.remove("reactorGameSave_Backup");
-      await StorageUtilsAsync.remove("reactorCurrentSaveSlot");
+      await StorageAdapter.remove("reactorGameSave");
+      for (let i = 1; i <= 3; i++) await StorageAdapter.remove(`reactorGameSave_${i}`);
+      await StorageAdapter.remove("reactorGameSave_Previous");
+      await StorageAdapter.remove("reactorGameSave_Backup");
+      await StorageAdapter.remove("reactorCurrentSaveSlot");
       StorageUtils.remove("reactorGameQuickStartShown");
       StorageUtils.remove("google_drive_save_file_id");
       StorageUtils.set("reactorNewGamePending", 1);
@@ -358,10 +356,9 @@ function setupGlobalListeners(game) {
 }
 
 function applyStatePatch(ui, patch) {
-  if (!ui?.stateManager || !patch || typeof patch !== "object") return;
-  Object.entries(patch).forEach(([key, value]) => {
-    ui.stateManager.setVar(key, value);
-  });
+  const game = ui?.game;
+  if (!game || !patch || typeof patch !== "object") return;
+  patchGameState(game, patch);
 }
 
 function handleObjectiveLoaded(ui, payload) {
@@ -388,12 +385,12 @@ export function attachGameEventListeners(game, ui) {
 
   on("statePatch", (patch) => applyStatePatch(ui, patch));
   on("toggleStateChanged", ({ toggleName, value }) => {
-    if (!ui?.stateManager) return;
+    if (!ui?.game?.state) return;
     const toggleKeys = ["pause", "auto_sell", "auto_buy", "heat_control"];
     if (!toggleKeys.includes(toggleName)) return;
     const coerced = Boolean(value);
-    if (ui.stateManager.getVar(toggleName) !== coerced) {
-      ui.stateManager.setVar(toggleName, coerced);
+    if (ui.game.state[toggleName] !== coerced) {
+      ui.game.onToggleStateChange?.(toggleName, coerced);
     }
   });
   on("quickSelectSlotsChanged", ({ slots }) => ui.stateManager.setQuickSelectSlots(slots));
@@ -411,15 +408,13 @@ export function attachGameEventListeners(game, ui) {
   on("vibrationRequest", ({ type }) => {
     const patterns = { heavy: 50, meltdown: 200, doublePulse: [30, 80, 30] };
     const pattern = patterns[type];
-    if (pattern != null) enqueueGameEffect(game, { kind: "haptic", pattern });
+    if (pattern != null) actions.enqueueEffect(game, { kind: "haptic", pattern });
   });
   on("heatWarningCleared", () => {
     if (ui.heatVisualsUI?.clearHeatWarningClasses) ui.heatVisualsUI.clearHeatWarningClasses();
     if (ui.gridInteractionUI) ui.gridInteractionUI.clearSegmentHighlight();
   });
-  on("chapterCelebration", ({ chapterIdx }) => {
-    if (ui.modalOrchestrationUI?.showChapterCelebration && chapterIdx >= 0) ui.modalOrchestrationUI.showChapterCelebration(chapterIdx);
-  });
+  on("chapterCelebration", () => {});
   on("welcomeBackOffline", ({ deltaTime, offlineMs, tickEquivalent }) => {
     const ms = offlineMs ?? deltaTime;
     const te = tickEquivalent ?? Math.floor(ms / FOUNDATIONAL_TICK_MS);
@@ -429,8 +424,9 @@ export function attachGameEventListeners(game, ui) {
     logger.log("error", "engine", "Game loop worker fatal:", detail);
   });
   on("simulationHardwareError", ({ message }) => {
-    ui.stateManager?.setVar?.("engine_status", "simulation_error");
-    ui.stateManager?.setVar?.("simulation_error_message", message ?? "");
+    if (!ui.game?.state) return;
+    ui.game.state.engine_status = "simulation_error";
+    ui.game.state.simulation_error_message = message ?? "";
   });
   on("upgradeAdded", ({ upgrade, game: g }) => {
     if (ui.stateManager?.handleUpgradeAdded && upgrade) ui.stateManager.handleUpgradeAdded(g, upgrade);
@@ -451,15 +447,18 @@ export function attachGameEventListeners(game, ui) {
     };
   });
   on("saveLoaded", ({ toggles, quick_select_slots }) => {
-    if (toggles && ui.stateManager) {
-      Object.entries(toggles).forEach(([key, value]) => ui.stateManager.setVar(key, value));
+    if (toggles && ui.game) {
+      patchGameState(ui.game, toggles);
     }
     if (quick_select_slots && ui.stateManager?.setQuickSelectSlots) ui.stateManager.setQuickSelectSlots(quick_select_slots);
-    if (ui.controlDeckUI?.updateAllToggleBtnStates) ui.controlDeckUI.updateAllToggleBtnStates();
     resetHeatThresholdSignalState(game);
   });
-  on("meltdown", () => ui.stateManager?.setVar("melting_down", true));
-  on("meltdownResolved", () => ui.stateManager?.setVar("melting_down", false));
+  on("meltdown", () => {
+    if (ui.game?.state) ui.game.state.melting_down = true;
+  });
+  on("meltdownResolved", () => {
+    if (ui.game?.state) ui.game.state.melting_down = false;
+  });
   on("meltdownStateChanged", () => {
     if (ui.meltdownUI?.updateMeltdownState) ui.meltdownUI.updateMeltdownState();
   });
@@ -483,8 +482,7 @@ export function attachGameEventListeners(game, ui) {
     if (ui.gridCanvasRenderer?.clearImageCache) ui.gridCanvasRenderer.clearImageCache();
   });
   on("partsPanelRefresh", () => {
-    if (ui.partsPanelUI?.populateActiveTab) ui.partsPanelUI.populateActiveTab();
-    if (ui.partsPanelUI?.refreshPartsPanel) ui.partsPanelUI.refreshPartsPanel();
+    ui.refreshPartsPanel?.();
   });
   on("markTileDirty", ({ row, col }) => {
     if (ui.gridCanvasRenderer?.markTileDirty) ui.gridCanvasRenderer.markTileDirty(row, col);
@@ -493,7 +491,7 @@ export function attachGameEventListeners(game, ui) {
     if (ui.gridCanvasRenderer?.markStaticDirty) ui.gridCanvasRenderer.markStaticDirty();
   });
   on("showFloatingText", ({ tile, value }) => {
-    if (ui.particleEffectsUI?.showFloatingTextAtTile && tile) ui.particleEffectsUI.showFloatingTextAtTile(tile, value);
+    if (tile) ui.showFloatingTextAtTile(tile, value);
   });
   on("objectiveLoaded", (payload) => handleObjectiveLoaded(ui, payload));
   on("objectiveCompleted", () => handleObjectiveCompleted(ui));
@@ -545,16 +543,7 @@ async function applyOfflineWelcomeBack(game, ui) {
 }
 
 function syncToggleStatesFromGame(game, ui) {
-  if (ui.controlDeckUI?.syncToggleStatesFromGame) {
-    ui.controlDeckUI.syncToggleStatesFromGame();
-    return;
-  }
-  try {
-    ui.stateManager.setVar("pause", game.paused ?? false);
-    ui.stateManager.setVar("auto_sell", game.reactor?.auto_sell_enabled ?? false);
-    ui.stateManager.setVar("auto_buy", game.reactor?.auto_buy_enabled ?? false);
-    ui.stateManager.setVar("heat_control", game.reactor?.heat_controlled ?? false);
-  } catch (_) {}
+  applyControlDeckToggleSync(ui);
 }
 
 function startEngine(game) {
@@ -563,10 +552,10 @@ function startEngine(game) {
 }
 
 function syncUIAfterEngineStart(game, ui) {
-  ui.stateManager.setVar("current_heat", game.reactor.current_heat);
-  ui.stateManager.setVar("current_power", game.reactor.current_power);
-  ui.stateManager.setVar("max_heat", game.reactor.max_heat);
-  ui.stateManager.setVar("max_power", game.reactor.max_power);
+  setDecimal(game.state, "current_heat", game.reactor.current_heat);
+  setDecimal(game.state, "current_power", game.reactor.current_power);
+  game.state.max_heat = game.reactor.max_heat;
+  game.state.max_power = game.reactor.max_power;
   if (ui.heatVisualsUI) ui.heatVisualsUI.updateHeatVisuals();
   StorageUtils.remove("reactorNewGamePending");
   game.objectives_manager?._syncActiveObjectiveToState?.();
@@ -576,18 +565,17 @@ function syncUIAfterEngineStart(game, ui) {
   }, SYNC_UI_DELAY_MS);
 }
 
-function initializeEngineViaPauseToggle(ui) {
-  ui.stateManager.setVar("pause", false);
-  ui.stateManager.setVar("pause", true);
+function initializeEngineViaPauseToggle(game) {
+  game.onToggleStateChange?.("pause", false);
+  game.onToggleStateChange?.("pause", true);
 }
 
 async function finalizeGameStart(game, ui) {
   game.pause();
-  ui.stateManager.setVar("pause", true);
   await applyOfflineWelcomeBack(game, ui);
   syncToggleStatesFromGame(game, ui);
   startEngine(game);
-  initializeEngineViaPauseToggle(ui);
+  initializeEngineViaPauseToggle(game);
   syncUIAfterEngineStart(game, ui);
   if (!StorageUtils.get("reactorGameQuickStartShown")) {
     try {
@@ -600,9 +588,7 @@ async function finalizeGameStart(game, ui) {
 
 function applyPendingToggleStates(game) {
   if (!game._pendingToggleStates) return;
-  Object.entries(game._pendingToggleStates).forEach(([key, value]) => {
-    game.ui.stateManager.setVar(key, value);
-  });
+  patchGameState(game, game._pendingToggleStates);
   delete game._pendingToggleStates;
 }
 
@@ -653,41 +639,13 @@ async function startGame(appContext) {
     setTimeout(() => ui.resizeReactor(), 50);
     setTimeout(() => ui.resizeReactor(), 150);
   }
-  ui.partsPanelUI.initializePartsPanel();
+  initializePartsPanel(ui);
   applyPendingToggleStates(game);
   if (game._saved_objective_index !== undefined) {
     await runObjectiveRestoreFlow(game, ui);
   } else {
     game.objectives_manager.start();
     await finalizeGameStart(game, ui);
-  }
-}
-
-class GameBootstrapper {
-  constructor({ game, ui, pageRouter, splashManager, appRoot }) {
-    this.game = game;
-    this.ui = ui;
-    this.pageRouter = pageRouter;
-    this.splashManager = splashManager;
-    this.appRoot = appRoot;
-  }
-  async bootstrap() {
-    getValidatedGameData();
-    console.log("[ReactorBoot] bootstrap: ui.init …");
-    await this.ui.init(this.game);
-    console.log("[ReactorBoot] bootstrap: appRoot.render …");
-    this.appRoot.render();
-    if (typeof this.ui.detachGameEventListeners === "function") {
-      this.ui.detachGameEventListeners();
-    }
-    this.ui.detachGameEventListeners = attachGameEventListeners(this.game, this.ui);
-    this.ui._teardownIntentDelegation = installAppRootIntentDelegation(this.game, this.ui);
-    console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset …");
-    this.game.tileset.initialize();
-    await this.game.partset.initialize();
-    await this.game.upgradeset.initialize();
-    await this.game.set_defaults();
-    console.log("[ReactorBoot] bootstrap: complete");
   }
 }
 
@@ -832,20 +790,18 @@ async function main() {
   console.log("[ReactorBoot] createAppInstances ok");
   const appRootEl = document.getElementById("app_root");
   console.log("[ReactorBoot] #app_root", appRootEl ? "found" : "MISSING");
-  const appRoot = new AppRoot(appRootEl, game, ui);
-  appRoot.render();
+  renderAppRoot(appRootEl, game, ui);
   if (!isTestEnv()) {
     window.pageRouter = pageRouter;
     window.ui = ui;
     window.game = game;
-    window.appRoot = appRoot;
+    window.appRoot = { render: () => renderAppRoot(appRootEl, game, ui) };
   }
   console.log("[ReactorBoot] migrateLocalStorageToIndexedDB …");
   await migrateLocalStorageToIndexedDB();
   const ctx = { game, pageRouter, ui };
   if (window.splashManager) window.splashManager.setAppContext(ctx);
-  const bootstrapper = new GameBootstrapper({ game, ui, pageRouter, splashManager: window.splashManager, appRoot });
-  await bootstrapper.bootstrap();
+  await bootstrapGame(game, ui);
   console.log("[ReactorBoot] handleUserSession …");
   await handleUserSession(ctx);
   setupButtonHandlers(ctx);

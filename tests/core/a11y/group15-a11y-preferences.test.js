@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, vi } from "../../helpers/setup.js";
 import { formatNumber, StorageUtils } from "@app/utils.js";
-import { preferences } from "@app/state.js";
+import { preferences } from "@app/store.js";
 import { createTutorialManager } from "@app/components/ui-tooltips-tutorial.js";
+import { setupResearchCollapsibleSections } from "@app/components/ui-components.js";
 
 describe("Group 15: Accessibility and Dynamic Preferences", () => {
   let game;
@@ -155,7 +156,7 @@ describe("Group 15: Accessibility and Dynamic Preferences", () => {
 
   it("toggles research section header aria-expanded on collapse", async () => {
     await game.router.loadPage("experimental_upgrades_section");
-    game.ui.pageInitUI.setupResearchCollapsibleSections();
+    setupResearchCollapsibleSections(game.ui);
     const header = document.querySelector("#experimental_upgrades_section .research-section-header");
     const article = header?.closest(".research-collapsible");
     expect(header).toBeTruthy();

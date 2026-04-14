@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, toNum, flushUIUpdates } from '../helpers/setup.js';
-import { setDecimal } from '@app/state.js';
+import { setDecimal } from "@app/store.js";
 import { toDecimal } from '@app/utils.js';
 
 describe('EP Info Bar Display', () => {
@@ -11,7 +11,7 @@ describe('EP Info Bar Display', () => {
         game = setup.game;
         document = setup.document;
         await game.router.loadPage("reactor_section");
-        game.ui.coreLoopUI.runUpdateInterfaceLoop(0);
+        game.ui.startRenderLoop(0);
     });
 
     afterEach(() => {

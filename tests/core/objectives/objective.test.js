@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, UI, Game, Engine, ObjectiveManager, assertProcessedObjectiveTitleHasIcon } from "../../helpers/setup.js";
 import dataService from "@app/services.js";
 import { getObjectiveCheck } from "@app/logic.js";
+import { patchGameState } from "@app/state.js";
 import { satisfyObjective } from "../../helpers/objectiveHelpers.js";
 
 // Load objective data
@@ -791,7 +792,7 @@ describe("Objective System", () => {
               const costNum = (typeof upgradeToBuy.getCost()?.toNumber === 'function' ? upgradeToBuy.getCost().toNumber() : upgradeToBuy.getCost());
               const currentNum = (typeof testGame.current_money?.toNumber === 'function' ? testGame.current_money.toNumber() : testGame.current_money);
               testGame.current_money = Math.max(currentNum, costNum * 2 + 10000);
-              testGame.ui.stateManager.setVar("current_money", testGame.current_money);
+              patchGameState(testGame, { current_money: testGame.current_money });
               testGame.upgradeset.check_affordability(testGame);
               const purchased = testGame.upgradeset.purchaseUpgrade(upgradeToBuy.id);
               console.log(`[DEBUG] Force purchased upgrade ${upgradeToBuy.id}: ${purchased}, level: ${upgradeToBuy.level}`);
@@ -822,14 +823,14 @@ describe("Objective System", () => {
         if (rewardType === 'money' && objective.reward) {
           const moneyBeforeReward = testGame.current_money;
           testGame.current_money = (typeof testGame.current_money?.add === 'function' ? testGame.current_money.add(objective.reward) : (testGame.current_money + objective.reward));
-          testGame.ui.stateManager.setVar('current_money', testGame.current_money, true);
+          patchGameState(testGame, { current_money: testGame.current_money });
           const afterNum = (typeof testGame.current_money?.toNumber === 'function' ? testGame.current_money.toNumber() : testGame.current_money);
           const beforeNum = (typeof moneyBeforeReward?.toNumber === 'function' ? moneyBeforeReward.toNumber() : moneyBeforeReward);
           expect(afterNum, `Objective ${index + 1} should give ${expectedReward} money`).toBe(beforeNum + expectedReward);
         } else if (rewardType === 'ep' && objective.ep_reward) {
           const currentEP = testGame.exotic_particles;
           testGame.exotic_particles = (typeof testGame.exotic_particles?.add === 'function' ? testGame.exotic_particles.add(objective.ep_reward) : (testGame.exotic_particles + objective.ep_reward));
-          testGame.ui.stateManager.setVar('exotic_particles', testGame.exotic_particles, true);
+          patchGameState(testGame, { exotic_particles: testGame.exotic_particles });
           const afterEPNum = (typeof testGame.exotic_particles?.toNumber === 'function' ? testGame.exotic_particles.toNumber() : testGame.exotic_particles);
           const beforeEPNum = (typeof currentEP?.toNumber === 'function' ? currentEP.toNumber() : currentEP);
           expect(afterEPNum, `Objective ${index + 1} should give ${expectedReward} EP on top of current EP`).toBe(beforeEPNum + expectedReward);

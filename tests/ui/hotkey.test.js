@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum, simulateKeyPress, buildKeyboardEvent } from '../helpers/setup.js';
+import { patchGameState } from "@app/state.js";
 
 describe('EP Hotkey Functionality', () => {
     let game;
@@ -22,9 +23,11 @@ describe('EP Hotkey Functionality', () => {
         const initialTotalEP = game.total_exotic_particles;
         const initialCurrentEP = game.current_exotic_particles;
 
-        game.ui.stateManager.setVar("exotic_particles", initialEP);
-        game.ui.stateManager.setVar("total_exotic_particles", initialTotalEP);
-        game.ui.stateManager.setVar("current_exotic_particles", initialCurrentEP);
+        patchGameState(game, {
+          exotic_particles: initialEP,
+          total_exotic_particles: initialTotalEP,
+          current_exotic_particles: initialCurrentEP,
+        });
 
         // Mock the affordability check
         const affordabilitySpy = vi.spyOn(game.upgradeset, 'check_affordability');
@@ -35,10 +38,6 @@ describe('EP Hotkey Functionality', () => {
         expect(toNum(game.total_exotic_particles)).toBe(toNum(initialTotalEP) + 1);
         expect(toNum(game.current_exotic_particles)).toBe(toNum(initialCurrentEP) + 1);
 
-        expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(toNum(initialEP) + 1);
-        expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(toNum(initialTotalEP) + 1);
-        expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(toNum(initialCurrentEP) + 1);
-
         expect(affordabilitySpy).toHaveBeenCalledWith(game);
     });
 
@@ -48,9 +47,11 @@ describe('EP Hotkey Functionality', () => {
         const initialTotalEP = game.total_exotic_particles;
         const initialCurrentEP = game.current_exotic_particles;
 
-        game.ui.stateManager.setVar("exotic_particles", initialEP);
-        game.ui.stateManager.setVar("total_exotic_particles", initialTotalEP);
-        game.ui.stateManager.setVar("current_exotic_particles", initialCurrentEP);
+        patchGameState(game, {
+          exotic_particles: initialEP,
+          total_exotic_particles: initialTotalEP,
+          current_exotic_particles: initialCurrentEP,
+        });
 
         // Mock the affordability check
         const affordabilitySpy = vi.spyOn(game.upgradeset, 'check_affordability');
@@ -60,10 +61,6 @@ describe('EP Hotkey Functionality', () => {
         expect(toNum(game.exotic_particles)).toBe(toNum(initialEP) + 1);
         expect(toNum(game.total_exotic_particles)).toBe(toNum(initialTotalEP) + 1);
         expect(toNum(game.current_exotic_particles)).toBe(toNum(initialCurrentEP) + 1);
-
-        expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(toNum(initialEP) + 1);
-        expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(toNum(initialTotalEP) + 1);
-        expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(toNum(initialCurrentEP) + 1);
 
         expect(affordabilitySpy).toHaveBeenCalledWith(game);
     });
@@ -93,19 +90,18 @@ describe('EP Hotkey Functionality', () => {
     it('should not trigger when E is pressed without CTRL', () => {
         // Set initial EP
         const initialEP = game.exotic_particles;
-        game.ui.stateManager.setVar("exotic_particles", initialEP);
+        patchGameState(game, { exotic_particles: initialEP });
 
         simulateKeyPress(document, 'e', { ctrlKey: false });
 
         // Verify that EP did not change
         expect(game.exotic_particles).toBe(initialEP);
-        expect(game.ui.stateManager.getVar("exotic_particles")).toBe(initialEP);
     });
 
     it('should start exponential money increase when CTRL+9 is pressed', () => {
         // Set initial money
         const initialMoney = game.current_money;
-        game.ui.stateManager.setVar("current_money", initialMoney);
+        patchGameState(game, { current_money: initialMoney });
 
         // Mock the exponential money methods
         const startSpy = vi.spyOn(game.ui, 'startCtrl9MoneyIncrease');

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 import { placePart, forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
 
 describe("Tile Mechanics", () => {
@@ -103,12 +104,12 @@ describe("Tile Mechanics", () => {
     const purchasePrice = toNum(part.cost);
 
     game.current_money = purchasePrice * 2;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
 
     const moneyBeforePurchase = toNum(game.current_money);
     const tile = await placePart(game, 0, 0, "uranium1");
     game.current_money = toNum(game.current_money) - purchasePrice;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     const moneyAfterPurchase = toNum(game.current_money);
 
     expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
@@ -131,12 +132,12 @@ describe("Tile Mechanics", () => {
     const purchasePrice = toNum(part.cost);
 
     game.current_money = purchasePrice * 3;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
 
     const moneyBeforePurchase = toNum(game.current_money);
     const tile = await placePart(game, 0, 0, "vent1");
     game.current_money = toNum(game.current_money) - purchasePrice;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     const moneyAfterPurchase = toNum(game.current_money);
 
     expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
@@ -161,12 +162,12 @@ describe("Tile Mechanics", () => {
       const purchasePrice = toNum(part.cost);
 
       game.current_money = purchasePrice * 3;
-      game.ui.stateManager.setVar("current_money", game.current_money);
+      patchGameState(game, { current_money: game.current_money });
 
       const moneyBeforePurchase = toNum(game.current_money);
       const tile = await placePart(game, 0, 0, partId);
       game.current_money = toNum(game.current_money) - purchasePrice;
-      game.ui.stateManager.setVar("current_money", game.current_money);
+      patchGameState(game, { current_money: game.current_money });
       const moneyAfterPurchase = toNum(game.current_money);
 
       expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);

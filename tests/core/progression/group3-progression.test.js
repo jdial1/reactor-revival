@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame, toNum, performTestRespec } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
 
 describe("Group 3: Progression & Tech Tree", () => {
   let game;
@@ -55,11 +56,11 @@ describe("Group 3: Progression & Tech Tree", () => {
     upgrade.updateDisplayCost();
     const cost = toNum(upgrade.getCost());
     game.current_money = cost;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
     expect(game.upgradeset.purchaseUpgrade("chronometer")).toBe(true);
     expect(toNum(game.current_money)).toBe(0);
-    expect(toNum(game.ui.stateManager.getVar("current_money"))).toBe(0);
+    expect(toNum(game.state.current_money)).toBe(0);
     expect(upgrade.level).toBe(1);
   });
 
@@ -71,11 +72,11 @@ describe("Group 3: Progression & Tech Tree", () => {
     const ecost = toNum(lab.getEcost());
     expect(ecost).toBe(1);
     game.current_exotic_particles = ecost;
-    game.ui.stateManager.setVar("current_exotic_particles", ecost);
+    patchGameState(game, { current_exotic_particles: ecost });
     game.upgradeset.check_affordability(game);
     expect(game.upgradeset.purchaseUpgrade("laboratory")).toBe(true);
     expect(toNum(game.current_exotic_particles)).toBe(0);
-    expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(0);
+    expect(toNum(game.state.current_exotic_particles)).toBe(0);
     expect(lab.level).toBe(1);
   });
 
@@ -90,7 +91,7 @@ describe("Group 3: Progression & Tech Tree", () => {
   it("locks auto-sell power reduction when sell cap is below stored power", () => {
     game.tileset.clearAllTiles();
     game.reactor.auto_sell_enabled = true;
-    game.ui.stateManager.setVar("auto_sell", true);
+    game.onToggleStateChange?.("auto_sell", true);
 
     const maxPower = 1000;
     const autoSellMult = 0.1;
@@ -116,7 +117,7 @@ describe("Group 3: Progression & Tech Tree", () => {
   it("locks auto-sell when stored power is below sell cap", () => {
     game.tileset.clearAllTiles();
     game.reactor.auto_sell_enabled = true;
-    game.ui.stateManager.setVar("auto_sell", true);
+    game.onToggleStateChange?.("auto_sell", true);
 
     const maxPower = 1000;
     const autoSellMult = 0.1;
@@ -141,7 +142,7 @@ describe("Group 3: Progression & Tech Tree", () => {
   it("uses altered max power for auto-sell cap when altered differs from base max", () => {
     game.tileset.clearAllTiles();
     game.reactor.auto_sell_enabled = true;
-    game.ui.stateManager.setVar("auto_sell", true);
+    game.onToggleStateChange?.("auto_sell", true);
 
     const baseMax = 1000;
     const alteredMax = 2000;
@@ -167,7 +168,7 @@ describe("Group 3: Progression & Tech Tree", () => {
   it("does not sell power when auto-sell is disabled", () => {
     game.tileset.clearAllTiles();
     game.reactor.auto_sell_enabled = false;
-    game.ui.stateManager.setVar("auto_sell", false);
+    game.onToggleStateChange?.("auto_sell", false);
     game.reactor.max_power = 1000;
     game.reactor.base_max_power = 1000;
     game.reactor.altered_max_power = 1000;
@@ -187,7 +188,7 @@ describe("Group 3: Progression & Tech Tree", () => {
     game.bypass_tech_tree_restrictions = false;
     game.tech_tree = "unified";
     game.current_money = 1e30;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
     expect(game.upgradeset.isUpgradeAvailable("chronometer")).toBe(true);
     expect(game.upgradeset.isUpgradeAvailable("heat_control_operator")).toBe(true);
@@ -198,7 +199,7 @@ describe("Group 3: Progression & Tech Tree", () => {
     game.bypass_tech_tree_restrictions = false;
     game.tech_tree = "__nonexistent_doctrine__";
     game.current_money = 1e30;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
     expect(game.upgradeset.isUpgradeAvailable("ceramic_composite")).toBe(false);
   });
@@ -211,7 +212,7 @@ describe("Group 3: Progression & Tech Tree", () => {
     upgrade.updateDisplayCost();
     expect(upgrade.display_cost).toBe("MAX");
     game.current_money = 1e30;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
     expect(game.upgradeset.purchaseUpgrade("heat_control_operator")).toBe(false);
     expect(upgrade.level).toBe(1);
@@ -251,7 +252,7 @@ describe("Group 3: Progression & Tech Tree", () => {
     const cEng = toNum(eng.getCost());
     const total = cArch + cEng;
     game.current_money = total;
-    game.ui.stateManager.setVar("current_money", game.current_money);
+    patchGameState(game, { current_money: game.current_money });
     game.upgradeset.check_affordability(game);
 
     expect(game.upgradeset.isUpgradeAvailable(architectUpgradeId)).toBe(true);
@@ -263,24 +264,24 @@ describe("Group 3: Progression & Tech Tree", () => {
     expect(game.upgradeset.purchaseUpgrade(engineerUpgradeId)).toBe(true);
     expect(game.upgradeset.getUpgrade(engineerUpgradeId).level).toBe(1);
     expect(toNum(game.current_money)).toBe(0);
-    expect(toNum(game.ui.stateManager.getVar("current_money"))).toBe(0);
+    expect(toNum(game.state.current_money)).toBe(0);
   });
 
   it("respec doctrine fails without enough EP and succeeds with exact cost", () => {
     game.bypass_tech_tree_restrictions = false;
     game.tech_tree = "unified";
     game.current_exotic_particles = 0;
-    game.ui.stateManager.setVar("current_exotic_particles", 0);
+    patchGameState(game, { current_exotic_particles: 0 });
 
     expect(game.respecDoctrine()).toBe(false);
     expect(game.tech_tree).toBe("unified");
 
     game.current_exotic_particles = game.RESPER_DOCTRINE_EP_COST;
-    game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+    patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
 
     expect(game.respecDoctrine()).toBe(true);
     expect(game.tech_tree).toBe(null);
     expect(toNum(game.current_exotic_particles)).toBe(0);
-    expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(0);
+    expect(toNum(game.state.current_exotic_particles)).toBe(0);
   });
 });

@@ -1,4 +1,5 @@
 import { syncGridState } from "./gameHelpers.js";
+import { patchGameState } from "@app/state.js";
 
 export async function satisfyObjective(game, idx) {
 
@@ -39,7 +40,7 @@ export async function satisfyObjective(game, idx) {
                 // Ensure sufficient money
                 const cost = upgradeToBuy.getCost();
                 game.current_money = Math.max(game.current_money, cost * 2 + 10000);
-                game.ui.stateManager.setVar("current_money", game.current_money);
+                patchGameState(game, { current_money: game.current_money });
                 game.upgradeset.check_affordability(game);
                 const purchased = game.upgradeset.purchaseUpgrade(upgradeToBuy.id);
                 // Verify purchase succeeded - ensure level is actually set
@@ -126,7 +127,7 @@ export async function satisfyObjective(game, idx) {
         }
 
         case 16: {
-            game.ui.stateManager.setVar("auto_sell", true);
+            game.onToggleStateChange?.("auto_sell", true);
             const capCols = Math.min(10, game.cols);
             for (let i = 0; i < capCols; i++) {
                 const t = game.tileset.getTile(0, i);
@@ -160,7 +161,7 @@ export async function satisfyObjective(game, idx) {
         case 21:
             for (let i = 0; i < 8; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("plutonium3"));
             for (let i = 0; i < 10; i++) await game.tileset.getTile(1, i).setPart(game.partset.getPartById("capacitor1"));
-            game.ui.stateManager.setVar("auto_sell", true);
+            game.onToggleStateChange?.("auto_sell", true);
             game.reactor.updateStats();
             game.reactor.stats_cash = 60000;
             break;
@@ -176,12 +177,12 @@ export async function satisfyObjective(game, idx) {
 
         case 24:
             game.current_money = 1000000000;
-            game.ui.stateManager.setVar("current_money", game.current_money);
+            patchGameState(game, { current_money: game.current_money });
             break;
 
         case 25:
             game.current_money = 10000000000;
-            game.ui.stateManager.setVar("current_money", game.current_money);
+            patchGameState(game, { current_money: game.current_money });
             break;
 
         case 26:
@@ -199,7 +200,7 @@ export async function satisfyObjective(game, idx) {
 
         case 28:
             game.exotic_particles = 10;
-            game.ui.stateManager.setVar("exotic_particles", 10);
+            patchGameState(game, { exotic_particles: 10 });
             break;
 
         case 30:
@@ -230,9 +231,11 @@ export async function satisfyObjective(game, idx) {
             // Ensure money is low enough (should already be base_money after reboot)
             game.current_money = game.base_money;
             // Update state manager to reflect the values
-            game.ui.stateManager.setVar("exotic_particles", 0);
-            game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
-            game.ui.stateManager.setVar("current_money", game.current_money);
+            patchGameState(game, {
+              exotic_particles: 0,
+              total_exotic_particles: game.total_exotic_particles,
+              current_money: game.current_money,
+            });
             game.objectives_manager.current_objective_index = idx;
             game.objectives_manager.set_objective(idx, true);
             // Check the objective after setting up the state

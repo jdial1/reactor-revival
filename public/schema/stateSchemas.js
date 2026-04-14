@@ -268,7 +268,6 @@ const GameLoopReactorStateSchema = z.object({
   heat_controlled: z.number().optional().default(0),
   vent_multiplier_eff: z.number().optional().default(0),
   stirling_multiplier: z.number().optional().default(0),
-  use_thermal_graph: z.boolean().optional().default(false),
 }).passthrough();
 
 export const GameLoopTickInputSchema = z.object({

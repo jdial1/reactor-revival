@@ -111,7 +111,7 @@ describe('Full Objective Run', () => {
 
             // Ensure game is not paused for objective checking
             game.paused = false;
-            game.ui.stateManager.setVar("pause", false);
+            game.onToggleStateChange?.("pause", false);
             
             // Ensure objective is loaded
             if (!game.objectives_manager.current_objective_def) {

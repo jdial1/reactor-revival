@@ -1,10 +1,10 @@
 import { html, render, nothing } from "lit-html";
 import { proxy } from "valtio/vanilla";
-import { styleMap, StorageUtilsAsync, serializeSave, rotateSlot1ToBackupAsync, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, formatDuration, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
-import { getValidatedPreferences, preferences, modalUi, syncReducedMotionDOM, enqueueGameEffect } from "../state.js";
+import { styleMap, StorageAdapter, serializeSave, rotateSlot1ToBackup, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, formatDuration, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
+import { getValidatedPreferences, preferences, modalUi, syncReducedMotionDOM, actions } from "../store.js";
 import { getValidatedGameData } from "../services.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
-import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate } from "./ui-components.js";
+import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate, getUiElement } from "./ui-components.js";
 import {
   settingsHelpShellTemplate,
   volumeStepperTemplate,
@@ -243,7 +243,7 @@ function setupMechSwitches(overlay, modal, signal) {
   if (numberFormatSelect) {
     numberFormatSelect.addEventListener("change", () => {
       preferences.numberFormat = numberFormatSelect.value;
-      if (game?.ui?.coreLoopUI?.runUpdateInterfaceLoop) game.ui.coreLoopUI.runUpdateInterfaceLoop();
+      game?.ui?.startRenderLoop?.(0);
     }, { signal });
   }
   bindEvents(overlay, {
@@ -348,7 +348,7 @@ function setupSettingsHelpModal(overlay, modal, signal) {
 function setupNavAndAbout(overlay) {
   const versionSpan = overlay.querySelector("#app_version");
   if (versionSpan) {
-    const cached = window.ui?.pageInitUI?._cachedVersion;
+    const cached = window.ui?._cachedVersion;
     if (cached) {
       versionSpan.textContent = cached;
     } else {
@@ -417,7 +417,7 @@ export function createSettingsContext(ui, modal) {
   const getUi = () => ui ?? window.ui;
   const playClick = () => {
     const game = getGame();
-    if (game) enqueueGameEffect(game, { kind: "sfx", id: "click", context: "global" });
+    if (game) actions.enqueueEffect(game, { kind: "sfx", id: "click", context: "global" });
   };
 
   const saveToHandle = async (handle) => {
@@ -452,8 +452,8 @@ export function createSettingsContext(ui, modal) {
       return;
     }
     await game.saveManager.autoSave();
-    const slot = Number(await StorageUtilsAsync.get("reactorCurrentSaveSlot", 1));
-    const saveData = await StorageUtilsAsync.getRaw(`reactorGameSave_${slot}`) || await StorageUtilsAsync.getRaw("reactorGameSave");
+    const slot = Number(await StorageAdapter.get("reactorCurrentSaveSlot", 1));
+    const saveData = await StorageAdapter.getRaw(`reactorGameSave_${slot}`) || await StorageAdapter.getRaw("reactorGameSave");
     if (!saveData) return;
     const blob = new Blob([saveData], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -466,7 +466,7 @@ export function createSettingsContext(ui, modal) {
 
   const _applyImportedSaveData = async (saveData) => {
     if (!saveData) return;
-    await rotateSlot1ToBackupAsync(saveData);
+    await rotateSlot1ToBackup(saveData);
     const game = getGame();
     if (!game?.saveManager) return;
     let result = await game.saveManager.loadGame(1);
@@ -634,7 +634,7 @@ class ModalOrchestration {
 
   _resolveModalRoot() {
     if (!this._modalRoot) {
-      this._modalRoot = this.ui?.coreLoopUI?.getElement?.("modal-root") ?? this.ui?.DOMElements?.modal_root ?? (typeof document !== "undefined" ? document.getElementById("modal-root") : null);
+      this._modalRoot = (this.ui ? getUiElement(this.ui, "modal-root") : null) ?? this.ui?.DOMElements?.modal_root ?? (typeof document !== "undefined" ? document.getElementById("modal-root") : null);
     }
     return this._modalRoot;
   }
@@ -913,8 +913,8 @@ class ModalOrchestration {
     }
     modal.classList.add("hidden");
     const previousPauseState = modal.dataset.previousPauseState === "true";
-    if (this.ui?.stateManager) {
-      this.ui.stateManager.setVar("pause", previousPauseState);
+    if (this.ui?.game) {
+      this.ui.game.onToggleStateChange?.("pause", previousPauseState);
     }
   }
 
@@ -924,15 +924,13 @@ class ModalOrchestration {
 
     const game = this.ui.game;
     game.pause();
-    this.ui.stateManager.setVar("pause", true);
 
     return new Promise((resolve) => {
       const handleClose = (mode) => {
         if ((mode === "instant" || mode === "fast-forward") && game.engine) game.engine.runInstantCatchup();
 
         if (game) {
-          game.paused = false;
-          this.ui.stateManager.setVar("pause", false);
+          game.onToggleStateChange?.("pause", false);
         }
         this.hideModal(MODAL_IDS.WELCOME_BACK);
         resolve(mode);
@@ -1135,7 +1133,7 @@ class ModalOrchestration {
     const game = this.ui?.game;
     if (pauseGame && game) {
       game.pause();
-      game.ui?.stateManager?.setVar?.("pause", true);
+      game.onToggleStateChange?.("pause", true);
     }
     if (this.ui?.uiState) this.ui.uiState.reactor_failed_error = null;
     this._closeLitModal();

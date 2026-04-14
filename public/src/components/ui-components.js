@@ -1,8 +1,19 @@
 import { html, render } from "lit-html";
-import { proxy, subscribe } from "valtio/vanilla";
-import { BlueprintSchema, LegacyGridSchema, setDecimal, preferences, subscribeKey, previewBlueprintPlannerStats, enqueueGameEffect } from "../state.js";
-import { repeat, styleMap, numFormat as fmt, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
-import { runCheckAffordability, calculateSectionCounts, BlueprintService } from "../logic.js";
+import {
+  proxy,
+  subscribe,
+  BlueprintSchema,
+  LegacyGridSchema,
+  setDecimal,
+  updateDecimal,
+  patchGameState,
+  preferences,
+  subscribeKey,
+  previewBlueprintPlannerStats,
+  actions,
+} from "../store.js";
+import { repeat, styleMap, numFormat as fmt, formatNumberCompactIntl, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
+import { runCheckAffordability, calculateSectionCounts } from "../logic.js";
 import { UpgradeCard, CloseButton, PartButton, partsModuleInfoCardTemplate } from "./button-factory.js";
 import { MODAL_IDS } from "./ui-modals.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
@@ -57,6 +68,34 @@ function formatSimulationTickLine(game) {
   return `${periodStr}s #${n}`;
 }
 
+export function getUiElement(ui, id) {
+  if (!ui || typeof document === "undefined") return null;
+  if (ui.DOMElements?.[id]) return ui.DOMElements[id];
+  const el = document.getElementById(id);
+  if (!el) return null;
+  if (!ui.DOMElements) ui.DOMElements = {};
+  ui.DOMElements[id] = el;
+  const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+  ui.DOMElements[camelCaseKey] = el;
+  return el;
+}
+
+export function cacheDomElements(_ui, _pageId) {
+  return true;
+}
+
+export function getPageReactor(ui) {
+  return getUiElement(ui, "reactor") ?? document.getElementById("reactor");
+}
+
+export function getPageReactorWrapper(ui) {
+  return getUiElement(ui, "reactor_wrapper") ?? document.getElementById("reactor_wrapper");
+}
+
+export function getPageReactorBackground(ui) {
+  return getUiElement(ui, "reactor_background") ?? document.getElementById("reactor_background");
+}
+
 function formatArchitectMetricsLine(state) {
   const p = fmt(toNumber(state.stats_power ?? 0), 0);
   const h = fmt(toNumber(state.stats_heat_generation ?? 0), 0);
@@ -68,139 +107,151 @@ function formatArchitectMetricsLine(state) {
   return `P/t ${p} · H/t ${h} · V ${v} · Hull ${hullStr}`;
 }
 
-class InfoBarUI {
-  constructor(ui) {
-    this.ui = ui;
-    this._unmount = null;
-    this._infoBarAbortController = null;
-    this._cathodeInfoBarFirst = Object.fromEntries(INFO_BAR_CATHODE_IDS.map((id) => [id, true]));
-    this._cathodeInfoBarLast = {};
-    this._cathodeInfoBarTargets = null;
-  }
+function resetInfoBarCathodeState(ui) {
+  ui._cathodeInfoBarFirst = Object.fromEntries(INFO_BAR_CATHODE_IDS.map((id) => [id, true]));
+  ui._cathodeInfoBarLast = {};
+  ui._cathodeInfoBarTargets = null;
+}
 
-  _resetInfoBarCathodeState() {
-    this._cathodeInfoBarFirst = Object.fromEntries(INFO_BAR_CATHODE_IDS.map((id) => [id, true]));
-    this._cathodeInfoBarLast = {};
-    this._cathodeInfoBarTargets = null;
-  }
-
-  _infoBarCathodeAfterRender() {
-    const targets = this._cathodeInfoBarTargets;
-    if (!targets) return;
-    for (const id of INFO_BAR_CATHODE_IDS) {
-      const el = document.getElementById(id);
-      const text = targets[id];
-      if (!el || typeof text !== "string") continue;
-      if (this._cathodeInfoBarFirst[id]) {
-        this._cathodeInfoBarFirst[id] = false;
-        el.textContent = text;
-        this._cathodeInfoBarLast[id] = text;
-        continue;
-      }
-      if (this._cathodeInfoBarLast[id] === text) continue;
-      this._cathodeInfoBarLast[id] = text;
-      runCathodeScramble(el, text, { durationMs: 150 });
+function infoBarCathodeAfterRender(ui) {
+  const targets = ui._cathodeInfoBarTargets;
+  if (!targets) return;
+  for (const id of INFO_BAR_CATHODE_IDS) {
+    const el = document.getElementById(id);
+    const text = targets[id];
+    if (!el || typeof text !== "string") continue;
+    if (ui._cathodeInfoBarFirst[id]) {
+      ui._cathodeInfoBarFirst[id] = false;
+      el.textContent = text;
+      ui._cathodeInfoBarLast[id] = text;
+      continue;
     }
+    if (ui._cathodeInfoBarLast[id] === text) continue;
+    ui._cathodeInfoBarLast[id] = text;
+    runCathodeScramble(el, text, { durationMs: 150 });
   }
+}
 
-  setupInfoBarButtons() {
-    const root = document.getElementById("info_bar_root");
-    if (!root || !this.ui.game?.state) return;
+function buildInfoBarTemplate(ui, state) {
+  const power = toNumber(state.current_power);
+  const heat = toNumber(state.current_heat);
+  const maxP = toNumber(state.max_power) || 1;
+  const maxH = toNumber(state.max_heat) || 1;
 
-    this.teardown();
-    this._resetInfoBarCathodeState();
-    this._infoBarAbortController = new AbortController();
-    const signal = this._infoBarAbortController.signal;
+  const pBar = getBarVisuals(power, maxP, "--fill-height", "vu");
+  const hBar = getBarVisuals(heat, maxH, "--fill-height", "heatVu");
 
-    const subscriptions = [{
-      state: this.ui.game.state,
-      keys: ["current_power", "max_power", "current_heat", "max_heat", "current_money", "current_exotic_particles", "active_buffs", "melting_down", "power_net_change", "heat_net_change", "stats_power", "stats_net_heat"],
-    }];
-    this._unmount = ReactiveLitComponent.mountMulti(
-      subscriptions,
-      () => this._infoBarTemplate(this.ui.game.state),
-      root,
-      () => this._infoBarCathodeAfterRender()
-    );
+  const meltdown = !!state.melting_down;
+  const powerClass = classMap({ "info-item": true, power: true, full: pBar.isFull, meltdown });
+  const heatClass = classMap({ "info-item": true, heat: true, full: hBar.isFull, meltdown, "heat-led-warning": hBar.isWarning });
+  const moneyDisplay = meltdown ? "☢️" : `$${formatNumberCompactIntl(state.current_money ?? 0)}`;
+  const moneyDisplayMobile = meltdown ? "☢️" : formatNumberCompactIntl(state.current_money ?? 0);
 
-    document.getElementById("control_deck_build_fab")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.ui.partsPanelUI.togglePartsPanelForBuildButton();
-    }, { signal });
+  const activeBuffs = state.active_buffs ?? [];
+
+  const epVisible = toNumber(state.current_exotic_particles) > 0;
+  const epContentStyle = styleMap({ display: epVisible ? "flex" : "none" });
+  const epText = formatNumberCompactIntl(state.current_exotic_particles ?? 0);
+  ui._cathodeInfoBarTargets = {
+    info_money_desktop: moneyDisplay,
+    info_money: moneyDisplayMobile,
+    info_ep_value_desktop: epText,
+    info_ep_value: epText,
+  };
+
+  return infoBarTemplate({
+    powerClass,
+    heatClass,
+    powerBarStyle: pBar.style,
+    heatBarStyle: hBar.style,
+    powerTextDesktop: fmt(power, 2),
+    powerTextMobile: fmt(power, 0),
+    maxPowerDesktop: fmt(maxP, 2),
+    maxPowerMobile: fmt(maxP),
+    heatTextDesktop: fmt(heat, 2),
+    heatTextMobile: fmt(heat, 0),
+    maxHeatDesktop: fmt(maxH, 2),
+    maxHeatMobile: fmt(maxH),
+    epContentStyle,
+    epVisible,
+    activeBuffs,
+  });
+}
+
+export function teardownInfoBar(ui) {
+  if (ui._infoBarUnmount) {
+    INFO_BAR_CATHODE_IDS.forEach((id) => cancelCathodeScramble(document.getElementById(id)));
+    try { ui._infoBarUnmount(); } catch (_) {}
+    ui._infoBarUnmount = null;
   }
+  if (ui._infoBarAbortController) {
+    ui._infoBarAbortController.abort();
+    ui._infoBarAbortController = null;
+  }
+}
 
-  teardown() {
-    if (this._unmount) {
-      INFO_BAR_CATHODE_IDS.forEach((id) => cancelCathodeScramble(document.getElementById(id)));
-      this._unmount();
-      this._unmount = null;
+export function mountInfoBar(ui) {
+  const root = document.getElementById("info_bar_root");
+  if (!root || !ui.game?.state) return;
+
+  teardownInfoBar(ui);
+  resetInfoBarCathodeState(ui);
+  ui._infoBarAbortController = new AbortController();
+  const signal = ui._infoBarAbortController.signal;
+
+  const subscriptions = [{
+    state: ui.game.state,
+    keys: ["current_power", "max_power", "current_heat", "max_heat", "current_money", "current_exotic_particles", "active_buffs", "melting_down", "power_net_change", "heat_net_change", "stats_power", "stats_net_heat"],
+  }];
+  ui._infoBarUnmount = ReactiveLitComponent.mountMulti(
+    subscriptions,
+    () => buildInfoBarTemplate(ui, ui.game.state),
+    root,
+    () => infoBarCathodeAfterRender(ui)
+  );
+
+  document.getElementById("control_deck_build_fab")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePartsPanelForBuildButton(ui);
+  }, { signal });
+
+  ui._unmounts.push(() => teardownInfoBar(ui));
+}
+
+function getPartsSectionElement(ui) {
+  return getUiElement(ui, "parts_section") ?? document.getElementById("parts_section");
+}
+
+export function updatePartsPanelBodyClass(ui) {
+  const partsSection = getPartsSectionElement(ui);
+  const collapsed = ui.uiState?.parts_panel_collapsed ?? partsSection?.classList.contains("collapsed");
+  document.body.classList.toggle("parts-panel-open", !!(partsSection && !collapsed));
+  document.body.classList.toggle("parts-panel-right", !!partsSection?.classList.contains("right-side"));
+  logger.log("debug", "ui", "[updatePartsPanelBodyClass] Panel collapsed:", collapsed, "Body classes:", document.body.className);
+}
+
+export function togglePartsPanelForBuildButton(ui) {
+  ui.deviceFeatures?.heavyVibration?.();
+  if (ui.game) actions.enqueueEffect(ui.game, { kind: "sfx", id: "metal_clank", a: 0.8, b: -0.7, context: "global" });
+  const partsSection = getPartsSectionElement(ui);
+  if (partsSection && ui.uiState) {
+    const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
+    if (isMobile) {
+      ui.uiState.parts_panel_collapsed = !ui.uiState.parts_panel_collapsed;
+      updatePartsPanelBodyClass(ui);
+      void partsSection.offsetHeight;
+    } else {
+      ui.uiState.parts_panel_collapsed = !ui.uiState.parts_panel_collapsed;
+      updatePartsPanelBodyClass(ui);
     }
-    if (this._infoBarAbortController) {
-      this._infoBarAbortController.abort();
-      this._infoBarAbortController = null;
+  } else if (partsSection) {
+    const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
+    if (isMobile) {
+      partsSection.classList.toggle("collapsed");
+      updatePartsPanelBodyClass(ui);
+      void partsSection.offsetHeight;
     }
-  }
-
-  _infoBarTemplate(state) {
-    const power = toNumber(state.current_power);
-    const heat = toNumber(state.current_heat);
-    const maxP = toNumber(state.max_power) || 1;
-    const maxH = toNumber(state.max_heat) || 1;
-
-    const rawPowerPct = Math.min(100, Math.max(0, (power / maxP) * 100));
-    const rawHeatPct = Math.min(100, Math.max(0, (heat / maxH) * 100));
-    const powerPct = vuQuantizePercent(rawPowerPct, maxP > 0 && power >= maxP);
-    const heatPct = vuQuantizePercent(rawHeatPct, maxH > 0 && heat >= maxH);
-    const vuLitPower = vuLitFromPercent(rawPowerPct, maxP > 0 && power >= maxP);
-    const vuLitHeat = vuLitFromPercent(rawHeatPct, maxH > 0 && heat >= maxH);
-    const heatRatio = maxH > 0 ? heat / maxH : 0;
-    const heatLedWarning = heatRatio >= 0.8;
-    const powerBarStyle = styleMap({
-      "--fill-height": `${powerPct}%`,
-      "--vu-lit": String(vuLitPower),
-    });
-    const heatBarStyle = styleMap({
-      "--fill-height": `${heatPct}%`,
-      "--vu-lit": String(vuLitHeat),
-      "--vu-red-width": vuHeatRedWidthPercent(vuLitHeat, heatLedWarning),
-    });
-
-    const meltdown = !!state.melting_down;
-    const powerClass = classMap({ "info-item": true, power: true, full: maxP > 0 && power >= maxP, meltdown });
-    const heatClass = classMap({ "info-item": true, heat: true, full: maxH > 0 && heat >= maxH, meltdown, "heat-led-warning": heatLedWarning });
-    const moneyDisplay = meltdown ? "☢️" : `$${fmt(state.current_money, 2)}`;
-    const moneyDisplayMobile = meltdown ? "☢️" : fmt(state.current_money, 0);
-
-    const activeBuffs = state.active_buffs ?? [];
-
-    const epVisible = toNumber(state.current_exotic_particles) > 0;
-    const epContentStyle = styleMap({ display: epVisible ? "flex" : "none" });
-    const epText = fmt(state.current_exotic_particles);
-    this._cathodeInfoBarTargets = {
-      info_money_desktop: moneyDisplay,
-      info_money: moneyDisplayMobile,
-      info_ep_value_desktop: epText,
-      info_ep_value: epText,
-    };
-
-    return infoBarTemplate({
-      powerClass,
-      heatClass,
-      powerBarStyle,
-      heatBarStyle,
-      powerTextDesktop: fmt(power, 2),
-      powerTextMobile: fmt(power, 0),
-      maxPowerDesktop: fmt(maxP, 2),
-      maxPowerMobile: fmt(maxP),
-      heatTextDesktop: fmt(heat, 2),
-      heatTextMobile: fmt(heat, 0),
-      maxHeatDesktop: fmt(maxH, 2),
-      maxHeatMobile: fmt(maxH),
-      epContentStyle,
-      epVisible,
-      activeBuffs,
-    });
   }
 }
 
@@ -208,156 +259,162 @@ const PERCENT_FULL = 100;
 const HAZARD_FILL_PERCENT = 95;
 const CRITICAL_FILL_PERCENT = 80;
 
-class MobileInfoBarUI {
-  constructor(ui) {
-    this.ui = ui;
-    this._unmountControlDeck = null;
-    this._unmountPassiveBar = null;
-
-    this._tickLineUpdateControlDeck = () => {
-      const el = document.getElementById("control_deck_tick_line");
-      const g = this.ui.game;
-      if (el && g) el.textContent = formatSimulationTickLine(g);
-    };
-    this._controlDeckStatePatchHandler = (patch) => {
-      if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) {
-        this._tickLineUpdateControlDeck();
-      }
-    };
+function getBarVisuals(current, max, cssVarHeight, layer) {
+  const rawPct = max > 0 ? Math.min(100, Math.max(0, (current / max) * 100)) : 0;
+  const isFull = max > 0 && current >= max;
+  const quant = vuQuantizePercent(rawPct, isFull);
+  const lit = vuLitFromPercent(rawPct, isFull);
+  const ratio = max > 0 ? current / max : 0;
+  const isWarning = ratio >= 0.8;
+  const styleObj = { [cssVarHeight]: `${quant}%` };
+  if (layer === "vu" || layer === "heatVu") {
+    styleObj["--vu-lit"] = String(lit);
   }
-
-  _controlDeckTemplate(state) {
-    const maxPower = toNumber(state.max_power ?? 0);
-    const maxHeat = toNumber(state.max_heat ?? 0);
-    const powerCurrent = toNumber(state.current_power ?? 0);
-    const heatCurrent = toNumber(state.current_heat ?? 0);
-
-    const rawPowerFill = maxPower > 0 ? Math.min(PERCENT_FULL, Math.max(0, (powerCurrent / maxPower) * PERCENT_FULL)) : 0;
-    const rawHeatFill = maxHeat > 0 ? Math.min(PERCENT_FULL, Math.max(0, (heatCurrent / maxHeat) * PERCENT_FULL)) : 0;
-    const powerFillPercent = vuQuantizePercent(rawPowerFill, maxPower > 0 && powerCurrent >= maxPower);
-    const heatFillPercent = vuQuantizePercent(rawHeatFill, maxHeat > 0 && heatCurrent >= maxHeat);
-
-    const heatHazard = heatFillPercent >= HAZARD_FILL_PERCENT;
-    const heatCritical = heatFillPercent > CRITICAL_FILL_PERCENT;
-
-    const powerDelta = state.power_net_change ?? 0;
-    const heatDelta = state.heat_net_change ?? 0;
-    const powerRateText = powerDelta === 0 ? "0" : (powerDelta > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(powerDelta), 0);
-    const heatRateText = heatDelta === 0 ? "0" : (heatDelta > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(heatDelta), 0);
-
-    const autoSellEnabled = !!state.auto_sell;
-    const multiplier = toNumber(state.auto_sell_multiplier ?? 0);
-    const hasAutoSellUpgrade = this.ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
-    const showAutoSell = autoSellEnabled && multiplier > 0 && hasAutoSellUpgrade;
-    const autoSellRate = showAutoSell ? Math.floor(maxPower * multiplier) : 0;
-    
-    const hasHeatControlUpgrade = this.ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
-    const heatControlEnabled = !!state.heat_controlled && hasHeatControlUpgrade;
-    const showHeatRate = heatControlEnabled && maxHeat > 0;
-    const ventBonus = toNumber(state.vent_multiplier_eff ?? 0);
-    const autoHeatRate = showHeatRate ? (maxHeat / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + ventBonus / VENT_BONUS_PERCENT_DIVISOR) : 0;
-
-    const powerFillStyle = styleMap({ "--power-fill-height": `${powerFillPercent}%` });
-    const heatFillStyle = styleMap({ "--heat-fill-height": `${heatFillPercent}%` });
-    const heatVentClass = classMap({ "control-deck-item": true, "heat-vent": true, hazard: heatHazard, critical: heatCritical });
-    const powerCapacitorClass = classMap({ "control-deck-item": true, "power-capacitor": true, "auto-sell-active": autoSellEnabled });
-
-    const autoSellRateContent = showAutoSell ? html`<img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="$">${fmt(autoSellRate, 0)}` : "";
-    const autoHeatRateContent = showHeatRate ? html`<img src="img/ui/icons/icon_heat.png" class="icon-inline" alt="heat">\u2193${fmt(Math.round(autoHeatRate), 0)}` : "";
-    const autoRateClass = classMap({ "control-deck-auto-rate": true, visible: showAutoSell });
-    const autoHeatRateClass = classMap({ "control-deck-auto-rate": true, visible: showHeatRate });
-
-    return mobileControlDeckTemplate({
-      powerCapacitorClass,
-      heatVentClass,
-      powerRateText,
-      heatRateText,
-      autoRateClass,
-      autoHeatRateClass,
-      autoSellRateContent,
-      autoHeatRateContent,
-      powerFillStyle,
-      heatFillStyle,
-      architectMetricsText: formatArchitectMetricsLine(state),
-      tickCadenceText: formatSimulationTickLine(this.ui.game),
-      powerCurrentText: fmt(powerCurrent, 0),
-      heatCurrentText: fmt(heatCurrent, 0),
-      maxPowerText: maxPower ? fmt(maxPower, 0) : "",
-      maxHeatText: maxHeat ? fmt(maxHeat, 0) : "",
-      moneyValueText: state.melting_down ? "☢️" : fmt(state.current_money ?? 0, 0),
-    });
+  if (layer === "heatVu") {
+    styleObj["--vu-red-width"] = vuHeatRedWidthPercent(lit, isWarning);
   }
+  return { isFull, isWarning, quant, lit, style: styleMap(styleObj) };
+}
 
-  _passiveBarTemplate(state) {
-    return mobilePassiveBarTemplate({
-      epText: fmt(state.current_exotic_particles ?? 0),
-      moneyText: state.melting_down ? "☢️" : fmt(state.current_money ?? 0, 0),
-      pauseClass: classMap({ "passive-top-pause": true, paused: !!state.pause }),
-      pauseAriaLabel: state.pause ? "Resume" : "Pause",
-      pauseTitle: state.pause ? "Resume" : "Pause",
-    });
-  }
+function buildMobileControlDeckTemplate(ui, state) {
+  const maxPower = toNumber(state.max_power ?? 0);
+  const maxHeat = toNumber(state.max_heat ?? 0);
+  const powerCurrent = toNumber(state.current_power ?? 0);
+  const heatCurrent = toNumber(state.current_heat ?? 0);
 
-  updateControlDeckValues() {
-    if (window.innerWidth > MOBILE_BREAKPOINT_PX || this._unmountControlDeck || !this.ui.game?.state) return;
+  const pBar = getBarVisuals(powerCurrent, maxPower, "--power-fill-height", "height");
+  const hBar = getBarVisuals(heatCurrent, maxHeat, "--heat-fill-height", "height");
 
-    const root = document.getElementById("control_deck_root");
-    if (!root) return;
+  const heatHazard = hBar.quant >= HAZARD_FILL_PERCENT;
+  const heatCritical = hBar.quant > CRITICAL_FILL_PERCENT;
 
-    const subscriptions = [{
-      state: this.ui.game.state,
-      keys: [
-        "max_power", "max_heat", "current_power", "current_heat",
-        "power_net_change", "heat_net_change", "stats_power", "stats_net_heat",
-        "stats_heat_generation", "stats_vent",
-        "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff",
-        "current_money", "melting_down",
-      ],
-    }];
-    const innerUnmount = ReactiveLitComponent.mountMulti(subscriptions, () => this._controlDeckTemplate(this.ui.game.state), root);
-    const g = this.ui.game;
-    if (!this._controlDeckTickListenersAttached && g?.on) {
-      this._controlDeckTickListenersAttached = true;
-      g.on("tickRecorded", this._tickLineUpdateControlDeck);
-      g.on("statePatch", this._controlDeckStatePatchHandler);
+  const powerDelta = state.power_net_change ?? 0;
+  const heatDelta = state.heat_net_change ?? 0;
+  const powerRateText = powerDelta === 0 ? "0" : (powerDelta > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(powerDelta), 0);
+  const heatRateText = heatDelta === 0 ? "0" : (heatDelta > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(heatDelta), 0);
+
+  const autoSellEnabled = !!state.auto_sell;
+  const multiplier = toNumber(state.auto_sell_multiplier ?? 0);
+  const hasAutoSellUpgrade = ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
+  const showAutoSell = autoSellEnabled && multiplier > 0 && hasAutoSellUpgrade;
+  const autoSellRate = showAutoSell ? Math.floor(maxPower * multiplier) : 0;
+
+  const hasHeatControlUpgrade = ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
+  const heatControlEnabled = !!state.heat_controlled && hasHeatControlUpgrade;
+  const showHeatRate = heatControlEnabled && maxHeat > 0;
+  const ventBonus = toNumber(state.vent_multiplier_eff ?? 0);
+  const autoHeatRate = showHeatRate ? (maxHeat / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + ventBonus / VENT_BONUS_PERCENT_DIVISOR) : 0;
+
+  const heatVentClass = classMap({ "control-deck-item": true, "heat-vent": true, hazard: heatHazard, critical: heatCritical });
+  const powerCapacitorClass = classMap({ "control-deck-item": true, "power-capacitor": true, "auto-sell-active": autoSellEnabled });
+
+  const autoSellRateContent = showAutoSell ? html`<img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="$">${fmt(autoSellRate, 0)}` : "";
+  const autoHeatRateContent = showHeatRate ? html`<img src="img/ui/icons/icon_heat.png" class="icon-inline" alt="heat">\u2193${fmt(Math.round(autoHeatRate), 0)}` : "";
+  const autoRateClass = classMap({ "control-deck-auto-rate": true, visible: showAutoSell });
+  const autoHeatRateClass = classMap({ "control-deck-auto-rate": true, visible: showHeatRate });
+
+  return mobileControlDeckTemplate({
+    powerCapacitorClass,
+    heatVentClass,
+    powerRateText,
+    heatRateText,
+    autoRateClass,
+    autoHeatRateClass,
+    autoSellRateContent,
+    autoHeatRateContent,
+    powerFillStyle: pBar.style,
+    heatFillStyle: hBar.style,
+    architectMetricsText: formatArchitectMetricsLine(state),
+    tickCadenceText: formatSimulationTickLine(ui.game),
+    powerCurrentText: fmt(powerCurrent, 0),
+    heatCurrentText: fmt(heatCurrent, 0),
+    maxPowerText: maxPower ? fmt(maxPower, 0) : "",
+    maxHeatText: maxHeat ? fmt(maxHeat, 0) : "",
+    moneyValueText: state.melting_down ? "\u2622\uFE0F" : formatNumberCompactIntl(state.current_money ?? 0),
+  });
+}
+
+function buildMobilePassiveBarTemplate(state) {
+  return mobilePassiveBarTemplate({
+    epText: formatNumberCompactIntl(state.current_exotic_particles ?? 0),
+    moneyText: state.melting_down ? "\u2622\uFE0F" : formatNumberCompactIntl(state.current_money ?? 0),
+    pauseClass: classMap({ "passive-top-pause": true, paused: !!state.pause }),
+    pauseAriaLabel: state.pause ? "Resume" : "Pause",
+    pauseTitle: state.pause ? "Resume" : "Pause",
+  });
+}
+
+function ensureMobileControlDeckListeners(ui) {
+  if (ui._mobileTickLineUpdateControlDeck) return;
+  ui._mobileTickLineUpdateControlDeck = () => {
+    const el = document.getElementById("control_deck_tick_line");
+    const g = ui.game;
+    if (el && g) el.textContent = formatSimulationTickLine(g);
+  };
+  ui._mobileControlDeckStatePatchHandler = (patch) => {
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) {
+      ui._mobileTickLineUpdateControlDeck();
     }
-    this._tickLineUpdateControlDeck();
-    this._unmountControlDeck = () => {
-      innerUnmount();
-      if (this._controlDeckTickListenersAttached && this.ui.game?.off) {
-        this.ui.game.off("tickRecorded", this._tickLineUpdateControlDeck);
-        this.ui.game.off("statePatch", this._controlDeckStatePatchHandler);
-        this._controlDeckTickListenersAttached = false;
-      }
-    };
-    this.updateMobilePassiveTopBar();
+  };
+}
+
+export function mountMobilePassiveBar(ui) {
+  if (window.innerWidth > MOBILE_BREAKPOINT_PX || ui._mobilePassiveBarMounted || !ui.game?.state) return;
+
+  const passiveBar = document.getElementById("mobile_passive_top_bar");
+  if (passiveBar) passiveBar.setAttribute("aria-hidden", "false");
+  const root = document.getElementById("mobile_passive_root");
+  if (!root) return;
+
+  const subscriptions = [{
+    state: ui.game.state,
+    keys: ["current_exotic_particles", "current_money", "pause", "melting_down"],
+  }];
+  const unmountPassive = ReactiveLitComponent.mountMulti(subscriptions, () => buildMobilePassiveBarTemplate(ui.game.state), root);
+  ui._mobilePassiveBarMounted = true;
+  ui._unmounts.push(() => {
+    unmountPassive();
+    ui._mobilePassiveBarMounted = false;
+  });
+}
+
+export function syncMobileControlDeckMounts(ui) {
+  if (window.innerWidth > MOBILE_BREAKPOINT_PX || ui._mobileControlDeckReactiveMounted || !ui.game?.state) return;
+
+  const root = document.getElementById("control_deck_root");
+  if (!root) return;
+
+  ensureMobileControlDeckListeners(ui);
+
+  const subscriptions = [{
+    state: ui.game.state,
+    keys: [
+      "max_power", "max_heat", "current_power", "current_heat",
+      "power_net_change", "heat_net_change", "stats_power", "stats_net_heat",
+      "stats_heat_generation", "stats_vent",
+      "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff",
+      "current_money", "melting_down",
+    ],
+  }];
+  const innerUnmount = ReactiveLitComponent.mountMulti(subscriptions, () => buildMobileControlDeckTemplate(ui, ui.game.state), root);
+  const g = ui.game;
+  if (!ui._mobileControlDeckTickListenersAttached && g?.on) {
+    ui._mobileControlDeckTickListenersAttached = true;
+    g.on("tickRecorded", ui._mobileTickLineUpdateControlDeck);
+    g.on("statePatch", ui._mobileControlDeckStatePatchHandler);
   }
-
-  updateMobilePassiveTopBar() {
-    if (window.innerWidth > MOBILE_BREAKPOINT_PX || this._unmountPassiveBar || !this.ui.game?.state) return;
-
-    const passiveBar = document.getElementById("mobile_passive_top_bar");
-    if (passiveBar) passiveBar.setAttribute("aria-hidden", "false");
-    const root = document.getElementById("mobile_passive_root");
-    if (!root) return;
-
-    const subscriptions = [{
-      state: this.ui.game.state,
-      keys: ["current_exotic_particles", "current_money", "pause", "melting_down"],
-    }];
-    this._unmountPassiveBar = ReactiveLitComponent.mountMulti(subscriptions, () => this._passiveBarTemplate(this.ui.game.state), root);
-  }
-
-  cleanup() {
-    if (this._unmountControlDeck) {
-      this._unmountControlDeck();
-      this._unmountControlDeck = null;
+  ui._mobileTickLineUpdateControlDeck();
+  ui._mobileControlDeckReactiveMounted = true;
+  ui._unmounts.push(() => {
+    innerUnmount();
+    if (ui._mobileControlDeckTickListenersAttached && ui.game?.off) {
+      ui.game.off("tickRecorded", ui._mobileTickLineUpdateControlDeck);
+      ui.game.off("statePatch", ui._mobileControlDeckStatePatchHandler);
+      ui._mobileControlDeckTickListenersAttached = false;
     }
-    if (this._unmountPassiveBar) {
-      this._unmountPassiveBar();
-      this._unmountPassiveBar = null;
-    }
-  }
+    ui._mobileControlDeckReactiveMounted = false;
+  });
+  mountMobilePassiveBar(ui);
 }
 
 class PageSetupUI {
@@ -467,7 +524,7 @@ class PageSetupUI {
       });
       const records = await leaderboardService.getTopRuns(sortBy, 20);
       render(leaderboardTemplate(records, "loaded", sortBy), container);
-      ui.navIndicatorsUI?.updateLeaderboardIcon?.();
+      updateLeaderboardIcon(ui);
     };
 
     const activeButton = document.querySelector('.leaderboard-sort.active');
@@ -534,16 +591,16 @@ class PageSetupUI {
       if (!sound || !ui.game) return;
       if (sound === "warning") {
         const intensity = warningSlider ? Number(warningSlider.value) / 100 : 0.5;
-        enqueueGameEffect(ui.game, { kind: "sfx", id: "warning", intensity, context: "global" });
+        actions.enqueueEffect(ui.game, { kind: "sfx", id: "warning", intensity, context: "global" });
         return;
       }
       if (sound === "explosion") {
         const subtype = button.dataset.variant === "meltdown" ? "meltdown" : null;
-        enqueueGameEffect(ui.game, { kind: "sfx", id: "explosion", subtype, pan: 0, context: "global" });
+        actions.enqueueEffect(ui.game, { kind: "sfx", id: "explosion", subtype, pan: 0, context: "global" });
         return;
       }
       const subtype = button.dataset.subtype || null;
-      enqueueGameEffect(ui.game, { kind: "sfx", id: sound, a: subtype, b: undefined, context: "global" });
+      actions.enqueueEffect(ui.game, { kind: "sfx", id: sound, a: subtype, b: undefined, context: "global" });
     };
 
     page.querySelectorAll("button.sound-btn").forEach((button) => {
@@ -654,786 +711,919 @@ function getPartsByContainer(partset, tabId, unlockManager) {
   return byContainer;
 }
 
-class PartsPanelUI {
-  constructor(ui) {
-    this.ui = ui;
-    this._partsPanelUnmount = null;
-  }
-
-  getPartsSection() {
-    return this.ui.coreLoopUI?.getElement?.("parts_section") ?? this.ui.DOMElements?.parts_section ?? document.getElementById("parts_section");
-  }
-
-  unlockAllPartsForTesting() {
-    const ui = this.ui;
-    if (!ui.game?.partset?.partsArray) return;
-    const typeLevelCombos = new Set();
-    ui.game.partset.partsArray.forEach(part => {
-      if (part.type && part.level) {
-        typeLevelCombos.add(`${part.type}:${part.level}`);
-      }
-    });
-    typeLevelCombos.forEach(combo => {
-      ui.game.placedCounts[combo] = 10;
-    });
-    ui.game.partset.check_affordability(ui.game);
-    this.refreshPartsPanel();
-  }
-
-  populateActiveTab() {
-    this.refreshPartsPanel();
-  }
-
-  refreshPartsPanel() {
-    const ui = this.ui;
-    if (ui.game?.state && typeof ui.game.state.parts_panel_version === "number") {
-      ui.game.state.parts_panel_version++;
+export function unlockAllPartsForTesting(ui) {
+  if (!ui.game?.partset?.partsArray) return;
+  const typeLevelCombos = new Set();
+  ui.game.partset.partsArray.forEach((part) => {
+    if (part.type && part.level) {
+      typeLevelCombos.add(`${part.type}:${part.level}`);
     }
-  }
+  });
+  typeLevelCombos.forEach((combo) => {
+    ui.game.placedCounts[combo] = 10;
+  });
+  ui.game.partset.check_affordability(ui.game);
+  refreshPartsPanel(ui);
+}
 
-  onActiveTabChanged(_tabId) {
-    this.refreshPartsPanel();
-  }
-
-  _createPartTemplateHandlers(partset, unlockManager, selectedPartId) {
-    const ui = this.ui;
-    const game = ui.game;
-    return (part) => {
-      const onClick = () => {
-        if (part.affordable) {
-          if (ui.help_mode_active && game?.tooltip_manager) game.tooltip_manager.show(part, null, true);
-          game?.emit?.("partClicked", { part });
-          ui.stateManager.setClickedPart(part);
-        } else if (game?.tooltip_manager) {
-          game.tooltip_manager.show(part, null, true);
-        }
-      };
-      const unlocked = !unlockManager || unlockManager.isPartUnlocked(part);
-      const opts = {
-        locked: !unlocked,
-        doctrineLocked: !unlocked && partset?.isPartDoctrineLocked?.(part),
-        tierProgress: !unlocked ? `${Math.min(unlockManager?.getPreviousTierCount(part) ?? 0, 10)}/10` : "",
-        partActive: part.id === selectedPartId,
-      };
-      return PartButton(part, onClick, opts);
-    };
-  }
-
-  _buildPartsTabContent(partset, unlockManager, activeTab, powerActive, heatActive) {
-    if (!partset) return partsPanelEmptyTabContentTemplate();
-    const byContainer = getPartsByContainer(partset, activeTab, unlockManager);
-    const selectedPartId = this.ui.stateManager.getClickedPart()?.id ?? null;
-    const partTemplate = this._createPartTemplateHandlers(partset, unlockManager, selectedPartId);
-    const grid = (id) => html`<div id=${id} class="item-grid">${repeat(byContainer.get(id) ?? [], (p) => p.id, partTemplate)}</div>`;
-    return partsPanelTabContentTemplate({ powerActive, heatActive, grid });
-  }
-
-  _partsPanelTemplate(uiState) {
-    const ui = this.ui;
-    const game = ui.game;
-    const partset = game?.partset;
-    const unlockManager = game?.unlockManager;
-    const activeTab = uiState?.active_parts_tab ?? "power";
-    const switchTab = (tabId) => { if (ui.uiState) ui.uiState.active_parts_tab = tabId; };
-    const onHelpToggle = () => {
-      ui.setHelpModeActive(!ui.help_mode_active);
-      this.refreshPartsPanel();
-    };
-    const powerActive = activeTab === "power";
-    const heatActive = activeTab === "heat";
-    const tabContent = this._buildPartsTabContent(partset, unlockManager, activeTab, powerActive, heatActive);
-
-    const selectedPartId = uiState?.interaction?.selectedPartId ?? null;
-    const selPart = selectedPartId && partset ? partset.getPartById(selectedPartId) : null;
-    const moduleInfoContent = selPart
-      ? partsModuleInfoCardTemplate(selPart)
-      : html`<span class="parts-module-info-empty">— Select a module —</span>`;
-
-    return partsPanelLayoutTemplate({
-      powerActive,
-      heatActive,
-      helpModeActive: ui.help_mode_active,
-      onSwitchPower: () => switchTab("power"),
-      onSwitchHeat: () => switchTab("heat"),
-      onHelpToggle,
-      tabContent,
-      moduleInfoContent,
-    });
-  }
-
-  setupPartsTabs() {
-    const ui = this.ui;
-    const root = document.getElementById("parts_panel_reactive_root");
-    if (!root || !ui.uiState) return;
-    const subscriptions = [
-      { state: ui.game?.state, keys: ["current_money", "current_exotic_particles", "parts_panel_version"] },
-      { state: ui.uiState, keys: ["active_parts_tab", "parts_panel_collapsed"] },
-      { state: ui.uiState?.interaction, keys: ["selectedPartId"] },
-    ].filter((s) => s.state != null);
-    if (subscriptions.length === 0) return;
-    const renderFn = () => this._partsPanelTemplate(ui.uiState);
-    this._partsPanelUnmount = ReactiveLitComponent.mountMulti(subscriptions, renderFn, root);
-  }
-
-  updateQuickSelectSlots() {
-    const ui = this.ui;
-    ui.stateManager.normalizeQuickSelectSlotsForUnlock();
-    const slots = ui.stateManager.getQuickSelectSlots();
-    const partset = ui.game?.partset;
-    const selectedPartId = ui.stateManager.getClickedPart()?.id ?? null;
-    const root = document.getElementById("quick_select_slots_root");
-    if (!root) return;
-    const slotTemplate = (slot, i) => {
-      const { partId, locked } = slot || { partId: null, locked: false };
-      const part = partId && partset ? partset.getPartById(partId) : null;
-      const slotClass = classMap({
-        "quick-select-slot": true,
-        locked: !!locked,
-        unaffordable: !!(part && !part.affordable),
-        "is-selected": partId !== null && partId === selectedPartId,
-      });
-      const ariaLabel = part ? (locked ? `Unlock ${part.title}` : `Select ${part.title}`) : `Recent part ${i + 1}`;
-      const costText = part ? (part.erequires ? `${fmt(part.cost)} EP` : `$${fmt(part.cost)}`) : "";
-      const iconStyle = part?.getImagePath ? styleMap({ backgroundImage: `url('${part.getImagePath()}')` }) : {};
-      return quickSelectSlotTemplate({
-        slotClass,
-        index: i,
-        ariaLabel,
-        hasIcon: !!part?.getImagePath,
-        iconStyle,
-        hasPart: !!part,
-        costText,
-      });
-    };
-    const template = html`${repeat(slots, (_, i) => i, slotTemplate)}`;
-    try {
-      render(template, root);
-    } catch (err) {
-      const msg = err?.message ?? "";
-      if (msg.includes("ChildPart") && msg.includes("parentNode")) {
-        render(html``, root);
-        render(template, root);
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  updatePartsPanelBodyClass() {
-    const partsSection = this.getPartsSection();
-    const collapsed = this.ui.uiState?.parts_panel_collapsed ?? partsSection?.classList.contains("collapsed");
-    document.body.classList.toggle("parts-panel-open", !!(partsSection && !collapsed));
-    document.body.classList.toggle("parts-panel-right", !!partsSection?.classList.contains("right-side"));
-
-    logger.log('debug', 'ui', '[updatePartsPanelBodyClass] Panel collapsed:', collapsed, "Body classes:", document.body.className);
-  }
-
-  closePartsPanel() {
-    const panel = this.getPartsSection();
-    if (!panel) return;
-    if (this.ui.uiState) this.ui.uiState.parts_panel_collapsed = true;
-    else panel.classList.add("collapsed");
-    this.updatePartsPanelBodyClass();
-  }
-
-  togglePartsPanelForBuildButton() {
-    const ui = this.ui;
-    ui.deviceFeatures?.heavyVibration?.();
-    if (ui.game) enqueueGameEffect(ui.game, { kind: "sfx", id: "metal_clank", a: 0.8, b: -0.7, context: "global" });
-    const partsSection = this.getPartsSection();
-    if (partsSection && ui.uiState) {
-      const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-      if (isMobile) {
-        ui.uiState.parts_panel_collapsed = !ui.uiState.parts_panel_collapsed;
-        this.updatePartsPanelBodyClass();
-        void partsSection.offsetHeight;
-      } else {
-        ui.uiState.parts_panel_collapsed = !ui.uiState.parts_panel_collapsed;
-        this.updatePartsPanelBodyClass();
-      }
-    } else if (partsSection) {
-      const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-      if (isMobile) {
-        partsSection.classList.toggle("collapsed");
-        this.updatePartsPanelBodyClass();
-        void partsSection.offsetHeight;
-      }
-    }
-  }
-
-  initializePartsPanel() {
-    const ui = this.ui;
-    const panel = this.getPartsSection();
-    if (!panel) return;
-
-    if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);
-    this._resizeHandler = () => {
-      const isCurrentlyMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-      if (ui.uiState) ui.uiState.parts_panel_collapsed = isCurrentlyMobile;
-      else panel.classList.toggle("collapsed", isCurrentlyMobile);
-      this.updatePartsPanelBodyClass();
-    };
-    window.addEventListener("resize", this._resizeHandler);
-
-    const isMobileOnLoad = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-    if (ui.uiState) ui.uiState.parts_panel_collapsed = isMobileOnLoad;
-    panel.classList.toggle("collapsed", ui.uiState?.parts_panel_collapsed ?? isMobileOnLoad);
-    logger.log('debug', 'ui', '[Parts Panel Init]', isMobileOnLoad ? "Mobile detected - added collapsed class" : "Desktop detected - removed collapsed class");
-    logger.log('debug', 'ui', '[Parts Panel Init] Final state - collapsed:', panel.classList.contains("collapsed"));
-    this.updatePartsPanelBodyClass();
-
-    const closeBtn = document.getElementById("parts_close_btn");
-    if (closeBtn && !closeBtn.hasAttribute("data-listener-attached")) {
-      closeBtn.setAttribute("data-listener-attached", "true");
-      closeBtn.addEventListener("click", () => {
-        this.closePartsPanel();
-      });
-    }
-
-    ui.stateManager.updatePartsPanelToggleIcon(null);
+export function refreshPartsPanel(ui) {
+  if (ui.game?.state && typeof ui.game.state.parts_panel_version === "number") {
+    ui.game.state.parts_panel_version++;
   }
 }
 
-class ControlDeckUI {
-  constructor(ui) {
-    this.ui = ui;
-    this.toggle_buttons_config = {
-      auto_sell: { id: "auto_sell_toggle", stateProperty: "auto_sell" },
-      auto_buy: { id: "auto_buy_toggle", stateProperty: "auto_buy" },
-      heat_control: {
-        id: "heat_control_toggle",
-        stateProperty: "heat_control",
-      },
-      pause: { id: "pause_toggle", stateProperty: "pause" },
-    };
-  }
+export function onPartsPanelActiveTabChanged(ui, _tabId) {
+  refreshPartsPanel(ui);
+}
 
-  _exoticParticlesTemplate(state) {
-    return controlDeckExoticParticlesTemplate({
-      currentEp: fmt(state.current_exotic_particles ?? 0),
-      totalEp: fmt(state.total_exotic_particles ?? 0),
+function createPartTemplateHandlers(ui, partset, unlockManager, selectedPartId) {
+  const game = ui.game;
+  return (part) => {
+    const onClick = () => {
+      if (part.affordable) {
+        if (ui.help_mode_active && game?.tooltip_manager) game.tooltip_manager.show(part, null, true);
+        game?.emit?.("partClicked", { part });
+        ui.stateManager.setClickedPart(part);
+      } else if (game?.tooltip_manager) {
+        game.tooltip_manager.show(part, null, true);
+      }
+    };
+    const unlocked = !unlockManager || unlockManager.isPartUnlocked(part);
+    const opts = {
+      locked: !unlocked,
+      doctrineLocked: !unlocked && partset?.isPartDoctrineLocked?.(part),
+      tierProgress: !unlocked ? `${Math.min(unlockManager?.getPreviousTierCount(part) ?? 0, 10)}/10` : "",
+      partActive: part.id === selectedPartId,
+    };
+    return PartButton(part, onClick, opts);
+  };
+}
+
+function buildPartsTabContent(ui, partset, unlockManager, activeTab, powerActive, heatActive) {
+  if (!partset) return partsPanelEmptyTabContentTemplate();
+  const byContainer = getPartsByContainer(partset, activeTab, unlockManager);
+  const selectedPartId = ui.stateManager.getClickedPart()?.id ?? null;
+  const partTemplate = createPartTemplateHandlers(ui, partset, unlockManager, selectedPartId);
+  const grid = (id) => html`<div id=${id} class="item-grid">${repeat(byContainer.get(id) ?? [], (p) => p.id, partTemplate)}</div>`;
+  return partsPanelTabContentTemplate({ powerActive, heatActive, grid });
+}
+
+function buildPartsPanelLayoutTemplate(ui, uiState) {
+  const game = ui.game;
+  const partset = game?.partset;
+  const unlockManager = game?.unlockManager;
+  const activeTab = uiState?.active_parts_tab ?? "power";
+  const switchTab = (tabId) => { if (ui.uiState) ui.uiState.active_parts_tab = tabId; };
+  const onHelpToggle = () => {
+    ui.setHelpModeActive(!ui.help_mode_active);
+    refreshPartsPanel(ui);
+  };
+  const powerActive = activeTab === "power";
+  const heatActive = activeTab === "heat";
+  const tabContent = buildPartsTabContent(ui, partset, unlockManager, activeTab, powerActive, heatActive);
+
+  const selectedPartId = uiState?.interaction?.selectedPartId ?? null;
+  const selPart = selectedPartId && partset ? partset.getPartById(selectedPartId) : null;
+  const moduleInfoContent = selPart
+    ? partsModuleInfoCardTemplate(selPart)
+    : html`<span class="parts-module-info-empty">— Select a module —</span>`;
+
+  return partsPanelLayoutTemplate({
+    powerActive,
+    heatActive,
+    helpModeActive: ui.help_mode_active,
+    onSwitchPower: () => switchTab("power"),
+    onSwitchHeat: () => switchTab("heat"),
+    onHelpToggle,
+    tabContent,
+    moduleInfoContent,
+  });
+}
+
+export function setupPartsTabs(ui) {
+  const root = document.getElementById("parts_panel_reactive_root");
+  if (!root || !ui.uiState) return;
+  const subscriptions = [
+    { state: ui.game?.state, keys: ["current_money", "current_exotic_particles", "parts_panel_version"] },
+    { state: ui.uiState, keys: ["active_parts_tab", "parts_panel_collapsed"] },
+    { state: ui.uiState?.interaction, keys: ["selectedPartId"] },
+  ].filter((s) => s.state != null);
+  if (subscriptions.length === 0) return;
+  const renderFn = () => buildPartsPanelLayoutTemplate(ui, ui.uiState);
+  ui._unmounts.push(ReactiveLitComponent.mountMulti(subscriptions, renderFn, root));
+}
+
+export function updateQuickSelectSlots(ui) {
+  ui.stateManager.normalizeQuickSelectSlotsForUnlock();
+  const slots = ui.stateManager.getQuickSelectSlots();
+  const partset = ui.game?.partset;
+  const selectedPartId = ui.stateManager.getClickedPart()?.id ?? null;
+  const root = document.getElementById("quick_select_slots_root");
+  if (!root) return;
+  const slotTemplate = (slot, i) => {
+    const { partId, locked } = slot || { partId: null, locked: false };
+    const part = partId && partset ? partset.getPartById(partId) : null;
+    const slotClass = classMap({
+      "quick-select-slot": true,
+      locked: !!locked,
+      unaffordable: !!(part && !part.affordable),
+      "is-selected": partId !== null && partId === selectedPartId,
+    });
+    const ariaLabel = part ? (locked ? `Unlock ${part.title}` : `Select ${part.title}`) : `Recent part ${i + 1}`;
+    const costText = part ? (part.erequires ? `${fmt(part.cost)} EP` : `$${fmt(part.cost)}`) : "";
+    const iconStyle = part?.getImagePath ? styleMap({ backgroundImage: `url('${part.getImagePath()}')` }) : {};
+    return quickSelectSlotTemplate({
+      slotClass,
+      index: i,
+      ariaLabel,
+      hasIcon: !!part?.getImagePath,
+      iconStyle,
+      hasPart: !!part,
+      costText,
+    });
+  };
+  const template = html`${repeat(slots, (_, i) => i, slotTemplate)}`;
+  try {
+    render(template, root);
+  } catch (err) {
+    const msg = err?.message ?? "";
+    if (msg.includes("ChildPart") && msg.includes("parentNode")) {
+      render(html``, root);
+      render(template, root);
+    } else {
+      throw err;
+    }
+  }
+}
+
+export function closePartsPanel(ui) {
+  const panel = getPartsSectionElement(ui);
+  if (!panel) return;
+  if (ui.uiState) ui.uiState.parts_panel_collapsed = true;
+  else panel.classList.add("collapsed");
+  updatePartsPanelBodyClass(ui);
+}
+
+export function initializePartsPanel(ui) {
+  const panel = getPartsSectionElement(ui);
+  if (!panel) return;
+
+  if (ui._partsPanelResizeHandler) window.removeEventListener("resize", ui._partsPanelResizeHandler);
+  ui._partsPanelResizeHandler = () => {
+    const isCurrentlyMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
+    if (ui.uiState) ui.uiState.parts_panel_collapsed = isCurrentlyMobile;
+    else panel.classList.toggle("collapsed", isCurrentlyMobile);
+    updatePartsPanelBodyClass(ui);
+  };
+  window.addEventListener("resize", ui._partsPanelResizeHandler);
+
+  const isMobileOnLoad = window.innerWidth <= MOBILE_BREAKPOINT_PX;
+  if (ui.uiState) ui.uiState.parts_panel_collapsed = isMobileOnLoad;
+  panel.classList.toggle("collapsed", ui.uiState?.parts_panel_collapsed ?? isMobileOnLoad);
+  logger.log("debug", "ui", "[Parts Panel Init]", isMobileOnLoad ? "Mobile detected - added collapsed class" : "Desktop detected - removed collapsed class");
+  logger.log("debug", "ui", "[Parts Panel Init] Final state - collapsed:", panel.classList.contains("collapsed"));
+  updatePartsPanelBodyClass(ui);
+
+  const closeBtn = document.getElementById("parts_close_btn");
+  if (closeBtn && !closeBtn.hasAttribute("data-listener-attached")) {
+    closeBtn.setAttribute("data-listener-attached", "true");
+    closeBtn.addEventListener("click", () => {
+      closePartsPanel(ui);
     });
   }
 
-  mountExoticParticlesDisplayIfNeeded(ui) {
-    if (this._epComponent) return;
-    const epRoot = document.getElementById("exotic_particles_display");
-    if (!epRoot || !ui.game?.state) return;
-    this._epComponent = new ReactiveLitComponent(
-      ui.game.state,
-      ["current_exotic_particles", "total_exotic_particles"],
-      (state) => this._exoticParticlesTemplate(state),
-      epRoot
+  ui.stateManager.updatePartsPanelToggleIcon(null);
+}
+
+export function setupPartsPanel(ui) {
+  setupPartsTabs(ui);
+  initializePartsPanel(ui);
+}
+
+
+export function clearPageReactor(ui) {
+  const reactor = getPageReactor(ui);
+  if (reactor) reactor.innerHTML = "";
+}
+
+export function setPageGridContainer(ui, container) {
+  if (ui.gridCanvasRenderer) ui.gridCanvasRenderer.setContainer(container);
+}
+
+export function setPageReactorVisibility(ui, visible) {
+  const reactor = getPageReactor(ui);
+  if (reactor) reactor.style.visibility = visible ? "visible" : "hidden";
+}
+
+export function setupResearchCollapsibleSections(ui) {
+  if (ui._researchCollapsibleSetup) return;
+  ui._researchCollapsibleSetup = true;
+  const section = document.getElementById("experimental_upgrades_section");
+  if (!section) return;
+  section.addEventListener("click", (e) => {
+    const header = e.target.closest(".research-section-header");
+    if (!header) return;
+    const article = header.closest(".research-collapsible");
+    if (!article) return;
+    e.preventDefault();
+    const collapsed = article.classList.toggle("section-collapsed");
+    header.setAttribute("aria-expanded", String(!collapsed));
+  });
+  section.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const header = e.target.closest(".research-section-header");
+    if (!header) return;
+    e.preventDefault();
+    header.click();
+  });
+  const coverWrap = document.querySelector(".refund-safety-cover-wrap");
+  const coverBtn = document.getElementById("refund_safety_cover");
+  if (coverBtn && coverWrap) {
+    coverBtn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      coverWrap.classList.toggle("cover-open");
+    });
+  }
+  const rebootBtn = document.getElementById("reboot_btn");
+  const refundBtn = document.getElementById("refund_btn");
+  const orchestrator = ui.modalOrchestrator;
+  if (rebootBtn) {
+    rebootBtn.addEventListener("click", (e) => {
+      if (!coverWrap?.classList.contains("cover-open")) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else {
+        orchestrator?.showPrestigeModal?.("refund");
+      }
+    });
+  }
+  if (refundBtn) {
+    refundBtn.addEventListener("click", () => {
+      orchestrator?.showPrestigeModal?.("prestige");
+    });
+  }
+}
+
+export function setupVersionDisplayForPage(ui) {
+  if (!ui?.uiState || ui._versionDisplayMounted) return;
+  const aboutEl = document.getElementById("about_version");
+  const appEl = document.getElementById("app_version");
+  const renderVersion = (el) => {
+    if (!el?.isConnected) return;
+    ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["version_display"] }],
+      () => html`${ui.uiState?.version_display?.app ?? ui.uiState?.version_display?.about ?? ""}`,
+      el
     );
-    this._epUnmount = this._epComponent.mount();
+  };
+  if (aboutEl) renderVersion(aboutEl);
+  if (appEl && appEl !== aboutEl) renderVersion(appEl);
+  ui._versionDisplayMounted = true;
+}
+
+export async function loadAndSetVersionForPage(ui) {
+  try {
+    const { getResourceUrl } = await import("../utils.js");
+    const response = await fetch(getResourceUrl("version.json"));
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await response.text();
+      if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+        throw new Error("HTML response received (likely 404 fallback)");
+      }
+      throw new Error(`Expected JSON but got ${contentType || "unknown content type"}`);
+    }
+
+    const versionData = await response.json();
+    const version = versionData.version || "Unknown";
+    ui._cachedVersion = version;
+
+    if (ui?.uiState) {
+      ui.uiState.version_display = { ...ui.uiState.version_display, app: version, about: version };
+    }
+  } catch (error) {
+    if (!error.message || !error.message.includes("Expected JSON")) {
+      logger.log("warn", "ui", "Could not load version info:", error.message || error);
+    }
+    if (ui?.uiState) {
+      ui.uiState.version_display = { ...ui.uiState.version_display, app: "Unknown", about: "Unknown" };
+    }
+  }
+}
+
+export function initializePage(ui, pageId) {
+  const game = ui.game;
+  cacheDomElements(ui, pageId);
+
+  if (pageId === "reactor_section") {
+    initControlDeckVarObjs(ui);
+    const pauseCfg = ui.var_objs_config?.pause;
+    const paused = !!ui.game?.state?.pause;
+    if (pauseCfg?.onupdate) pauseCfg.onupdate(paused);
   }
 
-  _mountStatsBarReactive(ui) {
-    const root = document.getElementById("reactor_stats");
-    if (!root || !ui.game?.state) return;
-    const state = ui.game.state;
-    render(controlDeckStatsBarTemplate(), root);
-    const ventEl = document.getElementById("stats_vent");
-    const powerEl = document.getElementById("stats_power");
-    const heatEl = document.getElementById("stats_heat");
-    const hullEl = document.getElementById("stats_hull");
-    const last = { vent: null, power: null, heat: null, hull: null };
-    const first = { vent: true, power: true, heat: true, hull: true };
-    const sync = () => {
-      const v = fmt(state.stats_vent ?? 0, 0);
-      const p = fmt(state.stats_power ?? 0, 0);
-      const h = fmt(state.stats_heat_generation ?? 0, 0);
-      const maxH = toNumber(state.max_heat ?? 0);
-      const cur = toNumber(state.current_heat ?? 0);
-      const hullPct = maxH > 0 ? (cur / maxH) * 100 : 0;
-      const hullText = `${fmt(hullPct, 1)}%`;
-      const apply = (el, key, text) => {
-        if (!el) return;
-        if (first[key]) {
-          el.textContent = text;
-          first[key] = false;
-          last[key] = text;
-          return;
+  switch (pageId) {
+    case "reactor_section": {
+      const reactor = getPageReactor(ui);
+      logger.log("debug", "ui", "[PageInit] reactor_section init start", {
+        hasGridScaler: !!ui.gridScaler,
+        hasWrapper: !!ui.gridScaler?.wrapper,
+        hasReactor: !!reactor,
+        hasGridRenderer: !!ui.gridCanvasRenderer,
+        hasGame: !!ui.game,
+        hasTileset: !!ui.game?.tileset,
+      });
+      if (ui.gridScaler && !ui.gridScaler.wrapper) {
+        ui.gridScaler.init();
+      }
+      if (reactor) {
+        clearPageReactor(ui);
+        if (ui.gridCanvasRenderer) {
+          ui.gridCanvasRenderer.init(reactor);
         }
-        if (last[key] === text) return;
-        last[key] = text;
-        runCathodeScramble(el, text, { durationMs: 150 });
-      };
-      apply(ventEl, "vent", v);
-      apply(powerEl, "power", p);
-      apply(heatEl, "heat", h);
-      apply(hullEl, "hull", hullText);
-    };
-    let scheduled = false;
-    const schedule = () => {
-      if (scheduled) return;
-      scheduled = true;
-      queueMicrotask(() => {
-        scheduled = false;
-        sync();
+      }
+
+      ui.inputHandler.setupReactorEventListeners();
+      ui.inputHandler.setupSegmentHighlight();
+      ui.gridScaler.resize();
+      const container = getPageReactorWrapper(ui) || getPageReactorBackground(ui);
+      setPageGridContainer(ui, container);
+      if (ui.game?.tileset) {
+        ui.game.tileset.updateActiveTiles();
+      }
+      if (ui.gridCanvasRenderer && ui.game) {
+        ui.gridCanvasRenderer.render(ui.game);
+      }
+      logger.log("debug", "ui", "[PageInit] reactor_section init done");
+      ui.initializeCopyPasteUI();
+      ui.pageSetupUI.setupMobileTopBar();
+      ui.pageSetupUI.setupMobileTopBarResizeListener();
+      break;
+    }
+    case "upgrades_section":
+      ui.pageSetupUI.setupAffordabilityBanners("upgrades_no_affordable_banner");
+      if (!ui._sectionCountsMountedUpgrades && document.getElementById("upgrades_content_wrapper")) {
+        ui._unmounts.push(mountSectionCountsReactive(ui, "upgrades_content_wrapper"));
+        ui._sectionCountsMountedUpgrades = true;
+      }
+      if (game?.upgradeset) updateSectionCountsState(ui, game);
+      requestAnimationFrame(() => {
+        if (
+          game.upgradeset &&
+          typeof game.upgradeset.populateUpgrades === "function"
+        ) {
+          game.upgradeset.populateUpgrades();
+        } else {
+          logger.log("warn", "ui", "upgradeset.populateUpgrades is not a function or upgradeset missing");
+        }
       });
-    };
-    const unsubs = [
-      subscribeKey(state, "stats_vent", schedule),
-      subscribeKey(state, "stats_power", schedule),
-      subscribeKey(state, "stats_heat_generation", schedule),
-      subscribeKey(state, "current_heat", schedule),
-      subscribeKey(state, "max_heat", schedule),
-    ];
-    sync();
-    this._statsBarUnmount = () => {
-      unsubs.forEach((u) => { try { u(); } catch (_) {} });
-      [ventEl, powerEl, heatEl, hullEl].forEach((el) => cancelCathodeScramble(el));
-    };
-    this.mountExoticParticlesDisplayIfNeeded(ui);
+      break;
+    case "experimental_upgrades_section":
+      mountExoticParticlesDisplayIfNeeded(ui);
+      ui.pageSetupUI.setupAffordabilityBanners("research_no_affordable_banner");
+      if (!ui._sectionCountsMountedResearch && document.getElementById("experimental_upgrades_content_wrapper")) {
+        ui._unmounts.push(mountSectionCountsReactive(ui, "experimental_upgrades_content_wrapper"));
+        ui._sectionCountsMountedResearch = true;
+      }
+      if (game?.upgradeset) updateSectionCountsState(ui, game);
+      if (
+        game.upgradeset &&
+        typeof game.upgradeset.populateExperimentalUpgrades === "function"
+      ) {
+        game.upgradeset.populateExperimentalUpgrades();
+      } else {
+        logger.log("warn", "ui", "upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing");
+      }
+      setupResearchCollapsibleSections(ui);
+      void loadAndSetVersionForPage(ui);
+      ui.setupUpgradeCardHoverBuzz();
+      break;
+    case "about_section":
+      setupVersionDisplayForPage(ui);
+      if (!ui.uiState?.version_display?.app) void loadAndSetVersionForPage(ui);
+      break;
+    case "leaderboard_section":
+      ui.pageSetupUI.setupLeaderboardPage();
+      break;
+    case "soundboard_section":
+      ui.pageSetupUI.setupSoundboardPage();
+      break;
+    default:
+      break;
   }
 
-  _mountEngineStatusReactive(ui) {
-    const root = document.getElementById("engine_status_indicator_root");
-    if (!root || !ui.game?.state) return;
-    const renderFn = (state) => {
-      const statusClass = classMap({
-        "engine-running": state.engine_status === "running",
-        "engine-paused": state.engine_status === "paused",
-        "engine-stopped": state.engine_status === "stopped",
-        "engine-tick": state.engine_status === "tick",
-        "engine-simulation-error": state.engine_status === "simulation_error",
-      });
-      return engineStatusIndicatorTemplate({ statusClass });
+  ui.objectivesUI.showObjectivesForPage(pageId);
+}
+
+function controlDeckExoticParticlesRenderTemplate(state) {
+  return controlDeckExoticParticlesTemplate({
+    currentEp: fmt(state.current_exotic_particles ?? 0),
+    totalEp: fmt(state.total_exotic_particles ?? 0),
+  });
+}
+
+export function mountExoticParticlesDisplayIfNeeded(ui) {
+  if (ui._controlDeckEpComponent) return;
+  const epRoot = document.getElementById("exotic_particles_display");
+  if (!epRoot || !ui.game?.state) return;
+  ui._controlDeckEpComponent = new ReactiveLitComponent(
+    ui.game.state,
+    ["current_exotic_particles", "total_exotic_particles"],
+    (state) => controlDeckExoticParticlesRenderTemplate(state),
+    epRoot
+  );
+  ui._unmounts.push(ui._controlDeckEpComponent.mount());
+}
+
+function mountStatsBarReactive(ui) {
+  const root = document.getElementById("reactor_stats");
+  if (!root || !ui.game?.state) return;
+  const state = ui.game.state;
+  render(controlDeckStatsBarTemplate(), root);
+  const ventEl = document.getElementById("stats_vent");
+  const powerEl = document.getElementById("stats_power");
+  const heatEl = document.getElementById("stats_heat");
+  const hullEl = document.getElementById("stats_hull");
+  const last = { vent: null, power: null, heat: null, hull: null };
+  const first = { vent: true, power: true, heat: true, hull: true };
+  const sync = () => {
+    const v = fmt(state.stats_vent ?? 0, 0);
+    const p = fmt(state.stats_power ?? 0, 0);
+    const h = fmt(state.stats_heat_generation ?? 0, 0);
+    const maxH = toNumber(state.max_heat ?? 0);
+    const cur = toNumber(state.current_heat ?? 0);
+    const hullPct = maxH > 0 ? (cur / maxH) * 100 : 0;
+    const hullText = `${fmt(hullPct, 1)}%`;
+    const apply = (el, key, text) => {
+      if (!el) return;
+      if (first[key]) {
+        el.textContent = text;
+        first[key] = false;
+        last[key] = text;
+        return;
+      }
+      if (last[key] === text) return;
+      last[key] = text;
+      runCathodeScramble(el, text, { durationMs: 150 });
     };
-    this._engineStatusComponent = new ReactiveLitComponent(
-      ui.game.state,
-      ["engine_status", "simulation_error_message"],
+    apply(ventEl, "vent", v);
+    apply(powerEl, "power", p);
+    apply(heatEl, "heat", h);
+    apply(hullEl, "hull", hullText);
+  };
+  let scheduled = false;
+  const schedule = () => {
+    if (scheduled) return;
+    scheduled = true;
+    queueMicrotask(() => {
+      scheduled = false;
+      sync();
+    });
+  };
+  const unsubs = [
+    subscribeKey(state, "stats_vent", schedule),
+    subscribeKey(state, "stats_power", schedule),
+    subscribeKey(state, "stats_heat_generation", schedule),
+    subscribeKey(state, "current_heat", schedule),
+    subscribeKey(state, "max_heat", schedule),
+  ];
+  sync();
+  ui._unmounts.push(() => {
+    unsubs.forEach((u) => { try { u(); } catch (_) {} });
+    [ventEl, powerEl, heatEl, hullEl].forEach((el) => cancelCathodeScramble(el));
+  });
+  mountExoticParticlesDisplayIfNeeded(ui);
+}
+
+function mountEngineStatusReactive(ui) {
+  const root = document.getElementById("engine_status_indicator_root");
+  if (!root || !ui.game?.state) return;
+  const renderFn = (state) => {
+    const statusClass = classMap({
+      "engine-running": state.engine_status === "running",
+      "engine-paused": state.engine_status === "paused",
+      "engine-stopped": state.engine_status === "stopped",
+      "engine-tick": state.engine_status === "tick",
+      "engine-simulation-error": state.engine_status === "simulation_error",
+    });
+    return engineStatusIndicatorTemplate({ statusClass });
+  };
+  ui._engineStatusComponent = new ReactiveLitComponent(
+    ui.game.state,
+    ["engine_status", "simulation_error_message"],
+    renderFn,
+    root
+  );
+  ui._unmounts.push(ui._engineStatusComponent.mount());
+}
+
+function mountTickCadenceNav(ui) {
+  if (typeof ui._tickCadenceNavUnmount === "function") {
+    ui._tickCadenceNavUnmount();
+    ui._tickCadenceNavUnmount = null;
+  }
+  const el = document.getElementById("tps_display");
+  if (!el || !ui.game?.on) return;
+  const update = () => {
+    el.textContent = formatSimulationTickLine(ui.game);
+  };
+  update();
+  ui.game.on("tickRecorded", update);
+  const onPatch = (patch) => {
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) update();
+  };
+  ui.game.on("statePatch", onPatch);
+  ui._tickCadenceNavUnmount = () => {
+    ui.game.off("tickRecorded", update);
+    ui.game.off("statePatch", onPatch);
+  };
+  if (!ui._tickCadenceNavCleanupRegistered) {
+    ui._tickCadenceNavCleanupRegistered = true;
+    ui._unmounts.push(() => {
+      if (typeof ui._tickCadenceNavUnmount === "function") {
+        ui._tickCadenceNavUnmount();
+        ui._tickCadenceNavUnmount = null;
+      }
+    });
+  }
+}
+
+export function initControlDeckVarObjs(ui) {
+  mountStatsBarReactive(ui);
+  mountEngineStatusReactive(ui);
+  mountTickCadenceNav(ui);
+  ui.var_objs_config = {
+    pause: {
+      id: "pause_toggle",
+      stateProperty: "pause",
+      onupdate: (val) => {
+        if (val) ui.gridInteractionUI.clearAllActiveAnimations();
+        if (ui.uiState) ui.uiState.is_paused = !!val;
+        if (ui.game && ui.game.engine) {
+          if (val) {
+            ui.game.engine.stop();
+            ui.game.state.engine_status = "paused";
+          } else {
+            ui.game.engine.start();
+            ui.game.state.engine_status = "running";
+          }
+        }
+        ui.deviceFeatures.updateWakeLockState();
+        ui.pauseStateUI?.updatePauseState?.();
+      },
+    },
+    melting_down: {
+      onupdate: (val) => {
+        if (val) ui.gridInteractionUI.clearAllActiveAnimations();
+      },
+    },
+  };
+  ui.stateManager?.setupStateSubscriptions?.();
+}
+
+function buildControlsNavTemplate(ui, state) {
+  const toggleHandler = (stateProperty) => () => {
+    const currentState = state[stateProperty];
+    const newState = !currentState;
+    logger.log("debug", "ui", `[TOGGLE] Button "${stateProperty}" clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}`);
+    ui.game.onToggleStateChange?.(stateProperty, newState);
+  };
+  const hasAutoSellUpgrade = ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
+  const hasAutoBuyUpgrade = ui.game?.upgradeset?.getUpgrade("auto_buy_operator")?.level > 0;
+  const hasHeatControlUpgrade = ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
+  return controlDeckControlsNavTemplate({
+    autoSellOn: !!state.auto_sell && hasAutoSellUpgrade,
+    autoBuyOn: !!state.auto_buy && hasAutoBuyUpgrade,
+    heatControlOn: !!state.heat_control && hasHeatControlUpgrade,
+    pauseOn: !!state.pause,
+    accountTitle: ui.uiState?.user_account_display?.title ?? "Account",
+    accountIcon: ui.uiState?.user_account_display?.icon ?? "\uD83D\uDC64",
+    onToggleAutoSell: hasAutoSellUpgrade ? toggleHandler("auto_sell") : null,
+    onToggleAutoBuy: hasAutoBuyUpgrade ? toggleHandler("auto_buy") : null,
+    onToggleHeatControl: hasHeatControlUpgrade ? toggleHandler("heat_control") : null,
+    onTogglePause: toggleHandler("pause"),
+  });
+}
+
+export function initializeControlDeckToggleButtons(ui) {
+  const root = document.getElementById("controls_nav_root");
+  if (root && ui.game?.state) {
+    const renderFn = () => buildControlsNavTemplate(ui, ui.game.state);
+    ui._unmounts.push(ReactiveLitComponent.mountMulti(
+      [
+        { state: ui.game.state, keys: ["auto_sell", "auto_buy", "heat_control", "pause"] },
+        ...(ui.uiState ? [{ state: ui.uiState, keys: ["user_account_display"] }] : []),
+      ],
       renderFn,
       root
+    ));
+  } else if (root) {
+    render(buildControlsNavTemplate(ui, {
+      auto_sell: false,
+      auto_buy: true,
+      heat_control: false,
+      pause: false,
+    }), root);
+  }
+}
+
+export function syncToggleStatesFromGame(ui) {
+  if (!ui.game) {
+    logger.log("warn", "ui", "syncToggleStatesFromGame called but game is not available");
+    return;
+  }
+  const toggleMappings = {
+    auto_sell: () => ui.game.reactor?.auto_sell_enabled ?? false,
+    auto_buy: () => ui.game.reactor?.auto_buy_enabled ?? false,
+    heat_control: () => ui.game.reactor?.heat_controlled ?? false,
+    pause: () => ui.game.paused ?? false,
+  };
+  for (const [stateProperty, getValue] of Object.entries(toggleMappings)) {
+    const gameValue = getValue();
+    const currentState = ui.game.state[stateProperty];
+    if (currentState !== gameValue) {
+      logger.log("debug", "ui", `[TOGGLE] Syncing "${stateProperty}" from game: ${currentState} -> ${gameValue}`);
+      ui.game.onToggleStateChange?.(stateProperty, gameValue);
+    }
+  }
+}
+
+export function updateControlDeckPercentageBar(ui, currentKey, maxKey, domElement) {
+  if (!domElement) return;
+  const st = ui.game?.state;
+  const current = toNumber(st?.[currentKey] ?? 0);
+  const max = toNumber(st?.[maxKey] ?? 1) || 1;
+  domElement.style.width = `${Math.min(100, Math.max(0, (current / max) * 100))}%`;
+}
+
+function mountLeaderboardButtons(ui) {
+  if (!ui.uiState || (ui._navLeaderboardUnmounts?.length ?? 0) > 0) return;
+  ui._navLeaderboardUnmounts = [];
+  const topBtn = document.querySelector('#main_top_nav button[data-page="leaderboard_section"]');
+  const bottomBtn = document.querySelector('#bottom_nav button[data-page="leaderboard_section"]');
+  const applyProps = (btn, d) => {
+    if (!btn || !d) return;
+    btn.disabled = d.disabled;
+    btn.style.opacity = d.disabled ? "0.5" : "1";
+    btn.style.cursor = d.disabled ? "not-allowed" : "pointer";
+    btn.style.pointerEvents = d.disabled ? "none" : "auto";
+  };
+  const template = () => html`${ui.uiState?.leaderboard_display?.icon ?? "🏆"}`;
+  const renderTop = () => {
+    const d = ui.uiState?.leaderboard_display ?? { icon: "🏆", disabled: false };
+    applyProps(topBtn, d);
+    return template();
+  };
+  const renderBottom = () => {
+    const d = ui.uiState?.leaderboard_display ?? { icon: "🏆", disabled: false };
+    applyProps(bottomBtn, d);
+    return template();
+  };
+  if (topBtn) {
+    const span = document.createElement("span");
+    span.setAttribute("aria-hidden", "true");
+    topBtn.textContent = "";
+    topBtn.appendChild(span);
+    ui._navLeaderboardUnmounts.push(ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["leaderboard_display"] }],
+      renderTop,
+      span
+    ));
+  }
+  if (bottomBtn && bottomBtn !== topBtn) {
+    const span = document.createElement("span");
+    span.setAttribute("aria-hidden", "true");
+    bottomBtn.textContent = "";
+    bottomBtn.appendChild(span);
+    ui._navLeaderboardUnmounts.push(ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: ["leaderboard_display"] }],
+      renderBottom,
+      span
+    ));
+  }
+}
+
+export function updateLeaderboardIcon(ui) {
+  if (typeof document === "undefined" || !ui.game) return;
+  mountLeaderboardButtons(ui);
+  if (!ui.uiState) return;
+  const lb = leaderboardService.getStatus();
+  const circuitOff = lb.state === "open";
+  const icon = ui.game.cheats_used ? "🚷" : circuitOff ? "📴" : "🏆";
+  const disabled = !!ui.game.cheats_used || circuitOff;
+  ui.uiState.leaderboard_display = { icon, disabled };
+}
+
+export function updateNavIndicators(ui) {
+  if (typeof document === "undefined" || !ui.uiState) return;
+  if (ui._navAffordabilityUnmounts?.length) return;
+  const mountIndicator = (button, key) => {
+    if (!button || button.style.position !== "relative") button.style.position = "relative";
+    let container = button.querySelector(".nav-indicator-mount");
+    if (!container) {
+      container = document.createElement("span");
+      container.className = "nav-indicator-mount";
+      button.appendChild(container);
+    }
+    const renderFn = () => {
+      const visible = !!ui.uiState?.[key];
+      return navIndicatorTemplate({ visible });
+    };
+    return ReactiveLitComponent.mountMulti(
+      [{ state: ui.uiState, keys: [key] }],
+      renderFn,
+      container
     );
-    this._engineStatusUnmount = this._engineStatusComponent.mount();
-  }
+  };
+  const unmounts = [];
+  document.querySelectorAll('[data-page="upgrades_section"]').forEach((btn) => {
+    unmounts.push(mountIndicator(btn, "has_affordable_upgrades"));
+  });
+  document.querySelectorAll('[data-page="experimental_upgrades_section"]').forEach((btn) => {
+    unmounts.push(mountIndicator(btn, "has_affordable_research"));
+  });
+  ui._navAffordabilityUnmounts = unmounts;
+}
 
-  _mountTickCadenceNav(ui) {
-    if (typeof this._tickCadenceNavUnmount === "function") {
-      this._tickCadenceNavUnmount();
-      this._tickCadenceNavUnmount = null;
-    }
-    const el = document.getElementById("tps_display");
-    if (!el || !ui.game?.on) return;
-    const update = () => {
-      el.textContent = formatSimulationTickLine(ui.game);
-    };
-    update();
-    ui.game.on("tickRecorded", update);
-    const onPatch = (patch) => {
-      if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) update();
-    };
-    ui.game.on("statePatch", onPatch);
-    this._tickCadenceNavUnmount = () => {
-      ui.game.off("tickRecorded", update);
-      ui.game.off("statePatch", onPatch);
-    };
-  }
-
-  initVarObjsConfig() {
-    const ui = this.ui;
-
-    this._mountStatsBarReactive(ui);
-    this._mountEngineStatusReactive(ui);
-    this._mountTickCadenceNav(ui);
-    ui.var_objs_config = {
-      pause: {
-        id: "pause_toggle",
-        stateProperty: "pause",
-        onupdate: (val) => {
-          if (val) ui.gridInteractionUI.clearAllActiveAnimations();
-          if (ui.uiState) ui.uiState.is_paused = !!val;
-          if (ui.game && ui.game.engine) {
-            if (val) {
-              ui.game.engine.stop();
-              ui.stateManager.setVar("engine_status", "paused");
-            } else {
-              ui.game.engine.start();
-              ui.stateManager.setVar("engine_status", "running");
-            }
-          }
-          ui.deviceFeatures.updateWakeLockState();
-          ui.pauseStateUI?.updatePauseState?.();
-        },
-      },
-      melting_down: {
-        onupdate: (val) => {
-          if (val) ui.gridInteractionUI.clearAllActiveAnimations();
-        },
-      },
-    };
-    ui.stateManager?.setupStateSubscriptions?.();
-  }
-
-  _controlsNavTemplate(state) {
-    const ui = this.ui;
-    const toggleHandler = (stateProperty) => () => {
-      const currentState = state[stateProperty];
-      const newState = !currentState;
-      logger.log("debug", "ui", `[TOGGLE] Button "${stateProperty}" clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}`);
-      ui.stateManager.setVar(stateProperty, newState);
-    };
-    const hasAutoSellUpgrade = ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
-    const hasAutoBuyUpgrade = ui.game?.upgradeset?.getUpgrade("auto_buy_operator")?.level > 0;
-    const hasHeatControlUpgrade = ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
-    return controlDeckControlsNavTemplate({
-      autoSellOn: !!state.auto_sell && hasAutoSellUpgrade,
-      autoBuyOn: !!state.auto_buy && hasAutoBuyUpgrade,
-      heatControlOn: !!state.heat_control && hasHeatControlUpgrade,
-      pauseOn: !!state.pause,
-      accountTitle: ui.uiState?.user_account_display?.title ?? "Account",
-      accountIcon: ui.uiState?.user_account_display?.icon ?? "👤",
-      onToggleAutoSell: hasAutoSellUpgrade ? toggleHandler("auto_sell") : null,
-      onToggleAutoBuy: hasAutoBuyUpgrade ? toggleHandler("auto_buy") : null,
-      onToggleHeatControl: hasHeatControlUpgrade ? toggleHandler("heat_control") : null,
-      onTogglePause: toggleHandler("pause"),
-    });
-  }
-
-  initializeToggleButtons() {
-    const ui = this.ui;
-    const root = document.getElementById("controls_nav_root");
-    if (root && ui.game?.state) {
-      const renderFn = () => this._controlsNavTemplate(ui.game.state);
-      this._controlsNavUnmount = ReactiveLitComponent.mountMulti(
-        [
-          { state: ui.game.state, keys: ["auto_sell", "auto_buy", "heat_control", "pause"] },
-          ...(ui.uiState ? [{ state: ui.uiState, keys: ["user_account_display"] }] : []),
-        ],
-        renderFn,
-        root
-      );
-    } else if (root) {
-      render(this._controlsNavTemplate({
-        auto_sell: false,
-        auto_buy: true,
-        heat_control: false,
-        pause: false,
-      }), root);
-    }
-  }
-
-  syncToggleStatesFromGame() {
-    const ui = this.ui;
-    if (!ui.game) {
-      logger.log('warn', 'ui', 'syncToggleStatesFromGame called but game is not available');
-      return;
-    }
-    const toggleMappings = {
-      auto_sell: () => ui.game.reactor?.auto_sell_enabled ?? false,
-      auto_buy: () => ui.game.reactor?.auto_buy_enabled ?? false,
-      heat_control: () => ui.game.reactor?.heat_controlled ?? false,
-      pause: () => ui.game.paused ?? false,
-    };
-    for (const [stateProperty, getValue] of Object.entries(toggleMappings)) {
-      const gameValue = getValue();
-      const currentState = ui.stateManager.getVar(stateProperty);
-      if (currentState !== gameValue) {
-        logger.log('debug', 'ui', `[TOGGLE] Syncing "${stateProperty}" from game: ${currentState} -> ${gameValue}`);
-        ui.stateManager.setVar(stateProperty, gameValue);
-      }
-    }
-  }
-
-  updatePercentageBar(currentKey, maxKey, domElement) {
-    if (!domElement) return;
-    const current = this.ui.stateManager.getVar(currentKey) || 0;
-    const max = this.ui.stateManager.getVar(maxKey) || 1;
-    domElement.style.width = `${Math.min(100, Math.max(0, (current / max) * 100))}%`;
+export function teardownAffordabilityIndicators(ui) {
+  if (ui._navAffordabilityUnmounts?.length) {
+    ui._navAffordabilityUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+    ui._navAffordabilityUnmounts = [];
   }
 }
 
-class NavIndicatorsUI {
-  constructor(ui) {
-    this.ui = ui;
-    this._leaderboardUnmounts = [];
-  }
-
-  updateLeaderboardIcon() {
-    if (typeof document === "undefined" || !this.ui.game) return;
-    this._mountLeaderboardButtons();
-    if (!this.ui.uiState) return;
-    const lb = leaderboardService.getStatus();
-    const circuitOff = lb.state === "open";
-    const icon = this.ui.game.cheats_used ? "🚷" : circuitOff ? "📴" : "🏆";
-    const disabled = !!this.ui.game.cheats_used || circuitOff;
-    this.ui.uiState.leaderboard_display = { icon, disabled };
-  }
-
-  _mountLeaderboardButtons() {
-    const ui = this.ui;
-    if (!ui.uiState || this._leaderboardUnmounts.length > 0) return;
-    const topBtn = document.querySelector('#main_top_nav button[data-page="leaderboard_section"]');
-    const bottomBtn = document.querySelector('#bottom_nav button[data-page="leaderboard_section"]');
-    const applyProps = (btn, d) => {
-      if (!btn || !d) return;
-      btn.disabled = d.disabled;
-      btn.style.opacity = d.disabled ? "0.5" : "1";
-      btn.style.cursor = d.disabled ? "not-allowed" : "pointer";
-      btn.style.pointerEvents = d.disabled ? "none" : "auto";
-    };
-    const template = () => html`${ui.uiState?.leaderboard_display?.icon ?? "🏆"}`;
-    const renderTop = () => {
-      const d = ui.uiState?.leaderboard_display ?? { icon: "🏆", disabled: false };
-      applyProps(topBtn, d);
-      return template();
-    };
-    const renderBottom = () => {
-      const d = ui.uiState?.leaderboard_display ?? { icon: "🏆", disabled: false };
-      applyProps(bottomBtn, d);
-      return template();
-    };
-    if (topBtn) {
-      const span = document.createElement("span");
-      span.setAttribute("aria-hidden", "true");
-      topBtn.textContent = "";
-      topBtn.appendChild(span);
-      this._leaderboardUnmounts.push(ReactiveLitComponent.mountMulti(
-        [{ state: ui.uiState, keys: ["leaderboard_display"] }],
-        renderTop,
-        span
-      ));
-    }
-    if (bottomBtn && bottomBtn !== topBtn) {
-      const span = document.createElement("span");
-      span.setAttribute("aria-hidden", "true");
-      bottomBtn.textContent = "";
-      bottomBtn.appendChild(span);
-      this._leaderboardUnmounts.push(ReactiveLitComponent.mountMulti(
-        [{ state: ui.uiState, keys: ["leaderboard_display"] }],
-        renderBottom,
-        span
-      ));
-    }
-  }
-
-  updateNavIndicators() {
-    if (typeof document === "undefined" || !this.ui.uiState) return;
-    if (this._affordabilityUnmounts?.length) return;
-    const ui = this.ui;
-    const mountIndicator = (button, key) => {
-      if (!button || button.style.position !== "relative") button.style.position = "relative";
-      let container = button.querySelector(".nav-indicator-mount");
-      if (!container) {
-        container = document.createElement("span");
-        container.className = "nav-indicator-mount";
-        button.appendChild(container);
-      }
-      const renderFn = () => {
-        const visible = !!ui.uiState?.[key];
-        return navIndicatorTemplate({ visible });
-      };
-      return ReactiveLitComponent.mountMulti(
-        [{ state: ui.uiState, keys: [key] }],
-        renderFn,
-        container
-      );
-    };
-    const unmounts = [];
-    document.querySelectorAll('[data-page="upgrades_section"]').forEach((btn) => {
-      unmounts.push(mountIndicator(btn, "has_affordable_upgrades"));
-    });
-    document.querySelectorAll('[data-page="experimental_upgrades_section"]').forEach((btn) => {
-      unmounts.push(mountIndicator(btn, "has_affordable_research"));
-    });
-    this._affordabilityUnmounts = unmounts;
-  }
-
-  teardownAffordabilityIndicators() {
-    if (this._affordabilityUnmounts?.length) {
-      this._affordabilityUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
-      this._affordabilityUnmounts = [];
-    }
+export function teardownTabSetupUI(ui) {
+  if (ui._tabSetupAbortController) {
+    ui._tabSetupAbortController.abort();
+    ui._tabSetupAbortController = null;
   }
 }
 
-class TabSetupUI extends BaseComponent {
-  constructor(ui) {
-    super();
-    this.ui = ui;
-    this._abortController = null;
-  }
+export function setupBuildTabButton(ui) {
+  teardownTabSetupUI(ui);
+  ui._tabSetupAbortController = new AbortController();
+  const { signal } = ui._tabSetupAbortController;
 
-  teardown() {
-    if (this._abortController) {
-      this._abortController.abort();
-      this._abortController = null;
-    }
-  }
+  const buildBtn = document.getElementById("build_tab_btn");
+  if (buildBtn) {
+    buildBtn.addEventListener("click", () => {
+      ui.deviceFeatures.lightVibration();
+      const partsSection = getPartsSectionElement(ui) ?? ui.DOMElements?.parts_section;
+      if (partsSection) {
+        const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
+        const hasSelectedPart = ui.stateManager.getClickedPart() !== null;
 
-  setupBuildTabButton() {
-    this.teardown();
-    this._abortController = new AbortController();
-    const { signal } = this._abortController;
-
-    const buildBtn = document.getElementById("build_tab_btn");
-    if (buildBtn) {
-      buildBtn.addEventListener("click", () => {
-        this.ui.deviceFeatures.lightVibration();
-        const partsSection = this.ui.partsPanelUI?.getPartsSection?.() ?? this.ui.DOMElements?.parts_section;
-        if (partsSection) {
-          const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-          const hasSelectedPart = this.ui.stateManager.getClickedPart() !== null;
-
-          const uiState = this.ui.uiState;
-          if (isMobile) {
-            if (hasSelectedPart && (uiState?.parts_panel_collapsed ?? partsSection.classList.contains("collapsed"))) {
-              if (uiState) uiState.parts_panel_collapsed = false;
-              else partsSection.classList.remove("collapsed");
-            } else if (!hasSelectedPart) {
-              if (uiState) uiState.parts_panel_collapsed = !uiState.parts_panel_collapsed;
-              else partsSection.classList.toggle("collapsed");
-            }
-            this.ui.partsPanelUI.updatePartsPanelBodyClass();
-          } else {
+        const uiState = ui.uiState;
+        if (isMobile) {
+          if (hasSelectedPart && (uiState?.parts_panel_collapsed ?? partsSection.classList.contains("collapsed"))) {
+            if (uiState) uiState.parts_panel_collapsed = false;
+            else partsSection.classList.remove("collapsed");
+          } else if (!hasSelectedPart) {
             if (uiState) uiState.parts_panel_collapsed = !uiState.parts_panel_collapsed;
-            this.ui.partsPanelUI.updatePartsPanelBodyClass();
+            else partsSection.classList.toggle("collapsed");
           }
+          updatePartsPanelBodyClass(ui);
+        } else {
+          if (uiState) uiState.parts_panel_collapsed = !uiState.parts_panel_collapsed;
+          updatePartsPanelBodyClass(ui);
         }
-      }, { signal });
-    }
-
-    const container = document.getElementById("quick_select_slots_container");
-    const longPressMs = 500;
-    let longPressTimer = null;
-    let didLongPress = false;
-    let activeSlotIndex = null;
-    const clearTimer = () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
       }
-      activeSlotIndex = null;
-    };
-    const handlePointerDown = (e) => {
-      const slotEl = e.target.closest(".quick-select-slot");
-      if (!slotEl) return;
-      activeSlotIndex = parseInt(slotEl.getAttribute("data-index"), 10);
-      didLongPress = false;
-      longPressTimer = setTimeout(() => {
-        longPressTimer = null;
-        didLongPress = true;
-        this.ui.deviceFeatures.heavyVibration();
-        const slots = this.ui.stateManager.getQuickSelectSlots();
-        const locked = slots[activeSlotIndex]?.locked ?? false;
-        this.ui.stateManager.setQuickSelectLock(activeSlotIndex, !locked);
-      }, longPressMs);
-    };
-    const handlePointerUp = (e) => {
-      const slotEl = e.target.closest(".quick-select-slot");
-      if (!slotEl) return;
-      clearTimer();
-      if (didLongPress) return;
-      const i = parseInt(slotEl.getAttribute("data-index"), 10);
-      const slots = this.ui.stateManager.getQuickSelectSlots();
-      const partId = slots[i]?.partId;
-      if (!partId || !this.ui.game?.partset) return;
-      const part = this.ui.game.partset.getPartById(partId);
-      if (!part || !part.affordable) return;
-      this.ui.deviceFeatures.lightVibration();
-      document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
-      this.ui.stateManager.setClickedPart(part, { skipOpenPanel: true });
-      if (part.$el) part.$el.classList.add("part_active");
-      this.ui.partsPanelUI.updateQuickSelectSlots();
-    };
-    if (container) {
-      container.addEventListener("pointerdown", handlePointerDown, { signal });
-      container.addEventListener("pointerup", handlePointerUp, { signal });
-      container.addEventListener("pointercancel", clearTimer, { signal });
-      container.addEventListener("pointerleave", clearTimer, { signal });
-    }
-    this.ui.partsPanelUI.updateQuickSelectSlots();
+    }, { signal });
   }
 
-  setupMenuTabButton() {
-    if (!this._abortController) this._abortController = new AbortController();
-    const { signal } = this._abortController;
-    const menuBtn = document.getElementById("menu_tab_btn");
-    if (menuBtn) {
-      menuBtn.addEventListener("click", () => {
-        this.ui.deviceFeatures.lightVibration();
-        if (this.ui.modalOrchestrator.isModalVisible(MODAL_IDS.SETTINGS)) {
-          this.ui.modalOrchestrator.hideModal(MODAL_IDS.SETTINGS);
-        } else {
-          if (this.ui.game?.router?.currentPageId === "reactor_section") this.ui.partsPanelUI?.closePartsPanel?.();
-          const bottomNav = document.getElementById("bottom_nav");
-          if (bottomNav) {
-            bottomNav.querySelectorAll("button[data-page]").forEach((btn) => {
-              btn.classList.remove("active");
-            });
-          }
-          document.getElementById("settings_btn")?.classList.remove("active");
-          menuBtn.classList.add("active");
-          this.ui.modalOrchestrator.showModal(MODAL_IDS.SETTINGS);
-        }
-      }, { signal });
+  const container = document.getElementById("quick_select_slots_container");
+  const longPressMs = 500;
+  let longPressTimer = null;
+  let didLongPress = false;
+  let activeSlotIndex = null;
+  const clearTimer = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
     }
+    activeSlotIndex = null;
+  };
+  const handlePointerDown = (e) => {
+    const slotEl = e.target.closest(".quick-select-slot");
+    if (!slotEl) return;
+    activeSlotIndex = parseInt(slotEl.getAttribute("data-index"), 10);
+    didLongPress = false;
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      didLongPress = true;
+      ui.deviceFeatures.heavyVibration();
+      const slots = ui.stateManager.getQuickSelectSlots();
+      const locked = slots[activeSlotIndex]?.locked ?? false;
+      ui.stateManager.setQuickSelectLock(activeSlotIndex, !locked);
+    }, longPressMs);
+  };
+  const handlePointerUp = (e) => {
+    const slotEl = e.target.closest(".quick-select-slot");
+    if (!slotEl) return;
+    clearTimer();
+    if (didLongPress) return;
+    const i = parseInt(slotEl.getAttribute("data-index"), 10);
+    const slots = ui.stateManager.getQuickSelectSlots();
+    const partId = slots[i]?.partId;
+    if (!partId || !ui.game?.partset) return;
+    const part = ui.game.partset.getPartById(partId);
+    if (!part || !part.affordable) return;
+    ui.deviceFeatures.lightVibration();
+    document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
+    ui.stateManager.setClickedPart(part, { skipOpenPanel: true });
+    if (part.$el) part.$el.classList.add("part_active");
+    updateQuickSelectSlots(ui);
+  };
+  if (container) {
+    container.addEventListener("pointerdown", handlePointerDown, { signal });
+    container.addEventListener("pointerup", handlePointerUp, { signal });
+    container.addEventListener("pointercancel", clearTimer, { signal });
+    container.addEventListener("pointerleave", clearTimer, { signal });
   }
+  updateQuickSelectSlots(ui);
+}
 
-  setupDesktopTopNavButtons() {
-    if (!this._abortController) this._abortController = new AbortController();
-    const { signal } = this._abortController;
-    const ui = this.ui;
-    const settingsTop = document.getElementById("settings_btn");
-    if (settingsTop) {
-      settingsTop.addEventListener("click", () => {
-        ui.deviceFeatures.lightVibration();
-        if (ui.modalOrchestrator.isModalVisible(MODAL_IDS.SETTINGS)) {
-          ui.modalOrchestrator.hideModal(MODAL_IDS.SETTINGS);
-        } else {
-          if (ui.game?.router?.currentPageId === "reactor_section") ui.partsPanelUI?.closePartsPanel?.();
-          const bottomNav = document.getElementById("bottom_nav");
-          if (bottomNav) {
-            bottomNav.querySelectorAll("button[data-page]").forEach((btn) => {
-              btn.classList.remove("active");
-            });
-          }
-          document.getElementById("menu_tab_btn")?.classList.remove("active");
-          settingsTop.classList.add("active");
-          ui.modalOrchestrator.showModal(MODAL_IDS.SETTINGS);
+export function setupMenuTabButton(ui) {
+  if (!ui._tabSetupAbortController) ui._tabSetupAbortController = new AbortController();
+  const { signal } = ui._tabSetupAbortController;
+  const menuBtn = document.getElementById("menu_tab_btn");
+  if (menuBtn) {
+    menuBtn.addEventListener("click", () => {
+      ui.deviceFeatures.lightVibration();
+      if (ui.modalOrchestrator.isModalVisible(MODAL_IDS.SETTINGS)) {
+        ui.modalOrchestrator.hideModal(MODAL_IDS.SETTINGS);
+      } else {
+        if (ui.game?.router?.currentPageId === "reactor_section") closePartsPanel(ui);
+        const bottomNav = document.getElementById("bottom_nav");
+        if (bottomNav) {
+          bottomNav.querySelectorAll("button[data-page]").forEach((btn) => {
+            btn.classList.remove("active");
+          });
         }
-      }, { signal });
-    }
-    const fsBtn = document.getElementById("fullscreen_toggle");
-    if (fsBtn) {
-      fsBtn.addEventListener("click", () => {
-        ui.deviceFeatures.toggleFullscreen();
-        ui.deviceFeatures.updateFullscreenButtonState();
-      }, { signal });
-    }
-    if (!ui._fullscreenSyncAttached) {
-      ui._fullscreenSyncAttached = true;
-      document.addEventListener("fullscreenchange", () => {
-        ui.deviceFeatures?.updateFullscreenButtonState?.();
-      });
-    }
-    const splashClose = document.getElementById("splash_close_btn");
-    if (splashClose) {
-      splashClose.addEventListener("click", async () => {
-        ui.deviceFeatures.lightVibration();
-        const sm = window.splashManager;
-        if (!sm) return;
-        ui.modalOrchestrator?.hideModal(MODAL_IDS.SETTINGS);
-        if (ui.game?.engine?.running) ui.game.engine.stop();
-        sm.show();
-        await sm.refreshSaveOptions();
-      }, { signal });
-    }
-    ui.deviceFeatures?.updateFullscreenButtonState?.();
+        document.getElementById("settings_btn")?.classList.remove("active");
+        menuBtn.classList.add("active");
+        ui.modalOrchestrator.showModal(MODAL_IDS.SETTINGS);
+      }
+    }, { signal });
   }
 }
 
-export {
-  InfoBarUI,
-  MobileInfoBarUI,
-  PageSetupUI,
-  PartsPanelUI,
-  ControlDeckUI,
-  NavIndicatorsUI,
-  TabSetupUI,
-};
+export function setupDesktopTopNavButtons(ui) {
+  if (!ui._tabSetupAbortController) ui._tabSetupAbortController = new AbortController();
+  const { signal } = ui._tabSetupAbortController;
+  const settingsTop = document.getElementById("settings_btn");
+  if (settingsTop) {
+    settingsTop.addEventListener("click", () => {
+      ui.deviceFeatures.lightVibration();
+      if (ui.modalOrchestrator.isModalVisible(MODAL_IDS.SETTINGS)) {
+        ui.modalOrchestrator.hideModal(MODAL_IDS.SETTINGS);
+      } else {
+        if (ui.game?.router?.currentPageId === "reactor_section") closePartsPanel(ui);
+        const bottomNav = document.getElementById("bottom_nav");
+        if (bottomNav) {
+          bottomNav.querySelectorAll("button[data-page]").forEach((btn) => {
+            btn.classList.remove("active");
+          });
+        }
+        document.getElementById("menu_tab_btn")?.classList.remove("active");
+        settingsTop.classList.add("active");
+        ui.modalOrchestrator.showModal(MODAL_IDS.SETTINGS);
+      }
+    }, { signal });
+  }
+  const fsBtn = document.getElementById("fullscreen_toggle");
+  if (fsBtn) {
+    fsBtn.addEventListener("click", () => {
+      ui.deviceFeatures.toggleFullscreen();
+      ui.deviceFeatures.updateFullscreenButtonState();
+    }, { signal });
+  }
+  if (!ui._fullscreenSyncAttached) {
+    ui._fullscreenSyncAttached = true;
+    document.addEventListener("fullscreenchange", () => {
+      ui.deviceFeatures?.updateFullscreenButtonState?.();
+    });
+  }
+  const splashClose = document.getElementById("splash_close_btn");
+  if (splashClose) {
+    splashClose.addEventListener("click", async () => {
+      ui.deviceFeatures.lightVibration();
+      const sm = window.splashManager;
+      if (!sm) return;
+      ui.modalOrchestrator?.hideModal(MODAL_IDS.SETTINGS);
+      if (ui.game?.engine?.running) ui.game.engine.stop();
+      sm.show();
+      await sm.refreshSaveOptions();
+    }, { signal });
+  }
+  ui.deviceFeatures?.updateFullscreenButtonState?.();
+}
+export { PageSetupUI };
 class ClipboardUI {
   constructor(ui) {
     this.ui = ui;
@@ -1546,7 +1736,7 @@ class MeltdownUI {
         cancelAnimationFrame(this._meltdownBuildupRafId);
         this._meltdownBuildupRafId = null;
       }
-      const wrapper = ui.pageInitUI?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
+      const wrapper = getPageReactorWrapper(ui) ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
       if (wrapper) wrapper.style.transform = "";
       const vignetteEl = document.getElementById("meltdown_vignette");
       if (vignetteEl) {
@@ -1575,7 +1765,7 @@ class MeltdownUI {
     const ui = this.ui;
     const BUILDUP_MS = 2500;
     const wrapper =
-      ui.pageInitUI?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
+      getPageReactorWrapper(ui) ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
     const section = document.getElementById("reactor_section");
     let vignetteEl = document.getElementById("meltdown_vignette");
     if (!vignetteEl && section) {
@@ -1658,7 +1848,7 @@ class MeltdownUI {
       const r = ui.game.reactor;
       if (r.decompression_enabled && r.current_heat <= 2 * r.max_heat && r.has_melted_down) {
         r.clearMeltdownState();
-        ui.stateManager.setVar("current_heat", r.current_heat);
+        setDecimal(ui.game.state, "current_heat", r.current_heat);
         if (ui.heatVisualsUI) ui.heatVisualsUI.updateHeatVisuals();
         if (ui.game.engine) ui.game.engine.start();
         this._showDecompressionSavedToast();
@@ -1771,10 +1961,10 @@ function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReacti
     e.stopPropagation();
     if (!upgradeset.isUpgradeAvailable(upgrade.id)) return;
     if (!upgradeset.purchaseUpgrade(upgrade.id)) {
-      if (upgradeset.game) enqueueGameEffect(upgradeset.game, { kind: "sfx", id: "error", context: "global" });
+      if (upgradeset.game) actions.enqueueEffect(upgradeset.game, { kind: "sfx", id: "error", context: "global" });
       return;
     }
-    if (upgradeset.game) enqueueGameEffect(upgradeset.game, { kind: "sfx", id: "upgrade", context: "global" });
+    if (upgradeset.game) actions.enqueueEffect(upgradeset.game, { kind: "sfx", id: "upgrade", context: "global" });
   };
   return UpgradeCard(upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost });
 }
@@ -1923,210 +2113,200 @@ export function mountSectionCountsReactive(ui, wrapperId) {
   return () => unmounts.forEach((fn) => { try { fn(); } catch (_) {} });
 }
 
-export class UpgradesUI {
-  constructor(ui) {
-    this.ui = ui;
+export function getUpgradeSectionContainer(ui, locationKey) {
+  return ui.DOMElements?.[locationKey] ?? getUiElement(ui, locationKey) ?? document.getElementById(locationKey);
+}
+
+export function appendUpgradeToSection(ui, locationKey, upgradeEl) {
+  const container = getUpgradeSectionContainer(ui, locationKey);
+  if (container && upgradeEl) {
+    container.appendChild(upgradeEl);
+  }
+}
+
+function formatUpgradeDebugValue(value) {
+  if (value === null || value === undefined) {
+    return "<span class='debug-null'>null</span>";
+  }
+  if (typeof value === "boolean") {
+    return `<span class='debug-boolean'>${value}</span>`;
+  }
+  if (typeof value === "number") {
+    return `<span class='debug-number'>${value}</span>`;
+  }
+  if (typeof value === "string") {
+    return `<span class='debug-string'>"${escapeHtml(value)}"</span>`;
+  }
+  if (typeof value === "object") {
+    if (Array.isArray(value)) {
+      return `<span class='debug-array'>[${value.length} items]</span>`;
+    }
+    return `<span class='debug-object'>{${Object.keys(value).length} keys}</span>`;
+  }
+  return `<span class='debug-other'>${escapeHtml(String(value))}</span>`;
+}
+
+export function showUpgradeDebugPanel(ui) {
+  const getEl = (id) => getUiElement(ui, id) ?? ui.DOMElements?.[id];
+  const debugSection = getEl("debug_section");
+  const debugToggleBtn = getEl("debug_toggle_btn");
+  if (debugSection && debugToggleBtn) {
+    debugSection.classList.remove("hidden");
+    debugToggleBtn.textContent = "Hide Debug Info";
+    updateUpgradeDebugVariables(ui);
+  }
+}
+
+export function hideUpgradeDebugPanel(ui) {
+  const getEl = (id) => getUiElement(ui, id) ?? ui.DOMElements?.[id];
+  const debugSection = getEl("debug_section");
+  const debugToggleBtn = getEl("debug_toggle_btn");
+  if (debugSection && debugToggleBtn) {
+    debugSection.classList.add("hidden");
+    debugToggleBtn.textContent = "Show Debug Info";
+  }
+}
+
+export function updateUpgradeDebugVariables(ui) {
+  const debugVariables = getUiElement(ui, "debug_variables") ?? ui.DOMElements?.debug_variables;
+  if (!ui.game || !debugVariables) return;
+  const gameVars = collectUpgradeDebugGameVariables(ui);
+  const sectionTemplate = ([fileName, variables]) => {
+    const sortedEntries = Object.entries(variables).sort(([a], [b]) => a.localeCompare(b));
+    return debugVariablesSectionTemplate({
+      fileName,
+      sortedEntries,
+      escapeKey: escapeHtml,
+      renderValue: (value) => unsafeHTML(formatUpgradeDebugValue(value)),
+    });
+  };
+  const entries = Object.entries(gameVars);
+  const template = debugVariablesTemplate({ entries, renderSection: sectionTemplate });
+  render(template, debugVariables);
+}
+
+export function collectUpgradeDebugGameVariables(ui) {
+  const vars = {
+    "Game (game.js)": {},
+    "Reactor (reactor.js)": {},
+    "State Manager": {},
+    "UI State": {},
+    Performance: {},
+    Tileset: {},
+    Engine: {},
+  };
+  if (!ui.game) return vars;
+  const game = ui.game;
+  vars["Game (game.js)"]["version"] = game.version;
+  vars["Game (game.js)"]["base_cols"] = game.base_cols;
+  vars["Game (game.js)"]["base_rows"] = game.base_rows;
+  vars["Game (game.js)"]["max_cols"] = game.max_cols;
+  vars["Game (game.js)"]["max_rows"] = game.max_rows;
+  vars["Game (game.js)"]["rows"] = game.rows;
+  vars["Game (game.js)"]["cols"] = game.cols;
+  vars["Game (game.js)"]["base_loop_wait"] = game.base_loop_wait;
+  vars["Game (game.js)"]["base_manual_heat_reduce"] = game.base_manual_heat_reduce;
+  vars["Game (game.js)"]["upgrade_max_level"] = game.upgrade_max_level;
+  vars["Game (game.js)"]["base_money"] = game.base_money;
+  vars["Game (game.js)"]["current_money"] = game.state.current_money;
+  vars["Game (game.js)"]["protium_particles"] = game.protium_particles;
+  vars["Game (game.js)"]["total_exotic_particles"] = game.state.total_exotic_particles;
+  vars["Game (game.js)"]["exotic_particles"] = game.exoticParticleManager.exotic_particles;
+  vars["Game (game.js)"]["current_exotic_particles"] = game.state.current_exotic_particles;
+  vars["Game (game.js)"]["loop_wait"] = game.loop_wait;
+  vars["Game (game.js)"]["paused"] = game.paused;
+  vars["Game (game.js)"]["autoSellEnabled"] = game.autoSellEnabled;
+  vars["Game (game.js)"]["isAutoBuyEnabled"] = game.isAutoBuyEnabled;
+  vars["Game (game.js)"]["sold_power"] = game.sold_power;
+  vars["Game (game.js)"]["sold_heat"] = game.sold_heat;
+
+  if (game.reactor) {
+    const reactor = game.reactor;
+    vars["Reactor (reactor.js)"]["base_max_heat"] = reactor.base_max_heat;
+    vars["Reactor (reactor.js)"]["base_max_power"] = reactor.base_max_power;
+    vars["Reactor (reactor.js)"]["current_heat"] = reactor.current_heat;
+    vars["Reactor (reactor.js)"]["current_power"] = reactor.current_power;
+    vars["Reactor (reactor.js)"]["max_heat"] = reactor.max_heat;
+    vars["Reactor (reactor.js)"]["altered_max_heat"] = reactor.altered_max_heat;
+    vars["Reactor (reactor.js)"]["max_power"] = reactor.max_power;
+    vars["Reactor (reactor.js)"]["altered_max_power"] = reactor.altered_max_power;
+    vars["Reactor (reactor.js)"]["auto_sell_multiplier"] = reactor.auto_sell_multiplier;
+    vars["Reactor (reactor.js)"]["heat_power_multiplier"] = reactor.heat_power_multiplier;
+    vars["Reactor (reactor.js)"]["heat_controlled"] = reactor.heat_controlled;
+    vars["Reactor (reactor.js)"]["heat_outlet_controlled"] = reactor.heat_outlet_controlled;
+    vars["Reactor (reactor.js)"]["vent_capacitor_multiplier"] = reactor.vent_capacitor_multiplier;
+    vars["Reactor (reactor.js)"]["vent_plating_multiplier"] = reactor.vent_plating_multiplier;
+    vars["Reactor (reactor.js)"]["transfer_capacitor_multiplier"] = reactor.transfer_capacitor_multiplier;
+    vars["Reactor (reactor.js)"]["transfer_plating_multiplier"] = reactor.transfer_plating_multiplier;
+    vars["Reactor (reactor.js)"]["has_melted_down"] = reactor.has_melted_down;
+    vars["Reactor (reactor.js)"]["stats_power"] = reactor.stats_power;
+    vars["Reactor (reactor.js)"]["stats_heat_generation"] = reactor.stats_heat_generation;
+    vars["Reactor (reactor.js)"]["stats_vent"] = reactor.stats_vent;
+    vars["Reactor (reactor.js)"]["stats_inlet"] = reactor.stats_inlet;
+    vars["Reactor (reactor.js)"]["stats_outlet"] = reactor.stats_outlet;
+    vars["Reactor (reactor.js)"]["stats_total_part_heat"] = reactor.stats_total_part_heat;
+    vars["Reactor (reactor.js)"]["vent_multiplier_eff"] = reactor.vent_multiplier_eff;
+    vars["Reactor (reactor.js)"]["transfer_multiplier_eff"] = reactor.transfer_multiplier_eff;
   }
 
-  getUpgradeContainer(locationKey) {
-    return this.ui.DOMElements?.[locationKey] ?? this.ui.coreLoopUI?.getElement?.(locationKey) ?? document.getElementById(locationKey);
+  if (game.tileset) {
+    const tileset = game.tileset;
+    vars["Tileset"]["max_rows"] = tileset.max_rows;
+    vars["Tileset"]["max_cols"] = tileset.max_cols;
+    vars["Tileset"]["rows"] = tileset.rows;
+    vars["Tileset"]["cols"] = tileset.cols;
+    vars["Tileset"]["tiles_list_length"] = tileset.tiles_list?.length || 0;
+    vars["Tileset"]["active_tiles_list_length"] = tileset.active_tiles_list?.length || 0;
+    vars["Tileset"]["tiles_with_parts"] = tileset.tiles_list?.filter((t) => t.part)?.length || 0;
   }
 
-  appendUpgrade(locationKey, upgradeEl) {
-    const container = this.getUpgradeContainer(locationKey);
-    if (container && upgradeEl) {
-      container.appendChild(upgradeEl);
-    }
+  if (game.engine) {
+    const engine = game.engine;
+    vars["Engine"]["running"] = engine.running;
+    vars["Engine"]["tick_count"] = engine.tick_count;
+    vars["Engine"]["last_tick_time"] = engine.last_tick_time;
+    vars["Engine"]["tick_interval"] = engine.tick_interval;
   }
 
-  showDebugPanel() {
-    const ui = this.ui;
-    const getEl = (id) => ui.coreLoopUI?.getElement?.(id) ?? ui.DOMElements?.[id];
-    const debugSection = getEl("debug_section");
-    const debugToggleBtn = getEl("debug_toggle_btn");
-    if (debugSection && debugToggleBtn) {
-      debugSection.classList.remove("hidden");
-      debugToggleBtn.textContent = "Hide Debug Info";
-      this.updateDebugVariables();
-    }
+  if (ui.stateManager) {
+    const stateVars = ui.stateManager.getAllVars();
+    Object.entries(stateVars).forEach(([key, value]) => {
+      vars["State Manager"][key] = value;
+    });
   }
 
-  hideDebugPanel() {
-    const ui = this.ui;
-    const getEl = (id) => ui.coreLoopUI?.getElement?.(id) ?? ui.DOMElements?.[id];
-    const debugSection = getEl("debug_section");
-    const debugToggleBtn = getEl("debug_toggle_btn");
-    if (debugSection && debugToggleBtn) {
-      debugSection.classList.add("hidden");
-      debugToggleBtn.textContent = "Show Debug Info";
-    }
+  vars["UI State"]["update_interface_interval"] = ui.update_interface_interval;
+  vars["UI State"]["isDragging"] = ui.inputHandler?.isDragging ?? false;
+  vars["UI State"]["lastTileModified"] = ui.inputHandler?.lastTileModified ? "Tile Object" : null;
+  vars["UI State"]["longPressTimer"] = ui.inputHandler?.longPressTimer ? "Active" : null;
+  vars["UI State"]["longPressDuration"] = ui.inputHandler?.longPressDuration ?? 500;
+  vars["UI State"]["last_money"] = ui.last_money;
+  vars["UI State"]["last_exotic_particles"] = ui.last_exotic_particles;
+  vars["UI State"]["ctrl9HoldTimer"] = ui.ctrl9HoldTimer ? "Active" : null;
+  vars["UI State"]["ctrl9HoldStartTime"] = ui.ctrl9HoldStartTime;
+  vars["UI State"]["ctrl9MoneyInterval"] = ui.ctrl9MoneyInterval ? "Active" : null;
+  vars["UI State"]["ctrl9BaseAmount"] = ui.ctrl9BaseAmount;
+  vars["UI State"]["ctrl9ExponentialRate"] = ui.ctrl9ExponentialRate;
+  vars["UI State"]["ctrl9IntervalMs"] = ui.ctrl9IntervalMs;
+  if (ui.ctrl9HoldStartTime) {
+    const holdDuration = Date.now() - ui.ctrl9HoldStartTime;
+    const secondsHeld = holdDuration / 1000;
+    vars["UI State"]["ctrl9SecondsHeld"] = secondsHeld.toFixed(2);
+    vars["UI State"]["ctrl9CurrentAmount"] = Math.floor(
+      ui.ctrl9BaseAmount * Math.pow(ui.ctrl9ExponentialRate, secondsHeld)
+    );
+  }
+  vars["UI State"]["screen_resolution"] = `${window.innerWidth}x${window.innerHeight}`;
+  vars["UI State"]["device_pixel_ratio"] = window.devicePixelRatio;
+
+  if (game.performance) {
+    const perf = game.performance;
+    vars["Performance"]["enabled"] = perf.enabled;
+    vars["Performance"]["marks"] = Object.keys(perf.marks || {}).length;
+    vars["Performance"]["measures"] = Object.keys(perf.measures || {}).length;
   }
 
-  updateDebugVariables() {
-    const ui = this.ui;
-    const debugVariables = ui.coreLoopUI?.getElement?.("debug_variables") ?? ui.DOMElements?.debug_variables;
-    if (!ui.game || !debugVariables) return;
-    const gameVars = this.collectGameVariables();
-    const sectionTemplate = ([fileName, variables]) => {
-      const sortedEntries = Object.entries(variables).sort(([a], [b]) => a.localeCompare(b));
-      return debugVariablesSectionTemplate({
-        fileName,
-        sortedEntries,
-        escapeKey: escapeHtml,
-        renderValue: (value) => unsafeHTML(this.formatDebugValue(value)),
-      });
-    };
-    const entries = Object.entries(gameVars);
-    const template = debugVariablesTemplate({ entries, renderSection: sectionTemplate });
-    render(template, debugVariables);
-  }
-
-  collectGameVariables() {
-    const ui = this.ui;
-    const vars = {
-      "Game (game.js)": {},
-      "Reactor (reactor.js)": {},
-      "State Manager": {},
-      "UI State": {},
-      Performance: {},
-      Tileset: {},
-      Engine: {},
-    };
-    if (!ui.game) return vars;
-    const game = ui.game;
-    vars["Game (game.js)"]["version"] = game.version;
-    vars["Game (game.js)"]["base_cols"] = game.base_cols;
-    vars["Game (game.js)"]["base_rows"] = game.base_rows;
-    vars["Game (game.js)"]["max_cols"] = game.max_cols;
-    vars["Game (game.js)"]["max_rows"] = game.max_rows;
-    vars["Game (game.js)"]["rows"] = game.rows;
-    vars["Game (game.js)"]["cols"] = game.cols;
-    vars["Game (game.js)"]["base_loop_wait"] = game.base_loop_wait;
-    vars["Game (game.js)"]["base_manual_heat_reduce"] = game.base_manual_heat_reduce;
-    vars["Game (game.js)"]["upgrade_max_level"] = game.upgrade_max_level;
-    vars["Game (game.js)"]["base_money"] = game.base_money;
-    vars["Game (game.js)"]["current_money"] = game.state.current_money;
-    vars["Game (game.js)"]["protium_particles"] = game.protium_particles;
-    vars["Game (game.js)"]["total_exotic_particles"] = game.state.total_exotic_particles;
-    vars["Game (game.js)"]["exotic_particles"] = game.exoticParticleManager.exotic_particles;
-    vars["Game (game.js)"]["current_exotic_particles"] = game.state.current_exotic_particles;
-    vars["Game (game.js)"]["loop_wait"] = game.loop_wait;
-    vars["Game (game.js)"]["paused"] = game.paused;
-    vars["Game (game.js)"]["autoSellEnabled"] = game.autoSellEnabled;
-    vars["Game (game.js)"]["isAutoBuyEnabled"] = game.isAutoBuyEnabled;
-    vars["Game (game.js)"]["sold_power"] = game.sold_power;
-    vars["Game (game.js)"]["sold_heat"] = game.sold_heat;
-
-    if (game.reactor) {
-      const reactor = game.reactor;
-      vars["Reactor (reactor.js)"]["base_max_heat"] = reactor.base_max_heat;
-      vars["Reactor (reactor.js)"]["base_max_power"] = reactor.base_max_power;
-      vars["Reactor (reactor.js)"]["current_heat"] = reactor.current_heat;
-      vars["Reactor (reactor.js)"]["current_power"] = reactor.current_power;
-      vars["Reactor (reactor.js)"]["max_heat"] = reactor.max_heat;
-      vars["Reactor (reactor.js)"]["altered_max_heat"] = reactor.altered_max_heat;
-      vars["Reactor (reactor.js)"]["max_power"] = reactor.max_power;
-      vars["Reactor (reactor.js)"]["altered_max_power"] = reactor.altered_max_power;
-      vars["Reactor (reactor.js)"]["auto_sell_multiplier"] = reactor.auto_sell_multiplier;
-      vars["Reactor (reactor.js)"]["heat_power_multiplier"] = reactor.heat_power_multiplier;
-      vars["Reactor (reactor.js)"]["heat_controlled"] = reactor.heat_controlled;
-      vars["Reactor (reactor.js)"]["heat_outlet_controlled"] = reactor.heat_outlet_controlled;
-      vars["Reactor (reactor.js)"]["vent_capacitor_multiplier"] = reactor.vent_capacitor_multiplier;
-      vars["Reactor (reactor.js)"]["vent_plating_multiplier"] = reactor.vent_plating_multiplier;
-      vars["Reactor (reactor.js)"]["transfer_capacitor_multiplier"] = reactor.transfer_capacitor_multiplier;
-      vars["Reactor (reactor.js)"]["transfer_plating_multiplier"] = reactor.transfer_plating_multiplier;
-      vars["Reactor (reactor.js)"]["has_melted_down"] = reactor.has_melted_down;
-      vars["Reactor (reactor.js)"]["stats_power"] = reactor.stats_power;
-      vars["Reactor (reactor.js)"]["stats_heat_generation"] = reactor.stats_heat_generation;
-      vars["Reactor (reactor.js)"]["stats_vent"] = reactor.stats_vent;
-      vars["Reactor (reactor.js)"]["stats_inlet"] = reactor.stats_inlet;
-      vars["Reactor (reactor.js)"]["stats_outlet"] = reactor.stats_outlet;
-      vars["Reactor (reactor.js)"]["stats_total_part_heat"] = reactor.stats_total_part_heat;
-      vars["Reactor (reactor.js)"]["vent_multiplier_eff"] = reactor.vent_multiplier_eff;
-      vars["Reactor (reactor.js)"]["transfer_multiplier_eff"] = reactor.transfer_multiplier_eff;
-    }
-
-    if (game.tileset) {
-      const tileset = game.tileset;
-      vars["Tileset"]["max_rows"] = tileset.max_rows;
-      vars["Tileset"]["max_cols"] = tileset.max_cols;
-      vars["Tileset"]["rows"] = tileset.rows;
-      vars["Tileset"]["cols"] = tileset.cols;
-      vars["Tileset"]["tiles_list_length"] = tileset.tiles_list?.length || 0;
-      vars["Tileset"]["active_tiles_list_length"] = tileset.active_tiles_list?.length || 0;
-      vars["Tileset"]["tiles_with_parts"] = tileset.tiles_list?.filter((t) => t.part)?.length || 0;
-    }
-
-    if (game.engine) {
-      const engine = game.engine;
-      vars["Engine"]["running"] = engine.running;
-      vars["Engine"]["tick_count"] = engine.tick_count;
-      vars["Engine"]["last_tick_time"] = engine.last_tick_time;
-      vars["Engine"]["tick_interval"] = engine.tick_interval;
-    }
-
-    if (ui.stateManager) {
-      const stateVars = ui.stateManager.getAllVars();
-      Object.entries(stateVars).forEach(([key, value]) => {
-        vars["State Manager"][key] = value;
-      });
-    }
-
-    vars["UI State"]["update_interface_interval"] = ui.update_interface_interval;
-    vars["UI State"]["isDragging"] = ui.inputHandler?.isDragging ?? false;
-    vars["UI State"]["lastTileModified"] = ui.inputHandler?.lastTileModified ? "Tile Object" : null;
-    vars["UI State"]["longPressTimer"] = ui.inputHandler?.longPressTimer ? "Active" : null;
-    vars["UI State"]["longPressDuration"] = ui.inputHandler?.longPressDuration ?? 500;
-    vars["UI State"]["last_money"] = ui.last_money;
-    vars["UI State"]["last_exotic_particles"] = ui.last_exotic_particles;
-    vars["UI State"]["ctrl9HoldTimer"] = ui.ctrl9HoldTimer ? "Active" : null;
-    vars["UI State"]["ctrl9HoldStartTime"] = ui.ctrl9HoldStartTime;
-    vars["UI State"]["ctrl9MoneyInterval"] = ui.ctrl9MoneyInterval ? "Active" : null;
-    vars["UI State"]["ctrl9BaseAmount"] = ui.ctrl9BaseAmount;
-    vars["UI State"]["ctrl9ExponentialRate"] = ui.ctrl9ExponentialRate;
-    vars["UI State"]["ctrl9IntervalMs"] = ui.ctrl9IntervalMs;
-    if (ui.ctrl9HoldStartTime) {
-      const holdDuration = Date.now() - ui.ctrl9HoldStartTime;
-      const secondsHeld = holdDuration / 1000;
-      vars["UI State"]["ctrl9SecondsHeld"] = secondsHeld.toFixed(2);
-      vars["UI State"]["ctrl9CurrentAmount"] = Math.floor(
-        ui.ctrl9BaseAmount * Math.pow(ui.ctrl9ExponentialRate, secondsHeld)
-      );
-    }
-    vars["UI State"]["screen_resolution"] = `${window.innerWidth}x${window.innerHeight}`;
-    vars["UI State"]["device_pixel_ratio"] = window.devicePixelRatio;
-
-    if (game.performance) {
-      const perf = game.performance;
-      vars["Performance"]["enabled"] = perf.enabled;
-      vars["Performance"]["marks"] = Object.keys(perf.marks || {}).length;
-      vars["Performance"]["measures"] = Object.keys(perf.measures || {}).length;
-    }
-
-    return vars;
-  }
-
-  formatDebugValue(value) {
-    if (value === null || value === undefined) {
-      return "<span class='debug-null'>null</span>";
-    }
-    if (typeof value === "boolean") {
-      return `<span class='debug-boolean'>${value}</span>`;
-    }
-    if (typeof value === "number") {
-      return `<span class='debug-number'>${value}</span>`;
-    }
-    if (typeof value === "string") {
-      return `<span class='debug-string'>"${escapeHtml(value)}"</span>`;
-    }
-    if (typeof value === "object") {
-      if (Array.isArray(value)) {
-        return `<span class='debug-array'>[${value.length} items]</span>`;
-      }
-      return `<span class='debug-object'>{${Object.keys(value).length} keys}</span>`;
-    }
-    return `<span class='debug-other'>${escapeHtml(String(value))}</span>`;
-  }
+  return vars;
 }
 
 function resourceGte(a, b) {
@@ -2475,6 +2655,32 @@ export function getCostBreakdown(layout, partset) {
   }, { money: 0, ep: 0 });
 }
 
+export function applyBlueprintLayout(game, layout, skipCostDeduction = false) {
+  if (!game?.tileset || !game?.partset) return;
+  const clipped = clipToGrid(layout, game.rows, game.cols);
+  game.tileset.tiles_list.forEach((tile) => {
+    if (tile.enabled && tile.part) tile.clearPart();
+  });
+  clipped.flatMap((row, r) => (row || []).map((cell, c) => (cell?.id ? { r, c, cell } : null)).filter(Boolean))
+    .forEach(({ r, c, cell }) => {
+      const part = game.partset.getPartById(cell.id);
+      if (part) {
+        const tile = game.tileset.getTile(r, c);
+        if (tile?.enabled) tile.setPart(part);
+      }
+    });
+  if (!skipCostDeduction) {
+    const { money: costMoney, ep: costEp } = getCostBreakdown(clipped, game.partset);
+    if (costMoney > 0 && game.state.current_money) {
+      updateDecimal(game.state, "current_money", (d) => d.sub(costMoney));
+    }
+    if (costEp > 0 && game.state.current_exotic_particles) {
+      updateDecimal(game.state, "current_exotic_particles", (d) => d.sub(costEp));
+    }
+  }
+  return clipped;
+}
+
 function getLayoutCost(entryData, game, fmtFn) {
   try {
     const str = typeof entryData === "string" ? entryData : JSON.stringify(entryData);
@@ -2603,8 +2809,8 @@ function showModal(ui, refs, opts) {
   ui._copyPasteModalReactiveUnmount = () => { titleUnmount(); btnUnmount(); };
   modalText.value = data;
   setModalTextareaVisibility(modalText, action === "paste");
-  const wasPaused = ui.stateManager.getVar("pause");
-  ui.stateManager.setVar("pause", true);
+  const wasPaused = !!ui.game.state.pause;
+  if (!wasPaused) ui.game.pause();
   renderModalCostContent(modalCost, cost, summary, ui, options);
   if (action === "copy") {
     modalText.readOnly = true;
@@ -2625,20 +2831,21 @@ function showModal(ui, refs, opts) {
   modal.dataset.previousPauseState = wasPaused;
   modal.onclick = (e) => {
     if (e.target === modal) {
-      ui.modalOrchestrationUI.hideModal();
+      hideCopyPasteModal(ui);
       modal.onclick = null;
     }
   };
 }
 
-export function setupCopyAction(ui, bp, refs) {
+export function setupCopyAction(ui, refs) {
   const { copyBtn, modalCost, confirmBtn } = refs;
+  const game = ui.game;
 
   copyBtn.onclick = () => {
-    const data = bp().serialize();
-    const layout = bp().deserialize(data);
-    const cost = bp().getTotalCost(layout);
-    const summary = bp().getPartSummary(layout);
+    const data = serializeReactor(game);
+    const layout = deserializeReactor(data);
+    const cost = calculateLayoutCost(game.partset, layout);
+    const summary = buildPartSummary(game.partset, layout);
     const checkedTypes = {};
     summary.forEach(item => { checkedTypes[item.id] = true; });
 
@@ -2650,8 +2857,8 @@ export function setupCopyAction(ui, bp, refs) {
         updateCopySummary(layout, summary, checkedTypes);
       };
       const componentTemplate = renderComponentIcons(summary, { showCheckboxes: true, checkedTypes }, onSlotClick);
-      const filteredLayout = bp().filterByTypes(layout, checkedTypes);
-      const filteredCost = bp().getTotalCost(filteredLayout);
+      const filteredLayout = filterLayoutByCheckedTypes(layout, checkedTypes);
+      const filteredCost = calculateLayoutCost(game.partset, filteredLayout);
       const costTemplate = copyPasteSelectedPartsCostTemplate({
         costStyle: styleMap({ marginTop: `${MODAL_COST_MARGIN_TOP_PX}px`, color: COLOR_SUCCESS, fontWeight: "bold" }),
         text: `Selected Parts Cost: $${fmt(filteredCost)}`,
@@ -2664,10 +2871,10 @@ export function setupCopyAction(ui, bp, refs) {
     updateCopySummary(layout, summary, checkedTypes);
 
     confirmBtn.onclick = async () => {
-      if (!ui.game) return;
-      const filteredLayout = bp().filterByTypes(layout, checkedTypes);
-      const rows = ui.game.rows;
-      const cols = ui.game.cols;
+      if (!game) return;
+      const filteredLayout = filterLayoutByCheckedTypes(layout, checkedTypes);
+      const rows = game.rows;
+      const cols = game.cols;
       const parts = filteredLayout.flatMap((row, r) => (row || []).map((cell, c) => (cell && cell.id) ? { r, c, t: cell.t, id: cell.id, lvl: cell.lvl || 1 } : null).filter(Boolean));
       const compactLayout = { size: { rows, cols }, parts };
       const filteredData = JSON.stringify(compactLayout, null, JSON_INDENT_SPACES);
@@ -2680,7 +2887,7 @@ export function setupCopyAction(ui, bp, refs) {
       } else {
         ui.uiState.copy_paste_modal_display = { ...ui.uiState.copy_paste_modal_display, confirmLabel: "Failed to Copy" };
       }
-      setTimeout(() => ui.modalOrchestrationUI.hideModal(), MODAL_HIDE_DELAY_MS);
+      setTimeout(() => hideCopyPasteModal(ui), MODAL_HIDE_DELAY_MS);
     };
 
     confirmBtn.disabled = false;
@@ -2697,38 +2904,41 @@ function clearExistingPartsForSell(ui) {
   ui.game.reactor.updateStats();
 }
 
-function handleConfirmPaste(ui, bp) {
-  const layoutToPaste = bp().deserialize(pasteState.textareaData);
+function handleConfirmPaste(ui) {
+  const g = ui.game;
+  const layoutToPaste = deserializeReactor(pasteState.textareaData);
   if (!layoutToPaste) {
     logger.log('warn', 'ui', 'Please paste reactor layout data into the text area.');
     return;
   }
-  const filtered = bp().filterByTypes(layoutToPaste, pasteState.checkedTypes);
-  const breakdown = bp().getCostBreakdown(filtered);
-  const sellCredit = pasteState.sellExisting ? bp().getCurrentSellValue() : 0;
-  const validation = bp().validateResources(breakdown, sellCredit);
+  const filtered = filterLayoutByCheckedTypes(layoutToPaste, pasteState.checkedTypes);
+  const breakdown = calculateLayoutCostBreakdown(g.partset, filtered);
+  const sellCredit = pasteState.sellExisting ? calculateCurrentSellValue(g.tileset) : 0;
+  const validation = validatePasteResources(breakdown, sellCredit, g.state.current_money, g.state.current_exotic_particles ?? 0);
 
   if (!validation.valid) {
     logger.log('warn', 'ui', validation.reason === "no_parts" ? "Invalid layout: no parts found." : "Not enough resources for full layout.");
     return;
   }
   if (pasteState.sellExisting) clearExistingPartsForSell(ui);
-  ui.copyPaste.pasteReactorLayout(bp().clipToGrid(filtered));
-  ui.modalOrchestrationUI.hideModal();
+  ui.copyPaste.pasteReactorLayout(clipToGrid(filtered, g.rows, g.cols));
+  hideCopyPasteModal(ui);
 }
 
-function handlePartialPaste(ui, bp) {
-  const layoutToPaste = bp().deserialize(pasteState.textareaData);
+function handlePartialPaste(ui) {
+  const g = ui.game;
+  const layoutToPaste = deserializeReactor(pasteState.textareaData);
   if (!layoutToPaste) return;
-  const filtered = bp().filterByTypes(layoutToPaste, pasteState.checkedTypes);
+  const filtered = filterLayoutByCheckedTypes(layoutToPaste, pasteState.checkedTypes);
   if (pasteState.sellExisting) clearExistingPartsForSell(ui);
-  const affordable = bp().buildAffordableLayout(filtered, 0);
+  const affordable = buildAffordableLayout(filtered, 0, g.rows, g.cols, g);
   if (affordable) ui.copyPaste.pasteReactorLayout(affordable);
-  ui.modalOrchestrationUI.hideModal();
+  hideCopyPasteModal(ui);
 }
 
-function renderPasteModalContent(ui, bp, refs) {
-  const parsed = bp().deserialize(pasteState.textareaData);
+function renderPasteModalContent(ui, refs) {
+  const g = ui.game;
+  const parsed = deserializeReactor(pasteState.textareaData);
   if (!parsed) {
     const msg = !pasteState.textareaData ? "Enter reactor layout JSON data in the text area above" : "Invalid layout data - please check the JSON format";
     render(copyPasteStatusMessageTemplate({ message: msg }), refs.modalCost);
@@ -2738,14 +2948,14 @@ function renderPasteModalContent(ui, bp, refs) {
     return;
   }
 
-  const originalSummary = bp().getPartSummary(parsed);
+  const originalSummary = buildPartSummary(g.partset, parsed);
   originalSummary.forEach(item => {
     if (pasteState.checkedTypes[item.id] === undefined) {
       pasteState.checkedTypes[item.id] = true;
     }
   });
 
-  const validationState = bp().buildPasteState(parsed, pasteState.checkedTypes, pasteState.sellExisting);
+  const validationState = buildPasteState(parsed, pasteState.checkedTypes, g, g.tileset, pasteState.sellExisting);
   if (!validationState.valid) {
     render(copyPasteStatusMessageTemplate({ message: validationState.invalidMessage }), refs.modalCost);
     refs.confirmBtn.disabled = true;
@@ -2792,18 +3002,19 @@ function renderPasteModalContent(ui, bp, refs) {
 
   const previewCanvas = document.getElementById("reactor_copy_paste_preview");
   if (previewCanvas) {
-    const affordableSet = bp().getAffordableSet(validationState.affordableLayout);
-    bp().renderPreview(parsed, previewCanvas, affordableSet);
+    const affordableSet = buildAffordableSet(validationState.affordableLayout);
+    renderLayoutPreview(g.partset, parsed, previewCanvas, affordableSet);
   }
 }
 
-export function setupPasteAction(ui, bp, refs) {
+export function setupPasteAction(ui, refs) {
   const { pasteBtn, modal, modalText, confirmBtn } = refs;
   const partialBtn = document.getElementById("reactor_copy_paste_partial_btn");
+  const g = ui.game;
 
   if (!modal._hasValtioSub) {
     modal._hasValtioSub = true;
-    subscribe(pasteState, () => renderPasteModalContent(ui, bp, refs));
+    subscribe(pasteState, () => renderPasteModalContent(ui, refs));
   }
 
   modalText.oninput = (e) => {
@@ -2811,25 +3022,25 @@ export function setupPasteAction(ui, bp, refs) {
     pasteState.checkedTypes = {};
   };
 
-  confirmBtn.onclick = () => handleConfirmPaste(ui, bp);
-  if (partialBtn) partialBtn.onclick = () => handlePartialPaste(ui, bp);
+  confirmBtn.onclick = () => handleConfirmPaste(ui);
+  if (partialBtn) partialBtn.onclick = () => handlePartialPaste(ui);
 
   ui._showPasteModalWithData = (data) => {
     pasteState.textareaData = data;
     pasteState.checkedTypes = {};
     pasteState.sellExisting = false;
 
-    const layout = bp().deserialize(data);
-    const summary = bp().getPartSummary(layout || []);
+    const layout = deserializeReactor(data);
+    const summary = buildPartSummary(g.partset, layout || []);
     const title = data ? "Paste Reactor Layout" : "Enter Reactor Layout Manually";
-    const currentSellValue = bp().getCurrentSellValue();
+    const currentSellValue = calculateCurrentSellValue(g.tileset);
     const hasExistingParts = ui.game.tileset.tiles_list.some(tile => tile.enabled && tile.part);
 
     modal.dataset.hasSellOption = String(hasExistingParts);
     modal.dataset.sellValue = String(currentSellValue);
 
     showModal(ui, refs, { title, data, cost: 0, action: "paste", canPaste: false, summary, showCheckboxes: true, checkedTypes: {} });
-    renderPasteModalContent(ui, bp, refs);
+    renderPasteModalContent(ui, refs);
   };
 
   pasteBtn.onclick = async () => {
@@ -2868,8 +3079,7 @@ export function myLayoutsTemplate(ui, list, fmtFn, onClose) {
   const onSaveFromClipboard = async () => {
     const result = await ui.clipboardUI.readFromClipboard();
     const data = result.success ? result.data : "";
-    const bpService = new BlueprintService(ui.game);
-    const layout = bpService.deserialize(data);
+    const layout = deserializeReactor(data);
     if (!layout) return;
 
     const defaultName = `Layout ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
@@ -2898,7 +3108,7 @@ class HeatVisualsUI {
 
   _applyHeatFromRatio(heatRatio) {
     const ui = this.ui;
-    const background = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+    const background = getPageReactorBackground(ui) ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
     if (!background) return;
     const root = typeof document !== "undefined" ? document.documentElement : null;
     const cd = Math.min(1.5, Math.max(0, heatRatio));
@@ -2921,13 +3131,14 @@ class HeatVisualsUI {
     else if (heatRatio >= 0.8) background.classList.add("heat-warning");
     const appRoot = typeof document !== "undefined" ? document.getElementById("app_root") : null;
     if (appRoot) {
+      appRoot.style.setProperty("--core-danger", String(cd));
       const heatNorm = Math.min(1, Math.max(0, heatRatio / 1.5));
       appRoot.style.setProperty("--crt-heat", String(heatNorm));
       const dur = 20 - heatNorm * 12;
       appRoot.style.setProperty("--crt-jitter-duration", `${dur}s`);
       appRoot.classList.toggle("crt-heat-tearing", heatRatio >= 1.3);
     }
-    const reactorEl = ui.pageInitUI?.getReactor?.() ?? document.getElementById("reactor");
+    const reactorEl = getPageReactor(ui) ?? document.getElementById("reactor");
     if (reactorEl) {
       const hr = Math.round(Math.min(1.5, Math.max(0, heatRatio)) * 1000) / 1000;
       reactorEl.setAttribute("data-heat-ratio", String(hr));
@@ -2937,7 +3148,7 @@ class HeatVisualsUI {
   _ensureOverlay() {
     const ui = this.ui;
     if (this._overlay && this._overlay.parentElement) return this._overlay;
-    const reactorWrapper = ui.pageInitUI?.getReactorWrapper?.() ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
+    const reactorWrapper = getPageReactorWrapper(ui) ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
     if (!reactorWrapper) {
       return null;
     }
@@ -3002,7 +3213,7 @@ class HeatVisualsUI {
     const ui = this.ui;
     const overlay = this._ensureOverlay();
     if (!overlay) return { x: 0, y: 0 };
-    const reactorEl = (ui.gridCanvasRenderer?.getCanvas() || ui.pageInitUI?.getReactor?.()) ?? ui.DOMElements?.reactor;
+    const reactorEl = (ui.gridCanvasRenderer?.getCanvas() || getPageReactor(ui)) ?? ui.DOMElements?.reactor;
     const tileSize = ui.gridCanvasRenderer?.getTileSize() ?? (parseInt(getComputedStyle(reactorEl || document.body).getPropertyValue('--tile-size'), 10) || 48);
     if (!reactorEl) return { x: 0, y: 0 };
     const reactorRect = reactorEl.getBoundingClientRect();
@@ -3079,7 +3290,7 @@ class HeatVisualsUI {
   }
 
   clearHeatWarningClasses() {
-    const bg = this.ui.pageInitUI?.getReactorBackground?.() ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+    const bg = getPageReactorBackground(this.ui) ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
     if (bg) {
       bg.classList.remove("heat-warning", "heat-critical");
       bg.style.setProperty("--heat-bg-alpha", "0");
@@ -3090,11 +3301,12 @@ class HeatVisualsUI {
     if (root) root.style.setProperty("--core-danger", "0");
     const appRoot = typeof document !== "undefined" ? document.getElementById("app_root") : null;
     if (appRoot) {
+      appRoot.style.setProperty("--core-danger", "0");
       appRoot.style.setProperty("--crt-heat", "0");
       appRoot.style.setProperty("--crt-jitter-duration", "20s");
       appRoot.classList.remove("crt-heat-tearing");
     }
-    const reactorEl = this.ui.pageInitUI?.getReactor?.() ?? document.getElementById("reactor");
+    const reactorEl = getPageReactor(this.ui) ?? document.getElementById("reactor");
     if (reactorEl) reactorEl.setAttribute("data-heat-ratio", "0");
   }
 
@@ -3107,8 +3319,8 @@ class HeatVisualsUI {
       const max = Math.max(1e-12, toNumber(r.max_heat));
       heatRatio = current / max;
     } else {
-      const current = toNumber(ui.stateManager.getVar("current_heat") ?? 0);
-      const max = Math.max(1e-12, toNumber(ui.stateManager.getVar("max_heat") ?? 1));
+      const current = toNumber(ui.game?.state?.current_heat ?? 0);
+      const max = Math.max(1e-12, toNumber(ui.game?.state?.max_heat ?? 1));
       heatRatio = current / max;
     }
     this._applyHeatFromRatio(heatRatio);
@@ -3150,7 +3362,7 @@ class GridInteractionUI {
   spawnTileIcon(kind, fromTile, toTile = null) {
     const ui = this.ui;
     try {
-      const container = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+      const container = getPageReactorBackground(ui) ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
       if (typeof document === "undefined" || !fromTile || !container) return;
       if (!container || !ui.gridCanvasRenderer) return;
       let animationKey = `${fromTile.row}-${fromTile.col}-${kind}`;
@@ -3196,7 +3408,7 @@ class GridInteractionUI {
     try {
       if (typeof document === "undefined" || !tile || !ui.gridCanvasRenderer) return;
       if (this._activeVentRotors.has(tile)) return;
-      const container = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
+      const container = getPageReactorBackground(ui) ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
       if (!container) return;
       const containerRect = container.getBoundingClientRect();
       const rect = ui.gridCanvasRenderer.getTileRectInContainer(tile.row, tile.col, containerRect);
@@ -3285,9 +3497,9 @@ class GridInteractionUI {
         });
       }
 
-      if (ui.stateManager) {
-        ui.stateManager.setVar("current_heat", 0);
-        ui.stateManager.setVar("total_heat", 0);
+      if (ui.game?.state) {
+        setDecimal(ui.game.state, "current_heat", 0);
+        ui.game.state.stats_heat_generation = 0;
       }
 
       this.clearAllActiveAnimations();
@@ -3302,7 +3514,7 @@ class GridInteractionUI {
     const ui = this.ui;
     try {
       if (!fromTile || !toTile || !ui.gridCanvasRenderer) return;
-      const container = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
+      const container = getPageReactorBackground(ui) ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
       if (!container) return;
       const cRect = container.getBoundingClientRect();
       const fromRect = ui.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, cRect);
@@ -3330,7 +3542,7 @@ class GridInteractionUI {
     const ui = this.ui;
     try {
       if (!fromTile || !ui.gridCanvasRenderer) return;
-      const container = ui.pageInitUI?.getReactorBackground?.() ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
+      const container = getPageReactorBackground(ui) ?? ui.DOMElements?.reactor_background ?? document.getElementById('reactor_background');
       if (!container) return;
       const cRect = container.getBoundingClientRect();
       const startRect = ui.gridCanvasRenderer.getTileRectInContainer(fromTile.row, fromTile.col, cRect);
@@ -3370,12 +3582,6 @@ class GridInteractionUI {
 export class CopyPasteUI {
   constructor(ui) {
     this.ui = ui;
-    this._blueprint = null;
-  }
-
-  _getBlueprint() {
-    if (!this._blueprint && this.ui.game) this._blueprint = new BlueprintService(this.ui.game);
-    return this._blueprint;
   }
 
   init() {
@@ -3412,7 +3618,7 @@ export class CopyPasteUI {
       };
     }
 
-    if (closeBtn) closeBtn.onclick = () => this.ui.modalOrchestrationUI.hideModal();
+    if (closeBtn) closeBtn.onclick = () => hideCopyPasteModal(this.ui);
 
     if (dropperBtn) {
       dropperBtn.onclick = () => {
@@ -3422,9 +3628,8 @@ export class CopyPasteUI {
     }
 
     const refs = { copyBtn, pasteBtn, modal, modalTitle, modalText, modalCost, closeBtn, confirmBtn };
-    const bp = () => this._getBlueprint();
-    setupCopyAction(this.ui, bp, refs);
-    setupPasteAction(this.ui, bp, refs);
+    setupCopyAction(this.ui, refs);
+    setupPasteAction(this.ui, refs);
   }
 
   open(data) {
@@ -3455,7 +3660,7 @@ export class CopyPasteUI {
     if (!layout || !ui.game || !ui.game.tileset || !ui.game.partset) return;
     ui.game.action_pasteLayout(layout, options);
     ui.gridCanvasRenderer?.markStaticDirty?.();
-    ui.coreLoopUI?.runUpdateInterfaceLoop?.();
+    startRenderLoop(ui, 0);
   }
 
   setupBlueprintPlannerControls() {
@@ -3503,7 +3708,7 @@ export class CopyPasteUI {
       applyBtn.onclick = () => {
         game.applyBlueprintPlannerLayout?.();
         syncHud();
-        ui.coreLoopUI?.runUpdateInterfaceLoop?.();
+        startRenderLoop(ui, 0);
       };
     }
     if (discardBtn) {
@@ -3575,152 +3780,120 @@ export class PerformanceUI {
   }
 }
 
-export class ModalOrchestrationUI {
-  constructor(ui) {
-    this.ui = ui;
-    this._contextModalHandler = null;
+export function subscribeToContextModalEvents(ui, game) {
+  if (!game?.on) return;
+  if (ui._contextModalHandler) return;
+  ui._contextModalHandler = (payload) => ui.modalOrchestrator?.showModal?.(MODAL_IDS.CONTEXT, payload);
+  game.on("showContextModal", ui._contextModalHandler);
+}
+
+export function unsubscribeContextModalEvents(ui, game) {
+  if (!game?.off || !ui._contextModalHandler) return;
+  game.off("showContextModal", ui._contextModalHandler);
+  ui._contextModalHandler = null;
+}
+
+export function hideCopyPasteModal(ui) {
+  const modal = document.getElementById("reactor_copy_paste_modal");
+  if (typeof ui._copyPasteModalReactiveUnmount === "function") {
+    try {
+      ui._copyPasteModalReactiveUnmount();
+    } catch (_) {}
+    ui._copyPasteModalReactiveUnmount = null;
   }
+  if (modal) modal.classList.add("hidden");
 
-  subscribeToContextModalEvents(game) {
-    if (!game?.on) return;
-    this._contextModalHandler = (payload) => this.ui.modalOrchestrator?.showModal?.(MODAL_IDS.CONTEXT, payload);
-    game.on("showContextModal", this._contextModalHandler);
-  }
-
-  showChapterCelebration() {}
-
-  hideModal() {
-    const ui = this.ui;
-    const modal = document.getElementById("reactor_copy_paste_modal");
-    if (typeof ui._copyPasteModalReactiveUnmount === "function") {
-      try {
-        ui._copyPasteModalReactiveUnmount();
-      } catch (_) {}
-      ui._copyPasteModalReactiveUnmount = null;
-    }
-    if (modal) modal.classList.add("hidden");
-
-    const prevPauseState = modal?.dataset?.previousPauseState;
-    if (prevPauseState != null && ui.stateManager) ui.stateManager.setVar("pause", prevPauseState === "true");
+  const prevPauseState = modal?.dataset?.previousPauseState;
+  if (prevPauseState != null && ui.game) {
+    ui.game.onToggleStateChange?.("pause", prevPauseState === "true");
   }
 }
 
-export class CoreLoopUI {
-  constructor(ui) {
-    this.ui = ui;
+export function getUiConfigDisplayValue(game, configKey) {
+  if (configKey === "exotic_particles") return game?.exoticParticleManager?.exotic_particles;
+  return game?.state?.[configKey];
+}
+
+export function snapUiDisplayValuesFromState(ui) {
+  if (!ui.displayValues) return;
+  const d = ui.displayValues;
+  ["money", "heat", "power", "ep"].forEach((k) => {
+    const o = d[k];
+    if (o && typeof o.current === "number" && typeof o.target === "number") o.current = o.target;
+  });
+}
+
+export function syncUiDisplayValueTargetsFromState(ui) {
+  const game = ui.game;
+  if (!game?.state || !ui.displayValues) return;
+  const s = game.state;
+  const d = ui.displayValues;
+  const toNum = (v) => (v != null && typeof v.toNumber === "function" ? v.toNumber() : Number(v ?? 0));
+  if (d.money) d.money.target = toNum(s.current_money);
+  if (d.heat) d.heat.target = toNum(s.current_heat);
+  if (d.power) d.power.target = toNum(s.current_power);
+  if (d.ep) d.ep.target = toNum(game.exoticParticleManager?.exotic_particles ?? s.current_exotic_particles ?? 0);
+}
+
+export function applyUiStateToDom(ui) {
+  const game = ui.game;
+  const config = ui.var_objs_config;
+  if (!config || !game?.state) return;
+  for (const configKey of Object.keys(config)) {
+    const val = getUiConfigDisplayValue(game, configKey);
+    if (val === undefined) continue;
+    const cfg = config[configKey];
+    cfg?.onupdate?.(val);
+  }
+}
+
+export function applyUiStateToDomForKeys(ui, keys) {
+  const game = ui.game;
+  const config = ui.var_objs_config;
+  if (!config || !game) return;
+  for (const configKey of keys) {
+    const cfg = config[configKey];
+    if (!cfg) continue;
+    const val = getUiConfigDisplayValue(game, configKey);
+    if (val === undefined) continue;
+    cfg.onupdate?.(val);
+  }
+}
+
+export function processUiUpdateQueue(ui) {
+  syncUiDisplayValueTargetsFromState(ui);
+  snapUiDisplayValuesFromState(ui);
+  applyUiStateToDom(ui);
+}
+
+export function updateUiRollingNumbers(ui, _dt) {
+  snapUiDisplayValuesFromState(ui);
+}
+
+export function startRenderLoop(ui, timestamp = 0) {
+  if (ui._updateLoopStopped) return;
+  if (typeof document === "undefined" || !document) return;
+  if (typeof document.getElementById !== "function") return;
+  if (!ui._lastUiTime) ui._lastUiTime = timestamp;
+  ui._lastUiTime = timestamp;
+
+  ui._firstFrameSyncDone = true;
+
+  if (timestamp - ui.last_interface_update > ui.update_interface_interval) {
+    ui.last_interface_update = timestamp;
+    ui.performanceUI?.recordFrame?.();
+    if (ui.gridCanvasRenderer && ui.game) ui.gridCanvasRenderer.render(ui.game);
+    updateLeaderboardIcon(ui);
+    ui.heatVisualsUI?.drawHeatFlowOverlay?.();
+    ui.heatVisualsUI?.drawVoltagePlacementOverlay?.();
   }
 
-  processUpdateQueue() {
-    this._syncDisplayValuesFromState();
-    this.snapDisplayValuesFromState();
-    this.applyStateToDom();
-  }
-
-  snapDisplayValuesFromState() {
-    const ui = this.ui;
-    if (!ui.displayValues) return;
-    const d = ui.displayValues;
-    ["money", "heat", "power", "ep"].forEach((k) => {
-      const o = d[k];
-      if (o && typeof o.current === "number" && typeof o.target === "number") o.current = o.target;
-    });
-  }
-
-  _syncDisplayValuesFromState() {
-    const ui = this.ui;
-    const game = ui.game;
-    if (!game?.state || !ui.displayValues) return;
-    const s = game.state;
-    const d = ui.displayValues;
-    const toNum = (v) => (v != null && typeof v.toNumber === "function" ? v.toNumber() : Number(v ?? 0));
-    if (d.money) d.money.target = toNum(s.current_money);
-    if (d.heat) d.heat.target = toNum(s.current_heat);
-    if (d.power) d.power.target = toNum(s.current_power);
-    if (d.ep) d.ep.target = toNum(game.exoticParticleManager?.exotic_particles ?? s.current_exotic_particles ?? 0);
-  }
-
-  updateRollingNumbers(_dt) {
-    this.snapDisplayValuesFromState();
-  }
-
-  cacheDOMElements() {
-    return true;
-  }
-
-  getElement(id) {
-    const ui = this.ui;
-    if (ui.DOMElements?.[id]) return ui.DOMElements[id];
-    const el = document.getElementById(id);
-    if (!el) return null;
-    ui.DOMElements[id] = el;
-    const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-    ui.DOMElements[camelCaseKey] = el;
-    return el;
-  }
-
-  initVarObjsConfig() {
-    this.ui.controlDeckUI?.initVarObjsConfig?.();
-  }
-
-  getDisplayValue(game, configKey) {
-    if (configKey === "exotic_particles") return game?.exoticParticleManager?.exotic_particles;
-    return game?.state?.[configKey];
-  }
-
-  applyStateToDom() {
-    const ui = this.ui;
-    const game = ui.game;
-    const config = ui.var_objs_config;
-    if (!config || !game?.state) return;
-    for (const configKey of Object.keys(config)) {
-      const val = this.getDisplayValue(game, configKey);
-      if (val === undefined) continue;
-      const cfg = config[configKey];
-      cfg?.onupdate?.(val);
-    }
-  }
-
-  applyStateToDomForKeys(keys) {
-    const ui = this.ui;
-    const game = ui.game;
-    const config = ui.var_objs_config;
-    if (!config || !game) return;
-    for (const configKey of keys) {
-      const cfg = config[configKey];
-      if (!cfg) continue;
-      const val = this.getDisplayValue(game, configKey);
-      if (val === undefined) continue;
-      cfg.onupdate?.(val);
-    }
-  }
-
-  runUpdateInterfaceLoop(timestamp = 0) {
-    const ui = this.ui;
-    if (ui._updateLoopStopped) return;
-    if (typeof document === "undefined" || !document) return;
-    if (typeof document.getElementById !== "function") return;
-    if (!ui._lastUiTime) ui._lastUiTime = timestamp;
-    const dt = timestamp - ui._lastUiTime;
-    ui._lastUiTime = timestamp;
-
-    ui._firstFrameSyncDone = true;
-
-    if (timestamp - ui.last_interface_update > ui.update_interface_interval) {
-      ui.last_interface_update = timestamp;
-      ui.performanceUI?.recordFrame?.();
-      if (ui.gridCanvasRenderer && ui.game) ui.gridCanvasRenderer.render(ui.game);
-      ui.navIndicatorsUI?.updateLeaderboardIcon?.();
-      ui.heatVisualsUI?.drawHeatFlowOverlay?.();
-      ui.heatVisualsUI?.drawVoltagePlacementOverlay?.();
-    }
-
-    ui.update_interface_task = requestAnimationFrame((ts) => ui.coreLoopUI.runUpdateInterfaceLoop(ts));
-  }
+  ui.update_interface_task = requestAnimationFrame((ts) => startRenderLoop(ui, ts));
 }
 
 export function setupKeyboardShortcuts(ui) {
   document.addEventListener("keydown", (e) => {
-    if (!ui?.game || !ui.stateManager) return;
+    if (!ui?.game) return;
     if (!e.ctrlKey) return;
     const k = String(e.key ?? "").toLowerCase();
     if (k !== "e") return;
@@ -3728,10 +3901,11 @@ export function setupKeyboardShortcuts(ui) {
     ui.game.markCheatsUsed?.();
     ui.game.grantCheatExoticParticle?.(1);
     const g = ui.game;
-    ui.stateManager.setVar("exotic_particles", g.exoticParticleManager?.exotic_particles ?? g.exotic_particles);
-    ui.stateManager.setVar("total_exotic_particles", g.state?.total_exotic_particles ?? g.total_exotic_particles);
-    ui.stateManager.setVar("current_exotic_particles", g.state?.current_exotic_particles ?? g.current_exotic_particles);
-    ui.stateManager?.setVar?.("exotic_particles", g.exoticParticleManager?.exotic_particles ?? g.exotic_particles);
+    patchGameState(g, {
+      exotic_particles: g.exoticParticleManager?.exotic_particles ?? g.exotic_particles,
+      total_exotic_particles: g.state?.total_exotic_particles ?? g.total_exotic_particles,
+      current_exotic_particles: g.state?.current_exotic_particles ?? g.current_exotic_particles,
+    });
     ui.game.upgradeset?.check_affordability?.(ui.game);
   });
 }
@@ -3766,7 +3940,7 @@ export function startCtrl9MoneyIncrease(ui) {
     if (delta > 0) {
       ui.ctrl9LastTotalAdded = totalAdded;
       ui.game.addMoney?.(delta);
-      ui.stateManager?.setVar?.("current_money", ui.game.state?.current_money ?? ui.game.current_money);
+      setDecimal(ui.game.state, "current_money", ui.game.state?.current_money ?? ui.game.current_money);
     }
   }, ui.ctrl9IntervalMs ?? 100);
 }
@@ -3839,65 +4013,43 @@ export class QuickStartUI {
   }
 }
 
-export class DeviceFeaturesUI {
-  constructor(ui) {
-    this.ui = ui;
-  }
+function dfVibrate(pattern) {
+  if (!navigator?.vibrate) return;
+  try {
+    navigator.vibrate(pattern);
+  } catch (_) {}
+}
 
-  updateWakeLockState() {}
-
-  toggleFullscreen() {
-    if (!document) return;
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch?.(() => {});
-    } else {
-      document.exitFullscreen?.().catch?.(() => {});
-    }
-  }
-
-  updateFullscreenButtonState() {
-    const ui = this.ui;
-    const btn = ui.coreLoopUI?.getElement?.("fullscreen_toggle") ?? document.getElementById("fullscreen_toggle");
-    if (!btn || !ui.uiState) return;
-    const title = document.fullscreenElement ? "Exit Fullscreen" : "Enter Fullscreen";
-    ui.uiState.fullscreen_display = { icon: "⛶", title };
-    btn.title = title;
-    btn.textContent = "⛶";
-  }
-
-  vibrate(pattern) {
-    if (!navigator?.vibrate) return;
-    try {
-      navigator.vibrate(pattern);
-    } catch (_) {}
-  }
-
-  lightVibration() {
-    this.vibrate(10);
-  }
-
-  heavyVibration() {
-    this.vibrate(50);
-  }
-
-  upgradeCardHoverBuzz() {
-    this.vibrate([8, 12, 10]);
-  }
-
-  doublePulseVibration() {
-    this.vibrate([30, 80, 30]);
-  }
-
-  meltdownVibration() {
-    this.vibrate(200);
-  }
-
-  heatRumbleVibration() {
-    this.vibrate([80, 40, 80, 40, 80]);
-  }
+export function bindDeviceFeatures(ui) {
+  const fsIcon = "⛶";
+  return {
+    updateWakeLockState() {},
+    toggleFullscreen() {
+      if (!document) return;
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch?.(() => {});
+      } else {
+        document.exitFullscreen?.().catch?.(() => {});
+      }
+    },
+    updateFullscreenButtonState() {
+      const btn = getUiElement(ui, "fullscreen_toggle") ?? document.getElementById("fullscreen_toggle");
+      if (!btn || !ui.uiState) return;
+      const title = document.fullscreenElement ? "Exit Fullscreen" : "Enter Fullscreen";
+      ui.uiState.fullscreen_display = { icon: fsIcon, title };
+      btn.title = title;
+      btn.textContent = fsIcon;
+    },
+    vibrate: dfVibrate,
+    lightVibration() { dfVibrate(10); },
+    heavyVibration() { dfVibrate(50); },
+    upgradeCardHoverBuzz() { dfVibrate([8, 12, 10]); },
+    doublePulseVibration() { dfVibrate([30, 80, 30]); },
+    meltdownVibration() { dfVibrate(200); },
+    heatRumbleVibration() { dfVibrate([80, 40, 80, 40, 80]); },
+    updateAppBadge() {},
+  };
 }
 
 export { HeatVisualsUI, GridInteractionUI };
-export { ParticleEffectsUI, VisualEventRendererUI } from "./visual-effects-manager.js";
- 
 

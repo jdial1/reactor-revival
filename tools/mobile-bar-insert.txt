@@ -1,0 +1,141 @@
+function buildMobileControlDeckTemplate(ui, state) {
+  const maxPower = toNumber(state.max_power ?? 0);
+  const maxHeat = toNumber(state.max_heat ?? 0);
+  const powerCurrent = toNumber(state.current_power ?? 0);
+  const heatCurrent = toNumber(state.current_heat ?? 0);
+
+  const pBar = getBarVisuals(powerCurrent, maxPower, "--power-fill-height", "height");
+  const hBar = getBarVisuals(heatCurrent, maxHeat, "--heat-fill-height", "height");
+
+  const heatHazard = hBar.quant >= HAZARD_FILL_PERCENT;
+  const heatCritical = hBar.quant > CRITICAL_FILL_PERCENT;
+
+  const powerDelta = state.power_net_change ?? 0;
+  const heatDelta = state.heat_net_change ?? 0;
+  const powerRateText = powerDelta === 0 ? "0" : (powerDelta > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(powerDelta), 0);
+  const heatRateText = heatDelta === 0 ? "0" : (heatDelta > 0 ? "\u2191" : "\u2193") + fmt(Math.abs(heatDelta), 0);
+
+  const autoSellEnabled = !!state.auto_sell;
+  const multiplier = toNumber(state.auto_sell_multiplier ?? 0);
+  const hasAutoSellUpgrade = ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
+  const showAutoSell = autoSellEnabled && multiplier > 0 && hasAutoSellUpgrade;
+  const autoSellRate = showAutoSell ? Math.floor(maxPower * multiplier) : 0;
+
+  const hasHeatControlUpgrade = ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
+  const heatControlEnabled = !!state.heat_controlled && hasHeatControlUpgrade;
+  const showHeatRate = heatControlEnabled && maxHeat > 0;
+  const ventBonus = toNumber(state.vent_multiplier_eff ?? 0);
+  const autoHeatRate = showHeatRate ? (maxHeat / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + ventBonus / VENT_BONUS_PERCENT_DIVISOR) : 0;
+
+  const heatVentClass = classMap({ "control-deck-item": true, "heat-vent": true, hazard: heatHazard, critical: heatCritical });
+  const powerCapacitorClass = classMap({ "control-deck-item": true, "power-capacitor": true, "auto-sell-active": autoSellEnabled });
+
+  const autoSellRateContent = showAutoSell ? html`<img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="$">${fmt(autoSellRate, 0)}` : "";
+  const autoHeatRateContent = showHeatRate ? html`<img src="img/ui/icons/icon_heat.png" class="icon-inline" alt="heat">\u2193${fmt(Math.round(autoHeatRate), 0)}` : "";
+  const autoRateClass = classMap({ "control-deck-auto-rate": true, visible: showAutoSell });
+  const autoHeatRateClass = classMap({ "control-deck-auto-rate": true, visible: showHeatRate });
+
+  return mobileControlDeckTemplate({
+    powerCapacitorClass,
+    heatVentClass,
+    powerRateText,
+    heatRateText,
+    autoRateClass,
+    autoHeatRateClass,
+    autoSellRateContent,
+    autoHeatRateContent,
+    powerFillStyle: pBar.style,
+    heatFillStyle: hBar.style,
+    architectMetricsText: formatArchitectMetricsLine(state),
+    tickCadenceText: formatSimulationTickLine(ui.game),
+    powerCurrentText: fmt(powerCurrent, 0),
+    heatCurrentText: fmt(heatCurrent, 0),
+    maxPowerText: maxPower ? fmt(maxPower, 0) : "",
+    maxHeatText: maxHeat ? fmt(maxHeat, 0) : "",
+    moneyValueText: state.melting_down ? "\u2622\uFE0F" : formatNumberCompactIntl(state.current_money ?? 0),
+  });
+}
+
+function buildMobilePassiveBarTemplate(state) {
+  return mobilePassiveBarTemplate({
+    epText: formatNumberCompactIntl(state.current_exotic_particles ?? 0),
+    moneyText: state.melting_down ? "\u2622\uFE0F" : formatNumberCompactIntl(state.current_money ?? 0),
+    pauseClass: classMap({ "passive-top-pause": true, paused: !!state.pause }),
+    pauseAriaLabel: state.pause ? "Resume" : "Pause",
+    pauseTitle: state.pause ? "Resume" : "Pause",
+  });
+}
+
+function ensureMobileControlDeckListeners(ui) {
+  if (ui._mobileTickLineUpdateControlDeck) return;
+  ui._mobileTickLineUpdateControlDeck = () => {
+    const el = document.getElementById("control_deck_tick_line");
+    const g = ui.game;
+    if (el && g) el.textContent = formatSimulationTickLine(g);
+  };
+  ui._mobileControlDeckStatePatchHandler = (patch) => {
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) {
+      ui._mobileTickLineUpdateControlDeck();
+    }
+  };
+}
+
+export function mountMobilePassiveBar(ui) {
+  if (window.innerWidth > MOBILE_BREAKPOINT_PX || ui._mobilePassiveBarMounted || !ui.game?.state) return;
+
+  const passiveBar = document.getElementById("mobile_passive_top_bar");
+  if (passiveBar) passiveBar.setAttribute("aria-hidden", "false");
+  const root = document.getElementById("mobile_passive_root");
+  if (!root) return;
+
+  const subscriptions = [{
+    state: ui.game.state,
+    keys: ["current_exotic_particles", "current_money", "pause", "melting_down"],
+  }];
+  const unmountPassive = ReactiveLitComponent.mountMulti(subscriptions, () => buildMobilePassiveBarTemplate(ui.game.state), root);
+  ui._mobilePassiveBarMounted = true;
+  ui._unmounts.push(() => {
+    unmountPassive();
+    ui._mobilePassiveBarMounted = false;
+  });
+}
+
+export function syncMobileControlDeckMounts(ui) {
+  if (window.innerWidth > MOBILE_BREAKPOINT_PX || ui._mobileControlDeckReactiveMounted || !ui.game?.state) return;
+
+  const root = document.getElementById("control_deck_root");
+  if (!root) return;
+
+  ensureMobileControlDeckListeners(ui);
+
+  const subscriptions = [{
+    state: ui.game.state,
+    keys: [
+      "max_power", "max_heat", "current_power", "current_heat",
+      "power_net_change", "heat_net_change", "stats_power", "stats_net_heat",
+      "stats_heat_generation", "stats_vent",
+      "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff",
+      "current_money", "melting_down",
+    ],
+  }];
+  const innerUnmount = ReactiveLitComponent.mountMulti(subscriptions, () => buildMobileControlDeckTemplate(ui, ui.game.state), root);
+  const g = ui.game;
+  if (!ui._mobileControlDeckTickListenersAttached && g?.on) {
+    ui._mobileControlDeckTickListenersAttached = true;
+    g.on("tickRecorded", ui._mobileTickLineUpdateControlDeck);
+    g.on("statePatch", ui._mobileControlDeckStatePatchHandler);
+  }
+  ui._mobileTickLineUpdateControlDeck();
+  ui._mobileControlDeckReactiveMounted = true;
+  ui._unmounts.push(() => {
+    innerUnmount();
+    if (ui._mobileControlDeckTickListenersAttached && ui.game?.off) {
+      ui.game.off("tickRecorded", ui._mobileTickLineUpdateControlDeck);
+      ui.game.off("statePatch", ui._mobileControlDeckStatePatchHandler);
+      ui._mobileControlDeckTickListenersAttached = false;
+    }
+    ui._mobileControlDeckReactiveMounted = false;
+  });
+  mountMobilePassiveBar(ui);
+}
+

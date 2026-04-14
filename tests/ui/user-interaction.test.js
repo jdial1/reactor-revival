@@ -91,7 +91,7 @@ describe("UI User Interaction Scenarios", () => {
     });
 
     it("should display a tooltip when tapping a part button in help mode", async () => {
-        game.ui.stateManager.setVar("help_mode", true);
+        game.ui.setHelpModeActive(true);
         const partBtn = document.querySelector(".parts_tab_content.active .part-btn, .item-grid .part-btn, [data-part-id]");
         const tooltipEl = document.getElementById("tooltip");
         if (!partBtn || !tooltipEl) return;

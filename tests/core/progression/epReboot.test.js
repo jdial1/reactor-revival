@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from '../../helpers/setup.js';
 import { AudioService } from '@app/services.js';
-import { setDecimal } from '@app/state.js';
+import { setDecimal } from "@app/store.js";
+import { patchGameState } from "@app/state.js";
 import { toDecimal } from '@app/utils.js';
 import { forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
 
@@ -18,11 +19,10 @@ describe('EP Reboot Functionality', () => {
         game.exotic_particles = 0;
         game.total_exotic_particles = 0;
         game.current_exotic_particles = 0;
-
-        // Initialize UI state manager with EP values
-        game.ui.stateManager.setVar("exotic_particles", 0);
-        game.ui.stateManager.setVar("total_exotic_particles", 0);
-        game.ui.stateManager.setVar("current_exotic_particles", 0);
+        game.exoticParticleManager.exotic_particles = toDecimal(0);
+        setDecimal(game.state, "total_exotic_particles", 0);
+        setDecimal(game.state, "current_exotic_particles", 0);
+        patchGameState(game, { exotic_particles: 0 });
     });
 
     afterEach(() => {
@@ -46,33 +46,29 @@ describe('EP Reboot Functionality', () => {
 
         it('should update EP state manager correctly', () => {
             game.exotic_particles = 150;
-            game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
+            patchGameState(game, { exotic_particles: game.exotic_particles });
 
-            expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(150);
+            expect(toNum(game.exotic_particles)).toBe(150);
         });
 
         it('should update total EP state manager correctly', () => {
             game.total_exotic_particles = 500;
-            game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
+            patchGameState(game, { total_exotic_particles: game.total_exotic_particles });
 
-            expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(500);
+            expect(toNum(game.state.total_exotic_particles)).toBe(500);
         });
 
         it('should update EP displays when values change', () => {
-            // Set initial values
             game.exotic_particles = 100;
             game.total_exotic_particles = 200;
-            game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
-            game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
+            patchGameState(game, { exotic_particles: game.exotic_particles, total_exotic_particles: game.total_exotic_particles });
 
-            // Update values
             game.exotic_particles = 250;
             game.total_exotic_particles = 350;
-            game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
-            game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
+            patchGameState(game, { exotic_particles: game.exotic_particles, total_exotic_particles: game.total_exotic_particles });
 
-            expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(250);
-            expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(350);
+            expect(toNum(game.exotic_particles)).toBe(250);
+            expect(toNum(game.state.total_exotic_particles)).toBe(350);
         });
     });
 
@@ -97,8 +93,8 @@ describe('EP Reboot Functionality', () => {
             expect(toNum(game.current_exotic_particles)).toBe(toNum(epBeforeReboot));
             expect(toNum(game.current_money)).toBe(toNum(game.base_money));
 
-            expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(toNum(epBeforeReboot));
-            expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(toNum(epBeforeReboot));
+            expect(toNum(game.state.total_exotic_particles)).toBe(toNum(epBeforeReboot));
+            expect(toNum(game.state.current_exotic_particles)).toBe(toNum(epBeforeReboot));
             expect(playSpy).toHaveBeenCalledWith('reboot');
         });
 
@@ -140,15 +136,13 @@ describe('EP Reboot Functionality', () => {
         it('should update state manager after refund reboot', async () => {
             game.exotic_particles = 75;
             game.total_exotic_particles = 125;
-            game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
-            game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
+            patchGameState(game, { exotic_particles: game.exotic_particles, total_exotic_particles: game.total_exotic_particles });
 
             await game.rebootActionDiscardExoticParticles();
 
-            // Check that state manager is updated correctly
-            expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(0);
-            expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(0);
-            expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(0);
+            expect(toNum(game.exotic_particles)).toBe(0);
+            expect(toNum(game.state.total_exotic_particles)).toBe(0);
+            expect(toNum(game.state.current_exotic_particles)).toBe(0);
         });
     });
 
@@ -174,20 +168,17 @@ describe('EP Reboot Functionality', () => {
             game.total_exotic_particles = 100;
             game.current_exotic_particles = 150;
 
-            // Update state manager
-            game.ui.stateManager.setVar("exotic_particles", game.exotic_particles);
-            game.ui.stateManager.setVar("total_exotic_particles", game.total_exotic_particles);
-            game.ui.stateManager.setVar("current_exotic_particles", game.current_exotic_particles);
+            patchGameState(game, {
+              exotic_particles: game.exotic_particles,
+              total_exotic_particles: game.total_exotic_particles,
+              current_exotic_particles: game.current_exotic_particles,
+            });
 
-            // Verify state is maintained
             expect(toNum(game.exotic_particles)).toBe(50);
             expect(toNum(game.total_exotic_particles)).toBe(100);
             expect(toNum(game.current_exotic_particles)).toBe(150);
-
-            // Verify UI state manager has correct values
-            expect(toNum(game.ui.stateManager.getVar("exotic_particles"))).toBe(50);
-            expect(toNum(game.ui.stateManager.getVar("total_exotic_particles"))).toBe(100);
-            expect(toNum(game.ui.stateManager.getVar("current_exotic_particles"))).toBe(150);
+            expect(toNum(game.state.total_exotic_particles)).toBe(100);
+            expect(toNum(game.state.current_exotic_particles)).toBe(150);
         });
     });
 }); 

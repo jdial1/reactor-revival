@@ -1,6 +1,7 @@
-import { tileKey, resolveTileFromKey } from "../state.js";
+import { tileKey, resolveTileFromKey } from "../store.js";
+import { getPageReactor } from "./ui-components.js";
 
-// Pointer paths resolve to a tile + DOM event; GridController maps those to grid intents (grid-intent-pipeline.js).
+// Pointer paths resolve to a tile + DOM event; GridController handles placement and blueprint paths directly.
 
 class Hotkeys {
   constructor(game) { this.game = game; }
@@ -140,7 +141,7 @@ export class InputHandler {
   }
 
   setupReactorEventListeners() {
-    const reactor = this.ui.pageInitUI?.getReactor?.() ?? this.ui.coreLoopUI?.getElement?.("reactor") ?? this.ui.DOMElements?.reactor;
+    const reactor = getPageReactor(this.ui) ?? this.ui.DOMElements?.reactor;
     if (!reactor) return;
 
     const MOVE_THRESHOLD = 18;
@@ -202,7 +203,7 @@ export class InputHandler {
   }
 
   setupSegmentHighlight() {
-    const reactorElement = this.ui.pageInitUI?.getReactor?.() ?? this.ui.coreLoopUI?.getElement?.("reactor") ?? this.ui.DOMElements?.reactor;
+    const reactorElement = getPageReactor(this.ui) ?? this.ui.DOMElements?.reactor;
     if (!reactorElement) return;
 
     const heatComponentCategories = [

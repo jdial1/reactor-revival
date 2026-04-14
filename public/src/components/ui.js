@@ -1,29 +1,31 @@
 import { numFormat as fmt, on, StorageUtils, StorageAdapter, toNumber } from "../utils.js";
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { StateManager, createUIState, initUIStateSubscriptions } from "../state.js";
+import { StateManager, createUIState, initUIStateSubscriptions, subscribeKey } from "../store.js";
 import { InputHandler } from "./input-manager.js";
 import { createModalOrchestrator } from "./ui-modals.js";
 import { GridScaler, GridCanvasRenderer } from "./ui-grid.js";
-import { ParticleEffectsUI, VisualEventRendererUI } from "./visual-effects-manager.js";
 import { leaderboardService } from "../services.js";
 import { logger } from "../utils.js";
-import { UpgradesUI, ComponentRenderingUI, runPopulateUpgradeSection, mountSectionCountsReactive, updateSectionCountsState } from "./ui-components.js";
 import {
+  ComponentRenderingUI,
+  runPopulateUpgradeSection,
+  mountSectionCountsReactive,
+  updateSectionCountsState,
   CopyPasteUI,
   UserAccountUI,
-  InfoBarUI,
-  MobileInfoBarUI,
   PageSetupUI,
-  PartsPanelUI,
   HeatVisualsUI,
   GridInteractionUI,
-  ControlDeckUI,
   PerformanceUI,
   MeltdownUI,
-  ModalOrchestrationUI,
-  CoreLoopUI,
-  DeviceFeaturesUI,
+  bindDeviceFeatures,
+  setupBuildTabButton,
+  setupMenuTabButton,
+  setupDesktopTopNavButtons,
+  teardownTabSetupUI,
+  updateNavIndicators as paintNavAffordabilityDots,
+  teardownAffordabilityIndicators,
   setupKeyboardShortcuts,
   setupCtrl9Handlers,
   startCtrl9MoneyIncrease,
@@ -32,15 +34,36 @@ import {
   setupResizeListeners,
   PwaDisplayModeUI,
   QuickStartUI,
-  NavIndicatorsUI,
-  TabSetupUI,
   ClipboardUI,
+  mountInfoBar,
+  syncMobileControlDeckMounts,
+  setupPartsPanel,
+  initializeControlDeckToggleButtons,
+  initControlDeckVarObjs,
+  cacheDomElements,
+  startRenderLoop,
+  getUiElement,
+  initializePage,
+  getUpgradeSectionContainer,
+  appendUpgradeToSection,
+  subscribeToContextModalEvents,
+  unsubscribeContextModalEvents,
+  updateQuickSelectSlots,
+  updatePartsPanelBodyClass,
+  refreshPartsPanel,
+  getPageReactor,
+  snapUiDisplayValuesFromState,
+  applyUiStateToDom,
+  processUiUpdateQueue,
+  updateUiRollingNumbers,
 } from "./ui-components.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
 import { getValidatedGameData } from "../services.js";
 import { MOBILE_BREAKPOINT_PX } from "../utils.js";
 import { ObjectiveController, checkObjectiveTextScrolling as applyObjectiveToastTitle } from "../logic.js";
 import { GridController, AudioController } from "./controllers/controllers.js";
+import { attachAudioSys } from "../audio.sys.js";
+import { mountHeatRatioStrip, mountEngineStatusChip, mountMuteIndicator } from "../ui.views.js";
 
 export function getRoot(selector) {
   return document.querySelector(selector);
@@ -81,248 +104,12 @@ export default domMapper;
 
 const MY_LAYOUTS_STORAGE_KEY = 'reactor_my_layouts';
 
-class PageInitUI {
-  constructor(ui) {
-    this.ui = ui;
-  }
-
-  clearReactor() {
-    const reactor = this.getReactor();
-    if (reactor) reactor.innerHTML = "";
-  }
-
-  getReactor() {
-    return this.ui.coreLoopUI?.getElement?.("reactor") ?? this.ui.DOMElements?.reactor ?? document.getElementById("reactor");
-  }
-
-  getReactorWrapper() {
-    return this.ui.coreLoopUI?.getElement?.("reactor_wrapper") ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById("reactor_wrapper");
-  }
-
-  getReactorBackground() {
-    return this.ui.coreLoopUI?.getElement?.("reactor_background") ?? this.ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
-  }
-
-  setGridContainer(container) {
-    if (this.ui.gridCanvasRenderer) this.ui.gridCanvasRenderer.setContainer(container);
-  }
-
-  setReactorVisibility(visible) {
-    const reactor = this.getReactor();
-    if (reactor) reactor.style.visibility = visible ? "visible" : "hidden";
-  }
-
-  initializePage(pageId) {
-    const game = this.ui.game;
-    this.ui.coreLoopUI.cacheDOMElements(pageId);
-
-    if (pageId === "reactor_section") {
-      this.ui.coreLoopUI.initVarObjsConfig();
-      const pauseCfg = this.ui.var_objs_config?.pause;
-      const paused = !!this.ui.stateManager?.getVar("pause");
-      if (pauseCfg?.onupdate) pauseCfg.onupdate(paused);
-    }
-
-    switch (pageId) {
-      case "reactor_section":
-        const reactor = this.getReactor();
-        logger.log('debug', 'ui', '[PageInit] reactor_section init start', {
-          hasGridScaler: !!this.ui.gridScaler,
-          hasWrapper: !!this.ui.gridScaler?.wrapper,
-          hasReactor: !!reactor,
-          hasGridRenderer: !!this.ui.gridCanvasRenderer,
-          hasGame: !!this.ui.game,
-          hasTileset: !!this.ui.game?.tileset
-        });
-        if (this.ui.gridScaler && !this.ui.gridScaler.wrapper) {
-          this.ui.gridScaler.init();
-        }
-        if (reactor) {
-          this.clearReactor();
-          if (this.ui.gridCanvasRenderer) {
-            this.ui.gridCanvasRenderer.init(reactor);
-          }
-        }
-
-        this.ui.inputHandler.setupReactorEventListeners();
-        this.ui.inputHandler.setupSegmentHighlight();
-        this.ui.gridScaler.resize();
-        const container = this.getReactorWrapper() || this.getReactorBackground();
-        this.setGridContainer(container);
-        if (this.ui.game?.tileset) {
-          this.ui.game.tileset.updateActiveTiles();
-        }
-        if (this.ui.gridCanvasRenderer && this.ui.game) {
-          this.ui.gridCanvasRenderer.render(this.ui.game);
-        }
-        logger.log('debug', 'ui', '[PageInit] reactor_section init done');
-        this.ui.initializeCopyPasteUI();
-        this.ui.pageSetupUI.setupMobileTopBar();
-        this.ui.pageSetupUI.setupMobileTopBarResizeListener();
-        break;
-      case "upgrades_section":
-        this.ui.pageSetupUI.setupAffordabilityBanners("upgrades_no_affordable_banner");
-        if (!this.ui._sectionCountsMountedUpgrades && document.getElementById("upgrades_content_wrapper")) {
-          this.ui._sectionCountsUnmountUpgrades = mountSectionCountsReactive(this.ui, "upgrades_content_wrapper");
-          this.ui._sectionCountsMountedUpgrades = true;
-        }
-        if (game?.upgradeset) updateSectionCountsState(this.ui, game);
-        requestAnimationFrame(() => {
-          if (
-            game.upgradeset &&
-            typeof game.upgradeset.populateUpgrades === "function"
-          ) {
-            game.upgradeset.populateUpgrades();
-          } else {
-            logger.log('warn', 'ui', 'upgradeset.populateUpgrades is not a function or upgradeset missing');
-          }
-        });
-        break;
-      case "experimental_upgrades_section":
-        this.ui.controlDeckUI.mountExoticParticlesDisplayIfNeeded(this.ui);
-        this.ui.pageSetupUI.setupAffordabilityBanners("research_no_affordable_banner");
-        if (!this.ui._sectionCountsMountedResearch && document.getElementById("experimental_upgrades_content_wrapper")) {
-          this.ui._sectionCountsUnmountResearch = mountSectionCountsReactive(this.ui, "experimental_upgrades_content_wrapper");
-          this.ui._sectionCountsMountedResearch = true;
-        }
-        if (game?.upgradeset) updateSectionCountsState(this.ui, game);
-        if (
-          game.upgradeset &&
-          typeof game.upgradeset.populateExperimentalUpgrades === "function"
-        ) {
-          game.upgradeset.populateExperimentalUpgrades();
-        } else {
-          logger.log('warn', 'ui', 'upgradeset.populateExperimentalUpgrades is not a function or upgradeset missing');
-        }
-        this.setupResearchCollapsibleSections();
-        this.loadAndSetVersion();
-        this.ui.setupUpgradeCardHoverBuzz();
-        break;
-      case "about_section":
-        this.setupVersionDisplay();
-        if (!this.ui.uiState?.version_display?.app) this.loadAndSetVersion();
-        break;
-      case "leaderboard_section":
-        this.ui.pageSetupUI.setupLeaderboardPage();
-        break;
-      case "soundboard_section":
-        this.ui.pageSetupUI.setupSoundboardPage();
-        break;
-      default:
-        break;
-    }
-
-    this.ui.objectivesUI.showObjectivesForPage(pageId);
-  }
-
-  setupResearchCollapsibleSections() {
-    if (this._researchCollapsibleSetup) return;
-    this._researchCollapsibleSetup = true;
-    const section = document.getElementById("experimental_upgrades_section");
-    if (!section) return;
-    section.addEventListener("click", (e) => {
-      const header = e.target.closest(".research-section-header");
-      if (!header) return;
-      const article = header.closest(".research-collapsible");
-      if (!article) return;
-      e.preventDefault();
-      const collapsed = article.classList.toggle("section-collapsed");
-      header.setAttribute("aria-expanded", String(!collapsed));
-    });
-    section.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter" && e.key !== " ") return;
-      const header = e.target.closest(".research-section-header");
-      if (!header) return;
-      e.preventDefault();
-      header.click();
-    });
-    const coverWrap = document.querySelector(".refund-safety-cover-wrap");
-    const coverBtn = document.getElementById("refund_safety_cover");
-    if (coverBtn && coverWrap) {
-      coverBtn.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        coverWrap.classList.toggle("cover-open");
-      });
-    }
-    const rebootBtn = document.getElementById("reboot_btn");
-    const refundBtn = document.getElementById("refund_btn");
-    const orchestrator = this.ui.modalOrchestrator;
-    if (rebootBtn) {
-      rebootBtn.addEventListener("click", (e) => {
-        if (!coverWrap?.classList.contains("cover-open")) {
-          e.preventDefault();
-          e.stopPropagation();
-        } else {
-          orchestrator?.showPrestigeModal?.("refund");
-        }
-      });
-    }
-    if (refundBtn) {
-      refundBtn.addEventListener("click", () => {
-        orchestrator?.showPrestigeModal?.("prestige");
-      });
-    }
-  }
-
-  setupVersionDisplay() {
-    const ui = this.ui;
-    if (!ui?.uiState || ui._versionDisplayMounted) return;
-    const aboutEl = document.getElementById("about_version");
-    const appEl = document.getElementById("app_version");
-    const renderVersion = (el) => {
-      if (!el?.isConnected) return;
-      ReactiveLitComponent.mountMulti(
-        [{ state: ui.uiState, keys: ["version_display"] }],
-        () => html`${ui.uiState?.version_display?.app ?? ui.uiState?.version_display?.about ?? ""}`,
-        el
-      );
-    };
-    if (aboutEl) renderVersion(aboutEl);
-    if (appEl && appEl !== aboutEl) renderVersion(appEl);
-    ui._versionDisplayMounted = true;
-  }
-
-  async loadAndSetVersion() {
-    const ui = this.ui;
-    try {
-      const { getResourceUrl } = await import("../utils.js");
-      const response = await fetch(getResourceUrl("version.json"));
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
-          throw new Error("HTML response received (likely 404 fallback)");
-        }
-        throw new Error(`Expected JSON but got ${contentType || "unknown content type"}`);
-      }
-
-      const versionData = await response.json();
-      const version = versionData.version || "Unknown";
-
-      if (ui?.uiState) {
-        ui.uiState.version_display = { ...ui.uiState.version_display, app: version, about: version };
-      }
-    } catch (error) {
-      if (!error.message || !error.message.includes("Expected JSON")) {
-        logger.log('warn', 'ui', 'Could not load version info:', error.message || error);
-      }
-      if (ui?.uiState) {
-        ui.uiState.version_display = { ...ui.uiState.version_display, app: "Unknown", about: "Unknown" };
-      }
-    }
-  }
-}
-
 function getPowerNetChangeFromStats(ui) {
   const fromState = ui.game?.state?.power_net_change;
   if (fromState !== undefined && typeof fromState === "number" && !isNaN(fromState)) return fromState;
-  const statsPower = toNumber(ui.stateManager.getVar("stats_power") || 0);
-  const autoSellEnabled = ui.stateManager.getVar("auto_sell") || false;
+  const st = ui.game?.state;
+  const statsPower = toNumber(st?.stats_power || 0);
+  const autoSellEnabled = st?.auto_sell || false;
   const autoSellMultiplier = toNumber(ui.game?.reactor?.auto_sell_multiplier || 0);
   if (autoSellEnabled && autoSellMultiplier > 0) {
     return statsPower - statsPower * autoSellMultiplier;
@@ -333,19 +120,20 @@ function getPowerNetChangeFromStats(ui) {
 function getHeatNetChangeFromStats(ui) {
   const fromState = ui.game?.state?.heat_net_change;
   if (fromState !== undefined && typeof fromState === "number" && !isNaN(fromState)) return fromState;
-  const statsNetHeat = ui.stateManager.getVar("stats_net_heat");
+  const st = ui.game?.state;
+  const statsNetHeat = st?.stats_net_heat;
   let baseNetHeat;
   if (typeof statsNetHeat === "number" && !isNaN(statsNetHeat)) {
     baseNetHeat = statsNetHeat;
   } else {
-    const totalHeat = toNumber(ui.stateManager.getVar("total_heat") || 0);
-    const statsVent = toNumber(ui.stateManager.getVar("stats_vent") || 0);
-    const statsOutlet = toNumber(ui.stateManager.getVar("stats_outlet") || 0);
+    const totalHeat = toNumber(st?.stats_heat_generation || 0);
+    const statsVent = toNumber(st?.stats_vent || 0);
+    const statsOutlet = toNumber(st?.stats_outlet || 0);
     baseNetHeat = totalHeat - statsVent - statsOutlet;
   }
-  const currentPower = toNumber(ui.stateManager.getVar("current_power") || 0);
-  const statsPower = toNumber(ui.stateManager.getVar("stats_power") || 0);
-  const maxPower = toNumber(ui.stateManager.getVar("max_power") || 0);
+  const currentPower = toNumber(st?.current_power || 0);
+  const statsPower = toNumber(st?.stats_power || 0);
+  const maxPower = toNumber(st?.max_power || 0);
   const potentialPower = currentPower + statsPower;
   const excessPower = Math.max(0, potentialPower - maxPower);
   const overflowToHeat = ui.game?.reactor?.power_overflow_to_heat_ratio ?? 1;
@@ -356,19 +144,18 @@ function getHeatNetChangeFromStats(ui) {
 
 function initMainLayoutInner(ui) {
   ui.setupEventListeners();
-  ui.controlDeckUI.initializeToggleButtons();
+  initializeControlDeckToggleButtons(ui);
   ui.initializeControlDeck();
-  ui.partsPanelUI.setupPartsTabs();
-  ui.partsPanelUI.initializePartsPanel();
-  ui.coreLoopUI.cacheDOMElements();
-  ui.coreLoopUI.initVarObjsConfig();
+  setupPartsPanel(ui);
+  cacheDomElements(ui);
+  initControlDeckVarObjs(ui);
   ui.quickStartUI.addHelpButtonToMainPage();
   ui.userAccountUI.setupUserAccountButton();
-  ui.tabSetupUI.setupBuildTabButton();
-  ui.tabSetupUI.setupMenuTabButton();
-  ui.tabSetupUI.setupDesktopTopNavButtons();
+  setupBuildTabButton(ui);
+  setupMenuTabButton(ui);
+  setupDesktopTopNavButtons(ui);
   ui.deviceFeatures.updateWakeLockState();
-  const basicOverview = ui.coreLoopUI?.getElement?.("basic_overview_section") ?? ui.DOMElements?.basic_overview_section;
+  const basicOverview = getUiElement(ui, "basic_overview_section") ?? ui.DOMElements?.basic_overview_section;
   if (basicOverview && ui.help_text?.basic_overview) {
     render(html`
       <h3>${ui.help_text.basic_overview.title}</h3>
@@ -379,11 +166,96 @@ function initMainLayoutInner(ui) {
   if (document.getElementById("reactor_wrapper")) {
     ui.gridScaler.resize();
   }
-  requestAnimationFrame((ts) => ui.coreLoopUI.runUpdateInterfaceLoop(ts));
-  if (ui.game && ui.game.engine) {
+  requestAnimationFrame((ts) => startRenderLoop(ui, ts));
+  if (ui.game && ui.game.engine && ui.game.state) {
     const status = ui.game.paused ? "paused" : (ui.game.engine.running ? "running" : "stopped");
-    ui.stateManager.setVar("engine_status", status);
+    ui.game.state.engine_status = status;
   }
+}
+
+function installGameStateEngineSync(ui) {
+  const game = ui.game;
+  if (!game?.state) return () => {};
+  const sync = () => {
+    const s = game.state;
+    const r = game.reactor;
+    if (r) {
+      r.auto_sell_enabled = !!s.auto_sell;
+      r.auto_buy_enabled = !!s.auto_buy;
+      r.heat_controlled = !!s.heat_control;
+    }
+    const p = !!s.pause;
+    if (game.paused !== p) {
+      game.paused = p;
+      const eng = game.engine;
+      if (eng) {
+        if (p) eng.stop();
+        else eng.start();
+      }
+    }
+  };
+  const keys = ["pause", "auto_sell", "auto_buy", "heat_control"];
+  const unsubs = keys.map((k) => subscribeKey(game.state, k, sync));
+  sync();
+  return () => unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+}
+
+export function dispatchUiIntent(game, ui, intent, e) {
+  if (!game || !ui) return;
+  const btn = e?.currentTarget;
+  if (intent === "SELL_POWER") {
+    const moneyBefore = game.state.current_money;
+    game.sell_action();
+    const moneyAfter = game.state.current_money;
+    const moneyGained = moneyAfter?.sub ? moneyAfter.sub(moneyBefore).toNumber() : Number(moneyAfter) - Number(moneyBefore);
+    if (moneyGained <= 0) return;
+    const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
+    const moneyDisplay = document.getElementById("control_deck_money");
+    const moneyTarget = isMobile
+      ? document.getElementById("mobile_passive_money_value")?.closest(".passive-top-money") ?? document.getElementById("mobile_passive_top_bar")
+      : moneyDisplay;
+    if (moneyDisplay) ui.showFloatingText(moneyDisplay, moneyGained);
+    if (moneyTarget && btn) {
+      ui.createBoltParticle(btn, moneyTarget);
+      ui.createSellSparks(btn, moneyTarget);
+    }
+    return;
+  }
+  if (intent === "VENT_HEAT") {
+    const maxH = toNumber(game.state?.max_heat ?? 0);
+    const curH = toNumber(game.state?.current_heat ?? 0);
+    const heatRatio = maxH > 0 ? curH / maxH : 0;
+    game.manual_reduce_heat_action();
+    if (btn) {
+      ui.createSteamParticles(btn, heatRatio);
+      if (btn.hasAttribute("data-vent-animate")) {
+        btn.classList.add("venting");
+        setTimeout(() => btn.classList.remove("venting"), 400);
+      }
+    }
+    return;
+  }
+  if (intent === "PAUSE_TOGGLE") {
+    game.state.pause = !game.state.pause;
+  }
+}
+
+export function installAppRootIntentDelegation(game, ui) {
+  const root = typeof document !== "undefined" ? document.getElementById("app_root") : null;
+  if (!root || root._intentDelegationBound) return () => {};
+  const handler = (ev) => {
+    const t = ev.target?.closest?.("[data-intent]");
+    if (!t || !root.contains(t)) return;
+    const id = t.getAttribute("data-intent");
+    if (!id) return;
+    dispatchUiIntent(game, ui, id, { currentTarget: t, target: ev.target });
+  };
+  root.addEventListener("click", handler);
+  root._intentDelegationBound = true;
+  return () => {
+    root.removeEventListener("click", handler);
+    root._intentDelegationBound = false;
+  };
 }
 
 class LayoutStorageUI {
@@ -427,12 +299,12 @@ class ObjectivesUI {
     this.controller = controller;
   }
   checkTextScrolling() {
-    const toastTitleEl = this.ui.coreLoopUI?.getElement?.("objectives_toast_title") ?? document.getElementById("objectives_toast_title");
+    const toastTitleEl = getUiElement(this.ui, "objectives_toast_title") ?? document.getElementById("objectives_toast_title");
     if (!toastTitleEl) return;
     applyObjectiveToastTitle({ objectives_toast_title: toastTitleEl });
   }
   markComplete() {
-    const toastBtn = this.ui.coreLoopUI?.getElement?.("objectives_toast_btn") ?? document.getElementById("objectives_toast_btn");
+    const toastBtn = getUiElement(this.ui, "objectives_toast_btn") ?? document.getElementById("objectives_toast_btn");
     if (!toastBtn) return;
     toastBtn.classList.add("is-complete");
     if (typeof this.animateObjectiveCompletion === "function") this.animateObjectiveCompletion();
@@ -463,8 +335,8 @@ class PauseStateUI {
     this.ui = ui;
   }
   updatePauseState() {
-    if (!this.ui.stateManager) return;
-    const statePaused = this.ui.stateManager.getVar("pause");
+    if (!this.ui.game?.state) return;
+    const statePaused = this.ui.game.state.pause;
     const isPaused = statePaused === undefined ? !!this.ui.game?.paused : !!statePaused;
     if (this.ui.uiState) this.ui.uiState.is_paused = !!isPaused;
     const doc = (typeof globalThis !== "undefined" && globalThis.document) || (typeof document !== "undefined" && document);
@@ -473,7 +345,7 @@ class PauseStateUI {
       const unpauseBtn = document.getElementById("unpause_btn");
       if (unpauseBtn && !unpauseBtn.hasAttribute("data-listener-added")) {
         unpauseBtn.addEventListener("click", () => {
-          this.ui.stateManager.setVar("pause", false);
+          this.ui.game.onToggleStateChange?.("pause", false);
         });
         unpauseBtn.setAttribute("data-listener-added", "true");
       }
@@ -505,15 +377,12 @@ export class UI {
     this.copyPasteUI = new CopyPasteUI(this);
     this.copyPaste = this.copyPasteUI;
     this.userAccountUI = new UserAccountUI(this);
-    this.infoBarUI = new InfoBarUI(this);
-    this.mobileInfoBarUI = new MobileInfoBarUI(this);
     this.pageSetupUI = new PageSetupUI(this);
-    this.partsPanelUI = new PartsPanelUI(this);
     this.objectiveController = new ObjectiveController({
       getGame: () => this.game,
       getUI: () => this,
       getStateManager: () => this.stateManager,
-      cacheDOMElements: () => this.coreLoopUI.cacheDOMElements(),
+      cacheDOMElements: () => cacheDomElements(this),
       lightVibration: () => this.deviceFeatures?.lightVibration?.(),
     });
     this.objectivesUI = new ObjectivesUI(this, this.objectiveController);
@@ -533,24 +402,15 @@ export class UI {
     emitEP: (t) => this.gridInteractionUI.emitEP(t),
   });
   this.audioController = new AudioController({ getAudioService: () => this.game?.audio, getUI: () => this });
-  this.controlDeckUI = new ControlDeckUI(this);
-    this.upgradesUI = new UpgradesUI(this);
     this.performanceUI = new PerformanceUI(this);
     this.meltdownUI = new MeltdownUI(this);
-    this.modalOrchestrationUI = new ModalOrchestrationUI(this);
-    this.coreLoopUI = new CoreLoopUI(this);
     this.layoutStorageUI = new LayoutStorageUI(this);
-    this.pageInitUI = new PageInitUI(this);
-    this.particleEffectsUI = new ParticleEffectsUI(this);
     this.componentRenderingUI = new ComponentRenderingUI(this);
-    this.deviceFeatures = new DeviceFeaturesUI(this);
+    this.deviceFeatures = bindDeviceFeatures(this);
     this.pwaDisplayModeUI = new PwaDisplayModeUI(this);
     this.quickStartUI = new QuickStartUI(this);
-    this.navIndicatorsUI = new NavIndicatorsUI(this);
     this.pauseStateUI = new PauseStateUI(this);
     this.clipboardUI = new ClipboardUI(this);
-    this.tabSetupUI = new TabSetupUI(this);
-    this.visualEventRendererUI = new VisualEventRendererUI(this);
 
     this.ctrl9HoldTimer = null;
     this.ctrl9HoldStartTime = null;
@@ -570,15 +430,91 @@ export class UI {
 
     this._visualPool = { floatingText: [], steamParticle: [], bolt: [] };
     this.detachGameEventListeners = null;
+    this._unmounts = [];
     this._icons = {
       power: "img/ui/icons/icon_power.png",
       heat: "img/ui/icons/icon_heat.png",
     };
+    this.updateQuickSelectSlots = () => updateQuickSelectSlots(this);
+    this.updatePartsPanelBodyClass = () => updatePartsPanelBodyClass(this);
+    this.refreshPartsPanel = () => refreshPartsPanel(this);
+    this.getUpgradeContainer = (k) => getUpgradeSectionContainer(this, k);
+    this.appendUpgrade = (k, el) => appendUpgradeToSection(this, k, el);
+    this.cacheDomElements = (pageId) => cacheDomElements(this, pageId);
+    this.getUiElement = (id) => getUiElement(this, id);
+    this.snapUiDisplayValuesFromState = () => snapUiDisplayValuesFromState(this);
+    this.applyUiStateToDom = () => applyUiStateToDom(this);
+    this.processUiUpdateQueue = () => processUiUpdateQueue(this);
+    this.updateUiRollingNumbers = (dt) => updateUiRollingNumbers(this, dt);
+    this.startRenderLoop = (ts) => startRenderLoop(this, ts);
   }
 
   _renderVisualEvents(eventBufferDescriptor) {
-    this.visualEventRendererUI.render(eventBufferDescriptor);
+    if (!eventBufferDescriptor || eventBufferDescriptor.head === eventBufferDescriptor.tail) return;
+    const { buffer, head, tail, max } = eventBufferDescriptor;
+    const tileset = this.game?.tileset;
+    if (!tileset || !buffer) return;
+    let pos = tail;
+    while (pos !== head) {
+      const idx = pos * 4;
+      const typeId = buffer[idx];
+      const row = buffer[idx + 1];
+      const col = buffer[idx + 2];
+      const t = tileset.getTile(row, col);
+      if (t) {
+        if (typeId === 1) {
+          this.gridController.spawnTileIcon("power", t, null);
+        } else if (typeId === 2 && t.part?.category === "vent") {
+          this.gridController.blinkVent(t);
+        }
+      }
+      pos = (pos + 1) % max;
+    }
+    if (this.game?.engine && typeof this.game.engine.ackEvents === "function") {
+      this.game.engine.ackEvents(head);
+    }
   }
+
+  showFloatingText(container, amount) {
+    if (!container || amount <= 0) return;
+    const parent = container.querySelector(".floating-text-container");
+    if (!parent) return;
+    const pool = this._visualPool;
+    const textEl = pool.floatingText.pop() || Object.assign(document.createElement("div"), { className: "floating-text" });
+    textEl.textContent = `+$${fmt(amount)}`;
+    parent.appendChild(textEl);
+    setTimeout(() => {
+      textEl.remove();
+      pool.floatingText.push(textEl);
+    }, 1000);
+  }
+
+  showFloatingTextAtTile(tile, amount) {
+    if (!tile || amount <= 0) return;
+    const overlay = this.heatVisualsUI._ensureOverlay();
+    if (!overlay) return;
+    const pos = this.heatVisualsUI._tileCenterToOverlayPosition(tile.row, tile.col);
+    const pool = this._visualPool;
+    const textEl = pool.floatingText.pop() || Object.assign(document.createElement("div"), { className: "floating-text" });
+    textEl.textContent = `+$${fmt(amount)}`;
+    textEl.style.left = `${pos.x}px`;
+    textEl.style.top = `${pos.y}px`;
+    overlay.appendChild(textEl);
+    setTimeout(() => {
+      textEl.remove();
+      pool.floatingText.push(textEl);
+    }, 1000);
+  }
+
+  initParticleCanvas() {}
+
+  resizeParticleCanvas() {}
+
+  createSteamParticles() {}
+
+  createBoltParticle() {}
+
+  createSellSparks() {}
 
   _cleanupVentRotor(tile) {
     this.gridInteractionUI._cleanupVentRotor(tile);
@@ -632,7 +568,14 @@ export class UI {
   }
 
   initMainLayout() {
+    if (typeof this._gameStateSyncTeardown === "function") {
+      this._gameStateSyncTeardown();
+      this._gameStateSyncTeardown = null;
+    }
     initMainLayoutInner(this);
+    if (this.game?.state) {
+      this._gameStateSyncTeardown = installGameStateEngineSync(this);
+    }
     this._uiStateTeardown = initUIStateSubscriptions(this.uiState, this);
   }
 
@@ -655,8 +598,48 @@ export class UI {
     this.stateManager.setGame(game);
     game.on("tickRecorded", () => this.performanceUI?.recordTick?.());
     this.meltdownUI.subscribeToMeltdownEvents(game);
-    this.modalOrchestrationUI.subscribeToContextModalEvents(game);
+    subscribeToContextModalEvents(this, game);
     this.audioController.attach(game);
+    const audioUnmount = attachAudioSys(() => this.game?.audio, () => this.game);
+    if (typeof audioUnmount === "function") this._unmounts.push(audioUnmount);
+    const heatStripHost = typeof document !== "undefined" ? document.getElementById("info_bar") : null;
+    if (heatStripHost && !document.getElementById("ui_views_heat_strip_host")) {
+      const h = document.createElement("div");
+      h.id = "ui_views_heat_strip_host";
+      h.className = "ui-views-heat-strip-host";
+      heatStripHost.insertBefore(h, heatStripHost.firstChild);
+      const heatUnmount = mountHeatRatioStrip(game, h);
+      if (typeof heatUnmount === "function") this._unmounts.push(heatUnmount);
+    }
+    if (heatStripHost && !document.getElementById("ui_views_engine_chip_host")) {
+      const ec = document.createElement("div");
+      ec.id = "ui_views_engine_chip_host";
+      ec.className = "ui-views-engine-chip-host";
+      const afterHeat = document.getElementById("ui_views_heat_strip_host");
+      if (afterHeat?.parentNode) {
+        afterHeat.after(ec);
+      } else {
+        heatStripHost.insertBefore(ec, heatStripHost.firstChild);
+      }
+      const engineUnmount = mountEngineStatusChip(game, ec);
+      if (typeof engineUnmount === "function") this._unmounts.push(engineUnmount);
+    }
+    if (heatStripHost && !document.getElementById("ui_views_mute_host")) {
+      const mh = document.createElement("div");
+      mh.id = "ui_views_mute_host";
+      mh.className = "ui-views-mute-host";
+      const afterEngine = document.getElementById("ui_views_engine_chip_host");
+      const afterHeat = document.getElementById("ui_views_heat_strip_host");
+      if (afterEngine?.parentNode) {
+        afterEngine.after(mh);
+      } else if (afterHeat?.parentNode) {
+        afterHeat.after(mh);
+      } else {
+        heatStripHost.insertBefore(mh, heatStripHost.firstChild);
+      }
+      const muteUnmount = mountMuteIndicator(mh);
+      if (typeof muteUnmount === "function") this._unmounts.push(muteUnmount);
+    }
     this.inputHandler.setup();
     this.modalOrchestrator.init(this);
     this.gridInteractionUI.clearAllActiveAnimations();
@@ -664,7 +647,7 @@ export class UI {
   }
 
   forceReactorRealignment() {
-    const reactor = this.pageInitUI?.getReactor?.() ?? this.DOMElements?.reactor;
+    const reactor = getPageReactor(this) ?? this.DOMElements?.reactor;
     if (!this.game || !reactor) return;
     const originalDisplay = reactor.style.display;
     reactor.style.display = "none";
@@ -678,16 +661,23 @@ export class UI {
     setupKeyboardShortcuts(this);
     setupCtrl9Handlers(this);
     setupResizeListeners(this);
-    this.infoBarUI.setupInfoBarButtons();
+    mountInfoBar(this);
     this.copyPaste.setupCopyStateButton();
     this.objectivesUI.setupObjectivesListeners();
+    if (this.game) {
+      if (typeof this._teardownIntentDelegation === "function") {
+        this._teardownIntentDelegation();
+        this._teardownIntentDelegation = null;
+      }
+      this._teardownIntentDelegation = installAppRootIntentDelegation(this.game, this);
+    }
   }
 
   static get MY_LAYOUTS_STORAGE_KEY() { return LayoutStorageUI.MY_LAYOUTS_STORAGE_KEY; }
 
   initializeControlDeck() {
     if (window.innerWidth > MOBILE_BREAKPOINT_PX) return;
-    this.mobileInfoBarUI.updateControlDeckValues();
+    syncMobileControlDeckMounts(this);
   }
 
   async resetReactor() {
@@ -710,55 +700,24 @@ export class UI {
     };
   }
 
+  updateNavIndicators() {
+    paintNavAffordabilityDots(this);
+  }
+
   cleanup() {
     if (this.update_interface_task) {
       cancelAnimationFrame(this.update_interface_task);
       this.update_interface_task = null;
     }
-    if (typeof this.controlDeckUI?._controlsNavUnmount === "function") {
-      this.controlDeckUI._controlsNavUnmount();
-      this.controlDeckUI._controlsNavUnmount = null;
-    }
-    if (typeof this.controlDeckUI?._statsBarUnmount === "function") {
-      this.controlDeckUI._statsBarUnmount();
-      this.controlDeckUI._statsBarUnmount = null;
-    }
-    if (typeof this.controlDeckUI?._epUnmount === "function") {
-      this.controlDeckUI._epUnmount();
-      this.controlDeckUI._epUnmount = null;
-    }
-    if (typeof this.controlDeckUI?._engineStatusUnmount === "function") {
-      this.controlDeckUI._engineStatusUnmount();
-      this.controlDeckUI._engineStatusUnmount = null;
-    }
-    if (typeof this.controlDeckUI?._tickCadenceNavUnmount === "function") {
-      this.controlDeckUI._tickCadenceNavUnmount();
-      this.controlDeckUI._tickCadenceNavUnmount = null;
-    }
+    this._unmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+    this._unmounts = [];
+    this._sectionCountsMountedUpgrades = false;
+    this._sectionCountsMountedResearch = false;
     if (this.objectiveController?.unmount) this.objectiveController.unmount();
-    if (typeof this.partsPanelUI?._partsPanelUnmount === "function") {
-      this.partsPanelUI._partsPanelUnmount();
-      this.partsPanelUI._partsPanelUnmount = null;
-    }
     this.meltdownUI.cleanup();
-    this.mobileInfoBarUI?.cleanup?.();
     if (typeof this.copyPasteUI?.teardownBlueprintPlanner === "function") {
       this.copyPasteUI.teardownBlueprintPlanner();
     }
-    if (typeof this.copyPasteUI?._copyStateUnmount === "function") {
-      this.copyPasteUI._copyStateUnmount();
-      this.copyPasteUI._copyStateUnmount = null;
-    }
-    if (typeof this._sectionCountsUnmountUpgrades === "function") {
-      this._sectionCountsUnmountUpgrades();
-      this._sectionCountsUnmountUpgrades = null;
-    }
-    this._sectionCountsMountedUpgrades = false;
-    if (typeof this._sectionCountsUnmountResearch === "function") {
-      this._sectionCountsUnmountResearch();
-      this._sectionCountsUnmountResearch = null;
-    }
-    this._sectionCountsMountedResearch = false;
     if (this._affordabilityBannerUnmounts?.length) {
       this._affordabilityBannerUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
       this._affordabilityBannerUnmounts = [];
@@ -766,19 +725,30 @@ export class UI {
     this._affordabilityBannerMountedUpgrades = false;
     this._affordabilityBannerMountedResearch = false;
     this._versionDisplayMounted = false;
-    this.navIndicatorsUI?.teardownAffordabilityIndicators?.();
-    this.infoBarUI?.teardown?.();
+    teardownAffordabilityIndicators(this);
+    teardownTabSetupUI(this);
     this.userAccountUI?.teardownUserAccountButton?.();
-    if (this.game && this.modalOrchestrationUI.unsubscribeContextModal) this.modalOrchestrationUI.unsubscribeContextModal(this.game);
+    if (this.game) unsubscribeContextModalEvents(this, this.game);
     if (typeof this.detachGameEventListeners === "function") {
       this.detachGameEventListeners();
       this.detachGameEventListeners = null;
     }
     if (this.stateManager?.teardown) this.stateManager.teardown();
+    if (typeof this._teardownIntentDelegation === "function") {
+      this._teardownIntentDelegation();
+      this._teardownIntentDelegation = null;
+    }
+    if (typeof this._gameStateSyncTeardown === "function") {
+      this._gameStateSyncTeardown();
+      this._gameStateSyncTeardown = null;
+    }
     if (typeof this._uiStateTeardown === "function") {
       this._uiStateTeardown();
       this._uiStateTeardown = null;
     }
     if (this.game?.tooltip_manager?.teardown) this.game.tooltip_manager.teardown();
+    document.getElementById("ui_views_mute_host")?.remove();
+    document.getElementById("ui_views_engine_chip_host")?.remove();
+    document.getElementById("ui_views_heat_strip_host")?.remove();
   }
 }

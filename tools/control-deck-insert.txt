@@ -1,0 +1,241 @@
+function controlDeckExoticParticlesRenderTemplate(state) {
+  return controlDeckExoticParticlesTemplate({
+    currentEp: fmt(state.current_exotic_particles ?? 0),
+    totalEp: fmt(state.total_exotic_particles ?? 0),
+  });
+}
+
+export function mountExoticParticlesDisplayIfNeeded(ui) {
+  if (ui._controlDeckEpComponent) return;
+  const epRoot = document.getElementById("exotic_particles_display");
+  if (!epRoot || !ui.game?.state) return;
+  ui._controlDeckEpComponent = new ReactiveLitComponent(
+    ui.game.state,
+    ["current_exotic_particles", "total_exotic_particles"],
+    (state) => controlDeckExoticParticlesRenderTemplate(state),
+    epRoot
+  );
+  ui._unmounts.push(ui._controlDeckEpComponent.mount());
+}
+
+function mountStatsBarReactive(ui) {
+  const root = document.getElementById("reactor_stats");
+  if (!root || !ui.game?.state) return;
+  const state = ui.game.state;
+  render(controlDeckStatsBarTemplate(), root);
+  const ventEl = document.getElementById("stats_vent");
+  const powerEl = document.getElementById("stats_power");
+  const heatEl = document.getElementById("stats_heat");
+  const hullEl = document.getElementById("stats_hull");
+  const last = { vent: null, power: null, heat: null, hull: null };
+  const first = { vent: true, power: true, heat: true, hull: true };
+  const sync = () => {
+    const v = fmt(state.stats_vent ?? 0, 0);
+    const p = fmt(state.stats_power ?? 0, 0);
+    const h = fmt(state.stats_heat_generation ?? 0, 0);
+    const maxH = toNumber(state.max_heat ?? 0);
+    const cur = toNumber(state.current_heat ?? 0);
+    const hullPct = maxH > 0 ? (cur / maxH) * 100 : 0;
+    const hullText = `${fmt(hullPct, 1)}%`;
+    const apply = (el, key, text) => {
+      if (!el) return;
+      if (first[key]) {
+        el.textContent = text;
+        first[key] = false;
+        last[key] = text;
+        return;
+      }
+      if (last[key] === text) return;
+      last[key] = text;
+      runCathodeScramble(el, text, { durationMs: 150 });
+    };
+    apply(ventEl, "vent", v);
+    apply(powerEl, "power", p);
+    apply(heatEl, "heat", h);
+    apply(hullEl, "hull", hullText);
+  };
+  let scheduled = false;
+  const schedule = () => {
+    if (scheduled) return;
+    scheduled = true;
+    queueMicrotask(() => {
+      scheduled = false;
+      sync();
+    });
+  };
+  const unsubs = [
+    subscribeKey(state, "stats_vent", schedule),
+    subscribeKey(state, "stats_power", schedule),
+    subscribeKey(state, "stats_heat_generation", schedule),
+    subscribeKey(state, "current_heat", schedule),
+    subscribeKey(state, "max_heat", schedule),
+  ];
+  sync();
+  ui._unmounts.push(() => {
+    unsubs.forEach((u) => { try { u(); } catch (_) {} });
+    [ventEl, powerEl, heatEl, hullEl].forEach((el) => cancelCathodeScramble(el));
+  });
+  mountExoticParticlesDisplayIfNeeded(ui);
+}
+
+function mountEngineStatusReactive(ui) {
+  const root = document.getElementById("engine_status_indicator_root");
+  if (!root || !ui.game?.state) return;
+  const renderFn = (state) => {
+    const statusClass = classMap({
+      "engine-running": state.engine_status === "running",
+      "engine-paused": state.engine_status === "paused",
+      "engine-stopped": state.engine_status === "stopped",
+      "engine-tick": state.engine_status === "tick",
+      "engine-simulation-error": state.engine_status === "simulation_error",
+    });
+    return engineStatusIndicatorTemplate({ statusClass });
+  };
+  ui._engineStatusComponent = new ReactiveLitComponent(
+    ui.game.state,
+    ["engine_status", "simulation_error_message"],
+    renderFn,
+    root
+  );
+  ui._unmounts.push(ui._engineStatusComponent.mount());
+}
+
+function mountTickCadenceNav(ui) {
+  if (typeof ui._tickCadenceNavUnmount === "function") {
+    ui._tickCadenceNavUnmount();
+    ui._tickCadenceNavUnmount = null;
+  }
+  const el = document.getElementById("tps_display");
+  if (!el || !ui.game?.on) return;
+  const update = () => {
+    el.textContent = formatSimulationTickLine(ui.game);
+  };
+  update();
+  ui.game.on("tickRecorded", update);
+  const onPatch = (patch) => {
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) update();
+  };
+  ui.game.on("statePatch", onPatch);
+  ui._tickCadenceNavUnmount = () => {
+    ui.game.off("tickRecorded", update);
+    ui.game.off("statePatch", onPatch);
+  };
+  if (!ui._tickCadenceNavCleanupRegistered) {
+    ui._tickCadenceNavCleanupRegistered = true;
+    ui._unmounts.push(() => {
+      if (typeof ui._tickCadenceNavUnmount === "function") {
+        ui._tickCadenceNavUnmount();
+        ui._tickCadenceNavUnmount = null;
+      }
+    });
+  }
+}
+
+export function initControlDeckVarObjs(ui) {
+  mountStatsBarReactive(ui);
+  mountEngineStatusReactive(ui);
+  mountTickCadenceNav(ui);
+  ui.var_objs_config = {
+    pause: {
+      id: "pause_toggle",
+      stateProperty: "pause",
+      onupdate: (val) => {
+        if (val) ui.gridInteractionUI.clearAllActiveAnimations();
+        if (ui.uiState) ui.uiState.is_paused = !!val;
+        if (ui.game && ui.game.engine) {
+          if (val) {
+            ui.game.engine.stop();
+            ui.game.state.engine_status = "paused";
+          } else {
+            ui.game.engine.start();
+            ui.game.state.engine_status = "running";
+          }
+        }
+        ui.deviceFeatures.updateWakeLockState();
+        ui.pauseStateUI?.updatePauseState?.();
+      },
+    },
+    melting_down: {
+      onupdate: (val) => {
+        if (val) ui.gridInteractionUI.clearAllActiveAnimations();
+      },
+    },
+  };
+  ui.stateManager?.setupStateSubscriptions?.();
+}
+
+function buildControlsNavTemplate(ui, state) {
+  const toggleHandler = (stateProperty) => () => {
+    const currentState = state[stateProperty];
+    const newState = !currentState;
+    logger.log("debug", "ui", `[TOGGLE] Button "${stateProperty}" clicked: ${currentState ? "ON" : "OFF"} -> ${newState ? "ON" : "OFF"}`);
+    ui.game.onToggleStateChange?.(stateProperty, newState);
+  };
+  const hasAutoSellUpgrade = ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
+  const hasAutoBuyUpgrade = ui.game?.upgradeset?.getUpgrade("auto_buy_operator")?.level > 0;
+  const hasHeatControlUpgrade = ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
+  return controlDeckControlsNavTemplate({
+    autoSellOn: !!state.auto_sell && hasAutoSellUpgrade,
+    autoBuyOn: !!state.auto_buy && hasAutoBuyUpgrade,
+    heatControlOn: !!state.heat_control && hasHeatControlUpgrade,
+    pauseOn: !!state.pause,
+    accountTitle: ui.uiState?.user_account_display?.title ?? "Account",
+    accountIcon: ui.uiState?.user_account_display?.icon ?? "\uD83D\uDC64",
+    onToggleAutoSell: hasAutoSellUpgrade ? toggleHandler("auto_sell") : null,
+    onToggleAutoBuy: hasAutoBuyUpgrade ? toggleHandler("auto_buy") : null,
+    onToggleHeatControl: hasHeatControlUpgrade ? toggleHandler("heat_control") : null,
+    onTogglePause: toggleHandler("pause"),
+  });
+}
+
+export function initializeControlDeckToggleButtons(ui) {
+  const root = document.getElementById("controls_nav_root");
+  if (root && ui.game?.state) {
+    const renderFn = () => buildControlsNavTemplate(ui, ui.game.state);
+    ui._unmounts.push(ReactiveLitComponent.mountMulti(
+      [
+        { state: ui.game.state, keys: ["auto_sell", "auto_buy", "heat_control", "pause"] },
+        ...(ui.uiState ? [{ state: ui.uiState, keys: ["user_account_display"] }] : []),
+      ],
+      renderFn,
+      root
+    ));
+  } else if (root) {
+    render(buildControlsNavTemplate(ui, {
+      auto_sell: false,
+      auto_buy: true,
+      heat_control: false,
+      pause: false,
+    }), root);
+  }
+}
+
+export function syncToggleStatesFromGame(ui) {
+  if (!ui.game) {
+    logger.log("warn", "ui", "syncToggleStatesFromGame called but game is not available");
+    return;
+  }
+  const toggleMappings = {
+    auto_sell: () => ui.game.reactor?.auto_sell_enabled ?? false,
+    auto_buy: () => ui.game.reactor?.auto_buy_enabled ?? false,
+    heat_control: () => ui.game.reactor?.heat_controlled ?? false,
+    pause: () => ui.game.paused ?? false,
+  };
+  for (const [stateProperty, getValue] of Object.entries(toggleMappings)) {
+    const gameValue = getValue();
+    const currentState = ui.game.state[stateProperty];
+    if (currentState !== gameValue) {
+      logger.log("debug", "ui", `[TOGGLE] Syncing "${stateProperty}" from game: ${currentState} -> ${gameValue}`);
+      ui.game.onToggleStateChange?.(stateProperty, gameValue);
+    }
+  }
+}
+
+export function updateControlDeckPercentageBar(ui, currentKey, maxKey, domElement) {
+  if (!domElement) return;
+  const st = ui.game?.state;
+  const current = toNumber(st?.[currentKey] ?? 0);
+  const max = toNumber(st?.[maxKey] ?? 1) || 1;
+  domElement.style.width = `${Math.min(100, Math.max(0, (current / max) * 100))}%`;
+}
+

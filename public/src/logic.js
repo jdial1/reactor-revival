@@ -100,7 +100,6 @@ import Decimal, {
   vuSegmentRatio01,
 } from "./utils.js";
 import { buildOrthogonalAdjacencyCSR, adjacencyKey } from "./spatial-adjacency.js";
-import { runPartStatMiddlewares, snapshotPartStats } from "./part-stat-pipeline.js";
 import {
   GameActionSchema,
   ACTION_SCHEMA_REGISTRY,
@@ -110,7 +109,6 @@ import {
   snapshot,
   createGameState,
   GameSaveManager,
-  SaveOrchestrator,
   UnlockManager,
   runRebootActionKeepEp,
   runRebootActionDiscardEp,
@@ -139,7 +137,7 @@ import {
 import { getValidatedGameData } from "./services.js";
 import { renderToNode, PartButton, UpgradeCard } from "./components/button-factory.js";
 import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
-import { serializeReactor, deserializeReactor, calculateLayoutCostBreakdown, calculateLayoutCost, renderLayoutPreview, buildPartSummary, buildAffordableSet, filterLayoutByCheckedTypes, clipToGrid as clipToGridFn, calculateCurrentSellValue, buildAffordableLayout as buildAffordableLayoutFn, buildPasteState as buildPasteStateFn, validatePasteResources, getCostBreakdown } from "./components/ui-components.js";
+import { applyBlueprintLayout } from "./components/ui-components.js";
 
 const rawBalance = {
   valveTopupCapRatio: 0.2,
@@ -736,8 +734,6 @@ function recalculatePartStats(part) {
   applyMultipliersToPart(part, game, levels, m);
   applyPerpetualFlag(part, game);
   applyHeatPowerMultiplier(part, game);
-  part._statPipelineTrace = { levels, multipliers: m, output: snapshotPartStats(part) };
-  runPartStatMiddlewares(part, { game, levels, multipliers: m });
 }
 
 function getBaseDescriptionTemplate(part) {
@@ -1268,97 +1264,6 @@ export class PartSet {
 
   getPartsByTier(tier) {
     return this.getPartsByLevel(tier);
-  }
-}
-
-
-export class BlueprintService {
-  constructor(game) {
-    this.game = game;
-  }
-
-  serialize() {
-    return serializeReactor(this.game);
-  }
-
-  deserialize(str) {
-    return deserializeReactor(str);
-  }
-
-  getCostBreakdown(layout) {
-    return calculateLayoutCostBreakdown(this.game?.partset, layout);
-  }
-
-  getTotalCost(layout) {
-    return calculateLayoutCost(this.game?.partset, layout);
-  }
-
-  getPartSummary(layout) {
-    return buildPartSummary(this.game?.partset, layout);
-  }
-
-  getAffordableSet(affordableLayout) {
-    return buildAffordableSet(affordableLayout);
-  }
-
-  filterByTypes(layout, checkedTypes) {
-    return filterLayoutByCheckedTypes(layout, checkedTypes);
-  }
-
-  clipToGrid(layout, rows, cols) {
-    return clipToGridFn(layout, rows ?? this.game.rows, cols ?? this.game.cols);
-  }
-
-  getCurrentSellValue() {
-    return calculateCurrentSellValue(this.game?.tileset);
-  }
-
-  buildAffordableLayout(filteredLayout, sellCredit) {
-    return buildAffordableLayoutFn(filteredLayout, sellCredit, this.game.rows, this.game.cols, this.game);
-  }
-
-  buildPasteState(layout, checkedTypes, sellCheckboxChecked) {
-    return buildPasteStateFn(layout, checkedTypes, this.game, this.game?.tileset, sellCheckboxChecked);
-  }
-
-  validateResources(breakdown, sellCredit) {
-    return validatePasteResources(
-      breakdown,
-      sellCredit,
-      this.game.state.current_money,
-      this.game.state.current_exotic_particles ?? 0
-    );
-  }
-
-  renderPreview(layout, canvasEl, affordableSet) {
-    return renderLayoutPreview(this.game?.partset, layout, canvasEl, affordableSet);
-  }
-
-  applyLayout(layout, skipCostDeduction = false) {
-    const clipped = this.clipToGrid(layout);
-    this.game.tileset.tiles_list.forEach(tile => {
-      if (tile.enabled && tile.part) tile.clearPart();
-    });
-
-    clipped.flatMap((row, r) => (row || []).map((cell, c) => (cell?.id ? { r, c, cell } : null)).filter(Boolean))
-      .forEach(({ r, c, cell }) => {
-        const part = this.game.partset.getPartById(cell.id);
-        if (part) {
-          const tile = this.game.tileset.getTile(r, c);
-          if (tile?.enabled) tile.setPart(part);
-        }
-      });
-
-    if (!skipCostDeduction) {
-      const { money: costMoney, ep: costEp } = getCostBreakdown(clipped, this.game.partset);
-      if (costMoney > 0 && this.game.state.current_money) {
-        updateDecimal(this.game.state, "current_money", (d) => d.sub(costMoney));
-      }
-      if (costEp > 0 && this.game.state.current_exotic_particles) {
-        updateDecimal(this.game.state, "current_exotic_particles", (d) => d.sub(costEp));
-      }
-    }
-    return clipped;
   }
 }
 
@@ -1911,13 +1816,11 @@ function runPurchaseUpgrade(upgradeset, upgradeId) {
   if (ecost.gt(0)) {
     if (toDecimal(upgradeset.game.state.current_exotic_particles).gte(ecost)) {
       updateDecimal(upgradeset.game.state, "current_exotic_particles", (d) => d.sub(ecost));
-      upgradeset.game.ui?.stateManager?.setVar("current_exotic_particles", upgradeset.game.state.current_exotic_particles);
       purchased = true;
     }
   } else {
     if (toDecimal(upgradeset.game.state.current_money).gte(cost)) {
       updateDecimal(upgradeset.game.state, "current_money", (d) => d.sub(cost));
-      upgradeset.game.ui?.stateManager?.setVar("current_money", upgradeset.game.state.current_money);
       purchased = true;
     }
   }
@@ -2285,62 +2188,6 @@ function formatDisplayInfo(manager) {
   return buildDisplayInfoFromProgress(objective, chapterIndex, chapterSize, completedInChapter, progress);
 }
 
-class ObjectiveTracker {
-  constructor(manager) { this.manager = manager; }
-  scheduleNextCheck() { const manager = this.manager; clearTimeout(manager.objective_timeout); if (manager.disableTimers) return; manager.objective_timeout = setTimeout(() => manager.check_current_objective(), manager.objective_interval); }
-  setObjective(objective_index, skip_wait = false) {
-    const manager = this.manager;
-    if (!manager.objectives_data || manager.objectives_data.length === 0) return;
-    if (typeof objective_index !== "number" || Number.isNaN(objective_index)) { const parsed = parseInt(objective_index, 10); objective_index = Number.isNaN(parsed) ? 0 : Math.max(0, parsed); } else { objective_index = Math.floor(objective_index); }
-    if (objective_index < 0) objective_index = 0;
-    const maxValidIndex = manager.objectives_data.length - 1;
-    if (objective_index > maxValidIndex) objective_index = maxValidIndex;
-    manager.current_objective_index = objective_index;
-    const nextObjective = manager.objectives_data[manager.current_objective_index];
-    clearTimeout(manager.objective_timeout);
-    const updateLogic = () => { if (nextObjective && nextObjective.checkId === "allObjectives") { manager._loadInfiniteObjective(); return; } if (nextObjective) manager._loadNormalObjective(nextObjective); else manager._loadAllCompletedObjective(); };
-    if (skip_wait) updateLogic(); else { manager.objective_unloading = true; manager._emitObjectiveUnloaded(); manager.objective_timeout = setTimeout(updateLogic, manager.objective_wait); }
-  }
-}
-
-class ObjectiveEvaluator {
-  constructor(manager) { this.manager = manager; }
-  checkAndAutoComplete() {
-    const manager = this.manager;
-    if (typeof window !== "undefined" && window.location && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") && typeof process === "undefined") { manager.scheduleNextCheck(); return; }
-    if (manager.current_objective_index === 0 && !manager.game._saved_objective_index) { manager.scheduleNextCheck(); return; }
-    while (manager.current_objective_def && manager.current_objective_def.checkId !== "allObjectives") {
-      manager._syncActiveObjectiveToState?.();
-      const checkFn = getObjectiveCheck(manager.current_objective_def.checkId);
-      const autoResult = checkFn?.(manager.game);
-      if (autoResult?.completed) {
-        const wasAlreadyCompleted = manager.objectives_data?.[manager.current_objective_index]?.completed;
-        manager.current_objective_def.completed = true;
-        if (manager.objectives_data?.[manager.current_objective_index]) manager.objectives_data[manager.current_objective_index].completed = true;
-        if (manager.game?.saveManager) void manager.game.saveManager.autoSave();
-        if (!wasAlreadyCompleted) { manager._emitObjectiveCompleted(); if (manager.current_objective_def.reward) updateDecimal(manager.game.state, "current_money", (d) => d.add(toDecimal(manager.current_objective_def.reward))); else if (manager.current_objective_def.ep_reward) { manager.game.exoticParticleManager.exotic_particles = manager.game.exoticParticleManager.exotic_particles.add(manager.current_objective_def.ep_reward); updateDecimal(manager.game.state, "total_exotic_particles", (d) => d.add(manager.current_objective_def.ep_reward)); updateDecimal(manager.game.state, "current_exotic_particles", (d) => d.add(manager.current_objective_def.ep_reward)); } }
-        manager.current_objective_index++; const maxValidIndex = manager.objectives_data.length - 1; if (manager.current_objective_index > maxValidIndex) manager.current_objective_index = maxValidIndex;
-        manager.set_objective(manager.current_objective_index, true);
-        if (manager.game?.saveManager) void manager.game.saveManager.autoSave();
-      } else { manager.scheduleNextCheck(); break; }
-    }
-  }
-  checkCurrentObjective() {
-    const manager = this.manager;
-    if (!manager.game || manager.game.paused || !manager.current_objective_def) { manager.scheduleNextCheck(); return; }
-    const checkFn = getObjectiveCheck(manager.current_objective_def.checkId);
-    const result = checkFn?.(manager.game);
-    if (!result?.completed) { manager.scheduleNextCheck(); return; }
-    manager.current_objective_def.completed = true;
-    if (manager.objectives_data?.[manager.current_objective_index]) manager.objectives_data[manager.current_objective_index].completed = true;
-    if (manager.game?.saveManager) void manager.game.saveManager.autoSave();
-    manager._emitObjectiveCompleted();
-    const displayObjective = { ...manager.current_objective_def, title: typeof manager.current_objective_def.title === "function" ? manager.current_objective_def.title() : manager.current_objective_def.title, completed: true };
-    manager._emitObjectiveLoaded(displayObjective);
-    clearTimeout(manager.objective_timeout);
-  }
-}
-
 const partMappings = { "Quad Plutonium Cells": "./img/parts/cell_2_4.png", "Quad Thorium Cells": "./img/parts/cell_3_4.png", "Quad Seaborgium Cells": "./img/parts/cell_4_4.png", "Quad Dolorium Cells": "./img/parts/cell_5_4.png", "Quad Nefastium Cells": "./img/parts/cell_6_4.png", "Particle Accelerators": "./img/parts/accelerator_1.png", "Plutonium Cells": "./img/parts/cell_2_1.png", "Thorium Cells": "./img/parts/cell_3_1.png", "Seaborgium Cells": "./img/parts/cell_4_1.png", "Dolorium Cells": "./img/parts/cell_5_1.png", "Nefastium Cells": "./img/parts/cell_6_1.png", "Heat Vent": "./img/parts/vent_1.png", "Capacitors": "./img/parts/capacitor_1.png", "Dual Cell": "./img/parts/cell_1_2.png", "Uranium Cell": "./img/parts/cell_1_1.png", "Capacitor": "./img/parts/capacitor_1.png", "Cells": "./img/parts/cell_1_1.png", "Cell": "./img/parts/cell_1_1.png", "experimental part": "./img/parts/xcell_1_1.png", "Improved Chronometers upgrade": "./img/upgrades/upgrade_flux.png", "Improved Chronometers": "./img/upgrades/upgrade_flux.png", "Power": "./img/ui/icons/icon_power.png", "Heat": "./img/ui/icons/icon_heat.png", "Exotic Particles": "🧬" };
 
 export function addPartIconsToTitle(game, title) {
@@ -2433,8 +2280,6 @@ export class ObjectiveManager {
     this._lastInfiniteHeat = 0;
     this._lastInfiniteEP = 0;
     this._infiniteChallengeIndex = 0;
-    this.tracker = new ObjectiveTracker(this);
-    this.evaluator = new ObjectiveEvaluator(this);
     this._sustainedTracking = {
       sustainedPower1k: { startTick: 0 },
       masterHighHeat: { startTick: 0 },
@@ -2600,16 +2445,74 @@ export class ObjectiveManager {
     }, 0);
   }
 
+  scheduleNextCheck() {
+    clearTimeout(this.objective_timeout);
+    if (this.disableTimers) return;
+    this.objective_timeout = setTimeout(() => this.check_current_objective(), this.objective_interval);
+  }
+
   checkAndAutoComplete() {
-    return this.evaluator.checkAndAutoComplete();
+    if (typeof window !== "undefined" && window.location && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") && typeof process === "undefined") {
+      this.scheduleNextCheck();
+      return;
+    }
+    if (this.current_objective_index === 0 && !this.game._saved_objective_index) {
+      this.scheduleNextCheck();
+      return;
+    }
+    while (this.current_objective_def && this.current_objective_def.checkId !== "allObjectives") {
+      this._syncActiveObjectiveToState?.();
+      const checkFn = getObjectiveCheck(this.current_objective_def.checkId);
+      const autoResult = checkFn?.(this.game);
+      if (autoResult?.completed) {
+        const wasAlreadyCompleted = this.objectives_data?.[this.current_objective_index]?.completed;
+        this.current_objective_def.completed = true;
+        if (this.objectives_data?.[this.current_objective_index]) this.objectives_data[this.current_objective_index].completed = true;
+        if (this.game?.saveManager) void this.game.saveManager.autoSave();
+        if (!wasAlreadyCompleted) {
+          this._emitObjectiveCompleted();
+          if (this.current_objective_def.reward) {
+            updateDecimal(this.game.state, "current_money", (d) => d.add(toDecimal(this.current_objective_def.reward)));
+          } else if (this.current_objective_def.ep_reward) {
+            this.game.exoticParticleManager.exotic_particles = this.game.exoticParticleManager.exotic_particles.add(this.current_objective_def.ep_reward);
+            updateDecimal(this.game.state, "total_exotic_particles", (d) => d.add(this.current_objective_def.ep_reward));
+            updateDecimal(this.game.state, "current_exotic_particles", (d) => d.add(this.current_objective_def.ep_reward));
+          }
+        }
+        this.current_objective_index++;
+        const maxValidIndex = this.objectives_data.length - 1;
+        if (this.current_objective_index > maxValidIndex) this.current_objective_index = maxValidIndex;
+        this.set_objective(this.current_objective_index, true);
+        if (this.game?.saveManager) void this.game.saveManager.autoSave();
+      } else {
+        this.scheduleNextCheck();
+        break;
+      }
+    }
   }
 
   check_current_objective() {
-    return this.evaluator.checkCurrentObjective();
-  }
-
-  scheduleNextCheck() {
-    return this.tracker.scheduleNextCheck();
+    if (!this.game || this.game.paused || !this.current_objective_def) {
+      this.scheduleNextCheck();
+      return;
+    }
+    const checkFn = getObjectiveCheck(this.current_objective_def.checkId);
+    const result = checkFn?.(this.game);
+    if (!result?.completed) {
+      this.scheduleNextCheck();
+      return;
+    }
+    this.current_objective_def.completed = true;
+    if (this.objectives_data?.[this.current_objective_index]) this.objectives_data[this.current_objective_index].completed = true;
+    if (this.game?.saveManager) void this.game.saveManager.autoSave();
+    this._emitObjectiveCompleted();
+    const displayObjective = {
+      ...this.current_objective_def,
+      title: typeof this.current_objective_def.title === "function" ? this.current_objective_def.title() : this.current_objective_def.title,
+      completed: true,
+    };
+    this._emitObjectiveLoaded(displayObjective);
+    clearTimeout(this.objective_timeout);
   }
 
   _loadInfiniteObjective() {
@@ -2659,7 +2562,33 @@ export class ObjectiveManager {
   }
 
   set_objective(objective_index, skip_wait = false) {
-    return this.tracker.setObjective(objective_index, skip_wait);
+    if (!this.objectives_data || this.objectives_data.length === 0) return;
+    if (typeof objective_index !== "number" || Number.isNaN(objective_index)) {
+      const parsed = parseInt(objective_index, 10);
+      objective_index = Number.isNaN(parsed) ? 0 : Math.max(0, parsed);
+    } else {
+      objective_index = Math.floor(objective_index);
+    }
+    if (objective_index < 0) objective_index = 0;
+    const maxValidIndex = this.objectives_data.length - 1;
+    if (objective_index > maxValidIndex) objective_index = maxValidIndex;
+    this.current_objective_index = objective_index;
+    const nextObjective = this.objectives_data[this.current_objective_index];
+    clearTimeout(this.objective_timeout);
+    const updateLogic = () => {
+      if (nextObjective && nextObjective.checkId === "allObjectives") {
+        this._loadInfiniteObjective();
+        return;
+      }
+      if (nextObjective) this._loadNormalObjective(nextObjective);
+      else this._loadAllCompletedObjective();
+    };
+    if (skip_wait) updateLogic();
+    else {
+      this.objective_unloading = true;
+      this._emitObjectiveUnloaded();
+      this.objective_timeout = setTimeout(updateLogic, this.objective_wait);
+    }
   }
 
   claimObjective() {
@@ -5129,7 +5058,6 @@ function buildReactorStatePayload(reactor) {
     heat_controlled: reactor.heat_controlled ? 1 : 0,
     vent_multiplier_eff: reactor.vent_multiplier_eff ?? 0,
     stirling_multiplier: reactor.stirling_multiplier ?? 0,
-    use_thermal_graph: !!reactor.use_thermal_graph,
   };
 }
 
@@ -5174,7 +5102,7 @@ export function serializeStateForGameLoopWorker(engine) {
   const orthoNeighborIndices = oi.buffer.slice(oi.byteOffset, oi.byteOffset + oi.byteLength);
   const autoBuyOn = autoSellFromStore
     ? !!stateSnapshot?.auto_buy
-    : !!(game.reactor?.auto_buy_enabled ?? game.ui?.stateManager?.getVar?.("auto_buy"));
+    : !!(game.reactor?.auto_buy_enabled ?? game.state?.auto_buy);
   const autoBuyUnlocked = (game.upgradeset?.getUpgrade("auto_buy_operator")?.level ?? 0) > 0;
   const prestigeMoneyMultiplier =
     typeof game.getPrestigeMultiplier === "function" ? game.getPrestigeMultiplier() : 1;
@@ -5189,7 +5117,7 @@ export function serializeStateForGameLoopWorker(engine) {
     rows: game.gridManager.rows,
     cols: game.gridManager.cols,
     maxCols: ts.max_cols ?? game.gridManager.cols,
-    autoSell: autoSellFromStore ? !!stateSnapshot?.auto_sell : !!game.ui?.stateManager?.getVar?.("auto_sell"),
+    autoSell: autoSellFromStore ? !!stateSnapshot?.auto_sell : !!game.state?.auto_sell,
     auto_buy: autoBuyOn,
     auto_buy_unlocked: autoBuyUnlocked,
     prestigeMoneyMultiplier,
@@ -5376,7 +5304,7 @@ export function applyGameLoopTickResult(engine, data) {
   syncSessionAfterTick(engine, data);
   queueMicrotask(() => {
     syncUIAfterTick(engine, data, reactor);
-    game.ui?.coreLoopUI?.snapDisplayValuesFromState?.();
+    game.ui?.snapUiDisplayValuesFromState?.();
   });
 }
 
@@ -6083,6 +6011,7 @@ function initSABState(engine) {
 }
 
 function initWorkerState(engine) {
+  engine._engineWorker = null;
   engine._worker = null;
   engine._workerPending = false;
   engine._workerHeartbeatId = null;
@@ -6148,9 +6077,6 @@ function processAutoSell(engine, multiplier) {
   const game = engine.game;
   let autoSellEnabled = reactor.auto_sell_enabled;
   if (autoSellEnabled === undefined) autoSellEnabled = game.state?.auto_sell;
-  if (autoSellEnabled === undefined && typeof game.ui?.stateManager?.getVar === "function") {
-    autoSellEnabled = !!game.ui.stateManager.getVar("auto_sell");
-  }
   if (autoSellEnabled === undefined) autoSellEnabled = false;
 
   if (!autoSellEnabled) return;
@@ -6559,10 +6485,7 @@ function syncStateVars(reactor, game, ctx) {
   }
 }
 
-function updatePostTickAudio(engine, reactor) {
-  if (engine.game.audio?.ambienceManager) {
-    engine.game.audio.ambienceManager.updateAmbienceHeat(reactor.current_heat.toNumber(), reactor.max_heat.toNumber());
-  }
+function updatePostTickAudio(engine) {
   if (engine.game.audio?.industrialManager) {
     engine.game.audio.industrialManager.scheduleIndustrialAmbience(engine.active_vents.length, engine.active_exchangers.length);
   }
@@ -6570,7 +6493,7 @@ function updatePostTickAudio(engine, reactor) {
 
 function syncStateThenVisuals(engine, reactor, ctx) {
   syncStateVars(reactor, engine.game, ctx);
-  updatePostTickAudio(engine, reactor);
+  updatePostTickAudio(engine);
 }
 
 function emitTickCompleteEvent(engine, reactor) {
@@ -6797,36 +6720,41 @@ function logEngineStartSnapshot(engine) {
   });
 }
 
-function ensureGameLoopWorker(engine) {
-  if (engine._gameLoopWorker) return engine._gameLoopWorker;
+function onEngineWorkerMessage(engine, e) {
+  const data = e.data;
+  if (data?.type === "tickResult" || data?.type === "economyCommandResult" || data?.type === "timerPulse") {
+    onGameLoopWorkerMessage(engine, e);
+    return;
+  }
+  if (engine._workerHeartbeatId) {
+    clearTimeout(engine._workerHeartbeatId);
+    engine._workerHeartbeatId = null;
+  }
+  handlePhysicsWorkerMessage(engine, data);
+}
+
+function ensureEngineWorker(engine) {
+  if (engine._engineWorker) return engine._engineWorker;
   try {
-    const url = new URL("./worker/gameLoop.worker.js", import.meta.url).href;
-    engine._gameLoopWorker = new Worker(url, { type: "module" });
-    engine._gameLoopWorker.onmessage = (e) => onGameLoopWorkerMessage(engine, e);
+    const url = new URL("./worker/engine.worker.js", import.meta.url).href;
+    engine._engineWorker = new Worker(url, { type: "module" });
+    engine._engineWorker.onmessage = (ev) => onEngineWorkerMessage(engine, ev);
+    engine._gameLoopWorker = engine._engineWorker;
+    engine._worker = engine._engineWorker;
   } catch (err) {
     engine._gameLoopWorkerFailed = true;
-    logger.log('warn', 'engine', '[GameLoopWorker] Failed to create worker', err);
+    engine._workerFailed = true;
+    logger.log("warn", "engine", "[EngineWorker] Failed to create worker", err);
   }
-  return engine._gameLoopWorker;
+  return engine._engineWorker;
+}
+
+function ensureGameLoopWorker(engine) {
+  return ensureEngineWorker(engine);
 }
 
 function ensurePhysicsWorker(engine) {
-  if (engine._worker) return engine._worker;
-  try {
-    const url = new URL("./worker/physics.worker.js", import.meta.url).href;
-    engine._worker = new Worker(url, { type: "module" });
-    engine._worker.onmessage = (e) => {
-      if (engine._workerHeartbeatId) {
-        clearTimeout(engine._workerHeartbeatId);
-        engine._workerHeartbeatId = null;
-      }
-      handlePhysicsWorkerMessage(engine, e.data);
-    };
-  } catch (err) {
-    engine._workerFailed = true;
-    logger.log('warn', 'engine', '[Worker] Failed to create physics worker', err);
-  }
-  return engine._worker;
+  return ensureEngineWorker(engine);
 }
 
 export class Engine {
@@ -7514,11 +7442,12 @@ function runComponentDepletion(game, tile) {
   tile.clearPart();
 }
 
-function buildSaveContext(game, { getToggles, getQuickSelectSlots }) {
+function buildSaveContext(game, { getToggles, getQuickSelectSlots, onBeforeSave }) {
   return {
     state: game.state,
     reactor: game.reactor,
     tileset: game.tileset,
+    partset: game.partset,
     upgradeset: game.upgradeset,
     objectives_manager: game.objectives_manager,
     version: game.version,
@@ -7535,6 +7464,7 @@ function buildSaveContext(game, { getToggles, getQuickSelectSlots }) {
     grace_period_ticks: game.grace_period_ticks,
     total_played_time: game.lifecycleManager.total_played_time,
     placedCounts: game.placedCounts,
+    onBeforeSave,
     getToggles,
     getQuickSelectSlots,
   };
@@ -7554,7 +7484,7 @@ function buildPersistenceContext(game, getCompactLayout) {
     debugHistory: game.debugHistory,
     logger: game.logger ?? logger,
     getCompactLayout,
-    applySaveState: (savedData) => game.saveOrchestrator.applySaveState(game, savedData),
+    applySaveState: (savedData) => game.saveManager.applySaveState(game, savedData),
   };
 }
 
@@ -7562,8 +7492,9 @@ export class Game {
   constructor(ui_instance, getCompactLayoutFn = null) {
     this._getCompactLayoutFn = getCompactLayoutFn;
     this.ui = ui_instance;
-    this.saveOrchestrator = new SaveOrchestrator({
-      getContext: () => buildSaveContext(this, {
+    this.saveManager = new GameSaveManager(
+      () => buildPersistenceContext(this, this._getCompactLayoutFn ? () => this._getCompactLayoutFn(this) : () => null),
+      () => buildSaveContext(this, {
         getToggles: () => ({
           auto_sell: this.state?.auto_sell ?? false,
           auto_buy: this.state?.auto_buy ?? true,
@@ -7571,13 +7502,12 @@ export class Game {
           pause: this.state?.pause ?? false,
         }),
         getQuickSelectSlots: () => this.ui?.stateManager?.getQuickSelectSlots() ?? [],
-      }),
-      onBeforeSave: () => {
-        this.debugHistory.add('game', 'Generating save state');
-        this.updateSessionTime();
-      }
-    });
-    this.saveManager = new GameSaveManager(this.saveOrchestrator, () => buildPersistenceContext(this, this._getCompactLayoutFn ? () => this._getCompactLayoutFn(this) : () => null));
+        onBeforeSave: () => {
+          this.debugHistory.add('game', 'Generating save state');
+          this.updateSessionTime();
+        },
+      })
+    );
     this.version = "1.4.0";
 
     this.gridManager = new GridManager(this);
@@ -7807,7 +7737,7 @@ export class Game {
       upgrades: savedData.upgrades?.length || 0,
       objectiveIndex: savedData.objectives?.current_objective_index
     });
-    await this.saveOrchestrator.applySaveState(this, savedData);
+    await this.saveManager.applySaveState(this, savedData);
   }
 
   pause() { this.sessionManager.pause(); }
@@ -7835,8 +7765,7 @@ export class Game {
   }
 
   action_pasteLayout(layout, options = {}) {
-    const bp = new BlueprintService(this);
-    bp.applyLayout(layout, options.skipCostDeduction === true);
+    applyBlueprintLayout(this, layout, options.skipCostDeduction === true);
     this.emit("layoutPasted", { layout });
   }
 
