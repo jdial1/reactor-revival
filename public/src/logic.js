@@ -104,7 +104,7 @@ import Decimal, {
   REFLECTOR_COOLING_MIN_MULTIPLIER,
   WEAVE_QUANTUM,
 } from "./utils.js";
-import { SpatialRegistry, adjacencyKey } from "./spatial-adjacency.js";
+import { SpatialRegistry } from "./spatial-adjacency.js";
 import {
   GameActionSchema,
   ACTION_SCHEMA_REGISTRY,
