@@ -113,8 +113,9 @@ import {
   UnlockManager,
   runRebootActionKeepEp,
   runRebootActionDiscardEp,
+  runRebootAction,
   runFullReboot,
-  setDefaults as setDefaultsFromModule,
+  setDefaults,
   LifecycleManager,
   GridManager,
   ConfigManager,
@@ -127,6 +128,8 @@ import {
   Reactor,
   enqueueGameEffect,
   previewBlueprintPlannerStats,
+  parseAndValidateSave,
+  resetSessionCriticalityCounters,
 } from "./state.js";
 import {
   BalanceConfigSchema,
@@ -7656,7 +7659,7 @@ export class Game {
   }
 
   async set_defaults() {
-    await setDefaultsFromModule(this);
+    await setDefaults(this);
   }
 
   syncModifiersFromUpgrades(opts) {
@@ -7917,3 +7920,24 @@ export class Game {
     return true;
   }
 }
+
+export {
+  parseAndValidateSave,
+  GameSaveManager,
+  GridManager,
+  UnlockManager,
+  resetSessionCriticalityCounters,
+  runRebootActionKeepEp,
+  runRebootActionDiscardEp,
+  runRebootAction,
+  runFullReboot,
+  setDefaults,
+  LifecycleManager,
+  ConfigManager,
+  ExoticParticleManager,
+  runSellAction,
+  runManualReduceHeatAction,
+  runSellPart,
+  runEpartOnclick,
+  Reactor,
+};
