@@ -1,6 +1,7 @@
 node_modules
 eslint-results.sarif
 /dist-sw
+stdout
 
 # Database
 *.db
