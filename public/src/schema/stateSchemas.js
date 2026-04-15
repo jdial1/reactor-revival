@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { toDecimal } from "../src/utils.js";
+import { toDecimal } from "../utils.js";
 import {
   DecimalSchema,
   SaveDecimalSchema,

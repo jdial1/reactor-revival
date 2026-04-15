@@ -22,7 +22,7 @@ describe("Core Game Mechanics", () => {
   it("should initialize with default values", () => {
     expect(toNum(game.current_money)).toBe(game.base_money);
     expect(toNum(game.exotic_particles)).toBe(0);
-    expect(game.tileset.tiles.length).toBe(game.max_rows);
+    expect(game.tileset.tiles.length).toBe(game.base_rows);
   });
 
   it("should process game loop ticks updates money on sell", () => {

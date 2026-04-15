@@ -16,7 +16,7 @@ import {
   fetchResolvedSaves,
   showLoadBackupModal,
 } from "./state.js";
-import { LeaderboardEntrySchema, LeaderboardResponseSchema } from "../schema/index.js";
+import { LeaderboardEntrySchema, LeaderboardResponseSchema } from "./schema/index.js";
 import {
   logger,
   StorageUtils,
@@ -173,153 +173,65 @@ const EVENT_TO_EFFECTS = {
   flux: { sampleKey: "click" },
   component_overheat: { sampleKey: "error" },
   depletion: { sampleKey: "depletion" },
+  warning: { triggerWarning: true },
+  metal_clank: { industrialMetalClank: true },
 };
 
-function trySample(svc, sampleKey, category, pan) {
-  const buf = svc._uiBuffers?.[sampleKey];
-  if (buf) {
-    svc._playSample(sampleKey, category, pan);
-    return true;
-  }
-  return false;
-}
-
-function handleClick(svc, opts) {
-  const config = EVENT_TO_EFFECTS.click;
-  if (config.duckAmbience) svc._duckAmbience();
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleError(svc, opts) {
-  const config = EVENT_TO_EFFECTS.error;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleTabSwitch(svc, opts) {
-  const config = EVENT_TO_EFFECTS.tab_switch;
-  if (trySample(svc, config.sampleKey, opts.category, opts.pan)) return;
-  if (config.sampleFallback) trySample(svc, config.sampleFallback, opts.category, opts.pan);
-}
-
-function handleTabRelayThud(svc, opts) {
-  const config = EVENT_TO_EFFECTS.tab_relay_thud;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleUiHover(svc, opts) {
-  const config = EVENT_TO_EFFECTS.ui_hover;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleCrtWhine(svc, opts) {
-  const config = EVENT_TO_EFFECTS.crt_whine;
-  if (config.duckAmbience) svc._duckAmbience();
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleSell(svc, opts) {
-  const config = EVENT_TO_EFFECTS.sell;
-  if (config.duckAmbience) svc._duckAmbience();
-  if (trySample(svc, config.sampleKey, opts.category, opts.pan)) return;
-  if (config.sampleFallback) trySample(svc, config.sampleFallback, opts.category, opts.pan);
-}
-
-function handlePlacement(svc, opts) {
-  const config = EVENT_TO_EFFECTS.placement;
-  const { subtype, category, pan } = opts;
-  const sampleKey = config.sampleMap?.[subtype] ?? config.sampleMap?.default ?? "placement";
-  trySample(svc, sampleKey, category, pan);
-}
-
-function handlePurge(svc, opts) {
-  const config = EVENT_TO_EFFECTS.purge;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleUpgrade(svc, opts) {
-  const config = EVENT_TO_EFFECTS.upgrade;
-  trySample(svc, config.sampleKey, opts.category, null);
-}
-
-function handleReboot(svc, opts) {
-  const config = EVENT_TO_EFFECTS.reboot;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleObjective(svc, opts) {
-  const config = EVENT_TO_EFFECTS.objective;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleSave(svc, opts) {
-  const config = EVENT_TO_EFFECTS.save;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleExplosion(svc, opts) {
-  const config = EVENT_TO_EFFECTS.explosion;
-  const { param, now } = opts;
-  const isMeltdown = opts.subtype === "meltdown" || param === "meltdown";
-  if (config.throttle && !isMeltdown && now - svc._lastExplosionTime < svc._config.explosionInterval) return;
-  svc._lastExplosionTime = now;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-  if (isMeltdown && config.meltdownSampleKey) {
-    trySample(svc, config.meltdownSampleKey, opts.category, opts.pan);
-  }
-}
-
-function handleFlux(svc, opts) {
-  const config = EVENT_TO_EFFECTS.flux;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleComponentOverheat(svc, opts) {
-  const config = EVENT_TO_EFFECTS.component_overheat;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleDepletion(svc, opts) {
-  const config = EVENT_TO_EFFECTS.depletion;
-  trySample(svc, config.sampleKey, opts.category, opts.pan);
-}
-
-function handleWarning(svc, opts) {
-  const intensity = opts.intensity ?? 0.5;
-  svc.warningManager.startWarningLoop(intensity);
-}
-
-function handleMetalClank(svc, opts) {
-  const g = typeof opts.param === "number" ? opts.param : 0.8;
-  svc._playIndustrialSample("metal_clank", opts.category, opts.pan, g);
-}
-
-const EVENT_HANDLERS = {
-  click: handleClick,
-  error: handleError,
-  tab_switch: handleTabSwitch,
-  tab_relay_thud: handleTabRelayThud,
-  ui_hover: handleUiHover,
-  crt_whine: handleCrtWhine,
-  sell: handleSell,
-  placement: handlePlacement,
-  purge: handlePurge,
-  upgrade: handleUpgrade,
-  reboot: handleReboot,
-  objective: handleObjective,
-  save: handleSave,
-  explosion: handleExplosion,
-  flux: handleFlux,
-  component_overheat: handleComponentOverheat,
-  depletion: handleDepletion,
-  warning: handleWarning,
-  metal_clank: handleMetalClank,
+const SENSORY_MAP = {
+  1: { sampleKey: "explosion", category: "alerts" }, // SENSORY_BITMASK.EXPLOSION
+  2: { sampleKey: "meltdown", category: "alerts" },  // SENSORY_BITMASK.MELTDOWN
+  4: { sampleKey: "depletion", category: "effects" },// SENSORY_BITMASK.DEPLETION
+  8: { sampleKey: "sell", category: "effects", duckAmbience: true },    // SENSORY_BITMASK.SELL_POWER
+  16: { triggerWarning: true, intensity: 0.5 },      // SENSORY_BITMASK.WARNING
 };
 
 export function handleAudioEvent(svc, eventType, context, options = {}) {
-  const handler = EVENT_HANDLERS[eventType];
-  if (handler) {
-    const merged = { ...context, ...options };
-    handler(svc, merged);
+  const config = EVENT_TO_EFFECTS[eventType];
+  if (!config) return;
+  const merged = { ...context, ...options };
+  if (config.duckAmbience) svc._duckAmbience();
+  if (config.triggerWarning) {
+    svc.warningManager.startWarningLoop(merged.intensity ?? 0.5);
+    return;
+  }
+  if (config.industrialMetalClank) {
+    const g = typeof merged.param === "number" ? merged.param : 0.8;
+    svc._playIndustrialSample("metal_clank", merged.category, merged.pan, g);
+    return;
+  }
+  if (config.throttle) {
+    const isMeltdown = merged.subtype === "meltdown" || merged.param === "meltdown";
+    if (!isMeltdown && merged.now - svc._lastExplosionTime < svc._config.explosionInterval) return;
+    svc._lastExplosionTime = merged.now;
+    if (isMeltdown && config.meltdownSampleKey) {
+      const fallbackBuf = svc._uiBuffers?.[config.meltdownSampleKey];
+      if (fallbackBuf) svc._playSample(config.meltdownSampleKey, merged.category, merged.pan);
+    }
+  }
+  const sampleKey = config.sampleMap?.[merged.subtype] ?? config.sampleMap?.default ?? config.sampleKey;
+  if (!sampleKey) return;
+  const buf = svc._uiBuffers?.[sampleKey];
+  if (buf) {
+    svc._playSample(sampleKey, merged.category, merged.pan);
+  } else if (config.sampleFallback) {
+    const fallbackBuf = svc._uiBuffers?.[config.sampleFallback];
+    if (fallbackBuf) svc._playSample(config.sampleFallback, merged.category, merged.pan);
+  }
+}
+
+export function processSensoryMask(svc, mask) {
+  if (!mask || !svc.enabled) return;
+  for (const bit in SENSORY_MAP) {
+    if (mask & Number(bit)) {
+      const config = SENSORY_MAP[bit];
+      if (config.duckAmbience) svc._duckAmbience();
+      if (config.triggerWarning) {
+        svc.warningManager.startWarningLoop(config.intensity ?? 0.5);
+      } else if (config.sampleKey) {
+        const buf = svc._uiBuffers?.[config.sampleKey];
+        if (buf) svc._playSample(config.sampleKey, config.category, 0);
+      }
+    }
   }
 }
 

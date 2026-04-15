@@ -13,6 +13,7 @@ export const LEADERBOARD_CONFIG = Object.freeze({
 
 export const AUTONOMIC_REPAIR_POWER_COST = 50;
 export const AUTONOMIC_REPAIR_POWER_MIN = 50;
+export const WEAVE_QUANTUM = 1_000_000;
 
 export function vuQuantizePercent(rawPercent, atMax) {
   if (atMax) return 100;

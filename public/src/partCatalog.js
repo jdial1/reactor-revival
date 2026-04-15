@@ -1,4 +1,5 @@
 import { bundledGameData } from "./bundledStaticData.js";
+import { compileTraitBitmask } from "./traits.js";
 
 const PART_TEMPLATES = bundledGameData.parts;
 
@@ -107,7 +108,11 @@ export function buildPartDefFromCatalog(id) {
   }
   const power_inc = (t.base_power_increase ?? 0) + (level > 1 && t.power_increase_add ? (level - 1) * t.power_increase_add : 0);
   const heat_inc = t.base_heat_increase ?? 0;
+  const traits = Array.isArray(t.traits) ? t.traits : (t.category === "cell" ? ["FUEL_CELL"] : []);
+  const trait_mask = compileTraitBitmask(traits);
+
   const out = {
+    ...t,
     id,
     type: t.type,
     category: t.category,
@@ -143,6 +148,8 @@ export function buildPartDefFromCatalog(id) {
     ep_heat: epHeat,
     power_increase: power_inc,
     heat_increase: heat_inc,
+    traits,
+    trait_mask,
   };
   return out;
 }

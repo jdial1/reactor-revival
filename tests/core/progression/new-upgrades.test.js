@@ -481,7 +481,6 @@ describe("New Gameplay Upgrades", () => {
             setDecimal(game.state, "session_power_produced", 0);
             setDecimal(game.state, "session_power_sold", 0);
             setDecimal(game.state, "session_heat_dissipated", 0);
-            setDecimal(game.state, "session_ep_from_engine", 0);
             game.paused = false;
             const om = game.objectives_manager;
             const prevCheck = om && om.check_current_objective;

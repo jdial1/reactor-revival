@@ -40,6 +40,7 @@ import {
   FOUNDATIONAL_TICK_MS,
   MELTDOWN_HEAT_MULTIPLIER,
 } from "../utils.js";
+import { hasTrait, TraitBitmask } from "../traits.js";
 import { toDecimal } from "../utils.js";
 import { buildContainmentSoa, buildOrthoAdjacencySoa, heatSoaView } from "./soaTickLayout.js";
 
@@ -91,7 +92,8 @@ function buildPayloadCellLookup(partLayout, stride) {
 }
 
 function partHasTrait(part, trait) {
-  return Array.isArray(part?.traits) && part.traits.includes(trait);
+  if (!part) return false;
+  return hasTrait(part.trait_mask, trait);
 }
 
 function isValveLikePart(p) {
@@ -357,7 +359,7 @@ function buildCellLookup(partLayout) {
   return (r, c) => cellByKey.get(`${r},${c}`);
 }
 
-function processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx, moneyRef, ctx) {
+function processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx, moneyRef, ctx, reactorHeat) {
   let power_add = 0;
   let heat_add = 0;
   const depletionIndices = [];
@@ -371,23 +373,37 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
     const M = part.cell_pack_M ?? 1;
     const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
     const N = computeWorkerNeighborPulseN(t.r, t.c, partTable, partAt, rows, cols);
-    const LP =
-      typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power)
-        ? part.power
-        : part.base_power ?? 0;
-    const H_eff =
-      typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat)
-        ? part.heat
-        : part.base_heat ?? 0;
-    const layoutPower =
-      typeof t.power === "number" && !isNaN(t.power) && isFinite(t.power)
-        ? t.power
-        : calculateCellPulsePower(LP, M, N);
+    const LP = typeof part.power === "number" && !isNaN(part.power) && isFinite(part.power) ? part.power : part.base_power ?? 0;
+    const H_eff = typeof part.heat === "number" && !isNaN(part.heat) && isFinite(part.heat) ? part.heat : part.base_heat ?? 0;
+    
+    // Apply dynamic multiplier for global heat
+    const hpm = ctx.reactorState.heat_power_multiplier || 0;
+    let powerMult = 1;
+    if (hpm > 0 && reactorHeat.gt(0)) {
+      const heatNum = Math.min(reactorHeat.toNumber(), 1e100);
+      powerMult = 1 + hpm * (Math.log(heatNum) / Math.log(1000) / 100);
+    }
+    const finalLP = LP * powerMult;
+
+    // Apply dynamic reflector cooling
+    const rcf = ctx.reactorState.reflector_cooling_factor || 0;
+    let heatMult = 1;
+    if (rcf > 0) {
+      let reflector_count = 0;
+      const neighbors = orthoNeighborNidxList(gidx(t.r, t.c), ctx);
+      for (let k = 0; k < neighbors.length; k++) {
+        const nPart = partTable[ctx.gridPartIdx[neighbors[k]]];
+        if (nPart && partHasTrait(nPart, "REFLECTOR")) reflector_count++;
+      }
+      if (reflector_count > 0) {
+        heatMult = Math.max(0.1, 1 - (reflector_count * rcf));
+      }
+    }
+    const finalHeff = H_eff * heatMult;
+
+    const layoutPower = calculateCellPulsePower(finalLP, M, N);
     power_add += layoutPower * multiplier;
-    const layoutHeat =
-      typeof t.heat === "number" && !isNaN(t.heat) && isFinite(t.heat)
-        ? t.heat
-        : calculateCellPulseHeat(H_eff, M, N, C);
+    const layoutHeat = calculateCellPulseHeat(finalHeff, M, N, C);
     const generatedHeat = layoutHeat * multiplier;
     const { gridPartIdx } = ctx;
     const neighbors = orthoNeighborNidxList(gidx(t.r, t.c), ctx);
@@ -436,14 +452,14 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
   return { power_add, heat_add, depletionIndices, tileUpdates };
 }
 
-function findExplosionIndices(partLayout, partTable, heat, gidx) {
+function findExplosionIndices(partLayout, partTable, integrity, gidx) {
   const explosionIndices = [];
   for (let i = 0; i < partLayout.length; i++) {
     const t = partLayout[i];
     const part = partTable[t.partIndex];
     if (!part?.containment) continue;
     const idx = gidx(t.r, t.c);
-    if (heat[idx] > part.containment) {
+    if (integrity[idx] <= 0) {
       const capSort = partHasTrait(part, "CAPACITOR") ? 0 : 1;
       explosionIndices.push({ idx, capSort });
     }
@@ -571,6 +587,14 @@ function processHeatPhase(heat, containment, payload, reactorHeat, multiplier, c
   return { reactorHeat: new (reactorHeat.constructor)(heatResult.reactorHeat), heatFromInlets: heatResult.heatFromInlets ?? 0 };
 }
 
+export const SENSORY_BITMASK = {
+  EXPLOSION: 1 << 0,
+  MELTDOWN: 1 << 1,
+  DEPLETION: 1 << 2,
+  SELL_POWER: 1 << 3,
+  WARNING: 1 << 4
+};
+
 function createGridContext(data) {
   const { partLayout, partTable, rows, cols, maxCols, multiplier, reactorState, autoSell, auto_buy, auto_buy_unlocked } = data;
   const stride = maxCols ?? cols;
@@ -594,7 +618,7 @@ function createGridContext(data) {
   };
 }
 
-function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, moneyRef) {
+function processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, reactorPower, moneyRef) {
   const { partLayout, partTable, rows, cols, stride, multiplier, reactorState, autoSell, effectiveMaxPower, partAt, gidx, orthoOff, orthoIdx } = ctx;
   ctx.gridPartIdx = buildGridPartIndices(partLayout, gridLen, stride);
 
@@ -613,7 +637,24 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, 
   const heatPhaseResult = processHeatPhase(heat, containment, payload, reactorHeat, multiplier, ctx);
   reactorHeat = heatPhaseResult.reactorHeat.add(heatPhaseResult.heatFromInlets);
 
-  const cellResult = processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx, moneyRef, ctx);
+  // Apply Thermal Stress
+  for (let i = 0; i < gridLen; i++) {
+    const cap = containment[i];
+    if (cap > 0) {
+      const pressure = (heat[i] || 0) / cap;
+      if (pressure > 1.0) {
+         integrity[i] -= (pressure - 1.0) * multiplier; // decay
+         if (integrity[i] < 0) integrity[i] = 0;
+         const leakage = (heat[i] - cap) * (1 - (integrity[i] / 100)) * multiplier;
+         if (leakage > 0) {
+            heat[i] -= leakage;
+            reactorHeat = reactorHeat.add(leakage);
+         }
+      }
+    }
+  }
+
+  const cellResult = processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx, moneyRef, ctx, reactorHeat);
   reactorHeat = reactorHeat.add(cellResult.heat_add);
   reactorHeat = applyHullRepulsionWorker(
     reactorHeat,
@@ -628,7 +669,7 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, 
   let failure_state = "nominal";
   const maxH = new (reactorHeat.constructor)(reactorState.max_heat ?? 0);
 
-  const explosionIndices = findExplosionIndices(partLayout, partTable, heat, gidx);
+  const explosionIndices = findExplosionIndices(partLayout, partTable, integrity, gidx);
   if (reactorHeat.gte(maxH) && maxH.gt(0)) {
     failure_state = "saturation";
 
@@ -688,7 +729,24 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, 
 }
 
 function runOneTick(data) {
+  const { partLayout, partTable } = data;
+  const traitTallies = {};
+  const partTallies = {};
+  const categoryTallies = {};
+  for (const t of Object.keys(TraitBitmask)) traitTallies[t] = 0;
+  for (let i = 0; i < partLayout.length; i++) {
+    const tile = partLayout[i];
+    const part = partTable[tile.partIndex];
+    if (!part) continue;
+    partTallies[part.id] = (partTallies[part.id] || 0) + 1;
+    categoryTallies[part.category] = (categoryTallies[part.category] || 0) + 1;
+    for (const [trait, bit] of Object.entries(TraitBitmask)) {
+      if ((part.trait_mask & bit) !== 0) traitTallies[trait]++;
+    }
+  }
+
   const heat = heatSoaView(data.heatBuffer);
+  const integrity = data.integrityBuffer ? new Float32Array(data.integrityBuffer) : new Float32Array(heat.length).fill(100);
   const gridLen = heat.length;
   const ctx = createGridContext(data);
   const Decimal = ctx.effectiveMaxPower.constructor;
@@ -743,7 +801,7 @@ function runOneTick(data) {
     if (tick > 0 && tick % 50 === 0 && typeof console !== "undefined" && console.info) {
       console.info("[GameLoopWorker] runOneTick progress", { tick, total: n, tickId: data.tickId });
     }
-    const result = processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, moneyRef);
+    const result = processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, reactorPower, moneyRef);
     reactorHeat = result.reactorHeat;
     reactorPower = result.reactorPower;
     if (isProjection && tick === 0) {
@@ -760,6 +818,18 @@ function runOneTick(data) {
     if (ctx.reactorState) {
       ctx.reactorState.hull_integrity = result.hull_integrity;
       ctx.reactorState.failure_state = result.failure_state;
+      
+      if (result.reactorPower >= 1000) {
+        ctx.reactorState.sustainedPower1kCount = (ctx.reactorState.sustainedPower1kCount || 0) + 1;
+      } else {
+        ctx.reactorState.sustainedPower1kCount = 0;
+      }
+
+      if (result.reactorHeat > 1e7 && result.hull_integrity > 0 && result.failure_state !== "meltdown" && result.failure_state !== "fragmentation") {
+        ctx.reactorState.masterHighHeatCount = (ctx.reactorState.masterHighHeatCount || 0) + 1;
+      } else {
+        ctx.reactorState.masterHighHeatCount = 0;
+      }
     }
     for (let e = 0; e < result.explosionIndices.length; e++) allExplosionIndices.push(result.explosionIndices[e]);
     for (let d = 0; d < result.depletionIndices.length; d++) allDepletionIndices.push(result.depletionIndices[d]);
@@ -785,9 +855,18 @@ function runOneTick(data) {
 
   const useSAB = !!data.heatBuffer && typeof SharedArrayBuffer !== "undefined" && data.heatBuffer instanceof SharedArrayBuffer;
   let heatBufferOut = null;
+  let integrityBufferOut = null;
   if (!useSAB && heat.buffer) {
     heatBufferOut = heat.buffer.slice(heat.byteOffset, heat.byteOffset + heat.byteLength);
+    integrityBufferOut = integrity.buffer.slice(integrity.byteOffset, integrity.byteOffset + integrity.byteLength);
   }
+
+  let sensoryMask = 0;
+  if (allExplosionIndices.length > 0) sensoryMask |= SENSORY_BITMASK.EXPLOSION;
+  if (allDepletionIndices.length > 0) sensoryMask |= SENSORY_BITMASK.DEPLETION;
+  if (finalFailureState === "meltdown") sensoryMask |= SENSORY_BITMASK.MELTDOWN;
+  else if (finalFailureState !== "nominal") sensoryMask |= SENSORY_BITMASK.WARNING;
+  if (totalPowerSold > 0) sensoryMask |= SENSORY_BITMASK.SELL_POWER;
 
   const authoritativeCurrentMoney = isProjection
     ? initialMoneyNum
@@ -810,9 +889,16 @@ function runOneTick(data) {
     transfers: [],
     tickCount: n,
     heatBuffer: heatBufferOut,
+    integrityBuffer: integrityBufferOut,
     useSAB,
     hull_integrity: finalHullIntegrity,
     failure_state: finalFailureState,
+    sustainedPower1kCount: ctx.reactorState?.sustainedPower1kCount || 0,
+    masterHighHeatCount: ctx.reactorState?.masterHighHeatCount || 0,
+    sensoryMask,
+    traitTallies,
+    partTallies,
+    categoryTallies,
     projection: isProjection ? true : undefined,
     projectionPlannerSample: isProjection ? projectionPlannerSample : undefined,
   };
@@ -823,11 +909,37 @@ export function attachGameLoopWorkerPort(workerGlobal) {
   let pending = null;
   let busy = false;
   let carriedBalance = null;
+  let carriedEp = null;
   const deferredEcon = [];
 
   function handleEconomyCommand(d) {
     const Dec = globalThis.Decimal;
     if (!Dec || d?.type !== "economyCommand") return;
+    if (d.cmd === "REQUEST_TRANSACTION") {
+      const Dec = globalThis.Decimal;
+      const mDelta = new Dec(d.moneyDelta ?? 0);
+      const eDelta = new Dec(d.epDelta ?? 0);
+      const b0 = carriedBalance != null ? new Dec(carriedBalance) : new Dec(Number(d.balanceHint ?? 0));
+      const ep0 = carriedEp != null ? new Dec(carriedEp) : new Dec(Number(d.epHint ?? 0));
+      
+      const mOk = mDelta.gte(0) || b0.gte(mDelta.abs());
+      const eOk = eDelta.gte(0) || ep0.gte(eDelta.abs());
+      
+      const ok = mOk && eOk;
+      if (ok) {
+        carriedBalance = b0.add(mDelta).toNumber();
+        carriedEp = ep0.add(eDelta).toNumber();
+      }
+      
+      workerGlobal.postMessage({
+        type: "economyCommandResult",
+        id: d.id,
+        ok,
+        balanceAfter: carriedBalance,
+        epAfter: carriedEp
+      });
+      return;
+    }
     if (d.cmd === "TRY_DEDUCT") {
       const amt = new Dec(d.amount ?? 0);
       const b0 = carriedBalance != null ? new Dec(carriedBalance) : new Dec(Number(d.balanceHint ?? 0));

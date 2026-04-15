@@ -37,7 +37,7 @@ describe('EP Reboot Functionality', () => {
             setDecimal(game.state, "total_exotic_particles", 0);
             setDecimal(game.state, "current_exotic_particles", 0);
             game.exoticParticleManager.exotic_particles = toDecimal(0);
-            setDecimal(game.state, "session_power_sold", 5_000_000);
+            setDecimal(game.state, "session_power_produced", 5_000_000);
             setDecimal(game.state, "session_heat_dissipated", 6_000_000);
             await game.rebootActionKeepExoticParticles();
             expect(toNum(game.state.total_exotic_particles)).toBe(5);
@@ -84,7 +84,7 @@ describe('EP Reboot Functionality', () => {
 
             const epBeforeReboot = game.exotic_particles;
             game.current_money = 5000;
-            setDecimal(game.state, "session_power_sold", 0);
+            setDecimal(game.state, "session_power_produced", 0);
             setDecimal(game.state, "session_heat_dissipated", 0);
             await game.rebootActionKeepExoticParticles();
 

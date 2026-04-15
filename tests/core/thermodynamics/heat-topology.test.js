@@ -96,7 +96,7 @@ describe("Heat Network Topology", () => {
   });
 
   it("gridIndex consistent across tileset and worker stride", () => {
-    assertGridIndexMatchesTileset(game.tileset, 9, 4, 454);
+    assertGridIndexMatchesTileset(game.tileset, 9, 4, 9 * game.tileset.max_cols + 4);
   });
 
   it("union-find merges two vent segments when a conducting tile bridges them", async () => {

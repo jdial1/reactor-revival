@@ -282,7 +282,7 @@ describe("Engine Mechanics", () => {
     setDecimal(game.state, "total_exotic_particles", 0);
     setDecimal(game.state, "current_exotic_particles", 0);
     game.exoticParticleManager.exotic_particles = toDecimal(0);
-    setDecimal(game.state, "session_power_sold", 3_000_000);
+    setDecimal(game.state, "session_power_produced", 3_000_000);
     setDecimal(game.state, "session_heat_dissipated", 4_000_000);
     await game.rebootActionKeepExoticParticles();
     expect(toNum(game.state.total_exotic_particles)).toBe(3);

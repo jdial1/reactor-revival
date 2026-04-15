@@ -1,12 +1,10 @@
 import { html, render } from "lit-html";
 
-import { classMap, styleMap, MOBILE_BREAKPOINT_PX, toDecimal } from "../../utils.js";
+import { classMap, styleMap, MOBILE_BREAKPOINT_PX } from "../../utils.js";
 
 import { ReactiveLitComponent } from "../reactive-lit-component.js";
 
-import { subscribeKey, preferences, setDecimal, updateDecimal, actions } from "../../store.js";
-
-import { tryDeductMoneyGameLoop, tryCreditMoneyGameLoop } from "../../logic.js";
+import { subscribeKey, preferences, actions } from "../../store.js";
 
 
 
@@ -104,19 +102,7 @@ export class GridController {
 
     const eng = game.engine;
 
-    const useWorkerEconomy =
-
-      eng &&
-
-      eng._gameLoopWorkerTickSeen &&
-
-      typeof eng._useGameLoopWorker === "function" &&
-
-      eng._useGameLoopWorker() &&
-
-      !eng._gameLoopWorkerFailed;
-
-    const costNum = clicked_part ? Number(clicked_part.cost) : 0;
+    const placementTiles = [];
 
 
 
@@ -184,115 +170,43 @@ export class GridController {
 
       if (!clicked_part) continue;
 
+      placementTiles.push(t);
 
+    }
 
-      if (useWorkerEconomy) {
+    if (placementTiles.length && eng) {
 
-        const r = await tryDeductMoneyGameLoop(game, costNum);
+      for (let pi = 0; pi < placementTiles.length; pi++) {
 
-        if (!r.ok) {
+        const t = placementTiles[pi];
 
-          if (!soundPlayedRef.v) {
+        game.state.intent_queue.push({
 
-            const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
+          action: "PLACE_PART",
 
-            actions.enqueueEffect(game, { kind: "sfx", id: "error", pan, context: "reactor" });
+          payload: { row: t.row, col: t.col, partId: clicked_part.id },
 
-            soundPlayedRef.v = true;
+        });
 
-          }
+      }
 
-          continue;
+      const { placed } = await eng.consumeIntentQueueAsync();
 
-        }
+      if (placed.length) {
 
-        setDecimal(game.state, "current_money", toDecimal(r.balanceAfter));
+        soundPlayedRef.v = true;
 
-        const partPlaced = await t.setPart(clicked_part);
+        if (ui.deviceFeatures?.lightVibration) ui.deviceFeatures.lightVibration();
 
-        if (partPlaced) {
+      }
 
-          ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
+      for (let pj = 0; pj < placed.length; pj++) {
 
-          if (ui.deviceFeatures?.lightVibration) ui.deviceFeatures.lightVibration();
+        const p = placed[pj];
 
-          soundPlayedRef.v = true;
+        ui.gridCanvasRenderer?.markTileDirty(p.row, p.col);
 
-          game.emit?.("partPlaced", { part: clicked_part, tile: t });
-
-        } else {
-
-          const c = await tryCreditMoneyGameLoop(game, costNum);
-
-          setDecimal(game.state, "current_money", toDecimal(c.balanceAfter));
-
-          if (!soundPlayedRef.v) {
-
-            const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
-
-            actions.enqueueEffect(game, { kind: "sfx", id: "error", pan, context: "reactor" });
-
-            soundPlayedRef.v = true;
-
-          }
-
-        }
-
-      } else {
-
-        const money = game.state.current_money;
-
-        const canAfford = money != null && typeof money.gte === "function"
-
-          ? money.gte(clicked_part.cost)
-
-          : Number(money) >= Number(clicked_part.cost);
-
-
-
-        if (canAfford) {
-
-          updateDecimal(game.state, "current_money", (d) => d.sub(clicked_part.cost));
-
-          const partPlaced = await t.setPart(clicked_part);
-
-
-
-          if (partPlaced) {
-
-            ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
-
-            if (ui.deviceFeatures?.lightVibration) ui.deviceFeatures.lightVibration();
-
-            soundPlayedRef.v = true;
-
-            game.emit?.("partPlaced", { part: clicked_part, tile: t });
-
-          } else {
-
-            updateDecimal(game.state, "current_money", (d) => d.add(clicked_part.cost));
-
-            if (!soundPlayedRef.v) {
-
-              const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
-
-              actions.enqueueEffect(game, { kind: "sfx", id: "error", pan, context: "reactor" });
-
-              soundPlayedRef.v = true;
-
-            }
-
-          }
-
-        } else if (!soundPlayedRef.v) {
-
-          const pan = game.calculatePan ? game.calculatePan(t.col) : 0;
-
-          actions.enqueueEffect(game, { kind: "sfx", id: "error", pan, context: "reactor" });
-
-          soundPlayedRef.v = true;
-
-        }
+        game.emit?.("partPlaced", { part: p.part, tile: game.tileset.getTile(p.row, p.col) });
 
       }
 

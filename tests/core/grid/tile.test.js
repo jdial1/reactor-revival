@@ -87,15 +87,17 @@ describe("Tile Mechanics", () => {
 
   it("should be enabled or disabled based on game dimensions", () => {
     const tileInside = game.tileset.getTile(0, 0);
-    const tileOutside = game.tileset.tiles[game.base_rows][game.base_cols]; // Get a tile outside the initial grid
+    let tileOutside = game.tileset.getTile(game.base_rows, game.base_cols);
 
     expect(tileInside.enabled).toBe(true);
-    expect(tileOutside.enabled).toBe(false);
+    expect(tileOutside).toBeFalsy();
 
     game.rows = game.base_rows + 1;
     game.cols = game.base_cols + 1;
+    game.tileset.resize(game.rows, game.cols);
     game.tileset.updateActiveTiles();
 
+    tileOutside = game.tileset.getTile(game.base_rows, game.base_cols);
     expect(tileOutside.enabled).toBe(true);
   });
 

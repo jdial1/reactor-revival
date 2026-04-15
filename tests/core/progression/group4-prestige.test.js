@@ -28,7 +28,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     setDecimal(game.state, "total_exotic_particles", 0);
     setDecimal(game.state, "current_exotic_particles", 0);
     game.exoticParticleManager.exotic_particles = toDecimal(0);
-    setDecimal(game.state, "session_power_sold", 4_000_000);
+    setDecimal(game.state, "session_power_produced", 4_000_000);
     setDecimal(game.state, "session_heat_dissipated", 5_000_000);
     await game.rebootActionKeepExoticParticles();
     expect(toNum(game.state.total_exotic_particles)).toBe(4);
@@ -39,7 +39,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     setDecimal(game.state, "total_exotic_particles", 10);
     setDecimal(game.state, "current_exotic_particles", 10);
     game.exoticParticleManager.exotic_particles = toDecimal(10);
-    setDecimal(game.state, "session_power_sold", 500_000);
+    setDecimal(game.state, "session_power_produced", 500_000);
     setDecimal(game.state, "session_heat_dissipated", 600_000);
     await game.rebootActionKeepExoticParticles();
     expect(toNum(game.state.total_exotic_particles)).toBe(10);
@@ -100,7 +100,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     const laboratory = game.upgradeset.getUpgrade("laboratory");
     laboratory.setLevel(1);
 
-    setDecimal(game.state, "session_power_sold", 0);
+    setDecimal(game.state, "session_power_produced", 0);
     setDecimal(game.state, "session_heat_dissipated", 0);
 
     await game.rebootActionKeepExoticParticles();

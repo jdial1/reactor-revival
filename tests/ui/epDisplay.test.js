@@ -43,7 +43,7 @@ describe('EP Info Bar Display', () => {
         setDecimal(game.state, "total_exotic_particles", 0);
         setDecimal(game.state, "current_exotic_particles", 0);
         game.exoticParticleManager.exotic_particles = toDecimal(0);
-        setDecimal(game.state, "session_power_sold", 2_000_000);
+        setDecimal(game.state, "session_power_produced", 2_000_000);
         setDecimal(game.state, "session_heat_dissipated", 2_000_000);
         await game.rebootActionKeepExoticParticles();
         expect(toNum(game.exotic_particles)).toBeGreaterThan(0);

@@ -37,14 +37,7 @@ function countParts(game, pred) {
 }
 
 function countCategories(game) {
-  const s = new Set();
-  const ts = game.tileset?.tiles_list;
-  if (!ts) return 0;
-  for (const t of ts) {
-    const p = t.part;
-    if (p?.category) s.add(p.category);
-  }
-  return s.size;
+  return Object.keys(game.reactor?.categoryTallies || {}).length;
 }
 
 function hasVentAdjacentToCell(game) {
@@ -76,7 +69,7 @@ function anyUpgradePurchased(game) {
 
 const checks = {
   firstCell: (game) => ({
-    completed: countParts(game, (p) => p.category === "cell") > 0,
+    completed: (game.reactor?.categoryTallies?.["cell"] || 0) > 0,
   }),
   sellPower: (game) => ({
     completed: toNumber(game.session_power_sold) > 0 || toNumber(game.state?.session_power_sold) > 0,
@@ -87,16 +80,16 @@ const checks = {
   ventNextToCell: (game) => ({ completed: hasVentAdjacentToCell(game) }),
   purchaseUpgrade: (game) => ({ completed: anyUpgradePurchased(game) }),
   purchaseDualCell: (game) => ({
-    completed: countParts(game, (p) => p.id === "uranium2") > 0,
+    completed: (game.reactor?.partTallies?.["uranium2"] || 0) > 0,
   }),
   tenActiveCells: (game) => ({
-    completed: countParts(game, (p) => p.category === "cell") >= 10,
+    completed: (game.reactor?.categoryTallies?.["cell"] || 0) >= 10,
   }),
   perpetualUranium: (game) => ({
     completed: (game.upgradeset.getUpgrade("uranium1_cell_perpetual")?.level ?? 0) > 0,
   }),
   increaseMaxPower: (game) => ({
-    completed: countParts(game, (p) => p.category === "capacitor") > 0,
+    completed: (game.reactor?.categoryTallies?.["capacitor"] || 0) > 0,
   }),
   completeChapter1: (game) => ({
     completed: priorChapterObjectivesComplete(game, "completeChapter1"),
@@ -111,7 +104,7 @@ const checks = {
     completed: countCategories(game) >= 5,
   }),
   tenCapacitors: (game) => ({
-    completed: countParts(game, (p) => p.category === "capacitor") >= 10,
+    completed: (game.reactor?.categoryTallies?.["capacitor"] || 0) >= 10,
   }),
   powerPerTick500: (game) => ({
     completed: toNumber(game.reactor?.stats_power) >= 500,
@@ -124,23 +117,18 @@ const checks = {
       !!game.reactor?.auto_sell_enabled && toNumber(game.reactor?.stats_cash) >= 500,
   }),
   sustainedPower1k: (game) => {
-    const om = game.objectives_manager;
-    const st = om?._sustained?.sustainedPower1k;
-    const okPower = toNumber(game.reactor?.stats_power) >= 1000;
-    const okTime =
-      st && game.engine && game.engine.tick_count - st.sinceTick >= 30;
-    return { completed: !!(okPower && okTime) };
+    return { completed: !!((game.reactor?.sustainedPower1kCount || 0) >= 30) };
   },
   infrastructureUpgrade1: (game) => ({
     completed:
-      countParts(game, (p) => p.id === "capacitor2") >= 10 &&
-      countParts(game, (p) => p.id === "vent2") >= 10,
+      (game.reactor?.partTallies?.["capacitor2"] || 0) >= 10 &&
+      (game.reactor?.partTallies?.["vent2"] || 0) >= 10,
   }),
   completeChapter2: (game) => ({
     completed: priorChapterObjectivesComplete(game, "completeChapter2"),
   }),
   fiveQuadPlutonium: (game) => ({
-    completed: countParts(game, (p) => p.id === "plutonium3") >= 5,
+    completed: (game.reactor?.partTallies?.["plutonium3"] || 0) >= 5,
   }),
   incomeMilestone50k: (game) => ({
     completed: toNumber(game.reactor?.stats_cash) >= 50000,
@@ -149,7 +137,7 @@ const checks = {
     completed: toNumber(game.reactor?.stats_power) >= 10000 && !game.paused,
   }),
   unlockThorium: (game) => ({
-    completed: countParts(game, (p) => p.id === "thorium3") >= 5,
+    completed: (game.reactor?.partTallies?.["thorium3"] || 0) >= 5,
   }),
   firstBillion: (game) => ({
     completed: toNumber(game.current_money) >= 1e9,
@@ -158,16 +146,10 @@ const checks = {
     completed: toNumber(game.current_money) >= 1e10,
   }),
   unlockSeaborgium: (game) => ({
-    completed: countParts(game, (p) => p.id === "seaborgium3") >= 5,
+    completed: (game.reactor?.partTallies?.["seaborgium3"] || 0) >= 5,
   }),
   masterHighHeat: (game) => {
-    const om = game.objectives_manager;
-    const st = om?._sustained?.masterHighHeat;
-    const okHeat = toNumber(game.reactor?.current_heat) > 1e7;
-    const okTime =
-      st && game.engine && game.engine.tick_count - st.sinceTick >= 30;
-    const okMelt = !game.reactor?.has_melted_down;
-    return { completed: !!(okHeat && okTime && okMelt) };
+    return { completed: !!((game.reactor?.masterHighHeatCount || 0) >= 30) };
   },
   ep10: (game) => ({
     completed: toNumber(game.exotic_particles) >= 10,

@@ -4,7 +4,7 @@ import {
   WORKER_HEARTBEAT_MS,
   WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK,
 } from "@app/utils.js";
-import { PhysicsTickResultSchema } from "../../../public/schema/stateSchemas.js";
+import { PhysicsTickResultSchema } from "../../../public/src/schema/stateSchemas.js";
 
 describe("Group 13: Web Worker Concurrency and Fallbacks", () => {
   let game;

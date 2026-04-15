@@ -8,8 +8,12 @@ export function syncReactorHeatVisualDom(ui, heatRatio) {
     const ratio = Number(heatRatio);
     const hr = Number.isFinite(ratio) ? ratio : 0;
     const cd = Math.min(1.5, Math.max(0, hr));
-    background.style.setProperty("--heat-ratio", String(cd));
-    background.style.setProperty("--core-danger", String(cd));
+    if (ui?.uiState) {
+      ui.uiState.core_danger = cd;
+    } else {
+      background.style.setProperty("--heat-ratio", String(cd));
+      background.style.setProperty("--core-danger", String(cd));
+    }
     let alpha = 0;
     if (hr <= 0.5) alpha = 0;
     else if (hr <= 1.0) alpha = Math.min((hr - 0.5) * 2 * 0.2, 0.2);

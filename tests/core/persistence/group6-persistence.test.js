@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
-import { SaveDataSchema } from "../../../public/schema/index.js";
-import { ObjectiveIndexSchema, SaveDecimalSchema } from "../../../public/schema/numberLikeSchema.js";
+import { SaveDataSchema } from "../../../public/src/schema/index.js";
+import { ObjectiveIndexSchema, SaveDecimalSchema } from "../../../public/src/schema/numberLikeSchema.js";
 import { toDecimal, serializeSave, deserializeSave, migrateLocalStorageToIndexedDB } from "@app/utils.js";
 import { parseAndValidateSave } from "@app/store.js";
 

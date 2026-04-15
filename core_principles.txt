@@ -8,7 +8,7 @@ The Evolutionary Lineage: From Idle Clicks to Systems Engineering
 
 The lineage of reactor-based incremental games is defined by a trajectory toward increasing technical sophistication and mathematical transparency. The progenitor of this subgenre is widely considered to be Reactor Idle, developed by the independent creator known as Baldurans. Early versions of this concept leaked onto platforms like Kongregate during the development phase, illustrating a community-driven appetite for grid-based resource management games that offered more than simple accumulation mechanics. These early iterations established the core loop: placing power-generating components on a grid to produce revenue while managing the entropic byproduct of heat.
 
-As the genre matured, subsequent projects such as Reactor Incremental and its various community-maintained forks, including the "Knockoff" and "Revival" iterations, began to formalize the underlying physics of the simulation. Reactor Incremental introduced the concept of "Pulses," where the proximity of components creates a multiplicative feedback loop, significantly increasing both production and risk. The technical architecture evolved to support more complex features, such as Google Drive saving, advanced macros for component placement, and a "Time Flux" system to handle offline progress. This progression reflects a broader trend in the idle game market, where innovation is driven by deeper simulation mechanics and more robust technical foundations.
+As the genre matured, subsequent projects such as Reactor Incremental and its various community-maintained forks, including the "Knockoff" and "Revival" iterations, began to formalize the underlying physics of the simulation. Reactor Incremental introduced the concept of "Pulses," where proximity couples tiles: neighbors raise each other's effective pulse count so power rises linearly in that total while heat rises quadratically. The technical architecture evolved to support more complex features, such as Google Drive saving, advanced macros for component placement, and a "Time Flux" system to handle offline progress. This progression reflects a broader trend in the idle game market, where innovation is driven by deeper simulation mechanics and more robust technical foundations.
 
 Era	Primary Mechanic	Technical Foundation	Source Authority
 Proto-Reactor	Manual Clicking / Basic Accumulation	Main Thread JS / Simple Counters	Early Reactor (Idle)
@@ -21,44 +21,17 @@ The foundational layer of the reactor substrate is built upon a rejection of arb
 
 The Calculus of Quadratic Divergence
 
-A defining characteristic of the modern reactor engine is the strict enforcement of the divergence between power and heat. In traditional incremental games, costs and rewards typically scale linearly or exponentially in tandem. The reactor substrate, however, introduces a mathematical "soft cap" by ensuring that heat scales quadratically while power scales linearly or multiplicatively. This creates a design space where density is punished, forcing the player to prioritize spatial efficiency over raw volume.
+A defining characteristic of the modern reactor engine is the strict enforcement of the divergence between power and heat. In traditional incremental games, costs and rewards typically scale linearly or exponentially in tandem. The reactor substrate, however, introduces a mathematical "soft cap" by ensuring that heat scales with the square of the cell's combined pulse count while power scales linearly with that same count (with further multiplicative upgrades applied to the power coefficient). This creates a design space where density is punished, forcing the player to prioritize spatial efficiency over raw volume.
 
-The power generation formula for a given cell is a function of its base power, linear modifiers, and the sum of adjacent pulses:
+Each fuel cell uses a total pulse count (M + N) per tick. M is the cell's own pack size (cell_pack_M in code), typically 1, 2, or 4 for single, double, or quad. N is the sum of pulses from neighbors within that part's topology and range: each adjacent active fuel cell contributes that neighbor's cell_count (same 1 / 2 / 4 convention); each adjacent active reflector contributes neighbor_pulse_value. Implementation reference: computeNeighborPulseNFromTile, calculateCellPulsePower, and calculateCellPulseHeat in public/src/logic.js; the worker uses computeWorkerNeighborPulseN with the same neighbor summation rules.
 
-P=(L⋅Pbase)⋅(M+N)
-P=(L⋅P
-base
-	​
+Power: P = Pbase × (M + N), where Pbase is the cell's base power coefficient (fuel type and tier from catalog data). Additional fuel-specific upgrades multiply this result (for example, uranium cell power scales by powers of two per upgrade level).
 
-)⋅(M+N)
+Heat: H = (Hbase × (M + N)²) / max(1, C), where Hbase is the cell's base heat coefficient and C is cell_count_C or cell_count, apportioning heat across sub-cells inside multi-cell parts. Heat is quadratic in (M + N), not an exponential such as 2^(1 + x); small integer values of (M + N) can coincide with powers of two by arithmetic accident (e.g. (1 + 1)² = 4), but a cell with M = 1 and N = 2 yields a heat factor of 9 from the pulse term, not 8.
 
-In this equation, 
-L
-L
- represents global linear modifiers (such as upgrades), while 
-M
-M
- and 
-N
-N
- represent the number of active pulses received from neighboring cells. Conversely, the heat generation for the same cell is governed by a quadratic relationship:
+Tier (fuel type and part level) changes Pbase and Hbase via part definitions (for example, level-1 uranium has base_power and base_heat of 1 in public/data/part_list.json before upgrades). Two orthogonally adjacent level-1 uranium singles therefore each have M = 1, N = 1, produce 2 power and 4 heat per tick, and sum to 4 power and 8 heat for the pair.
 
-H=Hbase⋅(M+N)2C
-H=
-C
-H
-base
-	​
-
-⋅(M+N)
-2
-	​
-
-
-The variable 
-C
-C
- represents the cooling or containment constant. As the number of adjacent pulses increases, the power output grows linearly, but the heat output grows by the square of the pulse count. This mathematical reality forces the player to transition from "Surrounder" builds—where cells are packed tightly together—to more sophisticated "Thermal Bus" architectures where components are spaced to maximize heat dissipation.
+As neighbor contributions stack, power rises in proportion to (M + N) while heat rises in proportion to (M + N)². This mathematical reality forces the player to transition from "Surrounder" builds—where cells are packed tightly together—to more sophisticated "Thermal Bus" architectures where components are spaced to maximize heat dissipation.
 
 The Pulse Priority and Integer Determinism
 
@@ -70,38 +43,23 @@ Topological Fluidity: The Thermal Bus and Graph Solvers
 
 In advanced iterations of the reactor substrate, the grid is no longer treated as a simple two-dimensional array of objects. Instead, it is modeled as a mathematical topology defined by edges (connections) and nodes (components). This shift allows for more complex interactions, such as the "Thermal Bus," where heat is treated as a fluid moving through a network.
 
-The Directed Acyclic Graph (DAG) Solver
+Pressure-Gradient Batch Heat Step
 
-Heat management in early reactor games was often localized; a cell would simply vent heat to its immediate neighbors or into a global pool. The modern substrate utilizes a Directed Acyclic Graph (DAG) solver to resolve thermal transfer more realistically. Instead of iterating through every component and calculating its specific cooling rate, the system treats the entire grid as a thermal gradient.
+Heat management in early reactor games was often localized; a cell would simply vent heat to its immediate neighbors or into a global pool. The modern substrate resolves transfer in `runHeatStepFromTyped`: thermal pressure ratios drive a batch redistribution step instead of ad hoc per-tile rules in the UI thread.
 
 The simulation calculates "Thermal Pressure"—a ratio of current heat to local containment capacity—across the entire grid. Energy then moves along this gradient in a single batch operation. This methodology mimics real-world heat exchange systems where diffusers discharge energy into a plenum chamber for centralized management. By treating heat as a fluid, the engine allows for the functional separation of "Engines" (cell clusters) from "Radiators" (venting arrays), enabling the transition from local logic to global logic in the player's architecture.
 
 Abstract Adjacency and Compiled Adjacency Maps
 
-To maintain performance while supporting complex interactions, the engine utilizes a Compiled Adjacency Map. Spatial lookups are one of the most computationally expensive parts of a grid-based simulation. By pre-calculating orthogonal, cross (row/column), and radial interactions upon grid-resize, the physics tick can remain 
-O(1)
-O(1)
- regarding spatial lookups.
+To maintain performance while supporting complex interactions, the engine utilizes a Compiled Adjacency Map. Spatial lookups are one of the most computationally expensive parts of a grid-based simulation. By pre-calculating orthogonal, cross (row/column), and radial interactions upon grid-resize, the physics tick can remain O(1) regarding spatial lookups.
 
 This abstract adjacency allows for components that have non-standard influence ranges. For example, a high-tier particle accelerator might influence every cell in its current row and column, or a reactor plating module might provide a radial bonus to the hull integrity of all nearby components. Because these relationships are pre-compiled into a static map, the engine can calculate the aggregate pulse input for every cell in a single pass of the TypedArray, significantly reducing the overhead of the main logic loop.
 
 Topology Type	Interaction Method	Performance Complexity	Strategic Application
-Orthogonal	Immediate Neighbors (4-way)	
-O(1)
-O(1)
-	Basic Fuel Cell clusters
-Cross	Row/Column Influence	
-O(1)
-O(1)
- (Pre-compiled)	Advanced Reflectors / Accelerators
-Radial	Distance-based Radius	
-O(1)
-O(1)
- (Pre-compiled)	Coolant Reservoirs / Safety Vents
-Global	Grid-wide Influence	
-O(1)
-O(1)
-	Reactor Plating / Global Buffs
+Orthogonal	Immediate Neighbors (4-way)	O(1)	Basic Fuel Cell clusters
+Cross	Row/Column Influence	O(1) (Pre-compiled)	Advanced Reflectors / Accelerators
+Radial	Distance-based Radius	O(1) (Pre-compiled)	Coolant Reservoirs / Safety Vents
+Global	Grid-wide Influence	O(1)	Reactor Plating / Global Buffs
 The Invariant Substrate: State over Action
 
 A central pillar of the reactor substrate's design is the principle that progression is a derivation of state, not a sequence of mutations. This approach is rooted in functional programming and ensures that the game engine remains robust, testable, and capable of handling complex interactions without side effects.
@@ -116,13 +74,13 @@ Transactional Persistence and the Command Queue
 
 Saving and loading in the reactor substrate are governed by a strict Schema Pipeline. Every save state is validated against a schema (typically using Zod) to ensure it adheres to the expected structure and value ranges. Once validated, the data is transformed into a binary-packed representation. This binary packing is essential for supporting large grids (e.g., 50x50 or larger) while keeping save files lightweight and resistant to corruption.
 
-User interactions are handled via a Command Queue. When a player places a component or sells power, they are sending an "Intent" to the logic layer rather than mutating the state directly. This architecture provides several key benefits:
+User interactions are handled via a Command Queue (`intent_queue`). Grid placement uses a `PLACE_PART` intent drained by the Engine (`consumeIntentQueueAsync`), which applies cost deduction and `Tile.setPart` in one pass; sell-power and vent intents may be applied on the main thread or included in the game-loop worker tick batch. This architecture provides several key benefits:
 
-Undo/Redo: Since every action is a discrete intent in a queue, the system can naturally support undoing or redoing actions by moving through the queue history.
+UI Decoupling: The UI enqueues intents instead of mutating the grid or wallet ad hoc; the Engine applies them so high-frequency rendering does not own simulation mutations.
 
-UI Decoupling: The UI never directly touches the simulation state. It sends commands to the worker and waits for a response, ensuring that high-frequency rendering does not block the physics tick.
+Extensibility: Discrete intents are a natural hook for future undo/redo or stricter worker-side validation; those features are not required for the queue pattern to pay off today.
 
-State Synchronization: The worker can validate every command against the current simulation state, preventing "cheating" or invalid placements that might occur if the UI were allowed to mutate data directly.
+State Synchronization: Economy commands can be coordinated with the game-loop worker (`TRY_DEDUCT` / `CREDIT`) so rapid ticks and purchases stay consistent with the active simulation path.
 
 Deterministic Lifecycle: Autonomous Entropy and Failure
 
@@ -139,7 +97,7 @@ When the game is resumed after a period of inactivity, the accumulator consumes 
 
 Worker Authority and the Anatomy of Failure
 
-The Web Worker acts as the "Source of Truth" for the entire simulation, including the player's wallet and component health. During high-speed play, where ticks may occur hundreds of times per second, moving data between the main thread and the worker is too slow. Therefore, the worker handles internal mechanics like component decay and "Auto-Buy" replacement autonomously.
+The unified `engine.worker.js` runs the game-loop and physics heat step (`gameLoopWorkerCore` + `physicsWorkerCore` with `runHeatStepFromTyped`). During high-speed play, batching ticks in the worker avoids blocking the main thread; wallet updates can follow the worker economy command path when that mode is active. Authoritative heat arrays and tick results are reconciled on the main `Engine` after each batch.
 
 Failure in the reactor substrate is a multi-stage physical process rather than a binary "game over." This adds a layer of tension and strategic depth, as players must manage the transition between safe operation and catastrophic failure. The "Anatomy of Failure" follows a standardized progression:
 
@@ -158,8 +116,8 @@ Heat>MaxHeat⋅1.1
 Fragmentation	
 Hull≤0
 Hull≤0
-	Random component deletion	Explosions on grid canvas
-Criticality	Thermal Runaway	Total grid wipe / Reset	Screen white-out / Particle blast
+	Probabilistic component loss per tick (structural decay)	Explosions on grid canvas
+Criticality	Thermal Runaway (reactor heat strictly greater than 2× max)	Total grid wipe / Reset	Screen white-out / Particle blast
 Pure Reactive Projection: The Stateless View
 
 A hallmark of the reactor substrate's architecture is the total decoupling of the simulation state from the DOM. The user interface is treated as a "Read-Only" lens—a projection of the state that can be destroyed and re-mounted without affecting the underlying logic.
@@ -182,7 +140,7 @@ The ultimate goal of the reactor substrate is to force a transition in the playe
 
 The Bottleneck of Exotic Particles
 
-In the late-game phase, the primary metric of success is the generation of Exotic Particles (EP). Unlike money, which can often be accumulated through raw power generation, EP generation is throttled by the lower of two values: Total Power Produced vs. Total Heat Dissipated. If the player produces massive amounts of power but lacks the cooling infrastructure to sustain it, their EP generation will be negligible. Conversely, an over-cooled reactor with low power output is equally inefficient.
+In the late-game phase, the primary metric of success is the generation of Exotic Particles (EP). Banked "weave" EP on reboot is derived from the minimum of session **power produced** and session **heat dissipated**, scaled by a fixed **Weave Quantum** (`WEAVE_QUANTUM` = 1e6 in code): `floor(min(produced, dissipated) / WEAVE_QUANTUM)`. If the player produces massive amounts of power but lacks the cooling infrastructure to match dissipation, weave EP is capped; conversely, high dissipation with low production yields the same cap. Money from selling power remains a separate economy track.
 
 This "Min Constraint" forces the player to find the "Perfect Mathematical Balance." They must architect systems that are not only powerful but also perpetual and autonomous. This is the essence of the "Architect's Journey"—the movement away from manual cooling clicks toward the design of autonomous, self-sustaining thermal loops.
 
@@ -202,7 +160,7 @@ The technical principles of the reactor substrate often mirror real-world chemic
 
 Fluidized Bed Reactors and Mass Transfer
 
-The movement of heat in the reactor substrate's DAG solver can be compared to the phenomena in a Fluidized Bed Biofilm Reactor (FBBR). In such systems, the efficiency of the reaction is determined by the "biofilm thickness" and the rate of mass transfer across the substrate. In the reactor substrate, the "biofilm" can be viewed as the layer of cooling components surrounding a fuel cell. If the "mass transfer" of heat is too slow, the cell becomes inhibited, leading to a loss of efficiency or structural failure.
+The movement of heat in the reactor substrate's pressure-gradient batch step (`runHeatStepFromTyped`) can be compared to the phenomena in a Fluidized Bed Biofilm Reactor (FBBR). In such systems, the efficiency of the reaction is determined by the "biofilm thickness" and the rate of mass transfer across the substrate. In the reactor substrate, the "biofilm" can be viewed as the layer of cooling components surrounding a fuel cell. If the "mass transfer" of heat is too slow, the cell becomes inhibited, leading to a loss of efficiency or structural failure.
 
 Similarly, the "Thermal Bus" architecture mirrors the design of modern microreactors, which utilize microchannels to precisely control reactant transfer and heat dissipation. The extremely large specific surface area of these microchannels allows for efficient heat exchange, much like how a well-designed grid in the reactor substrate uses a high density of small venting components to manage the output of a central power core.
 
@@ -216,6 +174,6 @@ Conclusion: The Maturity of the Reactor Substrate
 
 The Reactor Substrate represents a high-water mark in the technical evolution of the incremental genre. By prioritizing mathematical foundationalism, topological fluidity, and a decoupled reactive architecture, it has moved the genre beyond simple idle mechanics into the realm of complex systems engineering.
 
-The lineage of these games, from the early leaks of Reactor Idle to the high-performance frameworks of Reactor Revival, demonstrates a continuous commitment to simulation integrity. The use of Web Workers for deterministic physics, TypedArrays for performance, and DAG solvers for realistic heat transfer ensures that the simulation remains a robust and engaging challenge for professional architects and casual players alike.
+The lineage of these games, from the early leaks of Reactor Idle to the high-performance frameworks of Reactor Revival, demonstrates a continuous commitment to simulation integrity. The use of Web Workers for deterministic physics, TypedArrays for performance, and batch heat transfer along local pressure ratios ensures that the simulation remains a robust and engaging challenge for professional architects and casual players alike.
 
 Ultimately, the substrate is more than a set of code; it is a philosophy of design that treats the player as a rational actor within a formalized physical universe. The transition from manual operator to systems architect is not just a gameplay loop but a reflection of the substrate's own evolution—from a simple collection of mutations to an invariant, self-governing state machine of entropy and production. As the genre continues to evolve, the principles of the reactor substrate will likely serve as the foundation for the next generation of high-fidelity simulation games, further blurring the line between play and professional systems design.
