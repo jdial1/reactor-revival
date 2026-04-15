@@ -13,4 +13,5 @@ public/lib/pako.min.js
 /public/lib
 **/__pycache__/
 **/*.pyc
+**/*.py
 scripts/playtest_failure.png
