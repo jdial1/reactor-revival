@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import importPlugin from "eslint-plugin-import";
 
 const nodeGlobals = {
   Buffer: "readonly",
@@ -148,6 +149,22 @@ export default [
     },
     rules: {
       "no-console": "warn"
+    }
+  },
+  {
+    files: ["public/src/**/*.js"],
+    plugins: { import: importPlugin },
+    settings: {
+      "import/resolver": {
+        node: {
+          extensions: [".js", ".mjs", ".cjs"]
+        }
+      }
+    },
+    rules: {
+      "import/named": "error",
+      "import/default": "error",
+      "import/no-unresolved": "error"
     }
   }
 ];

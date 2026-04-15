@@ -7,6 +7,7 @@
   "debug": false,
   "scripts": {
     "test": "node scripts/test-runner.js",
+    "check:imports": "eslint public/src -c config/eslint.config.js --quiet",
     "check:test-patterns": "node scripts/check-expect-tonum.js",
     "test:performance": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192 --expose-gc\" CI=true vitest run tests/core/engine/performance.test.js -c config/vitest.config.mjs --testTimeout=120000 --hookTimeout=60000",
     "test:ci": "node scripts/test-runner.js",
@@ -51,6 +52,8 @@
     "cross-env": "^7.0.3",
     "esbuild": "^0.27.0",
     "eslint": "^9.32.0",
+    "eslint-import-resolver-node": "^0.3.10",
+    "eslint-plugin-import": "^2.32.0",
     "glob": "^11.0.3",
     "happy-dom": "^20.0.11",
     "jsdom": "^24.1.0",

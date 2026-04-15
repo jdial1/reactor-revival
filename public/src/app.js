@@ -1,5 +1,5 @@
 import { Game, Engine, resetHeatThresholdSignalState } from "./logic.js";
-import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, setSlot1FromBackupAsync, UPDATE_TOAST_STYLES, FOUNDATIONAL_TICK_MS, MAX_ACCUMULATOR_MULTIPLIER, BASE_MAX_HEAT, BASE_MAX_POWER } from "./utils.js";
+import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, setSlot1FromBackupAsync, FOUNDATIONAL_TICK_MS, MAX_ACCUMULATOR_MULTIPLIER, BASE_MAX_HEAT, BASE_MAX_POWER } from "./utils.js";
 import { html, render } from "lit-html";
 import { UI } from "./components/ui.js";
 import { MODAL_IDS } from "./components/ui-modals.js";

@@ -18,13 +18,10 @@ function runCommand(command, args = [], env = process.env) {
 async function runTests() {
   console.log('--- Starting full test suite (lint, syntax check, vitest) ---');
 
-  // 1. Run full lint
   runCommand('npm', ['run', 'lint']);
 
-  // 2. Run syntax check on all JS files
   runCommand('node', ['scripts/check-syntax.js']);
 
-  // 3. Run vitest
   const vitestArgs = [
     'vitest',
     'run',
