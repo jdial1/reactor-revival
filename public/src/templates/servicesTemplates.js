@@ -147,13 +147,13 @@ export function saveSlotMainTemplate({
             type="file"
             id="load-from-file-input"
             accept=".json,.reactor,application/json"
-            style="display:none;"
+            style="display: none;"
             @change=${onFileChange}
           />
           <button
             class="splash-btn splash-btn-resume-primary save-slot-restore-btn"
             ?disabled=${selectedSlot == null}
-            style="opacity: ${selectedSlot != null ? 1 : 0.5}"
+            style="opacity: ${selectedSlot != null ? 1 : 0.5};"
             @click=${onRestore}
           >
             RESTORE
@@ -169,32 +169,33 @@ export function saveSlotMainTemplate({
 export function updateNotificationModalTemplate(currentVersion, newVersion, onReloadNow, onDismiss) {
   return html`
     <style>
-      .update-notification-modal {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0, 0, 0, 0.8); display: flex; justify-content: center;
-        align-items: center; z-index: 10000; font-family: 'Press Start 2P', monospace;
-      }
-      .update-notification-content {
-        background: #2a2a2a; border: 2px solid #4a4a4a; border-radius: 8px;
-        padding: 20px; max-width: 400px; text-align: center; color: #fff;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-      }
-      .update-notification-content h3 { margin: 0 0 15px 0; color: #4CAF50; font-size: 1.2em; }
-      .version-comparison { margin: 15px 0; display: flex; justify-content: space-around; gap: 20px; }
-      .version-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-      .version-label { font-size: 0.9em; color: #ccc; }
-      .version-value { font-size: 1.1em; font-weight: bold; padding: 5px 10px; border-radius: 4px; }
-      .version-value.current { background: #f44336; color: white; }
-      .version-value.latest { background: #4CAF50; color: white; }
-      .update-instruction { margin: 15px 0; font-size: 0.9em; line-height: 1.4; }
-      .update-instruction a { color: #4CAF50; text-decoration: none; }
-      .update-instruction a:hover { text-decoration: underline; }
-      .update-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
-      .update-btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 0.9em; transition: background-color 0.2s; }
-      .update-btn.refresh { background: #4CAF50; color: white; }
-      .update-btn.refresh:hover { background: #45a049; }
-      .update-btn.dismiss { background: #666; color: white; }
-      .update-btn.dismiss:hover { background: #777; }
+ .update-notification-modal {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgb(0 0 0 / 80%); display: flex; justify-content: center;
+  align-items: center; z-index: 10000; font-family: 'Press Start 2P', monospace;
+ }
+
+ .update-notification-content {
+  background: #2a2a2a; border: 2px solid #4a4a4a; border-radius: 8px;
+  padding: 20px; max-width: 400px; text-align: center; color: #fff;
+  box-shadow: 0 4px 20px rgb(0 0 0 / 50%);
+ }
+ .update-notification-content h3 { margin: 0 0 15px; color: #4CAF50; font-size: 1.2em; }
+ .version-comparison { margin: 15px 0; display: flex; justify-content: space-around; gap: 20px; }
+ .version-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+ .version-label { font-size: 0.9em; color: #ccc; }
+ .version-value { font-size: 1.1em; font-weight: bold; padding: 5px 10px; border-radius: 4px; }
+ .version-value.current { background: #f44336; color: white; }
+ .version-value.latest { background: #4CAF50; color: white; }
+ .update-instruction { margin: 15px 0; font-size: 0.9em; line-height: 1.4; }
+ .update-instruction a { color: #4CAF50; text-decoration: none; }
+ .update-instruction a:hover { text-decoration: underline; }
+ .update-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+ .update-btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 0.9em; transition: background-color 0.2s; }
+ .update-btn.refresh { background: #4CAF50; color: white; }
+ .update-btn.refresh:hover { background: #45a049; }
+ .update-btn.dismiss { background: #666; color: white; }
+ .update-btn.dismiss:hover { background: #777; }
     </style>
     <div class="update-notification-content">
       <h3>🚀 Update Available!</h3>
@@ -222,18 +223,6 @@ export function updateNotificationModalTemplate(currentVersion, newVersion, onRe
 
 export function updateToastTemplate(onRefresh, onClose) {
   return html`
-    <style>
-      .update-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #2a2a2a; border: 2px solid #4CAF50; border-radius: 8px; padding: 0; z-index: 10000; font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); animation: toast-slide-up 0.3s ease-out; max-width: 400px; width: 90%; }
-      .update-toast-content { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; }
-      .update-toast-message { display: flex; align-items: center; gap: 8px; flex: 1; color: #fff; }
-      .update-toast-text { font-size: 0.9em; font-weight: 500; }
-      .update-toast-button { background: #4CAF50; color: white; border: none; border-radius: 4px; padding: 8px 16px; font-family: 'Press Start 2P', monospace; font-size: 0.8em; cursor: pointer; transition: background-color 0.2s; white-space: nowrap; }
-      .update-toast-button:hover { background: #45a049; }
-      .update-toast-close { background: transparent; color: #ccc; border: none; font-size: 1.2em; cursor: pointer; padding: 4px; line-height: 1; transition: color 0.2s; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
-      .update-toast-close:hover { color: #fff; }
-      @keyframes toast-slide-up { from { transform: translateX(-50%) translateY(100px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
-      @media (max-width: 480px) { .update-toast { bottom: 10px; left: 10px; right: 10px; transform: none; max-width: none; width: auto; } .update-toast-content { padding: 10px 12px; gap: 8px; } .update-toast-text { font-size: 0.8em; } .update-toast-button { padding: 6px 12px; font-size: 0.75em; } }
-    </style>
     <div class="update-toast-content">
       <div class="update-toast-message">
         <span class="update-toast-text">New content available, click to reload.</span>
@@ -246,23 +235,14 @@ export function updateToastTemplate(onRefresh, onClose) {
 
 export function versionCheckToastTemplate(borderColor, icon, message, onClose) {
   return html`
-    <style>
-      .version-check-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #2a2a2a; border: 2px solid ${borderColor}; border-radius: 8px; padding: 0; z-index: 10000; font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); animation: toast-slide-up 0.3s ease-out; max-width: 400px; width: 90%; }
-      .version-check-toast-content { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; }
-      .version-check-toast-message { display: flex; align-items: center; gap: 8px; flex: 1; }
-      .version-check-toast-icon { font-size: 1.2em; }
-      .version-check-toast-text { color: #fff; font-size: 0.7em; line-height: 1.4; }
-      .version-check-toast-close { background: transparent; color: #ccc; border: none; font-size: 1.2em; cursor: pointer; padding: 4px; line-height: 1; transition: color 0.2s; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
-      .version-check-toast-close:hover { color: #fff; }
-      @keyframes toast-slide-up { from { transform: translateX(-50%) translateY(100px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
-      @media (max-width: 480px) { .version-check-toast { bottom: 10px; left: 10px; right: 10px; transform: none; max-width: none; width: auto; } .version-check-toast-content { padding: 10px 12px; gap: 8px; } .version-check-toast-text { font-size: 0.6em; } }
-    </style>
-    <div class="version-check-toast-content">
+    <div class="version-check-toast" style="border: 2px solid ${borderColor};">
+      <div class="version-check-toast-content">
       <div class="version-check-toast-message">
         <span class="version-check-toast-icon">${icon}</span>
         <span class="version-check-toast-text">${message}</span>
       </div>
       <button class="version-check-toast-close" @click=${onClose}>×</button>
+    </div>
     </div>
   `;
 }

@@ -580,7 +580,7 @@ export function layoutViewModalTemplate({
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div style="display: flex; flex-direction: column; gap: 12px; max-width: 90vw; max-height: 90vh; padding: 16px; border: 1px solid rgb(90,90,90); background: rgb(26,26,26); color: white; overflow: auto;">
+      <div style="display: flex; flex-direction: column; gap: 12px; max-width: 90vw; max-height: 90vh; padding: 16px; border: 1px solid rgb(90 90 90); background: rgb(26 26 26); color: white; overflow: auto;">
         <div style="display: flex; align-items: center; justify-content: space-between;">
           <h3 style="margin: 0;">Reactor Layout</h3>
           <button type="button" @click=${() => onClose?.()} style="padding: 5px 10px;">×</button>
@@ -729,7 +729,7 @@ export function engineStatusIndicatorTemplate({
 export function navIndicatorTemplate({
   visible,
 }) {
-  return html`<span class="nav-indicator" style="display: ${visible ? "block" : "none"}"></span>`;
+  return html`<span class="nav-indicator ${visible ? "visible" : ""}"></span>`;
 }
 
 export function upgradeCostTextTemplate({

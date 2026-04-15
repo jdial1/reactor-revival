@@ -98,7 +98,7 @@ export function visualSectionTemplate(prefs, sectionHead, sectionHeadMargin, swi
       <table class="settings-visuals-table">
         ${switchRow("setting-motion", "Reduced Motion", prefs.reducedMotion, "reducedMotion")}
         ${selectRow("setting-number-format", "Number format", "numberFormat", html`
-          <select id="setting-number-format" class="pixel-select settings-select" style="background: rgb(60,60,60); color: white; border: 2px solid var(--bevel-dark); padding: 4px;">
+          <select id="setting-number-format" class="pixel-select settings-select" style="background: rgb(60 60 60); color: white; border: 2px solid var(--bevel-dark); padding: 4px;">
             <option value="default" ?selected=${prefs.numberFormat === "default"}>1,234 K</option>
             <option value="scientific" ?selected=${prefs.numberFormat === "scientific"}>1.23e3</option>
           </select>
@@ -132,9 +132,9 @@ export function systemSectionTemplate(prefs, notificationsChecked, sectionHead, 
         ${switchRow("setting-notifications", "Update Notifications", notificationsChecked, "notifications")}
       </table>
 
-      <h4 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-warning-color, rgb(255, 160, 0)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;">POWER CYCLING</h4>
+      <h4 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-warning-color, rgb(255 160 0)); font-size: 0.8rem; border-bottom: 2px solid rgb(68 68 68); padding-bottom: 4px;">POWER CYCLING</h4>
       <div class="data-buttons">
-        <button class="pixel-btn" id="research_back_to_splash_btn" style="border-color: rgb(209, 107, 107) rgb(80, 30, 30) rgb(80, 30, 30) rgb(209, 107, 107); background: rgb(171, 63, 63);">QUIT TO TITLE</button>
+        <button class="pixel-btn" id="research_back_to_splash_btn" style="border-color: rgb(209 107 107) rgb(80 30 30) rgb(80 30 30) rgb(209 107 107); background: rgb(171 63 63);">QUIT TO TITLE</button>
       </div>
 
       <h4 style=${sectionHeadMargin}>SYSTEM INFO</h4>
@@ -198,8 +198,8 @@ export function settingsModalTemplate({
       <div class="settings-modal pixel-panel modal-drawer-panel" style="padding: 0; display: flex; flex-direction: column;" @click=${(e) => e.stopPropagation()}>
         <div class="modal-drawer-metal-handle" aria-hidden="true"></div>
         <div class="modal-swipe-handle" aria-hidden="true"></div>
-        <div class="settings-header" style="background: rgb(35, 39, 35); border-bottom: 4px solid var(--bevel-dark); padding: 12px 16px;">
-          <h2 style="margin: 0; color: var(--game-success-color, rgb(143, 214, 148)); font-size: 1rem; text-shadow: 2px 2px 0px rgba(0,0,0,0.8);">[ DIAGNOSTIC TERMINAL ]</h2>
+        <div class="settings-header" style="background: rgb(35 39 35); border-bottom: 4px solid var(--bevel-dark); padding: 12px 16px;">
+          <h2 style="margin: 0; color: var(--game-success-color, rgb(143 214 148)); font-size: 1rem; text-shadow: 2px 2px 0 rgb(0 0 0 / 80%);">[ DIAGNOSTIC TERMINAL ]</h2>
           <button type="button" class="close-btn modal-close-btn modal-latch-close" aria-label="Close" @click=${onClose}><span class="modal-latch-arm" aria-hidden="true"></span><span class="modal-latch-body"></span></button>
         </div>
 

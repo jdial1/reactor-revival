@@ -268,6 +268,8 @@ const GameLoopReactorStateSchema = z.object({
   heat_controlled: z.number().optional().default(0),
   vent_multiplier_eff: z.number().optional().default(0),
   stirling_multiplier: z.number().optional().default(0),
+  hull_integrity: z.number().optional().default(100),
+  failure_state: z.string().optional().default("nominal"),
 }).passthrough();
 
 export const GameLoopTickInputSchema = z.object({
@@ -309,6 +311,8 @@ export const GameLoopTickResultSchema = z.object({
   error: z.boolean().optional(),
   heatBuffer: z.any().optional(),
   useSAB: z.boolean().optional(),
+  hull_integrity: z.number().optional(),
+  failure_state: z.string().optional(),
 }).passthrough();
 
 export const PhysicsTickInputSchema = z.object({

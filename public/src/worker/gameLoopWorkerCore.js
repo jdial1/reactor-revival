@@ -38,6 +38,7 @@ import {
   applyPowerOverflowCalcDecimal,
   HULL_REPEL_FRACTION,
   FOUNDATIONAL_TICK_MS,
+  MELTDOWN_HEAT_MULTIPLIER,
 } from "../utils.js";
 import { toDecimal } from "../utils.js";
 import { buildContainmentSoa, buildOrthoAdjacencySoa, heatSoaView } from "./soaTickLayout.js";
@@ -623,7 +624,33 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, 
     gidx
   );
 
+  let hull_integrity = reactorState.hull_integrity ?? 100;
+  let failure_state = "nominal";
+  const maxH = new (reactorHeat.constructor)(reactorState.max_heat ?? 0);
+
   const explosionIndices = findExplosionIndices(partLayout, partTable, heat, gidx);
+  if (reactorHeat.gte(maxH) && maxH.gt(0)) {
+    failure_state = "saturation";
+
+    if (reactorHeat.gte(maxH.mul(1.1))) {
+      failure_state = "repulsion";
+      const overpressure = reactorHeat.sub(maxH.mul(1.1)).div(maxH).toNumber();
+      hull_integrity = Math.max(0, hull_integrity - overpressure * 5);
+    }
+
+    if (hull_integrity <= 0 && reactorHeat.lt(maxH.mul(MELTDOWN_HEAT_MULTIPLIER))) {
+      failure_state = "fragmentation";
+      const validIndices = partLayout.map((t) => gidx(t.r, t.c));
+      if (validIndices.length > 0 && Math.random() < 0.1) {
+        explosionIndices.push(validIndices[Math.floor(Math.random() * validIndices.length)]);
+      }
+    }
+
+    if (reactorHeat.gt(maxH.mul(MELTDOWN_HEAT_MULTIPLIER))) {
+      failure_state = "criticality";
+    }
+  }
+
   const ventOut = processVents(partLayout, partTable, heat, reactorState, multiplier, gidx, reactorPower);
   reactorPower = ventOut.reactorPower;
   const ventPower = ventOut.power_add;
@@ -652,9 +679,11 @@ function processOneTickIteration(ctx, heat, gridLen, reactorHeat, reactorPower, 
     ventHeatDissipated: ventOut.ventHeatDissipated,
     cellPowerAdd: cellResult.power_add,
     cellHeatAdd: cellResult.heat_add,
-    explosionIndices,
+    explosionIndices: Array.from(new Set(explosionIndices)),
     depletionIndices: cellResult.depletionIndices,
     tileUpdates: cellResult.tileUpdates,
+    hull_integrity,
+    failure_state,
   };
 }
 
@@ -675,6 +704,8 @@ function runOneTick(data) {
   let totalMoneyEarned = new Decimal(0);
   let totalPowerSold = 0;
   let totalVentHeat = 0;
+  let finalHullIntegrity = data.reactorState.hull_integrity ?? 100;
+  let finalFailureState = data.reactorState.failure_state ?? "nominal";
   const isProjection = data.mode === "projection";
   const n = isProjection ? 1 : Math.max(1, data.tickCount || 1);
   const tick0 = typeof performance !== "undefined" ? performance.now() : 0;
@@ -686,6 +717,27 @@ function runOneTick(data) {
   const prestigeMult = new Decimal(Number(data.prestigeMoneyMultiplier ?? 1) || 1);
   const initialMoneyNum = moneyRef.value.toNumber();
   let projectionPlannerSample = null;
+
+  const intents = data.intents || [];
+  for (let i = 0; i < intents.length; i++) {
+    const intent = intents[i];
+    if (intent.action === "SELL_POWER") {
+      if (reactorPower.gt(0)) {
+        totalMoneyEarned = totalMoneyEarned.add(reactorPower.mul(data.reactorState.sell_price_multiplier || 1));
+        totalPowerSold += reactorPower.toNumber();
+        reactorPower = new Decimal(0);
+      }
+    } else if (intent.action === "VENT_HEAT") {
+      if (reactorHeat.gt(0)) {
+        let reduction = Number(data.reactorState.manual_heat_reduce ?? 1);
+        if (data.reactorState.manual_vent_percent > 0) {
+          reduction += (data.reactorState.max_heat || 1000) * data.reactorState.manual_vent_percent;
+        }
+        reactorHeat = reactorHeat.sub(reduction);
+        if (reactorHeat.lt(0)) reactorHeat = new Decimal(0);
+      }
+    }
+  }
 
   for (let tick = 0; tick < n; tick++) {
     if (tick > 0 && tick % 50 === 0 && typeof console !== "undefined" && console.info) {
@@ -703,6 +755,12 @@ function runOneTick(data) {
     totalMoneyEarned = totalMoneyEarned.add(result.moneyEarned);
     totalPowerSold += result.powerSold || 0;
     totalVentHeat += result.ventHeatDissipated || 0;
+    finalHullIntegrity = result.hull_integrity;
+    finalFailureState = result.failure_state;
+    if (ctx.reactorState) {
+      ctx.reactorState.hull_integrity = result.hull_integrity;
+      ctx.reactorState.failure_state = result.failure_state;
+    }
     for (let e = 0; e < result.explosionIndices.length; e++) allExplosionIndices.push(result.explosionIndices[e]);
     for (let d = 0; d < result.depletionIndices.length; d++) allDepletionIndices.push(result.depletionIndices[d]);
     for (let u = 0; u < result.tileUpdates.length; u++) {
@@ -753,6 +811,8 @@ function runOneTick(data) {
     tickCount: n,
     heatBuffer: heatBufferOut,
     useSAB,
+    hull_integrity: finalHullIntegrity,
+    failure_state: finalFailureState,
     projection: isProjection ? true : undefined,
     projectionPlannerSample: isProjection ? projectionPlannerSample : undefined,
   };

@@ -2714,11 +2714,17 @@ class SplashFlowController {
   }
 }
 
-let flavorMessages = ["Loading..."];
-try {
-  flavorMessages = getValidatedGameData().flavorText;
-} catch (error) {
-  logger.log("warn", "splash", "Flavor text init:", error);
+let flavorMessages = null;
+function getFlavorMessages() {
+  if (!flavorMessages) {
+    try {
+      flavorMessages = getValidatedGameData().flavorText;
+    } catch (error) {
+      logger.log("warn", "splash", "Flavor text init fallback used", error);
+      flavorMessages = ["Reactor online"];
+    }
+  }
+  return flavorMessages;
 }
 
 class SplashScreenManager extends BaseComponent {
@@ -3049,10 +3055,6 @@ class SplashScreenManager extends BaseComponent {
   async refreshSaveOptions() {
     await this.showStartOptions(!!(await StorageAdapter.getRaw("reactorGameSave")));
   }
-}
-
-export function getFlavorMessages() {
-  return flavorMessages;
 }
 
 export function createSplashManager() {

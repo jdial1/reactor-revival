@@ -1,0 +1,62 @@
+[
+  {
+    "id": "1",
+    "title": "Formalize the Intent Queue & Anatomy of",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:54:55"
+  },
+  {
+    "id": "2",
+    "title": "Implement the 4-Stage Anatomy of Failure",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:54:55"
+  },
+  {
+    "id": "3",
+    "title": "Decouple UI from Logic via the Intent Qu",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:54:55"
+  },
+  {
+    "id": "4",
+    "title": "Process the Intent Queue Deterministical",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:54:55"
+  },
+  {
+    "id": "5",
+    "title": "Strip out DOM polling from the Tick loop",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:54:55"
+  },
+  {
+    "id": "1",
+    "title": "Formalize the Intent Queue & Anatomy of",
+    "status": "Applied",
+    "timestamp": "2026-04-15 08:52:32"
+  },
+  {
+    "id": "2",
+    "title": "Implement the 4-Stage Anatomy of Failure",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:52:32"
+  },
+  {
+    "id": "3",
+    "title": "Decouple UI from Logic via the Intent Qu",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:52:32"
+  },
+  {
+    "id": "4",
+    "title": "Process the Intent Queue Deterministical",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:52:32"
+  },
+  {
+    "id": "5",
+    "title": "Strip out DOM polling from the Tick loop",
+    "status": "Failed",
+    "timestamp": "2026-04-15 08:52:32"
+  }
+]

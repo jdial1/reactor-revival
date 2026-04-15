@@ -23,14 +23,14 @@ describe("Group 10: State-to-DOM Synchronization", () => {
 
     game.reactor.max_heat = 1000;
     game.reactor.current_heat = 850;
-    patchGameState(game, { current_heat: 850 });
-    ui.heatVisualsUI.updateHeatVisuals();
+    patchGameState(game, { current_heat: 850, max_heat: 1000 });
+    ui.heatVisualsUI._applyHeatFromRatio(850 / 1000);
     expect(reactorBg.classList.contains("heat-warning")).toBe(true);
     expect(reactorBg.classList.contains("heat-critical")).toBe(false);
 
     game.reactor.current_heat = 1400;
-    patchGameState(game, { current_heat: 1400 });
-    ui.heatVisualsUI.updateHeatVisuals();
+    patchGameState(game, { current_heat: 1400, max_heat: 1000 });
+    ui.heatVisualsUI._applyHeatFromRatio(1400 / 1000);
     expect(reactorBg.classList.contains("heat-critical")).toBe(true);
   });
 

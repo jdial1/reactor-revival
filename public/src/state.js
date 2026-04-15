@@ -55,6 +55,7 @@ import {
 } from "./utils.js";
 import { backupModalTemplate } from "./templates/stateTemplates.js";
 import { drainGameEffects } from "./effect-orchestrator.js";
+import { syncReactorHeatVisualDom } from "./heatDomSync.js";
 import {
   NumericLike,
   DecimalLike,
@@ -175,10 +176,10 @@ export function createGameState(initial = {}) {
     manual_heat_reduce: initial.manual_heat_reduce ?? initial.base_manual_heat_reduce ?? 1,
     auto_sell_multiplier: initial.auto_sell_multiplier ?? 0,
     heat_controlled: initial.heat_controlled ?? false,
-    vent_multiplier_eff: initial.vent_multiplier_eff ?? 0,
+    hull_integrity: initial.hull_integrity ?? 100,
+    failure_state: initial.failure_state ?? "nominal", // nominal, saturation, repulsion, fragmentation, criticality
+    intent_queue: proxy([]),
     effect_queue: [],
-    ui_heat_critical: false,
-    ui_pipe_integrity_warning: false,
   });
 
   derive({
@@ -320,6 +321,8 @@ export function createUIState() {
     user_account_display: { icon: "💾", title: "Local saves" },
     copy_state_feedback: null,
     section_counts: {},
+    core_danger: 0,
+    heat_ratio: 0,
     has_affordable_upgrades: false,
     has_affordable_research: false,
     upgrades_banner_visibility: { upgradesHidden: true, researchHidden: true },
@@ -419,6 +422,23 @@ export function initUIStateSubscriptions(uiState, ui) {
   unsubs.push(subscribeKey(uiState, "is_paused", () => {
     ui.game?.onToggleStateChange?.("pause", !!uiState.is_paused);
   }));
+  unsubs.push(subscribeKey(uiState, "core_danger", (cd) => {
+    const root = typeof document !== "undefined" ? document.documentElement : null;
+    if (root) root.style.setProperty("--core-danger", String(cd));
+    const appRoot = typeof document !== "undefined" ? document.getElementById("app_root") : null;
+    if (appRoot) {
+      appRoot.style.setProperty("--core-danger", String(cd));
+      const heatNorm = Math.min(1, Math.max(0, uiState.heat_ratio / 1.5));
+      appRoot.style.setProperty("--crt-heat", String(heatNorm));
+      const dur = 20 - heatNorm * 12;
+      appRoot.style.setProperty("--crt-jitter-duration", `${dur}s`);
+      appRoot.classList.toggle("crt-heat-tearing", uiState.heat_ratio >= 1.3);
+    }
+  }));
+  unsubs.push(subscribeKey(uiState, "heat_ratio", (heatRatio) => {
+    syncReactorHeatVisualDom(ui, heatRatio);
+  }));
+  syncReactorHeatVisualDom(ui, uiState.heat_ratio);
   return () => unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
 }
 
@@ -770,25 +790,39 @@ function syncStatsToUI(reactor, _stateManager) {
 }
 
 function shouldMeltdown(reactor) {
-  if (reactor.has_melted_down) return false;
+  if (reactor.has_melted_down) return true;
   if (reactor.game.grace_period_ticks > 0) {
     reactor.game.grace_period_ticks--;
     return false;
   }
-  return reactor.current_heat.gt(reactor.max_heat.mul(MELTDOWN_HEAT_MULTIPLIER));
+
+  const heat = reactor.current_heat;
+  const max = reactor.max_heat;
+  const state = reactor.game.state;
+
+  if (heat.gt(max.mul(MELTDOWN_HEAT_MULTIPLIER))) {
+    if (state) state.failure_state = "criticality";
+    return true;
+  }
+
+  return false;
 }
 
 function executeMeltdown(reactor) {
   const game = reactor.game;
-  logger.log('warn', 'engine', '[MELTDOWN] Condition met! Initiating meltdown sequence.');
-  game.debugHistory.add('reactor', 'Meltdown triggered', { heat: reactor.current_heat, max_heat: reactor.max_heat });
+  logger.log("warn", "engine", "[MELTDOWN] Condition met! Initiating meltdown sequence.");
+  game.debugHistory.add("reactor", "Meltdown triggered", { heat: reactor.current_heat, max_heat: reactor.max_heat });
   reactor.has_melted_down = true;
 
   if (game.emit) game.emit("meltdown", { hasMeltedDown: true });
   game.emit?.("vibrationRequest", { type: "meltdown" });
   if (game.tooltip_manager) game.tooltip_manager.hide();
 
-  if (game.state) game.state.melting_down = true;
+  if (game.state) {
+    game.state.melting_down = true;
+    game.state.failure_state = "criticality";
+    game.state.hull_integrity = 0;
+  }
 
   if (game.engine) game.engine.stop();
 
@@ -1161,7 +1195,9 @@ export class StateManager extends BaseComponent {
     for (const key of heatKeys) {
       if (state[key] !== undefined) {
         this._stateUnsubscribes.push(subscribeKey(state, key, () => {
-          ui.heatVisualsUI?.updateHeatVisuals?.();
+          const hr = ui.game?.state?.heat_ratio;
+          const ratio = typeof hr === "number" && Number.isFinite(hr) ? hr : 0;
+          ui.heatVisualsUI?._applyHeatFromRatio?.(ratio);
           ui.deviceFeatures?.updateAppBadge?.();
         }));
       }

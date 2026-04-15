@@ -123,9 +123,8 @@ export function gameSetupTemplate(treeList, selectedDoctrine, selectedDifficulty
   `;
 }
 
-export function updateToastTemplate(styles, onRefresh, onClose) {
+export function updateToastTemplate(onRefresh, onClose) {
   return html`
-    <style>${styles}</style>
     <div class="update-toast">
       <div class="update-toast-content">
         <div class="update-toast-message">
@@ -140,10 +139,10 @@ export function updateToastTemplate(styles, onRefresh, onClose) {
 
 export function fallbackStartTemplate(onStart) {
   return html`
-    <div style="position:fixed;inset:0;background:#1a1a1a;display:flex;align-items:center;justify-content:center;z-index:99999;flex-direction:column;color:white;font-family:monospace;">
-      <h1 style="color:#e74c3c;">Splash UI Failed to Load</h1>
-      <p style="margin-bottom:20px;color:#ccc;">You can still start the game in fallback mode.</p>
-      <button class="pixel-btn btn-start" @click=${onStart} style="padding:10px 20px;font-size:16px;">START GAME</button>
+    <div style="position: fixed;inset: 0;background: #1a1a1a;display: flex;align-items: center;justify-content: center;z-index: 99999;flex-direction: column;color: white;font-family: monospace;">
+      <h1 style="color: #e74c3c;">Splash UI Failed to Load</h1>
+      <p style="margin-bottom: 20px;color: #ccc;">You can still start the game in fallback mode.</p>
+      <button class="pixel-btn btn-start" @click=${onStart} style="padding: 10px 20px;font-size: 16px;">START GAME</button>
     </div>
   `;
 }
@@ -151,16 +150,16 @@ export function fallbackStartTemplate(onStart) {
 export function criticalErrorTemplate(errorMessage, errorStack, onReload) {
   return html`
     <style>
-      .critical-error-overlay { position: fixed; z-index: 99999; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.95); }
-      .error-stack { max-height: 200px; overflow: auto; text-align: left; padding: 10px; background: #222; }
+ .critical-error-overlay { position: fixed; z-index: 99999; inset: 0; display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / 95%); }
+ .error-stack { max-height: 200px; overflow: auto; text-align: left; padding: 10px; background: #222; }
     </style>
-    <div class="critical-error-content pixel-panel" style="max-width:600px; text-align:center;">
-      <h1 class="critical-error-title" style="color:#ff4444;">REACTOR FAILED TO START</h1>
-      <div class="critical-error-message" style="margin:20px 0;">
-        <p class="error-text" style="color:#ffcccc;">${errorMessage}</p>
+    <div class="critical-error-content pixel-panel" style="max-width: 600px; text-align: center;">
+      <h1 class="critical-error-title" style="color: #f44;">REACTOR FAILED TO START</h1>
+      <div class="critical-error-message" style="margin: 20px 0;">
+        <p class="error-text" style="color: #fcc;">${errorMessage}</p>
         ${when(
           !!errorStack,
-          () => html`<details class="error-details"><summary style="cursor:pointer;color:#aaa;">Error Details</summary><pre class="error-stack">${errorStack}</pre></details>`
+          () => html`<details class="error-details"><summary style="cursor: pointer;color: #aaa;">Error Details</summary><pre class="error-stack">${errorStack}</pre></details>`
         )}
       </div>
       <button id="critical-error-reload" class="pixel-btn btn-start" @click=${onReload}>Reload Page</button>

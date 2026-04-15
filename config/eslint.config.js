@@ -46,7 +46,7 @@ export default [
   js.configs.recommended,
   {
     languageOptions: {
-      ecmaVersion: 2022,
+      ecmaVersion: "latest",
       sourceType: "module",
       globals: {
         window: "readonly",
@@ -105,7 +105,13 @@ export default [
         it: "readonly",
         beforeEach: "readonly",
         afterEach: "readonly",
-        vi: "readonly"
+        vi: "readonly",
+        Buffer: "readonly",
+        queueMicrotask: "readonly",
+        requestIdleCallback: "readonly",
+        crossOriginIsolated: "readonly",
+        HTMLDialogElement: "readonly",
+        AppState: "readonly"
       }
     },
     rules: {

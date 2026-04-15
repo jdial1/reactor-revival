@@ -14,6 +14,7 @@ import {
 } from "../store.js";
 import { repeat, styleMap, numFormat as fmt, formatNumberCompactIntl, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
 import { runCheckAffordability, calculateSectionCounts } from "../logic.js";
+import { syncReactorHeatVisualDom } from "../heatDomSync.js";
 import { UpgradeCard, CloseButton, PartButton, partsModuleInfoCardTemplate } from "./button-factory.js";
 import { MODAL_IDS } from "./ui-modals.js";
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
@@ -1849,7 +1850,11 @@ class MeltdownUI {
       if (r.decompression_enabled && r.current_heat <= 2 * r.max_heat && r.has_melted_down) {
         r.clearMeltdownState();
         setDecimal(ui.game.state, "current_heat", r.current_heat);
-        if (ui.heatVisualsUI) ui.heatVisualsUI.updateHeatVisuals();
+        if (ui.heatVisualsUI && ui.game?.state) {
+          const hr = ui.game.state.heat_ratio;
+          const ratio = typeof hr === "number" && Number.isFinite(hr) ? hr : 0;
+          ui.heatVisualsUI._applyHeatFromRatio(ratio);
+        }
         if (ui.game.engine) ui.game.engine.start();
         this._showDecompressionSavedToast();
       }
@@ -3108,41 +3113,12 @@ class HeatVisualsUI {
 
   _applyHeatFromRatio(heatRatio) {
     const ui = this.ui;
-    const background = getPageReactorBackground(ui) ?? ui.DOMElements?.reactor_background ?? document.getElementById("reactor_background");
-    if (!background) return;
-    const root = typeof document !== "undefined" ? document.documentElement : null;
     const cd = Math.min(1.5, Math.max(0, heatRatio));
-    if (root) root.style.setProperty("--core-danger", String(cd));
-    background.style.setProperty("--heat-ratio", String(cd));
-    background.style.setProperty("--core-danger", String(cd));
-    let alpha = 0;
-    if (heatRatio <= 0.5) alpha = 0;
-    else if (heatRatio <= 1.0) alpha = Math.min((heatRatio - 0.5) * 2 * 0.2, 0.2);
-    else if (heatRatio <= 1.5) alpha = 0.2 + Math.min((heatRatio - 1.0) * 2 * 0.3, 0.3);
-    else alpha = 0.5;
-    background.style.setProperty("--heat-bg-alpha", String(alpha));
-    if (heatRatio <= 0.5) {
-      background.style.backgroundColor = "transparent";
-    } else {
-      background.style.removeProperty("background-color");
+    if (ui.uiState) {
+      ui.uiState.core_danger = cd;
+      ui.uiState.heat_ratio = heatRatio;
     }
-    background.classList.remove("heat-warning", "heat-critical");
-    if (heatRatio >= 1.3) background.classList.add("heat-warning", "heat-critical");
-    else if (heatRatio >= 0.8) background.classList.add("heat-warning");
-    const appRoot = typeof document !== "undefined" ? document.getElementById("app_root") : null;
-    if (appRoot) {
-      appRoot.style.setProperty("--core-danger", String(cd));
-      const heatNorm = Math.min(1, Math.max(0, heatRatio / 1.5));
-      appRoot.style.setProperty("--crt-heat", String(heatNorm));
-      const dur = 20 - heatNorm * 12;
-      appRoot.style.setProperty("--crt-jitter-duration", `${dur}s`);
-      appRoot.classList.toggle("crt-heat-tearing", heatRatio >= 1.3);
-    }
-    const reactorEl = getPageReactor(ui) ?? document.getElementById("reactor");
-    if (reactorEl) {
-      const hr = Math.round(Math.min(1.5, Math.max(0, heatRatio)) * 1000) / 1000;
-      reactorEl.setAttribute("data-heat-ratio", String(hr));
-    }
+    syncReactorHeatVisualDom(ui, heatRatio);
   }
 
   _ensureOverlay() {
@@ -3310,21 +3286,6 @@ class HeatVisualsUI {
     if (reactorEl) reactorEl.setAttribute("data-heat-ratio", "0");
   }
 
-  updateHeatVisuals() {
-    const ui = this.ui;
-    const r = ui.game?.reactor;
-    let heatRatio;
-    if (r) {
-      const current = toNumber(r.current_heat);
-      const max = Math.max(1e-12, toNumber(r.max_heat));
-      heatRatio = current / max;
-    } else {
-      const current = toNumber(ui.game?.state?.current_heat ?? 0);
-      const max = Math.max(1e-12, toNumber(ui.game?.state?.max_heat ?? 1));
-      heatRatio = current / max;
-    }
-    this._applyHeatFromRatio(heatRatio);
-  }
 }
 
 class GridInteractionUI {

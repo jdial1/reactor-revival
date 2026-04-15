@@ -1,6 +1,6 @@
 import { buildFacts } from "./kernel/buildFacts.js";
-import { fromError } from "../lib/zod-validation-error.js";
-import { z } from "../lib/zod.js";
+import { fromError } from "zod-validation-error";
+import { z } from "zod";
 import { html, render } from "lit-html";
 import { subscribeKey } from "valtio/vanilla/utils";
 import Decimal, {
@@ -98,6 +98,7 @@ import Decimal, {
   RESPEC_DOCTRINE_EP_COST,
   runCathodeScramble,
   vuSegmentRatio01,
+  areAdjacent as areAdjacentFromModule,
 } from "./utils.js";
 import { buildOrthogonalAdjacencyCSR, adjacencyKey } from "./spatial-adjacency.js";
 import {
@@ -139,7 +140,7 @@ import { renderToNode, PartButton, UpgradeCard } from "./components/button-facto
 import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
 import { applyBlueprintLayout } from "./components/ui-components.js";
 
-const rawBalance = {
+export const BALANCE = BalanceConfigSchema.parse({
   valveTopupCapRatio: 0.2,
   stirlingMultiplierPerLevel: 0.01,
   defaultCostMultiplier: 1.5,
@@ -156,19 +157,7 @@ const rawBalance = {
   thermalFeedbackRatePerLevel: 0.1,
   volatileTuningMaxPerLevel: 0.05,
   platingTransferRatePerLevel: 0.05,
-};
-const balanceResult = BalanceConfigSchema.safeParse(rawBalance);
-export const BALANCE = balanceResult.success ? balanceResult.data : rawBalance;
-
-
-export const PART_DEFINITION_TOUCH_POINTS = [
-  "dataService/part_list.json",
-  "core/parts.js",
-  "components/ui/componentRenderingUI.js",
-  "core/simulation.js",
-  "core/parts.js",
-  "core/grid.js",
-];
+});
 
 const REACTOR_PLATING_DEFAULT_CONTAINMENT = 1000;
 const PERCENT_DIVISOR = 100;
@@ -315,6 +304,13 @@ export function applyComputedModifiers(game, opts = {}) {
   }
   if (!!r.heat_controlled !== m.heat_controlled) {
     game.onToggleStateChange?.("heat_control", m.heat_controlled);
+  }
+
+  const pa = game.partset?.partsArray;
+  if (pa) {
+    for (let i = 0; i < pa.length; i++) {
+      pa[i].recalculate_stats?.();
+    }
   }
 }
 
@@ -5017,7 +5013,7 @@ export function postGameLoopProjectionQuery(engine, game) {
         resolve(null);
         return;
       }
-      const base = serializeStateForGameLoopWorker(engine);
+      const base = serializeStateForGameLoopWorker(engine, { drainIntents: false });
       if (!base) {
         resolve(null);
         return;
@@ -5046,6 +5042,7 @@ export function postGameLoopProjectionQuery(engine, game) {
 }
 
 function buildReactorStatePayload(reactor) {
+  const game = reactor.game;
   return {
     current_heat: reactor.current_heat,
     current_power: reactor.current_power,
@@ -5058,6 +5055,10 @@ function buildReactorStatePayload(reactor) {
     heat_controlled: reactor.heat_controlled ? 1 : 0,
     vent_multiplier_eff: reactor.vent_multiplier_eff ?? 0,
     stirling_multiplier: reactor.stirling_multiplier ?? 0,
+    manual_heat_reduce: toNumber(reactor.manual_heat_reduce ?? game?.base_manual_heat_reduce ?? 1),
+    manual_vent_percent: toNumber(reactor.manual_vent_percent ?? 0),
+    hull_integrity: game.state?.hull_integrity ?? 100,
+    failure_state: game.state?.failure_state ?? "nominal",
   };
 }
 
@@ -5077,7 +5078,7 @@ function ensureOrthoAdjacencyForEngine(engine) {
   engine._orthoNeighborIndices = neighborIndices;
 }
 
-export function serializeStateForGameLoopWorker(engine) {
+export function serializeStateForGameLoopWorker(engine, opts = {}) {
   const game = engine.game;
   const ts = game.tileset;
   const reactor = game.reactor;
@@ -5106,6 +5107,14 @@ export function serializeStateForGameLoopWorker(engine) {
   const autoBuyUnlocked = (game.upgradeset?.getUpgrade("auto_buy_operator")?.level ?? 0) > 0;
   const prestigeMoneyMultiplier =
     typeof game.getPrestigeMultiplier === "function" ? game.getPrestigeMultiplier() : 1;
+  const drainIntents = opts.drainIntents !== false;
+  const drained = drainIntents ? game.state?.intent_queue?.splice(0, game.state.intent_queue.length) ?? [] : [];
+  const intents = [];
+  for (let i = 0; i < drained.length; i++) {
+    const intent = drained[i];
+    if (intent.action === "PAUSE_TOGGLE") game.togglePause?.();
+    else intents.push(intent);
+  }
   return {
     current_money: currentMoney,
     heatBuffer,
@@ -5123,6 +5132,7 @@ export function serializeStateForGameLoopWorker(engine) {
     prestigeMoneyMultiplier,
     multiplier: 1,
     tickCount: 1,
+    intents,
   };
 }
 
@@ -5289,6 +5299,10 @@ export function applyGameLoopTickResult(engine, data) {
   applyExplosionIndices(engine, ts, data.explosionIndices, maxCols);
   applyTileUpdates(ts, data.tileUpdates);
   applyDepletionIndices(engine, ts, data.depletionIndices, maxCols);
+  if (game.state && data.hull_integrity !== undefined) {
+    game.state.hull_integrity = data.hull_integrity;
+    game.state.failure_state = data.failure_state;
+  }
   if (game.state && data.authoritativeCurrentMoney != null) {
     setDecimal(game.state, "current_money", toDecimal(data.authoritativeCurrentMoney));
   }
@@ -6372,6 +6386,16 @@ function applyHullRepulsionFromOverflow(engine) {
   const reactor = engine.game.reactor;
   const maxH = reactor.max_heat;
   if (!maxH.gt(0) || !reactor.current_heat.gt(maxH)) return;
+
+  const state = engine.game.state;
+  if (state && state.failure_state === "fragmentation") {
+    const activeTiles = engine.game.tileset.active_tiles_list.filter((t) => t.part);
+    if (activeTiles.length > 0) {
+      const target = activeTiles[Math.floor(Math.random() * activeTiles.length)];
+      engine.handleComponentExplosion(target);
+    }
+  }
+
   const excess = reactor.current_heat.sub(maxH);
   const totalRepel = excess.mul(HULL_REPEL_FRACTION);
   const tiles = engine.game.tileset.active_tiles_list.filter(
@@ -6818,8 +6842,8 @@ export class Engine {
     return true;
   }
 
-  _serializeStateForGameLoopWorker() {
-    return serializeStateForGameLoopWorker(this);
+  _serializeStateForGameLoopWorker(opts) {
+    return serializeStateForGameLoopWorker(this, opts);
   }
 
   _applyGameLoopTickResult(data) {
@@ -7136,8 +7160,8 @@ _hasSimulationActivity() {
     this.animationFrameId = raf(this.loop.bind(this));
   }
 
-  tick() {
-    return this._processTick(1.0, false);
+   tick() {
+    this._processTick(1.0, false);
   }
 
   manualTick() {
@@ -7156,6 +7180,13 @@ _hasSimulationActivity() {
 
     logger.groupCollapsed(`Processing Tick #${currentTickNumber} (Manual: ${manual}, x${multiplier.toFixed(2)})`);
     try {
+      const intents = this.game.state?.intent_queue?.splice(0, this.game.state.intent_queue.length) || [];
+      for (let i = 0; i < intents.length; i++) {
+        if (intents[i].action === "SELL_POWER") this.game.sell_action();
+        if (intents[i].action === "VENT_HEAT") this.game.manual_reduce_heat_action();
+        if (intents[i].action === "PAUSE_TOGGLE") this.game.togglePause();
+      }
+
       if (this.game.reactor.has_melted_down) {
         logger.log('debug', 'engine', '[TICK ABORTED] Reactor already in meltdown state.');
         logger.groupEnd();

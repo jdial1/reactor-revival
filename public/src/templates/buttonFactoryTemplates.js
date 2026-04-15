@@ -29,14 +29,14 @@ export function upgradeCardTemplate({
          data-doctrine-locked=${doctrineLocked ? "true" : nothing}>
       <div class="upgrade-header">
         <div class="upgrade-icon-wrapper">
-          <div class="image" style="background-image: url('${iconPath}')"></div>
+          <div class="image" style="background-image: url('${iconPath}');"></div>
           ${overlayPath ? html`<img class="status-overlay ${isHeat ? "status-heat" : ""}" src=${overlayPath} alt="">` : nothing}
         </div>
         <div class="upgrade-details">
           <div class="upgrade-title">${title}</div>
-          <div class="upgrade-description" style="display: ${isMaxed ? "none" : ""}">${descContent}</div>
+          <div class="upgrade-description" ?hidden=${isMaxed}>${descContent}</div>
         </div>
-        <div class="upgrade-doctrine-icon" style="background-image: url('${doctrineIcon}')" data-doctrine=${doctrineId}></div>
+        <div class="upgrade-doctrine-icon" style="background-image: url('${doctrineIcon}');" data-doctrine=${doctrineId}></div>
       </div>
       <div class="upgrade-footer">
         <div class="upgrade-level-info">
@@ -95,7 +95,7 @@ export function partButtonTemplate({
             aria-label=${ariaLabel}
             ?disabled=${disabled}
             @click=${onClick}>
-      <div class="image" style="background-image: url('${imagePath}')"></div>
+      <div class="image" style="background-image: url('${imagePath}');"></div>
       <div class="part-price">${costText}</div>
       <div class="tier-progress" style=${tierStyle}>${tierProgress}</div>
       ${partDetailsBlockTemplate({ partTitle, stats, description, bonusLines })}

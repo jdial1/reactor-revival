@@ -1,6 +1,8 @@
 import { get, set, del, clear } from "idb-keyval";
-import { z, prettifyError } from "../lib/zod.js";
-import superjson from "../lib/superjson.js";
+import { fromError } from "zod-validation-error";
+import { tryParseBlueprintData, tryParseLegacyGridLayout } from "./core/layoutClipboard.js";
+import { z } from "zod";
+import superjson from "superjson";
 
 
 export const VU_LED_SEGMENTS = 16;
@@ -191,12 +193,19 @@ if (typeof window !== 'undefined') {
 }
 export { Logger, logger };
 
-export const render = (typeof window !== 'undefined') ? (await import("lit-html")).render : () => {};
-export const classMap = (typeof window !== 'undefined') ? (await import("lit-html/directives/class-map.js")).classMap : () => "";
-export const styleMap = (typeof window !== 'undefined') ? (await import("lit-html/directives/style-map.js")).styleMap : () => "";
-export const repeat = (typeof window !== 'undefined') ? (await import("lit-html/directives/repeat.js")).repeat : (a, b, c) => (a || []).map(c);
-export const when = (typeof window !== 'undefined') ? (await import("lit-html/directives/when.js")).when : (a, b, c) => (a ? b() : (c ? c() : ''));
-export const unsafeHTML = (typeof window !== 'undefined') ? (await import("lit-html/directives/unsafe-html.js")).unsafeHTML : (s) => s;
+import { render as litRender } from "lit-html";
+import { classMap as litClassMap } from "lit-html/directives/class-map.js";
+import { styleMap as litStyleMap } from "lit-html/directives/style-map.js";
+import { repeat as litRepeat } from "lit-html/directives/repeat.js";
+import { when as litWhen } from "lit-html/directives/when.js";
+import { unsafeHTML as litUnsafeHTML } from "lit-html/directives/unsafe-html.js";
+
+export const render = litRender;
+export const classMap = litClassMap;
+export const styleMap = litStyleMap;
+export const repeat = litRepeat;
+export const when = litWhen;
+export const unsafeHTML = litUnsafeHTML;
 
 const CELL_LEVEL_TILES = { 1: 1, 2: 2, 3: 4 };
 const CELL_TYPE_TO_NUM = { uranium: 1, plutonium: 2, thorium: 3, seaborgium: 4, dolorium: 5, nefastium: 6, protium: 1 };
@@ -552,7 +561,7 @@ export const StorageAdapter = {
         if (parsed == null || typeof parsed !== "object") return null;
         const validation = schema.safeParse(parsed);
         if (!validation.success) {
-          logger.log("warn", "StorageAdapter", `Zod Schema validation failed for ${key}`, prettifyError(validation.error));
+          logger.log("warn", "StorageAdapter", `Zod Schema validation failed for ${key}`, fromError(validation.error).message);
           return null;
         }
         return validation.data;
@@ -990,87 +999,6 @@ export const USER_PREF_KEYS = {
 export function getPref(key) { return StorageUtils.get(key); }
 export function setPref(key, value) { return StorageUtils.set(key, value); }
 
-export const UPDATE_TOAST_STYLES = `
-  .update-toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #2a2a2a;
-    border: 2px solid #4CAF50;
-    border-radius: 8px;
-    padding: 0;
-    z-index: 10000;
-    font-family: 'Minecraft', monospace;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    animation: toast-slide-up 0.3s ease-out;
-    max-width: 400px;
-    width: 90%;
-  }
-  .update-toast-content {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    gap: 12px;
-  }
-  .update-toast-message {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    color: #fff;
-  }
-  .update-toast-icon { font-size: 1.2em; }
-  .update-toast-text { font-size: 0.9em; font-weight: 500; }
-  .update-toast-button {
-    background: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-    font-family: 'Minecraft', monospace;
-    font-size: 0.8em;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    white-space: nowrap;
-  }
-  .update-toast-button:hover { background: #45a049; }
-  .update-toast-close {
-    background: transparent;
-    color: #ccc;
-    border: none;
-    font-size: 1.2em;
-    cursor: pointer;
-    padding: 4px;
-    line-height: 1;
-    transition: color 0.2s;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .update-toast-close:hover { color: #fff; }
-  @keyframes toast-slide-up {
-    from { transform: translateX(-50%) translateY(100px); opacity: 0; }
-    to { transform: translateX(-50%) translateY(0); opacity: 1; }
-  }
-  @media (max-width: 480px) {
-    .update-toast {
-      bottom: 10px;
-      left: 10px;
-      right: 10px;
-      transform: none;
-      max-width: none;
-      width: auto;
-    }
-    .update-toast-content { padding: 10px 12px; gap: 8px; }
-    .update-toast-text { font-size: 0.8em; }
-    .update-toast-button { padding: 6px 12px; font-size: 0.75em; }
-  }
-`;
-
 export class BaseComponent {
   constructor() {
     this.isVisible = false;
@@ -1084,6 +1012,75 @@ export class BaseComponent {
   }
   removeOverlay(el) {
     if (el) el.remove();
+    return null;
+  }
+}
+
+export function getCompactLayout(game) {
+  if (!game.tileset || !game.tileset.tiles_list) return null;
+  const rows = game.rows;
+  const cols = game.cols;
+  const parts = [];
+  game.tileset.tiles_list.forEach((tile) => {
+    if (tile.enabled && tile.part) {
+      parts.push({
+        r: tile.row,
+        c: tile.col,
+        t: tile.part.type,
+        id: tile.part.id,
+        lvl: tile.part.level || 1,
+      });
+    }
+  });
+  return { size: { rows, cols }, parts };
+}
+
+export function countPlacedParts(game, type, level) {
+  if (!game.tileset || !game.tileset.tiles_list) return 0;
+  let count = 0;
+  for (const tile of game.tileset.tiles_list) {
+    const tilePart = tile.part;
+    if (tilePart && tilePart.type === type && tilePart.level === level) {
+      count++;
+    }
+  }
+  return count;
+}
+
+export function serializeReactor(game) {
+  const layout = getCompactLayout(game);
+  if (!layout) return "";
+  return JSON.stringify(layout, null, 2);
+}
+
+function buildEmptyLayout(rows, cols) {
+  return Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
+}
+
+function populateLayoutFromParts(layout, parts, rows, cols) {
+  parts.forEach((part) => {
+    if (part.r >= 0 && part.r < rows && part.c >= 0 && part.c < cols) {
+      layout[part.r][part.c] = { t: part.t, id: part.id, lvl: part.lvl };
+    }
+  });
+}
+
+function parseLayoutFromBlueprint(parsed) {
+  const { rows, cols } = parsed.size;
+  const layout = buildEmptyLayout(rows, cols);
+  populateLayoutFromParts(layout, parsed.parts, rows, cols);
+  return layout;
+}
+
+export function deserializeReactor(str) {
+  try {
+    const data = JSON.parse(str);
+    const bp = tryParseBlueprintData(data);
+    if (bp) return parseLayoutFromBlueprint(bp);
+    const legacy = tryParseLegacyGridLayout(data);
+    if (legacy) return legacy;
+    return null;
+  } catch {
     return null;
   }
 }

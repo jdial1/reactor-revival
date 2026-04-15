@@ -56,7 +56,7 @@ export function drainGameEffects(game, getUi) {
     }
     if (e.kind !== "sfx" || !audio) continue;
     const ctx = e.context ?? "global";
-    if (ctx === "reactor" && page !== "reactor_section") continue;
+    if (ctx === "reactor" && page != null && page !== "reactor_section") continue;
     playSfx(audio, e);
   }
 }

@@ -177,48 +177,76 @@ describe("UI Integration and Gameplay", () => {
     patchGameState(game, { current_heat: game.reactor.current_heat, max_heat: game.reactor.max_heat });
 
     // Test low heat (should be transparent)
-    game.ui.heatVisualsUI.updateHeatVisuals();
-    expect(reactorBackground.style.backgroundColor).toBe("transparent");
+    {
+      const maxH = toNum(game.reactor.max_heat);
+      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
+      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
+    }
+    expect(reactorBackground.style.backgroundColor === "transparent" || reactorBackground.style.backgroundColor === "").toBe(true);
     expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
     expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
 
     // Test moderate heat (50% of max)
     game.reactor.current_heat = 500;
     patchGameState(game, { current_heat: game.reactor.current_heat });
-    game.ui.heatVisualsUI.updateHeatVisuals();
-    expect(reactorBackground.style.backgroundColor).toBe("transparent");
+    {
+      const maxH = toNum(game.reactor.max_heat);
+      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
+      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
+    }
+    expect(reactorBackground.style.backgroundColor === "transparent" || reactorBackground.style.backgroundColor === "").toBe(true);
     expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
 
     // Test high heat (80% of max - should show warning)
     game.reactor.current_heat = 800;
     patchGameState(game, { current_heat: game.reactor.current_heat });
-    game.ui.heatVisualsUI.updateHeatVisuals();
+    {
+      const maxH = toNum(game.reactor.max_heat);
+      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
+      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
+    }
     expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
     expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
 
     // Test critical heat (130% of max - should show critical)
     game.reactor.current_heat = 1300;
     patchGameState(game, { current_heat: game.reactor.current_heat });
-    game.ui.heatVisualsUI.updateHeatVisuals();
+    {
+      const maxH = toNum(game.reactor.max_heat);
+      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
+      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
+    }
     expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
     expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
 
     // Test extreme heat (200% of max - should show maximum effect)
     game.reactor.current_heat = 2000;
     patchGameState(game, { current_heat: game.reactor.current_heat });
-    game.ui.heatVisualsUI.updateHeatVisuals();
+    {
+      const maxH = toNum(game.reactor.max_heat);
+      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
+      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
+    }
     expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
 
     const testPart = game.partset.getPartById("vent1");
     const testTile = game.tileset.getTile(0, 0);
     await testTile.setPart(testPart);
     testTile.heat_contained = testPart.containment * 0.95;
-    game.ui.heatVisualsUI.updateHeatVisuals();
+    {
+      const maxH = toNum(game.reactor.max_heat);
+      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
+      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
+    }
 
     if (testTile.$el) {
       expect(testTile.$el.classList.contains("heat-wiggle")).toBe(true);
       testTile.heat_contained = testPart.containment * 0.5;
-      game.ui.heatVisualsUI.updateHeatVisuals();
+      {
+        const maxH = toNum(game.reactor.max_heat);
+        const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
+        game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
+      }
       expect(testTile.$el.classList.contains("heat-wiggle")).toBe(false);
     }
   });

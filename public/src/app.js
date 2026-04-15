@@ -282,7 +282,7 @@ function showUpdateToast(newVersion, currentVersion) {
     }
   };
 
-  render(updateToastTemplate(UPDATE_TOAST_STYLES, onRefresh, onClose), _toastContainer);
+  render(updateToastTemplate(onRefresh, onClose), _toastContainer);
 
   setTimeout(() => {
     const toast = _toastContainer?.querySelector(".update-toast");
@@ -396,7 +396,6 @@ export function attachGameEventListeners(game, ui) {
   on("quickSelectSlotsChanged", ({ slots }) => ui.stateManager.setQuickSelectSlots(slots));
   on("reactorTick", (payload) => {
     applyStatePatch(ui, payload);
-    if (ui.heatVisualsUI?.updateHeatVisuals) ui.heatVisualsUI.updateHeatVisuals();
   });
   on("exoticParticleEmitted", ({ tile }) => {
     if (ui.gridController?.emitEP && tile) ui.gridController.emitEP(tile);
@@ -556,7 +555,11 @@ function syncUIAfterEngineStart(game, ui) {
   setDecimal(game.state, "current_power", game.reactor.current_power);
   game.state.max_heat = game.reactor.max_heat;
   game.state.max_power = game.reactor.max_power;
-  if (ui.heatVisualsUI) ui.heatVisualsUI.updateHeatVisuals();
+  if (ui.heatVisualsUI && game.state) {
+    const hr = game.state.heat_ratio;
+    const ratio = typeof hr === "number" && Number.isFinite(hr) ? hr : 0;
+    ui.heatVisualsUI._applyHeatFromRatio(ratio);
+  }
   StorageUtils.remove("reactorNewGamePending");
   game.objectives_manager?._syncActiveObjectiveToState?.();
   ui.pauseStateUI?.updatePauseState?.();
