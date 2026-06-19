@@ -1,7 +1,7 @@
 {
-  "name": "reactor-game-tests",
+  "name": "reactor-revival",
   "version": "1.0.0",
-  "description": "A test suite for the reactor game.",
+  "description": "Reactor Revival - fork of reactor knockoff.",
   "type": "module",
   "scripts": {
     "test": "vitest"
