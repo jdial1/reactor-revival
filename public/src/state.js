@@ -13,13 +13,12 @@ import {
 import {
   getCellPowerCoefficientLP,
   getCellHeatCoefficientH,
-  calculateCellPulsePower,
-  calculateCellPulseHeat,
   resetHeatThresholdSignalState,
   deriveReactorStats,
   applyReflectorEffects,
   applyCellMultipliers,
-} from "./logic.js";
+} from "./domain/reactor-stats.js";
+import { calculateCellPulsePower, calculateCellPulseHeat } from "./logic-tooltip-stats.js";
 import {
   toDecimal,
   toNumber,

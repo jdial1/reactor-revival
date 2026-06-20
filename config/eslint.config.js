@@ -164,7 +164,8 @@ export default [
     rules: {
       "import/named": "error",
       "import/default": "error",
-      "import/no-unresolved": "error"
+      "import/no-unresolved": "error",
+      "import/no-cycle": ["warn", { "maxDepth": 10, "ignoreExternal": true }]
     }
   }
 ];
