@@ -1,0 +1,84 @@
+---
+description: Phase 0 gate — anti-patterns and items to avoid while unblocking npm test
+alwaysApply: false
+globs: "{scripts/test-runner.js,scripts/lint-runner.js,.github/workflows/**,public/css/**,.stylelintignore,package.json,config/.stylelintrc.json,config/vitest.config.mjs,tests/**}"
+---
+
+# Phase 0 — Unblock the Gate
+
+**Goal:** `npm test` exit 0 locally; CI build job green.
+
+**Exit criteria:** lint + syntax + full Vitest pass via `node scripts/test-runner.js`.
+
+---
+
+## Anti-patterns — do NOT do these
+
+### Lint & CSS
+
+- **Do not lint or “fix” vendor CSS** (`public/lib/pico.min.css`, copied fonts, minified libs). Never edit vendor files to satisfy stylelint. Exclude via `.stylelintignore` (`public/lib/**`) and `config/.stylelintrc.json` `ignoreFiles`; commit both.
+- **Do not disable stylelint rules globally** to unblock Phase 0 (`declaration-block-no-shorthand-property-overrides: null`, turning off `no-duplicate-selectors`, etc.). Fix project CSS or tighten ignore paths only.
+- **Do not mix longhand and shorthand on the same selector** when `declaration-block-no-shorthand-property-overrides` is enabled. Example failure: `margin-bottom` then `margin` in `.settings-content` — use longhand only (`margin-top`, `margin-right`, `margin-bottom`, `margin-left`; same for padding).
+- **Do not rely on `--fix` to “make lint pass” without reviewing diffs.** `lint:css` runs stylelint with `--fix`; a green run can still mutate files silently. Read the diff before committing.
+- **Do not append new CSS at file end** to fix lint in Phase 0. Merge into the existing rule block (see maintainability rule).
+
+### Test runner & scripts
+
+- **Do not treat `npm run test:deploy` as “tests pass.”** It skips `tests/ui/**`, `performance.test.js`, `clipboard.test.js`, `pasteModal.test.js`. Phase 0 requires full `npm test` (via `test-runner.js`) green.
+- **Do not remove Vitest exclusions or delete flaky tests** to green the gate without fixing root cause or documenting in `tests/README.md`.
+- **Do not skip lint in `test-runner.js`** (e.g. commenting out `runCommand('npm', ['run', 'lint'])`). The gate is lint + syntax + vitest together.
+- **Do not run only `npx vitest run`** and call Phase 0 done — syntax check and ESLint/stylelint are part of the gate.
+- **Do not add `shell: true` spawn workarounds** that hide failures; fix the underlying command exit code.
+
+### CI & deploy workflow
+
+- **Do not merge CI that only runs `test:deploy`** without either (a) aligning it with `npm test`, or (b) adding a separate `test:ui` (and documented) job. Undocumented subset = false confidence.
+- **Do not leave `.stylelintignore` untracked** while CI runs `npm run lint`. Untracked ignore files work locally but vanish on CI checkout.
+- **Do not bump `package.json` version to 1.0.0** in Phase 0; version tag comes after the gate is stable.
+
+### Scope creep (Phase 0 is not Phase 2)
+
+- **Do not refactor `logic.js`, `state.js`, or `ui.js`** during Phase 0. No file splits, no circular-dependency surgery, no architecture renames.
+- **Do not fix responsive UI clipping**, nav label consistency, or screenshot regressions in Phase 0 unless a Vitest/UI test explicitly fails.
+- **Do not strip production `console.log`** or wire `remove-console-logs` into deploy in Phase 0 — that is Phase 1.
+- **Do not dedupe/split CSS** (`css:dedupe`, `objectives.css` breakdown) beyond what lint requires.
+
+### Git & hygiene
+
+- **Do not commit `eslint-results.sarif`** unless the team explicitly wants SARIF in repo; it is a generated artifact.
+- **Do not commit `screenshots/ui/**`** as part of Phase 0 unless CI starts comparing them; they are audit output.
+- **Do not batch unrelated refactors** into “fix lint” commits. Phase 0 commits should be gate-only (stylelint ignore, CSS longhand, test fixes, CI script alignment).
+
+---
+
+## Correct patterns — do this instead
+
+| Step | Action |
+|------|--------|
+| 1 | Fix `public/css/settings-modal.css` longhand in `.settings-content` (inside `@media (width <= 900px)`) |
+| 2 | Commit `.stylelintignore`; verify `npm run lint:css` skips `public/lib/**` |
+| 3 | Run `npm test`; fix Vitest failures one suite at a time |
+| 4 | CI deploy workflow runs `npm test` (same gate as local) |
+| 5 | `test:deploy` documented as optional fast subset in `tests/README.md` |
+
+---
+
+## Verification checklist
+
+```bash
+npm run lint:css
+npm run lint:js
+node scripts/check-syntax.js
+npm test
+```
+
+All four must exit 0 before Phase 0 is complete.
+
+---
+
+## Known repo landmines
+
+- `settings-modal.css` line ~76: `.settings-content` uses `margin`/`padding` shorthands — valid fix is longhand side properties only.
+- `test-runner.js` runs lint and syntax **in parallel**; both must pass before Vitest starts.
+- `config/.stylelintrc.json` already has `"ignoreFiles": ["public/lib/**"]` — if pico still lints, `.stylelintignore` was missing from git; keep both aligned.
+- Duplicate test paths exist on Windows (`tests/core/pause-heat.test.js` vs `tests/core/thermodynamics/pause-heat.test.js`); do not delete either in Phase 0 without confirming which Vitest collects.

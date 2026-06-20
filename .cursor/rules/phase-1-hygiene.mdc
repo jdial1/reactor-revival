@@ -1,0 +1,138 @@
+---
+description: Phase 1 release hygiene — anti-patterns and items to avoid while aligning repo with what ships
+alwaysApply: false
+globs: "{.github/workflows/**,.gitignore,package.json,public/index.html,public/src/**,scripts/remove-console-logs.js,scripts/copy-libs.js,tests/**,README.md,tests/README.md}"
+---
+
+# Phase 1 — Release Hygiene
+
+**Goal:** Repository matches what ships. Clean git history, no stray artifacts, production build strips dev noise, duplicate tests removed.
+
+**Prerequisite:** Phase 0 complete (`npm test` exit 0 locally and in CI).
+
+**Exit criteria:** Clean `git status` on meaningful work; deploy artifact built from tested source; dev repo retains boot logs; duplicate test gone; generated outputs ignored.
+
+---
+
+## Anti-patterns — do NOT do these
+
+### Git & commit strategy
+
+- **Do not land the refactor as one mega-commit** (“everything untracked”). Split into reviewable chunks: tooling/CI, CSS split, services split, UI audit scripts, test moves, docs.
+- **Do not mix Phase 2 work into Phase 1 commits** (splitting `logic.js`/`state.js`/`ui.js`, breaking circular imports, responsive UI fixes, CSS dedupe of `objectives.css`).
+- **Do not commit generated or local-only artifacts:**
+  - `eslint-results.sarif` (already in `.gitignore`)
+  - `screenshots/ui/**` (already in `.gitignore`; CI audit output only)
+  - `node_modules/`, `*.log`
+  - `public/lib/**` (gitignored; produced by `npm run copy-libs` / `postinstall`)
+- **Do not remove `.gitignore` entries** for `public/lib` and expect vendored libs in git — CI and `postinstall` must keep generating them.
+- **Do not commit `public/sw.js`** without running `npm run build:sw` in the same change set; it is generated from `src-sw.js`.
+- **Do not tag `v1.0.0` in Phase 1** — version tag comes after Phases 0–4 are stable.
+
+### Console stripping (`remove-console-logs`)
+
+- **Do not run `npm run remove-console-logs` locally and commit the stripped source.** Dev needs boot traces in `public/src/app.js`, workers, and inline `index.html` scripts (`[ReactorBoot]` logs). Strip only in the **deploy build**, after `npm test`.
+- **Do not run console removal before tests in CI.** Order must be: `npm test` → `remove-console-logs` → upload artifact.
+- **Do not assume the script is safe for all files.** It removes `console.warn` and `console.error` too, replaces statements with `void(0)`, and uses a **naive regex on `index.html`** inline scripts — complex `console.log` calls may survive or break. Review diff if extending targets.
+- **Do not strip `scripts/`, `tests/`, or `config/`** — script only walks `public/src` + touches `index.html`; keep it that way.
+- **Do not add a runtime `DEBUG` flag in Phase 1** as a substitute for wiring deploy stripping — that is optional polish; Phase 1 goal is CI integration of existing script.
+
+### Deploy pipeline
+
+- **Do not skip `npm test` after adding console stripping** — stripping must not weaken the gate.
+- **Do not move `remove-console-logs` before `build:sw`** without checking precache manifest still matches post-strip file hashes (SW precache lists content hashes; strip changes JS → run SW build **after** strip, or re-run `build:sw` after strip).
+- **Correct order:** metadata → copy-libs → fix-manifest → **`npm test`** → **`remove-console-logs`** → **`build:sw`** → pwa-check → upload artifact.
+- **Do not upload artifact before PWA root check** if that check validates stripped output.
+
+### Duplicate & stale tests
+
+- **Do not delete both pause-heat tests.** Keep `tests/core/thermodynamics/pause-heat.test.js`; remove duplicate `tests/core/pause-heat.test.js` (identical content, wrong folder).
+- **Do not delete tests to shrink commit size** — only remove proven duplicates after `npm test` confirms single collection.
+- **Do not re-add `cloud-sync/` to docs** — folder does not exist (removed in Phase 0).
+
+### Vendor & static assets
+
+- **Do not commit minified vendor JS/CSS into git** bypassing `copy-libs.js` — fonts, pico, lit, valtio, zod copies belong generated under `public/lib/`.
+- **Do not edit generated `public/lib/*` by hand** for “quick fixes”; update `scripts/copy-libs.js` or source package.
+
+### Documentation
+
+- **Do not leave README claiming `test:deploy` is the CI gate** — Phase 0 aligned CI on `npm test`.
+- **Do not create new markdown files** for Phase 1 notes — use commits messages and existing `tests/README.md` / root `README.md`.
+
+### Scope creep (Phase 1 is not Phase 3)
+
+- **Do not fix tablet-landscape clipping**, nav label CORE vs Reactor, or leaderboard layout — Phase 3.
+- **Do not add visual regression / screenshot diff CI** — optional later; screenshots stay gitignored.
+- **Do not wire `compress-images` or `css:dedupe` into deploy** unless a tracked asset is broken — out of scope.
+
+---
+
+## Correct patterns — do this instead
+
+| Step | Action |
+|------|--------|
+| 1 | Commit Phase 0 leftovers (`.stylelintignore`, workflow, docs) if still untracked |
+| 2 | Land refactor in logical commits: CSS files, `public/src` splits, scripts, tests |
+| 3 | Delete `tests/core/pause-heat.test.js`; run `npm test` |
+| 4 | Add deploy step: `npm run remove-console-logs` **after** `npm test`, **before** final `build:sw` |
+| 5 | Confirm `.gitignore` covers `eslint-results.sarif`, `screenshots/`, `public/lib/` |
+| 6 | Verify clean tree: no untracked ship files that should be tracked, no tracked files that should be ignored |
+
+---
+
+## Suggested commit chunks (order matters)
+
+1. **Tooling & CI** — `.stylelintignore`, `.github/workflows/deploy.yml`, `.cursor/rules/`
+2. **CSS split** — `public/css/*.css`, `index.html` link tags, `scripts/split-css.js` / `css-dedupe.js` if used
+3. **JS module split** — `logic-*.js`, `services-*.js`, `components/*`, templates (no behavior change)
+4. **Tests & helpers** — moved/added tests, `tests/helpers/setup.js`
+5. **Audit scripts** — `ui-screenshots.js`, `ui-console-audit.js`, `ui-audit-core.js` (not screenshot PNGs)
+6. **Phase 1 hygiene** — duplicate test removal, deploy console-strip step, README touch-ups
+
+Each chunk: `npm test` before commit.
+
+---
+
+## Verification checklist
+
+```bash
+git status
+npm test
+npm run remove-console-logs
+npm test
+npm run build:sw
+npm run check-pwa-root-files
+```
+
+After local strip + rebuild: re-run tests to confirm strip did not break syntax/lint. Reset working tree (`git checkout -- public/`) after local strip experiment unless CI-only.
+
+**CI simulation:** deploy job should produce stripped `public/` artifact while repo source keeps console logs.
+
+---
+
+## Known repo landmines
+
+- **`public/lib/` is gitignored** but required at runtime — `npm ci` runs `postinstall` → `copy-libs`. Fresh clone without install will fail dev/tests that import from `lib/`.
+- **`remove-console-logs` mutates files in place** — only safe as last-mile deploy step, never as committed source cleanup.
+- **`tests/core/pause-heat.test.js` vs `tests/core/thermodynamics/pause-heat.test.js`** — byte-identical; Vitest runs both today (duplicate coverage).
+- **Boot logs live in** `public/index.html` (inline), `public/src/app.js` (~14 calls), `gameLoopWorkerCore.js`, workers — expect strip to touch these in artifact only.
+- **`package.json` `"version": "1.0.0"`** is aspirational until release tag; do not treat as shipped 1.0.
+- **Post-deploy job** (Puppeteer audit, screenshots) runs against live URL — Phase 1 does not change that; do not commit screenshot outputs.
+
+---
+
+## Phase 1 vs Phase 0 boundary
+
+| Phase 0 (done) | Phase 1 (this) |
+|----------------|----------------|
+| Green `npm test` gate | Clean git + logical commits |
+| CI runs full test | Console strip in deploy only |
+| Stylelint ignore vendor | Remove duplicate test |
+| Document test commands | Ignore artifacts, ship generated lib via CI |
+
+| Phase 1 (stop here) | Phase 2+ (defer) |
+|---------------------|------------------|
+| Commit refactor chunks | Split `logic.js` / `state.js` |
+| Deploy strip wiring | Break circular imports |
+| Duplicate test cleanup | Responsive UI polish |
