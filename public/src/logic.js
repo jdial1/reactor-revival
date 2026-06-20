@@ -349,15 +349,9 @@ export function getCellPowerCoefficientLP(part, game) {
   if (game?.upgradeset) {
     const powerUpg = game.upgradeset.getUpgrade(`${part.type}1_cell_power`);
     if (powerUpg && powerUpg.level > 0) P *= Math.pow(2, powerUpg.level);
-    const infused = game.upgradeset.getUpgrade("infused_cells")?.level || 0;
-    if (infused > 0) P *= Math.pow(2, infused);
-    const unleashed = game.upgradeset.getUpgrade("unleashed_cells")?.level || 0;
-    if (unleashed > 0) P *= Math.pow(2, unleashed);
     if (part.type === "protium") {
       const unstable = game.upgradeset.getUpgrade("unstable_protium")?.level || 0;
       if (unstable > 0) P *= Math.pow(2, unstable);
-      const depletedCount = game.protium_particles || 0;
-      if (depletedCount > 0) P *= (1 + 0.10 * depletedCount);
     }
   }
   return Number.isFinite(P) ? P : 0;

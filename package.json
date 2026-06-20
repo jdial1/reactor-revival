@@ -24,7 +24,9 @@
     "remove-console-logs": "node scripts/remove-console-logs.js",
     "compress-images": "node scripts/compress-images.js",
     "build:atlas": "node scripts/build-sprite-atlas.js",
-    "postinstall": "npm run copy-libs"
+    "postinstall": "npm run copy-libs",
+    "ui:console-audit": "node scripts/ui-console-audit.js",
+    "ui:console-audit:headed": "cross-env HEADED=1 node scripts/ui-console-audit.js"
   },
   "keywords": [],
   "x-build": {
@@ -61,6 +63,7 @@
     "postcss": "^8.5.6",
     "postcss-combine-duplicated-selectors": "^10.0.3",
     "postcss-html": "^1.8.1",
+    "puppeteer": "^24.4.0",
     "sharp": "^0.34.5",
     "stylelint": "^16.8.1",
     "stylelint-color-format": "^1.1.0",

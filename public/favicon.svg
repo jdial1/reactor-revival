@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Reactor Revival">
+  <defs>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFD54F"/>
+      <stop offset="100%" stop-color="#FFB000"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="0.6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="32" height="32" rx="3" fill="#1F2120"/>
+  <rect x="1.5" y="1.5" width="29" height="29" rx="2.5" fill="none" stroke="#7A7D7A" stroke-width="1"/>
+  <rect x="3" y="3" width="26" height="26" rx="2" fill="#25282c"/>
+  <rect x="5.5" y="5.5" width="21" height="21" rx="1.5" fill="#1A1D1A" stroke="#222422" stroke-width="0.5"/>
+  <g fill="#404448">
+    <rect x="6.5" y="6.5" width="3" height="3" rx="0.4"/>
+    <rect x="10.5" y="6.5" width="3" height="3" rx="0.4"/>
+    <rect x="14.5" y="6.5" width="3" height="3" rx="0.4"/>
+    <rect x="18.5" y="6.5" width="3" height="3" rx="0.4"/>
+    <rect x="22.5" y="6.5" width="3" height="3" rx="0.4"/>
+    <rect x="6.5" y="10.5" width="3" height="3" rx="0.4"/>
+    <rect x="10.5" y="10.5" width="3" height="3" rx="0.4"/>
+    <rect x="14.5" y="10.5" width="3" height="3" rx="0.4"/>
+    <rect x="18.5" y="10.5" width="3" height="3" rx="0.4"/>
+    <rect x="22.5" y="10.5" width="3" height="3" rx="0.4"/>
+    <rect x="6.5" y="14.5" width="3" height="3" rx="0.4"/>
+    <rect x="10.5" y="14.5" width="3" height="3" rx="0.4"/>
+    <rect x="14.5" y="14.5" width="3" height="3" rx="0.4"/>
+    <rect x="18.5" y="14.5" width="3" height="3" rx="0.4"/>
+    <rect x="22.5" y="14.5" width="3" height="3" rx="0.4"/>
+    <rect x="6.5" y="18.5" width="3" height="3" rx="0.4"/>
+    <rect x="10.5" y="18.5" width="3" height="3" rx="0.4"/>
+    <rect x="14.5" y="18.5" width="3" height="3" rx="0.4"/>
+    <rect x="18.5" y="18.5" width="3" height="3" rx="0.4"/>
+    <rect x="22.5" y="18.5" width="3" height="3" rx="0.4"/>
+    <rect x="6.5" y="22.5" width="3" height="3" rx="0.4"/>
+    <rect x="10.5" y="22.5" width="3" height="3" rx="0.4"/>
+    <rect x="14.5" y="22.5" width="3" height="3" rx="0.4"/>
+    <rect x="18.5" y="22.5" width="3" height="3" rx="0.4"/>
+    <rect x="22.5" y="22.5" width="3" height="3" rx="0.4"/>
+  </g>
+  <g fill="url(#core)" filter="url(#glow)">
+    <rect x="14.5" y="10.5" width="3" height="3" rx="0.4"/>
+    <rect x="10.5" y="14.5" width="3" height="3" rx="0.4"/>
+    <rect x="14.5" y="14.5" width="3" height="3" rx="0.4"/>
+    <rect x="18.5" y="14.5" width="3" height="3" rx="0.4"/>
+    <rect x="14.5" y="18.5" width="3" height="3" rx="0.4"/>
+  </g>
+  <circle cx="8" cy="8" r="1.25" fill="#6E8B3D"/>
+</svg>
