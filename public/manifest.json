@@ -1,0 +1,178 @@
+{
+  "id": "com.jdial.reactor",
+  "name": "Reactor Revival",
+  "short_name": "Reactor Revival",
+  "description": "An incremental reactor simulation game. Build and optimize your reactor, balance power output against heat, unlock upgrades, and harness exotic particles to push your reactor further. Features deterministic offline progression.",
+  "start_url": "/reactor-revival/",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "background_color": "#1a1a1a",
+  "theme_color": "#262626",
+  "orientation": "any",
+  "scope": "/reactor-revival/",
+  "scope_extensions": [
+    { "origin": "/reactor-revival/" }
+  ],
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "games",
+    "simulation",
+    "strategy"
+  ],
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "launch_handler": {
+    "client_mode": [
+      "navigate-existing",
+      "auto"
+    ]
+  },
+  "file_handlers": [
+    {
+      "action": "/reactor-revival/",
+      "accept": {
+        "application/json": [
+          ".reactor"
+        ]
+      },
+      "icons": [
+        {
+          "src": "img/parts/cell_1_1-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "launch_type": "single-client"
+    }
+  ],
+  "handle_links": true,
+  "protocol_handlers": [
+    {
+      "protocol": "web+reactor",
+      "url": "/reactor-revival/%s"
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "share_target": {
+    "action": "/reactor-revival/share-target/",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "reactor",
+          "accept": [
+            "application/json"
+          ]
+        }
+      ]
+    }
+  },
+  "icons": [
+    {
+      "src": "img/parts/cell_1_1-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "img/parts/cell_1_1-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "img/parts/cell_1_1-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "img/parts/cell_1_1-192x192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "img/parts/cell_1_1-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any",
+      "platform": "ios"
+    },
+    {
+      "src": "img/parts/cell_1_1-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any",
+      "form_factor": "wide"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start New Game",
+      "short_name": "New Game",
+      "description": "Start a fresh reactor simulation",
+      "url": "/reactor-revival/?action=new",
+      "icons": [
+        {
+          "src": "img/parts/cell_1_1-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "img/misc/preview.png",
+      "sizes": "1200x1200",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Reactor simulation gameplay"
+    },
+    {
+      "src": "img/misc/preview.png",
+      "sizes": "1200x1200",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile reactor simulation gameplay"
+    }
+  ],
+  "widgets": [
+    {
+      "name": "Reactor Status",
+      "tag": "reactor-status",
+      "description": "Shows current reactor power and heat levels",
+      "screenshots": [
+        {
+          "src": "img/misc/preview.png",
+          "sizes": "600x400",
+          "label": "Reactor Status Widget"
+        }
+      ],
+      "data": {
+        "interval": 60,
+        "fields": [
+          "power",
+          "heat",
+          "money"
+        ]
+      }
+    }
+  ],
+  "background_sync": {
+    "periodic": true,
+    "tag": "reactor-sync"
+  }
+}

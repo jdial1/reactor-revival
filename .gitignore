@@ -1,1 +1,19 @@
-/node_modules
+node_modules
+eslint-results.sarif
+/dist-sw
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+public/reactor_leaderboard.sqlite3
+public/lib/pako.min.js
+*.log
+/public/lib
+**/__pycache__/
+**/*.pyc
+**/*.py
+*.py
+*.pyc
+scripts/playtest_failure.png

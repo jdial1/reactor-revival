@@ -1,0 +1,68 @@
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
+import { setDecimal } from "@app/store.js";
+
+describe("Rolling Numbers UI", () => {
+    let game;
+    let ui;
+    let window;
+    let document;
+
+    beforeEach(async () => {
+        const setup = await setupGameWithDOM();
+        game = setup.game;
+        ui = game.ui;
+        window = setup.window;
+        document = setup.document;
+        await game.router.loadPage("reactor_section");
+        game.ui.startRenderLoop(0);
+    });
+
+    it("should initialize display values structure", () => {
+        expect(ui.displayValues).toBeDefined();
+        expect(ui.displayValues.money).toBeDefined();
+        expect(ui.displayValues.heat).toBeDefined();
+        expect(ui.displayValues.power).toBeDefined();
+        expect(ui.displayValues.ep).toBeDefined();
+    });
+
+    it("should snap display current to target after rolling update", () => {
+        const moneyObj = ui.displayValues.money;
+        moneyObj.current = 0;
+        moneyObj.target = 1000;
+
+        ui.updateUiRollingNumbers(16.667);
+
+        expect(moneyObj.current).toBe(1000);
+    });
+
+    it("should snap to target when difference is small", () => {
+        const moneyObj = ui.displayValues.money;
+        moneyObj.target = 100;
+        moneyObj.current = 99.95; // Within epsilon
+
+        ui.updateUiRollingNumbers(16.667);
+
+        expect(moneyObj.current).toBe(100);
+    });
+
+    it("should format large heat numbers with specific logic (2 decimals + suffix)", async () => {
+        Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true });
+
+        setDecimal(game.state, "current_heat", 1500);
+
+        await new Promise((r) => setTimeout(r, 50));
+
+        const heatEl = document.getElementById('info_heat_desktop');
+        expect(heatEl, "info_heat_desktop element should exist after info bar render").not.toBeNull();
+        expect(heatEl.textContent).toBe("1.5K");
+    });
+
+    it("should update target via state manager", () => {
+        setDecimal(game.state, "current_money", 5000);
+        ui.processUiUpdateQueue();
+
+        expect(toNum(ui.displayValues.money.target)).toBe(5000);
+        expect(toNum(ui.displayValues.money.current)).toBe(5000);
+    });
+});
+

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Reactor Revival</title>
+    <link rel="icon" type="image/png" href="img/parts/cell_1_1.png" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css" />
+    <link rel="stylesheet" href="css/main.css" />
+    <script>
+      (function(){
+        console.log("[ReactorBoot] inline: splash bg script start");
+        function ghPagesBasePath() {
+          try {
+            var h = window.location.hostname;
+            if (h && h.indexOf("github.io") !== -1 && window.location.pathname) {
+              var parts = window.location.pathname.split("/");
+              var repo = parts.length > 1 && parts[1] ? parts[1] : "";
+              return repo ? "/" + repo : "";
+            }
+          } catch (e) {}
+          return "";
+        }
+        var basePath = ghPagesBasePath();
+        var USE_STALENHAG_BG = true;
+        var STORAGE_KEY = 'splash-bg-counts';
+        var CAROUSEL_INTERVAL_MS = 30000;
+        var prefix = USE_STALENHAG_BG ? 'stalenhag' : 'splash';
+        var counts = {};
+        try {
+          var stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) counts = JSON.parse(stored);
+        } catch (e) {}
+        function init(maxIdx) {
+          maxIdx = maxIdx || 10;
+          var minCount = Infinity;
+          var minIndices = [];
+          for (var i = 1; i <= maxIdx; i++) {
+            var key = prefix + '_' + i;
+            var c = counts[key] || 0;
+            if (c < minCount) {
+              minCount = c;
+              minIndices = [i];
+            } else if (c === minCount) {
+              minIndices.push(i);
+            }
+          }
+          var n = minIndices[Math.floor(Math.random() * minIndices.length)];
+          function setBg(idx) {
+            var path = USE_STALENHAG_BG
+              ? basePath + '/img/misc/stalenhag_bg/bg_img' + idx + '.png'
+              : basePath + '/img/misc/backgrounds/splash_bg' + idx + '.png';
+            document.documentElement.style.setProperty('--splash-bg-url', 'url("' + path + '")');
+            counts[prefix + '_' + idx] = (counts[prefix + '_' + idx] || 0) + 1;
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(counts));
+            } catch (e) {}
+            var el = document.getElementById('splash-screen');
+            if (el) {
+              el.style.animation = 'none';
+              el.offsetHeight;
+              el.style.animation = '';
+            }
+          }
+          setBg(n);
+          setInterval(function() {
+            n = (n % maxIdx) + 1;
+            setBg(n);
+          }, CAROUSEL_INTERVAL_MS);
+        }
+        fetch('data/splash_bg_count.json')
+          .then(function(r) {
+            console.log("[ReactorBoot] splash_bg_count fetch status", r.status, r.ok);
+            return r.json();
+          })
+          .then(function(data) {
+            console.log("[ReactorBoot] splash_bg_count parsed", data);
+            init(USE_STALENHAG_BG ? data.stalenhag : data.splash);
+          })
+          .catch(function(e) {
+            console.warn("[ReactorBoot] splash_bg_count failed, using default count", e);
+            init(10);
+          });
+      })();
+    </script>
+    <script src="lib/pako.min.js"></script>
+    <script src="lib/zip.min.js"></script>
+    <script src="lib/break_infinity.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "derive-valtio": "./lib/derive-valtio.js",
+        "zod": "./lib/zod.js",
+        "zod-validation-error": "./lib/zod-validation-error.js",
+        "idb-keyval": "./lib/idb-keyval.js",
+        "valtio/vanilla": "./lib/valtio-vanilla.js",
+        "valtio/vanilla/utils": "./lib/valtio-utils.js",
+        "superjson": "./lib/superjson.js",
+        "@tanstack/query-core": "./lib/query-core.js",
+        "lit-html": "./lib/lit-html.js",
+        "lit-html/directives/class-map.js": "./lib/lit-class-map.js",
+        "lit-html/directives/style-map.js": "./lib/lit-style-map.js",
+        "lit-html/directives/repeat.js": "./lib/lit-repeat.js",
+        "lit-html/directives/when.js": "./lib/lit-when.js",
+        "lit-html/directives/unsafe-html.js": "./lib/lit-unsafe-html.js"
+      }
+    }
+    </script>
+</head>
+<body>
+    <div id="app_root" class="theme-dark"></div>
+    <script>
+      console.log("[ReactorBoot] body parsed, app_root present", !!document.getElementById("app_root"));
+    </script>
+    <script type="module" src="src/app.js"></script>
+</body>
+</html>

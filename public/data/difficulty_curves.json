@@ -1,0 +1,26 @@
+{
+  "easy": {
+    "base_money": 25,
+    "base_max_heat": 1500,
+    "base_max_power": 120,
+    "base_loop_wait": 1200,
+    "base_manual_heat_reduce": 2,
+    "power_overflow_to_heat_pct": 0
+  },
+  "medium": {
+    "base_money": 10,
+    "base_max_heat": 1000,
+    "base_max_power": 100,
+    "base_loop_wait": 1000,
+    "base_manual_heat_reduce": 1,
+    "power_overflow_to_heat_pct": 50
+  },
+  "hard": {
+    "base_money": 5,
+    "base_max_heat": 750,
+    "base_max_power": 80,
+    "base_loop_wait": 800,
+    "base_manual_heat_reduce": 0.5,
+    "power_overflow_to_heat_pct": 100
+  }
+}
