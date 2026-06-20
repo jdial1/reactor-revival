@@ -40,7 +40,7 @@ No assets or code from IndustrialCraft² or Reactor Incremental are used in this
 Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm install`** then **`npm run dev`** to serve `public/` locally with COOP/COEP headers (needed for workers and shared-memory paths).
 
 - **`npm run build:sw`** — Workbox injects the precache manifest from root `src-sw.js` into `public/sw.js` (`config/workbox-config.cjs`).
-- **Tests** — `npm test` / `npm run test:ci` (full suite); `npm run test:deploy` matches the CI subset (see `package.json`).
+- **Tests** — `npm test` / `npm run test:ci` (lint + syntax + Vitest; CI deploy uses this). `npm run test:deploy` is a faster Vitest-only subset for local iteration.
 - **`scripts/`** — `generate-metadata.js` (version + splash BG counts), vendor copy/bundle (`copy-libs.js`), unified `pwa-check.js` (local root files, `--fix-manifest`, `--remote` post-deploy checks), image compression, console stripping, and the dev server. **`config/`** — ESLint, Vitest, Workbox, Stylelint. See `package.json` `scripts` for the full list.
 
 ### Repository layout
