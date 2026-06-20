@@ -1,10 +1,9 @@
-import { MutationObserver } from "@tanstack/query-core";
 import { derive } from "derive-valtio";
 import { render } from "lit-html";
 import { subscribe, proxy, ref, snapshot } from "valtio/vanilla";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { fromError } from "zod-validation-error";
-import { queryClient, queryKeys, leaderboardService } from "./services.js";
+import { leaderboardService } from "./services-leaderboard.js";
 import {
   addPartIconsToTitle as addPartIconsToTitleHelper,
   getObjectiveScrollDuration as getObjectiveScrollDurationHelper,
@@ -19,6 +18,8 @@ import {
   applyCellMultipliers,
 } from "./domain/reactor-stats.js";
 import { calculateCellPulsePower, calculateCellPulseHeat } from "./logic-tooltip-stats.js";
+import { preferences } from "./state/preferences.js";
+import { saveGameMutation } from "./state/save-query.js";
 import {
   toDecimal,
   toNumber,
@@ -29,8 +30,6 @@ import {
   getBackupSaveForSlot1Async,
   serializeSave,
   rotateSlot1ToBackup,
-  formatDuration,
-  formatStatNum,
   BaseComponent,
   MOBILE_BREAKPOINT_PX,
   HEAT_EPSILON,
@@ -55,7 +54,6 @@ import {
   BASE_MAX_HEAT,
   WEAVE_QUANTUM,
 } from "./utils.js";
-import { backupModalTemplate } from "./templates/stateTemplates.js";
 import { drainGameEffects } from "./effect-orchestrator.js";
 import { syncReactorHeatVisualDom } from "./heatDomSync.js";
 import {
@@ -126,6 +124,22 @@ export {
   UserPreferencesSchema,
   BalanceConfigSchema,
 };
+
+export {
+  preferences,
+  initPreferencesStore,
+  getValidatedPreferences,
+  getVolumePreferences,
+  getAffordabilitySettings,
+  syncReducedMotionDOM,
+} from "./state/preferences.js";
+export {
+  createSaveMutation,
+  fetchResolvedSaves,
+  getSaveStats,
+  saveGameMutation,
+} from "./state/save-query.js";
+export { showLoadBackupModal } from "./state/save-ui.js";
 
 const initDec = (val, fallback = 0) =>
   ref(val != null ? (typeof val?.gte === "function" ? val : toDecimal(val)) : toDecimal(fallback));
@@ -483,90 +497,7 @@ export function initUIStateSubscriptions(uiState, ui) {
   return () => unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
 }
 
-const PREF_STORAGE_MAP = {
-  mute: "reactor_mute",
-  reducedMotion: "reactor_reduced_motion",
-  heatFlowVisible: "reactor_heat_flow_visible",
-  heatMapVisible: "reactor_heat_map_visible",
-  debugOverlay: "reactor_debug_overlay",
-  forceNoSAB: "reactor_force_no_sab",
-  numberFormat: "number_format",
-  volumeMaster: "reactor_volume_master",
-  volumeEffects: "reactor_volume_effects",
-  volumeAlerts: "reactor_volume_alerts",
-  volumeSystem: "reactor_volume_system",
-  volumeAmbience: "reactor_volume_ambience",
-  hideUnaffordableUpgrades: "reactor_hide_unaffordable_upgrades",
-  hideUnaffordableResearch: "reactor_hide_unaffordable_research",
-  hideMaxUpgrades: "reactor_hide_max_upgrades",
-  hideMaxResearch: "reactor_hide_max_research",
-};
-
-const PREF_DEFAULTS = UserPreferencesSchema.parse({});
-
-function hydrateFromStorage() {
-  const raw = {};
-  for (const [schemaKey, storageKey] of Object.entries(PREF_STORAGE_MAP)) {
-    const val = StorageUtils.get(storageKey);
-    if (val !== null && val !== undefined) raw[schemaKey] = val;
-  }
-  const result = UserPreferencesSchema.safeParse(raw);
-  return result.success ? result.data : UserPreferencesSchema.parse({});
-}
-
-export const preferences = proxy({ ...PREF_DEFAULTS });
-
 export const modalUi = proxy({ activeModal: null, payload: null });
-
-export function syncReducedMotionDOM() {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  if (!root?.style || !root?.classList) return;
-  const checked = !!preferences.reducedMotion;
-  root.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
-  root.classList.toggle("reduced-motion-app", checked);
-}
-
-export function initPreferencesStore() {
-  const hydrated = hydrateFromStorage();
-  Object.keys(PREF_DEFAULTS).forEach((k) => {
-    if (hydrated[k] !== undefined) preferences[k] = hydrated[k];
-  });
-  syncReducedMotionDOM();
-  subscribe(preferences, () => {
-    syncReducedMotionDOM();
-    Object.entries(PREF_STORAGE_MAP).forEach(([schemaKey, storageKey]) => {
-      const val = preferences[schemaKey];
-      if (val !== undefined) StorageUtils.set(storageKey, val);
-    });
-  });
-}
-
-export function getAffordabilitySettings() {
-  return {
-    hideUpgrades: preferences.hideUnaffordableUpgrades !== false,
-    hideResearch: preferences.hideUnaffordableResearch !== false,
-    hideMaxUpgrades: preferences.hideMaxUpgrades !== false,
-    hideMaxResearch: preferences.hideMaxResearch !== false,
-  };
-}
-
-export function getValidatedPreferences() {
-  return { ...preferences };
-}
-
-export function getVolumePreferences() {
-  const prefs = getValidatedPreferences();
-  return {
-    mute: prefs.mute,
-    master: prefs.volumeMaster,
-    effects: prefs.volumeEffects,
-    alerts: prefs.volumeAlerts,
-    system: prefs.volumeSystem,
-    ambience: prefs.volumeAmbience,
-  };
-}
-
 
 export function previewBlueprintPlannerStats(game) {
   if (!game?.blueprintPlanner?.active) return null;
@@ -1361,7 +1292,6 @@ export class StateManager extends BaseComponent {
 }
 
 
-const LOCAL_SLOTS = [1, 2, 3];
 export function parseAndValidateSave(raw) {
   const parsed = typeof raw === "string" ? deserializeSave(raw) : raw;
   const migrated = migrateSave(parsed);
@@ -1573,180 +1503,6 @@ export async function applySaveState(game, savedData) {
   for (const fn of POST_ASYNC_HYDRATORS) fn(game, savedData);
   game.reactor.hull_heat_doctrine_mult = 1;
   game.reactor.updateStats();
-}
-
-
-async function performSave(slot, saveData) {
-  const forDisk = { ...saveData };
-  if (forDisk.tiles_compact?.encoding && Array.isArray(forDisk.part_table) && forDisk.part_table.length > 0) {
-    forDisk.tiles = [];
-  }
-  const validatedData = SaveDataWriteSchema.parse(forDisk);
-  const saveKey = `reactorGameSave_${slot}`;
-  await StorageAdapter.set(saveKey, validatedData);
-  if (slot === 1) {
-    await rotateSlot1ToBackup(serializeSave(validatedData));
-  }
-  await StorageAdapter.set("reactorCurrentSaveSlot", slot);
-  return slot;
-}
-
-export function createSaveMutation() {
-  return new MutationObserver(queryClient, {
-    mutationFn: async ({ slot, saveData }) => performSave(slot, saveData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.saves.resolved() });
-    },
-    onError: (error) => {
-      logger.log("error", "game", "Save mutation failed:", error);
-    },
-  });
-}
-
-export async function saveGameMutation({ slot, saveData, getNextSaveSlot }) {
-  if (typeof indexedDB === "undefined") return null;
-  if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") return null;
-
-  const effectiveSlot = slot ?? (await getNextSaveSlot());
-  await performSave(effectiveSlot, saveData);
-  queryClient.invalidateQueries({ queryKey: queryKeys.saves.resolved() });
-  return effectiveSlot;
-}
-
-async function fetchLocalSlotData(slotId) {
-  try {
-    const slotData = await StorageAdapter.get(`reactorGameSave_${slotId}`, SaveDataSchema);
-    if (!slotData) return null;
-    return {
-      slot: slotId,
-      exists: true,
-      lastSaveTime: slotData.last_save_time || null,
-      totalPlayedTime: slotData.total_played_time || 0,
-      currentMoney: slotData.current_money || 0,
-      exoticParticles: slotData.exotic_particles ?? slotData.total_exotic_particles ?? 0,
-      data: slotData,
-    };
-  } catch (error) {
-    logger.log("warn", "saves", `Failed to fetch local slot ${slotId}`, error);
-    return null;
-  }
-}
-
-async function fetchLegacySlotData() {
-  try {
-    const oldSaveData = await StorageAdapter.get("reactorGameSave", SaveDataSchema);
-    if (!oldSaveData) return null;
-    return {
-      slot: "legacy",
-      exists: true,
-      lastSaveTime: oldSaveData.last_save_time || null,
-      totalPlayedTime: oldSaveData.total_played_time || 0,
-      currentMoney: oldSaveData.current_money || 0,
-      exoticParticles: oldSaveData.exotic_particles ?? oldSaveData.total_exotic_particles ?? 0,
-      data: oldSaveData,
-    };
-  } catch (error) {
-    logger.log("warn", "saves", "Failed to fetch legacy save", error);
-    return null;
-  }
-}
-
-async function fetchResolvedSavesFn() {
-  const slotPromises = LOCAL_SLOTS.map(fetchLocalSlotData);
-  const results = await Promise.all(slotPromises);
-  const saveSlots = results.filter(Boolean);
-
-  if (saveSlots.length === 0) {
-    const legacy = await fetchLegacySlotData();
-    if (legacy) saveSlots.push(legacy);
-  }
-
-  const hasSave = saveSlots.length > 0;
-  let maxLocalTime = 0;
-  let mostRecentSlot = null;
-
-  for (const slot of saveSlots) {
-    const t = slot.lastSaveTime || 0;
-    if (t > maxLocalTime) {
-      maxLocalTime = t;
-      mostRecentSlot = slot;
-    }
-  }
-
-  let dataJSON = null;
-  if (mostRecentSlot) {
-    const key = mostRecentSlot.slot === "legacy" ? "reactorGameSave" : `reactorGameSave_${mostRecentSlot.slot}`;
-    dataJSON = await StorageAdapter.getRaw(key);
-  }
-
-  let mostRecentSave = null;
-  let recentTime = 0;
-  for (const saveSlot of saveSlots) {
-    if (saveSlot.lastSaveTime && saveSlot.lastSaveTime > recentTime) {
-      recentTime = saveSlot.lastSaveTime;
-      mostRecentSave = saveSlot;
-    }
-  }
-
-  return {
-    hasSave,
-    saveSlots,
-    cloudSaveOnly: false,
-    cloudSaveData: null,
-    mostRecentSave,
-    maxLocalTime,
-    dataJSON,
-  };
-}
-
-export function fetchResolvedSaves() {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.saves.resolved(),
-    queryFn: fetchResolvedSavesFn,
-    staleTime: 10 * 1000,
-  });
-}
-
-export function getSaveStats(data) {
-  if (!data || typeof data !== "object") {
-    return { money: "0", ep: "0", playtime: "0", timestamp: "Unknown" };
-  }
-  const money = data.current_money != null ? formatStatNum(data.current_money) : "0";
-  const ep =
-    data.exotic_particles != null
-      ? formatStatNum(data.exotic_particles)
-      : data.total_exotic_particles != null
-        ? formatStatNum(data.total_exotic_particles)
-        : "0";
-  const playtime = data.total_played_time != null ? formatDuration(data.total_played_time, false) : "0";
-  const ts = data.last_save_time;
-  const timestamp = ts ? new Date(Number(ts)).toLocaleString() : "Unknown";
-  return { money, ep, playtime, timestamp };
-}
-
-function renderBackupModalTemplate(content, onLoad, onCancel) {
-  content.innerHTML = backupModalTemplate;
-  content.querySelector('[data-action="load-backup"]')?.addEventListener("click", onLoad);
-  content.querySelector('[data-action="cancel"]')?.addEventListener("click", onCancel);
-}
-
-export function showLoadBackupModal() {
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "game-setup-overlay bios-overlay";
-    overlay.style.zIndex = "10001";
-    const content = document.createElement("div");
-    overlay.appendChild(content);
-    const resolveAndClose = (value) => {
-      overlay.remove();
-      resolve(value);
-    };
-    renderBackupModalTemplate(content, () => resolveAndClose(true), () => resolveAndClose(false));
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) resolveAndClose(false);
-    });
-    document.body.appendChild(overlay);
-  });
 }
 
 function buildObjectivesStateForSave(ctx) {

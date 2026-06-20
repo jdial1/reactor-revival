@@ -1,5 +1,5 @@
 import { toDecimal, toNumber } from "./utils.js";
-import { getAffordabilitySettings } from "./state.js";
+import { getAffordabilitySettings } from "./state/preferences.js";
 
 const partElements = new WeakMap();
 const upgradeElements = new WeakMap();

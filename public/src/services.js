@@ -29,12 +29,9 @@ export {
 export { LeaderboardService, leaderboardService, getLocalBestRun } from "./services-leaderboard.js";
 
 import { html, render } from "lit-html";
-import {
-  SaveDataSchema,
-  VersionSchema,
-  fetchResolvedSaves,
-  showLoadBackupModal,
-} from "./state.js";
+import { SaveDataSchema, VersionSchema } from "./schema/index.js";
+import { fetchResolvedSaves } from "./state/save-query.js";
+import { showLoadBackupModal } from "./state/save-ui.js";
 import {
   logger,
   StorageUtils,

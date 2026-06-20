@@ -1,5 +1,5 @@
 import { render } from "lit-html";
-import { VersionSchema } from "./state.js";
+import { VersionSchema } from "./schema/index.js";
 import {
   logger,
   StorageUtils,

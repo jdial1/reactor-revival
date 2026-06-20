@@ -7,9 +7,8 @@ import {
   ObjectiveListSchema,
   DifficultyPresetSchema,
   HelpTextSchema,
-  getVolumePreferences,
-  preferences,
-} from "./state.js";
+} from "./schema/index.js";
+import { getVolumePreferences, preferences } from "./state/preferences.js";
 import {
   logger,
   getResourceUrl,
