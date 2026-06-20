@@ -12,8 +12,8 @@ import {
   previewBlueprintPlannerStats,
   actions,
 } from "../store.js";
-import { repeat, styleMap, numFormat as fmt, formatNumberCompactIntl, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../utils.js";
-import { runCheckAffordability, calculateSectionCounts } from "../logic.js";
+import { repeat, styleMap, numFormat as fmt, formatNumberCompactIntl, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent, resolveDomElement } from "../utils.js";
+import { runCheckAffordability, calculateSectionCounts, bindUpgradeElement, getUpgradeElement, getPartElement } from "../logic.js";
 import { syncReactorHeatVisualDom } from "../heatDomSync.js";
 import { UpgradeCard, CloseButton, PartButton, partsModuleInfoCardTemplate } from "./button-factory.js";
 import { MODAL_IDS } from "./ui-modals.js";
@@ -72,14 +72,7 @@ function formatSimulationTickLine(game) {
 
 export function getUiElement(ui, id) {
   if (!ui || typeof document === "undefined") return null;
-  if (ui.DOMElements?.[id]) return ui.DOMElements[id];
-  const el = document.getElementById(id);
-  if (!el) return null;
-  if (!ui.DOMElements) ui.DOMElements = {};
-  ui.DOMElements[id] = el;
-  const camelCaseKey = id.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-  ui.DOMElements[camelCaseKey] = el;
-  return el;
+  return document.getElementById(id);
 }
 
 export function cacheDomElements(_ui, _pageId) {
@@ -496,7 +489,7 @@ class PageSetupUI {
 
     const leaderboardTemplate = (records, status, sortBy) => {
       if (status === "loading") {
-        return leaderboardStatusRowTemplate({ text: "Loading..." });
+        return leaderboardStatusRowTemplate({ loading: true });
       }
       if (status === "offline") {
         return leaderboardStatusRowTemplate({ text: "Leaderboard unavailable. Try again later." });
@@ -1151,8 +1144,9 @@ function mountStatsBarReactive(ui) {
   const powerEl = document.getElementById("stats_power");
   const heatEl = document.getElementById("stats_heat");
   const hullEl = document.getElementById("stats_hull");
-  const last = { vent: null, power: null, heat: null, hull: null };
-  const first = { vent: true, power: true, heat: true, hull: true };
+  const hullDesktopEl = document.getElementById("info_hull_desktop");
+  const last = { vent: null, power: null, heat: null, hull: null, hullDesktop: null };
+  const first = { vent: true, power: true, heat: true, hull: true, hullDesktop: true };
   const sync = () => {
     const v = fmt(state.stats_vent ?? 0, 0);
     const p = fmt(state.stats_power ?? 0, 0);
@@ -1177,6 +1171,7 @@ function mountStatsBarReactive(ui) {
     apply(powerEl, "power", p);
     apply(heatEl, "heat", h);
     apply(hullEl, "hull", hullText);
+    apply(hullDesktopEl, "hullDesktop", hullText);
   };
   let scheduled = false;
   const schedule = () => {
@@ -1197,7 +1192,7 @@ function mountStatsBarReactive(ui) {
   sync();
   ui._unmounts.push(() => {
     unsubs.forEach((u) => { try { u(); } catch (_) {} });
-    [ventEl, powerEl, heatEl, hullEl].forEach((el) => cancelCathodeScramble(el));
+    [ventEl, powerEl, heatEl, hullEl, hullDesktopEl].forEach((el) => cancelCathodeScramble(el));
   });
   mountExoticParticlesDisplayIfNeeded(ui);
 }
@@ -1304,7 +1299,6 @@ function buildControlsNavTemplate(ui, state) {
     heatControlOn: !!state.heat_control && hasHeatControlUpgrade,
     pauseOn: !!state.pause,
     accountTitle: ui.uiState?.user_account_display?.title ?? "Account",
-    accountIcon: ui.uiState?.user_account_display?.icon ?? "\uD83D\uDC64",
     onToggleAutoSell: hasAutoSellUpgrade ? toggleHandler("auto_sell") : null,
     onToggleAutoBuy: hasAutoBuyUpgrade ? toggleHandler("auto_buy") : null,
     onToggleHeatControl: hasHeatControlUpgrade ? toggleHandler("heat_control") : null,
@@ -1538,7 +1532,8 @@ export function setupBuildTabButton(ui) {
     ui.deviceFeatures.lightVibration();
     document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
     ui.stateManager.setClickedPart(part, { skipOpenPanel: true });
-    if (part.$el) part.$el.classList.add("part_active");
+    const partEl = getPartElement(part);
+    if (partEl) partEl.classList.add("part_active");
     updateQuickSelectSlots(ui);
   };
   if (container) {
@@ -1987,7 +1982,8 @@ function renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useRe
 }
 
 function mountUpgradeReactiveDisplay(upgrade, display) {
-  const levelContainer = upgrade.$el.querySelector(".upgrade-level-info");
+  const root = getUpgradeElement(upgrade);
+  const levelContainer = root?.querySelector(".upgrade-level-info");
   if (levelContainer) {
     if (typeof upgrade._levelReactiveUnmount === "function") {
       try {
@@ -2053,14 +2049,15 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
   filtered.forEach((upgrade) => {
     const container = document.getElementById(getUpgradeContainerId(upgrade));
     if (!container?.isConnected) return;
-    upgrade.$el = container?.querySelector(`[data-id="${upgrade.id}"]`);
-    if (upgrade.$el) {
+    const el = container?.querySelector(`[data-id="${upgrade.id}"]`);
+    bindUpgradeElement(upgrade, el);
+    if (el) {
       upgrade.updateDisplayCost();
       const display = state?.upgrade_display;
       if (display) {
         mountUpgradeReactiveDisplay(upgrade, display);
       } else {
-        const lr = upgrade.$el.querySelector(".upgrade-level-info .cathode-readout");
+        const lr = el.querySelector(".upgrade-level-info .cathode-readout");
         const t = lr?.textContent?.trim();
         if (lr && t) runCathodeScramble(lr, t, { durationMs: 150 });
       }
@@ -3100,6 +3097,8 @@ export function myLayoutsTemplate(ui, list, fmtFn, onClose) {
     listContent: layoutsListTemplate(ui, list, fmtFn, () => ui.modalOrchestrator.showModal(MODAL_IDS.MY_LAYOUTS)),
   });
 }
+const heatVisualOverlays = new WeakMap();
+
 class HeatVisualsUI {
   constructor(ui) {
     this.ui = ui;
@@ -3124,8 +3123,9 @@ class HeatVisualsUI {
 
   _ensureOverlay() {
     const ui = this.ui;
-    if (this._overlay && this._overlay.parentElement) return this._overlay;
-    const reactorWrapper = getPageReactorWrapper(ui) ?? ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
+    const existing = heatVisualOverlays.get(this);
+    if (existing?.isConnected) return existing;
+    const reactorWrapper = getPageReactorWrapper(ui) ?? document.getElementById("reactor_wrapper");
     if (!reactorWrapper) {
       return null;
     }
@@ -3140,6 +3140,7 @@ class HeatVisualsUI {
     overlay.style.overflow = 'hidden';
     reactorWrapper.style.position = reactorWrapper.style.position || 'relative';
     reactorWrapper.appendChild(overlay);
+    heatVisualOverlays.set(this, overlay);
     this._overlay = overlay;
     return overlay;
   }
@@ -3147,7 +3148,14 @@ class HeatVisualsUI {
   _ensureHeatFlowOverlay() {
     const overlay = this._ensureOverlay();
     if (!overlay) return null;
-    if (this._heatFlowOverlay && this._heatFlowOverlay.parentElement) return this._heatFlowOverlay;
+    const cached = this._heatFlowOverlay;
+    if (cached) {
+      try {
+        if (cached.isConnected) return cached;
+      } catch {
+        this._heatFlowOverlay = null;
+      }
+    }
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "heat-flow-overlay");
     svg.setAttribute("width", "100%");
@@ -3164,7 +3172,14 @@ class HeatVisualsUI {
   _ensureVoltageOverlay() {
     const overlay = this._ensureOverlay();
     if (!overlay) return null;
-    if (this._voltageOverlaySvg && this._voltageOverlaySvg.parentElement) return this._voltageOverlaySvg;
+    const cached = this._voltageOverlaySvg;
+    if (cached) {
+      try {
+        if (cached.isConnected) return cached;
+      } catch {
+        this._voltageOverlaySvg = null;
+      }
+    }
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "voltage-placement-overlay");
     svg.setAttribute("width", "100%");
@@ -3662,10 +3677,17 @@ export class CopyPasteUI {
       if (game.off) game.off("blueprintPlannerChanged", onChanged);
       this._teardownBlueprintPlanner = null;
     };
+    const syncPlanToggle = () => {
+      const active = document.body.classList.contains("blueprint-planner-active");
+      toggle.setAttribute("aria-pressed", String(active));
+      toggle.title = active ? "Blueprint planning mode on" : "Live reactor mode";
+    };
     toggle.onclick = () => {
       game.toggleBlueprintPlanner?.();
       syncHud();
+      syncPlanToggle();
     };
+    syncPlanToggle();
     if (applyBtn) {
       applyBtn.onclick = () => {
         game.applyBlueprintPlannerLayout?.();

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
 import { REACTOR_HEAT_STANDARD_DIVISOR } from "@app/utils.js";
-import { GridCanvasRenderer } from "@app/components/ui-grid.js";
+import { GridCanvasRenderer, bindGridRendererSurfaces } from "@app/components/ui-grid.js";
 
 describe("Group 1: Core Grid & Component Generation", () => {
   let game;
@@ -147,8 +147,15 @@ describe("Group 1: Core Grid & Component Generation", () => {
     renderer._staticDirty = false;
     renderer._staticDirtyTiles.add("2,2");
     renderer._staticDirtyTiles.add("0,0");
-    renderer._container = { scrollLeft: 80, scrollTop: 80, clientWidth: 80, clientHeight: 80, getBoundingClientRect: () => ({}) };
-    renderer.ctx = {
+    const container = document.createElement("div");
+    container.id = "mock-scroll-container";
+    container.scrollLeft = 80;
+    container.scrollTop = 80;
+    Object.defineProperty(container, "clientWidth", { value: 80, configurable: true });
+    Object.defineProperty(container, "clientHeight", { value: 80, configurable: true });
+    document.body.appendChild(container);
+    renderer._containerId = "mock-scroll-container";
+    const mockCtx = {
       clearRect: vi.fn(),
       fillRect: vi.fn(),
       strokeRect: vi.fn(),
@@ -165,7 +172,7 @@ describe("Group 1: Core Grid & Component Generation", () => {
       fillStyle: "",
       strokeStyle: "",
     };
-    renderer._dynamicCtx = {
+    const mockDynamicCtx = {
       save: vi.fn(),
       restore: vi.fn(),
       clearRect: vi.fn(),
@@ -187,11 +194,18 @@ describe("Group 1: Core Grid & Component Generation", () => {
       strokeStyle: "",
       lineCap: "round",
     };
+    bindGridRendererSurfaces(renderer, {
+      canvas: {},
+      dynamicCanvas: {},
+      ctx: mockCtx,
+      dynamicCtx: mockDynamicCtx,
+    });
 
     renderer.render(game);
 
-    expect(renderer.ctx.clearRect).toHaveBeenCalledTimes(1);
-    expect(renderer.ctx.clearRect).toHaveBeenCalledWith(80, 80, 40, 40);
+    expect(mockCtx.clearRect).toHaveBeenCalledTimes(1);
+    expect(mockCtx.clearRect).toHaveBeenCalledWith(80, 80, 40, 40);
     expect(renderer._staticDirtyTiles.size).toBe(0);
+    container.remove();
   });
 });

@@ -29,7 +29,10 @@ export function reactorSectionTemplate() {
       <button id="reactor_my_layouts_btn" title="My Layouts" tabindex="0" aria-label="My Layouts">
         <span class="emoji-icon">&#128193;</span>
       </button>
-      <button id="reactor_blueprint_toggle" type="button" class="pixel-btn reactor-toolbar-btn" title="Blueprint planner" tabindex="0" aria-label="Toggle blueprint planner">Plan</button>
+      <button id="reactor_blueprint_toggle" type="button" class="pixel-btn reactor-toolbar-btn reactor-plan-toggle" title="Blueprint planner" tabindex="0" aria-label="Toggle blueprint planner" aria-pressed="false">
+        <span class="reactor-plan-state reactor-plan-state--live">LIVE</span>
+        <span class="reactor-plan-state reactor-plan-state--active">PLAN ON</span>
+      </button>
       <button id="reactor_sell_all_btn" title="Sell All Parts" tabindex="0" aria-label="Sell All Parts">
         <img src="img/ui/icons/icon_cash_outline.svg" alt="Sell" />
       </button>
@@ -227,15 +230,13 @@ export function aboutSectionTemplate() {
     <div class="about-section">
       <h3>Credits</h3>
       <p>Created by <a href="https://github.com/jdial1" target="_blank" rel="noopener noreferrer">Justin Dial</a></p>
-      <p class="credits-list">
-        Special thanks to:
-        <ul>
-          <li><a href="https://forum.industrial-craft.net/thread/2147-new-reactor-planner-made-by-talonius/" target="_blank" rel="noopener noreferrer">Talonius</a> - IC2 Reactor Planner</li>
-          <li><a href="https://github.com/MauveCloud/Ic2ExpReactorPlanner" target="_blank" rel="noopener noreferrer">MauveCloud</a> - IC2 Experimental Reactor Planner</li>
-          <li><a href="https://www.kongregate.com/games/Cael/reactor-incremental" target="_blank" rel="noopener noreferrer">Cael & Mephyst</a> - Reactor Incremental</li>
-          <li><a href="https://github.com/cwmonkey/reactor-knockoff" target="_blank" rel="noopener noreferrer">cwmonkey</a> - Reactor Knockoff</li>
-        </ul>
-      </p>
+      <p class="credits-list">Special thanks to:</p>
+      <ul class="credits-list">
+        <li><a href="https://forum.industrial-craft.net/thread/2147-new-reactor-planner-made-by-talonius/" target="_blank" rel="noopener noreferrer">Talonius</a> - IC2 Reactor Planner</li>
+        <li><a href="https://github.com/MauveCloud/Ic2ExpReactorPlanner" target="_blank" rel="noopener noreferrer">MauveCloud</a> - IC2 Experimental Reactor Planner</li>
+        <li><a href="https://www.kongregate.com/games/Cael/reactor-incremental" target="_blank" rel="noopener noreferrer">Cael & Mephyst</a> - Reactor Incremental</li>
+        <li><a href="https://github.com/cwmonkey/reactor-knockoff" target="_blank" rel="noopener noreferrer">cwmonkey</a> - Reactor Knockoff</li>
+      </ul>
     </div>
     <div class="about-section">
       <h3>Contact</h3>
@@ -290,9 +291,7 @@ export function leaderboardSectionTemplate() {
             <th>Layout</th>
           </tr>
         </thead>
-        <tbody id="leaderboard_rows">
-          <tr><td colspan="7" style="text-align: center;">Loading records...</td></tr>
-        </tbody>
+        <tbody id="leaderboard_rows"></tbody>
       </table>
     </div>
   </div>

@@ -34,9 +34,13 @@ export function infoBarTemplate({
         <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
         <span class="value cathode-readout" id="info_money_desktop"></span>
       </span>
+      <span class="info-item hull info-item-hull">
+        <span class="stats-inline-label">Hull</span>
+        <span id="info_hull_desktop" class="cathode-readout"></span>
+      </span>
       <span class="info-item ep" id="info_ep_desktop">
         <span class="ep-content" style=${epContentStyle} ?hidden=${!epVisible}>
-          <span class="icon">🧬</span>
+          <span class="icon"><img src="img/ui/nav/nav_experimental.png" alt="" class="passive-top-icon-img" /></span>
           <span class="value cathode-readout" id="info_ep_value_desktop"></span>
         </span>
       </span>
@@ -67,7 +71,7 @@ export function infoBarTemplate({
         <div class="info-item center-content">
           <span class="info-item ep" id="info_ep">
             <span class="ep-content" style=${epContentStyle} ?hidden=${!epVisible}>
-              <span class="icon">🧬</span>
+              <span class="icon"><img src="img/ui/nav/nav_experimental.png" alt="" class="passive-top-icon-img" /></span>
               <span class="value cathode-readout" id="info_ep_value"></span>
             </span>
           </span>
@@ -148,7 +152,7 @@ export function mobilePassiveBarTemplate({
 }) {
   return html`
     <span class="passive-top-ep">
-      <span class="passive-top-icon" aria-hidden="true">&#129516;</span>
+      <img src="img/ui/nav/nav_experimental.png" alt="" class="passive-top-icon-img" aria-hidden="true" />
       <span id="mobile_passive_ep">${epText}</span>
     </span>
     <span class="passive-top-money">
@@ -306,7 +310,6 @@ export function controlDeckControlsNavTemplate({
   heatControlOn,
   pauseOn,
   accountTitle,
-  accountIcon,
   onToggleAutoSell,
   onToggleAutoBuy,
   onToggleHeatControl,
@@ -319,8 +322,8 @@ export function controlDeckControlsNavTemplate({
     ${onToggleAutoBuy ? controlDeckMechSwitch("auto_buy_toggle", autoBuyOn, onToggleAutoBuy, "Auto buy", "Buy fuel and parts automatically when affordable", "") : ""}
     ${onToggleHeatControl ? controlDeckMechSwitch("heat_control_toggle", heatControlOn, onToggleHeatControl, "Auto heat", "Automatically vent heat toward the target level", "") : ""}
     ${controlDeckMechSwitch("pause_toggle", pauseOn, onTogglePause, pauseCaption, pauseHint, pauseOn ? "paused" : "")}
-    <button id="user_account_btn_mobile" class="pixel-btn" title=${accountTitle}>
-      <span class="control-icon" style="font-size: 1.5em;">${accountIcon}</span>
+    <button id="user_account_btn_mobile" class="account-btn" title=${accountTitle}>
+      <span class="control-icon account-save-icon" aria-hidden="true"></span>
       <span class="control-text">Account</span>
     </button>
   `;
@@ -539,8 +542,12 @@ export function componentSummaryTemplate({
 
 export function leaderboardStatusRowTemplate({
   text,
+  loading = false,
 }) {
-  return html`<tr><td colspan="7" style="text-align: center;">${text}</td></tr>`;
+  if (loading) {
+    return html`<tr><td colspan="7" class="leaderboard-loading-cell"><span class="terminal-loader">Loading records <span class="terminal-loader-bar" aria-hidden="true">[████░░░░░░]</span></span></td></tr>`;
+  }
+  return html`<tr><td colspan="7" class="leaderboard-status-cell">${text}</td></tr>`;
 }
 
 export function leaderboardRowTemplate({

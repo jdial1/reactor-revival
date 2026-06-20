@@ -1292,7 +1292,6 @@ export class StateManager extends BaseComponent {
     }
     const upgradeEl = upgrade_obj.createElement();
     if (upgradeEl) {
-      upgrade_obj.$el = upgradeEl;
       upgradeEl.upgrade_object = upgrade_obj;
       this.ui.appendUpgrade(locationKey, upgradeEl);
     }
@@ -1351,7 +1350,12 @@ export class StateManager extends BaseComponent {
   checkObjectiveTextScrolling() {
     const objectives = this.ui.objectivesUI;
     if (objectives?.checkTextScrolling) objectives.checkTextScrolling();
-    else checkObjectiveTextScrollingHelper(this.ui.DOMElements);
+    else {
+      checkObjectiveTextScrollingHelper({
+        objectives_toast_title: this.ui.getUiElement?.("objectives_toast_title")
+          ?? (typeof document !== "undefined" ? document.getElementById("objectives_toast_title") : null),
+      });
+    }
   }
 }
 

@@ -5,7 +5,7 @@ import { StateManager, createUIState, initUIStateSubscriptions, subscribeKey } f
 import { InputHandler } from "./input-manager.js";
 import { createModalOrchestrator } from "./ui-modals.js";
 import { GridScaler, GridCanvasRenderer } from "./ui-grid.js";
-import { leaderboardService } from "../services.js";
+import { leaderboardService, resolveAudioService } from "../services.js";
 import { logger } from "../utils.js";
 import {
   ComponentRenderingUI,
@@ -377,7 +377,7 @@ export class UI {
     pulseReflector: (a, b) => this.gridInteractionUI.pulseReflector(a, b),
     emitEP: (t) => this.gridInteractionUI.emitEP(t),
   });
-  this.audioController = new AudioController({ getAudioService: () => this.game?.audio, getUI: () => this });
+  this.audioController = new AudioController({ getAudioService: () => resolveAudioService(this.game?.audio), getUI: () => this });
     this.performanceUI = new PerformanceUI(this);
     this.meltdownUI = new MeltdownUI(this);
     this.layoutStorageUI = new LayoutStorageUI(this);
@@ -577,7 +577,7 @@ export class UI {
     this.meltdownUI.subscribeToMeltdownEvents(game);
     subscribeToContextModalEvents(this, game);
     this.audioController.attach(game);
-    const audioUnmount = attachAudioSys(() => this.game?.audio, () => this.game);
+    const audioUnmount = attachAudioSys(() => resolveAudioService(this.game?.audio), () => this.game);
     if (typeof audioUnmount === "function") this._unmounts.push(audioUnmount);
     const heatStripHost = typeof document !== "undefined" ? document.getElementById("info_bar") : null;
     if (heatStripHost && !document.getElementById("ui_views_heat_strip_host")) {

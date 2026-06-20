@@ -14,7 +14,7 @@ export function gameShellTemplate() {
       <button data-page="experimental_upgrades_section">Research</button>
     </li>
     <li>
-      <button data-page="leaderboard_section" title="Leaderboard" aria-label="Leaderboard">🏆</button>
+      <button data-page="leaderboard_section" title="Leaderboard" aria-label="Leaderboard">RANK</button>
     </li>
   </ul>
   <ul id="reactor_stats" class="desktop-only"></ul>
@@ -85,7 +85,7 @@ export function gameShellTemplate() {
   <div class="quick-select-slots" id="quick_select_slots_container" aria-label="Recent parts">
     <div id="quick_select_slots_root"></div>
     <button id="control_deck_build_fab" class="control-deck-fab" type="button" aria-label="Build Parts" title="Build Parts">
-      <span class="control-deck-fab-icon" aria-hidden="true">…</span>
+      <span class="control-deck-fab-icon" aria-hidden="true">+</span>
     </button>
   </div>
 </div>

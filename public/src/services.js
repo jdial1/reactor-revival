@@ -204,17 +204,17 @@ export function handleAudioEvent(svc, eventType, context, options = {}) {
     if (!isMeltdown && merged.now - svc._lastExplosionTime < svc._config.explosionInterval) return;
     svc._lastExplosionTime = merged.now;
     if (isMeltdown && config.meltdownSampleKey) {
-      const fallbackBuf = svc._uiBuffers?.[config.meltdownSampleKey];
+      const fallbackBuf = getUiBuffers(svc)?.[config.meltdownSampleKey];
       if (fallbackBuf) svc._playSample(config.meltdownSampleKey, merged.category, merged.pan);
     }
   }
   const sampleKey = config.sampleMap?.[merged.subtype] ?? config.sampleMap?.default ?? config.sampleKey;
   if (!sampleKey) return;
-  const buf = svc._uiBuffers?.[sampleKey];
+  const buf = getUiBuffers(svc)?.[sampleKey];
   if (buf) {
     svc._playSample(sampleKey, merged.category, merged.pan);
   } else if (config.sampleFallback) {
-    const fallbackBuf = svc._uiBuffers?.[config.sampleFallback];
+    const fallbackBuf = getUiBuffers(svc)?.[config.sampleFallback];
     if (fallbackBuf) svc._playSample(config.sampleFallback, merged.category, merged.pan);
   }
 }
@@ -228,7 +228,7 @@ export function processSensoryMask(svc, mask) {
       if (config.triggerWarning) {
         svc.warningManager.startWarningLoop(config.intensity ?? 0.5);
       } else if (config.sampleKey) {
-        const buf = svc._uiBuffers?.[config.sampleKey];
+        const buf = getUiBuffers(svc)?.[config.sampleKey];
         if (buf) svc._playSample(config.sampleKey, config.category, 0);
       }
     }
@@ -237,12 +237,129 @@ export function processSensoryMask(svc, mask) {
 
 const AUDIO_LOAD_CONCURRENCY = 6;
 
+const audioContextByService = new WeakMap();
+const audioContextById = new Map();
+const audioServicesById = new Map();
+const audioNodesById = new Map();
+const uiBuffersById = new Map();
+const industrialBuffersById = new Map();
+const ambienceBuffersById = new Map();
+let nextAudioServiceId = 1;
+
+function createUiBufferStore() {
+  return {
+    click: null,
+    placement: null,
+    placement_cell: null,
+    placement_plating: null,
+    upgrade: null,
+    error: null,
+    sell: null,
+    tab_switch: null,
+    explosion: null,
+    meltdown: null,
+    depletion: null,
+    reboot: null,
+    ep_spark: null,
+  };
+}
+
+function createIndustrialBufferStore() {
+  return { metal_clank: null, steam_hiss: null };
+}
+
+function ensureAudioNodes(service) {
+  const resolved = resolveAudioService(service);
+  if (!resolved?._audioServiceId) return {};
+  let nodes = audioNodesById.get(resolved._audioServiceId);
+  if (!nodes) {
+    nodes = {
+      masterGain: null,
+      effectsGain: null,
+      alertsGain: null,
+      systemGain: null,
+      ambienceGain: null,
+      ambienceDuckGain: null,
+      researchEpHum: null,
+    };
+    audioNodesById.set(resolved._audioServiceId, nodes);
+  }
+  return nodes;
+}
+
+function getUiBuffers(service) {
+  const resolved = resolveAudioService(service);
+  if (!resolved) return null;
+  const id = resolved._audioServiceId;
+  if (id == null) return resolved._uiBuffers ?? null;
+  let store = uiBuffersById.get(id);
+  if (!store) {
+    store = createUiBufferStore();
+    uiBuffersById.set(id, store);
+  }
+  return store;
+}
+
+function getIndustrialBuffers(service) {
+  const resolved = resolveAudioService(service);
+  if (!resolved) return null;
+  const id = resolved._audioServiceId;
+  if (id == null) return resolved._industrialBuffers ?? null;
+  let store = industrialBuffersById.get(id);
+  if (!store) {
+    store = createIndustrialBufferStore();
+    industrialBuffersById.set(id, store);
+  }
+  return store;
+}
+
+function getAmbienceBuffers(service) {
+  const resolved = resolveAudioService(service);
+  if (!resolved) return null;
+  const id = resolved._audioServiceId;
+  if (id == null) return resolved._ambienceBuffers ?? null;
+  let store = ambienceBuffersById.get(id);
+  if (!store) {
+    store = [];
+    ambienceBuffersById.set(id, store);
+  }
+  return store;
+}
+
+function getAudioContext(service) {
+  const resolved = resolveAudioService(service);
+  if (!resolved) return null;
+  const id = resolved._audioServiceId;
+  const ctx =
+    (id != null ? audioContextById.get(id) : null) ??
+    audioContextByService.get(resolved) ??
+    resolved._contextStore ??
+    null;
+  if (!ctx) return null;
+  try {
+    void ctx.state;
+  } catch {
+    return null;
+  }
+  return ctx;
+}
+
+export function resolveAudioService(service) {
+  if (!service) return null;
+  const id = service._audioServiceId;
+  if (id != null) {
+    const registered = audioServicesById.get(id);
+    if (registered) return registered;
+  }
+  return service;
+}
+
 async function loadUrlMapInto(svc, urlMap, target) {
   const tasks = Object.entries(urlMap).map(([key, url]) => async () => {
     try {
       const r = await fetch(url);
       const ab = await r.arrayBuffer();
-      target[key] = await svc.context.decodeAudioData(ab);
+      target[key] = await getAudioContext(svc)?.decodeAudioData(ab);
     } catch (e) {
       logger.log('warn', 'audio', 'Audio load failed', url, e);
     }
@@ -257,7 +374,7 @@ async function loadAmbienceLayers(svc, base) {
       try {
         const r = await fetch(url);
         const ab = await r.arrayBuffer();
-        return await svc.context.decodeAudioData(ab);
+        return await getAudioContext(svc)?.decodeAudioData(ab);
       } catch (e) {
         logger.log('warn', 'audio', 'Ambience load failed', url, e);
         return null;
@@ -268,12 +385,13 @@ async function loadAmbienceLayers(svc, base) {
 }
 
 function shouldRestartAmbience(svc) {
-  return svc._ambienceBuffers.length >= 3 && svc._ambienceBuffers.every(Boolean) &&
+  const ambienceBuffers = getAmbienceBuffers(svc) ?? [];
+  return ambienceBuffers.length >= 3 && ambienceBuffers.every(Boolean) &&
     svc.enabled && svc.ambienceGain?.gain.value > 0 && svc.ambienceManager.hasActiveAmbience();
 }
 
 export async function loadSampleBuffers(svc) {
-  if (!svc.context || isTestEnv()) return;
+  if (!getAudioContext(svc) || isTestEnv()) return;
   const base = getResourceUrl('audio/');
   const uiUrls = {
     click: base + 'ui_click.mp3',
@@ -291,12 +409,15 @@ export async function loadSampleBuffers(svc) {
     ep_spark: base + 'ep_spark.mp3',
   };
   const industrialUrls = { metal_clank: base + 'metal_clank.mp3', steam_hiss: base + 'steam_hiss.mp3' };
+  const uiBuffers = getUiBuffers(svc);
+  const industrialBuffers = getIndustrialBuffers(svc);
+  const ambienceBuffers = getAmbienceBuffers(svc);
   const [, , ambienceResults] = await Promise.all([
-    loadUrlMapInto(svc, uiUrls, svc._uiBuffers),
-    loadUrlMapInto(svc, industrialUrls, svc._industrialBuffers),
+    uiBuffers ? loadUrlMapInto(svc, uiUrls, uiBuffers) : Promise.resolve(),
+    industrialBuffers ? loadUrlMapInto(svc, industrialUrls, industrialBuffers) : Promise.resolve(),
     loadAmbienceLayers(svc, base),
   ]);
-  svc._ambienceBuffers.push(...ambienceResults);
+  if (ambienceBuffers) ambienceBuffers.push(...ambienceResults);
   if (shouldRestartAmbience(svc)) {
     svc.ambienceManager.stopAmbience();
     svc.ambienceManager.startAmbience();
@@ -321,11 +442,12 @@ export class AudioAmbienceManager {
   }
 
   updateAmbienceHeat(currentHeat, maxHeat) {
-    if (!this._ambienceLayerGains.length || !this.svc.context) return;
+    const ctx = getAudioContext(this.svc);
+    if (!this._ambienceLayerGains.length || !ctx) return;
     const heatRatio = maxHeat > 0 ? Math.max(0, Math.min(1, currentHeat / maxHeat)) : 0;
     this._ambienceHeatRatio = heatRatio;
     const [l1, l2, l3] = this._ambienceLayerWeights(heatRatio);
-    const t = this.svc.context.currentTime;
+    const t = ctx.currentTime;
     this._ambienceLayerGains[0].gain.setTargetAtTime(l1, t, 0.5);
     this._ambienceLayerGains[1].gain.setTargetAtTime(l2, t, 0.5);
     this._ambienceLayerGains[2].gain.setTargetAtTime(l3, t, 0.5);
@@ -338,23 +460,25 @@ export class AudioAmbienceManager {
   }
 
   startAmbience() {
-    if (!this.svc.enabled || !this.svc.context || this._ambienceNodes.length > 0) return;
-    const t = this.svc.context.currentTime;
+    const ctx = getAudioContext(this.svc);
+    if (!this.svc.enabled || !ctx || this._ambienceNodes.length > 0) return;
+    const t = ctx.currentTime;
     const dest = this.svc.ambienceGain || this.svc.masterGain;
-    const useLayers = this.svc._ambienceBuffers.length >= 3 &&
-      this.svc._ambienceBuffers[0] && this.svc._ambienceBuffers[1] && this.svc._ambienceBuffers[2];
+    const ambienceBuffers = getAmbienceBuffers(this.svc) ?? [];
+    const useLayers = ambienceBuffers.length >= 3 &&
+      ambienceBuffers[0] && ambienceBuffers[1] && ambienceBuffers[2];
     if (!useLayers) return;
-    this._ambienceFilter = this.svc.context.createBiquadFilter();
+    this._ambienceFilter = ctx.createBiquadFilter();
     this._ambienceFilter.type = 'lowpass';
     this._ambienceFilter.frequency.value = 100;
     this._ambienceFilter.Q.value = 1;
     this._ambienceFilter.connect(dest);
     const [l1, l2, l3] = this._ambienceLayerWeights(this._ambienceHeatRatio);
     for (let i = 0; i < 3; i++) {
-      const src = this.svc.context.createBufferSource();
-      src.buffer = this.svc._ambienceBuffers[i];
+      const src = ctx.createBufferSource();
+      src.buffer = ambienceBuffers[i];
       src.loop = true;
-      const gain = this.svc.context.createGain();
+      const gain = ctx.createGain();
       gain.gain.value = [l1, l2, l3][i];
       src.connect(gain);
       gain.connect(this._ambienceFilter);
@@ -398,8 +522,13 @@ export class AudioWarningManager {
   }
 
   _scheduleWarningBatch() {
-    if (!this._warningLoopActive || !this.svc.context || this.svc.context.state !== 'running') return;
-    const ctx = this.svc.context;
+    const ctx = getAudioContext(this.svc);
+    if (!this._warningLoopActive || !ctx) return;
+    try {
+      if (ctx.state !== "running") return;
+    } catch {
+      return;
+    }
     const interval = 5;
     const now = ctx.currentTime;
     const count = 4;
@@ -420,7 +549,8 @@ export class AudioWarningManager {
     }
     this._warningLoopActive = true;
     this._warningIntensity = intensity;
-    this._warningNextScheduleTime = this.svc.context ? this.svc.context.currentTime : 0;
+    const ctx = getAudioContext(this.svc);
+    this._warningNextScheduleTime = ctx ? ctx.currentTime : 0;
     this._scheduleWarningBatch();
     this._startGeigerTicks(intensity);
   }
@@ -436,8 +566,13 @@ export class AudioWarningManager {
   }
 
   _playGeigerTickAt(intensity, startTime) {
-    if (!this.svc.enabled || !this.svc.context || this.svc.context.state !== 'running') return;
-    const ctx = this.svc.context;
+    const ctx = getAudioContext(this.svc);
+    if (!this.svc.enabled || !ctx) return;
+    try {
+      if (ctx.state !== "running") return;
+    } catch {
+      return;
+    }
     const t = startTime;
     const categoryGain = this.svc._getCategoryGain('alerts');
     const tickOsc = ctx.createOscillator();
@@ -458,8 +593,13 @@ export class AudioWarningManager {
   }
 
   _scheduleGeigerBatch(intensity) {
-    if (!this._geigerActive || !this.svc.context || this.svc.context.state !== 'running') return;
-    const ctx = this.svc.context;
+    const ctx = getAudioContext(this.svc);
+    if (!this._geigerActive || !ctx) return;
+    try {
+      if (ctx.state !== "running") return;
+    } catch {
+      return;
+    }
     const baseInterval = 200 + (1 - intensity) * 300;
     const count = 25;
     let t = this._geigerNextTime || ctx.currentTime;
@@ -474,7 +614,7 @@ export class AudioWarningManager {
   }
 
   _startGeigerTicks(intensity = 0.5) {
-    if (this._geigerActive || !this.svc.enabled || !this.svc.context) return;
+    if (this._geigerActive || !this.svc.enabled || !getAudioContext(this.svc)) return;
     this._geigerActive = true;
     this._geigerNextTime = 0;
     this._scheduleGeigerBatch(intensity);
@@ -490,8 +630,13 @@ export class AudioWarningManager {
   }
 
   _playWarningSoundAt(intensity, startTime) {
-    if (!this.svc.enabled || !this.svc.context || this.svc.context.state !== 'running') return;
-    const ctx = this.svc.context;
+    const ctx = getAudioContext(this.svc);
+    if (!this.svc.enabled || !ctx) return;
+    try {
+      if (ctx.state !== "running") return;
+    } catch {
+      return;
+    }
     const t = startTime;
     const categoryGain = this.svc._getCategoryGain('alerts');
     const alarmDuration = 2.5;
@@ -598,9 +743,14 @@ export class AudioIndustrialManager {
   _playIndustrialAmbienceAccent() {
     const keys = ['metal_clank', 'steam_hiss'];
     const key = keys[Math.floor(Math.random() * keys.length)];
-    const buffer = this.svc._industrialBuffers[key];
-    if (!buffer || !this.svc.context || this.svc.context.state !== 'running' || !this.svc.enabled || !this.svc.ambienceGain) return;
-    const ctx = this.svc.context;
+    const buffer = getIndustrialBuffers(this.svc)?.[key];
+    const ctx = getAudioContext(this.svc);
+    if (!buffer || !ctx || !this.svc.enabled || !this.svc.ambienceGain) return;
+    try {
+      if (ctx.state !== "running") return;
+    } catch {
+      return;
+    }
     const t = ctx.currentTime;
     const src = ctx.createBufferSource();
     src.buffer = buffer;
@@ -624,9 +774,10 @@ export class AudioIndustrialManager {
 
 export class AudioService {
   constructor() {
-  this.context = null;
+  this._audioServiceId = nextAudioServiceId++;
+  audioServicesById.set(this._audioServiceId, this);
+  this._contextStore = null;
   this.enabled = true;
-  this.masterGain = null;
   this._isInitialized = false;
   this._lastWarningTime = 0;
   this._lastExplosionTime = 0;
@@ -634,10 +785,6 @@ export class AudioService {
   warningInterval: AUDIO_RUNTIME_DEFAULTS.warningIntervalMs,
   explosionInterval: AUDIO_RUNTIME_DEFAULTS.explosionIntervalMs
   };
-  this.effectsGain = null;
-  this.alertsGain = null;
-  this.systemGain = null;
-  this.ambienceGain = null;
   this._testLoopInterval = null;
   this._testSoundType = null;
   this._hasUnlocked = false;
@@ -653,11 +800,68 @@ export class AudioService {
   perSoundCap: AUDIO_RUNTIME_DEFAULTS.limiterPerSoundCap
   };
   this._activeLimiter = null;
-  this._uiBuffers = { click: null, placement: null, placement_cell: null, placement_plating: null, upgrade: null, error: null, sell: null, tab_switch: null, ep_spark: null };
-  this._industrialBuffers = { metal_clank: null, steam_hiss: null };
-  this._ambienceBuffers = [];
-  this._ambienceDuckGain = null;
-  this._researchEpHum = null;
+  uiBuffersById.set(this._audioServiceId, createUiBufferStore());
+  industrialBuffersById.set(this._audioServiceId, createIndustrialBufferStore());
+  ambienceBuffersById.set(this._audioServiceId, []);
+  ensureAudioNodes(this);
+  }
+
+  get masterGain() {
+    return ensureAudioNodes(this).masterGain ?? null;
+  }
+  set masterGain(value) {
+    ensureAudioNodes(this).masterGain = value;
+  }
+  get effectsGain() {
+    return ensureAudioNodes(this).effectsGain ?? null;
+  }
+  set effectsGain(value) {
+    ensureAudioNodes(this).effectsGain = value;
+  }
+  get alertsGain() {
+    return ensureAudioNodes(this).alertsGain ?? null;
+  }
+  set alertsGain(value) {
+    ensureAudioNodes(this).alertsGain = value;
+  }
+  get systemGain() {
+    return ensureAudioNodes(this).systemGain ?? null;
+  }
+  set systemGain(value) {
+    ensureAudioNodes(this).systemGain = value;
+  }
+  get ambienceGain() {
+    return ensureAudioNodes(this).ambienceGain ?? null;
+  }
+  set ambienceGain(value) {
+    ensureAudioNodes(this).ambienceGain = value;
+  }
+  get _ambienceDuckGain() {
+    return ensureAudioNodes(this).ambienceDuckGain ?? null;
+  }
+  set _ambienceDuckGain(value) {
+    ensureAudioNodes(this).ambienceDuckGain = value;
+  }
+  get _researchEpHum() {
+    return ensureAudioNodes(this).researchEpHum ?? null;
+  }
+  set _researchEpHum(value) {
+    ensureAudioNodes(this).researchEpHum = value;
+  }
+
+  get context() {
+    return audioContextByService.get(this) ?? this._contextStore ?? null;
+  }
+
+  set context(value) {
+    this._contextStore = value;
+    if (value) {
+      audioContextByService.set(this, value);
+      audioContextById.set(this._audioServiceId, value);
+    } else {
+      audioContextByService.delete(this);
+      audioContextById.delete(this._audioServiceId);
+    }
   }
 
   get _ambienceNodes() {
@@ -679,8 +883,14 @@ export class AudioService {
     return this.warningManager._warningRefillTimeout ?? null;
   }
   _duckAmbience() {
-  if (!this._ambienceDuckGain || !this.context || this.context.state !== 'running') return;
-  const t = this.context.currentTime;
+  const ctx = getAudioContext(this);
+  if (!this._ambienceDuckGain || !ctx) return;
+  try {
+    if (ctx.state !== "running") return;
+  } catch {
+    return;
+  }
+  const t = ctx.currentTime;
   this._ambienceDuckGain.gain.setValueAtTime(this._ambienceDuckGain.gain.value, t);
   this._ambienceDuckGain.gain.linearRampToValueAtTime(0.55, t + 0.03);
   this._ambienceDuckGain.gain.linearRampToValueAtTime(1, t + 0.12);
@@ -689,9 +899,14 @@ export class AudioService {
     await loadSampleBuffers(this);
   }
   _playSample(type, category, pan) {
-  const buffer = this._uiBuffers[type];
-  if (!buffer || !this.context || this.context.state !== 'running') return;
-  const ctx = this.context;
+  const buffer = getUiBuffers(this)?.[type];
+  const ctx = getAudioContext(this);
+  if (!buffer || !ctx) return;
+  try {
+    if (ctx.state !== "running") return;
+  } catch {
+    return;
+  }
   const t = ctx.currentTime;
   const categoryGain = this._getCategoryGain(category);
   const src = ctx.createBufferSource();
@@ -713,9 +928,14 @@ export class AudioService {
   src.stop(t + buffer.duration);
   }
   _playIndustrialSample(key, category, pan, gain) {
-  const buffer = this._industrialBuffers[key];
-  if (!buffer || !this.context || this.context.state !== "running") return;
-  const ctx = this.context;
+  const buffer = getIndustrialBuffers(this)?.[key];
+  const ctx = getAudioContext(this);
+  if (!buffer || !ctx) return;
+  try {
+    if (ctx.state !== "running") return;
+  } catch {
+    return;
+  }
   const t = ctx.currentTime;
   const categoryGain = this._getCategoryGain(category);
   const src = ctx.createBufferSource();
@@ -745,22 +965,24 @@ export class AudioService {
   return;
   }
   this.context = new AudioContext();
-  this.masterGain = this.context.createGain();
+  const ctx = getAudioContext(this);
+  if (!ctx) return;
+  this.masterGain = ctx.createGain();
   const volPrefs = getVolumePreferences();
   const savedMasterVol = volPrefs.master ?? AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume;
-  const isContextSuspended = this.context.state === 'suspended';
+  const isContextSuspended = ctx.state === 'suspended';
   if (isContextSuspended) {
   this.masterGain.gain.value = 0;
   } else {
   this.masterGain.gain.value = savedMasterVol;
   this._hasUnlocked = true;
   }
-  this.masterGain.connect(this.context.destination);
-  this.effectsGain = this.context.createGain();
-  this.alertsGain = this.context.createGain();
-  this.systemGain = this.context.createGain();
-  this.ambienceGain = this.context.createGain();
-  this._ambienceDuckGain = this.context.createGain();
+  this.masterGain.connect(ctx.destination);
+  this.effectsGain = ctx.createGain();
+  this.alertsGain = ctx.createGain();
+  this.systemGain = ctx.createGain();
+  this.ambienceGain = ctx.createGain();
+  this._ambienceDuckGain = ctx.createGain();
   this._ambienceDuckGain.gain.value = 1;
   this.effectsGain.connect(this.masterGain);
   this.alertsGain.connect(this.masterGain);
@@ -781,15 +1003,16 @@ export class AudioService {
   this._pendingAmbience = true;
   }
   const unlockAudio = async () => {
-  if (!this._hasUnlocked && this.context) {
-  const wasSuspended = this.context.state === 'suspended';
+  const unlockCtx = getAudioContext(this);
+  if (!this._hasUnlocked && unlockCtx) {
+  const wasSuspended = unlockCtx.state === 'suspended';
   if (wasSuspended) {
-  await this.context.resume();
+  await unlockCtx.resume();
   }
   this._hasUnlocked = true;
   const volPrefs = getVolumePreferences();
   const savedMasterVol = volPrefs.master ?? AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume;
-  const t = this.context.currentTime;
+  const t = unlockCtx.currentTime;
   const currentVol = this.masterGain.gain.value;
   if (wasSuspended || currentVol < 0.001) {
   this.masterGain.gain.setValueAtTime(0, t);
@@ -809,17 +1032,18 @@ export class AudioService {
   document.addEventListener('touchstart', unlockAudio);
   document.addEventListener('click', unlockAudio);
   document.addEventListener("visibilitychange", () => {
-  if (!this._isInitialized || !this.context) return;
+  const visCtx = getAudioContext(this);
+  if (!this._isInitialized || !visCtx) return;
   if (document.hidden) {
-  this.context.suspend();
+  visCtx.suspend();
   } else {
-  this.context.resume().then(() => {
+  visCtx.resume().then(() => {
   if (this._hasUnlocked && !document.hidden) {
   const volPrefs = getVolumePreferences();
   const savedMasterVol = volPrefs.master ?? AUDIO_RUNTIME_DEFAULTS.defaultMasterVolume;
   const currentVol = this.masterGain.gain.value;
   if (currentVol < savedMasterVol * 0.1) {
-  const t = this.context.currentTime;
+  const t = visCtx.currentTime;
   this.masterGain.gain.setValueAtTime(currentVol, t);
   this.masterGain.gain.linearRampToValueAtTime(savedMasterVol, t + 0.8);
   }
@@ -919,7 +1143,13 @@ export class AudioService {
   }
   startTestSound(category) {
   this.stopTestSound();
-  if (!this.enabled || !this.context || this.context.state !== 'running') return;
+  const ctx = getAudioContext(this);
+  if (!this.enabled || !ctx) return;
+  try {
+    if (ctx.state !== "running") return;
+  } catch {
+    return;
+  }
   this._testSoundType = category;
   const soundMap = {
   'effects': 'placement',
@@ -948,8 +1178,11 @@ export class AudioService {
     this.enabled = !muted;
     preferences.mute = muted;
     if (this.masterGain) {
-      const targetVol = this.enabled ? (getVolumePreferences().master ?? AUDIO_RUNTIME_DEFAULTS.defaultMutedMasterVolume) : 0;
-      this.masterGain.gain.setTargetAtTime(targetVol, this.context.currentTime, 0.1);
+      const ctx = getAudioContext(this);
+      if (ctx) {
+        const targetVol = this.enabled ? (getVolumePreferences().master ?? AUDIO_RUNTIME_DEFAULTS.defaultMutedMasterVolume) : 0;
+        this.masterGain.gain.setTargetAtTime(targetVol, ctx.currentTime, 0.1);
+      }
     }
     if (this.enabled) {
       this.ambienceManager.startAmbience();
@@ -1010,8 +1243,13 @@ export class AudioService {
   }
   trigger(eventId, options = {}) {
     const { param = null, pan = null } = options;
-    if (!this.enabled || !this.context || this.context.state !== "running") return;
-    const ctx = this.context;
+    const ctx = getAudioContext(this);
+    if (!this.enabled || !ctx) return;
+    try {
+      if (ctx.state !== "running") return;
+    } catch {
+      return;
+    }
     const now = Date.now();
     const t = ctx.currentTime;
     const subtype = typeof param === "string" ? param : "generic";
@@ -1043,16 +1281,21 @@ export class AudioService {
   }
 
   syncResearchEpHum(game) {
-    if (!this.enabled || !this.context || this.context.state !== "running") return;
+    const ctx = getAudioContext(this);
+    if (!this.enabled || !ctx) return;
+    try {
+      if (ctx.state !== "running") return;
+    } catch {
+      return;
+    }
     const ep = game?.state?.current_exotic_particles;
     const n = typeof ep?.toNumber === "function" ? ep.toNumber() : Number(ep) || 0;
-    const buf = this._uiBuffers?.ep_spark;
+    const buf = getUiBuffers(this)?.ep_spark;
     if (n <= 0 || !buf) {
       this.stopResearchEpHum();
       return;
     }
     const targetGain = Math.min(0.055, 0.0015 + Math.log1p(Math.max(0, n)) * 0.0035);
-    const ctx = this.context;
     const t = ctx.currentTime;
     const dest = this._getCategoryGain("effects");
     if (!this._researchEpHum) {
@@ -1070,12 +1313,17 @@ export class AudioService {
   }
 
   stopResearchEpHum() {
-    if (!this._researchEpHum || !this.context) {
+    if (!this._researchEpHum) {
+      this._researchEpHum = null;
+      return;
+    }
+    const ctx = getAudioContext(this);
+    if (!ctx) {
       this._researchEpHum = null;
       return;
     }
     const { source, gain } = this._researchEpHum;
-    const t = this.context.currentTime;
+    const t = ctx.currentTime;
     try {
       gain.gain.linearRampToValueAtTime(0.0001, t + 0.08);
       source.stop(t + 0.1);

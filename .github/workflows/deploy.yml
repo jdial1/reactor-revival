@@ -84,6 +84,12 @@ jobs:
         with:
           node-version: 24
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chrome for Puppeteer
+        run: npx puppeteer browsers install chrome
+
       - name: Wait for deployment to be ready
         run: sleep 60
 
@@ -94,6 +100,14 @@ jobs:
         run: |
           echo "Running PWA checks for: ${{ needs.deploy.outputs.page_url }}"
           node scripts/pwa-check.js --remote
+
+      - name: Run UI console audit
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.page_url }}
+          AUDIT_FAIL_ON: pageerror
+        run: |
+          echo "Running UI console audit for: $BASE_URL"
+          npm run ui:console-audit:deploy
 
       - name: Create check status comment (on failure)
         if: failure()
@@ -109,12 +123,12 @@ jobs:
                 owner,
                 repo,
                 commit_sha: sha,
-                body: '❌ PWA post-deployment checks failed. Please check the workflow logs for details.'
+                body: '❌ Post-deployment checks failed (PWA and/or UI console audit). Page errors or other check failures — see workflow logs.'
               });
               console.log('✅ Failure comment created successfully');
             } catch (error) {
               console.log('⚠️ Could not create commit comment (insufficient permissions):', error.message);
-              console.log('📝 PWA check failed - see workflow logs for details');
+              console.log('📝 Post-deployment checks failed - see workflow logs for details');
             }
 
       - name: Create check status comment (on success)
@@ -131,10 +145,10 @@ jobs:
                 owner,
                 repo,
                 commit_sha: sha,
-                body: '✅ PWA deployment successful! All post-deployment checks passed.'
+                body: '✅ Deployment successful! PWA checks and UI console audit passed (no page errors).'
               });
               console.log('✅ Success comment created successfully');
             } catch (error) {
               console.log('⚠️ Could not create commit comment (insufficient permissions):', error.message);
-              console.log('📝 PWA deployment successful - all checks passed!');
+              console.log('📝 Deployment successful - all post-deployment checks passed');
             }

@@ -106,6 +106,7 @@ import Decimal, {
   RESPEC_DOCTRINE_EP_COST,
   runCathodeScramble,
   vuSegmentRatio01,
+  resolveDomElement,
   areAdjacent as areAdjacentFromModule,
   REFLECTOR_COOLING_MIN_MULTIPLIER,
   WEAVE_QUANTUM,
@@ -1048,6 +1049,61 @@ export function getUpgradeBonusLines(obj, context = {}) {
   return lines;
 }
 
+const partElements = new WeakMap();
+const upgradeElements = new WeakMap();
+
+function getPartEl(part) {
+  return partElements.get(part) ?? null;
+}
+
+function isLiveUpgradeDomNode(el) {
+  if (!(el instanceof Element)) return false;
+  try {
+    return el.isConnected && !!el.closest(".page:not(.hidden)");
+  } catch {
+    return false;
+  }
+}
+
+function findLiveUpgradeElement(upgrade) {
+  if (typeof document === "undefined" || !upgrade?.id) return null;
+  const id = String(upgrade.id).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const selector = `[data-id="${id}"]`;
+  for (const container of document.querySelectorAll(".upgrade-group")) {
+    if (!container.isConnected) continue;
+    const page = container.closest(".page");
+    if (!page || page.classList.contains("hidden")) continue;
+    const live = container.querySelector(selector);
+    if (live instanceof Element) return live;
+  }
+  return null;
+}
+
+function getUpgradeEl(upgrade) {
+  const cached = upgradeElements.get(upgrade);
+  if (isLiveUpgradeDomNode(cached)) return cached;
+  if (cached) upgradeElements.delete(upgrade);
+  const live = findLiveUpgradeElement(upgrade);
+  if (live) upgradeElements.set(upgrade, live);
+  return live ?? null;
+}
+
+export function bindUpgradeElement(upgrade, el) {
+  if (isLiveUpgradeDomNode(el) || (el instanceof Element && el.isConnected)) {
+    upgradeElements.set(upgrade, el);
+  } else {
+    upgradeElements.delete(upgrade);
+  }
+}
+
+export function getUpgradeElement(upgrade) {
+  return getUpgradeEl(upgrade);
+}
+
+export function getPartElement(part) {
+  return getPartEl(part);
+}
+
 export class Part {
   constructor(part_definition, game) {
     this.game = game;
@@ -1127,21 +1183,21 @@ export class Part {
 
   createElement() {
     const onClick = () => {
+      const el = getPartEl(this);
       if (this.affordable) {
         if (this.game?.ui?.help_mode_active && this.game?.tooltip_manager) {
-          this.game.tooltip_manager.show(this, null, true, this.$el);
+          this.game.tooltip_manager.show(this, null, true, el);
         }
-        document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
+        document.querySelectorAll(".part.part_active").forEach((node) => node.classList.remove("part_active"));
         this.game.emit?.("partClicked", { part: this });
-        this.$el.classList.add("part_active");
-      } else {
-        if (this.game?.tooltip_manager) {
-          this.game.tooltip_manager.show(this, null, true, this.$el);
-        }
+        el?.classList.add("part_active");
+      } else if (this.game?.tooltip_manager) {
+        this.game.tooltip_manager.show(this, null, true, el);
       }
     };
-    this.$el = renderToNode(PartButton(this, onClick));
-    return this.$el;
+    const el = renderToNode(PartButton(this, onClick));
+    partElements.set(this, el);
+    return el;
   }
 
   getUpgradeBonusLines() {
@@ -1151,18 +1207,19 @@ export class Part {
   setAffordable(isAffordable) {
     if (this.affordable !== isAffordable) {
       this.affordable = isAffordable;
-      if (this.$el) {
-        this.$el.classList.toggle("unaffordable", !isAffordable);
-        this.$el.disabled = !isAffordable;
+      const el = getPartEl(this);
+      if (el) {
+        el.classList.toggle("unaffordable", !isAffordable);
+        el.disabled = !isAffordable;
 
-        let priceDiv = this.$el.querySelector(".part-price");
+        let priceDiv = el.querySelector(".part-price");
         if (!priceDiv) {
           priceDiv = document.createElement("div");
           priceDiv.className = "part-price";
           priceDiv.textContent = this.erequires
             ? `${fmt(this.cost)} EP`
             : `${fmt(this.cost)}`;
-          this.$el.appendChild(priceDiv);
+          el.appendChild(priceDiv);
         }
       }
     }
@@ -1536,23 +1593,23 @@ export class Upgrade {
   setAffordable(isAffordable) {
     if (this.affordable !== isAffordable) {
       this.affordable = isAffordable;
-      if (this.$el) {
-        const buyBtn = this.$el.querySelector(".upgrade-action-btn");
-        if (buyBtn) {
-          buyBtn.disabled = !isAffordable || this.level >= this.max_level;
-        }
-        this.$el.classList.toggle("unaffordable", !isAffordable);
+      const el = getUpgradeEl(this);
+      if (!isLiveUpgradeDomNode(el)) return;
+      const buyBtn = el.querySelector(".upgrade-action-btn");
+      if (buyBtn) {
+        buyBtn.disabled = !isAffordable || this.level >= this.max_level;
       }
+      el.classList.toggle("unaffordable", !isAffordable);
     }
   }
 
   setAffordProgress(progress) {
     const p = Math.max(0, Math.min(1, Number(progress)));
-    if (this.$el) {
-      const buyBtn = this.$el.querySelector(".upgrade-action-btn");
-      if (buyBtn) {
-        buyBtn.style.setProperty("--afford-progress", String(p));
-      }
+    const el = getUpgradeEl(this);
+    if (!isLiveUpgradeDomNode(el)) return;
+    const buyBtn = el.querySelector(".upgrade-action-btn");
+    if (buyBtn?.style?.setProperty) {
+      buyBtn.style.setProperty("--afford-progress", String(p));
     }
   }
 
@@ -1568,10 +1625,11 @@ export class Upgrade {
       this.display_cost = this.base_ecost.gt(0) ? `${fmt(this.current_ecost)} EP` : `$${fmt(this.current_cost)}`;
     }
 
-    if (this.$el) {
-      const buyBtn = this.$el.querySelector(".upgrade-action-btn");
+    const el = getUpgradeEl(this);
+    if (el) {
+      const buyBtn = el.querySelector(".upgrade-action-btn");
       if (buyBtn) {
-        const doctrineLocked = this.$el.classList.contains("doctrine-locked");
+        const doctrineLocked = el.classList.contains("doctrine-locked");
         if (doctrineLocked) {
           buyBtn.disabled = true;
           const doctrine = this.game.upgradeset?.getDoctrineForUpgrade(this.id);
@@ -1583,14 +1641,14 @@ export class Upgrade {
         }
       }
 
-      const descEl = this.$el.querySelector(".upgrade-description");
+      const descEl = el.querySelector(".upgrade-description");
       if (descEl) {
         descEl.style.display = this.level >= this.max_level ? "none" : "";
       }
 
-      this.$el.classList.toggle("maxed-out", this.level >= this.max_level);
+      el.classList.toggle("maxed-out", this.level >= this.max_level);
 
-      const costEl = this.$el.querySelector(".cost-display");
+      const costEl = el.querySelector(".cost-display");
       if (costEl) {
         const next = this.level >= this.max_level ? "" : String(this.display_cost ?? "");
         if (costEl.textContent !== next) {
@@ -1622,9 +1680,10 @@ export class Upgrade {
     const onResetClick = (e) => {
       e.stopPropagation();
     };
-    this.$el = renderToNode(UpgradeCard(this, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick }));
+    const el = renderToNode(UpgradeCard(this, doctrineSource, onBuyClick, { onBuyMaxClick, onResetClick }));
+    bindUpgradeElement(this, el);
     this.updateDisplayCost();
-    return this.$el;
+    return el;
   }
 
   _syncDisplayToState() {
@@ -1677,9 +1736,10 @@ function generateCellUpgrades(game) {
 }
 
 function handleUnavailableUpgrade(upgrade) {
-  if (!upgrade.$el) return;
-  upgrade.$el.classList.remove("hidden");
-  upgrade.$el.classList.add("doctrine-locked");
+  const el = getUpgradeEl(upgrade);
+  if (!isLiveUpgradeDomNode(el)) return;
+  el.classList.remove("hidden");
+  el.classList.add("doctrine-locked");
   upgrade.setAffordable(false);
   upgrade.setAffordProgress(0);
 }
@@ -1688,7 +1748,7 @@ function computeAffordable(upgrade, upgradeset, game) {
   if (game.reactor && game.reactor.has_melted_down) return false;
   const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
   if (upgrade.erequires && (!requiredUpgrade || requiredUpgrade.level === 0)) return false;
-  if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
+  if (upgrade.base_ecost?.gt?.(0)) {
     return toDecimal(game.state.current_exotic_particles).gte(upgrade.current_ecost);
   }
   return toDecimal(game.state.current_money).gte(upgrade.current_cost);
@@ -1730,16 +1790,17 @@ function isResearchUpgrade(upgrade) {
 }
 
 function applyUpgradeVisibility(upgrade, isAffordable, settings) {
-  if (!upgrade.$el) return { isResearch: false, isInDOM: false, isMaxed: false };
+  const el = getUpgradeEl(upgrade);
+  if (!isLiveUpgradeDomNode(el)) return { isResearch: false, isInDOM: false, isMaxed: false };
   const isResearch = isResearchUpgrade(upgrade);
   const shouldHideUnaffordable = isResearch ? settings.hideResearch : settings.hideUpgrades;
   const shouldHideMaxed = isResearch ? settings.hideMaxResearch : settings.hideMaxUpgrades;
   const isMaxed = upgrade.level >= upgrade.max_level;
-  const isInDOM = upgrade.$el.isConnected;
+  const isInDOM = el.isConnected;
   const shouldHide =
     (shouldHideUnaffordable && !isAffordable && !isMaxed) || (shouldHideMaxed && isMaxed);
-  if (shouldHide) upgrade.$el.classList.add("hidden");
-  else upgrade.$el.classList.remove("hidden");
+  if (shouldHide) el.classList.add("hidden");
+  else el.classList.remove("hidden");
   return { isResearch, isInDOM, isMaxed };
 }
 
@@ -1766,7 +1827,8 @@ export function runCheckAffordability(upgradeset, game) {
       return;
     }
 
-    if (upgrade.$el) upgrade.$el.classList.remove("doctrine-locked");
+    const el = getUpgradeEl(upgrade);
+    if (el) el.classList.remove("doctrine-locked");
 
     const isAffordable = computeAffordable(upgrade, upgradeset, game);
     upgrade.setAffordable(isAffordable);
@@ -1788,7 +1850,7 @@ export function runCheckAffordability(upgradeset, game) {
 }
 
 function getUpgradeContainerIdForSection(upgrade) {
-  if (upgrade.base_ecost && upgrade.base_ecost.gt(0)) {
+  if (upgrade.base_ecost?.gt?.(0)) {
     return upgrade.upgrade.type;
   }
   const normalizeKey = (key) => {
@@ -2356,7 +2418,8 @@ export function addPartIconsToTitle(game, title) {
 export function getObjectiveScrollDuration() { const baseWidth = 900; const baseDuration = 8; const screenWidth = (typeof window !== "undefined" && window.innerWidth) ? window.innerWidth : baseWidth; const duration = baseDuration * (screenWidth / baseWidth); return Math.max(5, Math.min(18, duration)); }
 
 export function checkObjectiveTextScrolling(domElements) {
-  const toastTitleEl = domElements.objectives_toast_title;
+  const toastTitleEl = resolveDomElement(domElements?.objectives_toast_title)
+    ?? (typeof document !== "undefined" ? document.getElementById("objectives_toast_title") : null);
   if (!toastTitleEl) return;
   toastTitleEl.style.animation = "none";
   const text = toastTitleEl.textContent || "";
@@ -4524,21 +4587,51 @@ function fillContainmentFromTiles(ts, rows, cols, containmentOut) {
   }
 }
 
-function prepareHeatContainment(engine, ts, rows, cols, gridLen) {
-  let needNew = !engine._heatTransferHeat || engine._heatTransferHeat.length !== gridLen;
-  if (!needNew) {
+function isFloat32ViewUsable(view) {
+  if (!view || typeof view.length !== "number" || view.length <= 0) return false;
+  try {
+    return view.buffer.byteLength > 0;
+  } catch {
+    return false;
+  }
+}
+
+function ensureFloat32Capacity(existing, len) {
+  if (isFloat32ViewUsable(existing) && existing.length === len) return existing;
+  return new Float32Array(len);
+}
+
+function copyFloat32View(dest, src, len) {
+  if (!dest || dest.length !== len) return;
+  if (src && isFloat32ViewUsable(src) && src.length === len) {
     try {
-      needNew = engine._heatTransferHeat.buffer.byteLength === 0;
-    } catch {
-      needNew = true;
-    }
+      dest.set(src);
+      return;
+    } catch (_) {}
   }
-  if (needNew) {
-    engine._heatTransferHeat = new Float32Array(gridLen);
-    engine._heatTransferContainment = new Float32Array(gridLen);
+  for (let i = 0; i < len; i++) {
+    dest[i] = src && i < src.length ? (+src[i] || 0) : 0;
   }
+}
+
+function ensureTilesetHeatMap(ts, gridLen) {
+  ts.heatMap = ensureFloat32Capacity(ts.heatMap, gridLen);
+  return ts.heatMap;
+}
+
+function applyHeatViewToTileset(ts, source) {
+  if (!ts || !source) return;
+  const len = ts.heatMap?.length ?? source.length;
+  if (!len) return;
+  const dest = ensureTilesetHeatMap(ts, len);
+  copyFloat32View(dest, source, len);
+}
+
+function prepareHeatContainment(engine, ts, rows, cols, gridLen) {
+  engine._heatTransferHeat = ensureFloat32Capacity(engine._heatTransferHeat, gridLen);
+  engine._heatTransferContainment = ensureFloat32Capacity(engine._heatTransferContainment, gridLen);
   const heatCopy = engine._heatTransferHeat;
-  heatCopy.set(ts.heatMap);
+  copyFloat32View(heatCopy, ts.heatMap, gridLen);
   const containment = engine._heatTransferContainment;
   fillContainmentFromTiles(ts, rows, cols, containment);
   return { heatCopy, containment };
@@ -4841,7 +4934,7 @@ export class HeatSystem {
       multiplier: payloadMultiplier ?? multiplier,
       recordTransfers,
     });
-    engine.game.tileset.heatMap = heat;
+    applyHeatViewToTileset(engine.game.tileset, heat);
     engine.game.reactor.current_heat = toDecimal(result.reactorHeat);
     if (game.performance && game.performance.shouldMeasure()) {
       game.performance.markEnd("tick_heat_transfer");
@@ -5195,7 +5288,7 @@ export function postGameLoopProjectionQuery(engine, game) {
       if (integrityBuffer) transfer.push(integrityBuffer);
       if (orthoNeighborOffsets) transfer.push(orthoNeighborOffsets);
       if (orthoNeighborIndices) transfer.push(orthoNeighborIndices);
-      w.postMessage({ ...rest, type: "tick", heatBuffer, integrityBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
+      postWorkerMessage(engine, { ...rest, type: "tick", heatBuffer, integrityBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
     };
     trySend();
   });
@@ -5388,7 +5481,7 @@ export function tryDeductMoneyGameLoop(game, amount) {
       resolve(syncDeduct());
       return;
     }
-    w.postMessage({
+    postWorkerMessage(engine, {
       type: "economyCommand",
       cmd: "TRY_DEDUCT",
       id,
@@ -5429,7 +5522,7 @@ export function requestTransactionGameLoop(game, { moneyDelta = 0, epDelta = 0 }
       resolve(syncTx());
       return;
     }
-    w.postMessage({
+    postWorkerMessage(engine, {
       type: "economyCommand",
       cmd: "REQUEST_TRANSACTION",
       id,
@@ -5463,7 +5556,7 @@ export function tryCreditMoneyGameLoop(game, amount) {
       resolve(syncCredit());
       return;
     }
-    w.postMessage({
+    postWorkerMessage(engine, {
       type: "economyCommand",
       cmd: "CREDIT",
       id,
@@ -5501,12 +5594,17 @@ export function applyGameLoopTickResult(engine, data) {
     game_state_current_power: game.state?.current_power?.toNumber?.() ?? game.state?.current_power
   });
   if (data.heatBuffer && ts?.heatMap) {
-    const incoming = new Float32Array(data.heatBuffer);
-    if (incoming.length === ts.heatMap.length) ts.heatMap.set(incoming);
+    applyHeatViewToTileset(ts, new Float32Array(data.heatBuffer));
   }
   if (data.integrityBuffer && ts?.integrityMap) {
     const incoming = new Float32Array(data.integrityBuffer);
-    if (incoming.length === ts.integrityMap.length) ts.integrityMap.set(incoming);
+    if (incoming.length === ts.integrityMap.length) {
+      try {
+        ts.integrityMap.set(incoming);
+      } catch {
+        copyFloat32View(ts.integrityMap, incoming, ts.integrityMap.length);
+      }
+    }
   }
   applyExplosionIndices(engine, ts, data.explosionIndices, maxCols);
   applyTileUpdates(ts, data.tileUpdates);
@@ -6035,7 +6133,7 @@ export function pushGameLoopWorkerTickFromPulse(engine) {
   if (orthoNeighborOffsets) transfer.push(orthoNeighborOffsets);
   if (orthoNeighborIndices) transfer.push(orthoNeighborIndices);
   logger.log("info", "engine", "[ReactorTick] worker tick sent", { tickId: state.tickId, tickCount, gridCells: engine.active_cells.length });
-  w.postMessage({ ...rest, type: "tick", heatBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
+  postWorkerMessage(engine, { ...rest, type: "tick", heatBuffer, orthoNeighborOffsets, orthoNeighborIndices }, transfer);
 }
 
 function ensureArraysValid(engine) {
@@ -6890,9 +6988,13 @@ function validateWorkerResponse(engine, data) {
 }
 
 function applyTransferredBuffers(engine, data) {
-  engine._heatTransferHeat = new Float32Array(data.heatBuffer);
+  const ts = engine.game?.tileset;
+  if (data.heatBuffer && ts) {
+    applyHeatViewToTileset(ts, new Float32Array(data.heatBuffer));
+  }
+  engine._heatTransferHeat = null;
+  engine._heatTransferContainment = null;
   if (data.containmentBuffer) engine._heatTransferContainment = new Float32Array(data.containmentBuffer);
-  engine.game.tileset.heatMap = engine._heatTransferHeat;
   if (data.inletsData) engine._heatPayload_inlets = new Float32Array(data.inletsData);
   if (data.valvesData) engine._heatPayload_valves = new Float32Array(data.valvesData);
   if (data.valveNeighborData) engine._heatPayload_valveNeighbors = new Float32Array(data.valveNeighborData);
@@ -6992,8 +7094,22 @@ function onEngineWorkerMessage(engine, e) {
   handlePhysicsWorkerMessage(engine, data);
 }
 
+const engineWorkers = new WeakMap();
+
+function postWorkerMessage(engine, message, transfer = []) {
+  if (!engine || typeof Worker === "undefined") return;
+  const worker = engineWorkers.get(engine);
+  if (!worker) return;
+  try {
+    Worker.prototype.postMessage.call(worker, message, transfer);
+  } catch (err) {
+    logger.log("warn", "engine", "[EngineWorker] postMessage failed", err);
+  }
+}
+
 function ensureEngineWorker(engine) {
-  if (engine._engineWorker) return engine._engineWorker;
+  const cached = engineWorkers.get(engine);
+  if (cached) return cached;
   try {
     let urlStr = "./worker/engine.worker.js";
     try {
@@ -7001,16 +7117,18 @@ function ensureEngineWorker(engine) {
         urlStr = new URL("./worker/engine.worker.js", import.meta.url).href;
       }
     } catch (e) {}
-    engine._engineWorker = new Worker(urlStr, { type: "module" });
-    engine._engineWorker.onmessage = (ev) => onEngineWorkerMessage(engine, ev);
-    engine._gameLoopWorker = engine._engineWorker;
-    engine._worker = engine._engineWorker;
+    const worker = new Worker(urlStr, { type: "module" });
+    worker.onmessage = (ev) => onEngineWorkerMessage(engine, ev);
+    engineWorkers.set(engine, worker);
+    engine._engineWorker = worker;
+    engine._gameLoopWorker = worker;
+    engine._worker = worker;
   } catch (err) {
     engine._gameLoopWorkerFailed = true;
     engine._workerFailed = true;
     logger.log("warn", "engine", "[EngineWorker] Failed to create worker", err);
   }
-  return engine._engineWorker;
+  return engineWorkers.get(engine) ?? null;
 }
 
 function ensureGameLoopWorker(engine) {
@@ -7304,9 +7422,8 @@ _hasSimulationActivity() {
 
   _syncGameLoopWorkerTimerControl(start) {
     if (!this._useGameLoopWorker()) return;
-    const w = this._getGameLoopWorker?.();
-    if (w && !this._gameLoopWorkerFailed) {
-      w.postMessage({ type: "timerControl", action: start ? "start" : "stop" });
+    if (engineWorkers.get(this) && !this._gameLoopWorkerFailed) {
+      postWorkerMessage(this, { type: "timerControl", action: start ? "start" : "stop" });
     }
   }
 
@@ -7582,7 +7699,7 @@ _hasSimulationActivity() {
       return;
     }
     logger.log("debug", "engine", "[PhysicsWorker] posting heat step, awaiting response:", { power_add, tickId: this._workerTickId });
-    w.postMessage(result.data, payload.transferList);
+    postWorkerMessage(this, result.data, payload.transferList);
     this._heatTransferHeat = null;
     this._heatTransferContainment = null;
     if (this._workerHeartbeatId) clearTimeout(this._workerHeartbeatId);

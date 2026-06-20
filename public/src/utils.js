@@ -1007,6 +1007,25 @@ export const USER_PREF_KEYS = {
 export function getPref(key) { return StorageUtils.get(key); }
 export function setPref(key, value) { return StorageUtils.set(key, value); }
 
+export function resolveDomElement(node, fallbackId = null) {
+  if (typeof document === "undefined") return null;
+  let id = fallbackId;
+  if (!id && node != null) {
+    try {
+      id = node.id;
+    } catch {
+      id = null;
+    }
+  }
+  if (typeof id === "string" && id) return document.getElementById(id);
+  return null;
+}
+
+export function getDomElementById(id) {
+  if (!id || typeof document === "undefined") return null;
+  return document.getElementById(id);
+}
+
 export class BaseComponent {
   constructor() {
     this.isVisible = false;

@@ -1,41 +1,44 @@
+import { resolveAudioService } from "./services.js";
+
 function playSfx(audio, e) {
-  if (!audio) return;
+  const svc = resolveAudioService(audio);
+  if (!svc) return;
   switch (e.id) {
     case "placement":
-      audio.play("placement", e.subtype ?? null, e.pan ?? 0);
+      svc.play("placement", e.subtype ?? null, e.pan ?? 0);
       break;
     case "explosion":
-      audio.play("explosion", e.subtype ?? null, e.pan ?? 0);
+      svc.play("explosion", e.subtype ?? null, e.pan ?? 0);
       break;
     case "warning":
-      audio.play("warning", e.intensity ?? 0.85);
+      svc.play("warning", e.intensity ?? 0.85);
       break;
     case "sell":
-      audio.play("sell", null, e.pan ?? 0);
+      svc.play("sell", null, e.pan ?? 0);
       break;
     case "error":
-      audio.play("error", null, e.pan ?? 0);
+      svc.play("error", null, e.pan ?? 0);
       break;
     case "upgrade":
-      audio.play("upgrade");
+      svc.play("upgrade");
       break;
     case "reboot":
-      audio.play("reboot");
+      svc.play("reboot");
       break;
     case "tab_switch":
-      audio.play("tab_switch");
+      svc.play("tab_switch");
       break;
     case "tab_relay_thud":
-      audio.play("tab_relay_thud");
+      svc.play("tab_relay_thud");
       break;
     case "metal_clank":
-      audio.play("metal_clank", e.a ?? 0.8, e.b ?? -0.7);
+      svc.play("metal_clank", e.a ?? 0.8, e.b ?? -0.7);
       break;
     case "click":
-      audio.play("click");
+      svc.play("click");
       break;
     default:
-      audio.play(e.id, e.a, e.b);
+      svc.play(e.id, e.a, e.b);
   }
 }
 

@@ -22,11 +22,18 @@ import {
   logger,
   BaseComponent,
   vuSegmentRatio01,
+  getDomElementById,
 } from "../utils.js";
 import { actions } from "../store.js";
 import { getPageReactor, getPageReactorWrapper } from "./ui-components.js";
 
 export { Tileset } from "../logic.js";
+
+const rendererSurfaces = new WeakMap();
+
+export function bindGridRendererSurfaces(renderer, surfaces) {
+  rendererSurfaces.set(renderer, surfaces);
+}
 
 class StaticGridRenderer {
   constructor(shared) {
@@ -450,10 +457,6 @@ class HeatEffectsRenderer {
 export class GridCanvasRenderer {
   constructor(ui) {
     this.ui = ui;
-    this.canvas = null;
-    this.ctx = null;
-    this._dynamicCanvas = null;
-    this._dynamicCtx = null;
     this._width = 0;
     this._height = 0;
     this._rows = GRID.defaultRows;
@@ -463,6 +466,7 @@ export class GridCanvasRenderer {
     this._imageCacheOrder = [];
     this._imageCacheMax = GRID.imageCacheMax;
     this._container = null;
+    this._containerId = null;
     this._staticDirty = true;
     this._staticDirtyTiles = new Set();
     this._lastResizeRequest = 0;
@@ -473,6 +477,22 @@ export class GridCanvasRenderer {
     this._atlasFrames = null;
     this._atlasImg = null;
     this._startAtlasLoad();
+  }
+
+  get canvas() {
+    return rendererSurfaces.get(this)?.canvas ?? null;
+  }
+
+  get ctx() {
+    return rendererSurfaces.get(this)?.ctx ?? null;
+  }
+
+  get _dynamicCanvas() {
+    return rendererSurfaces.get(this)?.dynamicCanvas ?? null;
+  }
+
+  get _dynamicCtx() {
+    return rendererSurfaces.get(this)?.dynamicCtx ?? null;
   }
 
   _startAtlasLoad() {
@@ -537,25 +557,26 @@ export class GridCanvasRenderer {
     wrapper.style.position = "relative";
     wrapper.style.width = "100%";
     wrapper.style.height = "100%";
-    this.canvas = document.createElement("canvas");
-    this.canvas.style.display = "block";
-    this.canvas.style.width = "100%";
-    this.canvas.style.height = "100%";
-    this.canvas.style.pointerEvents = "auto";
-    this._dynamicCanvas = document.createElement("canvas");
-    this._dynamicCanvas.style.position = "absolute";
-    this._dynamicCanvas.style.left = "0";
-    this._dynamicCanvas.style.top = "0";
-    this._dynamicCanvas.style.width = "100%";
-    this._dynamicCanvas.style.height = "100%";
-    this._dynamicCanvas.style.pointerEvents = "none";
-    wrapper.appendChild(this.canvas);
-    wrapper.appendChild(this._dynamicCanvas);
+    const canvas = document.createElement("canvas");
+    canvas.style.display = "block";
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    canvas.style.pointerEvents = "auto";
+    const dynamicCanvas = document.createElement("canvas");
+    dynamicCanvas.style.position = "absolute";
+    dynamicCanvas.style.left = "0";
+    dynamicCanvas.style.top = "0";
+    dynamicCanvas.style.width = "100%";
+    dynamicCanvas.style.height = "100%";
+    dynamicCanvas.style.pointerEvents = "none";
+    wrapper.appendChild(canvas);
+    wrapper.appendChild(dynamicCanvas);
     containerElement.appendChild(wrapper);
-    this.ctx = this.canvas.getContext("2d");
-    this._dynamicCtx = this._dynamicCanvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
+    const dynamicCtx = dynamicCanvas.getContext("2d");
+    rendererSurfaces.set(this, { canvas, dynamicCanvas, ctx, dynamicCtx });
     logger.log('debug', 'ui', '[Grid] init done, canvas attached to container');
-    return this.canvas;
+    return canvas;
   }
 
   setSize(widthPx, heightPx) {
@@ -566,13 +587,15 @@ export class GridCanvasRenderer {
     if (prevW !== this._width || prevH !== this._height) {
       logger.log('debug', 'ui', `[Grid] setSize ${this._width}x${this._height}`);
     }
-    if (this.canvas) {
-      this.canvas.width = this._width;
-      this.canvas.height = this._height;
+    const canvas = this.canvas;
+    if (canvas) {
+      canvas.width = this._width;
+      canvas.height = this._height;
     }
-    if (this._dynamicCanvas) {
-      this._dynamicCanvas.width = this._width;
-      this._dynamicCanvas.height = this._height;
+    const dynamicCanvas = this._dynamicCanvas;
+    if (dynamicCanvas) {
+      dynamicCanvas.width = this._width;
+      dynamicCanvas.height = this._height;
     }
   }
 
@@ -591,7 +614,8 @@ export class GridCanvasRenderer {
   }
 
   setContainer(containerElement) {
-    this._container = containerElement || null;
+    this._containerId = containerElement?.id || null;
+    this._container = null;
   }
 
   markStaticDirty() {
@@ -649,12 +673,14 @@ export class GridCanvasRenderer {
   }
 
   _getViewport() {
-    if (!this._container || typeof this._container.getBoundingClientRect !== "function") return null;
-    const scrollLeft = this._container.scrollLeft || 0;
-    const scrollTop = this._container.scrollTop || 0;
-    const w = this._container.clientWidth ?? 0;
-    const h = this._container.clientHeight ?? 0;
-    return { left: scrollLeft, top: scrollTop, width: w, height: h };
+    const el = getDomElementById(this._containerId);
+    if (!el) return null;
+    return {
+      left: el.scrollLeft || 0,
+      top: el.scrollTop || 0,
+      width: el.clientWidth ?? 0,
+      height: el.clientHeight ?? 0,
+    };
   }
 
   render(game) {
@@ -679,9 +705,6 @@ export class GridCanvasRenderer {
     }
     this._renderBailLogged = false;
     const viewport = this._getViewport();
-    const containerRect = this._container && typeof this._container.getBoundingClientRect === "function"
-      ? this._container.getBoundingClientRect()
-      : null;
 
     if (this.ctx && (this._staticDirty || this._staticDirtyTiles.size > 0)) {
       this._staticRenderer.render(game, viewport);
@@ -745,8 +768,8 @@ export class GridScaler extends BaseComponent {
 
     init() {
 
-        this.reactor = getPageReactor(this.ui) ?? this.ui.DOMElements?.reactor ?? document.getElementById('reactor');
-        this.wrapper = getPageReactorWrapper(this.ui) ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
+        this.reactor = getPageReactor(this.ui) ?? document.getElementById("reactor");
+        this.wrapper = getPageReactorWrapper(this.ui) ?? document.getElementById("reactor_wrapper");
 
         if (!this.wrapper) return;
 
@@ -998,11 +1021,8 @@ export class GridScaler extends BaseComponent {
 
 
     resize(_layoutRetry) {
-
-        if (!this.reactor || !this.wrapper) {
-            this.reactor = getPageReactor(this.ui) ?? this.ui.DOMElements?.reactor ?? document.getElementById('reactor');
-            this.wrapper = getPageReactorWrapper(this.ui) ?? this.ui.DOMElements?.reactor_wrapper ?? document.getElementById('reactor_wrapper');
-        }
+        this.reactor = getPageReactor(this.ui) ?? document.getElementById("reactor");
+        this.wrapper = getPageReactorWrapper(this.ui) ?? document.getElementById("reactor_wrapper");
 
         if (!this.reactor || !this.wrapper) {
             if (!this._resizeBailLogged && this.ui?.game) {

@@ -26,7 +26,10 @@
     "build:atlas": "node scripts/build-sprite-atlas.js",
     "postinstall": "npm run copy-libs",
     "ui:console-audit": "node scripts/ui-console-audit.js",
-    "ui:console-audit:headed": "cross-env HEADED=1 node scripts/ui-console-audit.js"
+    "ui:console-audit:headed": "cross-env HEADED=1 node scripts/ui-console-audit.js",
+    "ui:console-audit:deploy": "cross-env AUDIT_FAIL_ON=pageerror node scripts/ui-console-audit.js",
+    "ui:screenshots": "node scripts/ui-screenshots.js",
+    "ui:screenshots:headed": "cross-env HEADED=1 node scripts/ui-screenshots.js"
   },
   "keywords": [],
   "x-build": {

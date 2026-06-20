@@ -1,6 +1,7 @@
 import { render } from "lit-html";
 import { logger } from "./utils.js";
 import { subscribeKey, actions } from "./store.js";
+import { resolveAudioService } from "./services.js";
 import {
   gameShellTemplate,
   pageSectionTemplates,
@@ -68,7 +69,7 @@ export class PageRouter {
       this._epHumUnsub();
       this._epHumUnsub = null;
     }
-    const audio = this.ui.game?.audio;
+    const audio = resolveAudioService(this.ui.game?.audio);
     if (!audio) return;
     if (pageId !== "experimental_upgrades_section") {
       audio.stopResearchEpHum();
@@ -225,13 +226,17 @@ export class PageRouter {
         }
         if (hadPreviousPage) this._playTabNavAudio(pageId);
         if (hadPreviousPage) this._triggerCrtFlash();
-        this._syncResearchEpHumPage(pageId);
         this.ui.objectivesUI.showObjectivesForPage(pageId);
+        this._syncResearchEpHumPage(pageId);
       } else {
         logger.log("warn", "ui", `PageRouter: No .page element found in loaded content for ${pageId}`);
       }
     } catch (error) {
-      logger.error("PageRouter: Failed to render page \"%s\":", pageId, error);
+      logger.error(
+        "PageRouter: Failed to render page \"%s\": %s",
+        pageId,
+        error?.stack || error?.message || String(error)
+      );
       render(pageLoadErrorTemplate(), pageContentArea);
       if (this.currentPageId && this.ui?.uiState) {
         this.ui.uiState.active_page = this.currentPageId;

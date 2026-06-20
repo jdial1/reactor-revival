@@ -8,7 +8,7 @@ import {
   collectPartSemanticSegments,
 } from "../logic.js";
 import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
-import { actions } from "../store.js";
+import { actions, ref } from "../store.js";
 import {
   tutorialOverlayTemplate,
   tutorialCalloutTemplate,
@@ -748,7 +748,7 @@ export class TooltipManager extends BaseComponent {
     this.current_tile_context = tile_context;
     this.needsLiveUpdates = this._shouldTooltipUpdateLive(obj, tile_context);
     const uiState = this.game?.ui?.uiState;
-    if (uiState) uiState.hovered_entity = { obj, tile: tile_context, game: this.game, isMobile: this.isMobile };
+    if (uiState) uiState.hovered_entity = { obj, tile: tile_context, game: ref(this.game), isMobile: this.isMobile };
 
     if (!this.tooltip_showing) {
       this.isVisible = true;

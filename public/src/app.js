@@ -1,4 +1,4 @@
-import { Game, Engine, resetHeatThresholdSignalState } from "./logic.js";
+import { Game, Engine, resetHeatThresholdSignalState, getUpgradeElement } from "./logic.js";
 import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, setSlot1FromBackupAsync, FOUNDATIONAL_TICK_MS, MAX_ACCUMULATOR_MULTIPLIER, BASE_MAX_HEAT, BASE_MAX_POWER } from "./utils.js";
 import { html, render } from "lit-html";
 import { UI } from "./components/ui.js";
@@ -9,7 +9,7 @@ import {
   syncToggleStatesFromGame as applyControlDeckToggleSync,
   initializePartsPanel,
 } from "./components/ui-components.js";
-import { AudioService, createSplashManager, getValidatedGameData } from "./services.js";
+import { AudioService, createSplashManager, getValidatedGameData, resolveAudioService } from "./services.js";
 import {
   getValidatedPreferences,
   initPreferencesStore,
@@ -431,10 +431,11 @@ export function attachGameEventListeners(game, ui) {
     if (ui.stateManager?.handleUpgradeAdded && upgrade) ui.stateManager.handleUpgradeAdded(g, upgrade);
   });
   on("upgradePurchased", ({ upgrade }) => {
-    if (upgrade?.$el) {
-      upgrade.$el.classList.remove("upgrade-purchase-success");
-      void upgrade.$el.offsetWidth;
-      upgrade.$el.classList.add("upgrade-purchase-success");
+    const el = upgrade ? getUpgradeElement(upgrade) : null;
+    if (el) {
+      el.classList.remove("upgrade-purchase-success");
+      void el.offsetWidth;
+      el.classList.add("upgrade-purchase-success");
     }
   });
   on("upgradesChanged", () => updateSectionCountsState(ui, game));
@@ -772,7 +773,7 @@ function createAppInstances() {
   const ui = new UI();
   const game = new Game(ui, getCompactLayout);
   game.audio = new AudioService();
-  const initAudioOnGesture = () => game.audio.init();
+  const initAudioOnGesture = () => resolveAudioService(game.audio)?.init();
   document.addEventListener("click", initAudioOnGesture, { once: true });
   document.addEventListener("keydown", initAudioOnGesture, { once: true });
   document.addEventListener("touchstart", initAudioOnGesture, { once: true });

@@ -72,16 +72,20 @@ export function selectRowTemplate(id, label, helpKey, content, helpIcon) {
   `;
 }
 
-export function volumeSectionTemplate(isMuted, vol, volumeStepper) {
+export function volumeSectionTemplate(isMuted, vol, volumeStepper, mechSwitch) {
   return html`
     <div class="settings-section">
-      <label class="setting-row mute-toggle settings-option-row" style="margin-bottom: 1.5rem;" role="button" tabindex="0">
-        <span>Master Mute</span>
-        <button type="button" class="mute-btn" id="setting-mute-btn" aria-label="Toggle Mute">
-          <span class="mute-icon">${isMuted ? "🔇" : "🔊"}</span>
-        </button>
-        <input type="checkbox" class="settings-mech-checkbox" id="setting-mute" ?checked=${isMuted}>
-      </label>
+      <table class="settings-visuals-table" style="margin-bottom: 1.5rem;">
+        <tr class="settings-option-row" data-checkbox-id="setting-mute" role="button" tabindex="0">
+          <td class="settings-visuals-label"><span>Master Mute</span></td>
+          <td class="settings-visuals-control">
+            <label class="mech-switch-row">
+              <input type="checkbox" class="settings-mech-checkbox" id="setting-mute" ?checked=${isMuted}>
+              ${mechSwitch("setting-mute", isMuted)}
+            </label>
+          </td>
+        </tr>
+      </table>
       <div class="volume-setting"><label class="volume-label">Master Volume</label>${volumeStepper("master", vol.volumeMaster)}</div>
       <div class="volume-setting"><label class="volume-label">Effects Volume</label>${volumeStepper("effects", vol.volumeEffects)}</div>
       <div class="volume-setting"><label class="volume-label">Alerts Volume</label>${volumeStepper("alerts", vol.volumeAlerts)}</div>
@@ -199,7 +203,7 @@ export function settingsModalTemplate({
         <div class="modal-drawer-metal-handle" aria-hidden="true"></div>
         <div class="modal-swipe-handle" aria-hidden="true"></div>
         <div class="settings-header" style="background: rgb(35 39 35); border-bottom: 4px solid var(--bevel-dark); padding: 12px 16px;">
-          <h2 style="margin: 0; color: var(--game-success-color, rgb(143 214 148)); font-size: 1rem; text-shadow: 2px 2px 0 rgb(0 0 0 / 80%);">[ DIAGNOSTIC TERMINAL ]</h2>
+          <h2 style="margin: 0; color: var(--game-success-color, rgb(143 214 148)); font-size: 1rem; text-shadow: 2px 2px 0 rgb(0 0 0 / 80%);">DIAGNOSTIC TERMINAL</h2>
           <button type="button" class="close-btn modal-close-btn modal-latch-close" aria-label="Close" @click=${onClose}><span class="modal-latch-arm" aria-hidden="true"></span><span class="modal-latch-body"></span></button>
         </div>
 

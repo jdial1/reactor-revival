@@ -70,7 +70,7 @@ function selectRow(id, label, helpKey, content) {
 function createVolumeSection() {
   const vol = getValidatedPreferences();
   const isMuted = vol.mute;
-  return volumeSectionTemplate(isMuted, vol, volumeStepper);
+  return volumeSectionTemplate(isMuted, vol, volumeStepper, mechSwitch);
 }
 
 function createVisualSection() {
@@ -205,6 +205,8 @@ function createSetupMechSwitch(overlay, modal, signal) {
       e.preventDefault();
       e.stopPropagation();
       checkbox.checked = !checkbox.checked;
+      btn.classList.toggle("mech-switch-on-active", checkbox.checked);
+      btn.setAttribute("aria-checked", String(checkbox.checked));
       modal.playClick();
       onChange(checkbox.checked);
     }, { signal });
@@ -239,6 +241,15 @@ function setupMechSwitches(overlay, modal, signal) {
       game.engine.setForceNoSAB(checked);
     }
   });
+  setupMechSwitch("setting-mute", (checked) => {
+    preferences.mute = checked;
+    const ui = modal.getUi?.();
+    if (ui?.uiState) {
+      ui.uiState.audio_muted = checked;
+    }
+    const gameRef = modal.getGame?.();
+    if (gameRef?.audio) gameRef.audio.toggleMute(checked);
+  });
   const numberFormatSelect = overlay.querySelector("#setting-number-format");
   if (numberFormatSelect) {
     numberFormatSelect.addEventListener("change", () => {
@@ -268,12 +279,6 @@ function setupMechSwitches(overlay, modal, signal) {
           handleSelectRowClick(e, overlay, modal);
         }
       }
-    },
-    ".setting-row.mute-toggle": (e) => {
-      if (e.target.closest("#setting-mute-btn")) return;
-      e.preventDefault();
-      const btn = overlay.querySelector("#setting-mute-btn");
-      if (btn) btn.click();
     }
   }, { signal });
   setupSettingsHelpModal(overlay, modal, signal);
@@ -367,23 +372,8 @@ function setupNavAndAbout(overlay) {
 }
 
 export function bindSettingsEvents(overlay, modal, signal) {
-  const muteBtn = overlay.querySelector("#setting-mute-btn");
-  const muteCheckbox = overlay.querySelector("#setting-mute");
   const importInput = overlay.querySelector("#setting-import-input");
   bindEvents(overlay, {
-    "#setting-mute-btn": () => {
-      if (!muteCheckbox || !muteBtn) return;
-      const ui = modal.getUi?.();
-      if (ui?.uiState) {
-        ui.uiState.audio_muted = !ui.uiState.audio_muted;
-      } else {
-        muteCheckbox.checked = !muteCheckbox.checked;
-        preferences.mute = muteCheckbox.checked;
-        const game = modal.getGame?.();
-        if (game?.audio) game.audio.toggleMute(muteCheckbox.checked);
-      }
-      modal.playClick();
-    },
     "#setting-export": () => modal._handleExportClick(),
     "#setting-import": () => importInput?.click(),
     "#setting-import-input": { change: (e) => modal._handleImportFile(e.target.files[0]) },

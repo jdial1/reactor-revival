@@ -5,14 +5,32 @@ const isTestEnv = () =>
   (typeof global !== "undefined" && global.__VITEST__) ||
   (typeof window !== "undefined" && window.__VITEST__);
 
+function containerIdFrom(container) {
+  if (typeof container === "string") return container;
+  if (container == null) return null;
+  try {
+    return container.id || null;
+  } catch {
+    return null;
+  }
+}
+
+function liveContainer(containerId) {
+  if (!containerId || typeof document === "undefined") return null;
+  const target = document.getElementById(containerId);
+  return target?.isConnected ? target : null;
+}
+
 export class ReactiveLitComponent {
   static mount(state, renderFn, container, onAfterRender) {
+    const containerId = containerIdFrom(container);
     let raf = null;
 
     const executeRender = () => {
-      if (!container?.isConnected) return;
+      const target = liveContainer(containerId);
+      if (!target) return;
       try {
-        render(renderFn(state), container);
+        render(renderFn(state), target);
         onAfterRender?.();
       } catch (err) {
         const msg = String(err?.message ?? "");
@@ -44,11 +62,13 @@ export class ReactiveLitComponent {
   }
 
   static mountMultiStates(states, renderFn, container, onAfterRender) {
+    const containerId = containerIdFrom(container);
     let raf = null;
     const executeRender = () => {
-      if (!container?.isConnected) return;
+      const target = liveContainer(containerId);
+      if (!target) return;
       try {
-        render(renderFn(), container);
+        render(renderFn(), target);
         onAfterRender?.();
       } catch (err) {
         const msg = String(err?.message ?? "");
@@ -79,7 +99,7 @@ export class ReactiveLitComponent {
     this.state = state;
     this.stateKeys = Array.isArray(stateKeys) ? stateKeys : [stateKeys];
     this.renderFn = renderFn;
-    this.container = container;
+    this.containerId = containerIdFrom(container);
     this._unsubs = [];
     this._raf = null;
   }
@@ -105,13 +125,14 @@ export class ReactiveLitComponent {
   }
 
   _render() {
-    if (!this.container?.isConnected) {
+    const target = liveContainer(this.containerId);
+    if (!target) {
       this.unmount();
       return;
     }
     try {
       const template = this.renderFn(this.state);
-      if (template) render(template, this.container);
+      if (template) render(template, target);
     } catch (err) {
       const msg = String(err?.message ?? "");
       if ((msg.includes("parentNode") || msg.includes("nextSibling")) && msg.includes("null")) {
@@ -131,14 +152,16 @@ export class ReactiveLitComponent {
   }
 
   static mountMulti(subscriptions, renderFn, container, onAfterRender) {
+    const containerId = containerIdFrom(container);
     let _raf = null;
     const scheduleRender = () => {
       if (_raf) return;
       const doRender = () => {
-        if (!container?.isConnected) return;
+        const target = liveContainer(containerId);
+        if (!target) return;
         try {
           const template = renderFn();
-          if (template) render(template, container);
+          if (template) render(template, target);
           onAfterRender?.();
         } catch (err) {
           const msg = String(err?.message ?? "");
@@ -162,10 +185,11 @@ export class ReactiveLitComponent {
         unsubs.push(subscribeKey(state, key, scheduleRender));
       }
     }
-    if (container?.isConnected) {
+    const initialTarget = liveContainer(containerId);
+    if (initialTarget) {
       try {
         const template = renderFn();
-        if (template) render(template, container);
+        if (template) render(template, initialTarget);
         onAfterRender?.();
       } catch (err) {
         const msg = String(err?.message ?? "");
