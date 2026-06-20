@@ -1,0 +1,195 @@
+---
+description: Phase 2 architecture consolidation — anti-patterns while splitting logic/state/ui and breaking import cycles
+alwaysApply: false
+globs: "{public/src/**/*.js,config/eslint.config.js,tests/**/*.js,jsconfig.json}"
+---
+
+# Phase 2 — Architecture Consolidation
+
+**Goal:** No file over ~1,500 lines; no circular imports.
+
+**Prerequisite:** Phase 0 gate green (`npm test`); Phase 1 hygiene landed (clean git, deploy strip wired).
+
+**Exit criteria:** ESLint `import/no-cycle` passes on `public/src/**`; largest source file under 1,500 lines; `npm test` still green after each extraction chunk.
+
+---
+
+## Target layering (dependency direction)
+
+```
+utils, traits, schema, kernel/*     (leaf — no app imports)
+        ↓
+domain/*                            (game rules — no DOM, lit-html, valtio, services)
+        ↓
+state/*                             (persistence, reactive snapshots, managers)
+        ↓
+logic*.js / orchestration           (thin glue — shrink, then delete barrel)
+        ↓
+components/*, app.js                (DOM, lit-html, workers as consumers)
+```
+
+**Allowed sideways imports:** workers → `domain/heat`, `logic-heat-transfer`, `logic-topology` only (no DOM).
+
+---
+
+## Anti-patterns — do NOT do these
+
+### Scope & sequencing
+
+- **Do not split everything in one PR.** One module (or one cycle break) per commit; `npm test` after each.
+- **Do not start with `Game` or `Engine`.** They sit at the center of the graph. Extract leaves first (`Part`, `Upgrade`, heat primitives already split).
+- **Do not follow the Phase 2 table literally.** Several “logic.js” classes actually live in **`state.js`** today: `Reactor`, `GridManager`, `GameSaveManager`, `UnlockManager`, `LifecycleManager`, `ConfigManager`, `ExoticParticleManager`, `StateManager`. Plan extractions from the file that **currently owns** the code.
+- **Do not mix Phase 3 UI polish** (responsive clipping, nav labels, screenshot diffs) or **Phase 1 deploy changes** into architecture commits.
+- **Do not rename `@app/logic.js` public exports** until all tests and app imports are migrated — tests import `Game`, `BALANCE`, `getObjectiveCheck`, etc. from `@app/logic.js`.
+
+### Circular imports
+
+- **Do not “fix” `state ↔ logic` by adding a third file that imports both.** Introduce `domain/*` both can depend on; neither `state` nor `logic` should import each other when done.
+- **Do not ignore `services ↔ state`.** `state.js` imports `queryClient` / `leaderboardService` from `services.js`; `services.js` imports schemas and save helpers from `state.js`. Break this cycle in Phase 2, not only `state ↔ logic`.
+- **Do not leave `logic-upgrade-dom.js → state.js`** while claiming cycles are fixed. DOM binding must not pull reactive state; pass affordances in or move getters to domain.
+- **Do not enable `import/no-cycle: error` globally on day one.** Add the rule, run on `public/src`, fix cycles incrementally; use `warn` until the graph is clean, then tighten to `error`.
+- **Do not use dynamic `import()` purely to silence cycle lint** without restructuring — that hides the problem and breaks static analysis.
+
+### Domain purity (`domain/*`)
+
+- **Do not put lit-html, `document.*`, or `window.*` in `domain/*`.** `Part.createElement()`, `ObjectiveController` toast DOM, and `Game` visibility listeners in `logic.js` are presentation/orchestration — keep in `components/*` or a `presentation/*` layer, not domain.
+- **Do not move `Part` / `PartSet` wholesale to `domain/part.js`** without splitting data (`recalculate_stats`, catalogs) from DOM (`createElement`, `setAffordable` + `getPartElement`). Current `Part` calls `renderToNode`, `bindPartElement`, `document.querySelectorAll`.
+- **Do not import `components/button-factory.js`, `ui-components.js`, or `services.js` from domain.** `logic.js` already violates this (lines ~211–214); new modules must not copy the pattern.
+- **Do not import Valtio (`proxy`, `subscribe`) in domain.** Reactive state belongs in `state/*`.
+- **Do not pull workers into domain modules** — keep worker-safe heat/topology in existing `logic-heat-transfer.js` / `logic-topology.js` or thin `domain/heat` re-exports; workers must not load lit-html or state.
+
+### State split (`state.js` → `state/*`)
+
+- **Do not create `state/logic.js` or re-export from `logic.js` inside state.** State depends on domain physics helpers currently imported from `logic.js` (`deriveReactorStats`, `applyCellMultipliers`, etc.) — move those to `domain/reactor-stats.js` or `kernel/physics.js` first, then point state at domain.
+- **Do not split save Zod schemas away from `parseAndValidateSave` call sites** without keeping a single public entry (`state/save.js` exports everything save-related).
+- **Do not break `store.js` consumers.** `store.js` is the public facade re-exporting `state.js`; keep it stable or update `app.js` / components in the same chunk.
+- **Do not duplicate preferences in both `state/preferences.js` and `logic.js`.**
+
+### Logic barrel (`logic.js`)
+
+- **Do not delete `logic.js` until the barrel re-exports zero remaining implementations.** During migration, `logic.js` should re-export from new modules so `@app/logic.js` tests keep working.
+- **Do not leave `logic.js` as a 7k-line re-export file.** End state: thin barrel (<200 lines) or redirect to `domain/*` + delete.
+- **Do not move `Game` (line ~7147) before its state managers exist in domain/state.** `Game` imports `GridManager`, `GameSaveManager`, `Reactor`, etc. from `state.js` — extract managers first or co-locate in `domain/game.js` with explicit dependency order.
+
+### UI split (`components/ui.js` ~3,400 lines)
+
+- **Do not create circular UI modules** (`ui.js` ↔ `ui-reactor.js`). Feature modules import shared layout helpers; `ui.js` becomes a thin composer.
+- **Do not duplicate what already exists:** `ui-modals.js`, `ui-components.js`, `ui-grid.js`, `page-setup-ui.js`, `ui-tooltips-tutorial.js` — extend these instead of parallel `ui-*` trees.
+- **Do not import `logic.js` for one class** when a narrower import works (`ObjectiveController` → future `domain/objectives.js` or `components/objectives.js` depending on DOM).
+
+### Workers & performance
+
+- **Do not change worker import paths without running** `tests/core/workers/**` and `tests/core/thermodynamics/**`.
+- **Do not bundle `domain/*` through `logic.js` in workers** — workers already import `logic-heat-transfer.js` and `logic-topology.js` directly; preserve that.
+
+### Tests & tooling
+
+- **Do not update every test import to `@app/domain/part.js` in one commit.** Migrate implementation first; keep `@app/logic.js` barrel; switch tests last optional pass.
+- **Do not delete tests that fail during extraction** — fix imports or restore barrel exports.
+- **Do not skip `npm test` for “mechanical move only”** — line moves can break Vitest alias resolution and side-effect order.
+
+### Line-count gaming
+
+- **Do not split at exactly 1,500 lines** with arbitrary cuts — split by cohesion (one class family, one concern).
+- **Do not count re-export barrels toward the 1,500 limit** while implementation remains in a god file behind them.
+- **Do not ignore `objectives.css` (2,455 lines)** in Phase 2 — CSS split is Phase 3 unless a file blocks tests; focus Phase 2 on JS architecture.
+
+---
+
+## Correct extraction order (recommended)
+
+| Order | Module | From | Notes |
+|-------|--------|------|-------|
+| 1 | `domain/reactor-stats.js` | `logic.js` exports used by `state.js` | Breaks state→logic edge first |
+| 2 | `domain/part.js` | `Part`, `PartSet` | Split DOM methods to `logic-upgrade-dom` / button-factory |
+| 3 | `domain/upgrade.js` | `Upgrade`, `UpgradeSet` | Same DOM split as parts |
+| 4 | `domain/grid.js` | `Tile`, `Tileset` + `GridManager` from **state.js** | GridManager currently in state |
+| 5 | `domain/heat.js` | `HeatSystem`, `HeatFlowVisualizer` | Align with existing heat-transfer split |
+| 6 | `domain/engine.js` | `Engine`, `Performance` | After heat + grid stable |
+| 7 | `domain/objectives.js` | `ObjectiveManager` (data) | Keep `ObjectiveController` DOM in components |
+| 8 | `domain/game.js` | `Game` + managers from **state.js** | Largest move — last |
+| 9 | `state/preferences.js`, `state/save.js`, `state/ui-state.js` | `state.js` | After domain decoupled |
+| 10 | `components/ui-*.js` feature splits | `ui.js` | Reactor page, upgrades page, shell wiring |
+
+Each row = one or more commits + `npm test`.
+
+---
+
+## Correct patterns — do this instead
+
+| Step | Action |
+|------|--------|
+| 1 | Add ESLint `import/no-cycle` (warn) to `config/eslint.config.js` for `public/src/**/*.js` |
+| 2 | Inventory cycles with `npx eslint public/src --rule 'import/no-cycle: error'` or dependency-cruiser |
+| 3 | Move shared physics/stats from `logic.js` → `domain/` so `state.js` stops importing `logic.js` |
+| 4 | Extract one class family; leave re-exports in `logic.js` / `state.js` |
+| 5 | Run `npm test`; fix only regressions caused by the extraction |
+| 6 | Repeat until largest file < 1,500 lines and cycles = 0 |
+| 7 | Tighten `import/no-cycle` to `error` |
+
+---
+
+## Verification checklist
+
+```bash
+npx eslint public/src -c config/eslint.config.js --rule "import/no-cycle: error"
+npm test
+```
+
+Optional line audit (PowerShell):
+
+```powershell
+Get-ChildItem public/src -Recurse -Filter *.js |
+  ForEach-Object { [PSCustomObject]@{ Lines = (Get-Content $_.FullName | Measure-Object -Line).Lines; Name = $_.FullName } } |
+  Sort-Object Lines -Descending | Select-Object -First 15
+```
+
+All files under `public/src` should be < 1,500 lines (except generated/vendor). `npm test` must pass.
+
+---
+
+## Known repo landmines
+
+| Issue | Location | Risk |
+|-------|----------|------|
+| **state → logic** | `state.js` imports `deriveReactorStats`, `applyCellMultipliers`, … | Blocker for cycle-free graph |
+| **logic → state** | `logic.js` imports `GridManager`, `Reactor`, `GameSaveManager`, … | Mutual dependency |
+| **services ↔ state** | `services.js` ↔ `state.js` | Second cycle often missed |
+| **logic → components** | `logic.js` imports button-factory, ui-components | Domain contamination |
+| **Part DOM in model** | `Part.createElement()` in `logic.js` ~967 | Cannot naively move to domain |
+| **ObjectiveController DOM** | `logic.js` ~2507+ | Belongs in components after split |
+| **Managers in state, Game in logic** | `state.js` classes vs `Game` in `logic.js` | Plan table ≠ current layout |
+| **Workers** | `gameLoopWorkerCore.js`, `physicsWorkerCore.js` | Must keep importing heat/topology without DOM |
+| **Test barrel** | `@app/logic.js` in 10+ tests | Keep re-exports until end |
+| **store.js facade** | Re-exports all of `state.js` | Update atomically with state split |
+| **Existing partial splits** | `logic-heat-transfer`, `logic-topology`, `logic-upgrade-dom`, `kernel/physics` | Extend, don’t duplicate |
+
+---
+
+## Phase 2 vs adjacent phases
+
+| Defer (Phase 3+) | In scope (Phase 2) |
+|------------------|-------------------|
+| Responsive layout fixes | File splits & import layers |
+| `objectives.css` dedupe | `import/no-cycle` enforcement |
+| Screenshot visual regression | Break state↔logic↔services cycles |
+| Console boot log redesign | `ui.js` feature modules |
+| Version tag / 1.0 release | Largest JS file < 1,500 lines |
+
+| Already done (Phase 0–1) | Do not redo |
+|---------------------------|-------------|
+| `npm test` CI gate | Re-litigate test exclusions |
+| Deploy console strip | Move strip to source repo |
+| Duplicate pause-heat test | Delete tests to hit line limit |
+
+---
+
+## ESLint addition (exit criteria)
+
+When ready, extend `config/eslint.config.js` `public/src` block:
+
+```js
+"import/no-cycle": ["error", { "maxDepth": 10, "ignoreExternal": true }]
+```
+
+Start with `"warn"`, fix all reported cycles, then promote to `"error"`.
