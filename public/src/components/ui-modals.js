@@ -9,6 +9,7 @@ import {
   settingsHelpShellTemplate,
   volumeStepperTemplate,
   mechSwitchTemplate,
+  muteSwitchTemplate,
   helpIconTemplate,
   switchRowTemplate,
   selectRowTemplate,
@@ -70,7 +71,7 @@ function selectRow(id, label, helpKey, content) {
 function createVolumeSection() {
   const vol = getValidatedPreferences();
   const isMuted = vol.mute;
-  return volumeSectionTemplate(isMuted, vol, volumeStepper, mechSwitch);
+  return volumeSectionTemplate(isMuted, vol, volumeStepper, mechSwitch, muteSwitchTemplate);
 }
 
 function createVisualSection() {

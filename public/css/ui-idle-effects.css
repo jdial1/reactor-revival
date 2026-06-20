@@ -1,0 +1,25 @@
+html.ui-idle #app_root { animation: none !important; filter: saturate(1) !important;
+}
+
+html.ui-idle .info-bar-desktop .info-item.power::after,
+html.ui-idle .info-bar-desktop .info-item.heat::after,
+html.ui-idle #info_bar .info-row.info-main .info-item.power::after,
+html.ui-idle #info_bar .info-row.info-main .info-item.heat::after { animation: none !important;
+}
+
+html.ui-idle .page::after { opacity: 0.25; animation: none !important;
+}
+
+html.ui-idle #parts_section:not(.collapsed) { animation: none !important;
+}
+
+html.ui-idle #bottom_nav button.active,
+html.ui-idle footer#bottom_nav button.active { box-shadow: inset 2px 2px 4px rgb(0 0 0 / 60%) !important; text-shadow: none !important;
+}
+
+html.ui-idle .objectives-toast-btn.is-expanded.is-complete .objectives-claim-pill { animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) { html.ui-idle #app_root { filter: none !important;
+ }
+}

@@ -15,19 +15,40 @@ function containerIdFrom(container) {
   }
 }
 
+function bindContainerKey(container) {
+  if (typeof container === "string") return container;
+  if (container == null) return null;
+  if (typeof container === "object" && typeof container.id === "string" && container.id) {
+    return container.id;
+  }
+  if (typeof container === "object" && typeof container.nodeType === "number" && container.nodeType === 1) {
+    const id = `lit-host-${Math.random().toString(36).slice(2, 11)}`;
+    container.id = id;
+    return id;
+  }
+  return null;
+}
+
+function resolveLiveContainer(containerKey) {
+  if (typeof document === "undefined" || containerKey == null) return null;
+  try {
+    return document.getElementById(containerKey) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function liveContainer(containerId) {
-  if (!containerId || typeof document === "undefined") return null;
-  const target = document.getElementById(containerId);
-  return target?.isConnected ? target : null;
+  return resolveLiveContainer(containerId);
 }
 
 export class ReactiveLitComponent {
   static mount(state, renderFn, container, onAfterRender) {
-    const containerId = containerIdFrom(container);
+    const containerKey = bindContainerKey(container);
     let raf = null;
 
     const executeRender = () => {
-      const target = liveContainer(containerId);
+      const target = resolveLiveContainer(containerKey);
       if (!target) return;
       try {
         render(renderFn(state), target);
@@ -62,10 +83,10 @@ export class ReactiveLitComponent {
   }
 
   static mountMultiStates(states, renderFn, container, onAfterRender) {
-    const containerId = containerIdFrom(container);
+    const containerKey = bindContainerKey(container);
     let raf = null;
     const executeRender = () => {
-      const target = liveContainer(containerId);
+      const target = resolveLiveContainer(containerKey);
       if (!target) return;
       try {
         render(renderFn(), target);
@@ -99,7 +120,8 @@ export class ReactiveLitComponent {
     this.state = state;
     this.stateKeys = Array.isArray(stateKeys) ? stateKeys : [stateKeys];
     this.renderFn = renderFn;
-    this.containerId = containerIdFrom(container);
+    this.containerKey = bindContainerKey(container);
+    this.containerId = containerIdFrom(container) ?? this.containerKey;
     this._unsubs = [];
     this._raf = null;
   }
@@ -125,7 +147,7 @@ export class ReactiveLitComponent {
   }
 
   _render() {
-    const target = liveContainer(this.containerId);
+    const target = resolveLiveContainer(this.containerKey);
     if (!target) {
       this.unmount();
       return;
@@ -152,12 +174,12 @@ export class ReactiveLitComponent {
   }
 
   static mountMulti(subscriptions, renderFn, container, onAfterRender) {
-    const containerId = containerIdFrom(container);
+    const containerKey = bindContainerKey(container);
     let _raf = null;
     const scheduleRender = () => {
       if (_raf) return;
       const doRender = () => {
-        const target = liveContainer(containerId);
+        const target = resolveLiveContainer(containerKey);
         if (!target) return;
         try {
           const template = renderFn();
@@ -185,7 +207,7 @@ export class ReactiveLitComponent {
         unsubs.push(subscribeKey(state, key, scheduleRender));
       }
     }
-    const initialTarget = liveContainer(containerId);
+    const initialTarget = resolveLiveContainer(containerKey);
     if (initialTarget) {
       try {
         const template = renderFn();

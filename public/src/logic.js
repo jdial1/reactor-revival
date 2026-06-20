@@ -1,9 +1,70 @@
 import { buildFacts } from "./kernel/buildFacts.js";
-import { 
-  calculateNeutronPulsePower, 
-  calculateQuadraticHeat, 
-  applyReflectorCooling, 
-  calculateHeatPowerMultiplier 
+import { calculateSectionCounts } from "./logic-upgrade-sections.js";
+import {
+  runHeatStepFromTyped,
+  runHeatTransferStep,
+  MAX_NEIGHBORS,
+  INLET_STRIDE,
+  INLET_OFFSET_INDEX,
+  INLET_OFFSET_RATE,
+  INLET_OFFSET_N_COUNT,
+  INLET_OFFSET_NEIGHBORS,
+  VALVE_STRIDE,
+  VALVE_OFFSET_INDEX,
+  VALVE_OFFSET_TYPE,
+  VALVE_OFFSET_ORIENTATION,
+  VALVE_OFFSET_RATE,
+  VALVE_OFFSET_INPUT_IDX,
+  VALVE_OFFSET_OUTPUT_IDX,
+  EXCHANGER_STRIDE,
+  EXCHANGER_OFFSET_INDEX,
+  EXCHANGER_OFFSET_RATE,
+  EXCHANGER_OFFSET_CONTAINMENT,
+  EXCHANGER_OFFSET_N_COUNT,
+  EXCHANGER_OFFSET_NEIGHBOR_INDICES,
+  EXCHANGER_OFFSET_NEIGHBOR_CAPS,
+  EXCHANGER_OFFSET_NEIGHBOR_CATS,
+  OUTLET_STRIDE,
+  OUTLET_OFFSET_INDEX,
+  OUTLET_OFFSET_RATE,
+  OUTLET_OFFSET_ACTIVATED,
+  OUTLET_OFFSET_IS_OUTLET6,
+  OUTLET_OFFSET_N_COUNT,
+  OUTLET_OFFSET_NEIGHBOR_INDICES,
+  OUTLET_OFFSET_NEIGHBOR_CAPS,
+  VALVE_OVERFLOW,
+  VALVE_TOPUP,
+  VALVE_CHECK,
+  CATEGORY_EXCHANGER,
+  CATEGORY_OTHER,
+  CATEGORY_VENT_COOLANT,
+  canPushToNeighbor,
+  transferHeatBetweenNeighbors,
+  applyValveRule,
+} from "./logic-heat-transfer.js";
+import {
+  topologyNeighborCoords,
+  TOPOLOGY_TYPES,
+  Topology,
+  computeWorkerNeighborPulseN,
+} from "./logic-topology.js";
+import {
+  bindPartElement,
+  bindUpgradeElement,
+  getUpgradeElement,
+  getPartElement,
+  runCheckAffordability,
+  computeAffordable,
+} from "./logic-upgrade-dom.js";
+import {
+  getUpgradeBonusLines,
+  computeNeighborPulseNFromTile,
+  calculateCellPulsePower,
+  calculateCellPulseHeat,
+} from "./logic-tooltip-stats.js";
+import {
+  applyReflectorCooling,
+  calculateHeatPowerMultiplier,
 } from "./kernel/physics.js";
 import { hasTrait, compileTraitBitmask } from "./traits.js";
 import { StatDispatcher } from "./statDispatcher.js";
@@ -106,7 +167,6 @@ import Decimal, {
   RESPEC_DOCTRINE_EP_COST,
   runCathodeScramble,
   vuSegmentRatio01,
-  resolveDomElement,
   areAdjacent as areAdjacentFromModule,
   REFLECTOR_COOLING_MIN_MULTIPLIER,
   WEAVE_QUANTUM,
@@ -135,7 +195,6 @@ import {
   runManualReduceHeatAction,
   runSellPart,
   runEpartOnclick,
-  getAffordabilitySettings,
   Reactor,
   enqueueGameEffect,
   previewBlueprintPlannerStats,
@@ -182,7 +241,6 @@ const HEAT_LOG_BASE = 1000;
 const ISOTOPE_STABILIZATION_FACTOR = 0.05;
 const COMPONENT_REINFORCEMENT_FACTOR = 0.1;
 const CATALYST_REDUCTION_CAP = 0.75;
-const PCT_BASE = 100;
 const SINGLE_CELL_DESC_TPL = "Creates %power power. Creates %heat heat. Lasts %ticks ticks.";
 const MULTI_CELL_DESC_TPL = "Acts as %count %type cells. Creates %power power. Creates %heat heat. Lasts %ticks ticks";
 const TITLE_PREFIX_STRIP = /Dual |Quad /;
@@ -374,57 +432,6 @@ export function getCellHeatCoefficientH(part, game) {
   return Number.isFinite(H) ? H : 0;
 }
 
-export function computeNeighborPulseNFromTile(tile) {
-  let N = 0;
-  const cellNeighbors = tile.cellNeighborTiles || [];
-  for (let ni = 0; ni < cellNeighbors.length; ni++) {
-    const nb = cellNeighbors[ni];
-    if (nb.part?.category === "cell" && (nb.ticks ?? 0) > 0) N += nb.part.cell_count || 1;
-  }
-  const reflectors = tile.reflectorNeighborTiles || [];
-  for (let ri = 0; ri < reflectors.length; ri++) {
-    const rb = reflectors[ri];
-    if ((rb.ticks ?? 0) > 0 && rb.part?.category === "reflector") {
-      const v = rb.part.neighbor_pulse_value;
-      N += typeof v === "number" && isFinite(v) && v >= 0 ? v : 1;
-    }
-  }
-  return N;
-}
-
-export function computeWorkerNeighborPulseN(r, c, partTable, partAt, rows, cols) {
-  const self = partAt(r, c);
-  if (!self) return 0;
-  const cp = partTable[self.partIndex];
-  if (!cp || cp.category !== "cell") return 0;
-  const range = cp.range ?? 1;
-  const topo = cp.topologyType || "Manhattan";
-  const coords = topologyNeighborCoords(topo, r, c, range, rows, cols);
-  let N = 0;
-  for (let i = 0; i < coords.length; i++) {
-    const [nr, nc] = coords[i];
-    const nb = partAt(nr, nc);
-    if (!nb) continue;
-    const np = partTable[nb.partIndex];
-    if (!np) continue;
-    if (np.category === "cell" && (nb.ticks ?? 0) > 0) N += np.cell_count || 1;
-    if (np.category === "reflector" && (nb.ticks ?? 0) > 0) {
-      const v = np.neighbor_pulse_value;
-      N += typeof v === "number" && isFinite(v) && v >= 0 ? v : 1;
-    }
-  }
-  return N;
-}
-
-// Delegated to kernel/physics.js - keeping exports for backward compatibility
-export function calculateCellPulsePower(coefficient, M, N) {
-  return calculateNeutronPulsePower(coefficient, M, N);
-}
-
-export function calculateCellPulseHeat(Hbase, M, N, C) {
-  return calculateQuadraticHeat(Hbase, M, N, C);
-}
-
 export function applyReflectorEffects(tile, reactor, onReflectorPulse) {
   let reflector_count = 0;
   tile.reflectorNeighborTiles.forEach((r_tile) => {
@@ -567,54 +574,6 @@ export function deriveReactorStats(gridState, reactor) {
 
   return Object.freeze(accum);
 }
-
-export const TOPOLOGY_TYPES = ["Manhattan", "Orthogonal", "Cross", "Radial", "Global"];
-
-export function topologyNeighborCoords(topologyType, row, col, range, rows, cols) {
-  const t = topologyType || "Manhattan";
-  const rng = Math.ceil(Math.max(1, Number(range) || 1));
-  const out = [];
-  if (t === "Global") {
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (r !== row || c !== col) out.push([r, c]);
-      }
-    }
-    return out;
-  }
-  if (t === "Cross") {
-    for (let c = 0; c < cols; c++) {
-      if (c !== col) out.push([row, c]);
-    }
-    for (let r = 0; r < rows; r++) {
-      if (r !== row) out.push([r, col]);
-    }
-    return out;
-  }
-  for (let dr = -rng; dr <= rng; dr++) {
-    for (let dc = -rng; dc <= rng; dc++) {
-      if (dr === 0 && dc === 0) continue;
-      let valid = false;
-      if (t === "Manhattan") valid = Math.abs(dr) + Math.abs(dc) <= rng;
-      else if (t === "Radial") valid = Math.hypot(dr, dc) <= rng + 1e-9;
-      else if (t === "Orthogonal") valid = Math.abs(dr) + Math.abs(dc) === 1;
-      else valid = Math.abs(dr) + Math.abs(dc) <= rng; // default to Manhattan
-
-      if (valid && isInBounds(row + dr, col + dc, rows, cols)) {
-        out.push([row + dr, col + dc]);
-      }
-    }
-  }
-  return out;
-}
-
-export const Topology = {
-  Manhattan: (row, col, range, rows, cols) => topologyNeighborCoords("Manhattan", row, col, range, rows, cols),
-  Orthogonal: (row, col, _range, rows, cols) => topologyNeighborCoords("Orthogonal", row, col, 1, rows, cols),
-  Cross: (row, col, _range, rows, cols) => topologyNeighborCoords("Cross", row, col, 1, rows, cols),
-  Radial: (row, col, range, rows, cols) => topologyNeighborCoords("Radial", row, col, range, rows, cols),
-  Global: (row, col, _range, rows, cols) => topologyNeighborCoords("Global", row, col, 1, rows, cols),
-};
 
 function computeCapacitorMultipliers(part, _levels) {
   const capacitorPowerMultiplier = 1;
@@ -928,182 +887,6 @@ function buildPartDescription(part, fmtFn, tile_context = null) {
   return applyReplacements(baseDescTpl, part, fmtFn, effectiveTransfer, effectiveVent, cellCountForDesc);
 }
 
-export function collectPartSemanticSegments(part, tile_context = null) {
-  const tpl = getBaseDescriptionTemplate(part);
-  const effectiveTransfer = getEffectiveTransfer(part, tile_context);
-  const effectiveVent = getEffectiveVent(part, tile_context);
-  const cellCountForDesc = getCellCountForDesc(part);
-  const typeLabel = part.part.title.replace(TITLE_PREFIX_STRIP, "");
-  const segments = [];
-  if (tpl.includes("%count")) segments.push({ kind: "text", unitKey: "CELL_COUNT", value: cellCountForDesc });
-  if (tpl.includes("%type")) segments.push({ kind: "text", unitKey: "CELL_TYPE", value: typeLabel });
-  if (tpl.includes("%power_increase")) segments.push({ kind: "stat", unitKey: "POWER_INCREASE_UNITS", value: part.power_increase });
-  if (tpl.includes("%heat_increase")) segments.push({ kind: "stat", unitKey: "HEAT_INCREASE_UNITS", value: part.heat_increase, places: 0 });
-  if (tpl.includes("%reactor_power")) segments.push({ kind: "stat", unitKey: "REACTOR_POWER_UNITS", value: part.reactor_power });
-  if (tpl.includes("%reactor_heat")) segments.push({ kind: "stat", unitKey: "REACTOR_HEAT_UNITS", value: part.reactor_heat, places: 0 });
-  if (tpl.includes("%ticks")) segments.push({ kind: "stat", unitKey: "TICKS_UNITS", value: part.ticks });
-  if (tpl.includes("%containment")) segments.push({ kind: "stat", unitKey: "CONTAINMENT_UNITS", value: part.containment, places: 0 });
-  if (tpl.includes("%ep_heat")) segments.push({ kind: "stat", unitKey: "EP_HEAT_UNITS", value: part.ep_heat, places: 0 });
-  if (tpl.includes("%range")) segments.push({ kind: "stat", unitKey: "RANGE_UNITS", value: part.range });
-  if (tpl.includes("%power")) segments.push({ kind: "stat", unitKey: "POWER_UNITS", value: part.power });
-  if (tpl.includes("%heat")) segments.push({ kind: "stat", unitKey: "HEAT_UNITS", value: part.heat, places: 0 });
-  if (tpl.includes("%transfer")) segments.push({ kind: "stat", unitKey: "TRANSFER_UNITS", value: effectiveTransfer });
-  if (tpl.includes("%vent")) segments.push({ kind: "stat", unitKey: "VENT_UNITS", value: effectiveVent });
-  return segments;
-}
-
-function pctFromMultiplier(mult) {
-  return Math.round((mult - 1) * PCT_BASE);
-}
-
-function addVentBonusLines(obj, upg, lines, context) {
-  const tile = context?.tile;
-  const tev = upg("improved_heat_vents");
-  if (tev > 0) {
-    lines.push(`<span class="pos">+${tev * PCT_BASE}%</span> venting`);
-    lines.push(`<span class="pos">+${tev * PCT_BASE}%</span> max heat`);
-  }
-  const av = upg("active_venting");
-  if (av > 0 && tile?.containmentNeighborTiles) {
-    let capCount = 0;
-    for (const neighbor of tile.containmentNeighborTiles) {
-      if (neighbor.part && neighbor.part.category === "capacitor") {
-        capCount += neighbor.part.part?.level || neighbor.part.level || 1;
-      }
-    }
-    if (capCount > 0) {
-      const pct = av * capCount;
-      lines.push(`<span class="pos">+${pct}%</span> venting from ${capCount} capacitor neighbors`);
-    }
-  }
-}
-
-function addHeatExchangerBonusLines(obj, upg, lines) {
-  const ihe = upg("improved_heat_exchangers");
-  if (ihe > 0) lines.push(`<span class="pos">+${ihe * PCT_BASE}%</span> transfer, <span class="pos">+${ihe * PCT_BASE}%</span> max heat`);
-}
-
-function addInletOutletBonusLines(obj, upg, lines) {
-  const ihe = upg("improved_heat_exchangers");
-  if (ihe > 0) lines.push(`<span class="pos">+${ihe * PCT_BASE}%</span> transfer, <span class="pos">+${ihe * PCT_BASE}%</span> max heat`);
-}
-
-function addCapacitorBonusLines(obj, upg, lines) {
-  const iw = upg("improved_wiring");
-  if (iw > 0) lines.push(`<span class="pos">+${iw * PCT_BASE}%</span> power capacity, <span class="pos">+${iw * PCT_BASE}%</span> max heat`);
-}
-
-function addCoolantCellBonusLines(obj, upg, lines) {
-  const icc = upg("improved_coolant_cells");
-  if (icc > 0) lines.push(`<span class="pos">+${icc * PCT_BASE}%</span> max heat`);
-}
-
-function addReflectorBonusLines(obj, upg, lines) {
-  const ird = upg("improved_reflector_density");
-  if (ird > 0) lines.push(`<span class="pos">+${ird * PCT_BASE}%</span> duration`);
-  const inr = upg("improved_neutron_reflection");
-  if (inr > 0) lines.push(`<span class="pos">+${inr}%</span> power reflection`);
-}
-
-function addReactorPlatingBonusLines(_obj, _upg, _lines) {}
-
-function addParticleAcceleratorBonusLines(obj, upg, lines) {
-  const lvl = obj.level || 1;
-  const id = lvl === 6 ? "improved_particle_accelerators6" : "improved_particle_accelerators1";
-  const ipa = upg(id);
-  if (ipa > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, ipa))}%</span> EP heat cap`);
-}
-
-function addCellBonusLines(obj, upg, lines, context) {
-  const game = context?.game;
-  if (!game?.upgradeset) return;
-  const powerUpg = game.upgradeset.getUpgrade(`${obj.type}1_cell_power`);
-  if (powerUpg?.level > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, powerUpg.level))}%</span> power`);
-  const tickUpg = game.upgradeset.getUpgrade(`${obj.type}1_cell_tick`);
-  if (tickUpg?.level > 0) lines.push(`<span class="pos">+${pctFromMultiplier(Math.pow(2, tickUpg.level))}%</span> duration`);
-  const perpUpg = game.upgradeset.getUpgrade(`${obj.type}1_cell_perpetual`);
-  if (perpUpg?.level > 0) lines.push("Auto-replacement enabled");
-}
-
-const CATEGORY_BONUS_HANDLERS = {
-  vent: addVentBonusLines,
-  heat_exchanger: addHeatExchangerBonusLines,
-  heat_inlet: addInletOutletBonusLines,
-  heat_outlet: addInletOutletBonusLines,
-  capacitor: addCapacitorBonusLines,
-  coolant_cell: addCoolantCellBonusLines,
-  reflector: addReflectorBonusLines,
-  reactor_plating: addReactorPlatingBonusLines,
-  particle_accelerator: addParticleAcceleratorBonusLines,
-  cell: addCellBonusLines,
-};
-
-export function getUpgradeBonusLines(obj, context = {}) {
-  const lines = [];
-  if (!obj || obj.upgrade) return lines;
-  const game = context.game ?? obj.game;
-  if (!game?.upgradeset) return lines;
-  const upg = (id) => game.upgradeset.getUpgrade(id)?.level || 0;
-  const handler = CATEGORY_BONUS_HANDLERS[obj.category];
-  if (handler) handler(obj, upg, lines, context);
-  return lines;
-}
-
-const partElements = new WeakMap();
-const upgradeElements = new WeakMap();
-
-function getPartEl(part) {
-  return partElements.get(part) ?? null;
-}
-
-function isLiveUpgradeDomNode(el) {
-  if (!(el instanceof Element)) return false;
-  try {
-    return el.isConnected && !!el.closest(".page:not(.hidden)");
-  } catch {
-    return false;
-  }
-}
-
-function findLiveUpgradeElement(upgrade) {
-  if (typeof document === "undefined" || !upgrade?.id) return null;
-  const id = String(upgrade.id).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const selector = `[data-id="${id}"]`;
-  for (const container of document.querySelectorAll(".upgrade-group")) {
-    if (!container.isConnected) continue;
-    const page = container.closest(".page");
-    if (!page || page.classList.contains("hidden")) continue;
-    const live = container.querySelector(selector);
-    if (live instanceof Element) return live;
-  }
-  return null;
-}
-
-function getUpgradeEl(upgrade) {
-  const cached = upgradeElements.get(upgrade);
-  if (isLiveUpgradeDomNode(cached)) return cached;
-  if (cached) upgradeElements.delete(upgrade);
-  const live = findLiveUpgradeElement(upgrade);
-  if (live) upgradeElements.set(upgrade, live);
-  return live ?? null;
-}
-
-export function bindUpgradeElement(upgrade, el) {
-  if (isLiveUpgradeDomNode(el) || (el instanceof Element && el.isConnected)) {
-    upgradeElements.set(upgrade, el);
-  } else {
-    upgradeElements.delete(upgrade);
-  }
-}
-
-export function getUpgradeElement(upgrade) {
-  return getUpgradeEl(upgrade);
-}
-
-export function getPartElement(part) {
-  return getPartEl(part);
-}
-
 export class Part {
   constructor(part_definition, game) {
     this.game = game;
@@ -1183,7 +966,7 @@ export class Part {
 
   createElement() {
     const onClick = () => {
-      const el = getPartEl(this);
+      const el = getPartElement(this);
       if (this.affordable) {
         if (this.game?.ui?.help_mode_active && this.game?.tooltip_manager) {
           this.game.tooltip_manager.show(this, null, true, el);
@@ -1196,7 +979,7 @@ export class Part {
       }
     };
     const el = renderToNode(PartButton(this, onClick));
-    partElements.set(this, el);
+    bindPartElement(this, el);
     return el;
   }
 
@@ -1207,7 +990,7 @@ export class Part {
   setAffordable(isAffordable) {
     if (this.affordable !== isAffordable) {
       this.affordable = isAffordable;
-      const el = getPartEl(this);
+      const el = getPartElement(this);
       if (el) {
         el.classList.toggle("unaffordable", !isAffordable);
         el.disabled = !isAffordable;
@@ -1593,8 +1376,8 @@ export class Upgrade {
   setAffordable(isAffordable) {
     if (this.affordable !== isAffordable) {
       this.affordable = isAffordable;
-      const el = getUpgradeEl(this);
-      if (!isLiveUpgradeDomNode(el)) return;
+      const el = getUpgradeElement(this);
+      if (!el) return;
       const buyBtn = el.querySelector(".upgrade-action-btn");
       if (buyBtn) {
         buyBtn.disabled = !isAffordable || this.level >= this.max_level;
@@ -1605,8 +1388,8 @@ export class Upgrade {
 
   setAffordProgress(progress) {
     const p = Math.max(0, Math.min(1, Number(progress)));
-    const el = getUpgradeEl(this);
-    if (!isLiveUpgradeDomNode(el)) return;
+    const el = getUpgradeElement(this);
+    if (!el) return;
     const buyBtn = el.querySelector(".upgrade-action-btn");
     if (buyBtn?.style?.setProperty) {
       buyBtn.style.setProperty("--afford-progress", String(p));
@@ -1625,7 +1408,7 @@ export class Upgrade {
       this.display_cost = this.base_ecost.gt(0) ? `${fmt(this.current_ecost)} EP` : `$${fmt(this.current_cost)}`;
     }
 
-    const el = getUpgradeEl(this);
+    const el = getUpgradeElement(this);
     if (el) {
       const buyBtn = el.querySelector(".upgrade-action-btn");
       if (buyBtn) {
@@ -1735,209 +1518,68 @@ function generateCellUpgrades(game) {
   return generatedUpgrades;
 }
 
-function handleUnavailableUpgrade(upgrade) {
-  const el = getUpgradeEl(upgrade);
-  if (!isLiveUpgradeDomNode(el)) return;
-  el.classList.remove("hidden");
-  el.classList.add("doctrine-locked");
-  upgrade.setAffordable(false);
-  upgrade.setAffordProgress(0);
-}
-
-function computeAffordable(upgrade, upgradeset, game) {
-  if (game.reactor && game.reactor.has_melted_down) return false;
-  const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
-  if (upgrade.erequires && (!requiredUpgrade || requiredUpgrade.level === 0)) return false;
-  if (upgrade.base_ecost?.gt?.(0)) {
-    return toDecimal(game.state.current_exotic_particles).gte(upgrade.current_ecost);
-  }
-  return toDecimal(game.state.current_money).gte(upgrade.current_cost);
-}
-
-function isMaxLevelOrMeltedDown(upgrade, game) {
-  return upgrade.level >= upgrade.max_level || game.reactor?.has_melted_down === true;
-}
-
-function usesExoticParticles(upgrade) {
-  return Boolean(upgrade.base_ecost && upgrade.base_ecost.gt && upgrade.base_ecost.gt(0));
-}
-
-function getProgressRatio(current, cost) {
-  const n = toNumber(current);
-  const c = toNumber(cost);
-  return Math.min(1, n / c);
-}
-
-function getCurrentAndCost(upgrade, game) {
-  const useEp = usesExoticParticles(upgrade);
-  const raw = useEp ? game.state.current_exotic_particles : game.state.current_money;
-  const current = toDecimal(raw);
-  const cost = useEp ? upgrade.current_ecost : upgrade.current_cost;
-  if (!cost || !cost.gt(0)) return null;
-  return { current, cost };
-}
-
-function computeAffordProgress(upgrade, game, isAffordable) {
-  if (isAffordable) return 1;
-  if (isMaxLevelOrMeltedDown(upgrade, game)) return 0;
-  const pair = getCurrentAndCost(upgrade, game);
-  if (!pair) return 0;
-  return getProgressRatio(pair.current, pair.cost);
-}
-
-function isResearchUpgrade(upgrade) {
-  return Boolean(upgrade.base_ecost && upgrade.base_ecost.gt && upgrade.base_ecost.gt(0));
-}
-
-function applyUpgradeVisibility(upgrade, isAffordable, settings) {
-  const el = getUpgradeEl(upgrade);
-  if (!isLiveUpgradeDomNode(el)) return { isResearch: false, isInDOM: false, isMaxed: false };
-  const isResearch = isResearchUpgrade(upgrade);
-  const shouldHideUnaffordable = isResearch ? settings.hideResearch : settings.hideUpgrades;
-  const shouldHideMaxed = isResearch ? settings.hideMaxResearch : settings.hideMaxUpgrades;
-  const isMaxed = upgrade.level >= upgrade.max_level;
-  const isInDOM = el.isConnected;
-  const shouldHide =
-    (shouldHideUnaffordable && !isAffordable && !isMaxed) || (shouldHideMaxed && isMaxed);
-  if (shouldHide) el.classList.add("hidden");
-  else el.classList.remove("hidden");
-  return { isResearch, isInDOM, isMaxed };
-}
-
-function emitAffordabilityBanners(game, hasAnyUpgrade, hasVisibleAffordableUpgrade, hasAnyResearch, hasVisibleAffordableResearch) {
-  game?.emit?.("upgradesAffordabilityChanged", {
-    hasAnyUpgrade,
-    hasVisibleAffordableUpgrade,
-    hasAnyResearch,
-    hasVisibleAffordableResearch,
-  });
-}
-
-export function runCheckAffordability(upgradeset, game) {
-  if (!game) return;
-  const settings = getAffordabilitySettings();
-  let hasVisibleAffordableUpgrade = false;
-  let hasVisibleAffordableResearch = false;
-  let hasAnyUpgrade = false;
-  let hasAnyResearch = false;
-
-  upgradeset.upgradesArray.forEach((upgrade) => {
-    if (!upgradeset.isUpgradeAvailable(upgrade.id)) {
-      handleUnavailableUpgrade(upgrade);
-      return;
-    }
-
-    const el = getUpgradeEl(upgrade);
-    if (el) el.classList.remove("doctrine-locked");
-
-    const isAffordable = computeAffordable(upgrade, upgradeset, game);
-    upgrade.setAffordable(isAffordable);
-    upgrade.setAffordProgress(computeAffordProgress(upgrade, game, isAffordable));
-
-    const { isResearch, isInDOM, isMaxed } = applyUpgradeVisibility(upgrade, isAffordable, settings);
-    if (isInDOM) {
-      if (isResearch) {
-        hasAnyResearch = true;
-        if (isAffordable && !isMaxed) hasVisibleAffordableResearch = true;
-      } else {
-        hasAnyUpgrade = true;
-        if (isAffordable && !isMaxed) hasVisibleAffordableUpgrade = true;
-      }
-    }
-  });
-
-  emitAffordabilityBanners(game, hasAnyUpgrade, hasVisibleAffordableUpgrade, hasAnyResearch, hasVisibleAffordableResearch);
-}
-
-function getUpgradeContainerIdForSection(upgrade) {
-  if (upgrade.base_ecost?.gt?.(0)) {
-    return upgrade.upgrade.type;
-  }
-  const normalizeKey = (key) => {
-    if (key.endsWith("_upgrades")) return key;
-    const map = {
-      cell_power: "cell_power_upgrades",
-      cell_tick: "cell_tick_upgrades",
-      cell_perpetual: "cell_perpetual_upgrades",
-      exchangers: "exchanger_upgrades",
-      vents: "vent_upgrades",
-      other: "other_upgrades",
-    };
-    return map[key] || key;
-  };
-  return normalizeKey(upgrade.upgrade.type);
-}
-
-function getSectionUpgradeGroups(sectionName) {
-  const sectionMap = {
-    "Cell Upgrades": ["cell_power_upgrades", "cell_tick_upgrades", "cell_perpetual_upgrades"],
-    "Cooling Upgrades": ["vent_upgrades", "exchanger_upgrades"],
-    "General Upgrades": ["other_upgrades"],
-    "Laboratory": ["experimental_laboratory"],
-    "Global Boosts": ["experimental_boost"],
-    "Experimental Parts & Cells": ["experimental_parts", "experimental_cells", "experimental_cells_boost"],
-    "Particle Accelerators": ["experimental_particle_accelerators"],
-  };
-  return sectionMap[sectionName] || [];
-}
-
-function countUpgradesInGroupsWithFilter(upgradeset, groupIds, includeUpgrade) {
-  let total = 0;
-  let researched = 0;
-  const isUpgradeAvailable = (id) => upgradeset.isUpgradeAvailable(id);
-  const upgradesArray = upgradeset.upgradesArray;
-  const game = upgradeset.game;
-
-  groupIds.forEach((groupId) => {
-    const upgrades = upgradesArray.filter((upgrade) => {
-      if (!includeUpgrade(upgrade)) return false;
-      if (!isUpgradeAvailable(upgrade.id)) return false;
-      const containerId = getUpgradeContainerIdForSection(upgrade);
-      if (containerId !== groupId) return false;
-      const upgType = upgrade?.upgrade?.type || "";
-      const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
-      if (isCellUpgrade) {
-        const basePart = upgrade?.upgrade?.part;
-        if (basePart && basePart.category === "cell") {
-          if (game?.unlockManager && typeof game.unlockManager.isPartUnlocked === "function") {
-            return game.unlockManager.isPartUnlocked(basePart);
-          }
-          return true;
-        }
-      }
-      return true;
-    });
-
-    upgrades.forEach((upgrade) => {
-      total += upgrade.max_level;
-      researched += upgrade.level;
-    });
-  });
-
-  return { total, researched };
-}
-
-const UPGRADE_SECTIONS = [
-  { name: "Cell Upgrades", isResearch: false },
-  { name: "Cooling Upgrades", isResearch: false },
-  { name: "General Upgrades", isResearch: false },
-  { name: "Laboratory", isResearch: true },
-  { name: "Global Boosts", isResearch: true },
-  { name: "Experimental Parts & Cells", isResearch: true },
-  { name: "Particle Accelerators", isResearch: true },
-];
-
-export function calculateSectionCounts(upgradeset) {
-  return UPGRADE_SECTIONS.map((section) => {
-    const groupIds = getSectionUpgradeGroups(section.name);
-    if (groupIds.length === 0) return { ...section, total: 0, researched: 0 };
-    const includeUpgrade = section.isResearch
-      ? (u) => u.base_ecost.gt && u.base_ecost.gt(0)
-      : (u) => !(u.base_ecost.gt && u.base_ecost.gt(0));
-    const { total, researched } = countUpgradesInGroupsWithFilter(upgradeset, groupIds, includeUpgrade);
-    return { ...section, total, researched };
-  });
-}
+export { calculateSectionCounts } from "./logic-upgrade-sections.js";
+export {
+  addPartIconsToTitle,
+  getObjectiveScrollDuration,
+  checkObjectiveTextScrolling,
+} from "./logic-objectives-ui.js";
+export {
+  bindUpgradeElement,
+  getUpgradeElement,
+  getPartElement,
+  runCheckAffordability,
+} from "./logic-upgrade-dom.js";
+export {
+  getUpgradeBonusLines,
+  collectPartSemanticSegments,
+  computeNeighborPulseNFromTile,
+  calculateCellPulsePower,
+  calculateCellPulseHeat,
+} from "./logic-tooltip-stats.js";
+export {
+  runHeatStepFromTyped,
+  runHeatTransferStep,
+  MAX_NEIGHBORS,
+  INLET_STRIDE,
+  INLET_OFFSET_INDEX,
+  INLET_OFFSET_RATE,
+  INLET_OFFSET_N_COUNT,
+  INLET_OFFSET_NEIGHBORS,
+  VALVE_STRIDE,
+  VALVE_OFFSET_INDEX,
+  VALVE_OFFSET_TYPE,
+  VALVE_OFFSET_ORIENTATION,
+  VALVE_OFFSET_RATE,
+  VALVE_OFFSET_INPUT_IDX,
+  VALVE_OFFSET_OUTPUT_IDX,
+  EXCHANGER_STRIDE,
+  EXCHANGER_OFFSET_INDEX,
+  EXCHANGER_OFFSET_RATE,
+  EXCHANGER_OFFSET_CONTAINMENT,
+  EXCHANGER_OFFSET_N_COUNT,
+  EXCHANGER_OFFSET_NEIGHBOR_INDICES,
+  EXCHANGER_OFFSET_NEIGHBOR_CAPS,
+  EXCHANGER_OFFSET_NEIGHBOR_CATS,
+  OUTLET_STRIDE,
+  OUTLET_OFFSET_INDEX,
+  OUTLET_OFFSET_RATE,
+  OUTLET_OFFSET_ACTIVATED,
+  OUTLET_OFFSET_IS_OUTLET6,
+  OUTLET_OFFSET_N_COUNT,
+  OUTLET_OFFSET_NEIGHBOR_INDICES,
+  OUTLET_OFFSET_NEIGHBOR_CAPS,
+  VALVE_OVERFLOW,
+  VALVE_TOPUP,
+  VALVE_CHECK,
+  CATEGORY_EXCHANGER,
+  CATEGORY_OTHER,
+  CATEGORY_VENT_COOLANT,
+  canPushToNeighbor,
+  transferHeatBetweenNeighbors,
+  applyValveRule,
+} from "./logic-heat-transfer.js";
+export { topologyNeighborCoords, TOPOLOGY_TYPES, Topology, computeWorkerNeighborPulseN } from "./logic-topology.js";
 
 const OBJECTIVE_REQUIRED_UPGRADES = {
   improvedChronometers: ["chronometer"],
@@ -2393,67 +2035,6 @@ function formatDisplayInfo(manager) {
   const completedInChapter = computeCompletedInChapter(manager, chapterStart, index, objective);
   const progress = manager.getCurrentObjectiveProgress();
   return buildDisplayInfoFromProgress(objective, chapterIndex, chapterSize, completedInChapter, progress);
-}
-
-const partMappings = { "Quad Plutonium Cells": "./img/parts/cell_2_4.png", "Quad Thorium Cells": "./img/parts/cell_3_4.png", "Quad Seaborgium Cells": "./img/parts/cell_4_4.png", "Quad Dolorium Cells": "./img/parts/cell_5_4.png", "Quad Nefastium Cells": "./img/parts/cell_6_4.png", "Particle Accelerators": "./img/parts/accelerator_1.png", "Plutonium Cells": "./img/parts/cell_2_1.png", "Thorium Cells": "./img/parts/cell_3_1.png", "Seaborgium Cells": "./img/parts/cell_4_1.png", "Dolorium Cells": "./img/parts/cell_5_1.png", "Nefastium Cells": "./img/parts/cell_6_1.png", "Heat Vent": "./img/parts/vent_1.png", "Capacitors": "./img/parts/capacitor_1.png", "Dual Cell": "./img/parts/cell_1_2.png", "Uranium Cell": "./img/parts/cell_1_1.png", "Capacitor": "./img/parts/capacitor_1.png", "Cells": "./img/parts/cell_1_1.png", "Cell": "./img/parts/cell_1_1.png", "experimental part": "./img/parts/xcell_1_1.png", "Improved Chronometers upgrade": "./img/upgrades/upgrade_flux.png", "Improved Chronometers": "./img/upgrades/upgrade_flux.png", "Power": "./img/ui/icons/icon_power.png", "Heat": "./img/ui/icons/icon_heat.png", "Exotic Particles": "🧬" };
-
-export function addPartIconsToTitle(game, title) {
-  if (typeof title !== "string") return title;
-  let processedTitle = title;
-  const sortedMappings = Object.entries(partMappings).sort((a, b) => b[0].length - a[0].length);
-  const placeholders = new Map();
-  let placeholderCounter = 0;
-  for (const [partName, iconPath] of sortedMappings) {
-    const isEmoji = iconPath.length === 1 || iconPath.match(/^[^a-zA-Z0-9./]/);
-    const escapedPartName = partName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`\\b${escapedPartName.replace(/\s+/g, "\\s+")}\\b`, "i");
-    if (isEmoji) processedTitle = processedTitle.replace(regex, `${iconPath} ${partName}`);
-    else { const iconHtml = `<img src=\"${iconPath}\" class=\"objective-part-icon\" alt=\"${partName}\" title=\"${partName}\">`; processedTitle = processedTitle.replace(regex, () => { const placeholder = `__PLACEHOLDER_${placeholderCounter}__`; placeholders.set(placeholder, `${iconHtml} ${partName}`); placeholderCounter++; return placeholder; }); }
-  }
-  for (const [placeholder, replacement] of placeholders) processedTitle = processedTitle.replace(placeholder, replacement);
-  processedTitle = processedTitle.replace(/\$?\d{1,3}(?:,\d{3})+|\$?\d{4,}/g, (match) => { const hasDollar = match.startsWith("$"); const numStr = match.replace(/[^\d]/g, ""); const formatted = fmt(Number(numStr)); return hasDollar ? (`$${formatted}`) : formatted; });
-  return processedTitle;
-}
-
-export function getObjectiveScrollDuration() { const baseWidth = 900; const baseDuration = 8; const screenWidth = (typeof window !== "undefined" && window.innerWidth) ? window.innerWidth : baseWidth; const duration = baseDuration * (screenWidth / baseWidth); return Math.max(5, Math.min(18, duration)); }
-
-export function checkObjectiveTextScrolling(domElements) {
-  const toastTitleEl = resolveDomElement(domElements?.objectives_toast_title)
-    ?? (typeof document !== "undefined" ? document.getElementById("objectives_toast_title") : null);
-  if (!toastTitleEl) return;
-  toastTitleEl.style.animation = "none";
-  const text = toastTitleEl.textContent || "";
-  if (!text.trim()) return;
-  const mq = typeof globalThis.matchMedia === "function" ? globalThis.matchMedia("(prefers-reduced-motion: reduce)") : null;
-  if (mq?.matches) return;
-  toastTitleEl.classList.add("objectives-toast-title--typewriter");
-  toastTitleEl.innerHTML = "";
-  const ownerDoc = toastTitleEl.ownerDocument || (typeof document !== "undefined" ? document : null);
-  if (!ownerDoc?.createElement) {
-    toastTitleEl.textContent = text;
-    return;
-  }
-  try {
-    for (let i = 0; i < text.length; i++) {
-      const span = ownerDoc.createElement("span");
-      if (typeof span?.appendChild !== "function") {
-        toastTitleEl.textContent = text;
-        return;
-      }
-      span.className = "objective-char";
-      const o = String(i);
-      if (typeof span.style?.setProperty === "function") {
-        span.style.setProperty("--o", o);
-      } else {
-        span.setAttribute("style", `--o: ${o};`);
-      }
-      const ch = text[i];
-      span.textContent = ch === " " ? "\u00a0" : ch;
-      toastTitleEl.appendChild(span);
-    }
-  } catch {
-    toastTitleEl.textContent = text;
-  }
 }
 
 function formatObjectiveRewardLabel(reward) {
@@ -4188,395 +3769,6 @@ class HeatEffectsRenderer {
   }
 }
 
-
-export const MAX_NEIGHBORS = 8;
-export const INLET_STRIDE = 3 + MAX_NEIGHBORS;
-export const VALVE_STRIDE = 6;
-export const EXCHANGER_STRIDE = 4 + MAX_NEIGHBORS * 3;
-export const OUTLET_STRIDE = 5 + MAX_NEIGHBORS * 2;
-export const INLET_OFFSET_INDEX = 0;
-export const INLET_OFFSET_RATE = 1;
-export const INLET_OFFSET_N_COUNT = 2;
-export const INLET_OFFSET_NEIGHBORS = 3;
-export const VALVE_OFFSET_INDEX = 0;
-export const VALVE_OFFSET_TYPE = 1;
-export const VALVE_OFFSET_ORIENTATION = 2;
-export const VALVE_OFFSET_RATE = 3;
-export const VALVE_OFFSET_INPUT_IDX = 4;
-export const VALVE_OFFSET_OUTPUT_IDX = 5;
-export const EXCHANGER_OFFSET_INDEX = 0;
-export const EXCHANGER_OFFSET_RATE = 1;
-export const EXCHANGER_OFFSET_CONTAINMENT = 2;
-export const EXCHANGER_OFFSET_N_COUNT = 3;
-export const EXCHANGER_OFFSET_NEIGHBOR_INDICES = 4;
-export const EXCHANGER_OFFSET_NEIGHBOR_CAPS = 4 + MAX_NEIGHBORS;
-export const EXCHANGER_OFFSET_NEIGHBOR_CATS = 4 + MAX_NEIGHBORS * 2;
-export const OUTLET_OFFSET_INDEX = 0;
-export const OUTLET_OFFSET_RATE = 1;
-export const OUTLET_OFFSET_ACTIVATED = 2;
-export const OUTLET_OFFSET_IS_OUTLET6 = 3;
-export const OUTLET_OFFSET_N_COUNT = 4;
-export const OUTLET_OFFSET_NEIGHBOR_INDICES = 5;
-export const OUTLET_OFFSET_NEIGHBOR_CAPS = 5 + MAX_NEIGHBORS;
-
-export const VALVE_OVERFLOW = 1;
-export const VALVE_TOPUP = 2;
-export const VALVE_CHECK = 3;
-export const CATEGORY_EXCHANGER = 0;
-export const CATEGORY_OTHER = 1;
-export const CATEGORY_VENT_COOLANT = 2;
-
-export function canPushToNeighbor(heatStart, nStart, cat) {
-  return heatStart > nStart || (cat === CATEGORY_VENT_COOLANT && heatStart === nStart && heatStart > 0);
-}
-
-export function transferHeatBetweenNeighbors(heatStart, nStart, cap, cat, transferVal, totalHeadroom, remainingPush) {
-  if (remainingPush <= 0 || !canPushToNeighbor(heatStart, nStart, cat)) return 0;
-  const diff = Math.max(0, heatStart - nStart) || EXCHANGER_MIN_TRANSFER_UNIT;
-  const headroom = Math.max(cap - nStart, 0);
-  const bias = Math.max(headroom / totalHeadroom, 0);
-  return Math.min(
-    Math.max(EXCHANGER_MIN_TRANSFER_UNIT, Math.floor(transferVal * bias)),
-    Math.ceil(diff / HEAT_TRANSFER_DIFF_DIVISOR),
-    remainingPush
-  );
-}
-
-export function applyValveRule(heat, containment, val, multiplier, recordTransfers) {
-  const inputIdx = val.inputIdx;
-  const outputIdx = val.outputIdx;
-  if (inputIdx < 0 || outputIdx < 0) return;
-  const inputHeat = heat[inputIdx] || 0;
-  if (inputHeat <= 0) {
-    heat[val.index] = 0;
-    return;
-  }
-  const outputCap = containment[outputIdx] || 1;
-  const outputHeat = heat[outputIdx] || 0;
-  const outputSpace = Math.max(0, outputCap - outputHeat);
-  if (outputSpace <= 0) {
-    heat[val.index] = 0;
-    return;
-  }
-  let maxTransfer = val.transferRate * multiplier;
-  if (val.type === VALVE_TOPUP) maxTransfer = Math.min(maxTransfer, outputCap * BALANCE.valveTopupCapRatio);
-  const transfer = Math.min(maxTransfer, inputHeat, outputSpace);
-  if (transfer > 0) {
-    heat[inputIdx] -= transfer;
-    heat[outputIdx] = (heat[outputIdx] || 0) + transfer;
-    if (recordTransfers) recordTransfers.push({ fromIdx: inputIdx, toIdx: outputIdx, amount: transfer });
-  }
-  heat[val.index] = 0;
-}
-
-function runInlets(heat, reactorHeat, inletsData, nInlets, multiplier) {
-  let heatFromInlets = 0;
-  for (let i = 0; i < nInlets; i++) {
-    const base = i * INLET_STRIDE;
-    const rate = inletsData[base + 1] * multiplier;
-    for (let j = 0; j < (inletsData[base + 2] | 0); j++) {
-      const idx = inletsData[base + 3 + j] | 0;
-      const h = heat[idx] || 0;
-      const transfer = Math.min(rate, h);
-      heat[idx] -= transfer;
-      reactorHeat += transfer;
-      heatFromInlets += transfer;
-    }
-  }
-  return { reactorHeat, heatFromInlets };
-}
-
-function resetValveHeatValues(valvesData, nValves, heat, heatLen) {
-  for (let v = 0; v < nValves; v++) {
-    const valIndex = valvesData[v * VALVE_STRIDE] | 0;
-    if (valIndex >= 0 && valIndex < heatLen) heat[valIndex] = 0;
-  }
-}
-
-let _valveSnapPool = null;
-function getValveSnapBuffer(len) {
-  if (!_valveSnapPool || _valveSnapPool.length !== len) {
-    _valveSnapPool = new Float32Array(len);
-  }
-  return _valveSnapPool;
-}
-
-function runValvesFromTyped(heat, containment, valvesData, nValves, multiplier, recordTransfers) {
-  const heatLen = heat.length;
-  const snap = getValveSnapBuffer(heatLen);
-  for (let i = 0; i < heatLen; i++) snap[i] = heat[i] || 0;
-  for (let v = 0; v < nValves; v++) {
-    const base = v * VALVE_STRIDE;
-    const inputIdx = valvesData[base + 4] | 0;
-    const outputIdx = valvesData[base + 5] | 0;
-    const valIndex = valvesData[base + 0] | 0;
-    if (inputIdx < 0 || outputIdx < 0 || inputIdx >= heatLen || outputIdx >= heatLen || valIndex >= heatLen) continue;
-    const inputHeat = snap[inputIdx] || 0;
-    const outputCap = containment[outputIdx] || 1;
-    const outputSpace = Math.max(0, outputCap - (snap[outputIdx] || 0));
-    let maxTransfer = valvesData[base + 3] * multiplier;
-    if ((valvesData[base + 1] | 0) === VALVE_TOPUP) maxTransfer = Math.min(maxTransfer, outputCap * BALANCE.valveTopupCapRatio);
-    const transfer = Math.min(maxTransfer, inputHeat, outputSpace);
-    if (transfer > 0) {
-      heat[inputIdx] = (heat[inputIdx] || 0) - transfer;
-      heat[outputIdx] = (heat[outputIdx] || 0) + transfer;
-      if (recordTransfers) recordTransfers.push({ fromIdx: inputIdx, toIdx: outputIdx, amount: transfer });
-      snap[inputIdx] -= transfer;
-      snap[outputIdx] = (snap[outputIdx] || 0) + transfer;
-    }
-  }
-  resetValveHeatValues(valvesData, nValves, heat, heatLen);
-}
-
-let _valveFlagPool = null;
-function getValveFlagBuffer(len) {
-  if (!_valveFlagPool || _valveFlagPool.length !== len) {
-    _valveFlagPool = new Uint8Array(len);
-  }
-  return _valveFlagPool;
-}
-
-function buildValveFlags(valveNeighborData, nValveNeighbors, heatLen) {
-  const flags = getValveFlagBuffer(heatLen);
-  flags.fill(0);
-  for (let i = 0; i < nValveNeighbors; i++) {
-    const idx = valveNeighborData[i] | 0;
-    if (idx >= 0 && idx < heatLen) flags[idx] = 1;
-  }
-  return flags;
-}
-
-let _startHeatMapPool = null;
-function getStartHeatMapBuffer(len) {
-  if (!_startHeatMapPool || _startHeatMapPool.length !== len) {
-    _startHeatMapPool = new Float32Array(len);
-  }
-  return _startHeatMapPool;
-}
-
-function buildExchangerStartHeatTyped(exchangersData, nExchangers, heat) {
-  const startHeat = getStartHeatMapBuffer(heat.length);
-  startHeat.fill(-1); 
-  for (let e = 0; e < nExchangers; e++) {
-    const idx = exchangersData[e * EXCHANGER_STRIDE] | 0;
-    if (idx >= 0 && idx < startHeat.length) {
-      startHeat[idx] = heat[idx] || 0;
-    }
-  }
-  return startHeat;
-}
-
-function getExchangerStartHeat(idx, heat, valveFlags, startHeatMap) {
-  if (valveFlags[idx]) return heat[idx] || 0;
-  const sh = startHeatMap[idx];
-  return sh >= 0 ? sh : (heat[idx] || 0);
-}
-
-function collectExchangerPushTyped(heat, exchangersData, nExchangers, valveFlags, startHeatMap, multiplier, recordTransfers) {
-  for (let e = 0; e < nExchangers; e++) {
-    const base = e * EXCHANGER_STRIDE;
-    const idx = exchangersData[base + 0] | 0;
-    const heatStart = getExchangerStartHeat(idx, heat, valveFlags, startHeatMap);
-    const capStart = exchangersData[base + 2] || 1;
-    const pressureStart = heatStart / capStart;
-    const transferVal = exchangersData[base + 1] * multiplier;
-    const nCount = (exchangersData[base + 3] | 0) || 0;
-    let remainingPush = heatStart;
-    for (let n = 0; n < nCount; n++) {
-      if (remainingPush <= 0) break;
-      const nidx = exchangersData[base + 4 + n] | 0;
-      const nStart = getExchangerStartHeat(nidx, heat, valveFlags, startHeatMap);
-      const cap = exchangersData[base + 4 + MAX_NEIGHBORS + n] || 0;
-      const pressureNeighbor = nStart / (cap || 1);
-      if (pressureStart <= pressureNeighbor) continue;
-      const diff = heatStart - nStart;
-      const amt = Math.min(transferVal, diff / HEAT_TRANSFER_DIFF_DIVISOR, remainingPush);
-      if (amt > 0) {
-        heat[idx] -= amt;
-        heat[nidx] += amt;
-        if (recordTransfers) recordTransfers.push({ fromIdx: idx, toIdx: nidx, amount: amt });
-        remainingPush -= amt;
-      }
-    }
-  }
-}
-
-let _plannedOutPool = null;
-function getPlannedOutBuffer(len) {
-  if (!_plannedOutPool || _plannedOutPool.length !== len) {
-    _plannedOutPool = new Float32Array(len);
-  }
-  return _plannedOutPool;
-}
-
-function collectExchangerPullTyped(opts) {
-  const { heat, exchangersData, nExchangers, valveFlags, startHeatMap, multiplier, recordTransfers } = opts;
-  const plannedOutByNeighbor = getPlannedOutBuffer(heat.length);
-  plannedOutByNeighbor.fill(0);
-  
-  for (let e = 0; e < nExchangers; e++) {
-    const base = e * EXCHANGER_STRIDE;
-    const idx = exchangersData[base + 0] | 0;
-    const heatStart = getExchangerStartHeat(idx, heat, valveFlags, startHeatMap);
-    const transferVal = exchangersData[base + 1] * multiplier;
-    const nCount = (exchangersData[base + 3] | 0) || 0;
-    for (let n = 0; n < nCount; n++) {
-      const nidx = exchangersData[base + 4 + n] | 0;
-      const nStart = getExchangerStartHeat(nidx, heat, valveFlags, startHeatMap);
-      const alreadyOut = plannedOutByNeighbor[nidx] || 0;
-      const nAvailable = Math.max(0, nStart - alreadyOut);
-      if (nAvailable <= 0 || nStart <= heatStart) continue;
-      const diff = nStart - heatStart;
-      const amt = Math.min(transferVal, Math.ceil(diff / HEAT_TRANSFER_DIFF_DIVISOR), nAvailable);
-      if (amt > 0) {
-        heat[nidx] -= amt;
-        heat[idx] += amt;
-        if (recordTransfers) recordTransfers.push({ fromIdx: nidx, toIdx: idx, amount: amt });
-        plannedOutByNeighbor[nidx] = alreadyOut + amt;
-      }
-    }
-  }
-}
-
-function runExchangersFromTyped(opts) {
-  const { heat, containment, exchangersData, nExchangers, valveNeighborData, nValveNeighbors, multiplier, recordTransfers } = opts;
-  const heatLen = heat.length;
-  const valveFlags = buildValveFlags(valveNeighborData, nValveNeighbors, heatLen);
-  const startHeatMap = buildExchangerStartHeatTyped(exchangersData, nExchangers, heat);
-  collectExchangerPushTyped(heat, exchangersData, nExchangers, valveFlags, startHeatMap, multiplier, recordTransfers);
-  collectExchangerPullTyped({ heat, exchangersData, nExchangers, valveFlags, startHeatMap, multiplier, recordTransfers });
-}
-
-function processSingleOutlet(heat, outlet, reactorHeat) {
-  const { activated, nCount, transferCap, outIndex, isOutlet6, neighborIndices, neighborCaps } = outlet;
-  if (!activated || reactorHeat <= 0) return reactorHeat;
-  let toTransfer = Math.min(transferCap, reactorHeat);
-  if (toTransfer <= 0) return reactorHeat;
-  if (nCount > 0) {
-    const perNeighbor = toTransfer / nCount;
-    for (let n = 0; n < nCount; n++) {
-      const nidx = neighborIndices[n] | 0;
-      const cap = neighborCaps[n] || 0;
-      const current = heat[nidx] || 0;
-      let add = perNeighbor;
-      if (isOutlet6 && cap > 0) add = Math.min(add, Math.max(0, cap - current));
-      add = Math.min(add, reactorHeat);
-      if (add > 0) {
-        heat[nidx] = current + add;
-        reactorHeat -= add;
-      }
-    }
-  } else {
-    heat[outIndex] = (heat[outIndex] || 0) + toTransfer;
-    reactorHeat -= toTransfer;
-  }
-  return reactorHeat;
-}
-
-let _outletNeighborIndicesPool = new Int32Array(MAX_NEIGHBORS);
-let _outletNeighborCapsPool = new Float32Array(MAX_NEIGHBORS);
-
-function runOutletsFromTyped(heat, outletsData, nOutlets, reactorHeat, multiplier) {
-  for (let o = 0; o < nOutlets; o++) {
-    if (reactorHeat <= 0) break;
-    const base = o * OUTLET_STRIDE;
-    const activated = outletsData[base + OUTLET_OFFSET_ACTIVATED];
-    if (!activated) continue;
-    
-    const nCount = (outletsData[base + OUTLET_OFFSET_N_COUNT] | 0) || 0;
-    const transferCap = outletsData[base + OUTLET_OFFSET_RATE] * multiplier;
-    const outIndex = outletsData[base + OUTLET_OFFSET_INDEX] | 0;
-    const isOutlet6 = outletsData[base + OUTLET_OFFSET_IS_OUTLET6];
-    
-    for (let n = 0; n < nCount; n++) {
-      _outletNeighborIndicesPool[n] = outletsData[base + OUTLET_OFFSET_NEIGHBOR_INDICES + n] | 0;
-      _outletNeighborCapsPool[n] = outletsData[base + OUTLET_OFFSET_NEIGHBOR_CAPS + n] || 0;
-    }
-    
-    const outletConfig = {
-      activated,
-      nCount,
-      transferCap,
-      outIndex,
-      isOutlet6,
-      neighborIndices: _outletNeighborIndicesPool,
-      neighborCaps: _outletNeighborCapsPool,
-    };
-    reactorHeat = processSingleOutlet(heat, outletConfig, reactorHeat);
-  }
-  return reactorHeat;
-}
-
-let _heatTransferStagingPool = null;
-function getHeatTransferStagingBuffer(len) {
-  if (!_heatTransferStagingPool || _heatTransferStagingPool.length !== len) {
-    _heatTransferStagingPool = new Float32Array(len);
-  }
-  return _heatTransferStagingPool;
-}
-
-function runHeatTransferCore(heat, containment, componentSet, options) {
-  const heatLen = heat.length;
-  const nextHeat = getHeatTransferStagingBuffer(heatLen);
-  for (let i = 0; i < heatLen; i++) nextHeat[i] = heat[i] || 0;
-  
-  let reactorHeat = options.reactorHeat ?? 0;
-  const multiplier = options.multiplier ?? 1;
-  const recordTransfers = options.recordTransfers ?? null;
-  const {
-    inletsData,
-    nInlets = 0,
-    valvesData,
-    nValves = 0,
-    valveNeighborData,
-    nValveNeighbors = 0,
-    exchangersData,
-    nExchangers = 0,
-    outletsData,
-    nOutlets = 0,
-  } = componentSet;
-  const totalComponents = nInlets + nValves + nExchangers + nOutlets;
-  if (totalComponents > HEAT_TRANSFER_MAX_ITERATIONS) {
-    throw new Error(`Heat transfer payload too large: ${totalComponents} components`);
-  }
-  const r1 = runInlets(nextHeat, reactorHeat, inletsData, nInlets, multiplier);
-  reactorHeat = r1.reactorHeat;
-  runValvesFromTyped(nextHeat, containment, valvesData, nValves, multiplier, recordTransfers);
-  runExchangersFromTyped({
-    heat: nextHeat,
-    containment,
-    exchangersData,
-    nExchangers,
-    valveNeighborData,
-    nValveNeighbors,
-    multiplier,
-    recordTransfers,
-  });
-  reactorHeat = runOutletsFromTyped(nextHeat, outletsData, nOutlets, reactorHeat, multiplier);
-  for (let i = 0; i < nextHeat.length; i++) {
-    if (nextHeat[i] < HEAT_EPSILON) nextHeat[i] = 0;
-  }
-  if (reactorHeat < HEAT_EPSILON) reactorHeat = 0;
-  for (let i = 0; i < nextHeat.length; i++) heat[i] = nextHeat[i];
-  return { reactorHeat, heatFromInlets: r1.heatFromInlets };
-}
-
-export function runHeatTransferStep(componentSet, heatState, options = {}) {
-  const { heat, containment } = heatState;
-  return runHeatTransferCore(heat, containment, componentSet, {
-    reactorHeat: options.reactorHeat ?? 0,
-    multiplier: options.multiplier ?? 1,
-    recordTransfers: options.recordTransfers ?? null,
-  });
-}
-
-export function runHeatStepFromTyped(heat, containment, payload, recordTransfers) {
-  return runHeatTransferCore(heat, containment, payload, {
-    reactorHeat: payload.reactorHeat ?? 0,
-    multiplier: payload.multiplier ?? 1,
-    recordTransfers: recordTransfers ?? null,
-  });
-}
 
 function fillContainmentFromTiles(ts, rows, cols, containmentOut) {
   for (let r = 0; r < rows; r++) {

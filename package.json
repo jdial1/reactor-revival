@@ -16,10 +16,11 @@
     "setup": "node scripts/setup-runner.js",
     "generate-metadata": "node scripts/generate-metadata.js",
     "copy-libs": "node scripts/copy-libs.js",
+    "css:dedupe": "node scripts/css-dedupe.js",
     "build:sw": "workbox injectManifest config/workbox-config.cjs",
     "lint": "node scripts/lint-runner.js",
     "lint:js": "eslint . -c config/eslint.config.js --cache --cache-location node_modules/.cache/eslint --format @microsoft/eslint-formatter-sarif --output-file eslint-results.sarif",
-    "lint:css": "stylelint \"public/**/*.css\" \"public/**/*.html\" \"public/**/*.js\" --config config/.stylelintrc.json --fix",
+    "lint:css": "stylelint \"public/**/*.css\" \"public/**/*.html\" \"public/**/*.js\" --config config/.stylelintrc.json --ignore-path .stylelintignore --fix",
     "check-pwa-root-files": "node scripts/pwa-check.js",
     "remove-console-logs": "node scripts/remove-console-logs.js",
     "compress-images": "node scripts/compress-images.js",
@@ -27,9 +28,10 @@
     "postinstall": "npm run copy-libs",
     "ui:console-audit": "node scripts/ui-console-audit.js",
     "ui:console-audit:headed": "cross-env HEADED=1 node scripts/ui-console-audit.js",
-    "ui:console-audit:deploy": "cross-env AUDIT_FAIL_ON=pageerror node scripts/ui-console-audit.js",
+    "ui:console-audit:deploy": "cross-env AUDIT_FAIL_ON=pageerror,critical.startup node scripts/ui-console-audit.js",
     "ui:screenshots": "node scripts/ui-screenshots.js",
-    "ui:screenshots:headed": "cross-env HEADED=1 node scripts/ui-screenshots.js"
+    "ui:screenshots:headed": "cross-env HEADED=1 node scripts/ui-screenshots.js",
+    "ui:screenshots:deploy": "node scripts/ui-screenshots.js"
   },
   "keywords": [],
   "x-build": {
@@ -51,7 +53,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@fontsource/oswald": "^5.2.8",
+    "@fontsource/press-start-2p": "^5.2.7",
+    "@fontsource/share-tech-mono": "^5.2.7",
+    "@fontsource/vt323": "^5.2.7",
     "@microsoft/eslint-formatter-sarif": "^3.1.0",
+    "@picocss/pico": "^2.1.1",
     "@stylistic/stylelint-plugin": "^3.1.3",
     "@zip.js/zip.js": "^2.7.62",
     "cross-env": "^7.0.3",

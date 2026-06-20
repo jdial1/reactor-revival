@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, setupGameWithDOM, simulateViewportResize } from "../helpers/setup.js";
 
 import { GridScaler } from "@app/components/ui-grid.js";
+import { getPageReactor, getPageReactorWrapper } from "@app/components/ui-components.js";
 
 describe("Grid Scaling Logic (Reshaping)", () => {
     let game, ui, wrapper, reactor, window;
@@ -21,8 +22,8 @@ describe("Grid Scaling Logic (Reshaping)", () => {
         ui.gridScaler = new GridScaler(ui);
         
         await game.router.loadPage("reactor_section");
-        wrapper = ui.DOMElements.reactor_wrapper;
-        reactor = ui.DOMElements.reactor;
+        wrapper = getPageReactorWrapper(ui);
+        reactor = getPageReactor(ui);
 
         if (!wrapper || !reactor) {
             throw new Error("Reactor elements not found in DOM");

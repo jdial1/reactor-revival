@@ -1,0 +1,55 @@
+@font-face {
+ font-family: "Share Tech Mono";
+ font-style: normal;
+ font-weight: 400;
+ font-display: swap;
+ src: url("../lib/fonts/share-tech-mono-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+ font-family: "Press Start 2P";
+ font-style: normal;
+ font-weight: 400;
+ font-display: swap;
+ src: url("../lib/fonts/press-start-2p-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+ font-family: Oswald;
+ font-style: normal;
+ font-weight: 400;
+ font-display: swap;
+ src: url("../lib/fonts/oswald-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+ font-family: Oswald;
+ font-style: normal;
+ font-weight: 500;
+ font-display: swap;
+ src: url("../lib/fonts/oswald-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+ font-family: Oswald;
+ font-style: normal;
+ font-weight: 600;
+ font-display: swap;
+ src: url("../lib/fonts/oswald-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+ font-family: Oswald;
+ font-style: normal;
+ font-weight: 700;
+ font-display: swap;
+ src: url("../lib/fonts/oswald-latin-700-normal.woff2") format("woff2");
+}
+
+@font-face {
+ font-family: "VT323";
+ font-style: normal;
+ font-weight: 400;
+ font-display: swap;
+ src: url("../lib/fonts/vt323-latin-400-normal.woff2") format("woff2");
+}

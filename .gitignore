@@ -17,4 +17,4 @@ public/lib/pako.min.js
 *.py
 *.pyc
 scripts/playtest_failure.png
-screenshots/ui/
+screenshots/

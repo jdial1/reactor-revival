@@ -18,12 +18,22 @@ export function volumeStepperTemplate(key, step) {
   return html`
     <div class="volume-stepper" data-volume-key=${key}>
       <div class="volume-blocks" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow=${step} tabindex="0">
-        ${Array.from({ length: 11 }, (_, i) => html`
-          <button type="button" class="volume-block" data-step=${i} aria-label="${i * 10}%" ?data-active=${i <= step}></button>
+        ${Array.from({ length: 10 }, (_, i) => html`
+          <button type="button" class="volume-block" data-step=${i + 1} aria-label="${(i + 1) * 10}%" ?data-active=${i < step}></button>
         `)}
       </div>
       <span class="volume-stepper-val">${step * 10}%</span>
     </div>
+  `;
+}
+
+export function muteSwitchTemplate(id, isMuted) {
+  return html`
+    <button type="button" class="mech-switch ${isMuted ? "mech-switch-on-active" : ""}" role="switch" aria-checked=${isMuted} data-checkbox-id=${id} tabindex="0">
+      <span class="mech-switch-off">AUDIO</span>
+      <span class="mech-switch-track"><span class="mech-switch-thumb"></span></span>
+      <span class="mech-switch-on">MUTE</span>
+    </button>
   `;
 }
 
@@ -72,7 +82,8 @@ export function selectRowTemplate(id, label, helpKey, content, helpIcon) {
   `;
 }
 
-export function volumeSectionTemplate(isMuted, vol, volumeStepper, mechSwitch) {
+export function volumeSectionTemplate(isMuted, vol, volumeStepper, mechSwitch, muteSwitch) {
+  const muteControl = muteSwitch ? muteSwitch("setting-mute", isMuted) : mechSwitch("setting-mute", isMuted);
   return html`
     <div class="settings-section">
       <table class="settings-visuals-table" style="margin-bottom: 1.5rem;">
@@ -81,7 +92,7 @@ export function volumeSectionTemplate(isMuted, vol, volumeStepper, mechSwitch) {
           <td class="settings-visuals-control">
             <label class="mech-switch-row">
               <input type="checkbox" class="settings-mech-checkbox" id="setting-mute" ?checked=${isMuted}>
-              ${mechSwitch("setting-mute", isMuted)}
+              ${muteControl}
             </label>
           </td>
         </tr>

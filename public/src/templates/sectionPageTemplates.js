@@ -66,21 +66,30 @@ export function upgradesSectionTemplate() {
   <div id="upgrades_no_affordable_banner" class="affordability-banner hidden">
     <article>No affordable upgrades available</article>
   </div>
-  <div id="upgrades_content_wrapper">
-    <article>
-      <h2 data-section-name="Cell Upgrades">Cell Upgrades</h2>
-      <div id="cell_power_upgrades" class="upgrade-group"></div>
-      <div id="cell_tick_upgrades" class="upgrade-group"></div>
-      <div id="cell_perpetual_upgrades" class="upgrade-group"></div>
+  <div id="upgrades_content_wrapper" data-hub-accordion="true">
+    <article class="upgrade-section-hub upgrade-hub-collapsible">
+      <h2 class="upgrade-section-header" data-section-name="Cell Upgrades" role="button" tabindex="0" aria-expanded="true">Cell Upgrades</h2>
+      <p class="section-hub-blurb">Boost cell output, lifespan, and perpetual modes.</p>
+      <div class="upgrade-section-body">
+        <div id="cell_power_upgrades" class="upgrade-group"></div>
+        <div id="cell_tick_upgrades" class="upgrade-group"></div>
+        <div id="cell_perpetual_upgrades" class="upgrade-group"></div>
+      </div>
     </article>
-    <article>
-      <h2 data-section-name="Cooling Upgrades">Cooling Upgrades</h2>
-      <div id="vent_upgrades" class="upgrade-group"></div>
-      <div id="exchanger_upgrades" class="upgrade-group"></div>
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+      <h2 class="upgrade-section-header" data-section-name="Cooling Upgrades" role="button" tabindex="0" aria-expanded="false">Cooling Upgrades</h2>
+      <p class="section-hub-blurb">Improve vents, exchangers, and heat routing.</p>
+      <div class="upgrade-section-body">
+        <div id="vent_upgrades" class="upgrade-group"></div>
+        <div id="exchanger_upgrades" class="upgrade-group"></div>
+      </div>
     </article>
-    <article>
-      <h2 data-section-name="General Upgrades">General Upgrades</h2>
-      <div id="other_upgrades" class="upgrade-group"></div>
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+      <h2 class="upgrade-section-header" data-section-name="General Upgrades" role="button" tabindex="0" aria-expanded="false">General Upgrades</h2>
+      <p class="section-hub-blurb">Reactor-wide efficiency and quality-of-life upgrades.</p>
+      <div class="upgrade-section-body">
+        <div id="other_upgrades" class="upgrade-group"></div>
+      </div>
     </article>
   </div>
 </section>
@@ -99,12 +108,13 @@ export function researchSectionTemplate() {
   <div id="research_no_affordable_banner" class="affordability-banner hidden">
     <article>No affordable research available</article>
   </div>
-  <div id="experimental_upgrades_content_wrapper">
+  <div id="experimental_upgrades_content_wrapper" data-hub-accordion="true">
     <article id="exotic_particles_display"></article>
+    <p class="research-ep-hint" id="research_ep_hint">Spend EP in the hubs below ↓</p>
     <article id="reboot_section" class="research-collapsible section-collapsed">
       <h2 class="research-section-header" role="button" tabindex="0" aria-expanded="false">Prestige</h2>
+      <p class="section-hub-blurb">Refund wipes progress; Prestige keeps EP and research for a money multiplier.</p>
       <div class="research-section-body">
-        <p class="explanitory">Refund resets everything including EP. Prestige keeps Total EP and Research and grants a money multiplier.</p>
         <div class="research-buttons-container">
           <div class="refund-safety-cover-wrap">
             <button type="button" class="refund-safety-cover" id="refund_safety_cover" aria-label="Lift safety cover to enable full refund"></button>
@@ -114,23 +124,35 @@ export function researchSectionTemplate() {
         </div>
       </div>
     </article>
-    <article>
-      <h2 data-section-name="Laboratory">Laboratory</h2>
-      <div id="experimental_laboratory" class="upgrade-group"></div>
+    <article class="upgrade-section-hub upgrade-hub-collapsible">
+      <h2 class="upgrade-section-header" data-section-name="Laboratory" role="button" tabindex="0" aria-expanded="true">Laboratory</h2>
+      <p class="section-hub-blurb">Foundational exotic research and lab systems.</p>
+      <div class="upgrade-section-body">
+        <div id="experimental_laboratory" class="upgrade-group"></div>
+      </div>
     </article>
-    <article>
-      <h2 data-section-name="Global Boosts">Global Boosts</h2>
-      <div id="experimental_boost" class="upgrade-group"></div>
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+      <h2 class="upgrade-section-header" data-section-name="Global Boosts" role="button" tabindex="0" aria-expanded="false">Global Boosts</h2>
+      <p class="section-hub-blurb">Cross-tree multipliers and passive EP gains.</p>
+      <div class="upgrade-section-body">
+        <div id="experimental_boost" class="upgrade-group"></div>
+      </div>
     </article>
-    <article>
-      <h2>Experimental Parts & Cells</h2>
-      <div id="experimental_parts" class="upgrade-group"></div>
-      <div id="experimental_cells" class="upgrade-group"></div>
-      <div id="experimental_cells_boost" class="upgrade-group"></div>
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+      <h2 class="upgrade-section-header" data-section-name="Experimental Parts &amp; Cells" role="button" tabindex="0" aria-expanded="false">Experimental Parts &amp; Cells</h2>
+      <p class="section-hub-blurb">Advanced components and experimental cell lines.</p>
+      <div class="upgrade-section-body">
+        <div id="experimental_parts" class="upgrade-group"></div>
+        <div id="experimental_cells" class="upgrade-group"></div>
+        <div id="experimental_cells_boost" class="upgrade-group"></div>
+      </div>
     </article>
-    <article>
-      <h2 data-section-name="Particle Accelerators">Particle Accelerators</h2>
-      <div id="experimental_particle_accelerators" class="upgrade-group"></div>
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+      <h2 class="upgrade-section-header" data-section-name="Particle Accelerators" role="button" tabindex="0" aria-expanded="false">Particle Accelerators</h2>
+      <p class="section-hub-blurb">High-tier EP generation and accelerator tuning.</p>
+      <div class="upgrade-section-body">
+        <div id="experimental_particle_accelerators" class="upgrade-group"></div>
+      </div>
     </article>
   </div>
 </section>
@@ -203,7 +225,7 @@ export function soundboardSectionTemplate() {
 export function aboutSectionTemplate() {
   return html`
 <section id="about_section" class="page">
-  <div class="about-content pixel-panel is-inset">
+  <div class="about-content">
     <h2>About Reactor Revival</h2>
     <div id="basic_overview_section" class="about-section"></div>
     <div class="about-section">
@@ -223,11 +245,17 @@ export function aboutSectionTemplate() {
         <li>Heat management mechanics</li>
       </ul>
     </div>
+    <p class="about-scroll-hint" id="about_scroll_hint">Scroll for credits, contact &amp; legal ↓ <a href="#about_credits" class="about-credits-jump">Jump to credits</a></p>
+    <nav class="about-subnav" aria-label="About sections">
+      <a href="#about_credits">Credits</a>
+      <a href="#about_contact">Contact</a>
+      <a href="#about_legal">Legal</a>
+    </nav>
     <div class="about-section">
       <h3>Version</h3>
       <p>Current Version: <span id="about_version"></span></p>
     </div>
-    <div class="about-section">
+    <div class="about-section" id="about_credits">
       <h3>Credits</h3>
       <p>Created by <a href="https://github.com/jdial1" target="_blank" rel="noopener noreferrer">Justin Dial</a></p>
       <p class="credits-list">Special thanks to:</p>
@@ -238,14 +266,14 @@ export function aboutSectionTemplate() {
         <li><a href="https://github.com/cwmonkey/reactor-knockoff" target="_blank" rel="noopener noreferrer">cwmonkey</a> - Reactor Knockoff</li>
       </ul>
     </div>
-    <div class="about-section">
+    <div class="about-section" id="about_contact">
       <h3>Contact</h3>
       <p>
         For feedback or issues, please visit the
         <a href="https://github.com/jdial1/reactor-revival" target="_blank" rel="noopener noreferrer">GitHub</a>.
       </p>
     </div>
-    <div class="about-section">
+    <div class="about-section" id="about_legal">
       <h3>Legal</h3>
       <p>
         Read our
@@ -266,6 +294,7 @@ export function leaderboardSectionTemplate() {
   <div class="pixel-panel is-inset">
     <header class="leaderboard-header">
       <h2>Reactor Records</h2>
+      <p class="leaderboard-subtitle" id="leaderboard_subtitle">Sorted by power</p>
     </header>
     <div class="leaderboard-controls">
       <button class="pixel-btn leaderboard-sort active" data-sort="power" title="Top Power">
@@ -282,13 +311,13 @@ export function leaderboardSectionTemplate() {
       <table class="leaderboard-table">
         <thead>
           <tr>
-            <th>Rank</th>
-            <th>Date</th>
+            <th class="leaderboard-col-rank"><span class="leaderboard-col-long">Rank</span><span class="leaderboard-col-short">#</span></th>
+            <th class="leaderboard-col-date"><span class="leaderboard-col-long">Date</span><span class="leaderboard-col-short">Dt</span></th>
             <th class="leaderboard-col-power">Power</th>
             <th class="leaderboard-col-heat">Heat</th>
             <th class="leaderboard-col-money">Money</th>
             <th class="leaderboard-col-time" style="display: none;">Time</th>
-            <th>Layout</th>
+            <th class="leaderboard-col-layout" title="Layout">Lay</th>
           </tr>
         </thead>
         <tbody id="leaderboard_rows"></tbody>

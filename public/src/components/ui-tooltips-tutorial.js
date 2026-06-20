@@ -6,7 +6,7 @@ import {
   calculateCellPulsePower,
   calculateCellPulseHeat,
   collectPartSemanticSegments,
-} from "../logic.js";
+} from "../logic-tooltip-stats.js";
 import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
 import { actions, ref } from "../store.js";
 import {

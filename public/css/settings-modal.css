@@ -1,0 +1,505 @@
+/* Welcome Back Modal */
+.welcome-back-modal-overlay { position: fixed; z-index: 10003; display: flex; width: 100%; align-items: center; justify-content: center; inset: 0;
+}
+
+.welcome-back-modal { position: relative; z-index: 1; max-width: 90%; padding: 1.5rem; border: 3px solid rgb(51 51 51); border-radius: 12px; background-color: rgb(26 26 26); box-shadow: 0 8px 32px rgb(0 0 0 / 80%);
+}
+
+.welcome-back-title { margin: 0 0 1rem; color: var(--accent-color, rgb(143 214 148)); font-size: 1.4rem;
+}
+
+.welcome-back-message { margin: 0 0 0.5rem; color: rgb(255 255 255); font-size: 0.95rem;
+}
+
+.welcome-back-sub { margin: 0.5rem 0 1rem; color: rgb(200 200 200); font-size: 0.9rem;
+}
+
+.welcome-back-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;
+}
+
+.welcome-back-actions .pixel-btn { flex: 1; min-width: 140px;
+}
+
+.welcome-back-hint { margin: 0; color: rgb(140 140 140); font-size: 0.75rem; line-height: 1.4;
+}
+
+.reactor-failed-modal-overlay { position: fixed; z-index: 10003; display: flex; width: 100%; align-items: center; justify-content: center; inset: 0;
+}
+
+.reactor-failed-modal { position: relative; z-index: 1; max-width: 90%; padding: 1.5rem; border: 3px solid rgb(51 51 51); border-radius: 12px; background-color: rgb(26 26 26); box-shadow: 0 8px 32px rgb(0 0 0 / 80%);
+}
+
+.reactor-failed-title { margin: 0 0 1rem; color: var(--accent-color, rgb(255 150 100)); font-size: 1.4rem;
+}
+
+.reactor-failed-message { margin: 0 0 1rem; color: rgb(255 255 255); font-size: 0.95rem;
+}
+
+.reactor-failed-actions { display: flex; flex-wrap: wrap; gap: 0.75rem;
+}
+/* Settings Modal Styles */
+.settings-modal-overlay { position: fixed; z-index: 10002; display: flex; width: 100%; align-items: center; justify-content: center; inset: 0;
+}
+
+.settings-modal-overlay.modal-drawer-overlay { align-items: stretch; justify-content: flex-end; padding: 0; background: transparent;
+}
+
+.settings-modal-overlay.modal-drawer-overlay::before { display: none !important; animation: none !important;
+}
+
+.modal-drawer-scrim { flex: 1 1 auto; min-width: 0; align-self: stretch; cursor: pointer; border: none; padding: 0; margin: 0; background: rgb(0 0 0 / 52%); animation: modalOverlayFadeIn 0.22s ease-out;
+}
+
+.modal-drawer-panel { position: relative; box-sizing: border-box; flex: 0 0 var(--drawer-panel-width); width: var(--drawer-panel-width); max-width: var(--drawer-panel-width); height: 100%; max-height: 100dvh; align-self: stretch; padding-left: 14px; border-radius: 0; animation: modalDrawerSlideIn 0.3s steps(10, end) forwards;
+}
+
+@keyframes modalDrawerSlideIn { from { transform: translateX(100%); }
+ to { transform: translateX(0); }
+}
+
+.modal-drawer-metal-handle { position: absolute; z-index: 30; top: 0; bottom: 0; left: 0; width: 14px; pointer-events: none; background: linear-gradient(90deg, rgb(42 44 40) 0%, rgb(22 24 22) 35%, rgb(72 70 66) 70%, rgb(38 40 36) 100%); border-right: 2px solid rgb(0 0 0 / 75%); box-shadow: inset -3px 0 6px rgb(0 0 0 / 45%);
+}
+
+.settings-modal.modal-drawer-panel { min-width: 0; min-height: 0; height: 100%; max-height: 100dvh; border-radius: 0; border-right: none; box-shadow: -8px 0 24px rgb(0 0 0 / 65%);
+}
+
+@media (width <= 900px) { .settings-modal.modal-drawer-panel { width: 100%; max-width: 100%; flex-basis: 100%; height: 100dvh; max-height: 100dvh; padding-left: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+ }
+
+ .settings-modal .modal-drawer-metal-handle { display: none;
+ }
+
+ .settings-modal .settings-header,
+ .settings-modal .settings-tabs { flex-shrink: 0;
+ }
+
+ .settings-content { max-height: none; -webkit-overflow-scrolling: touch; margin: 6px 6px calc(6px + env(safe-area-inset-bottom)); padding: 1rem 0.75rem calc(2rem + env(safe-area-inset-bottom)); flex: 1 1 0; min-height: 0; overflow-y: auto;
+ }
+
+ body.modal-drawer-open #wrapper { transform: translateX(-35%);
+ }
+}
+
+.settings-modal { position: relative; z-index: 1; display: flex; flex-direction: column; max-width: 90%; height: 80dvh; min-height: 320px; max-height: 90dvh; padding: 0; border: 3px solid rgb(51 51 51); border-radius: 12px; background-color: rgb(26 26 26); box-shadow: 0 8px 32px rgb(0 0 0 / 80%); overflow: hidden;
+}
+
+@media (width >= 901px) { .settings-modal { min-width: 600px; max-width: 800px; min-height: 500px; max-height: 85%;
+ }
+}
+
+@media (width <= 900px) { .settings-modal-overlay { padding: 0;
+ }
+
+ .settings-modal { border: none; width: 100vw; max-width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+ }
+
+ .settings-tabs { padding: 6px 6px 0;
+ }
+
+ .settings-tab { font-size: 0.6rem; padding: 14px 2px;
+ }
+
+ .setting-row { width: 100%; padding: 12px 0; border-bottom: 1px solid rgb(255 255 255 / 10%); margin-bottom: 1rem;
+ }
+
+ .setting-row:last-child { border-bottom: none; margin-bottom: 0;
+ }
+
+ .setting-row span { flex: 1; font-size: 0.8rem;
+ }
+
+ .settings-visuals-label span { font-size: 0.8rem;
+ }
+
+ .volume-setting { width: 100%; padding: 12px 0; border-bottom: 1px solid rgb(255 255 255 / 10%); margin-bottom: 1.25rem;
+ }
+
+ .volume-setting:last-child { border-bottom: none;
+ }
+
+ .volume-label { margin-bottom: 12px; font-size: 0.85rem;
+ }
+
+ .volume-stepper .volume-block { height: 36px;
+ }
+}
+
+.settings-header { position: relative; z-index: 31; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+}
+
+.settings-header h2 { flex: 1 1 auto; text-align: center;
+}
+
+.settings-header .modal-close-btn { position: static;
+}
+
+.settings-header .close-btn { border: none; background: none; color: rgb(170 170 170); cursor: pointer; font-size: 1.5rem;
+}
+
+.settings-header .close-btn:hover { color: rgb(255 255 255);
+}
+
+.settings-header .modal-latch-body { background: linear-gradient(180deg, rgb(130 132 136), rgb(78 80 84)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
+}
+
+.settings-tabs { position: relative; z-index: 31; display: flex; width: 100%; flex-direction: row; gap: 4px; padding: 12px 12px 0; background: transparent;
+}
+
+.settings-tab { display: flex; flex: 1 1 0; align-items: center; justify-content: center; padding: 10px 2px; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background: rgb(50 52 56); color: rgb(150 155 160); font-family: var(--ui-pixel-font); font-size: 0.65rem; cursor: pointer; text-shadow: 1px 1px 0 black; transition: all 0.1s;
+}
+
+.settings-tab:hover { filter: brightness(1.1); transform: translateY(-2px);
+}
+
+.settings-tab.active,
+.settings-tab:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: rgb(35 39 35); color: rgb(255 176 0); text-shadow: 0 0 5px rgb(255 176 0 / 40%); transform: translateY(2px); box-shadow: inset 2px 2px 4px rgb(0 0 0 / 60%);
+}
+
+.settings_tab_content { display: none;
+}
+
+.settings_tab_content.active { display: block; animation: popIn 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-content { display: block; flex: 1 1 0; min-height: 0; padding: 1rem 1rem 1.5rem; margin: 12px; background: rgb(20 24 20); border-color: rgb(0 0 0) var(--bevel-dark) var(--bevel-dark) rgb(0 0 0); box-shadow: inset 4px 4px 12px rgb(0 0 0 / 90%); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+
+.settings-visuals-table { width: 100%; border-collapse: collapse;
+}
+
+.settings-modal-overlay .settings-visuals-table td { padding: 0.9rem 0; vertical-align: middle; border-bottom: 1px solid rgb(255 255 255 / 10%); background-color: transparent;
+}
+
+.settings-modal-overlay .settings-option-row { cursor: pointer; background: transparent; border: none; color: inherit;
+
+ --pico-background-color: transparent; --pico-primary-background: transparent;
+}
+
+.settings-modal-overlay .settings-option-row td { background-color: transparent;
+}
+
+.settings-modal-overlay .settings-option-row:hover { background: rgb(40 45 40); color: inherit;
+}
+
+.settings-modal-overlay .settings-option-row:hover td { background-color: rgb(40 45 40);
+}
+
+.settings-modal-overlay .settings-option-row:focus,
+.settings-modal-overlay .settings-option-row:focus-visible { outline: 2px solid var(--game-success-color); outline-offset: 2px; background: transparent; color: inherit;
+
+ --pico-background-color: transparent;
+}
+
+.settings-modal-overlay .settings-option-row:focus td,
+.settings-modal-overlay .settings-option-row:focus-visible td { background-color: transparent;
+}
+
+.settings-modal-overlay .mech-switch { background: var(--bevel-mid) !important; background-color: var(--bevel-mid) !important; color: white !important;
+
+ --pico-background-color: var(--bevel-mid) !important;
+}
+
+.settings-modal-overlay .mech-switch:hover { background: var(--bevel-mid) !important; background-color: rgb(90 90 90) !important;
+
+ --pico-background-color: rgb(90 90 90) !important;
+}
+
+.settings-modal-overlay .mech-switch:active,
+.settings-modal-overlay .mech-switch:focus,
+.settings-modal-overlay .mech-switch:focus-visible { background: var(--bevel-mid) !important; background-color: var(--bevel-mid) !important;
+
+ --pico-background-color: var(--bevel-mid) !important;
+}
+
+.settings-modal-overlay .settings-mech-checkbox { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; appearance: none; pointer-events: none;
+}
+
+.settings-visuals-label { display: flex; align-items: center; gap: 0.5rem; text-align: left; width: 99%;
+}
+
+.setting-help-icon { display: flex; align-items: center; justify-content: center; width: 20px; min-width: 20px; height: 20px; border: 2px solid var(--bevel-dark); border-radius: 50%; background: rgb(60 60 60) !important; background-color: rgb(60 60 60) !important; color: rgb(180 180 180); font-family: "Press Start 2P", cursive, monospace; font-size: 0.6rem; cursor: pointer; flex-shrink: 0; transition: none;
+}
+
+.setting-help-icon:hover { border-color: var(--game-success-color); color: var(--game-success-color); background: rgb(50 70 50) !important; background-color: rgb(50 70 50) !important;
+}
+
+.settings-help-modal { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+
+.settings-help-modal.hidden { display: none;
+}
+
+.settings-help-backdrop { position: absolute; inset: 0; background: rgb(0 0 0 / 60%); cursor: pointer;
+}
+
+.settings-help-content { position: relative; max-width: 320px; padding: 1rem 1.25rem 2.5rem; border: 3px solid var(--bevel-light);
+}
+
+.settings-help-close { position: absolute; top: 0.5rem; right: 0.5rem; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; overflow: hidden; border: 2px solid var(--bevel-dark); background: rgb(60 60 60); color: white; font-size: 1rem; cursor: pointer; line-height: 1;
+}
+
+.settings-help-close:hover { background: rgb(80 80 80); border-color: var(--bevel-light);
+}
+
+.settings-help-title { margin: 0 0 0.5rem; color: var(--game-success-color); font-size: 0.75rem; font-family: "Press Start 2P", cursive, monospace;
+}
+
+.settings-help-text { margin: 0; color: rgb(220 220 220); font-size: 0.7rem; font-family: "Press Start 2P", cursive, monospace; line-height: 1.5;
+}
+
+.settings-visuals-table tr:last-child td { border-bottom: none;
+}
+
+.settings-visuals-label span { color: white; font-family: "Press Start 2P", cursive, monospace; font-size: 0.85rem; text-shadow: var(--text-shadow); line-height: 1.4;
+}
+
+.settings-visuals-control { text-align: right; white-space: nowrap; width: 1%;
+}
+
+.settings-select { cursor: pointer; font-family: "Press Start 2P", cursive, monospace; font-size: 0.7rem; appearance: none; padding-right: 1.75em; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23fff' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center;
+}
+
+.settings-select:hover { filter: brightness(1.1);
+}
+
+.setting-row { display: flex; width: 100%; align-items: center; justify-content: flex-start; padding: 0.5rem 0; margin-bottom: 0.75rem; gap: 1rem;
+}
+
+.setting-row.mute-toggle span { flex: 1 1 auto; color: rgb(200 220 180); text-shadow: 1px 1px 0 black;
+}
+
+.volume-setting { margin-bottom: 1.25rem;
+}
+
+.volume-setting .volume-label { display: block; margin-bottom: 0.6rem; font-size: 0.75rem; color: rgb(200 220 180); text-shadow: 1px 1px 0 black;
+}
+
+.volume-stepper { display: flex; width: 100%; align-items: center; gap: 0.75rem;
+}
+
+.volume-stepper .volume-stepper-val { display: inline-block; min-width: 3.5em; align-self: center; color: white; font-family: "Courier New", Courier, monospace; font-size: 0.7rem; font-variant-numeric: tabular-nums; line-height: 1; text-align: right; text-shadow: var(--text-shadow);
+}
+
+.volume-stepper .volume-blocks { display: flex; flex: 1; cursor: pointer; gap: 2px; outline: none;
+}
+
+.volume-stepper .volume-block { min-width: 0; height: 24px; flex: 1; padding: 0; border: 2px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background: rgb(60 60 60); cursor: pointer; transition: background-color 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.volume-stepper .volume-block:hover { background: rgb(90 90 90);
+}
+
+.volume-stepper .volume-block[data-active] { border-color: rgb(137 197 125) rgb(45 80 40) rgb(45 80 40) rgb(137 197 125); background: var(--game-success-color);
+}
+
+.volume-stepper .volume-block:nth-child(n+8):nth-child(-n+9)[data-active] { border-color: rgb(220 180 50) rgb(80 65 20) rgb(80 65 20) rgb(220 180 50); background: var(--game-warning-color);
+}
+
+.volume-stepper .volume-block:nth-child(n+10)[data-active] { border-color: rgb(220 100 90) rgb(80 30 25) rgb(80 30 25) rgb(220 100 90); background: var(--game-danger-color);
+}
+
+.volume-stepper .volume-block:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); box-shadow: inset 1px 1px 2px rgb(0 0 0 / 50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+ .volume-stepper .volume-block { transition: none;
+ }
+
+ .power-fill,
+ .heat-fill,
+ .time-flux-sim-fill { transition: none;
+ }
+
+ .info-bar-desktop .info-item.power::after,
+ .info-bar-desktop .info-item.heat::after,
+ #info_bar .info-row.info-main .info-item.power::after,
+ #info_bar .info-row.info-main .info-item.heat::after { transition: none; animation: none;
+ }
+
+ #reactor_copy_paste_modal:not(.hidden)::before,
+ #my_layouts_modal:not(.hidden)::before,
+ .prestige-modal-overlay::before,
+ .welcome-back-modal-overlay::before,
+ .reactor-failed-modal-overlay::before,
+ .settings-modal-overlay::before,
+ .layout-view-modal-overlay::before { animation: none;
+ }
+
+ #reactor_copy_paste_modal .modal-header::after,
+ #my_layouts_modal .modal-header::after { animation: none;
+ }
+}
+
+html.reduced-motion-app #reactor_copy_paste_modal:not(.hidden)::before,
+html.reduced-motion-app #my_layouts_modal:not(.hidden)::before,
+html.reduced-motion-app .prestige-modal-overlay::before,
+html.reduced-motion-app .welcome-back-modal-overlay::before,
+html.reduced-motion-app .reactor-failed-modal-overlay::before,
+html.reduced-motion-app .settings-modal-overlay::before,
+html.reduced-motion-app .layout-view-modal-overlay::before { animation: none;
+}
+
+html.reduced-motion-app #reactor_copy_paste_modal .modal-header::after,
+html.reduced-motion-app #my_layouts_modal .modal-header::after { animation: none;
+}
+
+.mech-switch-row { position: relative; display: flex; width: 100%; align-items: center; justify-content: space-between; cursor: pointer; gap: 1rem;
+}
+
+.mech-switch-row > span { min-width: 0; flex: 1; cursor: pointer;
+}
+
+.mech-switch-row .mech-switch { flex-shrink: 0; margin-left: auto;
+}
+
+.mech-switch { display: flex; flex-shrink: 0; align-items: center; padding: 4px 6px; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; background: var(--bevel-mid); cursor: pointer; font-family: "Press Start 2P", cursive, monospace; font-size: 0.55rem; gap: 4px; transition: none;
+}
+
+.mech-switch:hover { border-color: white rgb(100 100 100) rgb(100 100 100) white; filter: brightness(1.1);
+}
+
+.mech-switch:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); box-shadow: inset 2px 2px 0 rgb(0 0 0 / 20%);
+}
+
+.mech-switch-off,
+.mech-switch-on { padding: 0 2px; color: rgb(100 100 100);
+}
+
+.mech-switch.mech-switch-on-active .mech-switch-on { color: white; text-shadow: var(--text-shadow);
+}
+
+.mech-switch:not(.mech-switch-on-active) .mech-switch-off { color: white; text-shadow: var(--text-shadow);
+}
+
+.mech-switch-track { position: relative; width: 48px; height: 28px; border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: rgb(50 50 50);
+}
+
+.mech-switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border: 2px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background: rgb(140 140 140); transition: left 0.1s ease;
+}
+
+.mech-switch.mech-switch-on-active .mech-switch-thumb { left: calc(100% - 22px); border-color: rgb(137 197 125) rgb(45 80 40) rgb(45 80 40) rgb(137 197 125); background: var(--game-success-color);
+}
+
+.volume-control { display: block; width: 100%;
+}
+
+.volume-control input[type="range"] { width: 100%; height: 8px; border-radius: 4px; appearance: none; background: rgb(60 60 60); cursor: pointer; outline: none;
+}
+
+.volume-control input[type="range"]::-webkit-slider-thumb { width: 32px; height: 32px; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; appearance: none; background: rgb(120 120 120); box-shadow: 2px 2px 4px rgb(0 0 0 / 50%); cursor: grab; transition: all 0.1s ease;
+}
+
+.volume-control input[type="range"]::-webkit-slider-thumb:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); box-shadow: 1px 1px 2px rgb(0 0 0 / 50%); cursor: grabbing; transform: translateY(1px);
+}
+
+.volume-control input[type="range"]::-moz-range-thumb { width: 32px; height: 32px; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; background: rgb(120 120 120); box-shadow: 2px 2px 4px rgb(0 0 0 / 50%); cursor: grab;
+}
+
+.volume-control input[type="range"]::-moz-range-thumb:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); cursor: grabbing; transform: translateY(1px);
+}
+
+.volume-control input[type="range"]::-moz-range-track { height: 8px; border-radius: 4px; background: rgb(60 60 60);
+}
+
+@media (width <= 900px) {
+}
+
+.mute-btn { font-size: 1.5rem; display: flex; width: var(--splash-btn-height); min-width: var(--splash-btn-height); height: var(--splash-btn-height); min-height: var(--splash-btn-height); flex-shrink: 0; align-items: center; justify-content: center; padding: 0; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; background: var(--bevel-mid); cursor: pointer; transition: none;
+}
+
+.mute-btn:hover { border-color: white rgb(100 100 100) rgb(100 100 100) white; filter: brightness(1.1); transform: none;
+}
+
+.volume-test-btn { display: flex; width: 30px; height: 30px; align-items: center; justify-content: center; padding: 0; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(255 255 255 / 10%); color: white; cursor: pointer;
+}
+
+.volume-test-btn.playing { border-color: transparent; background: var(--game-success-color, rgb(67 160 71));
+}
+
+.data-buttons { display: flex; width: 100%; flex-direction: row; gap: 0.75rem;
+}
+
+.settings-modal .pixel-btn { width: 100%; min-width: 0; max-width: none; height: var(--splash-btn-height); min-height: var(--splash-btn-height); flex: 1; padding: 0 1rem; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; background: var(--bevel-mid); box-shadow: none; font-family: "Press Start 2P", cursive, monospace !important; font-size: 1rem; text-shadow: var(--text-shadow); transition: none;
+}
+
+.settings-modal .pixel-btn:hover:not(:disabled) { border-color: white rgb(100 100 100) rgb(100 100 100) white; background-color: rgb(140 140 140); color: rgb(255 255 160); filter: brightness(1.1);
+}
+
+.settings-modal .pixel-btn:active:not(:disabled) { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: rgb(100 100 100); box-shadow: inset 2px 2px 0 rgb(0 0 0 / 20%); transform: translateY(1px);
+}
+
+.setting-row > span { flex: 1; color: white; font-family: "Press Start 2P", cursive, monospace; font-size: 0.96rem; text-align: left; text-shadow: var(--text-shadow);
+}
+
+.setting-row input[type="checkbox"] { position: relative; width: 60px; min-width: 60px; height: 30px; min-height: 30px; flex-shrink: 0; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; margin-left: auto; appearance: none; background: rgb(80 80 80); cursor: pointer; transition: background 0.2s ease;
+}
+
+.setting-row input[type="checkbox"]::before { position: absolute; top: 50%; left: 4px; width: 20px; height: 20px; border: 2px solid; border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: rgb(200 200 200); content: ""; transform: translateY(-50%); transition: left 0.2s ease;
+}
+
+.setting-row input[type="checkbox"]:checked { border-color: rgb(137 197 125) rgb(45 80 40) rgb(45 80 40) rgb(137 197 125); background: var(--game-success-color);
+}
+
+.setting-row input[type="checkbox"]:checked::before { left: calc(100% - 24px); border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background: white;
+}
+
+@media (width <= 900px) { .setting-row input[type="checkbox"] { width: 70px; min-width: 70px; height: 36px; min-height: 36px;
+ }
+
+ .setting-row input[type="checkbox"]::before { left: 4px; width: 28px; height: 28px;
+ }
+
+ .setting-row input[type="checkbox"]:checked::before { left: calc(100% - 32px);
+ }
+}
+
+.setting-row input[type="checkbox"]:hover { border-color: white rgb(100 100 100) rgb(100 100 100) white; filter: brightness(1.1);
+}
+
+.setting-row input[type="checkbox"]:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: rgb(100 100 100); box-shadow: inset 2px 2px 0 rgb(0 0 0 / 20%); transform: translateY(1px);
+}
+
+.setting-row input[type="checkbox"]:checked:active { border-color: rgb(45 80 40) rgb(137 197 125) rgb(137 197 125) rgb(45 80 40); background: rgb(109 170 95);
+}
+
+.setting-row.mute-toggle { position: relative; display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem;
+}
+
+.setting-row.mute-toggle .mute-btn { margin-left: 0.75rem; flex-shrink: 0;
+}
+
+.mute-btn:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); background: rgb(100 100 100); box-shadow: inset 2px 2px 0 rgb(0 0 0 / 20%); transform: translateY(1px);
+}
+
+.mute-btn .mute-icon { font-size: 1.2rem; text-shadow: var(--text-shadow);
+}
+
+.settings-cloud-saves { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.settings-cloud-heading { margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--accent-color, rgb(143 214 148)); font-family: "Press Start 2P", cursive, monospace;
+}
+
+.cloud-slot-list { display: flex; flex-direction: column; gap: 0.75rem;
+}
+
+.cloud-slot-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.cloud-slot-row:last-child { border-bottom: none;
+}
+
+.cloud-slot-info { display: flex; flex-direction: column; gap: 0.15rem; flex: 1; min-width: 0;
+}
+
+.cloud-slot-label { font-family: "Press Start 2P", cursive, monospace; font-size: 0.75rem; color: white; text-shadow: var(--text-shadow);
+}
+
+.cloud-slot-meta { font-size: 0.6rem; color: rgb(255 255 255 / 60%);
+}
+
+.cloud-slot-actions { display: flex; gap: 0.5rem; flex-shrink: 0;
+}
+
+.settings-modal .cloud-slot-actions .pixel-btn-small { flex: 1; min-width: 0; max-width: 5rem;
+}

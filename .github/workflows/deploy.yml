@@ -104,10 +104,17 @@ jobs:
       - name: Run UI console audit
         env:
           BASE_URL: ${{ needs.deploy.outputs.page_url }}
-          AUDIT_FAIL_ON: pageerror
+          AUDIT_FAIL_ON: pageerror,critical.startup
         run: |
           echo "Running UI console audit for: $BASE_URL"
           npm run ui:console-audit:deploy
+
+      - name: Run UI screenshots
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          echo "Running UI screenshots for: $BASE_URL"
+          npm run ui:screenshots:deploy
 
       - name: Create check status comment (on failure)
         if: failure()
@@ -123,7 +130,7 @@ jobs:
                 owner,
                 repo,
                 commit_sha: sha,
-                body: '❌ Post-deployment checks failed (PWA and/or UI console audit). Page errors or other check failures — see workflow logs.'
+                body: '❌ Post-deployment checks failed (PWA, UI console audit, and/or UI screenshots). Critical startup errors, page errors, or other check failures — see workflow logs.'
               });
               console.log('✅ Failure comment created successfully');
             } catch (error) {
@@ -145,7 +152,7 @@ jobs:
                 owner,
                 repo,
                 commit_sha: sha,
-                body: '✅ Deployment successful! PWA checks and UI console audit passed (no page errors).'
+                body: '✅ Deployment successful! PWA checks, UI console audit, and UI screenshots passed (no critical startup or page errors).'
               });
               console.log('✅ Success comment created successfully');
             } catch (error) {

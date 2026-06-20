@@ -16,6 +16,8 @@ import {
   exerciseUpgradesPage,
   exerciseExperimentalPage,
   runStep,
+  CRITICAL_STARTUP_FAIL_KIND,
+  collectorHasFatalIssues,
 } from "./ui-audit-core.js";
 
 const IGNORE_CONSOLE_PATTERNS = [
@@ -62,7 +64,7 @@ class IssueCollector {
   }
 }
 
-const DEFAULT_FAIL_KINDS = ["console.error", "pageerror", "requestfailed", "http.error"];
+const DEFAULT_FAIL_KINDS = ["console.error", "pageerror", "requestfailed", "http.error", CRITICAL_STARTUP_FAIL_KIND];
 
 function getFailKinds() {
   const raw = process.env.AUDIT_FAIL_ON;
@@ -102,24 +104,24 @@ function attachDiagnostics(page, collector) {
 }
 
 async function runUiWalkthrough(page, collector) {
-  await runStep(collector, "splash:load", () => prepareGameSession(page));
+  await runStep(collector, "splash:load", () => prepareGameSession(page), page);
 
   for (const pageId of PAGE_IDS) {
-    await runStep(collector, `page:${pageId}:navigate`, () => navigateToGamePage(page, pageId));
+    await runStep(collector, `page:${pageId}:navigate`, () => navigateToGamePage(page, pageId), page);
 
     if (pageId === "reactor_section") {
-      await runStep(collector, `page:${pageId}:reactor-ui`, () => exerciseReactorUi(page));
-      await runStep(collector, `page:${pageId}:settings`, () => exerciseSettingsModal(page, collector));
+      await runStep(collector, `page:${pageId}:reactor-ui`, () => exerciseReactorUi(page), page);
+      await runStep(collector, `page:${pageId}:settings`, () => exerciseSettingsModal(page, collector), page);
     } else if (pageId === "upgrades_section") {
-      await runStep(collector, `page:${pageId}:upgrades`, () => exerciseUpgradesPage(page));
+      await runStep(collector, `page:${pageId}:upgrades`, () => exerciseUpgradesPage(page), page);
     } else if (pageId === "experimental_upgrades_section") {
-      await runStep(collector, `page:${pageId}:research`, () => exerciseExperimentalPage(page));
+      await runStep(collector, `page:${pageId}:research`, () => exerciseExperimentalPage(page), page);
     }
 
     await delay(STEP_DELAY_MS);
   }
 
-  await runStep(collector, "return-reactor", () => navigateToGamePage(page, "reactor_section"));
+  await runStep(collector, "return-reactor", () => navigateToGamePage(page, "reactor_section"), page);
 }
 
 function printReport(collector, failKinds) {
@@ -144,7 +146,7 @@ function printReport(collector, failKinds) {
     console.log(`- ${entry.kind}${ctx}: ${entry.message}`);
   }
 
-  if (collector.hasMatchingKinds(failKinds)) {
+  if (collector.hasMatchingKinds(failKinds) || collector.hasMatchingKinds([CRITICAL_STARTUP_FAIL_KIND])) {
     console.log("\nAudit FAILED: matching issue kinds detected.");
   }
 }
@@ -170,13 +172,15 @@ async function main() {
 
   try {
     await runUiWalkthrough(page, collector);
+  } catch (error) {
+    if (error?.name !== "CriticalStartupError") throw error;
   } finally {
     await browser.close();
   }
 
   const failKinds = getFailKinds();
   printReport(collector, failKinds);
-  process.exitCode = collector.hasMatchingKinds(failKinds) ? 1 : 0;
+  process.exitCode = collectorHasFatalIssues(collector, failKinds) ? 1 : 0;
 }
 
 main();

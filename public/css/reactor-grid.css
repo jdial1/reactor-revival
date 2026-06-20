@@ -1,0 +1,287 @@
+/* Heat warning glow effect */
+#reactor_background.heat-warning { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 30px rgb(255 0 0 / 30%);
+}
+
+#reactor_background.heat-critical { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 40px rgb(255 0 0 / 50%), 0 0 30px rgb(255 0 0 / 30%);
+}
+
+#meltdown_vignette { position: absolute; inset: 0; z-index: 25; pointer-events: none; border-radius: 0; background: radial-gradient(ellipse 80% 80% at 50% 50%, transparent 20%, rgb(80 0 0 / 35%) 55%, rgb(40 0 0 / 85%) 100%); opacity: 0; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light); transition: opacity 0.05s steps(4, end);
+}
+
+body.blueprint-planner-active #reactor_background { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 24px rgb(0 150 200 / 25%); background: rgb(0 80 120 / 8%);
+}
+
+body.blueprint-planner-active #reactor_section { --blueprint-accent: rgb(0 180 220);
+}
+
+body.blueprint-planner-active #reactor_wrapper { position: relative; background: linear-gradient(rgb(15 30 40 / 60%) 1px, transparent 1px), linear-gradient(90deg, rgb(15 30 40 / 60%) 1px, transparent 1px); background-size: var(--tile-size, 48px) var(--tile-size, 48px); background-position: center center; border-radius: 8px; box-shadow: inset 0 0 0 2px rgb(0 150 200 / 30%), inset 0 0 40px 12px rgb(0 0 0 / 75%), 5px 5px 0 #333; animation: none;
+}
+
+body.blueprint-planner-active #reactor_section .tile { border-style: dashed !important; border-color: rgb(40 90 110) !important; background-color: rgb(15 25 32) !important; background-image: none !important; box-shadow: inset 0 1px 2px rgb(0 0 0 / 50%) !important; transform: none !important;
+}
+
+body.blueprint-planner-active #reactor_section .tile:hover { border-color: var(--blueprint-accent);
+}
+
+.blueprint-planner-hud { display: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; max-width: 220px; padding: 6px 8px; border: 2px solid rgb(0 120 160 / 50%); border-radius: 4px; background: rgb(20 35 45 / 95%); color: rgb(220 240 255); font-size: 0.65rem; line-height: 1.2;
+}
+
+body.blueprint-planner-active .blueprint-planner-hud { display: flex;
+}
+
+body.page-reactor #reactor_copy_paste_btns.collapsed .blueprint-planner-hud { display: none !important;
+}
+
+.blueprint-planner-hud .pixel-btn { padding: 4px 8px; font-size: 0.65rem;
+}
+
+.blueprint-planner-stat { font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+.reactor-toolbar-btn { width: 36px !important; min-width: 36px !important; max-width: 36px !important; height: 36px !important; padding: 0 !important; font-size: 0 !important; letter-spacing: 0 !important;
+}
+
+.reactor-toolbar-btn.reactor-plan-toggle { width: auto !important; min-width: 40px !important; max-width: 52px !important; height: 40px !important; padding: 0 4px !important; font-family: var(--ui-pixel-font) !important; font-size: 0.42rem !important; line-height: 1.1; color: rgb(235 238 242) !important; background: rgb(42 45 48) !important; text-shadow: 1px 1px 0 rgb(0 0 0 / 80%);
+}
+
+.reactor-plan-state { display: block; text-align: center; white-space: nowrap;
+}
+
+.reactor-plan-state--active { display: none;
+}
+
+body.blueprint-planner-active #reactor_blueprint_toggle.reactor-plan-toggle { border-color: rgb(0 200 255) rgb(0 60 90) rgb(0 60 90) rgb(0 200 255) !important; background: rgb(0 100 140) !important; box-shadow: 0 0 12px rgb(0 180 220 / 45%), 3px 3px 0 var(--bevel-shadow) !important; color: rgb(210 245 255) !important;
+}
+
+body.blueprint-planner-active #reactor_blueprint_toggle .reactor-plan-state--live { display: none;
+}
+
+body.blueprint-planner-active #reactor_blueprint_toggle .reactor-plan-state--active { display: block;
+}
+/* Heat wiggle animation for individual tiles when heat gets too high */
+@keyframes tile-heat-wiggle { 0%, 100% { transform: translateX(0) translateY(0); }
+ 25% { transform: translateX(-1px) translateY(-1px); }
+ 50% { transform: translateX(1px) translateY(1px); }
+ 75% { transform: translateX(-1px) translateY(1px); }
+}
+
+@keyframes core-rumble { 0%, 100% { transform: translate(0, 0); }
+ 1% { transform: translate(0.5px, 0.5px); }
+ 2% { transform: translate(-0.5px, -0.5px); }
+}
+
+@keyframes radiation-flicker { 0% { opacity: 0.2; filter: hue-rotate(0deg); }
+ 50% { opacity: 0.5; filter: brightness(2); }
+ 100% { opacity: 0.1; }
+}
+
+.tile.heat-wiggle { animation: tile-heat-wiggle 0.3s ease-in-out infinite;
+}
+/* Transient tile icon effects (power/heat/vent/ep) */
+.tile-fx { position: absolute; z-index: 21; filter: drop-shadow(0 0 2px rgb(0 0 0 / 60%)); image-rendering: pixelated; opacity: 1; pointer-events: none; transition: left 0.35s ease, top 0.35s ease, opacity 0.35s ease;
+}
+.tile-fx.fx-fade-out { opacity: 0; transform: scale(1.08); }
+.tile-fx.fx-ep { filter: drop-shadow(0 0 6px rgb(128 0 255 / 80%)); }
+/* Transient tile icon effects (power/heat/vent) */
+.tile-fx.fx-power.fx-fade-out { opacity: 0; }
+.tile-fx.fx-heat { opacity: 0.9; }
+/* Vent rotor: rotate center area while venting */
+.vent-rotor { position: absolute; z-index: 3; background-position: center; background-repeat: no-repeat; background-size: 166.66% 166.66%; image-rendering: pixelated; opacity: 1.0; pointer-events: none; transform-origin: center center;
+}
+.vent-rotor.spin { animation: vent-rotate 0.45s linear; transform-origin: center center; }
+
+@keyframes vent-rotate { from { transform: rotate(0deg); }
+ to { transform: rotate(360deg); }
+}
+/* Reflector pulse aura */
+.reflector-aura { position: absolute; width: 10px; height: 2px; border-radius: 2px; background: radial-gradient(closest-side, rgb(138 43 226 / 90%), rgb(138 43 226 / 0%)); filter: drop-shadow(0 0 6px rgb(138 43 226 / 60%)); opacity: 0.0; transform-origin: center center;
+}
+
+.reflector-aura.active { opacity: 0.9; transform: scaleX(10); transition: transform 0.35s ease-out, opacity 0.35s ease-out;
+}
+
+.vis-flow.flow-streak::before { position: absolute; border-radius: 999px; background: linear-gradient(90deg, transparent, currentcolor, transparent); content: ""; filter: drop-shadow(0 0 6px currentcolor); inset: 0;
+}
+
+.vis-flow.flow-ring { border: 2px solid currentcolor; border-radius: 50%; background: transparent; box-shadow: 0 0 6px currentcolor;
+}
+
+.vis-flow.flow-chev::before { position: absolute; background: conic-gradient(from 45deg, transparent 0 25%, currentcolor 25% 50%, transparent 50% 100%); content: ""; inset: 0; mask: radial-gradient(circle at 50% 50%, transparent 45%, black 46%);
+}
+
+.vis-flow.flow-cross::before { position: absolute; background:
+  linear-gradient(currentcolor, currentcolor),
+  linear-gradient(90deg, currentcolor, currentcolor); background-position: 50% 0, 0 50%; background-repeat: no-repeat; background-size: 2px 100%, 100% 2px; content: ""; filter: drop-shadow(0 0 6px currentcolor); inset: 0;
+}
+
+.vis-flow.flow-star::before { position: absolute; background:
+  linear-gradient(36deg, currentcolor, currentcolor),
+  linear-gradient(-36deg, currentcolor, currentcolor),
+  linear-gradient(90deg, currentcolor, currentcolor); background-position: 50% 0, 50% 0, 50% 0; background-repeat: no-repeat; background-size: 2px 100%, 2px 100%, 2px 100%; content: ""; filter: drop-shadow(0 0 6px currentcolor); inset: 0;
+}
+
+.vis-flow.flow-beam::before { position: absolute; background:
+  radial-gradient(circle at 50% 50%, currentcolor 40%, transparent 41%),
+  radial-gradient(circle at 20% 50%, currentcolor 20%, transparent 21%),
+  radial-gradient(circle at 80% 50%, currentcolor 20%, transparent 21%); content: ""; filter: drop-shadow(0 0 8px currentcolor); inset: 0;
+}
+
+#reactor_wrapper::-webkit-scrollbar { display: none; width: 0; height: 0; background: transparent;
+}
+/* Mobile-specific scrollbar styling - hidden */
+@media (width <= 900px) { #reactor_wrapper::-webkit-scrollbar { display: none; width: 0; height: 0; background: transparent;
+ }
+
+ #reactor_wrapper { -ms-overflow-style: none; scrollbar-width: none; display: flex; overflow: hidden; width: 100%; align-items: center; margin-top: 10px; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
+ }
+}
+
+#reactor { display: block; box-sizing: border-box; padding: 8px !important; border: 6px solid var(--bevel-dark); margin: 0; background-color: #121412 !important; direction: ltr; gap: 4px !important;
+}
+
+.tile { position: relative; width: var(--tile-size); max-width: 64px; height: var(--tile-size); max-height: 64px; /* Ensure tiles are properly positioned in the grid */
+ box-sizing: border-box; border: 3px solid #000 !important; background-color: #1a1d1a !important; background-image: var(--machined-texture) !important; background-size: 8px 8px !important; background-position: center; background-repeat: repeat; cursor: pointer; transition: none !important; box-shadow: var(--well-depth) !important;
+}
+
+@media (width >= 901px) { .tile { width: var(--tile-size); height: var(--tile-size);
+ }
+}
+
+.tile:hover { z-index: 10; border-color: white !important; background-color: var(--pico-primary-hover); box-shadow: 0 0 8px rgb(255 255 255 / 40%), inset 0 2px 4px rgb(0 0 0 / 30%); filter: brightness(1.1); transform: scale(1.05) translateY(-2px); transition: transform 0.1s ease, filter 0.1s ease, box-shadow 0.1s ease !important;
+}
+
+.tile.enabled { opacity: 1;
+}
+
+.tile[class*="part_"] { background-image: none !important; background-position: center; background-repeat: no-repeat; background-size: cover; border: 2px solid var(--bevel-light) !important; box-shadow: 0 6px 0 var(--bevel-shadow), 0 8px 15px rgb(0 0 0 / 90%), inset 1px 1px 0 var(--bevel-light) !important; transform: translateY(-3px) !important;
+}
+
+.tile[class*="part_uranium"].enabled::after,
+.tile[class*="part_plutonium"].enabled::after,
+.tile[class*="part_thorium"].enabled::after,
+.tile[class*="part_seaborgium"].enabled::after,
+.tile[class*="part_dolorium"].enabled::after,
+.tile[class*="part_nefastium"].enabled::after,
+.tile[class*="part_protium"].enabled::after { position: absolute; z-index: 5; inset: 0; background: rgb(0 242 255 / 30%); mix-blend-mode: screen; animation: radiation-flicker 0.15s steps(2) infinite; content: ""; pointer-events: none;
+}
+/* Enhanced valve tile styling for better visual flow */
+.tile[class*="part_overflow_valve"],
+.tile[class*="part_topup_valve"],
+.tile[class*="part_check_valve"] { /* Enhanced visual indicators for directional flow */
+ position: relative; border: 1px solid rgb(255 255 255 / 30%); background-position: center; background-repeat: no-repeat; background-size: contain; box-shadow: inset 0 0 4px rgb(255 255 255 / 10%);
+}
+/* Directional flow indicators for valves */
+.tile[class*="part_overflow_valve"]::before,
+.tile[class*="part_topup_valve"]::before,
+.tile[class*="part_check_valve"]::before { position: absolute; z-index: 1; top: 50%; left: 50%; width: 60%; height: 60%; background-position: center; background-repeat: no-repeat; background-size: contain; content: ""; opacity: 0.7; pointer-events: none; transform: translate(-50%, -50%); background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M2 12h16l-4-4v8l4-4z"/></svg>');
+}
+/* Active flow state for valves with enhanced visibility */
+.tile[class*="part_overflow_valve"].flow-active,
+.tile[class*="part_topup_valve"].flow-active,
+.tile[class*="part_check_valve"].flow-active { border-color: rgb(255 255 255 / 80%); /* Enhanced glow effect for active valves */
+ animation: valve-pulse 2s ease-in-out infinite alternate; box-shadow: 0 0 12px rgb(255 255 255 / 60%);
+}
+/* Pulse animation for active valves */
+@keyframes valve-pulse { 0% { box-shadow: 0 0 12px rgb(255 255 255 / 60%);
+ }
+
+ 100% { box-shadow: 0 0 20px rgb(255 255 255 / 80%);
+ }
+}
+
+.percent_wrapper_wrapper { position: absolute; z-index: 10; right: 0; bottom: 0; left: 0; display: block; overflow: hidden; height: 14px; border-radius: 0; background-color: rgb(0 0 0 / 85%); background-image: repeating-linear-gradient(90deg, transparent 0, transparent 3px, rgb(0 0 0 / 65%) 3px, rgb(0 0 0 / 65%) 4px);
+}
+/* Overlay used for transient visual effects (flow arrows, emits) */
+.reactor-overlay { position: absolute; z-index: 22; inset: 0; pointer-events: none;
+}
+
+.time-flux-sim-overlay { position: fixed; z-index: 3000; inset: 0; display: none; align-items: center; justify-content: center; background: rgb(0 0 0 / 55%); pointer-events: none;
+}
+
+.time-flux-sim-panel { display: flex; min-width: 220px; max-width: 60vw; flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 16px; border: 2px solid var(--bevel-light); background: var(--panel-bg); box-shadow: 2px 2px 0 rgb(0 0 0 / 40%);
+}
+
+.time-flux-sim-label { font-size: 14px; color: var(--text-color); text-align: center;
+}
+
+.time-flux-sim-bar { width: 100%; height: 10px; border: 1px solid var(--bevel-dark); background: rgb(0 0 0 / 45%);
+}
+
+.time-flux-sim-fill { width: 0%; height: 100%; background: repeating-linear-gradient(90deg, rgb(200 130 0) 0, var(--sovietwave-amber) 3px, rgb(0 0 0 / 52%) 3px, rgb(0 0 0 / 52%) 4px); box-shadow: 0 0 3px rgb(255 176 0 / 55%), 0 0 10px rgb(255 200 80 / 28%); transition: width 0.12s steps(10, end);
+}
+/* Enhanced part image styling for better scaling */
+.part .image { object-fit: contain; /* Ensures images scale properly within containers */
+ width: 95%; height: 95%; padding: 2px; margin: 2px; background-position: center; background-repeat: no-repeat; background-size: contain;
+}
+/* Responsive scaling for different screen sizes */
+@media (width >= 1200px) { .tile[class*="part_overflow_valve"] .part-image,
+ .tile[class*="part_topup_valve"] .part-image,
+ .tile[class*="part_check_valve"] .part-image { transform: scale(1.15); /* Slightly larger on bigger screens */
+ }
+}
+
+.percent_wrapper { display: flex; width: 100%; height: 100%; flex-direction: column; gap: 1px;
+}
+
+.percent { width: 0%; height: 50%; min-height: 6px; border-radius: 0; transition: width 0.28s steps(var(--vu-segments, 16), end);
+}
+
+.percent.heat { background:
+  repeating-linear-gradient(
+   90deg,
+   rgb(231 76 60) 0,
+   rgb(175 48 40) 3px,
+   rgb(0 0 0 / 50%) 3px,
+   rgb(0 0 0 / 50%) 4px
+  ) !important; box-shadow: 0 0 2px rgb(231 76 60 / 70%), 0 0 6px rgb(231 76 60 / 45%);
+}
+
+.percent.durability { background:
+  repeating-linear-gradient(
+   90deg,
+   rgb(89 196 53) 0,
+   rgb(45 150 55) 3px,
+   rgb(0 0 0 / 48%) 3px,
+   rgb(0 0 0 / 48%) 4px
+  ) !important; box-shadow: 0 0 2px rgb(89 196 53 / 70%), 0 0 6px rgb(89 196 53 / 45%);
+}
+
+.tile[class*="part_"] .percent_wrapper_wrapper { height: 10px; background-color: rgb(0 0 0 / 85%); background-image: repeating-linear-gradient(90deg, transparent 0, transparent 3px, rgb(0 0 0 / 65%) 3px, rgb(0 0 0 / 65%) 4px); display: block;
+}
+
+.tile:hover .percent_wrapper_wrapper { height: 12px; background-color: rgb(0 0 0 / 90%); background-image: repeating-linear-gradient(90deg, transparent 0, transparent 3px, rgb(0 0 0 / 65%) 3px, rgb(0 0 0 / 65%) 4px);
+}
+
+.tile .percent_wrapper_wrapper::before { position: absolute; z-index: 1; border: 1px solid rgb(255 255 255 / 20%); border-radius: 0; content: ""; inset: 0; pointer-events: none; background-image: repeating-linear-gradient(90deg, rgb(0 0 0 / 0%) 0, rgb(0 0 0 / 0%) 3px, rgb(0 0 0 / 35%) 3px, rgb(0 0 0 / 35%) 4px);
+}
+
+.tile.spent { filter: grayscale(100%); opacity: 0.5;
+}
+
+.tile.is-processing { animation: processing-pulse 1s infinite;
+}
+
+@keyframes processing-pulse { 0%,
+ 100% { opacity: 1;
+ }
+
+ 50% { opacity: 0.7;
+ }
+}
+
+.tile.exploding { position: relative; z-index: 10; width: 100% !important; height: 100% !important; animation: explosion-animation 0.6s steps(4, end) forwards; background-color: transparent !important; background-image: url("../img/ui/effects/explosion_map.png") !important; background-repeat: no-repeat !important; background-size: 500% 100% !important; transform: translateZ(0); /* Force hardware acceleration */
+}
+/* Hide part image during explosion */
+.tile.exploding img { display: none !important;
+}
+
+@keyframes explosion-animation { 0% { background-position: 0% 0%; }
+ 100% { background-position: 100% 0%; }
+}
+
+.tile .sell-indicator { position: absolute; top: 2px; right: 2px; display: none; /* Hide the red dot completely */
+ width: 8px; height: 8px; border-radius: 50%; background: rgb(255 0 0); opacity: 0; transition: opacity 0.2s;
+}
+
+.tile.selling .sell-indicator { display: none; opacity: 0; /* Keep opacity at 0 even when selling */
+}

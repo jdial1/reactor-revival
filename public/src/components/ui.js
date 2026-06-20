@@ -5,6 +5,7 @@ import { StateManager, createUIState, initUIStateSubscriptions, subscribeKey } f
 import { InputHandler } from "./input-manager.js";
 import { createModalOrchestrator } from "./ui-modals.js";
 import { GridScaler, GridCanvasRenderer } from "./ui-grid.js";
+import { PageSetupUI } from "./page-setup-ui.js";
 import { leaderboardService, resolveAudioService } from "../services.js";
 import { logger } from "../utils.js";
 import {
@@ -14,7 +15,6 @@ import {
   updateSectionCountsState,
   CopyPasteUI,
   UserAccountUI,
-  PageSetupUI,
   HeatVisualsUI,
   GridInteractionUI,
   PerformanceUI,
@@ -60,7 +60,9 @@ import {
 import { ReactiveLitComponent } from "./reactive-lit-component.js";
 import { getValidatedGameData } from "../services.js";
 import { MOBILE_BREAKPOINT_PX } from "../utils.js";
-import { ObjectiveController, checkObjectiveTextScrolling as applyObjectiveToastTitle } from "../logic.js";
+import { ObjectiveController } from "../logic.js";
+import { checkObjectiveTextScrolling as applyObjectiveToastTitle } from "../logic-objectives-ui.js";
+import { setupUiIdleEffects } from "../ui-idle-effects.js";
 import { GridController, AudioController } from "./controllers/controllers.js";
 import { attachAudioSys } from "../audio.sys.js";
 import { mountHeatRatioStrip, mountEngineStatusChip, mountMuteIndicator } from "../ui.views.js";
@@ -620,6 +622,8 @@ export class UI {
     this.inputHandler.setup();
     this.modalOrchestrator.init(this);
     this.gridInteractionUI.clearAllActiveAnimations();
+    const idleUnmount = setupUiIdleEffects();
+    if (typeof idleUnmount === "function") this._unmounts.push(idleUnmount);
     return true;
   }
 

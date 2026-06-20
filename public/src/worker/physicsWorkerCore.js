@@ -1,4 +1,4 @@
-import { runHeatStepFromTyped } from "../logic.js";
+import { runHeatStepFromTyped } from "../logic-heat-transfer.js";
 
 export function attachPhysicsWorkerPort(workerGlobal) {
   let pending = null;

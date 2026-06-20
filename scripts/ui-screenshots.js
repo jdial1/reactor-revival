@@ -18,14 +18,19 @@ import {
   openQuickStartModal,
   closeQuickStartModal,
   waitForSelectorOptional,
+  assertNoCriticalStartupFailure,
+  CriticalStartupError,
 } from "./ui-audit-core.js";
 
 const OUTPUT_DIR = path.resolve(process.env.SCREENSHOT_DIR || "screenshots/ui");
 
 const RESOLUTIONS = [
   { key: "390x844", width: 390, height: 844, label: "phone" },
+  { key: "576x960", width: 576, height: 960, label: "phablet" },
   { key: "768x1024", width: 768, height: 1024, label: "tablet" },
+  { key: "1024x768", width: 1024, height: 768, label: "tablet-landscape" },
   { key: "1280x800", width: 1280, height: 800, label: "laptop" },
+  { key: "1440x900", width: 1440, height: 900, label: "desktop" },
   { key: "1920x1080", width: 1920, height: 1080, label: "widescreen" },
 ];
 
@@ -64,6 +69,7 @@ function screenshotPath(resolutionKey, targetName) {
 const savedPaths = [];
 
 async function captureScreenshot(page, resolutionKey, targetName) {
+  await assertNoCriticalStartupFailure(page, null, `before screenshot ${resolutionKey}_${targetName}`);
   const filePath = screenshotPath(resolutionKey, targetName);
   await page.screenshot({ path: filePath, type: "png" });
   savedPaths.push(filePath);
@@ -86,12 +92,35 @@ async function waitForPageReady(page, pageId) {
   } catch {
     logStep(`page not ready for ${pageId}, capturing anyway`);
   }
+  if (pageId === "leaderboard_section") {
+    try {
+      await page.waitForFunction(
+        () => !document.querySelector(".leaderboard-loading-cell"),
+        { timeout: 4000 }
+      );
+    } catch {
+      logStep("leaderboard still loading, capturing anyway");
+    }
+    await delay(STEP_DELAY_MS);
+  }
+  if (pageId === "upgrades_section" || pageId === "experimental_upgrades_section") {
+    try {
+      await page.waitForFunction(
+        () => document.querySelector(".section-hub-meta-host .section-count"),
+        { timeout: 4000 }
+      );
+    } catch {
+      logStep(`hub meta not ready for ${pageId}, capturing anyway`);
+    }
+    await delay(STEP_DELAY_MS);
+  }
 }
 
 async function captureTarget(label, fn) {
   try {
     await fn();
   } catch (error) {
+    if (error?.name === "CriticalStartupError") throw error;
     logStep(`WARN: ${label} — ${error?.message || String(error)}`);
   }
 }
@@ -111,6 +140,13 @@ async function captureModalScreenshots(page, resolution) {
       await modal.open(page);
       await waitForSelectorOptional(page, modal.waitFor);
       await delay(STEP_DELAY_MS * 2);
+      if (modal.name === "settings") {
+        await page.evaluate(() => {
+          const panel = document.querySelector(".settings-content");
+          if (panel) panel.scrollTop = panel.scrollHeight;
+        });
+        await delay(STEP_DELAY_MS);
+      }
       await captureScreenshot(page, resolution.key, modal.name);
       await modal.close(page);
     });
@@ -160,8 +196,20 @@ async function main() {
     for (const resolution of RESOLUTIONS) {
       await captureResolution(page, resolution);
     }
+  } catch (error) {
+    if (error?.name === "CriticalStartupError") {
+      logStep(`FAIL: ${error.message}`);
+      process.exitCode = 1;
+    } else {
+      throw error;
+    }
   } finally {
     await browser.close();
+  }
+
+  if (process.exitCode === 1) {
+    printSummary(savedPaths);
+    return;
   }
 
   printSummary(savedPaths);
@@ -169,4 +217,12 @@ async function main() {
   process.exitCode = savedPaths.length < expected ? 1 : 0;
 }
 
-main();
+main().catch((error) => {
+  if (error?.name === "CriticalStartupError") {
+    logStep(`FAIL: ${error.message}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.error(error);
+  process.exitCode = 1;
+});

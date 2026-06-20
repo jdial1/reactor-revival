@@ -12,8 +12,9 @@ import {
   previewBlueprintPlannerStats,
   actions,
 } from "../store.js";
-import { repeat, styleMap, numFormat as fmt, formatNumberCompactIntl, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, formatTime, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, when, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent, resolveDomElement } from "../utils.js";
-import { runCheckAffordability, calculateSectionCounts, bindUpgradeElement, getUpgradeElement, getPartElement } from "../logic.js";
+import { repeat, styleMap, numFormat as fmt, formatNumberCompactIntl, logger, classMap, StorageUtils, serializeSave, escapeHtml, unsafeHTML, toNumber, getPartImagePath, toDecimal, MOBILE_BREAKPOINT_PX, REACTOR_HEAT_STANDARD_DIVISOR, VENT_BONUS_PERCENT_DIVISOR, BaseComponent, runCathodeScramble, cancelCathodeScramble, vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent, resolveDomElement } from "../utils.js";
+import { runCheckAffordability, bindUpgradeElement, getUpgradeElement, getPartElement } from "../logic-upgrade-dom.js";
+import { calculateSectionCounts, findTopAffordableInSection } from "../logic-upgrade-sections.js";
 import { syncReactorHeatVisualDom } from "../heatDomSync.js";
 import { UpgradeCard, CloseButton, PartButton, partsModuleInfoCardTemplate } from "./button-factory.js";
 import { MODAL_IDS } from "./ui-modals.js";
@@ -45,15 +46,11 @@ import {
   myLayoutsTableRowTemplate,
   componentSummaryEmptyTemplate,
   componentSummaryTemplate,
-  leaderboardStatusRowTemplate,
-  leaderboardRowTemplate as leaderboardRowTemplateView,
   layoutViewModalTemplate,
   quickStartTemplate as quickStartOverlayTemplate,
-  affordabilityBannerTemplate,
-  soundWarningValueTemplate,
   engineStatusIndicatorTemplate,
   navIndicatorTemplate,
-  sectionCountTextTemplate,
+  sectionHubMetaTemplate,
   plainTextTemplate,
   quickSelectSlotTemplate,
   decompressionSavedToastTemplate,
@@ -67,7 +64,7 @@ function formatSimulationTickLine(game) {
   const period = (game.loop_wait || 1000) / 1000;
   const periodStr = period >= 10 ? period.toFixed(1) : period.toFixed(2);
   const n = game.engine?.tick_count ?? 0;
-  return `${periodStr}s #${n}`;
+  return `${periodStr}s · tick ${n}`;
 }
 
 export function getUiElement(ui, id) {
@@ -332,7 +329,7 @@ function buildMobileControlDeckTemplate(ui, state) {
 function buildMobilePassiveBarTemplate(state) {
   return mobilePassiveBarTemplate({
     epText: formatNumberCompactIntl(state.current_exotic_particles ?? 0),
-    moneyText: state.melting_down ? "\u2622\uFE0F" : formatNumberCompactIntl(state.current_money ?? 0),
+    moneyText: state.melting_down ? "\u2622\uFE0F" : `$${formatNumberCompactIntl(state.current_money ?? 0)}`,
     pauseClass: classMap({ "passive-top-pause": true, paused: !!state.pause }),
     pauseAriaLabel: state.pause ? "Resume" : "Pause",
     pauseTitle: state.pause ? "Resume" : "Pause",
@@ -410,265 +407,6 @@ export function syncMobileControlDeckMounts(ui) {
     ui._mobileControlDeckReactiveMounted = false;
   });
   mountMobilePassiveBar(ui);
-}
-
-class PageSetupUI {
-  constructor(ui) {
-    this.ui = ui;
-    this._lastIsMobileForTopBar = null;
-    this._mobileTopBarResizeListenerAdded = false;
-  }
-
-  setupLeaderboardPage() {
-    const ui = this.ui;
-    const container = document.getElementById("leaderboard_rows");
-    const sortButtons = document.querySelectorAll(".leaderboard-sort");
-
-    if (!ui.game) {
-      if (container) render(leaderboardStatusRowTemplate({ text: "Game not initialized" }), container);
-      return;
-    }
-
-    const formatRecordDate = (run) => {
-      let date = 'N/A';
-      try {
-        const timestamp = typeof run.timestamp === 'string' ? parseInt(run.timestamp, 10) : run.timestamp;
-        if (timestamp && !isNaN(timestamp) && timestamp > 0) {
-          const dateObj = new Date(timestamp);
-          if (!isNaN(dateObj.getTime())) {
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            const year = String(dateObj.getFullYear()).slice(-2);
-            date = `${month}/${day}/${year}`;
-          }
-        }
-      } catch (e) {
-        logger.warn('Error formatting date:', e);
-      }
-      return date;
-    };
-
-    const leaderboardRowTemplate = (run, index, sortBy) => {
-      const date = formatRecordDate(run);
-      const timeStr = formatTime(run.time_played ?? 0);
-      const hasLayout = !!run.layout;
-      const powerClass = classMap({ "leaderboard-col-power": true, hidden: sortBy !== "power" });
-      const heatClass = classMap({ "leaderboard-col-heat": true, hidden: sortBy !== "heat" });
-      const moneyClass = classMap({ "leaderboard-col-money": true, hidden: sortBy !== "money" });
-      const onView = () => {
-        if (run.layout) {
-          ui.modalOrchestrator.showModal(MODAL_IDS.LAYOUT_VIEW, {
-            layoutJson: run.layout,
-            stats: {
-              money: run.money || 0,
-              ep: run.exotic_particles || 0,
-              heat: run.heat || 0,
-              power: run.power || 0,
-            },
-          });
-        }
-      };
-      const viewCellContent = when(
-        hasLayout,
-        () => html`<button class="pixel-btn layout-view-btn" style="padding: 2px 6px; font-size: 0.6em;" @click=${onView}>View</button>`,
-        () => html`<span style="opacity: 0.5;">-</span>`
-      );
-      return leaderboardRowTemplateView({
-        rank: index + 1,
-        date,
-        powerClass,
-        heatClass,
-        moneyClass,
-        powerText: fmt(run.power),
-        heatText: fmt(run.heat),
-        moneyText: `$${fmt(run.money)}`,
-        timeText: timeStr,
-        viewCellContent,
-      });
-    };
-
-    const leaderboardTemplate = (records, status, sortBy) => {
-      if (status === "loading") {
-        return leaderboardStatusRowTemplate({ loading: true });
-      }
-      if (status === "offline") {
-        return leaderboardStatusRowTemplate({ text: "Leaderboard unavailable. Try again later." });
-      }
-      if (records.length === 0) {
-        return leaderboardStatusRowTemplate({ text: "No records found yet. Play to save scores!" });
-      }
-      return repeat(records, (r, i) => `${r.timestamp}-${i}`, (run, index) => leaderboardRowTemplate(run, index, sortBy));
-    };
-
-    const loadRecords = async (sortBy) => {
-      if (!container) return;
-      render(leaderboardTemplate([], "loading", sortBy), container);
-      await leaderboardService.init();
-      const st = leaderboardService.getStatus();
-      if (st.state === "open") {
-        render(leaderboardTemplate([], "offline", sortBy), container);
-        sortButtons.forEach((b) => {
-          b.disabled = true;
-          b.style.opacity = "0.5";
-        });
-        return;
-      }
-      sortButtons.forEach((b) => {
-        b.disabled = false;
-        b.style.opacity = "";
-      });
-      const records = await leaderboardService.getTopRuns(sortBy, 20);
-      render(leaderboardTemplate(records, "loaded", sortBy), container);
-      updateLeaderboardIcon(ui);
-    };
-
-    const activeButton = document.querySelector('.leaderboard-sort.active');
-    const initialSort = activeButton ? activeButton.dataset.sort : 'power';
-    sortButtons.forEach(btn => {
-      btn.onclick = () => {
-        sortButtons.forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        loadRecords(btn.dataset.sort);
-      };
-    });
-    return loadRecords(initialSort);
-  }
-
-  setupAffordabilityBanners(bannerId) {
-    const ui = this.ui;
-    if (!ui?.uiState) return;
-    const flag = bannerId === "upgrades_no_affordable_banner" ? "_affordabilityBannerMountedUpgrades" : "_affordabilityBannerMountedResearch";
-    if (ui[flag]) return;
-    const container = document.getElementById(bannerId);
-    if (!container?.isConnected) return;
-    ui[flag] = true;
-    const isUpgrades = bannerId === "upgrades_no_affordable_banner";
-    const key = isUpgrades ? "upgradesHidden" : "researchHidden";
-    const message = isUpgrades ? "No affordable upgrades available" : "No affordable research available";
-    const unmount = ReactiveLitComponent.mountMulti(
-      [{ state: ui.uiState, keys: ["upgrades_banner_visibility"] }],
-      () => {
-        const visibility = ui.uiState?.upgrades_banner_visibility ?? { upgradesHidden: true, researchHidden: true };
-        const hidden = visibility[key];
-        return affordabilityBannerTemplate({ hidden, message });
-      },
-      container
-    );
-    if (ui._affordabilityBannerUnmounts) ui._affordabilityBannerUnmounts.push(unmount);
-    else ui._affordabilityBannerUnmounts = [unmount];
-  }
-
-  setupSoundboardPage() {
-    const ui = this.ui;
-    if (!ui.game?.audio) return;
-    const page = ui.DOMElements.soundboard_section || document.getElementById("soundboard_section");
-    if (!page) return;
-
-    const warningSlider = ui.DOMElements.sound_warning_intensity || document.getElementById("sound_warning_intensity");
-    const warningValue = ui.DOMElements.sound_warning_value || document.getElementById("sound_warning_value");
-    if (warningSlider && ui.uiState) {
-      const initial = Number(warningSlider.value) || 50;
-      ui.uiState.sound_warning_value = initial;
-      warningSlider.oninput = () => {
-        if (ui.uiState) ui.uiState.sound_warning_value = Number(warningSlider.value) || 50;
-      };
-    }
-    if (warningValue && ui.uiState) {
-      ReactiveLitComponent.mountMulti(
-        [{ state: ui.uiState, keys: ["sound_warning_value"] }],
-        () => soundWarningValueTemplate({ value: ui.uiState?.sound_warning_value ?? 50 }),
-        warningValue
-      );
-    }
-
-    const playSound = (button) => {
-      const sound = button.dataset.sound;
-      if (!sound || !ui.game) return;
-      if (sound === "warning") {
-        const intensity = warningSlider ? Number(warningSlider.value) / 100 : 0.5;
-        actions.enqueueEffect(ui.game, { kind: "sfx", id: "warning", intensity, context: "global" });
-        return;
-      }
-      if (sound === "explosion") {
-        const subtype = button.dataset.variant === "meltdown" ? "meltdown" : null;
-        actions.enqueueEffect(ui.game, { kind: "sfx", id: "explosion", subtype, pan: 0, context: "global" });
-        return;
-      }
-      const subtype = button.dataset.subtype || null;
-      actions.enqueueEffect(ui.game, { kind: "sfx", id: sound, a: subtype, b: undefined, context: "global" });
-    };
-
-    page.querySelectorAll("button.sound-btn").forEach((button) => {
-      button.onclick = () => playSound(button);
-    });
-  }
-
-  setupMobileTopBar() {
-    const ui = this.ui;
-    try {
-      const mobileTopBar = document.getElementById("mobile_top_bar");
-      const stats = document.getElementById("reactor_stats");
-      const topNav = document.getElementById("main_top_nav");
-      const reactorWrapper = document.getElementById("reactor_wrapper");
-      const reactorSection = document.getElementById("reactor_section");
-      const copyPasteBtns = document.getElementById("reactor_copy_paste_btns");
-      const copyPasteToggle = document.getElementById("reactor_copy_paste_toggle");
-      if (!mobileTopBar || !stats) return;
-
-      const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
-
-      if (isMobile) {
-        mobileTopBar.classList.add("active");
-        mobileTopBar.setAttribute("aria-hidden", "false");
-        let statsWrap = mobileTopBar.querySelector(".mobile-top-stats");
-        if (!statsWrap) {
-          statsWrap = document.createElement("div");
-          statsWrap.className = "mobile-top-stats";
-          mobileTopBar.appendChild(statsWrap);
-        }
-        if (stats && stats.parentElement !== statsWrap) statsWrap.appendChild(stats);
-        if (copyPasteBtns && reactorSection && reactorWrapper && copyPasteBtns.parentElement === reactorWrapper) {
-          reactorSection.insertBefore(copyPasteBtns, reactorWrapper);
-        }
-        const isCollapsed = ui?.uiState?.copy_paste_collapsed === true || copyPasteBtns?.classList.contains("collapsed");
-        if (isCollapsed && copyPasteToggle) {
-          copyPasteToggle.style.display = "inline-flex";
-          copyPasteToggle.style.visibility = "visible";
-        }
-      } else {
-        mobileTopBar.classList.remove("active");
-        mobileTopBar.setAttribute("aria-hidden", "true");
-        if (topNav && stats) {
-          const engineUl = topNav.querySelector("#engine_status");
-          if (engineUl) topNav.insertBefore(stats, engineUl);
-          else topNav.appendChild(stats);
-        }
-        if (reactorWrapper && copyPasteBtns && copyPasteBtns.parentElement !== reactorWrapper) {
-          reactorWrapper.appendChild(copyPasteBtns);
-        }
-        if (copyPasteToggle) {
-          copyPasteToggle.style.removeProperty("display");
-          copyPasteToggle.style.removeProperty("visibility");
-        }
-      }
-
-      this._lastIsMobileForTopBar = isMobile;
-    } catch (err) {
-      logger.warn("[UI] setupMobileTopBar error:", err);
-    }
-  }
-
-  setupMobileTopBarResizeListener() {
-    const ui = this.ui;
-    if (this._mobileTopBarResizeListenerAdded) return;
-    this._mobileTopBarResizeListenerAdded = true;
-    window.addEventListener("resize", () => {
-      const isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-      if (isMobile !== this._lastIsMobileForTopBar) {
-        this.setupMobileTopBar();
-      }
-    });
-  }
 }
 
 const CATEGORY_MAP = {
@@ -910,6 +648,70 @@ export function setPageReactorVisibility(ui, visible) {
   if (reactor) reactor.style.visibility = visible ? "visible" : "hidden";
 }
 
+export function setupUpgradeHubCollapsibleSections(ui) {
+  if (ui._upgradeHubCollapsibleSetup) return;
+  ui._upgradeHubCollapsibleSetup = true;
+  const bind = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    section.addEventListener("click", (e) => {
+      const header = e.target.closest(".upgrade-section-header");
+      if (!header) return;
+      const article = header.closest(".upgrade-hub-collapsible");
+      if (!article) return;
+      e.preventDefault();
+      const collapsed = article.classList.toggle("section-collapsed");
+      header.setAttribute("aria-expanded", String(!collapsed));
+      const accordionWrapper = article.closest("[data-hub-accordion]");
+      if (!collapsed && accordionWrapper) {
+        accordionWrapper.querySelectorAll(".upgrade-hub-collapsible").forEach((other) => {
+          if (other === article) return;
+          other.classList.add("section-collapsed");
+          other.querySelector(".upgrade-section-header")?.setAttribute("aria-expanded", "false");
+        });
+      }
+    });
+    section.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const header = e.target.closest(".upgrade-section-header");
+      if (!header) return;
+      e.preventDefault();
+      header.click();
+    });
+  };
+  bind("upgrades_section");
+  bind("experimental_upgrades_section");
+}
+
+export function setupAboutScrollHint() {
+  const section = document.getElementById("about_section");
+  const hint = document.getElementById("about_scroll_hint");
+  if (!section || !hint) return;
+  const hide = () => hint.classList.add("hidden");
+  const scrollTargets = [section, document.getElementById("page_content_area")].filter(Boolean);
+  scrollTargets.forEach((target) => {
+    target.addEventListener("scroll", hide, { once: true, passive: true });
+  });
+  requestAnimationFrame(() => {
+    const scrollHost = scrollTargets.find((el) => el.scrollHeight > el.clientHeight + 12) ?? section;
+    if (scrollHost.scrollHeight <= scrollHost.clientHeight + 12) hide();
+  });
+}
+
+function autoExpandAffordableHubSections(ui, wrapperId) {
+  const wrapper = document.getElementById(wrapperId);
+  const counts = ui?.uiState?.section_counts;
+  if (!wrapper || !counts) return;
+  wrapper.querySelectorAll(".upgrade-hub-collapsible.section-collapsed h2[data-section-name]").forEach((header) => {
+    const sectionName = header.getAttribute("data-section-name");
+    if ((counts[sectionName]?.affordable ?? 0) > 0) {
+      const article = header.closest(".upgrade-hub-collapsible");
+      article?.classList.remove("section-collapsed");
+      header.setAttribute("aria-expanded", "true");
+    }
+  });
+}
+
 export function setupResearchCollapsibleSections(ui) {
   if (ui._researchCollapsibleSetup) return;
   ui._researchCollapsibleSetup = true;
@@ -1061,12 +863,14 @@ export function initializePage(ui, pageId) {
       break;
     }
     case "upgrades_section":
+      setupUpgradeHubCollapsibleSections(ui);
       ui.pageSetupUI.setupAffordabilityBanners("upgrades_no_affordable_banner");
       if (!ui._sectionCountsMountedUpgrades && document.getElementById("upgrades_content_wrapper")) {
         ui._unmounts.push(mountSectionCountsReactive(ui, "upgrades_content_wrapper"));
         ui._sectionCountsMountedUpgrades = true;
       }
       if (game?.upgradeset) updateSectionCountsState(ui, game);
+      autoExpandAffordableHubSections(ui, "upgrades_content_wrapper");
       requestAnimationFrame(() => {
         if (
           game.upgradeset &&
@@ -1079,6 +883,7 @@ export function initializePage(ui, pageId) {
       });
       break;
     case "experimental_upgrades_section":
+      setupUpgradeHubCollapsibleSections(ui);
       mountExoticParticlesDisplayIfNeeded(ui);
       ui.pageSetupUI.setupAffordabilityBanners("research_no_affordable_banner");
       if (!ui._sectionCountsMountedResearch && document.getElementById("experimental_upgrades_content_wrapper")) {
@@ -1086,6 +891,7 @@ export function initializePage(ui, pageId) {
         ui._sectionCountsMountedResearch = true;
       }
       if (game?.upgradeset) updateSectionCountsState(ui, game);
+      autoExpandAffordableHubSections(ui, "experimental_upgrades_content_wrapper");
       if (
         game.upgradeset &&
         typeof game.upgradeset.populateExperimentalUpgrades === "function"
@@ -1099,6 +905,7 @@ export function initializePage(ui, pageId) {
       ui.setupUpgradeCardHoverBuzz();
       break;
     case "about_section":
+      setupAboutScrollHint();
       setupVersionDisplayForPage(ui);
       if (!ui.uiState?.version_display?.app) void loadAndSetVersionForPage(ui);
       break;
@@ -1172,6 +979,16 @@ function mountStatsBarReactive(ui) {
     apply(heatEl, "heat", h);
     apply(hullEl, "hull", hullText);
     apply(hullDesktopEl, "hullDesktop", hullText);
+    const hullEmpty = (() => {
+      const pct = parseFloat(String(hullText).replace("%", ""));
+      return !Number.isNaN(pct) && pct <= 0;
+    })();
+    [hullEl, hullDesktopEl].forEach((el) => {
+      if (!el) return;
+      el.classList.toggle("hull-readout-empty", hullEmpty);
+    });
+    const hullItem = document.querySelector(".info-item-hull");
+    if (hullItem) hullItem.classList.toggle("hull-empty-state", hullEmpty);
   };
   let scheduled = false;
   const schedule = () => {
@@ -1620,7 +1437,6 @@ export function setupDesktopTopNavButtons(ui) {
   }
   ui.deviceFeatures?.updateFullscreenButtonState?.();
 }
-export { PageSetupUI };
 class ClipboardUI {
   constructor(ui) {
     this.ui = ui;
@@ -2072,9 +1888,51 @@ export function updateSectionCountsState(ui, game) {
   const sections = calculateSectionCounts(game.upgradeset);
   const counts = {};
   sections.forEach((s) => {
-    counts[s.name] = { researched: s.researched, total: s.total };
+    counts[s.name] = { researched: s.researched, total: s.total, affordable: s.affordable ?? 0 };
   });
   ui.uiState.section_counts = counts;
+  updateHubSectionPreviews(ui, game);
+  updateResearchEpHint();
+}
+
+function updateResearchEpHint() {
+  const hint = document.getElementById("research_ep_hint");
+  const wrapper = document.getElementById("experimental_upgrades_content_wrapper");
+  if (!hint || !wrapper) return;
+  const allCollapsed = wrapper.querySelectorAll(".upgrade-hub-collapsible:not(.section-collapsed)").length === 0;
+  hint.classList.toggle("hidden", !allCollapsed);
+}
+
+function updateHubSectionPreviews(ui, game) {
+  const wrappers = ["upgrades_content_wrapper", "experimental_upgrades_content_wrapper"];
+  wrappers.forEach((wrapperId) => {
+    const wrapper = document.getElementById(wrapperId);
+    if (!wrapper) return;
+    wrapper.querySelectorAll("h2[data-section-name]").forEach((h2) => {
+      const sectionName = h2.getAttribute("data-section-name");
+      if (!sectionName) return;
+      const article = h2.closest(".upgrade-hub-collapsible");
+      if (!article) return;
+      let preview = article.querySelector(".section-hub-preview");
+      if (!preview) {
+        preview = document.createElement("p");
+        preview.className = "section-hub-preview";
+        const metaHost = article.querySelector(".section-hub-meta-host");
+        if (metaHost) metaHost.insertAdjacentElement("afterend", preview);
+        else h2.insertAdjacentElement("afterend", preview);
+      }
+      const top = findTopAffordableInSection(game.upgradeset, sectionName);
+      if (!top) {
+        preview.textContent = "";
+        preview.classList.add("hidden");
+        return;
+      }
+      const isEp = top.base_ecost?.gt?.(0);
+      const cost = isEp ? `${fmt(top.ecost)} EP` : `$${fmt(top.cost)}`;
+      preview.textContent = `${top.title} · ${cost}`;
+      preview.classList.remove("hidden");
+    });
+  });
 }
 
 function mountSectionCountsForWrapper(ui, wrapperId) {
@@ -2086,21 +1944,29 @@ function mountSectionCountsForWrapper(ui, wrapperId) {
   h2s.forEach((h2) => {
     const sectionName = h2.getAttribute("data-section-name");
     if (!sectionName) return;
-    let countSpan = h2.querySelector(".section-count");
-    if (!countSpan) {
-      countSpan = document.createElement("span");
-      countSpan.className = "section-count";
-      h2.appendChild(countSpan);
+    let metaHost = h2.nextElementSibling;
+    if (metaHost?.classList.contains("section-hub-blurb")) {
+      metaHost = metaHost.nextElementSibling;
+    }
+    if (!metaHost?.classList.contains("section-hub-meta-host")) {
+      metaHost = document.createElement("div");
+      metaHost.className = "section-hub-meta-host";
+      const blurb = h2.nextElementSibling?.classList.contains("section-hub-blurb") ? h2.nextElementSibling : null;
+      if (blurb) {
+        blurb.insertAdjacentElement("afterend", metaHost);
+      } else {
+        h2.insertAdjacentElement("afterend", metaHost);
+      }
     }
     const renderFn = () => {
-      const section = ui.uiState?.section_counts?.[sectionName] ?? { researched: 0, total: 0 };
-      return sectionCountTextTemplate({ researched: section.researched, total: section.total });
+      const section = ui.uiState?.section_counts?.[sectionName] ?? { researched: 0, total: 0, affordable: 0 };
+      return sectionHubMetaTemplate(section);
     };
     unmounts.push(
       ReactiveLitComponent.mountMulti(
         [{ state: ui.uiState, keys: ["section_counts"] }],
         renderFn,
-        countSpan
+        metaHost
       )
     );
   });

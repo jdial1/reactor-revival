@@ -17,13 +17,37 @@ fs.mkdirSync(libDir, { recursive: true });
 const rawCopies = [
   { source: "node_modules/break_infinity.js/dist/break_infinity.min.js", target: "break_infinity.min.js" },
   { source: "node_modules/pako/dist/pako.min.js", target: "pako.min.js" },
-  { source: "node_modules/@zip.js/zip.js/dist/zip.min.js", target: "zip.min.js" }
+  { source: "node_modules/@zip.js/zip.js/dist/zip.min.js", target: "zip.min.js" },
+  { source: "node_modules/@picocss/pico/css/pico.min.css", target: "pico.min.css" },
+];
+
+const fontCopies = [
+  { source: "node_modules/@fontsource/share-tech-mono/files/share-tech-mono-latin-400-normal.woff2", target: "fonts/share-tech-mono-latin-400-normal.woff2" },
+  { source: "node_modules/@fontsource/press-start-2p/files/press-start-2p-latin-400-normal.woff2", target: "fonts/press-start-2p-latin-400-normal.woff2" },
+  { source: "node_modules/@fontsource/vt323/files/vt323-latin-400-normal.woff2", target: "fonts/vt323-latin-400-normal.woff2" },
+  { source: "node_modules/@fontsource/oswald/files/oswald-latin-400-normal.woff2", target: "fonts/oswald-latin-400-normal.woff2" },
+  { source: "node_modules/@fontsource/oswald/files/oswald-latin-500-normal.woff2", target: "fonts/oswald-latin-500-normal.woff2" },
+  { source: "node_modules/@fontsource/oswald/files/oswald-latin-600-normal.woff2", target: "fonts/oswald-latin-600-normal.woff2" },
+  { source: "node_modules/@fontsource/oswald/files/oswald-latin-700-normal.woff2", target: "fonts/oswald-latin-700-normal.woff2" },
 ];
 
 rawCopies.forEach(({ source, target }) => {
   const srcPath = path.join(__dirname, "..", source);
   const destPath = path.join(libDir, target);
   if (fs.existsSync(srcPath)) {
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    fs.copyFileSync(srcPath, destPath);
+    console.log(`✓ Copied ${target}`);
+  } else {
+    console.warn(`⚠️ Source not found: ${source}`);
+  }
+});
+
+fontCopies.forEach(({ source, target }) => {
+  const srcPath = path.join(__dirname, "..", source);
+  const destPath = path.join(libDir, target);
+  if (fs.existsSync(srcPath)) {
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
     fs.copyFileSync(srcPath, destPath);
     console.log(`✓ Copied ${target}`);
   } else {

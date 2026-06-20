@@ -460,21 +460,28 @@ let cachedStrippedIndexHtml = null;
 let domShellSnapshot = null;
 let lastTestFilepath = null;
 
+function abortableResourcePromise(promise, onAbort = () => {}) {
+  if (promise && typeof promise.abort !== "function") {
+    promise.abort = onAbort;
+  }
+  return promise;
+}
+
 class TestCustomResourceLoader extends ResourceLoader {
   fetch(url, options) {
     const urlStr = url.toString();
     if (urlStr.includes('fonts.googleapis.com') || urlStr.includes('fonts.gstatic.com')) {
-      return Promise.resolve(Buffer.from(''));
+      return abortableResourcePromise(Promise.resolve(Buffer.from('')));
     }
     if (urlStr.includes('/lib/') || urlStr.endsWith('.min.js') || (urlStr.endsWith('.js') && !urlStr.includes('/src/'))) {
-      return Promise.resolve(Buffer.from(''));
+      return abortableResourcePromise(Promise.resolve(Buffer.from('')));
     }
     const cleanPath = urlStr.replace(/^http:\/\/localhost:8080\//, '').split('?')[0];
     const filePath = pathModule.resolve(__dirname, '../../public', cleanPath);
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      return Promise.resolve(fs.readFileSync(filePath));
+      return abortableResourcePromise(Promise.resolve(fs.readFileSync(filePath)));
     }
-    return Promise.reject(new Error(`Resource not found: ${urlStr}`));
+    return abortableResourcePromise(Promise.reject(new Error(`Resource not found: ${urlStr}`)));
   }
 }
 
@@ -811,19 +818,26 @@ function teardownGameResources() {
   }
 }
 
+function closeDomInstance() {
+  if (!domInstance) return;
+  try {
+    domInstance.window.close();
+  } catch (_) {
+    /* jsdom aborts pending resource loads; ignore incomplete teardown */
+  }
+  domInstance = null;
+}
+
 function cleanupGameHard() {
   teardownGameResources();
-  vi.clearAllMocks();
-  vi.restoreAllMocks();
-  if (domInstance) {
-    domInstance.window.close();
-    domInstance = null;
-  }
+  closeDomInstance();
   domShellSnapshot = null;
   delete global.window;
   delete global.document;
   globalGameInstance = null;
   initialGameState = null;
+  vi.clearAllMocks();
+  vi.restoreAllMocks();
   mockBrowserGlobals();
   if (global.gc) {
     global.gc();

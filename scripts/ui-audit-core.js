@@ -78,12 +78,17 @@ export async function clickIfPresent(page, selector) {
   return true;
 }
 
-export async function runStep(collector, label, fn) {
+export async function runStep(collector, label, fn, page) {
   collector?.setStep?.(label);
   logStep(label);
   try {
     await fn();
+    if (page) await assertNoCriticalStartupFailure(page, collector, label);
   } catch (error) {
+    if (error?.name === "CriticalStartupError") {
+      collector?.add?.(CRITICAL_STARTUP_FAIL_KIND, error.message, { step: label });
+      throw error;
+    }
     const message = error?.message || String(error);
     const isTimeout = error?.name === "TimeoutError" || /exceeded|Waiting failed/i.test(message);
     const kind = isTimeout ? "runner.warn" : "runner.error";
@@ -147,6 +152,47 @@ export async function navigateToGamePage(page, pageId) {
     const actual = await page.evaluate(() => window.game?.router?.currentPageId);
     logStep(`nav timeout for ${pageId} (router at ${actual ?? "unknown"})`);
   }
+}
+
+export const CRITICAL_STARTUP_FAIL_KIND = "critical.startup";
+
+export async function getCriticalStartupFailure(page) {
+  return page.evaluate(() => {
+    const overlay = document.getElementById("critical-error-overlay");
+    if (!overlay) return null;
+    const title = overlay.querySelector(".critical-error-title")?.textContent?.trim() || "";
+    const message = overlay.querySelector(".critical-error-message")?.textContent?.trim() || "";
+    return { title, message };
+  });
+}
+
+export function formatCriticalStartupFailure(failure, context = "") {
+  const title = failure?.title || "REACTOR FAILED TO START";
+  const detail = failure?.message ? ` — ${failure.message}` : "";
+  const prefix = context ? `${context}: ` : "";
+  return `${prefix}${title}${detail}`;
+}
+
+export class CriticalStartupError extends Error {
+  constructor(message, failure = null) {
+    super(message);
+    this.name = "CriticalStartupError";
+    this.failure = failure;
+  }
+}
+
+export async function assertNoCriticalStartupFailure(page, collector, context = "") {
+  const failure = await getCriticalStartupFailure(page);
+  if (!failure) return;
+  const message = formatCriticalStartupFailure(failure, context);
+  collector?.add?.(CRITICAL_STARTUP_FAIL_KIND, message, { failure, context });
+  throw new CriticalStartupError(message, failure);
+}
+
+export function collectorHasFatalIssues(collector, failKinds) {
+  if (!collector) return false;
+  const kinds = [...failKinds, CRITICAL_STARTUP_FAIL_KIND];
+  return collector.hasMatchingKinds(kinds);
 }
 
 export function bindDialogAccept(page) {
@@ -302,4 +348,5 @@ export async function prepareGameSession(page) {
   await delay(STEP_DELAY_MS * 2);
   await startNewGame(page);
   await dismissBlockingModals(page);
+  await assertNoCriticalStartupFailure(page, null, "after game session start");
 }

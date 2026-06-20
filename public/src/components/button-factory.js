@@ -1,6 +1,6 @@
 import { html, render, nothing } from "lit-html";
 import { numFormat, classMap, styleMap, unsafeHTML } from "../utils.js";
-import { getUpgradeBonusLines } from "../logic.js";
+import { getUpgradeBonusLines } from "../logic-tooltip-stats.js";
 import {
   upgradeCardTemplate,
   partButtonTemplate,

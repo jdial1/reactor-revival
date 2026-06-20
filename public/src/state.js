@@ -9,6 +9,8 @@ import {
   addPartIconsToTitle as addPartIconsToTitleHelper,
   getObjectiveScrollDuration as getObjectiveScrollDurationHelper,
   checkObjectiveTextScrolling as checkObjectiveTextScrollingHelper,
+} from "./logic-objectives-ui.js";
+import {
   getCellPowerCoefficientLP,
   getCellHeatCoefficientH,
   calculateCellPulsePower,

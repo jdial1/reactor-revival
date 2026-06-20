@@ -26,11 +26,13 @@ export function infoBarTemplate({
   return html`
     <div class="info-bar-desktop">
       <button class=${powerClass} id="info_bar_power_btn_desktop" type="button" tabindex="0" aria-label="Sell Power" style=${powerBarStyle} data-intent="SELL_POWER">
+        <span class="stats-inline-label">Power</span>
         <img src="img/ui/icons/icon_power.png" class="icon" alt="Power" />
         <span class="value" id="info_power_desktop">${powerTextDesktop}</span>
         <span class="denom" id="info_power_denom_desktop">/${maxPowerDesktop}</span>
       </button>
       <span class="info-item money">
+        <span class="stats-inline-label">Cash</span>
         <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
         <span class="value cathode-readout" id="info_money_desktop"></span>
       </span>
@@ -46,6 +48,7 @@ export function infoBarTemplate({
       </span>
       <div class="info-item buffs">${repeat(activeBuffs, (b) => b.id, buffIcons)}</div>
       <button class=${heatClass} id="info_bar_heat_btn_desktop" type="button" tabindex="0" aria-label="Reduce Heat" style=${heatBarStyle} data-intent="VENT_HEAT">
+        <span class="stats-inline-label">Heat</span>
         <img src="img/ui/icons/icon_heat.png" class="icon" alt="Heat" />
         <span class="value" id="info_heat_desktop">${heatTextDesktop}</span>
         <span class="denom" id="info_heat_denom_desktop">/${maxHeatDesktop}</span>
@@ -151,11 +154,12 @@ export function mobilePassiveBarTemplate({
   pauseTitle,
 }) {
   return html`
-    <span class="passive-top-ep">
+    <span class="passive-top-ep" title="Exotic particles">
       <img src="img/ui/nav/nav_experimental.png" alt="" class="passive-top-icon-img" aria-hidden="true" />
+      <span class="passive-top-ep-label">EP</span>
       <span id="mobile_passive_ep">${epText}</span>
     </span>
-    <span class="passive-top-money">
+    <span class="passive-top-money" title="Cash">
       <span id="mobile_passive_money_value">${moneyText}</span>
     </span>
     <button
@@ -543,9 +547,18 @@ export function componentSummaryTemplate({
 export function leaderboardStatusRowTemplate({
   text,
   loading = false,
+  offline = false,
+  empty = false,
+  onRetry,
 }) {
   if (loading) {
     return html`<tr><td colspan="7" class="leaderboard-loading-cell"><span class="terminal-loader">Loading records <span class="terminal-loader-bar" aria-hidden="true">[████░░░░░░]</span></span></td></tr>`;
+  }
+  if (offline) {
+    return html`<tr><td colspan="7" class="leaderboard-status-cell leaderboard-status-offline leaderboard-offline-cell"><span class="leaderboard-offline-text">${text}</span><button type="button" class="pixel-btn leaderboard-retry-btn" @click=${onRetry}>Retry</button></td></tr>`;
+  }
+  if (empty) {
+    return html`<tr><td colspan="7" class="leaderboard-status-cell leaderboard-status-empty">${text}</td></tr>`;
   }
   return html`<tr><td colspan="7" class="leaderboard-status-cell">${text}</td></tr>`;
 }
@@ -570,7 +583,7 @@ export function leaderboardRowTemplate({
       <td class=${heatClass}>${heatText}</td>
       <td class=${moneyClass}>${moneyText}</td>
       <td class="leaderboard-col-time" style="display: none;">${timeText}</td>
-      <td>${viewCellContent}</td>
+      <td class="leaderboard-col-layout">${viewCellContent}</td>
     </tr>
   `;
 }
@@ -750,6 +763,23 @@ export function sectionCountTextTemplate({
   total,
 }) {
   return html` ${researched}/${total}`;
+}
+
+export function sectionHubMetaTemplate({
+  researched,
+  total,
+  affordable = 0,
+}) {
+  const affordableClass = affordable > 0 ? "section-affordable-badge" : "section-affordable-badge section-affordable-none";
+  const affordableLabel = affordable > 0
+    ? `${affordable} affordable`
+    : (researched < total ? "none ready" : "0 affordable");
+  return html`
+    <span class="section-hub-meta">
+      <span class="section-count">${researched}/${total} researched</span>
+      <span class=${affordableClass}>${affordableLabel}</span>
+    </span>
+  `;
 }
 
 export function plainTextTemplate({
