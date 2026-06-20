@@ -43,11 +43,14 @@ jobs:
       - name: Fix manifest.json for GitHub Pages
         run: node scripts/pwa-check.js --fix-manifest
 
+      - name: Run test suite
+        run: npm test
+
+      - name: Strip console statements for production
+        run: npm run remove-console-logs
+
       - name: Build Service Worker
         run: npm run build:sw
-
-      - name: Run test suite
-        run: npm run test:deploy
 
       - name: Check PWA root files
         run: npm run check-pwa-root-files
