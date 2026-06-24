@@ -1,20 +1,11 @@
 [
     {
-        "version": "26_06_21-1925",
-        "date": "2026-06-22",
+        "version": "26_06_24-1536",
+        "date": "2026-06-24",
         "bullets": [
-            "Split state preferences and save modules to break services cycle.",
-            "Extract domain/reactor-stats.js to break state-to-logic import cycle.",
-            "Create phase-2-architecture.mdc",
-            "Add Phase 0 and Phase 1 Cursor rules for release hygiene.",
-            "Remove duplicate pause-heat test from tests/core root.",
-            "Document npm test as the full CI gate and test:deploy as local subset.",
-            "Run full test gate in CI and strip console logs before SW build.",
-            "Add UI fonts/CSS, lint config and CI screenshots",
-            "Add UI audits/screenshots; update CI & CSS",
-            "Add Puppeteer UI audit script and favicon",
-            "Add public build, assets, tests, and CI",
-            "Restore Reactor Revival branding after repo recreation."
+            "Massive public/src rewrite, assets, docs & CI\n\nLarge refactor and content update: migrate app sources into public/src (many new modules, components, domain/logic, workers, state, templates, and tests), add build scripts and tooling for CSS/static data, and introduce numerous assets (webp images, fonts, JSON data). Update CI deploy workflow to fetch full history, generate changelog metadata, commit deploy changelog, run CSS bundling, and enable screenshot layout audit. Tighten linting and architecture guardrails via ESLint changes and Workbox precache pattern updates. Add design and architecture docs (design-foundations.md, architecture-rules.md) and update README to reflect new metadata/changelog behavior.",
+            "Split state preferences and save modules to break services cycle.\n\nExtract state/preferences.js, state/save-query.js, and state/save-ui.js. services.js and services-audio.js no longer import state.js; state.js imports services-leaderboard directly. logic-upgrade-dom uses state/preferences.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+            "Extract domain/reactor-stats.js to break state-to-logic import cycle.\n\nMove reactor stat helpers and heat threshold reset into domain layer. state.js imports domain and logic-tooltip-stats directly; logic.js re-exports for backward compatibility. Enable ESLint import/no-cycle as warn.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
         ]
     }
 ]
