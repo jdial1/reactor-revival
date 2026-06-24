@@ -4,12 +4,6 @@ import { EngineStatus } from "../schema/stateSchemas.js";
 export function syncGameTogglesFromState(game) {
   if (!game?.state) return;
   const s = game.state;
-  const r = game.reactor;
-  if (r) {
-    r.auto_sell_enabled = !!s.auto_sell;
-    r.auto_buy_enabled = !!s.auto_buy;
-    r.heat_controlled = !!s.heat_control;
-  }
   const p = !!s.pause;
   if (game.paused !== p) {
     game.paused = p;

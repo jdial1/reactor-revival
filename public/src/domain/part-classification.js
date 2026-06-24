@@ -1,3 +1,5 @@
+import { computeTileNeighborLists } from "./grid.js";
+
 export function classifyTile(tile) {
   if (!tile?.part) {
     return { cells: false, inlets: false, exchangers: false, valves: false, outlets: false, vents: false, capacitors: false, vessels: false };
@@ -19,6 +21,22 @@ function buildValveNeighborCache(activeValves) {
     }
   }
   return valveNeighborCache;
+}
+
+export function rebuildTickNeighborViews(engine) {
+  const tileset = engine?.game?.tileset;
+  if (!tileset) {
+    if (engine) engine._tickNeighborViews = null;
+    return;
+  }
+  const map = new WeakMap();
+  const tiles = tileset.tiles_list;
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i];
+    if (!tile) continue;
+    map.set(tile, computeTileNeighborLists(tile));
+  }
+  engine._tickNeighborViews = map;
 }
 
 export function deriveActivePartsFromGrid(tileset) {
@@ -63,10 +81,18 @@ export function deriveActivePartsFromGrid(tileset) {
 export function bumpGridPartsRevision(tileset) {
   if (!tileset) return;
   tileset._partsRevision = (tileset._partsRevision ?? 0) + 1;
+  const engine = tileset.game?.engine;
+  if (engine) {
+    engine._workerPartSnapshotCache = null;
+    engine._tickNeighborViews = null;
+    invalidateTickParts(engine);
+  }
 }
 
 export function invalidateTickParts(engine) {
-  if (engine) engine._tickParts = null;
+  if (!engine) return;
+  engine._tickParts = null;
+  engine._tickNeighborViews = null;
 }
 
 export function ensureTickParts(engine) {
@@ -76,6 +102,7 @@ export function ensureTickParts(engine) {
   const cached = engine._tickParts;
   if (cached && cached.tickId === tickId && cached.revision === revision) return cached;
 
+  rebuildTickNeighborViews(engine);
   engine._valveOrientationCache?.clear?.();
   const derived = deriveActivePartsFromGrid(tileset);
   engine._tickParts = { tickId, revision, ...derived };

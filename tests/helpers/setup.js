@@ -610,6 +610,7 @@ function injectHTMLContent(document, htmlContent) {
 
 export function pinEngineToSyncMode(engine) {
   if (!engine) return;
+  engine._forceSyncHeat = true;
   engine._workerFailed = true;
   engine._forceGameLoopWorkerOff = true;
   engine._gameLoopWorkerFailed = true;

@@ -102,15 +102,12 @@ class TutorialRuntime {
   }
 
   ensurePartsPanelOpen(expand) {
-    const section = document.getElementById("parts_section");
     const tabPower = document.getElementById("tab_power");
     const ui = this.game?.ui;
-    const collapsed = ui?.uiState?.parts_panel_collapsed ?? section?.classList.contains("collapsed");
+    const collapsed = ui?.uiState?.parts_panel_collapsed ?? true;
     if (collapsed && expand) {
       if (ui?.uiState) ui.uiState.parts_panel_collapsed = false;
-      else if (section) section.classList.remove("collapsed");
-      if (section?.previousElementSibling?.id === "control_deck_build_fab") return;
-      if (ui?.partsPanelUI?.updatePartsPanelBodyClass) ui.partsPanelUI.updatePartsPanelBodyClass();
+      if (ui?.updatePartsPanelBodyClass) ui.updatePartsPanelBodyClass();
     }
     if (tabPower && !tabPower.classList.contains("active")) {
       tabPower.click();

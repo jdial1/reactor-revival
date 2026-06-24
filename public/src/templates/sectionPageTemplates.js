@@ -31,7 +31,7 @@ export function reactorSectionTemplate() {
   return html`
 <section id="reactor_section" class="page">
   <div id="reactor_background"></div>
-  <div id="reactor_copy_paste_btns" class="collapsed">
+  <div id="reactor_copy_paste_btns">
     <button id="reactor_copy_paste_toggle" class="reactor-toolbar-labeled-btn expand-toggle ui-bevel" title="Open reactor tools" tabindex="0" aria-label="Open reactor tools">
       <span class="reactor-toolbar-btn-icon" aria-hidden="true">
         <span class="expand-icon">&lt;</span>

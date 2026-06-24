@@ -22,7 +22,6 @@ import {
   HEAT_CALC_POOL_SIZE,
   GRID_SIZE_PHYSICS_WORKER_MAX_CELLS,
   WORKER_HEARTBEAT_MS,
-  WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK,
   PAUSED_POLL_MS,
   MAX_TEST_FRAMES,
   SESSION_UPDATE_INTERVAL_MS,
@@ -68,7 +67,7 @@ import { applyBlueprintLayoutDiff, layoutFromPlannerSlots, clipToGrid } from "./
 import {
   PhysicsTickResultSchema,
 } from "../schema/index.js";
-import { validateGameLoopTickInput, validatePhysicsTickInput, validateGameLoopTickResult, freezeWorkerTickSnapshot, lockSimulationForWorker, unlockSimulationAfterCommit, waitForSimulationUnlock } from "../worker/workerBoundary.js";
+import { validateGameLoopTickInput, validatePhysicsTickInput, validateGameLoopTickResult, freezeWorkerTickSnapshot, lockSimulationForWorker, unlockSimulationAfterCommit, waitForSimulationUnlock, isWorkerBoundaryValidationEnabled } from "../worker/workerBoundary.js";
 import {
   buildHeatPayload,
   HeatSystem,
@@ -306,6 +305,22 @@ function cloneHeatBufferForWorkerPost(buf) {
   return new Float32Array(new Float32Array(buf)).buffer;
 }
 
+function resolveWorkerPartSnapshot(engine, ts) {
+  const revision = ts?._partsRevision ?? 0;
+  const cached = engine._workerPartSnapshotCache;
+  if (cached && cached.revision === revision) {
+    return { partTable: cached.partTable, partLayout: cached.partLayout };
+  }
+  const { partTable, partLayout } = buildPartSnapshot(ts);
+  const snapshot = {
+    revision,
+    partTable: clonePartTableForWorker(partTable),
+    partLayout: clonePartLayoutForWorker(partLayout),
+  };
+  engine._workerPartSnapshotCache = snapshot;
+  return snapshot;
+}
+
 function clonePartTableForWorker(partTable) {
   return partTable.map((row) => {
     const copy = { ...row };
@@ -495,7 +510,7 @@ function buildReactorStatePayload(reactor) {
     sell_price_multiplier: reactor.sell_price_multiplier ?? 1,
     power_overflow_to_heat_ratio: reactor.power_overflow_to_heat_ratio ?? 1,
     power_multiplier: reactor.power_multiplier ?? 1,
-    heat_controlled: (reactor.heat_controlled || game.state?.heat_control) ? 1 : 0,
+    heat_controlled: game.state?.heat_control ? 1 : 0,
     vent_multiplier_eff: reactor.vent_multiplier_eff ?? 0,
     stirling_multiplier: reactor.stirling_multiplier ?? 0,
     manual_heat_reduce: toNumber(reactor.manual_heat_reduce ?? game?.base_manual_heat_reduce ?? 1),
@@ -593,7 +608,7 @@ export function serializeStateForGameLoopWorker(engine, opts = {}) {
   if (!ts?.heatMap) return null;
   ensureOrthoAdjacencyForEngine(engine);
   const stateSnapshot = game.state ? snapshot(game.state) : null;
-  const { partTable, partLayout } = buildPartSnapshot(ts);
+  const { partTable, partLayout } = resolveWorkerPartSnapshot(engine, ts);
   const autoSellFromStore = stateSnapshot?.auto_sell !== undefined;
   const rawMoney = stateSnapshot?.current_money;
   const currentMoney = rawMoney != null ? (typeof rawMoney === "number" || typeof rawMoney === "string" ? rawMoney : toNumber(rawMoney)) : undefined;
@@ -603,9 +618,7 @@ export function serializeStateForGameLoopWorker(engine, opts = {}) {
   const oi = engine._orthoNeighborIndices;
   const orthoNeighborOffsets = oo.buffer.slice(oo.byteOffset, oo.byteOffset + oo.byteLength);
   const orthoNeighborIndices = oi.buffer.slice(oi.byteOffset, oi.byteOffset + oi.byteLength);
-  const autoBuyOn = autoSellFromStore
-    ? !!stateSnapshot?.auto_buy
-    : !!(game.reactor?.auto_buy_enabled ?? game.state?.auto_buy);
+  const autoBuyOn = !!stateSnapshot?.auto_buy;
   const autoBuyUnlocked = (game.upgradeset?.getUpgrade("auto_buy_operator")?.level ?? 0) > 0;
   const prestigeMoneyMultiplier =
     typeof game.getPrestigeMultiplier === "function" ? game.getPrestigeMultiplier() : 1;
@@ -621,8 +634,8 @@ export function serializeStateForGameLoopWorker(engine, opts = {}) {
     integrityBuffer,
     orthoNeighborOffsets,
     orthoNeighborIndices,
-    partLayout: clonePartLayoutForWorker(partLayout),
-    partTable: clonePartTableForWorker(partTable),
+    partLayout,
+    partTable,
     reactorState: buildReactorStatePayload(reactor),
     rows: game.gridManager.rows,
     cols: game.gridManager.cols,
@@ -1160,12 +1173,15 @@ function postGameLoopWorkerTick(engine, tickCount, opts = {}) {
 
   engine._gameLoopWorkerTickId = (engine._gameLoopWorkerTickId || 0) + 1;
   engine._gameLoopTickContext = { tickId: engine._gameLoopWorkerTickId };
-  const state = freezeWorkerTickSnapshot({
+  const tickPayload = {
     ...base,
     tickId: engine._gameLoopWorkerTickId,
     tickCount,
     multiplier: 1,
-  });
+  };
+  const state = isWorkerBoundaryValidationEnabled()
+    ? freezeWorkerTickSnapshot(tickPayload)
+    : tickPayload;
   engine._gameLoopWorkerPending = true;
   engine._gameLoopWorkerPendingSince = typeof performance !== "undefined" ? performance.now() : 0;
   lockSimulationForWorker(engine);
@@ -1570,9 +1586,7 @@ function handleComponentExplosion(engine, tile) {
 function processAutoSell(engine, multiplier) {
   const reactor = engine.game.reactor;
   const game = engine.game;
-  let autoSellEnabled = reactor.auto_sell_enabled;
-  if (autoSellEnabled === undefined) autoSellEnabled = game.state?.auto_sell;
-  if (autoSellEnabled === undefined) autoSellEnabled = false;
+  const autoSellEnabled = !!game.state?.auto_sell;
   if (!autoSellEnabled) return;
 
   const layoutMax = toDecimal(reactor.max_power ?? 0);
@@ -1975,7 +1989,7 @@ function applyHeatReductions(reactor, multiplier) {
       reactor.current_heat = reactor.current_heat.sub(heatRemoved);
     }
   }
-  if (reactor.current_heat.gt(0) && !!(reactor.heat_controlled || reactor.game?.state?.heat_control)) {
+  if (reactor.current_heat.gt(0) && !!reactor.game?.state?.heat_control) {
     const ventBonus = reactor.vent_multiplier_eff || 0;
     const baseRed = reactor.max_heat.toNumber() / REACTOR_HEAT_STANDARD_DIVISOR;
     const reduction = baseRed * (1 + ventBonus / 100) * multiplier;
@@ -2150,20 +2164,13 @@ function takePhysicsWorkerTickContext(engine) {
 
 function recordPhysicsWorkerFailure(engine) {
   engine._heatWorkerConsecutiveTimeouts = (engine._heatWorkerConsecutiveTimeouts || 0) + 1;
-  if (engine._heatWorkerConsecutiveTimeouts >= WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK) {
-    engine._workerFailed = true;
-  }
+  engine._workerFailed = true;
 }
 
-function runPhysicsWorkerSyncFallback(engine, ctx, reason) {
-  if (!ctx || !engine.running) return;
+function failPhysicsWorkerTick(engine, reason) {
   recordPhysicsWorkerFailure(engine);
-  if (reason === "timeout") {
-    logger.log("warn", "engine", "[PhysicsWorker] heat step timeout");
-  } else {
-    logger.log("warn", "engine", "[PhysicsWorker] heat step fallback", { reason });
-  }
-  engine._runHeatStepSync(ctx.multiplier, ctx.power_add, ctx.heat_add, ctx.powerBeforeTick, ctx.heatBeforeTick);
+  if (!engine.running || engine._forceSyncHeat) return;
+  failSimulationHardwareIncompatible(engine, reason);
 }
 
 function onPhysicsWorkerHeatTimeout(engine) {
@@ -2171,17 +2178,15 @@ function onPhysicsWorkerHeatTimeout(engine) {
   clearPhysicsWorkerHeartbeat(engine);
   const ctx = takePhysicsWorkerTickContext(engine);
   if (!ctx) return;
-  recordPhysicsWorkerFailure(engine);
-  if (!engine.running) return;
   logger.log("warn", "engine", "[PhysicsWorker] heat step timeout");
-  engine._runHeatStepSync(ctx.multiplier, ctx.power_add, ctx.heat_add, ctx.powerBeforeTick, ctx.heatBeforeTick);
+  failPhysicsWorkerTick(engine, "physicsWorkerTimeout");
 }
 
-function cancelPendingPhysicsWorkerHeat(engine, { syncFallback = false, reason = "" } = {}) {
+function cancelPendingPhysicsWorkerHeat(engine, reason = "") {
   clearPhysicsWorkerHeartbeat(engine);
   if (!engine._workerPending) return;
-  const ctx = takePhysicsWorkerTickContext(engine);
-  if (syncFallback) runPhysicsWorkerSyncFallback(engine, ctx, reason);
+  takePhysicsWorkerTickContext(engine);
+  if (reason) failPhysicsWorkerTick(engine, reason);
 }
 
 function validateWorkerResponse(engine, data) {
@@ -2190,19 +2195,19 @@ function validateWorkerResponse(engine, data) {
   if (!data?.heatBuffer) {
     takePhysicsWorkerTickContext(engine);
     logger.log("debug", "engine", "[PhysicsWorker] validateWorkerResponse rejected: no heatBuffer");
-    if (ctx && engine.running) runPhysicsWorkerSyncFallback(engine, ctx, "no heatBuffer");
+    if (ctx && engine.running) failPhysicsWorkerTick(engine, "no heatBuffer");
     return null;
   }
   if (!engine.game?.tileset) {
     takePhysicsWorkerTickContext(engine);
     logger.log("debug", "engine", "[PhysicsWorker] validateWorkerResponse rejected: no tileset");
-    if (ctx && engine.running) runPhysicsWorkerSyncFallback(engine, ctx, "no tileset");
+    if (ctx && engine.running) failPhysicsWorkerTick(engine, "no tileset");
     return null;
   }
   takePhysicsWorkerTickContext(engine);
   if (!ctx || data.tickId !== ctx.tickId) {
     logger.log("debug", "engine", "[PhysicsWorker] validateWorkerResponse rejected: tickId mismatch", { received: data.tickId, expected: ctx?.tickId });
-    if (ctx && engine.running) runPhysicsWorkerSyncFallback(engine, ctx, "tickId mismatch");
+    if (ctx && engine.running) failPhysicsWorkerTick(engine, "tickId mismatch");
     return null;
   }
   return { ctx };
@@ -2325,8 +2330,9 @@ function ensureEngineWorker(engine) {
     worker.onerror = (ev) => {
       logger.log("warn", "engine", "[EngineWorker] worker error", ev?.message ?? ev);
       engine._workerFailed = true;
-      cancelPendingPhysicsWorkerHeat(engine, { syncFallback: true, reason: "workerError" });
+      cancelPendingPhysicsWorkerHeat(engine, "workerError");
       failGameLoopWorker(engine, "workerError");
+      failSimulationHardwareIncompatible(engine, "workerError");
     };
     registerEngineWorker(engine, worker);
     engine._engineWorker = worker;
@@ -3148,7 +3154,11 @@ export class Engine {
 
     const usePhysicsWorker = this._useWorker();
     if (!usePhysicsWorker) {
-      this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+      if (this._forceSyncHeat) {
+        this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+        return;
+      }
+      failSimulationHardwareIncompatible(this, "physicsWorkerUnavailable");
       return;
     }
 
@@ -3165,19 +3175,29 @@ export class Engine {
     if (!w) {
       this._workerPending = false;
       this._workerTickContext = null;
-      this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+      if (this._forceSyncHeat) {
+        this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+        return;
+      }
+      failSimulationHardwareIncompatible(this, "physicsWorkerCreateFailed");
       return;
     }
     const result = validatePhysicsTickInput(payload.msg, "PhysicsWorker send");
     if (!result.success) {
       this._workerPending = false;
       this._workerTickContext = null;
-      this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+      if (this._forceSyncHeat) {
+        this._runHeatStepSync(multiplier, power_add, heat_add, powerBeforeTick, heatBeforeTick);
+        return;
+      }
+      failSimulationHardwareIncompatible(this, "physicsWorkerInputValidation");
       return;
     }
     logger.log("debug", "engine", "[PhysicsWorker] posting heat step, awaiting response:", { power_add, tickId: this._workerTickId });
     if (!postWorkerMessage(this, result.data, payload.transferList)) {
-      cancelPendingPhysicsWorkerHeat(this, { syncFallback: true, reason: "postMessage" });
+      this._workerPending = false;
+      this._workerTickContext = null;
+      failPhysicsWorkerTick(this, "postMessage");
       return;
     }
     this._heatTransferHeat = null;

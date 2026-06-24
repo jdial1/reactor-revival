@@ -479,10 +479,10 @@ html.reduced-motion-app #app_root { animation: none !important;
  --heat-bg-alpha: 0; --heat-ratio: 0; --core-danger: 0; background-color: rgb(255 0 0 / var(--heat-bg-alpha)); inset: 0; pointer-events: none; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light); transition: background-color 0.35s steps(6, end), box-shadow 0.35s steps(6, end); filter: saturate(calc(1 + var(--core-danger) * 0.35));
 }
 
-#reactor_background.engineering-mode { background-color: rgb(0 90 110 / 14%); background-image: linear-gradient(rgb(0 220 255 / 10%) 1px, transparent 1px), linear-gradient(90deg, rgb(0 220 255 / 10%) 1px, transparent 1px); background-size: 22px 22px; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px rgb(0 200 220 / 28%), inset 0 0 48px rgb(0 160 200 / 18%);
+#reactor_background.engineering-mode, #wrapper.reactor-engineering-mode #reactor_background { background-color: rgb(0 90 110 / 14%); background-image: linear-gradient(rgb(0 220 255 / 10%) 1px, transparent 1px), linear-gradient(90deg, rgb(0 220 255 / 10%) 1px, transparent 1px); background-size: 22px 22px; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px rgb(0 200 220 / 28%), inset 0 0 48px rgb(0 160 200 / 18%);
 }
 
-#reactor_background.engineering-mode.heat-warning { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px rgb(0 200 220 / 22%), inset 0 0 36px rgb(255 0 0 / 28%), inset 0 0 48px rgb(0 160 200 / 12%);
+#reactor_background.engineering-mode, #wrapper.reactor-engineering-mode #reactor_background.heat-warning { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px rgb(0 200 220 / 22%), inset 0 0 36px rgb(255 0 0 / 28%), inset 0 0 48px rgb(0 160 200 / 12%);
 }
 /* --- Navigation Bars (Top & Bottom) --- */
 #main_top_nav,
@@ -592,7 +592,7 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 @media (width <= 900px) { #parts_section { position: fixed; z-index: 1100; inset: 0 0 calc(var(--bottom-nav-height, 40px) + env(safe-area-inset-bottom)); display: flex; overflow: hidden; width: 100vw; max-width: 100vw; height: auto; min-height: 0; max-height: none; flex-direction: column; padding: 0; padding-top: calc(env(safe-area-inset-top) + 10px); padding-bottom: 20px; border-radius: 0; border-top: 4px solid var(--bevel-light); border-right: none; border-bottom: none; border-left: none; background-color: var(--panel-bg); box-shadow: 0 -12px 48px rgb(0 0 0 / 90%), 0 0 40px rgb(0 0 0 / 85%); -webkit-overflow-scrolling: touch; overflow-y: auto; transform: translateY(100%); transition: transform 0.25s steps(6, end), height 0.25s steps(6, end), max-height 0.25s steps(6, end), box-shadow 0.2s steps(4, end), display 0s !important;
  }
 
- #parts_section.collapsed { display: none !important; overflow: hidden !important; height: 0 !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; border: none !important; margin: 0 !important; box-shadow: none !important; opacity: 0 !important; pointer-events: none !important; transform: translateY(100%) !important; visibility: hidden !important;
+ #parts_section.collapsed, #wrapper:not(.parts-panel-open) #parts_section { display: none !important; overflow: hidden !important; height: 0 !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; border: none !important; margin: 0 !important; box-shadow: none !important; opacity: 0 !important; pointer-events: none !important; transform: translateY(100%) !important; visibility: hidden !important;
  }
  /* Hide UI elements when parts panel is open on mobile */
  #wrapper.parts-panel-open #reactor_control_deck,
@@ -601,14 +601,20 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  }
 
  #parts_section.collapsed .parts_header,
+ #wrapper:not(.parts-panel-open) #parts_section .parts_header,
  #parts_section.collapsed #parts_tab_contents,
+ #wrapper:not(.parts-panel-open) #parts_section #parts_tab_contents,
  #parts_section.collapsed #controls_nav,
+ #wrapper:not(.parts-panel-open) #parts_section #controls_nav,
  #parts_section.collapsed .parts_tabs,
+ #wrapper:not(.parts-panel-open) #parts_section .parts_tabs,
  #parts_section.collapsed .parts_sheet_handle,
- #parts_section.collapsed > * { display: none !important; overflow: hidden !important; height: 0 !important; max-height: 0 !important; padding: 0 !important; margin: 0 !important; opacity: 0 !important; pointer-events: none !important; visibility: hidden !important;
+ #wrapper:not(.parts-panel-open) #parts_section .parts_sheet_handle,
+ #parts_section.collapsed > *,
+ #wrapper:not(.parts-panel-open) #parts_section > * { display: none !important; overflow: hidden !important; height: 0 !important; max-height: 0 !important; padding: 0 !important; margin: 0 !important; opacity: 0 !important; pointer-events: none !important; visibility: hidden !important;
  }
 
- #parts_section:not(.collapsed) { display: flex !important; opacity: 1 !important; pointer-events: auto; transform: translateY(0) !important; visibility: visible !important; animation: panel-jolt 0.15s steps(2) 2, panel-glow-pulse-mobile 5s infinite linear;
+ #parts_section:not(.collapsed), #wrapper.parts-panel-open #parts_section { display: flex !important; opacity: 1 !important; pointer-events: auto; transform: translateY(0) !important; visibility: visible !important; animation: panel-jolt 0.15s steps(2) 2, panel-glow-pulse-mobile 5s infinite linear;
  }
 
  .parts-close-btn { width: calc(100% - 16px); min-height: 44px; margin: 8px;
@@ -1036,10 +1042,10 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #controls_nav { flex: 0 0 auto; min-height: 0;
  }
 
- #parts_section:not(.collapsed) { animation: panel-jolt-rack 0.15s steps(2) 2, panel-glow-pulse 5s infinite linear;
+ #parts_section:not(.collapsed), #wrapper.parts-panel-open #parts_section { animation: panel-jolt-rack 0.15s steps(2) 2, panel-glow-pulse 5s infinite linear;
  }
 
- #parts_section.collapsed { display: none;
+ #parts_section.collapsed, #wrapper:not(.parts-panel-open) #parts_section { display: none;
  }
 
  #parts_close_btn { display: none;

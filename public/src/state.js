@@ -203,6 +203,9 @@ export function createGameState(initial = {}) {
     failure_state: initial.failure_state ?? "nominal",
     engine_tick_count: initial.engine_tick_count ?? 0,
     meltdown_seq: initial.meltdown_seq ?? 0,
+    prestige_seq: initial.prestige_seq ?? 0,
+    last_prestige: initial.last_prestige ?? null,
+    quick_select_slots: initial.quick_select_slots ?? [],
     base_max_heat: initial.base_max_heat ?? 0,
     base_max_power: initial.base_max_power ?? 0,
     effect_queue: [],
@@ -397,7 +400,6 @@ export class StateManager extends BaseComponent {
     if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
       this.game.state.parts_panel_version++;
     }
-    if (this.game?.emit) this.game.emit("partSelected", { part });
     this.updatePartsPanelToggleIcon(part);
 
     const skipOpenPanel = options.skipOpenPanel === true;
@@ -405,13 +407,7 @@ export class StateManager extends BaseComponent {
     if (isMobile && part && !skipOpenPanel) {
       const uiState = this.ui?.uiState;
       if (uiState) uiState.parts_panel_collapsed = false;
-      else {
-        const partsSection = document.getElementById("parts_section");
-        if (partsSection) partsSection.classList.remove("collapsed");
-      }
       this.ui.updatePartsPanelBodyClass();
-      const partsSection = document.getElementById("parts_section");
-      if (partsSection) void partsSection.offsetHeight;
     }
     if (part) {
       const inQuickSelect = this.getQuickSelectSlots().some((s) => s.partId === part.id);
@@ -425,6 +421,11 @@ export class StateManager extends BaseComponent {
   }
   getClickedPart() {
     return this.clicked_part;
+  }
+
+  syncQuickSelectSlotsToGameState() {
+    if (!this.game?.state) return;
+    this.game.state.quick_select_slots = this.getQuickSelectSlots();
   }
 
   pushLastUsedPart(part) {
@@ -444,6 +445,7 @@ export class StateManager extends BaseComponent {
       slots[i].partId = available.shift() ?? null;
     }
     if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+    this.syncQuickSelectSlotsToGameState();
   }
 
   getQuickSelectSlots() {
@@ -467,9 +469,10 @@ export class StateManager extends BaseComponent {
     if (index < 0 || index > 4) return;
     this.quickSelectSlots[index].locked = locked;
     if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+    this.syncQuickSelectSlotsToGameState();
   }
 
-  setQuickSelectSlots(slots) {
+  setQuickSelectSlots(slots, options = {}) {
     const normalized = Array.from({ length: 5 }, (_, i) => {
       const s = slots?.[i];
       return {
@@ -479,6 +482,7 @@ export class StateManager extends BaseComponent {
     });
     this.quickSelectSlots = normalized;
     if (typeof this.ui.updateQuickSelectSlots === "function") this.ui.updateQuickSelectSlots();
+    if (!options.skipStateSync) this.syncQuickSelectSlotsToGameState();
   }
 
   updatePartsPanelToggleIcon(_part) {}
@@ -770,13 +774,14 @@ async function runRebootActionInternal(game, keep_exotic_particles) {
   refreshUI(game);
   refreshObjective(game);
   if (keep_exotic_particles) {
-    game.emit?.("prestigeCompleted", {
+    game.state.last_prestige = {
       keepEp: true,
       epFromWeave,
       fuelCellCount,
       sessionPowerProduced,
       sessionHeatDissipated,
-    });
+    };
+    game.state.prestige_seq = (game.state.prestige_seq ?? 0) + 1;
   }
 }
 
@@ -988,7 +993,8 @@ export class LifecycleManager {
     this.game.onToggleStateChange?.("auto_buy", false);
     const defaultQuickSelectIds = ["uranium1", "vent1", "heat_exchanger1", "heat_outlet1", "capacitor1"];
     const slots = defaultQuickSelectIds.map((partId) => ({ partId, locked: false }));
-    this.game.emit("quickSelectSlotsChanged", { slots });
+    this.game.state.quick_select_slots = slots;
+    this.game.ui?.stateManager?.setQuickSelectSlots(slots, { skipStateSync: true });
     this.game.state.unlocked_achievements = [];
     this.game.achievement_manager?.restore?.([]);
   }
@@ -1038,11 +1044,6 @@ export function setGameConfiguration(game, config) {
 
 export function applyToggleStateChange(game, toggleName, value) {
   if (game.state && game.state[toggleName] !== value) game.state[toggleName] = value;
-  if (game.reactor) {
-    if (toggleName === "auto_sell") game.reactor.auto_sell_enabled = !!value;
-    else if (toggleName === "auto_buy") game.reactor.auto_buy_enabled = !!value;
-    else if (toggleName === "heat_control") game.reactor.heat_controlled = !!value;
-  }
   if (toggleName !== "pause") return;
   game.paused = value;
   if (game.router?.navigationPaused && !game.router.isNavigating) game.router.navigationPaused = false;

@@ -1,4 +1,4 @@
-﻿#objectives_section { right: 0; left: 0; display: flex; overflow: visible; min-height: 30px !important; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; transition: border-color 0.3s ease, box-shadow 0.3s ease; position: absolute !important; z-index: 1000; top: 0 !important; width: 100% !important; max-width: 100%; max-height: none !important; box-sizing: border-box; padding: 4px 0 0; margin: 4px 0 0 !important; font-family: "Press Start 2P", cursive, monospace !important; overflow-x: hidden; pointer-events: none;
+#objectives_section { right: 0; left: 0; display: flex; overflow: visible; min-height: 30px !important; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; transition: border-color 0.3s ease, box-shadow 0.3s ease; position: absolute !important; z-index: 1000; top: 0 !important; width: 100% !important; max-width: 100%; max-height: none !important; box-sizing: border-box; padding: 4px 0 0; margin: 4px 0 0 !important; font-family: "Press Start 2P", cursive, monospace !important; overflow-x: hidden; pointer-events: none;
 }
 
 #objectives_content { width: 100%; box-sizing: border-box; flex-direction: row; align-items: center; justify-content: space-between; display: block; overflow: visible; padding: 0 12px; gap: 0.4em;
@@ -1463,23 +1463,23 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 #reactor_copy_paste_btns { position: absolute; z-index: 25; top: 50%; right: 20px; display: flex; flex-direction: column; align-items: flex-end; margin-top: 8px; margin-bottom: 8px; gap: 8px; transform: translateY(-50%);
 }
 
-#reactor_copy_paste_btns.collapsed .reactor_copy_paste_buttons { display: none;
+#reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns .reactor_copy_paste_buttons { display: none;
 }
 
 #reactor_copy_paste_toggle .expand-icon,
 #reactor_copy_paste_toggle .collapse-icon { display: inline-block; color: rgb(255 255 255); font-size: 16px; line-height: 1;
 }
 
-#reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .expand-icon { display: inline-block !important;
+#reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .expand-icon { display: inline-block !important;
 }
 
-#reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .collapse-icon { display: none !important;
+#reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .collapse-icon { display: none !important;
 }
 
-#reactor_copy_paste_btns:not(.collapsed) #reactor_copy_paste_toggle .expand-icon { display: none !important;
+#reactor_copy_paste_btns:not(.collapsed), #wrapper:not(.copy-paste-collapsed) #reactor_copy_paste_btns #reactor_copy_paste_toggle .expand-icon { display: none !important;
 }
 
-#reactor_copy_paste_btns:not(.collapsed) #reactor_copy_paste_toggle .collapse-icon { display: inline-block !important;
+#reactor_copy_paste_btns:not(.collapsed), #wrapper:not(.copy-paste-collapsed) #reactor_copy_paste_btns #reactor_copy_paste_toggle .collapse-icon { display: inline-block !important;
 }
 
 .reactor_copy_paste_buttons { display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -1535,12 +1535,14 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 
 @media (prefers-reduced-motion: reduce) { #reactor_copy_paste_btns button,
  .reactor_copy_paste_buttons button,
- #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle { transition: none;
+ #reactor_copy_paste_btns.collapsed,
+ #wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle { transition: none;
  }
 
  #reactor_copy_paste_btns button:active,
  .reactor_copy_paste_buttons button:active,
- #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle:active { transform: none;
+ #reactor_copy_paste_btns.collapsed,
+ #wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle:active { transform: none;
  }
 }
 
@@ -1708,16 +1710,16 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 @media (width <= 900px) { #reactor_copy_paste_btns { z-index: 25; top: 50%; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; transform: translateY(-50%);
  }
 
- #reactor_copy_paste_btns.collapsed { position: fixed !important; z-index: 1101 !important; top: calc(env(safe-area-inset-top) + 4px) !important; right: 60px !important; left: auto !important; display: flex !important; align-items: flex-start; justify-content: flex-start; margin: 0 !important; transform: none !important; pointer-events: auto !important;
+ #reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns { position: fixed !important; z-index: 1101 !important; top: calc(env(safe-area-inset-top) + 4px) !important; right: 60px !important; left: auto !important; display: flex !important; align-items: flex-start; justify-content: flex-start; margin: 0 !important; transform: none !important; pointer-events: auto !important;
  }
 
- #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle { display: inline-flex !important; width: 44px !important; min-width: 44px; height: 44px !important; min-height: 44px; flex-shrink: 0; padding: 0; border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; background: rgb(50 50 50); box-shadow: 3px 3px 0 var(--bevel-shadow); transition: background 0.08s steps(2, end), border-color 0.08s steps(2, end), box-shadow 0.08s steps(2, end), transform 0.08s steps(2, end);
+ #reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle { display: inline-flex !important; width: 44px !important; min-width: 44px; height: 44px !important; min-height: 44px; flex-shrink: 0; padding: 0; border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; background: rgb(50 50 50); box-shadow: 3px 3px 0 var(--bevel-shadow); transition: background 0.08s steps(2, end), border-color 0.08s steps(2, end), box-shadow 0.08s steps(2, end), transform 0.08s steps(2, end);
  }
 
- #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); box-shadow: 1px 1px 0 var(--bevel-shadow), inset 2px 2px 4px rgb(0 0 0 / 50%); transform: translateY(2px);
+ #reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); box-shadow: 1px 1px 0 var(--bevel-shadow), inset 2px 2px 4px rgb(0 0 0 / 50%); transform: translateY(2px);
  }
 
- #reactor_copy_paste_btns.collapsed .reactor_copy_paste_buttons { display: none;
+ #reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns .reactor_copy_paste_buttons { display: none;
  }
 
  #reactor_copy_paste_modal .modal-content { max-width: 95%; max-height: 95%; margin: 10px;

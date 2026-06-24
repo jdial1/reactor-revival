@@ -223,7 +223,6 @@ export class AchievementManager {
 
     const handlers = [
       ["component_explosion", () => this._onComponentExplosion()],
-      ["prestigeCompleted", (p) => this._onPrestigeCompleted(p)],
     ];
 
     for (let i = 0; i < handlers.length; i++) {
@@ -241,6 +240,14 @@ export class AchievementManager {
         if (n > lastMeltdownSeq) {
           lastMeltdownSeq = n;
           this._onMeltdownStarted();
+        }
+      }));
+      let lastPrestigeSeq = g.state.prestige_seq | 0;
+      this._unsubs.push(subscribeKey(g.state, "prestige_seq", (seq) => {
+        const n = seq | 0;
+        if (n > lastPrestigeSeq) {
+          lastPrestigeSeq = n;
+          this._onPrestigeCompleted(g.state.last_prestige);
         }
       }));
       this._unsubs.push(subscribeKey(g.state, "engine_tick_count", () => this.onTickRecorded()));

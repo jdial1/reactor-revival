@@ -12,7 +12,7 @@ import { hideCopyPasteModal, openCopyPasteDialogHost, getCopyPasteRefs } from ".
 import { bindLitRenderMultiStates } from "../dom/lit-reactive.js";
 import { getUiElement } from "./page-dom.js";
 import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate } from "./ui-components.js";
-import { styleMap, repeat, bindEvents, escapeHtml } from "../dom/lit.js";
+import { styleMap, bindEvents, escapeHtml } from "../dom/lit.js";
 import { getMyLayouts } from "./ui-layout-storage.js";
 import { WEAVE_QUANTUM } from "../constants/balance.js";
 

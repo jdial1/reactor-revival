@@ -107,6 +107,7 @@ export function applyComputedModifiers(game, opts = {}) {
     const k = directKeys[i];
     if (typeof m[k] !== "undefined") r[k] = m[k];
   }
+  r.heat_controlled = m.heat_controlled;
 
   if (r.manual_heat_reduce !== m.manual_heat_reduce) {
     r.manual_heat_reduce = m.manual_heat_reduce;
@@ -115,13 +116,13 @@ export function applyComputedModifiers(game, opts = {}) {
     r.manual_heat_reduce = m.manual_heat_reduce;
   }
 
-  if (!!r.auto_sell_enabled !== m.auto_sell_from_upgrade) {
+  if (!!game.state?.auto_sell !== m.auto_sell_from_upgrade) {
     game.onToggleStateChange?.("auto_sell", m.auto_sell_from_upgrade);
   }
-  if (!!r.auto_buy_enabled !== m.auto_buy_from_upgrade) {
+  if (!!game.state?.auto_buy !== m.auto_buy_from_upgrade) {
     game.onToggleStateChange?.("auto_buy", m.auto_buy_from_upgrade);
   }
-  if (!!r.heat_controlled !== m.heat_controlled) {
+  if (!!game.state?.heat_control !== m.heat_controlled) {
     game.onToggleStateChange?.("heat_control", m.heat_controlled);
   }
 

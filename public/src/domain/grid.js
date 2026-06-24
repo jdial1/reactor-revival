@@ -104,6 +104,37 @@ import { vuSegmentRatio01 } from "../core/math-helpers.js";
 
 const GRID_SIZE = 50 * 50;
 
+export function computeTileNeighborLists(tile) {
+  const p = tile.part;
+  if (!p) {
+    return { containment: [], cell: [], reflector: [] };
+  }
+  const neighbors = Array.from(
+    tile.game.tileset.getTilesInRange(tile, p.range || 1)
+  );
+  const containment = [];
+  const cell = [];
+  const reflector = [];
+  for (const neighbor_tile of neighbors) {
+    if (neighbor_tile.part && neighbor_tile.activated) {
+      const np = neighbor_tile.part;
+      if (np.containment > 0 || ["heat_exchanger", "heat_outlet", "heat_inlet"].includes(np.category)) {
+        containment.push(neighbor_tile);
+      }
+      if (neighbor_tile.part.category === "cell" && neighbor_tile.ticks > 0) {
+        cell.push(neighbor_tile);
+      }
+      if (neighbor_tile.part.category === "reflector") {
+        reflector.push(neighbor_tile);
+      }
+    }
+  }
+  if (typeof process !== "undefined" && process.env.NODE_ENV === "test" && tile.part && tile.part.category === "heat_outlet") {
+    logger.log("debug", "game", `Outlet at (${tile.row}, ${tile.col}) has ${containment.length} containment neighbors: ${containment.map((t) => `(${t.row}, ${t.col}) ${t.part?.id}`).join(", ")}`);
+  }
+  return { containment, cell, reflector };
+}
+
 export class Tile {
   constructor(row, col, game) {
     this.game = game;
@@ -112,9 +143,6 @@ export class Tile {
     this.heat = 0;
     this.display_power = 0;
     this.display_heat = 0;
-    this._containmentNeighborTiles = [];
-    this._cellNeighborTiles = [];
-    this._reflectorNeighborTiles = [];
     this.activated = false;
     this.row = row;
     this.col = col;
@@ -125,7 +153,6 @@ export class Tile {
     this.ticks = 0;
     this.exploded = false;
     this.exploding = false;
-    this._neighborCache = null;
     this.cachedEffectiveVent = 0;
     this.cachedEffectiveTransfer = 0;
   }
@@ -153,82 +180,27 @@ export class Tile {
     this.ticks = value;
   }
 
-  _calculateAndCacheNeighbors() {
-    const p = this.part;
-    if (!p) {
-      this._neighborCache = { containment: [], cell: [], reflector: [] };
-      return;
+  _neighborLists() {
+    const views = this.game?.engine?._tickNeighborViews;
+    if (views) {
+      const hit = views.get(this);
+      if (hit) return hit;
     }
-    const neighbors = Array.from(
-      this.game.tileset.getTilesInRange(this, p.range || 1)
-    );
-    const containment = [];
-    const cell = [];
-    const reflector = [];
-    for (const neighbor_tile of neighbors) {
-      if (neighbor_tile.part && neighbor_tile.activated) {
-        const p = neighbor_tile.part;
-        if (p.containment > 0 || ['heat_exchanger', 'heat_outlet', 'heat_inlet'].includes(p.category)) {
-          containment.push(neighbor_tile);
-        }
-        if (neighbor_tile.part.category === "cell" && neighbor_tile.ticks > 0)
-          cell.push(neighbor_tile);
-        if (neighbor_tile.part.category === "reflector")
-          reflector.push(neighbor_tile);
-      }
-    }
-
-    if (typeof process !== "undefined" && process.env.NODE_ENV === 'test' && this.part && this.part.category === 'heat_outlet') {
-      logger.log('debug', 'game', `Outlet at (${this.row}, ${this.col}) has ${containment.length} containment neighbors: ${containment.map(t => `(${t.row}, ${t.col}) ${t.part?.id}`).join(', ')}`);
-    }
-
-    this._neighborCache = { containment, cell, reflector };
+    return computeTileNeighborLists(this);
   }
+
   invalidateNeighborCaches() {
-    this._neighborCache = null;
-    const ts = this.game?.tileset;
-    if (!ts) return;
-    const rows = this.game.rows;
-    const cols = this.game.cols;
-    const p = this.part;
-    const range = p?.range ?? 1;
-    const topo = p?.topologyType || "Manhattan";
-    const mark = (r, c) => {
-      const t = ts.getTile(r, c);
-      if (t) t._neighborCache = null;
-    };
-    if (topo === "Global") {
-      for (let i = 0; i < ts.tiles_list.length; i++) ts.tiles_list[i]._neighborCache = null;
-      return;
-    }
-    const invalidateRadius = Math.max(2, range + 2);
-    const man = topologyNeighborCoords("Manhattan", this.row, this.col, invalidateRadius, rows, cols);
-    for (let i = 0; i < man.length; i++) mark(man[i][0], man[i][1]);
-    if (topo === "Cross") {
-      for (let c = 0; c < cols; c++) mark(this.row, c);
-      for (let r = 0; r < rows; r++) mark(r, this.col);
-    } else {
-      const extra = topologyNeighborCoords(topo, this.row, this.col, Math.max(range, invalidateRadius), rows, cols);
-      for (let j = 0; j < extra.length; j++) mark(extra[j][0], extra[j][1]);
-    }
+    invalidateTickParts(this.game?.engine);
   }
+
   get containmentNeighborTiles() {
-    if (this._neighborCache === null) {
-      this._calculateAndCacheNeighbors();
-    }
-    return this._neighborCache.containment;
+    return this._neighborLists().containment;
   }
   get cellNeighborTiles() {
-    if (this._neighborCache === null) {
-      this._calculateAndCacheNeighbors();
-    }
-    return this._neighborCache.cell;
+    return this._neighborLists().cell;
   }
   get reflectorNeighborTiles() {
-    if (this._neighborCache === null) {
-      this._calculateAndCacheNeighbors();
-    }
-    return this._neighborCache.reflector;
+    return this._neighborLists().reflector;
   }
   recalculateEffectiveValues() {
     this.cachedEffectiveVent = 0;
@@ -332,7 +304,6 @@ export class Tile {
     this.part = partInstance;
     bumpGridPartsRevision(this.game?.tileset);
     invalidateTickParts(this.game?.engine);
-    this.invalidateNeighborCaches();
     if (this.part) {
       this.activated = true;
       this.ticks = this.part.ticks;
@@ -366,7 +337,6 @@ export class Tile {
     return true;
   }
   _clearPartReset() {
-    this.invalidateNeighborCaches();
     bumpGridPartsRevision(this.game?.tileset);
     invalidateTickParts(this.game?.engine);
     this.activated = false;
@@ -552,12 +522,6 @@ export class Tileset {
     }
 
     this.active_tiles_list = this.tiles_list.filter((t) => t.enabled);
-
-    this.tiles_list.forEach((tile) => {
-      if (tile._neighborCache !== undefined) {
-        tile._neighborCache = null;
-      }
-    });
 
     this.game.engine?.heatManager?.markSegmentsAsDirty();
   }

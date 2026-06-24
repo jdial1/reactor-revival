@@ -1,181 +1,30 @@
 ﻿import { EngineStatus } from "../schema/stateSchemas.js";
-import { buildFacts } from "../kernel/buildFacts.js";
 import { grantReward as applyGrantReward } from "./rewards.js";
 import { creditMoneyWithPrestige } from "./economy-intents.js";
-import {
-  heatSfxLastTick,
-  resetHeatThresholdSignalState,
-} from "./reactor-stats.js";
-import { calculateSectionCounts } from "../logic-upgrade-sections.js";
-import {
-  runHeatStepFromTyped,
-  runHeatTransferStep,
-  MAX_NEIGHBORS,
-  INLET_STRIDE,
-  INLET_OFFSET_INDEX,
-  INLET_OFFSET_RATE,
-  INLET_OFFSET_N_COUNT,
-  INLET_OFFSET_NEIGHBORS,
-  VALVE_STRIDE,
-  VALVE_OFFSET_INDEX,
-  VALVE_OFFSET_TYPE,
-  VALVE_OFFSET_ORIENTATION,
-  VALVE_OFFSET_RATE,
-  VALVE_OFFSET_INPUT_IDX,
-  VALVE_OFFSET_OUTPUT_IDX,
-  EXCHANGER_STRIDE,
-  EXCHANGER_OFFSET_INDEX,
-  EXCHANGER_OFFSET_RATE,
-  EXCHANGER_OFFSET_CONTAINMENT,
-  EXCHANGER_OFFSET_N_COUNT,
-  EXCHANGER_OFFSET_NEIGHBOR_INDICES,
-  EXCHANGER_OFFSET_NEIGHBOR_CAPS,
-  EXCHANGER_OFFSET_NEIGHBOR_CATS,
-  OUTLET_STRIDE,
-  OUTLET_OFFSET_INDEX,
-  OUTLET_OFFSET_RATE,
-  OUTLET_OFFSET_ACTIVATED,
-  OUTLET_OFFSET_IS_OUTLET6,
-  OUTLET_OFFSET_N_COUNT,
-  OUTLET_OFFSET_NEIGHBOR_INDICES,
-  OUTLET_OFFSET_NEIGHBOR_CAPS,
-  VALVE_OVERFLOW,
-  VALVE_TOPUP,
-  VALVE_CHECK,
-  CATEGORY_EXCHANGER,
-  CATEGORY_OTHER,
-  CATEGORY_VENT_COOLANT,
-  canPushToNeighbor,
-  transferHeatBetweenNeighbors,
-  applyValveRule,
-} from "../logic-heat-transfer.js";
-import {
-  topologyNeighborCoords,
-  TOPOLOGY_TYPES,
-  Topology,
-  computeWorkerNeighborPulseN,
-} from "../logic-topology.js";
-import {
-  computeAffordable,
-} from "../logic-upgrade-dom.js";
-import {
-  getUpgradeBonusLines,
-  computeNeighborPulseNFromTile,
-  calculateCellPulsePower,
-  calculateCellPulseHeat,
-} from "../logic-tooltip-stats.js";
-import { hasTrait, compileTraitBitmask } from "../traits.js";
+import { resetHeatThresholdSignalState } from "./reactor-stats.js";
 import { StatDispatcher } from "../statDispatcher.js";
 import { fromError } from "zod-validation-error";
 import { z } from "zod";
-import { html, render } from "lit-html";
-import { classMap, styleMap } from "../dom/lit.js";
 import { proxy } from "valtio/vanilla";
-import { StorageUtils } from "../storage/index.js";
-import Decimal from "../core/decimal-proxy.js";
-import {
-  toDecimal,
-  toNumber,
-  getDecimal,
-  isTestEnv,
-  getIndex,
-  isInBounds,
-  BASE_LOOP_WAIT_MS,
-  FOUNDATIONAL_TICK_MS,
-} from "../simUtils.js";
+import { toDecimal, toNumber, BASE_LOOP_WAIT_MS } from "../simUtils.js";
 import { logger } from "../core/logger.js";
-import { formatTime, numFormat as fmt } from "../format/numbers.js";
+import { formatTime } from "../format/numbers.js";
 import {
-  HEAT_TRANSFER_DIFF_DIVISOR,
-  EXCHANGER_MIN_TRANSFER_UNIT,
-  EXCHANGER_MIN_HEADROOM,
-  HEAT_TRANSFER_MAX_ITERATIONS,
-  VALVE_OVERFLOW_THRESHOLD,
-  VALVE_TOPUP_THRESHOLD,
-  HEAT_PAYLOAD_MAX_INLETS,
-  HEAT_PAYLOAD_MAX_VALVES,
-  HEAT_PAYLOAD_MAX_VALVE_NEIGHBORS,
-  HEAT_PAYLOAD_MAX_EXCHANGERS,
-  HEAT_PAYLOAD_MAX_OUTLETS,
-  HULL_REPEL_FRACTION,
-  CRITICAL_HEAT_RATIO,
-} from "../constants/sim.js";
-import {
-  GRID_SIZE_PHYSICS_WORKER_MAX_CELLS,
-  WORKER_HEARTBEAT_MS,
-  WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK,
-  PAUSED_POLL_MS,
-  MAX_TEST_FRAMES,
-  SESSION_UPDATE_INTERVAL_MS,
-  MAX_VISUAL_EVENTS,
-  MAX_VISUAL_REFLECTOR_PAIRS_PER_FRAME,
-  MAX_VISUAL_EXPLOSION_FLASHES_PER_FRAME,
-  HEAT_CALC_POOL_SIZE,
-  AUTONOMIC_REPAIR_POWER_COST,
-  AUTONOMIC_REPAIR_POWER_MIN,
-  EP_HEAT_SAFE_CAP,
-  HEAT_REMOVAL_TARGET_RATIO,
-  MULTIPLIER_FLOOR,
-  VISUAL_PARTICLE_HIGH_THRESHOLD,
-  VISUAL_PARTICLE_MED_THRESHOLD,
-  VISUAL_PARTICLE_HIGH_COUNT,
-  VISUAL_PARTICLE_MED_COUNT,
-  OFFLINE_TIME_THRESHOLD_MS,
-  MAX_ACCUMULATOR_MULTIPLIER,
-  MAX_LIVE_TICKS,
-  MAX_CATCHUP_TICKS,
-  GRID_TARGET_TOTAL_TILES,
-  GRID_MIN_DIMENSION,
-  GRID_MAX_DISPLAY_DIMENSION,
-  ZOOM_DAMPING_FACTOR,
-  PINCH_DISTANCE_THRESHOLD_PX,
-  MOMENTUM_DECAY_FACTOR,
-  SNAP_BACK_THRESHOLD_RATIO,
-  SNAP_BACK_SPRING_CONSTANT,
-  ZOOM_SCALE_MIN,
-  ZOOM_SCALE_MAX,
-  BALANCE_POWER_THRESHOLD_10K,
-  BASE_MAX_POWER,
-  BASE_MAX_HEAT,
-  SIMULATION_ERROR_MESSAGE,
-  HULL_HEAT_PER_PLATING_TILE,
-  POWER_STORAGE_PER_CAPACITOR_TILE,
-  POWER_STORAGE_CHARGED_PLATING_EXTRA,
-  MAX_PART_VARIANTS,
   UPGRADE_MAX_LEVEL,
   MAX_GRID_DIMENSION,
   BASE_MONEY,
   PRESTIGE_MULTIPLIER_PER_EP,
   PRESTIGE_MULTIPLIER_CAP,
   RESPEC_DOCTRINE_EP_COST,
-  WEAVE_QUANTUM,
-  GRID,
 } from "../constants/balance.js";
-import {
-  COLORS,
-  OVERHEAT_VISUAL,
-  BAR,
-  SINGULARITY,
-  HEAT_MAP,
-  HEAT_SHIMMER,
-  HEAT_HAZE,
-  HEAT_FLOW,
-} from "../constants/heat-visual.js";
-import { getPartImagePath } from "../core/part-images.js";
-import { MOBILE_BREAKPOINT_PX, RESIZE_DELAY_MS } from "../constants/ui-constants.js";
-import { getNeighborKeys, areAdjacent as areAdjacentFromModule } from "../core/grid-helpers.js";
-import { vuSegmentRatio01 } from "../core/math-helpers.js";
-import { SpatialRegistry } from "../spatial-adjacency.js";
 import {
   GameActionSchema,
   ACTION_SCHEMA_REGISTRY,
   EVENT_SCHEMA_REGISTRY,
-  snapshot,
   createGameState,
   UnlockManager,
   runRebootActionKeepEp,
   runRebootActionDiscardEp,
-  runRebootAction,
   runFullReboot,
   setDefaults,
   LifecycleManager,
@@ -186,35 +35,18 @@ import {
   runSellAction,
   runManualReduceHeatAction,
   runEpartOnclick,
-  resetSessionCriticalityCounters,
   updateDecimal,
   setDecimal,
 } from "../state.js";
 import { Reactor } from "./reactor.js";
-import { GridManager } from "./grid.js";
-import { parseAndValidateSave } from "./game-save.js";
-import { BALANCE } from "./balance.js";
-import {
-  Part,
-  PartSet,
-  resolveCellTierPartId,
-  CELL_FORM_FACTORS,
-} from "./part.js";
-import {
-  GameLoopTickInputSchema,
-  GameLoopTickResultSchema,
-  PhysicsTickInputSchema,
-  PhysicsTickResultSchema,
-} from "../schema/index.js";
-import { getValidatedGameData } from "../services-audio.js";
-import { renderToNode, PartButton, UpgradeCard } from "../components/button-factory.js";
+import { GridManager, Tileset } from "./grid.js";
+import { PartSet } from "./part.js";
 import { applyBlueprintLayoutDiff } from "./blueprint.js";
 import { applyComputedModifiers } from "./modifiers.js";
 import { UpgradeSet } from "./upgrade.js";
 import { ObjectiveManager } from "./objectives.js";
 import { AchievementManager } from "./achievements.js";
-import { Tileset } from "./grid.js";
-import { Engine, Performance, postGameLoopProjectionQuery } from "./engine.js";
+import { Performance, postGameLoopProjectionQuery } from "./engine.js";
 import { recordSimEvent } from "./sim-events.js";
 
 class SessionManager {
@@ -242,7 +74,7 @@ const SIDE_EFFECT_EVENTS = new Set([
   "layoutPasted", "blueprintApplyDeficit", "tileCleared",
   "welcomeBackOffline",
   "showContextModal", "markStaticDirty", "partsPanelRefresh",
-  "upgradePurchased", "prestigeCompleted", "statePatch", "quickSelectSlotsChanged",
+  "upgradePurchased", "statePatch",
 ]);
 
 export class GameEventDispatcher {
@@ -377,7 +209,7 @@ function runComponentDepletion(game, tile) {
   const part = tile.part;
   const hasProtiumLoader = game.upgradeset.getUpgrade("experimental_protium_loader")?.level > 0;
   const isProtium = part.type === "protium";
-  const autoBuyEnabled = game.reactor?.auto_buy_enabled ?? game.state?.auto_buy ?? false;
+  const autoBuyEnabled = !!game.state?.auto_buy;
   const autoReplace = (part.perpetual || (isProtium && hasProtiumLoader)) && !!autoBuyEnabled;
   if (autoReplace) {
     const cost = part.getAutoReplacementCost();

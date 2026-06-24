@@ -1,70 +1,14 @@
-﻿import { REACTOR_HEAT_STANDARD_DIVISOR } from "../constants/sim.js";
-import { VENT_BONUS_PERCENT_DIVISOR } from "../simUtils.js";
-import { html, render } from "lit-html";
-import {
-  proxy,
-  subscribe,
-  BlueprintSchema,
-  LegacyGridSchema,
-  setDecimal,
-  updateDecimal,
-  patchGameState,
-  preferences,
-  subscribeKey,
-  actions,
-  pwaState,
-} from "../store.js";
-import { getAppContext } from "../app-context.js";
-import { StorageUtils } from "../storage/index.js";
-import { numFormat as fmt } from "../format/numbers.js";
-import { logger } from "../core/logger.js";
-import { toNumber, toDecimal } from "../simUtils.js";
-import { getPartImagePath } from "../core/part-images.js";
-import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
-import { vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../core/math-helpers.js";
-import { readThemeColor } from "../theme-colors.js";
-import { getCompactLayout, serializeReactor } from "../layout/reactor-codec.js";
-import { formatNumberCompactIntl } from "../format/numbers.js";
-import { calculateSectionCounts, findTopAffordableInSection } from "../logic-upgrade-sections.js";
-import { UpgradeCard, CloseButton, PartButton, partsModuleInfoCardTemplate } from "./button-factory.js";
-import { MODAL_IDS } from "../modalIds.js";
-import { bindLitRenderMulti, bindLitRenderKeyed } from "../dom/lit-reactive.js";
-import { leaderboardService } from "../services-leaderboard.js";
-import { requestWakeLock, releaseWakeLock } from "../services-pwa.js";
-import {
-  clipToGrid,
-  getCostBreakdown,
-  applyBlueprintLayout,
-  deserializeReactor,
-  filterLayoutByCheckedTypes,
-  calculateCurrentSellValue,
-  buildAffordableLayout,
-  buildPasteState,
-  validatePasteResources,
-  calculateLayoutCostBreakdown,
-} from "../domain/blueprint.js";
-import {
-  mergeComponents,
-  renderComponentIcons,
-} from "./ui-blueprint-helpers.js";
-import {
-  getUiElement,
-  getPageReactor,
-  getPageReactorWrapper,
-  getPageReactorBackground,
-  isLitRenderContainer,
-  dedupeReactorStatsDom,
-} from "./page-dom.js";
-import { dispatchToggleIntent } from "./ui-intents.js";
-import {
-  setupMacroToolbar,
-  updateQuickSelectSlots,
-  closePartsPanel,
-  updatePartsPanelBodyClass,
-  togglePartsPanelForBuildButton,
-} from "./ui-parts-panel.js";
+﻿import { render } from "lit-html";
+import { classMap, styleMap } from "../dom/lit.js";
+import { toNumber } from "../simUtils.js";
+import { numFormat as fmt, formatNumberCompactIntl } from "../format/numbers.js";
+import { bindLitRenderMulti } from "../dom/lit-reactive.js";
+import { getUiElement } from "./page-dom.js";
 import { getBarVisuals } from "./ui-control-deck.js";
 import { teardownAffordabilityIndicators } from "./ui-nav.js";
+import { togglePartsPanelForBuildButton } from "./ui-parts-panel.js";
+import { renderComponentIcons } from "./ui-blueprint-helpers.js";
+import { infoBarTemplate } from "../templates/uiComponentsTemplates.js";
 
 export {
   getBarVisuals,
@@ -104,48 +48,6 @@ export {
   updateUiRollingNumbers,
   startRenderLoop,
 } from "./ui-render-loop.js";
-import { syncGameTogglesFromState } from "../logic/game-state-sync.js";
-import { compileTraitBitmask } from "../traits.js";
-import {
-  infoBarTemplate,
-  mobileControlDeckTemplate,
-  mobilePassiveBarTemplate,
-  partsPanelLayoutTemplate,
-  partsPanelEmptyTabContentTemplate,
-  partsPanelTabContentTemplate,
-  controlDeckStatsBarTemplate,
-  controlDeckExoticParticlesTemplate,
-  controlDeckControlsNavTemplate,
-  debugVariablesSectionTemplate,
-  debugVariablesTemplate,
-  emptyLayoutsListTemplate,
-  layoutsListTemplate as myLayoutsListTemplate,
-  myLayoutsModalTemplate,
-  copyPasteNoPartsTemplate,
-  copyPasteCostDisplayTemplate,
-  copyPasteSellOptionTemplate,
-  copyPasteModalCostContentTemplate,
-  copyPasteStatusMessageTemplate,
-  copyPasteRenderedContentTemplate,
-  copyPasteSelectedPartsCostTemplate,
-  myLayoutsTableRowTemplate,
-  componentSummaryEmptyTemplate,
-  componentSummaryTemplate,
-  layoutViewModalTemplate,
-  quickStartTemplate as quickStartOverlayTemplate,
-  engineStatusIndicatorTemplate,
-  navIndicatorTemplate,
-  sectionHubMetaTemplate,
-  plainTextTemplate,
-  quickSelectSlotTemplate,
-} from "../templates/uiComponentsTemplates.js";
-import { classMap, styleMap, repeat, unsafeHTML, resolveDomElement, BaseComponent, escapeHtml } from "../dom/lit.js";
-import {
-  updateToastTemplate,
-  changelogModalTemplate,
-  versionCheckToastTemplate,
-} from "../templates/servicesTemplates.js";
-
 const VENTING_ANIM_MS = 400;
 const INFO_BAR_CATHODE_IDS = ["info_money_desktop", "info_money", "info_ep_value_desktop", "info_ep_value"];
 

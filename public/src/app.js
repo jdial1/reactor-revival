@@ -157,7 +157,7 @@ function bindAppRootSubscription(container, game, ui) {
   if (game?.state) unsubs.push(subscribe(game.state, schedule));
   const uiState = ui?.uiState;
   if (uiState) {
-    for (const key of ["is_paused", "is_melting_down", "meltdown_buildup", "parts_panel_collapsed", "parts_panel_right_side", "tutorial_claim_step", "active_page", "core_danger", "heat_ratio"]) {
+    for (const key of ["is_paused", "is_melting_down", "meltdown_buildup", "parts_panel_collapsed", "parts_panel_right_side", "copy_paste_collapsed", "tutorial_claim_step", "active_page", "core_danger", "heat_ratio"]) {
       unsubs.push(subscribeKey(uiState, key, schedule));
     }
     unsubs.push(subscribeKey(uiState.copy_paste_display, "blueprintPlannerActive", schedule));
@@ -530,8 +530,10 @@ export function attachGameEventListeners(game, ui) {
   });
   if (game.state) {
     unsubs.push(subscribeKey(game.state, "failure_state", (state) => handleFailureState(state)));
+    unsubs.push(subscribeKey(game.state, "quick_select_slots", (slots) => {
+      if (slots && ui.stateManager?.setQuickSelectSlots) ui.stateManager.setQuickSelectSlots(slots, { skipStateSync: true });
+    }));
   }
-  on("quickSelectSlotsChanged", ({ slots }) => ui.stateManager.setQuickSelectSlots(slots));
   on("exoticParticleEmitted", ({ tile }) => {
     if (ui.gridInteractionUI?.emitEP && tile) ui.gridInteractionUI.emitEP(tile);
   });
@@ -577,7 +579,7 @@ export function attachGameEventListeners(game, ui) {
     if (toggles && ui.game) {
       patchGameState(ui.game, toggles);
     }
-    if (quick_select_slots && ui.stateManager?.setQuickSelectSlots) ui.stateManager.setQuickSelectSlots(quick_select_slots);
+    if (quick_select_slots && ui.stateManager?.setQuickSelectSlots) ui.stateManager.setQuickSelectSlots(quick_select_slots, { skipStateSync: true });
     resetHeatThresholdSignalState(game);
   });
   on("tileCleared", ({ tile }) => {

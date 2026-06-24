@@ -1,5 +1,3 @@
-import { getPartImagePath } from "../core/part-images.js";
-
 const PREVIEW_MAX_WIDTH = 160;
 const PREVIEW_MAX_HEIGHT = 120;
 const PREVIEW_MIN_TILE_SIZE = 2;

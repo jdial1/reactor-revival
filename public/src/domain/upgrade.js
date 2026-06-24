@@ -48,9 +48,11 @@ const UPGRADE_ACTION_NO_PART_SYNC = new Set([
   "unstable_protium",
 ]);
 
+import { bumpGridPartsRevision } from "./part-classification.js";
+
 export function syncUpgradeDerivedEffects(game, upgrade) {
   if (!game || !upgrade) return;
-  game.tileset?.tiles_list?.forEach?.((t) => t.invalidateNeighborCaches?.());
+  bumpGridPartsRevision(game.tileset);
   game.partset?.partsArray?.forEach?.((p) => p.recalculate_stats?.());
   game.tileset?.active_tiles_list?.forEach?.((tile) => {
     if (tile.part) tile.part.recalculate_stats();

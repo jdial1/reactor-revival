@@ -264,6 +264,10 @@ export function buildPersistenceContext(game, getCompactLayout) {
     logger: game.logger ?? logger,
     getCompactLayout,
     applySaveState: (savedData) => game.saveManager.applySaveState(game, savedData),
+    setSaveHydrationBlocked: (blocked) => {
+      game._saveHydrationBlocked = !!blocked;
+    },
+    isSaveHydrationBlocked: () => !!game._saveHydrationBlocked,
   };
 }
 
@@ -406,6 +410,10 @@ export class GameSaveManager {
     logger.log("debug", "game", `Attempting to save game. Meltdown state: ${ctx.hasMeltedDown}`);
     try {
       logger.log("debug", "game", "saveGame called", { slot, isAutoSave, meltdown: ctx.hasMeltedDown });
+      if (ctx.isSaveHydrationBlocked?.()) {
+        logger.log("warn", "game", "Save skipped: prior hydration failed");
+        return;
+      }
       if (ctx.hasMeltedDown) {
         if ((ctx.peakPower > 0 || ctx.peakHeat > 0) && !ctx.cheatsUsed) {
           leaderboardService.saveRun({
@@ -529,10 +537,12 @@ export class GameSaveManager {
 
       const validatedData = parseAndValidateSave(rawData);
       logger.log("debug", "game", "Applying save data from slot", { slot, version: validatedData.version });
+      ctx.setSaveHydrationBlocked?.(false);
       await ctx.applySaveState(validatedData);
       return true;
     } catch (error) {
       logger.log("error", "game", `Save corrupted or load failed for slot ${slot ?? "default"}:`, error);
+      ctx.setSaveHydrationBlocked?.(true);
       if (slot === 1 && (await getBackupSaveForSlot1Async())) {
         return { success: false, parseError: true, backupAvailable: true };
       }

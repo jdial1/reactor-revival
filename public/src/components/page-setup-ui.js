@@ -322,7 +322,7 @@ export class PageSetupUI {
         if (copyPasteBtns && reactorSection && reactorWrapper && copyPasteBtns.parentElement === reactorWrapper) {
           reactorSection.insertBefore(copyPasteBtns, reactorWrapper);
         }
-        const isCollapsed = ui?.uiState?.copy_paste_collapsed === true || copyPasteBtns?.classList.contains("collapsed");
+        const isCollapsed = ui?.uiState?.copy_paste_collapsed !== false;
         if (isCollapsed && copyPasteToggle) {
           copyPasteToggle.style.display = "inline-flex";
           copyPasteToggle.style.visibility = "visible";

@@ -75,7 +75,7 @@ function syncStatsToUI(reactor, _stateManager) {
     state.override_end_time = reactor.override_end_time;
     state.power_to_heat_ratio = reactor.power_to_heat_ratio;
     state.auto_sell_multiplier = reactor.auto_sell_multiplier;
-    state.heat_controlled = reactor.heat_controlled;
+    state.heat_controlled = reactor._heatControlStat;
     state.vent_multiplier_eff = reactor.vent_multiplier_eff;
     state.power_overflow_to_heat_ratio = reactor.power_overflow_to_heat_ratio ?? 1;
     state.manual_heat_reduce = toNumber(reactor.manual_heat_reduce ?? reactor.game?.base_manual_heat_reduce ?? 1);
@@ -203,7 +203,7 @@ export class Reactor {
 
     this.auto_sell_multiplier = 0;
     this.heat_power_multiplier = 0;
-    this.heat_controlled = false;
+    this._heatControlStat = false;
     this.heat_outlet_controlled = false;
     this.vent_capacitor_multiplier = 0;
     this.vent_plating_multiplier = 0;
@@ -264,6 +264,14 @@ export class Reactor {
   }
   set has_melted_down(v) {
     if (this.game?.state) this.game.state.melting_down = !!v;
+  }
+
+  get heat_controlled() {
+    return !!this.game?.state?.heat_control;
+  }
+  set heat_controlled(v) {
+    this._heatControlStat = !!v;
+    if (this.game?.state) this.game.state.heat_control = !!v;
   }
 
   recordClassificationStats() {

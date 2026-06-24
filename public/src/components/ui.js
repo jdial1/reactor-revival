@@ -1,14 +1,13 @@
-import { StorageUtils, StorageAdapter } from "../storage/index.js";
+import { StorageAdapter } from "../storage/index.js";
 import { numFormat as fmt } from "../format/numbers.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import { logger } from "../core/logger.js";
-import { on } from "../dom/lit.js";
 import { getAppContext } from "../app-context.js";
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { createUIState, initUIStateSubscriptions } from "../store.js";
 import { PageSetupUI } from "./page-setup-ui.js";
-import { leaderboardService, resolveAudioService } from "../services.js";
+import { resolveAudioService } from "../services.js";
 import {
   ComponentRenderingUI,
   runPopulateUpgradeSection,

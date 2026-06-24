@@ -1,4 +1,4 @@
-﻿import { html, render, nothing } from "lit-html";
+﻿import { html, render } from "lit-html";
 import { classMap, styleMap, unsafeHTML } from "../dom/lit.js";
 import { numFormat } from "../format/numbers.js";
 import { getUpgradeBonusLines } from "../logic-tooltip-stats.js";

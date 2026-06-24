@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGame, setupWorkerContext , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
-import {
-  WORKER_HEARTBEAT_MS,
-  WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK,
-} from "@app/utils.js";
+import { WORKER_HEARTBEAT_MS } from "@app/utils.js";
+import { EngineStatus } from "@app/store.js";
 import { PhysicsTickResultSchema } from "../../../public/src/schema/stateSchemas.js";
 
 describe("Group 13: Web Worker Concurrency and Fallbacks", () => {
@@ -29,8 +27,9 @@ describe("Group 13: Web Worker Concurrency and Fallbacks", () => {
     vi.clearAllMocks();
   });
 
-  it("disables physics worker after consecutive heartbeat timeouts and runs sync heat", async () => {
+  it("halts simulation after physics worker heartbeat timeout", async () => {
     const engine = game.engine;
+    engine._forceSyncHeat = false;
     engine._workerFailed = false;
     engine._worker = null;
     engine._engineWorker = null;
@@ -42,13 +41,13 @@ describe("Group 13: Web Worker Concurrency and Fallbacks", () => {
     syncActivePartsAtTickBoundary(engine);
     engine.running = true;
     const syncSpy = vi.spyOn(engine, "_runHeatStepSync");
-    for (let i = 0; i < WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK; i++) {
-      engine._processTick(1.0, false);
-      expect(engine._workerPending).toBe(true);
-      vi.advanceTimersByTime(WORKER_HEARTBEAT_MS);
-    }
+    engine._processTick(1.0, false);
+    expect(engine._workerPending).toBe(true);
+    vi.advanceTimersByTime(WORKER_HEARTBEAT_MS);
     expect(engine._workerFailed).toBe(true);
-    expect(syncSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(engine.running).toBe(false);
+    expect(game.state.engine_status).toBe(EngineStatus.SIMULATION_ERROR);
+    expect(syncSpy).not.toHaveBeenCalled();
   });
 
   it("rejects malformed physics worker results via PhysicsTickResultSchema", () => {

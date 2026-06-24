@@ -1,7 +1,6 @@
 ﻿import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { numFormat as fmt } from "../format/numbers.js";
-import { logger } from "../core/logger.js";
 import { escapeHtml } from "../dom/lit.js";
 import { actions } from "../store.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";

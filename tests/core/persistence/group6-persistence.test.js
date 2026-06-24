@@ -69,15 +69,15 @@ describe("Group 6: Persistence & Data Integrity", () => {
       expect(parsed.data.current_money.toString()).toBe("0");
     });
 
-    it("replaces tiles with [] when any tile row fails TileSchema", () => {
+    it("rejects saves when any tile row fails TileSchema", () => {
       const bad = {
         version: "1.0.0",
         run_id: STABLE_RUN_ID,
         tiles: [{ row: -1, col: 0, partId: "uranium1", ticks: 0, heat_contained: 0 }],
       };
       const parsed = SaveDataSchema.safeParse(bad);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.tiles).toEqual([]);
+      expect(parsed.success).toBe(false);
+      expect(() => parseAndValidateSave(bad)).toThrow("Save corrupted: validation failed");
     });
 
     it("migrates legacy 2D tile arrays to flat tiles with exact coordinates and defaults", () => {

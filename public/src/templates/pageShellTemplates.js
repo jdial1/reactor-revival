@@ -56,7 +56,7 @@ export function gameShellTemplate() {
   <div id="mobile_passive_root"></div>
 </div>
 <main id="main">
-  <aside id="parts_section" class="collapsed">
+  <aside id="parts_section">
     <div class="parts_sheet_handle" id="parts_sheet_handle"></div>
     <div id="parts_panel_reactive_root"></div>
     <nav id="controls_nav">

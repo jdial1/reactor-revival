@@ -3,6 +3,7 @@ import { patchGameState } from "@app/state.js";
 import { PartButton } from "@app/components/button-factory.js";
 import { render } from "lit-html";
 import * as stateModule from "@app/store.js";
+import * as simUtils from "@app/simUtils.js";
 import { bindLitRenderKeyed, bindLitRenderMulti } from "@app/dom/lit-reactive.js";
 
 describe("Group 10: State-to-DOM Synchronization", () => {
@@ -97,10 +98,7 @@ describe("Group 10: State-to-DOM Synchronization", () => {
   });
 
   it("unmount cancels pending animation frame for mountMulti subscriptions", () => {
-    const prevGlobalVitest = globalThis.__VITEST__;
-    const prevWindowVitest = window.__VITEST__;
-    globalThis.__VITEST__ = false;
-    window.__VITEST__ = false;
+    const isTestEnvSpy = vi.spyOn(simUtils, "isTestEnv").mockReturnValue(false);
     const container = document.createElement("div");
     document.body.appendChild(container);
     const state = stateModule.createUIState();
@@ -125,7 +123,6 @@ describe("Group 10: State-to-DOM Synchronization", () => {
     expect(cancelSpy).toHaveBeenCalled();
     expect(subscribeKeySpy).toHaveBeenCalledTimes(1);
     expect(unsub).toHaveBeenCalledTimes(1);
-    globalThis.__VITEST__ = prevGlobalVitest;
-    window.__VITEST__ = prevWindowVitest;
+    isTestEnvSpy.mockRestore();
   });
 });

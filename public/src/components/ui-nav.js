@@ -133,12 +133,10 @@ export function setupBuildTabButton(ui) {
 
         const uiState = ui.uiState;
         if (isMobile) {
-          if (hasSelectedPart && (uiState?.parts_panel_collapsed ?? partsSection.classList.contains("collapsed"))) {
-            if (uiState) uiState.parts_panel_collapsed = false;
-            else partsSection.classList.remove("collapsed");
+          if (hasSelectedPart && uiState?.parts_panel_collapsed) {
+            uiState.parts_panel_collapsed = false;
           } else if (!hasSelectedPart) {
             if (uiState) uiState.parts_panel_collapsed = !uiState.parts_panel_collapsed;
-            else partsSection.classList.toggle("collapsed");
           }
           updatePartsPanelBodyClass(ui);
         } else {

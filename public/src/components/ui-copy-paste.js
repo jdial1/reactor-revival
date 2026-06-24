@@ -495,12 +495,12 @@ export class CopyPasteUI {
     const dropperBtn = document.getElementById("reactor_dropper_btn");
     const getRefs = () => getCopyPasteRefs() ?? openCopyPasteDialogHost();
 
-    if (toggleBtn && copyPasteBtns) {
+    if (toggleBtn) {
       toggleBtn.onclick = () => {
         const uiState = this.ui.uiState;
-        if (uiState) uiState.copy_paste_collapsed = !uiState.copy_paste_collapsed;
-        else copyPasteBtns.classList.toggle("collapsed");
-        if (copyPasteBtns) StorageUtils.set("reactor_copy_paste_collapsed", copyPasteBtns.classList.contains("collapsed"));
+        if (!uiState) return;
+        uiState.copy_paste_collapsed = !uiState.copy_paste_collapsed;
+        StorageUtils.set("reactor_copy_paste_collapsed", uiState.copy_paste_collapsed);
       };
     }
 

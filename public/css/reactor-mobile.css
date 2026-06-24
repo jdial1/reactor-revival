@@ -160,16 +160,16 @@
  #wrapper.page-reactor #objectives_toast_btn:not(.is-expanded) { top: calc(env(safe-area-inset-top) + 4px); right: 110px; left: auto; width: 44px; height: 44px; border-width: 4px; box-shadow: none;
  }
 
- #wrapper.page-reactor #reactor_copy_paste_btns.collapsed { position: fixed !important; z-index: 1002 !important; top: calc(env(safe-area-inset-top) + 4px) !important; right: 60px !important; left: auto !important; display: flex !important; align-items: flex-start; justify-content: flex-start; margin: 0 !important; transform: none !important; pointer-events: auto !important;
+ #wrapper.page-reactor #reactor_copy_paste_btns.collapsed, #wrapper.page-reactor.copy-paste-collapsed #reactor_copy_paste_btns { position: fixed !important; z-index: 1002 !important; top: calc(env(safe-area-inset-top) + 4px) !important; right: 60px !important; left: auto !important; display: flex !important; align-items: flex-start; justify-content: flex-start; margin: 0 !important; transform: none !important; pointer-events: auto !important;
  }
 
- #wrapper.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle { display: inline-flex !important; width: 44px !important; min-width: 44px !important; height: 44px !important; min-height: 44px !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; overflow: visible !important;
+ #wrapper.page-reactor #reactor_copy_paste_btns.collapsed, #wrapper.page-reactor.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle { display: inline-flex !important; width: 44px !important; min-width: 44px !important; height: 44px !important; min-height: 44px !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; overflow: visible !important;
  }
 
- #wrapper.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .expand-icon { display: inline-block !important; opacity: 1 !important; visibility: visible !important; color: rgb(255 255 255) !important;
+ #wrapper.page-reactor #reactor_copy_paste_btns.collapsed, #wrapper.page-reactor.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .expand-icon { display: inline-block !important; opacity: 1 !important; visibility: visible !important; color: rgb(255 255 255) !important;
  }
 
- #wrapper.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .collapse-icon { display: none !important;
+ #wrapper.page-reactor #reactor_copy_paste_btns.collapsed, #wrapper.page-reactor.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .collapse-icon { display: none !important;
  }
 
  #wrapper { padding-top: calc(var(--mobile-passive-top-height) + env(safe-area-inset-top));

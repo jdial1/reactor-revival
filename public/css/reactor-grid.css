@@ -55,7 +55,7 @@
 #wrapper.blueprint-planner-active .blueprint-planner-hud { display: flex;
 }
 
-#wrapper.page-reactor #reactor_copy_paste_btns.collapsed .blueprint-planner-hud { display: none !important;
+#wrapper.page-reactor #reactor_copy_paste_btns.collapsed, #wrapper.page-reactor.copy-paste-collapsed #reactor_copy_paste_btns .blueprint-planner-hud { display: none !important;
 }
 
 .blueprint-planner-hud .pixel-btn { padding: 4px 8px; font-size: 0.65rem;

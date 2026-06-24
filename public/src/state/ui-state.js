@@ -101,6 +101,8 @@ export function buildShellClassMap(uiState, shellModalUi = modalUi, { hasSession
     "blueprint-planner-active": !!uiState?.copy_paste_display?.blueprintPlannerActive,
     "parts-panel-open": !uiState?.parts_panel_collapsed,
     "parts-panel-right": !!uiState?.parts_panel_right_side,
+    "copy-paste-collapsed": !!uiState?.copy_paste_collapsed,
+    "reactor-engineering-mode": !uiState?.parts_panel_collapsed,
     "tutorial-claim-step": !!uiState?.tutorial_claim_step,
     "modal-drawer-open": !!shellModalUi?.drawerOpen,
     [`page-${pageBase}`]: true,
@@ -144,8 +146,6 @@ function resolveSubscriptionDom(ui, dom, key, id) {
 export function initUIStateSubscriptions(uiState, ui) {
   const unsubs = [];
   const dom = {
-    copyPasteBtns: getUiElement(ui, "reactor_copy_paste_btns"),
-    partsSection: getUiElement(ui, "parts_section"),
     reactorBackground: getUiElement(ui, "reactor_background"),
     main: getUiElement(ui, "main"),
     mainTopNav: getUiElement(ui, "main_top_nav"),
@@ -153,22 +153,16 @@ export function initUIStateSubscriptions(uiState, ui) {
     failureWarningBanner: getUiElement(ui, "failure_warning_banner"),
     appRoot: getUiElement(ui, "app_root"),
   };
-  const syncCopyPasteCollapsed = () => {
+  const persistCopyPasteCollapsed = () => {
     StorageUtils.set("reactor_copy_paste_collapsed", uiState.copy_paste_collapsed);
-    const btns = resolveSubscriptionDom(ui, dom, "copyPasteBtns", "reactor_copy_paste_btns");
-    if (btns) btns.classList.toggle("collapsed", uiState.copy_paste_collapsed);
   };
-  const syncPartsPanelCollapsed = () => {
-    const section = resolveSubscriptionDom(ui, dom, "partsSection", "parts_section");
-    if (section) section.classList.toggle("collapsed", uiState.parts_panel_collapsed);
+  persistCopyPasteCollapsed();
+  unsubs.push(subscribeKey(uiState, "copy_paste_collapsed", persistCopyPasteCollapsed));
+  const syncPartsPanelDerived = () => {
     ui.updatePartsPanelBodyClass?.();
-    const bg = resolveSubscriptionDom(ui, dom, "reactorBackground", "reactor_background");
-    if (bg) bg.classList.toggle("engineering-mode", !uiState.parts_panel_collapsed);
   };
-  syncCopyPasteCollapsed();
-  syncPartsPanelCollapsed();
-  unsubs.push(subscribeKey(uiState, "copy_paste_collapsed", syncCopyPasteCollapsed));
-  unsubs.push(subscribeKey(uiState, "parts_panel_collapsed", syncPartsPanelCollapsed));
+  syncPartsPanelDerived();
+  unsubs.push(subscribeKey(uiState, "parts_panel_collapsed", syncPartsPanelDerived));
   unsubs.push(subscribeKey(uiState, "active_parts_tab", () => {
     ui.refreshPartsPanel?.();
   }));

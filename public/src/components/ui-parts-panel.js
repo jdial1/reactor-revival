@@ -2,7 +2,6 @@
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import { logger } from "../core/logger.js";
 import { numFormat as fmt } from "../format/numbers.js";
-import { formatNumberCompactIntl } from "../format/numbers.js";
 import { actions } from "../store.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
 import { PartButton, partsModuleInfoCardTemplate } from "./button-factory.js";
@@ -344,7 +343,7 @@ export function initializePartsPanel(ui) {
   const isMobileOnLoad = window.innerWidth <= MOBILE_BREAKPOINT_PX;
   if (ui.uiState) ui.uiState.parts_panel_collapsed = isMobileOnLoad;
   logger.log("debug", "ui", "[Parts Panel Init]", isMobileOnLoad ? "Mobile detected - added collapsed class" : "Desktop detected - removed collapsed class");
-  logger.log("debug", "ui", "[Parts Panel Init] Final state - collapsed:", panel.classList.contains("collapsed"));
+  logger.log("debug", "ui", "[Parts Panel Init] Final state - collapsed:", ui.uiState?.parts_panel_collapsed ?? true);
   updatePartsPanelBodyClass(ui);
 
   const closeBtn = document.getElementById("parts_close_btn");

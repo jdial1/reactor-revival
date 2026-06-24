@@ -1,12 +1,6 @@
 import { buildFacts } from "../kernel/buildFacts.js";
-import { getValveNeighborCache } from "./part-classification.js";
 import { heatSfxLastTick } from "./reactor-stats.js";
-import {
-  runHeatTransferStep,
-  canPushToNeighbor,
-  transferHeatBetweenNeighbors,
-  applyValveRule,
-} from "../logic-heat-transfer.js";
+import { runHeatTransferStep } from "../logic-heat-transfer.js";
 import {
   MAX_NEIGHBORS,
   INLET_STRIDE,
@@ -40,12 +34,8 @@ import {
   VALVE_OVERFLOW,
   VALVE_TOPUP,
   VALVE_CHECK,
-  CATEGORY_EXCHANGER,
-  CATEGORY_OTHER,
-  CATEGORY_VENT_COOLANT,
 } from "../constants/heat-transfer.js";
 import { toDecimal } from "../simUtils.js";
-import { logger } from "../core/logger.js";
 import {
   CRITICAL_HEAT_RATIO,
   HEAT_PAYLOAD_MAX_INLETS,
