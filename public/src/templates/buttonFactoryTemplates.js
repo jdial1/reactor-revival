@@ -1,5 +1,5 @@
-import { html, nothing } from "lit-html";
-import { repeat } from "../utils.js";
+﻿import { html, nothing } from "lit-html";
+import { repeat, styleMap } from "../dom/lit.js";
 
 function formatPartDescription(description) {
   return String(description ?? "").replace(/(?<=\.)\s+(?=[A-Z+])/g, "\n");
@@ -10,6 +10,9 @@ export function upgradeCardTemplate({
   upgradeId,
   doctrineId,
   doctrineLocked,
+  hidden,
+  unaffordable,
+  affordProgress,
   iconPath,
   overlayPath,
   isHeat,
@@ -22,11 +25,16 @@ export function upgradeCardTemplate({
   onBuyClick,
   costDisplay,
 }) {
+  const buyDisabled = doctrineLocked || isMaxed || unaffordable;
+  const buyStyle = affordProgress != null && affordProgress < 1
+    ? styleMap({ "--afford-progress": String(Math.max(0, Math.min(1, affordProgress))) })
+    : nothing;
   return html`
     <div class=${cardClass}
          data-id=${upgradeId}
          data-doctrine=${doctrineId}
-         data-doctrine-locked=${doctrineLocked ? "true" : nothing}>
+         data-doctrine-locked=${doctrineLocked ? "true" : nothing}
+         ?hidden=${hidden}>
       <div class="upgrade-header">
         <div class="upgrade-icon-wrapper">
           <div class="image" style="background-image: url('${iconPath}');"></div>
@@ -42,8 +50,9 @@ export function upgradeCardTemplate({
         <div class="upgrade-level-info">
           ${header ? html`<span class="level-text cathode-readout">${header}</span>` : html`<span class="level-text cathode-readout"></span>`}
         </div>
-        <button class="pixel-btn upgrade-action-btn industrial-btn"
-                ?disabled=${doctrineLocked || isMaxed}
+        <button class="pixel-btn upgrade-action-btn industrial-btn flex-center"
+                style=${buyStyle}
+                ?disabled=${buyDisabled}
                 aria-label=${ariaLabel}
                 @click=${onBuyClick}>
           <span class="action-text">Buy</span>

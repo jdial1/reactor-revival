@@ -1,5 +1,6 @@
-import { html, render, nothing } from "lit-html";
-import { numFormat, classMap, styleMap, unsafeHTML } from "../utils.js";
+﻿import { html, render, nothing } from "lit-html";
+import { classMap, styleMap, unsafeHTML } from "../dom/lit.js";
+import { numFormat } from "../format/numbers.js";
 import { getUpgradeBonusLines } from "../logic-tooltip-stats.js";
 import {
   upgradeCardTemplate,
@@ -147,7 +148,9 @@ const BASE_DOCTRINE_ICON = "img/ui/status/status_star.png";
 export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost } = {}) => {
   const isMaxed = upgrade.level >= upgrade.max_level;
   const doctrineIcon = BASE_DOCTRINE_ICON;
-  const doctrineLocked = false;
+  const upgradeset = upgrade.game?.upgradeset;
+  const available = upgradeset ? upgradeset.isUpgradeAvailable(upgrade.id) : true;
+  const doctrineLocked = !available;
   const header = useReactiveLevelAndCost ? "" : (isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`);
   const rawDesc = isMaxed ? "" : (upgrade.description || "");
   const descHtml = upgrade.game?.ui?.stateManager ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc) : rawDesc;
@@ -156,14 +159,21 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLe
   const iconPath = upgrade.upgrade?.icon ?? upgrade.icon ?? "img/ui/status/status_star.png";
   const { iconPath: overlayPath, isHeat } = getUpgradeIconOverlay(upgrade);
   const extraClasses = (upgrade.upgrade?.classList ?? []).join(" ");
-  const cardClassMap = { "upgrade-card": true };
+  const cardClassMap = {
+    "upgrade-card": true,
+    "unaffordable": !upgrade.affordable && !isMaxed && !doctrineLocked,
+    "maxed-out": isMaxed,
+    "doctrine-locked": doctrineLocked,
+  };
   extraClasses.split(" ").filter(Boolean).forEach((c) => (cardClassMap[c] = true));
-  const cardClass = classMap(cardClassMap);
   return upgradeCardTemplate({
-    cardClass,
+    cardClass: classMap(cardClassMap),
     upgradeId: upgrade.id,
     doctrineId: "base",
-    doctrineLocked: false,
+    doctrineLocked,
+    hidden: upgrade._affordHidden === true,
+    unaffordable: !upgrade.affordable,
+    affordProgress: upgrade.afford_progress ?? 0,
     iconPath,
     overlayPath,
     isHeat,

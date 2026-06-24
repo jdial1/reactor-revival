@@ -1,5 +1,5 @@
-import { html } from "lit-html";
-import { classMap, styleMap, repeat, when } from "../utils.js";
+﻿import { html } from "lit-html";
+import { classMap, styleMap, repeat, when } from "../dom/lit.js";
 
 export function renderSplashTemplate(isMuted, onMuteClick, onHideMenuClick) {
   return html`
@@ -26,7 +26,7 @@ export function renderSplashTemplate(isMuted, onMuteClick, onHideMenuClick) {
                 aria-label=${isMuted ? "Unmute" : "Mute"}
                 @click=${onMuteClick}
               >
-                <span class="splash-mute-icon" aria-hidden="true"></span>
+                <span class="splash-mute-icon" aria-hidden="true"><span class="splash-mute-led" data-muted=${isMuted ? "1" : "0"}></span></span>
                 <span class="splash-mute-label">AUDIO RELAY</span>
               </button>
               <button
@@ -99,19 +99,33 @@ export function difficultyCardTemplate(diffKey, diffLabel, diffDesc, selectedDif
   `;
 }
 
-export function gameSetupTemplate(treeList, selectedDoctrine, selectedDifficulty, onDoctrineSelect, onDifficultySelect, onBack, onStart) {
+export function gameSetupTemplate(treeList, selectedDoctrine, selectedDifficulty, onDoctrineSelect, onDifficultySelect, onBack, onStart, difficultyPresets = {}) {
   const doctrinePickRequired = false;
   const canStart = selectedDifficulty !== null;
+  const difficultyOrder = ["easy", "medium", "hard"];
+  const difficultyLabels = { easy: "EASY", medium: "MEDIUM", hard: "HARD" };
+  const difficultyFallback = {
+    easy: "Forgiving heat margins",
+    medium: "Balanced challenge",
+    hard: "Tight margins, fast ticks",
+  };
+  const difficultyDesc = (key) => {
+    const preset = difficultyPresets[key];
+    if (!preset) return difficultyFallback[key] ?? "";
+    const overflow = Number(preset.power_overflow_to_heat_pct) || 0;
+    const overflowLine = overflow > 0 ? `${overflow}% overflow → heat` : "0% overflow → heat";
+    return `$${preset.base_money} start · ${overflowLine} · ${preset.base_loop_wait}ms ticks`;
+  };
   return html`
     <div class="bios-screen game-setup-selection">
       <h1 class="game-setup-header">NEW GAME</h1>
       <div class="bios-content">
         <section class="setup-section setup-difficulty">
-          <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT DIFFICULTY ]</h2></div>
+          <div class="bios-title-vfd"><h2 class="bios-title">[ SELECT CHALLENGE MODE ]</h2></div>
           <div class="difficulty-cards" role="radiogroup" aria-label="Select difficulty">
-            ${difficultyCardTemplate("easy", "EASY", "Forgiving heat margins", selectedDifficulty, onDifficultySelect)}
-            ${difficultyCardTemplate("medium", "MEDIUM", "Balanced challenge", selectedDifficulty, onDifficultySelect)}
-            ${difficultyCardTemplate("hard", "HARD", "Tight margins, fast ticks", selectedDifficulty, onDifficultySelect)}
+            ${difficultyOrder.map((key) =>
+              difficultyCardTemplate(key, difficultyLabels[key], difficultyDesc(key), selectedDifficulty, onDifficultySelect)
+            )}
           </div>
         </section>
       </div>
@@ -139,9 +153,9 @@ export function updateToastTemplate(onRefresh, onClose) {
 
 export function fallbackStartTemplate(onStart) {
   return html`
-    <div style="position: fixed;inset: 0;background: #1a1a1a;display: flex;align-items: center;justify-content: center;z-index: 99999;flex-direction: column;color: white;font-family: monospace;">
-      <h1 style="color: #e74c3c;">Splash UI Failed to Load</h1>
-      <p style="margin-bottom: 20px;color: #ccc;">You can still start the game in fallback mode.</p>
+    <div style="position: fixed;inset: 0;background: var(--surface-inset);display: flex;align-items: center;justify-content: center;z-index: 99999;flex-direction: column;color: var(--text-primary);font-family: monospace;">
+      <h1 style="color: var(--canvas-confirm-danger);">Splash UI Failed to Load</h1>
+      <p style="margin-bottom: 20px;color: var(--neutral-200);">You can still start the game in fallback mode.</p>
       <button class="pixel-btn btn-start" @click=${onStart} style="padding: 10px 20px;font-size: 16px;">START GAME</button>
     </div>
   `;
@@ -150,16 +164,16 @@ export function fallbackStartTemplate(onStart) {
 export function criticalErrorTemplate(errorMessage, errorStack, onReload) {
   return html`
     <style>
- .critical-error-overlay { position: fixed; z-index: 99999; inset: 0; display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / 95%); }
- .error-stack { max-height: 200px; overflow: auto; text-align: left; padding: 10px; background: #222; }
+ .critical-error-overlay { position: fixed; z-index: 99999; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--alpha-black-90); }
+ .error-stack { max-height: 200px; overflow: auto; text-align: left; padding: 10px; background: var(--bevel-shadow); }
     </style>
     <div class="critical-error-content pixel-panel" style="max-width: 600px; text-align: center;">
-      <h1 class="critical-error-title" style="color: #f44;">REACTOR FAILED TO START</h1>
+      <h1 class="critical-error-title" style="color: var(--status-danger);">REACTOR FAILED TO START</h1>
       <div class="critical-error-message" style="margin: 20px 0;">
-        <p class="error-text" style="color: #fcc;">${errorMessage}</p>
+        <p class="error-text" style="color: rgb(255 204 204);">${errorMessage}</p>
         ${when(
           !!errorStack,
-          () => html`<details class="error-details"><summary style="cursor: pointer;color: #aaa;">Error Details</summary><pre class="error-stack">${errorStack}</pre></details>`
+          () => html`<details class="error-details"><summary style="cursor: pointer;color: var(--neutral-300);">Error Details</summary><pre class="error-stack">${errorStack}</pre></details>`
         )}
       </div>
       <button id="critical-error-reload" class="pixel-btn btn-start" @click=${onReload}>Reload Page</button>

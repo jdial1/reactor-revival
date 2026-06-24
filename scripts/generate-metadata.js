@@ -40,8 +40,8 @@ export function writeVersion() {
   console.log(`Central Time: ${centralFormatter.format(now)}`);
 }
 
-const splashPattern = /^splash_bg(\d+)\.png$/;
-const bgImgPattern = /^bg_img(\d+)\.png$/;
+const splashPattern = /^splash_bg(\d+)\.webp$/;
+const bgImgPattern = /^bg_img(\d+)\.webp$/;
 
 function countInDir(dirPath, pattern) {
   if (!fs.existsSync(dirPath)) return 0;
@@ -59,7 +59,13 @@ export function writeSplashBgCount() {
   fs.writeFileSync(outPath, JSON.stringify({ stalenhag, splash }));
 }
 
+async function writeChangelogFromGit() {
+  const { writeChangelog } = await import("./generate-changelog.js");
+  writeChangelog();
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   writeVersion();
   writeSplashBgCount();
+  await writeChangelogFromGit();
 }

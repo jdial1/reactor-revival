@@ -72,6 +72,7 @@ export default [
         caches: "readonly",
         performance: "readonly",
         getComputedStyle: "readonly",
+        Element: "readonly",
         Event: "readonly",
         KeyboardEvent: "readonly",
         PointerEvent: "readonly",
@@ -121,7 +122,30 @@ export default [
       "no-unused-vars": ["warn", { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }],
       "no-empty": ["error", { "allowEmptyCatch": true }],
       "no-case-declarations": "warn",
-      "no-useless-escape": "warn"
+      "no-useless-escape": "warn",
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          group: ["**/utils.js", "**/utils"],
+          importNames: [
+            "StorageAdapter",
+            "StorageUtils",
+            "serializeSave",
+            "deserializeSave",
+            "migrateLocalStorageToIndexedDB",
+            "AUTOSAVE_SLOT_KEY",
+            "render",
+            "classMap",
+            "styleMap",
+            "repeat",
+            "when",
+            "unsafeHTML",
+            "escapeHtml",
+            "on",
+            "BaseComponent",
+          ],
+          message: "Import storage from storage/index.js and DOM helpers from dom/lit.js",
+        }],
+      }],
     }
   },
   {
@@ -166,6 +190,56 @@ export default [
       "import/default": "error",
       "import/no-unresolved": "error",
       "import/no-cycle": ["warn", { "maxDepth": 10, "ignoreExternal": true }]
+    }
+  },
+  {
+    files: ["public/src/domain/**/*.js"],
+    rules: {
+      "no-restricted-imports": ["warn", {
+        patterns: [{
+          group: ["../utils.js", "../../utils.js", "@app/utils.js"],
+          message: "Import from domain-specific modules (simUtils.js, storage/, constants/) instead of the utils.js barrel.",
+        }],
+      }],
+    },
+  },
+  {
+    files: ["public/src/components/**/*.js"],
+    rules: {
+      "no-restricted-imports": ["warn", {
+        patterns: [{
+          group: ["../utils.js", "../../utils.js", "@app/utils.js"],
+          message: "Import from dom/lit.js, storage/, format/, or constants/ instead of the utils.js barrel.",
+        }],
+      }],
+    },
+  },
+  {
+    files: ["public/src/domain/**/*.js", "public/src/logic/**/*.js", "public/src/logic-*.js"],
+    rules: {
+      "no-restricted-globals": ["warn", {
+        "name": "document",
+        "message": "Domain/logic modules must not access document — use state/effects and let components render."
+      }, {
+        "name": "window",
+        "message": "Domain/logic modules must not access window — pass dependencies from components or state."
+      }]
+    }
+  },
+  {
+    files: ["public/src/**/*.js"],
+    ignores: ["public/src/app.js", "public/src/core/logger.js"],
+    rules: {
+      "no-restricted-syntax": ["warn", {
+        selector: "MemberExpression[object.name='window'][property.name='game']",
+        message: "Use getAppContext() instead of window.game."
+      }, {
+        selector: "MemberExpression[object.name='window'][property.name='ui']",
+        message: "Use getAppContext() instead of window.ui."
+      }, {
+        selector: "MemberExpression[object.name='window'][property.name='pageRouter']",
+        message: "Use getAppContext() instead of window.pageRouter."
+      }]
     }
   }
 ];

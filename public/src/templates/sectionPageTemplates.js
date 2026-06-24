@@ -1,60 +1,140 @@
 import { html } from "lit-html";
+import { classMap, when } from "../dom/lit.js";
+import { dispatchToggleIntent } from "../components/ui-intents.js";
 import {
   privacyPolicyPageContainerTemplate,
   termsOfServicePageContainerTemplate,
 } from "./legalPageTemplates.js";
 
+function upgradeHubHeaderBlock({ sectionName, blurb, expanded = false }) {
+  return html`
+    <header class="upgrade-section-header-block">
+      <div class="upgrade-section-header-row">
+        <h2 class="upgrade-section-header" data-section-name=${sectionName} role="button" tabindex="0" aria-expanded=${expanded ? "true" : "false"}>${sectionName}</h2>
+        <div class="section-hub-meta-host"></div>
+      </div>
+      <p class="section-hub-blurb">${blurb}</p>
+    </header>
+  `;
+}
+
+function researchSectionHeaderBlock({ title, blurb, expanded = false }) {
+  return html`
+    <header class="upgrade-section-header-block research-section-header-block">
+      <h2 class="research-section-header" role="button" tabindex="0" aria-expanded=${expanded ? "true" : "false"}>${title}</h2>
+      <p class="section-hub-blurb">${blurb}</p>
+    </header>
+  `;
+}
+
 export function reactorSectionTemplate() {
   return html`
 <section id="reactor_section" class="page">
   <div id="reactor_background"></div>
-  <div id="reactor_copy_paste_btns">
-    <button id="reactor_copy_paste_toggle" class="expand-toggle" title="Expand/Collapse" tabindex="0" aria-label="Expand/Collapse Copy Paste Controls">
-      <span class="expand-icon">&lt;</span>
-      <span class="collapse-icon">&gt;</span>
+  <div id="reactor_copy_paste_btns" class="collapsed">
+    <button id="reactor_copy_paste_toggle" class="reactor-toolbar-labeled-btn expand-toggle ui-bevel" title="Open reactor tools" tabindex="0" aria-label="Open reactor tools">
+      <span class="reactor-toolbar-btn-icon" aria-hidden="true">
+        <span class="expand-icon">&lt;</span>
+        <span class="collapse-icon">&gt;</span>
+      </span>
+      <span class="reactor-toolbar-btn-label toolbar-label-expand">OPEN</span>
+      <span class="reactor-toolbar-btn-label toolbar-label-collapse">HIDE</span>
     </button>
     <div class="reactor_copy_paste_buttons">
-      <button id="reactor_deselect_btn" title="Deselect Selected Part" tabindex="0" aria-label="Deselect Selected Part">
-        <img src="img/ui/icons/icon_deselect.svg" alt="Deselect" />
+      <button id="reactor_deselect_btn" class="reactor-toolbar-labeled-btn ui-bevel" title="Clear selected part" tabindex="0" aria-label="Clear selected part">
+        <span class="reactor-toolbar-btn-icon" aria-hidden="true">
+          <img src="img/ui/icons/icon_deselect.svg" alt="" />
+        </span>
+        <span class="reactor-toolbar-btn-label">CLEAR</span>
       </button>
-      <button id="reactor_dropper_btn" title="Pick Part From Reactor" tabindex="0" aria-label="Pick Part From Reactor">
-        <img src="img/ui/icons/icon_dropper.svg" alt="Pick" />
+      <button id="reactor_dropper_btn" class="reactor-toolbar-labeled-btn ui-bevel" title="Pick part from reactor" tabindex="0" aria-label="Pick part from reactor">
+        <span class="reactor-toolbar-btn-icon" aria-hidden="true">
+          <img src="img/ui/icons/icon_dropper.svg" alt="" />
+        </span>
+        <span class="reactor-toolbar-btn-label">PICK</span>
       </button>
-      <button id="reactor_copy_btn" title="Copy Reactor Layout" tabindex="0" aria-label="Copy Reactor Layout">
-        <img src="img/ui/icons/icon_copy.svg" alt="Copy" />
+      <button id="reactor_copy_btn" class="reactor-toolbar-labeled-btn ui-bevel" title="Copy reactor layout" tabindex="0" aria-label="Copy reactor layout">
+        <span class="reactor-toolbar-btn-icon" aria-hidden="true">
+          <img src="img/ui/icons/icon_copy.svg" alt="" />
+        </span>
+        <span class="reactor-toolbar-btn-label">COPY</span>
       </button>
-      <button id="reactor_paste_btn" title="Paste Reactor Layout" tabindex="0" aria-label="Paste Reactor Layout">
-        <img src="img/ui/icons/icon_paste.svg" alt="Paste" />
+      <button id="reactor_paste_btn" class="reactor-toolbar-labeled-btn ui-bevel" title="Paste reactor layout" tabindex="0" aria-label="Paste reactor layout">
+        <span class="reactor-toolbar-btn-icon" aria-hidden="true">
+          <img src="img/ui/icons/icon_paste.svg" alt="" />
+        </span>
+        <span class="reactor-toolbar-btn-label">PASTE</span>
       </button>
-      <button id="reactor_my_layouts_btn" title="My Layouts" tabindex="0" aria-label="My Layouts">
-        <span class="emoji-icon">&#128193;</span>
+      <button id="reactor_compare_layouts_btn" class="reactor-toolbar-labeled-btn ui-bevel" title="Compare two layouts" tabindex="0" aria-label="Compare two layouts">
+        <span class="reactor-toolbar-btn-label">A/B</span>
       </button>
-      <button id="reactor_blueprint_toggle" type="button" class="pixel-btn reactor-toolbar-btn reactor-plan-toggle" title="Blueprint planner" tabindex="0" aria-label="Toggle blueprint planner" aria-pressed="false">
-        <span class="reactor-plan-state reactor-plan-state--live">LIVE</span>
-        <span class="reactor-plan-state reactor-plan-state--active">PLAN ON</span>
+      <button id="reactor_my_layouts_btn" class="reactor-toolbar-labeled-btn ui-bevel" title="Saved layouts" tabindex="0" aria-label="Saved layouts">
+        <span class="reactor-toolbar-btn-icon" aria-hidden="true">
+          <span class="emoji-icon">&#128193;</span>
+        </span>
+        <span class="reactor-toolbar-btn-label">SAVES</span>
       </button>
-      <button id="reactor_sell_all_btn" title="Sell All Parts" tabindex="0" aria-label="Sell All Parts">
-        <img src="img/ui/icons/icon_cash_outline.svg" alt="Sell" />
+      <button id="reactor_blueprint_toggle" type="button" class="reactor-toolbar-labeled-btn pixel-btn reactor-toolbar-btn reactor-plan-toggle" title="Blueprint planner" tabindex="0" aria-label="Toggle blueprint planner" aria-pressed="false">
+        <span class="reactor-toolbar-btn-icon reactor-plan-icon" aria-hidden="true">
+          <svg class="reactor-toolbar-svg-icon" viewBox="0 0 16 16" width="16" height="16" focusable="false">
+            <rect x="1" y="1" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <rect x="9" y="1" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <rect x="1" y="9" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <rect x="9" y="9" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+        </span>
+        <span class="reactor-plan-state reactor-plan-state--live reactor-toolbar-btn-label">LIVE</span>
+        <span class="reactor-plan-state reactor-plan-state--active reactor-toolbar-btn-label">PLAN</span>
+      </button>
+      <button id="reactor_sell_all_btn" class="reactor-toolbar-labeled-btn ui-bevel" title="Sell all parts" tabindex="0" aria-label="Sell all parts">
+        <span class="reactor-toolbar-btn-icon" aria-hidden="true">
+          <img src="img/ui/icons/icon_cash_outline.svg" alt="" />
+        </span>
+        <span class="reactor-toolbar-btn-label">SELL</span>
       </button>
     </div>
     <div id="blueprint_planner_hud" class="blueprint-planner-hud" aria-live="polite">
-      <span id="blueprint_planner_power" class="blueprint-planner-stat"></span>
-      <span id="blueprint_planner_net_heat" class="blueprint-planner-stat"></span>
-      <button type="button" id="blueprint_planner_apply" class="pixel-btn">Apply</button>
-      <button type="button" id="blueprint_planner_discard" class="pixel-btn">Clear</button>
+      <div class="blueprint-planner-hud-stats">
+        <span id="blueprint_planner_power" class="blueprint-planner-stat"></span>
+        <span id="blueprint_planner_net_heat" class="blueprint-planner-stat"></span>
+        <span id="blueprint_planner_ep" class="blueprint-planner-stat"></span>
+        <span id="blueprint_planner_stability" class="blueprint-planner-stat"></span>
+      </div>
+      <div class="blueprint-planner-hud-actions">
+        <button type="button" id="blueprint_planner_apply" class="reactor-toolbar-labeled-btn ui-bevel" title="Apply blueprint plan" aria-label="Apply blueprint plan">
+          <span class="reactor-toolbar-btn-icon blueprint-planner-apply-icon" aria-hidden="true">
+            <svg class="reactor-toolbar-svg-icon" viewBox="0 0 16 16" width="16" height="16" focusable="false">
+              <path d="M3 8 L7 12 L13 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" />
+            </svg>
+          </span>
+          <span class="reactor-toolbar-btn-label">APPLY</span>
+        </button>
+        <button type="button" id="blueprint_planner_partial" class="reactor-toolbar-labeled-btn ui-bevel" title="Build what you can afford" aria-label="Build what you can afford">
+          <span class="reactor-toolbar-btn-label">PARTIAL</span>
+        </button>
+        <button type="button" id="blueprint_planner_export" class="reactor-toolbar-labeled-btn ui-bevel" title="Export tick analytics" aria-label="Export tick analytics">
+          <span class="reactor-toolbar-btn-label">EXPORT</span>
+        </button>
+        <button type="button" id="blueprint_planner_discard" class="reactor-toolbar-labeled-btn ui-bevel" title="Clear blueprint plan" aria-label="Clear blueprint plan">
+          <span class="reactor-toolbar-btn-icon" aria-hidden="true">
+            <img src="img/ui/icons/icon_deselect.svg" alt="" />
+          </span>
+          <span class="reactor-toolbar-btn-label">CLEAR</span>
+        </button>
+      </div>
     </div>
   </div>
-  <div id="pause_banner" class="container">
-    <article>PAUSED</article>
-    <button id="unpause_btn" class="resume-btn" type="button" title="Resume" aria-label="Resume game">Resume</button>
+  <div id="reactor_status_banners_root"></div>
+  <div id="failure_warning_banner" class="container hidden" role="status" aria-live="polite">
+    <article id="failure_warning_message"></article>
   </div>
-  <div id="meltdown_banner" class="container hidden">
-    <article>MELTDOWN</article>
-    <button id="reset_reactor_btn" class="reset-btn">Reset Reactor</button>
-  </div>
+  <div id="meltdown_vignette" aria-hidden="true"></div>
+  <div id="meltdown_strobe" aria-hidden="true"></div>
   <div id="reactor_wrapper">
     <div id="reactor"></div>
-    <div id="mobile_top_bar" aria-hidden="true"></div>
+    <div id="mobile_top_bar" aria-hidden="true">
+      <ul id="reactor_stats_mobile" class="mobile-only ep-status-panel"></ul>
+    </div>
   </div>
 </section>
   `;
@@ -68,8 +148,7 @@ export function upgradesSectionTemplate() {
   </div>
   <div id="upgrades_content_wrapper" data-hub-accordion="true">
     <article class="upgrade-section-hub upgrade-hub-collapsible">
-      <h2 class="upgrade-section-header" data-section-name="Cell Upgrades" role="button" tabindex="0" aria-expanded="true">Cell Upgrades</h2>
-      <p class="section-hub-blurb">Boost cell output, lifespan, and perpetual modes.</p>
+      ${upgradeHubHeaderBlock({ sectionName: "Cell Upgrades", blurb: "Boost cell output, lifespan, and perpetual modes.", expanded: true })}
       <div class="upgrade-section-body">
         <div id="cell_power_upgrades" class="upgrade-group"></div>
         <div id="cell_tick_upgrades" class="upgrade-group"></div>
@@ -77,16 +156,14 @@ export function upgradesSectionTemplate() {
       </div>
     </article>
     <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
-      <h2 class="upgrade-section-header" data-section-name="Cooling Upgrades" role="button" tabindex="0" aria-expanded="false">Cooling Upgrades</h2>
-      <p class="section-hub-blurb">Improve vents, exchangers, and heat routing.</p>
+      ${upgradeHubHeaderBlock({ sectionName: "Cooling Upgrades", blurb: "Improve vents, exchangers, and heat routing." })}
       <div class="upgrade-section-body">
         <div id="vent_upgrades" class="upgrade-group"></div>
         <div id="exchanger_upgrades" class="upgrade-group"></div>
       </div>
     </article>
     <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
-      <h2 class="upgrade-section-header" data-section-name="General Upgrades" role="button" tabindex="0" aria-expanded="false">General Upgrades</h2>
-      <p class="section-hub-blurb">Reactor-wide efficiency and quality-of-life upgrades.</p>
+      ${upgradeHubHeaderBlock({ sectionName: "General Upgrades", blurb: "Reactor-wide efficiency and quality-of-life upgrades." })}
       <div class="upgrade-section-body">
         <div id="other_upgrades" class="upgrade-group"></div>
       </div>
@@ -109,11 +186,10 @@ export function researchSectionTemplate() {
     <article>No affordable research available</article>
   </div>
   <div id="experimental_upgrades_content_wrapper" data-hub-accordion="true">
-    <article id="exotic_particles_display"></article>
+    <article id="exotic_particles_display" class="ep-status-panel"></article>
     <p class="research-ep-hint" id="research_ep_hint">Spend EP in the hubs below ↓</p>
     <article id="reboot_section" class="research-collapsible section-collapsed">
-      <h2 class="research-section-header" role="button" tabindex="0" aria-expanded="false">Prestige</h2>
-      <p class="section-hub-blurb">Refund wipes progress; Prestige keeps EP and research for a money multiplier.</p>
+      ${researchSectionHeaderBlock({ title: "Prestige", blurb: "Refund wipes progress; Prestige keeps EP and research for a money multiplier." })}
       <div class="research-section-body">
         <div class="research-buttons-container">
           <div class="refund-safety-cover-wrap">
@@ -125,22 +201,19 @@ export function researchSectionTemplate() {
       </div>
     </article>
     <article class="upgrade-section-hub upgrade-hub-collapsible">
-      <h2 class="upgrade-section-header" data-section-name="Laboratory" role="button" tabindex="0" aria-expanded="true">Laboratory</h2>
-      <p class="section-hub-blurb">Foundational exotic research and lab systems.</p>
+      ${upgradeHubHeaderBlock({ sectionName: "Laboratory", blurb: "Foundational exotic research and lab systems.", expanded: true })}
       <div class="upgrade-section-body">
         <div id="experimental_laboratory" class="upgrade-group"></div>
       </div>
     </article>
     <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
-      <h2 class="upgrade-section-header" data-section-name="Global Boosts" role="button" tabindex="0" aria-expanded="false">Global Boosts</h2>
-      <p class="section-hub-blurb">Cross-tree multipliers and passive EP gains.</p>
+      ${upgradeHubHeaderBlock({ sectionName: "Global Boosts", blurb: "Cross-tree multipliers and passive EP gains." })}
       <div class="upgrade-section-body">
         <div id="experimental_boost" class="upgrade-group"></div>
       </div>
     </article>
     <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
-      <h2 class="upgrade-section-header" data-section-name="Experimental Parts &amp; Cells" role="button" tabindex="0" aria-expanded="false">Experimental Parts &amp; Cells</h2>
-      <p class="section-hub-blurb">Advanced components and experimental cell lines.</p>
+      ${upgradeHubHeaderBlock({ sectionName: "Experimental Parts & Cells", blurb: "Advanced components and experimental cell lines." })}
       <div class="upgrade-section-body">
         <div id="experimental_parts" class="upgrade-group"></div>
         <div id="experimental_cells" class="upgrade-group"></div>
@@ -148,8 +221,7 @@ export function researchSectionTemplate() {
       </div>
     </article>
     <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
-      <h2 class="upgrade-section-header" data-section-name="Particle Accelerators" role="button" tabindex="0" aria-expanded="false">Particle Accelerators</h2>
-      <p class="section-hub-blurb">High-tier EP generation and accelerator tuning.</p>
+      ${upgradeHubHeaderBlock({ sectionName: "Particle Accelerators", blurb: "High-tier EP generation and accelerator tuning." })}
       <div class="upgrade-section-body">
         <div id="experimental_particle_accelerators" class="upgrade-group"></div>
       </div>
@@ -228,6 +300,11 @@ export function aboutSectionTemplate() {
   <div class="about-content">
     <h2>About Reactor Revival</h2>
     <div id="basic_overview_section" class="about-section"></div>
+    <div id="help_prestige_section" class="about-section"></div>
+    <div id="help_offline_section" class="about-section"></div>
+    <div id="help_layouts_section" class="about-section"></div>
+    <div id="help_parts_section" class="about-section"></div>
+    <div id="help_controls_section" class="about-section"></div>
     <div class="about-section">
       <h3>Game</h3>
       <p>
@@ -253,7 +330,7 @@ export function aboutSectionTemplate() {
     </nav>
     <div class="about-section">
       <h3>Version</h3>
-      <p>Current Version: <span id="about_version"></span></p>
+      <p>Current Version: <button type="button" id="about_version_btn" class="about-version-btn" title="View recent changes"><span id="about_version"></span></button></p>
     </div>
     <div class="about-section" id="about_credits">
       <h3>Credits</h3>
@@ -288,6 +365,47 @@ export function aboutSectionTemplate() {
   `;
 }
 
+export function reactorStatusBannersTemplate({ uiState, ui }) {
+  const onResume = () => dispatchToggleIntent(ui?.game, "pause", false, "unpause_btn");
+  const onReset = () => { void ui?.resetReactor?.(); };
+  return html`
+    ${when(uiState?.is_paused, () => html`
+      <div id="pause_banner" class="container">
+        <article>PAUSED</article>
+        <button id="unpause_btn" class="resume-btn ui-bevel" type="button" title="Resume" aria-label="Resume game" @click=${onResume}>Resume</button>
+      </div>
+    `)}
+    ${when(uiState?.is_melting_down, () => html`
+      <div id="meltdown_banner" class="container">
+        <article id="meltdown_banner_message">MELTDOWN</article>
+        <button id="reset_reactor_btn" class="reset-btn" type="button" @click=${onReset}>Reset Reactor</button>
+      </div>
+    `)}
+  `;
+}
+
+export function leaderboardControlsTemplate({ uiState, onSortChange }) {
+  const sorts = [
+    { key: "power", title: "Top Power", icon: "img/ui/icons/icon_power.png", alt: "Power" },
+    { key: "heat", title: "Top Heat", icon: "img/ui/icons/icon_heat.png", alt: "Heat" },
+    { key: "money", title: "Top Money", icon: "img/ui/icons/icon_cash.png", alt: "Money" },
+  ];
+  return html`
+    <div class="leaderboard-controls">
+      ${sorts.map(({ key, title, icon, alt }) => html`
+        <button
+          class=${classMap({ "pixel-btn": true, "leaderboard-sort": true, active: uiState.leaderboard_sort === key })}
+          data-sort=${key}
+          title=${title}
+          @click=${() => onSortChange(key)}
+        >
+          <img src=${icon} alt=${alt} class="icon-inline" />
+        </button>
+      `)}
+    </div>
+  `;
+}
+
 export function leaderboardSectionTemplate() {
   return html`
 <section id="leaderboard_section" class="page">
@@ -296,17 +414,7 @@ export function leaderboardSectionTemplate() {
       <h2>Reactor Records</h2>
       <p class="leaderboard-subtitle" id="leaderboard_subtitle">Sorted by power</p>
     </header>
-    <div class="leaderboard-controls">
-      <button class="pixel-btn leaderboard-sort active" data-sort="power" title="Top Power">
-        <img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" />
-      </button>
-      <button class="pixel-btn leaderboard-sort" data-sort="heat" title="Top Heat">
-        <img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" />
-      </button>
-      <button class="pixel-btn leaderboard-sort" data-sort="money" title="Top Money">
-        <img src="img/ui/icons/icon_cash.png" alt="Money" class="icon-inline" />
-      </button>
-    </div>
+    <div id="leaderboard_controls_root"></div>
     <div class="leaderboard-content">
       <table class="leaderboard-table">
         <thead>
@@ -317,7 +425,7 @@ export function leaderboardSectionTemplate() {
             <th class="leaderboard-col-heat">Heat</th>
             <th class="leaderboard-col-money">Money</th>
             <th class="leaderboard-col-time" style="display: none;">Time</th>
-            <th class="leaderboard-col-layout" title="Layout">Lay</th>
+            <th class="leaderboard-col-layout" title="Layout">Layout</th>
           </tr>
         </thead>
         <tbody id="leaderboard_rows"></tbody>

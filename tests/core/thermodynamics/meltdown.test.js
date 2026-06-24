@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGameWithDOM, toNum, clearGracePeriod } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
+import { assertShellStateClass } from "../../helpers/testUtils.js";
 
 describe("Reactor Meltdown Scenarios", () => {
     let game;
@@ -74,9 +75,7 @@ describe("Reactor Meltdown Scenarios", () => {
         game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
         game.ui.meltdownUI.updateMeltdownState();
-        if (typeof document !== 'undefined' && document && document.body) {
-            expect(document.body.classList.contains("reactor-meltdown")).toBe(true);
-        }
+        assertShellStateClass(game, "reactor-meltdown", "is_melting_down", true);
     });
 
     it("should clear the meltdown state upon a full reboot", async () => {
@@ -91,33 +90,19 @@ describe("Reactor Meltdown Scenarios", () => {
     });
 
     it("should clear the meltdown CSS class from body upon reboot", async () => {
-        // Use the existing game instance instead of creating a new one
         game.paused = false;
-        
-        // Ensure we're on reactor page
         await game.router.loadPage('reactor_section');
-        
-        // Trigger meltdown
         game.reactor.current_heat = game.reactor.max_heat * 2.1;
         game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);
-        
-        // Add the CSS class manually to test removal
-        if (document.body) {
-            document.body.classList.add("reactor-meltdown");
-        }
+        game.ui.meltdownUI?.updateMeltdownState?.();
+        assertShellStateClass(game, "reactor-meltdown", "is_melting_down", true);
 
-        // Perform reboot
         await game.rebootActionDiscardExoticParticles();
-
-        // Verify meltdown state is cleared
         expect(game.reactor.has_melted_down).toBe(false);
         expect(game.state.melting_down).toBe(false);
-
-        // Verify CSS class is removed from body
-        if (typeof document !== 'undefined' && document && document.body) {
-            expect(document.body.classList.contains("reactor-meltdown")).toBe(false);
-        }
+        game.ui.meltdownUI?.updateMeltdownState?.();
+        assertShellStateClass(game, "reactor-meltdown", "is_melting_down", false);
     }, 30000);
 
     it("should clear the meltdown state if a part is placed after a meltdown", async () => {

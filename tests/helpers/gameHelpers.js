@@ -1,5 +1,6 @@
 import { toDecimal } from "@app/utils.js";
 import { patchGameState } from "@app/state.js";
+import { syncActivePartsAtTickBoundary } from "@app/domain/part-classification.js";
 
 export function grantInfiniteResources(game) {
   game.current_money = 1e30;
@@ -14,8 +15,8 @@ export function grantInfiniteResources(game) {
 
 export function syncGridState(game, { activeTiles = false } = {}) {
   game.reactor.updateStats();
-  game.engine.markPartCacheAsDirty();
-  game.engine._updatePartCaches();
+  syncActivePartsAtTickBoundary(game.engine);
+
   if (activeTiles) {
     game.tileset.updateActiveTiles();
   }
@@ -206,7 +207,7 @@ export async function assembleHeatChain(
     tiles.push(tile);
   }
   game.reactor?.updateStats?.();
-  game.engine?._updatePartCaches?.();
+  syncActivePartsAtTickBoundary(game.engine);
   return tiles;
 }
 

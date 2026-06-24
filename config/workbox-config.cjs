@@ -6,9 +6,11 @@ module.exports = {
     "terms-of-service.html",
     "manifest.json",
     "version.json",
-    "css/**/*.css",
+    "css/app.css",
+    "fonts/**/*.{otf,woff,woff2,ttf}",
+    "lib/fonts/**/*.{woff2,woff,otf,ttf}",
     "data/**/*.json",
-    "img/**/*.{png,svg,jpg,jpeg}",
+    "img/**/*.{png,svg,jpg,jpeg,webp}",
     "lib/**/*.js",
     "src/**/*.js"
   ],

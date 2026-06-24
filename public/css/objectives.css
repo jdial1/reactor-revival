@@ -1,4 +1,4 @@
-#objectives_section { right: 0; left: 0; display: flex; overflow: visible; min-height: 30px !important; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; transition: border-color 0.3s ease, box-shadow 0.3s ease; position: absolute !important; z-index: 1000; top: 0 !important; width: 100% !important; max-width: 100%; max-height: none !important; box-sizing: border-box; padding: 4px 0 0; margin: 4px 0 0 !important; font-family: "Press Start 2P", cursive, monospace !important; overflow-x: hidden; pointer-events: none;
+﻿#objectives_section { right: 0; left: 0; display: flex; overflow: visible; min-height: 30px !important; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; transition: border-color 0.3s ease, box-shadow 0.3s ease; position: absolute !important; z-index: 1000; top: 0 !important; width: 100% !important; max-width: 100%; max-height: none !important; box-sizing: border-box; padding: 4px 0 0; margin: 4px 0 0 !important; font-family: "Press Start 2P", cursive, monospace !important; overflow-x: hidden; pointer-events: none;
 }
 
 #objectives_content { width: 100%; box-sizing: border-box; flex-direction: row; align-items: center; justify-content: space-between; display: block; overflow: visible; padding: 0 12px; gap: 0.4em;
@@ -62,7 +62,7 @@
  .mobile-objectives-container { width: 96%; min-height: 50px; max-height: none; margin-top: 8px; pointer-events: auto; transform: none;
  }
 
- body.page-reactor .objectives-toast-btn { top: calc(env(safe-area-inset-top) + var(--main-top-nav-height, 60px) + 8px); right: 8px; display: flex !important; opacity: 1; visibility: visible;
+ #wrapper.page-reactor .objectives-toast-btn { top: calc(env(safe-area-inset-top) + var(--main-top-nav-height, 60px) + 8px); right: 8px; display: flex !important; opacity: 1; visibility: visible;
  }
 
  .objectives-header { min-height: 50px !important; max-height: none !important; padding: 6px 12px !important; gap: 4px !important;
@@ -234,7 +234,7 @@
  to { opacity: 1; clip-path: inset(0 0 0 0); }
 }
 
-@media (width >= 901px) { body.page-reactor .objectives-toast-btn.is-expanded { left: calc(var(--sidebar-width, 300px) + 8px); right: 8px;
+@media (width >= 901px) { #wrapper.page-reactor .objectives-toast-btn.is-expanded { left: calc(var(--sidebar-width, 300px) + 8px); right: 8px;
  }
 }
 /* Header acts as the clickable button to expand */
@@ -684,7 +684,7 @@ body:not(.page-reactor) #objectives_toast_btn { display: none;
 #tooltip { position: fixed; z-index: 1101; width: auto; min-width: 300px; max-width: 400px; padding: 1rem; border: 8px solid var(--bevel-dark) !important; border-radius: 0; background: #050805 !important; box-shadow: 10px 10px 0 rgb(0 0 0 / 50%), inset 0 0 40px rgb(0 0 0 / 90%) !important; font-size: 0.85em; line-height: 1.3; opacity: 1; transition: opacity 0.2s ease; box-sizing: border-box; overflow: hidden auto; overflow-wrap: break-word; word-wrap: break-word;
 }
 
-#tooltip.hidden { opacity: 0; pointer-events: none;
+#tooltip.hidden { display: none; opacity: 0; pointer-events: none; visibility: hidden;
 }
 
 #tooltip::before { content: ""; position: absolute; inset: -2px; border: 1px solid var(--bevel-light); background-image: radial-gradient(circle, #444 2px, transparent 2px), radial-gradient(circle, #444 2px, transparent 2px), radial-gradient(circle, #444 2px, transparent 2px), radial-gradient(circle, #444 2px, transparent 2px); background-position: 4px 4px, calc(100% - 4px) 4px, 4px calc(100% - 4px), calc(100% - 4px) calc(100% - 4px); background-repeat: no-repeat; background-size: 8px 8px; z-index: 10; pointer-events: none;
@@ -759,8 +759,9 @@ body:not(.page-reactor) #objectives_toast_btn { display: none;
 #tooltip_data p[data-role="description"] .power-num { background-color: rgb(0 220 180 / 12%); }
 #tooltip_data p[data-role="description"] .heat-num { background-color: rgb(255 80 80 / 12%); }
 #tooltip_data p[data-role="description"] .tick-num { background-color: rgb(255 200 100 / 12%); }
-/* Mobile tooltip positioning */
-@media (width <= 900px) { #tooltip { position: fixed; z-index: 1110 !important; top: 8px; left: 20%; width: auto; min-width: 200px; max-width: calc(100vw - 216px); /* Account for left + right padding */
+
+@media (width <= 900px) { #tooltip,
+ #main.tooltip_showing #tooltip { display: none !important;
  }
 
  #controls_nav button:not(.mech-switch) { min-height: 50px !important; padding: 4px 2px !important; font-size: 0.55rem !important;
@@ -840,24 +841,6 @@ body:not(.page-reactor) #objectives_toast_btn { display: none;
  }
 
  #main.tooltip_showing #tooltip_actions { width: 100%; padding-top: 0.5rem; padding-left: 0; border-top: 2px solid var(--bevel-dark); border-left: none; margin-top: 0.5rem; margin-left: 0;
- }
-}
-
-@media (width <= 768px) { #tooltip { position: fixed; top: calc(var(--main-top-nav-height, 50px) + 8px); right: 3px; left: 3px; width: auto; min-width: auto; max-width: calc(100vw - 16px); box-sizing: border-box; padding: 0.3rem; font-size: 0.8em; overflow-wrap: break-word; overflow-x: hidden; transform: none; word-wrap: break-word;
- }
-
- #tooltip_data { max-width: 100%; overflow-wrap: break-word; word-wrap: break-word;
- }
-
- #tooltip_data p[data-role="description"] { padding: 0.3rem; margin: 0.3rem 0;
- }
-
- .tooltip-bonuses { padding: 0.3rem; margin-top: 0.3rem;
- }
- .tooltip-summary-row { padding-bottom: 0; border-bottom: none; margin-bottom: 0.2rem; flex-direction: column; gap: 0.3rem; }
- #tooltip_actions { margin-top: 0.3rem; }
-
- #tooltip_close_btn { top: 0.2rem; right: 0.2rem; width: 24px !important; height: 24px !important; padding: 0.05rem; font-size: 0.5em;
  }
 }
 
@@ -1215,7 +1198,7 @@ footer#bottom_nav button { overflow: hidden; width: 100% !important; min-width: 
  padding: 8px 16px !important; border: 2px solid rgb(255 255 255) !important; border-radius: 4px !important; margin-left: 20px !important; background: rgb(255 255 255 / 20%) !important; color: rgb(255 255 255) !important; cursor: pointer !important; font-size: 14px !important; font-weight: bold !important; text-shadow: 1px 1px 2px rgb(0 0 0 / 80%) !important; transition: all 0.3s ease !important;
 }
 
-body.reactor-meltdown #meltdown_banner .reset-btn { display: inline-block !important;
+#wrapper.reactor-meltdown #meltdown_banner .reset-btn { display: inline-block !important;
 }
 
 #meltdown_banner .reset-btn:hover { border-color: rgb(255 235 59) !important; background: rgb(255 255 255 / 30%) !important; box-shadow: 0 0 10px rgb(255 235 59 / 50%) !important; color: rgb(255 235 59) !important; transform: scale(1.05) !important;
@@ -1235,17 +1218,17 @@ body.reactor-meltdown #meltdown_banner .reset-btn { display: inline-block !impor
 #meltdown_banner { display: none !important;
 }
 
-body.game-paused #pause_banner { display: flex !important;
+#wrapper.game-paused #pause_banner { display: flex !important;
 }
 
-body.reactor-meltdown #meltdown_banner { display: flex !important; animation: meltdownFlash 1s ease-in-out infinite alternate !important;
+#wrapper.reactor-meltdown #meltdown_banner { display: flex !important; animation: meltdownFlash 1s ease-in-out infinite alternate !important;
 }
 
-body.game-paused #objectives_toast_btn,
-body.reactor-meltdown #objectives_toast_btn { display: none !important;
+#wrapper.game-paused #objectives_toast_btn,
+#wrapper.reactor-meltdown #objectives_toast_btn { display: none !important;
 }
 
-body.tutorial-claim-step #objectives_toast_btn { display: flex !important;
+#wrapper.tutorial-claim-step #objectives_toast_btn { display: flex !important;
 }
 
 body[data-tutorial-step] #tutorial-callout.visible {
@@ -1290,59 +1273,59 @@ body[data-tutorial-step="sell_power"] #parts_section { position: relative; z-ind
 #reactor_section { position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; align-items: center; justify-content: center; padding-top: calc(70px + 16px);
 }
 
-body.page-reactor #reactor_section { padding-top: calc(70px + 16px);
+#wrapper.page-reactor #reactor_section { padding-top: calc(70px + 16px);
 }
 
-@media (width <= 900px) { body.page-reactor #reactor_section { min-height: calc(100vh - var(--main-top-nav-height, 60px) - 50px - 90px - var(--bottom-nav-height, 40px)); padding-top: 0; padding-bottom: calc(50px + 90px + var(--bottom-nav-height, 40px) + 8px);
+@media (width <= 900px) { #wrapper.page-reactor #reactor_section { min-height: calc(100vh - var(--main-top-nav-height, 60px) - 50px - 90px - var(--bottom-nav-height, 40px)); padding-top: 0; padding-bottom: calc(50px + 90px + var(--bottom-nav-height, 40px) + 8px);
  }
 }
 
-@media (width > 900px) { body.page-reactor #reactor_section { padding-top: calc(70px + var(--main-top-nav-height, 60px)); padding-bottom: calc(var(--bottom-nav-height, 44px));
+@media (width > 900px) { #wrapper.page-reactor #reactor_section { padding-top: calc(70px + var(--main-top-nav-height, 60px)); padding-bottom: calc(var(--bottom-nav-height, 44px));
  }
 }
 
-body.page-privacy_policy nav#main_top_nav,
-body.page-terms_of_service nav#main_top_nav,
-body.page-privacy_policy footer#bottom_nav,
-body.page-terms_of_service footer#bottom_nav,
-body.page-privacy_policy footer#info_bar,
-body.page-terms_of_service footer#info_bar,
-body.page-privacy_policy #main_top_nav,
-body.page-terms_of_service #main_top_nav,
-body.page-privacy_policy #bottom_nav,
-body.page-terms_of_service #bottom_nav,
-body.page-privacy_policy #info_bar,
-body.page-terms_of_service #info_bar { display: none !important; overflow: hidden; height: 0 !important; opacity: 0 !important; visibility: hidden !important;
+#wrapper.page-privacy_policy nav#main_top_nav,
+#wrapper.page-terms_of_service nav#main_top_nav,
+#wrapper.page-privacy_policy footer#bottom_nav,
+#wrapper.page-terms_of_service footer#bottom_nav,
+#wrapper.page-privacy_policy footer#info_bar,
+#wrapper.page-terms_of_service footer#info_bar,
+#wrapper.page-privacy_policy #main_top_nav,
+#wrapper.page-terms_of_service #main_top_nav,
+#wrapper.page-privacy_policy #bottom_nav,
+#wrapper.page-terms_of_service #bottom_nav,
+#wrapper.page-privacy_policy #info_bar,
+#wrapper.page-terms_of_service #info_bar { display: none !important; overflow: hidden; height: 0 !important; opacity: 0 !important; visibility: hidden !important;
 }
 
-body.page-privacy_policy #splash-container,
-body.page-terms_of_service #splash-container,
-body.page-privacy_policy #quick-start-modal,
-body.page-terms_of_service #quick-start-modal { display: none !important;
+#wrapper.page-privacy_policy #splash-container,
+#wrapper.page-terms_of_service #splash-container,
+#wrapper.page-privacy_policy #quick-start-modal,
+#wrapper.page-terms_of_service #quick-start-modal { display: none !important;
 }
 
-body.page-privacy_policy #wrapper #main_top_nav,
-body.page-terms_of_service #wrapper #main_top_nav,
-body.page-privacy_policy #wrapper #bottom_nav,
-body.page-terms_of_service #wrapper #bottom_nav,
-body.page-privacy_policy #wrapper #info_bar,
-body.page-terms_of_service #wrapper #info_bar { display: none !important; overflow: hidden; height: 0 !important; opacity: 0 !important; visibility: hidden !important;
+#wrapper.page-privacy_policy #wrapper #main_top_nav,
+#wrapper.page-terms_of_service #wrapper #main_top_nav,
+#wrapper.page-privacy_policy #wrapper #bottom_nav,
+#wrapper.page-terms_of_service #wrapper #bottom_nav,
+#wrapper.page-privacy_policy #wrapper #info_bar,
+#wrapper.page-terms_of_service #wrapper #info_bar { display: none !important; overflow: hidden; height: 0 !important; opacity: 0 !important; visibility: hidden !important;
 }
 
-body.page-privacy_policy .about-content,
-body.page-terms_of_service .about-content { font-size: 0.9rem; line-height: 1.5;
+#wrapper.page-privacy_policy .about-content,
+#wrapper.page-terms_of_service .about-content { font-size: 0.9rem; line-height: 1.5;
 }
 
-body.page-privacy_policy .about-content h2,
-body.page-terms_of_service .about-content h2 { margin-bottom: 1rem; font-size: 1.5rem;
+#wrapper.page-privacy_policy .about-content h2,
+#wrapper.page-terms_of_service .about-content h2 { margin-bottom: 1rem; font-size: 1.5rem;
 }
 
-body.page-privacy_policy .about-content h3,
-body.page-terms_of_service .about-content h3 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.2rem;
+#wrapper.page-privacy_policy .about-content h3,
+#wrapper.page-terms_of_service .about-content h3 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.2rem;
 }
 
-body.page-privacy_policy .about-content p,
-body.page-terms_of_service .about-content p { margin-bottom: 0.75rem;
+#wrapper.page-privacy_policy .about-content p,
+#wrapper.page-terms_of_service .about-content p { margin-bottom: 0.75rem;
 }
 
 .affordability-banner { position: relative; z-index: 100; display: flex; width: 100%; align-items: center; justify-content: center; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; background-color: rgb(255 200 0); box-shadow: 0 2px 4px rgb(0 0 0 / 20%); color: rgb(0 0 0); font-size: 1.1rem; font-weight: bold; text-align: center;
@@ -1354,38 +1337,38 @@ body.page-terms_of_service .about-content p { margin-bottom: 0.75rem;
 .affordability-banner article { padding: 0; margin: 0; background: none; color: rgb(0 0 0); font-weight: bold; text-shadow: 1px 1px 2px rgb(255 255 255 / 50%);
 }
 
-body.page-privacy_policy .about-content ul,
-body.page-terms_of_service .about-content ul { margin-bottom: 0.75rem;
+#wrapper.page-privacy_policy .about-content ul,
+#wrapper.page-terms_of_service .about-content ul { margin-bottom: 0.75rem;
 }
 
-body.page-privacy_policy .about-content li,
-body.page-terms_of_service .about-content li { margin-bottom: 0.25rem;
+#wrapper.page-privacy_policy .about-content li,
+#wrapper.page-terms_of_service .about-content li { margin-bottom: 0.25rem;
 }
 
-body.page-privacy_policy #wrapper,
-body.page-terms_of_service #wrapper { overflow: visible !important; min-height: calc(100vh - 30px) !important; padding: 15px !important; margin: 15px !important; overflow-y: auto !important;
+#wrapper.page-privacy_policy #wrapper,
+#wrapper.page-terms_of_service #wrapper { overflow: visible !important; min-height: calc(100vh - 30px) !important; padding: 15px !important; margin: 15px !important; overflow-y: auto !important;
 }
 
-body.page-privacy_policy,
-body.page-terms_of_service { height: 100vh !important; font-family:
+#wrapper.page-privacy_policy,
+#wrapper.page-terms_of_service { height: 100vh !important; font-family:
   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   "Helvetica Neue", Arial, sans-serif !important; overflow-y: auto !important;
 }
 
-body.page-privacy_policy #main,
-body.page-terms_of_service #main { width: 100% !important; height: 100% !important; min-height: calc(100vh - 100px) !important; overflow-y: auto !important;
+#wrapper.page-privacy_policy #main,
+#wrapper.page-terms_of_service #main { width: 100% !important; height: 100% !important; min-height: calc(100vh - 100px) !important; overflow-y: auto !important;
 }
 
-body.page-privacy_policy #main_content_wrapper,
-body.page-terms_of_service #main_content_wrapper { width: 100% !important; height: 100% !important; overflow-y: auto !important;
+#wrapper.page-privacy_policy #main_content_wrapper,
+#wrapper.page-terms_of_service #main_content_wrapper { width: 100% !important; height: 100% !important; overflow-y: auto !important;
 }
 
-body.page-privacy_policy #page_content_area,
-body.page-terms_of_service #page_content_area { width: 100% !important; height: 100% !important; overflow-y: visible !important;
+#wrapper.page-privacy_policy #page_content_area,
+#wrapper.page-terms_of_service #page_content_area { width: 100% !important; height: 100% !important; overflow-y: visible !important;
 }
 
-body.page-privacy_policy .highlight,
-body.page-terms_of_service .highlight { padding: 2px 4px; border-radius: 4px; background: rgb(253 232 45 / 84.3%); box-shadow: 0 1px 2px rgb(0 0 0 / 3%); color: rgb(34 34 34); font-weight: 500;
+#wrapper.page-privacy_policy .highlight,
+#wrapper.page-terms_of_service .highlight { padding: 2px 4px; border-radius: 4px; background: rgb(253 232 45 / 84.3%); box-shadow: 0 1px 2px rgb(0 0 0 / 3%); color: rgb(34 34 34); font-weight: 500;
 }
 /* Terms of Service Page Styles */
 html:has(body > .page-container) { overflow-y: auto !important;
@@ -1929,13 +1912,13 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .component-count { color: rgb(255 255 255); font-size: 12px; font-weight: bold; text-shadow: 1px 1px 1px rgb(0 0 0 / 80%);
 }
 /* Mobile banner height overrides */
-@media (width <= 600px) { body.game-paused #pause_banner { height: 60px !important;
+@media (width <= 600px) { #wrapper.game-paused #pause_banner { height: 60px !important;
  }
 
  #pause_banner .resume-btn { padding: 6px 12px !important; margin-left: 10px !important; font-size: 12px !important;
  }
 
- body.reactor-meltdown #meltdown_banner { height: 60px !important; padding: 0.4rem !important; font-size: 1.1rem !important;
+ #wrapper.reactor-meltdown #meltdown_banner { height: 60px !important; padding: 0.4rem !important; font-size: 1.1rem !important;
  }
 
  #meltdown_banner article { font-size: 1.1rem !important; letter-spacing: 0.3px !important;
@@ -1945,13 +1928,13 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
  }
 }
 
-@media (width <= 400px) { body.game-paused #pause_banner { height: 60px !important;
+@media (width <= 400px) { #wrapper.game-paused #pause_banner { height: 60px !important;
  }
 
  #pause_banner .resume-btn { padding: 4px 8px !important; margin-left: 8px !important; font-size: 11px !important;
  }
 
- body.reactor-meltdown #meltdown_banner { height: 60px !important; padding: 0.3rem !important; font-size: 1rem !important;
+ #wrapper.reactor-meltdown #meltdown_banner { height: 60px !important; padding: 0.3rem !important; font-size: 1rem !important;
  }
 
  #meltdown_banner article { font-size: 1rem !important; letter-spacing: 0.2px !important;
@@ -2453,3 +2436,4 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 
 .chapter-celebration-title { margin: 0; font-size: clamp(1.4rem, 5vw, 2.2rem); color: rgb(255 255 255);
 }
+

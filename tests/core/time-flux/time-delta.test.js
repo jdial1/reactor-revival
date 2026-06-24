@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame, toNum } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame, toNum , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart, forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
 
 describe("Time Delta Physics Scaling", () => {
@@ -79,8 +79,8 @@ describe("Time Delta Physics Scaling", () => {
         t3.heat_contained = 0;
         t3.part.containment = 10000;
 
-        game.engine.markPartCacheAsDirty();
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
+
         game.engine._updateValveNeighborCache();
 
         const baseTransfer = t2.getEffectiveTransferValue();
@@ -124,8 +124,8 @@ describe("Time Delta Physics Scaling", () => {
     describe("Offline accumulator", () => {
         it("does not change accumulator from RAF loop alone", () => {
             game.tileset.clearAllTiles();
-            game.engine.markPartCacheAsDirty();
-            game.engine._updatePartCaches();
+            syncActivePartsAtTickBoundary(game.engine);
+
             game.engine.time_accumulator = 5000;
             const processSpy = vi.spyOn(game.engine, "_processTick");
             const target = globalThis.window || globalThis;

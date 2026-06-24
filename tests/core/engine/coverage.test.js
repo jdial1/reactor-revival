@@ -338,7 +338,7 @@ describe("Full Part and Upgrade Coverage", () => {
             preValue = game.loop_wait;
             break;
           case "component_reinforcement":
-            part = game.partset.getPartById("vent1");
+            part = game.partset.getPartById("capacitor1");
             preValue = part.containment;
             break;
           case "heat_control_operator":
@@ -405,7 +405,7 @@ describe("Full Part and Upgrade Coverage", () => {
             expect(postValue).toBe(preValue);
             break;
           case "component_reinforcement":
-            part = game.partset.getPartById("vent1");
+            part = game.partset.getPartById("capacitor1");
             postValue = part.containment;
             expect(postValue).toBeGreaterThan(preValue);
             break;

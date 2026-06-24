@@ -348,7 +348,7 @@ async function checkMainPage() {
 
 async function checkCriticalAssets() {
   log("\n🔍 Checking critical assets...", "blue");
-  const criticalAssets = ["/css/main.css", "/manifest.json", "/sw.js", "/index.html"];
+  const criticalAssets = ["/css/app.css", "/manifest.json", "/sw.js", "/index.html"];
   try {
     for (const asset of criticalAssets) {
       const response = await makeRequest(`${BASE_URL}${asset}`);

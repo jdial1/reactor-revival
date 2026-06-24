@@ -10,7 +10,7 @@
     "standalone"
   ],
   "background_color": "#1a1a1a",
-  "theme_color": "#262626",
+  "theme_color": "#1f2120",
   "orientation": "any",
   "scope": "/reactor-revival/",
   "scope_extensions": [

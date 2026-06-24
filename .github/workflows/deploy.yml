@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -34,8 +36,26 @@ jobs:
 
       # public/src is the single source of truth; no copy step needed
 
-      - name: Generate version.json and splash counts
+      - name: Generate version.json, splash counts, and changelog
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_HEAD_COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          CHANGELOG_COMMIT_MESSAGES: ${{ toJson(github.event.commits.*.message) }}
         run: npm run generate-metadata
+
+      - name: Commit deploy changelog
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/changelog.json
+          if git diff --staged --quiet; then
+            echo "changelog.json unchanged"
+          else
+            git commit -m "chore: update deploy changelog [skip ci]"
+            git push
+          fi
 
       - name: Copy external libraries
         run: npm run copy-libs
@@ -45,6 +65,9 @@ jobs:
 
       - name: Run test suite
         run: npm test
+
+      - name: Bundle CSS for production
+        run: npm run build:css
 
       - name: Strip console statements for production
         run: npm run remove-console-logs
@@ -115,6 +138,7 @@ jobs:
       - name: Run UI screenshots
         env:
           BASE_URL: ${{ needs.deploy.outputs.page_url }}
+          SCREENSHOT_LAYOUT_AUDIT: "1"
         run: |
           echo "Running UI screenshots for: $BASE_URL"
           npm run ui:screenshots:deploy

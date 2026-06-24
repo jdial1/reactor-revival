@@ -3,23 +3,26 @@
 
 importScripts("https://storage.googleapis.com/workbox-cdn/releases/6.4.1/workbox-sw.js");
 
-self.addEventListener("install", (event) => {
+function handleInstall(event) {
   event.waitUntil(self.skipWaiting());
-});
+}
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
-});
+function handleActivate(event) {
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      startVersionChecking(),
+    ])
+  );
+}
 
-// Allow clients to request immediate activation of the new service worker
-self.addEventListener("message", (event) => {
+function handleMessage(event) {
   if (event && event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
   } else if (event && event.data && event.data.type === "TRIGGER_VERSION_CHECK") {
-    // Manually trigger version check
     checkForVersionUpdate();
   }
-});
+}
 
 workbox.core.clientsClaim();
 
@@ -164,10 +167,10 @@ function showUpdateNotification(version) {
   }
 }
 
-self.addEventListener('notificationclick', (event) => {
+function handleNotificationClick(event) {
   event.notification.close();
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       if (clientList.length > 0) {
         let client = clientList[0];
         for (let i = 0; i < clientList.length; i++) {
@@ -177,10 +180,10 @@ self.addEventListener('notificationclick', (event) => {
         }
         return client.focus();
       }
-      return self.clients.openWindow(event.notification.data.url || '/');
+      return self.clients.openWindow(event.notification.data.url || "/");
     })
   );
-});
+}
 
 async function getDeployedVersion() {
   try {
@@ -248,19 +251,6 @@ function notifyClientsOfNewVersion(newVersion, currentVersion) {
   });
 }
 
-// Start version checking when service worker activates
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    Promise.all([
-      self.clients.claim(),
-      startVersionChecking(),
-    ])
-  );
-});
-
-// -----------------------------
-// Periodic Background Sync
-// -----------------------------
 async function handlePeriodicSync() {
   try {
     // Use the same version checking logic as the interval
@@ -271,22 +261,39 @@ async function handlePeriodicSync() {
   }
 }
 
-self.addEventListener("periodicsync", (event) => {
+function handlePeriodicSyncEvent(event) {
   if (event.tag === "reactor-periodic-sync") {
     event.waitUntil(handlePeriodicSync());
   }
-});
+}
 
-// -----------------------------
-// One-off Background Sync (fallback)
-// -----------------------------
-self.addEventListener("sync", (event) => {
+function handleSyncEvent(event) {
   if (event.tag === "reactor-sync") {
     event.waitUntil(handlePeriodicSync());
   }
-});
+}
 
-// -----------------------------
-// Push Notifications
-// -----------------------------
-// Push notifications are disabled for GitHub Pages hosting (no server to send pushes)
+function unregisterServiceWorkerListeners() {
+  self.removeEventListener("install", handleInstall);
+  self.removeEventListener("activate", handleActivate);
+  self.removeEventListener("message", handleMessage);
+  self.removeEventListener("notificationclick", handleNotificationClick);
+  self.removeEventListener("periodicsync", handlePeriodicSyncEvent);
+  self.removeEventListener("sync", handleSyncEvent);
+  if (versionCheckInterval) {
+    clearInterval(versionCheckInterval);
+    versionCheckInterval = null;
+  }
+}
+
+function registerServiceWorkerListeners() {
+  unregisterServiceWorkerListeners();
+  self.addEventListener("install", handleInstall);
+  self.addEventListener("activate", handleActivate);
+  self.addEventListener("message", handleMessage);
+  self.addEventListener("notificationclick", handleNotificationClick);
+  self.addEventListener("periodicsync", handlePeriodicSyncEvent);
+  self.addEventListener("sync", handleSyncEvent);
+}
+
+registerServiceWorkerListeners();

@@ -1,0 +1,294 @@
+[
+  {
+    "id": "ach_first_meltdown",
+    "title": "Not Great, Not Terrible",
+    "description": "Experience your first core meltdown.",
+    "group": "hazard",
+    "icon": "img/ui/effects/explosion_map.png",
+    "triggerType": "event",
+    "triggerEvent": "meltdownStarted"
+  },
+  {
+    "id": "ach_unplanned_disassembly",
+    "title": "Unplanned Disassembly",
+    "description": "Have a component explode due to over-pressurization.",
+    "group": "hazard",
+    "icon": "img/ui/effects/explosion_map.png",
+    "triggerType": "event",
+    "triggerEvent": "component_explosion"
+  },
+  {
+    "id": "ach_thermal_runaway",
+    "title": "Thermal Runaway",
+    "description": "Reach criticality (200% heat) without any Vents on the grid.",
+    "group": "hazard",
+    "triggerType": "tick",
+    "checkId": "criticality_no_vents"
+  },
+  {
+    "id": "ach_riding_redline",
+    "title": "Riding the Redline",
+    "description": "Remain in repulsion (heat > 110% of max) with hull integrity above 0% for 60 consecutive ticks.",
+    "group": "hazard",
+    "icon": "img/ui/effects/explosion_map.png",
+    "triggerType": "tick",
+    "checkId": "repulsion_60ticks"
+  },
+  {
+    "id": "ach_critical_margin",
+    "title": "Critical Margin",
+    "description": "Maintain reactor heat above 95% of max capacity for 120 consecutive ticks without melting down.",
+    "group": "hazard",
+    "triggerType": "tick",
+    "checkId": "heat_95pct_120ticks"
+  },
+  {
+    "id": "ach_controlled_fusion",
+    "title": "Controlled Burn",
+    "description": "Maintain 100% heat capacity for 10 consecutive ticks while generating at least 500,000 Power.",
+    "group": "hazard",
+    "triggerType": "tick",
+    "checkId": "max_heat_power_500k_10ticks"
+  },
+  {
+    "id": "ach_chain_reaction",
+    "title": "Chain Reaction",
+    "description": "Have exactly 10 components explode simultaneously on the grid in a single tick.",
+    "group": "hazard",
+    "triggerType": "tick",
+    "checkId": "simultaneous_explosions_10"
+  },
+  {
+    "id": "ach_thermal_whiplash",
+    "title": "Thermal Whiplash",
+    "description": "Recover from criticality (heat > 150%) back to nominal (heat < 80%) without manually clicking 'Reduce Heat'.",
+    "group": "hazard",
+    "triggerType": "tick",
+    "checkId": "criticality_recovery_auto"
+  },
+  {
+    "id": "ach_blueprint_stable",
+    "title": "Measure Twice",
+    "description": "Draft a layout in the Blueprint Planner with Net Heat ≤ 0 and > 0 Power.",
+    "group": "engineering",
+    "icon": "img/misc/reactor_planner.png",
+    "triggerType": "event",
+    "triggerEvent": "blueprintPlannerChanged"
+  },
+  {
+    "id": "ach_thermo_equilibrium",
+    "title": "Thermodynamic Equilibrium",
+    "description": "Achieve a Net Heat of exactly 0 while generating >5,000 Power.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "net_heat_zero_power_5k"
+  },
+  {
+    "id": "ach_closed_loop",
+    "title": "Closed Loop",
+    "description": "Have a stable reactor (Net Heat ≤ 0) running with 0 Vents.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "closed_loop_no_vents"
+  },
+  {
+    "id": "ach_unstable_equilibrium",
+    "title": "Unstable Equilibrium",
+    "description": "Generate >5,000,000 Power per tick with exactly 0 Vents placed.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "power_5m_no_vents"
+  },
+  {
+    "id": "ach_compact_fission",
+    "title": "Sub-Compact Core",
+    "description": "Generate >100,000 Power per tick on a grid of 36 tiles or fewer (6x6 size).",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "power_100k_grid_36"
+  },
+  {
+    "id": "ach_zero_heat_power_10k",
+    "title": "Cryogenic Fission",
+    "description": "Generate >10,000 Power per tick while maintaining current reactor heat at exactly 0.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "zero_heat_power_10k"
+  },
+  {
+    "id": "ach_stirling_powerhouse",
+    "title": "Thermal Capture Program",
+    "description": "Generate at least 1,000 Power per tick exclusively from Stirling Generator vent upgrades.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "stirling_power_1k"
+  },
+  {
+    "id": "ach_waste_heat_reclamation",
+    "title": "Waste Heat Reclamation",
+    "description": "Have a layout where your Stirling Generators produce more power than your primary fuel cells.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "stirling_exceeds_cell_power"
+  },
+  {
+    "id": "ach_stakhanovite_plan",
+    "title": "Stakhanovite Plan",
+    "description": "Produce >1,000,000 Power with a total grid value under $50,000.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "high_power_low_budget"
+  },
+  {
+    "id": "ach_pressure_cooker",
+    "title": "Pressure Cooker",
+    "description": "Have all active Heat Exchangers on the grid at exactly 100% heat capacity simultaneously.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "exchangers_max_capacity"
+  },
+  {
+    "id": "ach_the_cold_shoulder",
+    "title": "The Cold Shoulder",
+    "description": "Have 4 active Heat Inlets drawing heat from a single central cell.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "four_inlets_one_cell"
+  },
+  {
+    "id": "ach_the_straitjacket",
+    "title": "The Straitjacket",
+    "description": "Place a single fuel cell surrounded by 4 check valves creating a perfect heat-locking loop.",
+    "group": "engineering",
+    "triggerType": "tick",
+    "checkId": "heat_lock_loop"
+  },
+  {
+    "id": "ach_gravitational_collapse",
+    "title": "Singularity Horizon",
+    "description": "Place 4 Black Hole Particle Accelerators on the grid simultaneously.",
+    "group": "discovery",
+    "icon": "img/parts/accelerator_6.png",
+    "triggerType": "tick",
+    "checkId": "accelerator6_count_4"
+  },
+  {
+    "id": "ach_closed_door_lab",
+    "title": "Closed-Door Research",
+    "description": "Establish your first Experimental Laboratory (purchase Level 1).",
+    "group": "discovery",
+    "icon": "img/misc/lab.png",
+    "triggerType": "tick",
+    "checkId": "lab_unlocked"
+  },
+  {
+    "id": "ach_protium_breeder",
+    "title": "Protium Breeder Program",
+    "description": "Have 10 active Protium Cells on the grid simultaneously.",
+    "group": "discovery",
+    "icon": "img/parts/xcell_1_1.png",
+    "triggerType": "tick",
+    "checkId": "protium_cells_10"
+  },
+  {
+    "id": "ach_total_reflection",
+    "title": "Full Spectrum Reflection",
+    "description": "Place 12 Thermal Neutron Reflectors on the grid simultaneously.",
+    "group": "discovery",
+    "icon": "img/parts/reflector_6.png",
+    "triggerType": "tick",
+    "checkId": "reflector6_count_12"
+  },
+  {
+    "id": "ach_thermionic_harvest",
+    "title": "Thermionic Harvest",
+    "description": "Have 15 active Thermionic Coolant Cells on the grid simultaneously.",
+    "group": "discovery",
+    "icon": "img/parts/coolant_cell_6.png",
+    "triggerType": "tick",
+    "checkId": "coolant6_count_15"
+  },
+  {
+    "id": "ach_vortex_exchange",
+    "title": "Vortex Exchange",
+    "description": "Have both an Extreme Heat Inlet and an Extreme Heat Outlet active on the grid.",
+    "group": "discovery",
+    "triggerType": "tick",
+    "checkId": "inlet6_outlet6_active"
+  },
+  {
+    "id": "ach_supercritical_vortex",
+    "title": "Supercritical Vortex",
+    "description": "Have 8 active Extreme Vents on the grid simultaneously.",
+    "group": "discovery",
+    "icon": "img/parts/vent_6.png",
+    "triggerType": "tick",
+    "checkId": "vent6_count_8"
+  },
+  {
+    "id": "ach_protium_era",
+    "title": "The Protium Era",
+    "description": "Generate >50,000,000 Power per tick using only Protium Cells as your power source.",
+    "group": "discovery",
+    "icon": "img/parts/xcell_1_2.png",
+    "triggerType": "tick",
+    "checkId": "power_50m_protium_only"
+  },
+  {
+    "id": "ach_catalytic_synthesis",
+    "title": "Catalytic Synthesis",
+    "description": "Reach Level 10 of the Sub-Atomic Catalysts upgrade.",
+    "group": "discovery",
+    "triggerType": "tick",
+    "checkId": "sub_atomic_catalysts_lvl_10"
+  },
+  {
+    "id": "ach_singularity_evaporation",
+    "title": "Hawking Evaporation",
+    "description": "Have a Black Hole Particle Accelerator reach at least 99% of its maximum heat capacity.",
+    "group": "discovery",
+    "icon": "img/parts/accelerator_6.png",
+    "triggerType": "tick",
+    "checkId": "black_hole_critical"
+  },
+  {
+    "id": "ach_unified_theory",
+    "title": "Unified Field Theory",
+    "description": "Unlock all 9 experimental component types in your research tree.",
+    "group": "discovery",
+    "triggerType": "tick",
+    "checkId": "all_experimental_parts_unlocked"
+  },
+  {
+    "id": "ach_nuclear_disarmament",
+    "title": "Nuclear Disarmament",
+    "description": "Perform an Exotic Particle Weave (Prestige) with exactly 1 active fuel cell on your grid.",
+    "group": "discovery",
+    "triggerType": "event",
+    "triggerEvent": "prestigeCompleted"
+  },
+  {
+    "id": "ach_perfect_weave",
+    "title": "The Perfect Weave",
+    "description": "Complete an Exotic Particle Weave with session power produced and session heat dissipated within 0.1% of each other.",
+    "group": "discovery",
+    "triggerType": "event",
+    "triggerEvent": "prestigeCompleted"
+  },
+  {
+    "id": "ach_sympathetic_resonance",
+    "title": "Sympathetic Resonance",
+    "description": "Have a layout where a single central Reflector tile is adjacent to 4 active, fully enriched Quad Plutonium Cells.",
+    "group": "discovery",
+    "triggerType": "tick",
+    "checkId": "sympathetic_resonance_quad"
+  },
+  {
+    "id": "ach_frozen_fire",
+    "title": "Frozen Fire",
+    "description": "Have a Quad Nefastium Cell running at 100% output while its local heat is kept at exactly 0.",
+    "group": "discovery",
+    "triggerType": "tick",
+    "checkId": "frozen_fire_nefastium"
+  }
+]

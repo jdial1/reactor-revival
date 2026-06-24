@@ -14,8 +14,10 @@ export {
 export { default } from "./services-audio.js";
 export {
   initializePwa,
+  teardownPwa,
   getDeferredPrompt,
-  clearDeferredPrompt,
+  setupInstallPrompt,
+  onInstallPwaClick,
   requestWakeLock,
   releaseWakeLock,
   VersionChecker,
@@ -30,38 +32,37 @@ export { LeaderboardService, leaderboardService, getLocalBestRun } from "./servi
 
 import { html, render } from "lit-html";
 import { SaveDataSchema, VersionSchema } from "./schema/index.js";
+import { MODAL_IDS } from "./modalIds.js";
 import { fetchResolvedSaves } from "./state/save-query.js";
 import { showLoadBackupModal } from "./state/save-ui.js";
 import {
-  logger,
   StorageUtils,
   StorageAdapter,
   serializeSave,
   deserializeSave,
-  getResourceUrl,
-  isTestEnv,
   setSlot1FromBackupAsync,
-  classMap,
-  formatNumber,
-  formatPlaytimeLog,
-  runCathodeScramble,
   rotateSlot1ToBackup,
-  BaseComponent,
-  LEADERBOARD_CONFIG,
-} from "./utils.js";
+} from "./storage/index.js";
+import { classMap, BaseComponent, getResourceUrl } from "./dom/lit.js";
+import { logger } from "./core/logger.js";
+import { isTestEnv } from "./simUtils.js";
+import { formatNumber, formatPlaytimeLog } from "./format/numbers.js";
+import { LEADERBOARD_CONFIG } from "./constants/balance.js";
 import {
   splashStartOptionsTemplate,
   saveSlotRowTemplate,
   saveSlotMainTemplate,
 } from "./templates/servicesTemplates.js";
-import { MODAL_IDS } from "./components/ui-modals.js";
-import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
+import { getAppContext } from "./app-context.js";
+import { bindLitRenderMulti } from "./dom/lit-reactive.js";
+import { pwaState } from "./state/ui-state.js";
 import { getValidatedGameData } from "./services-audio.js";
 import {
   VersionChecker,
   warmImageCache,
   getCriticalUiIconAssets,
   preloadAllPartImages,
+  setupInstallPrompt,
 } from "./services-pwa.js";
 
 const FADE_SLIGHT_MS = 15000;
@@ -190,7 +191,7 @@ async function fetchVersionForSplash(versionChecker) {
 function mountSplashUserCountReactive(splashScreen, ui) {
   const userCountEl = splashScreen?.querySelector("#user-count-text");
   if (!userCountEl || !ui?.uiState) return;
-  ReactiveLitComponent.mountMulti(
+  bindLitRenderMulti(
     [{ state: ui.uiState, keys: ["user_count"] }],
     () => html`${ui.uiState?.user_count ?? 0}`,
     userCountEl
@@ -200,13 +201,20 @@ function mountSplashUserCountReactive(splashScreen, ui) {
 function addSplashStats(splashScreen, version, versionChecker, ui) {
   const versionText = splashScreen.querySelector("#splash-version-text");
   if (!versionText) return;
-  versionText.title = "Click to check for updates";
   versionText.style.cursor = "pointer";
   versionText.onclick = () => versionChecker.triggerVersionCheckToast();
   if (ui?.uiState) {
-    ReactiveLitComponent.mountMulti(
-      [{ state: ui.uiState, keys: ["version"] }],
-      () => html`v.${ui.uiState?.version ?? ""}`,
+    bindLitRenderMulti(
+      [
+        { state: ui.uiState, keys: ["version"] },
+        { state: pwaState, keys: ["updateAvailable", "hasAcknowledgedUpdate"] },
+      ],
+      () => {
+        const showNew = pwaState.updateAvailable && !pwaState.hasAcknowledgedUpdate;
+        versionText.classList.toggle("new-version", showNew);
+        versionText.title = showNew ? "New version available — click for details" : "Click to check for updates";
+        return html`v.${ui.uiState?.version ?? ""}`;
+      },
       versionText
     );
   } else {
@@ -330,7 +338,7 @@ async function loadFromDataImpl(splashManager, saveData, ctx) {
 async function teardownSplashAndWait() {
   const saveSlotEl = document.getElementById("save-slot-screen");
   if (saveSlotEl) saveSlotEl.remove();
-  if (window.splashManager) window.splashManager.hide();
+  getAppContext()?.splashManager?.hide();
   await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
 }
 
@@ -348,19 +356,16 @@ async function handleBackupLoadFlow(ctx, slot) {
 
 async function startGameOrFallback(ctx) {
   if (!ctx?.game || !ctx?.ui || !ctx?.pageRouter) return;
-  if (typeof window.startGame === "function") {
-    await window.startGame(ctx);
+  if (typeof getAppContext()?.startGame === "function") {
+    await getAppContext().startGame(ctx);
     return;
   }
   logger.log("error", "splash", "startGame function not available globally");
   await ctx.pageRouter.loadGameLayout();
   ctx.ui.initMainLayout();
   await ctx.pageRouter.loadPage("reactor_section");
-  ctx.game.tooltip_manager = new (await import("./components/ui-tooltips-tutorial.js")).TooltipManager(
-    "#main",
-    "#tooltip",
-    ctx.game
-  );
+  const { wireTooltipManager } = await import("./components/ui-tooltips-tutorial.js");
+  wireTooltipManager(ctx.ui, ctx.game);
   ctx.game.engine = new (await import("./logic.js")).Engine(ctx.game);
   await ctx.game.startSession();
   ctx.game.engine.start();
@@ -370,7 +375,7 @@ async function loadFromSaveSlotImpl(splashManager, slot, ctx) {
   try {
     await teardownSplashAndWait();
     const appCtx =
-      ctx ?? (splashManager._appContext || { game: window.game, ui: window.ui, pageRouter: window.pageRouter });
+      ctx ?? (splashManager._appContext || getAppContext() || {});
     if (!appCtx.game) {
       logger.log("error", "splash", "Game instance not available");
       return;
@@ -389,7 +394,7 @@ async function loadFromSaveSlotImpl(splashManager, slot, ctx) {
 class SplashStartOptionsBuilder {
   constructor(splashManager, ctx = null) {
     this.splashManager = splashManager;
-    this.ctx = ctx ?? (splashManager._appContext || { game: window.game, ui: window.ui, pageRouter: window.pageRouter });
+    this.ctx = ctx ?? (splashManager._appContext || getAppContext() || {});
   }
 
   async buildSaveSlotList(canLoadGame) {
@@ -404,29 +409,26 @@ class SplashStartOptionsBuilder {
 
     const onResume = async () => {
       try {
-        if (window.splashManager) window.splashManager.hide();
+        getAppContext()?.splashManager?.hide();
         await new Promise((resolve) => setTimeout(resolve, 600));
 
-        const game = this.ctx?.game ?? window.game;
+        const game = this.ctx?.game ?? getAppContext()?.game;
         if (game) {
           const loadSuccess = await game.saveManager.loadGame(mostRecentSave.slot);
 
-          const pageRouter = this.ctx?.pageRouter ?? window.pageRouter;
-          const ui = this.ctx?.ui ?? window.ui;
+          const pageRouter = this.ctx?.pageRouter ?? getAppContext()?.pageRouter;
+          const ui = this.ctx?.ui ?? getAppContext()?.ui;
 
           if (loadSuccess && pageRouter && ui) {
-            if (typeof window.startGame === "function") {
-              await window.startGame({ pageRouter, ui, game });
+            if (typeof getAppContext()?.startGame === "function") {
+              await getAppContext().startGame({ pageRouter, ui, game });
             } else {
               await pageRouter.loadGameLayout();
               ui.initMainLayout();
               await pageRouter.loadPage("reactor_section");
 
-              game.tooltip_manager = new (await import("./components/ui-tooltips-tutorial.js")).TooltipManager(
-                "#main",
-                "#tooltip",
-                game
-              );
+              const { wireTooltipManager } = await import("./components/ui-tooltips-tutorial.js");
+              wireTooltipManager(ui, game);
               game.engine = new (await import("./logic.js")).Engine(game);
 
               await game.startSession();
@@ -442,11 +444,12 @@ class SplashStartOptionsBuilder {
     const onNewRun = async () => {
       if (hasSave && !confirm("Are you sure you want to start a new game? Your saved progress will be overwritten."))
         return;
-      const game = this.ctx?.game ?? window.game;
-      const pageRouter = this.ctx?.pageRouter ?? window.pageRouter;
-      const ui = this.ctx?.ui ?? window.ui;
+      const game = this.ctx?.game ?? getAppContext()?.game;
+      const pageRouter = this.ctx?.pageRouter ?? getAppContext()?.pageRouter;
+      const ui = this.ctx?.ui ?? getAppContext()?.ui;
       try {
-        if (game && typeof window.showTechTreeSelection === "function") await window.showTechTreeSelection(game, pageRouter, ui, this.splashManager);
+        const showTechTree = getAppContext()?.showTechTreeSelection;
+        if (game && typeof showTechTree === "function") await showTechTree(game, pageRouter, ui, this.splashManager);
       } catch (error) {
         logger.log("error", "game", "Error showing tech tree selection:", error);
       }
@@ -715,6 +718,7 @@ class SplashScreenManager extends BaseComponent {
     this.installPrompt = null;
     this.uiManager = new SplashUIManager({ statusElement: null, splashScreen: null });
     this.versionChecker = new VersionChecker(this);
+    setupInstallPrompt(this);
     this.saveSlotUI = new SplashSaveSlotUI(this);
 
     if (!StorageUtils.get("reactor_user_id")) {
@@ -862,13 +866,13 @@ class SplashScreenManager extends BaseComponent {
     splashScreen.classList.add("splash-vhold-booting");
     if (this._vholdBootTimeout) clearTimeout(this._vholdBootTimeout);
     this._vholdBootTimeout = setTimeout(() => splashScreen.classList.remove("splash-vhold-booting"), 900);
-    const audio = this._appContext?.game?.audio ?? window.game?.audio;
+    const audio = this._appContext?.game?.audio ?? getAppContext()?.game?.audio;
     audio?.play?.("crt_whine");
 
     const versionEl = splashScreen.querySelector("#splash-version-text");
     const userCountEl = splashScreen.querySelector("#user-count-text");
-    runCathodeScramble(versionEl, versionEl?.textContent ?? "", { durationMs: 200 });
-    runCathodeScramble(userCountEl, userCountEl?.textContent ?? "", { durationMs: 220 });
+    if (versionEl) versionEl.textContent = versionEl.textContent ?? "";
+    if (userCountEl) userCountEl.textContent = userCountEl.textContent ?? "";
 
     this._signalJumpEnabled = false;
     if (this._signalJumpLoopTimeout) clearTimeout(this._signalJumpLoopTimeout);

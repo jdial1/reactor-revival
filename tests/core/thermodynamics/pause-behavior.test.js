@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, setupGameWithDOM, cleanupGame, toNum } from "../../helpers/setup.js";
+import { assertShellStateClass } from "../../helpers/testUtils.js";
 
 describe("Pause Behavior", () => {
     let game;
@@ -285,16 +286,16 @@ describe("Pause Behavior", () => {
         // Wait for page to load
         await new Promise((resolve) => setTimeout(resolve, 100));
 
-        expect(document.body.classList.contains("game-paused")).toBe(false);
+        assertShellStateClass(gameWithDOM, "game-paused", "is_paused", false);
 
         gameWithDOM.pause();
         gameWithDOM.ui.pauseStateUI.updatePauseState();
         expect(gameWithDOM.paused).toBe(true);
-        expect(document.body.classList.contains("game-paused")).toBe(true);
+        assertShellStateClass(gameWithDOM, "game-paused", "is_paused", true);
 
         gameWithDOM.resume();
         gameWithDOM.ui.pauseStateUI.updatePauseState();
         expect(gameWithDOM.paused).toBe(false);
-        expect(document.body.classList.contains("game-paused")).toBe(false);
+        assertShellStateClass(gameWithDOM, "game-paused", "is_paused", false);
     });
 }); 

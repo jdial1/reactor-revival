@@ -4,7 +4,7 @@ describe("DOMMapper", () => {
   let domMapperInstance;
 
   beforeAll(async () => {
-    const module = await import("@app/components/ui.js");
+    const module = await import("@app/components/page-dom.js");
     domMapperInstance = module.default;
   });
 

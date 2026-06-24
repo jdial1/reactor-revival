@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../../lib/zod.js";
 
 export const LeaderboardEntrySchema = z.object({
   user_id: z.string(),

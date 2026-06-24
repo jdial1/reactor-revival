@@ -1,8 +1,10 @@
-import { html, render } from "lit-html";
+﻿import { html, render } from "lit-html";
 import { actions } from "../store.js";
-import { repeat, numFormat as fmt, formatTime, logger, classMap, MOBILE_BREAKPOINT_PX, when } from "../utils.js";
-import { MODAL_IDS } from "./ui-modals.js";
-import { ReactiveLitComponent } from "./reactive-lit-component.js";
+import { numFormat as fmt, formatTime } from "../format/numbers.js";
+import { logger } from "../core/logger.js";
+import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
+import { MODAL_IDS } from "../modalIds.js";
+import { bindLitRenderMulti } from "../dom/lit-reactive.js";
 import { leaderboardService, getLocalBestRun } from "../services.js";
 import { queryClient, queryKeys } from "../services-query.js";
 import {
@@ -11,7 +13,10 @@ import {
   affordabilityBannerTemplate,
   soundWarningValueTemplate,
 } from "../templates/uiComponentsTemplates.js";
+import { leaderboardControlsTemplate } from "../templates/sectionPageTemplates.js";
 import { updateLeaderboardIcon } from "./ui-components.js";
+import { getUiElement } from "./page-dom.js";
+import { classMap, repeat, when } from "../dom/lit.js";
 
 export class PageSetupUI {
   constructor(ui) {
@@ -22,8 +27,7 @@ export class PageSetupUI {
 
   setupLeaderboardPage() {
     const ui = this.ui;
-    const container = document.getElementById("leaderboard_rows");
-    const sortButtons = document.querySelectorAll(".leaderboard-sort");
+    const container = getUiElement(ui, "leaderboard_rows");
 
     const syncLeaderboardColumnVisibility = (sortBy) => {
       const columns = [
@@ -41,6 +45,34 @@ export class PageSetupUI {
     if (!ui.game) {
       if (container) render(leaderboardStatusRowTemplate({ text: "Game not initialized" }), container);
       return;
+    }
+
+    const onSortChange = (sortBy) => {
+      if (ui.uiState) ui.uiState.leaderboard_sort = sortBy;
+      void loadRecords(sortBy);
+    };
+
+    let controlsRoot = getUiElement(ui, "leaderboard_controls_root");
+    if (!controlsRoot) {
+      const legacyBtn = document.querySelector(".leaderboard-sort");
+      if (legacyBtn) {
+        const host = document.createElement("div");
+        host.id = "leaderboard_controls_root";
+        legacyBtn.parentNode.insertBefore(host, legacyBtn);
+        document.querySelectorAll(".leaderboard-sort").forEach((btn) => btn.remove());
+        controlsRoot = host;
+      }
+    }
+
+    if (controlsRoot && ui.uiState && !ui._leaderboardControlsMounted) {
+      ui._leaderboardControlsMounted = true;
+      const unmount = bindLitRenderMulti(
+        [{ state: ui.uiState, keys: ["leaderboard_sort"] }],
+        () => leaderboardControlsTemplate({ uiState: ui.uiState, onSortChange }),
+        controlsRoot
+      );
+      if (ui._unmounts) ui._unmounts.push(unmount);
+      else ui._unmounts = [unmount];
     }
 
     const formatRecordDate = (run) => {
@@ -82,9 +114,17 @@ export class PageSetupUI {
           });
         }
       };
+      const onLoad = () => {
+        if (run.layout && typeof ui._showPasteModalWithData === "function") {
+          ui._showPasteModalWithData(run.layout);
+        }
+      };
       const viewCellContent = when(
         hasLayout,
-        () => html`<button class="pixel-btn layout-view-btn" style="padding: 2px 6px; font-size: 0.6em;" @click=${onView}>View</button>`,
+        () => html`
+          <button class="pixel-btn layout-view-btn" style="padding: 2px 6px; font-size: 0.6em; margin-right: 4px;" @click=${onView}>View</button>
+          <button class="pixel-btn layout-load-btn" style="padding: 2px 6px; font-size: 0.6em;" @click=${onLoad}>Load to Grid</button>
+        `,
         () => html`<span style="opacity: 0.5;">-</span>`
       );
       return leaderboardRowTemplateView({
@@ -119,7 +159,7 @@ export class PageSetupUI {
     };
 
     const updateSubtitle = (sortBy, status) => {
-      const el = document.getElementById("leaderboard_subtitle");
+      const el = getUiElement(ui, "leaderboard_subtitle");
       if (!el) return;
       const labels = { power: "power", heat: "heat", money: "money" };
       const base = `Sorted by ${labels[sortBy] ?? sortBy}`;
@@ -155,25 +195,13 @@ export class PageSetupUI {
       await leaderboardService.init();
       if (!leaderboardService.initialized) {
         renderOfflineView(sortBy);
-        sortButtons.forEach((b) => {
-          b.disabled = false;
-          b.style.opacity = "";
-        });
         return;
       }
       const st = leaderboardService.getStatus();
       if (st.state === "open") {
         renderOfflineView(sortBy);
-        sortButtons.forEach((b) => {
-          b.disabled = false;
-          b.style.opacity = "";
-        });
         return;
       }
-      sortButtons.forEach((b) => {
-        b.disabled = false;
-        b.style.opacity = "";
-      });
       let records = [];
       try {
         records = await Promise.race([
@@ -197,15 +225,7 @@ export class PageSetupUI {
       updateLeaderboardIcon(ui);
     };
 
-    const activeButton = document.querySelector('.leaderboard-sort.active');
-    const initialSort = activeButton ? activeButton.dataset.sort : 'power';
-    sortButtons.forEach(btn => {
-      btn.onclick = () => {
-        sortButtons.forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        loadRecords(btn.dataset.sort);
-      };
-    });
+    const initialSort = ui.uiState?.leaderboard_sort ?? "power";
     return loadRecords(initialSort);
   }
 
@@ -213,14 +233,18 @@ export class PageSetupUI {
     const ui = this.ui;
     if (!ui?.uiState) return;
     const flag = bannerId === "upgrades_no_affordable_banner" ? "_affordabilityBannerMountedUpgrades" : "_affordabilityBannerMountedResearch";
-    if (ui[flag]) return;
-    const container = document.getElementById(bannerId);
+    if (ui[flag]) {
+      const existing = getUiElement(ui, bannerId);
+      if (existing?.isConnected) return;
+      ui[flag] = false;
+    }
+    const container = getUiElement(ui, bannerId);
     if (!container?.isConnected) return;
     ui[flag] = true;
     const isUpgrades = bannerId === "upgrades_no_affordable_banner";
     const key = isUpgrades ? "upgradesHidden" : "researchHidden";
     const message = isUpgrades ? "No affordable upgrades available" : "No affordable research available";
-    const unmount = ReactiveLitComponent.mountMulti(
+    const unmount = bindLitRenderMulti(
       [{ state: ui.uiState, keys: ["upgrades_banner_visibility"] }],
       () => {
         const visibility = ui.uiState?.upgrades_banner_visibility ?? { upgradesHidden: true, researchHidden: true };
@@ -236,11 +260,10 @@ export class PageSetupUI {
   setupSoundboardPage() {
     const ui = this.ui;
     if (!ui.game?.audio) return;
-    const page = ui.DOMElements.soundboard_section || document.getElementById("soundboard_section");
+    const page = getUiElement(ui, "soundboard_section");
     if (!page) return;
-
-    const warningSlider = ui.DOMElements.sound_warning_intensity || document.getElementById("sound_warning_intensity");
-    const warningValue = ui.DOMElements.sound_warning_value || document.getElementById("sound_warning_value");
+    const warningSlider = getUiElement(ui, "sound_warning_intensity");
+    const warningValue = getUiElement(ui, "sound_warning_value");
     if (warningSlider && ui.uiState) {
       const initial = Number(warningSlider.value) || 50;
       ui.uiState.sound_warning_value = initial;
@@ -249,7 +272,7 @@ export class PageSetupUI {
       };
     }
     if (warningValue && ui.uiState) {
-      ReactiveLitComponent.mountMulti(
+      bindLitRenderMulti(
         [{ state: ui.uiState, keys: ["sound_warning_value"] }],
         () => soundWarningValueTemplate({ value: ui.uiState?.sound_warning_value ?? 50 }),
         warningValue
@@ -281,27 +304,21 @@ export class PageSetupUI {
   setupMobileTopBar() {
     const ui = this.ui;
     try {
-      const mobileTopBar = document.getElementById("mobile_top_bar");
-      const stats = document.getElementById("reactor_stats");
-      const topNav = document.getElementById("main_top_nav");
-      const reactorWrapper = document.getElementById("reactor_wrapper");
-      const reactorSection = document.getElementById("reactor_section");
-      const copyPasteBtns = document.getElementById("reactor_copy_paste_btns");
-      const copyPasteToggle = document.getElementById("reactor_copy_paste_toggle");
-      if (!mobileTopBar || !stats) return;
+      const mobileTopBar = getUiElement(ui, "mobile_top_bar");
+      const stats = getUiElement(ui, "reactor_stats");
+      const topNav = getUiElement(ui, "main_top_nav");
+      const reactorWrapper = getUiElement(ui, "reactor_wrapper");
+      const reactorSection = getUiElement(ui, "reactor_section");
+      const copyPasteBtns = getUiElement(ui, "reactor_copy_paste_btns");
+      const copyPasteToggle = getUiElement(ui, "reactor_copy_paste_toggle");
+      if (!mobileTopBar) return;
 
       const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
+      if (ui?.uiState) ui.uiState.is_mobile_viewport = isMobile;
 
       if (isMobile) {
         mobileTopBar.classList.add("active");
         mobileTopBar.setAttribute("aria-hidden", "false");
-        let statsWrap = mobileTopBar.querySelector(".mobile-top-stats");
-        if (!statsWrap) {
-          statsWrap = document.createElement("div");
-          statsWrap.className = "mobile-top-stats";
-          mobileTopBar.appendChild(statsWrap);
-        }
-        if (stats && stats.parentElement !== statsWrap) statsWrap.appendChild(stats);
         if (copyPasteBtns && reactorSection && reactorWrapper && copyPasteBtns.parentElement === reactorWrapper) {
           reactorSection.insertBefore(copyPasteBtns, reactorWrapper);
         }
@@ -313,11 +330,6 @@ export class PageSetupUI {
       } else {
         mobileTopBar.classList.remove("active");
         mobileTopBar.setAttribute("aria-hidden", "true");
-        if (topNav && stats) {
-          const engineUl = topNav.querySelector("#engine_status");
-          if (engineUl) topNav.insertBefore(stats, engineUl);
-          else topNav.appendChild(stats);
-        }
         if (reactorWrapper && copyPasteBtns && copyPasteBtns.parentElement !== reactorWrapper) {
           reactorWrapper.appendChild(copyPasteBtns);
         }

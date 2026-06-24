@@ -1,11 +1,9 @@
 import { LeaderboardResponseSchema } from "./schema/index.js";
 import { queryClient, queryKeys } from "./services-query.js";
-import {
-  logger,
-  isTestEnv,
-  LEADERBOARD_CONFIG,
-  StorageUtils,
-} from "./utils.js";
+import { StorageUtils } from "./storage/index.js";
+import { logger } from "./core/logger.js";
+import { isTestEnv } from "./simUtils.js";
+import { LEADERBOARD_CONFIG } from "./constants/balance.js";
 import {
   outboxEnqueue,
   outboxPeekReady,

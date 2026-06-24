@@ -1,48 +1,86 @@
+﻿import { HEAT_EPSILON } from "./constants/sim.js";
 import {
-  HEAT_EPSILON,
   HEAT_TRANSFER_DIFF_DIVISOR,
   EXCHANGER_MIN_TRANSFER_UNIT,
   HEAT_TRANSFER_MAX_ITERATIONS,
-} from "./utils.js";
+} from "./simUtils.js";
+import {
+  VALVE_TOPUP_CAP_RATIO,
+  MAX_NEIGHBORS,
+  INLET_STRIDE,
+  VALVE_STRIDE,
+  EXCHANGER_STRIDE,
+  OUTLET_STRIDE,
+  INLET_OFFSET_INDEX,
+  INLET_OFFSET_RATE,
+  INLET_OFFSET_N_COUNT,
+  INLET_OFFSET_NEIGHBORS,
+  VALVE_OFFSET_INDEX,
+  VALVE_OFFSET_TYPE,
+  VALVE_OFFSET_ORIENTATION,
+  VALVE_OFFSET_RATE,
+  VALVE_OFFSET_INPUT_IDX,
+  VALVE_OFFSET_OUTPUT_IDX,
+  EXCHANGER_OFFSET_INDEX,
+  EXCHANGER_OFFSET_RATE,
+  EXCHANGER_OFFSET_CONTAINMENT,
+  EXCHANGER_OFFSET_N_COUNT,
+  EXCHANGER_OFFSET_NEIGHBOR_INDICES,
+  EXCHANGER_OFFSET_NEIGHBOR_CAPS,
+  EXCHANGER_OFFSET_NEIGHBOR_CATS,
+  OUTLET_OFFSET_INDEX,
+  OUTLET_OFFSET_RATE,
+  OUTLET_OFFSET_ACTIVATED,
+  OUTLET_OFFSET_IS_OUTLET6,
+  OUTLET_OFFSET_N_COUNT,
+  OUTLET_OFFSET_NEIGHBOR_INDICES,
+  OUTLET_OFFSET_NEIGHBOR_CAPS,
+  VALVE_OVERFLOW,
+  VALVE_TOPUP,
+  VALVE_CHECK,
+  CATEGORY_EXCHANGER,
+  CATEGORY_OTHER,
+  CATEGORY_VENT_COOLANT,
+} from "./constants/heat-transfer.js";
 
-export const VALVE_TOPUP_CAP_RATIO = 0.2;
-
-export const MAX_NEIGHBORS = 8;
-export const INLET_STRIDE = 3 + MAX_NEIGHBORS;
-export const VALVE_STRIDE = 6;
-export const EXCHANGER_STRIDE = 4 + MAX_NEIGHBORS * 3;
-export const OUTLET_STRIDE = 5 + MAX_NEIGHBORS * 2;
-export const INLET_OFFSET_INDEX = 0;
-export const INLET_OFFSET_RATE = 1;
-export const INLET_OFFSET_N_COUNT = 2;
-export const INLET_OFFSET_NEIGHBORS = 3;
-export const VALVE_OFFSET_INDEX = 0;
-export const VALVE_OFFSET_TYPE = 1;
-export const VALVE_OFFSET_ORIENTATION = 2;
-export const VALVE_OFFSET_RATE = 3;
-export const VALVE_OFFSET_INPUT_IDX = 4;
-export const VALVE_OFFSET_OUTPUT_IDX = 5;
-export const EXCHANGER_OFFSET_INDEX = 0;
-export const EXCHANGER_OFFSET_RATE = 1;
-export const EXCHANGER_OFFSET_CONTAINMENT = 2;
-export const EXCHANGER_OFFSET_N_COUNT = 3;
-export const EXCHANGER_OFFSET_NEIGHBOR_INDICES = 4;
-export const EXCHANGER_OFFSET_NEIGHBOR_CAPS = 4 + MAX_NEIGHBORS;
-export const EXCHANGER_OFFSET_NEIGHBOR_CATS = 4 + MAX_NEIGHBORS * 2;
-export const OUTLET_OFFSET_INDEX = 0;
-export const OUTLET_OFFSET_RATE = 1;
-export const OUTLET_OFFSET_ACTIVATED = 2;
-export const OUTLET_OFFSET_IS_OUTLET6 = 3;
-export const OUTLET_OFFSET_N_COUNT = 4;
-export const OUTLET_OFFSET_NEIGHBOR_INDICES = 5;
-export const OUTLET_OFFSET_NEIGHBOR_CAPS = 5 + MAX_NEIGHBORS;
-
-export const VALVE_OVERFLOW = 1;
-export const VALVE_TOPUP = 2;
-export const VALVE_CHECK = 3;
-export const CATEGORY_EXCHANGER = 0;
-export const CATEGORY_OTHER = 1;
-export const CATEGORY_VENT_COOLANT = 2;
+export {
+  VALVE_TOPUP_CAP_RATIO,
+  MAX_NEIGHBORS,
+  INLET_STRIDE,
+  VALVE_STRIDE,
+  EXCHANGER_STRIDE,
+  OUTLET_STRIDE,
+  INLET_OFFSET_INDEX,
+  INLET_OFFSET_RATE,
+  INLET_OFFSET_N_COUNT,
+  INLET_OFFSET_NEIGHBORS,
+  VALVE_OFFSET_INDEX,
+  VALVE_OFFSET_TYPE,
+  VALVE_OFFSET_ORIENTATION,
+  VALVE_OFFSET_RATE,
+  VALVE_OFFSET_INPUT_IDX,
+  VALVE_OFFSET_OUTPUT_IDX,
+  EXCHANGER_OFFSET_INDEX,
+  EXCHANGER_OFFSET_RATE,
+  EXCHANGER_OFFSET_CONTAINMENT,
+  EXCHANGER_OFFSET_N_COUNT,
+  EXCHANGER_OFFSET_NEIGHBOR_INDICES,
+  EXCHANGER_OFFSET_NEIGHBOR_CAPS,
+  EXCHANGER_OFFSET_NEIGHBOR_CATS,
+  OUTLET_OFFSET_INDEX,
+  OUTLET_OFFSET_RATE,
+  OUTLET_OFFSET_ACTIVATED,
+  OUTLET_OFFSET_IS_OUTLET6,
+  OUTLET_OFFSET_N_COUNT,
+  OUTLET_OFFSET_NEIGHBOR_INDICES,
+  OUTLET_OFFSET_NEIGHBOR_CAPS,
+  VALVE_OVERFLOW,
+  VALVE_TOPUP,
+  VALVE_CHECK,
+  CATEGORY_EXCHANGER,
+  CATEGORY_OTHER,
+  CATEGORY_VENT_COOLANT,
+} from "./constants/heat-transfer.js";
 
 export function canPushToNeighbor(heatStart, nStart, cat) {
   return heatStart > nStart || (cat === CATEGORY_VENT_COOLANT && heatStart === nStart && heatStart > 0);
@@ -395,4 +433,63 @@ export function runHeatStepFromTyped(heat, containment, payload, recordTransfers
     recordTransfers: recordTransfers ?? null,
   });
 }
+
+export function inspectExchangerPressureFlow(tile) {
+  if (!tile?.part) return null;
+  const cat = tile.part.category;
+  if (cat !== "heat_exchanger" && cat !== "heat_inlet" && cat !== "heat_outlet") return null;
+  const cap = tile.part.containment || 1;
+  const heat = tile.heat_contained || 0;
+  const pressurePct = (heat / cap) * 100;
+  const neighbors = tile.containmentNeighborTiles || [];
+  if (neighbors.length === 0) return "No containment neighbors — heat cannot route";
+  let maxNeighborPct = 0;
+  let blockReason = null;
+  for (let i = 0; i < neighbors.length; i++) {
+    const nb = neighbors[i];
+    const nCap = nb.part?.containment || 1;
+    const nPct = ((nb.heat_contained || 0) / nCap) * 100;
+    if (nPct > maxNeighborPct) maxNeighborPct = nPct;
+    if (pressurePct <= nPct && !blockReason) {
+      blockReason = `Blocked: your ${pressurePct.toFixed(0)}% ≤ neighbor ${nPct.toFixed(0)}%`;
+    }
+  }
+  if (blockReason) return blockReason;
+  return `Flow OK: ${pressurePct.toFixed(0)}% vs max neighbor ${maxNeighborPct.toFixed(0)}%`;
+}
+
+export function computeWorkerVentPowerDemand(partLayout, partTable, heat, multiplier, gidx, isVentPart) {
+  let demand = 0;
+  for (let i = 0; i < partLayout.length; i++) {
+    const t = partLayout[i];
+    const part = partTable[t.partIndex];
+    if (!part?.vent_consumes_power || !isVentPart(part)) continue;
+    const ventRate = (t.ventRate ?? 0) * multiplier;
+    if (ventRate <= 0) continue;
+    const h = heat[gidx(t.r, t.c)] || 0;
+    if (h <= 0) continue;
+    demand += Math.min(ventRate, h);
+  }
+  return demand;
+}
+
+export function computeTileVentPowerDemand(tiles, multiplier, ventRateOf, heatOf) {
+  let demand = 0;
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i];
+    if (!tile.part?.vent_consumes_power) continue;
+    const ventRate = ventRateOf(tile) * multiplier;
+    if (ventRate <= 0) continue;
+    const heat = heatOf(tile);
+    if (heat <= 0) continue;
+    demand += Math.min(ventRate, heat);
+  }
+  return demand;
+}
+
+export function shouldScramForInsufficientVentPower(availablePower, demand) {
+  const avail = typeof availablePower === "number" ? availablePower : Number(availablePower) || 0;
+  return demand > 0 && avail < demand;
+}
+
 

@@ -1,4 +1,4 @@
-import { isInBounds } from "./utils.js";
+import { isInBounds } from "./simUtils.js";
 
 export function computeWorkerNeighborPulseN(r, c, partTable, partAt, rows, cols) {
   const self = partAt(r, c);

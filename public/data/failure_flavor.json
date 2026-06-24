@@ -1,0 +1,7 @@
+{
+    "saturation": "Core approaching thermal limit. Vent or throttle before efficiency collapses.",
+    "repulsion": "Hull integrity under stress. Structural decay has begun.",
+    "fragmentation": "Components failing. Emergency layout changes may be too late.",
+    "criticality": "Thermal runaway imminent. Meltdown unless heat is removed immediately.",
+    "meltdown": "Catastrophic failure. Reset the reactor to continue."
+}

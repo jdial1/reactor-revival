@@ -109,11 +109,15 @@ export async function clickNavButton(page, selector) {
 }
 
 export async function navigateToGamePage(page, pageId) {
-  const current = await page.evaluate(() => window.game?.router?.currentPageId);
+  const current = await page.evaluate(() => {
+    const game = window.__reactorAudit?.game ?? window.game;
+    return game?.router?.currentPageId;
+  });
   if (current === pageId) return;
 
   const routed = await page.evaluate(async (id) => {
-    const router = window.game?.router;
+    const game = window.__reactorAudit?.game ?? window.game;
+    const router = game?.router;
     if (router?.loadPage) {
       await router.loadPage(id, true);
       return router.currentPageId === id;
@@ -141,7 +145,8 @@ export async function navigateToGamePage(page, pageId) {
   try {
     await page.waitForFunction(
       (id) => {
-        if (window.game?.router?.currentPageId === id) return true;
+        const game = window.__reactorAudit?.game ?? window.game;
+        if (game?.router?.currentPageId === id) return true;
         const section = document.getElementById(id);
         return section && !section.classList.contains("hidden");
       },
@@ -149,7 +154,10 @@ export async function navigateToGamePage(page, pageId) {
       pageId
     );
   } catch {
-    const actual = await page.evaluate(() => window.game?.router?.currentPageId);
+    const actual = await page.evaluate(() => {
+      const game = window.__reactorAudit?.game ?? window.game;
+      return game?.router?.currentPageId;
+    });
     logStep(`nav timeout for ${pageId} (router at ${actual ?? "unknown"})`);
   }
 }
@@ -240,7 +248,8 @@ export async function dismissBlockingModals(page) {
 
 export async function openSettingsModal(page) {
   await page.evaluate(() => {
-    const orchestrator = window.ui?.modalOrchestrator;
+    const ui = window.__reactorAudit?.ui ?? window.ui;
+    const orchestrator = ui?.modalOrchestrator;
     if (orchestrator?.showModal) {
       orchestrator.showModal("settings");
       return;
@@ -254,7 +263,8 @@ export async function openSettingsModal(page) {
 
 export async function closeSettingsModal(page) {
   await page.evaluate(() => {
-    const orchestrator = window.ui?.modalOrchestrator;
+    const ui = window.__reactorAudit?.ui ?? window.ui;
+    const orchestrator = ui?.modalOrchestrator;
     if (orchestrator?.hideModal) orchestrator.hideModal("settings");
   });
   await clickIfPresent(page, ".settings-modal-overlay .modal-close-btn");
@@ -263,7 +273,9 @@ export async function closeSettingsModal(page) {
 
 export async function openQuickStartModal(page) {
   await page.evaluate(() => {
-    window.ui?.modalOrchestrator?.showModal?.("quickStart", { game: window.game });
+    const game = window.__reactorAudit?.game ?? window.game;
+    const ui = window.__reactorAudit?.ui ?? window.ui;
+    ui?.modalOrchestrator?.showModal?.("quickStart", { game });
   });
   await delay(STEP_DELAY_MS);
 }
@@ -272,15 +284,17 @@ export async function closeQuickStartModal(page) {
   await clickIfPresent(page, "#quick-start-close");
   await clickIfPresent(page, "#quick-start-close-2");
   await page.evaluate(() => {
-    window.ui?.modalOrchestrator?.hideModal?.("quickStart");
+    const ui = window.__reactorAudit?.ui ?? window.ui;
+    ui?.modalOrchestrator?.hideModal?.("quickStart");
   });
   await delay(STEP_DELAY_MS);
 }
 
 export async function exerciseSettingsModal(page, collector) {
   const hasSettingsControl = await page.evaluate(() => {
+    const ui = window.__reactorAudit?.ui ?? window.ui;
     return !!(
-      window.ui?.modalOrchestrator ||
+      ui?.modalOrchestrator ||
       document.getElementById("settings_btn") ||
       document.getElementById("menu_tab_btn")
     );
@@ -341,9 +355,9 @@ export async function exerciseExperimentalPage(page) {
   }
 }
 
-export async function prepareGameSession(page) {
+export async function prepareGameSession(page, baseUrl = BASE_URL) {
   await clearGameStorage(page);
-  await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
   await page.waitForSelector("#splash-new-game-btn, #app_root", { timeout: NAV_TIMEOUT_MS });
   await delay(STEP_DELAY_MS * 2);
   await startNewGame(page);

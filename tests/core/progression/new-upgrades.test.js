@@ -1,5 +1,5 @@
 /* eslint-disable no-undef */
-import { describe, it, expect, beforeEach, setupGameWithDOM, toNum, vi, createNowController } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGameWithDOM, toNum, vi, createNowController , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart, forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
 import { setDecimal } from "@app/store.js";
 import { patchGameState } from "@app/state.js";
@@ -48,8 +48,8 @@ describe("New Gameplay Upgrades", () => {
             tile.heat_contained = 100;
             
             game.tileset.updateActiveTiles();
-            game.engine.markPartCacheAsDirty();
-            game.engine._updatePartCaches();
+            syncActivePartsAtTickBoundary(game.engine);
+
             
             if (!game.engine.active_vessels.includes(tile)) {
                 game.engine.active_vessels.push(tile);
@@ -92,8 +92,8 @@ describe("New Gameplay Upgrades", () => {
     });
 
     describe("Set 2: Durability & Stability", () => {
-        it("Component Reinforcement: should increase containment of parts", async () => {
-            const part = game.partset.getPartById("vent1");
+        it("Component Reinforcement: should increase containment of buffer parts", async () => {
+            const part = game.partset.getPartById("capacitor1");
             const baseContainment = part.base_containment;
             
             forcePurchaseUpgrade(game, "component_reinforcement");
@@ -173,8 +173,8 @@ describe("New Gameplay Upgrades", () => {
             game.tileset.updateActiveTiles();
             ventTile.heat_contained = 100;
 
-            game.engine.markPartCacheAsDirty();
-            game.engine._updatePartCaches();
+            syncActivePartsAtTickBoundary(game.engine);
+
             if (!game.engine.active_vessels.includes(ventTile)) {
                 game.engine.active_vessels.push(ventTile);
             }
@@ -207,8 +207,8 @@ describe("New Gameplay Upgrades", () => {
 
         it("Electro-Thermal Conversion: should burn power to reduce heat at critical levels", async () => {
             game.tileset.clearAllTiles();
-            game.engine.markPartCacheAsDirty();
-            game.engine._updatePartCaches();
+            syncActivePartsAtTickBoundary(game.engine);
+
             
             game.reactor.base_max_heat = 10000;
             game.reactor.max_heat = 10000;
@@ -278,8 +278,8 @@ describe("New Gameplay Upgrades", () => {
             tile.heat_contained = 100;
             tile.activated = true;
             
-            game.engine.markPartCacheAsDirty();
-            game.engine._updatePartCaches();
+            syncActivePartsAtTickBoundary(game.engine);
+
              if (!game.engine.active_vessels.includes(tile)) {
                 game.engine.active_vessels.push(tile);
             }
@@ -324,8 +324,8 @@ describe("New Gameplay Upgrades", () => {
             game.tileset.getTile(1, 2).clearPart();
             game.tileset.updateActiveTiles();
             
-            game.engine.markPartCacheAsDirty();
-            game.engine._updatePartCaches();
+            syncActivePartsAtTickBoundary(game.engine);
+
             if (!game.engine.active_vessels.includes(ventTile)) {
                 game.engine.active_vessels.push(ventTile);
             }
@@ -345,8 +345,8 @@ describe("New Gameplay Upgrades", () => {
             // Recalculate vent stats after neighbors change
             ventTile.part.recalculate_stats();
             game.tileset.updateActiveTiles();
-            game.engine.markPartCacheAsDirty();
-            game.engine._updatePartCaches();
+            syncActivePartsAtTickBoundary(game.engine);
+
             
             // Deactivate cells to prevent heat generation during vent test
             const cellTile1 = game.tileset.getTile(0, 1);
@@ -489,8 +489,8 @@ describe("New Gameplay Upgrades", () => {
                 await placePart(game, 0, 0, "particle_accelerator1");
                 const tile = game.tileset.getTile(0, 0);
                 tile.heat_contained = 1e9;
-                game.engine.markPartCacheAsDirty();
-                game.engine._updatePartCaches();
+                syncActivePartsAtTickBoundary(game.engine);
+
                 game.engine.tick();
                 expect(toNum(game.state.current_exotic_particles)).toBe(bankedBefore);
                 expect(toNum(game.exotic_particles)).toBe(0);
@@ -543,76 +543,27 @@ describe("New Gameplay Upgrades", () => {
             expect(tile.power).toBe(cell.base_power);
         });
 
-        it("Ceramic Composite: should give Plating a transfer value", async () => {
+        it("Ceramic Composite: should boost plating hull heat bonus", async () => {
             const plating = game.partset.getPartById("reactor_plating1");
-            const tile = game.tileset.getTile(0, 0);
-            await tile.setPart(plating);
+            const baseReactorHeat = plating.base_reactor_heat;
+            await game.tileset.getTile(0, 0).setPart(plating);
             forcePurchaseUpgrade(game, "ceramic_composite");
             plating.recalculate_stats();
-            const expectedTransfer = plating.containment * 0.05;
-            expect(plating.transfer).toBeCloseTo(expectedTransfer);
+            expect(plating.reactor_heat).toBeCloseTo(baseReactorHeat * 1.05, 1);
         });
 
-        it("Ceramic Composite: should allow Plating to transfer heat between components", async () => {
-            const hotTile = game.tileset.getTile(0, 0);
-            const platingTile = game.tileset.getTile(0, 1);
-            const coldTile = game.tileset.getTile(0, 2);
-            await hotTile.setPart(game.partset.getPartById("coolant_cell1"));
-            await platingTile.setPart(game.partset.getPartById("reactor_plating1"));
-            await coldTile.setPart(game.partset.getPartById("coolant_cell1"));
-            hotTile.heat_contained = 1000;
-            platingTile.heat_contained = 500;
-            coldTile.heat_contained = 0;
-            [hotTile, platingTile, coldTile].forEach(t => { t.activated = true; });
-            
-            forcePurchaseUpgrade(game, "ceramic_composite");
-            
-            platingTile.part.recalculate_stats();
-            game.engine.markPartCacheAsDirty();
-            game.engine._updatePartCaches();
-            
-            game.paused = false;
-            game.engine.manualTick();
-            expect(coldTile.heat_contained).toBeGreaterThan(0);
-        });
-
-        it("Explosive Decompression: should reduce reactor heat on explosion", async () => {
+        it("Explosions should add contained heat to reactor hull", async () => {
             const tile = game.tileset.getTile(0, 0);
             const part = game.partset.getPartById("vent1");
 
             await tile.setPart(part);
             tile.activated = true;
-            
-            // Heat contained in component
             tile.heat_contained = 1000;
-            // Reactor global heat
             game.reactor.current_heat = 5000;
 
-            // Purchase Upgrade (Enable Decompression)
-            forcePurchaseUpgrade(game, "explosive_decompression");
-
-            // Trigger Explosion
             game.engine.handleComponentExplosion(tile);
 
-            // Expected: 5000 - 1000 = 4000
-            expect(toNum(game.reactor.current_heat)).toBe(4000);
-        });
-
-        it("Explosive Decompression: should not reduce heat below zero", async () => {
-            const tile = game.tileset.getTile(0, 0);
-            
-            await tile.setPart(game.partset.getPartById("vent1"));
-            tile.activated = true;
-            tile.heat_contained = 1000;
-            
-            // Reactor heat lower than component heat
-            game.reactor.current_heat = 500;
-
-            forcePurchaseUpgrade(game, "explosive_decompression");
-
-            game.engine.handleComponentExplosion(tile);
-
-            expect(toNum(game.reactor.current_heat)).toBe(0);
+            expect(toNum(game.reactor.current_heat)).toBe(6000);
         });
     });
 });

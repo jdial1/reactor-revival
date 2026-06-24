@@ -1,15 +1,45 @@
-import { render } from "lit-html";
 import { VersionSchema } from "./schema/index.js";
-import {
-  logger,
-  StorageUtils,
-  escapeHtml,
-} from "./utils.js";
-import {
-  updateNotificationModalTemplate,
-  updateToastTemplate as updateToastTemplateView,
-  versionCheckToastTemplate,
-} from "./templates/servicesTemplates.js";
+import { StorageUtils } from "./storage/index.js";
+import { logger } from "./core/logger.js";
+import { loadChangelog, getRecentChangelogEntries, findChangelogEntry } from "./changelog.js";
+import { pwaState } from "./state/ui-state.js";
+import { getAppContext } from "./app-context.js";
+
+let pwaAbortController = null;
+const pwaUnsubs = [];
+let pwaGlobalListenersAttached = false;
+
+function getPwaSignal() {
+  if (!pwaAbortController) {
+    pwaAbortController = new AbortController();
+  }
+  return pwaAbortController.signal;
+}
+
+function bindPwaListener(target, type, handler, options) {
+  if (!target || typeof target.addEventListener !== "function") return;
+  const signal = getPwaSignal();
+  const opts = options ? { ...options, signal } : { signal };
+  target.addEventListener(type, handler, opts);
+  pwaUnsubs.push(() => target.removeEventListener(type, handler, opts));
+}
+
+function onControllerChange() {
+  window.location.reload();
+}
+
+function onNewWorkerStateChange(newWorker) {
+  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+    logger.log('info', 'ui', '[SW] New service worker available');
+  }
+}
+
+function onRegistrationUpdateFound(registration) {
+  const newWorker = registration.installing;
+  if (newWorker) {
+    bindPwaListener(newWorker, 'statechange', () => onNewWorkerStateChange(newWorker));
+  }
+}
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
@@ -23,26 +53,52 @@ function registerServiceWorker() {
     .then(function(registration) {
       logger.log('info', 'ui', '[SW] Service Worker registered successfully:', registration.scope);
       if (!navigator.serviceWorker.controller) {
-        navigator.serviceWorker.addEventListener('controllerchange', function() { window.location.reload(); }, { once: true });
+        bindPwaListener(navigator.serviceWorker, 'controllerchange', onControllerChange, { once: true });
       }
-      registration.addEventListener('updatefound', function() {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', function() {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              logger.log('info', 'ui', '[SW] New service worker available');
-            }
-          });
-        }
-      });
+      bindPwaListener(registration, 'updatefound', () => onRegistrationUpdateFound(registration));
     })
     .catch(function(error) {
       logger.error('[SW] Service Worker registration failed:', error);
     });
 }
 
+function onPwaKeydown(e) {
+  const splash = getAppContext()?.splashManager;
+  if (e.key === "Escape" && splash) {
+    splash.forceHide();
+  }
+  if (e.ctrlKey && e.shiftKey && e.key === "V") {
+    e.preventDefault();
+    pwaState.versionCheckRequested = true;
+  }
+}
+
+function onPwaAppInstalled() {
+  clearDeferredPrompt();
+  pwaState.installPromptAvailable = false;
+}
+
+function initPwaGlobalListeners() {
+  if (pwaGlobalListenersAttached || typeof document === "undefined" || typeof window === "undefined") return;
+  pwaGlobalListenersAttached = true;
+  bindPwaListener(document, "keydown", onPwaKeydown);
+  bindPwaListener(window, "appinstalled", onPwaAppInstalled);
+}
+
+export function teardownPwa() {
+  pwaAbortController?.abort();
+  pwaAbortController = null;
+  while (pwaUnsubs.length) {
+    pwaUnsubs.pop()?.();
+  }
+  pwaGlobalListenersAttached = false;
+  wakeLockVisibilityListenerAttached = false;
+  releaseWakeLock();
+}
+
 export function initializePwa() {
   console.log("[ReactorBoot] initializePwa", window.location.hostname);
+  initPwaGlobalListeners();
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   if (isLocalhost) {
     logger.log('info', 'ui', '[SW] Localhost detected. Skipping Service Worker registration.');
@@ -55,7 +111,7 @@ export function initializePwa() {
     }
     return;
   }
-  window.addEventListener('load', registerServiceWorker);
+  bindPwaListener(window, 'load', registerServiceWorker);
 }
 
 let deferredPrompt = null;
@@ -66,32 +122,29 @@ export function getDeferredPrompt() {
 
 export function clearDeferredPrompt() {
   deferredPrompt = null;
+  pwaState.installPromptAvailable = false;
 }
 
-function setupInstallPrompt(manager) {
+export async function onInstallPwaClick() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  try {
+    await deferredPrompt.userChoice;
+  } catch (_) {}
+  deferredPrompt = null;
+  pwaState.installPromptAvailable = false;
+}
+
+function onBeforeInstallPrompt(e, manager) {
+  e.preventDefault();
+  if (manager) manager.installPrompt = e;
+  deferredPrompt = e;
+  pwaState.installPromptAvailable = true;
+}
+
+export function setupInstallPrompt(manager) {
   if (typeof window === "undefined") return;
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    if (manager) manager.installPrompt = e;
-    deferredPrompt = e;
-    const btn = document.querySelector("#install_pwa_btn");
-    if (btn) {
-      btn.classList.remove("hidden");
-      if (!btn.dataset.installListenerAttached) {
-        btn.dataset.installListenerAttached = "1";
-        btn.addEventListener("click", async () => {
-          if (deferredPrompt) {
-            deferredPrompt.prompt();
-            try {
-              await deferredPrompt.userChoice;
-            } catch (_) {}
-            deferredPrompt = null;
-            btn.classList.add("hidden");
-          }
-        });
-      }
-    }
-  });
+  bindPwaListener(window, "beforeinstallprompt", (e) => onBeforeInstallPrompt(e, manager));
 }
 
 let wakeLock = null;
@@ -107,14 +160,16 @@ async function acquireWakeLock() {
   } catch (_err) {}
 }
 
+function onWakeLockVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    acquireWakeLock();
+  }
+}
+
 export async function requestWakeLock() {
   wakeLockEnabled = true;
-  if (!wakeLockVisibilityListenerAttached && typeof document !== "undefined" && typeof document.addEventListener === "function") {
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        acquireWakeLock();
-      }
-    });
+  if (!wakeLockVisibilityListenerAttached && typeof document !== "undefined") {
+    bindPwaListener(document, 'visibilitychange', onWakeLockVisibilityChange);
     wakeLockVisibilityListenerAttached = true;
   }
   await acquireWakeLock();
@@ -128,29 +183,6 @@ export function releaseWakeLock() {
   }
 }
 
-if (typeof document !== "undefined" && typeof window !== "undefined") {
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && window.splashManager) {
-      window.splashManager.forceHide();
-    }
-    if (e.ctrlKey && e.shiftKey && e.key === "V") {
-      e.preventDefault();
-      if (window.splashManager) {
-        window.splashManager?.versionChecker?.triggerVersionCheckToast();
-      }
-    }
-  });
-
-  window.addEventListener("appinstalled", () => {
-    clearDeferredPrompt();
-    const btn = document.querySelector("#install_pwa_btn");
-    if (btn) btn.classList.add("hidden");
-  });
-}
-
-if (typeof window !== "undefined") {
-  window.showHotkeyHelp = function () {};
-}
 
 export class VersionChecker {
   constructor(splashManagerRef) {
@@ -159,14 +191,22 @@ export class VersionChecker {
   }
 
   startVersionChecking() {
+    this.stopVersionChecking();
     this.currentVersion = null;
+    this._versionAbortController = new AbortController();
+    const { signal } = this._versionAbortController;
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'NEW_VERSION_AVAILABLE') {
           this.handleNewVersion(event.data.version, event.data.currentVersion);
         }
-      });
+      }, { signal });
     }
+  }
+
+  stopVersionChecking() {
+    this._versionAbortController?.abort();
+    this._versionAbortController = null;
   }
 
   async checkForNewVersion() {
@@ -255,7 +295,7 @@ export class VersionChecker {
     }
 
     try {
-      const { getResourceUrl } = await import("./utils.js");
+      const { getResourceUrl } = await import("./dom/lit.js");
       const versionUrl = getResourceUrl("version.json");
       const response = await fetch(versionUrl, { cache: 'no-cache' });
       if (response.ok) {
@@ -303,78 +343,42 @@ export class VersionChecker {
   handleNewVersion(newVersion, currentVersion = null) {
     const lastNotifiedVersion = StorageUtils.get('reactor-last-notified-version');
     if (lastNotifiedVersion === newVersion) return;
-    this.showUpdateToast(newVersion, currentVersion || this.currentVersion);
+    const changelog = loadChangelog();
+    const entry = findChangelogEntry(changelog, newVersion);
+    pwaState.updateAvailable = true;
+    pwaState.updateVersion = newVersion;
+    pwaState.hasAcknowledgedUpdate = false;
+    pwaState.currentVersion = currentVersion || this.currentVersion || "";
+    pwaState.changelogPayload = entry ? { summary: `Update ${newVersion} — ${entry.date ?? "new build"}`, bullets: (entry.bullets ?? []).slice(0, 6) } : { summary: `Update available: ${newVersion}`, bullets: [] };
     this.currentVersion = newVersion;
     StorageUtils.set('reactor-last-notified-version', newVersion);
   }
 
   showUpdateNotification(newVersion, currentVersion) {
-    const modal = document.createElement("div");
-    modal.className = "update-notification-modal";
-    const onDismiss = () => modal.remove();
-    render(
-      updateNotificationModalTemplate(
-        escapeHtml(currentVersion),
-        escapeHtml(newVersion),
-        () => window.location.reload(),
-        onDismiss
-      ),
-      modal
-    );
-
-    document.body.appendChild(modal);
-
-    setTimeout(() => {
-      if (document.body && typeof document.body.contains === "function" && document.body.contains(modal)) {
-        modal.remove();
-      }
-    }, 30000);
+    this.handleNewVersion(newVersion, currentVersion);
   }
 
-  showUpdateToast(_newVersion, _currentVersion) {
-    const existingToast = document.querySelector('.update-toast');
-    if (existingToast) {
-      existingToast.remove();
-    }
+  showUpdateToast(newVersion, currentVersion) {
+    this.handleNewVersion(newVersion, currentVersion);
+  }
 
-    const toast = document.createElement('div');
-    toast.className = 'update-toast';
-    const onRefresh = () => {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
-      }
-      window.location.reload();
-    };
-    const onClose = () => toast.remove();
-    render(updateToastTemplateView(onRefresh, onClose), toast);
+  showChangelogModal({ title, entries, onReload } = {}) {
+    pwaState.changelogOpen = true;
+    pwaState.changelogPayload = { title: title ?? "Recent Changes", entries: entries ?? [], onReload };
+  }
 
-    if (document.body) document.body.appendChild(toast);
-
-    setTimeout(() => {
-      if (document.body && typeof document.body.contains === "function" && document.body.contains(toast)) {
-        toast.style.animation = 'toast-slide-up 0.3s ease-out reverse';
-        setTimeout(() => {
-          if (document.body && typeof document.body.contains === "function" && document.body.contains(toast)) {
-            toast.remove();
-          }
-        }, 300);
-      }
-    }, 10000);
+  showRecentChangelogModal({ title, limit = 5, onReload } = {}) {
+    const entries = getRecentChangelogEntries(loadChangelog(), limit);
+    this.showChangelogModal({ title, entries, onReload });
   }
 
   async triggerVersionCheckToast() {
     try {
       const currentVersion = await this.getLocalVersion() || "Unknown";
-      const deployedVersion = await this.checkDeployedVersion();
-      if (deployedVersion && this.isNewerVersion(deployedVersion, currentVersion)) {
-        this.showUpdateToast(deployedVersion, currentVersion);
-      } else if (deployedVersion && deployedVersion === currentVersion) {
-        this.showVersionCheckToast(`You're running the latest version: ${currentVersion}`, 'info');
-      } else if (deployedVersion && !this.isNewerVersion(deployedVersion, currentVersion) && deployedVersion !== currentVersion) {
-        this.showVersionCheckToast(`Current version: ${currentVersion} (Deployed: ${deployedVersion})`, 'warning');
-      } else {
-        this.showVersionCheckToast(`Current version: ${currentVersion} (Unable to check for updates)`, 'warning');
-      }
+      await this.showRecentChangelogModal({
+        title: `Version ${currentVersion} — recent changes`,
+        limit: 5,
+      });
     } catch (error) {
       logger.log('error', 'ui', 'Version check failed:', error);
       this.showVersionCheckToast('Version check failed. Please try again later.', 'error');
@@ -382,39 +386,16 @@ export class VersionChecker {
   }
 
   showVersionCheckToast(message, type = "info") {
-    const existingToast = document.querySelector(".version-check-toast");
-    if (existingToast) {
-      existingToast.remove();
-    }
-
-    const toast = document.createElement("div");
-    toast.className = "version-check-toast";
-    const icon = type === "info" ? "ℹ️" : type === "warning" ? "⚠️" : "❌";
-    const borderColor = type === "info" ? "#2196F3" : type === "warning" ? "#FF9800" : "#f44336";
-    const onClose = () => toast.remove();
-    render(versionCheckToastTemplate(borderColor, icon, message, onClose), toast);
-
-    if (document.body) document.body.appendChild(toast);
-
+    pwaState.versionCheckToast = { message, type };
     setTimeout(() => {
-      if (document.body && typeof document.body.contains === "function" && document.body.contains(toast)) {
-        toast.style.animation = 'toast-slide-up 0.3s ease-out reverse';
-        setTimeout(() => {
-          if (document.body && typeof document.body.contains === "function" && document.body.contains(toast)) {
-            toast.remove();
-          }
-        }, 300);
-      }
+      if (pwaState.versionCheckToast?.message === message) pwaState.versionCheckToast = null;
     }, 5000);
   }
 
   clearVersionNotification() {
     StorageUtils.remove('reactor-last-notified-version');
-    const versionEl = this.splashManagerRef.splashScreen?.querySelector('#splash-version-text');
-    if (versionEl) {
-      versionEl.classList.remove('new-version');
-      versionEl.title = 'Click to check for updates';
-    }
+    pwaState.hasAcknowledgedUpdate = true;
+    pwaState.updateAvailable = false;
   }
 }
 
@@ -643,4 +624,38 @@ export function getPartImagesByTier() {
 
 export function getMaxTier() {
   return maxTier;
+}
+
+export function initLaunchQueueHandler({ game, onFileLoaded } = {}) {
+  if (typeof window === "undefined") return;
+  if (!("launchQueue" in window) || !("files" in LaunchParams.prototype)) return;
+
+  window.launchQueue.setConsumer(async (launchParams) => {
+    if (!launchParams.files.length) return;
+
+    const fileHandle = launchParams.files[0];
+    const file = await fileHandle.getFile();
+    const text = await file.text();
+
+    try {
+      const validated = game?.saveManager?.validateSaveData(text);
+      if (game.engine?.running) game.pause();
+
+      const confirmLoad = confirm(
+        `Load save "${file.name}"?\n(Current unsaved progress will be lost)`
+      );
+
+      if (!confirmLoad || !validated) return;
+
+      if (typeof onFileLoaded === "function") {
+        await onFileLoaded(validated, fileHandle);
+        return;
+      }
+
+      await game.applySaveState(validated);
+      game.activeFileHandle = fileHandle;
+    } catch (e) {
+      logger.log("error", "game", "[PWA] Error handling launch file", e);
+    }
+  });
 }

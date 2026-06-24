@@ -16,11 +16,11 @@ describe("Upgrade Actions Mechanics", () => {
   });
 
   it("should apply component reinforcement upgrade correctly", () => {
-    const vent = game.partset.getPartById("vent1");
-    const before = vent.containment;
+    const capacitor = game.partset.getPartById("capacitor1");
+    const before = capacitor.containment;
     forcePurchaseUpgrade(game, "component_reinforcement");
-    vent.recalculate_stats();
-    expect(vent.containment).toBeGreaterThan(before);
+    capacitor.recalculate_stats();
+    expect(capacitor.containment).toBeGreaterThan(before);
   });
 
   it("should apply reactor rows upgrade correctly", () => {

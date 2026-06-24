@@ -5,10 +5,11 @@ import {
   StorageAdapter,
   serializeSave,
   rotateSlot1ToBackup,
-  logger,
-  formatDuration,
-  formatStatNum,
-} from "../utils.js";
+  AUTOSAVE_SLOT_KEY,
+  STORAGE_KEYS,
+} from "../storage/index.js";
+import { logger } from "../core/logger.js";
+import { formatDuration, formatStatNum } from "../format/numbers.js";
 
 const LOCAL_SLOTS = [1, 2, 3];
 
@@ -18,12 +19,14 @@ async function performSave(slot, saveData) {
     forDisk.tiles = [];
   }
   const validatedData = SaveDataWriteSchema.parse(forDisk);
-  const saveKey = `reactorGameSave_${slot}`;
+  const saveKey = slot === "auto" ? AUTOSAVE_SLOT_KEY : `${STORAGE_KEYS.GAME_SAVE}_${slot}`;
   await StorageAdapter.set(saveKey, validatedData);
   if (slot === 1) {
     await rotateSlot1ToBackup(serializeSave(validatedData));
   }
-  await StorageAdapter.set("reactorCurrentSaveSlot", slot);
+  if (slot !== "auto") {
+    await StorageAdapter.set(STORAGE_KEYS.CURRENT_SLOT, slot);
+  }
   return slot;
 }
 
@@ -39,11 +42,11 @@ export function createSaveMutation() {
   });
 }
 
-export async function saveGameMutation({ slot, saveData, getNextSaveSlot }) {
+export async function saveGameMutation({ slot, saveData, getNextSaveSlot, isAutoSave = false }) {
   if (typeof indexedDB === "undefined") return null;
   if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") return null;
 
-  const effectiveSlot = slot ?? (await getNextSaveSlot());
+  const effectiveSlot = isAutoSave ? "auto" : (slot ?? (await getNextSaveSlot()));
   await performSave(effectiveSlot, saveData);
   queryClient.invalidateQueries({ queryKey: queryKeys.saves.resolved() });
   return effectiveSlot;
@@ -51,7 +54,7 @@ export async function saveGameMutation({ slot, saveData, getNextSaveSlot }) {
 
 async function fetchLocalSlotData(slotId) {
   try {
-    const slotData = await StorageAdapter.get(`reactorGameSave_${slotId}`, SaveDataSchema);
+    const slotData = await StorageAdapter.get(`${STORAGE_KEYS.GAME_SAVE}_${slotId}`, SaveDataSchema);
     if (!slotData) return null;
     return {
       slot: slotId,
@@ -61,6 +64,7 @@ async function fetchLocalSlotData(slotId) {
       currentMoney: slotData.current_money || 0,
       exoticParticles: slotData.exotic_particles ?? slotData.total_exotic_particles ?? 0,
       data: slotData,
+      isAutoSave: false,
     };
   } catch (error) {
     logger.log("warn", "saves", `Failed to fetch local slot ${slotId}`, error);
@@ -68,9 +72,29 @@ async function fetchLocalSlotData(slotId) {
   }
 }
 
+async function fetchAutoSaveSlotData() {
+  try {
+    const slotData = await StorageAdapter.get(AUTOSAVE_SLOT_KEY, SaveDataSchema);
+    if (!slotData) return null;
+    return {
+      slot: "auto",
+      exists: true,
+      lastSaveTime: slotData.last_save_time || null,
+      totalPlayedTime: slotData.total_played_time || 0,
+      currentMoney: slotData.current_money || 0,
+      exoticParticles: slotData.exotic_particles ?? slotData.total_exotic_particles ?? 0,
+      data: slotData,
+      isAutoSave: true,
+    };
+  } catch (error) {
+    logger.log("warn", "saves", "Failed to fetch autosave buffer", error);
+    return null;
+  }
+}
+
 async function fetchLegacySlotData() {
   try {
-    const oldSaveData = await StorageAdapter.get("reactorGameSave", SaveDataSchema);
+    const oldSaveData = await StorageAdapter.get(STORAGE_KEYS.GAME_SAVE, SaveDataSchema);
     if (!oldSaveData) return null;
     return {
       slot: "legacy",
@@ -80,6 +104,7 @@ async function fetchLegacySlotData() {
       currentMoney: oldSaveData.current_money || 0,
       exoticParticles: oldSaveData.exotic_particles ?? oldSaveData.total_exotic_particles ?? 0,
       data: oldSaveData,
+      isAutoSave: false,
     };
   } catch (error) {
     logger.log("warn", "saves", "Failed to fetch legacy save", error);
@@ -91,13 +116,14 @@ async function fetchResolvedSavesFn() {
   const slotPromises = LOCAL_SLOTS.map(fetchLocalSlotData);
   const results = await Promise.all(slotPromises);
   const saveSlots = results.filter(Boolean);
+  const autoSave = await fetchAutoSaveSlotData();
 
   if (saveSlots.length === 0) {
     const legacy = await fetchLegacySlotData();
     if (legacy) saveSlots.push(legacy);
   }
 
-  const hasSave = saveSlots.length > 0;
+  const hasSave = saveSlots.length > 0 || !!autoSave;
   let maxLocalTime = 0;
   let mostRecentSlot = null;
 
@@ -108,11 +134,19 @@ async function fetchResolvedSavesFn() {
       mostRecentSlot = slot;
     }
   }
+  if (autoSave && (autoSave.lastSaveTime || 0) > maxLocalTime) {
+    mostRecentSlot = autoSave;
+  }
 
   let dataJSON = null;
   if (mostRecentSlot) {
-    const key = mostRecentSlot.slot === "legacy" ? "reactorGameSave" : `reactorGameSave_${mostRecentSlot.slot}`;
-    dataJSON = await StorageAdapter.getRaw(key);
+    if (mostRecentSlot.slot === "legacy") {
+      dataJSON = await StorageAdapter.getRaw(STORAGE_KEYS.GAME_SAVE);
+    } else if (mostRecentSlot.slot === "auto") {
+      dataJSON = await StorageAdapter.getRaw(AUTOSAVE_SLOT_KEY);
+    } else {
+      dataJSON = await StorageAdapter.getRaw(`${STORAGE_KEYS.GAME_SAVE}_${mostRecentSlot.slot}`);
+    }
   }
 
   let mostRecentSave = null;
@@ -123,14 +157,18 @@ async function fetchResolvedSavesFn() {
       mostRecentSave = saveSlot;
     }
   }
+  if (autoSave && (autoSave.lastSaveTime || 0) > recentTime) {
+    mostRecentSave = autoSave;
+  }
 
   return {
     hasSave,
     saveSlots,
+    autoSave,
     cloudSaveOnly: false,
     cloudSaveData: null,
     mostRecentSave,
-    maxLocalTime,
+    maxLocalTime: Math.max(maxLocalTime, autoSave?.lastSaveTime || 0),
     dataJSON,
   };
 }
@@ -159,3 +197,5 @@ export function getSaveStats(data) {
   const timestamp = ts ? new Date(Number(ts)).toLocaleString() : "Unknown";
   return { money, ep, playtime, timestamp };
 }
+
+export { fetchAutoSaveSlotData };

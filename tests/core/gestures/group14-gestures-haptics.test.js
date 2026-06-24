@@ -6,6 +6,7 @@ import {
   SNAP_BACK_THRESHOLD_RATIO,
 } from "@app/utils.js";
 import { requestWakeLock, releaseWakeLock } from "@app/services.js";
+import * as gridIntentHandler from "../../../public/src/components/grid-intent-handler.js";
 
 describe("Group 14: Mobile Gestures, Haptics and Wake Lock", () => {
   let game;
@@ -145,13 +146,13 @@ describe("Group 14: Mobile Gestures, Haptics and Wake Lock", () => {
     const tile = game.tileset.getTile(0, 0);
     const interaction = game.ui.uiState.interaction;
     interaction.isDragging = true;
-    const handleSpy = vi.spyOn(game.ui.gridController, "handleGridInteraction").mockResolvedValue(undefined);
+    const handleSpy = vi.spyOn(gridIntentHandler, "handleGridInteraction").mockResolvedValue(undefined);
     const state = input._buildPointerState(tile, { clientX: 4, clientY: 4 });
 
     input._scheduleLongPressForTile(state, tile);
     vi.advanceTimersByTime(input.longPressDuration);
 
-    expect(handleSpy).toHaveBeenCalledWith(tile, { type: "longpress", button: 0 });
+    expect(handleSpy).toHaveBeenCalledWith(game.ui, tile, { type: "longpress", button: 0 });
     expect(game.ui.uiState.interaction.sellingTileKey).toBeNull();
     expect(game.ui.uiState.interaction.isDragging).toBe(false);
     vi.useRealTimers();
@@ -163,7 +164,7 @@ describe("Group 14: Mobile Gestures, Haptics and Wake Lock", () => {
     const secondTile = game.tileset.getTile(0, 1);
     const interaction = game.ui.uiState.interaction;
     interaction.isDragging = true;
-    const handleSpy = vi.spyOn(game.ui.gridController, "handleGridInteraction").mockResolvedValue(undefined);
+    const handleSpy = vi.spyOn(gridIntentHandler, "handleGridInteraction").mockResolvedValue(undefined);
     const state = input._buildPointerState(firstTile, { clientX: 0, clientY: 0 });
     state.longPressTargetTile = firstTile;
     input.longPressTimer = 1;
@@ -180,7 +181,7 @@ describe("Group 14: Mobile Gestures, Haptics and Wake Lock", () => {
     expect(input.longPressTimer).toBeNull();
     expect(game.ui.uiState.interaction.sellingTileKey).toBeNull();
     expect(handleSpy).toHaveBeenCalledTimes(1);
-    expect(handleSpy).toHaveBeenCalledWith(secondTile, { clientX: 30, clientY: 0 });
+    expect(handleSpy).toHaveBeenCalledWith(game.ui, secondTile, { clientX: 30, clientY: 0 });
   });
 
   it("invokes navigator.vibrate with expected patterns for DeviceFeaturesUI", () => {

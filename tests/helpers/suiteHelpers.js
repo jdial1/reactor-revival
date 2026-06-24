@@ -35,6 +35,18 @@ export function injectReactorCopyPasteModalMarkup(doc = globalThis.document) {
   doc.body.insertAdjacentHTML("beforeend", REACTOR_COPY_PASTE_MODAL_MARKUP.trim());
 }
 
+export function getCopyPasteModalRefs(doc = globalThis.document) {
+  const root = doc.getElementById("modal-root");
+  const modal = root?.querySelector("#reactor_copy_paste_modal") ?? doc.getElementById("reactor_copy_paste_modal");
+  if (!modal) return null;
+  return {
+    modal,
+    modalTitle: modal.querySelector("#reactor_copy_paste_modal_title") ?? doc.getElementById("reactor_copy_paste_modal_title"),
+    modalText: modal.querySelector("#reactor_copy_paste_text") ?? doc.getElementById("reactor_copy_paste_text"),
+    modalCost: modal.querySelector("#reactor_copy_paste_cost") ?? doc.getElementById("reactor_copy_paste_cost"),
+  };
+}
+
 export function setupModalEnvironment(doc = globalThis.document) {
   injectReactorCopyPasteModalMarkup(doc);
 }

@@ -1,4 +1,4 @@
-.info-bar-desktop .info-item.hull.hull-empty-state { color: rgb(244 67 54); border-color: rgb(100 35 30) rgb(60 20 18) rgb(60 20 18) rgb(100 35 30); background: rgb(35 18 16);
+﻿.info-bar-desktop .info-item.hull.hull-empty-state { color: rgb(244 67 54); border-color: rgb(100 35 30) rgb(60 20 18) rgb(60 20 18) rgb(100 35 30); background: rgb(35 18 16);
 }
 
 .info-bar-desktop .info-item.hull.hull-empty-state .stats-inline-label,
@@ -139,3 +139,4 @@
  html.ui-idle .about-scroll-hint { animation: none;
  }
 }
+

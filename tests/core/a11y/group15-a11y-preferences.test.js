@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, vi } from "../../helpers/setup.js";
-import { formatNumber, StorageUtils } from "@app/utils.js";
+import { formatNumber } from "@app/utils.js";
+import { StorageUtils } from "@app/storage/index.js";
 import { preferences } from "@app/store.js";
 import { createTutorialManager } from "@app/components/ui-tooltips-tutorial.js";
 import { setupResearchCollapsibleSections } from "@app/components/ui-components.js";

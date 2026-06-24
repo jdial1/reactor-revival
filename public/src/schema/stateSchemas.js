@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { toDecimal } from "../utils.js";
+import { z } from "../../lib/zod.js";
+import { toDecimal } from "../simUtils.js";
 import {
   DecimalSchema,
   SaveDecimalSchema,
@@ -40,6 +40,21 @@ export const ObjectiveDefinitionSchema = z
 
 export const ObjectiveListSchema = z.array(ObjectiveDefinitionSchema);
 
+export const AchievementDefinitionSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    description: z.string(),
+    group: z.enum(["hazard", "engineering", "discovery", "milestone"]),
+    icon: z.string().optional(),
+    triggerType: z.enum(["event", "tick"]),
+    triggerEvent: z.string().optional(),
+    checkId: z.string().optional(),
+  })
+  .strict();
+
+export const AchievementListSchema = z.array(AchievementDefinitionSchema);
+
 export const GameDimensionsSchema = z.object({
   base_cols: z.number().int().min(1).default(12),
   base_rows: z.number().int().min(1).default(12),
@@ -56,6 +71,16 @@ export const DifficultyPresetSchema = z.object({
 
 const HelpTextSectionSchema = z.record(z.string(), z.union([z.string(), z.object({ title: z.string(), content: z.string() }).passthrough()]));
 export const HelpTextSchema = z.record(z.string(), HelpTextSectionSchema);
+
+export const ChangelogEntrySchema = z.object({
+  version: z.string(),
+  date: z.string().optional(),
+  bullets: z.array(z.string()).min(1),
+});
+
+export const ChangelogSchema = z.array(ChangelogEntrySchema);
+
+export const FailureFlavorSchema = z.record(z.string(), z.string());
 
 export const VersionSchema = z.object({
   version: z.string().optional().default("Unknown"),
@@ -146,7 +171,7 @@ const ReactorStateSchema = z.object({
   base_max_power: NumericToNumber.optional(),
   altered_max_heat: NumericToNumber.optional(),
   altered_max_power: NumericToNumber.optional(),
-}).passthrough();
+});
 
 const UpgradeStateSchema = z.object({
   id: z.string(),
@@ -216,11 +241,12 @@ const LatestSaveBodySchema = z.object({
     current_objective_index: ObjectiveIndexSchema,
     completed_objectives: z.array(z.union([z.boolean(), z.null(), z.undefined()]).transform((v) => v === true)).optional().default([]),
     infinite_objective: InfiniteObjectiveSchema,
-  }).passthrough().catch({}).optional().default({ current_objective_index: 0, completed_objectives: [] }),
+  }).catch({}).optional().default({ current_objective_index: 0, completed_objectives: [] }),
   toggles: z.record(z.string(), z.unknown()).catch({}).optional().default({}),
   quick_select_slots: z.array(z.unknown()).catch([]).optional().default([]),
-  ui: z.object({}).passthrough().catch({}).optional().default({}),
-}).passthrough();
+  unlocked_achievements: z.array(z.string()).catch([]).optional().default([]),
+  ui: z.object({}).catch({}).optional().default({}),
+});
 
 export const SaveDataWriteSchema = LatestSaveBodySchema;
 export const SaveDataReadSchema = z.preprocess(migrateSave, LatestSaveBodySchema);
@@ -391,8 +417,6 @@ const SaveLoadedPayloadSchema = z.object({
   quick_select_slots: z.array(z.unknown()).optional(),
 }).passthrough();
 
-const ExoticParticlesChangedPayloadSchema = z.object({}).passthrough();
-
 const ToggleStateChangedPayloadSchema = z.object({
   toggleName: z.string(),
   value: z.unknown(),
@@ -420,23 +444,21 @@ const StatePatchPayloadSchema = z.object({
   manual_heat_reduce: z.number().optional(),
 }).passthrough();
 
+export const EngineStatus = Object.freeze({
+  RUNNING: "running",
+  STOPPED: "stopped",
+  PAUSED: "paused",
+  TICK: "tick",
+  SIMULATION_ERROR: "simulation_error",
+});
+
 export const EVENT_SCHEMA_REGISTRY = {
   component_explosion: ComponentExplosionPayloadSchema,
-  meltdown: MeltdownPayloadSchema,
-  meltdownResolved: MeltdownPayloadSchema,
-  meltdownStarted: z.object({}).passthrough(),
   vibrationRequest: VibrationRequestPayloadSchema,
   saveLoaded: SaveLoadedPayloadSchema,
-  exoticParticlesChanged: ExoticParticlesChangedPayloadSchema,
-  toggleStateChanged: ToggleStateChangedPayloadSchema,
-  reactorTick: ReactorTickPayloadSchema,
-  powerSold: z.object({}).passthrough(),
-  clearAnimations: z.object({}).passthrough(),
-  clearImageCache: z.object({}).passthrough(),
   layoutPasted: z.object({ layout: z.any() }).passthrough(),
   gridResized: z.object({}).passthrough(),
   grid_changed: z.object({}).passthrough(),
-  tickRecorded: z.object({}).passthrough(),
   welcomeBackOffline: TimeFluxPayloadSchema,
   moneyChanged: MoneyChangedPayloadSchema,
   statePatch: StatePatchPayloadSchema,
@@ -445,6 +467,10 @@ export const EVENT_SCHEMA_REGISTRY = {
   heatWarning: z.object({ heatRatio: z.number().optional(), tickCount: z.number().optional() }).passthrough(),
   pipeIntegrityWarning: z.object({ heatRatio: z.number().optional(), tickCount: z.number().optional() }).passthrough(),
   firstHighHeat: z.object({ heatRatio: z.number().optional(), tickCount: z.number().optional() }).passthrough(),
+  achievementUnlocked: z.object({ achievement: z.any().optional(), silent: z.boolean().optional() }).passthrough(),
+  achievementCatchUpSummary: z.object({ count: z.number().optional() }).passthrough(),
+  prestigeCompleted: z.object({ epFromWeave: z.number().optional(), keepEp: z.boolean().optional() }).passthrough(),
+  partPlaced: z.object({ part: z.any().optional(), tile: z.any().optional() }).passthrough(),
 };
 
 const TileRefSchema = z.custom((val) => val != null && typeof val.row === "number" && typeof val.col === "number");
@@ -501,8 +527,8 @@ export const UserPreferencesSchema = z.object({
   volumeAlerts: z.number().min(0).max(1).optional().default(0.5),
   volumeSystem: z.number().min(0).max(1).optional().default(0.5),
   volumeAmbience: z.number().min(0).max(1).optional().default(0.12),
-  hideUnaffordableUpgrades: z.boolean().optional().default(true),
-  hideUnaffordableResearch: z.boolean().optional().default(true),
+  hideUnaffordableUpgrades: z.boolean().optional().default(false),
+  hideUnaffordableResearch: z.boolean().optional().default(false),
   hideMaxUpgrades: z.boolean().optional().default(true),
   hideMaxResearch: z.boolean().optional().default(true),
 }).passthrough();

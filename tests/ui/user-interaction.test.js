@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setupGameWithDOM, toNum, attachMockDOMToTiles } from "../helpers/setup.js";
 
+import { handleGridInteraction } from "../../public/src/components/grid-intent-handler.js";
+
 describe("UI User Interaction Scenarios", () => {
     let game;
     let document;
@@ -49,7 +51,7 @@ describe("UI User Interaction Scenarios", () => {
         
         const tile = game.tileset.getTile(5, 5);
         // Directly call the handler as in original test
-        await game.ui.gridController.handleGridInteraction(tile, { button: 0 });
+        await handleGridInteraction(game.ui,tile, { button: 0 });
         
         expect(tile.part.id).toBe("uranium1");
     });
@@ -61,7 +63,7 @@ describe("UI User Interaction Scenarios", () => {
         
         const moneyBeforeSell = game.current_money;
         
-        await game.ui.gridController.handleGridInteraction(tile, { type: "longpress", button: 0, target: tile.$el });
+        await handleGridInteraction(game.ui,tile, { type: "longpress", button: 0, target: tile.$el });
         
         expect(tile.part).toBeNull();
         expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
@@ -97,7 +99,7 @@ describe("UI User Interaction Scenarios", () => {
         if (!partBtn || !tooltipEl) return;
         partBtn.click();
         await vi.advanceTimersByTimeAsync(100);
-        const visible = !tooltipEl.classList.contains("hidden");
+        const visible = !tooltipEl.classList.contains("fade-out");
         expect(visible || tooltipEl.style.display !== "none").toBeTruthy();
     });
 
@@ -118,9 +120,9 @@ describe("UI User Interaction Scenarios", () => {
             expect(tileElement).not.toBeNull();
         });
 
-        it("should sell a part when a tile is sold directly", () => {
+        it("should sell a part when a tile is sold directly", async () => {
             const moneyBeforeSell = game.current_money;
-            game.sellPart(tile);
+            await game.sellPart(tile);
             expect(tile.part).toBeNull();
             expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
@@ -128,7 +130,7 @@ describe("UI User Interaction Scenarios", () => {
         it("should sell a part when a tile receives a longpress event", async () => {
             const moneyBeforeSell = game.current_money;
             
-            await game.ui.gridController.handleGridInteraction(tile, { type: "longpress", button: 0, target: tileElement });
+            await handleGridInteraction(game.ui,tile, { type: "longpress", button: 0, target: tileElement });
             expect(tile.part).toBeNull();
             expect(toNum(game.current_money)).toBeGreaterThan(toNum(moneyBeforeSell));
         });
@@ -139,7 +141,7 @@ describe("UI User Interaction Scenarios", () => {
 
             const sellPartSpy = vi.spyOn(game, "sellPart");
 
-            await game.ui.gridController.handleGridInteraction(tile, { type: "longpress", button: 0, target: tileElement });
+            await handleGridInteraction(game.ui,tile, { type: "longpress", button: 0, target: tileElement });
 
             expect(sellPartSpy).not.toHaveBeenCalled();
         });
@@ -151,7 +153,7 @@ describe("UI User Interaction Scenarios", () => {
             const clearPartSpy = vi.spyOn(tile, "clearPart");
 
             // Call handler with pointerdown event
-            await game.ui.gridController.handleGridInteraction(tile, {
+            await handleGridInteraction(game.ui,tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -179,7 +181,7 @@ describe("UI User Interaction Scenarios", () => {
             const clearPartSpy = vi.spyOn(tile, "clearPart");
 
             // Call handler with pointerdown event
-            await game.ui.gridController.handleGridInteraction(tile, {
+            await handleGridInteraction(game.ui,tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -190,7 +192,7 @@ describe("UI User Interaction Scenarios", () => {
             vi.advanceTimersByTime(200);
 
             // Call handler with pointermove event
-            await game.ui.gridController.handleGridInteraction(tile, {
+            await handleGridInteraction(game.ui,tile, {
                 type: 'pointermove',
                 clientX: 120,
                 clientY: 100
@@ -210,7 +212,7 @@ describe("UI User Interaction Scenarios", () => {
         it("should NOT sell a part if modifier keys are pressed during long-press", async () => {
             const moneyBeforeSell = game.current_money;
             const clearPartSpy = vi.spyOn(tile, "clearPart");
-            await game.ui.gridController.handleGridInteraction(tile, {
+            await handleGridInteraction(game.ui,tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -226,7 +228,7 @@ describe("UI User Interaction Scenarios", () => {
 
         it("should add 'selling' class during long-press animation", async () => {
             // Call handler with pointerdown event
-            await game.ui.gridController.handleGridInteraction(tile, {
+            await handleGridInteraction(game.ui,tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -269,7 +271,7 @@ describe("UI User Interaction Scenarios", () => {
             const clearPartSpy3 = vi.spyOn(tile3, "clearPart");
 
             // Long-press on first tile
-            await game.ui.gridController.handleGridInteraction(tile, {
+            await handleGridInteraction(game.ui,tile, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 100,
@@ -279,7 +281,7 @@ describe("UI User Interaction Scenarios", () => {
             vi.advanceTimersByTime(250 + (game.ui.longPressDuration || 1000) + 500);
 
             // Long-press on second tile
-            await game.ui.gridController.handleGridInteraction(tile2, {
+            await handleGridInteraction(game.ui,tile2, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 120,
@@ -289,7 +291,7 @@ describe("UI User Interaction Scenarios", () => {
             vi.advanceTimersByTime(250 + (game.ui.longPressDuration || 1000) + 500);
 
             // Long-press on third tile
-            await game.ui.gridController.handleGridInteraction(tile3, {
+            await handleGridInteraction(game.ui,tile3, {
                 type: 'pointerdown',
                 button: 0,
                 clientX: 140,

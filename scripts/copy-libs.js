@@ -18,7 +18,6 @@ const rawCopies = [
   { source: "node_modules/break_infinity.js/dist/break_infinity.min.js", target: "break_infinity.min.js" },
   { source: "node_modules/pako/dist/pako.min.js", target: "pako.min.js" },
   { source: "node_modules/@zip.js/zip.js/dist/zip.min.js", target: "zip.min.js" },
-  { source: "node_modules/@picocss/pico/css/pico.min.css", target: "pico.min.css" },
 ];
 
 const fontCopies = [

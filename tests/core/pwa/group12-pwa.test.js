@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import { describe, it, expect, beforeEach, afterEach, vi } from "../../helpers/setup.js";
 import { VersionChecker } from "@app/services.js";
-import { StorageUtils } from "@app/utils.js";
+import { StorageUtils } from "@app/storage/index.js";
 
 describe("Group 12: PWA, Service Worker & Versioning", () => {
   let versionChecker;

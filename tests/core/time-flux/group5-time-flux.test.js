@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGame } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGame , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
 import {
   processOfflineTime,
-  runInstantCatchup,
+  startOfflineFastForward,
 } from "@app/logic.js";
 import {
   FOUNDATIONAL_TICK_MS,
@@ -20,8 +20,8 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
     game.engine.setForceNoSAB(true);
     game.engine._useGameLoopWorker = () => false;
     await placePart(game, 0, 0, "uranium1");
-    game.engine.markPartCacheAsDirty();
-    game.engine._updatePartCaches();
+    syncActivePartsAtTickBoundary(game.engine);
+
   });
 
   afterEach(() => {
@@ -53,30 +53,29 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
     expect(game._offlineCatchupMs).toBe(capMs);
   });
 
-  it("locks runInstantCatchup at offline span cap", () => {
+  it("queues worker fast-forward ticks from offline span", () => {
     game.reactor.current_heat = 50;
     game.reactor.max_heat = 1000;
     const bankedMs = MAX_ACCUMULATOR_MULTIPLIER * FOUNDATIONAL_TICK_MS;
     game._offlineCatchupMs = bankedMs;
-    const tickSpy = vi.spyOn(game.engine, "_processTick");
 
-    runInstantCatchup(game.engine);
+    startOfflineFastForward(game.engine);
 
-    expect(tickSpy).not.toHaveBeenCalled();
     expect(game._offlineCatchupMs).toBe(0);
-    expect(game.paused).toBe(false);
+    expect(game.engine._offlineFastForwardTicks).toBe(MAX_ACCUMULATOR_MULTIPLIER);
+    expect(game.engine._isCatchingUp).toBe(true);
   });
 
-  it("locks runInstantCatchup for partial queued offline span", () => {
+  it("queues partial offline span for worker fast-forward", () => {
     game.reactor.current_heat = 50;
     game.reactor.max_heat = 1000;
     const ticks = 47;
     game._offlineCatchupMs = ticks * FOUNDATIONAL_TICK_MS;
-    const tickSpy = vi.spyOn(game.engine, "_processTick");
 
-    runInstantCatchup(game.engine);
+    startOfflineFastForward(game.engine);
 
-    expect(tickSpy).not.toHaveBeenCalled();
     expect(game._offlineCatchupMs).toBe(0);
+    expect(game.engine._offlineFastForwardTicks).toBe(ticks);
+    expect(game.engine._isCatchingUp).toBe(true);
   });
 });

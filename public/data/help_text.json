@@ -1,7 +1,7 @@
 {
     "basic_overview": {
         "title": "Basic Overview",
-        "content": "Cells = power and heat<br>Power = money<br>Money = Bigger cells and more money<br>Lots of money = particle accelerators<br>Particle accelerators = exotic particles (EP)<br>EP = more upgrades and new toys for more power, heat and money!"
+        "content": "Cells = power and heat<br>Power = money<br>Money = Bigger cells and more money<br>Lots of money = particle accelerators<br>Particle accelerators = exotic particles (EP)<br>EP = more upgrades and new toys for more power, heat and money!<br><br>Back up your progress: <strong>Settings → Export Save</strong> (.reactor file) for other devices or safekeeping."
     },
     "parts": {
         "cells": "Cells are your primary power generators. They produce both power and heat.",
@@ -13,16 +13,29 @@
         "heatInlets": "Heat Inlets push heat from adjacent components into the reactor.",
         "heatOutlets": "Heat Outlets pull heat from the reactor into adjacent components.",
         "coolantCells": "Coolant Cells passively absorb heat from adjacent components.",
-        "reactorPlatings": "Each reactor plating placed on the grid adds a fixed amount to reactor heat capacity."
+        "reactorPlatings": "Each reactor plating placed on the grid adds a fixed amount to reactor heat capacity.",
+        "sellConsequences": "Selling parts returns less when they are overheated or worn. Depleted cells sell for about $0 — plan placement carefully."
     },
     "controls": {
         "autoSell": "Automatically sells a portion of your power.",
         "autoBuy": "Automatically replaces depleted components if you have Perpetual upgrades (Cells, Capacitors, Reflectors).",
         "heatController": "Automatically reduces heat when it gets too high.",
-        "pause": "Pauses all reactor operations. Use this to plan changes or prevent accidents."
+        "pause": "Pauses all reactor operations. Use this to plan changes or prevent accidents.",
+        "saveExport": "Settings → Export Save writes a .reactor file (or JSON fallback) to your device. Use File System Access when supported.",
+        "saveImport": "Settings → Import Save restores a .reactor or JSON backup. Your current slot is backed up before import.",
+        "offlineCatchup": "While the tab is closed, your reactor keeps progressing (deterministic offline catch-up). When you return after a long absence, use <strong>Fast-Forward</strong> to replay offline ticks through the physics worker at high speed. Unstable layouts can still melt down during catch-up — vent before leaving the game idle.",
+        "chronometer": "The <strong>Chronometer</strong> upgrade (and Improved Chronometers research) speeds up reactor ticks so you earn faster. Faster ticks also mean heat builds faster — scale cooling with output."
+    },
+    "layouts": {
+        "title": "Layouts & Blueprint Planning",
+        "content": "<strong>Copy layout</strong> (reactor toolbar) exports your grid as text you can share or save.<br><strong>Paste / Import</strong> loads a layout from clipboard or file; My Layouts can store favorites and load them later.<br><strong>Blueprint mode</strong> (plan toggle) lets you draft changes without spending money. The HUD shows power, heat balance, and stability — use <strong>Apply</strong> to commit or <strong>Clear</strong> to discard the draft."
     },
     "upgrades": {
         "general": "Upgrades provide permanent improvements to your reactor's capabilities.",
         "experimental": "Experimental upgrades cost Exotic Particles (EP) and persist through reboots."
+    },
+    "prestige": {
+        "title": "Prestige & Research",
+        "content": "<strong>Wait until ~51 EP</strong> before your first reboot. The first tier of permanent research costs 50 EP per upgrade — rebooting too early leaves you unable to buy anything meaningful.<br><br><strong>Weave EP</strong> (banked on Prestige reboot) uses the <em>minimum</em> of total power produced and total heat dissipated this run, divided by 1,000,000 (Weave Quantum). High power without matching cooling caps your EP gain.<br><br><strong>Prestige</strong> resets money, grid parts, and regular upgrades but keeps EP and experimental research.<br><strong>Refund</strong> (full reset) also wipes experimental research and refunds all EP."
     }
 }

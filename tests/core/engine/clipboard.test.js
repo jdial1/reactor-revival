@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, setupGameWithDOM, mockClipboardAPI, injectReactorCopyPasteModalMarkup } from '../../helpers/setup.js';
+import { describe, it, expect, vi, beforeEach, afterEach, setupGameWithDOM, mockClipboardAPI, getCopyPasteModalRefs } from '../../helpers/setup.js';
 
 describe('Clipboard Functionality', () => {
     let ui;
@@ -11,8 +11,6 @@ describe('Clipboard Functionality', () => {
         const setup = await setupGameWithDOM();
         game = setup.game;
         ui = game.ui;
-
-        injectReactorCopyPasteModalMarkup(document);
 
         const clip = mockClipboardAPI();
         mockNavigator = clip.navigator;
@@ -77,13 +75,11 @@ describe('Clipboard Functionality', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Check that modal is shown with manual entry title
-            const modal = document.getElementById('reactor_copy_paste_modal');
-            const modalTitle = document.getElementById('reactor_copy_paste_modal_title');
-            const modalText = document.getElementById('reactor_copy_paste_text');
-
-            expect(modal.classList.contains('hidden')).toBe(false);
-            expect(modalTitle.textContent).toBe('Enter Reactor Layout Manually');
-            expect(modalText.placeholder).toBe('Enter reactor layout JSON data manually...');
+            const refs = getCopyPasteModalRefs(document);
+            expect(refs).not.toBeNull();
+            expect(refs.modal.classList.contains('hidden')).toBe(false);
+            expect(refs.modalTitle.textContent).toBe('Enter Reactor Layout Manually');
+            expect(refs.modalText.placeholder).toBe('Enter reactor layout JSON data manually...');
         });
     });
 }); 

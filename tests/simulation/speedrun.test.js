@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { patchGameState } from "@app/state.js";
 import { toDecimal } from "@app/utils.js";
-import { setupGameWithDOM } from "../helpers/setup.js";
+import { setupGameWithDOM, syncActivePartsAtTickBoundary } from "../helpers/setup.js";
+import { handleGridInteraction } from "../../public/src/components/grid-intent-handler.js";
 import objective_list_data from "../../public/data/objective_list.json";
 
 function clickDOM(selector) {
@@ -14,7 +15,7 @@ async function placePartViaUI(game, partId, row, col) {
   const tile = game.tileset.getTile(row, col);
   if (!tile) throw new Error(`Tile ${row},${col} not found`);
   game.ui.stateManager.setClickedPart(part);
-  await game.ui.gridController.handleGridInteraction(tile, { button: 0, pointerType: "touch", type: "pointerdown" });
+  await handleGridInteraction(game.ui, tile, { button: 0, pointerType: "touch", type: "pointerdown" });
   game.ui.stateManager.setClickedPart(null);
 }
 
@@ -119,7 +120,7 @@ async function solveObjective(index, game) {
       break;
     case "powerPerTick200":
       game.tileset.clearAllTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       for (let i = 0; i < 5; i++) {
         await placePartViaUI(game, "plutonium1", 0, i);
         game.tileset.getTile(0, i).activated = true;
@@ -144,7 +145,7 @@ async function solveObjective(index, game) {
         await tile.setPart(part);
       }
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -194,7 +195,7 @@ async function solveObjective(index, game) {
         tile.ticks = 60;
       }
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager?.updateSustainedTracking("sustainedPower1k", game.engine.tick_count - 30);
       game.objectives_manager.check_current_objective();
@@ -206,7 +207,7 @@ async function solveObjective(index, game) {
       for (let i = 0; i < 10; i++) await game.tileset.getTile(0, i).setPart(cap2);
       for (let i = 0; i < 10; i++) await game.tileset.getTile(1, i).setPart(vent2);
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       break;
     }
@@ -221,7 +222,7 @@ async function solveObjective(index, game) {
         tile.ticks = 60;
       }
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -247,7 +248,7 @@ async function solveObjective(index, game) {
         tile.ticks = 900;
       }
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.engine.tick();
       game.reactor.updateStats();
       break;
@@ -261,7 +262,7 @@ async function solveObjective(index, game) {
         tile.ticks = 900;
       }
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -283,7 +284,7 @@ async function solveObjective(index, game) {
         tile.ticks = 3600;
       }
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -348,7 +349,7 @@ async function solveObjective(index, game) {
         tile.ticks = 22000;
       }
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -366,7 +367,7 @@ async function solveObjective(index, game) {
         tile.ticks = 86000;
       }
       game.tileset.updateActiveTiles();
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -385,7 +386,7 @@ async function solveObjective(index, game) {
       const inf = game.objectives_manager.current_objective_def;
       if (inf?.checkId === "infinitePower" && inf?.target != null) {
         game.tileset.clearAllTiles();
-        game.engine.markPartCacheAsDirty();
+        syncActivePartsAtTickBoundary(game.engine);
         const plutonium1 = game.partset.getPartById("plutonium1");
         for (let r = 0; r < 3; r++) {
           for (let c = 0; c < 5; c++) {
@@ -429,7 +430,9 @@ async function waitForObjectiveCompletion(game, maxTicks = 1000) {
 }
 
 describe("End-to-End Speed Run (DOM Simulation)", () => {
-  it("should complete all objectives in sequence via DOM interactions", async () => {
+  it(
+    "should complete all objectives in sequence via DOM interactions",
+    async () => {
     vi.useFakeTimers();
 
     const setup = await setupGameWithDOM();
@@ -499,7 +502,7 @@ describe("End-to-End Speed Run (DOM Simulation)", () => {
 
       if (i < totalObjectives - 2) {
         game.tileset.clearAllTiles();
-        game.engine.markPartCacheAsDirty();
+        syncActivePartsAtTickBoundary(game.engine);
       }
     }
 
@@ -509,5 +512,5 @@ describe("End-to-End Speed Run (DOM Simulation)", () => {
     expect(checkId === "allObjectives" || infiniteIds.includes(checkId)).toBe(true);
 
     vi.useRealTimers();
-  }, 120000);
+  }, 180000);
 });

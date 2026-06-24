@@ -10,6 +10,10 @@ import "../../lib/break_infinity.min.js";
 }
 import {
   runHeatStepFromTyped,
+  computeWorkerVentPowerDemand,
+  shouldScramForInsufficientVentPower,
+} from "../logic-heat-transfer.js";
+import {
   INLET_STRIDE, INLET_OFFSET_INDEX, INLET_OFFSET_RATE, INLET_OFFSET_N_COUNT, INLET_OFFSET_NEIGHBORS,
   VALVE_STRIDE, VALVE_OFFSET_INDEX, VALVE_OFFSET_TYPE, VALVE_OFFSET_ORIENTATION, VALVE_OFFSET_RATE, VALVE_OFFSET_INPUT_IDX, VALVE_OFFSET_OUTPUT_IDX,
   EXCHANGER_STRIDE, EXCHANGER_OFFSET_INDEX, EXCHANGER_OFFSET_RATE, EXCHANGER_OFFSET_CONTAINMENT, EXCHANGER_OFFSET_N_COUNT,
@@ -17,12 +21,15 @@ import {
   OUTLET_STRIDE, OUTLET_OFFSET_INDEX, OUTLET_OFFSET_RATE, OUTLET_OFFSET_ACTIVATED, OUTLET_OFFSET_IS_OUTLET6, OUTLET_OFFSET_N_COUNT,
   OUTLET_OFFSET_NEIGHBOR_INDICES, OUTLET_OFFSET_NEIGHBOR_CAPS,
   MAX_NEIGHBORS,
-} from "../logic-heat-transfer.js";
+} from "../constants/heat-transfer.js";
 import {
   computeWorkerNeighborPulseN,
 } from "../logic-topology.js";
 import {
   REACTOR_HEAT_STANDARD_DIVISOR,
+  MELTDOWN_HEAT_MULTIPLIER,
+} from "../constants/sim.js";
+import {
   DEFAULT_OVERFLOW_RATIO,
   DEFAULT_POWER_MULTIPLIER,
   DEFAULT_SELL_PRICE_MULTIPLIER,
@@ -38,11 +45,17 @@ import {
   applyPowerOverflowCalcDecimal,
   HULL_REPEL_FRACTION,
   FOUNDATIONAL_TICK_MS,
-  MELTDOWN_HEAT_MULTIPLIER,
-} from "../utils.js";
+} from "../simUtils.js";
 import { hasTrait } from "../traits.js";
-import { toDecimal } from "../utils.js";
+import { toDecimal } from "../simUtils.js";
 import { buildContainmentSoa, buildOrthoAdjacencySoa, heatSoaView } from "./soaTickLayout.js";
+import { validateGameLoopTickInput } from "./workerBoundary.js";
+import {
+  FRAGMENTATION_EXPLOSION_CHANCE,
+  FRAGMENTATION_SALT_STRUCTURAL,
+  deterministicChance,
+  deterministicPickIndex,
+} from "../kernel/deterministic-tick-rng.js";
 
 const MAX_INLETS = HEAT_PAYLOAD_MAX_INLETS;
 const MAX_VALVES = HEAT_PAYLOAD_MAX_VALVES;
@@ -428,6 +441,8 @@ function processCells(partLayout, partTable, heat, rows, cols, stride, multiplie
       if (autoOn && eligible && moneyRef.value.gte(costNum)) {
         moneyRef.value = moneyRef.value.sub(costNum);
         moneyRef.spentAutoBuy = moneyRef.spentAutoBuy.add(costNum);
+        if (!moneyRef.autoBuyEvents) moneyRef.autoBuyEvents = [];
+        moneyRef.autoBuyEvents.push({ r: t.r, c: t.c, cost: costNum });
         const resetTicks = t.maxTicks ?? partTable[t.partIndex]?.ticks ?? 0;
         t.ticks = resetTicks;
       } else {
@@ -603,7 +618,7 @@ function createGridContext(data) {
   };
 }
 
-function processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, reactorPower, moneyRef) {
+function processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, reactorPower, moneyRef, globalTick) {
   const { partLayout, partTable, rows, cols, stride, multiplier, reactorState, autoSell, effectiveMaxPower, partAt, gidx, orthoOff, orthoIdx } = ctx;
   ctx.gridPartIdx = buildGridPartIndices(partLayout, gridLen, stride);
 
@@ -641,7 +656,20 @@ function processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, rea
     }
   }
 
-  const cellResult = processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx, moneyRef, ctx, reactorHeat);
+  const ventPowerDemand = computeWorkerVentPowerDemand(
+    partLayout,
+    partTable,
+    heat,
+    multiplier,
+    gidx,
+    (part) => partHasTrait(part, "VENT")
+  );
+  let cellResult = processCells(partLayout, partTable, heat, rows, cols, stride, multiplier, partAt, gidx, moneyRef, ctx, reactorHeat);
+  const powerForVents = reactorPower.toNumber() + (cellResult.power_add || 0);
+  if (shouldScramForInsufficientVentPower(powerForVents, ventPowerDemand)) {
+    reactorHeat = reactorHeat.sub(cellResult.heat_add || 0);
+    cellResult = { ...cellResult, power_add: 0, heat_add: 0, powerVentScram: true };
+  }
   reactorHeat = reactorHeat.add(cellResult.heat_add);
   reactorHeat = applyHullRepulsionWorker(
     reactorHeat,
@@ -669,8 +697,12 @@ function processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, rea
     if (hull_integrity <= 0 && reactorHeat.lt(maxH.mul(MELTDOWN_HEAT_MULTIPLIER))) {
       failure_state = "fragmentation";
       const validIndices = partLayout.map((t) => gidx(t.r, t.c));
-      if (validIndices.length > 0 && Math.random() < 0.1) {
-        explosionIndices.push(validIndices[Math.floor(Math.random() * validIndices.length)]);
+      if (
+        validIndices.length > 0
+        && deterministicChance(globalTick, FRAGMENTATION_SALT_STRUCTURAL, FRAGMENTATION_EXPLOSION_CHANCE)
+      ) {
+        const pick = deterministicPickIndex(globalTick, FRAGMENTATION_SALT_STRUCTURAL + 1, validIndices.length);
+        if (pick >= 0) explosionIndices.push(validIndices[pick]);
       }
     }
 
@@ -706,7 +738,9 @@ function processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, rea
     powerSold: powerResult.powerSold?.toNumber?.() ?? Number(powerResult.powerSold ?? 0),
     ventHeatDissipated: ventOut.ventHeatDissipated,
     cellPowerAdd: cellResult.power_add,
+    ventPowerAdd: ventPower,
     cellHeatAdd: cellResult.heat_add,
+    powerVentScram: !!cellResult.powerVentScram,
     explosionIndices: Array.from(new Set(explosionIndices)),
     depletionIndices: cellResult.depletionIndices,
     hull_integrity,
@@ -738,10 +772,8 @@ function runOneTick(data) {
   const gridLen = heat.length;
   const ctx = createGridContext(data);
   const Decimal = ctx.effectiveMaxPower.constructor;
-  let reactorHeat = data.reactorState.current_heat;
-  let reactorPower = data.reactorState.current_power;
-  if (typeof reactorHeat?.toNumber !== "function") reactorHeat = new Decimal(reactorHeat ?? 0);
-  if (typeof reactorPower?.toNumber !== "function") reactorPower = new Decimal(reactorPower ?? 0);
+  let reactorHeat = toDecimal(data.reactorState.current_heat);
+  let reactorPower = toDecimal(data.reactorState.current_power);
   const powerBeforeTick = reactorPower;
   const heatBeforeTick = reactorHeat;
   const allExplosionIndices = [];
@@ -752,16 +784,26 @@ function runOneTick(data) {
   let finalHullIntegrity = data.reactorState.hull_integrity ?? 100;
   let finalFailureState = data.reactorState.failure_state ?? "nominal";
   const isProjection = data.mode === "projection";
-  const n = isProjection ? 1 : Math.max(1, data.tickCount || 1);
+  const warmupTicks = isProjection ? Math.max(0, Number(data.projectionWarmupTicks ?? 0) | 0) : 0;
+  const sampleTicks = isProjection ? Math.max(1, Number(data.projectionSampleTicks ?? 1) | 0) : 1;
+  const recordTicks = isProjection && data.projectionRecordTicks === true;
+  const n = isProjection ? warmupTicks + sampleTicks : Math.max(1, data.tickCount || 1);
   const tick0 = typeof performance !== "undefined" ? performance.now() : 0;
   const rawMoney = data.current_money;
   const moneyRef = {
-    value: new Decimal(rawMoney != null ? (typeof rawMoney === "number" ? rawMoney : String(rawMoney)) : 0),
+    value: toDecimal(rawMoney ?? 0),
     spentAutoBuy: new Decimal(0),
+    autoBuyEvents: [],
   };
   const prestigeMult = new Decimal(Number(data.prestigeMoneyMultiplier ?? 1) || 1);
   const initialMoneyNum = moneyRef.value.toNumber();
   let projectionPlannerSample = null;
+  let projectionSampleAcc = null;
+  let projectionTickSeries = null;
+  if (isProjection) {
+    projectionSampleAcc = { power: 0, cellPower: 0, stirlingPower: 0, netHeat: 0, ep: 0, count: 0 };
+    if (recordTicks) projectionTickSeries = [];
+  }
 
   const intents = data.intents || [];
   for (let i = 0; i < intents.length; i++) {
@@ -784,18 +826,38 @@ function runOneTick(data) {
     }
   }
 
+  const baseEngineTick = Number(data.engine_tick_count ?? 0) | 0;
+
   for (let tick = 0; tick < n; tick++) {
     if (tick > 0 && tick % 50 === 0 && typeof console !== "undefined" && console.info) {
       console.info("[GameLoopWorker] runOneTick progress", { tick, total: n, tickId: data.tickId });
     }
-    const result = processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, reactorPower, moneyRef);
+    const globalTick = baseEngineTick + tick;
+    const result = processOneTickIteration(ctx, heat, integrity, gridLen, reactorHeat, reactorPower, moneyRef, globalTick);
     reactorHeat = result.reactorHeat;
     reactorPower = result.reactorPower;
-    if (isProjection && tick === 0) {
-      projectionPlannerSample = {
-        stats_power: result.cellPowerAdd ?? 0,
-        stats_net_heat: (result.cellHeatAdd ?? 0) - (result.ventHeatDissipated ?? 0),
-      };
+    if (isProjection && tick >= warmupTicks) {
+      const cellPower = result.cellPowerAdd ?? 0;
+      const stirlingPower = result.ventPowerAdd ?? 0;
+      const netHeat = (result.cellHeatAdd ?? 0) - (result.ventHeatDissipated ?? 0);
+      projectionSampleAcc.power += cellPower + stirlingPower;
+      projectionSampleAcc.cellPower += cellPower;
+      projectionSampleAcc.stirlingPower += stirlingPower;
+      projectionSampleAcc.netHeat += netHeat;
+      projectionSampleAcc.ep += result.epGained ?? 0;
+      projectionSampleAcc.count += 1;
+      if (projectionTickSeries) {
+        projectionTickSeries.push({
+          tick: tick - warmupTicks,
+          stats_power: cellPower + stirlingPower,
+          stats_cell_power: cellPower,
+          stats_stirling_power: stirlingPower,
+          stats_net_heat: netHeat,
+          stats_ep: result.epGained ?? 0,
+          reactor_heat: result.reactorHeat?.toNumber?.() ?? Number(result.reactorHeat ?? 0),
+          reactor_power: result.reactorPower?.toNumber?.() ?? Number(result.reactorPower ?? 0),
+        });
+      }
     }
     totalMoneyEarned = totalMoneyEarned.add(result.moneyEarned);
     totalPowerSold += result.powerSold || 0;
@@ -836,6 +898,21 @@ function runOneTick(data) {
     console.info("[GameLoopWorker] runOneTick finished", { tickId: data.tickId, innerTicks: n, batchMs: Math.round(batchMs) });
   }
 
+  if (isProjection && projectionSampleAcc?.count > 0) {
+    const c = projectionSampleAcc.count;
+    projectionPlannerSample = {
+      stats_power: projectionSampleAcc.power / c,
+      stats_cell_power: projectionSampleAcc.cellPower / c,
+      stats_stirling_power: projectionSampleAcc.stirlingPower / c,
+      stats_net_heat: projectionSampleAcc.netHeat / c,
+      stats_ep: projectionSampleAcc.ep / c,
+      warmup_ticks: warmupTicks,
+      sample_ticks: c,
+      total_ticks: n,
+      tick_series: projectionTickSeries ?? undefined,
+    };
+  }
+
   let heatBufferOut = null;
   let integrityBufferOut = null;
   if (heat.buffer) {
@@ -870,6 +947,7 @@ function runOneTick(data) {
     moneyEarned: isProjection ? 0 : totalMoneyEarned.toNumber(),
     authoritativeCurrentMoney,
     moneySpentAutoBuy: moneyRef.spentAutoBuy.toNumber(),
+    autoBuyEvents: moneyRef.autoBuyEvents,
     powerSold: totalPowerSold,
     ventHeatDissipated: totalVentHeat,
     epGained: 0,
@@ -968,6 +1046,18 @@ export function attachGameLoopWorkerPort(workerGlobal) {
     if (!d || !isTick) {
       busy = false;
       if (d) workerGlobal.postMessage({ type: "tickResult", tickId: d.tickId, error: true });
+      return;
+    }
+    const validation = validateGameLoopTickInput(d, "GameLoopWorker receive");
+    if (!validation.success) {
+      busy = false;
+      workerGlobal.postMessage({
+        type: "tickResult",
+        tickId: d.tickId ?? 0,
+        error: true,
+        message: "Input validation failed",
+      });
+      if (pending) runStep();
       return;
     }
     busy = true;

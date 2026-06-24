@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, vi, toNum } from "../../helpers/setup.js";
-import { StorageUtils, StorageAdapter, serializeSave, deserializeSave } from "@app/utils.js";
+import { StorageUtils, StorageAdapter, serializeSave, deserializeSave } from "@app/storage/index.js";
 
 describe("Save and Load Functionality", () => {
   let game;

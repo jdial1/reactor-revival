@@ -5,17 +5,35 @@ import {
   UpgradeDefinitionSchema,
   TechTreeSchema,
   ObjectiveListSchema,
+  AchievementListSchema,
   DifficultyPresetSchema,
   HelpTextSchema,
 } from "./schema/index.js";
 import { getVolumePreferences, preferences } from "./state/preferences.js";
-import {
-  logger,
-  getResourceUrl,
-  isTestEnv,
-  runWithConcurrencyLimit,
-} from "./utils.js";
+import { logger } from "./core/logger.js";
+import { isTestEnv } from "./simUtils.js";
+import { runWithConcurrencyLimit } from "./layout/reactor-codec.js";
+import { getResourceUrl } from "./dom/lit.js";
 import { bundledGameData } from "./bundledStaticData.js";
+import {
+  ensureAudioNodes,
+  getAmbienceBuffers,
+  getAudioContext,
+  getIndustrialBuffers,
+  getServiceAudioContext,
+  getUiBuffers,
+  registerAudioService,
+  resolveAudioService,
+  setAmbienceBuffers,
+  setServiceAudioContext,
+  setUiBuffers,
+} from "./audio-runtime.js";
+import { AudioWarningManager } from "./audio-warning-manager.js";
+import { AudioIndustrialManager } from "./audio-industrial-manager.js";
+
+export { AudioWarningManager } from "./audio-warning-manager.js";
+export { AudioIndustrialManager } from "./audio-industrial-manager.js";
+export { resolveAudioService } from "./audio-runtime.js";
 
 let _validatedGameData;
 export function getValidatedGameData() {
@@ -26,6 +44,7 @@ export function getValidatedGameData() {
         upgrades: z.array(UpgradeDefinitionSchema).parse(bundledGameData.upgrades),
         techTree: TechTreeSchema.parse(bundledGameData.techTree),
         objectives: ObjectiveListSchema.parse(bundledGameData.objectives),
+        achievements: AchievementListSchema.parse(bundledGameData.achievements),
         difficulty: z.record(z.string(), DifficultyPresetSchema).parse(bundledGameData.difficulty),
         helpText: HelpTextSchema.parse(bundledGameData.helpText),
         settingsHelp: z.record(z.string(), z.string()).parse(bundledGameData.settingsHelp),
@@ -116,7 +135,6 @@ const EVENT_TO_EFFECTS = {
   flux: { sampleKey: "click" },
   component_overheat: { sampleKey: "error" },
   depletion: { sampleKey: "depletion" },
-  warning: { triggerWarning: true },
   metal_clank: { industrialMetalClank: true },
 };
 
@@ -124,8 +142,7 @@ const SENSORY_MAP = {
   1: { sampleKey: "explosion", category: "alerts" }, // SENSORY_BITMASK.EXPLOSION
   2: { sampleKey: "meltdown", category: "alerts" },  // SENSORY_BITMASK.MELTDOWN
   4: { sampleKey: "depletion", category: "effects" },// SENSORY_BITMASK.DEPLETION
-  8: { sampleKey: "sell", category: "effects", duckAmbience: true },    // SENSORY_BITMASK.SELL_POWER
-  16: { triggerWarning: true, intensity: 0.5 },      // SENSORY_BITMASK.WARNING
+  8: { sampleKey: "sell", category: "effects", duckAmbience: true },
 };
 
 export function handleAudioEvent(svc, eventType, context, options = {}) {
@@ -133,10 +150,6 @@ export function handleAudioEvent(svc, eventType, context, options = {}) {
   if (!config) return;
   const merged = { ...context, ...options };
   if (config.duckAmbience) svc._duckAmbience();
-  if (config.triggerWarning) {
-    svc.warningManager.startWarningLoop(merged.intensity ?? 0.5);
-    return;
-  }
   if (config.industrialMetalClank) {
     const g = typeof merged.param === "number" ? merged.param : 0.8;
     svc._playIndustrialSample("metal_clank", merged.category, merged.pan, g);
@@ -162,140 +175,32 @@ export function handleAudioEvent(svc, eventType, context, options = {}) {
   }
 }
 
-export function processSensoryMask(svc, mask) {
+export function processSensoryMask(svc, mask, ambience = null) {
   if (!mask || !svc.enabled) return;
   for (const bit in SENSORY_MAP) {
     if (mask & Number(bit)) {
       const config = SENSORY_MAP[bit];
       if (config.duckAmbience) svc._duckAmbience();
-      if (config.triggerWarning) {
-        svc.warningManager.startWarningLoop(config.intensity ?? 0.5);
-      } else if (config.sampleKey) {
+      if (config.sampleKey) {
         const buf = getUiBuffers(svc)?.[config.sampleKey];
         if (buf) svc._playSample(config.sampleKey, config.category, 0);
       }
     }
   }
+  if (ambience && svc.ambienceManager) {
+    const heat =
+      typeof ambience.currentHeat?.toNumber === "function"
+        ? ambience.currentHeat.toNumber()
+        : Number(ambience.currentHeat) || 0;
+    const maxHeat =
+      typeof ambience.maxHeat?.toNumber === "function"
+        ? ambience.maxHeat.toNumber()
+        : Number(ambience.maxHeat) || 0;
+    svc.ambienceManager.updateAmbienceHeat(heat, maxHeat);
+  }
 }
 
 const AUDIO_LOAD_CONCURRENCY = 6;
-
-const audioContextByService = new WeakMap();
-const audioContextById = new Map();
-const audioServicesById = new Map();
-const audioNodesById = new Map();
-const uiBuffersById = new Map();
-const industrialBuffersById = new Map();
-const ambienceBuffersById = new Map();
-let nextAudioServiceId = 1;
-
-function createUiBufferStore() {
-  return {
-    click: null,
-    placement: null,
-    placement_cell: null,
-    placement_plating: null,
-    upgrade: null,
-    error: null,
-    sell: null,
-    tab_switch: null,
-    explosion: null,
-    meltdown: null,
-    depletion: null,
-    reboot: null,
-    ep_spark: null,
-  };
-}
-
-function createIndustrialBufferStore() {
-  return { metal_clank: null, steam_hiss: null };
-}
-
-function ensureAudioNodes(service) {
-  const resolved = resolveAudioService(service);
-  if (!resolved?._audioServiceId) return {};
-  let nodes = audioNodesById.get(resolved._audioServiceId);
-  if (!nodes) {
-    nodes = {
-      masterGain: null,
-      effectsGain: null,
-      alertsGain: null,
-      systemGain: null,
-      ambienceGain: null,
-      ambienceDuckGain: null,
-      researchEpHum: null,
-    };
-    audioNodesById.set(resolved._audioServiceId, nodes);
-  }
-  return nodes;
-}
-
-function getUiBuffers(service) {
-  const resolved = resolveAudioService(service);
-  if (!resolved) return null;
-  const id = resolved._audioServiceId;
-  if (id == null) return resolved._uiBuffers ?? null;
-  let store = uiBuffersById.get(id);
-  if (!store) {
-    store = createUiBufferStore();
-    uiBuffersById.set(id, store);
-  }
-  return store;
-}
-
-function getIndustrialBuffers(service) {
-  const resolved = resolveAudioService(service);
-  if (!resolved) return null;
-  const id = resolved._audioServiceId;
-  if (id == null) return resolved._industrialBuffers ?? null;
-  let store = industrialBuffersById.get(id);
-  if (!store) {
-    store = createIndustrialBufferStore();
-    industrialBuffersById.set(id, store);
-  }
-  return store;
-}
-
-function getAmbienceBuffers(service) {
-  const resolved = resolveAudioService(service);
-  if (!resolved) return null;
-  const id = resolved._audioServiceId;
-  if (id == null) return resolved._ambienceBuffers ?? null;
-  let store = ambienceBuffersById.get(id);
-  if (!store) {
-    store = [];
-    ambienceBuffersById.set(id, store);
-  }
-  return store;
-}
-
-function getAudioContext(service) {
-  const resolved = resolveAudioService(service);
-  if (!resolved) return null;
-  const id = resolved._audioServiceId;
-  const ctx =
-    (id != null ? audioContextById.get(id) : null) ??
-    audioContextByService.get(resolved) ??
-    resolved._contextStore ??
-    null;
-  if (!ctx) return null;
-  try {
-    void ctx.state;
-  } catch {
-    return null;
-  }
-  return ctx;
-}
-
-export function resolveAudioService(service) {
-  if (!service) return null;
-  const id = service._audioServiceId;
-  if (id != null) {
-    const registered = audioServicesById.get(id);
-    if (registered) return registered;
-  }
-  return service;
-}
 
 async function loadUrlMapInto(svc, urlMap, target) {
   const tasks = Object.entries(urlMap).map(([key, url]) => async () => {
@@ -452,273 +357,9 @@ export class AudioAmbienceManager {
   }
 }
 
-export class AudioWarningManager {
-  constructor(svc) {
-    this.svc = svc;
-    this._warningLoopActive = false;
-    this._warningIntensity = 0.5;
-    this._warningRefillTimeout = null;
-    this._warningNextScheduleTime = 0;
-    this._geigerActive = false;
-    this._geigerRefillTimeout = null;
-    this._geigerNextTime = 0;
-  }
-
-  _scheduleWarningBatch() {
-    const ctx = getAudioContext(this.svc);
-    if (!this._warningLoopActive || !ctx) return;
-    try {
-      if (ctx.state !== "running") return;
-    } catch {
-      return;
-    }
-    const interval = 5;
-    const now = ctx.currentTime;
-    const count = 4;
-    let base = this._warningNextScheduleTime || now;
-    if (base < now - interval) base = Math.ceil(now / interval) * interval;
-    for (let i = 0; i < count; i++) {
-      const when = base + i * interval;
-      if (when >= now - 0.05) this._playWarningSoundAt(this._warningIntensity, when);
-    }
-    this._warningNextScheduleTime = base + count * interval;
-    this._warningRefillTimeout = setTimeout(() => this._scheduleWarningBatch(), (count - 1) * interval * 1000);
-  }
-
-  startWarningLoop(intensity = 0.5) {
-    if (this._warningLoopActive) {
-      this._warningIntensity = intensity;
-      return;
-    }
-    this._warningLoopActive = true;
-    this._warningIntensity = intensity;
-    const ctx = getAudioContext(this.svc);
-    this._warningNextScheduleTime = ctx ? ctx.currentTime : 0;
-    this._scheduleWarningBatch();
-    this._startGeigerTicks(intensity);
-  }
-
-  stopWarningLoop() {
-    this._warningLoopActive = false;
-    if (this._warningRefillTimeout) {
-      clearTimeout(this._warningRefillTimeout);
-      this._warningRefillTimeout = null;
-    }
-    this._warningNextScheduleTime = 0;
-    this._stopGeigerTicks();
-  }
-
-  _playGeigerTickAt(intensity, startTime) {
-    const ctx = getAudioContext(this.svc);
-    if (!this.svc.enabled || !ctx) return;
-    try {
-      if (ctx.state !== "running") return;
-    } catch {
-      return;
-    }
-    const t = startTime;
-    const categoryGain = this.svc._getCategoryGain('alerts');
-    const tickOsc = ctx.createOscillator();
-    const tickGain = ctx.createGain();
-    const tickFilter = ctx.createBiquadFilter();
-    tickOsc.type = 'square';
-    tickOsc.frequency.value = 8000 + Math.random() * 2000;
-    tickFilter.type = 'bandpass';
-    tickFilter.frequency.value = 6000;
-    tickFilter.Q.value = 8;
-    tickOsc.connect(tickFilter);
-    tickFilter.connect(tickGain);
-    tickGain.connect(categoryGain);
-    tickGain.gain.setValueAtTime(0.08 * intensity, t);
-    tickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.01);
-    tickOsc.start(t);
-    tickOsc.stop(t + 0.01);
-  }
-
-  _scheduleGeigerBatch(intensity) {
-    const ctx = getAudioContext(this.svc);
-    if (!this._geigerActive || !ctx) return;
-    try {
-      if (ctx.state !== "running") return;
-    } catch {
-      return;
-    }
-    const baseInterval = 200 + (1 - intensity) * 300;
-    const count = 25;
-    let t = this._geigerNextTime || ctx.currentTime;
-    if (t < ctx.currentTime - 1) t = ctx.currentTime;
-    for (let i = 0; i < count; i++) {
-      this._playGeigerTickAt(intensity, t);
-      t += (baseInterval + (Math.random() * 100 - 50)) / 1000;
-    }
-    this._geigerNextTime = t;
-    const refillMs = (count * baseInterval * 0.8) | 0;
-    this._geigerRefillTimeout = setTimeout(() => this._scheduleGeigerBatch(this._warningIntensity), refillMs);
-  }
-
-  _startGeigerTicks(intensity = 0.5) {
-    if (this._geigerActive || !this.svc.enabled || !getAudioContext(this.svc)) return;
-    this._geigerActive = true;
-    this._geigerNextTime = 0;
-    this._scheduleGeigerBatch(intensity);
-  }
-
-  _stopGeigerTicks() {
-    this._geigerActive = false;
-    if (this._geigerRefillTimeout) {
-      clearTimeout(this._geigerRefillTimeout);
-      this._geigerRefillTimeout = null;
-    }
-    this._geigerNextTime = 0;
-  }
-
-  _playWarningSoundAt(intensity, startTime) {
-    const ctx = getAudioContext(this.svc);
-    if (!this.svc.enabled || !ctx) return;
-    try {
-      if (ctx.state !== "running") return;
-    } catch {
-      return;
-    }
-    const t = startTime;
-    const categoryGain = this.svc._getCategoryGain('alerts');
-    const alarmDuration = 2.5;
-    const oscKlaxon = ctx.createOscillator();
-    const gainKlaxon = ctx.createGain();
-    const shaper = ctx.createWaveShaper();
-    const klaxonFilter = ctx.createBiquadFilter();
-    oscKlaxon.type = 'square';
-    oscKlaxon.frequency.setValueAtTime(180, t);
-    oscKlaxon.frequency.linearRampToValueAtTime(160, t + alarmDuration);
-    const lfo = ctx.createOscillator();
-    lfo.type = 'sine';
-    lfo.frequency.value = 4;
-    const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 15;
-    lfo.connect(lfoGain);
-    lfoGain.connect(oscKlaxon.frequency);
-    lfo.start(t);
-    lfo.stop(t + alarmDuration);
-    shaper.curve = this.svc._makeDistortionCurve(800);
-    klaxonFilter.type = 'lowpass';
-    klaxonFilter.frequency.value = 800;
-    klaxonFilter.Q.value = 1;
-    oscKlaxon.connect(shaper);
-    shaper.connect(klaxonFilter);
-    klaxonFilter.connect(gainKlaxon);
-    gainKlaxon.connect(categoryGain);
-    gainKlaxon.gain.setValueAtTime(0.25, t);
-    gainKlaxon.gain.linearRampToValueAtTime(0, t + alarmDuration);
-    oscKlaxon.start(t);
-    oscKlaxon.stop(t + alarmDuration);
-    const oscTurbine = ctx.createOscillator();
-    const gainTurbine = ctx.createGain();
-    const startFreq = 2000 + intensity * 1000;
-    oscTurbine.type = 'triangle';
-    oscTurbine.frequency.setValueAtTime(startFreq, t);
-    oscTurbine.frequency.linearRampToValueAtTime(startFreq + 200, t + alarmDuration);
-    oscTurbine.connect(gainTurbine);
-    gainTurbine.connect(categoryGain);
-    gainTurbine.gain.setValueAtTime(0.05 * intensity, t);
-    gainTurbine.gain.linearRampToValueAtTime(0, t + alarmDuration);
-    oscTurbine.start(t);
-    oscTurbine.stop(t + alarmDuration);
-  }
-
-  isWarningLoopActive() {
-    return this._warningLoopActive;
-  }
-
-  getWarningIntensity() {
-    return this._warningIntensity;
-  }
-
-  isGeigerActive() {
-    return this._geigerActive;
-  }
-}
-
-export class AudioIndustrialManager {
-  constructor(svc) {
-    this.svc = svc;
-    this._industrialAmbienceTimeout = null;
-    this._industrialAmbienceVentCount = 0;
-    this._industrialAmbienceExchangerCount = 0;
-  }
-
-  stopIndustrialAmbience() {
-    if (this._industrialAmbienceTimeout) {
-      clearTimeout(this._industrialAmbienceTimeout);
-      this._industrialAmbienceTimeout = null;
-    }
-    this._industrialAmbienceVentCount = 0;
-    this._industrialAmbienceExchangerCount = 0;
-  }
-
-  scheduleIndustrialAmbience(ventCount, exchangerCount) {
-    this._industrialAmbienceVentCount = ventCount;
-    this._industrialAmbienceExchangerCount = exchangerCount;
-    if (ventCount + exchangerCount === 0) {
-      if (this._industrialAmbienceTimeout) {
-        clearTimeout(this._industrialAmbienceTimeout);
-        this._industrialAmbienceTimeout = null;
-      }
-      return;
-    }
-    if (this._industrialAmbienceTimeout) return;
-    this._scheduleNextIndustrialAmbience();
-  }
-
-  _scheduleNextIndustrialAmbience() {
-    const ventCount = this._industrialAmbienceVentCount;
-    const exchangerCount = this._industrialAmbienceExchangerCount;
-    if (ventCount + exchangerCount === 0) return;
-    const divisor = 1 + ventCount * 0.1 + exchangerCount * 0.1;
-    const intervalMs = (Math.random() * 5000) / divisor;
-    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-    this._industrialAmbienceTimeout = setTimeout(() => {
-      this._industrialAmbienceTimeout = null;
-      this._playIndustrialAmbienceAccent();
-      this._scheduleNextIndustrialAmbience();
-    }, clamp(intervalMs, 800, 12000));
-  }
-
-  _playIndustrialAmbienceAccent() {
-    const keys = ['metal_clank', 'steam_hiss'];
-    const key = keys[Math.floor(Math.random() * keys.length)];
-    const buffer = getIndustrialBuffers(this.svc)?.[key];
-    const ctx = getAudioContext(this.svc);
-    if (!buffer || !ctx || !this.svc.enabled || !this.svc.ambienceGain) return;
-    try {
-      if (ctx.state !== "running") return;
-    } catch {
-      return;
-    }
-    const t = ctx.currentTime;
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    src.playbackRate.value = 0.85 + Math.random() * 0.3;
-    const gain = ctx.createGain();
-    const ambienceLevel = this.svc.ambienceGain.gain.value;
-    gain.gain.value = ambienceLevel * 0.3;
-    src.connect(gain);
-    let dest = this.svc.ambienceGain;
-    if (ctx.createStereoPanner) {
-      const panner = ctx.createStereoPanner();
-      panner.pan.value = -0.8 + Math.random() * 1.6;
-      panner.connect(dest);
-      dest = panner;
-    }
-    gain.connect(dest);
-    src.start(t);
-    src.stop(t + buffer.duration);
-  }
-}
-
 export class AudioService {
   constructor() {
-  this._audioServiceId = nextAudioServiceId++;
-  audioServicesById.set(this._audioServiceId, this);
+  registerAudioService(this);
   this._contextStore = null;
   this.enabled = true;
   this._isInitialized = false;
@@ -743,9 +384,6 @@ export class AudioService {
   perSoundCap: AUDIO_RUNTIME_DEFAULTS.limiterPerSoundCap
   };
   this._activeLimiter = null;
-  uiBuffersById.set(this._audioServiceId, createUiBufferStore());
-  industrialBuffersById.set(this._audioServiceId, createIndustrialBufferStore());
-  ambienceBuffersById.set(this._audioServiceId, []);
   ensureAudioNodes(this);
   }
 
@@ -793,7 +431,7 @@ export class AudioService {
   }
 
   get context() {
-    return audioContextByService.get(this) ?? this._contextStore ?? null;
+    return getServiceAudioContext(this);
   }
 
   get _uiBuffers() {
@@ -801,29 +439,19 @@ export class AudioService {
   }
 
   set _uiBuffers(value) {
-    const id = this._audioServiceId;
-    if (id != null && value) uiBuffersById.set(id, value);
+    setUiBuffers(this, value);
   }
 
   get _ambienceBuffers() {
-    const id = this._audioServiceId;
-    return id != null ? ambienceBuffersById.get(id) ?? [] : [];
+    return getAmbienceBuffers(this) ?? [];
   }
 
   set _ambienceBuffers(value) {
-    const id = this._audioServiceId;
-    if (id != null) ambienceBuffersById.set(id, value);
+    setAmbienceBuffers(this, value);
   }
 
   set context(value) {
-    this._contextStore = value;
-    if (value) {
-      audioContextByService.set(this, value);
-      audioContextById.set(this._audioServiceId, value);
-    } else {
-      audioContextByService.delete(this);
-      audioContextById.delete(this._audioServiceId);
-    }
+    setServiceAudioContext(this, value);
   }
 
   get _ambienceNodes() {
@@ -1232,6 +860,10 @@ export class AudioService {
     const context = { t, ctx, categoryGain, category, spatialOpts, subtype, intensity, now };
     const mergedOptions = { param, pan };
     try {
+      if (eventId === "warning") {
+        this.warningManager._playWarningSoundAt(intensity, t);
+        return;
+      }
       handleAudioEvent(this, eventId, context, mergedOptions);
     } finally {
       if (limiterNode) this._activeLimiter = null;

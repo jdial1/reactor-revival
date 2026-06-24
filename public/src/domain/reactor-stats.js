@@ -10,8 +10,8 @@ import {
   BASE_MAX_POWER,
   PERCENT_DIVISOR,
   REFLECTOR_COOLING_MIN_MULTIPLIER,
-  toDecimal,
-} from "../utils.js";
+} from "../constants/balance.js";
+import { toDecimal } from "../simUtils.js";
 
 export const heatSfxLastTick = new Map();
 
@@ -174,6 +174,19 @@ export function deriveReactorStats(gridState, reactor) {
     if (tile.part.category === "heat_inlet") accum.stats_inlet += tile.getEffectiveTransferValue();
     if (tile.part.category === "heat_outlet") accum.stats_outlet += tile.getEffectiveTransferValue();
   });
+
+  let stats_stirling_power = 0;
+  const stirlingMult = Number(reactor.stirling_multiplier ?? 0);
+  if (stirlingMult > 0) {
+    tileset.active_tiles_list.forEach((tile) => {
+      if (tile.activated && tile.part?.category === "vent") {
+        stats_stirling_power += tile.getEffectiveVentValue() * stirlingMult;
+      }
+    });
+  }
+  accum.stats_cell_power = accum.stats_power;
+  accum.stats_stirling_power = stats_stirling_power;
+  accum.stats_power = accum.stats_power + stats_stirling_power;
 
   tileset.active_tiles_list.forEach((tile) => {
     if (tile.activated && tile.part) {

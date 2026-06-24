@@ -1,5 +1,5 @@
-import { html } from "lit-html";
-import { styleMap, unsafeHTML, when } from "../utils.js";
+﻿import { html } from "lit-html";
+import { styleMap, when, unsafeHTML } from "../dom/lit.js";
 
 export const tutorialOverlayTemplate = html`
   <div class="tutorial-spotlight-top"></div>

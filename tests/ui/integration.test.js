@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum , syncActivePartsAtTickBoundary} from "../helpers/setup.js";
 import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 import { patchGameState } from "@app/state.js";
+import { assertPageShellClass } from "../helpers/testUtils.js";
 
 describe("UI Integration and Gameplay", () => {
   let game, document;
@@ -49,8 +50,8 @@ describe("UI Integration and Gameplay", () => {
       game.reactor.updateStats();
       game.tileset.updateActiveTiles(); // Ensure tiles are active
       // Force update the engine's part cache to include the new part
-      game.engine.markPartCacheAsDirty();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
+
 
       // Ensure the engine is running and game is unpaused so it can process the part
       game.paused = false;
@@ -150,16 +151,16 @@ describe("UI Integration and Gameplay", () => {
     };
 
     await loadPageSafe("reactor_section");
-    expect(document.body.classList.contains("page-reactor")).toBe(true);
+    assertPageShellClass(game, "page-reactor");
     expect(game.ui.uiState?.active_page).toBe("reactor_section");
     expect(document.getElementById("objectives_toast_btn"), "Objectives toast should exist").not.toBeNull();
 
     await loadPageSafe("upgrades_section");
-    expect(document.body.classList.contains("page-upgrades")).toBe(true);
+    assertPageShellClass(game, "page-upgrades");
     expect(game.ui.uiState?.active_page).toBe("upgrades_section");
 
     await loadPageSafe("reactor_section");
-    expect(document.body.classList.contains("page-reactor")).toBe(true);
+    assertPageShellClass(game, "page-reactor");
     expect(game.ui.uiState?.active_page).toBe("reactor_section");
   });
 

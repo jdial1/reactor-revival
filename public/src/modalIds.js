@@ -1,6 +1,15 @@
 export const MODAL_IDS = {
-  SETTINGS: "settings",
-  LAYOUT_VIEW: "layout_view",
-  MY_LAYOUTS: "my_layouts",
   CONTEXT: "context",
+  PRESTIGE: "prestige",
+  COPY_PASTE: "copyPaste",
+  WELCOME_BACK: "welcomeBack",
+  QUICK_START: "quickStart",
+  DETAILED_QUICK_START: "detailedQuickStart",
+  REACTOR_FAILED_TO_START: "reactorFailedToStart",
+  LOGIN: "login",
+  PROFILE: "profile",
+  LOGOUT: "logout",
+  SETTINGS: "settings",
+  LAYOUT_VIEW: "layoutView",
+  MY_LAYOUTS: "myLayouts",
 };

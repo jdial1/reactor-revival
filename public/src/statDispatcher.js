@@ -1,5 +1,5 @@
 import { collectAllPartIds, buildPartDefFromCatalog } from "./partCatalog.js";
-import { Part } from "./logic.js"; 
+import { Part } from "./domain/part.js";
 
 export class StatDispatcher {
   constructor(game) {

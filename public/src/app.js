@@ -1,34 +1,55 @@
-import { Game, Engine, resetHeatThresholdSignalState, getUpgradeElement } from "./logic.js";
-import { StorageUtils, StorageAdapter, isTestEnv, migrateLocalStorageToIndexedDB, setFormatPreferencesGetter, logger, classMap, setSlot1FromBackupAsync, FOUNDATIONAL_TICK_MS, MAX_ACCUMULATOR_MULTIPLIER, BASE_MAX_HEAT, BASE_MAX_POWER } from "./utils.js";
+﻿import { classMap, styleMap } from "./dom/lit.js";
+import { BASE_MAX_HEAT, BASE_MAX_POWER, MAX_ACCUMULATOR_MULTIPLIER } from "./constants/balance.js";
+import { Game, Engine, resetHeatThresholdSignalState, queryUpgradeElement } from "./logic.js";
+import { ensureGameStateEngineSync, teardownGameStateEngineSync } from "./logic/game-state-sync.js";
+import { wireUiDomSubsystems, teardownAppSubsystems } from "./components/ui-app-wiring.js";
+import { StorageUtils, StorageAdapter, migrateLocalStorageToIndexedDB, setSlot1FromBackupAsync, AUTOSAVE_SLOT_KEY, STORAGE_KEYS } from "./storage/index.js";
+import { isTestEnv, FOUNDATIONAL_TICK_MS } from "./simUtils.js";
+import { setFormatPreferencesGetter } from "./format/numbers.js";
+import { logger } from "./core/logger.js";
+import { getCompactLayout } from "./layout/reactor-codec.js";
+import { readThemeColor } from "./theme-colors.js";
 import { html, render } from "lit-html";
-import { UI } from "./components/ui.js";
-import { MODAL_IDS } from "./components/ui-modals.js";
-import {
-  updateSectionCountsState,
-  getCompactLayout,
-  syncToggleStatesFromGame as applyControlDeckToggleSync,
-  initializePartsPanel,
-} from "./components/ui-components.js";
+import { UI, showStatusNotice } from "./components/ui.js";
+import { MODAL_IDS } from "./modalIds.js";
 import { AudioService, createSplashManager, getValidatedGameData, resolveAudioService } from "./services.js";
 import {
   getValidatedPreferences,
   initPreferencesStore,
-  preferences,
   showLoadBackupModal,
   actions,
   patchGameState,
   setDecimal,
+  modalUi,
+  pwaState,
+  buildShellClassMap,
+  buildShellStyleMap,
+  preferences,
 } from "./store.js";
-import { TooltipManager, createTutorialManager } from "./components/ui-tooltips-tutorial.js";
-import { ReactiveLitComponent } from "./components/reactive-lit-component.js";
+import { enqueueClearAnimations } from "./state/game-effects.js";
+import { wireTooltipManager, createTutorialManager } from "./components/ui-tooltips-tutorial.js";
+import { createGameSaveManager } from "./domain/game-save.js";
+import { getGridCanvasRenderer } from "./components/grid-canvas-service.js";
+import { initPwaDisplayMode } from "./components/ui-components.js";
+import {
+  updateToastTemplate,
+  changelogModalTemplate,
+  versionCheckToastTemplate,
+} from "./templates/servicesTemplates.js";
 import {
   renderSplashTemplate,
   gameSetupTemplate,
-  updateToastTemplate,
   fallbackStartTemplate,
   criticalErrorTemplate,
 } from "./templates/appTemplates.js";
 import { PageRouter } from "./page-router.js";
+import { loadFailureFlavor, getFailureFlavorMessage } from "./failureFlavor.js";
+import { subscribe } from "valtio/vanilla";
+import { subscribeKey } from "valtio/vanilla/utils";
+import { setAppContext, getAppContext } from "./app-context.js";
+import { pushAppUnsub, teardownAppListeners } from "./app-listeners.js";
+import { createPerformanceUIService } from "./components/performance-ui-service.js";
+import { EngineStatus } from "./schema/stateSchemas.js";
 
 export { PageRouter };
 
@@ -37,17 +58,54 @@ if (typeof console !== "undefined" && typeof document !== "undefined") {
   console.log("[ReactorBoot] app.js evaluated (static imports finished)");
 }
 
-if (typeof window !== "undefined") {
-  window.splashManager ??= createSplashManager();
-  window.showLoadBackupModal = showLoadBackupModal;
-  window.setSlot1FromBackup = () => setSlot1FromBackupAsync();
+function getSplashManager() {
+  return getAppContext()?.splashManager ?? null;
 }
 
-let _appRootSplashMuteUnmount = null;
+
+function renderPwaOverlays() {
+  const updateBlock = pwaState.updateAvailable
+    ? html`<div class="update-toast">${updateToastTemplate(
+      () => {
+        if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: "SKIP_WAITING" });
+        }
+        window.location.reload();
+      },
+      () => { pwaState.updateAvailable = false; },
+      pwaState.changelogPayload ?? { summary: `Update available: ${pwaState.updateVersion}`, bullets: [] }
+    )}</div>`
+    : null;
+  const changelogBlock = pwaState.changelogOpen
+    ? changelogModalTemplate({
+      title: pwaState.changelogPayload?.title ?? "Recent Changes",
+      entries: pwaState.changelogPayload?.entries ?? [],
+      onClose: () => { pwaState.changelogOpen = false; },
+      onReload: pwaState.changelogPayload?.onReload,
+    })
+    : null;
+  const versionToast = pwaState.versionCheckToast;
+  const versionBlock = versionToast
+    ? html`<div class="version-check-toast">${versionCheckToastTemplate(
+      versionToast.type === "info"
+        ? readThemeColor("--canvas-info")
+        : versionToast.type === "warning"
+          ? readThemeColor("--canvas-warning")
+          : readThemeColor("--canvas-error"),
+      versionToast.type === "info" ? "ℹ️" : versionToast.type === "warning" ? "⚠️" : "❌",
+      versionToast.message,
+      () => { pwaState.versionCheckToast = null; }
+    )}</div>`
+    : null;
+  return html`
+    <div id="pwa-toast-host">${updateBlock}${versionBlock}</div>
+    <div id="pwa-changelog-host">${changelogBlock}</div>
+  `;
+}
 
 function renderSplashSection(hasSession, game, ui) {
   if (hasSession) return null;
-  const isMuted = !!preferences.mute;
+  const isMuted = ui?.uiState ? !!ui.uiState.audio_muted : !!preferences.mute;
   const handleMuteClick = (e) => {
     e.stopPropagation();
     if (ui?.uiState) ui.uiState.audio_muted = !ui.uiState.audio_muted;
@@ -64,34 +122,92 @@ function renderSplashSection(hasSession, game, ui) {
   return renderSplashTemplate(isMuted, handleMuteClick, onHideMenuClick);
 }
 
+let _appRootRaf = null;
+let _appRootUnsub = null;
+let _performanceService = null;
+
+function startPerformanceService(game) {
+  _performanceService?.stop?.();
+  _performanceService = createPerformanceUIService(() => game);
+  _performanceService.start();
+  pushAppUnsub(() => {
+    _performanceService?.stop?.();
+    _performanceService = null;
+  });
+}
+
+function scheduleAppRootRender(container, game, ui) {
+  if (_appRootRaf != null) return;
+  _appRootRaf = requestAnimationFrame(() => {
+    _appRootRaf = null;
+    renderAppRoot(container, game, ui);
+  });
+}
+
+function handleVersionCheckRequest() {
+  if (!pwaState.versionCheckRequested) return;
+  getAppContext()?.splashManager?.versionChecker?.triggerVersionCheckToast?.();
+  pwaState.versionCheckRequested = false;
+}
+
+function bindAppRootSubscription(container, game, ui) {
+  if (_appRootUnsub) _appRootUnsub();
+  const unsubs = [];
+  const schedule = () => scheduleAppRootRender(container, game, ui);
+  if (game?.state) unsubs.push(subscribe(game.state, schedule));
+  const uiState = ui?.uiState;
+  if (uiState) {
+    for (const key of ["is_paused", "is_melting_down", "meltdown_buildup", "parts_panel_collapsed", "parts_panel_right_side", "tutorial_claim_step", "active_page", "core_danger", "heat_ratio"]) {
+      unsubs.push(subscribeKey(uiState, key, schedule));
+    }
+    unsubs.push(subscribeKey(uiState.copy_paste_display, "blueprintPlannerActive", schedule));
+  }
+  if (game?.state) {
+    unsubs.push(subscribeKey(game.state, "heat_balanced", schedule));
+  }
+  unsubs.push(subscribeKey(modalUi, "drawerOpen", schedule));
+  unsubs.push(subscribeKey(preferences, "mute", schedule));
+  for (const key of ["installPromptAvailable", "updateAvailable", "updateVersion", "changelogOpen", "changelogPayload", "versionCheckToast"]) {
+    unsubs.push(subscribeKey(pwaState, key, schedule));
+  }
+  unsubs.push(subscribeKey(pwaState, "versionCheckRequested", handleVersionCheckRequest));
+  _appRootUnsub = () => {
+    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+  };
+  pushAppUnsub(() => {
+    if (_appRootUnsub) _appRootUnsub();
+    _appRootUnsub = null;
+    if (_appRootRaf != null) cancelAnimationFrame(_appRootRaf);
+    _appRootRaf = null;
+  });
+}
+
 function renderAppRoot(container, game, ui) {
   if (!container) return;
   const hasSession = !!game?.lifecycleManager?.session_start_time;
+  const shellClassMap = buildShellClassMap(ui?.uiState, modalUi, { hasSession, game });
+  const shellStyle = buildShellStyleMap(ui?.uiState, game);
   console.log("[ReactorBoot] renderAppRoot", { hasSession, container: true });
   const template = html`
     ${renderSplashSection(hasSession, game, ui)}
-    <div id="wrapper" class=${classMap({ hidden: !hasSession })}></div>
-    <dialog id="modal-root" class="game-modal-host"></dialog>
+    <div id="wrapper" class=${classMap(shellClassMap)} style=${styleMap(shellStyle)}></div>
+    ${renderPwaOverlays()}
   `;
   try {
     render(template, container);
+    let modalRoot = document.getElementById("modal-root");
+    if (!modalRoot) {
+      modalRoot = document.createElement("dialog");
+      modalRoot.id = "modal-root";
+      modalRoot.className = "game-modal-host";
+      container.appendChild(modalRoot);
+    }
+    const installBtn = document.getElementById("install_pwa_btn");
+    if (installBtn) installBtn.classList.toggle("hidden", !pwaState.installPromptAvailable);
     console.log("[ReactorBoot] app root lit render committed");
   } catch (err) {
     console.error("[ReactorBoot] app root lit render threw", err);
     throw err;
-  }
-  if (!hasSession) {
-    const iconEl = container.querySelector(".splash-mute-icon");
-    if (iconEl) {
-      _appRootSplashMuteUnmount = ReactiveLitComponent.mountMulti(
-        [{ state: preferences, keys: ["mute"] }],
-        () => html`<span class="splash-mute-led" data-muted=${preferences.mute ? "1" : "0"}></span>`,
-        iconEl
-      );
-    }
-  } else if (_appRootSplashMuteUnmount) {
-    _appRootSplashMuteUnmount();
-    _appRootSplashMuteUnmount = null;
   }
 }
 
@@ -105,11 +221,21 @@ async function bootstrapGame(game, ui) {
     ui.detachGameEventListeners();
   }
   ui.detachGameEventListeners = attachGameEventListeners(game, ui);
+  startPerformanceService(game);
   console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset …");
   game.tileset.initialize();
   await game.partset.initialize();
   await game.upgradeset.initialize();
   await game.set_defaults();
+  game._subsystems = {
+    stateManager: ui.stateManager,
+    inputHandler: ui.inputHandler,
+    audioController: ui.audioController,
+    objectiveController: ui.objectiveController,
+    achievementController: ui.achievementController,
+    objectivesUI: ui.objectivesUI,
+    pauseStateUI: ui.pauseStateUI,
+  };
   console.log("[ReactorBoot] bootstrap: complete");
 }
 
@@ -170,7 +296,8 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
           } catch (error) {
             logger.log('error', 'game', 'Failed to start game:', error);
           }
-        }
+        },
+      difficultyPresets
       ), overlay);
     };
 
@@ -194,21 +321,7 @@ async function waitForSplashHide() {
 }
 
 async function clearStorageForNewGameFlow(game) {
-  if (typeof window.clearAllGameDataForNewGame === "function") {
-    await window.clearAllGameDataForNewGame(game);
-  } else {
-    try {
-      await StorageAdapter.remove("reactorGameSave");
-      for (let i = 1; i <= 3; i++) await StorageAdapter.remove(`reactorGameSave_${i}`);
-      await StorageAdapter.remove("reactorGameSave_Previous");
-      await StorageAdapter.remove("reactorGameSave_Backup");
-      await StorageAdapter.remove("reactorCurrentSaveSlot");
-      StorageUtils.remove("reactorGameQuickStartShown");
-      StorageUtils.remove("google_drive_save_file_id");
-      StorageUtils.set("reactorNewGamePending", 1);
-    } catch (_) { }
-    delete game._saved_objective_index;
-  }
+  await clearAllGameDataForNewGame(game);
 }
 
 async function initializeGameState(game) {
@@ -220,11 +333,13 @@ async function initializeGameState(game) {
 }
 
 async function launchGame(pageRouter, ui, game) {
-  if (typeof window.startGame === "function") {
-    await window.startGame({ pageRouter, ui, game });
+  const ctx = getAppContext();
+  if (typeof ctx?.startGame === "function") {
+    await ctx.startGame({ pageRouter, ui, game });
   } else {
     await pageRouter.loadGameLayout();
     ui.initMainLayout();
+    ensureGameStateEngineSync(game);
     await pageRouter.loadPage("reactor_section");
     game.startSession();
     game.engine.start();
@@ -240,15 +355,13 @@ export async function startNewGameFlow(game, pageRouter, ui, splashManager, tech
     ui.stateManager?.setClickedPart?.(null);
     ui.setHelpModeActive?.(true);
     await launchGame(pageRouter, ui, game);
-    StorageUtils.remove("reactorNewGamePending");
+    StorageUtils.remove(STORAGE_KEYS.NEW_GAME_PENDING);
   } catch (error) {
     logger.log('error', 'game', 'Error in startNewGameFlow:', error);
     logger.log('error', 'game', 'Error stack:', error.stack);
     throw error;
   }
 }
-
-window.showTechTreeSelection = showTechTreeSelection;
 
 let _toastContainer = null;
 
@@ -259,57 +372,11 @@ function removeExistingUpdateToast() {
   _toastContainer = null;
 }
 
-const UPDATE_TOAST_AUTO_REMOVE_MS = 10000;
-const TOAST_ANIMATION_MS = 300;
-
-
-function showUpdateToast(newVersion, currentVersion) {
-  removeExistingUpdateToast();
-  _toastContainer = document.createElement("div");
-  document.body.appendChild(_toastContainer);
-
-  const onRefresh = () => {
-    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: "SKIP_WAITING" });
-    }
-    window.location.reload();
-  };
-  const onClose = () => {
-    const toast = _toastContainer?.querySelector(".update-toast");
-    if (toast) {
-      toast.style.animation = `toast-slide-up ${TOAST_ANIMATION_MS}ms ease-out reverse`;
-      setTimeout(() => removeExistingUpdateToast(), TOAST_ANIMATION_MS);
-    }
-  };
-
-  render(updateToastTemplate(onRefresh, onClose), _toastContainer);
-
-  setTimeout(() => {
-    const toast = _toastContainer?.querySelector(".update-toast");
-    if (toast && document.body.contains(toast)) {
-      toast.style.animation = `toast-slide-up ${TOAST_ANIMATION_MS}ms ease-out reverse`;
-      setTimeout(() => removeExistingUpdateToast(), TOAST_ANIMATION_MS);
-    }
-  }, UPDATE_TOAST_AUTO_REMOVE_MS);
-}
-
-let _swMessageHandler = null;
-
-function registerServiceWorkerUpdateListener() {
-  if (!("serviceWorker" in navigator)) return;
-  _swMessageHandler = (event) => {
-    if (event?.data?.type === "NEW_VERSION_AVAILABLE") {
-      showUpdateToast(event.data.version, event.data.currentVersion);
-    }
-  };
-  navigator.serviceWorker.addEventListener("message", _swMessageHandler);
-}
-
 let _pageClickHandler = null;
 let _tooltipCloseHandler = null;
 let _beforeUnloadHandler = null;
 
-function attachPageClickListeners(game) {
+function attachPageClickListeners(game, unsubs) {
   _pageClickHandler = async (e) => {
     const pageBtn = e.target.closest("[data-page]");
     if (!pageBtn) return;
@@ -318,11 +385,17 @@ function attachPageClickListeners(game) {
     await game.router.loadPage(pageBtn.dataset.page);
   };
   document.addEventListener("click", _pageClickHandler);
+  unsubs.push(() => {
+    if (_pageClickHandler) {
+      document.removeEventListener("click", _pageClickHandler);
+      _pageClickHandler = null;
+    }
+  });
 }
 
-function attachTooltipCloseListener(game) {
+function attachTooltipCloseListener(ui, unsubs) {
   _tooltipCloseHandler = (e) => {
-    if (!game.tooltip_manager?.isLocked) return;
+    if (!ui.tooltipManager?.isLocked) return;
     const tooltipEl = document.getElementById("tooltip");
     if (
       tooltipEl &&
@@ -330,16 +403,22 @@ function attachTooltipCloseListener(game) {
       !e.target.closest(".upgrade, .part") &&
       !e.target.closest("#tooltip_actions")
     ) {
-      game.tooltip_manager.closeView();
+      ui.tooltipManager.closeView();
     }
   };
   document.addEventListener("click", _tooltipCloseHandler, true);
+  unsubs.push(() => {
+    if (_tooltipCloseHandler) {
+      document.removeEventListener("click", _tooltipCloseHandler, true);
+      _tooltipCloseHandler = null;
+    }
+  });
 }
 
-function attachBeforeUnloadListener(game) {
+function attachBeforeUnloadListener(game, unsubs) {
   _beforeUnloadHandler = () => {
     try {
-      if (StorageUtils.get("reactorNewGamePending") === 1) return;
+      if (StorageUtils.get(STORAGE_KEYS.NEW_GAME_PENDING) === 1) return;
     } catch (_) {}
     if (game && typeof game.updateSessionTime === "function") {
       game.updateSessionTime();
@@ -347,12 +426,23 @@ function attachBeforeUnloadListener(game) {
     }
   };
   window.addEventListener("beforeunload", _beforeUnloadHandler);
+  unsubs.push(() => {
+    if (_beforeUnloadHandler) {
+      window.removeEventListener("beforeunload", _beforeUnloadHandler);
+      _beforeUnloadHandler = null;
+    }
+  });
 }
 
-function setupGlobalListeners(game) {
-  attachPageClickListeners(game);
-  attachTooltipCloseListener(game);
-  attachBeforeUnloadListener(game);
+function setupGlobalListeners(game, ui) {
+  const unsubs = [];
+  attachPageClickListeners(game, unsubs);
+  attachTooltipCloseListener(ui, unsubs);
+  attachBeforeUnloadListener(game, unsubs);
+  return () => {
+    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+    unsubs.length = 0;
+  };
 }
 
 function applyStatePatch(ui, patch) {
@@ -366,8 +456,28 @@ function handleObjectiveLoaded(ui, payload) {
   ui.stateManager.handleObjectiveLoaded(payload.objective, payload.objectiveIndex);
 }
 
-function handleObjectiveCompleted(ui) {
+function handleObjectiveCompleted(ui, payload) {
   ui.stateManager.handleObjectiveCompleted();
+  const flavor = payload?.flavorText?.trim();
+  if (flavor && payload?.isChapterCompletion) {
+    showStatusNotice({
+      tag: "CHAPTER COMPLETE",
+      body: flavor,
+      durationMs: 5500,
+    });
+  }
+  if (payload?.checkId === "completeChapter1" && !StorageUtils.get("reactor_save_export_hint_seen")) {
+    StorageUtils.set("reactor_save_export_hint_seen", true);
+    const showSaveHint = () => showStatusNotice({
+      tag: "TIP // SAVE BACKUP",
+      body: "Export your save from Settings → Export Save for backup or other devices.",
+    });
+    if (flavor && payload?.isChapterCompletion) {
+      setTimeout(showSaveHint, 5600);
+    } else {
+      showSaveHint();
+    }
+  }
 }
 
 function handleObjectiveUnloaded(ui) {
@@ -377,33 +487,57 @@ function handleObjectiveUnloaded(ui) {
 export function attachGameEventListeners(game, ui) {
   if (!game || !ui) return () => {};
 
-  const subscriptions = [];
-  const on = (eventName, handler) => {
-    game.on(eventName, handler);
-    subscriptions.push(() => game.off(eventName, handler));
+  const unsubs = [];
+  let failureFlavorMap = loadFailureFlavor();
+  let lastFailureState = game.state?.failure_state ?? "nominal";
+
+  const syncFailureWarningBanner = (state, message) => {
+    const banner = typeof document !== "undefined" ? document.getElementById("failure_warning_banner") : null;
+    const msgEl = typeof document !== "undefined" ? document.getElementById("failure_warning_message") : null;
+    if (!banner || !msgEl) return;
+    if (state === "nominal" || game.reactor?.has_melted_down) {
+      banner.classList.add("hidden");
+      return;
+    }
+    if (message) {
+      msgEl.textContent = message;
+      banner.classList.remove("hidden");
+    }
   };
 
-  on("statePatch", (patch) => applyStatePatch(ui, patch));
-  on("toggleStateChanged", ({ toggleName, value }) => {
-    if (!ui?.game?.state) return;
-    const toggleKeys = ["pause", "auto_sell", "auto_buy", "heat_control"];
-    if (!toggleKeys.includes(toggleName)) return;
-    const coerced = Boolean(value);
-    if (ui.game.state[toggleName] !== coerced) {
-      ui.game.onToggleStateChange?.(toggleName, coerced);
+  const handleFailureState = (state) => {
+    if (!state || state === lastFailureState) return;
+    lastFailureState = state;
+    const msg = getFailureFlavorMessage(failureFlavorMap ?? {}, state);
+    syncFailureWarningBanner(state, msg);
+    if (msg && state !== "nominal") {
+      showStatusNotice({
+        tag: `WARN // ${String(state).toUpperCase()}`,
+        body: msg,
+      });
     }
+    if (state === "nominal") syncFailureWarningBanner("nominal", null);
+    ui.updateFailurePhaseSensory?.(state);
+  };
+
+  const on = (eventName, handler) => {
+    game.on(eventName, handler);
+    unsubs.push(() => game.off(eventName, handler));
+  };
+
+  on("statePatch", (patch) => {
+    applyStatePatch(ui, patch);
   });
+  if (game.state) {
+    unsubs.push(subscribeKey(game.state, "failure_state", (state) => handleFailureState(state)));
+  }
   on("quickSelectSlotsChanged", ({ slots }) => ui.stateManager.setQuickSelectSlots(slots));
-  on("reactorTick", (payload) => {
-    applyStatePatch(ui, payload);
-  });
   on("exoticParticleEmitted", ({ tile }) => {
-    if (ui.gridController?.emitEP && tile) ui.gridController.emitEP(tile);
+    if (ui.gridInteractionUI?.emitEP && tile) ui.gridInteractionUI.emitEP(tile);
   });
   on("partClicked", ({ part }) => {
     if (part && ui.stateManager?.setClickedPart) ui.stateManager.setClickedPart(part);
   });
-  on("gridResized", () => ui.resizeReactor?.());
   on("vibrationRequest", ({ type }) => {
     const patterns = { heavy: 50, meltdown: 200, doublePulse: [30, 80, 30] };
     const pattern = patterns[type];
@@ -424,28 +558,21 @@ export function attachGameEventListeners(game, ui) {
   });
   on("simulationHardwareError", ({ message }) => {
     if (!ui.game?.state) return;
-    ui.game.state.engine_status = "simulation_error";
+    ui.game.state.engine_status = EngineStatus.SIMULATION_ERROR;
     ui.game.state.simulation_error_message = message ?? "";
   });
   on("upgradeAdded", ({ upgrade, game: g }) => {
     if (ui.stateManager?.handleUpgradeAdded && upgrade) ui.stateManager.handleUpgradeAdded(g, upgrade);
   });
   on("upgradePurchased", ({ upgrade }) => {
-    const el = upgrade ? getUpgradeElement(upgrade) : null;
+    const el = upgrade ? queryUpgradeElement(upgrade) : null;
     if (el) {
       el.classList.remove("upgrade-purchase-success");
       void el.offsetWidth;
       el.classList.add("upgrade-purchase-success");
     }
   });
-  on("upgradesChanged", () => updateSectionCountsState(ui, game));
-  on("upgradesAffordabilityChanged", ({ hasAnyUpgrade, hasVisibleAffordableUpgrade, hasAnyResearch, hasVisibleAffordableResearch }) => {
-    if (!ui?.uiState) return;
-    ui.uiState.upgrades_banner_visibility = {
-      upgradesHidden: !(hasAnyUpgrade && !hasVisibleAffordableUpgrade),
-      researchHidden: !(hasAnyResearch && !hasVisibleAffordableResearch),
-    };
-  });
+  on("upgradesChanged", () => ui.updateSectionCountsState(game));
   on("saveLoaded", ({ toggles, quick_select_slots }) => {
     if (toggles && ui.game) {
       patchGameState(ui.game, toggles);
@@ -453,57 +580,32 @@ export function attachGameEventListeners(game, ui) {
     if (quick_select_slots && ui.stateManager?.setQuickSelectSlots) ui.stateManager.setQuickSelectSlots(quick_select_slots);
     resetHeatThresholdSignalState(game);
   });
-  on("meltdown", () => {
-    if (ui.game?.state) ui.game.state.melting_down = true;
-  });
-  on("meltdownResolved", () => {
-    if (ui.game?.state) ui.game.state.melting_down = false;
-  });
-  on("meltdownStateChanged", () => {
-    if (ui.meltdownUI?.updateMeltdownState) ui.meltdownUI.updateMeltdownState();
-  });
-  on("meltdownStarted", () => {
-    if (ui.meltdownUI?.startMeltdownBuildup) {
-      ui.meltdownUI.startMeltdownBuildup(() => ui.meltdownUI?.explodeAllPartsSequentially?.());
-    } else if (ui.meltdownUI?.explodeAllPartsSequentially) {
-      ui.meltdownUI.explodeAllPartsSequentially();
-    }
-  });
-  on("visualEventsReady", (eventBuffer) => {
-    if (ui._renderVisualEvents && eventBuffer) ui._renderVisualEvents(eventBuffer);
-  });
   on("tileCleared", ({ tile }) => {
-    if (game.tooltip_manager?.current_tile_context === tile) game.tooltip_manager.hide();
-  });
-  on("clearAnimations", () => {
-    if (ui.gridInteractionUI?.clearAllActiveAnimations) ui.gridInteractionUI.clearAllActiveAnimations();
-  });
-  on("clearImageCache", () => {
-    if (ui.gridCanvasRenderer?.clearImageCache) ui.gridCanvasRenderer.clearImageCache();
+    const entity = ui.uiState?.hovered_entity;
+    if (entity?.tile === tile) ui.uiState.hovered_entity = null;
   });
   on("partsPanelRefresh", () => {
     ui.refreshPartsPanel?.();
   });
-  on("markTileDirty", ({ row, col }) => {
-    if (ui.gridCanvasRenderer?.markTileDirty) ui.gridCanvasRenderer.markTileDirty(row, col);
-  });
   on("markStaticDirty", () => {
-    if (ui.gridCanvasRenderer?.markStaticDirty) ui.gridCanvasRenderer.markStaticDirty();
+    getGridCanvasRenderer()?.markStaticDirty?.();
   });
-  on("showFloatingText", ({ tile, value }) => {
-    if (tile) ui.showFloatingTextAtTile(tile, value);
-  });
-  on("objectiveLoaded", (payload) => handleObjectiveLoaded(ui, payload));
-  on("objectiveCompleted", () => handleObjectiveCompleted(ui));
-  on("objectiveUnloaded", () => handleObjectiveUnloaded(ui));
+  if (game.state) {
+    unsubs.push(subscribeKey(game.state, "objective_notifications", (notifications) => {
+      if (!notifications?.length) return;
+      while (notifications.length) {
+        const payload = notifications.shift();
+        if (!payload) continue;
+        if (payload.kind === "completed") handleObjectiveCompleted(ui, payload);
+      }
+    }));
+  }
+
+  ui.updateFailurePhaseSensory?.(game.state?.failure_state ?? "nominal");
 
   return () => {
-    for (let i = 0; i < subscriptions.length; i++) {
-      try {
-        subscriptions[i]();
-      } catch (_) {}
-    }
-    subscriptions.length = 0;
+    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+    unsubs.length = 0;
   };
 }
 
@@ -525,8 +627,11 @@ async function tryLoadStatelessPage(pageRouter, initialPage) {
   return false;
 }
 
-function initGameComponents(game) {
-  game.tooltip_manager = new TooltipManager("#main", "#tooltip", game);
+let _tooltipTeardown = null;
+
+function initGameComponents(game, ui) {
+  if (_tooltipTeardown) _tooltipTeardown();
+  _tooltipTeardown = wireTooltipManager(ui, game);
   game.engine = new Engine(game);
   game.engine.setForceNoSAB(preferences.forceNoSAB === true);
   game.tutorialManager = createTutorialManager(game);
@@ -543,7 +648,7 @@ async function applyOfflineWelcomeBack(game, ui) {
 }
 
 function syncToggleStatesFromGame(game, ui) {
-  applyControlDeckToggleSync(ui);
+  ui.syncToggleStatesFromGame();
 }
 
 function startEngine(game) {
@@ -561,7 +666,7 @@ function syncUIAfterEngineStart(game, ui) {
     const ratio = typeof hr === "number" && Number.isFinite(hr) ? hr : 0;
     ui.heatVisualsUI._applyHeatFromRatio(ratio);
   }
-  StorageUtils.remove("reactorNewGamePending");
+  StorageUtils.remove(STORAGE_KEYS.NEW_GAME_PENDING);
   game.objectives_manager?._syncActiveObjectiveToState?.();
   ui.pauseStateUI?.updatePauseState?.();
   setTimeout(() => {
@@ -581,7 +686,7 @@ async function finalizeGameStart(game, ui) {
   startEngine(game);
   initializeEngineViaPauseToggle(game);
   syncUIAfterEngineStart(game, ui);
-  if (!StorageUtils.get("reactorGameQuickStartShown")) {
+  if (!StorageUtils.get(STORAGE_KEYS.QUICK_START_SHOWN)) {
     try {
       await ui.modalOrchestrator.showModal(MODAL_IDS.QUICK_START, { game });
     } catch (error) {
@@ -604,6 +709,7 @@ function restoreObjectiveState(game, savedIndex) {
   game.objectives_manager.current_objective_index = index;
   game.objectives_manager.set_objective(index, true);
   game.objectives_manager.start();
+  game.achievement_manager?.start?.();
 }
 
 async function runObjectiveRestoreFlow(game, ui) {
@@ -633,22 +739,24 @@ async function startGame(appContext) {
   if (await tryLoadStatelessPage(pageRouter, initialPage)) return;
   await pageRouter.loadGameLayout();
   ui.initMainLayout();
+  ensureGameStateEngineSync(game);
   await pageRouter.loadPage(initialPage);
-  initGameComponents(game);
+  initGameComponents(game, ui);
   await game.startSession();
-  if (typeof window !== "undefined" && window.appRoot) window.appRoot.render();
+  getAppContext()?.appRoot?.render?.();
   if (initialPage === "reactor_section" && ui.resizeReactor) {
     ui.resizeReactor();
     requestAnimationFrame(() => ui.resizeReactor());
     setTimeout(() => ui.resizeReactor(), 50);
     setTimeout(() => ui.resizeReactor(), 150);
   }
-  initializePartsPanel(ui);
+  ui.initializePartsPanel();
   applyPendingToggleStates(game);
   if (game._saved_objective_index !== undefined) {
     await runObjectiveRestoreFlow(game, ui);
   } else {
     game.objectives_manager.start();
+    game.achievement_manager?.start?.();
     await finalizeGameStart(game, ui);
   }
 }
@@ -658,18 +766,18 @@ const SPLASH_HIDE_DELAY_MS = 600;
 
 function hasAnyExistingSave(isNewGamePending) {
   if (isNewGamePending) return false;
-  if (StorageUtils.getRaw("reactorGameSave")) return true;
+  if (StorageUtils.getRaw(STORAGE_KEYS.GAME_SAVE)) return true;
   for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {
-    if (StorageUtils.getRaw(`reactorGameSave_${i}`)) return true;
+    if (StorageUtils.getRaw(`${STORAGE_KEYS.GAME_SAVE}_${i}`)) return true;
   }
   return false;
 }
 
 async function resolveBackupIfRequested(game, savedGame, loadSlot) {
-  if (!savedGame || typeof savedGame !== "object" || !savedGame.backupAvailable || !window.showLoadBackupModal || !window.setSlot1FromBackup) return savedGame;
-  const useBackup = await window.showLoadBackupModal();
+  if (!savedGame || typeof savedGame !== "object" || !savedGame.backupAvailable) return savedGame;
+  const useBackup = await showLoadBackupModal();
   if (!useBackup) return false;
-  await window.setSlot1FromBackup();
+  await setSlot1FromBackupAsync();
   return game.saveManager.loadGame(loadSlot ? parseInt(loadSlot) : null);
 }
 
@@ -692,27 +800,28 @@ function shouldAutoStart(savedGame, isNewGamePending, pageInfo) {
 
 async function performAutoStart(hash, pageInfo, ctx) {
   if (pageInfo && pageInfo.stateless) {
-    if (window.splashManager) window.splashManager.hide();
+    if (getSplashManager()) getSplashManager().hide();
     await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
     await ctx.pageRouter.loadPage(hash);
     return;
   }
-  if (window.splashManager) window.splashManager.hide();
+  if (getSplashManager()) getSplashManager().hide();
   await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
   await startGame(ctx);
 }
 
 async function handleNoAutoStart(ctx) {
-  if (window.splashManager) {
-    await window.splashManager.setStep("ready");
-    await window.splashManager.showStartOptions(true);
+  const sm = getSplashManager();
+  if (sm) {
+    await sm.setStep("ready");
+    await sm.showStartOptions(true);
     return;
   }
   createFallbackStartInterface(ctx.pageRouter, ctx.ui, ctx.game);
 }
 
 async function handleUserSession(ctx) {
-  const isNewGamePending = StorageUtils.get("reactorNewGamePending") === 1;
+  const isNewGamePending = StorageUtils.get(STORAGE_KEYS.NEW_GAME_PENDING) === 1;
   const loadSlot = StorageUtils.get("reactorLoadSlot");
   const { resolved: savedGame, shouldPause } = await loadSavedGame(ctx.game, loadSlot, isNewGamePending);
   if (shouldPause) {
@@ -726,27 +835,67 @@ async function handleUserSession(ctx) {
   else await handleNoAutoStart(ctx);
 }
 
-async function clearAllGameDataForNewGame(game) {
-  await StorageAdapter.remove("reactorGameSave");
+async function clearAllSaveDataForSplashReturn(game) {
+  await StorageAdapter.remove(STORAGE_KEYS.GAME_SAVE);
+  await StorageAdapter.remove(AUTOSAVE_SLOT_KEY);
   for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {
-    await StorageAdapter.remove(`reactorGameSave_${i}`);
+    await StorageAdapter.remove(`${STORAGE_KEYS.GAME_SAVE}_${i}`);
   }
   await StorageAdapter.remove("reactorGameSave_Previous");
   await StorageAdapter.remove("reactorGameSave_Backup");
-  await StorageAdapter.remove("reactorCurrentSaveSlot");
-  StorageUtils.remove("reactorGameQuickStartShown");
+  await StorageAdapter.remove(STORAGE_KEYS.CURRENT_SLOT);
+  StorageUtils.remove(STORAGE_KEYS.QUICK_START_SHOWN);
   StorageUtils.remove("google_drive_save_file_id");
-  StorageUtils.set("reactorNewGamePending", 1);
+  StorageUtils.remove(STORAGE_KEYS.NEW_GAME_PENDING);
+  StorageUtils.remove("reactorLoadSlot");
   if (game && Object.prototype.hasOwnProperty.call(game, "_saved_objective_index")) {
     delete game._saved_objective_index;
   }
+}
+
+async function clearAllGameDataForNewGame(game) {
+  await clearAllSaveDataForSplashReturn(game);
+  StorageUtils.set(STORAGE_KEYS.NEW_GAME_PENDING, 1);
+}
+
+function rebindSplashDom(splashManager) {
+  if (!splashManager) return;
+  splashManager.splashScreen = document.querySelector("#splash-screen");
+  splashManager.statusElement =
+    splashManager.splashScreen?.querySelector("#splash-status") ?? document.querySelector("#splash-status");
+  splashManager.uiManager.setRefs({
+    statusElement: splashManager.statusElement,
+    splashScreen: splashManager.splashScreen,
+  });
+}
+
+async function returnToSplashScreen(ctx, { clearSaves = true } = {}) {
+  const { game, ui, pageRouter } = ctx ?? {};
+  if (game?.engine?.running) game.engine.stop();
+  teardownGameStateEngineSync(game);
+  teardownAppSubsystems(ui, game);
+  if (clearSaves) await clearAllSaveDataForSplashReturn(game);
+  if (game?.lifecycleManager) game.lifecycleManager.session_start_time = null;
+  game?.reactor?.clearMeltdownState?.();
+  enqueueClearAnimations(game);
+  ui?.modalOrchestrator?.hideModal?.(MODAL_IDS.SETTINGS);
+  ui.teardownGameLayout();
+  pageRouter?.resetForSplashReturn?.();
+  getAppContext()?.appRoot?.render?.();
+  const splashManager = getSplashManager();
+  if (!splashManager) return;
+  rebindSplashDom(splashManager);
+  splashManager.isReady = false;
+  splashManager.show();
+  await splashManager.setStep("ready");
+  await splashManager.showStartOptions(false);
 }
 
 function bindLoadGameButton(ctx) {
   const btn = document.getElementById("splash-load-game-btn");
   if (!btn) return;
   btn.onclick = async () => {
-    if (window.splashManager) window.splashManager.hide();
+    if (getSplashManager()) getSplashManager().hide();
     await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
     await startGame(ctx);
   };
@@ -758,7 +907,7 @@ function bindLoadGameUploadRow(ctx) {
     document.getElementById("splash-load-game-btn");
   if (!loadBtn) return;
   loadBtn.onclick = async () => {
-    if (window.splashManager) window.splashManager.hide();
+    if (getSplashManager()) getSplashManager().hide();
     await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
     await startGame(ctx);
   };
@@ -771,12 +920,15 @@ function setupButtonHandlers(ctx) {
 
 function createAppInstances() {
   const ui = new UI();
+  wireUiDomSubsystems(ui);
   const game = new Game(ui, getCompactLayout);
+  game.saveManager = createGameSaveManager(game, getCompactLayout);
   game.audio = new AudioService();
   const initAudioOnGesture = () => resolveAudioService(game.audio)?.init();
-  document.addEventListener("click", initAudioOnGesture, { once: true });
-  document.addEventListener("keydown", initAudioOnGesture, { once: true });
-  document.addEventListener("touchstart", initAudioOnGesture, { once: true });
+  for (const type of ["click", "keydown", "touchstart"]) {
+    document.addEventListener(type, initAudioOnGesture, { once: true });
+    pushAppUnsub(() => document.removeEventListener(type, initAudioOnGesture));
+  }
   const pageRouter = new PageRouter(ui);
   game.router = pageRouter;
   return { ui, game, pageRouter };
@@ -789,67 +941,57 @@ async function main() {
   console.log("[ReactorBoot] services.js loaded");
   _requestWakeLock = pwaModule.requestWakeLock;
   pwaModule.initializePwa();
+  initPwaDisplayMode();
   initPreferencesStore();
   const { ui, game, pageRouter } = createAppInstances();
   console.log("[ReactorBoot] createAppInstances ok");
   const appRootEl = document.getElementById("app_root");
   console.log("[ReactorBoot] #app_root", appRootEl ? "found" : "MISSING");
   renderAppRoot(appRootEl, game, ui);
+  const splashManager = createSplashManager();
   if (!isTestEnv()) {
-    window.pageRouter = pageRouter;
-    window.ui = ui;
-    window.game = game;
-    window.appRoot = { render: () => renderAppRoot(appRootEl, game, ui) };
+    setAppContext({
+      game,
+      ui,
+      pageRouter,
+      subsystems: game._subsystems,
+      splashManager,
+      startGame,
+      returnToSplashScreen,
+      clearAllGameDataForNewGame,
+      showTechTreeSelection,
+      appRoot: { render: () => renderAppRoot(appRootEl, game, ui) },
+    });
+    if (import.meta.env?.DEV) {
+      window.__reactorAudit = {
+        get game() { return getAppContext()?.game; },
+        get ui() { return getAppContext()?.ui; },
+      };
+      window.clearAllGameDataForNewGame = clearAllGameDataForNewGame;
+      window.returnToSplashScreen = returnToSplashScreen;
+    }
+    bindAppRootSubscription(appRootEl, game, ui);
   }
+  const ctx = { game, pageRouter, ui };
+  getAppContext()?.splashManager?.setAppContext(ctx);
   console.log("[ReactorBoot] migrateLocalStorageToIndexedDB …");
   await migrateLocalStorageToIndexedDB();
-  const ctx = { game, pageRouter, ui };
-  if (window.splashManager) window.splashManager.setAppContext(ctx);
   await bootstrapGame(game, ui);
   console.log("[ReactorBoot] handleUserSession …");
   await handleUserSession(ctx);
   setupButtonHandlers(ctx);
-  setupGlobalListeners(game);
-  registerServiceWorkerUpdateListener();
+  if (typeof ui.detachGlobalListeners === "function") {
+    ui.detachGlobalListeners();
+  }
+  ui.detachGlobalListeners = setupGlobalListeners(game, ui);
   if (typeof window !== "undefined") {
     if (typeof registerPeriodicSync === "function") registerPeriodicSync();
     if (typeof registerOneOffSync === "function") registerOneOffSync();
   }
-  setupLaunchQueueHandler(game);
+  const { initLaunchQueueHandler } = await import("./services-pwa.js");
+  initLaunchQueueHandler({ game });
   console.log("[ReactorBoot] main() finished");
 }
-
-function setupLaunchQueueHandler(game) {
-  if (!('launchQueue' in window) || !('files' in LaunchParams.prototype)) return;
-
-  window.launchQueue.setConsumer(async (launchParams) => {
-    if (!launchParams.files.length) return;
-
-    const fileHandle = launchParams.files[0];
-    const file = await fileHandle.getFile();
-    const text = await file.text();
-
-    try {
-      const validated = game?.saveManager?.validateSaveData(text);
-
-      if (game.engine?.running) game.pause();
-
-      const confirmLoad = confirm(
-        `Load save "${file.name}"?\n(Current unsaved progress will be lost)`
-      );
-
-      if (confirmLoad && validated) {
-        await game.applySaveState(validated);
-        game.activeFileHandle = fileHandle;
-      }
-    } catch (e) {
-      logger.log('error', 'game', '[PWA] Error handling launch file', e);
-    }
-  });
-}
-
-window.startGame = startGame;
-window.clearAllGameDataForNewGame = clearAllGameDataForNewGame;
 
 async function createFallbackStartInterface(pageRouter, ui, game) {
   try {
@@ -899,6 +1041,7 @@ function scheduleMain() {
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", run);
+    pushAppUnsub(() => document.removeEventListener("DOMContentLoaded", run));
   } else {
     run();
   }
@@ -906,30 +1049,36 @@ function scheduleMain() {
 scheduleMain();
 
 _windowErrorHandler = (event) => {
-  if (event.error && !document.getElementById("critical-error-overlay")) {
-    console.error("[ReactorBoot] window error event", event.error);
-    logger.log('error', 'game', 'Uncaught error:', event.error);
-    showCriticalError(event.error);
-  }
+  if (!event.error || document.getElementById("critical-error-overlay")) return;
+  console.error("[ReactorBoot] window error event", event.error);
+  logger.log("error", "game", "Uncaught error:", event.error);
+  if (getAppContext()?.game?.lifecycleManager?.session_start_time) return;
+  showCriticalError(event.error);
 };
 window.addEventListener("error", _windowErrorHandler);
-
-_unhandledRejectionHandler = (event) => {
-  if (event.reason && !document.getElementById("critical-error-overlay")) {
-    console.error("[ReactorBoot] unhandledrejection", event.reason);
-    logger.log('error', 'game', 'Unhandled promise rejection:', event.reason);
-    showCriticalError(event.reason);
-  }
-};
-window.addEventListener("unhandledrejection", _unhandledRejectionHandler);
-
-export function teardownAppErrorHandlers() {
+pushAppUnsub(() => {
   if (_windowErrorHandler) {
     window.removeEventListener("error", _windowErrorHandler);
     _windowErrorHandler = null;
   }
+});
+
+_unhandledRejectionHandler = (event) => {
+  if (!event.reason || document.getElementById("critical-error-overlay")) return;
+  console.error("[ReactorBoot] unhandledrejection", event.reason);
+  logger.log("error", "game", "Unhandled promise rejection:", event.reason);
+  if (getAppContext()?.game?.lifecycleManager?.session_start_time) return;
+  showCriticalError(event.reason);
+};
+window.addEventListener("unhandledrejection", _unhandledRejectionHandler);
+pushAppUnsub(() => {
   if (_unhandledRejectionHandler) {
     window.removeEventListener("unhandledrejection", _unhandledRejectionHandler);
     _unhandledRejectionHandler = null;
   }
+});
+
+export function teardownAppErrorHandlers() {
+  teardownAppListeners();
 }
+

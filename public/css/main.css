@@ -1,4 +1,4 @@
-:root { --vu-segments: 16; --drawer-panel-width: min(420px, 92vw); --sidebar-width: 300px; --sidebar-width-mobile: 80%; --tile-size: 48px; --bottom-nav-height: 40px; --bottom-nav-height-mobile: 52px; --game-success-color: rgb(93 156 81); --game-warning-color: rgb(255 160 0); --game-danger-color: rgb(171 63 63); --game-primary-color: rgb(81 93 156); --bevel-light: rgb(153 153 153); --bevel-mid: rgb(102 102 102); --bevel-dark: rgb(31 41 55); --bevel-shadow: rgb(17 17 17); --splash-shadow-solid: 3px 3px 0 var(--bevel-shadow); --panel-bg: rgb(38 38 38); --inset-bg: rgb(26 26 26); --text-shadow: 2px 2px 0px black; --splash-btn-width: 400px; --splash-btn-height: 52px; --splash-btn-min-touch: 44px; --splash-btn-radius: 0; --splash-bevel-width: 5px; --main-top-nav-height: 60px; --mobile-passive-top-height: 48px; --objective-progress-bg: rgb(45 55 72); --objective-reward-bg: rgb(45 55 72); --objective-claim-ready-bg: rgb(40 167 69); /* Map objective vars to global palette */
+﻿:root { --vu-segments: 16; --drawer-panel-width: min(420px, 92vw); --sidebar-width: 300px; --sidebar-width-mobile: 80%; --tile-size: 48px; --bottom-nav-height: 40px; --bottom-nav-height-mobile: 52px; --game-success-color: rgb(93 156 81); --game-warning-color: rgb(255 160 0); --game-danger-color: rgb(171 63 63); --game-primary-color: rgb(81 93 156); --bevel-light: rgb(153 153 153); --bevel-mid: rgb(102 102 102); --bevel-dark: rgb(31 41 55); --bevel-shadow: rgb(17 17 17); --splash-shadow-solid: 3px 3px 0 var(--bevel-shadow); --panel-bg: rgb(38 38 38); --inset-bg: rgb(26 26 26); --text-shadow: 2px 2px 0px black; --splash-btn-width: 400px; --splash-btn-height: 52px; --splash-btn-min-touch: 44px; --splash-btn-radius: 0; --splash-bevel-width: 5px; --main-top-nav-height: 60px; --mobile-passive-top-height: 48px; --objective-progress-bg: rgb(45 55 72); --objective-reward-bg: rgb(45 55 72); --objective-claim-ready-bg: rgb(40 167 69); /* Map objective vars to global palette */
  --objective-bg: var(--panel-bg); --objective-border: var(--bevel-light); --objective-text: white; --objective-accent: rgb(102 179 255);
  --sovietwave-slate: #1F2120; --sovietwave-amber: #FFB000; --sovietwave-paper: #E0D8C3; --sovietwave-industrial-red: #A33B2B;
  --splash-military-green: #3d5c3d; --splash-military-green-dark: #2d4a2d; --splash-bakelite: #5c4033; --splash-bakelite-dark: #4a3529; --splash-charcoal: #25282c; --splash-charcoal-dark: #1a1a1a; --splash-rust: #A33B2B; --splash-rust-dark: #7a2a1f; --splash-bone: #E0D8C3; --splash-text-primary: #E0D8C3; --splash-accent-olive: rgb(141 161 127); --splash-accent-amber: #FFB000; --splash-panel-bg: #25282c; --splash-header-bg: #1F2120; --splash-font: "Share Tech Mono", monospace; --ui-pixel-font: "Press Start 2P", cursive, monospace; --ui-terminal-font: "Share Tech Mono", monospace; --splash-danger-border-light: rgb(209 107 107); --splash-danger-border-dark: rgb(80 30 30);
@@ -13,6 +13,28 @@
  --glow-green: rgb(73 251 53 / 15%);
  --well-depth: inset 6px 6px 12px rgb(0 0 0 / 90%), inset -2px -2px 4px rgb(255 255 255 / 5%);
  --machined-texture: linear-gradient(45deg, #141614 25%, transparent 25%), linear-gradient(-45deg, #141614 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #141614 75%), linear-gradient(-45deg, transparent 75%, #141614 75%);
+ --neutral-black: rgb(0 0 0);
+ --surface-gost: var(--gost-panel);
+ --text-primary: var(--gost-text);
+ --status-success: var(--game-success-color);
+ --status-warn: var(--game-warning-color);
+ --status-danger: var(--game-danger-color);
+ --canvas-tile-machined: rgb(255 255 255 / 8%);
+ --canvas-shadow: rgb(0 0 0 / 35%);
+ --canvas-heat-bar-bg: rgb(0 0 0 / 55%);
+ --canvas-heat-fill: var(--game-warning-color);
+ --canvas-durability-fill: rgb(0 200 255);
+ --canvas-boost: rgb(0 242 255);
+ --canvas-explosion-glow: rgb(255 80 60);
+ --canvas-explosion-stroke: rgb(255 120 80);
+ --canvas-selling-fill: rgb(255 200 0 / 25%);
+ --canvas-selling-stroke: rgb(255 200 0);
+ --canvas-highlight-fill: rgb(0 200 255 / 20%);
+ --canvas-highlight-stroke: rgb(0 200 255);
+ --canvas-hover-fill: rgb(255 255 255 / 10%);
+ --canvas-hover-stroke: rgb(255 255 255 / 50%);
+ --canvas-heat-flow: rgb(255 120 40);
+ --canvas-shimmer: rgb(255 180 80);
 }
 
 ::-webkit-scrollbar { width: 20px;
@@ -113,16 +135,16 @@ html.reduced-motion-app #app_root { animation: none !important;
  .objectives-toast-btn.is-expanded.is-complete .objectives-claim-pill { animation: none !important; }
 }
 
-body.page-reactor #app_root .cathode-readout { text-shadow: calc(0.5px + var(--crt-heat, 0) * 4px) 0 calc(var(--crt-heat, 0) * 2px) rgb(255 90 60 / calc(0.12 + var(--crt-heat, 0) * 0.32)), 0 0 8px rgb(34 197 94 / 45%), 1px 1px 0 rgb(0 0 0 / 90%);
+#wrapper.page-reactor #app_root .cathode-readout { text-shadow: calc(0.5px + var(--crt-heat, 0) * 4px) 0 calc(var(--crt-heat, 0) * 2px) rgb(255 90 60 / calc(0.12 + var(--crt-heat, 0) * 0.32)), 0 0 8px rgb(34 197 94 / 45%), 1px 1px 0 rgb(0 0 0 / 90%);
 }
 
 #wrapper { display: flex; width: 100%; min-width: 0; height: 100dvh; flex-direction: column; padding: 0 !important; margin: 0 !important; transition: transform 0.32s steps(10, end);
 }
 
-body.modal-drawer-open #wrapper { transform: translateX(calc(-1 * var(--drawer-panel-width)));
+#wrapper.modal-drawer-open #wrapper { transform: translateX(calc(-1 * var(--drawer-panel-width)));
 }
 
-body.reactor-meltdown #wrapper { filter: hue-rotate(-50deg) contrast(1.5);
+#wrapper.reactor-meltdown #wrapper { filter: hue-rotate(-50deg) contrast(1.5);
 }
 
 #main { display: flex; overflow: visible; width: 100%; min-width: 0; height: 100%; min-height: 0; flex: 1; flex-direction: column; padding: 0; margin: 0; background-color: var(--sovietwave-slate); background-image: none; color: white;
@@ -426,6 +448,28 @@ body.reactor-meltdown #wrapper { filter: hue-rotate(-50deg) contrast(1.5);
  animation: core-rumble 8s ease-in-out infinite;
 }
 
+#reactor.reactor-css-grid {
+ display: block;
+ width: 100%;
+ height: 100%;
+ min-width: 0;
+ min-height: 0;
+}
+
+#reactor.reactor-css-grid .reactor-canvas-host {
+ position: relative;
+ width: 100%;
+ height: 100%;
+ min-width: 0;
+ min-height: 0;
+}
+
+#reactor.reactor-css-grid .tile {
+ aspect-ratio: 1;
+ width: 100%;
+ height: auto;
+}
+
 @media (width <= 900px) {
 
 }
@@ -551,9 +595,9 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #parts_section.collapsed { display: none !important; overflow: hidden !important; height: 0 !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; border: none !important; margin: 0 !important; box-shadow: none !important; opacity: 0 !important; pointer-events: none !important; transform: translateY(100%) !important; visibility: hidden !important;
  }
  /* Hide UI elements when parts panel is open on mobile */
- body.parts-panel-open #reactor_control_deck,
- body.parts-panel-open #objectives_toast_btn,
- body.parts-panel-open #mobile_top_bar { display: none !important;
+ #wrapper.parts-panel-open #reactor_control_deck,
+ #wrapper.parts-panel-open #objectives_toast_btn,
+ #wrapper.parts-panel-open #mobile_top_bar { display: none !important;
  }
 
  #parts_section.collapsed .parts_header,
@@ -1001,17 +1045,83 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #parts_close_btn { display: none;
  }
  /* Add left padding to main content when parts panel is visible */
- body.page-reactor #main { position: relative; padding-left: 275px; background-color: var(--sovietwave-slate);
+ #wrapper.page-reactor #main { position: relative; padding-left: 275px; background-color: var(--sovietwave-slate);
  }
  /* Add padding to info bar since it's outside main */
- body.page-reactor #info_bar { padding-left: 275px !important;
+ #wrapper.page-reactor #info_bar { padding-left: 275px !important;
  }
  /* Center the reactor grid on desktop */
- @media (width >= 901px) { body.page-reactor #reactor_wrapper { overflow: visible; justify-content: center;
+ @media (width >= 901px) { #wrapper.page-reactor #reactor_wrapper { overflow: visible; justify-content: center;
   }
   /* Make tooltips smaller on desktop */
   #tooltip { width: 400px; max-width: 25vw; padding: 0.8rem; font-size: 0.85em;
   }
+ }
+}
+
+#wrapper.shop-overlay-open { --shop-panel-width: min(420px, 38vw); overflow: hidden !important;
+}
+
+#wrapper.shop-overlay-open #page_content_area { overflow: hidden; min-height: 0; flex: 1;
+}
+
+#wrapper.shop-overlay-open #reactor_section { display: flex !important; min-height: 0; flex: 1 1 auto;
+}
+
+#wrapper.shop-overlay-open #upgrades_section:not(.hidden),
+#wrapper.shop-overlay-open #experimental_upgrades_section:not(.hidden) { position: fixed; z-index: 1150; display: flex !important; overflow: hidden; width: var(--shop-panel-width); min-width: 320px; max-width: 480px; height: auto; min-height: 0; max-height: none; box-sizing: border-box; flex: none; flex-direction: column; padding: 0.75rem 0.5rem 1rem; border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background-color: var(--panel-bg); box-shadow: -28px 12px 36px rgb(0 0 0 / 88%), -20px 0 0 0 rgb(0 0 0 / 80%), 0 0 40px rgb(0 0 0 / 90%) !important; border-left: 6px solid var(--bevel-dark); transition: transform 0.25s steps(6, end), box-shadow 0.2s steps(4, end) !important; -webkit-overflow-scrolling: touch; transform: translateX(0); visibility: visible; pointer-events: auto; animation: panel-jolt-rack 0.15s steps(2) 2, panel-glow-pulse 5s infinite linear;
+}
+
+#wrapper.shop-overlay-open #upgrades_section:not(.hidden)::after,
+#wrapper.shop-overlay-open #experimental_upgrades_section:not(.hidden)::after { content: ""; position: absolute; z-index: 2; top: 0; left: 0; width: 6px; height: 100%; pointer-events: none; background: var(--knurled-grip); opacity: 0.85;
+}
+
+#wrapper.shop-overlay-open #upgrades_section:not(.hidden).page::before,
+#wrapper.shop-overlay-open #experimental_upgrades_section:not(.hidden).page::before,
+#wrapper.shop-overlay-open #upgrades_section:not(.hidden).page::after,
+#wrapper.shop-overlay-open #experimental_upgrades_section:not(.hidden).page::after { display: none;
+}
+
+#wrapper.shop-overlay-open #upgrades_content_wrapper,
+#wrapper.shop-overlay-open #experimental_upgrades_content_wrapper { width: 100%; min-height: 0; flex: 1 1 0; padding: 0 0.25rem; -webkit-overflow-scrolling: touch; overflow-y: auto;
+}
+
+#wrapper.shop-overlay-open.page-upgrades #main,
+#wrapper.shop-overlay-open.page-experimental_upgrades #main,
+#wrapper.shop-overlay-open.page-upgrades #main_content_wrapper,
+#wrapper.shop-overlay-open.page-experimental_upgrades #main_content_wrapper,
+#wrapper.shop-overlay-open.page-upgrades #page_content_area,
+#wrapper.shop-overlay-open.page-experimental_upgrades #page_content_area { overflow: hidden; height: 100%; min-height: 0;
+}
+
+@media (width >= 901px) { #wrapper.shop-overlay-open #upgrades_section:not(.hidden),
+ #wrapper.shop-overlay-open #experimental_upgrades_section:not(.hidden) { inset: calc(var(--main-top-nav-height) + env(safe-area-inset-top, 0px)) 0 calc(var(--bottom-nav-height, 44px) + env(safe-area-inset-bottom, 0px)) auto; width: var(--shop-panel-width); min-width: 320px; max-width: 480px;
+ }
+
+ #wrapper.shop-overlay-open.page-reactor #main { padding-right: var(--shop-panel-width);
+ }
+
+ #wrapper.shop-overlay-open #info_bar { padding-right: var(--shop-panel-width) !important;
+ }
+
+ #wrapper.shop-overlay-open #upgrades_section .upgrade-group,
+ #wrapper.shop-overlay-open #experimental_upgrades_section .upgrade-group { grid-template-columns: 1fr;
+ }
+}
+
+@media (width <= 900px) { #wrapper.shop-overlay-open { --shop-panel-width: 100vw;
+ }
+
+ #wrapper.shop-overlay-open #upgrades_section:not(.hidden),
+ #wrapper.shop-overlay-open #experimental_upgrades_section:not(.hidden) { inset: 0 0 calc(var(--bottom-nav-height, 40px) + env(safe-area-inset-bottom)); width: 100vw; min-width: 0; max-width: 100vw; padding: 0; padding-top: calc(env(safe-area-inset-top) + 10px); padding-bottom: 20px; border-radius: 0; border-top: 4px solid var(--bevel-light); border-right: none; border-bottom: none; border-left: none; box-shadow: 0 -12px 48px rgb(0 0 0 / 90%), 0 0 40px rgb(0 0 0 / 85%); transform: translateY(0) !important; animation: panel-jolt 0.15s steps(2) 2, panel-glow-pulse-mobile 5s infinite linear;
+ }
+
+ #wrapper.shop-overlay-open #upgrades_section:not(.hidden)::after,
+ #wrapper.shop-overlay-open #experimental_upgrades_section:not(.hidden)::after { display: none;
+ }
+
+ #wrapper.shop-overlay-open #reactor_control_deck,
+ #wrapper.shop-overlay-open #build_above_deck_row { display: none !important;
  }
 }
 
@@ -1037,6 +1147,9 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  height: auto;
  background: transparent;
  box-sizing: border-box;
+}
+
+#modal-root.game-modal-host #reactor_copy_paste_modal { position: relative; inset: auto; width: 100%; height: auto;
 }
 
 #modal-root.game-modal-host::backdrop {
@@ -2636,4 +2749,5 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  .update-toast { bottom: 10px; left: 10px; right: 10px; transform: none; max-width: none; width: auto; }
  .version-check-toast { bottom: 10px; left: 10px; right: 10px; transform: none; max-width: none; width: auto; }
 }
+
 

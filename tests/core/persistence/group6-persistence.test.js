@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
 import { SaveDataSchema } from "../../../public/src/schema/index.js";
 import { ObjectiveIndexSchema, SaveDecimalSchema } from "../../../public/src/schema/numberLikeSchema.js";
-import { toDecimal, serializeSave, deserializeSave, migrateLocalStorageToIndexedDB } from "@app/utils.js";
+import { toDecimal } from "@app/utils.js";
+import { serializeSave, deserializeSave, migrateLocalStorageToIndexedDB } from "@app/storage/index.js";
 import { parseAndValidateSave } from "@app/store.js";
 
 const STABLE_RUN_ID = "11111111-1111-1111-1111-111111111111";

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame, toNum } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame, toNum , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart, forcePurchaseUpgrade, runTicks } from "../../helpers/gameHelpers.js";
 import { computeNeighborPulseNFromTile } from "@app/logic.js";
 
@@ -57,7 +57,7 @@ describe("Complex Layouts and Advanced Interactions", () => {
 
         const expectedStatsPower = cellPart.base_power * 1;
         expect(game.reactor.stats_power).toBeCloseTo(expectedStatsPower, 1);
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
         game.engine.tick();
     });
 

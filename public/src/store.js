@@ -1,6 +1,7 @@
 export {
   preferences,
   modalUi,
+  pwaState,
   enqueueGameEffect,
   runSellAction,
   runManualReduceHeatAction,
@@ -19,10 +20,13 @@ export {
   resolveTileFromKey,
   BlueprintSchema,
   LegacyGridSchema,
-  previewBlueprintPlannerStats,
   StateManager,
   createUIState,
   initUIStateSubscriptions,
+  applyBodyClassesFromUiState,
+  buildShellClassMap,
+  buildShellStyleMap,
+  EngineStatus,
 } from "./state.js";
 export { subscribe, proxy, snapshot, ref } from "valtio/vanilla";
 export { subscribeKey } from "valtio/vanilla/utils";

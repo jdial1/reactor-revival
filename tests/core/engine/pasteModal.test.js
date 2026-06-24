@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, setupGameWithDOM, mockClipboardAPI, injectReactorCopyPasteModalMarkup } from '../../helpers/setup.js';
+import { describe, it, expect, vi, beforeEach, afterEach, setupGameWithDOM, mockClipboardAPI, getCopyPasteModalRefs } from '../../helpers/setup.js';
 
 describe('Paste Modal Unaffordable Text', () => {
     let game;
@@ -11,8 +11,6 @@ describe('Paste Modal Unaffordable Text', () => {
         const setup = await setupGameWithDOM();
         game = setup.game;
         ui = game.ui;
-
-        injectReactorCopyPasteModalMarkup(document);
 
         const clip = mockClipboardAPI();
         mockNav = clip.navigator;
@@ -55,13 +53,12 @@ describe('Paste Modal Unaffordable Text', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Check that modal is shown
-            const modal = document.getElementById('reactor_copy_paste_modal');
-            expect(modal.classList.contains('hidden')).toBe(false);
+            const refs = getCopyPasteModalRefs(document);
+            expect(refs).not.toBeNull();
+            expect(refs.modal.classList.contains('hidden')).toBe(false);
 
-            // Check that unaffordable text is displayed
-            const modalCost = document.getElementById('reactor_copy_paste_cost');
-            expect(modalCost.innerHTML).toContain("needed");
-            expect(modalCost.innerHTML).toContain("you have");
+            expect(refs.modalCost.innerHTML).toContain("needed");
+            expect(refs.modalCost.innerHTML).toContain("you have");
         });
 
         it('should show affordable text when layout costs less than player money', async () => {
@@ -90,12 +87,11 @@ describe('Paste Modal Unaffordable Text', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Check that modal is shown
-            const modal = document.getElementById('reactor_copy_paste_modal');
-            expect(modal.classList.contains('hidden')).toBe(false);
+            const refs = getCopyPasteModalRefs(document);
+            expect(refs).not.toBeNull();
+            expect(refs.modal.classList.contains('hidden')).toBe(false);
 
-            // Check that unaffordable text is NOT displayed
-            const modalCost = document.getElementById('reactor_copy_paste_cost');
-            expect(modalCost.innerHTML).not.toContain('Not Enough Money');
+            expect(refs.modalCost.innerHTML).not.toContain('Not Enough Money');
         });
 
         it('should update unaffordable text when player money changes', async () => {
@@ -124,23 +120,21 @@ describe('Paste Modal Unaffordable Text', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Check that unaffordable text is displayed initially
-            const modalCost = document.getElementById('reactor_copy_paste_cost');
-            expect(modalCost.innerHTML).toContain("needed");
-            expect(modalCost.innerHTML).toContain("you have");
+            const refs = getCopyPasteModalRefs(document);
+            expect(refs).not.toBeNull();
+            expect(refs.modalCost.innerHTML).toContain("needed");
+            expect(refs.modalCost.innerHTML).toContain("you have");
 
-            // Increase player money
             game.current_money = 10000;
 
-            // Trigger a manual update by simulating textarea input
-            const modalText = document.getElementById('reactor_copy_paste_text');
-            modalText.value = JSON.stringify(expensiveLayout);
-            modalText.dispatchEvent(new Event('input'));
+            refs.modalText.value = JSON.stringify(expensiveLayout);
+            refs.modalText.dispatchEvent(new Event('input'));
 
             // Wait for update
             await new Promise(resolve => setTimeout(resolve, 50));
 
             // Check that unaffordable text is no longer displayed
-            expect(modalCost.innerHTML).not.toContain('Not Enough Money');
+            expect(refs.modalCost.innerHTML).not.toContain('Not Enough Money');
         });
     });
 }); 

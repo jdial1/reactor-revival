@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { toDecimal } from "../utils.js";
+import { z } from "../../lib/zod.js";
+import { toDecimal } from "../simUtils.js";
 
 export const NumericLike = z.union([z.number(), z.string()]);
 

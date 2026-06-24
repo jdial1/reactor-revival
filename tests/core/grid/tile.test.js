@@ -119,7 +119,7 @@ describe("Tile Mechanics", () => {
     const moneyBeforeSell = toNum(game.current_money);
     const expectedSellValue = toNum(tile.calculateSellValue());
 
-    game.sellPart(tile);
+    await game.sellPart(tile);
     const moneyAfterSell = toNum(game.current_money);
     const actualSellValue = moneyAfterSell - moneyBeforeSell;
 
@@ -147,7 +147,7 @@ describe("Tile Mechanics", () => {
     const moneyBeforeSell = moneyAfterPurchase;
     const expectedSellValue = toNum(tile.calculateSellValue());
 
-    game.sellPart(tile);
+    await game.sellPart(tile);
     const moneyAfterSell = toNum(game.current_money);
     const actualSellValue = moneyAfterSell - moneyBeforeSell;
 
@@ -177,7 +177,7 @@ describe("Tile Mechanics", () => {
       const moneyBeforeSell = moneyAfterPurchase;
       const expectedSellValue = toNum(tile.calculateSellValue());
 
-      game.sellPart(tile);
+      await game.sellPart(tile);
       const moneyAfterSell = toNum(game.current_money);
       const actualSellValue = moneyAfterSell - moneyBeforeSell;
 

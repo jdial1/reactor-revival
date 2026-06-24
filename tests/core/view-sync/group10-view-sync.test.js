@@ -3,7 +3,7 @@ import { patchGameState } from "@app/state.js";
 import { PartButton } from "@app/components/button-factory.js";
 import { render } from "lit-html";
 import * as stateModule from "@app/store.js";
-import { ReactiveLitComponent } from "@app/components/reactive-lit-component.js";
+import { bindLitRenderKeyed, bindLitRenderMulti } from "@app/dom/lit-reactive.js";
 
 describe("Group 10: State-to-DOM Synchronization", () => {
   let game;
@@ -82,20 +82,18 @@ describe("Group 10: State-to-DOM Synchronization", () => {
       .spyOn(stateModule, "subscribeKey")
       .mockReturnValueOnce(unsubA)
       .mockReturnValueOnce(unsubB);
-    const component = new ReactiveLitComponent(
+    const unmount = bindLitRenderKeyed(
       state,
       ["active_page", "audio_muted"],
       () => null,
       container
     );
 
-    component.mount();
-    component.unmount();
+    unmount();
 
     expect(subscribeKeySpy).toHaveBeenCalledTimes(2);
     expect(unsubA).toHaveBeenCalledTimes(1);
     expect(unsubB).toHaveBeenCalledTimes(1);
-    expect(component._unsubs).toEqual([]);
   });
 
   it("unmount cancels pending animation frame for mountMulti subscriptions", () => {
@@ -114,7 +112,7 @@ describe("Group 10: State-to-DOM Synchronization", () => {
       scheduleRender = cb;
       return unsub;
     });
-    const stop = ReactiveLitComponent.mountMulti(
+    const stop = bindLitRenderMulti(
       [{ state, keys: "active_page" }],
       () => null,
       container

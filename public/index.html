@@ -6,7 +6,6 @@
     <title>Reactor Revival</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="manifest" href="manifest.json" />
-    <link rel="stylesheet" href="lib/pico.min.css" />
     <link rel="stylesheet" href="css/fonts.css" />
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/splash.css" />
@@ -58,8 +57,8 @@
           var n = minIndices[Math.floor(Math.random() * minIndices.length)];
           function setBg(idx) {
             var path = USE_STALENHAG_BG
-              ? basePath + '/img/misc/stalenhag_bg/bg_img' + idx + '.png'
-              : basePath + '/img/misc/backgrounds/splash_bg' + idx + '.png';
+              ? basePath + '/img/misc/stalenhag_bg/bg_img' + idx + '.webp'
+              : basePath + '/img/misc/backgrounds/splash_bg' + idx + '.webp';
             document.documentElement.style.setProperty('--splash-bg-url', 'url("' + path + '")');
             counts[prefix + '_' + idx] = (counts[prefix + '_' + idx] || 0) + 1;
             try {
@@ -78,19 +77,8 @@
             setBg(n);
           }, CAROUSEL_INTERVAL_MS);
         }
-        fetch('data/splash_bg_count.json')
-          .then(function(r) {
-            console.log("[ReactorBoot] splash_bg_count fetch status", r.status, r.ok);
-            return r.json();
-          })
-          .then(function(data) {
-            console.log("[ReactorBoot] splash_bg_count parsed", data);
-            init(USE_STALENHAG_BG ? data.stalenhag : data.splash);
-          })
-          .catch(function(e) {
-            console.warn("[ReactorBoot] splash_bg_count failed, using default count", e);
-            init(10);
-          });
+        var SPLASH_BG_COUNT = { stalenhag: 30, splash: 10 };
+        init(USE_STALENHAG_BG ? SPLASH_BG_COUNT.stalenhag : SPLASH_BG_COUNT.splash);
       })();
     </script>
     <script src="lib/pako.min.js"></script>

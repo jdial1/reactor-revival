@@ -1,10 +1,10 @@
 import { subscribe, proxy } from "valtio/vanilla";
 import { UserPreferencesSchema } from "../schema/index.js";
-import { StorageUtils } from "../utils.js";
+import { StorageUtils, STORAGE_KEYS } from "../storage/index.js";
 
 const PREF_STORAGE_MAP = {
-  mute: "reactor_mute",
-  reducedMotion: "reactor_reduced_motion",
+  mute: STORAGE_KEYS.MUTE,
+  reducedMotion: STORAGE_KEYS.REDUCED_MOTION,
   heatFlowVisible: "reactor_heat_flow_visible",
   heatMapVisible: "reactor_heat_map_visible",
   debugOverlay: "reactor_debug_overlay",
@@ -61,8 +61,8 @@ export function initPreferencesStore() {
 
 export function getAffordabilitySettings() {
   return {
-    hideUpgrades: preferences.hideUnaffordableUpgrades !== false,
-    hideResearch: preferences.hideUnaffordableResearch !== false,
+    hideUpgrades: preferences.hideUnaffordableUpgrades === true,
+    hideResearch: preferences.hideUnaffordableResearch === true,
     hideMaxUpgrades: preferences.hideMaxUpgrades !== false,
     hideMaxResearch: preferences.hideMaxResearch !== false,
   };

@@ -1,4 +1,5 @@
 import { runHeatStepFromTyped } from "../logic-heat-transfer.js";
+import { validatePhysicsTickInput } from "./workerBoundary.js";
 
 export function attachPhysicsWorkerPort(workerGlobal) {
   let pending = null;
@@ -67,6 +68,18 @@ export function attachPhysicsWorkerPort(workerGlobal) {
   function runStep() {
     const d = pending;
     pending = null;
+    const validation = validatePhysicsTickInput(d, "PhysicsWorker receive");
+    if (!validation.success) {
+      busy = false;
+      workerGlobal.postMessage({
+        heatBuffer: null,
+        reactorHeat: 0,
+        heatFromInlets: 0,
+        tickId: d?.tickId,
+        error: true,
+      });
+      return;
+    }
     if (!d || !d.heatBuffer) {
       console.debug("[PhysicsWorker] runStep: no heatBuffer, posting null response", { tickId: d?.tickId, hasData: !!d });
       busy = false;

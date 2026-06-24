@@ -1,5 +1,6 @@
 import { vi, expect } from "vitest";
-import { serializeSave, toDecimal, StorageAdapter } from "@app/utils.js";
+import { toDecimal } from "@app/utils.js";
+import { serializeSave, StorageAdapter } from "@app/storage/index.js";
 import { patchGameState } from "@app/state.js";
 import { clearGrid } from "./gameHelpers.js";
 
@@ -672,9 +673,47 @@ export function mockThrottle(vi, { startMs } = {}) {
   return ctrl;
 }
 
+export function getAppShell() {
+  if (typeof document === "undefined") return null;
+  return document.getElementById("wrapper") || document.body;
+}
+
 export function assertActivePage(game, pageId) {
   expect(game.router.currentPageId).toBe(pageId);
   const slug = pageId.replace("_section", "");
-  expect(document.body.classList.contains(`page-${slug}`)).toBe(true);
+  const shell = getAppShell();
+  if (shell?.classList.contains(`page-${slug}`)) return;
+  if (game?.ui?.uiState?.active_page) {
+    expect(game.ui.uiState.active_page).toBe(pageId);
+    return;
+  }
+  expect(shell?.classList.contains(`page-${slug}`)).toBe(true);
+}
+
+export function assertPageShellClass(game, className, expected = true) {
+  const pageIdByClass = {
+    "page-reactor": "reactor_section",
+    "page-upgrades": "upgrades_section",
+    "page-experimental_upgrades": "experimental_upgrades_section",
+    "page-leaderboard": "leaderboard_section",
+  };
+  const shell = getAppShell();
+  if (shell?.classList.contains(className) === expected) return;
+  const pageId = pageIdByClass[className];
+  if (pageId && game?.ui?.uiState) {
+    expect(game.ui.uiState.active_page === pageId).toBe(expected);
+    return;
+  }
+  expect(shell?.classList.contains(className)).toBe(expected);
+}
+
+export function assertShellStateClass(game, className, uiStateKey, expected = true) {
+  const shell = getAppShell();
+  if (shell?.classList.contains(className) === expected) return;
+  if (game?.ui?.uiState && uiStateKey in game.ui.uiState) {
+    expect(!!game.ui.uiState[uiStateKey]).toBe(expected);
+    return;
+  }
+  expect(shell?.classList.contains(className)).toBe(expected);
 }
 

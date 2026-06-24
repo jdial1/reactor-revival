@@ -41,7 +41,7 @@ Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm 
 
 - **`npm run build:sw`** — Workbox injects the precache manifest from root `src-sw.js` into `public/sw.js` (`config/workbox-config.cjs`).
 - **Tests** — `npm test` / `npm run test:ci` (lint + syntax + Vitest; CI deploy uses this). `npm run test:deploy` is a faster Vitest-only subset for local iteration.
-- **`scripts/`** — `generate-metadata.js` (version + splash BG counts), vendor copy/bundle (`copy-libs.js`), unified `pwa-check.js` (local root files, `--fix-manifest`, `--remote` post-deploy checks), image compression, console stripping, and the dev server. **`config/`** — ESLint, Vitest, Workbox, Stylelint. See `package.json` `scripts` for the full list.
+- **`scripts/`** — `generate-metadata.js` (version + splash BG counts + changelog from the GitHub push commit list), `bundle-static-data.mjs`, `technical-debt-audit.py` (`npm run audit:debt` full-repo scan; `npm run audit:debt:public` for `public/` only), etc. `public/data/changelog.json` is updated each deploy from `github.event.commits` and committed back with `[skip ci]`. **`config/`** — ESLint, Vitest, Workbox, Stylelint. See `package.json` `scripts` for the full list.
 
 ### Repository layout
 

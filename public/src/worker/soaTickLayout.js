@@ -1,4 +1,4 @@
-import { getIndex } from "../utils.js";
+import { getIndex } from "../simUtils.js";
 
 export function buildContainmentSoa(partLayout, partTable, stride, gridLen) {
   const containment = new Float32Array(gridLen);

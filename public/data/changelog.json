@@ -1,0 +1,20 @@
+[
+    {
+        "version": "26_06_21-1925",
+        "date": "2026-06-22",
+        "bullets": [
+            "Split state preferences and save modules to break services cycle.",
+            "Extract domain/reactor-stats.js to break state-to-logic import cycle.",
+            "Create phase-2-architecture.mdc",
+            "Add Phase 0 and Phase 1 Cursor rules for release hygiene.",
+            "Remove duplicate pause-heat test from tests/core root.",
+            "Document npm test as the full CI gate and test:deploy as local subset.",
+            "Run full test gate in CI and strip console logs before SW build.",
+            "Add UI fonts/CSS, lint config and CI screenshots",
+            "Add UI audits/screenshots; update CI & CSS",
+            "Add Puppeteer UI audit script and favicon",
+            "Add public build, assets, tests, and CI",
+            "Restore Reactor Revival branding after repo recreation."
+        ]
+    }
+]

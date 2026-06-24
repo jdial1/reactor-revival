@@ -107,10 +107,14 @@ describe("Grid Scaling Logic (Reshaping)", () => {
 
         expect(reactor.style.getPropertyValue('--game-rows')).toBe('12');
         expect(reactor.style.getPropertyValue('--game-cols')).toBe('12');
-        // On smaller screens or tests, tileSize might be different, verify it's set
-        expect(reactor.style.getPropertyValue('--tile-size')).toMatch(/^\d+px$/); 
-        expect(reactor.style.width).toMatch(/^\d+px$/);
-        expect(reactor.style.height).toMatch(/^\d+px$/);
+        expect(reactor.style.getPropertyValue('--tile-size')).toMatch(/^\d+px$/);
+        if (!ui.uiState?.layout_css_grid) {
+            expect(reactor.style.width).toMatch(/^\d+px$/);
+            expect(reactor.style.height).toMatch(/^\d+px$/);
+        } else {
+            expect(ui.uiState.grid_layout?.rows).toBe(12);
+            expect(ui.uiState.grid_layout?.cols).toBe(12);
+        }
     });
 
     it("should respect min/max limits configured in GridScaler", () => {

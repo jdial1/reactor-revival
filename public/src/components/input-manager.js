@@ -1,17 +1,21 @@
 import { tileKey, resolveTileFromKey } from "../store.js";
-import { getPageReactor } from "./ui-components.js";
+import { getPageReactor } from "./page-dom.js";
+import { handleGridInteraction } from "./grid-intent-handler.js";
 
-// Pointer paths resolve to a tile + DOM event; GridController handles placement and blueprint paths directly.
-
+// Pointer paths resolve to a tile + DOM event; grid intents are queued from handleGridInteraction.
 class Hotkeys {
   constructor(game) { this.game = game; }
-  *getTiles(tile, event) {
+  *getTiles(tile, event, macroOverride = null) {
     if (!this.game) return;
     const { shiftKey, ctrlKey, altKey } = event;
     if (ctrlKey && altKey) yield* this.checker(tile);
     else if (ctrlKey) yield* this.row(tile);
     else if (altKey) yield* this.column(tile);
     else if (shiftKey && tile.part) yield* this.fillSame(tile.part);
+    else if (macroOverride === "row") yield* this.row(tile);
+    else if (macroOverride === "col") yield* this.column(tile);
+    else if (macroOverride === "checker") yield* this.checker(tile);
+    else if (macroOverride === "fill" && tile.part) yield* this.fillSame(tile.part);
     else yield tile;
   }
   *row(tile)          { for (let c = 0; c < this.game.cols; c++) { const t = this.game.tileset.getTile(tile.row, c); if (t?.enabled) yield t; } }
@@ -52,7 +56,7 @@ export class InputHandler {
       this.longPressTimer = null;
       if (state.longPressTargetTile) {
         this._setInteractionState({ sellingTileKey: null });
-        void this.ui.gridController.handleGridInteraction(state.longPressTargetTile, { type: "longpress", button: 0 });
+        void handleGridInteraction(this.ui, state.longPressTargetTile, { type: "longpress", button: 0 });
       }
       this._setInteractionState({ isDragging: false });
     };
@@ -81,7 +85,7 @@ export class InputHandler {
       if (!this.isDragging) return;
       const moveTile = getTileFromEvent(e_move);
       if (moveTile && moveTile !== this.lastTileModified) {
-        await this.ui.gridController.handleGridInteraction(moveTile, e_move);
+        await handleGridInteraction(this.ui, moveTile, e_move);
         this.lastTileModified = moveTile;
       }
     };
@@ -91,7 +95,7 @@ export class InputHandler {
     return async (e_up) => {
       if (!state.pointerMoved && this.isDragging && state.pointerDownTileEl) {
         cancelLongPress();
-        await this.ui.gridController.handleGridInteraction(state.pointerDownTileEl, e_up || initialEvent);
+        await handleGridInteraction(this.ui, state.pointerDownTileEl, e_up || initialEvent);
       } else if (this.longPressTimer) {
         cancelLongPress();
       }
@@ -141,7 +145,7 @@ export class InputHandler {
   }
 
   setupReactorEventListeners() {
-    const reactor = getPageReactor(this.ui) ?? this.ui.DOMElements?.reactor;
+    const reactor = getPageReactor(this.ui);
     if (!reactor) return;
 
     const MOVE_THRESHOLD = 18;
@@ -203,7 +207,7 @@ export class InputHandler {
   }
 
   setupSegmentHighlight() {
-    const reactorElement = getPageReactor(this.ui) ?? this.ui.DOMElements?.reactor;
+    const reactorElement = getPageReactor(this.ui);
     if (!reactorElement) return;
 
     const heatComponentCategories = [

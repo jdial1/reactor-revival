@@ -1,5 +1,5 @@
 import { render } from "lit-html";
-import { logger } from "./utils.js";
+import { logger } from "./core/logger.js";
 import { subscribeKey, actions } from "./store.js";
 import { resolveAudioService } from "./services.js";
 import {
@@ -8,11 +8,12 @@ import {
   pageLoadErrorTemplate,
 } from "./templates/pageTemplates.js";
 import {
-  initializePage,
   setPageReactorVisibility,
   loadAndSetVersionForPage,
   closePartsPanel,
 } from "./components/ui-components.js";
+import { dispatchToggleIntent } from "./components/ui-intents.js";
+import { isShopOverlayPage, isSimVisiblePage, dedupeReactorStatsDom } from "./components/page-dom.js";
 
 export const PAGE_STATES = {
   reactor_section: { template: pageSectionTemplates.reactor_section },
@@ -83,33 +84,63 @@ export class PageRouter {
     }
   }
 
-  _applyPauseStateForNavigation(wasOnReactorPage, goingToReactorPage) {
-    if (!this.ui.game?.engine) return;
-    if (wasOnReactorPage && !goingToReactorPage) {
+  _applyPauseStateForNavigation(wasSimVisible, goingSimVisible) {
+    const game = this.ui.game;
+    if (!game?.engine) return;
+    if (wasSimVisible && !goingSimVisible) {
       closePartsPanel(this.ui);
-      const currentlyPaused = !!this.ui.game?.state?.pause;
+      const currentlyPaused = !!game?.state?.pause;
       if (!currentlyPaused) {
         this.navigationPaused = true;
         this.isNavigating = true;
-        this.ui.game.pause();
+        dispatchToggleIntent(game, "pause", true, "navigation");
         this.isNavigating = false;
       } else {
         this.navigationPaused = false;
       }
       return;
     }
-    if (!wasOnReactorPage && goingToReactorPage) {
+    if (!wasSimVisible && goingSimVisible) {
       if (this.navigationPaused) {
         this.navigationPaused = false;
         this.isNavigating = true;
-        this.ui.game.resume();
+        dispatchToggleIntent(game, "pause", false, "navigation");
         this.isNavigating = false;
       } else {
-        const shouldBePaused = !!this.ui.game?.state?.pause;
-        if (shouldBePaused && !this.ui.game.paused) {
-          this.ui.game.pause();
+        const shouldBePaused = !!game?.state?.pause;
+        if (shouldBePaused && !game.paused) {
+          dispatchToggleIntent(game, "pause", true, "navigation");
         }
       }
+    }
+  }
+
+  async _ensurePageInCache(pageId) {
+    if (this.pageCache.has(pageId)) return this.pageCache.get(pageId);
+    const pageDef = this.pages[pageId];
+    if (!pageDef) return null;
+    const pageContentArea = document.querySelector(this.contentAreaSelector);
+    if (!pageContentArea) return null;
+    try {
+      const tempContainer = document.createElement("div");
+      render(pageDef.template(), tempContainer);
+      const newPageElement = tempContainer.firstElementChild;
+      if (!newPageElement?.classList.contains("page")) return null;
+      newPageElement.classList.add("hidden");
+      pageContentArea.appendChild(newPageElement);
+      this.pageCache.set(pageId, newPageElement);
+      if (!this.initializedPages.has(pageId)) {
+        this.ui.initializePage(pageId);
+        this.initializedPages.add(pageId);
+      }
+      return newPageElement;
+    } catch (error) {
+      logger.error(
+        "PageRouter: Failed to preload page \"%s\": %s",
+        pageId,
+        error?.stack || error?.message || String(error)
+      );
+      return null;
     }
   }
 
@@ -121,13 +152,17 @@ export class PageRouter {
       return;
     }
 
-    const wasOnReactorPage = this.currentPageId === "reactor_section";
-    const goingToReactorPage = pageId === "reactor_section";
-    this._applyPauseStateForNavigation(wasOnReactorPage, goingToReactorPage);
+    const wasSimVisible = isSimVisiblePage(this.currentPageId);
+    const goingSimVisible = isSimVisiblePage(pageId);
+    this._applyPauseStateForNavigation(wasSimVisible, goingSimVisible);
 
-    if (this.currentPageId === "upgrades_section" && goingToReactorPage) {
-      setPageReactorVisibility(this.ui, false);
-      setTimeout(() => setPageReactorVisibility(this.ui, true), 250);
+    if (isShopOverlayPage(pageId)) {
+      await this._ensurePageInCache("reactor_section");
+      const reactorPage = this.pageCache.get("reactor_section");
+      if (reactorPage) {
+        reactorPage.classList.remove("hidden");
+        setPageReactorVisibility(this.ui, true);
+      }
     }
 
     const earlyPageDef = this.pages[pageId];
@@ -145,7 +180,14 @@ export class PageRouter {
     }
 
     if (this.currentPageId && this.pageCache.has(this.currentPageId)) {
-      this.pageCache.get(this.currentPageId).classList.add("hidden");
+      const hidePrevious = !(this.currentPageId === "reactor_section" && isShopOverlayPage(pageId));
+      if (hidePrevious) {
+        this.pageCache.get(this.currentPageId).classList.add("hidden");
+      }
+    }
+
+    if (!goingSimVisible && this.pageCache.has("reactor_section")) {
+      this.pageCache.get("reactor_section").classList.add("hidden");
     }
 
     const hadPreviousPage = this.currentPageId != null;
@@ -162,7 +204,7 @@ export class PageRouter {
       const cachedPage = this.pageCache.get(pageId);
       cachedPage.classList.remove("hidden");
 
-      initializePage(this.ui, pageId);
+      this.ui.initializePage(pageId);
 
       if (pageId === "reactor_section" && this.ui.resizeReactor) {
         this.ui.resizeReactor();
@@ -214,7 +256,7 @@ export class PageRouter {
         });
 
         if (!this.initializedPages.has(pageId)) {
-          initializePage(this.ui, pageId);
+          this.ui.initializePage(pageId);
           this.initializedPages.add(pageId);
         }
 
@@ -274,24 +316,6 @@ export class PageRouter {
       if (pageId === "privacy_policy_section") {
         this.populatePrivacyPolicyDate();
       }
-
-      const bodyClasses = document.body.className.split(" ");
-      const cleanClasses = bodyClasses.filter(
-        (cls) =>
-          cls === `page-${pageId.replace("_section", "")}` ||
-          (!cls.startsWith("page-") &&
-            !cls.includes("panel") &&
-            !cls.includes("open"))
-      );
-      document.body.className = cleanClasses.join(" ");
-
-      if (
-        !document.body.classList.contains(
-          `page-${pageId.replace("_section", "")}`
-        )
-      ) {
-        document.body.classList.add(`page-${pageId.replace("_section", "")}`);
-      }
     }
   }
 
@@ -350,6 +374,7 @@ export class PageRouter {
       const wrapper = document.getElementById("wrapper");
       if (wrapper) {
         render(gameShellTemplate(), wrapper);
+        dedupeReactorStatsDom();
         wrapper.classList.remove("hidden");
       } else {
         logger.log("error", "ui", "PageRouter: #wrapper element not found to load game layout.");
@@ -357,5 +382,11 @@ export class PageRouter {
     } catch (error) {
       logger.log("error", "ui", "PageRouter: Failed to render game layout:", error);
     }
+  }
+
+  resetForSplashReturn() {
+    this.pageCache.clear();
+    this.initializedPages.clear();
+    this.currentPageId = null;
   }
 }

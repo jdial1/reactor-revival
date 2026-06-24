@@ -1,5 +1,29 @@
-/* BUILD ROW (Above Control Deck, Reactor Page Only): 5 quick-select slots full width */
+﻿/* BUILD ROW (Above Control Deck, Reactor Page Only): 5 quick-select slots full width */
 #build_above_deck_row { position: fixed; z-index: 26; right: env(safe-area-inset-right); bottom: calc(var(--bottom-nav-height, 40px) + 120px + env(safe-area-inset-bottom)); left: env(safe-area-inset-left); display: none; height: 58px; box-sizing: border-box; align-items: stretch; padding-right: 4px; padding-left: 4px; gap: 4px;
+}
+
+#build_above_deck_row .macro-toolbar-anchor { position: relative; display: flex; width: 52px; min-width: 52px; max-width: 52px; flex: 0 0 52px;
+}
+
+#build_above_deck_row .macro-toolbar-fab.is-macro-active { border-color: var(--sovietwave-amber) var(--bevel-dark) var(--bevel-dark) var(--sovietwave-amber); box-shadow: inset 2px 2px 8px rgb(0 0 0 / 65%), 0 0 0 1px rgb(0 0 0 / 40%), 2px 2px 0 rgb(0 0 0 / 50%);
+}
+
+#build_above_deck_row .macro-toolbar-fab-icon { font-size: 0.95rem;
+}
+
+#build_above_deck_row .macro-toolbar-popover { position: absolute; z-index: 35; bottom: calc(100% + 4px); left: 0; display: flex; min-width: 52px; flex-direction: column; padding: 4px; border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background: rgb(40 40 40); box-shadow: 2px 2px 0 rgb(0 0 0 / 50%); gap: 2px;
+}
+
+#build_above_deck_row .macro-toolbar-popover.hidden { display: none;
+}
+
+#build_above_deck_row .macro-toolbar-popover .macro-toolbar-btn { display: block; width: 100%; padding: 6px 8px; border: 2px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background: rgb(55 55 55); color: rgb(220 220 220); cursor: pointer; font-family: "Press Start 2P", cursive, monospace; font-size: 0.5rem; line-height: 1.3; text-align: center; text-shadow: 1px 1px 0 black;
+}
+
+#build_above_deck_row .macro-toolbar-popover .macro-toolbar-btn.is-active { border-color: var(--sovietwave-amber) var(--bevel-dark) var(--bevel-dark) var(--sovietwave-amber); background: rgb(70 60 35); color: rgb(255 236 179);
+}
+
+#build_above_deck_row .macro-toolbar-popover .macro-toolbar-btn:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); box-shadow: inset 2px 2px 4px rgb(0 0 0 / 50%);
 }
 
 #build_above_deck_row .quick-select-slots { display: grid; width: 100%; flex: 1; grid-template-columns: minmax(0, 1fr) 52px; gap: 4px; align-items: stretch; min-width: 0;
@@ -62,22 +86,22 @@
 #build_above_deck_row .control-deck-fab:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); box-shadow: inset 2px 2px 5px rgb(0 0 0 / 50%); transform: none !important;
 }
 
-body.page-upgrades #build_above_deck_row,
-body.page-experimental_upgrades #build_above_deck_row,
-body.page-leaderboard #build_above_deck_row,
-body.page-about #build_above_deck_row { display: none !important;
+#wrapper.page-upgrades #build_above_deck_row,
+#wrapper.page-experimental_upgrades #build_above_deck_row,
+#wrapper.page-leaderboard #build_above_deck_row,
+#wrapper.page-about #build_above_deck_row { display: none !important;
 }
 
 @media (width <= 900px) { #build_above_deck_row { display: flex;
  }
 
- body.page-reactor #build_above_deck_row { display: flex;
+ #wrapper.page-reactor #build_above_deck_row { display: flex;
  }
 
- body.page-upgrades #build_above_deck_row,
- body.page-experimental_upgrades #build_above_deck_row,
- body.page-leaderboard #build_above_deck_row,
- body.page-about #build_above_deck_row { display: none !important;
+ #wrapper.page-upgrades #build_above_deck_row,
+ #wrapper.page-experimental_upgrades #build_above_deck_row,
+ #wrapper.page-leaderboard #build_above_deck_row,
+ #wrapper.page-about #build_above_deck_row { display: none !important;
  }
 }
 /* MOBILE PASSIVE TOP BAR (EP | Money | Pause) */
@@ -130,22 +154,22 @@ body.page-about #build_above_deck_row { display: none !important;
  .mobile-passive-top-bar { display: flex !important;
  }
 
- body.page-reactor .mobile-passive-top-bar { padding-right: 8px;
+ #wrapper.page-reactor .mobile-passive-top-bar { padding-right: 8px;
  }
 
- body.page-reactor #objectives_toast_btn:not(.is-expanded) { top: calc(env(safe-area-inset-top) + 4px); right: 110px; left: auto; width: 44px; height: 44px; border-width: 4px; box-shadow: none;
+ #wrapper.page-reactor #objectives_toast_btn:not(.is-expanded) { top: calc(env(safe-area-inset-top) + 4px); right: 110px; left: auto; width: 44px; height: 44px; border-width: 4px; box-shadow: none;
  }
 
- body.page-reactor #reactor_copy_paste_btns.collapsed { position: fixed !important; z-index: 1002 !important; top: calc(env(safe-area-inset-top) + 4px) !important; right: 60px !important; left: auto !important; display: flex !important; align-items: flex-start; justify-content: flex-start; margin: 0 !important; transform: none !important; pointer-events: auto !important;
+ #wrapper.page-reactor #reactor_copy_paste_btns.collapsed { position: fixed !important; z-index: 1002 !important; top: calc(env(safe-area-inset-top) + 4px) !important; right: 60px !important; left: auto !important; display: flex !important; align-items: flex-start; justify-content: flex-start; margin: 0 !important; transform: none !important; pointer-events: auto !important;
  }
 
- body.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle { display: inline-flex !important; width: 44px !important; min-width: 44px !important; height: 44px !important; min-height: 44px !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; overflow: visible !important;
+ #wrapper.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle { display: inline-flex !important; width: 44px !important; min-width: 44px !important; height: 44px !important; min-height: 44px !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; overflow: visible !important;
  }
 
- body.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .expand-icon { display: inline-block !important; opacity: 1 !important; visibility: visible !important; color: rgb(255 255 255) !important;
+ #wrapper.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .expand-icon { display: inline-block !important; opacity: 1 !important; visibility: visible !important; color: rgb(255 255 255) !important;
  }
 
- body.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .collapse-icon { display: none !important;
+ #wrapper.page-reactor #reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .collapse-icon { display: none !important;
  }
 
  #wrapper { padding-top: calc(var(--mobile-passive-top-height) + env(safe-area-inset-top));
@@ -158,10 +182,10 @@ body.page-about #build_above_deck_row { display: none !important;
 @media (width <= 900px) { #reactor_control_deck { display: block;
  }
 
- body.page-upgrades #reactor_control_deck,
- body.page-experimental_upgrades #reactor_control_deck,
- body.page-leaderboard #reactor_control_deck,
- body.page-about #reactor_control_deck { display: none !important;
+ #wrapper.page-upgrades #reactor_control_deck,
+ #wrapper.page-experimental_upgrades #reactor_control_deck,
+ #wrapper.page-leaderboard #reactor_control_deck,
+ #wrapper.page-about #reactor_control_deck { display: none !important;
  }
 
  #reactor_control_deck .control-deck-grid { grid-template-columns: 1fr 1fr;
@@ -186,7 +210,7 @@ body.page-about #build_above_deck_row { display: none !important;
 .control-deck-tick-line { flex: 0 0 auto; color: rgb(140 200 160); font-family: "Press Start 2P", cursive, monospace; font-size: 0.55rem; white-space: nowrap;
 }
 
-.control-deck-item { position: relative; display: flex; overflow: hidden; height: 100%; align-items: center; align-self: stretch; justify-content: center; padding: 0; border: 4px solid; border-color: rgb(102 102 102) rgb(34 34 34) rgb(34 34 34) rgb(102 102 102); border-radius: 0; background: rgb(40 40 40); box-shadow: 3px 3px 0 rgb(0 0 0 / 50%); cursor: pointer; transition: transform 0.05s steps(2, end), filter 0.05s steps(2, end);
+.control-deck-item { position: relative; display: flex; overflow: hidden; height: 100%; align-items: center; align-self: stretch; justify-content: center; padding: 0; border: 4px solid; border-color: rgb(102 102 102) rgb(34 34 34) rgb(34 34 34) rgb(102 102 102); border-radius: 0; background: rgb(40 40 40); box-shadow: 3px 3px 0 rgb(0 0 0 / 50%); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform 0.05s steps(2, end), filter 0.05s steps(2, end);
 }
 
 .control-deck-item:hover { z-index: 10; filter: brightness(1.1); transform: translateY(-2px);
@@ -274,7 +298,7 @@ body.page-about #build_above_deck_row { display: none !important;
 .power-capacitor { background: rgb(40 40 40);
 }
 
-.power-fill { position: absolute; z-index: 1; bottom: 0; left: 0; width: 100%; height: var(--power-fill-height, 0%); background-color: rgb(253 216 53 / 70%);
+.power-fill { position: absolute; z-index: 1; bottom: 0; left: 0; width: 100%; height: var(--power-fill-height, 0%); pointer-events: none; background-color: rgb(253 216 53 / 70%);
  background-image: repeating-linear-gradient(90deg, rgb(253 216 53 / 92%) 0 calc(100% / var(--vu-segments) - 1px), rgb(0 0 0 / 55%) calc(100% / var(--vu-segments) - 1px) calc(100% / var(--vu-segments))), repeating-linear-gradient(to bottom, transparent 0, transparent 6px, rgb(0 0 0 / 14%) 6px, rgb(0 0 0 / 14%) 7px), linear-gradient(45deg, rgb(255 255 255 / 15%) 25%, transparent 25%, transparent 50%, rgb(255 255 255 / 15%) 50%, rgb(255 255 255 / 15%) 75%, transparent 75%, transparent); background-size: 100% 100%, 100% 7px, 20px 20px; box-shadow: 0 -2px 10px rgb(253 216 53 / 40%); transition: height 0.22s steps(var(--vu-segments), end);
 }
 /* Money Scoreboard - Recessed Display */
@@ -336,7 +360,7 @@ body.page-about #build_above_deck_row { display: none !important;
  88%, 100% { transform: translateY(120%); opacity: 0; }
 }
 
-.heat-fill { position: absolute; z-index: 1; bottom: 0; left: 0; width: 100%; height: var(--heat-fill-height, 0%); background-image:
+.heat-fill { position: absolute; z-index: 1; bottom: 0; left: 0; width: 100%; height: var(--heat-fill-height, 0%); pointer-events: none; background-image:
   repeating-linear-gradient(90deg, rgb(244 95 65 / 95%) 0 calc(100% / var(--vu-segments) - 1px), rgb(0 0 0 / 50%) calc(100% / var(--vu-segments) - 1px) calc(100% / var(--vu-segments))),
   repeating-linear-gradient(to bottom, transparent 0, transparent 6px, rgb(0 0 0 / 18%) 6px, rgb(0 0 0 / 18%) 7px),
   linear-gradient(
@@ -383,3 +407,4 @@ body.page-about #build_above_deck_row { display: none !important;
  100% { opacity: 0; transform: translateX(calc(-50% + var(--steam-offset-x, 0px))) translateY(-80px) scale(1.5);
  }
 }
+

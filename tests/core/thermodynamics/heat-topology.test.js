@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, setupGame, assertGridIndexMatchesTileset } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGame, assertGridIndexMatchesTileset , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
 
 function refreshHeatSegments(game) {
-  game.engine.markPartCacheAsDirty();
-  game.engine._updatePartCaches();
+  syncActivePartsAtTickBoundary(game.engine);
+
   game.engine.heatManager.markSegmentsAsDirty();
 }
 
@@ -52,8 +52,8 @@ describe("Heat Network Topology", () => {
     const part = game.partset.getPartById("uranium1");
     if (part?.base_ticks) cellTile.ticks = part.base_ticks;
 
-    game.engine.markPartCacheAsDirty();
-    game.engine._updatePartCaches();
+    syncActivePartsAtTickBoundary(game.engine);
+
     game.engine.manualTick();
 
     expect(cellTile.ticks).toBeLessThan(120);
@@ -72,8 +72,8 @@ describe("Heat Network Topology", () => {
   it("active_cells includes cell after dimension change", async () => {
     const cellTile = await placePart(game, 9, 4, "uranium1");
 
-    game.engine.markPartCacheAsDirty();
-    game.engine._updatePartCaches();
+    syncActivePartsAtTickBoundary(game.engine);
+
 
     expect(game.engine.active_cells).toContain(cellTile);
   });
@@ -117,7 +117,7 @@ describe("Heat Network Topology", () => {
     refreshHeatSegments(game);
     const hm = game.engine.heatManager;
     expect(hm.getSegmentForTile(mid)).toBe(hm.getSegmentForTile(rightVent));
-    game.sellPart(mid);
+    await game.sellPart(mid);
     refreshHeatSegments(game);
     const left = game.tileset.getTile(9, 4);
     const right = game.tileset.getTile(11, 4);

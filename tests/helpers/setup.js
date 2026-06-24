@@ -290,6 +290,7 @@ export { forceActiveObjective, forceActiveObjective as forceObjective } from "./
 export * from "./suiteHelpers.js";
 export { performTestRespec as testRespec, clearGracePeriod as skipGrace } from "./suiteHelpers.js";
 export { MemoryAuditor } from "./memoryAuditor.js";
+export { syncActivePartsAtTickBoundary, invalidateTickParts } from "@app/domain/part-classification.js";
 
 // --- Phase 3: Test Utilities & Enhanced Debugging ---
 
@@ -607,6 +608,17 @@ function injectHTMLContent(document, htmlContent) {
   document.body.appendChild(fragment);
 }
 
+export function pinEngineToSyncMode(engine) {
+  if (!engine) return;
+  engine._workerFailed = true;
+  engine._forceGameLoopWorkerOff = true;
+  engine._gameLoopWorkerFailed = true;
+  engine._workerPending = false;
+  engine._workerTickContext = null;
+  engine._gameLoopWorkerPending = false;
+  engine._gameLoopWorkerPendingSince = 0;
+}
+
 /**
  * Sets up a game instance for CORE LOGIC tests without a real DOM.
  * Reuses a single game instance and resets it for performance.
@@ -638,8 +650,11 @@ export async function setupGameLogicOnly() {
     // Further mock UI methods as needed...
 
     const game = new Game(mockedUI);
+    const { createGameSaveManager } = await import("@app/domain/game-save.js");
+    game.saveManager = createGameSaveManager(game);
     await mockedUI.init(game);
     game.engine = new Engine(game);
+    pinEngineToSyncMode(game.engine);
     game.objectives_manager = new ObjectiveManager(game);
 
     // CRITICAL FIX: The tileset must be initialized to create the grid.
@@ -656,6 +671,7 @@ export async function setupGameLogicOnly() {
   globalGameInstance.bypass_tech_tree_restrictions = true;
   grantInfiniteResources(globalGameInstance);
   globalGameInstance.paused = false;
+  pinEngineToSyncMode(globalGameInstance.engine);
 
   return globalGameInstance;
 }
@@ -693,6 +709,8 @@ export async function setupGameWithDOM() {
 
   const ui = new UI();
   const game = new Game(ui);
+  const { createGameSaveManager } = await import("@app/domain/game-save.js");
+  game.saveManager = createGameSaveManager(game);
   game.router = new PageRouter(ui);
   await ui.init(game);
   await game.partset.initialize();
@@ -725,7 +743,7 @@ export async function setupGameWithDOM() {
   }
 
   game.engine = new Engine(game);
-  game.engine._workerFailed = true;
+  pinEngineToSyncMode(game.engine);
 
   // CRITICAL: Initialize audio service like in app.js
   const { AudioService } = await import("@app/services.js");
@@ -744,7 +762,6 @@ export async function setupGameWithDOM() {
 
 export async function setupGame() {
   const { game } = await setupGameWithDOM();
-  // For older tests that expect the engine to be running immediately.
   if (game.engine && !game.engine.running) {
     game.paused = false;
     game.engine.start();

@@ -8,28 +8,54 @@
 #meltdown_vignette { position: absolute; inset: 0; z-index: 25; pointer-events: none; border-radius: 0; background: radial-gradient(ellipse 80% 80% at 50% 50%, transparent 20%, rgb(80 0 0 / 35%) 55%, rgb(40 0 0 / 85%) 100%); opacity: 0; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light); transition: opacity 0.05s steps(4, end);
 }
 
-body.blueprint-planner-active #reactor_background { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 24px rgb(0 150 200 / 25%); background: rgb(0 80 120 / 8%);
+#meltdown_strobe { position: absolute; inset: 0; z-index: 26; pointer-events: none; border-radius: 8px; background: rgb(255 0 0 / 40%); mix-blend-mode: overlay; opacity: 0;
 }
 
-body.blueprint-planner-active #reactor_section { --blueprint-accent: rgb(0 180 220);
+#wrapper.meltdown-buildup #meltdown_vignette { display: block; animation: meltdown-vignette-buildup 2.5s ease-in forwards;
 }
 
-body.blueprint-planner-active #reactor_wrapper { position: relative; background: linear-gradient(rgb(15 30 40 / 60%) 1px, transparent 1px), linear-gradient(90deg, rgb(15 30 40 / 60%) 1px, transparent 1px); background-size: var(--tile-size, 48px) var(--tile-size, 48px); background-position: center center; border-radius: 8px; box-shadow: inset 0 0 0 2px rgb(0 150 200 / 30%), inset 0 0 40px 12px rgb(0 0 0 / 75%), 5px 5px 0 #333; animation: none;
+#wrapper.meltdown-buildup #meltdown_strobe { display: block; animation: meltdown-strobe-pulse 2.5s linear forwards;
 }
 
-body.blueprint-planner-active #reactor_section .tile { border-style: dashed !important; border-color: rgb(40 90 110) !important; background-color: rgb(15 25 32) !important; background-image: none !important; box-shadow: inset 0 1px 2px rgb(0 0 0 / 50%) !important; transform: none !important;
+#wrapper.meltdown-buildup #reactor_wrapper { animation: meltdown-shake 0.08s infinite;
 }
 
-body.blueprint-planner-active #reactor_section .tile:hover { border-color: var(--blueprint-accent);
+@keyframes meltdown-shake { 0%, 100% { transform: translate(0, 0); }
+ 25% { transform: translate(-4px, 3px); }
+ 50% { transform: translate(4px, -3px); }
+ 75% { transform: translate(-3px, -4px); }
+}
+
+@keyframes meltdown-vignette-buildup { from { opacity: 0; }
+ to { opacity: 0.9; }
+}
+
+@keyframes meltdown-strobe-pulse { 0%, 100% { opacity: 0; }
+ 50% { opacity: 0.38; }
+}
+
+#wrapper.blueprint-planner-active #reactor_background { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 24px rgb(0 150 200 / 25%); background: rgb(0 80 120 / 8%);
+}
+
+#wrapper.blueprint-planner-active #reactor_section { --blueprint-accent: rgb(0 180 220);
+}
+
+#wrapper.blueprint-planner-active #reactor_wrapper { position: relative; background: linear-gradient(rgb(15 30 40 / 60%) 1px, transparent 1px), linear-gradient(90deg, rgb(15 30 40 / 60%) 1px, transparent 1px); background-size: var(--tile-size, 48px) var(--tile-size, 48px); background-position: center center; border-radius: 8px; box-shadow: inset 0 0 0 2px rgb(0 150 200 / 30%), inset 0 0 40px 12px rgb(0 0 0 / 75%), 5px 5px 0 #333; animation: none;
+}
+
+#wrapper.blueprint-planner-active #reactor_section .tile { border-style: dashed !important; border-color: rgb(40 90 110) !important; background-color: rgb(15 25 32) !important; background-image: none !important; box-shadow: inset 0 1px 2px rgb(0 0 0 / 50%) !important; transform: none !important;
+}
+
+#wrapper.blueprint-planner-active #reactor_section .tile:hover { border-color: var(--blueprint-accent);
 }
 
 .blueprint-planner-hud { display: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; max-width: 220px; padding: 6px 8px; border: 2px solid rgb(0 120 160 / 50%); border-radius: 4px; background: rgb(20 35 45 / 95%); color: rgb(220 240 255); font-size: 0.65rem; line-height: 1.2;
 }
 
-body.blueprint-planner-active .blueprint-planner-hud { display: flex;
+#wrapper.blueprint-planner-active .blueprint-planner-hud { display: flex;
 }
 
-body.page-reactor #reactor_copy_paste_btns.collapsed .blueprint-planner-hud { display: none !important;
+#wrapper.page-reactor #reactor_copy_paste_btns.collapsed .blueprint-planner-hud { display: none !important;
 }
 
 .blueprint-planner-hud .pixel-btn { padding: 4px 8px; font-size: 0.65rem;
@@ -50,13 +76,13 @@ body.page-reactor #reactor_copy_paste_btns.collapsed .blueprint-planner-hud { di
 .reactor-plan-state--active { display: none;
 }
 
-body.blueprint-planner-active #reactor_blueprint_toggle.reactor-plan-toggle { border-color: rgb(0 200 255) rgb(0 60 90) rgb(0 60 90) rgb(0 200 255) !important; background: rgb(0 100 140) !important; box-shadow: 0 0 12px rgb(0 180 220 / 45%), 3px 3px 0 var(--bevel-shadow) !important; color: rgb(210 245 255) !important;
+#wrapper.blueprint-planner-active #reactor_blueprint_toggle.reactor-plan-toggle { border-color: rgb(0 200 255) rgb(0 60 90) rgb(0 60 90) rgb(0 200 255) !important; background: rgb(0 100 140) !important; box-shadow: 0 0 12px rgb(0 180 220 / 45%), 3px 3px 0 var(--bevel-shadow) !important; color: rgb(210 245 255) !important;
 }
 
-body.blueprint-planner-active #reactor_blueprint_toggle .reactor-plan-state--live { display: none;
+#wrapper.blueprint-planner-active #reactor_blueprint_toggle .reactor-plan-state--live { display: none;
 }
 
-body.blueprint-planner-active #reactor_blueprint_toggle .reactor-plan-state--active { display: block;
+#wrapper.blueprint-planner-active #reactor_blueprint_toggle .reactor-plan-state--active { display: block;
 }
 /* Heat wiggle animation for individual tiles when heat gets too high */
 @keyframes tile-heat-wiggle { 0%, 100% { transform: translateX(0) translateY(0); }
@@ -140,7 +166,7 @@ body.blueprint-planner-active #reactor_blueprint_toggle .reactor-plan-state--act
 }
 
 .tile { position: relative; width: var(--tile-size); max-width: 64px; height: var(--tile-size); max-height: 64px; /* Ensure tiles are properly positioned in the grid */
- box-sizing: border-box; border: 3px solid #000 !important; background-color: #1a1d1a !important; background-image: var(--machined-texture) !important; background-size: 8px 8px !important; background-position: center; background-repeat: repeat; cursor: pointer; transition: none !important; box-shadow: var(--well-depth) !important;
+ box-sizing: border-box; border: 3px solid var(--neutral-black) !important; background-color: var(--gost-chassis) !important; background-image: var(--machined-texture) !important; background-size: 8px 8px !important; background-position: center; background-repeat: repeat; cursor: pointer; transition: none !important; box-shadow: var(--well-depth) !important;
 }
 
 @media (width >= 901px) { .tile { width: var(--tile-size); height: var(--tile-size);
@@ -285,3 +311,4 @@ body.blueprint-planner-active #reactor_blueprint_toggle .reactor-plan-state--act
 
 .tile.selling .sell-indicator { display: none; opacity: 0; /* Keep opacity at 0 even when selling */
 }
+

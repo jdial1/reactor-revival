@@ -1,4 +1,4 @@
-import { numFormat as fmt, resolveDomElement } from "./utils.js";
+import { numFormat as fmt } from "./format/numbers.js";
 
 const partMappings = { "Quad Plutonium Cells": "./img/parts/cell_2_4.png", "Quad Thorium Cells": "./img/parts/cell_3_4.png", "Quad Seaborgium Cells": "./img/parts/cell_4_4.png", "Quad Dolorium Cells": "./img/parts/cell_5_4.png", "Quad Nefastium Cells": "./img/parts/cell_6_4.png", "Particle Accelerators": "./img/parts/accelerator_1.png", "Plutonium Cells": "./img/parts/cell_2_1.png", "Thorium Cells": "./img/parts/cell_3_1.png", "Seaborgium Cells": "./img/parts/cell_4_1.png", "Dolorium Cells": "./img/parts/cell_5_1.png", "Nefastium Cells": "./img/parts/cell_6_1.png", "Heat Vent": "./img/parts/vent_1.png", "Capacitors": "./img/parts/capacitor_1.png", "Dual Cell": "./img/parts/cell_1_2.png", "Uranium Cell": "./img/parts/cell_1_1.png", "Capacitor": "./img/parts/capacitor_1.png", "Cells": "./img/parts/cell_1_1.png", "Cell": "./img/parts/cell_1_1.png", "experimental part": "./img/parts/xcell_1_1.png", "Improved Chronometers upgrade": "./img/upgrades/upgrade_flux.png", "Improved Chronometers": "./img/upgrades/upgrade_flux.png", "Power": "./img/ui/icons/icon_power.png", "Heat": "./img/ui/icons/icon_heat.png", "Exotic Particles": "🧬" };
 
@@ -20,15 +20,10 @@ export function addPartIconsToTitle(game, title) {
   return processedTitle;
 }
 
-export function getObjectiveScrollDuration() { const baseWidth = 900; const baseDuration = 8; const screenWidth = (typeof window !== "undefined" && window.innerWidth) ? window.innerWidth : baseWidth; const duration = baseDuration * (screenWidth / baseWidth); return Math.max(5, Math.min(18, duration)); }
-
-export function checkObjectiveTextScrolling(domElements) {
-  const toastTitleEl = resolveDomElement(domElements?.objectives_toast_title)
-    ?? (typeof document !== "undefined" ? document.getElementById("objectives_toast_title") : null);
-  if (!toastTitleEl) return;
-  toastTitleEl.style.animation = "none";
-  toastTitleEl.classList.remove("objectives-toast-title--typewriter");
-  const text = toastTitleEl.textContent || "";
-  if (!text.trim()) return;
-  toastTitleEl.textContent = text;
+export function getObjectiveScrollDuration() {
+  const baseWidth = 900;
+  const baseDuration = 8;
+  const screenWidth = (typeof window !== "undefined" && window.innerWidth) ? window.innerWidth : baseWidth;
+  const duration = baseDuration * (screenWidth / baseWidth);
+  return Math.max(5, Math.min(18, duration));
 }

@@ -1,13 +1,19 @@
-export function syncReactorHeatVisualDom(ui, heatRatio) {
+import { getPageReactor, getPageReactorBackground } from "./components/page-dom.js";
+
+export function isHeatNetBalanced(netHeat, heatGeneration) {
+  const net = Number(netHeat);
+  const gen = Number(heatGeneration);
+  return Number.isFinite(net) && net <= 0 && Number.isFinite(gen) && gen > 0;
+}
+
+export function syncReactorHeatVisualDom(ui, heatRatio, netHeat, heatGeneration) {
   if (typeof document === "undefined") return;
-  const background =
-    document.getElementById("reactor_background") ||
-    ui?.DOMElements?.reactor_background ||
-    null;
+  const heatBalanced = isHeatNetBalanced(netHeat, heatGeneration);
+  const background = getPageReactorBackground(ui);
   if (background) {
     const ratio = Number(heatRatio);
     const hr = Number.isFinite(ratio) ? ratio : 0;
-    const cd = Math.min(1.5, Math.max(0, hr));
+    const cd = heatBalanced ? Math.min(0.5, Math.max(0, hr)) : Math.min(1.5, Math.max(0, hr));
     if (ui?.uiState) {
       ui.uiState.core_danger = cd;
     } else {
@@ -23,10 +29,12 @@ export function syncReactorHeatVisualDom(ui, heatRatio) {
     if (hr <= 0.5) background.style.backgroundColor = "transparent";
     else background.style.removeProperty("background-color");
     background.classList.remove("heat-warning", "heat-critical");
-    if (hr >= 1.3) background.classList.add("heat-warning", "heat-critical");
-    else if (hr >= 0.8) background.classList.add("heat-warning");
+    if (!heatBalanced) {
+      if (hr >= 1.3) background.classList.add("heat-warning", "heat-critical");
+      else if (hr >= 0.8) background.classList.add("heat-warning");
+    }
   }
-  const reactorEl = document.getElementById("reactor");
+  const reactorEl = getPageReactor(ui);
   if (reactorEl) {
     const r = Number(heatRatio);
     const hr = Math.round(Math.min(1.5, Math.max(0, Number.isFinite(r) ? r : 0)) * 1000) / 1000;

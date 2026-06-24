@@ -176,26 +176,26 @@ export function updateNotificationModalTemplate(currentVersion, newVersion, onRe
  }
 
  .update-notification-content {
-  background: #2a2a2a; border: 2px solid #4a4a4a; border-radius: 8px;
-  padding: 20px; max-width: 400px; text-align: center; color: #fff;
-  box-shadow: 0 4px 20px rgb(0 0 0 / 50%);
+  background: var(--alert-panel-bg); border: 2px solid var(--neutral-550); border-radius: 8px;
+  padding: 20px; max-width: 400px; text-align: center; color: var(--text-primary);
+  box-shadow: 0 4px 20px var(--alpha-black-50);
  }
- .update-notification-content h3 { margin: 0 0 15px; color: #4CAF50; font-size: 1.2em; }
+ .update-notification-content h3 { margin: 0 0 15px; color: var(--status-success); font-size: 1.2em; }
  .version-comparison { margin: 15px 0; display: flex; justify-content: space-around; gap: 20px; }
  .version-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
- .version-label { font-size: 0.9em; color: #ccc; }
+ .version-label { font-size: 0.9em; color: var(--neutral-200); }
  .version-value { font-size: 1.1em; font-weight: bold; padding: 5px 10px; border-radius: 4px; }
- .version-value.current { background: #f44336; color: white; }
- .version-value.latest { background: #4CAF50; color: white; }
+ .version-value.current { background: var(--status-danger); color: var(--text-primary); }
+ .version-value.latest { background: var(--status-success); color: var(--text-primary); }
  .update-instruction { margin: 15px 0; font-size: 0.9em; line-height: 1.4; }
- .update-instruction a { color: #4CAF50; text-decoration: none; }
+ .update-instruction a { color: var(--status-success); text-decoration: none; }
  .update-instruction a:hover { text-decoration: underline; }
  .update-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
  .update-btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 0.9em; transition: background-color 0.2s; }
- .update-btn.refresh { background: #4CAF50; color: white; }
- .update-btn.refresh:hover { background: #45a049; }
- .update-btn.dismiss { background: #666; color: white; }
- .update-btn.dismiss:hover { background: #777; }
+ .update-btn.refresh { background: var(--status-success); color: var(--text-primary); }
+ .update-btn.refresh:hover { background: var(--alert-success-hover); }
+ .update-btn.dismiss { background: var(--neutral-450); color: var(--text-primary); }
+ .update-btn.dismiss:hover { background: var(--neutral-400); }
     </style>
     <div class="update-notification-content">
       <h3>🚀 Update Available!</h3>
@@ -221,14 +221,44 @@ export function updateNotificationModalTemplate(currentVersion, newVersion, onRe
   `;
 }
 
-export function updateToastTemplate(onRefresh, onClose) {
+export function updateToastTemplate(onRefresh, onClose, { summary, bullets = [] } = {}) {
+  const text = summary ?? "New content available, click to reload.";
   return html`
     <div class="update-toast-content">
       <div class="update-toast-message">
-        <span class="update-toast-text">New content available, click to reload.</span>
+        <span class="update-toast-text">${text}</span>
+        ${bullets.length
+          ? html`<ul class="update-toast-bullets">${bullets.map((b) => html`<li>${b}</li>`)}</ul>`
+          : null}
       </div>
       <button class="update-toast-button" @click=${onRefresh}>Reload</button>
       <button class="update-toast-close" @click=${onClose}>×</button>
+    </div>
+  `;
+}
+
+export function changelogModalTemplate({ title, entries, onClose, onReload }) {
+  return html`
+    <div class="changelog-modal-overlay" @click=${(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+      <div class="changelog-modal pixel-panel" role="dialog" aria-labelledby="changelog_modal_title">
+        <h2 id="changelog_modal_title">${title}</h2>
+        <div class="changelog-modal-body">
+          ${entries.length === 0
+            ? html`<p class="changelog-empty">No changelog entries available.</p>`
+            : entries.map((entry) => html`
+              <section class="changelog-entry">
+                <h3 class="changelog-entry-version">${entry.version}${entry.date ? html`<span class="changelog-entry-date">${entry.date}</span>` : null}</h3>
+                <ul class="changelog-entry-bullets">
+                  ${entry.bullets.map((b) => html`<li>${b}</li>`)}
+                </ul>
+              </section>
+            `)}
+        </div>
+        <div class="changelog-modal-actions">
+          ${onReload ? html`<button type="button" class="pixel-btn nav-btn btn-start" @click=${onReload}>Reload</button>` : null}
+          <button type="button" class="pixel-btn nav-btn" @click=${onClose}>Close</button>
+        </div>
+      </div>
     </div>
   `;
 }

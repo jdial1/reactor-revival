@@ -1,5 +1,5 @@
-import { html } from "lit-html";
-import { repeat, classMap } from "../utils.js";
+﻿import { html } from "lit-html";
+import { classMap, repeat } from "../dom/lit.js";
 
 export function infoBarTemplate({
   powerClass,
@@ -38,7 +38,8 @@ export function infoBarTemplate({
       </span>
       <span class="info-item hull info-item-hull">
         <span class="stats-inline-label">Hull</span>
-        <span id="info_hull_desktop" class="cathode-readout"></span>
+        <img src="img/parts/plating_1.png" class="icon" alt="Hull" />
+        <span class="value cathode-readout" id="info_hull_desktop"></span>
       </span>
       <span class="info-item ep" id="info_ep_desktop">
         <span class="ep-content" style=${epContentStyle} ?hidden=${!epVisible}>
@@ -275,10 +276,10 @@ export function partsPanelTabContentTemplate({
 
 export function controlDeckStatsBarTemplate() {
   return html`
-    <li><strong title="Total heat venting per tick"><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent" class="cathode-readout"></span></strong></li>
-    <li><strong title="Power per tick"><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power" class="cathode-readout"></span></strong></li>
-    <li><strong title="Heat per tick"><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat" class="cathode-readout"></span></strong></li>
-    <li><strong title="Reactor hull fill"><span class="stats-inline-label">Hull</span> <span id="stats_hull" class="cathode-readout"></span></strong></li>
+    <li class="reactor-stat reactor-stat--vent"><strong title="Total heat venting per tick"><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent" class="cathode-readout"></span></strong></li>
+    <li class="reactor-stat reactor-stat--power"><strong title="Total power per tick (cells + Stirling)"><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power" class="cathode-readout"></span></strong></li>
+    <li class="reactor-stat reactor-stat--heat"><strong title="Heat per tick"><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat" class="cathode-readout"></span></strong></li>
+    <li class="reactor-stat reactor-stat--hull"><strong title="Reactor hull fill"><span class="stats-inline-label">Hull</span> <span id="stats_hull" class="cathode-readout"></span></strong></li>
   `;
 }
 
@@ -477,6 +478,29 @@ export function copyPasteSelectedPartsCostTemplate({
   return html`<div style=${costStyle}>${text}</div>`;
 }
 
+export function copyPasteDialogShellTemplate() {
+  return html`
+    <div id="reactor_copy_paste_modal" class="copy-paste-dialog-host">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="reactor_copy_paste_modal_title">Reactor Layout</h3>
+          <button id="reactor_copy_paste_close_btn" type="button" title="Close" aria-label="Close Modal">×</button>
+        </div>
+        <textarea id="reactor_copy_paste_text" placeholder="Paste reactor layout data here..."></textarea>
+        <div id="reactor_copy_paste_preview_wrap" class="hidden">
+          <div id="reactor_copy_paste_preview_label">Preview</div>
+          <canvas id="reactor_copy_paste_preview"></canvas>
+        </div>
+        <div id="reactor_copy_paste_cost"></div>
+        <div class="modal-actions">
+          <button id="reactor_copy_paste_confirm_btn" type="button" class="hidden">Action</button>
+          <button id="reactor_copy_paste_partial_btn" type="button" class="hidden">Paste what I can afford</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export function myLayoutsTableRowTemplate({
   entryId,
   name,
@@ -668,6 +692,7 @@ export function quickStartTemplate({
             </div>
           </div>
           <div class="qs-warning">Excess Heat causes Critical Failure.</div>
+          <div class="qs-beta-note">Early access — balance and saves may change; export saves often.</div>
         </div>
         <footer class="qs-footer">
           <button type="button" id="quick-start-close" class="qs-btn-primary" @click=${() => onClose?.()}>INITIATE REACTOR</button>
@@ -723,6 +748,15 @@ export function quickStartTemplate({
   `;
 }
 
+export function statusNoticeToastTemplate({ tag, body }) {
+  return html`
+    <div class="decompression-saved-toast__panel status-notice-toast__panel" id="status_notice_inner">
+      <div class="decompression-saved-toast__tag">${tag}</div>
+      <div class="decompression-saved-toast__body">${body}</div>
+    </div>
+  `;
+}
+
 export function affordabilityBannerTemplate({
   hidden,
   message,
@@ -772,11 +806,11 @@ export function sectionHubMetaTemplate({
 }) {
   const affordableClass = affordable > 0 ? "section-affordable-badge" : "section-affordable-badge section-affordable-none";
   const affordableLabel = affordable > 0
-    ? `${affordable} affordable`
-    : (researched < total ? "none ready" : "0 affordable");
+    ? `${affordable} ready`
+    : (researched < total ? "none ready" : "complete");
   return html`
     <span class="section-hub-meta">
-      <span class="section-count">${researched}/${total} researched</span>
+      <span class="section-count">${researched}/${total}</span>
       <span class=${affordableClass}>${affordableLabel}</span>
     </span>
   `;

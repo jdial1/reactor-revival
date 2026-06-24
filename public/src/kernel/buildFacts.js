@@ -1,4 +1,4 @@
-import { toNumber } from "../utils.js";
+import { toNumber } from "../simUtils.js";
 
 export function buildFacts(game, engine, data) {
   const reactor = game.reactor;
@@ -14,10 +14,14 @@ export function buildFacts(game, engine, data) {
       if (u?.id && (u.level ?? 0) > 0) upgrades[u.id] = u.level;
     }
   }
+  const statsNetHeat = Number(game.state?.stats_net_heat ?? reactor.stats_net_heat ?? NaN);
+  const statsHeatGen = Number(game.state?.stats_heat_generation ?? reactor.stats_heat_generation ?? 0);
+  const netHeatBalanced = Number.isFinite(statsNetHeat) && statsNetHeat <= 0 && statsHeatGen > 0;
   return {
     reactorHeat,
     maxHeat,
     heatRatio,
+    netHeatBalanced,
     reactorPower: toNumber(reactor.current_power ?? 0),
     maxPower: toNumber(reactor.max_power ?? 0),
     tickCount,

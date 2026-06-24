@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, toNum } from "../../helpers/setup.js";
 import { infiniteMoneyLayout, buildLayoutGridFromCompact } from "../../fixtures/layouts.js";
 
 describe("Paused reactor should not generate money for provided layout", () => {
@@ -13,10 +13,12 @@ describe("Paused reactor should not generate money for provided layout", () => {
     });
 
     it("does not increase money while paused (even with auto-sell enabled)", async () => {
+        game.bypass_tech_tree_restrictions = true;
         const layoutGrid = buildLayoutGridFromCompact(infiniteMoneyLayout);
 
         // Apply layout to the reactor (deducts cost as well)
-        game.ui.copyPaste.pasteReactorLayout(layoutGrid);
+        game.ui.copyPaste.pasteReactorLayout(layoutGrid, { skipCostDeduction: true });
+        await game.engine.consumeIntentQueueAsync();
         game.reactor.updateStats();
 
         const moneyBefore = game.current_money;
@@ -45,7 +47,9 @@ describe("Paused reactor should not generate money for provided layout", () => {
 
         // The layout can instantly melt down due to extreme heat, in which case money won't increase.
         // Consider the engine "processed" if any of these changed: power > 0, heat > 0, or meltdown happened.
-        const processed = game.reactor.current_power > 0 || game.reactor.current_heat > 0 || game.reactor.has_melted_down;
+        const processed = toNum(game.reactor.current_power) > 0
+            || toNum(game.reactor.current_heat) > 0
+            || game.reactor.has_melted_down;
         expect(processed).toBe(true);
     });
 });

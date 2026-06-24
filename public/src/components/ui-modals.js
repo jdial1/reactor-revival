@@ -1,35 +1,326 @@
-import { html, render, nothing } from "lit-html";
+﻿import { html, render, nothing } from "lit-html";
 import { proxy } from "valtio/vanilla";
-import { styleMap, StorageAdapter, serializeSave, rotateSlot1ToBackup, setSlot1FromBackupAsync, logger, bindEvents, escapeHtml, formatDuration, numFormat as fmt, StorageUtils, formatPrestigeNumber } from "../utils.js";
-import { getValidatedPreferences, preferences, modalUi, syncReducedMotionDOM, actions } from "../store.js";
-import { getValidatedGameData } from "../services.js";
-import { ReactiveLitComponent } from "./reactive-lit-component.js";
-import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate, getUiElement } from "./ui-components.js";
-import {
-  settingsHelpShellTemplate,
-  volumeStepperTemplate,
-  mechSwitchTemplate,
-  muteSwitchTemplate,
-  helpIconTemplate,
-  switchRowTemplate,
-  selectRowTemplate,
-  volumeSectionTemplate,
-  visualSectionTemplate,
-  systemSectionTemplate,
-  dataSectionTemplate,
-  settingsModalTemplate as settingsModalLayoutTemplate,
-  reactorFailedToStartTemplate as reactorFailedToStartModalTemplate,
-  welcomeBackModalTemplate as welcomeBackLayoutTemplate,
-  prestigeModalTemplate as prestigeLayoutTemplate,
-  contextModalTemplate as contextLayoutTemplate,
-} from "../templates/uiModalTemplates.js";
+import { StorageAdapter, serializeSave, rotateSlot1ToBackup, setSlot1FromBackupAsync, StorageUtils, STORAGE_KEYS } from "../storage/index.js";
+import { logger } from "../core/logger.js";
+import { formatDuration, numFormat as fmt, formatPrestigeNumber } from "../format/numbers.js";
+import { getValidatedPreferences, preferences, modalUi, syncReducedMotionDOM, actions, showLoadBackupModal } from "../store.js";
+import { getValidatedGameData } from "../services-audio.js";
+import { getAppContext } from "../app-context.js";
+import { enqueueWarningStop } from "../state/game-effects.js";
+import { MODAL_IDS } from "../modalIds.js";
+import { hideCopyPasteModal, openCopyPasteDialogHost, getCopyPasteRefs } from "./ui-copy-paste.js";
+import { bindLitRenderMultiStates } from "../dom/lit-reactive.js";
+import { getUiElement } from "./page-dom.js";
+import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate } from "./ui-components.js";
+import { styleMap, repeat, bindEvents, escapeHtml } from "../dom/lit.js";
+import { getMyLayouts } from "./ui-layout-storage.js";
+import { WEAVE_QUANTUM } from "../constants/balance.js";
 
 const HIDDEN_STYLE = { display: "none" };
-const DRAWER_BODY_CLASS = "modal-drawer-open";
+const SECTION_HEAD = "margin-top: 0; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
+const SECTION_HEAD_MARGIN = "margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
+
+const SETTINGS_MODAL_TABS = [
+  { tab: "audio", label: "AUDIO", panelId: "settings_tab_audio", btnId: "settings_tab_audio_btn" },
+  { tab: "visuals", label: "VISUALS", panelId: "settings_tab_visuals", btnId: "settings_tab_visuals_btn" },
+  { tab: "system", label: "SYS", panelId: "settings_tab_system", btnId: "settings_tab_system_btn" },
+  { tab: "data", label: "DATA", panelId: "settings_tab_data", btnId: "settings_tab_data_btn" },
+];
+
+const settingsHelpShellTemplate = `<div class="settings-help-content pixel-panel">
+  <div class="settings-help-body"></div>
+  <button type="button" class="settings-help-close" aria-label="Close">×</button>
+</div>`;
+
+function volumeStepper(key, value) {
+  const step = volToStep(value);
+  return html`
+    <div class="volume-stepper" data-volume-key=${key}>
+      <div class="volume-blocks" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow=${step} tabindex="0">
+        ${Array.from({ length: 10 }, (_, i) => html`
+          <button type="button" class="volume-block" data-step=${i + 1} aria-label="${(i + 1) * 10}%" ?data-active=${i < step}></button>
+        `)}
+      </div>
+      <span class="volume-stepper-val">${step * 10}%</span>
+    </div>
+  `;
+}
+
+function muteSwitch(id, isMuted) {
+  return html`
+    <button type="button" class="mech-switch ${isMuted ? "mech-switch-on-active" : ""}" role="switch" aria-checked=${isMuted} data-checkbox-id=${id} tabindex="0">
+      <span class="mech-switch-off">AUDIO</span>
+      <span class="mech-switch-track"><span class="mech-switch-thumb"></span></span>
+      <span class="mech-switch-on">MUTE</span>
+    </button>
+  `;
+}
+
+function mechSwitch(id, checked) {
+  return html`
+    <button type="button" class="mech-switch ${checked ? "mech-switch-on-active" : ""}" role="switch" aria-checked=${checked} data-checkbox-id=${id} tabindex="0">
+      <span class="mech-switch-off">OFF</span>
+      <span class="mech-switch-track"><span class="mech-switch-thumb"></span></span>
+      <span class="mech-switch-on">ON</span>
+    </button>
+  `;
+}
+
+function helpIcon(settingKey) {
+  return html`
+    <button type="button" class="setting-help-icon flex-center" data-setting-key=${settingKey} aria-label="Explain this setting">?</button>
+  `;
+}
+
+function switchRow(id, label, checked, helpKey) {
+  const key = helpKey ?? id.replace("setting-", "");
+  return html`
+    <tr class="settings-option-row" data-checkbox-id=${id} role="button" tabindex="0">
+      <td class="settings-visuals-label">
+        <span>${label}</span>
+        ${helpIcon(key)}
+      </td>
+      <td class="settings-visuals-control">
+        <label class="mech-switch-row">
+          <input type="checkbox" class="settings-mech-checkbox" id=${id} ?checked=${checked}>
+          ${mechSwitch(id, checked)}
+        </label>
+      </td>
+    </tr>
+  `;
+}
+
+function selectRow(id, label, helpKey, content) {
+  return html`
+    <tr class="settings-option-row settings-option-select" data-select-id=${id} role="button" tabindex="0">
+      <td class="settings-visuals-label">
+        <span>${label}</span>
+        ${helpIcon(helpKey)}
+      </td>
+      <td class="settings-visuals-control">${content}</td>
+    </tr>
+  `;
+}
+
+function volumeSection(isMuted, vol) {
+  return html`
+    <div class="settings-section">
+      <table class="settings-visuals-table" style="margin-bottom: 1.5rem;">
+        <tr class="settings-option-row" data-checkbox-id="setting-mute" role="button" tabindex="0">
+          <td class="settings-visuals-label"><span>Master Mute</span></td>
+          <td class="settings-visuals-control">
+            <label class="mech-switch-row">
+              <input type="checkbox" class="settings-mech-checkbox" id="setting-mute" ?checked=${isMuted}>
+              ${muteSwitch("setting-mute", isMuted)}
+            </label>
+          </td>
+        </tr>
+      </table>
+      <div class="volume-setting"><label class="volume-label">Master Volume</label>${volumeStepper("master", vol.volumeMaster)}</div>
+      <div class="volume-setting"><label class="volume-label">Effects Volume</label>${volumeStepper("effects", vol.volumeEffects)}</div>
+      <div class="volume-setting"><label class="volume-label">Alerts Volume</label>${volumeStepper("alerts", vol.volumeAlerts)}</div>
+      <div class="volume-setting"><label class="volume-label">System Volume</label>${volumeStepper("system", vol.volumeSystem)}</div>
+      <div class="volume-setting" style="margin-bottom: 0;"><label class="volume-label">Background Volume</label>${volumeStepper("ambience", vol.volumeAmbience)}</div>
+    </div>
+  `;
+}
+
+function visualSection(prefs) {
+  return html`
+    <div class="settings-section">
+      <h4 style=${SECTION_HEAD}>ACCESSIBILITY</h4>
+      <table class="settings-visuals-table">
+        ${switchRow("setting-motion", "Reduced Motion", prefs.reducedMotion, "reducedMotion")}
+        ${selectRow("setting-number-format", "Number format", "numberFormat", html`
+          <select id="setting-number-format" class="pixel-select settings-select" style="background: rgb(60 60 60); color: white; border: 2px solid var(--bevel-dark); padding: 4px;">
+            <option value="default" ?selected=${prefs.numberFormat === "default"}>1,234 K</option>
+            <option value="scientific" ?selected=${prefs.numberFormat === "scientific"}>1.23e3</option>
+          </select>
+        `)}
+      </table>
+
+      <h4 style=${SECTION_HEAD_MARGIN}>UPGRADE PANEL</h4>
+      <table class="settings-visuals-table">
+        ${switchRow("setting-hide-upgrades", "Hide Unaffordable Upgrades", prefs.hideUnaffordableUpgrades, "hideUnaffordableUpgrades")}
+        ${switchRow("setting-hide-research", "Hide Unaffordable Research", prefs.hideUnaffordableResearch, "hideUnaffordableResearch")}
+        ${switchRow("setting-hide-max-upgrades", "Hide Max Upgrades", prefs.hideMaxUpgrades, "hideMaxUpgrades")}
+        ${switchRow("setting-hide-max-research", "Hide Max Research", prefs.hideMaxResearch, "hideMaxResearch")}
+      </table>
+
+      <h4 style=${SECTION_HEAD_MARGIN}>REACTOR VIEW</h4>
+      <table class="settings-visuals-table">
+        ${switchRow("setting-heat-flow", "Heat flow arrows", prefs.heatFlowVisible, "heatFlowVisible")}
+        ${switchRow("setting-heat-map", "Heat map", prefs.heatMapVisible, "heatMapVisible")}
+        ${switchRow("setting-debug-overlay", "Debug overlay (flow arrows)", prefs.debugOverlay, "debugOverlay")}
+      </table>
+    </div>
+  `;
+}
+
+function systemSection(prefs, notificationsChecked) {
+  return html`
+    <div class="settings-section">
+      <h4 style=${SECTION_HEAD}>ENGINE & NOTIFICATIONS</h4>
+      <table class="settings-visuals-table">
+        ${switchRow("setting-force-no-sab", "Force No-SAB", prefs.forceNoSAB, "forceNoSAB")}
+        ${switchRow("setting-notifications", "Update Notifications", notificationsChecked, "notifications")}
+      </table>
+
+      <h4 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-warning-color, rgb(255 160 0)); font-size: 0.8rem; border-bottom: 2px solid rgb(68 68 68); padding-bottom: 4px;">POWER CYCLING</h4>
+      <div class="data-buttons">
+        <button class="pixel-btn" id="research_back_to_splash_btn" style="border-color: rgb(209 107 107) rgb(80 30 30) rgb(80 30 30) rgb(209 107 107); background: rgb(171 63 63);">QUIT TO TITLE</button>
+      </div>
+
+      <h4 style=${SECTION_HEAD_MARGIN}>SYSTEM INFO</h4>
+      <p style="margin: 0.5rem 0; font-size: 0.65rem; color: var(--neutral-200);">Version: <span id="app_version" style="color: var(--text-primary);">Loading...</span></p>
+      <p style="margin: 0.5rem 0; font-size: 0.65rem; color: var(--neutral-200);">Display Mode: <span id="app_display_mode" style="color: var(--text-primary);">Detecting...</span></p>
+
+      <h4 style=${SECTION_HEAD_MARGIN}>LEGAL</h4>
+      <div class="settings-legal-links" style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <a href="#about_section" data-page="about_section" class="settings-legal-link">About</a>
+        <a href="privacy-policy.html" class="settings-legal-link" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        <a href="terms-of-service.html" class="settings-legal-link" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+      </div>
+    </div>
+  `;
+}
+
+function dataSection() {
+  return html`
+    <div class="settings-section">
+      <h4 style=${SECTION_HEAD}>LOCAL STORAGE</h4>
+      <div class="data-buttons">
+        <button class="pixel-btn" id="setting-export">Export</button>
+        <button class="pixel-btn" id="setting-import">Import</button>
+        <button class="pixel-btn" id="setting-changelog" type="button">Recent Changes</button>
+        <input type="file" id="setting-import-input" accept=".json" style=${styleMap(HIDDEN_STYLE)}>
+      </div>
+    </div>
+  `;
+}
+
+function settingsModalLayout({ activeTab, notificationPermission = "default", onTabClick, onClose }) {
+  const vol = getValidatedPreferences();
+  const prefs = getValidatedPreferences();
+  const notificationsChecked = notificationPermission === "granted";
+  const panelByTab = {
+    audio: volumeSection(vol.mute, vol),
+    visuals: visualSection(prefs),
+    system: systemSection(prefs, notificationsChecked),
+    data: dataSection(),
+  };
+  return html`
+    <div class="settings-modal pixel-panel modal-drawer-panel" style="padding: 0; display: flex; flex-direction: column;" @click=${(e) => e.stopPropagation()}>
+        <div class="modal-drawer-metal-handle" aria-hidden="true"></div>
+        <div class="modal-swipe-handle" aria-hidden="true"></div>
+        <div class="settings-header" style="background: rgb(35 39 35); border-bottom: 4px solid var(--bevel-dark); padding: 12px 16px;">
+          <h2 style="margin: 0; color: var(--game-success-color, rgb(143 214 148)); font-size: 1rem; text-shadow: 2px 2px 0 rgb(0 0 0 / 80%);">DIAGNOSTIC TERMINAL</h2>
+          <button type="button" class="close-btn modal-close-btn modal-latch-close" aria-label="Close" @click=${onClose}><span class="modal-latch-arm" aria-hidden="true"></span><span class="modal-latch-body"></span></button>
+        </div>
+
+        <div class="settings-tabs" role="tablist">
+          ${SETTINGS_MODAL_TABS.map(
+            ({ tab, label, panelId, btnId }) => html`
+              <button
+                class="settings-tab ui-bevel flex-center ${activeTab === tab ? "active" : ""}"
+                role="tab"
+                aria-selected=${activeTab === tab}
+                aria-controls=${panelId}
+                data-tab=${tab}
+                id=${btnId}
+                @click=${() => onTabClick(tab)}
+              >${label}</button>
+            `
+          )}
+        </div>
+
+        <div class="settings-content pixel-panel is-inset">
+          ${SETTINGS_MODAL_TABS.map(
+            ({ tab, panelId, btnId }) => html`
+              <div
+                id=${panelId}
+                class="settings_tab_content ${activeTab === tab ? "active" : ""}"
+                role="tabpanel"
+                aria-labelledby=${btnId}
+                aria-hidden=${activeTab !== tab}
+              >
+                ${panelByTab[tab]}
+              </div>
+            `
+          )}
+        </div>
+    </div>
+  `;
+}
+
+function reactorFailedToStartLayout({ errorMessage, defaultMessage, onTryAgain, onDismiss }) {
+  return html`
+    <div class="reactor-failed-modal-overlay" @click=${(e) => { if (e.target === e.currentTarget) onDismiss(); }}>
+      <div class="reactor-failed-modal pixel-panel">
+        <h2 class="reactor-failed-title">Reactor Failed to Start</h2>
+        <p class="reactor-failed-message">${errorMessage ?? defaultMessage}</p>
+        <div class="reactor-failed-actions">
+          <button type="button" class="pixel-btn" @click=${onTryAgain}>Try Again</button>
+          <button type="button" class="pixel-btn secondary" @click=${onDismiss}>Dismiss (Pause)</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function welcomeBackLayout({ durationStr, tickStr, onFastForward, onDismiss }) {
+  return html`
+    <div class="welcome-back-modal-overlay" @click=${(e) => { if (e.target === e.currentTarget) onDismiss(); }}>
+      <div class="welcome-back-modal pixel-panel">
+        <h2 class="welcome-back-title">Welcome Back!</h2>
+        <p class="welcome-back-message">Away for <strong>${durationStr}</strong> (~${tickStr} ticks). Catch up via worker replay:</p>
+        <div class="welcome-back-actions">
+          <button type="button" class="pixel-btn welcome-back-ff" @click=${onFastForward}>Fast-Forward</button>
+        </div>
+        <p class="welcome-back-hint"><strong>Fast-Forward</strong> replays offline ticks through the physics worker at ${100} ticks per frame. Unstable layouts can still melt down.</p>
+      </div>
+    </div>
+  `;
+}
+
+function prestigeLayout({ mode, title, body, onConfirm, onCancel }) {
+  return html`
+    <div class="prestige-modal-overlay" @click=${(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div class="prestige-modal pixel-panel">
+        <h2 id="prestige_modal_title">${title}</h2>
+        <div id="prestige_modal_body">${body}</div>
+        <div class="prestige-modal-actions">
+          <button id="prestige_modal_cancel" class="pixel-btn nav-btn" type="button" @click=${onCancel}>Cancel</button>
+          ${mode === "refund"
+            ? html`<button id="prestige_modal_confirm_refund" class="pixel-btn nav-btn" type="button" @click=${() => onConfirm("refund")}>Confirm Refund</button>`
+            : html`<button id="prestige_modal_confirm_prestige" class="pixel-btn nav-btn btn-start" type="button" @click=${() => onConfirm("prestige")}>Confirm Prestige</button>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function contextLayout({ partTitle, bodyContent, onClose, onSell }) {
+  return html`
+    <div id="context_modal" class="context-modal context-modal-panel" role="document">
+      <div class="context-modal-handle"></div>
+      <div class="context-modal-content">
+        <div class="context-modal-header">
+          <h3 class="context-modal-title">${partTitle}</h3>
+          <button class="context-modal-close" aria-label="Close" @click=${onClose}>×</button>
+        </div>
+        <div class="context-modal-body">${bodyContent}</div>
+        <div class="context-modal-actions">
+          <button class="context-modal-sell-btn" @click=${onSell}>Sell/Destroy</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 function setModalDrawerOpen(open) {
-  if (typeof document === "undefined") return;
-  document.body.classList.toggle(DRAWER_BODY_CLASS, !!open);
+  modalUi.drawerOpen = !!open;
 }
 
 function syncModalDialogOpen(root, open) {
@@ -39,54 +330,9 @@ function syncModalDialogOpen(root, open) {
     else if (!open && root.open) root.close();
   } catch (_) {}
 }
-const SECTION_HEAD = "margin-top: 0; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
-const SECTION_HEAD_MARGIN = "margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
 
 function volToStep(v) {
   return Math.min(10, Math.round(v * 10));
-}
-
-function volumeStepper(key, value) {
-  const step = volToStep(value);
-  return volumeStepperTemplate(key, step);
-}
-
-function mechSwitch(id, checked) {
-  return mechSwitchTemplate(id, checked);
-}
-
-function helpIcon(settingKey) {
-  return helpIconTemplate(settingKey);
-}
-
-function switchRow(id, label, checked, helpKey) {
-  const key = helpKey ?? id.replace("setting-", "");
-  return switchRowTemplate(id, label, checked, key, helpIcon, mechSwitch);
-}
-
-function selectRow(id, label, helpKey, content) {
-  return selectRowTemplate(id, label, helpKey, content, helpIcon);
-}
-
-function createVolumeSection() {
-  const vol = getValidatedPreferences();
-  const isMuted = vol.mute;
-  return volumeSectionTemplate(isMuted, vol, volumeStepper, mechSwitch, muteSwitchTemplate);
-}
-
-function createVisualSection() {
-  const prefs = getValidatedPreferences();
-  return visualSectionTemplate(prefs, SECTION_HEAD, SECTION_HEAD_MARGIN, switchRow, selectRow);
-}
-
-function createSystemSection(notificationPermission = "default") {
-  const prefs = getValidatedPreferences();
-  const notificationsChecked = notificationPermission === "granted";
-  return systemSectionTemplate(prefs, notificationsChecked, SECTION_HEAD, SECTION_HEAD_MARGIN, switchRow);
-}
-
-function createDataSection() {
-  return dataSectionTemplate(SECTION_HEAD, HIDDEN_STYLE);
 }
 
 let _activeAbortController = null;
@@ -122,15 +368,10 @@ function stepToVal(s) {
 const VOLUME_STEP_MIN = 0;
 const VOLUME_STEP_MAX = 10;
 
-function applyStepperState(key, step, modal) {
+function applyStepperState(key, step) {
   const value = stepToVal(step);
   const prefKey = VOLUME_PREF_KEYS[key];
   if (prefKey) preferences[prefKey] = value;
-  const ui = modal?.getUi?.();
-  if (ui?.uiState) {
-    const uiKey = { master: "volume_master", effects: "volume_effects", alerts: "volume_alerts", system: "volume_system", ambience: "volume_ambience" }[key];
-    if (uiKey) ui.uiState[uiKey] = value;
-  }
 }
 
 function handleVolumeKeydown(e, blocks, updateStepper, modal) {
@@ -298,37 +539,27 @@ function setupCloudSaves() {}
 function setupSettingsHelpModal(overlay, modal, signal) {
   let helpEl = overlay.querySelector(".settings-help-modal");
   if (!helpEl) {
-    helpEl = document.createElement("div");
-    helpEl.className = "settings-help-modal hidden";
+    helpEl = document.createElement("dialog");
+    helpEl.className = "settings-help-modal";
     helpEl.innerHTML = settingsHelpShellTemplate;
     overlay.appendChild(helpEl);
   }
-  const backdrop = helpEl.querySelector(".settings-help-backdrop");
   const body = helpEl.querySelector(".settings-help-body");
   const closeBtn = helpEl.querySelector(".settings-help-close");
 
-  let escapeHandler = null;
-  const hide = () => {
-    helpEl.classList.add("hidden");
-    if (escapeHandler) {
-      document.removeEventListener("keydown", escapeHandler);
-      escapeHandler = null;
-    }
-  };
+  const hide = () => helpEl.close();
 
   const show = (title, content) => {
     render(html`
       <h4 class="settings-help-title">${title}</h4>
       <p class="settings-help-text">${content}</p>
     `, body);
-    helpEl.classList.remove("hidden");
-    escapeHandler = (e) => {
-      if (e.key === "Escape") hide();
-    };
-    document.addEventListener("keydown", escapeHandler, { signal });
+    if (!helpEl.open) helpEl.showModal();
   };
 
-  backdrop.addEventListener("click", hide, { signal });
+  helpEl.addEventListener("click", (e) => {
+    if (e.target === helpEl) hide();
+  }, { signal });
   closeBtn.addEventListener("click", hide, { signal });
 
   overlay.addEventListener("click", async (e) => {
@@ -354,7 +585,7 @@ function setupSettingsHelpModal(overlay, modal, signal) {
 function setupNavAndAbout(overlay) {
   const versionSpan = overlay.querySelector("#app_version");
   if (versionSpan) {
-    const cached = window.ui?._cachedVersion;
+    const cached = getAppContext()?.ui?._cachedVersion;
     if (cached) {
       versionSpan.textContent = cached;
     } else {
@@ -377,6 +608,12 @@ export function bindSettingsEvents(overlay, modal, signal) {
   bindEvents(overlay, {
     "#setting-export": () => modal._handleExportClick(),
     "#setting-import": () => importInput?.click(),
+    "#setting-changelog": () => {
+      getAppContext()?.splashManager?.versionChecker?.showRecentChangelogModal?.({
+        title: "Recent Changes",
+        limit: 5,
+      });
+    },
     "#setting-import-input": { change: (e) => modal._handleImportFile(e.target.files[0]) },
     "#research_back_to_splash_btn": () => { window.location.href = window.location.origin + window.location.pathname; }
   }, { signal });
@@ -386,26 +623,16 @@ export function bindSettingsEvents(overlay, modal, signal) {
   setupCloudSaves(overlay, modal, signal);
 }
 
-export const settingsModalTemplate = (settingsState, onTabClick, onClose) => {
-  const activeTab = settingsState?.activeTab ?? "audio";
-  const volumeTemplate = createVolumeSection();
-  const visualTemplate = createVisualSection();
-  const systemTemplate = createSystemSection(settingsState?.notificationPermission ?? "default");
-  const dataTemplate = createDataSection();
-  return settingsModalLayoutTemplate({
-    activeTab,
-    volumeTemplate,
-    visualTemplate,
-    systemTemplate,
-    dataTemplate,
-    onTabClick,
-    onClose,
-  });
-};
+export const settingsModalTemplate = (settingsState, onTabClick, onClose) => settingsModalLayout({
+  activeTab: settingsState?.activeTab ?? "audio",
+  notificationPermission: settingsState?.notificationPermission ?? "default",
+  onTabClick,
+  onClose,
+});
 
 export function createSettingsContext(ui, modal) {
-  const getGame = () => ui?.game ?? window.game;
-  const getUi = () => ui ?? window.ui;
+  const getGame = () => ui?.game ?? getAppContext()?.game;
+  const getUi = () => ui ?? getAppContext()?.ui;
   const playClick = () => {
     const game = getGame();
     if (game) actions.enqueueEffect(game, { kind: "sfx", id: "click", context: "global" });
@@ -443,8 +670,8 @@ export function createSettingsContext(ui, modal) {
       return;
     }
     await game.saveManager.autoSave();
-    const slot = Number(await StorageAdapter.get("reactorCurrentSaveSlot", 1));
-    const saveData = await StorageAdapter.getRaw(`reactorGameSave_${slot}`) || await StorageAdapter.getRaw("reactorGameSave");
+    const slot = Number(await StorageAdapter.get(STORAGE_KEYS.CURRENT_SLOT, 1));
+    const saveData = await StorageAdapter.getRaw(`${STORAGE_KEYS.GAME_SAVE}_${slot}`) || await StorageAdapter.getRaw(STORAGE_KEYS.GAME_SAVE);
     if (!saveData) return;
     const blob = new Blob([saveData], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -461,9 +688,9 @@ export function createSettingsContext(ui, modal) {
     const game = getGame();
     if (!game?.saveManager) return;
     let result = await game.saveManager.loadGame(1);
-    const hasBackup = result && typeof result === "object" && result.backupAvailable && window.showLoadBackupModal;
+    const hasBackup = result && typeof result === "object" && result.backupAvailable;
     if (hasBackup) {
-      const useBackup = await window.showLoadBackupModal();
+      const useBackup = await showLoadBackupModal();
       if (useBackup) {
         await setSlot1FromBackupAsync();
         result = await game.saveManager.loadGame(1);
@@ -529,7 +756,7 @@ export function createSettingsContext(ui, modal) {
 
 const REACTOR_FAILED_DEFAULT_MESSAGE = "The game engine stopped unexpectedly. Try restarting or refresh the page.";
 function reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }) {
-  return reactorFailedToStartModalTemplate({
+  return reactorFailedToStartLayout({
     errorMessage,
     defaultMessage: REACTOR_FAILED_DEFAULT_MESSAGE,
     onTryAgain,
@@ -537,29 +764,34 @@ function reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }) {
   });
 }
 
-function welcomeBackModalTemplate(payload, onInstant, onFastForward, onDismiss) {
+function welcomeBackModalTemplate(payload, onFastForward, onDismiss) {
   const { offlineMs = 0, tickEquivalent = 0, queuedTicks = 0 } = payload ?? {};
   const durationStr = formatDuration(offlineMs, false);
   const tickStr = (tickEquivalent || queuedTicks).toLocaleString();
-  return welcomeBackLayoutTemplate({
+  return welcomeBackLayout({
     durationStr,
     tickStr,
-    onInstant,
     onFastForward,
     onDismiss,
   });
 }
 
 function prestigeModalTemplate(payload, onConfirm, onCancel) {
-  const { mode, totalEp, preservedUpgrades, prestigeMultiplier } = payload;
+  const { mode, totalEp, preservedUpgrades, prestigeMultiplier, epFromWeave } = payload;
   const title = mode === "refund" ? "Full Refund" : "Prestige";
   const body = mode === "refund"
     ? html`You will reset: all Exotic Particles, all progress, reactor, and money.`
     : html`
       <div>You will keep: <strong>${formatPrestigeNumber(totalEp)} Total EP</strong>, <strong>${preservedUpgrades} Research</strong>. Reactor and money reset.</div>
+      <div style="margin-top: 0.75rem;">
+        EP from this run: <strong>${formatPrestigeNumber(epFromWeave ?? 0)}</strong><br>
+        <small style="color: var(--neutral-400);">
+          (Min(Power, Heat) / ${WEAVE_QUANTUM.toLocaleString()})
+        </small>
+      </div>
       <div style="margin-top: 0.75rem;">Money multiplier: ×${prestigeMultiplier.toFixed(2)} (from Total EP)</div>
     `;
-  return prestigeLayoutTemplate({ mode, title, body, onConfirm, onCancel });
+  return prestigeLayout({ mode, title, body, onConfirm, onCancel });
 }
 
 function contextModalTemplate(tile, onSell, onClose) {
@@ -572,7 +804,7 @@ function contextModalTemplate(tile, onSell, onClose) {
   const bodyContent = stats.length > 0
     ? html`<div>${stats.map((s, i) => html`${escapeHtml(s)}${i < stats.length - 1 ? html`<br>` : nothing}`)}</div>`
     : html`<div>No stats available</div>`;
-  return contextLayoutTemplate({
+  return contextLayout({
     partTitle: part.title || "Part",
     bodyContent,
     onClose,
@@ -580,21 +812,7 @@ function contextModalTemplate(tile, onSell, onClose) {
   });
 }
 
-export const MODAL_IDS = {
-  CONTEXT: "context",
-  PRESTIGE: "prestige",
-  COPY_PASTE: "copyPaste",
-  WELCOME_BACK: "welcomeBack",
-  QUICK_START: "quickStart",
-  DETAILED_QUICK_START: "detailedQuickStart",
-  REACTOR_FAILED_TO_START: "reactorFailedToStart",
-  LOGIN: "login",
-  PROFILE: "profile",
-  LOGOUT: "logout",
-  SETTINGS: "settings",
-  LAYOUT_VIEW: "layoutView",
-  MY_LAYOUTS: "myLayouts",
-};
+export { MODAL_IDS } from "../modalIds.js";
 
 class ModalOrchestration {
   constructor() {
@@ -625,7 +843,7 @@ class ModalOrchestration {
 
   _resolveModalRoot() {
     if (!this._modalRoot) {
-      this._modalRoot = (this.ui ? getUiElement(this.ui, "modal-root") : null) ?? this.ui?.DOMElements?.modal_root ?? (typeof document !== "undefined" ? document.getElementById("modal-root") : null);
+      this._modalRoot = (this.ui ? getUiElement(this.ui, "modal-root") : null) ?? (typeof document !== "undefined" ? document.getElementById("modal-root") : null);
     }
     return this._modalRoot;
   }
@@ -730,10 +948,16 @@ class ModalOrchestration {
   _renderContextModal() {
     if (!this._resolveModalRoot()) return;
     const tile = this._activeContextTile;
-    const onSell = () => {
+    const onSell = async () => {
       this.ui?.deviceFeatures?.heavyVibration?.();
-      if (this.ui?.game && tile?.part) {
-        this.ui.game.sellPart(tile);
+      const game = this.ui?.game;
+      if (game && tile?.part) {
+        game.state.intent_queue.push({
+          action: "SELL_PART",
+          payload: { row: tile.row, col: tile.col },
+        });
+        await game.engine?.consumeIntentQueueAsync?.();
+        this.ui?.gridCanvasRenderer?.markTileDirty(tile.row, tile.col);
         this.hideModal(MODAL_IDS.CONTEXT);
       }
     };
@@ -773,6 +997,7 @@ class ModalOrchestration {
 
     const game = this.ui.game;
     const totalEp = game.state.total_exotic_particles || 0;
+    const epFromWeave = game.state?.session_ep_weave ?? 0;
     const preservedUpgrades = game.upgradeset.getAllUpgrades().filter((u) => u.base_ecost && u.level > 0).length;
     const prestigeMultiplier = game.getPrestigeMultiplier ? game.getPrestigeMultiplier() : 1;
 
@@ -788,7 +1013,7 @@ class ModalOrchestration {
 
     this._openLitModal(
       prestigeModalTemplate(
-        { mode, totalEp, preservedUpgrades, prestigeMultiplier },
+        { mode, totalEp, epFromWeave, preservedUpgrades, prestigeMultiplier },
         onConfirm,
         onCancel
       )
@@ -808,28 +1033,13 @@ class ModalOrchestration {
   _showSellModal(payload) {
     const ui = this.ui;
     const { summary = [], checkedTypes = {}, previousPauseState = false } = payload || {};
-    const modal = document.getElementById("reactor_copy_paste_modal");
-    const modalTitle = document.getElementById("reactor_copy_paste_modal_title");
-    const modalText = document.getElementById("reactor_copy_paste_text");
-    const modalCost = document.getElementById("reactor_copy_paste_cost");
-    const confirmBtn = document.getElementById("reactor_copy_paste_confirm_btn");
-    const closeBtn = document.getElementById("reactor_copy_paste_close_btn");
+    openCopyPasteDialogHost();
+    const refs = getCopyPasteRefs();
+    if (!refs) return;
+    const { modal: modalEl, modalTitle, modalText, modalCost, confirmBtn, closeBtn } = refs;
 
-    if (!modal || !modalTitle || !modalCost || !confirmBtn || !closeBtn) return;
-
-    this._sellModalReactiveUnmount?.();
-    ui.uiState.sell_modal_display = { title: "Sell Reactor Parts", confirmLabel: "Sell Selected" };
-    const titleUnmount = ReactiveLitComponent.mountMulti(
-      [{ state: ui.uiState, keys: ["sell_modal_display"] }],
-      () => html`${ui.uiState?.sell_modal_display?.title ?? ""}`,
-      modalTitle
-    );
-    const btnUnmount = ReactiveLitComponent.mountMulti(
-      [{ state: ui.uiState, keys: ["sell_modal_display"] }],
-      () => html`${ui.uiState?.sell_modal_display?.confirmLabel ?? ""}`,
-      confirmBtn
-    );
-    this._sellModalReactiveUnmount = () => { titleUnmount(); btnUnmount(); };
+    modalTitle.textContent = "Sell Reactor Parts";
+    confirmBtn.textContent = "Sell Selected";
 
     if (modalText) {
       modalText.classList.add("hidden");
@@ -840,8 +1050,7 @@ class ModalOrchestration {
       modalText.style.overflow = "hidden";
     }
 
-    modal.classList.remove("hidden");
-    modal.dataset.previousPauseState = previousPauseState;
+    modalEl.dataset.previousPauseState = previousPauseState;
 
     const updateSellSummary = () => {
       const filteredSummary = summary.filter(item => checkedTypes[item.id] !== false);
@@ -860,8 +1069,8 @@ class ModalOrchestration {
 
     confirmBtn.classList.remove("hidden");
     confirmBtn.disabled = false;
-    confirmBtn.style.backgroundColor = '#e74c3c';
-    confirmBtn.onclick = () => {
+    confirmBtn.style.backgroundColor = "var(--canvas-confirm-danger)";
+    confirmBtn.onclick = async () => {
       const tilesToSell = [];
       ui.game.tileset.tiles_list.forEach(tile => {
         if (tile.enabled && tile.part && checkedTypes[tile.part.id] !== false) {
@@ -869,44 +1078,37 @@ class ModalOrchestration {
         }
       });
       const totalSellValue = tilesToSell.reduce((sum, tile) => sum + (tile.calculateSellValue?.() ?? tile.part.cost), 0);
-      tilesToSell.forEach(tile => {
-        tile.sellPart();
-      });
+      for (let i = 0; i < tilesToSell.length; i++) {
+        const t = tilesToSell[i];
+        ui.game.state.intent_queue.push({
+          action: "SELL_PART",
+          payload: { row: t.row, col: t.col },
+        });
+      }
+      await ui.game.engine?.consumeIntentQueueAsync?.();
       ui.game.reactor.updateStats();
-      ui.uiState.sell_modal_display = { ...ui.uiState.sell_modal_display, confirmLabel: `Sold $${fmt(totalSellValue)}` };
-      confirmBtn.style.backgroundColor = '#27ae60';
+      confirmBtn.textContent = `Sold $${fmt(totalSellValue)}`;
+      confirmBtn.style.backgroundColor = "var(--canvas-confirm-success)";
       setTimeout(() => {
         this.hideModal(MODAL_IDS.COPY_PASTE);
-        confirmBtn.style.backgroundColor = '#4a9eff';
+        confirmBtn.style.backgroundColor = "var(--canvas-confirm-action)";
       }, 1500);
     };
 
     closeBtn.onclick = () => this.hideModal(MODAL_IDS.COPY_PASTE);
 
-    if (modal._sellModalOutsideClick) modal.removeEventListener("click", modal._sellModalOutsideClick);
-    modal._sellModalOutsideClick = (e) => {
-      if (e.target === modal) this.hideModal(MODAL_IDS.COPY_PASTE);
-    };
-    modal.addEventListener("click", modal._sellModalOutsideClick);
+    const dialogRoot = this._resolveModalRoot();
+    if (dialogRoot && !dialogRoot._sellModalBackdropBound) {
+      dialogRoot._sellModalBackdropBound = true;
+      dialogRoot.addEventListener("click", (e) => {
+        if (e.target === dialogRoot) this.hideModal(MODAL_IDS.COPY_PASTE);
+      });
+    }
     updateSellSummary();
   }
 
   _hideCopyPasteModal() {
-    this._sellModalReactiveUnmount?.();
-    this._sellModalReactiveUnmount = null;
-    this.ui?._copyPasteModalReactiveUnmount?.();
-    if (this.ui) this.ui._copyPasteModalReactiveUnmount = null;
-    const modal = document.getElementById("reactor_copy_paste_modal");
-    if (!modal) return;
-    if (modal._sellModalOutsideClick) {
-      modal.removeEventListener("click", modal._sellModalOutsideClick);
-      modal._sellModalOutsideClick = null;
-    }
-    modal.classList.add("hidden");
-    const previousPauseState = modal.dataset.previousPauseState === "true";
-    if (this.ui?.game) {
-      this.ui.game.onToggleStateChange?.("pause", previousPauseState);
-    }
+    hideCopyPasteModal(this.ui);
   }
 
   _showWelcomeBackModal(payload) {
@@ -918,7 +1120,7 @@ class ModalOrchestration {
 
     return new Promise((resolve) => {
       const handleClose = (mode) => {
-        if ((mode === "instant" || mode === "fast-forward") && game.engine) game.engine.runInstantCatchup();
+        if (mode === "fast-forward" && game.engine) game.engine.beginFastForwardCatchup();
 
         if (game) {
           game.onToggleStateChange?.("pause", false);
@@ -927,7 +1129,6 @@ class ModalOrchestration {
         resolve(mode);
       };
 
-      const onInstant = () => handleClose("instant");
       const onFastForward = () => handleClose("fast-forward");
       const onDismiss = () => handleClose("fast-forward");
 
@@ -947,7 +1148,6 @@ class ModalOrchestration {
       this._openLitModal(
         welcomeBackModalTemplate(
           payload,
-          () => wrappedClose("instant"),
           () => wrappedClose("fast-forward"),
           () => wrappedClose("fast-forward")
         )
@@ -982,7 +1182,7 @@ class ModalOrchestration {
         }
       }
     };
-    this._settingsUnmount = ReactiveLitComponent.mountMultiStates(
+    this._settingsUnmount = bindLitRenderMultiStates(
       [preferences, this._settingsState],
       () => settingsModalTemplate(this._settingsState, onTabClick, onClose),
       this._modalRoot,
@@ -996,14 +1196,17 @@ class ModalOrchestration {
     this._settingsState.activeTab = "audio";
     this._settingsState.notificationPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
     this._settingsContext = createSettingsContext(this.ui, this);
-    const keyHandler = (e) => {
-      if (e.key === "Escape") {
-        document.removeEventListener("keydown", keyHandler);
+    const root = this._modalRoot;
+    if (root && !root._settingsCancelBound) {
+      root._settingsCancelBound = true;
+      root.addEventListener("cancel", (e) => {
+        e.preventDefault();
         this.hideModal(MODAL_IDS.SETTINGS);
-      }
-    };
-    document.addEventListener("keydown", keyHandler);
-    this._settingsKeyHandler = keyHandler;
+      });
+      root.addEventListener("click", (e) => {
+        if (e.target === root) this.hideModal(MODAL_IDS.SETTINGS);
+      });
+    }
     this._settingsVisible = true;
     setModalDrawerOpen(true);
     this._renderSettingsModal();
@@ -1019,13 +1222,12 @@ class ModalOrchestration {
     }
     abortSettingsListeners();
     if (this._settingsKeyHandler) {
-      document.removeEventListener("keydown", this._settingsKeyHandler);
       this._settingsKeyHandler = null;
     }
     const game = this.ui?.game;
-    if (game?.audio) {
-      game.audio.stopTestSound();
-      game.audio.warningManager?.stopWarningLoop?.();
+    if (game) {
+      enqueueWarningStop(game);
+      game.audio?.stopTestSound?.();
     }
     this._closeLitModal();
     const menuBtn = document.getElementById("menu_tab_btn");
@@ -1065,7 +1267,7 @@ class ModalOrchestration {
     this._quickStartGame = game;
 
     const onClose = () => {
-      StorageUtils.set("reactorGameQuickStartShown", 1);
+      StorageUtils.set(STORAGE_KEYS.QUICK_START_SHOWN, 1);
       if (this._quickStartGame?.tutorialManager && !StorageUtils.get("reactorTutorialCompleted")) {
         this._quickStartGame.tutorialManager.start();
       }
@@ -1152,7 +1354,7 @@ class ModalOrchestration {
     if (!this._resolveModalRoot()) return;
 
     const onClose = () => this.hideModal(MODAL_IDS.MY_LAYOUTS);
-    const list = this.ui.layoutStorageUI.getMyLayouts();
+    const list = getMyLayouts();
     this._openLitModal(myLayoutsTemplate(this.ui, list, fmt, onClose));
   }
 

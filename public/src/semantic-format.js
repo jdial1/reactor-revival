@@ -6,6 +6,7 @@ const UNIT_LABELS = {
   CONTAINMENT_UNITS: "Containment",
   TRANSFER_UNITS: "Transfer",
   VENT_UNITS: "Vent",
+  STIRLING_POWER_UNITS: "Stirling Power",
   TICKS_UNITS: "Ticks",
   RANGE_UNITS: "Range",
   EP_HEAT_UNITS: "EP heat",

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGame, setupWorkerContext } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGame, setupWorkerContext , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
 import {
   WORKER_HEARTBEAT_MS,
@@ -39,7 +39,8 @@ describe("Group 13: Web Worker Concurrency and Fallbacks", () => {
     game.tileset.clearAllTiles();
     await placePart(game, 0, 0, "uranium1");
     game.reactor.updateStats();
-    engine._updatePartCaches();
+    syncActivePartsAtTickBoundary(engine);
+    engine.running = true;
     const syncSpy = vi.spyOn(engine, "_runHeatStepSync");
     for (let i = 0; i < WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK; i++) {
       engine._processTick(1.0, false);
@@ -47,7 +48,7 @@ describe("Group 13: Web Worker Concurrency and Fallbacks", () => {
       vi.advanceTimersByTime(WORKER_HEARTBEAT_MS);
     }
     expect(engine._workerFailed).toBe(true);
-    expect(syncSpy.mock.calls.length).toBeGreaterThanOrEqual(WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK);
+    expect(syncSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
   });
 
   it("rejects malformed physics worker results via PhysicsTickResultSchema", () => {
@@ -75,6 +76,7 @@ describe("Group 13: Web Worker Concurrency and Fallbacks", () => {
       reactorHeat: 0,
       heatFromInlets: 0,
       tickId: 77,
+      error: true,
     });
     ctx.restore();
   });

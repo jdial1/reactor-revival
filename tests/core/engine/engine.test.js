@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM, syncActivePartsAtTickBoundary, invalidateTickParts } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
 import { setDecimal } from "@app/store.js";
 import { toDecimal } from "@app/utils.js";
@@ -71,7 +71,7 @@ describe("Engine Mechanics", () => {
     await placePart(game, 9, 4, "uranium1");
     await placePart(game, 10, 4, "vent1");
     game.reactor.updateStats();
-    game.engine._updatePartCaches();
+    syncActivePartsAtTickBoundary(game.engine);
 
     expect(() => game.engine._buildHeatPayload(1)).not.toThrow();
     const payload = game.engine._buildHeatPayload(1);
@@ -710,12 +710,12 @@ describe("Engine Mechanics", () => {
   });
 
   describe("Memory Leak Auditing", () => {
-    it("should trim active_cells and active_vessels to actual part count after _updatePartCaches", async () => {
+    it("should trim active_cells and active_vessels to actual part count after syncActivePartsAtTickBoundary", async () => {
       game.tileset.clearAllTiles();
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 1, 0, "vent1");
-      game.engine.markPartCacheAsDirty();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
+
 
       expect(game.engine.active_cells.length).toBe(1);
       expect(game.engine.active_vessels.length).toBeGreaterThanOrEqual(1);
@@ -723,12 +723,12 @@ describe("Engine Mechanics", () => {
 
     it("should clear cache arrays and not retain stale references when grid is cleared", async () => {
       await placePart(game, 0, 0, "uranium1");
-      game.engine.markPartCacheAsDirty();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
+
 
       game.tileset.clearAllTiles();
-      game.engine.markPartCacheAsDirty();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
+
 
       expect(game.engine.active_cells.length).toBe(0);
       expect(game.engine.active_vessels.length).toBe(0);
@@ -737,17 +737,16 @@ describe("Engine Mechanics", () => {
     it("should cap cache array lengths to grid capacity", async () => {
       game.tileset.clearAllTiles();
       const maxParts = game._rows * game._cols;
-      game.engine.markPartCacheAsDirty();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
+
 
       expect(game.engine.active_cells.length).toBeLessThanOrEqual(maxParts);
       expect(game.engine.active_vessels.length).toBeLessThanOrEqual(maxParts);
     });
 
-    it("should restore invalid cache arrays via _ensureArraysValid", () => {
-      game.engine.active_cells = null;
-      game.engine.active_vessels = null;
-      game.engine._ensureArraysValid();
+    it("should derive tick part lists after cache invalidation", () => {
+      invalidateTickParts(game.engine);
+      syncActivePartsAtTickBoundary(game.engine);
 
       expect(Array.isArray(game.engine.active_cells)).toBe(true);
       expect(Array.isArray(game.engine.active_vessels)).toBe(true);
@@ -780,7 +779,7 @@ describe("Engine Mechanics", () => {
     it("should not grow event ring buffer during Time Flux burst (many rapid ticks)", async () => {
       game.tileset.clearAllTiles();
       await placePart(game, 0, 0, "uranium1");
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
 
       const bufferLengthBefore = game.engine._eventRingBuffer.length;
       const maxBefore = game.engine.MAX_EVENTS;
@@ -794,7 +793,7 @@ describe("Engine Mechanics", () => {
 
     it("should not accumulate unbounded pending events across ticks (ring buffer drain)", async () => {
       await placePart(game, 0, 0, "uranium1");
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
 
       game.engine._processTick(1.0);
       const headAfterFirst = game.engine._eventHead;
@@ -813,7 +812,7 @@ describe("Engine Mechanics", () => {
     it("should keep event ring buffer bounded after many deterministic ticks", async () => {
       game.tileset.clearAllTiles();
       await placePart(game, 0, 0, "uranium1");
-      game.engine.markPartCacheAsDirty();
+      syncActivePartsAtTickBoundary(game.engine);
       const bufferLengthBefore = game.engine._eventRingBuffer.length;
       for (let i = 0; i < 200; i++) {
         game.engine._processTick(1);
@@ -831,7 +830,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 1, "heat_exchanger1");
       await placePart(game, 1, 0, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
       game.engine._updateValveNeighborCache();
 
       const payload = game.engine._buildHeatPayload(1);
@@ -850,7 +849,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 1, "heat_exchanger1");
       await placePart(game, 1, 0, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
       game.engine._updateValveNeighborCache();
 
       const payload = game.engine._buildHeatPayload(1);
@@ -911,7 +910,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
 
       const cellPart = game.partset.getPartById("uranium1");
       const expectedPowerPerTick = cellPart.power ?? cellPart.base_power ?? 1;
@@ -930,7 +929,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
 
       const initialStatePower = toNum(game.state?.current_power ?? 0);
       game.engine._processTick(1.0);
@@ -944,7 +943,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
 
       game.engine._processTick(1.0);
 
@@ -958,7 +957,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
 
       const powerHistory = [];
       for (let i = 0; i < 10; i++) {
@@ -976,7 +975,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
 
       for (let i = 0; i < 3; i++) {
         game.engine._processTick(1.0);
@@ -992,7 +991,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
 
       expect(game.engine._useGameLoopWorker()).toBe(false);
 
@@ -1005,7 +1004,7 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      game.engine._updatePartCaches();
+      syncActivePartsAtTickBoundary(game.engine);
 
       const initialCount = game.engine.tick_count;
       game.engine._processTick(1.0);

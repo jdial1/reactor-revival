@@ -473,7 +473,7 @@ describe("AudioService", () => {
       const part = game.partset.getPartById("uranium1");
       await tile.setPart(part);
       const playSpy = vi.spyOn(game.audio, 'play');
-      game.sellPart(tile);
+      await game.sellPart(tile);
       expect(playSpy).toHaveBeenCalledWith("sell", null, expect.any(Number));
     });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi, PageRouter, setupGameWithDOM } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from "../../helpers/setup.js";
 import { getPageReactor } from "@app/components/ui-components.js";
 
 describe("PageRouter Grid Transition", () => {
@@ -24,7 +24,7 @@ describe("PageRouter Grid Transition", () => {
         vi.useFakeTimers();
     }, 60000);
 
-    it("should hide grid when transitioning from upgrades to reactor", async () => {
+    it("should keep grid visible when transitioning from upgrades to reactor", async () => {
         pageRouter.currentPageId = "upgrades_section";
 
         pageRouter.pageCache.set("reactor_section", {
@@ -35,11 +35,6 @@ describe("PageRouter Grid Transition", () => {
         });
 
         await pageRouter.loadPage("reactor_section");
-
-        const reactor = getReactorEl();
-        expect(reactor?.style.visibility).toBe("hidden");
-
-        vi.advanceTimersByTime(250);
 
         expect(getReactorEl()?.style.visibility).toBe("visible");
     });
@@ -57,6 +52,17 @@ describe("PageRouter Grid Transition", () => {
         await pageRouter.loadPage("reactor_section");
 
         expect(getReactorEl()?.style.visibility).toBe("visible");
+    });
+
+    it("should not pause when opening the upgrades shop overlay", async () => {
+        pageRouter.currentPageId = "reactor_section";
+        game.paused = false;
+        game.state.pause = false;
+        const pauseSpy = vi.spyOn(game, "pause");
+
+        await pageRouter.loadPage("upgrades_section");
+
+        expect(pauseSpy).not.toHaveBeenCalled();
     });
 
     it("should handle missing reactor element gracefully", async () => {
@@ -81,4 +87,4 @@ describe("PageRouter Grid Transition", () => {
             game.engine.stop();
         }
     });
-}); 
+});

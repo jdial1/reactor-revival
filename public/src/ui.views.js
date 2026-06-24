@@ -1,6 +1,6 @@
 import { html, render } from "lit-html";
 import { subscribe } from "valtio/vanilla";
-import { preferences } from "./store.js";
+import { preferences, EngineStatus } from "./store.js";
 
 function heatRatioStripView(game) {
   const st = game?.state;
@@ -14,7 +14,7 @@ function engineStatusChipView(game) {
   const st = game?.state;
   if (!st) return html``;
   const paused = !!st.pause;
-  const stopped = st.engine_status === "stopped";
+  const stopped = st.engine_status === EngineStatus.STOPPED;
   const label = paused ? "Paused" : stopped ? "Idle" : "Run";
   const title = paused ? "Simulation paused" : stopped ? "Engine idle" : "Simulation running";
   return html`<span class="ui-views-engine-chip ${paused ? "paused" : ""} ${stopped ? "idle" : ""}" title=${title} aria-hidden="true">${label}</span>`;
@@ -26,10 +26,10 @@ export function mountHeatRatioStrip(game, host) {
     render(heatRatioStripView(game), host);
   };
   run();
-  const unsub = subscribe(game.state, run);
+  const unsubscribe = subscribe(game.state, run);
   return () => {
     try {
-      unsub();
+      unsubscribe();
     } catch (_) {}
     render(html``, host);
   };
@@ -41,10 +41,10 @@ export function mountEngineStatusChip(game, host) {
     render(engineStatusChipView(game), host);
   };
   run();
-  const unsub = subscribe(game.state, run);
+  const unsubscribe = subscribe(game.state, run);
   return () => {
     try {
-      unsub();
+      unsubscribe();
     } catch (_) {}
     render(html``, host);
   };
@@ -61,11 +61,29 @@ export function mountMuteIndicator(host) {
     render(muteIndicatorView(), host);
   };
   run();
-  const unsub = subscribe(preferences, run);
+  const unsubscribe = subscribe(preferences, run);
   return () => {
     try {
-      unsub();
+      unsubscribe();
     } catch (_) {}
     render(html``, host);
+  };
+}
+
+export function mountUiViewHosts(game) {
+  if (typeof document === "undefined" || !game) return () => {};
+  const heatHost = document.getElementById("ui_views_heat_strip_host");
+  const engineHost = document.getElementById("ui_views_engine_chip_host");
+  const muteHost = document.getElementById("ui_views_mute_host");
+  if (!heatHost || !engineHost || !muteHost) return () => {};
+  const unmounts = [];
+  const heatUnmount = mountHeatRatioStrip(game, heatHost);
+  if (typeof heatUnmount === "function") unmounts.push(heatUnmount);
+  const engineUnmount = mountEngineStatusChip(game, engineHost);
+  if (typeof engineUnmount === "function") unmounts.push(engineUnmount);
+  const muteUnmount = mountMuteIndicator(muteHost);
+  if (typeof muteUnmount === "function") unmounts.push(muteUnmount);
+  return () => {
+    unmounts.forEach((fn) => { try { fn(); } catch (_) {} });
   };
 }

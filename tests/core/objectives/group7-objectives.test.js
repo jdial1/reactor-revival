@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
-import { CHAPTER_COMPLETION_OBJECTIVE_INDICES, INFINITE_POWER_STEP } from "@app/logic.js";
+import { CHAPTER_COMPLETION_OBJECTIVE_INDICES } from "@app/logic.js";
 
 describe("Group 7: Objective & Tutorial Progression", () => {
   let game;
@@ -8,33 +8,15 @@ describe("Group 7: Objective & Tutorial Progression", () => {
     game = await setupGame();
   });
 
-  it("locks infinite power objective additive scaling", () => {
+  it("loads the all-completed objective after the final chapter objective", () => {
     const om = game.objectives_manager;
-    om._infiniteChallengeIndex = 0;
-    const firstObj = om.generateInfiniteObjective();
-    const firstTarget = firstObj.target;
-
-    om._lastInfinitePowerTarget = firstTarget;
-    om._infiniteChallengeIndex = 0;
-    const secondObj = om.generateInfiniteObjective();
-
-    expect(firstObj.checkId).toBe("infinitePower");
-    expect(secondObj.checkId).toBe("infinitePower");
-    expect(secondObj.target).toBe(firstTarget + INFINITE_POWER_STEP);
-  });
-
-  it("locks infinite money objective multiplicative scaling", () => {
-    const om = game.objectives_manager;
-    om._infiniteChallengeIndex = 2;
-    const firstObj = om.generateInfiniteObjective();
-    const firstTarget = firstObj.target;
-
-    om._lastInfiniteMoneyThorium = firstTarget;
-    om._infiniteChallengeIndex = 2;
-    const secondObj = om.generateInfiniteObjective();
-
-    expect(firstObj.checkId).toBe("infiniteMoneyThorium");
-    expect(secondObj.target).toBe(firstTarget * 2);
+    const lastIndex = om.objectives_data.length - 1;
+    for (let i = 0; i < lastIndex; i++) {
+      if (om.objectives_data[i]) om.objectives_data[i].completed = true;
+    }
+    om.set_objective(lastIndex, true);
+    expect(om.current_objective_def.checkId).toBe("allObjectives");
+    expect(om.current_objective_def.title).toContain("All objectives completed");
   });
 
   it("locks objective reward grant against double firing while claiming", () => {

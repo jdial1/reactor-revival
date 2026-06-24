@@ -1,37 +1,32 @@
-import { numFormat as fmt, on, StorageUtils, StorageAdapter, toNumber } from "../utils.js";
+import { StorageUtils, StorageAdapter } from "../storage/index.js";
+import { numFormat as fmt } from "../format/numbers.js";
+import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
+import { logger } from "../core/logger.js";
+import { on } from "../dom/lit.js";
+import { getAppContext } from "../app-context.js";
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { StateManager, createUIState, initUIStateSubscriptions, subscribeKey } from "../store.js";
-import { InputHandler } from "./input-manager.js";
-import { createModalOrchestrator } from "./ui-modals.js";
-import { GridScaler, GridCanvasRenderer } from "./ui-grid.js";
+import { createUIState, initUIStateSubscriptions } from "../store.js";
 import { PageSetupUI } from "./page-setup-ui.js";
 import { leaderboardService, resolveAudioService } from "../services.js";
-import { logger } from "../utils.js";
 import {
   ComponentRenderingUI,
   runPopulateUpgradeSection,
-  mountSectionCountsReactive,
-  updateSectionCountsState,
+  mountSectionCountsReactive as mountHubSectionCounts,
+  updateSectionCountsState as syncSectionCountsState,
+  mountExoticParticlesDisplayIfNeeded as mountControlDeckEpDisplay,
   CopyPasteUI,
   UserAccountUI,
-  HeatVisualsUI,
-  GridInteractionUI,
-  PerformanceUI,
-  MeltdownUI,
-  bindDeviceFeatures,
   setupBuildTabButton,
   setupMenuTabButton,
   setupDesktopTopNavButtons,
   teardownTabSetupUI,
   updateNavIndicators as paintNavAffordabilityDots,
   teardownAffordabilityIndicators,
-  setupKeyboardShortcuts,
-  setupCtrl9Handlers,
-  startCtrl9MoneyIncrease,
-  stopCtrl9MoneyIncrease,
   setupNavListeners,
+  teardownNavListeners,
   setupResizeListeners,
+  teardownResizeListeners,
   PwaDisplayModeUI,
   QuickStartUI,
   ClipboardUI,
@@ -40,15 +35,13 @@ import {
   setupPartsPanel,
   initializeControlDeckToggleButtons,
   initControlDeckVarObjs,
-  cacheDomElements,
-  startRenderLoop,
   getUiElement,
-  initializePage,
   getUpgradeSectionContainer,
   appendUpgradeToSection,
   subscribeToContextModalEvents,
   unsubscribeContextModalEvents,
   updateQuickSelectSlots,
+  updateFailurePhaseSensory,
   updatePartsPanelBodyClass,
   refreshPartsPanel,
   getPageReactor,
@@ -56,92 +49,55 @@ import {
   applyUiStateToDom,
   processUiUpdateQueue,
   updateUiRollingNumbers,
+  initializePartsPanel as runInitializePartsPanel,
+  teardownPartsPanel,
+  syncToggleStatesFromGame as applyToggleStatesFromGame,
+  teardownGameLayout as runTeardownGameLayout,
 } from "./ui-components.js";
-import { ReactiveLitComponent } from "./reactive-lit-component.js";
+import { createDeviceFeatures } from "../infrastructure/device.js";
+import { startRenderLoop } from "./ui-render-loop.js";
+import { initializePage as runInitializePage } from "./ui-page-init.js";
+export { showStatusNotice } from "./ui-notices.js";
 import { getValidatedGameData } from "../services.js";
-import { MOBILE_BREAKPOINT_PX } from "../utils.js";
-import { ObjectiveController } from "../logic.js";
-import { checkObjectiveTextScrolling as applyObjectiveToastTitle } from "../logic-objectives-ui.js";
 import { setupUiIdleEffects } from "../ui-idle-effects.js";
-import { GridController, AudioController } from "./controllers/controllers.js";
 import { attachAudioSys } from "../audio.sys.js";
-import { mountHeatRatioStrip, mountEngineStatusChip, mountMuteIndicator } from "../ui.views.js";
+import { mountUiViewHosts } from "../ui.views.js";
+import { teardownGameStateEngineSync } from "../logic/game-state-sync.js";
+import { installAppRootIntentDelegation } from "./ui-intents.js";
+import { teardownAllUiSubsystems, wireAppSubsystems, wireUiDomSubsystems } from "./ui-app-wiring.js";
+import { MY_LAYOUTS_STORAGE_KEY } from "./ui-layout-storage.js";
 
-export function getRoot(selector) {
-  return document.querySelector(selector);
-}
-
-export function getSplashContainer() {
-  return getRoot("#splash-container");
-}
-
-export function getWrapper() {
-  return getRoot("#wrapper");
-}
-
-export function getReactor() {
-  return getRoot("#reactor");
-}
-
-let _domMapperInitPromise = null;
-
-export async function init() {
-  if (_domMapperInitPromise) return _domMapperInitPromise;
-  if (document.readyState === "loading") {
-    _domMapperInitPromise = new Promise((resolve) => {
-      document.addEventListener("DOMContentLoaded", resolve, { once: true });
-    });
-  } else {
-    _domMapperInitPromise = Promise.resolve();
+function mountUiViewHostsForLayout(ui) {
+  if (typeof ui._uiViewHostsUnmount === "function") {
+    try { ui._uiViewHostsUnmount(); } catch (_) {}
+    ui._uiViewHostsUnmount = null;
   }
-  return _domMapperInitPromise;
+  const unmount = mountUiViewHosts(ui.game);
+  if (typeof unmount !== "function") return;
+  ui._uiViewHostsUnmount = unmount;
+  if (!ui._layoutUnmounts) ui._layoutUnmounts = [];
+  ui._layoutUnmounts.push(unmount);
 }
 
-if (typeof window !== "undefined") {
-  window.domMapper = { getRoot, getSplashContainer, getWrapper, getReactor, init };
+function isFloatingTextElement(el) {
+  return el && typeof el === "object" && el.nodeType === 1 && typeof el.appendChild === "function";
 }
 
-export const domMapper = typeof window !== "undefined" ? window.domMapper : null;
-export default domMapper;
-
-const MY_LAYOUTS_STORAGE_KEY = 'reactor_my_layouts';
-
-function getPowerNetChangeFromStats(ui) {
-  const fromState = ui.game?.state?.power_net_change;
-  if (fromState !== undefined && typeof fromState === "number" && !isNaN(fromState)) return fromState;
-  const st = ui.game?.state;
-  const statsPower = toNumber(st?.stats_power || 0);
-  const autoSellEnabled = st?.auto_sell || false;
-  const autoSellMultiplier = toNumber(ui.game?.reactor?.auto_sell_multiplier || 0);
-  if (autoSellEnabled && autoSellMultiplier > 0) {
-    return statsPower - statsPower * autoSellMultiplier;
+function borrowFloatingTextElement(pool) {
+  const list = pool?.floatingText;
+  if (!Array.isArray(list)) return document.createElement("div");
+  while (list.length) {
+    const candidate = list.pop();
+    if (isFloatingTextElement(candidate)) {
+      candidate.className = "floating-text";
+      candidate.removeAttribute("style");
+      candidate.classList.remove("floating-text--debit", "floating-text--credit");
+      return candidate;
+    }
   }
-  return statsPower;
-}
-
-function getHeatNetChangeFromStats(ui) {
-  const fromState = ui.game?.state?.heat_net_change;
-  if (fromState !== undefined && typeof fromState === "number" && !isNaN(fromState)) return fromState;
-  const st = ui.game?.state;
-  const statsNetHeat = st?.stats_net_heat;
-  let baseNetHeat;
-  if (typeof statsNetHeat === "number" && !isNaN(statsNetHeat)) {
-    baseNetHeat = statsNetHeat;
-  } else {
-    const totalHeat = toNumber(st?.stats_heat_generation || 0);
-    const statsVent = toNumber(st?.stats_vent || 0);
-    const statsOutlet = toNumber(st?.stats_outlet || 0);
-    baseNetHeat = totalHeat - statsVent - statsOutlet;
-  }
-  const currentPower = toNumber(st?.current_power || 0);
-  const statsPower = toNumber(st?.stats_power || 0);
-  const maxPower = toNumber(st?.max_power || 0);
-  const potentialPower = currentPower + statsPower;
-  const excessPower = Math.max(0, potentialPower - maxPower);
-  const overflowToHeat = ui.game?.reactor?.power_overflow_to_heat_ratio ?? 1;
-  const overflowHeat = excessPower * overflowToHeat;
-  const manualReduce = toNumber(ui.game?.reactor?.manual_heat_reduce || ui.game?.base_manual_heat_reduce || 1);
-  return baseNetHeat + overflowHeat - manualReduce;
+  const el = document.createElement("div");
+  el.className = "floating-text";
+  return el;
 }
 
 function initMainLayoutInner(ui) {
@@ -149,7 +105,6 @@ function initMainLayoutInner(ui) {
   initializeControlDeckToggleButtons(ui);
   ui.initializeControlDeck();
   setupPartsPanel(ui);
-  cacheDomElements(ui);
   initControlDeckVarObjs(ui);
   ui.quickStartUI.addHelpButtonToMainPage();
   ui.userAccountUI.setupUserAccountButton();
@@ -157,186 +112,71 @@ function initMainLayoutInner(ui) {
   setupMenuTabButton(ui);
   setupDesktopTopNavButtons(ui);
   ui.deviceFeatures.updateWakeLockState();
-  const basicOverview = getUiElement(ui, "basic_overview_section") ?? ui.DOMElements?.basic_overview_section;
+  const basicOverview = getUiElement(ui, "basic_overview_section");
   if (basicOverview && ui.help_text?.basic_overview) {
     render(html`
       <h3>${ui.help_text.basic_overview.title}</h3>
       <p>${unsafeHTML(ui.help_text.basic_overview.content)}</p>
     `, basicOverview);
   }
+  const prestigeHelp = document.getElementById("help_prestige_section");
+  if (prestigeHelp && ui.help_text?.prestige?.title) {
+    render(html`
+      <h3>${ui.help_text.prestige.title}</h3>
+      <p>${unsafeHTML(ui.help_text.prestige.content)}</p>
+    `, prestigeHelp);
+  }
+  const offlineHelp = document.getElementById("help_offline_section");
+  if (offlineHelp && ui.help_text?.controls?.offlineCatchup) {
+    render(html`
+      <h3>Offline Progress</h3>
+      <p>${unsafeHTML(ui.help_text.controls.offlineCatchup)}</p>
+    `, offlineHelp);
+  }
+  const layoutsHelp = document.getElementById("help_layouts_section");
+  if (layoutsHelp && ui.help_text?.layouts?.title) {
+    render(html`
+      <h3>${ui.help_text.layouts.title}</h3>
+      <p>${unsafeHTML(ui.help_text.layouts.content)}</p>
+    `, layoutsHelp);
+  }
+  const partsHelp = document.getElementById("help_parts_section");
+  if (partsHelp && ui.help_text?.parts?.sellConsequences) {
+    render(html`
+      <h3>Parts &amp; Selling</h3>
+      <p>${ui.help_text.parts.sellConsequences}</p>
+    `, partsHelp);
+  }
+  const controlsHelp = document.getElementById("help_controls_section");
+  if (controlsHelp && ui.help_text?.controls) {
+    const c = ui.help_text.controls;
+    render(html`
+      <h3>Save &amp; Backup</h3>
+      <p>${c.saveExport ?? ""}<br>${c.saveImport ?? ""}</p>
+      ${c.chronometer ? html`<h3>Tick Speed</h3><p>${unsafeHTML(c.chronometer)}</p>` : ""}
+    `, controlsHelp);
+  }
   if (ui.gridScaler) ui.gridScaler.init();
   if (document.getElementById("reactor_wrapper")) {
-    ui.gridScaler.resize();
+    ui.gridScaler?.resize?.();
   }
   requestAnimationFrame((ts) => startRenderLoop(ui, ts));
-  if (ui.game && ui.game.engine && ui.game.state) {
-    const status = ui.game.paused ? "paused" : (ui.game.engine.running ? "running" : "stopped");
-    ui.game.state.engine_status = status;
-  }
 }
 
-function installGameStateEngineSync(ui) {
-  const game = ui.game;
-  if (!game?.state) return () => {};
-  const sync = () => {
-    const s = game.state;
-    const r = game.reactor;
-    if (r) {
-      r.auto_sell_enabled = !!s.auto_sell;
-      r.auto_buy_enabled = !!s.auto_buy;
-      r.heat_controlled = !!s.heat_control;
-    }
-    const p = !!s.pause;
-    if (game.paused !== p) {
-      game.paused = p;
-      const eng = game.engine;
-      if (eng) {
-        if (p) eng.stop();
-        else eng.start();
-      }
-    }
+function installUiLifecycleTeardown(ui) {
+  if (typeof window === "undefined" || ui._pageLifecycleBound) return;
+  ui._pageLifecycleBound = true;
+  const flush = (event) => {
+    if (event?.persisted) return;
+    ui.cleanup();
   };
-  const keys = ["pause", "auto_sell", "auto_buy", "heat_control"];
-  const unsubs = keys.map((k) => subscribeKey(game.state, k, sync));
-  sync();
-  return () => unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+  window.addEventListener("pagehide", flush);
+  ui._unmounts.push(() => window.removeEventListener("pagehide", flush));
 }
-
-export function dispatchUiIntent(game, ui, intent, e) {
-  if (!game || !ui) return;
-  const btn = e?.currentTarget;
-  
-  game.state.intent_queue.push({
-    action: intent,
-    timestamp: Date.now(),
-    payload: { sourceId: btn?.id }
-  });
-}
-
-export function bindIntentDelegation(game, ui, root) {
-  if (!root || root._intentDelegationBound) return;
-  const handler = (ev) => {
-    const t = ev.target.closest("[data-intent]");
-    if (!t || !root.contains(t)) return;
-    const id = t.getAttribute("data-intent");
-    if (!id) return;
-    dispatchUiIntent(game, ui, id, { currentTarget: t, target: ev.target });
-  };
-  root.addEventListener("click", handler);
-  root._intentDelegationBound = true;
-  return () => {
-    root.removeEventListener("click", handler);
-    root._intentDelegationBound = false;
-  };
-}
-
-export function installAppRootIntentDelegation(game, ui) {
-  const root = getWrapper();
-  const teardown = bindIntentDelegation(game, ui, root);
-  return typeof teardown === "function" ? teardown : () => {};
-}
-
-class LayoutStorageUI {
-  constructor(ui) {
-    this.ui = ui;
-  }
-  static get MY_LAYOUTS_STORAGE_KEY() {
-    return MY_LAYOUTS_STORAGE_KEY;
-  }
-  getMyLayouts() {
-    try {
-      const arr = StorageUtils.get(MY_LAYOUTS_STORAGE_KEY);
-      if (!arr) return [];
-      return Array.isArray(arr) ? arr : [];
-    } catch {
-      return [];
-    }
-  }
-  saveMyLayouts(layouts) {
-    StorageUtils.set(MY_LAYOUTS_STORAGE_KEY, layouts);
-  }
-  addToMyLayouts(name, data) {
-    const list = this.getMyLayouts();
-    list.unshift({
-      id: String(Date.now()),
-      name: name || `Layout ${list.length + 1}`,
-      data,
-      createdAt: Date.now()
-    });
-    this.saveMyLayouts(list);
-  }
-  removeFromMyLayouts(id) {
-    const list = this.getMyLayouts().filter((e) => e.id !== id);
-    this.saveMyLayouts(list);
-  }
-}
-
-class ObjectivesUI {
-  constructor(ui, controller = null) {
-    this.ui = ui;
-    this.controller = controller;
-  }
-  checkTextScrolling() {
-    const toastTitleEl = getUiElement(this.ui, "objectives_toast_title") ?? document.getElementById("objectives_toast_title");
-    if (!toastTitleEl) return;
-    applyObjectiveToastTitle({ objectives_toast_title: toastTitleEl });
-  }
-  markComplete() {
-    const toastBtn = getUiElement(this.ui, "objectives_toast_btn") ?? document.getElementById("objectives_toast_btn");
-    if (!toastBtn) return;
-    toastBtn.classList.add("is-complete");
-    if (typeof this.animateObjectiveCompletion === "function") this.animateObjectiveCompletion();
-  }
-  updateObjectiveDisplay() {
-    if (this.controller) return this.controller.updateDisplay();
-  }
-  updateObjectiveDisplayFromState() {
-    if (this.controller) return this.controller.updateDisplayFromState();
-  }
-  animateObjectiveCompletion() {
-    if (this.controller) return this.controller.animateCompletion();
-  }
-  showObjectivesForPage(pageId) {
-    if (this.ui?.uiState) {
-      this.ui.uiState.active_page = pageId;
-      this.ui.uiState.active_route = pageId;
-    }
-    if (this.controller) return this.controller.showForPage(pageId);
-  }
-  setupObjectivesListeners() {
-    if (this.controller) return this.controller.setupListeners();
-  }
-}
-
-class PauseStateUI {
-  constructor(ui) {
-    this.ui = ui;
-  }
-  updatePauseState() {
-    if (!this.ui.game?.state) return;
-    const statePaused = this.ui.game.state.pause;
-    const isPaused = statePaused === undefined ? !!this.ui.game?.paused : !!statePaused;
-    if (this.ui.uiState) this.ui.uiState.is_paused = !!isPaused;
-    const doc = (typeof globalThis !== "undefined" && globalThis.document) || (typeof document !== "undefined" && document);
-    if (doc?.body) doc.body.classList.toggle("game-paused", !!isPaused);
-    if (isPaused) {
-      const unpauseBtn = document.getElementById("unpause_btn");
-      if (unpauseBtn && !unpauseBtn.hasAttribute("data-listener-added")) {
-        unpauseBtn.addEventListener("click", () => {
-          this.ui.game.onToggleStateChange?.("pause", false);
-        });
-        unpauseBtn.setAttribute("data-listener-added", "true");
-      }
-    }
-  }
-}
-
-export { getPowerNetChangeFromStats as getPowerNetChange, getHeatNetChangeFromStats as getHeatNetChange };
 
 export class UI {
   constructor() {
     this.game = null;
-    this.DOMElements = {};
     this.var_objs_config = {};
     this.last_money = 0;
     this.last_exotic_particles = 0;
@@ -346,56 +186,32 @@ export class UI {
     this.last_interface_update = 0;
     this.update_interface_task = null;
     this._updateLoopRunning = false;
-    this.stateManager = new StateManager(this);
-    this.inputHandler = new InputHandler(this);
-    this.modalOrchestrator = createModalOrchestrator();
-    this.gridScaler = new GridScaler(this);
-    this.gridCanvasRenderer = new GridCanvasRenderer(this);
+    this.stateManager = null;
+    this.inputHandler = null;
+    this.modalOrchestrator = null;
+    this.gridScaler = null;
     this.help_mode_active = false;
     this.copyPasteUI = new CopyPasteUI(this);
     this.copyPaste = this.copyPasteUI;
     this.userAccountUI = new UserAccountUI(this);
     this.pageSetupUI = new PageSetupUI(this);
-    this.objectiveController = new ObjectiveController({
-      getGame: () => this.game,
-      getUI: () => this,
-      getStateManager: () => this.stateManager,
-      cacheDOMElements: () => cacheDomElements(this),
-      lightVibration: () => this.deviceFeatures?.lightVibration?.(),
-    });
-    this.objectivesUI = new ObjectivesUI(this, this.objectiveController);
-    this.heatVisualsUI = new HeatVisualsUI(this);
-    this.gridInteractionUI = new GridInteractionUI(this);
-    this.gridController = new GridController({
-      getHighlightedSegment: () => this.gridInteractionUI.highlightedSegment,
-      getInputManager: () => this.inputHandler,
-      getGame: () => this.game,
-      getUI: () => this,
-      spawnTileIcon: (k, from, to) => this.gridInteractionUI.spawnTileIcon(k, from, to),
-      blinkVent: (t) => this.gridInteractionUI.blinkVent(t),
-      clearAllActiveAnimations: () => this.gridInteractionUI.clearAllActiveAnimations(),
-      getAnimationStatus: () => this.gridInteractionUI.getAnimationStatus(),
-      clearReactorHeat: () => this.gridInteractionUI.clearReactorHeat(),
-    pulseReflector: (a, b) => this.gridInteractionUI.pulseReflector(a, b),
-    emitEP: (t) => this.gridInteractionUI.emitEP(t),
-  });
-  this.audioController = new AudioController({ getAudioService: () => resolveAudioService(this.game?.audio), getUI: () => this });
-    this.performanceUI = new PerformanceUI(this);
-    this.meltdownUI = new MeltdownUI(this);
-    this.layoutStorageUI = new LayoutStorageUI(this);
+    this.objectiveController = null;
+    this.achievementController = null;
+    this.objectivesUI = null;
+    this.heatVisualsUI = null;
+    this.gridInteractionUI = null;
+    this.meltdownUI = null;
     this.componentRenderingUI = new ComponentRenderingUI(this);
-    this.deviceFeatures = bindDeviceFeatures(this);
+    this.deviceFeatures = createDeviceFeatures(() => this);
+    this._deviceServiceTeardown = null;
     this.pwaDisplayModeUI = new PwaDisplayModeUI(this);
     this.quickStartUI = new QuickStartUI(this);
-    this.pauseStateUI = new PauseStateUI(this);
+    this.pauseStateUI = null;
     this.clipboardUI = new ClipboardUI(this);
 
     this.ctrl9HoldTimer = null;
     this.ctrl9HoldStartTime = null;
     this.ctrl9MoneyInterval = null;
-    this.ctrl9BaseAmount = 1000000000;
-    this.ctrl9ExponentialRate = 5;
-    this.ctrl9IntervalMs = 100;
 
     this._lastUiTime = 0;
 
@@ -408,17 +224,21 @@ export class UI {
 
     this._visualPool = { floatingText: [], steamParticle: [], bolt: [] };
     this.detachGameEventListeners = null;
+    this.detachGlobalListeners = null;
     this._unmounts = [];
+    this._layoutUnmounts = [];
+    this._lifecycleEnded = false;
+    this._pageLifecycleBound = false;
     this._icons = {
       power: "img/ui/icons/icon_power.png",
       heat: "img/ui/icons/icon_heat.png",
     };
     this.updateQuickSelectSlots = () => updateQuickSelectSlots(this);
+    this.updateFailurePhaseSensory = (state) => updateFailurePhaseSensory(this, state);
     this.updatePartsPanelBodyClass = () => updatePartsPanelBodyClass(this);
     this.refreshPartsPanel = () => refreshPartsPanel(this);
     this.getUpgradeContainer = (k) => getUpgradeSectionContainer(this, k);
     this.appendUpgrade = (k, el) => appendUpgradeToSection(this, k, el);
-    this.cacheDomElements = (pageId) => cacheDomElements(this, pageId);
     this.getUiElement = (id) => getUiElement(this, id);
     this.snapUiDisplayValuesFromState = () => snapUiDisplayValuesFromState(this);
     this.applyUiStateToDom = () => applyUiStateToDom(this);
@@ -427,11 +247,40 @@ export class UI {
     this.startRenderLoop = (ts) => startRenderLoop(this, ts);
   }
 
+  initializePage(pageId) {
+    runInitializePage(this, pageId);
+  }
+
+  updateSectionCountsState(game = this.game) {
+    syncSectionCountsState(this, game);
+  }
+
+  initializePartsPanel() {
+    runInitializePartsPanel(this);
+  }
+
+  teardownGameLayout() {
+    runTeardownGameLayout(this);
+  }
+
+  syncToggleStatesFromGame() {
+    applyToggleStatesFromGame(this);
+  }
+
+  mountSectionCountsReactive(wrapperId) {
+    return mountHubSectionCounts(this, wrapperId);
+  }
+
+  mountExoticParticlesDisplayIfNeeded() {
+    mountControlDeckEpDisplay(this);
+  }
+
   _renderVisualEvents(eventBufferDescriptor) {
-    if (!eventBufferDescriptor || eventBufferDescriptor.head === eventBufferDescriptor.tail) return;
-    const { buffer, head, tail, max } = eventBufferDescriptor;
+    const engine = this.game?.engine;
     const tileset = this.game?.tileset;
-    if (!tileset || !buffer) return;
+    const gi = this.gridInteractionUI;
+    if (!engine || !eventBufferDescriptor || !tileset || !gi) return;
+    const { buffer, head, tail, max } = eventBufferDescriptor;
     let pos = tail;
     while (pos !== head) {
       const idx = pos * 2;
@@ -441,25 +290,20 @@ export class UI {
       const col = packed & 0x3F;
       const t = tileset.getTile(row, col);
       if (t) {
-        if (typeId === 1) {
-          this.gridController.spawnTileIcon("power", t, null);
-        } else if (typeId === 2 && t.part?.category === "vent") {
-          this.gridController.blinkVent(t);
-        }
+        if (typeId === 1) gi.spawnTileIcon("power", t, null);
+        else if (typeId === 2 && t.part?.category === "vent") gi.blinkVent(t);
       }
       pos = (pos + 1) % max;
     }
-    if (this.game?.engine && typeof this.game.engine.ackEvents === "function") {
-      this.game.engine.ackEvents(head);
-    }
+    engine.ackEvents(head);
   }
 
   showFloatingText(container, amount) {
     if (!container || amount <= 0) return;
-    const parent = container.querySelector(".floating-text-container");
-    if (!parent) return;
+    const parent = container.querySelector?.(".floating-text-container");
+    if (!parent || parent.nodeType !== 1) return;
     const pool = this._visualPool;
-    const textEl = pool.floatingText.pop() || Object.assign(document.createElement("div"), { className: "floating-text" });
+    const textEl = borrowFloatingTextElement(pool);
     textEl.textContent = `+$${fmt(amount)}`;
     parent.appendChild(textEl);
     setTimeout(() => {
@@ -468,21 +312,34 @@ export class UI {
     }, 1000);
   }
 
-  showFloatingTextAtTile(tile, amount) {
-    if (!tile || amount <= 0) return;
-    const overlay = this.heatVisualsUI._ensureOverlay();
-    if (!overlay) return;
-    const pos = this.heatVisualsUI._tileCenterToOverlayPosition(tile.row, tile.col);
-    const pool = this._visualPool;
-    const textEl = pool.floatingText.pop() || Object.assign(document.createElement("div"), { className: "floating-text" });
-    textEl.textContent = `+$${fmt(amount)}`;
-    textEl.style.left = `${pos.x}px`;
-    textEl.style.top = `${pos.y}px`;
-    overlay.appendChild(textEl);
-    setTimeout(() => {
-      textEl.remove();
-      pool.floatingText.push(textEl);
-    }, 1000);
+  showFloatingTextAtTile(tile, amountOrText, options = {}) {
+    if (!tile) return;
+    try {
+      const overlay = this.heatVisualsUI?._ensureOverlay?.();
+      if (!overlay || overlay.nodeType !== 1) return;
+      const pos = this.heatVisualsUI._tileCenterToOverlayPosition(tile.row, tile.col);
+      const pool = this._visualPool;
+      const textEl = borrowFloatingTextElement(pool);
+      const variant = options.variant ?? (typeof amountOrText === "number" && amountOrText < 0 ? "debit" : "credit");
+      if (typeof amountOrText === "number") {
+        const n = amountOrText;
+        textEl.textContent = n >= 0 ? `+$${fmt(n)}` : `-$${fmt(Math.abs(n))}`;
+      } else {
+        textEl.textContent = String(amountOrText ?? "");
+      }
+      textEl.classList.toggle("floating-text--debit", variant === "debit");
+      textEl.classList.toggle("floating-text--credit", variant === "credit");
+      textEl.style.left = `${pos.x}px`;
+      textEl.style.top = `${pos.y}px`;
+      overlay.appendChild(textEl);
+      setTimeout(() => {
+        textEl.remove();
+        textEl.classList.remove("floating-text--debit", "floating-text--credit");
+        pool.floatingText.push(textEl);
+      }, 1000);
+    } catch (err) {
+      logger.log("warn", "ui", "Floating text render skipped", err);
+    }
   }
 
   initParticleCanvas() {}
@@ -497,14 +354,6 @@ export class UI {
 
   _cleanupVentRotor(tile) {
     this.gridInteractionUI._cleanupVentRotor(tile);
-  }
-
-  getPowerNetChange() {
-    return getPowerNetChangeFromStats(this);
-  }
-
-  getHeatNetChange() {
-    return getHeatNetChangeFromStats(this);
   }
 
   getSellingTile() {
@@ -525,7 +374,7 @@ export class UI {
   }
 
   resizeReactor() {
-    this.gridScaler.resize();
+    this.gridScaler?.resize?.();
   }
 
   initializeCopyPasteUI() {
@@ -542,28 +391,25 @@ export class UI {
       if (prev && card.contains(prev)) return;
       this.deviceFeatures?.upgradeCardHoverBuzz?.();
     };
-    document.getElementById("upgrades_content_wrapper")?.addEventListener("mouseover", onMouseOver);
-    document.getElementById("experimental_upgrades_content_wrapper")?.addEventListener("mouseover", onMouseOver);
+    const wrappers = [
+      document.getElementById("upgrades_content_wrapper"),
+      document.getElementById("experimental_upgrades_content_wrapper"),
+    ].filter(Boolean);
+    wrappers.forEach((el) => el.addEventListener("mouseover", onMouseOver));
+    this._unmounts.push(() => {
+      wrappers.forEach((el) => el.removeEventListener("mouseover", onMouseOver));
+      this._upgradeBuzzSetup = false;
+    });
   }
 
   initMainLayout() {
-    if (typeof this._gameStateSyncTeardown === "function") {
-      this._gameStateSyncTeardown();
-      this._gameStateSyncTeardown = null;
+    runTeardownGameLayout(this);
+    if (typeof this._uiStateTeardown === "function") {
+      this._uiStateTeardown();
+      this._uiStateTeardown = null;
     }
     initMainLayoutInner(this);
-    if (this.game?.state) {
-      this._gameStateSyncTeardown = installGameStateEngineSync(this);
-    }
     this._uiStateTeardown = initUIStateSubscriptions(this.uiState, this);
-  }
-
-  startCtrl9MoneyIncrease() {
-    startCtrl9MoneyIncrease(this);
-  }
-
-  stopCtrl9MoneyIncrease() {
-    stopCtrl9MoneyIncrease(this);
   }
 
   async init(game) {
@@ -573,88 +419,46 @@ export class UI {
     if (game?.upgradeset?.setPopulateSectionFn) {
       game.upgradeset.setPopulateSectionFn(runPopulateUpgradeSection);
     }
-    this.stateManager = new StateManager(this);
-    this.stateManager.setGame(game);
-    game.on("tickRecorded", () => this.performanceUI?.recordTick?.());
-    this.meltdownUI.subscribeToMeltdownEvents(game);
     subscribeToContextModalEvents(this, game);
-    this.audioController.attach(game);
     const audioUnmount = attachAudioSys(() => resolveAudioService(this.game?.audio), () => this.game);
     if (typeof audioUnmount === "function") this._unmounts.push(audioUnmount);
-    const heatStripHost = typeof document !== "undefined" ? document.getElementById("info_bar") : null;
-    if (heatStripHost && !document.getElementById("ui_views_heat_strip_host")) {
-      const h = document.createElement("div");
-      h.id = "ui_views_heat_strip_host";
-      h.className = "ui-views-heat-strip-host";
-      heatStripHost.insertBefore(h, heatStripHost.firstChild);
-      const heatUnmount = mountHeatRatioStrip(game, h);
-      if (typeof heatUnmount === "function") this._unmounts.push(heatUnmount);
-    }
-    if (heatStripHost && !document.getElementById("ui_views_engine_chip_host")) {
-      const ec = document.createElement("div");
-      ec.id = "ui_views_engine_chip_host";
-      ec.className = "ui-views-engine-chip-host";
-      const afterHeat = document.getElementById("ui_views_heat_strip_host");
-      if (afterHeat?.parentNode) {
-        afterHeat.after(ec);
-      } else {
-        heatStripHost.insertBefore(ec, heatStripHost.firstChild);
-      }
-      const engineUnmount = mountEngineStatusChip(game, ec);
-      if (typeof engineUnmount === "function") this._unmounts.push(engineUnmount);
-    }
-    if (heatStripHost && !document.getElementById("ui_views_mute_host")) {
-      const mh = document.createElement("div");
-      mh.id = "ui_views_mute_host";
-      mh.className = "ui-views-mute-host";
-      const afterEngine = document.getElementById("ui_views_engine_chip_host");
-      const afterHeat = document.getElementById("ui_views_heat_strip_host");
-      if (afterEngine?.parentNode) {
-        afterEngine.after(mh);
-      } else if (afterHeat?.parentNode) {
-        afterHeat.after(mh);
-      } else {
-        heatStripHost.insertBefore(mh, heatStripHost.firstChild);
-      }
-      const muteUnmount = mountMuteIndicator(mh);
-      if (typeof muteUnmount === "function") this._unmounts.push(muteUnmount);
-    }
-    this.inputHandler.setup();
-    this.modalOrchestrator.init(this);
-    this.gridInteractionUI.clearAllActiveAnimations();
+    mountUiViewHostsForLayout(this);
     const idleUnmount = setupUiIdleEffects();
     if (typeof idleUnmount === "function") this._unmounts.push(idleUnmount);
+    installUiLifecycleTeardown(this);
+    wireUiDomSubsystems(this);
+    wireAppSubsystems(this, game);
     return true;
   }
 
   forceReactorRealignment() {
-    const reactor = getPageReactor(this) ?? this.DOMElements?.reactor;
+    const reactor = getPageReactor(this);
     if (!this.game || !reactor) return;
     const originalDisplay = reactor.style.display;
     reactor.style.display = "none";
     reactor.offsetHeight;
     reactor.style.display = originalDisplay;
-    this.gridScaler.resize();
+    this.gridScaler?.resize?.();
   }
 
   setupEventListeners() {
     setupNavListeners(this);
-    setupKeyboardShortcuts(this);
-    setupCtrl9Handlers(this);
     setupResizeListeners(this);
     mountInfoBar(this);
+    mountUiViewHostsForLayout(this);
     this.copyPaste.setupCopyStateButton();
-    this.objectivesUI.setupObjectivesListeners();
+    this.objectivesUI?.setupObjectivesListeners?.();
+    this.achievementController?.mount?.();
     if (this.game) {
       if (typeof this._teardownIntentDelegation === "function") {
         this._teardownIntentDelegation();
         this._teardownIntentDelegation = null;
       }
-      this._teardownIntentDelegation = installAppRootIntentDelegation(this.game, this);
+      this._teardownIntentDelegation = installAppRootIntentDelegation(this.game);
     }
   }
 
-  static get MY_LAYOUTS_STORAGE_KEY() { return LayoutStorageUI.MY_LAYOUTS_STORAGE_KEY; }
+  static get MY_LAYOUTS_STORAGE_KEY() { return MY_LAYOUTS_STORAGE_KEY; }
 
   initializeControlDeck() {
     if (window.innerWidth > MOBILE_BREAKPOINT_PX) return;
@@ -662,14 +466,17 @@ export class UI {
   }
 
   async resetReactor() {
-    logger.log('debug', 'game', 'resetReactor method called - deleting save and returning to splash');
+    logger.log("debug", "game", "resetReactor: clearing save and returning to splash");
+    const ctx = getAppContext() ?? { game: this.game, ui: this, pageRouter: this.game?.router };
+    if (typeof ctx.returnToSplashScreen === "function") {
+      await ctx.returnToSplashScreen(ctx, { clearSaves: true });
+      return;
+    }
     try {
       await StorageAdapter.remove("reactorGameSave");
-      logger.debug("Save file deleted from localStorage");
     } catch (error) {
-      logger.log('error', 'game', 'Error deleting save file:', error);
+      logger.log("error", "game", "Error deleting save file:", error);
     }
-    logger.log('debug', 'game', 'Navigating to splash page');
     window.location.href = window.location.origin + window.location.pathname;
   }
 
@@ -686,6 +493,9 @@ export class UI {
   }
 
   cleanup() {
+    if (this._lifecycleEnded) return;
+    this._lifecycleEnded = true;
+    runTeardownGameLayout(this);
     if (this.update_interface_task) {
       cancelAnimationFrame(this.update_interface_task);
       this.update_interface_task = null;
@@ -694,8 +504,7 @@ export class UI {
     this._unmounts = [];
     this._sectionCountsMountedUpgrades = false;
     this._sectionCountsMountedResearch = false;
-    if (this.objectiveController?.unmount) this.objectiveController.unmount();
-    this.meltdownUI.cleanup();
+    teardownAllUiSubsystems(this, this.game);
     if (typeof this.copyPasteUI?.teardownBlueprintPlanner === "function") {
       this.copyPasteUI.teardownBlueprintPlanner();
     }
@@ -708,28 +517,28 @@ export class UI {
     this._versionDisplayMounted = false;
     teardownAffordabilityIndicators(this);
     teardownTabSetupUI(this);
+    teardownNavListeners(this);
+    teardownResizeListeners(this);
+    teardownPartsPanel(this);
     this.userAccountUI?.teardownUserAccountButton?.();
     if (this.game) unsubscribeContextModalEvents(this, this.game);
     if (typeof this.detachGameEventListeners === "function") {
       this.detachGameEventListeners();
       this.detachGameEventListeners = null;
     }
-    if (this.stateManager?.teardown) this.stateManager.teardown();
+    if (typeof this.detachGlobalListeners === "function") {
+      this.detachGlobalListeners();
+      this.detachGlobalListeners = null;
+    }
+    teardownGameStateEngineSync(this.game);
     if (typeof this._teardownIntentDelegation === "function") {
       this._teardownIntentDelegation();
       this._teardownIntentDelegation = null;
-    }
-    if (typeof this._gameStateSyncTeardown === "function") {
-      this._gameStateSyncTeardown();
-      this._gameStateSyncTeardown = null;
     }
     if (typeof this._uiStateTeardown === "function") {
       this._uiStateTeardown();
       this._uiStateTeardown = null;
     }
-    if (this.game?.tooltip_manager?.teardown) this.game.tooltip_manager.teardown();
-    document.getElementById("ui_views_mute_host")?.remove();
-    document.getElementById("ui_views_engine_chip_host")?.remove();
-    document.getElementById("ui_views_heat_strip_host")?.remove();
+    if (this.tooltipManager?.teardown) this.tooltipManager.teardown();
   }
 }

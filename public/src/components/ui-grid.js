@@ -1,14 +1,5 @@
+import { getIndex } from "../simUtils.js";
 import {
-  getIndex,
-  GRID,
-  COLORS,
-  OVERHEAT_VISUAL,
-  BAR,
-  SINGULARITY,
-  HEAT_MAP,
-  HEAT_SHIMMER,
-  HEAT_HAZE,
-  HEAT_FLOW,
   GRID_TARGET_TOTAL_TILES,
   GRID_MIN_DIMENSION,
   GRID_MAX_DISPLAY_DIMENSION,
@@ -19,13 +10,25 @@ import {
   SNAP_BACK_SPRING_CONSTANT,
   ZOOM_SCALE_MIN,
   ZOOM_SCALE_MAX,
-  logger,
-  BaseComponent,
-  vuSegmentRatio01,
-  getDomElementById,
-} from "../utils.js";
+  GRID,
+} from "../constants/balance.js";
+import {
+  COLORS,
+  OVERHEAT_VISUAL,
+  BAR,
+  SINGULARITY,
+  HEAT_MAP,
+  HEAT_SHIMMER,
+  HEAT_HAZE,
+  HEAT_FLOW,
+} from "../constants/heat-visual.js";
+import { MOBILE_BREAKPOINT_PX, MOBILE_MIN_TILE_PX, DESKTOP_MIN_TILE_PX, MAX_TILE_SIZE_PX } from "../constants/ui-constants.js";
+import { logger } from "../core/logger.js";
+import { vuSegmentRatio01 } from "../core/math-helpers.js";
+import { BaseComponent, getDomElementById } from "../dom/lit.js";
 import { actions } from "../store.js";
-import { getPageReactor, getPageReactorWrapper } from "./ui-components.js";
+import { getPageReactor, getPageReactorWrapper } from "./page-dom.js";
+import { subscribeKey } from "valtio/vanilla/utils";
 
 export { Tileset } from "../logic.js";
 
@@ -167,20 +170,19 @@ class DynamicOverlayRenderer {
 
       const maxHeat = tile.part.containment || 1;
       const hasHeatBar = tile.part.base_containment > 0 || (tile.part.containment > 0 && tile.part.category !== "valve");
+      const hasDurability = tile.part.base_ticks > 0;
+      const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
       if (hasHeatBar && tile.heat_contained != null) {
         const pct = vuSegmentRatio01(Math.max(0, Math.min(1, tile.heat_contained / maxHeat)));
-        const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
-        const by = y + ts - barH;
+        const by = hasDurability ? y + 1 : y + ts - barH;
         ctx.fillStyle = COLORS.heatBarBg;
         ctx.fillRect(x, by, ts, barH);
         ctx.fillStyle = COLORS.heatBarFill;
         ctx.fillRect(x, by, ts * pct, barH);
       }
 
-      const hasDurability = tile.part.base_ticks > 0;
       if (hasDurability && tile.ticks != null && tile.part.ticks > 0) {
         const pct = vuSegmentRatio01(Math.max(0, Math.min(1, tile.ticks / tile.part.ticks)));
-        const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
         const by = y + ts - barH;
         if (!hasHeatBar) {
           ctx.fillStyle = COLORS.heatBarBg;
@@ -474,9 +476,6 @@ export class GridCanvasRenderer {
     this._staticRenderer = new StaticGridRenderer(this);
     this._dynamicRenderer = new DynamicOverlayRenderer(this);
     this._heatRenderer = new HeatEffectsRenderer(this);
-    this._atlasFrames = null;
-    this._atlasImg = null;
-    this._startAtlasLoad();
   }
 
   get canvas() {
@@ -495,29 +494,7 @@ export class GridCanvasRenderer {
     return rendererSurfaces.get(this)?.dynamicCtx ?? null;
   }
 
-  _startAtlasLoad() {
-    if (typeof fetch === "undefined") return;
-    fetch("data/sprite-atlas.json")
-      .then((r) => r.json())
-      .then((data) => {
-        this._atlasFrames = data.frames || null;
-        const img = new Image();
-        img.onload = () => {
-          this._atlasImg = img;
-          this.markStaticDirty();
-        };
-        img.src = data.atlas || "img/reactor-parts-atlas.png";
-      })
-      .catch(() => {});
-  }
-
   drawPartSprite(ctx, imagePath, dx, dy, ts) {
-    const uv = this._atlasFrames?.[imagePath];
-    const atlas = this._atlasImg;
-    if (uv && atlas && atlas.complete && atlas.naturalWidth) {
-      ctx.drawImage(atlas, uv.x, uv.y, uv.w, uv.h, dx, dy - 3, ts, ts);
-      return;
-    }
     const img = this.loadImage(imagePath);
     if (img.complete && img.naturalWidth) ctx.drawImage(img, dx, dy - 3, ts, ts);
   }
@@ -529,6 +506,7 @@ export class GridCanvasRenderer {
       this._imageCache.delete(oldest);
     }
     const img = new Image();
+    img.onload = () => this.markStaticDirty();
     img.src = path;
     this._imageCache.set(path, img);
     this._imageCacheOrder.push(path);
@@ -554,9 +532,12 @@ export class GridCanvasRenderer {
       return;
     }
     const wrapper = document.createElement("div");
+    wrapper.className = "reactor-canvas-host";
     wrapper.style.position = "relative";
     wrapper.style.width = "100%";
     wrapper.style.height = "100%";
+    wrapper.style.minWidth = "0";
+    wrapper.style.minHeight = "0";
     const canvas = document.createElement("canvas");
     canvas.style.display = "block";
     canvas.style.width = "100%";
@@ -975,10 +956,10 @@ export class GridScaler extends BaseComponent {
     }
 
 
-    static get MOBILE_BREAKPOINT_PX() { return 900; }
-    static get MOBILE_MIN_TILE_PX() { return 40; }
-    static get DESKTOP_MIN_TILE_PX() { return 36; }
-    static get MAX_TILE_SIZE_PX() { return 64; }
+    static get MOBILE_BREAKPOINT_PX() { return MOBILE_BREAKPOINT_PX; }
+    static get MOBILE_MIN_TILE_PX() { return MOBILE_MIN_TILE_PX; }
+    static get DESKTOP_MIN_TILE_PX() { return DESKTOP_MIN_TILE_PX; }
+    static get MAX_TILE_SIZE_PX() { return MAX_TILE_SIZE_PX; }
     static get MOBILE_PREF_COLS() { return 8; }
     static get MOBILE_TALL_ROWS() { return 14; }
     static get MOBILE_MED_ROWS() { return 10; }
@@ -1084,20 +1065,36 @@ export class GridScaler extends BaseComponent {
         const finalGridWidth = cols * tileSize;
         const finalGridHeight = rows * tileSize;
 
-        this.reactor.style.setProperty('--tile-size', `${tileSize}px`);
-        this.reactor.style.setProperty('--game-cols', cols);
-        this.reactor.style.setProperty('--game-rows', rows);
+        if (this.ui?.uiState) {
+          this.ui.uiState.grid_layout = { cols, rows, tile_size_px: tileSize };
+          const useCssGrid = this.ui.uiState.layout_css_grid === true;
+          if (useCssGrid) {
+            this.ui.uiState.grid_shell_width = 0;
+            this.ui.uiState.grid_shell_height = 0;
+          } else {
+            this.ui.uiState.grid_shell_width = finalGridWidth;
+            this.ui.uiState.grid_shell_height = finalGridHeight;
+          }
+        }
 
-        this.reactor.style.width = `${finalGridWidth}px`;
-        this.reactor.style.height = `${finalGridHeight}px`;
-
-        if (this.ui.gridCanvasRenderer) {
-          this.ui.gridCanvasRenderer.setSize(finalGridWidth, finalGridHeight);
-          this.ui.gridCanvasRenderer.setGridDimensions(rows, cols);
-          this.ui.gridCanvasRenderer.markStaticDirty();
-          logger.log('debug', 'ui', `[GridScaler] resize complete: ${cols}x${rows} grid, ${finalGridWidth}x${finalGridHeight}px`);
+        const useCssGrid = this.ui?.uiState?.layout_css_grid === true;
+        if (useCssGrid) {
+            const hostW = this.reactor?.clientWidth ?? this.wrapper?.clientWidth ?? finalGridWidth;
+            const hostH = this.reactor?.clientHeight ?? this.wrapper?.clientHeight ?? finalGridHeight;
+            if (this.ui.gridCanvasRenderer) {
+                this.ui.gridCanvasRenderer.setSize(hostW, hostH);
+                this.ui.gridCanvasRenderer.setGridDimensions(rows, cols);
+                this.ui.gridCanvasRenderer.markStaticDirty();
+            }
         } else {
-          logger.log('warn', 'ui', '[GridScaler] resize complete but gridCanvasRenderer missing');
+            if (this.ui.gridCanvasRenderer) {
+                this.ui.gridCanvasRenderer.setSize(finalGridWidth, finalGridHeight);
+                this.ui.gridCanvasRenderer.setGridDimensions(rows, cols);
+                this.ui.gridCanvasRenderer.markStaticDirty();
+                logger.log('debug', 'ui', `[GridScaler] resize complete: ${cols}x${rows} grid, ${finalGridWidth}x${finalGridHeight}px`);
+            } else {
+                logger.log('warn', 'ui', '[GridScaler] resize complete but gridCanvasRenderer missing');
+            }
         }
 
         const sig = `${rows}|${cols}|${tileSize}`;
@@ -1115,6 +1112,7 @@ export class GridScaler extends BaseComponent {
         }
 
         this.applyWrapperAndSectionStyles(isMobile);
+        applyReactorGridLayoutStyles(this.ui);
     }
 
     applyWrapperAndSectionStyles(isMobile) {
@@ -1147,4 +1145,48 @@ export class GridScaler extends BaseComponent {
         this.wrapper.style.paddingLeft = '';
     }
 
+}
+
+function buildReactorGridStyle(ui) {
+  const gl = ui.uiState?.grid_layout ?? {};
+  const useCssGrid = ui.uiState?.layout_css_grid === true;
+  const style = {
+    "--tile-size": gl.tile_size_px ? `${gl.tile_size_px}px` : undefined,
+    "--game-cols": gl.cols ? String(gl.cols) : undefined,
+    "--game-rows": gl.rows ? String(gl.rows) : undefined,
+  };
+  if (!useCssGrid) {
+    if (ui.uiState?.grid_shell_width) style.width = `${ui.uiState.grid_shell_width}px`;
+    if (ui.uiState?.grid_shell_height) style.height = `${ui.uiState.grid_shell_height}px`;
+  }
+  return style;
+}
+
+export function applyReactorGridLayoutStyles(ui) {
+  const reactor = getPageReactor(ui);
+  if (!reactor || !ui?.uiState) return;
+  const useCssGrid = ui.uiState.layout_css_grid === true;
+  reactor.classList.toggle("reactor-css-grid", useCssGrid);
+  const mapped = buildReactorGridStyle(ui);
+  for (const key of Object.keys(mapped)) {
+    const val = mapped[key];
+    if (val != null && val !== "") reactor.style.setProperty(key, val);
+    else reactor.style.removeProperty(key);
+  }
+  if (useCssGrid) {
+    reactor.style.removeProperty("width");
+    reactor.style.removeProperty("height");
+  }
+}
+
+export function mountReactorGridLayoutBinding(ui) {
+  if (!ui?.uiState || ui._reactorGridLayoutUnsubs) return;
+  const apply = () => applyReactorGridLayoutStyles(ui);
+  ui._reactorGridLayoutUnsubs = [
+    subscribeKey(ui.uiState, "grid_layout", apply),
+    subscribeKey(ui.uiState, "layout_css_grid", apply),
+    subscribeKey(ui.uiState, "grid_shell_width", apply),
+    subscribeKey(ui.uiState, "grid_shell_height", apply),
+  ];
+  apply();
 }

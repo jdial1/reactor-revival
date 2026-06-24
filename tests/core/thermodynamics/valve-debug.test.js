@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
 
 describe("Valve Debug Test", () => {
@@ -33,7 +33,7 @@ describe("Valve Debug Test", () => {
         ventTile2.heat_contained = 0;
 
         game.reactor.updateStats();
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
 
         console.log("=== BEFORE TICK ===");
         console.log(`Test 1 (inactive): coolant=${coolantTile1.heat_contained}, vent=${ventTile1.heat_contained}`);
@@ -67,7 +67,7 @@ describe("Valve Debug Test", () => {
         ventTile.heat_contained = 100;
 
         game.reactor.updateStats();
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
 
         game.engine.tick();
 
@@ -85,7 +85,7 @@ describe("Valve Debug Test", () => {
         ventTile.heat_contained = 0;
 
         game.reactor.updateStats();
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
 
         const isValveActive = game.engine.active_exchangers.includes(valveTile);
         const valveNeighbors = valveTile.containmentNeighborTiles.filter(t => t.part);
@@ -208,8 +208,8 @@ describe("Valve Debug Test", () => {
         ventTile.heat_contained = 0;
 
         game.reactor.updateStats();
-        game.engine.markPartCacheAsDirty();
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
+
         game.engine._updateValveNeighborCache();
 
         expect(() => game.engine.tick()).not.toThrow();
@@ -229,8 +229,8 @@ describe("Valve Debug Test", () => {
         ventTile.heat_contained = 0;
 
         game.reactor.updateStats();
-        game.engine.markPartCacheAsDirty();
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
+
         game.engine._updateValveNeighborCache();
 
         expect(() => game.engine.tick()).not.toThrow();
@@ -248,8 +248,8 @@ describe("Valve Debug Test", () => {
         ventTile.heat_contained = 0;
 
         game.reactor.updateStats();
-        game.engine.markPartCacheAsDirty();
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
+
         game.engine._updateValveNeighborCache();
 
         expect(() => game.engine.tick()).not.toThrow();
@@ -258,13 +258,13 @@ describe("Valve Debug Test", () => {
     it("should invalidate valve orientation cache when parts change", async () => {
         game.tileset.clearAllTiles();
         const valveTile = await placePart(game, 5, 5, "overflow_valve");
-        game.engine._updatePartCaches();
+        syncActivePartsAtTickBoundary(game.engine);
 
         const orient1 = game.engine._getValveOrientation("overflow_valve");
         expect(orient1).toBe(1);
         expect(game.engine._valveOrientationCache.size).toBe(1);
 
-        game.engine.markPartCacheAsDirty();
+        syncActivePartsAtTickBoundary(game.engine);
         expect(game.engine._valveOrientationCache.size).toBe(0);
 
         const orient2 = game.engine._getValveOrientation("overflow_valve2");

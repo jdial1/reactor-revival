@@ -1,5 +1,8 @@
-import { html, render } from "lit-html";
-import { StorageUtils, numFormat as fmt, unsafeHTML, logger, MOBILE_BREAKPOINT_PX, BaseComponent } from "../utils.js";
+﻿import { html, render } from "lit-html";
+import { StorageUtils } from "../storage/index.js";
+import { numFormat as fmt } from "../format/numbers.js";
+import { logger } from "../core/logger.js";
+import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import {
   getUpgradeBonusLines as getUpgradeBonusLinesCore,
   computeNeighborPulseNFromTile,
@@ -8,11 +11,13 @@ import {
   collectPartSemanticSegments,
 } from "../logic-tooltip-stats.js";
 import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
+import { inspectExchangerPressureFlow } from "../logic-heat-transfer.js";
 import { actions, ref } from "../store.js";
+import { subscribeKey } from "valtio/vanilla/utils";
+import { unsafeHTML, BaseComponent } from "../dom/lit.js";
 import {
   tutorialOverlayTemplate,
   tutorialCalloutTemplate,
-  mobileTooltipContentTemplate,
   desktopTooltipContentTemplate,
 } from "../templates/uiTooltipTemplates.js";
 
@@ -304,11 +309,11 @@ class TutorialRuntime {
   showClaimStep() {
     this.currentStep = -1;
     this._syncTutorialBodyDataset("claim");
-    document.body.classList.add("tutorial-claim-step");
+    if (this.game?.ui?.uiState) this.game.ui.uiState.tutorial_claim_step = true;
     CLAIM_STEP.onEnter(this.game);
     const target = this.game?.ui?.getTutorialTarget?.("claim_objective");
     if (!target) {
-      document.body.classList.remove("tutorial-claim-step");
+      if (this.game?.ui?.uiState) this.game.ui.uiState.tutorial_claim_step = false;
       this._claimStepActive = false;
       if (this._resumeStepIndex !== null) {
         const next = this._resumeStepIndex;
@@ -335,7 +340,7 @@ class TutorialRuntime {
   }
 
   async complete() {
-    document.body.classList.remove("tutorial-claim-step");
+    if (this.game?.ui?.uiState) this.game.ui.uiState.tutorial_claim_step = false;
     this.hideSpotlight();
     this.currentStep = -1;
     this._syncTutorialBodyDataset(null);
@@ -362,7 +367,7 @@ class TutorialRuntime {
   }
 
   _exitClaimStepAndResume() {
-    document.body.classList.remove("tutorial-claim-step");
+    if (this.game?.ui?.uiState) this.game.ui.uiState.tutorial_claim_step = false;
     this.hideSpotlight();
     this._claimStepActive = false;
     if (this._resumeStepIndex !== null) {
@@ -400,27 +405,6 @@ class TutorialRuntime {
 
 export function createTutorialManager(game) {
   return new TutorialRuntime(game);
-}
-
-function applyMobileTooltipPosition(tooltipEl) {
-  const partsPanel = document.getElementById("parts_section");
-  const margin = 8;
-  const sidePadding = 8;
-  const gap = 8;
-  const top = margin;
-  const isPartsPanelOpen = partsPanel && !partsPanel.classList.contains("collapsed");
-  const partsPanelWidth = isPartsPanelOpen && partsPanel ? partsPanel.getBoundingClientRect().width : 0;
-  const leftPosition = isPartsPanelOpen ? partsPanelWidth + gap : sidePadding;
-  const rightPadding = sidePadding;
-  const viewportWidth = window.innerWidth;
-  const maxWidth = viewportWidth - leftPosition - rightPadding;
-  tooltipEl.style.left = `${leftPosition}px`;
-  tooltipEl.style.right = `${rightPadding}px`;
-  tooltipEl.style.width = "";
-  tooltipEl.style.maxWidth = `${maxWidth}px`;
-  tooltipEl.style.top = `${top}px`;
-  tooltipEl.style.transform = "none";
-  tooltipEl.style.boxSizing = "border-box";
 }
 
 function clearDesktopTooltipPosition(tooltipEl) {
@@ -530,6 +514,8 @@ function calculateSellValue(obj, tile) {
 function setHeatAndSegmentStats(stats, obj, tile, game) {
   if (!tile?.activated || (!obj.containment && tile.heat_contained <= 0)) return;
   setBaseHeatStats(stats, obj, tile);
+  const pressureNote = inspectExchangerPressureFlow(tile);
+  if (pressureNote) stats.set("Heat routing", pressureNote);
   if (!game.engine?.heatManager) return;
   const segment = game.engine.heatManager.getSegmentForTile(tile);
   if (!segment) return;
@@ -562,28 +548,6 @@ function getDetailedStats(obj, tile, game) {
   setMaxOrLockedStatus(stats, obj, game);
   setHeatAndSegmentStats(stats, obj, tile, game);
   setTransferSellAndEpStats(stats, obj, tile);
-  return stats;
-}
-
-function buildMobileStatsArray(obj, tile) {
-  const stats = [];
-  if (obj.upgrade) {
-    const isMaxed = obj.level >= obj.max_level;
-    stats.push(isMaxed ? "MAX" : `Level ${obj.level}/${obj.max_level}`);
-  }
-  if (obj.cost !== undefined || obj.upgrade?.cost !== undefined) {
-    const cost = obj.cost ?? obj.upgrade?.cost;
-    stats.push(`<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(cost)}`);
-  }
-  if (tile?.display_power !== undefined || obj.power !== undefined || obj.base_power !== undefined) {
-    const power = tile?.display_power ?? obj.power ?? obj.base_power;
-    if (power > 0) stats.push(`<img src='img/ui/icons/icon_power.png' class='icon-inline' alt='power'>${fmt(power)}`);
-  }
-  if (tile?.display_heat !== undefined || obj.heat !== undefined || obj.base_heat !== undefined) {
-    const heat = tile?.display_heat ?? obj.heat ?? obj.base_heat;
-    if (heat > 0) stats.push(`<img src='img/ui/icons/icon_heat.png' class='icon-inline' alt='heat'>${fmt(heat, 0)}`);
-  }
-  if (obj.ticks > 0) stats.push(`<img src='img/ui/icons/icon_time.png' class='icon-inline' alt='tick'>${fmt(obj.ticks)}`);
   return stats;
 }
 
@@ -620,40 +584,10 @@ function getBuyCostText(obj) {
   return "";
 }
 
-function tooltipContentTemplate(obj, tile, game, isMobile, onBuy) {
+function tooltipContentTemplate(obj, tile, game, onBuy) {
   if (!obj) return html``;
   const iconify = getIconifyFn();
   const title = obj.title || obj.upgrade?.title || "";
-
-  if (isMobile) {
-    const stats = buildMobileStatsArray(obj, tile);
-    const statsHtml = obj.upgrade ? stats.join(" ") : "";
-    let descHtml = "";
-    if (obj.category === "cell" && !obj.upgrade && tile) {
-      descHtml = formatDescriptionBulleted(formatCellSubstrateLines(tile, obj), iconify);
-    } else if (!obj.upgrade) {
-      descHtml = formatSemanticSegmentsForTooltip(collectPartSemanticSegments(obj, tile), fmt, iconify);
-    } else {
-      const description = obj.description || obj.upgrade?.description;
-      descHtml = description ? formatDescriptionBulleted(description, iconify) : "";
-    }
-    const bonusLines = getUpgradeBonusLines(obj, tile, game);
-    const bonusHtml = bonusLines.map((line) => `<div class="tooltip-bonus-line">${colorizeBonus(line, iconify)}</div>`).join("");
-    let upgradeStatus = "";
-    if (obj.upgrade) {
-      if (obj.level >= obj.max_level) upgradeStatus = "Maximum Level Reached";
-      else if (!obj.affordable) upgradeStatus = '<span class="tooltip-mobile-unaffordable">Cannot Afford Upgrade</span>';
-    }
-    return mobileTooltipContentTemplate({
-      title,
-      hasUpgrade: !!obj.upgrade,
-      statsHtml,
-      descHtml,
-      hasBonusLines: bonusLines.length > 0,
-      bonusHtml,
-      upgradeStatus,
-    });
-  }
 
   const summaryItems = buildDesktopSummaryItems(obj, tile);
   const summaryHtml = obj.upgrade ? summaryItems.join("") : "";
@@ -703,11 +637,15 @@ export class TooltipManager extends BaseComponent {
     this.lastRenderedObj = null;
     this.lastRenderedTileContext = null;
     this._lastTooltipContent = null;
-    this.isMobile = window.innerWidth <= 768;
+    this.isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
     this.needsLiveUpdates = false;
     this._resizeHandler = () => {
       const wasMobile = this.isMobile;
-      this.isMobile = window.innerWidth <= 768;
+      this.isMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
+      if (this.isMobile) {
+        this._hide();
+        return;
+      }
       if (wasMobile !== this.isMobile && this.current_obj) {
         this.update();
       }
@@ -730,6 +668,10 @@ export class TooltipManager extends BaseComponent {
   }
 
   show(obj, tile_context, isClick = false, anchorEl = null) {
+    if (this.isMobile) {
+      this._hide();
+      return;
+    }
     if (this.isLocked && !isClick) return;
     clearTimeout(this.tooltip_task);
 
@@ -753,7 +695,8 @@ export class TooltipManager extends BaseComponent {
     if (!this.tooltip_showing) {
       this.isVisible = true;
       this.$main.classList.add("tooltip_showing");
-      this.setElementVisible(this.$tooltip, true);
+      this.$tooltip.classList.remove("hidden");
+      this.$tooltip.setAttribute("aria-hidden", "false");
       this.tooltip_showing = true;
     }
 
@@ -766,23 +709,23 @@ export class TooltipManager extends BaseComponent {
       this.lastRenderedTileContext = tile_context;
     }
 
-    if (window.innerWidth > 768) {
-      clearDesktopTooltipPosition(this.$tooltip);
-    } else {
-      applyMobileTooltipPosition(this.$tooltip);
-    }
+    clearDesktopTooltipPosition(this.$tooltip);
   }
 
   reposition() {
-    if (this.tooltip_showing && this.current_obj && window.innerWidth <= 768) {
-      this.show(this.current_obj, this.current_tile_context, this.isLocked, null);
+    if (this.tooltip_showing && this.current_obj && !this.isMobile) {
+      clearDesktopTooltipPosition(this.$tooltip);
     }
   }
 
   hide() {
     if (this.isLocked) return;
     clearTimeout(this.tooltip_task);
-    this.tooltip_task = setTimeout(() => this._hide(), 200);
+    this.tooltip_task = setTimeout(() => {
+      const uiState = this.game?.ui?.uiState;
+      if (uiState) uiState.hovered_entity = null;
+      else this._hide();
+    }, 200);
     this.lastRenderedObj = null;
     this.lastRenderedTileContext = null;
   }
@@ -792,15 +735,24 @@ export class TooltipManager extends BaseComponent {
     this._hide();
   }
 
-  _hide() {
+  forceHide() {
+    this.isLocked = false;
+    clearTimeout(this.tooltip_task);
+    this.lastRenderedObj = null;
+    this.lastRenderedTileContext = null;
     const uiState = this.game?.ui?.uiState;
-    if (uiState) uiState.hovered_entity = null;
+    if (uiState?.hovered_entity) uiState.hovered_entity = null;
+    else this._hide();
+  }
+
+  _hide() {
     this.current_obj = null;
     this.current_tile_context = null;
     if (this.tooltip_showing) {
       this.isVisible = false;
       this.$main.classList.remove("tooltip_showing");
-      this.setElementVisible(this.$tooltip, false);
+      this.$tooltip.classList.add("hidden");
+      this.$tooltip.setAttribute("aria-hidden", "true");
       this.tooltip_showing = false;
     }
   }
@@ -817,9 +769,14 @@ export class TooltipManager extends BaseComponent {
         this.update();
       } else {
         actions.enqueueEffect(this.game, { kind: "sfx", id: "error", context: "global" });
+        actions.enqueueEffect(this.game, {
+          kind: "floating_text",
+          body: "[Not enough funds!]",
+          context: "global",
+        });
       }
     };
-    const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, this.isMobile, onBuy);
+    const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, onBuy);
     try {
       render(template, this.$tooltipContent);
     } catch (_) {}
@@ -841,4 +798,30 @@ export class TooltipManager extends BaseComponent {
       this.update();
     }
   }
+}
+
+export function wireTooltipManager(ui, game) {
+  const manager = new TooltipManager("#main", "#tooltip", game);
+  ui.tooltipManager = manager;
+  const uiState = ui.uiState;
+  const unsubs = [];
+  if (uiState) {
+    unsubs.push(subscribeKey(uiState, "is_melting_down", (melting) => {
+      if (melting) manager.forceHide();
+    }));
+    unsubs.push(subscribeKey(uiState, "hovered_entity", (entity) => {
+      if (!entity?.obj) {
+        if (manager.tooltip_showing) manager._hide();
+        return;
+      }
+      if (manager.current_obj !== entity.obj || manager.current_tile_context !== entity.tile) {
+        manager.show(entity.obj, entity.tile, !!entity.isClick);
+      }
+    }));
+  }
+  return () => {
+    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+    manager.teardown();
+    ui.tooltipManager = null;
+  };
 }
