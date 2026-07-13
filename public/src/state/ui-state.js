@@ -4,7 +4,7 @@ import { render } from "lit-html";
 import { StorageUtils } from "../storage/index.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import { syncReactorHeatVisualDom } from "../heatDomSync.js";
-import { getUiElement, isShopOverlayPage } from "../components/page-dom.js";
+import { getUiElement, isShopOverlayPage, isSimVisiblePage } from "../components/page-dom.js";
 import { dispatchToggleIntent } from "../components/ui-intents.js";
 import { statusNoticeSlotTemplate } from "../templates/pageShellTemplates.js";
 
@@ -48,6 +48,7 @@ export function createUIState() {
       hoveredTileKey: null,
       sellingTileKey: null,
       selectedPartId: null,
+      selectedUpgradeId: null,
       placementMacro: null,
     },
     copy_paste_display: { blueprintPlannerActive: false },
@@ -108,7 +109,7 @@ export function buildShellClassMap(uiState, shellModalUi = modalUi, { hasSession
     [`page-${pageBase}`]: true,
     "page-legal": LEGAL_PAGE_IDS.has(activePageId),
     "shop-overlay-open": isShopOverlayPage(activePageId),
-    "page-reactor": isShopOverlayPage(activePageId),
+    "page-reactor": isSimVisiblePage(activePageId),
   };
 }
 
@@ -150,7 +151,6 @@ export function initUIStateSubscriptions(uiState, ui) {
     main: getUiElement(ui, "main"),
     mainTopNav: getUiElement(ui, "main_top_nav"),
     bottomNav: getUiElement(ui, "bottom_nav"),
-    failureWarningBanner: getUiElement(ui, "failure_warning_banner"),
     appRoot: getUiElement(ui, "app_root"),
   };
   const persistCopyPasteCollapsed = () => {
@@ -207,6 +207,9 @@ export function initUIStateSubscriptions(uiState, ui) {
   }));
   unsubs.push(subscribeKey(uiState, "active_page", (pageId) => {
     syncNavAndPageClass();
+    if (pageId !== "upgrades_section" && pageId !== "experimental_upgrades_section") {
+      uiState.interaction.selectedUpgradeId = null;
+    }
     if (pageId === "reactor_section") {
       dom.reactorBackground = getUiElement(ui, "reactor_background");
       const om = ui.game?.objectives_manager;
@@ -219,12 +222,6 @@ export function initUIStateSubscriptions(uiState, ui) {
       }
     }
   }));
-  const syncFailureBannerOnMeltdown = () => {
-    const failureBanner = resolveSubscriptionDom(ui, dom, "failureWarningBanner", "failure_warning_banner");
-    if (failureBanner && uiState.is_melting_down) failureBanner.classList.add("hidden");
-  };
-  syncFailureBannerOnMeltdown();
-  unsubs.push(subscribeKey(uiState, "is_melting_down", syncFailureBannerOnMeltdown));
   unsubs.push(subscribeKey(uiState, "grid_dirty_tile", (key) => {
     if (!key) return;
     const [r, c] = key.split(",").map(Number);

@@ -1,3 +1,5 @@
+import { isCellUpgradeVisible } from "./domain/upgrade.js";
+
 function getUpgradeContainerIdForSection(upgrade) {
   if (upgrade.base_ecost?.gt?.(0)) {
     return upgrade.upgrade.type;
@@ -44,17 +46,7 @@ function countUpgradesInGroupsWithFilter(upgradeset, groupIds, includeUpgrade) {
       if (!isUpgradeAvailable(upgrade.id)) return false;
       const containerId = getUpgradeContainerIdForSection(upgrade);
       if (containerId !== groupId) return false;
-      const upgType = upgrade?.upgrade?.type || "";
-      const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
-      if (isCellUpgrade) {
-        const basePart = upgrade?.upgrade?.part;
-        if (basePart && basePart.category === "cell") {
-          if (game?.unlockManager && typeof game.unlockManager.isPartUnlocked === "function") {
-            return game.unlockManager.isPartUnlocked(basePart);
-          }
-          return true;
-        }
-      }
+      if (!isCellUpgradeVisible(upgrade, game)) return false;
       return true;
     });
 
@@ -101,6 +93,7 @@ export function findTopAffordableInSection(upgradeset, sectionName) {
   for (const upgrade of upgradeset.upgradesArray) {
     if (!includeUpgrade(upgrade)) continue;
     if (!upgradeset.isUpgradeAvailable(upgrade.id)) continue;
+    if (!isCellUpgradeVisible(upgrade, upgradeset.game)) continue;
     const containerId = getUpgradeContainerIdForSection(upgrade);
     if (!groupIds.includes(containerId)) continue;
     if (upgrade.level >= upgrade.max_level || !upgrade.affordable) continue;

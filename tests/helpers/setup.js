@@ -16,8 +16,18 @@
 // --- Phase 1: Early Global Mocks ---
 // These must be defined BEFORE any application code is imported to prevent reference errors.
 
+import {
+  getCoreBridgeOptions,
+  isCoreEngineTestMode,
+  testEngineMode,
+} from './testEngineMode.js';
+
+export { getCoreBridgeOptions, isCoreEngineTestMode, testEngineMode };
 import Decimal from 'break_infinity.js';
 import { toNumber } from '@app/utils.js';
+if (isCoreEngineTestMode) {
+  console.info("[test-engine] REACTOR_TEST_ENGINE=core — authoritative ticks via reactor-core-lib");
+}
 if (typeof global !== 'undefined') global.Decimal = Decimal;
 if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
 
@@ -674,6 +684,11 @@ export async function setupGameLogicOnly() {
   globalGameInstance.paused = false;
   pinEngineToSyncMode(globalGameInstance.engine);
 
+  if (!globalGameInstance.coreBridge?.isActive) {
+    const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
+    await attachCoreBridge(globalGameInstance, getCoreBridgeOptions());
+  }
+
   return globalGameInstance;
 }
 
@@ -746,7 +761,9 @@ export async function setupGameWithDOM() {
   game.engine = new Engine(game);
   pinEngineToSyncMode(game.engine);
 
-  // CRITICAL: Initialize audio service like in app.js
+  const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
+  await attachCoreBridge(game, getCoreBridgeOptions());
+
   const { AudioService } = await import("@app/services.js");
   game.audio = new AudioService();
   await game.audio.init();
@@ -763,6 +780,10 @@ export async function setupGameWithDOM() {
 
 export async function setupGame() {
   const { game } = await setupGameWithDOM();
+  if (!game.coreBridge?.isActive) {
+    const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
+    await attachCoreBridge(game, getCoreBridgeOptions());
+  }
   if (game.engine && !game.engine.running) {
     game.paused = false;
     game.engine.start();

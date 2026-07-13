@@ -6,7 +6,6 @@ export {
   runSellAction,
   runManualReduceHeatAction,
   runSellPart,
-  runEpartOnclick,
   getValidatedPreferences,
   initPreferencesStore,
   getVolumePreferences,

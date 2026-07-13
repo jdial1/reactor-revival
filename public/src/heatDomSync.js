@@ -6,6 +6,20 @@ export function isHeatNetBalanced(netHeat, heatGeneration) {
   return Number.isFinite(net) && net <= 0 && Number.isFinite(gen) && gen > 0;
 }
 
+function syncWrapperShellHeatStyles(ui, heatRatio, heatBalanced) {
+  const wrapper = document.getElementById("wrapper");
+  if (!wrapper) return;
+  const ratio = Number(heatRatio);
+  const hr = Number.isFinite(ratio) ? ratio : 0;
+  const cd = ui?.uiState?.core_danger ?? (heatBalanced ? Math.min(0.5, Math.max(0, hr)) : Math.min(1.5, Math.max(0, hr)));
+  const heatNorm = Math.min(1, Math.max(0, hr / 1.5));
+  wrapper.style.setProperty("--core-danger", String(cd));
+  wrapper.style.setProperty("--crt-heat", String(heatNorm));
+  wrapper.style.setProperty("--crt-jitter-duration", `${20 - heatNorm * 12}s`);
+  wrapper.style.setProperty("--heat-ratio", String(cd));
+  wrapper.classList.toggle("crt-heat-tearing", hr >= 1.3 && heatBalanced === false);
+}
+
 export function syncReactorHeatVisualDom(ui, heatRatio, netHeat, heatGeneration) {
   if (typeof document === "undefined") return;
   const heatBalanced = isHeatNetBalanced(netHeat, heatGeneration);
@@ -40,4 +54,5 @@ export function syncReactorHeatVisualDom(ui, heatRatio, netHeat, heatGeneration)
     const hr = Math.round(Math.min(1.5, Math.max(0, Number.isFinite(r) ? r : 0)) * 1000) / 1000;
     reactorEl.setAttribute("data-heat-ratio", String(hr));
   }
+  syncWrapperShellHeatStyles(ui, heatRatio, heatBalanced);
 }

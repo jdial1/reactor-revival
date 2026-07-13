@@ -4,7 +4,9 @@ import { numFormat as fmt } from "../format/numbers.js";
 import { escapeHtml } from "../dom/lit.js";
 import { actions } from "../store.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
+import { subscribeKey } from "valtio/vanilla/utils";
 import { runCheckAffordability, setUpgradeCardRefreshHandler } from "../domain/upgrade-affordance.js";
+import { isCellUpgradeVisible } from "../domain/upgrade.js";
 import { calculateSectionCounts, findTopAffordableInSection } from "../logic-upgrade-sections.js";
 import { UpgradeCard } from "./button-factory.js";
 import { getUiElement } from "./page-dom.js";
@@ -12,6 +14,8 @@ import {
   debugVariablesSectionTemplate,
   debugVariablesTemplate,
   sectionHubMetaTemplate,
+  upgradeHubDetailEmptyTemplate,
+  upgradeHubDetailPanelTemplate,
 } from "../templates/uiComponentsTemplates.js";
 const EXPAND_UPGRADE_IDS = ["expand_reactor_rows", "expand_reactor_cols"];
 
@@ -31,23 +35,22 @@ function getUpgradeContainerId(upgrade) {
   return key?.endsWith("_upgrades") ? key : (map[key] || key);
 }
 
-function shouldSkipCellUpgrade(upgrade, upgradeset) {
-  try {
-    const upgType = upgrade?.upgrade?.type || "";
-    const basePart = upgrade?.upgrade?.part;
-    const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
-    if (isCellUpgrade && basePart && basePart.category === "cell") {
-      const show =
-        upgradeset.game?.unlockManager && typeof upgradeset.game.unlockManager.isPartUnlocked === "function"
-          ? upgradeset.game.unlockManager.isPartUnlocked(basePart)
-          : true;
-      return !show;
-    }
-  } catch (_) {}
-  return false;
+function filterVisibleUpgrades(upgrades, upgradeset) {
+  const game = upgradeset?.game;
+  return upgrades.filter((u) => isCellUpgradeVisible(u, game));
 }
 
-function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReactiveLevelAndCost) {
+function syncSelectedUpgradeVisibility(upgradeset) {
+  const ui = upgradeset?.game?.ui;
+  const selectedId = ui?.uiState?.interaction?.selectedUpgradeId;
+  if (!selectedId) return;
+  const upgrade = upgradeset?.getUpgrade(selectedId);
+  if (!upgrade || !isCellUpgradeVisible(upgrade, upgradeset.game)) {
+    ui.uiState.interaction.selectedUpgradeId = null;
+  }
+}
+
+function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReactiveLevelAndCost, selectedUpgradeId) {
   const onBuyClick = (e) => {
     e.stopPropagation();
     if (!upgradeset.isUpgradeAvailable(upgrade.id)) return;
@@ -64,11 +67,19 @@ function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReacti
     }
     if (upgradeset.game) actions.enqueueEffect(upgradeset.game, { kind: "sfx", id: "upgrade", context: "global" });
   };
-  return UpgradeCard(upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost });
+  const onSelectClick = (e) => {
+    if (e.target.closest(".upgrade-action-btn")) return;
+    const ui = upgradeset.game?.ui;
+    if (!ui?.uiState?.interaction) return;
+    const current = ui.uiState.interaction.selectedUpgradeId;
+    ui.uiState.interaction.selectedUpgradeId = current === upgrade.id ? null : upgrade.id;
+  };
+  const selected = selectedUpgradeId === upgrade.id;
+  return UpgradeCard(upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost, selected, onSelectClick });
 }
 
-function renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container) {
-  const cards = upgrades.map((upgrade) => buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReactiveLevelAndCost));
+function renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container, selectedUpgradeId) {
+  const cards = upgrades.map((upgrade) => buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReactiveLevelAndCost, selectedUpgradeId));
   try {
     render(html`${cards}`, container);
   } catch (err) {
@@ -117,7 +128,9 @@ function mountUpgradeReactiveDisplay(upgrade, display, container) {
 
 export function refreshUpgradeCards(upgradeset) {
   if (typeof document === "undefined" || !upgradeset) return;
-  const filtered = upgradeset.upgradesArray;
+  syncSelectedUpgradeVisibility(upgradeset);
+  const filtered = filterVisibleUpgrades(upgradeset.upgradesArray, upgradeset);
+  const selectedUpgradeId = upgradeset.game?.ui?.uiState?.interaction?.selectedUpgradeId ?? null;
   const byContainer = new Map();
   filtered.forEach((upgrade) => {
     const cid = getUpgradeContainerId(upgrade);
@@ -130,11 +143,27 @@ export function refreshUpgradeCards(upgradeset) {
   byContainer.forEach((upgrades, containerId) => {
     const container = document.getElementById(containerId);
     if (!container?.isConnected) return;
-    renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container);
+    renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container, selectedUpgradeId);
     const display = state?.upgrade_display;
     upgrades.forEach((upgrade) => {
       if (display) mountUpgradeReactiveDisplay(upgrade, display, container);
     });
+  });
+  clearEmptyUpgradeContainers(byContainer);
+}
+
+function clearEmptyUpgradeContainers(byContainer) {
+  const containerIds = [
+    "cell_power_upgrades", "cell_tick_upgrades", "cell_perpetual_upgrades", "vent_upgrades", "exchanger_upgrades", "other_upgrades",
+    "experimental_laboratory", "experimental_boost", "experimental_parts", "experimental_cells", "experimental_cells_boost", "experimental_particle_accelerators",
+  ];
+  containerIds.forEach((containerId) => {
+    if (byContainer.has(containerId)) return;
+    const container = document.getElementById(containerId);
+    if (!container?.isConnected) return;
+    try {
+      render(html``, container);
+    } catch (_) {}
   });
 }
 
@@ -145,11 +174,15 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
   const wrapper = document.getElementById(wrapperId);
   if (!wrapper?.isConnected) return;
 
-  const filtered = upgradeset.upgradesArray
-    .filter(filterFn)
-    .filter((u) => !EXPAND_UPGRADE_IDS.includes(u.upgrade?.id))
-    .filter((u) => !(upgradeset.isUpgradeAvailable(u.id) && shouldSkipCellUpgrade(u, upgradeset)));
+  syncSelectedUpgradeVisibility(upgradeset);
+  const filtered = filterVisibleUpgrades(
+    upgradeset.upgradesArray
+      .filter(filterFn)
+      .filter((u) => !EXPAND_UPGRADE_IDS.includes(u.upgrade?.id)),
+    upgradeset
+  );
 
+  const selectedUpgradeId = upgradeset.game?.ui?.uiState?.interaction?.selectedUpgradeId ?? null;
   const byContainer = new Map();
   filtered.forEach((upgrade) => {
     const cid = getUpgradeContainerId(upgrade);
@@ -164,8 +197,9 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
   byContainer.forEach((upgrades, containerId) => {
     const container = document.getElementById(containerId);
     if (!container?.isConnected) return;
-    renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container);
+    renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container, selectedUpgradeId);
   });
+  clearEmptyUpgradeContainers(byContainer);
 
   const game = upgradeset.game;
   filtered.forEach((upgrade) => {
@@ -283,6 +317,122 @@ export function mountSectionCountsReactive(ui, wrapperId) {
     : ["upgrades_content_wrapper", "experimental_upgrades_content_wrapper"];
   const unmounts = ids.flatMap((id) => mountSectionCountsForWrapper(ui, id));
   return () => unmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+}
+
+function buildUpgradeDetailPanelData(upgrade, upgradeset) {
+  if (!upgrade || !upgradeset) return null;
+  const isMaxed = upgrade.level >= upgrade.max_level;
+  const available = upgradeset.isUpgradeAvailable(upgrade.id);
+  const doctrineLocked = !available;
+  const display = upgradeset.game?.state?.upgrade_display?.[upgrade.id];
+  const level = display?.level ?? upgrade.level;
+  const levelHeader = isMaxed ? "MAX" : `Level ${level}/${upgrade.max_level}`;
+  const rawDesc = isMaxed ? "" : (upgrade.description || "");
+  const descHtml = upgrade.game?.ui?.stateManager
+    ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc)
+    : rawDesc;
+  const costDisplay = isMaxed ? "" : (display?.display_cost ?? upgrade.display_cost ?? upgrade.cost ?? "");
+  const iconPath = upgrade.upgrade?.icon ?? upgrade.icon ?? "img/ui/status/status_star.png";
+  return {
+    upgradeId: upgrade.id,
+    iconPath,
+    title: upgrade.title,
+    descHtml,
+    levelHeader,
+    costDisplay,
+    doctrineLocked,
+    isMaxed,
+    unaffordable: !upgrade.affordable && !isMaxed && !doctrineLocked,
+    affordProgress: upgrade.afford_progress ?? 0,
+    ariaLabel: isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`,
+    onBuyClick: (e) => {
+      e.stopPropagation();
+      if (!upgradeset.isUpgradeAvailable(upgrade.id)) return;
+      if (!upgradeset.purchaseUpgrade(upgrade.id)) {
+        if (upgradeset.game) {
+          actions.enqueueEffect(upgradeset.game, { kind: "sfx", id: "error", context: "global" });
+          actions.enqueueEffect(upgradeset.game, {
+            kind: "floating_text",
+            body: "[Not enough funds!]",
+            context: "global",
+          });
+        }
+        return;
+      }
+      if (upgradeset.game) actions.enqueueEffect(upgradeset.game, { kind: "sfx", id: "upgrade", context: "global" });
+    },
+  };
+}
+
+export function mountUpgradeDetailPanel(ui, panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel?.isConnected || !ui?.uiState) return null;
+  const isResearchPanel = panelId === "research_detail_panel";
+  const subscriptions = [
+    { state: ui.uiState.interaction, keys: ["selectedUpgradeId"] },
+    { state: ui.uiState, keys: ["active_page"] },
+    { state: ui.game?.state, keys: ["upgrade_display", "current_money", "current_exotic_particles"] },
+  ].filter((s) => s.state != null);
+  const renderFn = () => {
+    const activePage = ui.uiState.active_page;
+    if (isResearchPanel && activePage !== "experimental_upgrades_section") {
+      return upgradeHubDetailEmptyTemplate();
+    }
+    if (!isResearchPanel && activePage !== "upgrades_section") {
+      return upgradeHubDetailEmptyTemplate();
+    }
+    const selectedId = ui.uiState.interaction.selectedUpgradeId;
+    const upgradeset = ui.game?.upgradeset;
+    const upgrade = selectedId && upgradeset ? upgradeset.getUpgrade(selectedId) : null;
+    if (!upgrade || !isCellUpgradeVisible(upgrade, ui.game)) {
+      return upgradeHubDetailEmptyTemplate();
+    }
+    const isResearchUpgrade = Boolean(upgrade.base_ecost?.gt?.(0));
+    if (isResearchPanel !== isResearchUpgrade) {
+      return upgradeHubDetailEmptyTemplate();
+    }
+    const data = buildUpgradeDetailPanelData(upgrade, upgradeset);
+    if (!data) return upgradeHubDetailEmptyTemplate();
+    return upgradeHubDetailPanelTemplate(data);
+  };
+  return bindLitRenderMulti(subscriptions, renderFn, panel);
+}
+
+function ensureUpgradeDetailSelectionRefresh(ui) {
+  if (!ui || ui._upgradeDetailSelectionRefreshMounted) return;
+  if (!ui.uiState?.interaction || !ui.game?.upgradeset) return;
+  ui._upgradeDetailSelectionRefreshMounted = true;
+  ui._unmounts.push(
+    subscribeKey(ui.uiState.interaction, "selectedUpgradeId", () => {
+      refreshUpgradeCards(ui.game.upgradeset);
+    })
+  );
+}
+
+export function ensureUpgradeDetailPanelMounted(ui, panelId) {
+  if (!ui) return;
+  if (!ui._upgradeDetailPanelUnmounts) ui._upgradeDetailPanelUnmounts = {};
+  if (ui._upgradeDetailPanelUnmounts[panelId]) return;
+  const unmount = mountUpgradeDetailPanel(ui, panelId);
+  if (typeof unmount !== "function") return;
+  ui._upgradeDetailPanelUnmounts[panelId] = unmount;
+  ui._unmounts.push(unmount);
+  ensureUpgradeDetailSelectionRefresh(ui);
+}
+
+export function mountUpgradeDetailPanels(ui) {
+  ensureUpgradeDetailPanelMounted(ui, "upgrades_detail_panel");
+  ensureUpgradeDetailPanelMounted(ui, "research_detail_panel");
+  return () => {
+    const unmounts = ui?._upgradeDetailPanelUnmounts;
+    if (!unmounts) return;
+    Object.values(unmounts).forEach((fn) => {
+      try {
+        fn();
+      } catch (_) {}
+    });
+    ui._upgradeDetailPanelUnmounts = {};
+  };
 }
 
 export function getUpgradeSectionContainer(ui, locationKey) {

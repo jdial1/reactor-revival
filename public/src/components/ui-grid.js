@@ -533,21 +533,14 @@ export class GridCanvasRenderer {
     const wrapper = document.createElement("div");
     wrapper.className = "reactor-canvas-host";
     wrapper.style.position = "relative";
-    wrapper.style.width = "100%";
-    wrapper.style.height = "100%";
-    wrapper.style.minWidth = "0";
-    wrapper.style.minHeight = "0";
+    wrapper.style.flexShrink = "0";
     const canvas = document.createElement("canvas");
     canvas.style.display = "block";
-    canvas.style.width = "100%";
-    canvas.style.height = "100%";
     canvas.style.pointerEvents = "auto";
     const dynamicCanvas = document.createElement("canvas");
     dynamicCanvas.style.position = "absolute";
     dynamicCanvas.style.left = "0";
     dynamicCanvas.style.top = "0";
-    dynamicCanvas.style.width = "100%";
-    dynamicCanvas.style.height = "100%";
     dynamicCanvas.style.pointerEvents = "none";
     wrapper.appendChild(canvas);
     wrapper.appendChild(dynamicCanvas);
@@ -557,6 +550,26 @@ export class GridCanvasRenderer {
     rendererSurfaces.set(this, { canvas, dynamicCanvas, ctx, dynamicCtx });
     logger.log('debug', 'ui', '[Grid] init done, canvas attached to container');
     return canvas;
+  }
+
+  _syncCanvasDisplaySize() {
+    const pxW = `${this._width}px`;
+    const pxH = `${this._height}px`;
+    const canvas = this.canvas;
+    if (canvas) {
+      canvas.style.width = pxW;
+      canvas.style.height = pxH;
+    }
+    const dynamicCanvas = this._dynamicCanvas;
+    if (dynamicCanvas) {
+      dynamicCanvas.style.width = pxW;
+      dynamicCanvas.style.height = pxH;
+    }
+    const host = canvas?.parentElement;
+    if (host) {
+      host.style.width = pxW;
+      host.style.height = pxH;
+    }
   }
 
   setSize(widthPx, heightPx) {
@@ -577,6 +590,7 @@ export class GridCanvasRenderer {
       dynamicCanvas.width = this._width;
       dynamicCanvas.height = this._height;
     }
+    this._syncCanvasDisplaySize();
   }
 
   setGridDimensions(rows, cols) {
@@ -618,28 +632,37 @@ export class GridCanvasRenderer {
   getRows() { return this._rows; }
   getCols() { return this._cols; }
 
-  hitTest(clientX, clientY) {
-    if (!this.canvas || !this.ui?.game?.tileset) return null;
+  _clientToGridCoords(clientX, clientY) {
     const rect = this.canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    const cols = Math.max(1, this._cols);
-    const rows = Math.max(1, this._rows);
-    const tileW = rect.width / cols;
-    const tileH = rect.height / rows;
-    const col = (x / tileW) | 0;
-    const row = (y / tileH) | 0;
+    const scaleX = this._width > 0 ? rect.width / this._width : 1;
+    const scaleY = this._height > 0 ? rect.height / this._height : 1;
+    return {
+      x: scaleX > 0 ? (clientX - rect.left) / scaleX : 0,
+      y: scaleY > 0 ? (clientY - rect.top) / scaleY : 0,
+      scaleX,
+      scaleY,
+      rect,
+    };
+  }
+
+  hitTest(clientX, clientY) {
+    if (!this.canvas || !this.ui?.game?.tileset || this._tileSize <= 0) return null;
+    const { x, y } = this._clientToGridCoords(clientX, clientY);
+    const col = (x / this._tileSize) | 0;
+    const row = (y / this._tileSize) | 0;
     if (row < 0 || row >= this._rows || col < 0 || col >= this._cols) return null;
     return this.ui.game.tileset.getTile(row, col);
   }
 
   getTileRectInContainer(row, col, containerRect) {
-    if (!this.canvas || !containerRect) return { left: 0, top: 0, width: 0, height: 0 };
+    if (!this.canvas || !containerRect || this._tileSize <= 0) {
+      return { left: 0, top: 0, width: 0, height: 0 };
+    }
     const reactorRect = this.canvas.getBoundingClientRect();
-    const cols = Math.max(1, this._cols);
-    const rows = Math.max(1, this._rows);
-    const tw = reactorRect.width / cols;
-    const th = reactorRect.height / rows;
+    const scaleX = this._width > 0 ? reactorRect.width / this._width : 1;
+    const scaleY = this._height > 0 ? reactorRect.height / this._height : 1;
+    const tw = this._tileSize * scaleX;
+    const th = this._tileSize * scaleY;
     const left = reactorRect.left - containerRect.left + col * tw;
     const top = reactorRect.top - containerRect.top + row * th;
     return {
@@ -960,21 +983,25 @@ export class GridScaler extends BaseComponent {
     static get DESKTOP_MIN_TILE_PX() { return DESKTOP_MIN_TILE_PX; }
     static get MAX_TILE_SIZE_PX() { return MAX_TILE_SIZE_PX; }
     static get MOBILE_PREF_COLS() { return 8; }
-    static get MOBILE_TALL_ROWS() { return 14; }
+    static get MOBILE_MAX_COLS() { return 8; }
+    static get MOBILE_MAX_ROWS() { return 12; }
+    static get MOBILE_TALL_ROWS() { return 12; }
     static get MOBILE_MED_ROWS() { return 10; }
     static get MAX_DESKTOP_COLS() { return 16; }
 
     getMobileGridDimensions(availWidth, availHeight) {
         const minTileSize = GridScaler.MOBILE_MIN_TILE_PX;
+        const maxCols = GridScaler.MOBILE_MAX_COLS;
+        const maxRows = GridScaler.MOBILE_MAX_ROWS;
         const maxTilesX = Math.floor(availWidth / minTileSize);
         const maxTilesY = Math.floor(availHeight / minTileSize);
         let cols = GridScaler.MOBILE_PREF_COLS;
-        cols = Math.max(this.config.minCols, Math.min(cols, maxTilesX, this.config.maxCols));
-        let rows = maxTilesY >= GridScaler.MOBILE_TALL_ROWS ? GridScaler.MOBILE_TALL_ROWS : maxTilesY >= GridScaler.MOBILE_MED_ROWS ? GridScaler.MOBILE_MED_ROWS : Math.max(this.config.minRows, Math.min(maxTilesY, this.config.maxRows));
+        cols = Math.max(this.config.minCols, Math.min(cols, maxTilesX, maxCols, this.config.maxCols));
+        let rows = maxTilesY >= GridScaler.MOBILE_TALL_ROWS ? GridScaler.MOBILE_TALL_ROWS : maxTilesY >= GridScaler.MOBILE_MED_ROWS ? GridScaler.MOBILE_MED_ROWS : Math.max(this.config.minRows, Math.min(maxTilesY, maxRows, this.config.maxRows));
         const actualTileSizeY = availHeight / rows;
         if (actualTileSizeY < minTileSize) {
             rows = Math.floor(availHeight / minTileSize);
-            rows = Math.max(this.config.minRows, Math.min(rows, this.config.maxRows));
+            rows = Math.max(this.config.minRows, Math.min(rows, maxRows, this.config.maxRows));
         }
         return { rows, cols };
     }
@@ -1013,6 +1040,10 @@ export class GridScaler extends BaseComponent {
         }
         this._resizeBailLogged = false;
 
+        const maxTileSize = GridScaler.MAX_TILE_SIZE_PX;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= GridScaler.MOBILE_BREAKPOINT_PX;
+        this.applyWrapperAndSectionStyles(isMobile);
+
         const availWidth = this.wrapper.clientWidth;
         const availHeight = this.wrapper.clientHeight;
 
@@ -1030,25 +1061,27 @@ export class GridScaler extends BaseComponent {
         }
         this._layoutExhaustedLogged = false;
 
-        const maxTileSize = GridScaler.MAX_TILE_SIZE_PX;
-        const isMobile = typeof window !== 'undefined' && window.innerWidth <= GridScaler.MOBILE_BREAKPOINT_PX;
-        const dims = this.calculateGridDimensions(availWidth, availHeight, maxTileSize);
+        const chrome = getReactorChromeInsets(this.reactor, isMobile);
+        const maxGridW = Math.max(1, availWidth - chrome.horizontal);
+        const maxGridH = Math.max(1, availHeight - chrome.vertical);
+
+        const dims = this.calculateGridDimensions(maxGridW, maxGridH, maxTileSize);
 
         let cols = dims.cols;
         let rows = dims.rows;
 
-        const sizeXFinal = availWidth / cols;
-        const sizeYFinal = availHeight / rows;
+        const sizeXFinal = maxGridW / cols;
+        const sizeYFinal = maxGridH / rows;
         let tileSize = Math.floor(Math.min(sizeXFinal, sizeYFinal, maxTileSize));
-        
-        const calculatedGridHeight = rows * tileSize;
-        if (calculatedGridHeight > availHeight && isMobile) {
-            const maxRowsForHeight = Math.floor(availHeight / tileSize);
-            if (maxRowsForHeight >= this.config.minRows) {
-                rows = maxRowsForHeight;
-                tileSize = Math.floor(availHeight / rows);
-            }
-        }
+        ({ cols, rows, tileSize } = fitGridToBounds(
+          cols,
+          rows,
+          tileSize,
+          maxGridW,
+          maxGridH,
+          maxTileSize,
+          this.config
+        ));
 
         if (!this.ui?.game) {
             logger.log('warn', 'ui', '[GridScaler] resize bailed: no game instance');
@@ -1061,39 +1094,22 @@ export class GridScaler extends BaseComponent {
             this.ui.game.cols = cols;
         }
 
-        const finalGridWidth = cols * tileSize;
-        const finalGridHeight = rows * tileSize;
+        const canvasWidth = cols * tileSize;
+        const canvasHeight = rows * tileSize;
 
         if (this.ui?.uiState) {
           this.ui.uiState.grid_layout = { cols, rows, tile_size_px: tileSize };
-          const useCssGrid = this.ui.uiState.layout_css_grid === true;
-          if (useCssGrid) {
-            this.ui.uiState.grid_shell_width = 0;
-            this.ui.uiState.grid_shell_height = 0;
-          } else {
-            this.ui.uiState.grid_shell_width = finalGridWidth;
-            this.ui.uiState.grid_shell_height = finalGridHeight;
-          }
+          this.ui.uiState.grid_shell_width = canvasWidth + chrome.horizontal;
+          this.ui.uiState.grid_shell_height = canvasHeight + chrome.vertical;
         }
 
-        const useCssGrid = this.ui?.uiState?.layout_css_grid === true;
-        if (useCssGrid) {
-            const hostW = this.reactor?.clientWidth ?? this.wrapper?.clientWidth ?? finalGridWidth;
-            const hostH = this.reactor?.clientHeight ?? this.wrapper?.clientHeight ?? finalGridHeight;
-            if (this.ui.gridCanvasRenderer) {
-                this.ui.gridCanvasRenderer.setSize(hostW, hostH);
-                this.ui.gridCanvasRenderer.setGridDimensions(rows, cols);
-                this.ui.gridCanvasRenderer.markStaticDirty();
-            }
+        if (this.ui.gridCanvasRenderer) {
+            this.ui.gridCanvasRenderer.setSize(canvasWidth, canvasHeight);
+            this.ui.gridCanvasRenderer.setGridDimensions(rows, cols);
+            this.ui.gridCanvasRenderer.markStaticDirty();
+            logger.log('debug', 'ui', `[GridScaler] resize complete: ${cols}x${rows} grid, ${canvasWidth}x${canvasHeight}px canvas, ${this.ui.uiState?.grid_shell_width}x${this.ui.uiState?.grid_shell_height}px shell`);
         } else {
-            if (this.ui.gridCanvasRenderer) {
-                this.ui.gridCanvasRenderer.setSize(finalGridWidth, finalGridHeight);
-                this.ui.gridCanvasRenderer.setGridDimensions(rows, cols);
-                this.ui.gridCanvasRenderer.markStaticDirty();
-                logger.log('debug', 'ui', `[GridScaler] resize complete: ${cols}x${rows} grid, ${finalGridWidth}x${finalGridHeight}px`);
-            } else {
-                logger.log('warn', 'ui', '[GridScaler] resize complete but gridCanvasRenderer missing');
-            }
+            logger.log('warn', 'ui', '[GridScaler] resize complete but gridCanvasRenderer missing');
         }
 
         const sig = `${rows}|${cols}|${tileSize}`;
@@ -1110,7 +1126,6 @@ export class GridScaler extends BaseComponent {
             }, 150);
         }
 
-        this.applyWrapperAndSectionStyles(isMobile);
         applyReactorGridLayoutStyles(this.ui);
     }
 
@@ -1121,16 +1136,14 @@ export class GridScaler extends BaseComponent {
         this.wrapper.style.justifyContent = 'center';
         const section = document.getElementById('reactor_section') || this.wrapper.parentElement;
         if (section && isMobile) {
-            const topBar = document.getElementById('mobile_passive_top_bar');
-            const topOffset = topBar ? topBar.offsetHeight : 0;
             const buildRow = document.getElementById('build_above_deck_row');
             const controlDeck = document.getElementById('reactor_control_deck');
             const bottomNav = document.getElementById('bottom_nav');
             const bottomOffset = (buildRow?.offsetHeight || 0) + (controlDeck?.offsetHeight || 0) + (bottomNav?.offsetHeight || 0);
-            section.style.paddingTop = `${topOffset}px`;
-            section.style.paddingRight = '5px';
+            section.style.paddingTop = `${getReactorSectionTopInset(this.ui, isMobile)}px`;
+            section.style.paddingRight = '0';
             section.style.paddingBottom = `${bottomOffset}px`;
-            section.style.paddingLeft = '5px';
+            section.style.paddingLeft = '0';
         }
         if (section && !isMobile) {
             section.style.paddingTop = '';
@@ -1146,18 +1159,69 @@ export class GridScaler extends BaseComponent {
 
 }
 
+function getReactorChromeInsets(reactor, isMobile) {
+  if (isMobile) return { horizontal: 0, vertical: 0 };
+  if (typeof window === "undefined" || !reactor) {
+    return { horizontal: 28, vertical: 28 };
+  }
+  const cs = getComputedStyle(reactor);
+  const horizontal =
+    (parseFloat(cs.paddingLeft) || 0) +
+    (parseFloat(cs.paddingRight) || 0) +
+    (parseFloat(cs.borderLeftWidth) || 0) +
+    (parseFloat(cs.borderRightWidth) || 0);
+  const vertical =
+    (parseFloat(cs.paddingTop) || 0) +
+    (parseFloat(cs.paddingBottom) || 0) +
+    (parseFloat(cs.borderTopWidth) || 0) +
+    (parseFloat(cs.borderBottomWidth) || 0);
+  return {
+    horizontal: horizontal > 0 ? horizontal : 28,
+    vertical: vertical > 0 ? vertical : 28,
+  };
+}
+
+function fitGridToBounds(cols, rows, tileSize, maxGridW, maxGridH, maxTileSize, config) {
+  let nextCols = cols;
+  let nextRows = rows;
+  let nextTileSize = tileSize;
+  for (let pass = 0; pass < 4; pass++) {
+    if (nextRows * nextTileSize > maxGridH) {
+      const maxRowsForHeight = Math.floor(maxGridH / Math.max(1, nextTileSize));
+      if (maxRowsForHeight >= config.minRows) {
+        nextRows = maxRowsForHeight;
+      }
+    }
+    if (nextCols * nextTileSize > maxGridW) {
+      const maxColsForWidth = Math.floor(maxGridW / Math.max(1, nextTileSize));
+      if (maxColsForWidth >= config.minCols) {
+        nextCols = maxColsForWidth;
+      }
+    }
+    nextTileSize = Math.floor(
+      Math.min(maxGridW / nextCols, maxGridH / nextRows, maxTileSize)
+    );
+    if (nextTileSize < 1) nextTileSize = 1;
+    if (nextCols * nextTileSize <= maxGridW && nextRows * nextTileSize <= maxGridH) break;
+  }
+  return { cols: nextCols, rows: nextRows, tileSize: nextTileSize };
+}
+
+function getReactorSectionTopInset(_ui, isMobile) {
+  if (!isMobile) return 0;
+  const topBar = document.getElementById("mobile_passive_top_bar");
+  return topBar ? topBar.offsetHeight : 0;
+}
+
 function buildReactorGridStyle(ui) {
   const gl = ui.uiState?.grid_layout ?? {};
-  const useCssGrid = ui.uiState?.layout_css_grid === true;
   const style = {
     "--tile-size": gl.tile_size_px ? `${gl.tile_size_px}px` : undefined,
     "--game-cols": gl.cols ? String(gl.cols) : undefined,
     "--game-rows": gl.rows ? String(gl.rows) : undefined,
   };
-  if (!useCssGrid) {
-    if (ui.uiState?.grid_shell_width) style.width = `${ui.uiState.grid_shell_width}px`;
-    if (ui.uiState?.grid_shell_height) style.height = `${ui.uiState.grid_shell_height}px`;
-  }
+  if (ui.uiState?.grid_shell_width) style.width = `${ui.uiState.grid_shell_width}px`;
+  if (ui.uiState?.grid_shell_height) style.height = `${ui.uiState.grid_shell_height}px`;
   return style;
 }
 
@@ -1165,16 +1229,14 @@ export function applyReactorGridLayoutStyles(ui) {
   const reactor = getPageReactor(ui);
   if (!reactor || !ui?.uiState) return;
   const useCssGrid = ui.uiState.layout_css_grid === true;
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
   reactor.classList.toggle("reactor-css-grid", useCssGrid);
+  reactor.classList.toggle("reactor-mobile-fit", useCssGrid && isMobile);
   const mapped = buildReactorGridStyle(ui);
   for (const key of Object.keys(mapped)) {
     const val = mapped[key];
     if (val != null && val !== "") reactor.style.setProperty(key, val);
     else reactor.style.removeProperty(key);
-  }
-  if (useCssGrid) {
-    reactor.style.removeProperty("width");
-    reactor.style.removeProperty("height");
   }
 }
 

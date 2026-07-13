@@ -1,6 +1,5 @@
 import { html } from "lit-html";
-import { classMap, when } from "../dom/lit.js";
-import { dispatchToggleIntent } from "../components/ui-intents.js";
+import { classMap } from "../dom/lit.js";
 import {
   privacyPolicyPageContainerTemplate,
   termsOfServicePageContainerTemplate,
@@ -124,13 +123,15 @@ export function reactorSectionTemplate() {
       </div>
     </div>
   </div>
-  <div id="reactor_status_banners_root"></div>
-  <div id="failure_warning_banner" class="container hidden" role="status" aria-live="polite">
-    <article id="failure_warning_message"></article>
-  </div>
   <div id="meltdown_vignette" aria-hidden="true"></div>
   <div id="meltdown_strobe" aria-hidden="true"></div>
   <div id="reactor_wrapper">
+    <div id="reactor_status_banners_root">
+      <div id="meltdown_banner" class="container">
+        <article id="meltdown_banner_message">MELTDOWN</article>
+        <button id="reset_reactor_btn" class="reset-btn" type="button">Reset Reactor</button>
+      </div>
+    </div>
     <div id="reactor"></div>
     <div id="mobile_top_bar" aria-hidden="true">
       <ul id="reactor_stats_mobile" class="mobile-only ep-status-panel"></ul>
@@ -169,6 +170,7 @@ export function upgradesSectionTemplate() {
       </div>
     </article>
   </div>
+  <div id="upgrades_detail_panel" class="upgrade-hub-detail-panel" aria-live="polite"></div>
 </section>
   `;
 }
@@ -227,6 +229,7 @@ export function researchSectionTemplate() {
       </div>
     </article>
   </div>
+  <div id="research_detail_panel" class="upgrade-hub-detail-panel" aria-live="polite"></div>
 </section>
   `;
 }
@@ -362,25 +365,6 @@ export function aboutSectionTemplate() {
     <button id="install_pwa_btn" class="pixel-btn hidden">Install App</button>
   </div>
 </section>
-  `;
-}
-
-export function reactorStatusBannersTemplate({ uiState, ui }) {
-  const onResume = () => dispatchToggleIntent(ui?.game, "pause", false, "unpause_btn");
-  const onReset = () => { void ui?.resetReactor?.(); };
-  return html`
-    ${when(uiState?.is_paused, () => html`
-      <div id="pause_banner" class="container">
-        <article>PAUSED</article>
-        <button id="unpause_btn" class="resume-btn ui-bevel" type="button" title="Resume" aria-label="Resume game" @click=${onResume}>Resume</button>
-      </div>
-    `)}
-    ${when(uiState?.is_melting_down, () => html`
-      <div id="meltdown_banner" class="container">
-        <article id="meltdown_banner_message">MELTDOWN</article>
-        <button id="reset_reactor_btn" class="reset-btn" type="button" @click=${onReset}>Reset Reactor</button>
-      </div>
-    `)}
   `;
 }
 

@@ -1,5 +1,5 @@
 import { html, render } from "lit-html";
-import { subscribe } from "valtio/vanilla";
+import { subscribeKey } from "valtio/vanilla/utils";
 import { preferences, EngineStatus } from "./store.js";
 
 function heatRatioStripView(game) {
@@ -26,7 +26,7 @@ export function mountHeatRatioStrip(game, host) {
     render(heatRatioStripView(game), host);
   };
   run();
-  const unsubscribe = subscribe(game.state, run);
+  const unsubscribe = subscribeKey(game.state, "heat_ratio", run);
   return () => {
     try {
       unsubscribe();
@@ -41,10 +41,13 @@ export function mountEngineStatusChip(game, host) {
     render(engineStatusChipView(game), host);
   };
   run();
-  const unsubscribe = subscribe(game.state, run);
+  const unsubs = [
+    subscribeKey(game.state, "pause", run),
+    subscribeKey(game.state, "engine_status", run),
+  ];
   return () => {
     try {
-      unsubscribe();
+      unsubs.forEach((fn) => fn());
     } catch (_) {}
     render(html``, host);
   };
@@ -61,7 +64,7 @@ export function mountMuteIndicator(host) {
     render(muteIndicatorView(), host);
   };
   run();
-  const unsubscribe = subscribe(preferences, run);
+  const unsubscribe = subscribeKey(preferences, "mute", run);
   return () => {
     try {
       unsubscribe();

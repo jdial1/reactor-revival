@@ -179,6 +179,7 @@ export default [
     files: ["public/src/**/*.js"],
     plugins: { import: importPlugin },
     settings: {
+      "import/core-modules": ["reactor-core"],
       "import/resolver": {
         node: {
           extensions: [".js", ".mjs", ".cjs"]

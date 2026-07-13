@@ -1,10 +1,8 @@
 import { debitMoney, debitExoticParticles, enqueueDebitLayoutCost } from "./economy-intents.js";
 import { BlueprintSchema, LegacyGridSchema } from "../store.js";
 import { isLayoutShareCode, shareCodeToLayoutGrid } from "../core/layoutShareCodec.js";
-
-export function clipToGrid(layout, rows, cols) {
-  return layout.slice(0, rows).map((row) => (row || []).slice(0, cols));
-}
+import { clipToGrid } from "reactor-core";
+export { clipToGrid };
 
 export function getCostBreakdown(layout, partset) {
   if (!layout || !partset) return { money: 0, ep: 0 };

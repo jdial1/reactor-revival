@@ -32,28 +32,6 @@ export function tryDebitMoney(game, amount) {
   return { ok: true, balanceAfter: toNumber(game.state.current_money) };
 }
 
-export function applyTransactionDeltas(game, moneyDelta = 0, epDelta = 0) {
-  if (!game?.state) {
-    return { ok: true, balanceAfter: 0, epAfter: 0 };
-  }
-  const mDelta = Number(moneyDelta) || 0;
-  const eDelta = Number(epDelta) || 0;
-  const m0 = toDecimal(game.state.current_money);
-  const e0 = toDecimal(game.state.total_exotic_particles);
-  const mOk = mDelta >= 0 || m0.gte(Math.abs(mDelta));
-  const eOk = eDelta >= 0 || e0.gte(Math.abs(eDelta));
-  const ok = mOk && eOk;
-  if (ok) {
-    if (mDelta !== 0) updateDecimal(game.state, "current_money", (d) => d.add(mDelta));
-    if (eDelta !== 0) updateDecimal(game.state, "total_exotic_particles", (d) => d.add(eDelta));
-  }
-  return {
-    ok,
-    balanceAfter: toNumber(game.state.current_money),
-    epAfter: toNumber(game.state.total_exotic_particles),
-  };
-}
-
 export function creditMoneyWithPrestige(game, amount) {
   if (!game?.state) return;
   const multiplier = typeof game.getPrestigeMultiplier === "function" ? game.getPrestigeMultiplier() : 1;

@@ -23,6 +23,7 @@ export function upgradeCardTemplate({
   header,
   ariaLabel,
   onBuyClick,
+  onSelectClick,
   costDisplay,
 }) {
   const buyDisabled = doctrineLocked || isMaxed || unaffordable;
@@ -34,7 +35,8 @@ export function upgradeCardTemplate({
          data-id=${upgradeId}
          data-doctrine=${doctrineId}
          data-doctrine-locked=${doctrineLocked ? "true" : nothing}
-         ?hidden=${hidden}>
+         ?hidden=${hidden}
+         @click=${onSelectClick}>
       <div class="upgrade-header">
         <div class="upgrade-icon-wrapper">
           <div class="image" style="background-image: url('${iconPath}');"></div>

@@ -33,12 +33,6 @@ export const CELL_FORM_FACTORS = [
 
 const CELL_COUNTS_BY_LEVEL = CELL_FORM_FACTORS.map((f) => f.cellCount);
 
-function migrateLegacyValvePartId(partId) {
-  if (partId === "overflow_valve2" || partId === "overflow_valve3" || partId === "overflow_valve4") return "overflow_valve";
-  if (partId === "topup_valve2" || partId === "topup_valve3" || partId === "topup_valve4") return "topup_valve";
-  if (partId === "check_valve2" || partId === "check_valve3" || partId === "check_valve4") return "check_valve";
-  return partId;
-}
 const PART_TITLE_PREFIXES = ["Basic ", "Advanced ", "Super ", "Wonderous ", "Ultimate "];
 
 export function resolveCellTierPartId(type, level) {
@@ -222,7 +216,7 @@ function applyBaseCellStats(part, game, levels, m) {
     part.power = part.base_power;
     part.heat = part.base_heat;
   }
-  part.ticks = part.base_ticks * m.tickMultiplier;
+  part.ticks = (part.base_ticks ?? 0) * m.tickMultiplier;
 }
 
 function applyContainmentVent(part, levels, m) {

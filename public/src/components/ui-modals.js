@@ -4,7 +4,6 @@ import { StorageAdapter, serializeSave, rotateSlot1ToBackup, setSlot1FromBackupA
 import { logger } from "../core/logger.js";
 import { formatDuration, numFormat as fmt, formatPrestigeNumber } from "../format/numbers.js";
 import { getValidatedPreferences, preferences, modalUi, syncReducedMotionDOM, actions, showLoadBackupModal } from "../store.js";
-import { getValidatedGameData } from "../services-audio.js";
 import { getAppContext } from "../app-context.js";
 import { enqueueWarningStop } from "../state/game-effects.js";
 import { MODAL_IDS } from "../modalIds.js";
@@ -26,11 +25,6 @@ const SETTINGS_MODAL_TABS = [
   { tab: "system", label: "SYS", panelId: "settings_tab_system", btnId: "settings_tab_system_btn" },
   { tab: "data", label: "DATA", panelId: "settings_tab_data", btnId: "settings_tab_data_btn" },
 ];
-
-const settingsHelpShellTemplate = `<div class="settings-help-content pixel-panel">
-  <div class="settings-help-body"></div>
-  <button type="button" class="settings-help-close" aria-label="Close">×</button>
-</div>`;
 
 function volumeStepper(key, value) {
   const step = volToStep(value);
@@ -66,19 +60,11 @@ function mechSwitch(id, checked) {
   `;
 }
 
-function helpIcon(settingKey) {
-  return html`
-    <button type="button" class="setting-help-icon flex-center" data-setting-key=${settingKey} aria-label="Explain this setting">?</button>
-  `;
-}
-
-function switchRow(id, label, checked, helpKey) {
-  const key = helpKey ?? id.replace("setting-", "");
+function switchRow(id, label, checked) {
   return html`
     <tr class="settings-option-row" data-checkbox-id=${id} role="button" tabindex="0">
       <td class="settings-visuals-label">
         <span>${label}</span>
-        ${helpIcon(key)}
       </td>
       <td class="settings-visuals-control">
         <label class="mech-switch-row">
@@ -90,12 +76,11 @@ function switchRow(id, label, checked, helpKey) {
   `;
 }
 
-function selectRow(id, label, helpKey, content) {
+function selectRow(id, label, content) {
   return html`
     <tr class="settings-option-row settings-option-select" data-select-id=${id} role="button" tabindex="0">
       <td class="settings-visuals-label">
         <span>${label}</span>
-        ${helpIcon(helpKey)}
       </td>
       <td class="settings-visuals-control">${content}</td>
     </tr>
@@ -130,8 +115,8 @@ function visualSection(prefs) {
     <div class="settings-section">
       <h4 style=${SECTION_HEAD}>ACCESSIBILITY</h4>
       <table class="settings-visuals-table">
-        ${switchRow("setting-motion", "Reduced Motion", prefs.reducedMotion, "reducedMotion")}
-        ${selectRow("setting-number-format", "Number format", "numberFormat", html`
+        ${switchRow("setting-motion", "Reduced Motion", prefs.reducedMotion)}
+        ${selectRow("setting-number-format", "Number format", html`
           <select id="setting-number-format" class="pixel-select settings-select" style="background: rgb(60 60 60); color: white; border: 2px solid var(--bevel-dark); padding: 4px;">
             <option value="default" ?selected=${prefs.numberFormat === "default"}>1,234 K</option>
             <option value="scientific" ?selected=${prefs.numberFormat === "scientific"}>1.23e3</option>
@@ -141,17 +126,17 @@ function visualSection(prefs) {
 
       <h4 style=${SECTION_HEAD_MARGIN}>UPGRADE PANEL</h4>
       <table class="settings-visuals-table">
-        ${switchRow("setting-hide-upgrades", "Hide Unaffordable Upgrades", prefs.hideUnaffordableUpgrades, "hideUnaffordableUpgrades")}
-        ${switchRow("setting-hide-research", "Hide Unaffordable Research", prefs.hideUnaffordableResearch, "hideUnaffordableResearch")}
-        ${switchRow("setting-hide-max-upgrades", "Hide Max Upgrades", prefs.hideMaxUpgrades, "hideMaxUpgrades")}
-        ${switchRow("setting-hide-max-research", "Hide Max Research", prefs.hideMaxResearch, "hideMaxResearch")}
+        ${switchRow("setting-hide-upgrades", "Hide Unaffordable Upgrades", prefs.hideUnaffordableUpgrades)}
+        ${switchRow("setting-hide-research", "Hide Unaffordable Research", prefs.hideUnaffordableResearch)}
+        ${switchRow("setting-hide-max-upgrades", "Hide Max Upgrades", prefs.hideMaxUpgrades)}
+        ${switchRow("setting-hide-max-research", "Hide Max Research", prefs.hideMaxResearch)}
       </table>
 
       <h4 style=${SECTION_HEAD_MARGIN}>REACTOR VIEW</h4>
       <table class="settings-visuals-table">
-        ${switchRow("setting-heat-flow", "Heat flow arrows", prefs.heatFlowVisible, "heatFlowVisible")}
-        ${switchRow("setting-heat-map", "Heat map", prefs.heatMapVisible, "heatMapVisible")}
-        ${switchRow("setting-debug-overlay", "Debug overlay (flow arrows)", prefs.debugOverlay, "debugOverlay")}
+        ${switchRow("setting-heat-flow", "Heat flow arrows", prefs.heatFlowVisible)}
+        ${switchRow("setting-heat-map", "Heat map", prefs.heatMapVisible)}
+        ${switchRow("setting-debug-overlay", "Debug overlay (flow arrows)", prefs.debugOverlay)}
       </table>
     </div>
   `;
@@ -162,8 +147,8 @@ function systemSection(prefs, notificationsChecked) {
     <div class="settings-section">
       <h4 style=${SECTION_HEAD}>ENGINE & NOTIFICATIONS</h4>
       <table class="settings-visuals-table">
-        ${switchRow("setting-force-no-sab", "Force No-SAB", prefs.forceNoSAB, "forceNoSAB")}
-        ${switchRow("setting-notifications", "Update Notifications", notificationsChecked, "notifications")}
+        ${switchRow("setting-force-no-sab", "Force No-SAB", prefs.forceNoSAB)}
+        ${switchRow("setting-notifications", "Update Notifications", notificationsChecked)}
       </table>
 
       <h4 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--game-warning-color, rgb(255 160 0)); font-size: 0.8rem; border-bottom: 2px solid rgb(68 68 68); padding-bottom: 4px;">POWER CYCLING</h4>
@@ -410,7 +395,6 @@ function setupVolumeSteppers(overlay, modal, signal) {
 }
 
 function handleToggleRowClick(e, overlay, modal) {
-  if (e.target.closest(".setting-help-icon")) return;
   e.preventDefault();
   const tr = e.target.closest("tr");
   const id = tr?.dataset.checkboxId;
@@ -423,7 +407,7 @@ function handleToggleRowClick(e, overlay, modal) {
 }
 
 function handleSelectRowClick(e, overlay, modal) {
-  if (e.target.closest(".setting-help-icon") || e.target.closest("select")) return;
+  if (e.target.closest("select")) return;
   e.preventDefault();
   const tr = e.target.closest("tr");
   const id = tr?.dataset.selectId;
@@ -523,7 +507,6 @@ function setupMechSwitches(overlay, modal, signal) {
       }
     }
   }, { signal });
-  setupSettingsHelpModal(overlay, modal, signal);
   const notifCheckbox = overlay.querySelector("#setting-notifications");
   if (notifCheckbox && "Notification" in window) {
     setupMechSwitch("setting-notifications", (checked) => modal._handleNotificationSwitch(checked));
@@ -535,52 +518,6 @@ function setupMechSwitches(overlay, modal, signal) {
 }
 
 function setupCloudSaves() {}
-
-function setupSettingsHelpModal(overlay, modal, signal) {
-  let helpEl = overlay.querySelector(".settings-help-modal");
-  if (!helpEl) {
-    helpEl = document.createElement("dialog");
-    helpEl.className = "settings-help-modal";
-    helpEl.innerHTML = settingsHelpShellTemplate;
-    overlay.appendChild(helpEl);
-  }
-  const body = helpEl.querySelector(".settings-help-body");
-  const closeBtn = helpEl.querySelector(".settings-help-close");
-
-  const hide = () => helpEl.close();
-
-  const show = (title, content) => {
-    render(html`
-      <h4 class="settings-help-title">${title}</h4>
-      <p class="settings-help-text">${content}</p>
-    `, body);
-    if (!helpEl.open) helpEl.showModal();
-  };
-
-  helpEl.addEventListener("click", (e) => {
-    if (e.target === helpEl) hide();
-  }, { signal });
-  closeBtn.addEventListener("click", hide, { signal });
-
-  overlay.addEventListener("click", async (e) => {
-    const btn = e.target.closest(".setting-help-icon");
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const key = btn.dataset.settingKey;
-    if (!key) return;
-    modal.playClick();
-    let data = {};
-    try {
-      data = getValidatedGameData().settingsHelp;
-    } catch (err) {}
-    const text = data[key] || "No description available.";
-    const row = btn.closest("tr");
-    const labelSpan = row?.querySelector(".settings-visuals-label span");
-    const title = labelSpan?.textContent?.trim() || key;
-    show(title, text);
-  }, { signal });
-}
 
 function setupNavAndAbout(overlay) {
   const versionSpan = overlay.querySelector("#app_version");

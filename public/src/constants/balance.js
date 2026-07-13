@@ -23,7 +23,6 @@ export const OP_OUTLET = 4;
 
 export const GRID_SIZE_PHYSICS_WORKER_MAX_CELLS = 2500;
 export const WORKER_HEARTBEAT_MS = 2000;
-export const WORKER_HEAT_TIMEOUTS_BEFORE_FALLBACK = 3;
 export const UPGRADE_MAX_LEVEL = 32;
 
 export const EP_HEAT_SAFE_CAP = 1e100;

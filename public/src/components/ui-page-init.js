@@ -8,7 +8,6 @@ import {
 } from "./page-dom.js";
 import { mountReactorGridLayoutBinding } from "./ui-grid.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
-import { reactorStatusBannersTemplate } from "../templates/sectionPageTemplates.js";
 import { pwaState } from "../store.js";
 
 export function clearPageReactor(ui) {
@@ -205,17 +204,11 @@ export function initializePage(ui, pageId) {
   switch (pageId) {
     case "reactor_section": {
       mountReactorGridLayoutBinding(ui);
-      if (ui.uiState && !ui._reactorBannersMounted) {
-        const bannersRoot = document.getElementById("reactor_status_banners_root");
-        if (bannersRoot) {
-          ui._reactorBannersMounted = true;
-          const unmount = bindLitRenderMulti(
-            [{ state: ui.uiState, keys: ["is_paused", "is_melting_down"] }],
-            () => reactorStatusBannersTemplate({ uiState: ui.uiState, ui }),
-            bannersRoot
-          );
-          if (ui._unmounts) ui._unmounts.push(unmount);
-          else ui._unmounts = [unmount];
+      if (!ui._reactorResetBtnMounted) {
+        const resetBtn = document.getElementById("reset_reactor_btn");
+        if (resetBtn) {
+          ui._reactorResetBtnMounted = true;
+          resetBtn.addEventListener("click", () => { void ui.resetReactor?.(); });
         }
       }
       const reactor = getPageReactor(ui);
@@ -261,6 +254,7 @@ export function initializePage(ui, pageId) {
         ui._unmounts.push(ui.mountSectionCountsReactive("upgrades_content_wrapper"));
         ui._sectionCountsMountedUpgrades = true;
       }
+      ui.ensureUpgradeDetailPanelMounted("upgrades_detail_panel");
       if (game?.upgradeset) ui.updateSectionCountsState(game);
       autoExpandAffordableHubSections(ui, "upgrades_content_wrapper");
       requestAnimationFrame(() => {
@@ -282,6 +276,7 @@ export function initializePage(ui, pageId) {
         ui._unmounts.push(ui.mountSectionCountsReactive("experimental_upgrades_content_wrapper"));
         ui._sectionCountsMountedResearch = true;
       }
+      ui.ensureUpgradeDetailPanelMounted("research_detail_panel");
       if (game?.upgradeset) ui.updateSectionCountsState(game);
       autoExpandAffordableHubSections(ui, "experimental_upgrades_content_wrapper");
       if (

@@ -21,10 +21,11 @@ export default defineConfig({
       { find: "lit-html/directives/when.js", replacement: path.resolve(repoRoot, "node_modules/lit-html/directives/when.js") },
       { find: "lit-html/directives/unsafe-html.js", replacement: path.resolve(repoRoot, "node_modules/lit-html/directives/unsafe-html.js") },
       { find: "lit-html", replacement: path.resolve(repoRoot, "node_modules/lit-html/lit-html.js") },
+      { find: "reactor-core", replacement: path.resolve(repoRoot, "node_modules/reactor-core-lib/src/index.js") },
     ],
   },
   test: {
-    exclude: [...configDefaults.exclude, "**/performance.test.js"],
+    exclude: [...configDefaults.exclude, "**/performance.test.js", "e2e/**"],
     globals: true,
     environment: "jsdom",
     environmentOptions: {

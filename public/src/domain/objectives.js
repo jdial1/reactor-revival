@@ -511,6 +511,9 @@ export class ObjectiveManager {
 
     grantObjectiveReward(this.game, this.current_objective_def);
 
+    const claimedIndex = this.current_objective_index;
+    this.game.coreBridge?.syncObjectiveClaim?.(claimedIndex);
+
     this.current_objective_index++;
     const maxValidIndex = this.objectives_data.length - 1;
     if (this.current_objective_index > maxValidIndex) {

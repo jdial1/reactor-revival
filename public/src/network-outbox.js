@@ -2,12 +2,25 @@ import { get, set } from "idb-keyval";
 
 const OUTBOX_KEY = "reactor_network_outbox_v1";
 
+function serializeOutboxRows(rows) {
+  return JSON.parse(JSON.stringify(rows, (_key, value) => {
+    if (value != null && typeof value.toNumber === "function") {
+      try {
+        return value.toNumber();
+      } catch {
+        return Number(value) || 0;
+      }
+    }
+    return value;
+  }));
+}
+
 export async function outboxReadAll() {
   return (await get(OUTBOX_KEY)) || [];
 }
 
 async function outboxWriteAll(rows) {
-  await set(OUTBOX_KEY, rows);
+  await set(OUTBOX_KEY, serializeOutboxRows(rows));
 }
 
 export async function outboxEnqueue(record) {

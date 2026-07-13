@@ -145,7 +145,7 @@ export const InstallButton = (onClick) => html`
 
 const BASE_DOCTRINE_ICON = "img/ui/status/status_star.png";
 
-export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost } = {}) => {
+export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost, selected, onSelectClick } = {}) => {
   const isMaxed = upgrade.level >= upgrade.max_level;
   const doctrineIcon = BASE_DOCTRINE_ICON;
   const upgradeset = upgrade.game?.upgradeset;
@@ -164,6 +164,7 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLe
     "unaffordable": !upgrade.affordable && !isMaxed && !doctrineLocked,
     "maxed-out": isMaxed,
     "doctrine-locked": doctrineLocked,
+    "upgrade-card--selected": !!selected,
   };
   extraClasses.split(" ").filter(Boolean).forEach((c) => (cardClassMap[c] = true));
   return upgradeCardTemplate({
@@ -184,6 +185,7 @@ export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLe
     header,
     ariaLabel,
     onBuyClick,
+    onSelectClick,
     costDisplay,
   });
 };

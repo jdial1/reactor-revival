@@ -253,7 +253,7 @@ export class Reactor {
   set max_heat(v) {
     this._max_heat = (v != null && typeof v.gt === 'function') ? v : toDecimal(v);
     if (this.game?.state) {
-      this.game.state.max_heat = this._max_heat;
+      this.game.state.max_heat = toNumber(this._max_heat);
     }
   }
   get max_power() { return this._max_power; }
@@ -359,9 +359,61 @@ export class Reactor {
     return { classification, efficiencyLabel, suffixes, summary, markLabel, subClass };
   }
 
-  updateStats() {
+  updateStats(opts = {}) {
     if (!this.game.tileset) return;
-    const stats = deriveReactorStats(this.game.tileset, this);
+    const bridge = this.game.coreBridge;
+    let stats;
+    if (bridge?.isActive && bridge.authoritativeTicks !== false && opts.fromSession && bridge.session?.systems?.stats) {
+      const coreStats = bridge.prepareCoreStatsRead(true);
+      if (coreStats) {
+        stats = {
+          stats_power: coreStats.power,
+          stats_cell_power: coreStats.cellPower,
+          stats_stirling_power: coreStats.stirlingPower,
+          stats_heat_generation: coreStats.heatGeneration,
+          stats_total_part_heat: coreStats.totalPartHeat,
+          stats_vent: coreStats.vent,
+          stats_inlet: coreStats.inlet,
+          stats_outlet: coreStats.outlet,
+          stats_net_heat: coreStats.netHeat,
+          stats_cash: coreStats.cash,
+          temp_vent_multiplier: this.vent_multiplier_eff,
+          temp_transfer_multiplier: this.transfer_multiplier_eff,
+          current_max_power: toDecimal(coreStats.maxPower ?? BASE_MAX_POWER),
+          current_max_heat: toDecimal(coreStats.maxHeat ?? BASE_MAX_HEAT),
+        };
+      }
+    } else if (
+      bridge?.isActive
+      && bridge.authoritativeTicks !== false
+      && !opts.fromSession
+      && this.heat_power_multiplier > 0
+      && toNumber(this.current_heat) > 0
+      && bridge.session?.systems?.stats
+    ) {
+      bridge.syncGridFromGame();
+      bridge.syncMechanicsOverridesFromGame();
+      const coreStats = bridge.session.getSnapshot()?.stats;
+      if (coreStats) {
+        stats = {
+          stats_power: coreStats.power,
+          stats_cell_power: coreStats.cellPower,
+          stats_stirling_power: coreStats.stirlingPower,
+          stats_heat_generation: coreStats.heatGeneration,
+          stats_total_part_heat: coreStats.totalPartHeat,
+          stats_vent: coreStats.vent,
+          stats_inlet: coreStats.inlet,
+          stats_outlet: coreStats.outlet,
+          stats_net_heat: coreStats.netHeat,
+          stats_cash: coreStats.cash,
+          temp_vent_multiplier: this.vent_multiplier_eff,
+          temp_transfer_multiplier: this.transfer_multiplier_eff,
+          current_max_power: toDecimal(coreStats.maxPower ?? BASE_MAX_POWER),
+          current_max_heat: toDecimal(coreStats.maxHeat ?? BASE_MAX_HEAT),
+        };
+      }
+    }
+    if (!stats) stats = deriveReactorStats(this.game.tileset, this);
     applyStatsToReactor(this, stats);
     syncStatsToUI(this, this.game.ui?.stateManager);
     if (this.game.tileset && this.game.tileset.active_tiles_list) {

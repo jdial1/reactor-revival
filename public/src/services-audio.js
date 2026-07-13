@@ -47,7 +47,6 @@ export function getValidatedGameData() {
         achievements: AchievementListSchema.parse(bundledGameData.achievements),
         difficulty: z.record(z.string(), DifficultyPresetSchema).parse(bundledGameData.difficulty),
         helpText: HelpTextSchema.parse(bundledGameData.helpText),
-        settingsHelp: z.record(z.string(), z.string()).parse(bundledGameData.settingsHelp),
         flavorText: z.array(z.string()).parse(bundledGameData.flavorText),
       };
     } catch (err) {
@@ -69,9 +68,6 @@ const dataService = {
   },
   async loadHelpText() {
     return getValidatedGameData().helpText;
-  },
-  async loadSettingsHelp() {
-    return getValidatedGameData().settingsHelp;
   },
   async loadObjectiveList() {
     return getValidatedGameData().objectives;

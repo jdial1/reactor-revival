@@ -11,7 +11,7 @@ import {
   collectPartSemanticSegments,
 } from "../logic-tooltip-stats.js";
 import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
-import { inspectExchangerPressureFlow } from "../logic-heat-transfer.js";
+import { inspectExchangerPressureFlow } from "../domain/heat.js";
 import { actions, ref } from "../store.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { unsafeHTML, BaseComponent } from "../dom/lit.js";

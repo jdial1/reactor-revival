@@ -284,6 +284,8 @@ export {
   runPopulateUpgradeSection,
   updateSectionCountsState,
   mountSectionCountsReactive,
+  mountUpgradeDetailPanels,
+  ensureUpgradeDetailPanelMounted,
   getUpgradeSectionContainer,
   appendUpgradeToSection,
   showUpgradeDebugPanel,

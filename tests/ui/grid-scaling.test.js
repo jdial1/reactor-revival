@@ -74,7 +74,7 @@ describe("Grid Scaling Logic (Reshaping)", () => {
         // Mobile: gridScaler uses cols = 8, capped by maxTilesX (400/40 = 10).
         expect(game.cols).toBe(8);
         expect(game.rows).toBeGreaterThanOrEqual(10);
-        expect(game.rows).toBeLessThanOrEqual(14);
+        expect(game.rows).toBeLessThanOrEqual(12);
         expect(game.rows).toBeGreaterThan(game.cols);
         expect(game.rows * game.cols).toBeGreaterThanOrEqual(60); // 6x10=60
     });
@@ -108,13 +108,10 @@ describe("Grid Scaling Logic (Reshaping)", () => {
         expect(reactor.style.getPropertyValue('--game-rows')).toBe('12');
         expect(reactor.style.getPropertyValue('--game-cols')).toBe('12');
         expect(reactor.style.getPropertyValue('--tile-size')).toMatch(/^\d+px$/);
-        if (!ui.uiState?.layout_css_grid) {
-            expect(reactor.style.width).toMatch(/^\d+px$/);
-            expect(reactor.style.height).toMatch(/^\d+px$/);
-        } else {
-            expect(ui.uiState.grid_layout?.rows).toBe(12);
-            expect(ui.uiState.grid_layout?.cols).toBe(12);
-        }
+        expect(reactor.style.width).toMatch(/^\d+px$/);
+        expect(reactor.style.height).toMatch(/^\d+px$/);
+        expect(ui.uiState.grid_layout?.rows).toBe(12);
+        expect(ui.uiState.grid_layout?.cols).toBe(12);
     });
 
     it("should respect min/max limits configured in GridScaler", () => {

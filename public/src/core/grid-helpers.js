@@ -1,3 +1,5 @@
+import { toDecimal } from "../simUtils.js";
+
 export function getNeighborKeys(r, c) {
   return [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]];
 }
@@ -17,6 +19,6 @@ export function clampHeat(heat, maxHeat) {
 
 export function clampHeatDecimal(heat, maxHeat) {
   if (heat.gt(maxHeat) && maxHeat.gt(0)) return maxHeat;
-  if (heat.lt(0)) return heat.constructor(0);
+  if (heat.lt(0)) return toDecimal(0);
   return heat;
 }

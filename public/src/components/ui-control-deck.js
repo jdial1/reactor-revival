@@ -4,7 +4,7 @@ import { VENT_BONUS_PERCENT_DIVISOR } from "../simUtils.js";
 import { REACTOR_HEAT_STANDARD_DIVISOR } from "../constants/sim.js";
 import { numFormat as fmt } from "../format/numbers.js";
 import { logger } from "../core/logger.js";
-import { toNumber } from "../simUtils.js";
+import { toNumber, isAllPowerOverflowingToHeat } from "../simUtils.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import { vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent } from "../core/math-helpers.js";
 import { formatNumberCompactIntl } from "../format/numbers.js";
@@ -32,11 +32,10 @@ export function formatSimulationTickLine(game) {
   if (!game) return "—";
   const period = (game.loop_wait || 1000) / 1000;
   const periodStr = period >= 10 ? period.toFixed(1) : period.toFixed(2);
-  const n = game.engine?.tick_count ?? 0;
-  return `${periodStr}s · tick ${n}`;
+  return `${periodStr}s`;
 }
 
-function formatArchitectMetricsLine(state) {
+function formatArchitectMetricsLine(state, game) {
   const p = fmt(toNumber(state.stats_power ?? 0), 0);
   const h = fmt(toNumber(state.stats_heat_generation ?? 0), 0);
   const v = fmt(toNumber(state.stats_vent ?? 0), 0);
@@ -44,7 +43,8 @@ function formatArchitectMetricsLine(state) {
   const cur = toNumber(state.current_heat ?? 0);
   const hullPct = maxH > 0 ? (cur / maxH) * 100 : 0;
   const hullStr = `${fmt(hullPct, 1)}%`;
-  return `P/t ${p} · H/t ${h} · V ${v} · Hull ${hullStr}`;
+  const period = formatSimulationTickLine(game);
+  return `P/t ${p} · H/t ${h} · V ${v} · ${period} · Hull ${hullStr}`;
 }
 
 export function getBarVisuals(current, max, cssVarHeight, layer) {
@@ -93,7 +93,14 @@ function buildMobileControlDeckTemplate(ui, state) {
   const ventBonus = toNumber(state.vent_multiplier_eff ?? 0);
   const autoHeatRate = showHeatRate ? (maxHeat / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + ventBonus / VENT_BONUS_PERCENT_DIVISOR) : 0;
 
-  const heatVentClass = classMap({ "control-deck-item": true, "heat-vent": true, hazard: heatHazard, critical: heatCritical });
+  const powerOverflowToHeat = isAllPowerOverflowingToHeat(state, ui.game?.reactor);
+  const heatVentClass = classMap({
+    "control-deck-item": true,
+    "heat-vent": true,
+    hazard: heatHazard,
+    critical: heatCritical,
+    "power-overflow-to-heat": powerOverflowToHeat,
+  });
   const powerCapacitorClass = classMap({ "control-deck-item": true, "power-capacitor": true, "auto-sell-active": autoSellEnabled });
 
   const autoSellRateContent = showAutoSell ? html`<img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="$">${fmt(autoSellRate, 0)}` : "";
@@ -112,13 +119,13 @@ function buildMobileControlDeckTemplate(ui, state) {
     autoHeatRateContent,
     powerFillStyle: pBar.style,
     heatFillStyle: hBar.style,
-    architectMetricsText: formatArchitectMetricsLine(state),
-    tickCadenceText: formatSimulationTickLine(ui.game),
+    architectMetricsText: formatArchitectMetricsLine(state, ui.game),
     powerCurrentText: fmt(powerCurrent, 0),
     heatCurrentText: fmt(heatCurrent, 0),
     maxPowerText: maxPower ? fmt(maxPower, 0) : "",
     maxHeatText: maxHeat ? fmt(maxHeat, 0) : "",
     moneyValueText: state.melting_down ? "\u2622\uFE0F" : formatNumberCompactIntl(state.current_money ?? 0),
+    powerOverflowToHeat,
   });
 }
 
@@ -130,20 +137,6 @@ function buildMobilePassiveBarTemplate(state) {
     pauseAriaLabel: state.pause ? "Resume" : "Pause",
     pauseTitle: state.pause ? "Resume" : "Pause",
   });
-}
-
-function ensureMobileControlDeckListeners(ui, tickLineEl) {
-  if (ui._mobileTickLineUpdateControlDeck) return;
-  ui._mobileTickLineUpdateControlDeck = () => {
-    const el = tickLineEl?.isConnected ? tickLineEl : getUiElement(ui, "control_deck_tick_line");
-    const g = ui.game;
-    if (el && g) el.textContent = formatSimulationTickLine(g);
-  };
-  ui._mobileControlDeckStatePatchHandler = (patch) => {
-    if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) {
-      ui._mobileTickLineUpdateControlDeck();
-    }
-  };
 }
 
 export function mountMobilePassiveBar(ui) {
@@ -173,38 +166,32 @@ export function syncMobileControlDeckMounts(ui) {
   const root = getUiElement(ui, "control_deck_root");
   if (!root) return;
 
-  const tickLineEl = getUiElement(ui, "control_deck_tick_line");
-  ensureMobileControlDeckListeners(ui, tickLineEl);
-
   const subscriptions = [{
     state: ui.game.state,
     keys: [
       "max_power", "max_heat", "current_power", "current_heat",
       "power_net_change", "heat_net_change", "stats_power", "stats_net_heat",
-      "stats_heat_generation", "stats_vent",
+      "stats_heat_generation", "stats_vent", "power_overflow_to_heat_ratio",
       "auto_sell", "auto_sell_multiplier", "heat_controlled", "vent_multiplier_eff",
-      "current_money", "melting_down", "engine_tick_count",
+      "current_money", "melting_down",
     ],
   }];
   const innerUnmount = bindLitRenderMulti(subscriptions, () => buildMobileControlDeckTemplate(ui, ui.game.state), root);
-  if (!ui._mobileControlDeckTickSub && ui.game?.state) {
-    ui._mobileControlDeckTickSub = subscribeKey(ui.game.state, "engine_tick_count", ui._mobileTickLineUpdateControlDeck);
-  }
+  const onLoopWaitPatch = (patch) => {
+    if (!patch || !Object.prototype.hasOwnProperty.call(patch, "loop_wait")) return;
+    const el = root.querySelector(".control-deck-architect-metrics");
+    if (el && ui.game?.state) el.textContent = formatArchitectMetricsLine(ui.game.state, ui.game);
+  };
   if (!ui._mobileControlDeckPatchAttached && ui.game?.on) {
     ui._mobileControlDeckPatchAttached = true;
-    ui.game.on("statePatch", ui._mobileControlDeckStatePatchHandler);
+    ui.game.on("statePatch", onLoopWaitPatch);
   }
-  ui._mobileTickLineUpdateControlDeck();
   ui._mobileControlDeckReactiveMounted = true;
   if (!ui._layoutUnmounts) ui._layoutUnmounts = [];
   ui._layoutUnmounts.push(() => {
     innerUnmount();
-    if (ui._mobileControlDeckTickSub) {
-      ui._mobileControlDeckTickSub();
-      ui._mobileControlDeckTickSub = null;
-    }
     if (ui._mobileControlDeckPatchAttached && ui.game?.off) {
-      ui.game.off("statePatch", ui._mobileControlDeckStatePatchHandler);
+      ui.game.off("statePatch", onLoopWaitPatch);
       ui._mobileControlDeckPatchAttached = false;
     }
     ui._mobileControlDeckReactiveMounted = false;
@@ -488,16 +475,11 @@ function mountTickCadenceNav(ui) {
     el.textContent = formatSimulationTickLine(ui.game);
   };
   update();
-  ui._tickCadenceNavTickSub = subscribeKey(ui.game.state, "engine_tick_count", update);
   const onPatch = (patch) => {
     if (patch && Object.prototype.hasOwnProperty.call(patch, "loop_wait")) update();
   };
   ui.game.on("statePatch", onPatch);
   ui._tickCadenceNavUnmount = () => {
-    if (ui._tickCadenceNavTickSub) {
-      ui._tickCadenceNavTickSub();
-      ui._tickCadenceNavTickSub = null;
-    }
     ui.game.off("statePatch", onPatch);
   };
   ui._tickCadenceNavListenersAttached = true;

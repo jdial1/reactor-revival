@@ -1,4 +1,4 @@
-import { toNumber } from "../simUtils.js";
+import { toNumber, resolveEffectiveMaxPower } from "../simUtils.js";
 
 export function computePowerNetChange(state, reactor = null) {
   const statsPower = toNumber(state?.stats_power ?? 0);
@@ -22,7 +22,12 @@ export function computeHeatNetChange(state, reactor = null) {
   }
   const currentPower = toNumber(state?.current_power ?? 0);
   const statsPower = toNumber(state?.stats_power ?? 0);
-  const maxPower = toNumber(state?.max_power ?? 0);
+  const maxPower = toNumber(resolveEffectiveMaxPower({
+    max_power: state?.max_power,
+    base_max_power: reactor?.base_max_power ?? state?.base_max_power,
+    altered_max_power: reactor?.altered_max_power ?? state?.altered_max_power,
+    effective_max_power: state?.effective_max_power,
+  }));
   const potentialPower = currentPower + statsPower;
   const excessPower = Math.max(0, potentialPower - maxPower);
   const overflowToHeat = Number(

@@ -158,7 +158,14 @@
 @media (width <= 900px) { #reactor_wrapper::-webkit-scrollbar { display: none; width: 0; height: 0; background: transparent;
  }
 
- #reactor_wrapper { -ms-overflow-style: none; scrollbar-width: none; display: flex; overflow: hidden; width: 100%; align-items: center; margin-top: 10px; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
+ #reactor_wrapper { -ms-overflow-style: none; scrollbar-width: none; display: flex; overflow: hidden; width: 100%; align-items: center; margin-top: 0; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
+ }
+}
+
+@media (width <= 900px) {
+ #reactor.reactor-css-grid {
+  padding: 0 !important;
+  border: none !important;
  }
 }
 

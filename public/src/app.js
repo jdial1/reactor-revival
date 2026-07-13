@@ -29,6 +29,7 @@ import {
 import { enqueueClearAnimations } from "./state/game-effects.js";
 import { wireTooltipManager, createTutorialManager } from "./components/ui-tooltips-tutorial.js";
 import { createGameSaveManager } from "./domain/game-save.js";
+import { attachCoreBridge } from "./bridge/revival-session-bridge.js";
 import { getGridCanvasRenderer } from "./components/grid-canvas-service.js";
 import { initPwaDisplayMode } from "./components/ui-components.js";
 import {
@@ -44,7 +45,6 @@ import {
 } from "./templates/appTemplates.js";
 import { PageRouter } from "./page-router.js";
 import { loadFailureFlavor, getFailureFlavorMessage } from "./failureFlavor.js";
-import { subscribe } from "valtio/vanilla";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { setAppContext, getAppContext } from "./app-context.js";
 import { pushAppUnsub, teardownAppListeners } from "./app-listeners.js";
@@ -154,16 +154,17 @@ function bindAppRootSubscription(container, game, ui) {
   if (_appRootUnsub) _appRootUnsub();
   const unsubs = [];
   const schedule = () => scheduleAppRootRender(container, game, ui);
-  if (game?.state) unsubs.push(subscribe(game.state, schedule));
   const uiState = ui?.uiState;
   if (uiState) {
-    for (const key of ["is_paused", "is_melting_down", "meltdown_buildup", "parts_panel_collapsed", "parts_panel_right_side", "copy_paste_collapsed", "tutorial_claim_step", "active_page", "core_danger", "heat_ratio"]) {
+    for (const key of ["is_paused", "is_melting_down", "meltdown_buildup", "parts_panel_collapsed", "parts_panel_right_side", "copy_paste_collapsed", "tutorial_claim_step", "active_page"]) {
       unsubs.push(subscribeKey(uiState, key, schedule));
     }
     unsubs.push(subscribeKey(uiState.copy_paste_display, "blueprintPlannerActive", schedule));
   }
   if (game?.state) {
     unsubs.push(subscribeKey(game.state, "heat_balanced", schedule));
+    unsubs.push(subscribeKey(game.state, "melting_down", schedule));
+    unsubs.push(subscribeKey(game.state, "pause", schedule));
   }
   unsubs.push(subscribeKey(modalUi, "drawerOpen", schedule));
   unsubs.push(subscribeKey(preferences, "mute", schedule));
@@ -187,7 +188,6 @@ function renderAppRoot(container, game, ui) {
   const hasSession = !!game?.lifecycleManager?.session_start_time;
   const shellClassMap = buildShellClassMap(ui?.uiState, modalUi, { hasSession, game });
   const shellStyle = buildShellStyleMap(ui?.uiState, game);
-  console.log("[ReactorBoot] renderAppRoot", { hasSession, container: true });
   const template = html`
     ${renderSplashSection(hasSession, game, ui)}
     <div id="wrapper" class=${classMap(shellClassMap)} style=${styleMap(shellStyle)}></div>
@@ -204,7 +204,6 @@ function renderAppRoot(container, game, ui) {
     }
     const installBtn = document.getElementById("install_pwa_btn");
     if (installBtn) installBtn.classList.toggle("hidden", !pwaState.installPromptAvailable);
-    console.log("[ReactorBoot] app root lit render committed");
   } catch (err) {
     console.error("[ReactorBoot] app root lit render threw", err);
     throw err;
@@ -491,32 +490,16 @@ export function attachGameEventListeners(game, ui) {
   let failureFlavorMap = loadFailureFlavor();
   let lastFailureState = game.state?.failure_state ?? "nominal";
 
-  const syncFailureWarningBanner = (state, message) => {
-    const banner = typeof document !== "undefined" ? document.getElementById("failure_warning_banner") : null;
-    const msgEl = typeof document !== "undefined" ? document.getElementById("failure_warning_message") : null;
-    if (!banner || !msgEl) return;
-    if (state === "nominal" || game.reactor?.has_melted_down) {
-      banner.classList.add("hidden");
-      return;
-    }
-    if (message) {
-      msgEl.textContent = message;
-      banner.classList.remove("hidden");
-    }
-  };
-
   const handleFailureState = (state) => {
     if (!state || state === lastFailureState) return;
     lastFailureState = state;
     const msg = getFailureFlavorMessage(failureFlavorMap ?? {}, state);
-    syncFailureWarningBanner(state, msg);
     if (msg && state !== "nominal") {
       showStatusNotice({
         tag: `WARN // ${String(state).toUpperCase()}`,
         body: msg,
       });
     }
-    if (state === "nominal") syncFailureWarningBanner("nominal", null);
     ui.updateFailurePhaseSensory?.(state);
   };
 
@@ -631,9 +614,10 @@ async function tryLoadStatelessPage(pageRouter, initialPage) {
 
 let _tooltipTeardown = null;
 
-function initGameComponents(game, ui) {
+async function initGameComponents(game, ui) {
   if (_tooltipTeardown) _tooltipTeardown();
   _tooltipTeardown = wireTooltipManager(ui, game);
+  await attachCoreBridge(game);
   game.engine = new Engine(game);
   game.engine.setForceNoSAB(preferences.forceNoSAB === true);
   game.tutorialManager = createTutorialManager(game);
@@ -743,7 +727,7 @@ async function startGame(appContext) {
   ui.initMainLayout();
   ensureGameStateEngineSync(game);
   await pageRouter.loadPage(initialPage);
-  initGameComponents(game, ui);
+  await initGameComponents(game, ui);
   await game.startSession();
   getAppContext()?.appRoot?.render?.();
   if (initialPage === "reactor_section" && ui.resizeReactor) {
@@ -964,7 +948,10 @@ async function main() {
       showTechTreeSelection,
       appRoot: { render: () => renderAppRoot(appRootEl, game, ui) },
     });
-    if (import.meta.env?.DEV) {
+    const exposeAuditHooks =
+      import.meta.env?.DEV ||
+      (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2e"));
+    if (exposeAuditHooks) {
       window.__reactorAudit = {
         get game() { return getAppContext()?.game; },
         get ui() { return getAppContext()?.ui; },

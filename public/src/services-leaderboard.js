@@ -2,7 +2,7 @@ import { LeaderboardResponseSchema } from "./schema/index.js";
 import { queryClient, queryKeys } from "./services-query.js";
 import { StorageUtils } from "./storage/index.js";
 import { logger } from "./core/logger.js";
-import { isTestEnv } from "./simUtils.js";
+import { isTestEnv, toNumber } from "./simUtils.js";
 import { LEADERBOARD_CONFIG } from "./constants/balance.js";
 import {
   outboxEnqueue,
@@ -17,15 +17,28 @@ const LB_OUTBOX_BACKOFF_BASE_MS = 5000;
 const LB_OUTBOX_BACKOFF_MAX_MS = 300000;
 const LOCAL_BEST_RUNS_KEY = "reactor_local_best_runs";
 
+function normalizeLeaderboardPayload(stats) {
+  const money = stats?.money;
+  return {
+    user_id: stats?.user_id,
+    run_id: stats?.run_id,
+    heat: toNumber(stats?.heat ?? 0),
+    power: toNumber(stats?.power ?? 0),
+    money: toNumber(money ?? 0),
+    time: toNumber(stats?.time ?? 0),
+    layout: stats?.layout ?? null,
+  };
+}
+
 function cacheLocalBestRun(stats) {
   const cache = StorageUtils.get(LOCAL_BEST_RUNS_KEY, {});
   const run = {
-    power: stats.power,
-    heat: stats.heat,
-    money: stats.money,
-    time: stats.time,
-    time_played: stats.time,
-    layout: stats.layout ?? null,
+    power: toNumber(stats?.power ?? 0),
+    heat: toNumber(stats?.heat ?? 0),
+    money: toNumber(stats?.money ?? 0),
+    time: toNumber(stats?.time ?? 0),
+    time_played: toNumber(stats?.time ?? 0),
+    layout: stats?.layout ?? null,
     timestamp: Date.now(),
   };
   ["power", "heat", "money"].forEach((metric) => {
@@ -148,19 +161,12 @@ export class LeaderboardService {
   }
 
   async _performSaveRun(stats) {
+    const payload = normalizeLeaderboardPayload(stats);
     try {
       if (!this._circuitAllowsRequest()) {
         await outboxEnqueue({
           type: "leaderboard",
-          payload: {
-            user_id: stats.user_id,
-            run_id: stats.run_id,
-            heat: stats.heat,
-            power: stats.power,
-            money: stats.money,
-            time: stats.time,
-            layout: stats.layout || null,
-          },
+          payload,
         });
         this._scheduleOutboxDrain();
         return;
@@ -168,15 +174,7 @@ export class LeaderboardService {
       const response = await fetch(`${this.apiBaseUrl}/api/leaderboard/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: stats.user_id,
-          run_id: stats.run_id,
-          heat: stats.heat,
-          power: stats.power,
-          money: stats.money,
-          time: stats.time,
-          layout: stats.layout || null,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -184,15 +182,7 @@ export class LeaderboardService {
         this._onLeaderboardFailure();
         await outboxEnqueue({
           type: "leaderboard",
-          payload: {
-            user_id: stats.user_id,
-            run_id: stats.run_id,
-            heat: stats.heat,
-            power: stats.power,
-            money: stats.money,
-            time: stats.time,
-            layout: stats.layout || null,
-          },
+          payload,
         });
         this._scheduleOutboxDrain();
       } else {
@@ -204,15 +194,7 @@ export class LeaderboardService {
       this._onLeaderboardFailure();
       await outboxEnqueue({
         type: "leaderboard",
-        payload: {
-          user_id: stats.user_id,
-          run_id: stats.run_id,
-          heat: stats.heat,
-          power: stats.power,
-          money: stats.money,
-          time: stats.time,
-          layout: stats.layout || null,
-        },
+        payload,
       });
       this._scheduleOutboxDrain();
     } finally {

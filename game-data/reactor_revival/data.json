@@ -1,0 +1,153 @@
+{
+  "id": "reactor_revival",
+  "name": "Reactor Revival",
+  "description": "Canonical Reactor Revival game definition.",
+  "version": "2.0.0",
+  "saveVersion": 2,
+  "tickRate": 1000,
+  "tickRateMs": 1000,
+  "tickRateUpgradable": true,
+  "baseTicksPerSecond": 1,
+  "gridDefaults": {
+    "rows": 12,
+    "cols": 12,
+    "minRows": 6,
+    "minCols": 6,
+    "maxRows": 50,
+    "maxCols": 50,
+    "expandableRows": 38,
+    "expandableCols": 38,
+    "baseMaxHeat": 1000,
+    "baseMaxPower": 100
+  },
+  "features": {
+    "heatSuppression": true,
+    "breederMechanics": false,
+    "environmentalCooling": false,
+    "exchangerRouting": true,
+    "moxScaling": false,
+    "fluidMode": false,
+    "legacyLoopOrder": true,
+    "pendingDestruction": true,
+    "generatesMoney": true,
+    "doubleBufferedHeat": false,
+    "condensatorCooling": false,
+    "prestigeMechanics": true,
+    "offlineProgression": true,
+    "autoReplace": true,
+    "upgradeModifiers": true,
+    "chronometerSpeed": true,
+    "forcefulFusion": true,
+    "heatControlOperator": true,
+    "particleAccelerators": true,
+    "experimentalUpgrades": true,
+    "valveMechanics": true,
+    "tileHeatMap": true,
+    "pressureExchangers": true,
+    "containmentExplosions": true,
+    "reactorStats": true,
+    "intentEconomy": true,
+    "sustainedObjectives": true,
+    "failureStates": true,
+    "decimalEconomy": true,
+    "objectives": true,
+    "achievements": true,
+    "blueprintPlanner": true
+  },
+  "economy": {
+    "currency": "Money",
+    "baseMoney": 10,
+    "autoSellPower": true,
+    "exoticParticles": "Exotic Particles",
+    "prestigeCurrency": "Exotic Particles",
+    "weaveQuantum": 1000000,
+    "prestigeMultiplierPerEp": 0.001,
+    "prestigeMultiplierCap": 100
+  },
+  "mechanics": {
+    "meltdownThreshold": "failure_states",
+    "meltdownHeatMultiplier": 2,
+    "gracePeriodTicks": 30,
+    "hullRepelFraction": 0.05,
+    "offlineProgression": true,
+    "valve": {
+      "overflowThreshold": 0.8,
+      "topupThreshold": 0.2,
+      "topupCapRatio": 0.2
+    },
+    "exchanger": {
+      "diffDivisor": 2,
+      "minTransferUnit": 1,
+      "maxIterations": 10000
+    },
+    "cell": {
+      "defaultCellCount": 1,
+      "pulseFromReflectors": true,
+      "heatFormula": "pulseSquaredOverC"
+    },
+    "failure": {
+      "meltdownHeatMultiplier": 2,
+      "gracePeriodTicks": 30,
+      "hullRepelFraction": 0.05,
+      "fragmentationExplosionChance": 0.12,
+      "saturationRatio": 1.1,
+      "hullDecayPerOverpressure": 5
+    },
+    "economy": {
+      "powerOverflowToHeatRatio": 1,
+      "defaultOverflowRatio": 0.5,
+      "autoSellBasis": "maxPower"
+    },
+    "offline": {
+      "welcomeBackThresholdMs": 30000,
+      "maxCatchupTicks": 100,
+      "maxCatchupMs": 100000
+    }
+  },
+  "categories": [
+    {
+      "id": "cell",
+      "label": "FUEL CELLS"
+    },
+    {
+      "id": "reflector",
+      "label": "REFLECTORS"
+    },
+    {
+      "id": "capacitor",
+      "label": "CAPACITORS"
+    },
+    {
+      "id": "vent",
+      "label": "HEAT VENTS"
+    },
+    {
+      "id": "heat_exchanger",
+      "label": "HEAT EXCHANGERS"
+    },
+    {
+      "id": "heat_inlet",
+      "label": "HEAT INLETS"
+    },
+    {
+      "id": "heat_outlet",
+      "label": "HEAT OUTLETS"
+    },
+    {
+      "id": "coolant_cell",
+      "label": "COOLANT CELLS"
+    },
+    {
+      "id": "reactor_plating",
+      "label": "REACTOR PLATING"
+    },
+    {
+      "id": "particle_accelerator",
+      "label": "PARTICLE ACCELERATORS"
+    },
+    {
+      "id": "valve",
+      "label": "VALVES"
+    }
+  ]
+}

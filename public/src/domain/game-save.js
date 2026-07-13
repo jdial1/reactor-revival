@@ -201,6 +201,15 @@ export async function applySaveState(game, savedData) {
   reconcileReactorFromState(game);
   game.reactor.hull_heat_doctrine_mult = 1;
   game.reactor.updateStats();
+  if (game.coreBridge?.isActive) {
+    if (game.coreBridge.authoritativeTicks !== false) {
+      game.coreBridge.loadLegacySave(savedData);
+    } else {
+      game.coreBridge.syncGridFromGame();
+      game.coreBridge.syncMetaFromGame();
+      game.coreBridge.syncTogglesFromGame();
+    }
+  }
 }
 
 export async function absorbSaveDTO(game, dto) {

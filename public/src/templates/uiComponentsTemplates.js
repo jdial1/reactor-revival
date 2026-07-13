@@ -1,5 +1,6 @@
-﻿import { html } from "lit-html";
-import { classMap, repeat } from "../dom/lit.js";
+﻿import { html, nothing } from "lit-html";
+import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
+import { classMap, repeat, styleMap } from "../dom/lit.js";
 
 export function infoBarTemplate({
   powerClass,
@@ -99,12 +100,12 @@ export function mobileControlDeckTemplate({
   powerFillStyle,
   heatFillStyle,
   architectMetricsText,
-  tickCadenceText,
   powerCurrentText,
   heatCurrentText,
   maxPowerText,
   maxHeatText,
   moneyValueText,
+  powerOverflowToHeat,
 }) {
   return html`
     <button class=${powerCapacitorClass} id="control_deck_power_btn" type="button" tabindex="0" aria-label="Sell Power" data-intent="SELL_POWER">
@@ -130,6 +131,7 @@ export function mobileControlDeckTemplate({
     <button class=${heatVentClass} id="control_deck_heat_btn" type="button" tabindex="0" aria-label="Vent Heat" data-intent="VENT_HEAT" data-vent-animate>
       <span class="control-deck-rate" id="control_deck_heat_rate" aria-hidden="true">${heatRateText}</span>
       <span class=${autoHeatRateClass} id="control_deck_auto_heat_rate" aria-hidden="true">${autoHeatRateContent}</span>
+      ${powerOverflowToHeat ? html`<img src="img/ui/icons/icon_power.png" alt="" class="control-deck-power-overflow-badge" aria-hidden="true" title="Power converting to heat" />` : nothing}
       <div class="control-deck-fill heat-fill" style=${heatFillStyle}></div>
       <div class="control-deck-hazard-stripes"></div>
       <div class="control-deck-content">
@@ -142,7 +144,6 @@ export function mobileControlDeckTemplate({
 
     <div class="control-deck-architect" aria-label="Per-tick reactor metrics">
       <span class="control-deck-architect-metrics">${architectMetricsText}</span>
-      <span id="control_deck_tick_line" class="control-deck-tick-line">${tickCadenceText}</span>
     </div>
   `;
 }
@@ -186,6 +187,7 @@ export function partsPanelLayoutTemplate({
   onHelpToggle,
   tabContent,
   moduleInfoContent,
+  moduleInfoPanelClass = "parts-module-info-panel",
 }) {
   return html`
     <div class="parts_header">
@@ -222,7 +224,7 @@ export function partsPanelLayoutTemplate({
     <div id="parts_tab_contents">
       ${tabContent}
     </div>
-    <div id="parts_module_info" class="parts-module-info-panel" aria-live="polite">
+    <div id="parts_module_info" class=${moduleInfoPanelClass} aria-live="polite">
       ${moduleInfoContent}
     </div>
   `;
@@ -813,6 +815,52 @@ export function sectionHubMetaTemplate({
       <span class="section-count">${researched}/${total}</span>
       <span class=${affordableClass}>${affordableLabel}</span>
     </span>
+  `;
+}
+
+export function upgradeHubDetailEmptyTemplate(message = "— Select an upgrade —") {
+  return html`<span class="upgrade-hub-detail-empty">${message}</span>`;
+}
+
+export function upgradeHubDetailPanelTemplate({
+  iconPath,
+  title,
+  descHtml,
+  levelHeader,
+  costDisplay,
+  doctrineLocked,
+  isMaxed,
+  unaffordable,
+  affordProgress,
+  ariaLabel,
+  onBuyClick,
+}) {
+  const buyDisabled = doctrineLocked || isMaxed || unaffordable;
+  const buyStyle = affordProgress != null && affordProgress < 1
+    ? styleMap({ "--afford-progress": String(Math.max(0, Math.min(1, affordProgress))) })
+    : nothing;
+  return html`
+    <div class="upgrade-hub-detail-inner">
+      <div class="upgrade-hub-detail-copy">
+        <div class="upgrade-hub-detail-title">${title}</div>
+        ${!isMaxed && descHtml ? html`<div class="upgrade-hub-detail-desc">${unsafeHTML(descHtml)}</div>` : nothing}
+      </div>
+      <div class="upgrade-hub-detail-footer">
+        <div class="upgrade-hub-detail-icon">
+          <div class="image" style=${styleMap({ backgroundImage: `url('${iconPath}')` })}></div>
+        </div>
+        <span class="upgrade-hub-detail-level">${levelHeader}</span>
+        ${!isMaxed ? html`
+          <button class="pixel-btn upgrade-action-btn industrial-btn upgrade-hub-detail-buy"
+                  style=${buyStyle}
+                  ?disabled=${buyDisabled}
+                  aria-label=${ariaLabel}
+                  @click=${onBuyClick}>
+            <span class="cost-display cathode-readout">${costDisplay}</span>
+          </button>
+        ` : html`<span class="upgrade-hub-detail-maxed">MAX</span>`}
+      </div>
+    </div>
   `;
 }
 

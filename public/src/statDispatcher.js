@@ -1,5 +1,6 @@
 import { collectAllPartIds, buildPartDefFromCatalog } from "./partCatalog.js";
 import { Part } from "./domain/part.js";
+import { toNumber } from "./simUtils.js";
 
 export class StatDispatcher {
   constructor(game) {
@@ -29,7 +30,7 @@ export class StatDispatcher {
         base_power: part.base_power ?? 0,
         base_heat: part.base_heat ?? 0,
         category: part.category ?? "",
-        ticks: part.ticks ?? 0,
+        ticks: toNumber(part.ticks ?? part.base_ticks ?? 0),
         type: part.type ?? "",
         ep_heat: part.ep_heat ?? 0,
         level: part.level ?? 1,

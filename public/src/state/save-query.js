@@ -1,4 +1,3 @@
-import { MutationObserver } from "@tanstack/query-core";
 import { SaveDataSchema, SaveDataWriteSchema } from "../schema/index.js";
 import { queryClient, queryKeys } from "../services-query.js";
 import {
@@ -9,7 +8,6 @@ import {
   STORAGE_KEYS,
 } from "../storage/index.js";
 import { logger } from "../core/logger.js";
-import { formatDuration, formatStatNum } from "../format/numbers.js";
 
 const LOCAL_SLOTS = [1, 2, 3];
 
@@ -28,18 +26,6 @@ async function performSave(slot, saveData) {
     await StorageAdapter.set(STORAGE_KEYS.CURRENT_SLOT, slot);
   }
   return slot;
-}
-
-export function createSaveMutation() {
-  return new MutationObserver(queryClient, {
-    mutationFn: async ({ slot, saveData }) => performSave(slot, saveData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.saves.resolved() });
-    },
-    onError: (error) => {
-      logger.log("error", "game", "Save mutation failed:", error);
-    },
-  });
 }
 
 export async function saveGameMutation({ slot, saveData, getNextSaveSlot, isAutoSave = false }) {
@@ -179,23 +165,6 @@ export function fetchResolvedSaves() {
     queryFn: fetchResolvedSavesFn,
     staleTime: 10 * 1000,
   });
-}
-
-export function getSaveStats(data) {
-  if (!data || typeof data !== "object") {
-    return { money: "0", ep: "0", playtime: "0", timestamp: "Unknown" };
-  }
-  const money = data.current_money != null ? formatStatNum(data.current_money) : "0";
-  const ep =
-    data.exotic_particles != null
-      ? formatStatNum(data.exotic_particles)
-      : data.total_exotic_particles != null
-        ? formatStatNum(data.total_exotic_particles)
-        : "0";
-  const playtime = data.total_played_time != null ? formatDuration(data.total_played_time, false) : "0";
-  const ts = data.last_save_time;
-  const timestamp = ts ? new Date(Number(ts)).toLocaleString() : "Unknown";
-  return { money, ep, playtime, timestamp };
 }
 
 export { fetchAutoSaveSlotData };

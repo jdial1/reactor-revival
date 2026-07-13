@@ -10,6 +10,8 @@ import {
   partsPanelEmptyTabContentTemplate,
   partsPanelTabContentTemplate,
   quickSelectSlotTemplate,
+  upgradeHubDetailEmptyTemplate,
+  upgradeHubDetailPanelTemplate,
 } from "../templates/uiComponentsTemplates.js";
 import { getUiElement } from "./page-dom.js";
 import { classMap, styleMap, repeat } from "../dom/lit.js";
@@ -127,6 +129,51 @@ function buildPartsTabContent(ui, partset, unlockManager, activeTab, powerActive
   return partsPanelTabContentTemplate({ powerActive, heatActive, grid });
 }
 
+function buildPartDetailPanelData(part, ui) {
+  if (!part?.getImagePath) return null;
+  const unlockManager = ui.game?.unlockManager;
+  const locked = unlockManager && !unlockManager.isPartUnlocked(part);
+  const doctrineLocked = ui.game?.partset?.isPartDoctrineLocked?.(part) ?? false;
+  const rawDesc = part.description || "";
+  const descHtml = ui.stateManager?.addPartIconsToTitle?.(rawDesc) ?? rawDesc;
+  const costDisplay = part.erequires ? `${fmt(part.cost)} EP` : `$${fmt(part.cost)}`;
+  const statParts = [];
+  if (part.power > 0) statParts.push(`${fmt(part.power)} power`);
+  if (part.heat > 0) statParts.push(`${fmt(part.heat)} heat`);
+  const levelHeader = locked
+    ? `${Math.min(unlockManager?.getPreviousTierCount(part) ?? 0, 10)}/10`
+    : (statParts.join(" · ") || "Selected");
+  return {
+    iconPath: part.getImagePath(),
+    title: part.title || "",
+    descHtml,
+    levelHeader,
+    costDisplay,
+    doctrineLocked: doctrineLocked || locked,
+    isMaxed: false,
+    unaffordable: !part.affordable && !locked && !doctrineLocked,
+    affordProgress: null,
+    ariaLabel: `${part.title || "Part"}, ${costDisplay}`,
+    onBuyClick: (e) => {
+      e.stopPropagation();
+      if (locked || doctrineLocked || !part.affordable) return;
+      ui.stateManager.setClickedPart(part);
+    },
+  };
+}
+
+function buildPartsModuleInfoContent(ui, selPart, uiState) {
+  const isMobile = uiState?.is_mobile_viewport ?? (typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX);
+  if (isMobile) {
+    if (!selPart) return upgradeHubDetailEmptyTemplate("— Select a module —");
+    const data = buildPartDetailPanelData(selPart, ui);
+    return data ? upgradeHubDetailPanelTemplate(data) : upgradeHubDetailEmptyTemplate("— Select a module —");
+  }
+  return selPart
+    ? partsModuleInfoCardTemplate(selPart)
+    : html`<span class="parts-module-info-empty">— Select a module —</span>`;
+}
+
 function buildPartsPanelLayoutTemplate(ui, uiState) {
   const game = ui.game;
   const partset = game?.partset;
@@ -143,9 +190,8 @@ function buildPartsPanelLayoutTemplate(ui, uiState) {
 
   const selectedPartId = uiState?.interaction?.selectedPartId ?? null;
   const selPart = selectedPartId && partset ? partset.getPartById(selectedPartId) : null;
-  const moduleInfoContent = selPart
-    ? partsModuleInfoCardTemplate(selPart)
-    : html`<span class="parts-module-info-empty">— Select a module —</span>`;
+  const isMobile = uiState?.is_mobile_viewport ?? (typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX);
+  const moduleInfoContent = buildPartsModuleInfoContent(ui, selPart, uiState);
 
   return partsPanelLayoutTemplate({
     powerActive,
@@ -156,6 +202,7 @@ function buildPartsPanelLayoutTemplate(ui, uiState) {
     onHelpToggle,
     tabContent,
     moduleInfoContent,
+    moduleInfoPanelClass: isMobile ? "upgrade-hub-detail-panel" : "parts-module-info-panel",
   });
 }
 
@@ -173,7 +220,7 @@ export function setupPartsTabs(ui) {
   if (!root || !ui.uiState) return;
   const subscriptions = [
     { state: ui.game?.state, keys: ["current_money", "current_exotic_particles", "parts_panel_version"] },
-    { state: ui.uiState, keys: ["active_parts_tab", "parts_panel_collapsed"] },
+    { state: ui.uiState, keys: ["active_parts_tab", "parts_panel_collapsed", "is_mobile_viewport"] },
     { state: ui.uiState?.interaction, keys: ["selectedPartId"] },
   ].filter((s) => s.state != null);
   if (subscriptions.length === 0) return;
@@ -275,10 +322,12 @@ export function updateMacroToolbar(ui) {
 }
 
 export function updateQuickSelectSlots(ui) {
-  ui.stateManager.normalizeQuickSelectSlotsForUnlock();
-  const slots = ui.stateManager.getQuickSelectSlots();
+  const stateManager = ui?.stateManager;
+  if (!stateManager) return;
+  stateManager.normalizeQuickSelectSlotsForUnlock();
+  const slots = stateManager.getQuickSelectSlots();
   const partset = ui.game?.partset;
-  const selectedPartId = ui.stateManager.getClickedPart()?.id ?? null;
+  const selectedPartId = stateManager.getClickedPart()?.id ?? null;
   const root = document.getElementById("quick_select_slots_root");
   if (!root) return;
   const slotTemplate = (slot, i) => {
@@ -337,18 +386,23 @@ export function initializePartsPanel(ui) {
   const { signal } = ui._partsPanelAbortController;
   window.addEventListener("resize", () => {
     const isCurrentlyMobile = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-    if (ui.uiState) ui.uiState.parts_panel_collapsed = isCurrentlyMobile;
+    if (ui.uiState) {
+      ui.uiState.is_mobile_viewport = isCurrentlyMobile;
+      ui.uiState.parts_panel_collapsed = isCurrentlyMobile;
+    }
   }, { signal });
 
   const isMobileOnLoad = window.innerWidth <= MOBILE_BREAKPOINT_PX;
-  if (ui.uiState) ui.uiState.parts_panel_collapsed = isMobileOnLoad;
+  if (ui.uiState) {
+    ui.uiState.is_mobile_viewport = isMobileOnLoad;
+    ui.uiState.parts_panel_collapsed = isMobileOnLoad;
+  }
   logger.log("debug", "ui", "[Parts Panel Init]", isMobileOnLoad ? "Mobile detected - added collapsed class" : "Desktop detected - removed collapsed class");
   logger.log("debug", "ui", "[Parts Panel Init] Final state - collapsed:", ui.uiState?.parts_panel_collapsed ?? true);
   updatePartsPanelBodyClass(ui);
 
   const closeBtn = document.getElementById("parts_close_btn");
-  if (closeBtn && !closeBtn.hasAttribute("data-listener-attached")) {
-    closeBtn.setAttribute("data-listener-attached", "true");
+  if (closeBtn) {
     closeBtn.addEventListener("click", () => {
       closePartsPanel(ui);
     }, { signal });

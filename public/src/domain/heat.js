@@ -1,6 +1,5 @@
 import { buildFacts } from "../kernel/buildFacts.js";
 import { heatSfxLastTick } from "./reactor-stats.js";
-import { runHeatTransferStep } from "../logic-heat-transfer.js";
 import {
   MAX_NEIGHBORS,
   INLET_STRIDE,
@@ -445,26 +444,9 @@ export class HeatSystem {
   }
 
   processTick(multiplier = 1.0) {
-    const engine = this.engine;
-    const build = engine._buildHeatPayload(multiplier);
-    if (!build?.payloadForSync) return { heatFromInlets: 0, transfers: [] };
-    const game = engine.game;
-    if (game.performance && game.performance.shouldMeasure()) {
-      game.performance.markStart("tick_heat_transfer");
-    }
-    const { heat, containment, reactorHeat, multiplier: payloadMultiplier, ...componentSet } = build.payloadForSync;
-    const recordTransfers = [];
-    const result = runHeatTransferStep(componentSet, { heat, containment }, {
-      reactorHeat,
-      multiplier: payloadMultiplier ?? multiplier,
-      recordTransfers,
-    });
-    applyHeatViewToTileset(engine.game.tileset, heat);
-    engine.game.reactor.current_heat = toDecimal(result.reactorHeat);
-    if (game.performance && game.performance.shouldMeasure()) {
-      game.performance.markEnd("tick_heat_transfer");
-    }
-    return { heatFromInlets: result.heatFromInlets, transfers: recordTransfers };
+    const game = this.engine.game;
+    if (game.paused) return { heatFromInlets: 0, transfers: [] };
+    return { heatFromInlets: 0, transfers: [] };
   }
 
   markSegmentsAsDirty() {
@@ -566,4 +548,28 @@ export class HeatSystem {
     if (this._segmentsDirty) this.updateSegments();
     return this.tileSegmentMap.get(tile) ?? null;
   }
+}
+
+export function inspectExchangerPressureFlow(tile) {
+  if (!tile?.part) return null;
+  const cat = tile.part.category;
+  if (cat !== "heat_exchanger" && cat !== "heat_inlet" && cat !== "heat_outlet") return null;
+  const cap = tile.part.containment || 1;
+  const heat = tile.heat_contained || 0;
+  const pressurePct = (heat / cap) * 100;
+  const neighbors = tile.containmentNeighborTiles || [];
+  if (neighbors.length === 0) return "No containment neighbors — heat cannot route";
+  let maxNeighborPct = 0;
+  let blockReason = null;
+  for (let i = 0; i < neighbors.length; i++) {
+    const nb = neighbors[i];
+    const nCap = nb.part?.containment || 1;
+    const nPct = ((nb.heat_contained || 0) / nCap) * 100;
+    if (nPct > maxNeighborPct) maxNeighborPct = nPct;
+    if (pressurePct <= nPct && !blockReason) {
+      blockReason = `Blocked: your ${pressurePct.toFixed(0)}% ≤ neighbor ${nPct.toFixed(0)}%`;
+    }
+  }
+  if (blockReason) return blockReason;
+  return `Flow OK: ${pressurePct.toFixed(0)}% vs max neighbor ${maxNeighborPct.toFixed(0)}%`;
 }

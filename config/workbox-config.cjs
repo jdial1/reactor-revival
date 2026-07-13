@@ -12,6 +12,7 @@ module.exports = {
     "data/**/*.json",
     "img/**/*.{png,svg,jpg,jpeg,webp}",
     "lib/**/*.js",
+    "lib/reactor-core/games/**/*.json",
     "src/**/*.js"
   ],
   globIgnores: ["**/node_modules/**/*"],

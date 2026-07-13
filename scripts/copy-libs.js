@@ -7,7 +7,10 @@ import { build } from "esbuild";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const libDir = path.join(__dirname, "..", "public", "lib");
+const root = path.join(__dirname, "..");
+const libDir = path.join(root, "public", "lib");
+const corePkgRoot = path.join(root, "node_modules", "reactor-core-lib");
+const localGameDataRoot = path.join(root, "game-data");
 
 if (fs.existsSync(libDir)) {
   fs.rmSync(libDir, { recursive: true, force: true });
@@ -68,7 +71,8 @@ const esmEntryPoints = {
   "lit-style-map": "lit-html/directives/style-map.js",
   "lit-repeat": "lit-html/directives/repeat.js",
   "lit-when": "lit-html/directives/when.js",
-  "lit-unsafe-html": "lit-html/directives/unsafe-html.js"
+  "lit-unsafe-html": "lit-html/directives/unsafe-html.js",
+  "reactor-core": path.join(corePkgRoot, "src", "index.js"),
 };
 
 console.log("\nBundling ESM dependencies using esbuild...");
@@ -83,10 +87,37 @@ try {
     minify: true,
     sourcemap: false,
     target: ["es2022"],
-    chunkNames: "chunk-[hash]"
+    chunkNames: "chunk-[hash]",
+    platform: "browser",
+    external: ["node:fs/promises", "node:url", "node:path"],
   });
   console.log("✓ All ESM packages bundled successfully into public/lib!");
 } catch (err) {
   console.error("✗ Error bundling packages:", err);
   process.exit(1);
 }
+
+const coreGamesDir = path.join(libDir, "reactor-core", "games");
+const coreGamesSrc = path.join(corePkgRoot, "src", "games");
+const gameDataFiles = ["data.json", "parts.json", "upgrades.json", "research.json"];
+
+function copyGameDataFrom(sourceRoot, label) {
+  if (!fs.existsSync(sourceRoot)) return;
+  for (const gameId of fs.readdirSync(sourceRoot)) {
+    const gameSrcDir = path.join(sourceRoot, gameId);
+    if (!fs.statSync(gameSrcDir).isDirectory()) continue;
+    const destDir = path.join(coreGamesDir, gameId);
+    let copied = false;
+    for (const file of gameDataFiles) {
+      const srcPath = path.join(gameSrcDir, file);
+      if (!fs.existsSync(srcPath)) continue;
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.copyFileSync(srcPath, path.join(destDir, file));
+      copied = true;
+    }
+    if (copied) console.log(`✓ Copied reactor-core game data (${label}): ${gameId}`);
+  }
+}
+
+copyGameDataFrom(coreGamesSrc, "package");
+copyGameDataFrom(localGameDataRoot, "local");

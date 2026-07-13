@@ -1,4 +1,4 @@
-﻿:root { --vu-segments: 16; --drawer-panel-width: min(420px, 92vw); --sidebar-width: 300px; --sidebar-width-mobile: 80%; --tile-size: 48px; --bottom-nav-height: 40px; --bottom-nav-height-mobile: 52px; --game-success-color: rgb(93 156 81); --game-warning-color: rgb(255 160 0); --game-danger-color: rgb(171 63 63); --game-primary-color: rgb(81 93 156); --bevel-light: rgb(153 153 153); --bevel-mid: rgb(102 102 102); --bevel-dark: rgb(31 41 55); --bevel-shadow: rgb(17 17 17); --splash-shadow-solid: 3px 3px 0 var(--bevel-shadow); --panel-bg: rgb(38 38 38); --inset-bg: rgb(26 26 26); --text-shadow: 2px 2px 0px black; --splash-btn-width: 400px; --splash-btn-height: 52px; --splash-btn-min-touch: 44px; --splash-btn-radius: 0; --splash-bevel-width: 5px; --main-top-nav-height: 60px; --mobile-passive-top-height: 48px; --objective-progress-bg: rgb(45 55 72); --objective-reward-bg: rgb(45 55 72); --objective-claim-ready-bg: rgb(40 167 69); /* Map objective vars to global palette */
+:root { --vu-segments: 16; --drawer-panel-width: min(420px, 92vw); --sidebar-width: 300px; --sidebar-width-mobile: 80%; --tile-size: 48px; --bottom-nav-height: 40px; --bottom-nav-height-mobile: 52px; --game-success-color: rgb(93 156 81); --game-warning-color: rgb(255 160 0); --game-danger-color: rgb(171 63 63); --game-primary-color: rgb(81 93 156); --bevel-light: rgb(153 153 153); --bevel-mid: rgb(102 102 102); --bevel-dark: rgb(31 41 55); --bevel-shadow: rgb(17 17 17); --splash-shadow-solid: 3px 3px 0 var(--bevel-shadow); --panel-bg: rgb(38 38 38); --inset-bg: rgb(26 26 26); --text-shadow: 2px 2px 0px black; --splash-btn-width: 400px; --splash-btn-height: 52px; --splash-btn-min-touch: 44px; --splash-btn-radius: 0; --splash-bevel-width: 5px; --main-top-nav-height: 60px; --mobile-passive-top-height: 48px; --objective-progress-bg: rgb(45 55 72); --objective-reward-bg: rgb(45 55 72); --objective-claim-ready-bg: rgb(40 167 69); /* Map objective vars to global palette */
  --objective-bg: var(--panel-bg); --objective-border: var(--bevel-light); --objective-text: white; --objective-accent: rgb(102 179 255);
  --sovietwave-slate: #1F2120; --sovietwave-amber: #FFB000; --sovietwave-paper: #E0D8C3; --sovietwave-industrial-red: #A33B2B;
  --splash-military-green: #3d5c3d; --splash-military-green-dark: #2d4a2d; --splash-bakelite: #5c4033; --splash-bakelite-dark: #4a3529; --splash-charcoal: #25282c; --splash-charcoal-dark: #1a1a1a; --splash-rust: #A33B2B; --splash-rust-dark: #7a2a1f; --splash-bone: #E0D8C3; --splash-text-primary: #E0D8C3; --splash-accent-olive: rgb(141 161 127); --splash-accent-amber: #FFB000; --splash-panel-bg: #25282c; --splash-header-bg: #1F2120; --splash-font: "Share Tech Mono", monospace; --ui-pixel-font: "Press Start 2P", cursive, monospace; --ui-terminal-font: "Share Tech Mono", monospace; --splash-danger-border-light: rgb(209 107 107); --splash-danger-border-dark: rgb(80 30 30);
@@ -450,16 +450,14 @@ html.reduced-motion-app #app_root { animation: none !important;
 
 #reactor.reactor-css-grid {
  display: block;
- width: 100%;
- height: 100%;
+ max-width: 100%;
+ max-height: 100%;
  min-width: 0;
  min-height: 0;
 }
 
 #reactor.reactor-css-grid .reactor-canvas-host {
  position: relative;
- width: 100%;
- height: 100%;
  min-width: 0;
  min-height: 0;
 }
@@ -471,7 +469,19 @@ html.reduced-motion-app #app_root { animation: none !important;
 }
 
 @media (width <= 900px) {
+ #reactor_wrapper {
+  padding: 0 !important;
+  border: none !important;
+  margin-top: 0;
+  background-color: transparent !important;
+  box-shadow: none;
+ }
 
+ #reactor.reactor-css-grid {
+  padding: 0 !important;
+  border: none !important;
+  background-color: #121412 !important;
+ }
 }
 
 #reactor_background { position: absolute; z-index: 20; overflow: hidden; width: 100%; height: 100%; border-radius: 0;
@@ -589,10 +599,19 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 #main_top_nav { height: var(--main-top-nav-height, 60px);
 }
 
-@media (width <= 900px) { #parts_section { position: fixed; z-index: 1100; inset: 0 0 calc(var(--bottom-nav-height, 40px) + env(safe-area-inset-bottom)); display: flex; overflow: hidden; width: 100vw; max-width: 100vw; height: auto; min-height: 0; max-height: none; flex-direction: column; padding: 0; padding-top: calc(env(safe-area-inset-top) + 10px); padding-bottom: 20px; border-radius: 0; border-top: 4px solid var(--bevel-light); border-right: none; border-bottom: none; border-left: none; background-color: var(--panel-bg); box-shadow: 0 -12px 48px rgb(0 0 0 / 90%), 0 0 40px rgb(0 0 0 / 85%); -webkit-overflow-scrolling: touch; overflow-y: auto; transform: translateY(100%); transition: transform 0.25s steps(6, end), height 0.25s steps(6, end), max-height 0.25s steps(6, end), box-shadow 0.2s steps(4, end), display 0s !important;
+@media (width <= 900px) { #wrapper.page-reactor { --mobile-parts-dock-height: 115px;
  }
 
- #parts_section.collapsed, #wrapper:not(.parts-panel-open) #parts_section { display: none !important; overflow: hidden !important; height: 0 !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; border: none !important; margin: 0 !important; box-shadow: none !important; opacity: 0 !important; pointer-events: none !important; transform: translateY(100%) !important; visibility: hidden !important;
+ #wrapper.page-reactor.parts-panel-open { --mobile-parts-dock-height: 0px;
+ }
+
+ #parts_section { position: fixed; z-index: 1100; inset: 0 0 calc(var(--bottom-nav-height, 40px) + env(safe-area-inset-bottom)); display: flex; overflow: hidden; width: 100vw; max-width: 100vw; height: auto; min-height: 0; max-height: none; flex-direction: column; padding: 0; padding-top: calc(env(safe-area-inset-top) + 10px); padding-bottom: 0; border-radius: 0; border-top: 4px solid var(--bevel-light); border-right: none; border-bottom: none; border-left: none; background-color: var(--panel-bg); box-shadow: 0 -12px 48px rgb(0 0 0 / 90%), 0 0 40px rgb(0 0 0 / 85%); transform: translateY(100%); transition: transform 0.25s steps(6, end), height 0.25s steps(6, end), max-height 0.25s steps(6, end), box-shadow 0.2s steps(4, end), display 0s !important;
+ }
+
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section { position: fixed; z-index: 28; inset: auto 0 calc(var(--bottom-nav-height, 40px) + env(safe-area-inset-bottom)); display: flex !important; overflow: hidden; width: 100vw; height: auto; min-height: 0; max-height: var(--mobile-parts-dock-height); padding: 0; border-top: 3px solid var(--bevel-light); border-right: none; border-bottom: none; border-left: none; background-color: var(--panel-bg); box-shadow: 0 -4px 12px rgb(0 0 0 / 70%); opacity: 1 !important; pointer-events: auto !important; transform: none !important; visibility: visible !important; animation: none !important;
+ }
+
+ #parts_section.collapsed, #wrapper:not(.parts-panel-open, .page-reactor) #parts_section { display: none !important; overflow: hidden !important; height: 0 !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; border: none !important; margin: 0 !important; box-shadow: none !important; opacity: 0 !important; pointer-events: none !important; transform: translateY(100%) !important; visibility: hidden !important;
  }
  /* Hide UI elements when parts panel is open on mobile */
  #wrapper.parts-panel-open #reactor_control_deck,
@@ -603,27 +622,61 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #parts_section.collapsed .parts_header,
  #wrapper:not(.parts-panel-open) #parts_section .parts_header,
  #parts_section.collapsed #parts_tab_contents,
- #wrapper:not(.parts-panel-open) #parts_section #parts_tab_contents,
+ #wrapper:not(.parts-panel-open, .page-reactor) #parts_section #parts_tab_contents,
  #parts_section.collapsed #controls_nav,
- #wrapper:not(.parts-panel-open) #parts_section #controls_nav,
+ #wrapper:not(.parts-panel-open, .page-reactor) #parts_section #controls_nav,
  #parts_section.collapsed .parts_tabs,
  #wrapper:not(.parts-panel-open) #parts_section .parts_tabs,
  #parts_section.collapsed .parts_sheet_handle,
  #wrapper:not(.parts-panel-open) #parts_section .parts_sheet_handle,
  #parts_section.collapsed > *,
- #wrapper:not(.parts-panel-open) #parts_section > * { display: none !important; overflow: hidden !important; height: 0 !important; max-height: 0 !important; padding: 0 !important; margin: 0 !important; opacity: 0 !important; pointer-events: none !important; visibility: hidden !important;
+ #wrapper:not(.parts-panel-open, .page-reactor) #parts_section > * { display: none !important; overflow: hidden !important; height: 0 !important; max-height: 0 !important; padding: 0 !important; margin: 0 !important; opacity: 0 !important; pointer-events: none !important; visibility: hidden !important;
+ }
+
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section .parts_header,
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section #parts_close_btn,
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section .parts_sheet_handle,
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section #parts_tab_contents,
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section #controls_nav { display: none !important;
+ }
+
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section #parts_module_info { display: block !important; overflow: visible !important; height: auto !important; max-height: none !important; padding: 0 !important; margin: 0 !important; opacity: 1 !important; pointer-events: auto !important; visibility: visible !important;
+ }
+
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section > #parts_module_info { margin-top: 0; order: 1;
  }
 
  #parts_section:not(.collapsed), #wrapper.parts-panel-open #parts_section { display: flex !important; opacity: 1 !important; pointer-events: auto; transform: translateY(0) !important; visibility: visible !important; animation: panel-jolt 0.15s steps(2) 2, panel-glow-pulse-mobile 5s infinite linear;
  }
 
- .parts-close-btn { width: calc(100% - 16px); min-height: 44px; margin: 8px;
+ #parts_panel_reactive_root { display: contents;
+ }
+
+ #parts_section > .parts_header { order: 1; flex: 0 0 auto;
+ }
+
+ #parts_section > #parts_close_btn { order: 2; flex: 0 0 auto;
+ }
+
+ #parts_section > #parts_module_info { order: 3; flex: 0 0 auto; margin-top: auto;
+ }
+
+ #parts_section > #controls_nav { order: 4; flex: 0 0 auto;
+ }
+
+ #parts_section > #parts_tab_contents { order: 5; flex: 0 0 auto;
+ }
+
+ #wrapper.parts-panel-open #parts_section > #parts_module_info { margin-top: 0;
+ }
+
+ #wrapper.parts-panel-open #parts_section > #parts_tab_contents { order: 2; flex: 1 1 auto; min-height: 0; max-height: none; overflow: hidden auto;
+ }
+
+ .parts-close-btn { width: auto; min-height: 36px; padding: 0 12px; margin: 4px 8px 0 auto; align-self: flex-end;
  }
 
  .parts_sheet_handle { display: none;
- }
-
- .parts_tab_label { display: inline;
  }
 
  .parts_categories_carousel { -webkit-overflow-scrolling: touch; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
@@ -632,22 +685,40 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  .parts_categories_carousel::-webkit-scrollbar { display: none;
  }
 
- .parts_tab { min-width: 120px; flex-shrink: 0; scroll-snap-align: start;
+ .parts_tab { min-width: 88px; flex-shrink: 0; scroll-snap-align: start; padding: 2px 4px;
  }
 
- .parts_header { flex: 0 0 auto; padding: 8px; border-bottom: 3px solid var(--bevel-dark);
+ .parts_tab img { width: 24px; height: 24px;
  }
 
- #parts_tab_contents { flex: 1 1 auto; padding: 8px; -webkit-overflow-scrolling: touch; overflow-y: auto;
+ .parts_tab_label { display: inline; font-size: 0.55rem;
  }
 
- .parts-module-info-panel { flex: 0 0 auto; padding: 10px 12px; border-top: 3px solid var(--bevel-dark); background: rgb(18 22 20); box-shadow: var(--well-depth); font-size: 0.55rem; line-height: 1.5;
+ .parts_header { flex: 0 0 auto; padding: 4px 6px; border-bottom: 2px solid var(--bevel-dark);
  }
 
- .parts-module-info-inner { display: flex; align-items: flex-start; gap: 8px; min-height: auto; flex-direction: row; text-align: left;
+ #parts_tab_contents { flex: 0 0 auto; max-height: 52px; padding: 2px 4px; -webkit-overflow-scrolling: touch; overflow: hidden auto;
  }
 
- .parts-module-info-inner .image { width: 40px; height: 40px; flex-shrink: 0; background-position: center; background-repeat: no-repeat; background-size: contain;
+ #parts_tab_contents hgroup { display: none;
+ }
+
+ #parts_tab_contents .parts_tab_content.active { display: flex; min-height: 0; flex-direction: column; gap: 2px;
+ }
+
+ #parts_tab_contents .item-grid { display: flex; width: 100%; max-height: 44px; flex-wrap: nowrap; padding: 2px !important; border-width: 2px; margin-bottom: 0; gap: 3px !important; grid-template-columns: none; overflow: auto hidden; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+ }
+
+ #parts_tab_contents .item-grid .part { width: 40px; height: 40px; flex: 0 0 40px; scroll-snap-align: start;
+ }
+
+ .parts-module-info-panel { flex: 0 0 auto; padding: 4px 6px; border-top: 2px solid var(--bevel-dark); background: rgb(18 22 20); box-shadow: var(--well-depth); font-size: 0.5rem; line-height: 1.35;
+ }
+
+ .parts-module-info-inner { display: flex; align-items: center; gap: 6px; min-height: auto; flex-direction: row; text-align: left;
+ }
+
+ .parts-module-info-inner .image { width: 28px; height: 28px; flex-shrink: 0; background-position: center; background-repeat: no-repeat; background-size: contain;
  }
 
  .parts-module-info-inner .part-details { display: flex; overflow: hidden; min-width: 0; flex: 1; flex-direction: column; gap: 2px; text-align: left;
@@ -686,10 +757,10 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  .parts-module-info-inner .part-details-stats .stat-boost { color: rgb(0 255 0);
  }
 
- .parts-module-info-inner .part-details-desc { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; color: rgb(170 170 170); font-size: 0.75em; -webkit-line-clamp: 3; line-clamp: 3; line-height: 1.3; white-space: pre-line;
+ .parts-module-info-inner .part-details-desc { display: none;
  }
 
- .parts-module-info-inner .part-details-bonuses { display: flex; flex-wrap: wrap; margin-top: 2px; font-size: 0.75em; gap: 4px 8px;
+ .parts-module-info-inner .part-details-bonuses { display: none;
  }
 
  .parts-module-info-inner .part-details-bonuses:empty { display: none;
@@ -1289,45 +1360,64 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 }
 
 @media (width <= 900px) { /* Mobile Upgrade Card Layout */
- .upgrade-card { min-height: 110px; flex-direction: row; /* Horizontal layout */
-  align-items: stretch;
+ .upgrade-group { gap: 0.25rem;
  }
 
- .upgrade-header { position: relative; flex: 1; flex-direction: column; align-items: flex-start; padding: 10px; border-right: 2px solid var(--bevel-dark); border-bottom: none; background: transparent; gap: 6px;
+ .upgrade-card { min-height: 44px; flex-direction: row; align-items: center; padding: 0; border: none; border-bottom: 1px solid rgb(48 52 50); background-color: rgb(32 34 32); box-shadow: none; cursor: pointer;
  }
 
- .upgrade-icon-wrapper { width: 42px; height: 42px; border-width: 2px;
+ .upgrade-card:hover { filter: none; transform: none;
  }
 
- .upgrade-icon-wrapper .image { width: 32px; height: 32px;
+ .upgrade-card:active { border-color: transparent; transform: none; background-color: rgb(40 42 40);
  }
 
- .upgrade-details { width: 100%;
+ .upgrade-card.upgrade-card--selected { border-bottom-color: rgb(48 52 50); background-color: rgb(38 44 38); box-shadow: inset 3px 0 0 rgb(89 196 53);
  }
 
- .upgrade-doctrine-icon { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; margin-left: 0;
+ .upgrade-header { flex: 1; flex-direction: row; align-items: center; padding: 8px 10px; border-right: none; border-bottom: none; background: transparent; gap: 10px;
  }
 
- .upgrade-title { margin-bottom: 4px; font-size: 0.85rem;
+ .upgrade-icon-wrapper { width: 36px; height: 36px; border: 1px solid rgb(55 58 55); box-shadow: none;
  }
 
- .upgrade-description { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; font-size: 0.7rem; -webkit-line-clamp: 3; line-clamp: 3; line-height: 1.3;
+ .upgrade-icon-wrapper .image { width: 26px; height: 26px;
  }
 
- .upgrade-footer { flex: 0 0 110px; /* Fixed width for button area */
-  flex-direction: column; justify-content: center; padding: 8px; border-top: none; background: rgb(0 0 0 / 20%); gap: 6px;
+ .upgrade-details { min-width: 0; flex: 1;
  }
 
- .upgrade-level-info { margin-bottom: 0; font-size: 0.65rem; text-align: center;
+ .upgrade-doctrine-icon { display: none;
  }
 
- .upgrade-action-btn { width: 100%; min-height: 0; flex: 1; padding: 0; border-width: 3px; margin: 0; font-size: 0.8rem;
+ .upgrade-title { overflow: hidden; margin-bottom: 0; font-size: 0.74rem; text-overflow: ellipsis; white-space: nowrap;
  }
 
- .upgrade-action-btn .cost-display { display: block; margin-top: 2px; font-size: 0.75rem;
+ .upgrade-description { display: none;
  }
 
- .upgrade-card.maxed-out .upgrade-footer { align-items: center; justify-content: center;
+ .upgrade-footer { flex: 0 0 auto; flex-direction: row; align-items: center; padding: 8px 10px 8px 0; border-top: none; background: transparent; gap: 8px;
+ }
+
+ .upgrade-level-info { font-size: 0.66rem; white-space: nowrap;
+ }
+
+ .upgrade-action-btn { width: auto; min-width: 76px; min-height: 36px; flex: 0 0 auto; padding: 6px 10px; border: 1px solid rgb(70 72 70); margin: 0; background: rgb(45 47 45); box-shadow: none; font-size: 0.68rem;
+ }
+
+ .upgrade-action-btn.industrial-btn:hover { box-shadow: none; filter: brightness(1.08); transform: none;
+ }
+
+ .upgrade-action-btn:not(:disabled):active { border-color: rgb(55 58 55); box-shadow: none; transform: none;
+ }
+
+ .upgrade-action-btn .cost-display { margin-top: 0; font-size: 0.7rem; text-shadow: none;
+ }
+
+ .upgrade-card.maxed-out { max-width: 100%; transform: none; filter: grayscale(0.6); opacity: 0.75;
+ }
+
+ .upgrade-card.maxed-out .upgrade-footer { align-items: center; justify-content: flex-end;
  }
 }
 
@@ -1343,6 +1433,42 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 .upgrade-card.unaffordable .upgrade-title,
 .upgrade-card.unaffordable .upgrade-description,
 .upgrade-card.unaffordable .upgrade-level-info { color: inherit; opacity: 1;
+}
+
+.upgrade-hub-detail-panel { display: none;
+}
+
+.upgrade-hub-detail-empty { display: block; color: rgb(100 110 105); font-family: var(--ui-terminal-font); font-size: 0.8rem; line-height: 1.55; text-align: center;
+}
+
+.upgrade-hub-detail-inner { display: flex; min-height: 86px; flex-direction: column; gap: 10px;
+}
+
+.upgrade-hub-detail-copy { display: flex; width: 100%; min-width: 0; flex-direction: column; gap: 7px;
+}
+
+.upgrade-hub-detail-footer { display: flex; align-items: center; margin-top: auto; gap: 10px;
+}
+
+.upgrade-hub-detail-icon { display: flex; width: 58px; height: 58px; flex-shrink: 0; align-items: center; justify-content: center; border: 1px solid rgb(55 58 55); background-color: rgb(30 30 30); box-shadow: none;
+}
+
+.upgrade-hub-detail-icon .image { width: 41px; height: 41px; background-position: center; background-repeat: no-repeat; background-size: contain; image-rendering: pixelated;
+}
+
+.upgrade-hub-detail-title { color: rgb(255 224 130); font-family: var(--ui-terminal-font); font-size: 0.9rem; font-weight: bold; line-height: 1.4;
+}
+
+.upgrade-hub-detail-desc { color: rgb(200 200 200); font-family: var(--ui-terminal-font); font-size: 0.8rem; line-height: 1.55;
+}
+
+.upgrade-hub-detail-level { color: rgb(143 214 148); font-family: var(--ui-terminal-font); font-size: 0.8rem; font-weight: bold; white-space: nowrap;
+}
+
+.upgrade-hub-detail-buy { min-width: 115px; min-height: 48px; padding: 10px 14px; border: 1px solid rgb(70 72 70); margin: 0 0 0 auto; background: rgb(45 47 45); box-shadow: none; font-size: 0.84rem;
+}
+
+.upgrade-hub-detail-maxed { margin-left: auto; color: var(--game-success-color); font-family: var(--ui-terminal-font); font-size: 0.84rem; font-weight: bold;
 }
 
 #exotic_particles_display { position: relative; z-index: 0; box-sizing: border-box; padding: calc(8px + 1rem) 1rem 1rem; border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); margin-bottom: 2rem; background-color: rgb(0 0 0 / 60%); text-align: center; clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px); overflow: hidden;
@@ -1462,7 +1588,16 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 }
 
 @media (width <= 900px) { #upgrades_section,
- #experimental_upgrades_section { padding: calc(var(--mobile-passive-top-height) + env(safe-area-inset-top) + 25px) 0.5rem calc(90px + var(--bottom-nav-height, 40px) + 2 * env(safe-area-inset-bottom) + 25px); overflow: visible; height: auto; min-height: 0; max-height: none; flex: 1 1 auto; -webkit-overflow-scrolling: touch;
+ #experimental_upgrades_section { display: flex; overflow: hidden; padding: calc(var(--mobile-passive-top-height) + env(safe-area-inset-top) + 25px) 0.5rem calc(var(--bottom-nav-height, 40px) + env(safe-area-inset-bottom) + 8px); height: auto; min-height: 0; max-height: none; flex: 1 1 auto; flex-direction: column; -webkit-overflow-scrolling: touch;
+ }
+
+ #upgrades_content_wrapper,
+ #experimental_upgrades_content_wrapper { min-height: 0; flex: 1 1 auto; padding-bottom: 0.5rem; -webkit-overflow-scrolling: touch; overflow-y: auto;
+ }
+
+ #upgrades_section .upgrade-hub-detail-panel,
+ #experimental_upgrades_section .upgrade-hub-detail-panel,
+ #parts_section .upgrade-hub-detail-panel { display: block; flex: 0 0 auto; min-height: 115px; padding: 14px 17px; border-top: 1px solid rgb(55 58 55); background: rgb(18 22 20); box-shadow: none; font-family: var(--ui-terminal-font);
  }
 
  #leaderboard_section,

@@ -1,3 +1,5 @@
+import { BASE_MAX_POWER } from "./constants/balance.js";
+
 export function toNumber(value) {
   if (value == null) return 0;
   if (typeof value === "number") return value;
@@ -47,8 +49,6 @@ export const VENT_BONUS_PERCENT_DIVISOR = 100;
 export const BASE_LOOP_WAIT_MS = 1000;
 export const FOUNDATIONAL_TICK_MS = BASE_LOOP_WAIT_MS;
 
-export * from "./constants/sim.js";
-
 export function getIndex(row, col, cols) {
   return row * cols + col;
 }
@@ -64,7 +64,46 @@ export function applyPowerOverflowCalc(reactorPower, effectiveMaxPower, overflow
 }
 
 export function applyPowerOverflowCalcDecimal(reactorPower, effectiveMaxPower, overflowRatio) {
-  if (reactorPower.lte(effectiveMaxPower)) return { reactorPower, overflowHeat: reactorPower.constructor(0) };
+  if (reactorPower.lte(effectiveMaxPower)) return { reactorPower, overflowHeat: toDecimal(0) };
   const overflow = reactorPower.sub(effectiveMaxPower);
   return { reactorPower: effectiveMaxPower, overflowHeat: overflow.mul(overflowRatio) };
 }
+
+export function resolveEffectiveMaxPower(reactorState) {
+  const explicit = Number(reactorState?.effective_max_power ?? 0);
+  if (Number.isFinite(explicit) && explicit > 0) return toDecimal(explicit);
+  const layout = toDecimal(reactorState?.max_power ?? 0);
+  const altered = toDecimal(reactorState?.altered_max_power ?? reactorState?.base_max_power ?? 0);
+  if (altered.gt(0)) return altered;
+  if (layout.gt(0)) return layout;
+  return toDecimal(BASE_MAX_POWER);
+}
+
+export function isAllPowerOverflowingToHeat(state, reactor = null) {
+  const statsPower = toNumber(state?.stats_power ?? 0);
+  if (statsPower <= 0) return false;
+  const overflowRatio = Number(
+    state?.power_overflow_to_heat_ratio ?? reactor?.power_overflow_to_heat_ratio ?? 1
+  ) || 0;
+  if (overflowRatio <= 0) return false;
+  const currentPower = toNumber(state?.current_power ?? 0);
+  const cap = toNumber(resolveEffectiveMaxPower({
+    effective_max_power: state?.effective_max_power,
+    max_power: state?.max_power,
+    base_max_power: reactor?.base_max_power ?? state?.base_max_power,
+    altered_max_power: reactor?.altered_max_power ?? state?.altered_max_power,
+  }));
+  if (cap <= 0) return true;
+  const potential = currentPower + statsPower;
+  const overflow = Math.max(0, potential - cap);
+  return overflow >= statsPower;
+}
+
+export function resolveAutoSellPowerBasis(reactorState) {
+  const Decimal = getDecimal();
+  const layout = toDecimal(reactorState?.max_power ?? 0);
+  const altered = toDecimal(reactorState?.altered_max_power ?? reactorState?.base_max_power ?? 0);
+  return Decimal.max(layout, altered);
+}
+
+export * from "./constants/sim.js";

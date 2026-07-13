@@ -39,7 +39,9 @@ function resolveLiveContainer(containerKey) {
 
 function isIgnorableLitRenderError(err) {
   const msg = String(err?.message ?? "");
+  if (msg.includes("Illegal invocation")) return true;
   if ((msg.includes("parentNode") || msg.includes("nextSibling")) && msg.includes("null")) return true;
+  if (msg.includes("null") && msg.includes("setting 'data'")) return true;
   return msg.includes("HTMLTemplateElement");
 }
 

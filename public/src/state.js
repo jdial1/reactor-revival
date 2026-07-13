@@ -131,12 +131,7 @@ export {
   getAffordabilitySettings,
   syncReducedMotionDOM,
 } from "./state/preferences.js";
-export {
-  createSaveMutation,
-  fetchResolvedSaves,
-  getSaveStats,
-  saveGameMutation,
-} from "./state/save-query.js";
+export { fetchResolvedSaves, saveGameMutation } from "./state/save-query.js";
 export {
   parseAndValidateSave,
   applySaveState,
@@ -364,7 +359,7 @@ export class StateManager extends BaseComponent {
     ui.deviceFeatures?.updateAppBadge?.();
     const runAffordabilityCascade = () => {
       const g = this.game;
-      if (!g) return;
+      if (!g || !ui.stateManager || ui.stateManager !== this) return;
       try {
         const moneyVal = g.state?.current_money;
         const epVal = g.state?.current_exotic_particles;
@@ -1044,6 +1039,11 @@ export function setGameConfiguration(game, config) {
 
 export function applyToggleStateChange(game, toggleName, value) {
   if (game.state && game.state[toggleName] !== value) game.state[toggleName] = value;
+  if (toggleName === "heat_control" && game.reactor) game.reactor.heat_controlled = !!value;
+  const bridge = game.coreBridge;
+  if (bridge?.isActive && bridge.session?.toggles && toggleName in bridge.session.toggles) {
+    bridge.session.toggles[toggleName] = !!value;
+  }
   if (toggleName !== "pause") return;
   game.paused = value;
   if (game.router?.navigationPaused && !game.router.isNavigating) game.router.navigationPaused = false;
@@ -1096,6 +1096,14 @@ export class ExoticParticleManager {
 }
 
 export function runSellAction(game) {
+  const bridge = game.coreBridge;
+  if (bridge?.isActive && bridge.authoritativeTicks !== false) {
+    if (bridge.sellPower()) {
+      game.reactor?.updateStats?.({ fromSession: true });
+      return;
+    }
+    return;
+  }
   game.reactor.sellPower();
   game.reactor.updateStats();
 }
@@ -1104,6 +1112,14 @@ export function runManualReduceHeatAction(game) {
   logger.log("debug", "game", "Manual heat reduction");
   recordSimEvent(game, { type: "MANUAL_HEAT_REDUCE" });
   drainGameEffects(game, () => game?.ui);
+  const bridge = game.coreBridge;
+  if (bridge?.isActive && bridge.authoritativeTicks !== false) {
+    if (bridge.ventHeat()) {
+      game.reactor?.updateStats?.({ fromSession: true });
+      return;
+    }
+    return;
+  }
   game.reactor.manualReduceHeat();
   game.reactor.updateStats();
 }

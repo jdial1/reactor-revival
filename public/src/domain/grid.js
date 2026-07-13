@@ -88,6 +88,7 @@ import { bumpGridPartsRevision, invalidateTickParts } from "./part-classificatio
 import { drainGameEffects } from "../effect-orchestrator.js";
 import {
   getIndex,
+  toDecimal,
 } from "../simUtils.js";
 import { logger } from "../core/logger.js";
 import {
@@ -279,6 +280,16 @@ export class Tile {
     logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
   }
 
+  applySessionSync(part, inst, tileHeat = 0) {
+    this.part = part;
+    this.activated = true;
+    this.enabled = true;
+    this.exploded = false;
+    this.exploding = false;
+    this.ticks = inst?.ticks != null ? inst.ticks : part.ticks;
+    this.heat_contained = tileHeat > 0 ? toDecimal(tileHeat) : toDecimal(0);
+  }
+
   async setPart(partInstance) {
     if (partInstance === null || partInstance === undefined) {
       throw new Error("Invalid part: part cannot be null or undefined");
@@ -314,12 +325,20 @@ export class Tile {
       if (this.game.reactor.has_melted_down) {
         this._clearMeltdownRecovery();
       }
+      const bridge = this.game.coreBridge;
+      if (!isRestoring) {
+        this.recalculateEffectiveValues();
+      }
     }
 
     this.game.engine?.heatManager?.markSegmentsAsDirty();
     if (!isRestoring) {
       this.game.reactor.updateStats();
-      this.recalculateEffectiveValues();
+      if (!this.part) this.recalculateEffectiveValues();
+      const bridge = this.game.coreBridge;
+      if (this.part && bridge?.shouldSyncPlacementsToSession?.()) {
+        bridge.syncTileFromGame(this.row, this.col);
+      }
       try {
         if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
           this.game.state.parts_panel_version++;
@@ -349,6 +368,10 @@ export class Tile {
     this.display_heat = 0;
     this.exploded = false;
     this.exploding = false;
+    const bridge = this.game?.coreBridge;
+    if (bridge?.shouldSyncPlacementsToSession?.()) {
+      bridge.syncTileFromGame(this.row, this.col);
+    }
     this.game.bumpGridTileDirty?.(this.row, this.col);
     this.game.engine?.heatManager?.markSegmentsAsDirty();
     this.game.reactor.updateStats();
