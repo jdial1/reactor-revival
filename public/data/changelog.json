@@ -1,9 +1,9 @@
 [
     {
-        "version": "26_06_24-1645",
-        "date": "2026-06-24",
+        "version": "26_07_12-2223",
+        "date": "2026-07-12",
         "bullets": [
-            "Add ESLint unused report and multiple updates\n\nAdd eslint-unused.json (ESLint unused/diagnostic report) and apply a batch of changes across the frontend. Updated CSS, UI components, reactor layout, domain logic (engine, reactor, save/upgrade/heat logic), state/store, templates, PWA/splash flows and tests. These edits include lint-related cleanup, UI/UX tweaks, engine/state synchronization improvements, and updated tests/helpers to align with the changes."
+            "reactor-core-lib extraction\n\nreactor-core-lib extraction"
         ]
     }
 ]
