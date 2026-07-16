@@ -1,9 +1,9 @@
 [
     {
-        "version": "26_07_12-2223",
-        "date": "2026-07-12",
+        "version": "26_07_16-1821",
+        "date": "2026-07-16",
         "bullets": [
-            "reactor-core-lib extraction\n\nreactor-core-lib extraction"
+            "reactor core lib import v1\n\nreactor core lib import v1"
         ]
     }
 ]
