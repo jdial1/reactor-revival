@@ -23,6 +23,7 @@ import {
   buildPartSummary,
   renderLayoutPreview,
 } from "./ui-reactor-layout.js";
+import { drainGridIntentsAsync } from "../bridge/bridge-intents.js";
 import { styleMap } from "../dom/lit.js";
 import {
   copyPasteNoPartsTemplate,
@@ -208,7 +209,7 @@ export function setupCopyAction(ui, { copyBtn, getRefs }) {
     const { modalCost, confirmBtn } = refs;
     const data = serializeReactor(game);
     const layout = deserializeReactor(data);
-    const cost = calculateLayoutCost(game.partset, layout);
+    const cost = calculateLayoutCost(game, layout);
     const summary = buildPartSummary(game.partset, layout);
     const checkedTypes = {};
     summary.forEach(item => { checkedTypes[item.id] = true; });
@@ -222,7 +223,7 @@ export function setupCopyAction(ui, { copyBtn, getRefs }) {
       };
       const componentTemplate = renderComponentIcons(summary, { showCheckboxes: true, checkedTypes }, onSlotClick);
       const filteredLayout = filterLayoutByCheckedTypes(layout, checkedTypes);
-      const filteredCost = calculateLayoutCost(game.partset, filteredLayout);
+      const filteredCost = calculateLayoutCost(game, filteredLayout);
       const costTemplate = copyPasteSelectedPartsCostTemplate({
         costStyle: styleMap({ marginTop: `${MODAL_COST_MARGIN_TOP_PX}px`, color: COLOR_SUCCESS, fontWeight: "bold" }),
         text: `Selected Parts Cost: $${fmt(filteredCost)}`,
@@ -299,7 +300,7 @@ function tickSeriesToCsv(series) {
 }
 
 function queueBlueprintPaste(game, layout, options = {}) {
-  game.state.intent_queue.push({
+  return drainGridIntentsAsync(game, game.engine, [{
     action: "APPLY_BLUEPRINT",
     payload: {
       layout,
@@ -307,7 +308,7 @@ function queueBlueprintPaste(game, layout, options = {}) {
       skipCostDeduction: options.skipCostDeduction === true,
       partial: options.partial === true,
     },
-  });
+  }]);
 }
 
 function handleConfirmPaste(ui) {
@@ -336,8 +337,7 @@ function handleConfirmPaste(ui) {
     }
     return;
   }
-  queueBlueprintPaste(g, clipToGrid(filtered, g.rows, g.cols), { sellExisting: pasteState.sellExisting });
-  g.engine?.consumeIntentQueueAsync?.().then(() => {
+  queueBlueprintPaste(g, clipToGrid(filtered, g.rows, g.cols), { sellExisting: pasteState.sellExisting }).then(() => {
     ui.gridCanvasRenderer?.markStaticDirty?.();
     startRenderLoop(ui, 0);
   });
@@ -349,8 +349,7 @@ function handlePartialPaste(ui) {
   const layoutToPaste = deserializeReactorInput(pasteState.textareaData, g);
   if (!layoutToPaste) return;
   const filtered = filterLayoutByCheckedTypes(layoutToPaste, pasteState.checkedTypes);
-  queueBlueprintPaste(g, clipToGrid(filtered, g.rows, g.cols), { sellExisting: pasteState.sellExisting, partial: true });
-  g.engine?.consumeIntentQueueAsync?.().then(() => {
+  queueBlueprintPaste(g, clipToGrid(filtered, g.rows, g.cols), { sellExisting: pasteState.sellExisting, partial: true }).then(() => {
     ui.gridCanvasRenderer?.markStaticDirty?.();
     startRenderLoop(ui, 0);
   });
@@ -552,8 +551,7 @@ export class CopyPasteUI {
   pasteReactorLayout(layout, options = {}) {
     const ui = this.ui;
     if (!layout || !ui.game) return;
-    queueBlueprintPaste(ui.game, layout, options);
-    ui.game.engine?.consumeIntentQueueAsync?.().then(() => {
+    queueBlueprintPaste(ui.game, layout, options).then(() => {
       ui.gridCanvasRenderer?.markStaticDirty?.();
       startRenderLoop(ui, 0);
     });

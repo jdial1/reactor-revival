@@ -14,28 +14,12 @@ import {
   SIMULATION_ERROR_MESSAGE,
   PAUSED_POLL_MS,
 } from "../constants/balance.js";
-import {
-  HEAT_PAYLOAD_MAX_INLETS,
-  HEAT_PAYLOAD_MAX_VALVES,
-  HEAT_PAYLOAD_MAX_VALVE_NEIGHBORS,
-  HEAT_PAYLOAD_MAX_EXCHANGERS,
-  HEAT_PAYLOAD_MAX_OUTLETS,
-} from "../constants/sim.js";
-import {
-  INLET_STRIDE,
-  VALVE_STRIDE,
-  EXCHANGER_STRIDE,
-  OUTLET_STRIDE,
-} from "../constants/heat-transfer.js";
 import { performance } from "../dom/lit.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import { recordSimEvent } from "./sim-events.js";
-import { syncActivePartsAtTickBoundary, getTickPartList, getValveNeighborCache } from "./part-classification.js";
+import { getTickPartList, getValveNeighborCache } from "../bridge/bridge-parts.js";
 import { numFormat as fmt } from "../format/numbers.js";
-import { HeatSystem, buildHeatPayload } from "./heat.js";
-import { drainGridIntentsAsync } from "./engine-intents.js";
-import { purchaseUpgradeCore } from "./upgrade.js";
-import { grantReward } from "./rewards.js";
+import { consumeIntentQueueAsync } from "../bridge/bridge-intents.js";
 export { Performance } from "./engine-performance.js";
 
 function createVisualEventBuffer(maxEvents) {
@@ -57,38 +41,6 @@ function createVisualEventBuffer(maxEvents) {
       tail = newTail;
     },
   };
-}
-
-class TimeManager {
-  constructor(engine) {
-    this._engine = engine;
-  }
-  get game() {
-    return this._engine.game;
-  }
-}
-
-class HeatFlowVisualizer {
-  constructor() {
-    this._debug = [];
-    this._pool = [];
-  }
-  clear() {
-    for (let i = 0; i < this._debug.length; i++) this._pool.push(this._debug[i]);
-    this._debug.length = 0;
-  }
-  addTransfer(fromIdx, toIdx, amount, cols) {
-    const v = this._pool.pop() || { fromRow: 0, fromCol: 0, toRow: 0, toCol: 0, amount: 0 };
-    v.fromRow = (fromIdx / cols) | 0;
-    v.fromCol = fromIdx % cols;
-    v.toRow = (toIdx / cols) | 0;
-    v.toCol = toIdx % cols;
-    v.amount = amount;
-    this._debug.push(v);
-  }
-  getVectors() {
-    return this._debug;
-  }
 }
 
 function handleComponentExplosion(engine, tile) {
@@ -130,53 +82,6 @@ export function failSimulationHardwareIncompatible(engine, detail) {
   });
 }
 
-function getValveOrientation(valveId, cache) {
-  let orientation = cache.get(valveId);
-  if (orientation !== undefined) return orientation;
-  const match = valveId.match(/(\d+)$/);
-  orientation = match ? parseInt(match[1], 10) : 1;
-  cache.set(valveId, orientation);
-  return orientation;
-}
-
-function getTwoNeighborOrientation(neighbors, orientation) {
-  const a = neighbors[0];
-  const b = neighbors[1];
-  const isAFirst = (orientation === 1 || orientation === 3) ? (a.col < b.col) : (a.row < b.row);
-  const first = isAFirst ? a : b;
-  const last = isAFirst ? b : a;
-  const invert = orientation === 3 || orientation === 4;
-  return { inputNeighbor: invert ? last : first, outputNeighbor: invert ? first : last };
-}
-
-function getSortedNeighborOrientation(neighbors, orientation) {
-  const sorted = [...neighbors].sort((a, b) =>
-    (orientation === 1 || orientation === 3) ? (a.col - b.col) : (a.row - b.row)
-  );
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-  const invert = orientation === 3 || orientation === 4;
-  return { inputNeighbor: invert ? last : first, outputNeighbor: invert ? first : last };
-}
-
-function getInputOutputNeighbors(valve, neighbors, orientation) {
-  if (neighbors.length < 2) {
-    return { inputNeighbor: null, outputNeighbor: null };
-  }
-  const routing = neighbors.length === 2
-    ? getTwoNeighborOrientation(neighbors, orientation)
-    : getSortedNeighborOrientation(neighbors, orientation);
-  return { inputNeighbor: routing.inputNeighbor, outputNeighbor: routing.outputNeighbor };
-}
-
-function initHeatPayloadBuffers(engine) {
-  engine._heatPayload_inlets = new Float32Array(HEAT_PAYLOAD_MAX_INLETS * INLET_STRIDE);
-  engine._heatPayload_valves = new Float32Array(HEAT_PAYLOAD_MAX_VALVES * VALVE_STRIDE);
-  engine._heatPayload_valveNeighbors = new Float32Array(HEAT_PAYLOAD_MAX_VALVE_NEIGHBORS);
-  engine._heatPayload_exchangers = new Float32Array(HEAT_PAYLOAD_MAX_EXCHANGERS * EXCHANGER_STRIDE);
-  engine._heatPayload_outlets = new Float32Array(HEAT_PAYLOAD_MAX_OUTLETS * OUTLET_STRIDE);
-}
-
 export function startOfflineFastForward(engine) {
   const game = engine.game;
   const offlineMs = game._offlineCatchupMs || 0;
@@ -185,7 +90,7 @@ export function startOfflineFastForward(engine) {
     Math.floor(offlineMs / FOUNDATIONAL_TICK_MS),
     MAX_ACCUMULATOR_MULTIPLIER
   );
-  if (ticks <= 0 || !engine._hasSimulationActivity()) return 0;
+  if (ticks <= 0 || !engine.game?.coreBridge?.hasTickActivity?.()) return 0;
   engine._offlineFastForwardTicks = ticks;
   engine._isCatchingUp = true;
   return ticks;
@@ -204,10 +109,10 @@ async function runChunkedOfflineReplay(engine, opts = {}) {
   const chunkTicks = opts.chunkTicks ?? OFFLINE_REPLAY_CHUNK_TICKS;
   const yieldMs = opts.yieldMs ?? 0;
   let remaining = opts.totalTicks ?? engine._offlineFastForwardTicks ?? 0;
-  if (remaining <= 0 || !engine._hasSimulationActivity()) return;
+  if (remaining <= 0 || !engine.game?.coreBridge?.hasTickActivity?.()) return;
 
   const bridge = engine.game?.coreBridge;
-  if (!bridge?.isActive) return;
+  if (!bridge?.isActive || !bridge.session?.catchupGenerator) return;
 
   engine._offlineReplayActive = true;
   engine._isCatchingUp = true;
@@ -217,17 +122,20 @@ async function runChunkedOfflineReplay(engine, opts = {}) {
   const startEp = toNumber(engine.game.state.current_exotic_particles);
 
   try {
-    while (remaining > 0) {
+    for await (const _chunk of bridge.session.catchupGenerator(remaining, chunkTicks)) {
       if (!engine.running || engine.game.paused) break;
-      const batch = Math.min(chunkTicks, remaining);
-      bridge.processBatchTicks(batch);
-      remaining -= batch;
-      if (remaining > 0) await yieldToNextFrame(yieldMs);
+      bridge.syncGridToGame?.();
+      bridge.routeEvents?.();
+      bridge.projectToGame?.(bridge.session.engine.getLastResult());
+      await yieldToNextFrame(yieldMs);
     }
   } finally {
     engine._offlineReplayActive = false;
     engine._isCatchingUp = false;
     engine._offlineFastForwardTicks = 0;
+    bridge.syncGridToGame?.();
+    bridge.routeEvents?.();
+    bridge.projectToGame?.(bridge.session.engine.getLastResult());
     engine.game.achievement_manager?.onCatchUpEnded?.();
 
     const earnedMoney = toNumber(engine.game.state.current_money) - startMoney;
@@ -252,18 +160,16 @@ export function processOfflineTime(engine, deltaTime) {
   const span = Math.min(deltaTime, capMs);
   engine.game._offlineCatchupMs = span;
   const tickEquivalent = Math.floor(span / FOUNDATIONAL_TICK_MS);
-  if (tickEquivalent > 0 && engine._hasSimulationActivity()) {
+  if (tickEquivalent > 0 && engine.game?.coreBridge?.hasTickActivity?.()) {
     engine.game.emit?.("welcomeBackOffline", { deltaTime: span, offlineMs: span, tickEquivalent });
   }
   return true;
 }
 
-export function postGameLoopProjectionQuery(engine, game, options = {}) {
+export function postGameLoopProjectionQuery(_engine, game) {
   const bridge = game.coreBridge;
   if (!bridge?.isActive) return Promise.resolve(null);
-  bridge.syncGridFromGame?.();
-  bridge.syncMetaFromGame?.();
-  if (options.layout) bridge.syncGridFromGame?.();
+  bridge.syncForStatsRead();
   const snap = bridge.session?.getSnapshot?.();
   if (!snap) return Promise.resolve(null);
   return Promise.resolve({
@@ -302,8 +208,6 @@ export class Engine {
     this._simAccumulatorMs = 0;
     this._rAfPrevTs = 0;
     this._tickParts = null;
-    this._valveOrientationCache = new Map();
-    this._forceGameLoopWorkerOff = false;
 
     this.MAX_EVENTS = MAX_VISUAL_EVENTS;
     this._visualEventBuffer = createVisualEventBuffer(this.MAX_EVENTS);
@@ -311,78 +215,24 @@ export class Engine {
     this._reflectorPairCount = 0;
     this._explosionFlashPending = 0;
 
-    this.timeManager = new TimeManager(this);
-    this.heatManager = new HeatSystem(this);
-    this.heatFlowVisualizer = new HeatFlowVisualizer();
+    this.heatManager = {
+      getSegmentForTile: (tile) => this.game.coreBridge?.getHeatSegmentForTile?.(tile) ?? null,
+    };
     this._visibilityListenerBound = false;
     this._visibilityHiddenAt = 0;
     this._offlineReplayActive = false;
-    initHeatPayloadBuffers(this);
-  }
-
-  setForceNoSAB(_override) {}
-
-  _useCoreAuthoritativeTicks() {
-    const bridge = this.game?.coreBridge;
-    return !!(bridge?.isActive && bridge.authoritativeTicks !== false);
-  }
-
-  _useGameLoopWorker() {
-    return false;
-  }
-
-  _useWorker() {
-    return false;
   }
 
   _processIntentQueue() {
-    const game = this.game;
-    const q = game.state?.intent_queue;
-    if (!q?.length) return;
-    const bridge = game.coreBridge;
-    const keep = [];
-    for (let i = 0; i < q.length; i++) {
-      const intent = q[i];
-      if (intent.action === "PURCHASE_UPGRADE") {
-        const id = intent.payload?.upgradeId;
-        if (id) {
-          purchaseUpgradeCore(game.upgradeset, id);
-          bridge?.syncUpgradesFromGame?.();
-        }
-      } else if (intent.action === "GRANT_REWARD") {
-        grantReward(game, intent.payload);
-      } else {
-        keep.push(intent);
-      }
-    }
-    q.length = 0;
-    for (let j = 0; j < keep.length; j++) q.push(keep[j]);
-  }
-
-  _buildHeatPayload(multiplier = 1) {
-    return buildHeatPayload(this, multiplier);
-  }
-
-  _updateValveNeighborCache() {}
-
-  _getValveOrientation(valveId) {
-    return getValveOrientation(valveId, this._valveOrientationCache);
-  }
-
-  _getInputOutputNeighbors(valve, neighbors, orientation) {
-    return getInputOutputNeighbors(valve, neighbors, orientation);
+    void consumeIntentQueueAsync(this.game, this);
   }
 
   async consumeIntentQueueAsync() {
-    const game = this.game;
-    const queue = game.state?.intent_queue;
-    if (!queue || queue.length === 0) return { placed: [], sold: [] };
-    const batch = queue.splice(0, queue.length);
-    return drainGridIntentsAsync(game, this, batch);
+    return consumeIntentQueueAsync(this.game, this);
   }
 
   getLastHeatFlowVectors() {
-    return this.heatFlowVisualizer.getVectors();
+    return this.game?.coreBridge?.session?.getHeatFlowVectors?.() ?? [];
   }
 
   enqueueVisualEvent(typeId, row, col, value) {
@@ -421,25 +271,6 @@ export class Engine {
   }
   get _eventTail() {
     return this.getEventBuffer().tail;
-  }
-
-  _hasSimulationActivity() {
-    syncActivePartsAtTickBoundary(this);
-    const hasParts = this.active_cells.length > 0 ||
-      this.active_vents.length > 0 ||
-      this.active_exchangers.length > 0 ||
-      this.active_valves.length > 0;
-    const currentPower = toNumber(this.game.reactor.current_power);
-    const autoSell = !!this.game.state?.auto_sell;
-    const hasPowerToSell = currentPower > 0 && autoSell;
-    const q = this.game.state?.intent_queue;
-    if (q?.length) {
-      for (let i = 0; i < q.length; i++) {
-        const action = q[i]?.action;
-        if (action === "SELL_POWER" || action === "VENT_HEAT") return true;
-      }
-    }
-    return hasParts || hasPowerToSell;
   }
 
   _bindVisibilityForOffline() {

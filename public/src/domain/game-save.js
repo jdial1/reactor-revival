@@ -1,4 +1,4 @@
-import { recalculatePlacedCountsFromGrid } from "./placed-counts.js";
+import { recalculatePlacedCountsFromGrid } from "../bridge/bridge-grid-sync.js";
 import { fromError } from "zod-validation-error";
 import { leaderboardService } from "../services-leaderboard.js";
 import { saveGameMutation, fetchAutoSaveSlotData } from "../state/save-query.js";
@@ -8,6 +8,7 @@ import { StorageAdapter, deserializeSave, getBackupSaveForSlot1Async } from "../
 import { SaveDataSchema } from "../schema/index.js";
 import { snapshot } from "valtio/vanilla";
 import { SAVE_FORMAT_VERSION_LATEST, buildPartTable, encodeTilesCompact, migrateSave } from "../schema/saveMigration.js";
+import { unlockedAchievementIds } from "../bridge/core-state-projection.js";
 
 export function parseAndValidateSave(raw) {
   const parsed = typeof raw === "string" ? deserializeSave(raw) : raw;
@@ -60,6 +61,9 @@ function applySessionMetadata(game, savedData) {
   game.lifecycleManager.last_save_time = savedData.last_save_time ?? null;
   game.lifecycleManager.session_start_time = null;
   game.placedCounts = savedData.placedCounts ?? game.placedCounts ?? {};
+  if (game.coreBridge?.isActive) {
+    game.coreBridge.setPlacedCounts(game.placedCounts);
+  }
 }
 
 function applyReactorState(game, savedData) {
@@ -162,6 +166,7 @@ function applyObjectives(game, savedData) {
     om.set_objective(savedIndex, true);
     if (om.checkForChapterCompletion) om.checkForChapterCompletion();
   }
+  game.coreBridge?.hydrateObjectivesFromGame?.();
 }
 
 function applyUIState(game, savedData) {
@@ -178,11 +183,19 @@ function applyUIState(game, savedData) {
 }
 
 function applyAchievements(game, savedData) {
-  const ids = savedData.unlocked_achievements;
+  const full = savedData.achievements;
   if (game.achievement_manager) {
-    game.achievement_manager.restore(ids ?? []);
+    game.achievement_manager.restore(full ?? savedData.unlocked_achievements ?? []);
   } else if (game.state) {
-    game.state.unlocked_achievements = Array.isArray(ids) ? ids : [];
+    if (full && typeof full === "object" && !Array.isArray(full)) {
+      game.state.achievements = full;
+      game.state.unlocked_achievements = unlockedAchievementIds(full);
+    } else {
+      game.state.unlocked_achievements = Array.isArray(savedData.unlocked_achievements)
+        ? savedData.unlocked_achievements
+        : [];
+    }
+    game.coreBridge?.hydrateAchievementsFromGame?.();
   }
 }
 
@@ -202,13 +215,7 @@ export async function applySaveState(game, savedData) {
   game.reactor.hull_heat_doctrine_mult = 1;
   game.reactor.updateStats();
   if (game.coreBridge?.isActive) {
-    if (game.coreBridge.authoritativeTicks !== false) {
-      game.coreBridge.loadLegacySave(savedData);
-    } else {
-      game.coreBridge.syncGridFromGame();
-      game.coreBridge.syncMetaFromGame();
-      game.coreBridge.syncTogglesFromGame();
-    }
+    game.coreBridge.loadLegacySave(savedData);
   }
 }
 
@@ -374,6 +381,9 @@ export class GameSaveManager {
       upgrades: upgradeState,
       objectives: buildObjectivesStateForSave(ctx),
       unlocked_achievements: stateSnap?.unlocked_achievements ?? ctx.state?.unlocked_achievements ?? [],
+      achievements: ctx.coreBridge?.session?.systems?.achievements?.serialize?.()
+        ?? ctx.state?.achievements
+        ?? { unlocked: stateSnap?.unlocked_achievements ?? ctx.state?.unlocked_achievements ?? [] },
       toggles: ctx.getToggles?.() ?? {},
       quick_select_slots: ctx.getQuickSelectSlots?.() ?? [],
       ui: {},

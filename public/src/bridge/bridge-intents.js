@@ -1,35 +1,32 @@
-import { applyToggleStateChange, runSellPart } from "../state.js";
+import { applyToggleStateChange } from "../state.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
-import { recordSimEvent } from "./sim-events.js";
-import { applyBlueprintLayoutDiff, layoutFromPlannerSlots } from "./blueprint.js";
-import { debitMoney, creditMoney } from "./economy-intents.js";
-import { bumpGridPartsRevision, invalidateTickParts } from "./part-classification.js";
-import { toNumber } from "../simUtils.js";
+import { recordSimEvent } from "../domain/sim-events.js";
+import { bumpGridPartsRevision, invalidateTickParts } from "./bridge-parts.js";
 
-async function applyPlacePartIntent(game, payload) {
+function applyPlacePartIntent(game, payload) {
   const partId = payload?.partId;
   const row = payload?.row | 0;
   const col = payload?.col | 0;
+  const bridge = game.coreBridge;
+  if (!bridge?.isActive || !partId) return null;
   const part = game.partset?.getPartById?.(partId);
   const tile = game.tileset?.getTile(row, col);
   if (!part || !tile) return null;
-  const costNum = Number(part.cost) || 0;
-  const money = game.state?.current_money;
-  const canAfford = money != null && typeof money.gte === "function"
-    ? money.gte(part.cost)
-    : toNumber(money) >= costNum;
-  if (!canAfford) {
+  if (game.partset?.isPartDoctrineLocked?.(part)) return null;
+  const result = bridge.placePart(row, col, partId);
+  if (!result) {
     recordSimEvent(game, { type: "INSUFFICIENT_FUNDS", row, col });
     drainGameEffects(game, () => game?.ui);
     return null;
   }
-  debitMoney(game, costNum);
-  const partPlaced = await tile.setPart(part);
-  if (partPlaced) return { row, col, part };
-  creditMoney(game, costNum);
-  recordSimEvent(game, { type: "OPERATION_FAILED", context: "reactor", col });
+  recordSimEvent(game, {
+    type: "PART_PLACED",
+    row,
+    col,
+    category: part.category,
+  });
   drainGameEffects(game, () => game?.ui);
-  return null;
+  return { row, col, part };
 }
 
 function applySellPartIntent(game, payload) {
@@ -37,19 +34,19 @@ function applySellPartIntent(game, payload) {
   const col = payload?.col | 0;
   const tile = game.tileset?.getTile(row, col);
   if (!tile?.part || tile.part.isSpecialTile) return null;
-  runSellPart(game, tile);
-  return { row, col };
+  const bridge = game.coreBridge;
+  if (!bridge?.isActive) return null;
+  return bridge.sellPart(row, col);
 }
 
 function applyBlueprintIntent(game, payload) {
   const layout = payload?.layout;
   if (!layout) return { ok: false };
-  if (payload?.sellExisting) {
-    game.tileset.tiles_list.forEach((tile) => {
-      if (tile.enabled && tile.part) runSellPart(game, tile);
-    });
-  }
-  const result = applyBlueprintLayoutDiff(game, layout, {
+  const bridge = game.coreBridge;
+  if (!bridge?.isActive) return { ok: false, reason: "no_session" };
+  const result = bridge.applyBlueprint({
+    layout,
+    sellExisting: payload?.sellExisting === true,
     skipCostDeduction: payload?.skipCostDeduction === true,
     partial: payload?.partial === true,
     sellCredit: 0,
@@ -63,43 +60,42 @@ function applyBlueprintIntent(game, payload) {
 }
 
 function applyBlueprintPlannerIntent(game, payload = {}) {
-  const layout = layoutFromPlannerSlots(game);
-  if (!layout) return { ok: false, reason: "empty" };
-  const entries = Object.entries(game.blueprintPlanner?.slots || {}).filter(([, partId]) => partId);
-  for (let i = 0; i < entries.length; i++) {
-    const [key, partId] = entries[i];
-    const [rs, cs] = key.split(",");
-    const r = Number(rs);
-    const c = Number(cs);
-    const part = game.partset.getPartById(partId);
-    const tile = game.tileset.getTile(r, c);
-    if (!part || !tile?.enabled || !game.unlockManager.isPartUnlocked(part)) return { ok: false, reason: "unlock" };
-    if (part.erequires) {
-      const u = game.upgradeset.getUpgrade(part.erequires);
-      if (!u || u.level <= 0) return { ok: false, reason: "unlock" };
-    }
-  }
-  const result = applyBlueprintLayoutDiff(game, layout, { partial: payload.partial === true });
+  const bridge = game.coreBridge;
+  if (!bridge?.isActive) return { ok: false, reason: "no_session" };
+  const result = bridge.commitBlueprintPlanner({ partial: payload.partial === true });
   if (!result.ok) {
     if (result.reason === "deficit") game.emit?.("blueprintApplyDeficit", result);
     recordSimEvent(game, { type: "OPERATION_FAILED", context: "reactor" });
     drainGameEffects(game, () => game?.ui);
     return result;
   }
-  game.blueprintPlanner.slots = {};
-  game.blueprintPlanner.active = false;
-  game.reactor.updateStats();
-  game.partset.check_affordability(game);
+  game.reactor?.updateStats?.();
+  game.partset?.check_affordability?.(game);
   game.emit?.("grid_changed", {});
   return result;
 }
 
-export async function drainGridIntentsAsync(game, engine, intents) {
+function applyImmediateIntent(game, intent) {
+  if (intent.action === "PURCHASE_UPGRADE") {
+    const id = intent.payload?.upgradeId ?? intent.payload?.id;
+    if (id) game.coreBridge?.purchaseUpgrade?.(id);
+    return true;
+  }
+  if (intent.action === "GRANT_REWARD") {
+    game.coreBridge?.grantReward?.(intent.payload);
+    return true;
+  }
+  return false;
+}
+
+function drainIntentBatchSync(game, engine, intents) {
   const placed = [];
   const sold = [];
+  const reboots = [];
   let gridMutated = false;
   for (let i = 0; i < intents.length; i++) {
     const intent = intents[i];
+    if (applyImmediateIntent(game, intent)) continue;
     if (intent.action === "SELL_POWER") {
       game.sell_action();
       continue;
@@ -118,17 +114,14 @@ export async function drainGridIntentsAsync(game, engine, intents) {
       continue;
     }
     if (intent.action === "REBOOT") {
-      const keepEp = intent.payload?.keepEp === true;
-      if (keepEp) await game.rebootActionKeepExoticParticles();
-      else await game.rebootActionDiscardExoticParticles();
+      reboots.push(intent);
       continue;
     }
     if (intent.action === "PLACE_PART") {
-      const p = await applyPlacePartIntent(game, intent.payload);
+      const p = applyPlacePartIntent(game, intent.payload);
       if (p) {
         placed.push(p);
         gridMutated = true;
-        game.unlockManager?.incrementPlacedCount?.(p.part.type, p.part.level);
       }
       continue;
     }
@@ -154,5 +147,31 @@ export async function drainGridIntentsAsync(game, engine, intents) {
     invalidateTickParts(engine);
   }
   drainGameEffects(game, () => game?.ui);
+  return { placed, sold, reboots };
+}
+
+export async function drainGridIntentsAsync(game, engine, intents) {
+  const { placed, sold, reboots } = drainIntentBatchSync(game, engine, intents);
+  for (let i = 0; i < reboots.length; i++) {
+    const keepEp = reboots[i].payload?.keepEp === true;
+    if (keepEp) await game.rebootActionKeepExoticParticles();
+    else await game.rebootActionDiscardExoticParticles();
+  }
   return { placed, sold };
+}
+
+export function drainIntentQueueSync(game, engine) {
+  const queue = game?.state?.intent_queue;
+  if (!queue?.length) return { placed: [], sold: [] };
+  const batch = queue.splice(0, queue.length);
+  const { placed, sold, reboots } = drainIntentBatchSync(game, engine, batch);
+  for (let i = 0; i < reboots.length; i++) queue.push(reboots[i]);
+  return { placed, sold };
+}
+
+export async function consumeIntentQueueAsync(game, engine) {
+  const queue = game?.state?.intent_queue;
+  if (!queue || queue.length === 0) return { placed: [], sold: [] };
+  const batch = queue.splice(0, queue.length);
+  return drainGridIntentsAsync(game, engine, batch);
 }

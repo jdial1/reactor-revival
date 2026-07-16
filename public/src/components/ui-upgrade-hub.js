@@ -5,7 +5,7 @@ import { escapeHtml } from "../dom/lit.js";
 import { actions } from "../store.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
 import { subscribeKey } from "valtio/vanilla/utils";
-import { runCheckAffordability, setUpgradeCardRefreshHandler } from "../domain/upgrade-affordance.js";
+import { runCheckAffordability, setUpgradeCardRefreshHandler } from "../bridge/bridge-upgrades.js";
 import { isCellUpgradeVisible } from "../domain/upgrade.js";
 import { calculateSectionCounts, findTopAffordableInSection } from "../logic-upgrade-sections.js";
 import { UpgradeCard } from "./button-factory.js";

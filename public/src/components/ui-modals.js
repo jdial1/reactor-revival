@@ -14,6 +14,7 @@ import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStart
 import { styleMap, bindEvents, escapeHtml } from "../dom/lit.js";
 import { getMyLayouts } from "./ui-layout-storage.js";
 import { WEAVE_QUANTUM } from "../constants/balance.js";
+import { drainGridIntentsAsync } from "../bridge/bridge-intents.js";
 
 const HIDDEN_STYLE = { display: "none" };
 const SECTION_HEAD = "margin-top: 0; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
@@ -147,7 +148,6 @@ function systemSection(prefs, notificationsChecked) {
     <div class="settings-section">
       <h4 style=${SECTION_HEAD}>ENGINE & NOTIFICATIONS</h4>
       <table class="settings-visuals-table">
-        ${switchRow("setting-force-no-sab", "Force No-SAB", prefs.forceNoSAB)}
         ${switchRow("setting-notifications", "Update Notifications", notificationsChecked)}
       </table>
 
@@ -461,12 +461,6 @@ function setupMechSwitches(overlay, modal, signal) {
   setupMechSwitch("setting-heat-flow", (checked) => { preferences.heatFlowVisible = checked; });
   setupMechSwitch("setting-heat-map", (checked) => { preferences.heatMapVisible = checked; });
   setupMechSwitch("setting-debug-overlay", (checked) => { preferences.debugOverlay = checked; });
-  setupMechSwitch("setting-force-no-sab", (checked) => {
-    preferences.forceNoSAB = checked;
-    if (game?.engine && typeof game.engine.setForceNoSAB === "function") {
-      game.engine.setForceNoSAB(checked);
-    }
-  });
   setupMechSwitch("setting-mute", (checked) => {
     preferences.mute = checked;
     const ui = modal.getUi?.();
@@ -889,11 +883,7 @@ class ModalOrchestration {
       this.ui?.deviceFeatures?.heavyVibration?.();
       const game = this.ui?.game;
       if (game && tile?.part) {
-        game.state.intent_queue.push({
-          action: "SELL_PART",
-          payload: { row: tile.row, col: tile.col },
-        });
-        await game.engine?.consumeIntentQueueAsync?.();
+        await game.sellPart(tile);
         this.ui?.gridCanvasRenderer?.markTileDirty(tile.row, tile.col);
         this.hideModal(MODAL_IDS.CONTEXT);
       }
@@ -1015,14 +1005,11 @@ class ModalOrchestration {
         }
       });
       const totalSellValue = tilesToSell.reduce((sum, tile) => sum + (tile.calculateSellValue?.() ?? tile.part.cost), 0);
-      for (let i = 0; i < tilesToSell.length; i++) {
-        const t = tilesToSell[i];
-        ui.game.state.intent_queue.push({
-          action: "SELL_PART",
-          payload: { row: t.row, col: t.col },
-        });
-      }
-      await ui.game.engine?.consumeIntentQueueAsync?.();
+      const intents = tilesToSell.map((t) => ({
+        action: "SELL_PART",
+        payload: { row: t.row, col: t.col },
+      }));
+      await drainGridIntentsAsync(ui.game, ui.game.engine, intents);
       ui.game.reactor.updateStats();
       confirmBtn.textContent = `Sold $${fmt(totalSellValue)}`;
       confirmBtn.style.backgroundColor = "var(--canvas-confirm-success)";

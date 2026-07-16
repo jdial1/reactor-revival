@@ -10,7 +10,7 @@ import {
 import { addToMyLayouts, removeFromMyLayouts } from "./ui-layout-storage.js";
 
 function getLayoutCost(entryData, game, fmtFn) {
-  return calculateLayoutCostFromData(entryData, game?.partset, fmtFn);
+  return calculateLayoutCostFromData(entryData, game, fmtFn);
 }
 
 function layoutsListTemplate(ui, list, fmtFn, onAfterDelete) {

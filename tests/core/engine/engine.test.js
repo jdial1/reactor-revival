@@ -63,8 +63,7 @@ describe("Engine Mechanics", () => {
     expect(cellTile.ticks).toBe(initialTicks - 1);
   });
 
-  it("heat payload builds successfully for non-square grid", async () => {
-    game.engine.setForceNoSAB(true);
+  it("core session stats available for non-square grid", async () => {
     game.gridManager.setRows(14);
     game.gridManager.setCols(8);
     game.tileset.updateActiveTiles();
@@ -73,9 +72,9 @@ describe("Engine Mechanics", () => {
     game.reactor.updateStats();
     syncActivePartsAtTickBoundary(game.engine);
 
-    expect(() => game.engine._buildHeatPayload(1)).not.toThrow();
-    const payload = game.engine._buildHeatPayload(1);
-    expect(payload).toBeDefined();
+    const snap = game.coreBridge?.session?.getSnapshot?.();
+    expect(snap?.stats).toBeDefined();
+    expect(snap.stats.power).toBeGreaterThan(0);
   });
 
   it("should track auto-sell calls", async () => {
@@ -822,50 +821,6 @@ describe("Engine Mechanics", () => {
     });
   });
 
-  describe("Heat payload transfer buffers (detached ArrayBuffer regression)", () => {
-    it("should not transfer engine persistent buffers in transfer mode", async () => {
-      game.engine.setForceNoSAB(true);
-      game.tileset.clearAllTiles();
-      await placePart(game, 0, 0, "heat_inlet1");
-      await placePart(game, 0, 1, "heat_exchanger1");
-      await placePart(game, 1, 0, "vent1");
-      game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-      game.engine._updateValveNeighborCache();
-
-      const payload = game.engine._buildHeatPayload(1);
-      expect(payload).toBeDefined();
-      expect(payload.transferList).toBeDefined();
-
-      const engineTransferBuf = game.engine._heatPayload_transferData?.buffer;
-
-      if (engineTransferBuf) expect(payload.transferList).not.toContain(engineTransferBuf);
-    });
-
-    it("should allow sync ticks after simulated transfer without detached ArrayBuffer error", async () => {
-      game.engine.setForceNoSAB(true);
-      game.tileset.clearAllTiles();
-      await placePart(game, 0, 0, "heat_inlet1");
-      await placePart(game, 0, 1, "heat_exchanger1");
-      await placePart(game, 1, 0, "vent1");
-      game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-      game.engine._updateValveNeighborCache();
-
-      const payload = game.engine._buildHeatPayload(1);
-      const ch = new MessageChannel();
-      ch.port1.postMessage({}, payload.transferList);
-
-      expect(() => {
-        game.engine.heatManager.processTick(1);
-      }).not.toThrow();
-
-      for (let i = 0; i < 5; i++) {
-        expect(() => game.engine.heatManager.processTick(1)).not.toThrow();
-      }
-    });
-  });
-
   it("should not process ticks when game is paused", () => {
     // Set up a simple scenario with a fuel cell
     const fuelPart = game.partset.getPartById("uranium1");
@@ -898,9 +853,6 @@ describe("Engine Mechanics", () => {
 
   describe("Cell power and UI state sync (regression: power only on timeout)", () => {
     beforeEach(() => {
-      game.engine.setForceNoSAB(true);
-      game.engine._workerFailed = true;
-      game.engine._gameLoopWorkerFailed = true;
       game.reactor.current_power = 0;
       game.reactor.current_heat = 0;
     });
@@ -983,20 +935,6 @@ describe("Engine Mechanics", () => {
         const statePower = toNum(game.state?.current_power ?? 0);
         expect(statePower).toBe(reactorPower);
       }
-    });
-
-    it("setForceNoSAB disables game loop worker; tick still runs", async () => {
-      game.engine.setForceNoSAB(true);
-      game.tileset.clearAllTiles();
-      await placePart(game, 0, 0, "uranium1");
-      await placePart(game, 0, 1, "vent1");
-      game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-
-      expect(game.engine._useGameLoopWorker()).toBe(false);
-
-      game.engine._processTick(1.0);
-      expect(toNum(game.reactor.current_power)).toBeGreaterThan(0);
     });
 
     it("tick_count increments when tick completes", async () => {

@@ -87,114 +87,10 @@ describe("Valve Debug Test", () => {
         game.reactor.updateStats();
         syncActivePartsAtTickBoundary(game.engine);
 
-        const isValveActive = game.engine.active_exchangers.includes(valveTile);
-        const valveNeighbors = valveTile.containmentNeighborTiles.filter(t => t.part);
-        const coolantCell = game.partset.getPartById("coolant_cell1");
-        const coolantRatio = coolantTile.heat_contained / coolantCell.containment;
-
-        console.log("=== VALVE STATE BEFORE PROCESSING ===");
-        console.log(`Valve in active_exchangers: ${isValveActive}`);
-        console.log(`Valve neighbors: ${valveNeighbors.length}`);
-        console.log(`Coolant heat ratio: ${coolantRatio.toFixed(3)} (>=0.8? ${coolantRatio >= 0.8})`);
-
-        valveNeighbors.forEach((n, i) => {
-            if (n.part) {
-                console.log(`  Neighbor ${i}: ${n.part.id} at (${n.row},${n.col}) with heat ${n.heat_contained || 0}`);
-            }
-        });
-
-        const overflowValve = game.partset.getPartById("overflow_valve");
-        const valveOrientation = game.engine._getValveOrientation(overflowValve.id);
-        const { inputNeighbor, outputNeighbor } = game.engine._getInputOutputNeighbors(valveTile, valveNeighbors, valveOrientation);
-
-        console.log(`Valve orientation: ${valveOrientation}`);
-        console.log(`Input neighbor: ${inputNeighbor?.part?.id} at (${inputNeighbor?.row},${inputNeighbor?.col})`);
-        console.log(`Output neighbor: ${outputNeighbor?.part?.id} at (${outputNeighbor?.row},${outputNeighbor?.col})`);
-
-        // Check if valve should transfer heat
-        if (inputNeighbor && outputNeighbor) {
-            const inputHeat = inputNeighbor.heat_contained || 0;
-            const inputContainment = inputNeighbor.part.containment || 1;
-            const inputRatio = inputHeat / inputContainment;
-            const valveTransfer = valveTile.getEffectiveTransferValue();
-
-            console.log(`Input heat: ${inputHeat}, containment: ${inputContainment}, ratio: ${inputRatio.toFixed(3)}`);
-            console.log(`Valve transfer capacity: ${valveTransfer}`);
-            console.log(`Should transfer? ${inputRatio >= 0.8 && valveTransfer > 0}`);
-        }
-
-        // Check valve transfer value
-        const valveTransfer = valveTile.getEffectiveTransferValue();
-        console.log(`Valve effective transfer value: ${valveTransfer}`);
-
-        // Check vent's effective vent value
-        const ventVentValue = ventTile.getEffectiveVentValue();
-        console.log(`Vent effective vent value: ${ventVentValue}`);
-
-        // Check if vent is in active_vessels
-        const isVentActive = game.engine.active_vessels.includes(ventTile);
-        console.log(`Vent in active_vessels: ${isVentActive}`);
-
-        // Check if vent is in valveNeighborTiles
-        const valveNeighborTiles = new Set();
-        for (const valve of game.engine.active_exchangers.filter(t => t.part && t.part.category === 'valve')) {
-            const neighbors = valve.containmentNeighborTiles.filter(t => t.part);
-            for (const neighbor of neighbors) {
-                valveNeighborTiles.add(neighbor);
-            }
-        }
-        const isVentInValveNeighbors = valveNeighborTiles.has(ventTile);
-        console.log(`Vent in valveNeighborTiles: ${isVentInValveNeighbors}`);
-
-        // Run engine tick
-        console.log("=== RUNNING ENGINE TICK ===");
-
-        // Add a hook to monitor heat values during the tick
-        const originalTick = game.engine._processTick.bind(game.engine);
-        let heatValuesDuringTick = [];
-
-        game.engine._processTick = function (manual = false) {
-            // Monitor heat values at key points
-            heatValuesDuringTick.push({
-                stage: "start",
-                coolant: coolantTile.heat_contained,
-                valve: valveTile.heat_contained,
-                vent: ventTile.heat_contained
-            });
-
-            const result = originalTick(manual);
-
-            heatValuesDuringTick.push({
-                stage: "end",
-                coolant: coolantTile.heat_contained,
-                valve: valveTile.heat_contained,
-                vent: ventTile.heat_contained
-            });
-
-            return result;
-        };
-
         game.engine.tick();
 
-        // Restore original tick function
-        game.engine._processTick = originalTick;
-
-        console.log("=== AFTER ENGINE TICK ===");
-        console.log(`Coolant heat: ${coolantTile.heat_contained}`);
-        console.log(`Valve heat: ${valveTile.heat_contained}`);
-        console.log(`Vent heat: ${ventTile.heat_contained}`);
-
-        // Show heat values during the tick
-        console.log("=== HEAT VALUES DURING TICK ===");
-        heatValuesDuringTick.forEach((values, index) => {
-            console.log(`${values.stage}: coolant=${values.coolant}, valve=${values.valve}, vent=${values.vent}`);
-        });
-
-        // This test is just for debugging
-        expect(coolantTile.heat_contained).toBeLessThan(1700); // Some heat should have been transferred
-        // Note: With the fix, vents can now process heat in the same tick after receiving it from valves
-        // This allows proper heat flow through the system
-        expect(ventTile.heat_contained).toBeGreaterThan(0); // Vent should retain some heat after processing
+        expect(coolantTile.heat_contained).toBeLessThan(1700);
+        expect(ventTile.heat_contained).toBeGreaterThan(0);
     });
 
     it("should process valve at top-left corner without out-of-bounds", async () => {
@@ -209,8 +105,6 @@ describe("Valve Debug Test", () => {
 
         game.reactor.updateStats();
         syncActivePartsAtTickBoundary(game.engine);
-
-        game.engine._updateValveNeighborCache();
 
         expect(() => game.engine.tick()).not.toThrow();
         expect(coolantTile.heat_contained).toBeLessThan(1700);
@@ -231,8 +125,6 @@ describe("Valve Debug Test", () => {
         game.reactor.updateStats();
         syncActivePartsAtTickBoundary(game.engine);
 
-        game.engine._updateValveNeighborCache();
-
         expect(() => game.engine.tick()).not.toThrow();
         expect(coolantTile.heat_contained).toBeLessThan(1700);
     });
@@ -250,24 +142,6 @@ describe("Valve Debug Test", () => {
         game.reactor.updateStats();
         syncActivePartsAtTickBoundary(game.engine);
 
-        game.engine._updateValveNeighborCache();
-
         expect(() => game.engine.tick()).not.toThrow();
-    });
-
-    it("should invalidate valve orientation cache when parts change", async () => {
-        game.tileset.clearAllTiles();
-        const valveTile = await placePart(game, 5, 5, "overflow_valve");
-        syncActivePartsAtTickBoundary(game.engine);
-
-        const orient1 = game.engine._getValveOrientation("overflow_valve");
-        expect(orient1).toBe(1);
-        expect(game.engine._valveOrientationCache.size).toBe(1);
-
-        syncActivePartsAtTickBoundary(game.engine);
-        expect(game.engine._valveOrientationCache.size).toBe(0);
-
-        const orient2 = game.engine._getValveOrientation("overflow_valve2");
-        expect(orient2).toBe(2);
     });
 });

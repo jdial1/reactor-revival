@@ -3,8 +3,6 @@ import { placePart } from "../../helpers/gameHelpers.js";
 
 function refreshHeatSegments(game) {
   syncActivePartsAtTickBoundary(game.engine);
-
-  game.engine.heatManager.markSegmentsAsDirty();
 }
 
 const toNum = (v) => (v != null && typeof v.toNumber === "function" ? v.toNumber() : Number(v));

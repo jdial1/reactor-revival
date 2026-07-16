@@ -1,7 +1,5 @@
 ﻿import { EngineStatus } from "../schema/stateSchemas.js";
-import { grantReward as applyGrantReward } from "./rewards.js";
-import { creditMoneyWithPrestige } from "./economy-intents.js";
-import { resetHeatThresholdSignalState } from "./reactor-stats.js";
+import { resetHeatThresholdSignalState } from "../heatDomSync.js";
 import { StatDispatcher } from "../statDispatcher.js";
 import { fromError } from "zod-validation-error";
 import { z } from "zod";
@@ -42,13 +40,12 @@ import { Reactor } from "./reactor.js";
 import { GridManager, Tileset } from "./grid.js";
 import { PartSet } from "./part.js";
 import { applyBlueprintLayoutDiff } from "./blueprint.js";
-import { applyComputedModifiers } from "./modifiers.js";
+import { applyComputedModifiers } from "../bridge/bridge-mechanics.js";
+import { drainGridIntentsAsync } from "../bridge/bridge-intents.js";
 import { UpgradeSet } from "./upgrade.js";
 import { ObjectiveManager } from "./objectives.js";
 import { AchievementManager } from "./achievements.js";
 import { Performance, postGameLoopProjectionQuery } from "./engine.js";
-import { recordSimEvent } from "./sim-events.js";
-
 class SessionManager {
   constructor(game) {
     this.game = game;
@@ -116,33 +113,6 @@ export class GameEventDispatcher {
   }
 }
 
-const ACTION_INTENT_BUILDERS = {
-  sell: () => ({ action: "SELL_POWER" }),
-  manualReduceHeat: () => ({ action: "VENT_HEAT" }),
-  pause: () => ({ action: "SET_TOGGLE", payload: { toggleName: "pause", value: true } }),
-  resume: () => ({ action: "SET_TOGGLE", payload: { toggleName: "pause", value: false } }),
-  togglePause: () => ({ action: "PAUSE_TOGGLE" }),
-  rebootKeepEp: () => ({ action: "REBOOT", payload: { keepEp: true } }),
-  rebootDiscardEp: () => ({ action: "REBOOT", payload: { keepEp: false } }),
-  reboot: () => ({ action: "REBOOT", payload: { keepEp: false } }),
-  sellPart: (_g, p) => ({ action: "SELL_PART", payload: { row: p.tile?.row, col: p.tile?.col } }),
-  pasteLayout: (_g, p) => ({
-    action: "APPLY_BLUEPRINT",
-    payload: {
-      layout: p.layout,
-      skipCostDeduction: p.options?.skipCostDeduction === true,
-      partial: p.options?.partial === true,
-    },
-  }),
-};
-
-function pushGameIntent(game, intent) {
-  if (!game?.state) return null;
-  game.state.intent_queue.push({ ...intent, timestamp: Date.now() });
-  void game.engine?.consumeIntentQueueAsync?.();
-  return true;
-}
-
 function executeAction(game, action) {
   const actionResult = GameActionSchema.safeParse(action);
   if (!actionResult.success) return null;
@@ -150,9 +120,50 @@ function executeAction(game, action) {
   const schema = ACTION_SCHEMA_REGISTRY[type];
   const payloadResult = schema ? schema.safeParse(payload) : { success: true, data: payload };
   if (!payloadResult.success) return null;
-  const builder = ACTION_INTENT_BUILDERS[type];
-  if (!builder) return null;
-  return pushGameIntent(game, builder(game, payloadResult.data));
+  const data = payloadResult.data;
+  if (type === "sell") {
+    game.sell_action();
+    return true;
+  }
+  if (type === "manualReduceHeat") {
+    game.manual_reduce_heat_action();
+    return true;
+  }
+  if (type === "pause") {
+    applyToggleStateChange(game, "pause", true);
+    return true;
+  }
+  if (type === "resume") {
+    applyToggleStateChange(game, "pause", false);
+    return true;
+  }
+  if (type === "togglePause") {
+    game.togglePause();
+    return true;
+  }
+  if (type === "rebootKeepEp") {
+    return game.rebootActionKeepExoticParticles();
+  }
+  if (type === "rebootDiscardEp" || type === "reboot") {
+    return game.rebootActionDiscardExoticParticles();
+  }
+  if (type === "sellPart") {
+    return drainGridIntentsAsync(game, game.engine, [{
+      action: "SELL_PART",
+      payload: { row: data.tile?.row, col: data.tile?.col },
+    }]);
+  }
+  if (type === "pasteLayout") {
+    return drainGridIntentsAsync(game, game.engine, [{
+      action: "APPLY_BLUEPRINT",
+      payload: {
+        layout: data.layout,
+        skipCostDeduction: data.options?.skipCostDeduction === true,
+        partial: data.options?.partial === true,
+      },
+    }]);
+  }
+  return null;
 }
 
 class TimeKeeper {
@@ -192,6 +203,7 @@ class EconomyManager {
   }
   setCurrentMoney(value) {
     setDecimal(this.game.state, "current_money", value);
+    this.game.coreBridge?.loadEconomyFromHost?.();
   }
   getPrestigeMultiplier() {
     const ep = this.game.state.total_exotic_particles;
@@ -199,39 +211,12 @@ class EconomyManager {
     return 1 + Math.min(epNumber * this.prestigePerEp, this.prestigeCap);
   }
   addMoney(amount) {
-    creditMoneyWithPrestige(this.game, amount);
+    this.game.coreBridge?.creditMoney?.(amount, { applyPrestige: true });
   }
 }
 
 function runComponentDepletion(game, tile) {
-  if (!tile.part) return;
-  game.logger?.debug?.(`[AUTO-BUY] Component depletion at (${tile.row}, ${tile.col})`, { partId: tile.part.id, perpetual: tile.part.perpetual });
-  const part = tile.part;
-  const hasProtiumLoader = game.upgradeset.getUpgrade("experimental_protium_loader")?.level > 0;
-  const isProtium = part.type === "protium";
-  const autoBuyEnabled = !!game.state?.auto_buy;
-  const autoReplace = (part.perpetual || (isProtium && hasProtiumLoader)) && !!autoBuyEnabled;
-  if (autoReplace) {
-    const cost = part.getAutoReplacementCost();
-    const money = game.state.current_money;
-    game.logger?.debug?.(`[AUTO-BUY] Attempting to replace '${part.id}'. Cost: ${cost}, Current Money: ${money}`);
-    const canAfford = money != null && typeof money.gte === "function" && money.gte(cost);
-    if (canAfford) {
-      updateDecimal(game.state, "current_money", (d) => d.sub(cost));
-      game.logger?.debug?.(`[AUTO-BUY] Success. New Money: ${game.state.current_money}`);
-      part.recalculate_stats();
-      tile.ticks = part.ticks;
-      recordSimEvent(game, {
-        type: "AUTO_BUY_DEBIT",
-        row: tile.row,
-        col: tile.col,
-        text: `-$${Number(cost) || 0}`,
-      });
-      game.reactor.updateStats();
-      return;
-    }
-    logger.log('debug', 'game', '[AUTO-BUY] Failed. Insufficient funds.');
-  }
+  if (!tile?.part) return;
   game.emit("tileCleared", { tile });
   tile.clearPart();
 }
@@ -396,7 +381,7 @@ export class Game {
   }
 
   grantReward(reward) {
-    applyGrantReward(this, reward);
+    this.coreBridge?.grantReward?.(reward);
   }
 
   bumpGridTileDirty(row, col) {
@@ -463,15 +448,11 @@ export class Game {
   }
 
   async sellPart(tile) {
-    if (!tile || !this.state) return;
-    this.state.intent_queue.push({
+    if (!tile) return;
+    return drainGridIntentsAsync(this, this.engine, [{
       action: "SELL_PART",
-      timestamp: Date.now(),
       payload: { row: tile.row, col: tile.col },
-    });
-    if (this.engine?.consumeIntentQueueAsync) {
-      return this.engine.consumeIntentQueueAsync();
-    }
+    }]);
   }
 
   handleComponentDepletion(tile) {
@@ -517,6 +498,7 @@ export class Game {
     const result = applyBlueprintLayoutDiff(this, layout, {
       skipCostDeduction: options.skipCostDeduction === true,
       partial: options.partial === true,
+      sellExisting: options.sellExisting === true,
     });
     if (result.ok) this.emit("layoutPasted", { layout });
     return result;
@@ -570,12 +552,10 @@ export class Game {
   }
 
   applyBlueprintPlannerLayout(options = {}) {
-    if (!this.engine) return null;
-    this.state.intent_queue.push({
+    return drainGridIntentsAsync(this, this.engine, [{
       action: "COMMIT_BLUEPRINT_PLANNER",
       payload: { partial: options.partial === true },
-    });
-    return this.engine.consumeIntentQueueAsync();
+    }]);
   }
 
   getDoctrine() {

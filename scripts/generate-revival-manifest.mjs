@@ -75,9 +75,9 @@ function buildComponent(template, level, id) {
     { base: "baseContainment", src: "base_containment", mult: "containment_multi", norm: t.containment_norm ?? (t.category === "capacitor" ? 5 : (t.category === "coolant_cell" ? 180 : 75)) },
   ];
 
-  for (const { base, src, mult, norm } of MULTIPLIERS) {
+  for (const { base, src, mult } of MULTIPLIERS) {
     if (t[src] != null && t[mult] != null && level > 1) {
-      comp[base] = t[src] * pow(t[mult] / norm, level - 1);
+      comp[base] = t[src] * pow(t[mult], level - 1);
     }
   }
 

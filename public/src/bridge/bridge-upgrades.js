@@ -1,49 +1,56 @@
-import { toDecimal, toNumber } from "../simUtils.js";
+import { toNumber } from "../simUtils.js";
 import { getAffordabilitySettings } from "../state/preferences.js";
 
-export function computeAffordable(upgrade, upgradeset, game) {
-  if (game.reactor && game.reactor.has_melted_down) return false;
-  const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
-  if (upgrade.erequires && (!requiredUpgrade || requiredUpgrade.level === 0)) return false;
-  if (upgrade.base_ecost?.gt?.(0)) {
-    return toDecimal(game.state.current_exotic_particles).gte(upgrade.current_ecost);
+export function hydrateUpgradeLevelsFromHost(bridge) {
+  const session = bridge.session;
+  const upgradeset = bridge.game?.upgradeset;
+  if (!session?.setUpgradeLevels || !upgradeset?.upgradesArray) return;
+  const levels = [];
+  for (let i = 0; i < upgradeset.upgradesArray.length; i++) {
+    const upg = upgradeset.upgradesArray[i];
+    const hostLevel = upg.level || 0;
+    if (hostLevel > 0) levels.push({ id: upg.id, level: hostLevel });
   }
-  return toDecimal(game.state.current_money).gte(upgrade.current_cost);
+  session.setUpgradeLevels(levels);
 }
 
-function isMaxLevelOrMeltedDown(upgrade, game) {
-  return upgrade.level >= upgrade.max_level || game.reactor?.has_melted_down === true;
+export function projectUpgradeLevelsToHost(bridge) {
+  const session = bridge.session;
+  const upgradeset = bridge.game?.upgradeset;
+  if (!session || !upgradeset?.upgradesArray) return;
+  for (let i = 0; i < upgradeset.upgradesArray.length; i++) {
+    const upg = upgradeset.upgradesArray[i];
+    if (!upg) continue;
+    const level = session.getUpgradeLevel?.(upg.id) ?? 0;
+    if (upg.level !== level) upg.setLevel(level, { deferSync: true });
+  }
+  bridge.game.syncModifiersFromUpgrades?.({ skipGrid: true });
 }
 
-function usesExoticParticles(upgrade) {
+export function getSessionUpgradeLevel(bridge, id) {
+  return bridge.session?.getUpgradeLevel?.(id) ?? 0;
+}
+
+export function computeAffordable(upgrade, upgradeset, game) {
+  if (game.reactor?.has_melted_down) return false;
+  if (!upgradeset.isUpgradeAvailable(upgrade.id)) return false;
+  const preview = game.coreBridge?.previewUpgrade?.(upgrade.id);
+  if (!preview) return false;
+  return !!preview.canPurchase;
+}
+
+function isResearchUpgrade(upgrade) {
   return Boolean(upgrade.base_ecost?.gt?.(0));
-}
-
-function getProgressRatio(current, cost) {
-  const n = toNumber(current);
-  const c = toNumber(cost);
-  return Math.min(1, n / c);
-}
-
-function getCurrentAndCost(upgrade, game) {
-  const useEp = usesExoticParticles(upgrade);
-  const raw = useEp ? game.state.current_exotic_particles : game.state.current_money;
-  const current = toDecimal(raw);
-  const cost = useEp ? upgrade.current_ecost : upgrade.current_cost;
-  if (!cost || !cost.gt(0)) return null;
-  return { current, cost };
 }
 
 export function computeAffordProgress(upgrade, game, isAffordable) {
   if (isAffordable) return 1;
-  if (isMaxLevelOrMeltedDown(upgrade, game)) return 0;
-  const pair = getCurrentAndCost(upgrade, game);
-  if (!pair) return 0;
-  return getProgressRatio(pair.current, pair.cost);
-}
-
-export function isResearchUpgrade(upgrade) {
-  return Boolean(upgrade.base_ecost?.gt?.(0));
+  if (upgrade.level >= upgrade.max_level || game.reactor?.has_melted_down) return 0;
+  const preview = game.coreBridge?.previewUpgrade?.(upgrade.id);
+  if (!preview || preview.cost == null || !(preview.cost > 0)) return 0;
+  const isEp = preview.currency === "ep" || preview.currency === "exotic_particles";
+  const raw = isEp ? game.state.current_exotic_particles : game.state.current_money;
+  return Math.min(1, toNumber(raw) / toNumber(preview.cost));
 }
 
 export function getAffordanceFlags(upgrade, upgradeset, game, settings) {

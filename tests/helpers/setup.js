@@ -300,7 +300,7 @@ export { forceActiveObjective, forceActiveObjective as forceObjective } from "./
 export * from "./suiteHelpers.js";
 export { performTestRespec as testRespec, clearGracePeriod as skipGrace } from "./suiteHelpers.js";
 export { MemoryAuditor } from "./memoryAuditor.js";
-export { syncActivePartsAtTickBoundary, invalidateTickParts } from "@app/domain/part-classification.js";
+export { syncActivePartsAtTickBoundary, invalidateTickParts } from "@app/bridge/bridge-parts.js";
 
 // --- Phase 3: Test Utilities & Enhanced Debugging ---
 
@@ -618,17 +618,7 @@ function injectHTMLContent(document, htmlContent) {
   document.body.appendChild(fragment);
 }
 
-export function pinEngineToSyncMode(engine) {
-  if (!engine) return;
-  engine._forceSyncHeat = true;
-  engine._workerFailed = true;
-  engine._forceGameLoopWorkerOff = true;
-  engine._gameLoopWorkerFailed = true;
-  engine._workerPending = false;
-  engine._workerTickContext = null;
-  engine._gameLoopWorkerPending = false;
-  engine._gameLoopWorkerPendingSince = 0;
-}
+export function pinEngineToSyncMode(_engine) {}
 
 /**
  * Sets up a game instance for CORE LOGIC tests without a real DOM.
@@ -672,6 +662,8 @@ export async function setupGameLogicOnly() {
   game.tileset.initialize();
 
   await game.partset.initialize();
+  const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
+  await attachCoreBridge(game, getCoreBridgeOptions());
   await game.upgradeset.initialize();
     await game.objectives_manager.initialize();
 
@@ -730,6 +722,8 @@ export async function setupGameWithDOM() {
   game.router = new PageRouter(ui);
   await ui.init(game);
   await game.partset.initialize();
+  const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
+  await attachCoreBridge(game, getCoreBridgeOptions());
   await game.upgradeset.initialize();
   await game.set_defaults();
 
@@ -761,9 +755,6 @@ export async function setupGameWithDOM() {
   game.engine = new Engine(game);
   pinEngineToSyncMode(game.engine);
 
-  const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
-  await attachCoreBridge(game, getCoreBridgeOptions());
-
   const { AudioService } = await import("@app/services.js");
   game.audio = new AudioService();
   await game.audio.init();
@@ -780,10 +771,7 @@ export async function setupGameWithDOM() {
 
 export async function setupGame() {
   const { game } = await setupGameWithDOM();
-  if (!game.coreBridge?.isActive) {
-    const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
-    await attachCoreBridge(game, getCoreBridgeOptions());
-  }
+  game.bypass_tech_tree_restrictions = true;
   if (game.engine && !game.engine.running) {
     game.paused = false;
     game.engine.start();

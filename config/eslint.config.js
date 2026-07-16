@@ -167,15 +167,6 @@ export default [
     }
   },
   {
-    files: ["**/public/src/worker/**/*.js"],
-    languageOptions: {
-      globals: { self: "readonly", console: "readonly" }
-    },
-    rules: {
-      "no-console": "warn"
-    }
-  },
-  {
     files: ["public/src/**/*.js"],
     plugins: { import: importPlugin },
     settings: {

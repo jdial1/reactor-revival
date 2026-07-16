@@ -1,11 +1,9 @@
-export function dispatchToggleIntent(game, toggleName, value, sourceId = null) {
+import { applyToggleStateChange } from "../state.js";
+import { drainGridIntentsAsync } from "../bridge/bridge-intents.js";
+
+export function dispatchToggleIntent(game, toggleName, value, _sourceId = null) {
   if (!game?.state) return;
-  game.state.intent_queue.push({
-    action: "SET_TOGGLE",
-    timestamp: Date.now(),
-    payload: { toggleName, value: !!value, sourceId },
-  });
-  game.engine?.consumeIntentQueueAsync?.();
+  applyToggleStateChange(game, toggleName, !!value);
 }
 
 export function dispatchPauseIntent(game, paused, sourceId = "navigation") {
@@ -15,12 +13,11 @@ export function dispatchPauseIntent(game, paused, sourceId = "navigation") {
 export function dispatchUiIntent(game, intent, e) {
   if (!game?.state) return;
   const btn = e?.currentTarget;
-  game.state.intent_queue.push({
+  const sourceId = btn?.id;
+  void drainGridIntentsAsync(game, game.engine, [{
     action: intent,
-    timestamp: Date.now(),
-    payload: { sourceId: btn?.id },
-  });
-  game.engine?.consumeIntentQueueAsync?.();
+    payload: { sourceId },
+  }]);
 }
 
 function createIntentDelegationHandler(game, root) {

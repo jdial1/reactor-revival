@@ -245,6 +245,13 @@ const LatestSaveBodySchema = z.object({
   toggles: z.record(z.string(), z.unknown()).catch({}).optional().default({}),
   quick_select_slots: z.array(z.unknown()).catch([]).optional().default([]),
   unlocked_achievements: z.array(z.string()).catch([]).optional().default([]),
+  achievements: z.object({
+    unlocked: z.array(z.string()).optional(),
+    trackers: z.record(z.string(), z.unknown()).optional(),
+    sustained: z.unknown().optional(),
+    soldHeatCount: z.number().optional(),
+    lastSnapshot: z.record(z.string(), z.unknown()).optional(),
+  }).passthrough().optional(),
   ui: z.object({}).catch({}).optional().default({}),
 });
 
@@ -524,7 +531,6 @@ export const UserPreferencesSchema = z.object({
   heatFlowVisible: z.boolean().optional().default(true),
   heatMapVisible: z.boolean().optional().default(false),
   debugOverlay: z.boolean().optional().default(false),
-  forceNoSAB: z.boolean().optional().default(false),
   numberFormat: z.enum(["default", "scientific"]).optional().default("default"),
   volumeMaster: z.number().min(0).max(1).optional().default(0.25),
   volumeEffects: z.number().min(0).max(1).optional().default(0.5),

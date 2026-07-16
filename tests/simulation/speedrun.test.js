@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { patchGameState } from "@app/state.js";
 import { toDecimal } from "@app/utils.js";
 import { setupGameWithDOM, syncActivePartsAtTickBoundary } from "../helpers/setup.js";
+import { setCoreSustainedStart } from "../helpers/objectiveHelpers.js";
 import { handleGridInteraction } from "../../public/src/components/grid-intent-handler.js";
 import objective_list_data from "../../public/data/objective_list.json";
 
@@ -158,12 +159,19 @@ async function solveObjective(index, game) {
       break;
     }
     case "powerPerTick500":
-      for (let i = 0; i < 10; i++) {
-        await placePartViaUI(game, "plutonium1", 0, i);
-        game.tileset.getTile(0, i).activated = true;
-        game.tileset.getTile(0, i).ticks = 60;
+      game.paused = false;
+      game.onToggleStateChange?.("pause", false);
+      game.coreBridge?.session?.setPaused?.(false);
+      for (let i = 0; i < Math.min(10, game.cols); i++) {
+        const tile = game.tileset.getTile(0, i);
+        if (tile.part) tile.clearPart();
+        await tile.setPart(game.partset.getPartById("plutonium1"));
+        tile.activated = true;
+        tile.ticks = 9999;
       }
-      game.engine.tick();
+      game.tileset.updateActiveTiles();
+      syncActivePartsAtTickBoundary(game.engine);
+      game.coreBridge?.syncGridFromGame?.();
       game.reactor.updateStats();
       break;
     case "potentUranium3": {
@@ -175,16 +183,32 @@ async function solveObjective(index, game) {
       break;
     }
     case "autoSell500":
-      game.onToggleStateChange?.("auto_sell", true);
+      game.upgradeset.getUpgrade("auto_sell_operator")?.setLevel(1);
+      game.reactor.auto_sell_multiplier = 1;
       for (let i = 0; i < 10; i++) await placePartViaUI(game, "capacitor1", 0, i);
       for (let i = 0; i < 5; i++) {
         await placePartViaUI(game, "plutonium1", 1, i);
         game.tileset.getTile(1, i).activated = true;
         game.tileset.getTile(1, i).ticks = 60;
       }
-      game.engine.tick();
       game.reactor.updateStats();
-      game.reactor.stats_cash = 501;
+      game.reactor.altered_max_power = Math.max(
+        Number(game.reactor.max_power) || 0,
+        Number(game.reactor.altered_max_power) || 0,
+        500,
+      );
+      game.onToggleStateChange?.("auto_sell", true);
+      game.reactor.has_melted_down = false;
+      if (game.state) game.state.melting_down = false;
+      game.coreBridge?.session?.systems?.failure?.reset?.();
+      if (game.coreBridge?.session?.engine?.meltdown) {
+        game.coreBridge.session.engine.reset();
+        game.coreBridge.syncGridFromGame();
+      }
+      game.reactor.current_power = Math.max(Number(game.reactor.max_power) || 0, 500);
+      game.engine.stop();
+      game.engine.manualTick();
+      game.reactor.updateStats();
       break;
     case "sustainedPower1k": {
       const plutonium3 = game.partset.getPartById("plutonium3");
@@ -197,7 +221,11 @@ async function solveObjective(index, game) {
       game.tileset.updateActiveTiles();
       syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
-      game.objectives_manager?.updateSustainedTracking("sustainedPower1k", game.engine.tick_count - 30);
+      setCoreSustainedStart(
+        game,
+        "sustainedPower1k",
+        (game.coreBridge?.session?.engine?.tickCount ?? game.engine.tick_count) - 30,
+      );
       game.objectives_manager.check_current_objective();
       break;
     }
@@ -228,16 +256,29 @@ async function solveObjective(index, game) {
       break;
     }
     case "incomeMilestone50k":
-      game.onToggleStateChange?.("auto_sell", true);
+      game.upgradeset.getUpgrade("auto_sell_operator")?.setLevel(1);
+      game.reactor.auto_sell_multiplier = 1;
       for (let i = 0; i < 8; i++) {
         await placePartViaUI(game, "plutonium3", 0, i);
         game.tileset.getTile(0, i).activated = true;
         game.tileset.getTile(0, i).ticks = 60;
       }
       for (let i = 0; i < 10; i++) await placePartViaUI(game, "capacitor1", 1, i);
-      game.engine.tick();
       game.reactor.updateStats();
-      game.reactor.stats_cash = 60000;
+      game.reactor.altered_max_power = 60000;
+      game.reactor.sell_price_multiplier = 1;
+      game.onToggleStateChange?.("auto_sell", true);
+      game.reactor.has_melted_down = false;
+      if (game.state) game.state.melting_down = false;
+      game.coreBridge?.session?.systems?.failure?.reset?.();
+      if (game.coreBridge?.session?.engine?.meltdown) {
+        game.coreBridge.session.engine.reset();
+        game.coreBridge.syncGridFromGame();
+      }
+      game.reactor.current_power = 60000;
+      game.engine.stop();
+      game.engine.manualTick();
+      game.reactor.updateStats();
       break;
     case "powerPerTick10k": {
       const thorium1 = game.partset.getPartById("thorium1");
@@ -299,21 +340,28 @@ async function solveObjective(index, game) {
       game.reactor.updateStats();
       game.reactor.current_heat = 15000000;
       game.reactor.has_melted_down = false;
-      game.objectives_manager?.updateSustainedTracking("masterHighHeat", game.engine.tick_count - 30);
+      setCoreSustainedStart(
+        game,
+        "masterHighHeat",
+        (game.coreBridge?.session?.engine?.tickCount ?? game.engine.tick_count) - 30,
+      );
       break;
     case "ep10":
+      game.current_exotic_particles = 10;
       game.exotic_particles = 10;
-      patchGameState(game, { exotic_particles: 10 });
+      patchGameState(game, { current_exotic_particles: 10, exotic_particles: 10 });
       break;
     case "completeChapter3":
       break;
     case "ep51":
+      game.current_exotic_particles = 51;
       game.exotic_particles = 51;
-      patchGameState(game, { exotic_particles: 51 });
+      patchGameState(game, { current_exotic_particles: 51, exotic_particles: 51 });
       break;
     case "ep250":
+      game.current_exotic_particles = 250;
       game.exotic_particles = 250;
-      patchGameState(game, { exotic_particles: 250 });
+      patchGameState(game, { current_exotic_particles: 250, exotic_particles: 250 });
       break;
     case "investInResearch1":
       game.upgradeset.getUpgrade("laboratory")?.setLevel(1);
@@ -327,8 +375,14 @@ async function solveObjective(index, game) {
       patchGameState(game, { exotic_particles: 10, total_exotic_particles: 10, current_exotic_particles: 10 });
       await game.rebootActionKeepExoticParticles();
       game.exotic_particles = 0;
+      game.current_exotic_particles = 0;
       game.current_money = game.base_money;
-      patchGameState(game, { exotic_particles: 0, current_money: game.current_money });
+      patchGameState(game, {
+        exotic_particles: 0,
+        current_exotic_particles: 0,
+        total_exotic_particles: game.total_exotic_particles,
+        current_money: game.current_money,
+      });
       game.objectives_manager.current_objective_index = index;
       game.objectives_manager.set_objective(index, true);
       game.objectives_manager.check_current_objective();
@@ -355,8 +409,9 @@ async function solveObjective(index, game) {
       break;
     }
     case "ep1000":
+      game.current_exotic_particles = 1000;
       game.exotic_particles = 1000;
-      patchGameState(game, { exotic_particles: 1000 });
+      patchGameState(game, { current_exotic_particles: 1000, exotic_particles: 1000 });
       break;
     case "fiveQuadNefastium": {
       const nefastium3 = game.partset.getPartById("nefastium3");
@@ -416,6 +471,9 @@ async function waitForObjectiveCompletion(game, maxTicks = 1000) {
     !game.objectives_manager.current_objective_def?.completed &&
     ticks < maxTicks
   ) {
+    game.paused = false;
+    game.onToggleStateChange?.("pause", false);
+    game.coreBridge?.session?.setPaused?.(false);
     game.engine.tick();
     game.reactor.updateStats();
     game.objectives_manager.check_current_objective();
@@ -482,6 +540,9 @@ describe("End-to-End Speed Run (DOM Simulation)", () => {
 
       await solveObjective(i, game);
 
+      game.paused = false;
+      game.onToggleStateChange?.("pause", false);
+      game.coreBridge?.session?.setPaused?.(false);
       game.objectives_manager.check_current_objective();
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();

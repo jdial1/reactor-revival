@@ -12,7 +12,7 @@ export { ObjectiveController } from "./components/objective-controller.js";
 export { AchievementController } from "./components/achievement-controller.js";
 export { Tileset } from "./domain/grid.js";
 export { BALANCE } from "./domain/balance.js";
-export { resetHeatThresholdSignalState } from "./domain/reactor-stats.js";
+export { resetHeatThresholdSignalState } from "./heatDomSync.js";
 export { queryUpgradeElement } from "./logic-upgrade-dom.js";
 export { computeNeighborPulseNFromTile } from "./logic-tooltip-stats.js";
 export { Engine, startOfflineFastForward, processOfflineTime } from "./domain/engine.js";

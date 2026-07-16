@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, UI
 import dataService from "@app/services.js";
 import { getObjectiveCheck } from "@app/logic.js";
 import { patchGameState } from "@app/state.js";
-import { satisfyObjective } from "../../helpers/objectiveHelpers.js";
+import { satisfyObjective, setCoreSustainedStart } from "../../helpers/objectiveHelpers.js";
 
 // Load objective data
 let objective_list_data = [];
@@ -870,7 +870,6 @@ describe("Objective System", () => {
     it("should test sustained power generation objective", async () => {
       const testGame = await setupGame();
 
-      // Set up power generation
       for (let i = 0; i < 8; i++) {
         await testGame.tileset
           .getTile(0, i)
@@ -878,16 +877,22 @@ describe("Objective System", () => {
       }
       testGame.reactor.updateStats();
 
-      testGame.objectives_manager?.resetSustainedTracking("sustainedPower1k");
+      setCoreSustainedStart(testGame, "sustainedPower1k", 0);
 
       const checkFn = getObjectiveCheck("sustainedPower1k");
       expect(checkFn(testGame).completed).toBe(false);
 
-      testGame.objectives_manager?.updateSustainedTracking("sustainedPower1k", testGame.engine.tick_count - 30);
+      setCoreSustainedStart(
+        testGame,
+        "sustainedPower1k",
+        (testGame.coreBridge?.session?.engine?.tickCount ?? testGame.engine.tick_count) - 30,
+      );
       expect(checkFn(testGame).completed).toBe(true);
 
-      // Test that it fails if power drops below threshold
-      testGame.reactor.stats_power = 500;
+      for (let i = 0; i < 8; i++) {
+        const tile = testGame.tileset.getTile(0, i);
+        if (tile?.part) await tile.clearPart(false);
+      }
       expect(checkFn(testGame).completed).toBe(false);
     });
 
@@ -917,17 +922,32 @@ describe("Objective System", () => {
 
     it("should test powerPerTick10k objective", async () => {
       const testGame = await setupGame();
+      const { syncActivePartsAtTickBoundary } = await import("../../helpers/setup.js");
 
       const checkFn = getObjectiveCheck("powerPerTick10k");
       expect(checkFn(testGame).completed).toBe(false);
 
-      testGame.reactor.stats_power = 10000;
+      const thorium1 = testGame.partset.getPartById("thorium1");
+      for (let i = 0; i < 10; i++) {
+        const tile = testGame.tileset.getTile(0, i);
+        await tile.setPart(thorium1);
+        tile.activated = true;
+        tile.ticks = 900;
+      }
+      testGame.tileset.updateActiveTiles();
+      syncActivePartsAtTickBoundary(testGame.engine);
+      testGame.engine.tick();
+      testGame.reactor.updateStats();
+      testGame.paused = false;
+      testGame.onToggleStateChange?.("pause", false);
       expect(checkFn(testGame).completed).toBe(true);
 
       testGame.paused = true;
+      testGame.onToggleStateChange?.("pause", true);
       expect(checkFn(testGame).completed).toBe(false);
 
       testGame.paused = false;
+      testGame.onToggleStateChange?.("pause", false);
       expect(checkFn(testGame).completed).toBe(true);
     });
 
@@ -945,12 +965,16 @@ describe("Objective System", () => {
       // Manually set high heat level
       testGame.reactor.current_heat = 15000000;
 
-      testGame.objectives_manager?.resetSustainedTracking("masterHighHeat");
+      setCoreSustainedStart(testGame, "masterHighHeat", 0);
 
       const checkFn = getObjectiveCheck("masterHighHeat");
       expect(checkFn(testGame).completed).toBe(false);
 
-      testGame.objectives_manager?.updateSustainedTracking("masterHighHeat", testGame.engine.tick_count - 30);
+      setCoreSustainedStart(
+        testGame,
+        "masterHighHeat",
+        (testGame.coreBridge?.session?.engine?.tickCount ?? testGame.engine.tick_count) - 30,
+      );
       expect(checkFn(testGame).completed).toBe(true);
 
       // Test that it fails if reactor melts down

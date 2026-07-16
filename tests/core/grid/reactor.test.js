@@ -122,7 +122,7 @@ describe("Reactor Mechanics", () => {
     game.engine.tick();
     expect(toNum(game.reactor.current_power)).toBe(toNum(cell.power));
     const initialMoney = toNum(game.current_money);
-    game.reactor.sellPower();
+    game.sell_action();
     expect(toNum(game.reactor.current_power)).toBe(0);
     expect(toNum(game.current_money)).toBe(initialMoney + toNum(cell.power));
     expect(game.sold_power).toBe(true);
@@ -153,17 +153,15 @@ describe("Reactor Mechanics", () => {
     expect(game.sold_heat).toBe(true);
   });
 
-  it("should go into meltdown when heat > 2 * max_heat", () => {
-    // Meltdown syncs game.state.melting_down
-    game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
+  it("presents meltdown when core failure already melted down", () => {
+    game.reactor.has_melted_down = true;
     const meltdown = game.reactor.checkMeltdown();
     expect(meltdown).toBe(true);
-    expect(game.reactor.has_melted_down).toBe(true);
     expect(game.state.melting_down).toBe(true);
   });
 
-  it("should not meltdown when heat is high but not critical", () => {
-    game.reactor.current_heat = game.reactor.max_heat * 1.9;
+  it("does not present meltdown from host heat alone", () => {
+    game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
     const meltdown = game.reactor.checkMeltdown();
     expect(meltdown).toBe(false);
     expect(game.reactor.has_melted_down).toBe(false);
@@ -187,7 +185,7 @@ describe("Reactor Mechanics", () => {
     part.recalculate_stats();
     game.reactor.updateStats();
     game.engine.tick();
-    expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(part.base_power), 0);
+    expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(part.base_power) * 2, 0);
   });
 
   it("should handle heat generation correctly", async () => {

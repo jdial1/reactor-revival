@@ -6,6 +6,13 @@ export function isHeatNetBalanced(netHeat, heatGeneration) {
   return Number.isFinite(net) && net <= 0 && Number.isFinite(gen) && gen > 0;
 }
 
+export function resetHeatThresholdSignalState(game) {
+  if (!game?.state || typeof game.state !== "object") return;
+  game.state._firstHighHeatSeen = false;
+  game.state.ui_heat_critical = false;
+  game.state.ui_pipe_integrity_warning = false;
+}
+
 function syncWrapperShellHeatStyles(ui, heatRatio, heatBalanced) {
   const wrapper = document.getElementById("wrapper");
   if (!wrapper) return;

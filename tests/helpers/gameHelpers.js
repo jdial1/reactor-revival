@@ -1,13 +1,16 @@
 import { toDecimal } from "@app/utils.js";
-import { patchGameState } from "@app/state.js";
-import { syncActivePartsAtTickBoundary } from "@app/domain/part-classification.js";
+import { patchGameState, setDecimal } from "@app/state.js";
+import { syncActivePartsAtTickBoundary } from "@app/bridge/bridge-parts.js";
 
 export function grantInfiniteResources(game) {
   game.current_money = 1e30;
-  game.current_exotic_particles = toDecimal(1e20);
+  setDecimal(game.state, "current_exotic_particles", toDecimal(1e20));
+  setDecimal(game.state, "total_exotic_particles", toDecimal(1e20));
+  game.exoticParticleManager.exotic_particles = toDecimal(1e20);
+  game.coreBridge?.loadEconomyFromHost?.();
   patchGameState(game, {
     current_money: game.current_money,
-    current_exotic_particles: game.current_exotic_particles,
+    current_exotic_particles: game.state.current_exotic_particles,
   });
   game.partset?.check_affordability?.(game);
   game.upgradeset?.check_affordability?.(game);

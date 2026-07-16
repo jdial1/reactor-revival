@@ -5,13 +5,11 @@ import { logger } from "../core/logger.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import {
   getUpgradeBonusLines as getUpgradeBonusLinesCore,
-  computeNeighborPulseNFromTile,
-  calculateCellPulsePower,
-  calculateCellPulseHeat,
   collectPartSemanticSegments,
+  computeDisplaySellValue,
 } from "../logic-tooltip-stats.js";
 import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
-import { inspectExchangerPressureFlow } from "../domain/heat.js";
+import { inspectExchangerPressureFlowForTile } from "../bridge/bridge-heat.js";
 import { actions, ref } from "../store.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { unsafeHTML, BaseComponent } from "../dom/lit.js";
@@ -480,38 +478,35 @@ function setBaseHeatStats(stats, obj, tile) {
 }
 
 function setVentCoolingStats(stats, segment) {
-  const totalVentRate = segment.vents.reduce((sum, vent) => sum + vent.getEffectiveVentValue(), 0);
+  const totalVentRate = segment.totalVentRate
+    ?? segment.vents.reduce((sum, vent) => sum + vent.getEffectiveVentValue(), 0);
   stats.set("Cooling", `${fmt(totalVentRate, 1)}/tick`);
 }
 
 function setOutletTransferStats(stats, segment, game) {
-  const totalOutletRate = segment.outlets.reduce((sum, o) => sum + o.getEffectiveTransferValue(), 0);
+  const totalOutletRate = segment.totalOutletRate
+    ?? segment.outlets.reduce((sum, o) => sum + o.getEffectiveTransferValue(), 0);
   const reactorFullness = game.reactor.max_heat > 0 ? game.reactor.current_heat / game.reactor.max_heat : 0;
   const effective = totalOutletRate * reactorFullness * (1 - segment.fullnessRatio);
   stats.set("Transfer", `${fmt(effective, 1)}/tick`);
 }
 
 function setInletTransferStats(stats, segment, game) {
-  const totalInletRate = segment.inlets.reduce((sum, i) => sum + i.getEffectiveTransferValue(), 0);
+  const totalInletRate = segment.totalInletRate
+    ?? segment.inlets.reduce((sum, i) => sum + i.getEffectiveTransferValue(), 0);
   const reactorFullness = game.reactor.max_heat > 0 ? game.reactor.current_heat / game.reactor.max_heat : 0;
   const effective = totalInletRate * segment.fullnessRatio * (1 - reactorFullness);
   stats.set("Transfer", `${fmt(effective, 1)}/tick`);
 }
 
 function calculateSellValue(obj, tile) {
-  let sell_value = obj.cost;
-  if (obj.ticks > 0) {
-    sell_value = Math.ceil((tile.ticks / obj.ticks) * obj.cost);
-  } else if (obj.containment > 0) {
-    sell_value = obj.cost - Math.ceil((tile.heat_contained / obj.containment) * obj.cost);
-  }
-  return sell_value;
+  return computeDisplaySellValue(obj, tile);
 }
 
 function setHeatAndSegmentStats(stats, obj, tile, game) {
   if (!tile?.activated || (!obj.containment && tile.heat_contained <= 0)) return;
   setBaseHeatStats(stats, obj, tile);
-  const pressureNote = inspectExchangerPressureFlow(tile);
+  const pressureNote = inspectExchangerPressureFlowForTile(tile);
   if (pressureNote) stats.set("Heat routing", pressureNote);
   if (!game.engine?.heatManager) return;
   const segment = game.engine.heatManager.getSegmentForTile(tile);
@@ -562,13 +557,15 @@ function buildDesktopSummaryItems(obj, tile) {
 
 function formatCellSubstrateLines(tile, part) {
   if (!tile || part.category !== "cell") return "";
-  const M = part.cell_pack_M ?? 1;
+  const bridge = tile.game?.coreBridge;
+  const desc = bridge?.describeCellPulse?.(tile);
+  const M = desc?.cellMultiplier ?? part.cell_pack_M ?? 1;
   const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
-  const N = computeNeighborPulseNFromTile(tile);
+  const N = desc?.pulseN ?? 0;
   const H = part.base_heat ?? 0;
   const P = part.base_power ?? 0;
-  const heatVal = calculateCellPulseHeat(H, M, N, C);
-  const powVal = calculateCellPulsePower(P, M, N);
+  const heatVal = (H * (M + N) * (M + N)) / C;
+  const powVal = P * (M + N);
   return `[P: ${fmt(P, 0)}] × ([M: ${M}] + [N: ${fmt(N, 0)}]) = ${fmt(powVal, 0)} Power/tick; [H: ${fmt(H, 0)}] × ([M: ${M}] + [N: ${fmt(N, 0)}])² / [C: ${C}] = ${fmt(heatVal, 0)} Heat/tick`;
 }
 

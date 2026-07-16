@@ -10,7 +10,7 @@ import {
   addPartIconsToTitle as addPartIconsToTitleHelper,
   getObjectiveScrollDuration as getObjectiveScrollDurationHelper,
 } from "./logic-objectives-ui.js";
-import { resetHeatThresholdSignalState } from "./domain/reactor-stats.js";
+import { isHeatNetBalanced, resetHeatThresholdSignalState, syncReactorHeatVisualDom } from "./heatDomSync.js";
 import { preferences } from "./state/preferences.js";
 import { saveGameMutation } from "./state/save-query.js";
 import { setDecimal, updateDecimal } from "./state/decimal-sync.js";
@@ -24,7 +24,7 @@ import {
   serializeSave,
   rotateSlot1ToBackup,
 } from "./storage/index.js";
-import { computePowerNetChange, computeHeatNetChange } from "./domain/net-change.js";
+import { calculateWeaveEp } from "reactor-core";
 import { BaseComponent } from "./dom/lit.js";
 import { toDecimal, toNumber } from "./simUtils.js";
 import { logger } from "./core/logger.js";
@@ -49,11 +49,9 @@ import {
   WEAVE_QUANTUM,
 } from "./constants/balance.js";
 import { CRITICAL_HEAT_RATIO } from "./constants/sim.js";
-import { isHeatNetBalanced } from "./heatDomSync.js";
 import { recordSimEvent } from "./domain/sim-events.js";
 import { drainGameEffects } from "./effect-orchestrator.js";
 import { enqueueGameEffect, enqueueClearAnimations, enqueueClearImageCache } from "./state/game-effects.js";
-import { syncReactorHeatVisualDom } from "./heatDomSync.js";
 import {
   NumericLike,
   DecimalLike,
@@ -214,14 +212,20 @@ export function createGameState(initial = {}) {
   });
 
   derive({
-    power_net_change: (get) => computePowerNetChange(get(baseState)),
+    power_net_change: (get) => {
+      const v = get(baseState).core_power_net_change;
+      return typeof v === "number" && !Number.isNaN(v) ? v : 0;
+    },
     session_ep_weave: (get) => {
       const state = get(baseState);
       const p = toNumber(state.session_power_produced ?? 0);
       const h = toNumber(state.session_heat_dissipated ?? 0);
       return Math.floor(Math.min(p, h) / WEAVE_QUANTUM);
     },
-    heat_net_change: (get) => computeHeatNetChange(get(baseState)),
+    heat_net_change: (get) => {
+      const v = get(baseState).core_heat_net_change;
+      return typeof v === "number" && !Number.isNaN(v) ? v : 0;
+    },
     heat_ratio: (get) => {
       const state = get(baseState);
       const ch = toNumber(state.current_heat ?? 0);
@@ -524,12 +528,14 @@ export class StateManager extends BaseComponent {
       setDecimal(this.game.state, "current_money", this.game.base_money);
       setDecimal(this.game.state, "current_power", 0);
       setDecimal(this.game.state, "current_heat", 0);
+      this.game.coreBridge?.loadEconomyFromHost?.();
       this.game.reactor.updateStats();
     }
     // Ensure any progress-based gating resets as well
     try {
       if (this.game) {
         this.game.placedCounts = {};
+        this.game.coreBridge?.clearPlacedCounts?.();
       }
     } catch (_) { }
   }
@@ -638,11 +644,18 @@ export class UnlockManager {
   }
 
   getPlacedCount(type, level) {
+    const bridge = this.game.coreBridge;
+    if (bridge?.isActive) return bridge.getPlacedCount(type, level);
     const counts = this.game.placedCounts ?? {};
     return counts[`${type}:${level}`] || 0;
   }
 
   incrementPlacedCount(type, level) {
+    const bridge = this.game.coreBridge;
+    if (bridge?.isActive) {
+      bridge.incrementPlacedCount(type, level);
+      return;
+    }
     const counts = this.game.placedCounts ?? {};
     const key = `${type}:${level}`;
     counts[key] = (counts[key] || 0) + 1;
@@ -737,16 +750,59 @@ function refreshObjective(game) {
   if (game.objectives_manager) game.objectives_manager.check_current_objective();
 }
 
+async function runCoreKeepEpPrestige(game, bridge) {
+  const savedProtium = game.protium_particles;
+  bridge.loadEconomyFromHost?.();
+  const result = bridge.prestige();
+  game.protium_particles = savedProtium;
+  clearState(game);
+  resetObjectives(game);
+  bridge.hydrateObjectivesFromGame?.();
+  const epFromWeave = result?.earned ?? 0;
+  game.exoticParticleManager.exotic_particles = toDecimal(epFromWeave);
+  const prestigePayload = {
+    keepEp: true,
+    epFromWeave,
+    fuelCellCount: result?.fuelCellCount ?? 0,
+    sessionPowerProduced: result?.sessionPowerProduced ?? 0,
+    sessionHeatDissipated: result?.sessionHeatDissipated ?? 0,
+  };
+  game.state.last_prestige = prestigePayload;
+  game.state.prestige_seq = (game.state.prestige_seq ?? 0) + 1;
+  bridge.loadEconomyFromHost?.();
+  refreshUI(game);
+  refreshObjective(game);
+}
+
+async function runCoreDiscardEpReboot(game, bridge) {
+  const savedProtium = game.protium_particles;
+  bridge.reboot({ keepEp: false });
+  game.protium_particles = savedProtium;
+  setDecimal(game.state, "current_exotic_particles", 0);
+  setDecimal(game.state, "total_exotic_particles", 0);
+  game.exoticParticleManager.exotic_particles = toDecimal(0);
+  bridge.loadEconomyFromHost?.();
+  clearState(game);
+  resetObjectives(game);
+  bridge.hydrateObjectivesFromGame?.();
+  refreshUI(game);
+  refreshObjective(game);
+}
+
 async function runRebootActionInternal(game, keep_exotic_particles) {
   logger.log("debug", "game", "Reboot action initiated", { keep_exotic_particles });
   recordSimEvent(game, { type: "PRESTIGE_REBOOT_TRIGGERED" });
   drainGameEffects(game, () => game?.ui);
+  const bridge = game.coreBridge;
+  if (bridge?.isActive) {
+    if (keep_exotic_particles) await runCoreKeepEpPrestige(game, bridge);
+    else await runCoreDiscardEpReboot(game, bridge);
+    return;
+  }
   const st = game.state;
-  const sessionPowerProduced = toNumber(st?.session_power_produced ?? 0);
-  const sessionHeatDissipated = toNumber(st?.session_heat_dissipated ?? 0);
-  const epFromWeave = Math.floor(
-    Math.min(sessionPowerProduced, sessionHeatDissipated) / WEAVE_QUANTUM
-  );
+  let sessionPowerProduced = toNumber(st?.session_power_produced ?? 0);
+  let sessionHeatDissipated = toNumber(st?.session_heat_dissipated ?? 0);
+  let epFromWeave = calculateWeaveEp(sessionPowerProduced, sessionHeatDissipated, WEAVE_QUANTUM);
   let fuelCellCount = 0;
   const tiles = game.tileset?.active_tiles_list;
   if (tiles) {
@@ -769,13 +825,14 @@ async function runRebootActionInternal(game, keep_exotic_particles) {
   refreshUI(game);
   refreshObjective(game);
   if (keep_exotic_particles) {
-    game.state.last_prestige = {
+    const prestigePayload = {
       keepEp: true,
       epFromWeave,
       fuelCellCount,
       sessionPowerProduced,
       sessionHeatDissipated,
     };
+    game.state.last_prestige = prestigePayload;
     game.state.prestige_seq = (game.state.prestige_seq ?? 0) + 1;
   }
 }
@@ -801,6 +858,7 @@ export async function runFullReboot(game) {
   setDecimal(game.state, "current_exotic_particles", 0);
   game.protium_particles = 0;
   setDecimal(game.state, "total_exotic_particles", 0);
+  game.coreBridge?.loadEconomyFromHost?.();
   resetSessionCriticalityCounters(game);
   game.gridManager.setRows(game.base_rows);
   game.gridManager.setCols(game.base_cols);
@@ -839,6 +897,7 @@ function applyBaseResources(game) {
   resetSessionCriticalityCounters(game);
   game.sold_power = false;
   game.sold_heat = false;
+  game.coreBridge?.loadEconomyFromHost?.();
 }
 
 async function resetSubsystems(game, bypass, preservedTechTree) {
@@ -864,6 +923,7 @@ function refreshAllPartStatsForGame(game) {
 
 function applyPlacementState(game) {
   game.placedCounts = {};
+  game.coreBridge?.clearPlacedCounts?.();
 }
 
 function clearTilesThenVisuals(game) {
@@ -980,10 +1040,13 @@ export class LifecycleManager {
     this.game.run_id = crypto.randomUUID();
     this.game.cheats_used = false;
     this.game.reactor.clearMeltdownState();
+    this.game.coreBridge?.syncGridFromGame?.();
+    this.game.coreBridge?.hydrateObjectivesFromGame?.();
     initLeaderboardSafe();
     enqueueClearAnimations(this.game);
     setDecimal(this.game.state, "current_money", this.game.base_money);
     this.game.state.stats_cash = this.game.state.current_money;
+    this.game.coreBridge?.loadEconomyFromHost?.();
     this.game.onToggleStateChange?.("auto_sell", false);
     this.game.onToggleStateChange?.("auto_buy", false);
     const defaultQuickSelectIds = ["uranium1", "vent1", "heat_exchanger1", "heat_outlet1", "capacitor1"];
@@ -1068,6 +1131,7 @@ export class ExoticParticleManager {
 
   set total_exotic_particles(v) {
     setDecimal(this.game.state, "total_exotic_particles", ensureDecimal(v));
+    this.game.coreBridge?.loadEconomyFromHost?.();
   }
 
   get exotic_particles() {
@@ -1084,6 +1148,7 @@ export class ExoticParticleManager {
 
   set current_exotic_particles(v) {
     setDecimal(this.game.state, "current_exotic_particles", ensureDecimal(v));
+    this.game.coreBridge?.loadEconomyFromHost?.();
   }
 
   grantCheatExoticParticle(amount = 1) {
@@ -1097,15 +1162,10 @@ export class ExoticParticleManager {
 
 export function runSellAction(game) {
   const bridge = game.coreBridge;
-  if (bridge?.isActive && bridge.authoritativeTicks !== false) {
-    if (bridge.sellPower()) {
-      game.reactor?.updateStats?.({ fromSession: true });
-      return;
-    }
-    return;
+  if (!bridge?.isActive) return;
+  if (bridge.sellPower()) {
+    game.reactor?.updateStats?.({ fromSession: true });
   }
-  game.reactor.sellPower();
-  game.reactor.updateStats();
 }
 
 export function runManualReduceHeatAction(game) {
@@ -1113,24 +1173,9 @@ export function runManualReduceHeatAction(game) {
   recordSimEvent(game, { type: "MANUAL_HEAT_REDUCE" });
   drainGameEffects(game, () => game?.ui);
   const bridge = game.coreBridge;
-  if (bridge?.isActive && bridge.authoritativeTicks !== false) {
-    if (bridge.ventHeat()) {
-      game.reactor?.updateStats?.({ fromSession: true });
-      return;
-    }
-    return;
-  }
-  game.reactor.manualReduceHeat();
-  game.reactor.updateStats();
-}
-
-export function runSellPart(game, tile) {
-  if (tile && tile.part) {
-    const sellValue = tile.calculateSellValue();
-    logger.log("debug", "game", "sellPart", { row: tile.row, col: tile.col, partId: tile.part.id, value: sellValue });
-    recordSimEvent(game, { type: "PART_SOLD", row: tile.row, col: tile.col, text: `+${sellValue}` });
-    drainGameEffects(game, () => game?.ui);
-    tile.sellPart();
+  if (!bridge?.isActive) return;
+  if (bridge.ventHeat()) {
+    game.reactor?.updateStats?.({ fromSession: true });
   }
 }
 

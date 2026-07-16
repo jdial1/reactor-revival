@@ -224,6 +224,7 @@ async function bootstrapGame(game, ui) {
   console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset …");
   game.tileset.initialize();
   await game.partset.initialize();
+  await attachCoreBridge(game);
   await game.upgradeset.initialize();
   await game.set_defaults();
   game._subsystems = {
@@ -538,9 +539,6 @@ export function attachGameEventListeners(game, ui) {
     const te = tickEquivalent ?? Math.floor(ms / FOUNDATIONAL_TICK_MS);
     if (ui.modalOrchestrator?.showModal) ui.modalOrchestrator.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs: ms, tickEquivalent: te });
   });
-  on("gameLoopWorkerFatal", ({ detail }) => {
-    logger.log("error", "engine", "Game loop worker fatal:", detail);
-  });
   on("simulationHardwareError", ({ message }) => {
     if (!ui.game?.state) return;
     ui.game.state.engine_status = EngineStatus.SIMULATION_ERROR;
@@ -619,7 +617,6 @@ async function initGameComponents(game, ui) {
   _tooltipTeardown = wireTooltipManager(ui, game);
   await attachCoreBridge(game);
   game.engine = new Engine(game);
-  game.engine.setForceNoSAB(preferences.forceNoSAB === true);
   game.tutorialManager = createTutorialManager(game);
 }
 

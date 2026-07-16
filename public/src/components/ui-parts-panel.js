@@ -83,6 +83,10 @@ export function unlockAllPartsForTesting(ui) {
   typeLevelCombos.forEach((combo) => {
     ui.game.placedCounts[combo] = 10;
   });
+  const bridge = ui.game.coreBridge;
+  if (bridge?.isActive) {
+    bridge.setPlacedCounts({ ...ui.game.placedCounts });
+  }
   ui.game.partset.check_affordability(ui.game);
   refreshPartsPanel(ui);
 }

@@ -1,6 +1,7 @@
-﻿import { HEAT_EPSILON, MELTDOWN_HEAT_MULTIPLIER } from "../constants/sim.js";
-import { deriveReactorStats } from "./reactor-stats.js";
-import { setDecimal, updateDecimal, syncReactorToUIState } from "../state/decimal-sync.js";
+﻿import {
+  syncTilePulseDisplays,
+} from "../bridge/core-state-projection.js";
+import { setDecimal, syncReactorToUIState } from "../state/decimal-sync.js";
 import { recordSimEvent } from "./sim-events.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import { saveRecoveredBlueprint } from "../components/ui-layout-storage.js";
@@ -8,7 +9,6 @@ import { toDecimal, toNumber } from "../simUtils.js";
 import { logger } from "../core/logger.js";
 import { getCompactLayout } from "../layout/reactor-codec.js";
 import {
-  OVERRIDE_DURATION_MS,
   TICKS_FULL_CYCLE,
   TICKS_10PCT,
   REFERENCE_POWER,
@@ -83,45 +83,11 @@ function syncStatsToUI(reactor, _stateManager) {
   }
 }
 
-function shouldMeltdown(reactor) {
-  if (reactor.has_melted_down) return true;
-  if (reactor.game.grace_period_ticks > 0) {
-    reactor.game.grace_period_ticks--;
-    return false;
-  }
-
-  const heat = reactor.current_heat;
-  const max = reactor.max_heat;
-  const state = reactor.game.state;
-
-  if (heat.lt(max)) {
-    if (state) {
-      state.failure_state = "nominal";
-      state.hull_integrity = 100;
-    }
-    return false;
-  }
-
-  if (state && heat.gte(max) && heat.lt(max.mul(1.1))) {
-    state.failure_state = "saturation";
-  }
-  if (state && heat.gte(max.mul(1.1)) && state.hull_integrity > 0) {
-    state.failure_state = "repulsion";
-    const overpressure = heat.sub(max.mul(1.1)).div(max).toNumber();
-    state.hull_integrity = Math.max(0, state.hull_integrity - overpressure * 5);
-  }
-  if (state && state.hull_integrity <= 0 && heat.lt(max.mul(MELTDOWN_HEAT_MULTIPLIER))) {
-    state.failure_state = "fragmentation";
-  }
-  if (heat.gt(max.mul(MELTDOWN_HEAT_MULTIPLIER))) {
-    if (state) state.failure_state = "criticality";
-    return true;
-  }
-  return false;
-}
-
 function executeMeltdown(reactor) {
   const game = reactor.game;
+  if (reactor._meltdownPresentationDone) return;
+  reactor._meltdownPresentationDone = true;
+
   logger.log("warn", "engine", "[MELTDOWN] Condition met! Initiating meltdown sequence.");
   logger.log("debug", "reactor", "Meltdown triggered", { heat: reactor.current_heat, max_heat: reactor.max_heat });
 
@@ -131,6 +97,7 @@ function executeMeltdown(reactor) {
     game.state.failure_state = "criticality";
     game.state.hull_integrity = 0;
   }
+  reactor.has_melted_down = true;
   recordSimEvent(game, { type: "MELTDOWN_HAPTIC", pattern: 200 });
   drainGameEffects(game, () => game?.ui);
 
@@ -145,6 +112,8 @@ function executeMeltdown(reactor) {
     game.tileset.active_tiles_list.forEach((tile) => {
       if (tile.part) tile.clearPart();
     });
+    game.coreBridge?.session?.grid?.clearGrid?.();
+    game.coreBridge?.syncGridToGame?.();
   }
 
   game.partset.check_affordability(game);
@@ -153,12 +122,12 @@ function executeMeltdown(reactor) {
 
 function clearMeltdown(reactor) {
   const game = reactor.game;
+  reactor._meltdownPresentationDone = false;
   if (game.state) {
     game.state.melting_down = false;
     game.state.failure_state = "nominal";
     game.state.hull_integrity = 100;
   }
-  // Use centralized sync to ensure UI state matches reactor state
   syncReactorToUIState(game);
   game.partset.check_affordability(game);
   game.upgradeset.check_affordability(game);
@@ -171,11 +140,6 @@ function clearHeatVisualStates(reactor) {
     game.tileset.active_tiles_list.forEach((tile) => { tile.exploding = false; });
   }
   game.emit?.("heatWarningCleared");
-  if (game.engine && game.engine.heatManager) {
-    game.engine.heatManager.segments.clear();
-    game.engine.heatManager.tileSegmentMap.clear();
-    game.engine.heatManager.markSegmentsAsDirty();
-  }
 }
 
 export class Reactor {
@@ -203,6 +167,7 @@ export class Reactor {
 
     this.auto_sell_multiplier = 0;
     this.heat_power_multiplier = 0;
+    this._meltdownPresentationDone = false;
     this._heatControlStat = false;
     this.heat_outlet_controlled = false;
     this.vent_capacitor_multiplier = 0;
@@ -362,61 +327,35 @@ export class Reactor {
   updateStats(opts = {}) {
     if (!this.game.tileset) return;
     const bridge = this.game.coreBridge;
-    let stats;
-    if (bridge?.isActive && bridge.authoritativeTicks !== false && opts.fromSession && bridge.session?.systems?.stats) {
-      const coreStats = bridge.prepareCoreStatsRead(true);
-      if (coreStats) {
-        stats = {
-          stats_power: coreStats.power,
-          stats_cell_power: coreStats.cellPower,
-          stats_stirling_power: coreStats.stirlingPower,
-          stats_heat_generation: coreStats.heatGeneration,
-          stats_total_part_heat: coreStats.totalPartHeat,
-          stats_vent: coreStats.vent,
-          stats_inlet: coreStats.inlet,
-          stats_outlet: coreStats.outlet,
-          stats_net_heat: coreStats.netHeat,
-          stats_cash: coreStats.cash,
-          temp_vent_multiplier: this.vent_multiplier_eff,
-          temp_transfer_multiplier: this.transfer_multiplier_eff,
-          current_max_power: toDecimal(coreStats.maxPower ?? BASE_MAX_POWER),
-          current_max_heat: toDecimal(coreStats.maxHeat ?? BASE_MAX_HEAT),
-        };
-      }
-    } else if (
-      bridge?.isActive
-      && bridge.authoritativeTicks !== false
-      && !opts.fromSession
-      && this.heat_power_multiplier > 0
-      && toNumber(this.current_heat) > 0
-      && bridge.session?.systems?.stats
-    ) {
-      bridge.syncGridFromGame();
-      bridge.syncMechanicsOverridesFromGame();
-      const coreStats = bridge.session.getSnapshot()?.stats;
-      if (coreStats) {
-        stats = {
-          stats_power: coreStats.power,
-          stats_cell_power: coreStats.cellPower,
-          stats_stirling_power: coreStats.stirlingPower,
-          stats_heat_generation: coreStats.heatGeneration,
-          stats_total_part_heat: coreStats.totalPartHeat,
-          stats_vent: coreStats.vent,
-          stats_inlet: coreStats.inlet,
-          stats_outlet: coreStats.outlet,
-          stats_net_heat: coreStats.netHeat,
-          stats_cash: coreStats.cash,
-          temp_vent_multiplier: this.vent_multiplier_eff,
-          temp_transfer_multiplier: this.transfer_multiplier_eff,
-          current_max_power: toDecimal(coreStats.maxPower ?? BASE_MAX_POWER),
-          current_max_heat: toDecimal(coreStats.maxHeat ?? BASE_MAX_HEAT),
-        };
-      }
+    if (!bridge?.isActive) return;
+
+    if (!opts.fromSession) {
+      bridge.syncForStatsRead();
     }
-    if (!stats) stats = deriveReactorStats(this.game.tileset, this);
+
+    const coreStats = bridge.session?.getSnapshot()?.stats;
+    if (!coreStats) return;
+
+    const stats = {
+      stats_power: coreStats.power,
+      stats_cell_power: coreStats.cellPower,
+      stats_stirling_power: coreStats.stirlingPower,
+      stats_heat_generation: coreStats.heatGeneration,
+      stats_total_part_heat: coreStats.totalPartHeat,
+      stats_vent: coreStats.vent,
+      stats_inlet: coreStats.inlet,
+      stats_outlet: coreStats.outlet,
+      stats_net_heat: coreStats.netHeat,
+      stats_cash: coreStats.cash,
+      temp_vent_multiplier: coreStats.vent_multiplier_add ?? coreStats.ventAdditivePercent ?? 0,
+      temp_transfer_multiplier: coreStats.transfer_multiplier_add ?? coreStats.transferAdditivePercent ?? 0,
+      current_max_power: toDecimal(coreStats.maxPower ?? BASE_MAX_POWER),
+      current_max_heat: toDecimal(coreStats.maxHeat ?? BASE_MAX_HEAT),
+    };
     applyStatsToReactor(this, stats);
     syncStatsToUI(this, this.game.ui?.stateManager);
-    if (this.game.tileset && this.game.tileset.active_tiles_list) {
+    if (!opts.fromSession) syncTilePulseDisplays(this);
+    if (this.game.tileset.active_tiles_list) {
       for (let i = 0; i < this.game.tileset.active_tiles_list.length; i++) {
         const t = this.game.tileset.active_tiles_list[i];
         if (t && t.part && typeof t.recalculateEffectiveValues === "function") {
@@ -427,40 +366,13 @@ export class Reactor {
   }
 
   manualReduceHeat() {
-    if (this.current_heat.gt(0)) {
-      const previousHeat = this.current_heat;
-      let reduction = this.manual_heat_reduce || this.game.base_manual_heat_reduce || 1;
-      if (this.manual_vent_percent > 0) {
-        reduction += this.max_heat.toNumber() * this.manual_vent_percent;
-      }
-      this.current_heat = this.current_heat.sub(reduction);
-      if (this.current_heat.lt(0)) this.current_heat = toDecimal(0);
-      const eps = toDecimal(HEAT_EPSILON);
-      if (this.current_heat.lte(eps)) {
-        this.current_heat = toDecimal(0);
-        if (previousHeat.gt(eps)) this.game.sold_heat = true;
-      }
-
-      this.updateStats();
-    }
+    if (!this.current_heat.gt(0)) return;
+    this.game?.manual_reduce_heat_action?.();
   }
 
   sellPower() {
-    if (this.current_power.gt(0)) {
-      const soldAmt = this.current_power;
-      const value = soldAmt.mul(this.sell_price_multiplier || 1);
-      if (this.game.state) {
-        updateDecimal(this.game.state, "session_power_sold", (d) => d.add(soldAmt));
-      }
-      this.game.addMoney(value);
-      this.current_power = toDecimal(0);
-      this.game.sold_power = true;
-
-      if (this.manual_override_mult > 0) {
-        this.override_end_time = Date.now() + OVERRIDE_DURATION_MS;
-        this.updateStats();
-      }
-    }
+    if (!this.current_power.gt(0)) return;
+    this.game?.sell_action?.();
   }
 
   toSaveState() {
@@ -476,17 +388,11 @@ export class Reactor {
   }
 
   checkMeltdown() {
-    if (this.has_melted_down) {
-      logger.log('debug', 'engine', '[MELTDOWN-CHECK] Already in meltdown state.');
-      return false;
-    }
-    const isMeltdown = shouldMeltdown(this);
-    logger.log('debug', 'engine', `[MELTDOWN-CHECK] Inside checkMeltdown. isMeltdown condition evaluated to: ${isMeltdown}. (Heat: ${this.current_heat.toFixed(2)} > 2 * Max Heat: ${this.max_heat.toFixed(2)})`);
-    if (isMeltdown) {
-      executeMeltdown(this);
-      return true;
-    }
-    return false;
+    const already = this.has_melted_down || !!this.game.state?.melting_down
+      || !!this.game.coreBridge?.session?.systems?.failure?.hasMeltedDown;
+    if (!already) return false;
+    executeMeltdown(this);
+    return true;
   }
 
   clearMeltdownState() {

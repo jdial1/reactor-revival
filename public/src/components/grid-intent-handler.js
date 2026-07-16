@@ -1,5 +1,6 @@
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import { actions } from "../store.js";
+import { drainGridIntentsAsync } from "../bridge/bridge-intents.js";
 
 export async function handleGridInteraction(ui, tile, event) {
   const game = ui?.game;
@@ -72,14 +73,11 @@ export async function handleGridInteraction(ui, tile, event) {
   }
 
   if (sellTiles.length && eng) {
-    for (let si = 0; si < sellTiles.length; si++) {
-      const t = sellTiles[si];
-      game.state.intent_queue.push({
-        action: "SELL_PART",
-        payload: { row: t.row, col: t.col },
-      });
-    }
-    const { sold } = await eng.consumeIntentQueueAsync();
+    const intents = sellTiles.map((t) => ({
+      action: "SELL_PART",
+      payload: { row: t.row, col: t.col },
+    }));
+    const { sold } = await drainGridIntentsAsync(game, eng, intents);
     if (sold.length) {
       soundPlayedRef.v = true;
       if (ui.deviceFeatures?.heavyVibration) ui.deviceFeatures.heavyVibration();
@@ -91,14 +89,11 @@ export async function handleGridInteraction(ui, tile, event) {
   }
 
   if (placementTiles.length && eng) {
-    for (let pi = 0; pi < placementTiles.length; pi++) {
-      const t = placementTiles[pi];
-      game.state.intent_queue.push({
-        action: "PLACE_PART",
-        payload: { row: t.row, col: t.col, partId: clicked_part.id },
-      });
-    }
-    const { placed } = await eng.consumeIntentQueueAsync();
+    const intents = placementTiles.map((t) => ({
+      action: "PLACE_PART",
+      payload: { row: t.row, col: t.col, partId: clicked_part.id },
+    }));
+    const { placed } = await drainGridIntentsAsync(game, eng, intents);
     if (placed.length) {
       soundPlayedRef.v = true;
       if (ui.deviceFeatures?.lightVibration) ui.deviceFeatures.lightVibration();

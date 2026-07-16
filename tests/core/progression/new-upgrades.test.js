@@ -57,6 +57,7 @@ describe("New Gameplay Upgrades", () => {
 
             forcePurchaseUpgrade(game, "stirling_generators");
             expect(game.reactor.stirling_multiplier).toBeGreaterThan(0);
+            tile.heat_contained = 100;
             
             game.paused = false;
             game.onToggleStateChange?.("pause", false);
@@ -181,6 +182,7 @@ describe("New Gameplay Upgrades", () => {
 
             forcePurchaseUpgrade(game, "convective_airflow");
             expect(game.reactor.convective_boost).toBeGreaterThan(0);
+            ventTile.heat_contained = 100;
             
             // Ensure part has correct vent value
             ventTile.part.recalculate_stats();
@@ -481,6 +483,7 @@ describe("New Gameplay Upgrades", () => {
             setDecimal(game.state, "session_power_produced", 0);
             setDecimal(game.state, "session_power_sold", 0);
             setDecimal(game.state, "session_heat_dissipated", 0);
+            game.coreBridge?.loadEconomyFromHost?.();
             game.paused = false;
             const om = game.objectives_manager;
             const prevCheck = om && om.check_current_objective;

@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { UpgradeDefinitionSchema, TechTreeSchema } from "../schema/index.js";
 import { bundledGameData } from "../bundledStaticData.js";
-import { applyComputedModifiers } from "./modifiers.js";
+import { applyComputedModifiers } from "../bridge/bridge-mechanics.js";
 import { calculateSectionCounts } from "../logic-upgrade-sections.js";
-import { runCheckAffordabilityCore, runCheckAffordability, computeAffordable } from "../domain/upgrade-affordance.js";
-import { debitMoney, debitExoticParticles } from "./economy-intents.js";
+import { runCheckAffordabilityCore, runCheckAffordability, computeAffordable } from "../bridge/bridge-upgrades.js";
 import { toDecimal, toNumber, getDecimal } from "../simUtils.js";
 import { numFormat as fmt } from "../format/numbers.js";
 import { logger } from "../core/logger.js";
@@ -48,7 +47,7 @@ const UPGRADE_ACTION_NO_PART_SYNC = new Set([
   "unstable_protium",
 ]);
 
-import { bumpGridPartsRevision } from "./part-classification.js";
+import { bumpGridPartsRevision } from "../bridge/bridge-parts.js";
 
 export function syncUpgradeDerivedEffects(game, upgrade) {
   if (!game || !upgrade) return;
@@ -71,14 +70,6 @@ export function syncUpgradeDerivedEffects(game, upgrade) {
       rp.perpetual = (game.upgradeset.getUpgrade("perpetual_reflectors")?.level ?? 0) > 0;
       rp.recalculate_stats();
     }
-  }
-  if (upgrade.id === "uranium1_cell_tick") {
-    const part = game.partset.getPartById("uranium1");
-    if (part) part.ticks = part.base_ticks * Math.pow(2, upgrade.level);
-  }
-  if (upgrade.id === "uranium1_cell_perpetual") {
-    const part = game.partset.getPartById("uranium1");
-    if (part) part.perpetual = true;
   }
   game.statDispatcher?.derive();
   if (upgrade.type?.includes?.("cell")) game.update_cell_power?.();
@@ -151,17 +142,29 @@ export class Upgrade {
   }
 
   updateDisplayCost() {
-    this.current_ecost = this.base_ecost.mul(Decimal.pow(this.ecost_multiplier, this.level));
-    this.current_cost = this.base_cost.mul(Decimal.pow(this.cost_multiplier, this.level));
-
-    if (this.level >= this.max_level) {
+    const bridge = this.game?.coreBridge;
+    if (!bridge?.isActive) return;
+    const preview = bridge.previewUpgrade(this.id);
+    if (!preview) return;
+    if (preview.reason === "max_level" || this.level >= this.max_level) {
       this.display_cost = "MAX";
       this.current_cost = Decimal.MAX_VALUE;
       this.current_ecost = Decimal.MAX_VALUE;
     } else {
-      this.display_cost = this.base_ecost.gt(0) ? `${fmt(this.current_ecost)} EP` : `$${fmt(this.current_cost)}`;
+      const costDec = preview.costDecimal != null
+        ? toDecimal(preview.costDecimal)
+        : toDecimal(preview.cost);
+      const isEp = preview.currency === "ep" || preview.currency === "exotic_particles";
+      if (isEp) {
+        this.current_ecost = costDec;
+        this.current_cost = toDecimal(0);
+        this.display_cost = `${fmt(this.current_ecost)} EP`;
+      } else {
+        this.current_cost = costDec;
+        this.current_ecost = toDecimal(0);
+        this.display_cost = `$${fmt(this.current_cost)}`;
+      }
     }
-
     this._syncDisplayToState();
   }
 
@@ -179,11 +182,8 @@ export class Upgrade {
   }
 }
 
-const CELL_UPGRADE_TEMPLATES = [
-  { type: "cell_power", title: "Potent ", description: "s: +100% power.", actionId: "cell_power" },
-  { type: "cell_tick", title: "Enriched ", description: "s: 2x duration.", actionId: "cell_tick" },
-  { type: "cell_perpetual", title: "Perpetual ", description: "s: auto-replace at 1.5x normal price.", levels: 1, actionId: "cell_perpetual" },
-];
+const CELL_UPGRADE_EFFECTS = new Set(["cell_power", "cell_tick", "cell_perpetual"]);
+const CATALOG_TRANSIENT_CLASSES = new Set(["hidden", "locked", "maxed"]);
 
 export function isCellUpgradeVisible(upgrade, game) {
   const upgType = upgrade?.upgrade?.type || "";
@@ -198,32 +198,66 @@ export function isCellUpgradeVisible(upgrade, game) {
 }
 
 function generateCellUpgrades(game) {
-  const generatedUpgrades = [];
-  const allParts = game.partset.getAllParts();
-  logger.log('debug', 'game', 'All parts:', allParts.map((p) => ({ id: p.id, level: p.level, hasCost: !!p.part.cell_tick_upgrade_cost })));
-  const baseCellParts = allParts.filter((p) => p.part.cell_tick_upgrade_cost && p.level === 1);
-  logger.log('debug', 'game', 'Base cell parts for upgrades:', baseCellParts.map((p) => p.id));
-  for (const template of CELL_UPGRADE_TEMPLATES) {
-    for (const part of baseCellParts) {
-      const upgradeDef = {
-        id: `${part.id}_${template.type}`,
-        type: `${template.type}_upgrades`,
-        title: template.title + part.title,
-        description: part.title + template.description,
-        levels: template.levels,
-        cost: part.part[`${template.type}_upgrade_cost`],
-        multiplier: part.part[`${template.type}_upgrade_multi`],
-        actionId: template.actionId,
-        classList: [part.id, template.type],
-        part: part,
-        icon: part.getImagePath(),
-      };
-      logger.log('debug', 'game', `Generated upgrade: ${upgradeDef.id} with cost: ${upgradeDef.cost}`);
-      generatedUpgrades.push(upgradeDef);
-    }
+  const bridge = game.coreBridge;
+  if (!bridge?.isActive) return [];
+  const catalog = bridge.listUpgrades() || [];
+  const generated = [];
+  for (let i = 0; i < catalog.length; i++) {
+    const entry = catalog[i];
+    if (!CELL_UPGRADE_EFFECTS.has(entry.effect)) continue;
+    const storeDef = bridge.session?.systems?.upgrades?.getDefinition?.(entry.id);
+    const part = entry.partId ? game.partset?.getPartById?.(entry.partId) : null;
+    const isEp = entry.currency === "ep" || entry.currency === "exotic_particles";
+    const baseCost = storeDef?.baseCost ?? entry.cost ?? 0;
+    generated.push({
+      id: entry.id,
+      type: entry.type || entry.section || `${entry.effect}_upgrades`,
+      title: entry.title,
+      description: entry.description || "",
+      levels: entry.maxLevel ?? storeDef?.maxLevel,
+      cost: isEp ? 0 : baseCost,
+      ecost: isEp ? baseCost : 0,
+      multiplier: storeDef?.costMultiplier ?? 2,
+      actionId: entry.effect,
+      classList: (entry.classList || []).filter((cls) => !CATALOG_TRANSIENT_CLASSES.has(cls)),
+      part,
+      icon: entry.iconPath || entry.icon || (typeof part?.getImagePath === "function" ? part.getImagePath() : null),
+      visible: entry.visible,
+      unlockVisible: entry.unlockVisible,
+    });
   }
-  logger.log('debug', 'game', 'Total generated upgrades:', generatedUpgrades.length);
-  return generatedUpgrades;
+  return generated;
+}
+
+const OPERATOR_HOST_TITLES = {
+  auto_sell_operator: "Power Grid Sync",
+  auto_buy_operator: "Supply Chain Logistics",
+};
+
+function generateOperatorUpgrades(game) {
+  const bridge = game.coreBridge;
+  if (!bridge?.isActive) return [];
+  const catalog = bridge.listUpgrades() || [];
+  const out = [];
+  for (let i = 0; i < catalog.length; i++) {
+    const entry = catalog[i];
+    if (!OPERATOR_HOST_TITLES[entry.id]) continue;
+    const storeDef = bridge.session?.systems?.upgrades?.getDefinition?.(entry.id);
+    const isEp = entry.currency === "ep" || entry.currency === "exotic_particles";
+    const baseCost = storeDef?.baseCost ?? entry.cost ?? 0;
+    out.push({
+      id: entry.id,
+      type: entry.type || entry.section || "other",
+      title: OPERATOR_HOST_TITLES[entry.id],
+      description: entry.description || "",
+      levels: entry.maxLevel ?? storeDef?.maxLevel ?? 1,
+      cost: isEp ? 0 : baseCost,
+      ecost: isEp ? baseCost : 0,
+      multiplier: storeDef?.costMultiplier ?? 1,
+      actionId: entry.id,
+    });
+  }
+  return out;
 }
 
 const OBJECTIVE_REQUIRED_UPGRADES = {
@@ -251,11 +285,13 @@ function isUpgradeAvailable(upgradeset, upgradeId) {
     if (upgradeset.game.bypass_tech_tree_restrictions) return true;
 
     const allowedTrees = upgradeset.upgradeToTechTreeMap.get(upgradeId);
-    // If an upgrade isn't in any tech tree definitions, it is a global/base upgrade
-    if (!allowedTrees || allowedTrees.size === 0) return true;
+    if (allowedTrees && allowedTrees.size > 0 && !allowedTrees.has(upgradeset.game.tech_tree)) {
+      return false;
+    }
 
-    // If it is in a tree, the game must have that specific tree active
-    return allowedTrees.has(upgradeset.game.tech_tree);
+    const bridge = upgradeset.game.coreBridge;
+    if (bridge?.isActive) return bridge.isUpgradeAvailable(upgradeId);
+    return !allowedTrees || allowedTrees.size === 0 || allowedTrees.has(upgradeset.game.tech_tree);
 }
 
 function getExclusiveUpgradeIdsForTree(upgradeset, treeId) {
@@ -283,58 +319,6 @@ function sanitizeDoctrineUpgradeLevelsOnLoad(upgradeset, techTreeId) {
     const upgrade = upgradeset.getUpgrade(upgradeId);
     if (upgrade && upgrade.level > 0) upgrade.setLevel(0);
   });
-}
-
-export function purchaseUpgradeCore(upgradeset, upgradeId) {
-  return runPurchaseUpgrade(upgradeset, upgradeId);
-}
-
-function runPurchaseUpgrade(upgradeset, upgradeId) {
-  const upgrade = upgradeset.getUpgrade(upgradeId);
-  if (!upgrade) {
-    logger.log('warn', 'game', `[Upgrade] Purchase failed: Upgrade '${upgradeId}' not found.`);
-    return false;
-  }
-  if (!upgradeset.isUpgradeAvailable(upgradeId)) {
-    return false;
-  }
-  if (!computeAffordable(upgrade, upgradeset, upgradeset.game)) {
-    logger.log('warn', 'game', `[Upgrade] Purchase failed: '${upgradeId}' not affordable. Money: ${upgradeset.game.state.current_money}, Cost: ${upgrade.getCost()}`);
-    return false;
-  }
-  if (upgrade.level >= upgrade.max_level) {
-    logger.log('warn', 'game', `[Upgrade] Purchase failed: '${upgradeId}' already at max level (${upgrade.level})`);
-    return false;
-  }
-
-  const cost = upgrade.getCost();
-  const ecost = upgrade.getEcost();
-  let purchased = false;
-
-  if (ecost.gt(0)) {
-    if (toDecimal(upgradeset.game.state.current_exotic_particles).gte(ecost)) {
-      debitExoticParticles(upgradeset.game, ecost.toNumber?.() ?? Number(ecost));
-      purchased = true;
-    }
-  } else {
-    if (toDecimal(upgradeset.game.state.current_money).gte(cost)) {
-      debitMoney(upgradeset.game, cost.toNumber?.() ?? Number(cost));
-      purchased = true;
-    }
-  }
-
-  if (purchased) {
-    upgrade.setLevel(upgrade.level + 1);
-    upgradeset.game.emit?.("upgradePurchased", { upgrade });
-    logger.log("debug", "upgrades", "Upgrade purchased", { id: upgradeId, level: upgrade.level });
-    if (upgrade.upgrade.type === "experimental_parts") {
-      upgradeset.game.epart_onclick(upgrade);
-    }
-    upgradeset.updateSectionCounts();
-    void upgradeset.game.saveManager.autoSave();
-  }
-
-  return purchased;
 }
 
 function runPurchaseUpgradeToMax(upgradeset, upgradeId) {
@@ -381,19 +365,12 @@ export class UpgradeSet {
 
     logger.log('debug', 'game', 'Upgrade data loaded:', data?.length, "upgrades");
 
-    const fullUpgradeList = [...data, ...generateCellUpgrades(this.game)];
+    const fullUpgradeList = [...data, ...generateCellUpgrades(this.game), ...generateOperatorUpgrades(this.game)];
     fullUpgradeList.forEach((upgradeDef) => {
       const upgradeInstance = new Upgrade(upgradeDef, this.game);
       this.upgrades.set(upgradeInstance.id, upgradeInstance);
       this.upgradesArray.push(upgradeInstance);
     });
-    
-    const autoSellUpg = new Upgrade({ id: "auto_sell_operator", title: "Power Grid Sync", description: "Unlocks Auto-Sell toggle.", cost: 50000, type: "other", levels: 1 }, this.game);
-    const autoBuyUpg = new Upgrade({ id: "auto_buy_operator", title: "Supply Chain Logistics", description: "Unlocks Auto-Buy toggle.", cost: 100000, type: "other", levels: 1 }, this.game);
-    this.upgrades.set(autoSellUpg.id, autoSellUpg);
-    this.upgradesArray.push(autoSellUpg);
-    this.upgrades.set(autoBuyUpg.id, autoBuyUpg);
-    this.upgradesArray.push(autoBuyUpg);
 
     return this.upgradesArray;
   }
@@ -432,14 +409,9 @@ export class UpgradeSet {
 
   purchaseUpgrade(upgradeId) {
     const game = this.game;
-    if (!game?.state) return false;
+    if (!game?.coreBridge?.isActive) return false;
     const before = this.getUpgrade(upgradeId)?.level ?? 0;
-    game.state.intent_queue.push({
-      action: "PURCHASE_UPGRADE",
-      timestamp: Date.now(),
-      payload: { upgradeId },
-    });
-    game.engine?._processIntentQueue?.();
+    game.coreBridge.purchaseUpgrade(upgradeId);
     return (this.getUpgrade(upgradeId)?.level ?? 0) > before;
   }
 

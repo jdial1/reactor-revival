@@ -1,0 +1,73 @@
+================================================================================
+reactor-core-lib — missing / incomplete features (host cutover leftovers)
+================================================================================
+Date: 2026-07-16
+Host: reactor-revival
+Lib version in use: reactor-core-lib@1.2.9 (npm)
+Published: v1.2.9 (commit 268adaa)
+
+
+PURPOSE
+-------
+Host cutover leftovers for reactor-core-lib maintainers who do not have the
+revival repo open. Host target: simulation only through a small bridge set;
+all other tick/physics/catalog compile logic lives in reactor-core-lib.
+
+
+HOST BRIDGE SURFACE (keep; do not grow with sim math)
+----------------------------------------------------
+  public/src/bridge/revival-session-bridge.js  — facade (tick/dispatch/ops)
+  public/src/bridge/core-state-projection.js   — snapshot → host state/tiles
+  public/src/bridge/bridge-grid-sync.js        — layout/heat/ticks + placedCounts
+  public/src/bridge/bridge-upgrades.js         — levels hydrate/project + affordance
+  public/src/bridge/bridge-mechanics.js        — overrides + applyComputedModifiers
+  public/src/bridge/bridge-intents.js          — host UI → session ops / batch apply
+  public/src/bridge/bridge-parts.js            — maps session getActivePartList → tiles
+  public/src/bridge/bridge-heat.js             — heat segment/flow → host tiles
+  public/src/bridge/route-session-events.js    — events → FX/toasts/meltdown UI
+
+
+SHIPPED IN LIB 1.2.9 AND CONSUMED BY HOST
+----------------------------------------
+  L1–L17, L19 as previously documented.
+  L18 command queue: session.enqueueIntent / drainCommands / runCommand /
+      pendingCommands (host intent_queue is residual/empty).
+  Placed counts: getPlacedCount / incrementPlacedCount / rebuildPlacedCounts /
+      setPlacedCounts / clearPlacedCounts (PLACE_PART increments in session).
+  Active parts: getActiveParts / getActivePartList / classifyActivePart
+      (bridge-parts maps entries → host tiles for Engine.active_* tests).
+
+
+DONE ON HOST (1.2.9 switch)
+---------------------------
+- package.json → reactor-core-lib@^1.2.9 (off file: Desktop path)
+- Session owns placedCounts; UnlockManager reads/writes via bridge
+- Removed host double-increment on place; tick meta no longer remirrors
+  host→session placedCounts every tick
+- bridge-parts uses session.getActivePartList (no local grid classify scan)
+- hasTickActivity uses session.pendingCommands + hasTickActivity
+
+
+STILL OPEN — HOST POLISH (not lib physics)
+------------------------------------------
+- Delete state.intent_queue entirely once no residual drain callers remain
+- domain/engine.js — rAF / visibility / catchup / visual rings
+- UpgradeSet / Part — display chrome over session catalog
+- domain/balance.js — HUD/test constants only
+- Optionally drop Engine.active_* getters once tests query session directly
+
+
+HOST-ONLY (do not add to lib)
+-----------------------------
+- Meltdown presentation, doctrine chrome, valtio/DOM/rAF
+- Visual FX, Tile/Tileset canvas, blueprint share-code UI
+- Objectives/achievements UI orchestration
+
+
+SUGGESTED NEXT
+--------------
+  P1  Delete host intent_queue + schema field if unused
+  P2  Point tests at session.getActivePartList; thin bridge-parts further
+  P3  Keep package.json on ^1.2.9; avoid file: unless local lib WIP
+
+End of document.

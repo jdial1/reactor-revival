@@ -1,59 +1,85 @@
-import { calculateNeutronPulsePower, calculateQuadraticHeat } from "./kernel/physics.js";
 import { collectTooltipBonusLinesFromRules } from "./constants/part-tooltip-bonuses.js";
-
-const PCT_BASE = 100;
-const SINGLE_CELL_DESC_TPL = "Creates %power power. Creates %heat heat. Lasts %ticks ticks.";
-const MULTI_CELL_DESC_TPL = "Acts as %count %type cells. Creates %power power. Creates %heat heat. Lasts %ticks ticks";
-const TITLE_PREFIX_STRIP = /Dual |Quad /;
-const CELL_COUNTS_BY_LEVEL = [1, 2, 4];
-
-function getBaseDescriptionTemplate(part) {
-  const baseDescTpl = part.part.base_description;
-  if (baseDescTpl === "%single_cell_description") return SINGLE_CELL_DESC_TPL;
-  if (baseDescTpl === "%multi_cell_description") return MULTI_CELL_DESC_TPL;
-  if (!baseDescTpl) return part.part.cell_count > 1 ? MULTI_CELL_DESC_TPL : SINGLE_CELL_DESC_TPL;
-  return baseDescTpl;
-}
+import { formatPartDescription } from "reactor-core";
 
 function getEffectiveTransfer(part, tile_context) {
-  return tile_context ? tile_context.getEffectiveTransferValue() : part.transfer;
+  if (tile_context) {
+    const bridge = tile_context.game?.coreBridge;
+    if (bridge?.isActive) {
+      const rates = bridge.resolveDisplayRatesForTile(tile_context);
+      if (rates) return rates.transfer;
+    }
+    return tile_context.getEffectiveTransferValue?.() ?? part.transfer;
+  }
+  return part.transfer;
 }
 
 function getEffectiveVent(part, tile_context) {
-  return tile_context ? tile_context.getEffectiveVentValue() : part.vent;
+  if (tile_context) {
+    const bridge = tile_context.game?.coreBridge;
+    if (bridge?.isActive) {
+      const rates = bridge.resolveDisplayRatesForTile(tile_context);
+      if (rates) return rates.vent;
+    }
+    return tile_context.getEffectiveVentValue?.() ?? part.vent;
+  }
+  return part.vent;
 }
 
-function getCellCountForDesc(part) {
-  const cellLevelIndex = (part.part.level || 1) - 1;
-  return CELL_COUNTS_BY_LEVEL[cellLevelIndex] ?? part.cell_count ?? 1;
+function partToCompiledShape(part) {
+  return {
+    id: part.id,
+    title: part.title,
+    category: part.category,
+    type: part.type,
+    level: part.level,
+    baseTicks: part.ticks,
+    basePower: part.power,
+    baseHeat: part.heat,
+    containment: part.containment,
+    reactorPower: part.reactor_power,
+    reactorHeat: part.reactor_heat,
+    vent: part.vent,
+    transfer: part.transfer,
+    powerIncrease: part.power_increase,
+    heatIncrease: part.heat_increase,
+    cellCount: part.cell_count,
+    epHeat: part.ep_heat,
+    baseDescription: part.part?.base_description ?? part.base_description,
+    definition: part.part,
+  };
 }
 
 export function collectPartSemanticSegments(part, tile_context = null) {
-  const tpl = getBaseDescriptionTemplate(part);
-  const effectiveTransfer = getEffectiveTransfer(part, tile_context);
-  const effectiveVent = getEffectiveVent(part, tile_context);
-  const cellCountForDesc = getCellCountForDesc(part);
-  const typeLabel = part.part.title.replace(TITLE_PREFIX_STRIP, "");
-  const segments = [];
-  if (tpl.includes("%count")) segments.push({ kind: "text", unitKey: "CELL_COUNT", value: cellCountForDesc });
-  if (tpl.includes("%type")) segments.push({ kind: "text", unitKey: "CELL_TYPE", value: typeLabel });
-  if (tpl.includes("%power_increase")) segments.push({ kind: "stat", unitKey: "POWER_INCREASE_UNITS", value: part.power_increase });
-  if (tpl.includes("%heat_increase")) segments.push({ kind: "stat", unitKey: "HEAT_INCREASE_UNITS", value: part.heat_increase, places: 0 });
-  if (tpl.includes("%reactor_power")) segments.push({ kind: "stat", unitKey: "REACTOR_POWER_UNITS", value: part.reactor_power });
-  if (tpl.includes("%reactor_heat")) segments.push({ kind: "stat", unitKey: "REACTOR_HEAT_UNITS", value: part.reactor_heat, places: 0 });
-  if (tpl.includes("%ticks")) segments.push({ kind: "stat", unitKey: "TICKS_UNITS", value: part.ticks });
-  if (tpl.includes("%containment")) segments.push({ kind: "stat", unitKey: "CONTAINMENT_UNITS", value: part.containment, places: 0 });
-  if (tpl.includes("%ep_heat")) segments.push({ kind: "stat", unitKey: "EP_HEAT_UNITS", value: part.ep_heat, places: 0 });
-  if (tpl.includes("%range")) segments.push({ kind: "stat", unitKey: "RANGE_UNITS", value: part.range });
-  if (tpl.includes("%power")) segments.push({ kind: "stat", unitKey: "POWER_UNITS", value: part.power });
-  if (tpl.includes("%heat")) segments.push({ kind: "stat", unitKey: "HEAT_UNITS", value: part.heat, places: 0 });
-  if (tpl.includes("%transfer")) segments.push({ kind: "stat", unitKey: "TRANSFER_UNITS", value: effectiveTransfer });
-  if (tpl.includes("%vent")) segments.push({ kind: "stat", unitKey: "VENT_UNITS", value: effectiveVent });
+  const bridge = tile_context?.game?.coreBridge ?? part.game?.coreBridge;
+  const extras = {
+    transfer: getEffectiveTransfer(part, tile_context),
+    vent: getEffectiveVent(part, tile_context),
+    power: part.power,
+    heat: part.heat,
+    range: part.range,
+  };
+  let segments;
+  if (bridge?.isActive && bridge.session?.getPartDescription) {
+    segments = bridge.session.getPartDescription(part.id, {
+      template: part.part?.base_description ?? part.base_description,
+      ...extras,
+    }).segments;
+  } else {
+    segments = formatPartDescription(
+      partToCompiledShape(part),
+      part.part?.base_description ?? part.base_description,
+      extras,
+    ).segments;
+  }
   if (part.category === "vent" && tile_context?.game) {
     const stirlingLvl = tile_context.game.upgradeset.getUpgrade("stirling_generators")?.level ?? 0;
     if (stirlingLvl > 0) {
-      const stirlingPower = effectiveVent * (stirlingLvl * 0.01);
-      segments.push({ kind: "stat", unitKey: "STIRLING_POWER_UNITS", value: stirlingPower });
+      const effectiveVent = extras.vent;
+      segments.push({
+        kind: "stat",
+        unitKey: "STIRLING_POWER_UNITS",
+        value: effectiveVent * (stirlingLvl * 0.01),
+      });
     }
   }
   return segments;
@@ -70,27 +96,16 @@ export function getUpgradeBonusLines(obj, context = {}) {
 }
 
 export function computeNeighborPulseNFromTile(tile) {
-  let N = 0;
-  const cellNeighbors = tile.cellNeighborTiles || [];
-  for (let ni = 0; ni < cellNeighbors.length; ni++) {
-    const nb = cellNeighbors[ni];
-    if (nb.part?.category === "cell" && (nb.ticks ?? 0) > 0) N += nb.part.cell_count || 1;
-  }
-  const reflectors = tile.reflectorNeighborTiles || [];
-  for (let ri = 0; ri < reflectors.length; ri++) {
-    const rb = reflectors[ri];
-    if ((rb.ticks ?? 0) > 0 && rb.part?.category === "reflector") {
-      const v = rb.part.neighbor_pulse_value;
-      N += typeof v === "number" && isFinite(v) && v >= 0 ? v : 1;
-    }
-  }
-  return N;
+  const desc = tile?.game?.coreBridge?.describeCellPulse?.(tile);
+  return typeof desc?.pulseN === "number" ? desc.pulseN : 0;
 }
 
-export function calculateCellPulsePower(coefficient, M, N) {
-  return calculateNeutronPulsePower(coefficient, M, N);
-}
-
-export function calculateCellPulseHeat(Hbase, M, N, C) {
-  return calculateQuadraticHeat(Hbase, M, N, C);
+export function computeDisplaySellValue(part, tile = null) {
+  if (!part) return 0;
+  const bridge = tile?.game?.coreBridge ?? part.game?.coreBridge;
+  if (!bridge?.isActive) return 0;
+  if (tile && typeof tile.row === "number" && typeof tile.col === "number") {
+    return bridge.computeSellValueForTile(tile);
+  }
+  return bridge.computeSellValueForPart?.(part.id) ?? 0;
 }

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, setupGameLogicOnly, pinEngineToSyncMode } from "../helpers/setup.js";
-import { runCheckAffordabilityCore } from "@app/domain/upgrade-affordance.js";
-import { TICK_PHASE_ORDER } from "@app/domain/tick-phases.js";
+import { runCheckAffordabilityCore } from "@app/bridge/bridge-upgrades.js";
 
 describe("tick pipeline", () => {
   let game;
@@ -17,14 +16,20 @@ describe("tick pipeline", () => {
     expect(game.engine.tick_count).toBe(before + 1);
   });
 
-  it("exposes ordered tick phases without ui-effects in core module", () => {
-    expect(TICK_PHASE_ORDER).toEqual([
+  it("exposes reactor-core-lib revival tick stages on session", () => {
+    const stages = game.coreBridge?.session?.getPipelineStages?.();
+    expect(stages).toEqual([
       "intents",
+      "preTick",
       "cells",
       "heat",
+      "automation",
       "vents",
+      "destroy",
       "economy",
+      "failure",
       "objectives",
+      "achievements",
     ]);
   });
 

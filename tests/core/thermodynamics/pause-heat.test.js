@@ -29,7 +29,7 @@ describe("Pause Heat Processing", () => {
         expect(tile.heat_contained).toBeLessThan(initialHeat);
     });
 
-    it("should not call updateSegments when game is paused", () => {
+    it("should not update heat segments when game is paused", () => {
         game.pause();
         expect(game.paused).toBe(true);
 
@@ -39,7 +39,7 @@ describe("Pause Heat Processing", () => {
             updateSegmentsCalled = true;
         };
 
-        game.engine.heatManager.processTick();
+        game.engine.tick();
 
         expect(updateSegmentsCalled).toBe(false);
 

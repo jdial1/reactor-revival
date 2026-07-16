@@ -82,9 +82,9 @@ export class GridManager {
   }
 }
 
-import { topologyNeighborCoords } from "../logic-topology.js";
+import { topologyNeighborCoords } from "reactor-core";
 import { recordSimEvent } from "./sim-events.js";
-import { bumpGridPartsRevision, invalidateTickParts } from "./part-classification.js";
+import { bumpGridPartsRevision, invalidateTickParts } from "../bridge/bridge-parts.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import {
   getIndex,
@@ -102,8 +102,6 @@ import {
   SINGULARITY,
 } from "../constants/heat-visual.js";
 import { vuSegmentRatio01 } from "../core/math-helpers.js";
-
-const GRID_SIZE = 50 * 50;
 
 export function computeTileNeighborLists(tile) {
   const p = tile.part;
@@ -208,29 +206,23 @@ export class Tile {
     this.cachedEffectiveTransfer = 0;
     if (!this.part) return;
 
-    if (this.part.vent) {
-      let ventValue = this.part.vent;
-      const activeVenting = this.game.upgradeset.getUpgrade("active_venting");
-      if (activeVenting && activeVenting.level > 0) {
-        let capacitorBonus = 0;
-        const neighbors = this.containmentNeighborTiles;
-        for (let i = 0; i < neighbors.length; i++) {
-          const neighbor = neighbors[i];
-          if (neighbor.part && neighbor.part.category === "capacitor") {
-            capacitorBonus += neighbor.part.level || 1;
-          }
+    const bridge = this.game?.coreBridge;
+    if (bridge?.isActive) {
+      const rates = bridge.resolveDisplayRatesForTile(this);
+      if (rates) {
+        this.cachedEffectiveVent = rates.vent ?? 0;
+        this.cachedEffectiveTransfer = rates.transfer ?? 0;
+        if (this.part.category === "vent" && (rates.vent || this.part.vent)) {
+          this.cachedEffectiveTransfer = this.cachedEffectiveVent || this.cachedEffectiveTransfer;
         }
-        ventValue *= 1 + (activeVenting.level * capacitorBonus) / 100;
+        return;
       }
-      this.cachedEffectiveVent = ventValue;
     }
 
-    if (this.part.category === 'vent' && this.part.vent) {
-      this.cachedEffectiveTransfer = this.part.vent;
-    } else if (this.part.transfer) {
-      const transferMultiplier = this.game?.reactor.transfer_multiplier_eff || 0;
-      this.cachedEffectiveTransfer = this.part.transfer * (1 + transferMultiplier / 100);
-    }
+    this.cachedEffectiveVent = this.part.vent || 0;
+    this.cachedEffectiveTransfer = this.part.category === "vent"
+      ? this.cachedEffectiveVent
+      : (this.part.transfer || 0);
   }
 
   getEffectiveVentValue() {
@@ -330,15 +322,9 @@ export class Tile {
         this.recalculateEffectiveValues();
       }
     }
-
-    this.game.engine?.heatManager?.markSegmentsAsDirty();
     if (!isRestoring) {
       this.game.reactor.updateStats();
       if (!this.part) this.recalculateEffectiveValues();
-      const bridge = this.game.coreBridge;
-      if (this.part && bridge?.shouldSyncPlacementsToSession?.()) {
-        bridge.syncTileFromGame(this.row, this.col);
-      }
       try {
         if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
           this.game.state.parts_panel_version++;
@@ -368,12 +354,7 @@ export class Tile {
     this.display_heat = 0;
     this.exploded = false;
     this.exploding = false;
-    const bridge = this.game?.coreBridge;
-    if (bridge?.shouldSyncPlacementsToSession?.()) {
-      bridge.syncTileFromGame(this.row, this.col);
-    }
     this.game.bumpGridTileDirty?.(this.row, this.col);
-    this.game.engine?.heatManager?.markSegmentsAsDirty();
     this.game.reactor.updateStats();
     try {
       if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
@@ -395,29 +376,19 @@ export class Tile {
     const part_id = this.part.id;
     logger.log('debug', 'game', `Selling part '${part_id}' from tile (${this.row}, ${this.col}).`);
     logger.log('debug', 'tile', 'sellPart', { row: this.row, col: this.col, partId: part_id });
-    const sell_value = this.calculateSellValue();
-    this.game.addMoney(sell_value);
+    const bridge = this.game?.coreBridge;
+    if (bridge?.isActive) {
+      bridge.sellPart(this.row, this.col);
+      return;
+    }
+    this.game.addMoney(this.calculateSellValue());
     this._clearPartReset();
   }
 
 
   calculateSellValue() {
-    if (!this.part) {
-      return 0;
-    }
-    const part = this.part;
-    let sellValue = part.cost;
-    if (part.ticks > 0 && typeof this.ticks === "number") {
-      const lifeRemainingRatio = Math.max(0, this.ticks / part.ticks);
-      sellValue = Math.ceil(part.cost * lifeRemainingRatio);
-    } else if (
-      part.containment > 0 &&
-      typeof this.heat_contained === "number"
-    ) {
-      const damageRatio = Math.min(1, this.heat_contained / part.containment);
-      sellValue = part.cost - Math.ceil(part.cost * damageRatio);
-    }
-    return Math.max(0, sellValue);
+    if (!this.part) return 0;
+    return this.game?.coreBridge?.computeSellValueForTile?.(this) ?? 0;
   }
   refreshVisualState() {
     this.game.bumpGridTileDirty?.(this.row, this.col);
@@ -545,8 +516,6 @@ export class Tileset {
     }
 
     this.active_tiles_list = this.tiles_list.filter((t) => t.enabled);
-
-    this.game.engine?.heatManager?.markSegmentsAsDirty();
   }
 
   getTile(row, col) {
@@ -578,7 +547,7 @@ export class Tileset {
         tile.clearPart();
       }
     });
-    this.game.engine?.heatManager?.markSegmentsAsDirty();
+    this.game.coreBridge?.syncGridFromGame?.();
   }
 
   clearAllParts() {
@@ -587,7 +556,6 @@ export class Tileset {
         tile.clearPart();
       }
     });
-    this.game.engine?.heatManager?.markSegmentsAsDirty();
   }
 
   getAllTiles() {

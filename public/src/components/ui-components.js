@@ -316,7 +316,7 @@ export class ComponentRenderingUI {
 }
 
 
-export { clipToGrid, getCostBreakdown, applyBlueprintLayout, computeBlueprintDiff, applyBlueprintLayoutDiff, calculateLayoutCost } from "../domain/blueprint.js";
+export { clipToGrid, getCostBreakdown, computeBlueprintDiff, applyBlueprintLayoutDiff, calculateLayoutCost } from "../domain/blueprint.js";
 export { mergeComponents, renderComponentIcons } from "./ui-blueprint-helpers.js";
 export {
   deserializeReactor,

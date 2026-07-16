@@ -5,7 +5,6 @@ export {
   enqueueGameEffect,
   runSellAction,
   runManualReduceHeatAction,
-  runSellPart,
   getValidatedPreferences,
   initPreferencesStore,
   getVolumePreferences,

@@ -4,7 +4,7 @@ export {
   getAffordanceFlags,
   runCheckAffordability,
   setUpgradeCardRefreshHandler,
-} from "./domain/upgrade-affordance.js";
+} from "./bridge/bridge-upgrades.js";
 
 export { bindPartElement, getPartElement } from "./components/part-presentation.js";
 

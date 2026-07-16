@@ -1,0 +1,527 @@
+================================================================================
+reactor-core-lib — feature push candidates from reactor-revival UI cutover
+================================================================================
+Date: 2026-07-16
+Audience: reactor-core-lib maintainers (this document is written so you do NOT
+          need the reactor-revival app open)
+Consuming app: reactor-revival (npm package "reactor-core-lib", import alias
+               "reactor-core")
+Game id: reactor_revival
+
+PURPOSE
+-------
+The revival UI is mid-cutover onto reactor-core-lib as the authoritative
+simulation. Ticks already go through createGameSession + session.tick /
+runBatchTicks. Local heat-transfer / worker paths were deleted (~1.1k lines).
+
+What remains is duplicated RULE ownership: the UI/domain/bridge still evaluates
+or mutates state that core systems already exist for (or should own). This
+document lists concrete lib changes so the UI can shrink to:
+  intent → session.dispatch / session API → project snapshot/events to UI
+
+Do not assume UI file paths are stable. Prefer the behavior, formulas, and
+API contracts below.
+
+
+CURRENT INTEGRATION MODEL (how the app talks to you)
+----------------------------------------------------
+1. App creates a session with createGameSession({ gameId: "reactor_revival" }).
+2. App syncs grid placements + some runtime fields into session.grid /
+   instances before ticks.
+3. App calls session.tick({ multiplier }) (or runBatchTicks) each frame.
+4. App projects tick results + session.systems.* back into UI state.
+5. Player actions currently go through an app "bridge" that sometimes calls
+   session.dispatch({ type }) and sometimes mutates session.grid / app objects
+   directly — the latter is what we want to eliminate.
+
+Core already registers (createGameSession.js registerDefaultCommands):
+  PLACE_PART, REMOVE_PART, PURCHASE_UPGRADE, SELL_POWER, VENT_HEAT,
+  SET_TOGGLE, PAUSE_TOGGLE, REBOOT, SELL_PART, DEBIT_MONEY, CREDIT_MONEY,
+  DEBIT_LAYOUT_COST
+Revival ruleset also registers:
+  APPLY_BLUEPRINT, COMMIT_BLUEPRINT_PLANNER
+
+Gaps are mostly: commands incomplete vs UI policy, or UI bypassing them.
+
+
+SUGGESTED CUT ORDER
+-------------------
+1. Failure ownership (stop dual meltdown evaluators)
+2. PURCHASE_UPGRADE used end-to-end (stop bridge reimplementation)
+3. Layout caps derived only in core (stop UI overwrite of grid.maxPower/maxHeat)
+4. Cell pulse / effective power-heat computed in core (stop UI feeding
+   inst._effectivePower / _effectiveHeat)
+5. VENT_HEAT policy, topology re-export usage, blueprint session ops, HUD
+   snapshot fields, heat warning facts
+
+
+================================================================================
+HIGH PRIORITY
+================================================================================
+
+--------------------------------------------------------------------------------
+H1. Meltdown / hull failure — single owner
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  createFailureSystem(manifest) already implements the stage machine:
+    nominal → saturation (≥ max) → repulsion (≥ max*1.1, hull drain) →
+    fragmentation (hull ≤ 0) → criticality / meltdown (heat > max * meltdownMultiplier)
+  Emits: events 'meltdown', 'fragmentationExplosion'
+  Tick result fields: meltdown, failureState, hullIntegrity
+  Serialize/deserialize: failureState, hullIntegrity, hasMeltedDown, gracePeriodTicks
+  Meltdown multiplier default: 2 (manifest.mechanics.failure.meltdownHeatMultiplier
+  or mechanics.meltdownHeatMultiplier)
+  Grace: decrements one tick per evaluate while gracePeriodTicks > 0
+
+PROBLEM
+  The consuming app STILL runs a parallel shouldMeltdown() on its Reactor object
+  with the same thresholds, and executeMeltdown() for UI side-effects
+  (stop engine, save recovered blueprint, clear tiles, haptic). Two evaluators
+  can diverge on grace decrement timing, hull drain, and when meltdown fires.
+
+WHAT THE APP SHOULD DO AFTER THE FIX
+  - Never evaluate failure locally.
+  - On session event meltdown / tickResult.meltdown: run presentation only
+    (UI overlay, audio/haptics, optional recovered-blueprint save, clear tiles
+    if no meltdown UI). Those presentation steps stay OUT of the lib.
+
+WHAT TO ADD / HARDEN IN THE LIB
+  1. Guarantee failure.evaluate runs exactly once per tick in the revival
+     pipeline stage order (already listed: ... economy, failure, objectives).
+  2. Ensure snapshot / getLastResult always expose:
+       failureState, hullIntegrity, hasMeltedDown (or meltingDown), gracePeriodTicks
+     so hosts do not mirror state.
+  3. Document that hosts must NOT decrement grace themselves; only
+     failure.setGracePeriodTicks / deserialize.
+  4. Optional: emit staged events (failureStateChanged) when state transitions
+     so UI can SFX without polling.
+  5. Keep meltdownMultiplier + gracePeriodTicks configurable via
+     reactor_revival manifest mechanics (already partially wired).
+
+ACCEPTANCE
+  Host can delete local shouldMeltdown/executeMeltdown evaluation; meltdown
+  only occurs when core says so; hull_integrity / failure_state match core
+  serialize() after every tick.
+
+
+--------------------------------------------------------------------------------
+H2. Upgrade purchase — make PURCHASE_UPGRADE the only path
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  registerCommand('PURCHASE_UPGRADE', (session, { id }) => session.purchaseUpgrade(id))
+  session.purchaseUpgrade(id):
+    systems.upgrades.purchase(id, systems.economy)
+    → recompileModifiers()
+    → events.emit('upgradePurchased', { id })
+  createUpgradeStore: getCost, canPurchase, purchase, compileModifiers, serialize
+  reactor_revival uses createRevivalUpgradeStore which flattens manifest.upgrades
+  and maps actionId → effect handlers in effect-registry.js
+
+PROBLEM
+  The app bridge reimplements purchase:
+    - availability / max level / erequires checks on APP Upgrade objects
+    - cost from upgrade.getCost() / getEcost() (app Decimal economy)
+    - spend via session.systems.economy
+    - level bump on APP upgrade object
+    - then syncUpgradesFromGame() into core store
+  Core's PURCHASE_UPGRADE is bypassed. App UpgradeSet and core store can desync
+  (money/EP, levels, modifiers).
+
+UI RULES THE BRIDGE ENFORCES TODAY (must be expressible in core)
+  - Reject if upgrade missing
+  - Reject if not "available" (research/unlock gating — app-specific; either
+    move into upgrade def flags or a ruleset canPurchase hook)
+  - Reject if level >= max_level
+  - Reject if reactor has melted down
+  - If upgrade.erequires: required upgrade must have level > 0
+  - Currency: if ecost > 0 spend exotic particles, else spend money
+  - On success: bump level, emit upgradePurchased, recompile modifiers,
+    recalculate grid caps
+
+GAPS TO CLOSE IN THE LIB
+  1. Align canPurchase/purchase with revival cost model:
+     - money vs EP (createRevivalUpgradeStore already sets currency from ecost)
+     - erequires: today createUpgradeStore checks erequires oddly
+       (requires EP if prerequisite level is 0). Revival UI requires
+       prerequisite level > 0 regardless of EP. Fix to: all ids in
+       def.erequires must have getLevel(req) > 0.
+  2. Block purchase when systems.failure.hasMeltedDown (or engine.meltdown).
+  3. Optional ruleset hook: upgrades.canPurchaseExtra(session, id) → boolean
+     for research/availability gating the app currently does outside the store.
+  4. After purchase, ensure recompileModifiers + grid.recalculateCaps() run
+     (purchaseUpgrade already recompiles; confirm recalculateCaps is called —
+     today recompileModifiers calls grid.recalculateCaps()).
+  5. Event payload should include newLevel + spent { money, ep } for UI.
+
+WHAT THE APP SHOULD DO AFTER THE FIX
+  bridge.purchaseUpgrade(id) → session.dispatch({ type:'PURCHASE_UPGRADE', payload:{ id } })
+  → drain commands → project economy + upgrade levels from session
+  Delete app-side spend/level mutation.
+
+ACCEPTANCE
+  Buying an upgrade only mutates session.systems.upgrades + economy; host
+  Upgrade UI is a projection of store.serialize().
+
+
+--------------------------------------------------------------------------------
+H3. Layout max power / max heat caps — derive only in core
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  grid.maxPower / grid.maxHeat initialized from manifest.gridDefaults
+    (baseMaxPower, baseMaxHeat)
+  Capacitor defs (buildIncrementalCapacitor):
+    onAddToGrid: adjustMaxPower(effectivePower); adjustMaxHeat(effectiveContainment)
+    onRemoveFromGrid: inverse
+  Plating defs (buildIncrementalPlating):
+    onAddToGrid: adjustMaxHeat(effectiveContainment)
+    heatAdjustment on def for recalculateCaps
+  grid.recalculateCaps():
+    reset to baseMaxHeat / baseMaxPower
+    for each instance:
+      maxHeat += definition.heatAdjustment (if any)
+      maxPower += definition.power (if any)
+  session.recompileModifiers() calls grid.recalculateCaps()
+
+PROBLEM
+  App bridge applyLayoutCapsFromGame() OVERWRITES session.grid.maxPower/maxHeat
+  by walking the UI tileset:
+    maxPower = BASE_MAX_POWER (100)
+    maxHeat  = BASE_MAX_HEAT (1000)
+    for each placed part:
+      if category === "capacitor":
+        maxPower += part.reactor_power
+      if category === "reactor_plating":
+        maxHeat  += part.reactor_heat
+        maxPower += part.reactor_power
+
+  That is a third formula (UI fields reactor_power / reactor_heat) vs core's
+  power / containment / heatAdjustment and onAdd/onRemove incremental adjusts.
+
+KNOWN SEMANTIC MISMATCH TO RESOLVE IN LIB (important)
+  UI plating adds BOTH reactor_heat (to max heat) AND reactor_power (to max power).
+  Core plating builder only adjusts max heat (containment / heatAdjustment).
+  UI capacitors use reactor_power for max power only (heat capacity is separate
+  containment on the part).
+  Core capacitors add both effectivePower to maxPower AND effectiveContainment
+  to maxHeat on place.
+
+  Decide the authoritative revival formula and encode it in:
+    - part specs in games/reactor_revival/parts (or components manifest)
+    - buildIncrementalCapacitor / buildIncrementalPlating
+    - recalculateCaps (must match onAdd/onRemove exactly)
+
+WHAT TO ADD / FIX IN THE LIB
+  1. Make recalculateCaps the single source of truth; call it on
+     placeComponent, removeComponent, resize, deserialize, recompileModifiers.
+  2. Ensure onAdd/onRemove and recalculateCaps use the SAME fields so
+     place-then-recalculate is idempotent (today mixing adjustMax* with
+     recalculateCaps can double-count if both run carelessly — document or
+     make place only set component and always recalculateCaps).
+  3. Map revival part JSON fields (reactor_power, reactor_heat, containment,
+     power) into definition fields used by caps so hosts never sum them.
+  4. Snapshot always includes maxPower/maxHeat after any layout change.
+  5. Stop requiring hosts to write grid.maxPower/maxHeat.
+
+ACCEPTANCE
+  After place/remove/upgrade, grid.maxPower/maxHeat equal the documented formula
+  with no host overwrite; UI only reads snapshot values.
+
+
+--------------------------------------------------------------------------------
+H4. Cell pulse / per-tile power & heat — compute in core, project out
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  computeNeighborPulseN(grid, row, col)
+  computeCellOutput(def, inst, pulse, reflectorCount, reflectorCooling, multiplier)
+  Formulas (cellPhase.js):
+    pulse N from cardinal neighbors:
+      cell with ticks>0 contributes cellCount (default 1)
+      reflector with ticks>0 contributes neighborPulseValue or
+        1 + powerIncrease/100
+    layoutPower = lp * pulse   (unless inst._effectivePower set)
+    generatedHeat = (hEff * pulse^2 / cellCount) * multiplier
+      (unless inst._effectiveHeat set — then uses that * multiplier)
+  deriveReactorStats uses the same computeNeighborPulseN + computeCellOutput
+
+PROBLEM — INVERTED OWNERSHIP
+  App computes tile.power / tile.heat locally (syncTilePulseDisplays):
+    P = cell power coefficient (with upgrade doubling for *1_cell_power, etc.)
+    H = cell heat coefficient (protium unstable / depleted particle mods)
+    M = cell_pack_M, C = cell_count
+    N = neighbor pulse from tile neighbor lists
+    power = P * (M + N)
+    heat  = H * (M + N)^2 / C
+    then reflector cooling + heat_power_multiplier
+  Bridge then copies into instances:
+    inst._effectivePower = tile.power
+    inst._effectiveHeat  = tile.heat
+  Core cell phase PREFERS those overrides over computing from defs.
+  So authoritative tick output depends on UI computing first.
+
+WHAT TO ADD / FIX IN THE LIB
+  1. Expand cell coefficient resolution inside core (or revival modifiers) so
+     upgrades that affect cell base power/heat are applied when resolving
+     lp / hEff — without needing _effectivePower/_effectiveHeat from the host.
+     Known revival modifiers the UI applies today:
+       - upgrade `${partType}1_cell_power` level L → power *= 2^L
+       - upgrade unstable_protium on protium → power *= 2^L, heat *= 0.5^L
+       - protium_particles (depleted count) D → heat *= (1 + 0.10 * D)
+  2. Persist per-cell last tick outputs on the instance or in tick result:
+       { row, col, power, heat, pulseN, reflectorCount }
+     so UI display/tooltips can project without recomputing.
+  3. Deprecate / ignore host-written _effectivePower/_effectiveHeat for cells
+     during authoritative ticks (keep only if needed for planner preview).
+  4. Export pure helpers already present:
+       computeNeighborPulseN, computeCellOutput
+     (and optionally calculateNeutronPulsePower / quadratic heat as named
+     exports) so tooltip code can call the same functions without duplicating
+     formulas.
+
+FORMULAS TO KEEP IDENTICAL (host physics kernel)
+  power = coefficient * (M + N)
+  heat  = Hbase * (M + N)^2 / max(1, C)
+  reflector cooling: heatMult = max(0.1, 1 - reflectorCount * reflectorCoolingFactor)
+
+ACCEPTANCE
+  Tick cell power/heat match deriveReactorStats without any pre-tick UI write
+  of _effectivePower/_effectiveHeat; UI display fields are projections.
+
+
+================================================================================
+MEDIUM PRIORITY
+================================================================================
+
+--------------------------------------------------------------------------------
+M1. Neighbor topology — single implementation
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  Exported from package index:
+    topologyNeighborCoords, Topology, TOPOLOGY_TYPES
+  (engine/kernel/neighborTopology.js)
+
+PROBLEM
+  Consuming app still ships a local logic-topology.js copy used by grid +
+  achievement checks. Byte-duplicate risk.
+
+WHAT TO DO IN THE LIB
+  Keep exports stable; document as the canonical topology API.
+  No new feature required unless missing modes the app uses — verify
+  TOPOLOGY_TYPES covers app needs before app deletes its copy.
+
+APP ACTION (after lib docs/exports confirmed)
+  Delete local duplicate; import from "reactor-core".
+
+
+--------------------------------------------------------------------------------
+M2. Blueprint diff / apply / cost — session-centric
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  Exports: applyBlueprintLayoutDiff, computeBlueprintDiff,
+    layoutFromPlannerSlots, gridToLayout, clipToGrid, sellAllComponents
+  Commands: APPLY_BLUEPRINT, COMMIT_BLUEPRINT_PLANNER
+
+PROBLEM
+  App domain/blueprint.js imports only clipToGrid; reimplements cost breakdown,
+  live-grid diff, and apply against Game tileset / partset Decimals.
+
+WHAT TO ADD / HARDEN IN THE LIB
+  1. Cost breakdown helper that uses session registry definitions
+     (money vs EP via erequires / currency on def), returning { money, ep }.
+  2. Ensure APPLY_BLUEPRINT options cover: sellExisting, skipCostDeduction,
+     partial, sellCredit (already partially present).
+  3. Return netHeat/power preview in diff/apply results (planner already emits
+     some of this).
+  4. Document that hosts should pass layout slots only; not reimplement diff.
+
+ACCEPTANCE
+  Host blueprint paste/commit is dispatch-only; costs match session economy.
+
+
+--------------------------------------------------------------------------------
+M3. Net-change / auto-heat HUD fields on snapshot
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  deriveReactorStats returns: power, heatGeneration, vent, outlet, netHeat,
+  cash, maxPower, maxHeat, etc.
+
+PROBLEM
+  App domain/net-change.js recomputes HUD nets:
+    power net: statsPower - statsPower * autoSellMultiplier (if auto_sell)
+    heat net:  netHeat + overflowHeat - manualReduce
+      overflowHeat = max(0, currentPower + statsPower - maxPower)
+                     * power_overflow_to_heat_ratio
+
+WHAT TO ADD IN THE LIB
+  Expose on snapshot/stats (names flexible):
+    powerNetChange, heatNetChange
+  computed with the same rules, reading:
+    toggles.auto_sell, modifiers.autoSellPercent / sell fraction,
+    grid.currentPower, grid.maxPower,
+    modifiers.powerToHeatRatio (electro-thermal overflow),
+    modifiers.manualVentMultiplier → manual reduce amount,
+    modifiers.manualVentPercent
+  Host only formats numbers.
+
+ACCEPTANCE
+  HUD numbers equal snapshot fields; app can delete computeHeatNetChange.
+
+
+--------------------------------------------------------------------------------
+M4. Heat containment segment / inspection API (optional)
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  runHeatPipeline owns transfer; no public "segment graph" for tooltips.
+
+PROBLEM
+  App HeatSystem still maintains union-find segments for containment/pressure
+  tooltip visualization. Can disagree with pipeline routing.
+
+WHAT TO ADD IN THE LIB (pick one)
+  A) Export a read-only buildContainmentSegments(grid) used by tooltips, OR
+  B) Document segments as UI-only derived view and provide golden tests against
+     pipeline neighbors so UI can keep a thin visual graph.
+
+Prefer A if pressure-flow tooltips are considered product features of revival.
+
+
+--------------------------------------------------------------------------------
+M5. Heat threshold / warning facts
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  Failure system handles meltdown path; no first-class "heat warning" events.
+  App deleted syncHeatThresholdEffects helpers but still has UI flags:
+    ui_heat_critical, ui_pipe_integrity_warning
+  App constant criticalHeatRatio ≈ 0.85 (SIM_CONSTANTS).
+
+WHAT TO ADD IN THE LIB
+  Either:
+    - Emit events when heat/maxHeat crosses warning thresholds
+      (e.g. heatWarning { ratio, level: 'high'|'critical' }), OR
+    - Put heatRatio on every snapshot and let UI derive flags only
+  Manifest-configurable thresholds recommended:
+    criticalHeatRatio (default 0.85)
+
+Do not put SFX/DOM in the lib — only facts/events.
+
+
+--------------------------------------------------------------------------------
+M6. VENT_HEAT command — partial vent policy (not full clear)
+--------------------------------------------------------------------------------
+STATUS IN CORE TODAY
+  registerCommand('VENT_HEAT'):
+    vents ALL currentHeat to 0; emits ventHeat { amount: previous }
+
+PROBLEM
+  App bridge.ventHeat does NOT use the command. It applies:
+    reduction = manual_heat_reduce
+               || base_manual_heat_reduce
+               || 1
+    if manual_vent_percent > 0:
+      reduction += max_heat * manual_vent_percent
+    nextHeat = max(0, currentHeat - reduction)
+  Also sets objective flag soldHeat when heat crosses to ~0
+  (HEAT_EPSILON ≈ 0.001).
+
+  Core modifiers already have:
+    manualVentMultiplier (improved_piping → 10x)
+    manualVentPercent (emergency_coolant → min(level,3) * 0.005)
+
+WHAT TO FIX IN THE LIB
+  Replace VENT_HEAT body with policy-aware reduction:
+    baseReduce = (manifest/base manual reduce, default 1) * manualVentMultiplier
+    reduction = baseReduce + maxHeat * manualVentPercent
+    subtract from currentHeat; clamp ≥ 0
+  Emit ventHeat { amount, remaining }
+  When remaining <= epsilon and amount > 0: set objectives soldHeat / emit
+  soldHeat-compatible signal (progression already listens for sellPower-style
+  flags — add soldHeat symmetrically).
+
+ACCEPTANCE
+  App bridge.ventHeat becomes dispatch VENT_HEAT + project; amounts match
+  upgrade levels for improved_piping / emergency_coolant.
+
+
+================================================================================
+LOW PRIORITY / CLEANUP
+================================================================================
+
+L1. SpatialRegistry
+  App spatial-adjacency.js appears unused after worker removal.
+  No lib work unless multi-thread heat returns; then adjacency belongs in core.
+
+L2. Tick phase documentation
+  Keep createPipeline().stages as the source of truth for phase order.
+  Export or document loopOrder: 'legacy' stages list for host authors.
+  App tick-phases.js is comments-only and can be deleted on the app side.
+
+L3. Mechanics overrides vs compileModifiers
+  App still maps a large mechanicsOverrides object into the session each tick
+  (syncMechanicsOverridesFromGame). Core already has upgrade compileModifiers
+  + session.mechanicsOverrides.
+  Goal: prefer modifiers from upgrade store; treat mechanicsOverrides as
+  temporary debug/overrides only. Reduce required host sync surface.
+
+L4. Tooltip formula exports
+  Export computeNeighborPulseN + computeCellOutput (already) and document
+  pulse power / quadratic heat. Host tooltip modules should call these instead
+  of local kernel/physics duplicates.
+
+
+================================================================================
+WHAT MUST STAY IN THE HOST APP (do not pull into the lib)
+================================================================================
+- DOM / lit templates / control deck layout
+- Valtio (or other) reactive UI state store
+- rAF loop, tab visibility, offline catchup *scheduling* (calling runOffline is fine)
+- Visual FX timing (reflector pulse lines, explosion flashes)
+- Meltdown overlay / audio / haptics / recovered-blueprint *file* UX
+- PWA, save-slot UI chrome, clipboard share encoding for social links
+- Mapping session snapshot → DOM (projection layer)
+
+
+================================================================================
+REFERENCE CONSTANTS (revival host; confirm against games/reactor_revival manifest)
+================================================================================
+BASE_MAX_HEAT                 1000
+BASE_MAX_POWER                 100
+MELTDOWN_HEAT_MULTIPLIER         2
+HEAT_EPSILON                 0.001
+CRITICAL_HEAT_RATIO           0.85
+Saturation band:   maxHeat .. maxHeat * 1.1
+Repulsion hull drain: overpressure = (heat - max*1.1) / max;
+                      hullIntegrity -= overpressure * 5
+Cell pulse power:  P * (M + N)
+Cell pulse heat:   H * (M + N)^2 / C
+Reflector cooling: max(0.1, 1 - count * factor)
+
+
+================================================================================
+EXISTING CORE APIS TO LEVERAGE (avoid reinventing)
+================================================================================
+createGameSession / createGameLoader
+runBatchTicks
+createFailureSystem
+createUpgradeStore / createRevivalUpgradeStore
+session.purchaseUpgrade / PURCHASE_UPGRADE command
+SELL_POWER / VENT_HEAT / SET_TOGGLE / REBOOT commands
+deriveReactorStats / createReactorStatsComputer
+computeNeighborPulseN / runCellPhase / computeCellOutput
+runHeatPipeline / runVentPhase
+applyBlueprintLayoutDiff / computeBlueprintDiff / clipToGrid
+topologyNeighborCoords / Topology / TOPOLOGY_TYPES
+grid.recalculateCaps / placeComponent / removeComponent
+systems.upgrades.compileModifiers / recompileModifiers
+
+
+================================================================================
+SUCCESS CRITERIA FOR THE CUTOVER
+================================================================================
+1. Host never evaluates meltdown/hull locally.
+2. Host never spends money/EP or bumps upgrade levels except via commands.
+3. Host never assigns grid.maxPower/maxHeat.
+4. Host never writes cell _effectivePower/_effectiveHeat before ticks for
+   authoritative simulation.
+5. Manual vent and sell go through VENT_HEAT / SELL_POWER only.
+6. Bridge shrinks to: sync placements → tick/dispatch → project snapshot/events.
+
+End of document.

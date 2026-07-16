@@ -81,8 +81,6 @@ describe("Time Delta Physics Scaling", () => {
 
         syncActivePartsAtTickBoundary(game.engine);
 
-        game.engine._updateValveNeighborCache();
-
         const baseTransfer = t2.getEffectiveTransferValue();
         const multiplier = 2.5;
 

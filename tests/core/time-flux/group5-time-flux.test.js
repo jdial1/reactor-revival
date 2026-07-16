@@ -17,8 +17,6 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
     game = await setupGame();
     game.loop_wait = FOUNDATIONAL_TICK_MS;
     game.paused = false;
-    game.engine.setForceNoSAB(true);
-    game.engine._useGameLoopWorker = () => false;
     await placePart(game, 0, 0, "uranium1");
     syncActivePartsAtTickBoundary(game.engine);
 
