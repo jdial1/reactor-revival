@@ -94,10 +94,13 @@ Still thick but no longer authoritative for money/EP/levels/tick physics.
 Further line-count shrink is optional polish, not a cutover blocker.
 
 
-P3 REVIEW — 2026-07-17 (public/src ownership pass)
---------------------------------------------------
-Cutover blockers remain DONE. This pass maps thickness + soft leaks
-that amplify host→session via syncReactorScalarsFromGame / diverge hydrate.
+P3 REVIEW — 2026-07-17 (public/src ownership pass; canvas refresh)
+------------------------------------------------------------------
+Cutover blockers remain DONE. Soft place/heat leaks and P1 dual-write
+footguns are CLOSED. Remaining work is size polish + lib gaps + test
+harness split — not re-cutover.
+
+Canvas: public-src-core-lib-review (Cursor canvases/)
 
 VERDICT (deep review canvas)
   Authority cutover complete. Size cutover is not.
@@ -116,78 +119,75 @@ Domain line counts (approx):
   state.js 965 | game.js 547 | game-save.js 498 | objectives.js 454
   grid.js 446 | engine.js 430 | upgrade.js 373 | reactor.js 279
   part.js 276 | blueprint.js 186
-  bridge facade revival-session-bridge.js 678 (+ satellites)
+  bridge facade revival-session-bridge.js ~750 (+ satellites)
 
 Per-shell role today:
-  game.js       — wire/facade; managers; intents → bridge; planner chrome
-  part.js       — catalog DTO + affordability (session snapshot reads)
+  game.js       — wire/facade; host managers (non-authoritative); intents → bridge
+  part.js       — catalog DTO + affordability host loop (lib gap)
   upgrade.js    — levels from project/events; buy via bridge; host side effects
-  grid.js       — Tile projection + host-first setPart/clearPart API
+  grid.js       — Tile projection + session-first setPart/clearPart via bridge
   reactor.js    — snapshot stats + large modifier mirror + meltdown presentation
   engine.js     — rAF shell; bridge.processTick only; explosion FX + hull dump
-  objectives.js — claim/auto-complete sequencing over session checks
+  objectives.js — chapter/display chrome; claim/auto via bridge (check+claim)
   blueprint.js  — serialize/share + validatePasteResources UI gate
   game-save.js  — hydrate host then bridge (expected)
-  state.js      — valtio + unlock tier policy + prestige/reboot chrome
+  state.js      — valtio + unlock tier policy + prestige/reboot chrome + schema barrel
 
-SOFT LEAKS (status after P3 soft-leak pass — 2026-07-17)
+SOFT LEAKS / P1 FOOTGUNS — ALL DONE (do not reopen as authority bugs)
   1) Tile.setPart / clearPart — DONE session-first
-     setPart → bridge.placePartUnpaid + applySessionSync via syncGridToGame.
-     clearPart → bridge.removePartAt. Tests: placePart helper uses unpaid place.
   2) Explosion hull dump — DONE session-authored
-     engine → bridge.dumpTileHeatToHull (grid.adjustCurrentHeat + project).
   3) Meltdown recovery heat — DONE session-authored
-     _clearMeltdownRecovery → bridge.resetReactorHeat (grid.resetHeat + project).
-  4) EconomyManager / EP setters — still host writers (footgun; prod via bridge).
-  5) Achievement dual-write — still dual (not this pass).
-  6) Pre-tick syncReactorScalarsFromGame — DONE removed from tick/op/stats.
-     vent/sell still push host scalars once (test harness heat/power writes).
-     Public syncReactorScalarsFromGame remains for explicit hydrate.
+  4) EconomyManager / EP setters — DONE guarded (withHostEconomyHydrate /
+     _isRestoringSave; VITEST allows; prod throws outside hydrate)
+  5) Achievement dual-write — DONE notifyUnlock from session events;
+     unlock() session-first then notice only
+  6) Pre-tick syncReactorScalarsFromGame — DONE (vent/sell harness only)
+  7) Objectives claim — DONE bridge.completeAndClaimObjective /
+     tryAutoCompleteCurrentObjective (session checkObjective + claimCurrent);
+     host markComplete+grantReward loops removed from claim/auto paths
+  8) SET_TOGGLE / REBOOT intents — DONE UI producers via drain
+  9) clearReactorHeat — DONE deleted
+ 10) Doctrine place gate — DONE single gate on bridge.placePart /
+     placePartUnpaid (session isUpgradeAvailable via partset)
 
-UI / component leftovers (display drift, not spend authority)
-  - bridge-intents place path: host isPartDoctrineLocked gate before
-    bridge.placePart (can desync from session if doctrine differs)
-  - Duplicate transfer/overflow/Stirling math in tooltips, control-deck,
-    simUtils (display-only; rule-drift risk)
-  - buildPartSummary / sell-modal fallbacks using part.cost vs session
-    sell/place previews
-  - Prestige confirm → game.rebootAction* (reaches bridge via state.js,
-    skips REBOOT intent drain)
-  - Toggle UI → applyToggleStateChange directly (SET_TOGGLE intent unused)
-  - clearReactorHeat in ui-heat-visuals (dead; dangerous if wired)
-  - Components place/sell/blueprint hot paths correctly intent→bridge
-  - Services (audio/PWA/leaderboard) presentation only
+SIZE DEBT (optional polish — not spend authority)
+  - Reactor modifier field farm (sessionModifiers + field copy for legacy readers)
+  - state.js god-module (valtio + UnlockManager + reboot chrome + schema barrel)
+  - ObjectiveManager / AchievementManager display + chapter chrome (thick)
+  - Control-deck auto-sell/vent / Stirling / overflow host-projected fields
+  - buildPartSummary / sell-modal part.cost fallbacks
+  - PartSet.check_affordability host loop (blocked on lib afford flags)
+  - syncReactorScalarsFromGame retained for test harness host heat writes
 
-RANKED P3 SHRINK (optional polish)
-  1) Tile setPart/clearPart → DONE (session place/remove + projection)
-  2) Explosion/meltdown heat + drop pre-tick scalar push → DONE
-     (vent/sell still sync scalars once for host test harness writes)
-  3) Reactor modifier mirror → thin DTO from session.projectModifiers
-     (partial: auto_sell_percent→multiplier; sell overrides narrowed)
-  4) Upgrade.setLevel → DONE display + deferSync; modifiers at bridge
-  5) state.js prestige/reboot/new-game chrome → closer to bridge helpers;
-     keep UnlockManager as UI policy
-  6) Objective claim/auto-grant → single session CLAIM_OBJECTIVE op
-  7) Achievements → session unlock + project IDs only
-  8) PartSet affordability loops → project afford flags if lib exposes
+RANKED REMAINING (S = size, L = lib, T = tests)
+  S1) Collapse Reactor modifier farm → thin DTO from projectModifiers/snapshot
+  S2) Slim state.js (valtio + UnlockManager + bridge-adjacent reboot)
+  S3) Thin ObjectiveManager / AchievementManager to display + event chrome
+  S4) Control-deck / overflow / Stirling from session snapshot fields only
+  L1) Lib CLAIM_OBJECTIVE first-class op — host wrap fine until then
+  L2) Lib part afford snapshot flags (filterAffordablePlacements only today)
+  T1) Test harness: createGameSession / headless for sim; host tests for
+      projection + UI policy only
 
 TEST HARNESS NOTE (structural; not authority)
   Suites boot the full host and hydrate after host mutations
   (syncGridFromGame / loadEconomyFromHost / pushHostUpgradeLevelsForLoad /
-   syncReactorScalarsFromGame for host heat/power writes before vent/sell).
+  syncReactorScalarsFromGame for host heat/power writes before vent/sell).
   A lib-centric suite would prefer createGameSession / createHeadlessRunner
   for pure sim and host tests only for projection + UI policy — larger than
-  P3 shell shrink; not required for authority.
+  shell shrink; not required for authority.
 
-BRIDGE GAPS (remaining after soft-leak pass)
-  - Economy/EP host setters (footgun)
-  - Achievement dual unlock
-  - Objective claim orchestration
-  - Full reactor modifier DTO (still applyComputedModifiers copy)
+BRIDGE GAPS (remaining)
+  - Full deletion of reactor modifier field farm (compat copy remains)
+  - Part afford snapshot flags (lib)
+  - First-class CLAIM_OBJECTIVE command (lib; host bridge wraps check+claim)
+  - Optional HUD display-rate snapshot fields (lib)
 
 NOT GAPS (correct)
   sell/vent/purchase/place/blueprint/prestige/reboot/respec/cheat EP
   caps/stats from snapshot; neighbors/pulse/heat segments from session
+  objective claim + achievement unlock via session (host is chrome only)
+  SET_TOGGLE / REBOOT intent producers
 
 
 reactor-core IMPORT SURFACE (host today)
@@ -208,7 +208,33 @@ SUCCESS CRITERIA (updated)
 4. Host never writes cell _effectivePower/_effectiveHeat.        DONE
 5. Manual vent and sell go through VENT_HEAT / SELL_POWER.       DONE
 6. Bridge = intent → dispatch/tick → project on hot paths;
-   hydrate (loadEconomyFromHost / syncGridFromGame /
-   pushHostUpgradeLevelsForLoad) only on load/setup.             DONE
+   hydrate on load/setup; tick/_syncForObjectiveEval may also
+   push host runtime/economy into session when tests/UI mutate
+   host mirrors first (protium/sell/heat harness paths).         DONE
+
+HOST SYNC HARDENING (2026-07-17 evening — keep)
+-----------------------------------------------
+- processTick copies session protiumParticles to host before
+  post-tick loadEconomyFromHost can clobber mid-flight gains
+- ObjectiveManager clones bundled objective defs (no shared
+  completed flags across games); check_current_objective syncs
+  grid + session.checkObjective; teardown clears auto-complete timer
+- syncGridToGame applies/clears parts even on exploding tiles so
+  explosion clear + re-place do not diverge host vs session
+- Part.base_power reads catalog basePower (not shop power)
+- Upgrade.setLevel merges one level into session (setUpgradeLevels
+  replace-all safe); test harness may still hydrate after setLevel
+
+NOT DONE (do not claim as finished)
+-----------------------------------
+- Net frontend line cut is not ~800–1000 in this tree (recent
+  domain/bridge pass is roughly net-flat; objectives thinned most)
+- ObjectiveManager still has start() setTimeout auto-complete and
+  claim feedback timers — not passive objectiveComplete-only
+- EconomyManager / TimeKeeper / SessionManager still exist in game.js
+- Tile still has heat_contained / addHeat / ticks (projection +
+  harness writes); reactor meltdown presentation remains on host
+- engine.js rAF / offline catchup and blueprint share codec still
+  host-owned (optional next shrink targets, not authority blockers)
 
 End of document.

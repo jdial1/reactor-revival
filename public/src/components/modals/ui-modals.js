@@ -15,6 +15,7 @@ import { styleMap, bindEvents, escapeHtml } from "../../dom/lit.js";
 import { getMyLayouts } from "../blueprints/ui-layout-storage.js";
 import { WEAVE_QUANTUM } from "../../constants/balance.js";
 import { drainGridIntentsAsync } from "../../bridge/bridge-intents.js";
+import { dispatchRebootIntent } from "../grid/ui-intents.js";
 
 const HIDDEN_STYLE = { display: "none" };
 const SECTION_HEAD = "margin-top: 0; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
@@ -925,11 +926,7 @@ class ModalOrchestration {
     const onCancel = () => this.hideModal(MODAL_IDS.PRESTIGE);
     const onConfirm = (confirmedMode) => {
       this.hideModal(MODAL_IDS.PRESTIGE);
-      if (confirmedMode === "refund") {
-        game.rebootActionDiscardExoticParticles();
-      } else {
-        game.rebootActionKeepExoticParticles();
-      }
+      dispatchRebootIntent(game, { keepEp: confirmedMode !== "refund" });
     };
 
     this._openLitModal(

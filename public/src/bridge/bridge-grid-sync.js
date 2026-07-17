@@ -30,6 +30,7 @@ export function gameGridDiffersFromSession(bridge) {
   const game = bridge.game;
   const grid = bridge.session?.grid;
   if (!game?.tileset || !grid) return false;
+  if (grid.rows !== game.rows || grid.cols !== game.cols) return true;
   for (let r = 0; r < game.rows; r++) {
     for (let c = 0; c < game.cols; c++) {
       const tile = game.tileset.getTile(r, c);
@@ -86,7 +87,6 @@ export function syncGridToGame(bridge) {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const tile = tileset.getTile(r, c);
-      if (tile?.exploded || tile?.exploding) continue;
       const inst = grid.getComponentAt(r, c);
       if (!inst) {
         if (tile?.part) {

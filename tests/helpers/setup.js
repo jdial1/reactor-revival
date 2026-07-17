@@ -811,6 +811,7 @@ function teardownGameResources() {
   if (globalGameInstance?.engine?.stop) {
     globalGameInstance.engine.stop();
   }
+  globalGameInstance?.objectives_manager?.teardown?.();
 
   if (globalGameInstance?.ui?.cleanup) {
     globalGameInstance.ui.cleanup();

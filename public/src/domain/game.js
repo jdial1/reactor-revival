@@ -28,6 +28,7 @@ import {
   runManualReduceHeatAction,
   runEpartOnclick,
   setDecimal,
+  assertHostEconomyWrite,
 } from "../state.js";
 import { Reactor } from "./reactor.js";
 import { GridManager, Tileset } from "./grid.js";
@@ -109,16 +110,15 @@ class AchievementManager {
     return !!this.game?.engine?._isCatchingUp;
   }
 
-  unlock(id, { silent } = {}) {
-    if (!id || this.isUnlocked(id)) return false;
+  notifyUnlock(id, { silent } = {}) {
+    if (!id) return false;
     const def = this.getDefinition(id);
     if (!def) return false;
-
-    const list = this._getUnlockedList();
-    list.push(id);
-    this.game.state.unlocked_achievements = list;
-    this.game.coreBridge?.session?.systems?.achievements?.unlock?.(id);
-
+    if (!this.isUnlocked(id)) {
+      const list = this._getUnlockedList();
+      list.push(id);
+      this.game.state.unlocked_achievements = list;
+    }
     const isSilent = silent ?? this._isCatchUpSilent();
     if (isSilent) {
       this._silentUnlockCount++;
@@ -130,11 +130,17 @@ class AchievementManager {
       });
       this.game.emit?.("achievementUnlocked", { achievement: def, silent: false });
     }
-
     if (this.game?.saveManager && !this.game._isRestoringSave) {
       void this.game.saveManager.autoSave();
     }
     return true;
+  }
+
+  unlock(id, { silent } = {}) {
+    if (!id || this.isUnlocked(id)) return false;
+    if (!this.getDefinition(id)) return false;
+    this.game.coreBridge?.session?.systems?.achievements?.unlock?.(id);
+    return this.notifyUnlock(id, { silent });
   }
 
   onCatchUpEnded() {
@@ -274,6 +280,7 @@ class EconomyManager {
     return this.game.state.current_money;
   }
   setCurrentMoney(value) {
+    assertHostEconomyWrite(this.game, "current_money");
     setDecimal(this.game.state, "current_money", value);
   }
 }

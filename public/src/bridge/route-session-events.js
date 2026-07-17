@@ -37,8 +37,9 @@ export function routeSessionEvents(bridge) {
       const id = event.payload?.id;
       const upgrade = id ? game.upgradeset?.getUpgrade(id) : null;
       const newLevel = event.payload?.newLevel;
-      if (upgrade && typeof newLevel === "number" && upgrade.level !== newLevel) {
-        upgrade.setLevel(newLevel, { deferSync: true });
+      if (upgrade && typeof newLevel === "number") {
+        if (upgrade.level !== newLevel) upgrade.setLevel(newLevel, { deferSync: true });
+        else upgrade.updateDisplayCost?.();
       }
       game.emit?.("upgradePurchased", { upgrade, ...event.payload });
     }
@@ -56,7 +57,7 @@ export function routeSessionEvents(bridge) {
     }
     if (event.type === "achievementUnlocked") {
       const id = event.payload?.id;
-      if (id) game.achievement_manager?.unlock(id);
+      if (id) game.achievement_manager?.notifyUnlock(id);
     }
     if (event.type === "automationReplace") {
       const replacements = event.payload?.replacements;

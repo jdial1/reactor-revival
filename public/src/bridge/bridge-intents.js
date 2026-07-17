@@ -13,7 +13,6 @@ function applyPlacePartIntent(game, payload) {
   const part = game.partset?.getPartById?.(partId);
   const tile = game.tileset?.getTile(row, col);
   if (!part || !tile) return null;
-  if (game.partset?.isPartDoctrineLocked?.(part)) return null;
   const result = bridge.placePart(row, col, partId);
   if (!result) {
     recordSimEvent(game, { type: "INSUFFICIENT_FUNDS", row, col });

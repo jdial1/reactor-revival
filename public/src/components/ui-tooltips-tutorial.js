@@ -268,6 +268,12 @@ class TutorialRuntime {
   }
 
   _clearStepListeners() {
+    if (this._resizeListener) {
+      window.removeEventListener("resize", this._resizeListener);
+    }
+    if (this._scrollListener) {
+      window.removeEventListener("scroll", this._scrollListener, { capture: true });
+    }
     if (this._stepAbortController) {
       this._stepAbortController.abort();
       this._stepAbortController = null;

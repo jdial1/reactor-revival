@@ -1,13 +1,23 @@
-import { applyToggleStateChange } from "../../state.js";
 import { drainGridIntentsAsync } from "../../bridge/bridge-intents.js";
 
 export function dispatchToggleIntent(game, toggleName, value, _sourceId = null) {
-  if (!game?.state) return;
-  applyToggleStateChange(game, toggleName, !!value);
+  if (!game?.state || !toggleName) return;
+  void drainGridIntentsAsync(game, game.engine, [{
+    action: "SET_TOGGLE",
+    payload: { toggleName, value: !!value },
+  }]);
 }
 
 export function dispatchPauseIntent(game, paused, sourceId = "navigation") {
   dispatchToggleIntent(game, "pause", !!paused, sourceId);
+}
+
+export function dispatchRebootIntent(game, { keepEp = false } = {}) {
+  if (!game) return;
+  void drainGridIntentsAsync(game, game.engine, [{
+    action: "REBOOT",
+    payload: { keepEp: !!keepEp },
+  }]);
 }
 
 export function dispatchUiIntent(game, intent, e) {

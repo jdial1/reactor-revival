@@ -239,7 +239,11 @@ export function patchGameState(game, patch) {
   const st = game.state;
   for (const [key, value] of Object.entries(patch)) {
     if (key === "exotic_particles") {
-      if (game.exoticParticleManager) game.exoticParticleManager.exotic_particles = value;
+      if (game.exoticParticleManager) {
+        withHostEconomyHydrate(game, () => {
+          game.exoticParticleManager.exotic_particles = value;
+        });
+      }
       continue;
     }
     if (key === "total_heat") {
@@ -504,9 +508,11 @@ export class StateManager extends BaseComponent {
   }
   game_reset() {
     if (this.game?.state) {
-      setDecimal(this.game.state, "current_money", this.game.base_money);
-      setDecimal(this.game.state, "current_power", 0);
-      setDecimal(this.game.state, "current_heat", 0);
+      withHostEconomyHydrate(this.game, () => {
+        setDecimal(this.game.state, "current_money", this.game.base_money);
+        setDecimal(this.game.state, "current_power", 0);
+        setDecimal(this.game.state, "current_heat", 0);
+      });
       this.game.coreBridge?.loadEconomyFromHost?.();
       this.game.reactor.updateStats();
     }
@@ -684,19 +690,20 @@ async function runCoreKeepEpPrestige(game, bridge) {
   const savedProtium = game.protium_particles;
   const result = bridge.prestige();
   game.protium_particles = savedProtium;
-  game.exoticParticleManager.exotic_particles = toDecimal(0);
+  const epFromWeave = result?.earned ?? 0;
+  withHostEconomyHydrate(game, () => {
+    game.exoticParticleManager.exotic_particles = toDecimal(epFromWeave);
+  });
   clearState(game);
   resetObjectives(game);
   bridge.hydrateObjectivesFromGame?.();
-  const epFromWeave = result?.earned ?? 0;
-  const prestigePayload = {
+  game.state.last_prestige = {
     keepEp: true,
     epFromWeave,
     fuelCellCount: result?.fuelCellCount ?? 0,
     sessionPowerProduced: result?.sessionPowerProduced ?? 0,
     sessionHeatDissipated: result?.sessionHeatDissipated ?? 0,
   };
-  game.state.last_prestige = prestigePayload;
   game.state.prestige_seq = (game.state.prestige_seq ?? 0) + 1;
   refreshUI(game);
   refreshObjective(game);
@@ -706,7 +713,9 @@ async function runCoreDiscardEpReboot(game, bridge) {
   const savedProtium = game.protium_particles;
   bridge.reboot({ keepEp: false });
   game.protium_particles = savedProtium;
-  game.exoticParticleManager.exotic_particles = toDecimal(0);
+  withHostEconomyHydrate(game, () => {
+    game.exoticParticleManager.exotic_particles = toDecimal(0);
+  });
   clearState(game);
   resetObjectives(game);
   bridge.hydrateObjectivesFromGame?.();
@@ -765,11 +774,13 @@ function applyBaseDimensions(game, dimensions) {
 }
 
 function applyBaseResources(game) {
-  setDecimal(game.state, "current_money", game.base_money);
-  game.protium_particles = 0;
-  setDecimal(game.state, "total_exotic_particles", 0);
-  game.exoticParticleManager.exotic_particles = toDecimal(0);
-  setDecimal(game.state, "current_exotic_particles", 0);
+  withHostEconomyHydrate(game, () => {
+    setDecimal(game.state, "current_money", game.base_money);
+    game.protium_particles = 0;
+    setDecimal(game.state, "total_exotic_particles", 0);
+    game.exoticParticleManager.exotic_particles = toDecimal(0);
+    setDecimal(game.state, "current_exotic_particles", 0);
+  });
   resetSessionCriticalityCounters(game);
   game.sold_power = false;
   game.sold_heat = false;
@@ -838,6 +849,7 @@ function applyDoctrineThenSession(game) {
 
 function resetObjectives(game) {
   if (game.objectives_manager) {
+    game.objectives_manager.teardown?.();
     game.objectives_manager.current_objective_index = 0;
     if (game.objectives_manager.objectives_data?.length) {
       game.objectives_manager.objectives_data.forEach((obj) => {
@@ -845,6 +857,7 @@ function resetObjectives(game) {
       });
       game.objectives_manager.set_objective(0, true);
     }
+    game.coreBridge?.hydrateObjectivesFromGame?.();
   }
 }
 
@@ -972,6 +985,22 @@ export function setGameConfiguration(game, config) {
   gameConfigStore.set(game, { ...prev, ...config });
 }
 
+export function withHostEconomyHydrate(game, fn) {
+  if (!game) return fn();
+  game._hostEconomyWrite = (game._hostEconomyWrite | 0) + 1;
+  try {
+    return fn();
+  } finally {
+    game._hostEconomyWrite = Math.max(0, (game._hostEconomyWrite | 0) - 1);
+  }
+}
+
+export function assertHostEconomyWrite(game, label) {
+  if (game?._hostEconomyWrite || game?._isRestoringSave) return;
+  if (typeof process !== "undefined" && process.env?.VITEST) return;
+  throw new Error(`Host economy write outside hydrate: ${label}`);
+}
+
 export function applyToggleStateChange(game, toggleName, value) {
   if (game.state && game.state[toggleName] !== value) game.state[toggleName] = value;
   if (toggleName === "heat_control" && game.reactor) game.reactor.heat_controlled = !!value;
@@ -1002,6 +1031,7 @@ export class ExoticParticleManager {
   }
 
   set total_exotic_particles(v) {
+    assertHostEconomyWrite(this.game, "total_exotic_particles");
     setDecimal(this.game.state, "total_exotic_particles", ensureDecimal(v));
   }
 
@@ -1010,6 +1040,7 @@ export class ExoticParticleManager {
   }
 
   set exotic_particles(v) {
+    assertHostEconomyWrite(this.game, "exotic_particles");
     this._exotic_particles = ensureDecimal(v);
   }
 
@@ -1018,6 +1049,7 @@ export class ExoticParticleManager {
   }
 
   set current_exotic_particles(v) {
+    assertHostEconomyWrite(this.game, "current_exotic_particles");
     setDecimal(this.game.state, "current_exotic_particles", ensureDecimal(v));
   }
 

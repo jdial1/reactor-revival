@@ -184,9 +184,16 @@ export class Tile {
     const bridge = requireActiveBridge(this.game, "recalculateEffectiveValues");
     const rates = bridge.resolveDisplayRatesForTile(this);
     if (!rates) return;
-    this.cachedEffectiveVent = rates.vent ?? 0;
-    this.cachedEffectiveTransfer = rates.transfer ?? 0;
-    if (this.part.category === "vent" && (rates.vent || this.part.vent)) {
+    const mods = bridge.session?.modifiers || {};
+    const ventEff = mods.ventEffectiveness || 1;
+    const transferEff = mods.transferEffectiveness || 1;
+    const ventPlating = rates.bonuses?.ventMultiplier ?? 1;
+    const transferPlating = rates.bonuses?.transferMultiplier ?? 1;
+    const baseVent = this.part.base_vent ?? rates.baseVent ?? 0;
+    const baseTransfer = this.part.base_transfer ?? rates.baseTransfer ?? 0;
+    this.cachedEffectiveVent = baseVent * ventEff * ventPlating;
+    this.cachedEffectiveTransfer = baseTransfer * transferEff * transferPlating;
+    if (this.part.category === "vent" && (this.cachedEffectiveVent || this.part.vent)) {
       this.cachedEffectiveTransfer = this.cachedEffectiveVent || this.cachedEffectiveTransfer;
     }
   }
@@ -208,8 +215,8 @@ export class Tile {
     const game = this.game;
     logger.log('debug', 'game', '[Recovery] Clearing meltdown state after placing part:', this.part?.id);
     logger.log('debug', 'game', '[Recovery] Reactor heat before reset:', game.reactor.current_heat, "max:", game.reactor.max_heat);
-    game.coreBridge?.resetReactorHeat?.();
     game.reactor.clearMeltdownState();
+    game.coreBridge?.resetReactorHeat?.();
     const engineStopped = game.engine && !game.engine.running;
     if (!engineStopped) {
       logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);

@@ -76,10 +76,19 @@ export class RevivalSessionBridge {
     projectUpgradeLevelsToHost(this);
   }
 
+  projectLiveState({ preserveHostScalars = true, preserveHostEconomy = false } = {}) {
+    if (!this.session) return;
+    if (preserveHostScalars) syncReactorScalarsFromGame(this);
+    if (preserveHostEconomy) this.loadEconomyFromHost();
+    this.projectToGame();
+  }
+
   _syncBeforeTick() {
     this.syncTickMetaFromGame();
     this.syncTogglesFromGame();
-    syncGridCheap(this, { runtimeFromHost: false });
+    syncGridCheap(this, { runtimeFromHost: true });
+    syncReactorScalarsFromGame(this);
+    this.loadEconomyFromHost();
     syncHostSellOverridesToSession(this);
   }
 
@@ -162,7 +171,7 @@ export class RevivalSessionBridge {
         applyPrestige: !!payload.applyPrestige,
       });
       this.routeEvents();
-      this.projectToGame(this.session.engine.getLastResult());
+      this.projectLiveState({ preserveHostScalars: false });
       return !!(result && result.ok !== false);
     }
     const { ok } = this._dispatchAndProject("GRANT_REWARD", {
@@ -180,7 +189,7 @@ export class RevivalSessionBridge {
     if (typeof this.session.creditMoney === "function") {
       this.session.creditMoney(n, { applyPrestige });
       this.routeEvents();
-      this.projectToGame(this.session.engine.getLastResult());
+      this.projectLiveState({ preserveHostScalars: false });
       return true;
     }
     const { ok } = this._dispatchAndProject("CREDIT_MONEY", { amount: n, applyPrestige });
@@ -200,7 +209,7 @@ export class RevivalSessionBridge {
       const ok = this.session.debitMoney(n);
       if (ok) {
         this.routeEvents();
-        this.projectToGame(this.session.engine.getLastResult());
+        this.projectLiveState({ preserveHostScalars: false });
       }
       return !!ok;
     }
@@ -223,7 +232,8 @@ export class RevivalSessionBridge {
 
   _syncBeforeSessionOp() {
     if (!this.session) return false;
-    syncGridCheap(this, { runtimeFromHost: false });
+    syncGridCheap(this, { runtimeFromHost: true });
+    syncReactorScalarsFromGame(this);
     this.syncTickMetaFromGame();
     this.syncTogglesFromGame();
     return true;
@@ -231,33 +241,38 @@ export class RevivalSessionBridge {
 
   placePartUnpaid(row, col, partId) {
     if (!this.session || !partId) return false;
-    syncGridCheap(this, { runtimeFromHost: false });
+    const part = this.game.partset?.getPartById?.(partId);
+    if (part && this.game.partset?.isPartDoctrineLocked?.(part)) return false;
+    syncGridCheap(this, { runtimeFromHost: true });
+    syncReactorScalarsFromGame(this);
     const ok = this.session.placeComponent(row, col, partId);
     if (!ok) return false;
     syncGridLayoutToGame(this);
-    this.projectToGame(this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: true, preserveHostEconomy: true });
     return true;
   }
 
   removePartAt(row, col) {
     if (!this.session) return false;
-    syncGridCheap(this, { runtimeFromHost: false });
+    syncGridCheap(this, { runtimeFromHost: true });
+    syncReactorScalarsFromGame(this);
     this.session.removeComponent(row, col);
     syncGridLayoutToGame(this);
-    this.projectToGame(this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: true, preserveHostEconomy: true });
     return true;
   }
 
   dumpTileHeatToHull(amount) {
     if (!this.session || !(amount > 0)) return;
+    syncReactorScalarsFromGame(this);
     this.session.grid.adjustCurrentHeat(toNumber(amount));
-    this.projectToGame(this.session.getSnapshot?.() ?? this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: false });
   }
 
   resetReactorHeat() {
     if (!this.session) return;
     this.session.grid.resetHeat();
-    this.projectToGame(this.session.getSnapshot?.() ?? this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: false });
   }
 
   _dispatchAndProject(type, payload, options = {}) {
@@ -272,7 +287,7 @@ export class RevivalSessionBridge {
     if (failed) return { ok: false, result: result ?? null };
     if (options.grid) syncGridLayoutToGame(this);
     this.routeEvents();
-    this.projectToGame(this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: false });
     return { ok: true, result };
   }
 
@@ -283,6 +298,9 @@ export class RevivalSessionBridge {
   _syncForObjectiveEval() {
     this.syncMetaFromGame();
     this.syncObjectiveFlagsFromGame();
+    syncGridCheap(this, { runtimeFromHost: true });
+    syncReactorScalarsFromGame(this);
+    this.loadEconomyFromHost();
     this.syncForStatsRead();
   }
 
@@ -325,13 +343,14 @@ export class RevivalSessionBridge {
 
   placePart(row, col, partId) {
     if (!this.session || !partId) return null;
+    const part = this.game.partset?.getPartById?.(partId);
+    if (part && this.game.partset?.isPartDoctrineLocked?.(part)) return null;
     this._syncBeforeSessionOp();
     const { ok } = this._dispatchAndProject("PLACE_PART_PAID", { row, col, id: partId }, {
       requireOk: true,
       grid: true,
     });
     if (!ok) return null;
-    const part = this.game.partset?.getPartById?.(partId);
     return part ? { row, col, part } : { row, col, part: null };
   }
 
@@ -357,9 +376,57 @@ export class RevivalSessionBridge {
 
   syncObjectiveClaim(claimedIndex) {
     const objectives = this.session?.systems?.objectives;
-    if (!objectives) return;
+    if (!objectives) return false;
     if (!objectives.isComplete(claimedIndex)) objectives.markComplete(claimedIndex);
-    if (objectives.currentIndex === claimedIndex) objectives.claimCurrent();
+    if (objectives.currentIndex === claimedIndex) return !!objectives.claimCurrent();
+    return false;
+  }
+
+  completeAndClaimObjective(expectedIndex = null) {
+    const objectives = this.session?.systems?.objectives;
+    const om = this.game?.objectives_manager;
+    if (!objectives || !this.session) return false;
+    this.syncObjectiveFlagsFromGame();
+    const idx = expectedIndex ?? om?.current_objective_index ?? objectives.currentIndex;
+    this.syncObjectiveIndex(idx);
+    if (objectives.currentIndex !== idx) return false;
+    const ctx = this._objectiveEvalContext();
+    const already = objectives.isComplete(idx);
+    const hostDef = om?.current_objective_def;
+    if (!already) {
+      if (!this.session.checkObjective?.(ctx)) return false;
+    } else if (hostDef?.isChapterCompletion) {
+      const obj = objectives.getCurrentObjective?.() ?? hostDef;
+      if (obj && (obj.reward != null || obj.ep_reward != null)) this.grantReward(obj);
+    }
+    if (!objectives.claimCurrent?.()) return false;
+    if (om) {
+      if (om.objectives_data?.[idx]) om.objectives_data[idx].completed = true;
+      om.current_objective_index = objectives.currentIndex;
+    }
+    this.routeEvents();
+    this.projectLiveState();
+    return true;
+  }
+
+  tryAutoCompleteCurrentObjective() {
+    const objectives = this.session?.systems?.objectives;
+    if (!objectives || !this.session) return null;
+    this.syncObjectiveFlagsFromGame();
+    const om = this.game?.objectives_manager;
+    if (om) this.syncObjectiveIndex(om.current_objective_index);
+    const idx = objectives.currentIndex;
+    const alreadyCompleted = objectives.isComplete(idx);
+    const ctx = this._objectiveEvalContext();
+    if (!alreadyCompleted && !this.session.checkObjective?.(ctx)) return null;
+    if (!objectives.claimCurrent?.()) return null;
+    if (om) {
+      if (om.objectives_data?.[idx]) om.objectives_data[idx].completed = true;
+      om.current_objective_index = objectives.currentIndex;
+    }
+    this.routeEvents();
+    this.projectLiveState();
+    return { advanced: true, newlyCompleted: !alreadyCompleted };
   }
 
   syncObjectiveIndex(index) {
@@ -456,9 +523,16 @@ export class RevivalSessionBridge {
     const powerBefore = toNumber(this.game?.reactor?.current_power ?? 0);
     this._syncBeforeTick();
     const result = this.session.tick({ multiplier });
+    const econ = this.session.systems?.economy;
+    if (econ && typeof econ.protiumParticles === "number") {
+      this.game.protium_particles = econ.protiumParticles;
+    }
     syncGridLayoutToGame(this);
     this.routeEvents();
     this.projectToGame(result, { heatBefore, powerBefore, multiplier });
+    if (econ && typeof econ.protiumParticles === "number") {
+      this.game.protium_particles = econ.protiumParticles;
+    }
     this.game.reactor?.updateStats?.({ fromSession: true });
     return result;
   }
@@ -488,7 +562,7 @@ export class RevivalSessionBridge {
     if (!this.session) return;
     this.session.loadLegacySave(savedData);
     this.syncGridToGame();
-    this.projectToGame(this.session.engine.getLastResult());
+    this.projectLiveState();
   }
 
   drainPendingCommands() {
@@ -548,8 +622,13 @@ export class RevivalSessionBridge {
     if (!this.session || !this.game?.reactor) return false;
     this.syncReactorScalarsFromGame();
     if (toNumber(this.session.grid.currentHeat) <= 0) return false;
-    const { ok } = this._dispatchAndProject("VENT_HEAT");
-    return !!ok;
+    this.session.dispatch({ type: "VENT_HEAT" });
+    const applied = this.drainPendingCommands();
+    const entry = applied.find((e) => e.type === "VENT_HEAT");
+    if (entry?.result === false || entry?.result == null) return false;
+    this.routeEvents();
+    this.projectLiveState({ preserveHostScalars: false });
+    return true;
   }
 
   previewBlueprintDiff(layout) {
@@ -656,10 +735,12 @@ export class RevivalSessionBridge {
     if (!purchaseEntry?.result) return false;
 
     this.routeEvents();
-    this.projectToGame(this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: true });
     const newLevel = this.session.getUpgradeLevel?.(id);
     if (typeof newLevel === "number" && upgrade.level !== newLevel) {
       upgrade.setLevel(newLevel, { deferSync: true });
+    } else {
+      upgrade.updateDisplayCost?.();
     }
     this.game.syncModifiersFromUpgrades?.();
     if (upgrade.upgrade?.type === "experimental_parts") {
@@ -676,12 +757,13 @@ export class RevivalSessionBridge {
 
   prestige(options = {}) {
     if (!this.session) return null;
+    this.loadEconomyFromHost();
     const preview = this.session.previewPrestige({ keepEp: true });
     const earned = this.session.prestige(options);
     syncGridLayoutToGame(this);
     this.projectUpgradeLevelsToHost();
     this.routeEvents();
-    this.projectToGame(this.session.getSnapshot?.() ?? this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: false });
     this.syncCompiledPartsFromSession();
     this.game.reactor?.updateStats?.();
     return {
@@ -695,13 +777,14 @@ export class RevivalSessionBridge {
 
   reboot(options = {}) {
     if (!this.session) return null;
+    this.loadEconomyFromHost();
     const keepEp = options.keepEp === true;
     const preview = this.session.previewPrestige({ keepEp });
     const earned = this.session.reboot({ keepEp, refundEp: false, ...options });
     syncGridLayoutToGame(this);
     this.projectUpgradeLevelsToHost();
     this.routeEvents();
-    this.projectToGame(this.session.getSnapshot?.() ?? this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: false });
     this.syncCompiledPartsFromSession();
     this.game.reactor?.updateStats?.();
     return {
@@ -715,6 +798,7 @@ export class RevivalSessionBridge {
 
   respecDoctrine() {
     if (!this.session || !this.game?.upgradeset) return false;
+    this.loadEconomyFromHost();
     const cost = toNumber(this.game.RESPER_DOCTRINE_EP_COST);
     if (!(cost > 0) || !this.session.debitExoticParticles?.(cost)) return false;
 
@@ -733,7 +817,7 @@ export class RevivalSessionBridge {
     this.session.setUpgradeLevels(entries);
     this.projectUpgradeLevelsToHost();
     this.routeEvents();
-    this.projectToGame(this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: false });
     this.game.upgradeset.updateSectionCounts?.();
     return true;
   }
@@ -765,7 +849,7 @@ export class RevivalSessionBridge {
     this.session.setUpgradeLevels(experimental);
     this.projectUpgradeLevelsToHost();
     this.routeEvents();
-    this.projectToGame(this.session.getSnapshot?.() ?? this.session.engine.getLastResult());
+    this.projectLiveState({ preserveHostScalars: false });
     this.syncCompiledPartsFromSession();
     this.game.reactor?.updateStats?.();
     return result;

@@ -183,6 +183,7 @@ export async function satisfyObjective(game, idx) {
         }
 
         case 18:
+            game.tileset.clearAllTiles();
             for (let i = 0; i < 10; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("capacitor2"));
             for (let i = 0; i < 10; i++) await game.tileset.getTile(1, i).setPart(game.partset.getPartById("vent2"));
             break;

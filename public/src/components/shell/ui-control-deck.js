@@ -1,8 +1,7 @@
 import { safeCall, teardownAll } from "../../core/teardown.js";
 import { html, render } from "lit-html";
 import { classMap, styleMap } from "../../dom/lit.js";
-import { VENT_BONUS_PERCENT_DIVISOR, toNumber, isAllPowerOverflowingToHeat } from "../../simUtils.js";
-import { REACTOR_HEAT_STANDARD_DIVISOR } from "../../constants/sim.js";
+import { toNumber, isAllPowerOverflowingToHeat } from "../../simUtils.js";
 import { numFormat as fmt, formatNumberCompactIntl } from "../../core/numbers.js";
 import { logger } from "../../core/logger.js";
 import { MOBILE_BREAKPOINT_PX } from "../../constants/ui-constants.js";
@@ -83,13 +82,14 @@ function buildMobileControlDeckTemplate(ui, state) {
   const multiplier = toNumber(state.auto_sell_multiplier ?? 0);
   const hasAutoSellUpgrade = ui.game?.upgradeset?.getUpgrade("auto_sell_operator")?.level > 0;
   const showAutoSell = autoSellEnabled && multiplier > 0 && hasAutoSellUpgrade;
-  const autoSellRate = showAutoSell ? Math.floor(maxPower * multiplier) : 0;
+  const autoSellRate = showAutoSell ? Math.floor(toNumber(state.stats_cash ?? 0)) : 0;
 
   const hasHeatControlUpgrade = ui.game?.upgradeset?.getUpgrade("heat_control_operator")?.level > 0;
   const heatControlEnabled = !!state.heat_controlled && hasHeatControlUpgrade;
   const showHeatRate = heatControlEnabled && maxHeat > 0;
-  const ventBonus = toNumber(state.vent_multiplier_eff ?? 0);
-  const autoHeatRate = showHeatRate ? (maxHeat / REACTOR_HEAT_STANDARD_DIVISOR) * (1 + ventBonus / VENT_BONUS_PERCENT_DIVISOR) : 0;
+  const manualReduce = toNumber(state.manual_heat_reduce ?? ui.game?.reactor?.manual_heat_reduce ?? 0);
+  const manualVentPercent = toNumber(ui.game?.reactor?.manual_vent_percent ?? 0);
+  const autoHeatRate = showHeatRate ? manualReduce + maxHeat * manualVentPercent : 0;
 
   const powerOverflowToHeat = isAllPowerOverflowingToHeat(state, ui.game?.reactor);
   const heatVentClass = classMap({
@@ -511,7 +511,7 @@ export function initControlDeckVarObjs(ui) {
     },
     melting_down: {
       onupdate: (val) => {
-        if (val) ui.gridInteractionUI.clearAllActiveAnimations();
+        if (val) ui.gridInteractionUI?.clearAllActiveAnimations?.();
       },
     },
   };

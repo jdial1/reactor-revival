@@ -10,6 +10,17 @@ describe("Engine Mechanics", () => {
 
   beforeEach(async () => {
     game = await setupGame();
+    const objectives = game.coreBridge?.session?.systems?.objectives;
+    if (objectives?.deserialize && objectives?.serialize) {
+      const data = objectives.serialize();
+      const last = Math.max(0, (objectives.objectives?.length ?? 1) - 1);
+      objectives.deserialize({ ...data, currentIndex: last, completed: data.completed ?? [] });
+      if (game.objectives_manager) {
+        game.objectives_manager.current_objective_index = last;
+        game.objectives_manager.current_objective_def =
+          game.objectives_manager.objectives_data?.[last] ?? game.objectives_manager.current_objective_def;
+      }
+    }
     vi.useFakeTimers();
   });
 

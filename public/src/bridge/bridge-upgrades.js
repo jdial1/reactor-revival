@@ -1,6 +1,27 @@
 import { toNumber } from "../simUtils.js";
 import { getAffordabilitySettings } from "../state/preferences.js";
 
+export function mergeSessionUpgradeLevel(session, id, level) {
+  if (!session?.setUpgradeLevels || !id) return;
+  const prev = typeof session.systems?.upgrades?.serialize === "function"
+    ? session.systems.upgrades.serialize()
+    : [];
+  const next = [];
+  let found = false;
+  for (let i = 0; i < prev.length; i++) {
+    const entry = prev[i];
+    if (!entry?.id) continue;
+    if (entry.id === id) {
+      found = true;
+      if (level > 0) next.push({ id, level });
+      continue;
+    }
+    if (entry.level > 0) next.push({ id: entry.id, level: entry.level });
+  }
+  if (!found && level > 0) next.push({ id, level });
+  session.setUpgradeLevels(next);
+}
+
 export function hydrateUpgradeLevelsFromHost(bridge) {
   const session = bridge.session;
   const upgradeset = bridge.game?.upgradeset;
@@ -23,6 +44,7 @@ export function projectUpgradeLevelsToHost(bridge) {
     if (!upg) continue;
     const level = session.getUpgradeLevel?.(upg.id) ?? 0;
     if (upg.level !== level) upg.setLevel(level, { deferSync: true, skipSessionSync: true });
+    else upg.updateDisplayCost?.();
   }
   bridge.game.syncModifiersFromUpgrades?.({ skipGrid: true });
 }
@@ -109,6 +131,7 @@ export function setUpgradeCardRefreshHandler(fn) {
 }
 
 export function runCheckAffordability(upgradeset, game) {
+  game?.coreBridge?.loadEconomyFromHost?.();
   const snapshot = runCheckAffordabilityCore(upgradeset, game);
   if (!snapshot) return;
   _refreshUpgradeCards?.(upgradeset);

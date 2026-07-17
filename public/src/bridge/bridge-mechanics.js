@@ -7,6 +7,9 @@ export function syncHostSellOverridesToSession(bridge) {
   const mult = toNumber(reactor.auto_sell_multiplier);
   const altered = toNumber(reactor.altered_max_power);
   const powerMultiplier = toNumber(reactor.power_multiplier);
+  const overflowRatio = toNumber(
+    reactor.power_overflow_to_heat_ratio ?? bridge.game.state?.power_overflow_to_heat_ratio,
+  );
   const prev = bridge.session.mechanicsOverrides || {};
   const next = { ...prev };
   let changed = false;
@@ -14,10 +17,12 @@ export function syncHostSellOverridesToSession(bridge) {
     next.autoSellPercent = mult * 100;
     changed = true;
   }
-  if (altered > 0 && toNumber(prev.alteredMaxPower) !== altered) {
-    next.alteredMaxPower = altered;
-    changed = true;
-  } else if (altered <= 0 && "alteredMaxPower" in next) {
+  if (altered > 0) {
+    if (toNumber(next.alteredMaxPower) !== altered) {
+      next.alteredMaxPower = altered;
+      changed = true;
+    }
+  } else if ("alteredMaxPower" in next) {
     delete next.alteredMaxPower;
     changed = true;
   }
@@ -26,6 +31,10 @@ export function syncHostSellOverridesToSession(bridge) {
     changed = true;
   } else if (powerMultiplier <= 1 && "powerMultiplier" in next) {
     delete next.powerMultiplier;
+    changed = true;
+  }
+  if (Number.isFinite(overflowRatio) && toNumber(next.powerOverflowToHeatRatio) !== overflowRatio) {
+    next.powerOverflowToHeatRatio = overflowRatio;
     changed = true;
   }
   if (changed) bridge.session.mechanicsOverrides = next;
@@ -52,6 +61,7 @@ export function applyComputedModifiers(game, opts = {}) {
   const m = projectSessionModifiers(game);
   if (!m) return;
   const r = game.reactor;
+  r.sessionModifiers = m;
   if (!skipGrid) {
     const rowsChanged = game.rows !== m.gridRows;
     const colsChanged = game.cols !== m.gridCols;
@@ -72,7 +82,7 @@ export function applyComputedModifiers(game, opts = {}) {
     "transfer_capacitor_multiplier", "vent_plating_multiplier", "vent_capacitor_multiplier",
     "stirling_multiplier", "manual_vent_percent", "perpetual_capacitors", "perpetual_reflectors",
     "manual_override_mult", "convective_boost", "power_to_heat_ratio", "catalyst_reduction",
-    "thermal_feedback_rate", "volatile_tuning_max", "plating_heat_bonus", "reflector_cooling_factor"
+    "thermal_feedback_rate", "volatile_tuning_max", "plating_heat_bonus", "reflector_cooling_factor",
   ];
   for (let i = 0; i < directKeys.length; i++) {
     const k = directKeys[i];
@@ -82,13 +92,9 @@ export function applyComputedModifiers(game, opts = {}) {
   if (typeof m.auto_sell_percent === "number" && m.auto_sell_percent > 0) {
     r.auto_sell_multiplier = m.auto_sell_percent / 100;
   }
-
-  if (r.manual_heat_reduce !== m.manual_heat_reduce) {
-    r.manual_heat_reduce = m.manual_heat_reduce;
-    game.emit?.("statePatch", { manual_heat_reduce: m.manual_heat_reduce });
-  } else {
-    r.manual_heat_reduce = m.manual_heat_reduce;
-  }
+  r.manual_heat_reduce = m.manual_heat_reduce;
+  if (game.state) game.state.manual_heat_reduce = toNumber(m.manual_heat_reduce);
+  game.emit?.("statePatch", { manual_heat_reduce: m.manual_heat_reduce });
 
   if (!!game.state?.auto_sell !== m.auto_sell_from_upgrade) {
     game.onToggleStateChange?.("auto_sell", m.auto_sell_from_upgrade);

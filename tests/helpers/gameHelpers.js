@@ -1,5 +1,5 @@
 import { toDecimal } from "@app/utils.js";
-import { patchGameState, setDecimal } from "@app/state.js";
+import { patchGameState, setDecimal, withHostEconomyHydrate } from "@app/state.js";
 
 export function hydrateSessionFromHost(game) {
   game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
@@ -8,10 +8,12 @@ export function hydrateSessionFromHost(game) {
 }
 
 export function grantInfiniteResources(game) {
-  game.current_money = 1e30;
-  setDecimal(game.state, "current_exotic_particles", toDecimal(1e20));
-  setDecimal(game.state, "total_exotic_particles", toDecimal(1e20));
-  game.exoticParticleManager.exotic_particles = toDecimal(1e20);
+  withHostEconomyHydrate(game, () => {
+    game.current_money = 1e30;
+    setDecimal(game.state, "current_exotic_particles", toDecimal(1e20));
+    setDecimal(game.state, "total_exotic_particles", toDecimal(1e20));
+    game.exoticParticleManager.exotic_particles = toDecimal(1e20);
+  });
   game.coreBridge?.loadEconomyFromHost?.();
   patchGameState(game, {
     current_money: game.current_money,
@@ -55,13 +57,8 @@ export async function placePart(game, row, col, partId, tileState) {
     const part = game.partset.getPartById(partId);
     if (!part) throw new Error(`Part ${partId} does not exist`);
 
-    const bridge = game.coreBridge;
-    if (bridge?.isActive) {
-      if (!bridge.placePartUnpaid(row, col, partId)) {
-        throw new Error(`Failed to place ${partId} at ${row},${col}`);
-      }
-    } else {
-      await tile.setPart(part);
+    if (!(await tile.setPart(part))) {
+      throw new Error(`Failed to place ${partId} at ${row},${col}`);
     }
     if (tileState) {
         if (tileState.heat !== undefined) tile.heat_contained = tileState.heat;

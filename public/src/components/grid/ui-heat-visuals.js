@@ -1,4 +1,4 @@
-import { subscribeKey, preferences, setDecimal } from "../../store.js";
+import { subscribeKey, preferences } from "../../store.js";
 import { logger } from "../../core/logger.js";
 import { html } from "lit-html";
 import { render, repeat } from "../../dom/lit.js";
@@ -467,40 +467,6 @@ export class GridInteractionUI {
       activeTileIcons: this._activeTileIconKeys.size,
       totalActiveAnimations: this._activeVentRotors.size + this._activeTileIconKeys.size,
     };
-  }
-
-  clearReactorHeat() {
-    const ui = this.ui;
-    if (!ui.game || !ui.game.reactor) return;
-
-    try {
-      ui.game.reactor.current_heat = 0;
-
-      if (ui.game.tileset && ui.game.tileset.active_tiles_list) {
-        ui.game.tileset.active_tiles_list.forEach(tile => {
-          if (tile.heat_contained !== undefined) {
-            tile.heat_contained = 0;
-          }
-          if (tile.heat !== undefined) {
-            tile.heat = 0;
-          }
-          if (tile.display_heat !== undefined) {
-            tile.display_heat = 0;
-          }
-        });
-      }
-
-      if (ui.game?.state) {
-        setDecimal(ui.game.state, "current_heat", 0);
-        ui.game.state.stats_heat_generation = 0;
-      }
-
-      this.clearAllActiveAnimations();
-
-      logger.log('debug', 'ui', 'Reactor heat cleared!');
-    } catch (error) {
-      logger.log('error', 'ui', 'Error clearing reactor heat:', error);
-    }
   }
 
   pulseReflector(fromTile, toTile) {

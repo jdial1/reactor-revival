@@ -21,7 +21,7 @@ export function buildHostStatePatch(snap, tickResult = {}, tickMeta = {}) {
   const economy = snap.economy ?? {};
   const coreStats = snap.stats;
   const toggles = snap.toggles ?? {};
-  const warnLevel = snap.heatWarningLevel ?? tickResult.heatWarningLevel ?? null;
+  const warnLevel = snap.heatWarningLevel ?? tickResult?.heatWarningLevel ?? null;
 
   const patch = {
     current_heat: grid.currentHeat ?? 0,
@@ -36,7 +36,7 @@ export function buildHostStatePatch(snap, tickResult = {}, tickMeta = {}) {
     max_power: grid.maxPower ?? 0,
     ui_heat_critical: warnLevel === "critical",
     ui_pipe_integrity_warning: warnLevel === "high" || warnLevel === "critical",
-    melting_down: snap.hasMeltedDown ?? tickResult.meltdown ?? false,
+    melting_down: !!(snap.hasMeltedDown ?? tickResult?.meltdown),
     failure_state: snap.failureState ?? "nominal",
     hull_integrity: snap.hullIntegrity ?? 100,
     auto_sell: !!toggles.auto_sell,
@@ -233,6 +233,7 @@ export function projectSessionMetaToGame(game, session, snap) {
   game.tick_count = snap?.engine?.tickCount ?? session.engine.tickCount;
   game._coreSnapshot = snap;
 
-  const protium = snap?.economy?.protiumParticles;
-  if (protium != null) game.protium_particles = protium;
+  const protium = session.systems?.economy?.protiumParticles
+    ?? snap?.economy?.protiumParticles;
+  if (protium != null) game.protium_particles = toNumber(protium);
 }

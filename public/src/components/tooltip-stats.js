@@ -29,13 +29,12 @@ export function collectPartSemanticSegments(part, tile_context = null) {
     ...extras,
   }).segments;
   if (part.category === "vent" && tile_context?.game) {
-    const stirlingLvl = tile_context.game.upgradeset.getUpgrade("stirling_generators")?.level ?? 0;
-    if (stirlingLvl > 0) {
-      const effectiveVent = extras.vent;
+    const stirlingMult = Number(tile_context.game.reactor?.stirling_multiplier ?? 0);
+    if (stirlingMult > 0) {
       segments.push({
         kind: "stat",
         unitKey: "STIRLING_POWER_UNITS",
-        value: effectiveVent * (stirlingLvl * 0.01),
+        value: extras.vent * stirlingMult,
       });
     }
   }
