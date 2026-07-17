@@ -51,6 +51,7 @@ describe("Reactor Mechanics", () => {
     // Simulate heat contained in parts
     tile1.heat_contained = 50;
     tile2.heat_contained = 75;
+    game.coreBridge.syncGridFromGame();
 
     game.reactor.updateStats();
 
@@ -143,12 +144,14 @@ describe("Reactor Mechanics", () => {
 
   it("should manually reduce heat", () => {
     game.reactor.current_heat = 100;
+    game.coreBridge.syncReactorScalarsFromGame();
     game.sold_heat = false;
     game.manual_reduce_heat_action();
     expect(toNum(game.reactor.current_heat)).toBe(100 - game.base_manual_heat_reduce);
     expect(game.sold_heat).toBe(true);
 
     game.reactor.current_heat = 0.5;
+    game.coreBridge.syncReactorScalarsFromGame();
     game.manual_reduce_heat_action();
     expect(toNum(game.reactor.current_heat)).toBe(0);
     expect(game.sold_heat).toBe(true);
@@ -178,6 +181,7 @@ describe("Reactor Mechanics", () => {
     const infusedUpgrade = game.upgradeset.getUpgrade("infused_cells");
     game.current_exotic_particles = Math.max(toNum(labUpgrade.getEcost()), toNum(infusedUpgrade.getEcost())) + 1000;
     patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.check_affordability(game);
 
     expect(game.upgradeset.purchaseUpgrade("laboratory")).toBe(true);
@@ -210,6 +214,9 @@ describe("Reactor Mechanics", () => {
   it("should handle heat venting correctly", async () => {
     game.reactor.current_heat = 1000;
     game.reactor.heat_controlled = true;
+    game.state.heat_control = true;
+    game.coreBridge.syncReactorScalarsFromGame();
+    game.coreBridge.syncTogglesFromGame();
     game.engine.tick();
     expect(toNum(game.reactor.current_heat)).toBeLessThan(1000);
     expect(toNum(game.reactor.current_heat)).toBeGreaterThan(0);

@@ -6,8 +6,6 @@ import { runCheckAffordability } from "../bridge/bridge-upgrades.js";
 import { toDecimal, toNumber, getDecimal } from "../simUtils.js";
 import { numFormat as fmt } from "../core/numbers.js";
 import { logger } from "../core/logger.js";
-import { MAX_PART_VARIANTS } from "../constants/balance.js";
-import { bumpGridPartsRevision } from "../bridge/bridge-grid-sync.js";
 import { getActiveBridge, requireActiveBridge } from "../bridge/active.js";
 
 const Decimal = getDecimal();
@@ -59,32 +57,6 @@ const buildUpgradeDefsFromSession = (game) => {
   return defs;
 };
 
-const needsPartStatSync = (upgrade) => {
-  const actionId = upgrade?.actionId || "";
-  const type = upgrade?.type || upgrade?.upgrade?.type || "";
-  const id = upgrade?.id || "";
-  if (type.includes("cell") || id.includes("_cell_") || actionId.includes("cell")) return true;
-  if (actionId === "perpetual_reflectors" || actionId === "perpetual_capacitors") return true;
-  return false;
-};
-
-const syncUpgradeDerivedEffects = (game, upgrade) => {
-  if (!game || !upgrade) return;
-  bumpGridPartsRevision(game.tileset);
-  const pid = upgrade.upgrade?.part?.id;
-  if (pid && String(upgrade.id || "").endsWith("_cell_perpetual")) {
-    const p = game.partset.getPartById(pid);
-    if (p) p.perpetual = upgrade.level > 0;
-  }
-  const perpetualReflectors = (game.upgradeset.getUpgrade("perpetual_reflectors")?.level ?? 0) > 0;
-  for (let i = 1; i <= MAX_PART_VARIANTS; i++) {
-    const rp = game.partset.getPartById(`reflector${i}`);
-    if (rp) rp.perpetual = perpetualReflectors;
-  }
-  if (upgrade.type?.includes?.("cell")) game.update_cell_power?.();
-  game.reactor?.updateStats?.();
-};
-
 export class Upgrade {
   constructor(upgrade_definition, game) {
     this.game = game;
@@ -125,34 +97,13 @@ export class Upgrade {
       this.level = level;
       this.updateDisplayCost();
       this._syncDisplayToState();
-      if (this.actionId === "chronometer") {
-        this.game.loop_wait = this.game.base_loop_wait;
-        this.game.emit?.("statePatch", { loop_wait: this.game.loop_wait });
-      } else if (needsPartStatSync(this)) {
-        syncUpgradeDerivedEffects(this.game, this);
-      }
     }
-    const bridge = getActiveBridge(this.game);
-    if (bridge?.session?.setUpgradeLevels && !opts.skipSessionSync) {
-      const sessLevel = bridge.session.getUpgradeLevel?.(this.id) ?? 0;
-      if (sessLevel !== this.level) {
-        const entries = (this.game.upgradeset?.toSaveState?.() || []).map((e) => ({ id: e.id, level: e.level }));
-        const idx = entries.findIndex((e) => e.id === this.id);
-        if (this.level > 0) {
-          if (idx >= 0) entries[idx].level = this.level;
-          else entries.push({ id: this.id, level: this.level });
-        } else if (idx >= 0) {
-          entries.splice(idx, 1);
-        }
-        bridge.session.setUpgradeLevels(entries);
-      }
+    if (opts.deferSync) return;
+    if (this.actionId === "chronometer") {
+      this.game.loop_wait = this.game.base_loop_wait;
+      this.game.emit?.("statePatch", { loop_wait: this.game.loop_wait });
     }
-    if (this.type.includes("cell")) {
-      this.game.update_cell_power();
-    }
-    if (!opts.deferSync) {
-      applyComputedModifiers(this.game);
-    }
+    applyComputedModifiers(this.game);
     this.game.reactor?.updateStats?.();
   }
 
@@ -270,11 +221,18 @@ function resetDoctrineUpgradeLevels(upgradeset, treeId) {
 
 function sanitizeDoctrineUpgradeLevelsOnLoad(upgradeset, techTreeId) {
   if (upgradeset.game.bypass_tech_tree_restrictions || !techTreeId) return;
+  let changed = false;
   upgradeset.upgradeToTechTreeMap.forEach((treeSet, upgradeId) => {
     if (treeSet.size !== 1 || treeSet.has(techTreeId)) return;
     const upgrade = upgradeset.getUpgrade(upgradeId);
-    if (upgrade && upgrade.level > 0) upgrade.setLevel(0);
+    if (upgrade && upgrade.level > 0) {
+      upgrade.setLevel(0);
+      changed = true;
+    }
   });
+  if (changed) {
+    upgradeset.game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+  }
 }
 
 function runPurchaseUpgradeToMax(upgradeset, upgradeId) {

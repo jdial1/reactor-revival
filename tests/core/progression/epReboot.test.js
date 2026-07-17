@@ -39,6 +39,7 @@ describe('EP Reboot Functionality', () => {
             game.exoticParticleManager.exotic_particles = toDecimal(0);
             setDecimal(game.state, "session_power_produced", 5_000_000);
             setDecimal(game.state, "session_heat_dissipated", 6_000_000);
+            game.coreBridge.loadEconomyFromHost();
             await game.rebootActionKeepExoticParticles();
             expect(toNum(game.state.total_exotic_particles)).toBe(5);
             expect(toNum(game.state.current_exotic_particles)).toBe(5);
@@ -86,6 +87,7 @@ describe('EP Reboot Functionality', () => {
             game.current_money = 5000;
             setDecimal(game.state, "session_power_produced", 0);
             setDecimal(game.state, "session_heat_dissipated", 0);
+            game.coreBridge.loadEconomyFromHost();
             await game.rebootActionKeepExoticParticles();
 
             expect(toNum(game.exotic_particles)).toBe(0);
@@ -125,6 +127,7 @@ describe('EP Reboot Functionality', () => {
             game.exoticParticleManager.exotic_particles = toDecimal(10);
 
             game.current_money = 5000;
+            game.coreBridge.loadEconomyFromHost();
             await game.router.loadPage("experimental_upgrades_section");
             await game.rebootActionDiscardExoticParticles();
 
@@ -137,6 +140,7 @@ describe('EP Reboot Functionality', () => {
             game.exotic_particles = 75;
             game.total_exotic_particles = 125;
             patchGameState(game, { exotic_particles: game.exotic_particles, total_exotic_particles: game.total_exotic_particles });
+            game.coreBridge.loadEconomyFromHost();
 
             await game.rebootActionDiscardExoticParticles();
 

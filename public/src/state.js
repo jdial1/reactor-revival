@@ -682,14 +682,13 @@ function refreshObjective(game) {
 
 async function runCoreKeepEpPrestige(game, bridge) {
   const savedProtium = game.protium_particles;
-  bridge.loadEconomyFromHost?.();
   const result = bridge.prestige();
   game.protium_particles = savedProtium;
+  game.exoticParticleManager.exotic_particles = toDecimal(0);
   clearState(game);
   resetObjectives(game);
   bridge.hydrateObjectivesFromGame?.();
   const epFromWeave = result?.earned ?? 0;
-  game.exoticParticleManager.exotic_particles = toDecimal(epFromWeave);
   const prestigePayload = {
     keepEp: true,
     epFromWeave,
@@ -699,7 +698,6 @@ async function runCoreKeepEpPrestige(game, bridge) {
   };
   game.state.last_prestige = prestigePayload;
   game.state.prestige_seq = (game.state.prestige_seq ?? 0) + 1;
-  bridge.loadEconomyFromHost?.();
   refreshUI(game);
   refreshObjective(game);
 }
@@ -708,10 +706,7 @@ async function runCoreDiscardEpReboot(game, bridge) {
   const savedProtium = game.protium_particles;
   bridge.reboot({ keepEp: false });
   game.protium_particles = savedProtium;
-  setDecimal(game.state, "current_exotic_particles", 0);
-  setDecimal(game.state, "total_exotic_particles", 0);
   game.exoticParticleManager.exotic_particles = toDecimal(0);
-  bridge.loadEconomyFromHost?.();
   clearState(game);
   resetObjectives(game);
   bridge.hydrateObjectivesFromGame?.();
@@ -743,31 +738,21 @@ export async function runRebootAction(game, keep_exotic_particles = false) {
 export async function runFullReboot(game) {
   if (game.engine && game.engine.running) game.engine.stop();
   game.paused = false;
-  setDecimal(game.state, "current_money", 0);
-  game.tech_tree = null;
-  game.exoticParticleManager.exotic_particles = toDecimal(0);
-  setDecimal(game.state, "current_exotic_particles", 0);
-  game.protium_particles = 0;
-  setDecimal(game.state, "total_exotic_particles", 0);
-  game.coreBridge?.loadEconomyFromHost?.();
-  resetSessionCriticalityCounters(game);
   game.gridManager.setRows(game.base_rows);
   game.gridManager.setCols(game.base_cols);
   if (game._test_grid_size) {
     game.gridManager.setRows(game._test_grid_size.rows);
     game.gridManager.setCols(game._test_grid_size.cols);
   }
+  const bridge = requireActiveBridge(game, "runFullReboot");
+  if (bridge.session.grid.rows !== game.rows || bridge.session.grid.cols !== game.cols) {
+    bridge.session.grid.resize(game.rows, game.cols);
+  }
+  bridge.hardReset();
+  resetSessionCriticalityCounters(game);
   if (game.reactor) {
-    game.reactor.current_heat = 0;
-    game.reactor.current_power = 0;
     game.state.melting_down = false;
     game.reactor.updateStats();
-  }
-  if (game.tileset) game.tileset.clearAllTiles();
-  if (game.upgradeset) {
-    game.upgradeset.upgradesArray.forEach((upgrade) => {
-      if (!upgrade.upgrade.type.includes("experimental")) upgrade.level = 0;
-    });
   }
   game.syncModifiersFromUpgrades();
 }
@@ -1018,7 +1003,6 @@ export class ExoticParticleManager {
 
   set total_exotic_particles(v) {
     setDecimal(this.game.state, "total_exotic_particles", ensureDecimal(v));
-    this.game.coreBridge?.loadEconomyFromHost?.();
   }
 
   get exotic_particles() {
@@ -1035,15 +1019,16 @@ export class ExoticParticleManager {
 
   set current_exotic_particles(v) {
     setDecimal(this.game.state, "current_exotic_particles", ensureDecimal(v));
-    this.game.coreBridge?.loadEconomyFromHost?.();
   }
 
   grantCheatExoticParticle(amount = 1) {
-    const delta = toDecimal(amount);
+    const bridge = requireActiveBridge(this.game, "grantCheatExoticParticle");
+    const n = toNumber(amount);
     this.game.markCheatsUsed();
-    this.exotic_particles = this.exotic_particles.add(delta);
-    this.total_exotic_particles = this.total_exotic_particles.add(delta);
-    this.current_exotic_particles = this.current_exotic_particles.add(delta);
+    if (!(n > 0)) return;
+    bridge.session.creditExoticParticles(n);
+    bridge.routeEvents();
+    bridge.projectToGame(bridge.session.engine.getLastResult());
   }
 }
 

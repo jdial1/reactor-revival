@@ -27,7 +27,6 @@ import {
   runSellAction,
   runManualReduceHeatAction,
   runEpartOnclick,
-  updateDecimal,
   setDecimal,
 } from "../state.js";
 import { Reactor } from "./reactor.js";
@@ -276,7 +275,6 @@ class EconomyManager {
   }
   setCurrentMoney(value) {
     setDecimal(this.game.state, "current_money", value);
-    this.game.coreBridge?.loadEconomyFromHost?.();
   }
 }
 
@@ -613,19 +611,9 @@ export class Game {
   }
 
   respecDoctrine() {
-    const cost = this.RESPER_DOCTRINE_EP_COST; // Ensure using the property name in class
-    const currentEp = this.state.current_exotic_particles;
-
-    if (currentEp.lt(cost)) return false;
-
-    updateDecimal(this.state, "current_exotic_particles", (d) => d.sub(cost));
-
-    const oldTree = this.tech_tree;
-    this.tech_tree = null; // Set to null as per test expectation
-
-    this.upgradeset.resetDoctrineUpgradeLevels(oldTree);
+    const bridge = requireActiveBridge(this, "respecDoctrine");
+    if (!bridge.respecDoctrine()) return false;
     resetHeatThresholdSignalState(this);
-
     if (this.saveManager) this.saveManager.autoSave();
     return true;
   }

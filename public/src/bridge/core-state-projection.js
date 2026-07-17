@@ -118,6 +118,16 @@ export function projectReactorFromSnapshot(game, snap) {
   reactor.stats_outlet = coreStats.outlet;
   reactor.stats_total_part_heat = coreStats.totalPartHeat;
   reactor.stats_cash = coreStats.cash;
+  if (coreStats.temp_vent_multiplier != null) {
+    reactor.vent_multiplier_eff = coreStats.temp_vent_multiplier;
+  } else if (coreStats.ventMultiplier != null) {
+    reactor.vent_multiplier_eff = coreStats.ventMultiplier;
+  }
+  if (coreStats.temp_transfer_multiplier != null) {
+    reactor.transfer_multiplier_eff = coreStats.temp_transfer_multiplier;
+  } else if (coreStats.transferMultiplier != null) {
+    reactor.transfer_multiplier_eff = coreStats.transferMultiplier;
+  }
 }
 
 export function projectTileRuntimeFromSnapshot(game, liveGrid, cellOutputs) {

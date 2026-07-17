@@ -1,6 +1,12 @@
 import { toDecimal } from "@app/utils.js";
 import { patchGameState, setDecimal } from "@app/state.js";
 
+export function hydrateSessionFromHost(game) {
+  game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+  game.coreBridge?.loadEconomyFromHost?.();
+  game.coreBridge?.syncGridFromGame?.();
+}
+
 export function grantInfiniteResources(game) {
   game.current_money = 1e30;
   setDecimal(game.state, "current_exotic_particles", toDecimal(1e20));
@@ -49,20 +55,36 @@ export async function placePart(game, row, col, partId, tileState) {
     const part = game.partset.getPartById(partId);
     if (!part) throw new Error(`Part ${partId} does not exist`);
 
-    await tile.setPart(part);
+    const bridge = game.coreBridge;
+    if (bridge?.isActive) {
+      if (!bridge.placePartUnpaid(row, col, partId)) {
+        throw new Error(`Failed to place ${partId} at ${row},${col}`);
+      }
+    } else {
+      await tile.setPart(part);
+    }
     if (tileState) {
         if (tileState.heat !== undefined) tile.heat_contained = tileState.heat;
         if (tileState.heat_contained !== undefined) tile.heat_contained = tileState.heat_contained;
         if (tileState.ticks !== undefined) tile.ticks = tileState.ticks;
         else if (part.category === "cell") tile.ticks = part.ticks;
         tile.activated = tileState.activated !== undefined ? tileState.activated : true;
-    } else {
+        game.coreBridge?.syncGridFromGame?.();
+    } else if (part.category === "cell" && tile.part) {
+        tile.ticks = part.ticks;
         tile.activated = true;
-        if (part.category === "cell") {
-            tile.ticks = part.ticks;
-        }
+        game.coreBridge?.syncGridFromGame?.();
     }
+    tile.recalculateEffectiveValues?.();
     return tile;
+}
+
+export function setUpgradeLevel(game, upgradeId, level) {
+  const upgrade = game.upgradeset.getUpgrade(upgradeId);
+  if (!upgrade) throw new Error(`Upgrade ${upgradeId} not found`);
+  upgrade.setLevel(level);
+  game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+  return upgrade;
 }
 
 export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
@@ -123,6 +145,7 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     if (!success) {
         if (level > 0 && upgrade.level < upgrade.max_level) {
             upgrade.setLevel(Math.min(level, upgrade.max_level));
+            game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
             game.bypass_tech_tree_restrictions = wasBypass;
             return true;
         }
@@ -134,6 +157,7 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     game.bypass_tech_tree_restrictions = wasBypass;
     if (level > 1) {
         upgrade.setLevel(level);
+        game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
     }
 
     return success;
@@ -151,6 +175,7 @@ export function unlockAllUpgrades(game) {
             u.setLevel(1);
         }
     });
+    game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
 }
 
 export function maxOutUpgrades(game, filterFn = null) {
@@ -159,6 +184,7 @@ export function maxOutUpgrades(game, filterFn = null) {
             u.setLevel(u.max_level);
         }
     });
+    game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
     game.reactor.updateStats();
 }
 

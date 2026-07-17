@@ -112,7 +112,7 @@ const handleComponentExplosion = (engine, tile) => {
     });
   }
   if (tile && tile.heat_contained > 0) {
-    engine.game.reactor.current_heat = engine.game.reactor.current_heat.add(tile.heat_contained);
+    engine.game.coreBridge?.dumpTileHeatToHull?.(tile.heat_contained);
   }
   tile.exploding = true;
   engine.noteExplosionVisualPending();

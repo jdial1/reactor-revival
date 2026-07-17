@@ -206,9 +206,9 @@ export class Tile {
 
   _clearMeltdownRecovery() {
     const game = this.game;
-    logger.log('debug', 'game', '[Recovery] Clearing meltdown state after placing part:', this.part.id);
+    logger.log('debug', 'game', '[Recovery] Clearing meltdown state after placing part:', this.part?.id);
     logger.log('debug', 'game', '[Recovery] Reactor heat before reset:', game.reactor.current_heat, "max:", game.reactor.max_heat);
-    game.reactor.current_heat = 0;
+    game.coreBridge?.resetReactorHeat?.();
     game.reactor.clearMeltdownState();
     const engineStopped = game.engine && !game.engine.running;
     if (!engineStopped) {
@@ -248,6 +248,29 @@ export class Tile {
     this.heat_contained = tileHeat > 0 ? toDecimal(tileHeat) : toDecimal(0);
   }
 
+  _applyLocalPart(partInstance) {
+    this.part = partInstance;
+    bumpGridPartsRevision(this.game?.tileset);
+    this.activated = true;
+    this.ticks = partInstance.ticks;
+    this.heat_contained = 0;
+    this.exploded = false;
+    this.exploding = false;
+    this.game.bumpGridTileDirty?.(this.row, this.col);
+  }
+
+  _afterPartPresentation() {
+    safeCall(() => {
+      if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
+        this.game.state.parts_panel_version++;
+      }
+      if (this.game?.upgradeset?.populateUpgrades) {
+        this.game.upgradeset.populateUpgrades();
+      }
+    }, "tile upgrade refresh");
+    if (this.game?.saveManager) void this.game.saveManager.autoSave();
+  }
+
   async setPart(partInstance) {
     if (partInstance === null || partInstance === undefined) {
       throw new Error("Invalid part: part cannot be null or undefined");
@@ -259,7 +282,16 @@ export class Tile {
     if (!isRestoring && this.game?.partset?.isPartDoctrineLocked(partInstance)) {
       return false;
     }
-    if (!isRestoring && this.game?.audio?.enabled) {
+    if (isRestoring) {
+      this._applyLocalPart(partInstance);
+      this.recalculateEffectiveValues();
+      return true;
+    }
+    const bridge = requireActiveBridge(this.game, "setPart");
+    if (!bridge.placePartUnpaid(this.row, this.col, partInstance.id)) {
+      return false;
+    }
+    if (this.game?.audio?.enabled) {
       logger.log('debug', 'game', `Placing part '${partInstance.id}' on tile (${this.row}, ${this.col})`);
       logger.log('debug', 'tile', 'setPart', { row: this.row, col: this.col, partId: partInstance.id });
       recordSimEvent(this.game, {
@@ -270,42 +302,15 @@ export class Tile {
       });
       drainGameEffects(this.game, () => this.game?.ui);
     }
-    this.part = partInstance;
-    bumpGridPartsRevision(this.game?.tileset);
-    if (this.part) {
-      this.activated = true;
-      this.ticks = this.part.ticks;
-      this.heat_contained = 0;
-      this.exploded = false;
-      this.exploding = false;
-      this.game.bumpGridTileDirty?.(this.row, this.col);
-      if (this.game.reactor.has_melted_down) {
-        this._clearMeltdownRecovery();
-      }
-      const bridge = this.game.coreBridge;
-      if (!isRestoring) {
-        this.recalculateEffectiveValues();
-      }
+    if (this.game.reactor.has_melted_down) {
+      this._clearMeltdownRecovery();
     }
-    if (!isRestoring) {
-      this.game.reactor.updateStats();
-      if (!this.part) this.recalculateEffectiveValues();
-      safeCall(() => {
-        if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
-          this.game.state.parts_panel_version++;
-        }
-        if (this.game && this.game.upgradeset && typeof this.game.upgradeset.populateUpgrades === "function") {
-          this.game.upgradeset.populateUpgrades();
-        }
-      }, "tile upgrade refresh");
-      if (this.game?.saveManager) {
-        void this.game.saveManager.autoSave();
-      }
-    } else {
-      this.recalculateEffectiveValues();
-    }
+    this.recalculateEffectiveValues();
+    this.game.reactor.updateStats({ fromSession: true });
+    this._afterPartPresentation();
     return true;
   }
+
   _clearPartReset() {
     bumpGridPartsRevision(this.game?.tileset);
     this.activated = false;
@@ -319,7 +324,7 @@ export class Tile {
     this.exploded = false;
     this.exploding = false;
     this.game.bumpGridTileDirty?.(this.row, this.col);
-    this.game.reactor.updateStats();
+    this.game.reactor.updateStats({ fromSession: true });
     safeCall(() => {
       if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
         this.game.state.parts_panel_version++;
@@ -332,6 +337,18 @@ export class Tile {
     if (!this.part) return;
     logger.log('debug', 'game', `Clearing part '${this.part.id}' from tile (${this.row}, ${this.col}).`);
     logger.log('debug', 'tile', 'clearPart', { row: this.row, col: this.col, partId: this.part.id });
+    const bridge = this.game.coreBridge;
+    if (bridge?.isActive) {
+      bridge.removePartAt(this.row, this.col);
+      this.game.reactor.updateStats({ fromSession: true });
+      safeCall(() => {
+        if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
+          this.game.state.parts_panel_version++;
+        }
+      }, "parts panel bump");
+      if (this.game?.saveManager) void this.game.saveManager.autoSave();
+      return;
+    }
     this._clearPartReset();
   }
 
@@ -454,12 +471,18 @@ export class Tileset {
   }
 
   clearAllTiles() {
+    const session = this.game.coreBridge?.session;
+    if (session?.grid) {
+      session.grid.clearGrid();
+      session.grid.recalculateCaps?.();
+      this.game.coreBridge.syncGridToGame();
+      return;
+    }
     this.tiles_list.forEach((tile) => {
       if (tile.part) {
         tile.clearPart();
       }
     });
-    this.game.coreBridge?.syncGridFromGame?.();
   }
 
   getAllTiles() {

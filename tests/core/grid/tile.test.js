@@ -33,6 +33,7 @@ describe("Tile Mechanics", () => {
     const tile = await placePart(game, 0, 0, "uranium1");
     const part = tile.part;
     tile.ticks = part.ticks / 2;
+    game.coreBridge.syncGridFromGame();
     const moneyBeforeSell = toNum(game.current_money);
     const expectedRefund = Math.ceil(toNum(part.cost) * (tile.ticks / part.ticks));
 
@@ -79,7 +80,9 @@ describe("Tile Mechanics", () => {
     const ventUpgrade = game.upgradeset.getUpgrade("improved_heat_vents");
     if (ventUpgrade && ventUpgrade.level < ventUpgrade.max_level) {
       ventUpgrade.setLevel(1);
+      game.coreBridge.pushHostUpgradeLevelsForLoad();
     }
+    ventTile.recalculateEffectiveValues();
 
     const expectedValue = ventTile.part.base_vent * (1 + (ventUpgrade?.level ?? 0));
     expect(ventTile.getEffectiveVentValue()).toBe(expectedValue);
@@ -107,11 +110,13 @@ describe("Tile Mechanics", () => {
 
     game.current_money = purchasePrice * 2;
     patchGameState(game, { current_money: game.current_money });
+    game.coreBridge.loadEconomyFromHost();
 
     const moneyBeforePurchase = toNum(game.current_money);
     const tile = await placePart(game, 0, 0, "uranium1");
     game.current_money = toNum(game.current_money) - purchasePrice;
     patchGameState(game, { current_money: game.current_money });
+    game.coreBridge.loadEconomyFromHost();
     const moneyAfterPurchase = toNum(game.current_money);
 
     expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
@@ -135,11 +140,13 @@ describe("Tile Mechanics", () => {
 
     game.current_money = purchasePrice * 3;
     patchGameState(game, { current_money: game.current_money });
+    game.coreBridge.loadEconomyFromHost();
 
     const moneyBeforePurchase = toNum(game.current_money);
     const tile = await placePart(game, 0, 0, "vent1");
     game.current_money = toNum(game.current_money) - purchasePrice;
     patchGameState(game, { current_money: game.current_money });
+    game.coreBridge.loadEconomyFromHost();
     const moneyAfterPurchase = toNum(game.current_money);
 
     expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
@@ -165,11 +172,13 @@ describe("Tile Mechanics", () => {
 
       game.current_money = purchasePrice * 3;
       patchGameState(game, { current_money: game.current_money });
+      game.coreBridge.loadEconomyFromHost();
 
       const moneyBeforePurchase = toNum(game.current_money);
       const tile = await placePart(game, 0, 0, partId);
       game.current_money = toNum(game.current_money) - purchasePrice;
       patchGameState(game, { current_money: game.current_money });
+      game.coreBridge.loadEconomyFromHost();
       const moneyAfterPurchase = toNum(game.current_money);
 
       expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);

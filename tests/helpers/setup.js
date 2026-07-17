@@ -639,6 +639,8 @@ export async function setupGameLogicOnly() {
             u.level = 0;
       u.updateDisplayCost(); // CRITICAL: Recalculate cost after level reset.
     });
+    globalGameInstance.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+    globalGameInstance.coreBridge?.syncGridFromGame?.();
   } else {
     // Create a new instance
     const mockedUI = new UI();

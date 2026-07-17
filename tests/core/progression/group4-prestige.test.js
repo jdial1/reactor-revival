@@ -36,6 +36,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     game.exoticParticleManager.exotic_particles = toDecimal(0);
     setDecimal(game.state, "session_power_produced", 4_000_000);
     setDecimal(game.state, "session_heat_dissipated", 5_000_000);
+    game.coreBridge.loadEconomyFromHost();
     await game.rebootActionKeepExoticParticles();
     expect(toNum(game.state.total_exotic_particles)).toBe(4);
     expect(toNum(game.state.current_exotic_particles)).toBe(4);
@@ -47,6 +48,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     game.exoticParticleManager.exotic_particles = toDecimal(10);
     setDecimal(game.state, "session_power_produced", 500_000);
     setDecimal(game.state, "session_heat_dissipated", 600_000);
+    game.coreBridge.loadEconomyFromHost();
     await game.rebootActionKeepExoticParticles();
     expect(toNum(game.state.total_exotic_particles)).toBe(10);
   });
@@ -105,9 +107,11 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     standardUpgrade.setLevel(1);
     const laboratory = game.upgradeset.getUpgrade("laboratory");
     laboratory.setLevel(1);
+    game.coreBridge.pushHostUpgradeLevelsForLoad();
 
     setDecimal(game.state, "session_power_produced", 0);
     setDecimal(game.state, "session_heat_dissipated", 0);
+    game.coreBridge.loadEconomyFromHost();
 
     await game.rebootActionKeepExoticParticles();
 
@@ -138,6 +142,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     game.current_money = 5000;
     await placePart(game, 0, 0, "uranium1");
     game.upgradeset.getUpgrade("laboratory").setLevel(1);
+    game.coreBridge.pushHostUpgradeLevelsForLoad();
 
     await game.rebootActionDiscardExoticParticles();
 
@@ -153,6 +158,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
   it("locks experimental upgrade purchases to EP spending", () => {
     const laboratory = game.upgradeset.getUpgrade("laboratory");
     laboratory.setLevel(1);
+    game.coreBridge.pushHostUpgradeLevelsForLoad();
     const targetUpgrade = game.upgradeset.getUpgrade("fractal_piping");
     targetUpgrade.updateDisplayCost();
     const epCost = toNum(targetUpgrade.getEcost());
@@ -160,6 +166,7 @@ describe("Group 4: Exotic Particles & Prestige", () => {
     game.current_money = 250000;
     game.current_exotic_particles = epCost + 50;
     patchGameState(game, { current_money: game.current_money, current_exotic_particles: game.current_exotic_particles });
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.check_affordability(game);
 
     const moneyBefore = toNum(game.current_money);

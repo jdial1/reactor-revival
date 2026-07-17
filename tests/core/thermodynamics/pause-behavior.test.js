@@ -19,6 +19,7 @@ describe("Pause Behavior", () => {
         await tile.setPart(fuelPart);
         tile.activated = true;
         tile.ticks = 10;
+        game.coreBridge.syncGridFromGame();
 
         // Set initial reactor heat
         const initialHeat = game.reactor.current_heat;
@@ -52,6 +53,7 @@ describe("Pause Behavior", () => {
 
         // Set heat above containment to trigger explosion
         tile.heat_contained = ventPart.containment * 1.5;
+        game.coreBridge.syncGridFromGame();
 
         // Mock the explosion handler to track if it was called
         const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
@@ -250,6 +252,7 @@ describe("Pause Behavior", () => {
         tile.setPart(fuelPart);
         tile.activated = true;
         tile.ticks = 5;
+        game.coreBridge.syncGridFromGame();
 
         const initialTicks = tile.ticks;
 

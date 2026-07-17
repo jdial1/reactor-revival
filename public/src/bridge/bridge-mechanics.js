@@ -6,8 +6,6 @@ export function syncHostSellOverridesToSession(bridge) {
   const reactor = bridge.game.reactor;
   const mult = toNumber(reactor.auto_sell_multiplier);
   const altered = toNumber(reactor.altered_max_power);
-  const powerToHeat = toNumber(reactor.power_to_heat_ratio);
-  const overflowRatio = toNumber(reactor.power_overflow_to_heat_ratio);
   const powerMultiplier = toNumber(reactor.power_multiplier);
   const prev = bridge.session.mechanicsOverrides || {};
   const next = { ...prev };
@@ -23,16 +21,11 @@ export function syncHostSellOverridesToSession(bridge) {
     delete next.alteredMaxPower;
     changed = true;
   }
-  if (powerToHeat > 0 && powerToHeat !== toNumber(prev.powerToHeatRatio)) {
-    next.powerToHeatRatio = powerToHeat;
-    changed = true;
-  }
-  if (overflowRatio >= 0 && overflowRatio !== toNumber(prev.powerOverflowToHeatRatio)) {
-    next.powerOverflowToHeatRatio = overflowRatio;
-    changed = true;
-  }
   if (powerMultiplier > 1 && powerMultiplier !== toNumber(prev.powerMultiplier)) {
     next.powerMultiplier = powerMultiplier;
+    changed = true;
+  } else if (powerMultiplier <= 1 && "powerMultiplier" in next) {
+    delete next.powerMultiplier;
     changed = true;
   }
   if (changed) bridge.session.mechanicsOverrides = next;
@@ -86,6 +79,9 @@ export function applyComputedModifiers(game, opts = {}) {
     if (typeof m[k] !== "undefined") r[k] = m[k];
   }
   r.heat_controlled = m.heat_controlled;
+  if (typeof m.auto_sell_percent === "number" && m.auto_sell_percent > 0) {
+    r.auto_sell_multiplier = m.auto_sell_percent / 100;
+  }
 
   if (r.manual_heat_reduce !== m.manual_heat_reduce) {
     r.manual_heat_reduce = m.manual_heat_reduce;

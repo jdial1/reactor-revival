@@ -124,17 +124,16 @@ describe("New Gameplay Upgrades", () => {
             const nowCtl = createNowController(vi);
             try {
                 const upgrade = game.upgradeset.getUpgrade("manual_override");
-                game.current_money = upgrade.getCost() * 10;
-                patchGameState(game, { current_money: game.current_money });
-                game.upgradeset.check_affordability(game);
-                game.upgradeset.purchaseUpgrade(upgrade.id);
+                forcePurchaseUpgrade(game, upgrade.id);
                 expect(game.reactor.manual_override_mult).toBeGreaterThan(0);
                 const tile = game.tileset.getTile(0, 0);
                 const cell = game.partset.getPartById("uranium1");
                 await tile.setPart(cell);
                 tile.ticks = 100;
                 tile.activated = true;
+                game.coreBridge.syncGridFromGame();
                 game.reactor.current_power = 10;
+                game.coreBridge.syncReactorScalarsFromGame();
                 game.sell_action();
                 expect(game.reactor.override_end_time).toBeGreaterThan(Date.now());
                 game.reactor.updateStats();
@@ -238,9 +237,7 @@ describe("New Gameplay Upgrades", () => {
             game.current_exotic_particles = 0;
             patchGameState(game, { current_exotic_particles: 0 });
 
-            game.current_money = upgrade.getCost() * 10;
-            game.upgradeset.check_affordability(game);
-            game.upgradeset.purchaseUpgrade(upgrade.id);
+            forcePurchaseUpgrade(game, upgrade.id);
 
             expect(game.reactor.catalyst_reduction).toBeGreaterThan(0);
             pa.recalculate_stats();
@@ -256,10 +253,9 @@ describe("New Gameplay Upgrades", () => {
             const improvedVents = game.upgradeset.getUpgrade("improved_heat_vents");
             
             game.current_money = stirling.getCost() + improvedVents.getCost() + 1000;
-            game.upgradeset.check_affordability(game);
-            
-            game.upgradeset.purchaseUpgrade(stirling.id);
-            game.upgradeset.purchaseUpgrade(improvedVents.id);
+            game.coreBridge.loadEconomyFromHost();
+            forcePurchaseUpgrade(game, stirling.id);
+            forcePurchaseUpgrade(game, improvedVents.id);
             
             const vent = game.partset.getPartById("vent1");
             const tile = game.tileset.getTile(0, 0);
@@ -270,6 +266,7 @@ describe("New Gameplay Upgrades", () => {
             
             tile.heat_contained = 100;
             tile.activated = true;
+            game.coreBridge.syncGridFromGame();
             
             syncActivePartsAtTickBoundary(game.engine);
 
@@ -304,6 +301,7 @@ describe("New Gameplay Upgrades", () => {
 
             ventTile.heat_contained = 100;
             game.tileset.updateActiveTiles();
+            game.coreBridge.syncGridFromGame();
 
             forcePurchaseUpgrade(game, "convective_airflow");
             
@@ -312,6 +310,7 @@ describe("New Gameplay Upgrades", () => {
             game.tileset.getTile(1, 0).clearPart();
             game.tileset.getTile(1, 2).clearPart();
             game.tileset.updateActiveTiles();
+            game.coreBridge.syncGridFromGame();
             
             syncActivePartsAtTickBoundary(game.engine);
 
@@ -370,6 +369,7 @@ describe("New Gameplay Upgrades", () => {
             // Store initial heat and track changes
             ventTile.heat_contained = 100;
             heatBefore = 100;
+            game.coreBridge.syncGridFromGame();
             
             // Intercept heat additions by wrapping the tick
             const originalProcessTick = game.engine._processTick;

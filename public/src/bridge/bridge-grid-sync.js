@@ -7,7 +7,7 @@ export function bumpGridPartsRevision(tileset) {
   if (engine) engine._workerPartSnapshotCache = null;
 }
 
-export function syncGridCheap(bridge, { runtimeFromHost = true } = {}) {
+export function syncGridCheap(bridge, { runtimeFromHost = false } = {}) {
   if (!bridge.session) return;
   if (gameGridDiffersFromSession(bridge)) syncGridFromGame(bridge);
   else if (runtimeFromHost) syncRuntimeTileStateFromGame(bridge);

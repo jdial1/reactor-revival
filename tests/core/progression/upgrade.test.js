@@ -14,6 +14,7 @@ describe("Upgrade Mechanics", () => {
 
     game.current_money = toNum(upgrade.getCost()) * 2;
     patchGameState(game, { current_money: game.current_money });
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.check_affordability(game);
     game.upgradeset.purchaseUpgrade(upgrade.id);
 
@@ -26,6 +27,7 @@ describe("Upgrade Mechanics", () => {
     const initialRows = game.rows;
 
     game.current_money = upgrade.getCost();
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.check_affordability(game);
     game.upgradeset.purchaseUpgrade(upgrade.id);
 
@@ -35,6 +37,7 @@ describe("Upgrade Mechanics", () => {
   it("should become unaffordable with insufficient funds", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
     game.current_money = upgrade.getCost() - 1;
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.check_affordability(game);
     expect(upgrade.affordable).toBe(false);
   });
@@ -42,15 +45,18 @@ describe("Upgrade Mechanics", () => {
   it("should correctly handle experimental upgrades requiring EP", () => {
     const labUpgrade = game.upgradeset.getUpgrade("laboratory");
     game.current_exotic_particles = labUpgrade.getCost() + 100;
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.purchaseUpgrade("laboratory");
 
     const expUpgrade = game.upgradeset.getUpgrade("infused_cells");
 
     game.current_exotic_particles = expUpgrade.base_ecost;
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.check_affordability(game);
     expect(expUpgrade.affordable).toBe(true);
 
     game.current_exotic_particles = expUpgrade.base_ecost - 1;
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.check_affordability(game);
     expect(expUpgrade.affordable).toBe(false);
   });
@@ -66,6 +72,7 @@ describe("Upgrade Mechanics", () => {
     const upgrade = game.upgradeset.getUpgrade("chronometer");
     const cost = upgrade.getCost();
     game.current_money = cost - 1;
+    game.coreBridge.loadEconomyFromHost();
 
     const result = game.upgradeset.purchaseUpgrade(upgrade.id);
 
@@ -78,6 +85,7 @@ describe("Upgrade Mechanics", () => {
     const cost = upgrade.getCost();
     game.current_money = cost + 1000;
     patchGameState(game, { current_money: game.current_money });
+    game.coreBridge.loadEconomyFromHost();
     game.upgradeset.check_affordability(game);
     const expectedMoney = toNum(game.current_money) - toNum(cost);
 

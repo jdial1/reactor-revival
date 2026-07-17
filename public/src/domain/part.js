@@ -3,7 +3,7 @@ import { numFormat as fmt } from "../core/numbers.js";
 import { logger } from "../core/logger.js";
 import { getPartImagePath } from "../core/part-images.js";
 import { getUpgradeBonusLines } from "../components/tooltip-stats.js";
-import { requireActiveBridge } from "../bridge/active.js";
+import { getActiveBridge, requireActiveBridge } from "../bridge/active.js";
 
 const REACTOR_PLATING_DEFAULT_CONTAINMENT = 1000;
 
@@ -40,7 +40,6 @@ const applyCompiledCatalogPart = (part, compiled) => {
 
 const recalculatePartStats = (part) => {
   const bridge = requireActiveBridge(part.game, "recalculatePartStats");
-  bridge.syncReactorScalarsFromGame?.();
   const compiled = bridge.session.getPart?.(part.id);
   if (!compiled) throw new Error(`Part catalog missing id: ${part.id}`);
   applyCompiledCatalogPart(part, compiled);
@@ -244,6 +243,10 @@ export class PartSet {
 
   check_affordability(game) {
     if (!game) return;
+    const bridge = getActiveBridge(game);
+    const economy = bridge?.session?.getEconomySnapshot?.() ?? null;
+    const money = toDecimal(economy?.money ?? game.state.current_money ?? 0);
+    const ep = toDecimal(economy?.currentExoticParticles ?? game.state.current_exotic_particles ?? 0);
     this.partsArray.forEach((part) => {
       if (game.reactor && game.reactor.has_melted_down) {
         part.setAffordable(false);
@@ -258,14 +261,16 @@ export class PartSet {
         : true;
       let isAffordable = false;
       if (part.erequires) {
-        const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
-        if (requiredUpgrade?.level > 0 && isUnlocked) {
+        const reqLevel = bridge?.session?.getUpgradeLevel?.(part.erequires)
+          ?? game.upgradeset.getUpgrade(part.erequires)?.level
+          ?? 0;
+        if (reqLevel > 0 && isUnlocked) {
           isAffordable = part.ecost?.gt?.(0)
-            ? game.state.current_exotic_particles.gte(part.ecost)
-            : game.state.current_money.gte(part.cost);
+            ? ep.gte(part.ecost)
+            : money.gte(part.cost);
         }
       } else if (isUnlocked) {
-        isAffordable = game.state.current_money.gte(part.cost);
+        isAffordable = money.gte(part.cost);
       }
       part.setAffordable(isAffordable);
     });

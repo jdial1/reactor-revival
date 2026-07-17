@@ -63,6 +63,7 @@ export function setUpgradeLevelAndRefresh(game, upgradeId, level) {
   }
   upgrade.setLevel(level);
   upgrade.updateDisplayCost();
+  game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
 }
 
 export async function captureConsoleOutputs(method, fn) {
