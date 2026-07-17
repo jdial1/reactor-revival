@@ -6,7 +6,7 @@ import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import { MODAL_IDS } from "../modalIds.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
 import { leaderboardService, getLocalBestRun } from "../services.js";
-import { queryClient, queryKeys } from "../services-query.js";
+import { queryClient, queryKeys } from "../services-leaderboard.js";
 import {
   leaderboardStatusRowTemplate,
   leaderboardRowTemplate as leaderboardRowTemplateView,

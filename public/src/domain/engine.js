@@ -17,12 +17,64 @@ import {
 import { performance } from "../dom/lit.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import { recordSimEvent } from "./sim-events.js";
-import { getTickPartList, getValveNeighborCache } from "../bridge/bridge-parts.js";
 import { numFormat as fmt } from "../format/numbers.js";
-import { consumeIntentQueueAsync } from "../bridge/bridge-intents.js";
-export { Performance } from "./engine-performance.js";
 
-function createVisualEventBuffer(maxEvents) {
+const DEBUG_PERFORMANCE =
+  (typeof process !== "undefined" && process.env?.NODE_ENV === "test") ||
+  (typeof window !== "undefined" && window.location?.hostname === "localhost") ||
+  false;
+
+export class Performance {
+  constructor(game) {
+    this.game = game;
+    this.enabled = false;
+    this.marks = {};
+    this.measures = {};
+    this.counters = {};
+    this.averages = {};
+    this.maxSamples = 100;
+  }
+
+  enable() {
+    if (!DEBUG_PERFORMANCE) return;
+    this.enabled = true;
+  }
+
+  disable() {
+    this.enabled = false;
+  }
+
+  shouldMeasure() {
+    return this.enabled && DEBUG_PERFORMANCE;
+  }
+
+  markStart(name) {
+    if (!this.enabled || typeof performance.mark !== "function") return;
+    performance.mark(`${name}_start`);
+    this.marks[name] = performance.now();
+  }
+
+  markEnd(name) {
+    if (!this.enabled || !this.marks[name] || typeof performance.mark !== "function") return;
+    performance.mark(`${name}_end`);
+    if (typeof performance.measure === "function") {
+      performance.measure(name, `${name}_start`, `${name}_end`);
+    }
+    const duration = performance.now() - this.marks[name];
+    this.measures[name] = duration;
+    if (!this.averages[name]) this.averages[name] = { sum: 0, count: 0, samples: [] };
+    const avg = this.averages[name];
+    avg.sum += duration;
+    avg.count++;
+    avg.samples.push(duration);
+    if (avg.samples.length > this.maxSamples) {
+      avg.sum -= avg.samples.shift();
+    }
+    this.counters[name] = (this.counters[name] || 0) + 1;
+  }
+}
+
+const createVisualEventBuffer = (maxEvents) => {
   const buffer = new Uint32Array(maxEvents * 2);
   let head = 0;
   let tail = 0;
@@ -41,9 +93,9 @@ function createVisualEventBuffer(maxEvents) {
       tail = newTail;
     },
   };
-}
+};
 
-function handleComponentExplosion(engine, tile) {
+const handleComponentExplosion = (engine, tile) => {
   tile.exploded = true;
   if (engine.game) {
     recordSimEvent(engine.game, {
@@ -67,9 +119,9 @@ function handleComponentExplosion(engine, tile) {
     engine.handleComponentDepletion(tile);
     tile.exploding = false;
   }, 600);
-}
+};
 
-export function failSimulationHardwareIncompatible(engine, detail) {
+const failSimulationHardwareIncompatible = (engine, detail) => {
   engine._simulationHardwareError = true;
   if (engine.game?.state) {
     engine.game.state.engine_status = EngineStatus.SIMULATION_ERROR;
@@ -80,9 +132,9 @@ export function failSimulationHardwareIncompatible(engine, detail) {
     message: SIMULATION_ERROR_MESSAGE,
     detail: detail != null ? String(detail) : "",
   });
-}
+};
 
-export function startOfflineFastForward(engine) {
+export const startOfflineFastForward = (engine) => {
   const game = engine.game;
   const offlineMs = game._offlineCatchupMs || 0;
   game._offlineCatchupMs = 0;
@@ -94,18 +146,18 @@ export function startOfflineFastForward(engine) {
   engine._offlineFastForwardTicks = ticks;
   engine._isCatchingUp = true;
   return ticks;
-}
+};
 
-function yieldToNextFrame(yieldMs = 0) {
+const yieldToNextFrame = (yieldMs = 0) => {
   if (yieldMs > 0) return new Promise((resolve) => setTimeout(resolve, yieldMs));
   const rafFn =
     (typeof window !== "undefined" && window.requestAnimationFrame) ||
     globalThis.requestAnimationFrame;
   if (typeof rafFn === "function") return new Promise((resolve) => rafFn(() => resolve()));
   return new Promise((resolve) => setTimeout(resolve, 16));
-}
+};
 
-async function runChunkedOfflineReplay(engine, opts = {}) {
+const runChunkedOfflineReplay = async (engine, opts = {}) => {
   const chunkTicks = opts.chunkTicks ?? OFFLINE_REPLAY_CHUNK_TICKS;
   const yieldMs = opts.yieldMs ?? 0;
   let remaining = opts.totalTicks ?? engine._offlineFastForwardTicks ?? 0;
@@ -152,9 +204,9 @@ async function runChunkedOfflineReplay(engine, opts = {}) {
       drainGameEffects(engine.game, () => engine.game?.ui);
     }
   }
-}
+};
 
-export function processOfflineTime(engine, deltaTime) {
+export const processOfflineTime = (engine, deltaTime) => {
   if (deltaTime <= OFFLINE_TIME_THRESHOLD_MS) return false;
   const capMs = MAX_ACCUMULATOR_MULTIPLIER * FOUNDATIONAL_TICK_MS;
   const span = Math.min(deltaTime, capMs);
@@ -164,9 +216,9 @@ export function processOfflineTime(engine, deltaTime) {
     engine.game.emit?.("welcomeBackOffline", { deltaTime: span, offlineMs: span, tickEquivalent });
   }
   return true;
-}
+};
 
-export function postGameLoopProjectionQuery(_engine, game) {
+export const postGameLoopProjectionQuery = (_engine, game) => {
   const bridge = game.coreBridge;
   if (!bridge?.isActive) return Promise.resolve(null);
   bridge.syncForStatsRead();
@@ -178,9 +230,9 @@ export function postGameLoopProjectionQuery(_engine, game) {
     reactorHeat: snap.grid?.currentHeat ?? 0,
     meltdown: snap.meltdown ?? false,
   });
-}
+};
 
-function logEngineStartSnapshot(engine) {
+const logEngineStartSnapshot = (engine) => {
   const game = engine.game;
   logger.log("info", "engine", "[EngineStart] tick processing", {
     coreBridge: !!game.coreBridge?.isActive,
@@ -188,7 +240,7 @@ function logEngineStartSnapshot(engine) {
     simulationTickMs: FOUNDATIONAL_TICK_MS,
     tickCount: engine.tick_count,
   });
-}
+};
 
 export class Engine {
   constructor(game) {
@@ -221,14 +273,6 @@ export class Engine {
     this._visibilityListenerBound = false;
     this._visibilityHiddenAt = 0;
     this._offlineReplayActive = false;
-  }
-
-  _processIntentQueue() {
-    void consumeIntentQueueAsync(this.game, this);
-  }
-
-  async consumeIntentQueueAsync() {
-    return consumeIntentQueueAsync(this.game, this);
   }
 
   getLastHeatFlowVectors() {
@@ -441,31 +485,3 @@ export class Engine {
     handleComponentExplosion(this, tile);
   }
 }
-
-const TICK_PART_KEYS = [
-  "active_cells",
-  "active_vessels",
-  "active_inlets",
-  "active_exchangers",
-  "active_outlets",
-  "active_valves",
-  "active_vents",
-  "active_capacitors",
-];
-
-for (let i = 0; i < TICK_PART_KEYS.length; i++) {
-  const key = TICK_PART_KEYS[i];
-  Object.defineProperty(Engine.prototype, key, {
-    get() {
-      return getTickPartList(this, key);
-    },
-    configurable: true,
-  });
-}
-
-Object.defineProperty(Engine.prototype, "_valveNeighborCache", {
-  get() {
-    return getValveNeighborCache(this);
-  },
-  configurable: true,
-});

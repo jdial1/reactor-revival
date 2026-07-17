@@ -1,6 +1,5 @@
 import { toDecimal } from "@app/utils.js";
 import { patchGameState, setDecimal } from "@app/state.js";
-import { syncActivePartsAtTickBoundary } from "@app/bridge/bridge-parts.js";
 
 export function grantInfiniteResources(game) {
   game.current_money = 1e30;
@@ -18,7 +17,7 @@ export function grantInfiniteResources(game) {
 
 export function syncGridState(game, { activeTiles = false } = {}) {
   game.reactor.updateStats();
-  syncActivePartsAtTickBoundary(game.engine);
+  game.coreBridge?.syncGridFromGame?.();
 
   if (activeTiles) {
     game.tileset.updateActiveTiles();
@@ -85,10 +84,11 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     }
     
     upgrade.updateDisplayCost();
-    const currentCost = upgrade.base_ecost ? upgrade.getEcost() : upgrade.getCost();
+    const isEpUpgrade = !!(upgrade.base_ecost?.gt?.(0) || (Number(upgrade.base_ecost) > 0));
+    const currentCost = isEpUpgrade ? upgrade.getEcost() : upgrade.getCost();
     const costNum = (typeof currentCost?.toNumber === 'function' ? currentCost.toNumber() : Number(currentCost));
 
-    if (upgrade.base_ecost) {
+    if (isEpUpgrade) {
         const epNum = (typeof game.current_exotic_particles?.toNumber === 'function' ? game.current_exotic_particles.toNumber() : Number(game.current_exotic_particles));
         game.current_exotic_particles = Math.max(epNum, costNum * 10 + 100);
         patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
@@ -97,6 +97,7 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
         game.current_money = Math.max(moneyNum, costNum * 10 + 10000);
         patchGameState(game, { current_money: game.current_money });
     }
+    game.coreBridge?.loadEconomyFromHost?.();
 
     upgrade.updateDisplayCost();
 
@@ -107,7 +108,7 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
 
     const ecost = upgrade.getEcost();
     const costVal = upgrade.getCost();
-    const hasEnoughResources = upgrade.base_ecost
+    const hasEnoughResources = isEpUpgrade
         ? (game.current_exotic_particles?.gte ? game.current_exotic_particles.gte(ecost) : Number(game.current_exotic_particles) >= (ecost?.toNumber ? ecost.toNumber() : ecost))
         : (game.current_money?.gte ? game.current_money.gte(costVal) : Number(game.current_money) >= (costVal?.toNumber ? costVal.toNumber() : costVal));
     
@@ -210,7 +211,7 @@ export async function assembleHeatChain(
     tiles.push(tile);
   }
   game.reactor?.updateStats?.();
-  syncActivePartsAtTickBoundary(game.engine);
+  game.coreBridge?.syncGridFromGame?.();
   return tiles;
 }
 

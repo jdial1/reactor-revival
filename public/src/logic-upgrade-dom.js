@@ -6,7 +6,7 @@ export {
   setUpgradeCardRefreshHandler,
 } from "./bridge/bridge-upgrades.js";
 
-export { bindPartElement, getPartElement } from "./components/part-presentation.js";
+export { bindPartElement, getPartElement } from "./components/presentation.js";
 
 export function queryUpgradeElement(upgrade) {
   if (typeof document === "undefined" || !upgrade?.id) return null;

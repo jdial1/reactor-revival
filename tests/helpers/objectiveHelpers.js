@@ -217,14 +217,19 @@ export async function satisfyObjective(game, idx) {
             break;
 
         case 22: {
-            const tile = game.tileset.getTile(0, 0);
-            await tile.setPart(game.partset.getPartById("uranium1"));
-            tile.activated = true;
-            tile.ticks = 10;
-            tile.power = 10000;
-            tile.heat = 0;
+            const thorium1 = game.partset.getPartById("thorium1");
+            for (let i = 0; i < 10; i++) {
+                const tile = game.tileset.getTile(0, i);
+                if (!tile || !thorium1) continue;
+                await tile.setPart(thorium1);
+                tile.activated = true;
+                tile.ticks = 900;
+            }
+            game.tileset.updateActiveTiles();
             game.paused = false;
             game.onToggleStateChange?.("pause", false);
+            game.engine?.tick?.();
+            game.reactor.updateStats();
             break;
         }
 

@@ -12,19 +12,42 @@ import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
 import { inspectExchangerPressureFlowForTile } from "../bridge/bridge-heat.js";
 import { actions, ref } from "../store.js";
 import { subscribeKey } from "valtio/vanilla/utils";
-import { unsafeHTML, BaseComponent } from "../dom/lit.js";
-import {
-  tutorialOverlayTemplate,
-  tutorialCalloutTemplate,
-  desktopTooltipContentTemplate,
-} from "../templates/uiTooltipTemplates.js";
+import { styleMap, when, unsafeHTML, BaseComponent } from "../dom/lit.js";
 
-function renderTutorialCallout(container, message, onSkip, onHardSkip) {
+const tutorialOverlayTemplate = html`
+  <div class="tutorial-spotlight-top"></div>
+  <div class="tutorial-spotlight-left"></div>
+  <div class="tutorial-spotlight-right"></div>
+  <div class="tutorial-spotlight-bottom"></div>
+  <div class="tutorial-focus-border"></div>
+  <div class="tutorial-pointer" aria-hidden="true">
+    <svg class="tutorial-pointer-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 4l4 8-2 2 2 10 4-6 4 8 4-12-6-4-4-2-4-4z" fill="rgb(255 220 160)" stroke="rgb(180 140 80)" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+  </div>
+`;
+
+const tutorialCalloutTemplate = (message, onSkip, onHardSkip) => html`
+  <div class="tutorial-message">${message}</div>
+  <button type="button" class="tutorial-skip-btn" @click=${onSkip}>Skip</button>
+  <button type="button" class="tutorial-hard-skip-btn" @click=${onHardSkip}>Hard Skip</button>
+`;
+
+const desktopTooltipContentTemplate = ({ title, hasUpgrade, summaryHtml, descHtml, hasBonusLines, bonusHtml, statsHtml, buyBtn }) => html`
+  <div data-role="title" class="tooltip-title" style="margin-bottom: 0.5em; font-size: 1.1em; font-weight: bold;">${title}</div>
+  <div data-role="desktop-summary" class="tooltip-summary-row" style=${styleMap({ display: hasUpgrade ? "" : "none" })}>${unsafeHTML(summaryHtml)}</div>
+  <p data-role="description" class=${hasUpgrade ? "is-inset" : ""}>${unsafeHTML(descHtml)}</p>
+  ${when(hasBonusLines, () => html`<div data-role="bonus-lines" class="tooltip-bonuses">${unsafeHTML(bonusHtml)}</div>`)}
+  <dl class="tooltip-stats" data-role="desktop-stats">${unsafeHTML(statsHtml)}</dl>
+  <footer id="tooltip_actions">${buyBtn}</footer>
+`;
+
+const renderTutorialCallout = (container, message, onSkip, onHardSkip) => {
   if (!container?.isConnected) return;
   try {
     render(tutorialCalloutTemplate(message, onSkip, onHardSkip), container);
   } catch (_) {}
-}
+};
 
 const TUTORIAL_STEP_KEY = "reactorTutorialStep";
 const TUTORIAL_HARD_SKIP_KEY = "reactorTutorialHardSkipped";
@@ -558,10 +581,12 @@ function buildDesktopSummaryItems(obj, tile) {
 function formatCellSubstrateLines(tile, part) {
   if (!tile || part.category !== "cell") return "";
   const bridge = tile.game?.coreBridge;
-  const desc = bridge?.describeCellPulse?.(tile);
-  const M = desc?.cellMultiplier ?? part.cell_pack_M ?? 1;
+  if (!bridge?.isActive) throw new Error("formatCellSubstrateLines requires an active core session");
+  const desc = bridge.describeCellPulse(tile);
+  if (!desc) return "";
+  const M = desc.cellMultiplier ?? part.cell_pack_M ?? 1;
   const C = Math.max(1, part.cell_count_C ?? part.cell_count ?? 1);
-  const N = desc?.pulseN ?? 0;
+  const N = desc.pulseN ?? 0;
   const H = part.base_heat ?? 0;
   const P = part.base_power ?? 0;
   const heatVal = (H * (M + N) * (M + N)) / C;

@@ -124,8 +124,9 @@ describe("Reactor Meltdown Scenarios", () => {
     it("should block meltdown while grace_period_ticks > 0", () => {
         game.paused = false;
         game.grace_period_ticks = 5;
-        game.reactor.current_heat = game.reactor.max_heat * 2.1;
         clearGracePeriod(game);
+        expect(game.reactor.has_melted_down).toBe(false);
+        game.reactor.current_heat = game.reactor.max_heat * 2.1;
         expect(game.reactor.has_melted_down).toBe(false);
         game.engine.tick();
         expect(game.reactor.has_melted_down).toBe(true);

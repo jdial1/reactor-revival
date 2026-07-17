@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach, setupGame, toNum , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
 import { placePart, forcePurchaseUpgrade, runTicks } from "../../helpers/gameHelpers.js";
-import { computeNeighborPulseNFromTile } from "@app/logic.js";
 
 describe("Complex Layouts and Advanced Interactions", () => {
     let game;
@@ -77,7 +76,7 @@ describe("Complex Layouts and Advanced Interactions", () => {
         const protiumTile = game.tileset.getTile(1, 0);
         const catalogProtium = game.partset.getPartById("protium1");
         const M = catalogProtium.cell_pack_M ?? 1;
-        const N = computeNeighborPulseNFromTile(protiumTile);
+        const N = game.coreBridge.describeCellPulse(protiumTile)?.pulseN ?? 0;
         const expectedPower = catalogProtium.base_power * (M + N);
 
         game.reactor.updateStats();

@@ -84,9 +84,8 @@ export function unlockAllPartsForTesting(ui) {
     ui.game.placedCounts[combo] = 10;
   });
   const bridge = ui.game.coreBridge;
-  if (bridge?.isActive) {
-    bridge.setPlacedCounts({ ...ui.game.placedCounts });
-  }
+  if (!bridge?.isActive) throw new Error("unlockAllParts requires an active core session");
+  bridge.setPlacedCounts({ ...ui.game.placedCounts });
   ui.game.partset.check_affordability(ui.game);
   refreshPartsPanel(ui);
 }

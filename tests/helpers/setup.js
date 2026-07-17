@@ -300,7 +300,12 @@ export { forceActiveObjective, forceActiveObjective as forceObjective } from "./
 export * from "./suiteHelpers.js";
 export { performTestRespec as testRespec, clearGracePeriod as skipGrace } from "./suiteHelpers.js";
 export { MemoryAuditor } from "./memoryAuditor.js";
-export { syncActivePartsAtTickBoundary, invalidateTickParts } from "@app/bridge/bridge-parts.js";
+
+export function syncActivePartsAtTickBoundary(engine) {
+  engine?.game?.coreBridge?.syncGridFromGame?.();
+}
+
+export function invalidateTickParts() {}
 
 // --- Phase 3: Test Utilities & Enhanced Debugging ---
 
@@ -661,9 +666,9 @@ export async function setupGameLogicOnly() {
     // CRITICAL FIX: The tileset must be initialized to create the grid.
   game.tileset.initialize();
 
-  await game.partset.initialize();
   const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
   await attachCoreBridge(game, getCoreBridgeOptions());
+  await game.partset.initialize();
   await game.upgradeset.initialize();
     await game.objectives_manager.initialize();
 
@@ -721,9 +726,9 @@ export async function setupGameWithDOM() {
   game.saveManager = createGameSaveManager(game);
   game.router = new PageRouter(ui);
   await ui.init(game);
-  await game.partset.initialize();
   const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
   await attachCoreBridge(game, getCoreBridgeOptions());
+  await game.partset.initialize();
   await game.upgradeset.initialize();
   await game.set_defaults();
 
@@ -891,7 +896,7 @@ export function cleanupGame() {
   cleanupGameHard();
 }
 
-beforeEach((context) => {
+beforeEach(async (context) => {
   const fp = getTaskFilepath(context.task);
   if (lastTestFilepath !== null && fp != null && fp !== lastTestFilepath) {
     cleanupGameHard();
@@ -901,7 +906,9 @@ beforeEach((context) => {
   }
   currentTestName = getFullTestName(context.task);
   testLogs.set(currentTestName, []);
-  if (globalGameInstance) {
+  if (globalGameInstance?.saveManager?.getSaveState) {
+    initialGameState = await globalGameInstance.saveManager.getSaveState();
+  } else if (typeof globalGameInstance?.getSaveState === "function") {
     initialGameState = globalGameInstance.getSaveState();
   }
 });
@@ -924,11 +931,17 @@ afterEach(async (context) => {
     originalLog(`\n\u001b[33m--- Extended Debug Info for Failed Test ---\u001b[0m`);
     originalLog(dumpGrid(globalGameInstance));
     if (initialGameState) {
-      const finalGameState = globalGameInstance.getSaveState();
-      const differences = diffObjects(initialGameState, finalGameState);
-      if (Object.keys(differences).length > 0) {
-        originalLog('\u001b[34m--- Game State Changes ---\u001b[0m');
-        originalLog(differences);
+      const finalGameState = typeof globalGameInstance.saveManager?.getSaveState === "function"
+        ? await globalGameInstance.saveManager.getSaveState()
+        : typeof globalGameInstance.getSaveState === "function"
+          ? globalGameInstance.getSaveState()
+          : null;
+      if (finalGameState) {
+        const differences = diffObjects(initialGameState, finalGameState);
+        if (Object.keys(differences).length > 0) {
+          originalLog('\u001b[34m--- Game State Changes ---\u001b[0m');
+          originalLog(differences);
+        }
       }
     }
     if (context.task.result?.error?.stack) {

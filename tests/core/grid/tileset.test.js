@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame } from "../../helpers/setup.js";
+import { topologyNeighborCoords } from "reactor-core";
 
 describe("Tileset Mechanics", () => {
   let game;
@@ -34,12 +35,12 @@ describe("Tileset Mechanics", () => {
     expect(game.tileset.active_tiles_list.length).toBe(4);
     expect(game.tileset.getTile(0, 0).enabled).toBe(true);
     expect(game.tileset.getTile(1, 1).enabled).toBe(true);
-    expect(game.tileset.tiles[2][2].enabled).toBe(false); // Check a tile that is now inactive
+    expect(game.tileset.tiles[2][2].enabled).toBe(false);
   });
 
   it("should get all neighboring tiles in a given range (von Neumann)", () => {
-    const centerTile = game.tileset.getTile(5, 5);
-    const neighbors = Array.from(game.tileset.getTilesInRange(centerTile, 1));
+    const coords = topologyNeighborCoords("Manhattan", 5, 5, 1, game.rows, game.cols);
+    const neighbors = coords.map(([r, c]) => game.tileset.getTile(r, c)).filter(Boolean);
     expect(neighbors.length).toBe(4);
     const neighborCoords = neighbors.map((t) => [t.row, t.col]);
     expect(neighborCoords).toContainEqual([4, 5]);

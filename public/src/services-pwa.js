@@ -120,7 +120,7 @@ export function getDeferredPrompt() {
   return deferredPrompt;
 }
 
-export function clearDeferredPrompt() {
+function clearDeferredPrompt() {
   deferredPrompt = null;
   pwaState.installPromptAvailable = false;
 }
@@ -591,7 +591,7 @@ export async function warmImageCache(imagePaths) {
   }
 }
 
-export async function preloadTierImages(tier) {
+async function preloadTierImages(tier) {
   const tierImages = partImagesByTier[tier] || [];
   if (tierImages.length === 0) {
     return;
@@ -616,14 +616,6 @@ export async function preloadTierImages(tier) {
 export async function preloadAllPartImages() {
   const tierPromises = Array.from({ length: maxTier }, (_, i) => preloadTierImages(i + 1));
   await Promise.all(tierPromises);
-}
-
-export function getPartImagesByTier() {
-  return partImagesByTier;
-}
-
-export function getMaxTier() {
-  return maxTier;
 }
 
 export function initLaunchQueueHandler({ game, onFileLoaded } = {}) {

@@ -2,11 +2,11 @@ import { render } from "lit-html";
 import { logger } from "./core/logger.js";
 import { subscribeKey, actions } from "./store.js";
 import { resolveAudioService } from "./services.js";
+import { gameShellTemplate } from "./templates/pageShellTemplates.js";
 import {
-  gameShellTemplate,
   pageSectionTemplates,
   pageLoadErrorTemplate,
-} from "./templates/pageTemplates.js";
+} from "./templates/sectionPageTemplates.js";
 import {
   setPageReactorVisibility,
   loadAndSetVersionForPage,

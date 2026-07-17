@@ -1,10 +1,6 @@
-import { render } from "lit-html";
+import { html, render } from "lit-html";
 import { preferences } from "../state/preferences.js";
 import { enqueueGameEffect } from "../state/game-effects.js";
-import {
-  achievementToastTemplate,
-  achievementSummaryToastTemplate,
-} from "../templates/achievementToastTemplates.js";
 
 const TOAST_HOLD_MS = 4000;
 const TOAST_ANIM_OUT_MS = 320;
@@ -14,6 +10,36 @@ const GROUP_AUDIO = {
   engineering: "click",
   discovery: "ep_spark",
   milestone: "sell",
+};
+
+const achievementToastTemplate = ({ title, description, group, icon }) => {
+  const iconSrc = icon || "img/ui/icons/icon_power.png";
+  return html`
+    <div class="achievement-toast achievement-toast--${group}" role="status" aria-live="polite">
+      <div class="achievement-toast__panel">
+        <div class="achievement-toast__tag">ACHIEVEMENT</div>
+        <div class="achievement-toast__body">
+          <img class="achievement-toast__icon" src="${iconSrc}" alt="" />
+          <div class="achievement-toast__text">
+            <div class="achievement-toast__title">${title}</div>
+            <div class="achievement-toast__description">${description}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+const achievementSummaryToastTemplate = (count) => {
+  const label = count === 1 ? "1 achievement unlocked while offline." : `${count} achievements unlocked while offline.`;
+  return html`
+    <div class="achievement-toast achievement-toast--summary" role="status" aria-live="polite">
+      <div class="achievement-toast__panel achievement-toast__panel--summary">
+        <div class="achievement-toast__tag">OFFLINE</div>
+        <div class="achievement-toast__body achievement-toast__body--summary">${label}</div>
+      </div>
+    </div>
+  `;
 };
 
 export class AchievementController {
@@ -89,7 +115,7 @@ export class AchievementController {
         group: achievement.group,
         icon: achievement.icon,
       }),
-      host
+      host,
     );
     const panel = host.querySelector(".achievement-toast");
     if (panel && !reduced) {

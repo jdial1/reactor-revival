@@ -3,11 +3,13 @@ import { numFormat as fmt } from "../format/numbers.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import { logger } from "../core/logger.js";
 import { getAppContext } from "../app-context.js";
+import { writeClipboardText, readClipboardText } from "../core/clipboard.js";
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { createUIState, initUIStateSubscriptions } from "../store.js";
+import { createUIState, initUIStateSubscriptions, preferences } from "../store.js";
+import { subscribe } from "valtio/vanilla";
 import { PageSetupUI } from "./page-setup-ui.js";
-import { resolveAudioService } from "../services.js";
+import { resolveAudioService, getValidatedGameData } from "../services.js";
 import {
   ComponentRenderingUI,
   runPopulateUpgradeSection,
@@ -30,7 +32,6 @@ import {
   teardownResizeListeners,
   PwaDisplayModeUI,
   QuickStartUI,
-  ClipboardUI,
   mountInfoBar,
   syncMobileControlDeckMounts,
   setupPartsPanel,
@@ -59,14 +60,26 @@ import { createDeviceFeatures } from "../infrastructure/device.js";
 import { startRenderLoop } from "./ui-render-loop.js";
 import { initializePage as runInitializePage } from "./ui-page-init.js";
 export { showStatusNotice } from "./ui-notices.js";
-import { getValidatedGameData } from "../services.js";
 import { setupUiIdleEffects } from "../ui-idle-effects.js";
-import { attachAudioSys } from "../audio.sys.js";
 import { mountUiViewHosts } from "../ui.views.js";
 import { teardownGameStateEngineSync } from "../logic/game-state-sync.js";
 import { installAppRootIntentDelegation } from "./ui-intents.js";
 import { teardownAllUiSubsystems, wireAppSubsystems, wireUiDomSubsystems } from "./ui-app-wiring.js";
 import { MY_LAYOUTS_STORAGE_KEY } from "./ui-layout-storage.js";
+
+const attachAudioSys = (getAudioService) => {
+  const unsub = subscribe(preferences, () => {
+    const audio = getAudioService();
+    if (audio?._isInitialized && typeof audio._loadVolumeSettings === "function") {
+      audio._loadVolumeSettings();
+    }
+  });
+  return () => {
+    try {
+      unsub();
+    } catch (_) {}
+  };
+};
 
 function mountUiViewHostsForLayout(ui) {
   if (typeof ui._uiViewHostsUnmount === "function") {
@@ -208,7 +221,10 @@ export class UI {
     this.pwaDisplayModeUI = new PwaDisplayModeUI(this);
     this.quickStartUI = new QuickStartUI(this);
     this.pauseStateUI = null;
-    this.clipboardUI = new ClipboardUI(this);
+    this.clipboardUI = {
+      writeToClipboard: writeClipboardText,
+      readFromClipboard: readClipboardText,
+    };
 
     this.ctrl9HoldTimer = null;
     this.ctrl9HoldStartTime = null;

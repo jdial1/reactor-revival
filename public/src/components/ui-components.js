@@ -316,9 +316,12 @@ export class ComponentRenderingUI {
 }
 
 
-export { clipToGrid, getCostBreakdown, computeBlueprintDiff, applyBlueprintLayoutDiff, calculateLayoutCost } from "../domain/blueprint.js";
-export { mergeComponents, renderComponentIcons } from "./ui-blueprint-helpers.js";
 export {
+  clipToGrid,
+  calculateLayoutCostBreakdown,
+  computeBlueprintDiff,
+  applyBlueprintLayoutDiff,
+  calculateLayoutCost,
   deserializeReactor,
   deserializeReactorInput,
   filterLayoutByCheckedTypes,
@@ -326,9 +329,9 @@ export {
   buildAffordableLayout,
   buildPasteState,
   validatePasteResources,
-  calculateLayoutCostBreakdown,
   calculateLayoutDiffBreakdown,
 } from "../domain/blueprint.js";
+export { renderComponentIcons } from "./ui-blueprint-helpers.js";
 export { encodeLayoutShare, decodeLayoutShare, isLayoutShareCode } from "../core/layoutShareCodec.js";
 
 
@@ -348,7 +351,6 @@ export {
   setupPasteAction,
 } from "./ui-copy-paste.js";
 
-export { ClipboardUI } from "./ui-clipboard.js";
 export {
   initializePage,
   loadAndSetVersionForPage,

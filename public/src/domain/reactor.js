@@ -9,16 +9,10 @@ import { toDecimal, toNumber } from "../simUtils.js";
 import { logger } from "../core/logger.js";
 import { getCompactLayout } from "../layout/reactor-codec.js";
 import {
-  TICKS_FULL_CYCLE,
-  TICKS_10PCT,
-  REFERENCE_POWER,
-  CLASSIFICATION_HISTORY_MAX,
-  MARK_II_E_THRESHOLD_CYCLES,
-  MAX_SUBCLASS_CYCLES,
   BASE_MAX_HEAT,
   BASE_MAX_POWER,
 } from "../constants/balance.js";
-import { CRITICAL_HEAT_RATIO, VALVE_OVERFLOW_THRESHOLD } from "../constants/sim.js";
+import { VALVE_OVERFLOW_THRESHOLD } from "../constants/sim.js";
 
 function applyStatsToReactor(reactor, stats) {
   reactor.stats_power = stats.stats_power;
@@ -94,8 +88,6 @@ function executeMeltdown(reactor) {
   if (game.state) {
     game.state.melting_down = true;
     game.state.meltdown_seq = (game.state.meltdown_seq | 0) + 1;
-    game.state.failure_state = "criticality";
-    game.state.hull_integrity = 0;
   }
   reactor.has_melted_down = true;
   recordSimEvent(game, { type: "MELTDOWN_HAPTIC", pattern: 200 });
@@ -125,8 +117,6 @@ function clearMeltdown(reactor) {
   reactor._meltdownPresentationDone = false;
   if (game.state) {
     game.state.melting_down = false;
-    game.state.failure_state = "nominal";
-    game.state.hull_integrity = 100;
   }
   syncReactorToUIState(game);
   game.partset.check_affordability(game);
@@ -166,6 +156,7 @@ export class Reactor {
     }
 
     this.auto_sell_multiplier = 0;
+    this.power_multiplier = 1;
     this.heat_power_multiplier = 0;
     this._meltdownPresentationDone = false;
     this._heatControlStat = false;
@@ -195,7 +186,6 @@ export class Reactor {
 
     this._last_calculated_max_power = toDecimal(this.base_max_power);
     this._last_calculated_max_heat = toDecimal(this.base_max_heat);
-    this._classificationStatsHistory = [];
   }
 
   get current_heat() {
@@ -239,95 +229,10 @@ export class Reactor {
     if (this.game?.state) this.game.state.heat_control = !!v;
   }
 
-  recordClassificationStats() {
-    const h = this._classificationStatsHistory;
-    h.push({
-      netHeat: Number(this.stats_net_heat) || 0,
-      power: Number(this.stats_power) || 0,
-      inlet: Number(this.stats_inlet) || 0,
-      outlet: Number(this.stats_outlet) || 0
-    });
-    if (h.length > CLASSIFICATION_HISTORY_MAX) h.shift();
-  }
-
-  getAveragedClassificationStats() {
-    const h = this._classificationStatsHistory;
-    if (!h.length) return null;
-    const n = h.length;
-    let netHeat = 0, power = 0, inlet = 0, outlet = 0;
-    for (let i = 0; i < n; i++) {
-      netHeat += h[i].netHeat;
-      power += h[i].power;
-      inlet += h[i].inlet;
-      outlet += h[i].outlet;
-    }
-    return {
-      netHeat: netHeat / n,
-      power: power / n,
-      inlet: inlet / n,
-      outlet: outlet / n
-    };
-  }
-
-  getClassification() {
-    if (!this.game?.tileset) return null;
-    if (typeof this.updateStats === "function") this.updateStats();
-    const averaged = this.getAveragedClassificationStats && this.getAveragedClassificationStats();
-    const netHeat = averaged ? averaged.netHeat : (Number(this.stats_net_heat) || 0);
-    const maxHeat = Number(this.max_heat) || 1;
-    const cellCount = this.game.tileset.active_tiles_list.filter((t) => t.part && t.part.category === "cell").length;
-    const inletVal = averaged ? averaged.inlet : (Number(this.stats_inlet) || 0);
-    const outletVal = averaged ? averaged.outlet : (Number(this.stats_outlet) || 0);
-    const hasOutsideCooling = inletVal > 0 || outletVal > 0;
-    const statsPower = averaged ? averaged.power : (Number(this.stats_power) || 0);
-    let efficiencyNum = cellCount > 0 ? statsPower / (cellCount * REFERENCE_POWER) : 1;
-    if (!isFinite(efficiencyNum) || efficiencyNum < 1) efficiencyNum = 1;
-    let efficiencyLabel = "EE";
-    if (efficiencyNum >= 4) efficiencyLabel = "EA";
-    else if (efficiencyNum >= 3) efficiencyLabel = "EB";
-    else if (efficiencyNum >= 2) efficiencyLabel = "EC";
-    else if (efficiencyNum > 1) efficiencyLabel = "ED";
-    const suffixes = [];
-    if (hasOutsideCooling && netHeat <= 0) suffixes.push("SUC");
-    let markLabel;
-    let subClass = "";
-    let summary = "";
-    if (netHeat <= 0) {
-      markLabel = "Mark I";
-      subClass = hasOutsideCooling ? "O" : "I";
-      summary = "Generates no excess heat; safe to run continuously.";
-    } else {
-      const heatPerTick = netHeat;
-      const criticalHeat = CRITICAL_HEAT_RATIO * maxHeat;
-      const ticksToCritical = heatPerTick > 0 ? criticalHeat / heatPerTick : Infinity;
-      if (ticksToCritical >= TICKS_FULL_CYCLE) {
-        markLabel = "Mark II";
-        const fullCycles = Math.floor(ticksToCritical / TICKS_FULL_CYCLE);
-        subClass = fullCycles >= MARK_II_E_THRESHOLD_CYCLES ? "E" : String(Math.min(fullCycles, MAX_SUBCLASS_CYCLES));
-        summary = fullCycles >= MARK_II_E_THRESHOLD_CYCLES
-          ? `Runs ${MARK_II_E_THRESHOLD_CYCLES}+ cycles before critical heat; nearly Mark I.`
-          : `Runs ${subClass} full cycle(s) before cooldown needed.`;
-      } else if (ticksToCritical >= TICKS_10PCT) {
-        markLabel = "Mark III";
-        summary = "Cannot complete a full cycle; shutdown mid-cycle required.";
-      } else if (ticksToCritical > 0) {
-        markLabel = "Mark IV";
-        summary = "Reaches critical heat in under 10% of a cycle; component replacement may be needed.";
-      } else {
-        markLabel = "Mark V";
-        summary = "Very short run before cooldown; precise timing required.";
-      }
-    }
-    const mainLabel = subClass ? `${markLabel}-${subClass}` : markLabel;
-    const suffixStr = suffixes.length ? " -" + suffixes.join(" -") : "";
-    const classification = `${mainLabel} ${efficiencyLabel}${suffixStr}`.trim();
-    return { classification, efficiencyLabel, suffixes, summary, markLabel, subClass };
-  }
-
   updateStats(opts = {}) {
     if (!this.game.tileset) return;
     const bridge = this.game.coreBridge;
-    if (!bridge?.isActive) return;
+    if (!bridge?.isActive) throw new Error("updateStats requires an active core session");
 
     if (!opts.fromSession) {
       bridge.syncForStatsRead();

@@ -1,4 +1,3 @@
-import { recalculatePlacedCountsFromGrid } from "../bridge/bridge-grid-sync.js";
 import { fromError } from "zod-validation-error";
 import { leaderboardService } from "../services-leaderboard.js";
 import { saveGameMutation, fetchAutoSaveSlotData } from "../state/save-query.js";
@@ -10,7 +9,7 @@ import { snapshot } from "valtio/vanilla";
 import { SAVE_FORMAT_VERSION_LATEST, buildPartTable, encodeTilesCompact, migrateSave } from "../schema/saveMigration.js";
 import { unlockedAchievementIds } from "../bridge/core-state-projection.js";
 
-export function parseAndValidateSave(raw) {
+export const parseAndValidateSave = (raw) => {
   const parsed = typeof raw === "string" ? deserializeSave(raw) : raw;
   const migrated = migrateSave(parsed);
   const result = SaveDataSchema.safeParse(migrated);
@@ -19,14 +18,14 @@ export function parseAndValidateSave(raw) {
     throw new Error("Save corrupted: validation failed");
   }
   return result.data;
-}
+};
 
 const LEGACY_TECH_TREE_IDS = new Set(["architect", "physicist", "engineer"]);
 
-export function normalizeSavedTechTreeId(id) {
+export const normalizeSavedTechTreeId = (id) => {
   if (!id || LEGACY_TECH_TREE_IDS.has(id)) return "unified";
   return id;
-}
+};
 
 function applyCoreGameState(game, savedData) {
   setDecimal(game.state, "current_money", savedData.current_money);
@@ -75,7 +74,7 @@ function applyReactorState(game, savedData) {
   if (savedData.reactor.base_max_power != null) game.state.base_max_power = savedData.reactor.base_max_power;
 }
 
-export function reconcileReactorFromState(game) {
+function reconcileReactorFromState(game) {
   const s = game?.state;
   const r = game?.reactor;
   if (!s || !r) return;
@@ -83,42 +82,18 @@ export function reconcileReactorFromState(game) {
   if (s.base_max_power) r.base_max_power = s.base_max_power;
 }
 
-async function applyUpgrades(game, savedData) {
+async function applyUpgrades(game, _savedData) {
   game.upgradeset.reset();
   await game.upgradeset.initialize();
-  if (savedData.upgrades) {
-    savedData.upgrades.forEach((upgData) => {
-      const upgrade = game.upgradeset.getUpgrade(upgData.id);
-      if (upgrade) upgrade.setLevel(upgData.level, { deferSync: true });
-    });
-  }
-  if (game.upgradeset && game.tech_tree) game.upgradeset.sanitizeDoctrineUpgradeLevelsOnLoad(game.tech_tree);
-  game.syncModifiersFromUpgrades({ skipGrid: true });
-  game.reactor.updateStats();
 }
 
 async function restoreTiles(game, savedData) {
   if (!game.tileset.initialized) game.tileset.initialize();
   game.tileset.clearAllTiles();
-  const tiles = savedData.tiles ?? [];
-  await Promise.all(
-    tiles.map(async (tileData) => {
-      const tile = game.tileset.getTile(tileData.row, tileData.col);
-      const part = game.partset.getPartById(tileData.partId);
-      if (tile && part) {
-        await tile.setPart(part);
-        tile.ticks = tileData.ticks;
-        tile.heat_contained = tileData.heat_contained;
-      }
-    })
-  );
   const placedCounts = savedData.placedCounts ?? {};
   if (Object.keys(placedCounts).length > 0) {
     game.placedCounts = { ...placedCounts };
-  } else {
-    recalculatePlacedCountsFromGrid(game);
   }
-  game.reactor.updateStats();
 }
 
 function parseObjectiveIndex(v) {
@@ -213,21 +188,21 @@ export async function applySaveState(game, savedData) {
   for (const fn of POST_ASYNC_HYDRATORS) fn(game, savedData);
   reconcileReactorFromState(game);
   game.reactor.hull_heat_doctrine_mult = 1;
+  if (!game.coreBridge?.isActive) throw new Error("applySaveState requires an active core session");
+  game.coreBridge.loadLegacySave(savedData);
+  game.coreBridge.syncUpgradeLevelsToGame();
+  if (game.upgradeset && game.tech_tree) game.upgradeset.sanitizeDoctrineUpgradeLevelsOnLoad(game.tech_tree);
+  game.syncModifiersFromUpgrades({ skipGrid: true });
   game.reactor.updateStats();
-  if (game.coreBridge?.isActive) {
-    game.coreBridge.loadLegacySave(savedData);
-  }
 }
 
-export async function absorbSaveDTO(game, dto) {
-  return applySaveState(game, dto);
-}
+export const absorbSaveDTO = async (game, dto) => applySaveState(game, dto);
 
-export async function buildSaveDTO(game) {
+export const buildSaveDTO = async (game) => {
   const mgr = game?.saveManager;
   if (!mgr?.getSaveState) throw new Error("Save manager unavailable");
   return mgr.getSaveState();
-}
+};
 
 function buildObjectivesStateForSave(ctx) {
   const om = ctx.objectives_manager;
@@ -238,7 +213,7 @@ function buildObjectivesStateForSave(ctx) {
   return obj;
 }
 
-export function buildSaveContext(game, { getToggles, getQuickSelectSlots, onBeforeSave } = {}) {
+function buildSaveContext(game, { getToggles, getQuickSelectSlots, onBeforeSave } = {}) {
   return {
     state: game.state,
     reactor: game.reactor,
@@ -266,7 +241,7 @@ export function buildSaveContext(game, { getToggles, getQuickSelectSlots, onBefo
   };
 }
 
-export function buildPersistenceContext(game, getCompactLayout) {
+function buildPersistenceContext(game, getCompactLayout) {
   return {
     hasMeltedDown: game.reactor?.has_melted_down,
     peakPower: game.peak_power,
@@ -287,7 +262,7 @@ export function buildPersistenceContext(game, getCompactLayout) {
   };
 }
 
-export function createGameSaveManager(game, getCompactLayoutFn = null) {
+export const createGameSaveManager = (game, getCompactLayoutFn = null) => {
   const resolveLayout = getCompactLayoutFn ? () => getCompactLayoutFn(game) : () => null;
   return new GameSaveManager(
     () => buildPersistenceContext(game, resolveLayout),
@@ -305,7 +280,7 @@ export function createGameSaveManager(game, getCompactLayoutFn = null) {
       },
     })
   );
-}
+};
 
 export class GameSaveManager {
   constructor(getPersistenceContext, getSaveContext) {

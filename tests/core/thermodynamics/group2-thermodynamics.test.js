@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
 import { placePart, syncGridState } from "../../helpers/gameHelpers.js";
-import { BALANCE } from "@app/logic.js";
 import { HEAT_TRANSFER_DIFF_DIVISOR, VALVE_TOPUP_THRESHOLD } from "@app/utils.js";
 
 function f32(x) {
@@ -29,7 +28,7 @@ function expectedOverflowVentChain(initialSource, valveRate, ventStart, ventCap,
 
 function topupTransferAmount(valveRate, initialSource, ventStart, ventCap) {
   const outputSpace = Math.max(0, f32(f32(ventCap) - f32(ventStart)));
-  const maxTransfer = f32(Math.min(f32(valveRate), f32(f32(ventCap) * BALANCE.valveTopupCapRatio)));
+  const maxTransfer = f32(Math.min(f32(valveRate), f32(f32(ventCap) * VALVE_TOPUP_THRESHOLD)));
   return f32(Math.min(maxTransfer, f32(initialSource), outputSpace));
 }
 
@@ -304,7 +303,7 @@ describe("Group 2: Thermodynamics & Heat Transfer", () => {
 
     expect(f32(f32(toNum(output.heat_contained)) / f32(outputCapacity))).toBe(f32(VALVE_TOPUP_THRESHOLD));
     expect(exp.transfer).toBe(transferExpected);
-    expect(transferExpected).toBe(f32(f32(outputCapacity) * BALANCE.valveTopupCapRatio));
+    expect(transferExpected).toBe(f32(f32(outputCapacity) * VALVE_TOPUP_THRESHOLD));
 
     prepTick(game);
     game.engine.tick();
@@ -330,7 +329,7 @@ describe("Group 2: Thermodynamics & Heat Transfer", () => {
     const exp = expectedTopupVentChain(source.heat_contained, valveRate, output.heat_contained, outputCapacity, ventRate);
 
     expect(exp.transfer).toBe(transferExpected);
-    expect(transferExpected).toBe(f32(f32(outputCapacity) * BALANCE.valveTopupCapRatio));
+    expect(transferExpected).toBe(f32(f32(outputCapacity) * VALVE_TOPUP_THRESHOLD));
 
     prepTick(game);
     game.engine.tick();

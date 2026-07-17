@@ -1,14 +1,15 @@
 import { applyToggleStateChange } from "../state.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import { recordSimEvent } from "../domain/sim-events.js";
-import { bumpGridPartsRevision, invalidateTickParts } from "./bridge-parts.js";
+import { bumpGridPartsRevision } from "./bridge-parts.js";
 
 function applyPlacePartIntent(game, payload) {
   const partId = payload?.partId;
   const row = payload?.row | 0;
   const col = payload?.col | 0;
   const bridge = game.coreBridge;
-  if (!bridge?.isActive || !partId) return null;
+  if (!bridge?.isActive) throw new Error("placePart requires an active core session");
+  if (!partId) return null;
   const part = game.partset?.getPartById?.(partId);
   const tile = game.tileset?.getTile(row, col);
   if (!part || !tile) return null;
@@ -35,7 +36,7 @@ function applySellPartIntent(game, payload) {
   const tile = game.tileset?.getTile(row, col);
   if (!tile?.part || tile.part.isSpecialTile) return null;
   const bridge = game.coreBridge;
-  if (!bridge?.isActive) return null;
+  if (!bridge?.isActive) throw new Error("sellPart requires an active core session");
   return bridge.sellPart(row, col);
 }
 
@@ -43,7 +44,7 @@ function applyBlueprintIntent(game, payload) {
   const layout = payload?.layout;
   if (!layout) return { ok: false };
   const bridge = game.coreBridge;
-  if (!bridge?.isActive) return { ok: false, reason: "no_session" };
+  if (!bridge?.isActive) throw new Error("applyBlueprint requires an active core session");
   const result = bridge.applyBlueprint({
     layout,
     sellExisting: payload?.sellExisting === true,
@@ -61,7 +62,7 @@ function applyBlueprintIntent(game, payload) {
 
 function applyBlueprintPlannerIntent(game, payload = {}) {
   const bridge = game.coreBridge;
-  if (!bridge?.isActive) return { ok: false, reason: "no_session" };
+  if (!bridge?.isActive) throw new Error("commitBlueprintPlanner requires an active core session");
   const result = bridge.commitBlueprintPlanner({ partial: payload.partial === true });
   if (!result.ok) {
     if (result.reason === "deficit") game.emit?.("blueprintApplyDeficit", result);
@@ -144,7 +145,6 @@ function drainIntentBatchSync(game, engine, intents) {
   if (gridMutated) {
     game.reactor?.updateStats?.();
     bumpGridPartsRevision(game.tileset);
-    invalidateTickParts(engine);
   }
   drainGameEffects(game, () => game?.ui);
   return { placed, sold, reboots };
@@ -158,20 +158,4 @@ export async function drainGridIntentsAsync(game, engine, intents) {
     else await game.rebootActionDiscardExoticParticles();
   }
   return { placed, sold };
-}
-
-export function drainIntentQueueSync(game, engine) {
-  const queue = game?.state?.intent_queue;
-  if (!queue?.length) return { placed: [], sold: [] };
-  const batch = queue.splice(0, queue.length);
-  const { placed, sold, reboots } = drainIntentBatchSync(game, engine, batch);
-  for (let i = 0; i < reboots.length; i++) queue.push(reboots[i]);
-  return { placed, sold };
-}
-
-export async function consumeIntentQueueAsync(game, engine) {
-  const queue = game?.state?.intent_queue;
-  if (!queue || queue.length === 0) return { placed: [], sold: [] };
-  const batch = queue.splice(0, queue.length);
-  return drainGridIntentsAsync(game, engine, batch);
 }

@@ -3,71 +3,96 @@ reactor-core-lib — missing / incomplete features (host cutover leftovers)
 ================================================================================
 Date: 2026-07-16
 Host: reactor-revival
-Lib version in use: reactor-core-lib@1.2.9 (npm)
-Published: v1.2.9 (commit 268adaa)
+Lib version in use: reactor-core-lib@1.2.12 (npm)
+Published: v1.2.12 (commit 563a366)
 
 
 PURPOSE
 -------
-Host cutover leftovers for reactor-core-lib maintainers who do not have the
-revival repo open. Host target: simulation only through a small bridge set;
-all other tick/physics/catalog compile logic lives in reactor-core-lib.
+Host is a UI wrapper + bridge + test suite. Simulation lives in reactor-core-lib.
+Bridge is mandatory (inactive paths throw).
 
 
-HOST BRIDGE SURFACE (keep; do not grow with sim math)
-----------------------------------------------------
-  public/src/bridge/revival-session-bridge.js  — facade (tick/dispatch/ops)
-  public/src/bridge/core-state-projection.js   — snapshot → host state/tiles
-  public/src/bridge/bridge-grid-sync.js        — layout/heat/ticks + placedCounts
-  public/src/bridge/bridge-upgrades.js         — levels hydrate/project + affordance
-  public/src/bridge/bridge-mechanics.js        — overrides + applyComputedModifiers
-  public/src/bridge/bridge-intents.js          — host UI → session ops / batch apply
-  public/src/bridge/bridge-parts.js            — maps session getActivePartList → tiles
-  public/src/bridge/bridge-heat.js             — heat segment/flow → host tiles
-  public/src/bridge/route-session-events.js    — events → FX/toasts/meltdown UI
+HOST BRIDGE SURFACE
+-------------------
+  revival-session-bridge.js   — facade
+  core-state-projection.js    — snapshot → host state/tiles
+  bridge-grid-sync.js         — layout/heat/ticks + placedCounts
+  bridge-upgrades.js          — levels + affordance
+  bridge-mechanics.js         — narrow sell overrides + session→host modifiers
+  bridge-intents.js           — UI → session ops
+  bridge-parts.js             — revision bump only
+  bridge-heat.js              — heat segment/flow
+  route-session-events.js     — events → FX/UI
 
 
-SHIPPED IN LIB 1.2.9 AND CONSUMED BY HOST
-----------------------------------------
-  L1–L17, L19 as previously documented.
-  L18 command queue: session.enqueueIntent / drainCommands / runCommand /
-      pendingCommands (host intent_queue is residual/empty).
-  Placed counts: getPlacedCount / incrementPlacedCount / rebuildPlacedCounts /
-      setPlacedCounts / clearPlacedCounts (PLACE_PART increments in session).
-  Active parts: getActiveParts / getActivePartList / classifyActivePart
-      (bridge-parts maps entries → host tiles for Engine.active_* tests).
+DONE ON HOST (recent)
+---------------------
+- PartSet / UpgradeSet from session catalogs
+- Neighbors / displayTitle / prestige applyPrestige via session
+- P1–P5 host polish (active_* shim, dead grid renderers, tooltip peel,
+  IC2 classification move, upgrade hydrate collapse)
+- Dead: integrityMap, syncHeatFrom/ToTiles, clearAllParts
+- Dead: HEAT_EPSILON, MELTDOWN_HEAT_MULTIPLIER, traits.js
+- session_ep_weave derive → lib calculateWeaveEp
+- Valve transferMultiplier + reflector neighborPulseValue from compiled
+  catalog (host no longer multiplies valve transfer)
+- Dual-path freeze: no full per-tick mechanicsOverrides / grace stomp;
+  grace set once on bridge init; meltdown presentation no longer writes
+  hull/failure; vent residual sold_heat host policy removed;
+  upgrade hydrate load/init only; purchase projects with skipSessionSync
 
 
-DONE ON HOST (1.2.9 switch)
----------------------------
-- package.json → reactor-core-lib@^1.2.9 (off file: Desktop path)
-- Session owns placedCounts; UnlockManager reads/writes via bridge
-- Removed host double-increment on place; tick meta no longer remirrors
-  host→session placedCounts every tick
-- bridge-parts uses session.getActivePartList (no local grid classify scan)
-- hasTickActivity uses session.pendingCommands + hasTickActivity
+STILL OPEN — NEED LIB
+---------------------
+  (none)
 
 
-STILL OPEN — HOST POLISH (not lib physics)
-------------------------------------------
-- Delete state.intent_queue entirely once no residual drain callers remain
-- domain/engine.js — rAF / visibility / catchup / visual rings
-- UpgradeSet / Part — display chrome over session catalog
-- domain/balance.js — HUD/test constants only
-- Optionally drop Engine.active_* getters once tests query session directly
+STILL OPEN — HOST POLISH (UI wrapper target)
+--------------------------------------------
+  (none)
 
 
-HOST-ONLY (do not add to lib)
------------------------------
+DONE — HOST POLISH
+------------------
+H1  Retargeted tests off tileset.getTilesInRange; deleted host helper
+H2  Retargeted partset tests to getPartsByLevel; deleted getPartsByTier alias
+H3  Retargeted pulse tests to session.describeCellPulse; deleted helper
+H4  Deleted unused components/reactor-classification.js
+H5  Removed unused Part shell traits / trait_mask (UI never read them)
+H6  Deleted domain/balance.js BALANCE mirror; tests use VALVE_TOPUP_THRESHOLD
+    from SIM_CONSTANTS (constants/sim.js)
+
+
+HOST-ONLY (keep)
+----------------
 - Meltdown presentation, doctrine chrome, valtio/DOM/rAF
-- Visual FX, Tile/Tileset canvas, blueprint share-code UI
+- Visual FX, Tile canvas, blueprint share-code UI
 - Objectives/achievements UI orchestration
+- UnlockManager tier rules (uses session placedCounts)
+- Tooltip HTML + stirling segment + neighbor bonus attribution
+- Engine explosion FX + hull heat dump on componentExplosion (lib emits
+  event only; host adds tile heat to reactor for presentation)
+- Narrow tick sell overrides (autoSellPercent / alteredMaxPower /
+  powerToHeatRatio) when host test/UI values differ from session
+
+
+FAT FILE MAP (approx lines)
+---------------------------
+  ui-* / services* / templates     — UI (keep)
+  state.js (~1k)                   — valtio + unlock + reboot chrome
+  domain/grid.js (~500)            — tile mirror + heatMap SoA
+  bridge/revival-session-bridge.js — keep
+  domain/game-save.js              — persistence chrome
+  domain/engine.js                 — rAF/catchup/visual rings; tick → bridge
+  domain/upgrade.js / part.js      — catalog shells
+  domain/reactor.js                — stats projection + meltdown presentation
 
 
 SUGGESTED NEXT
 --------------
-  P1  Delete host intent_queue + schema field if unused
-  P2  Point tests at session.getActivePartList; thin bridge-parts further
-  P3  Keep package.json on ^1.2.9; avoid file: unless local lib WIP
+  1. Keep bridge shrinking toward intent → dispatch/tick → project
+  2. Peel remaining tooltip display formulas onto session describe APIs
+  3. Collapse Tile.setPart test helpers onto session dispatch (optional)
 
 End of document.

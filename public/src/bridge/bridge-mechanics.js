@@ -1,33 +1,41 @@
-import { toNumber } from "../simUtils.js";
 import { MOBILE_BREAKPOINT_PX, RESIZE_DELAY_MS } from "../constants/ui-constants.js";
+import { toNumber } from "../simUtils.js";
 
-export function syncMechanicsOverridesFromGame(bridge) {
+export function syncHostSellOverridesToSession(bridge) {
   if (!bridge.session || !bridge.game?.reactor) return;
   const reactor = bridge.game.reactor;
+  const mult = toNumber(reactor.auto_sell_multiplier);
+  const altered = toNumber(reactor.altered_max_power);
+  const powerToHeat = toNumber(reactor.power_to_heat_ratio);
+  const overflowRatio = toNumber(reactor.power_overflow_to_heat_ratio);
+  const powerMultiplier = toNumber(reactor.power_multiplier);
   const prev = bridge.session.mechanicsOverrides || {};
-  const mods = bridge.session.modifiers || {};
-  const alteredMax = toNumber(reactor.altered_max_power ?? reactor.max_power);
-  const maxPower = toNumber(reactor.max_power ?? bridge.session.grid.maxPower);
-  const hostPowerMult = toNumber(reactor.power_multiplier);
-  bridge.session.mechanicsOverrides = {
-    ...prev,
-    autoSellPercent: toNumber(reactor.auto_sell_multiplier) * 100,
-    sellPriceMultiplier: toNumber(reactor.sell_price_multiplier) || prev.sellPriceMultiplier || 1,
-    powerOverflowToHeatRatio: toNumber(
-      reactor.power_overflow_to_heat_ratio
-      ?? prev.powerOverflowToHeatRatio
-      ?? mods.powerOverflowToHeatRatio
-      ?? 1
-    ),
-    powerMultiplier: hostPowerMult > 1 ? hostPowerMult : (prev.powerMultiplier ?? 1),
-    alteredMaxPower: alteredMax > 0 ? alteredMax : maxPower,
-    powerToHeatRatio: toNumber(reactor.power_to_heat_ratio) || prev.powerToHeatRatio || 0,
-    ventMultiplierEff: toNumber(reactor.vent_multiplier_eff) || prev.ventMultiplierEff || 0,
-    stirlingMultiplier: toNumber(reactor.stirling_multiplier) || prev.stirlingMultiplier || 0,
-    convectiveBoost: toNumber(reactor.convective_boost) || prev.convectiveBoost || 0,
-    reflectorCoolingFactor: toNumber(reactor.reflector_cooling_factor) || prev.reflectorCoolingFactor || 0,
-    heatPowerMultiplier: toNumber(reactor.heat_power_multiplier) || prev.heatPowerMultiplier || 0,
-  };
+  const next = { ...prev };
+  let changed = false;
+  if (mult > 0) {
+    next.autoSellPercent = mult * 100;
+    changed = true;
+  }
+  if (altered > 0 && toNumber(prev.alteredMaxPower) !== altered) {
+    next.alteredMaxPower = altered;
+    changed = true;
+  } else if (altered <= 0 && "alteredMaxPower" in next) {
+    delete next.alteredMaxPower;
+    changed = true;
+  }
+  if (powerToHeat > 0 && powerToHeat !== toNumber(prev.powerToHeatRatio)) {
+    next.powerToHeatRatio = powerToHeat;
+    changed = true;
+  }
+  if (overflowRatio >= 0 && overflowRatio !== toNumber(prev.powerOverflowToHeatRatio)) {
+    next.powerOverflowToHeatRatio = overflowRatio;
+    changed = true;
+  }
+  if (powerMultiplier > 1 && powerMultiplier !== toNumber(prev.powerMultiplier)) {
+    next.powerMultiplier = powerMultiplier;
+    changed = true;
+  }
+  if (changed) bridge.session.mechanicsOverrides = next;
 }
 
 function projectSessionModifiers(game) {

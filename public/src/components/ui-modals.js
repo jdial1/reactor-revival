@@ -926,7 +926,7 @@ class ModalOrchestration {
     const totalEp = game.state.total_exotic_particles || 0;
     const epFromWeave = game.state?.session_ep_weave ?? 0;
     const preservedUpgrades = game.upgradeset.getAllUpgrades().filter((u) => u.base_ecost && u.level > 0).length;
-    const prestigeMultiplier = game.getPrestigeMultiplier ? game.getPrestigeMultiplier() : 1;
+    const prestigeMultiplier = game.getPrestigeMultiplier();
 
     const onCancel = () => this.hideModal(MODAL_IDS.PRESTIGE);
     const onConfirm = (confirmedMode) => {

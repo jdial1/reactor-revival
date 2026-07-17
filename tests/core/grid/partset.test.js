@@ -54,22 +54,22 @@ describe("Partset Mechanics", () => {
     expect(parts).toEqual([]);
   });
 
-  it("should get parts by tier", () => {
-    const tier1Parts = game.partset.getPartsByTier(1);
+  it("should get parts by level", () => {
+    const tier1Parts = game.partset.getPartsByLevel(1);
     expect(tier1Parts.length).toBeGreaterThan(0);
     tier1Parts.forEach((part) => {
       expect(part.level).toBe(1);
     });
 
-    const tier2Parts = game.partset.getPartsByTier(2);
+    const tier2Parts = game.partset.getPartsByLevel(2);
     expect(tier2Parts.length).toBeGreaterThan(0);
     tier2Parts.forEach((part) => {
       expect(part.level).toBe(2);
     });
   });
 
-  it("should return empty array for invalid tier", () => {
-    const parts = game.partset.getPartsByTier(999);
+  it("should return empty array for invalid level", () => {
+    const parts = game.partset.getPartsByLevel(999);
     expect(parts).toEqual([]);
   });
 

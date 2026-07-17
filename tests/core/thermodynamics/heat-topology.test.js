@@ -72,8 +72,8 @@ describe("Heat Network Topology", () => {
 
     syncActivePartsAtTickBoundary(game.engine);
 
-
-    expect(game.engine.active_cells).toContain(cellTile);
+    const cells = game.coreBridge.session.getActivePartList("active_cells");
+    expect(cells.some((e) => e.row === cellTile.row && e.col === cellTile.col)).toBe(true);
   });
 
   it("heat flows to vent when cell has one neighbor", async () => {
@@ -102,10 +102,10 @@ describe("Heat Network Topology", () => {
     const rightVent = await placePart(game, 11, 4, "vent1");
     refreshHeatSegments(game);
     const hm = game.engine.heatManager;
-    expect(hm.getSegmentForTile(leftVent)).not.toBe(hm.getSegmentForTile(rightVent));
+    expect(hm.getSegmentForTile(leftVent)).not.toEqual(hm.getSegmentForTile(rightVent));
     await placePart(game, 10, 4, "heat_exchanger1");
     refreshHeatSegments(game);
-    expect(hm.getSegmentForTile(leftVent)).toBe(hm.getSegmentForTile(rightVent));
+    expect(hm.getSegmentForTile(leftVent)).toEqual(hm.getSegmentForTile(rightVent));
   });
 
   it("union-find splits one segment when the keystone bridge tile is sold", async () => {
@@ -114,12 +114,12 @@ describe("Heat Network Topology", () => {
     const rightVent = await placePart(game, 11, 4, "vent1");
     refreshHeatSegments(game);
     const hm = game.engine.heatManager;
-    expect(hm.getSegmentForTile(mid)).toBe(hm.getSegmentForTile(rightVent));
+    expect(hm.getSegmentForTile(mid)).toEqual(hm.getSegmentForTile(rightVent));
     await game.sellPart(mid);
     refreshHeatSegments(game);
     const left = game.tileset.getTile(9, 4);
     const right = game.tileset.getTile(11, 4);
-    expect(hm.getSegmentForTile(left)).not.toBe(hm.getSegmentForTile(right));
+    expect(hm.getSegmentForTile(left)).not.toEqual(hm.getSegmentForTile(right));
   });
 
   it("segment fullnessRatio aggregates heat across merged components", async () => {

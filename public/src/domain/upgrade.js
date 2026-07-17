@@ -1,5 +1,4 @@
-import { z } from "zod";
-import { UpgradeDefinitionSchema, TechTreeSchema } from "../schema/index.js";
+import { TechTreeSchema } from "../schema/index.js";
 import { bundledGameData } from "../bundledStaticData.js";
 import { applyComputedModifiers } from "../bridge/bridge-mechanics.js";
 import { calculateSectionCounts } from "../logic-upgrade-sections.js";
@@ -8,73 +7,85 @@ import { toDecimal, toNumber, getDecimal } from "../simUtils.js";
 import { numFormat as fmt } from "../format/numbers.js";
 import { logger } from "../core/logger.js";
 import { MAX_PART_VARIANTS } from "../constants/balance.js";
+import { bumpGridPartsRevision } from "../bridge/bridge-parts.js";
 
 const Decimal = getDecimal();
 
-function loadUpgradeTemplates() {
-  const data = z.array(UpgradeDefinitionSchema).parse(bundledGameData.upgrades);
-  const techTree = TechTreeSchema.parse(bundledGameData.techTree);
-  return { upgrades: data, techTree };
-}
+const CELL_UPGRADE_EFFECTS = new Set(["cell_power", "cell_tick", "cell_perpetual"]);
+const CATALOG_TRANSIENT_CLASSES = new Set(["hidden", "locked", "maxed"]);
 
-const UPGRADE_ACTION_NO_PART_SYNC = new Set([
-  "forceful_fusion",
-  "heat_control_operator",
-  "heat_outlet_control_operator",
-  "expand_reactor_rows",
-  "expand_reactor_cols",
-  "improved_piping",
-  "perpetual_capacitors",
-  "reinforced_heat_exchangers",
-  "active_exchangers",
-  "improved_heatsinks",
-  "active_venting",
-  "stirling_generators",
-  "emergency_coolant",
-  "reflector_cooling",
-  "manual_override",
-  "convective_airflow",
-  "electro_thermal_conversion",
-  "thermal_feedback",
-  "volatile_tuning",
-  "auto_sell_operator",
-  "auto_buy_operator",
-  "protium_cells",
-  "full_spectrum_reflectors",
-  "fluid_hyperdynamics",
-  "fractal_piping",
-  "ultracryonics",
-  "unstable_protium",
-]);
+const loadTechTree = () => TechTreeSchema.parse(bundledGameData.techTree);
 
-import { bumpGridPartsRevision } from "../bridge/bridge-parts.js";
+const normalizeErequires = (raw) => {
+  if (Array.isArray(raw)) return raw[0] || null;
+  return raw || null;
+};
 
-export function syncUpgradeDerivedEffects(game, upgrade) {
+const catalogEntryToHostDef = (entry, game) => {
+  const bridge = game.coreBridge;
+  const storeDef = bridge.session?.systems?.upgrades?.getDefinition?.(entry.id);
+  const isEp = entry.currency === "ep" || entry.currency === "exotic_particles";
+  const baseCost = storeDef?.baseCost ?? entry.baseCost ?? entry.cost ?? 0;
+  const isCell = CELL_UPGRADE_EFFECTS.has(entry.effect);
+  const part = entry.partId ? game.partset?.getPartById?.(entry.partId) : null;
+  return {
+    id: entry.id,
+    type: isCell ? `${entry.effect}_upgrades` : (entry.type || entry.section || "other"),
+    title: entry.displayTitle || entry.title,
+    description: entry.description || "",
+    levels: entry.maxLevel ?? storeDef?.maxLevel,
+    cost: isEp ? 0 : baseCost,
+    ecost: isEp ? baseCost : 0,
+    multiplier: storeDef?.costMultiplier ?? entry.costMultiplier ?? 2,
+    ecost_multiplier: storeDef?.costMultiplier ?? entry.costMultiplier ?? 2,
+    actionId: isCell ? entry.effect : entry.id,
+    erequires: normalizeErequires(entry.erequires),
+    classList: (entry.classList || []).filter((cls) => !CATALOG_TRANSIENT_CLASSES.has(cls)),
+    part: part || undefined,
+    icon: entry.iconPath || entry.icon || (typeof part?.getImagePath === "function" ? part.getImagePath() : null),
+    visible: entry.visible,
+    unlockVisible: entry.unlockVisible,
+  };
+};
+
+const buildUpgradeDefsFromSession = (game) => {
+  const bridge = game?.coreBridge;
+  if (!bridge?.isActive || !bridge.listUpgrades) {
+    throw new Error("UpgradeSet.initialize requires an active core session");
+  }
+  const catalog = bridge.listUpgrades() || [];
+  const defs = [];
+  for (let i = 0; i < catalog.length; i++) {
+    defs.push(catalogEntryToHostDef(catalog[i], game));
+  }
+  return defs;
+};
+
+const needsPartStatSync = (upgrade) => {
+  const actionId = upgrade?.actionId || "";
+  const type = upgrade?.type || upgrade?.upgrade?.type || "";
+  const id = upgrade?.id || "";
+  if (type.includes("cell") || id.includes("_cell_") || actionId.includes("cell")) return true;
+  if (actionId === "perpetual_reflectors" || actionId === "perpetual_capacitors") return true;
+  return false;
+};
+
+const syncUpgradeDerivedEffects = (game, upgrade) => {
   if (!game || !upgrade) return;
   bumpGridPartsRevision(game.tileset);
-  game.partset?.partsArray?.forEach?.((p) => p.recalculate_stats?.());
-  game.tileset?.active_tiles_list?.forEach?.((tile) => {
-    if (tile.part) tile.part.recalculate_stats();
-  });
   const pid = upgrade.upgrade?.part?.id;
-  if (pid) {
+  if (pid && String(upgrade.id || "").endsWith("_cell_perpetual")) {
     const p = game.partset.getPartById(pid);
-    if (p) {
-      if (String(upgrade.id || "").endsWith("_cell_perpetual")) p.perpetual = upgrade.level > 0;
-      p.recalculate_stats();
-    }
+    if (p) p.perpetual = upgrade.level > 0;
   }
+  const perpetualReflectors = (game.upgradeset.getUpgrade("perpetual_reflectors")?.level ?? 0) > 0;
   for (let i = 1; i <= MAX_PART_VARIANTS; i++) {
     const rp = game.partset.getPartById(`reflector${i}`);
-    if (rp) {
-      rp.perpetual = (game.upgradeset.getUpgrade("perpetual_reflectors")?.level ?? 0) > 0;
-      rp.recalculate_stats();
-    }
+    if (rp) rp.perpetual = perpetualReflectors;
   }
-  game.statDispatcher?.derive();
   if (upgrade.type?.includes?.("cell")) game.update_cell_power?.();
   game.reactor?.updateStats?.();
-}
+};
 
 export class Upgrade {
   constructor(upgrade_definition, game) {
@@ -119,8 +130,23 @@ export class Upgrade {
       if (this.actionId === "chronometer") {
         this.game.loop_wait = this.game.base_loop_wait;
         this.game.emit?.("statePatch", { loop_wait: this.game.loop_wait });
-      } else if (this.actionId && !UPGRADE_ACTION_NO_PART_SYNC.has(this.actionId)) {
+      } else if (needsPartStatSync(this)) {
         syncUpgradeDerivedEffects(this.game, this);
+      }
+    }
+    const bridge = this.game?.coreBridge;
+    if (bridge?.isActive && bridge.session?.setUpgradeLevels && !opts.skipSessionSync) {
+      const sessLevel = bridge.session.getUpgradeLevel?.(this.id) ?? 0;
+      if (sessLevel !== this.level) {
+        const entries = (this.game.upgradeset?.toSaveState?.() || []).map((e) => ({ id: e.id, level: e.level }));
+        const idx = entries.findIndex((e) => e.id === this.id);
+        if (this.level > 0) {
+          if (idx >= 0) entries[idx].level = this.level;
+          else entries.push({ id: this.id, level: this.level });
+        } else if (idx >= 0) {
+          entries.splice(idx, 1);
+        }
+        bridge.session.setUpgradeLevels(entries);
       }
     }
     if (this.type.includes("cell")) {
@@ -129,6 +155,7 @@ export class Upgrade {
     if (!opts.deferSync) {
       applyComputedModifiers(this.game);
     }
+    this.game.reactor?.updateStats?.();
   }
 
   setAffordable(isAffordable) {
@@ -143,7 +170,7 @@ export class Upgrade {
 
   updateDisplayCost() {
     const bridge = this.game?.coreBridge;
-    if (!bridge?.isActive) return;
+    if (!bridge?.isActive) throw new Error("updateDisplayCost requires an active core session");
     const preview = bridge.previewUpgrade(this.id);
     if (!preview) return;
     if (preview.reason === "max_level" || this.level >= this.max_level) {
@@ -182,9 +209,6 @@ export class Upgrade {
   }
 }
 
-const CELL_UPGRADE_EFFECTS = new Set(["cell_power", "cell_tick", "cell_perpetual"]);
-const CATALOG_TRANSIENT_CLASSES = new Set(["hidden", "locked", "maxed"]);
-
 export function isCellUpgradeVisible(upgrade, game) {
   const upgType = upgrade?.upgrade?.type || "";
   const basePart = upgrade?.upgrade?.part;
@@ -195,69 +219,6 @@ export function isCellUpgradeVisible(upgrade, game) {
     return unlockManager.isPartUnlocked(basePart);
   }
   return true;
-}
-
-function generateCellUpgrades(game) {
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) return [];
-  const catalog = bridge.listUpgrades() || [];
-  const generated = [];
-  for (let i = 0; i < catalog.length; i++) {
-    const entry = catalog[i];
-    if (!CELL_UPGRADE_EFFECTS.has(entry.effect)) continue;
-    const storeDef = bridge.session?.systems?.upgrades?.getDefinition?.(entry.id);
-    const part = entry.partId ? game.partset?.getPartById?.(entry.partId) : null;
-    const isEp = entry.currency === "ep" || entry.currency === "exotic_particles";
-    const baseCost = storeDef?.baseCost ?? entry.cost ?? 0;
-    generated.push({
-      id: entry.id,
-      type: entry.type || entry.section || `${entry.effect}_upgrades`,
-      title: entry.title,
-      description: entry.description || "",
-      levels: entry.maxLevel ?? storeDef?.maxLevel,
-      cost: isEp ? 0 : baseCost,
-      ecost: isEp ? baseCost : 0,
-      multiplier: storeDef?.costMultiplier ?? 2,
-      actionId: entry.effect,
-      classList: (entry.classList || []).filter((cls) => !CATALOG_TRANSIENT_CLASSES.has(cls)),
-      part,
-      icon: entry.iconPath || entry.icon || (typeof part?.getImagePath === "function" ? part.getImagePath() : null),
-      visible: entry.visible,
-      unlockVisible: entry.unlockVisible,
-    });
-  }
-  return generated;
-}
-
-const OPERATOR_HOST_TITLES = {
-  auto_sell_operator: "Power Grid Sync",
-  auto_buy_operator: "Supply Chain Logistics",
-};
-
-function generateOperatorUpgrades(game) {
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) return [];
-  const catalog = bridge.listUpgrades() || [];
-  const out = [];
-  for (let i = 0; i < catalog.length; i++) {
-    const entry = catalog[i];
-    if (!OPERATOR_HOST_TITLES[entry.id]) continue;
-    const storeDef = bridge.session?.systems?.upgrades?.getDefinition?.(entry.id);
-    const isEp = entry.currency === "ep" || entry.currency === "exotic_particles";
-    const baseCost = storeDef?.baseCost ?? entry.cost ?? 0;
-    out.push({
-      id: entry.id,
-      type: entry.type || entry.section || "other",
-      title: OPERATOR_HOST_TITLES[entry.id],
-      description: entry.description || "",
-      levels: entry.maxLevel ?? storeDef?.maxLevel ?? 1,
-      cost: isEp ? 0 : baseCost,
-      ecost: isEp ? baseCost : 0,
-      multiplier: storeDef?.costMultiplier ?? 1,
-      actionId: entry.id,
-    });
-  }
-  return out;
 }
 
 const OBJECTIVE_REQUIRED_UPGRADES = {
@@ -290,8 +251,8 @@ function isUpgradeAvailable(upgradeset, upgradeId) {
     }
 
     const bridge = upgradeset.game.coreBridge;
-    if (bridge?.isActive) return bridge.isUpgradeAvailable(upgradeId);
-    return !allowedTrees || allowedTrees.size === 0 || allowedTrees.has(upgradeset.game.tech_tree);
+    if (!bridge?.isActive) throw new Error("isUpgradeAvailable requires an active core session");
+    return bridge.isUpgradeAvailable(upgradeId);
 }
 
 function getExclusiveUpgradeIdsForTree(upgradeset, treeId) {
@@ -347,26 +308,24 @@ export class UpgradeSet {
   }
 
   async initialize() {
-    const { upgrades, techTree } = loadUpgradeTemplates();
-    const data = upgrades;
-    this.techTrees = techTree; // Store for Game.getDoctrine()
+    const techTree = loadTechTree();
+    this.techTrees = techTree;
     this.reset();
 
-    // Populate the Tech Tree Mapping
     this.upgradeToTechTreeMap.clear();
-    techTree.forEach(tree => {
-        tree.upgrades.forEach(upgId => {
-            if (!this.upgradeToTechTreeMap.has(upgId)) {
-                this.upgradeToTechTreeMap.set(upgId, new Set());
-            }
-            this.upgradeToTechTreeMap.get(upgId).add(tree.id);
-        });
+    techTree.forEach((tree) => {
+      tree.upgrades.forEach((upgId) => {
+        if (!this.upgradeToTechTreeMap.has(upgId)) {
+          this.upgradeToTechTreeMap.set(upgId, new Set());
+        }
+        this.upgradeToTechTreeMap.get(upgId).add(tree.id);
+      });
     });
 
-    logger.log('debug', 'game', 'Upgrade data loaded:', data?.length, "upgrades");
+    const data = buildUpgradeDefsFromSession(this.game);
+    logger.log("debug", "game", "Upgrade data loaded:", data?.length, "upgrades");
 
-    const fullUpgradeList = [...data, ...generateCellUpgrades(this.game), ...generateOperatorUpgrades(this.game)];
-    fullUpgradeList.forEach((upgradeDef) => {
+    data.forEach((upgradeDef) => {
       const upgradeInstance = new Upgrade(upgradeDef, this.game);
       this.upgrades.set(upgradeInstance.id, upgradeInstance);
       this.upgradesArray.push(upgradeInstance);

@@ -14,8 +14,6 @@ import {
   CLAIM_FEEDBACK_DELAY_MS,
 } from "../constants/objectives.js";
 
-export { CHAPTER_NAMES, CHAPTER_COMPLETION_OBJECTIVE_INDICES } from "../constants/objectives.js";
-
 function loadObjectiveList() {
   const objectives = bundledGameData.objectives;
   return objectives?.default || objectives;
@@ -124,9 +122,7 @@ export function getObjectiveCheck(checkId) {
   if (!checkId) return null;
   return (game) => {
     const bridge = game?.coreBridge;
-    if (!bridge?.isActive) {
-      return { completed: false, percent: 0, text: "Loading..." };
-    }
+    if (!bridge?.isActive) throw new Error("getObjectiveCheck requires an active core session");
     return bridge.evaluateObjectiveCheck(checkId) || {
       completed: false,
       percent: 0,
@@ -187,7 +183,7 @@ export class ObjectiveManager {
 
   _readSessionProgress() {
     const bridge = this.game?.coreBridge;
-    if (!bridge?.isActive) return { completed: false, percent: 0, text: "Loading..." };
+    if (!bridge?.isActive) throw new Error("objective progress requires an active core session");
     return bridge.getObjectiveProgress() || { completed: false, percent: 0, text: "Awaiting completion..." };
   }
 

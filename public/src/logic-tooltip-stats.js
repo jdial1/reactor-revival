@@ -1,56 +1,27 @@
 import { collectTooltipBonusLinesFromRules } from "./constants/part-tooltip-bonuses.js";
-import { formatPartDescription } from "reactor-core";
+
+function requireBridge(game, label) {
+  const bridge = game?.coreBridge;
+  if (!bridge?.isActive) throw new Error(`${label} requires an active core session`);
+  return bridge;
+}
 
 function getEffectiveTransfer(part, tile_context) {
-  if (tile_context) {
-    const bridge = tile_context.game?.coreBridge;
-    if (bridge?.isActive) {
-      const rates = bridge.resolveDisplayRatesForTile(tile_context);
-      if (rates) return rates.transfer;
-    }
-    return tile_context.getEffectiveTransferValue?.() ?? part.transfer;
-  }
-  return part.transfer;
+  if (!tile_context) return part.transfer;
+  const bridge = requireBridge(tile_context.game, "getEffectiveTransfer");
+  const rates = bridge.resolveDisplayRatesForTile(tile_context);
+  return rates?.transfer ?? tile_context.getEffectiveTransferValue?.() ?? part.transfer;
 }
 
 function getEffectiveVent(part, tile_context) {
-  if (tile_context) {
-    const bridge = tile_context.game?.coreBridge;
-    if (bridge?.isActive) {
-      const rates = bridge.resolveDisplayRatesForTile(tile_context);
-      if (rates) return rates.vent;
-    }
-    return tile_context.getEffectiveVentValue?.() ?? part.vent;
-  }
-  return part.vent;
-}
-
-function partToCompiledShape(part) {
-  return {
-    id: part.id,
-    title: part.title,
-    category: part.category,
-    type: part.type,
-    level: part.level,
-    baseTicks: part.ticks,
-    basePower: part.power,
-    baseHeat: part.heat,
-    containment: part.containment,
-    reactorPower: part.reactor_power,
-    reactorHeat: part.reactor_heat,
-    vent: part.vent,
-    transfer: part.transfer,
-    powerIncrease: part.power_increase,
-    heatIncrease: part.heat_increase,
-    cellCount: part.cell_count,
-    epHeat: part.ep_heat,
-    baseDescription: part.part?.base_description ?? part.base_description,
-    definition: part.part,
-  };
+  if (!tile_context) return part.vent;
+  const bridge = requireBridge(tile_context.game, "getEffectiveVent");
+  const rates = bridge.resolveDisplayRatesForTile(tile_context);
+  return rates?.vent ?? tile_context.getEffectiveVentValue?.() ?? part.vent;
 }
 
 export function collectPartSemanticSegments(part, tile_context = null) {
-  const bridge = tile_context?.game?.coreBridge ?? part.game?.coreBridge;
+  const bridge = requireBridge(tile_context?.game ?? part.game, "collectPartSemanticSegments");
   const extras = {
     transfer: getEffectiveTransfer(part, tile_context),
     vent: getEffectiveVent(part, tile_context),
@@ -58,19 +29,10 @@ export function collectPartSemanticSegments(part, tile_context = null) {
     heat: part.heat,
     range: part.range,
   };
-  let segments;
-  if (bridge?.isActive && bridge.session?.getPartDescription) {
-    segments = bridge.session.getPartDescription(part.id, {
-      template: part.part?.base_description ?? part.base_description,
-      ...extras,
-    }).segments;
-  } else {
-    segments = formatPartDescription(
-      partToCompiledShape(part),
-      part.part?.base_description ?? part.base_description,
-      extras,
-    ).segments;
-  }
+  const segments = bridge.session.getPartDescription(part.id, {
+    template: part.part?.base_description ?? part.base_description,
+    ...extras,
+  }).segments;
   if (part.category === "vent" && tile_context?.game) {
     const stirlingLvl = tile_context.game.upgradeset.getUpgrade("stirling_generators")?.level ?? 0;
     if (stirlingLvl > 0) {
@@ -95,17 +57,11 @@ export function getUpgradeBonusLines(obj, context = {}) {
   return lines;
 }
 
-export function computeNeighborPulseNFromTile(tile) {
-  const desc = tile?.game?.coreBridge?.describeCellPulse?.(tile);
-  return typeof desc?.pulseN === "number" ? desc.pulseN : 0;
-}
-
 export function computeDisplaySellValue(part, tile = null) {
   if (!part) return 0;
-  const bridge = tile?.game?.coreBridge ?? part.game?.coreBridge;
-  if (!bridge?.isActive) return 0;
+  const bridge = requireBridge(tile?.game ?? part.game, "computeDisplaySellValue");
   if (tile && typeof tile.row === "number" && typeof tile.col === "number") {
     return bridge.computeSellValueForTile(tile);
   }
-  return bridge.computeSellValueForPart?.(part.id) ?? 0;
+  return bridge.computeSellValueForPart(part.id);
 }

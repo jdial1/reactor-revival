@@ -1,5 +1,5 @@
+import { QueryClient } from "@tanstack/query-core";
 import { LeaderboardResponseSchema } from "./schema/index.js";
-import { queryClient, queryKeys } from "./services-query.js";
 import { StorageUtils } from "./storage/index.js";
 import { logger } from "./core/logger.js";
 import { isTestEnv, toNumber } from "./simUtils.js";
@@ -11,13 +11,31 @@ import {
   outboxUpdateById,
 } from "./network-outbox.js";
 
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      retry: 2,
+    },
+  },
+});
+
+export const queryKeys = {
+  gameData: (resource) => (resource ? ["gameData", resource] : ["gameData"]),
+  leaderboard: (sortBy, limit) => ["leaderboard", "top", sortBy, limit],
+  saves: {
+    resolved: () => ["saves", "resolved"],
+    local: (slot) => ["saves", "local", slot],
+  },
+};
 const LB_FAILURE_THRESHOLD = 2;
 const LB_COOLDOWN_MS = 30000;
 const LB_OUTBOX_BACKOFF_BASE_MS = 5000;
 const LB_OUTBOX_BACKOFF_MAX_MS = 300000;
 const LOCAL_BEST_RUNS_KEY = "reactor_local_best_runs";
 
-function normalizeLeaderboardPayload(stats) {
+const normalizeLeaderboardPayload = (stats) => {
   const money = stats?.money;
   return {
     user_id: stats?.user_id,
@@ -28,9 +46,9 @@ function normalizeLeaderboardPayload(stats) {
     time: toNumber(stats?.time ?? 0),
     layout: stats?.layout ?? null,
   };
-}
+};
 
-function cacheLocalBestRun(stats) {
+const cacheLocalBestRun = (stats) => {
   const cache = StorageUtils.get(LOCAL_BEST_RUNS_KEY, {});
   const run = {
     power: toNumber(stats?.power ?? 0),
@@ -47,12 +65,12 @@ function cacheLocalBestRun(stats) {
     if (!prev || val > (Number(prev[metric]) || 0)) cache[metric] = { ...run };
   });
   StorageUtils.set(LOCAL_BEST_RUNS_KEY, cache);
-}
+};
 
-export function getLocalBestRun(sortBy = "power") {
+export const getLocalBestRun = (sortBy = "power") => {
   const cache = StorageUtils.get(LOCAL_BEST_RUNS_KEY, {});
   return cache[sortBy] ?? null;
-}
+};
 
 export class LeaderboardService {
   constructor() {

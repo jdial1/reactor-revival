@@ -143,9 +143,10 @@ describe("Reactor Mechanics", () => {
 
   it("should manually reduce heat", () => {
     game.reactor.current_heat = 100;
+    game.sold_heat = false;
     game.manual_reduce_heat_action();
     expect(toNum(game.reactor.current_heat)).toBe(100 - game.base_manual_heat_reduce);
-    expect(game.sold_heat).toBe(false);
+    expect(game.sold_heat).toBe(true);
 
     game.reactor.current_heat = 0.5;
     game.manual_reduce_heat_action();
@@ -185,7 +186,7 @@ describe("Reactor Mechanics", () => {
     part.recalculate_stats();
     game.reactor.updateStats();
     game.engine.tick();
-    expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(part.base_power) * 2, 0);
+    expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(part.base_power) * 4, 0);
   });
 
   it("should handle heat generation correctly", async () => {

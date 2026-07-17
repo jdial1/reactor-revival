@@ -463,14 +463,17 @@ describe("Valve Heat Flow Integration", () => {
             syncGridState(game);
 
             // Check if exchanger is in active_exchangers
-            const isExchangerActive = game.engine.active_exchangers.includes(exchangerTile);
+            const exchangers = game.coreBridge.session.getActivePartList("active_exchangers");
+            const isExchangerActive = exchangers.some((e) => e.row === exchangerTile.row && e.col === exchangerTile.col);
 
             // Check if exchanger is excluded due to being valve neighbor
             const isValveNeighbor = valveTile.containmentNeighborTiles.includes(exchangerTile);
 
             // Check valve neighbor tiles collection
             const valveNeighborTiles = new Set();
-            for (const valve of game.engine.active_exchangers.filter(t => t.part && t.part.category === 'valve')) {
+            for (const entry of exchangers) {
+                const valve = game.tileset.getTile(entry.row, entry.col);
+                if (!valve?.part || valve.part.category !== "valve") continue;
                 const neighbors = valve.containmentNeighborTiles.filter(t => t.part);
                 for (const neighbor of neighbors) {
                     valveNeighborTiles.add(neighbor);

@@ -50,11 +50,6 @@ describe("New Gameplay Upgrades", () => {
             game.tileset.updateActiveTiles();
             syncActivePartsAtTickBoundary(game.engine);
 
-            
-            if (!game.engine.active_vessels.includes(tile)) {
-                game.engine.active_vessels.push(tile);
-            }
-
             forcePurchaseUpgrade(game, "stirling_generators");
             expect(game.reactor.stirling_multiplier).toBeGreaterThan(0);
             tile.heat_contained = 100;
@@ -176,10 +171,6 @@ describe("New Gameplay Upgrades", () => {
 
             syncActivePartsAtTickBoundary(game.engine);
 
-            if (!game.engine.active_vessels.includes(ventTile)) {
-                game.engine.active_vessels.push(ventTile);
-            }
-
             forcePurchaseUpgrade(game, "convective_airflow");
             expect(game.reactor.convective_boost).toBeGreaterThan(0);
             ventTile.heat_contained = 100;
@@ -282,10 +273,6 @@ describe("New Gameplay Upgrades", () => {
             
             syncActivePartsAtTickBoundary(game.engine);
 
-             if (!game.engine.active_vessels.includes(tile)) {
-                game.engine.active_vessels.push(tile);
-            }
-
             game.paused = false;
             const initialPower = game.reactor.current_power;
             game.engine.tick();
@@ -327,10 +314,6 @@ describe("New Gameplay Upgrades", () => {
             game.tileset.updateActiveTiles();
             
             syncActivePartsAtTickBoundary(game.engine);
-
-            if (!game.engine.active_vessels.includes(ventTile)) {
-                game.engine.active_vessels.push(ventTile);
-            }
 
             game.paused = false;
             game.onToggleStateChange?.("pause", false);

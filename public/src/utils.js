@@ -5,8 +5,6 @@ export {
   isTestEnv,
   getIndex,
   isInBounds,
-  applyPowerOverflowCalc,
-  applyPowerOverflowCalcDecimal,
   DEFAULT_OVERFLOW_RATIO,
   DEFAULT_POWER_MULTIPLIER,
   DEFAULT_SELL_PRICE_MULTIPLIER,
@@ -19,7 +17,7 @@ export { default } from "./core/decimal-proxy.js";
 export { Logger, logger } from "./core/logger.js";
 export { default as DecimalProxy } from "./core/decimal-proxy.js";
 export { vuQuantizePercent, vuLitFromPercent, vuHeatRedWidthPercent, vuSegmentRatio01, safeAdd, safeSub } from "./core/math-helpers.js";
-export { getNeighborKeys, areAdjacent, clampHeat, clampHeatDecimal } from "./core/grid-helpers.js";
+export { getNeighborKeys, areAdjacent } from "./core/grid-helpers.js";
 export { getPartImagePath } from "./core/part-images.js";
 export { runWithConcurrencyLimit, getCompactLayout, countPlacedParts, serializeReactor, deserializeReactor } from "./layout/reactor-codec.js";
 

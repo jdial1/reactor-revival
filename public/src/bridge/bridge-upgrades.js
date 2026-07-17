@@ -22,7 +22,7 @@ export function projectUpgradeLevelsToHost(bridge) {
     const upg = upgradeset.upgradesArray[i];
     if (!upg) continue;
     const level = session.getUpgradeLevel?.(upg.id) ?? 0;
-    if (upg.level !== level) upg.setLevel(level, { deferSync: true });
+    if (upg.level !== level) upg.setLevel(level, { deferSync: true, skipSessionSync: true });
   }
   bridge.game.syncModifiersFromUpgrades?.({ skipGrid: true });
 }

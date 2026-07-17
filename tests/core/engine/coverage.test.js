@@ -1,23 +1,17 @@
-import { Game } from "@app/logic.js";
-import { UI } from "@app/components/ui.js";
-import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGame, toNum, cleanupGame } from "../../helpers/setup.js";
 import { patchGameState } from "@app/state.js";
+import { grantInfiniteResources } from "../../helpers/gameHelpers.js";
 
-// Create a temporary game instance just to generate the list of tests.
-// This is NOT the instance that will be used in the `it` blocks.
-const mockUiForTestGen = new UI();
-const testGenGame = new Game(mockUiForTestGen);
-testGenGame.tileset.initialize();
-testGenGame.partset.initialize();
-testGenGame.upgradeset.initialize();
-const allParts = testGenGame.partset.getAllParts();
-const allUpgrades = testGenGame.upgradeset.getAllUpgrades();
+const coverageCatalog = await setupGame();
+const allParts = coverageCatalog.partset.getAllParts();
+const allUpgrades = coverageCatalog.upgradeset.getAllUpgrades();
+cleanupGame();
 
 describe("Full Part and Upgrade Coverage", () => {
   let game;
   beforeEach(async () => {
-    // Use the proper async setup for each actual test to get a clean state
     game = await setupGame();
+    grantInfiniteResources(game);
   });
 
   it.todo('should have tests for all parts and upgrades');
@@ -34,7 +28,10 @@ describe("Full Part and Upgrade Coverage", () => {
 
         const prevSpec = game.getPreviousTierSpec(part);
         if (prevSpec) {
-          game.placedCounts[`${prevSpec.type}:${prevSpec.level}`] = 10;
+          const key = `${prevSpec.type}:${prevSpec.level}`;
+          game.placedCounts[key] = 10;
+          game.coreBridge?.setPlacedCounts?.(game.placedCounts);
+          game._unlockStates = {};
         }
 
         if (part.erequires) {
@@ -85,6 +82,7 @@ describe("Full Part and Upgrade Coverage", () => {
             if (!isUnlocked) {
               // Force unlock by ensuring count is sufficient
               game.placedCounts[`${prevSpec.type}:${prevSpec.level}`] = 10;
+              game.coreBridge?.setPlacedCounts?.(game.placedCounts);
               game._unlockStates = {};
             }
           }
@@ -111,8 +109,8 @@ describe("Full Part and Upgrade Coverage", () => {
             game._unlockStates = {};
             const isUnlocked = game.isPartUnlocked(part);
             if (!isUnlocked) {
-              // Force unlock by ensuring count is sufficient
               game.placedCounts[`${prevSpec.type}:${prevSpec.level}`] = 10;
+              game.coreBridge?.setPlacedCounts?.(game.placedCounts);
               game._unlockStates = {};
             }
           }
@@ -122,6 +120,7 @@ describe("Full Part and Upgrade Coverage", () => {
           patchGameState(game, { current_money: game.current_money });
         }
 
+        grantInfiniteResources(game);
         game.partset.check_affordability(game);
         if (partTemplate.id === "dolorium3") {
           const tile = game.tileset.getTile(5, 5);
@@ -258,11 +257,11 @@ describe("Full Part and Upgrade Coverage", () => {
             game.engine._processTick = function(multiplier, manual) {
               const result = originalProcessTick.call(this, multiplier, manual);
               // After tick, ensure particle accelerator heat doesn't exceed containment
-              for (const vessel of this.active_vessels) {
-                if (vessel.part && vessel.part.category === 'particle_accelerator') {
-                  const maxHeat = vessel.part.containment || 1000;
-                  if (vessel.heat_contained > maxHeat) {
-                    vessel.heat_contained = maxHeat;
+              for (const tile of this.game.tileset.active_tiles_list) {
+                if (tile.part && tile.part.category === 'particle_accelerator') {
+                  const maxHeat = tile.part.containment || 1000;
+                  if (tile.heat_contained > maxHeat) {
+                    tile.heat_contained = maxHeat;
                   }
                 }
               }

@@ -1,4 +1,3 @@
-export { queryClient, queryKeys } from "./services-query.js";
 export {
   getValidatedGameData,
   AUDIO_RUNTIME_DEFAULTS,
@@ -6,9 +5,6 @@ export {
   processSensoryMask,
   resolveAudioService,
   loadSampleBuffers,
-  AudioAmbienceManager,
-  AudioWarningManager,
-  AudioIndustrialManager,
   AudioService,
 } from "./services-audio.js";
 export { default } from "./services-audio.js";
@@ -22,13 +18,10 @@ export {
   releaseWakeLock,
   VersionChecker,
   getCriticalUiIconAssets,
-  getPartImagesByTier,
-  getMaxTier,
   warmImageCache,
-  preloadTierImages,
   preloadAllPartImages,
 } from "./services-pwa.js";
-export { LeaderboardService, leaderboardService, getLocalBestRun } from "./services-leaderboard.js";
+export { LeaderboardService, leaderboardService, getLocalBestRun, queryClient, queryKeys } from "./services-leaderboard.js";
 
 import { html, render } from "lit-html";
 import { SaveDataSchema, VersionSchema } from "./schema/index.js";
@@ -48,15 +41,9 @@ import { logger } from "./core/logger.js";
 import { isTestEnv } from "./simUtils.js";
 import { formatNumber, formatPlaytimeLog } from "./format/numbers.js";
 import { LEADERBOARD_CONFIG } from "./constants/balance.js";
-import {
-  splashStartOptionsTemplate,
-  saveSlotRowTemplate,
-  saveSlotMainTemplate,
-} from "./templates/servicesTemplates.js";
 import { getAppContext } from "./app-context.js";
 import { bindLitRenderMulti } from "./dom/lit-reactive.js";
 import { pwaState } from "./state/ui-state.js";
-import { getValidatedGameData } from "./services-audio.js";
 import {
   VersionChecker,
   warmImageCache,
@@ -64,6 +51,173 @@ import {
   preloadAllPartImages,
   setupInstallPrompt,
 } from "./services-pwa.js";
+
+const splashStartOptionsTemplate = ({
+  mostRecentSave,
+  hasSave,
+  onResume,
+  onNewRun,
+  onShowLoad,
+  onShowSettings,
+}) => {
+  return html`
+    ${mostRecentSave
+      ? html`
+          <button
+            class="splash-btn splash-btn-load splash-btn-full-width splash-btn-resume-primary splash-btn-continue"
+            @click=${onResume}
+          >
+            <div class="load-game-header"><span>RESUME</span></div>
+          </button>
+        `
+      : ""}
+
+    <div class="splash-btn-actions-grid">
+      <div class="splash-btn-row-secondary">
+        <button
+          id="splash-new-game-btn"
+          class="splash-btn splash-btn-start ${!mostRecentSave ? "splash-btn-resume-primary" : ""}"
+          @click=${onNewRun}
+        >
+          NEW RUN
+        </button>
+        <button class="splash-btn splash-btn-load" @click=${onShowLoad}>
+          <div class="load-game-header"><span>LOAD</span></div>
+        </button>
+      </div>
+      <div class="splash-btn-row-tertiary">
+        <button
+          class="splash-btn splash-btn-config splash-btn-row-tertiary-single"
+          title="System configuration"
+          @click=${onShowSettings}
+        >
+          SYS
+        </button>
+      </div>
+    </div>
+  `;
+};
+
+const saveSlotRowTemplate =({
+  rowClasses,
+  btnClasses,
+  i,
+  isCloud,
+  isEmpty,
+  logId,
+  isSelected,
+  slotData,
+  onSwipeStart,
+  onSwipeEnd,
+  onSlotClick,
+  onDeleteClick,
+  formatPlaytimeLog,
+  formatSlotNumber,
+}) => {
+  return html`
+    <div class=${rowClasses}>
+      <div class="save-slot-swipe-wrapper" @touchstart=${onSwipeStart} @touchend=${onSwipeEnd}>
+        <button
+          class=${btnClasses}
+          type="button"
+          data-slot=${i}
+          data-is-cloud=${isCloud}
+          data-is-empty=${isEmpty}
+          @click=${onSlotClick}
+        >
+          ${isEmpty
+            ? html`
+                <div class="save-slot-row-top">
+                  <span class="save-slot-log-id save-slot-log-id-empty">${logId}</span>
+                  <span class="save-slot-right">EMPTY</span>
+                </div>
+                <div class="save-slot-row-bottom">
+                  <span class="save-slot-ttime">--:--:--</span>
+                </div>
+              `
+            : html`
+                <span class="save-slot-tape-icon" aria-hidden="true"></span>
+                <span class="save-slot-select-arrow ${isSelected ? "visible" : ""}" aria-hidden="true">&#x25B6;</span>
+                <div class="save-slot-row-top">
+                  <span class="save-slot-log-id">${logId}</span>
+                </div>
+                <div class="save-slot-row-meta">
+                  <span class="save-slot-ttime">T+ ${formatPlaytimeLog(Number(slotData.totalPlayedTime))}</span>
+                </div>
+                <div class="save-slot-row-bottom">
+                  <span class="save-slot-money">$${formatSlotNumber(Number(slotData.currentMoney))}</span>
+                  <span class="save-slot-sep">|</span>
+                  <span class="save-slot-ep">${formatSlotNumber(Number(slotData.exoticParticles))} EP</span>
+                </div>
+              `}
+        </button>
+        ${!isCloud && !isEmpty
+          ? html`<button class="save-slot-delete" type="button" aria-label="Delete" @click=${onDeleteClick}>DEL</button>`
+          : ""}
+      </div>
+    </div>
+  `;
+};
+
+const saveSlotMainTemplate =({
+  isCloudAvailable,
+  cloudSlots,
+  localSlots,
+  selectedSlot,
+  onHeaderTouchStart,
+  onHeaderTouchEnd,
+  onClose,
+  onFileChange,
+  onRestore,
+  onImportBackup,
+  renderSlot,
+}) => {
+  return html`
+    <header
+      class="save-slot-screen-header"
+      @touchstart=${onHeaderTouchStart}
+      @touchend=${onHeaderTouchEnd}
+    >
+      <div class="modal-swipe-handle" aria-hidden="true"></div>
+      <div class="save-slot-header-row">
+        <h1 class="save-slot-title">SYSTEM LOGS</h1>
+        <button class="save-slot-back-btn" title="Cancel" aria-label="Cancel" @click=${onClose}>&#x2715;</button>
+      </div>
+    </header>
+    <div class="save-slot-panel">
+      <div class="save-slot-options">
+        ${isCloudAvailable
+          ? html`
+              <h2 class="save-slot-section-header">CLOUD BACKUPS</h2>
+              ${cloudSlots.map((s, idx) => renderSlot(s, idx + 1, true))}
+              <h2 class="save-slot-section-header save-slot-section-secondary">CORE BACKUPS</h2>
+            `
+          : html` <h2 class="save-slot-section-header">CORE BACKUPS</h2> `}
+        ${localSlots.map((s, idx) => renderSlot(s, idx + 1, false))}
+        <div class="save-slot-actions">
+          <input
+            type="file"
+            id="load-from-file-input"
+            accept=".json,.reactor,application/json"
+            style="display: none;"
+            @change=${onFileChange}
+          />
+          <button
+            class="splash-btn splash-btn-resume-primary save-slot-restore-btn"
+            ?disabled=${selectedSlot == null}
+            style="opacity: ${selectedSlot != null ? 1 : 0.5};"
+            @click=${onRestore}
+          >
+            RESTORE
+          </button>
+          <button class="save-slot-import-btn" @click=${onImportBackup}>IMPORT BACKUP</button>
+          <button class="save-slot-back-action" @click=${onClose}>BACK</button>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
 
 const FADE_SLIGHT_MS = 15000;
 const FADE_FULL_MS = 30000;
@@ -676,33 +830,6 @@ const LOADING_STEPS = [
   { id: "ready", message: "Reactor online - All systems nominal!" },
 ];
 
-class SplashFlowController {
-  constructor() {
-    this.loadingSteps = LOADING_STEPS;
-    this.currentStep = 0;
-  }
-  nextStep(onUpdateStatus) {
-    if (this.currentStep < this.loadingSteps.length - 1) {
-      this.currentStep++;
-      const step = this.loadingSteps[this.currentStep];
-      onUpdateStatus?.(step.message);
-    }
-  }
-}
-
-let flavorMessages = null;
-function getFlavorMessages() {
-  if (!flavorMessages) {
-    try {
-      flavorMessages = getValidatedGameData().flavorText;
-    } catch (error) {
-      logger.log("warn", "splash", "Flavor text init fallback used", error);
-      flavorMessages = ["Reactor online"];
-    }
-  }
-  return flavorMessages;
-}
-
 class SplashScreenManager extends BaseComponent {
   constructor() {
     super();
@@ -710,8 +837,7 @@ class SplashScreenManager extends BaseComponent {
     this.statusElement = null;
     this._appContext = null;
 
-    this.flowController = new SplashFlowController();
-    this.loadingSteps = this.flowController.loadingSteps;
+    this.loadingSteps = LOADING_STEPS;
     this.currentStep = 0;
     this.isReady = false;
     this.errorTimeout = null;
@@ -842,8 +968,10 @@ class SplashScreenManager extends BaseComponent {
   }
 
   nextStep() {
-    this.flowController.nextStep((msg) => this.updateStatus(msg));
-    this.currentStep = this.flowController.currentStep;
+    if (this.currentStep < this.loadingSteps.length - 1) {
+      this.currentStep++;
+      this.updateStatus(this.loadingSteps[this.currentStep].message);
+    }
   }
 
   async setStep(stepId) {
@@ -1034,8 +1162,4 @@ class SplashScreenManager extends BaseComponent {
   }
 }
 
-export function createSplashManager() {
-  return new SplashScreenManager();
-}
-
-export { SplashScreenManager };
+export const createSplashManager = () => new SplashScreenManager();

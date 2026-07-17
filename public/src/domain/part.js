@@ -1,58 +1,13 @@
-import { z } from "zod";
-import { PartDefinitionSchema } from "../schema/index.js";
-import { bundledGameData } from "../bundledStaticData.js";
-import { compileTraitBitmask, hasTrait } from "../traits.js";
 import { toDecimal } from "../simUtils.js";
 import { numFormat as fmt } from "../format/numbers.js";
 import { logger } from "../core/logger.js";
 import { getPartImagePath } from "../core/part-images.js";
-import {
-  getUpgradeBonusLines,
-} from "../logic-tooltip-stats.js";
-import { formatPartDescription, compilePartStats } from "reactor-core";
+import { getUpgradeBonusLines } from "../logic-tooltip-stats.js";
 
 const REACTOR_PLATING_DEFAULT_CONTAINMENT = 1000;
-const PERCENT_DIVISOR = 100;
-const SINGLE_CELL_DESC_TPL = "Creates %power power. Creates %heat heat. Lasts %ticks ticks.";
-const MULTI_CELL_DESC_TPL = "Acts as %count %type cells. Creates %power power. Creates %heat heat. Lasts %ticks ticks";
 
-export const CELL_FORM_FACTORS = [
-  { titlePrefix: "", cellPackM: 1, cellCount: 1 },
-  { titlePrefix: "Dual ", cellPackM: 4, cellCount: 2 },
-  { titlePrefix: "Quad ", cellPackM: 12, cellCount: 4 },
-];
+const applyCompiledCatalogPart = (part, compiled) => {
 
-const PART_TITLE_PREFIXES = ["Basic ", "Advanced ", "Super ", "Wonderous ", "Ultimate "];
-
-export function resolveCellTierPartId(type, level) {
-  return `${type}${level}`;
-}
-
-function recalculatePartStats(part) {
-  const bridge = part.game?.coreBridge;
-  const session = bridge?.session;
-  if (!session) return;
-  if (bridge.isActive) {
-    bridge.syncMechanicsOverridesFromGame?.();
-    bridge.syncReactorScalarsFromGame?.();
-  }
-  let compiled = session.getPart?.(part.id);
-  if (!compiled) {
-    compiled = compilePartStats(part.id, {
-      manifest: session.manifest,
-      registry: session.registry,
-      modifiers: session.modifiers,
-      exoticParticles: session.systems?.economy?.currentExoticParticles,
-      weaveQuantum: session.systems?.economy?.weaveQuantum,
-      currentHeat: session.grid?.currentHeat,
-      heatPowerMultiplier: session.mechanicsOverrides?.heatPowerMultiplier,
-      protiumParticles: session.systems?.economy?.protiumParticles,
-    });
-  }
-  applyCompiledCatalogPart(part, compiled);
-}
-
-export function applyCompiledCatalogPart(part, compiled) {
   if (!part || !compiled) return false;
   const def = compiled.definition;
   part.ticks = compiled.baseTicks ?? part.ticks;
@@ -76,18 +31,28 @@ export function applyCompiledCatalogPart(part, compiled) {
   else if (def?.epHeat != null) part.ep_heat = def.epHeat;
   if (def?.range != null) part.range = def.range;
   else if (part.part?.range != null) part.range = part.part.range;
-  if (part.category === "reflector") {
-    part.neighbor_pulse_value = Math.max(0, 1 + (part.power_increase || 0) / PERCENT_DIVISOR);
-  }
-  if (part.category === "valve" && part.part?.transfer_multiplier) {
-    part.transfer = (compiled.transfer ?? part.base_transfer ?? 0) * part.part.transfer_multiplier;
-  }
+  if (compiled.neighborPulseValue != null) part.neighbor_pulse_value = compiled.neighborPulseValue;
+  if (compiled.transferMultiplier != null) part.transfer_multiplier = compiled.transferMultiplier;
   part.ecost = part.base_ecost;
   return true;
-}
+};
 
-function buildPartDescription(part, fmtFn, tile_context = null) {
+const recalculatePartStats = (part) => {
   const bridge = part.game?.coreBridge;
+  if (!bridge?.isActive || !bridge.session) {
+    throw new Error("recalculatePartStats requires an active core session");
+  }
+  bridge.syncReactorScalarsFromGame?.();
+  const compiled = bridge.session.getPart?.(part.id);
+  if (!compiled) throw new Error(`Part catalog missing id: ${part.id}`);
+  applyCompiledCatalogPart(part, compiled);
+};
+
+const buildPartDescription = (part, fmtFn, tile_context = null) => {
+  const bridge = part.game?.coreBridge;
+  if (!bridge?.isActive || !bridge.session?.getPartDescription) {
+    throw new Error("buildPartDescription requires an active core session");
+  }
   const extras = {
     transfer: tile_context ? (tile_context.getEffectiveTransferValue?.() ?? part.transfer) : part.transfer,
     vent: tile_context ? (tile_context.getEffectiveVentValue?.() ?? part.vent) : part.vent,
@@ -96,37 +61,67 @@ function buildPartDescription(part, fmtFn, tile_context = null) {
     range: part.range,
     fmt: fmtFn,
   };
-  if (bridge?.isActive && bridge.session?.getPartDescription) {
-    return bridge.session.getPartDescription(part.id, {
-      template: part.part?.base_description ?? part.base_description,
-      ...extras,
-    }).text;
+  return bridge.session.getPartDescription(part.id, {
+    template: part.part?.base_description ?? part.base_description,
+    ...extras,
+  }).text;
+};
+
+const partShellFromCompiled = (compiled) => {
+  const def = compiled.definition || {};
+  return {
+    id: compiled.id,
+    title: compiled.title,
+    category: compiled.category,
+    type: compiled.type,
+    level: compiled.level ?? 1,
+    experimental: !!compiled.experimental,
+    base_power: compiled.basePower ?? 0,
+    base_heat: compiled.baseHeat ?? 0,
+    base_ticks: compiled.baseTicks ?? 0,
+    base_containment: compiled.containment ?? (compiled.category === "reactor_plating" ? REACTOR_PLATING_DEFAULT_CONTAINMENT : 0),
+    base_vent: compiled.vent ?? 0,
+    base_reactor_power: compiled.reactorPower ?? 0,
+    base_reactor_heat: compiled.reactorHeat ?? 0,
+    base_transfer: def.baseTransfer ?? compiled.transfer ?? 0,
+    base_ep_heat: compiled.baseEpHeat ?? compiled.epHeat ?? 0,
+    base_power_increase: compiled.powerIncrease ?? 0,
+    base_heat_increase: compiled.heatIncrease ?? 0,
+    base_ecost: toDecimal(0),
+    base_cost: toDecimal(compiled.baseCost ?? 0),
+    base_description: compiled.baseDescription ?? null,
+    erequires: compiled.erequires ?? null,
+    cell_count: compiled.cellCount ?? null,
+    cell_pack_M: compiled.cellMultiplier ?? 1,
+    cell_count_C: compiled.cellCount ?? 1,
+    location: def.location ?? null,
+    valve_group: def.valveGroup ?? def.valve_group ?? null,
+    activation_threshold: def.activationThreshold ?? def.activation_threshold ?? null,
+    transfer_direction: def.transferDirection ?? def.transfer_direction ?? null,
+    vent_consumes_power: !!def.ventConsumesPower,
+    outlet_respect_neighbor_cap: !!def.outletRespectNeighborCap,
+    capacitor_autosell_heat_ratio: typeof def.capacitorAutosellHeatRatio === "number" ? def.capacitorAutosellHeatRatio : 0,
+    range: def.range ?? 1,
+    transfer_multiplier: compiled.transferMultiplier ?? def.transferMultiplier ?? def.transfer_multiplier ?? null,
+    neighbor_pulse_value: compiled.neighborPulseValue ?? null,
+  };
+};
+
+const buildCategoryOrders = (compiledList) => {
+  const categoryTypeOrder = new Map();
+  const typeOrderIndex = new Map();
+  for (let i = 0; i < compiledList.length; i++) {
+    const c = compiledList[i];
+    if (!c?.category || !c?.type) continue;
+    const arr = categoryTypeOrder.get(c.category) || [];
+    if (!arr.includes(c.type)) {
+      arr.push(c.type);
+      categoryTypeOrder.set(c.category, arr);
+      typeOrderIndex.set(`${c.category}:${c.type}`, arr.length - 1);
+    }
   }
-  return formatPartDescription(
-    {
-      id: part.id,
-      title: part.title,
-      category: part.category,
-      level: part.level,
-      baseTicks: part.ticks,
-      basePower: part.power,
-      baseHeat: part.heat,
-      containment: part.containment,
-      reactorPower: part.reactor_power,
-      reactorHeat: part.reactor_heat,
-      vent: part.vent,
-      transfer: part.transfer,
-      powerIncrease: part.power_increase,
-      heatIncrease: part.heat_increase,
-      cellCount: part.cell_count,
-      epHeat: part.ep_heat,
-      baseDescription: part.part?.base_description ?? part.base_description,
-      definition: part.part,
-    },
-    part.part?.base_description ?? part.base_description,
-    extras,
-  ).text;
-}
+  return { categoryTypeOrder, typeOrderIndex };
+};
 
 export class Part {
   constructor(part_definition, game) {
@@ -151,13 +146,11 @@ export class Part {
     this.base_heat_increase = part_definition.base_heat_increase;
     this.base_ecost = part_definition.base_ecost;
     this.base_cost = part_definition.base_cost;
-
     this.location = part_definition.location ?? null;
     this.base_description = part_definition.base_description;
     this.valve_group = part_definition.valve_group ?? null;
     this.activation_threshold = part_definition.activation_threshold ?? null;
     this.transfer_direction = part_definition.transfer_direction ?? null;
-
     this.erequires = part_definition.erequires ?? null;
     this.cost = part_definition.base_cost;
     this.perpetual = false;
@@ -172,9 +165,7 @@ export class Part {
     this.outlet_respect_neighbor_cap = !!part_definition.outlet_respect_neighbor_cap;
     this.capacitor_autosell_heat_ratio =
       typeof part_definition.capacitor_autosell_heat_ratio === "number" ? part_definition.capacitor_autosell_heat_ratio : 0;
-    this.traits = (Array.isArray(part_definition.traits) && part_definition.traits.length > 0) ? part_definition.traits : (this.category === "cell" ? ["FUEL_CELL"] : []);
-    this.trait_mask = part_definition.trait_mask || compileTraitBitmask(this.traits);
-
+    this.range = part_definition.range ?? 1;
     this.recalculate_stats();
     this.updateDescription();
   }
@@ -182,19 +173,6 @@ export class Part {
   recalculate_stats() {
     recalculatePartStats(this);
     this.updateDescription();
-  }
-
-  getCacheKinds(tile) {
-    const c = this.category;
-    const cells = c === "cell" && tile?.ticks > 0;
-    const inlets = c === "heat_inlet";
-    const exchangers = c === "heat_exchanger" || c === "valve" || (c === "reactor_plating" && this.transfer > 0);
-    const valves = c === "valve";
-    const outlets = c === "heat_outlet" && tile?.activated;
-    const vents = c === "vent";
-    const capacitors = c === "capacitor";
-    const vessels = c === "vent" || (this.vent > 0) || c === "particle_accelerator" || (this.containment > 0 && c !== "valve");
-    return { cells, inlets, exchangers, valves, outlets, vents, capacitors, vessels };
   }
 
   getImagePath() {
@@ -215,115 +193,11 @@ export class Part {
 
   getAutoReplacementCost() {
     const bridge = this.game?.coreBridge;
-    if (!bridge?.isActive || !bridge.session) return toDecimal(0);
+    if (!bridge?.isActive || !bridge.session) {
+      throw new Error("getAutoReplacementCost requires an active core session");
+    }
     return toDecimal(bridge.session.partAutoReplaceCost(this.id));
   }
-}
-
-function generatePartDefinition(template, level) {
-  const partDef = { ...template, level };
-
-  if (template.levels) {
-    partDef.id = resolveCellTierPartId(template.type, level);
-  } else if (template.id) {
-    partDef.id = template.id;
-  } else {
-    partDef.id = `${template.type}${level}`;
-  }
-
-  if (template.levels) {
-    partDef.base_cost = template.base_cost.mul(Math.pow(template.cost_multi, level - 1));
-  } else {
-    partDef.base_cost = template.base_cost;
-  }
-
-  if (partDef.category === "cell") {
-    applyCellProperties(partDef, template, level);
-    return partDef;
-  }
-  applyGenericPartProperties(partDef, template, level);
-  return partDef;
-}
-
-function applyCellProperties(partDef, template, level) {
-  const form = CELL_FORM_FACTORS[level - 1] || CELL_FORM_FACTORS[0];
-  partDef.title = `${form.titlePrefix}${template.title}`;
-  partDef.base_description = template.base_description || (level > 1 ? MULTI_CELL_DESC_TPL : SINGLE_CELL_DESC_TPL);
-  partDef.base_power = template.base_power;
-  partDef.base_heat = template.base_heat;
-  partDef.cell_pack_M = form.cellPackM;
-  partDef.cell_count_C = form.cellCount;
-  partDef.cell_count = form.cellCount;
-}
-
-function applyGenericPartProperties(partDef, template, level) {
-  if (template.title && !template.experimental) {
-    partDef.title = template.title;
-  } else {
-    partDef.title = template.experimental ? template.title : `${PART_TITLE_PREFIXES[level - 1] || ""}${template.title || template.type}`;
-  }
-
-  if (template.levels) {
-    const applyMultiplier = (baseKey, multiplierKey) => {
-      if (template[baseKey] && template[multiplierKey]) {
-        partDef[baseKey] = template[baseKey] * Math.pow(template[multiplierKey], level - 1);
-      }
-    };
-
-    applyMultiplier("base_ticks", "ticks_multiplier");
-    applyMultiplier("base_containment", "containment_multi");
-    applyMultiplier("base_reactor_power", "reactor_power_multi");
-    applyMultiplier("base_reactor_heat", "reactor_heat_multiplier");
-    applyMultiplier("base_ep_heat", "ep_heat_multiplier");
-
-    if (template.base_transfer && template.transfer_multiplier) {
-      partDef.base_transfer = template.base_transfer * Math.pow(template.transfer_multiplier, level - 1);
-    }
-
-    if (template.base_vent && template.vent_multiplier) {
-      partDef.base_vent = template.base_vent * Math.pow(template.vent_multiplier, level - 1);
-    }
-
-    if (template.base_power_increase && template.power_increase_add) {
-      partDef.base_power_increase = template.base_power_increase + (template.power_increase_add * (level - 1));
-    }
-  } else {
-    if (template.base_transfer) partDef.base_transfer = template.base_transfer;
-    if (template.base_vent) partDef.base_vent = template.base_vent;
-    if (template.base_power_increase) partDef.base_power_increase = template.base_power_increase;
-    if (template.base_ticks) partDef.base_ticks = template.base_ticks;
-    if (template.base_containment) partDef.base_containment = template.base_containment;
-    if (template.base_reactor_power) partDef.base_reactor_power = template.base_reactor_power;
-    if (template.base_reactor_heat) partDef.base_reactor_heat = template.base_reactor_heat;
-    if (template.base_ep_heat) partDef.base_ep_heat = template.base_ep_heat;
-  }
-}
-
-export function buildPartCatalog(rawParts = bundledGameData.parts) {
-  const templates = z.array(PartDefinitionSchema).parse(rawParts);
-  const catalog = [];
-  const categoryTypeOrder = new Map();
-  const typeOrderIndex = new Map();
-
-  templates.forEach((template) => {
-    if (template.category) {
-      const arr = categoryTypeOrder.get(template.category) || [];
-      if (!arr.includes(template.type)) {
-        arr.push(template.type);
-        categoryTypeOrder.set(template.category, arr);
-        typeOrderIndex.set(`${template.category}:${template.type}`, arr.length - 1);
-      }
-    }
-    if (template.levels) {
-      for (let i = 0; i < template.levels; i++) {
-        catalog.push(generatePartDefinition(template, i + 1));
-      }
-    } else {
-      catalog.push(generatePartDefinition(template, template.level));
-    }
-  });
-
-  return { catalog, categoryTypeOrder, typeOrderIndex };
 }
 
 export class PartSet {
@@ -343,46 +217,39 @@ export class PartSet {
   }
 
   async initialize() {
-    if (this.initialized) {
-      return this.partsArray;
+    if (this.initialized) return this.partsArray;
+
+    const session = this.game?.coreBridge?.session;
+    if (!session?.listParts) {
+      throw new Error("PartSet.initialize requires an active core session");
     }
 
-    logger.log('info', 'game', 'Loading part list data...');
-    const { catalog, categoryTypeOrder, typeOrderIndex } = buildPartCatalog();
+    logger.log("info", "game", "Loading part list data...");
+    const compiledList = session.listParts() || [];
+    const { categoryTypeOrder, typeOrderIndex } = buildCategoryOrders(compiledList);
     this.categoryTypeOrder = categoryTypeOrder;
     this.typeOrderIndex = typeOrderIndex;
-    logger.log('debug', 'game', 'Part list data loaded:', {
-      count: catalog.length,
-      categories: [...new Set(catalog.map((p) => p.category))]
+
+    logger.log("debug", "game", "Part list data loaded:", {
+      count: compiledList.length,
+      categories: [...new Set(compiledList.map((p) => p.category))],
     });
 
-    catalog.forEach((partDef) => {
-      const partInstance = new Part(partDef, this.game);
+    for (let i = 0; i < compiledList.length; i++) {
+      const compiled = compiledList[i];
+      if (!compiled?.id) continue;
+      const partInstance = new Part(partShellFromCompiled(compiled), this.game);
       this.parts.set(partInstance.id, partInstance);
       this.partsArray.push(partInstance);
-    });
+    }
 
     this.initialized = true;
     return this.partsArray;
   }
 
-  generatePartDefinition(template, level) {
-    return generatePartDefinition(template, level);
-  }
-
-  _applyCellProperties(partDef, template, level) {
-    applyCellProperties(partDef, template, level);
-  }
-
-  _applyGenericPartProperties(partDef, template, level) {
-    applyGenericPartProperties(partDef, template, level);
-  }
-
   updateCellPower() {
     this.partsArray.forEach((part) => {
-      if (part.category === "cell") {
-        part.recalculate_stats();
-      }
+      if (part.category === "cell") part.recalculate_stats();
     });
   }
 
@@ -397,7 +264,9 @@ export class PartSet {
         part.setAffordable(false);
         return;
       }
-      const isUnlocked = this.game?.unlockManager && typeof this.game.unlockManager.isPartUnlocked === "function" ? this.game.unlockManager.isPartUnlocked(part) : true;
+      const isUnlocked = this.game?.unlockManager && typeof this.game.unlockManager.isPartUnlocked === "function"
+        ? this.game.unlockManager.isPartUnlocked(part)
+        : true;
       let isAffordable = false;
       if (part.erequires) {
         const requiredUpgrade = game.upgradeset.getUpgrade(part.erequires);
@@ -438,9 +307,5 @@ export class PartSet {
 
   getPartsByLevel(level) {
     return this.partsArray.filter((part) => part.level === level);
-  }
-
-  getPartsByTier(tier) {
-    return this.getPartsByLevel(tier);
   }
 }

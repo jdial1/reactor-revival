@@ -23,18 +23,7 @@ export const BalanceConfigSchema = z.object({
 export const SimConstantsSchema = z.object({
   valveOverflowThreshold: z.number().min(0).max(1),
   valveTopupThreshold: z.number().min(0).max(1),
-  heatEpsilon: z.number().min(0),
-  meltdownHeatMultiplier: z.number().min(0),
   criticalHeatRatio: z.number().min(0).max(1),
   reactorHeatStandardDivisor: z.number().min(1),
-  heatPayloadMaxInlets: z.number().int().min(1),
-  heatPayloadMaxValves: z.number().int().min(1),
-  heatPayloadMaxValveNeighbors: z.number().int().min(1),
-  heatPayloadMaxExchangers: z.number().int().min(1),
-  heatPayloadMaxOutlets: z.number().int().min(1),
-  heatTransferMaxIterations: z.number().int().min(1),
-  hullRepelFraction: z.number().min(0).max(1),
   heatTransferDiffDivisor: z.number().min(1),
-  exchangerMinHeadroom: z.number().min(0),
-  exchangerMinTransferUnit: z.number().min(0),
 }).passthrough();

@@ -223,8 +223,8 @@ async function bootstrapGame(game, ui) {
   startPerformanceService(game);
   console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset …");
   game.tileset.initialize();
-  await game.partset.initialize();
   await attachCoreBridge(game);
+  await game.partset.initialize();
   await game.upgradeset.initialize();
   await game.set_defaults();
   game._subsystems = {

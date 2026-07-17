@@ -1,4 +1,4 @@
-import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
+﻿import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import {
   BASE_COLS_MOBILE,
   BASE_COLS_DESKTOP,
@@ -82,56 +82,36 @@ export class GridManager {
   }
 }
 
-import { topologyNeighborCoords } from "reactor-core";
 import { recordSimEvent } from "./sim-events.js";
-import { bumpGridPartsRevision, invalidateTickParts } from "../bridge/bridge-parts.js";
+import { bumpGridPartsRevision } from "../bridge/bridge-parts.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import {
   getIndex,
   toDecimal,
 } from "../simUtils.js";
 import { logger } from "../core/logger.js";
-import {
-  COLORS,
-  HEAT_MAP,
-  HEAT_FLOW,
-  HEAT_SHIMMER,
-  HEAT_HAZE,
-  OVERHEAT_VISUAL,
-  BAR,
-  SINGULARITY,
-} from "../constants/heat-visual.js";
-import { vuSegmentRatio01 } from "../core/math-helpers.js";
 
-export function computeTileNeighborLists(tile) {
-  const p = tile.part;
-  if (!p) {
-    return { containment: [], cell: [], reflector: [] };
+function neighborEntriesToTiles(tileset, entries) {
+  const out = [];
+  if (!tileset || !entries) return out;
+  for (let i = 0; i < entries.length; i++) {
+    const tile = tileset.getTile(entries[i].row, entries[i].col);
+    if (tile) out.push(tile);
   }
-  const neighbors = Array.from(
-    tile.game.tileset.getTilesInRange(tile, p.range || 1)
-  );
-  const containment = [];
-  const cell = [];
-  const reflector = [];
-  for (const neighbor_tile of neighbors) {
-    if (neighbor_tile.part && neighbor_tile.activated) {
-      const np = neighbor_tile.part;
-      if (np.containment > 0 || ["heat_exchanger", "heat_outlet", "heat_inlet"].includes(np.category)) {
-        containment.push(neighbor_tile);
-      }
-      if (neighbor_tile.part.category === "cell" && neighbor_tile.ticks > 0) {
-        cell.push(neighbor_tile);
-      }
-      if (neighbor_tile.part.category === "reflector") {
-        reflector.push(neighbor_tile);
-      }
-    }
-  }
-  if (typeof process !== "undefined" && process.env.NODE_ENV === "test" && tile.part && tile.part.category === "heat_outlet") {
-    logger.log("debug", "game", `Outlet at (${tile.row}, ${tile.col}) has ${containment.length} containment neighbors: ${containment.map((t) => `(${t.row}, ${t.col}) ${t.part?.id}`).join(", ")}`);
-  }
-  return { containment, cell, reflector };
+  return out;
+}
+
+function queryTileNeighborLists(tile) {
+  if (!tile.part) return { containment: [], cell: [], reflector: [] };
+  const bridge = tile.game?.coreBridge;
+  if (!bridge?.isActive) throw new Error("neighbor query requires an active core session");
+  const lists = bridge.queryNeighbors(tile.row, tile.col);
+  const tileset = tile.game.tileset;
+  return {
+    containment: neighborEntriesToTiles(tileset, lists.containment),
+    cell: neighborEntriesToTiles(tileset, lists.cell),
+    reflector: neighborEntriesToTiles(tileset, lists.reflector),
+  };
 }
 
 export class Tile {
@@ -180,16 +160,11 @@ export class Tile {
   }
 
   _neighborLists() {
-    const views = this.game?.engine?._tickNeighborViews;
-    if (views) {
-      const hit = views.get(this);
-      if (hit) return hit;
-    }
-    return computeTileNeighborLists(this);
+    return queryTileNeighborLists(this);
   }
 
   invalidateNeighborCaches() {
-    invalidateTickParts(this.game?.engine);
+    bumpGridPartsRevision(this.game?.tileset);
   }
 
   get containmentNeighborTiles() {
@@ -205,24 +180,15 @@ export class Tile {
     this.cachedEffectiveVent = 0;
     this.cachedEffectiveTransfer = 0;
     if (!this.part) return;
-
-    const bridge = this.game?.coreBridge;
-    if (bridge?.isActive) {
-      const rates = bridge.resolveDisplayRatesForTile(this);
-      if (rates) {
-        this.cachedEffectiveVent = rates.vent ?? 0;
-        this.cachedEffectiveTransfer = rates.transfer ?? 0;
-        if (this.part.category === "vent" && (rates.vent || this.part.vent)) {
-          this.cachedEffectiveTransfer = this.cachedEffectiveVent || this.cachedEffectiveTransfer;
-        }
-        return;
-      }
+    const bridge = this.game.coreBridge;
+    if (!bridge?.isActive) throw new Error("recalculateEffectiveValues requires an active core session");
+    const rates = bridge.resolveDisplayRatesForTile(this);
+    if (!rates) return;
+    this.cachedEffectiveVent = rates.vent ?? 0;
+    this.cachedEffectiveTransfer = rates.transfer ?? 0;
+    if (this.part.category === "vent" && (rates.vent || this.part.vent)) {
+      this.cachedEffectiveTransfer = this.cachedEffectiveVent || this.cachedEffectiveTransfer;
     }
-
-    this.cachedEffectiveVent = this.part.vent || 0;
-    this.cachedEffectiveTransfer = this.part.category === "vent"
-      ? this.cachedEffectiveVent
-      : (this.part.transfer || 0);
   }
 
   getEffectiveVentValue() {
@@ -306,7 +272,6 @@ export class Tile {
     }
     this.part = partInstance;
     bumpGridPartsRevision(this.game?.tileset);
-    invalidateTickParts(this.game?.engine);
     if (this.part) {
       this.activated = true;
       this.ticks = this.part.ticks;
@@ -343,7 +308,6 @@ export class Tile {
   }
   _clearPartReset() {
     bumpGridPartsRevision(this.game?.tileset);
-    invalidateTickParts(this.game?.engine);
     this.activated = false;
     this.part = null;
     this.ticks = 0;
@@ -376,19 +340,16 @@ export class Tile {
     const part_id = this.part.id;
     logger.log('debug', 'game', `Selling part '${part_id}' from tile (${this.row}, ${this.col}).`);
     logger.log('debug', 'tile', 'sellPart', { row: this.row, col: this.col, partId: part_id });
-    const bridge = this.game?.coreBridge;
-    if (bridge?.isActive) {
-      bridge.sellPart(this.row, this.col);
-      return;
-    }
-    this.game.addMoney(this.calculateSellValue());
-    this._clearPartReset();
+    const bridge = this.game.coreBridge;
+    if (!bridge?.isActive) throw new Error("sellPart requires an active core session");
+    bridge.sellPart(this.row, this.col);
   }
-
 
   calculateSellValue() {
     if (!this.part) return 0;
-    return this.game?.coreBridge?.computeSellValueForTile?.(this) ?? 0;
+    const bridge = this.game.coreBridge;
+    if (!bridge?.isActive) throw new Error("calculateSellValue requires an active core session");
+    return bridge.computeSellValueForTile(this);
   }
   refreshVisualState() {
     this.game.bumpGridTileDirty?.(this.row, this.col);
@@ -407,34 +368,10 @@ export class Tileset {
     this.active_tiles = [];
     this.active_tiles_list = [];
     this.heatMap = new Float32Array(this.max_rows * this.max_cols);
-    this.integrityMap = new Float32Array(this.max_rows * this.max_cols);
-    for (let i = 0; i < this.integrityMap.length; i++) this.integrityMap[i] = 100;
   }
 
   gridIndex(row, col) {
     return getIndex(row, col, this.max_cols);
-  }
-
-  syncHeatFromTiles() {
-    const rows = this.game?.rows ?? this.max_rows;
-    const cols = this.game?.cols ?? this.max_cols;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const tile = this.tiles[r]?.[c];
-        if (tile) this.heatMap[this.gridIndex(r, c)] = tile.heat_contained;
-      }
-    }
-  }
-
-  syncHeatToTiles() {
-    const rows = this.game?.rows ?? this.max_rows;
-    const cols = this.game?.cols ?? this.max_cols;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const tile = this.tiles[r]?.[c];
-        if (tile) tile._heatContained = this.heatMap[this.gridIndex(r, c)];
-      }
-    }
   }
 
   resize(newRows, newCols) {
@@ -446,23 +383,18 @@ export class Tileset {
     const oldRows = this.max_rows;
     const oldCols = this.max_cols;
     const oldHeatMap = this.heatMap;
-    const oldIntegrityMap = this.integrityMap;
-    
+
     this.max_rows = newRows;
     this.max_cols = newCols;
     const newGridSize = this.max_rows * this.max_cols;
     this.heatMap = new Float32Array(newGridSize);
-    this.integrityMap = new Float32Array(newGridSize);
-    
-    for (let i = 0; i < newGridSize; i++) this.integrityMap[i] = 100;
-    
+
     for (let r = 0; r < oldRows; r++) {
       for (let c = 0; c < oldCols; c++) {
         if (r < this.max_rows && c < this.max_cols) {
            const oldIdx = r * oldCols + c;
            const newIdx = r * this.max_cols + c;
            this.heatMap[newIdx] = oldHeatMap[oldIdx];
-           if (oldIntegrityMap) this.integrityMap[newIdx] = oldIntegrityMap[oldIdx];
         }
       }
     }
@@ -525,22 +457,6 @@ export class Tileset {
     return null;
   }
 
-  *getTilesInRange(centerTile, range, topologyTypeOverride) {
-    if (!centerTile) return;
-    const rows = this.game.rows;
-    const cols = this.game.cols;
-    const p = centerTile.part;
-    const topo = topologyTypeOverride ?? p?.topologyType ?? "Manhattan";
-    const rng = range != null ? range : p?.range ?? 1;
-    const coords = topologyNeighborCoords(topo, centerTile.row, centerTile.col, rng, rows, cols);
-    for (let i = 0; i < coords.length; i++) {
-      const r = coords[i][0];
-      const c = coords[i][1];
-      const tile = this.tiles[r]?.[c];
-      if (tile) yield tile;
-    }
-  }
-
   clearAllTiles() {
     this.tiles_list.forEach((tile) => {
       if (tile.part) {
@@ -548,14 +464,6 @@ export class Tileset {
       }
     });
     this.game.coreBridge?.syncGridFromGame?.();
-  }
-
-  clearAllParts() {
-    this.active_tiles_list.forEach((tile) => {
-      if (tile.part) {
-        tile.clearPart();
-      }
-    });
   }
 
   getAllTiles() {
@@ -575,435 +483,3 @@ export class Tileset {
   }
 }
 
-class StaticGridRenderer {
-  constructor(shared) {
-    this._shared = shared;
-  }
-
-  drawTile(game, r, c) {
-    const { ctx, _tileSize: ts } = this._shared;
-    const x = c * ts;
-    const y = r * ts;
-    ctx.fillStyle = COLORS.tileBg;
-    ctx.strokeStyle = COLORS.tileStroke;
-    ctx.lineWidth = 1;
-    ctx.fillRect(x, y, ts, ts);
-    ctx.strokeRect(x, y, ts, ts);
-    const tile = game.tileset?.getTile(r, c);
-    if (tile?.enabled && tile.part) {
-      const path = typeof tile.part.getImagePath === "function" ? tile.part.getImagePath() : null;
-      if (path) {
-        const img = this._shared.loadImage(path);
-        if (img.complete && img.naturalWidth) ctx.drawImage(img, x, y, ts, ts);
-      }
-    }
-  }
-
-  render(game, viewport) {
-    const { ctx, _width, _height, _rows: rows, _cols: cols, _tileSize: ts, _staticDirty, _staticDirtyTiles } = this._shared;
-    if (!ctx || _width <= 0 || _height <= 0) {
-      if (!this._shared._staticBailLogged) {
-        this._shared._staticBailLogged = true;
-        logger.log('warn', 'ui', '[StaticGrid] render bailed', { hasCtx: !!ctx, width: _width, height: _height });
-      }
-      return;
-    }
-    this._shared._staticBailLogged = false;
-    const cull = viewport != null;
-
-    if (_staticDirty) {
-      ctx.clearRect(0, 0, _width, _height);
-      Array.from({ length: rows }, (_, r) => r).forEach((r) =>
-        Array.from({ length: cols }, (_, c) => c).forEach((c) => {
-          if (!cull || this._shared.tileInViewport(r, c, viewport)) this.drawTile(game, r, c);
-        })
-      );
-      this._shared._staticDirty = false;
-      this._shared._staticDirtyTiles.clear();
-      return;
-    }
-
-    if (_staticDirtyTiles.size === 0) return;
-    _staticDirtyTiles.forEach((key) => {
-      const [r, c] = key.split(",").map(Number);
-      if (!cull || this._shared.tileInViewport(r, c, viewport)) {
-        ctx.clearRect(c * ts, r * ts, ts, ts);
-        this.drawTile(game, r, c);
-      }
-    });
-    this._shared._staticDirtyTiles.clear();
-  }
-}
-
-class DynamicOverlayRenderer {
-  constructor(shared) {
-    this._shared = shared;
-  }
-
-  _getGlobalBoostCategories() {
-    return {
-      infused_cells: ["reflector"],
-      unleashed_cells: ["heat_exchanger", "heat_inlet", "heat_outlet"],
-      quantum_buffering: ["capacitor", "reactor_plating"],
-      full_spectrum_reflectors: ["reflector"],
-      fluid_hyperdynamics: ["heat_inlet", "heat_outlet", "heat_exchanger", "vent"],
-      fractal_piping: ["vent", "heat_exchanger"],
-      ultracryonics: ["coolant_cell"],
-    };
-  }
-
-  _isTileBuffedByGlobalBoost(game, tile) {
-    const part = tile?.part;
-    if (!part || !game?.upgradeset) return false;
-    const mapping = this._getGlobalBoostCategories();
-    for (const [upgradeId, categories] of Object.entries(mapping)) {
-      if (!categories.includes(part.category)) continue;
-      const level = game.upgradeset.getUpgrade(upgradeId)?.level ?? 0;
-      if (level > 0) return true;
-    }
-    return false;
-  }
-
-  _drawSingularityOverlay(ctx, x, y, ts, now) {
-    const cx = x + ts * 0.5;
-    const cy = y + ts * 0.5;
-    const rMax = Math.hypot(ts * 0.5, ts * 0.5);
-    const ringR = rMax * (0.5 + Math.sin(now * 0.003) * 0.15);
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rMax);
-    grad.addColorStop(0, `rgba(0, 0, 0, ${SINGULARITY.blackHoleAlpha})`);
-    grad.addColorStop(0.2, SINGULARITY.innerTint);
-    grad.addColorStop(0.6, SINGULARITY.midTint);
-    grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, rMax, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = `rgba(180, 100, 255, ${SINGULARITY.ringBaseAlpha + Math.sin(now * SINGULARITY.ringTimeScale) * SINGULARITY.ringPulseAmplitude})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-    ctx.stroke();
-    const orbitT = (now * SINGULARITY.orbitTimeScale) % (Math.PI * 2);
-    ctx.strokeStyle = `rgba(220, 150, 255, ${0.35 + Math.sin(now * 0.01) * 0.2})`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, ringR * 0.7, ringR * 0.35, orbitT * 0.5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  render(game, viewport, ui) {
-    const { _dynamicCtx: ctx, _width, _height, _tileSize: ts } = this._shared;
-    if (!ctx || !game?.tileset || _width <= 0 || _height <= 0) return;
-
-    const tiles = game.tileset.active_tiles_list;
-    if (!tiles) return;
-    const cull = viewport != null;
-    const now = typeof performance !== "undefined" ? performance.now() : 0;
-    const pulseAlpha = 0.12 + Math.sin(now * 0.002) * 0.06;
-
-    for (let i = 0; i < tiles.length; i++) {
-      const tile = tiles[i];
-      if (!tile?.enabled || !tile.part) continue;
-      const r = tile.row;
-      const c = tile.col;
-      if (cull && !this._shared.tileInViewport(r, c, viewport)) continue;
-      const x = c * ts;
-      const y = r * ts;
-
-      if (this._isTileBuffedByGlobalBoost(game, tile)) {
-        ctx.fillStyle = COLORS.boostPulse(pulseAlpha);
-        ctx.fillRect(x, y, ts, ts);
-      }
-
-      const maxHeat = tile.part.containment || 1;
-      const hasHeatBar = tile.part.base_containment > 0 || (tile.part.containment > 0 && tile.part.category !== "valve");
-      if (hasHeatBar && tile.heat_contained != null) {
-        const pct = vuSegmentRatio01(Math.max(0, Math.min(1, tile.heat_contained / maxHeat)));
-        const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
-        const by = y + ts - barH;
-        ctx.fillStyle = COLORS.heatBarBg;
-        ctx.fillRect(x, by, ts, barH);
-        ctx.fillStyle = COLORS.heatBarFill;
-        ctx.fillRect(x, by, ts * pct, barH);
-      }
-
-      const hasDurability = tile.part.base_ticks > 0;
-      if (hasDurability && tile.ticks != null && tile.part.ticks > 0) {
-        const pct = vuSegmentRatio01(Math.max(0, Math.min(1, tile.ticks / tile.part.ticks)));
-        const barH = Math.max(BAR.minBarHeight, (ts * BAR.barHeightRatio) | 0);
-        const by = y + ts - barH;
-        if (!hasHeatBar) {
-          ctx.fillStyle = COLORS.heatBarBg;
-          ctx.fillRect(x, by, ts, barH);
-        }
-        ctx.fillStyle = COLORS.durabilityBarFill;
-        ctx.fillRect(x, by, ts * pct, barH);
-      }
-
-      if (hasHeatBar && tile.part.containment > 0) {
-        const heatRatio = tile.heat_contained / tile.part.containment;
-        if (heatRatio >= OVERHEAT_VISUAL.heatRatioThreshold) {
-          const wiggle = Math.sin(now * OVERHEAT_VISUAL.wiggleFreq) * OVERHEAT_VISUAL.wiggleAmplitude;
-          ctx.strokeStyle = `rgba(255, 80, 60, ${OVERHEAT_VISUAL.strokeBaseAlpha + Math.sin(now * OVERHEAT_VISUAL.strokePulseFreq) * OVERHEAT_VISUAL.strokePulseAmplitude})`;
-          ctx.lineWidth = OVERHEAT_VISUAL.lineWidth;
-          ctx.strokeRect(x + wiggle, y, ts - wiggle * 2, ts);
-          ctx.strokeRect(x, y + wiggle, ts, ts - wiggle * 2);
-        }
-      }
-
-      if (tile.exploding) {
-        const explosionAlpha = 0.35 + Math.sin(now * 0.02) * 0.2;
-        ctx.fillStyle = COLORS.explosionGlow(explosionAlpha);
-        ctx.fillRect(x, y, ts, ts);
-        ctx.strokeStyle = COLORS.explosionStroke(explosionAlpha);
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x + 1, y + 1, ts - 2, ts - 2);
-      }
-
-      const sellingTile = ui?.getSellingTile?.();
-      if (sellingTile === tile) {
-        ctx.fillStyle = COLORS.sellingFill;
-        ctx.fillRect(x, y, ts, ts);
-        ctx.strokeStyle = COLORS.sellingStroke;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, ts, ts);
-      }
-
-      if (tile.part?.id === "particle_accelerator6") {
-        this._drawSingularityOverlay(ctx, x, y, ts, now);
-      }
-    }
-
-    const highlightedTiles = ui?.getHighlightedTiles?.();
-    if (highlightedTiles?.length) {
-      ctx.fillStyle = COLORS.highlightFill;
-      for (let i = 0; i < highlightedTiles.length; i++) {
-        const t = highlightedTiles[i];
-        if (!t?.enabled) continue;
-        const r = t.row;
-        const c = t.col;
-        if (cull && !this._shared.tileInViewport(r, c, viewport)) continue;
-        ctx.fillRect(c * ts, r * ts, ts, ts);
-        ctx.strokeStyle = COLORS.highlightStroke;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(c * ts, r * ts, ts, ts);
-      }
-    }
-
-    const hoveredTile = ui?.getHoveredTile?.();
-    if (hoveredTile?.enabled) {
-      const r = hoveredTile.row;
-      const c = hoveredTile.col;
-      if (!cull || this._shared.tileInViewport(r, c, viewport)) {
-        const x = c * ts;
-        const y = r * ts;
-        ctx.fillStyle = COLORS.hoverFill;
-        ctx.fillRect(x, y, ts, ts);
-        ctx.strokeStyle = COLORS.hoverStroke;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(x, y, ts, ts);
-      }
-    }
-  }
-}
-
-class HeatEffectsRenderer {
-  constructor(shared) {
-    this._shared = shared;
-  }
-
-  _smoothHeatMap(heatMap, rows, cols, gridIndex) {
-    const out = new Float64Array(rows * cols);
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        let sum = 0;
-        let n = 0;
-        for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-            const nr = r + dr;
-            const nc = c + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-              sum += heatMap[gridIndex(nr, nc)] || 0;
-              n++;
-            }
-          }
-        }
-        out[gridIndex(r, c)] = n > 0 ? sum / n : 0;
-      }
-    }
-    return out;
-  }
-
-  _prepareHeatData(game) {
-    const { _dynamicCtx, _width, _height, _rows: rows, _cols: cols } = this._shared;
-    if (!_dynamicCtx || !game?.tileset?.heatMap || _width <= 0 || _height <= 0) return null;
-    const gridIndex = (r, c) => getIndex(r, c, game.tileset.max_cols);
-    const smoothed = this._smoothHeatMap(game.tileset.heatMap, rows, cols, gridIndex);
-    let maxHeat = 0;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const h = smoothed[gridIndex(r, c)] || 0;
-        if (h > maxHeat) maxHeat = h;
-      }
-    }
-    if (maxHeat <= 0) return null;
-    return { smoothed, maxHeat, gridIndex, rows, cols };
-  }
-
-  _drawHeatEffectsLayers(game, viewport) {
-    const hd = this._prepareHeatData(game);
-    if (!hd) return;
-    const { smoothed, maxHeat, gridIndex, rows, cols } = hd;
-    const ts = this._shared._tileSize;
-    const now = typeof performance !== "undefined" ? performance.now() : 0;
-    const cull = viewport != null && viewport.width > 0 && viewport.height > 0;
-    const ctx = this._shared._dynamicCtx;
-    const blobR = ts * HEAT_MAP.blobRadiusRatio;
-    const sThresh = HEAT_SHIMMER.threshold;
-    const hThresh = HEAT_HAZE.threshold;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (cull && !this._shared.tileInViewport(r, c, viewport)) continue;
-        const heat = smoothed[gridIndex(r, c)] || 0;
-        const t = Math.max(0, Math.min(1, heat / maxHeat));
-        if (t === 0) continue;
-        const cx = c * ts + ts * 0.5;
-        const cy = r * ts + ts * 0.5;
-        ctx.fillStyle = `rgba(0,0,0,${HEAT_MAP.baseAlpha + HEAT_MAP.alphaRange * t})`;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, blobR, blobR, 0, 0, Math.PI * 2);
-        ctx.fill();
-        if (t >= sThresh) {
-          const baseA = HEAT_SHIMMER.baseAlphaMultiplier * ((t - sThresh) / (1 - sThresh));
-          for (let i = 0; i < HEAT_SHIMMER.layerCount; i++) {
-            const phase = (now * HEAT_SHIMMER.timeScale + i * HEAT_SHIMMER.phaseSpacing) % (Math.PI * 2);
-            const ox = Math.sin(phase) * (ts * 0.12);
-            const oy = Math.cos(phase * 0.7) * (ts * 0.1);
-            ctx.fillStyle = COLORS.shimmerTint(baseA * (0.6 + 0.4 * Math.sin(phase * 2)));
-            ctx.beginPath();
-            ctx.ellipse(
-              cx + ox,
-              cy + oy,
-              ts * (0.35 + Math.sin(phase * 1.3) * 0.08),
-              ts * (0.25 + Math.cos(phase * 0.9) * 0.06),
-              phase * 0.3,
-              0,
-              Math.PI * 2
-            );
-            ctx.fill();
-          }
-        }
-        if (t >= hThresh) {
-          const rise = (now * HEAT_HAZE.riseSpeedPx) % (ts * 1.2);
-          const hCy = cy - rise + Math.sin(now * HEAT_HAZE.wobbleFreq + r * 0.5 + c * 0.5) * ts * 0.15;
-          const hCx = cx + Math.sin(now * 0.002 + c) * ts * 0.12;
-          const rMax = ts * HEAT_HAZE.maxRadiusRatio;
-          const grad = ctx.createRadialGradient(hCx, hCy, 0, hCx, hCy, rMax);
-          const int = (t - hThresh) / (1 - hThresh);
-          grad.addColorStop(0, `rgba(255, 220, 180, ${0.12 * int})`);
-          grad.addColorStop(0.4, `rgba(255, 200, 150, ${0.06 * int})`);
-          grad.addColorStop(1, "rgba(255, 200, 150, 0)");
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(cx, cy, rMax, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-  }
-
-  _drawHeatFlowLayer(game, viewport) {
-    const engine = game?.engine;
-    if (!this._shared._dynamicCtx || !engine || typeof engine.getLastHeatFlowVectors !== "function") return;
-    const vectors = engine.getLastHeatFlowVectors();
-    if (!vectors.length) return;
-    const ts = this._shared._tileSize;
-    const cull = viewport != null;
-    const now = typeof performance !== "undefined" ? performance.now() : 0;
-    const headLen = Math.max(4, Math.min(12, (ts * 10) / 48 | 0));
-    const strokeWidth = Math.max(1.5, (ts * 2) / 48);
-    const maxAmountForSpeed = HEAT_FLOW.maxAmountForSpeed;
-    const dashLen = Math.max(6, ts * 0.35 | 0);
-    const gapLen = Math.max(4, ts * 0.2 | 0);
-    const ctx = this._shared._dynamicCtx;
-
-    for (let i = 0; i < vectors.length; i++) {
-      const v = vectors[i];
-      if (cull) {
-        const fromIn = this._shared.tileInViewport(v.fromRow, v.fromCol, viewport);
-        const toIn = this._shared.tileInViewport(v.toRow, v.toCol, viewport);
-        if (!fromIn && !toIn) continue;
-      }
-      const fromX = (v.fromCol + 0.5) * ts;
-      const fromY = (v.fromRow + 0.5) * ts;
-      const toX = (v.toCol + 0.5) * ts;
-      const toY = (v.toRow + 0.5) * ts;
-      const dx = toX - fromX;
-      const dy = toY - fromY;
-      const len = Math.hypot(dx, dy);
-      if (len < 2) continue;
-      const ux = dx / len;
-      const uy = dy / len;
-      const endX = toX - ux * headLen;
-      const endY = toY - uy * headLen;
-      const amount = typeof v.amount === "number" ? v.amount : 0;
-      const speed = HEAT_FLOW.baseSpeed + (amount / maxAmountForSpeed) * HEAT_FLOW.speedAmountScale;
-      const segLen = len - headLen;
-
-      ctx.strokeStyle = COLORS.heatFlowArrow;
-      ctx.lineWidth = strokeWidth;
-      ctx.lineCap = "round";
-      ctx.setLineDash([dashLen, gapLen]);
-      const period = dashLen + gapLen;
-      ctx.lineDashOffset = -(now * 0.001 * speed * period * 0.5) % period;
-      ctx.beginPath();
-      ctx.moveTo(fromX, fromY);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      const ax = ux * headLen;
-      const ay = uy * headLen;
-      const perp = Math.max(2, headLen * 0.4);
-      const px = -uy * perp;
-      const py = ux * perp;
-      ctx.fillStyle = COLORS.heatFlowArrowHead;
-      ctx.beginPath();
-      ctx.moveTo(toX, toY);
-      ctx.lineTo(toX - ax + px, toY - ay + py);
-      ctx.lineTo(toX - ax - px, toY - ay - py);
-      ctx.closePath();
-      ctx.fill();
-
-      if (segLen > 4) {
-        const pulseLen = HEAT_FLOW.pulseLen;
-        const numPulses = HEAT_FLOW.pulseCount;
-        for (let k = 0; k < numPulses; k++) {
-          const phase = ((now * 0.001 * speed + k / numPulses) % 1);
-          const p0 = (phase - pulseLen * 0.5 + 1) % 1;
-          const p1 = (phase + pulseLen * 0.5 + 1) % 1;
-          const x0 = fromX + ux * segLen * p0;
-          const y0 = fromY + uy * segLen * p0;
-          const x1 = fromX + ux * segLen * p1;
-          const y1 = fromY + uy * segLen * p1;
-          const alpha = 0.5 + (amount / maxAmountForSpeed) * 0.45;
-          ctx.strokeStyle = HEAT_FLOW.pulseColor(alpha);
-          ctx.lineWidth = strokeWidth * 1.4;
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.lineTo(x1, y1);
-          ctx.stroke();
-        }
-      }
-    }
-  }
-
-  render(game, viewport, ui) {
-    if (ui?.getHeatMapVisible?.()) {
-      this._drawHeatEffectsLayers(game, viewport);
-    }
-    if (ui?.getHeatFlowVisible?.() || ui?.getDebugOverlayVisible?.()) {
-      this._drawHeatFlowLayer(game, viewport);
-    }
-  }
-}

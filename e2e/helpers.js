@@ -289,9 +289,6 @@ export async function applyBlueprintPlan(page) {
     const game = window.__reactorAudit?.game;
     if (!game) return { ok: false, reason: "no game" };
     await game.applyBlueprintPlannerLayout?.();
-    if (game.engine?.consumeIntentQueueAsync) {
-      await game.engine.consumeIntentQueueAsync();
-    }
     if (game.blueprintPlanner?.active) game.toggleBlueprintPlanner();
     return {
       ok: !game.blueprintPlanner?.active,
@@ -578,21 +575,10 @@ export async function placePartOnGrid(page, partId, row, col) {
         ui?.stateManager?.setClickedPart(part);
       }
 
-      game.state.intent_queue.push({
-        action: "PLACE_PART",
-        payload: { row: r, col: c, partId: id },
-      });
+      const placedResult = game.coreBridge?.placePart?.(r, c, id);
+      const placed = placedResult ? [placedResult] : [];
 
-      let placed = [];
-      if (game.engine?.consumeIntentQueueAsync) {
-        const res = await game.engine.consumeIntentQueueAsync();
-        placed = res?.placed ?? [];
-      } else {
-        const ok = await tile.setPart(part);
-        if (ok) placed = [{ row: r, col: c, part }];
-      }
-
-      const onTile = placed.some((p) => p.row === r && p.col === c) || !!tile.part;
+      const onTile = !!tile.part || placed.length > 0;
       return {
         ok: onTile,
         mode: "live",
@@ -626,22 +612,14 @@ export async function placePartsOnGrid(page, placements) {
     const game = window.__reactorAudit?.game;
     if (!game) throw new Error("Game audit hook missing");
 
+    let placedCount = 0;
     for (let i = 0; i < parts.length; i++) {
       const { partId, row, col } = parts[i];
       const part = game.partset.getPartById(partId);
       const tile = game.tileset.getTile(row, col);
       if (!part) return { ok: false, reason: `unknown part ${partId}` };
       if (!tile) return { ok: false, reason: `missing tile ${row},${col}` };
-      game.state.intent_queue.push({
-        action: "PLACE_PART",
-        payload: { row, col, partId },
-      });
-    }
-
-    let placed = [];
-    if (game.engine?.consumeIntentQueueAsync) {
-      const res = await game.engine.consumeIntentQueueAsync();
-      placed = res?.placed ?? [];
+      if (game.coreBridge?.placePart?.(row, col, partId)) placedCount++;
     }
 
     const missing = parts.filter(
@@ -650,7 +628,7 @@ export async function placePartsOnGrid(page, placements) {
     );
     return {
       ok: missing.length === 0,
-      placedCount: placed.length,
+      placedCount,
       missing,
     };
   }, placements);

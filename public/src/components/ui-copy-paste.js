@@ -550,8 +550,8 @@ export class CopyPasteUI {
 
   pasteReactorLayout(layout, options = {}) {
     const ui = this.ui;
-    if (!layout || !ui.game) return;
-    queueBlueprintPaste(ui.game, layout, options).then(() => {
+    if (!layout || !ui.game) return Promise.resolve();
+    return queueBlueprintPaste(ui.game, layout, options).then(() => {
       ui.gridCanvasRenderer?.markStaticDirty?.();
       startRenderLoop(ui, 0);
     });

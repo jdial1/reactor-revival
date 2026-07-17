@@ -709,46 +709,46 @@ describe("Engine Mechanics", () => {
   });
 
   describe("Memory Leak Auditing", () => {
-    it("should trim active_cells and active_vessels to actual part count after syncActivePartsAtTickBoundary", async () => {
+    it("should report active_cells and active_vessels from session after grid sync", async () => {
       game.tileset.clearAllTiles();
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 1, 0, "vent1");
       syncActivePartsAtTickBoundary(game.engine);
 
-
-      expect(game.engine.active_cells.length).toBe(1);
-      expect(game.engine.active_vessels.length).toBeGreaterThanOrEqual(1);
+      const session = game.coreBridge.session;
+      expect(session.getActivePartList("active_cells").length).toBe(1);
+      expect(session.getActivePartList("active_vessels").length).toBeGreaterThanOrEqual(1);
     });
 
-    it("should clear cache arrays and not retain stale references when grid is cleared", async () => {
+    it("should clear session active lists when grid is cleared", async () => {
       await placePart(game, 0, 0, "uranium1");
       syncActivePartsAtTickBoundary(game.engine);
-
 
       game.tileset.clearAllTiles();
       syncActivePartsAtTickBoundary(game.engine);
 
-
-      expect(game.engine.active_cells.length).toBe(0);
-      expect(game.engine.active_vessels.length).toBe(0);
+      const session = game.coreBridge.session;
+      expect(session.getActivePartList("active_cells").length).toBe(0);
+      expect(session.getActivePartList("active_vessels").length).toBe(0);
     });
 
-    it("should cap cache array lengths to grid capacity", async () => {
+    it("should cap session active list lengths to grid capacity", async () => {
       game.tileset.clearAllTiles();
       const maxParts = game._rows * game._cols;
       syncActivePartsAtTickBoundary(game.engine);
 
-
-      expect(game.engine.active_cells.length).toBeLessThanOrEqual(maxParts);
-      expect(game.engine.active_vessels.length).toBeLessThanOrEqual(maxParts);
+      const session = game.coreBridge.session;
+      expect(session.getActivePartList("active_cells").length).toBeLessThanOrEqual(maxParts);
+      expect(session.getActivePartList("active_vessels").length).toBeLessThanOrEqual(maxParts);
     });
 
-    it("should derive tick part lists after cache invalidation", () => {
+    it("should derive tick part lists from session after sync", () => {
       invalidateTickParts(game.engine);
       syncActivePartsAtTickBoundary(game.engine);
 
-      expect(Array.isArray(game.engine.active_cells)).toBe(true);
-      expect(Array.isArray(game.engine.active_vessels)).toBe(true);
+      const session = game.coreBridge.session;
+      expect(Array.isArray(session.getActivePartList("active_cells"))).toBe(true);
+      expect(Array.isArray(session.getActivePartList("active_vessels"))).toBe(true);
     });
 
     it("should keep event ring buffer at fixed size and never grow", async () => {

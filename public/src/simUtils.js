@@ -57,18 +57,6 @@ export function isInBounds(nr, nc, rows, cols) {
   return nr >= 0 && nr < rows && nc >= 0 && nc < cols;
 }
 
-export function applyPowerOverflowCalc(reactorPower, effectiveMaxPower, overflowRatio) {
-  if (reactorPower <= effectiveMaxPower) return { reactorPower, overflowHeat: 0 };
-  const overflow = reactorPower - effectiveMaxPower;
-  return { reactorPower: effectiveMaxPower, overflowHeat: overflow * overflowRatio };
-}
-
-export function applyPowerOverflowCalcDecimal(reactorPower, effectiveMaxPower, overflowRatio) {
-  if (reactorPower.lte(effectiveMaxPower)) return { reactorPower, overflowHeat: toDecimal(0) };
-  const overflow = reactorPower.sub(effectiveMaxPower);
-  return { reactorPower: effectiveMaxPower, overflowHeat: overflow.mul(overflowRatio) };
-}
-
 export function resolveEffectiveMaxPower(reactorState) {
   const explicit = Number(reactorState?.effective_max_power ?? 0);
   if (Number.isFinite(explicit) && explicit > 0) return toDecimal(explicit);
@@ -97,13 +85,6 @@ export function isAllPowerOverflowingToHeat(state, reactor = null) {
   const potential = currentPower + statsPower;
   const overflow = Math.max(0, potential - cap);
   return overflow >= statsPower;
-}
-
-export function resolveAutoSellPowerBasis(reactorState) {
-  const Decimal = getDecimal();
-  const layout = toDecimal(reactorState?.max_power ?? 0);
-  const altered = toDecimal(reactorState?.altered_max_power ?? reactorState?.base_max_power ?? 0);
-  return Decimal.max(layout, altered);
 }
 
 export * from "./constants/sim.js";

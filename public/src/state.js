@@ -1,10 +1,10 @@
-﻿import { HEAT_EPSILON, MELTDOWN_HEAT_MULTIPLIER } from "./constants/sim.js";
-import { EngineStatus } from "./schema/stateSchemas.js";
+﻿import { EngineStatus } from "./schema/stateSchemas.js";
 import { derive } from "derive-valtio";
 import { render } from "lit-html";
 import { subscribe, proxy, ref, snapshot } from "valtio/vanilla";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { fromError } from "zod-validation-error";
+import { calculateWeaveEp } from "reactor-core";
 import { leaderboardService } from "./services-leaderboard.js";
 import {
   addPartIconsToTitle as addPartIconsToTitleHelper,
@@ -16,27 +16,19 @@ import { saveGameMutation } from "./state/save-query.js";
 import { setDecimal, updateDecimal } from "./state/decimal-sync.js";
 import { calculateBaseDimensions } from "./domain/grid.js";
 import { normalizeSavedTechTreeId } from "./domain/game-save.js";
-import {
-  StorageUtils,
+import { StorageUtils,
   StorageAdapter,
   deserializeSave,
   getBackupSaveForSlot1Async,
   serializeSave,
   rotateSlot1ToBackup,
 } from "./storage/index.js";
-import { calculateWeaveEp } from "reactor-core";
 import { BaseComponent } from "./dom/lit.js";
 import { toDecimal, toNumber } from "./simUtils.js";
 import { logger } from "./core/logger.js";
 import { MOBILE_BREAKPOINT_PX } from "./constants/ui-constants.js";
 import {
-  TICKS_FULL_CYCLE,
-  TICKS_10PCT,
-  REFERENCE_POWER,
   OVERRIDE_DURATION_MS,
-  CLASSIFICATION_HISTORY_MAX,
-  MARK_II_E_THRESHOLD_CYCLES,
-  MAX_SUBCLASS_CYCLES,
   HEAT_POWER_LOG_CAP,
   HEAT_POWER_LOG_BASE,
   DEFAULT_AUTOSAVE_INTERVAL_MS,
@@ -48,7 +40,6 @@ import {
   BASE_MAX_HEAT,
   WEAVE_QUANTUM,
 } from "./constants/balance.js";
-import { CRITICAL_HEAT_RATIO } from "./constants/sim.js";
 import { recordSimEvent } from "./domain/sim-events.js";
 import { drainGameEffects } from "./effect-orchestrator.js";
 import { enqueueGameEffect, enqueueClearAnimations, enqueueClearImageCache } from "./state/game-effects.js";
@@ -203,7 +194,6 @@ export function createGameState(initial = {}) {
     base_max_power: initial.base_max_power ?? 0,
     effect_queue: [],
     sim_event_queue: [],
-    intent_queue: proxy([]),
     objective_notifications: proxy([]),
     ui_heat_critical: initial.ui_heat_critical ?? false,
     ui_pipe_integrity_warning: initial.ui_pipe_integrity_warning ?? false,
@@ -218,9 +208,11 @@ export function createGameState(initial = {}) {
     },
     session_ep_weave: (get) => {
       const state = get(baseState);
-      const p = toNumber(state.session_power_produced ?? 0);
-      const h = toNumber(state.session_heat_dissipated ?? 0);
-      return Math.floor(Math.min(p, h) / WEAVE_QUANTUM);
+      return calculateWeaveEp(
+        state.session_power_produced ?? 0,
+        state.session_heat_dissipated ?? 0,
+        WEAVE_QUANTUM,
+      );
     },
     heat_net_change: (get) => {
       const v = get(baseState).core_heat_net_change;
@@ -645,21 +637,14 @@ export class UnlockManager {
 
   getPlacedCount(type, level) {
     const bridge = this.game.coreBridge;
-    if (bridge?.isActive) return bridge.getPlacedCount(type, level);
-    const counts = this.game.placedCounts ?? {};
-    return counts[`${type}:${level}`] || 0;
+    if (!bridge?.isActive) throw new Error("getPlacedCount requires an active core session");
+    return bridge.getPlacedCount(type, level);
   }
 
   incrementPlacedCount(type, level) {
     const bridge = this.game.coreBridge;
-    if (bridge?.isActive) {
-      bridge.incrementPlacedCount(type, level);
-      return;
-    }
-    const counts = this.game.placedCounts ?? {};
-    const key = `${type}:${level}`;
-    counts[key] = (counts[key] || 0) + 1;
-    this.game.placedCounts = counts;
+    if (!bridge?.isActive) throw new Error("incrementPlacedCount requires an active core session");
+    bridge.incrementPlacedCount(type, level);
   }
 
   getPreviousTierCount(part) {
@@ -701,44 +686,11 @@ export function resetSessionCriticalityCounters(game) {
   setDecimal(game.state, "session_heat_dissipated", 0);
 }
 
-function captureRebootState(game, keep_exotic_particles) {
-  const savedTotalEp = game.state.total_exotic_particles;
-  const savedCurrentEp = game.state.current_exotic_particles;
-  const savedProtiumParticles = game.protium_particles;
-  const preservedEpUpgrades = keep_exotic_particles
-    ? game.upgradeset.getAllUpgrades()
-        .filter((upg) => upg.base_ecost?.gt?.(0) && upg.level > 0)
-        .map((upg) => ({ id: upg.id, level: upg.level }))
-    : [];
-  return { savedTotalEp, savedCurrentEp, savedProtiumParticles, preservedEpUpgrades };
-}
-
-async function applyDefaults(game, savedProtiumParticles) {
-  await game.set_defaults();
-  game.protium_particles = savedProtiumParticles;
-}
-
 function clearState(game) {
   game.reactor.clearMeltdownState();
+  game.reactor.current_heat = 0;
+  game.reactor.current_power = 0;
   enqueueClearAnimations(game);
-}
-
-function restoreExoticParticles(game, keep_exotic_particles, savedTotalEp, savedCurrentEp, preservedEpUpgrades) {
-  if (keep_exotic_particles) {
-    setDecimal(game.state, "total_exotic_particles", savedTotalEp);
-    setDecimal(game.state, "current_exotic_particles", savedCurrentEp);
-  } else {
-    setDecimal(game.state, "total_exotic_particles", toDecimal(0));
-    setDecimal(game.state, "current_exotic_particles", toDecimal(0));
-  }
-  if (keep_exotic_particles && preservedEpUpgrades.length > 0) {
-    preservedEpUpgrades.forEach(({ id, level }) => {
-      const upg = game.upgradeset.getUpgrade(id);
-      if (upg) upg.setLevel(level, { deferSync: true });
-    });
-    game.syncModifiersFromUpgrades({ skipGrid: true });
-    game.reactor.updateStats();
-  }
 }
 
 function refreshUI(game) {
@@ -794,47 +746,9 @@ async function runRebootActionInternal(game, keep_exotic_particles) {
   recordSimEvent(game, { type: "PRESTIGE_REBOOT_TRIGGERED" });
   drainGameEffects(game, () => game?.ui);
   const bridge = game.coreBridge;
-  if (bridge?.isActive) {
-    if (keep_exotic_particles) await runCoreKeepEpPrestige(game, bridge);
-    else await runCoreDiscardEpReboot(game, bridge);
-    return;
-  }
-  const st = game.state;
-  let sessionPowerProduced = toNumber(st?.session_power_produced ?? 0);
-  let sessionHeatDissipated = toNumber(st?.session_heat_dissipated ?? 0);
-  let epFromWeave = calculateWeaveEp(sessionPowerProduced, sessionHeatDissipated, WEAVE_QUANTUM);
-  let fuelCellCount = 0;
-  const tiles = game.tileset?.active_tiles_list;
-  if (tiles) {
-    for (let i = 0; i < tiles.length; i++) {
-      const tile = tiles[i];
-      if (tile?.part?.category === "cell" && tile.ticks > 0) fuelCellCount++;
-    }
-  }
-  const { savedTotalEp, savedCurrentEp, savedProtiumParticles, preservedEpUpgrades } = captureRebootState(game, keep_exotic_particles);
-  await applyDefaults(game, savedProtiumParticles);
-  clearState(game);
-  restoreExoticParticles(game, keep_exotic_particles, savedTotalEp, savedCurrentEp, preservedEpUpgrades);
-  if (keep_exotic_particles && epFromWeave > 0) {
-    const d = toDecimal(epFromWeave);
-    updateDecimal(game.state, "current_exotic_particles", (x) => x.add(d));
-    updateDecimal(game.state, "total_exotic_particles", (x) => x.add(d));
-    game.exoticParticleManager.exotic_particles = game.exoticParticleManager.exotic_particles.add(d);
-  }
-  resetSessionCriticalityCounters(game);
-  refreshUI(game);
-  refreshObjective(game);
-  if (keep_exotic_particles) {
-    const prestigePayload = {
-      keepEp: true,
-      epFromWeave,
-      fuelCellCount,
-      sessionPowerProduced,
-      sessionHeatDissipated,
-    };
-    game.state.last_prestige = prestigePayload;
-    game.state.prestige_seq = (game.state.prestige_seq ?? 0) + 1;
-  }
+  if (!bridge?.isActive) throw new Error("reboot requires an active core session");
+  if (keep_exotic_particles) await runCoreKeepEpPrestige(game, bridge);
+  else await runCoreDiscardEpReboot(game, bridge);
 }
 
 export async function runRebootActionKeepEp(game) {
@@ -1162,7 +1076,7 @@ export class ExoticParticleManager {
 
 export function runSellAction(game) {
   const bridge = game.coreBridge;
-  if (!bridge?.isActive) return;
+  if (!bridge?.isActive) throw new Error("runSellAction requires an active core session");
   if (bridge.sellPower()) {
     game.reactor?.updateStats?.({ fromSession: true });
   }
@@ -1173,7 +1087,7 @@ export function runManualReduceHeatAction(game) {
   recordSimEvent(game, { type: "MANUAL_HEAT_REDUCE" });
   drainGameEffects(game, () => game?.ui);
   const bridge = game.coreBridge;
-  if (!bridge?.isActive) return;
+  if (!bridge?.isActive) throw new Error("runManualReduceHeatAction requires an active core session");
   if (bridge.ventHeat()) {
     game.reactor?.updateStats?.({ fromSession: true });
   }
