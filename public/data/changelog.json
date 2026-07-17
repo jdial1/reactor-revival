@@ -1,9 +1,9 @@
 [
     {
-        "version": "26_07_17-0746",
+        "version": "26_07_17-1005",
         "date": "2026-07-17",
         "bullets": [
-            "Integrate reactor-core-lib@1.2.12 & consolidate code\n\nUpgrade to reactor-core-lib v1.2.12 and refactor host layer to rely more heavily on the core library:\n\n- Move audio managers into services-audio.js; delete isolated audio module files\n- Consolidate presentation logic into presentation.js; remove separate part/upgrade files\n- Move achievement toasts into achievement-controller.js; delete template file\n- Move audio system attachment into ui.js\n- Retarget PartSet and UpgradeSet initialization to consume session catalogs\n- Fix bootstrap order: attachCoreBridge before partset.initialize\n- Simplify E2E helpers to use coreBridge.placePart directly\n- Remove unused domain modules (balance.js, statDispatcher.js, traits.js)\n- Clean up unused constants and dead code\n- Enforce core bridge requirement: throw instead of fallback in critical paths\n- Update tests to query session active part lists instead of engine getters"
+            "reactorCoreLib 2\n\nreactorCoreLib 2"
         ]
     }
 ]
