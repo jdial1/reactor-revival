@@ -1,9 +1,9 @@
 [
     {
-        "version": "26_07_17-1005",
+        "version": "26_07_17-1206",
         "date": "2026-07-17",
         "bullets": [
-            "reactorCoreLib 2\n\nreactorCoreLib 2"
+            "Close host soft leaks and finish session ownership inversion.\n\nRoute tile place/clear and explosion/meltdown heat through the session, drop pre-tick scalar amplify, and thin Upgrade.setLevel to display with bridge-side modifier sync.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
         ]
     }
 ]
