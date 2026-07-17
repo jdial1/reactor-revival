@@ -1,6 +1,7 @@
 import { BlueprintSchema, LegacyGridSchema } from "../store.js";
 import { isLayoutShareCode, shareCodeToLayoutGrid } from "../core/layoutShareCodec.js";
 import { clipToGrid } from "reactor-core";
+import { getActiveBridge } from "../bridge/active.js";
 
 export { clipToGrid };
 
@@ -41,8 +42,8 @@ export const computeBlueprintDiff = (game, targetLayout) => {
   if (!game?.tileset || !targetLayout) {
     return { toRemove: [], toPlace: [], unchanged: [], breakdown: { money: 0, ep: 0 } };
   }
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) {
+  const bridge = getActiveBridge(game);
+  if (!bridge) {
     return { toRemove: [], toPlace: [], unchanged: [], breakdown: { money: 0, ep: 0 } };
   }
   const core = bridge.previewBlueprintDiff(targetLayout);
@@ -64,8 +65,8 @@ export const computeBlueprintDiff = (game, targetLayout) => {
 };
 
 export const applyBlueprintLayoutDiff = (game, targetLayout, options = {}) => {
-  const bridge = game?.coreBridge;
-  if (!bridge?.isActive || !targetLayout) return { ok: false, reason: "invalid" };
+  const bridge = getActiveBridge(game);
+  if (!bridge || !targetLayout) return { ok: false, reason: "invalid" };
   return bridge.applyBlueprint({
     layout: targetLayout,
     skipCostDeduction: options.skipCostDeduction === true,
@@ -101,10 +102,8 @@ export const deserializeReactorInput = (str, game) => {
 };
 
 export const calculateLayoutCostBreakdown = (gameOrPartset, layout) => {
-  const game = resolveGame(gameOrPartset);
-  return game?.coreBridge?.isActive
-    ? game.coreBridge.layoutCost(layout).breakdown
-    : { money: 0, ep: 0 };
+  const bridge = getActiveBridge(resolveGame(gameOrPartset));
+  return bridge ? bridge.layoutCost(layout).breakdown : { money: 0, ep: 0 };
 };
 
 export const calculateLayoutCost = (gameOrPartset, layout) =>
@@ -125,20 +124,19 @@ export const calculateLayoutCostFromData = (entryData, gameOrPartset, fmtFn) => 
 export const calculateLayoutDiffBreakdown = (game, layout) => {
   if (!game) return { money: 0, ep: 0 };
   const clipped = clipToGrid(layout, game.rows, game.cols);
-  return game.coreBridge?.isActive
-    ? game.coreBridge.previewBlueprintDiff(clipped).breakdown
-    : { money: 0, ep: 0 };
+  const bridge = getActiveBridge(game);
+  return bridge ? bridge.previewBlueprintDiff(clipped).breakdown : { money: 0, ep: 0 };
 };
 
 export const filterLayoutByCheckedTypes = (layout, checkedTypes) =>
   layout.map((row) => row.map((cell) => (cell && checkedTypes[cell.id] !== false ? cell : null)));
 
 export const calculateCurrentSellValue = (tileset) =>
-  tileset?.game?.coreBridge?.computeGridSellCredit?.().total ?? 0;
+  getActiveBridge(tileset?.game)?.computeGridSellCredit?.().total ?? 0;
 
 export const buildAffordableLayout = (filteredLayout, sellCredit, gameRows, gameCols, game) => {
-  const bridge = game?.coreBridge;
-  if (!bridge?.isActive || !filteredLayout) return null;
+  const bridge = getActiveBridge(game);
+  if (!bridge || !filteredLayout) return null;
   const preview = bridge.previewPartialBlueprint(filteredLayout, { sellCredit });
   const rows = Math.min(gameRows, filteredLayout.length);
   const cols = Math.min(gameCols, filteredLayout[0]?.length ?? 0);
@@ -155,7 +153,7 @@ export const buildPasteState = (layout, checkedTypes, game, tileset, sellCheckbo
 
   const filteredLayout = filterLayoutByCheckedTypes(layout, checkedTypes);
   const sellCredit = sellCheckboxChecked ? calculateCurrentSellValue(tileset) : 0;
-  const bridge = game?.coreBridge;
+  const bridge = getActiveBridge(game);
   const currentMoney = game.state.current_money;
   const currentEp = game.state.current_exotic_particles;
   const currentMoneyNum = typeof currentMoney?.toNumber === "function"
@@ -165,7 +163,7 @@ export const buildPasteState = (layout, checkedTypes, game, tileset, sellCheckbo
     ? currentEp.toNumber()
     : Number(currentEp ?? 0);
 
-  const preview = bridge?.isActive
+  const preview = bridge
     ? bridge.previewPartialBlueprint(filteredLayout, {
       sellCredit,
       balances: { money: currentMoneyNum, ep: currentEpNum },

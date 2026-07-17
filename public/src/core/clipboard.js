@@ -1,4 +1,4 @@
-import { logger } from "../core/logger.js";
+import { logger } from "./logger.js";
 
 export async function writeClipboardText(text) {
   try {

@@ -7,7 +7,8 @@ Vitest runs against the app under `public/` with jsdom. Shared setup lives in `t
 | Directory | Role |
 |-----------|------|
 | **`tests/core/`** | Grouped by domain: `grid/`, `thermodynamics/`, `progression/`, `time-flux/`, `persistence/`, `objectives/`, `blueprints/`, `audio/`, `view-sync/`, `pwa/`, `workers/`, `gestures/`, `a11y/`, `engine/` (engine/game/scenarios/utilities) |
-| **`tests/ui/`** | DOM, components, layout, hotkeys, EP display, modals, and user-driven flows |
+| **`tests/ui/`** | Vitest + jsdom DOM/component tests (not Playwright) |
+| **`e2e/`** (repo root) | Playwright browser flows (`npm run test:e2e`) |
 | **`tests/simulation/`** | Longer or scripted simulation runs (e.g. speedrun-style scenarios) |
 | **`tests/services/`** | External-facing services (e.g. leaderboard) |
 | **`tests/helpers/`** | Shared test utilities and Vitest setup |
@@ -24,7 +25,7 @@ npm test
 npm run test:ci
 ```
 
-`npm test` runs ESLint, Stylelint, `scripts/check-syntax.js`, then Vitest (all suites except `performance.test.js`, which is excluded in `config/vitest.config.mjs`).
+`npm test` runs ESLint, Stylelint, `scripts/qa/check-syntax.js`, then Vitest (all suites except `performance.test.js`, which is excluded in `config/vitest.config.mjs`).
 
 Subset by folder (pass paths after `--`):
 

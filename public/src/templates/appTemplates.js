@@ -1,5 +1,5 @@
-﻿import { html } from "lit-html";
-import { classMap, styleMap, repeat, when } from "../dom/lit.js";
+import { html } from "lit-html";
+import { classMap, when } from "../dom/lit.js";
 
 export function renderSplashTemplate(isMuted, onMuteClick, onHideMenuClick) {
   return html`
@@ -60,27 +60,6 @@ export function renderSplashTemplate(isMuted, onMuteClick, onHideMenuClick) {
   `;
 }
 
-export function doctrineCardTemplate(tree, selectedDoctrine, onSelect) {
-  const isSelected = tree.id === selectedDoctrine;
-  const classes = classMap({
-    "doctrine-card": true,
-    selected: isSelected,
-  });
-  const styles = styleMap({
-    ...(tree.color ? { "--doctrine-color": tree.color } : {}),
-  });
-  return html`
-    <button type="button" class=${classes} style=${styles} role="option" aria-selected=${isSelected ? "true" : "false"} data-tree-id=${tree.id} data-doctrine=${tree.id} @click=${() => onSelect(tree.id)}>
-      <span class="doctrine-led" aria-hidden="true"></span>
-      <img class="doctrine-card-icon" src="img/ui/icons/${tree.id}.png" alt="" />
-      <div class="doctrine-card-text">
-        <span class="doctrine-card-title">${tree.shortTitle ?? tree.title}</span>
-        <span class="doctrine-card-subtitle">${tree.subtitle}</span>
-      </div>
-    </button>
-  `;
-}
-
 export function difficultyCardTemplate(diffKey, diffLabel, diffDesc, selectedDifficulty, onSelect) {
   const isSelected = diffKey === selectedDifficulty;
   const classes = classMap({
@@ -99,8 +78,7 @@ export function difficultyCardTemplate(diffKey, diffLabel, diffDesc, selectedDif
   `;
 }
 
-export function gameSetupTemplate(treeList, selectedDoctrine, selectedDifficulty, onDoctrineSelect, onDifficultySelect, onBack, onStart, difficultyPresets = {}) {
-  const doctrinePickRequired = false;
+export function gameSetupTemplate(selectedDifficulty, onDifficultySelect, onBack, onStart, difficultyPresets = {}) {
   const canStart = selectedDifficulty !== null;
   const difficultyOrder = ["easy", "medium", "hard"];
   const difficultyLabels = { easy: "EASY", medium: "MEDIUM", hard: "HARD" };

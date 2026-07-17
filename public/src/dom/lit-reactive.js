@@ -1,6 +1,7 @@
 import { render } from "lit-html";
 import { subscribe, subscribeKey } from "../store.js";
 import { isTestEnv } from "../simUtils.js";
+import { teardownAll } from "../core/teardown.js";
 
 function bindContainerKey(container) {
   if (typeof container === "string") return container;
@@ -57,91 +58,77 @@ function scheduleLitRender(executeRender, rafRef) {
   });
 }
 
+function createLitBinding({ getTemplate, attachSubscriptions, requireInitialTarget = false, skipFalsyTemplate = false, onAfterRender }) {
+  return (container) => {
+    const containerKey = bindContainerKey(container);
+    const rafRef = { current: null };
+
+    const executeRender = () => {
+      const target = resolveLiveContainer(containerKey);
+      if (!target) return;
+      try {
+        const template = getTemplate();
+        if (!skipFalsyTemplate || template) render(template, target);
+        onAfterRender?.();
+      } catch (err) {
+        if (isIgnorableLitRenderError(err)) return;
+        console.error("Lit render error:", err);
+      }
+    };
+
+    const scheduleRender = () => scheduleLitRender(executeRender, rafRef);
+    const unsubs = attachSubscriptions(scheduleRender);
+
+    if (!requireInitialTarget || resolveLiveContainer(containerKey)) executeRender();
+
+    return () => {
+      teardownAll(unsubs);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  };
+}
+
 export function bindLitRender(state, renderFn, container, onAfterRender) {
-  const containerKey = bindContainerKey(container);
-  const rafRef = { current: null };
-
-  const executeRender = () => {
-    const target = resolveLiveContainer(containerKey);
-    if (!target) return;
-    try {
-      render(renderFn(state), target);
-      onAfterRender?.();
-    } catch (err) {
-      if (isIgnorableLitRenderError(err)) return;
-      console.error("Lit render error:", err);
-    }
-  };
-
-  const scheduleRender = () => scheduleLitRender(executeRender, rafRef);
-  const unsubscribe = subscribe(state, scheduleRender);
-  executeRender();
-
-  return () => {
-    unsubscribe();
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  };
+  return createLitBinding({
+    getTemplate: () => renderFn(state),
+    attachSubscriptions: (scheduleRender) => {
+      const unsubs = [];
+      unsubs.push(subscribe(state, scheduleRender));
+      return unsubs;
+    },
+    onAfterRender,
+  })(container);
 }
 
 export function bindLitRenderMultiStates(states, renderFn, container, onAfterRender) {
-  const containerKey = bindContainerKey(container);
-  const rafRef = { current: null };
-
-  const executeRender = () => {
-    const target = resolveLiveContainer(containerKey);
-    if (!target) return;
-    try {
-      render(renderFn(), target);
-      onAfterRender?.();
-    } catch (err) {
-      if (isIgnorableLitRenderError(err)) return;
-      console.error("Lit render error:", err);
-    }
-  };
-
-  const scheduleRender = () => scheduleLitRender(executeRender, rafRef);
-  const unsubs = states.map((s) => subscribe(s, scheduleRender));
-  executeRender();
-
-  return () => {
-    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  };
+  return createLitBinding({
+    getTemplate: () => renderFn(),
+    attachSubscriptions: (scheduleRender) => {
+      const unsubs = [];
+      states.forEach((s) => unsubs.push(subscribe(s, scheduleRender)));
+      return unsubs;
+    },
+    onAfterRender,
+  })(container);
 }
 
 export function bindLitRenderMulti(subscriptions, renderFn, container, onAfterRender) {
-  const containerKey = bindContainerKey(container);
-  const rafRef = { current: null };
-
-  const executeRender = () => {
-    const target = resolveLiveContainer(containerKey);
-    if (!target) return;
-    try {
-      const template = renderFn();
-      if (template) render(template, target);
-      onAfterRender?.();
-    } catch (err) {
-      if (isIgnorableLitRenderError(err)) return;
-      console.error("Lit render error:", err);
-    }
-  };
-
-  const scheduleRender = () => scheduleLitRender(executeRender, rafRef);
-  const unsubs = [];
-  for (const { state, keys } of subscriptions) {
-    const keyList = Array.isArray(keys) ? keys : [keys];
-    for (const key of keyList) {
-      unsubs.push(subscribeKey(state, key, scheduleRender));
-    }
-  }
-
-  const initialTarget = resolveLiveContainer(containerKey);
-  if (initialTarget) executeRender();
-
-  return () => {
-    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  };
+  return createLitBinding({
+    getTemplate: () => renderFn(),
+    requireInitialTarget: true,
+    skipFalsyTemplate: true,
+    attachSubscriptions: (scheduleRender) => {
+      const unsubs = [];
+      for (const { state, keys } of subscriptions) {
+        const keyList = Array.isArray(keys) ? keys : [keys];
+        for (const key of keyList) {
+          unsubs.push(subscribeKey(state, key, scheduleRender));
+        }
+      }
+      return unsubs;
+    },
+    onAfterRender,
+  })(container);
 }
 
 export function bindLitRenderKeyed(state, stateKeys, renderFn, container) {

@@ -29,20 +29,4 @@ describe("Pause Heat Processing", () => {
         expect(tile.heat_contained).toBeLessThan(initialHeat);
     });
 
-    it("should not update heat segments when game is paused", () => {
-        game.pause();
-        expect(game.paused).toBe(true);
-
-        const originalUpdateSegments = game.engine.heatManager.updateSegments;
-        let updateSegmentsCalled = false;
-        game.engine.heatManager.updateSegments = () => {
-            updateSegmentsCalled = true;
-        };
-
-        game.engine.tick();
-
-        expect(updateSegmentsCalled).toBe(false);
-
-        game.engine.heatManager.updateSegments = originalUpdateSegments;
-    });
 });

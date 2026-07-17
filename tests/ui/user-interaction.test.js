@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setupGameWithDOM, toNum, attachMockDOMToTiles } from "../helpers/setup.js";
 
-import { handleGridInteraction } from "../../public/src/components/grid-intent-handler.js";
+import { handleGridInteraction } from "../../public/src/components/grid/grid-intent-handler.js";
 
 describe("UI User Interaction Scenarios", () => {
     let game;

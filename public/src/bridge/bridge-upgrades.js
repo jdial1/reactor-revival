@@ -27,10 +27,6 @@ export function projectUpgradeLevelsToHost(bridge) {
   bridge.game.syncModifiersFromUpgrades?.({ skipGrid: true });
 }
 
-export function getSessionUpgradeLevel(bridge, id) {
-  return bridge.session?.getUpgradeLevel?.(id) ?? 0;
-}
-
 export function computeAffordable(upgrade, upgradeset, game) {
   if (game.reactor?.has_melted_down) return false;
   if (!upgradeset.isUpgradeAvailable(upgrade.id)) return false;

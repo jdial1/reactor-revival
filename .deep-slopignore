@@ -1,0 +1,8 @@
+node_modules/
+.git/
+public/lib/
+public/sw.js
+**/*.min.js
+screenshots/
+coverage/
+eslint-results.sarif

@@ -1,8 +1,9 @@
 import { render } from "lit-html";
 import { logger } from "./core/logger.js";
 import { subscribeKey, actions } from "./store.js";
-import { resolveAudioService } from "./services.js";
+import { resolveAudioService } from "./services/app-services.js";
 import { gameShellTemplate } from "./templates/pageShellTemplates.js";
+import { safeCall, teardownAll } from "./core/teardown.js";
 import {
   pageSectionTemplates,
   pageLoadErrorTemplate,
@@ -12,8 +13,9 @@ import {
   loadAndSetVersionForPage,
   closePartsPanel,
 } from "./components/ui-components.js";
-import { dispatchToggleIntent } from "./components/ui-intents.js";
-import { isShopOverlayPage, isSimVisiblePage, dedupeReactorStatsDom } from "./components/page-dom.js";
+import { dispatchToggleIntent } from "./components/grid/ui-intents.js";
+import { isShopOverlayPage, isSimVisiblePage, dedupeReactorStatsDom } from "./components/shell/page-dom.js";
+import { populatePrivacyPolicyDateElement, fallbackPrivacyPolicyDate } from "./templates/legalPageTemplates.js";
 
 export const PAGE_STATES = {
   reactor_section: { template: pageSectionTemplates.reactor_section },
@@ -65,22 +67,29 @@ export class PageRouter {
     }
   }
 
-  _syncResearchEpHumPage(pageId) {
+  _teardownEpHumSync() {
     if (this._epHumUnsub) {
-      this._epHumUnsub();
+      safeCall(() => { this._epHumUnsub(); });
       this._epHumUnsub = null;
     }
     const audio = resolveAudioService(this.ui.game?.audio);
+    audio?.stopResearchEpHum?.();
+  }
+
+  _syncResearchEpHumPage(pageId) {
+    this._teardownEpHumSync();
+    const audio = resolveAudioService(this.ui.game?.audio);
     if (!audio) return;
-    if (pageId !== "experimental_upgrades_section") {
-      audio.stopResearchEpHum();
-      return;
-    }
+    if (pageId !== "experimental_upgrades_section") return;
     const game = this.ui.game;
     const sync = () => audio.syncResearchEpHum(game);
     sync();
     if (game?.state) {
-      this._epHumUnsub = subscribeKey(game.state, "current_exotic_particles", sync);
+      const unsubs = [];
+      unsubs.push(subscribeKey(game.state, "current_exotic_particles", sync));
+      this._epHumUnsub = () => {
+        teardownAll(unsubs);
+      };
     }
   }
 
@@ -321,51 +330,11 @@ export class PageRouter {
 
   async populatePrivacyPolicyDate() {
     try {
-      const response = await fetch("version.json");
-      if (response.ok) {
-        const versionData = await response.json();
-        const version = versionData.version;
-
-        const parts = version.split("-")[0].split("_");
-        if (parts.length === 3) {
-          const day = parts[0];
-          const month = parts[1];
-          const year = "20" + parts[2];
-
-          const monthNames = [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December",
-          ];
-
-          const monthName = monthNames[parseInt(month) - 1];
-          const formattedDate = `${monthName} ${day}, ${year}`;
-
-          const dateElement = document.getElementById("privacy-policy-date");
-          if (dateElement) {
-            dateElement.textContent = formattedDate;
-          }
-        }
-      }
+      await populatePrivacyPolicyDateElement();
     } catch (error) {
       logger.error("Failed to load version for privacy policy date:", error);
       const dateElement = document.getElementById("privacy-policy-date");
-      if (dateElement) {
-        dateElement.textContent = new Date().toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        });
-      }
+      if (dateElement) dateElement.textContent = fallbackPrivacyPolicyDate();
     }
   }
 
@@ -385,6 +354,7 @@ export class PageRouter {
   }
 
   resetForSplashReturn() {
+    this._teardownEpHumSync();
     this.pageCache.clear();
     this.initializedPages.clear();
     this.currentPageId = null;

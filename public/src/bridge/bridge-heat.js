@@ -37,11 +37,3 @@ export function inspectExchangerPressureFlow(bridge, tile) {
   const diag = bridge.session.getTileFlowDiagnostics(tile.row, tile.col);
   return diag?.summary ?? null;
 }
-
-export function inspectExchangerPressureFlowForTile(tile) {
-  return inspectExchangerPressureFlow(tile?.game?.coreBridge, tile);
-}
-
-export function getHeatSegmentForGameTile(game, tile) {
-  return getHeatSegmentForTile(game?.coreBridge, tile);
-}

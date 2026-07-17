@@ -101,11 +101,11 @@ describe("Heat Network Topology", () => {
     const leftVent = await placePart(game, 9, 4, "vent1");
     const rightVent = await placePart(game, 11, 4, "vent1");
     refreshHeatSegments(game);
-    const hm = game.engine.heatManager;
-    expect(hm.getSegmentForTile(leftVent)).not.toEqual(hm.getSegmentForTile(rightVent));
+    const segFor = (tile) => game.coreBridge?.getHeatSegmentForTile?.(tile) ?? null;
+    expect(segFor(leftVent)).not.toEqual(segFor(rightVent));
     await placePart(game, 10, 4, "heat_exchanger1");
     refreshHeatSegments(game);
-    expect(hm.getSegmentForTile(leftVent)).toEqual(hm.getSegmentForTile(rightVent));
+    expect(segFor(leftVent)).toEqual(segFor(rightVent));
   });
 
   it("union-find splits one segment when the keystone bridge tile is sold", async () => {
@@ -113,13 +113,13 @@ describe("Heat Network Topology", () => {
     const mid = await placePart(game, 10, 4, "heat_exchanger1");
     const rightVent = await placePart(game, 11, 4, "vent1");
     refreshHeatSegments(game);
-    const hm = game.engine.heatManager;
-    expect(hm.getSegmentForTile(mid)).toEqual(hm.getSegmentForTile(rightVent));
+    const segFor = (tile) => game.coreBridge?.getHeatSegmentForTile?.(tile) ?? null;
+    expect(segFor(mid)).toEqual(segFor(rightVent));
     await game.sellPart(mid);
     refreshHeatSegments(game);
     const left = game.tileset.getTile(9, 4);
     const right = game.tileset.getTile(11, 4);
-    expect(hm.getSegmentForTile(left)).not.toEqual(hm.getSegmentForTile(right));
+    expect(segFor(left)).not.toEqual(segFor(right));
   });
 
   it("segment fullnessRatio aggregates heat across merged components", async () => {
@@ -129,7 +129,7 @@ describe("Heat Network Topology", () => {
     v1.heat_contained = 100;
     v2.heat_contained = 100;
     refreshHeatSegments(game);
-    const seg = game.engine.heatManager.getSegmentForTile(v1);
+    const seg = game.coreBridge?.getHeatSegmentForTile?.(v1);
     expect(seg.components.length).toBe(3);
     expect(seg.totalHeat).toBe(200);
     expect(seg.fullnessRatio).toBeGreaterThan(0);

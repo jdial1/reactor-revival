@@ -8,7 +8,7 @@ import {
   createTrackedMockAudioContext,
   attachAudioContextToWindow,
 } from "../../helpers/setup.js";
-import { AudioService } from "@app/services.js";
+import { AudioService } from "@app/services/app-services.js";
 import { initPreferencesStore, preferences } from "@app/store.js";
 
 describe("AudioService", () => {

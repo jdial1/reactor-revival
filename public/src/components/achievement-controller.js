@@ -1,6 +1,7 @@
 import { html, render } from "lit-html";
 import { preferences } from "../state/preferences.js";
 import { enqueueGameEffect } from "../state/game-effects.js";
+import { safeCall } from "../core/teardown.js";
 
 const TOAST_HOLD_MS = 4000;
 const TOAST_ANIM_OUT_MS = 320;
@@ -62,9 +63,7 @@ export class AchievementController {
 
   unmount() {
     for (let i = 0; i < this._unsubs.length; i++) {
-      try {
-        this._unsubs[i]();
-      } catch (_) {}
+      safeCall(() => { this._unsubs[i](); });
     }
     this._unsubs.length = 0;
     this._queue.length = 0;

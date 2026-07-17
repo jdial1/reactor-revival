@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
-import { RESOLUTIONS } from "../scripts/ui-screenshot-config.js";
+import { RESOLUTIONS } from "../scripts/ui-audit/ui-screenshot-config.js";
 
 const baseURL = process.env.BASE_URL || "http://localhost:8080";
 
@@ -11,7 +11,7 @@ function e2eResolutionProjects() {
 
   if (filter && resolutions.length === 0) {
     throw new Error(
-      `E2E_RESOLUTION "${filter}" is not defined in scripts/ui-screenshot-config.js RESOLUTIONS`
+      `E2E_RESOLUTION "${filter}" is not defined in scripts/ui-audit/ui-screenshot-config.js RESOLUTIONS`
     );
   }
 

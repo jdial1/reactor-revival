@@ -1,11 +1,11 @@
-﻿import { EngineStatus } from "../schema/stateSchemas.js";
-import { resetHeatThresholdSignalState } from "../heatDomSync.js";
-import { fromError } from "zod-validation-error";
-import { z } from "zod";
+import { safeCall } from "../core/teardown.js";
+import { EngineStatus } from "../schema/stateSchemas.js";
+import { resetHeatThresholdSignalState } from "../components/shell/heat-dom-sync.js";
 import { proxy } from "valtio/vanilla";
 import { toDecimal, BASE_LOOP_WAIT_MS } from "../simUtils.js";
 import { logger } from "../core/logger.js";
-import { formatTime } from "../format/numbers.js";
+import { formatTime } from "../core/numbers.js";
+import { requireActiveBridge } from "../bridge/active.js";
 import {
   UPGRADE_MAX_LEVEL,
   MAX_GRID_DIMENSION,
@@ -13,9 +13,6 @@ import {
   RESPEC_DOCTRINE_EP_COST,
 } from "../constants/balance.js";
 import {
-  GameActionSchema,
-  ACTION_SCHEMA_REGISTRY,
-  EVENT_SCHEMA_REGISTRY,
   createGameState,
   UnlockManager,
   runRebootActionKeepEp,
@@ -42,7 +39,7 @@ import { drainGridIntentsAsync } from "../bridge/bridge-intents.js";
 import { UpgradeSet } from "./upgrade.js";
 import { ObjectiveManager } from "./objectives.js";
 import { Performance, postGameLoopProjectionQuery } from "./engine.js";
-import { bundledGameData } from "../bundledStaticData.js";
+import { bundledGameData } from "../generated/bundledStaticData.js";
 import { AchievementListSchema } from "../schema/index.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { enqueueGameEffect } from "../state/game-effects.js";
@@ -113,10 +110,6 @@ class AchievementManager {
     return !!this.game?.engine?._isCatchingUp;
   }
 
-  _syncUnlockToCore(id) {
-    this.game.coreBridge?.session?.systems?.achievements?.unlock?.(id);
-  }
-
   unlock(id, { silent } = {}) {
     if (!id || this.isUnlocked(id)) return false;
     const def = this.getDefinition(id);
@@ -125,7 +118,7 @@ class AchievementManager {
     const list = this._getUnlockedList();
     list.push(id);
     this.game.state.unlocked_achievements = list;
-    this._syncUnlockToCore(id);
+    this.game.coreBridge?.session?.systems?.achievements?.unlock?.(id);
 
     const isSilent = silent ?? this._isCatchUpSilent();
     if (isSilent) {
@@ -175,9 +168,7 @@ class AchievementManager {
 
   unbind() {
     for (let i = 0; i < this._unsubs.length; i++) {
-      try {
-        this._unsubs[i]();
-      } catch (_) {}
+      safeCall(() => { this._unsubs[i](); });
     }
     this._unsubs.length = 0;
   }
@@ -206,8 +197,6 @@ class SessionManager {
     else this.pause();
   }
 }
-
-const DEFAULT_PAYLOAD_SCHEMA = z.object({}).passthrough();
 
 const SIDE_EFFECT_EVENTS = new Set([
   "vibrationRequest", "achievementUnlocked", "achievementCatchUpSummary", "heatWarning",
@@ -238,77 +227,18 @@ class GameEventDispatcher {
     if (!SIDE_EFFECT_EVENTS.has(eventName) && typeof process !== "undefined" && process.env?.NODE_ENV !== "production") {
       this._logger?.warn?.(`[Game] Deprecated data-flow event "${eventName}" — use state instead`);
     }
-    const schema = EVENT_SCHEMA_REGISTRY[eventName] ?? DEFAULT_PAYLOAD_SCHEMA;
-    const result = schema.safeParse(payload ?? {});
-    if (!result.success) {
-      this._logger?.warn?.(`[Game] Event "${eventName}" payload validation failed:`, fromError(result.error).toString());
-      return;
-    }
-    payload = result.data;
     const list = this._listeners.get(eventName);
     if (!list) return;
+    const data = payload ?? {};
     list.forEach((fn) => {
       try {
-        fn(payload);
+        fn(data);
       } catch (err) {
         const msg = err?.message ?? String(err);
         this._logger?.warn?.(`[Game] Event handler error for "${eventName}":`, msg);
       }
     });
   }
-}
-
-function executeAction(game, action) {
-  const actionResult = GameActionSchema.safeParse(action);
-  if (!actionResult.success) return null;
-  const { type, payload = {} } = actionResult.data;
-  const schema = ACTION_SCHEMA_REGISTRY[type];
-  const payloadResult = schema ? schema.safeParse(payload) : { success: true, data: payload };
-  if (!payloadResult.success) return null;
-  const data = payloadResult.data;
-  if (type === "sell") {
-    game.sell_action();
-    return true;
-  }
-  if (type === "manualReduceHeat") {
-    game.manual_reduce_heat_action();
-    return true;
-  }
-  if (type === "pause") {
-    applyToggleStateChange(game, "pause", true);
-    return true;
-  }
-  if (type === "resume") {
-    applyToggleStateChange(game, "pause", false);
-    return true;
-  }
-  if (type === "togglePause") {
-    game.togglePause();
-    return true;
-  }
-  if (type === "rebootKeepEp") {
-    return game.rebootActionKeepExoticParticles();
-  }
-  if (type === "rebootDiscardEp" || type === "reboot") {
-    return game.rebootActionDiscardExoticParticles();
-  }
-  if (type === "sellPart") {
-    return drainGridIntentsAsync(game, game.engine, [{
-      action: "SELL_PART",
-      payload: { row: data.tile?.row, col: data.tile?.col },
-    }]);
-  }
-  if (type === "pasteLayout") {
-    return drainGridIntentsAsync(game, game.engine, [{
-      action: "APPLY_BLUEPRINT",
-      payload: {
-        layout: data.layout,
-        skipCostDeduction: data.options?.skipCostDeduction === true,
-        partial: data.options?.partial === true,
-      },
-    }]);
-  }
-  return null;
 }
 
 class TimeKeeper {
@@ -347,9 +277,6 @@ class EconomyManager {
   setCurrentMoney(value) {
     setDecimal(this.game.state, "current_money", value);
     this.game.coreBridge?.loadEconomyFromHost?.();
-  }
-  addMoney(amount) {
-    this.game.coreBridge?.creditMoney?.(amount, { applyPrestige: true });
   }
 }
 
@@ -499,13 +426,7 @@ export class Game {
   set total_played_time(v) { this.lifecycleManager.total_played_time = v; }
 
   getPrestigeMultiplier() {
-    const bridge = this.coreBridge;
-    if (!bridge?.isActive) throw new Error("getPrestigeMultiplier requires an active core session");
-    return bridge.getPrestigeMultiplier();
-  }
-
-  addMoney(amount) {
-    this.economyManager.addMoney(amount);
+    return requireActiveBridge(this, "getPrestigeMultiplier").getPrestigeMultiplier();
   }
 
   markCheatsUsed() {
@@ -514,10 +435,6 @@ export class Game {
 
   grantCheatExoticParticle(amount = 1) {
     this.exoticParticleManager.grantCheatExoticParticle(amount);
-  }
-
-  grantReward(reward) {
-    this.coreBridge?.grantReward?.(reward);
   }
 
   bumpGridTileDirty(row, col) {
@@ -616,10 +533,6 @@ export class Game {
 
   onToggleStateChange(toggleName, value) {
     applyToggleStateChange(this, toggleName, value);
-  }
-
-  execute(action) {
-    return executeAction(this, action);
   }
 
   getConfiguration() {

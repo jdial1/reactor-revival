@@ -47,7 +47,6 @@ export const DEFAULT_POWER_MULTIPLIER = 1;
 export const DEFAULT_SELL_PRICE_MULTIPLIER = 1;
 export const VENT_BONUS_PERCENT_DIVISOR = 100;
 export const BASE_LOOP_WAIT_MS = 1000;
-export const FOUNDATIONAL_TICK_MS = BASE_LOOP_WAIT_MS;
 
 export function getIndex(row, col, cols) {
   return row * cols + col;

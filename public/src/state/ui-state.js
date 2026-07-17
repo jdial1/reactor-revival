@@ -3,10 +3,11 @@ import { subscribeKey } from "valtio/vanilla/utils";
 import { render } from "lit-html";
 import { StorageUtils } from "../storage/index.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
-import { syncReactorHeatVisualDom } from "../heatDomSync.js";
-import { getUiElement, isShopOverlayPage, isSimVisiblePage } from "../components/page-dom.js";
-import { dispatchToggleIntent } from "../components/ui-intents.js";
+import { syncReactorHeatVisualDom } from "../components/shell/heat-dom-sync.js";
+import { getUiElement, isShopOverlayPage, isSimVisiblePage } from "../components/shell/page-dom.js";
+import { dispatchToggleIntent } from "../components/grid/ui-intents.js";
 import { statusNoticeSlotTemplate } from "../templates/pageShellTemplates.js";
+import { teardownAll } from "../core/teardown.js";
 
 const LEGAL_PAGE_IDS = new Set(["privacy_policy_section", "terms_of_service_section"]);
 
@@ -257,7 +258,7 @@ export function initUIStateSubscriptions(uiState, ui) {
   };
   syncStatusNotice();
   unsubs.push(subscribeKey(uiState, "active_notice", syncStatusNotice));
-  return () => unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+  return () => teardownAll(unsubs);
 }
 
 export const modalUi = proxy({ activeModal: null, payload: null, drawerOpen: false });

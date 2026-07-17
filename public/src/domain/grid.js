@@ -1,4 +1,4 @@
-﻿import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
+import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import {
   BASE_COLS_MOBILE,
   BASE_COLS_DESKTOP,
@@ -6,6 +6,8 @@ import {
   BASE_ROWS_DESKTOP,
 } from "../constants/balance.js";
 import { GameDimensionsSchema } from "../schema/index.js";
+import { requireActiveBridge } from "../bridge/active.js";
+import { safeCall } from "../core/teardown.js";
 
 export function calculateBaseDimensions() {
   const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
@@ -83,7 +85,7 @@ export class GridManager {
 }
 
 import { recordSimEvent } from "./sim-events.js";
-import { bumpGridPartsRevision } from "../bridge/bridge-parts.js";
+import { bumpGridPartsRevision } from "../bridge/bridge-grid-sync.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import {
   getIndex,
@@ -103,8 +105,7 @@ function neighborEntriesToTiles(tileset, entries) {
 
 function queryTileNeighborLists(tile) {
   if (!tile.part) return { containment: [], cell: [], reflector: [] };
-  const bridge = tile.game?.coreBridge;
-  if (!bridge?.isActive) throw new Error("neighbor query requires an active core session");
+  const bridge = requireActiveBridge(tile.game, "neighbor query");
   const lists = bridge.queryNeighbors(tile.row, tile.col);
   const tileset = tile.game.tileset;
   return {
@@ -180,8 +181,7 @@ export class Tile {
     this.cachedEffectiveVent = 0;
     this.cachedEffectiveTransfer = 0;
     if (!this.part) return;
-    const bridge = this.game.coreBridge;
-    if (!bridge?.isActive) throw new Error("recalculateEffectiveValues requires an active core session");
+    const bridge = requireActiveBridge(this.game, "recalculateEffectiveValues");
     const rates = bridge.resolveDisplayRatesForTile(this);
     if (!rates) return;
     this.cachedEffectiveVent = rates.vent ?? 0;
@@ -290,14 +290,14 @@ export class Tile {
     if (!isRestoring) {
       this.game.reactor.updateStats();
       if (!this.part) this.recalculateEffectiveValues();
-      try {
+      safeCall(() => {
         if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
           this.game.state.parts_panel_version++;
         }
         if (this.game && this.game.upgradeset && typeof this.game.upgradeset.populateUpgrades === "function") {
           this.game.upgradeset.populateUpgrades();
         }
-      } catch (_) { }
+      }, "tile upgrade refresh");
       if (this.game?.saveManager) {
         void this.game.saveManager.autoSave();
       }
@@ -320,11 +320,11 @@ export class Tile {
     this.exploding = false;
     this.game.bumpGridTileDirty?.(this.row, this.col);
     this.game.reactor.updateStats();
-    try {
+    safeCall(() => {
       if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
         this.game.state.parts_panel_version++;
       }
-    } catch (_) {}
+    }, "parts panel bump");
     if (this.game?.saveManager) void this.game.saveManager.autoSave();
   }
 
@@ -340,16 +340,12 @@ export class Tile {
     const part_id = this.part.id;
     logger.log('debug', 'game', `Selling part '${part_id}' from tile (${this.row}, ${this.col}).`);
     logger.log('debug', 'tile', 'sellPart', { row: this.row, col: this.col, partId: part_id });
-    const bridge = this.game.coreBridge;
-    if (!bridge?.isActive) throw new Error("sellPart requires an active core session");
-    bridge.sellPart(this.row, this.col);
+    requireActiveBridge(this.game, "sellPart").sellPart(this.row, this.col);
   }
 
   calculateSellValue() {
     if (!this.part) return 0;
-    const bridge = this.game.coreBridge;
-    if (!bridge?.isActive) throw new Error("calculateSellValue requires an active core session");
-    return bridge.computeSellValueForTile(this);
+    return requireActiveBridge(this.game, "calculateSellValue").computeSellValueForTile(this);
   }
   refreshVisualState() {
     this.game.bumpGridTileDirty?.(this.row, this.col);

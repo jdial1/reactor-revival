@@ -1,18 +1,19 @@
-﻿import { classMap, styleMap } from "./dom/lit.js";
+import { classMap, styleMap } from "./dom/lit.js";
 import { BASE_MAX_HEAT, BASE_MAX_POWER, MAX_ACCUMULATOR_MULTIPLIER } from "./constants/balance.js";
 import { Game, Engine, resetHeatThresholdSignalState, queryUpgradeElement } from "./logic.js";
-import { ensureGameStateEngineSync, teardownGameStateEngineSync } from "./logic/game-state-sync.js";
-import { wireUiDomSubsystems, teardownAppSubsystems } from "./components/ui-app-wiring.js";
+import { ensureGameStateEngineSync, teardownGameStateEngineSync } from "./components/shell/game-state-sync.js";
+import { wireUiDomSubsystems, teardownAppSubsystems } from "./components/shell/ui-app-wiring.js";
 import { StorageUtils, StorageAdapter, migrateLocalStorageToIndexedDB, setSlot1FromBackupAsync, AUTOSAVE_SLOT_KEY, STORAGE_KEYS } from "./storage/index.js";
-import { isTestEnv, FOUNDATIONAL_TICK_MS } from "./simUtils.js";
-import { setFormatPreferencesGetter } from "./format/numbers.js";
+import { isTestEnv, BASE_LOOP_WAIT_MS } from "./simUtils.js";
+import { setFormatPreferencesGetter } from "./core/numbers.js";
 import { logger } from "./core/logger.js";
-import { getCompactLayout } from "./layout/reactor-codec.js";
-import { readThemeColor } from "./theme-colors.js";
+import { getCompactLayout } from "./domain/reactor-codec.js";
+import { readThemeColor } from "./components/shell/theme-colors.js";
 import { html, render } from "lit-html";
 import { UI, showStatusNotice } from "./components/ui.js";
-import { MODAL_IDS } from "./modalIds.js";
-import { AudioService, createSplashManager, getValidatedGameData, resolveAudioService } from "./services.js";
+import { MODAL_IDS } from "./constants/modal-ids.js";
+import { AudioService, createSplashManager, getValidatedGameData, resolveAudioService } from "./services/app-services.js";
+import { safeCall, teardownAll } from "./core/teardown.js";
 import {
   getValidatedPreferences,
   initPreferencesStore,
@@ -30,7 +31,7 @@ import { enqueueClearAnimations } from "./state/game-effects.js";
 import { wireTooltipManager, createTutorialManager } from "./components/ui-tooltips-tutorial.js";
 import { createGameSaveManager } from "./domain/game-save.js";
 import { attachCoreBridge } from "./bridge/revival-session-bridge.js";
-import { getGridCanvasRenderer } from "./components/grid-canvas-service.js";
+import { getGridCanvasRenderer } from "./components/grid/grid-canvas-service.js";
 import { initPwaDisplayMode } from "./components/ui-components.js";
 import {
   updateToastTemplate,
@@ -44,14 +45,26 @@ import {
   criticalErrorTemplate,
 } from "./templates/appTemplates.js";
 import { PageRouter } from "./page-router.js";
-import { loadFailureFlavor, getFailureFlavorMessage } from "./failureFlavor.js";
+import { loadFailureFlavor, getFailureFlavorMessage } from "./domain/failure-flavor.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { setAppContext, getAppContext } from "./app-context.js";
-import { pushAppUnsub, teardownAppListeners } from "./app-listeners.js";
-import { createPerformanceUIService } from "./components/performance-ui-service.js";
+import { createPerformanceUIService } from "./components/shell/performance-ui-service.js";
 import { EngineStatus } from "./schema/stateSchemas.js";
 
 export { PageRouter };
+
+const _appUnsubs = [];
+
+function pushAppUnsub(unsub) {
+  _appUnsubs.push(unsub);
+}
+
+export function teardownAppErrorHandlers() {
+  while (_appUnsubs.length) {
+    const fn = _appUnsubs.pop();
+    safeCall(fn);
+  }
+}
 
 setFormatPreferencesGetter(getValidatedPreferences);
 if (typeof console !== "undefined" && typeof document !== "undefined") {
@@ -92,7 +105,7 @@ function renderPwaOverlays() {
         : versionToast.type === "warning"
           ? readThemeColor("--canvas-warning")
           : readThemeColor("--canvas-error"),
-      versionToast.type === "info" ? "ℹ️" : versionToast.type === "warning" ? "⚠️" : "❌",
+      versionToast.type === "info" ? "??" : versionToast.type === "warning" ? "??" : "?",
       versionToast.message,
       () => { pwaState.versionCheckToast = null; }
     )}</div>`
@@ -173,7 +186,7 @@ function bindAppRootSubscription(container, game, ui) {
   }
   unsubs.push(subscribeKey(pwaState, "versionCheckRequested", handleVersionCheckRequest));
   _appRootUnsub = () => {
-    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+    teardownAll(unsubs);
   };
   pushAppUnsub(() => {
     if (_appRootUnsub) _appRootUnsub();
@@ -212,7 +225,7 @@ function renderAppRoot(container, game, ui) {
 
 async function bootstrapGame(game, ui) {
   getValidatedGameData();
-  console.log("[ReactorBoot] bootstrap: ui.init …");
+  console.log("[ReactorBoot] bootstrap: ui.init �");
   await ui.init(game);
   const appRootEl = document.getElementById("app_root");
   renderAppRoot(appRootEl, game, ui);
@@ -221,7 +234,7 @@ async function bootstrapGame(game, ui) {
   }
   ui.detachGameEventListeners = attachGameEventListeners(game, ui);
   startPerformanceService(game);
-  console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset …");
+  console.log("[ReactorBoot] bootstrap: tileset / partset / upgradeset �");
   game.tileset.initialize();
   await attachCoreBridge(game);
   await game.partset.initialize();
@@ -253,8 +266,6 @@ function ensureGameSetupOverlay() {
 }
 
 
-let _showTechTreeInProgress = false;
-
 export async function showTechTreeSelection(game, pageRouter, ui, splashManager) {
   const overlay = ensureGameSetupOverlay();
   let selectedDifficulty = null;
@@ -269,10 +280,7 @@ export async function showTechTreeSelection(game, pageRouter, ui, splashManager)
 
   const renderSetup = () => {
     render(gameSetupTemplate(
-      [],
-      null,
       selectedDifficulty,
-      () => {},
       (diff) => { selectedDifficulty = diff; renderSetup(); },
       () => {
         overlay.classList.add("hidden");
@@ -363,15 +371,6 @@ export async function startNewGameFlow(game, pageRouter, ui, splashManager, tech
   }
 }
 
-let _toastContainer = null;
-
-function removeExistingUpdateToast() {
-  const existing = document.querySelector(".update-toast");
-  if (existing) existing.remove();
-  if (_toastContainer?.parentNode) _toastContainer.remove();
-  _toastContainer = null;
-}
-
 let _pageClickHandler = null;
 let _tooltipCloseHandler = null;
 let _beforeUnloadHandler = null;
@@ -417,9 +416,7 @@ function attachTooltipCloseListener(ui, unsubs) {
 
 function attachBeforeUnloadListener(game, unsubs) {
   _beforeUnloadHandler = () => {
-    try {
-      if (StorageUtils.get(STORAGE_KEYS.NEW_GAME_PENDING) === 1) return;
-    } catch (_) {}
+    safeCall(() => { if (StorageUtils.get(STORAGE_KEYS.NEW_GAME_PENDING) === 1) return; });
     if (game && typeof game.updateSessionTime === "function") {
       game.updateSessionTime();
       void game.saveManager.autoSave();
@@ -440,7 +437,7 @@ function setupGlobalListeners(game, ui) {
   attachTooltipCloseListener(ui, unsubs);
   attachBeforeUnloadListener(game, unsubs);
   return () => {
-    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+    teardownAll(unsubs);
     unsubs.length = 0;
   };
 }
@@ -449,11 +446,6 @@ function applyStatePatch(ui, patch) {
   const game = ui?.game;
   if (!game || !patch || typeof patch !== "object") return;
   patchGameState(game, patch);
-}
-
-function handleObjectiveLoaded(ui, payload) {
-  if (!payload?.objective) return;
-  ui.stateManager.handleObjectiveLoaded(payload.objective, payload.objectiveIndex);
 }
 
 function handleObjectiveCompleted(ui, payload) {
@@ -470,7 +462,7 @@ function handleObjectiveCompleted(ui, payload) {
     StorageUtils.set("reactor_save_export_hint_seen", true);
     const showSaveHint = () => showStatusNotice({
       tag: "TIP // SAVE BACKUP",
-      body: "Export your save from Settings → Export Save for backup or other devices.",
+      body: "Export your save from Settings ? Export Save for backup or other devices.",
     });
     if (flavor && payload?.isChapterCompletion) {
       setTimeout(showSaveHint, 5600);
@@ -478,10 +470,6 @@ function handleObjectiveCompleted(ui, payload) {
       showSaveHint();
     }
   }
-}
-
-function handleObjectiveUnloaded(ui) {
-  ui.stateManager.handleObjectiveUnloaded();
 }
 
 export function attachGameEventListeners(game, ui) {
@@ -536,7 +524,7 @@ export function attachGameEventListeners(game, ui) {
   on("chapterCelebration", () => {});
   on("welcomeBackOffline", ({ deltaTime, offlineMs, tickEquivalent }) => {
     const ms = offlineMs ?? deltaTime;
-    const te = tickEquivalent ?? Math.floor(ms / FOUNDATIONAL_TICK_MS);
+    const te = tickEquivalent ?? Math.floor(ms / BASE_LOOP_WAIT_MS);
     if (ui.modalOrchestrator?.showModal) ui.modalOrchestrator.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs: ms, tickEquivalent: te });
   });
   on("simulationHardwareError", ({ message }) => {
@@ -587,7 +575,7 @@ export function attachGameEventListeners(game, ui) {
   ui.updateFailurePhaseSensory?.(game.state?.failure_state ?? "nominal");
 
   return () => {
-    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+    teardownAll(unsubs);
     unsubs.length = 0;
   };
 }
@@ -623,10 +611,10 @@ async function initGameComponents(game, ui) {
 async function applyOfflineWelcomeBack(game, ui) {
   const offlineMs = Date.now() - (game.lifecycleManager.last_save_time || 0);
   if (offlineMs <= OFFLINE_WELCOME_BACK_MS || !game.tileset.active_tiles_list.length) return;
-  const maxMs = MAX_ACCUMULATOR_MULTIPLIER * FOUNDATIONAL_TICK_MS;
+  const maxMs = MAX_ACCUMULATOR_MULTIPLIER * BASE_LOOP_WAIT_MS;
   const span = Math.min(offlineMs, maxMs);
   game._offlineCatchupMs = span;
-  const tickEquivalent = Math.floor(span / FOUNDATIONAL_TICK_MS);
+  const tickEquivalent = Math.floor(span / BASE_LOOP_WAIT_MS);
   await ui.modalOrchestrator.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs: span, tickEquivalent });
 }
 
@@ -746,15 +734,6 @@ async function startGame(appContext) {
 
 const SAVE_SLOT_COUNT = 3;
 const SPLASH_HIDE_DELAY_MS = 600;
-
-function hasAnyExistingSave(isNewGamePending) {
-  if (isNewGamePending) return false;
-  if (StorageUtils.getRaw(STORAGE_KEYS.GAME_SAVE)) return true;
-  for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {
-    if (StorageUtils.getRaw(`${STORAGE_KEYS.GAME_SAVE}_${i}`)) return true;
-  }
-  return false;
-}
 
 async function resolveBackupIfRequested(game, savedGame, loadSlot) {
   if (!savedGame || typeof savedGame !== "object" || !savedGame.backupAvailable) return savedGame;
@@ -920,7 +899,7 @@ function createAppInstances() {
 async function main() {
   "use strict";
   console.log("[ReactorBoot] main() start");
-  const pwaModule = await import("./services.js");
+  const pwaModule = await import("./services/app-services.js");
   console.log("[ReactorBoot] services.js loaded");
   _requestWakeLock = pwaModule.requestWakeLock;
   pwaModule.initializePwa();
@@ -960,10 +939,10 @@ async function main() {
   }
   const ctx = { game, pageRouter, ui };
   getAppContext()?.splashManager?.setAppContext(ctx);
-  console.log("[ReactorBoot] migrateLocalStorageToIndexedDB …");
+  console.log("[ReactorBoot] migrateLocalStorageToIndexedDB �");
   await migrateLocalStorageToIndexedDB();
   await bootstrapGame(game, ui);
-  console.log("[ReactorBoot] handleUserSession …");
+  console.log("[ReactorBoot] handleUserSession �");
   await handleUserSession(ctx);
   setupButtonHandlers(ctx);
   if (typeof ui.detachGlobalListeners === "function") {
@@ -974,7 +953,7 @@ async function main() {
     if (typeof registerPeriodicSync === "function") registerPeriodicSync();
     if (typeof registerOneOffSync === "function") registerOneOffSync();
   }
-  const { initLaunchQueueHandler } = await import("./services-pwa.js");
+  const { initLaunchQueueHandler } = await import("./services/pwa.js");
   initLaunchQueueHandler({ game });
   console.log("[ReactorBoot] main() finished");
 }
@@ -1012,7 +991,7 @@ let _unhandledRejectionHandler = null;
 
 function scheduleMain() {
   const run = () => {
-    console.log("[ReactorBoot] DOM ready → main()", document.readyState);
+    console.log("[ReactorBoot] DOM ready ? main()", document.readyState);
     try {
       main().catch((error) => {
         console.error("[ReactorBoot] main() rejected", error);
@@ -1063,8 +1042,4 @@ pushAppUnsub(() => {
     _unhandledRejectionHandler = null;
   }
 });
-
-export function teardownAppErrorHandlers() {
-  teardownAppListeners();
-}
 

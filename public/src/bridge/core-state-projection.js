@@ -1,5 +1,6 @@
 import { patchGameState } from "../state.js";
 import { toDecimal, toNumber } from "../simUtils.js";
+import { getActiveBridge } from "./active.js";
 
 export function unlockedAchievementIds(achievements) {
   if (Array.isArray(achievements)) return achievements;
@@ -167,8 +168,8 @@ export function applyCellOutputsToTiles(tileset, outputs) {
 export function syncTilePulseDisplays(reactor) {
   const tileset = reactor?.game?.tileset;
   if (!tileset) return;
-  const bridge = reactor.game.coreBridge;
-  if (!bridge?.isActive) return;
+  const bridge = getActiveBridge(reactor.game);
+  if (!bridge) return;
   bridge.syncForStatsRead();
   const session = bridge.session;
   const outputs = session.refreshCellOutputs?.()

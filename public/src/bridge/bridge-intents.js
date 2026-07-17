@@ -1,14 +1,14 @@
 import { applyToggleStateChange } from "../state.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import { recordSimEvent } from "../domain/sim-events.js";
-import { bumpGridPartsRevision } from "./bridge-parts.js";
+import { bumpGridPartsRevision } from "./bridge-grid-sync.js";
+import { requireActiveBridge } from "./active.js";
 
 function applyPlacePartIntent(game, payload) {
   const partId = payload?.partId;
   const row = payload?.row | 0;
   const col = payload?.col | 0;
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) throw new Error("placePart requires an active core session");
+  const bridge = requireActiveBridge(game, "placePart");
   if (!partId) return null;
   const part = game.partset?.getPartById?.(partId);
   const tile = game.tileset?.getTile(row, col);
@@ -35,16 +35,14 @@ function applySellPartIntent(game, payload) {
   const col = payload?.col | 0;
   const tile = game.tileset?.getTile(row, col);
   if (!tile?.part || tile.part.isSpecialTile) return null;
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) throw new Error("sellPart requires an active core session");
+  const bridge = requireActiveBridge(game, "sellPart");
   return bridge.sellPart(row, col);
 }
 
 function applyBlueprintIntent(game, payload) {
   const layout = payload?.layout;
   if (!layout) return { ok: false };
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) throw new Error("applyBlueprint requires an active core session");
+  const bridge = requireActiveBridge(game, "applyBlueprint");
   const result = bridge.applyBlueprint({
     layout,
     sellExisting: payload?.sellExisting === true,
@@ -61,8 +59,7 @@ function applyBlueprintIntent(game, payload) {
 }
 
 function applyBlueprintPlannerIntent(game, payload = {}) {
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) throw new Error("commitBlueprintPlanner requires an active core session");
+  const bridge = requireActiveBridge(game, "commitBlueprintPlanner");
   const result = bridge.commitBlueprintPlanner({ partial: payload.partial === true });
   if (!result.ok) {
     if (result.reason === "deficit") game.emit?.("blueprintApplyDeficit", result);
@@ -76,19 +73,6 @@ function applyBlueprintPlannerIntent(game, payload = {}) {
   return result;
 }
 
-function applyImmediateIntent(game, intent) {
-  if (intent.action === "PURCHASE_UPGRADE") {
-    const id = intent.payload?.upgradeId ?? intent.payload?.id;
-    if (id) game.coreBridge?.purchaseUpgrade?.(id);
-    return true;
-  }
-  if (intent.action === "GRANT_REWARD") {
-    game.coreBridge?.grantReward?.(intent.payload);
-    return true;
-  }
-  return false;
-}
-
 function drainIntentBatchSync(game, engine, intents) {
   const placed = [];
   const sold = [];
@@ -96,7 +80,6 @@ function drainIntentBatchSync(game, engine, intents) {
   let gridMutated = false;
   for (let i = 0; i < intents.length; i++) {
     const intent = intents[i];
-    if (applyImmediateIntent(game, intent)) continue;
     if (intent.action === "SELL_POWER") {
       game.sell_action();
       continue;

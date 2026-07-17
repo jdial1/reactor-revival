@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-export { RESOLUTIONS } from "../scripts/ui-screenshot-config.js";
+export { RESOLUTIONS } from "../scripts/ui-audit/ui-screenshot-config.js";
 
 export const BASE_URL = process.env.BASE_URL || "http://localhost:8080";
 export const E2E_URL = `${BASE_URL.replace(/\/$/, "")}/?e2e=1`;
@@ -645,7 +645,7 @@ export async function injectFunds(page, amount = 10_000_000) {
   await page.evaluate((amt) => {
     const game = window.__reactorAudit?.game;
     if (!game) throw new Error("Game audit hook unavailable — load with ?e2e=1");
-    game.addMoney(amt);
+    game.coreBridge?.creditMoney?.(amt, { applyPrestige: true });
     game.reactor?.updateStats?.();
     game.partset?.check_affordability?.(game);
   }, amount);

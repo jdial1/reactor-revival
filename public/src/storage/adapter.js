@@ -1,5 +1,5 @@
-import { get, set, del, clear } from "../../lib/idb-keyval.js";
-import { fromError } from "../../lib/zod-validation-error.js";
+import { get, set, del, clear } from "./idb-keyval.js";
+import { fromError } from "../core/zod-error.js";
 import { logger } from "../core/logger.js";
 import { StorageUtils, isStorageAvailable } from "./local.js";
 import { superjsonStringify, superjsonParse } from "../core/decimal-proxy.js";
@@ -132,7 +132,9 @@ export async function migrateLocalStorageToIndexedDB() {
       if (fromIDB != null) continue;
       await StorageAdapter.setRaw(key, fromLS);
     }
-  } catch (_) {}
+  } catch (err) {
+    logger.warn("migrateLocalStorageToIndexedDB failed", err);
+  }
 }
 
 export function getBackupSaveForSlot1() { return StorageUtils.getRaw(SAVE_BACKUP_KEY); }

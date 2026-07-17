@@ -11,13 +11,19 @@ export class Logger {
       try {
         const storedLevel = localStorage.getItem('reactor_log_level');
         if (storedLevel && this.levels[storedLevel.toUpperCase()] !== undefined) this.currentLevel = this.levels[storedLevel.toUpperCase()];
-      } catch (e) {}
+      } catch (err) {
+        this._storageUnavailable = err;
+      }
     }
   }
   setLevel(level) {
     if (this.levels[level.toUpperCase()] !== undefined) {
       this.currentLevel = this.levels[level.toUpperCase()];
-      try { localStorage.setItem('reactor_log_level', level.toUpperCase()); } catch (e) {}
+      try {
+        localStorage.setItem('reactor_log_level', level.toUpperCase());
+      } catch (err) {
+        this._storageUnavailable = err;
+      }
     }
   }
   shouldLog(level) {

@@ -1,5 +1,5 @@
 import { StorageAdapter } from "../storage/index.js";
-import { numFormat as fmt } from "../format/numbers.js";
+import { numFormat as fmt } from "../core/numbers.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import { logger } from "../core/logger.js";
 import { getAppContext } from "../app-context.js";
@@ -8,8 +8,9 @@ import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { createUIState, initUIStateSubscriptions, preferences } from "../store.js";
 import { subscribe } from "valtio/vanilla";
-import { PageSetupUI } from "./page-setup-ui.js";
-import { resolveAudioService, getValidatedGameData } from "../services.js";
+import { PageSetupUI } from "./shell/page-setup-ui.js";
+import { resolveAudioService, getValidatedGameData } from "../services/app-services.js";
+import { safeCall, teardownAll } from "../core/teardown.js";
 import {
   ComponentRenderingUI,
   runPopulateUpgradeSection,
@@ -56,16 +57,16 @@ import {
   syncToggleStatesFromGame as applyToggleStatesFromGame,
   teardownGameLayout as runTeardownGameLayout,
 } from "./ui-components.js";
-import { createDeviceFeatures } from "../infrastructure/device.js";
-import { startRenderLoop } from "./ui-render-loop.js";
-import { initializePage as runInitializePage } from "./ui-page-init.js";
-export { showStatusNotice } from "./ui-notices.js";
-import { setupUiIdleEffects } from "../ui-idle-effects.js";
-import { mountUiViewHosts } from "../ui.views.js";
-import { teardownGameStateEngineSync } from "../logic/game-state-sync.js";
-import { installAppRootIntentDelegation } from "./ui-intents.js";
-import { teardownAllUiSubsystems, wireAppSubsystems, wireUiDomSubsystems } from "./ui-app-wiring.js";
-import { MY_LAYOUTS_STORAGE_KEY } from "./ui-layout-storage.js";
+import { createDeviceFeatures } from "./shell/device.js";
+import { startRenderLoop } from "./grid/ui-render-loop.js";
+import { initializePage as runInitializePage } from "./shell/ui-page-init.js";
+export { showStatusNotice } from "./shell/ui-notices.js";
+import { setupUiIdleEffects } from "./shell/ui-idle-effects.js";
+import { mountUiViewHosts } from "./shell/ui-views.js";
+import { teardownGameStateEngineSync } from "./shell/game-state-sync.js";
+import { installAppRootIntentDelegation } from "./grid/ui-intents.js";
+import { teardownAllUiSubsystems, wireAppSubsystems, wireUiDomSubsystems } from "./shell/ui-app-wiring.js";
+import { MY_LAYOUTS_STORAGE_KEY } from "./blueprints/ui-layout-storage.js";
 
 const attachAudioSys = (getAudioService) => {
   const unsub = subscribe(preferences, () => {
@@ -75,15 +76,13 @@ const attachAudioSys = (getAudioService) => {
     }
   });
   return () => {
-    try {
-      unsub();
-    } catch (_) {}
+    safeCall(() => { unsub(); });
   };
 };
 
 function mountUiViewHostsForLayout(ui) {
   if (typeof ui._uiViewHostsUnmount === "function") {
-    try { ui._uiViewHostsUnmount(); } catch (_) {}
+    safeCall(() => { ui._uiViewHostsUnmount(); });
     ui._uiViewHostsUnmount = null;
   }
   const unmount = mountUiViewHosts(ui.game);
@@ -525,7 +524,7 @@ export class UI {
       cancelAnimationFrame(this.update_interface_task);
       this.update_interface_task = null;
     }
-    this._unmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+    teardownAll(this._unmounts);
     this._unmounts = [];
     this._sectionCountsMountedUpgrades = false;
     this._sectionCountsMountedResearch = false;
@@ -534,7 +533,7 @@ export class UI {
       this.copyPasteUI.teardownBlueprintPlanner();
     }
     if (this._affordabilityBannerUnmounts?.length) {
-      this._affordabilityBannerUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+      teardownAll(this._affordabilityBannerUnmounts);
       this._affordabilityBannerUnmounts = [];
     }
     this._affordabilityBannerMountedUpgrades = false;
@@ -564,6 +563,5 @@ export class UI {
       this._uiStateTeardown();
       this._uiStateTeardown = null;
     }
-    if (this.tooltipManager?.teardown) this.tooltipManager.teardown();
   }
 }

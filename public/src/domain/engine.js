@@ -1,5 +1,5 @@
-﻿import { EngineStatus } from "../schema/stateSchemas.js";
-import { toNumber, isTestEnv, FOUNDATIONAL_TICK_MS } from "../simUtils.js";
+import { EngineStatus } from "../schema/stateSchemas.js";
+import { toNumber, isTestEnv, BASE_LOOP_WAIT_MS } from "../simUtils.js";
 import { logger } from "../core/logger.js";
 import {
   MAX_TEST_FRAMES,
@@ -17,7 +17,8 @@ import {
 import { performance } from "../dom/lit.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
 import { recordSimEvent } from "./sim-events.js";
-import { numFormat as fmt } from "../format/numbers.js";
+import { numFormat as fmt } from "../core/numbers.js";
+import { getActiveBridge } from "../bridge/active.js";
 
 const DEBUG_PERFORMANCE =
   (typeof process !== "undefined" && process.env?.NODE_ENV === "test") ||
@@ -139,10 +140,10 @@ export const startOfflineFastForward = (engine) => {
   const offlineMs = game._offlineCatchupMs || 0;
   game._offlineCatchupMs = 0;
   const ticks = Math.min(
-    Math.floor(offlineMs / FOUNDATIONAL_TICK_MS),
+    Math.floor(offlineMs / BASE_LOOP_WAIT_MS),
     MAX_ACCUMULATOR_MULTIPLIER
   );
-  if (ticks <= 0 || !engine.game?.coreBridge?.hasTickActivity?.()) return 0;
+  if (ticks <= 0 || !getActiveBridge(engine.game)?.hasTickActivity?.()) return 0;
   engine._offlineFastForwardTicks = ticks;
   engine._isCatchingUp = true;
   return ticks;
@@ -161,10 +162,8 @@ const runChunkedOfflineReplay = async (engine, opts = {}) => {
   const chunkTicks = opts.chunkTicks ?? OFFLINE_REPLAY_CHUNK_TICKS;
   const yieldMs = opts.yieldMs ?? 0;
   let remaining = opts.totalTicks ?? engine._offlineFastForwardTicks ?? 0;
-  if (remaining <= 0 || !engine.game?.coreBridge?.hasTickActivity?.()) return;
-
-  const bridge = engine.game?.coreBridge;
-  if (!bridge?.isActive || !bridge.session?.catchupGenerator) return;
+  const bridge = getActiveBridge(engine.game);
+  if (remaining <= 0 || !bridge?.hasTickActivity?.() || !bridge.session?.catchupGenerator) return;
 
   engine._offlineReplayActive = true;
   engine._isCatchingUp = true;
@@ -208,19 +207,19 @@ const runChunkedOfflineReplay = async (engine, opts = {}) => {
 
 export const processOfflineTime = (engine, deltaTime) => {
   if (deltaTime <= OFFLINE_TIME_THRESHOLD_MS) return false;
-  const capMs = MAX_ACCUMULATOR_MULTIPLIER * FOUNDATIONAL_TICK_MS;
+  const capMs = MAX_ACCUMULATOR_MULTIPLIER * BASE_LOOP_WAIT_MS;
   const span = Math.min(deltaTime, capMs);
   engine.game._offlineCatchupMs = span;
-  const tickEquivalent = Math.floor(span / FOUNDATIONAL_TICK_MS);
-  if (tickEquivalent > 0 && engine.game?.coreBridge?.hasTickActivity?.()) {
+  const tickEquivalent = Math.floor(span / BASE_LOOP_WAIT_MS);
+  if (tickEquivalent > 0 && getActiveBridge(engine.game)?.hasTickActivity?.()) {
     engine.game.emit?.("welcomeBackOffline", { deltaTime: span, offlineMs: span, tickEquivalent });
   }
   return true;
 };
 
 export const postGameLoopProjectionQuery = (_engine, game) => {
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) return Promise.resolve(null);
+  const bridge = getActiveBridge(game);
+  if (!bridge) return Promise.resolve(null);
   bridge.syncForStatsRead();
   const snap = bridge.session?.getSnapshot?.();
   if (!snap) return Promise.resolve(null);
@@ -235,9 +234,9 @@ export const postGameLoopProjectionQuery = (_engine, game) => {
 const logEngineStartSnapshot = (engine) => {
   const game = engine.game;
   logger.log("info", "engine", "[EngineStart] tick processing", {
-    coreBridge: !!game.coreBridge?.isActive,
+    coreBridge: !!getActiveBridge(game),
     loopWaitMs: game.loop_wait,
-    simulationTickMs: FOUNDATIONAL_TICK_MS,
+    simulationTickMs: BASE_LOOP_WAIT_MS,
     tickCount: engine.tick_count,
   });
 };
@@ -267,16 +266,9 @@ export class Engine {
     this._reflectorPairCount = 0;
     this._explosionFlashPending = 0;
 
-    this.heatManager = {
-      getSegmentForTile: (tile) => this.game.coreBridge?.getHeatSegmentForTile?.(tile) ?? null,
-    };
     this._visibilityListenerBound = false;
     this._visibilityHiddenAt = 0;
     this._offlineReplayActive = false;
-  }
-
-  getLastHeatFlowVectors() {
-    return this.game?.coreBridge?.session?.getHeatFlowVectors?.() ?? [];
   }
 
   enqueueVisualEvent(typeId, row, col, value) {
@@ -422,7 +414,7 @@ export class Engine {
 
     this.last_timestamp = timestamp;
 
-    const tickMs = Math.max(1, Number(this.game.loop_wait) || FOUNDATIONAL_TICK_MS);
+    const tickMs = Math.max(1, Number(this.game.loop_wait) || BASE_LOOP_WAIT_MS);
     const capMs = MAX_ACCUMULATOR_MULTIPLIER * tickMs;
     if (!this._rAfPrevTs) this._rAfPrevTs = timestamp;
     else {
@@ -462,8 +454,8 @@ export class Engine {
   }
 
   _processTick(multiplier = 1.0, manual = false) {
-    const bridge = this.game?.coreBridge;
-    if (!bridge?.isActive) {
+    const bridge = getActiveBridge(this.game);
+    if (!bridge) {
       failSimulationHardwareIncompatible(this, "coreBridgeUnavailable");
       return;
     }

@@ -1,4 +1,4 @@
-﻿import { html, nothing } from "lit-html";
+import { html, nothing } from "lit-html";
 import { repeat, styleMap } from "../dom/lit.js";
 
 function formatPartDescription(description) {

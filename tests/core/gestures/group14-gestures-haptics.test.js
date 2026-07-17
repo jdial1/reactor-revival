@@ -5,8 +5,8 @@ import {
   MOMENTUM_DECAY_FACTOR,
   SNAP_BACK_THRESHOLD_RATIO,
 } from "@app/utils.js";
-import { requestWakeLock, releaseWakeLock } from "@app/services.js";
-import * as gridIntentHandler from "../../../public/src/components/grid-intent-handler.js";
+import { requestWakeLock, releaseWakeLock } from "@app/services/app-services.js";
+import * as gridIntentHandler from "../../../public/src/components/grid/grid-intent-handler.js";
 
 describe("Group 14: Mobile Gestures, Haptics and Wake Lock", () => {
   let game;

@@ -1,14 +1,7 @@
 import { getDecimal } from "../simUtils.js";
-import superjson from "../../lib/superjson.js";
+import { superjsonStringify, superjsonParse } from "./save-wire.js";
 
-const Decimal = getDecimal();
-superjson.registerCustom(
-  { isApplicable: (v) => v instanceof Decimal, serialize: (v) => v.toString(), deserialize: (v) => new Decimal(v) },
-  "Decimal"
-);
-
-export const superjsonStringify = (obj) => superjson.stringify(obj);
-export const superjsonParse = (str) => superjson.parse(str);
+export { superjsonStringify, superjsonParse };
 
 const DecimalProxy = new Proxy(function () {}, {
   construct(_, args) { return new (getDecimal())(...args); },

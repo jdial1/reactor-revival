@@ -1,8 +1,9 @@
 import { toDecimal } from "../simUtils.js";
-import { numFormat as fmt } from "../format/numbers.js";
+import { numFormat as fmt } from "../core/numbers.js";
 import { logger } from "../core/logger.js";
 import { getPartImagePath } from "../core/part-images.js";
-import { getUpgradeBonusLines } from "../logic-tooltip-stats.js";
+import { getUpgradeBonusLines } from "../components/tooltip-stats.js";
+import { requireActiveBridge } from "../bridge/active.js";
 
 const REACTOR_PLATING_DEFAULT_CONTAINMENT = 1000;
 
@@ -38,10 +39,7 @@ const applyCompiledCatalogPart = (part, compiled) => {
 };
 
 const recalculatePartStats = (part) => {
-  const bridge = part.game?.coreBridge;
-  if (!bridge?.isActive || !bridge.session) {
-    throw new Error("recalculatePartStats requires an active core session");
-  }
+  const bridge = requireActiveBridge(part.game, "recalculatePartStats");
   bridge.syncReactorScalarsFromGame?.();
   const compiled = bridge.session.getPart?.(part.id);
   if (!compiled) throw new Error(`Part catalog missing id: ${part.id}`);
@@ -49,10 +47,7 @@ const recalculatePartStats = (part) => {
 };
 
 const buildPartDescription = (part, fmtFn, tile_context = null) => {
-  const bridge = part.game?.coreBridge;
-  if (!bridge?.isActive || !bridge.session?.getPartDescription) {
-    throw new Error("buildPartDescription requires an active core session");
-  }
+  const bridge = requireActiveBridge(part.game, "buildPartDescription");
   const extras = {
     transfer: tile_context ? (tile_context.getEffectiveTransferValue?.() ?? part.transfer) : part.transfer,
     vent: tile_context ? (tile_context.getEffectiveVentValue?.() ?? part.vent) : part.vent,
@@ -192,10 +187,7 @@ export class Part {
   }
 
   getAutoReplacementCost() {
-    const bridge = this.game?.coreBridge;
-    if (!bridge?.isActive || !bridge.session) {
-      throw new Error("getAutoReplacementCost requires an active core session");
-    }
+    const bridge = requireActiveBridge(this.game, "getAutoReplacementCost");
     return toDecimal(bridge.session.partAutoReplaceCost(this.id));
   }
 }
@@ -219,13 +211,10 @@ export class PartSet {
   async initialize() {
     if (this.initialized) return this.partsArray;
 
-    const session = this.game?.coreBridge?.session;
-    if (!session?.listParts) {
-      throw new Error("PartSet.initialize requires an active core session");
-    }
+    const bridge = requireActiveBridge(this.game, "PartSet.initialize");
 
     logger.log("info", "game", "Loading part list data...");
-    const compiledList = session.listParts() || [];
+    const compiledList = bridge.session.listParts() || [];
     const { categoryTypeOrder, typeOrderIndex } = buildCategoryOrders(compiledList);
     this.categoryTypeOrder = categoryTypeOrder;
     this.typeOrderIndex = typeOrderIndex;

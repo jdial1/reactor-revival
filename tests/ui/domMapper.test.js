@@ -4,8 +4,8 @@ describe("DOMMapper", () => {
   let domMapperInstance;
 
   beforeAll(async () => {
-    const module = await import("@app/components/page-dom.js");
-    domMapperInstance = module.default;
+    const module = await import("@app/components/shell/page-dom.js");
+    domMapperInstance = module.domMapper;
   });
 
   it("should be defined", () => {

@@ -1,7 +1,8 @@
-import { resolveAudioService, processSensoryMask } from "./services-audio.js";
-import { isShopOverlayPage } from "./components/page-dom.js";
-import { showStatusNotice } from "./components/ui-notices.js";
+import { resolveAudioService, processSensoryMask } from "./services/audio.js";
+import { isShopOverlayPage } from "./components/shell/page-dom.js";
+import { showStatusNotice } from "./components/shell/ui-notices.js";
 import { drainSimEventQueue } from "./domain/sim-events.js";
+import { safeCall } from "./core/teardown.js";
 
 function playSfx(audio, e) {
   const svc = resolveAudioService(audio);
@@ -68,9 +69,7 @@ function drainFloatingTextEffect(game, ui, e) {
   if (row != null && col != null && game?.tileset) {
     const tile = game.tileset.getTile(row, col);
     if (tile && typeof ui.showFloatingTextAtTile === "function") {
-      try {
-        ui.showFloatingTextAtTile(tile, text, { variant: e.variant });
-      } catch (_) {}
+      safeCall(() => ui.showFloatingTextAtTile(tile, text, { variant: e.variant }), "floating text");
     }
     return;
   }
@@ -127,9 +126,7 @@ function mapSimEventToEffects(game, ui, page, event) {
     }
     case "MELTDOWN_HAPTIC": {
       if (typeof navigator !== "undefined" && navigator.vibrate) {
-        try {
-          navigator.vibrate(event.pattern ?? 200);
-        } catch (_) {}
+        safeCall(() => { navigator.vibrate(event.pattern ?? 200); });
       }
       return;
     }
@@ -160,9 +157,7 @@ function mapSimEventToEffects(game, ui, page, event) {
     }
     case "MANUAL_HEAT_REDUCE": {
       if (typeof navigator !== "undefined" && navigator.vibrate) {
-        try {
-          navigator.vibrate(50);
-        } catch (_) {}
+        safeCall(() => { navigator.vibrate(50); });
       }
       if (!shouldSkipReactorEffect(page, "reactor") && game?.audio) {
         playSfx(game.audio, { id: "metal_clank", a: 0.8, b: -0.7, context: "reactor" });
@@ -171,9 +166,7 @@ function mapSimEventToEffects(game, ui, page, event) {
     }
     case "PART_SOLD": {
       if (typeof navigator !== "undefined" && navigator.vibrate) {
-        try {
-          navigator.vibrate(50);
-        } catch (_) {}
+        safeCall(() => { navigator.vibrate(50); });
       }
       if (shouldSkipReactorEffect(page, "reactor")) return;
       if (game?.audio) {
@@ -213,9 +206,7 @@ export function drainGameEffects(game, getUi) {
   for (const e of batch) {
     if (e.kind === "haptic") {
       if (typeof navigator !== "undefined" && navigator.vibrate) {
-        try {
-          navigator.vibrate(e.pattern);
-        } catch (_) {}
+        safeCall(() => { navigator.vibrate(e.pattern); });
       }
       continue;
     }

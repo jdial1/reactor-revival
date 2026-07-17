@@ -1,16 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame, toNum } from "../../helpers/setup.js";
-import { patchGameState } from "@app/state.js";
-import { placePart } from "../../helpers/gameHelpers.js";
-import { setDecimal } from "@app/store.js";
-import { toDecimal } from "@app/utils.js";
 import {
-  PRESTIGE_MULTIPLIER_CAP,
-  PRESTIGE_MULTIPLIER_PER_EP,
-} from "@app/utils.js";
-import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  setupGame,
+  toNum,
   cappedPrestigeEpContribution,
   expectedPrestigeMultiplierFromTotalEp,
 } from "../../helpers/setup.js";
+import { patchGameState } from "@app/state.js";
+import { placePart } from "../../helpers/gameHelpers.js";
+import { setDecimal } from "@app/store.js";
+import {
+  toDecimal,
+  PRESTIGE_MULTIPLIER_CAP,
+  PRESTIGE_MULTIPLIER_PER_EP,
+} from "@app/utils.js";
 
 describe("Group 4: Exotic Particles & Prestige", () => {
   let game;

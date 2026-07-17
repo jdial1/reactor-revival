@@ -1,13 +1,14 @@
-﻿import {
+import {
   syncTilePulseDisplays,
 } from "../bridge/core-state-projection.js";
+import { requireActiveBridge } from "../bridge/active.js";
 import { setDecimal, syncReactorToUIState } from "../state/decimal-sync.js";
 import { recordSimEvent } from "./sim-events.js";
 import { drainGameEffects } from "../effect-orchestrator.js";
-import { saveRecoveredBlueprint } from "../components/ui-layout-storage.js";
+import { saveRecoveredBlueprint } from "../components/blueprints/ui-layout-storage.js";
 import { toDecimal, toNumber } from "../simUtils.js";
 import { logger } from "../core/logger.js";
-import { getCompactLayout } from "../layout/reactor-codec.js";
+import { getCompactLayout } from "./reactor-codec.js";
 import {
   BASE_MAX_HEAT,
   BASE_MAX_POWER,
@@ -231,8 +232,7 @@ export class Reactor {
 
   updateStats(opts = {}) {
     if (!this.game.tileset) return;
-    const bridge = this.game.coreBridge;
-    if (!bridge?.isActive) throw new Error("updateStats requires an active core session");
+    const bridge = requireActiveBridge(this.game, "updateStats");
 
     if (!opts.fromSession) {
       bridge.syncForStatsRead();

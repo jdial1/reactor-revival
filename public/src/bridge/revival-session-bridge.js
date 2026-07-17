@@ -31,6 +31,9 @@ import {
   getHeatSegmentForTile,
   inspectExchangerPressureFlow,
 } from "./bridge-heat.js";
+import { getActiveBridge } from "./active.js";
+
+export { getActiveBridge, requireActiveBridge } from "./active.js";
 
 export class RevivalSessionBridge {
   constructor(game, _options = {}) {
@@ -73,14 +76,10 @@ export class RevivalSessionBridge {
     projectUpgradeLevelsToHost(this);
   }
 
-  syncUpgradesFromGame() {
-    this.pushHostUpgradeLevelsForLoad();
-  }
-
   _syncBeforeTick() {
     this.syncTickMetaFromGame();
     this.syncTogglesFromGame();
-    syncGridCheap(this);
+    syncGridCheap(this, { runtimeFromHost: false });
     syncHostSellOverridesToSession(this);
     syncReactorScalarsFromGame(this);
   }
@@ -193,7 +192,6 @@ export class RevivalSessionBridge {
 
   getPrestigeMultiplier() {
     if (!this.session) return 1;
-    this.loadEconomyFromHost();
     return this.session.getPrestigeMultiplier?.() ?? 1;
   }
 
@@ -625,26 +623,22 @@ export class RevivalSessionBridge {
     if (!upgrade) return false;
     if (!this.session.systems?.upgrades?.getDefinition?.(id)) return false;
 
-    this.loadEconomyFromHost();
     this.session.dispatch({ type: "PURCHASE_UPGRADE", payload: { id } });
     const applied = this.drainPendingCommands();
     const purchaseEntry = applied.find((entry) => entry.type === "PURCHASE_UPGRADE");
     if (!purchaseEntry?.result) return false;
 
+    this.routeEvents();
+    this.projectToGame(this.session.engine.getLastResult());
     const newLevel = this.session.getUpgradeLevel?.(id);
-    if (typeof newLevel === "number") upgrade.setLevel(newLevel, { deferSync: true, skipSessionSync: true });
+    if (typeof newLevel === "number" && upgrade.level !== newLevel) {
+      upgrade.setLevel(newLevel, { skipSessionSync: true });
+    }
     if (upgrade.upgrade?.type === "experimental_parts") {
       this.game.epart_onclick?.(upgrade);
     }
     upgradeset.updateSectionCounts();
     void this.game.saveManager?.autoSave?.();
-
-    this.syncTogglesFromGame();
-    this._syncGridCheap();
-    this.syncReactorScalarsFromGame();
-    this.routeEvents();
-    this.projectToGame(this.session.engine.getLastResult());
-    this.game.syncModifiersFromUpgrades?.({ skipGrid: true });
     return true;
   }
 
@@ -694,7 +688,8 @@ export class RevivalSessionBridge {
 }
 
 export async function attachCoreBridge(game, options = {}) {
-  if (game.coreBridge?.isActive) return game.coreBridge;
+  const existing = getActiveBridge(game);
+  if (existing) return existing;
   const bridge = new RevivalSessionBridge(game, options);
   game.coreBridge = bridge;
   await bridge.init();

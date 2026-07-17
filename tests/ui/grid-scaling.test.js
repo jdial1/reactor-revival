@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, setupGameWithDOM, simulateViewportResize } from "../helpers/setup.js";
 
-import { GridScaler } from "@app/components/ui-grid.js";
+import { GridScaler } from "@app/components/grid/ui-grid.js";
 import { getPageReactor, getPageReactorWrapper } from "@app/components/ui-components.js";
 
 describe("Grid Scaling Logic (Reshaping)", () => {

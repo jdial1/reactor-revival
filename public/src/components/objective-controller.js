@@ -2,7 +2,7 @@ import { html, render } from "lit-html";
 import { classMap, styleMap } from "../dom/lit.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
 import { getObjectiveClaimText } from "../domain/objectives.js";
-import { isShopOverlayPage } from "./page-dom.js";
+import { isShopOverlayPage } from "./shell/page-dom.js";
 import { enqueueGameEffect } from "../state/game-effects.js";
 
 export function checkObjectiveTextScrolling(titleEl) {

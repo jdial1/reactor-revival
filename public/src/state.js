@@ -1,16 +1,16 @@
-﻿import { EngineStatus } from "./schema/stateSchemas.js";
-import { derive } from "derive-valtio";
+import { EngineStatus } from "./schema/stateSchemas.js";
+import { safeCall, teardownAll } from "./core/teardown.js";
+import { derive } from "./state/derive.js";
 import { render } from "lit-html";
 import { subscribe, proxy, ref, snapshot } from "valtio/vanilla";
 import { subscribeKey } from "valtio/vanilla/utils";
-import { fromError } from "zod-validation-error";
 import { calculateWeaveEp } from "reactor-core";
-import { leaderboardService } from "./services-leaderboard.js";
+import { leaderboardService } from "./services/leaderboard.js";
 import {
   addPartIconsToTitle as addPartIconsToTitleHelper,
   getObjectiveScrollDuration as getObjectiveScrollDurationHelper,
-} from "./logic-objectives-ui.js";
-import { isHeatNetBalanced, resetHeatThresholdSignalState, syncReactorHeatVisualDom } from "./heatDomSync.js";
+} from "./components/objectives-ui.js";
+import { isHeatNetBalanced, resetHeatThresholdSignalState, syncReactorHeatVisualDom } from "./components/shell/heat-dom-sync.js";
 import { preferences } from "./state/preferences.js";
 import { saveGameMutation } from "./state/save-query.js";
 import { setDecimal, updateDecimal } from "./state/decimal-sync.js";
@@ -26,6 +26,7 @@ import { StorageUtils,
 import { BaseComponent } from "./dom/lit.js";
 import { toDecimal, toNumber } from "./simUtils.js";
 import { logger } from "./core/logger.js";
+import { getActiveBridge, requireActiveBridge } from "./bridge/active.js";
 import { MOBILE_BREAKPOINT_PX } from "./constants/ui-constants.js";
 import {
   OVERRIDE_DURATION_MS,
@@ -63,15 +64,8 @@ import {
   UpgradeDefinitionSchema,
   TileSchema,
   SaveDataSchema,
-  GameLoopTickInputSchema,
-  GameLoopTickResultSchema,
-  PhysicsTickInputSchema,
-  PhysicsTickResultSchema,
   BlueprintSchema,
   LegacyGridSchema,
-  EVENT_SCHEMA_REGISTRY,
-  ACTION_SCHEMA_REGISTRY,
-  GameActionSchema,
   UserPreferencesSchema,
   BalanceConfigSchema,
   SaveDataWriteSchema,
@@ -99,15 +93,8 @@ export {
   TileSchema,
   SaveDataSchema,
   SaveDataWriteSchema,
-  GameLoopTickInputSchema,
-  GameLoopTickResultSchema,
-  PhysicsTickInputSchema,
-  PhysicsTickResultSchema,
   BlueprintSchema,
   LegacyGridSchema,
-  EVENT_SCHEMA_REGISTRY,
-  ACTION_SCHEMA_REGISTRY,
-  GameActionSchema,
   UserPreferencesSchema,
   BalanceConfigSchema,
 };
@@ -126,8 +113,8 @@ export {
   applySaveState,
   normalizeSavedTechTreeId,
   GameSaveManager,
-  showLoadBackupModal,
-} from "./state/save.js";
+} from "./domain/game-save.js";
+export { showLoadBackupModal } from "./state/save-ui.js";
 export { setDecimal, updateDecimal, syncReactorToUIState } from "./state/decimal-sync.js";
 export { Reactor } from "./domain/reactor.js";
 export { GridManager, calculateBaseDimensions } from "./domain/grid.js";
@@ -290,7 +277,7 @@ export class StateManager extends BaseComponent {
   teardown() {
     const unsubs = this._stateUnsubscribes;
     if (unsubs.length) {
-      unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+      teardownAll(unsubs);
       unsubs.length = 0;
     }
   }
@@ -523,13 +510,12 @@ export class StateManager extends BaseComponent {
       this.game.coreBridge?.loadEconomyFromHost?.();
       this.game.reactor.updateStats();
     }
-    // Ensure any progress-based gating resets as well
-    try {
+    safeCall(() => {
       if (this.game) {
         this.game.placedCounts = {};
         this.game.coreBridge?.clearPlacedCounts?.();
       }
-    } catch (_) { }
+    }, "game_reset gating");
   }
 
   getAllVars() {
@@ -553,10 +539,6 @@ export class StateManager extends BaseComponent {
     if (objective?.title) {
       setTimeout(() => this.checkObjectiveTextScrolling(), 0);
     }
-  }
-
-  handleObjectiveUnloaded() {
-    // No-op for now. Could add animation or clearing logic here if desired.
   }
 
   getObjectiveScrollDuration() {
@@ -636,15 +618,11 @@ export class UnlockManager {
   }
 
   getPlacedCount(type, level) {
-    const bridge = this.game.coreBridge;
-    if (!bridge?.isActive) throw new Error("getPlacedCount requires an active core session");
-    return bridge.getPlacedCount(type, level);
+    return requireActiveBridge(this.game, "getPlacedCount").getPlacedCount(type, level);
   }
 
   incrementPlacedCount(type, level) {
-    const bridge = this.game.coreBridge;
-    if (!bridge?.isActive) throw new Error("incrementPlacedCount requires an active core session");
-    bridge.incrementPlacedCount(type, level);
+    requireActiveBridge(this.game, "incrementPlacedCount").incrementPlacedCount(type, level);
   }
 
   getPreviousTierCount(part) {
@@ -745,8 +723,7 @@ async function runRebootActionInternal(game, keep_exotic_particles) {
   logger.log("debug", "game", "Reboot action initiated", { keep_exotic_particles });
   recordSimEvent(game, { type: "PRESTIGE_REBOOT_TRIGGERED" });
   drainGameEffects(game, () => game?.ui);
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) throw new Error("reboot requires an active core session");
+  const bridge = requireActiveBridge(game, "reboot");
   if (keep_exotic_particles) await runCoreKeepEpPrestige(game, bridge);
   else await runCoreDiscardEpReboot(game, bridge);
 }
@@ -827,9 +804,7 @@ async function resetSubsystems(game, bypass, preservedTechTree) {
 function refreshAllPartStatsForGame(game) {
   if (game.partset?.partsArray?.length) {
     game.partset.partsArray.forEach((part) => {
-      try {
-        part.recalculate_stats();
-      } catch (_) {}
+      safeCall(() => { part.recalculate_stats(); });
     });
   }
   game.upgradeset.check_affordability(game);
@@ -903,8 +878,6 @@ function validateObjectiveState(game) {
 }
 
 const EXPECTED_LEADERBOARD_ERROR_TERMS = [
-  "Atomics",
-  "COOP/COEP",
   "Cannot read properties",
   "can't access property",
 ];
@@ -1017,8 +990,8 @@ export function setGameConfiguration(game, config) {
 export function applyToggleStateChange(game, toggleName, value) {
   if (game.state && game.state[toggleName] !== value) game.state[toggleName] = value;
   if (toggleName === "heat_control" && game.reactor) game.reactor.heat_controlled = !!value;
-  const bridge = game.coreBridge;
-  if (bridge?.isActive && bridge.session?.toggles && toggleName in bridge.session.toggles) {
+  const bridge = getActiveBridge(game);
+  if (bridge?.session?.toggles && toggleName in bridge.session.toggles) {
     bridge.session.toggles[toggleName] = !!value;
   }
   if (toggleName !== "pause") return;
@@ -1075,8 +1048,7 @@ export class ExoticParticleManager {
 }
 
 export function runSellAction(game) {
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) throw new Error("runSellAction requires an active core session");
+  const bridge = requireActiveBridge(game, "runSellAction");
   if (bridge.sellPower()) {
     game.reactor?.updateStats?.({ fromSession: true });
   }
@@ -1086,8 +1058,7 @@ export function runManualReduceHeatAction(game) {
   logger.log("debug", "game", "Manual heat reduction");
   recordSimEvent(game, { type: "MANUAL_HEAT_REDUCE" });
   drainGameEffects(game, () => game?.ui);
-  const bridge = game.coreBridge;
-  if (!bridge?.isActive) throw new Error("runManualReduceHeatAction requires an active core session");
+  const bridge = requireActiveBridge(game, "runManualReduceHeatAction");
   if (bridge.ventHeat()) {
     game.reactor?.updateStats?.({ fromSession: true });
   }

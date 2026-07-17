@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from '../../helpers/setup.js';
-import { AudioService } from '@app/services.js';
+import { AudioService } from '@app/services/app-services.js';
 import { setDecimal } from "@app/store.js";
 import { patchGameState } from "@app/state.js";
 import { toDecimal } from '@app/utils.js';

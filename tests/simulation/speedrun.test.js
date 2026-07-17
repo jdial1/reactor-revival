@@ -3,7 +3,7 @@ import { patchGameState } from "@app/state.js";
 import { toDecimal } from "@app/utils.js";
 import { setupGameWithDOM, syncActivePartsAtTickBoundary } from "../helpers/setup.js";
 import { setCoreSustainedStart } from "../helpers/objectiveHelpers.js";
-import { handleGridInteraction } from "../../public/src/components/grid-intent-handler.js";
+import { handleGridInteraction } from "../../public/src/components/grid/grid-intent-handler.js";
 import objective_list_data from "../../public/data/objective_list.json";
 
 function clickDOM(selector) {

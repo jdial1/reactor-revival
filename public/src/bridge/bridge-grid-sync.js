@@ -1,10 +1,29 @@
 import { toDecimal, toNumber } from "../simUtils.js";
-import { bumpGridPartsRevision } from "./bridge-parts.js";
 
-export function syncGridCheap(bridge) {
+export function bumpGridPartsRevision(tileset) {
+  if (!tileset) return;
+  tileset._partsRevision = (tileset._partsRevision ?? 0) + 1;
+  const engine = tileset.game?.engine;
+  if (engine) engine._workerPartSnapshotCache = null;
+}
+
+export function syncGridCheap(bridge, { runtimeFromHost = true } = {}) {
   if (!bridge.session) return;
   if (gameGridDiffersFromSession(bridge)) syncGridFromGame(bridge);
-  else syncRuntimeTileStateFromGame(bridge);
+  else if (runtimeFromHost) syncRuntimeTileStateFromGame(bridge);
+}
+
+export function syncRuntimeTileStateFromGame(bridge) {
+  if (!bridge.session || !bridge.game?.tileset) return;
+  const { tileset, rows, cols } = bridge.game;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const tile = tileset.getTile(r, c);
+      const inst = bridge.session.grid.getComponentAt(r, c);
+      if (!tile?.part || !inst) continue;
+      copyTileStateToInstance(bridge, tile, inst, r, c);
+    }
+  }
 }
 
 export function gameGridDiffersFromSession(bridge) {
@@ -20,19 +39,6 @@ export function gameGridDiffersFromSession(bridge) {
     }
   }
   return false;
-}
-
-export function syncRuntimeTileStateFromGame(bridge) {
-  if (!bridge.session || !bridge.game?.tileset) return;
-  const { tileset, rows, cols } = bridge.game;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const tile = tileset.getTile(r, c);
-      const inst = bridge.session.grid.getComponentAt(r, c);
-      if (!tile?.part || !inst) continue;
-      copyTileStateToInstance(bridge, tile, inst, r, c);
-    }
-  }
 }
 
 export function copyTileStateToInstance(bridge, tile, inst, row, col) {
@@ -106,14 +112,4 @@ export function syncReactorScalarsFromGame(bridge) {
   const reactor = bridge.game.reactor;
   bridge.session.grid.currentHeat = toNumber(reactor.current_heat);
   bridge.session.grid.currentPower = toNumber(reactor.current_power);
-}
-
-export function recalculatePlacedCountsFromGrid(game) {
-  const bridge = game?.coreBridge;
-  if (bridge?.isActive && typeof bridge.rebuildPlacedCounts === "function") {
-    return bridge.rebuildPlacedCounts();
-  }
-  if (!game) return {};
-  game.placedCounts = {};
-  return game.placedCounts;
 }

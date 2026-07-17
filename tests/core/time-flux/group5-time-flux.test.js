@@ -5,7 +5,7 @@ import {
   startOfflineFastForward,
 } from "@app/logic.js";
 import {
-  FOUNDATIONAL_TICK_MS,
+  BASE_LOOP_WAIT_MS,
   MAX_ACCUMULATOR_MULTIPLIER,
   OFFLINE_TIME_THRESHOLD_MS,
 } from "@app/utils.js";
@@ -15,7 +15,7 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
 
   beforeEach(async () => {
     game = await setupGame();
-    game.loop_wait = FOUNDATIONAL_TICK_MS;
+    game.loop_wait = BASE_LOOP_WAIT_MS;
     game.paused = false;
     await placePart(game, 0, 0, "uranium1");
     syncActivePartsAtTickBoundary(game.engine);
@@ -39,13 +39,13 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
     const delta = OFFLINE_TIME_THRESHOLD_MS + 1;
     const r = processOfflineTime(game.engine, delta);
     expect(r).toBe(true);
-    const capMs = MAX_ACCUMULATOR_MULTIPLIER * FOUNDATIONAL_TICK_MS;
+    const capMs = MAX_ACCUMULATOR_MULTIPLIER * BASE_LOOP_WAIT_MS;
     expect(game._offlineCatchupMs).toBe(Math.min(delta, capMs));
   });
 
   it("locks processOfflineTime clamps to max accumulator", () => {
     game._offlineCatchupMs = 50000;
-    const capMs = MAX_ACCUMULATOR_MULTIPLIER * FOUNDATIONAL_TICK_MS;
+    const capMs = MAX_ACCUMULATOR_MULTIPLIER * BASE_LOOP_WAIT_MS;
     const r = processOfflineTime(game.engine, 2_000_000);
     expect(r).toBe(true);
     expect(game._offlineCatchupMs).toBe(capMs);
@@ -54,7 +54,7 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
   it("queues worker fast-forward ticks from offline span", () => {
     game.reactor.current_heat = 50;
     game.reactor.max_heat = 1000;
-    const bankedMs = MAX_ACCUMULATOR_MULTIPLIER * FOUNDATIONAL_TICK_MS;
+    const bankedMs = MAX_ACCUMULATOR_MULTIPLIER * BASE_LOOP_WAIT_MS;
     game._offlineCatchupMs = bankedMs;
 
     startOfflineFastForward(game.engine);
@@ -68,7 +68,7 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
     game.reactor.current_heat = 50;
     game.reactor.max_heat = 1000;
     const ticks = 47;
-    game._offlineCatchupMs = ticks * FOUNDATIONAL_TICK_MS;
+    game._offlineCatchupMs = ticks * BASE_LOOP_WAIT_MS;
 
     startOfflineFastForward(game.engine);
 

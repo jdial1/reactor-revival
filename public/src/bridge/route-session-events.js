@@ -37,7 +37,7 @@ export function routeSessionEvents(bridge) {
       const id = event.payload?.id;
       const upgrade = id ? game.upgradeset?.getUpgrade(id) : null;
       if (upgrade && typeof event.payload?.newLevel === "number") {
-        upgrade.setLevel(event.payload.newLevel);
+        upgrade.setLevel(event.payload.newLevel, { skipSessionSync: true });
       }
       game.emit?.("upgradePurchased", { upgrade, ...event.payload });
     }

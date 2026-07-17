@@ -1,0 +1,158 @@
+================================================================================
+reactor-core-lib — missing / incomplete features (host cutover leftovers)
+================================================================================
+Date: 2026-07-17 (continued review)
+Host: reactor-revival
+Lib version in use: reactor-core-lib@1.2.12 (npm)
+Import alias: "reactor-core"
+
+
+PURPOSE
+-------
+Host is a UI wrapper + bridge + test suite. Simulation lives in reactor-core-lib.
+Bridge is mandatory (inactive paths throw).
+
+
+HOST BRIDGE SURFACE
+-------------------
+  revival-session-bridge.js   — facade (tick / dispatch / prestige / reboot)
+  core-state-projection.js    — snapshot → host state/tiles
+  bridge-grid-sync.js         — layout/heat/ticks + placedCounts (STILL bidirectional)
+  bridge-upgrades.js          — levels + affordance projection
+  bridge-mechanics.js         — narrow sell overrides + session→host modifiers
+  bridge-intents.js           — UI → session ops
+  bridge-heat.js              — heat segment/flow (read-only)
+  route-session-events.js     — events → FX/UI
+
+
+DONE (physics / tick authority — do not re-open)
+------------------------------------------------
+- Tick / heat / pulse / caps / vent / sell / purchase go through session
+- No host shouldMeltdown / _effectivePower/_effectiveHeat / applyLayoutCaps
+- Blueprint diff/cost via session; clipToGrid from lib
+- Meltdown evaluation in lib; host executeMeltdown is presentation only
+- Tooltips use describeCellPulse / getHeatSegmentAt
+- Neighbors via session.queryNeighbors
+- Weave EP via calculateWeaveEp
+
+
+===============================================================================
+CONTINUED REVIEW (2026-07-17) — remaining dual ownership
+===============================================================================
+
+Verdict: tick physics is cut over. The host is still a parallel mutable
+game object graph (tileset / upgradeset / Decimal economy) that must be
+synced into the session before ops. Next work is ownership inversion:
+session authoritative → project out; kill host→session stomp paths.
+
+
+-------------------------------------------------------------------------------
+P0 — HOST STILL AUTHORITATIVE BEFORE SESSION OPS (architecture)
+-------------------------------------------------------------------------------
+
+1) Grid mirror sync (bridge-grid-sync.js) — PARTIAL (2026-07-17)
+   DONE: _syncBeforeTick uses syncGridCheap({ runtimeFromHost: false }) so matched
+         layouts do not stomp session heat/ticks before ticks.
+   OPEN: session ops still runtimeFromHost (sell/tests mutate tile.ticks on host);
+         layout diverge still rebuilds via syncGridFromGame (setPart helpers).
+
+2) Economy load before mutations (revival-session-bridge.js) — PARTIAL
+   DONE: purchaseUpgrade / getPrestigeMultiplier no longer loadEconomyFromHost.
+   OPEN: EconomyManager / ExoticParticleManager setters still loadEconomyFromHost;
+         prestige/reboot chrome still patches EP then reloads.
+
+3) Upgrade level dual write (domain/upgrade.js + bridge-upgrades.js) — PARTIAL
+   DONE: upgradePurchased + purchaseUpgrade project with skipSessionSync.
+   OPEN: Upgrade.setLevel still pushes setUpgradeLevels for test/host mutations.
+
+
+-------------------------------------------------------------------------------
+P1 — HOST RULE LEFTOVERS (should become session commands or thin UI)
+-------------------------------------------------------------------------------
+
+4) Doctrine respec (domain/game.js respecDoctrine)
+   Spends EP + resets doctrine upgrade levels on host objects; no session
+   command. Needs lib RESPEC_DOCTRINE (or equivalent) then project.
+
+5) Full reboot / test reset (state.js runFullReboot)
+   Zeros money/EP/heat/power, clears tiles, zeros non-experimental upgrade
+   levels on host, then syncModifiersFromUpgrades — bypasses session.reboot.
+   Target: session.reboot / hard-reset API + project; host only stops engine
+           and refreshes UI.
+
+6) Prestige/reboot chrome still patches EP after bridge
+   runCoreKeepEpPrestige / runCoreDiscardEpReboot call bridge then rewrite
+   exoticParticleManager / current_exotic_particles. Should trust
+   projectToGame after session.prestige/reboot (protium preserve is host OK).
+
+7) Part affordability (domain/part.js PartSet.check_affordability)
+   Re-evaluates unlock + money/EP gte locally. Prefer session afford flags
+   (bridge-upgrades already has preview patterns) or snapshot afford map.
+
+
+-------------------------------------------------------------------------------
+P2 — KEEP ON HOST (document, do not "fix into lib")
+-------------------------------------------------------------------------------
+
+- executeMeltdown presentation (overlay, haptic, recovered blueprint, engine stop)
+- Tile._clearMeltdownRecovery presentation (unpause / restart engine)
+- engine handleComponentExplosion hull heat dump (lib emits event only)
+- syncHostSellOverridesToSession when tests/UI force auto_sell / altered_max_power
+- UnlockManager tier visibility rules (uses session placedCounts) — product UI policy
+- valtio state, rAF engine shell, save chrome, lit templates, audio/PWA
+- blueprint serialize/share-code / validatePasteResources (UI gating over session costs)
+
+
+-------------------------------------------------------------------------------
+P3 — SHRINK FAT DOMAIN SHELLS (after P0/P1)
+-------------------------------------------------------------------------------
+
+Approx line counts (shells, not physics):
+  state.js          ~1.0k   valtio + unlock + reboot chrome
+  game.js           ~0.6k   orchestration + doctrine + managers
+  grid.js           ~0.5k   Tile mirror + GridManager + heatMap SoA
+  engine.js         ~0.5k   rAF / catchup / visual rings; tick → bridge
+  upgrade.js        ~0.4k   catalog shell + setLevel dual-write
+  reactor.js        ~0.3k   stats projection + meltdown presentation
+  part.js           ~0.3k   catalog shell + affordability
+  blueprint.js      ~0.2k   mostly bridge wrappers (good shape)
+
+Goal shape per domain type:
+  Part / Upgrade / Tile / Reactor = projection DTOs + display helpers
+  Game / Engine = wire UI intents → bridge + schedule project
+  state.js = valtio store + UI-only flags; reboot/prestige move next to bridge
+
+
+SUGGESTED NEXT CUT ORDER
+------------------------
+  1. Stop syncGridFromGame on tick hot path; assert layout only changes via
+     dispatch; project heat/ticks from session after every tick
+  2. Stop loadEconomyFromHost before PURCHASE_UPGRADE / CREDIT / DEBIT;
+     project economy after command
+  3. Collapse Upgrade.setLevel host→session writes; hydrate only on load
+  4. Add session RESPEC_DOCTRINE; thin respecDoctrine to dispatch+project
+  5. Route runFullReboot through session hard reset
+  6. Peel check_affordability onto session afford snapshots
+
+
+reactor-core IMPORT SURFACE (host today)
+----------------------------------------
+  revival-session-bridge.js  createGameSession, computeBlueprintDiff,
+                             computePartSellValue
+  state.js                   calculateWeaveEp
+  domain/blueprint.js        clipToGrid
+  (most session APIs used via bridge methods, not direct imports)
+
+
+SUCCESS CRITERIA (updated)
+--------------------------
+1. Host never evaluates meltdown/hull locally.                    DONE
+2. Host never spends money/EP or bumps upgrade levels except via
+   commands (doctrine respec + full reboot still violate).       OPEN
+3. Host never assigns grid.maxPower/maxHeat.                     DONE
+4. Host never writes cell _effectivePower/_effectiveHeat.        DONE
+5. Manual vent and sell go through VENT_HEAT / SELL_POWER.       DONE
+6. Bridge shrinks to: intent → dispatch/tick → project.
+   (still syncGridFromGame + loadEconomyFromHost on many paths)  OPEN
+
+End of document.

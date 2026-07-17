@@ -9,7 +9,7 @@ import {
   UpgradeCard,
   BuyButton,
   TooltipCloseButton
-} from "@app/components/button-factory.js";
+} from "@app/components/upgrades/button-factory.js";
 
 describe("UI Component Creation and State", () => {
   const itWithDOM = it.skip;

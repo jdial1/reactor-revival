@@ -311,7 +311,7 @@ Inline boot script (`index.html`):
 
 - Prefer **WebP** for large backgrounds (PNG sources retired)
 - Industrial/desolate tone; no bright stock photography
-- Compress via `scripts/compress-images.js` before commit
+- Compress via `scripts/build/compress-images.js` before commit
 
 ---
 

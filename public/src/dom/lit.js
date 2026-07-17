@@ -4,6 +4,7 @@ import { styleMap as litStyleMap } from "../../lib/lit-style-map.js";
 import { repeat as litRepeat } from "../../lib/lit-repeat.js";
 import { when as litWhen } from "../../lib/lit-when.js";
 import { unsafeHTML as litUnsafeHTML } from "../../lib/lit-unsafe-html.js";
+import { logger } from "../core/logger.js";
 
 export const render = litRender;
 export const classMap = litClassMap;
@@ -92,7 +93,9 @@ export function getBasePath() {
       const repoName = pathParts.length > 1 && pathParts[1] ? pathParts[1] : '';
       return repoName ? `/${repoName}` : '';
     }
-  } catch (_) {}
+  } catch (err) {
+    logger.warn("getBasePath failed", err);
+  }
   return '';
 }
 

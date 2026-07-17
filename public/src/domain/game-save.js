@@ -1,5 +1,5 @@
-import { fromError } from "zod-validation-error";
-import { leaderboardService } from "../services-leaderboard.js";
+import { fromError } from "../core/zod-error.js";
+import { leaderboardService } from "../services/leaderboard.js";
 import { saveGameMutation, fetchAutoSaveSlotData } from "../state/save-query.js";
 import { setDecimal } from "../state/decimal-sync.js";
 import { logger } from "../core/logger.js";
@@ -8,6 +8,7 @@ import { SaveDataSchema } from "../schema/index.js";
 import { snapshot } from "valtio/vanilla";
 import { SAVE_FORMAT_VERSION_LATEST, buildPartTable, encodeTilesCompact, migrateSave } from "../schema/saveMigration.js";
 import { unlockedAchievementIds } from "../bridge/core-state-projection.js";
+import { getActiveBridge, requireActiveBridge } from "../bridge/active.js";
 
 export const parseAndValidateSave = (raw) => {
   const parsed = typeof raw === "string" ? deserializeSave(raw) : raw;
@@ -26,6 +27,22 @@ export const normalizeSavedTechTreeId = (id) => {
   if (!id || LEGACY_TECH_TREE_IDS.has(id)) return "unified";
   return id;
 };
+
+function saveLeaderboardRunIfEligible(ctx) {
+  if (!((ctx.peakPower > 0 || ctx.peakHeat > 0) && !ctx.cheatsUsed)) return;
+  leaderboardService.saveRun({
+    user_id: ctx.userId,
+    run_id: ctx.runId,
+    heat: ctx.peakHeat,
+    power: ctx.peakPower,
+    money:
+      ctx.currentMoney && typeof ctx.currentMoney.toNumber === "function"
+        ? ctx.currentMoney.toNumber()
+        : Number(ctx.currentMoney),
+    time: ctx.totalPlayedTime,
+    layout: JSON.stringify(ctx.getCompactLayout()),
+  });
+}
 
 function applyCoreGameState(game, savedData) {
   setDecimal(game.state, "current_money", savedData.current_money);
@@ -60,9 +77,7 @@ function applySessionMetadata(game, savedData) {
   game.lifecycleManager.last_save_time = savedData.last_save_time ?? null;
   game.lifecycleManager.session_start_time = null;
   game.placedCounts = savedData.placedCounts ?? game.placedCounts ?? {};
-  if (game.coreBridge?.isActive) {
-    game.coreBridge.setPlacedCounts(game.placedCounts);
-  }
+  getActiveBridge(game)?.setPlacedCounts(game.placedCounts);
 }
 
 function applyReactorState(game, savedData) {
@@ -188,9 +203,9 @@ export async function applySaveState(game, savedData) {
   for (const fn of POST_ASYNC_HYDRATORS) fn(game, savedData);
   reconcileReactorFromState(game);
   game.reactor.hull_heat_doctrine_mult = 1;
-  if (!game.coreBridge?.isActive) throw new Error("applySaveState requires an active core session");
-  game.coreBridge.loadLegacySave(savedData);
-  game.coreBridge.syncUpgradeLevelsToGame();
+  const bridge = requireActiveBridge(game, "applySaveState");
+  bridge.loadLegacySave(savedData);
+  bridge.syncUpgradeLevelsToGame();
   if (game.upgradeset && game.tech_tree) game.upgradeset.sanitizeDoctrineUpgradeLevelsOnLoad(game.tech_tree);
   game.syncModifiersFromUpgrades({ skipGrid: true });
   game.reactor.updateStats();
@@ -409,38 +424,12 @@ export class GameSaveManager {
         return;
       }
       if (ctx.hasMeltedDown) {
-        if ((ctx.peakPower > 0 || ctx.peakHeat > 0) && !ctx.cheatsUsed) {
-          leaderboardService.saveRun({
-            user_id: ctx.userId,
-            run_id: ctx.runId,
-            heat: ctx.peakHeat,
-            power: ctx.peakPower,
-            money:
-              ctx.currentMoney && typeof ctx.currentMoney.toNumber === "function"
-                ? ctx.currentMoney.toNumber()
-                : Number(ctx.currentMoney),
-            time: ctx.totalPlayedTime,
-            layout: JSON.stringify(ctx.getCompactLayout()),
-          });
-        }
+        saveLeaderboardRunIfEligible(ctx);
         return;
       }
 
       ctx.updateSessionTime();
-      if ((ctx.peakPower > 0 || ctx.peakHeat > 0) && !ctx.cheatsUsed) {
-        leaderboardService.saveRun({
-          user_id: ctx.userId,
-          run_id: ctx.runId,
-          heat: ctx.peakHeat,
-          power: ctx.peakPower,
-          money:
-            ctx.currentMoney && typeof ctx.currentMoney.toNumber === "function"
-              ? ctx.currentMoney.toNumber()
-              : Number(ctx.currentMoney),
-          time: ctx.totalPlayedTime,
-          layout: JSON.stringify(ctx.getCompactLayout()),
-        });
-      }
+      saveLeaderboardRunIfEligible(ctx);
 
       const saveData = await this.getSaveState();
       const effectiveSlot = await saveGameMutation({

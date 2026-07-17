@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { bundledGameData } from "../../../public/src/bundledStaticData.js";
+import { bundledGameData } from "../../../public/src/generated/bundledStaticData.js";
 
 test("Upgrade dependency graph is acyclic", () => {
   const upgrades = bundledGameData.upgrades;

@@ -1,7 +1,7 @@
 ---
 description: Phase 1 release hygiene — anti-patterns and items to avoid while aligning repo with what ships
 alwaysApply: false
-globs: "{.github/workflows/**,.gitignore,package.json,public/index.html,public/src/**,scripts/remove-console-logs.js,scripts/copy-libs.js,tests/**,README.md,tests/README.md}"
+globs: "{.github/workflows/**,.gitignore,package.json,public/index.html,public/src/**,scripts/build/remove-console-logs.js,scripts/build/copy-libs.js,tests/**,README.md,tests/README.md}"
 ---
 
 # Phase 1 — Release Hygiene
@@ -26,7 +26,7 @@ globs: "{.github/workflows/**,.gitignore,package.json,public/index.html,public/s
   - `node_modules/`, `*.log`
   - `public/lib/**` (gitignored; produced by `npm run copy-libs` / `postinstall`)
 - **Do not remove `.gitignore` entries** for `public/lib` and expect vendored libs in git — CI and `postinstall` must keep generating them.
-- **Do not commit `public/sw.js`** without running `npm run build:sw` in the same change set; it is generated from `src-sw.js`.
+- **Do not commit `public/sw.js`** without running `npm run build:sw` in the same change set; it is generated from `config/src-sw.js`.
 - **Do not tag `v1.0.0` in Phase 1** — version tag comes after Phases 0–4 are stable.
 
 ### Console stripping (`remove-console-logs`)
@@ -53,7 +53,7 @@ globs: "{.github/workflows/**,.gitignore,package.json,public/index.html,public/s
 ### Vendor & static assets
 
 - **Do not commit minified vendor JS/CSS into git** bypassing `copy-libs.js` — fonts, pico, lit, valtio, zod copies belong generated under `public/lib/`.
-- **Do not edit generated `public/lib/*` by hand** for “quick fixes”; update `scripts/copy-libs.js` or source package.
+- **Do not edit generated `public/lib/*` by hand** for “quick fixes”; update `scripts/build/copy-libs.js` or source package.
 
 ### Documentation
 

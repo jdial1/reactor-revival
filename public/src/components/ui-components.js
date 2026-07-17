@@ -1,13 +1,14 @@
-﻿import { render } from "lit-html";
+import { safeCall, teardownAll } from "../core/teardown.js";
+import { render } from "lit-html";
 import { classMap, styleMap } from "../dom/lit.js";
 import { toNumber } from "../simUtils.js";
-import { numFormat as fmt, formatNumberCompactIntl } from "../format/numbers.js";
+import { numFormat as fmt, formatNumberCompactIntl } from "../core/numbers.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
-import { getUiElement } from "./page-dom.js";
-import { getBarVisuals } from "./ui-control-deck.js";
-import { teardownAffordabilityIndicators } from "./ui-nav.js";
-import { togglePartsPanelForBuildButton } from "./ui-parts-panel.js";
-import { renderComponentIcons } from "./ui-blueprint-helpers.js";
+import { getUiElement } from "./shell/page-dom.js";
+import { getBarVisuals } from "./shell/ui-control-deck.js";
+import { teardownAffordabilityIndicators } from "./shell/ui-nav.js";
+import { togglePartsPanelForBuildButton } from "./shell/ui-parts-panel.js";
+import { renderComponentIcons } from "./blueprints/ui-blueprint-helpers.js";
 import { infoBarTemplate } from "../templates/uiComponentsTemplates.js";
 
 export {
@@ -22,7 +23,7 @@ export {
   initializeControlDeckToggleButtons,
   syncToggleStatesFromGame,
   updateControlDeckPercentageBar,
-} from "./ui-control-deck.js";
+} from "./shell/ui-control-deck.js";
 
 export {
   updateLeaderboardIcon,
@@ -36,7 +37,7 @@ export {
   teardownNavListeners,
   setupResizeListeners,
   teardownResizeListeners,
-} from "./ui-nav.js";
+} from "./shell/ui-nav.js";
 
 export {
   getUiConfigDisplayValue,
@@ -47,7 +48,7 @@ export {
   processUiUpdateQueue,
   updateUiRollingNumbers,
   startRenderLoop,
-} from "./ui-render-loop.js";
+} from "./grid/ui-render-loop.js";
 const VENTING_ANIM_MS = 400;
 const INFO_BAR_CATHODE_IDS = ["info_money_desktop", "info_money", "info_ep_value_desktop", "info_ep_value"];
 
@@ -59,10 +60,10 @@ export {
   getPageReactorBackground,
   isLitRenderContainer,
   dedupeReactorStatsDom,
-} from "./page-dom.js";
+} from "./shell/page-dom.js";
 
-export { HeatVisualsUI, GridInteractionUI } from "./ui-heat-visuals.js";
-export { myLayoutsTemplate, layoutViewTemplate } from "./ui-layout-templates.js";
+export { HeatVisualsUI, GridInteractionUI } from "./grid/ui-heat-visuals.js";
+export { myLayoutsTemplate, layoutViewTemplate } from "./blueprints/ui-layout-templates.js";
 
 
 function resetInfoBarCathodeState(ui) {
@@ -150,7 +151,7 @@ function buildInfoBarTemplate(ui, state) {
 
 export function teardownInfoBar(ui) {
   if (ui._infoBarUnmount) {
-    try { ui._infoBarUnmount(); } catch (_) {}
+    safeCall(() => { ui._infoBarUnmount(); });
     ui._infoBarUnmount = null;
   }
   ui._infoBarRoot = null;
@@ -198,19 +199,19 @@ export function teardownGameLayout(ui) {
   teardownAffordabilityIndicators(ui);
 
   if (ui._affordabilityBannerUnmounts?.length) {
-    ui._affordabilityBannerUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+    teardownAll(ui._affordabilityBannerUnmounts);
     ui._affordabilityBannerUnmounts = [];
   }
   ui._affordabilityBannerMountedUpgrades = false;
   ui._affordabilityBannerMountedResearch = false;
 
   if (ui._navLeaderboardUnmounts?.length) {
-    ui._navLeaderboardUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+    teardownAll(ui._navLeaderboardUnmounts);
     ui._navLeaderboardUnmounts = [];
   }
 
   if (typeof ui._statsBarUnmount === "function") {
-    try { ui._statsBarUnmount(); } catch (_) {}
+    safeCall(() => { ui._statsBarUnmount(); });
     ui._statsBarUnmount = null;
   }
   ui._statsBarReactiveMounted = false;
@@ -226,13 +227,13 @@ export function teardownGameLayout(ui) {
   }
 
   if (typeof ui._controlsNavUnmount === "function") {
-    try { ui._controlsNavUnmount(); } catch (_) {}
+    safeCall(() => { ui._controlsNavUnmount(); });
     ui._controlsNavUnmount = null;
   }
   ui._controlsNavReactiveMounted = false;
 
   if (typeof ui._partsPanelReactiveUnmount === "function") {
-    try { ui._partsPanelReactiveUnmount(); } catch (_) {}
+    safeCall(() => { ui._partsPanelReactiveUnmount(); });
     ui._partsPanelReactiveUnmount = null;
   }
 
@@ -242,8 +243,10 @@ export function teardownGameLayout(ui) {
   }
   ui._tickCadenceNavListenersAttached = false;
 
+  ui.inputHandler?.teardownAllListeners?.();
+
   if (ui._layoutUnmounts?.length) {
-    ui._layoutUnmounts.forEach((fn) => { try { fn(); } catch (_) {} });
+    teardownAll(ui._layoutUnmounts);
     ui._layoutUnmounts = [];
   }
   ui._uiViewHostsUnmount = null;
@@ -277,9 +280,9 @@ export {
   initializePartsPanel,
   teardownPartsPanel,
   setupPartsPanel,
-} from "./ui-parts-panel.js";
+} from "./shell/ui-parts-panel.js";
 
-export { InputHandler } from "./input-manager.js";
+export { InputHandler } from "./shell/input-manager.js";
 export {
   runPopulateUpgradeSection,
   updateSectionCountsState,
@@ -292,7 +295,7 @@ export {
   hideUpgradeDebugPanel,
   updateUpgradeDebugVariables,
   collectUpgradeDebugGameVariables,
-} from "./ui-upgrade-hub.js";
+} from "./upgrades/ui-upgrade-hub.js";
 export {
   UserAccountUI,
   PwaDisplayModeUI,
@@ -302,7 +305,7 @@ export {
   subscribeToContextModalEvents,
   unsubscribeContextModalEvents,
   quickStartTemplate,
-} from "./ui-device-shell.js";
+} from "./shell/ui-device-shell.js";
 
 export class ComponentRenderingUI {
   constructor(ui) {
@@ -331,7 +334,7 @@ export {
   validatePasteResources,
   calculateLayoutDiffBreakdown,
 } from "../domain/blueprint.js";
-export { renderComponentIcons } from "./ui-blueprint-helpers.js";
+export { renderComponentIcons } from "./blueprints/ui-blueprint-helpers.js";
 export { encodeLayoutShare, decodeLayoutShare, isLayoutShareCode } from "../core/layoutShareCodec.js";
 
 
@@ -342,14 +345,14 @@ export {
   renderLayoutPreview,
   buildPartSummary,
   buildAffordableSet,
-} from "./ui-reactor-layout.js";
-export { getCompactLayout, serializeReactor } from "../layout/reactor-codec.js";
+} from "./grid/ui-reactor-layout.js";
+export { getCompactLayout, serializeReactor } from "../domain/reactor-codec.js";
 export {
   CopyPasteUI,
   hideCopyPasteModal,
   setupCopyAction,
   setupPasteAction,
-} from "./ui-copy-paste.js";
+} from "./blueprints/ui-copy-paste.js";
 
 export {
   initializePage,
@@ -360,6 +363,6 @@ export {
   setupAboutScrollHint,
   setupResearchCollapsibleSections,
   setupVersionDisplayForPage,
-} from "./ui-page-init.js";
-export { MeltdownUI } from "./ui-meltdown.js";
+} from "./shell/ui-page-init.js";
+export { MeltdownUI } from "./shell/ui-meltdown.js";
 

@@ -1,4 +1,4 @@
-﻿import { html, nothing } from "lit-html";
+import { html, nothing } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { classMap, repeat, styleMap } from "../dom/lit.js";
 
@@ -864,12 +864,6 @@ export function upgradeHubDetailPanelTemplate({
   `;
 }
 
-export function plainTextTemplate({
-  text,
-}) {
-  return html`${text}`;
-}
-
 export function quickSelectSlotTemplate({
   slotClass,
   index,
@@ -884,15 +878,6 @@ export function quickSelectSlotTemplate({
       ${hasIcon ? html`<div class="quick-select-icon" style=${iconStyle}></div>` : ""}
       ${hasPart ? html`<div class="quick-select-cost">${costText}</div>` : ""}
     </button>
-  `;
-}
-
-export function decompressionSavedToastTemplate() {
-  return html`
-    <div class="decompression-saved-toast__panel" id="decompression_inner">
-      <div class="decompression-saved-toast__tag">STATUS // VENT BLOWDOWN</div>
-      <div class="decompression-saved-toast__body">Explosive decompression saved the reactor!</div>
-    </div>
   `;
 }
 

@@ -5,16 +5,43 @@ export const showLoadBackupModal = () =>
     const overlay = document.createElement("div");
     overlay.className = "game-setup-overlay bios-overlay";
     overlay.style.zIndex = "10001";
-    const content = document.createElement("div");
-    content.innerHTML = `<div class="bios-overlay-content" style="max-width: 420px;">
-  <h2 style="margin-bottom: 0.75rem; font-size: 0.9rem;">Save file corrupted</h2>
-  <p style="font-size: 0.65rem; color: rgb(180 190 170); margin-bottom: 1rem;">The current save could not be read. Load from backup?</p>
-  <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-    <button type="button" class="splash-btn" data-action="load-backup">Load backup</button>
-    <button type="button" class="splash-btn splash-btn-exit" data-action="cancel">Cancel</button>
-  </div>
-</div>`;
-    overlay.appendChild(content);
+
+    const panel = document.createElement("div");
+    panel.className = "bios-overlay-content";
+    panel.style.maxWidth = "420px";
+
+    const title = document.createElement("h2");
+    title.style.marginBottom = "0.75rem";
+    title.style.fontSize = "0.9rem";
+    title.textContent = "Save file corrupted";
+
+    const body = document.createElement("p");
+    body.style.fontSize = "0.65rem";
+    body.style.color = "rgb(180 190 170)";
+    body.style.marginBottom = "1rem";
+    body.textContent = "The current save could not be read. Load from backup?";
+
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.flexDirection = "column";
+    actions.style.gap = "0.5rem";
+
+    const loadBtn = document.createElement("button");
+    loadBtn.type = "button";
+    loadBtn.className = "splash-btn";
+    loadBtn.dataset.action = "load-backup";
+    loadBtn.textContent = "Load backup";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "splash-btn splash-btn-exit";
+    cancelBtn.dataset.action = "cancel";
+    cancelBtn.textContent = "Cancel";
+
+    actions.append(loadBtn, cancelBtn);
+    panel.append(title, body, actions);
+    overlay.appendChild(panel);
+
     const resolveAndClose = (value) => {
       controller.abort();
       overlay.remove();

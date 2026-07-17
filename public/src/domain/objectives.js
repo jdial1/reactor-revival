@@ -1,8 +1,9 @@
 import { subscribeKey } from "valtio/vanilla/utils";
-import { bundledGameData } from "../bundledStaticData.js";
-import { numFormat as fmt } from "../format/numbers.js";
+import { bundledGameData } from "../generated/bundledStaticData.js";
+import { numFormat as fmt } from "../core/numbers.js";
 import { logger } from "../core/logger.js";
 import { areAdjacent as areAdjacentFromModule } from "../core/grid-helpers.js";
+import { safeCall } from "../core/teardown.js";
 import {
   CHAPTER_NAMES,
   OBJECTIVE_INTERVAL_MS,
@@ -13,6 +14,7 @@ import {
   CHAPTER_COMPLETION_OBJECTIVE_INDICES,
   CLAIM_FEEDBACK_DELAY_MS,
 } from "../constants/objectives.js";
+import { requireActiveBridge } from "../bridge/active.js";
 
 function loadObjectiveList() {
   const objectives = bundledGameData.objectives;
@@ -121,8 +123,7 @@ function getObjectiveClaimText(reward) {
 export function getObjectiveCheck(checkId) {
   if (!checkId) return null;
   return (game) => {
-    const bridge = game?.coreBridge;
-    if (!bridge?.isActive) throw new Error("getObjectiveCheck requires an active core session");
+    const bridge = requireActiveBridge(game, "getObjectiveCheck");
     return bridge.evaluateObjectiveCheck(checkId) || {
       completed: false,
       percent: 0,
@@ -150,9 +151,17 @@ export class ObjectiveManager {
   _clearObjectiveStateWatchers() {
     const u = this._objectiveWatchUnsubs;
     for (let i = 0; i < u.length; i++) {
-      if (typeof u[i] === "function") u[i]();
+      if (typeof u[i] === "function") {
+        safeCall(u[i]);
+      }
     }
     this._objectiveWatchUnsubs = [];
+  }
+
+  teardown() {
+    this._clearObjectiveStateWatchers();
+    clearTimeout(this.objective_timeout);
+    this.objective_timeout = null;
   }
 
   _bindObjectiveStateWatchers() {
@@ -165,30 +174,20 @@ export class ObjectiveManager {
       this._objectiveWatchLastFire = now;
       this.check_current_objective();
     };
+    const unsubs = this._objectiveWatchUnsubs;
     for (let i = 0; i < OBJECTIVE_VALTIO_WATCH_KEYS.length; i++) {
       const key = OBJECTIVE_VALTIO_WATCH_KEYS[i];
-      try {
-        this._objectiveWatchUnsubs.push(subscribeKey(st, key, fire));
-      } catch (_) {}
+      safeCall(() => { unsubs.push(subscribeKey(st, key, fire)); });
     }
   }
 
-  _sessionObjectives() {
-    return this.game?.coreBridge?.session?.systems?.objectives ?? null;
-  }
-
-  _syncIndexToSession() {
-    this.game?.coreBridge?.syncObjectiveIndex?.(this.current_objective_index);
-  }
-
   _readSessionProgress() {
-    const bridge = this.game?.coreBridge;
-    if (!bridge?.isActive) throw new Error("objective progress requires an active core session");
-    return bridge.getObjectiveProgress() || { completed: false, percent: 0, text: "Awaiting completion..." };
+    return requireActiveBridge(this.game, "objective progress").getObjectiveProgress()
+      || { completed: false, percent: 0, text: "Awaiting completion..." };
   }
 
   _isSessionComplete(index = this.current_objective_index) {
-    const objectives = this._sessionObjectives();
+    const objectives = this.game?.coreBridge?.session?.systems?.objectives ?? null;
     if (!objectives) return !!this.current_objective_def?.completed;
     if (objectives.isComplete(index)) return true;
     if (index !== this.current_objective_index) {
@@ -238,7 +237,6 @@ export class ObjectiveManager {
 
   _emitObjectiveUnloaded() {
     this._clearObjectiveStateWatchers();
-    this.game?.ui?.stateManager?.handleObjectiveUnloaded?.();
   }
 
   async initialize() {
@@ -287,7 +285,7 @@ export class ObjectiveManager {
     }
     const bridge = this.game?.coreBridge;
     bridge?.hydrateObjectivesFromGame?.();
-    this._syncIndexToSession();
+    bridge?.syncObjectiveIndex?.(this.current_objective_index);
     while (this.current_objective_def && this.current_objective_def.checkId !== "allObjectives") {
       this._syncActiveObjectiveToState?.();
       const progress = this._readSessionProgress();
@@ -396,7 +394,7 @@ export class ObjectiveManager {
     const maxValidIndex = this.objectives_data.length - 1;
     if (objective_index > maxValidIndex) objective_index = maxValidIndex;
     this.current_objective_index = objective_index;
-    this._syncIndexToSession();
+    this.game?.coreBridge?.syncObjectiveIndex?.(this.current_objective_index);
     const nextObjective = this.objectives_data[this.current_objective_index];
     clearTimeout(this.objective_timeout);
     const updateLogic = () => {

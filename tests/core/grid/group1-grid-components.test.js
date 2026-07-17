@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
 import { REACTOR_HEAT_STANDARD_DIVISOR } from "@app/utils.js";
-import { GridCanvasRenderer, bindGridRendererSurfaces } from "@app/components/ui-grid.js";
+import { GridCanvasRenderer, bindGridRendererSurfaces } from "@app/components/grid/ui-grid.js";
 
 describe("Group 1: Core Grid & Component Generation", () => {
   let game;

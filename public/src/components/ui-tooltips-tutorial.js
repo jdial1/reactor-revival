@@ -1,15 +1,17 @@
-﻿import { html, render } from "lit-html";
+import { safeCall, teardownAll } from "../core/teardown.js";
+import { html, render } from "lit-html";
 import { StorageUtils } from "../storage/index.js";
-import { numFormat as fmt } from "../format/numbers.js";
+import { numFormat as fmt } from "../core/numbers.js";
 import { logger } from "../core/logger.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
 import {
   getUpgradeBonusLines as getUpgradeBonusLinesCore,
   collectPartSemanticSegments,
   computeDisplaySellValue,
-} from "../logic-tooltip-stats.js";
-import { formatSemanticSegmentsForTooltip } from "../semantic-format.js";
-import { inspectExchangerPressureFlowForTile } from "../bridge/bridge-heat.js";
+} from "./tooltip-stats.js";
+import { formatSemanticSegmentsForTooltip } from "./semantic-format.js";
+import { inspectExchangerPressureFlow } from "../bridge/bridge-heat.js";
+import { requireActiveBridge } from "../bridge/active.js";
 import { actions, ref } from "../store.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { styleMap, when, unsafeHTML, BaseComponent } from "../dom/lit.js";
@@ -44,9 +46,7 @@ const desktopTooltipContentTemplate = ({ title, hasUpgrade, summaryHtml, descHtm
 
 const renderTutorialCallout = (container, message, onSkip, onHardSkip) => {
   if (!container?.isConnected) return;
-  try {
-    render(tutorialCalloutTemplate(message, onSkip, onHardSkip), container);
-  } catch (_) {}
+  safeCall(() => { render(tutorialCalloutTemplate(message, onSkip, onHardSkip), container); });
 };
 
 const TUTORIAL_STEP_KEY = "reactorTutorialStep";
@@ -267,6 +267,15 @@ class TutorialRuntime {
     else document.body.dataset.tutorialStep = String(value);
   }
 
+  _clearStepListeners() {
+    if (this._stepAbortController) {
+      this._stepAbortController.abort();
+      this._stepAbortController = null;
+    }
+    this._resizeListener = null;
+    this._scrollListener = null;
+  }
+
   showStep(stepIndex) {
     const step = this.steps[stepIndex];
     if (!step) return this.complete();
@@ -292,18 +301,21 @@ class TutorialRuntime {
       this.updatePointer(useGridTile ? rect : null);
     };
     update();
+    this._clearStepListeners();
+    const ac = new AbortController();
+    const { signal } = ac;
+    this._stepAbortController = ac;
     this._resizeListener = () => update();
     this._scrollListener = () => update();
-    window.addEventListener("resize", this._resizeListener);
-    window.addEventListener("scroll", this._scrollListener, true);
+    window.addEventListener("resize", this._resizeListener, { signal });
+    window.addEventListener("scroll", this._scrollListener, { capture: true, signal });
   }
 
   hideSpotlight() {
     this.updatePointer(null);
     if (this.overlay) this.overlay.classList.remove("visible");
     if (this.callout) this.callout.classList.remove("visible");
-    window.removeEventListener("resize", this._resizeListener);
-    window.removeEventListener("scroll", this._scrollListener, true);
+    this._clearStepListeners();
   }
 
   advance() {
@@ -313,7 +325,11 @@ class TutorialRuntime {
   advanceFrom(fromIndex) {
     this.hideSpotlight();
     const next = fromIndex + 1;
-    if (next >= this.steps.length) return this.complete().catch(() => {});
+    if (next >= this.steps.length) {
+      return this.complete().catch((err) => {
+        logger.warn("tutorial complete failed", err);
+      });
+    }
     this.persistStep(next);
     if (this.hasClaimableObjective()) {
       this._resumeStepIndex = next;
@@ -351,10 +367,14 @@ class TutorialRuntime {
       this.updateCallout(CLAIM_STEP.message, rect);
     };
     setTimeout(update, 50);
+    this._clearStepListeners();
+    const ac = new AbortController();
+    const { signal } = ac;
+    this._stepAbortController = ac;
     this._resizeListener = () => update();
     this._scrollListener = () => update();
-    window.addEventListener("resize", this._resizeListener);
-    window.addEventListener("scroll", this._scrollListener, true);
+    window.addEventListener("resize", this._resizeListener, { signal });
+    window.addEventListener("scroll", this._scrollListener, { capture: true, signal });
   }
 
   async complete() {
@@ -375,13 +395,17 @@ class TutorialRuntime {
   }
 
   skip() {
-    this.complete().catch(() => {});
+    this.complete().catch((err) => {
+      logger.warn("tutorial skip failed", err);
+    });
   }
 
   hardSkip() {
     if (this.game) this.game.bypass_tech_tree_restrictions = true;
     StorageUtils.set(TUTORIAL_HARD_SKIP_KEY, 1);
-    this.complete().catch(() => {});
+    this.complete().catch((err) => {
+      logger.warn("tutorial hardSkip failed", err);
+    });
   }
 
   _exitClaimStepAndResume() {
@@ -529,10 +553,9 @@ function calculateSellValue(obj, tile) {
 function setHeatAndSegmentStats(stats, obj, tile, game) {
   if (!tile?.activated || (!obj.containment && tile.heat_contained <= 0)) return;
   setBaseHeatStats(stats, obj, tile);
-  const pressureNote = inspectExchangerPressureFlowForTile(tile);
+  const pressureNote = inspectExchangerPressureFlow(tile?.game?.coreBridge, tile);
   if (pressureNote) stats.set("Heat routing", pressureNote);
-  if (!game.engine?.heatManager) return;
-  const segment = game.engine.heatManager.getSegmentForTile(tile);
+  const segment = game.coreBridge?.getHeatSegmentForTile?.(tile);
   if (!segment) return;
   stats.set("Segment", `${fmt(segment.fullnessRatio * 100, 1)}% full`);
   if (obj.category === "vent" && segment.vents.length > 0) {
@@ -580,8 +603,7 @@ function buildDesktopSummaryItems(obj, tile) {
 
 function formatCellSubstrateLines(tile, part) {
   if (!tile || part.category !== "cell") return "";
-  const bridge = tile.game?.coreBridge;
-  if (!bridge?.isActive) throw new Error("formatCellSubstrateLines requires an active core session");
+  const bridge = requireActiveBridge(tile.game, "formatCellSubstrateLines");
   const desc = bridge.describeCellPulse(tile);
   if (!desc) return "";
   const M = desc.cellMultiplier ?? part.cell_pack_M ?? 1;
@@ -673,16 +695,17 @@ export class TooltipManager extends BaseComponent {
       if (e.target.id === "tooltip_close_btn") this.closeView();
     };
 
-    window.addEventListener("resize", this._resizeHandler);
-    this.$tooltip.addEventListener("click", this._tooltipClickHandler);
+    const ac = new AbortController();
+    const { signal } = ac;
+    this._listenerAbortController = ac;
+    window.addEventListener("resize", this._resizeHandler, { signal });
+    this.$tooltip.addEventListener("click", this._tooltipClickHandler, { signal });
   }
 
   teardown() {
-    if (typeof window !== "undefined") {
-      window.removeEventListener("resize", this._resizeHandler);
-    }
-    if (this.$tooltip) {
-      this.$tooltip.removeEventListener("click", this._tooltipClickHandler);
+    if (this._listenerAbortController) {
+      this._listenerAbortController.abort();
+      this._listenerAbortController = null;
     }
   }
 
@@ -796,9 +819,7 @@ export class TooltipManager extends BaseComponent {
       }
     };
     const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, onBuy);
-    try {
-      render(template, this.$tooltipContent);
-    } catch (_) {}
+    safeCall(() => { render(template, this.$tooltipContent); });
     this.game.performance.markEnd("tooltip_update_total");
   }
 
@@ -820,6 +841,10 @@ export class TooltipManager extends BaseComponent {
 }
 
 export function wireTooltipManager(ui, game) {
+  if (typeof ui._tooltipWireTeardown === "function") {
+    safeCall(() => { ui._tooltipWireTeardown(); });
+    ui._tooltipWireTeardown = null;
+  }
   const manager = new TooltipManager("#main", "#tooltip", game);
   ui.tooltipManager = manager;
   const uiState = ui.uiState;
@@ -838,9 +863,14 @@ export function wireTooltipManager(ui, game) {
       }
     }));
   }
-  return () => {
-    unsubs.forEach((fn) => { try { fn(); } catch (_) {} });
+  const teardown = () => {
+    teardownAll(unsubs);
     manager.teardown();
     ui.tooltipManager = null;
+    ui._tooltipWireTeardown = null;
   };
+  ui._tooltipWireTeardown = teardown;
+  if (!ui._unmounts) ui._unmounts = [];
+  ui._unmounts.push(teardown);
+  return teardown;
 }

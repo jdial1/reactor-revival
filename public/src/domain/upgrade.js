@@ -1,13 +1,14 @@
 import { TechTreeSchema } from "../schema/index.js";
-import { bundledGameData } from "../bundledStaticData.js";
+import { bundledGameData } from "../generated/bundledStaticData.js";
 import { applyComputedModifiers } from "../bridge/bridge-mechanics.js";
-import { calculateSectionCounts } from "../logic-upgrade-sections.js";
-import { runCheckAffordabilityCore, runCheckAffordability, computeAffordable } from "../bridge/bridge-upgrades.js";
+import { calculateSectionCounts } from "./upgrade-sections.js";
+import { runCheckAffordability } from "../bridge/bridge-upgrades.js";
 import { toDecimal, toNumber, getDecimal } from "../simUtils.js";
-import { numFormat as fmt } from "../format/numbers.js";
+import { numFormat as fmt } from "../core/numbers.js";
 import { logger } from "../core/logger.js";
 import { MAX_PART_VARIANTS } from "../constants/balance.js";
-import { bumpGridPartsRevision } from "../bridge/bridge-parts.js";
+import { bumpGridPartsRevision } from "../bridge/bridge-grid-sync.js";
+import { getActiveBridge, requireActiveBridge } from "../bridge/active.js";
 
 const Decimal = getDecimal();
 
@@ -49,10 +50,7 @@ const catalogEntryToHostDef = (entry, game) => {
 };
 
 const buildUpgradeDefsFromSession = (game) => {
-  const bridge = game?.coreBridge;
-  if (!bridge?.isActive || !bridge.listUpgrades) {
-    throw new Error("UpgradeSet.initialize requires an active core session");
-  }
+  const bridge = requireActiveBridge(game, "UpgradeSet.initialize");
   const catalog = bridge.listUpgrades() || [];
   const defs = [];
   for (let i = 0; i < catalog.length; i++) {
@@ -134,8 +132,8 @@ export class Upgrade {
         syncUpgradeDerivedEffects(this.game, this);
       }
     }
-    const bridge = this.game?.coreBridge;
-    if (bridge?.isActive && bridge.session?.setUpgradeLevels && !opts.skipSessionSync) {
+    const bridge = getActiveBridge(this.game);
+    if (bridge?.session?.setUpgradeLevels && !opts.skipSessionSync) {
       const sessLevel = bridge.session.getUpgradeLevel?.(this.id) ?? 0;
       if (sessLevel !== this.level) {
         const entries = (this.game.upgradeset?.toSaveState?.() || []).map((e) => ({ id: e.id, level: e.level }));
@@ -169,8 +167,7 @@ export class Upgrade {
   }
 
   updateDisplayCost() {
-    const bridge = this.game?.coreBridge;
-    if (!bridge?.isActive) throw new Error("updateDisplayCost requires an active core session");
+    const bridge = requireActiveBridge(this.game, "updateDisplayCost");
     const preview = bridge.previewUpgrade(this.id);
     if (!preview) return;
     if (preview.reason === "max_level" || this.level >= this.max_level) {
@@ -250,9 +247,7 @@ function isUpgradeAvailable(upgradeset, upgradeId) {
       return false;
     }
 
-    const bridge = upgradeset.game.coreBridge;
-    if (!bridge?.isActive) throw new Error("isUpgradeAvailable requires an active core session");
-    return bridge.isUpgradeAvailable(upgradeId);
+    return requireActiveBridge(upgradeset.game, "isUpgradeAvailable").isUpgradeAvailable(upgradeId);
 }
 
 function getExclusiveUpgradeIdsForTree(upgradeset, treeId) {
@@ -367,10 +362,10 @@ export class UpgradeSet {
   }
 
   purchaseUpgrade(upgradeId) {
-    const game = this.game;
-    if (!game?.coreBridge?.isActive) return false;
+    const bridge = getActiveBridge(this.game);
+    if (!bridge) return false;
     const before = this.getUpgrade(upgradeId)?.level ?? 0;
-    game.coreBridge.purchaseUpgrade(upgradeId);
+    bridge.purchaseUpgrade(upgradeId);
     return (this.getUpgrade(upgradeId)?.level ?? 0) > before;
   }
 

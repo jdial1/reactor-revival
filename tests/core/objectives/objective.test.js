@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, UI, Game, Engine, ObjectiveManager, assertProcessedObjectiveTitleHasIcon } from "../../helpers/setup.js";
-import dataService from "@app/services.js";
+import dataService from "@app/services/app-services.js";
 import { getObjectiveCheck } from "@app/logic.js";
 import { patchGameState } from "@app/state.js";
 import { satisfyObjective, setCoreSustainedStart } from "../../helpers/objectiveHelpers.js";

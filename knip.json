@@ -1,0 +1,49 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "public/index.html",
+    "public/privacy-policy.html",
+    "public/terms-of-service.html",
+    "public/src/app.js",
+    "public/src/renderLegalStandalone.js",
+    "config/src-sw.js",
+    "config/workbox-config.cjs",
+    "scripts/**/*.{js,mjs,cjs}",
+    "e2e/**/*.js",
+    "tests/**/*.js"
+  ],
+  "project": [
+    "public/src/**/*.js",
+    "config/**/*.{js,mjs,cjs}",
+    "scripts/**/*.{js,mjs,cjs}",
+    "e2e/**/*.js",
+    "tests/**/*.js"
+  ],
+  "paths": {
+    "@app/*": ["./public/src/*"],
+    "@test-helpers": ["./tests/helpers/setup.js"],
+    "reactor-core": ["./node_modules/reactor-core-lib/src/index.js"]
+  },
+  "ignoreDependencies": [
+    "@fontsource/oswald",
+    "@fontsource/press-start-2p",
+    "@fontsource/share-tech-mono",
+    "@fontsource/vt323",
+    "@microsoft/eslint-formatter-sarif",
+    "@zip.js/zip.js",
+    "eslint-import-resolver-node",
+    "pako"
+  ],
+  "eslint": {
+    "config": ["config/eslint.config.js"]
+  },
+  "stylelint": {
+    "config": ["config/.stylelintrc.json"]
+  },
+  "vitest": {
+    "config": ["config/vitest.config.mjs"]
+  },
+  "playwright": {
+    "config": ["config/playwright.config.mjs"]
+  }
+}

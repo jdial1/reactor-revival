@@ -32,7 +32,7 @@ if (typeof global !== 'undefined') global.Decimal = Decimal;
 if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
 
 import { URL as NodeURL } from 'url';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import pathModule from 'path';
 import { JSDOM, ResourceLoader } from 'jsdom';
@@ -43,7 +43,7 @@ import {
   mockHardwareAPIs,
 } from './testUtils.js';
 
-vi.mock('idb-keyval', () => {
+vi.mock('@app/storage/idb-keyval.js', () => {
   const getStorage = () => (typeof global !== 'undefined' && global.localStorage) || (typeof window !== 'undefined' && window.localStorage);
   return {
     get: (key) => {
@@ -210,14 +210,10 @@ if (global.window) global.window.Decimal = Decimal;
 // --- Phase 2: Common Imports & Exports ---
 // Re-exporting common modules saves individual test files from importing them repeatedly.
 
-// Vitest framework imports
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-
 // Core application imports
 import { Game, Engine, ObjectiveManager } from '@app/logic.js';
 import { UI } from '@app/components/ui.js';
-import { PageRouter } from '@app/app.js';
-import { attachGameEventListeners } from '@app/app.js';
+import { PageRouter, attachGameEventListeners } from '@app/app.js';
 import { grantInfiniteResources, syncGridState } from './gameHelpers.js';
 import { mockFetchJsonResponse } from './suiteHelpers.js';
 
@@ -740,12 +736,6 @@ export async function setupGameWithDOM() {
   game.objectives_manager = new ObjectiveManager(game);
   await game.objectives_manager.initialize();
   
-  if (typeof globalThis.crossOriginIsolated === "undefined") {
-    Object.defineProperty(globalThis, "crossOriginIsolated", { value: true, configurable: true, writable: true });
-  }
-  if (global.window && typeof global.window.crossOriginIsolated === "undefined") {
-    Object.defineProperty(global.window, "crossOriginIsolated", { value: true, configurable: true, writable: true });
-  }
   if (typeof global.Worker === "undefined") {
     global.Worker = class MockWorker {
       constructor() {
@@ -760,7 +750,7 @@ export async function setupGameWithDOM() {
   game.engine = new Engine(game);
   pinEngineToSyncMode(game.engine);
 
-  const { AudioService } = await import("@app/services.js");
+  const { AudioService } = await import("@app/services/app-services.js");
   game.audio = new AudioService();
   await game.audio.init();
   

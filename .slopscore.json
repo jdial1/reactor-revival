@@ -1,0 +1,24 @@
+{
+  "preset": "web",
+  "failOn": "critical",
+  "ignore": [
+    "examples",
+    "fixtures",
+    "reference",
+    "tests",
+    "e2e",
+    "scripts",
+    "config",
+    "public/lib"
+  ],
+  "rules": {
+    "052": "off",
+    "055": "off",
+    "099": "off",
+    "105": "off",
+    "139": "off",
+    "178": "off",
+    "231": "off",
+    "276": "off"
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame, simulateViewportResize } from "../helpers/setup.js";
-import { GridScaler } from "@app/components/ui-grid.js";
+import { GridScaler } from "@app/components/grid/ui-grid.js";
 import { assertPageShellClass, getAppShell } from "../helpers/testUtils.js";
 
 // Helper to check if an element exists and is not explicitly hidden

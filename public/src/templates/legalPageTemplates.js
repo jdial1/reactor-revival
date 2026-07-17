@@ -1,4 +1,56 @@
 import { html } from "lit-html";
+import { logger } from "../core/logger.js";
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+export function formatPrivacyPolicyDateFromVersion(version) {
+  if (!version) return null;
+  const parts = String(version).split("-")[0].split("_");
+  if (parts.length !== 3) return null;
+  const [day, month, yearSuffix] = parts;
+  const monthName = MONTH_NAMES[parseInt(month, 10) - 1];
+  if (!monthName) return null;
+  return `${monthName} ${day}, 20${yearSuffix}`;
+}
+
+export function fallbackPrivacyPolicyDate() {
+  return new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+export async function populatePrivacyPolicyDateElement(el = document.getElementById("privacy-policy-date")) {
+  if (!el) return;
+  try {
+    const response = await fetch("version.json");
+    if (response.ok) {
+      const versionData = await response.json();
+      const formatted = formatPrivacyPolicyDateFromVersion(versionData?.version);
+      if (formatted) {
+        el.textContent = formatted;
+        return;
+      }
+    }
+  } catch (err) {
+    logger.warn("privacy policy date fetch failed", err);
+  }
+  el.textContent = fallbackPrivacyPolicyDate();
+}
 
 function legalBackFooter(embeddedInApp) {
   if (embeddedInApp) {

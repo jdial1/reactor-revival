@@ -1,14 +1,14 @@
 ---
 description: Phase 0 gate — anti-patterns and items to avoid while unblocking npm test
 alwaysApply: false
-globs: "{scripts/test-runner.js,scripts/lint-runner.js,.github/workflows/**,public/css/**,.stylelintignore,package.json,config/.stylelintrc.json,config/vitest.config.mjs,tests/**}"
+globs: "{scripts/qa/test-runner.js,scripts/qa/lint-runner.js,.github/workflows/**,public/css/**,.stylelintignore,package.json,config/.stylelintrc.json,config/vitest.config.mjs,tests/**}"
 ---
 
 # Phase 0 — Unblock the Gate
 
 **Goal:** `npm test` exit 0 locally; CI build job green.
 
-**Exit criteria:** lint + syntax + full Vitest pass via `node scripts/test-runner.js`.
+**Exit criteria:** lint + syntax + full Vitest pass via `node scripts/qa/test-runner.js`.
 
 ---
 
@@ -68,9 +68,10 @@ globs: "{scripts/test-runner.js,scripts/lint-runner.js,.github/workflows/**,publ
 ```bash
 npm run lint:css
 npm run lint:js
-node scripts/check-syntax.js
+node scripts/qa/check-syntax.js
 npm test
 ```
+
 
 All four must exit 0 before Phase 0 is complete.
 

@@ -1,0 +1,316 @@
+import { html, render } from "lit-html";
+import { classMap, styleMap, unsafeHTML } from "../../dom/lit.js";
+import { numFormat } from "../../core/numbers.js";
+import { getUpgradeBonusLines } from "../tooltip-stats.js";
+import {
+  upgradeCardTemplate,
+  partButtonTemplate,
+  partDetailsBlockTemplate,
+  partStatIconTemplate,
+  partStatTemplate,
+  closeButtonTemplate,
+} from "../../templates/buttonFactoryTemplates.js";
+
+function withTemplateTarget(e, selector, onClick) {
+  const target = e.target.closest(selector);
+  if (!target) return;
+  const wrappedEvent = Object.create(e);
+  Object.defineProperty(wrappedEvent, "currentTarget", { value: target });
+  onClick(wrappedEvent);
+}
+
+function getUpgradeIconOverlay(upgrade) {
+  try {
+    const classes = Array.isArray(upgrade.upgrade?.classList) ? upgrade.upgrade.classList : [];
+    const title = (upgrade.title || "").toLowerCase();
+    const desc = (upgrade.description || "").toLowerCase();
+    const type = (upgrade.type || upgrade.upgrade?.type || "").toLowerCase();
+    const actionId = (upgrade.actionId || upgrade.upgrade?.actionId || "").toLowerCase();
+
+    let iconPath = null;
+    let isHeat = false;
+
+    if (classes.includes("cell_perpetual") || title.includes("perpetual") || actionId.includes("perpetual")) {
+      iconPath = "img/ui/status/status_infinity.png";
+    }
+
+    if (!iconPath && (classes.includes("cell_tick") || title.includes("enriched") || actionId.includes("tick") ||
+      desc.includes("tick") || desc.includes("duration") || desc.includes("last") || desc.includes("per second") || title.includes("clock") || title.includes("chronometer"))) {
+      iconPath = "img/ui/icons/icon_time.png";
+    }
+
+    if (!iconPath) {
+      const heatTerms = ["heat", "vent", "exchange", "containment", "hold", "heatsink", "coolant", "thermal", "inlet", "outlet", "exchanger", "venting"];
+      const powerTerms = ["power", "potent", "reflection", "transformer", "grid", "capacitor", "capacitance", "accelerator"];
+      const hasHeat = heatTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t));
+      const hasPower = powerTerms.some(t => title.includes(t) || desc.includes(t) || type.includes(t) || actionId.includes(t) || classes.includes("cell_power"));
+      if (hasHeat) {
+        iconPath = "img/ui/icons/icon_heat.png";
+        isHeat = true;
+      } else if (hasPower) {
+        iconPath = "img/ui/icons/icon_power.png";
+      }
+    }
+
+    if (!iconPath) iconPath = "img/ui/status/status_star.png";
+    return { iconPath, isHeat };
+  } catch (_) {
+    return { iconPath: null, isHeat: false };
+  }
+}
+
+export function renderToNode(template) {
+  const container = document.createElement("div");
+  render(template, container);
+  return container.firstElementChild || container;
+}
+
+export const StartButton = (disabled, onClick) => html`
+  <span @click=${(e) => withTemplateTarget(e, "#splash-new-game-btn", onClick)}>
+    <button id="splash-new-game-btn" class="splash-btn splash-btn-start" ?disabled=${disabled}>
+      New Game
+    </button>
+  </span>
+`;
+
+export const LoadGameButtonFullWidth = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
+  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onClick)}>
+    <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-full-width">
+      <div class="load-game-header"><span>Load Local Game</span></div>
+      <div class="load-game-details">
+        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
+        <div class="played-time">${playedTimeStr}</div>
+      </div>
+    </button>
+  </span>
+`;
+
+export const LoadGameButton = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
+  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onClick)}>
+    <button id="splash-load-game-btn" class="splash-btn splash-btn-load">
+      <div class="load-game-header"><span>Load Local Game</span></div>
+      <div class="load-game-details">
+        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
+        <div class="played-time">${playedTimeStr}</div>
+      </div>
+      <div class="synced-label" style=${isCloudSynced ? "" : "display:none;"}></div>
+    </button>
+  </span>
+`;
+
+export const LoadGameUploadRow = (saveData, playedTimeStr, isCloudSynced, onLoadClick) => html`
+  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onLoadClick)}>
+    <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-full-width">
+      <div class="load-game-header"><span>Load Local Game</span></div>
+      <div class="load-game-details">
+        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
+        <div class="played-time">${playedTimeStr}</div>
+      </div>
+      <div class="synced-label" style=${isCloudSynced ? "" : "display:none;"}></div>
+    </button>
+  </span>
+`;
+
+export const BuyButton = (upgrade, onClick) => {
+  const isEp = upgrade?.erequires || (upgrade?.base_ecost != null && Number(upgrade.base_ecost) > 0);
+  const costDisplay = isEp ? `${upgrade.current_ecost ?? 0} 🧬 EP` : (upgrade?.display_cost ?? upgrade?.current_cost ?? "");
+  const ariaLabel = upgrade?.title ? `Buy ${upgrade.title}` : "Buy";
+  const disabled = upgrade ? !upgrade.affordable : false;
+  return html`
+    <button class="pixel-btn" ?disabled=${disabled} aria-label=${ariaLabel} @click=${onClick}>
+      Buy
+      <img src="img/ui/icons/icon_cash.png" class="icon-inline" alt="cash" style=${styleMap({ display: isEp ? "none" : "" })} />
+      <span class="cost-text">${costDisplay}</span>
+    </button>
+  `;
+};
+
+export const TooltipCloseButton = (onClick) => html`
+  <span @click=${(e) => withTemplateTarget(e, "#tooltip_close_btn", onClick)}>
+    <button id="tooltip_close_btn" title="Close" aria-label="Close tooltip">×</button>
+  </span>
+`;
+
+export const HelpButton = (onClick, title = "Click for information") => html`
+  <span @click=${(e) => withTemplateTarget(e, "button.help-btn", onClick)}>
+    <button class="help-btn" title=${title} aria-label=${title}>?</button>
+  </span>
+`;
+
+export const InstallButton = (onClick) => html`
+  <span @click=${(e) => withTemplateTarget(e, "button.contrast", onClick)}>
+    <button class="contrast">Install App</button>
+  </span>
+`;
+
+const BASE_DOCTRINE_ICON = "img/ui/status/status_star.png";
+
+export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost, selected, onSelectClick } = {}) => {
+  const isMaxed = upgrade.level >= upgrade.max_level;
+  const doctrineIcon = BASE_DOCTRINE_ICON;
+  const upgradeset = upgrade.game?.upgradeset;
+  const available = upgradeset ? upgradeset.isUpgradeAvailable(upgrade.id) : true;
+  const doctrineLocked = !available;
+  const header = useReactiveLevelAndCost ? "" : (isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`);
+  const rawDesc = isMaxed ? "" : (upgrade.description || "");
+  const descHtml = upgrade.game?.ui?.stateManager ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc) : rawDesc;
+  const costDisplay = isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? "");
+  const ariaLabel = isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`;
+  const iconPath = upgrade.upgrade?.icon ?? upgrade.icon ?? "img/ui/status/status_star.png";
+  const { iconPath: overlayPath, isHeat } = getUpgradeIconOverlay(upgrade);
+  const extraClasses = (upgrade.upgrade?.classList ?? []).join(" ");
+  const cardClassMap = {
+    "upgrade-card": true,
+    "unaffordable": !upgrade.affordable && !isMaxed && !doctrineLocked,
+    "maxed-out": isMaxed,
+    "doctrine-locked": doctrineLocked,
+    "upgrade-card--selected": !!selected,
+  };
+  extraClasses.split(" ").filter(Boolean).forEach((c) => (cardClassMap[c] = true));
+  return upgradeCardTemplate({
+    cardClass: classMap(cardClassMap),
+    upgradeId: upgrade.id,
+    doctrineId: "base",
+    doctrineLocked,
+    hidden: upgrade._affordHidden === true,
+    unaffordable: !upgrade.affordable,
+    affordProgress: upgrade.afford_progress ?? 0,
+    iconPath,
+    overlayPath,
+    isHeat,
+    title: upgrade.title,
+    isMaxed,
+    descContent: unsafeHTML(descHtml),
+    doctrineIcon,
+    header,
+    ariaLabel,
+    onBuyClick,
+    onSelectClick,
+    costDisplay,
+  });
+};
+
+function buildPartStats(part) {
+  const fmt = numFormat;
+  const cashIcon = partStatIconTemplate({ src: "img/ui/icons/icon_cash.png", alt: "$" });
+  const powerIcon = partStatIconTemplate({ src: "img/ui/icons/icon_power.png", alt: "pwr" });
+  const heatIcon = partStatIconTemplate({ src: "img/ui/icons/icon_heat.png", alt: "heat" });
+  const tickIcon = partStatIconTemplate({ src: "img/ui/icons/icon_time.png", alt: "tick" });
+  const stats = [];
+  if (part.erequires) {
+    stats.push(partStatTemplate({ className: "stat-cost", content: `${fmt(part.cost)} EP` }));
+  } else {
+    stats.push(partStatTemplate({ className: "stat-cost", content: html`${cashIcon}${fmt(part.cost)}` }));
+  }
+  if (part.power > 0) stats.push(partStatTemplate({ className: "stat-power", content: html`${powerIcon}${fmt(part.power)}` }));
+  if (part.heat > 0) stats.push(partStatTemplate({ className: "stat-heat", content: html`${heatIcon}${fmt(part.heat, 0)}` }));
+  if (part.vent > 0) stats.push(partStatTemplate({ className: "stat-vent", content: `${fmt(part.vent, 0)} vent` }));
+  if (part.containment > 0) stats.push(partStatTemplate({ className: "stat-cont", content: html`${heatIcon}${fmt(part.containment, 0)} cap` }));
+  if (part.transfer > 0) stats.push(partStatTemplate({ className: "stat-xfer", content: `${fmt(part.transfer, 0)} xfer` }));
+  if (part.ticks > 0) stats.push(partStatTemplate({ className: "stat-tick", content: html`${tickIcon}${fmt(part.ticks)}` }));
+  if (part.reactor_power > 0) stats.push(partStatTemplate({ className: "stat-rpower", content: html`${powerIcon}${fmt(part.reactor_power)} cap` }));
+  if (part.power_increase > 0) stats.push(partStatTemplate({ className: "stat-boost", content: html`+${fmt(part.power_increase)}%${powerIcon}` }));
+  return stats;
+}
+
+export function partsModuleInfoCardTemplate(part) {
+  if (!part?.getImagePath) return html``;
+  const stats = buildPartStats(part);
+  const bonusLines = getUpgradeBonusLines(part, { tile: null, game: part.game });
+  return html`
+    <div class="parts-module-info-inner">
+      <div class="image" style=${styleMap({ backgroundImage: `url('${part.getImagePath()}')` })}></div>
+      ${partDetailsBlockTemplate({
+        partTitle: part.title || "",
+        stats,
+        description: part.description || "",
+        bonusLines,
+      })}
+    </div>
+  `;
+}
+
+export const PartButton = (part, onClick, opts = {}) => {
+  const costText = part.erequires ? `${numFormat(part.cost)} EP` : numFormat(part.cost);
+  const locked = opts.locked ?? false;
+  const doctrineLocked = opts.doctrineLocked ?? false;
+  const tierProgress = opts.tierProgress ?? "";
+  const partActive = opts.partActive ?? false;
+  const btnClass = classMap({
+    part: true,
+    "pixel-btn": true,
+    "is-square": true,
+    part_active: partActive,
+    [part.className]: !!part.className,
+    [`part_${part.id}`]: true,
+    [`category_${part.category}`]: !!part.category,
+    unaffordable: !part.affordable,
+    "locked-by-tier": locked,
+    "doctrine-locked": doctrineLocked,
+  });
+  const tierStyle = styleMap({ display: locked ? "block" : "none" });
+  const stats = buildPartStats(part);
+  const bonusLines = getUpgradeBonusLines(part, { tile: null, game: part.game });
+  return partButtonTemplate({
+    btnClass,
+    id: `part_btn_${part.id}`,
+    title: part.title || "",
+    ariaLabel: `${part.title || "Part button"}, Cost: ${costText}`,
+    disabled: !part.affordable || locked,
+    onClick,
+    imagePath: part.getImagePath(),
+    costText,
+    tierStyle,
+    tierProgress,
+    partTitle: part.title || "",
+    stats,
+    description: part.description || "",
+    bonusLines,
+  });
+};
+
+export const CloseButton = (modal, onClick) => closeButtonTemplate({ onClick });
+
+export function createNewGameButton(onClick) {
+  return renderToNode(StartButton(false, onClick));
+}
+
+export function createLoadGameButton(saveData, playedTimeStr, isCloudSynced, onClick) {
+  return renderToNode(LoadGameButton(saveData, playedTimeStr, isCloudSynced, onClick));
+}
+
+export function createLoadGameButtonFullWidth(saveData, playedTimeStr, isCloudSynced, onClick) {
+  return renderToNode(LoadGameButtonFullWidth(saveData, playedTimeStr, isCloudSynced, onClick));
+}
+
+export function createLoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick) {
+  return renderToNode(LoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick));
+}
+
+export function createTooltipCloseButton(onClick) {
+  return renderToNode(TooltipCloseButton(onClick));
+}
+
+export function createHelpButton(onClick, title = "Click for information") {
+  return renderToNode(HelpButton(onClick, title));
+}
+
+export function createUpgradeButton(upgrade, doctrineSource) {
+  return renderToNode(UpgradeCard(upgrade, doctrineSource, () => {}));
+}
+
+export function createPartButton(part) {
+  return renderToNode(PartButton(part, () => {}));
+}
+
+export function createBuyButton(upgrade, onClick) {
+  return renderToNode(BuyButton(upgrade, onClick));
+}
+
+export function createInstallButton(onClick) {
+  return renderToNode(InstallButton(onClick));
+}
+
+export function createCloseButton(modal) {
+  return renderToNode(CloseButton(modal, () => modal.remove()));
+}

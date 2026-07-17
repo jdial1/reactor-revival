@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, setupGameWithDOM, toNum } from "../../helpers/setup.js";
 import { patchGameState } from "@app/state.js";
-import { PartButton } from "@app/components/button-factory.js";
+import { PartButton } from "@app/components/upgrades/button-factory.js";
 import { render } from "lit-html";
 import * as stateModule from "@app/store.js";
 import * as simUtils from "@app/simUtils.js";

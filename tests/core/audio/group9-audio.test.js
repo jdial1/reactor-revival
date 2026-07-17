@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGame } from "../../helpers/setup.js";
-import { AUDIO_RUNTIME_DEFAULTS } from "@app/services.js";
+import { AUDIO_RUNTIME_DEFAULTS } from "@app/services/app-services.js";
 
 describe("Group 9: Audio Engine & Spatial Panning", () => {
   let game;

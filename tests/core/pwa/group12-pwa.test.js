@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import { describe, it, expect, beforeEach, afterEach, vi } from "../../helpers/setup.js";
-import { VersionChecker } from "@app/services.js";
+import { VersionChecker } from "@app/services/app-services.js";
 import { StorageUtils } from "@app/storage/index.js";
 
 describe("Group 12: PWA, Service Worker & Versioning", () => {
@@ -31,7 +31,7 @@ describe("Group 12: PWA, Service Worker & Versioning", () => {
   });
 
   it("locks service worker navigation NetworkFirst plus offline fallback to index cache", () => {
-    const swPath = path.resolve(__dirname, "../../../src-sw.js");
+    const swPath = path.resolve(__dirname, "../../../config/src-sw.js");
     const swSource = fs.readFileSync(swPath, "utf-8");
 
     expect(swSource).toContain('request.mode === "navigate"');

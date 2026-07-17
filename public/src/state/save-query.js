@@ -1,5 +1,5 @@
 import { SaveDataSchema, SaveDataWriteSchema } from "../schema/index.js";
-import { queryClient, queryKeys } from "../services-leaderboard.js";
+import { queryClient, queryKeys } from "../services/leaderboard.js";
 import {
   StorageAdapter,
   serializeSave,

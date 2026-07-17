@@ -37,7 +37,7 @@ export default [
       "**/public/lib/*.js",
       "**/public/sw.js",
       "**/public/sw-temp.js",
-      "**/src-sw.js",
+      "**/config/src-sw.js",
       "**/eslint-results.sarif",
       "**/config/workbox-config.cjs",
       "**/node_modules/**",
@@ -111,7 +111,6 @@ export default [
         Buffer: "readonly",
         queueMicrotask: "readonly",
         requestIdleCallback: "readonly",
-        crossOriginIsolated: "readonly",
         HTMLDialogElement: "readonly",
         AppState: "readonly"
       }
@@ -158,7 +157,7 @@ export default [
     }
   },
   {
-    files: ["**/public/sw.js", "**/src-sw.js", "**/public/sw-temp.js"],
+    files: ["**/public/sw.js", "**/config/src-sw.js", "**/public/sw-temp.js"],
     languageOptions: {
       globals: { ...workerGlobals }
     },
@@ -207,7 +206,7 @@ export default [
     },
   },
   {
-    files: ["public/src/domain/**/*.js", "public/src/logic/**/*.js", "public/src/logic-*.js"],
+    files: ["public/src/domain/**/*.js"],
     rules: {
       "no-restricted-globals": ["warn", {
         "name": "document",

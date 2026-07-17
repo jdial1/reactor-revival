@@ -61,7 +61,7 @@ jobs:
         run: npm run copy-libs
 
       - name: Fix manifest.json for GitHub Pages
-        run: node scripts/pwa-check.js --fix-manifest
+        run: node scripts/qa/pwa-check.js --fix-manifest
 
       - name: Run test suite
         run: npm test
@@ -125,7 +125,7 @@ jobs:
           GITHUB_PAGES_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
           echo "Running PWA checks for: ${{ needs.deploy.outputs.page_url }}"
-          node scripts/pwa-check.js --remote
+          node scripts/qa/pwa-check.js --remote
 
       - name: Run UI console audit
         env:

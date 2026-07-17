@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame, UI, Game, Engine, ObjectiveManager } from "../../helpers/setup.js";
-import dataService from "@app/services.js";
+import dataService from "@app/services/app-services.js";
 import { getObjectiveCheck } from "@app/logic.js";
 
 // Load objective data

@@ -16,7 +16,7 @@ module.exports = {
     "src/**/*.js"
   ],
   globIgnores: ["**/node_modules/**/*"],
-  swSrc: "src-sw.js",
+  swSrc: "config/src-sw.js",
   swDest: "public/sw.js",
   maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
 };

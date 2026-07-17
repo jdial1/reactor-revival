@@ -37,22 +37,32 @@ No assets or code from IndustrialCraft² or Reactor Incremental are used in this
 
 ## Development
 
-Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm install`** then **`npm run dev`** to serve `public/` locally with COOP/COEP headers (needed for workers and shared-memory paths).
+Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm install`** then **`npm run dev`** to serve `public/` locally.
 
-- **`npm run build:sw`** — Workbox injects the precache manifest from root `src-sw.js` into `public/sw.js` (`config/workbox-config.cjs`).
-- **Tests** — `npm test` / `npm run test:ci` (lint + syntax + Vitest; CI deploy uses this). `npm run test:deploy` is a faster Vitest-only subset for local iteration.
-- **`scripts/`** — `generate-metadata.js` (version + splash BG counts + changelog from the GitHub push commit list), `bundle-static-data.mjs`, `technical-debt-audit.py` (`npm run audit:debt` full-repo scan; `npm run audit:debt:public` for `public/` only), etc. `public/data/changelog.json` is updated each deploy from `github.event.commits` and committed back with `[skip ci]`. **`config/`** — ESLint, Vitest, Workbox, Stylelint. See `package.json` `scripts` for the full list.
+- **`npm run build:sw`** — Workbox injects the precache manifest from `config/src-sw.js` into `public/sw.js`.
+- **Tests** — `npm test` (lint + syntax + Vitest). Playwright e2e is separate: `npm run test:e2e` (`e2e/`). See `tests/README.md`.
+- **`scripts/`** — `build/` (serve, copy-libs, generate/bundle), `qa/` (test/lint/pwa/debt), `ui-audit/` (screenshots/console). See `package.json` `scripts`.
 
 ### Repository layout
 
-- **`public/`** — Everything the host/CDN serves: HTML, CSS, assets, `manifest.json`, and application code as native ES modules under `public/src/` (there is no separate top-level `src/` for app code; that keeps the static-site root obvious).
-- **`src-sw.js` (repo root)** — Service worker **source** for Workbox. `npm run build:sw` injects the precache manifest into **`public/sw.js`**, which is what browsers load. Do not edit `public/sw.js` by hand.
-- **`config/`** — ESLint, Vitest, Workbox, Stylelint configs.
-- **`tests/`** — Vitest suites. `tests/core/` uses domain subfolders (`grid/`, `thermodynamics/`, `engine/`, …); see `tests/README.md`. Tests import app modules via the `@app/` alias (see `jsconfig.json`).
+- **`public/`** — Ship root: HTML, CSS, assets, `manifest.json`, `public/src/` app modules.
+- **`public/data/`** — Host-facing JSON (objectives, help, changelog, splash counts, etc.). Bundled into `public/src/generated/bundledStaticData.js`.
+- **`game-data/reactor_revival/`** — Lib-shaped catalog overlay (`parts.json`, `upgrades.json`, …) copied into `public/lib/reactor-core/games/` by `copy-libs`. Not the host UI data dir.
+- **`config/src-sw.js`** — Service worker source. Do not edit `public/sw.js` by hand.
+- **`config/`** — ESLint, Vitest, Workbox, Stylelint, SW source.
+- **`tests/`** — Vitest (unit/integration/UI-in-jsdom). **`e2e/`** — Playwright browser flows.
+- **`docs/`** — Design notes and lib cutover notes.
+
+### Splash backgrounds
+
+Both sets are live, selected by `USE_STALENHAG_BG` in `public/index.html`:
+
+- `public/img/misc/stalenhag_bg/` — primary when the flag is on
+- `public/img/misc/backgrounds/splash_bg*.webp` — fallback set
 
 ```
-repo root:  src-sw.js, config/, scripts/, tests/
-ship:       public/   (index.html, sw.js built, public/src/*.js, data/, schema/, …)
+repo:   config/, scripts/{build,qa,ui-audit}/, tests/, e2e/, game-data/, docs/
+ship:   public/  (index.html, sw.js, src/, data/, css/, img/, fonts/)
 ```
 
 ---
