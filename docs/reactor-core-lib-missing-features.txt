@@ -302,9 +302,8 @@ GAP RANK — largest distance to a honest 1.0 tag
       Done when: tag-hard items hold (met); 9b supporting diet closed.
 
   G10 SHIP HARDENING (soak + tag; no late perf discover)   → Step 10
-      Status: PARTIAL. 10a DONE · 10b DONE · 10c DONE · 10d BLOCKED.
-      Remaining = git tag v1.0.0 from clean green main (10d).
-      Perf/soak/PWA/known-issues confirmed (10a–10c).
+      Status: DONE. 10a DONE · 10b DONE · 10c DONE · 10d DONE.
+      Tagged v1.0.0 @ 05b9ac2; parallel 8c/8d still OPEN (non-blocking).
       Done when: 10a/10c/10d DONE from green main.
 
 NOT in the top gap list (parked / optional — see DEFERRED):
@@ -337,7 +336,8 @@ All must be true (binary — map to Steps + G1–G10):
   [x] QW list remains FROZEN; no new QW PRs landed after freeze
   [x] README + known-issues (severity) match ship; money/heat/save issues = block
       (10c: README Known issues table; freeze exceptions = 0)
-  [ ] One version story; git tag v1.0.0 from clean green main
+  [x] One version story; git tag v1.0.0 from clean green main
+      (tag v1.0.0 @ 05b9ac2; product 1.0.0 ≠ deploy version.json stamp)
 
 If a checkbox fails, do not tag — fix under the owning Step, or add to
 known-issues only when non-critical (no money/heat/save desync) and frozen.
@@ -359,8 +359,8 @@ Stance (non-negotiable):
 
 Trust spine order (QW list FROZEN — work this only):
   Step 3d DONE · 4a–4d DONE · 5 DONE · Step 6 DONE · Step 7 DONE →
-  Step 9a DONE · Step 9d DONE · Step 1d DONE · 10a–10c DONE ← NEXT →
-  tag (10d). Parallel: 8c/8d usable chrome.
+  Step 9a DONE · Step 9d DONE · Step 1d DONE · Step 10 DONE (v1.0.0).
+  Parallel remaining: 8c/8d usable chrome.
 
 Deep-dive snapshot (2026-07-18, excl. generated):
   public/src total          ~26.4k lines / ~138 JS modules
@@ -1284,14 +1284,17 @@ order, changelog, known-issues severity freeze, tag. No last-minute systems.
       Exit: issues frozen; freeze exceptions = 0.
 
   10d  Tag v1.0.0 from green main
-      Status: BLOCKED on clean green main + §E version/tag box
-      Real tag; one version story; deploy without console-strip; critical
-      path smoke pass; README launch link matches ship.
-      Exit: tagged v1.0.0. Blocked until §E checklist all true.
+      Status: DONE (2026-07-20)
+      DONE: annotated tag v1.0.0 → 05b9ac21c0d98d7643348d1c41c5e6b2f11324ff
+        (CI 29780027575 + soak 29780027432 green); product version
+        package.json / APP_VERSION / changelog = 1.0.0; version.json
+        remains deploy cache stamp; README launch + known-issues match;
+        no deploy console-strip.
+      Exit: tagged v1.0.0.
 
 Step 10 exit: 10a/10b/10c/10d DONE from green main after hard exits above.
 
-PROGRESS: 10a DONE · 10b DONE · 10c DONE · 10d BLOCKED.
+PROGRESS: 10a DONE · 10b DONE · 10c DONE · 10d DONE.
 
 Avoid:
   - Last-minute features, balance reworks, or new prestige layers
@@ -2009,7 +2012,8 @@ NEXT FOCUS (immediate — trust spine; QW list FROZEN)
 ---------------------------------------------------
 Do not reopen physics cutover. Reject new QWs. Stop unexport theater.
 
-  Order: Step 10d tag v1.0.0 ← NEXT · parallel 8c/8d.
+  Order: Reductive 1.0 tagged · parallel 8c/8d usable chrome.
+  CLOSED: 10d tag v1.0.0 @ 05b9ac2 (CI 29780027575 / soak 29780027432).
   CLOSED: 10c changelog + known-issues severity freeze (README table;
     changelog.json ship bullets; generate-changelog trailer strip).
   CLOSED: 10a PWA/SW + soak CI; 10b tick+project budget reconfirm.
@@ -2033,7 +2037,7 @@ Do not reopen physics cutover. Reject new QWs. Stop unexport theater.
   Parked (not DTO debt): Objective claim protocol, Reactor updateStats/sell,
   Upgrade.setLevel. Tile place/sell entity API deleted (intent_queue only).
 
-PROGRESS LANDING (2026-07-20 — Step 10c DONE)
+PROGRESS LANDING (2026-07-20 — Step 10d DONE / v1.0.0 tagged)
   - Scrap inventory CLOSED; QW1–QW24 FROZEN (no further QWs)
   - Soft exits / fat-facade freeze / CSS consolidate / late perf /
     SUCCESS #6 stomp blessing / scoped game valtio — SUPERSEDED
@@ -2124,7 +2128,9 @@ PROGRESS LANDING (2026-07-20 — Step 10c DONE)
   - Step 10c DONE: deleted deploy commit-dump from changelog.json;
     ship bullets + README Known issues severity freeze; generate-changelog
     strips Co-authored-by / body noise; §E README box checked.
-  - Next bites: Step 10d tag v1.0.0 · parallel 8c/8d
+  - Step 10d DONE: git tag v1.0.0 → 05b9ac2; CI+soak green on tag commit;
+    §E version/tag box checked; Step 10 / G10 DONE.
+  - Next bites: parallel 8c/8d usable chrome (non-blocking)
 
   N1) Step 1 — DONE: 1a DONE · 1b IN FORCE · 1c DONE · 1d DONE
   N2) Step 2 — DONE: 2a DONE · 2b DONE · 2c DONE · 2d DONE
@@ -2135,6 +2141,6 @@ PROGRESS LANDING (2026-07-20 — Step 10c DONE)
   N7) Step 7 — DONE: 7a DONE · 7b DONE · 7c DONE · 7d DONE
   N8) Step 8 — 8a DONE · 8b DROPPED · 8c OPEN · 8d OPEN (usable, not bytes)
   N9) Step 9 — DONE: 9a DONE · 9b DONE · 9c DONE · 9d DONE
-  N10) Step 10 — PARTIAL: 10a DONE · 10b DONE · 10c DONE · 10d BLOCKED
+  N10) Step 10 — DONE: 10a DONE · 10b DONE · 10c DONE · 10d DONE (v1.0.0)
 
   End of document.

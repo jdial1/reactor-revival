@@ -214,11 +214,14 @@ export function writeChangelog() {
   }
 
   const currentEntry = { version, date: entryDate(), bullets };
+  const productEntry = existing.find((e) => e.version === "1.0.0");
 
-  const merged = [currentEntry];
+  const merged = [];
+  if (productEntry && version !== "1.0.0") merged.push(productEntry);
+  if (version === "1.0.0") merged.push(currentEntry);
+  else merged.push(currentEntry);
   for (const entry of existing) {
-    if (entry.version === version) continue;
-    if (merged.some((e) => e.version === version)) continue;
+    if (entry.version === version || entry.version === "1.0.0") continue;
     merged.push(entry);
     if (merged.length >= MAX_ENTRIES) break;
   }
