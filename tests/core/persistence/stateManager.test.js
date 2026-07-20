@@ -13,13 +13,13 @@ describe("State Manager Mechanics", () => {
     expect(game.state.pause).toBe(true);
   });
 
-  it("should trigger onToggleStateChange for toggle keys", () => {
+  it("applies toggle patches as host fields without re-dispatch", () => {
     game.ui.stateManager.setGame(game);
     const spy = vi.spyOn(game, "onToggleStateChange");
-    patchGameState(game, { pause: true });
-    expect(spy).toHaveBeenCalledWith("pause", true);
-    patchGameState(game, { auto_sell: true });
-    expect(spy).toHaveBeenCalledWith("auto_sell", true);
+    patchGameState(game, { pause: true, auto_sell: true });
+    expect(game.state.pause).toBe(true);
+    expect(game.state.auto_sell).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it("should correctly set and get the clicked part", () => {

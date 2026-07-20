@@ -1,3 +1,5 @@
+import { partIconPath } from "../tooltip-stats.js";
+
 const PREVIEW_MAX_WIDTH = 160;
 const PREVIEW_MAX_HEIGHT = 120;
 const PREVIEW_MIN_TILE_SIZE = 2;
@@ -51,7 +53,7 @@ function drawPreviewCell(ctx, opts) {
   if (!cell?.id) return;
   const part = partset.getPartById(cell.id);
   if (!part) return;
-  const path = typeof part.getImagePath === "function" ? part.getImagePath() : null;
+  const path = partIconPath(part);
   if (!path) return;
   const key = `${r},${c}`;
   const ghost = affordableSet != null && !affordableSet.has(key);
@@ -95,10 +97,4 @@ export function buildPartSummary(partset, layout) {
     return acc;
   }, {});
   return Object.values(summary);
-}
-
-export function buildAffordableSet(affordableLayout) {
-  if (!affordableLayout) return new Set();
-  const keys = affordableLayout.flatMap((row, r) => (row || []).map((cell, c) => cell ? `${r},${c}` : null).filter(Boolean));
-  return new Set(keys);
 }

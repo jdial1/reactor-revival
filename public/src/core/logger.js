@@ -1,10 +1,21 @@
 const VALID_LEVELS = ['error', 'warn', 'info', 'debug'];
 
+function isProductionBuild() {
+  if (typeof window === 'undefined') return false;
+  if (window.PRODUCTION_BUILD === true) return true;
+  try {
+    const host = window.location.hostname;
+    return !!host && host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 export class Logger {
   constructor() {
     this.levels = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
     this.mutedContexts = new Set();
-    this.productionMode = typeof window !== 'undefined' && window.PRODUCTION_BUILD === true;
+    this.productionMode = isProductionBuild();
     this.currentLevel = this.levels.INFO;
     if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') this.currentLevel = this.levels.DEBUG;
     if (!this.productionMode) {
@@ -42,7 +53,7 @@ export class Logger {
     };
     return args.map(arg => {
       if (typeof arg === 'object' && arg !== null) {
-        try { return JSON.stringify(arg, replacer, 2); } catch (e) { return '[Unserializable Object]'; }
+        try { return JSON.stringify(arg, replacer, 2); } catch { return '[Unserializable Object]'; }
       }
       return arg;
     });
@@ -84,9 +95,12 @@ if (typeof window !== "undefined" && import.meta.env?.DEV) {
   window.logger = logger;
   window.setLogLevel = (level) => {
     const validLevels = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
-    if (!validLevels.includes(level.toUpperCase())) { console.warn(`Invalid level. Use: ${validLevels.join(', ')}`); return; }
+    if (!validLevels.includes(level.toUpperCase())) {
+      logger.warn(`Invalid level. Use: ${validLevels.join(', ')}`);
+      return;
+    }
     logger.setLevel(level);
-    console.log(`Log level set to: ${level}`);
+    logger.info(`Log level set to: ${level}`);
   };
   window.setDebug = () => window.setLogLevel('DEBUG');
   window.setInfo = () => window.setLogLevel('INFO');

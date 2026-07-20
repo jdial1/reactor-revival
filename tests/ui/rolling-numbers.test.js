@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGameWithDOM, toNum } from "../helpers/setup.js";
 import { setDecimal } from "@app/store.js";
+import { loadEconomyFromHost } from "../helpers/bridge-test-harness.js";
 
-describe("Rolling Numbers UI", () => {
+describe("Info bar snapshot HUD", () => {
     let game;
     let ui;
     let window;
@@ -17,52 +18,29 @@ describe("Rolling Numbers UI", () => {
         game.ui.startRenderLoop(0);
     });
 
-    it("should initialize display values structure", () => {
-        expect(ui.displayValues).toBeDefined();
-        expect(ui.displayValues.money).toBeDefined();
-        expect(ui.displayValues.heat).toBeDefined();
-        expect(ui.displayValues.power).toBeDefined();
-        expect(ui.displayValues.ep).toBeDefined();
+    it("bumps chrome snapshot_rev on projectLiveState", () => {
+        const before = ui.uiState.snapshot_rev | 0;
+        game.coreBridge?.projectLiveState?.();
+        expect(ui.uiState.snapshot_rev).toBeGreaterThan(before);
     });
 
-    it("should snap display current to target after rolling update", () => {
-        const moneyObj = ui.displayValues.money;
-        moneyObj.current = 0;
-        moneyObj.target = 1000;
+    it("formats large heat numbers from session snapshot", async () => {
+        Object.defineProperty(window, "innerWidth", { value: 1024, writable: true });
 
-        ui.updateUiRollingNumbers(16.667);
-
-        expect(moneyObj.current).toBe(1000);
-    });
-
-    it("should snap to target when difference is small", () => {
-        const moneyObj = ui.displayValues.money;
-        moneyObj.target = 100;
-        moneyObj.current = 99.95; // Within epsilon
-
-        ui.updateUiRollingNumbers(16.667);
-
-        expect(moneyObj.current).toBe(100);
-    });
-
-    it("should format large heat numbers with specific logic (2 decimals + suffix)", async () => {
-        Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true });
-
-        setDecimal(game.state, "current_heat", 1500);
-
+        game.coreBridge?.setReactorHeat?.(1500);
         await new Promise((r) => setTimeout(r, 50));
 
-        const heatEl = document.getElementById('info_heat_desktop');
+        const heatEl = document.getElementById("info_heat_desktop");
         expect(heatEl, "info_heat_desktop element should exist after info bar render").not.toBeNull();
         expect(heatEl.textContent).toBe("1.5K");
     });
 
-    it("should update target via state manager", () => {
+    it("exposes money on session snapshot after host economy hydrate", () => {
         setDecimal(game.state, "current_money", 5000);
-        ui.processUiUpdateQueue();
-
-        expect(toNum(ui.displayValues.money.target)).toBe(5000);
-        expect(toNum(ui.displayValues.money.current)).toBe(5000);
+        loadEconomyFromHost(game);
+        game.coreBridge?.projectLiveState?.();
+        const snap = game.coreBridge?.getSnapshot?.();
+        expect(toNum(snap?.economy?.money)).toBe(5000);
+        expect(ui.uiState.snapshot_rev).toBeGreaterThan(0);
     });
 });
-

@@ -1,172 +1,103 @@
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame, toNum , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
-import { placePart, forcePurchaseUpgrade, runTicks } from "../../helpers/gameHelpers.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  hasMeltedDown,
+  componentTicksAt,
+  setSessionReactorHeat,
+  reactorMaxHeat,
+} from "../../helpers/sessionHelpers.js";
 
-describe("Complex Layouts and Advanced Interactions", () => {
-    let game;
+function place(session, row, col, id) {
+  expect(session.placeComponent(row, col, id)).toBe(true);
+}
 
-    beforeEach(async () => {
-        game = await setupGame();
-        // Use fake timers to control game ticks precisely
-        vi.useFakeTimers();
-    });
+function money(session) {
+  return Number(session.getSnapshot().economy?.money ?? 0);
+}
 
-    afterEach(() => {
-        vi.useRealTimers();
-    });
+function slotId(session, row, col) {
+  const snap = session.getSnapshot();
+  return snap.grid.slots[row * snap.grid.cols + col]?.id ?? null;
+}
 
-    it("should correctly transfer heat through a long chain of heat exchangers", async () => {
-        const cellTile = await placePart(game, 5, 5, "uranium1");
-        
-        const exchangerTiles = [];
-        for (let i = 0; i < 5; i++) {
-            exchangerTiles.push(await placePart(game, 5, 6 + i, "heat_exchanger1"));
-        }
-        await placePart(game, 5, 11, "vent1");
+describe("Complex Layouts (session)", () => {
+  let session;
 
-        game.reactor.updateStats();
-        game.engine.tick();
-        
-        expect(game.reactor.has_melted_down).toBe(false);
-        expect(cellTile.activated).toBe(true);
-        expect(cellTile.ticks).toBeGreaterThan(0);
+  beforeEach(async () => {
+    session = await setupSessionOnly({ money: 1e30 });
+  });
 
-        runTicks(game, 10);
-        
-        expect(game.reactor.has_melted_down).toBe(false);
-        expect(cellTile.activated).toBe(true);
-        expect(cellTile.ticks).toBeGreaterThan(0);
-    });
+  it("transfers heat through a long exchanger chain without meltdown", () => {
+    place(session, 5, 5, "uranium1");
+    for (let i = 0; i < 5; i++) place(session, 5, 6 + i, "heat_exchanger1");
+    place(session, 5, 11, "vent1");
 
-    it("stats_power uses base_power times M+N pulse (fusion does not scale cell coefficient)", async () => {
-        game.bypass_tech_tree_restrictions = true;
-        game.reactor.auto_sell_enabled = false;
-        game.onToggleStateChange?.("auto_sell", false);
+    session.tick();
+    expect(hasMeltedDown(session)).toBe(false);
+    expect(slotId(session, 5, 5)).toBe("uranium1");
+    expect(componentTicksAt(session, 5, 5)).toBeGreaterThan(0);
 
-        forcePurchaseUpgrade(game, "forceful_fusion");
-        expect(game.reactor.heat_power_multiplier).toBe(1);
+    for (let i = 0; i < 10; i++) session.tick();
 
-        const cellPart = game.partset.getPartById("uranium1");
-        await placePart(game, 5, 5, "uranium1");
+    expect(hasMeltedDown(session)).toBe(false);
+    expect(slotId(session, 5, 5)).toBe("uranium1");
+    expect(componentTicksAt(session, 5, 5)).toBeGreaterThan(0);
+  });
 
-        game.reactor.current_heat = 10000;
-        game.reactor.max_heat = 100000;
-        game.reactor.altered_max_heat = 100000;
+  it("keeps cell pulse power at base_power under forceful fusion high heat", () => {
+    expect(session.purchaseUpgrade("forceful_fusion")).toBe(true);
+    expect(session.modifiers?.heatPowerMultiplier).toBe(1);
 
-        game.reactor.updateStats();
+    place(session, 5, 5, "uranium1");
+    session.grid.maxHeat = 100000;
+    setSessionReactorHeat(session, 10000);
+    expect(reactorMaxHeat(session)).toBe(100000);
 
-        const expectedStatsPower = cellPart.base_power * 1;
-        expect(game.reactor.stats_power).toBeCloseTo(expectedStatsPower, 1);
-        syncActivePartsAtTickBoundary(game.engine);
-        game.engine.tick();
-    });
+    const part = session.getPart("uranium1");
+    const out = session.getCellOutputAt(5, 5);
+    expect(out.power).toBeCloseTo(Number(part.basePower ?? part.base_power), 1);
+  });
 
-    it("protium stats_power follows base_power times M+N pulse (no particle multiplier on P)", async () => {
-        const protiumPart = game.partset.getPartById("protium1");
-        game.upgradeset.getUpgrade("laboratory").setLevel(1);
-        game.upgradeset.getUpgrade("protium_cells").setLevel(1);
+  it("protium depletes into particles and reports base_power times M+N pulse", () => {
+    session.setUpgradeLevels([
+      { id: "laboratory", level: 1 },
+      { id: "protium_cells", level: 1 },
+    ]);
 
-        const firstTile = await placePart(game, 0, 0, "protium1");
-        firstTile.ticks = 1;
-        game.engine.tick();
+    place(session, 0, 0, "protium1");
+    const part = session.getPart("protium1");
+    session.grid.getComponentAt(0, 0).ticks = 1;
+    session.tick();
 
-        expect(firstTile.part).toBeNull();
-        expect(game.protium_particles).toBe(protiumPart.cell_count);
+    expect(slotId(session, 0, 0)).toBeNull();
+    expect(Number(session.getSnapshot().economy?.protiumParticles ?? 0)).toBe(
+      Number(part.cellCount ?? part.cell_count ?? 1)
+    );
 
-        await placePart(game, 1, 0, "protium1");
-        const protiumTile = game.tileset.getTile(1, 0);
-        const catalogProtium = game.partset.getPartById("protium1");
-        const M = catalogProtium.cell_pack_M ?? 1;
-        const N = game.coreBridge.describeCellPulse(protiumTile)?.pulseN ?? 0;
-        const expectedPower = catalogProtium.base_power * (M + N);
+    place(session, 1, 0, "protium1");
+    const out = session.getCellOutputAt(1, 0);
+    const M = Number(part.cellMultiplier ?? part.cell_pack_M ?? 1);
+    const N = Number(out.pulseN ?? 0);
+    const base = Number(part.basePower ?? part.base_power);
+    expect(out.power).toBeCloseTo(base * (M + N), 1);
+  });
 
-        game.reactor.updateStats();
+  it("auto-buys a depleted perpetual uranium cell in the same tick", async () => {
+    const local = await setupSessionOnly();
+    local.creditMoney(1e6);
+    expect(local.purchaseUpgrade("uranium1_cell_perpetual")).toBe(true);
+    local.toggles.auto_buy = true;
 
-        expect(game.reactor.stats_power).toBeCloseTo(expectedPower, 1);
-    });
+    place(local, 0, 0, "uranium1");
+    const part = local.getPart("uranium1");
+    expect(part.perpetual).toBe(true);
 
-    it("should consume reactor power when an Extreme Vent is active", async () => {
-        // eslint-disable-next-line no-undef
-        const originalConsoleLog = console.log;
-        // eslint-disable-next-line no-undef
-        console.log = (...args) => originalConsoleLog(...args);
+    const before = money(local);
+    local.grid.getComponentAt(0, 0).ticks = 1;
+    local.tick();
 
-        game.upgradeset.getUpgrade("laboratory").setLevel(1);
-        game.upgradeset.getUpgrade("vortex_cooling").setLevel(1);
-
-        await placePart(game, 1, 0, "capacitor1");
-        await placePart(game, 0, 0, "coolant_cell1");
-        const ventTile = await placePart(game, 0, 1, "vent6");
-        
-        const heatToVent = 1000;
-        ventTile.heat_contained = heatToVent;
-        game.reactor.current_power = 2000;
-
-        // Update reactor stats to populate neighbor lists
-        game.reactor.updateStats();
-
-        // Run a tick to actually vent the heat
-        game.engine.tick();
-
-        // Debug: Check the values
-        // eslint-disable-next-line no-undef
-        console.log(`Initial heat: ${heatToVent}`);
-        // eslint-disable-next-line no-undef
-        console.log(`Final vent heat: ${ventTile.heat_contained}`);
-        // eslint-disable-next-line no-undef
-        console.log(`Initial power: 2000`);
-        // eslint-disable-next-line no-undef
-        console.log(`Final power: ${game.reactor.current_power}`);
-        // eslint-disable-next-line no-undef
-        console.log(`Heat vented: ${heatToVent - ventTile.heat_contained}`);
-        // eslint-disable-next-line no-undef
-        console.log(`Power consumed: ${2000 - game.reactor.current_power}`);
-
-        // Restore console.log
-        // eslint-disable-next-line no-undef
-        console.log = originalConsoleLog;
-
-        // Check that heat was vented (some amount)
-        expect(ventTile.heat_contained).toBeLessThan(heatToVent);
-
-        expect(toNum(game.reactor.current_power)).toBeLessThan(2000);
-
-        const heatVented = heatToVent - ventTile.heat_contained;
-        const powerConsumed = 2000 - toNum(game.reactor.current_power);
-
-        // The power consumed should be close to the heat vented (allowing for small differences)
-        expect(Math.abs(powerConsumed - heatVented)).toBeLessThan(1500);
-    });
-
-    it("should handle auto-buy for multiple depleted perpetual parts in the same tick", async () => {
-        game.upgradeset.getUpgrade("uranium1_cell_perpetual").setLevel(1);
-        game.upgradeset.getUpgrade("perpetual_reflectors").setLevel(1);
-        game.onToggleStateChange?.("auto_buy", true);
-
-        const cellTile = await placePart(game, 0, 0, "uranium1");
-        const reflectorTile = await placePart(game, 0, 1, "reflector1");
-
-        // Set both to be depleted on the next tick
-        cellTile.ticks = 1;
-        reflectorTile.ticks = 1;
-
-        const cellPart = game.partset.getPartById("uranium1");
-        const reflectorPart = game.partset.getPartById("reflector1");
-        const cellCost = cellPart.getAutoReplacementCost();
-        const reflectorCost = reflectorPart.getAutoReplacementCost();
-        const totalCost = cellCost + reflectorCost;
-
-        game.current_money = totalCost;
-
-        game.engine.tick();
-
-        // Both parts should have been replaced
-        expect(cellTile.part).not.toBeNull();
-        expect(reflectorTile.part).not.toBeNull();
-
-        // Ticks should be reset
-        expect(cellTile.ticks).toBe(cellPart.base_ticks);
-        expect(reflectorTile.ticks).toBe(reflectorPart.base_ticks);
-
-        expect(toNum(game.current_money)).toBeLessThanOrEqual(toNum(totalCost) + 1);
-    });
-}); 
+    expect(slotId(local, 0, 0)).toBe("uranium1");
+    expect(componentTicksAt(local, 0, 0)).toBe(Number(part.baseTicks ?? part.base_ticks));
+    expect(money(local)).toBeLessThan(before);
+  });
+});

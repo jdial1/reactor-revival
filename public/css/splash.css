@@ -1,7 +1,7 @@
 ﻿#splash-container { flex: 1; display: flex; width: 100%; min-width: 0; min-height: 0; background: var(--sovietwave-slate); padding: 1.5%;
 }
 
-#splash-screen { position: relative; display: flex; overflow: hidden; flex: 1; width: 100%; max-width: none; min-height: 0; flex-direction: column; align-items: stretch; justify-content: flex-end; padding: 0; margin: 0; background-color: var(--sovietwave-slate); background-image: var(--splash-bg-url, url("../img/misc/backgrounds/splash_bg1.png")); background-repeat: no-repeat; background-position: 15% 15%; background-size: min(110vmax, 4096px) min(110vmax, 4096px); animation: splash-ken-burns 40s linear forwards; font-family: var(--splash-font) !important; text-align: center; letter-spacing: 1px; border-radius: 3%; transform: translateZ(0); backface-visibility: hidden;
+#splash-screen { position: relative; display: flex; overflow: hidden; flex: 1; width: 100%; max-width: none; min-height: 0; flex-direction: column; align-items: stretch; justify-content: flex-end; padding: 0; margin: 0; background-color: var(--sovietwave-slate); background-image: var(--splash-bg-url, url("../img/misc/stalenhag_bg/bg_img1.webp")); background-repeat: no-repeat; background-position: 15% 15%; background-size: min(110vmax, 4096px) min(110vmax, 4096px); animation: splash-ken-burns 40s linear forwards; font-family: var(--splash-font) !important; text-align: center; letter-spacing: 1px; border-radius: 3%; transform: translateZ(0); backface-visibility: hidden;
 }
 
 #splash-screen::before { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; background: radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgb(31 33 32 / 70%) 100%); z-index: 0;
@@ -106,9 +106,6 @@
 }
 
 .save-slot-section-header { margin: 0 0 0.75rem; padding-bottom: 4px; color: var(--splash-accent-olive); font-family: var(--splash-font) !important; font-size: 0.75rem; font-weight: 600; letter-spacing: 2px; text-align: center; text-transform: uppercase; border-bottom: 2px solid rgb(68 68 68);
-}
-
-.save-slot-section-secondary { margin-top: 1.25rem; opacity: 0.9;
 }
 
 @media (width <= 600px) { #save-slot-screen { padding: 0;
@@ -552,87 +549,10 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
 .splash-btn-group { display: flex; width: var(--splash-btn-width); max-width: var(--splash-btn-width); margin: 0 auto 1.5rem; gap: 0;
 }
 
-.splash-btn-group .splash-btn,
-.cloud-loading { width: 50% !important; min-width: 0 !important; max-width: none !important; border-radius: 0; margin: 0;
+.splash-btn-group .splash-btn { width: 50% !important; min-width: 0 !important; max-width: none !important; border-radius: 0; margin: 0;
 }
 
 .splash-btn-full-width { width: 100% !important; max-width: 100% !important;
-}
-
-.splash-auth-in-panel .splash-auth-buttons { display: flex; flex-direction: row; gap: 0.25rem;
-}
-
-.splash-auth-icon-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0; border: 1px solid rgb(255 255 255 / 5%); border-radius: 0; background: rgb(0 0 0 / 20%); color: var(--splash-text-primary); cursor: pointer; box-shadow: none; font-family: var(--splash-font); transition: all 0.1s;
-}
-
-.splash-auth-icon-btn:hover { filter: brightness(1.15);
-}
-
-.splash-auth-icon-btn:active { background: rgb(0 0 0 / 30%); box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
-}
-
-.splash-auth-icon-btn svg { flex-shrink: 0;
-}
-
-.splash-auth-signed-in { display: flex; flex-direction: row; align-items: center; gap: 0.5rem;
-}
-
-.splash-auth-signed-in-icon { display: flex; align-items: center;
-}
-
-.splash-auth-in-panel { position: relative; display: flex; flex-shrink: 0; gap: 0.25rem;
-}
-
-#splash-email-auth-form,
-.splash-auth-terminal-form { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; background: var(--splash-panel-bg); border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 0; box-shadow: 4px 4px 0 var(--bevel-shadow); min-width: 200px; color: var(--splash-text-primary); font-family: var(--splash-font) !important;
-}
-
-.splash-auth-terminal-prompt,
-.splash-auth-comms-prompt { padding: 0.25rem 0; font-size: 0.6rem; color: var(--sovietwave-amber); letter-spacing: 1px; font-family: var(--splash-font) !important;
-}
-
-.splash-auth-form-actions { display: flex; flex-wrap: wrap; gap: 0.5rem;
-}
-
-.splash-auth-form-btn { min-width: 100px; flex: 1;
-}
-
-.splash-auth-message { min-height: 1.5rem; font-size: 0.75rem; text-align: center; font-family: var(--splash-font) !important;
-}
-
-#splash-email-auth-form .splash-auth-input,
-.splash-auth-terminal-form .splash-auth-input { background: rgb(40 40 40) !important; border: 2px solid var(--bevel-dark) !important; color: var(--splash-text-primary) !important; font-family: var(--splash-font) !important; padding: 0.5rem !important; font-size: 0.75rem !important; border-radius: 0;
-}
-
-#splash-email-auth-form .splash-auth-input::placeholder,
-.splash-auth-terminal-form .splash-auth-input::placeholder { color: rgb(140 140 140);
-}
-
-.splash-auth-comms-icon { font-family: var(--splash-font); font-size: 0.7rem; margin-right: 0.25rem;
-}
-
-.nav-auth-modal { background: var(--splash-panel-bg); border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); padding: 1.5rem; max-width: 400px; width: 90%; box-shadow: 4px 4px 0 var(--bevel-shadow); border-radius: 0; position: relative; font-family: var(--splash-font) !important;
-}
-
-.nav-auth-terminal-prompt { padding: 0.25rem 0 0.75rem; font-size: 0.65rem; color: var(--sovietwave-amber); letter-spacing: 1px;
-}
-
-.nav-auth-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;
-}
-
-.nav-auth-option-btn { flex: 1; min-width: 140px;
-}
-
-.nav-auth-email-form { display: flex; flex-direction: column; gap: 0.5rem;
-}
-
-.nav-auth-email-form.hidden { display: none !important;
-}
-
-.nav-auth-input { background: rgb(40 40 40) !important; border: 2px solid var(--bevel-dark) !important; color: var(--splash-text-primary) !important; font-family: var(--splash-font) !important; padding: 0.5rem !important; font-size: 0.75rem !important; border-radius: 0;
-}
-
-.nav-auth-input::placeholder { color: rgb(140 140 140);
 }
 
 .splash-footer-links { position: fixed; z-index: 10; right: 0; bottom: 0.5em; left: 0; max-width: 100vw; box-sizing: border-box; padding: 0 1rem; font-family: "Press Start 2P", cursive, monospace; font-size: 0.55rem; opacity: 0.85; text-align: center;

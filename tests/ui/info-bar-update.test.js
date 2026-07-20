@@ -40,6 +40,7 @@ describe("UI Info Bar updates for max power/heat", () => {
         const tile = game.tileset.getTile(5, 5);
         await tile.setPart(capacitor);
         game.reactor.updateStats();
+        game.coreBridge?.projectLiveState?.();
         flushUI();
         await waitForInfoBarRender();
 
@@ -68,8 +69,8 @@ describe("UI Info Bar updates for max power/heat", () => {
             await t.setPart(plating);
         }
         game.reactor.updateStats();
+        game.coreBridge?.projectLiveState?.();
         flushUI();
-        game.ui.updateUiRollingNumbers(10000);
         await waitForInfoBarRender();
 
         const mobileDenom = document.getElementById("info_heat_denom");

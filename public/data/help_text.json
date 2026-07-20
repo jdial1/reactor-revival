@@ -1,10 +1,10 @@
 {
     "basic_overview": {
         "title": "Basic Overview",
-        "content": "Cells = power and heat<br>Power = money<br>Money = Bigger cells and more money<br>Lots of money = particle accelerators<br>Particle accelerators = exotic particles (EP)<br>EP = more upgrades and new toys for more power, heat and money!<br><br>Back up your progress: <strong>Settings → Export Save</strong> (.reactor file) for other devices or safekeeping."
+        "content": "Cells = power and heat<br>Power = money<br>Money = Bigger cells and more money<br>Lots of money = particle accelerators<br>Particle accelerators = exotic particles (EP)<br>EP = more upgrades and new toys for more power, heat and money!<br><br>Click <strong>Power</strong> to sell stored energy for money. Click <strong>Heat</strong> to vent heat manually. Keep reactor heat under control — excess heat causes a meltdown.<br><br>Follow <strong>Objectives</strong> for guided chapter rewards as you scale.<br><br>Back up your progress: <strong>Settings → Export Save</strong> (.reactor file) for other devices or safekeeping."
     },
     "parts": {
-        "cells": "Cells are your primary power generators. They produce both power and heat.",
+        "cells": "Cells are your primary power generators. They produce both power and heat. Buy Single, Dual, or Quad configs for more output in one tile.",
         "reflectors": "Reflectors boost the power output of adjacent cells.",
         "capacitors": "Each capacitor placed on the reactor grid adds a fixed amount to reactor power storage.",
         "particleAccelerators": "Particle Accelerators can generate Exotic Particles (EP) from contained heat; EP from accelerators is capped by the smaller of total cell power produced and total heat vented this run.",
@@ -14,6 +14,7 @@
         "heatOutlets": "Heat Outlets pull heat from the reactor into adjacent components.",
         "coolantCells": "Coolant Cells passively absorb heat from adjacent components.",
         "reactorPlatings": "Each reactor plating placed on the grid adds a fixed amount to reactor heat capacity.",
+        "valves": "Valves move heat directionally between neighbors: Overflow (when input is nearly full), Top-up (when output is low), and Check (one-way flow).",
         "sellConsequences": "Selling parts returns less when they are overheated or worn. Depleted cells sell for about $0 — plan placement carefully."
     },
     "controls": {
@@ -25,6 +26,14 @@
         "saveImport": "Settings → Import Save restores a .reactor or JSON backup. Your current slot is backed up before import.",
         "offlineCatchup": "While the tab is closed, your reactor keeps progressing (deterministic offline catch-up). When you return after a long absence, use <strong>Fast-Forward</strong> to replay offline ticks through the physics worker at high speed. Unstable layouts can still melt down during catch-up — vent before leaving the game idle.",
         "chronometer": "The <strong>Chronometer</strong> upgrade (and Improved Chronometers research) speeds up reactor ticks so you earn faster. Faster ticks also mean heat builds faster — scale cooling with output."
+    },
+    "meltdown": {
+        "title": "Meltdown",
+        "content": "Reactor heat above safe capacity triggers a <strong>meltdown</strong> — the run fails and you recover from the failure screen. Plate for higher heat capacity, vent and route heat with cooling parts, and pause before risky rebuilds. Unstable layouts can also melt down during offline catch-up."
+    },
+    "objectives": {
+        "title": "Objectives",
+        "content": "<strong>Objectives</strong> are the guided checklist of goals (place parts, sell power, buy upgrades, hit power milestones, earn EP, reboot). Completing them grants money or EP rewards and advances through chapters toward experimental play."
     },
     "layouts": {
         "title": "Layouts & Blueprint Planning",

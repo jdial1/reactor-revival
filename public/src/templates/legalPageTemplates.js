@@ -34,7 +34,7 @@ export function fallbackPrivacyPolicyDate() {
   });
 }
 
-export async function populatePrivacyPolicyDateElement(el = document.getElementById("privacy-policy-date")) {
+export async function populatePrivacyPolicyDateElement(el) {
   if (!el) return;
   try {
     const response = await fetch("version.json");
@@ -86,7 +86,7 @@ export function privacyPolicyPageContainerTemplate(embeddedInApp = true) {
           <div class="highlight-box">
             <div class="highlight-icon">🔒</div>
             <p>
-              <strong>We do not collect any personal data.</strong> Reactor Revival is designed to respect your privacy. All game data is stored locally on your device or, optionally, in your own Google Drive account.
+              <strong>We do not collect any personal data.</strong> Reactor Revival is designed to respect your privacy. All game data is stored locally on your device (browser storage and optional .reactor export files you choose to save).
             </p>
           </div>
           <h3>Data Storage Methods</h3>
@@ -95,15 +95,14 @@ export function privacyPolicyPageContainerTemplate(embeddedInApp = true) {
               <strong>Local Storage:</strong> Your game progress is saved in your browser's local storage. This data is not transmitted to any servers.
             </li>
             <li>
-              <strong>Google Drive (Optional):</strong> If you choose to connect your Google account, your game save file will be stored in your Google Drive. The application only has permission to access the files it creates. We do not have access to any other files in your Drive. This feature is provided for your convenience to back up and sync your game data.
+              <strong>Manual export:</strong> You may export a .reactor save file to your own disk and import it later. That file stays under your control.
             </li>
           </ul>
         </section>
         <section class="tos-section">
           <h2>Third-Party Services</h2>
           <p>
-            The optional Google Drive integration is subject to the
-            <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>. We do not receive or store your Google account credentials.
+            The optional leaderboard feature, when enabled, may send run summaries you choose to submit. There is no cloud save account or Google Drive integration in the shipped build.
           </p>
         </section>
         <section class="tos-section">

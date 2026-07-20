@@ -1,13 +1,50 @@
 import { recordSimEvent } from "../domain/sim-events.js";
-import { drainGameEffects } from "../effect-orchestrator.js";
+import { syncActiveObjectiveToState } from "../domain/objectives.js";
+import { OVERRIDE_DURATION_MS } from "../constants/balance.js";
+import { toNumber } from "../simUtils.js";
+import { getCompactLayout } from "../domain/reactor-codec.js";
+import { bumpSnapshotRev } from "../state/snapshot-rev.js";
+import { runSubsystemHook } from "../core/subsystem-registry.js";
+import { logger } from "../core/logger.js";
 
-export function routeSessionEvents(bridge) {
-  const events = bridge.session?.drainEvents?.() || [];
+export function presentMeltdown(game) {
+  if (!game || game._meltdownPresentationDone) return;
+  if (!game.state?.melting_down
+    && !game.coreBridge?.session?.systems?.failure?.hasMeltedDown) {
+    return;
+  }
+  game._meltdownPresentationDone = true;
+  logger.log("warn", "engine", "[MELTDOWN] Session failure projected; presenting meltdown chrome.");
+  if (game.state) {
+    game.state.melting_down = true;
+    game.state.meltdown_seq = (game.state.meltdown_seq | 0) + 1;
+  }
+  bumpSnapshotRev(game);
+  recordSimEvent(game, { type: "MELTDOWN_HAPTIC", pattern: 200 });
+  runSubsystemHook(game, "postTick");
+  if (game.engine) game.engine.stop();
+  const layout = getCompactLayout(game);
+  if (layout?.parts?.length) {
+    game.emit?.("meltdownRecoveredBlueprint", { layout });
+  }
+  if (!game.ui?.meltdownUI) {
+    game.tileset?.clearAllTiles?.();
+  }
+  game.partset?.check_affordability?.(game);
+  game.upgradeset?.check_affordability?.(game);
+}
+
+export function routeSessionEvents(bridge, preDrainedEvents = null) {
+  const events = preDrainedEvents ?? (bridge.session?.drainEvents?.() || []);
   const game = bridge.game;
   for (const event of events) {
     if (event.type === "sellPower") {
       game.sold_power = true;
       recordSimEvent(game, { type: "POWER_SOLD", ...(event.payload || {}) });
+      const reactor = game.reactor;
+      if (toNumber(reactor?.sessionModifiers?.manual_override_mult ?? 0) > 0) {
+        reactor.override_end_time = Date.now() + OVERRIDE_DURATION_MS;
+      }
     }
     if (event.type === "ventHeat") {
       recordSimEvent(game, { type: "HEAT_VENTED", ...(event.payload || {}) });
@@ -18,12 +55,11 @@ export function routeSessionEvents(bridge) {
     }
     if (event.type === "heatWarning") {
       const level = event.payload?.level ?? null;
-      if (game.state) {
-        game.state.ui_heat_critical = level === "critical";
-        game.state.ui_pipe_integrity_warning = level === "high" || level === "critical";
+      if (game.ui?.uiState) {
+        game.ui.uiState.heat_critical = level === "critical";
+        game.ui.uiState.pipe_integrity_warning = level === "high" || level === "critical";
       }
       if (!level) game.emit?.("heatWarningCleared");
-      else game.emit?.("heatWarning", event.payload);
     }
     if (event.type === "partSold") {
       recordSimEvent(game, {
@@ -37,9 +73,8 @@ export function routeSessionEvents(bridge) {
       const id = event.payload?.id;
       const upgrade = id ? game.upgradeset?.getUpgrade(id) : null;
       const newLevel = event.payload?.newLevel;
-      if (upgrade && typeof newLevel === "number") {
-        if (upgrade.level !== newLevel) upgrade.setLevel(newLevel, { deferSync: true });
-        else upgrade.updateDisplayCost?.();
+      if (upgrade && typeof newLevel === "number" && upgrade.level !== newLevel) {
+        upgrade.setLevel(newLevel, { deferSync: true });
       }
       game.emit?.("upgradePurchased", { upgrade, ...event.payload });
     }
@@ -53,7 +88,7 @@ export function routeSessionEvents(bridge) {
           om._emitObjectiveCompleted?.();
         }
       }
-      om?._syncActiveObjectiveToState?.();
+      syncActiveObjectiveToState(om);
     }
     if (event.type === "achievementUnlocked") {
       const id = event.payload?.id;
@@ -72,22 +107,13 @@ export function routeSessionEvents(bridge) {
         }
       }
     }
-    if (event.type === "reboot") game.emit?.("statePatch", { type: "reboot" });
-    if (event.type === "blueprintPlannerCommitted") game.emit?.("grid_changed", {});
+    if (event.type === "reboot") game.emit?.("reboot");
     if (event.type === "componentExplosion") {
       const row = event.payload?.row;
       const col = event.payload?.col;
       const tile = game.tileset?.getTile(row, col);
       if (tile) {
         game.engine?.handleComponentExplosion?.(tile);
-        if (tile.exploded) {
-          const inst = bridge.session?.grid?.getComponentAt(row, col);
-          if (inst) inst.pendingDestruction = true;
-        }
-        const partId = event.payload?.id || tile.part?.id;
-        if (partId?.startsWith("particle_accelerator") || tile.part?.category === "particle_accelerator") {
-          game.reactor?.checkMeltdown?.();
-        }
       }
     }
     if (event.type === "reflector_pulse") {
@@ -101,10 +127,7 @@ export function routeSessionEvents(bridge) {
       }
     }
     if (event.type === "meltdown") {
-      game.reactor.has_melted_down = true;
-      game.state.melting_down = true;
-      game.reactor?.checkMeltdown?.();
+      presentMeltdown(game);
     }
   }
-  if (events.length) drainGameEffects(game, () => game?.ui);
 }

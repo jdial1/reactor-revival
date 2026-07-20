@@ -84,9 +84,9 @@ export class PageRouter {
     const game = this.ui.game;
     const sync = () => audio.syncResearchEpHum(game);
     sync();
-    if (game?.state) {
+    if (game?.ui?.uiState) {
       const unsubs = [];
-      unsubs.push(subscribeKey(game.state, "current_exotic_particles", sync));
+      unsubs.push(subscribeKey(game.ui.uiState, "snapshot_rev", sync));
       this._epHumUnsub = () => {
         teardownAll(unsubs);
       };
@@ -330,7 +330,7 @@ export class PageRouter {
 
   async populatePrivacyPolicyDate() {
     try {
-      await populatePrivacyPolicyDateElement();
+      await populatePrivacyPolicyDateElement(document.getElementById("privacy-policy-date"));
     } catch (error) {
       logger.error("Failed to load version for privacy policy date:", error);
       const dateElement = document.getElementById("privacy-policy-date");

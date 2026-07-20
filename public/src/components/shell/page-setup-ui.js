@@ -18,6 +18,19 @@ import { updateLeaderboardIcon } from "../ui-components.js";
 import { getUiElement } from "./page-dom.js";
 import { classMap, repeat, when } from "../../dom/lit.js";
 
+function syncLeaderboardHeaderVisibility(sortBy) {
+  const table = typeof document !== "undefined"
+    ? document.getElementsByClassName("leaderboard-table")[0]
+    : null;
+  const thead = table?.tHead;
+  if (!thead) return;
+  ["power", "heat", "money"].forEach((key) => {
+    const el = thead.getElementsByClassName(`leaderboard-col-${key}`)[0];
+    if (!el) return;
+    el.className = sortBy === key ? `leaderboard-col-${key}` : `leaderboard-col-${key} hidden`;
+  });
+}
+
 export class PageSetupUI {
   constructor(ui) {
     this.ui = ui;
@@ -29,19 +42,6 @@ export class PageSetupUI {
     const ui = this.ui;
     const container = getUiElement(ui, "leaderboard_rows");
 
-    const syncLeaderboardColumnVisibility = (sortBy) => {
-      const columns = [
-        ["power", ".leaderboard-col-power"],
-        ["heat", ".leaderboard-col-heat"],
-        ["money", ".leaderboard-col-money"],
-      ];
-      columns.forEach(([key, selector]) => {
-        document.querySelectorAll(`.leaderboard-table ${selector}`).forEach((el) => {
-          el.classList.toggle("hidden", sortBy !== key);
-        });
-      });
-    };
-
     if (!ui.game) {
       if (container) render(leaderboardStatusRowTemplate({ text: "Game not initialized" }), container);
       return;
@@ -52,17 +52,7 @@ export class PageSetupUI {
       void loadRecords(sortBy);
     };
 
-    let controlsRoot = getUiElement(ui, "leaderboard_controls_root");
-    if (!controlsRoot) {
-      const legacyBtn = document.querySelector(".leaderboard-sort");
-      if (legacyBtn) {
-        const host = document.createElement("div");
-        host.id = "leaderboard_controls_root";
-        legacyBtn.parentNode.insertBefore(host, legacyBtn);
-        document.querySelectorAll(".leaderboard-sort").forEach((btn) => btn.remove());
-        controlsRoot = host;
-      }
-    }
+    const controlsRoot = getUiElement(ui, "leaderboard_controls_root");
 
     if (controlsRoot && ui.uiState && !ui._leaderboardControlsMounted) {
       ui._leaderboardControlsMounted = true;
@@ -185,7 +175,7 @@ export class PageSetupUI {
 
     const loadRecords = async (sortBy) => {
       if (!container) return;
-      syncLeaderboardColumnVisibility(sortBy);
+      syncLeaderboardHeaderVisibility(sortBy);
       updateSubtitle(sortBy, "loading");
       if (leaderboardService.disabled) {
         render(leaderboardTemplate([], "loaded", sortBy), container);
@@ -298,17 +288,17 @@ export class PageSetupUI {
       actions.enqueueEffect(ui.game, { kind: "sfx", id: sound, a: subtype, b: undefined, context: "global" });
     };
 
-    page.querySelectorAll("button.sound-btn").forEach((button) => {
+    const buttons = page.getElementsByClassName("sound-btn");
+    for (let i = 0; i < buttons.length; i++) {
+      const button = buttons[i];
       button.onclick = () => playSound(button);
-    });
+    }
   }
 
   setupMobileTopBar() {
     const ui = this.ui;
     try {
       const mobileTopBar = getUiElement(ui, "mobile_top_bar");
-      const stats = getUiElement(ui, "reactor_stats");
-      const topNav = getUiElement(ui, "main_top_nav");
       const reactorWrapper = getUiElement(ui, "reactor_wrapper");
       const reactorSection = getUiElement(ui, "reactor_section");
       const copyPasteBtns = getUiElement(ui, "reactor_copy_paste_btns");
@@ -318,9 +308,9 @@ export class PageSetupUI {
       const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
       if (ui?.uiState) ui.uiState.is_mobile_viewport = isMobile;
 
+      mobileTopBar.className = isMobile ? "active" : "";
+      mobileTopBar.setAttribute("aria-hidden", isMobile ? "false" : "true");
       if (isMobile) {
-        mobileTopBar.classList.add("active");
-        mobileTopBar.setAttribute("aria-hidden", "false");
         if (copyPasteBtns && reactorSection && reactorWrapper && copyPasteBtns.parentElement === reactorWrapper) {
           reactorSection.insertBefore(copyPasteBtns, reactorWrapper);
         }
@@ -330,8 +320,6 @@ export class PageSetupUI {
           copyPasteToggle.style.visibility = "visible";
         }
       } else {
-        mobileTopBar.classList.remove("active");
-        mobileTopBar.setAttribute("aria-hidden", "true");
         if (reactorWrapper && copyPasteBtns && copyPasteBtns.parentElement !== reactorWrapper) {
           reactorWrapper.appendChild(copyPasteBtns);
         }

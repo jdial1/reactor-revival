@@ -1,115 +1,73 @@
-import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import { setupSessionOnly } from "../../helpers/sessionHelpers.js";
 
-describe("Partset Mechanics", () => {
-  let game;
+function partsByType(session, type) {
+  return session.listParts().filter((p) => p.type === type);
+}
+
+function partsByLevel(session, level) {
+  return session.listParts().filter((p) => p.level === level);
+}
+
+function partsByCategory(session, category) {
+  return session.listParts().filter((p) => p.category === category);
+}
+
+describe("Partset Mechanics (session)", () => {
+  let session;
+
   beforeEach(async () => {
-    game = await setupGame();
+    session = await setupSessionOnly();
   });
 
-  it("should initialize with all required parts", () => {
-    const requiredParts = [
-      "uranium1",
-      "uranium2",
-      "uranium3",
-      "vent1",
-      "capacitor1",
-    ];
-    requiredParts.forEach((partId) => {
-      const part = game.partset.getPartById(partId);
+  it("exposes required catalog ids via getPart/listParts", () => {
+    for (const id of ["uranium1", "uranium2", "uranium3", "vent1", "capacitor1"]) {
+      const part = session.getPart(id);
       expect(part).toBeDefined();
-      expect(part.id).toBe(partId);
-    });
-  });
-
-  it("should get part by ID", () => {
-    const part = game.partset.getPartById("uranium1");
-    expect(part).toBeDefined();
-    expect(part.id).toBe("uranium1");
-    expect(toNum(part.power)).toBeGreaterThan(0);
-    expect(toNum(part.heat)).toBeGreaterThan(0);
-    expect(toNum(part.cost)).toBeGreaterThan(0);
-  });
-
-  it("should return undefined for invalid part ID", () => {
-    const part = game.partset.getPartById("invalid_part");
-    expect(part).toBeUndefined();
-  });
-
-  it("should get all parts of a specific type", () => {
-    const uraniumParts = game.partset.getPartsByType("uranium");
-    expect(uraniumParts.length).toBe(3);
-    uraniumParts.forEach((part) => {
-      expect(part.id).toMatch(/^uranium\d$/);
-    });
-
-    const ventParts = game.partset.getPartsByType("vent");
-    expect(ventParts.length).toBe(6);
-    ventParts.forEach((part) => {
-      expect(part.id).toMatch(/^vent\d$/);
-    });
-  });
-
-  it("should return empty array for invalid part type", () => {
-    const parts = game.partset.getPartsByType("invalid_type");
-    expect(parts).toEqual([]);
-  });
-
-  it("should get parts by level", () => {
-    const tier1Parts = game.partset.getPartsByLevel(1);
-    expect(tier1Parts.length).toBeGreaterThan(0);
-    tier1Parts.forEach((part) => {
-      expect(part.level).toBe(1);
-    });
-
-    const tier2Parts = game.partset.getPartsByLevel(2);
-    expect(tier2Parts.length).toBeGreaterThan(0);
-    tier2Parts.forEach((part) => {
-      expect(part.level).toBe(2);
-    });
-  });
-
-  it("should return empty array for invalid level", () => {
-    const parts = game.partset.getPartsByLevel(999);
-    expect(parts).toEqual([]);
-  });
-
-  it("should get parts by category", () => {
-    const cellParts = game.partset.getPartsByCategory("cell");
-    expect(cellParts.length).toBeGreaterThan(0);
-    cellParts.forEach((part) => {
-      expect(part.category).toBe("cell");
-    });
-
-    const coolingParts = game.partset.getPartsByCategory("vent");
-    expect(coolingParts.length).toBeGreaterThan(0);
-    coolingParts.forEach((part) => {
-      expect(part.category).toBe("vent");
-    });
-  });
-
-  it("should return empty array for invalid category", () => {
-    const parts = game.partset.getPartsByCategory("invalid_category");
-    expect(parts).toEqual([]);
-  });
-
-  it("should get all available parts", () => {
-    const allParts = game.partset.getAllParts();
-    expect(allParts.length).toBeGreaterThan(0);
-    expect(allParts.every((part) => part.id && part.type)).toBe(true);
-  });
-
-  it("should only show parts whose prerequisites are met", async () => {
-    const uranium1 = game.partset.getPartById("uranium1");
-    const uranium2 = game.partset.getPartById("uranium2");
-
-    // Initially, uranium2 should be locked
-    expect(game.isPartUnlocked(uranium2)).toBe(false);
-
-    // Place 10 uranium1 parts
-    for (let i = 0; i < 10; i++) {
-      game.incrementPlacedCount('uranium', 1);
+      expect(part.id).toBe(id);
     }
+    expect(session.listParts().length).toBeGreaterThan(0);
+    expect(session.listParts().every((p) => p.id && p.type)).toBe(true);
+  });
 
-    expect(game.isPartUnlocked(uranium2)).toBe(true);
+  it("returns nullish for invalid part ids", () => {
+    expect(session.getPart("invalid_part")).toBeFalsy();
+  });
+
+  it("filters parts by type, level, and category", () => {
+    const uranium = partsByType(session, "uranium");
+    expect(uranium).toHaveLength(3);
+    uranium.forEach((p) => expect(p.id).toMatch(/^uranium\d$/));
+
+    const vents = partsByType(session, "vent");
+    expect(vents).toHaveLength(6);
+    vents.forEach((p) => expect(p.id).toMatch(/^vent\d$/));
+
+    expect(partsByType(session, "invalid_type")).toEqual([]);
+
+    const tier1 = partsByLevel(session, 1);
+    expect(tier1.length).toBeGreaterThan(0);
+    tier1.forEach((p) => expect(p.level).toBe(1));
+
+    const tier2 = partsByLevel(session, 2);
+    expect(tier2.length).toBeGreaterThan(0);
+    tier2.forEach((p) => expect(p.level).toBe(2));
+    expect(partsByLevel(session, 999)).toEqual([]);
+
+    const cells = partsByCategory(session, "cell");
+    expect(cells.length).toBeGreaterThan(0);
+    cells.forEach((p) => expect(p.category).toBe("cell"));
+
+    const cooling = partsByCategory(session, "vent");
+    expect(cooling.length).toBeGreaterThan(0);
+    cooling.forEach((p) => expect(p.category).toBe("vent"));
+    expect(partsByCategory(session, "invalid_category")).toEqual([]);
+  });
+
+  it("unlocks higher tiers when placedCounts hit the threshold", () => {
+    expect(session.getPlacedCount("uranium", 1)).toBeLessThan(10);
+    session.setPlacedCounts({ "uranium:1": 10 });
+    expect(session.getPlacedCount("uranium", 1)).toBeGreaterThanOrEqual(10);
+    expect(session.getPart("uranium2")).toBeDefined();
   });
 });

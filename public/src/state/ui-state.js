@@ -3,9 +3,10 @@ import { subscribeKey } from "valtio/vanilla/utils";
 import { render } from "lit-html";
 import { StorageUtils } from "../storage/index.js";
 import { MOBILE_BREAKPOINT_PX } from "../constants/ui-constants.js";
-import { syncReactorHeatVisualDom } from "../components/shell/heat-dom-sync.js";
+import { hudViewFromSnapshot, resolveSessionSnapshot } from "../components/shell/hud-from-snapshot.js";
 import { getUiElement, isShopOverlayPage, isSimVisiblePage } from "../components/shell/page-dom.js";
-import { dispatchToggleIntent } from "../components/grid/ui-intents.js";
+import { dispatchPlayerIntent } from "../bridge/bridge-intents.js";
+import { syncActiveObjectiveToState } from "../domain/objectives.js";
 import { statusNoticeSlotTemplate } from "../templates/pageShellTemplates.js";
 import { teardownAll } from "../core/teardown.js";
 
@@ -20,7 +21,7 @@ export function createUIState() {
   const copyPasteCollapsed = StorageUtils.get("reactor_copy_paste_collapsed") !== false;
   return proxy({
     performance_stats: { fps: 0, tps: 0, fps_color: "rgb(93 156 81)", tps_color: "rgb(93 156 81)" },
-    stats: { vent: 0, power: 0, heat: 0, money: 0, ep: 0 },
+    snapshot_rev: 0,
     is_paused: false,
     is_melting_down: false,
     meltdown_buildup: false,
@@ -57,28 +58,39 @@ export function createUIState() {
     grid_layout: { cols: 0, rows: 0, tile_size_px: 0 },
     grid_shell_width: 0,
     grid_shell_height: 0,
-    user_account_display: { icon: "💾", title: "Local saves" },
     copy_state_feedback: null,
     section_counts: {},
-    core_danger: 0,
-    heat_ratio: 0,
     has_affordable_upgrades: false,
     has_affordable_research: false,
     upgrades_banner_visibility: { upgradesHidden: true, researchHidden: true },
     version_display: { about: "", app: "" },
     sound_warning_value: 50,
     sell_modal_display: { title: "", confirmLabel: "" },
-    user_account_feedback: { text: "", isError: false },
     fullscreen_display: { icon: "⛶", title: "Toggle Fullscreen" },
     copy_paste_modal_display: { title: "", confirmLabel: "" },
+    hub_collapsed: {
+      "Cell Upgrades": false,
+      "Cooling Upgrades": true,
+      "General Upgrades": true,
+      Laboratory: false,
+      "Global Boosts": true,
+      "Experimental Parts & Cells": true,
+      "Particle Accelerators": true,
+      reboot_section: true,
+      doctrine_tree_viewer: true,
+    },
     tutorial_claim_step: false,
     active_notice: null,
     grid_dirty_tile: null,
     visual_fx: [],
     tile_fx: [],
     is_mobile_viewport: isMobileOnInit,
+    heat_critical: false,
+    pipe_integrity_warning: false,
   });
 }
+
+export { bumpSnapshotRev } from "./snapshot-rev.js";
 
 export function resolveTileFromKey(game, key) {
   if (!key || !game?.tileset) return null;
@@ -89,17 +101,44 @@ export function resolveTileFromKey(game, key) {
 
 export { tileKey };
 
+function shellHeatSignals(game) {
+  const view = hudViewFromSnapshot(resolveSessionSnapshot(game), game);
+  const heatRatio = typeof view.heat_ratio === "number" && Number.isFinite(view.heat_ratio) ? view.heat_ratio : 0;
+  const heatBalanced = view.heat_balanced;
+  const coreDanger = heatBalanced
+    ? Math.min(0.5, Math.max(0, heatRatio))
+    : Math.min(1.5, Math.max(0, heatRatio));
+  return { heatRatio, heatBalanced, coreDanger };
+}
+
+function heatBgAlpha(heatRatio) {
+  const hr = Number(heatRatio);
+  if (!Number.isFinite(hr) || hr <= 0.5) return 0;
+  if (hr <= 1.0) return Math.min((hr - 0.5) * 2 * 0.2, 0.2);
+  if (hr <= 1.5) return 0.2 + Math.min((hr - 1.0) * 2 * 0.3, 0.3);
+  return 0.5;
+}
+
+export function shellHeatRatioAttr(game) {
+  const { heatRatio } = shellHeatSignals(game);
+  return String(Math.round(Math.min(1.5, Math.max(0, heatRatio)) * 1000) / 1000);
+}
+
 export function buildShellClassMap(uiState, shellModalUi = modalUi, { hasSession = true, game = null } = {}) {
   const activePageId = uiState?.active_page ?? "reactor_section";
   const pageBase = activePageId.replace("_section", "");
-  const heatRatio = uiState?.heat_ratio ?? 0;
-  const heatBalanced = game?.state?.heat_balanced;
+  const { heatRatio, heatBalanced } = shellHeatSignals(game);
+  const thresholdCritical = heatBalanced === false && heatRatio >= 1.3;
+  const thresholdWarning = heatBalanced === false && heatRatio >= 0.8;
   return {
     hidden: !hasSession,
     "game-paused": !!uiState?.is_paused,
     "reactor-meltdown": !!uiState?.is_melting_down,
     "meltdown-buildup": !!uiState?.meltdown_buildup,
-    "crt-heat-tearing": heatRatio >= 1.3 && heatBalanced === false,
+    "crt-heat-tearing": thresholdCritical,
+    "heat-warning": thresholdWarning,
+    "heat-critical": thresholdCritical,
+    "pipe-integrity-warning": !!uiState?.pipe_integrity_warning,
     "blueprint-planner-active": !!uiState?.copy_paste_display?.blueprintPlannerActive,
     "parts-panel-open": !uiState?.parts_panel_collapsed,
     "parts-panel-right": !!uiState?.parts_panel_right_side,
@@ -115,8 +154,7 @@ export function buildShellClassMap(uiState, shellModalUi = modalUi, { hasSession
 }
 
 export function buildShellStyleMap(uiState, game = null) {
-  const cd = uiState?.core_danger ?? 0;
-  const heatRatio = uiState?.heat_ratio ?? 0;
+  const { heatRatio, coreDanger } = shellHeatSignals(game);
   const heatNorm = Math.min(1, Math.max(0, heatRatio / 1.5));
   const dur = `${20 - heatNorm * 12}s`;
 
@@ -127,10 +165,11 @@ export function buildShellStyleMap(uiState, game = null) {
   }
 
   return {
-    "--core-danger": String(cd),
+    "--core-danger": String(coreDanger),
     "--crt-heat": String(heatNorm),
     "--crt-jitter-duration": dur,
-    "--heat-ratio": String(cd),
+    "--heat-ratio": String(coreDanger),
+    "--heat-bg-alpha": String(heatBgAlpha(heatRatio)),
     ...(doctrineColor ? { "--doctrine-color": doctrineColor } : {}),
   };
 }
@@ -167,18 +206,12 @@ export function initUIStateSubscriptions(uiState, ui) {
   unsubs.push(subscribeKey(uiState, "active_parts_tab", () => {
     ui.refreshPartsPanel?.();
   }));
-  const syncPartActive = () => {
-    const main = resolveSubscriptionDom(ui, dom, "main", "main");
-    if (main) main.classList.toggle("part_active", !!uiState.interaction?.selectedPartId);
-  };
-  syncPartActive();
-  unsubs.push(subscribeKey(uiState.interaction, "selectedPartId", syncPartActive));
   const syncMobileViewport = () => {
     if (typeof window === "undefined") return;
     uiState.is_mobile_viewport = window.innerWidth <= MOBILE_BREAKPOINT_PX;
     const mobileTopBar = getUiElement(ui, "mobile_top_bar");
     if (mobileTopBar) {
-      mobileTopBar.classList.toggle("active", uiState.is_mobile_viewport);
+      mobileTopBar.className = uiState.is_mobile_viewport ? "active" : "";
       mobileTopBar.setAttribute("aria-hidden", uiState.is_mobile_viewport ? "false" : "true");
     }
   };
@@ -195,9 +228,14 @@ export function initUIStateSubscriptions(uiState, ui) {
     const bottomNav = resolveSubscriptionDom(ui, dom, "bottomNav", "bottom_nav");
     [topNav, bottomNav].forEach((navContainer) => {
       if (!navContainer) return;
-      navContainer.querySelectorAll("button[data-page]").forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.page === activePageId);
-      });
+      const buttons = navContainer.getElementsByTagName("button");
+      for (let i = 0; i < buttons.length; i++) {
+        const btn = buttons[i];
+        if (!btn.dataset.page) continue;
+        const on = btn.dataset.page === activePageId;
+        const base = btn.className.replace(/\bactive\b/g, "").replace(/\s+/g, " ").trim();
+        btn.className = on ? (base ? `${base} active` : "active") : base;
+      }
     });
   };
   syncNavAndPageClass();
@@ -215,7 +253,7 @@ export function initUIStateSubscriptions(uiState, ui) {
       dom.reactorBackground = getUiElement(ui, "reactor_background");
       const om = ui.game?.objectives_manager;
       if (om?.current_objective_def) {
-        om._syncActiveObjectiveToState?.();
+        syncActiveObjectiveToState(om);
         ui.stateManager?.handleObjectiveLoaded?.({
           ...om.current_objective_def,
           title: typeof om.current_objective_def.title === "function" ? om.current_objective_def.title() : om.current_objective_def.title,
@@ -230,31 +268,20 @@ export function initUIStateSubscriptions(uiState, ui) {
   }));
   unsubs.push(subscribeKey(uiState, "is_paused", (val) => {
     if (!ui.game?.state || !!ui.game.state.pause === !!val) return;
-    dispatchToggleIntent(ui.game, "pause", !!val);
+    void dispatchPlayerIntent(ui.game, ui.game.engine, {
+      type: "SET_TOGGLE",
+      payload: { toggleName: "pause", value: !!val },
+    });
   }));
-  unsubs.push(subscribeKey(uiState, "heat_ratio", (heatRatio) => {
-    const st = ui.game?.state;
-    syncReactorHeatVisualDom(ui, heatRatio, st?.stats_net_heat, st?.stats_heat_generation);
-  }));
-  if (ui.game?.state) {
-    const syncHeatBalanced = () => {
-      const st = ui.game.state;
-      const heatRatio = uiState.heat_ratio;
-      syncReactorHeatVisualDom(ui, heatRatio, st.stats_net_heat, st.stats_heat_generation);
-    };
-    unsubs.push(subscribeKey(ui.game.state, "stats_net_heat", syncHeatBalanced));
-    unsubs.push(subscribeKey(ui.game.state, "stats_heat_generation", syncHeatBalanced));
-    unsubs.push(subscribeKey(ui.game.state, "heat_balanced", syncHeatBalanced));
-  }
-  syncReactorHeatVisualDom(ui, uiState.heat_ratio, ui.game?.state?.stats_net_heat, ui.game?.state?.stats_heat_generation);
   const syncStatusNotice = () => {
     const root = getUiElement(ui, "status_notice_root");
     if (!root) return;
-    render(statusNoticeSlotTemplate(uiState.active_notice), root);
-    const inner = root.querySelector("#status_notice_inner");
-    if (inner) {
-      requestAnimationFrame(() => inner.classList.add("decompression-saved-toast__panel--visible"));
-    }
+    const notice = uiState.active_notice;
+    render(statusNoticeSlotTemplate(notice, false), root);
+    if (!notice?.body) return;
+    requestAnimationFrame(() => {
+      render(statusNoticeSlotTemplate(notice, true), root);
+    });
   };
   syncStatusNotice();
   unsubs.push(subscribeKey(uiState, "active_notice", syncStatusNotice));

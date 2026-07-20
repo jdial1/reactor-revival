@@ -77,7 +77,7 @@ describe("Save and Load Functionality", () => {
 
     await tile1.setPart(uranium);
     await tile2.setPart(vent);
-    tile1.ticks = 5;
+    game.coreBridge.setTileTicks(tile1.row, tile1.col, 5);
 
     const rawSave = await game.saveManager.getSaveState();
     const saveData = {
@@ -143,7 +143,7 @@ describe("Save and Load Functionality", () => {
     const uranium = game.partset.getPartById("uranium1");
     const tile = game.tileset.getTile(0, 0);
     await tile.setPart(uranium);
-    tile.ticks = 5;
+    game.coreBridge.setTileTicks(tile.row, tile.col, 5);
 
     const rawSave = await game.saveManager.getSaveState();
     const payload = serializeSave(rawSave);

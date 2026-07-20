@@ -223,7 +223,7 @@ describe("Reactor Performance Stress Tests", () => {
       await Promise.all(placementPromises);
 
       if (preheat) {
-        game.reactor.current_heat = game.reactor.max_heat / 2;
+        game.coreBridge.setReactorHeat(game.reactor.max_heat / 2);
       }
 
       for (let i = 0; i < TEST_TICKS; i++) {
@@ -336,7 +336,7 @@ describe("Large Grid Performance Stress Tests", () => {
           // Prevent meltdown during stress tests with high-heat parts
           game.reactor.max_heat = 1e30;
           game.reactor.max_power = 1e30;
-          game.reactor.current_power = 1e20; // Pre-fill power for active cooling
+          game.coreBridge.setReactorPower(1e20); // Pre-fill power for active cooling
           
           // Disable explosions for performance testing
           game.engine.handleComponentExplosion = () => {};
@@ -356,7 +356,7 @@ describe("Large Grid Performance Stress Tests", () => {
           await Promise.all(placementPromises);
 
           if (preheat) {
-            game.reactor.current_heat = game.reactor.max_heat * 0.3; // Moderate preheat for large grids
+            game.coreBridge.setReactorHeat(game.reactor.max_heat * 0.3); // Moderate preheat for large grids
           }
 
           console.log(
@@ -544,8 +544,8 @@ describe("Experimental Parts 100x100 Grid Stress Test", () => {
     await Promise.all(placementPromises);
 
     // Pre-heat the reactor to test heat management
-    game.reactor.current_heat = game.reactor.max_heat * 0.4;
-    game.reactor.current_power = game.reactor.max_power * 0.3;
+    game.coreBridge.setReactorHeat(game.reactor.max_heat * 0.4);
+    game.coreBridge.setReactorPower(game.reactor.max_power * 0.3);
 
     console.log(`⚡ Running ${TEST_TICKS} ticks on ${100 * 100} experimental tiles...`);
 

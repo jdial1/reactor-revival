@@ -1,279 +1,95 @@
-import { describe, it, expect, beforeEach, setupGameWithDOM, toNum } from "../../helpers/setup.js";
-import { patchGameState } from "@app/state.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  setSessionReactorHeat,
+  reactorHeat,
+  reactorMaxHeat,
+} from "../../helpers/sessionHelpers.js";
 
-describe("Auto Heat Testing", () => {
-    let game;
+function setHeatControl(session, on) {
+  session.toggles.heat_control = !!on;
+}
 
-    beforeEach(async () => {
-        const setup = await setupGameWithDOM();
-        game = setup.game;
-        game.current_money = 1e30;
-        game.current_exotic_particles = 1e20;
-        game.upgradeset.check_affordability(game);
-    });
+describe("Auto Heat (session)", () => {
+  let session;
 
-    it("should auto-reduce heat when 'Heat Control Operator' upgrade is purchased", async () => {
-        game.paused = false;
-        // Ensure engine is running
-        if (!game.engine.running) {
-            game.engine.start();
-        }
-        game.reactor.max_heat = 10000; // Set explicit max heat for deterministic reduction
-        game.reactor.current_heat = 150;
-        const initialHeat = toNum(game.reactor.current_heat);
+  beforeEach(async () => {
+    session = await setupSessionOnly({ money: 1e30 });
+    session.grid.maxHeat = 10000;
+  });
 
-        // Ensure money and purchase upgrade
-        const { forcePurchaseUpgrade } = await import("../../helpers/gameHelpers.js");
-        forcePurchaseUpgrade(game, 'heat_control_operator');
-        expect(game.reactor.heat_controlled).toBe(true);
+  it("reduces hull heat when heat_control toggle is on", () => {
+    setHeatControl(session, true);
+    setSessionReactorHeat(session, 150);
+    const initial = reactorHeat(session);
+    session.tick();
+    expect(reactorHeat(session)).toBeLessThan(initial);
+  });
 
-        // Run a tick
-        game.engine.tick();
+  it("does not reduce hull heat when heat_control toggle is off", () => {
+    setHeatControl(session, false);
+    setSessionReactorHeat(session, 1000);
+    const initial = reactorHeat(session);
+    session.tick();
+    expect(reactorHeat(session)).toBe(initial);
+  });
 
-        expect(toNum(game.reactor.current_heat)).toBeLessThan(initialHeat);
-    });
+  it("switches reduction when heat_control toggle changes", () => {
+    setSessionReactorHeat(session, 1000);
 
-    it("should NOT auto-reduce heat when heat_controlled is false", () => {
-        game.paused = false;
-        game.reactor.current_heat = 1000;
-        const initialHeat = toNum(game.reactor.current_heat);
+    setHeatControl(session, false);
+    const beforeOff = reactorHeat(session);
+    session.tick();
+    expect(reactorHeat(session)).toBe(beforeOff);
 
-        // Disable heat control (which disables auto heat reduction)
-        game.reactor.heat_controlled = false;
+    setHeatControl(session, true);
+    const beforeOn = reactorHeat(session);
+    session.tick();
+    expect(reactorHeat(session)).toBeLessThan(beforeOn);
+  });
 
-        // Run a tick
-        game.engine.tick();
+  it("stays at zero heat when already empty", () => {
+    setHeatControl(session, true);
+    setSessionReactorHeat(session, 0);
+    session.tick();
+    expect(reactorHeat(session)).toBe(0);
+  });
 
-        expect(toNum(game.reactor.current_heat)).toBe(initialHeat);
-    });
+  it("keeps reducing across multiple ticks when toggle is on", () => {
+    setHeatControl(session, true);
+    setSessionReactorHeat(session, 1000);
+    const initial = reactorHeat(session);
+    for (let i = 0; i < 5; i++) session.tick();
+    expect(reactorHeat(session)).toBeLessThan(initial);
+  });
 
-    it("should toggle auto heat reduction when heat_control state changes", () => {
-        game.paused = false;
-        // Ensure engine is running
-        if (!game.engine.running) {
-            game.engine.start();
-        }
-        game.reactor.max_heat = 10000;
-        // Set initial heat
-        game.reactor.current_heat = 1000;
+  it("does not reduce across multiple ticks when toggle is off", () => {
+    setHeatControl(session, false);
+    setSessionReactorHeat(session, 1000);
+    const initial = reactorHeat(session);
+    for (let i = 0; i < 5; i++) session.tick();
+    expect(reactorHeat(session)).toBe(initial);
+  });
 
-        // Test with heat_controlled = false
-        game.reactor.heat_controlled = false;
-        game.onToggleStateChange?.("heat_control", false);
-        const heatBeforeTick1 = toNum(game.reactor.current_heat);
-        game.engine.tick();
-        const heatAfterTick1 = toNum(game.reactor.current_heat);
-        expect(heatAfterTick1).toBe(heatBeforeTick1);
+  it("still auto-reduces when vents and capacitors are placed", () => {
+    setHeatControl(session, true);
+    setSessionReactorHeat(session, 1000);
+    expect(session.placeComponent(0, 0, "vent1")).toBe(true);
+    expect(session.placeComponent(0, 1, "capacitor1")).toBe(true);
 
-        game.reactor.heat_controlled = true;
-        game.onToggleStateChange?.("heat_control", true);
-        const heatBeforeTick2 = toNum(game.reactor.current_heat);
-        game.engine.tick();
-        const heatAfterTick2 = toNum(game.reactor.current_heat);
-        expect(heatAfterTick2).toBeLessThan(heatBeforeTick2);
-    });
+    const before = reactorHeat(session);
+    const autoReduction = reactorMaxHeat(session) / 10000;
+    session.tick();
+    expect(reactorHeat(session)).toBeLessThanOrEqual(before - autoReduction + 1e-6);
+  });
 
-    it("should handle heat_control toggle through UI state manager", () => {
-        game.paused = false;
-        // Ensure engine is running
-        if (!game.engine.running) {
-            game.engine.start();
-        }
-
-        // Set initial heat
-        game.reactor.current_heat = 1000;
-
-        // Test turning heat control ON
-        game.onToggleStateChange("heat_control", true);
-        expect(game.reactor.heat_controlled).toBe(true);
-
-        const heatBeforeTick = toNum(game.reactor.current_heat);
-        game.engine.tick();
-        const heatAfterTick = toNum(game.reactor.current_heat);
-        expect(heatAfterTick).toBeLessThan(heatBeforeTick);
-
-        game.onToggleStateChange("heat_control", false);
-        expect(game.reactor.heat_controlled).toBe(false);
-
-        const heatBeforeTick2 = toNum(game.reactor.current_heat);
-        game.engine.tick();
-        const heatAfterTick2 = toNum(game.reactor.current_heat);
-        expect(heatAfterTick2).toBe(heatBeforeTick2);
-    });
-
-    it("should not auto-reduce heat when heat is 0", () => {
-        game.paused = false;
-        // Set heat to 0
-        game.reactor.current_heat = 0;
-        game.reactor.heat_controlled = true;
-
-        // Run a tick
-        game.engine.tick();
-
-        expect(toNum(game.reactor.current_heat)).toBe(0);
-    });
-
-    it("should apply vent multiplier from Plating/Capacitor parts when auto-reducing heat", async () => {
-        game.paused = false;
-        // Ensure engine is running
-        if (!game.engine.running) {
-            game.engine.start();
-        }
-
-        // Purchase upgrade that enables vent_plating_multiplier
-        game.current_money = 1e9;
-        patchGameState(game, { current_money: game.current_money });
-        game.upgradeset.check_affordability(game);
-        game.upgradeset.purchaseUpgrade('improved_heatsinks');
-        expect(game.reactor.vent_plating_multiplier).toBe(1);
-
-        // Place a Reactor Plating part to trigger multiplier calculation
-        await game.tileset.getTile(0, 0).setPart(game.partset.getPartById('reactor_plating1'));
-        game.reactor.updateStats();
-
-        // Set initial heat
-        game.reactor.current_heat = 1000;
-        game.reactor.heat_controlled = true;
-
-        const heatBeforeTick = toNum(game.reactor.current_heat);
-        game.engine.tick();
-        const heatAfterTick = toNum(game.reactor.current_heat);
-        const baseReduction = toNum(game.reactor.max_heat) / 10000;
-        expect(heatBeforeTick - heatAfterTick).toBeGreaterThan(baseReduction);
-    });
-
-    it("should NOT disable auto venting when heat outlets are present", async () => {
-        game.paused = false;
-        // Ensure engine is running
-        if (!game.engine.running) {
-            game.engine.start();
-        }
-
-        // Set initial heat
-        game.reactor.current_heat = 1000;
-        game.reactor.heat_controlled = true;
-        game.onToggleStateChange?.("heat_control", true);
-
-        // Add a heat outlet with a containment neighbor
-        const outletPart = game.partset.getPartById("vent1");
-        const outletTile = game.tileset.getTile(0, 0);
-        await outletTile.setPart(outletPart);
-        outletTile.activated = true;
-
-        // Add a containment tile next to the outlet
-        const containmentPart = game.partset.getPartById("capacitor1");
-        const containmentTile = game.tileset.getTile(0, 1);
-        await containmentTile.setPart(containmentPart);
-        containmentTile.activated = true;
-        game.reactor.updateStats();
-
-        const heatBeforeTick = toNum(game.reactor.current_heat);
-        game.engine.tick();
-        const heatAfterTick = toNum(game.reactor.current_heat);
-        const autoHeatReduction = toNum(game.reactor.max_heat) / 10000;
-        expect(heatAfterTick).toBeLessThanOrEqual(heatBeforeTick - autoHeatReduction + 1e-6);
-    });
-
-    it("should maintain auto venting regardless of heat outlets", async () => {
-        game.paused = false;
-        // Ensure engine is running
-        if (!game.engine.running) {
-            game.engine.start();
-        }
-
-        // Set initial heat
-        game.reactor.current_heat = 1000;
-        game.reactor.heat_controlled = true;
-        game.onToggleStateChange?.("heat_control", true);
-
-        // Add a heat outlet with a containment neighbor
-        const outletPart = game.partset.getPartById("vent1");
-        const outletTile = game.tileset.getTile(0, 0);
-        await outletTile.setPart(outletPart);
-        outletTile.activated = true;
-
-        // Add a containment tile next to the outlet
-        const containmentPart = game.partset.getPartById("capacitor1");
-        const containmentTile = game.tileset.getTile(0, 1);
-        await containmentTile.setPart(containmentPart);
-        containmentTile.activated = true;
-        game.reactor.updateStats();
-
-        const heatBeforeTick1 = toNum(game.reactor.current_heat);
-        game.engine.tick();
-        const heatAfterTick1 = toNum(game.reactor.current_heat);
-        const autoHeatReduction = toNum(game.reactor.max_heat) / 10000;
-        expect(heatAfterTick1).toBeLessThanOrEqual(heatBeforeTick1 - autoHeatReduction + 1e-6);
-
-        // Remove the outlet
-        if (outletTile.$el) {
-            outletTile.clearPart();
-        }
-
-        const heatBeforeTick2 = toNum(game.reactor.current_heat);
-        game.engine.tick();
-        const heatAfterTick2 = toNum(game.reactor.current_heat);
-        expect(heatAfterTick2).toBeLessThan(heatBeforeTick2);
-    });
-
-    it("should handle multiple ticks correctly with heat_controlled = true", () => {
-        game.paused = false;
-        // Ensure engine is running
-        if (!game.engine.running) {
-            game.engine.start();
-        }
-
-        // Set initial heat
-        game.reactor.current_heat = 1000;
-        game.reactor.heat_controlled = true;
-        game.onToggleStateChange?.("heat_control", true);
-
-        const initialHeat = toNum(game.reactor.current_heat);
-
-        for (let i = 0; i < 5; i++) {
-            game.engine.tick();
-        }
-
-        expect(toNum(game.reactor.current_heat)).toBeLessThan(initialHeat);
-    });
-
-    it("should handle multiple ticks correctly with heat_controlled = false", () => {
-        game.reactor.current_heat = 1000;
-        game.reactor.heat_controlled = false;
-
-        const initialHeat = toNum(game.reactor.current_heat);
-
-        // Run multiple ticks
-        for (let i = 0; i < 5; i++) {
-            game.engine.tick();
-        }
-
-        expect(toNum(game.reactor.current_heat)).toBe(initialHeat);
-    });
-
-    it("should correctly save and load the heat_control state via its upgrade", async () => {
-        const { forcePurchaseUpgrade } = await import("../../helpers/gameHelpers.js");
-        const { StorageUtils } = await import("@app/storage/index.js");
-        forcePurchaseUpgrade(game, 'heat_control_operator');
-        game.reactor.has_melted_down = false;
-        game.state.heat_control = true;
-        const saveData = await game.saveManager.getSaveState();
-        StorageUtils.setRaw('reactorGameSave_1', StorageUtils.serialize(saveData));
-        StorageUtils.set('reactorCurrentSaveSlot', 1);
-        const savedData = StorageUtils.get('reactorGameSave_1');
-        expect(savedData.toggles.heat_control).toBe(true);
-
-        await game.set_defaults();
-        await game.saveManager.loadGame(1);
-        
-        if (game._pendingToggleStates) {
-            game.ui.stateManager.setGame(game);
-            Object.entries(game._pendingToggleStates).forEach(([key, value]) => {
-                game.onToggleStateChange?.(key, value);
-            });
-            delete game._pendingToggleStates;
-        }
-
-        expect(game.reactor.heat_controlled).toBe(true);
-    });
+  it("purchase heat_control_operator then enable toggle reduces heat", () => {
+    expect(session.purchaseUpgrade("heat_control_operator")).toBe(true);
+    expect(session.getUpgradeLevel("heat_control_operator")).toBe(1);
+    setHeatControl(session, true);
+    setSessionReactorHeat(session, 150);
+    const initial = reactorHeat(session);
+    session.tick();
+    expect(reactorHeat(session)).toBeLessThan(initial);
+  });
 });

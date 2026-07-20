@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGame , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGame } from "../../helpers/setup.js";
 import { placePart } from "../../helpers/gameHelpers.js";
 import {
   processOfflineTime,
   startOfflineFastForward,
-} from "@app/logic.js";
+} from "@app/domain/engine.js";
+import { BASE_LOOP_WAIT_MS } from "@app/simUtils.js";
 import {
-  BASE_LOOP_WAIT_MS,
   MAX_ACCUMULATOR_MULTIPLIER,
   OFFLINE_TIME_THRESHOLD_MS,
-} from "@app/utils.js";
+} from "@app/constants/balance.js";
 
 describe("Group 5: Offline time and deterministic catch-up", () => {
   let game;
@@ -18,8 +18,6 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
     game.loop_wait = BASE_LOOP_WAIT_MS;
     game.paused = false;
     await placePart(game, 0, 0, "uranium1");
-    syncActivePartsAtTickBoundary(game.engine);
-
   });
 
   afterEach(() => {
@@ -52,7 +50,7 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
   });
 
   it("queues worker fast-forward ticks from offline span", () => {
-    game.reactor.current_heat = 50;
+    game.coreBridge.setReactorHeat(50);
     game.reactor.max_heat = 1000;
     const bankedMs = MAX_ACCUMULATOR_MULTIPLIER * BASE_LOOP_WAIT_MS;
     game._offlineCatchupMs = bankedMs;
@@ -65,7 +63,7 @@ describe("Group 5: Offline time and deterministic catch-up", () => {
   });
 
   it("queues partial offline span for worker fast-forward", () => {
-    game.reactor.current_heat = 50;
+    game.coreBridge.setReactorHeat(50);
     game.reactor.max_heat = 1000;
     const ticks = 47;
     game._offlineCatchupMs = ticks * BASE_LOOP_WAIT_MS;

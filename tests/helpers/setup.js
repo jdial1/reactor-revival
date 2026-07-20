@@ -1,21 +1,4 @@
-/**
- * Vitest Global Setup File
- *
- * This file is executed before all test suites. Its purpose is to establish a consistent,
- * mocked browser-like environment for running tests in Node.js. It also provides
- * common setup functions, test utilities, and enhanced debugging for test failures.
- *
- * Key Responsibilities:
- * 1. Mock essential browser globals (`window`, `document`, `localStorage`, `URL`, etc.).
- * 2. Export common testing utilities (`vi`, `expect`, `describe`) and application modules.
- * 3. Provide helper functions (`setupGameWithDOM`, `setupGameLogicOnly`) to initialize the game state.
- * 4. Implement advanced logging that captures console output per-test and dumps it on failure.
- * 5. Offer detailed debug reports for failed tests, including game state diffs and reactor grid snapshots.
- */
-
-// --- Phase 1: Early Global Mocks ---
-// These must be defined BEFORE any application code is imported to prevent reference errors.
-
+import { mockBrowserGlobals } from './setupEnv.js';
 import {
   getCoreBridgeOptions,
   isCoreEngineTestMode,
@@ -24,24 +7,46 @@ import {
 
 export { getCoreBridgeOptions, isCoreEngineTestMode, testEngineMode };
 import Decimal from 'break_infinity.js';
-import { toNumber } from '@app/utils.js';
+import { toNumber } from '@app/simUtils.js';
 if (isCoreEngineTestMode) {
   console.info("[test-engine] REACTOR_TEST_ENGINE=core — authoritative ticks via reactor-core-lib");
 }
 if (typeof global !== 'undefined') global.Decimal = Decimal;
 if (typeof global.window !== 'undefined') global.window.Decimal = Decimal;
 
-import { URL as NodeURL } from 'url';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+
+vi.mock("@app/state.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  const { hydrateEconomyFromHost } = await import("@app/bridge/bridge-economy-sync.js");
+  const economyKeys = new Set([
+    "current_money",
+    "current_exotic_particles",
+    "total_exotic_particles",
+    "exotic_particles",
+    "session_power_produced",
+    "session_power_sold",
+    "session_heat_dissipated",
+  ]);
+  return {
+    ...actual,
+    patchGameState(game, patch) {
+      actual.patchGameState(game, patch);
+      if (!game?.coreBridge || !patch) return;
+      for (const key of Object.keys(patch)) {
+        if (economyKeys.has(key)) {
+          hydrateEconomyFromHost(game.coreBridge);
+          return;
+        }
+      }
+    },
+  };
+});
+
 import fs from 'fs';
 import pathModule from 'path';
 import { JSDOM, ResourceLoader } from 'jsdom';
-import {
-  createJSDOMAudioContextMock,
-  attachMockDOMToTiles,
-  simulateViewportResize,
-  mockHardwareAPIs,
-} from './testUtils.js';
+import { createJSDOMAudioContextMock } from './testUtils.js';
 
 vi.mock('@app/storage/idb-keyval.js', () => {
   const getStorage = () => (typeof global !== 'undefined' && global.localStorage) || (typeof window !== 'undefined' && window.localStorage);
@@ -69,153 +74,37 @@ vi.mock('@app/storage/idb-keyval.js', () => {
   };
 });
 
-// Helper to create a mock localStorage implementation.
-function createMockLocalStorage() {
-    let store = {};
-    return {
-        getItem: (key) => store[key] || null,
-    setItem: (key, value) => {
-      store[key] = String(value);
-    },
-    removeItem: (key) => {
-      delete store[key];
-    },
-    clear: () => {
-      store = {};
-    },
-        key: (i) => Object.keys(store)[i] || null,
-    get length() {
-      return Object.keys(store).length;
-    },
-    };
-}
-
-// Mock browser globals that are not available in the Node.js environment.
-const mockBrowserGlobals = () => {
-    global.localStorage = createMockLocalStorage();
-
-  // CHANGE: Polyfill instead of overwriting to avoid "read-only" errors.
-  // This is the primary fix for the TypeError.
-  if (typeof global.crypto === 'undefined') {
-    global.crypto = {};
-  }
-  if (typeof global.crypto.randomUUID === 'undefined') {
-    global.crypto.randomUUID = () => 'mock-uuid-0000-0000-000000000000';
-  }
-
-  // CHANGE: Only define our custom URL if a global one doesn't already exist.
-  if (typeof global.URL === 'undefined') {
-    global.URL = class URL extends NodeURL {
-      static createObjectURL() {
-        return `blob:http://localhost:8080/${Math.random().toString(36).substring(7)}`;
-      }
-      static revokeObjectURL() {
-        /* no-op */
-      }
-    };
-  }
-
-  // Mock other common browser APIs.
-  global.requestAnimationFrame = (callback) => setTimeout(callback, 16);
-  global.cancelAnimationFrame = (id) => clearTimeout(id);
-  global.ResizeObserver =
-    global.ResizeObserver ||
-    class ResizeObserver {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    };
-  global.PointerEvent =
-    global.PointerEvent ||
-    class PointerEvent extends Event {
-      constructor(type, options) {
-        super(type, options);
-      }
-    };
-  
-  if (typeof global.performance === 'undefined') {
-    global.performance = {};
-  }
-  global.performance.now = () => Date.now();
-  global.performance.mark = vi.fn();
-  global.performance.measure = vi.fn();
-  if (
-    typeof global.window !== 'undefined' &&
-    global.window.performance &&
-    global.window.performance !== global.performance
-  ) {
-    global.window.performance.mark = function (name) {
-      return global.performance.mark(name);
-    };
-    global.window.performance.measure = function (name, startMark, endMark) {
-      return global.performance.measure(name, startMark, endMark);
-    };
-    global.window.performance.now = function () {
-      return global.performance.now();
-    };
-  }
-
-  // Create a minimal `window` and `document` for imports that might access them at the top level.
-  // JSDOM will provide a full implementation later for DOM-based tests.
-  if (typeof global.window === 'undefined') {
-    global.window = {
-      localStorage: global.localStorage,
-      crypto: global.crypto,
-      URL: global.URL,
-      requestAnimationFrame: global.requestAnimationFrame,
-      cancelAnimationFrame: global.cancelAnimationFrame,
-      ResizeObserver: global.ResizeObserver,
-      PointerEvent: global.PointerEvent,
-      performance: global.performance,
-      setTimeout,
-      clearTimeout,
-      location: {
-        href: 'http://localhost:8080/',
-        origin: 'http://localhost:8080',
-        hostname: 'localhost',
-        reload: vi.fn(),
-      },
-    };
-  }
-
-  if (typeof global.document === 'undefined') {
-    const createCommentShim = (data) => ({ nodeType: 8, data: String(data || ''), ownerDocument: null });
-    global.document = {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      body: { appendChild: vi.fn(), style: {}, classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), contains: vi.fn(() => false) } },
-      createElement: () => ({
-        style: {},
-        classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
-        appendChild: vi.fn(),
-        addEventListener: vi.fn(),
-        setAttribute: vi.fn(),
-        ownerDocument: null,
-      }),
-      createComment: createCommentShim,
-      getElementById: vi.fn(() => null),
-      querySelector: vi.fn(() => null),
-      querySelectorAll: vi.fn(() => []),
-    };
-  }
-
-  // Flag for the game engine to know it's running in a test environment.
-  global.__VITEST__ = true;
-};
-
-// Immediately execute the mocking.
 mockBrowserGlobals();
 if (global.window) global.window.Decimal = Decimal;
 
-// --- Phase 2: Common Imports & Exports ---
-// Re-exporting common modules saves individual test files from importing them repeatedly.
-
-// Core application imports
-import { Game, Engine, ObjectiveManager } from '@app/logic.js';
+import { Game } from '@app/domain/game.js';
+import { Engine } from '@app/domain/engine.js';
+import { ObjectiveManager } from '@app/domain/objectives.js';
+import '@app/components/upgrades/presentation.js';
 import { UI } from '@app/components/ui.js';
-import { PageRouter, attachGameEventListeners } from '@app/app.js';
-import { grantInfiniteResources, syncGridState } from './gameHelpers.js';
-import { mockFetchJsonResponse } from './suiteHelpers.js';
+import { PageRouter } from '@app/page-router.js';
+import { attachGameEventListeners } from '@app/components/shell/game-event-wiring.js';
+import { grantInfiniteResources, setTilePart, clearTilePart } from './gameHelpers.js';
+import { pushHostUpgradeLevelsForLoad, syncGridFromGame } from "./bridge-test-harness.js";
+import { Tile } from '@app/domain/grid.js';
+import { resolveTileDisplayRate } from '@app/components/tooltip-stats.js';
+
+Tile.prototype.setPart = function setPart(part) {
+  return setTilePart(this, part);
+};
+Tile.prototype.clearPart = function clearPart() {
+  return clearTilePart(this);
+};
+Tile.prototype.sellPart = function sellPart() {
+  return this.game?.sellPart?.(this);
+};
+Tile.prototype.getEffectiveVentValue = function getEffectiveVentValue() {
+  return resolveTileDisplayRate(this, "vent");
+};
+Tile.prototype.getEffectiveTransferValue = function getEffectiveTransferValue() {
+  return resolveTileDisplayRate(this, "transfer");
+};
+Tile.prototype.recalculateEffectiveValues = function recalculateEffectiveValues() {};
 
 export const toNum = toNumber;
 
@@ -230,50 +119,6 @@ export {
   getFlatIndex,
   setGridDimensions as reshapeGrid,
 } from './gameHelpers.js';
-
-export { runManualActionUntil as runUntil } from './gameHelpers.js';
-
-export {
-  grantInfiniteResources as grantInfinite,
-  assembleHeatChain as assembleChain,
-} from './gameHelpers.js';
-
-export {
-  simulateViewportResize as setViewport,
-  flushUIUpdates as flushUI,
-  mockPerformanceAPI as mockPerformance,
-  mockClipboardAPI as mockClipboard,
-  setupWorkerContext as setupWorkerCtx,
-  captureOutput,
-  setupMockAudio,
-  mockThrottle,
-} from './testUtils.js';
-
-export { createServiceWorkerTestMocks as setupMockSW } from './testUtils.js';
-
-export {
-  assertProcessedObjectiveTitleHasIcon as expectTitleToHaveIcon,
-  getPartByCriteria as findPart,
-  setupModalEnvironment as setupModalDOM,
-} from './suiteHelpers.js';
-
-export {
-  setResourcesAndRefreshAffordability as setResources,
-  setUpgradeLevelAndRefresh as levelUpgrade,
-  assertActivePage as assertPage,
-  attachMockDOMToTiles as attachMockEl,
-  setupPage,
-} from './testUtils.js';
-
-export { simulateSaveAndLoad as testSaveLoad } from './testUtils.js';
-
-export {
-  infiniteMoneyLayout,
-  buildLayoutGridFromCompact,
-  generateDenseLayout,
-  generateTestLayout,
-  generateTestLayout as getTestLayout,
-} from '../fixtures/layouts.js';
 
 export {
   describe,
@@ -292,179 +137,7 @@ export {
 };
 
 export * from "./testUtils.js";
-export { forceActiveObjective, forceActiveObjective as forceObjective } from "./objectiveHelpers.js";
 export * from "./suiteHelpers.js";
-export { performTestRespec as testRespec, clearGracePeriod as skipGrace } from "./suiteHelpers.js";
-export { MemoryAuditor } from "./memoryAuditor.js";
-
-export function syncActivePartsAtTickBoundary(engine) {
-  engine?.game?.coreBridge?.syncGridFromGame?.();
-}
-
-export function invalidateTickParts() {}
-
-// --- Phase 3: Test Utilities & Enhanced Debugging ---
-
-// Store console logs per-test to only show them on failure.
-const testLogs = new Map();
-let currentTestName = null;
-let initialGameState = null;
-
-// Keep original console methods to use for test runner output.
-const { log: originalLog, warn: originalWarn, error: originalError } = console;
-
-// Intercept console methods to buffer logs.
-const createLogger = (type) => (...args) => {
-  if (currentTestName && testLogs.has(currentTestName)) {
-    testLogs.get(currentTestName).push({ type, args });
-  } else {
-    // If not in a test context, log directly.
-    const originalLogger = { log: originalLog, warn: originalWarn, error: originalError }[type];
-    originalLogger(...args);
-  }
-};
-console.log = createLogger('log');
-console.warn = createLogger('warn');
-console.error = createLogger('error');
-
-// Helper to get the full test name (e.g., "describe > describe > it").
-const getFullTestName = (task) => {
-  if (!task) return 'global';
-  const pathParts = [];
-  let current = task;
-  while (current && current.name) {
-    pathParts.unshift(current.name);
-    current = current.suite;
-  }
-  return pathParts.join(' > ');
-};
-
-// Helper for diffing game state before and after a test.
-function diffObjects(obj1, obj2, path = '') {
-    const differences = {};
-    const allKeys = new Set([...Object.keys(obj1), ...Object.keys(obj2)]);
-    for (const key of allKeys) {
-        const newPath = path ? `${path}.${key}` : key;
-        const val1 = obj1[key];
-        const val2 = obj2[key];
-    if (JSON.stringify(val1) !== JSON.stringify(val2)) {
-            differences[newPath] = { from: val1, to: val2 };
-        }
-    }
-    return differences;
-}
-
-// Helper to generate a visual text-based representation of the reactor grid.
-function dumpGrid(game) {
-  if (!game?.tileset || !game.rows || !game.cols) return 'Grid unavailable.';
-  const getPartAbbreviation = (part) => {
-    if (!part) return '..';
-    const id = part.id;
-    if (id.startsWith('uranium')) return `U${id.slice(-1)}`;
-    if (id.startsWith('reflector')) return `R${id.slice(-1)}`;
-    if (id.startsWith('capacitor')) return `C${id.slice(-1)}`;
-    if (id.startsWith('vent')) return `V${id.slice(-1)}`;
-    // Add other abbreviations as needed...
-    return '??';
-  };
-
-    let output = '\n\u001b[34m--- Reactor Grid State ---\u001b[0m\n';
-    for (let r = 0; r < game.rows; r++) {
-    let rowStr = '';
-        for (let c = 0; c < game.cols; c++) {
-            const tile = game.tileset.getTile(r, c);
-      const heatRatio = tile?.part?.containment > 0 ? tile.heat_contained / tile.part.containment : 0;
-            let heatIndicator = ' ';
-      if (heatRatio >= 1) heatIndicator = '\u001b[31m*'; // Red
-      else if (heatRatio > 0.8) heatIndicator = '\u001b[33m!'; // Yellow
-      else if (heatRatio > 0.5) heatIndicator = '\u001b[37m·'; // Dim
-      rowStr += ` ${getPartAbbreviation(tile?.part)}${heatIndicator}\u001b[0m |`;
-    }
-    output += `|${rowStr}\n`;
-  }
-  output += '\u001b[34m--------------------------\u001b[0m\n';
-    return output;
-}
-
-// Custom Jest/Vitest matchers for more readable game-specific assertions.
-expect.extend({
-  toHavePart(tile, expectedPartId) {
-    const pass = tile.part && tile.part.id === expectedPartId;
-    return {
-      pass,
-      message: () =>
-        `Expected tile to have part ${expectedPartId}, but found ${tile.part?.id || 'null'}`,
-    };
-  },
-  toHaveHeatLevel(tile, expectedHeat, tolerance = 0.1) {
-    const actualHeat = tile.heat_contained || 0;
-    const pass = Math.abs(actualHeat - expectedHeat) <= tolerance;
-    return {
-      pass,
-      message: () =>
-        `Expected tile heat to be ~${expectedHeat}, but found ${actualHeat}`,
-    };
-  },
-  toBeEquivalentTo(received, expected, precision = 7) {
-    const a = toNumber(received);
-    const e = Number(expected);
-    const threshold = Math.max(1e-12, Math.abs(e) * Math.pow(10, -precision));
-    const pass = Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= threshold;
-    return {
-      pass,
-      message: () =>
-        `expected ${a} to be equivalent to ${e} within relative precision ${precision} (threshold ${threshold})`,
-    };
-  },
-  toWithinGameTolerance(received, expected, tolerance = 1e-6) {
-    const a = toNumber(received);
-    const e = Number(expected);
-    const pass = Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= tolerance;
-    return {
-      pass,
-      message: () =>
-        `expected ${a} to be within ${tolerance} of ${e}`,
-    };
-  },
-  toBeDecimal(received, expected, precision = 7) {
-    const a = toNumber(received);
-    const e = Number(expected);
-    const threshold = Math.max(1e-12, Math.abs(e) * Math.pow(10, -precision));
-    const pass = Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= threshold;
-    return {
-      pass,
-      message: () =>
-        `expected ${a} to match decimal ${e} within precision ${precision}`,
-    };
-  },
-  toBeCloseToG(received, expected, tolerance = 1e-6) {
-    const a = toNumber(received);
-    const e = Number(expected);
-    const pass = Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= tolerance;
-    return {
-      pass,
-      message: () =>
-        `expected ${a} to be within game tolerance ${tolerance} of ${e}`,
-    };
-  },
-  toHaveTitleIcon(received, iconId) {
-    const s = String(received ?? "");
-    if (iconId.startsWith("./img/") || iconId.startsWith("img/")) {
-      const pass = s.includes("<img") && s.includes("objective-part-icon") && s.includes(iconId);
-      return {
-        pass,
-        message: () => `expected title HTML to include img icon ${iconId}`,
-      };
-    }
-    const pass = s.includes(iconId);
-    return {
-      pass,
-      message: () => `expected title HTML to include ${iconId}`,
-    };
-  },
-});
-
-// --- Phase 4: Core Test Setup Functions ---
 
 let globalGameInstance = null;
 let domInstance = null;
@@ -619,13 +292,24 @@ function injectHTMLContent(document, htmlContent) {
   document.body.appendChild(fragment);
 }
 
-export function pinEngineToSyncMode(_engine) {}
+function ensureLogicOnlyWindow() {
+  if (typeof global.window?.addEventListener === "function") return;
+  const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
+    url: "http://localhost:8080/",
+    pretendToBeVisual: true,
+  });
+  global.window = dom.window;
+  global.document = dom.window.document;
+  mockBrowserGlobals();
+  if (global.window) global.window.Decimal = Decimal;
+}
 
 /**
  * Sets up a game instance for CORE LOGIC tests without a real DOM.
  * Reuses a single game instance and resets it for performance.
  */
-export async function setupGameLogicOnly() {
+export async function setupGameLogicOnly({ infiniteResources = true } = {}) {
+  ensureLogicOnlyWindow();
   if (globalGameInstance) {
     // Reset existing instance for speed
     await globalGameInstance.set_defaults();
@@ -637,10 +321,10 @@ export async function setupGameLogicOnly() {
     
     globalGameInstance.upgradeset.getAllUpgrades().forEach((u) => {
             u.level = 0;
-      u.updateDisplayCost(); // CRITICAL: Recalculate cost after level reset.
     });
-    globalGameInstance.coreBridge?.pushHostUpgradeLevelsForLoad?.();
-    globalGameInstance.coreBridge?.syncGridFromGame?.();
+    pushHostUpgradeLevelsForLoad(globalGameInstance);
+    globalGameInstance.syncModifiersFromUpgrades?.({ skipGrid: true });
+    syncGridFromGame(globalGameInstance);
   } else {
     // Create a new instance
     const mockedUI = new UI();
@@ -650,22 +334,27 @@ export async function setupGameLogicOnly() {
     mockedUI.DOMElements = { main: { classList: { toggle: vi.fn() } } };
     mockedUI.resizeReactor = vi.fn();
     mockedUI.showPage = vi.fn();
-    mockedUI.runUpdateInterfaceLoop = vi.fn(); // Prevent UI update loops from accessing DOM
-    // Further mock UI methods as needed...
+    mockedUI.runUpdateInterfaceLoop = vi.fn();
+    mockedUI.stateManager = {
+      handleObjectiveCompleted: vi.fn(),
+      handleObjectiveLoaded: vi.fn(),
+      setGame: vi.fn(),
+    };
 
     const game = new Game(mockedUI);
     const { createGameSaveManager } = await import("@app/domain/game-save.js");
     game.saveManager = createGameSaveManager(game);
     await mockedUI.init(game);
     game.engine = new Engine(game);
-    pinEngineToSyncMode(game.engine);
     game.objectives_manager = new ObjectiveManager(game);
 
     // CRITICAL FIX: The tileset must be initialized to create the grid.
   game.tileset.initialize();
 
   const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
+  const { attachHeatMutatorsForTests } = await import("./bridge-test-harness.js");
   await attachCoreBridge(game, getCoreBridgeOptions());
+  attachHeatMutatorsForTests(game);
   await game.partset.initialize();
   await game.upgradeset.initialize();
     await game.objectives_manager.initialize();
@@ -675,13 +364,17 @@ export async function setupGameLogicOnly() {
 
   // Set default state for logic tests
   globalGameInstance.bypass_tech_tree_restrictions = true;
-  grantInfiniteResources(globalGameInstance);
+  if (infiniteResources) grantInfiniteResources(globalGameInstance);
   globalGameInstance.paused = false;
-  pinEngineToSyncMode(globalGameInstance.engine);
 
   if (!globalGameInstance.coreBridge?.isActive) {
     const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
+    const { attachHeatMutatorsForTests } = await import("./bridge-test-harness.js");
     await attachCoreBridge(globalGameInstance, getCoreBridgeOptions());
+    attachHeatMutatorsForTests(globalGameInstance);
+  } else {
+    const { attachHeatMutatorsForTests } = await import("./bridge-test-harness.js");
+    attachHeatMutatorsForTests(globalGameInstance);
   }
 
   return globalGameInstance;
@@ -725,7 +418,9 @@ export async function setupGameWithDOM() {
   game.router = new PageRouter(ui);
   await ui.init(game);
   const { attachCoreBridge } = await import("@app/bridge/revival-session-bridge.js");
+  const { attachHeatMutatorsForTests } = await import("./bridge-test-harness.js");
   await attachCoreBridge(game, getCoreBridgeOptions());
+  attachHeatMutatorsForTests(game);
   await game.partset.initialize();
   await game.upgradeset.initialize();
   await game.set_defaults();
@@ -750,7 +445,6 @@ export async function setupGameWithDOM() {
   }
 
   game.engine = new Engine(game);
-  pinEngineToSyncMode(game.engine);
 
   const { AudioService } = await import("@app/services/app-services.js");
   game.audio = new AudioService();
@@ -767,7 +461,8 @@ export async function setupGameWithDOM() {
 
 
 export async function setupGame() {
-  const { game } = await setupGameWithDOM();
+  globalGameInstance = null;
+  const game = await setupGameLogicOnly({ infiniteResources: false });
   game.bypass_tech_tree_restrictions = true;
   if (game.engine && !game.engine.running) {
     game.paused = false;
@@ -776,36 +471,7 @@ export async function setupGame() {
   return game;
 }
 
-export async function setupStandardReactor() {
-  const ctx = await setupGameWithDOM();
-  syncGridState(ctx.game);
-  attachMockDOMToTiles(ctx.game, ctx.document);
-  return ctx;
-}
-
-export async function setupProgressionTest() {
-  const ctx = await setupStandardReactor();
-  const { game } = ctx;
-  game.bypass_tech_tree_restrictions = true;
-  grantInfiniteResources(game);
-  const innerFetch = globalThis.fetch;
-  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (req, init) => {
-    const u = typeof req === "string" ? req : req?.url ?? "";
-    const s = String(u);
-    if (/googleapis\.com|supabase\.co|oauth2|accounts\.google/.test(s)) {
-      return mockFetchJsonResponse({ access_token: "test-token", success: true });
-    }
-    return innerFetch.call(globalThis, req, init);
-  });
-  return { ...ctx, restoreCloudFetch: () => fetchSpy.mockRestore() };
-}
-
-export async function setupMobileInteraction() {
-  const ctx = await setupStandardReactor();
-  const hw = mockHardwareAPIs({ visibilityState: "visible" });
-  simulateViewportResize(390, 844);
-  return { ...ctx, restoreHardware: hw.restore };
-}
+export { setupSessionOnly, tileHeatAt, setSessionTileHeat } from "./sessionHelpers.js";
 
 function teardownGameResources() {
   if (globalGameInstance?.engine?.stop) {
@@ -860,7 +526,6 @@ function cleanupGameHard() {
   delete global.window;
   delete global.document;
   globalGameInstance = null;
-  initialGameState = null;
   vi.clearAllMocks();
   vi.restoreAllMocks();
   mockBrowserGlobals();
@@ -879,7 +544,6 @@ function cleanupGameSoft() {
     /* ignore */
   }
   globalGameInstance = null;
-  initialGameState = null;
   if (global.gc) {
     global.gc();
   }
@@ -889,7 +553,7 @@ export function cleanupGame() {
   cleanupGameHard();
 }
 
-beforeEach(async (context) => {
+beforeEach((context) => {
   const fp = getTaskFilepath(context.task);
   if (lastTestFilepath !== null && fp != null && fp !== lastTestFilepath) {
     cleanupGameHard();
@@ -897,57 +561,8 @@ beforeEach(async (context) => {
   if (fp != null) {
     lastTestFilepath = fp;
   }
-  currentTestName = getFullTestName(context.task);
-  testLogs.set(currentTestName, []);
-  if (globalGameInstance?.saveManager?.getSaveState) {
-    initialGameState = await globalGameInstance.saveManager.getSaveState();
-  } else if (typeof globalGameInstance?.getSaveState === "function") {
-    initialGameState = globalGameInstance.getSaveState();
-  }
 });
 
-afterEach(async (context) => {
-  const testFailed = context.task.state === 'fail';
-  const shouldDumpLogs = testFailed || process.env.FORCE_LOG_DUMP;
-  const logs = testLogs.get(currentTestName);
-
-  if (shouldDumpLogs && logs?.length > 0) {
-    originalLog(`\n\u001b[36m--- Console logs for test: "${currentTestName}" ---\u001b[0m`);
-    logs.forEach(({ type, args }) => {
-      const logger = { log: originalLog, warn: originalWarn, error: originalError }[type];
-      logger(...args);
-    });
-    originalLog(`\u001b[36m--------------------------------------------------------\u001b[0m\n`);
-  }
-
-  if (testFailed && globalGameInstance) {
-    originalLog(`\n\u001b[33m--- Extended Debug Info for Failed Test ---\u001b[0m`);
-    originalLog(dumpGrid(globalGameInstance));
-    if (initialGameState) {
-      const finalGameState = typeof globalGameInstance.saveManager?.getSaveState === "function"
-        ? await globalGameInstance.saveManager.getSaveState()
-        : typeof globalGameInstance.getSaveState === "function"
-          ? globalGameInstance.getSaveState()
-          : null;
-      if (finalGameState) {
-        const differences = diffObjects(initialGameState, finalGameState);
-        if (Object.keys(differences).length > 0) {
-          originalLog('\u001b[34m--- Game State Changes ---\u001b[0m');
-          originalLog(differences);
-        }
-      }
-    }
-    if (context.task.result?.error?.stack) {
-        originalError('\u001b[31m--- Error Stack ---\u001b[0m');
-        originalError(context.task.result.error.stack);
-    }
-    originalLog(`\u001b[33m-----------------------------------------\u001b[0m\n`);
-  }
-
-  testLogs.delete(currentTestName);
-  currentTestName = null;
-
+afterEach(() => {
   cleanupGameSoft();
-
-  vi.useRealTimers();
 });

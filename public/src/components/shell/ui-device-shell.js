@@ -1,29 +1,6 @@
 import { MODAL_IDS } from "../../constants/modal-ids.js";
 import { quickStartTemplate as quickStartOverlayTemplate } from "../../templates/uiComponentsTemplates.js";
-import { createDeviceFeatures } from "./device.js";
-export class UserAccountUI {
-  constructor(ui) {
-    this.ui = ui;
-    this._buttonAbortController = null;
-  }
-
-  setupUserAccountButton() {
-    const ui = this.ui;
-    if (!ui.uiState) return;
-    const root = document.getElementById("user_account_btn_root");
-    if (!root) return;
-    this._buttonAbortController?.abort?.();
-    this._buttonAbortController = new AbortController();
-    const btn = document.getElementById("user_account_btn");
-    if (btn) {
-      btn.onclick = null;
-    }
-
-    ui.uiState.user_account_display = { icon: "💾", title: "Local saves" };
-  }
-
-  showProfileModal() {}
-}
+import { getUiElement } from "./page-dom.js";
 
 export function subscribeToContextModalEvents(ui, game) {
   if (!game?.on) return;
@@ -55,7 +32,7 @@ export function initPwaDisplayMode(ui) {
   if (initPwaDisplayMode._mounted) return;
   initPwaDisplayMode._mounted = true;
 
-  const installBtn = document.getElementById("install_pwa_btn");
+  const installBtn = getUiElement(ui, "install_pwa_btn");
   if (installBtn && !installBtn.dataset.pwaBound) {
     installBtn.dataset.pwaBound = "1";
     installBtn.addEventListener("click", () => {
@@ -74,9 +51,9 @@ export class QuickStartUI {
   }
 
   addHelpButtonToMainPage() {
-    const mainTopNav = document.getElementById("main_top_nav");
+    const mainTopNav = getUiElement(this.ui, "main_top_nav");
     if (!mainTopNav) return;
-    if (mainTopNav.querySelector("#quick_start_help_button")) return;
+    if (getUiElement(this.ui, "quick_start_help_button")) return;
     const btn = document.createElement("button");
     btn.id = "quick_start_help_button";
     btn.type = "button";
@@ -86,8 +63,4 @@ export class QuickStartUI {
     btn.onclick = () => this.ui.modalOrchestrator?.showModal?.(MODAL_IDS.DETAILED_QUICK_START);
     mainTopNav.appendChild(btn);
   }
-}
-
-export function bindDeviceFeatures(ui) {
-  return createDeviceFeatures(() => ui);
 }

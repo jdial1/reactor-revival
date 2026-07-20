@@ -12,7 +12,7 @@ export function getMyLayouts() {
   }
 }
 
-export function saveMyLayouts(layouts) {
+function saveMyLayouts(layouts) {
   StorageUtils.set(MY_LAYOUTS_STORAGE_KEY, layouts);
 }
 

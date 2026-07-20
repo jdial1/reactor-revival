@@ -1,10 +1,7 @@
-import { safeCall } from "../core/teardown.js";
 import { EngineStatus } from "../schema/stateSchemas.js";
-import { resetHeatThresholdSignalState } from "../components/shell/heat-dom-sync.js";
-import { proxy } from "valtio/vanilla";
-import { toDecimal, BASE_LOOP_WAIT_MS } from "../simUtils.js";
+import { resetHeatThresholdSignalState } from "./heat-signals.js";
+import { toNumber, BASE_LOOP_WAIT_MS } from "../simUtils.js";
 import { logger } from "../core/logger.js";
-import { formatTime } from "../core/numbers.js";
 import { requireActiveBridge } from "../bridge/active.js";
 import {
   UPGRADE_MAX_LEVEL,
@@ -12,12 +9,9 @@ import {
   BASE_MONEY,
   RESPEC_DOCTRINE_EP_COST,
 } from "../constants/balance.js";
+import { APP_VERSION } from "../constants/app-version.js";
 import {
   createGameState,
-  UnlockManager,
-  runRebootActionKeepEp,
-  runRebootActionDiscardEp,
-  runFullReboot,
   setDefaults,
   LifecycleManager,
   applyToggleStateChange,
@@ -26,24 +20,30 @@ import {
   ExoticParticleManager,
   runSellAction,
   runManualReduceHeatAction,
-  runEpartOnclick,
   setDecimal,
   assertHostEconomyWrite,
 } from "../state.js";
+import { UnlockManager } from "../state/unlock-manager.js";
+import {
+  runRebootActionKeepEp,
+  runRebootActionDiscardEp,
+  runFullReboot,
+} from "../state/reboot.js";
 import { Reactor } from "./reactor.js";
 import { GridManager, Tileset } from "./grid.js";
 import { PartSet } from "./part.js";
 import { applyBlueprintLayoutDiff } from "./blueprint.js";
 import { applyComputedModifiers } from "../bridge/bridge-mechanics.js";
-import { drainGridIntentsAsync } from "../bridge/bridge-intents.js";
+import { dispatchPlayerIntent, enqueueIntent, shouldDrainIntentsImmediately } from "../bridge/bridge-intents.js";
 import { UpgradeSet } from "./upgrade.js";
 import { ObjectiveManager } from "./objectives.js";
 import { Performance, postGameLoopProjectionQuery } from "./engine.js";
 import { bundledGameData } from "../generated/bundledStaticData.js";
 import { AchievementListSchema } from "../schema/index.js";
-import { subscribeKey } from "valtio/vanilla/utils";
 import { enqueueGameEffect } from "../state/game-effects.js";
-import { unlockedAchievementIds } from "../bridge/core-state-projection.js";
+import { runSubsystemHook } from "../core/subsystem-registry.js";
+import { hydrateAchievementsIntoSession, unlockedAchievementIds } from "../bridge/core-state-projection.js";
+import { projectUpgradeLevelsToHost } from "../bridge/bridge-upgrades.js";
 
 const loadAchievementsFromBundle = () => AchievementListSchema.parse(bundledGameData.achievements);
 
@@ -54,7 +54,6 @@ class AchievementManager {
     this._eventToAchievementIds = new Map();
     this._silentUnlockCount = 0;
     this._wasCatchingUp = false;
-    this._unsubs = [];
   }
 
   async initialize() {
@@ -103,7 +102,7 @@ class AchievementManager {
       this.game.state.unlocked_achievements = ids;
       this.game.state.achievements = undefined;
     }
-    this.game.coreBridge?.hydrateAchievementsFromGame?.();
+    hydrateAchievementsIntoSession(this.game.coreBridge);
   }
 
   _isCatchUpSilent() {
@@ -128,7 +127,7 @@ class AchievementManager {
         tag: "ACHIEVEMENT",
         body: `Unlocked: ${def.title}`,
       });
-      this.game.emit?.("achievementUnlocked", { achievement: def, silent: false });
+      runSubsystemHook(this.game, "postTick");
     }
     if (this.game?.saveManager && !this.game._isRestoringSave) {
       void this.game.saveManager.autoSave();
@@ -164,54 +163,12 @@ class AchievementManager {
     this._handleCatchUpTransition();
   }
 
-  bind() {
-    this.unbind();
-    const g = this.game;
-    if (!g?.state) return;
-    this._unsubs.push(subscribeKey(g.state, "engine_tick_count", () => this.onTickRecorded()));
-  }
-
-  unbind() {
-    for (let i = 0; i < this._unsubs.length; i++) {
-      safeCall(() => { this._unsubs[i](); });
-    }
-    this._unsubs.length = 0;
-  }
-
   start() {
     if (!this.achievements_data.length) {
-      void this.initialize().then(() => this.bind());
-      return;
+      void this.initialize();
     }
-    this.bind();
   }
 }
-
-class SessionManager {
-  constructor(game) {
-    this.game = game;
-  }
-  pause() {
-    this.game.onToggleStateChange?.("pause", true);
-  }
-  resume() {
-    this.game.onToggleStateChange?.("pause", false);
-  }
-  togglePause() {
-    if (this.game.paused) this.resume();
-    else this.pause();
-  }
-}
-
-const SIDE_EFFECT_EVENTS = new Set([
-  "vibrationRequest", "achievementUnlocked", "achievementCatchUpSummary", "heatWarning",
-  "pipeIntegrityWarning", "firstHighHeat", "saveLoaded", "component_explosion",
-  "objectiveClaimed", "chapterCelebration",
-  "layoutPasted", "blueprintApplyDeficit", "tileCleared",
-  "welcomeBackOffline",
-  "showContextModal", "markStaticDirty", "partsPanelRefresh",
-  "upgradePurchased", "statePatch",
-]);
 
 class GameEventDispatcher {
   constructor(logger) {
@@ -229,9 +186,6 @@ class GameEventDispatcher {
     if (i !== -1) list.splice(i, 1);
   }
   emit(eventName, payload) {
-    if (!SIDE_EFFECT_EVENTS.has(eventName) && typeof process !== "undefined" && process.env?.NODE_ENV !== "production") {
-      this._logger?.warn?.(`[Game] Deprecated data-flow event "${eventName}" — use state instead`);
-    }
     const list = this._listeners.get(eventName);
     if (!list) return;
     const data = payload ?? {};
@@ -246,49 +200,13 @@ class GameEventDispatcher {
   }
 }
 
-class TimeKeeper {
-  constructor(game) {
-    this.game = game;
-  }
-  updateSessionTime() {
-    const lm = this.game.lifecycleManager;
-    if (lm.session_start_time) {
-      const sessionTime = Date.now() - lm.session_start_time;
-      lm.total_played_time = lm.total_played_time + sessionTime;
-      lm.session_start_time = Date.now();
-    }
-    if (this.game.reactor) {
-      if (this.game.reactor.current_power > this.game.peak_power) this.game.peak_power = this.game.reactor.current_power;
-      if (this.game.reactor.current_heat > this.game.peak_heat) this.game.peak_heat = this.game.reactor.current_heat;
-    }
-  }
-  getFormattedTotalPlayedTime() {
-    const lm = this.game.lifecycleManager;
-    let totalTime = lm.total_played_time;
-    if (lm.session_start_time) {
-      totalTime += Date.now() - lm.session_start_time;
-    }
-    return formatTime(totalTime);
-  }
-}
-
-class EconomyManager {
-  constructor(game) {
-    this.game = game;
-  }
-  getCurrentMoney() {
-    return this.game.state.current_money;
-  }
-  setCurrentMoney(value) {
-    assertHostEconomyWrite(this.game, "current_money");
-    setDecimal(this.game.state, "current_money", value);
-  }
-}
-
 function runComponentDepletion(game, tile) {
   if (!tile?.part) return;
   game.emit("tileCleared", { tile });
-  tile.clearPart();
+  void dispatchPlayerIntent(game, game.engine, {
+    type: "REMOVE_PART",
+    payload: { row: tile.row, col: tile.col },
+  });
 }
 
 
@@ -297,7 +215,7 @@ export class Game {
     this._getCompactLayoutFn = getCompactLayoutFn;
     this.ui = ui_instance;
     this.saveManager = null;
-    this.version = "1.4.0";
+    this.version = APP_VERSION;
 
     this.gridManager = new GridManager(this);
     this.max_cols = MAX_GRID_DIMENSION;
@@ -314,14 +232,14 @@ export class Game {
     this.partset = new PartSet(this);
     this.upgradeset = new UpgradeSet(this);
     this.state = createGameState({
-      current_money: toDecimal(0),
-      current_power: toDecimal(0),
-      current_heat: toDecimal(0),
-      current_exotic_particles: toDecimal(0),
-      total_exotic_particles: toDecimal(0),
-      session_power_produced: toDecimal(0),
-      session_power_sold: toDecimal(0),
-      session_heat_dissipated: toDecimal(0),
+      current_money: 0,
+      current_power: 0,
+      current_heat: 0,
+      current_exotic_particles: 0,
+      total_exotic_particles: 0,
+      session_power_produced: 0,
+      session_power_sold: 0,
+      session_heat_dissipated: 0,
       max_power: 0,
       max_heat: 0,
       stats_power: 0,
@@ -354,9 +272,7 @@ export class Game {
     this.placedCounts = {};
     this._unlockStates = {};
     this.unlockManager = new UnlockManager(this);
-    this.sessionManager = new SessionManager(this);
 
-    this.undoHistory = [];
     this.audio = null;
     this.logger = logger;
 
@@ -371,12 +287,10 @@ export class Game {
     this.RESPER_DOCTRINE_EP_COST = RESPEC_DOCTRINE_EP_COST;
     this.cheats_used = false;
     this.grace_period_ticks = 0;
-    this.blueprintPlanner = proxy({ active: false, slots: {} });
+    this.blueprintPlanner = { active: false, slots: {} };
     this._offlineCatchupMs = 0;
     this._mainState = null;
     this.eventDispatcher = new GameEventDispatcher(logger);
-    this.economyManager = new EconomyManager(this);
-    this.timeKeeper = new TimeKeeper(this);
     this.exoticParticleManager = new ExoticParticleManager(this);
   }
 
@@ -399,13 +313,6 @@ export class Game {
   shouldShowPart(part) { return this.unlockManager.shouldShowPart(part); }
   isPartUnlocked(part) { return this.unlockManager.isPartUnlocked(part); }
   getPlacedCount(type, level) { return this.unlockManager.getPlacedCount(type, level); }
-  incrementPlacedCount(type, level) { return this.unlockManager.incrementPlacedCount(type, level); }
-
-  enqueueVisualEvent() {}
-  enqueueVisualEvents() {}
-  drainVisualEvents() {
-    return [];
-  }
 
   async set_defaults() {
     await setDefaults(this);
@@ -415,8 +322,11 @@ export class Game {
     applyComputedModifiers(this, opts);
   }
 
-  get current_money() { return this.economyManager.getCurrentMoney(); }
-  set current_money(v) { this.economyManager.setCurrentMoney(v); }
+  get current_money() { return this.state.current_money; }
+  set current_money(v) {
+    assertHostEconomyWrite(this, "current_money");
+    setDecimal(this.state, "current_money", v);
+  }
   get current_exotic_particles() { return this.state.current_exotic_particles; }
   set current_exotic_particles(v) { this.exoticParticleManager.current_exotic_particles = v; }
   get exotic_particles() { return this.exoticParticleManager.exotic_particles; }
@@ -464,12 +374,8 @@ export class Game {
   }
 
   update_cell_power() {
-    if (!this.partset || !this.reactor) return;
-    this.partset.updateCellPower();
+    if (!this.reactor) return;
     this.reactor.updateStats();
-  }
-  epart_onclick(purchased_upgrade) {
-    runEpartOnclick(this, purchased_upgrade);
   }
   manual_reduce_heat_action() {
     runManualReduceHeatAction(this);
@@ -507,10 +413,10 @@ export class Game {
 
   async sellPart(tile) {
     if (!tile) return;
-    return drainGridIntentsAsync(this, this.engine, [{
-      action: "SELL_PART",
+    return dispatchPlayerIntent(this, this.engine, {
+      type: "SELL_PART",
       payload: { row: tile.row, col: tile.col },
-    }]);
+    });
   }
 
   handleComponentDepletion(tile) {
@@ -528,9 +434,12 @@ export class Game {
     await this.saveManager.applySaveState(this, savedData);
   }
 
-  pause() { this.sessionManager.pause(); }
-  resume() { this.sessionManager.resume(); }
-  togglePause() { this.sessionManager.togglePause(); }
+  pause() { this.onToggleStateChange?.("pause", true); }
+  resume() { this.onToggleStateChange?.("pause", false); }
+  togglePause() {
+    if (this.paused) this.resume();
+    else this.pause();
+  }
 
   async reboot() {
     await runFullReboot(this);
@@ -549,13 +458,17 @@ export class Game {
   }
 
   action_pasteLayout(layout, options = {}) {
-    const result = applyBlueprintLayoutDiff(this, layout, {
+    const payload = {
+      layout,
       skipCostDeduction: options.skipCostDeduction === true,
       partial: options.partial === true,
       sellExisting: options.sellExisting === true,
-    });
-    if (result.ok) this.emit("layoutPasted", { layout });
-    return result;
+    };
+    if (!shouldDrainIntentsImmediately(this)) {
+      enqueueIntent(this, { type: "APPLY_BLUEPRINT", payload });
+      return { ok: true, queued: true };
+    }
+    return applyBlueprintLayoutDiff(this, layout, options);
   }
 
   toggleBlueprintPlanner() {
@@ -579,6 +492,7 @@ export class Game {
   _syncBlueprintPlannerUi() {
     const d = this.ui?.uiState?.copy_paste_display;
     if (d) d.blueprintPlannerActive = !!this.blueprintPlanner.active;
+    this.emit?.("blueprintPlannerChanged");
   }
 
   getBlueprintPlannerPartId(row, col) {
@@ -598,7 +512,8 @@ export class Game {
   }
 
   requestBlueprintProjectionSample(options = {}) {
-    return postGameLoopProjectionQuery(this.engine, this, options);
+    const layout = this.blueprintPlanner?.active ? this.buildGridProjectionSnapshot() : null;
+    return postGameLoopProjectionQuery(this.engine, this, { ...options, layout });
   }
 
   requestLayoutProjectionSample(layout, options = {}) {
@@ -606,10 +521,10 @@ export class Game {
   }
 
   applyBlueprintPlannerLayout(options = {}) {
-    return drainGridIntentsAsync(this, this.engine, [{
-      action: "COMMIT_BLUEPRINT_PLANNER",
+    return dispatchPlayerIntent(this, this.engine, {
+      type: "COMMIT_BLUEPRINT_PLANNER",
       payload: { partial: options.partial === true },
-    }]);
+    });
   }
 
   getDoctrine() {
@@ -619,7 +534,27 @@ export class Game {
 
   respecDoctrine() {
     const bridge = requireActiveBridge(this, "respecDoctrine");
-    if (!bridge.respecDoctrine()) return false;
+    if (!bridge.session || !this.upgradeset) return false;
+    const cost = toNumber(this.RESPER_DOCTRINE_EP_COST);
+    if (!(cost > 0) || !bridge.session.debitExoticParticles?.(cost)) return false;
+
+    const oldTree = this.tech_tree;
+    this.tech_tree = null;
+    bridge.session.techTree = null;
+
+    const exclusive = new Set(this.upgradeset.getExclusiveUpgradeIdsForTree?.(oldTree) || []);
+    const entries = [];
+    for (let i = 0; i < this.upgradeset.upgradesArray.length; i++) {
+      const upg = this.upgradeset.upgradesArray[i];
+      if (!upg || exclusive.has(upg.id)) continue;
+      const level = bridge.session.getUpgradeLevel?.(upg.id) ?? upg.level ?? 0;
+      if (level > 0) entries.push({ id: upg.id, level });
+    }
+    bridge.session.setUpgradeLevels(entries);
+    projectUpgradeLevelsToHost(bridge);
+    bridge.routeEvents();
+    bridge.projectLiveState();
+    this.upgradeset.updateSectionCounts?.();
     resetHeatThresholdSignalState(this);
     if (this.saveManager) this.saveManager.autoSave();
     return true;

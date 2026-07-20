@@ -37,10 +37,11 @@ export const preferences = proxy({ ...PREF_DEFAULTS });
 export function syncReducedMotionDOM() {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  if (!root?.style || !root?.classList) return;
+  if (!root?.style) return;
   const checked = !!preferences.reducedMotion;
   root.style.setProperty("--prefers-reduced-motion", checked ? "reduce" : "no-preference");
-  root.classList.toggle("reduced-motion-app", checked);
+  if (checked) root.dataset.reducedMotion = "";
+  else delete root.dataset.reducedMotion;
 }
 
 export function initPreferencesStore() {

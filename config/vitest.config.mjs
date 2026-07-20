@@ -13,6 +13,7 @@ const localThreads = Math.min(
 export default defineConfig({
   resolve: {
     alias: [
+      { find: "@app/state.js", replacement: path.resolve(repoRoot, "tests/helpers/state-patch-shim.js") },
       { find: "@app", replacement: path.resolve(repoRoot, "public/src") },
       { find: "@test-helpers", replacement: path.resolve(repoRoot, "tests/helpers/setup.js") },
       { find: "lit-html/directives/class-map.js", replacement: path.resolve(repoRoot, "node_modules/lit-html/directives/class-map.js") },
@@ -33,7 +34,7 @@ export default defineConfig({
         url: "http://localhost:8080/",
       },
     },
-    setupFiles: ["./tests/helpers/setupDecimal.js", "./tests/helpers/setup.js"],
+    setupFiles: ["./tests/helpers/setupDecimal.js", "./tests/helpers/setupEnv.js"],
     reporters: ["default"],
     css: false,
     pool: "threads",

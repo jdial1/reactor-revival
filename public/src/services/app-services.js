@@ -25,7 +25,8 @@ export {
 export { LeaderboardService, leaderboardService, getLocalBestRun, queryClient, queryKeys } from "./leaderboard.js";
 
 import { html, render } from "lit-html";
-import { SaveDataSchema, VersionSchema } from "../schema/index.js";
+import { VersionSchema } from "../schema/index.js";
+import { parseAndValidateSave } from "../domain/game-save.js";
 import { MODAL_IDS } from "../constants/modal-ids.js";
 import { fetchResolvedSaves } from "../state/save-query.js";
 import { showLoadBackupModal } from "../state/save-ui.js";
@@ -33,7 +34,6 @@ import {
   StorageUtils,
   StorageAdapter,
   serializeSave,
-  deserializeSave,
   setSlot1FromBackupAsync,
   rotateSlot1ToBackup,
 } from "../storage/index.js";
@@ -45,6 +45,32 @@ import { LEADERBOARD_CONFIG } from "../constants/balance.js";
 import { getAppContext } from "../app-context.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
 import { pwaState } from "../state/ui-state.js";
+import { getUiElement } from "../components/shell/page-dom.js";
+
+function firstByClass(root, className) {
+  if (!root) return null;
+  return root.getElementsByClassName(className)[0] ?? null;
+}
+
+function forEachByClass(root, className, fn) {
+  if (!root) return;
+  const list = root.getElementsByClassName(className);
+  for (let i = 0; i < list.length; i++) fn(list[i]);
+}
+
+function setClassFlag(el, className, on) {
+  if (!el) return;
+  const re = new RegExp(`\\b${className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
+  const base = el.className.replace(re, "").replace(/\s+/g, " ").trim();
+  el.className = on ? (base ? `${base} ${className}` : className) : base;
+}
+
+function resolveIdSelector(sel) {
+  if (typeof sel === "string" && sel.startsWith("#") && !/[\s>+~[:.]/.test(sel.slice(1))) {
+    return getUiElement(null, sel.slice(1));
+  }
+  return null;
+}
 import {
   VersionChecker,
   warmImageCache,
@@ -55,7 +81,6 @@ import {
 
 const splashStartOptionsTemplate = ({
   mostRecentSave,
-  hasSave,
   onResume,
   onNewRun,
   onShowLoad,
@@ -103,7 +128,6 @@ const saveSlotRowTemplate =({
   rowClasses,
   btnClasses,
   i,
-  isCloud,
   isEmpty,
   logId,
   isSelected,
@@ -122,7 +146,6 @@ const saveSlotRowTemplate =({
           class=${btnClasses}
           type="button"
           data-slot=${i}
-          data-is-cloud=${isCloud}
           data-is-empty=${isEmpty}
           @click=${onSlotClick}
         >
@@ -152,7 +175,7 @@ const saveSlotRowTemplate =({
                 </div>
               `}
         </button>
-        ${!isCloud && !isEmpty
+        ${!isEmpty
           ? html`<button class="save-slot-delete" type="button" aria-label="Delete" @click=${onDeleteClick}>DEL</button>`
           : ""}
       </div>
@@ -161,8 +184,6 @@ const saveSlotRowTemplate =({
 };
 
 const saveSlotMainTemplate =({
-  isCloudAvailable,
-  cloudSlots,
   localSlots,
   selectedSlot,
   onHeaderTouchStart,
@@ -187,14 +208,8 @@ const saveSlotMainTemplate =({
     </header>
     <div class="save-slot-panel">
       <div class="save-slot-options">
-        ${isCloudAvailable
-          ? html`
-              <h2 class="save-slot-section-header">CLOUD BACKUPS</h2>
-              ${cloudSlots.map((s, idx) => renderSlot(s, idx + 1, true))}
-              <h2 class="save-slot-section-header save-slot-section-secondary">CORE BACKUPS</h2>
-            `
-          : html` <h2 class="save-slot-section-header">CORE BACKUPS</h2> `}
-        ${localSlots.map((s, idx) => renderSlot(s, idx + 1, false))}
+        <h2 class="save-slot-section-header">CORE BACKUPS</h2>
+        ${localSlots.map((s, idx) => renderSlot(s, idx + 1))}
         <div class="save-slot-actions">
           <input
             type="file"
@@ -225,17 +240,22 @@ const FADE_FULL_MS = 30000;
 const FADE_CLASS_SLIGHT = "splash-menu-fade-slight";
 const FADE_CLASS_FULL = "splash-menu-fade-full";
 
+function clearFadeClasses(panel) {
+  setClassFlag(panel, FADE_CLASS_SLIGHT, false);
+  setClassFlag(panel, FADE_CLASS_FULL, false);
+}
+
 function scheduleFadeSteps(panel, slightTimerRef, fullTimerRef) {
   if (slightTimerRef.current) clearTimeout(slightTimerRef.current);
   if (fullTimerRef.current) clearTimeout(fullTimerRef.current);
-  panel.classList.remove(FADE_CLASS_SLIGHT, FADE_CLASS_FULL);
+  clearFadeClasses(panel);
   slightTimerRef.current = setTimeout(() => {
-    panel.classList.add(FADE_CLASS_SLIGHT);
+    setClassFlag(panel, FADE_CLASS_SLIGHT, true);
     slightTimerRef.current = null;
   }, FADE_SLIGHT_MS);
   fullTimerRef.current = setTimeout(() => {
-    panel.classList.remove(FADE_CLASS_SLIGHT);
-    panel.classList.add(FADE_CLASS_FULL);
+    setClassFlag(panel, FADE_CLASS_SLIGHT, false);
+    setClassFlag(panel, FADE_CLASS_FULL, true);
     fullTimerRef.current = null;
   }, FADE_FULL_MS);
 }
@@ -266,7 +286,7 @@ function initSplashMenuIdleFade(panelElement) {
     if (slightTimerRef.current) clearTimeout(slightTimerRef.current);
     if (fullTimerRef.current) clearTimeout(fullTimerRef.current);
     ac.abort();
-    panelElement.classList.remove(FADE_CLASS_SLIGHT, FADE_CLASS_FULL);
+    clearFadeClasses(panelElement);
   };
 }
 
@@ -336,8 +356,8 @@ async function fetchVersionForSplash(versionChecker) {
   }
 }
 
-function mountSplashUserCountReactive(splashScreen, ui) {
-  const userCountEl = splashScreen?.querySelector("#user-count-text");
+function mountSplashUserCountReactive(_splashScreen, ui) {
+  const userCountEl = getUiElement(null, "user-count-text");
   if (!userCountEl || !ui?.uiState) return () => {};
   return bindLitRenderMulti(
     [{ state: ui.uiState, keys: ["user_count"] }],
@@ -347,7 +367,7 @@ function mountSplashUserCountReactive(splashScreen, ui) {
 }
 
 function addSplashStats(splashScreen, version, versionChecker, ui) {
-  const versionText = splashScreen.querySelector("#splash-version-text");
+  const versionText = getUiElement(null, "splash-version-text");
   if (!versionText) return () => {};
   versionText.style.cursor = "pointer";
   versionText.onclick = () => versionChecker.triggerVersionCheckToast();
@@ -359,7 +379,7 @@ function addSplashStats(splashScreen, version, versionChecker, ui) {
       ],
       () => {
         const showNew = pwaState.updateAvailable && !pwaState.hasAcknowledgedUpdate;
-        versionText.classList.toggle("new-version", showNew);
+        setClassFlag(versionText, "new-version", showNew);
         versionText.title = showNew ? "New version available — click for details" : "Click to check for updates";
         return html`v.${ui.uiState?.version ?? ""}`;
       },
@@ -388,7 +408,7 @@ class SplashUIManager extends BaseComponent {
       return;
     }
     this.statusElement.textContent = message;
-    this.statusElement.classList.add("splash-element-visible");
+    setClassFlag(this.statusElement, "splash-element-visible", true);
   }
 
   stopFlavorText() {}
@@ -396,7 +416,7 @@ class SplashUIManager extends BaseComponent {
   hide(onHidden) {
     if (!this.splashScreen) return;
     this.stopFlavorText();
-    this.splashScreen.classList.add("fade-out");
+    setClassFlag(this.splashScreen, "fade-out", true);
     setTimeout(() => {
       this.isVisible = false;
       this.setElementVisible(this.splashScreen, false);
@@ -407,7 +427,7 @@ class SplashUIManager extends BaseComponent {
   show() {
     if (this.splashScreen) {
       this.isVisible = true;
-      this.splashScreen.classList.remove("fade-out");
+      setClassFlag(this.splashScreen, "fade-out", false);
       this.setElementVisible(this.splashScreen, true);
     }
   }
@@ -415,7 +435,7 @@ class SplashUIManager extends BaseComponent {
   forceHide() {
     if (this.splashScreen) {
       this.isVisible = false;
-      this.splashScreen.classList.add("fade-out");
+      setClassFlag(this.splashScreen, "fade-out", true);
       this.setElementVisible(this.splashScreen, false);
     }
   }
@@ -423,7 +443,7 @@ class SplashUIManager extends BaseComponent {
 
 async function waitForSplashElement(selector, maxAttempts = 20) {
   for (let i = 0; i < maxAttempts; i++) {
-    const el = document.querySelector(selector);
+    const el = resolveIdSelector(selector);
     if (el) return el;
     await new Promise((r) => setTimeout(r, 50));
   }
@@ -433,9 +453,8 @@ async function waitForSplashElement(selector, maxAttempts = 20) {
 async function runLoadSplashScreen(manager) {
   if (isTestEnv()) return false;
   try {
-    manager.splashScreen = document.querySelector("#splash-screen") ?? await waitForSplashElement("#splash-screen");
-    manager.statusElement =
-      document.querySelector("#splash-status") ?? manager.splashScreen?.querySelector("#splash-status");
+    manager.splashScreen = getUiElement(null, "splash-screen") ?? await waitForSplashElement("#splash-screen");
+    manager.statusElement = getUiElement(null, "splash-status");
     if (!manager.splashScreen) throw new Error("Splash screen not found (AppRoot must render first)");
     manager.uiManager?.setRefs({ statusElement: manager.statusElement, splashScreen: manager.splashScreen });
     await manager.initializeSplashStats();
@@ -455,24 +474,23 @@ async function runLoadSplashScreen(manager) {
   }
 }
 
+function showStatusVisible(el, message) {
+  if (!el) return;
+  setClassFlag(el, "splash-element-hidden", false);
+  setClassFlag(el, "splash-element-visible", true);
+  el.textContent = message;
+}
+
 function runSetStep(manager, stepId) {
   const stepIndex = manager.loadingSteps.findIndex((step) => step.id === stepId);
   if (stepIndex === -1) return;
   manager.currentStep = stepIndex;
   const step = manager.loadingSteps[manager.currentStep];
-  if (manager.statusElement) {
-    manager.statusElement.classList.remove("splash-element-hidden");
-    manager.statusElement.classList.add("splash-element-visible");
-    manager.statusElement.textContent = step.message;
-  }
+  showStatusVisible(manager.statusElement, step.message);
 }
 
 function runSetSubStep(manager, message) {
-  if (manager.statusElement) {
-    manager.statusElement.classList.remove("splash-element-hidden");
-    manager.statusElement.classList.add("splash-element-visible");
-    manager.statusElement.textContent = message;
-  }
+  showStatusVisible(manager.statusElement, message);
 }
 
 const SPLASH_HIDE_DELAY_MS = 600;
@@ -484,7 +502,7 @@ async function loadFromDataImpl(splashManager, saveData, ctx) {
 }
 
 async function teardownSplashAndWait() {
-  const saveSlotEl = document.getElementById("save-slot-screen");
+  const saveSlotEl = getUiElement(null, "save-slot-screen");
   if (saveSlotEl) saveSlotEl.remove();
   getAppContext()?.splashManager?.hide();
   await new Promise((resolve) => setTimeout(resolve, SPLASH_HIDE_DELAY_MS));
@@ -514,7 +532,7 @@ async function startGameOrFallback(ctx) {
   await ctx.pageRouter.loadPage("reactor_section");
   const { wireTooltipManager } = await import("../components/ui-tooltips-tutorial.js");
   wireTooltipManager(ctx.ui, ctx.game);
-  ctx.game.engine = new (await import("../logic.js")).Engine(ctx.game);
+  ctx.game.engine = new (await import("../domain/engine.js")).Engine(ctx.game);
   await ctx.game.startSession();
   ctx.game.engine.start();
 }
@@ -547,7 +565,7 @@ class SplashStartOptionsBuilder {
 
   async buildSaveSlotList(canLoadGame) {
     if (!canLoadGame) {
-      return { hasSave: false, saveSlots: [], cloudSaveOnly: false, cloudSaveData: null, mostRecentSave: null };
+      return { hasSave: false, saveSlots: [], mostRecentSave: null };
     }
     return fetchResolvedSaves();
   }
@@ -563,11 +581,12 @@ class SplashStartOptionsBuilder {
         const game = this.ctx?.game ?? getAppContext()?.game;
         if (game) {
           const loadSuccess = await game.saveManager.loadGame(mostRecentSave.slot);
+          const loadedOk = loadSuccess === true;
 
           const pageRouter = this.ctx?.pageRouter ?? getAppContext()?.pageRouter;
           const ui = this.ctx?.ui ?? getAppContext()?.ui;
 
-          if (loadSuccess && pageRouter && ui) {
+          if (loadedOk && pageRouter && ui) {
             if (typeof getAppContext()?.startGame === "function") {
               await getAppContext().startGame({ pageRouter, ui, game });
             } else {
@@ -577,7 +596,7 @@ class SplashStartOptionsBuilder {
 
               const { wireTooltipManager } = await import("../components/ui-tooltips-tutorial.js");
               wireTooltipManager(ui, game);
-              game.engine = new (await import("../logic.js")).Engine(game);
+              game.engine = new (await import("../domain/engine.js")).Engine(game);
 
               await game.startSession();
               game.engine.start();
@@ -605,7 +624,6 @@ class SplashStartOptionsBuilder {
 
     const template = splashStartOptionsTemplate({
       mostRecentSave,
-      hasSave,
       onResume,
       onNewRun,
       onShowLoad: () => this.splashManager.showSaveSlotSelection(saveSlots),
@@ -705,7 +723,6 @@ class SplashSaveSlotUI {
       rowClasses,
       btnClasses,
       i,
-      isCloud: false,
       isEmpty,
       logId,
       isSelected,
@@ -729,11 +746,7 @@ class SplashSaveSlotUI {
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
-          const saveData = event.target.result;
-          const parsed = typeof saveData === "string" ? deserializeSave(saveData) : saveData;
-          const result = SaveDataSchema.safeParse(parsed);
-          if (!result.success) throw new Error("Save corrupted: validation failed");
-          const validated = result.data;
+          const validated = parseAndValidateSave(event.target.result);
           await rotateSlot1ToBackup(serializeSave(validated));
           await this.splashManager.loadFromSaveSlot(1);
         } catch (err) {
@@ -745,12 +758,10 @@ class SplashSaveSlotUI {
     };
 
     const triggerFileInput = () => {
-      this.container.querySelector("#load-from-file-input")?.click();
+      getUiElement(null, "load-from-file-input")?.click();
     };
 
     return saveSlotMainTemplate({
-      isCloudAvailable: false,
-      cloudSlots: [],
       localSlots,
       selectedSlot: this.state.selectedSlot,
       onHeaderTouchStart: (e) => {
@@ -990,41 +1001,33 @@ class SplashScreenManager extends BaseComponent {
     if (!this.splashScreen || this.isReady) return;
 
     const splashScreen = this.splashScreen;
-    splashScreen.classList.remove("splash-vhold-booting");
+    setClassFlag(splashScreen, "splash-vhold-booting", false);
     void splashScreen.offsetHeight;
-    splashScreen.classList.add("splash-vhold-booting");
+    setClassFlag(splashScreen, "splash-vhold-booting", true);
     if (this._vholdBootTimeout) clearTimeout(this._vholdBootTimeout);
-    this._vholdBootTimeout = setTimeout(() => splashScreen.classList.remove("splash-vhold-booting"), 900);
+    this._vholdBootTimeout = setTimeout(() => setClassFlag(splashScreen, "splash-vhold-booting", false), 900);
     const audio = this._appContext?.game?.audio ?? getAppContext()?.game?.audio;
     audio?.play?.("crt_whine");
 
-    const versionEl = splashScreen.querySelector("#splash-version-text");
-    const userCountEl = splashScreen.querySelector("#user-count-text");
-    if (versionEl) versionEl.textContent = versionEl.textContent ?? "";
-    if (userCountEl) userCountEl.textContent = userCountEl.textContent ?? "";
-
+    const menuPanel = firstByClass(splashScreen, "splash-menu-panel");
     this._signalJumpEnabled = false;
     if (this._signalJumpLoopTimeout) clearTimeout(this._signalJumpLoopTimeout);
     if (this._signalJumpResetTimeout) clearTimeout(this._signalJumpResetTimeout);
     this._signalJumpLoopTimeout = null;
     this._signalJumpResetTimeout = null;
-    const panelEl = splashScreen.querySelector(".splash-menu-panel");
-    panelEl?.classList.remove("splash-signal-jump");
+    setClassFlag(menuPanel, "splash-signal-jump", false);
 
     this._signalJumpEnabled = true;
     const jumpOnce = () => {
-      if (!this._signalJumpEnabled) return;
-      const panel = splashScreen.querySelector(".splash-menu-panel");
-      if (panel) {
-        const amp = 2 + Math.random();
-        const dir = Math.random() < 0.5 ? -1 : 1;
-        panel.style.setProperty("--splash-jump-y", `${dir * amp}px`);
-        panel.classList.remove("splash-signal-jump");
-        void panel.offsetHeight;
-        panel.classList.add("splash-signal-jump");
-        if (this._signalJumpResetTimeout) clearTimeout(this._signalJumpResetTimeout);
-        this._signalJumpResetTimeout = setTimeout(() => panel.classList.remove("splash-signal-jump"), 230);
-      }
+      if (!this._signalJumpEnabled || !menuPanel) return;
+      const amp = 2 + Math.random();
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      menuPanel.style.setProperty("--splash-jump-y", `${dir * amp}px`);
+      setClassFlag(menuPanel, "splash-signal-jump", false);
+      void menuPanel.offsetHeight;
+      setClassFlag(menuPanel, "splash-signal-jump", true);
+      if (this._signalJumpResetTimeout) clearTimeout(this._signalJumpResetTimeout);
+      this._signalJumpResetTimeout = setTimeout(() => setClassFlag(menuPanel, "splash-signal-jump", false), 230);
       const nextDelayMs = 1200 + Math.random() * 2600;
       this._signalJumpLoopTimeout = setTimeout(jumpOnce, nextDelayMs);
     };
@@ -1032,17 +1035,16 @@ class SplashScreenManager extends BaseComponent {
     this._signalJumpLoopTimeout = setTimeout(jumpOnce, initialDelayMs);
 
     this.stopFlavorText();
-    const spinner = this.splashScreen?.querySelector(".splash-spinner");
-    if (spinner) spinner.classList.add("splash-element-hidden");
-    if (this.statusElement) this.statusElement.classList.add("splash-element-hidden");
+    setClassFlag(firstByClass(splashScreen, "splash-spinner"), "splash-element-hidden", true);
+    setClassFlag(this.statusElement, "splash-element-hidden", true);
 
-    let startOptionsSection = this.splashScreen?.querySelector(".splash-start-options");
+    let startOptionsSection = getUiElement(null, "splash-start-options")
+      ?? firstByClass(splashScreen, "splash-start-options");
     if (!startOptionsSection) {
       startOptionsSection = document.createElement("div");
       startOptionsSection.id = "splash-start-options";
       startOptionsSection.className = "splash-start-options";
-      const inner = this.splashScreen.querySelector(".splash-menu-inner");
-      (inner ?? this.splashScreen.querySelector(".splash-menu-panel"))?.appendChild(startOptionsSection);
+      (firstByClass(splashScreen, "splash-menu-inner") ?? menuPanel)?.appendChild(startOptionsSection);
     }
 
     const builder = new SplashStartOptionsBuilder(this, this._appContext);
@@ -1059,10 +1061,8 @@ class SplashScreenManager extends BaseComponent {
     const splashRoot = splashScreen;
     const active = new Set();
     const updateGlow = () => {
-      if (active.size > 0) splashRoot.classList.add("splash-bezel-glow-hot");
-      else splashRoot.classList.remove("splash-bezel-glow-hot");
+      setClassFlag(splashRoot, "splash-bezel-glow-hot", active.size > 0);
     };
-    const resumeButtons = splashRoot?.querySelectorAll(".splash-btn-resume-primary") ?? [];
     const onEnter = (e) => {
       active.add(e.currentTarget);
       updateGlow();
@@ -1071,7 +1071,7 @@ class SplashScreenManager extends BaseComponent {
       active.delete(e.currentTarget);
       updateGlow();
     };
-    resumeButtons.forEach((btn) => {
+    forEachByClass(splashRoot, "splash-btn-resume-primary", (btn) => {
       btn.addEventListener("pointerenter", onEnter);
       btn.addEventListener("pointerleave", onLeave);
       btn.addEventListener("focus", onEnter);
@@ -1081,12 +1081,11 @@ class SplashScreenManager extends BaseComponent {
     });
     updateGlow();
 
-    startOptionsSection.classList.add("visible");
-    setTimeout(() => startOptionsSection.classList.add("show"), 100);
+    setClassFlag(startOptionsSection, "visible", true);
+    setTimeout(() => setClassFlag(startOptionsSection, "show", true), 100);
 
     this.teardownIdleFade?.();
-    const panel = this.splashScreen?.querySelector(".splash-menu-panel");
-    if (panel) this.teardownIdleFade = initSplashMenuIdleFade(panel);
+    if (menuPanel) this.teardownIdleFade = initSplashMenuIdleFade(menuPanel);
   }
 
   hide() {
@@ -1100,9 +1099,9 @@ class SplashScreenManager extends BaseComponent {
     this._signalJumpResetTimeout = null;
     if (this._vholdBootTimeout) clearTimeout(this._vholdBootTimeout);
     this._vholdBootTimeout = null;
-    this.splashScreen.classList.remove("splash-vhold-booting");
-    this.splashScreen?.querySelector(".splash-menu-panel")?.classList.remove("splash-signal-jump");
-    this.splashScreen.classList.remove("splash-bezel-glow-hot");
+    setClassFlag(this.splashScreen, "splash-vhold-booting", false);
+    setClassFlag(firstByClass(this.splashScreen, "splash-menu-panel"), "splash-signal-jump", false);
+    setClassFlag(this.splashScreen, "splash-bezel-glow-hot", false);
     this._resumeGlowHandlers.forEach(({ el, onEnter, onLeave }) => {
       el.removeEventListener("pointerenter", onEnter);
       el.removeEventListener("pointerleave", onLeave);

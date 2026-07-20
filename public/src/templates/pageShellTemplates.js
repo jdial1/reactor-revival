@@ -1,11 +1,11 @@
 import { html, nothing } from "lit-html";
 import { statusNoticeToastTemplate } from "./uiComponentsTemplates.js";
 
-export function statusNoticeSlotTemplate(activeNotice) {
+export function statusNoticeSlotTemplate(activeNotice, visible = false) {
   if (!activeNotice?.body) return nothing;
   return html`
     <div class="decompression-saved-toast status-notice-toast" role="status">
-      ${statusNoticeToastTemplate({ tag: activeNotice.tag, body: activeNotice.body })}
+      ${statusNoticeToastTemplate({ tag: activeNotice.tag, body: activeNotice.body, visible })}
     </div>
   `;
 }
@@ -38,9 +38,6 @@ export function gameShellTemplate() {
     <li id="engine_status_indicator_root"></li>
   </ul>
   <ul class="nav-group-right">
-    <li>
-      <span id="user_account_btn_root"></span>
-    </li>
     <li>
       <button id="fullscreen_toggle" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">⛶</button>
     </li>

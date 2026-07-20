@@ -2,7 +2,7 @@ import { z } from "zod";
 import { bundledGameData } from "../generated/bundledStaticData.js";
 import { logger } from "../core/logger.js";
 
-export const FailureFlavorSchema = z.record(z.string(), z.string());
+const FailureFlavorSchema = z.record(z.string(), z.string());
 
 let _failureFlavorCache = null;
 

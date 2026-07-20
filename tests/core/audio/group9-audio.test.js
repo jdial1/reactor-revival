@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGame } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM } from "../../helpers/setup.js";
 import { AUDIO_RUNTIME_DEFAULTS } from "@app/services/app-services.js";
 
 describe("Group 9: Audio Engine & Spatial Panning", () => {
   let game;
 
   beforeEach(async () => {
-    game = await setupGame();
+    const setup = await setupGameWithDOM();
+    game = setup.game;
   });
 
   afterEach(() => {

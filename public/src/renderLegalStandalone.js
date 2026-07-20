@@ -11,7 +11,7 @@ const kind = document.documentElement.dataset.legalPage;
 if (root) {
   if (kind === "privacy") {
     render(privacyPolicyPageContainerTemplate(false), root);
-    void populatePrivacyPolicyDateElement();
+    void populatePrivacyPolicyDateElement(document.getElementById("privacy-policy-date"));
   } else if (kind === "terms") {
     render(termsOfServicePageContainerTemplate(false), root);
   }

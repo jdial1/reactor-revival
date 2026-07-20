@@ -88,16 +88,13 @@ The reactor substrate operates as a self-governing state machine that exists ind
 
 The Accumulator and Offline Determinism
 
-To solve the "Background Tab" problem—where browsers reduce the execution frequency of JavaScript in inactive tabs—the engine utilizes a fixed-timestep accumulator. Instead of relying on the browser's requestAnimationFrame for timing, the engine tracks the delta between the last processed tick and the current real-world time.
+To solve the "Background Tab" problem—where browsers reduce the execution frequency of JavaScript in inactive tabs—the host Engine uses a fixed-timestep accumulator driven by the main-thread `requestAnimationFrame` loop. Wall-clock delta feeds `_simAccumulatorMs`; when enough time accumulates, the Engine drains discrete ticks (capped per frame by `MAX_LIVE_TICKS`). The Web Worker is a computational offload for heat/tick batches, not an independent wall-clock orchestrator: if the main thread stalls, rAF stops and catch-up pauses with it.
 
-When the game is resumed after a period of inactivity, the accumulator consumes real-world time to produce a series of discrete simulation ticks. For example, if the simulation is configured for 10 ticks per second and the player returns after one hour of offline time, the engine will process exactly 36,000 ticks (
-10⋅60⋅60
-10⋅60⋅60
-). Because the simulation is deterministic, the state after these 36,000 ticks will be identical regardless of whether the game was running in the foreground or processed as a catch-up batch.
+Offline / Welcome-Back catch-up is also capped for browser safety. `prepareOfflineCatchup` / `startOfflineFastForward` clamp the replay window to `MAX_ACCUMULATOR_MULTIPLIER` ticks (currently 100 — about 100 seconds at `BASE_LOOP_WAIT_MS`), then `runChunkedOfflineReplay` yields between chunks (`WELCOME_BACK_FF_MAX_TICKS` per frame). Within that capped window the replay is deterministic tick-for-tick; multi-hour "sleep" gaps are not fully simulated. Expanding the cap requires keeping the chunked yield path so the tab does not freeze.
 
 Worker Authority and the Anatomy of Failure
 
-The unified `engine.worker.js` runs the game-loop and physics heat step (`gameLoopWorkerCore` + `physicsWorkerCore` with `runHeatStepFromTyped`). During high-speed play, batching ticks in the worker avoids blocking the main thread; wallet updates can follow the worker economy command path when that mode is active. Authoritative heat arrays and tick results are reconciled on the main `Engine` after each batch.
+The unified `engine.worker.js` runs the game-loop and physics heat step (`gameLoopWorkerCore` + `physicsWorkerCore` with `runHeatStepFromTyped`). During high-speed play, batching ticks in the worker avoids blocking the main thread for heavy math; wallet updates can follow the worker economy command path when that mode is active. Authoritative heat arrays and tick results are reconciled on the main `Engine` after each batch. This is offload, not a second autonomous clock.
 
 Failure in the reactor substrate is a multi-stage physical process rather than a binary "game over." This adds a layer of tension and strategic depth, as players must manage the transition between safe operation and catastrophic failure. The "Anatomy of Failure" follows a standardized progression:
 

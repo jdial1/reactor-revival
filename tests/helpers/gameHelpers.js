@@ -1,10 +1,19 @@
-import { toDecimal } from "@app/utils.js";
+import { toDecimal } from "@app/simUtils.js";
 import { patchGameState, setDecimal, withHostEconomyHydrate } from "@app/state.js";
+import { dispatchPlayerIntent } from "@app/bridge/bridge-intents.js";
+import {
+  hydrateSessionFromHost as harnessHydrateSession,
+  loadEconomyFromHost,
+  pushHostUpgradeLevelsForLoad,
+  setReactorHeat as harnessSetReactorHeat,
+  setReactorPower as harnessSetReactorPower,
+  setTileHeat as harnessSetTileHeat,
+  setTileTicks as harnessSetTileTicks,
+  syncGridFromGame,
+} from "./bridge-test-harness.js";
 
 export function hydrateSessionFromHost(game) {
-  game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
-  game.coreBridge?.loadEconomyFromHost?.();
-  game.coreBridge?.syncGridFromGame?.();
+  harnessHydrateSession(game);
 }
 
 export function grantInfiniteResources(game) {
@@ -14,7 +23,7 @@ export function grantInfiniteResources(game) {
     setDecimal(game.state, "total_exotic_particles", toDecimal(1e20));
     game.exoticParticleManager.exotic_particles = toDecimal(1e20);
   });
-  game.coreBridge?.loadEconomyFromHost?.();
+  loadEconomyFromHost(game);
   patchGameState(game, {
     current_money: game.current_money,
     current_exotic_particles: game.state.current_exotic_particles,
@@ -25,7 +34,7 @@ export function grantInfiniteResources(game) {
 
 export function syncGridState(game, { activeTiles = false } = {}) {
   game.reactor.updateStats();
-  game.coreBridge?.syncGridFromGame?.();
+  syncGridFromGame(game);
 
   if (activeTiles) {
     game.tileset.updateActiveTiles();
@@ -51,26 +60,69 @@ export function setGridDimensions(game, { rows, cols }) {
   game.tileset.updateActiveTiles();
 }
 
+export function setTileHeat(game, tile, heat) {
+  if (!tile) return;
+  harnessSetTileHeat(game, tile.row, tile.col, heat);
+}
+
+export function setTileTicks(game, tile, ticks) {
+  if (!tile) return;
+  harnessSetTileTicks(game, tile.row, tile.col, ticks);
+}
+
+export function setReactorHeat(game, heat) {
+  harnessSetReactorHeat(game, heat);
+}
+
+export function setReactorPower(game, power) {
+  harnessSetReactorPower(game, power);
+}
+
+export async function setTilePart(tile, part) {
+  if (!tile?.game || !part?.id) return false;
+  if (tile.part) return false;
+  if (tile.game.partset?.isPartDoctrineLocked?.(part)) return false;
+  const { placed } = await dispatchPlayerIntent(tile.game, tile.game.engine, {
+    type: "PLACE_PART",
+    payload: { row: tile.row, col: tile.col, id: part.id },
+  });
+  return placed.length > 0;
+}
+
+export async function clearTilePart(tile) {
+  if (!tile?.part || !tile.game) return;
+  await dispatchPlayerIntent(tile.game, tile.game.engine, {
+    type: "REMOVE_PART",
+    payload: { row: tile.row, col: tile.col },
+  });
+}
+
 export async function placePart(game, row, col, partId, tileState) {
     const tile = game.tileset.getTile(row, col);
     if (!tile) throw new Error(`Tile at ${row},${col} does not exist`);
     const part = game.partset.getPartById(partId);
     if (!part) throw new Error(`Part ${partId} does not exist`);
 
-    if (!(await tile.setPart(part))) {
+    if (!(await setTilePart(tile, part))) {
       throw new Error(`Failed to place ${partId} at ${row},${col}`);
     }
     if (tileState) {
-        if (tileState.heat !== undefined) tile.heat_contained = tileState.heat;
-        if (tileState.heat_contained !== undefined) tile.heat_contained = tileState.heat_contained;
-        if (tileState.ticks !== undefined) tile.ticks = tileState.ticks;
-        else if (part.category === "cell") tile.ticks = part.ticks;
-        tile.activated = tileState.activated !== undefined ? tileState.activated : true;
-        game.coreBridge?.syncGridFromGame?.();
+        if (tileState.heat !== undefined) setTileHeat(game, tile, tileState.heat);
+        if (tileState.heat_contained !== undefined) setTileHeat(game, tile, tileState.heat_contained);
+        if (tileState.ticks !== undefined) setTileTicks(game, tile, tileState.ticks);
+        else if (part.category === "cell") setTileTicks(game, tile, part.ticks);
+        if (tileState.activated !== undefined) {
+          const inst = game.coreBridge?.session?.grid?.getComponentAt?.(row, col);
+          if (inst && game.coreBridge.session.grid.tileHeatMap) {
+            game.coreBridge.session.grid.tileHeatMap.setActivated(row, col, tileState.activated);
+          }
+          tile.activated = tileState.activated;
+        } else {
+          tile.activated = true;
+        }
     } else if (part.category === "cell" && tile.part) {
-        tile.ticks = part.ticks;
+        setTileTicks(game, tile, part.ticks);
         tile.activated = true;
-        game.coreBridge?.syncGridFromGame?.();
     }
     tile.recalculateEffectiveValues?.();
     return tile;
@@ -80,7 +132,7 @@ export function setUpgradeLevel(game, upgradeId, level) {
   const upgrade = game.upgradeset.getUpgrade(upgradeId);
   if (!upgrade) throw new Error(`Upgrade ${upgradeId} not found`);
   upgrade.setLevel(level);
-  game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+  pushHostUpgradeLevelsForLoad(game);
   return upgrade;
 }
 
@@ -102,9 +154,8 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
         }
     }
     
-    upgrade.updateDisplayCost();
     const isEpUpgrade = !!(upgrade.base_ecost?.gt?.(0) || (Number(upgrade.base_ecost) > 0));
-    const currentCost = isEpUpgrade ? upgrade.getEcost() : upgrade.getCost();
+    const currentCost = isEpUpgrade ? upgrade.current_ecost : upgrade.current_cost;
     const costNum = (typeof currentCost?.toNumber === 'function' ? currentCost.toNumber() : Number(currentCost));
 
     if (isEpUpgrade) {
@@ -116,25 +167,23 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
         game.current_money = Math.max(moneyNum, costNum * 10 + 10000);
         patchGameState(game, { current_money: game.current_money });
     }
-    game.coreBridge?.loadEconomyFromHost?.();
-
-    upgrade.updateDisplayCost();
+    loadEconomyFromHost(game);
 
     const wasBypass = game.bypass_tech_tree_restrictions;
     game.bypass_tech_tree_restrictions = true;
     const wasAffordable = upgrade.affordable;
-    upgrade.setAffordable(true);
+    upgrade.affordable = true;
 
-    const ecost = upgrade.getEcost();
-    const costVal = upgrade.getCost();
+    const ecost = upgrade.current_ecost;
+    const costVal = upgrade.current_cost;
     const hasEnoughResources = isEpUpgrade
         ? (game.current_exotic_particles?.gte ? game.current_exotic_particles.gte(ecost) : Number(game.current_exotic_particles) >= (ecost?.toNumber ? ecost.toNumber() : ecost))
         : (game.current_money?.gte ? game.current_money.gte(costVal) : Number(game.current_money) >= (costVal?.toNumber ? costVal.toNumber() : costVal));
     
     if (!hasEnoughResources) {
         game.bypass_tech_tree_restrictions = wasBypass;
-        upgrade.setAffordable(wasAffordable);
-        throw new Error(`Upgrade ${upgradeId} requires more resources. Money: ${game.current_money}, Cost: ${upgrade.getCost()}, EP: ${game.current_exotic_particles}, ECost: ${upgrade.getEcost()}`);
+        upgrade.affordable = wasAffordable;
+        throw new Error(`Upgrade ${upgradeId} requires more resources. Money: ${game.current_money}, Cost: ${upgrade.current_cost}, EP: ${game.current_exotic_particles}, ECost: ${upgrade.current_ecost}`);
     }
 
     const success = game.upgradeset.purchaseUpgrade(upgradeId);
@@ -142,19 +191,19 @@ export function forcePurchaseUpgrade(game, upgradeId, level = 1) {
     if (!success) {
         if (level > 0 && upgrade.level < upgrade.max_level) {
             upgrade.setLevel(Math.min(level, upgrade.max_level));
-            game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+            pushHostUpgradeLevelsForLoad(game);
             game.bypass_tech_tree_restrictions = wasBypass;
             return true;
         }
         game.bypass_tech_tree_restrictions = wasBypass;
-        upgrade.setAffordable(wasAffordable);
+        upgrade.affordable = wasAffordable;
         throw new Error(`Failed to purchase upgrade ${upgradeId}. Level: ${upgrade.level}, Max Level: ${upgrade.max_level}`);
     }
 
     game.bypass_tech_tree_restrictions = wasBypass;
     if (level > 1) {
         upgrade.setLevel(level);
-        game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+        pushHostUpgradeLevelsForLoad(game);
     }
 
     return success;
@@ -172,7 +221,7 @@ export function unlockAllUpgrades(game) {
             u.setLevel(1);
         }
     });
-    game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+    pushHostUpgradeLevelsForLoad(game);
 }
 
 export function maxOutUpgrades(game, filterFn = null) {
@@ -181,7 +230,7 @@ export function maxOutUpgrades(game, filterFn = null) {
             u.setLevel(u.max_level);
         }
     });
-    game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+    pushHostUpgradeLevelsForLoad(game);
     game.reactor.updateStats();
 }
 
@@ -229,12 +278,11 @@ export async function assembleHeatChain(
     const col = axis === "horizontal" ? startCol + i : startCol;
     const tile = await placePart(game, row, col, partIds[i]);
     if (heatByIndex && heatByIndex[i] !== undefined) {
-      tile.heat_contained = heatByIndex[i];
+      setTileHeat(game, tile, heatByIndex[i]);
     }
     tiles.push(tile);
   }
   game.reactor?.updateStats?.();
-  game.coreBridge?.syncGridFromGame?.();
   return tiles;
 }
 

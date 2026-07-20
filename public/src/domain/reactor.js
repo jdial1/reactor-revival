@@ -2,72 +2,16 @@ import {
   syncTilePulseDisplays,
 } from "../bridge/core-state-projection.js";
 import { requireActiveBridge } from "../bridge/active.js";
-import { setDecimal, syncReactorToUIState } from "../state/decimal-sync.js";
-import { recordSimEvent } from "./sim-events.js";
-import { drainGameEffects } from "../effect-orchestrator.js";
-import { saveRecoveredBlueprint } from "../components/blueprints/ui-layout-storage.js";
+import { setDecimal } from "../state/decimal-sync.js";
 import { toDecimal, toNumber } from "../simUtils.js";
-import { logger } from "../core/logger.js";
-import { getCompactLayout } from "./reactor-codec.js";
 import {
   BASE_MAX_HEAT,
   BASE_MAX_POWER,
 } from "../constants/balance.js";
-import { VALVE_OVERFLOW_THRESHOLD } from "../constants/sim.js";
-
-function computeActiveBuffs(state) {
-  const buffs = [];
-  const manualOverride = (state.manual_override_mult || 0) > 0 && Date.now() < (state.override_end_time || 0);
-  if (manualOverride) {
-    buffs.push({ id: "manual_override", icon: "img/ui/nav/nav_play.png", title: "Manual Override" });
-  }
-  if ((state.power_to_heat_ratio || 0) > 0) {
-    const maxHeat = toNumber(state.max_heat ?? 0);
-    const currentHeat = toNumber(state.current_heat ?? 0);
-    const heatPercent = maxHeat > 0 ? currentHeat / maxHeat : 0;
-    if (heatPercent > VALVE_OVERFLOW_THRESHOLD && (toNumber(state.current_power ?? 0) || 0) > 0) {
-      buffs.push({ id: "electro_thermal_conversion", icon: "img/parts/capacitor_4.png", title: "Electro-Thermal Conversion" });
-    }
-  }
-  return buffs;
-}
-
-function executeMeltdown(reactor) {
-  const game = reactor.game;
-  if (reactor._meltdownPresentationDone) return;
-  reactor._meltdownPresentationDone = true;
-  logger.log("warn", "engine", "[MELTDOWN] Condition met! Initiating meltdown sequence.");
-  logger.log("debug", "reactor", "Meltdown triggered", { heat: reactor.current_heat, max_heat: reactor.max_heat });
-
-  if (game.state) {
-    game.state.melting_down = true;
-    game.state.meltdown_seq = (game.state.meltdown_seq | 0) + 1;
-  }
-  reactor.has_melted_down = true;
-
-  recordSimEvent(game, { type: "MELTDOWN_HAPTIC", pattern: 200 });
-  drainGameEffects(game, () => game?.ui);
-
-  if (game.engine) game.engine.stop();
-  const layout = getCompactLayout(game);
-  if (layout?.parts?.length) {
-    saveRecoveredBlueprint(layout);
-  }
-
-  if (!game.ui?.meltdownUI) {
-    game.tileset.active_tiles_list.forEach((tile) => {
-      if (tile.part) tile.clearPart();
-    });
-    game.coreBridge?.session?.grid?.clearGrid?.();
-    game.coreBridge?.syncGridToGame?.();
-  }
-  game.partset.check_affordability(game);
-  game.upgradeset.check_affordability(game);
-}
 
 function clearMeltdown(reactor) {
   const game = reactor.game;
-  reactor._meltdownPresentationDone = false;
+  game._meltdownPresentationDone = false;
   if (game.state) {
     game.state.melting_down = false;
   }
@@ -76,18 +20,9 @@ function clearMeltdown(reactor) {
   if (session?.engine?.meltdown) {
     session.engine.reset();
   }
-  game.coreBridge?.projectLiveState?.({ preserveHostScalars: false });
-  syncReactorToUIState(game);
+  game.coreBridge?.projectLiveState?.();
   game.partset.check_affordability(game);
   game.upgradeset.check_affordability(game);
-  clearHeatVisualStates(reactor);
-}
-
-function clearHeatVisualStates(reactor) {
-  const game = reactor.game;
-  if (game.tileset && game.tileset.active_tiles_list) {
-    game.tileset.active_tiles_list.forEach((tile) => { tile.exploding = false; });
-  }
   game.emit?.("heatWarningCleared");
 }
 
@@ -100,10 +35,9 @@ export class Reactor {
   }
 
   setDefaults() {
-    const zero = toDecimal(0);
     if (this.game?.state) {
-      setDecimal(this.game.state, "current_heat", zero);
-      setDecimal(this.game.state, "current_power", zero);
+      setDecimal(this.game.state, "current_heat", 0);
+      setDecimal(this.game.state, "current_power", 0);
       this.game.state.max_heat = this.base_max_heat;
       this.game.state.max_power = this.base_max_power;
       this.game.state.melting_down = false;
@@ -115,26 +49,9 @@ export class Reactor {
     this.sessionModifiers = null;
     this.auto_sell_multiplier = 0;
     this.power_multiplier = 1;
-    this.heat_power_multiplier = 0;
-    this._meltdownPresentationDone = false;
-    this.heat_outlet_controlled = false;
-    this.vent_capacitor_multiplier = 0;
-    this.vent_plating_multiplier = 0;
-    this.transfer_capacitor_multiplier = 0;
-    this.transfer_plating_multiplier = 0;
-    this.stirling_multiplier = 0;
     this.sell_price_multiplier = 1;
-    this.manual_vent_percent = 0;
-    this.reflector_cooling_factor = 0;
-    this.manual_override_mult = 0;
     this.override_end_time = 0;
-    this.convective_boost = 0;
-    this.power_to_heat_ratio = 0;
-    this.catalyst_reduction = 0;
-    this.thermal_feedback_rate = 0;
-    this.volatile_tuning_max = 0;
-    this.plating_heat_bonus = 0;
-    this.hull_heat_doctrine_mult = 1;
+    this.game._meltdownPresentationDone = false;
     this.manual_heat_reduce = this.game?.base_manual_heat_reduce ?? 1;
 
     this.game.sold_power = false;
@@ -142,28 +59,28 @@ export class Reactor {
   }
 
   get current_heat() {
-    return this.game?.state?.current_heat ?? toDecimal(0);
+    return toNumber(this.game?.state?.current_heat ?? 0);
   }
   set current_heat(v) {
     if (this.game?.state) setDecimal(this.game.state, "current_heat", v);
   }
 
   get current_power() {
-    return this.game?.state?.current_power ?? toDecimal(0);
+    return toNumber(this.game?.state?.current_power ?? 0);
   }
   set current_power(v) {
     if (this.game?.state) setDecimal(this.game.state, "current_power", v);
   }
 
   get max_heat() {
-    return toDecimal(this.game?.state?.max_heat ?? this.base_max_heat);
+    return toNumber(this.game?.state?.max_heat ?? this.base_max_heat);
   }
   set max_heat(v) {
     if (this.game?.state) this.game.state.max_heat = toNumber(v);
   }
 
   get max_power() {
-    return toDecimal(this.game?.state?.max_power ?? this.base_max_power);
+    return toNumber(this.game?.state?.max_power ?? this.base_max_power);
   }
   set max_power(v) {
     if (this.game?.state) this.game.state.max_power = toNumber(v);
@@ -187,7 +104,7 @@ export class Reactor {
     if (!this.game.tileset) return;
     const bridge = requireActiveBridge(this.game, "updateStats");
     if (!opts.fromSession) {
-      bridge.syncForStatsRead();
+      bridge.session?.grid?.recalculateCaps?.();
     }
     const coreStats = bridge.session?.getSnapshot()?.stats;
     if (!coreStats) return;
@@ -241,33 +158,19 @@ export class Reactor {
       state.max_power = toNumber(maxPower);
       state.max_heat = toNumber(maxHeat);
 
-      state.manual_override_mult = this.manual_override_mult;
-      state.override_end_time = this.override_end_time;
-      state.power_to_heat_ratio = this.power_to_heat_ratio;
       state.auto_sell_multiplier = this.auto_sell_multiplier;
-
-      state.active_buffs = computeActiveBuffs(state);
     }
 
     if (!opts.fromSession) syncTilePulseDisplays(this);
-
-    if (this.game.tileset.active_tiles_list) {
-      for (let i = 0; i < this.game.tileset.active_tiles_list.length; i++) {
-        const t = this.game.tileset.active_tiles_list[i];
-        if (t && t.part && typeof t.recalculateEffectiveValues === "function") {
-          t.recalculateEffectiveValues();
-        }
-      }
-    }
   }
 
   manualReduceHeat() {
-    if (!this.current_heat.gt(0)) return;
+    if (!(this.current_heat > 0)) return;
     this.game?.manual_reduce_heat_action?.();
   }
 
   sellPower() {
-    if (!this.current_power.gt(0)) return;
+    if (!(this.current_power > 0)) return;
     this.game?.sell_action?.();
   }
 
@@ -283,19 +186,7 @@ export class Reactor {
     };
   }
 
-  checkMeltdown() {
-    const already = this.has_melted_down || !!this.game.state?.melting_down
-      || !!this.game.coreBridge?.session?.systems?.failure?.hasMeltedDown;
-    if (!already) return false;
-    executeMeltdown(this);
-    return true;
-  }
-
   clearMeltdownState() {
     clearMeltdown(this);
-  }
-
-  clearHeatVisualStates() {
-    clearHeatVisualStates(this);
   }
 }

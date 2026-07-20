@@ -1,109 +1,18 @@
 import { bundledGameData } from "../generated/bundledStaticData.js";
-import { numFormat as fmt } from "../core/numbers.js";
 import { logger } from "../core/logger.js";
-import { areAdjacent as areAdjacentFromModule } from "../core/grid-helpers.js";
 import {
-  CHAPTER_NAMES,
   DEFAULT_OBJECTIVE_INDEX,
-  CHAPTER_SIZE_DEFAULT,
-  CHAPTER_4_SIZE,
-  CHAPTER_COMPLETION_OBJECTIVE_INDICES,
   CLAIM_FEEDBACK_DELAY_MS,
 } from "../constants/objectives.js";
 import { requireActiveBridge } from "../bridge/active.js";
+import { hydrateObjectivesIntoSession } from "../bridge/core-state-projection.js";
+import { bumpSnapshotRev } from "../state/snapshot-rev.js";
 
 function loadObjectiveList() {
   const objectives = bundledGameData.objectives;
   const list = objectives?.default || objectives;
   if (!Array.isArray(list)) return list;
   return list.map((obj) => ({ ...obj, completed: false }));
-}
-
-function _checkChapterCompletion(objectives_data, startIndex, chapterSize) {
-  if (!objectives_data || objectives_data.length === 0) return { completed: false, text: "Loading...", percent: 0 };
-  const endIndex = Math.min(startIndex + chapterSize, objectives_data.length);
-  let completedCount = 0;
-  let totalObjectives = 0;
-  for (let i = startIndex; i < endIndex; i++) {
-    const obj = objectives_data[i];
-    if (!obj || obj.isChapterCompletion) continue;
-    totalObjectives++;
-    if (obj.completed) completedCount++;
-  }
-  const percent = totalObjectives > 0 ? (completedCount / totalObjectives) * 100 : 0;
-  return { completed: completedCount >= totalObjectives, text: `${completedCount} / ${totalObjectives} Objectives Complete`, percent: Math.min(100, percent) };
-}
-
-function buildLoadingDisplayInfo(objective) {
-  return {
-    chapterName: "Loading...",
-    chapterProgressText: "0 / 10",
-    chapterProgressPercent: 0,
-    title: objective.title || "Loading...",
-    description: objective.description || "",
-    flavor_text: objective.flavor_text,
-    progressText: "Loading...",
-    progressPercent: 0,
-    reward: { money: objective.reward || 0, ep: objective.ep_reward || 0 },
-    isComplete: objective.completed || false,
-    isChapterCompletion: objective.isChapterCompletion || false,
-  };
-}
-
-function getChapterSize(chapterIndex) {
-  return chapterIndex === 3 ? CHAPTER_4_SIZE : CHAPTER_SIZE_DEFAULT;
-}
-
-function computeCompletedInChapter(manager, chapterStart, index, objective) {
-  let completed = 0;
-  for (let i = chapterStart; i < index; i++) {
-    if (manager.objectives_data[i]?.completed) completed++;
-  }
-  if (objective.completed) completed++;
-  return completed;
-}
-
-function buildDisplayInfoFromProgress(objective, chapterIndex, chapterSize, completedInChapter, progress) {
-  const safeProgress = progress || { text: "Loading...", percent: 0 };
-  return {
-    chapterName: CHAPTER_NAMES[chapterIndex] || `Chapter ${chapterIndex + 1}`,
-    chapterProgressText: `${completedInChapter} / ${chapterSize}`,
-    chapterProgressPercent: (completedInChapter / chapterSize) * 100,
-    title: objective.title,
-    description: objective.description || "",
-    flavor_text: objective.flavor_text,
-    progressText: safeProgress.text,
-    progressPercent: Math.min(100, safeProgress.percent),
-    reward: { money: objective.reward || 0, ep: objective.ep_reward || 0 },
-    isComplete: objective.completed || false,
-    isChapterCompletion: objective.isChapterCompletion || false,
-  };
-}
-
-function formatDisplayInfo(manager) {
-  if (!manager.current_objective_def || manager.current_objective_index < 0) return null;
-  const index = manager.current_objective_index;
-  const objective = manager.current_objective_def;
-  if (!manager.game || !manager.game.tileset || !manager.game.reactor) return buildLoadingDisplayInfo(objective);
-  const chapterIndex = Math.floor(index / CHAPTER_SIZE_DEFAULT);
-  const chapterStart = chapterIndex * CHAPTER_SIZE_DEFAULT;
-  const chapterSize = getChapterSize(chapterIndex);
-  const completedInChapter = computeCompletedInChapter(manager, chapterStart, index, objective);
-  const progress = manager.getCurrentObjectiveProgress();
-  return buildDisplayInfoFromProgress(objective, chapterIndex, chapterSize, completedInChapter, progress);
-}
-
-function formatObjectiveRewardLabel(reward) {
-  const money = Number(reward?.money ?? 0);
-  const ep = Number(reward?.ep ?? 0);
-  if (money > 0) return `$${fmt(money)}`;
-  if (ep > 0) return `${fmt(ep)} EP`;
-  return "";
-}
-
-function getObjectiveClaimText(reward) {
-  const rewardLabel = formatObjectiveRewardLabel(reward);
-  return rewardLabel ? `Claim ${rewardLabel}` : "Claim";
 }
 
 export function getObjectiveCheck(checkId) {
@@ -118,6 +27,98 @@ export function getObjectiveCheck(checkId) {
   };
 }
 
+function objectiveEvalContext(game) {
+  const melted = !!game?.reactor?.has_melted_down;
+  return {
+    meltdown: melted,
+    hasMeltedDown: melted,
+    paused: !!game?.paused,
+  };
+}
+
+function syncObjectiveIndex(bridge, index) {
+  const objectives = bridge?.session?.systems?.objectives;
+  if (!objectives || typeof objectives.setIndex !== "function") return;
+  const list = objectives.objectives || [];
+  if (list[index]?.checkId === "allObjectives") return;
+  objectives.setIndex(index);
+}
+
+function completeAndClaimViaSession(bridge, om, expectedIndex) {
+  const objectives = bridge?.session?.systems?.objectives;
+  if (!objectives || !bridge?.session) return false;
+  bridge._syncForObjectiveEval();
+  const idx = expectedIndex ?? om?.current_objective_index ?? objectives.currentIndex;
+  syncObjectiveIndex(bridge, idx);
+  if (objectives.currentIndex !== idx) return false;
+  const ctx = objectiveEvalContext(bridge.game);
+  const already = objectives.isComplete(idx);
+  if (!already) {
+    if (!bridge.session.checkObjective?.(ctx)) return false;
+  }
+  if (!objectives.isComplete(idx)) return false;
+  if (!objectives.claimCurrent?.()) return false;
+  if (om) {
+    if (om.objectives_data?.[idx]) om.objectives_data[idx].completed = true;
+    om.current_objective_index = objectives.currentIndex;
+  }
+  bridge.routeEvents();
+  bridge.projectLiveState();
+  return true;
+}
+
+function tryAutoCompleteCurrentObjective(om) {
+  const bridge = om?.game?.coreBridge;
+  const objectives = bridge?.session?.systems?.objectives;
+  if (!objectives || !bridge?.session) return null;
+  bridge._syncForObjectiveEval();
+  syncObjectiveIndex(bridge, om.current_objective_index);
+  const idx = objectives.currentIndex;
+  const alreadyCompleted = objectives.isComplete(idx);
+  if (!alreadyCompleted && !bridge.session.checkObjective?.(objectiveEvalContext(om.game))) {
+    return null;
+  }
+  if (!objectives.claimCurrent?.()) return null;
+  if (om.objectives_data?.[idx]) om.objectives_data[idx].completed = true;
+  om.current_objective_index = objectives.currentIndex;
+  bridge.routeEvents();
+  bridge.projectLiveState();
+  return { advanced: true, newlyCompleted: !alreadyCompleted };
+}
+
+export function readObjectiveProgress(manager) {
+  if (!manager?.current_objective_def || manager.current_objective_def.completed) {
+    return { text: "", percent: 100 };
+  }
+  if (!manager.game?.tileset || !manager.game?.reactor) {
+    return { text: "Loading...", percent: 0 };
+  }
+  const result = requireActiveBridge(manager.game, "objective progress").getObjectiveProgress()
+    || { completed: false, percent: 0, text: "Awaiting completion..." };
+  return { text: result.text || "Awaiting completion...", percent: result.percent || 0 };
+}
+
+export function syncActiveObjectiveToState(manager) {
+  const state = manager?.game?.state;
+  if (!state?.active_objective) return;
+  const def = manager.current_objective_def;
+  if (!def) return;
+  const checkId = def.checkId ?? null;
+  const isComplete = !!def.completed;
+  const progress = readObjectiveProgress(manager);
+  state.active_objective = {
+    title: typeof def.title === "function" ? def.title() : (def.title ?? ""),
+    index: manager.current_objective_index,
+    isComplete,
+    isChapterCompletion: !!def.isChapterCompletion,
+    reward: { money: def.reward || 0, ep: def.ep_reward || 0 },
+    progressPercent: Math.min(100, progress?.percent ?? 0),
+    hasProgressBar: checkId === "sustainedPower1k" && !isComplete,
+    checkId,
+  };
+  bumpSnapshotRev(manager.game);
+}
+
 export class ObjectiveManager {
   constructor(gameInstance) {
     this.game = gameInstance;
@@ -125,68 +126,32 @@ export class ObjectiveManager {
     this.current_objective_index = DEFAULT_OBJECTIVE_INDEX;
     this.current_objective_def = null;
     this.claiming = false;
-    this._autoCompleteTimer = null;
-  }
-
-  teardown() {
-    if (this._autoCompleteTimer != null) {
-      clearTimeout(this._autoCompleteTimer);
-      this._autoCompleteTimer = null;
-    }
-  }
-
-  _readSessionProgress() {
-    return requireActiveBridge(this.game, "objective progress").getObjectiveProgress()
-      || { completed: false, percent: 0, text: "Awaiting completion..." };
   }
 
   _isSessionComplete(index = this.current_objective_index) {
     const objectives = this.game?.coreBridge?.session?.systems?.objectives ?? null;
-    if (!objectives) return !!this.current_objective_def?.completed;
-    if (objectives.isComplete(index)) return true;
-    if (index !== this.current_objective_index) {
-      return !!this.objectives_data?.[index]?.completed;
-    }
-    return !!this._readSessionProgress().completed;
-  }
-
-  _syncActiveObjectiveToState() {
-    const state = this.game?.state;
-    if (!state?.active_objective) return;
-    const info = this.getCurrentObjectiveDisplayInfo();
-    if (!info) return;
-    const checkId = this.current_objective_def?.checkId ?? null;
-    state.active_objective = {
-      title: info.title ?? "",
-      index: this.current_objective_index,
-      isComplete: !!info.isComplete,
-      isChapterCompletion: !!info.isChapterCompletion,
-      reward: info.reward ?? null,
-      progressPercent: info.progressPercent ?? 0,
-      hasProgressBar: checkId === "sustainedPower1k" && !info.isComplete,
-      checkId,
-    };
+    if (objectives?.isComplete?.(index)) return true;
+    return !!this.objectives_data?.[index]?.completed
+      || (index === this.current_objective_index && !!this.current_objective_def?.completed);
   }
 
   _emitObjectiveLoaded(displayObjective) {
-    this._syncActiveObjectiveToState();
-    this.game?.ui?.stateManager?.handleObjectiveLoaded?.(displayObjective, this.current_objective_index);
+    syncActiveObjectiveToState(this);
+    this.game?.emit?.("objectiveLoaded", {
+      objective: displayObjective,
+      index: this.current_objective_index,
+    });
   }
 
   _emitObjectiveCompleted() {
     const def = this.current_objective_def;
     const checkId = def?.checkId;
-    this._syncActiveObjectiveToState();
-    this.game?.ui?.stateManager?.handleObjectiveCompleted?.();
-    const notifications = this.game?.state?.objective_notifications;
-    if (notifications) {
-      notifications.push({
-        kind: "completed",
-        checkId,
-        flavorText: def?.flavor_text,
-        isChapterCompletion: !!def?.isChapterCompletion,
-      });
-    }
+    syncActiveObjectiveToState(this);
+    this.game?.emit?.("objectiveCompleted", {
+      checkId,
+      flavorText: def?.flavor_text,
+      isChapterCompletion: !!def?.isChapterCompletion,
+    });
   }
 
   async initialize() {
@@ -204,7 +169,7 @@ export class ObjectiveManager {
         if (this.objectives_data[index]) this.objectives_data[index].completed = completed;
       });
     }
-    this.game?.coreBridge?.hydrateObjectivesFromGame?.();
+    hydrateObjectivesIntoSession(this.game?.coreBridge);
   }
 
   start() {
@@ -215,21 +180,18 @@ export class ObjectiveManager {
     if (!this.current_objective_def) {
       this.set_objective(this.current_objective_index);
     }
-    if (this._autoCompleteTimer != null) clearTimeout(this._autoCompleteTimer);
-    this._autoCompleteTimer = setTimeout(() => {
-      this._autoCompleteTimer = null;
-      this.checkAndAutoComplete();
-    }, 0);
+    if (this.disableTimers) return;
+    this.checkAndAutoComplete();
   }
 
   checkAndAutoComplete() {
     const bridge = this.game?.coreBridge;
-    bridge?.hydrateObjectivesFromGame?.();
-    bridge?.syncObjectiveIndex?.(this.current_objective_index);
+    hydrateObjectivesIntoSession(bridge);
+    syncObjectiveIndex(bridge, this.current_objective_index);
     while (this.current_objective_def && this.current_objective_def.checkId !== "allObjectives") {
-      this._syncActiveObjectiveToState?.();
+      syncActiveObjectiveToState(this);
       const wasAlreadyCompleted = !!this.objectives_data?.[this.current_objective_index]?.completed;
-      const result = bridge?.tryAutoCompleteCurrentObjective?.();
+      const result = tryAutoCompleteCurrentObjective(this);
 
       if (!result?.advanced) {
         break;
@@ -251,23 +213,25 @@ export class ObjectiveManager {
   check_current_objective() {
     const bridge = this.game?.coreBridge;
     const objectives = bridge?.session?.systems?.objectives;
+    const idx = this.current_objective_index;
+    if (this.current_objective_def?.checkId === "allObjectives") {
+      this.current_objective_def.completed = true;
+      if (this.objectives_data?.[idx]) this.objectives_data[idx].completed = true;
+      syncActiveObjectiveToState(this);
+      return;
+    }
     if (bridge?.session && objectives) {
       bridge._syncForObjectiveEval?.();
-      bridge.syncObjectiveIndex?.(this.current_objective_index);
-      const idx = this.current_objective_index;
+      syncObjectiveIndex(bridge, idx);
       if (!objectives.isComplete?.(idx)) {
-        bridge.session.checkObjective?.(bridge._objectiveEvalContext?.() ?? {
-          meltdown: !!this.game?.reactor?.has_melted_down,
-          hasMeltedDown: !!this.game?.reactor?.has_melted_down,
-          paused: !!this.game?.paused,
-        });
+        bridge.session.checkObjective?.(objectiveEvalContext(this.game));
       }
-      if (objectives.isComplete?.(idx) || this._isSessionComplete(idx)) {
+      if (objectives.isComplete?.(idx)) {
         if (this.objectives_data?.[idx]) this.objectives_data[idx].completed = true;
         if (this.current_objective_def) this.current_objective_def.completed = true;
       }
     }
-    this._syncActiveObjectiveToState();
+    syncActiveObjectiveToState(this);
   }
 
   _loadNormalObjective(nextObjective) {
@@ -278,8 +242,6 @@ export class ObjectiveManager {
         this.objectives_data[this.current_objective_index].completed = true;
       }
       this.game.coreBridge?.session?.systems?.objectives?.markComplete?.(this.current_objective_index);
-      const chapterIdx = CHAPTER_COMPLETION_OBJECTIVE_INDICES.indexOf(this.current_objective_index);
-      if (chapterIdx >= 0) this.game.emit?.("chapterCelebration", { chapterIdx });
     }
     const displayObjective = {
       ...this.current_objective_def,
@@ -293,7 +255,10 @@ export class ObjectiveManager {
       title: "All objectives completed!",
       reward: 0,
       checkId: "allObjectives",
+      completed: true,
     };
+    const idx = this.current_objective_index;
+    if (this.objectives_data?.[idx]) this.objectives_data[idx].completed = true;
     this._emitObjectiveLoaded({ ...this.current_objective_def });
   }
 
@@ -306,7 +271,7 @@ export class ObjectiveManager {
     idx = Math.max(0, Math.min(idx, this.objectives_data.length - 1));
 
     this.current_objective_index = idx;
-    this.game?.coreBridge?.syncObjectiveIndex?.(this.current_objective_index);
+    syncObjectiveIndex(this.game?.coreBridge, this.current_objective_index);
     const nextObjective = this.objectives_data[this.current_objective_index];
 
     if (nextObjective && nextObjective.checkId === "allObjectives") {
@@ -322,58 +287,38 @@ export class ObjectiveManager {
     if (this.claiming) return;
     if (!this.current_objective_def) return;
 
-    let isComplete = this.current_objective_def.isChapterCompletion
-      ? this.getChapterCompletionStatus(this.current_objective_def, this.current_objective_index)
-      : this.current_objective_def.completed;
+    let isComplete = !!this.current_objective_def.completed;
 
     if (!isComplete) isComplete = this._isSessionComplete();
     if (!isComplete) return;
 
     this.claiming = true;
     this.game.emit?.("vibrationRequest", { type: "doublePulse" });
-    const chapterIdx = CHAPTER_COMPLETION_OBJECTIVE_INDICES.indexOf(this.current_objective_index);
-    if (chapterIdx >= 0) this.game.emit?.("chapterCelebration", { chapterIdx });
 
     const claimedIndex = this.current_objective_index;
     const bridge = this.game.coreBridge;
-    const sessionObj = bridge?.session?.systems?.objectives?.getCurrentObjective?.();
     const def = this.current_objective_def;
-    const hostOnlyClaim = !!(def?.checkId && sessionObj?.checkId && def.checkId !== sessionObj.checkId);
 
-    if (hostOnlyClaim) {
-      bridge.grantReward?.(def);
-      bridge.syncObjectiveClaim?.(claimedIndex);
-      this.current_objective_index = bridge.session?.systems?.objectives?.currentIndex ?? claimedIndex + 1;
-    } else if (!bridge?.completeAndClaimObjective?.(claimedIndex)) {
+    if (def?.checkId === "allObjectives") {
+      this.set_objective(claimedIndex);
+      if (this.game?.saveManager) void this.game.saveManager.autoSave();
+      if (this.game?.emit) this.game.emit("objectiveClaimed", {});
+      setTimeout(() => { this.claiming = false; }, CLAIM_FEEDBACK_DELAY_MS);
+      return;
+    }
+
+    if (!completeAndClaimViaSession(bridge, this, claimedIndex)) {
       this.claiming = false;
       return;
     }
 
+    const sessionIndex = bridge?.session?.systems?.objectives?.currentIndex;
+    if (typeof sessionIndex === "number") this.current_objective_index = sessionIndex;
     this.set_objective(this.current_objective_index);
     if (this.game?.saveManager) void this.game.saveManager.autoSave();
     if (this.game?.emit) this.game.emit("objectiveClaimed", {});
 
     setTimeout(() => { this.claiming = false; }, CLAIM_FEEDBACK_DELAY_MS);
   }
-
-  getCurrentObjectiveDisplayInfo() { return formatDisplayInfo(this); }
-  getCurrentObjectiveProgress() {
-    if (!this.current_objective_def || this.current_objective_def.completed) return { text: "", percent: 100 };
-    if (!this.game || !this.game.tileset || !this.game.reactor) return { text: "Loading...", percent: 0 };
-    const result = this._readSessionProgress();
-    return { text: result.text || "Awaiting completion...", percent: result.percent || 0 };
-  }
-  checkChapterCompletion(startIndex, chapterSize) { return _checkChapterCompletion(this.objectives_data, startIndex, chapterSize); }
-  getChapterCompletionStatus(objective) { return objective.completed || false; }
-  areAdjacent(tile1, tile2) { return areAdjacentFromModule(tile1, tile2); }
-  getCurrentObjectiveInfo() {
-    return {
-      index: this.current_objective_index,
-      title: this.current_objective_def ? (typeof this.current_objective_def.title === "function" ? this.current_objective_def.title() : this.current_objective_def.title) : "No objective loaded",
-      checkId: this.current_objective_def?.checkId || null,
-      total_objectives: this.objectives_data.length,
-      completed: this.current_objective_def?.completed || false,
-    };
-  }
 }
-export { getObjectiveClaimText };
+

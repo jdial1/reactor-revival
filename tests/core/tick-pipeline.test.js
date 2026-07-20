@@ -1,13 +1,11 @@
-import { describe, it, expect, beforeEach, setupGameLogicOnly, pinEngineToSyncMode } from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, setupGameLogicOnly } from "../helpers/setup.js";
 import { runCheckAffordabilityCore } from "@app/bridge/bridge-upgrades.js";
 
 describe("tick pipeline", () => {
   let game;
 
   beforeEach(async () => {
-    game = await setupGameLogicOnly();
-    pinEngineToSyncMode(game.engine);
-  });
+    game = await setupGameLogicOnly();  });
 
   it("advances tick_count on manual main-thread tick", () => {
     if (!game.engine) return;

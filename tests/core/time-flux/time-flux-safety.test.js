@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, vi , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, vi } from "../../helpers/setup.js";
 
 describe("Engine RAF loop without main-thread simulation ticks", () => {
   let game;
@@ -7,10 +7,7 @@ describe("Engine RAF loop without main-thread simulation ticks", () => {
     const setup = await setupGameWithDOM();
     game = setup.game;
     const tile = game.tileset.getTile(0, 0);
-    await tile.setPart(game.partset.getPartById("uranium1"));
-    syncActivePartsAtTickBoundary(game.engine);
-
-  });
+    await tile.setPart(game.partset.getPartById("uranium1"));  });
 
   afterEach(() => {
     if (game?.engine) game.engine.stop();

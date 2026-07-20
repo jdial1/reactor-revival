@@ -1,98 +1,95 @@
-import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
-import { patchGameState } from "@app/state.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  purchaseSessionUpgrade,
+  sessionEp,
+  setSessionEconomy,
+} from "../../helpers/sessionHelpers.js";
 
-describe("Upgrade Mechanics", () => {
-  let game;
+function money(session) {
+  return Number(session.getSnapshot().economy?.money ?? 0);
+}
+
+describe("Upgrade Mechanics (session)", () => {
+  let session;
+
   beforeEach(async () => {
-    game = await setupGame();
-    game.bypass_tech_tree_restrictions = true; // Ensure upgrades are purchasable
+    session = await setupSessionOnly();
   });
 
-  it("should calculate increasing cost based on level and multiplier", () => {
-    const upgrade = game.upgradeset.getUpgrade("chronometer");
-    expect(toNum(upgrade.current_cost)).toBe(toNum(upgrade.base_cost));
+  it("scales money cost by costMultiplier after purchase", () => {
+    const before = session.previewUpgrade("chronometer");
+    expect(before.cost).toBe(before.def.baseCost);
 
-    game.current_money = toNum(upgrade.getCost()) * 2;
-    patchGameState(game, { current_money: game.current_money });
-    game.coreBridge.loadEconomyFromHost();
-    game.upgradeset.check_affordability(game);
-    game.upgradeset.purchaseUpgrade(upgrade.id);
+    setSessionEconomy(session, { money: String(before.cost * 2) });
+    expect(purchaseSessionUpgrade(session, "chronometer")).toBe(true);
 
-    // After purchase, level is 1, so cost should be base_cost * cost_multiplier^1
-    expect(toNum(upgrade.current_cost)).toBeCloseTo(toNum(upgrade.base_cost) * upgrade.cost_multiplier, 10);
+    const after = session.previewUpgrade("chronometer");
+    expect(after.cost).toBeCloseTo(before.def.baseCost * before.def.costMultiplier, 10);
   });
 
-  it("should set level and trigger its action", () => {
-    const upgrade = game.upgradeset.getUpgrade("expand_reactor_rows");
-    const initialRows = game.rows;
-
-    game.current_money = upgrade.getCost();
-    game.coreBridge.loadEconomyFromHost();
-    game.upgradeset.check_affordability(game);
-    game.upgradeset.purchaseUpgrade(upgrade.id);
-
-    expect(game.rows).toBe(initialRows + 1);
+  it("applies expand_reactor_rows as gridRowsBonus", () => {
+    expect(session.modifiers.gridRowsBonus).toBe(0);
+    const cost = session.previewUpgrade("expand_reactor_rows").cost;
+    setSessionEconomy(session, { money: String(cost) });
+    expect(purchaseSessionUpgrade(session, "expand_reactor_rows")).toBe(true);
+    expect(session.getUpgradeLevel("expand_reactor_rows")).toBe(1);
+    expect(session.modifiers.gridRowsBonus).toBe(1);
   });
 
-  it("should become unaffordable with insufficient funds", () => {
-    const upgrade = game.upgradeset.getUpgrade("chronometer");
-    game.current_money = upgrade.getCost() - 1;
-    game.coreBridge.loadEconomyFromHost();
-    game.upgradeset.check_affordability(game);
-    expect(upgrade.affordable).toBe(false);
+  it("marks money upgrade unpurchasable with insufficient funds", () => {
+    const cost = session.previewUpgrade("chronometer").cost;
+    setSessionEconomy(session, { money: String(cost - 1) });
+    const preview = session.previewUpgrade("chronometer");
+    expect(preview.canPurchase).toBe(false);
+    expect(preview.reason).toBe("funds");
   });
 
-  it("should correctly handle experimental upgrades requiring EP", () => {
-    const labUpgrade = game.upgradeset.getUpgrade("laboratory");
-    game.current_exotic_particles = labUpgrade.getCost() + 100;
-    game.coreBridge.loadEconomyFromHost();
-    game.upgradeset.purchaseUpgrade("laboratory");
+  it("gates experimental upgrades on EP affordability after laboratory", () => {
+    setSessionEconomy(session, {
+      currentExoticParticles: "200",
+      totalExoticParticles: "200",
+    });
+    expect(purchaseSessionUpgrade(session, "laboratory")).toBe(true);
 
-    const expUpgrade = game.upgradeset.getUpgrade("infused_cells");
+    const cost = session.previewUpgrade("infused_cells").cost;
+    setSessionEconomy(session, {
+      currentExoticParticles: String(cost),
+      totalExoticParticles: String(cost),
+    });
+    expect(session.previewUpgrade("infused_cells").canPurchase).toBe(true);
 
-    game.current_exotic_particles = expUpgrade.base_ecost;
-    game.coreBridge.loadEconomyFromHost();
-    game.upgradeset.check_affordability(game);
-    expect(expUpgrade.affordable).toBe(true);
-
-    game.current_exotic_particles = expUpgrade.base_ecost - 1;
-    game.coreBridge.loadEconomyFromHost();
-    game.upgradeset.check_affordability(game);
-    expect(expUpgrade.affordable).toBe(false);
+    setSessionEconomy(session, {
+      currentExoticParticles: String(cost - 1),
+      totalExoticParticles: String(cost - 1),
+    });
+    const unafford = session.previewUpgrade("infused_cells");
+    expect(unafford.canPurchase).toBe(false);
+    expect(unafford.reason).toBe("funds");
   });
 
-  it("should show MAX cost when at max level", () => {
-    const upgrade = game.upgradeset.getUpgrade("heat_control_operator"); // max_level: 1
-    upgrade.setLevel(1);
-    expect(upgrade.display_cost).toBe("MAX");
-    expect(Number.isFinite(toNum(upgrade.current_cost))).toBe(false);
+  it("reports max_level when upgrade is at cap", () => {
+    session.setUpgradeLevels([{ id: "heat_control_operator", level: 1 }]);
+    const preview = session.previewUpgrade("heat_control_operator");
+    expect(preview.def.maxLevel).toBe(1);
+    expect(preview.reason).toBe("max_level");
+    expect(Number.isFinite(preview.cost)).toBe(false);
   });
 
-  it("should not allow purchase with insufficient funds", () => {
-    const upgrade = game.upgradeset.getUpgrade("chronometer");
-    const cost = upgrade.getCost();
-    game.current_money = cost - 1;
-    game.coreBridge.loadEconomyFromHost();
-
-    const result = game.upgradeset.purchaseUpgrade(upgrade.id);
-
-    expect(result).toBe(false);
-    expect(upgrade.level).toBe(0);
+  it("rejects purchase with insufficient funds", () => {
+    const cost = session.previewUpgrade("chronometer").cost;
+    setSessionEconomy(session, { money: String(cost - 1) });
+    expect(purchaseSessionUpgrade(session, "chronometer")).toBe(false);
+    expect(session.getUpgradeLevel("chronometer")).toBe(0);
   });
 
-  it("should allow purchase with sufficient funds and deduct cost", () => {
-    const upgrade = game.upgradeset.getUpgrade("chronometer");
-    const cost = upgrade.getCost();
-    game.current_money = cost + 1000;
-    patchGameState(game, { current_money: game.current_money });
-    game.coreBridge.loadEconomyFromHost();
-    game.upgradeset.check_affordability(game);
-    const expectedMoney = toNum(game.current_money) - toNum(cost);
-
-    const result = game.upgradeset.purchaseUpgrade(upgrade.id);
-
-    expect(result).toBe(true);
-    expect(upgrade.level).toBe(1);
-    expect(toNum(game.current_money)).toBeCloseTo(expectedMoney, 10);
+  it("purchases with sufficient funds and deducts cost", () => {
+    const cost = session.previewUpgrade("chronometer").cost;
+    setSessionEconomy(session, { money: String(cost + 1000) });
+    const expected = cost + 1000 - cost;
+    expect(purchaseSessionUpgrade(session, "chronometer")).toBe(true);
+    expect(session.getUpgradeLevel("chronometer")).toBe(1);
+    expect(money(session)).toBeCloseTo(expected, 10);
+    expect(sessionEp(session).money).toBeCloseTo(expected, 10);
   });
 });

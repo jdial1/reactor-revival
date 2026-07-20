@@ -136,7 +136,7 @@
 @media (prefers-reduced-motion: reduce) { .about-scroll-hint { animation: none; opacity: 0.75;
  }
 
- html.ui-idle .about-scroll-hint { animation: none;
+ html[data-ui-idle] .about-scroll-hint { animation: none;
  }
 }
 

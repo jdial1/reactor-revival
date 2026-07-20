@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
-import { CHAPTER_COMPLETION_OBJECTIVE_INDICES } from "@app/logic.js";
+import { CHAPTER_COMPLETION_OBJECTIVE_INDICES } from "@app/constants/objectives.js";
 
 describe("Group 7: Objective & Tutorial Progression", () => {
   let game;
@@ -19,20 +19,18 @@ describe("Group 7: Objective & Tutorial Progression", () => {
     expect(om.current_objective_def.title).toContain("All objectives completed");
   });
 
-  it("locks objective reward grant against double firing while claiming", () => {
+  it("host claim does not dispatch GRANT_REWARD (payout is lib checkObjective)", () => {
     const om = game.objectives_manager;
-    const reward = 321;
     const beforeMoney = toNum(game.state.current_money);
 
-    om.current_objective_def = { checkId: "manualReward", completed: true, reward };
+    om.current_objective_def = { checkId: "manualReward", completed: true, reward: 321 };
     om.current_objective_index = 0;
     vi.spyOn(om, "set_objective").mockImplementation(() => {});
 
     om.claimObjective();
     om.claimObjective();
 
-    const afterMoney = toNum(game.state.current_money);
-    expect(afterMoney - beforeMoney).toBe(reward);
+    expect(toNum(game.state.current_money) - beforeMoney).toBe(0);
   });
 
   it("locks chapter completion objective auto-complete once chapter prerequisites are done", () => {

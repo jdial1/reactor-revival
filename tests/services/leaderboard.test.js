@@ -30,16 +30,27 @@ describe("Leaderboard Service & Integration", () => {
 
         const existing = document.getElementById("leaderboard_rows");
         if (existing) existing.closest(".leaderboard-table")?.remove();
+        document.getElementById("leaderboard_controls_root")?.remove();
 
         const leaderboardHtml = `
             <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th class="leaderboard-col-power">Power</th>
+                        <th class="leaderboard-col-heat">Heat</th>
+                        <th class="leaderboard-col-money">Money</th>
+                    </tr>
+                </thead>
                 <tbody id="leaderboard_rows"></tbody>
             </table>
-            <button class="leaderboard-sort" data-sort="power">Power</button>
-            <button class="leaderboard-sort" data-sort="heat">Heat</button>
-            <button class="leaderboard-sort" data-sort="money">Money</button>
+            <div id="leaderboard_controls_root"></div>
         `;
         document.body.innerHTML += leaderboardHtml;
+        if (game.ui) {
+            game.ui._leaderboardControlsMounted = false;
+            if (!game.ui.uiState) game.ui.uiState = {};
+            game.ui.uiState.leaderboard_sort = "power";
+        }
     });
 
     afterEach(() => {
@@ -278,17 +289,19 @@ describe("Leaderboard Service & Integration", () => {
 
             vi.spyOn(leaderboardService, 'getTopRuns').mockResolvedValue([]);
 
-            game.ui.pageSetupUI.setupLeaderboardPage();
-            
-            const heatBtn = document.querySelector('[data-sort="heat"]');
-            
-            expect(heatBtn).toBeTruthy();
-            
+            await game.ui.pageSetupUI.setupLeaderboardPage();
+
+            const heatBtn = await vi.waitFor(() => {
+                const btn = document.querySelector('#leaderboard_controls_root [data-sort="heat"]');
+                if (!btn) throw new Error("Expected Lit-mounted heat sort button");
+                return btn;
+            }, { timeout: 2000 });
+
             heatBtn.click();
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            expect(leaderboardService.getTopRuns).toHaveBeenCalledWith('heat', 20);
-            expect(heatBtn.classList.contains('active')).toBe(true);
+            await vi.waitFor(() => {
+                expect(leaderboardService.getTopRuns).toHaveBeenCalledWith('heat', 20);
+                expect(heatBtn.classList.contains('active')).toBe(true);
+            }, { timeout: 2000 });
         });
     });
 });

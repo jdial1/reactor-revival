@@ -10,20 +10,25 @@ import {
   OFFLINE_TIME_THRESHOLD_MS,
   MAX_ACCUMULATOR_MULTIPLIER,
   MAX_LIVE_TICKS,
-  OFFLINE_REPLAY_CHUNK_TICKS,
+  WELCOME_BACK_FF_MAX_TICKS,
   SIMULATION_ERROR_MESSAGE,
   PAUSED_POLL_MS,
 } from "../constants/balance.js";
-import { performance } from "../dom/lit.js";
-import { drainGameEffects } from "../effect-orchestrator.js";
 import { recordSimEvent } from "./sim-events.js";
 import { numFormat as fmt } from "../core/numbers.js";
 import { getActiveBridge } from "../bridge/active.js";
+import { syncGridToGame } from "../bridge/bridge-grid-sync.js";
+import { runSubsystemHook } from "../core/subsystem-registry.js";
 
 const DEBUG_PERFORMANCE =
   (typeof process !== "undefined" && process.env?.NODE_ENV === "test") ||
-  (typeof window !== "undefined" && window.location?.hostname === "localhost") ||
+  (typeof globalThis !== "undefined" && globalThis.location?.hostname === "localhost") ||
   false;
+
+const perfNow = () =>
+  typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
 
 export class Performance {
   constructor(game) {
@@ -50,18 +55,18 @@ export class Performance {
   }
 
   markStart(name) {
-    if (!this.enabled || typeof performance.mark !== "function") return;
+    if (!this.enabled || typeof performance?.mark !== "function") return;
     performance.mark(`${name}_start`);
-    this.marks[name] = performance.now();
+    this.marks[name] = perfNow();
   }
 
   markEnd(name) {
-    if (!this.enabled || !this.marks[name] || typeof performance.mark !== "function") return;
+    if (!this.enabled || !this.marks[name] || typeof performance?.mark !== "function") return;
     performance.mark(`${name}_end`);
     if (typeof performance.measure === "function") {
       performance.measure(name, `${name}_start`, `${name}_end`);
     }
-    const duration = performance.now() - this.marks[name];
+    const duration = perfNow() - this.marks[name];
     this.measures[name] = duration;
     if (!this.averages[name]) this.averages[name] = { sum: 0, count: 0, samples: [] };
     const avg = this.averages[name];
@@ -104,15 +109,7 @@ const handleComponentExplosion = (engine, tile) => {
       row: tile.row,
       col: tile.col,
     });
-    drainGameEffects(engine.game, () => engine.game?.ui);
-    engine.game.emit?.("component_explosion", {
-      row: tile.row,
-      col: tile.col,
-      partId: tile.part?.id,
-    });
-  }
-  if (tile && tile.heat_contained > 0) {
-    engine.game.coreBridge?.dumpTileHeatToHull?.(tile.heat_contained);
+    runSubsystemHook(engine.game, "postTick");
   }
   tile.exploding = true;
   engine.noteExplosionVisualPending();
@@ -151,17 +148,17 @@ export const startOfflineFastForward = (engine) => {
 
 const yieldToNextFrame = (yieldMs = 0) => {
   if (yieldMs > 0) return new Promise((resolve) => setTimeout(resolve, yieldMs));
-  const rafFn =
-    (typeof window !== "undefined" && window.requestAnimationFrame) ||
-    globalThis.requestAnimationFrame;
+  const rafFn = globalThis.requestAnimationFrame;
   if (typeof rafFn === "function") return new Promise((resolve) => rafFn(() => resolve()));
   return new Promise((resolve) => setTimeout(resolve, 16));
 };
 
 const runChunkedOfflineReplay = async (engine, opts = {}) => {
-  const chunkTicks = opts.chunkTicks ?? OFFLINE_REPLAY_CHUNK_TICKS;
+  const chunkTicks = opts.chunkTicks ?? WELCOME_BACK_FF_MAX_TICKS;
   const yieldMs = opts.yieldMs ?? 0;
+  const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : null;
   let remaining = opts.totalTicks ?? engine._offlineFastForwardTicks ?? 0;
+  const total = remaining;
   const bridge = getActiveBridge(engine.game);
   if (remaining <= 0 || !bridge?.hasTickActivity?.() || !bridge.session?.catchupGenerator) return;
 
@@ -173,18 +170,23 @@ const runChunkedOfflineReplay = async (engine, opts = {}) => {
   const startEp = toNumber(engine.game.state.current_exotic_particles);
 
   try {
-    for await (const _chunk of bridge.session.catchupGenerator(remaining, chunkTicks)) {
-      if (!engine.running || engine.game.paused) break;
-      bridge.syncGridToGame?.();
+    for await (const chunk of bridge.session.catchupGenerator(remaining, chunkTicks)) {
+      if (!engine._offlineReplayActive) break;
+      syncGridToGame(bridge);
       bridge.routeEvents?.();
       bridge.projectToGame?.(bridge.session.engine.getLastResult());
+      onProgress?.({
+        processed: chunk.processed ?? total - (chunk.remaining ?? 0),
+        remaining: chunk.remaining ?? 0,
+        total,
+      });
       await yieldToNextFrame(yieldMs);
     }
   } finally {
     engine._offlineReplayActive = false;
     engine._isCatchingUp = false;
     engine._offlineFastForwardTicks = 0;
-    bridge.syncGridToGame?.();
+    syncGridToGame(bridge);
     bridge.routeEvents?.();
     bridge.projectToGame?.(bridge.session.engine.getLastResult());
     engine.game.achievement_manager?.onCatchUpEnded?.();
@@ -200,35 +202,52 @@ const runChunkedOfflineReplay = async (engine, opts = {}) => {
         body,
         durationMs: 6000,
       });
-      drainGameEffects(engine.game, () => engine.game?.ui);
+      runSubsystemHook(engine.game, "postTick");
     }
+    onProgress?.({ processed: total, remaining: 0, total, done: true });
   }
 };
 
-export const processOfflineTime = (engine, deltaTime) => {
-  if (deltaTime <= OFFLINE_TIME_THRESHOLD_MS) return false;
+export function prepareOfflineCatchup(game, deltaTime) {
+  if (deltaTime <= OFFLINE_TIME_THRESHOLD_MS) return null;
   const capMs = MAX_ACCUMULATOR_MULTIPLIER * BASE_LOOP_WAIT_MS;
   const span = Math.min(deltaTime, capMs);
-  engine.game._offlineCatchupMs = span;
+  game._offlineCatchupMs = span;
   const tickEquivalent = Math.floor(span / BASE_LOOP_WAIT_MS);
-  if (tickEquivalent > 0 && getActiveBridge(engine.game)?.hasTickActivity?.()) {
-    engine.game.emit?.("welcomeBackOffline", { deltaTime: span, offlineMs: span, tickEquivalent });
+  return { deltaTime: span, offlineMs: span, tickEquivalent };
+}
+
+export const processOfflineTime = (engine, deltaTime) => {
+  const prepared = prepareOfflineCatchup(engine.game, deltaTime);
+  if (!prepared) return false;
+  if (prepared.tickEquivalent > 0 && getActiveBridge(engine.game)?.hasTickActivity?.()) {
+    engine.game.emit?.("welcomeBackOffline", prepared);
   }
   return true;
 };
 
-export const postGameLoopProjectionQuery = (_engine, game) => {
+export const postGameLoopProjectionQuery = async (_engine, game, options = {}) => {
   const bridge = getActiveBridge(game);
-  if (!bridge) return Promise.resolve(null);
-  bridge.syncForStatsRead();
-  const snap = bridge.session?.getSnapshot?.();
-  if (!snap) return Promise.resolve(null);
-  return Promise.resolve({
-    stats: snap.stats,
-    reactorPower: snap.grid?.currentPower ?? 0,
-    reactorHeat: snap.grid?.currentHeat ?? 0,
-    meltdown: snap.meltdown ?? false,
+  if (!bridge) return null;
+  bridge.session?.grid?.recalculateCaps?.();
+
+  const layout = options.layout
+    ?? (game.blueprintPlanner?.active ? game.buildGridProjectionSnapshot?.() : null);
+  const sample = await bridge.sampleLayoutProjection?.({
+    layout,
+    recordTicks: options.recordTicks,
   });
+
+  const snap = bridge.session?.getSnapshot?.();
+  if (!snap && !sample) return null;
+  return {
+    stats: sample?.stats ?? snap?.stats,
+    reactorPower: snap?.grid?.currentPower ?? 0,
+    reactorHeat: snap?.grid?.currentHeat ?? 0,
+    meltdown: snap?.meltdown ?? snap?.hasMeltedDown ?? false,
+    heatRatio: snap?.heatRatio ?? 0,
+    projectionPlannerSample: sample,
+  };
 };
 
 const logEngineStartSnapshot = (engine) => {
@@ -309,39 +328,21 @@ export class Engine {
     return this.getEventBuffer().tail;
   }
 
-  _bindVisibilityForOffline() {
-    if (typeof document === "undefined" || this._visibilityListenerBound) return;
-    this._visibilityListenerBound = true;
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        this._visibilityHiddenAt = performance.now();
-      } else if (this._visibilityHiddenAt > 0) {
-        const gap = performance.now() - this._visibilityHiddenAt;
-        this._visibilityHiddenAt = 0;
-        if (this.running && !this.game.paused && gap > OFFLINE_TIME_THRESHOLD_MS) {
-          processOfflineTime(this, gap);
-        }
-      }
-    });
-  }
-
   start() {
     logger.log("info", "engine", "Engine starting...");
     logEngineStartSnapshot(this);
-    const stalled = typeof document !== "undefined" && !document.hidden &&
-      this.running && !this.game.paused &&
-      (performance.now() - (this.last_timestamp || 0)) > 1500;
+    const stalled = this.running && !this.game.paused &&
+      (perfNow() - (this.last_timestamp || 0)) > 1500;
     if (this.running && !stalled) return;
     if (stalled) this.running = false;
     this.running = true;
     this._testFrameCount = 0;
-    this.last_timestamp = performance.now();
+    this.last_timestamp = perfNow();
     this.last_session_update = Date.now();
     this._simAccumulatorMs = 0;
     this._rAfPrevTs = 0;
     this._reflectorPairCount = 0;
     this._explosionFlashPending = 0;
-    this._bindVisibilityForOffline();
     this.loop(this.last_timestamp);
     if (this.game.state) this.game.state.engine_status = EngineStatus.RUNNING;
   }
@@ -369,9 +370,7 @@ export class Engine {
 
   loop(timestamp) {
     const inTestEnv = isTestEnv();
-    const raf = (typeof window !== "undefined" && window.requestAnimationFrame)
-      ? window.requestAnimationFrame
-      : globalThis.requestAnimationFrame;
+    const raf = globalThis.requestAnimationFrame;
 
     if (!inTestEnv) {
       this._testFrameCount = 0;
@@ -398,7 +397,7 @@ export class Engine {
         this.last_timestamp = timestamp;
         this._pausedTimeoutId = setTimeout(() => {
           this._pausedTimeoutId = null;
-          if (this.running && this.game.paused) this.loop(performance.now());
+          if (this.running && this.game.paused) this.loop(perfNow());
         }, PAUSED_POLL_MS);
       }
       return;
@@ -460,17 +459,22 @@ export class Engine {
       return;
     }
     if (this.game.paused && !manual) return;
+    const payload = { game: this.game, multiplier, manual };
+    runSubsystemHook(this.game, "onTick", payload);
     bridge.processTick(multiplier);
     this.tick_count = bridge.session.engine.tickCount;
+    this.game.achievement_manager?.onTickRecorded?.();
+    runSubsystemHook(this.game, "postTick", payload);
   }
 
   handleComponentDepletion(tile) {
     this.game.handleComponentDepletion(tile);
   }
 
-  beginFastForwardCatchup() {
+  beginFastForwardCatchup(opts = {}) {
     const ticks = startOfflineFastForward(this);
-    if (ticks > 0) void runChunkedOfflineReplay(this, { totalTicks: ticks });
+    if (ticks > 0) return runChunkedOfflineReplay(this, { totalTicks: ticks, ...opts });
+    return Promise.resolve();
   }
 
   handleComponentExplosion(tile) {

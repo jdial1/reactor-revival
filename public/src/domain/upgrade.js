@@ -2,13 +2,18 @@ import { TechTreeSchema } from "../schema/index.js";
 import { bundledGameData } from "../generated/bundledStaticData.js";
 import { applyComputedModifiers } from "../bridge/bridge-mechanics.js";
 import { calculateSectionCounts } from "./upgrade-sections.js";
-import { runCheckAffordability, mergeSessionUpgradeLevel } from "../bridge/bridge-upgrades.js";
-import { toDecimal, toNumber, getDecimal } from "../simUtils.js";
-import { numFormat as fmt } from "../core/numbers.js";
+import {
+  runCheckAffordability,
+  mergeSessionUpgradeLevel,
+  projectUpgradeCosts,
+  projectAllUpgradeCosts,
+} from "../bridge/bridge-upgrades.js";
+import { toDecimal, toNumber } from "../simUtils.js";
 import { logger } from "../core/logger.js";
 import { getActiveBridge, requireActiveBridge } from "../bridge/active.js";
+import { getPartImagePath } from "../core/part-images.js";
+import { bumpSnapshotRev } from "../state/snapshot-rev.js";
 
-const Decimal = getDecimal();
 const CELL_UPGRADE_EFFECTS = new Set(["cell_power", "cell_tick", "cell_perpetual"]);
 const CATALOG_TRANSIENT_CLASSES = new Set(["hidden", "locked", "maxed"]);
 
@@ -41,7 +46,9 @@ const catalogEntryToHostDef = (entry, game) => {
     erequires: normalizeErequires(entry.erequires),
     classList: (entry.classList || []).filter((cls) => !CATALOG_TRANSIENT_CLASSES.has(cls)),
     part: part || undefined,
-    icon: entry.iconPath || entry.icon || (typeof part?.getImagePath === "function" ? part.getImagePath() : null),
+    icon: entry.iconPath || entry.icon || (part
+      ? getPartImagePath({ type: part.type, category: part.category, level: part.level, id: part.id })
+      : null),
     visible: entry.visible,
     unlockVisible: entry.unlockVisible,
   };
@@ -78,52 +85,12 @@ export class Upgrade {
 
     this.affordable = false;
     this.afford_progress = 0;
-    this.$el = null;
-    this.$levels = null;
-
-    this.updateDisplayCost();
-  }
-
-  get level() {
-    const bridge = getActiveBridge(this.game);
-    if (!bridge) return 0;
-    return bridge.getUpgradeLevel(this.id);
-  }
-
-  get current_cost() {
-    const bridge = getActiveBridge(this.game);
-    if (!bridge) return this.base_cost;
-    const preview = bridge.previewUpgrade(this.id);
-    if (!preview || preview.reason === "max_level" || this.level >= this.max_level) return Decimal.MAX_VALUE;
-    const isEp = preview.currency === "ep" || preview.currency === "exotic_particles";
-    return isEp ? toDecimal(0) : toDecimal(preview.costDecimal ?? preview.cost);
-  }
-
-  get current_ecost() {
-    const bridge = getActiveBridge(this.game);
-    if (!bridge) return this.base_ecost;
-    const preview = bridge.previewUpgrade(this.id);
-    if (!preview || preview.reason === "max_level" || this.level >= this.max_level) return Decimal.MAX_VALUE;
-    const isEp = preview.currency === "ep" || preview.currency === "exotic_particles";
-    return isEp ? toDecimal(preview.costDecimal ?? preview.cost) : toDecimal(0);
-  }
-
-  get display_cost() {
-    const bridge = getActiveBridge(this.game);
-    if (!bridge) return "";
-    const preview = bridge.previewUpgrade(this.id);
-    if (!preview || preview.reason === "max_level" || this.level >= this.max_level) return "MAX";
-    const costDec = preview.costDecimal != null ? toDecimal(preview.costDecimal) : toDecimal(preview.cost);
-    const isEp = preview.currency === "ep" || preview.currency === "exotic_particles";
-    return isEp ? `${fmt(costDec)} EP` : `$${fmt(costDec)}`;
-  }
-
-  get cost() {
-    return toNumber(this.base_cost);
-  }
-
-  get ecost() {
-    return toNumber(this.base_ecost);
+    this.level = 0;
+    this.cost = toNumber(this.base_cost);
+    this.ecost = toNumber(this.base_ecost);
+    this.current_cost = this.base_cost;
+    this.current_ecost = this.base_ecost;
+    projectUpgradeCosts(this);
   }
 
   setLevel(level, opts = {}) {
@@ -135,62 +102,22 @@ export class Upgrade {
       }
     }
 
-    this.updateDisplayCost();
+    this.level = level;
+    projectUpgradeCosts(this);
 
     if (opts.deferSync) return;
 
     if (this.actionId === "chronometer") {
       this.game.loop_wait = this.game.base_loop_wait;
-      this.game.emit?.("statePatch", { loop_wait: this.game.loop_wait });
     }
 
     applyComputedModifiers(this.game);
     this.game.reactor?.updateStats?.();
-  }
-
-  setAffordable(isAffordable) {
-    if (this.affordable !== isAffordable) {
-      this.affordable = isAffordable;
-    }
-  }
-
-  setAffordProgress(progress) {
-    this.afford_progress = progress;
-  }
-
-  updateDisplayCost() {
-    this._syncDisplayToState();
-  }
-
-  _syncDisplayToState() {
-    const st = this.game?.state?.upgrade_display;
-    if (st) {
-      st[this.id] = { level: this.level, display_cost: this.display_cost };
-    }
-  }
-
-  getCost() {
-    return this.current_cost;
-  }
-
-  getEcost() {
-    return this.current_ecost || 0;
+    bumpSnapshotRev(this.game);
   }
 }
 
-export function isCellUpgradeVisible(upgrade, game) {
-  const upgType = upgrade?.upgrade?.type || "";
-  const basePart = upgrade?.upgrade?.part;
-  const isCellUpgrade = typeof upgType === "string" && upgType.indexOf("cell_") === 0;
-
-  if (!isCellUpgrade || !basePart || basePart.category !== "cell") return true;
-
-  const unlockManager = game?.unlockManager;
-  if (unlockManager && typeof unlockManager.isPartUnlocked === "function") {
-    return unlockManager.isPartUnlocked(basePart);
-  }
-  return true;
-}
+export { isCellUpgradeVisible } from "./upgrade-visibility.js";
 
 function isUpgradeAvailable(upgradeset, upgradeId) {
   if (upgradeset.game.bypass_tech_tree_restrictions) return true;
@@ -237,7 +164,7 @@ function sanitizeDoctrineUpgradeLevelsOnLoad(upgradeset, techTreeId) {
   });
 
   if (changed) {
-    upgradeset.game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+    upgradeset.game.coreBridge?.hydrateFromHost?.();
   }
 }
 
@@ -290,6 +217,7 @@ export class UpgradeSet {
       this.upgrades.set(upgradeInstance.id, upgradeInstance);
       this.upgradesArray.push(upgradeInstance);
     });
+    projectAllUpgradeCosts(this);
 
     return this.upgradesArray;
   }
@@ -327,13 +255,19 @@ export class UpgradeSet {
 
   purchaseUpgrade(upgradeId) {
     const bridge = getActiveBridge(this.game);
-    if (!bridge) return false;
-
-    const before = this.getUpgrade(upgradeId)?.level ?? 0;
-    bridge.purchaseUpgrade(upgradeId);
+    if (!bridge?.session) return false;
     const upgrade = this.getUpgrade(upgradeId);
-    upgrade?.updateDisplayCost?.();
-    return (upgrade?.level ?? 0) > before;
+    if (!upgrade) return false;
+    if (!bridge.session.systems?.upgrades?.getDefinition?.(upgradeId)) return false;
+    const before = upgrade.level ?? 0;
+    const dispatchResult = bridge.dispatch({ type: "PURCHASE_UPGRADE", payload: { id: upgradeId } });
+    const after = bridge.session.getUpgradeLevel?.(upgradeId) ?? 0;
+    if (!dispatchResult.ok || !(after > before)) return false;
+    projectUpgradeCosts(upgrade);
+    this.game.syncModifiersFromUpgrades?.();
+    this.updateSectionCounts();
+    void this.game.saveManager?.autoSave?.();
+    return true;
   }
 
   purchaseUpgradeToMax(upgradeId) {

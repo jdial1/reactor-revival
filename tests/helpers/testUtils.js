@@ -1,5 +1,6 @@
+import { pushHostUpgradeLevelsForLoad } from "./bridge-test-harness.js";
 import { vi, expect } from "vitest";
-import { toDecimal } from "@app/utils.js";
+import { toDecimal } from "@app/simUtils.js";
 import { serializeSave, StorageAdapter } from "@app/storage/index.js";
 import { patchGameState } from "@app/state.js";
 import { clearGrid } from "./gameHelpers.js";
@@ -62,8 +63,7 @@ export function setUpgradeLevelAndRefresh(game, upgradeId, level) {
     throw new Error(`Upgrade ${upgradeId} not found`);
   }
   upgrade.setLevel(level);
-  upgrade.updateDisplayCost();
-  game.coreBridge?.pushHostUpgradeLevelsForLoad?.();
+  pushHostUpgradeLevelsForLoad(game);
 }
 
 export async function captureConsoleOutputs(method, fn) {
@@ -615,14 +615,11 @@ export function mockPerformanceAPI(vi, { stepMs = 10 } = {}) {
   };
 }
 
-export async function flushUIUpdates(game, { deltaMs = 16.667, rolling = true } = {}) {
+export async function flushUIUpdates(game, { deltaMs: _deltaMs = 16.667, rolling: _rolling = true } = {}) {
   await new Promise((r) => setTimeout(r, 0));
   const ui = game?.ui;
   if (!ui) return;
   ui.processUiUpdateQueue?.();
-  if (rolling) {
-    ui.updateUiRollingNumbers?.(deltaMs);
-  }
 }
 
 export function setupWorkerContext(vi) {

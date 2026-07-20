@@ -1,265 +1,165 @@
-import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
-import { patchGameState } from "@app/state.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  setSessionTileHeat,
+  tileHeatAt,
+  setSessionReactorHeat,
+  reactorHeat,
+  reactorMaxHeat,
+  hasMeltedDown,
+} from "../../helpers/sessionHelpers.js";
 
-describe("Reactor Mechanics", () => {
-  let game;
+function place(session, row, col, id) {
+  expect(session.placeComponent(row, col, id)).toBe(true);
+}
+
+function power(session) {
+  return Number(session.getSnapshot().grid.currentPower ?? 0);
+}
+
+function maxPower(session) {
+  return Number(session.getSnapshot().grid.maxPower ?? 0);
+}
+
+function money(session) {
+  return Number(session.getSnapshot().economy?.money ?? 0);
+}
+
+function cellPower(session, row, col) {
+  return Number(session.getCellOutputAt(row, col)?.power ?? 0);
+}
+
+function cellHeat(session, row, col) {
+  return Number(session.getCellOutputAt(row, col)?.heat ?? 0);
+}
+
+describe("Reactor Mechanics (session)", () => {
+  let session;
 
   beforeEach(async () => {
-    game = await setupGame();
+    session = await setupSessionOnly({ money: 1e6 });
   });
 
-  it("should initialize with correct default values", () => {
-    expect(toNum(game.reactor.current_power)).toBe(0);
-    expect(toNum(game.reactor.current_heat)).toBe(0);
-    game.reactor.updateStats();
-    expect(toNum(game.reactor.max_power)).toBe(100);
-    expect(toNum(game.reactor.max_heat)).toBe(1000);
-    expect(game.reactor.has_melted_down).toBe(false);
+  it("initializes with zero live scalars and default caps", () => {
+    expect(power(session)).toBe(0);
+    expect(reactorHeat(session)).toBe(0);
+    expect(maxPower(session)).toBe(100);
+    expect(reactorMaxHeat(session)).toBe(1000);
+    expect(hasMeltedDown(session)).toBe(false);
   });
 
-  it("should update stats based on active parts", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-    await tile.setPart(part);
-    game.reactor.updateStats();
-
-    expect(game.reactor.stats_power).toBe(part.power);
-    expect(game.reactor.stats_heat_generation).toBe(part.heat);
-    expect(game.reactor.stats_total_part_heat).toBe(0); // No heat contained initially
+  it("reports cell output power and heat for active parts", () => {
+    place(session, 0, 0, "uranium1");
+    const part = session.getPart("uranium1");
+    expect(cellPower(session, 0, 0)).toBe(Number(part.power ?? part.basePower));
+    expect(cellHeat(session, 0, 0)).toBe(Number(part.heat ?? part.baseHeat));
+    expect(tileHeatAt(session, 0, 0)).toBe(0);
   });
 
-  it("should handle multiple active parts", async () => {
-    const tile1 = game.tileset.getTile(0, 0);
-    const tile2 = game.tileset.getTile(1, 1);
-    const part = game.partset.getPartById("uranium1");
-    await tile1.setPart(part);
-    await tile2.setPart(part);
-    game.reactor.updateStats();
-
-    expect(game.reactor.stats_power).toBe(part.power * 2);
-    expect(game.reactor.stats_heat_generation).toBe(part.heat * 2);
-    expect(game.reactor.stats_total_part_heat).toBe(0); // No heat contained initially
-  });
-
-  it("should calculate total part heat correctly", async () => {
-    const tile1 = game.tileset.getTile(0, 0);
-    const tile2 = game.tileset.getTile(1, 1);
-    const part = game.partset.getPartById("uranium1");
-    await tile1.setPart(part);
-    await tile2.setPart(part);
-
-    // Simulate heat contained in parts
-    tile1.heat_contained = 50;
-    tile2.heat_contained = 75;
-    game.coreBridge.syncGridFromGame();
-
-    game.reactor.updateStats();
-
-    expect(game.reactor.stats_total_part_heat).toBe(125); // 50 + 75
-  });
-
-  it("should handle heat generation and venting", async () => {
-    const initialHeat = 0;
-    game.reactor.current_heat = 0;
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-    await tile.setPart(part);
-
-    // Activate the cell and set ticks so it generates heat
-    tile.activated = true;
-    tile.ticks = 10;
-
-    game.engine.tick();
-    const naturalVenting = game.reactor.max_heat / 10000; // 0.1
-    const heatGenerated = part.heat; // Get actual heat from the part
-    const expected = initialHeat + heatGenerated - naturalVenting;
-
-    expect(toNum(game.reactor.current_heat)).toBeCloseTo(expected, 0);
-  });
-
-  it("should not vent below zero heat", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-    await tile.setPart(part);
-
-    game.reactor.current_heat = 0;
-    game.reactor.vent_value = 10;
-
-    game.engine.tick();
-
-    // Should not go below zero, but may be a small positive value due to decay logic
-    expect(toNum(game.reactor.current_heat)).toBeGreaterThanOrEqual(0);
-  });
-
-  it("should handle reactor size changes", () => {
-    game.rows = 5;
-    game.cols = 5;
-    game.tileset.updateActiveTiles();
-
-    const activeTiles = game.tileset.active_tiles_list;
-    expect(activeTiles.length).toBe(25); // 5x5 grid
-    activeTiles.forEach((tile) => {
-      expect(tile.enabled).toBe(true);
-    });
-  });
-
-  it("should disable tiles outside reactor size", () => {
-    game.rows = 2;
-    game.cols = 2;
-    game.tileset.updateActiveTiles();
-
-    // getTile only returns tiles within reactor bounds, so we need to access
-    // the tile directly from tiles_list to check if it's disabled
-    const tile = game.tileset.tiles_list.find(
-      (t) => t.row === 2 && t.col === 2
+  it("sums outputs across multiple active cells", () => {
+    place(session, 0, 0, "uranium1");
+    place(session, 1, 1, "uranium1");
+    const part = session.getPart("uranium1");
+    expect(cellPower(session, 0, 0) + cellPower(session, 1, 1)).toBe(
+      Number(part.power ?? part.basePower) * 2
     );
-    expect(tile).toBeDefined();
-    expect(tile.enabled).toBe(false);
+    expect(cellHeat(session, 0, 0) + cellHeat(session, 1, 1)).toBe(
+      Number(part.heat ?? part.baseHeat) * 2
+    );
   });
 
-  it("should handle power generation and selling", async () => {
-    const cell = game.partset.getPartById('uranium1');
-    await game.tileset.getTile(0, 0).setPart(cell);
-    game.engine.tick();
-    expect(toNum(game.reactor.current_power)).toBe(toNum(cell.power));
-    const initialMoney = toNum(game.current_money);
-    game.sell_action();
-    expect(toNum(game.reactor.current_power)).toBe(0);
-    expect(toNum(game.current_money)).toBe(initialMoney + toNum(cell.power));
-    expect(game.sold_power).toBe(true);
+  it("sums contained tile heat across parts", () => {
+    place(session, 0, 0, "uranium1");
+    place(session, 1, 1, "uranium1");
+    setSessionTileHeat(session, 0, 0, 50);
+    setSessionTileHeat(session, 1, 1, 75);
+    expect(tileHeatAt(session, 0, 0) + tileHeatAt(session, 1, 1)).toBe(125);
   });
 
-  it("should apply reflector bonuses during stat updates", async () => {
-    const cell = game.partset.getPartById("uranium1");
-    const reflector = game.partset.getPartById("reflector1");
-    await game.tileset.getTile(0, 0).setPart(cell);
-    await game.tileset.getTile(0, 1).setPart(reflector);
-    game.reactor.updateStats();
-
-    const reflectorPulse = 1 + reflector.power_increase / 100;
-    const pulse = 1 + reflectorPulse;
-    const expectedPower = cell.base_power * pulse;
-    expect(game.reactor.stats_power).toBeCloseTo(expectedPower);
+  it("adds cell heat to the hull on tick", () => {
+    place(session, 0, 0, "uranium1");
+    setSessionReactorHeat(session, 0);
+    session.toggles.heat_control = false;
+    session.tick();
+    expect(reactorHeat(session)).toBeGreaterThan(0);
+    expect(reactorHeat(session)).toBe(cellHeat(session, 0, 0));
   });
 
-  it("should manually reduce heat", () => {
-    game.reactor.current_heat = 100;
-    game.coreBridge.syncReactorScalarsFromGame();
-    game.sold_heat = false;
-    game.manual_reduce_heat_action();
-    expect(toNum(game.reactor.current_heat)).toBe(100 - game.base_manual_heat_reduce);
-    expect(game.sold_heat).toBe(true);
-
-    game.reactor.current_heat = 0.5;
-    game.coreBridge.syncReactorScalarsFromGame();
-    game.manual_reduce_heat_action();
-    expect(toNum(game.reactor.current_heat)).toBe(0);
-    expect(game.sold_heat).toBe(true);
+  it("keeps hull heat non-negative after a tick", () => {
+    place(session, 0, 0, "uranium1");
+    setSessionReactorHeat(session, 0);
+    session.tick();
+    expect(reactorHeat(session)).toBeGreaterThanOrEqual(0);
   });
 
-  it("presents meltdown when core failure already melted down", () => {
-    game.reactor.has_melted_down = true;
-    const meltdown = game.reactor.checkMeltdown();
-    expect(meltdown).toBe(true);
-    expect(game.state.melting_down).toBe(true);
+  it("sells stored power for money via SELL_POWER", () => {
+    place(session, 0, 0, "uranium1");
+    session.tick();
+    const stored = power(session);
+    expect(stored).toBeGreaterThan(0);
+    const before = money(session);
+    const result = session.runCommand({ type: "SELL_POWER", payload: {} });
+    expect(result.ok).toBe(true);
+    expect(power(session)).toBe(0);
+    expect(money(session)).toBeCloseTo(before + stored, 6);
   });
 
-  it("does not present meltdown from host heat alone", () => {
-    game.reactor.current_heat = game.reactor.max_heat * 2 + 1;
-    const meltdown = game.reactor.checkMeltdown();
-    expect(meltdown).toBe(false);
-    expect(game.reactor.has_melted_down).toBe(false);
+  it("applies cardinal reflector bonuses to cell output", () => {
+    place(session, 0, 0, "uranium1");
+    place(session, 0, 1, "reflector1");
+    const cell = session.getPart("uranium1");
+    const reflector = session.getPart("reflector1");
+    const reflectorPulse = 1 + Number(reflector.powerIncrease) / 100;
+    const expected = Number(cell.basePower) * (1 + reflectorPulse);
+    expect(cellPower(session, 0, 0)).toBeCloseTo(expected);
   });
 
-  it("does not apply infused cells as a separate power multiplier on harmonic output", async () => {
-    game.bypass_tech_tree_restrictions = true;
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-    await tile.setPart(part);
+  it("vents hull heat via VENT_HEAT", () => {
+    setSessionReactorHeat(session, 100);
+    const result = session.runCommand({ type: "VENT_HEAT", payload: {} });
+    expect(result.ok).toBe(true);
+    expect(reactorHeat(session)).toBe(99);
 
-    const labUpgrade = game.upgradeset.getUpgrade("laboratory");
-    const infusedUpgrade = game.upgradeset.getUpgrade("infused_cells");
-    game.current_exotic_particles = Math.max(toNum(labUpgrade.getEcost()), toNum(infusedUpgrade.getEcost())) + 1000;
-    patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
-    game.coreBridge.loadEconomyFromHost();
-    game.upgradeset.check_affordability(game);
-
-    expect(game.upgradeset.purchaseUpgrade("laboratory")).toBe(true);
-    game.upgradeset.check_affordability(game);
-    expect(game.upgradeset.purchaseUpgrade("infused_cells")).toBe(true);
-    part.recalculate_stats();
-    game.reactor.updateStats();
-    game.engine.tick();
-    expect(toNum(game.reactor.current_power)).toBeCloseTo(toNum(part.base_power) * 4, 0);
+    setSessionReactorHeat(session, 0.5);
+    session.runCommand({ type: "VENT_HEAT", payload: {} });
+    expect(reactorHeat(session)).toBe(0);
   });
 
-  it("should handle heat generation correctly", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-    await tile.setPart(part);
-    game.reactor.heat_power_multiplier = 2;
-    game.engine.tick();
-    expect(toNum(game.reactor.current_heat)).toBeGreaterThan(0);
+  it("does not treat infused cells as a separate harmonic power multiplier beyond compiled output", () => {
+    session.creditExoticParticles?.(1e6);
+    session.setUpgradeLevels([
+      { id: "laboratory", level: 1 },
+      { id: "infused_cells", level: 1 },
+    ]);
+    place(session, 0, 0, "uranium1");
+    session.grid.currentPower = 0;
+    const part = session.getPart("uranium1");
+    session.tick();
+    expect(power(session)).toBeCloseTo(Number(part.basePower) * 4, 0);
   });
 
-  it("should handle power generation correctly", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const part = game.partset.getPartById("uranium1");
-    await tile.setPart(part);
-    game.reactor.power_multiplier = 2;
-    game.engine.tick();
-    expect(toNum(game.reactor.current_power)).toBe(toNum(part.power) * 2);
+  it("auto-reduces hull heat when heat_control is on", () => {
+    setSessionReactorHeat(session, 1000);
+    session.toggles.heat_control = true;
+    session.tick();
+    expect(reactorHeat(session)).toBeLessThan(1000);
+    expect(reactorHeat(session)).toBeGreaterThan(0);
   });
 
-  it("should handle heat venting correctly", async () => {
-    game.reactor.current_heat = 1000;
-    game.reactor.heat_controlled = true;
-    game.state.heat_control = true;
-    game.coreBridge.syncReactorScalarsFromGame();
-    game.coreBridge.syncTogglesFromGame();
-    game.engine.tick();
-    expect(toNum(game.reactor.current_heat)).toBeLessThan(1000);
-    expect(toNum(game.reactor.current_heat)).toBeGreaterThan(0);
+  it("clears melt and scalars on reboot", () => {
+    setSessionReactorHeat(session, reactorMaxHeat(session) * 2.1);
+    session.tick();
+    expect(hasMeltedDown(session)).toBe(true);
+    session.reboot();
+    expect(hasMeltedDown(session)).toBe(false);
+    expect(reactorHeat(session)).toBe(0);
+    expect(power(session)).toBe(0);
   });
 
-  it("should handle power storage correctly", async () => {
-    // This test is not relevant unless you have a capacitor part and logic for storage
-    // If you do, set up a capacitor and check current_power after a tick
-    // Otherwise, remove this test
-    expect(true).toBe(true);
-  });
-
-  it("should handle reactor reset correctly", () => {
-    game.reactor.current_heat = 1000;
-    game.reactor.current_power = 500;
-    game.reactor.has_melted_down = true;
-    game.reactor.setDefaults();
-    expect(toNum(game.reactor.current_heat)).toBe(0);
-    expect(toNum(game.reactor.current_power)).toBe(0);
-    expect(game.reactor.has_melted_down).toBe(false);
-  });
-
-  it("should handle reactor stats update correctly", async () => {
-    const initialMaxHeat = game.reactor.max_heat;
-    const plating = game.partset.getPartById('reactor_plating1');
-    await game.tileset.getTile(0, 0).setPart(plating);
-    game.reactor.updateStats();
-    expect(toNum(game.reactor.max_heat)).toBe(toNum(initialMaxHeat) + toNum(plating.reactor_heat));
-  });
-
-  it("should handle reactor tick correctly", () => {
-    const tickSpy = vi.spyOn(game.engine, "tick");
-    game.engine.tick();
-    expect(tickSpy).toHaveBeenCalled();
-  });
-
-  it("should reset with setDefaults", () => {
-    game.reactor.current_heat = 1000;
-    game.reactor.current_power = 500;
-    game.reactor.has_melted_down = true;
-    game.reactor.setDefaults();
-    expect(toNum(game.reactor.current_heat)).toBe(0);
-    expect(toNum(game.reactor.current_power)).toBe(0);
-    expect(game.reactor.has_melted_down).toBe(false);
+  it("raises max heat when reactor plating is placed", () => {
+    const before = reactorMaxHeat(session);
+    const plating = session.getPart("reactor_plating1");
+    place(session, 0, 0, "reactor_plating1");
+    expect(reactorMaxHeat(session)).toBe(before + Number(plating.reactorHeat));
   });
 });

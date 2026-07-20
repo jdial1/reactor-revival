@@ -1,175 +1,145 @@
-import { describe, it, expect, beforeEach, setupGame, vi, afterEach, toNum } from "../../helpers/setup.js";
-import { placePart, runTicks } from "../../helpers/gameHelpers.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  tileHeatAt,
+  setSessionTileHeat,
+  setSessionReactorHeat,
+  reactorHeat,
+  reactorMaxHeat,
+} from "../../helpers/sessionHelpers.js";
 
-describe("Neighbor Interactions", () => {
-    let game;
+function place(session, row, col, id) {
+  expect(session.placeComponent(row, col, id)).toBe(true);
+}
 
-    beforeEach(async () => {
-        game = await setupGame();
-        // Use a predictable environment
-        vi.useFakeTimers();
-    });
+function cellPower(session, row, col) {
+  return Number(session.getCellOutputAt(row, col)?.power ?? 0);
+}
 
-    afterEach(() => {
-        vi.useRealTimers();
-    });
+function maxPower(session) {
+  return Number(session.getSnapshot().grid.maxPower ?? 0);
+}
 
-    it("cells only receive reflector bonuses from cardinal-adjacent reflectors", async () => {
-        await placePart(game, 5, 5, "uranium1");
-        
-        game.reactor.updateStats();
-        const basePower = game.reactor.stats_power;
+describe("Neighbor Interactions (session)", () => {
+  let session;
 
-        const cardinals = [
-            await placePart(game, 5, 4, "reflector1"),
-            await placePart(game, 5, 6, "reflector1"),
-            await placePart(game, 4, 5, "reflector1"),
-            await placePart(game, 6, 5, "reflector1"),
-        ];
-        
-        await placePart(game, 4, 4, "reflector1");
+  beforeEach(async () => {
+    session = await setupSessionOnly();
+  });
 
-        game.reactor.updateStats();
-        const withCardinals = game.reactor.stats_power;
+  it("cells only receive reflector bonuses from cardinal-adjacent reflectors", () => {
+    place(session, 5, 5, "uranium1");
+    const basePower = cellPower(session, 5, 5);
 
-        // Remove diagonal effect by comparing against baseline + expected increases
-        expect(withCardinals).toBeGreaterThan(basePower);
+    place(session, 5, 4, "reflector1");
+    place(session, 5, 6, "reflector1");
+    place(session, 4, 5, "reflector1");
+    place(session, 6, 5, "reflector1");
+    place(session, 4, 4, "reflector1");
 
-        // Now remove one cardinal reflector and ensure power decreases
-        await cardinals[0].clearPart(false);
-        game.reactor.updateStats();
-        const afterRemoval = game.reactor.stats_power;
-        expect(afterRemoval).toBeLessThan(withCardinals);
+    const withCardinals = cellPower(session, 5, 5);
+    expect(withCardinals).toBeGreaterThan(basePower);
+    expect(session.getCellOutputAt(5, 5).reflectorCount).toBe(4);
 
-        // Ensure diagonal-only placement does not affect
-        for (let i = 1; i < cardinals.length; i++) {
-            await cardinals[i].clearPart(false);
-        }
-        game.reactor.updateStats();
-        const withOnlyDiagonal = game.reactor.stats_power;
-        expect(withOnlyDiagonal).toBeCloseTo(basePower);
-    });
+    session.removeComponent(5, 4);
+    expect(cellPower(session, 5, 5)).toBeLessThan(withCardinals);
 
-    it("reflectors do not affect non-cell neighbors", async () => {
-        const ventTile = await placePart(game, 3, 3, "vent1");
-        await placePart(game, 3, 4, "reflector1");
+    session.removeComponent(5, 6);
+    session.removeComponent(4, 5);
+    session.removeComponent(6, 5);
+    expect(cellPower(session, 5, 5)).toBeCloseTo(basePower);
+    expect(session.getCellOutputAt(5, 5).reflectorCount).toBe(0);
+  });
 
-        ventTile.heat_contained = 0; // so self-venting does nothing
-        game.reactor.updateStats();
-        game.engine.tick();
+  it("reflectors do not push heat into neighboring vents", () => {
+    place(session, 3, 3, "vent1");
+    place(session, 3, 4, "reflector1");
+    setSessionTileHeat(session, 3, 3, 0);
+    session.tick();
+    expect(tileHeatAt(session, 3, 3)).toBe(0);
+  });
 
-        // Vent unchanged; reflector didn't modify neighbor state
-        expect(ventTile.heat_contained).toBe(0);
-    });
+  it("heat outlet transfers hull heat to cardinal vents only", () => {
+    place(session, 5, 5, "heat_outlet1");
+    place(session, 5, 6, "vent1");
+    place(session, 4, 4, "vent1");
+    setSessionReactorHeat(session, 100);
+    setSessionTileHeat(session, 5, 6, 0);
+    setSessionTileHeat(session, 4, 4, 0);
 
-    it("heat outlet transfers reactor heat to cardinal containment neighbors and can overfill full neighbors (may explode)", async () => {
-        await placePart(game, 5, 5, "heat_outlet1");
-        const neighbor = await placePart(game, 5, 6, "vent1");
-        const diagonal = await placePart(game, 4, 4, "vent1");
+    session.tick();
 
-        game.reactor.current_heat = 100;
-        neighbor.heat_contained = 0;
-        diagonal.heat_contained = 0;
+    expect(tileHeatAt(session, 5, 6)).toBeGreaterThan(0);
+    expect(tileHeatAt(session, 4, 4)).toBe(0);
+    expect(reactorHeat(session)).toBeLessThan(100);
+  });
 
-        game.reactor.updateStats();
-        game.engine.tick();
+  it("heat exchanger balances heat with cooler cardinal neighbors only", () => {
+    place(session, 6, 6, "heat_exchanger1");
+    place(session, 6, 5, "vent1");
+    place(session, 5, 5, "vent1");
+    setSessionTileHeat(session, 6, 6, 100);
+    setSessionTileHeat(session, 6, 5, 0);
+    setSessionTileHeat(session, 5, 5, 0);
 
-        expect(neighbor.heat_contained).toBeGreaterThan(0);
-        expect(diagonal.heat_contained).toBe(0);
+    session.tick();
 
-        const capacity = neighbor.part.containment;
-        neighbor.heat_contained = capacity;
-        game.engine.tick();
-        // If component did not explode, it should have been overfilled
-        if (neighbor.part) {
-            expect(neighbor.heat_contained).toBeGreaterThan(capacity);
-        } else {
-            expect(neighbor.part).toBeNull();
-        }
-    });
+    expect(tileHeatAt(session, 6, 6)).toBeLessThan(100);
+    expect(tileHeatAt(session, 6, 5)).toBeGreaterThan(0);
+    expect(tileHeatAt(session, 5, 5)).toBe(0);
+  });
 
-    it("heat exchanger balances heat with cooler cardinal neighbors only", async () => {
-        const exchTile = await placePart(game, 6, 6, "heat_exchanger1");
-        const coolNeighbor = await placePart(game, 6, 5, "vent1");
-        const diagonal = await placePart(game, 5, 5, "vent1");
+  it("vents reduce only their own heat", () => {
+    place(session, 2, 2, "vent1");
+    place(session, 2, 3, "vent1");
+    setSessionTileHeat(session, 2, 2, 20);
+    setSessionTileHeat(session, 2, 3, 10);
 
-        exchTile.heat_contained = 100;
-        coolNeighbor.heat_contained = 0;
-        diagonal.heat_contained = 0;
+    session.tick();
 
-        game.reactor.updateStats();
-        game.engine.tick();
+    expect(tileHeatAt(session, 2, 2)).toBeLessThan(20);
+    expect(tileHeatAt(session, 2, 3)).toBeLessThanOrEqual(10);
+  });
 
-        expect(exchTile.heat_contained).toBeLessThan(100);
-        expect(coolNeighbor.heat_contained).toBeGreaterThan(0);
-        expect(diagonal.heat_contained).toBe(0);
-    });
+  it("capacitor and reactor plating raise caps without heating neighbors", () => {
+    const prevMaxPower = maxPower(session);
+    const prevMaxHeat = reactorMaxHeat(session);
 
-    it("vents reduce only their own heat and do not modify neighbors", async () => {
-        const ventTile = await placePart(game, 2, 2, "vent1");
-        const neighbor = await placePart(game, 2, 3, "vent1");
+    place(session, 0, 0, "capacitor1");
+    place(session, 0, 1, "reactor_plating1");
+    place(session, 0, 2, "vent1");
+    setSessionTileHeat(session, 0, 2, 0);
 
-        ventTile.heat_contained = 20;
-        neighbor.heat_contained = 10;
+    expect(maxPower(session)).toBeGreaterThanOrEqual(prevMaxPower);
+    expect(reactorMaxHeat(session)).toBeGreaterThanOrEqual(prevMaxHeat);
 
-        game.reactor.updateStats();
-        game.engine.tick();
+    session.tick();
+    expect(tileHeatAt(session, 0, 2)).toBe(0);
+  });
 
-        expect(ventTile.heat_contained).toBeLessThan(20);
-        // Neighbor should only change due to its own venting, not due to adjacency
-        expect(neighbor.heat_contained).toBeLessThanOrEqual(10);
-    });
+  it("heat inlet pulls adjacent component heat into the hull", () => {
+    place(session, 7, 7, "heat_inlet1");
+    place(session, 7, 6, "vent1");
+    setSessionTileHeat(session, 7, 6, 50);
+    const prevHull = reactorHeat(session);
 
-    it("capacitor and reactor plating modify global stats without neighbor side effects", async () => {
-        await placePart(game, 0, 0, "capacitor1");
-        await placePart(game, 0, 1, "reactor_plating1");
-        const neighbor = await placePart(game, 0, 2, "vent1");
+    session.tick();
 
-        neighbor.heat_contained = 0;
-        const prevMaxPower = game.reactor.max_power;
-        const prevMaxHeat = game.reactor.max_heat;
+    expect(tileHeatAt(session, 7, 6)).toBeLessThan(50);
+    expect(reactorHeat(session)).toBeGreaterThan(prevHull);
+  });
 
-        game.reactor.updateStats();
+  it("particle accelerator receives heat from a cardinal heat outlet", () => {
+    place(session, 9, 9, "heat_outlet1");
+    place(session, 9, 10, "particle_accelerator1");
+    setSessionReactorHeat(session, 200);
 
-        expect(toNum(game.reactor.max_power)).toBeGreaterThanOrEqual(toNum(prevMaxPower));
-        expect(toNum(game.reactor.max_heat)).toBeGreaterThanOrEqual(toNum(prevMaxHeat));
+    session.tick();
+    expect(tileHeatAt(session, 9, 10)).toBeGreaterThan(0);
 
-        game.engine.tick();
-        // Neighbor should remain unaffected by cap/plate (no heat pushed/pulled)
-        expect(neighbor.heat_contained).toBe(0);
-    });
-
-    it("heat inlet pulls heat from adjacent components into the reactor", async () => {
-        await placePart(game, 7, 7, "heat_inlet1");
-        const hotNeighbor = await placePart(game, 7, 6, "vent1");
-
-        hotNeighbor.heat_contained = 50;
-        const prevReactorHeat = game.reactor.current_heat;
-
-        game.reactor.updateStats();
-        game.engine.tick();
-
-        expect(hotNeighbor.heat_contained).toBeLessThan(50);
-        expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(prevReactorHeat));
-    });
-
-    it("particle accelerator gains heat from outlet (cardinal only)", async () => {
-        await placePart(game, 9, 9, "heat_outlet1");
-        const paTile = await placePart(game, 9, 10, "particle_accelerator1");
-
-        // Provide reactor heat for outlet to push into PA
-        game.reactor.current_heat = 200;
-
-        game.reactor.updateStats();
-        game.engine.tick();
-
-        // PA should have received some heat from outlet
-        expect(paTile.heat_contained).toBeGreaterThan(0);
-
-        // Run a few more ticks to continue heat flow; EP generation requires massive heat, so we don't assert it here
-        runTicks(game, 3);
-        expect(paTile.heat_contained).toBeGreaterThan(0);
-    });
+    session.tick();
+    session.tick();
+    session.tick();
+    expect(tileHeatAt(session, 9, 10)).toBeGreaterThan(0);
+  });
 });
-
-

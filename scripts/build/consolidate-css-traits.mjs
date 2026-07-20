@@ -9,7 +9,7 @@ import combine from "postcss-combine-duplicated-selectors";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cssDir = path.join(__dirname, "../..", "public", "css");
 
-const SKIP = new Set(["variables.css", "fonts.css", "app.css"]);
+const SKIP = new Set(["variables.css", "fonts.css", "app.css", "utilities.css"]);
 const TRAIT_MIN = 2;
 const BLOCK_MIN = 2;
 const MAX_PASSES = 6;
@@ -355,7 +355,11 @@ async function run() {
     const blockCss = buildBlockCss(blockGroups);
 
     const utilitiesRoot = roots.get("utilities.css");
-    let utilities = utilitiesRoot ? utilitiesRoot.toString() : fs.readFileSync(utilitiesPath, "utf8");
+    let utilities = utilitiesRoot
+      ? utilitiesRoot.toString()
+      : fs.existsSync(utilitiesPath)
+        ? fs.readFileSync(utilitiesPath, "utf8")
+        : "/* shared trait/block groups extracted by css:consolidate */\n";
     utilities = utilities.replace(/\n\/\* consolidated trait groups \*\/[\s\S]*$/, "");
     utilities = utilities.trimEnd() + "\n";
 

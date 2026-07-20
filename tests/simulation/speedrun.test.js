@@ -1,7 +1,8 @@
+import { syncGridFromGame } from "../helpers/bridge-test-harness.js";
 import { describe, it, expect, vi } from "vitest";
 import { patchGameState } from "@app/state.js";
-import { toDecimal } from "@app/utils.js";
-import { setupGameWithDOM, syncActivePartsAtTickBoundary } from "../helpers/setup.js";
+import { toDecimal } from "@app/simUtils.js";
+import { setupGameWithDOM } from "../helpers/setup.js";
 import { setCoreSustainedStart } from "../helpers/objectiveHelpers.js";
 import { handleGridInteraction } from "../../public/src/components/grid/grid-intent-handler.js";
 import objective_list_data from "../../public/data/objective_list.json";
@@ -52,7 +53,7 @@ async function solveObjective(index, game) {
       await placePartViaUI(game, "uranium1", 0, 0);
       const cellTile = game.tileset.getTile(0, 0);
       cellTile.activated = true;
-      cellTile.ticks = 15;
+      game.coreBridge.setTileTicks(cellTile.row, cellTile.col, 15);
       game.tileset.updateActiveTiles();
       const powerNum = () => {
         const p = game.reactor?.current_power;
@@ -68,7 +69,7 @@ async function solveObjective(index, game) {
       clickDOM("#info_bar_power_btn_desktop");
       if (!game.sold_power) {
         if (powerNum() <= 0) {
-          game.reactor.current_power = toDecimal(10);
+          game.coreBridge.setReactorPower(toDecimal(10));
           game.reactor.updateStats();
         }
         game.sell_action();
@@ -87,7 +88,7 @@ async function solveObjective(index, game) {
     case "ventNextToCell":
       await placePartViaUI(game, "uranium1", 0, 0);
       game.tileset.getTile(0, 0).activated = true;
-      game.tileset.getTile(0, 0).ticks = 15;
+      { const __t = game.tileset.getTile(0, 0); game.coreBridge.setTileTicks(__t.row, __t.col, 15); }
       await placePartViaUI(game, "vent1", 0, 1);
       game.reactor.updateStats();
       break;
@@ -97,7 +98,7 @@ async function solveObjective(index, game) {
     case "purchaseDualCell":
       await placePartViaUI(game, "uranium2", 1, 0);
       game.tileset.getTile(1, 0).activated = true;
-      game.tileset.getTile(1, 0).ticks = 15;
+      { const __t = game.tileset.getTile(1, 0); game.coreBridge.setTileTicks(__t.row, __t.col, 15); }
       game.engine.tick();
       game.reactor.updateStats();
       break;
@@ -105,7 +106,7 @@ async function solveObjective(index, game) {
       for (let i = 0; i < 10; i++) {
         await placePartViaUI(game, "uranium1", 0, i);
         game.tileset.getTile(0, i).activated = true;
-        game.tileset.getTile(0, i).ticks = 15;
+        { const __t = game.tileset.getTile(0, i); game.coreBridge.setTileTicks(__t.row, __t.col, 15); }
       }
       game.engine.tick();
       game.reactor.updateStats();
@@ -121,11 +122,10 @@ async function solveObjective(index, game) {
       break;
     case "powerPerTick200":
       game.tileset.clearAllTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       for (let i = 0; i < 5; i++) {
         await placePartViaUI(game, "plutonium1", 0, i);
         game.tileset.getTile(0, i).activated = true;
-        game.tileset.getTile(0, i).ticks = 60;
+        { const __t = game.tileset.getTile(0, i); game.coreBridge.setTileTicks(__t.row, __t.col, 60); }
       }
       game.tileset.updateActiveTiles();
       game.engine.tick();
@@ -146,7 +146,6 @@ async function solveObjective(index, game) {
         await tile.setPart(part);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -167,11 +166,10 @@ async function solveObjective(index, game) {
         if (tile.part) tile.clearPart();
         await tile.setPart(game.partset.getPartById("plutonium1"));
         tile.activated = true;
-        tile.ticks = 9999;
+        game.coreBridge.setTileTicks(tile.row, tile.col, 9999);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
-      game.coreBridge?.syncGridFromGame?.();
+      syncGridFromGame(game);
       game.reactor.updateStats();
       break;
     case "potentUranium3": {
@@ -189,7 +187,7 @@ async function solveObjective(index, game) {
       for (let i = 0; i < 5; i++) {
         await placePartViaUI(game, "plutonium1", 1, i);
         game.tileset.getTile(1, i).activated = true;
-        game.tileset.getTile(1, i).ticks = 60;
+        { const __t = game.tileset.getTile(1, i); game.coreBridge.setTileTicks(__t.row, __t.col, 60); }
       }
       game.reactor.updateStats();
       game.reactor.altered_max_power = Math.max(
@@ -203,9 +201,9 @@ async function solveObjective(index, game) {
       game.coreBridge?.session?.systems?.failure?.reset?.();
       if (game.coreBridge?.session?.engine?.meltdown) {
         game.coreBridge.session.engine.reset();
-        game.coreBridge.syncGridFromGame();
+        syncGridFromGame(game);
       }
-      game.reactor.current_power = Math.max(Number(game.reactor.max_power) || 0, 500);
+      game.coreBridge.setReactorPower(Math.max(Number(game.reactor.max_power) || 0, 500));
       game.engine.stop();
       game.engine.manualTick();
       game.reactor.updateStats();
@@ -216,10 +214,9 @@ async function solveObjective(index, game) {
         const tile = game.tileset.getTile(0, i);
         await tile.setPart(plutonium3);
         tile.activated = true;
-        tile.ticks = 60;
+        game.coreBridge.setTileTicks(tile.row, tile.col, 60);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       setCoreSustainedStart(
         game,
@@ -235,7 +232,6 @@ async function solveObjective(index, game) {
       for (let i = 0; i < 10; i++) await game.tileset.getTile(0, i).setPart(cap2);
       for (let i = 0; i < 10; i++) await game.tileset.getTile(1, i).setPart(vent2);
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       break;
     }
@@ -247,10 +243,9 @@ async function solveObjective(index, game) {
         const tile = game.tileset.getTile(0, i);
         await tile.setPart(plutonium3);
         tile.activated = true;
-        tile.ticks = 60;
+        game.coreBridge.setTileTicks(tile.row, tile.col, 60);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -261,7 +256,7 @@ async function solveObjective(index, game) {
       for (let i = 0; i < 8; i++) {
         await placePartViaUI(game, "plutonium3", 0, i);
         game.tileset.getTile(0, i).activated = true;
-        game.tileset.getTile(0, i).ticks = 60;
+        { const __t = game.tileset.getTile(0, i); game.coreBridge.setTileTicks(__t.row, __t.col, 60); }
       }
       for (let i = 0; i < 10; i++) await placePartViaUI(game, "capacitor1", 1, i);
       game.reactor.updateStats();
@@ -273,9 +268,9 @@ async function solveObjective(index, game) {
       game.coreBridge?.session?.systems?.failure?.reset?.();
       if (game.coreBridge?.session?.engine?.meltdown) {
         game.coreBridge.session.engine.reset();
-        game.coreBridge.syncGridFromGame();
+        syncGridFromGame(game);
       }
-      game.reactor.current_power = 60000;
+      game.coreBridge.setReactorPower(60000);
       game.engine.stop();
       game.engine.manualTick();
       game.reactor.updateStats();
@@ -286,10 +281,9 @@ async function solveObjective(index, game) {
         const tile = game.tileset.getTile(0, i);
         await tile.setPart(thorium1);
         tile.activated = true;
-        tile.ticks = 900;
+        game.coreBridge.setTileTicks(tile.row, tile.col, 900);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.engine.tick();
       game.reactor.updateStats();
       break;
@@ -300,10 +294,9 @@ async function solveObjective(index, game) {
         const tile = game.tileset.getTile(0, i);
         await tile.setPart(thorium3);
         tile.activated = true;
-        tile.ticks = 900;
+        game.coreBridge.setTileTicks(tile.row, tile.col, 900);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -322,10 +315,9 @@ async function solveObjective(index, game) {
         const tile = game.tileset.getTile(0, i);
         await tile.setPart(seaborgium3);
         tile.activated = true;
-        tile.ticks = 3600;
+        game.coreBridge.setTileTicks(tile.row, tile.col, 3600);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -334,11 +326,11 @@ async function solveObjective(index, game) {
       for (let i = 0; i < 8; i++) {
         await placePartViaUI(game, "plutonium3", 0, i);
         game.tileset.getTile(0, i).activated = true;
-        game.tileset.getTile(0, i).ticks = 60;
+        { const __t = game.tileset.getTile(0, i); game.coreBridge.setTileTicks(__t.row, __t.col, 60); }
       }
       game.engine.tick();
       game.reactor.updateStats();
-      game.reactor.current_heat = 15000000;
+      game.coreBridge.setReactorHeat(15000000);
       game.reactor.has_melted_down = false;
       setCoreSustainedStart(
         game,
@@ -400,10 +392,9 @@ async function solveObjective(index, game) {
         const tile = game.tileset.getTile(0, i);
         await tile.setPart(dolorium3);
         tile.activated = true;
-        tile.ticks = 22000;
+        game.coreBridge.setTileTicks(tile.row, tile.col, 22000);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -419,10 +410,9 @@ async function solveObjective(index, game) {
         const tile = game.tileset.getTile(0, i);
         await tile.setPart(nefastium3);
         tile.activated = true;
-        tile.ticks = 86000;
+        game.coreBridge.setTileTicks(tile.row, tile.col, 86000);
       }
       game.tileset.updateActiveTiles();
-      syncActivePartsAtTickBoundary(game.engine);
       game.reactor.updateStats();
       game.objectives_manager.check_current_objective();
       break;
@@ -441,14 +431,13 @@ async function solveObjective(index, game) {
       const inf = game.objectives_manager.current_objective_def;
       if (inf?.checkId === "infinitePower" && inf?.target != null) {
         game.tileset.clearAllTiles();
-        syncActivePartsAtTickBoundary(game.engine);
         const plutonium1 = game.partset.getPartById("plutonium1");
         for (let r = 0; r < 3; r++) {
           for (let c = 0; c < 5; c++) {
             await placePartViaUI(game, "plutonium1", r, c);
             const t = game.tileset.getTile(r, c);
             t.activated = true;
-            t.ticks = 60;
+            game.coreBridge.setTileTicks(t.row, t.col, 60);
           }
         }
         game.tileset.updateActiveTiles();
@@ -563,7 +552,6 @@ describe("End-to-End Speed Run (DOM Simulation)", () => {
 
       if (i < totalObjectives - 2) {
         game.tileset.clearAllTiles();
-        syncActivePartsAtTickBoundary(game.engine);
       }
     }
 

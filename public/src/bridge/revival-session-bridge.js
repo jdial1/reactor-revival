@@ -4,28 +4,27 @@ import {
   computePartSellValue,
 } from "reactor-core";
 import { toNumber } from "../simUtils.js";
-import { OVERRIDE_DURATION_MS } from "../constants/balance.js";
 import {
   applyHostStatePatch,
   buildHostStatePatch,
+  hydrateAchievementsIntoSession,
+  hydrateObjectivesIntoSession,
+  projectHeatWarningUi,
   projectObjectivesFromSnapshot,
   projectReactorFromSnapshot,
   projectSessionMetaToGame,
   projectTileRuntimeFromSnapshot,
   resolveCoreSnapshot,
-  unlockedAchievementIds,
 } from "./core-state-projection.js";
-import { routeSessionEvents } from "./route-session-events.js";
+import { presentMeltdown, routeSessionEvents } from "./route-session-events.js";
+import { assertNotTickInFlight, buildTickCommit } from "./tick-commit.js";
+import { drainIntentQueue } from "./bridge-intents.js";
 import {
-  syncGridCheap,
-  syncGridFromGame as syncGridLayoutFromGame,
+  hydrateGridFromHost,
   syncGridToGame as syncGridLayoutToGame,
-  syncReactorScalarsFromGame,
 } from "./bridge-grid-sync.js";
-import {
-  hydrateUpgradeLevelsFromHost as pushHostUpgradeLevelsForLoadFn,
-  projectUpgradeLevelsToHost,
-} from "./bridge-upgrades.js";
+import { hydrateUpgradeLevelsFromHost } from "./bridge-upgrades.js";
+import { hydrateEconomyFromHost } from "./bridge-economy-sync.js";
 import { syncHostSellOverridesToSession } from "./bridge-mechanics.js";
 import {
   getHeatSegmentForTile,
@@ -33,9 +32,58 @@ import {
 } from "./bridge-heat.js";
 import { getActiveBridge } from "./active.js";
 
-export { getActiveBridge, requireActiveBridge } from "./active.js";
+function syncObjectiveFlagsFromGame(bridge) {
+  const objectives = bridge.session?.systems?.objectives;
+  if (!objectives || !bridge.game) return;
+  objectives.setFlags?.({
+    soldPower: !!bridge.game.sold_power,
+    soldHeat: !!bridge.game.sold_heat,
+  });
+}
 
-export class RevivalSessionBridge {
+function syncTickMetaFromGame(bridge) {
+  if (!bridge.session || !bridge.game) return;
+  bridge.session.suppressExplosions = false;
+  syncObjectiveFlagsFromGame(bridge);
+}
+
+function syncTogglesFromGame(bridge) {
+  if (!bridge.session || !bridge.game?.state) return;
+  const st = bridge.game.state;
+  const reactor = bridge.game.reactor;
+  bridge.session.toggles.auto_sell = !!(st.auto_sell || reactor?.auto_sell_enabled);
+  bridge.session.toggles.auto_buy = !!st.auto_buy;
+  bridge.session.toggles.heat_control = !!(st.heat_control || reactor?.heat_controlled);
+  bridge.session.toggles.time_flux = st.time_flux !== false;
+  bridge.session.setPaused(!!st.pause);
+}
+
+function syncMetaFromGame(bridge) {
+  if (!bridge.session || !bridge.game) return;
+  syncTickMetaFromGame(bridge);
+  bridge.session.runId = bridge.game.run_id ?? bridge.session.runId;
+  bridge.session.techTree = bridge.game.tech_tree ?? bridge.session.techTree;
+  bridge.session.totalPlayedTime = bridge.game.lifecycleManager?.total_played_time ?? bridge.session.totalPlayedTime;
+  bridge.session.lastSaveTime = bridge.game.lifecycleManager?.last_save_time ?? bridge.session.lastSaveTime;
+  hydrateAchievementsIntoSession(bridge);
+  if (bridge.game.blueprintPlanner) {
+    const prevSlots = JSON.stringify(bridge.session.blueprintPlanner?.slots ?? {});
+    bridge.session.blueprintPlanner = {
+      slots: { ...(bridge.game.blueprintPlanner.slots ?? {}) },
+      active: !!bridge.game.blueprintPlanner.active,
+    };
+    const nextSlots = JSON.stringify(bridge.session.blueprintPlanner.slots);
+    if (prevSlots !== nextSlots) {
+      const snapshot = bridge.session.getSnapshot?.();
+      bridge.session.events?.emit("blueprintPlannerChanged", {
+        netHeat: snapshot?.stats?.netHeat,
+        power: snapshot?.stats?.power,
+      });
+    }
+  }
+}
+
+class RevivalSessionBridge {
   constructor(game, _options = {}) {
     this.game = game;
     this.session = null;
@@ -52,87 +100,66 @@ export class RevivalSessionBridge {
     this._initPromise = createGameSession({ gameId: "reactor_revival" }).then((session) => {
       this.session = session;
       this._ready = true;
-      this.pushHostUpgradeLevelsForLoad();
+      this._bindExplosionHullDump();
+      this.hydrateFromHost();
       this.session.systems.failure?.setGracePeriodTicks?.(this.game.grace_period_ticks ?? 0);
-      this.syncGridFromGame();
-      this.syncTogglesFromGame();
-      this.syncMetaFromGame();
-      this.loadEconomyFromHost();
       if (Object.keys(this.game.placedCounts || {}).length > 0) {
-        this.setPlacedCounts(this.game.placedCounts);
+        this.session.setPlacedCounts(this.game.placedCounts);
       } else {
-        this.rebuildPlacedCounts();
+        this.session.rebuildPlacedCounts();
       }
+      this.game.placedCounts = { ...(this.session.placedCounts || {}) };
       return session;
     });
     return this._initPromise;
   }
 
-  pushHostUpgradeLevelsForLoad() {
-    pushHostUpgradeLevelsForLoadFn(this);
+  _bindExplosionHullDump() {
+    if (!this.session?.hooks?.on || this._explosionHullDumpBound) return;
+    this._explosionHullDumpBound = true;
+    this.session.hooks.on("game:componentExplosion", (payload) => {
+      this._dumpExplodedTileHeatToHull(payload);
+    });
   }
 
-  projectUpgradeLevelsToHost() {
-    projectUpgradeLevelsToHost(this);
+  _dumpExplodedTileHeatToHull(payload) {
+    const row = payload?.row;
+    const col = payload?.col;
+    const grid = this.session?.grid;
+    if (!grid || typeof row !== "number" || typeof col !== "number") return;
+    const amount = toNumber(grid.getTileHeat(row, col));
+    if (!(amount > 0)) return;
+    grid.adjustCurrentHeat(amount);
+    grid.setTileHeat(row, col, 0);
   }
 
-  projectLiveState({ preserveHostScalars = true, preserveHostEconomy = false } = {}) {
+  hydrateFromHost() {
+    assertNotTickInFlight(this, "hydrateFromHost");
+    if (!this.session || !this.game) return;
+    hydrateUpgradeLevelsFromHost(this);
+    hydrateGridFromHost(this);
+    hydrateEconomyFromHost(this);
+    syncMetaFromGame(this);
+    syncTogglesFromGame(this);
+    hydrateObjectivesIntoSession(this);
+  }
+
+  getSnapshot() {
+    return this.session?.getSnapshot?.() ?? null;
+  }
+
+  projectLiveState() {
     if (!this.session) return;
-    if (preserveHostScalars) syncReactorScalarsFromGame(this);
-    if (preserveHostEconomy) this.loadEconomyFromHost();
     this.projectToGame();
   }
 
   _syncBeforeTick() {
-    this.syncTickMetaFromGame();
-    this.syncTogglesFromGame();
-    syncGridCheap(this, { runtimeFromHost: true });
-    syncReactorScalarsFromGame(this);
-    this.loadEconomyFromHost();
+    syncTickMetaFromGame(this);
     syncHostSellOverridesToSession(this);
-  }
-
-  syncTickMetaFromGame() {
-    if (!this.session || !this.game) return;
-    this.session.suppressExplosions = false;
-    this.syncObjectiveFlagsFromGame();
-  }
-
-  loadEconomyFromHost() {
-    if (!this.session?.loadEconomyState || !this.game) return;
-    this.session.loadEconomyState({
-      money: toNumber(this.game.state?.current_money ?? this.game.current_money),
-      currentExoticParticles: toNumber(
-        this.game.current_exotic_particles ?? this.game.state?.current_exotic_particles,
-      ),
-      totalExoticParticles: toNumber(this.game.state?.total_exotic_particles),
-      sessionPowerProduced: toNumber(this.game.state?.session_power_produced),
-      sessionPowerSold: toNumber(this.game.state?.session_power_sold),
-      sessionHeatDissipated: toNumber(this.game.state?.session_heat_dissipated),
-      soldHeat: this.game.sold_heat,
-      protiumParticles: toNumber(this.game.protium_particles ?? 0),
-    });
-  }
-
-  syncForStatsRead() {
-    if (!this.session) return;
-    syncGridCheap(this, { runtimeFromHost: false });
-    this.session.grid.recalculateCaps?.();
-    this.syncCompiledPartsFromSession();
-  }
-
-  syncCompiledPartsFromSession() {
-    if (!this.session || !this.game?.partset) return;
-    const parts = this.game.partset.partsArray || [];
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (part) part.recalculate_stats();
-    }
   }
 
   resolveDisplayRatesForTile(tile) {
     if (!this.session || !tile) return null;
-    syncGridCheap(this, { runtimeFromHost: false });
     const inst = this.session.grid.getComponentAt(tile.row, tile.col);
     if (inst?.definition) return this.session.resolveDisplayRates(inst);
     if (tile.part?.id) return this.session.resolveDisplayRates(tile.part.id);
@@ -149,51 +176,13 @@ export class RevivalSessionBridge {
 
   describeCellPulse(tile) {
     if (!this.session || !tile || typeof tile.row !== "number") return null;
-    syncGridCheap(this, { runtimeFromHost: false });
     return this.session.describeCellPulse?.(tile.row, tile.col) ?? null;
   }
 
   hasTickActivity() {
     if (!this.session) return false;
     if ((this.session.pendingCommands ?? 0) > 0) return true;
-    this.syncTogglesFromGame();
     return !!this.session.hasTickActivity?.();
-  }
-
-  grantReward(payload = {}) {
-    if (!this.session) return false;
-    const money = payload.money ?? payload.reward;
-    const ep = payload.ep ?? payload.ep_reward;
-    if (typeof this.session.grantReward === "function") {
-      const result = this.session.grantReward({
-        money: money != null ? toNumber(money) : undefined,
-        ep: ep != null ? toNumber(ep) : undefined,
-        applyPrestige: !!payload.applyPrestige,
-      });
-      this.routeEvents();
-      this.projectLiveState({ preserveHostScalars: false });
-      return !!(result && result.ok !== false);
-    }
-    const { ok } = this._dispatchAndProject("GRANT_REWARD", {
-      money: money != null ? toNumber(money) : undefined,
-      ep: ep != null ? toNumber(ep) : undefined,
-      applyPrestige: !!payload.applyPrestige,
-    });
-    return ok;
-  }
-
-  creditMoney(amount, { applyPrestige = false } = {}) {
-    if (!this.session) return false;
-    const n = toNumber(amount);
-    if (!(n > 0)) return false;
-    if (typeof this.session.creditMoney === "function") {
-      this.session.creditMoney(n, { applyPrestige });
-      this.routeEvents();
-      this.projectLiveState({ preserveHostScalars: false });
-      return true;
-    }
-    const { ok } = this._dispatchAndProject("CREDIT_MONEY", { amount: n, applyPrestige });
-    return ok;
   }
 
   getPrestigeMultiplier() {
@@ -201,25 +190,9 @@ export class RevivalSessionBridge {
     return this.session.getPrestigeMultiplier?.() ?? 1;
   }
 
-  debitMoney(amount) {
-    if (!this.session) return false;
-    const n = toNumber(amount);
-    if (!(n > 0)) return false;
-    if (typeof this.session.debitMoney === "function") {
-      const ok = this.session.debitMoney(n);
-      if (ok) {
-        this.routeEvents();
-        this.projectLiveState({ preserveHostScalars: false });
-      }
-      return !!ok;
-    }
-    const { ok } = this._dispatchAndProject("DEBIT_MONEY", { amount: n });
-    return ok;
-  }
-
   computeSellValueForTile(tile) {
     if (!this.session || !tile || typeof tile.row !== "number" || typeof tile.col !== "number") return 0;
-    this.syncForStatsRead();
+    this.session.grid.recalculateCaps?.();
     return toNumber(this.session.computeSellValue(tile.row, tile.col));
   }
 
@@ -232,221 +205,44 @@ export class RevivalSessionBridge {
 
   _syncBeforeSessionOp() {
     if (!this.session) return false;
-    syncGridCheap(this, { runtimeFromHost: true });
-    syncReactorScalarsFromGame(this);
-    this.syncTickMetaFromGame();
-    this.syncTogglesFromGame();
+    syncTickMetaFromGame(this);
     return true;
   }
 
-  placePartUnpaid(row, col, partId) {
-    if (!this.session || !partId) return false;
-    const part = this.game.partset?.getPartById?.(partId);
-    if (part && this.game.partset?.isPartDoctrineLocked?.(part)) return false;
-    syncGridCheap(this, { runtimeFromHost: true });
-    syncReactorScalarsFromGame(this);
-    const ok = this.session.placeComponent(row, col, partId);
-    if (!ok) return false;
-    syncGridLayoutToGame(this);
-    this.projectLiveState({ preserveHostScalars: true, preserveHostEconomy: true });
-    return true;
-  }
-
-  removePartAt(row, col) {
-    if (!this.session) return false;
-    syncGridCheap(this, { runtimeFromHost: true });
-    syncReactorScalarsFromGame(this);
-    this.session.removeComponent(row, col);
-    syncGridLayoutToGame(this);
-    this.projectLiveState({ preserveHostScalars: true, preserveHostEconomy: true });
-    return true;
-  }
-
-  dumpTileHeatToHull(amount) {
-    if (!this.session || !(amount > 0)) return;
-    syncReactorScalarsFromGame(this);
-    this.session.grid.adjustCurrentHeat(toNumber(amount));
-    this.projectLiveState({ preserveHostScalars: false });
-  }
-
-  resetReactorHeat() {
-    if (!this.session) return;
-    this.session.grid.resetHeat();
-    this.projectLiveState({ preserveHostScalars: false });
-  }
-
-  _dispatchAndProject(type, payload, options = {}) {
-    if (!this.session) return { ok: false, result: null };
-    this.session.dispatch(payload !== undefined ? { type, payload } : { type });
+  dispatch(command) {
+    if (!this.session || !command?.type) return { ok: false, result: null };
+    this._syncBeforeSessionOp();
+    this.session.dispatch(command);
     const applied = this.drainPendingCommands();
-    const entry = applied.find((e) => e.type === type);
+    const entry = applied.find((e) => e.type === command.type);
     const result = entry?.result;
-    const failed = options.requireOk
-      ? !result?.ok
-      : result === false || result == null;
+    const failed = result === false || result == null || result?.ok === false;
     if (failed) return { ok: false, result: result ?? null };
-    if (options.grid) syncGridLayoutToGame(this);
+    syncGridLayoutToGame(this);
+    if (this._deferIntentProject) return { ok: true, result };
     this.routeEvents();
-    this.projectLiveState({ preserveHostScalars: false });
+    this.projectLiveState();
     return { ok: true, result };
   }
 
-  _syncGridCheap() {
-    syncGridCheap(this, { runtimeFromHost: false });
+  _drainQueuedIntentsBeforeTick() {
+    const game = this.game;
+    if (!game?.state?.intent_queue?.length) return;
+    this._deferIntentProject = true;
+    let reboots = [];
+    try {
+      ({ reboots } = drainIntentQueue(game, game.engine));
+    } finally {
+      this._deferIntentProject = false;
+    }
+    this._pendingRebootIntents = reboots;
   }
+
 
   _syncForObjectiveEval() {
-    this.syncMetaFromGame();
-    this.syncObjectiveFlagsFromGame();
-    syncGridCheap(this, { runtimeFromHost: true });
-    syncReactorScalarsFromGame(this);
-    this.loadEconomyFromHost();
-    this.syncForStatsRead();
-  }
-
-  syncGridFromGame() {
-    syncGridLayoutFromGame(this);
-  }
-
-  syncGridToGame() {
-    syncGridLayoutToGame(this);
-  }
-
-  syncReactorScalarsFromGame() {
-    syncReactorScalarsFromGame(this);
-  }
-
-  syncMetaFromGame() {
-    if (!this.session || !this.game) return;
-    this.syncTickMetaFromGame();
-    this.session.runId = this.game.run_id ?? this.session.runId;
-    this.session.techTree = this.game.tech_tree ?? this.session.techTree;
-    this.session.totalPlayedTime = this.game.lifecycleManager?.total_played_time ?? this.session.totalPlayedTime;
-    this.session.lastSaveTime = this.game.lifecycleManager?.last_save_time ?? this.session.lastSaveTime;
-    this.hydrateAchievementsFromGame();
-    if (this.game.blueprintPlanner) {
-      const prevSlots = JSON.stringify(this.session.blueprintPlanner?.slots ?? {});
-      this.session.blueprintPlanner = {
-        slots: { ...(this.game.blueprintPlanner.slots ?? {}) },
-        active: !!this.game.blueprintPlanner.active,
-      };
-      const nextSlots = JSON.stringify(this.session.blueprintPlanner.slots);
-      if (prevSlots !== nextSlots) {
-        const snapshot = this.session.getSnapshot?.();
-        this.session.events?.emit('blueprintPlannerChanged', {
-          netHeat: snapshot?.stats?.netHeat,
-          power: snapshot?.stats?.power,
-        });
-      }
-    }
-  }
-
-  placePart(row, col, partId) {
-    if (!this.session || !partId) return null;
-    const part = this.game.partset?.getPartById?.(partId);
-    if (part && this.game.partset?.isPartDoctrineLocked?.(part)) return null;
-    this._syncBeforeSessionOp();
-    const { ok } = this._dispatchAndProject("PLACE_PART_PAID", { row, col, id: partId }, {
-      requireOk: true,
-      grid: true,
-    });
-    if (!ok) return null;
-    return part ? { row, col, part } : { row, col, part: null };
-  }
-
-  sellPart(row, col) {
-    if (!this.session) return null;
-    const tile = this.game.tileset?.getTile(row, col);
-    if (!tile?.part) return null;
-    this._syncBeforeSessionOp();
-    const { ok } = this._dispatchAndProject("SELL_PART", { row, col }, { grid: true });
-    return ok ? { row, col } : null;
-  }
-
-  syncTogglesFromGame() {
-    if (!this.session || !this.game?.state) return;
-    const st = this.game.state;
-    const reactor = this.game.reactor;
-    this.session.toggles.auto_sell = !!(st.auto_sell || reactor?.auto_sell_enabled);
-    this.session.toggles.auto_buy = !!st.auto_buy;
-    this.session.toggles.heat_control = !!(st.heat_control || reactor?.heat_controlled);
-    this.session.toggles.time_flux = st.time_flux !== false;
-    this.session.setPaused(!!st.pause);
-  }
-
-  syncObjectiveClaim(claimedIndex) {
-    const objectives = this.session?.systems?.objectives;
-    if (!objectives) return false;
-    if (!objectives.isComplete(claimedIndex)) objectives.markComplete(claimedIndex);
-    if (objectives.currentIndex === claimedIndex) return !!objectives.claimCurrent();
-    return false;
-  }
-
-  completeAndClaimObjective(expectedIndex = null) {
-    const objectives = this.session?.systems?.objectives;
-    const om = this.game?.objectives_manager;
-    if (!objectives || !this.session) return false;
-    this.syncObjectiveFlagsFromGame();
-    const idx = expectedIndex ?? om?.current_objective_index ?? objectives.currentIndex;
-    this.syncObjectiveIndex(idx);
-    if (objectives.currentIndex !== idx) return false;
-    const ctx = this._objectiveEvalContext();
-    const already = objectives.isComplete(idx);
-    const hostDef = om?.current_objective_def;
-    if (!already) {
-      if (!this.session.checkObjective?.(ctx)) return false;
-    } else if (hostDef?.isChapterCompletion) {
-      const obj = objectives.getCurrentObjective?.() ?? hostDef;
-      if (obj && (obj.reward != null || obj.ep_reward != null)) this.grantReward(obj);
-    }
-    if (!objectives.claimCurrent?.()) return false;
-    if (om) {
-      if (om.objectives_data?.[idx]) om.objectives_data[idx].completed = true;
-      om.current_objective_index = objectives.currentIndex;
-    }
-    this.routeEvents();
-    this.projectLiveState();
-    return true;
-  }
-
-  tryAutoCompleteCurrentObjective() {
-    const objectives = this.session?.systems?.objectives;
-    if (!objectives || !this.session) return null;
-    this.syncObjectiveFlagsFromGame();
-    const om = this.game?.objectives_manager;
-    if (om) this.syncObjectiveIndex(om.current_objective_index);
-    const idx = objectives.currentIndex;
-    const alreadyCompleted = objectives.isComplete(idx);
-    const ctx = this._objectiveEvalContext();
-    if (!alreadyCompleted && !this.session.checkObjective?.(ctx)) return null;
-    if (!objectives.claimCurrent?.()) return null;
-    if (om) {
-      if (om.objectives_data?.[idx]) om.objectives_data[idx].completed = true;
-      om.current_objective_index = objectives.currentIndex;
-    }
-    this.routeEvents();
-    this.projectLiveState();
-    return { advanced: true, newlyCompleted: !alreadyCompleted };
-  }
-
-  syncObjectiveIndex(index) {
-    const objectives = this.session?.systems?.objectives;
-    if (!objectives || typeof objectives.setIndex !== "function") return;
-    const list = objectives.objectives || [];
-    if (list[index]?.checkId === "allObjectives") return;
-    objectives.setIndex(index);
-  }
-
-  syncObjectiveFlagsFromGame() {
-    const objectives = this.session?.systems?.objectives;
-    if (!objectives || !this.game) return;
-    objectives.setFlags?.({
-      soldPower: !!this.game.sold_power,
-      soldHeat: !!this.game.sold_heat,
-    });
-    if (typeof this.game.paused === "boolean") {
-      this.session.setPaused?.(!!this.game.paused);
-    }
+    syncMetaFromGame(this);
+    syncObjectiveFlagsFromGame(this);
+    this.session?.grid?.recalculateCaps?.();
   }
 
   _objectiveEvalContext() {
@@ -456,45 +252,6 @@ export class RevivalSessionBridge {
       hasMeltedDown: melted,
       paused: !!this.game?.paused,
     };
-  }
-
-  hydrateAchievementsFromGame() {
-    if (!this.session || !this.game?.state) return;
-    const full = this.game.state.achievements;
-    if (full && typeof full === "object" && !Array.isArray(full)) {
-      this.session.systems.achievements?.deserialize?.(full);
-      const ids = unlockedAchievementIds(full);
-      this.session.achievements = ids;
-      this.game.state.unlocked_achievements = ids;
-      return;
-    }
-    const fromState = this.game.state.unlocked_achievements;
-    const ids = Array.isArray(fromState)
-      ? [...fromState]
-      : [...(Array.isArray(this.session.achievements) ? this.session.achievements : [])];
-    this.session.achievements = ids;
-    this.session.systems.achievements?.deserialize?.(ids);
-  }
-
-  hydrateObjectivesFromGame() {
-    const objectives = this.session?.systems?.objectives;
-    const om = this.game?.objectives_manager;
-    if (!objectives || !om) return;
-    const completed = [];
-    const data = om.objectives_data || [];
-    for (let i = 0; i < data.length; i++) {
-      if (data[i]?.completed) completed.push(i);
-    }
-    const rawIndex = om.current_objective_index ?? 0;
-    objectives.deserialize?.({
-      currentIndex: rawIndex,
-      completed,
-      flags: {
-        soldPower: !!this.game.sold_power,
-        soldHeat: !!this.game.sold_heat,
-      },
-    });
-    objectives.setIndex?.(rawIndex);
   }
 
   getObjectiveProgress() {
@@ -521,29 +278,73 @@ export class RevivalSessionBridge {
     if (!this.session) return null;
     const heatBefore = toNumber(this.game?.reactor?.current_heat ?? 0);
     const powerBefore = toNumber(this.game?.reactor?.current_power ?? 0);
+    this._drainQueuedIntentsBeforeTick();
     this._syncBeforeTick();
-    const result = this.session.tick({ multiplier });
+    this._tickInFlight = true;
+    let result;
+    let commit;
+    try {
+      result = this.session.tick({ multiplier });
+      const events = this.session.drainEvents?.() || [];
+      this._ensureExplosionHeatDumped(events);
+      commit = buildTickCommit(this.session, result, { heatBefore, powerBefore, multiplier }, events);
+    } finally {
+      this._tickInFlight = false;
+    }
     const econ = this.session.systems?.economy;
     if (econ && typeof econ.protiumParticles === "number") {
       this.game.protium_particles = econ.protiumParticles;
     }
     syncGridLayoutToGame(this);
-    this.routeEvents();
-    this.projectToGame(result, { heatBefore, powerBefore, multiplier });
+    this.projectToGame(commit.tickResult, commit.tickMeta, commit.stateSnapshot);
+    routeSessionEvents(this, commit.events);
+    if (commit.stateSnapshot?.hasMeltedDown || commit.tickResult?.meltdown) {
+      presentMeltdown(this.game);
+    }
     if (econ && typeof econ.protiumParticles === "number") {
       this.game.protium_particles = econ.protiumParticles;
     }
     this.game.reactor?.updateStats?.({ fromSession: true });
+    const pendingReboots = this._pendingRebootIntents;
+    this._pendingRebootIntents = null;
+    if (pendingReboots?.length) {
+      void (async () => {
+        for (let i = 0; i < pendingReboots.length; i++) {
+          const keepEp = pendingReboots[i].payload?.keepEp === true;
+          if (keepEp) await this.game.rebootActionKeepExoticParticles();
+          else await this.game.rebootActionDiscardExoticParticles();
+        }
+      })();
+    }
     return result;
   }
 
-  projectToGame(tickResult, tickMeta = {}) {
+  _ensureExplosionHeatDumped(events) {
+    if (!this.session?.grid || !Array.isArray(events)) return;
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
+      if (event?.type !== "componentExplosion") continue;
+      const row = event.payload?.row;
+      const col = event.payload?.col;
+      if (typeof row !== "number" || typeof col !== "number") continue;
+      const amount = toNumber(this.session.grid.getTileHeat(row, col));
+      if (!(amount > 0)) continue;
+      this.session.grid.adjustCurrentHeat(amount);
+      this.session.grid.setTileHeat(row, col, 0);
+      if (event.payload && typeof event.payload === "object") {
+        event.payload.heatDumped = amount;
+      }
+    }
+  }
+
+  projectToGame(tickResult, tickMeta = {}, snapOverride = null) {
     const game = this.game;
     const session = this.session;
     if (!game?.state || !session) return;
 
-    const snap = resolveCoreSnapshot(session, tickResult);
+    const snap = snapOverride ?? resolveCoreSnapshot(session, tickResult);
     applyHostStatePatch(game, buildHostStatePatch(snap, tickResult, tickMeta));
+    projectHeatWarningUi(game, snap?.heatWarningLevel ?? tickResult?.heatWarningLevel ?? null);
     projectSessionMetaToGame(game, session, snap);
     projectReactorFromSnapshot(game, snap);
     projectTileRuntimeFromSnapshot(
@@ -561,7 +362,7 @@ export class RevivalSessionBridge {
   loadLegacySave(savedData) {
     if (!this.session) return;
     this.session.loadLegacySave(savedData);
-    this.syncGridToGame();
+    syncGridLayoutToGame(this);
     this.projectLiveState();
   }
 
@@ -573,62 +374,6 @@ export class RevivalSessionBridge {
 
   getPlacedCount(type, level) {
     return this.session?.getPlacedCount?.(type, level) ?? 0;
-  }
-
-  incrementPlacedCount(type, level, amount = 1) {
-    if (!this.session?.incrementPlacedCount) return 0;
-    const n = this.session.incrementPlacedCount(type, level, amount);
-    this.game.placedCounts = { ...(this.session.placedCounts || {}) };
-    return n;
-  }
-
-  rebuildPlacedCounts() {
-    if (!this.session?.rebuildPlacedCounts) return {};
-    syncGridCheap(this, { runtimeFromHost: false });
-    const counts = this.session.rebuildPlacedCounts();
-    this.game.placedCounts = { ...counts };
-    return counts;
-  }
-
-  setPlacedCounts(counts = {}) {
-    if (!this.session?.setPlacedCounts) return {};
-    const next = this.session.setPlacedCounts(counts);
-    this.game.placedCounts = { ...next };
-    return next;
-  }
-
-  clearPlacedCounts() {
-    if (!this.session?.clearPlacedCounts) return {};
-    const next = this.session.clearPlacedCounts();
-    this.game.placedCounts = { ...(next || {}) };
-    return next;
-  }
-
-  sellPower() {
-    if (!this.session) return false;
-    this.syncReactorScalarsFromGame();
-    this.syncTogglesFromGame();
-    if (toNumber(this.session.grid.currentPower) <= 0) return false;
-    const { ok } = this._dispatchAndProject("SELL_POWER");
-    if (!ok) return false;
-    const reactor = this.game.reactor;
-    if (reactor.manual_override_mult > 0) {
-      reactor.override_end_time = Date.now() + OVERRIDE_DURATION_MS;
-    }
-    return true;
-  }
-
-  ventHeat() {
-    if (!this.session || !this.game?.reactor) return false;
-    this.syncReactorScalarsFromGame();
-    if (toNumber(this.session.grid.currentHeat) <= 0) return false;
-    this.session.dispatch({ type: "VENT_HEAT" });
-    const applied = this.drainPendingCommands();
-    const entry = applied.find((e) => e.type === "VENT_HEAT");
-    if (entry?.result === false || entry?.result == null) return false;
-    this.routeEvents();
-    this.projectLiveState({ preserveHostScalars: false });
-    return true;
   }
 
   previewBlueprintDiff(layout) {
@@ -662,37 +407,75 @@ export class RevivalSessionBridge {
     return this.session.layoutCost(layout);
   }
 
+  async sampleLayoutProjection({ layout = null, recordTicks = false } = {}) {
+    if (!this.session) return null;
+    const tickCount = recordTicks === true ? 30 : (typeof recordTicks === "number" ? Math.max(1, recordTicks | 0) : 8);
+    const sampleSession = await createGameSession({ gameId: "reactor_revival" });
+    const normalizePartIds = (raw) => {
+      if (!raw) return null;
+      if (raw.partIds && raw.rows != null && raw.cols != null) return raw;
+      if (!Array.isArray(raw) || !Array.isArray(raw[0])) return null;
+      const rows = raw.length;
+      const cols = raw[0].length;
+      const partIds = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = raw[r][c];
+          partIds.push(cell?.id ?? cell?.t ?? (typeof cell === "string" ? cell : null));
+        }
+      }
+      return { rows, cols, partIds };
+    };
+    try {
+      sampleSession.load(this.session.save());
+      const normalized = normalizePartIds(layout);
+      if (normalized) {
+        const { rows, cols, partIds } = normalized;
+        if (sampleSession.grid.rows !== rows || sampleSession.grid.cols !== cols) {
+          sampleSession.grid.resize(rows, cols);
+        }
+        sampleSession.grid.clearGrid();
+        let i = 0;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const id = partIds[i++];
+            if (id) sampleSession.placeComponent(r, c, id);
+          }
+        }
+        sampleSession.grid.recalculateCaps?.();
+      }
+      const tick_series = [];
+      for (let t = 0; t < tickCount; t++) {
+        sampleSession.tick();
+        const snap = sampleSession.getSnapshot();
+        const stats = snap?.stats ?? {};
+        tick_series.push({
+          tick: t,
+          power: stats.power ?? 0,
+          net_heat: stats.netHeat ?? 0,
+          heat: snap?.grid?.currentHeat ?? 0,
+          meltdown: !!(snap?.hasMeltedDown ?? snap?.engine?.meltdown),
+        });
+      }
+      const snap = sampleSession.getSnapshot();
+      const stats = snap?.stats ?? {};
+      return {
+        stats,
+        stats_power: stats.power ?? 0,
+        stats_net_heat: stats.netHeat ?? 0,
+        stats_ep: stats.cash ?? 0,
+        tick_series: recordTicks ? tick_series : undefined,
+        meltdown: !!(snap?.hasMeltedDown),
+        heatRatio: snap?.heatRatio ?? 0,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   computeGridSellCredit(sellMultiplier, options) {
     if (!this.session) return { total: 0, items: [], sellMultiplier: sellMultiplier ?? 0.5 };
-    this._syncGridCheap();
     return this.session.computeGridSellCredit(sellMultiplier, options);
-  }
-
-  applyBlueprint(payload = {}) {
-    if (!this.session || !payload?.layout) return { ok: false, reason: "invalid" };
-    this._syncBeforeSessionOp();
-    const { ok, result } = this._dispatchAndProject("APPLY_BLUEPRINT", payload, {
-      requireOk: true,
-      grid: true,
-    });
-    return ok ? result : (result ?? { ok: false, reason: "rejected" });
-  }
-
-  commitBlueprintPlanner(payload = {}) {
-    if (!this.session) return { ok: false, reason: "invalid" };
-    this._syncBeforeSessionOp();
-    const { ok, result } = this._dispatchAndProject("COMMIT_BLUEPRINT_PLANNER", payload, {
-      requireOk: true,
-      grid: true,
-    });
-    if (!ok) return result ?? { ok: false, reason: "rejected" };
-    const planner = this.session.blueprintPlanner;
-    if (this.game.blueprintPlanner) {
-      this.game.blueprintPlanner.slots = { ...(planner?.slots ?? {}) };
-      this.game.blueprintPlanner.active = !!planner?.active;
-      this.game._syncBlueprintPlannerUi?.();
-    }
-    return result;
   }
 
   previewUpgrade(id) {
@@ -714,145 +497,11 @@ export class RevivalSessionBridge {
 
   queryNeighbors(row, col, options) {
     if (!this.session) return { containment: [], cell: [], reflector: [] };
-    syncGridCheap(this, { runtimeFromHost: false });
     return this.session.queryNeighbors(row, col, options);
   }
 
   getUpgradeLevel(id) {
     return this.session?.getUpgradeLevel?.(id) ?? 0;
-  }
-
-  purchaseUpgrade(id) {
-    if (!this.session || !this.game?.upgradeset) return false;
-    const upgradeset = this.game.upgradeset;
-    const upgrade = upgradeset.getUpgrade(id);
-    if (!upgrade) return false;
-    if (!this.session.systems?.upgrades?.getDefinition?.(id)) return false;
-
-    this.session.dispatch({ type: "PURCHASE_UPGRADE", payload: { id } });
-    const applied = this.drainPendingCommands();
-    const purchaseEntry = applied.find((entry) => entry.type === "PURCHASE_UPGRADE");
-    if (!purchaseEntry?.result) return false;
-
-    this.routeEvents();
-    this.projectLiveState({ preserveHostScalars: true });
-    const newLevel = this.session.getUpgradeLevel?.(id);
-    if (typeof newLevel === "number" && upgrade.level !== newLevel) {
-      upgrade.setLevel(newLevel, { deferSync: true });
-    } else {
-      upgrade.updateDisplayCost?.();
-    }
-    this.game.syncModifiersFromUpgrades?.();
-    if (upgrade.upgrade?.type === "experimental_parts") {
-      this.game.epart_onclick?.(upgrade);
-    }
-    upgradeset.updateSectionCounts();
-    void this.game.saveManager?.autoSave?.();
-    return true;
-  }
-
-  syncUpgradeLevelsToGame() {
-    projectUpgradeLevelsToHost(this);
-  }
-
-  prestige(options = {}) {
-    if (!this.session) return null;
-    this.loadEconomyFromHost();
-    const preview = this.session.previewPrestige({ keepEp: true });
-    const earned = this.session.prestige(options);
-    syncGridLayoutToGame(this);
-    this.projectUpgradeLevelsToHost();
-    this.routeEvents();
-    this.projectLiveState({ preserveHostScalars: false });
-    this.syncCompiledPartsFromSession();
-    this.game.reactor?.updateStats?.();
-    return {
-      earned: toNumber(earned) || toNumber(preview?.earned),
-      keepEp: true,
-      fuelCellCount: preview?.fuelCellCount ?? 0,
-      sessionPowerProduced: preview?.sessionPowerProduced ?? 0,
-      sessionHeatDissipated: preview?.sessionHeatDissipated ?? 0,
-    };
-  }
-
-  reboot(options = {}) {
-    if (!this.session) return null;
-    this.loadEconomyFromHost();
-    const keepEp = options.keepEp === true;
-    const preview = this.session.previewPrestige({ keepEp });
-    const earned = this.session.reboot({ keepEp, refundEp: false, ...options });
-    syncGridLayoutToGame(this);
-    this.projectUpgradeLevelsToHost();
-    this.routeEvents();
-    this.projectLiveState({ preserveHostScalars: false });
-    this.syncCompiledPartsFromSession();
-    this.game.reactor?.updateStats?.();
-    return {
-      earned: keepEp ? (toNumber(earned) || toNumber(preview?.earned)) : 0,
-      keepEp,
-      fuelCellCount: preview?.fuelCellCount ?? 0,
-      sessionPowerProduced: preview?.sessionPowerProduced ?? 0,
-      sessionHeatDissipated: preview?.sessionHeatDissipated ?? 0,
-    };
-  }
-
-  respecDoctrine() {
-    if (!this.session || !this.game?.upgradeset) return false;
-    this.loadEconomyFromHost();
-    const cost = toNumber(this.game.RESPER_DOCTRINE_EP_COST);
-    if (!(cost > 0) || !this.session.debitExoticParticles?.(cost)) return false;
-
-    const oldTree = this.game.tech_tree;
-    this.game.tech_tree = null;
-    this.session.techTree = null;
-
-    const exclusive = new Set(this.game.upgradeset.getExclusiveUpgradeIdsForTree?.(oldTree) || []);
-    const entries = [];
-    for (let i = 0; i < this.game.upgradeset.upgradesArray.length; i++) {
-      const upg = this.game.upgradeset.upgradesArray[i];
-      if (!upg || exclusive.has(upg.id)) continue;
-      const level = this.session.getUpgradeLevel?.(upg.id) ?? upg.level ?? 0;
-      if (level > 0) entries.push({ id: upg.id, level });
-    }
-    this.session.setUpgradeLevels(entries);
-    this.projectUpgradeLevelsToHost();
-    this.routeEvents();
-    this.projectLiveState({ preserveHostScalars: false });
-    this.game.upgradeset.updateSectionCounts?.();
-    return true;
-  }
-
-  hardReset() {
-    if (!this.session) return null;
-    this.game.tech_tree = null;
-    this.session.techTree = null;
-    this.game.protium_particles = 0;
-    const result = this.reboot({ keepEp: false });
-    this.session.loadEconomyState({
-      money: 0,
-      currentExoticParticles: 0,
-      totalExoticParticles: 0,
-      sessionPowerProduced: 0,
-      sessionPowerSold: 0,
-      sessionHeatDissipated: 0,
-      soldHeat: false,
-      protiumParticles: 0,
-    });
-    const experimental = [];
-    const upgrades = this.game.upgradeset?.upgradesArray || [];
-    for (let i = 0; i < upgrades.length; i++) {
-      const upg = upgrades[i];
-      if (!upg?.upgrade?.type?.includes?.("experimental")) continue;
-      const level = this.session.getUpgradeLevel?.(upg.id) ?? 0;
-      if (level > 0) experimental.push({ id: upg.id, level });
-    }
-    this.session.setUpgradeLevels(experimental);
-    this.projectUpgradeLevelsToHost();
-    this.routeEvents();
-    this.projectLiveState({ preserveHostScalars: false });
-    this.syncCompiledPartsFromSession();
-    this.game.reactor?.updateStats?.();
-    return result;
   }
 
 }

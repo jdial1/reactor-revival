@@ -1,4 +1,5 @@
 import { toDecimal, toNumber } from "../simUtils.js";
+import { projectHeatMapToTileset } from "./core-state-projection.js";
 
 export function bumpGridPartsRevision(tileset) {
   if (!tileset) return;
@@ -7,42 +8,9 @@ export function bumpGridPartsRevision(tileset) {
   if (engine) engine._workerPartSnapshotCache = null;
 }
 
-export function syncGridCheap(bridge, { runtimeFromHost = false } = {}) {
-  if (!bridge.session) return;
-  if (gameGridDiffersFromSession(bridge)) syncGridFromGame(bridge);
-  else if (runtimeFromHost) syncRuntimeTileStateFromGame(bridge);
-}
+export function syncGridCheap(_bridge) {}
 
-export function syncRuntimeTileStateFromGame(bridge) {
-  if (!bridge.session || !bridge.game?.tileset) return;
-  const { tileset, rows, cols } = bridge.game;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const tile = tileset.getTile(r, c);
-      const inst = bridge.session.grid.getComponentAt(r, c);
-      if (!tile?.part || !inst) continue;
-      copyTileStateToInstance(bridge, tile, inst, r, c);
-    }
-  }
-}
-
-export function gameGridDiffersFromSession(bridge) {
-  const game = bridge.game;
-  const grid = bridge.session?.grid;
-  if (!game?.tileset || !grid) return false;
-  if (grid.rows !== game.rows || grid.cols !== game.cols) return true;
-  for (let r = 0; r < game.rows; r++) {
-    for (let c = 0; c < game.cols; c++) {
-      const tile = game.tileset.getTile(r, c);
-      const gameId = tile?.part?.id ?? null;
-      const sessionId = grid.getComponentAt(r, c)?.definition?.id ?? null;
-      if (gameId !== sessionId) return true;
-    }
-  }
-  return false;
-}
-
-export function copyTileStateToInstance(bridge, tile, inst, row, col) {
+function copyTileStateToInstance(bridge, tile, inst, row, col) {
   if (tile.heat_contained != null) {
     bridge.session.grid.setTileHeat(row, col, toNumber(tile.heat_contained));
   }
@@ -55,7 +23,7 @@ export function copyTileStateToInstance(bridge, tile, inst, row, col) {
   delete inst.heat;
 }
 
-export function syncGridFromGame(bridge) {
+export function hydrateGridFromHost(bridge) {
   if (!bridge.session || !bridge.game?.tileset) return;
   const { tileset, rows, cols } = bridge.game;
   if (bridge.session.grid.rows !== rows || bridge.session.grid.cols !== cols) {
@@ -91,9 +59,20 @@ export function syncGridToGame(bridge) {
       if (!inst) {
         if (tile?.part) {
           tile.part = null;
+          tile._setProjectedTicks?.(0);
+          tile._setProjectedHeat?.(0);
+          tile.display_power = 0;
+          tile.display_heat = 0;
+          tile.activated = false;
+        } else if (tile) {
+          tile._setProjectedHeat?.(0);
+          tile._setProjectedTicks?.(0);
+        } else {
+          continue;
+        }
+        if (!tile._setProjectedTicks) {
           tile.ticks = 0;
           tile.heat_contained = toDecimal(0);
-          tile.activated = false;
         }
         continue;
       }
@@ -103,13 +82,7 @@ export function syncGridToGame(bridge) {
       tile.applySessionSync(part, inst, typeof tileHeat === "number" ? tileHeat : 0);
     }
   }
+  projectHeatMapToTileset(bridge);
   bumpGridPartsRevision(tileset);
   game.tileset.updateActiveTiles?.();
-}
-
-export function syncReactorScalarsFromGame(bridge) {
-  if (!bridge.session || !bridge.game?.reactor) return;
-  const reactor = bridge.game.reactor;
-  bridge.session.grid.currentHeat = toNumber(reactor.current_heat);
-  bridge.session.grid.currentPower = toNumber(reactor.current_power);
 }

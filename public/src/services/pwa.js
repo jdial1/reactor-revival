@@ -109,7 +109,7 @@ export function teardownPwa() {
 }
 
 export function initializePwa() {
-  console.log("[ReactorBoot] initializePwa", window.location.hostname);
+  logger.log("info", "boot", "initializePwa", window.location.hostname);
   initPwaGlobalListeners();
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   if (isLocalhost) {
@@ -310,7 +310,7 @@ export class VersionChecker {
         return parseVersionFromResponse(response);
       }
     } catch (error) {
-      console.warn("Failed to get local version from direct fetch:", error);
+      logger.log("warn", "ui", "Failed to get local version from direct fetch:", error);
     }
 
     try {
@@ -584,7 +584,6 @@ export async function warmImageCache(imagePaths) {
   });
   try {
     const results = await Promise.allSettled(loadPromises);
-    const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
     const failed = results.filter(r => r.status === 'fulfilled' && !r.value.success).length;
     if (failed > 0) {
       const failedAssets = results
@@ -593,7 +592,7 @@ export async function warmImageCache(imagePaths) {
       logger.log('warn', 'ui', `[PWA] Failed to preload: ${failedAssets.join(', ')}`);
     }
   } catch (error) {
-    console.warn('[PWA] Image cache warming encountered an error:', error);
+    logger.log("warn", "ui", "[PWA] Image cache warming encountered an error:", error);
   }
 }
 

@@ -80,8 +80,6 @@ export const ChangelogEntrySchema = z.object({
 
 export const ChangelogSchema = z.array(ChangelogEntrySchema);
 
-export const FailureFlavorSchema = z.record(z.string(), z.string());
-
 export const VersionSchema = z.object({
   version: z.string().optional().default("Unknown"),
 }).passthrough();

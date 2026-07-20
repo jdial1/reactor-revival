@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGame, cleanupGame } from "../../helpers/setup.js";
 import objective_list_data from "../../../public/data/objective_list.json";
-import { getObjectiveCheck } from "@app/logic.js";
+import { getObjectiveCheck } from "@app/domain/objectives.js";
 import { satisfyObjective } from "../../helpers/objectiveHelpers.js";
 import { MemoryAuditor } from "../../helpers/memoryAuditor.js";
 

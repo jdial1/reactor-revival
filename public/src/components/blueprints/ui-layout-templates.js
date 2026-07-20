@@ -59,8 +59,6 @@ export function myLayoutsTemplate(ui, list, fmtFn, onClose) {
     listContent: layoutsListTemplate(ui, list, fmtFn, () => ui.modalOrchestrator.showModal(MODAL_IDS.MY_LAYOUTS)),
   });
 }
-const heatVisualOverlays = new WeakMap();
-
 export const layoutViewTemplate = (layoutJson, stats, game, onClose) => {
   let parsed = null;
   safeCall(() => { parsed = typeof layoutJson === "string" ? JSON.parse(layoutJson) : layoutJson; });

@@ -30,6 +30,7 @@
     "@fontsource/share-tech-mono",
     "@fontsource/vt323",
     "@microsoft/eslint-formatter-sarif",
+    "eslint-formatter-",
     "@zip.js/zip.js",
     "eslint-import-resolver-node",
     "pako"

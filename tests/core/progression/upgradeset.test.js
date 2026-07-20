@@ -1,92 +1,77 @@
-import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
-import { patchGameState } from "@app/state.js";
-import { forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  purchaseSessionUpgrade,
+  setSessionEconomy,
+} from "../../helpers/sessionHelpers.js";
 
-describe("Upgradeset Mechanics", () => {
-  let game;
+describe("Upgradeset Mechanics (session)", () => {
+  let session;
+
   beforeEach(async () => {
-    game = await setupGame();
-    game.bypass_tech_tree_restrictions = true;
+    session = await setupSessionOnly();
   });
 
-  it("should initialize with all required upgrades", () => {
-    const requiredUpgrades = [
+  it("lists required upgrades", () => {
+    const ids = new Set(session.listUpgrades().map((u) => u.id));
+    for (const upgradeId of [
       "chronometer",
       "forceful_fusion",
       "uranium1_cell_power",
       "uranium1_cell_tick",
       "uranium1_cell_perpetual",
-    ];
-
-    requiredUpgrades.forEach((upgradeId) => {
-      const upgrade = game.upgradeset.getUpgrade(upgradeId);
-      expect(upgrade).toBeDefined();
-      expect(upgrade.id).toBe(upgradeId);
-    });
+    ]) {
+      expect(ids.has(upgradeId)).toBe(true);
+    }
   });
 
-  it("should get upgrade by ID", () => {
-    const upgrade = game.upgradeset.getUpgrade("uranium1_cell_power");
-    expect(upgrade).toBeDefined();
+  it("previews upgrade by ID", () => {
+    const upgrade = session.previewUpgrade("uranium1_cell_power");
+    expect(upgrade.ok).toBe(true);
     expect(upgrade.id).toBe("uranium1_cell_power");
-    expect(toNum(upgrade.base_cost)).toBeGreaterThan(0);
-    expect(upgrade.level).toBe(0);
-    expect(upgrade.max_level).toBeGreaterThan(0);
+    expect(Number(upgrade.def.baseCost)).toBeGreaterThan(0);
+    expect(session.getUpgradeLevel("uranium1_cell_power")).toBe(0);
+    expect(upgrade.def.maxLevel == null || upgrade.def.maxLevel > 0).toBe(true);
   });
 
-  it("should return undefined for invalid upgrade ID", () => {
-    const upgrade = game.upgradeset.getUpgrade("invalid_upgrade");
-    expect(upgrade).toBeUndefined();
+  it("returns unknown for invalid upgrade ID", () => {
+    const upgrade = session.previewUpgrade("invalid_upgrade");
+    expect(upgrade.ok).toBe(false);
+    expect(upgrade.reason).toBe("unknown");
   });
 
-  it("should get upgrades by type", () => {
-    const otherUpgrades = game.upgradeset.getUpgradesByType("other");
-    expect(otherUpgrades.length).toBeGreaterThan(0);
-    otherUpgrades.forEach((upgrade) => {
-      expect(upgrade.upgrade.type).toBe("other");
+  it("filters upgrades by type", () => {
+    const other = session.listUpgrades().filter((u) => u.type === "other");
+    expect(other.length).toBeGreaterThan(0);
+    other.forEach((upgrade) => {
+      expect(upgrade.type).toBe("other");
     });
   });
 
-  it("should return empty array for invalid type", () => {
-    const upgrades = game.upgradeset.getUpgradesByType("invalid_type");
+  it("returns empty for invalid type", () => {
+    const upgrades = session.listUpgrades().filter((u) => u.type === "invalid_type");
     expect(upgrades).toEqual([]);
   });
 
-  it("should get all available upgrades", () => {
-    const allUpgrades = game.upgradeset.getAllUpgrades();
-    expect(allUpgrades.length).toBeGreaterThan(0);
-    expect(
-      allUpgrades.every((upgrade) => upgrade.id && upgrade.max_level)
-    ).toBe(true);
+  it("lists all upgrades with ids", () => {
+    const all = session.listUpgrades();
+    expect(all.length).toBeGreaterThan(0);
+    expect(all.every((upgrade) => upgrade.id)).toBe(true);
   });
 
-  it("should check affordability correctly", () => {
-    const upgrade = game.upgradeset.getUpgrade("chronometer");
-    // Ensure clean state
-    upgrade.setLevel(0);
-    upgrade.updateDisplayCost();
-    
-    const cost = upgrade.getCost();
-    
-    game.current_money = cost;
-    patchGameState(game, { current_money: game.current_money });
-    game.upgradeset.check_affordability(game);
-    expect(upgrade.affordable, `Expected affordable at money ${cost}`).toBe(true);
-    
-    game.current_money = cost - 1;
-    patchGameState(game, { current_money: game.current_money });
-    game.upgradeset.check_affordability(game);
-    expect(upgrade.affordable, `Expected unaffordable at money ${cost - 1}`).toBe(false);
+  it("checks affordability via previewUpgrade", () => {
+    const cost = session.previewUpgrade("chronometer").cost;
+    setSessionEconomy(session, { money: String(cost) });
+    expect(session.previewUpgrade("chronometer").canPurchase).toBe(true);
+
+    setSessionEconomy(session, { money: String(cost - 1) });
+    expect(session.previewUpgrade("chronometer").canPurchase).toBe(false);
   });
 
-  it("should correctly purchase an upgrade", () => {
-    const upgrade = game.upgradeset.getUpgrade("chronometer");
-    upgrade.setLevel(0);
-    upgrade.updateDisplayCost();
-
-    const result = forcePurchaseUpgrade(game, "chronometer");
-
-    expect(result, "Purchase returned false").toBe(true);
-    expect(upgrade.level).toBe(1);
+  it("purchases chronometer via session", () => {
+    const cost = session.previewUpgrade("chronometer").cost;
+    setSessionEconomy(session, { money: String(cost) });
+    expect(purchaseSessionUpgrade(session, "chronometer")).toBe(true);
+    expect(session.getUpgradeLevel("chronometer")).toBe(1);
   });
 });

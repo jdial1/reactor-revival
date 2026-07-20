@@ -151,8 +151,6 @@ async function fetchResolvedSavesFn() {
     hasSave,
     saveSlots,
     autoSave,
-    cloudSaveOnly: false,
-    cloudSaveData: null,
     mostRecentSave,
     maxLocalTime: Math.max(maxLocalTime, autoSave?.lastSaveTime || 0),
     dataJSON,

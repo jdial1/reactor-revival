@@ -30,7 +30,7 @@ describe("Full Part and Upgrade Coverage", () => {
         if (prevSpec) {
           const key = `${prevSpec.type}:${prevSpec.level}`;
           game.placedCounts[key] = 10;
-          game.coreBridge?.setPlacedCounts?.(game.placedCounts);
+          game.coreBridge?.session?.setPlacedCounts?.(game.placedCounts);
           game._unlockStates = {};
         }
 
@@ -38,8 +38,8 @@ describe("Full Part and Upgrade Coverage", () => {
           // Ensure we have enough EP to purchase required upgrades
           const labUpgrade = game.upgradeset.getUpgrade("laboratory");
           const reqUpgrade = game.upgradeset.getUpgrade(part.erequires);
-          const labCost = labUpgrade ? labUpgrade.getEcost() : 0;
-          const reqCost = reqUpgrade ? reqUpgrade.getEcost() : 0;
+          const labCost = labUpgrade ? labUpgrade.current_ecost : 0;
+          const reqCost = reqUpgrade ? reqUpgrade.current_ecost : 0;
           
           // Set EP high enough to purchase both upgrades
           game.current_exotic_particles = Math.max(labCost + reqCost + 100000, 100000);
@@ -66,13 +66,11 @@ describe("Full Part and Upgrade Coverage", () => {
           }
           
           // Recalculate part stats after upgrades are purchased
-          part.recalculate_stats();
           
           // Verify required upgrade is actually purchased (double-check)
           if (reqUpgrade && reqUpgrade.level === 0) {
             // Force purchase if still not purchased
             reqUpgrade.setLevel(1);
-            part.recalculate_stats();
           }
           
           // Ensure part is unlocked before setting resources
@@ -82,7 +80,7 @@ describe("Full Part and Upgrade Coverage", () => {
             if (!isUnlocked) {
               // Force unlock by ensuring count is sufficient
               game.placedCounts[`${prevSpec.type}:${prevSpec.level}`] = 10;
-              game.coreBridge?.setPlacedCounts?.(game.placedCounts);
+              game.coreBridge?.session?.setPlacedCounts?.(game.placedCounts);
               game._unlockStates = {};
             }
           }
@@ -95,7 +93,6 @@ describe("Full Part and Upgrade Coverage", () => {
             game.exotic_particles = game.current_exotic_particles;
             patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
             // Recalculate again after setting EP to ensure ecost is updated
-            part.recalculate_stats();
           } else {
             // Part costs money (even though it requires an upgrade)
             // Ensure cost is set - use base_cost if cost is 0
@@ -110,7 +107,7 @@ describe("Full Part and Upgrade Coverage", () => {
             const isUnlocked = game.isPartUnlocked(part);
             if (!isUnlocked) {
               game.placedCounts[`${prevSpec.type}:${prevSpec.level}`] = 10;
-              game.coreBridge?.setPlacedCounts?.(game.placedCounts);
+              game.coreBridge?.session?.setPlacedCounts?.(game.placedCounts);
               game._unlockStates = {};
             }
           }
@@ -185,10 +182,10 @@ describe("Full Part and Upgrade Coverage", () => {
             await tile.setPart(part);
             tile.activated = true;
             const initialHeat = 10;
-            tile.heat_contained = initialHeat;
+            game.coreBridge.setTileHeat(tile.row, tile.col, initialHeat);
 
             if (part.id === "vent6") {
-              game.reactor.current_power = initialHeat; // Ensure power is available for vent6
+              game.coreBridge.setReactorPower(initialHeat); // Ensure power is available for vent6
             }
 
             game.engine.tick();
@@ -200,7 +197,7 @@ describe("Full Part and Upgrade Coverage", () => {
             break;
           }
           case "coolant_cell":
-            tile.heat_contained = 100;
+            game.coreBridge.setTileHeat(tile.row, tile.col, 100);
             game.engine.tick();
             expect(tile.heat_contained).toBe(100);
             expect(tile.part.containment).toBe(part.containment);
@@ -212,8 +209,8 @@ describe("Full Part and Upgrade Coverage", () => {
             );
             neighborTile.activated = true;
             tile.activated = true;
-            tile.heat_contained = 100;
-            neighborTile.heat_contained = 0;
+            game.coreBridge.setTileHeat(tile.row, tile.col, 100);
+            game.coreBridge.setTileHeat(neighborTile.row, neighborTile.col, 0);
             game.engine.tick();
             expect(tile.heat_contained).toBeGreaterThan(0);
             expect(neighborTile.heat_contained).toBeGreaterThan(0);
@@ -222,7 +219,7 @@ describe("Full Part and Upgrade Coverage", () => {
           case "heat_inlet": {
             const sourceTile = game.tileset.getTile(5, 6);
             await sourceTile.setPart(game.partset.getPartById("coolant_cell1"));
-            sourceTile.heat_contained = 50;
+            game.coreBridge.setTileHeat(sourceTile.row, sourceTile.col, 50);
             sourceTile.activated = true;
             tile.activated = true;
             game.reactor.updateStats();
@@ -241,7 +238,7 @@ describe("Full Part and Upgrade Coverage", () => {
             await sinkTile.setPart(game.partset.getPartById("coolant_cell1"));
             sinkTile.activated = true;
             const initialHeatInReactor = 10;
-            game.reactor.current_heat = initialHeatInReactor;
+            game.coreBridge.setReactorHeat(initialHeatInReactor);
             game.engine.tick();
             expect(toNum(game.reactor.current_heat)).toBeLessThan(initialHeatInReactor);
             expect(sinkTile.heat_contained).toBeGreaterThan(0);
@@ -261,7 +258,7 @@ describe("Full Part and Upgrade Coverage", () => {
                 if (tile.part && tile.part.category === 'particle_accelerator') {
                   const maxHeat = tile.part.containment || 1000;
                   if (tile.heat_contained > maxHeat) {
-                    tile.heat_contained = maxHeat;
+                    game.coreBridge.setTileHeat(tile.row, tile.col, maxHeat);
                   }
                 }
               }
@@ -276,12 +273,12 @@ describe("Full Part and Upgrade Coverage", () => {
             // Boost reactor caps to avoid flux/explosion side-effects during the test
             game.reactor.max_power = 1e9;
             game.reactor.max_heat = 1e9;
-            game.reactor.current_power = 0;
-            game.reactor.current_heat = 0;
+            game.coreBridge.setReactorPower(0);
+            game.coreBridge.setReactorHeat(0);
             
             // Prime the accelerator with sufficient heat to drive EP generation
             const targetHeat = Math.max((tile.part.ep_heat || 1000) * 2, 1000);
-            tile.heat_contained = targetHeat;
+            game.coreBridge.setTileHeat(tile.row, tile.col, targetHeat);
             
             // Particle accelerators need heat to generate EP - run many ticks to ensure EP generation
             // EP generation is chance-based, so we need enough ticks for the probability to trigger
@@ -366,23 +363,23 @@ describe("Full Part and Upgrade Coverage", () => {
               // For EP upgrades that require other EP upgrades, ensure we have enough EP
               const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
               if (requiredUpgrade && requiredUpgrade.level === 0) {
-                game.current_exotic_particles = requiredUpgrade.getEcost();
+                game.current_exotic_particles = requiredUpgrade.current_ecost;
                 game.upgradeset.purchaseUpgrade(upgrade.erequires);
               }
             }
           }
-          game.current_exotic_particles = upgrade.getEcost();
+          game.current_exotic_particles = upgrade.current_ecost;
         } else {
           // For regular upgrades, handle dependencies
           if (upgrade.erequires) {
             const requiredUpgrade = game.upgradeset.getUpgrade(upgrade.erequires);
             if (requiredUpgrade && requiredUpgrade.level === 0) {
-              game.current_money = requiredUpgrade.getCost();
+              game.current_money = requiredUpgrade.current_cost;
               patchGameState(game, { current_money: game.current_money });
               game.upgradeset.purchaseUpgrade(upgrade.erequires);
             }
           }
-          game.current_money = upgrade.getCost();
+          game.current_money = upgrade.current_cost;
           patchGameState(game, { current_money: game.current_money });
         }
 

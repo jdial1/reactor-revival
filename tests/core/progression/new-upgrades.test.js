@@ -1,556 +1,191 @@
-/* eslint-disable no-undef */
-import { describe, it, expect, beforeEach, setupGameWithDOM, toNum, vi, createNowController , syncActivePartsAtTickBoundary} from "../../helpers/setup.js";
-import { placePart, forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
-import { setDecimal } from "@app/store.js";
-import { patchGameState } from "@app/state.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  purchaseSessionUpgrade,
+  setSessionTileHeat,
+  tileHeatAt,
+  setSessionReactorHeat,
+  reactorHeat,
+  sessionEp,
+  setSessionEconomy,
+} from "../../helpers/sessionHelpers.js";
 
-describe("New Gameplay Upgrades", () => {
-    let game;
+function power(session) {
+  return Number(session.getSnapshot().grid.currentPower ?? 0);
+}
 
-    beforeEach(async () => {
-        const setup = await setupGameWithDOM();
-        game = setup.game;
-        await game.upgradeset.initialize();
-        game.bypass_tech_tree_restrictions = true;
-        game.current_money = 1e30;
-        game.current_exotic_particles = 1e20;
-        game.upgradeset.check_affordability(game);
-        game.tileset.updateActiveTiles();
+describe("New Gameplay Upgrades (session)", () => {
+  let session;
 
-        game.onToggleStateChange?.("auto_sell", false);
+  beforeEach(async () => {
+    session = await setupSessionOnly({ money: 1e30 });
+  });
 
-        game.reactor.base_max_power = 100000;
-        game.reactor.base_max_heat = 100000;
-        game.reactor.altered_max_power = 100000;
-        game.reactor.altered_max_heat = 100000;
-        game.reactor.max_power = 100000;
-        game.reactor.max_heat = 100000;
+  describe("efficiency and utility", () => {
+    it("stirling_generators converts vented heat to power", () => {
+      expect(session.placeComponent(0, 0, "vent1")).toBe(true);
+      setSessionTileHeat(session, 0, 0, 40);
+      expect(purchaseSessionUpgrade(session, "stirling_generators")).toBe(true);
+      expect(session.modifiers.stirlingMultiplier).toBeGreaterThan(0);
+
+      const powerBefore = power(session);
+      const heatBefore = tileHeatAt(session, 0, 0);
+      session.tick();
+      const vented = heatBefore - tileHeatAt(session, 0, 0);
+      expect(vented).toBeGreaterThan(0);
+      expect(power(session) - powerBefore).toBeCloseTo(
+        vented * session.modifiers.stirlingMultiplier,
+        4
+      );
     });
 
-    describe("Set 1: Efficiency & Utility", () => {
-        it("Stirling Generators: should convert vented heat to power", async () => {
-            game.engine.handleComponentExplosion = () => {}; // Disable explosions
-            const tile = await placePart(game, 0, 0, "vent1");
-            tile.activated = true;
-            tile.enabled = true;
-            
-            // Ensure part has correct vent value
-            tile.part.recalculate_stats();
-            const baseVent = tile.part.vent || 4;
-            tile.part.vent = baseVent;
-            tile.part.base_vent = baseVent;
-            
-            // Override getEffectiveVentValue to return the part's vent value
-            tile.getEffectiveVentValue = function() {
-                return this.part ? this.part.vent : 0;
-            };
+    it("emergency_coolant increases VENT_HEAT reduction", () => {
+      setSessionReactorHeat(session, 1000);
+      session.grid.maxHeat = 1000;
+      expect(purchaseSessionUpgrade(session, "emergency_coolant")).toBe(true);
+      expect(session.modifiers.manualVentPercent).toBeGreaterThan(0);
 
-            tile.heat_contained = 100;
-            
-            game.tileset.updateActiveTiles();
-            syncActivePartsAtTickBoundary(game.engine);
+      session.runCommand({ type: "VENT_HEAT", payload: {} });
+      expect(reactorHeat(session)).toBe(1000 - (1 + 1000 * 0.005));
+    });
+  });
 
-            forcePurchaseUpgrade(game, "stirling_generators");
-            expect(game.reactor.stirling_multiplier).toBeGreaterThan(0);
-            tile.heat_contained = 100;
-            
-            game.paused = false;
-            game.onToggleStateChange?.("pause", false);
-            
-            const initialPower = game.reactor.current_power;
-            const initialHeat = tile.heat_contained;
-
-            console.log(`[DEBUG Stirling] Pre-Tick: Heat=${tile.heat_contained}, Power=${initialPower}, Multiplier=${game.reactor.stirling_multiplier}`);
-
-            game.engine.manualTick();
-            game.reactor.updateStats();
-
-            console.log(`[DEBUG Stirling] Post-Tick: Heat=${tile.heat_contained}, Power=${game.reactor.current_power}`);
-
-            expect(tile.heat_contained).toBeLessThan(initialHeat);
-            expect(toNum(game.reactor.current_power)).toBeGreaterThan(toNum(initialPower));
-            
-            const ventAmount = initialHeat - tile.heat_contained;
-            const expectedGain = ventAmount * game.reactor.stirling_multiplier;
-            expect(toNum(game.reactor.current_power) - toNum(initialPower)).toBeCloseTo(expectedGain, 4);
-        });
-
-        it("Emergency Coolant Injectors: should increase manual heat reduction", async () => {
-            game.reactor.current_heat = 1000;
-            game.reactor.max_heat = 1000;
-            const baseReduction = game.reactor.manual_heat_reduce || 1;
-            forcePurchaseUpgrade(game, "emergency_coolant");
-            expect(game.reactor.manual_vent_percent).toBeGreaterThan(0);
-            game.manual_reduce_heat_action();
-            const expectedReduction = baseReduction + (1000 * 0.005);
-            expect(1000 - toNum(game.reactor.current_heat)).toBe(expectedReduction);
-        });
+  describe("durability and stability", () => {
+    it("component_reinforcement raises buffer containment", () => {
+      const before = Number(session.getPart("capacitor1").containment);
+      expect(purchaseSessionUpgrade(session, "component_reinforcement")).toBe(true);
+      expect(Number(session.getPart("capacitor1").containment)).toBeCloseTo(before * 1.1, 5);
     });
 
-    describe("Set 2: Durability & Stability", () => {
-        it("Component Reinforcement: should increase containment of buffer parts", async () => {
-            const part = game.partset.getPartById("capacitor1");
-            const baseContainment = part.base_containment;
-            
-            forcePurchaseUpgrade(game, "component_reinforcement");
-            part.recalculate_stats();
-            expect(part.containment).toBeCloseTo(baseContainment * 1.10, 1);
-        });
-
-        it("Isotope Stabilization: should increase cell lifespan", async () => {
-            const cell = game.partset.getPartById("uranium1");
-            const baseTicks = cell.base_ticks;
-            
-            forcePurchaseUpgrade(game, "isotope_stabilization");
-            cell.recalculate_stats();
-            expect(cell.ticks).toBeCloseTo(baseTicks * 1.05, 1);
-        });
-
-        it("Reflector Coolant Injection: should reduce adjacent cell heat output", async () => {
-            const cellTile = await placePart(game, 0, 0, "uranium1");
-            await placePart(game, 0, 1, "reflector1");
-            game.reactor.updateStats();
-            const heatBefore = cellTile.heat;
-            forcePurchaseUpgrade(game, "reflector_cooling");
-            expect(game.reactor.reflector_cooling_factor).toBeGreaterThan(0);
-            game.reactor.updateStats();
-            expect(cellTile.heat).toBeLessThan(heatBefore);
-            expect(cellTile.heat).toBeCloseTo(heatBefore * 0.98, 0.1);
-        });
+    it("isotope_stabilization raises cell baseTicks", () => {
+      const before = Number(session.getPart("uranium1").baseTicks);
+      expect(purchaseSessionUpgrade(session, "isotope_stabilization")).toBe(true);
+      expect(Number(session.getPart("uranium1").baseTicks)).toBeCloseTo(before * 1.05, 5);
     });
 
-    describe("Set 3: Layout & Risk", () => {
-        it("Manual Override: should create temporary power buff on sell", async () => {
-            const nowCtl = createNowController(vi);
-            try {
-                const upgrade = game.upgradeset.getUpgrade("manual_override");
-                forcePurchaseUpgrade(game, upgrade.id);
-                expect(game.reactor.manual_override_mult).toBeGreaterThan(0);
-                const tile = game.tileset.getTile(0, 0);
-                const cell = game.partset.getPartById("uranium1");
-                await tile.setPart(cell);
-                tile.ticks = 100;
-                tile.activated = true;
-                game.coreBridge.syncGridFromGame();
-                game.reactor.current_power = 10;
-                game.coreBridge.syncReactorScalarsFromGame();
-                game.sell_action();
-                expect(game.reactor.override_end_time).toBeGreaterThan(Date.now());
-                game.reactor.updateStats();
-                expect(tile.power).toBeGreaterThanOrEqual(cell.base_power);
-            } finally {
-                nowCtl.restore();
-            }
-        });
+    it("reflector_cooling reduces adjacent cell heat output", () => {
+      expect(session.placeComponent(0, 0, "uranium1")).toBe(true);
+      expect(session.placeComponent(0, 1, "reflector1")).toBe(true);
+      const heatBefore = Number(session.getCellOutputAt(0, 0).heat);
+      expect(purchaseSessionUpgrade(session, "reflector_cooling")).toBe(true);
+      expect(session.modifiers.reflectorCoolingFactor).toBeGreaterThan(0);
+      expect(Number(session.getCellOutputAt(0, 0).heat)).toBeLessThan(heatBefore);
+      expect(Number(session.getCellOutputAt(0, 0).heat)).toBeCloseTo(heatBefore * 0.98, 1);
+    });
+  });
+
+  describe("layout and risk", () => {
+    it("manual_override sets manualOverrideMult", () => {
+      expect(purchaseSessionUpgrade(session, "manual_override")).toBe(true);
+      expect(session.modifiers.manualOverrideMult).toBeGreaterThan(0);
     });
 
-    describe("Set 4: Layout Strategy", () => {
-        it("Convective Airflow: should boost vent based on empty neighbors", async () => {
-            game.engine.handleComponentExplosion = () => {}; // Disable explosions
-            const ventTile = game.tileset.getTile(1, 1);
-            const ventPart = game.partset.getPartById("vent1");
+    it("convective_airflow boosts venting with empty neighbors", () => {
+      expect(session.placeComponent(1, 1, "vent1")).toBe(true);
+      setSessionTileHeat(session, 1, 1, 40);
+      expect(purchaseSessionUpgrade(session, "convective_airflow")).toBe(true);
+      expect(session.modifiers.convectiveBoost).toBeGreaterThan(0);
 
-            await ventTile.setPart(ventPart);
-            ventTile.enabled = true;
-            ventTile.activated = true;
-            ventTile.part.category = "vent";
-
-            ventTile.getEffectiveVentValue = () => 4;
-
-            ventTile.heat_contained = 100;
-            game.tileset.updateActiveTiles();
-
-            game.tileset.getTile(0, 1).clearPart();
-            game.tileset.getTile(2, 1).clearPart();
-            game.tileset.getTile(1, 0).clearPart();
-            game.tileset.getTile(1, 2).clearPart();
-            
-            game.tileset.updateActiveTiles();
-            ventTile.heat_contained = 100;
-
-            syncActivePartsAtTickBoundary(game.engine);
-
-            forcePurchaseUpgrade(game, "convective_airflow");
-            expect(game.reactor.convective_boost).toBeGreaterThan(0);
-            ventTile.heat_contained = 100;
-            
-            // Ensure part has correct vent value
-            ventTile.part.recalculate_stats();
-            const baseVent = ventTile.part.vent || 4;
-            ventTile.part.vent = baseVent;
-            ventTile.part.base_vent = baseVent;
-            
-            // Override getEffectiveVentValue to return the part's vent value
-            ventTile.getEffectiveVentValue = function() {
-                return this.part ? this.part.vent : 0;
-            };
-            
-            game.paused = false;
-            game.onToggleStateChange?.("pause", false);
-            
-            const heatBefore = ventTile.heat_contained;
-            game.engine.manualTick();
-            const heatReduction = heatBefore - ventTile.heat_contained;
-            
-            console.log(`[DEBUG Convective] Reduction=${heatReduction}, Vent=${ventTile.part.vent}, Boost=${game.reactor.convective_boost}`);
-            expect(heatReduction).toBeGreaterThan(4);
-            expect(heatReduction).toBeCloseTo(5.6, 1);
-        });
-
-        it("Electro-Thermal Conversion: should burn power to reduce heat at critical levels", async () => {
-            game.tileset.clearAllTiles();
-            syncActivePartsAtTickBoundary(game.engine);
-
-            
-            game.reactor.base_max_heat = 10000;
-            game.reactor.max_heat = 10000;
-            game.reactor.base_max_power = 20000;
-            game.reactor.max_power = 20000;
-            game.reactor.altered_max_heat = 10000;
-            game.reactor.altered_max_power = 20000;
-
-            game.reactor.current_heat = 9500; 
-            game.reactor.current_power = 1000;
-            game.reactor.heat_controlled = false;
-
-            forcePurchaseUpgrade(game, "electro_thermal_conversion");
-            expect(game.reactor.power_to_heat_ratio).toBeGreaterThan(0);
-
-            game.paused = false;
-            game.onToggleStateChange?.("pause", false);
-
-            const heatBefore = game.reactor.current_heat;
-            const powerBefore = game.reactor.current_power;
-
-            game.engine.manualTick();
-
-            expect(toNum(game.reactor.current_heat)).toBeLessThan(toNum(heatBefore));
-            expect(toNum(game.reactor.current_power)).toBeLessThan(toNum(powerBefore));
-        });
-
-        it("Sub-Atomic Catalysts: should reduce EP heat threshold", async () => {
-            const upgrade = game.upgradeset.getUpgrade("sub_atomic_catalysts");
-            const pa = game.partset.getPartById("particle_accelerator1");
-            if(!pa.base_ep_heat) pa.base_ep_heat = 500000000;
-            pa.ep_heat = pa.base_ep_heat;
-            const epBefore = game.current_exotic_particles;
-            game.current_exotic_particles = 0;
-            patchGameState(game, { current_exotic_particles: 0 });
-
-            forcePurchaseUpgrade(game, upgrade.id);
-
-            expect(game.reactor.catalyst_reduction).toBeGreaterThan(0);
-            pa.recalculate_stats();
-            expect(toNum(pa.ep_heat)).toBeLessThanOrEqual(toNum(pa.base_ep_heat) * 1.01);
-            game.current_exotic_particles = epBefore;
-            patchGameState(game, { current_exotic_particles: epBefore });
-        });
+      const heatBefore = tileHeatAt(session, 1, 1);
+      session.tick();
+      expect(heatBefore - tileHeatAt(session, 1, 1)).toBeCloseTo(5.6, 1);
     });
 
-    describe("Advanced Interactions & Persistence", () => {
-        it("Stirling Generators: should calculate power based on upgraded vent rates", async () => {
-            const stirling = game.upgradeset.getUpgrade("stirling_generators");
-            const improvedVents = game.upgradeset.getUpgrade("improved_heat_vents");
-            
-            game.current_money = stirling.getCost() + improvedVents.getCost() + 1000;
-            game.coreBridge.loadEconomyFromHost();
-            forcePurchaseUpgrade(game, stirling.id);
-            forcePurchaseUpgrade(game, improvedVents.id);
-            
-            const vent = game.partset.getPartById("vent1");
-            const tile = game.tileset.getTile(0, 0);
-            await tile.setPart(vent);
-            tile.part.category = "vent";
-            
-            tile.getEffectiveVentValue = () => 8;
-            
-            tile.heat_contained = 100;
-            tile.activated = true;
-            game.coreBridge.syncGridFromGame();
-            
-            syncActivePartsAtTickBoundary(game.engine);
+    it("convective_airflow vents less when neighbors are occupied", () => {
+      expect(session.placeComponent(1, 1, "vent1")).toBe(true);
+      expect(session.placeComponent(0, 1, "uranium1")).toBe(true);
+      expect(session.placeComponent(2, 1, "uranium1")).toBe(true);
+      setSessionTileHeat(session, 1, 1, 40);
+      expect(purchaseSessionUpgrade(session, "convective_airflow")).toBe(true);
 
-            game.paused = false;
-            const initialPower = game.reactor.current_power;
-            game.engine.tick();
-            
-            const powerGenerated = game.reactor.current_power - initialPower;
-            expect(powerGenerated).toBeGreaterThan(0);
-        });
-
-        it("Convective Airflow: should scale dynamically with neighbor count", async () => {
-            game.engine.handleComponentExplosion = () => {}; // Disable explosions
-            const ventTile = game.tileset.getTile(1, 1);
-            const ventPart = game.partset.getPartById("vent1");
-
-            await ventTile.setPart(ventPart);
-            ventTile.enabled = true;
-            ventTile.activated = true;
-            ventTile.part.category = "vent";
-
-            // Ensure part has correct vent value
-            ventTile.part.recalculate_stats();
-            const baseVent = ventTile.part.vent || 4;
-            ventTile.part.vent = baseVent;
-            ventTile.part.base_vent = baseVent;
-            
-            // Override getEffectiveVentValue to return the part's vent value
-            ventTile.getEffectiveVentValue = function() {
-                return this.part ? this.part.vent : 0;
-            };
-
-            ventTile.heat_contained = 100;
-            game.tileset.updateActiveTiles();
-            game.coreBridge.syncGridFromGame();
-
-            forcePurchaseUpgrade(game, "convective_airflow");
-            
-            game.tileset.getTile(0, 1).clearPart();
-            game.tileset.getTile(2, 1).clearPart();
-            game.tileset.getTile(1, 0).clearPart();
-            game.tileset.getTile(1, 2).clearPart();
-            game.tileset.updateActiveTiles();
-            game.coreBridge.syncGridFromGame();
-            
-            syncActivePartsAtTickBoundary(game.engine);
-
-            game.paused = false;
-            game.onToggleStateChange?.("pause", false);
-            
-            let heatBefore = ventTile.heat_contained;
-            game.engine.manualTick();
-            let heatReduction = heatBefore - ventTile.heat_contained;
-
-            expect(heatReduction).toBeCloseTo(5.6, 1);
-
-            await game.tileset.getTile(0, 1).setPart(game.partset.getPartById("uranium1"));
-            await game.tileset.getTile(2, 1).setPart(game.partset.getPartById("uranium1"));
-            
-            // Recalculate vent stats after neighbors change
-            ventTile.part.recalculate_stats();
-            game.tileset.updateActiveTiles();
-            syncActivePartsAtTickBoundary(game.engine);
-
-            
-            // Deactivate cells to prevent heat generation during vent test
-            const cellTile1 = game.tileset.getTile(0, 1);
-            const cellTile2 = game.tileset.getTile(2, 1);
-            const wasActivated1 = cellTile1.activated;
-            const wasActivated2 = cellTile2.activated;
-            cellTile1.activated = false;
-            cellTile2.activated = false;
-            
-            // Also prevent heat transfer by clearing heat from cells and reactor
-            cellTile1.heat_contained = 0;
-            cellTile2.heat_contained = 0;
-            game.reactor.current_heat = 0;
-            
-            // Deactivate all heat exchangers and outlets to prevent heat transfer to vent
-            const deactivatedTiles = [];
-            game.tileset.tiles_list.forEach(t => {
-              if (t.part && (t.part.category === 'heat_exchanger' || t.part.category === 'heat_outlet' || t.part.category === 'heat_inlet')) {
-                if (t.activated) {
-                  deactivatedTiles.push(t);
-                  t.activated = false;
-                }
-              }
-            });
-            
-            // Also prevent particle accelerators from pulling heat
-            game.tileset.tiles_list.forEach(t => {
-              if (t.part && t.part.category === 'particle_accelerator') {
-                if (t.activated) {
-                  deactivatedTiles.push(t);
-                  t.activated = false;
-                }
-              }
-            });
-            
-            // Store initial heat and track changes
-            ventTile.heat_contained = 100;
-            heatBefore = 100;
-            game.coreBridge.syncGridFromGame();
-            
-            // Intercept heat additions by wrapping the tick
-            const originalProcessTick = game.engine._processTick;
-            let ventHeatAtStart = ventTile.heat_contained;
-            game.engine._processTick = function(multiplier, manual) {
-              // Before processing, store vent heat
-              ventHeatAtStart = ventTile.heat_contained;
-              const result = originalProcessTick.call(this, multiplier, manual);
-              // After processing, if heat was added to vent, remove it
-              if (ventTile.heat_contained > ventHeatAtStart) {
-                ventTile.heat_contained = ventHeatAtStart;
-              }
-              return result;
-            };
-            
-            game.engine.tick();
-            const firstReduction = heatBefore - ventTile.heat_contained;
-            
-            // Restore original method
-            game.engine._processTick = originalProcessTick;
-            
-            // Restore deactivated tiles
-            deactivatedTiles.forEach(t => { t.activated = true; });
-            
-            // Restore activation state
-            cellTile1.activated = wasActivated1;
-            cellTile2.activated = wasActivated2;
-            
-            // With two neighbors occupied, reduction should increase relative to the solo vent value
-            // Expect roughly double the base reduction when both adjacent tiles are occupied
-            const expectedIncreased = firstReduction * 2;
-            expect(heatReduction).toBeGreaterThan(firstReduction);
-            expect(heatReduction).toBeCloseTo(expectedIncreased, 1);
-        });
-
-        it("Sub-Atomic Catalysts: should generate EP at lower heat levels", async () => {
-            const upgrade = game.upgradeset.getUpgrade("sub_atomic_catalysts");
-            const pa = game.partset.getPartById("particle_accelerator1");
-            if (!pa.base_ep_heat) pa.base_ep_heat = 500000000;
-            pa.ep_heat = pa.base_ep_heat;
-            const epBefore = game.current_exotic_particles;
-            game.current_exotic_particles = 0;
-            patchGameState(game, { current_exotic_particles: 0 });
-
-            game.current_money = upgrade.getCost() * 10;
-            patchGameState(game, { current_money: game.current_money });
-            game.upgradeset.check_affordability(game);
-            game.upgradeset.purchaseUpgrade(upgrade.id);
-            
-            pa.recalculate_stats();
-            expect(toNum(pa.ep_heat)).toBeLessThanOrEqual(toNum(pa.base_ep_heat) * 1.01);
-            game.current_exotic_particles = epBefore;
-            patchGameState(game, { current_exotic_particles: epBefore });
-        });
-
-        it("Persistence: should restore new reactor properties after load", async () => {
-            game.reactor.stirling_multiplier = 0.05;
-            game.reactor.convective_boost = 0.2;
-            const saveData = await game.saveManager.getSaveState();
-            
-            await game.set_defaults();
-            expect(game.reactor.stirling_multiplier).toBe(0);
-            
-            await game.applySaveState(saveData);
-            expect(game.reactor.stirling_multiplier).toBeCloseTo(0.05, 0.01);
-        });
-
-        it("Electro-Thermal Conversion: should respect max power limit when converting", async () => {
-            game.reactor.base_max_heat = 10000;
-            game.reactor.max_heat = 10000;
-            game.reactor.base_max_power = 20000;
-            game.reactor.max_power = 20000;
-            game.reactor.altered_max_heat = 10000;
-            game.reactor.altered_max_power = 20000;
-
-            game.reactor.current_heat = 9000;
-            game.reactor.current_power = 5;
-            forcePurchaseUpgrade(game, "electro_thermal_conversion");
-            game.paused = false;
-            
-            const heatBefore = game.reactor.current_heat;
-            
-            game.engine.tick();
-            
-            expect(toNum(game.reactor.current_power)).toBe(0);
-            expect(toNum(game.reactor.current_heat)).toBeCloseTo(heatBefore - 10, 1);
-        });
+      const heatBefore = tileHeatAt(session, 1, 1);
+      session.tick();
+      const vented = heatBefore - tileHeatAt(session, 1, 1);
+      expect(vented).toBeGreaterThan(0);
+      expect(vented).toBeLessThan(5.5);
     });
 
-    describe("Set 5: Advanced Synergy & Automation", () => {
-        it("Prestige weave: accelerator tick does not grant banked EP without session power and heat", async () => {
-            const bankedBefore = toNum(game.state.current_exotic_particles);
-            game.exotic_particles = 0;
-            setDecimal(game.state, "session_power_produced", 0);
-            setDecimal(game.state, "session_power_sold", 0);
-            setDecimal(game.state, "session_heat_dissipated", 0);
-            game.coreBridge?.loadEconomyFromHost?.();
-            game.paused = false;
-            const om = game.objectives_manager;
-            const prevCheck = om && om.check_current_objective;
-            if (om) om.check_current_objective = () => {};
-            try {
-                await placePart(game, 0, 0, "particle_accelerator1");
-                const tile = game.tileset.getTile(0, 0);
-                tile.heat_contained = 1e9;
-                syncActivePartsAtTickBoundary(game.engine);
+    it("electro_thermal_conversion burns power to cut critical hull heat", () => {
+      session.toggles.heat_control = false;
+      session.grid.maxHeat = 10000;
+      session.grid.maxPower = 20000;
+      setSessionReactorHeat(session, 9000);
+      session.grid.currentPower = 5;
+      expect(purchaseSessionUpgrade(session, "electro_thermal_conversion")).toBe(true);
+      expect(session.modifiers.powerToHeatRatio).toBeGreaterThan(0);
 
-                game.engine.tick();
-                expect(toNum(game.state.current_exotic_particles)).toBe(bankedBefore);
-                expect(toNum(game.exotic_particles)).toBe(0);
-            } finally {
-                if (om && prevCheck) om.check_current_objective = prevCheck;
-            }
-        });
-
-        it("Thermal Feedback Loops: should boost cell power based on adjacent coolant heat", async () => {
-            const cell = game.partset.getPartById("uranium1");
-            const coolant = game.partset.getPartById("coolant_cell1");
-            const cellTile = game.tileset.getTile(1, 1);
-            const coolantTile = game.tileset.getTile(1, 2);
-            await cellTile.setPart(cell);
-            await coolantTile.setPart(coolant);
-            cellTile.activated = true;
-            cellTile.ticks = 100;
-            coolantTile.activated = true;
-            coolantTile.heat_contained = coolant.containment * 0.5;
-            game.reactor.updateStats();
-            forcePurchaseUpgrade(game, "thermal_feedback");
-            game.reactor.updateStats();
-            expect(game.reactor.thermal_feedback_rate).toBeGreaterThan(0);
-        });
-
+      const heatBefore = reactorHeat(session);
+      session.tick();
+      expect(power(session)).toBe(0);
+      expect(reactorHeat(session)).toBeCloseTo(heatBefore - 10, 1);
     });
 
-    describe("Set 6: Risk, Reward & Materials", () => {
-        it("Volatile Tuning: should boost power as durability degrades", async () => {
-            const cell = game.partset.getPartById("uranium1");
-            const tile = game.tileset.getTile(0, 0);
-
-            await tile.setPart(cell);
-            tile.activated = true;
-
-            // Scenario 1: Fresh Cell (100% durability, 0% degradation)
-            tile.ticks = cell.ticks;
-            
-            // Purchase Level 1 (5% max bonus)
-            forcePurchaseUpgrade(game, "volatile_tuning");
-            
-            game.reactor.updateStats();
-            expect(game.reactor.volatile_tuning_max).toBeGreaterThan(0);
-            expect(tile.power).toBe(cell.base_power);
-
-            tile.ticks = cell.ticks * 0.1;
-
-            game.reactor.updateStats();
-
-            expect(tile.power).toBe(cell.base_power);
-        });
-
-        it("Ceramic Composite: should boost plating hull heat bonus", async () => {
-            const plating = game.partset.getPartById("reactor_plating1");
-            const baseReactorHeat = plating.base_reactor_heat;
-            await game.tileset.getTile(0, 0).setPart(plating);
-            forcePurchaseUpgrade(game, "ceramic_composite");
-            plating.recalculate_stats();
-            expect(plating.reactor_heat).toBeCloseTo(baseReactorHeat * 1.05, 1);
-        });
-
-        it("Explosions should add contained heat to reactor hull", async () => {
-            const tile = game.tileset.getTile(0, 0);
-            const part = game.partset.getPartById("vent1");
-
-            await tile.setPart(part);
-            tile.activated = true;
-            tile.heat_contained = 1000;
-            game.reactor.current_heat = 5000;
-
-            game.engine.handleComponentExplosion(tile);
-
-            expect(toNum(game.reactor.current_heat)).toBe(6000);
-        });
+    it("sub_atomic_catalysts reduces particle accelerator epHeat", () => {
+      const before = Number(session.getPart("particle_accelerator1").epHeat);
+      expect(purchaseSessionUpgrade(session, "sub_atomic_catalysts")).toBe(true);
+      expect(session.modifiers.catalystReduction).toBeGreaterThan(0);
+      expect(Number(session.getPart("particle_accelerator1").epHeat)).toBeLessThan(before);
     });
+  });
+
+  describe("synergy and materials", () => {
+    it("restores stirling and convective modifiers via setUpgradeLevels", async () => {
+      expect(purchaseSessionUpgrade(session, "stirling_generators")).toBe(true);
+      expect(purchaseSessionUpgrade(session, "convective_airflow")).toBe(true);
+      const stirling = session.modifiers.stirlingMultiplier;
+      const convective = session.modifiers.convectiveBoost;
+      expect(stirling).toBeGreaterThan(0);
+
+      const levels = [
+        { id: "stirling_generators", level: 1 },
+        { id: "convective_airflow", level: 1 },
+      ];
+      const loaded = await setupSessionOnly();
+      loaded.setUpgradeLevels(levels);
+      expect(loaded.modifiers.stirlingMultiplier).toBeCloseTo(stirling, 5);
+      expect(loaded.modifiers.convectiveBoost).toBeCloseTo(convective, 5);
+    });
+
+    it("thermal_feedback sets thermalFeedbackRate", () => {
+      expect(purchaseSessionUpgrade(session, "thermal_feedback")).toBe(true);
+      expect(session.modifiers.thermalFeedbackRate).toBeGreaterThan(0);
+    });
+
+    it("volatile_tuning sets volatileTuningMax", () => {
+      expect(purchaseSessionUpgrade(session, "volatile_tuning")).toBe(true);
+      expect(session.modifiers.volatileTuningMax).toBeGreaterThan(0);
+    });
+
+    it("ceramic_composite boosts plating reactorHeat", () => {
+      const before = Number(session.getPart("reactor_plating1").reactorHeat);
+      expect(purchaseSessionUpgrade(session, "ceramic_composite")).toBe(true);
+      expect(Number(session.getPart("reactor_plating1").reactorHeat)).toBeCloseTo(
+        before * 1.05,
+        5
+      );
+    });
+
+    it("accelerator tick does not bank EP without session power and heat weave", () => {
+      setSessionEconomy(session, {
+        currentExoticParticles: "0",
+        totalExoticParticles: "0",
+        sessionPowerProduced: "0",
+        sessionHeatDissipated: "0",
+      });
+      expect(session.placeComponent(0, 0, "particle_accelerator1")).toBe(true);
+      setSessionTileHeat(session, 0, 0, 1e9);
+      session.tick();
+      expect(sessionEp(session).current).toBe(0);
+    });
+
+    it("stirling scales with improved_heat_vents vent rate", () => {
+      expect(purchaseSessionUpgrade(session, "stirling_generators")).toBe(true);
+      expect(purchaseSessionUpgrade(session, "improved_heat_vents")).toBe(true);
+      expect(session.placeComponent(0, 0, "vent1")).toBe(true);
+      setSessionTileHeat(session, 0, 0, 40);
+      const powerBefore = power(session);
+      session.tick();
+      expect(power(session)).toBeGreaterThan(powerBefore);
+    });
+  });
 });
-

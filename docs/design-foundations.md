@@ -53,11 +53,11 @@ One row per component. **Source** = primary exemplar we adopt. **Revival rule** 
 | **Pulse & heat physics** | **Revival** (`core_principles.txt`) | Power ∝ (M+N); heat ∝ (M+N)²; pressure-gradient batch heat step; no RNG in core sim | ● Shipped | `logic.js`, `logic-heat-transfer.js`, `gameLoopWorkerCore.js` |
 | **Physics kernel** | **Revival** | Single worker kernel — planner, live, and offline replay call the same code path | ● Shipped | Worker kernel; offline via `startOfflineFastForward()` chunked replay |
 | **Grid state (hot path)** | **Shapez** | Entity ID + SoA component stores (`Float32Array`, `Int32Array`); objects only at UI edge | ◐ Partial | Worker SoA shipped; main thread still `Tile` class in `domain/grid.js` |
-| **Sim / render split** | **Shapez** | Fixed `FOUNDATIONAL_TICK_MS` sim; `requestAnimationFrame` for display/FX only | ◐ Partial | Worker + `ui.js` rAF; some snapshot prep on main |
-| **Tick orchestration** | **Space Company** | One global tick controller; named phases in fixed order | ● Shipped | Explicit `TickOrchestrator` with named phases in `domain/tick-phases.js` |
+| **Sim / render split** | **Shapez** (aspiration) | Fixed sim tick isolated from UI stutter | ○ Not shipped | Host `Engine.loop` is rAF-driven; worker offloads heat/tick math but does not own the wall clock |
+| **Tick orchestration** | **Space Company** (aspiration) | One global tick controller; named phases in fixed order | ◐ Partial | Physics phases live inside reactor-core-lib's tick pipeline; host wraps with `runSubsystemHook` pre/post (`onTick` / `postTick`) — no `domain/tick-phases.js` |
 | **Worker boundary** | **Screeps** | Immutable tick snapshot in; atomic commit out; no mid-tick shared mutation | ◐ Partial | `serializeStateForGameLoopWorker`, `workerBoundary.js` |
 | **Player input** | **Screeps** | All sim-affecting actions → `intent_queue` → drain at tick start | ● Shipped | `PLACE_PART`, `SELL_PART`, `APPLY_BLUEPRINT` via `drainGridIntents*` in `domain/engine.js` |
-| **Offline catch-up** | **Trimps** | Chunked worker replay only; yield to UI between chunks; no analytical stat multiply | ● Shipped | `startOfflineFastForward()` + `WELCOME_BACK_FF_MAX_TICKS`; analytical `runInstantCatchup()` removed |
+| **Offline catch-up** | **Trimps** | Chunked worker replay only; yield to UI between chunks; no analytical stat multiply | ● Shipped (capped) | Cap `MAX_ACCUMULATOR_MULTIPLIER` (100); `startOfflineFastForward()` + chunked replay; analytical `runInstantCatchup()` removed |
 | **Compiled adjacency** | **Revival** | Pre-built ortho/topology maps; O(1) neighbor lookup per tick | ● Shipped | `logic-topology.js`, `soaTickLayout.js` |
 
 ### 3.2 State, Saves & Data
@@ -107,7 +107,7 @@ One row per component. **Source** = primary exemplar we adopt. **Revival rule** 
 | **Blueprint apply** | **Revival** | Diff-based apply; partial afford; deficit toasts — never silent fail or full-grid replacement tax | ● Shipped | `applyBlueprintLayoutDiff` with partial placement and affordance checks |
 | **Layout share codes** | **Talonius** / **MauveCloud** | Short versioned URL-safe codec — not verbose JSON paste | ● Shipped | `core/layoutShareCodec.js` (rr1: prefix) |
 | **Save portability** | **RI** + **Revival** | Prominent `.reactor` export/import; dedicated auto-save slot | ● Shipped | Settings export/import (`.reactor`); dedicated `AUTOSAVE_SLOT_KEY` protects manual slots |
-| **Offline return ("Morning Coffee")** | **Trimps** (math) + **mobile tycoon** (UX framing) | Worker replay + earnings ledger + meltdown projection before fast-forward | ◐ Partial | Fast-Forward via worker; catch-up earnings notice via `effect_queue` after `runChunkedOfflineReplay()`; meltdown projection still open |
+| **Offline return ("Morning Coffee")** | **Trimps** (math) + **mobile tycoon** (UX framing) | Chunked deterministic replay within an explicit safety cap | ◐ Partial | Cap = `MAX_ACCUMULATOR_MULTIPLIER` (100 ticks); chunked `runChunkedOfflineReplay` + earnings notice; multi-hour full replay not shipped; meltdown projection still open |
 | **Tick audio** | **RI** | Rhythmic sim-bound ASMR; klaxons on danger phases | ● Shipped | `services-audio.js`, tick-bound ambience |
 | **Surge / milestone VFX** | **Radioactive Idle** | Deterministic celebration on power/EP milestones — not chain-reaction RNG | ● Shipped | `fx-ep`, `fx-power`, `fx-heat` sprites in `ui-heat-visuals.js` |
 | **Flavor & narrative** | **Navalty** | Toasts and banners — never modal dialogue walls mid-optimization | ● Shipped | `flavor_text.json`, `failure_flavor.json`, chapter toasts |

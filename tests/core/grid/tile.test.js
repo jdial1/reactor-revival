@@ -1,198 +1,104 @@
-import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
-import { patchGameState } from "@app/state.js";
-import { placePart, forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  sessionEp,
+  componentTicksAt,
+} from "../../helpers/sessionHelpers.js";
 
-describe("Tile Mechanics", () => {
-  let game;
+function money(session) {
+  return sessionEp(session).money;
+}
+
+function slotId(session, row, col) {
+  const snap = session.getSnapshot();
+  return snap.grid.slots[row * snap.grid.cols + col]?.id ?? null;
+}
+
+function placePaid(session, row, col, partId) {
+  return session.runCommand({
+    type: "PLACE_PART_PAID",
+    payload: { row, col, partId },
+  });
+}
+
+describe("Tile Mechanics (session)", () => {
+  let session;
 
   beforeEach(async () => {
-    game = await setupGame();
+    session = await setupSessionOnly({ money: 1e6 });
   });
 
-  it("should set and clear parts correctly, handling money", async () => {
-    const tile = await placePart(game, 0, 0, "uranium1");
-    const part = tile.part;
+  it("places paid parts and refunds full cost on SELL_PART", () => {
+    const cost = Number(session.getPart("uranium1").baseCost);
+    const before = money(session);
+    expect(placePaid(session, 0, 0, "uranium1").ok).toBe(true);
+    expect(slotId(session, 0, 0)).toBe("uranium1");
+    expect(money(session)).toBeCloseTo(before - cost, 6);
 
-    const moneyBeforeSell = toNum(game.current_money);
-    tile.sellPart();
-
-    expect(tile.part).toBeNull();
-    expect(toNum(game.current_money)).toBe(moneyBeforeSell + toNum(part.cost));
+    const beforeSell = money(session);
+    expect(session.computeSellValue(0, 0)).toBe(cost);
+    expect(session.runCommand({ type: "SELL_PART", payload: { row: 0, col: 0 } }).ok).toBe(true);
+    expect(slotId(session, 0, 0)).toBeNull();
+    expect(money(session)).toBeCloseTo(beforeSell + cost, 6);
   });
 
-  it("should clear a part without a refund", async () => {
-    const tile = await placePart(game, 0, 0, "uranium1");
-    const moneyBeforeClear = toNum(game.current_money);
-    game.handleComponentDepletion(tile);
-
-    expect(tile.part).toBeNull();
-    expect(toNum(game.current_money)).toBe(moneyBeforeClear);
+  it("clears a part without refund via REMOVE_PART", () => {
+    expect(placePaid(session, 0, 0, "uranium1").ok).toBe(true);
+    const before = money(session);
+    expect(session.runCommand({ type: "REMOVE_PART", payload: { row: 0, col: 0 } }).ok).toBe(true);
+    expect(slotId(session, 0, 0)).toBeNull();
+    expect(money(session)).toBe(before);
   });
 
-  it("should calculate partial refund for damaged parts", async () => {
-    const tile = await placePart(game, 0, 0, "uranium1");
-    const part = tile.part;
-    tile.ticks = part.ticks / 2;
-    game.coreBridge.syncGridFromGame();
-    const moneyBeforeSell = toNum(game.current_money);
-    const expectedRefund = Math.ceil(toNum(part.cost) * (tile.ticks / part.ticks));
+  it("partial-refunds damaged parts from remaining ticks", () => {
+    expect(placePaid(session, 0, 0, "uranium1").ok).toBe(true);
+    const part = session.getPart("uranium1");
+    const fullTicks = Number(part.baseTicks);
+    const inst = session.grid.getComponentAt(0, 0);
+    inst.ticks = fullTicks / 2;
+    const expected = Math.ceil(Number(part.baseCost) * (componentTicksAt(session, 0, 0) / fullTicks));
+    expect(session.computeSellValue(0, 0)).toBe(expected);
 
-    tile.sellPart();
-
-    expect(toNum(game.current_money)).toBe(moneyBeforeSell + expectedRefund);
+    const before = money(session);
+    expect(session.runCommand({ type: "SELL_PART", payload: { row: 0, col: 0 } }).ok).toBe(true);
+    expect(money(session)).toBe(before + expected);
   });
 
-  it("should not allow overwriting existing parts", async () => {
-    const tile = await placePart(game, 0, 0, "uranium1");
-    const firstPart = tile.part;
-    const secondPart = game.partset.getPartById("vent1");
-
-    await tile.setPart(secondPart);
-
-    // The first part should still be there, not overwritten
-    expect(tile.part).toBe(firstPart);
-    expect(tile.part.id).toBe("uranium1");
-    expect(tile.part.id).not.toBe("vent1");
+  it("rejects paid placement on occupied tiles", () => {
+    expect(placePaid(session, 0, 0, "uranium1").result?.ok).toBe(true);
+    const second = placePaid(session, 0, 0, "vent1");
+    expect(second.result?.ok).toBe(false);
+    expect(second.result?.reason).toBe("occupied");
+    expect(slotId(session, 0, 0)).toBe("uranium1");
   });
 
-  it("should return false when trying to place part on occupied tile", async () => {
-    const tile = game.tileset.getTile(0, 0);
-    const firstPart = game.partset.getPartById("uranium1");
-    const secondPart = game.partset.getPartById("vent1");
-
-    // Place the first part
-    const firstResult = await tile.setPart(firstPart);
-    expect(firstResult).toBe(true);
-    expect(tile.part).toBe(firstPart);
-
-    // Try to place a second part - should return false
-    const secondResult = await tile.setPart(secondPart);
-    expect(secondResult).toBe(false);
-    expect(tile.part).toBe(firstPart); // First part should still be there
+  it("scales vent catalog rate with improved_heat_vents", () => {
+    const before = Number(session.getPart("vent1").vent);
+    session.setUpgradeLevels([{ id: "improved_heat_vents", level: 1 }]);
+    expect(Number(session.getPart("vent1").vent)).toBe(before * 2);
   });
 
-  it("should calculate effective vent value with upgrades", async () => {
-    const ventTile = await placePart(game, 0, 0, "vent1");
-    const initialVentValue = ventTile.getEffectiveVentValue();
-    expect(initialVentValue).toBe(ventTile.part.vent);
-
-    game.bypass_tech_tree_restrictions = true;
-    const ventUpgrade = game.upgradeset.getUpgrade("improved_heat_vents");
-    if (ventUpgrade && ventUpgrade.level < ventUpgrade.max_level) {
-      ventUpgrade.setLevel(1);
-      game.coreBridge.pushHostUpgradeLevelsForLoad();
-    }
-    ventTile.recalculateEffectiveValues();
-
-    const expectedValue = ventTile.part.base_vent * (1 + (ventUpgrade?.level ?? 0));
-    expect(ventTile.getEffectiveVentValue()).toBe(expectedValue);
+  it("keeps in-bounds slots placeable and rejects out-of-bounds", () => {
+    const snap = session.getSnapshot();
+    expect(snap.grid.rows).toBeGreaterThan(0);
+    expect(snap.grid.cols).toBeGreaterThan(0);
+    expect(placePaid(session, 0, 0, "uranium1").ok).toBe(true);
+    expect(session.placeComponent(snap.grid.rows, snap.grid.cols, "uranium1")).toBe(false);
   });
 
-  it("should be enabled or disabled based on game dimensions", () => {
-    const tileInside = game.tileset.getTile(0, 0);
-    let tileOutside = game.tileset.getTile(game.base_rows, game.base_cols);
+  it("sells vent and capacitor at purchase price without doubling", () => {
+    for (const partId of ["uranium1", "vent1", "capacitor1"]) {
+      const cost = Number(session.getPart(partId).baseCost);
+      const beforeBuy = money(session);
+      expect(placePaid(session, 0, 0, partId).ok).toBe(true);
+      expect(money(session)).toBeCloseTo(beforeBuy - cost, 6);
+      expect(session.computeSellValue(0, 0)).toBe(cost);
 
-    expect(tileInside.enabled).toBe(true);
-    expect(tileOutside).toBeFalsy();
-
-    game.rows = game.base_rows + 1;
-    game.cols = game.base_cols + 1;
-    game.tileset.resize(game.rows, game.cols);
-    game.tileset.updateActiveTiles();
-
-    tileOutside = game.tileset.getTile(game.base_rows, game.base_cols);
-    expect(tileOutside.enabled).toBe(true);
-  });
-
-  it("should give correct sell price when selling via sellPart()", async () => {
-    const part = game.partset.getPartById("uranium1");
-    const purchasePrice = toNum(part.cost);
-
-    game.current_money = purchasePrice * 2;
-    patchGameState(game, { current_money: game.current_money });
-    game.coreBridge.loadEconomyFromHost();
-
-    const moneyBeforePurchase = toNum(game.current_money);
-    const tile = await placePart(game, 0, 0, "uranium1");
-    game.current_money = toNum(game.current_money) - purchasePrice;
-    patchGameState(game, { current_money: game.current_money });
-    game.coreBridge.loadEconomyFromHost();
-    const moneyAfterPurchase = toNum(game.current_money);
-
-    expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
-
-    const moneyBeforeSell = toNum(game.current_money);
-    const expectedSellValue = toNum(tile.calculateSellValue());
-
-    await game.sellPart(tile);
-    const moneyAfterSell = toNum(game.current_money);
-    const actualSellValue = moneyAfterSell - moneyBeforeSell;
-
-    expect(actualSellValue).toBe(expectedSellValue);
-    expect(actualSellValue).toBe(purchasePrice);
-    expect(actualSellValue).not.toBe(purchasePrice * 2);
-    expect(tile.part).toBeNull();
-  });
-
-  it("should not double the sell price when selling via sellPart()", async () => {
-    const part = game.partset.getPartById("vent1");
-    const purchasePrice = toNum(part.cost);
-
-    game.current_money = purchasePrice * 3;
-    patchGameState(game, { current_money: game.current_money });
-    game.coreBridge.loadEconomyFromHost();
-
-    const moneyBeforePurchase = toNum(game.current_money);
-    const tile = await placePart(game, 0, 0, "vent1");
-    game.current_money = toNum(game.current_money) - purchasePrice;
-    patchGameState(game, { current_money: game.current_money });
-    game.coreBridge.loadEconomyFromHost();
-    const moneyAfterPurchase = toNum(game.current_money);
-
-    expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
-
-    const moneyBeforeSell = moneyAfterPurchase;
-    const expectedSellValue = toNum(tile.calculateSellValue());
-
-    await game.sellPart(tile);
-    const moneyAfterSell = toNum(game.current_money);
-    const actualSellValue = moneyAfterSell - moneyBeforeSell;
-
-    expect(actualSellValue).toBe(expectedSellValue);
-    expect(actualSellValue).toBe(purchasePrice);
-    expect(actualSellValue).not.toBe(purchasePrice * 2);
-  });
-
-  it("should calculate sell value correctly for parts with different costs", async () => {
-    const testParts = ["uranium1", "vent1", "capacitor1"];
-    
-    for (const partId of testParts) {
-      const part = game.partset.getPartById(partId);
-      const purchasePrice = toNum(part.cost);
-
-      game.current_money = purchasePrice * 3;
-      patchGameState(game, { current_money: game.current_money });
-      game.coreBridge.loadEconomyFromHost();
-
-      const moneyBeforePurchase = toNum(game.current_money);
-      const tile = await placePart(game, 0, 0, partId);
-      game.current_money = toNum(game.current_money) - purchasePrice;
-      patchGameState(game, { current_money: game.current_money });
-      game.coreBridge.loadEconomyFromHost();
-      const moneyAfterPurchase = toNum(game.current_money);
-
-      expect(moneyAfterPurchase).toBe(moneyBeforePurchase - purchasePrice);
-
-      const moneyBeforeSell = moneyAfterPurchase;
-      const expectedSellValue = toNum(tile.calculateSellValue());
-
-      await game.sellPart(tile);
-      const moneyAfterSell = toNum(game.current_money);
-      const actualSellValue = moneyAfterSell - moneyBeforeSell;
-
-      expect(actualSellValue).toBe(expectedSellValue);
-      expect(actualSellValue).toBe(purchasePrice);
-      expect(actualSellValue).not.toBe(purchasePrice * 2);
+      const beforeSell = money(session);
+      expect(session.runCommand({ type: "SELL_PART", payload: { row: 0, col: 0 } }).ok).toBe(true);
+      expect(money(session) - beforeSell).toBeCloseTo(cost, 6);
+      expect(money(session) - beforeSell).not.toBeCloseTo(cost * 2, 6);
+      expect(slotId(session, 0, 0)).toBeNull();
     }
   });
 });

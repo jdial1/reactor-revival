@@ -1,6 +1,5 @@
 import { subscribe } from "valtio/vanilla";
 import { preferences } from "../../state/preferences.js";
-import { teardownAll } from "../../core/teardown.js";
 
 let cachedColors = null;
 
@@ -9,7 +8,7 @@ export function readThemeColor(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export function resetThemeColors() {
+function resetThemeColors() {
   cachedColors = null;
 }
 
@@ -50,7 +49,7 @@ function buildCanvasColors() {
   };
 }
 
-export function getCanvasColors() {
+function getCanvasColors() {
   if (!cachedColors) cachedColors = buildCanvasColors();
   return cachedColors;
 }
@@ -72,9 +71,4 @@ if (typeof window !== "undefined") {
   unsubs.push(subscribe(preferences, () => {
     resetThemeColors();
   }));
-}
-
-export function teardownThemeColorWatch() {
-  teardownAll(unsubs);
-  unsubs.length = 0;
 }

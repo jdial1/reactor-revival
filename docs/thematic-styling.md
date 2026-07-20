@@ -297,8 +297,7 @@ Copy for phased warnings lives in `failure_flavor.json`. Styling must support ba
 
 Inline boot script (`index.html`):
 
-- Default: **Stålenhag** set (`stalenhag_bg/bg_img{N}.webp`, N = 1–30)
-- Alternate: `splash_bg{N}.webp` (`USE_STALENHAG_BG = false`)
+- **Stålenhag** set (`stalenhag_bg/bg_img{N}.webp`, N = 1–30)
 - Fair rotation via localStorage counts; 30s carousel; sets `--splash-bg-url`
 - Ken Burns `splash-ken-burns` on `#splash-screen`
 

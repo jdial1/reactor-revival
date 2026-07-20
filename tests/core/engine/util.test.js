@@ -1,5 +1,6 @@
 import { describe, it, expect } from "../../helpers/setup.js";
-import { formatNumber, numFormat, timeFormat, setFormatPreferencesGetter, getDecimal } from "@app/utils.js";
+import { getDecimal } from "@app/simUtils.js";
+import { formatNumber, numFormat, timeFormat, setFormatPreferencesGetter } from "@app/core/numbers.js";
 
 const Decimal = getDecimal();
 

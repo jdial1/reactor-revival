@@ -1,14 +1,7 @@
-import { drainGameEffects } from "../effect-orchestrator.js";
-
 export function enqueueGameEffect(game, effect) {
   const st = game?.state;
   if (!st || !Array.isArray(st.effect_queue)) return;
   st.effect_queue.push(effect);
-  drainGameEffects(game, () => game?.ui);
-}
-
-export function flushSimEvents(game) {
-  drainGameEffects(game, () => game?.ui);
 }
 
 export function enqueueClearAnimations(game) {

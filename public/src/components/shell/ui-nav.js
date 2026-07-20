@@ -4,7 +4,6 @@ import { getAppContext } from "../../app-context.js";
 import { bindLitRenderMulti } from "../../dom/lit-reactive.js";
 import { leaderboardService } from "../../services/leaderboard.js";
 import { MODAL_IDS } from "../../constants/modal-ids.js";
-import { getPartElement } from "../upgrades/upgrade-dom.js";
 import { getUiElement } from "./page-dom.js";
 import { safeCall, teardownAll } from "../../core/teardown.js";
 import {
@@ -15,11 +14,55 @@ import {
 } from "./ui-parts-panel.js";
 import { navIndicatorTemplate } from "../../templates/uiComponentsTemplates.js";
 
+function findPageButton(nav, pageId) {
+  if (!nav) return null;
+  const buttons = nav.getElementsByTagName("button");
+  for (let i = 0; i < buttons.length; i++) {
+    if (buttons[i].dataset.page === pageId) return buttons[i];
+  }
+  return null;
+}
+
+function forEachPageButton(pageId, fn) {
+  const roots = [getUiElement(null, "main_top_nav"), getUiElement(null, "bottom_nav")];
+  for (const root of roots) {
+    if (!root) continue;
+    const buttons = root.getElementsByTagName("button");
+    for (let i = 0; i < buttons.length; i++) {
+      if (buttons[i].dataset.page === pageId) fn(buttons[i]);
+    }
+  }
+}
+
+function stripActiveClass(el) {
+  if (!el) return;
+  el.className = el.className.replace(/\bactive\b/g, "").replace(/\s+/g, " ").trim();
+}
+
+function addActiveClass(el) {
+  if (!el) return;
+  const base = el.className.replace(/\bactive\b/g, "").replace(/\s+/g, " ").trim();
+  el.className = base ? `${base} active` : "active";
+}
+
+function ensureNavIndicatorMount(button) {
+  if (!button) return null;
+  if (button.style.position !== "relative") button.style.position = "relative";
+  const children = button.children;
+  for (let i = 0; i < children.length; i++) {
+    if (children[i].classList.contains("nav-indicator-mount")) return children[i];
+  }
+  const container = document.createElement("span");
+  container.className = "nav-indicator-mount";
+  button.appendChild(container);
+  return container;
+}
+
 function mountLeaderboardButtons(ui) {
   if (!ui.uiState || (ui._navLeaderboardUnmounts?.length ?? 0) > 0) return;
   ui._navLeaderboardUnmounts = [];
-  const topBtn = document.querySelector('#main_top_nav button[data-page="leaderboard_section"]');
-  const bottomBtn = document.querySelector('#bottom_nav button[data-page="leaderboard_section"]');
+  const topBtn = findPageButton(getUiElement(ui, "main_top_nav"), "leaderboard_section");
+  const bottomBtn = findPageButton(getUiElement(ui, "bottom_nav"), "leaderboard_section");
   const applyProps = (btn, d) => {
     if (!btn || !d) return;
     btn.disabled = d.disabled;
@@ -77,13 +120,8 @@ export function updateNavIndicators(ui) {
   if (typeof document === "undefined" || !ui.uiState) return;
   if (ui._navAffordabilityUnmounts?.length) return;
   const mountIndicator = (button, key) => {
-    if (!button || button.style.position !== "relative") button.style.position = "relative";
-    let container = button.querySelector(".nav-indicator-mount");
-    if (!container) {
-      container = document.createElement("span");
-      container.className = "nav-indicator-mount";
-      button.appendChild(container);
-    }
+    const container = ensureNavIndicatorMount(button);
+    if (!container) return () => {};
     const renderFn = () => {
       const visible = !!ui.uiState?.[key];
       return navIndicatorTemplate({ visible });
@@ -95,10 +133,10 @@ export function updateNavIndicators(ui) {
     );
   };
   const unmounts = [];
-  document.querySelectorAll('[data-page="upgrades_section"]').forEach((btn) => {
+  forEachPageButton("upgrades_section", (btn) => {
     unmounts.push(mountIndicator(btn, "has_affordable_upgrades"));
   });
-  document.querySelectorAll('[data-page="experimental_upgrades_section"]').forEach((btn) => {
+  forEachPageButton("experimental_upgrades_section", (btn) => {
     unmounts.push(mountIndicator(btn, "has_affordable_research"));
   });
   ui._navAffordabilityUnmounts = unmounts;
@@ -123,7 +161,7 @@ export function setupBuildTabButton(ui) {
   ui._tabSetupAbortController = new AbortController();
   const { signal } = ui._tabSetupAbortController;
 
-  const buildBtn = document.getElementById("build_tab_btn");
+  const buildBtn = getUiElement(ui, "build_tab_btn");
   if (buildBtn) {
     buildBtn.addEventListener("click", () => {
       ui.deviceFeatures.lightVibration();
@@ -148,7 +186,7 @@ export function setupBuildTabButton(ui) {
     }, { signal });
   }
 
-  const container = document.getElementById("quick_select_slots_container");
+  const container = getUiElement(ui, "quick_select_slots_container");
   const longPressMs = 500;
   let longPressTimer = null;
   let didLongPress = false;
@@ -186,10 +224,7 @@ export function setupBuildTabButton(ui) {
     const part = ui.game.partset.getPartById(partId);
     if (!part || !part.affordable) return;
     ui.deviceFeatures.lightVibration();
-    document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
     ui.stateManager.setClickedPart(part, { skipOpenPanel: true });
-    const partEl = getPartElement(part);
-    if (partEl) partEl.classList.add("part_active");
     updateQuickSelectSlots(ui);
   };
   if (container) {
@@ -209,18 +244,22 @@ function toggleSettingsFromNav(ui, activeBtn, clearBtnId) {
     return;
   }
   if (ui.game?.router?.currentPageId === "reactor_section") closePartsPanel(ui);
-  document.getElementById("bottom_nav")?.querySelectorAll("button[data-page]").forEach((btn) => {
-    btn.classList.remove("active");
-  });
-  if (clearBtnId) document.getElementById(clearBtnId)?.classList.remove("active");
-  activeBtn.classList.add("active");
+  const bottomNav = getUiElement(ui, "bottom_nav");
+  if (bottomNav) {
+    const buttons = bottomNav.getElementsByTagName("button");
+    for (let i = 0; i < buttons.length; i++) {
+      if (buttons[i].dataset.page) stripActiveClass(buttons[i]);
+    }
+  }
+  if (clearBtnId) stripActiveClass(getUiElement(ui, clearBtnId));
+  addActiveClass(activeBtn);
   ui.modalOrchestrator.showModal(MODAL_IDS.SETTINGS);
 }
 
 export function setupMenuTabButton(ui) {
   if (!ui._tabSetupAbortController) ui._tabSetupAbortController = new AbortController();
   const { signal } = ui._tabSetupAbortController;
-  const menuBtn = document.getElementById("menu_tab_btn");
+  const menuBtn = getUiElement(ui, "menu_tab_btn");
   if (menuBtn) {
     menuBtn.addEventListener("click", () => toggleSettingsFromNav(ui, menuBtn, "settings_btn"), { signal });
   }
@@ -229,11 +268,11 @@ export function setupMenuTabButton(ui) {
 export function setupDesktopTopNavButtons(ui) {
   if (!ui._tabSetupAbortController) ui._tabSetupAbortController = new AbortController();
   const { signal } = ui._tabSetupAbortController;
-  const settingsTop = document.getElementById("settings_btn");
+  const settingsTop = getUiElement(ui, "settings_btn");
   if (settingsTop) {
     settingsTop.addEventListener("click", () => toggleSettingsFromNav(ui, settingsTop, "menu_tab_btn"), { signal });
   }
-  const fsBtn = document.getElementById("fullscreen_toggle");
+  const fsBtn = getUiElement(ui, "fullscreen_toggle");
   if (fsBtn) {
     fsBtn.addEventListener("click", () => {
       ui.deviceFeatures.toggleFullscreen();
@@ -246,7 +285,7 @@ export function setupDesktopTopNavButtons(ui) {
       ui.deviceFeatures?.updateFullscreenButtonState?.();
     });
   }
-  const splashClose = document.getElementById("splash_close_btn");
+  const splashClose = getUiElement(ui, "splash_close_btn");
   if (splashClose) {
     splashClose.addEventListener("click", async () => {
       ui.deviceFeatures.lightVibration();

@@ -7,10 +7,10 @@ import {
 } from "../constants/balance.js";
 import { GameDimensionsSchema } from "../schema/index.js";
 import { requireActiveBridge } from "../bridge/active.js";
-import { safeCall } from "../core/teardown.js";
+import { syncGridToGame } from "../bridge/bridge-grid-sync.js";
 
 export function calculateBaseDimensions() {
-  const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
+  const isMobile = typeof globalThis !== "undefined" && globalThis.innerWidth <= MOBILE_BREAKPOINT_PX;
   const raw = {
     base_cols: isMobile ? BASE_COLS_MOBILE : BASE_COLS_DESKTOP,
     base_rows: isMobile ? BASE_ROWS_MOBILE : BASE_ROWS_DESKTOP,
@@ -49,7 +49,6 @@ export class GridManager {
 
   setRows(value) {
     if (this._rows !== value) {
-      const oldRows = this._rows;
       this._rows = value;
       if (this.game.tileset && typeof this.game.tileset.resize === "function") {
         this.game.tileset.resize(value, this._cols);
@@ -63,7 +62,6 @@ export class GridManager {
 
   setCols(value) {
     if (this._cols !== value) {
-      const oldCols = this._cols;
       this._cols = value;
       if (this.game.tileset && typeof this.game.tileset.resize === "function") {
         this.game.tileset.resize(this._rows, value);
@@ -84,14 +82,11 @@ export class GridManager {
   }
 }
 
-import { recordSimEvent } from "./sim-events.js";
 import { bumpGridPartsRevision } from "../bridge/bridge-grid-sync.js";
-import { drainGameEffects } from "../effect-orchestrator.js";
 import {
   getIndex,
-  toDecimal,
+  toNumber,
 } from "../simUtils.js";
-import { logger } from "../core/logger.js";
 
 function neighborEntriesToTiles(tileset, entries) {
   const out = [];
@@ -103,16 +98,11 @@ function neighborEntriesToTiles(tileset, entries) {
   return out;
 }
 
-function queryTileNeighborLists(tile) {
-  if (!tile.part) return { containment: [], cell: [], reflector: [] };
+function queryContainmentNeighborTiles(tile) {
+  if (!tile.part) return [];
   const bridge = requireActiveBridge(tile.game, "neighbor query");
   const lists = bridge.queryNeighbors(tile.row, tile.col);
-  const tileset = tile.game.tileset;
-  return {
-    containment: neighborEntriesToTiles(tileset, lists.containment),
-    cell: neighborEntriesToTiles(tileset, lists.cell),
-    reflector: neighborEntriesToTiles(tileset, lists.reflector),
-  };
+  return neighborEntriesToTiles(tile.game.tileset, lists.containment);
 }
 
 export class Tile {
@@ -127,14 +117,10 @@ export class Tile {
     this.row = row;
     this.col = col;
     this.enabled = false;
-    this.display_chance = 0;
-    this.display_chance_percent_of_total = 0;
     this._heatContained = 0;
-    this.ticks = 0;
+    this._ticks = 0;
     this.exploded = false;
     this.exploding = false;
-    this.cachedEffectiveVent = 0;
-    this.cachedEffectiveTransfer = 0;
   }
 
   get heat_contained() {
@@ -143,25 +129,30 @@ export class Tile {
     return this._heatContained;
   }
 
-  set heat_contained(v) {
+  _setProjectedHeat(v) {
+    const n = typeof v === "number" ? v : toNumber(v);
     const ts = this.game?.tileset;
     if (ts?.heatMap) {
-      ts.heatMap[ts.gridIndex(this.row, this.col)] = v;
+      ts.heatMap[ts.gridIndex(this.row, this.col)] = n;
       return;
     }
-    this._heatContained = v;
+    this._heatContained = n;
   }
 
-  addHeat(amount) {
-    this.heat_contained = (this.heat_contained || 0) + amount;
+  get ticks() {
+    const ts = this.game?.tileset;
+    if (ts?.ticksMap) return ts.ticksMap[ts.gridIndex(this.row, this.col)];
+    return this._ticks;
   }
 
-  setTicks(value) {
-    this.ticks = value;
-  }
-
-  _neighborLists() {
-    return queryTileNeighborLists(this);
+  _setProjectedTicks(v) {
+    const n = typeof v === "number" ? v : toNumber(v);
+    const ts = this.game?.tileset;
+    if (ts?.ticksMap) {
+      ts.ticksMap[ts.gridIndex(this.row, this.col)] = n;
+      return;
+    }
+    this._ticks = n;
   }
 
   invalidateNeighborCaches() {
@@ -169,40 +160,7 @@ export class Tile {
   }
 
   get containmentNeighborTiles() {
-    return this._neighborLists().containment;
-  }
-  get cellNeighborTiles() {
-    return this._neighborLists().cell;
-  }
-  get reflectorNeighborTiles() {
-    return this._neighborLists().reflector;
-  }
-  recalculateEffectiveValues() {
-    this.cachedEffectiveVent = 0;
-    this.cachedEffectiveTransfer = 0;
-    if (!this.part) return;
-    const bridge = requireActiveBridge(this.game, "recalculateEffectiveValues");
-    const rates = bridge.resolveDisplayRatesForTile(this);
-    if (!rates) return;
-    const mods = bridge.session?.modifiers || {};
-    const ventEff = mods.ventEffectiveness || 1;
-    const transferEff = mods.transferEffectiveness || 1;
-    const ventPlating = rates.bonuses?.ventMultiplier ?? 1;
-    const transferPlating = rates.bonuses?.transferMultiplier ?? 1;
-    const baseVent = this.part.base_vent ?? rates.baseVent ?? 0;
-    const baseTransfer = this.part.base_transfer ?? rates.baseTransfer ?? 0;
-    this.cachedEffectiveVent = baseVent * ventEff * ventPlating;
-    this.cachedEffectiveTransfer = baseTransfer * transferEff * transferPlating;
-    if (this.part.category === "vent" && (this.cachedEffectiveVent || this.part.vent)) {
-      this.cachedEffectiveTransfer = this.cachedEffectiveVent || this.cachedEffectiveTransfer;
-    }
-  }
-
-  getEffectiveVentValue() {
-    return this.cachedEffectiveVent;
-  }
-  getEffectiveTransferValue() {
-    return this.cachedEffectiveTransfer;
+    return queryContainmentNeighborTiles(this);
   }
   disable() {
     if (this.enabled) this.enabled = false;
@@ -211,168 +169,19 @@ export class Tile {
     if (!this.enabled) this.enabled = true;
   }
 
-  _clearMeltdownRecovery() {
-    const game = this.game;
-    logger.log('debug', 'game', '[Recovery] Clearing meltdown state after placing part:', this.part?.id);
-    logger.log('debug', 'game', '[Recovery] Reactor heat before reset:', game.reactor.current_heat, "max:", game.reactor.max_heat);
-    game.reactor.clearMeltdownState();
-    game.coreBridge?.resetReactorHeat?.();
-    const engineStopped = game.engine && !game.engine.running;
-    if (!engineStopped) {
-      logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
-      return;
-    }
-    const currentPauseState = game.state?.pause ?? game.paused;
-    logger.log('debug', 'game', '[Recovery] Current pause state:', currentPauseState);
-    logger.log('debug', 'game', '[Recovery] Engine running state:', game.engine.running);
-    logger.log('debug', 'game', '[Recovery] Game paused state:', game.paused);
-    if (currentPauseState) {
-      logger.log('info', 'game', '[Recovery] Unpausing game');
-      game.onToggleStateChange?.("pause", false);
-      logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
-      return;
-    }
-    const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') ||
-      (typeof global !== 'undefined' && global.__VITEST__) ||
-      (typeof window !== 'undefined' && window.__VITEST__);
-    if (isTestEnv) {
-      logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
-      return;
-    }
-    logger.log('info', 'game', '[Recovery] Force restarting engine');
-    game.paused = false;
-    game.engine.start();
-    logger.log('debug', 'game', '[Recovery] Meltdown state cleared, has_melted_down:', game.reactor.has_melted_down, "heat reset to:", game.reactor.current_heat);
-  }
-
   applySessionSync(part, inst, tileHeat = 0) {
     this.part = part;
     this.activated = true;
     this.enabled = true;
     this.exploded = false;
     this.exploding = false;
-    this.ticks = inst?.ticks != null ? inst.ticks : part.ticks;
-    this.heat_contained = tileHeat > 0 ? toDecimal(tileHeat) : toDecimal(0);
-  }
-
-  _applyLocalPart(partInstance) {
-    this.part = partInstance;
-    bumpGridPartsRevision(this.game?.tileset);
-    this.activated = true;
-    this.ticks = partInstance.ticks;
-    this.heat_contained = 0;
-    this.exploded = false;
-    this.exploding = false;
-    this.game.bumpGridTileDirty?.(this.row, this.col);
-  }
-
-  _afterPartPresentation() {
-    safeCall(() => {
-      if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
-        this.game.state.parts_panel_version++;
-      }
-      if (this.game?.upgradeset?.populateUpgrades) {
-        this.game.upgradeset.populateUpgrades();
-      }
-    }, "tile upgrade refresh");
-    if (this.game?.saveManager) void this.game.saveManager.autoSave();
-  }
-
-  async setPart(partInstance) {
-    if (partInstance === null || partInstance === undefined) {
-      throw new Error("Invalid part: part cannot be null or undefined");
-    }
-    if (this.part) {
-      return false;
-    }
-    const isRestoring = this.game?._isRestoringSave;
-    if (!isRestoring && this.game?.partset?.isPartDoctrineLocked(partInstance)) {
-      return false;
-    }
-    if (isRestoring) {
-      this._applyLocalPart(partInstance);
-      this.recalculateEffectiveValues();
-      return true;
-    }
-    const bridge = requireActiveBridge(this.game, "setPart");
-    if (!bridge.placePartUnpaid(this.row, this.col, partInstance.id)) {
-      return false;
-    }
-    if (this.game?.audio?.enabled) {
-      logger.log('debug', 'game', `Placing part '${partInstance.id}' on tile (${this.row}, ${this.col})`);
-      logger.log('debug', 'tile', 'setPart', { row: this.row, col: this.col, partId: partInstance.id });
-      recordSimEvent(this.game, {
-        type: "PART_PLACED",
-        row: this.row,
-        col: this.col,
-        category: partInstance.category,
-      });
-      drainGameEffects(this.game, () => this.game?.ui);
-    }
-    if (this.game.reactor.has_melted_down) {
-      this._clearMeltdownRecovery();
-    }
-    this.recalculateEffectiveValues();
-    this.game.reactor.updateStats({ fromSession: true });
-    this._afterPartPresentation();
-    return true;
-  }
-
-  _clearPartReset() {
-    bumpGridPartsRevision(this.game?.tileset);
-    this.activated = false;
-    this.part = null;
-    this.ticks = 0;
-    this.heat_contained = 0;
-    this.power = 0;
-    this.heat = 0;
-    this.display_power = 0;
-    this.display_heat = 0;
-    this.exploded = false;
-    this.exploding = false;
-    this.game.bumpGridTileDirty?.(this.row, this.col);
-    this.game.reactor.updateStats({ fromSession: true });
-    safeCall(() => {
-      if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
-        this.game.state.parts_panel_version++;
-      }
-    }, "parts panel bump");
-    if (this.game?.saveManager) void this.game.saveManager.autoSave();
-  }
-
-  clearPart() {
-    if (!this.part) return;
-    logger.log('debug', 'game', `Clearing part '${this.part.id}' from tile (${this.row}, ${this.col}).`);
-    logger.log('debug', 'tile', 'clearPart', { row: this.row, col: this.col, partId: this.part.id });
-    const bridge = this.game.coreBridge;
-    if (bridge?.isActive) {
-      bridge.removePartAt(this.row, this.col);
-      this.game.reactor.updateStats({ fromSession: true });
-      safeCall(() => {
-        if (this.game?.state && typeof this.game.state.parts_panel_version === "number") {
-          this.game.state.parts_panel_version++;
-        }
-      }, "parts panel bump");
-      if (this.game?.saveManager) void this.game.saveManager.autoSave();
-      return;
-    }
-    this._clearPartReset();
-  }
-
-  sellPart() {
-    if (!this.part) return;
-    const part_id = this.part.id;
-    logger.log('debug', 'game', `Selling part '${part_id}' from tile (${this.row}, ${this.col}).`);
-    logger.log('debug', 'tile', 'sellPart', { row: this.row, col: this.col, partId: part_id });
-    requireActiveBridge(this.game, "sellPart").sellPart(this.row, this.col);
+    this._setProjectedTicks(inst?.ticks != null ? inst.ticks : part.ticks);
+    this._setProjectedHeat(tileHeat > 0 ? tileHeat : 0);
   }
 
   calculateSellValue() {
     if (!this.part) return 0;
     return requireActiveBridge(this.game, "calculateSellValue").computeSellValueForTile(this);
-  }
-  refreshVisualState() {
-    this.game.bumpGridTileDirty?.(this.row, this.col);
   }
 }
 
@@ -388,6 +197,7 @@ export class Tileset {
     this.active_tiles = [];
     this.active_tiles_list = [];
     this.heatMap = new Float32Array(this.max_rows * this.max_cols);
+    this.ticksMap = new Uint32Array(this.max_rows * this.max_cols);
   }
 
   gridIndex(row, col) {
@@ -403,11 +213,13 @@ export class Tileset {
     const oldRows = this.max_rows;
     const oldCols = this.max_cols;
     const oldHeatMap = this.heatMap;
+    const oldTicksMap = this.ticksMap;
 
     this.max_rows = newRows;
     this.max_cols = newCols;
     const newGridSize = this.max_rows * this.max_cols;
     this.heatMap = new Float32Array(newGridSize);
+    this.ticksMap = new Uint32Array(newGridSize);
 
     for (let r = 0; r < oldRows; r++) {
       for (let c = 0; c < oldCols; c++) {
@@ -415,6 +227,7 @@ export class Tileset {
            const oldIdx = r * oldCols + c;
            const newIdx = r * this.max_cols + c;
            this.heatMap[newIdx] = oldHeatMap[oldIdx];
+           this.ticksMap[newIdx] = oldTicksMap[oldIdx];
         }
       }
     }
@@ -482,14 +295,8 @@ export class Tileset {
     if (session?.grid) {
       session.grid.clearGrid();
       session.grid.recalculateCaps?.();
-      this.game.coreBridge.syncGridToGame();
-      return;
+      syncGridToGame(this.game.coreBridge);
     }
-    this.tiles_list.forEach((tile) => {
-      if (tile.part) {
-        tile.clearPart();
-      }
-    });
   }
 
   getAllTiles() {
@@ -497,14 +304,17 @@ export class Tileset {
   }
 
   toSaveState() {
+    const grid = this.game?.coreBridge?.session?.grid;
     return this.active_tiles_list
       .filter((tile) => tile.part)
       .map((tile) => ({
         row: tile.row,
         col: tile.col,
         partId: tile.part.id,
-        ticks: tile.ticks,
-        heat_contained: tile.heat_contained,
+        ticks: grid?.getComponentAt?.(tile.row, tile.col)?.ticks ?? tile.ticks,
+        heat_contained: grid
+          ? grid.getTileHeat(tile.row, tile.col)
+          : tile.heat_contained,
       }));
   }
 }

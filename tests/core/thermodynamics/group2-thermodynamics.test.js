@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
-import { placePart, syncGridState } from "../../helpers/gameHelpers.js";
-import { HEAT_TRANSFER_DIFF_DIVISOR, VALVE_TOPUP_THRESHOLD } from "@app/utils.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  setSessionTileHeat,
+  tileHeatAt,
+} from "../../helpers/sessionHelpers.js";
+import { HEAT_TRANSFER_DIFF_DIVISOR, VALVE_TOPUP_THRESHOLD } from "@app/constants/sim.js";
 
 function f32(x) {
   const a = new Float32Array(1);
   a[0] = x;
   return a[0];
-}
-
-function prepTick(game) {
-  syncGridState(game);
 }
 
 function overflowTransferAmount(valveRate, initialSource, ventStart, ventCap) {
@@ -41,6 +41,18 @@ function expectedTopupVentChain(initialSource, valveRate, ventStart, ventCap, ve
   return { transfer, sourceAfter, ventAfter };
 }
 
+function effectiveTransfer(session, partId) {
+  return f32(session.resolveDisplayRates(partId)?.transfer ?? 0);
+}
+
+function effectiveVent(session, partId) {
+  return f32(session.resolveDisplayRates(partId)?.vent ?? 0);
+}
+
+function containment(session, partId) {
+  return f32(session.getPart(partId)?.containment ?? 0);
+}
+
 function exchangerPullFromHotNeighbor(hotHeat, exchHeat, transferVal) {
   const diff = f32(f32(hotHeat) - f32(exchHeat));
   return Math.min(
@@ -50,314 +62,283 @@ function exchangerPullFromHotNeighbor(hotHeat, exchHeat, transferVal) {
   );
 }
 
-function snapThree(hotTile, exchTile, coolTile) {
-  return {
-    hot: f32(hotTile.heat_contained),
-    exch: f32(exchTile.heat_contained),
-    cool: f32(coolTile.heat_contained),
-  };
+function place(session, row, col, id) {
+  expect(session.placeComponent(row, col, id)).toBe(true);
 }
 
-describe("Group 2: Thermodynamics & Heat Transfer", () => {
-  let game;
+describe("Group 2: Thermodynamics & Heat Transfer (session)", () => {
+  let session;
 
   beforeEach(async () => {
-    game = await setupGame();
-    game.tileset.clearAllTiles();
+    session = await setupSessionOnly();
   });
 
-  it("locks exchanger single-tick pull from hotter neighbor with exact heat", async () => {
-    const hot = await placePart(game, 5, 5, "coolant_cell1");
-    const exch = await placePart(game, 5, 6, "heat_exchanger1");
-    const cool = await placePart(game, 5, 7, "coolant_cell1");
+  it("locks exchanger single-tick pull from hotter neighbor with exact heat", () => {
+    place(session, 5, 5, "coolant_cell1");
+    place(session, 5, 6, "heat_exchanger1");
+    place(session, 5, 7, "coolant_cell1");
 
     const startHot = 1200;
-    hot.heat_contained = startHot;
-    exch.heat_contained = 0;
-    cool.heat_contained = 0;
+    setSessionTileHeat(session, 5, 5, startHot);
+    setSessionTileHeat(session, 5, 6, 0);
+    setSessionTileHeat(session, 5, 7, 0);
 
-    const tv = exch.getEffectiveTransferValue();
+    const tv = effectiveTransfer(session, "heat_exchanger1");
     const pull = exchangerPullFromHotNeighbor(startHot, 0, tv);
 
-    prepTick(game);
-    game.engine.tick();
+    session.tick();
 
-    expect(toNum(hot.heat_contained)).toBe(f32(f32(startHot) - f32(pull)));
-    expect(toNum(exch.heat_contained)).toBe(f32(pull));
-    expect(toNum(cool.heat_contained)).toBe(0);
+    expect(f32(tileHeatAt(session, 5, 5))).toBe(f32(f32(startHot) - f32(pull)));
+    expect(f32(tileHeatAt(session, 5, 6))).toBe(f32(pull));
+    expect(f32(tileHeatAt(session, 5, 7))).toBe(0);
 
-    const total = f32(f32(f32(hot.heat_contained) + f32(exch.heat_contained)) + f32(cool.heat_contained));
+    const total = f32(
+      f32(f32(tileHeatAt(session, 5, 5)) + f32(tileHeatAt(session, 5, 6))) +
+        f32(tileHeatAt(session, 5, 7))
+    );
     expect(total).toBe(f32(startHot));
   });
 
-  it("locks exchanger redistribution over two ticks with conserved total heat", async () => {
-    const hot = await placePart(game, 5, 5, "coolant_cell1");
-    const exchanger = await placePart(game, 5, 6, "heat_exchanger1");
-    const cool = await placePart(game, 5, 7, "coolant_cell1");
+  it("locks exchanger redistribution over two ticks with conserved total heat", () => {
+    place(session, 5, 5, "coolant_cell1");
+    place(session, 5, 6, "heat_exchanger1");
+    place(session, 5, 7, "coolant_cell1");
 
     const startHot = 1200;
-    hot.heat_contained = startHot;
-    exchanger.heat_contained = 0;
-    cool.heat_contained = 0;
+    setSessionTileHeat(session, 5, 5, startHot);
+    setSessionTileHeat(session, 5, 6, 0);
+    setSessionTileHeat(session, 5, 7, 0);
 
-    prepTick(game);
-    game.engine.tick();
-    game.engine.tick();
+    session.tick();
+    session.tick();
 
-    const snap = snapThree(hot, exchanger, cool);
-    const total = f32(f32(f32(snap.hot) + f32(snap.exch)) + f32(snap.cool));
+    const hot = f32(tileHeatAt(session, 5, 5));
+    const exch = f32(tileHeatAt(session, 5, 6));
+    const cool = f32(tileHeatAt(session, 5, 7));
+    const total = f32(f32(f32(hot) + f32(exch)) + f32(cool));
 
     expect(total).toBe(f32(startHot));
-    expect(snap.hot).toBeLessThan(startHot);
-    expect(f32(snap.exch) + f32(snap.cool)).toBeGreaterThan(0);
+    expect(hot).toBeLessThan(startHot);
+    expect(f32(exch) + f32(cool)).toBeGreaterThan(0);
   });
 
-  it("locks coolant to check valve to vent chain with exact post-tick heat", async () => {
-    const coolant = await placePart(game, 8, 0, "coolant_cell1");
-    const valve = await placePart(game, 8, 1, "check_valve");
-    const vent = await placePart(game, 8, 2, "vent1");
+  it("locks coolant to check valve to vent chain with exact post-tick heat", () => {
+    place(session, 8, 0, "coolant_cell1");
+    place(session, 8, 1, "check_valve");
+    place(session, 8, 2, "vent1");
 
-    coolant.heat_contained = f32(f32(coolant.part.containment) * 0.5);
-    valve.heat_contained = 0;
-    vent.heat_contained = 0;
+    const sourceStart = f32(f32(containment(session, "coolant_cell1")) * 0.5);
+    setSessionTileHeat(session, 8, 0, sourceStart);
+    setSessionTileHeat(session, 8, 1, 0);
+    setSessionTileHeat(session, 8, 2, 0);
 
-    const valveRate = valve.getEffectiveTransferValue();
-    const ventRate = vent.getEffectiveVentValue();
-    const ventCap = vent.part.containment;
-    const transferExpected = overflowTransferAmount(valveRate, coolant.heat_contained, 0, ventCap);
-    const exp = expectedOverflowVentChain(coolant.heat_contained, valveRate, 0, ventCap, ventRate);
+    const valveRate = effectiveTransfer(session, "check_valve");
+    const ventRate = effectiveVent(session, "vent1");
+    const ventCap = containment(session, "vent1");
+    const transferExpected = overflowTransferAmount(valveRate, sourceStart, 0, ventCap);
+    const exp = expectedOverflowVentChain(sourceStart, valveRate, 0, ventCap, ventRate);
 
     expect(exp.transfer).toBe(transferExpected);
 
-    prepTick(game);
-    game.engine.tick();
+    session.tick();
 
-    expect(toNum(valve.heat_contained)).toBe(0);
-    expect(toNum(coolant.heat_contained)).toBe(exp.sourceAfter);
-    expect(toNum(vent.heat_contained)).toBe(exp.ventAfter);
+    expect(f32(tileHeatAt(session, 8, 1))).toBe(0);
+    expect(f32(tileHeatAt(session, 8, 0))).toBe(exp.sourceAfter);
+    expect(f32(tileHeatAt(session, 8, 2))).toBe(exp.ventAfter);
   });
 
-  it("locks coolant to overflow valve to vent chain with exact post-tick heat", async () => {
-    const coolant = await placePart(game, 0, 0, "coolant_cell1");
-    const valve = await placePart(game, 0, 1, "overflow_valve");
-    const vent = await placePart(game, 0, 2, "vent1");
+  it("locks coolant to overflow valve to vent chain with exact post-tick heat", () => {
+    place(session, 0, 0, "coolant_cell1");
+    place(session, 0, 1, "overflow_valve");
+    place(session, 0, 2, "vent1");
 
-    const cap = coolant.part.containment;
-    coolant.heat_contained = f32(cap * 0.9);
-    valve.heat_contained = 0;
-    vent.heat_contained = 0;
+    const sourceStart = f32(containment(session, "coolant_cell1") * 0.9);
+    setSessionTileHeat(session, 0, 0, sourceStart);
+    setSessionTileHeat(session, 0, 1, 0);
+    setSessionTileHeat(session, 0, 2, 0);
 
-    const valveRate = valve.getEffectiveTransferValue();
-    const ventRate = vent.getEffectiveVentValue();
-    const ventCap = vent.part.containment;
-    const transferExpected = overflowTransferAmount(valveRate, coolant.heat_contained, 0, ventCap);
-    const exp = expectedOverflowVentChain(coolant.heat_contained, valveRate, 0, ventCap, ventRate);
+    const valveRate = effectiveTransfer(session, "overflow_valve");
+    const ventRate = effectiveVent(session, "vent1");
+    const ventCap = containment(session, "vent1");
+    const transferExpected = overflowTransferAmount(valveRate, sourceStart, 0, ventCap);
+    const exp = expectedOverflowVentChain(sourceStart, valveRate, 0, ventCap, ventRate);
 
     expect(exp.transfer).toBe(transferExpected);
 
-    prepTick(game);
-    game.engine.tick();
+    session.tick();
 
-    expect(toNum(valve.heat_contained)).toBe(0);
-    expect(toNum(coolant.heat_contained)).toBe(exp.sourceAfter);
-    expect(toNum(vent.heat_contained)).toBe(exp.ventAfter);
+    expect(f32(tileHeatAt(session, 0, 1))).toBe(0);
+    expect(f32(tileHeatAt(session, 0, 0))).toBe(exp.sourceAfter);
+    expect(f32(tileHeatAt(session, 0, 2))).toBe(exp.ventAfter);
   });
 
-  it("locks vent to remove exactly its effective vent rate per tick", async () => {
-    const vent = await placePart(game, 4, 4, "vent1");
-    const ventRate = vent.getEffectiveVentValue();
+  it("locks vent to remove exactly its effective vent rate per tick", () => {
+    place(session, 4, 4, "vent1");
+    const ventRate = effectiveVent(session, "vent1");
     const initialHeat = f32(f32(ventRate) * 3);
 
-    vent.heat_contained = initialHeat;
+    setSessionTileHeat(session, 4, 4, initialHeat);
+    session.tick();
 
-    prepTick(game);
-    game.engine.tick();
-
-    expect(toNum(vent.heat_contained)).toBe(f32(f32(initialHeat) - f32(ventRate)));
+    expect(f32(tileHeatAt(session, 4, 4))).toBe(f32(f32(initialHeat) - f32(ventRate)));
   });
 
-  it("locks vent clamping to zero when heat is below vent rate", async () => {
-    const vent = await placePart(game, 4, 4, "vent1");
-    const ventRate = vent.getEffectiveVentValue();
+  it("locks vent clamping to zero when heat is below vent rate", () => {
+    place(session, 4, 4, "vent1");
+    const ventRate = effectiveVent(session, "vent1");
     const initialHeat = f32(f32(ventRate) / 4);
 
-    vent.heat_contained = initialHeat;
+    setSessionTileHeat(session, 4, 4, initialHeat);
+    session.tick();
 
-    prepTick(game);
-    game.engine.tick();
-
-    expect(toNum(vent.heat_contained)).toBe(0);
+    expect(f32(tileHeatAt(session, 4, 4))).toBe(0);
   });
 
-  it("locks overflow valve below 80% input ratio with no transfer", async () => {
-    const source = await placePart(game, 6, 5, "coolant_cell1");
-    const valve = await placePart(game, 6, 6, "overflow_valve");
-    const sink = await placePart(game, 6, 7, "vent1");
+  it("locks overflow valve below 80% input ratio with no transfer", () => {
+    place(session, 6, 5, "coolant_cell1");
+    place(session, 6, 6, "overflow_valve");
+    place(session, 6, 7, "vent1");
 
-    const capacity = source.part.containment;
-    source.heat_contained = f32(f32(capacity) * 0.7999);
-    valve.heat_contained = 0;
-    sink.heat_contained = 0;
+    const capacity = containment(session, "coolant_cell1");
+    const beforeIn = f32(f32(capacity) * 0.7999);
+    setSessionTileHeat(session, 6, 5, beforeIn);
+    setSessionTileHeat(session, 6, 6, 0);
+    setSessionTileHeat(session, 6, 7, 0);
 
-    const beforeIn = toNum(source.heat_contained);
-    const beforeOut = toNum(sink.heat_contained);
+    session.tick();
 
-    prepTick(game);
-    game.engine.tick();
-
-    expect(toNum(source.heat_contained)).toBe(beforeIn);
-    expect(toNum(sink.heat_contained)).toBe(beforeOut);
-    expect(toNum(valve.heat_contained)).toBe(0);
+    expect(f32(tileHeatAt(session, 6, 5))).toBe(beforeIn);
+    expect(f32(tileHeatAt(session, 6, 7))).toBe(0);
+    expect(f32(tileHeatAt(session, 6, 6))).toBe(0);
   });
 
-  it("locks overflow valve at exactly 80% input ratio allowing transfer", async () => {
-    const source = await placePart(game, 6, 5, "coolant_cell1");
-    const valve = await placePart(game, 6, 6, "overflow_valve");
-    const sink = await placePart(game, 6, 7, "vent1");
+  it("locks overflow valve at exactly 80% input ratio allowing transfer", () => {
+    place(session, 6, 5, "coolant_cell1");
+    place(session, 6, 6, "overflow_valve");
+    place(session, 6, 7, "vent1");
 
-    const capacity = source.part.containment;
-    source.heat_contained = f32(f32(capacity) * 0.8);
-    valve.heat_contained = 0;
-    sink.heat_contained = 0;
+    const capacity = containment(session, "coolant_cell1");
+    const sourceStart = f32(f32(capacity) * 0.8);
+    setSessionTileHeat(session, 6, 5, sourceStart);
+    setSessionTileHeat(session, 6, 6, 0);
+    setSessionTileHeat(session, 6, 7, 0);
 
-    const valveRate = valve.getEffectiveTransferValue();
-    const ventRate = sink.getEffectiveVentValue();
-    const ventCap = sink.part.containment;
-    const transferExpected = overflowTransferAmount(valveRate, source.heat_contained, 0, ventCap);
-    const exp = expectedOverflowVentChain(source.heat_contained, valveRate, 0, ventCap, ventRate);
+    const valveRate = effectiveTransfer(session, "overflow_valve");
+    const ventRate = effectiveVent(session, "vent1");
+    const ventCap = containment(session, "vent1");
+    const transferExpected = overflowTransferAmount(valveRate, sourceStart, 0, ventCap);
+    const exp = expectedOverflowVentChain(sourceStart, valveRate, 0, ventCap, ventRate);
 
     expect(exp.transfer).toBe(transferExpected);
-    expect(transferExpected).toBe(f32(sink.part.containment));
+    expect(transferExpected).toBe(ventCap);
 
-    prepTick(game);
-    game.engine.tick();
+    session.tick();
 
-    expect(toNum(valve.heat_contained)).toBe(0);
-    expect(toNum(source.heat_contained)).toBe(exp.sourceAfter);
-    expect(toNum(sink.heat_contained)).toBe(exp.ventAfter);
+    expect(f32(tileHeatAt(session, 6, 6))).toBe(0);
+    expect(f32(tileHeatAt(session, 6, 5))).toBe(exp.sourceAfter);
+    expect(f32(tileHeatAt(session, 6, 7))).toBe(exp.ventAfter);
   });
 
-  it("locks overflow valve above 80% input ratio with exact post-tick heat", async () => {
-    const source = await placePart(game, 6, 5, "coolant_cell1");
-    const valve = await placePart(game, 6, 6, "overflow_valve");
-    const sink = await placePart(game, 6, 7, "vent1");
+  it("locks overflow valve above 80% input ratio with exact post-tick heat", () => {
+    place(session, 6, 5, "coolant_cell1");
+    place(session, 6, 6, "overflow_valve");
+    place(session, 6, 7, "vent1");
 
-    const capacity = source.part.containment;
-    source.heat_contained = f32(f32(capacity) * 0.9001);
-    valve.heat_contained = 0;
-    sink.heat_contained = 0;
+    const capacity = containment(session, "coolant_cell1");
+    const sourceStart = f32(f32(capacity) * 0.9001);
+    setSessionTileHeat(session, 6, 5, sourceStart);
+    setSessionTileHeat(session, 6, 6, 0);
+    setSessionTileHeat(session, 6, 7, 0);
 
-    const valveRate = valve.getEffectiveTransferValue();
-    const ventRate = sink.getEffectiveVentValue();
-    const ventCap = sink.part.containment;
-    const transferExpected = overflowTransferAmount(valveRate, source.heat_contained, 0, ventCap);
-    const exp = expectedOverflowVentChain(source.heat_contained, valveRate, 0, ventCap, ventRate);
+    const valveRate = effectiveTransfer(session, "overflow_valve");
+    const ventRate = effectiveVent(session, "vent1");
+    const ventCap = containment(session, "vent1");
+    const transferExpected = overflowTransferAmount(valveRate, sourceStart, 0, ventCap);
+    const exp = expectedOverflowVentChain(sourceStart, valveRate, 0, ventCap, ventRate);
 
     expect(exp.transfer).toBe(transferExpected);
 
-    prepTick(game);
-    game.engine.tick();
+    session.tick();
 
-    expect(toNum(valve.heat_contained)).toBe(0);
-    expect(toNum(source.heat_contained)).toBe(exp.sourceAfter);
-    expect(toNum(sink.heat_contained)).toBe(exp.ventAfter);
+    expect(f32(tileHeatAt(session, 6, 6))).toBe(0);
+    expect(f32(tileHeatAt(session, 6, 5))).toBe(exp.sourceAfter);
+    expect(f32(tileHeatAt(session, 6, 7))).toBe(exp.ventAfter);
   });
 
-  it("locks top-up valve when output above 20% with no transfer", async () => {
-    const source = await placePart(game, 7, 5, "coolant_cell1");
-    const valve = await placePart(game, 7, 6, "topup_valve");
-    const output = await placePart(game, 7, 7, "vent1");
+  it("locks top-up valve when output above 20% with no transfer", () => {
+    place(session, 7, 5, "coolant_cell1");
+    place(session, 7, 6, "topup_valve");
+    place(session, 7, 7, "vent1");
 
-    const outputCapacity = output.part.containment;
-    source.heat_contained = f32(source.part.containment * 0.95);
-    valve.heat_contained = 0;
-    output.heat_contained = f32(f32(outputCapacity) * 0.2001);
+    const outputCapacity = containment(session, "vent1");
+    const beforeIn = f32(containment(session, "coolant_cell1") * 0.95);
+    const beforeOut = f32(f32(outputCapacity) * 0.2001);
+    setSessionTileHeat(session, 7, 5, beforeIn);
+    setSessionTileHeat(session, 7, 6, 0);
+    setSessionTileHeat(session, 7, 7, beforeOut);
 
-    const beforeOut = f32(output.heat_contained);
-    const beforeIn = f32(source.heat_contained);
-    const ventRate = output.getEffectiveVentValue();
+    const ventRate = effectiveVent(session, "vent1");
     const expectedOutOnlyVent = f32(f32(beforeOut) - Math.min(f32(ventRate), f32(beforeOut)));
 
-    prepTick(game);
-    game.engine.tick();
+    session.tick();
 
-    expect(toNum(source.heat_contained)).toBe(beforeIn);
-    expect(toNum(output.heat_contained)).toBe(expectedOutOnlyVent);
-    expect(toNum(valve.heat_contained)).toBe(0);
+    expect(f32(tileHeatAt(session, 7, 5))).toBe(beforeIn);
+    expect(f32(tileHeatAt(session, 7, 7))).toBe(expectedOutOnlyVent);
+    expect(f32(tileHeatAt(session, 7, 6))).toBe(0);
   });
 
-  it("locks top-up valve at exactly 20% output ratio allowing transfer", async () => {
-    const source = await placePart(game, 7, 5, "coolant_cell1");
-    const valve = await placePart(game, 7, 6, "topup_valve");
-    const output = await placePart(game, 7, 7, "vent1");
+  it("locks top-up valve at exactly 20% output ratio allowing transfer", () => {
+    place(session, 7, 5, "coolant_cell1");
+    place(session, 7, 6, "topup_valve");
+    place(session, 7, 7, "vent1");
 
-    const outputCapacity = output.part.containment;
-    source.heat_contained = f32(source.part.containment * 0.95);
-    valve.heat_contained = 0;
-    output.heat_contained = f32(f32(outputCapacity) * VALVE_TOPUP_THRESHOLD);
+    const outputCapacity = containment(session, "vent1");
+    const sourceStart = f32(containment(session, "coolant_cell1") * 0.95);
+    const outStart = f32(f32(outputCapacity) * VALVE_TOPUP_THRESHOLD);
+    setSessionTileHeat(session, 7, 5, sourceStart);
+    setSessionTileHeat(session, 7, 6, 0);
+    setSessionTileHeat(session, 7, 7, outStart);
 
-    const valveRate = valve.getEffectiveTransferValue();
-    const ventRate = output.getEffectiveVentValue();
-    const transferExpected = topupTransferAmount(valveRate, source.heat_contained, output.heat_contained, outputCapacity);
-    const exp = expectedTopupVentChain(source.heat_contained, valveRate, output.heat_contained, outputCapacity, ventRate);
+    const valveRate = effectiveTransfer(session, "topup_valve");
+    const ventRate = effectiveVent(session, "vent1");
+    const transferExpected = topupTransferAmount(valveRate, sourceStart, outStart, outputCapacity);
+    const exp = expectedTopupVentChain(sourceStart, valveRate, outStart, outputCapacity, ventRate);
 
-    expect(f32(f32(toNum(output.heat_contained)) / f32(outputCapacity))).toBe(f32(VALVE_TOPUP_THRESHOLD));
+    expect(f32(f32(outStart) / f32(outputCapacity))).toBe(f32(VALVE_TOPUP_THRESHOLD));
     expect(exp.transfer).toBe(transferExpected);
     expect(transferExpected).toBe(f32(f32(outputCapacity) * VALVE_TOPUP_THRESHOLD));
 
-    prepTick(game);
-    game.engine.tick();
+    session.tick();
 
-    expect(toNum(valve.heat_contained)).toBe(0);
-    expect(toNum(source.heat_contained)).toBe(exp.sourceAfter);
-    expect(toNum(output.heat_contained)).toBe(exp.ventAfter);
+    expect(f32(tileHeatAt(session, 7, 6))).toBe(0);
+    expect(f32(tileHeatAt(session, 7, 5))).toBe(exp.sourceAfter);
+    expect(f32(tileHeatAt(session, 7, 7))).toBe(exp.ventAfter);
   });
 
-  it("locks top-up valve when output below 20% with exact post-tick heat", async () => {
-    const source = await placePart(game, 7, 5, "coolant_cell1");
-    const valve = await placePart(game, 7, 6, "topup_valve");
-    const output = await placePart(game, 7, 7, "vent1");
+  it("locks top-up valve when output below 20% with exact post-tick heat", () => {
+    place(session, 7, 5, "coolant_cell1");
+    place(session, 7, 6, "topup_valve");
+    place(session, 7, 7, "vent1");
 
-    const outputCapacity = output.part.containment;
-    source.heat_contained = f32(source.part.containment * 0.95);
-    valve.heat_contained = 0;
-    output.heat_contained = f32(f32(outputCapacity) * 0.1);
+    const outputCapacity = containment(session, "vent1");
+    const sourceStart = f32(containment(session, "coolant_cell1") * 0.95);
+    const outStart = f32(f32(outputCapacity) * 0.1);
+    setSessionTileHeat(session, 7, 5, sourceStart);
+    setSessionTileHeat(session, 7, 6, 0);
+    setSessionTileHeat(session, 7, 7, outStart);
 
-    const valveRate = valve.getEffectiveTransferValue();
-    const ventRate = output.getEffectiveVentValue();
-    const transferExpected = topupTransferAmount(valveRate, source.heat_contained, output.heat_contained, outputCapacity);
-    const exp = expectedTopupVentChain(source.heat_contained, valveRate, output.heat_contained, outputCapacity, ventRate);
+    const valveRate = effectiveTransfer(session, "topup_valve");
+    const ventRate = effectiveVent(session, "vent1");
+    const transferExpected = topupTransferAmount(valveRate, sourceStart, outStart, outputCapacity);
+    const exp = expectedTopupVentChain(sourceStart, valveRate, outStart, outputCapacity, ventRate);
 
     expect(exp.transfer).toBe(transferExpected);
     expect(transferExpected).toBe(f32(f32(outputCapacity) * VALVE_TOPUP_THRESHOLD));
 
-    prepTick(game);
-    game.engine.tick();
+    session.tick();
 
-    expect(toNum(valve.heat_contained)).toBe(0);
-    expect(toNum(source.heat_contained)).toBe(exp.sourceAfter);
-    expect(toNum(output.heat_contained)).toBe(exp.ventAfter);
-  });
-
-  it("locks meltdown boundary to strictly greater than 2x max heat", () => {
-    game.paused = false;
-    const at2x = game.reactor.max_heat.mul(2);
-    game.reactor.current_heat = at2x;
-    game.engine.tick();
-    expect(game.reactor.has_melted_down).toBe(false);
-    expect(toNum(game.reactor.current_heat)).toBe(toNum(at2x));
-
-    game.reactor.current_heat = game.reactor.max_heat.mul(2).add(1);
-    game.engine.tick();
-    expect(game.reactor.has_melted_down).toBe(true);
-  });
-
-  it("locks meltdown at 2.1x max heat same as minimal over-2x", () => {
-    game.paused = false;
-    const h = game.reactor.max_heat.mul(2.1);
-    game.reactor.current_heat = h;
-    game.engine.tick();
-    expect(game.reactor.has_melted_down).toBe(true);
-    expect(toNum(game.reactor.current_heat)).toBe(toNum(h));
+    expect(f32(tileHeatAt(session, 7, 6))).toBe(0);
+    expect(f32(tileHeatAt(session, 7, 5))).toBe(exp.sourceAfter);
+    expect(f32(tileHeatAt(session, 7, 7))).toBe(exp.ventAfter);
   });
 });

@@ -1,4 +1,4 @@
-import { isCellUpgradeVisible } from "./upgrade.js";
+import { isCellUpgradeVisible } from "./upgrade-visibility.js";
 
 function getUpgradeContainerIdForSection(upgrade) {
   if (upgrade.base_ecost?.gt?.(0)) {

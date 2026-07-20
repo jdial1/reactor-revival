@@ -22,7 +22,7 @@ export function createDeviceFeatures(getUi) {
     },
     updateFullscreenButtonState() {
       const ui = getUi();
-      const btn = getUiElement(ui, "fullscreen_toggle") ?? document.getElementById("fullscreen_toggle");
+      const btn = getUiElement(ui, "fullscreen_toggle");
       if (!btn || !ui?.uiState) return;
       const title = document.fullscreenElement ? "Exit Fullscreen" : "Enter Fullscreen";
       ui.uiState.fullscreen_display = { icon: fsIcon, title };
@@ -40,7 +40,7 @@ export function createDeviceFeatures(getUi) {
   };
 }
 
-export function installDeviceService(ui, game) {
+export function installDeviceService(ui, _game) {
   const features = createDeviceFeatures(() => ui);
   const unsubs = [];
 
@@ -53,13 +53,6 @@ export function installDeviceService(ui, game) {
     syncWakeLock(ui.uiState.is_paused);
   }
 
-  if (game?.state) {
-    unsubs.push(subscribeKey(game.state, "effect_queue", (queue) => {
-      if (!Array.isArray(queue) || !queue.length) return;
-      const last = queue[queue.length - 1];
-      if (last?.kind === "vibrate") features.vibrate(last.pattern ?? 10);
-    }));
-  }
 
   const teardown = () => {
     teardownAll(unsubs);

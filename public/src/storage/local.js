@@ -13,7 +13,7 @@ export const STORAGE_KEYS = Object.freeze({
 let storageAvailable = null;
 export function isStorageAvailable() {
   if (storageAvailable !== null) return storageAvailable;
-  try { const test = '__storage_test__'; localStorage.setItem(test, test); localStorage.removeItem(test); storageAvailable = true; } catch (e) { storageAvailable = false; }
+  try { const test = '__storage_test__'; localStorage.setItem(test, test); localStorage.removeItem(test); storageAvailable = true; } catch { storageAvailable = false; }
   return storageAvailable;
 }
 
@@ -24,11 +24,11 @@ function saveDataReplacer(_key, value) {
 }
 
 export const StorageUtils = {
-  get(key, defaultValue = null) { if (!isStorageAvailable()) return defaultValue; try { const raw = localStorage.getItem(key); if (raw === null) return defaultValue; try { return deserializeSave(raw); } catch (_) { return raw; } } catch (e) { return defaultValue; } },
-  set(key, value) { if (!isStorageAvailable()) return false; try { const str = (typeof value === "object" && value !== null) || typeof value === "bigint" ? superjsonStringify(value) : JSON.stringify(value); localStorage.setItem(key, str); return true; } catch (e) { return false; } },
-  remove(key) { if (!isStorageAvailable()) return false; try { localStorage.removeItem(key); return true; } catch (e) { return false; } },
-  getRaw(key, defaultValue = null) { if (!isStorageAvailable()) return defaultValue; try { const value = localStorage.getItem(key); return value !== null ? value : defaultValue; } catch (e) { return defaultValue; } },
-  setRaw(key, value) { if (!isStorageAvailable()) return false; try { localStorage.setItem(key, value); return true; } catch (e) { return false; } },
+  get(key, defaultValue = null) { if (!isStorageAvailable()) return defaultValue; try { const raw = localStorage.getItem(key); if (raw === null) return defaultValue; try { return deserializeSave(raw); } catch { return raw; } } catch { return defaultValue; } },
+  set(key, value) { if (!isStorageAvailable()) return false; try { const str = (typeof value === "object" && value !== null) || typeof value === "bigint" ? superjsonStringify(value) : JSON.stringify(value); localStorage.setItem(key, str); return true; } catch { return false; } },
+  remove(key) { if (!isStorageAvailable()) return false; try { localStorage.removeItem(key); return true; } catch { return false; } },
+  getRaw(key, defaultValue = null) { if (!isStorageAvailable()) return defaultValue; try { const value = localStorage.getItem(key); return value !== null ? value : defaultValue; } catch { return defaultValue; } },
+  setRaw(key, value) { if (!isStorageAvailable()) return false; try { localStorage.setItem(key, value); return true; } catch { return false; } },
   serialize(obj, space) { return JSON.stringify(obj, saveDataReplacer, space ?? undefined); },
 };
 

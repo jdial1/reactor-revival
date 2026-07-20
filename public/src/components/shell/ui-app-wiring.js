@@ -1,16 +1,23 @@
 import { StateManager, applyBodyClassesFromUiState, subscribeKey, preferences } from "../../store.js";
-import { ObjectiveController, AchievementController } from "../../logic.js";
+import { ObjectiveController } from "../objective-controller.js";
+import { AchievementController } from "../achievement-controller.js";
 import { checkObjectiveTextScrolling as applyObjectiveToastTitleStyles } from "../objective-controller.js";
 import { getUiElement } from "../ui-components.js";
 import { installDeviceService } from "./device.js";
 import { resolveAudioService } from "../../services/app-services.js";
 import { InputHandler } from "./input-manager.js";
 import { createModalOrchestrator } from "../modals/ui-modals.js";
-import { getGridCanvasRenderer, initGridCanvasService, teardownGridCanvasService } from "../grid/grid-canvas-service.js";
-import { GridScaler } from "../grid/ui-grid.js";
+import { GridScaler, getGridCanvasRenderer, initGridCanvasService, teardownGridCanvasService } from "../grid/ui-grid.js";
 import { HeatVisualsUI, GridInteractionUI } from "../grid/ui-heat-visuals.js";
 import { MeltdownUI } from "./ui-meltdown.js";
 import { safeCall, teardownAll } from "../../core/teardown.js";
+import {
+  ensureSubsystemRegistry,
+  registerSubsystem,
+  teardownAllSubsystems,
+} from "../../core/subsystem-registry.js";
+import { flushGameEffects } from "../../state/game-effects-flush.js";
+import { hudViewFromSnapshot, resolveSessionSnapshot } from "./hud-from-snapshot.js";
 
 class AudioController {
   constructor(api) {
@@ -38,21 +45,13 @@ class AudioController {
       this.unsubs.push(subscribeKey(preferences, key, syncVolumes));
     }
 
-    if (game.state) {
-      const syncHeatBalanced = (balanced) => {
-        game.audio?.warningManager?.setHeatBalanced?.(!!balanced);
+    if (game.ui?.uiState) {
+      const syncHeatBalanced = () => {
+        const view = hudViewFromSnapshot(resolveSessionSnapshot(game), game);
+        game.audio?.warningManager?.setHeatBalanced?.(!!view.heat_balanced);
       };
-      this.unsubs.push(subscribeKey(game.state, "heat_balanced", syncHeatBalanced));
-      syncHeatBalanced(game.state.heat_balanced);
-
-      const syncAmbience = () => {
-        const vc = game.state.active_vent_count ?? 0;
-        const ec = game.state.active_exchanger_count ?? 0;
-        game.audio?.industrialManager?.scheduleIndustrialAmbience(vc, ec);
-      };
-      this.unsubs.push(subscribeKey(game.state, "active_vent_count", syncAmbience));
-      this.unsubs.push(subscribeKey(game.state, "active_exchanger_count", syncAmbience));
-      syncAmbience();
+      this.unsubs.push(subscribeKey(game.ui.uiState, "snapshot_rev", syncHeatBalanced));
+      syncHeatBalanced();
     }
   }
 
@@ -71,13 +70,9 @@ export class ObjectivesUI {
     this.controller = controller;
   }
   checkTextScrolling() {
-    const toastTitleEl = getUiElement(this.ui, "objectives_toast_title") ?? document.getElementById("objectives_toast_title");
-    applyObjectiveToastTitleStyles(toastTitleEl);
+    applyObjectiveToastTitleStyles(getUiElement(this.ui, "objectives_toast_title"));
   }
   markComplete() {
-    const toastBtn = getUiElement(this.ui, "objectives_toast_btn") ?? document.getElementById("objectives_toast_btn");
-    if (!toastBtn) return;
-    toastBtn.classList.add("is-complete");
     if (typeof this.animateObjectiveCompletion === "function") this.animateObjectiveCompletion();
   }
   updateObjectiveDisplay() {
@@ -184,7 +179,7 @@ export function wireGameServices(ui, game) {
   };
 }
 
-export function teardownGameServices(ui, game) {
+export function teardownGameServices(ui, _game) {
   if (ui._deviceServiceTeardown) {
     safeCall(() => { ui._deviceServiceTeardown(); });
     ui._deviceServiceTeardown = null;
@@ -206,6 +201,9 @@ export function wireAppControllers(ui, game) {
     getUI: () => ui,
   });
   ui.audioController.attach(game);
+  registerSubsystem(game, "audio", {
+    teardown: () => ui.audioController?.detach?.(game),
+  });
   return {
     audioController: ui.audioController,
   };
@@ -229,6 +227,12 @@ export function wireAppPresenters(ui, game) {
   });
   ui.objectivesUI = new ObjectivesUI(ui, ui.objectiveController);
   ui.pauseStateUI = new PauseStateUI(ui);
+  registerSubsystem(game, "objectives", {
+    teardown: () => ui.objectiveController?.unmount?.(),
+  });
+  registerSubsystem(game, "achievements", {
+    teardown: () => ui.achievementController?.unmount?.(),
+  });
   return {
     objectiveController: ui.objectiveController,
     achievementController: ui.achievementController,
@@ -247,14 +251,29 @@ export function teardownAppPresenters(ui) {
 }
 
 export function wireAppSubsystems(ui, game) {
+  ensureSubsystemRegistry(game);
+  registerSubsystem(game, "fxDrain", {
+    postTick: ({ game: g } = {}) => flushGameEffects(g ?? game),
+  });
   wireUiDomSubsystems(ui);
   const services = wireGameServices(ui, game);
   const controllers = wireAppControllers(ui, game);
   const presenters = wireAppPresenters(ui, game);
+  game._subsystems = {
+    stateManager: ui.stateManager,
+    inputHandler: ui.inputHandler,
+    audioController: ui.audioController,
+    objectiveController: ui.objectiveController,
+    achievementController: ui.achievementController,
+    objectivesUI: ui.objectivesUI,
+    pauseStateUI: ui.pauseStateUI,
+    registry: game.subsystemRegistry,
+  };
   return { ...services, ...controllers, ...presenters };
 }
 
 export function teardownAppSubsystems(ui, game) {
+  teardownAllSubsystems(game);
   teardownAppPresenters(ui);
   teardownAppControllers(ui, game);
   teardownGameServices(ui, game);

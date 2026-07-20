@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
 import { SaveDataSchema } from "../../../public/src/schema/index.js";
 import { ObjectiveIndexSchema, SaveDecimalSchema } from "../../../public/src/schema/numberLikeSchema.js";
-import { toDecimal } from "@app/utils.js";
+import { toDecimal } from "@app/simUtils.js";
 import { serializeSave, deserializeSave, migrateLocalStorageToIndexedDB } from "@app/storage/index.js";
 import { parseAndValidateSave } from "@app/store.js";
 
@@ -94,6 +94,42 @@ describe("Group 6: Persistence & Data Integrity", () => {
       expect(parsed.tiles).toEqual([
         { row: 0, col: 0, partId: "uranium1", ticks: 0, heat_contained: 0 },
         { row: 1, col: 1, partId: "vent1", ticks: 2, heat_contained: 0 },
+      ]);
+      expect(parsed.save_format_version).toBe(3);
+    });
+
+    it("migrates v1 saves through the version chain to latest format", () => {
+      const v1 = {
+        version: "1.0.0",
+        run_id: STABLE_RUN_ID,
+        save_format_version: 1,
+        tech_tree: "architect",
+        exotic_particles: 12,
+        unlocked_achievements: ["first_cell"],
+        tiles: [],
+      };
+      const parsed = SaveDataSchema.parse(v1);
+      expect(parsed.save_format_version).toBe(3);
+      expect(parsed.tech_tree).toBe("unified");
+      expect(toNum(parsed.current_exotic_particles)).toBe(12);
+      expect(parsed.achievements?.unlocked).toEqual(["first_cell"]);
+      expect(parsed.unlocked_achievements).toEqual(["first_cell"]);
+    });
+
+    it("migrates v2 saves into v3 shape without re-flattening tiles", () => {
+      const v2 = {
+        version: "1.4.0",
+        run_id: STABLE_RUN_ID,
+        save_format_version: 2,
+        tech_tree: "physicist",
+        current_exotic_particles: 5,
+        tiles: [{ row: 0, col: 0, partId: "uranium1", ticks: 1, heat_contained: 0 }],
+      };
+      const parsed = SaveDataSchema.parse(v2);
+      expect(parsed.save_format_version).toBe(3);
+      expect(parsed.tech_tree).toBe("unified");
+      expect(parsed.tiles).toEqual([
+        { row: 0, col: 0, partId: "uranium1", ticks: 1, heat_contained: 0 },
       ]);
     });
 
@@ -218,7 +254,7 @@ describe("Group 6: Persistence & Data Integrity", () => {
 
     it("gracefully ignores unrecognized part IDs during paste", () => {
       const moneyBefore = game.state.current_money;
-      const moneyBeforeStr = moneyBefore.toString();
+      const moneyBeforeStr = String(moneyBefore);
       const layout = [[{ t: "uranium", id: "unknown_part_999", lvl: 1 }]];
 
       expect(() => game.action_pasteLayout(layout, { skipCostDeduction: true })).not.toThrow();
@@ -227,13 +263,13 @@ describe("Group 6: Persistence & Data Integrity", () => {
       expect(tile).not.toBeNull();
       expect(tile.part).toBeNull();
       expect(tile.ticks).toBe(0);
-      expect(game.state.current_money.eq(moneyBefore)).toBe(true);
-      expect(game.state.current_money.toString()).toBe(moneyBeforeStr);
+      expect(Number(game.state.current_money)).toBe(Number(moneyBefore));
+      expect(String(game.state.current_money)).toBe(moneyBeforeStr);
     });
 
     it("applies recognized parts while skipping unrecognized part IDs", () => {
       const moneyBefore = game.state.current_money;
-      const moneyBeforeStr = moneyBefore.toString();
+      const moneyBeforeStr = String(moneyBefore);
       expect(game.rows).toBeGreaterThanOrEqual(1);
       expect(game.cols).toBeGreaterThanOrEqual(2);
 
@@ -257,8 +293,8 @@ describe("Group 6: Persistence & Data Integrity", () => {
       expect(t0.ticks).toBe(uraniumPart.ticks);
       expect(t1.part).toBeNull();
       expect(t1.ticks).toBe(0);
-      expect(game.state.current_money.eq(moneyBefore)).toBe(true);
-      expect(game.state.current_money.toString()).toBe(moneyBeforeStr);
+      expect(Number(game.state.current_money)).toBe(Number(moneyBefore));
+      expect(String(game.state.current_money)).toBe(moneyBeforeStr);
     });
   });
 

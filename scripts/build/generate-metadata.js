@@ -40,7 +40,6 @@ export function writeVersion() {
   console.log(`Central Time: ${centralFormatter.format(now)}`);
 }
 
-const splashPattern = /^splash_bg(\d+)\.webp$/;
 const bgImgPattern = /^bg_img(\d+)\.webp$/;
 
 function countInDir(dirPath, pattern) {
@@ -52,11 +51,9 @@ function countInDir(dirPath, pattern) {
 
 export function writeSplashBgCount() {
   const stalenhagDir = path.join(root, "public", "img", "misc", "stalenhag_bg");
-  const splashDir = path.join(root, "public", "img", "misc", "backgrounds");
   const stalenhag = countInDir(stalenhagDir, bgImgPattern);
-  const splash = countInDir(splashDir, splashPattern);
   const outPath = path.join(root, "public", "data", "splash_bg_count.json");
-  fs.writeFileSync(outPath, JSON.stringify({ stalenhag, splash }));
+  fs.writeFileSync(outPath, JSON.stringify({ stalenhag }));
 }
 
 async function writeChangelogFromGit() {

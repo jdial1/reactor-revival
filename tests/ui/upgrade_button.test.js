@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM } from '../helpers/setup.js';
+import { formatUpgradeDisplayCost } from "@app/components/upgrades/upgrade-display.js";
 
 describe('Upgrade Button UX', () => {
   let game;
@@ -24,8 +25,7 @@ describe('Upgrade Button UX', () => {
     const ariaLabel = buyBtn.getAttribute('aria-label');
 
     // Ensure the display cost is updated
-    upgrade.updateDisplayCost();
-    const expectedCost = upgrade.display_cost;
+    const expectedCost = formatUpgradeDisplayCost(upgrade);
     const expectedLabel = `Buy ${upgrade.title} for ${expectedCost}`;
 
     expect(ariaLabel).toBe(expectedLabel);

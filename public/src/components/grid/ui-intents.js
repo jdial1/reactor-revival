@@ -1,11 +1,12 @@
-import { drainGridIntentsAsync } from "../../bridge/bridge-intents.js";
+import { dispatchPlayerIntent } from "../../bridge/bridge-intents.js";
+import { getUiElement } from "../shell/page-dom.js";
 
 export function dispatchToggleIntent(game, toggleName, value, _sourceId = null) {
   if (!game?.state || !toggleName) return;
-  void drainGridIntentsAsync(game, game.engine, [{
-    action: "SET_TOGGLE",
+  void dispatchPlayerIntent(game, game.engine, {
+    type: "SET_TOGGLE",
     payload: { toggleName, value: !!value },
-  }]);
+  });
 }
 
 export function dispatchPauseIntent(game, paused, sourceId = "navigation") {
@@ -14,20 +15,20 @@ export function dispatchPauseIntent(game, paused, sourceId = "navigation") {
 
 export function dispatchRebootIntent(game, { keepEp = false } = {}) {
   if (!game) return;
-  void drainGridIntentsAsync(game, game.engine, [{
-    action: "REBOOT",
+  void dispatchPlayerIntent(game, game.engine, {
+    type: "REBOOT",
     payload: { keepEp: !!keepEp },
-  }]);
+  });
 }
 
 export function dispatchUiIntent(game, intent, e) {
   if (!game?.state) return;
   const btn = e?.currentTarget;
   const sourceId = btn?.id;
-  void drainGridIntentsAsync(game, game.engine, [{
-    action: intent,
+  void dispatchPlayerIntent(game, game.engine, {
+    type: intent,
     payload: { sourceId },
-  }]);
+  });
 }
 
 function createIntentDelegationHandler(game, root) {
@@ -62,7 +63,7 @@ export function bindIntentDelegation(game, root) {
 }
 
 export function installAppRootIntentDelegation(game) {
-  const root = typeof document !== "undefined" ? document.querySelector("#wrapper") : null;
+  const root = getUiElement(null, "wrapper");
   const teardown = bindIntentDelegation(game, root);
   return typeof teardown === "function" ? teardown : () => {};
 }

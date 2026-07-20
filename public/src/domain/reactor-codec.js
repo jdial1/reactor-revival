@@ -17,18 +17,6 @@ export function getCompactLayout(game) {
   return { size: { rows, cols }, parts };
 }
 
-export function countPlacedParts(game, type, level) {
-  if (!game.tileset || !game.tileset.tiles_list) return 0;
-  let count = 0;
-  for (const tile of game.tileset.tiles_list) {
-    const tilePart = tile.part;
-    if (tilePart && tilePart.type === type && tilePart.level === level) {
-      count++;
-    }
-  }
-  return count;
-}
-
 export function serializeReactor(game) {
   const layout = getCompactLayout(game);
   if (!layout) return "";

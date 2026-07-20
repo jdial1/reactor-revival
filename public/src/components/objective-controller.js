@@ -1,14 +1,14 @@
 import { html, render } from "lit-html";
 import { classMap, styleMap } from "../dom/lit.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
-import { getObjectiveClaimText } from "../domain/objectives.js";
-import { isShopOverlayPage } from "./shell/page-dom.js";
-import { enqueueGameEffect } from "../state/game-effects.js";
+import { formatObjectiveDisplayInfo, getObjectiveClaimText } from "./objective-display.js";
+import { syncActiveObjectiveToState } from "../domain/objectives.js";
+import { getUiElement, isShopOverlayPage } from "./shell/page-dom.js";
+import { enqueueAndDrain } from "../state/game-effects-flush.js";
 
 export function checkObjectiveTextScrolling(titleEl) {
   if (!titleEl) return;
   titleEl.style.animation = "none";
-  titleEl.classList.remove("objectives-toast-title--typewriter");
   const text = titleEl.textContent || "";
   if (!text.trim()) return;
   titleEl.textContent = text;
@@ -32,17 +32,10 @@ export class ObjectiveController {
 
   _handleToastClick(event) {
     if (event.target?.closest?.(".objectives-claim-pill")) return;
-    const toastBtn = event.currentTarget;
     const uiState = this.api.getUI()?.uiState;
-    if (uiState) {
-      uiState.objectives_toast_expanded = !uiState.objectives_toast_expanded;
-      if (uiState.objectives_toast_expanded && this.api.lightVibration) this.api.lightVibration();
-    } else {
-      const isExpanded = toastBtn.classList.toggle("is-expanded");
-      toastBtn.setAttribute("aria-expanded", isExpanded ? "true" : "false");
-      if (isExpanded && this.api.lightVibration) this.api.lightVibration();
-      this._render(this._getRenderState());
-    }
+    if (!uiState) return;
+    uiState.objectives_toast_expanded = !uiState.objectives_toast_expanded;
+    if (uiState.objectives_toast_expanded && this.api.lightVibration) this.api.lightVibration();
   }
 
   _getRenderState() {
@@ -69,7 +62,7 @@ export class ObjectiveController {
     }
     const hidden = !isReactorContextPage(uiState?.active_page);
     if (!om) return { sandbox: false, title: "", claimText: "Claim", reward: null, progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: uiState?.objectives_toast_expanded ?? false, hidden };
-    const info = om.getCurrentObjectiveDisplayInfo();
+    const info = formatObjectiveDisplayInfo(om);
     if (!info) return { sandbox: false, title: "", claimText: "Claim", reward: null, progressPercent: 0, isComplete: false, isActive: false, hasProgressBar: false, isExpanded: uiState?.objectives_toast_expanded ?? false, hidden };
     const objectiveIndex = om.current_objective_index ?? 0;
     const displayTitle = info.title ? `${objectiveIndex + 1}: ${info.title}` : "";
@@ -141,7 +134,7 @@ export class ObjectiveController {
   }
 
   _syncObjectivesToastTitle(state) {
-    const titleEl = typeof document !== "undefined" ? document.getElementById("objectives_toast_title") : null;
+    const titleEl = getUiElement(null, "objectives_toast_title");
     if (!titleEl) return;
     titleEl.textContent = state?.title ?? "";
     if (state?.title?.trim()) {
@@ -150,7 +143,7 @@ export class ObjectiveController {
   }
 
   _render(state) {
-    const root = document.getElementById("objectives_toast_root");
+    const root = getUiElement(null, "objectives_toast_root");
     if (!root?.isConnected || !state) return;
     const template = this._toTemplate(state);
     if (template) {
@@ -197,25 +190,27 @@ export class ObjectiveController {
       isExpanded,
       hidden: !isReactorContextPage(uiState?.active_page),
     };
-    const wasComplete = document.getElementById("objectives_toast_btn")?.classList.contains("is-complete");
+    const wasComplete = !!this._lastObjectiveComplete;
     this._render(renderState);
+    this._lastObjectiveComplete = !!obj.isComplete;
     if (!wasComplete && obj.isComplete) this.animateCompletion();
   }
 
   updateDisplay() {
     const game = this.api.getGame();
     if (!game?.objectives_manager) return;
-    const info = game.objectives_manager.getCurrentObjectiveDisplayInfo();
+    const info = formatObjectiveDisplayInfo(game.objectives_manager);
     if (!info) return;
-    const wasComplete = document.getElementById("objectives_toast_btn")?.classList.contains("is-complete");
+    const wasComplete = !!this._lastObjectiveComplete;
     this._render(this._getRenderState());
+    this._lastObjectiveComplete = !!info.isComplete;
     if (!wasComplete && info.isComplete) this.animateCompletion();
   }
 
   animateCompletion() {
     const game = this.api.getGame();
     if (game) {
-      enqueueGameEffect(game, {
+      enqueueAndDrain(game, {
         kind: "dom_pulse",
         selector: "#objectives_toast_btn",
         className: "objective-completed",
@@ -229,7 +224,7 @@ export class ObjectiveController {
       const game = this.api.getGame();
       const om = game?.objectives_manager;
       if (om?.current_objective_def) {
-        om._syncActiveObjectiveToState?.();
+        syncActiveObjectiveToState(om);
         this.api.getStateManager()?.handleObjectiveLoaded?.({
           ...om.current_objective_def,
           title: typeof om.current_objective_def.title === "function" ? om.current_objective_def.title() : om.current_objective_def.title,
@@ -239,13 +234,13 @@ export class ObjectiveController {
   }
 
   setupListeners() {
+    this.unmount();
     const game = this.api.getGame();
     const ui = this.api.getUI();
-    const root = document.getElementById("objectives_toast_root");
+    const root = getUiElement(ui, "objectives_toast_root");
     if (root && game?.state && ui?.uiState) {
       const subscriptions = [
-        { state: game.state, keys: ["active_objective"] },
-        { state: ui.uiState, keys: ["objectives_toast_expanded", "active_page"] },
+        { state: ui.uiState, keys: ["objectives_toast_expanded", "active_page", "snapshot_rev"] },
       ];
       const renderFn = () => this._renderReactive();
       this._objectivesUnmount = bindLitRenderMulti(

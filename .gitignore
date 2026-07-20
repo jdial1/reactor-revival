@@ -4,6 +4,15 @@ eslint-results.sarif
 eslint-unused.json
 _fix-coverage*.mjs
 /dist-sw
+tmp-*.txt
+tmp-*.log
+*.log
+
+# Generated ship artifacts (build:css / build:sw / copy-libs)
+/public/lib
+public/css/app.css
+public/css/_entry.css
+public/sw.js
 
 # Database
 *.db
@@ -11,18 +20,14 @@ _fix-coverage*.mjs
 *.sqlite3
 *.db-journal
 public/reactor_leaderboard.sqlite3
-public/lib/pako.min.js
-*.log
-/public/lib
-public/css/app.css
-public/css/_entry.css
+
+# Tooling scrap
 **/__pycache__/
-**/*.pyc
-**/*.py
-*.py
 *.pyc
+*.py
 scripts/playtest_failure.png
 screenshots/
 reference/
 /test-results
+/playwright-report
 /.cursor

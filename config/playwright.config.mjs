@@ -4,7 +4,8 @@ import { RESOLUTIONS } from "../scripts/ui-audit/ui-screenshot-config.js";
 const baseURL = process.env.BASE_URL || "http://localhost:8080";
 
 function e2eResolutionProjects() {
-  const filter = process.env.E2E_RESOLUTION?.trim();
+  const soak = process.env.E2E_SOAK === "1" || process.env.E2E_SOAK === "true";
+  const filter = process.env.E2E_RESOLUTION?.trim() || (soak ? "1920x1080" : "");
   const resolutions = filter
     ? RESOLUTIONS.filter((r) => r.key === filter || r.label === filter)
     : RESOLUTIONS;
@@ -17,6 +18,8 @@ function e2eResolutionProjects() {
 
   if (!filter) {
     console.log(`[e2e] running ${resolutions.length} viewport projects (${resolutions.map((r) => r.key).join(", ")})`);
+  } else {
+    console.log(`[e2e] running viewport project ${resolutions.map((r) => r.key).join(", ")}`);
   }
 
   return resolutions.map((resolution) => ({
@@ -24,6 +27,7 @@ function e2eResolutionProjects() {
     use: {
       viewport: { width: resolution.width, height: resolution.height },
     },
+    testMatch: soak ? /soak-s\d+.*\.spec\.js$/ : undefined,
   }));
 }
 

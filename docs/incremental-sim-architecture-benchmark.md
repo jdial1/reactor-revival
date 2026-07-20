@@ -8,7 +8,7 @@
 >
 > **Audience:** Core contributors planning architecture, simulation integrity, state management, and Phase 2 migration.
 >
-> **Last updated:** 2026-06-24 (v1.1 — Easy-wins audit: sim-events, TickOrchestrator completion, upgrade DAG CI)
+> **Last updated:** 2026-07-19 (v1.2 — honesty pass: capped offline, no host TickOrchestrator, rAF-coupled sim clock)
 
 ---
 
@@ -105,7 +105,7 @@ Browser Simulation / Incremental Peers
               │
               └── Reactor Revival (jdial1) — IC2 reactor sim on modern PWA substrate
                         │
-                        ├── Already aligned: worker heat kernel, intent_queue, save migration v2, TickOrchestrator
+                        ├── Already aligned: worker heat kernel, intent_queue, save migration v2, capped chunked offline
                         ├── Partially aligned: SoA in worker / OOP on main (dual representation)
                         └── Gap targets: ECS migration
 ```
@@ -131,7 +131,7 @@ Each entry: **what it is**, **core architectural principles**, **what it does we
 **Design principles**
 
 - **Entity Component System (ECS):** Grid items are entity IDs; stats live in component stores; heat/item transport runs in isolated systems — no deep inheritance trees.
-- **Decoupled render loop:** Simulation at fixed tick rate (e.g. 60 Hz); rendering via `requestAnimationFrame` independently. UI stutter cannot stall sim.
+- **Decoupled render loop (Shapez ideal):** Simulation at fixed tick rate; rendering via `requestAnimationFrame` independently so UI stutter cannot stall sim. **Revival does not ship this** — host `Engine.loop` is itself rAF-scheduled; the worker offloads math but the wall clock is main-thread rAF.
 - **Typed spatial indexing:** Chunks, spatial hashes, and flat buffers for belt/item lookup — O(1) neighborhood queries at scale.
 
 **Steal**
@@ -288,7 +288,7 @@ Each entry: **what it is**, **core architectural principles**, **what it does we
 
 **Steal**
 
-- Introduce `TickOrchestrator` with ordered phases: `[ intents, cells, heat, vents, economy, objectives, ui-effects ]` — document order in `core_principles.txt`.
+- Document reactor-core-lib tick phase order; keep host hooks thin (`onTick` / `postTick`). Do not invent a parallel host `TickOrchestrator` unless it replaces implicit hook scatter with a real registry.
 - Keep `upgrade_list.json` / `part_list.json` as **sole balance surface**; modifiers in `domain/modifiers.js` should be data-driven lookups, not hardcoded `if (id === ...)`.
 - Add **`erequires` dependency validation** at load time (Space Company validates tech tree edges; we have `erequires` in JSON but should schema-enforce).
 
@@ -297,7 +297,7 @@ Each entry: **what it is**, **core architectural principles**, **what it does we
 - Multiple planet / resource silos — single reactor site is our identity.
 - Generic idle "click for +1" loops — our tick is physics-first.
 
-**Revival status:** JSON-driven parts/upgrades strong; tick phase order explicitly documented in `domain/tick-phases.js` and strictly enforced via the `TickOrchestrator` in `domain/engine.js`.
+**Revival status:** JSON-driven parts/upgrades strong. There is **no** `domain/tick-phases.js` / host `TickOrchestrator`. Tick phase order is encapsulated inside reactor-core-lib's pipeline; the host Engine wraps it with `runSubsystemHook(..., "onTick"|"postTick")` around `bridge.processTick()`.
 
 **Hooks, friction & secret sauce**
 
@@ -317,14 +317,14 @@ Direct comparison of Reactor Revival's current architecture against peer standar
 | Architectural Area | Reactor Revival (current) | Benchmark Standard | Primary Source |
 |--------------------|---------------------------|-------------------|----------------|
 | **Grid state** | `Tile` class objects with neighbor caches, display mirrors, nested physics helpers (`domain/grid.js`) | Entity IDs + component stores; physics in one vectorized system | Shapez ECS |
-| **Sim / render loop** | Worker sim + main-thread rAF (`ui.js`); some physics prep on main in `engine.js` | Fixed sim tick fully isolated; render reads snapshot only | Shapez |
+| **Sim / render loop** | Host `Engine.loop` via rAF drains accumulator → `tick()`; worker offloads heat batches | Fixed sim tick fully isolated; render reads snapshot only | Shapez |
 | **Worker boundary** | `serializeStateForGameLoopWorker` posts buffers + intents; main thread still mutates `Tileset` between posts | Immutable tick snapshot; single commit after worker return | Screeps |
 | **Player input** | `intent_queue` for place/sell/vent/pause; atomic drain via `consumeIntentQueueAsync` | All mutations via intents; atomic drain at tick start | Screeps |
 | **Module structure** | Phase 2 split in progress; recent services cycle fix | Subsystems register with central dispatcher; zero import cycles | Shark Game |
 | **UI update path** | Valtio proxies + Lit shell templates; `uiState` drives pause/meltdown/leaderboard/notices | State change → dirty flags → minimal DOM diff | Shark Game |
 | **Offline catch-up** | `processOfflineTime` + `startOfflineFastForward()` worker chunk replay | Progress UI for long spans | Trimps |
 | **Save migration** | `saveMigration.js` v2, compact tiles, Zod validation | Version chain with per-version migrators + tests | Trimps |
-| **Tick orchestration** | `TickOrchestrator` with phases `vents`, `economy`, `objectives` registered in `domain/engine.js` | Single ticker with ordered sub-handlers | Space Company |
+| **Tick orchestration** | Lib pipeline + host pre/post subsystem hooks (no `tick-phases.js`) | Single ticker with ordered sub-handlers | Space Company |
 | **Balance surface** | JSON lists + `modifiers.js` interpretation | Pure data configs; engine is generic interpreter | Space Company |
 
 **Priority ranking for debt reduction**
@@ -340,7 +340,7 @@ Direct comparison of Reactor Revival's current architecture against peer standar
 | Principle | Shapez | Screeps | Shark Game | Trimps | Space Co. | Revival | Best exemplar |
 |-----------|--------|---------|------------|--------|-----------|---------|---------------|
 | ECS / SoA hot path | ● | ◐ | ○ | ○ | ○ | ◐ | Shapez |
-| Fixed sim / free render | ● | ● | ◐ | ◐ | ◐ | ◐ | Shapez |
+| Fixed sim / free render | ● | ● | ◐ | ◐ | ◐ | ○ | Shapez |
 | Worker / thread isolation | ◐ | ● | ○ | ○ | ○ | ● | Screeps + Revival |
 | Intent buffering | ○ | ● | ◐ | ○ | ◐ | ◐ | Screeps |
 | Flat serialization boundary | ● | ● | ○ | ◐ | ○ | ◐ | Screeps |
@@ -374,7 +374,7 @@ Use when weighing architectural imports — **do not re-build what already exist
 | Save migration | `migrateSave`, `SAVE_FORMAT_VERSION_LATEST = 2` |
 | Offline catch-up | `domain/engine.js` → `processOfflineTime`, `startOfflineFastForward` |
 | Data-driven balance | `public/data/part_list.json`, `upgrade_list.json`, Zod schemas |
-| Decoupled render | `components/ui.js` rAF loop; worker `FOUNDATIONAL_TICK_MS` interval |
+| Sim clock | `domain/engine.js` rAF `loop` + accumulator; worker for math offload (not async fixed-tick ownership) |
 | Phase 2 migration rules | `.cursor/rules/phase-2-architecture.mdc` |
 | Architecture tests | `tests/core/time-flux/`, `tests/core/thermodynamics/`, `tests/core/blueprints/upgrade-dag.test.js` |
 
@@ -404,7 +404,7 @@ Maps **current Reactor Revival engineering friction** against §2 Mega Sauces an
 
 | # | Live friction | Violates | Evidence | Fix |
 |---|---------------|----------|----------|-----|
-| 7 | **Implicit tick phase order** | Space Co. sauce · Friction #5 | **Remediated** | Unified via `TickOrchestrator` running ordered synchronous phases. |
+| 7 | **Implicit tick phase order** | Space Co. sauce · Friction #5 | **Partial** — phases live in reactor-core-lib; host has only `onTick`/`postTick` hooks (no `TickOrchestrator` / `tick-phases.js`) | Document lib order; optional host registry later |
 | 8 | **Residue import cycles** | Shark Game sauce | **Remediated** | Cycle fixes applied across logic and domain boundaries |
 | 9 | **God file concentration** | Friction #7 | `domain/engine.js`, `domain/grid.js` remain large | Continue Strangler split per phase-2-architecture.mdc |
 | 10| **UI God Object** | Law 6.3 | **Remediated** | Dismantled into `ui-copy-paste.js`, `ui-parts-panel.js`, `ui-heat-visuals.js`, etc. |
@@ -412,7 +412,7 @@ Maps **current Reactor Revival engineering friction** against §2 Mega Sauces an
 | 12| **Window Pollution** | Law 6.1 | **Remediated** | `window.showHotkeyHelp` removed; context via `app-context.js` with strict ES imports |
 | 13| **`utils.js` god barrel** | Law 6.2 | **Remediated (app)** — zero imports in `public/src/`; thin `@app` re-export for tests only | Migrate test imports; delete shim |
 | 14| **Cached `active_*` part lists** | Law 3.3 | **Fixed** — `ensureTickParts()` at tick boundary; engine getters; revision invalidation on grid mutation | — |
-| 15| **GameEventDispatcher remnant** | Law 1.1 · Friction #3 | **Partial** — achievements use `enqueueGameEffect`; `prestigeCompleted`, `achievementCatchUpSummary`, `vibrationRequest` still emit | Phase A2 |
+| 15| **GameEventDispatcher remnant** | Law 1.1 · Friction #3 | **Partial** — core `statePatch` pub/sub deleted (project + `snapshot_rev`); achievements use `enqueueGameEffect`; `prestigeCompleted`, `achievementCatchUpSummary`, `vibrationRequest` still emit | Phase A2 |
 
 ### Data & Saves
 
@@ -443,8 +443,8 @@ Maps **current Reactor Revival engineering friction** against §2 Mega Sauces an
 
 | # | Deliverable | Acceptance criteria |
 |---|-------------|---------------------|
-| A1 | Chunked offline worker replay | Vitest: 10k offline ticks === live 10k ticks on reference layout |
-| A2 | Dismantle GameEventDispatcher | **Partial** — achievement unlocks route through `effect_queue`; catch-up summary and prestige completion still emit |
+| A1 | Chunked offline worker replay | **Shipped (capped)** — replay ≤ `MAX_ACCUMULATOR_MULTIPLIER` (100); chunk yield path live; uncapped 10k overnight replay not the contract |
+| A2 | Dismantle GameEventDispatcher | **Partial** — `statePatch` core sync removed; achievement unlocks route through `effect_queue`; catch-up summary and prestige completion still emit |
 | A3 | Atomic worker commit | Single `applyWorkerTickResult()`; no `Tile` mutation during worker flight |
 | A4 | Intent audit | Zero direct `setPart` from input handlers except via intent drain |
 
@@ -456,7 +456,7 @@ Maps **current Reactor Revival engineering friction** against §2 Mega Sauces an
 
 | # | Deliverable | Acceptance criteria |
 |---|-------------|---------------------|
-| B1 | `TickOrchestrator` registry | **Shipped** — `vents`, `economy`, `objectives` registered; `runPostHeatPhase` delegates to orchestrator |
+| B1 | `TickOrchestrator` registry | **Not shipped** — prior claims of `domain/tick-phases.js` were false; host uses subsystem hooks around lib `processTick` |
 | B2 | Dismantle UI God Object | Break `components/ui.js` into isolated view controllers; zero coupling to `Engine` |
 | B3 | Effect pipeline completion | All feedback paths use `effect_queue`; mute-safe visual fallbacks |
 | B4 | Import cycle CI gate | ESLint fails on new cycles in `public/src` |

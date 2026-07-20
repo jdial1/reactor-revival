@@ -8,13 +8,39 @@ import {
   getUpgradeBonusLines as getUpgradeBonusLinesCore,
   collectPartSemanticSegments,
   computeDisplaySellValue,
+  resolveTileDisplayRate,
 } from "./tooltip-stats.js";
 import { formatSemanticSegmentsForTooltip } from "./semantic-format.js";
 import { inspectExchangerPressureFlow } from "../bridge/bridge-heat.js";
 import { requireActiveBridge } from "../bridge/active.js";
-import { actions, ref } from "../store.js";
+import { ref } from "../store.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { styleMap, when, unsafeHTML, BaseComponent } from "../dom/lit.js";
+import { purchaseUpgradeWithFeedback } from "./upgrades/presentation.js";
+import { getUiElement } from "./shell/page-dom.js";
+
+function firstByClass(root, className) {
+  if (!root) return null;
+  return root.getElementsByClassName(className)[0] ?? null;
+}
+
+function setClassFlag(el, className, on) {
+  if (!el) return;
+  const re = new RegExp(`\\b${className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
+  const base = el.className.replace(re, "").replace(/\s+/g, " ").trim();
+  el.className = on ? (base ? `${base} ${className}` : className) : base;
+}
+
+function resolveSimpleSelector(sel) {
+  if (!sel || typeof sel !== "string") return null;
+  if (sel.startsWith("#") && !/[\s>+~[:.]/.test(sel.slice(1))) {
+    return getUiElement(null, sel.slice(1));
+  }
+  if (sel.startsWith(".") && !/[\s>+~[:#]/.test(sel.slice(1))) {
+    return document.getElementsByClassName(sel.slice(1))[0] ?? null;
+  }
+  return null;
+}
 
 const tutorialOverlayTemplate = html`
   <div class="tutorial-spotlight-top"></div>
@@ -56,14 +82,8 @@ const CLAIM_STEP = {
   key: "claim_objective",
   message: "Click Claim to complete the objective",
   onEnter(game) {
-    const toast = document.getElementById("objectives_toast_btn");
     const uiState = game?.ui?.uiState;
-    if (uiState && !uiState.objectives_toast_expanded) {
-      uiState.objectives_toast_expanded = true;
-    } else if (toast && !toast.classList.contains("is-expanded")) {
-      toast.classList.add("is-expanded");
-      toast.setAttribute("aria-expanded", "true");
-    }
+    if (uiState) uiState.objectives_toast_expanded = true;
   },
 };
 
@@ -123,7 +143,7 @@ class TutorialRuntime {
   }
 
   ensurePartsPanelOpen(expand) {
-    const tabPower = document.getElementById("tab_power");
+    const tabPower = getUiElement(null, "tab_power");
     const ui = this.game?.ui;
     const collapsed = ui?.uiState?.parts_panel_collapsed ?? true;
     if (collapsed && expand) {
@@ -137,7 +157,7 @@ class TutorialRuntime {
 
   ensureHeatTabAndPanel() {
     this.ensurePartsPanelOpen(true);
-    const tabHeat = document.getElementById("tab_heat");
+    const tabHeat = getUiElement(null, "tab_heat");
     if (tabHeat && !tabHeat.classList.contains("active")) {
       tabHeat.click();
     }
@@ -174,7 +194,7 @@ class TutorialRuntime {
       if (el) return el;
     }
     const sel = this.getSelectorForStep(step);
-    return sel ? document.querySelector(sel) : null;
+    return resolveSimpleSelector(sel);
   }
 
   getGridTileForStep(step) {
@@ -194,7 +214,7 @@ class TutorialRuntime {
   updatePointer(tileRect) {
     if (!this.pointer) return;
     if (!tileRect) {
-      this.pointer.classList.remove("visible");
+      setClassFlag(this.pointer, "visible", false);
       return;
     }
     const centerX = tileRect.left + tileRect.width / 2;
@@ -203,7 +223,7 @@ class TutorialRuntime {
     const tipOffsetY = 28;
     this.pointer.style.left = `${centerX - tipOffsetX}px`;
     this.pointer.style.top = `${centerY - tipOffsetY}px`;
-    this.pointer.classList.add("visible");
+    setClassFlag(this.pointer, "visible", true);
   }
 
   createOverlay() {
@@ -212,7 +232,7 @@ class TutorialRuntime {
     this.overlay.id = "tutorial-overlay";
     this.overlay.className = "tutorial-overlay";
     render(tutorialOverlayTemplate, this.overlay);
-    this.pointer = this.overlay.querySelector(".tutorial-pointer");
+    this.pointer = firstByClass(this.overlay, "tutorial-pointer");
     this.callout = document.createElement("div");
     this.callout.id = "tutorial-callout";
     this.callout.className = "tutorial-callout";
@@ -234,7 +254,7 @@ class TutorialRuntime {
     const [top, left, right, bottom] = this.overlay.children;
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const focusBorder = this.overlay.querySelector(".tutorial-focus-border");
+    const focusBorder = firstByClass(this.overlay, "tutorial-focus-border");
     top.style.cssText = `top:0;left:0;width:100%;height:${r.top}px`;
     left.style.cssText = `top:${r.top}px;left:0;width:${r.left}px;height:${r.height}px`;
     right.style.cssText = `top:${r.top}px;left:${r.right}px;width:${w - r.right}px;height:${r.height}px`;
@@ -294,8 +314,8 @@ class TutorialRuntime {
       return;
     }
     this.createOverlay();
-    this.overlay.classList.add("visible");
-    this.callout.classList.add("visible");
+    setClassFlag(this.overlay, "visible", true);
+    setClassFlag(this.callout, "visible", true);
     const message = (this.isMobile() && step.mobileMessage) ? step.mobileMessage : step.message;
     const tileRect = this.getTileRectForStep(step);
     const useGridTile = !!tileRect;
@@ -319,8 +339,8 @@ class TutorialRuntime {
 
   hideSpotlight() {
     this.updatePointer(null);
-    if (this.overlay) this.overlay.classList.remove("visible");
-    if (this.callout) this.callout.classList.remove("visible");
+    setClassFlag(this.overlay, "visible", false);
+    setClassFlag(this.callout, "visible", false);
     this._clearStepListeners();
   }
 
@@ -363,8 +383,8 @@ class TutorialRuntime {
       return;
     }
     this.createOverlay();
-    this.overlay.classList.add("visible");
-    this.callout.classList.add("visible");
+    setClassFlag(this.overlay, "visible", true);
+    setClassFlag(this.callout, "visible", true);
     const update = () => {
       const t = this.game?.ui?.getTutorialTarget?.("claim_objective");
       if (!t) return;
@@ -532,13 +552,13 @@ function setBaseHeatStats(stats, obj, tile) {
 
 function setVentCoolingStats(stats, segment) {
   const totalVentRate = segment.totalVentRate
-    ?? segment.vents.reduce((sum, vent) => sum + vent.getEffectiveVentValue(), 0);
+    ?? segment.vents.reduce((sum, vent) => sum + resolveTileDisplayRate(vent, "vent"), 0);
   stats.set("Cooling", `${fmt(totalVentRate, 1)}/tick`);
 }
 
 function setOutletTransferStats(stats, segment, game) {
   const totalOutletRate = segment.totalOutletRate
-    ?? segment.outlets.reduce((sum, o) => sum + o.getEffectiveTransferValue(), 0);
+    ?? segment.outlets.reduce((sum, o) => sum + resolveTileDisplayRate(o, "transfer"), 0);
   const reactorFullness = game.reactor.max_heat > 0 ? game.reactor.current_heat / game.reactor.max_heat : 0;
   const effective = totalOutletRate * reactorFullness * (1 - segment.fullnessRatio);
   stats.set("Transfer", `${fmt(effective, 1)}/tick`);
@@ -546,14 +566,14 @@ function setOutletTransferStats(stats, segment, game) {
 
 function setInletTransferStats(stats, segment, game) {
   const totalInletRate = segment.totalInletRate
-    ?? segment.inlets.reduce((sum, i) => sum + i.getEffectiveTransferValue(), 0);
+    ?? segment.inlets.reduce((sum, i) => sum + resolveTileDisplayRate(i, "transfer"), 0);
   const reactorFullness = game.reactor.max_heat > 0 ? game.reactor.current_heat / game.reactor.max_heat : 0;
   const effective = totalInletRate * segment.fullnessRatio * (1 - reactorFullness);
   stats.set("Transfer", `${fmt(effective, 1)}/tick`);
 }
 
-function calculateSellValue(obj, tile) {
-  return computeDisplaySellValue(obj, tile);
+function calculateSellValue(obj, tile, game) {
+  return computeDisplaySellValue(obj, tile, game);
 }
 
 function setHeatAndSegmentStats(stats, obj, tile, game) {
@@ -573,13 +593,13 @@ function setHeatAndSegmentStats(stats, obj, tile, game) {
   }
 }
 
-function setTransferSellAndEpStats(stats, obj, tile) {
+function setTransferSellAndEpStats(stats, obj, tile, game) {
   if (!tile?.activated) return;
   if ((obj.category === "heat_outlet" || obj.category === "heat_inlet") && !stats.has("Transfer")) {
-    stats.set("Max Transfer", `${fmt(tile.getEffectiveTransferValue(), 1)}/tick`);
+    stats.set("Max Transfer", `${fmt(resolveTileDisplayRate(tile, "transfer"), 1)}/tick`);
   }
   if (obj.category !== "cell") {
-    const sell_value = calculateSellValue(obj, tile);
+    const sell_value = calculateSellValue(obj, tile, game);
     stats.set("Sells for", `<img src='img/ui/icons/icon_cash.png' class='icon-inline' alt='cash'>${fmt(Math.max(0, sell_value))}`);
   }
   if (obj.category === "particle_accelerator") {
@@ -591,7 +611,7 @@ function getDetailedStats(obj, tile, game) {
   const stats = new Map();
   setMaxOrLockedStatus(stats, obj, game);
   setHeatAndSegmentStats(stats, obj, tile, game);
-  setTransferSellAndEpStats(stats, obj, tile);
+  setTransferSellAndEpStats(stats, obj, tile, game);
   return stats;
 }
 
@@ -642,7 +662,7 @@ function tooltipContentTemplate(obj, tile, game, onBuy) {
   if (obj.category === "cell" && !obj.upgrade && tile) {
     descHtml = formatDescriptionBulleted(formatCellSubstrateLines(tile, obj), iconify);
   } else if (!obj.upgrade) {
-    descHtml = formatSemanticSegmentsForTooltip(collectPartSemanticSegments(obj, tile), fmt, iconify);
+    descHtml = formatSemanticSegmentsForTooltip(collectPartSemanticSegments(obj, tile, game), fmt, iconify);
   } else {
     const description = obj.description || obj.upgrade?.description;
     descHtml = description ? formatDescriptionBulleted(description, iconify) : "";
@@ -667,9 +687,9 @@ function tooltipContentTemplate(obj, tile, game, onBuy) {
 export class TooltipManager extends BaseComponent {
   constructor(main_element_selector, tooltip_element_selector, game) {
     super();
-    this.$main = document.querySelector(main_element_selector);
-    this.$tooltip = document.querySelector(tooltip_element_selector);
-    this.$tooltipContent = document.getElementById("tooltip_data");
+    this.$main = resolveSimpleSelector(main_element_selector);
+    this.$tooltip = resolveSimpleSelector(tooltip_element_selector);
+    this.$tooltipContent = getUiElement(null, "tooltip_data");
     this.game = game;
 
     if (!this.$main || !this.$tooltip || !this.$tooltipContent) {
@@ -715,7 +735,7 @@ export class TooltipManager extends BaseComponent {
     }
   }
 
-  show(obj, tile_context, isClick = false, anchorEl = null) {
+  show(obj, tile_context, isClick = false, _anchorEl = null) {
     if (this.isMobile) {
       this._hide();
       return;
@@ -742,8 +762,8 @@ export class TooltipManager extends BaseComponent {
 
     if (!this.tooltip_showing) {
       this.isVisible = true;
-      this.$main.classList.add("tooltip_showing");
-      this.$tooltip.classList.remove("hidden");
+      setClassFlag(this.$main, "tooltip_showing", true);
+      setClassFlag(this.$tooltip, "hidden", false);
       this.$tooltip.setAttribute("aria-hidden", "false");
       this.tooltip_showing = true;
     }
@@ -798,8 +818,8 @@ export class TooltipManager extends BaseComponent {
     this.current_tile_context = null;
     if (this.tooltip_showing) {
       this.isVisible = false;
-      this.$main.classList.remove("tooltip_showing");
-      this.$tooltip.classList.add("hidden");
+      setClassFlag(this.$main, "tooltip_showing", false);
+      setClassFlag(this.$tooltip, "hidden", true);
       this.$tooltip.setAttribute("aria-hidden", "true");
       this.tooltip_showing = false;
     }
@@ -812,17 +832,9 @@ export class TooltipManager extends BaseComponent {
     const onBuy = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (this.game.upgradeset.purchaseUpgrade(this.current_obj.id)) {
-        actions.enqueueEffect(this.game, { kind: "sfx", id: "upgrade", context: "global" });
-        this.update();
-      } else {
-        actions.enqueueEffect(this.game, { kind: "sfx", id: "error", context: "global" });
-        actions.enqueueEffect(this.game, {
-          kind: "floating_text",
-          body: "[Not enough funds!]",
-          context: "global",
-        });
-      }
+      purchaseUpgradeWithFeedback(this.game.upgradeset, this.current_obj.id, {
+        onSuccess: () => this.update(),
+      });
     };
     const template = tooltipContentTemplate(this.current_obj, this.current_tile_context, this.game, onBuy);
     safeCall(() => { render(template, this.$tooltipContent); });

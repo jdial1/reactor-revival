@@ -73,8 +73,6 @@ export const HEAT_SAFETY_STOP_THRESHOLD = 0.9;
 export const ACCUMULATOR_EPSILON = SIM_CONSTANTS.heatEpsilon;
 export const MAX_LIVE_TICKS = 10;
 export const WELCOME_BACK_FF_MAX_TICKS = 100;
-export const OFFLINE_REPLAY_CHUNK_TICKS = 10000;
-export const MAX_CATCHUP_TICKS = 500;
 
 export const MAX_GRID_DIMENSION = 50;
 export const BASE_MONEY = 10;

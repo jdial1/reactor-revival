@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum , syncActivePartsAtTickBoundary} from "../helpers/setup.js";
+import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from "../helpers/setup.js";
 import { forcePurchaseUpgrade } from "../helpers/gameHelpers.js";
 import { patchGameState } from "@app/state.js";
+import { buildShellClassMap, buildShellStyleMap, modalUi } from "@app/store.js";
 import { assertPageShellClass } from "../helpers/testUtils.js";
 
 describe("UI Integration and Gameplay", () => {
@@ -44,15 +45,12 @@ describe("UI Integration and Gameplay", () => {
 
       // Activate the cell and set ticks so it generates power and heat
       tile.activated = true;
-      tile.ticks = 10;
+      game.coreBridge.setTileTicks(tile.row, tile.col, 10);
 
       // Update reactor stats to include the new part
       game.reactor.updateStats();
       game.tileset.updateActiveTiles(); // Ensure tiles are active
       // Force update the engine's part cache to include the new part
-      syncActivePartsAtTickBoundary(game.engine);
-
-
       // Ensure the engine is running and game is unpaused so it can process the part
       game.paused = false;
       game.onToggleStateChange?.("pause", false);
@@ -116,7 +114,7 @@ describe("UI Integration and Gameplay", () => {
 
   it("should update money display after selling power", async () => {
     const initialMoney = game.current_money;
-    game.reactor.current_power = 1234; // Set power to be sold
+    game.coreBridge.setReactorPower(1234); // Set power to be sold
 
     game.sell_action(); // Trigger the actual game action
 
@@ -165,89 +163,47 @@ describe("UI Integration and Gameplay", () => {
   });
 
   it("should update reactor heat background based on heat ratio", async () => {
-    // Start on reactor page
     await game.router.loadPage("reactor_section");
-
-    // Get the reactor background element
     const reactorBackground = document.getElementById("reactor_background");
     expect(reactorBackground, "Reactor background element should exist").not.toBeNull();
 
-    // Set initial heat values
-    game.reactor.current_heat = 0;
+    const shellClasses = () => buildShellClassMap(game.ui.uiState, modalUi, { hasSession: true, game });
+    const shellStyles = () => buildShellStyleMap(game.ui.uiState, game);
+
+    game.coreBridge.setReactorHeat(0);
     game.reactor.max_heat = 1000;
     patchGameState(game, { current_heat: game.reactor.current_heat, max_heat: game.reactor.max_heat });
+    expect(Number(shellStyles()["--heat-bg-alpha"])).toBe(0);
+    expect(shellClasses()["heat-warning"]).toBe(false);
+    expect(shellClasses()["heat-critical"]).toBe(false);
 
-    // Test low heat (should be transparent)
-    {
-      const maxH = toNum(game.reactor.max_heat);
-      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
-      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
-    }
-    expect(reactorBackground.style.backgroundColor === "transparent" || reactorBackground.style.backgroundColor === "").toBe(true);
-    expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
-    expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
-
-    // Test moderate heat (50% of max)
-    game.reactor.current_heat = 500;
+    game.coreBridge.setReactorHeat(500);
     patchGameState(game, { current_heat: game.reactor.current_heat });
-    {
-      const maxH = toNum(game.reactor.max_heat);
-      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
-      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
-    }
-    expect(reactorBackground.style.backgroundColor === "transparent" || reactorBackground.style.backgroundColor === "").toBe(true);
-    expect(reactorBackground.classList.contains("heat-warning")).toBe(false);
+    expect(Number(shellStyles()["--heat-bg-alpha"])).toBe(0);
+    expect(shellClasses()["heat-warning"]).toBe(false);
 
-    // Test high heat (80% of max - should show warning)
-    game.reactor.current_heat = 800;
+    game.coreBridge.setReactorHeat(800);
     patchGameState(game, { current_heat: game.reactor.current_heat });
-    {
-      const maxH = toNum(game.reactor.max_heat);
-      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
-      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
-    }
-    expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
-    expect(reactorBackground.classList.contains("heat-critical")).toBe(false);
+    expect(shellClasses()["heat-warning"]).toBe(true);
+    expect(shellClasses()["heat-critical"]).toBe(false);
 
-    // Test critical heat (130% of max - should show critical)
-    game.reactor.current_heat = 1300;
+    game.coreBridge.setReactorHeat(1300);
     patchGameState(game, { current_heat: game.reactor.current_heat });
-    {
-      const maxH = toNum(game.reactor.max_heat);
-      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
-      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
-    }
-    expect(reactorBackground.classList.contains("heat-warning")).toBe(true);
-    expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
+    expect(shellClasses()["heat-warning"]).toBe(true);
+    expect(shellClasses()["heat-critical"]).toBe(true);
 
-    // Test extreme heat (200% of max - should show maximum effect)
-    game.reactor.current_heat = 2000;
+    game.coreBridge.setReactorHeat(2000);
     patchGameState(game, { current_heat: game.reactor.current_heat });
-    {
-      const maxH = toNum(game.reactor.max_heat);
-      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
-      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
-    }
-    expect(reactorBackground.classList.contains("heat-critical")).toBe(true);
+    expect(shellClasses()["heat-critical"]).toBe(true);
 
     const testPart = game.partset.getPartById("vent1");
     const testTile = game.tileset.getTile(0, 0);
     await testTile.setPart(testPart);
-    testTile.heat_contained = testPart.containment * 0.95;
-    {
-      const maxH = toNum(game.reactor.max_heat);
-      const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
-      game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
-    }
+    game.coreBridge.setTileHeat(testTile.row, testTile.col, testPart.containment * 0.95);
 
     if (testTile.$el) {
       expect(testTile.$el.classList.contains("heat-wiggle")).toBe(true);
-      testTile.heat_contained = testPart.containment * 0.5;
-      {
-        const maxH = toNum(game.reactor.max_heat);
-        const hr = maxH > 0 ? toNum(game.reactor.current_heat) / maxH : 0;
-        game.ui.heatVisualsUI._applyHeatFromRatio(Number.isFinite(hr) ? hr : 0);
-      }
+      game.coreBridge.setTileHeat(testTile.row, testTile.col, testPart.containment * 0.5);
       expect(testTile.$el.classList.contains("heat-wiggle")).toBe(false);
     }
   });

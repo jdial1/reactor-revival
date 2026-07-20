@@ -1,3 +1,4 @@
+import { bumpSnapshotRev } from "../../state/snapshot-rev.js";
 import { safeCall } from "../../core/teardown.js";
 import { html, render } from "lit-html";
 import { MOBILE_BREAKPOINT_PX } from "../../constants/ui-constants.js";
@@ -16,7 +17,8 @@ import {
 } from "../../templates/uiComponentsTemplates.js";
 import { getUiElement } from "./page-dom.js";
 import { classMap, styleMap, repeat } from "../../dom/lit.js";
-import { requireActiveBridge } from "../../bridge/active.js";
+import { partIconPath, resolvePartDescription } from "../tooltip-stats.js";
+import { refreshPartsFromSession } from "../../domain/part.js";
 
 function getPartsSectionElement(ui) {
   return getUiElement(ui, "parts_section");
@@ -74,26 +76,9 @@ function getPartsByContainer(partset, tabId, unlockManager) {
   return byContainer;
 }
 
-export function unlockAllPartsForTesting(ui) {
-  if (!ui.game?.partset?.partsArray) return;
-  const typeLevelCombos = new Set();
-  ui.game.partset.partsArray.forEach((part) => {
-    if (part.type && part.level) {
-      typeLevelCombos.add(`${part.type}:${part.level}`);
-    }
-  });
-  typeLevelCombos.forEach((combo) => {
-    ui.game.placedCounts[combo] = 10;
-  });
-  requireActiveBridge(ui.game, "unlockAllParts").setPlacedCounts({ ...ui.game.placedCounts });
-  ui.game.partset.check_affordability(ui.game);
-  refreshPartsPanel(ui);
-}
-
 export function refreshPartsPanel(ui) {
-  if (ui.game?.state && typeof ui.game.state.parts_panel_version === "number") {
-    ui.game.state.parts_panel_version++;
-  }
+  refreshPartsFromSession(ui.game?.partset);
+  bumpSnapshotRev(ui.game);
 }
 
 export function onPartsPanelActiveTabChanged(ui, _tabId) {
@@ -118,6 +103,7 @@ function createPartTemplateHandlers(ui, partset, unlockManager, selectedPartId) 
       doctrineLocked: !unlocked && partset?.isPartDoctrineLocked?.(part),
       tierProgress: !unlocked ? `${Math.min(unlockManager?.getPreviousTierCount(part) ?? 0, 10)}/10` : "",
       partActive: part.id === selectedPartId,
+      game,
     };
     return PartButton(part, onClick, opts);
   };
@@ -133,11 +119,12 @@ function buildPartsTabContent(ui, partset, unlockManager, activeTab, powerActive
 }
 
 function buildPartDetailPanelData(part, ui) {
-  if (!part?.getImagePath) return null;
+  const iconPath = partIconPath(part);
+  if (!iconPath) return null;
   const unlockManager = ui.game?.unlockManager;
   const locked = unlockManager && !unlockManager.isPartUnlocked(part);
   const doctrineLocked = ui.game?.partset?.isPartDoctrineLocked?.(part) ?? false;
-  const rawDesc = part.description || "";
+  const rawDesc = resolvePartDescription(part, null, ui.game);
   const descHtml = ui.stateManager?.addPartIconsToTitle?.(rawDesc) ?? rawDesc;
   const costDisplay = part.erequires ? `${fmt(part.cost)} EP` : `$${fmt(part.cost)}`;
   const statParts = [];
@@ -147,7 +134,7 @@ function buildPartDetailPanelData(part, ui) {
     ? `${Math.min(unlockManager?.getPreviousTierCount(part) ?? 0, 10)}/10`
     : (statParts.join(" · ") || "Selected");
   return {
-    iconPath: part.getImagePath(),
+    iconPath,
     title: part.title || "",
     descHtml,
     levelHeader,
@@ -173,7 +160,7 @@ function buildPartsModuleInfoContent(ui, selPart, uiState) {
     return data ? upgradeHubDetailPanelTemplate(data) : upgradeHubDetailEmptyTemplate("— Select a module —");
   }
   return selPart
-    ? partsModuleInfoCardTemplate(selPart)
+    ? partsModuleInfoCardTemplate(selPart, ui.game)
     : html`<span class="parts-module-info-empty">— Select a module —</span>`;
 }
 
@@ -211,7 +198,7 @@ function buildPartsPanelLayoutTemplate(ui, uiState) {
 
 export function setupPartsTabs(ui) {
   if (ui._partsPanelReactiveMounted) {
-    const root = document.getElementById("parts_panel_reactive_root");
+    const root = getUiElement(ui, "parts_panel_reactive_root");
     if (root?.isConnected) return;
     if (typeof ui._partsPanelReactiveUnmount === "function") {
       safeCall(() => { ui._partsPanelReactiveUnmount(); });
@@ -219,11 +206,10 @@ export function setupPartsTabs(ui) {
     }
     ui._partsPanelReactiveMounted = false;
   }
-  const root = document.getElementById("parts_panel_reactive_root");
+  const root = getUiElement(ui, "parts_panel_reactive_root");
   if (!root || !ui.uiState) return;
   const subscriptions = [
-    { state: ui.game?.state, keys: ["current_money", "current_exotic_particles", "parts_panel_version"] },
-    { state: ui.uiState, keys: ["active_parts_tab", "parts_panel_collapsed", "is_mobile_viewport"] },
+    { state: ui.uiState, keys: ["active_parts_tab", "parts_panel_collapsed", "is_mobile_viewport", "snapshot_rev"] },
     { state: ui.uiState?.interaction, keys: ["selectedPartId"] },
   ].filter((s) => s.state != null);
   if (subscriptions.length === 0) return;
@@ -248,29 +234,31 @@ function macroFabLabel(active) {
   return match?.label ?? "1×";
 }
 
-function setMacroPopoverOpen(open) {
-  const popover = document.getElementById("macro_toolbar_popover");
-  const fab = document.getElementById("macro_toolbar_fab");
+function setMacroPopoverOpen(ui, open) {
+  const popover = getUiElement(ui, "macro_toolbar_popover");
+  const fab = getUiElement(ui, "macro_toolbar_fab");
   if (!popover || !fab) return;
-  popover.classList.toggle("hidden", !open);
+  popover.className = open ? "macro-toolbar-popover" : "macro-toolbar-popover hidden";
   fab.setAttribute("aria-expanded", open ? "true" : "false");
 }
 
 function syncMacroFabChrome(ui) {
-  const fab = document.getElementById("macro_toolbar_fab");
-  const labelEl = document.getElementById("macro_toolbar_fab_label");
+  const fab = getUiElement(ui, "macro_toolbar_fab");
+  const labelEl = getUiElement(ui, "macro_toolbar_fab_label");
   if (!fab || !labelEl || !ui?.uiState) return;
   const active = ui.uiState.interaction.placementMacro;
   labelEl.textContent = macroFabLabel(active);
-  fab.classList.toggle("is-macro-active", !!active);
+  fab.className = active
+    ? "control-deck-fab macro-toolbar-fab is-macro-active"
+    : "control-deck-fab macro-toolbar-fab";
   fab.title = active
     ? `Macro: ${macroFabLabel(active)} (tap to change)`
     : "Placement macros";
 }
 
 export function setupMacroToolbar(ui) {
-  const popover = document.getElementById("macro_toolbar_popover");
-  const fab = document.getElementById("macro_toolbar_fab");
+  const popover = getUiElement(ui, "macro_toolbar_popover");
+  const fab = getUiElement(ui, "macro_toolbar_fab");
   if (!popover || !fab || !ui.uiState) return;
   const active = ui.uiState.interaction.placementMacro;
   const template = html`
@@ -296,8 +284,8 @@ export function setupMacroToolbar(ui) {
     fab.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const isOpen = !popover.classList.contains("hidden");
-      setMacroPopoverOpen(!isOpen);
+      const isOpen = fab.getAttribute("aria-expanded") === "true";
+      setMacroPopoverOpen(ui, !isOpen);
       ui.deviceFeatures?.lightVibration?.();
     });
     popover.addEventListener("click", (e) => {
@@ -309,13 +297,13 @@ export function setupMacroToolbar(ui) {
       const current = ui.uiState.interaction.placementMacro;
       ui.uiState.interaction.placementMacro = next && next === current ? null : next;
       ui.deviceFeatures?.lightVibration?.();
-      setMacroPopoverOpen(false);
+      setMacroPopoverOpen(ui, false);
       updateMacroToolbar(ui);
     });
     document.addEventListener("click", (e) => {
-      const anchor = document.getElementById("macro_toolbar_anchor");
+      const anchor = getUiElement(ui, "macro_toolbar_anchor");
       if (!anchor || anchor.contains(e.target)) return;
-      setMacroPopoverOpen(false);
+      setMacroPopoverOpen(ui, false);
     });
   }
 }
@@ -331,7 +319,7 @@ export function updateQuickSelectSlots(ui) {
   const slots = stateManager.getQuickSelectSlots();
   const partset = ui.game?.partset;
   const selectedPartId = stateManager.getClickedPart()?.id ?? null;
-  const root = document.getElementById("quick_select_slots_root");
+  const root = getUiElement(ui, "quick_select_slots_root");
   if (!root) return;
   const slotTemplate = (slot, i) => {
     const { partId, locked } = slot || { partId: null, locked: false };
@@ -344,12 +332,13 @@ export function updateQuickSelectSlots(ui) {
     });
     const ariaLabel = part ? (locked ? `Unlock ${part.title}` : `Select ${part.title}`) : `Recent part ${i + 1}`;
     const costText = part ? (part.erequires ? `${fmt(part.cost)} EP` : `$${fmt(part.cost)}`) : "";
-    const iconStyle = part?.getImagePath ? styleMap({ backgroundImage: `url('${part.getImagePath()}')` }) : {};
+    const iconPath = partIconPath(part);
+    const iconStyle = iconPath ? styleMap({ backgroundImage: `url('${iconPath}')` }) : {};
     return quickSelectSlotTemplate({
       slotClass,
       index: i,
       ariaLabel,
-      hasIcon: !!part?.getImagePath,
+      hasIcon: !!iconPath,
       iconStyle,
       hasPart: !!part,
       costText,
@@ -404,7 +393,7 @@ export function initializePartsPanel(ui) {
   logger.log("debug", "ui", "[Parts Panel Init] Final state - collapsed:", ui.uiState?.parts_panel_collapsed ?? true);
   updatePartsPanelBodyClass(ui);
 
-  const closeBtn = document.getElementById("parts_close_btn");
+  const closeBtn = getUiElement(ui, "parts_close_btn");
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
       closePartsPanel(ui);

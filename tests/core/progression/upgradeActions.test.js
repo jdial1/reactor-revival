@@ -1,63 +1,53 @@
-import { describe, it, expect, beforeEach, setupGame, toNum } from "../../helpers/setup.js";
-import { placePart, forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  purchaseSessionUpgrade,
+  ventRateAt,
+} from "../../helpers/sessionHelpers.js";
 
-describe("Upgrade Actions Mechanics", () => {
-  let game;
+describe("Upgrade Actions Mechanics (session)", () => {
+  let session;
 
   beforeEach(async () => {
-    game = await setupGame();
+    session = await setupSessionOnly({ money: 1e30 });
   });
 
-  it("should apply chronometer upgrade correctly", () => {
-    const initialWait = game.base_loop_wait;
-    const purchased = forcePurchaseUpgrade(game, "chronometer");
-    expect(purchased).toBe(true);
-    expect(game.loop_wait).toBe(initialWait);
+  it("applies chronometer as tickRateBonus", () => {
+    expect(session.modifiers.tickRateBonus).toBe(0);
+    expect(purchaseSessionUpgrade(session, "chronometer")).toBe(true);
+    expect(session.modifiers.tickRateBonus).toBeGreaterThan(0);
   });
 
-  it("should apply component reinforcement upgrade correctly", () => {
-    const capacitor = game.partset.getPartById("capacitor1");
-    const before = capacitor.containment;
-    forcePurchaseUpgrade(game, "component_reinforcement");
-    capacitor.recalculate_stats();
-    expect(capacitor.containment).toBeGreaterThan(before);
+  it("applies component reinforcement to part containment", () => {
+    const before = Number(session.getPart("capacitor1").containment);
+    expect(purchaseSessionUpgrade(session, "component_reinforcement")).toBe(true);
+    expect(Number(session.getPart("capacitor1").containment)).toBeGreaterThan(before);
   });
 
-  it("should apply reactor rows upgrade correctly", () => {
-    const initialRows = game.rows;
-    forcePurchaseUpgrade(game, "expand_reactor_rows");
-    expect(game.rows).toBe(initialRows + 1);
+  it("applies reactor rows as gridRowsBonus", () => {
+    expect(session.modifiers.gridRowsBonus).toBe(0);
+    expect(purchaseSessionUpgrade(session, "expand_reactor_rows")).toBe(true);
+    expect(session.getUpgradeLevel("expand_reactor_rows")).toBe(1);
+    expect(session.modifiers.gridRowsBonus).toBe(1);
   });
 
-  it("should apply forceful fusion upgrade correctly", () => {
-    forcePurchaseUpgrade(game, "forceful_fusion");
-    expect(game.reactor.heat_power_multiplier).toBe(1);
+  it("applies forceful fusion heatPowerMultiplier", () => {
+    expect(purchaseSessionUpgrade(session, "forceful_fusion")).toBe(true);
+    expect(session.modifiers.heatPowerMultiplier).toBe(1);
   });
 
-  it("should apply active venting upgrade correctly", async () => {
-    const tile = await placePart(game, 0, 0, "vent1");
-    await placePart(game, 0, 1, "capacitor1");
-    
-    const initialVent = tile.getEffectiveVentValue();
-    const upgrade = game.upgradeset.getUpgrade("active_venting");
-    upgrade.setLevel(1);
-    tile.part.recalculate_stats();
-    tile.recalculateEffectiveValues();
-    
-    expect(tile.getEffectiveVentValue()).toBeGreaterThan(initialVent);
+  it("applies active venting to placed vent display rate", () => {
+    session.placeComponent(0, 0, "vent1");
+    session.placeComponent(0, 1, "capacitor1");
+    const initialVent = ventRateAt(session, 0, 0);
+    session.setUpgradeLevels([{ id: "active_venting", level: 1 }]);
+    expect(ventRateAt(session, 0, 0)).toBeGreaterThan(initialVent);
   });
 
-  it("should apply improved heat vents upgrade correctly", async () => {
-    const tile = await placePart(game, 0, 0, "vent1");
-    const ventPart = tile.part;
-    const baseVentValue = ventPart.base_vent;
-    
-    const bought = forcePurchaseUpgrade(game, "improved_heat_vents");
-    expect(bought).toBe(true);
-    
-    ventPart.recalculate_stats();
-    tile.recalculateEffectiveValues();
-    const expectedValue = baseVentValue * 2;
-    expect(tile.getEffectiveVentValue()).toBe(expectedValue);
+  it("applies improved heat vents doubling vent rate", () => {
+    session.placeComponent(0, 0, "vent1");
+    const baseVent = Number(session.getPart("vent1").vent);
+    expect(purchaseSessionUpgrade(session, "improved_heat_vents")).toBe(true);
+    expect(ventRateAt(session, 0, 0)).toBe(baseVent * 2);
   });
 });

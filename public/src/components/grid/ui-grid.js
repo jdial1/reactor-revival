@@ -22,17 +22,17 @@ import {
   HEAT_HAZE,
   HEAT_FLOW,
 } from "../../constants/heat-visual.js";
+import { partIconPath } from "../tooltip-stats.js";
 import { MOBILE_BREAKPOINT_PX, MOBILE_MIN_TILE_PX, DESKTOP_MIN_TILE_PX, MAX_TILE_SIZE_PX } from "../../constants/ui-constants.js";
 import { logger } from "../../core/logger.js";
 import { vuSegmentRatio01 } from "../../core/math-helpers.js";
 import { BaseComponent, getDomElementById } from "../../dom/lit.js";
 import { actions } from "../../store.js";
-import { getPageReactor, getPageReactorWrapper } from "../shell/page-dom.js";
+import { getPageReactor, getPageReactorWrapper, getUiElement } from "../shell/page-dom.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 
-export { Tileset } from "../../logic.js";
-
 const rendererSurfaces = new WeakMap();
+let gridCanvasRenderer = null;
 
 export function bindGridRendererSurfaces(renderer, surfaces) {
   rendererSurfaces.set(renderer, surfaces);
@@ -67,7 +67,7 @@ class StaticGridRenderer {
     ctx.lineWidth = 3;
     ctx.strokeRect(x + 1.5, y + 1.5, ts - 3, ts - 3);
     if (occupied) {
-      const path = typeof tile.part.getImagePath === "function" ? tile.part.getImagePath() : null;
+      const path = partIconPath(tile.part);
       if (path) {
         ctx.fillStyle = COLORS.tileOccDropShadow;
         ctx.fillRect(x + 1, y + 5, ts - 2, ts - 2);
@@ -78,7 +78,7 @@ class StaticGridRenderer {
       const ghostId = game.getBlueprintPlannerPartId(r, c);
       if (ghostId) {
         const ghostPart = game.partset.getPartById(ghostId);
-        const gpath = ghostPart && typeof ghostPart.getImagePath === "function" ? ghostPart.getImagePath() : null;
+        const gpath = partIconPath(ghostPart);
         if (gpath) {
           ctx.save();
           ctx.globalAlpha = 0.5;
@@ -147,8 +147,6 @@ class DynamicOverlayRenderer {
     if (!tiles) return;
     const cull = viewport != null;
     const now = typeof performance !== "undefined" ? performance.now() : 0;
-    const pulseAlpha = 0.12 + Math.sin(now * 0.002) * 0.06;
-
     for (let i = 0; i < tiles.length; i++) {
       const tile = tiles[i];
       if (!tile?.enabled || !tile.part) continue;
@@ -695,7 +693,7 @@ export class GridCanvasRenderer {
       return;
     }
     if (this._width <= 0 || this._height <= 0) {
-      const wrapperExists = typeof document !== "undefined" && document.getElementById("reactor_wrapper");
+      const wrapperExists = typeof document !== "undefined" && !!getUiElement(null, "reactor_wrapper");
       if (wrapperExists) {
         const now = typeof performance !== "undefined" ? performance.now() : Date.now();
         if (now - this._lastResizeRequest > 100) {
@@ -721,6 +719,20 @@ export class GridCanvasRenderer {
       this._dynamicCtx.restore();
     }
   }
+}
+
+export function getGridCanvasRenderer() {
+  return gridCanvasRenderer;
+}
+
+export function initGridCanvasService(ui) {
+  if (gridCanvasRenderer) return gridCanvasRenderer;
+  gridCanvasRenderer = new GridCanvasRenderer(ui);
+  return gridCanvasRenderer;
+}
+
+export function teardownGridCanvasService() {
+  gridCanvasRenderer = null;
 }
 
 export class GridScaler extends BaseComponent {
@@ -771,8 +783,8 @@ export class GridScaler extends BaseComponent {
 
     init() {
 
-        this.reactor = getPageReactor(this.ui) ?? document.getElementById("reactor");
-        this.wrapper = getPageReactorWrapper(this.ui) ?? document.getElementById("reactor_wrapper");
+        this.reactor = getPageReactor(this.ui);
+        this.wrapper = getPageReactorWrapper(this.ui);
 
         if (!this.wrapper) return;
 
@@ -1019,7 +1031,7 @@ export class GridScaler extends BaseComponent {
         return { rows, cols };
     }
 
-    calculateGridDimensions(availWidth, availHeight, maxTileSize) {
+    calculateGridDimensions(availWidth, availHeight, _maxTileSize) {
         const isMobile = typeof window !== 'undefined' && window.innerWidth <= GridScaler.MOBILE_BREAKPOINT_PX;
         if (isMobile) return this.getMobileGridDimensions(availWidth, availHeight);
         return this.getDesktopGridDimensions(availWidth, availHeight);
@@ -1028,8 +1040,8 @@ export class GridScaler extends BaseComponent {
 
 
     resize(_layoutRetry) {
-        this.reactor = getPageReactor(this.ui) ?? document.getElementById("reactor");
-        this.wrapper = getPageReactorWrapper(this.ui) ?? document.getElementById("reactor_wrapper");
+        this.reactor = getPageReactor(this.ui);
+        this.wrapper = getPageReactorWrapper(this.ui);
 
         if (!this.reactor || !this.wrapper) {
             if (!this._resizeBailLogged && this.ui?.game) {
@@ -1134,11 +1146,11 @@ export class GridScaler extends BaseComponent {
         this.wrapper.style.display = 'flex';
         this.wrapper.style.alignItems = 'center';
         this.wrapper.style.justifyContent = 'center';
-        const section = document.getElementById('reactor_section') || this.wrapper.parentElement;
+        const section = getUiElement(this.ui, "reactor_section") || this.wrapper.parentElement;
         if (section && isMobile) {
-            const buildRow = document.getElementById('build_above_deck_row');
-            const controlDeck = document.getElementById('reactor_control_deck');
-            const bottomNav = document.getElementById('bottom_nav');
+            const buildRow = getUiElement(this.ui, "build_above_deck_row");
+            const controlDeck = getUiElement(this.ui, "reactor_control_deck");
+            const bottomNav = getUiElement(this.ui, "bottom_nav");
             const bottomOffset = (buildRow?.offsetHeight || 0) + (controlDeck?.offsetHeight || 0) + (bottomNav?.offsetHeight || 0);
             section.style.paddingTop = `${getReactorSectionTopInset(this.ui, isMobile)}px`;
             section.style.paddingRight = '0';
@@ -1209,7 +1221,7 @@ function fitGridToBounds(cols, rows, tileSize, maxGridW, maxGridH, maxTileSize, 
 
 function getReactorSectionTopInset(_ui, isMobile) {
   if (!isMobile) return 0;
-  const topBar = document.getElementById("mobile_passive_top_bar");
+  const topBar = getUiElement(null, "mobile_passive_top_bar");
   return topBar ? topBar.offsetHeight : 0;
 }
 
@@ -1225,13 +1237,21 @@ function buildReactorGridStyle(ui) {
   return style;
 }
 
-export function applyReactorGridLayoutStyles(ui) {
+function applyReactorGridLayoutStyles(ui) {
   const reactor = getPageReactor(ui);
   if (!reactor || !ui?.uiState) return;
   const useCssGrid = ui.uiState.layout_css_grid === true;
   const isMobile = typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX;
-  reactor.classList.toggle("reactor-css-grid", useCssGrid);
-  reactor.classList.toggle("reactor-mobile-fit", useCssGrid && isMobile);
+  const base = reactor.className
+    .replace(/\breactor-css-grid\b/g, "")
+    .replace(/\breactor-mobile-fit\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const flags = [
+    useCssGrid ? "reactor-css-grid" : "",
+    useCssGrid && isMobile ? "reactor-mobile-fit" : "",
+  ].filter(Boolean).join(" ");
+  reactor.className = [base, flags].filter(Boolean).join(" ");
   const mapped = buildReactorGridStyle(ui);
   for (const key of Object.keys(mapped)) {
     const val = mapped[key];

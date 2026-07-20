@@ -116,12 +116,12 @@ export default [
       }
     },
     rules: {
-      "eqeqeq": ["warn", "always"],
+      "eqeqeq": "off",
       "no-console": "warn",
-      "no-unused-vars": ["warn", { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }],
+      "no-unused-vars": ["error", { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }],
       "no-empty": ["error", { "allowEmptyCatch": true }],
-      "no-case-declarations": "warn",
-      "no-useless-escape": "warn",
+      "no-case-declarations": "off",
+      "no-useless-escape": "off",
       "no-restricted-imports": ["error", {
         patterns: [{
           group: ["**/utils.js", "**/utils"],
@@ -143,17 +143,21 @@ export default [
             "BaseComponent",
           ],
           message: "Import storage from storage/index.js and DOM helpers from dom/lit.js",
+        }, {
+          group: ["**/bridge-test-harness.js", "**/bridge-test-harness"],
+          message: "bridge-test-harness is tests-only; production must use hydrateFromHost on named load/new-game entrypoints.",
         }],
       }],
     }
   },
   {
-    files: ["scripts/**/*.js", "scripts/**/*.cjs"],
+    files: ["scripts/**/*.{js,mjs,cjs}", "e2e/**/*.js", "config/playwright.config.mjs"],
     languageOptions: {
       globals: { ...nodeGlobals }
     },
     rules: {
-      "no-console": "off"
+      "no-console": "off",
+      "no-unused-vars": "off"
     }
   },
   {
@@ -161,6 +165,19 @@ export default [
     languageOptions: {
       globals: { ...workerGlobals }
     },
+    rules: {
+      "no-console": "off"
+    }
+  },
+  {
+    files: ["public/src/**/*.js"],
+    ignores: ["public/src/core/logger.js"],
+    rules: {
+      "no-console": "error"
+    }
+  },
+  {
+    files: ["public/src/core/logger.js"],
     rules: {
       "no-console": "off"
     }
@@ -180,14 +197,23 @@ export default [
       "import/named": "error",
       "import/default": "error",
       "import/no-unresolved": "error",
-      "import/no-cycle": ["warn", { "maxDepth": 10, "ignoreExternal": true }]
+      "import/no-cycle": ["error", { "maxDepth": 10, "ignoreExternal": true }],
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          group: ["**/bridge-test-harness.js", "**/bridge-test-harness"],
+          message: "bridge-test-harness is tests-only (Step 3d). Production must use hydrateFromHost / project-out only.",
+        }],
+      }],
     }
   },
   {
     files: ["public/src/domain/**/*.js"],
     rules: {
-      "no-restricted-imports": ["warn", {
+      "no-restricted-imports": ["error", {
         patterns: [{
+          group: ["**/bridge-test-harness.js", "**/bridge-test-harness"],
+          message: "bridge-test-harness is tests-only (Step 3d). Production must use hydrateFromHost / project-out only.",
+        }, {
           group: ["../utils.js", "../../utils.js", "@app/utils.js"],
           message: "Import from domain-specific modules (simUtils.js, storage/, constants/) instead of the utils.js barrel.",
         }],
@@ -197,8 +223,11 @@ export default [
   {
     files: ["public/src/components/**/*.js"],
     rules: {
-      "no-restricted-imports": ["warn", {
+      "no-restricted-imports": ["error", {
         patterns: [{
+          group: ["**/bridge-test-harness.js", "**/bridge-test-harness"],
+          message: "bridge-test-harness is tests-only (Step 3d). Production must use hydrateFromHost / project-out only.",
+        }, {
           group: ["../utils.js", "../../utils.js", "@app/utils.js"],
           message: "Import from dom/lit.js, storage/, format/, or constants/ instead of the utils.js barrel.",
         }],
@@ -208,7 +237,7 @@ export default [
   {
     files: ["public/src/domain/**/*.js"],
     rules: {
-      "no-restricted-globals": ["warn", {
+      "no-restricted-globals": ["error", {
         "name": "document",
         "message": "Domain/logic modules must not access document — use state/effects and let components render."
       }, {
@@ -221,7 +250,7 @@ export default [
     files: ["public/src/**/*.js"],
     ignores: ["public/src/app.js", "public/src/core/logger.js"],
     rules: {
-      "no-restricted-syntax": ["warn", {
+      "no-restricted-syntax": ["error", {
         selector: "MemberExpression[object.name='window'][property.name='game']",
         message: "Use getAppContext() instead of window.game."
       }, {
@@ -230,6 +259,31 @@ export default [
       }, {
         selector: "MemberExpression[object.name='window'][property.name='pageRouter']",
         message: "Use getAppContext() instead of window.pageRouter."
+      }]
+    }
+  },
+  {
+    files: ["public/src/**/*.js"],
+    ignores: [
+      "public/src/app.js",
+      "public/src/page-router.js",
+      "public/src/renderLegalStandalone.js",
+      "public/src/dom/**",
+      "public/src/effect-orchestrator.js",
+      "public/src/components/shell/boot-session.js",
+      "public/src/components/shell/page-dom.js",
+      "public/src/components/shell/ui-page-init.js"
+    ],
+    rules: {
+      "no-restricted-syntax": ["error", {
+        selector: "CallExpression[callee.object.name='document'][callee.property.name=/^(querySelector|querySelectorAll|getElementById)$/]",
+        message: "Step 7d: document query APIs only in mount/boot allowlist — use Lit classMap/styleMap or page-dom helpers."
+      }, {
+        selector: "CallExpression[callee.property.name=/^(querySelector|querySelectorAll|getElementById)$/]",
+        message: "Step 7d: querySelector/getElementById only in mount/boot allowlist — prefer Lit bindings."
+      }, {
+        selector: "CallExpression[callee.object.property.name='classList'][callee.property.name=/^(add|remove|toggle|replace)$/]",
+        message: "Step 7d: classList mutations only in mount/boot allowlist — use Lit classMap."
       }]
     }
   }

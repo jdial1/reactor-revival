@@ -1,5 +1,33 @@
 import { renderToNode, PartButton, UpgradeCard } from "./button-factory.js";
-import { enqueueGameEffect } from "../../state/game-effects.js";
+import { actions } from "../../store.js";
+import { Upgrade } from "../../domain/upgrade.js";
+
+export { formatUpgradeDisplayCost } from "./upgrade-display.js";
+
+export function purchaseUpgradeWithFeedback(upgradeset, upgradeId, { onSuccess } = {}) {
+  if (!upgradeset) return false;
+  if (typeof upgradeset.isUpgradeAvailable === "function" && !upgradeset.isUpgradeAvailable(upgradeId)) {
+    return false;
+  }
+  const game = upgradeset.game;
+  if (!upgradeset.purchaseUpgrade(upgradeId)) {
+    if (game) {
+      actions.enqueueEffect(game, { kind: "sfx", id: "error", context: "global" });
+      actions.enqueueEffect(game, {
+        kind: "floating_text",
+        body: "[Not enough funds!]",
+        context: "global",
+      });
+    }
+    return false;
+  }
+  if (game) {
+    actions.enqueueEffect(game, { kind: "sfx", id: "upgrade", context: "global" });
+    upgradeset.check_affordability?.(game);
+  }
+  onSuccess?.();
+  return true;
+}
 
 const partElements = new WeakMap();
 
@@ -10,58 +38,42 @@ export const bindPartElement = (part, el) => {
 
 export const getPartElement = (part) => partElements.get(part) ?? null;
 
-export const createPartElement = (part) => {
+export const createPartElement = (part, game = null) => {
+  const g = game ?? null;
   const onClick = () => {
     const el = getPartElement(part);
+    const ui = g?.ui;
     if (part.affordable) {
-      if (part.game?.ui?.help_mode_active && part.game?.ui?.tooltipManager) {
-        part.game.ui.tooltipManager.show(part, null, true, el);
+      if (ui?.help_mode_active && ui?.tooltipManager) {
+        ui.tooltipManager.show(part, null, true, el);
       }
-      const uiState = part.game?.ui?.uiState;
+      const uiState = ui?.uiState;
       if (uiState?.interaction) {
         uiState.interaction.selectedPartId = part.id;
       }
-      part.game.emit?.("partClicked", { part });
-      el?.classList.add("part_active");
-    } else if (part.game?.ui?.tooltipManager) {
-      part.game.ui.tooltipManager.show(part, null, true, el);
+      g?.emit?.("partClicked", { part });
+    } else if (ui?.tooltipManager) {
+      ui.tooltipManager.show(part, null, true, el);
     }
   };
-  const el = renderToNode(PartButton(part, onClick));
+  const el = renderToNode(PartButton(part, onClick, { game: g }));
   bindPartElement(part, el);
   return el;
-};
-
-export const attachPartPresentation = (PartClass) => {
-  PartClass.prototype.createElement = function createElement() {
-    return createPartElement(this);
-  };
 };
 
 export const createUpgradeElement = (upgrade) => {
   const doctrineSource = (id) => upgrade.game?.upgradeset?.getDoctrineForUpgrade(id);
   const onBuyClick = (e) => {
     e.stopPropagation();
-    if (upgrade.game.upgradeset && !upgrade.game.upgradeset.isUpgradeAvailable(upgrade.id)) return;
-    if (!upgrade.game.upgradeset.purchaseUpgrade(upgrade.id)) {
-      enqueueGameEffect(upgrade.game, { kind: "sfx", id: "error", context: "global" });
-      enqueueGameEffect(upgrade.game, {
-        kind: "floating_text",
-        body: "[Not enough funds!]",
-        context: "global",
-      });
-      return;
-    }
-    enqueueGameEffect(upgrade.game, { kind: "sfx", id: "upgrade", context: "global" });
-    upgrade.game.upgradeset.check_affordability(upgrade.game);
+    purchaseUpgradeWithFeedback(upgrade.game?.upgradeset, upgrade.id);
   };
   return renderToNode(UpgradeCard(upgrade, doctrineSource, onBuyClick));
 };
 
 export const attachUpgradePresentation = (UpgradeClass) => {
   UpgradeClass.prototype.createElement = function createElement() {
-    const el = createUpgradeElement(this);
-    this.updateDisplayCost();
-    return el;
+    return createUpgradeElement(this);
   };
 };
+
+attachUpgradePresentation(Upgrade);

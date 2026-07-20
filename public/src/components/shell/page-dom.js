@@ -1,4 +1,4 @@
-export const SHOP_OVERLAY_PAGE_IDS = new Set([
+const SHOP_OVERLAY_PAGE_IDS = new Set([
   "upgrades_section",
   "experimental_upgrades_section",
 ]);
@@ -20,11 +20,7 @@ export function getUiElement(_ui, id) {
   }
 }
 
-export function isLitRenderContainer(node) {
-  return isDomElement(node) && node.tagName !== "TEMPLATE";
-}
-
-export function isDomElement(node) {
+function isDomElement(node) {
   return (
     node &&
     typeof node === "object" &&
@@ -32,6 +28,10 @@ export function isDomElement(node) {
     node.isConnected === true &&
     typeof node.appendChild === "function"
   );
+}
+
+export function isLitRenderContainer(node) {
+  return isDomElement(node) && node.tagName !== "TEMPLATE";
 }
 
 export function dedupeReactorStatsDom() {
@@ -59,46 +59,3 @@ export function getPageReactorWrapper(ui) {
 export function getPageReactorBackground(ui) {
   return getUiElement(ui, "reactor_background");
 }
-
-export function getRoot(selector) {
-  if (typeof document === "undefined") return null;
-  return document.querySelector(selector);
-}
-
-export function getSplashContainer() {
-  return getRoot("#splash-container");
-}
-
-export function getWrapper() {
-  return getRoot("#wrapper");
-}
-
-export function getReactor() {
-  return getRoot("#reactor");
-}
-
-let _domMapperInitPromise = null;
-
-export async function initDomMapper() {
-  if (_domMapperInitPromise) return _domMapperInitPromise;
-  if (typeof document === "undefined") {
-    _domMapperInitPromise = Promise.resolve();
-    return _domMapperInitPromise;
-  }
-  if (document.readyState === "loading") {
-    _domMapperInitPromise = new Promise((resolve) => {
-      document.addEventListener("DOMContentLoaded", resolve, { once: true });
-    });
-  } else {
-    _domMapperInitPromise = Promise.resolve();
-  }
-  return _domMapperInitPromise;
-}
-
-export const domMapper = {
-  getRoot,
-  getSplashContainer,
-  getWrapper,
-  getReactor,
-  init: initDomMapper,
-};

@@ -1,4 +1,4 @@
-import { safeCall, teardownAll } from "../../core/teardown.js";
+import { safeCall } from "../../core/teardown.js";
 import { html, render, nothing } from "lit-html";
 import { proxy, subscribe, modalUi } from "../../store.js";
 import { MODAL_IDS } from "../../constants/modal-ids.js";
@@ -26,8 +26,18 @@ import {
   buildPartSummary,
   renderLayoutPreview,
 } from "../grid/ui-reactor-layout.js";
-import { drainGridIntentsAsync } from "../../bridge/bridge-intents.js";
-import { styleMap } from "../../dom/lit.js";
+import { dispatchPlayerIntent } from "../../bridge/bridge-intents.js";
+import { classMap, styleMap } from "../../dom/lit.js";
+import { getUiElement } from "../shell/page-dom.js";
+import {
+  COPY_PASTE_MODAL_HIDE_DELAY_MS as MODAL_HIDE_DELAY_MS,
+  COPY_PASTE_MODAL_COST_MARGIN_TOP_PX as MODAL_COST_MARGIN_TOP_PX,
+  COPY_PASTE_MODAL_SECTION_MARGIN_TOP_PX as MODAL_SECTION_MARGIN_TOP_PX,
+  COPY_PASTE_MODAL_BORDER_RADIUS_PX as MODAL_BORDER_RADIUS_PX,
+  COPY_PASTE_MODAL_GAP_PX as MODAL_GAP_PX,
+  COPY_PASTE_MODAL_PADDING_PX as MODAL_PADDING_PX,
+  COPY_PASTE_MODAL_INNER_GAP_PX as MODAL_INNER_GAP_PX,
+} from "../../constants/ui-timing.js";
 import {
   copyPasteNoPartsTemplate,
   copyPasteCostDisplayTemplate,
@@ -42,14 +52,8 @@ import {
 function startRenderLoop(ui, timestamp = 0) {
   if (typeof ui.startRenderLoop === 'function') ui.startRenderLoop(timestamp);
 }
-const MODAL_HIDE_DELAY_MS = 1000;
-const MODAL_COST_MARGIN_TOP_PX = 10;
-const MODAL_SECTION_MARGIN_TOP_PX = 15;
-const MODAL_BORDER_RADIUS_PX = 4;
 const CONFIRM_BTN_BG = "var(--canvas-confirm)";
-const MODAL_GAP_PX = 4;
-const MODAL_PADDING_PX = 10;
-const MODAL_INNER_GAP_PX = 8;
+const CONFIRM_BTN_DANGER = "var(--canvas-confirm-danger)";
 const JSON_INDENT_SPACES = 2;
 const MODAL_BORDER_COLOR = "var(--neutral-500)";
 const MODAL_BG_DARK = "var(--alert-panel-bg)";
@@ -58,10 +62,6 @@ const COLOR_SUCCESS = "var(--status-success)";
 const COLOR_ERROR = "var(--canvas-cannot-afford)";
 const COLOR_AFFORD = "var(--canvas-afford)";
 const COLOR_CANNOT_AFFORD = "var(--canvas-cannot-afford)";
-const OPACITY_VISIBLE = "1";
-const OPACITY_HIDDEN = "0";
-const Z_INDEX_VISIBLE = "1";
-const HEIGHT_COLLAPSED = "0";
 
 const pasteState = proxy({
   textareaData: "",
@@ -69,22 +69,44 @@ const pasteState = proxy({
   sellExisting: false,
 });
 
-function setModalTextareaVisibility(modalText, isPaste) {
-  if (isPaste) {
-    modalText.classList.remove("hidden");
-    modalText.style.display = "block";
-    modalText.style.visibility = "visible";
-    modalText.style.opacity = OPACITY_VISIBLE;
-    modalText.style.position = "relative";
-    modalText.style.zIndex = Z_INDEX_VISIBLE;
-  } else {
-    modalText.classList.add("hidden");
-    modalText.style.display = "none";
-    modalText.style.visibility = "hidden";
-    modalText.style.opacity = OPACITY_HIDDEN;
-    modalText.style.height = HEIGHT_COLLAPSED;
-    modalText.style.overflow = "hidden";
-  }
+export function buildCopyPasteShellDisplay({
+  action = "paste",
+  title = "Reactor Layout",
+  confirmLabel = "Action",
+  confirmDisabled = false,
+  confirmHidden = false,
+  previousPauseState = "",
+  confirmDanger = false,
+} = {}) {
+  const textareaVisible = action === "paste" || action === "copy";
+  const isPaste = action === "paste";
+  return {
+    title,
+    confirmLabel,
+    confirmDisabled,
+    previousPauseState,
+    textareaReadOnly: action === "copy" || action === "sell",
+    textareaPlaceholder: action === "copy"
+      ? "Reactor layout data (read-only)"
+      : "Paste reactor layout data here...",
+    textareaClass: classMap({ hidden: !textareaVisible || action === "sell" }),
+    textareaStyle: styleMap(
+      action === "sell" || !textareaVisible
+        ? { display: "none", visibility: "hidden", opacity: "0", height: "0", overflow: "hidden" }
+        : { display: "block", visibility: "visible", opacity: "1", position: "relative", zIndex: "1" }
+    ),
+    previewClass: classMap({ hidden: !isPaste }),
+    confirmClass: classMap({ hidden: confirmHidden }),
+    confirmStyle: styleMap({
+      backgroundColor: confirmDanger ? CONFIRM_BTN_DANGER : CONFIRM_BTN_BG,
+      cursor: "pointer",
+    }),
+    partialClass: classMap({ hidden: !isPaste }),
+  };
+}
+
+function renderCopyPasteShell(root, display) {
+  render(copyPasteDialogShellTemplate(display), root);
 }
 
 function CostDisplay({ breakdown, affordability }) {
@@ -142,80 +164,74 @@ export function syncModalDialogOpen(root, open) {
   }, "syncModalDialogOpen");
 }
 
-export function getCopyPasteRefs(root = document.getElementById("modal-root")) {
-  if (!root) return null;
-  const modal = root.querySelector("#reactor_copy_paste_modal");
-  const modalTitle = root.querySelector("#reactor_copy_paste_modal_title");
-  const modalText = root.querySelector("#reactor_copy_paste_text");
-  const modalCost = root.querySelector("#reactor_copy_paste_cost");
-  const closeBtn = root.querySelector("#reactor_copy_paste_close_btn");
-  const confirmBtn = root.querySelector("#reactor_copy_paste_confirm_btn");
+export function getCopyPasteRefs(_root) {
+  const modal = getUiElement(null, "reactor_copy_paste_modal");
+  const modalTitle = getUiElement(null, "reactor_copy_paste_modal_title");
+  const modalText = getUiElement(null, "reactor_copy_paste_text");
+  const modalCost = getUiElement(null, "reactor_copy_paste_cost");
+  const closeBtn = getUiElement(null, "reactor_copy_paste_close_btn");
+  const confirmBtn = getUiElement(null, "reactor_copy_paste_confirm_btn");
   if (!modal || !modalTitle || !modalText || !modalCost || !closeBtn || !confirmBtn) return null;
   return { modal, modalTitle, modalText, modalCost, closeBtn, confirmBtn };
 }
 
-export function openCopyPasteDialogHost() {
-  const root = document.getElementById("modal-root");
+export function openCopyPasteDialogHost(display = buildCopyPasteShellDisplay()) {
+  const root = getUiElement(null, "modal-root");
   if (!root) return null;
-  render(copyPasteDialogShellTemplate(), root);
+  renderCopyPasteShell(root, display);
   syncModalDialogOpen(root, true);
   return getCopyPasteRefs(root);
 }
 
-function showModal(ui, refs, opts) {
+function showModal(ui, _refs, opts) {
   modalUi.activeModal = MODAL_IDS.COPY_PASTE;
   modalUi.payload = opts;
-  const liveRefs = refs ?? openCopyPasteDialogHost();
-  if (!liveRefs) return;
-  const { modal, modalTitle, modalText, modalCost, confirmBtn, closeBtn } = liveRefs;
   const { title, data, cost, action, canPaste = false, summary = [], ...options } = opts;
   const confirmLabel = action === "copy" ? "Copy" : "Paste";
-  modalTitle.textContent = title;
-  confirmBtn.textContent = confirmLabel;
-  modalText.value = data;
-  setModalTextareaVisibility(modalText, action === "paste");
   const wasPaused = !!ui.game.state.pause;
   if (!wasPaused) ui.game.pause();
-  renderModalCostContent(modalCost, cost, summary, ui, options);
-  if (action === "copy") {
-    modalText.readOnly = true;
-    modalText.placeholder = "Reactor layout data (read-only)";
-    confirmBtn.classList.remove("hidden");
-    confirmBtn.disabled = false;
-  } else if (action === "paste") {
-    modalText.readOnly = false;
-    modalText.placeholder = (data && data.trim()) ? "Paste reactor layout JSON data here..." : "Enter reactor layout JSON data manually...";
-    confirmBtn.classList.remove("hidden");
-    confirmBtn.disabled = !canPaste;
+  const display = buildCopyPasteShellDisplay({
+    action,
+    title,
+    confirmLabel,
+    confirmDisabled: action === "paste" ? !canPaste : false,
+    previousPauseState: String(wasPaused),
+  });
+  if (action === "paste") {
+    display.textareaPlaceholder = (data && data.trim())
+      ? "Paste reactor layout JSON data here..."
+      : "Enter reactor layout JSON data manually...";
   }
-  const previewWrap = document.getElementById("reactor_copy_paste_preview_wrap");
-  const partialBtn = document.getElementById("reactor_copy_paste_partial_btn");
-  if (previewWrap) previewWrap.classList.toggle("hidden", action !== "paste");
-  if (partialBtn) partialBtn.classList.toggle("hidden", action !== "paste");
-  modal.dataset.previousPauseState = wasPaused;
+  const root = getUiElement(null, "modal-root");
+  if (!root) return null;
+  renderCopyPasteShell(root, display);
+  syncModalDialogOpen(root, true);
+  const liveRefs = getCopyPasteRefs(root);
+  if (!liveRefs) return null;
+  const { modalText, modalCost, closeBtn } = liveRefs;
+  modalText.value = data ?? "";
+  renderModalCostContent(modalCost, cost, summary, ui, options);
   closeBtn.onclick = () => hideCopyPasteModal(ui);
-  const dialogRoot = document.getElementById("modal-root");
-  if (dialogRoot && !dialogRoot._copyPasteBackdropBound) {
-    dialogRoot._copyPasteBackdropBound = true;
+  if (!root._copyPasteBackdropBound) {
+    root._copyPasteBackdropBound = true;
     const ac = new AbortController();
     if (!ui._unmounts) ui._unmounts = [];
     ui._unmounts.push(() => {
       safeCall(() => { ac.abort(); });
-      dialogRoot._copyPasteBackdropBound = false;
+      root._copyPasteBackdropBound = false;
     });
-    dialogRoot.addEventListener("click", (e) => {
-      if (e.target === dialogRoot) hideCopyPasteModal(ui);
+    root.addEventListener("click", (e) => {
+      if (e.target === root) hideCopyPasteModal(ui);
     }, { signal: ac.signal });
   }
+  return liveRefs;
 }
 
-export function setupCopyAction(ui, { copyBtn, getRefs }) {
+function setupCopyAction(ui, { copyBtn, getRefs }) {
   const game = ui.game;
 
   copyBtn.onclick = () => {
-    const refs = getRefs();
-    if (!refs) return;
-    const { modalCost, confirmBtn } = refs;
+    if (!getRefs()) return;
     const data = serializeReactor(game);
     const layout = deserializeReactor(data);
     const cost = calculateLayoutCost(game, layout);
@@ -223,7 +239,9 @@ export function setupCopyAction(ui, { copyBtn, getRefs }) {
     const checkedTypes = {};
     summary.forEach(item => { checkedTypes[item.id] = true; });
 
-    showModal(ui, refs, { title: "Copy Reactor Layout", data, cost, action: "copy", canPaste: false, summary, showCheckboxes: true, checkedTypes });
+    const liveRefs = showModal(ui, null, { title: "Copy Reactor Layout", data, cost, action: "copy", canPaste: false, summary, showCheckboxes: true, checkedTypes });
+    if (!liveRefs) return;
+    const { modalCost, confirmBtn } = liveRefs;
 
     const updateCopySummary = (layout, summary, checkedTypes) => {
       const onSlotClick = (ids, checked) => {
@@ -239,7 +257,6 @@ export function setupCopyAction(ui, { copyBtn, getRefs }) {
       });
       render(html`${componentTemplate}${costTemplate}`, modalCost);
       confirmBtn.disabled = false;
-      confirmBtn.classList.remove("hidden");
     };
 
     updateCopySummary(layout, summary, checkedTypes);
@@ -267,9 +284,6 @@ export function setupCopyAction(ui, { copyBtn, getRefs }) {
     };
 
     confirmBtn.disabled = false;
-    confirmBtn.classList.remove("hidden");
-    confirmBtn.style.backgroundColor = CONFIRM_BTN_BG;
-    confirmBtn.style.cursor = "pointer";
   };
 }
 
@@ -309,15 +323,15 @@ function tickSeriesToCsv(series) {
 }
 
 function queueBlueprintPaste(game, layout, options = {}) {
-  return drainGridIntentsAsync(game, game.engine, [{
-    action: "APPLY_BLUEPRINT",
+  return dispatchPlayerIntent(game, game.engine, {
+    type: "APPLY_BLUEPRINT",
     payload: {
       layout,
       sellExisting: !!options.sellExisting,
       skipCostDeduction: options.skipCostDeduction === true,
       partial: options.partial === true,
     },
-  }]);
+  });
 }
 
 function handleConfirmPaste(ui) {
@@ -372,7 +386,7 @@ function renderPasteModalContent(ui, refs) {
     const msg = !pasteState.textareaData ? "Enter reactor layout JSON data in the text area above" : "Invalid layout data - please check the JSON format";
     render(copyPasteStatusMessageTemplate({ message: msg }), refs.modalCost);
     refs.confirmBtn.disabled = true;
-    const partialBtnRef = document.getElementById("reactor_copy_paste_partial_btn");
+    const partialBtnRef = getUiElement(null, "reactor_copy_paste_partial_btn");
     if (partialBtnRef) partialBtnRef.disabled = true;
     return;
   }
@@ -388,7 +402,7 @@ function renderPasteModalContent(ui, refs) {
   if (!validationState.valid) {
     render(copyPasteStatusMessageTemplate({ message: validationState.invalidMessage }), refs.modalCost);
     refs.confirmBtn.disabled = true;
-    const partialBtnRef = document.getElementById("reactor_copy_paste_partial_btn");
+    const partialBtnRef = getUiElement(null, "reactor_copy_paste_partial_btn");
     if (partialBtnRef) partialBtnRef.disabled = true;
     return;
   }
@@ -424,12 +438,12 @@ function renderPasteModalContent(ui, refs) {
   );
 
   refs.confirmBtn.disabled = !validationState.canPaste;
-  const partialBtnRef = document.getElementById("reactor_copy_paste_partial_btn");
+  const partialBtnRef = getUiElement(null, "reactor_copy_paste_partial_btn");
   if (partialBtnRef) {
     partialBtnRef.disabled = !validationState.hasPartial;
   }
 
-  const previewCanvas = document.getElementById("reactor_copy_paste_preview");
+  const previewCanvas = getUiElement(null, "reactor_copy_paste_preview");
   if (previewCanvas) {
     const diff = g ? computeBlueprintDiff(g, validationState.filteredLayout) : { unchanged: [], toPlace: [] };
     const affordableSet = new Set(
@@ -440,12 +454,12 @@ function renderPasteModalContent(ui, refs) {
   }
 }
 
-export function setupPasteAction(ui, { pasteBtn, getRefs }) {
+function setupPasteAction(ui, { pasteBtn, getRefs: _getRefs }) {
   const g = ui.game;
 
   const bindPasteModalListeners = (refs) => {
     const { modal, modalText, confirmBtn } = refs;
-    const partialBtn = document.getElementById("reactor_copy_paste_partial_btn");
+    const partialBtn = getUiElement(null, "reactor_copy_paste_partial_btn");
     if (modal._pasteListenersBound) return;
     modal._pasteListenersBound = true;
     const pasteUnsub = subscribe(pasteState, () => {
@@ -466,10 +480,6 @@ export function setupPasteAction(ui, { pasteBtn, getRefs }) {
   };
 
   ui._showPasteModalWithData = (data) => {
-    const refs = getRefs();
-    if (!refs) return;
-    bindPasteModalListeners(refs);
-    const { modal } = refs;
     pasteState.textareaData = data;
     pasteState.checkedTypes = {};
     pasteState.sellExisting = false;
@@ -480,11 +490,12 @@ export function setupPasteAction(ui, { pasteBtn, getRefs }) {
     const currentSellValue = calculateCurrentSellValue(g.tileset);
     const hasExistingParts = ui.game.tileset.tiles_list.some(tile => tile.enabled && tile.part);
 
-    modal.dataset.hasSellOption = String(hasExistingParts);
-    modal.dataset.sellValue = String(currentSellValue);
-
-    showModal(ui, refs, { title, data, cost: 0, action: "paste", canPaste: false, summary, showCheckboxes: true, checkedTypes: {} });
-    renderPasteModalContent(ui, refs);
+    const liveRefs = showModal(ui, null, { title, data, cost: 0, action: "paste", canPaste: false, summary, showCheckboxes: true, checkedTypes: {} });
+    if (!liveRefs) return;
+    liveRefs.modal.dataset.hasSellOption = String(hasExistingParts);
+    liveRefs.modal.dataset.sellValue = String(currentSellValue);
+    bindPasteModalListeners(liveRefs);
+    renderPasteModalContent(ui, liveRefs);
   };
 
   pasteBtn.onclick = async () => {
@@ -500,12 +511,11 @@ export class CopyPasteUI {
   }
 
   init() {
-    const copyPasteBtns = document.getElementById("reactor_copy_paste_btns");
-    const toggleBtn = document.getElementById("reactor_copy_paste_toggle");
-    const copyBtn = document.getElementById("reactor_copy_btn");
-    const pasteBtn = document.getElementById("reactor_paste_btn");
-    const deselectBtn = document.getElementById("reactor_deselect_btn");
-    const dropperBtn = document.getElementById("reactor_dropper_btn");
+    const toggleBtn = getUiElement(null, "reactor_copy_paste_toggle");
+    const copyBtn = getUiElement(null, "reactor_copy_btn");
+    const pasteBtn = getUiElement(null, "reactor_paste_btn");
+    const deselectBtn = getUiElement(null, "reactor_deselect_btn");
+    const dropperBtn = getUiElement(null, "reactor_dropper_btn");
     const getRefs = () => getCopyPasteRefs() ?? openCopyPasteDialogHost();
 
     if (toggleBtn) {
@@ -523,7 +533,6 @@ export class CopyPasteUI {
 
     if (deselectBtn) {
       deselectBtn.onclick = () => {
-        document.querySelectorAll(".part.part_active").forEach((el) => el.classList.remove("part_active"));
         this.ui.stateManager.setClickedPart(null);
       };
     }
@@ -531,7 +540,8 @@ export class CopyPasteUI {
     if (dropperBtn) {
       dropperBtn.onclick = () => {
         this.ui._dropperModeActive = !this.ui._dropperModeActive;
-        dropperBtn.classList.toggle("on", this.ui._dropperModeActive);
+        const base = dropperBtn.className.replace(/\bon\b/g, "").replace(/\s+/g, " ").trim();
+        dropperBtn.className = this.ui._dropperModeActive ? (base ? `${base} on` : "on") : base;
       };
     }
 
@@ -545,7 +555,7 @@ export class CopyPasteUI {
 
   setupCopyStateButton() {
     const ui = this.ui;
-    const copyStateBtn = document.getElementById("copy_state_btn");
+    const copyStateBtn = getUiElement(null, "copy_state_btn");
     if (!copyStateBtn || !ui.uiState || !ui.game?.saveManager) return;
     copyStateBtn.onclick = async () => {
       try {
@@ -574,11 +584,11 @@ export class CopyPasteUI {
   setupBlueprintPlannerControls() {
     const ui = this.ui;
     const game = ui.game;
-    const toggle = document.getElementById("reactor_blueprint_toggle");
-    const applyBtn = document.getElementById("blueprint_planner_apply");
-    const partialBtn = document.getElementById("blueprint_planner_partial");
-    const exportBtn = document.getElementById("blueprint_planner_export");
-    const discardBtn = document.getElementById("blueprint_planner_discard");
+    const toggle = getUiElement(null, "reactor_blueprint_toggle");
+    const applyBtn = getUiElement(null, "blueprint_planner_apply");
+    const partialBtn = getUiElement(null, "blueprint_planner_partial");
+    const exportBtn = getUiElement(null, "blueprint_planner_export");
+    const discardBtn = getUiElement(null, "blueprint_planner_discard");
     if (!toggle || !game) return;
     if (typeof this._teardownBlueprintPlanner === "function") this._teardownBlueprintPlanner();
     let blueprintHudTimer = null;
@@ -586,10 +596,10 @@ export class CopyPasteUI {
       if (blueprintHudTimer) clearTimeout(blueprintHudTimer);
       blueprintHudTimer = setTimeout(async () => {
         blueprintHudTimer = null;
-        const pEl = document.getElementById("blueprint_planner_power");
-        const hEl = document.getElementById("blueprint_planner_net_heat");
-        const epEl = document.getElementById("blueprint_planner_ep");
-        const sEl = document.getElementById("blueprint_planner_stability");
+        const pEl = getUiElement(null, "blueprint_planner_power");
+        const hEl = getUiElement(null, "blueprint_planner_net_heat");
+        const epEl = getUiElement(null, "blueprint_planner_ep");
+        const sEl = getUiElement(null, "blueprint_planner_stability");
         if (!game.blueprintPlanner?.active) {
           if (pEl) pEl.textContent = "";
           if (hEl) hEl.textContent = "";
@@ -628,21 +638,14 @@ export class CopyPasteUI {
     const onDeficit = (result) => showBlueprintDeficitToast(result);
     if (game.on) {
       game.on("blueprintApplyDeficit", onDeficit);
-    }
-    let blueprintUnsub = null;
-    const unsubs = [];
-    if (game.blueprintPlanner) {
-      blueprintUnsub = subscribe(game.blueprintPlanner, onChanged);
-      unsubs.push(blueprintUnsub);
+      game.on("blueprintPlannerChanged", onChanged);
     }
     this._teardownBlueprintPlanner = () => {
       if (blueprintHudTimer) clearTimeout(blueprintHudTimer);
       blueprintHudTimer = null;
-      teardownAll(unsubs);
-      unsubs.length = 0;
-      blueprintUnsub = null;
       if (game.off) {
         game.off("blueprintApplyDeficit", onDeficit);
+        game.off("blueprintPlannerChanged", onChanged);
       }
       this._teardownBlueprintPlanner = null;
     };
@@ -698,21 +701,26 @@ export class CopyPasteUI {
   setupLayoutCompareControls() {
     const ui = this.ui;
     const game = ui.game;
-    const openBtn = document.getElementById("reactor_compare_layouts_btn");
-    const modal = document.getElementById("layout_compare_modal");
-    const closeBtn = document.getElementById("layout_compare_close_btn");
-    const runBtn = document.getElementById("layout_compare_run_btn");
-    const resultsEl = document.getElementById("layout_compare_results");
+    const openBtn = getUiElement(null, "reactor_compare_layouts_btn");
+    const modal = getUiElement(null, "layout_compare_modal");
+    const closeBtn = getUiElement(null, "layout_compare_close_btn");
+    const runBtn = getUiElement(null, "layout_compare_run_btn");
+    const resultsEl = getUiElement(null, "layout_compare_results");
     if (!openBtn || !modal || !game) return;
-    const hide = () => modal.classList.add("hidden");
-    const show = () => modal.classList.remove("hidden");
+    const hide = () => {
+      const base = modal.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
+      modal.className = base ? `${base} hidden` : "hidden";
+    };
+    const show = () => {
+      modal.className = modal.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
+    };
     openBtn.onclick = show;
     if (closeBtn) closeBtn.onclick = hide;
     modal.onclick = (e) => { if (e.target === modal) hide(); };
     if (!runBtn || !resultsEl) return;
     runBtn.onclick = async () => {
-      const aRaw = document.getElementById("layout_compare_a")?.value?.trim() ?? "";
-      const bRaw = document.getElementById("layout_compare_b")?.value?.trim() ?? "";
+      const aRaw = getUiElement(null, "layout_compare_a")?.value?.trim() ?? "";
+      const bRaw = getUiElement(null, "layout_compare_b")?.value?.trim() ?? "";
       const layoutA = deserializeReactorInput(aRaw, game);
       const layoutB = deserializeReactorInput(bRaw, game);
       if (!layoutA || !layoutB) {
@@ -755,8 +763,8 @@ export class CopyPasteUI {
 }
 
 export function hideCopyPasteModal(ui) {
-  const root = document.getElementById("modal-root");
-  const modal = root?.querySelector("#reactor_copy_paste_modal");
+  const root = getUiElement(null, "modal-root");
+  const modal = getUiElement(null, "reactor_copy_paste_modal");
   const prevPauseState = modal?.dataset?.previousPauseState;
   modalUi.activeModal = null;
   modalUi.payload = null;

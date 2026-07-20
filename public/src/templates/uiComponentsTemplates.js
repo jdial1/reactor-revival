@@ -5,6 +5,7 @@ import { classMap, repeat, styleMap } from "../dom/lit.js";
 export function infoBarTemplate({
   powerClass,
   heatClass,
+  hullClass,
   powerBarStyle,
   heatBarStyle,
   powerTextDesktop,
@@ -15,6 +16,8 @@ export function infoBarTemplate({
   heatTextMobile,
   maxHeatDesktop,
   maxHeatMobile,
+  hullText,
+  hullReadoutClass,
   epContentStyle,
   epVisible,
   activeBuffs,
@@ -37,10 +40,10 @@ export function infoBarTemplate({
         <img src="img/ui/icons/icon_cash.png" class="icon" alt="Cash" />
         <span class="value cathode-readout" id="info_money_desktop"></span>
       </span>
-      <span class="info-item hull info-item-hull">
+      <span class=${hullClass}>
         <span class="stats-inline-label">Hull</span>
         <img src="img/parts/plating_1.png" class="icon" alt="Hull" />
-        <span class="value cathode-readout" id="info_hull_desktop"></span>
+        <span class=${hullReadoutClass} id="info_hull_desktop">${hullText}</span>
       </span>
       <span class="info-item ep" id="info_ep_desktop">
         <span class="ep-content" style=${epContentStyle} ?hidden=${!epVisible}>
@@ -276,12 +279,19 @@ export function partsPanelTabContentTemplate({
   `;
 }
 
-export function controlDeckStatsBarTemplate() {
+export function controlDeckStatsBarTemplate({
+  ventText,
+  powerText,
+  heatText,
+  hullText,
+  powerTitle,
+  hullReadoutClass,
+}) {
   return html`
-    <li class="reactor-stat reactor-stat--vent"><strong title="Total heat venting per tick"><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent" class="cathode-readout"></span></strong></li>
-    <li class="reactor-stat reactor-stat--power"><strong title="Total power per tick (cells + Stirling)"><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power" class="cathode-readout"></span></strong></li>
-    <li class="reactor-stat reactor-stat--heat"><strong title="Heat per tick"><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat" class="cathode-readout"></span></strong></li>
-    <li class="reactor-stat reactor-stat--hull"><strong title="Reactor hull fill"><span class="stats-inline-label">Hull</span> <span id="stats_hull" class="cathode-readout"></span></strong></li>
+    <li class="reactor-stat reactor-stat--vent"><strong title="Total heat venting per tick"><img src="img/ui/icons/icon_vent.png" alt="Vent" class="icon-inline" /><span id="stats_vent" class="cathode-readout">${ventText}</span></strong></li>
+    <li class="reactor-stat reactor-stat--power"><strong title=${powerTitle}><img src="img/ui/icons/icon_power.png" alt="Power" class="icon-inline" /><span id="stats_power" class="cathode-readout">${powerText}</span></strong></li>
+    <li class="reactor-stat reactor-stat--heat"><strong title="Heat per tick"><img src="img/ui/icons/icon_heat.png" alt="Heat" class="icon-inline" /><span id="stats_heat" class="cathode-readout">${heatText}</span></strong></li>
+    <li class="reactor-stat reactor-stat--hull"><strong title="Reactor hull fill"><span class="stats-inline-label">Hull</span> <span id="stats_hull" class=${hullReadoutClass}>${hullText}</span></strong></li>
   `;
 }
 
@@ -316,11 +326,11 @@ export function controlDeckControlsNavTemplate({
   autoBuyOn,
   heatControlOn,
   pauseOn,
-  accountTitle,
   onToggleAutoSell,
   onToggleAutoBuy,
   onToggleHeatControl,
   onTogglePause,
+  onOpenSaves,
 }) {
   const pauseCaption = pauseOn ? "Paused" : "Running";
   const pauseHint = pauseOn ? "Resume simulation" : "Pause simulation";
@@ -329,9 +339,9 @@ export function controlDeckControlsNavTemplate({
     ${onToggleAutoBuy ? controlDeckMechSwitch("auto_buy_toggle", autoBuyOn, onToggleAutoBuy, "Auto buy", "Buy fuel and parts automatically when affordable", "") : ""}
     ${onToggleHeatControl ? controlDeckMechSwitch("heat_control_toggle", heatControlOn, onToggleHeatControl, "Auto heat", "Automatically vent heat toward the target level", "") : ""}
     ${controlDeckMechSwitch("pause_toggle", pauseOn, onTogglePause, pauseCaption, pauseHint, pauseOn ? "paused" : "")}
-    <button id="user_account_btn_mobile" class="account-btn" title=${accountTitle}>
+    <button type="button" id="user_account_btn_mobile" class="account-btn" title="Local saves" @click=${() => onOpenSaves?.()}>
       <span class="control-icon account-save-icon" aria-hidden="true"></span>
-      <span class="control-text">Account</span>
+      <span class="control-text">Saves</span>
     </button>
   `;
 }
@@ -480,23 +490,36 @@ export function copyPasteSelectedPartsCostTemplate({
   return html`<div style=${costStyle}>${text}</div>`;
 }
 
-export function copyPasteDialogShellTemplate() {
+export function copyPasteDialogShellTemplate({
+  textareaClass,
+  textareaStyle,
+  previewClass,
+  confirmClass,
+  confirmStyle,
+  partialClass,
+  textareaReadOnly = false,
+  textareaPlaceholder = "Paste reactor layout data here...",
+  confirmDisabled = false,
+  confirmLabel = "Action",
+  title = "Reactor Layout",
+  previousPauseState = "",
+} = {}) {
   return html`
-    <div id="reactor_copy_paste_modal" class="copy-paste-dialog-host">
+    <div id="reactor_copy_paste_modal" class="copy-paste-dialog-host" data-previous-pause-state=${previousPauseState}>
       <div class="modal-content">
         <div class="modal-header">
-          <h3 id="reactor_copy_paste_modal_title">Reactor Layout</h3>
+          <h3 id="reactor_copy_paste_modal_title">${title}</h3>
           <button id="reactor_copy_paste_close_btn" type="button" title="Close" aria-label="Close Modal">×</button>
         </div>
-        <textarea id="reactor_copy_paste_text" placeholder="Paste reactor layout data here..."></textarea>
-        <div id="reactor_copy_paste_preview_wrap" class="hidden">
+        <textarea id="reactor_copy_paste_text" class=${textareaClass} style=${textareaStyle} ?readonly=${textareaReadOnly} placeholder=${textareaPlaceholder}></textarea>
+        <div id="reactor_copy_paste_preview_wrap" class=${previewClass}>
           <div id="reactor_copy_paste_preview_label">Preview</div>
           <canvas id="reactor_copy_paste_preview"></canvas>
         </div>
         <div id="reactor_copy_paste_cost"></div>
         <div class="modal-actions">
-          <button id="reactor_copy_paste_confirm_btn" type="button" class="hidden">Action</button>
-          <button id="reactor_copy_paste_partial_btn" type="button" class="hidden">Paste what I can afford</button>
+          <button id="reactor_copy_paste_confirm_btn" type="button" class=${confirmClass} style=${confirmStyle} ?disabled=${confirmDisabled}>${confirmLabel}</button>
+          <button id="reactor_copy_paste_partial_btn" type="button" class=${partialClass}>Paste what I can afford</button>
         </div>
       </div>
     </div>
@@ -750,9 +773,12 @@ export function quickStartTemplate({
   `;
 }
 
-export function statusNoticeToastTemplate({ tag, body }) {
+export function statusNoticeToastTemplate({ tag, body, visible = false }) {
+  const panelClass = visible
+    ? "decompression-saved-toast__panel status-notice-toast__panel decompression-saved-toast__panel--visible"
+    : "decompression-saved-toast__panel status-notice-toast__panel";
   return html`
-    <div class="decompression-saved-toast__panel status-notice-toast__panel" id="status_notice_inner">
+    <div class=${panelClass} id="status_notice_inner">
       <div class="decompression-saved-toast__tag">${tag}</div>
       <div class="decompression-saved-toast__body">${body}</div>
     </div>

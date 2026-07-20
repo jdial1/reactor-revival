@@ -1,140 +1,99 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame, toNum } from '../../helpers/setup.js';
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  hasMeltedDown,
+  sessionEp,
+} from "../../helpers/sessionHelpers.js";
 
-describe('Global Boost Research Upgrades', () => {
-    let game;
+const GLOBAL_BOOST_IDS = [
+  "full_spectrum_reflectors",
+  "fluid_hyperdynamics",
+  "fractal_piping",
+  "ultracryonics",
+];
 
-    // List of global boost upgrade IDs
-    const globalBoostsIds = [
-        'full_spectrum_reflectors',
-        'fluid_hyperdynamics',
-        'fractal_piping',
-        'ultracryonics',
-    ];
+describe("Global Boost Research Upgrades (session)", () => {
+  let session;
 
-    beforeEach(async () => {
-        game = await setupGame();
-        // The laboratory is required to enable any experimental upgrades.
-        const lab = game.upgradeset.getUpgrade('laboratory');
-        if (lab) {
-            lab.setLevel(1);
-        }
+  beforeEach(async () => {
+    session = await setupSessionOnly({ money: 1e30 });
+    session.setUpgradeLevels([{ id: "laboratory", level: 1 }]);
+  });
+
+  describe("Individual Upgrade Tests (Level 5)", () => {
+    it("full_spectrum_reflectors boosts reflector powerIncrease", () => {
+      const initial = Number(session.getPart("reflector1").powerIncrease);
+      session.setUpgradeLevels([
+        { id: "laboratory", level: 1 },
+        { id: "full_spectrum_reflectors", level: 5 },
+      ]);
+      expect(Number(session.getPart("reflector1").powerIncrease)).toBe(initial * (1 + 5));
     });
 
-    afterEach(() => {
-        if (game && game.engine) {
-            game.engine.stop();
-        }
+    it("fluid_hyperdynamics boosts vent/exchanger transfer rates", () => {
+      const vent = Number(session.getPart("vent1").vent);
+      const exchanger = Number(session.getPart("heat_exchanger1").transfer);
+      const inlet = Number(session.getPart("heat_inlet1").transfer);
+      const outlet = Number(session.getPart("heat_outlet1").transfer);
+      session.setUpgradeLevels([
+        { id: "laboratory", level: 1 },
+        { id: "fluid_hyperdynamics", level: 5 },
+      ]);
+      const mult = 2 ** 5;
+      expect(Number(session.getPart("vent1").vent)).toBe(vent * mult);
+      expect(Number(session.getPart("heat_exchanger1").transfer)).toBe(exchanger * mult);
+      expect(Number(session.getPart("heat_inlet1").transfer)).toBe(inlet * mult);
+      expect(Number(session.getPart("heat_outlet1").transfer)).toBe(outlet * mult);
     });
 
-    describe('Individual Upgrade Tests (Level 5)', () => {
-        it('full_spectrum_reflectors should boost reflector power increase', () => {
-            const upgrade = game.upgradeset.getUpgrade('full_spectrum_reflectors');
-            const reflector = game.partset.getPartById('reflector1');
-            const initialPowerIncrease = reflector.base_power_increase;
-
-            upgrade.setLevel(5);
-            reflector.recalculate_stats();
-
-            // From part.js: power_increase = base_power_increase * (1 + level)
-            const expectedMultiplier = 1 + 5;
-            expect(reflector.power_increase).toBe(initialPowerIncrease * expectedMultiplier);
-        });
-
-        it('fluid_hyperdynamics should boost vent/exchanger effectiveness', () => {
-            const upgrade = game.upgradeset.getUpgrade('fluid_hyperdynamics');
-            const vent = game.partset.getPartById('vent1');
-            const exchanger = game.partset.getPartById('heat_exchanger1');
-            const inlet = game.partset.getPartById('heat_inlet1');
-            const outlet = game.partset.getPartById('heat_outlet1');
-
-            const initialVent = vent.base_vent;
-            const initialExchangerTransfer = exchanger.base_transfer;
-            const initialInletTransfer = inlet.base_transfer;
-            const initialOutletTransfer = outlet.base_transfer;
-
-            upgrade.setLevel(5);
-            vent.recalculate_stats();
-            exchanger.recalculate_stats();
-            inlet.recalculate_stats();
-            outlet.recalculate_stats();
-
-            const expectedMultiplier = Math.pow(2, 5); // 32x
-            expect(vent.vent).toBe(initialVent * expectedMultiplier);
-            expect(exchanger.transfer).toBe(initialExchangerTransfer * expectedMultiplier);
-            expect(inlet.transfer).toBe(initialInletTransfer * expectedMultiplier);
-            expect(outlet.transfer).toBe(initialOutletTransfer * expectedMultiplier);
-        });
-
-        it('fractal_piping should boost vent/exchanger heat capacity', () => {
-            const upgrade = game.upgradeset.getUpgrade('fractal_piping');
-            const vent = game.partset.getPartById('vent1');
-            const exchanger = game.partset.getPartById('heat_exchanger1');
-            const initialVentContainment = vent.base_containment;
-            const initialExchangerContainment = exchanger.base_containment;
-
-            upgrade.setLevel(5);
-            vent.recalculate_stats();
-            exchanger.recalculate_stats();
-
-            const expectedMultiplier = Math.pow(2, 5); // 32x
-            expect(vent.containment).toBe(initialVentContainment * expectedMultiplier);
-            expect(exchanger.containment).toBe(initialExchangerContainment * expectedMultiplier);
-        });
-
-        it('ultracryonics should boost coolant cell heat capacity', () => {
-            const upgrade = game.upgradeset.getUpgrade('ultracryonics');
-            const coolant = game.partset.getPartById('coolant_cell1');
-            const initialContainment = coolant.base_containment;
-
-            upgrade.setLevel(5);
-            coolant.recalculate_stats();
-
-            const expectedMultiplier = Math.pow(2, 5); // 32x
-            expect(coolant.containment).toBe(initialContainment * expectedMultiplier);
-        });
-
+    it("fractal_piping boosts vent/exchanger containment", () => {
+      const vent = Number(session.getPart("vent1").containment);
+      const exchanger = Number(session.getPart("heat_exchanger1").containment);
+      session.setUpgradeLevels([
+        { id: "laboratory", level: 1 },
+        { id: "fractal_piping", level: 5 },
+      ]);
+      const mult = 2 ** 5;
+      expect(Number(session.getPart("vent1").containment)).toBe(vent * mult);
+      expect(Number(session.getPart("heat_exchanger1").containment)).toBe(exchanger * mult);
     });
 
-    describe('Max Level Sanity Check (Level 10)', () => {
-        it('should remain stable with all global boosts at level 10', async () => {
-            // Set all global boosts to level 10
-            globalBoostsIds.forEach(id => {
-                const upgrade = game.upgradeset.getUpgrade(id);
-                if (upgrade) {
-                    upgrade.setLevel(10);
-                }
-            });
-
-            // Place a simple, stable layout
-            const cell = game.partset.getPartById('uranium1');
-            const vent = game.partset.getPartById('vent1');
-
-            await game.tileset.getTile(5, 5).setPart(cell);
-            await game.tileset.getTile(5, 6).setPart(vent);
-
-            // Run a few ticks
-            for (let i = 0; i < 10; i++) {
-                game.engine.tick();
-            }
-
-            // Sanity checks
-            expect(isFinite(game.current_money)).toBe(true);
-            expect(toNum(game.current_money)).toBeGreaterThanOrEqual(0);
-
-            expect(isFinite(game.reactor.current_power)).toBe(true);
-            expect(toNum(game.reactor.current_power)).toBeGreaterThanOrEqual(0);
-
-            expect(isFinite(game.reactor.current_heat)).toBe(true);
-            expect(toNum(game.reactor.current_heat)).toBeGreaterThanOrEqual(0);
-
-            expect(game.reactor.has_melted_down).toBe(false);
-
-            // Check that power and heat values are boosted significantly
-            // With level 10 upgrades, we expect very large multipliers
-            const expectedMinPower = 1; // Even with boosts, a single cell should produce at least 1 power
-            const expectedMinHeat = 1;  // Even with boosts, a single cell should produce at least 1 heat
-            expect(game.reactor.stats_power).toBeGreaterThanOrEqual(expectedMinPower);
-            expect(game.reactor.stats_heat_generation).toBeGreaterThanOrEqual(expectedMinHeat);
-        });
+    it("ultracryonics boosts coolant containment", () => {
+      const initial = Number(session.getPart("coolant_cell1").containment);
+      session.setUpgradeLevels([
+        { id: "laboratory", level: 1 },
+        { id: "ultracryonics", level: 5 },
+      ]);
+      expect(Number(session.getPart("coolant_cell1").containment)).toBe(initial * 2 ** 5);
     });
-}); 
+  });
+
+  describe("Max Level Sanity Check (Level 10)", () => {
+    it("stays stable with all global boosts at level 10", () => {
+      session.setUpgradeLevels([
+        { id: "laboratory", level: 1 },
+        ...GLOBAL_BOOST_IDS.map((id) => ({ id, level: 10 })),
+      ]);
+      session.placeComponent(5, 5, "uranium1");
+      session.placeComponent(5, 6, "vent1");
+      for (let i = 0; i < 10; i++) session.tick();
+
+      const snap = session.getSnapshot();
+      const money = sessionEp(session).money;
+      const power = Number(session.grid.currentPower ?? 0);
+      const heat = Number(session.grid.currentHeat ?? 0);
+      const cell = session.getCellOutputAt(5, 5);
+
+      expect(Number.isFinite(money)).toBe(true);
+      expect(money).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(power)).toBe(true);
+      expect(power).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(heat)).toBe(true);
+      expect(heat).toBeGreaterThanOrEqual(0);
+      expect(hasMeltedDown(session)).toBe(false);
+      expect(Number(cell?.power ?? 0)).toBeGreaterThanOrEqual(1);
+      expect(Number(cell?.heat ?? 0)).toBeGreaterThanOrEqual(1);
+      expect(snap.grid).toBeTruthy();
+    });
+  });
+});

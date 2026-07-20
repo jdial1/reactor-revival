@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM, syncActivePartsAtTickBoundary, invalidateTickParts } from "../../helpers/setup.js";
-import { placePart } from "../../helpers/gameHelpers.js";
-import { setDecimal } from "@app/store.js";
-import { toDecimal } from "@app/utils.js";
+import { describe, it, expect, beforeEach, vi, afterEach, setupGame, setupGameWithDOM } from "../../helpers/setup.js";
+import { placePart, forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
+import { loadEconomyFromHost } from "../../helpers/bridge-test-harness.js";
+import { patchGameState, setDecimal } from "@app/store.js";
+import { toDecimal } from "@app/simUtils.js";
 
 const toNum = (v) => (v != null && typeof v.toNumber === 'function' ? v.toNumber() : Number(v));
 
@@ -81,8 +82,6 @@ describe("Engine Mechanics", () => {
     await placePart(game, 9, 4, "uranium1");
     await placePart(game, 10, 4, "vent1");
     game.reactor.updateStats();
-    syncActivePartsAtTickBoundary(game.engine);
-
     const snap = game.coreBridge?.session?.getSnapshot?.();
     expect(snap?.stats).toBeDefined();
     expect(snap.stats.power).toBeGreaterThan(0);
@@ -92,7 +91,7 @@ describe("Engine Mechanics", () => {
     // Set up auto-sell
     game.onToggleStateChange?.("auto_sell", true);
     game.reactor.auto_sell_multiplier = 0.1;
-    game.reactor.current_power = 649; // Start with 649 so after +1 from uranium = 650, then -100 from auto-sell = 550
+    game.coreBridge.setReactorPower(649); // Start with 649 so after +1 from uranium = 650, then -100 from auto-sell = 550
     game.reactor.altered_max_power = 1000; // Set altered_max_power instead of max_power
     console.log(`[DIAGNOSTIC] Set altered_max_power=${game.reactor.altered_max_power} just before tick()`);
 
@@ -101,7 +100,7 @@ describe("Engine Mechanics", () => {
     const tile = game.tileset.getTile(0, 0);
     await tile.setPart(fuelPart);
     tile.activated = true;
-    tile.ticks = 10;
+    game.coreBridge.setTileTicks(tile.row, tile.col, 10);
 
     const initialMoney = game.current_money;
     let autoSellCallCount = 0;
@@ -137,7 +136,7 @@ describe("Engine Mechanics", () => {
     const tile = game.tileset.getTile(0, 0);
     await tile.setPart(cell);
     tile.activated = true;
-    tile.ticks = cell.base_ticks;
+    game.coreBridge.setTileTicks(tile.row, tile.col, cell.base_ticks);
     game.reactor.auto_sell_multiplier = 0.1;
     game.reactor.altered_max_power = 1000;
     console.log(`[DIAGNOSTIC] Set altered_max_power=${game.reactor.altered_max_power} just before updateStats()`);
@@ -176,7 +175,7 @@ describe("Engine Mechanics", () => {
     // Set up auto-sell
     game.onToggleStateChange?.("auto_sell", true);
     game.reactor.auto_sell_multiplier = 0.1; // 10%
-    game.reactor.current_power = 650; // Set power to expected value after plutonium generation
+    game.coreBridge.setReactorPower(650); // Set power to expected value after plutonium generation
     game.reactor.altered_max_power = 1000; // Set altered_max_power instead of max_power
     console.log(`[DIAGNOSTIC] Set altered_max_power=${game.reactor.altered_max_power} just before updateStats()`);
 
@@ -205,7 +204,7 @@ describe("Engine Mechanics", () => {
     const fuelPart = game.partset.getPartById("plutonium1");
     await tile.setPart(fuelPart);
     tile.activated = true;
-    tile.ticks = 10;
+    game.coreBridge.setTileTicks(tile.row, tile.col, 10);
 
     const initialPower = game.reactor.current_power;
     console.log(`[TEST] Before tick: power=${initialPower}, cell_power=${fuelPart.power}`);
@@ -220,7 +219,7 @@ describe("Engine Mechanics", () => {
     game.onToggleStateChange?.("auto_sell", true);
     game.reactor.auto_sell_multiplier = 0.1;
     game.reactor.altered_max_power = 1000;
-    game.reactor.current_power = 0;
+    game.coreBridge.setReactorPower(0);
     game.reactor.max_power = 1000; // Set max power for calculation
     game.reactor.updateStats();
 
@@ -228,7 +227,7 @@ describe("Engine Mechanics", () => {
     const fuelPart = game.partset.getPartById("plutonium1"); // A part that generates 150 power
     await tile.setPart(fuelPart);
     tile.activated = true;
-    tile.ticks = 10;
+    game.coreBridge.setTileTicks(tile.row, tile.col, 10);
     const initialMoney = game.current_money;
     const sellAmount = Math.floor(1000 * 0.1);
 
@@ -245,16 +244,13 @@ describe("Engine Mechanics", () => {
       console.warn("perpetual_reflectors upgrade not available, skipping test");
       return;
     }
-    // Force money for upgrade and buy it
-    game.current_money = perpetualUpgrade.getCost() * 10;
-    game.upgradeset.check_affordability(game);
-    const bought = game.upgradeset.purchaseUpgrade('perpetual_reflectors');
+    forcePurchaseUpgrade(game, "perpetual_reflectors");
+    const bought = perpetualUpgrade.level > 0;
     expect(bought, "Perpetual Reflectors purchase failed").toBe(true);
     expect(perpetualUpgrade.level).toBe(1);
     
     // Re-fetch to ensure we have the updated state, though it should be the same object
     const partRef = game.partset.getPartById("reflector1");
-    partRef.recalculate_stats();
     expect(partRef.perpetual, "Reflector should be perpetual after upgrade").toBe(true);
 
     // Set auto-buy state directly
@@ -267,21 +263,23 @@ describe("Engine Mechanics", () => {
     await cellTile.setPart(game.partset.getPartById('uranium1'));
 
     const replacementCost = toNum(part.cost) * 1.5;
-    game.current_money = replacementCost * 2;
-    const initialMoney = game.current_money;
-    tile.ticks = 1;
+    const funded = replacementCost * 2;
+    patchGameState(game, { current_money: funded });
+    game.coreBridge?.hydrateFromHost?.();
+    const initialMoney = toNum(game.coreBridge?.session?.systems?.economy?.money ?? game.current_money);
+    game.coreBridge.setTileTicks(tile.row, tile.col, 1);
 
     game.engine.tick();
     expect(tile.part).not.toBeNull();
     expect(tile.ticks).toBe(part.ticks);
-    expect(toNum(game.current_money)).toBe(toNum(initialMoney) - replacementCost);
+    expect(toNum(game.coreBridge?.session?.systems?.economy?.money ?? game.current_money)).toBe(initialMoney - replacementCost);
   });
 
   it("should clear part when a non-perpetual component is depleted", async () => {
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("uranium1"); // Not perpetual by default
     await tile.setPart(part);
-    tile.ticks = 1;
+    game.coreBridge.setTileTicks(tile.row, tile.col, 1);
 
     game.engine.tick();
 
@@ -294,6 +292,7 @@ describe("Engine Mechanics", () => {
     game.exoticParticleManager.exotic_particles = toDecimal(0);
     setDecimal(game.state, "session_power_produced", 3_000_000);
     setDecimal(game.state, "session_heat_dissipated", 4_000_000);
+    loadEconomyFromHost(game);
     await game.rebootActionKeepExoticParticles();
     expect(toNum(game.state.total_exotic_particles)).toBe(3);
   });
@@ -302,7 +301,7 @@ describe("Engine Mechanics", () => {
     const tile = game.tileset.getTile(0, 0);
     const part = game.partset.getPartById("particle_accelerator1");
     await tile.setPart(part);
-    game.reactor.current_heat = toNum(game.reactor.max_heat) * 3;
+    game.coreBridge.setReactorHeat(toNum(game.reactor.max_heat) * 3);
     game.engine.tick();
     expect(game.reactor.has_melted_down).toBe(true);
   });
@@ -325,8 +324,8 @@ describe("Engine Mechanics", () => {
     ventTile1.activated = true;
 
     // Set initial heat - exchanger has heat, vent has none
-    exchangerTile.heat_contained = 100;
-    ventTile1.heat_contained = 0;
+    game.coreBridge.setTileHeat(exchangerTile.row, exchangerTile.col, 100);
+    game.coreBridge.setTileHeat(ventTile1.row, ventTile1.col, 0);
 
     // Update reactor stats to populate neighbor lists and segment information
     game.reactor.updateStats();
@@ -374,7 +373,7 @@ describe("Engine Mechanics", () => {
 
         // Set heat above containment limit
         const testHeat = part.containment * 1.5;
-        tile.heat_contained = testHeat;
+        game.coreBridge.setTileHeat(tile.row, tile.col, testHeat);
 
         // Debug logging
         console.log(`[DEBUG] Test setup: part=${part.id}, containment=${part.containment}, testHeat=${testHeat}, heat_contained=${tile.heat_contained}`);
@@ -438,25 +437,16 @@ describe("Engine Mechanics", () => {
       // Verify the part has containment
       expect(part.containment).toBeGreaterThan(0);
 
-      // Set heat above containment limit
       const testHeat = part.containment * 1.5;
-      tile.heat_contained = testHeat;
-
-      // Mock the meltdown check to track if it was called
-      const originalCheckMeltdown = game.reactor.checkMeltdown;
-      let meltdownCalled = false;
-      game.reactor.checkMeltdown = () => {
-        meltdownCalled = true;
-        return false; // Don't actually trigger meltdown for test
-      };
+      game.coreBridge.setTileHeat(tile.row, tile.col, testHeat);
 
       game.engine.tick();
 
-      // Restore original handler
-      game.reactor.checkMeltdown = originalCheckMeltdown;
-
-      // Verify meltdown was triggered
-      expect(meltdownCalled).toBe(true);
+      expect(
+        game.state.melting_down
+          || !!game.coreBridge?.session?.systems?.failure?.hasMeltedDown
+          || !!game._meltdownPresentationDone
+      ).toBe(true);
     });
 
     it("should NOT explode parts without containment", async () => {
@@ -471,7 +461,7 @@ describe("Engine Mechanics", () => {
       expect(part.containment).toBe(0);
 
       // Set some heat
-      tile.heat_contained = 1000;
+      game.coreBridge.setTileHeat(tile.row, tile.col, 1000);
 
       // Mock the explosion handler to track if it was called
       const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
@@ -499,7 +489,7 @@ describe("Engine Mechanics", () => {
 
       // Set heat below containment limit
       const testHeat = part.containment * 0.5;
-      tile.heat_contained = testHeat;
+      game.coreBridge.setTileHeat(tile.row, tile.col, testHeat);
 
       // Mock the explosion handler to track if it was called
       const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
@@ -523,7 +513,7 @@ describe("Engine Mechanics", () => {
       await tile.setPart(part);
 
       // Set heat exactly at containment limit (not greater than)
-      tile.heat_contained = part.containment;
+      game.coreBridge.setTileHeat(tile.row, tile.col, part.containment);
 
       // Mock the explosion handler to track if it was called
       const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
@@ -555,7 +545,7 @@ describe("Engine Mechanics", () => {
       tile.activated = true; // Activate the tile so it's processed by the engine
 
       // Set heat just above containment limit
-      tile.heat_contained = part.containment + 0.1;
+      game.coreBridge.setTileHeat(tile.row, tile.col, part.containment + 0.1);
 
       // Mock the explosion handler to track if it was called
       const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
@@ -588,8 +578,8 @@ describe("Engine Mechanics", () => {
       tile2.activated = true;
 
       // Set both tiles above containment
-      tile1.heat_contained = part.containment * 1.5;
-      tile2.heat_contained = part.containment * 2.0;
+      game.coreBridge.setTileHeat(tile1.row, tile1.col, part.containment * 1.5);
+      game.coreBridge.setTileHeat(tile2.row, tile2.col, part.containment * 2.0);
 
       // Mock the explosion handler to track calls
       const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
@@ -619,7 +609,7 @@ describe("Engine Mechanics", () => {
       tile.activated = true; // Activate the tile so it's processed by the engine
 
       // Set heat above containment to trigger explosion
-      tile.heat_contained = part.containment * 1.5;
+      game.coreBridge.setTileHeat(tile.row, tile.col, part.containment * 1.5);
       const initialHeat = tile.heat_contained;
 
       // Mock the explosion handler to prevent actual depletion
@@ -639,9 +629,9 @@ describe("Engine Mechanics", () => {
       // Verify explosion was triggered
       expect(explosionCalled).toBe(true);
 
-      // Verify heat wasn't significantly vented (explosion should happen before venting)
-      // The heat might be slightly reduced due to venting before explosion, but should be close to initial
-      expect(tile.heat_contained).toBeGreaterThan(initialHeat * 0.9);
+      // Contained heat dumps to hull on explode (not left on the tile to vent)
+      expect(tile.heat_contained).toBe(0);
+      expect(toNum(game.reactor.current_heat)).toBeGreaterThanOrEqual(initialHeat * 0.9);
     });
 
     it("should allow heat outlets to overfill components beyond containment", async () => {
@@ -661,11 +651,11 @@ describe("Engine Mechanics", () => {
       componentTile.activated = true;
 
       // Set reactor heat high enough for outlet to transfer, but not so high it melts down
-      game.reactor.current_heat = 1000;
+      game.coreBridge.setReactorHeat(1000);
       game.reactor.max_heat = 100000; // Increase max heat to prevent meltdown
 
       // Set component at containment limit
-      componentTile.heat_contained = componentPart.containment;
+      game.coreBridge.setTileHeat(componentTile.row, componentTile.col, componentPart.containment);
 
       // Update reactor stats to populate neighbor lists
       game.reactor.updateStats();
@@ -701,7 +691,7 @@ describe("Engine Mechanics", () => {
       tile.activated = true; // Activate the tile so it's processed by the engine
 
       // Set heat above containment to trigger explosion
-      tile.heat_contained = part.containment * 1.5;
+      game.coreBridge.setTileHeat(tile.row, tile.col, part.containment * 1.5);
 
       // Mock the depletion handler to prevent actual depletion
       const originalHandleComponentDepletion = game.engine.handleComponentDepletion;
@@ -724,8 +714,6 @@ describe("Engine Mechanics", () => {
       game.tileset.clearAllTiles();
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 1, 0, "vent1");
-      syncActivePartsAtTickBoundary(game.engine);
-
       const session = game.coreBridge.session;
       expect(session.getActivePartList("active_cells").length).toBe(1);
       expect(session.getActivePartList("active_vessels").length).toBeGreaterThanOrEqual(1);
@@ -733,11 +721,7 @@ describe("Engine Mechanics", () => {
 
     it("should clear session active lists when grid is cleared", async () => {
       await placePart(game, 0, 0, "uranium1");
-      syncActivePartsAtTickBoundary(game.engine);
-
       game.tileset.clearAllTiles();
-      syncActivePartsAtTickBoundary(game.engine);
-
       const session = game.coreBridge.session;
       expect(session.getActivePartList("active_cells").length).toBe(0);
       expect(session.getActivePartList("active_vessels").length).toBe(0);
@@ -746,17 +730,12 @@ describe("Engine Mechanics", () => {
     it("should cap session active list lengths to grid capacity", async () => {
       game.tileset.clearAllTiles();
       const maxParts = game._rows * game._cols;
-      syncActivePartsAtTickBoundary(game.engine);
-
       const session = game.coreBridge.session;
       expect(session.getActivePartList("active_cells").length).toBeLessThanOrEqual(maxParts);
       expect(session.getActivePartList("active_vessels").length).toBeLessThanOrEqual(maxParts);
     });
 
     it("should derive tick part lists from session after sync", () => {
-      invalidateTickParts(game.engine);
-      syncActivePartsAtTickBoundary(game.engine);
-
       const session = game.coreBridge.session;
       expect(Array.isArray(session.getActivePartList("active_cells"))).toBe(true);
       expect(Array.isArray(session.getActivePartList("active_vessels"))).toBe(true);
@@ -789,8 +768,6 @@ describe("Engine Mechanics", () => {
     it("should not grow event ring buffer during Time Flux burst (many rapid ticks)", async () => {
       game.tileset.clearAllTiles();
       await placePart(game, 0, 0, "uranium1");
-      syncActivePartsAtTickBoundary(game.engine);
-
       const bufferLengthBefore = game.engine._eventRingBuffer.length;
       const maxBefore = game.engine.MAX_EVENTS;
       for (let i = 0; i < 100; i++) {
@@ -803,8 +780,6 @@ describe("Engine Mechanics", () => {
 
     it("should not accumulate unbounded pending events across ticks (ring buffer drain)", async () => {
       await placePart(game, 0, 0, "uranium1");
-      syncActivePartsAtTickBoundary(game.engine);
-
       game.engine._processTick(1.0);
       const headAfterFirst = game.engine._eventHead;
       const tailAfterFirst = game.engine._eventTail;
@@ -822,7 +797,6 @@ describe("Engine Mechanics", () => {
     it("should keep event ring buffer bounded after many deterministic ticks", async () => {
       game.tileset.clearAllTiles();
       await placePart(game, 0, 0, "uranium1");
-      syncActivePartsAtTickBoundary(game.engine);
       const bufferLengthBefore = game.engine._eventRingBuffer.length;
       for (let i = 0; i < 200; i++) {
         game.engine._processTick(1);
@@ -838,7 +812,7 @@ describe("Engine Mechanics", () => {
     const tile = game.tileset.getTile(0, 0);
     tile.setPart(fuelPart);
     tile.activated = true;
-    tile.ticks = 10;
+    game.coreBridge.setTileTicks(tile.row, tile.col, 10);
 
     // Set initial reactor heat
     const initialHeat = game.reactor.current_heat;
@@ -864,8 +838,8 @@ describe("Engine Mechanics", () => {
 
   describe("Cell power and UI state sync (regression: power only on timeout)", () => {
     beforeEach(() => {
-      game.reactor.current_power = 0;
-      game.reactor.current_heat = 0;
+      game.coreBridge.setReactorPower(0);
+      game.coreBridge.setReactorHeat(0);
     });
 
     it("power accrues on every tick when cells present", async () => {
@@ -873,8 +847,6 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-
       const cellPart = game.partset.getPartById("uranium1");
       const expectedPowerPerTick = cellPart.power ?? cellPart.base_power ?? 1;
 
@@ -892,8 +864,6 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-
       const initialStatePower = toNum(game.state?.current_power ?? 0);
       game.engine._processTick(1.0);
       const afterStatePower = toNum(game.state?.current_power ?? 0);
@@ -906,8 +876,6 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-
       game.engine._processTick(1.0);
 
       const delta = game.state?.power_delta_per_tick ?? 0;
@@ -920,8 +888,6 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-
       const powerHistory = [];
       for (let i = 0; i < 10; i++) {
         game.engine._processTick(1.0);
@@ -938,8 +904,6 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-
       for (let i = 0; i < 3; i++) {
         game.engine._processTick(1.0);
         const reactorPower = toNum(game.reactor.current_power);
@@ -953,8 +917,6 @@ describe("Engine Mechanics", () => {
       await placePart(game, 0, 0, "uranium1");
       await placePart(game, 0, 1, "vent1");
       game.reactor.updateStats();
-      syncActivePartsAtTickBoundary(game.engine);
-
       const initialCount = game.engine.tick_count;
       game.engine._processTick(1.0);
       expect(game.engine.tick_count).toBe(initialCount + 1);

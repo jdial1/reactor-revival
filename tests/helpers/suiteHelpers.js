@@ -1,12 +1,11 @@
 import { expect } from "vitest";
+import { toNumber as toNum } from "@app/simUtils.js";
 import {
   EP_CHANCE_LOG_BASE,
   PRESTIGE_MULTIPLIER_CAP,
   PRESTIGE_MULTIPLIER_PER_EP,
-  toNumber as toNum,
-} from "@app/utils.js";
+} from "@app/constants/balance.js";
 import { runTicks } from "./gameHelpers.js";
-import { patchGameState } from "@app/state.js";
 
 export const REACTOR_COPY_PASTE_MODAL_MARKUP = `
       <div id="reactor_copy_paste_modal" class="hidden">
@@ -109,34 +108,4 @@ export function assertProcessedObjectiveTitleHasIcon(processedTitle, expectedIco
 export function assertGridIndexMatchesTileset(tileset, row, col, expectedIndex) {
   expect(tileset.gridIndex(row, col)).toBe(expectedIndex);
   expect(row * tileset.max_cols + col).toBe(expectedIndex);
-}
-
-export function performTestRespec(
-  game,
-  {
-    doctrine = "unified",
-    exclusiveUpgradeId = "forceful_fusion",
-    bypassTechTree = false,
-  } = {}
-) {
-  game.bypass_tech_tree_restrictions = bypassTechTree;
-  game.tech_tree = doctrine;
-  const upg = game.upgradeset.getUpgrade(exclusiveUpgradeId);
-  upg.setLevel(0);
-  upg.updateDisplayCost();
-  const cost = toNum(upg.getCost());
-  game.current_money = cost;
-  patchGameState(game, { current_money: game.current_money });
-  game.upgradeset.check_affordability(game);
-  const purchased = game.upgradeset.purchaseUpgrade(exclusiveUpgradeId);
-  game.current_exotic_particles = game.RESPER_DOCTRINE_EP_COST;
-  patchGameState(game, { current_exotic_particles: game.current_exotic_particles });
-  const respecOk = game.respecDoctrine();
-  return {
-    purchased,
-    respecOk,
-    exclusiveLevelAfter: game.upgradeset.getUpgrade(exclusiveUpgradeId).level,
-    techTreeAfter: game.tech_tree,
-    epAfter: toNum(game.current_exotic_particles),
-  };
 }

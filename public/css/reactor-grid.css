@@ -1,8 +1,8 @@
-/* Heat warning glow effect */
-#reactor_background.heat-warning { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 30px rgb(255 0 0 / 30%);
+/* Heat warning glow effect — driven by Lit #wrapper classMap (Step 7d) */
+#wrapper.heat-warning #reactor_background { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 30px rgb(255 0 0 / 30%);
 }
 
-#reactor_background.heat-critical { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 40px rgb(255 0 0 / 50%), 0 0 30px rgb(255 0 0 / 30%);
+#wrapper.heat-critical #reactor_background { box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light), inset 0 0 40px rgb(255 0 0 / 50%), 0 0 30px rgb(255 0 0 / 30%);
 }
 
 #meltdown_vignette { position: absolute; inset: 0; z-index: 25; pointer-events: none; border-radius: 0; background: radial-gradient(ellipse 80% 80% at 50% 50%, transparent 20%, rgb(80 0 0 / 35%) 55%, rgb(40 0 0 / 85%) 100%); opacity: 0; box-shadow: inset 0 0 0 2px var(--bevel-dark), inset 0 0 0 6px var(--bevel-light); transition: opacity 0.05s steps(4, end);

@@ -1,4 +1,4 @@
-import { BlueprintSchema, LegacyGridSchema } from "../store.js";
+import { BlueprintSchema, LegacyGridSchema } from "../schema/index.js";
 import { isLayoutShareCode, shareCodeToLayoutGrid } from "../core/layoutShareCodec.js";
 import { clipToGrid } from "reactor-core";
 import { getActiveBridge } from "../bridge/active.js";
@@ -67,13 +67,19 @@ export const computeBlueprintDiff = (game, targetLayout) => {
 export const applyBlueprintLayoutDiff = (game, targetLayout, options = {}) => {
   const bridge = getActiveBridge(game);
   if (!bridge || !targetLayout) return { ok: false, reason: "invalid" };
-  return bridge.applyBlueprint({
-    layout: targetLayout,
-    skipCostDeduction: options.skipCostDeduction === true,
-    partial: options.partial === true,
-    sellExisting: options.sellExisting === true,
-    sellCredit: options.sellCredit ?? 0,
+  const { ok, result } = bridge.dispatch({
+    type: "APPLY_BLUEPRINT",
+    payload: {
+      layout: targetLayout,
+      skipCostDeduction: options.skipCostDeduction === true,
+      partial: options.partial === true,
+      sellExisting: options.sellExisting === true,
+      sellCredit: options.sellCredit ?? 0,
+    },
   });
+  const out = ok ? result : (result ?? { ok: false, reason: "rejected" });
+  if (!ok && out?.reason === "deficit") game.emit?.("blueprintApplyDeficit", out);
+  return out;
 };
 
 export const deserializeReactor = (str) => {

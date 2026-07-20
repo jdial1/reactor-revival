@@ -1,7 +1,8 @@
 import { html, render } from "lit-html";
 import { classMap, styleMap, unsafeHTML } from "../../dom/lit.js";
 import { numFormat } from "../../core/numbers.js";
-import { getUpgradeBonusLines } from "../tooltip-stats.js";
+import { getUpgradeBonusLines, partIconPath, resolvePartDescription } from "../tooltip-stats.js";
+import { formatUpgradeDisplayCost } from "./upgrade-display.js";
 import {
   upgradeCardTemplate,
   partButtonTemplate,
@@ -73,47 +74,9 @@ export const StartButton = (disabled, onClick) => html`
   </span>
 `;
 
-export const LoadGameButtonFullWidth = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onClick)}>
-    <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-full-width">
-      <div class="load-game-header"><span>Load Local Game</span></div>
-      <div class="load-game-details">
-        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
-        <div class="played-time">${playedTimeStr}</div>
-      </div>
-    </button>
-  </span>
-`;
-
-export const LoadGameButton = (saveData, playedTimeStr, isCloudSynced, onClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onClick)}>
-    <button id="splash-load-game-btn" class="splash-btn splash-btn-load">
-      <div class="load-game-header"><span>Load Local Game</span></div>
-      <div class="load-game-details">
-        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
-        <div class="played-time">${playedTimeStr}</div>
-      </div>
-      <div class="synced-label" style=${isCloudSynced ? "" : "display:none;"}></div>
-    </button>
-  </span>
-`;
-
-export const LoadGameUploadRow = (saveData, playedTimeStr, isCloudSynced, onLoadClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "#splash-load-game-btn", onLoadClick)}>
-    <button id="splash-load-game-btn" class="splash-btn splash-btn-load splash-btn-full-width">
-      <div class="load-game-header"><span>Load Local Game</span></div>
-      <div class="load-game-details">
-        <div class="money">&#36;${numFormat(saveData?.current_money ?? 0)}</div>
-        <div class="played-time">${playedTimeStr}</div>
-      </div>
-      <div class="synced-label" style=${isCloudSynced ? "" : "display:none;"}></div>
-    </button>
-  </span>
-`;
-
 export const BuyButton = (upgrade, onClick) => {
   const isEp = upgrade?.erequires || (upgrade?.base_ecost != null && Number(upgrade.base_ecost) > 0);
-  const costDisplay = isEp ? `${upgrade.current_ecost ?? 0} 🧬 EP` : (upgrade?.display_cost ?? upgrade?.current_cost ?? "");
+  const costDisplay = formatUpgradeDisplayCost(upgrade) || upgrade?.current_cost || "";
   const ariaLabel = upgrade?.title ? `Buy ${upgrade.title}` : "Buy";
   const disabled = upgrade ? !upgrade.affordable : false;
   return html`
@@ -145,16 +108,16 @@ export const InstallButton = (onClick) => html`
 
 const BASE_DOCTRINE_ICON = "img/ui/status/status_star.png";
 
-export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost, selected, onSelectClick } = {}) => {
+export const UpgradeCard = (upgrade, doctrineSource, onBuyClick, { selected, onSelectClick } = {}) => {
   const isMaxed = upgrade.level >= upgrade.max_level;
   const doctrineIcon = BASE_DOCTRINE_ICON;
   const upgradeset = upgrade.game?.upgradeset;
   const available = upgradeset ? upgradeset.isUpgradeAvailable(upgrade.id) : true;
   const doctrineLocked = !available;
-  const header = useReactiveLevelAndCost ? "" : (isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`);
+  const header = isMaxed ? "MAX" : `Level ${upgrade.level}/${upgrade.max_level}`;
   const rawDesc = isMaxed ? "" : (upgrade.description || "");
   const descHtml = upgrade.game?.ui?.stateManager ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc) : rawDesc;
-  const costDisplay = isMaxed ? "" : (upgrade.display_cost ?? upgrade.cost ?? "");
+  const costDisplay = isMaxed ? "" : (formatUpgradeDisplayCost(upgrade) || upgrade.cost || "");
   const ariaLabel = isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`;
   const iconPath = upgrade.upgrade?.icon ?? upgrade.icon ?? "img/ui/status/status_star.png";
   const { iconPath: overlayPath, isHeat } = getUpgradeIconOverlay(upgrade);
@@ -213,17 +176,18 @@ function buildPartStats(part) {
   return stats;
 }
 
-export function partsModuleInfoCardTemplate(part) {
-  if (!part?.getImagePath) return html``;
+export function partsModuleInfoCardTemplate(part, game = null) {
+  const iconPath = partIconPath(part);
+  if (!iconPath) return html``;
   const stats = buildPartStats(part);
-  const bonusLines = getUpgradeBonusLines(part, { tile: null, game: part.game });
+  const bonusLines = getUpgradeBonusLines(part, { tile: null, game });
   return html`
     <div class="parts-module-info-inner">
-      <div class="image" style=${styleMap({ backgroundImage: `url('${part.getImagePath()}')` })}></div>
+      <div class="image" style=${styleMap({ backgroundImage: `url('${iconPath}')` })}></div>
       ${partDetailsBlockTemplate({
         partTitle: part.title || "",
         stats,
-        description: part.description || "",
+        description: resolvePartDescription(part, null, game),
         bonusLines,
       })}
     </div>
@@ -236,12 +200,12 @@ export const PartButton = (part, onClick, opts = {}) => {
   const doctrineLocked = opts.doctrineLocked ?? false;
   const tierProgress = opts.tierProgress ?? "";
   const partActive = opts.partActive ?? false;
+  const game = opts.game ?? null;
   const btnClass = classMap({
     part: true,
     "pixel-btn": true,
     "is-square": true,
     part_active: partActive,
-    [part.className]: !!part.className,
     [`part_${part.id}`]: true,
     [`category_${part.category}`]: !!part.category,
     unaffordable: !part.affordable,
@@ -250,7 +214,7 @@ export const PartButton = (part, onClick, opts = {}) => {
   });
   const tierStyle = styleMap({ display: locked ? "block" : "none" });
   const stats = buildPartStats(part);
-  const bonusLines = getUpgradeBonusLines(part, { tile: null, game: part.game });
+  const bonusLines = getUpgradeBonusLines(part, { tile: null, game });
   return partButtonTemplate({
     btnClass,
     id: `part_btn_${part.id}`,
@@ -258,13 +222,13 @@ export const PartButton = (part, onClick, opts = {}) => {
     ariaLabel: `${part.title || "Part button"}, Cost: ${costText}`,
     disabled: !part.affordable || locked,
     onClick,
-    imagePath: part.getImagePath(),
+    imagePath: partIconPath(part),
     costText,
     tierStyle,
     tierProgress,
     partTitle: part.title || "",
     stats,
-    description: part.description || "",
+    description: resolvePartDescription(part, null, game),
     bonusLines,
   });
 };
@@ -273,18 +237,6 @@ export const CloseButton = (modal, onClick) => closeButtonTemplate({ onClick });
 
 export function createNewGameButton(onClick) {
   return renderToNode(StartButton(false, onClick));
-}
-
-export function createLoadGameButton(saveData, playedTimeStr, isCloudSynced, onClick) {
-  return renderToNode(LoadGameButton(saveData, playedTimeStr, isCloudSynced, onClick));
-}
-
-export function createLoadGameButtonFullWidth(saveData, playedTimeStr, isCloudSynced, onClick) {
-  return renderToNode(LoadGameButtonFullWidth(saveData, playedTimeStr, isCloudSynced, onClick));
-}
-
-export function createLoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick) {
-  return renderToNode(LoadGameUploadRow(saveData, playedTimeStr, isCloudSynced, onLoadClick));
 }
 
 export function createTooltipCloseButton(onClick) {

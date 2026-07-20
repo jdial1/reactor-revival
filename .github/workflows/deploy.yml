@@ -69,9 +69,6 @@ jobs:
       - name: Bundle CSS for production
         run: npm run build:css
 
-      - name: Strip console statements for production
-        run: npm run remove-console-logs
-
       - name: Build Service Worker
         run: npm run build:sw
 

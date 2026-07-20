@@ -6,7 +6,7 @@ export function toNumber(value) {
   if (typeof value?.toNumber === "function") {
     try {
       return value.toNumber();
-    } catch (e) {
+    } catch {
       return Number.isFinite(Number(value.toString())) ? Number(value.toString()) : 0;
     }
   }
@@ -37,7 +37,12 @@ export function toDecimal(value) {
 }
 
 export function isTestEnv() {
-  return (typeof process !== "undefined" && process.env && process.env.NODE_ENV === "test")
+  return (typeof process !== "undefined" && process.env && (
+    process.env.NODE_ENV === "test"
+    || !!process.env.VITEST
+    || process.env.VITEST === "true"
+  ))
+    || (typeof globalThis !== "undefined" && !!globalThis.__VITEST__)
     || (typeof global !== "undefined" && global.__VITEST__)
     || (typeof window !== "undefined" && window.__VITEST__);
 }

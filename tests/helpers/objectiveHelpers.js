@@ -1,3 +1,4 @@
+import { syncGridFromGame } from "./bridge-test-harness.js";
 import { syncGridState } from "./gameHelpers.js";
 import { patchGameState } from "@app/state.js";
 
@@ -19,7 +20,7 @@ export async function satisfyObjective(game, idx) {
             break;
 
         case 1:
-            game.reactor.current_power = 10;
+            game.coreBridge.setReactorPower(10);
             game.sell_action();
             break;
 
@@ -46,7 +47,7 @@ export async function satisfyObjective(game, idx) {
             
             if (upgradeToBuy) {
                 // Ensure sufficient money
-                const cost = upgradeToBuy.getCost();
+                const cost = upgradeToBuy.current_cost;
                 game.current_money = Math.max(game.current_money, cost * 2 + 10000);
                 patchGameState(game, { current_money: game.current_money });
                 game.upgradeset.check_affordability(game);
@@ -148,7 +149,7 @@ export async function satisfyObjective(game, idx) {
                 if (t) {
                     await t.setPart(game.partset.getPartById("plutonium1"));
                     t.activated = true;
-                    t.ticks = 60;
+                    game.coreBridge.setTileTicks(t.row, t.col, 60);
                 }
             }
             game.reactor.updateStats();
@@ -163,9 +164,9 @@ export async function satisfyObjective(game, idx) {
             game.coreBridge?.session?.systems?.failure?.reset?.();
             if (game.coreBridge?.session?.engine?.meltdown) {
               game.coreBridge.session.engine.reset();
-              game.coreBridge.syncGridFromGame();
+              syncGridFromGame(game);
             }
-            game.reactor.current_power = Math.max(Number(game.reactor.max_power) || 0, 500);
+            game.coreBridge.setReactorPower(Math.max(Number(game.reactor.max_power) || 0, 500));
             game.paused = false;
             game.onToggleStateChange?.("pause", false);
             game.engine?.stop?.();
@@ -206,10 +207,10 @@ export async function satisfyObjective(game, idx) {
             game.coreBridge?.session?.systems?.failure?.reset?.();
             if (game.coreBridge?.session?.engine?.meltdown) {
               game.coreBridge.session.engine.reset();
-              game.coreBridge.syncGridFromGame();
+              syncGridFromGame(game);
             }
             game.reactor.altered_max_power = 60000;
-            game.reactor.current_power = 60000;
+            game.coreBridge.setReactorPower(60000);
             game.paused = false;
             game.onToggleStateChange?.("pause", false);
             game.engine?.stop?.();
@@ -218,19 +219,27 @@ export async function satisfyObjective(game, idx) {
             break;
 
         case 22: {
+            game.tileset.clearAllTiles();
             const thorium1 = game.partset.getPartById("thorium1");
             for (let i = 0; i < 10; i++) {
                 const tile = game.tileset.getTile(0, i);
                 if (!tile || !thorium1) continue;
                 await tile.setPart(thorium1);
                 tile.activated = true;
-                tile.ticks = 900;
+                game.coreBridge.setTileTicks(tile.row, tile.col, 900);
             }
             game.tileset.updateActiveTiles();
+            syncGridFromGame(game);
             game.paused = false;
             game.onToggleStateChange?.("pause", false);
+            game.coreBridge?.session?.setPaused?.(false);
+            game.reactor.has_melted_down = false;
+            if (game.state) game.state.melting_down = false;
+            game.coreBridge?.session?.systems?.failure?.reset?.();
+            game.reactor.updateStats();
             game.engine?.tick?.();
             game.reactor.updateStats();
+            game.coreBridge?.session?.grid?.recalculateCaps?.();
             break;
         }
 
@@ -256,7 +265,7 @@ export async function satisfyObjective(game, idx) {
             for (let i = 0; i < 8; i++) await game.tileset.getTile(0, i).setPart(game.partset.getPartById("plutonium3"));
             game.reactor.updateStats();
             game.reactor.max_heat = 50000000;
-            game.reactor.current_heat = 15000000;
+            game.coreBridge.setReactorHeat(15000000);
             game.reactor.has_melted_down = false;
             if (game.state) game.state.melting_down = false;
             game.paused = false;

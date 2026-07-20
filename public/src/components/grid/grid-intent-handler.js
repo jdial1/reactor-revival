@@ -1,6 +1,6 @@
 import { MOBILE_BREAKPOINT_PX } from "../../constants/ui-constants.js";
 import { actions } from "../../store.js";
-import { drainGridIntentsAsync } from "../../bridge/bridge-intents.js";
+import { dispatchPlayerIntents } from "../../bridge/bridge-intents.js";
 
 export async function handleGridInteraction(ui, tile, event) {
   const game = ui?.game;
@@ -74,11 +74,11 @@ export async function handleGridInteraction(ui, tile, event) {
 
   if (sellTiles.length && eng) {
     const intents = sellTiles.map((t) => ({
-      action: "SELL_PART",
+      type: "SELL_PART",
       payload: { row: t.row, col: t.col },
     }));
-    const { sold } = await drainGridIntentsAsync(game, eng, intents);
-    if (sold.length) {
+    const { sold, queued } = await dispatchPlayerIntents(game, eng, intents);
+    if (sold.length || queued) {
       soundPlayedRef.v = true;
       if (ui.deviceFeatures?.heavyVibration) ui.deviceFeatures.heavyVibration();
     }
@@ -86,21 +86,35 @@ export async function handleGridInteraction(ui, tile, event) {
       const s = sold[sj];
       ui.gridCanvasRenderer?.markTileDirty(s.row, s.col);
     }
+    if (queued) {
+      for (let sj = 0; sj < sellTiles.length; sj++) {
+        const t = sellTiles[sj];
+        ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
+      }
+    }
   }
 
   if (placementTiles.length && eng) {
+    const part = game.partset?.getPartById?.(clicked_part.id);
+    if (part && game.partset?.isPartDoctrineLocked?.(part)) return;
     const intents = placementTiles.map((t) => ({
-      action: "PLACE_PART",
-      payload: { row: t.row, col: t.col, partId: clicked_part.id },
+      type: "PLACE_PART_PAID",
+      payload: { row: t.row, col: t.col, id: clicked_part.id },
     }));
-    const { placed } = await drainGridIntentsAsync(game, eng, intents);
-    if (placed.length) {
+    const { placed, queued } = await dispatchPlayerIntents(game, eng, intents);
+    if (placed.length || queued) {
       soundPlayedRef.v = true;
       if (ui.deviceFeatures?.lightVibration) ui.deviceFeatures.lightVibration();
     }
     for (let pj = 0; pj < placed.length; pj++) {
       const p = placed[pj];
       ui.gridCanvasRenderer?.markTileDirty(p.row, p.col);
+    }
+    if (queued) {
+      for (let pj = 0; pj < placementTiles.length; pj++) {
+        const t = placementTiles[pj];
+        ui.gridCanvasRenderer?.markTileDirty(t.row, t.col);
+      }
     }
   }
 }

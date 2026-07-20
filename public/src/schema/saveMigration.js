@@ -1,5 +1,13 @@
-export const SAVE_FORMAT_VERSION_LATEST = 2;
+export const SAVE_FORMAT_VERSION_LATEST = 3;
 export const SAVE_FORMAT_VERSION_INITIAL = 1;
+
+const LEGACY_TECH_TREE_IDS = new Set(["architect", "physicist", "engineer"]);
+
+export function normalizeSavedTechTreeId(id) {
+  if (id == null || id === "") return id ?? null;
+  if (LEGACY_TECH_TREE_IDS.has(id)) return "unified";
+  return id;
+}
 
 function bytesToBase64(bytes) {
   if (typeof Buffer !== "undefined") {
@@ -98,48 +106,111 @@ export function decodeTilesCompact(tiles_compact, part_table) {
   return out;
 }
 
-function normalizeLegacyGrid2D(data) {
-  const out = { ...data };
-  if (out.tiles && Array.isArray(out.tiles) && out.tiles.length > 0) {
-    const first = out.tiles[0];
-    if (Array.isArray(first)) {
-      const migrated = [];
-      (out.tiles || []).forEach((row, r) => {
-        (row || []).forEach((cell, c) => {
-          if (cell && (cell.partId || cell.id)) {
-            migrated.push({
-              row: r,
-              col: c,
-              partId: cell.partId ?? cell.id,
-              ticks: cell.ticks ?? 0,
-              heat_contained: cell.heat_contained ?? 0,
-            });
-          }
-        });
-      });
-      out.tiles = migrated;
+function clonePlain(raw) {
+  if (!raw || typeof raw !== "object") return raw;
+  const data = { ...raw };
+  if (Array.isArray(raw.tiles)) data.tiles = raw.tiles.slice();
+  if (Array.isArray(raw.unlocked_achievements)) {
+    data.unlocked_achievements = raw.unlocked_achievements.slice();
+  }
+  if (raw.achievements && typeof raw.achievements === "object" && !Array.isArray(raw.achievements)) {
+    data.achievements = { ...raw.achievements };
+    if (Array.isArray(raw.achievements.unlocked)) {
+      data.achievements.unlocked = raw.achievements.unlocked.slice();
     }
   }
-  return out;
+  return data;
 }
 
-export function migrateSave(raw) {
-  if (!raw || typeof raw !== "object") return raw;
-  let data = normalizeLegacyGrid2D({ ...raw });
-  if (!data.version) data.version = "1.0.0";
-  const ver = typeof data.save_format_version === "number" && data.save_format_version >= 1
-    ? data.save_format_version
-    : SAVE_FORMAT_VERSION_INITIAL;
-  if (ver < SAVE_FORMAT_VERSION_LATEST) {
-    data.save_format_version = SAVE_FORMAT_VERSION_LATEST;
-  } else {
-    data.save_format_version = ver;
+function readFormatVersion(data) {
+  if (typeof data.save_format_version === "number" && data.save_format_version >= 1) {
+    return data.save_format_version;
   }
+  return SAVE_FORMAT_VERSION_INITIAL;
+}
+
+function normalizeLegacyGrid2D(data) {
+  if (!data.tiles || !Array.isArray(data.tiles) || data.tiles.length === 0) return data;
+  const first = data.tiles[0];
+  if (!Array.isArray(first)) return data;
+  const migrated = [];
+  (data.tiles || []).forEach((row, r) => {
+    (row || []).forEach((cell, c) => {
+      if (cell && (cell.partId || cell.id)) {
+        migrated.push({
+          row: r,
+          col: c,
+          partId: cell.partId ?? cell.id,
+          ticks: cell.ticks ?? 0,
+          heat_contained: cell.heat_contained ?? 0,
+        });
+      }
+    });
+  });
+  data.tiles = migrated;
+  return data;
+}
+
+function expandTilesCompactIfNeeded(data) {
   const compact = data.tiles_compact;
   const table = data.part_table;
   const tilesArr = Array.isArray(data.tiles) ? data.tiles : [];
   if (compact && Array.isArray(table) && table.length > 0 && tilesArr.length === 0) {
     data.tiles = decodeTilesCompact(compact, table);
   }
+  return data;
+}
+
+function migrateV1ToV2(data) {
+  normalizeLegacyGrid2D(data);
+  if (!data.version) data.version = "1.0.0";
+  expandTilesCompactIfNeeded(data);
+  data.save_format_version = 2;
+  return data;
+}
+
+function migrateV2ToV3(data) {
+  data.tech_tree = normalizeSavedTechTreeId(data.tech_tree);
+  if (data.current_exotic_particles == null && data.exotic_particles != null) {
+    data.current_exotic_particles = data.exotic_particles;
+  }
+  if (data.exotic_particles == null && data.current_exotic_particles != null) {
+    data.exotic_particles = data.current_exotic_particles;
+  }
+  const unlocked = Array.isArray(data.unlocked_achievements) ? data.unlocked_achievements : [];
+  if (data.achievements == null) {
+    data.achievements = { unlocked: [...unlocked] };
+  } else if (Array.isArray(data.achievements)) {
+    data.achievements = { unlocked: [...data.achievements] };
+  } else if (typeof data.achievements === "object") {
+    if (!Array.isArray(data.achievements.unlocked)) {
+      data.achievements = { ...data.achievements, unlocked: [...unlocked] };
+    }
+  }
+  if (!Array.isArray(data.unlocked_achievements)) {
+    data.unlocked_achievements = Array.isArray(data.achievements?.unlocked)
+      ? [...data.achievements.unlocked]
+      : [];
+  }
+  data.save_format_version = 3;
+  return data;
+}
+
+const MIGRATIONS = {
+  1: migrateV1ToV2,
+  2: migrateV2ToV3,
+};
+
+export function migrateSave(raw) {
+  if (!raw || typeof raw !== "object") return raw;
+  let data = clonePlain(raw);
+  let ver = readFormatVersion(data);
+  while (ver < SAVE_FORMAT_VERSION_LATEST) {
+    const step = MIGRATIONS[ver];
+    if (!step) throw new Error(`Missing migrator for save_format_version ${ver}`);
+    data = step(data);
+    ver = readFormatVersion(data);
+  }
+  expandTilesCompactIfNeeded(data);
   return data;
 }

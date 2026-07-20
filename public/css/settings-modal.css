@@ -300,17 +300,17 @@
  }
 }
 
-html.reduced-motion-app #reactor_copy_paste_modal:not(.hidden)::before,
-html.reduced-motion-app #my_layouts_modal:not(.hidden)::before,
-html.reduced-motion-app .prestige-modal-overlay::before,
-html.reduced-motion-app .welcome-back-modal-overlay::before,
-html.reduced-motion-app .reactor-failed-modal-overlay::before,
-html.reduced-motion-app .settings-modal-overlay::before,
-html.reduced-motion-app .layout-view-modal-overlay::before { animation: none;
+html[data-reduced-motion] #reactor_copy_paste_modal:not(.hidden)::before,
+html[data-reduced-motion] #my_layouts_modal:not(.hidden)::before,
+html[data-reduced-motion] .prestige-modal-overlay::before,
+html[data-reduced-motion] .welcome-back-modal-overlay::before,
+html[data-reduced-motion] .reactor-failed-modal-overlay::before,
+html[data-reduced-motion] .settings-modal-overlay::before,
+html[data-reduced-motion] .layout-view-modal-overlay::before { animation: none;
 }
 
-html.reduced-motion-app #reactor_copy_paste_modal .modal-header::after,
-html.reduced-motion-app #my_layouts_modal .modal-header::after { animation: none;
+html[data-reduced-motion] #reactor_copy_paste_modal .modal-header::after,
+html[data-reduced-motion] #my_layouts_modal .modal-header::after { animation: none;
 }
 
 .mech-switch-row { position: relative; display: flex; width: 100%; align-items: center; justify-content: space-between; cursor: pointer; gap: 1rem;
@@ -442,35 +442,5 @@ html.reduced-motion-app #my_layouts_modal .modal-header::after { animation: none
 }
 
 .mute-btn .mute-icon { font-size: 1.2rem; text-shadow: var(--text-shadow);
-}
-
-.settings-cloud-saves { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgb(255 255 255 / 10%);
-}
-
-.settings-cloud-heading { margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--accent-color, rgb(143 214 148)); font-family: "Press Start 2P", cursive, monospace;
-}
-
-.cloud-slot-list { display: flex; flex-direction: column; gap: 0.75rem;
-}
-
-.cloud-slot-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid rgb(255 255 255 / 10%);
-}
-
-.cloud-slot-row:last-child { border-bottom: none;
-}
-
-.cloud-slot-info { display: flex; flex-direction: column; gap: 0.15rem; flex: 1; min-width: 0;
-}
-
-.cloud-slot-label { font-family: "Press Start 2P", cursive, monospace; font-size: 0.75rem; color: white; text-shadow: var(--text-shadow);
-}
-
-.cloud-slot-meta { font-size: 0.6rem; color: rgb(255 255 255 / 60%);
-}
-
-.cloud-slot-actions { display: flex; gap: 0.5rem; flex-shrink: 0;
-}
-
-.settings-modal .cloud-slot-actions .pixel-btn-small { flex: 1; min-width: 0; max-width: 5rem;
 }
 

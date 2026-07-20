@@ -1,188 +1,79 @@
-import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, toNum } from '../../helpers/setup.js';
-import { AudioService } from '@app/services/app-services.js';
-import { setDecimal } from "@app/store.js";
-import { patchGameState } from "@app/state.js";
-import { toDecimal } from '@app/utils.js';
-import { forcePurchaseUpgrade } from "../../helpers/gameHelpers.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  purchaseSessionUpgrade,
+  sessionEp,
+  setSessionEconomy,
+} from "../../helpers/sessionHelpers.js";
 
-describe('EP Reboot Functionality', () => {
-    let game;
+describe("EP Reboot (session)", () => {
+  let session;
 
-    beforeEach(async () => {
-        vi.spyOn(AudioService.prototype, 'play').mockImplementation(() => {});
-        const setup = await setupGameWithDOM();
-        game = setup.game;
-        game.audio = new AudioService();
-        await game.audio.init();
+  beforeEach(async () => {
+    session = await setupSessionOnly({ money: 1e30 });
+  });
 
-        // Reset EP to 0 to ensure clean state
-        game.exotic_particles = 0;
-        game.total_exotic_particles = 0;
-        game.current_exotic_particles = 0;
-        game.exoticParticleManager.exotic_particles = toDecimal(0);
-        setDecimal(game.state, "total_exotic_particles", 0);
-        setDecimal(game.state, "current_exotic_particles", 0);
-        patchGameState(game, { exotic_particles: 0 });
+  it("grants EP at reboot from session power and heat (defining weave)", () => {
+    setSessionEconomy(session, {
+      currentExoticParticles: "0",
+      totalExoticParticles: "0",
+      sessionPowerProduced: "5000000",
+      sessionHeatDissipated: "6000000",
     });
+    expect(session.calculatePrestigeReward()).toBe(5);
 
-    afterEach(() => {
-        // Clean up any timers or intervals
-        if (game && game.engine) {
-            game.engine.stop();
-        }
+    const earned = session.reboot({ keepEp: true });
+    expect(earned).toBe(5);
+    const ep = sessionEp(session);
+    expect(ep.total).toBe(5);
+    expect(ep.current).toBe(5);
+    expect(ep.sessionPower).toBe(0);
+    expect(ep.sessionHeat).toBe(0);
+  });
+
+  it("keeps total EP when rebooting with keepEp", () => {
+    session.creditExoticParticles(75);
+    setSessionEconomy(session, {
+      sessionPowerProduced: "0",
+      sessionHeatDissipated: "0",
     });
+    const before = sessionEp(session);
+    expect(before.total).toBe(75);
 
-    describe('EP Generation and Display', () => {
-        it('grants EP at reboot from session power and heat (defining weave)', async () => {
-            setDecimal(game.state, "total_exotic_particles", 0);
-            setDecimal(game.state, "current_exotic_particles", 0);
-            game.exoticParticleManager.exotic_particles = toDecimal(0);
-            setDecimal(game.state, "session_power_produced", 5_000_000);
-            setDecimal(game.state, "session_heat_dissipated", 6_000_000);
-            game.coreBridge.loadEconomyFromHost();
-            await game.rebootActionKeepExoticParticles();
-            expect(toNum(game.state.total_exotic_particles)).toBe(5);
-            expect(toNum(game.state.current_exotic_particles)).toBe(5);
-        });
+    session.reboot({ keepEp: true });
+    const after = sessionEp(session);
+    expect(after.total).toBe(75);
+    expect(after.current).toBe(75);
+    expect(after.money).toBe(Number(session.getSnapshot().economy.money));
+  });
 
-        it('should update EP state manager correctly', () => {
-            game.exotic_particles = 150;
-            patchGameState(game, { exotic_particles: game.exotic_particles });
+  it("preserves experimental upgrades but resets standard ones on reboot", () => {
+    expect(purchaseSessionUpgrade(session, "chronometer")).toBeTruthy();
+    session.creditExoticParticles(100);
+    expect(purchaseSessionUpgrade(session, "laboratory")).toBeTruthy();
+    expect(session.getUpgradeLevel("chronometer")).toBe(1);
+    expect(session.getUpgradeLevel("laboratory")).toBe(1);
 
-            expect(toNum(game.exotic_particles)).toBe(150);
-        });
+    session.reboot({ keepEp: true });
 
-        it('should update total EP state manager correctly', () => {
-            game.total_exotic_particles = 500;
-            patchGameState(game, { total_exotic_particles: game.total_exotic_particles });
+    expect(session.getUpgradeLevel("chronometer")).toBe(0);
+    expect(session.getUpgradeLevel("laboratory")).toBe(1);
+  });
 
-            expect(toNum(game.state.total_exotic_particles)).toBe(500);
-        });
+  it("zeros all EP on discard reboot (keepEp false)", () => {
+    session.creditExoticParticles(10);
+    expect(sessionEp(session).total).toBe(10);
 
-        it('should update EP displays when values change', () => {
-            game.exotic_particles = 100;
-            game.total_exotic_particles = 200;
-            patchGameState(game, { exotic_particles: game.exotic_particles, total_exotic_particles: game.total_exotic_particles });
+    session.reboot({ keepEp: false });
 
-            game.exotic_particles = 250;
-            game.total_exotic_particles = 350;
-            patchGameState(game, { exotic_particles: game.exotic_particles, total_exotic_particles: game.total_exotic_particles });
+    const ep = sessionEp(session);
+    expect(ep.current).toBe(0);
+    expect(ep.total).toBe(0);
+  });
 
-            expect(toNum(game.exotic_particles)).toBe(250);
-            expect(toNum(game.state.total_exotic_particles)).toBe(350);
-        });
-    });
-
-    describe('Reboot for EP (Keep EP)', () => {
-        it('should play reboot sound and keep EP when rebooting', async () => {
-            game.paused = false;
-            game.engine.start();
-            const playSpy = vi.spyOn(game.audio, 'play');
-
-            setDecimal(game.state, "total_exotic_particles", 75);
-            setDecimal(game.state, "current_exotic_particles", 75);
-            game.exoticParticleManager.exotic_particles = toDecimal(75);
-
-            const epBeforeReboot = game.exotic_particles;
-            game.current_money = 5000;
-            setDecimal(game.state, "session_power_produced", 0);
-            setDecimal(game.state, "session_heat_dissipated", 0);
-            game.coreBridge.loadEconomyFromHost();
-            await game.rebootActionKeepExoticParticles();
-
-            expect(toNum(game.exotic_particles)).toBe(0);
-            expect(toNum(game.total_exotic_particles)).toBe(toNum(epBeforeReboot));
-            expect(toNum(game.current_exotic_particles)).toBe(toNum(epBeforeReboot));
-            expect(toNum(game.current_money)).toBe(toNum(game.base_money));
-
-            expect(toNum(game.state.total_exotic_particles)).toBe(toNum(epBeforeReboot));
-            expect(toNum(game.state.current_exotic_particles)).toBe(toNum(epBeforeReboot));
-            expect(playSpy).toHaveBeenCalledWith('reboot');
-        });
-
-        it('should preserve experimental upgrades but reset standard ones on reboot', async () => {
-            forcePurchaseUpgrade(game, "chronometer");
-            forcePurchaseUpgrade(game, "laboratory");
-            
-            const standardUpgrade = game.upgradeset.getUpgrade("chronometer");
-            const labUpgrade = game.upgradeset.getUpgrade("laboratory");
-            
-            expect(standardUpgrade.level).toBe(1);
-            expect(labUpgrade.level).toBe(1);
-            
-            await game.rebootActionKeepExoticParticles();
-
-            expect(game.upgradeset.getUpgrade("chronometer").level).toBe(0);
-            expect(game.upgradeset.getUpgrade("laboratory").level).toBe(1);
-        });
-    });
-
-    describe('Reboot and Refund EP (Full Refund)', () => {
-        it('should reset all EP to zero on a full refund reboot', async () => {
-            game.paused = false;
-            game.engine.start();
-
-            setDecimal(game.state, "total_exotic_particles", 10);
-            setDecimal(game.state, "current_exotic_particles", 10);
-            game.exoticParticleManager.exotic_particles = toDecimal(10);
-
-            game.current_money = 5000;
-            game.coreBridge.loadEconomyFromHost();
-            await game.router.loadPage("experimental_upgrades_section");
-            await game.rebootActionDiscardExoticParticles();
-
-            expect(toNum(game.exotic_particles)).toBe(0);
-            expect(toNum(game.total_exotic_particles)).toBe(0);
-            expect(toNum(game.current_exotic_particles)).toBe(0);
-        });
-
-        it('should update state manager after refund reboot', async () => {
-            game.exotic_particles = 75;
-            game.total_exotic_particles = 125;
-            patchGameState(game, { exotic_particles: game.exotic_particles, total_exotic_particles: game.total_exotic_particles });
-            game.coreBridge.loadEconomyFromHost();
-
-            await game.rebootActionDiscardExoticParticles();
-
-            expect(toNum(game.exotic_particles)).toBe(0);
-            expect(toNum(game.state.total_exotic_particles)).toBe(0);
-            expect(toNum(game.state.current_exotic_particles)).toBe(0);
-        });
-    });
-
-    describe('UI Button Functionality', () => {
-        it('should have correct reboot function signature', () => {
-            expect(typeof game.rebootActionKeepExoticParticles).toBe('function');
-            expect(typeof game.rebootActionDiscardExoticParticles).toBe('function');
-            expect(() => game.rebootActionKeepExoticParticles()).not.toThrow();
-            expect(() => game.rebootActionDiscardExoticParticles()).not.toThrow();
-        });
-    });
-
-    describe('EP State Management', () => {
-        it('should properly initialize EP state', () => {
-            expect(toNum(game.exotic_particles)).toBe(0);
-            expect(toNum(game.total_exotic_particles)).toBe(0);
-            expect(toNum(game.current_exotic_particles)).toBe(0);
-        });
-
-        it('should maintain EP state across game operations', () => {
-            // Set EP values
-            game.exotic_particles = 50;
-            game.total_exotic_particles = 100;
-            game.current_exotic_particles = 150;
-
-            patchGameState(game, {
-              exotic_particles: game.exotic_particles,
-              total_exotic_particles: game.total_exotic_particles,
-              current_exotic_particles: game.current_exotic_particles,
-            });
-
-            expect(toNum(game.exotic_particles)).toBe(50);
-            expect(toNum(game.total_exotic_particles)).toBe(100);
-            expect(toNum(game.current_exotic_particles)).toBe(150);
-            expect(toNum(game.state.total_exotic_particles)).toBe(100);
-            expect(toNum(game.state.current_exotic_particles)).toBe(150);
-        });
-    });
-}); 
+  it("initializes EP at zero", () => {
+    const ep = sessionEp(session);
+    expect(ep.current).toBe(0);
+    expect(ep.total).toBe(0);
+  });
+});

@@ -2,6 +2,7 @@ import { render } from "lit-html";
 import { subscribe, subscribeKey } from "../store.js";
 import { isTestEnv } from "../simUtils.js";
 import { teardownAll } from "../core/teardown.js";
+import { logger } from "../core/logger.js";
 
 function bindContainerKey(container) {
   if (typeof container === "string") return container;
@@ -72,7 +73,7 @@ function createLitBinding({ getTemplate, attachSubscriptions, requireInitialTarg
         onAfterRender?.();
       } catch (err) {
         if (isIgnorableLitRenderError(err)) return;
-        console.error("Lit render error:", err);
+        logger.log("error", "ui", "Lit render error:", err);
       }
     };
 

@@ -18,7 +18,6 @@
     <link rel="stylesheet" href="css/ui-secondary-pages.css" />
     <script>
       (function(){
-        console.log("[ReactorBoot] inline: splash bg script start");
         function ghPagesBasePath() {
           try {
             var h = window.location.hostname;
@@ -31,17 +30,16 @@
           return "";
         }
         var basePath = ghPagesBasePath();
-        var USE_STALENHAG_BG = true;
         var STORAGE_KEY = 'splash-bg-counts';
         var CAROUSEL_INTERVAL_MS = 30000;
-        var prefix = USE_STALENHAG_BG ? 'stalenhag' : 'splash';
+        var prefix = 'stalenhag';
         var counts = {};
         try {
           var stored = localStorage.getItem(STORAGE_KEY);
           if (stored) counts = JSON.parse(stored);
         } catch (e) {}
         function init(maxIdx) {
-          maxIdx = maxIdx || 10;
+          maxIdx = maxIdx || 30;
           var minCount = Infinity;
           var minIndices = [];
           for (var i = 1; i <= maxIdx; i++) {
@@ -56,9 +54,7 @@
           }
           var n = minIndices[Math.floor(Math.random() * minIndices.length)];
           function setBg(idx) {
-            var path = USE_STALENHAG_BG
-              ? basePath + '/img/misc/stalenhag_bg/bg_img' + idx + '.webp'
-              : basePath + '/img/misc/backgrounds/splash_bg' + idx + '.webp';
+            var path = basePath + '/img/misc/stalenhag_bg/bg_img' + idx + '.webp';
             document.documentElement.style.setProperty('--splash-bg-url', 'url("' + path + '")');
             counts[prefix + '_' + idx] = (counts[prefix + '_' + idx] || 0) + 1;
             try {
@@ -77,8 +73,7 @@
             setBg(n);
           }, CAROUSEL_INTERVAL_MS);
         }
-        var SPLASH_BG_COUNT = { stalenhag: 30, splash: 10 };
-        init(USE_STALENHAG_BG ? SPLASH_BG_COUNT.stalenhag : SPLASH_BG_COUNT.splash);
+        init(30);
       })();
     </script>
     <script src="lib/pako.min.js"></script>
@@ -104,9 +99,6 @@
 </head>
 <body>
     <div id="app_root" class="theme-dark"></div>
-    <script>
-      console.log("[ReactorBoot] body parsed, app_root present", !!document.getElementById("app_root"));
-    </script>
     <script type="module" src="src/app.js"></script>
 </body>
 </html>

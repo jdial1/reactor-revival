@@ -3,13 +3,14 @@ import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { numFormat as fmt } from "../../core/numbers.js";
 import { escapeHtml } from "../../dom/lit.js";
-import { actions } from "../../store.js";
 import { bindLitRenderMulti } from "../../dom/lit-reactive.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { runCheckAffordability, setUpgradeCardRefreshHandler } from "../../bridge/bridge-upgrades.js";
 import { isCellUpgradeVisible } from "../../domain/upgrade.js";
 import { calculateSectionCounts, findTopAffordableInSection } from "../../domain/upgrade-sections.js";
 import { UpgradeCard } from "./button-factory.js";
+import { purchaseUpgradeWithFeedback } from "./presentation.js";
+import { formatUpgradeDisplayCost } from "./upgrade-display.js";
 import { getUiElement } from "../shell/page-dom.js";
 import {
   debugVariablesSectionTemplate,
@@ -19,6 +20,20 @@ import {
   upgradeHubDetailPanelTemplate,
 } from "../../templates/uiComponentsTemplates.js";
 const EXPAND_UPGRADE_IDS = ["expand_reactor_rows", "expand_reactor_cols"];
+
+function firstByClass(root, className) {
+  if (!root) return null;
+  const list = root.getElementsByClassName(className);
+  return list[0] ?? null;
+}
+
+function forEachSectionH2(wrapper, fn) {
+  if (!wrapper) return;
+  const h2s = wrapper.getElementsByTagName("h2");
+  for (let i = 0; i < h2s.length; i++) {
+    if (h2s[i].hasAttribute("data-section-name")) fn(h2s[i]);
+  }
+}
 
 function getUpgradeContainerId(upgrade) {
   if (upgrade.base_ecost && upgrade.base_ecost.gt && upgrade.base_ecost.gt(0)) {
@@ -51,23 +66,7 @@ function syncSelectedUpgradeVisibility(upgradeset) {
   }
 }
 
-function purchaseUpgradeWithFeedback(upgradeset, upgradeId) {
-  if (!upgradeset.isUpgradeAvailable(upgradeId)) return;
-  if (!upgradeset.purchaseUpgrade(upgradeId)) {
-    if (upgradeset.game) {
-      actions.enqueueEffect(upgradeset.game, { kind: "sfx", id: "error", context: "global" });
-      actions.enqueueEffect(upgradeset.game, {
-        kind: "floating_text",
-        body: "[Not enough funds!]",
-        context: "global",
-      });
-    }
-    return;
-  }
-  if (upgradeset.game) actions.enqueueEffect(upgradeset.game, { kind: "sfx", id: "upgrade", context: "global" });
-}
-
-function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReactiveLevelAndCost, selectedUpgradeId) {
+function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, selectedUpgradeId) {
   const onBuyClick = (e) => {
     e.stopPropagation();
     purchaseUpgradeWithFeedback(upgradeset, upgrade.id);
@@ -80,52 +79,17 @@ function buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReacti
     ui.uiState.interaction.selectedUpgradeId = current === upgrade.id ? null : upgrade.id;
   };
   const selected = selectedUpgradeId === upgrade.id;
-  return UpgradeCard(upgrade, doctrineSource, onBuyClick, { useReactiveLevelAndCost, selected, onSelectClick });
+  return UpgradeCard(upgrade, doctrineSource, onBuyClick, { selected, onSelectClick });
 }
 
-function renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container, selectedUpgradeId) {
-  const cards = upgrades.map((upgrade) => buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, useReactiveLevelAndCost, selectedUpgradeId));
+function renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, container, selectedUpgradeId) {
+  const cards = upgrades.map((upgrade) => buildUpgradeCardTemplate(upgradeset, upgrade, doctrineSource, selectedUpgradeId));
   try {
     render(html`${cards}`, container);
   } catch (err) {
     const msg = String(err?.message ?? "");
     if (msg.includes("nextSibling") || msg.includes("parentNode")) return;
     throw err;
-  }
-}
-
-function mountUpgradeReactiveDisplay(upgrade, display, container) {
-  const root = container?.querySelector(`[data-id="${upgrade.id}"]`);
-  const levelContainer = root?.querySelector(".upgrade-level-info");
-  if (levelContainer) {
-    if (typeof upgrade._levelReactiveUnmount === "function") {
-      safeCall(() => { upgrade._levelReactiveUnmount(); });
-      upgrade._levelReactiveUnmount = null;
-    }
-    levelContainer.replaceChildren();
-    let lastLevelHeader;
-    const levelRenderFn = () => html`<span class="level-text cathode-readout"></span>`;
-    const afterLevelReadout = () => {
-      const el = levelContainer.querySelector(".cathode-readout");
-      const d = display[upgrade.id] ?? upgrade;
-      const lvl = d.level ?? upgrade.level;
-      const header = lvl >= upgrade.max_level ? "MAX" : `Level ${lvl}/${upgrade.max_level}`;
-      if (!el || typeof header !== "string") return;
-      if (lastLevelHeader === undefined) {
-        el.textContent = header;
-        lastLevelHeader = header;
-        return;
-      }
-      if (lastLevelHeader === header) return;
-      lastLevelHeader = header;
-      el.textContent = header;
-    };
-    upgrade._levelReactiveUnmount = bindLitRenderMulti(
-      [{ state: display, keys: [upgrade.id] }],
-      levelRenderFn,
-      levelContainer,
-      afterLevelReadout
-    );
   }
 }
 
@@ -139,30 +103,22 @@ function groupUpgradesByContainer(filtered) {
   return byContainer;
 }
 
-function renderGroupedUpgradeCards(upgradeset, byContainer, mountReactive) {
+function renderGroupedUpgradeCards(upgradeset, byContainer) {
   const selectedUpgradeId = upgradeset.game?.ui?.uiState?.interaction?.selectedUpgradeId ?? null;
   const doctrineSource = (id) => upgradeset.game?.upgradeset?.getDoctrineForUpgrade(id);
-  const state = upgradeset.game?.state;
-  const useReactiveLevelAndCost = !!state?.upgrade_display;
   byContainer.forEach((upgrades, containerId) => {
-    const container = document.getElementById(containerId);
+    const container = getUiElement(null, containerId);
     if (!container?.isConnected) return;
-    renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, useReactiveLevelAndCost, container, selectedUpgradeId);
-    if (!mountReactive) return;
-    const display = state?.upgrade_display;
-    upgrades.forEach((upgrade) => {
-      if (display) mountUpgradeReactiveDisplay(upgrade, display, container);
-    });
+    renderUpgradeContainerCards(upgrades, upgradeset, doctrineSource, container, selectedUpgradeId);
   });
   clearEmptyUpgradeContainers(byContainer);
-  return state;
 }
 
 export function refreshUpgradeCards(upgradeset) {
   if (typeof document === "undefined" || !upgradeset) return;
   syncSelectedUpgradeVisibility(upgradeset);
   const filtered = filterVisibleUpgrades(upgradeset.upgradesArray, upgradeset);
-  renderGroupedUpgradeCards(upgradeset, groupUpgradesByContainer(filtered), true);
+  renderGroupedUpgradeCards(upgradeset, groupUpgradesByContainer(filtered));
 }
 
 function clearEmptyUpgradeContainers(byContainer) {
@@ -172,7 +128,7 @@ function clearEmptyUpgradeContainers(byContainer) {
   ];
   containerIds.forEach((containerId) => {
     if (byContainer.has(containerId)) return;
-    const container = document.getElementById(containerId);
+    const container = getUiElement(null, containerId);
     if (!container?.isConnected) return;
     safeCall(() => { render(html``, container); });
   });
@@ -182,7 +138,7 @@ setUpgradeCardRefreshHandler(refreshUpgradeCards);
 
 export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
   if (typeof document === "undefined") return;
-  const wrapper = document.getElementById(wrapperId);
+  const wrapper = getUiElement(null, wrapperId);
   if (!wrapper?.isConnected) return;
 
   syncSelectedUpgradeVisibility(upgradeset);
@@ -194,25 +150,9 @@ export function runPopulateUpgradeSection(upgradeset, wrapperId, filterFn) {
   );
 
   const byContainer = groupUpgradesByContainer(filtered);
-  const state = renderGroupedUpgradeCards(upgradeset, byContainer, false);
+  renderGroupedUpgradeCards(upgradeset, byContainer);
 
   const game = upgradeset.game;
-  filtered.forEach((upgrade) => {
-    const containerId = getUpgradeContainerId(upgrade);
-    const container = document.getElementById(containerId);
-    if (!container?.isConnected) return;
-    upgrade.updateDisplayCost();
-    const display = state?.upgrade_display;
-    if (display) {
-      mountUpgradeReactiveDisplay(upgrade, display, container);
-    } else {
-      const el = container.querySelector(`[data-id="${upgrade.id}"]`);
-      const lr = el?.querySelector(".upgrade-level-info .cathode-readout");
-      const t = lr?.textContent?.trim();
-      if (lr && t) lr.textContent = t;
-    }
-  });
-
   if (game) runCheckAffordability(upgradeset, game);
 }
 
@@ -225,35 +165,43 @@ export function updateSectionCountsState(ui, game) {
   });
   ui.uiState.section_counts = counts;
   updateHubSectionPreviews(ui, game);
-  updateResearchEpHint();
+  updateResearchEpHint(ui);
 }
 
-function updateResearchEpHint() {
-  const hint = document.getElementById("research_ep_hint");
-  const wrapper = document.getElementById("experimental_upgrades_content_wrapper");
-  if (!hint || !wrapper) return;
-  const allCollapsed = wrapper.querySelectorAll(".upgrade-hub-collapsible:not(.section-collapsed)").length === 0;
-  hint.classList.toggle("hidden", !allCollapsed);
+const RESEARCH_HUB_COLLAPSE_KEYS = [
+  "Laboratory",
+  "Global Boosts",
+  "Experimental Parts & Cells",
+  "Particle Accelerators",
+];
+
+function updateResearchEpHint(ui) {
+  const hint = getUiElement(ui, "research_ep_hint");
+  if (!hint) return;
+  const map = ui?.uiState?.hub_collapsed || {};
+  const allCollapsed = RESEARCH_HUB_COLLAPSE_KEYS.every((key) => !!map[key]);
+  const base = hint.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
+  hint.className = allCollapsed ? base : (base ? `${base} hidden` : "hidden");
 }
 
 function updateHubSectionPreviews(ui, game) {
   const wrappers = ["upgrades_content_wrapper", "experimental_upgrades_content_wrapper"];
   wrappers.forEach((wrapperId) => {
-    const wrapper = document.getElementById(wrapperId);
+    const wrapper = getUiElement(ui, wrapperId);
     if (!wrapper) return;
-    wrapper.querySelectorAll("h2[data-section-name]").forEach((h2) => {
+    forEachSectionH2(wrapper, (h2) => {
       const sectionName = h2.getAttribute("data-section-name");
       if (!sectionName) return;
       const article = h2.closest(".upgrade-hub-collapsible");
       if (!article) return;
-      let preview = article.querySelector(".section-hub-preview");
+      let preview = firstByClass(article, "section-hub-preview");
       if (!preview) {
         preview = document.createElement("p");
         preview.className = "section-hub-preview";
-        const headerBlock = article.querySelector(".upgrade-section-header-block");
+        const headerBlock = firstByClass(article, "upgrade-section-header-block");
         if (headerBlock) headerBlock.appendChild(preview);
         else {
-          const metaHost = article.querySelector(".section-hub-meta-host");
+          const metaHost = firstByClass(article, "section-hub-meta-host");
           if (metaHost) metaHost.insertAdjacentElement("afterend", preview);
           else h2.insertAdjacentElement("afterend", preview);
         }
@@ -261,32 +209,32 @@ function updateHubSectionPreviews(ui, game) {
       const top = findTopAffordableInSection(game.upgradeset, sectionName);
       if (!top) {
         preview.textContent = "";
-        preview.classList.add("hidden");
+        const base = preview.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
+        preview.className = base ? `${base} hidden` : "hidden";
         return;
       }
       const isEp = top.base_ecost?.gt?.(0);
       const cost = isEp ? `${fmt(top.ecost)} EP` : `$${fmt(top.cost)}`;
       preview.textContent = `${top.title} · ${cost}`;
-      preview.classList.remove("hidden");
+      preview.className = preview.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
     });
   });
 }
 
 function mountSectionCountsForWrapper(ui, wrapperId) {
   if (typeof document === "undefined") return [];
-  const wrapper = document.getElementById(wrapperId);
+  const wrapper = getUiElement(ui, wrapperId);
   if (!wrapper?.isConnected) return [];
-  const h2s = wrapper.querySelectorAll("h2[data-section-name]");
   const unmounts = [];
-  h2s.forEach((h2) => {
+  forEachSectionH2(wrapper, (h2) => {
     const sectionName = h2.getAttribute("data-section-name");
     if (!sectionName) return;
     const headerBlock = h2.closest(".upgrade-section-header-block");
-    let metaHost = headerBlock?.querySelector(".section-hub-meta-host");
+    let metaHost = firstByClass(headerBlock, "section-hub-meta-host");
     if (!metaHost) {
       metaHost = document.createElement("div");
       metaHost.className = "section-hub-meta-host";
-      const row = headerBlock?.querySelector(".upgrade-section-header-row");
+      const row = firstByClass(headerBlock, "upgrade-section-header-row");
       if (row) row.appendChild(metaHost);
       else h2.insertAdjacentElement("afterend", metaHost);
     }
@@ -319,14 +267,13 @@ function buildUpgradeDetailPanelData(upgrade, upgradeset) {
   const isMaxed = upgrade.level >= upgrade.max_level;
   const available = upgradeset.isUpgradeAvailable(upgrade.id);
   const doctrineLocked = !available;
-  const display = upgradeset.game?.state?.upgrade_display?.[upgrade.id];
-  const level = display?.level ?? upgrade.level;
+  const level = upgrade.level;
   const levelHeader = isMaxed ? "MAX" : `Level ${level}/${upgrade.max_level}`;
   const rawDesc = isMaxed ? "" : (upgrade.description || "");
   const descHtml = upgrade.game?.ui?.stateManager
     ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc)
     : rawDesc;
-  const costDisplay = isMaxed ? "" : (display?.display_cost ?? upgrade.display_cost ?? upgrade.cost ?? "");
+  const costDisplay = isMaxed ? "" : (formatUpgradeDisplayCost(upgrade) || upgrade.cost || "");
   const iconPath = upgrade.upgrade?.icon ?? upgrade.icon ?? "img/ui/status/status_star.png";
   return {
     upgradeId: upgrade.id,
@@ -348,13 +295,12 @@ function buildUpgradeDetailPanelData(upgrade, upgradeset) {
 }
 
 export function mountUpgradeDetailPanel(ui, panelId) {
-  const panel = document.getElementById(panelId);
+  const panel = getUiElement(ui, panelId);
   if (!panel?.isConnected || !ui?.uiState) return null;
   const isResearchPanel = panelId === "research_detail_panel";
   const subscriptions = [
     { state: ui.uiState.interaction, keys: ["selectedUpgradeId"] },
-    { state: ui.uiState, keys: ["active_page"] },
-    { state: ui.game?.state, keys: ["upgrade_display", "current_money", "current_exotic_particles"] },
+    { state: ui.uiState, keys: ["active_page", "snapshot_rev"] },
   ].filter((s) => s.state != null);
   const renderFn = () => {
     const activePage = ui.uiState.active_page;
@@ -420,7 +366,7 @@ export function mountUpgradeDetailPanels(ui) {
 }
 
 export function getUpgradeSectionContainer(ui, locationKey) {
-  return getUiElement(ui, locationKey) ?? document.getElementById(locationKey);
+  return getUiElement(ui, locationKey);
 }
 
 export function appendUpgradeToSection(ui, locationKey, upgradeEl) {
@@ -457,7 +403,7 @@ export function showUpgradeDebugPanel(ui) {
   const debugSection = getEl("debug_section");
   const debugToggleBtn = getEl("debug_toggle_btn");
   if (debugSection && debugToggleBtn) {
-    debugSection.classList.remove("hidden");
+    debugSection.className = debugSection.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
     debugToggleBtn.textContent = "Hide Debug Info";
     updateUpgradeDebugVariables(ui);
   }
@@ -468,7 +414,8 @@ export function hideUpgradeDebugPanel(ui) {
   const debugSection = getEl("debug_section");
   const debugToggleBtn = getEl("debug_toggle_btn");
   if (debugSection && debugToggleBtn) {
-    debugSection.classList.add("hidden");
+    const base = debugSection.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
+    debugSection.className = base ? `${base} hidden` : "hidden";
     debugToggleBtn.textContent = "Show Debug Info";
   }
 }
@@ -537,13 +484,15 @@ export function collectUpgradeDebugGameVariables(ui) {
     vars["Reactor (reactor.js)"]["max_power"] = reactor.max_power;
     vars["Reactor (reactor.js)"]["altered_max_power"] = reactor.altered_max_power;
     vars["Reactor (reactor.js)"]["auto_sell_multiplier"] = reactor.auto_sell_multiplier;
-    vars["Reactor (reactor.js)"]["heat_power_multiplier"] = reactor.heat_power_multiplier;
     vars["Reactor (reactor.js)"]["heat_controlled"] = reactor.heat_controlled;
-    vars["Reactor (reactor.js)"]["heat_outlet_controlled"] = reactor.heat_outlet_controlled;
-    vars["Reactor (reactor.js)"]["vent_capacitor_multiplier"] = reactor.vent_capacitor_multiplier;
-    vars["Reactor (reactor.js)"]["vent_plating_multiplier"] = reactor.vent_plating_multiplier;
-    vars["Reactor (reactor.js)"]["transfer_capacitor_multiplier"] = reactor.transfer_capacitor_multiplier;
-    vars["Reactor (reactor.js)"]["transfer_plating_multiplier"] = reactor.transfer_plating_multiplier;
+    const mods = reactor.sessionModifiers;
+    vars["Reactor (reactor.js)"]["heat_power_multiplier"] = mods?.heat_power_multiplier ?? 0;
+    vars["Reactor (reactor.js)"]["heat_outlet_controlled"] = !!mods?.heat_outlet_controlled;
+    vars["Reactor (reactor.js)"]["vent_capacitor_multiplier"] = mods?.vent_capacitor_multiplier ?? 0;
+    vars["Reactor (reactor.js)"]["vent_plating_multiplier"] = mods?.vent_plating_multiplier ?? 0;
+    vars["Reactor (reactor.js)"]["transfer_capacitor_multiplier"] = mods?.transfer_capacitor_multiplier ?? 0;
+    vars["Reactor (reactor.js)"]["transfer_plating_multiplier"] = mods?.transfer_plating_multiplier ?? 0;
+    vars["Reactor (reactor.js)"]["stirling_multiplier"] = mods?.stirling_multiplier ?? 0;
     vars["Reactor (reactor.js)"]["has_melted_down"] = reactor.has_melted_down;
     vars["Reactor (reactor.js)"]["stats_power"] = reactor.stats_power;
     vars["Reactor (reactor.js)"]["stats_heat_generation"] = reactor.stats_heat_generation;
@@ -586,8 +535,7 @@ export function collectUpgradeDebugGameVariables(ui) {
   vars["UI State"]["lastTileModified"] = ui.inputHandler?.lastTileModified ? "Tile Object" : null;
   vars["UI State"]["longPressTimer"] = ui.inputHandler?.longPressTimer ? "Active" : null;
   vars["UI State"]["longPressDuration"] = ui.inputHandler?.longPressDuration ?? 500;
-  vars["UI State"]["last_money"] = ui.last_money;
-  vars["UI State"]["last_exotic_particles"] = ui.last_exotic_particles;
+  vars["UI State"]["snapshot_rev"] = ui.uiState?.snapshot_rev ?? 0;
   vars["UI State"]["ctrl9HoldTimer"] = null;
   vars["UI State"]["ctrl9HoldStartTime"] = null;
   vars["UI State"]["ctrl9MoneyInterval"] = null;

@@ -3,8 +3,7 @@ import { getUiElement, getPageReactorWrapper } from "./page-dom.js";
 import { applyBodyClassesFromUiState } from "../../state/ui-state.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { teardownAll } from "../../core/teardown.js";
-
-const MELTDOWN_BUILDUP_MS = 2500;
+import { MELTDOWN_BUILDUP_MS } from "../../constants/ui-timing.js";
 
 export class MeltdownUI {
   constructor(ui) {
@@ -30,15 +29,15 @@ export class MeltdownUI {
   }
 
   subscribeToMeltdownEvents(game) {
-    if (!game?.state) return;
+    if (!game?.ui?.uiState) return;
     this.cleanup();
     this._resolveMeltdownDom();
     const unsubs = this._meltdownUnsubs;
-    unsubs.push(subscribeKey(game.state, "melting_down", () => this.updateMeltdownState()));
-    let lastMeltdownSeq = game.state.meltdown_seq | 0;
-    unsubs.push(subscribeKey(game.state, "meltdown_seq", (seq) => {
-      const n = seq | 0;
-      if (n > lastMeltdownSeq && game.state.melting_down) {
+    let lastMeltdownSeq = game.state?.meltdown_seq | 0;
+    unsubs.push(subscribeKey(game.ui.uiState, "snapshot_rev", () => {
+      this.updateMeltdownState();
+      const n = game.state?.meltdown_seq | 0;
+      if (n > lastMeltdownSeq && game.state?.melting_down) {
         lastMeltdownSeq = n;
         this.startMeltdownBuildup(() => this.explodeAllPartsSequentially?.());
       }
@@ -65,7 +64,7 @@ export class MeltdownUI {
     el.className = "explosion-emf-overlay";
     doc.body.appendChild(el);
     requestAnimationFrame(() => {
-      el.classList.add("explosion-emf-overlay--on");
+      el.className = "explosion-emf-overlay explosion-emf-overlay--on";
     });
     setTimeout(() => {
       el.remove();
@@ -96,7 +95,6 @@ export class MeltdownUI {
       ui.uiState.meltdown_buildup = false;
     }
 
-    this.updateProgressBarMeltdownState(hasMeltedDown);
   }
 
   startMeltdownBuildup(onComplete) {
@@ -124,9 +122,7 @@ export class MeltdownUI {
       typeof process !== "undefined" &&
       (process.env.NODE_ENV === "test" || process.env.VITEST === "true")
     ) {
-      tilesWithParts.forEach((tile) => {
-        if (tile.part) tile.clearPart();
-      });
+      ui.game.tileset?.clearAllTiles?.();
       logger.log("debug", "ui", "All parts exploded!");
       return;
     }
@@ -142,8 +138,5 @@ export class MeltdownUI {
     setTimeout(() => {
       logger.log("debug", "ui", "All parts exploded!");
     }, totalExplosionTime);
-  }
-
-  updateProgressBarMeltdownState(_isMeltdown) {
   }
 }

@@ -491,7 +491,7 @@ export const getValidatedGameData = () => {
 
 const dataService = {
   async ensureAllGameDataLoaded() {
-    console.log("[ReactorBoot] game data (bundled) validated");
+    logger.log("info", "boot", "game data (bundled) validated");
     return getValidatedGameData();
   },
   async loadFlavorText() {

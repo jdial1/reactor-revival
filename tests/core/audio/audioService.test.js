@@ -452,12 +452,15 @@ describe("AudioService", () => {
       if (!game.audio || !game.audio._isInitialized) {
         await game.audio.init();
       }
+      game.audio.enabled = true;
       const tile = game.tileset.getTile(5, 5);
       const part = game.partset.getPartById("uranium1");
       tile.clearPart();
       const playSpy = vi.spyOn(game.audio, 'play');
 
       await tile.setPart(part);
+      const { flushGameEffects } = await import("@app/state/game-effects-flush.js");
+      flushGameEffects(game);
 
       expect(tile.part).not.toBeNull();
       expect(tile.part.id).toBe("uranium1");

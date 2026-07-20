@@ -4,7 +4,7 @@ import {
   ZOOM_SCALE_MAX,
   MOMENTUM_DECAY_FACTOR,
   SNAP_BACK_THRESHOLD_RATIO,
-} from "@app/utils.js";
+} from "@app/constants/balance.js";
 import { requestWakeLock, releaseWakeLock } from "@app/services/app-services.js";
 import * as gridIntentHandler from "../../../public/src/components/grid/grid-intent-handler.js";
 

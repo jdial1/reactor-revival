@@ -1,8 +1,6 @@
 import { subscribeKey, preferences } from "../../store.js";
-import { logger } from "../../core/logger.js";
 import { html } from "lit-html";
 import { render, repeat } from "../../dom/lit.js";
-import { syncReactorHeatVisualDom, isHeatNetBalanced } from "../shell/heat-dom-sync.js";
 import { safeCall, teardownAll } from "../../core/teardown.js";
 import {
   getPageReactorWrapper,
@@ -11,6 +9,7 @@ import {
   getUiElement,
 } from "../shell/page-dom.js";
 import { handleGridInteraction } from "./grid-intent-handler.js";
+import { partIconPath } from "../tooltip-stats.js";
 
 const heatVisualOverlays = new WeakMap();
 const HEAT_FLOW_STROKE = "rgba(255,120,40,0.9)";
@@ -69,14 +68,6 @@ export class HeatVisualsUI {
     this._heatFlowOverlay = null;
     this._voltageOverlaySvg = null;
     this._unsubs = [];
-    const st = ui.game?.state;
-    if (st) {
-      this._unsubs.push(subscribeKey(st, "heat_ratio", (r) => this._applyHeatFromRatio(typeof r === "number" && isFinite(r) ? r : 0)));
-      this._unsubs.push(subscribeKey(st, "stats_net_heat", () => {
-        const r = typeof st.heat_ratio === "number" && isFinite(st.heat_ratio) ? st.heat_ratio : 0;
-        this._applyHeatFromRatio(r);
-      }));
-    }
     if (!ui._unmounts) ui._unmounts = [];
     ui._unmounts.push(() => this.teardown());
   }
@@ -85,20 +76,6 @@ export class HeatVisualsUI {
     teardownAll(this._unsubs);
     this._unsubs.length = 0;
     this.resetOverlays();
-  }
-
-  _applyHeatFromRatio(heatRatio) {
-    const ui = this.ui;
-    const st = ui.game?.state;
-    const netHeat = st?.stats_net_heat;
-    const heatGen = st?.stats_heat_generation;
-    const heatBalanced = isHeatNetBalanced(netHeat, heatGen);
-    const cd = heatBalanced ? Math.min(0.5, Math.max(0, heatRatio)) : Math.min(1.5, Math.max(0, heatRatio));
-    if (ui.uiState) {
-      ui.uiState.core_danger = cd;
-      ui.uiState.heat_ratio = heatRatio;
-    }
-    syncReactorHeatVisualDom(ui, heatRatio, netHeat, heatGen);
   }
 
   resetOverlays() {
@@ -222,27 +199,6 @@ export class HeatVisualsUI {
     render(heatFlowOverlayTemplate(vectors, w, h, project), host);
   }
 
-  clearHeatWarningClasses() {
-    const bg = getPageReactorBackground(this.ui);
-    if (bg) {
-      bg.classList.remove("heat-warning", "heat-critical");
-      bg.style.setProperty("--heat-bg-alpha", "0");
-      bg.style.setProperty("--heat-ratio", "0");
-      bg.style.setProperty("--core-danger", "0");
-    }
-    const root = typeof document !== "undefined" ? document.documentElement : null;
-    if (root) root.style.setProperty("--core-danger", "0");
-    const appRoot = getUiElement(this.ui, "app_root");
-    if (appRoot) {
-      appRoot.style.setProperty("--core-danger", "0");
-      appRoot.style.setProperty("--crt-heat", "0");
-      appRoot.style.setProperty("--crt-jitter-duration", "20s");
-      appRoot.classList.remove("crt-heat-tearing");
-    }
-    const reactorEl = getPageReactor(this.ui);
-    if (reactorEl) reactorEl.setAttribute("data-heat-ratio", "0");
-  }
-
 }
 
 function tileFxTemplate(items) {
@@ -302,7 +258,7 @@ export class GridInteractionUI {
   _ensureTileFxHost() {
     const overlay = this._ensureOverlay?.() ?? getPageReactorBackground(this.ui);
     if (!overlay) return null;
-    let host = overlay.querySelector(".tile-fx-layer");
+    let host = overlay.getElementsByClassName("tile-fx-layer")[0] ?? null;
     if (!host) {
       host = document.createElement("div");
       host.className = "tile-fx-layer";
@@ -433,7 +389,7 @@ export class GridInteractionUI {
     const size = 0.6;
     const rotorW = rect.width * size;
     const rotorH = rect.height * size;
-    const bgImage = tile?.part?.getImagePath?.() ?? "";
+    const bgImage = partIconPath(tile?.part) ?? "";
     this._activeVentRotors.add(ventKey);
     this._enqueueTileFx({
       id: `vent-${ventKey}-${Date.now()}`,
@@ -492,7 +448,7 @@ export class GridInteractionUI {
       aura.style.height = `${size}px`;
       aura.style.transform = `rotate(${angle}deg)`;
       container.appendChild(aura);
-      requestAnimationFrame(() => aura.classList.add('active'));
+      requestAnimationFrame(() => { aura.className = "reflector-aura active"; });
       setTimeout(() => aura.remove(), 450);
     }, "pulseReflector");
   }
@@ -530,7 +486,7 @@ export class GridInteractionUI {
           img.style.top = `${endTop}px`;
           img.style.opacity = '0.2';
         } else {
-          img.classList.add('fx-fade-out');
+          img.className = "tile-fx fx-ep fx-fade-out";
         }
         setTimeout(() => img.remove(), 550);
       });

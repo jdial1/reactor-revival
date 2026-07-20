@@ -5,27 +5,28 @@ import { setDecimal } from "../state/decimal-sync.js";
 import { logger } from "../core/logger.js";
 import { StorageAdapter, deserializeSave, getBackupSaveForSlot1Async } from "../storage/index.js";
 import { SaveDataSchema } from "../schema/index.js";
-import { snapshot } from "valtio/vanilla";
-import { SAVE_FORMAT_VERSION_LATEST, buildPartTable, encodeTilesCompact, migrateSave } from "../schema/saveMigration.js";
-import { unlockedAchievementIds } from "../bridge/core-state-projection.js";
+import {
+  SAVE_FORMAT_VERSION_LATEST,
+  buildPartTable,
+  encodeTilesCompact,
+} from "../schema/saveMigration.js";
+import {
+  hydrateAchievementsIntoSession,
+  hydrateObjectivesIntoSession,
+  unlockedAchievementIds,
+} from "../bridge/core-state-projection.js";
+import { projectUpgradeLevelsToHost } from "../bridge/bridge-upgrades.js";
 import { getActiveBridge, requireActiveBridge } from "../bridge/active.js";
+import { toNumber } from "../simUtils.js";
 
 export const parseAndValidateSave = (raw) => {
   const parsed = typeof raw === "string" ? deserializeSave(raw) : raw;
-  const migrated = migrateSave(parsed);
-  const result = SaveDataSchema.safeParse(migrated);
+  const result = SaveDataSchema.safeParse(parsed);
   if (!result.success) {
     logger.log("error", "game", "Save validation failed:", fromError(result.error).toString());
     throw new Error("Save corrupted: validation failed");
   }
   return result.data;
-};
-
-const LEGACY_TECH_TREE_IDS = new Set(["architect", "physicist", "engineer"]);
-
-export const normalizeSavedTechTreeId = (id) => {
-  if (!id || LEGACY_TECH_TREE_IDS.has(id)) return "unified";
-  return id;
 };
 
 function saveLeaderboardRunIfEligible(ctx) {
@@ -47,13 +48,13 @@ function saveLeaderboardRunIfEligible(ctx) {
 function applyCoreGameState(game, savedData) {
   setDecimal(game.state, "current_money", savedData.current_money);
   game.run_id = savedData.run_id;
-  game.peak_power = savedData.reactor?.current_power != null ? savedData.reactor.current_power.toNumber() : 0;
-  game.peak_heat = savedData.reactor?.current_heat != null ? savedData.reactor.current_heat.toNumber() : 0;
+  game.peak_power = savedData.reactor?.current_power != null ? toNumber(savedData.reactor.current_power) : 0;
+  game.peak_heat = savedData.reactor?.current_heat != null ? toNumber(savedData.reactor.current_heat) : 0;
   game.base_rows = savedData.base_rows;
   game.base_cols = savedData.base_cols;
   game.protium_particles = savedData.protium_particles;
   setDecimal(game.state, "total_exotic_particles", savedData.total_exotic_particles);
-  const epRaw = savedData.current_exotic_particles ?? savedData.exotic_particles;
+  const epRaw = savedData.current_exotic_particles;
   game.exoticParticleManager.exotic_particles = epRaw;
   setDecimal(game.state, "current_exotic_particles", epRaw);
   setDecimal(game.state, "session_power_produced", savedData.session_power_produced ?? 0);
@@ -77,7 +78,11 @@ function applySessionMetadata(game, savedData) {
   game.lifecycleManager.last_save_time = savedData.last_save_time ?? null;
   game.lifecycleManager.session_start_time = null;
   game.placedCounts = savedData.placedCounts ?? game.placedCounts ?? {};
-  getActiveBridge(game)?.setPlacedCounts(game.placedCounts);
+  const bridge = getActiveBridge(game);
+  if (bridge?.session?.setPlacedCounts) {
+    bridge.session.setPlacedCounts(game.placedCounts);
+    game.placedCounts = { ...(bridge.session.placedCounts || {}) };
+  }
 }
 
 function applyReactorState(game, savedData) {
@@ -87,14 +92,6 @@ function applyReactorState(game, savedData) {
   game.state.melting_down = savedData.reactor.has_melted_down ?? false;
   if (savedData.reactor.base_max_heat != null) game.state.base_max_heat = savedData.reactor.base_max_heat;
   if (savedData.reactor.base_max_power != null) game.state.base_max_power = savedData.reactor.base_max_power;
-}
-
-function reconcileReactorFromState(game) {
-  const s = game?.state;
-  const r = game?.reactor;
-  if (!s || !r) return;
-  if (s.base_max_heat) r.base_max_heat = s.base_max_heat;
-  if (s.base_max_power) r.base_max_power = s.base_max_power;
 }
 
 async function applyUpgrades(game, _savedData) {
@@ -120,7 +117,7 @@ function parseObjectiveIndex(v) {
 function clampObjectiveIndex(game, savedData, savedIndex) {
   const rawNum = typeof savedIndex === "string" ? parseInt(savedIndex, 10) : Number(savedIndex);
   if (savedIndex != null && !Number.isNaN(rawNum) && rawNum < 0) {
-    console.warn(`Negative objective index ${savedIndex}. Clamping to 0.`);
+    logger.log("warn", "save", `Negative objective index ${savedIndex}. Clamping to 0.`);
     return 0;
   }
   let idx = parseObjectiveIndex(savedIndex);
@@ -144,26 +141,36 @@ function clampObjectiveIndex(game, savedData, savedIndex) {
 function applyObjectives(game, savedData) {
   if (!savedData.objectives) return;
   const savedIndex = clampObjectiveIndex(game, savedData, savedData.objectives.current_objective_index);
-  const om = game.objectives_manager;
-  if (savedData.objectives.completed_objectives?.length && om?.objectives_data) {
-    savedData.objectives.completed_objectives.forEach((completed, index) => {
-      if (om.objectives_data[index]) om.objectives_data[index].completed = completed;
-    });
-  }
-  if (om) om.current_objective_index = savedIndex;
   game._saved_objective_index = savedIndex;
-  if (om?.set_objective && om.objectives_data?.length) {
-    om.set_objective(savedIndex, true);
-    if (om.checkForChapterCompletion) om.checkForChapterCompletion();
+  const om = game.objectives_manager;
+  if (!om?.objectives_data?.length) return;
+  const completed = savedData.objectives.completed_objectives ?? [];
+  for (let i = 0; i < om.objectives_data.length; i++) {
+    om.objectives_data[i].completed = completed[i] === true;
   }
-  game.coreBridge?.hydrateObjectivesFromGame?.();
+  om.current_objective_index = savedIndex;
+  hydrateObjectivesIntoSession(game.coreBridge);
+}
+
+function applyObjectiveChromeAfterSession(game, savedData) {
+  if (!savedData?.objectives) return;
+  const om = game.objectives_manager;
+  if (!om) return;
+  const savedIndex = game._saved_objective_index ?? clampObjectiveIndex(game, savedData, savedData.objectives.current_objective_index);
+  om.current_objective_index = savedIndex;
+  if (om.set_objective && om.objectives_data?.length) {
+    om.set_objective(savedIndex, true);
+    om.checkForChapterCompletion?.();
+  }
 }
 
 function applyUIState(game, savedData) {
   const toggles = savedData.toggles ?? {};
   game._pendingToggleStates = toggles;
-  if (game.onToggleStateChange) {
-    Object.entries(toggles).forEach(([key, value]) => game.onToggleStateChange(key, value));
+  if (game.state) {
+    for (const [key, value] of Object.entries(toggles)) {
+      game.state[key] = !!value;
+    }
   }
   game.emit?.("saveLoaded", {
     toggles,
@@ -175,7 +182,7 @@ function applyUIState(game, savedData) {
 function applyAchievements(game, savedData) {
   const full = savedData.achievements;
   if (game.achievement_manager) {
-    game.achievement_manager.restore(full ?? savedData.unlocked_achievements ?? []);
+    game.achievement_manager.restore(full ?? { unlocked: savedData.unlocked_achievements ?? [] });
   } else if (game.state) {
     if (full && typeof full === "object" && !Array.isArray(full)) {
       game.state.achievements = full;
@@ -185,7 +192,7 @@ function applyAchievements(game, savedData) {
         ? savedData.unlocked_achievements
         : [];
     }
-    game.coreBridge?.hydrateAchievementsFromGame?.();
+    hydrateAchievementsIntoSession(game.coreBridge);
   }
 }
 
@@ -201,11 +208,10 @@ export async function applySaveState(game, savedData) {
   if (!game.partset.initialized) await game.partset.initialize();
   for (const fn of ASYNC_HYDRATORS) await fn(game, savedData);
   for (const fn of POST_ASYNC_HYDRATORS) fn(game, savedData);
-  reconcileReactorFromState(game);
-  game.reactor.hull_heat_doctrine_mult = 1;
   const bridge = requireActiveBridge(game, "applySaveState");
   bridge.loadLegacySave(savedData);
-  bridge.syncUpgradeLevelsToGame();
+  projectUpgradeLevelsToHost(bridge);
+  applyObjectiveChromeAfterSession(game, savedData);
   if (game.upgradeset && game.tech_tree) game.upgradeset.sanitizeDoctrineUpgradeLevelsOnLoad(game.tech_tree);
   game.syncModifiersFromUpgrades({ skipGrid: true });
   game.reactor.updateStats();
@@ -306,7 +312,7 @@ export class GameSaveManager {
   async getSaveState() {
     const ctx = this.getSaveContext();
     ctx.onBeforeSave?.();
-    const stateSnap = ctx.state ? snapshot(ctx.state) : null;
+    const state = ctx.state;
     const reactorState = typeof ctx.reactor?.toSaveState === "function" ? ctx.reactor.toSaveState() : {
       current_heat: ctx.reactor.current_heat,
       current_power: ctx.reactor.current_power,
@@ -318,15 +324,20 @@ export class GameSaveManager {
     };
     const tileState = typeof ctx.tileset?.toSaveState === "function"
       ? ctx.tileset.toSaveState()
-      : ctx.tileset.active_tiles_list
-        .filter((tile) => tile.part)
-        .map((tile) => ({
-          row: tile.row,
-          col: tile.col,
-          partId: tile.part.id,
-          ticks: tile.ticks,
-          heat_contained: tile.heat_contained,
-        }));
+      : (() => {
+          const grid = ctx.coreBridge?.session?.grid;
+          return ctx.tileset.active_tiles_list
+            .filter((tile) => tile.part)
+            .map((tile) => ({
+              row: tile.row,
+              col: tile.col,
+              partId: tile.part.id,
+              ticks: grid?.getComponentAt?.(tile.row, tile.col)?.ticks ?? tile.ticks,
+              heat_contained: grid
+                ? grid.getTileHeat(tile.row, tile.col)
+                : tile.heat_contained,
+            }));
+        })();
     const upgradeState = typeof ctx.upgradeset?.toSaveState === "function"
       ? ctx.upgradeset.toSaveState()
       : ctx.upgradeset.upgradesArray
@@ -350,14 +361,14 @@ export class GameSaveManager {
       version: ctx.version,
       run_id: ctx.run_id,
       tech_tree: ctx.tech_tree,
-      current_money: stateSnap?.current_money ?? ctx.state?.current_money,
+      current_money: state?.current_money,
       protium_particles: ctx.protium_particles,
       total_exotic_particles: ctx.total_exotic_particles,
       exotic_particles: ctx.exotic_particles,
       current_exotic_particles: ctx.current_exotic_particles,
-      session_power_produced: stateSnap?.session_power_produced ?? ctx.state?.session_power_produced,
-      session_power_sold: stateSnap?.session_power_sold ?? ctx.state?.session_power_sold,
-      session_heat_dissipated: stateSnap?.session_heat_dissipated ?? ctx.state?.session_heat_dissipated,
+      session_power_produced: state?.session_power_produced,
+      session_power_sold: state?.session_power_sold,
+      session_heat_dissipated: state?.session_heat_dissipated,
       rows: ctx.rows,
       cols: ctx.cols,
       sold_power: ctx.sold_power,
@@ -370,29 +381,14 @@ export class GameSaveManager {
       tiles: tileState,
       upgrades: upgradeState,
       objectives: buildObjectivesStateForSave(ctx),
-      unlocked_achievements: stateSnap?.unlocked_achievements ?? ctx.state?.unlocked_achievements ?? [],
+      unlocked_achievements: state?.unlocked_achievements ?? [],
       achievements: ctx.coreBridge?.session?.systems?.achievements?.serialize?.()
-        ?? ctx.state?.achievements
-        ?? { unlocked: stateSnap?.unlocked_achievements ?? ctx.state?.unlocked_achievements ?? [] },
+        ?? state?.achievements
+        ?? { unlocked: state?.unlocked_achievements ?? [] },
       toggles: ctx.getToggles?.() ?? {},
       quick_select_slots: ctx.getQuickSelectSlots?.() ?? [],
       ui: {},
     };
-    try {
-      if (typeof indexedDB !== "undefined") {
-        const keysToCheck = ["reactorGameSave", "reactorGameSave_1", "reactorGameSave_2", "reactorGameSave_3"];
-        for (const key of keysToCheck) {
-          const existingSave = await StorageAdapter.get(key);
-          if (existingSave && typeof existingSave === "object" && existingSave.isCloudSynced) {
-            saveData.isCloudSynced = existingSave.isCloudSynced;
-            saveData.cloudUploadedAt = existingSave.cloudUploadedAt;
-            break;
-          }
-        }
-      }
-    } catch (error) {
-      logger.log("warn", "game", "Could not preserve cloud sync flags:", error.message);
-    }
     return saveData;
   }
 

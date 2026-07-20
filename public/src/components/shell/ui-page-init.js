@@ -1,4 +1,4 @@
-import { html } from "lit-html";
+import { html, render } from "lit-html";
 import { logger } from "../../core/logger.js";
 import { safeCall } from "../../core/teardown.js";
 import {
@@ -9,7 +9,9 @@ import {
 } from "./page-dom.js";
 import { mountReactorGridLayoutBinding } from "../grid/ui-grid.js";
 import { bindLitRenderMulti } from "../../dom/lit-reactive.js";
+import { classMap } from "../../dom/lit.js";
 import { pwaState } from "../../store.js";
+import { MODAL_IDS } from "../../constants/modal-ids.js";
 
 function ensureUnmounts(ui) {
   if (!ui._unmounts) ui._unmounts = [];
@@ -32,9 +34,89 @@ export function setPageGridContainer(ui, container) {
   if (ui.gridCanvasRenderer) ui.gridCanvasRenderer.setContainer(container);
 }
 
+function hubKeyForArticle(article) {
+  return article?.dataset?.hubKey
+    || article?.querySelector("h2[data-section-name]")?.getAttribute("data-section-name")
+    || article?.id
+    || null;
+}
+
+function findHubArticle(key) {
+  return [...document.querySelectorAll("[data-hub-key]")].find((el) => el.dataset.hubKey === key) ?? null;
+}
+
+function hubArticleClassMap(key, collapsed) {
+  const isResearch = key === "reboot_section" || key === "doctrine_tree_viewer";
+  const isDoctrine = key === "doctrine_tree_viewer";
+  return {
+    "upgrade-section-hub": !isResearch,
+    "upgrade-hub-collapsible": !isResearch,
+    "research-collapsible": isResearch,
+    "doctrine-tree-viewer": isDoctrine,
+    "section-collapsed": collapsed,
+    hidden: isDoctrine,
+  };
+}
+
+function projectHubCollapsedFromMarkers(ui, host) {
+  host.querySelectorAll("[data-hub-proj]").forEach((marker) => {
+    const key = marker.getAttribute("data-hub-proj");
+    const article = findHubArticle(key);
+    if (!article) return;
+    article.setAttribute("class", marker.getAttribute("class") || "");
+    article.dataset.hubKey = key;
+    if (key === "reboot_section" || key === "doctrine_tree_viewer") article.id = key;
+    const header = article.querySelector(".upgrade-section-header, .research-section-header");
+    header?.setAttribute("aria-expanded", String(!ui.uiState.hub_collapsed[key]));
+  });
+}
+
+function hubCollapsedTemplate(ui) {
+  const map = ui.uiState.hub_collapsed || {};
+  return html`${Object.keys(map).map((key) => html`<i data-hub-proj=${key} class=${classMap(hubArticleClassMap(key, !!map[key]))}></i>`)}`;
+}
+
+function mountHubCollapsedProjection(ui) {
+  if (ui._hubCollapsedProjectionMounted || !ui?.uiState) return;
+  let host = document.getElementById("hub_collapsed_lit_host");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "hub_collapsed_lit_host";
+    host.hidden = true;
+    document.body.appendChild(host);
+  }
+  ui._hubCollapsedProjectionMounted = true;
+  ui._hubCollapsedLitHost = host;
+  const unmount = bindLitRenderMulti(
+    [{ state: ui.uiState, keys: ["hub_collapsed"] }],
+    () => hubCollapsedTemplate(ui),
+    host,
+    () => projectHubCollapsedFromMarkers(ui, host)
+  );
+  if (typeof unmount === "function") ensureUnmounts(ui).push(unmount);
+}
+
+function setHubCollapsed(ui, key, collapsed, { accordionWrapper = null } = {}) {
+  if (!ui?.uiState || !key) return;
+  const next = { ...ui.uiState.hub_collapsed, [key]: collapsed };
+  if (!collapsed && accordionWrapper) {
+    accordionWrapper.querySelectorAll("[data-hub-key]").forEach((other) => {
+      const otherKey = hubKeyForArticle(other);
+      if (otherKey && otherKey !== key) next[otherKey] = true;
+    });
+  }
+  ui.uiState.hub_collapsed = next;
+  const host = ui._hubCollapsedLitHost || document.getElementById("hub_collapsed_lit_host");
+  if (host) {
+    render(hubCollapsedTemplate(ui), host);
+    projectHubCollapsedFromMarkers(ui, host);
+  }
+}
+
 export function setupUpgradeHubCollapsibleSections(ui) {
   if (ui._upgradeHubCollapsibleSetup) return;
   ui._upgradeHubCollapsibleSetup = true;
+  mountHubCollapsedProjection(ui);
   const ac = new AbortController();
   const { signal } = ac;
   trackAbortController(ui, ac);
@@ -47,16 +129,9 @@ export function setupUpgradeHubCollapsibleSections(ui) {
       const article = header.closest(".upgrade-hub-collapsible");
       if (!article) return;
       e.preventDefault();
-      const collapsed = article.classList.toggle("section-collapsed");
-      header.setAttribute("aria-expanded", String(!collapsed));
-      const accordionWrapper = article.closest("[data-hub-accordion]");
-      if (!collapsed && accordionWrapper) {
-        accordionWrapper.querySelectorAll(".upgrade-hub-collapsible").forEach((other) => {
-          if (other === article) return;
-          other.classList.add("section-collapsed");
-          other.querySelector(".upgrade-section-header")?.setAttribute("aria-expanded", "false");
-        });
-      }
+      const key = hubKeyForArticle(article);
+      const collapsed = !(ui.uiState.hub_collapsed[key]);
+      setHubCollapsed(ui, key, collapsed, { accordionWrapper: article.closest("[data-hub-accordion]") });
     }, { signal });
     section.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
@@ -91,22 +166,27 @@ export function setupAboutScrollHint(ui) {
 function autoExpandAffordableHubSections(ui, wrapperId) {
   const wrapper = document.getElementById(wrapperId);
   const counts = ui?.uiState?.section_counts;
-  if (!wrapper || !counts) return;
-  wrapper.querySelectorAll(".upgrade-hub-collapsible.section-collapsed h2[data-section-name]").forEach((header) => {
+  if (!wrapper || !counts || !ui.uiState) return;
+  const next = { ...ui.uiState.hub_collapsed };
+  let changed = false;
+  wrapper.querySelectorAll(".upgrade-hub-collapsible[data-hub-key] h2[data-section-name]").forEach((header) => {
     const sectionName = header.getAttribute("data-section-name");
-    if ((counts[sectionName]?.affordable ?? 0) > 0) {
-      const article = header.closest(".upgrade-hub-collapsible");
-      article?.classList.remove("section-collapsed");
-      header.setAttribute("aria-expanded", "true");
+    const key = hubKeyForArticle(header.closest(".upgrade-hub-collapsible"));
+    if (!key) return;
+    if ((counts[sectionName]?.affordable ?? 0) > 0 && next[key]) {
+      next[key] = false;
+      changed = true;
     }
   });
+  if (changed) ui.uiState.hub_collapsed = next;
 }
 
 export function setupResearchCollapsibleSections(ui) {
-  if (ui._researchCollapsibleSetup) return;
-  ui._researchCollapsibleSetup = true;
   const section = document.getElementById("experimental_upgrades_section");
   if (!section) return;
+  mountHubCollapsedProjection(ui);
+  if (ui._researchCollapsibleSetup) return;
+  ui._researchCollapsibleSetup = true;
   const ac = new AbortController();
   const { signal } = ac;
   trackAbortController(ui, ac);
@@ -116,8 +196,8 @@ export function setupResearchCollapsibleSections(ui) {
     const article = header.closest(".research-collapsible");
     if (!article) return;
     e.preventDefault();
-    const collapsed = article.classList.toggle("section-collapsed");
-    header.setAttribute("aria-expanded", String(!collapsed));
+    const key = hubKeyForArticle(article);
+    setHubCollapsed(ui, key, !(ui.uiState.hub_collapsed[key]));
   }, { signal });
   section.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
@@ -143,13 +223,13 @@ export function setupResearchCollapsibleSections(ui) {
         e.preventDefault();
         e.stopPropagation();
       } else {
-        orchestrator?.showPrestigeModal?.("refund");
+        orchestrator?.showModal?.(MODAL_IDS.PRESTIGE, { mode: "refund" });
       }
     }, { signal });
   }
   if (refundBtn) {
     refundBtn.addEventListener("click", () => {
-      orchestrator?.showPrestigeModal?.("prestige");
+      orchestrator?.showModal?.(MODAL_IDS.PRESTIGE, { mode: "prestige" });
     }, { signal });
   }
 }

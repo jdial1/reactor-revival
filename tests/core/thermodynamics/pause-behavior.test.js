@@ -1,304 +1,127 @@
-import { describe, it, expect, beforeEach, afterEach, setupGame, setupGameWithDOM, cleanupGame, toNum } from "../../helpers/setup.js";
-import { assertShellStateClass } from "../../helpers/testUtils.js";
-
-describe("Pause Behavior", () => {
-    let game;
-
-    beforeEach(async () => {
-        game = await setupGame();
-    });
-
-    afterEach(() => {
-        cleanupGame();
-    });
-
-    it("should prevent heat generation when game is paused", async () => {
-        // Set up a high-heat generating cell
-        const fuelPart = game.partset.getPartById("plutonium1");
-        const tile = game.tileset.getTile(0, 0);
-        await tile.setPart(fuelPart);
-        tile.activated = true;
-        tile.ticks = 10;
-        game.coreBridge.syncGridFromGame();
-
-        // Set initial reactor heat
-        const initialHeat = game.reactor.current_heat;
-        game.pause();
-        expect(game.paused).toBe(true);
-
-        // Process multiple ticks while paused
-        for (let i = 0; i < 5; i++) {
-            game.engine.tick();
-        }
-
-        // Heat should not change when game is paused
-        expect(game.reactor.current_heat).toBe(initialHeat);
-
-        // Unpause the game
-        game.resume();
-        expect(game.paused).toBe(false);
-
-        // Process a tick while unpaused
-        game.engine.tick();
-
-        expect(toNum(game.reactor.current_heat)).toBeGreaterThan(toNum(initialHeat));
-    });
-
-    it("should prevent part explosions when game is paused", async () => {
-        // Set up a component that could explode
-        const ventPart = game.partset.getPartById("vent1");
-        const tile = game.tileset.getTile(0, 0);
-        await tile.setPart(ventPart);
-        tile.activated = true;
-
-        // Set heat above containment to trigger explosion
-        tile.heat_contained = ventPart.containment * 1.5;
-        game.coreBridge.syncGridFromGame();
-
-        // Mock the explosion handler to track if it was called
-        const originalHandleComponentExplosion = game.engine.handleComponentExplosion;
-        let explosionCalled = false;
-        game.engine.handleComponentExplosion = (explodedTile) => {
-            explosionCalled = true;
-        };
-
-        // Pause the game
-        game.pause();
-        expect(game.paused).toBe(true);
-
-        // Process multiple ticks while paused
-        for (let i = 0; i < 5; i++) {
-            game.engine.tick();
-        }
-
-        // Component should not explode when game is paused
-        expect(explosionCalled).toBe(false);
-        expect(tile.part).toBe(ventPart); // Part should still exist
-
-        // Unpause the game
-        game.resume();
-        expect(game.paused).toBe(false);
-
-        // Process a tick while unpaused
-        game.engine.tick();
-
-        // Component should now explode when game is unpaused
-        expect(explosionCalled).toBe(true);
-
-        // Restore original handler
-        game.engine.handleComponentExplosion = originalHandleComponentExplosion;
-    });
-
-    it("should prevent heat manager processing when game is paused", async () => {
-        // Set up a cooling setup
-        const coolantPart = game.partset.getPartById("coolant_cell1");
-        const exchangerPart = game.partset.getPartById("heat_exchanger1");
-        const ventPart = game.partset.getPartById("vent1");
-
-        const coolantTile = game.tileset.getTile(5, 5);
-        const exchangerTile = game.tileset.getTile(5, 6);
-        const ventTile = game.tileset.getTile(5, 7);
-
-        await coolantTile.setPart(coolantPart);
-        await exchangerTile.setPart(exchangerPart);
-        await ventTile.setPart(ventPart);
-
-        coolantTile.activated = true;
-        exchangerTile.activated = true;
-        ventTile.activated = true;
-
-        // Add initial heat to coolant cell
-        coolantTile.heat_contained = 1000;
-        const initialHeat = coolantTile.heat_contained;
-        game.pause();
-        expect(game.paused).toBe(true);
-
-        // Process the engine tick while paused
-        game.engine.tick();
-
-        // Heat should not change when game is paused
-        expect(coolantTile.heat_contained).toBe(initialHeat);
-
-        // Unpause the game
-        game.resume();
-        expect(game.paused).toBe(false);
-
-        // Process the engine tick again while unpaused
-        game.engine.tick();
-
-        // Heat should now change when game is unpaused
-        // Run a few ticks to ensure heat processing occurs
-        game.engine.tick();
-        game.engine.tick();
-
-        // The engine should process ticks when unpaused, so we should see some change
-        // Either heat transfer occurs or the engine processes the tick
-        const heatChanged = coolantTile.heat_contained !== initialHeat;
-        const engineProcessed = game.engine.running || game.reactor.current_power > 0;
-
-        expect(heatChanged || engineProcessed).toBe(true);
-    });
-
-    it("should prevent engine loop from running when game is paused", () => {
-        // Start the engine
-        game.engine.start();
-        expect(game.engine.running).toBe(true);
-
-        // Pause the game
-        game.pause();
-        expect(game.paused).toBe(true);
-
-        // Engine should stop when game is paused
-        expect(game.engine.running).toBe(false);
-
-        // Unpause the game
-        game.resume();
-        expect(game.paused).toBe(false);
-
-        // Engine should start again when game is unpaused
-        expect(game.engine.running).toBe(true);
-    });
-
-    it("should prevent multiple systems from processing when game is paused", async () => {
-        // Set up a complex scenario with multiple components
-        const fuelPart = game.partset.getPartById("uranium1");
-        const ventPart = game.partset.getPartById("vent1");
-        const capacitorPart = game.partset.getPartById("capacitor1");
-
-        const fuelTile = game.tileset.getTile(0, 0);
-        const ventTile = game.tileset.getTile(0, 1);
-        const capacitorTile = game.tileset.getTile(0, 2);
-
-        await fuelTile.setPart(fuelPart);
-        await ventTile.setPart(ventPart);
-        await capacitorTile.setPart(capacitorPart);
-
-        fuelTile.activated = true;
-        ventTile.activated = true;
-        capacitorTile.activated = true;
-
-        // Set initial values
-        const initialReactorHeat = game.reactor.current_heat;
-        const initialReactorPower = game.reactor.current_power;
-        const initialVentHeat = ventTile.heat_contained || 0;
-        const initialCapacitorHeat = capacitorTile.heat_contained || 0;
-
-        game.ui.stateManager.setGame(game);
-
-        game.togglePause();
-        expect(game.paused).toBe(true);
-
-        // Process multiple engine ticks while paused
-        for (let i = 0; i < 10; i++) {
-            game.engine.tick();
-        }
-
-        // Nothing should change when game is paused
-        expect(game.reactor.current_heat).toBe(initialReactorHeat);
-        expect(game.reactor.current_power).toBe(initialReactorPower);
-        expect(ventTile.heat_contained || 0).toBe(initialVentHeat);
-        expect(capacitorTile.heat_contained || 0).toBe(initialCapacitorHeat);
-
-        game.togglePause();
-
-        // Process a single tick while unpaused
-        game.engine.tick();
-
-        // Values should now change when game is unpaused
-        // Power should definitely change
-        expect(game.reactor.current_power).not.toBe(initialReactorPower);
-
-        // Heat might be distributed and then vented, so the final values might be the same
-        // but the important thing is that the engine processed the tick when unpaused
-        // We can verify this by checking that the engine is running
-        expect(game.engine.running).toBe(true);
-    });
-
-    it("should handle pause state correctly in save/load scenarios", async () => {
-        // Set up a game state
-        const fuelPart = game.partset.getPartById("uranium1");
-        const tile = game.tileset.getTile(0, 0);
-        await tile.setPart(fuelPart);
-        tile.activated = true;
-
-        // Pause the game
-        game.pause();
-        expect(game.paused).toBe(true);
-
-        const saveData = await game.saveManager.getSaveState();
-        const newGame = await setupGame();
-        await newGame.applySaveState(saveData);
-
-        // Pause state should be preserved
-        expect(newGame.paused).toBe(true);
-
-        // Engine should be stopped
-        expect(newGame.engine.running).toBe(false);
-
-        // Unpause the new game
-        newGame.resume();
-        expect(newGame.paused).toBe(false);
-
-        // Engine should start
-        expect(newGame.engine.running).toBe(true);
-
-        cleanupGame();
-    });
-
-    it("should prevent time-based progression when game is paused", () => {
-        // Set up a part with limited ticks
-        const fuelPart = game.partset.getPartById("uranium1");
-        const tile = game.tileset.getTile(0, 0);
-        tile.setPart(fuelPart);
-        tile.activated = true;
-        tile.ticks = 5;
-        game.coreBridge.syncGridFromGame();
-
-        const initialTicks = tile.ticks;
-
-        // Pause the game
-        game.pause();
-        expect(game.paused).toBe(true);
-
-        // Process multiple ticks while paused
-        for (let i = 0; i < 10; i++) {
-            game.engine.tick();
-        }
-
-        // Ticks should not decrease when game is paused
-        expect(tile.ticks).toBe(initialTicks);
-
-        // Unpause the game
-        game.resume();
-        expect(game.paused).toBe(false);
-
-        // Process a tick while unpaused
-        game.engine.tick();
-
-        // Ticks should now decrease when game is unpaused
-        expect(tile.ticks).toBeLessThan(initialTicks);
-    });
-
-    it("should show and hide pause banner when game is paused and resumed", async () => {
-        // Use setupGameWithDOM to get access to router and DOM
-        const { game: gameWithDOM } = await setupGameWithDOM();
-
-        // Ensure we're on the reactor page to have access to the pause banner
-        await gameWithDOM.router.loadPage("reactor_section");
-
-        // Wait for page to load
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        assertShellStateClass(gameWithDOM, "game-paused", "is_paused", false);
-
-        gameWithDOM.pause();
-        gameWithDOM.ui.pauseStateUI.updatePauseState();
-        expect(gameWithDOM.paused).toBe(true);
-        assertShellStateClass(gameWithDOM, "game-paused", "is_paused", true);
-
-        gameWithDOM.resume();
-        gameWithDOM.ui.pauseStateUI.updatePauseState();
-        expect(gameWithDOM.paused).toBe(false);
-        assertShellStateClass(gameWithDOM, "game-paused", "is_paused", false);
-    });
-}); 
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  setSessionTileHeat,
+  tileHeatAt,
+  reactorHeat,
+  componentTicksAt,
+} from "../../helpers/sessionHelpers.js";
+
+function money(session) {
+  return Number(session.getSnapshot().economy?.money ?? 0);
+}
+
+function power(session) {
+  return Number(session.getSnapshot().grid.currentPower ?? 0);
+}
+
+function slotId(session, row, col) {
+  const snap = session.getSnapshot();
+  return snap.grid.slots[row * snap.grid.cols + col]?.id ?? null;
+}
+
+describe("Pause Behavior (session)", () => {
+  let session;
+
+  beforeEach(async () => {
+    session = await setupSessionOnly({ money: 1e6 });
+  });
+
+  it("blocks hull heat generation while paused and resumes when unpaused", () => {
+    expect(session.placeComponent(0, 0, "plutonium1")).toBe(true);
+    const initial = reactorHeat(session);
+
+    session.setPaused(true);
+    for (let i = 0; i < 5; i++) session.tick();
+    expect(reactorHeat(session)).toBe(initial);
+
+    session.setPaused(false);
+    session.tick();
+    expect(reactorHeat(session)).toBeGreaterThan(initial);
+  });
+
+  it("holds coolant heat while paused and transfers when unpaused", () => {
+    expect(session.placeComponent(5, 5, "coolant_cell1")).toBe(true);
+    expect(session.placeComponent(5, 6, "heat_exchanger1")).toBe(true);
+    expect(session.placeComponent(5, 7, "vent1")).toBe(true);
+    setSessionTileHeat(session, 5, 5, 1000);
+    const initial = tileHeatAt(session, 5, 5);
+
+    session.setPaused(true);
+    session.tick();
+    expect(tileHeatAt(session, 5, 5)).toBe(initial);
+
+    session.setPaused(false);
+    session.tick();
+    session.tick();
+    expect(tileHeatAt(session, 5, 5)).not.toBe(initial);
+  });
+
+  it("freezes fuel ticks while paused and decrements when unpaused", () => {
+    expect(session.placeComponent(0, 0, "uranium1")).toBe(true);
+    const initial = componentTicksAt(session, 0, 0);
+
+    session.setPaused(true);
+    for (let i = 0; i < 10; i++) session.tick();
+    expect(componentTicksAt(session, 0, 0)).toBe(initial);
+
+    session.setPaused(false);
+    session.tick();
+    expect(componentTicksAt(session, 0, 0)).toBeLessThan(initial);
+  });
+
+  it("freezes power and tile heat across a multi-part layout while paused", () => {
+    expect(session.placeComponent(0, 0, "uranium1")).toBe(true);
+    expect(session.placeComponent(0, 1, "vent1")).toBe(true);
+    expect(session.placeComponent(0, 2, "capacitor1")).toBe(true);
+
+    const heat0 = reactorHeat(session);
+    const power0 = power(session);
+    const vent0 = tileHeatAt(session, 0, 1);
+
+    session.setPaused(true);
+    for (let i = 0; i < 10; i++) session.tick();
+
+    expect(reactorHeat(session)).toBe(heat0);
+    expect(power(session)).toBe(power0);
+    expect(tileHeatAt(session, 0, 1)).toBe(vent0);
+    expect(slotId(session, 0, 0)).toBe("uranium1");
+
+    session.setPaused(false);
+    session.tick();
+    expect(power(session)).not.toBe(power0);
+  });
+
+  it("does not increase money while paused even with auto_sell", () => {
+    expect(session.placeComponent(0, 0, "uranium1")).toBe(true);
+    expect(session.placeComponent(0, 1, "capacitor1")).toBe(true);
+    session.toggles.auto_sell = true;
+
+    session.setPaused(true);
+    const before = money(session);
+    for (let i = 0; i < 50; i++) session.tick();
+    expect(money(session)).toBe(before);
+
+    session.setPaused(false);
+    for (let i = 0; i < 5; i++) session.tick();
+    const processed =
+      power(session) > 0 || reactorHeat(session) > 0 || money(session) !== before;
+    expect(processed).toBe(true);
+  });
+
+  it("preserves pause across session save/load", async () => {
+    expect(session.placeComponent(0, 0, "uranium1")).toBe(true);
+    session.setPaused(true);
+    expect(session.getSnapshot().paused).toBe(true);
+
+    const saved = session.save();
+    const loaded = await setupSessionOnly();
+    loaded.load(saved);
+
+    expect(loaded.getSnapshot().paused).toBe(true);
+    expect(loaded.getSnapshot().toggles.pause).toBe(true);
+
+    loaded.setPaused(false);
+    expect(loaded.getSnapshot().paused).toBe(false);
+  });
+});

@@ -1,5 +1,6 @@
 import { MOBILE_BREAKPOINT_PX, RESIZE_DELAY_MS } from "../constants/ui-constants.js";
 import { toNumber } from "../simUtils.js";
+import { refreshPartsFromSession } from "../domain/part.js";
 
 export function syncHostSellOverridesToSession(bridge) {
   if (!bridge.session || !bridge.game?.reactor) return;
@@ -62,6 +63,7 @@ export function applyComputedModifiers(game, opts = {}) {
   if (!m) return;
   const r = game.reactor;
   r.sessionModifiers = m;
+  refreshPartsFromSession(game.partset);
   if (!skipGrid) {
     const rowsChanged = game.rows !== m.gridRows;
     const colsChanged = game.cols !== m.gridCols;
@@ -77,24 +79,15 @@ export function applyComputedModifiers(game, opts = {}) {
     }
   }
 
-  const directKeys = [
-    "heat_power_multiplier", "heat_outlet_controlled", "transfer_plating_multiplier",
-    "transfer_capacitor_multiplier", "vent_plating_multiplier", "vent_capacitor_multiplier",
-    "stirling_multiplier", "manual_vent_percent", "perpetual_capacitors", "perpetual_reflectors",
-    "manual_override_mult", "convective_boost", "power_to_heat_ratio", "catalyst_reduction",
-    "thermal_feedback_rate", "volatile_tuning_max", "plating_heat_bonus", "reflector_cooling_factor",
-  ];
-  for (let i = 0; i < directKeys.length; i++) {
-    const k = directKeys[i];
-    if (typeof m[k] !== "undefined") r[k] = m[k];
-  }
   r.heat_controlled = m.heat_controlled;
   if (typeof m.auto_sell_percent === "number" && m.auto_sell_percent > 0) {
     r.auto_sell_multiplier = m.auto_sell_percent / 100;
   }
   r.manual_heat_reduce = m.manual_heat_reduce;
-  if (game.state) game.state.manual_heat_reduce = toNumber(m.manual_heat_reduce);
-  game.emit?.("statePatch", { manual_heat_reduce: m.manual_heat_reduce });
+  if (game.state) {
+    game.state.manual_heat_reduce = toNumber(m.manual_heat_reduce);
+    game.state.auto_sell_multiplier = toNumber(r.auto_sell_multiplier ?? 0);
+  }
 
   if (!!game.state?.auto_sell !== m.auto_sell_from_upgrade) {
     game.onToggleStateChange?.("auto_sell", m.auto_sell_from_upgrade);
@@ -103,11 +96,4 @@ export function applyComputedModifiers(game, opts = {}) {
     game.onToggleStateChange?.("auto_buy", m.auto_buy_from_upgrade);
   }
   game.onToggleStateChange?.("heat_control", m.heat_controlled);
-
-  const pa = game.partset?.partsArray;
-  if (pa) {
-    for (let i = 0; i < pa.length; i++) {
-      pa[i].recalculate_stats?.();
-    }
-  }
 }

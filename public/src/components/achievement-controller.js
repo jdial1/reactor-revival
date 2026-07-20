@@ -1,10 +1,9 @@
 import { html, render } from "lit-html";
 import { preferences } from "../state/preferences.js";
-import { enqueueGameEffect } from "../state/game-effects.js";
+import { enqueueAndDrain } from "../state/game-effects-flush.js";
 import { safeCall } from "../core/teardown.js";
-
-const TOAST_HOLD_MS = 4000;
-const TOAST_ANIM_OUT_MS = 320;
+import { ACHIEVEMENT_TOAST_HOLD_MS, ACHIEVEMENT_TOAST_ANIM_OUT_MS } from "../constants/ui-timing.js";
+import { getUiElement } from "./shell/page-dom.js";
 
 const GROUP_AUDIO = {
   hazard: "tab_relay_thud",
@@ -53,7 +52,8 @@ export class AchievementController {
   }
 
   mount() {
-    this._root = typeof document !== "undefined" ? document.getElementById("achievement_toast_root") : null;
+    this.unmount();
+    this._root = getUiElement(null, "achievement_toast_root");
     const game = this.api.getGame?.();
     if (!game?.on) return;
     const onSummary = (payload) => this._enqueueSummary(payload?.count ?? 0);
@@ -99,7 +99,7 @@ export class AchievementController {
     if (!game) return;
     const id = GROUP_AUDIO[group];
     if (!id) return;
-    enqueueGameEffect(game, { kind: "sfx", id, context: "global", vol: 0.55 });
+    enqueueAndDrain(game, { kind: "sfx", id, context: "global", vol: 0.55 });
   }
 
   _showAchievement(achievement) {
@@ -107,28 +107,31 @@ export class AchievementController {
     const host = document.createElement("div");
     host.className = reduced ? "achievement-toast-host achievement-toast-host--reduced" : "achievement-toast-host";
     this._root.appendChild(host);
+    const group = achievement.group;
     render(
       achievementToastTemplate({
         title: achievement.title,
         description: achievement.description,
-        group: achievement.group,
+        group,
         icon: achievement.icon,
       }),
       host,
     );
-    const panel = host.querySelector(".achievement-toast");
+    const panel = host.firstElementChild;
     if (panel && !reduced) {
-      panel.classList.add(`achievement-toast--animate-in`);
+      panel.className = `achievement-toast achievement-toast--${group} achievement-toast--animate-in`;
     }
-    this._playGroupAudio(achievement.group);
+    this._playGroupAudio(group);
     setTimeout(() => {
-      if (panel) panel.classList.add("achievement-toast--animate-out");
+      if (panel) {
+        panel.className = `achievement-toast achievement-toast--${group} achievement-toast--animate-out`;
+      }
       setTimeout(() => {
         host.remove();
         this._showing = false;
         this._drain();
-      }, TOAST_ANIM_OUT_MS);
-    }, TOAST_HOLD_MS);
+      }, ACHIEVEMENT_TOAST_ANIM_OUT_MS);
+    }, ACHIEVEMENT_TOAST_HOLD_MS);
   }
 
   _showSummary(count) {
@@ -137,13 +140,15 @@ export class AchievementController {
     this._root.appendChild(host);
     render(achievementSummaryToastTemplate(count), host);
     setTimeout(() => {
-      const panel = host.querySelector(".achievement-toast");
-      if (panel) panel.classList.add("achievement-toast--animate-out");
+      const panel = host.firstElementChild;
+      if (panel) {
+        panel.className = `${panel.className} achievement-toast--animate-out`.trim();
+      }
       setTimeout(() => {
         host.remove();
         this._showing = false;
         this._drain();
-      }, TOAST_ANIM_OUT_MS);
-    }, TOAST_HOLD_MS);
+      }, ACHIEVEMENT_TOAST_ANIM_OUT_MS);
+    }, ACHIEVEMENT_TOAST_HOLD_MS);
   }
 }

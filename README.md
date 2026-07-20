@@ -40,7 +40,8 @@ No assets or code from IndustrialCraft² or Reactor Incremental are used in this
 Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm install`** then **`npm run dev`** to serve `public/` locally.
 
 - **`npm run build:sw`** — Workbox injects the precache manifest from `config/src-sw.js` into `public/sw.js`.
-- **Tests** — `npm test` (lint + syntax + Vitest). Playwright e2e is separate: `npm run test:e2e` (`e2e/`). See `tests/README.md`.
+- **Tests** — `npm test` (lint + syntax + Vitest) is the sole merge/release gate. `npm run test:deploy` is an optional fast subset only. Playwright e2e is separate: `npm run test:e2e` (`e2e/`). See `tests/README.md`.
+- **Version** — `package.json` `"1.0.0"` is aspirational until a real `v1.0.0` tag (see `docs/reactor-core-lib-missing-features.txt`).
 - **`scripts/`** — `build/` (serve, copy-libs, generate/bundle), `qa/` (test/lint/pwa/debt), `ui-audit/` (screenshots/console). See `package.json` `scripts`.
 
 ### Repository layout
@@ -48,21 +49,18 @@ Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm 
 - **`public/`** — Ship root: HTML, CSS, assets, `manifest.json`, `public/src/` app modules.
 - **`public/data/`** — Host-facing JSON (objectives, help, changelog, splash counts, etc.). Bundled into `public/src/generated/bundledStaticData.js`.
 - **`game-data/reactor_revival/`** — Lib-shaped catalog overlay (`parts.json`, `upgrades.json`, …) copied into `public/lib/reactor-core/games/` by `copy-libs`. Not the host UI data dir.
-- **`config/src-sw.js`** — Service worker source. Do not edit `public/sw.js` by hand.
+- **`config/src-sw.js`** — Service worker source. `public/sw.js` is generated (`npm run build:sw`) and gitignored.
 - **`config/`** — ESLint, Vitest, Workbox, Stylelint, SW source.
 - **`tests/`** — Vitest (unit/integration/UI-in-jsdom). **`e2e/`** — Playwright browser flows.
 - **`docs/`** — Design notes and lib cutover notes.
 
 ### Splash backgrounds
 
-Both sets are live, selected by `USE_STALENHAG_BG` in `public/index.html`:
-
-- `public/img/misc/stalenhag_bg/` — primary when the flag is on
-- `public/img/misc/backgrounds/splash_bg*.webp` — fallback set
+`public/img/misc/stalenhag_bg/` — carousel set wired from `public/index.html` (`--splash-bg-url`).
 
 ```
 repo:   config/, scripts/{build,qa,ui-audit}/, tests/, e2e/, game-data/, docs/
-ship:   public/  (index.html, sw.js, src/, data/, css/, img/, fonts/)
+ship:   public/  (index.html, src/, data/, css/, img/, fonts/; sw.js + lib/ from build)
 ```
 
 ---

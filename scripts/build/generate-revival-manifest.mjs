@@ -146,7 +146,7 @@ const manifest = {
   name: "Reactor Revival",
   description: "Canonical Reactor Revival game definition.",
   version: "2.0.0",
-  saveVersion: 2,
+  saveVersion: 3,
   tickRate: 1000,
   tickRateMs: 1000,
   tickRateUpgradable: true,

@@ -1,7 +1,7 @@
 ================================================================================
 reactor-core-lib — missing / incomplete features (host cutover leftovers)
 ================================================================================
-Date: 2026-07-17 (ownership inversion pass)
+Date: 2026-07-18 (reductive 1.0 roadmap — hardened binary exits)
 Host: reactor-revival
 Lib version in use: reactor-core-lib@1.2.12 (npm)
 Import alias: "reactor-core"
@@ -12,19 +12,1704 @@ PURPOSE
 Host is a UI wrapper + bridge + test suite. Simulation lives in reactor-core-lib.
 Bridge is mandatory (inactive paths throw).
 
+Authority cutover (physics ownership) is DONE. Remaining path to public 1.0 is
+REDUCTIVE only: refine, delete, consolidate, and polish — do not add gameplay
+systems, modes, parts, upgrades, or parallel architectures.
 
-HOST BRIDGE SURFACE
--------------------
-  revival-session-bridge.js   — facade (tick / dispatch / prestige / reboot /
-                                respecDoctrine / hardReset)
-  core-state-projection.js    — snapshot → host state/tiles
-  bridge-grid-sync.js         — layout hydrate on diverge; runtime host→session
-                                OFF by default (project out after tick/ops)
-  bridge-upgrades.js          — levels + affordance projection
-  bridge-mechanics.js         — narrow sell overrides + session→host modifiers
-  bridge-intents.js           — UI → session ops
-  bridge-heat.js              — heat segment/flow (read-only)
-  route-session-events.js     — events → FX/UI
+HARD LAWS (close loopholes — soft exits are forbidden):
+  1. Unidirectional: UI → lib Command → bridge.dispatch → session → snapshot → UI.
+     No production host→session stomps (preserveHostScalars defaults, etc.).
+  2. Dumb data: host projection payloads are methodless POJOs. Display logic
+     is pure functions in the UI layer — not class wrappers with helpers.
+  3. Dumb bridge: dispatch(intent) ≈ session.execute(intent) — zero translation
+     switch/case middleware. UI builds exact lib Command payloads. No facade zoo.
+  4. No game mirror in Valtio: valtio holds UI ephemeral state only (tabs, modals,
+     prefs). Money/heat/grid/levels render from bridge snapshot/observer — never
+     mirrored into host state proxies.
+  5. Harness isolation: sync helpers for tests must be physically unloadable
+     from the production bundle.
+  6. Soak is CI: S1–S8 are Playwright e2e specs — manual checkbox is not an exit.
+  7. Binary exits: each Step exit is a pass/fail invariant, not "shrinking",
+     "readable", or "clean enough".
+  8. QW list FROZEN: no new Quick Wins; PRs must hit Trust Spine (G3–G6).
+
+Doc authority for release intent: THIS FILE wins when other docs lag.
+  design-foundations.md / architecture-rules.md / core_principles.txt still
+  describe product identity, laws, and physics vocabulary — keep those.
+  Their "worker kernel / dual-physics / mid-cutover" implementation maps are
+  historical; do not plan 1.0 work from push-candidates or §6 paths that
+  contradict DONE sections below.
+
+
+================================================================================
+PUBLIC 1.0 — WHAT IT SHOULD LOOK LIKE (definition of done)
+================================================================================
+Dated: 2026-07-18. This is the product + engineering picture of a tagged
+v1.0.0 — not a feature wishlist. TEN PHASES (Steps 1–10) below are the
+execution spine that gets here.
+
+1.0 is a CLEAN SHIP of the game that already exists after authority cutover:
+a browser PWA where reactor-core-lib owns simulation, the host is UI + bridge
++ chrome, and a player can trust boot → play → save → return → prestige
+without dual-path ghosts or "tests green but architecture lies."
+
+
+--------------------------------------------------------------------------------
+A. Player-facing product shape (what "1.0" feels like)
+--------------------------------------------------------------------------------
+Identity (from design-foundations north star — still valid):
+  Trustworthy browser IC2-style reactor sim: spatial adjacency puzzle,
+  deterministic pulse physics, industrial operator fantasy. Theorycrafting
+  and teachability live in-engine — not wiki/spreadsheet dependent.
+
+In a 1.0 build the player can, end-to-end:
+
+  LOOP
+    Place / sell / vent / toggle / buy upgrades via one UI→intent path each.
+    Tick runs; heat/power/meltdown/sell/spend match session authority.
+    Heat overlays, tooltips, and control deck read projected session facts.
+
+  PROGRESSION
+    Chapter objectives teach mechanics; claim/auto-complete via session.
+    Prestige / reboot / doctrine respec work through bridge; EP weave is
+    honest and visible. Achievements are optional chrome, not a second econ.
+
+  THEORYCRAFT
+    Blueprint planner / compare / share codes already ship — they stay.
+    Same session physics sample path; no parallel "planner math."
+
+  PERSISTENCE & RETURN
+    Save v3 + migrations load cleanly; .reactor export/import works.
+    Welcome-Back / offline fast-forward is chunked, risk-aware, and does
+    not clobber mid-flight economy. Meltdown recovers Recovered Blueprint
+    before tile clear (presentation order correct).
+
+  TRUST SURFACE
+    Installable PWA; offline-capable enough for a session; What's New /
+    changelog on version bump; leaderboard optional (not a ship blocker).
+    Critical path usable on desktop + tablet/mobile without broken chrome.
+
+PLAYER SOAK (gated — pass/fail before tag; desktop + one mobile viewport):
+  HARD RULE: S1–S8 must be fully automated in e2e/*.spec.js via Playwright and
+  run on CI. Manual verification is NOT a valid exit for these paths. Map each
+  S-id 1:1 to a named e2e spec (extend engineering.spec.js / hazards.spec.js
+  or add sibling specs). Step 9d / §E fail red if any S-path lacks CI e2e.
+
+  S1 Fresh install → chapter teach through first prestige-relevant objective
+  S2 Place / sell / vent / toggle / buy upgrade once each; deck matches session
+  S3 Save → kill tab → reload → economy + grid + objective index intact
+  S4 Welcome-Back FF → no money/EP clobber; heat risk does not soft-lock
+  S5 Meltdown → Recovered Blueprint before tile clear; resume playable
+  S6 Prestige / reboot / doctrine respec once each; EP weave consistent
+  S7 .reactor export/import round-trip once
+  S8 PWA install + offline enough for a short session
+
+What 1.0 does NOT need to feel like:
+  A content dump, a redesign, a cloud product, or a "complete genre checklist."
+  Partial systems from design-foundations (undo history, deeper achievement
+  catalog, meltdown-before-FF projection polish) are nice — not tag gates.
+  CSS byte contests, knip zero-debt, and full harness rewrites are not tag
+  gates unless listed as hard invariants below.
+
+
+--------------------------------------------------------------------------------
+B. Engineering shape (what the codebase looks like at tag)
+--------------------------------------------------------------------------------
+Architecture (must hold — binary):
+
+  session (reactor-core-lib)  = sole authority for tick, heat, money/EP,
+                                upgrade levels, place/sell/vent, meltdown eval,
+                                objective claim checks
+  bridge                      = dispatch(libCommand) ≈ session.execute — tick +
+                                project-out + hydrate-on-load; no translation zoo
+  host projection             = methodless POJOs from getSnapshot()/project()
+  host UI                     = pure formatters + lit templates rendering snapshot;
+                                valtio = UI ephemeral only (never sim data)
+  host services               = audio, PWA, leaderboard (no sim authority)
+  tests                       = sim → createGameSession / lib state only;
+                                host → projection/UI with mocks; soak → Playwright
+
+Honesty bar at tag (binary):
+
+  - package.json "1.0.0" matches real git tag v1.0.0 from green main
+  - One version story (no Game.version disagreeing with package/tag)
+  - Full `npm test` is sole merge/release gate; CI fails on lint *warnings*
+  - Knip unused-export count does not grow above committed baseline
+  - Zero production calls of harness sync APIs (physically excluded from bundle)
+  - Zero production host→session runtime stomps (preserveHostScalars gone /
+    default false and unused on hot paths; loadEconomyFromHost hydrate-only)
+  - Zero sim fields (money/heat/grid/levels) in valtio proxies
+  - bridge.dispatch is passthrough — no Intent→Command remap switch
+  - Logging via core/logger.js only; ESLint bans console.* in public/src
+  - Deploy: test → css → build:sw → PWA check (NO regex console-strip step)
+  - Playwright e2e covers S1–S8 on CI (manual soak does not count)
+  - Known issues frozen with severity; money/heat/save desync = tag blocker
+  - README launch link and scripts match what ships
+
+Reductive bar (not vanity LOC):
+
+  - Dual systems collapsed to one way per job (scrap inventory + Step 3)
+  - Domain class wrappers deleted or reduced to zero-method data + factories;
+    display = pure UI functions (formatPartForDisplay, etc.)
+  - Bridge public surface = attach + passthrough dispatch + tick/project/hydrate
+  - Valtio for UI state only (tabs, modals, preferences); zero simulation data
+    (grid, economy) mirrored in host state managers
+  - Net-negative *dual paths* preferred over net-negative lines
+  - CSS: orphan selectors deleted; payload size NOT a tag gate
+  - QW list frozen — no hygiene theater PRs during trust spine
+
+"Good enough" vs "perfect" at 1.0:
+
+  KEEP imperfect but honest:
+    Objective/achievement *display* chrome if single-path and non-authoritative
+    Host meltdown presentation / recovered blueprint ordering
+    Lib afford-flag / CLAIM_OBJECTIVE gaps via lib Command + dispatch only
+    main.css / objectives.css large if layouts work (no automate-to-shrink)
+
+  NOT good enough for tag:
+    Authority regressions; save/load broken; dual meltdown/econ evaluators
+    Anemic domain classes with methods pretending to be DTOs
+    Bespoke bridge methods OR switch(intent.type) translation middleware
+    Valtio (or any host store) mirroring money/heat/grid/levels
+    Harness sync importable from production modules
+    Manual-only soak checkboxes without Playwright CI coverage
+    New Quick Wins while G3–G6 open
+    Feature freeze ignored; CI green via deleted tests / skipped lint
+    package.json version pretending the tag already shipped
+    Soft exits ("readable", "shrinking", "clean enough") marked DONE
+
+
+--------------------------------------------------------------------------------
+C. What a 1.0 release must AVOID
+--------------------------------------------------------------------------------
+These are release killers and scope traps. Cross-cutting with TEN PHASES
+Avoid lists and DEFERRED / NOT 1.0 below — restated here as a single gate.
+
+DO NOT ADD (content / product):
+  - New parts, upgrades, objectives, prestige layers, challenge modes, pages
+  - Planner modes, undo macros, cloud save, accounts, analytics, i18n, themes
+  - Multi-reactor / facility-menu abstractions (identity rejects)
+  - "Just one small QoL" that grows surface area during freeze
+  - Balance reworks or content campaigns as "release polish"
+
+DO NOT RE-OPEN (architecture):
+  - Authority cutover / DONE physics ownership as redesign projects
+  - Second sim path, host heat/power evaluators, dual claim/reward loops
+  - New sync directions (host→session runtime stomps in production)
+  - Compatibility shims, feature flags hiding dead code, third adapters
+  - New state libraries, kernel/application meta-layers, god barrels
+  - Class wrappers around projection data "for display helpers"
+  - Growing bridge facade methods OR switch(intent.type) remap middleware
+  - Mirroring session money/heat/grid into valtio "scoped" game stores
+  - New Quick Wins while Trust Spine (G3–G6) is open
+
+DO NOT FAKE THE GATE:
+  - Calling `test:deploy` or one Vitest file "tests pass"
+  - Disabling lint, deleting flaky unique coverage, or painting CI green
+  - Tagging from a dirty tree; force-pushing release history
+  - Regex console-strip as a substitute for logger discipline
+  - Treating aspirational package.json "1.0.0" as already shipped
+  - Marking soft exits DONE; rubber-stamping Step 9 to unblock tag
+  - Counting QW/unexport PRs as trust progress while stomps remain
+  - Manual soak checkboxes instead of Playwright S1–S8 on CI
+
+DO NOT BLEED SCOPE ACROSS STEPS:
+  - UI redesign inside bridge PRs; harness rewrites inside CSS PRs
+  - Lib wish-list (afford flags, CLAIM op) as 1.0 blockers
+  - New markdown plan sprawl — update THIS file; commit messages carry history
+  - Invent-then-delete; order is DELETE → MERGE → TIGHTEN
+  - Automated CSS dedupe/trait-extract puzzles as architecture work
+
+DO NOT CONFUSE DOCS:
+  - Planning from reactor-core-lib-push-candidates.txt mid-cutover narrative
+  - Treating design-foundations §8 P0/P1 gaps (undo, achievement count) as
+    tag blockers when they are post-1.0 or optional polish
+  - Re-litigating remediated identity rejects (I1–I10) as new work
+  - SUCCESS CRITERIA that bless host→session pushes "for tests/UI"
+
+
+--------------------------------------------------------------------------------
+D. Largest gaps: NOW (2026-07-18) → tagged 1.0
+--------------------------------------------------------------------------------
+Verdict in one line:
+  Physics authority is DONE. Projection honesty, dispatch-only bridge,
+  methodless data, harness quarantine, logger discipline, and player soak
+  are NOT. That delta IS the 1.0 work. Knip/CSS/LOC are satellites.
+
+Already closed (do not spend 1.0 budget here):
+  Tick/heat/pulse/caps/vent/sell/purchase/meltdown *eval* in session
+  Intent drain + REBOOT host orch (SET_TOGGLE → session dispatch DONE)
+  Welcome-Back chunked FF; save migration registry; projection planner sample
+  Cloud/account stub deletes; utils/logic barrels; orphan auth CSS (QW trail)
+
+STILL OPEN TRUST DEBT (do not claim DONE — live code as of 2026-07-19):
+  CLOSED under 6d: passthrough dispatch + sync*/hydrate* public zoo deleted
+  CLOSED under 6d follow-on (2026-07-20): SET_TOGGLE owns session;
+    hot-path syncTogglesFromGame + objective pause stomp deleted;
+    pause honesty (resume/reboot/setDefaults/meltdown/game-state-sync)
+  CLOSED under 2b: regex console-strip deleted; public/src → logger + ESLint
+  CLOSED under 3d: preserveHostScalars gone; harness sync exiled
+  CLOSED under 4c: EconomyManager / TimeKeeper / SessionManager deleted
+  CLOSED under 4a–4d: methodless projection + Part createPart factory +
+    tick+project perf budget (check:methodless-projection)
+
+GAP RANK — largest distance to a honest 1.0 tag
+(severity = blocks trust or multiplies every later step; not "coolest"):
+
+  G1  FEATURE FREEZE + GATE TRUTH                          → Step 1
+      Status: PARTIAL. 1a DONE · 1b IN FORCE · 1c DONE · 1d PARTIAL (R1+R3+R5).
+      Why largest: without freeze + RC+soak criteria, later deletes fight noise.
+      Done when: 1a–1d binary exits hold (1b IN FORCE through tag).
+
+  G2  LOGGER + REPO HONESTY                                → Step 2
+      Status: DONE. 2a DONE · 2b DONE · 2c DONE · 2d DONE.
+      Why large: was ignore/logger/knip honesty; closed for tag path.
+      Done when: 2a–2d binary exits hold.
+
+  G3  KILL PROD STOMPS + HARNESS EXILE                     → Step 3
+      Status: DONE. 3a DONE · 3b SUPPORTING · 3c DONE · 3d DONE.
+      Why critical: every remaining stomp is a future "tests green, game lies".
+      Done when: 3d hard invariant holds; knip baseline non-growth only.
+
+  G4  METHODLESS PROJECTION + PERF BUDGET                  → Step 4
+      Status: DONE. 4a DONE · 4b DONE · 4c DONE · 4d DONE.
+      Why large: anemic class DTOs re-accumulate authority; prove 60fps here.
+      Done when: 4a–4d binary exits hold including perf budget.
+
+  G5  VALTIO UI-ONLY (no game-state mirror)                → Step 5
+      Status: DONE. 5a DONE · 5b DONE · 5c DONE · 5d DONE.
+      Why large: gridState/economyState valtio = dual-state mirror revived.
+      Done when: 5a–5d binary exits hold (zero sim data in host proxies).
+
+  G6  PASSTHROUGH DISPATCH (no translation middleware)     → Step 6
+      Status: DONE. 6a DONE · 6b DONE · 6c IN FORCE · 6d DONE.
+      Why medium-large: facade zoo OR switch(intent.type) remap = same debt.
+      Done when: dispatch ≈ session.execute; UI emits exact lib Commands.
+
+  G7  UI CONSOLIDATE + PERF + DOM LINT                     → Step 7
+      Status: DONE. 7a DONE · 7b DONE · 7c DONE · 7d DONE.
+      Why medium: dual producers + imperative DOM = trust + FPS risk.
+      Done when: 7a–7d binary exits hold including perf budget.
+
+  G8  PRESENTATION (non-blocking size)                     → Step 8
+      Status: STARTED. 8a DONE · 8b DROPPED (auto-consolidate) ·
+      8c OPEN · 8d OPEN (critical-path usable only).
+      Why low for tag: orphan CSS yes; byte puzzles no.
+      Done when: 8a/8c DONE; 8b not a gate; 8d = usable critical path.
+
+  G9  HARNESS DECOUPLE (tag-hard = quarantine)              → Step 9
+      Status: DONE. 9a DONE · 9b DONE · 9c DONE · 9d DONE. Tag-hard: 9a+9c.
+      Done when: tag-hard items hold (met); 9b supporting diet closed.
+
+  G10 SHIP HARDENING (soak + tag; no late perf discover)   → Step 10
+      Status: BLOCKED on trust spine (G1–G7 hard exits) + player soak.
+      Perf already proven on Steps 4 + 7 — 10 does not rediscover FPS.
+      Done when: 10a/10c/10d DONE from green main.
+
+NOT in the top gap list (parked / optional — see DEFERRED):
+  L1/L2 lib afford flags + CLAIM_OBJECTIVE — wrap via dispatch; never block
+  Undo history, achievement catalog expansion, cloud, i18n, rebrand
+  Screenshot-diff hard CI gate; compress-images; css:consolidate script
+  Knip zero unused-exports (baseline non-growth only)
+  design-foundations "worker SoA on main" long-term ECS — post-1.0
+
+
+--------------------------------------------------------------------------------
+E. Acceptance checklist for tagging v1.0.0
+--------------------------------------------------------------------------------
+All must be true (binary — map to Steps + G1–G10):
+
+  [x] Steps 1–7 hard exits hold; Step 9 tag-hard (9a+9c) hold; no open
+      freeze exceptions (Step 8 critical-path usable still OPEN — 8c/8d)
+  [ ] Full `npm test` green locally and in CI; lint warnings fail CI
+      (local green; CI run IDs after push — 1d R2)
+  [x] Knip unused-export count ≤ committed baseline
+  [ ] Playwright e2e covers S1–S8 on CI (manual soak does not count)
+      (local soak green; CI after push — 1d R4)
+  [x] No production host→session stomps; no dual claim; no host meltdown eval
+  [x] Bridge dispatch is passthrough (no remap switch); bespoke zoo gone
+  [x] Projection data methodless; display = pure UI functions
+  [x] Zero sim data (money/heat/grid/levels) in valtio / host state managers
+  [x] Harness sync modules unloadable from production bundle
+  [x] console.* banned in public/src; logger.js only; no deploy regex strip
+  [x] Perf budgets recorded and held at Step 4 and Step 7 exits
+  [x] QW list remains FROZEN; no new QW PRs landed after freeze
+  [ ] README + known-issues (severity) match ship; money/heat/save issues = block
+  [ ] One version story; git tag v1.0.0 from clean green main
+
+If a checkbox fails, do not tag — fix under the owning Step, or add to
+known-issues only when non-critical (no money/heat/save desync) and frozen.
+
+
+================================================================================
+REDUCTIVE 1.0 TEN PHASES — dated 2026-07-18 (hardened exits)
+================================================================================
+North star: ship a smaller, clearer, honest public build of what already exists.
+TEN PHASES (= Steps 1–10). Finish a step's *binary* exit before the next.
+Soft words ("shrinking", "readable", "clean enough") are forbidden as DONE.
+
+Stance (non-negotiable):
+  DELETE / COLLAPSE / POLISH only. No new gameplay systems, progression tracks,
+  pages, planner modes, cloud backends, or "while we're here" features.
+  Physics authority cutover is closed; projection honesty is NOT closed.
+  Prefer net-negative *dual paths*. If a PR grows surface area, it waits.
+  QW/unexport count is not velocity. Trust spine (G3→G6) outranks knip/CSS.
+
+Trust spine order (QW list FROZEN — work this only):
+  Step 3d DONE · 4a–4d DONE · 5 DONE · Step 6 DONE · Step 7 DONE →
+  Step 9a DONE · Step 9d DONE · Step 1d RC ← NEXT → tag (10).
+  Parallel/supporting: 8c/8d usable chrome; 3b knip; 9b setup diet DONE.
+
+Deep-dive snapshot (2026-07-18, excl. generated):
+  public/src total          ~26.4k lines / ~138 JS modules
+  Heaviest hotspots:        ui-modals, audio, ui-grid, app-services,
+                            app.js, revival-session-bridge, state.js
+  components+templates      ~12k   consolidate producers; lit-declarative
+  services                  ~3.3k   keep (audio/PWA/leaderboard)
+  domain                    ~3.5k   DELETE class wrappers → methodless POJOs
+  state.js + state/*        ~1.7k   valtio UI-only; delete game mirrors
+  bridge                    ~2.0k   passthrough dispatch; delete zoo + remap
+  CSS weight: large OK for 1.0 if layouts work; orphan delete only
+  tests ~84 unit + ~4 e2e    sim=lib; UI=mocks; harness exile from prod
+  Verdict: physics + methodless + remap + prestige/reboot + heat + placedCounts/claim DONE; 6d sync* + logger NOT done
+  package.json "1.0.0" aspirational until Step 10 tags
+  Canvas: reductive-1-0-quick-wins (Cursor canvases/) — QWs ≠ trust spine
+
+Size debt → step owners (single tracker; do not fork):
+  S1 Reactor modifier farm              → Step 4 (methodless)
+  S2 state.js god / game mirrors        → Step 5 (valtio UI-only)
+  S3 Objective/Achievement chrome       → Step 4 delete classes + Step 7 UI
+  S4 Control-deck / overflow / Stirling → Step 4 POJO fields + Step 7
+  T1 Headless sim vs host tests         → Step 9 (tag-hard: 9a+9c)
+  L1/L2 Lib afford / CLAIM ops          → park; dispatch wrap; never block
+
+Dual systems the phases must collapse (not grow a third of):
+  state.js god proxy / game fields in valtio vs snapshot→Lit only
+  (utils.js test shim — DELETED 2026-07-18)
+  GameEventDispatcher residue vs effect_queue
+  host domain *classes* vs session POJO projection
+  bespoke bridge methods OR Intent→Command remap switch vs session.execute
+  tests/helpers/setup.js full-host boot for sim suites
+  harness sync on prod facade vs bridge-test-harness.js (tests only)
+  regex console-strip vs logger.js + ESLint ban
+  manual soak checklists vs Playwright S1–S8 on CI
+  QW theater vs Trust Spine (G3–G6) PRs
+  stale mid-cutover docs / SUCCESS CRITERIA that bless stomps
+
+Scrap inventory CLOSED (Step 1 — 2026-07-18):
+  KEEP   bridge (+ satellites), audio/PWA/leaderboard services, product UI
+         chrome (grid/modals/control-deck/upgrades/objectives display),
+         game-data + public/data catalogs, save v3 + migrations,
+         blueprint planner/compare/share, welcome-back FF, difficulty presets,
+         achievements chrome (no new content)
+  DELETE done (2026-07-18):
+         tmp-obj-alone.txt, tmp-two.txt (+ gitignore tmp-*.txt)
+         setupCloudSaves no-op + call (ui-modals.js)
+         orphan .settings-cloud-* / .cloud-slot-* CSS (settings-modal.css)
+           [verified deleted QW10 2026-07-18 — was still on disk after QW3 note]
+         orphan splash-auth / nav-auth / .cloud-loading CSS + empty
+           #splash-auth-in-footer mount (QW10)
+         cloudSaveOnly / cloudSaveData always-null fields (save-query,
+         app-services empty splash state)
+         privacy copy claiming Google Drive (legalPageTemplates.js → local
+         + .reactor export honesty)
+         UserAccountUI stub + LOGIN/PROFILE/LOGOUT modal ids/handlers
+         empty #user_account_btn_root; user_account_display/feedback state
+         control-deck account button → SETTINGS (label "Saves"; one path)
+         undoHistory=[] unwired array (F1.1 scrapyard design-only now)
+         public/src/utils.js barrel (tests → simUtils/core/constants)
+         public/src/logic.js barrel (callers → domain/components;
+           presentation attach lives in presentation.js)
+         ui-grid Tileset re-export via logic.js
+         unlockAllPartsForTesting + bindDeviceFeatures dead helpers
+         unexported same-file bridge helpers (gameGridDiffersFromSession,
+         copyTileStateToInstance, freezeCommit, clearOrphanSessionTileHeat,
+         drainIntentBatchSync, drainGridIntentsAsync)
+         countPlacedParts; flushSimEvents; updateDecimal; duplicate
+           FailureFlavorSchema (stateSchemas); game-save techTree re-export
+         welcome-back dual compute (now prepareOfflineCatchup +
+           showWelcomeBackModal only)
+         dead domMapper API + hollow domMapper.test.js (QW20)
+         google_drive_save_file_id localStorage scrub leftover (QW21)
+         ui-modals same-file unused exports + MODAL_IDS re-export (QW22)
+         unused ui-components barrel re-exports (QW23)
+         F2.1 remnant purge: CLOUD BACKUPS save-slot branch / isCloud*
+           params (app-services); LoadGame* synced-label chrome
+           (button-factory); isCloudSynced/cloudUploadedAt preserve
+           (game-save)
+         F6.1 collapse: USE_STALENHAG_BG dual branch + inactive
+           splash_bg*.webp set; stalenhag-only carousel
+  DELETE queued for Step 3 (do not re-litigate — just remove):
+         further knip unused-export backlog (curated only; no mass delete)
+         proven duplicate tests only (pause-heat wrong-folder dupe already
+         gone — only thermodynamics/pause-heat.test.js remains)
+  PARK   reactor-core-lib-push-candidates.txt mid-cutover narrative
+         css:dedupe / compress-images / screenshot-diff / css:consolidate
+           → DROPPED as 1.0 gates (manual orphan CSS only; Step 8b)
+         L1/L2 lib afford flags + CLAIM_OBJECTIVE (never block tag)
+         POST-1.0 FRAGMENT SCRAPYARD (F1–F7) — do not schedule under Steps
+  VERIFY closed: login/profile → DELETED (not KEEP)
+
+
+--------------------------------------------------------------------------------
+QUICK WINS — ranked reductive bites (historical; list FROZEN)
+--------------------------------------------------------------------------------
+[FROZEN 2026-07-18] No further QWs accepted. All engineering effort must be
+directed to the Trust Spine (G3–G6). Reject PRs whose only claim is a new QW,
+unexport diet, or CSS orphan while 3d/4/5/6 remain open. Hygiene trail below
+is closed history — do not extend the numbered list.
+
+Deploy honesty (CI — Step 2d DONE):
+  npm test → build:css → build:sw → check-pwa-root-files (no console-strip).
+  Logging = logger.js + ESLint no-console error; --max-warnings 0.
+  Knip: config/knip-baseline.json; CI fails if unused-export count grows.
+
+
+--------------------------------------------------------------------------------
+STEP 1 — Freeze the product surface + lock the quality gate
+--------------------------------------------------------------------------------
+Goal: Agree what 1.0 *is*, and one definition of "green" the release trusts.
+
+Broad move: Finish keep / delete / park; freeze the 1.0 train; lock `npm test`
+as sole gate; prove green + write RC criteria including player soak S1–S8.
+
+  1a  Scrap keep / delete / park inventory
+      Status: DONE (2026-07-18)
+      Close written KEEP / DELETE / PARK decisions (scrap inventory above;
+      QW1). No open "is X in 1.0?" for surface already inventoried.
+      Exit: inventory CLOSED; VERIFY login/profile → DELETED.
+
+  1b  Feature-freeze the 1.0 train
+      Status: IN FORCE (2026-07-18) — stance written; enforcement ongoing
+      DELETE / COLLAPSE / POLISH only. Refuse new parts, upgrades, objectives,
+      prestige rules, planner modes, pages, cloud backends, or "one small
+      feature" exceptions on the 1.0 branch.
+      Exit: freeze exceptions = 0 (stays IN FORCE through tag).
+
+  1c  Document sole quality gate
+      Status: DONE (2026-07-18)
+      Full `npm test` is the only merge/release gate; `test:deploy` optional
+      fast subset only; package `"1.0.0"` aspirational until Step 10 tag.
+      Exit: gate truth written; CI runs npm test first.
+
+  1d  Green gate + RC criteria + Playwright soak map
+      Status: PARTIAL (2026-07-20)
+      S1–S9 → Playwright file map owned (9d):
+        S1 e2e/soak-s1-fresh-install.spec.js
+        S2 e2e/soak-s2-control-deck.spec.js
+        S3 e2e/soak-s3-save-reload.spec.js
+        S4 e2e/soak-s4-welcome-back.spec.js
+        S5 e2e/soak-s5-meltdown-recover.spec.js
+        S6 e2e/soak-s6-prestige-reboot.spec.js
+        S7 e2e/soak-s7-export-import.spec.js
+        S8 e2e/soak-s8-pwa-offline.spec.js
+        S9 e2e/soak-s9-heat-power-accrual.spec.js
+      RC criteria (binary — all must hold before Step 10 tag):
+        R1) npm test green locally on the release commit
+        R2) CI npm test green on the same commit (master / release PR)
+        R3) npm run test:e2e:soak green locally (S1–S9)
+        R4) CI job e2e-soak.yml green (Chromium soak on PR/master)
+        R5) No open freeze exceptions (1b); QW list remains FROZEN
+        R6) Acceptance checklist §E boxes for Steps 1–7 + 9a/9c/9d hold
+      DONE: R1 local npm test green (2026-07-20); R3 soak 9/9 local;
+        R5 freeze exceptions = 0 and QW list FROZEN (in force);
+        file map + RC written; deleted eslint.yml duplicate check
+        zoo → sole-gate `npm test` on PR/master (workflow name CI);
+        e2e-soak.yml present locally (not yet on default branch).
+      OPEN: R2/R4 green Actions run IDs after commit+push/PR (workflows wired
+        locally incl. e2e-soak.yml ASCII S1-S9; 404 on default branch until
+        push). R6: SUCCESS #6 Steps 5/6 DONE; §E CI boxes still open.
+      Exit: green proof recorded; RC written; S1–S8 → Playwright file map owned.
+
+Step 1 exit: 1a/1c/1d DONE and 1b IN FORCE.
+
+PROGRESS: 1a DONE · 1b IN FORCE · 1c DONE · 1d PARTIAL (R1+R3+R5; R2/R4 await push).
+
+Avoid:
+  - New parts, upgrades, objectives, prestige rules, planner modes, pages
+  - "Just one small feature" exceptions during freeze
+  - Calling `test:deploy` or a single Vitest file "tests pass"
+  - Disabling lint or deleting flaky unique coverage to paint green
+  - Mixing architecture deletes into "make CI green" commits
+  - Treating package.json "1.0.0" as already shipped
+  - RC criteria that omit player soak
+
+
+--------------------------------------------------------------------------------
+STEP 2 — Align the repo with what ships (logger, not regex strip)
+--------------------------------------------------------------------------------
+Goal: Git tree, deploy artifact, and runtime logging tell the same honest story.
+
+Broad move: Hygiene + kill deploy regex console strip. Ban console.* via
+ESLint; all logs through core/logger.js (no-op / filter when !isDev).
+Commit knip baseline; CI fails on growth and on lint warnings.
+
+  2a  Ignore / generate hygiene
+      Status: DONE (2026-07-20)
+      DONE: public/lib + css/app.css + eslint sarif + screenshots ignored;
+        untracked generated public/sw.js (source = config/src-sw.js;
+        deploy/CI run build:sw); playwright-report ignored; deleted
+        redundant public/lib/pako.min.js ignore line; tmp scrap already gone.
+      Exit: tracked vs ignored story matches ship root.
+
+  2b  Logger discipline + delete deploy console-strip
+      Status: DONE (2026-07-19)
+      DONE: deleted scripts/build/remove-console-logs.js + package script +
+        deploy.yml strip step; ESLint no-console error on public/src
+        (logger.js sink exempt); call sites → logger.log / logger.*;
+        productionMode = PRODUCTION_BUILD or non-localhost host
+        (INFO/DEBUG gated on ship hosts without regex mutilation);
+        deleted duplicate console.error dual-paths beside logger in app.js;
+        deleted inline index.html boot console.log.
+      Exit held: zero console.* call sites in public/src outside logger.js;
+            strip unused by CI; deploy order test → css → build:sw → PWA.
+
+  2c  README / legal match shipped story
+      Status: DONE (2026-07-18) — strip docs absent from README (2b clean).
+      Gate truth in README; privacy/legal no Drive/cloud claims (QW2/QW3).
+      Exit: docs match scripts players and CI actually run.
+
+  2d  Clean tree + CI warning-fail + knip baseline
+      Status: DONE (2026-07-19)
+      lint:js --max-warnings 0; check:eslint-warning-budget baseline=0;
+      check:knip-baseline (config/knip-baseline.json) fails on growth;
+      both gates in CI workflow (npm test) + local npm test. Game.version = APP_VERSION
+      ("1.0.0") matches package.json. DELETED knip-orphan upgrade-dom.js +
+      grid-helpers.js; dead unused import/var debt cleared for warning-fail.
+      Local cutover WIP tree ≠ tag-clean (Step 10).
+      Exit held: warning-fail CI; knip baseline enforced; versions align.
+
+Step 2 exit: 2a/2b/2c/2d DONE.
+
+PROGRESS: 2a DONE · 2b DONE · 2c DONE · 2d DONE.
+
+Avoid:
+  - Keeping regex strip "just in case" alongside logger
+  - Source-map-breaking build hacks for console removal
+  - Mega-commits or mixing trust-spine work into hygiene
+  - Vendoring public/lib or hand-editing generated sw.js
+  - Requiring knip zero unused-exports before tag
+  - Tagging 1.0 as part of hygiene
+
+
+--------------------------------------------------------------------------------
+STEP 3 — Delete dual paths, prod stomps, and harness from prod
+--------------------------------------------------------------------------------
+Goal: One way to do each job; make host→session stomps and harness sync
+physically impossible in the production bundle.
+
+Broad move: Finish dead deletes; collapse remaining stomps; exile harness
+sync into bridge-test-harness.js (tests-only import; prod build fails if
+imported). Knip diet is supporting (baseline non-growth from Step 2).
+
+  3a  Delete inventory stubs / dead barrels
+      Status: DONE (2026-07-18)
+      utils.js + logic.js barrels, cloud/account stubs, domMapper, dead
+      helpers (QW4–QW6, QW12, QW18, QW20). Prefer delete over wrap.
+      Exit: Step 1 DELETE-done items gone from production paths.
+
+  3b  Knip unused-export diet (SUPPORTING — not tag spine)
+      Status: SUPPORTING (2026-07-18)
+      Curated unexports OK; no mass 300+ delete. Enforcement = baseline
+      non-growth (Step 2d), not "clean enough" vibes.
+      Exit: not required for Step 3; do not block 3d on knip zero.
+
+  3c  Collapse dual runtime paths
+      Status: DONE (2026-07-18)
+      FX bus allowlist + dead emits (QW11); welcome-back single path (QW17);
+      splash load single binder (QW21); quick-start path (QW15).
+      Exit: one way per collapsed job; no dual binders/emit pairs.
+
+  3d  Kill prod stomps + exile harness sync from prod bundle
+      Status: DONE (2026-07-18)
+      Exit held:
+        - preserveHostScalars / preserveHostEconomy / syncGridCheap deleted
+        - purchase / claim / prestige / reboot / respec / affordability do not
+          stomp session from host mirrors
+        - host→session only via named hydrateFromHost (init/new-game/sanitize)
+        - syncGridFromGame / loadEconomyFromHost / syncReactorScalarsFromGame /
+          pushHostUpgradeLevelsForLoad live in tests/helpers/bridge-test-harness.js
+        - ESLint bans public/src importing harness; CI check:harness-exile
+      Exit: zero production host→session runtime stomps; harness APIs
+            unloadable from prod; grep/CI proves it.
+
+Step 3 exit: 3a/3c DONE and 3d DONE. (3b supporting only.)
+
+PROGRESS: 3a DONE · 3b SUPPORTING · 3c DONE · 3d DONE.
+
+Avoid:
+  - "Compatibility shims" or second adapters for deleted paths
+  - Leaving stomps on bridge facade "for debugging"
+  - Quarantine by comment/convention only (must be physical)
+  - Re-opening physics cutover under the guise of cleanup
+  - Deleting uniquely asserting tests
+  - Blocking tag on knip zero while stomps remain
+
+
+--------------------------------------------------------------------------------
+STEP 4 — Methodless projection data (NOT anemic domain classes)
+--------------------------------------------------------------------------------
+Goal: Host projection payloads are raw POJOs/structs with ZERO methods.
+Display formatting lives as pure functions in the UI layer.
+
+Broad move: Delete class wrappers (new Part(), new Tile() for display, etc.)
+that exist to hang helpers. Collapse mirror managers. Prove tick+project
+hits the performance budget HERE — do not wait for Step 10.
+
+  4a  Reactor modifier farm → sessionModifiers
+      Status: DONE (2026-07-18)
+      sessionModifiers POJO from projectSessionModifiers; directKeys copy
+      loop gone (QW8). Accessor shell deleted under 4b (2026-07-18).
+      Exit: no dual modifier fields on Reactor for the farm keys.
+      NOTE: remaining Reactor class still has real behavior methods
+      (updateStats/meltdown/sell) — not a display-DTO trap; gut further
+      only if they become methodless projection under 4b/4d.
+
+  4b  Delete domain class wrappers; UI pure formatters
+      Status: DONE (2026-07-18)
+      Exit met: no domain class instances exist solely to attach display
+        methods; formatters live under components/ (objective-display,
+        upgrade-display, tooltip-stats, hud-from-snapshot).
+      Part / Tile / Upgrade / Reactor / Objective display paths:
+        - Projection = plain objects (or freeze-dried structs)
+        - formatPartForDisplay(partDto) / similar pure fns in UI modules
+        - NO methods on DTOs; NO anemic "display helper" classes in domain/
+      DONE:
+        - Part.getImagePath / Part.getUpgradeBonusLines deleted
+        - Part.updateDescription / buildPartDescription / description field /
+          $el / recalculate_stats / updateCellPower / attachPartPresentation
+          deleted; resolvePartDescription + partIconPath in tooltip-stats.js
+        - domain/part-tooltip-bonuses.js deleted; dead syncCompiledPartsFromSession
+          description refresh removed from bridge
+        - UI call sites use partIconPath / resolvePartDescription
+        - Upgrade.display_cost / updateDisplayCost / _syncDisplayToState deleted
+        - formatUpgradeDisplayCost in components/upgrades/upgrade-display.js
+        - upgrade_display valtio mirror + reactive level mount deleted
+        - dead epart_onclick / runEpartOnclick display-refresh path deleted
+        - Upgrade.$el / $levels DOM stubs deleted
+        - Tile.display_power / display_heat getters + _setProjectedDisplay deleted;
+          plain projected fields written by bridge projection
+        - Objective display formatters + getCurrentObjectiveDisplayInfo deleted
+          from domain/; formatObjectiveDisplayInfo / getObjectiveClaimText in
+          components/objective-display.js; syncActiveObjectiveToState uses raw def
+        - Reactor computeActiveBuffs + state.active_buffs mirror deleted;
+          computeActiveBuffs / hudViewFromSnapshot in shell/hud-from-snapshot.js
+        - Reactor.clearHeatVisualStates deleted; clearTileExplodingFlags +
+          clearHeatVisualStates in domain/heat-signals.js; heatWarningCleared
+          chrome in game-event-wiring (heat-dom-sync stays deleted per 7d)
+        - Dead valtio buff mirrors deleted (manual_override_mult /
+          override_end_time / power_to_heat_ratio) from createGameState /
+          updateStats / bridge-mechanics
+        - ObjectiveManager getCurrentObjectiveInfo / checkChapterCompletion /
+          getChapterCompletionStatus / areAdjacent deleted; formatCurrentObjectiveInfo
+          in components/objective-display.js
+        - Reactor modifier accessor shell deleted (_mod/_setMod + ~18 get/set
+          pairs); UI/tests read reactor.sessionModifiers.<key> directly
+          (closes 4a transitional accessor-on-class note)
+        - Upgrade.getCost / getEcost aliases deleted; tests use current_cost /
+          current_ecost (UI already formatUpgradeDisplayCost)
+        - Upgrade.setAffordable / setAffordProgress deleted; bridge-upgrades
+          writes affordable / afford_progress fields directly
+        - Part.setAffordable deleted; PartSet.check_affordability writes
+          part.affordable; dead Part.className + getAutoReplacementCost deleted
+          (tests use session.partAutoReplaceCost)
+        - Part _ov/_setOv/_overrides + all setters deleted; live _getDef
+          getters remain (heatBoost/EP still session-live; full POJO copy
+          deferred until refreshPartsFromSession)
+        - Upgrade level/current_cost/current_ecost/cost/ecost are plain fields;
+          projectUpgradeCosts / projectAllUpgradeCosts in bridge-upgrades
+          (setLevel, purchase, affordability, projectUpgradeLevelsToHost)
+        - Part freeze-dried: _getDef/_cachedDecimal/stat getters deleted;
+          applyCompiledPartFields + refreshPartsFromSession copy session
+          getPart onto plain fields; wired from applyComputedModifiers,
+          PartSet.check_affordability, refreshPartsPanel, initialize
+        - ObjectiveManager claim/progress chrome: getCurrentObjectiveProgress /
+          _readSessionProgress / _syncActiveObjectiveToState / empty teardown
+          deleted from class; readObjectiveProgress + syncActiveObjectiveToState
+          are module free functions (objective-display uses readObjectiveProgress)
+        - Tile dead display/neighbor chrome deleted: setTicks, refreshVisualState,
+          cellNeighborTiles, reflectorNeighborTiles, display_chance*;
+          containment neighbor query collapsed to containment-only helper
+        - Dead bridge call tile._setProjectedDisplay replaced with plain
+          display_power/display_heat = 0 in bridge-grid-sync clear path
+      NOT 4b debt (left open on purpose — wrong layer to gut here):
+        - ObjectiveManager claimObjective / completeAndClaimViaSession /
+          checkAndAutoComplete = session claim protocol + lifecycle, not
+          display formatters (keep as host orchestration). Host must not
+          dispatch GRANT_REWARD on claim — lib checkObjective pays; claim
+          only advances via claimCurrent (CLAIM_OBJECTIVE still F5.2 gap).
+        - Tile effective-rate caches DELETED (2026-07-19); tooltips query bridge
+        - Reactor updateStats/sell = host behavior (see 4a NOTE)
+        - Part factory-only POJO closed under 4d (createPart; no class;
+          no game ref on POJO — 2026-07-19)
+        - Tile setPart/clearPart/sellPart DELETED (2026-07-19); place/sell
+          only via intent_queue / InputHandler
+      Exit: domain/ has no class instances used solely to attach display
+            methods; formatters live under components/ or ui format modules.
+
+  4c  Collapse mirror-only managers
+      Status: DONE (2026-07-18)
+      EconomyManager / TimeKeeper / SessionManager DELETED.
+      Money accessors + pause/resume inline on Game; session time on
+      LifecycleManager. No econ setters that call loadEconomyFromHost.
+      AchievementManager = unlock protocol (not display DTO); Objective
+      display chrome gutted under 4b (claim stays as session protocol).
+      Exit: mirror managers gone or trivial getters; no econ setters that
+            call loadEconomyFromHost (even under VITEST in domain/).
+
+  4d  Methodless + perf budget exit
+      Status: DONE (2026-07-18)
+      DONE:
+        - domain/ banned from lit / document.* / valtio (CI: check:domain-purity)
+        - Engine offline visibility moved to shell/engine-offline-visibility.js
+        - blueprintPlanner proxy → plain POJO; AchievementManager subscribeKey deleted
+        - game-save valtio snapshot() deleted; reads state fields directly
+        - PERF budget recorded + held: check:tick-project-budget
+          (12x12 uranium1/vent1 grid; avg tick+getSnapshot ≤ 16.667ms / 60fps;
+           wired into npm test / CI sole gate)
+        - Reactor visual helpers exiled: computeActiveBuffs → hud-from-snapshot;
+          clearHeatVisualStates off Reactor → heat-signals + event wiring;
+          dead buff valtio mirrors deleted (heat-dom-sync remains deleted/7d)
+        - 4b Exit holds (claim/Reactor kept as host protocol, not DTO debt;
+          Tile place/sell entity API deleted 2026-07-19)
+        - class Part DELETED → createPart() factory returns Object.prototype
+          POJO with NO game backref (context passed at render time; PartSet
+          Map identity unchanged)
+        - CI proof: check:methodless-projection walks getSnapshot +
+          buildHostStatePatch for zero own functions / non-POJO nodes;
+          asserts createPart own keys are data-only and game-free; wired
+          into npm test / CI sole gate
+      Exit: methodless projection; perf budget recorded AND held.
+
+Step 4 exit: 4a DONE and 4b/4c/4d DONE (incl. perf). Soft "shrinking" forbidden.
+
+PROGRESS: 4a DONE · 4b DONE · 4c DONE · 4d DONE.
+
+Avoid:
+  - "DTO classes with display helpers" (that is the trap — delete the class)
+  - Moving presentation into domain "for cleanliness"
+  - Line-count file splits that keep the same methods
+  - Re-implementing lib affordances/claims on the host
+  - Deferring perf measurement to Step 10
+
+
+--------------------------------------------------------------------------------
+STEP 5 — Valtio UI-only (kill game-state mirrors)
+--------------------------------------------------------------------------------
+Goal: Valtio holds UI ephemeral state only. Zero simulation data in host
+proxies. Lit renders from bridge.getSnapshot() / project payload (observer
+or event if reactivity needed). app.js = boot + wire only.
+
+Broad move: Collapse god proxy to uiState (tabs, modals, preferences, chrome
+flags). DELETE money/heat/grid/levels/economy tracking from valtio. Components
+must not subscribe to game fields via host state managers.
+
+  5a  Trim state.js barrels / re-exports
+      Status: DONE (2026-07-18) — transitional; 5d finishes the job
+      Schema/domain/reboot/valtio barrels trimmed (QW7).
+      Exit: interim only; 5d requires UI-only valtio, not thinner game mirrors.
+
+  5b  Extract boot / session from app.js
+      Status: DONE (2026-07-18)
+      game-event-wiring; splash load binder; boot-session owns startGame,
+      bootstrapGame, handleUserSession (auto-start), returnToSplashScreen,
+      clearAllGameData/startNewGameFlow/showTechTreeSelection, splash load
+      button, global listeners. app.js = root render + main() wire only.
+      Exit: app.js = boot + wire only (no business logic bodies).
+
+  5c  Delete parallel barrels (logic.js et al.)
+      Status: DONE (2026-07-18)
+      logic.js DELETED (QW12); no public convenience barrel reintroduced.
+      Exit: no second god-barrel.
+
+  5d  UI-only valtio + snapshot render path
+      Status: DONE (2026-07-19) — CRITICAL (State Mirror Trap)
+      createGameState is a plain POJO (valtio proxy + derive deleted);
+      money/heat/power/EP/session scalars are plain Numbers via setDecimal→
+      toNumber (no break_infinity Decimal instances in the hydrate bag);
+      UI affordability / heat / meltdown / HUD / prestige weave subscribe
+      uiState.snapshot_rev and read hudViewFromSnapshot(getSnapshot());
+      objective_notifications dual-path deleted; dead vent/exchanger
+      ambience + effect_queue vibrate subs deleted; derive.js deleted;
+      statePatch pub/sub for core sync DELETED (bridge→UI via project +
+      snapshot_rev only).
+      Host still keeps a non-proxy hydrate bag on game.state for load/
+      domain afford glue — not a valtio sim mirror; scalars are primitives.
+      Exit: grep/CI proves zero sim fields in valtio proxies; Lit reads
+            snapshot; app.js boot+wire; no gridState/economyState stores;
+            no Decimal class instances in createGameState hot scalars.
+
+Step 5 exit: 5b/5c/5d DONE (5a absorbed into 5d).
+
+PROGRESS: 5a DONE(transitional) · 5b DONE · 5c DONE · 5d DONE.
+
+Avoid:
+  - Creating gridState / economyState / "scoped game" valtio proxies
+  - Extract-then-re-export-all (barrel that hides the god)
+  - "Valtio for performance" as excuse to mirror session
+  - New state libraries; keep valtio for UI chrome only
+  - Dynamic import() solely to silence cycle lint
+  - Moving DOM/lit into state modules
+  - Mega-PRs touching state + bridge + all components at once
+
+
+--------------------------------------------------------------------------------
+STEP 6 — Passthrough dispatch (kill facade zoo AND remap switch)
+--------------------------------------------------------------------------------
+Goal: Bridge is a boring adapter. UI emits exact reactor-core-lib Commands.
+dispatch is practically one line: (intent) => session.execute(intent).
+
+Broad move: Public surface = attachCoreBridge + passthrough dispatch + tick +
+project/hydrate/read helpers. Delete placePart/sellPart/respecDoctrine/etc.
+UI constructs the exact Command payload the lib expects — no UI_SELL_PART →
+SELL remapping layer in the bridge.
+
+  6a  Document target surface (SUPERSEDES prior "freeze fat facade")
+      Status: DONE (2026-07-18)
+      HOST BRIDGE SURFACE rewritten as code-accurate inventory of
+      RevivalSessionBridge + satellites; every bespoke action method
+      marked DELETE with migrate-to Command. QW19 fat-facade freeze dead.
+      Exit: surface list matches code; bespoke action methods marked DELETE.
+
+  6b  Narrow public entry + delete bespoke action methods
+      Status: DONE (2026-07-18)
+      attachCoreBridge sole public entry; class module-private.
+      DELETED public placePart, sellPart, purchaseUpgrade, respecDoctrine,
+      completeAndClaimObjective, hardReset, sellPower, ventHeat wrappers.
+      Public mutate path = bridge.dispatch(libCommand); place/sell/buy/vent
+      emit PLACE_PART_PAID / SELL_PART / PURCHASE_UPGRADE / SELL_POWER /
+      VENT_HEAT. respec/hardReset/claim orchestration moved to domain/state.
+      Exit: UI/production callers use passthrough dispatch; zoo gone.
+      Remaining for 6d: sync*/hydrate* named helper collapse.
+
+  6c  Refuse new sync directions / dual-writes
+      Status: IN FORCE — enforce with Step 3d
+      Runtime project-out after session ops; hydrate only on load/setup;
+      preserveHostScalars / loadEconomyFromHost not on hot paths.
+      Exit: freeze exceptions = 0 through tag.
+
+  6d  Passthrough dispatch + one drain schedule (HARD EXIT)
+      Status: DONE (2026-07-19)
+      DONE:
+        - bridge-intents drain is passthrough bridge.dispatch({ type, payload });
+          no PLACE_PART→PLACE_PART_PAID / action→type remap
+        - UI/queue emit lib Command shapes (PLACE_PART_PAID + id, SELL_PART,
+          APPLY_BLUEPRINT, COMMIT_BLUEPRINT_PLANNER, SELL_POWER, VENT_HEAT,
+          SET_TOGGLE, REBOOT host-orch)
+        - DELETED remappers applyPlacePartIntent / applySellPartIntent /
+          applyBlueprintIntent / applyBlueprintPlannerIntent
+        - DELETED thin wrappers placePartUnpaid / removePartAt /
+          applyBlueprint / commitBlueprintPlanner / grantReward /
+          creditMoney / debitMoney → callers use dispatch(libCommand)
+        - DELETED bridge.prestige / bridge.reboot / dumpTileHeatToHull;
+          state/reboot.js + runFullReboot use dispatch({ type: "REBOOT",
+          payload: { keepEp, refundEp: false } }) + session.previewPrestige
+          for host chrome (last_prestige / EP weave / objective reset)
+        - DELETED bridge setTileHeat / setTileTicks / setReactorHeat /
+          setReactorPower / resetReactorHeat from RevivalSessionBridge;
+          tests-only via bridge-test-harness (+ attachHeatMutatorsForTests
+          in setup); prod meltdown recovery → session.grid.resetHeat +
+          projectLiveState
+        - DELETED bridge incrementPlacedCount / setPlacedCounts /
+          clearPlacedCounts / rebuildPlacedCounts (keep getPlacedCount);
+          init/save/state call session.*; lib PLACE_PART bumps counts;
+          deleted host game/unlock-manager incrementPlacedCount wrappers
+        - DELETED bridge tryAutoCompleteCurrentObjective / syncObjectiveClaim /
+          syncObjectiveIndex; domain/objectives.js owns claim + index sync
+        - DELETED bridge hydrateAchievementsFromGame / hydrateObjectivesFromGame /
+          syncForStatsRead / syncGridToGame / syncUpgradeLevelsToGame /
+          projectUpgradeLevelsToHost (class methods); hydrateFromHost owns
+          load-path meta+toggles+achievements+objectives; satellites
+          hydrateAchievementsIntoSession / hydrateObjectivesIntoSession
+          (core-state-projection) + projectUpgradeLevelsToHost /
+          syncGridToGame (bridge-upgrades / bridge-grid-sync); callers use
+          session.grid.recalculateCaps / projectLiveState
+        - DELETED public syncTogglesFromGame / syncMetaFromGame /
+          syncTickMetaFromGame / syncObjectiveFlagsFromGame; module-private
+          helpers only via hydrateFromHost / _syncBeforeTick /
+          _syncBeforeSessionOp / _syncForObjectiveEval; dispatch() owns
+          pre-command sync (drain/blueprint no longer call sync*)
+      Exit held: dispatch body has no type-remap switch; no public sync*
+            action methods; UI emits lib Command shapes.
+      Follow-on CLOSED (2026-07-20): SET_TOGGLE/PAUSE_TOGGLE drain →
+            bridge.dispatch passthrough; applyToggleStateChange dispatches
+            when bridge active; deleted hot-path syncTogglesFromGame +
+            syncObjectiveFlags pause stomp; patchGameState no longer
+            re-dispatches toggles (projection-safe). hydrateFromHost keeps
+            load-time toggle sync only.
+      Honesty CLOSED (2026-07-20): resume/reboot pause via SET_TOGGLE
+            (boot-session onToggle; runFullReboot dispatch); deleted
+            game-state-sync host pause↔engine dual-path; meltdown via
+            onToggle; setDefaults pause = host + session.setPaused only
+            (no dispatch/project — avoids grid rehydrate onto cleared host).
+
+Step 6 exit: 6a/6b/6d DONE and 6c IN FORCE.
+
+PROGRESS: 6a DONE · 6b DONE · 6c IN FORCE · 6d DONE.
+
+Avoid:
+  - Renaming placePart → placePartIntent wrapper (still a zoo)
+  - switch(intent.type) { case 'UI_SELL': session.command('SELL')… } (zoo moved)
+  - Host writing heat/ticks/levels then syncing into session in prod
+  - Expanding bridge to own UI policy (unlock tiers, copy, modals)
+  - Lib wish-list as tag blockers
+  - Freezing a fat facade and calling it done (QW19 freeze is SUPERSEDED)
+
+
+--------------------------------------------------------------------------------
+STEP 7 — Consolidate UI + enforce declarative DOM + perf
+--------------------------------------------------------------------------------
+Goal: One producer per action; Lit declarative bindings; prove FPS again.
+
+Broad move: Merge duplicate controllers; UI constructs Intents for dispatch;
+ESLint restricts document.querySelector / classList mutations outside
+designated mount/boot files; re-record perf budget (domain gut + UI merge
+must not tank frames).
+
+  7a  Place / sell / vent / toggle single producers
+      Status: DONE (2026-07-18) — migrate producers to bridge.dispatch
+      grid-intent-handler + data-intent paths (QW9).
+      Exit: one UI→Intent→dispatch path each (update callers when Step 6 lands).
+
+  7b  Upgrade buy + FX bus collapse
+      Status: DONE (2026-07-18) — buy path must end at dispatch
+      purchaseUpgradeWithFeedback shared (QW13); dead emits gone (QW11).
+      Exit: one upgrade-buy helper → dispatch; FX-only or gone dispatcher.
+
+  7c  Merge modal / grid / control-deck duplicates
+      Status: DONE (2026-07-18)
+      Deleted: ModalOrchestration facade zoo (showWelcomeBack/showPrestige/
+        showContext/showSettings/hide*); dual heat-DOM sync in ui-state;
+        grid-canvas-service.js (inlined into ui-grid);
+        updateControlDeckPercentageBar + stats-bar DOM fallback;
+        empty MeltdownUI.updateProgressBarMeltdownState.
+      Exit: duplicate controllers removed (binary: named dupes gone).
+
+  7d  Declarative DOM + perf budget
+      Status: DONE (2026-07-19)
+      DONE: deleted heat-dom-sync.js; Lit buildShellClassMap/
+        StyleMap + data-heat-ratio on #wrapper own heat-warning/critical/
+        --heat-bg-alpha (CSS #wrapper.heat-* #reactor_background);
+        clearTileExplodingFlags/clearHeatVisualStates → domain/heat-signals;
+        CI check:declarative-dom bans syncReactorHeatVisualDom revival;
+        ESLint no-restricted-syntax for querySelector/getElementById/
+        classList outside mount/boot (+ remainder shrink list);
+        check:tick-project-budget still in gate;
+        mountStatsBarReactive → bindLitRenderMulti + controlDeckStatsBarTemplate
+        (no querySelector/textContent diff loop); info-bar hull Lit-bound;
+        copy-paste modal shell textarea/confirm/preview via Lit classMap/
+        styleMap; hub/research collapsibles via uiState.hub_collapsed +
+        Lit classMap projection (no classList.toggle section-collapsed);
+        Tile cachedEffectiveVent/Transfer + recalculateEffectiveValues DELETED
+        (tooltips query bridge display rates at render);
+        DELETED queryUpgradeElement + upgrade purchase classList flash
+        (dom_pulse via effect bus); DELETED toast is-complete classList
+        dual-write (Lit classMap owns it); DELETED presentation part_active
+        classList (parts panel Lit binds selectedPartId); ESLint ignore
+        removed for ui-intents / ui-render-loop / presentation / upgrade-dom /
+        device / ui-app-wiring / game-event-wiring / state.js;
+        DELETED dead failure-* classList on #reactor_section (no CSS);
+        getUiElement for control-deck/views/device-shell/ui-components;
+        idle via html[data-ui-idle] (no classList); meltdown flash via
+        className; legal date el from allowlisted callers; ESLint ignore
+        also removed for control-deck / views / device-shell / meltdown /
+        idle-effects / ui-components / legalPageTemplates;
+        reduced-motion via html[data-reduced-motion] (no classList);
+        status notice --visible via Lit two-phase render (no classList);
+        nav active + mobile top bar via className; objective toast complete
+        via Lit + _lastObjectiveComplete (no DOM class read); achievement
+        toast animate via className; parts-panel macro toolbar className +
+        getUiElement; ESLint ignore also removed for preferences /
+        ui-state / objective-controller / achievement-controller /
+        ui-parts-panel; DELETED ui-nav + copy-paste part_active classList
+        dual-paths (selectedPartId Lit owns active); ui-nav uses
+        getUiElement + button walks + className (off ignore); research EP
+        hint reads hub_collapsed (no DOM collapsed query); hub debug/
+        preview hidden via className; ui-upgrade-hub + ui.js off ignore
+        (getUiElement + class/tag walks; floating-text/help-mode via
+        className; deleted redundant floating classList.clear);
+        ui-heat-visuals + ui-grid off ignore (tile-fx host via
+        getElementsByClassName; deleted getElementById reactor/wrapper
+        fallbacks; reactor layout flags via className); ui-copy-paste
+        off ignore (getCopyPasteRefs via getUiElement ids; deleted
+        modal-root querySelector dual-path + unused copy_paste_btns
+        lookup; dropper/compare hidden via className); ui-modals off
+        ignore (settings via getUiElement/class walks; deleted
+        modal-root getElementById fallback; nav active via className);
+        ui-tooltips-tutorial off ignore (deleted CLAIM_STEP toast
+        classList dual-path; getUiElement/className/class walks);
+        app-services splash off ignore (getUiElement/className/class
+        walks; deleted querySelector/classList dual-paths + no-op
+        version/userCount textContent dual-path); page-setup-ui off
+        ignore (DELETED legacy .leaderboard-sort mount dual-path;
+        header column visibility via className + getElementsByClassName;
+        sound-btn via class walk; mobile top bar via className); DOM
+        ignore remainder is mount/boot allowlist only (app/page-router/
+        renderLegal/dom/effect-orchestrator/boot-session/page-dom/
+        ui-page-init).
+      PERF re-confirm (2026-07-19): check:tick-project-budget ok
+        (12x12 avg=0.815ms max=1.729ms budget=16.667ms n=100);
+        check:declarative-dom ok; check:methodless-projection ok.
+      Exit: lint rule enforced; no parallel imperative DOM on lit surfaces;
+            perf budget held.
+
+Step 7 exit: 7a/7b DONE and 7c/7d DONE (incl. perf + ESLint).
+
+PROGRESS: 7a DONE · 7b DONE · 7c DONE · 7d DONE.
+
+Avoid:
+  - New UI features, tutorials, pages, or QoL systems
+  - "We looked for getElementById" without lint enforcement
+  - Second tooltip/stats pipelines beside session-backed ones
+  - Optimistic local mutations before session ack
+  - Deferring perf to Step 10
+
+
+--------------------------------------------------------------------------------
+STEP 8 — Presentation debt (orphans only; no CSS-script hostage)
+--------------------------------------------------------------------------------
+Goal: Critical path usable on target viewports. No redesign. No byte contests.
+
+Broad move: Manual orphan CSS delete only. DROP automated css:consolidate /
+trait-extract as a 1.0 workstream (distraction). Large main.css is OK if
+layouts are not broken.
+
+  8a  Delete orphan / dead CSS
+      Status: DONE (2026-07-18)
+      Orphan cloud/auth CSS + empty splash auth mount deleted (QW10).
+      Exit: no selectors for deleted cloud/account chrome.
+
+  8b  Automated CSS consolidate / trait extract
+      Status: DROPPED for 1.0 (was PARKED — now explicitly not a gate)
+      Do not run or retune css:consolidate as release work. Optional
+      post-1.0 manual cleanup only. Payload size is NOT a tag blocker.
+      Exit: N/A — not required for Step 8 or tag.
+
+  8c  Responsive / label debt on current layouts
+      Status: OPEN
+      Fix known clipping and label inconsistency on critical path; no redesign.
+      Exit: tablet/mobile critical paths usable (place/tick/save/settings).
+
+  8d  Critical-path visual usable (not "audit vibes")
+      Status: OPEN
+      Splash/settings/reactor chrome usable and on-theme enough for public;
+      no new design system; screenshot hard gate deferred.
+      Exit: critical path usable; no broken chrome on reference mobile.
+
+Step 8 exit: 8a DONE and 8c/8d DONE. 8b not a gate.
+
+PROGRESS: 8a DONE · 8b DROPPED · 8c OPEN · 8d OPEN.
+
+Avoid:
+  - Full visual redesign, rebrand, or new theme families
+  - Holding tag on CSS minification / trait-extract puzzles
+  - Wiring screenshot diff as a hard merge gate
+  - Appending CSS at file ends; merge into existing selectors/tokens
+  - Editing vendor/generated CSS under public/lib
+
+
+--------------------------------------------------------------------------------
+STEP 9 — Rebalance harness (tag-hard = lib sim + physical exile)
+--------------------------------------------------------------------------------
+Goal: Tests protect the architecture you ship. Sim tests never mount UI.
+Harness sync cannot be imported by production.
+
+Broad move: Thermodynamics / EP / grid physics suites → createGameSession /
+reactor-core-lib state only; delete UI/DOM mounting from those tests.
+UI tests = isolated component tests with mock projection data.
+Tag-hard: 9a + 9c. 9b setup diet is supporting.
+
+  9a  Sim tests use lib / session only (TAG-HARD)
+      Status: DONE (2026-07-19) — SIM_ROOTS session-only
+      DONE (zero UI mount): thermo / grid / progression forbid
+      setupGameWithDOM (CI: check:sim-no-dom). setupGame →
+      setupGameLogicOnly. Meltdown UI chrome in tests/ui/ only.
+      DONE (session migrate bite — thermo folder): meltdown + boundary +
+      heat-flow + group2 + auto-heat + heat-topology + pause-behavior +
+      session-valve-flow + session-heat-outlet + neighbor-interactions
+      assert createGameSession / getSnapshot only (zero setupGame under
+      tests/core/thermodynamics/). Deleted *-debug thermo + valve-heat-
+      flow + reflector_regression; deleted pause-heat /
+      pause-infinite-money + group2/meltdown/auto-heat/topology/pause
+      host dual paths; neighbor-interactions rewritten off setupGame/
+      placePart/updateStats/coreBridge.
+      DONE (session migrate bite — EP reboot): epReboot.test.js on
+      setupSessionOnly / session.reboot / creditExoticParticles /
+      calculatePrestigeReward / getUpgradeLevel (host Game dual-path gone;
+      ~186→77 LOC).
+      DONE (session migrate bite — EP purchase): epUpgradePurchase.test.js
+      on setupSessionOnly / previewUpgrade / purchaseUpgrade / sessionEp
+      (deleted setupGame/patchGameState/forcePurchaseUpgrade/upgradeset
+      dual-path + duplicate UI cost-display asserts; ~280→155 LOC).
+      DONE (session migrate bite — grid complex-layouts): exchanger chain /
+      forceful-fusion pulse / protium deplete / perpetual auto-buy on
+      createGameSession (~174→103 LOC); deleted setupGame/forcePurchase/
+      patchGameState/fake-timers + console.log extreme-vent dual path.
+      DONE (session migrate bite — grid group1): cell/reflector/cap/plate/
+      tick/deplete locks on createGameSession (~211→122 LOC physics);
+      canvas viewport culls moved to tests/ui/grid-canvas-culling.test.js;
+      deleted setupGame/placePart/updateStats/coreBridge/state delta dual
+      path from sim suite.
+      DONE (session migrate bite — grid reactor): reactor.test.js on
+      createGameSession (outputs/tile-heat/SELL_POWER/VENT_HEAT/infused/
+      heat_control/reboot/plating; ~265→165 LOC); presentMeltdown chrome
+      moved to tests/ui/meltdown-presentation.test.js; deleted tileset
+      resize/setDefaults dup/tick-spy/noop/power_multiplier stomp +
+      harness sync dual path.
+      DONE (session migrate bite — prestige group4): group4-prestige on
+      createGameSession (weave EP / PA no-EP / keep-EP isolation /
+      multiplier cap / discard; ~183→127 LOC); deleted setupGame/
+      loadEconomyFromHost/setDecimal/grantCheat dual path + fractal
+      purchase dup (lives in epUpgradePurchase).
+      DONE (session migrate bite — upgradeActions + power-overflow):
+      upgradeActions + power-overflow on createGameSession (modifiers /
+      resolveDisplayRates / mechanicsOverrides overflow ratios); deleted
+      setupGame/forcePurchaseUpgrade/placePart/coreBridge dual path +
+      host-only "persist after init" block.
+      DONE (session migrate bite — upgrade + upgradeset): upgrade.test +
+      upgradeset.test on createGameSession (previewUpgrade/listUpgrades/
+      purchaseUpgrade); deleted setupGame/loadEconomyFromHost/patchGameState/
+      forcePurchaseUpgrade/host UpgradeSet dual path; MAX display stays in
+      tests/ui (formatUpgradeDisplayCost).
+      DONE (session migrate bite — group3 + global-boosts): group3 +
+      global-boosts on createGameSession (cost/purchase/auto-sell via
+      mechanicsOverrides.autoSellPercent + part boosts via setUpgradeLevels);
+      deleted setupGame/patchGameState/coreBridge/DoctrineManager/
+      performTestRespec/respecDoctrine/host tech-tree lock dual path.
+      DONE (session migrate bite — new-upgrades): new-upgrades.test.js on
+      setupSessionOnly / modifiers / getPart / tick / VENT_HEAT (~562→195
+      LOC); deleted setupGame/harness sync/forcePurchaseUpgrade/
+      patchGameState/setDecimal/console.log + host tile monkey-patches /
+      _processTick intercept / saveManager dual path.
+      DONE (session migrate bite — tile/part/partset DTO): part + partset +
+      tile on setupSessionOnly / getPart / listParts / PLACE_PART_PAID /
+      SELL_PART / REMOVE_PART / computeSellValue / setUpgradeLevels /
+      getPlacedCount (~462→250 LOC); deleted setupGame/placePart/
+      forcePurchaseUpgrade/loadEconomyFromHost/patchGameState/tile.setPart/
+      sellPart/check_affordability host dual path; icon paths via
+      getPartImagePath POJO; description via session.getPartDescription.
+      DONE (session migrate bite — tileset/part-detection): tileset +
+      part-detection on setupSessionOnly / getSnapshot.grid /
+      placeComponent / removeComponent / topologyNeighborCoords /
+      getActivePartList (~123→85 LOC); deleted setupGame/placePart/
+      tile.setPart/clearAllTiles/updateActiveTiles host dual path.
+      DONE (SIM_ROOTS session): tests/core/{thermodynamics,grid,progression}
+      have zero setupGame / setupGameLogicOnly (tag-hard session half).
+      Exit (mount half): thermo / EP / grid physics — zero UI mount.
+      Exit (tag-hard): SIM_ROOTS assert lib/session state (no host Game).
+
+  9b  Diet tests/helpers/setup.js (SUPPORTING)
+      Status: DONE (2026-07-20)
+      vitest setupFiles = setupEnv.js only (mocks + timers; no Game/UI).
+      Host boot (setupGame*) is opt-in via import of helpers/setup.js.
+      SIM_ROOTS import vitest (+ suiteHelpers); check:sim-no-dom forbids
+      setup.js / setupGame / setupGameLogicOnly / setupGameWithDOM.
+      Deleted unused expect.extend matchers + dumpGrid/diffObjects/
+      console-buffer failure theater; prior dead helpers/aliases/no-ops.
+      Exit: supporting; full-host boot is not the default for every suite.
+
+  9c  Physical harness exile (TAG-HARD — pairs with Step 3d)
+      Status: DONE (2026-07-18) — lands with Step 3d
+      bridge-test-harness.js holds syncGridFromGame /
+      loadEconomyFromHost / syncReactorScalarsFromGame /
+      pushHostUpgradeLevelsForLoad. Production cannot import it
+      (ESLint restricted-imports + check:harness-exile). Tests import
+      harness helpers only (no coreBridge.* sync facade).
+      Exit: same as Step 3d harness half — CI proves prod cannot import.
+
+  9d  Playwright owns S1–S8 soak (TAG-HARD for tag / Step 10)
+      Status: DONE (2026-07-20) — honesty pass
+      S1–S9 → e2e/soak-sN-*.spec.js; npm run test:e2e:soak 9/9 local.
+      Deleted S3 applySaveState resume fallback; S6 requires cells cleared
+      + prestige_seq; S4 requires real Welcome-Back FF (Date.now offset).
+      Fixed v3 tiles_compact expand on load (empty tiles[] on disk).
+      Resume click targets .splash-btn-continue only (not NEW RUN glow).
+      .github/workflows/e2e-soak.yml on PR/master.
+      Exit: CI Playwright runs soak green; no dual-write scrap paths.
+            Must not block Steps 1–8 deletes — but blocks Step 10 tag.
+
+Step 9 tag-hard exit: 9a DONE and 9c DONE. Tag also requires 9d (S1–S8 e2e).
+9b supporting only.
+
+PROGRESS: 9a DONE (zero UI mount + SIM_ROOTS session-only: thermo/grid/
+         progression; tileset/part-detection closed) · 9b DONE (setupEnv
+         default; SIM_ROOTS off setup.js) · 9c DONE · 9d DONE (S1–S9 soak
+         9/9 local; honesty pass 2026-07-20).
+
+Avoid:
+  - Rubber-stamping 9a/9b to unblock tag while sim tests still boot host
+  - Claiming soak "done" via human checklist without Playwright CI
+  - Growing setup.js to paper over layering bugs
+  - Deleting hard suites instead of re-homing on session
+  - Asserting "function was called" instead of resulting state
+  - Re-introducing harness sync into production modules
+
+
+--------------------------------------------------------------------------------
+STEP 10 — Ship hardening and public 1.0
+--------------------------------------------------------------------------------
+Goal: Tagged, playable, supportable public release. Launch checklist only.
+Perf already proven on Steps 4 + 7 — do not rediscover FPS here.
+
+Broad move: Player soak S1–S8, PWA/SW, migrations, welcome-back, meltdown
+order, changelog, known-issues severity freeze, tag. No last-minute systems.
+
+  10a  PWA / SW + save / recovery + Playwright soak
+      Status: BLOCKED
+      Verify PWA/SW, save migrations, Welcome-Back FF, meltdown recovery
+      order. S1–S8 must already be green via Playwright on CI (Step 9d) —
+      humans do not check off soak at tag week.
+      Exit: CI e2e S1–S8 + checklist pass. Blocked on 1–7 hard exits + 9a/9c/9d.
+
+  10b  Perf budget confirmation (NOT discovery)
+      Status: BLOCKED — confirmation only
+      Re-confirm Step 4 + Step 7 recorded budgets still hold on release
+      candidate. No new systems to "fix" perf. If budget fails, fix under
+      Step 4/7 — do not invent Step-10 optimizers.
+      Exit: budgets still hold on RC. Not a first-time measurement gate.
+
+  10c  Changelog + known-issues severity freeze
+      Status: BLOCKED
+      Changelog for public; known issues listed with severity.
+      Money/heat/save desync = cannot freeze as "known" — must fix.
+      Exit: issues frozen; freeze exceptions = 0.
+
+  10d  Tag v1.0.0 from green main
+      Status: BLOCKED
+      Real tag; one version story; deploy without console-strip; critical
+      path smoke pass; README launch link matches ship.
+      Exit: tagged v1.0.0. Blocked until §E checklist all true.
+
+Step 10 exit: 10a/10b/10c/10d DONE from green main after hard exits above.
+
+PROGRESS: 10a BLOCKED · 10b BLOCKED · 10c BLOCKED · 10d BLOCKED.
+
+Avoid:
+  - Last-minute features, balance reworks, or new prestige layers
+  - First-time perf discovery at tag week
+  - Force-pushing release history or tagging from dirty trees
+  - Expanding cloud/leaderboard as a 1.0 blocker
+  - Treating package.json "1.0.0" as shipped without the tag
+  - Re-enabling regex console strip for the tag artifact
+
+
+================================================================================
+CROSS-CUTTING ANTI-PATTERNS (all steps)
+================================================================================
+- Additive defaults: wrappers, adapters-on-adapters, "compat forever" shims
+- Re-cutover: treating DONE physics ownership as open redesigns
+- Soft exits: "shrinking", "readable", "clean enough" marked DONE
+- DTO trap: class wrappers with display methods pretending to be data
+- State Mirror Trap: valtio gridState/economyState / money/heat/grid proxies
+- Facade zoo: bespoke bridge methods that re-encode Commands under new names
+- Intent Translation Trap: switch(intent.type) remap middleware in dispatch
+- Stomp ghosts: preserveHostScalars / loadEconomyFromHost on hot paths
+- Harness leak: test sync helpers importable from production modules
+- Console strip crutch: regex deploy strip instead of logger + ESLint ban
+- Late perf: measuring FPS only at Step 10 after architecture guts
+- Manual soak theater: humans check S1–S8 instead of Playwright CI
+- Scope bleed: UI polish inside bridge PRs; CSS scripts as trust work
+- Line-count gaming: split files without deleting dual paths; barrels hiding gods
+- QW theater: new Quick Wins or unexport PRs while Trust Spine (G3–G6) open
+- Lib wish-list creep: afford flags / CLAIM op must not block 1.0
+- Documentation sprawl: update THIS file; do not mint new markdown plans
+- Order: DELETE first, MERGE second, TIGHTEN third — never invent then delete
+
+
+================================================================================
+DEFERRED / NOT 1.0 — deferred-not-1.0 list (frozen; do not pull into Steps 1–10)
+================================================================================
+Out of scope for 1.0. Parked post-tag. Do not schedule under TEN PHASES / Steps 1–10.
+Short list (ideas + rejects). Concrete scrapable EXISTING fragments → next section.
+  - Multi-reactor / heat-bus networks
+  - Facility-menu abstraction replacing the tile grid   ← HARD REJECT (identity)
+  - Cloud save backend / accounts / analytics
+  - i18n / RTL
+  - Light theme / alternate palettes / full visual rebrand
+  - City-demand / timed quota scenarios
+  - Community gallery expansion
+  - New part / upgrade / objective content campaigns
+  - Undo history / macro systems beyond what already ships
+  - Lib content features that do not delete host complexity
+  - Optional lib afford-flag / CLAIM_OBJECTIVE gaps (unless a host fork dies)
+  - Screenshot-diff hard CI gate; compress-images as release blocker
+  - css:consolidate / trait-extract automation as release work
+  - Knip zero unused-exports (baseline non-growth only)
+  - New test frameworks, coverage tools, or design-system migrations
+
+
+================================================================================
+POST-1.0 FRAGMENT SCRAPYARD — existing features to mine later
+================================================================================
+Dated: 2026-07-18. Purpose: inventory what ALREADY exists in tree / data / stubs
+outside the 1.0 train, so future design updates scrape fragments instead of
+reinventing or smuggling work into Steps 1–10.
+
+Rules of use:
+  - NOT a backlog. Do not schedule these under TEN PHASES.
+  - Scrape = reuse touchpoint, pattern, or data shape AFTER v1.0.0 tag.
+  - Prefer deleting dead stubs in Step 3 if they confuse 1.0; re-add post-tag
+    from this scrapyard + git history — do not "finish" them during freeze.
+  - HARD REJECT items are listed only so scrapers do not "accidentally" revive them.
+  - Lib bumps still allowed post-1.0 only when they delete host complexity or
+    unlock a fragment below without a second sim path.
+
+
+--------------------------------------------------------------------------------
+SCRAPE PROTOCOL (how to mine a fragment)
+--------------------------------------------------------------------------------
+1. Confirm fragment id here; note STATUS (stub / partial / shipped-expandable).
+2. Read TOUCHPOINTS; diff against HEAD at tag — do not trust stale paths blindly.
+3. Decision gate (design-foundations §7): identity + determinism + adjacency.
+4. Land as one strangler: extend the fragment, delete the stub/duplication.
+5. Do not pull facility-menu / dual-physics / infinite-quest shapes back in.
+
+
+--------------------------------------------------------------------------------
+F1 — OPERATOR SAFETY & PLACEMENT (partial chrome already in host)
+--------------------------------------------------------------------------------
+
+F1.1  Grid undoHistory (DELETED from host 2026-07-18 — scrapyard design only)
+  STATUS: deleted-from-1.0-train — unwired undoHistory=[] removed from Game.
+          Re-entry design lives here only (post-tag).
+  TOUCH was: domain/game.js (undoHistory = [])
+  SCRAPE: Wire intent-safe undo of last place/macro; pair with macro toolbar.
+          Sell-degradation + miss-click friction (related-projects #10) is the
+          design problem this fragment answers — not a free second economy.
+
+F1.2  Macro toolbar + hotkeys (shipped without undo)
+  STATUS: shipped-expandable
+  TOUCH:  templates/pageShellTemplates.js (#macro_toolbar_*),
+          components/shell/ui-parts-panel.js, input/hotkey paths
+  SCRAPE: Add undo-last-macro / checkerboard / row-col fill depth from RI
+          parity notes; keep macros as intents, not direct Tile mutation.
+
+F1.3  Welcome-Back meltdownRisk + projectionQuery (partial)
+  STATUS: partial — elevated-heat warning + progress UI ship;
+          prep/UI dual sites collapsed (QW17 prepareOfflineCatchup +
+          showWelcomeBackModal); full pre-FF meltdown projection still thin
+  TOUCH:  components/modals/ui-modals.js (welcomeBackLayout, meltdownRisk,
+          postGameLoopProjectionQuery), domain/engine.js
+          (prepareOfflineCatchup, processOfflineTime, WELCOME_BACK_FF_MAX_TICKS),
+          app.js applyOfflineWelcomeBack; shell/game-event-wiring FX listener
+  SCRAPE: Richer offline ledger / projected meltdown before Fast-Forward
+          (related-projects #8). Do not revive analytical runInstantCatchup.
+
+
+--------------------------------------------------------------------------------
+F2 — PERSISTENCE & COMMUNITY (stubs + shipped portable core)
+--------------------------------------------------------------------------------
+
+F2.1  Cloud save stub (DELETED from host 2026-07-18 — scrapyard design only)
+  STATUS: deleted-from-1.0-train — setupCloudSaves, cloud CSS, cloudSave*
+          null fields, Google Drive privacy claims, CLOUD BACKUPS save-slot
+          branch, LoadGame* synced-label chrome, and isCloudSynced /
+          cloudUploadedAt preserve removed. Re-entry design lives here
+          only (post-tag).
+  TOUCH was: ui-modals setupCloudSaves; settings-modal.css cloud selectors;
+          save-query / app-services cloudSave* + CLOUD BACKUPS UI;
+          button-factory LoadGame*; game-save cloud flag preserve;
+          legalPageTemplates Drive copy
+  SCRAPE: Optional encrypted blob backend AFTER local .reactor trust is solid.
+          Restore from this id + git history — do not re-add during Steps 1–10.
+  AVOID:  Making cloud a 1.0 blocker or dual-write authority.
+
+F2.2  .reactor export/import + autosave slot (shipped core)
+  STATUS: shipped — 1.0 keeps as-is; fragment is portability UX depth
+  TOUCH:  domain/game-save.js, settings export/import, AUTOSAVE_SLOT_KEY
+  SCRAPE: Multi-slot UX, clearer migration messaging, cloud attach point (F2.1).
+
+F2.3  Layout share codec rr1: (shipped)
+  STATUS: shipped-expandable
+  TOUCH:  core/layoutShareCodec.js, domain/blueprint.js paste path
+  SCRAPE: Community gallery (F2.4), leaderboard "load layout", short-link page.
+
+F2.4  Community gallery (design-open; codec ready)
+  STATUS: idea + codec fragment — no gallery page
+  TOUCH:  share codec + leaderboard Load-to-Grid pattern
+          (services/leaderboard.js, ui-nav leaderboard_section)
+  SCRAPE: Curated/static gallery of rr1: codes with attribution (benchmark E3).
+          Do not build accounts to ship a static page.
+
+F2.5  Leaderboard outbox + Load to Grid (shipped optional)
+  STATUS: shipped — not a 1.0 tag blocker; expandable post-tag
+  TOUCH:  services/leaderboard.js, game-save saveRun hook, nav icons
+  SCRAPE: Reproducible layout attach, sort modes, offline outbox hardening.
+          Do not expand cloud/accounts under 1.0 Steps.
+
+
+--------------------------------------------------------------------------------
+F3 — THEORYCRAFT & PLANNER (shipped; expand later)
+--------------------------------------------------------------------------------
+
+F3.1  Blueprint planner slots + session sample
+  STATUS: shipped — keep for 1.0; scrapyard for deeper planner UX
+  TOUCH:  bridge revival-session-bridge blueprintPlanner sync,
+          session sampleLayoutProjection / projectionPlannerSample,
+          domain/game.js planner helpers, ui-copy-paste
+  SCRAPE: Richer sandbox HUD, warmup controls, planner-only overlays.
+          Same session physics only — no parallel planner math.
+
+F3.2  Layout A/B compare modal
+  STATUS: shipped-expandable
+  TOUCH:  pageShellTemplates.js #layout_compare_*, ui-copy-paste compare
+  SCRAPE: Delta charts, export of compare report, share-code-native inputs.
+
+F3.3  Blueprint planner CSV/JSON export
+  STATUS: shipped-expandable
+  TOUCH:  blueprint_planner_export path in ui-copy-paste
+  SCRAPE: MauveCloud-style analytics packs; tick-window export depth.
+
+
+--------------------------------------------------------------------------------
+F4 — PROGRESSION & CONTENT (data already present; campaigns deferred)
+--------------------------------------------------------------------------------
+
+F4.1  Achievement catalog (data-rich; chrome thick)
+  STATUS: shipped-expandable — public/data/achievement_list.json (~35 entries);
+          design-foundations once targeted ~30 optional; evaluators + toasts exist
+  TOUCH:  achievement_list.json, achievement-controller,
+          domain achievement chrome, effect_queue notices
+  SCRAPE: Orthogonal badges / meta goals — not chapter railroad replacement.
+          Thin display chrome in Steps 4/7; add CONTENT only post-tag.
+
+F4.2  Difficulty presets (easy/medium/hard)
+  STATUS: shipped-expandable
+  TOUCH:  difficulty_curves.json / bundled difficulty, app.js new-game preset
+          (power_overflow_to_heat_ratio etc.)
+  SCRAPE: Curated puzzle layouts / challenge modes (NOT infinite generated
+          quests — INFINITE_CHALLENGES was remediated; do not revive).
+
+F4.3  Flavor / failure copy (Navalty diegetic fragment)
+  STATUS: shipped — toast/banner path; city-demand scenario deferred
+  TOUCH:  flavor_text.json, failure_flavor.json, objective flavor_text fields
+  SCRAPE: Timed quota / "city demands power" challenge SKIN on existing
+          flavor + difficulty — never visual-novel modal walls mid-optimize.
+
+F4.4  Automation upgrades (partial RI arc)
+  STATUS: partial — auto_buy, heat_control, cell_perpetual ship;
+          smarter routing / full operator arc open
+  TOUCH:  state toggles, upgrade hub sections (*_operator, cell_perpetual_*),
+          game-state-sync keys
+  SCRAPE: Next automation tiers as JSON upgrades + session toggles — not
+          host-side autobuy brains that bypass intents.
+
+F4.5  Doctrine / prestige / weave chrome
+  STATUS: shipped — 1.0 keeps honesty; fragment is teachability depth
+  TOUCH:  bridge.respecDoctrine, WEAVE_QUANTUM prestige modal copy,
+          session_ep_weave derivations
+  SCRAPE: Clearer weave onboarding, doctrine tree UX — no new prestige layer
+          during 1.0 freeze.
+
+
+--------------------------------------------------------------------------------
+F5 — LIB / BRIDGE GAPS (optional; reductive only)
+--------------------------------------------------------------------------------
+
+F5.1  Part afford snapshot flags
+  STATUS: lib gap — host PartSet.check_affordability loop remains
+  TOUCH:  domain/part.js affordability; lib filterAffordablePlacements today
+  SCRAPE: Lib flags that DELETE host loop (L2). Never block 1.0 tag.
+
+F5.2  First-class CLAIM_OBJECTIVE command
+  STATUS: lib gap — host bridge.completeAndClaimObjective wraps check+claim
+  TOUCH:  revival-session-bridge.js completeAndClaimObjective, objectives.js
+  SCRAPE: CLAIM_OBJECTIVE op (L1) only if host fork dies / net delete.
+
+F5.3  HUD display-rate snapshot fields
+  STATUS: optional lib gap
+  TOUCH:  control-deck / overflow / Stirling host-projected fields (S4)
+  SCRAPE: Snapshot fields that collapse host mirrors — post-tag or Step 4/6
+          only when net-negative.
+
+
+--------------------------------------------------------------------------------
+F6 — VISUAL / THEME / OPS TOOLING (scripts & flags exist)
+--------------------------------------------------------------------------------
+
+F6.1  Dual splash background sets
+  STATUS: collapsed-to-stalenhag-for-1.0 — inactive splash_bg* set +
+          USE_STALENHAG_BG dual branch removed 2026-07-18; only
+          stalenhag_bg ships. Alternate packs are post-tag scrape.
+  TOUCH:  public/index.html carousel; img/misc/stalenhag_bg/
+  SCRAPE: Alternate palette / seasonal splash packs from git history;
+          stay inside thematic-styling.md — no purple/glow AI-slop rebrand.
+
+F6.2  Heat / meltdown / surge VFX vocabulary
+  STATUS: shipped — expand presentation later
+  TOUCH:  ui-heat-visuals.js (heat-flow, fx-ep/power/heat),
+          ui-meltdown presentation, failure_state phases
+  SCRAPE: Stronger phased panic / CRT language without new sim rules.
+
+F6.3  Screenshot + UI audit scripts (not CI hard gate)
+  STATUS: tooling shipped — gate deferred
+  TOUCH:  package.json ui:screenshots*, ui:console-audit*,
+          scripts/ui-audit/*
+  SCRAPE: Optional visual regression AFTER Step 8 polish stabilizes.
+          Do not make screenshot-diff a 1.0 merge blocker.
+
+F6.4  compress-images / css:dedupe / css:consolidate scripts
+  STATUS: DROPPED for 1.0 train — automated trait extract grew payload;
+          Step 8b is not a gate. Manual orphan delete only for 1.0.
+  TOUCH:  package.json compress-images, css:dedupe, css:consolidate
+  SCRAPE: Post-tag manual CSS hygiene if needed; never gate deploy on these.
+
+F6.5  subsystem-registry hooks
+  STATUS: early host registry — not a new gameplay system
+  TOUCH:  core/subsystem-registry.js; engine/reactor/game/bridge-intents/
+          ui-app-wiring runSubsystemHook call sites
+  SCRAPE: Shark-style subsystem registration cleanup post-size-cutover;
+          do not grow a second kernel behind the registry during 1.0.
+
+
+--------------------------------------------------------------------------------
+F7 — DESIGN-ONLY (no meaningful live fragment — park ideas)
+--------------------------------------------------------------------------------
+These are DEFERRED ideas without a scrapable implementation. Do not invent
+code for them during Steps 1–10. After tag, start from benchmarks + identity
+gate — or skip forever.
+
+  F7.1  Multi-reactor / heat-bus networks (Reactor Redux) — topology metaphor
+        already in pressure-gradient heat; secondary grid is late-game only
+  F7.2  City-demand timed quotas (Navalty) — skin via F4.3 flavor + F4.2 presets
+  F7.3  i18n / RTL string tables (MauveCloud) — extract when player base justifies
+  F7.4  Light theme / full visual rebrand — reject AI-default palettes
+  F7.5  New part/upgrade/objective content campaigns — data-only after freeze lifts
+  F7.6  Main-thread ECS / SoA Tile retirement — long-term size dream; not 1.0
+
+HARD REJECT (do not scrape into product):
+  X1 Facility-menu abstraction replacing the tile grid
+  X2 Infinite generic generated quests (INFINITE_CHALLENGES)
+  X3 Analytical offline multiply (runInstantCatchup)
+  X4 Dual physics kernels / UI-thread sim authority
+  X5 Wiki-required core mechanics; visual-novel modal walls mid-optimize
+
+
+--------------------------------------------------------------------------------
+FRAGMENT → FUTURE THEME MAP (optional grouping after tag)
+--------------------------------------------------------------------------------
+  "Miss-click forgiveness"     → F1.1 + F1.2
+  "Morning Coffee trust"       → F1.3 + F2.2
+  "Share & community"          → F2.3 + F2.4 + F2.5 + F3.2
+  "Planner depth"              → F3.1 + F3.2 + F3.3
+  "Operator automation"        → F4.4 + F4.5
+  "Content season"             → F4.1 + F4.2 + F4.3 + F7.5
+  "Lib thinning"               → F5.1 + F5.2 + F5.3
+  "Presentation season"        → F6.1 + F6.2 + F6.3 + F6.4
+
+
+================================================================================
+HOW TO USE THIS ROADMAP
+================================================================================
+- Read PUBLIC 1.0 (§A–E) first for tag picture, soak list, hard laws, gap rank.
+- Work TRUST SPINE first (1d → 3d → 4 → 6 → 5 → 7 → 2 → soak/tag). Not QW count.
+- Soft exit words are forbidden as DONE. Binary invariants only.
+- Do not schedule POST-1.0 FRAGMENT SCRAPYARD under Steps 1–10.
+- Every PR on the 1.0 train must hit Trust Spine (G3–G6): exile harness,
+  gut a domain class, delete a game-valtio mirror, or convert to passthrough
+  lib Command dispatch — or it waits. QW list is FROZEN.
+- Lib bumps allowed when they delete host code; not when they add content.
+- Update DONE notes as steps complete; do not erase history; do not grow this
+  file as a second product — prefer short status lines over archaeology essays.
+- This file wins on release intent when .cursor rules or other docs lag.
+
+Step↔rule mapping (early phases ↔ existing .cursor rules — rules may lag):
+  Step 1  ↔  .cursor/rules/phase-0-gate.mdc (freeze + npm test)
+  Step 2  ↔  phase-1-hygiene.mdc SUPERSEDED on console-strip — logger+ESLint now
+  Step 3  ↔  .cursor/rules/phase-2-architecture.mdc + harness exile mandate
+  Steps 4–6  methodless data + valtio UI-only + passthrough dispatch
+  Step 7     lib Commands + declarative UI + DOM ESLint restrictions
+  Step 8     orphan CSS only; thematic-styling.md if present; no consolidate gate
+  Step 9     sim=lib; harness exile; Playwright S1–S8 owns soak
+  Step 10    tag after hard exits + CI e2e soak; perf confirmation only
+
+Size-debt ownership (RANKED REMAINING → step):
+  S1 Reactor modifier / class wrappers   → Step 4 (methodless)
+  S2 state.js god / game mirrors         → Step 5 (valtio UI-only + snapshot)
+  S3 Objective/Achievement class chrome  → Step 4 delete + Step 7 UI fns
+  S4 Control-deck / Stirling fields      → Step 4 POJO + Step 7
+  L1/L2 lib afford / CLAIM ops           → park; lib Command + dispatch; never block
+  T1 harness session vs host split       → Step 9 (tag-hard 9a+9c)
+  T2 Playwright S1–S8 soak               → Step 9d (blocks tag)
+
+
+HOST BRIDGE SURFACE (6a DONE — inventory matches revival-session-bridge.js)
+-------------------------------------------------------------------------
+  Public entry ONLY: attachCoreBridge / getActiveBridge / requireActiveBridge.
+  RevivalSessionBridge class = module-private (not a second public facade).
+
+  ALLOWED (keep — target public API; add thin wrappers where missing):
+    dispatch(libCommand)        KEEP — session.dispatch(cmd) + drain + project;
+                                ZERO type-remap / UI→lib translation
+    processTick                 KEEP — session tick + project-out
+    projectToGame / projectLiveState  KEEP — session → methodless POJOs
+    getSnapshot                 KEEP — thin session.getSnapshot() read wrapper
+    hydrateFromHost             KEEP — named load/new-game/sanitize ONLY
+    loadLegacySave              KEEP — hydrate-on-load
+    drainPendingCommands        KEEP — session.drainCommands passthrough
+    routeEvents                 KEEP — FX/UI after project
+    read-only queries (KEEP):
+      resolveDisplayRatesForTile / getHeatSegmentForTile /
+      inspectExchangerPressureFlow / describeCellPulse / hasTickActivity /
+      getPrestigeMultiplier / computeSellValueForTile / computeSellValueForPart /
+      getObjectiveProgress / evaluateObjectiveCheck / previewBlueprintDiff /
+      previewPartialBlueprint / layoutCost / sampleLayoutProjection /
+      computeGridSellCredit / previewUpgrade / isUpgradeAvailable /
+      listUpgrades / queryNeighbors / getUpgradeLevel / getPlacedCount
+
+  DELETED under 6b (callers → bridge.dispatch / domain orchestration):
+    placePart / sellPart / purchaseUpgrade / sellPower / ventHeat
+    completeAndClaimObjective / hardReset / respecDoctrine
+
+  DELETED under 6d (2026-07-19):
+    placePartUnpaid / removePartAt / applyBlueprint / commitBlueprintPlanner
+    grantReward / creditMoney / debitMoney
+    bridge-intents action→type remap (PLACE_PART→PLACE_PART_PAID, etc.)
+    prestige / reboot / dumpTileHeatToHull
+      → state/reboot.js dispatches REBOOT Command + host chrome
+    setTileHeat / setTileTicks / setReactorHeat / setReactorPower /
+    resetReactorHeat → bridge-test-harness (+ setup attach); prod uses
+      session.grid.resetHeat + projectLiveState for meltdown recovery
+    incrementPlacedCount / setPlacedCounts / clearPlacedCounts /
+    rebuildPlacedCounts → session placedCounts (getPlacedCount KEEP)
+    tryAutoCompleteCurrentObjective / syncObjectiveClaim /
+    syncObjectiveIndex → domain/objectives.js
+
+  DELETED under 6d (public sync* internalized 2026-07-19):
+    syncTogglesFromGame / syncMetaFromGame / syncTickMetaFromGame /
+    syncObjectiveFlagsFromGame → module-private; hydrateFromHost /
+      _syncBeforeTick / _syncBeforeSessionOp / _syncForObjectiveEval /
+      dispatch() only (not public actions)
+
+  HYDRATE satellites (internal; named load/setup only — not hot-path API):
+    hydrateGridFromHost / hydrateEconomyFromHost /
+    hydrateUpgradeLevelsFromHost /
+    hydrateAchievementsIntoSession / hydrateObjectivesIntoSession
+    projectUpgradeLevelsToHost / syncGridToGame (project-out satellites)
+
+  INTERNAL / TESTS ONLY (not production-importable):
+    bridge-test-harness.js — syncGridFromGame, loadEconomyFromHost,
+                             syncReactorScalarsFromGame,
+                             pushHostUpgradeLevelsForLoad,
+                             setTileHeat / setTileTicks / setReactorHeat /
+                             setReactorPower / resetReactorHeat,
+                             attachHeatMutatorsForTests
+
+  Satellites (internal, not second public facade):
+    core-state-projection.js — snapshot → host POJOs
+    bridge-grid-sync.js      — layout hydrate on diverge; no hot stomps
+    bridge-upgrades.js       — levels + affordance projection-out
+    bridge-mechanics.js      — sell overrides + session→host modifiers
+    bridge-economy-sync.js   — economy hydrate-on-load
+    bridge-intents.js        — drain→bridge.dispatch passthrough (6d DONE);
+                               host-only SET_TOGGLE/PAUSE_TOGGLE/REBOOT orch remain
+    bridge-heat.js           — heat segment/flow (read-only)
+    tick-commit.js           — tick commit build + in-flight asserts
+    route-session-events.js  — events → FX/UI
+    active.js                — getActiveBridge / requireActiveBridge
+
+  Refuse: new sync direction; facade convenience methods; Intent remap switch;
+  dual-writing host mirrors; preserveHostScalars on hot paths; sim data in valtio.
 
 
 DONE (physics / tick authority — do not re-open)
@@ -32,7 +1717,8 @@ DONE (physics / tick authority — do not re-open)
 - Tick / heat / pulse / caps / vent / sell / purchase go through session
 - No host shouldMeltdown / _effectivePower/_effectiveHeat / applyLayoutCaps
 - Blueprint diff/cost via session; clipToGrid from lib
-- Meltdown evaluation in lib; host executeMeltdown is presentation only
+- Meltdown evaluation in lib; host presentMeltdown (route-session-events)
+  is presentation only — no executeMeltdown/checkMeltdown on Reactor
 - Tooltips use describeCellPulse / getHeatSegmentAt
 - Neighbors via session.queryNeighbors
 - Weave EP via calculateWeaveEp
@@ -72,48 +1758,54 @@ DONE (P1 host rule leftovers — 2026-07-17)
 
 P2 — KEEP ON HOST (document, do not "fix into lib")
 ----------------------------------------------------
-- executeMeltdown presentation (overlay, haptic, recovered blueprint, engine stop)
-- Tile._clearMeltdownRecovery presentation (unpause / restart engine)
-- engine handleComponentExplosion hull heat dump (lib emits event only)
+- presentMeltdown presentation (overlay, haptic, recovered blueprint, engine stop)
+  via route-session-events catching lib meltdown / projected hasMeltedDown
+- clearMeltdownRecoveryAfterPlace (bridge-intents after PLACE_PART)
+- engine handleComponentExplosion is presentation-only (lib emits event;
+  explodeComponent dumps contained tile heat to hull then zeros tile;
+  host _ensureExplosionHeatDumped is no-op when lib already dumped)
 - syncHostSellOverridesToSession when tests/UI force auto_sell / altered_max_power
 - UnlockManager tier visibility rules (uses session placedCounts) — product UI policy
 - valtio state, rAF engine shell, save chrome, lit templates, audio/PWA
 - blueprint serialize/share-code / validatePasteResources (UI gating over session costs)
-- Test helpers may call pushHostUpgradeLevelsForLoad / loadEconomyFromHost /
-  syncGridFromGame explicitly after host mutations (not production paths)
+- Test helpers may call harness sync ONLY via bridge-test-harness.js after
+  host mutations (Step 3d/9c — not production-importable paths)
 
 
-P3 — DOMAIN SHELLS (in progress / ongoing)
-------------------------------------------
-Goal shape per domain type:
-  Part / Upgrade / Tile / Reactor = projection DTOs + display helpers
-  Game / Engine = wire UI intents → bridge + schedule project
-  state.js = valtio store + UI-only flags; reboot/prestige next to bridge
+P3 — PROJECTION DATA (in progress — SUPERSEDES "DTO + display helpers")
+----------------------------------------------------------------------
+Goal shape (HARD — Step 4):
+  Part / Upgrade / Tile / Reactor projection = methodless POJOs / structs
+  Display = pure UI functions (formatPartForDisplay, etc.) — NOT class methods
+  Game / Engine = wire UI Intents → bridge.dispatch + schedule project
+  state = valtio UI ephemeral only; Lit renders bridge.getSnapshot() —
+          never money/heat/grid mirrors in host proxies
 
-Still thick but no longer authoritative for money/EP/levels/tick physics.
-Further line-count shrink is optional polish, not a cutover blocker.
+Still thick class shells today; they are NOT "good enough DTOs". Deleting
+the class wrapper IS the cutover. Line-count shrink without method deletion
+is not progress.
 
 
 P3 REVIEW — 2026-07-17 (public/src ownership pass; canvas refresh)
 ------------------------------------------------------------------
-Cutover blockers remain DONE. Soft place/heat leaks and P1 dual-write
-footguns are CLOSED. Remaining work is size polish + lib gaps + test
-harness split — not re-cutover.
+Physics cutover blockers remain DONE. Soft place/heat leaks and P1 dual-write
+footguns are CLOSED for *eval*. Remaining work is projection honesty +
+dispatch-only bridge + harness exile + methodless data — not re-cutover.
 
 Canvas: public-src-core-lib-review (Cursor canvases/)
 
-VERDICT (deep review canvas)
-  Authority cutover complete. Size cutover is not.
-  ~25k non-generated public/src lines; UI/services are the wrapper and stay;
-  shrink targets are domain (~3.7k) + state.js (~1k). Bridge (~1.5k) stays.
+VERDICT (deep review canvas — updated 2026-07-18 harden)
+  Physics authority complete. Projection honesty / facade zoo / harness
+  leak / logger strip are NOT. ~25k public/src lines; UI/services stay;
+  shrink targets are domain class wrappers + state god proxy + bridge zoo.
 
 Host layer line budget (excl. generated; 2026-07-17 count):
-  components+templates  ~12.1k  (UI — keep)
+  components+templates  ~12.1k  (UI — keep; pure formatters live here)
   services              ~3.3k   (audio/PWA/leaderboard — keep)
-  domain                ~3.7k   (thick shells — shrink to DTOs)
-  root (app/state/…)    ~2.7k   (state.js god-module)
-  bridge                ~1.5k   (mandatory adapter — keep)
-  infra (core/schema/…) ~2.5k   (host utilities — keep)
+  domain                ~3.7k   (thick classes — DELETE wrappers → POJOs)
+  root (app/state/…)    ~2.7k   (god proxy — valtio UI-only + snapshot Lit)
+  bridge                ~1.5k   (passthrough dispatch; delete zoo + remap)
+  infra (core/schema/…) ~2.5k   (host utilities — keep; logger discipline)
 
 Domain line counts (approx):
   state.js 965 | game.js 547 | game-save.js 498 | objectives.js 454
@@ -135,7 +1827,9 @@ Per-shell role today:
 
 SOFT LEAKS / P1 FOOTGUNS — ALL DONE (do not reopen as authority bugs)
   1) Tile.setPart / clearPart — DONE session-first
-  2) Explosion hull dump — DONE session-authored
+  2) Explosion FX — DONE presentation-only; hull dump on game:componentExplosion
+     hook during session tick (before commit/project);
+     session explodeComponent / bridge _ensureExplosionHeatDumped owns hull dump
   3) Meltdown recovery heat — DONE session-authored
   4) EconomyManager / EP setters — DONE guarded (withHostEconomyHydrate /
      _isRestoringSave; VITEST allows; prod throws outside hydrate)
@@ -150,44 +1844,50 @@ SOFT LEAKS / P1 FOOTGUNS — ALL DONE (do not reopen as authority bugs)
  10) Doctrine place gate — DONE single gate on bridge.placePart /
      placePartUnpaid (session isUpgradeAvailable via partset)
 
-SIZE DEBT (optional polish — not spend authority)
-  - Reactor modifier field farm (sessionModifiers + field copy for legacy readers)
-  - state.js god-module (valtio + UnlockManager + reboot chrome + schema barrel)
-  - ObjectiveManager / AchievementManager display + chapter chrome (thick)
-  - Control-deck auto-sell/vent / Stirling / overflow host-projected fields
-  - buildPartSummary / sell-modal part.cost fallbacks
-  - PartSet.check_affordability host loop (blocked on lib afford flags)
-  - syncReactorScalarsFromGame retained for test harness host heat writes
+SIZE / HONESTY DEBT (1.0 trust spine — not optional LOC polish)
+  - Domain class wrappers with methods (DTO trap) → Step 4 methodless POJOs
+  - state.js god proxy / game mirrors → Step 5 valtio UI-only + snapshot Lit
+  - CLOSED 6: Bridge bespoke zoo + remap → passthrough dispatch
+  - CLOSED 3d/9c: prod stomps + harness facade exile
+  - ObjectiveManager / AchievementManager chrome → Step 4b
+  - CLOSED 4c: EconomyManager / TimeKeeper / SessionManager deleted
+  - Control-deck / Stirling / overflow as projected POJO fields → Step 4+7
+  - CLOSED 2b: console.* + deploy regex strip → logger.js + ESLint ban
+  - PartSet.check_affordability host loop (lib gap — wrap; never block tag)
 
-RANKED REMAINING (S = size, L = lib, T = tests)
-  S1) Collapse Reactor modifier farm → thin DTO from projectModifiers/snapshot
-  S2) Slim state.js (valtio + UnlockManager + bridge-adjacent reboot)
-  S3) Thin ObjectiveManager / AchievementManager to display + event chrome
-  S4) Control-deck / overflow / Stirling from session snapshot fields only
-  L1) Lib CLAIM_OBJECTIVE first-class op — host wrap fine until then
-  L2) Lib part afford snapshot flags (filterAffordablePlacements only today)
-  T1) Test harness: createGameSession / headless for sim; host tests for
-      projection + UI policy only
+RANKED REMAINING (trust first)
+  T1) Sim tests → session.getSnapshot (9a SIM_ROOTS DONE)           → Step 9a CLOSED
+  T2) Playwright S1–S8 on CI                                         → Step 9d CLOSED
+  CLOSED: G2 ignore/generate + logger + knip (Step 2a–2d)
+  L1/L2) Lib CLAIM / afford flags — park; lib Command; never block
+  CLOSED: U1 DOM ESLint + UI consolidate + perf (Step 7a–7d)
+  CLOSED: T0 stomps + T0b/9c harness exile (Step 3d)
+  CLOSED: S1 methodless projection + perf (Step 4a–4d)
+  CLOSED: B1 dispatch zoo delete (Step 6b); S2 valtio UI-only (Step 5)
+  CLOSED: B1b Step 6d DONE (passthrough + sync*/hydrate* public zoo)
+  CLOSED: G2 logger pivot (2b) + warning-fail/knip (2d)
+  CLOSED: 9a zero-UI-mount half (check:sim-no-dom on thermo/grid/EP)
 
-TEST HARNESS NOTE (structural; not authority)
-  Suites boot the full host and hydrate after host mutations
-  (syncGridFromGame / loadEconomyFromHost / pushHostUpgradeLevelsForLoad /
-  syncReactorScalarsFromGame for host heat/power writes before vent/sell).
-  A lib-centric suite would prefer createGameSession / createHeadlessRunner
-  for pure sim and host tests only for projection + UI policy — larger than
-  shell shrink; not required for authority.
+TEST HARNESS NOTE (structural — 9c DONE with 3d; 9a DONE)
+  Host→session test sync lives in bridge-test-harness.js only
+  (CI: check:harness-exile). Mount half DONE (check:sim-no-dom).
+  CLOSED 9a SIM_ROOTS: thermo/grid/progression session-only (no setupGame).
+  UI/host suites (engine/objectives/…) may still boot host — not SIM_ROOTS.
 
 BRIDGE GAPS (remaining)
-  - Full deletion of reactor modifier field farm (compat copy remains)
-  - Part afford snapshot flags (lib)
-  - First-class CLAIM_OBJECTIVE command (lib; host bridge wraps check+claim)
-  - Optional HUD display-rate snapshot fields (lib)
+  - 6a/6b/6d CLOSED: passthrough dispatch; public sync*/hydrate* zoo gone
+  - Part afford snapshot flags (lib — park)
+  - First-class CLAIM_OBJECTIVE (lib — park; host dispatch wrap fine)
+  - Optional HUD display-rate snapshot fields (lib — park)
+  CLOSED 3d: preserveHostScalars / hot-path host→session stomps / harness
+  on prod facade
 
-NOT GAPS (correct)
+NOT GAPS (correct for physics)
   sell/vent/purchase/place/blueprint/prestige/reboot/respec/cheat EP
-  caps/stats from snapshot; neighbors/pulse/heat segments from session
+  *authority* in session; neighbors/pulse/heat segments from session
   objective claim + achievement unlock via session (host is chrome only)
-  SET_TOGGLE / REBOOT intent producers
+  SET_TOGGLE session-owned via dispatch; REBOOT host orch remains
+  (keepEp chrome — not toggle dual-write)
 
 
 reactor-core IMPORT SURFACE (host today)
@@ -199,42 +1899,224 @@ reactor-core IMPORT SURFACE (host today)
   (most session APIs used via bridge methods, not direct imports)
 
 
-SUCCESS CRITERIA (updated)
---------------------------
+SUCCESS CRITERIA (updated 2026-07-18 — hardened; #6 rewritten)
+--------------------------------------------------------------
 1. Host never evaluates meltdown/hull locally.                    DONE
+   (presentMeltdown reads projected melting_down / session hasMeltedDown;
+    no host heat-threshold meltdown eval; Reactor.executeMeltdown deleted)
 2. Host never spends money/EP or bumps upgrade levels except via
-   commands (respec/hardReset/purchase go through session).       DONE
+   lib Commands through passthrough bridge.dispatch.             DONE
 3. Host never assigns grid.maxPower/maxHeat.                     DONE
 4. Host never writes cell _effectivePower/_effectiveHeat.        DONE
-5. Manual vent and sell go through VENT_HEAT / SELL_POWER.       DONE
-6. Bridge = intent → dispatch/tick → project on hot paths;
-   hydrate on load/setup; tick/_syncForObjectiveEval may also
-   push host runtime/economy into session when tests/UI mutate
-   host mirrors first (protium/sell/heat harness paths).         DONE
+5. Manual vent and sell go through VENT_HEAT / SELL_POWER Intents. DONE
+6. Bridge hot path = lib Command → passthrough dispatch → tick →
+   project-out / getSnapshot only. No switch(intent.type) remap.
+   Hydrate (host→session) ONLY on named load/new-game/sanitize
+   entrypoints. Harness sync lives in bridge-test-harness.js and
+   MUST NOT be importable from production. Zero sim data in valtio.
+   SUPERSEDES prior #6 that blessed host→session pushes for
+   "tests/UI mutate host mirrors first" — that was the stomp ghost.
+   Harness exile + hydrate-only half: DONE (3d). Passthrough dispatch
+   + zero valtio sim mirrors: DONE (Steps 6/5).
 
-HOST SYNC HARDENING (2026-07-17 evening — keep)
------------------------------------------------
-- processTick copies session protiumParticles to host before
-  post-tick loadEconomyFromHost can clobber mid-flight gains
-- ObjectiveManager clones bundled objective defs (no shared
-  completed flags across games); check_current_objective syncs
-  grid + session.checkObjective; teardown clears auto-complete timer
-- syncGridToGame applies/clears parts even on exploding tiles so
-  explosion clear + re-place do not diverge host vs session
+HOST SYNC HARDENING (2026-07-17 evening — keep where true; 3d CLOSED)
+--------------------------------------------------------------------------
+- processTick must not clobber mid-flight protium/economy via host stomps
+- ObjectiveManager clones bundled objective defs (no shared completed flags)
+- syncGridToGame applies/clears parts even on exploding tiles (project-out)
 - Part.base_power reads catalog basePower (not shop power)
-- Upgrade.setLevel merges one level into session (setUpgradeLevels
-  replace-all safe); test harness may still hydrate after setLevel
+- Upgrade levels from session project/events; harness hydrate ONLY via
+  bridge-test-harness.js after host mutations in tests
+- DONE 3d: preserveHostScalars gone; prestige/purchase do not
+  loadEconomyFromHost on hot paths; harness APIs unloadable from prod
 
-NOT DONE (do not claim as finished)
------------------------------------
-- Net frontend line cut is not ~800–1000 in this tree (recent
-  domain/bridge pass is roughly net-flat; objectives thinned most)
-- ObjectiveManager still has start() setTimeout auto-complete and
-  claim feedback timers — not passive objectiveComplete-only
-- EconomyManager / TimeKeeper / SessionManager still exist in game.js
-- Tile still has heat_contained / addHeat / ticks (projection +
-  harness writes); reactor meltdown presentation remains on host
-- engine.js rAF / offline catchup and blueprint share codec still
-  host-owned (optional next shrink targets, not authority blockers)
+DONE (host heat mirror deletion — 2026-07-17)
+---------------------------------------------
+- Production tick/ops: runtimeFromHost=false; no tick-path
+  syncReactorScalarsFromGame; session tileHeatMap is sole heat kernel
+- Tile.heat_contained is getter-only over Tileset.heatMap view;
+  addHeat removed; projection masks to occupied cells only
+- Tests mutate heat via bridge-test-harness (setup attachHeatMutatorsForTests);
+  prod RevivalSessionBridge has no heat setters
+- explodeComponent dumps contained heat to hull then zeros tile;
+  host FX path does not dump; save serializes from session grid
 
-End of document.
+
+DONE (session-as-worker boundary — 2026-07-17)
+---------------------------------------------
+- processTick: no loadEconomyFromHost; tick commit cloned before project
+- intent_queue drains at tick start when running; immediate when paused
+- routeSessionEvents FX-only (no mid-commit session heat / pendingDestruction)
+- Meltdown presentation single-path via projected flag / meltdown event
+- Save migration: Trimps MIGRATIONS registry (v1→v2→v3); hydrate assignment-only
+
+NOT DONE (do not claim as finished — trust spine)
+-------------------------------------------------
+- CLOSED 6d: passthrough dispatch + public sync*/hydrate* zoo deleted
+  (private host→session toggle sync remains until SET_TOGGLE owns session)
+- Deploy regex console-strip DELETED (Step 2b); logger + ESLint no-console
+- CLOSED 4a–4d: methodless projection + createPart factory (no game on POJO)
+  + perf budget
+- CLOSED 5d: createGameState valtio sim proxy killed; hydrate bag scalars are
+  plain Numbers (no Decimal instances); statePatch core sync deleted
+- Sim suites still often boot full host (Step 9a)
+- Meltdown presentation on host via presentMeltdown / effect_queue (expected;
+  Recovered Blueprint before tile clear)
+- blueprint share codec still host-owned (optional shrink)
+- Parked host protocol (not DTO debt): ObjectiveManager claim,
+  Reactor updateStats/sell, Upgrade.setLevel
+  (Tile place/sell entity API DELETED 2026-07-19)
+
+DONE under Step 4c (2026-07-18)
+--------------------------------
+- EconomyManager / TimeKeeper / SessionManager deleted from game.js
+- current_money get/set + pause/resume/togglePause inline on Game
+- session time + peak tracking owned by LifecycleManager
+
+DONE under Step 3d (2026-07-18 — do not reopen as stomp debt)
+-------------------------------------------------------------
+- preserveHostScalars absent; no hot-path host→session scalar stomps
+- syncReactorScalarsFromGame / test sync names live only in
+  tests/helpers/bridge-test-harness.js
+- Production grid/econ/upgrade host→session only via hydrateFromHost
+  (hydrateGridFromHost / hydrateEconomyFromHost / hydrateUpgradeLevelsFromHost)
+- ESLint bans public/src importing bridge-test-harness
+- CI: check:harness-exile in test-runner + CI npm test gate
+- Vitest alias @app/state.js → tests/helpers/state-patch-shim.js
+  (test-only: economy patchGameState hydrates session; production untouched)
+
+DONE (Reductive 1.0 remaining — 2026-07-18)
+-------------------------------------------
+- Tile ticks/display projection getters; dead runtimeFromHost sync removed
+- Intent drain at tick start; UI place/sell via intent_queue
+- Save hydrate: objectives via session load + chrome after project
+- state/reboot.js extracted; domain imports reboot narrowly
+- Welcome-Back: WELCOME_BACK_FF_MAX_TICKS chunks + progress + heat risk
+- projectionPlannerSample via ephemeral session sampleLayoutProjection
+- ObjectiveManager start() synchronous checkAndAutoComplete (no setTimeout)
+- QW1–QW24 hygiene trail (barrels/cloud/orphans) — supporting, not trust spine
+
+NEXT FOCUS (immediate — trust spine; QW list FROZEN)
+---------------------------------------------------
+Do not reopen physics cutover. Reject new QWs. Stop unexport theater.
+
+  Order: Step 1d finish (R2/R4 CI run IDs after push) ← NEXT → tag (10).
+  CLOSED: 6d SET_TOGGLE follow-on + pause honesty; 1d R5 DONE.
+  Parallel: 8c/8d; 3b knip.
+  CLOSED: Step 2a ignore/generate hygiene (sw.js untracked; lib/css
+  generated ignored).
+  CLOSED: Step 9d honesty — S1–S9 soak 9/9 local; tiles_compact load fix;
+  no S3 applySaveState paper; e2e-soak.yml present.
+  CLOSED: eslint.yml checklist zoo → sole-gate npm test on PR.
+  CLOSED: 9b setup diet (setupEnv default; SIM_ROOTS off setup.js).
+  Parallel: 8c/8d; 3b knip diet.
+  CLOSED: 3d stomps + harness exile; 4a–4d methodless + createPart + perf;
+  4c mirror managers; Step 4b display chrome; 6a surface inventory;
+  6b public dispatch zoo delete; 6d DONE (passthrough + sync*/hydrate*
+  public zoo internalized); 5b/5d; Step 7 DONE (7a–7d DOM lint + perf);
+  Step 2b DONE (logger + strip delete); Step 2d DONE (warning-fail + knip);
+  Step 9a DONE (SIM_ROOTS session-only incl. tileset/part-detection).
+  Parked (not DTO debt): Objective claim protocol, Reactor updateStats/sell,
+  Upgrade.setLevel. Tile place/sell entity API deleted (intent_queue only).
+
+PROGRESS LANDING (2026-07-20 — 1d prep + SUCCESS #6 honesty)
+  - Scrap inventory CLOSED; QW1–QW24 FROZEN (no further QWs)
+  - Soft exits / fat-facade freeze / CSS consolidate / late perf /
+    SUCCESS #6 stomp blessing / scoped game valtio — SUPERSEDED
+  - Step 3d DONE: harness exile + hydrate-only prod
+  - Step 4c DONE: EconomyManager / TimeKeeper / SessionManager deleted
+  - Step 4b DONE: display formatters under components/; domain DTOs not
+    used solely for display methods; claim/Tile/Reactor kept as host
+    protocol (see 4b NOT 4b debt)
+  - Step 4d DONE: class Part → createPart factory POJO (no game ref);
+    domain purity + tick+project perf budget held; CI
+    check:methodless-projection proves getSnapshot + buildHostStatePatch
+    + createPart are methodless and game-free
+  - Step 5b DONE: app.js boot+wire only; session lifecycle in boot-session.js
+  - Step 5d DONE: createGameState is plain POJO (no valtio/derive);
+    money/heat/power/EP/session scalars are Numbers (setDecimal→toNumber);
+    statePatch emit/listen deleted; UI reads hudViewFromSnapshot +
+    snapshot_rev; objective_notifications + dead ambience/effect_queue
+    game.state subs deleted; derive.js deleted
+  - Step 7 DONE: 7a–7d closed. Declarative DOM ESLint enforced (ignore =
+    mount/boot only); dual classList/querySelector producers deleted on
+    Lit surfaces; check:declarative-dom + check:tick-project-budget held
+    (12x12 avg=0.815ms ≪ 16.667ms); check:methodless-projection ok
+  - Step 6a DONE: HOST BRIDGE SURFACE matches RevivalSessionBridge
+  - Step 6b DONE: public dispatch(libCommand); deleted placePart/sellPart/
+    purchaseUpgrade/sellPower/ventHeat/completeAndClaimObjective/hardReset/
+    respecDoctrine; callers emit lib Commands or domain orchestration
+  - Step 6d DONE: intent_queue uses {type,payload} lib Commands;
+    drain→bridge.dispatch passthrough; deleted PLACE_PART→PLACE_PART_PAID
+    remappers + placePartUnpaid/removePartAt/applyBlueprint/
+    commitBlueprintPlanner/grantReward/creditMoney/debitMoney;
+    deleted bridge.prestige/reboot/dumpTileHeatToHull; state/reboot.js
+    dispatches REBOOT + previewPrestige for host chrome;
+    deleted bridge setTileHeat/setTileTicks/setReactorHeat/setReactorPower/
+    resetReactorHeat → bridge-test-harness + setup attach; prod meltdown
+    recovery uses session.grid.resetHeat + projectLiveState;
+    deleted bridge placedCounts mutators + tryAutoComplete/syncObjectiveClaim/
+    syncObjectiveIndex; domain/objectives owns claim; session.* for counts;
+    deleted bridge hydrateAchievements/Objectives + syncForStatsRead +
+    syncGridToGame + syncUpgradeLevelsToGame + projectUpgradeLevelsToHost
+    class methods; hydrateFromHost owns load-path; satellites own mid-session
+    hydrate/project-out; recalculateCaps inlined at read sites;
+    public syncToggles/Meta/TickMeta/Flags deleted → module-private;
+    dispatch() owns pre-command sync
+  - Step 2b DONE: deleted remove-console-logs script/script/deploy step;
+    public/src console.* → logger (ESLint no-console error; logger.js sink
+    only); productionMode host-gated; index.html boot console deleted
+  - Step 2d DONE: lint:js --max-warnings 0; eslint-warning-baseline=0;
+    knip-baseline unusedExports=238 / unusedFiles=0; CI + npm test gates;
+    APP_VERSION/package.json = 1.0.0; deleted orphan upgrade-dom.js +
+    grid-helpers.js; dead unused import/var cleared
+  - Step 9a DONE: zero UI mount (check:sim-no-dom) + SIM_ROOTS
+    (thermo/grid/progression) session-only — zero setupGame. Thermo +
+    EP + prestige/upgrade + new-upgrades + tile/part/partset +
+    tileset/part-detection session-complete (~123→85 LOC for last bite;
+    deleted setupGame/placePart/tile.setPart/clearAllTiles dual path;
+    asserts getSnapshot.grid / getActivePartList / topologyNeighborCoords).
+    Host boots remain outside SIM_ROOTS (engine/objectives/UI).
+  - Step 9d DONE (honesty 2026-07-20): S1–S9 soak 9/9 local;
+    migrateSave expands tiles_compact for v3 disk saves; resume uses
+    .splash-btn-continue; S3/S4/S6 asserts are path-honest (no
+    applySaveState paper / OR prestige / skipped FF).
+  - Step 1d PARTIAL: R1 local npm test green; R3 soak 9/9; RC R1–R6
+    written; deleted eslint.yml per-check zoo → `npm test` sole gate on
+    PR/master (workflow CI) + SARIF upload; e2e-soak.yml on PR/master.
+    OPEN: R2/R4 green Actions run IDs after push.
+  - Step 2a DONE: untracked generated public/sw.js (src = config/src-sw.js);
+    gitignore public/sw.js + playwright-report; public/lib + app.css remain
+    generated-only; deleted redundant pako ignore line.
+  - Step 9b DONE: vitest setupFiles=setupEnv.js (no Game/UI); host boot
+    opt-in via helpers/setup.js; SIM_ROOTS on vitest; check:sim-no-dom
+    forbids setup.js/setupGame*; deleted unused matchers + failure dump
+    theater (~867→514 setup.js + thin setupEnv).
+  - 6d follow-on DONE: SET_TOGGLE owns session (dispatch passthrough);
+    deleted hot-path syncTogglesFromGame + pause stomp in objective flags;
+    patchGameState projection no longer calls onToggleStateChange;
+    applyToggleStateChange → bridge.dispatch when active.
+  - 6d pause honesty DONE: resume/reboot via SET_TOGGLE; deleted
+    game-state-sync pause↔engine dual-path; meltdown recovery via
+    onToggle; setDefaults pause clear = host + session.setPaused only
+    (no SET_TOGGLE dispatch — avoids syncGridToGame onto cleared host).
+  - Step 1d PARTIAL: R1+R3+R5 DONE; R2/R4 await commit+push (e2e-soak.yml
+    local ASCII-ready; absent on default branch until push); §E partial.
+  - SUCCESS #6 honesty: Steps 5/6 passthrough + zero valtio sim mirrors
+    marked DONE (was stale PARTIAL).
+  - Deleted tests/core/view-sync/_probe.test.js (valtio probe theater).
+  - Next bites: Step 1d R2/R4 CI run proof (needs commit+push) · tag (10)
+    · 8c/8d
+
+  N1) Step 1 — PARTIAL: 1a DONE · 1b IN FORCE · 1c DONE · 1d PARTIAL (R1+R3+R5)
+  N2) Step 2 — DONE: 2a DONE · 2b DONE · 2c DONE · 2d DONE
+  N3) Step 3 — DONE: 3a DONE · 3b SUPPORTING · 3c DONE · 3d DONE
+  N4) Step 4 — DONE: 4a DONE · 4b DONE · 4c DONE · 4d DONE
+  N5) Step 5 — DONE: 5a transitional · 5b DONE · 5c DONE · 5d DONE
+  N6) Step 6 — DONE: 6a DONE · 6b DONE · 6c IN FORCE · 6d DONE
+  N7) Step 7 — DONE: 7a DONE · 7b DONE · 7c DONE · 7d DONE
+  N8) Step 8 — 8a DONE · 8b DROPPED · 8c OPEN · 8d OPEN (usable, not bytes)
+  N9) Step 9 — DONE: 9a DONE · 9b DONE · 9c DONE · 9d DONE
+  N10) Step 10 — BLOCKED: 1d RC + tag; perf confirmation only
+
+  End of document.

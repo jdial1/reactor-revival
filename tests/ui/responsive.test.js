@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame, simulateViewportResize } from "../helpers/setup.js";
 import { GridScaler } from "@app/components/grid/ui-grid.js";
+import { createPartElement } from "@app/components/upgrades/presentation.js";
 import { assertPageShellClass, getAppShell } from "../helpers/testUtils.js";
 
 // Helper to check if an element exists and is not explicitly hidden
@@ -229,10 +230,9 @@ describe("Responsive UI Layout and Overlap Checks", () => {
       let createdPartsCount = 0;
       parts.slice(0, 3).forEach((p) => {
         try {
-          p.createElement();
+          createPartElement(p, game);
           createdPartsCount++;
-        } catch (e) {
-          // createElement may fail in test environment, that's okay
+        } catch (_e) {
         }
       });
 

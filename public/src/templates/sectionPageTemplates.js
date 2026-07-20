@@ -148,7 +148,7 @@ export function upgradesSectionTemplate() {
     <article>No affordable upgrades available</article>
   </div>
   <div id="upgrades_content_wrapper" data-hub-accordion="true">
-    <article class="upgrade-section-hub upgrade-hub-collapsible">
+    <article class="upgrade-section-hub upgrade-hub-collapsible" data-hub-key="Cell Upgrades">
       ${upgradeHubHeaderBlock({ sectionName: "Cell Upgrades", blurb: "Boost cell output, lifespan, and perpetual modes.", expanded: true })}
       <div class="upgrade-section-body">
         <div id="cell_power_upgrades" class="upgrade-group"></div>
@@ -156,14 +156,14 @@ export function upgradesSectionTemplate() {
         <div id="cell_perpetual_upgrades" class="upgrade-group"></div>
       </div>
     </article>
-    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed" data-hub-key="Cooling Upgrades">
       ${upgradeHubHeaderBlock({ sectionName: "Cooling Upgrades", blurb: "Improve vents, exchangers, and heat routing." })}
       <div class="upgrade-section-body">
         <div id="vent_upgrades" class="upgrade-group"></div>
         <div id="exchanger_upgrades" class="upgrade-group"></div>
       </div>
     </article>
-    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed" data-hub-key="General Upgrades">
       ${upgradeHubHeaderBlock({ sectionName: "General Upgrades", blurb: "Reactor-wide efficiency and quality-of-life upgrades." })}
       <div class="upgrade-section-body">
         <div id="other_upgrades" class="upgrade-group"></div>
@@ -178,7 +178,7 @@ export function upgradesSectionTemplate() {
 export function researchSectionTemplate() {
   return html`
 <section id="experimental_upgrades_section" class="page">
-  <article id="doctrine_tree_viewer" class="doctrine-tree-viewer research-collapsible section-collapsed hidden">
+  <article id="doctrine_tree_viewer" class="doctrine-tree-viewer research-collapsible section-collapsed hidden" data-hub-key="doctrine_tree_viewer">
     <h2 class="research-section-header" role="button" tabindex="0" aria-expanded="false">Doctrine &amp; Tech Tree</h2>
     <div class="research-section-body">
       <div id="doctrine_tree_viewer_content"></div>
@@ -190,7 +190,7 @@ export function researchSectionTemplate() {
   <div id="experimental_upgrades_content_wrapper" data-hub-accordion="true">
     <article id="exotic_particles_display" class="ep-status-panel"></article>
     <p class="research-ep-hint" id="research_ep_hint">Spend EP in the hubs below ↓</p>
-    <article id="reboot_section" class="research-collapsible section-collapsed">
+    <article id="reboot_section" class="research-collapsible section-collapsed" data-hub-key="reboot_section">
       ${researchSectionHeaderBlock({ title: "Prestige", blurb: "Refund wipes progress; Prestige keeps EP and research for a money multiplier." })}
       <div class="research-section-body">
         <div class="research-buttons-container">
@@ -202,19 +202,19 @@ export function researchSectionTemplate() {
         </div>
       </div>
     </article>
-    <article class="upgrade-section-hub upgrade-hub-collapsible">
+    <article class="upgrade-section-hub upgrade-hub-collapsible" data-hub-key="Laboratory">
       ${upgradeHubHeaderBlock({ sectionName: "Laboratory", blurb: "Foundational exotic research and lab systems.", expanded: true })}
       <div class="upgrade-section-body">
         <div id="experimental_laboratory" class="upgrade-group"></div>
       </div>
     </article>
-    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed" data-hub-key="Global Boosts">
       ${upgradeHubHeaderBlock({ sectionName: "Global Boosts", blurb: "Cross-tree multipliers and passive EP gains." })}
       <div class="upgrade-section-body">
         <div id="experimental_boost" class="upgrade-group"></div>
       </div>
     </article>
-    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed" data-hub-key="Experimental Parts & Cells">
       ${upgradeHubHeaderBlock({ sectionName: "Experimental Parts & Cells", blurb: "Advanced components and experimental cell lines." })}
       <div class="upgrade-section-body">
         <div id="experimental_parts" class="upgrade-group"></div>
@@ -222,7 +222,7 @@ export function researchSectionTemplate() {
         <div id="experimental_cells_boost" class="upgrade-group"></div>
       </div>
     </article>
-    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed">
+    <article class="upgrade-section-hub upgrade-hub-collapsible section-collapsed" data-hub-key="Particle Accelerators">
       ${upgradeHubHeaderBlock({ sectionName: "Particle Accelerators", blurb: "High-tier EP generation and accelerator tuning." })}
       <div class="upgrade-section-body">
         <div id="experimental_particle_accelerators" class="upgrade-group"></div>
@@ -303,6 +303,8 @@ export function aboutSectionTemplate() {
   <div class="about-content">
     <h2>About Reactor Revival</h2>
     <div id="basic_overview_section" class="about-section"></div>
+    <div id="help_objectives_section" class="about-section"></div>
+    <div id="help_meltdown_section" class="about-section"></div>
     <div id="help_prestige_section" class="about-section"></div>
     <div id="help_offline_section" class="about-section"></div>
     <div id="help_layouts_section" class="about-section"></div>

@@ -33,13 +33,15 @@ describe("UI User Interaction Scenarios", () => {
     });
 
     it("should toggle pause when pause button clicked", async () => {
-        const pauseBtn = document.getElementById("pause_toggle");
-        if (!pauseBtn) return;
+        const pauseBtn = () => document.getElementById("pause_toggle");
+        if (!pauseBtn()) return;
         const wasPaused = game.paused;
-        pauseBtn.click();
+        pauseBtn().click();
+        await Promise.resolve();
         await vi.advanceTimersByTimeAsync(0);
         expect(game.paused).toBe(!wasPaused);
-        pauseBtn.click();
+        pauseBtn().click();
+        await Promise.resolve();
         await vi.advanceTimersByTimeAsync(0);
         expect(game.paused).toBe(wasPaused);
     });

@@ -40,9 +40,9 @@ export function createPerformanceUIService(getGame) {
     stop();
     rafId = requestAnimationFrame(frameLoop);
     const game = getGame?.();
-    if (game?.state) {
+    if (game?.ui?.uiState) {
       const unsubs = [];
-      unsubs.push(subscribeKey(game.state, "engine_tick_count", recordTick));
+      unsubs.push(subscribeKey(game.ui.uiState, "snapshot_rev", recordTick));
       tickUnsubs = unsubs;
     }
   };

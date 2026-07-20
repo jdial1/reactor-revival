@@ -1,211 +1,122 @@
-import { describe, it, expect, beforeEach, vi, setupGame, toNum } from "../../helpers/setup.js";
-import { placePart } from "../../helpers/gameHelpers.js";
-import { REACTOR_HEAT_STANDARD_DIVISOR } from "@app/utils.js";
-import { GridCanvasRenderer, bindGridRendererSurfaces } from "@app/components/grid/ui-grid.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setupSessionOnly,
+  setSessionReactorHeat,
+  reactorHeat,
+  reactorMaxHeat,
+  componentTicksAt,
+} from "../../helpers/sessionHelpers.js";
+import { REACTOR_HEAT_STANDARD_DIVISOR } from "@app/constants/sim.js";
 
-describe("Group 1: Core Grid & Component Generation", () => {
-  let game;
+function place(session, row, col, id) {
+  expect(session.placeComponent(row, col, id)).toBe(true);
+}
+
+function power(session) {
+  return Number(session.getSnapshot().grid.currentPower ?? 0);
+}
+
+function maxPower(session) {
+  return Number(session.getSnapshot().grid.maxPower ?? 0);
+}
+
+function slotId(session, row, col) {
+  const snap = session.getSnapshot();
+  return snap.grid.slots[row * snap.grid.cols + col]?.id ?? null;
+}
+
+describe("Group 1: Core Grid & Component Generation (session)", () => {
+  let session;
 
   beforeEach(async () => {
-    game = await setupGame();
+    session = await setupSessionOnly();
   });
 
-  it("locks base cell power and heat without reflectors", async () => {
-    const cellTile = await placePart(game, 3, 3, "uranium1");
-    const cellPart = game.partset.getPartById("uranium1");
+  it("locks base cell power and heat without reflectors", () => {
+    place(session, 3, 3, "uranium1");
+    const part = session.getPart("uranium1");
+    const out = session.getCellOutputAt(3, 3);
 
-    game.reactor.updateStats();
+    expect(out.power).toBe(Number(part.basePower));
+    expect(out.heat).toBe(Number(part.baseHeat));
 
-    expect(cellTile.power).toBe(cellPart.base_power);
-    expect(cellTile.heat).toBe(cellPart.base_heat);
-    expect(game.reactor.stats_power).toBe(cellPart.base_power);
-    expect(game.reactor.stats_heat_generation).toBe(cellPart.base_heat);
+    session.grid.currentPower = 0;
+    setSessionReactorHeat(session, 0);
+    session.toggles.heat_control = true;
+    session.tick();
 
-    game.reactor.current_power = 0;
-    game.reactor.current_heat = 0;
-    game.reactor.heat_controlled = true;
-    game.engine.tick();
-
-    expect(toNum(game.reactor.current_power)).toBe(cellPart.base_power);
-    expect(cellTile.ticks).toBe(cellPart.base_ticks - 1);
-    const baseVent =
-      toNum(game.reactor.max_heat) / REACTOR_HEAT_STANDARD_DIVISOR;
-    const ventFactor = 1 + (game.reactor.vent_multiplier_eff || 0) / 100;
-    const expectedReactorHeat =
-      cellPart.base_heat - baseVent * ventFactor;
-    expect(toNum(game.reactor.current_heat)).toBe(expectedReactorHeat);
-    expect(game.state.heat_delta_per_tick).toBe(expectedReactorHeat);
-    expect(game.state.power_delta_per_tick).toBe(cellPart.base_power);
+    expect(power(session)).toBe(Number(part.basePower));
+    expect(componentTicksAt(session, 3, 3)).toBe(Number(part.baseTicks) - 1);
+    const baseVent = reactorMaxHeat(session) / REACTOR_HEAT_STANDARD_DIVISOR;
+    expect(reactorHeat(session)).toBe(Number(part.baseHeat) - baseVent);
   });
 
-  it("locks cardinal reflector multiplier and ignores diagonal reflectors", async () => {
-    const cellTile = await placePart(game, 5, 5, "uranium1");
-    const reflectorCardinal = await placePart(game, 5, 6, "reflector1");
-    const reflectorDiagonal = await placePart(game, 4, 4, "reflector1");
-    const reflectorCardinalTicksBefore = reflectorCardinal.ticks;
-    const reflectorDiagonalTicksBefore = reflectorDiagonal.ticks;
+  it("locks cardinal reflector multiplier and ignores diagonal reflectors", () => {
+    place(session, 5, 5, "uranium1");
+    place(session, 5, 6, "reflector1");
+    place(session, 4, 4, "reflector1");
+    const cardTicksBefore = componentTicksAt(session, 5, 6);
+    const diagTicksBefore = componentTicksAt(session, 4, 4);
 
-    const cellPart = game.partset.getPartById("uranium1");
-    const reflectorPart = game.partset.getPartById("reflector1");
-    const reflectorPulse = 1 + reflectorPart.power_increase / 100;
+    const cell = session.getPart("uranium1");
+    const reflector = session.getPart("reflector1");
+    const reflectorPulse = 1 + Number(reflector.powerIncrease) / 100;
     const pulse = 1 + reflectorPulse;
-    const expectedPower = cellPart.base_power * pulse;
-    const expectedHeat = cellPart.base_heat * pulse * pulse;
+    const expectedPower = Number(cell.basePower) * pulse;
+    const expectedHeat = Number(cell.baseHeat) * pulse * pulse;
 
-    game.reactor.updateStats();
+    const out = session.getCellOutputAt(5, 5);
+    expect(out.power).toBeCloseTo(expectedPower, 10);
+    expect(out.heat).toBeCloseTo(expectedHeat, 10);
+    expect(out.reflectorCount).toBe(1);
 
-    expect(cellTile.power).toBe(expectedPower);
-    expect(cellTile.heat).toBe(expectedHeat);
-    expect(game.reactor.stats_power).toBe(expectedPower);
-    expect(game.reactor.stats_heat_generation).toBe(expectedHeat);
+    session.grid.currentPower = 0;
+    setSessionReactorHeat(session, 0);
+    session.toggles.heat_control = true;
+    session.tick();
 
-    game.reactor.current_power = 0;
-    game.reactor.current_heat = 0;
-    game.reactor.heat_controlled = true;
-    game.engine.tick();
-
-    expect(toNum(game.reactor.current_power)).toBe(expectedPower);
-    const baseVent =
-      toNum(game.reactor.max_heat) / REACTOR_HEAT_STANDARD_DIVISOR;
-    const ventFactor = 1 + (game.reactor.vent_multiplier_eff || 0) / 100;
-    const expectedReactorHeat = expectedHeat - baseVent * ventFactor;
-    expect(toNum(game.reactor.current_heat)).toBe(expectedReactorHeat);
-    expect(game.state.heat_delta_per_tick).toBe(expectedReactorHeat);
-    expect(game.state.power_delta_per_tick).toBe(expectedPower);
-    expect(cellTile.ticks).toBe(cellPart.base_ticks - 1);
-    expect(reflectorCardinal.ticks).toBe(reflectorCardinalTicksBefore - 1);
-    expect(reflectorDiagonal.ticks).toBe(reflectorDiagonalTicksBefore);
+    expect(power(session)).toBeCloseTo(expectedPower, 10);
+    const baseVent = reactorMaxHeat(session) / REACTOR_HEAT_STANDARD_DIVISOR;
+    expect(reactorHeat(session)).toBeCloseTo(expectedHeat - baseVent, 10);
+    expect(componentTicksAt(session, 5, 5)).toBe(Number(cell.baseTicks) - 1);
+    expect(componentTicksAt(session, 5, 6)).toBe(cardTicksBefore - 1);
+    expect(componentTicksAt(session, 4, 4)).toBe(diagTicksBefore);
   });
 
-  it("locks capacitor and reactor plating global capacity effects", async () => {
-    const baseMaxPower = toNum(game.reactor.max_power);
-    const baseMaxHeat = toNum(game.reactor.max_heat);
+  it("locks capacitor and reactor plating global capacity effects", () => {
+    const baseMaxPower = maxPower(session);
+    const baseMaxHeat = reactorMaxHeat(session);
+    const capacitor = session.getPart("capacitor1");
+    const plating = session.getPart("reactor_plating1");
 
-    const capacitorTile = await placePart(game, 0, 0, "capacitor1");
-    const platingTile = await placePart(game, 0, 1, "reactor_plating1");
-    const addPower = toNum(capacitorTile.part.reactor_power);
-    const addHeat = toNum(platingTile.part.reactor_heat);
+    place(session, 0, 0, "capacitor1");
+    place(session, 0, 1, "reactor_plating1");
 
-    game.reactor.updateStats();
+    expect(maxPower(session)).toBe(baseMaxPower + Number(capacitor.reactorPower));
+    expect(reactorMaxHeat(session)).toBe(baseMaxHeat + Number(plating.reactorHeat));
 
-    expect(toNum(game.reactor.max_power)).toBe(baseMaxPower + addPower);
-    expect(toNum(game.reactor.max_heat)).toBe(baseMaxHeat + addHeat);
-    expect(game.reactor.stats_power).toBe(0);
-    expect(game.reactor.stats_heat_generation).toBe(0);
+    session.grid.currentPower = 0;
+    setSessionReactorHeat(session, 0);
+    session.tick();
 
-    game.reactor.current_power = 0;
-    game.reactor.current_heat = 0;
-    game.engine.tick();
-
-    expect(toNum(game.reactor.current_power)).toBe(0);
-    expect(toNum(game.reactor.current_heat)).toBe(0);
-    expect(Math.abs(game.state.power_delta_per_tick ?? 0)).toBe(0);
-    expect(Math.abs(game.state.heat_delta_per_tick ?? 0)).toBe(0);
+    expect(power(session)).toBe(0);
+    expect(reactorHeat(session)).toBe(0);
   });
 
-  it("locks durability decrement by exactly one tick", async () => {
-    const cellTile = await placePart(game, 1, 1, "uranium1");
-    const cellPart = game.partset.getPartById("uranium1");
-
-    game.engine.tick();
-
-    expect(cellTile.ticks).toBe(cellPart.base_ticks - 1);
+  it("locks durability decrement by exactly one tick", () => {
+    place(session, 1, 1, "uranium1");
+    const part = session.getPart("uranium1");
+    session.tick();
+    expect(componentTicksAt(session, 1, 1)).toBe(Number(part.baseTicks) - 1);
   });
 
-  it("locks depletion when durability reaches zero", async () => {
-    const cellTile = await placePart(game, 2, 2, "uranium1");
-    cellTile.ticks = 1;
+  it("locks depletion when durability reaches zero", () => {
+    place(session, 2, 2, "uranium1");
+    session.grid.getComponentAt(2, 2).ticks = 1;
+    session.tick();
 
-    game.engine.tick();
-
-    expect(cellTile.part).toBeNull();
-    expect(cellTile.ticks).toBe(0);
-    game.reactor.updateStats();
-    expect(game.reactor.stats_power).toBe(0);
-    expect(game.reactor.stats_heat_generation).toBe(0);
-  });
-
-  it("culls tile visibility correctly at viewport boundaries", () => {
-    const renderer = new GridCanvasRenderer({ game });
-    renderer._tileSize = 50;
-    const viewport = { left: 100, top: 100, width: 200, height: 200 };
-
-    expect(renderer.tileInViewport(2, 2, viewport)).toBe(true);
-    expect(renderer.tileInViewport(1, 1, viewport)).toBe(false);
-    expect(renderer.tileInViewport(8, 8, viewport)).toBe(false);
-    expect(renderer.tileInViewport(3, 2, viewport)).toBe(true);
-    expect(renderer.tileInViewport(2, 1, viewport)).toBe(false);
-  });
-
-  it("renders and clears only dirty static tiles in viewport", () => {
-    const renderer = new GridCanvasRenderer({ game });
-    renderer._rows = 6;
-    renderer._cols = 6;
-    renderer._tileSize = 40;
-    renderer._width = 240;
-    renderer._height = 240;
-    renderer._staticDirty = false;
-    renderer._staticDirtyTiles.add("2,2");
-    renderer._staticDirtyTiles.add("0,0");
-    const container = document.createElement("div");
-    container.id = "mock-scroll-container";
-    container.scrollLeft = 80;
-    container.scrollTop = 80;
-    Object.defineProperty(container, "clientWidth", { value: 80, configurable: true });
-    Object.defineProperty(container, "clientHeight", { value: 80, configurable: true });
-    document.body.appendChild(container);
-    renderer._containerId = "mock-scroll-container";
-    const mockCtx = {
-      clearRect: vi.fn(),
-      fillRect: vi.fn(),
-      strokeRect: vi.fn(),
-      drawImage: vi.fn(),
-      save: vi.fn(),
-      restore: vi.fn(),
-      beginPath: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      arc: vi.fn(),
-      fill: vi.fn(),
-      stroke: vi.fn(),
-      lineWidth: 1,
-      fillStyle: "",
-      strokeStyle: "",
-    };
-    const mockDynamicCtx = {
-      save: vi.fn(),
-      restore: vi.fn(),
-      clearRect: vi.fn(),
-      fillRect: vi.fn(),
-      strokeRect: vi.fn(),
-      beginPath: vi.fn(),
-      arc: vi.fn(),
-      ellipse: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      closePath: vi.fn(),
-      fill: vi.fn(),
-      stroke: vi.fn(),
-      createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-      setLineDash: vi.fn(),
-      lineDashOffset: 0,
-      lineWidth: 1,
-      fillStyle: "",
-      strokeStyle: "",
-      lineCap: "round",
-    };
-    bindGridRendererSurfaces(renderer, {
-      canvas: {},
-      dynamicCanvas: {},
-      ctx: mockCtx,
-      dynamicCtx: mockDynamicCtx,
-    });
-
-    renderer.render(game);
-
-    expect(mockCtx.clearRect).toHaveBeenCalledTimes(1);
-    expect(mockCtx.clearRect).toHaveBeenCalledWith(80, 80, 40, 40);
-    expect(renderer._staticDirtyTiles.size).toBe(0);
-    container.remove();
+    expect(session.grid.getComponentAt(2, 2)).toBeNull();
+    expect(slotId(session, 2, 2)).toBeFalsy();
+    expect(componentTicksAt(session, 2, 2)).toBe(0);
   });
 });

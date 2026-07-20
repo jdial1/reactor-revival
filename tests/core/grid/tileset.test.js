@@ -1,63 +1,59 @@
-import { describe, it, expect, beforeEach, setupGame } from "../../helpers/setup.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import { setupSessionOnly } from "../../helpers/sessionHelpers.js";
 import { topologyNeighborCoords } from "reactor-core";
 
-describe("Tileset Mechanics", () => {
-  let game;
+function slotAt(session, row, col) {
+  const snap = session.getSnapshot();
+  return snap.grid.slots[row * snap.grid.cols + col] ?? null;
+}
+
+function clearOccupied(session) {
+  const snap = session.getSnapshot();
+  for (let i = 0; i < snap.grid.slots.length; i++) {
+    const slot = snap.grid.slots[i];
+    if (!slot?.id) continue;
+    session.removeComponent(Math.floor(i / snap.grid.cols), i % snap.grid.cols);
+  }
+}
+
+describe("Tileset Mechanics (session)", () => {
+  let session;
 
   beforeEach(async () => {
-    game = await setupGame();
+    session = await setupSessionOnly();
   });
 
-  it("should initialize a grid of tiles", () => {
-    expect(game.tileset.tiles.length).toBe(game.tileset.max_rows);
-    expect(game.tileset.tiles[0].length).toBe(game.tileset.max_cols);
-    expect(game.tileset.tiles_list.length).toBe(
-      game.tileset.max_rows * game.tileset.max_cols
-    );
+  it("exposes a rectangular slot grid matching snapshot dims", () => {
+    const { rows, cols, slots } = session.getSnapshot().grid;
+    expect(rows).toBeGreaterThan(0);
+    expect(cols).toBeGreaterThan(0);
+    expect(slots).toHaveLength(rows * cols);
   });
 
-  it("should get a specific tile by its coordinates", () => {
-    const tile = game.tileset.getTile(5, 8);
-    expect(tile).toBeDefined();
-    expect(tile.row).toBe(5);
-    expect(tile.col).toBe(8);
+  it("reads in-bounds coordinates and rejects out-of-bounds placement", () => {
+    const { rows, cols } = session.getSnapshot().grid;
+    expect(session.placeComponent(5, 8, "uranium1")).toBe(true);
+    expect(slotAt(session, 5, 8)?.id).toBe("uranium1");
+    expect(session.placeComponent(rows, cols, "uranium1")).toBe(false);
+    expect(session.placeComponent(-1, 0, "uranium1")).toBe(false);
   });
 
-  it("should return null for out-of-bounds coordinates", () => {
-    const tile = game.tileset.getTile(game.rows, game.cols);
-    expect(tile).toBeNull();
+  it("lists von Neumann neighbors via topologyNeighborCoords", () => {
+    const { rows, cols } = session.getSnapshot().grid;
+    const coords = topologyNeighborCoords("Manhattan", 5, 5, 1, rows, cols);
+    expect(coords).toHaveLength(4);
+    expect(coords).toContainEqual([4, 5]);
+    expect(coords).toContainEqual([6, 5]);
+    expect(coords).toContainEqual([5, 4]);
+    expect(coords).toContainEqual([5, 6]);
   });
 
-  it("should correctly identify active tiles based on game dimensions", () => {
-    game.rows = 2;
-    game.cols = 2;
-    game.tileset.updateActiveTiles();
-    expect(game.tileset.active_tiles_list.length).toBe(4);
-    expect(game.tileset.getTile(0, 0).enabled).toBe(true);
-    expect(game.tileset.getTile(1, 1).enabled).toBe(true);
-    expect(game.tileset.tiles[2][2].enabled).toBe(false);
-  });
-
-  it("should get all neighboring tiles in a given range (von Neumann)", () => {
-    const coords = topologyNeighborCoords("Manhattan", 5, 5, 1, game.rows, game.cols);
-    const neighbors = coords.map(([r, c]) => game.tileset.getTile(r, c)).filter(Boolean);
-    expect(neighbors.length).toBe(4);
-    const neighborCoords = neighbors.map((t) => [t.row, t.col]);
-    expect(neighborCoords).toContainEqual([4, 5]);
-    expect(neighborCoords).toContainEqual([6, 5]);
-    expect(neighborCoords).toContainEqual([5, 4]);
-    expect(neighborCoords).toContainEqual([5, 6]);
-  });
-
-  it("should clear all parts from all tiles", async () => {
-    const tile1 = game.tileset.getTile(0, 0);
-    const tile2 = game.tileset.getTile(1, 1);
-    await tile1.setPart(game.partset.getPartById("uranium1"));
-    await tile2.setPart(game.partset.getPartById("vent1"));
-
-    game.tileset.clearAllTiles();
-
-    expect(tile1.part).toBeNull();
-    expect(tile2.part).toBeNull();
+  it("clears all placed parts via removeComponent", () => {
+    expect(session.placeComponent(0, 0, "uranium1")).toBe(true);
+    expect(session.placeComponent(1, 1, "vent1")).toBe(true);
+    clearOccupied(session);
+    expect(slotAt(session, 0, 0)?.id).toBeFalsy();
+    expect(slotAt(session, 1, 1)?.id).toBeFalsy();
+    expect(session.getActivePartList("active_vessels")).toHaveLength(0);
   });
 });

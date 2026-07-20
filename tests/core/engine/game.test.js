@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, cleanupGame, toNum } from "../../helpers/setup.js";
 import { patchGameState } from "@app/state.js";
+import { loadEconomyFromHost } from "../../helpers/bridge-test-harness.js";
 
 describe("Core Game Mechanics", () => {
   let game;
@@ -34,7 +35,7 @@ describe("Core Game Mechanics", () => {
     tile.activated = true;
     
     // Simulate power generation and sell
-    game.reactor.current_power = 10;
+    game.coreBridge.setReactorPower(10);
     game.sell_action();
 
     expect(toNum(game.current_money)).toBeGreaterThan(toNum(initialMoney));
@@ -44,16 +45,16 @@ describe("Core Game Mechanics", () => {
     game.current_money = 100000;
     game.exotic_particles = 50;
     game.total_exotic_particles = 100;
-    
+    loadEconomyFromHost(game);
+
     const tile = game.tileset.getTile(0, 0);
     tile.setPart(game.partset.getPartById("uranium1"));
-    
-    // Reboot keeping EP (Prestige)
+
     await game.rebootActionKeepExoticParticles();
-    
+
     expect(toNum(game.current_money)).toBe(game.base_money);
     expect(toNum(game.exotic_particles)).toBe(0);
-    expect(toNum(game.total_exotic_particles)).toBe(100); 
+    expect(toNum(game.total_exotic_particles)).toBe(100);
     expect(tile.part).toBeNull();
   });
 });

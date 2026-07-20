@@ -1,27 +1,8 @@
 import { toDecimal } from "../simUtils.js";
-import { numFormat as fmt } from "../core/numbers.js";
 import { logger } from "../core/logger.js";
-import { getPartImagePath } from "../core/part-images.js";
-import { getUpgradeBonusLines } from "../components/tooltip-stats.js";
 import { getActiveBridge, requireActiveBridge } from "../bridge/active.js";
 
 const REACTOR_PLATING_DEFAULT_CONTAINMENT = 1000;
-
-const buildPartDescription = (part, fmtFn, tile_context = null) => {
-  const bridge = requireActiveBridge(part.game, "buildPartDescription");
-  const extras = {
-    transfer: tile_context ? (tile_context.getEffectiveTransferValue?.() ?? part.transfer) : part.transfer,
-    vent: tile_context ? (tile_context.getEffectiveVentValue?.() ?? part.vent) : part.vent,
-    power: part.power,
-    heat: part.heat,
-    range: part.range,
-    fmt: fmtFn,
-  };
-  return bridge.session.getPartDescription(part.id, {
-    template: part.part?.baseDescription ?? part.part?.base_description ?? part.base_description,
-    ...extras,
-  }).text;
-};
 
 const buildCategoryOrders = (compiledList) => {
   const categoryTypeOrder = new Map();
@@ -39,242 +20,113 @@ const buildCategoryOrders = (compiledList) => {
   return { categoryTypeOrder, typeOrderIndex };
 };
 
-export class Part {
-  constructor(part_definition, game) {
-    this.game = game;
-    this.part = part_definition;
-    const def = part_definition.definition || {};
+export function applyCompiledPartFields(part, compiled) {
+  if (!part || !compiled) return;
+  const fallback = part.part || compiled;
+  const def = compiled.definition || fallback.definition || {};
 
-    this.id = part_definition.id || def.id;
-    this.category = part_definition.category;
-    this.type = part_definition.type;
+  part.cost = toDecimal(compiled.baseCost ?? fallback.base_cost ?? 0);
+  part.base_cost = part.cost;
+  part.ecost = toDecimal(compiled.baseEcost ?? fallback.base_ecost ?? 0);
+  part.base_ecost = part.ecost;
 
-    this.title = part_definition.title;
-    this.level = part_definition.level ?? 1;
-    this.experimental = !!part_definition.experimental;
-    this.base_description = part_definition.baseDescription ?? part_definition.base_description;
-    this.erequires = part_definition.erequires ?? null;
-    this.location = part_definition.location ?? def.location ?? null;
-    this.valve_group = part_definition.valveGroup ?? part_definition.valve_group ?? def.valveGroup ?? def.valve_group ?? null;
-    this.activation_threshold = part_definition.activationThreshold ?? part_definition.activation_threshold ?? def.activationThreshold ?? def.activation_threshold ?? null;
-    this.transfer_direction = part_definition.transferDirection ?? part_definition.transfer_direction ?? def.transferDirection ?? def.transfer_direction ?? null;
-    this.vent_consumes_power = !!(part_definition.ventConsumesPower ?? part_definition.vent_consumes_power ?? def.ventConsumesPower);
-    this.outlet_respect_neighbor_cap = !!(part_definition.outletRespectNeighborCap ?? part_definition.outlet_respect_neighbor_cap ?? def.outletRespectNeighborCap);
-    this.capacitor_autosell_heat_ratio = typeof part_definition.capacitorAutosellHeatRatio === "number"
+  part.power = compiled.power ?? compiled.basePower ?? fallback.base_power ?? 0;
+  part.base_power = compiled.basePower
+    ?? compiled.base_power
+    ?? fallback.basePower
+    ?? fallback.base_power
+    ?? part.power;
+
+  part.heat = compiled.heat ?? compiled.baseHeat ?? fallback.base_heat ?? 0;
+  part.base_heat = compiled.baseHeat ?? compiled.base_heat ?? fallback.baseHeat ?? fallback.base_heat ?? part.heat;
+
+  part.ticks = compiled.baseTicks ?? fallback.base_ticks ?? 0;
+  part.base_ticks = part.ticks;
+
+  part.containment = compiled.containment
+    ?? fallback.base_containment
+    ?? (part.category === "reactor_plating" ? REACTOR_PLATING_DEFAULT_CONTAINMENT : 0);
+  part.base_containment = part.containment;
+
+  part.vent = compiled.vent ?? fallback.base_vent ?? 0;
+  part.base_vent = fallback.baseVent ?? fallback.base_vent ?? fallback.vent ?? part.vent;
+
+  part.transfer = compiled.transfer
+    ?? def.baseTransfer
+    ?? fallback.base_transfer
+    ?? 0;
+  part.base_transfer = fallback.baseTransfer ?? fallback.base_transfer ?? fallback.transfer ?? part.transfer;
+
+  part.reactor_power = compiled.reactorPower ?? fallback.base_reactor_power ?? 0;
+  part.base_reactor_power = part.reactor_power;
+  part.reactor_heat = compiled.reactorHeat ?? fallback.base_reactor_heat ?? 0;
+  part.base_reactor_heat = part.reactor_heat;
+
+  part.power_increase = compiled.powerIncrease
+    ?? def.powerIncrease
+    ?? fallback.base_power_increase
+    ?? 0;
+  part.base_power_increase = part.power_increase;
+  part.heat_increase = compiled.heatIncrease
+    ?? def.heatIncrease
+    ?? fallback.base_heat_increase
+    ?? 0;
+  part.base_heat_increase = part.heat_increase;
+
+  part.ep_heat = compiled.epHeat ?? compiled.baseEpHeat ?? fallback.base_ep_heat ?? 0;
+  part.base_ep_heat = compiled.baseEpHeat ?? fallback.base_ep_heat ?? part.ep_heat;
+
+  part.range = def.range ?? fallback.range ?? 1;
+  part.perpetual = !!compiled.perpetual;
+  part.transfer_multiplier = compiled.transferMultiplier
+    ?? def.transferMultiplier
+    ?? fallback.transfer_multiplier
+    ?? null;
+  part.neighbor_pulse_value = compiled.neighborPulseValue ?? null;
+
+  part.cell_count = compiled.cellCount ?? fallback.cell_count ?? null;
+  part.cell_pack_M = compiled.cellMultiplier ?? fallback.cell_pack_M ?? 1;
+  part.cell_count_C = compiled.cellCount ?? fallback.cell_count_C ?? 1;
+}
+
+export function refreshPartsFromSession(partset) {
+  const bridge = getActiveBridge(partset?.game);
+  const list = partset?.partsArray;
+  if (!bridge?.session || !list) return;
+  for (let i = 0; i < list.length; i++) {
+    const part = list[i];
+    const compiled = bridge.session.getPart?.(part.id);
+    if (compiled) applyCompiledPartFields(part, compiled);
+  }
+}
+
+export function createPart(part_definition) {
+  const def = part_definition.definition || {};
+  const part = {
+    part: part_definition,
+    id: part_definition.id || def.id,
+    category: part_definition.category,
+    type: part_definition.type,
+    title: part_definition.title,
+    level: part_definition.level ?? 1,
+    experimental: !!part_definition.experimental,
+    base_description: part_definition.baseDescription ?? part_definition.base_description,
+    erequires: part_definition.erequires ?? null,
+    location: part_definition.location ?? def.location ?? null,
+    valve_group: part_definition.valveGroup ?? part_definition.valve_group ?? def.valveGroup ?? def.valve_group ?? null,
+    activation_threshold: part_definition.activationThreshold ?? part_definition.activation_threshold ?? def.activationThreshold ?? def.activation_threshold ?? null,
+    transfer_direction: part_definition.transferDirection ?? part_definition.transfer_direction ?? def.transferDirection ?? def.transfer_direction ?? null,
+    vent_consumes_power: !!(part_definition.ventConsumesPower ?? part_definition.vent_consumes_power ?? def.ventConsumesPower),
+    outlet_respect_neighbor_cap: !!(part_definition.outletRespectNeighborCap ?? part_definition.outlet_respect_neighbor_cap ?? def.outletRespectNeighborCap),
+    capacitor_autosell_heat_ratio: typeof part_definition.capacitorAutosellHeatRatio === "number"
       ? part_definition.capacitorAutosellHeatRatio
       : (typeof def.capacitorAutosellHeatRatio === "number"
         ? def.capacitorAutosellHeatRatio
-        : (part_definition.capacitor_autosell_heat_ratio || 0));
-
-    this.affordable = false;
-    this.$el = null;
-    this.className = "";
-    this.description = "";
-    this._decCache = Object.create(null);
-    this._overrides = Object.create(null);
-
-    this.updateDescription();
-  }
-
-  _getDef() {
-    const bridge = getActiveBridge(this.game);
-    if (!bridge) return this.part;
-    return bridge.session.getPart?.(this.id) || this.part;
-  }
-
-  _ov(key, resolve) {
-    if (Object.prototype.hasOwnProperty.call(this._overrides, key)) {
-      return this._overrides[key];
-    }
-    return resolve();
-  }
-
-  _setOv(key, value) {
-    this._overrides[key] = value;
-  }
-
-  _cachedDecimal(key, raw) {
-    const entry = this._decCache[key];
-    if (entry && entry.raw === raw) return entry.value;
-    const value = toDecimal(raw);
-    this._decCache[key] = { raw, value };
-    return value;
-  }
-
-  get cost() {
-    return this._ov("cost", () =>
-      this._cachedDecimal("cost", this._getDef().baseCost ?? this.part.base_cost ?? 0));
-  }
-  set cost(v) { this._setOv("cost", toDecimal(v)); }
-  get base_cost() { return this._ov("base_cost", () => this.cost); }
-  set base_cost(v) { this._setOv("base_cost", toDecimal(v)); this.cost = v; }
-
-  get ecost() {
-    return this._ov("ecost", () =>
-      this._cachedDecimal("ecost", this._getDef().baseEcost ?? this.part.base_ecost ?? 0));
-  }
-  set ecost(v) { this._setOv("ecost", toDecimal(v)); }
-  get base_ecost() { return this._ov("base_ecost", () => this.ecost); }
-  set base_ecost(v) { this._setOv("base_ecost", toDecimal(v)); this.ecost = v; }
-
-  get power() {
-    return this._ov("power", () => this._getDef().power ?? this._getDef().basePower ?? this.part.base_power ?? 0);
-  }
-  set power(v) { this._setOv("power", v); }
-  get base_power() {
-    return this._ov("base_power", () =>
-      this._getDef().basePower
-        ?? this._getDef().base_power
-        ?? this.part?.basePower
-        ?? this.part?.base_power
-        ?? this.power);
-  }
-  set base_power(v) { this._setOv("base_power", v); this.power = v; }
-
-  get heat() {
-    return this._ov("heat", () => this._getDef().heat ?? this._getDef().baseHeat ?? this.part.base_heat ?? 0);
-  }
-  set heat(v) { this._setOv("heat", v); }
-  get base_heat() { return this._ov("base_heat", () => this.heat); }
-  set base_heat(v) { this._setOv("base_heat", v); this.heat = v; }
-
-  get ticks() {
-    return this._ov("ticks", () => this._getDef().baseTicks ?? this.part.base_ticks ?? 0);
-  }
-  set ticks(v) { this._setOv("ticks", v); }
-  get base_ticks() { return this._ov("base_ticks", () => this.ticks); }
-  set base_ticks(v) { this._setOv("base_ticks", v); this.ticks = v; }
-
-  get containment() {
-    return this._ov("containment", () =>
-      this._getDef().containment
-        ?? this.part.base_containment
-        ?? (this.category === "reactor_plating" ? REACTOR_PLATING_DEFAULT_CONTAINMENT : 0));
-  }
-  set containment(v) { this._setOv("containment", v); }
-  get base_containment() { return this._ov("base_containment", () => this.containment); }
-  set base_containment(v) { this._setOv("base_containment", v); this.containment = v; }
-
-  get vent() {
-    return this._ov("vent", () => this._getDef().vent ?? this.part.base_vent ?? 0);
-  }
-  set vent(v) { this._setOv("vent", v); }
-  get base_vent() {
-    return this._ov("base_vent", () => this.part.base_vent ?? this.part.baseVent ?? this.vent);
-  }
-  set base_vent(v) { this._setOv("base_vent", v); }
-
-  get transfer() {
-    return this._ov("transfer", () =>
-      this._getDef().transfer
-        ?? this._getDef().definition?.baseTransfer
-        ?? this.part.base_transfer
-        ?? 0);
-  }
-  set transfer(v) { this._setOv("transfer", v); }
-  get base_transfer() {
-    return this._ov("base_transfer", () =>
-      this.part.base_transfer ?? this.part.baseTransfer ?? this.transfer);
-  }
-  set base_transfer(v) { this._setOv("base_transfer", v); }
-
-  get reactor_power() {
-    return this._ov("reactor_power", () => this._getDef().reactorPower ?? this.part.base_reactor_power ?? 0);
-  }
-  set reactor_power(v) { this._setOv("reactor_power", v); }
-  get base_reactor_power() { return this._ov("base_reactor_power", () => this.reactor_power); }
-  set base_reactor_power(v) { this._setOv("base_reactor_power", v); this.reactor_power = v; }
-
-  get reactor_heat() {
-    return this._ov("reactor_heat", () => this._getDef().reactorHeat ?? this.part.base_reactor_heat ?? 0);
-  }
-  set reactor_heat(v) { this._setOv("reactor_heat", v); }
-  get base_reactor_heat() { return this._ov("base_reactor_heat", () => this.reactor_heat); }
-  set base_reactor_heat(v) { this._setOv("base_reactor_heat", v); this.reactor_heat = v; }
-
-  get power_increase() {
-    return this._ov("power_increase", () =>
-      this._getDef().powerIncrease
-        ?? this._getDef().definition?.powerIncrease
-        ?? this.part.base_power_increase
-        ?? 0);
-  }
-  set power_increase(v) { this._setOv("power_increase", v); }
-  get base_power_increase() { return this._ov("base_power_increase", () => this.power_increase); }
-  set base_power_increase(v) { this._setOv("base_power_increase", v); this.power_increase = v; }
-
-  get heat_increase() {
-    return this._ov("heat_increase", () =>
-      this._getDef().heatIncrease
-        ?? this._getDef().definition?.heatIncrease
-        ?? this.part.base_heat_increase
-        ?? 0);
-  }
-  set heat_increase(v) { this._setOv("heat_increase", v); }
-  get base_heat_increase() { return this._ov("base_heat_increase", () => this.heat_increase); }
-  set base_heat_increase(v) { this._setOv("base_heat_increase", v); this.heat_increase = v; }
-
-  get ep_heat() {
-    return this._ov("ep_heat", () => this._getDef().epHeat ?? this._getDef().baseEpHeat ?? this.part.base_ep_heat ?? 0);
-  }
-  set ep_heat(v) { this._setOv("ep_heat", v); }
-  get base_ep_heat() { return this._ov("base_ep_heat", () => this.ep_heat); }
-  set base_ep_heat(v) { this._setOv("base_ep_heat", v); this.ep_heat = v; }
-
-  get range() { return this._ov("range", () => this._getDef().definition?.range ?? this.part.range ?? 1); }
-  set range(v) { this._setOv("range", v); }
-  get perpetual() { return this._ov("perpetual", () => !!this._getDef().perpetual); }
-  set perpetual(v) { this._setOv("perpetual", !!v); }
-  get transfer_multiplier() {
-    return this._ov("transfer_multiplier", () =>
-      this._getDef().transferMultiplier
-        ?? this._getDef().definition?.transferMultiplier
-        ?? this.part.transfer_multiplier
-        ?? null);
-  }
-  set transfer_multiplier(v) { this._setOv("transfer_multiplier", v); }
-  get neighbor_pulse_value() {
-    return this._ov("neighbor_pulse_value", () => this._getDef().neighborPulseValue ?? null);
-  }
-  set neighbor_pulse_value(v) { this._setOv("neighbor_pulse_value", v); }
-
-  get cell_count() {
-    return this._ov("cell_count", () => this._getDef().cellCount ?? this.part.cell_count ?? null);
-  }
-  set cell_count(v) { this._setOv("cell_count", v); }
-  get cell_pack_M() {
-    return this._ov("cell_pack_M", () => this._getDef().cellMultiplier ?? this.part.cell_pack_M ?? 1);
-  }
-  set cell_pack_M(v) { this._setOv("cell_pack_M", v); }
-  get cell_count_C() {
-    return this._ov("cell_count_C", () => this._getDef().cellCount ?? this.part.cell_count_C ?? 1);
-  }
-  set cell_count_C(v) { this._setOv("cell_count_C", v); }
-
-  recalculate_stats() {
-    this.updateDescription();
-  }
-
-  getImagePath() {
-    return getPartImagePath({ type: this.type, category: this.category, level: this.level, id: this.id });
-  }
-
-  updateDescription(tile_context = null) {
-    this.description = buildPartDescription(this, fmt, tile_context);
-  }
-
-  setAffordable(isAffordable) {
-    this.affordable = isAffordable;
-  }
-
-  getUpgradeBonusLines() {
-    return getUpgradeBonusLines(this, { tile: null, game: this.game });
-  }
-
-  getAutoReplacementCost() {
-    const bridge = requireActiveBridge(this.game, "getAutoReplacementCost");
-    return toDecimal(bridge.session.partAutoReplaceCost(this.id));
-  }
+        : (part_definition.capacitor_autosell_heat_ratio || 0)),
+    affordable: false,
+  };
+  applyCompiledPartFields(part, part_definition);
+  return part;
 }
 
 export class PartSet {
@@ -306,23 +158,19 @@ export class PartSet {
     for (let i = 0; i < compiledList.length; i++) {
       const compiled = compiledList[i];
       if (!compiled?.id) continue;
-      const partInstance = new Part(compiled, this.game);
+      const partInstance = createPart(compiled);
       this.parts.set(partInstance.id, partInstance);
       this.partsArray.push(partInstance);
     }
 
     this.initialized = true;
+    refreshPartsFromSession(this);
     return this.partsArray;
-  }
-
-  updateCellPower() {
-    this.partsArray.forEach((part) => {
-      if (part.category === "cell") part.updateDescription();
-    });
   }
 
   check_affordability(game) {
     if (!game) return;
+    refreshPartsFromSession(this);
     const bridge = getActiveBridge(game);
     const economy = bridge?.session?.getEconomySnapshot?.() ?? null;
     const money = toDecimal(game.state?.current_money ?? economy?.money ?? 0);
@@ -330,11 +178,11 @@ export class PartSet {
 
     this.partsArray.forEach((part) => {
       if (game.reactor && game.reactor.has_melted_down) {
-        part.setAffordable(false);
+        part.affordable = false;
         return;
       }
       if (this.isPartDoctrineLocked(part)) {
-        part.setAffordable(false);
+        part.affordable = false;
         return;
       }
 
@@ -353,7 +201,7 @@ export class PartSet {
       } else if (isUnlocked) {
         isAffordable = money.gte(part.cost);
       }
-      part.setAffordable(isAffordable);
+      part.affordable = isAffordable;
     });
   }
 

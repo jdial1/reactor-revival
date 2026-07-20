@@ -2,7 +2,7 @@ export {
   preferences,
   modalUi,
   pwaState,
-  enqueueGameEffect,
+  enqueueAndDrain,
   runSellAction,
   runManualReduceHeatAction,
   getValidatedPreferences,
@@ -11,28 +11,32 @@ export {
   parseAndValidateSave,
   showLoadBackupModal,
   setDecimal,
-  updateDecimal,
   patchGameState,
   syncReducedMotionDOM,
   tileKey,
   resolveTileFromKey,
-  BlueprintSchema,
-  LegacyGridSchema,
   StateManager,
   createUIState,
   initUIStateSubscriptions,
   applyBodyClassesFromUiState,
   buildShellClassMap,
   buildShellStyleMap,
+  shellHeatRatioAttr,
   EngineStatus,
 } from "./state.js";
+export { BlueprintSchema, LegacyGridSchema } from "./schema/index.js";
+export { enqueueGameEffect } from "./state/game-effects.js";
 export { subscribe, proxy, snapshot, ref } from "valtio/vanilla";
-export { subscribeKey } from "valtio/vanilla/utils";
+import { subscribeKey as valtioSubscribeKey } from "valtio/vanilla/utils";
+
+export function subscribeKey(proxyObject, key, callback) {
+  return valtioSubscribeKey(proxyObject, key, callback);
+}
 
 import {
   runSellAction as runSellActionImpl,
   runManualReduceHeatAction as runManualReduceHeatActionImpl,
-  enqueueGameEffect as enqueueGameEffectImpl,
+  enqueueAndDrain as enqueueAndDrainImpl,
 } from "./state.js";
 
 export const actions = {
@@ -43,6 +47,6 @@ export const actions = {
     runManualReduceHeatActionImpl(game);
   },
   enqueueEffect(game, effect) {
-    enqueueGameEffectImpl(game, effect);
+    enqueueAndDrainImpl(game, effect);
   },
 };

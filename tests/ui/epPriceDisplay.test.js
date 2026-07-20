@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, setupGameWithDOM, toNum } from '../helpers/setup.js';
 import { patchGameState } from "@app/state.js";
+import { formatUpgradeDisplayCost } from "@app/components/upgrades/upgrade-display.js";
 
 describe('EP Price Display and Affordability Synchronization', () => {
     let game;
@@ -27,28 +28,23 @@ describe('EP Price Display and Affordability Synchronization', () => {
             expect(toNum(infusedCells.base_ecost)).toBe(100);
 
             // Verify display costs match base costs
-            laboratory.updateDisplayCost();
-            infusedCells.updateDisplayCost();
-            expect(laboratory.display_cost).toBe("1 EP");
-            expect(infusedCells.display_cost).toBe("100 EP");
+            expect(formatUpgradeDisplayCost(laboratory)).toBe("1 EP");
+            expect(formatUpgradeDisplayCost(infusedCells)).toBe("100 EP");
         });
 
         it('should update price display when level increases', () => {
             const infusedCells = game.upgradeset.getUpgrade("infused_cells");
 
             // Level 0
-            infusedCells.updateDisplayCost();
-            expect(infusedCells.display_cost).toBe("100 EP");
+            expect(formatUpgradeDisplayCost(infusedCells)).toBe("100 EP");
 
             // Level 1
             infusedCells.setLevel(1);
-            infusedCells.updateDisplayCost();
-            expect(infusedCells.display_cost).toBe("200 EP"); // 100 * 2
+            expect(formatUpgradeDisplayCost(infusedCells)).toBe("200 EP"); // 100 * 2
 
             // Level 2
             infusedCells.setLevel(2);
-            infusedCells.updateDisplayCost();
-            expect(infusedCells.display_cost).toBe("400 EP"); // 100 * 2^2
+            expect(formatUpgradeDisplayCost(infusedCells)).toBe("400 EP"); // 100 * 2^2
         });
 
         it('should show max level indicator when at max level', () => {
@@ -56,9 +52,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
 
             // Set to max level
             laboratory.setLevel(laboratory.max_level);
-            laboratory.updateDisplayCost();
-
-            expect(laboratory.display_cost).toBe("MAX");
+            expect(formatUpgradeDisplayCost(laboratory)).toBe("MAX");
             expect(Number.isFinite(toNum(laboratory.current_ecost))).toBe(false);
         });
     });
@@ -145,7 +139,6 @@ describe('EP Price Display and Affordability Synchronization', () => {
             // Now give enough EP for protium cells
             game.current_exotic_particles = protiumCells.base_ecost;
             patchGameState(game, { current_exotic_particles: protiumCells.base_ecost });
-            protiumCells.updateDisplayCost(); // Ensure cost display is updated
             game.upgradeset.check_affordability(game);
             expect(protiumCells.affordable).toBe(true);
         });
@@ -160,10 +153,9 @@ describe('EP Price Display and Affordability Synchronization', () => {
             game.current_exotic_particles = cost;
             patchGameState(game, { current_exotic_particles: cost });
 
-            const purchased = game.upgradeset.purchaseUpgrade("protium_cells");
-            expect(purchased).toBe(false);
+            expect(game.upgradeset.purchaseUpgrade("protium_cells")).toBe(false);
             expect(protiumCells.level).toBe(0);
-            expect(game.current_exotic_particles).toBe(cost); // EP should not change
+            expect(toNum(game.current_exotic_particles)).toBe(toNum(cost));
         });
 
         it('should prevent purchase when insufficient EP', () => {
@@ -174,8 +166,7 @@ describe('EP Price Display and Affordability Synchronization', () => {
             game.current_exotic_particles = cost - 1;
             patchGameState(game, { current_exotic_particles: cost - 1 });
 
-            const purchased = game.upgradeset.purchaseUpgrade("laboratory");
-            expect(purchased).toBe(false);
+            expect(game.upgradeset.purchaseUpgrade("laboratory")).toBe(false);
             expect(laboratory.level).toBe(0);
             expect(toNum(game.current_exotic_particles)).toBe(toNum(cost) - 1);
         });
@@ -206,17 +197,14 @@ describe('EP Price Display and Affordability Synchronization', () => {
 
             // Level 0
             infusedCells.setLevel(0);
-            infusedCells.updateDisplayCost();
             expect(toNum(infusedCells.current_ecost)).toBe(100);
 
             // Level 1
             infusedCells.setLevel(1);
-            infusedCells.updateDisplayCost();
             expect(toNum(infusedCells.current_ecost)).toBe(200);
 
             // Level 2
             infusedCells.setLevel(2);
-            infusedCells.updateDisplayCost();
             expect(toNum(infusedCells.current_ecost)).toBe(400);
         });
 
@@ -228,8 +216,6 @@ describe('EP Price Display and Affordability Synchronization', () => {
             expect(infusedCells.cost_multiplier).toBe(2); // Same in this case, but should use ecost_multiplier
 
             infusedCells.setLevel(1);
-            infusedCells.updateDisplayCost();
-
             // Should use ecost_multiplier, not cost_multiplier
             expect(toNum(infusedCells.current_ecost)).toBe(100 * infusedCells.ecost_multiplier);
         });

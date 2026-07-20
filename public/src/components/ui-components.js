@@ -6,15 +6,13 @@ import { numFormat as fmt, formatNumberCompactIntl } from "../core/numbers.js";
 import { bindLitRenderMulti } from "../dom/lit-reactive.js";
 import { getUiElement } from "./shell/page-dom.js";
 import { getBarVisuals } from "./shell/ui-control-deck.js";
+import { resolveSessionSnapshot, hudViewFromSnapshot } from "./shell/hud-from-snapshot.js";
 import { teardownAffordabilityIndicators } from "./shell/ui-nav.js";
 import { togglePartsPanelForBuildButton } from "./shell/ui-parts-panel.js";
 import { renderComponentIcons } from "./blueprints/ui-blueprint-helpers.js";
 import { infoBarTemplate } from "../templates/uiComponentsTemplates.js";
 
 export {
-  getBarVisuals,
-  formatSimulationTickLine,
-  mountMobilePassiveBar,
   syncMobileControlDeckMounts,
   updateFailurePhaseSensory,
   setPageReactorVisibility,
@@ -22,7 +20,6 @@ export {
   initControlDeckVarObjs,
   initializeControlDeckToggleButtons,
   syncToggleStatesFromGame,
-  updateControlDeckPercentageBar,
 } from "./shell/ui-control-deck.js";
 
 export {
@@ -40,16 +37,9 @@ export {
 } from "./shell/ui-nav.js";
 
 export {
-  getUiConfigDisplayValue,
-  snapUiDisplayValuesFromState,
-  syncUiDisplayValueTargetsFromState,
   applyUiStateToDom,
-  applyUiStateToDomForKeys,
   processUiUpdateQueue,
-  updateUiRollingNumbers,
-  startRenderLoop,
 } from "./grid/ui-render-loop.js";
-const VENTING_ANIM_MS = 400;
 const INFO_BAR_CATHODE_IDS = ["info_money_desktop", "info_money", "info_ep_value_desktop", "info_ep_value"];
 
 
@@ -57,12 +47,8 @@ export {
   getUiElement,
   getPageReactor,
   getPageReactorWrapper,
-  getPageReactorBackground,
-  isLitRenderContainer,
-  dedupeReactorStatsDom,
 } from "./shell/page-dom.js";
 
-export { HeatVisualsUI, GridInteractionUI } from "./grid/ui-heat-visuals.js";
 export { myLayoutsTemplate, layoutViewTemplate } from "./blueprints/ui-layout-templates.js";
 
 
@@ -73,11 +59,10 @@ function resetInfoBarCathodeState(ui) {
 }
 
 function resolveInfoBarCathodeEl(ui, id) {
-  const root = ui._infoBarRoot;
-  if (!root) return null;
+  if (!ui._infoBarRoot) return null;
   let el = ui._infoBarCathodeEls?.[id];
   if (!el?.isConnected) {
-    el = root.querySelector(`#${id}`);
+    el = getUiElement(ui, id);
     if (!ui._infoBarCathodeEls) ui._infoBarCathodeEls = {};
     ui._infoBarCathodeEls[id] = el;
   }
@@ -103,7 +88,8 @@ function infoBarCathodeAfterRender(ui) {
   }
 }
 
-function buildInfoBarTemplate(ui, state) {
+function buildInfoBarTemplate(ui) {
+  const state = hudViewFromSnapshot(resolveSessionSnapshot(ui.game), ui.game);
   const power = toNumber(state.current_power);
   const heat = toNumber(state.current_heat);
   const maxP = toNumber(state.max_power) || 1;
@@ -117,6 +103,11 @@ function buildInfoBarTemplate(ui, state) {
   const heatClass = classMap({ "info-item": true, heat: true, full: hBar.isFull, meltdown, "heat-led-warning": hBar.isWarning });
   const moneyDisplay = meltdown ? "☢️" : `$${formatNumberCompactIntl(state.current_money ?? 0)}`;
   const moneyDisplayMobile = meltdown ? "☢️" : formatNumberCompactIntl(state.current_money ?? 0);
+  const hullPct = maxH > 0 ? (heat / maxH) * 100 : 0;
+  const hullText = `${fmt(hullPct, 1)}%`;
+  const hullEmpty = hullPct <= 0;
+  const hullClass = classMap({ "info-item": true, hull: true, "info-item-hull": true, "hull-empty-state": hullEmpty });
+  const hullReadoutClass = classMap({ value: true, "cathode-readout": true, "hull-readout-empty": hullEmpty });
 
   const activeBuffs = state.active_buffs ?? [];
 
@@ -133,6 +124,7 @@ function buildInfoBarTemplate(ui, state) {
   return infoBarTemplate({
     powerClass,
     heatClass,
+    hullClass,
     powerBarStyle: pBar.style,
     heatBarStyle: hBar.style,
     powerTextDesktop: fmt(power, 2),
@@ -143,6 +135,8 @@ function buildInfoBarTemplate(ui, state) {
     heatTextMobile: fmt(heat, 0),
     maxHeatDesktop: fmt(maxH, 2),
     maxHeatMobile: fmt(maxH),
+    hullText,
+    hullReadoutClass,
     epContentStyle,
     epVisible,
     activeBuffs,
@@ -164,7 +158,7 @@ export function teardownInfoBar(ui) {
 
 export function mountInfoBar(ui) {
   const root = getUiElement(ui, "info_bar_root");
-  if (!root || !ui.game?.state) return;
+  if (!root || !ui.uiState) return;
 
   teardownInfoBar(ui);
   ui._infoBarRoot = root;
@@ -173,12 +167,12 @@ export function mountInfoBar(ui) {
   const signal = ui._infoBarAbortController.signal;
 
   const subscriptions = [{
-    state: ui.game.state,
-    keys: ["current_power", "max_power", "current_heat", "max_heat", "current_money", "current_exotic_particles", "active_buffs", "melting_down", "power_net_change", "heat_net_change", "stats_power", "stats_net_heat"],
+    state: ui.uiState,
+    keys: ["snapshot_rev"],
   }];
   ui._infoBarUnmount = bindLitRenderMulti(
     subscriptions,
-    () => buildInfoBarTemplate(ui, ui.game.state),
+    () => buildInfoBarTemplate(ui),
     root,
     () => infoBarCathodeAfterRender(ui)
   );
@@ -216,14 +210,14 @@ export function teardownGameLayout(ui) {
   }
   ui._statsBarReactiveMounted = false;
 
-  if (ui._engineStatusComponent) {
-    ui._engineStatusComponent.unmount();
-    ui._engineStatusComponent = null;
+  if (typeof ui._engineStatusUnmount === "function") {
+    safeCall(() => { ui._engineStatusUnmount(); });
+    ui._engineStatusUnmount = null;
   }
 
-  if (ui._controlDeckEpComponent) {
-    ui._controlDeckEpComponent.unmount();
-    ui._controlDeckEpComponent = null;
+  if (typeof ui._controlDeckEpUnmount === "function") {
+    safeCall(() => { ui._controlDeckEpUnmount(); });
+    ui._controlDeckEpUnmount = null;
   }
 
   if (typeof ui._controlsNavUnmount === "function") {
@@ -269,7 +263,6 @@ export function teardownGameLayout(ui) {
 export {
   updatePartsPanelBodyClass,
   togglePartsPanelForBuildButton,
-  unlockAllPartsForTesting,
   refreshPartsPanel,
   onPartsPanelActiveTabChanged,
   setupPartsTabs,
@@ -297,14 +290,11 @@ export {
   collectUpgradeDebugGameVariables,
 } from "./upgrades/ui-upgrade-hub.js";
 export {
-  UserAccountUI,
   PwaDisplayModeUI,
   QuickStartUI,
-  bindDeviceFeatures,
   initPwaDisplayMode,
   subscribeToContextModalEvents,
   unsubscribeContextModalEvents,
-  quickStartTemplate,
 } from "./shell/ui-device-shell.js";
 
 export class ComponentRenderingUI {
@@ -344,25 +334,15 @@ export { encodeLayoutShare, decodeLayoutShare, isLayoutShareCode } from "../core
 export {
   renderLayoutPreview,
   buildPartSummary,
-  buildAffordableSet,
 } from "./grid/ui-reactor-layout.js";
 export { getCompactLayout, serializeReactor } from "../domain/reactor-codec.js";
 export {
   CopyPasteUI,
   hideCopyPasteModal,
-  setupCopyAction,
-  setupPasteAction,
 } from "./blueprints/ui-copy-paste.js";
 
 export {
-  initializePage,
   loadAndSetVersionForPage,
-  clearPageReactor,
-  setPageGridContainer,
-  setupUpgradeHubCollapsibleSections,
-  setupAboutScrollHint,
   setupResearchCollapsibleSections,
-  setupVersionDisplayForPage,
 } from "./shell/ui-page-init.js";
-export { MeltdownUI } from "./shell/ui-meltdown.js";
 

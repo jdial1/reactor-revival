@@ -1,5 +1,37 @@
-import { toNumber } from "../simUtils.js";
+import { toNumber, toDecimal, getDecimal } from "../simUtils.js";
 import { getAffordabilitySettings } from "../state/preferences.js";
+import { getActiveBridge } from "./active.js";
+
+const Decimal = getDecimal();
+
+export function projectUpgradeCosts(upgrade) {
+  if (!upgrade) return;
+  const bridge = getActiveBridge(upgrade.game);
+  if (bridge) {
+    upgrade.level = bridge.getUpgradeLevel(upgrade.id) ?? 0;
+  }
+  if (!bridge) {
+    upgrade.current_cost = upgrade.base_cost;
+    upgrade.current_ecost = upgrade.base_ecost;
+    return;
+  }
+  const preview = bridge.previewUpgrade(upgrade.id);
+  if (!preview || preview.reason === "max_level" || upgrade.level >= upgrade.max_level) {
+    upgrade.current_cost = Decimal.MAX_VALUE;
+    upgrade.current_ecost = Decimal.MAX_VALUE;
+    return;
+  }
+  const isEp = preview.currency === "ep" || preview.currency === "exotic_particles";
+  const cost = toDecimal(preview.costDecimal ?? preview.cost);
+  upgrade.current_cost = isEp ? toDecimal(0) : cost;
+  upgrade.current_ecost = isEp ? cost : toDecimal(0);
+}
+
+export function projectAllUpgradeCosts(upgradeset) {
+  const list = upgradeset?.upgradesArray;
+  if (!list) return;
+  for (let i = 0; i < list.length; i++) projectUpgradeCosts(list[i]);
+}
 
 export function mergeSessionUpgradeLevel(session, id, level) {
   if (!session?.setUpgradeLevels || !id) return;
@@ -44,12 +76,12 @@ export function projectUpgradeLevelsToHost(bridge) {
     if (!upg) continue;
     const level = session.getUpgradeLevel?.(upg.id) ?? 0;
     if (upg.level !== level) upg.setLevel(level, { deferSync: true, skipSessionSync: true });
-    else upg.updateDisplayCost?.();
+    else projectUpgradeCosts(upg);
   }
   bridge.game.syncModifiersFromUpgrades?.({ skipGrid: true });
 }
 
-export function computeAffordable(upgrade, upgradeset, game) {
+function computeAffordable(upgrade, upgradeset, game) {
   if (game.reactor?.has_melted_down) return false;
   if (!upgradeset.isUpgradeAvailable(upgrade.id)) return false;
   const preview = game.coreBridge?.previewUpgrade?.(upgrade.id);
@@ -61,7 +93,7 @@ function isResearchUpgrade(upgrade) {
   return Boolean(upgrade.base_ecost?.gt?.(0));
 }
 
-export function computeAffordProgress(upgrade, game, isAffordable) {
+function computeAffordProgress(upgrade, game, isAffordable) {
   if (isAffordable) return 1;
   if (upgrade.level >= upgrade.max_level || game.reactor?.has_melted_down) return 0;
   const preview = game.coreBridge?.previewUpgrade?.(upgrade.id);
@@ -71,7 +103,7 @@ export function computeAffordProgress(upgrade, game, isAffordable) {
   return Math.min(1, toNumber(raw) / toNumber(preview.cost));
 }
 
-export function getAffordanceFlags(upgrade, upgradeset, game, settings) {
+function getAffordanceFlags(upgrade, upgradeset, game, settings) {
   const available = upgradeset.isUpgradeAvailable(upgrade.id);
   if (!available) {
     return { available: false, affordable: false, progress: 0, isResearch: isResearchUpgrade(upgrade), isMaxed: false, hidden: false, doctrineLocked: true };
@@ -99,13 +131,13 @@ export function runCheckAffordabilityCore(upgradeset, game) {
     const flags = getAffordanceFlags(upgrade, upgradeset, game, settings);
     upgrade._affordHidden = flags.hidden;
     if (!flags.available) {
-      upgrade.setAffordable(false);
-      upgrade.setAffordProgress(0);
+      upgrade.affordable = false;
+      upgrade.afford_progress = 0;
       rows.push({ upgrade, flags });
       return;
     }
-    upgrade.setAffordable(flags.affordable);
-    upgrade.setAffordProgress(flags.progress);
+    upgrade.affordable = flags.affordable;
+    upgrade.afford_progress = flags.progress;
     if (flags.isResearch) {
       hasAnyResearch = true;
       if (flags.affordable && !flags.isMaxed) hasVisibleAffordableResearch = true;
@@ -131,7 +163,7 @@ export function setUpgradeCardRefreshHandler(fn) {
 }
 
 export function runCheckAffordability(upgradeset, game) {
-  game?.coreBridge?.loadEconomyFromHost?.();
+  projectAllUpgradeCosts(upgradeset);
   const snapshot = runCheckAffordabilityCore(upgradeset, game);
   if (!snapshot) return;
   _refreshUpgradeCards?.(upgradeset);

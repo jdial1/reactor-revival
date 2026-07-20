@@ -5,17 +5,56 @@ import { logger } from "../../core/logger.js";
 import { formatDuration, numFormat as fmt, formatPrestigeNumber } from "../../core/numbers.js";
 import { getValidatedPreferences, preferences, modalUi, syncReducedMotionDOM, actions, showLoadBackupModal } from "../../store.js";
 import { getAppContext } from "../../app-context.js";
-import { enqueueWarningStop } from "../../state/game-effects.js";
+import { enqueueWarningStop } from "../../state/game-effects-flush.js";
 import { MODAL_IDS } from "../../constants/modal-ids.js";
-import { hideCopyPasteModal, openCopyPasteDialogHost, getCopyPasteRefs, syncModalDialogOpen } from "../blueprints/ui-copy-paste.js";
+import { hideCopyPasteModal, openCopyPasteDialogHost, getCopyPasteRefs, syncModalDialogOpen, buildCopyPasteShellDisplay } from "../blueprints/ui-copy-paste.js";
 import { bindLitRenderMultiStates } from "../../dom/lit-reactive.js";
 import { getUiElement } from "../shell/page-dom.js";
-import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate, quickStartTemplate } from "../ui-components.js";
+import { renderComponentIcons, layoutViewTemplate, myLayoutsTemplate } from "../ui-components.js";
+import { quickStartTemplate } from "../shell/ui-device-shell.js";
 import { styleMap, bindEvents, escapeHtml } from "../../dom/lit.js";
 import { getMyLayouts } from "../blueprints/ui-layout-storage.js";
-import { WEAVE_QUANTUM } from "../../constants/balance.js";
-import { drainGridIntentsAsync } from "../../bridge/bridge-intents.js";
+import { WEAVE_QUANTUM, WELCOME_BACK_FF_MAX_TICKS } from "../../constants/balance.js";
+import { hudViewFromSnapshot, resolveSessionSnapshot } from "../shell/hud-from-snapshot.js";
+import { dispatchPlayerIntents } from "../../bridge/bridge-intents.js";
 import { dispatchRebootIntent } from "../grid/ui-intents.js";
+import { postGameLoopProjectionQuery } from "../../domain/engine.js";
+
+function firstByClass(root, className) {
+  if (!root) return null;
+  return root.getElementsByClassName(className)[0] ?? null;
+}
+
+function forEachByClass(root, className, fn) {
+  if (!root) return;
+  const list = root.getElementsByClassName(className);
+  for (let i = 0; i < list.length; i++) fn(list[i]);
+}
+
+function findMechSwitch(overlay, checkboxId) {
+  const switches = overlay?.getElementsByClassName("mech-switch");
+  if (!switches) return null;
+  for (let i = 0; i < switches.length; i++) {
+    if (switches[i].dataset.checkboxId === checkboxId) return switches[i];
+  }
+  return null;
+}
+
+function setClassFlag(el, className, on) {
+  if (!el) return;
+  const re = new RegExp(`\\b${className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
+  const base = el.className.replace(re, "").replace(/\s+/g, " ").trim();
+  el.className = on ? (base ? `${base} ${className}` : className) : base;
+}
+
+function findPageButton(nav, pageId) {
+  if (!nav) return null;
+  const buttons = nav.getElementsByTagName("button");
+  for (let i = 0; i < buttons.length; i++) {
+    if (buttons[i].dataset.page === pageId) return buttons[i];
+  }
+  return null;
+}
 
 const HIDDEN_STYLE = { display: "none" };
 const SECTION_HEAD = "margin-top: 0; margin-bottom: 0.75rem; color: var(--game-success-color, rgb(93, 156, 81)); font-size: 0.8rem; border-bottom: 2px solid rgb(68,68,68); padding-bottom: 4px;";
@@ -254,16 +293,29 @@ function reactorFailedToStartLayout({ errorMessage, defaultMessage, onTryAgain, 
   `;
 }
 
-function welcomeBackLayout({ durationStr, tickStr, onFastForward, onDismiss }) {
+function welcomeBackLayout({ durationStr, tickStr, onFastForward, meltdownRisk, catchingUp, progressPct }) {
+  const pct = Math.max(0, Math.min(100, progressPct ?? 0));
   return html`
-    <div class="welcome-back-modal-overlay" @click=${(e) => { if (e.target === e.currentTarget) onDismiss(); }}>
+    <div class="welcome-back-modal-overlay">
       <div class="welcome-back-modal pixel-panel">
-        <h2 class="welcome-back-title">Welcome Back!</h2>
-        <p class="welcome-back-message">Away for <strong>${durationStr}</strong> (~${tickStr} ticks). Catch up via worker replay:</p>
-        <div class="welcome-back-actions">
-          <button type="button" class="pixel-btn welcome-back-ff" @click=${onFastForward}>Fast-Forward</button>
-        </div>
-        <p class="welcome-back-hint"><strong>Fast-Forward</strong> replays offline ticks through the physics worker at ${100} ticks per frame. Unstable layouts can still melt down.</p>
+        <h2 class="welcome-back-title">${catchingUp ? "Catching Up…" : "Welcome Back!"}</h2>
+        ${catchingUp
+          ? html`
+            <p class="welcome-back-message">Replaying offline ticks (${pct.toFixed(0)}%).</p>
+            <div class="welcome-back-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${pct}>
+              <div class="welcome-back-progress-bar" style="width: ${pct}%;"></div>
+            </div>
+          `
+          : html`
+            <p class="welcome-back-message">Away for <strong>${durationStr}</strong> (~${tickStr} ticks). Catch up via session replay:</p>
+            ${meltdownRisk
+              ? html`<p class="welcome-back-sub" style="color: var(--game-danger-color, rgb(220 80 80));">Heat is already elevated — fast-forward may trigger a meltdown.</p>`
+              : nothing}
+            <div class="welcome-back-actions">
+              <button type="button" class="pixel-btn welcome-back-ff" @click=${onFastForward}>Fast-Forward</button>
+            </div>
+            <p class="welcome-back-hint"><strong>Fast-Forward</strong> replays offline ticks at ${WELCOME_BACK_FF_MAX_TICKS} ticks per frame. Unstable layouts can still melt down.</p>
+          `}
       </div>
     </div>
   `;
@@ -315,21 +367,18 @@ function volToStep(v) {
 
 let _activeAbortController = null;
 
-export function getAbortSignal() {
+function getAbortSignal() {
   if (_activeAbortController) _activeAbortController.abort();
   _activeAbortController = new AbortController();
   return _activeAbortController.signal;
 }
 
-export function abortSettingsListeners() {
+function abortSettingsListeners() {
   if (_activeAbortController) {
     _activeAbortController.abort();
     _activeAbortController = null;
   }
 }
-
-const SAVED_BUTTON_RESET_MS = 1500;
-const ERROR_BUTTON_RESET_MS = 2000;
 
 const VOLUME_PREF_KEYS = {
   master: "volumeMaster",
@@ -371,12 +420,12 @@ function handleVolumeKeydown(e, blocks, updateStepper, modal) {
 }
 
 function setupVolumeSteppers(overlay, modal, signal) {
-  overlay.querySelectorAll(".volume-stepper").forEach((stepper) => {
+  forEachByClass(overlay, "volume-stepper", (stepper) => {
     const key = stepper.dataset.volumeKey;
-    const blocks = stepper.querySelector(".volume-blocks");
+    const blocks = firstByClass(stepper, "volume-blocks");
     if (!blocks) return;
     const updateStepper = (step) => applyStepperState(key, step, modal);
-    blocks.querySelectorAll(".volume-block").forEach((block) => {
+    forEachByClass(blocks, "volume-block", (block) => {
       block.addEventListener("click", (e) => {
         e.stopPropagation();
         updateStepper(parseInt(block.dataset.step, 10));
@@ -392,7 +441,7 @@ function handleToggleRowClick(e, overlay, modal) {
   const tr = e.target.closest("tr");
   const id = tr?.dataset.checkboxId;
   if (!id) return;
-  const switchEl = overlay.querySelector(`.mech-switch[data-checkbox-id="${id}"]`);
+  const switchEl = findMechSwitch(overlay, id);
   if (switchEl) {
     switchEl.click();
     modal.playClick();
@@ -405,26 +454,26 @@ function handleSelectRowClick(e, overlay, modal) {
   const tr = e.target.closest("tr");
   const id = tr?.dataset.selectId;
   if (id) {
-    const select = overlay.querySelector(`#${id}`);
+    const select = getUiElement(null, id);
     if (select) {
-          select.focus();
-          if (typeof select.showPicker === "function") select.showPicker();
-          else select.click();
-          modal.playClick();
-        }
+      select.focus();
+      if (typeof select.showPicker === "function") select.showPicker();
+      else select.click();
+      modal.playClick();
+    }
   }
 }
 
 function createSetupMechSwitch(overlay, modal, signal) {
   return (checkboxId, onChange) => {
-    const checkbox = overlay.querySelector(`#${checkboxId}`);
-    const btn = overlay.querySelector(`.mech-switch[data-checkbox-id="${checkboxId}"]`);
+    const checkbox = getUiElement(null, checkboxId);
+    const btn = findMechSwitch(overlay, checkboxId);
     if (!checkbox || !btn) return;
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       checkbox.checked = !checkbox.checked;
-      btn.classList.toggle("mech-switch-on-active", checkbox.checked);
+      setClassFlag(btn, "mech-switch-on-active", checkbox.checked);
       btn.setAttribute("aria-checked", String(checkbox.checked));
       modal.playClick();
       onChange(checkbox.checked);
@@ -443,7 +492,7 @@ function setupMechSwitches(overlay, modal, signal) {
   };
   Object.entries(affordPrefMap).forEach(([id, prefKey]) => {
     setupMechSwitch(id, () => {
-      const el = overlay.querySelector(`#${id}`);
+      const el = getUiElement(null, id);
       if (!el) return;
       preferences[prefKey] = el.checked;
       if (game?.upgradeset) game.upgradeset.check_affordability(game);
@@ -465,7 +514,7 @@ function setupMechSwitches(overlay, modal, signal) {
     const gameRef = modal.getGame?.();
     if (gameRef?.audio) gameRef.audio.toggleMute(checked);
   });
-  const numberFormatSelect = overlay.querySelector("#setting-number-format");
+  const numberFormatSelect = getUiElement(null, "setting-number-format");
   if (numberFormatSelect) {
     numberFormatSelect.addEventListener("change", () => {
       preferences.numberFormat = numberFormatSelect.value;
@@ -475,7 +524,7 @@ function setupMechSwitches(overlay, modal, signal) {
   bindEvents(overlay, {
     ".mech-switch-row span": (e) => {
       e.preventDefault();
-      e.target.closest(".mech-switch-row")?.querySelector(".mech-switch")?.click();
+      firstByClass(e.target.closest(".mech-switch-row"), "mech-switch")?.click();
     },
     "tr.settings-option-row[data-checkbox-id]": {
       click: (e) => handleToggleRowClick(e, overlay, modal),
@@ -496,7 +545,7 @@ function setupMechSwitches(overlay, modal, signal) {
       }
     }
   }, { signal });
-  const notifCheckbox = overlay.querySelector("#setting-notifications");
+  const notifCheckbox = getUiElement(null, "setting-notifications");
   if (notifCheckbox && "Notification" in window) {
     setupMechSwitch("setting-notifications", (checked) => modal._handleNotificationSwitch(checked));
   }
@@ -506,10 +555,8 @@ function setupMechSwitches(overlay, modal, signal) {
   }
 }
 
-function setupCloudSaves() {}
-
-function setupNavAndAbout(overlay) {
-  const versionSpan = overlay.querySelector("#app_version");
+function setupNavAndAbout(_overlay) {
+  const versionSpan = getUiElement(null, "app_version");
   if (versionSpan) {
     const cached = getAppContext()?.ui?._cachedVersion;
     if (cached) {
@@ -521,7 +568,7 @@ function setupNavAndAbout(overlay) {
         .catch(() => { versionSpan.textContent = "Unknown"; });
     }
   }
-  const displayModeSpan = overlay.querySelector("#app_display_mode");
+  const displayModeSpan = getUiElement(null, "app_display_mode");
   if (displayModeSpan) {
     const modes = ["standalone", "minimal-ui", "browser"];
     const activeMode = modes.find((m) => window.matchMedia(`(display-mode: ${m})`).matches) || "browser";
@@ -529,8 +576,8 @@ function setupNavAndAbout(overlay) {
   }
 }
 
-export function bindSettingsEvents(overlay, modal, signal) {
-  const importInput = overlay.querySelector("#setting-import-input");
+function bindSettingsEvents(overlay, modal, signal) {
+  const importInput = getUiElement(null, "setting-import-input");
   bindEvents(overlay, {
     "#setting-export": () => modal._handleExportClick(),
     "#setting-import": () => importInput?.click(),
@@ -546,17 +593,16 @@ export function bindSettingsEvents(overlay, modal, signal) {
   setupVolumeSteppers(overlay, modal, signal);
   setupMechSwitches(overlay, modal, signal);
   setupNavAndAbout(overlay);
-  setupCloudSaves(overlay, modal, signal);
 }
 
-export const settingsModalTemplate = (settingsState, onTabClick, onClose) => settingsModalLayout({
+const settingsModalTemplate = (settingsState, onTabClick, onClose) => settingsModalLayout({
   activeTab: settingsState?.activeTab ?? "audio",
   notificationPermission: settingsState?.notificationPermission ?? "default",
   onTabClick,
   onClose,
 });
 
-export function createSettingsContext(ui, modal) {
+function createSettingsContext(ui, modal) {
   const getGame = () => ui?.game ?? getAppContext()?.game;
   const getUi = () => ui ?? getAppContext()?.ui;
   const playClick = () => {
@@ -644,7 +690,7 @@ export function createSettingsContext(ui, modal) {
     }
   };
 
-  const _handleNotificationSwitch = async (checked, notifCheckbox) => {
+  const _handleNotificationSwitch = async (checked, _notifCheckbox) => {
     if (!checked) {
       logger.log("warn", "ui", "To disable notifications completely, you must reset permissions in your browser settings.");
       updateNotificationPermission();
@@ -690,15 +736,24 @@ function reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }) {
   });
 }
 
-function welcomeBackModalTemplate(payload, onFastForward, onDismiss) {
-  const { offlineMs = 0, tickEquivalent = 0, queuedTicks = 0 } = payload ?? {};
+function welcomeBackModalTemplate(payload, onFastForward) {
+  const {
+    offlineMs = 0,
+    tickEquivalent = 0,
+    queuedTicks = 0,
+    meltdownRisk = false,
+    catchingUp = false,
+    progressPct = 0,
+  } = payload ?? {};
   const durationStr = formatDuration(offlineMs, false);
   const tickStr = (tickEquivalent || queuedTicks).toLocaleString();
   return welcomeBackLayout({
     durationStr,
     tickStr,
     onFastForward,
-    onDismiss,
+    meltdownRisk,
+    catchingUp,
+    progressPct,
   });
 }
 
@@ -738,8 +793,6 @@ function contextModalTemplate(tile, onSell, onClose) {
   });
 }
 
-export { MODAL_IDS } from "../../constants/modal-ids.js";
-
 class ModalOrchestration {
   constructor() {
     this.ui = null;
@@ -756,7 +809,7 @@ class ModalOrchestration {
 
   init(ui) {
     this.ui = ui;
-    const root = typeof document !== "undefined" ? document.getElementById("modal-root") : null;
+    const root = getUiElement(ui, "modal-root");
     if (root instanceof HTMLDialogElement && !root.dataset.boundGameCancel) {
       root.dataset.boundGameCancel = "1";
       root.addEventListener("cancel", (e) => {
@@ -769,7 +822,7 @@ class ModalOrchestration {
 
   _resolveModalRoot() {
     if (!this._modalRoot) {
-      this._modalRoot = (this.ui ? getUiElement(this.ui, "modal-root") : null) ?? (typeof document !== "undefined" ? document.getElementById("modal-root") : null);
+      this._modalRoot = getUiElement(this.ui, "modal-root");
     }
     return this._modalRoot;
   }
@@ -817,18 +870,6 @@ class ModalOrchestration {
     this._handlers.set(MODAL_IDS.REACTOR_FAILED_TO_START, {
       show: (p) => this._showReactorFailedToStartModal(p),
       hide: () => this._hideReactorFailedToStartModal(),
-    });
-    this._handlers.set(MODAL_IDS.LOGIN, {
-      show: () => ui?.userAccountUI?.showLoginModal?.(),
-      hide: () => {},
-    });
-    this._handlers.set(MODAL_IDS.PROFILE, {
-      show: () => ui?.userAccountUI?.showProfileModal?.(),
-      hide: () => {},
-    });
-    this._handlers.set(MODAL_IDS.LOGOUT, {
-      show: () => ui?.userAccountUI?.showLogoutModal?.(),
-      hide: () => {},
     });
     this._handlers.set(MODAL_IDS.SETTINGS, {
       show: () => this._showSettingsModal(),
@@ -897,7 +938,7 @@ class ModalOrchestration {
     this._activeContextTile = tile;
     this._renderContextModal();
     this.ui.deviceFeatures?.lightVibration?.();
-    const handle = this._modalRoot?.querySelector(".context-modal-handle");
+    const handle = firstByClass(this._modalRoot, "context-modal-handle");
     if (handle) {
       let startY = 0;
       const onEnd = (e) => {
@@ -919,7 +960,7 @@ class ModalOrchestration {
 
     const game = this.ui.game;
     const totalEp = game.state.total_exotic_particles || 0;
-    const epFromWeave = game.state?.session_ep_weave ?? 0;
+    const epFromWeave = hudViewFromSnapshot(resolveSessionSnapshot(game), game).session_ep_weave ?? 0;
     const preservedUpgrades = game.upgradeset.getAllUpgrades().filter((u) => u.base_ecost && u.level > 0).length;
     const prestigeMultiplier = game.getPrestigeMultiplier();
 
@@ -951,24 +992,17 @@ class ModalOrchestration {
   _showSellModal(payload) {
     const ui = this.ui;
     const { summary = [], checkedTypes = {}, previousPauseState = false } = payload || {};
-    openCopyPasteDialogHost();
+    const display = buildCopyPasteShellDisplay({
+      action: "sell",
+      title: "Sell Reactor Parts",
+      confirmLabel: "Sell Selected",
+      confirmDanger: true,
+      previousPauseState: String(!!previousPauseState),
+    });
+    openCopyPasteDialogHost(display);
     const refs = getCopyPasteRefs();
     if (!refs) return;
-    const { modal: modalEl, modalTitle, modalText, modalCost, confirmBtn, closeBtn } = refs;
-
-    modalTitle.textContent = "Sell Reactor Parts";
-    confirmBtn.textContent = "Sell Selected";
-
-    if (modalText) {
-      modalText.classList.add("hidden");
-      modalText.style.display = "none";
-      modalText.style.visibility = "hidden";
-      modalText.style.opacity = "0";
-      modalText.style.height = "0";
-      modalText.style.overflow = "hidden";
-    }
-
-    modalEl.dataset.previousPauseState = previousPauseState;
+    const { modalCost, confirmBtn, closeBtn } = refs;
 
     const updateSellSummary = () => {
       const filteredSummary = summary.filter(item => checkedTypes[item.id] !== false);
@@ -985,9 +1019,7 @@ class ModalOrchestration {
       confirmBtn.disabled = totalSellValue === 0;
     };
 
-    confirmBtn.classList.remove("hidden");
     confirmBtn.disabled = false;
-    confirmBtn.style.backgroundColor = "var(--canvas-confirm-danger)";
     confirmBtn.onclick = async () => {
       const tilesToSell = [];
       ui.game.tileset.tiles_list.forEach(tile => {
@@ -997,10 +1029,10 @@ class ModalOrchestration {
       });
       const totalSellValue = tilesToSell.reduce((sum, tile) => sum + (tile.calculateSellValue?.() ?? tile.part.cost), 0);
       const intents = tilesToSell.map((t) => ({
-        action: "SELL_PART",
+        type: "SELL_PART",
         payload: { row: t.row, col: t.col },
       }));
-      await drainGridIntentsAsync(ui.game, ui.game.engine, intents);
+      await dispatchPlayerIntents(ui.game, ui.game.engine, intents);
       ui.game.reactor.updateStats();
       confirmBtn.textContent = `Sold $${fmt(totalSellValue)}`;
       confirmBtn.style.backgroundColor = "var(--canvas-confirm-success)";
@@ -1026,47 +1058,72 @@ class ModalOrchestration {
     hideCopyPasteModal(this.ui);
   }
 
-  _showWelcomeBackModal(payload) {
-    if (!this.ui?.game) return Promise.resolve();
-    if (!this._resolveModalRoot()) return Promise.resolve();
+  async _showWelcomeBackModal(payload) {
+    if (!this.ui?.game) return;
+    for (let i = 0; i < 40 && !this._resolveModalRoot(); i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    if (!this._resolveModalRoot()) return;
 
     const game = this.ui.game;
     game.pause();
 
-    return new Promise((resolve) => {
-      const handleClose = (mode) => {
-        if (mode === "fast-forward" && game.engine) game.engine.beginFastForwardCatchup();
+    let meltdownRisk = false;
+    try {
+      const proj = await postGameLoopProjectionQuery(game.engine, game);
+      const heatRatio = proj?.heatRatio ?? 0;
+      meltdownRisk = !!(proj?.meltdown || heatRatio >= 0.85);
+    } catch (_) {
+      meltdownRisk = false;
+    }
 
-        if (game) {
-          game.onToggleStateChange?.("pause", false);
-        }
+    const state = {
+      ...(payload ?? {}),
+      meltdownRisk,
+      catchingUp: false,
+      progressPct: 0,
+    };
+
+    return new Promise((resolve) => {
+      const renderWelcome = () => {
+        this._openLitModal(
+          welcomeBackModalTemplate(state, () => void startCatchup())
+        );
+      };
+
+      const finish = (mode) => {
+        document.removeEventListener("keydown", keyHandler);
+        if (game) game.onToggleStateChange?.("pause", false);
         this.hideModal(MODAL_IDS.WELCOME_BACK);
         resolve(mode);
       };
 
-      const onFastForward = () => handleClose("fast-forward");
-      const onDismiss = () => handleClose("fast-forward");
+      const startCatchup = async () => {
+        if (state.catchingUp) return;
+        state.catchingUp = true;
+        state.progressPct = 0;
+        renderWelcome();
+        if (!game.engine) {
+          finish("fast-forward");
+          return;
+        }
+        await game.engine.beginFastForwardCatchup({
+          onProgress: ({ processed, total, done }) => {
+            const t = total > 0 ? total : 1;
+            state.progressPct = done ? 100 : Math.min(100, (processed / t) * 100);
+            renderWelcome();
+          },
+        });
+        finish("fast-forward");
+      };
 
       const keyHandler = (e) => {
-        if (e.key === "Escape") {
-          document.removeEventListener("keydown", keyHandler);
-          onDismiss();
+        if (e.key === "Escape" && !state.catchingUp) {
+          void startCatchup();
         }
       };
       document.addEventListener("keydown", keyHandler);
-
-      const wrappedClose = (mode) => {
-        document.removeEventListener("keydown", keyHandler);
-        handleClose(mode);
-      };
-
-      this._openLitModal(
-        welcomeBackModalTemplate(
-          payload,
-          () => wrappedClose("fast-forward"),
-          () => wrappedClose("fast-forward")
-        )
-      );
+      renderWelcome();
     });
   }
 
@@ -1087,7 +1144,7 @@ class ModalOrchestration {
       const overlay = this._modalRoot?.firstElementChild;
       if (overlay) {
         bindSettingsEvents(overlay, this._settingsContext, signal);
-        const header = overlay.querySelector(".settings-header");
+        const header = firstByClass(overlay, "settings-header");
         if (header) {
           let startY = 0;
           header.addEventListener("touchstart", (e) => { startY = e.touches[0].clientY; }, { passive: true });
@@ -1145,17 +1202,11 @@ class ModalOrchestration {
       game.audio?.stopTestSound?.();
     }
     this._closeLitModal();
-    const menuBtn = document.getElementById("menu_tab_btn");
-    if (menuBtn) menuBtn.classList.remove("active");
-    const settingsTopBtn = document.getElementById("settings_btn");
-    if (settingsTopBtn) settingsTopBtn.classList.remove("active");
+    setClassFlag(getUiElement(this.ui, "menu_tab_btn"), "active", false);
+    setClassFlag(getUiElement(this.ui, "settings_btn"), "active", false);
     const currentPageId = game?.router?.currentPageId;
     if (currentPageId) {
-      const bottomNav = document.getElementById("bottom_nav");
-      if (bottomNav) {
-        const pageBtn = bottomNav.querySelector(`button[data-page="${currentPageId}"]`);
-        if (pageBtn) pageBtn.classList.add("active");
-      }
+      setClassFlag(findPageButton(getUiElement(this.ui, "bottom_nav"), currentPageId), "active", true);
     }
   }
 
@@ -1175,7 +1226,7 @@ class ModalOrchestration {
     this._openLitModal(reactorFailedToStartTemplate({ errorMessage, onTryAgain, onDismiss }));
   }
 
-  _showQuickStartModal(game, isDetailed = false) {
+  _showQuickStartModal(game, _isDetailed = false) {
     if (!this._resolveModalRoot()) return;
 
     this._quickStartPage = 1;
@@ -1207,34 +1258,6 @@ class ModalOrchestration {
   _hideQuickStartModal() {
     this._quickStartGame = null;
     this._closeLitModal();
-  }
-
-  showSettings() {
-    this.showModal(MODAL_IDS.SETTINGS);
-  }
-
-  showWelcomeBackModal(offlineMs, tickEquivalent) {
-    return this.showModal(MODAL_IDS.WELCOME_BACK, { offlineMs, tickEquivalent });
-  }
-
-  showPrestigeModal(mode) {
-    this.showModal(MODAL_IDS.PRESTIGE, { mode });
-  }
-
-  hidePrestigeModal() {
-    this.hideModal(MODAL_IDS.PRESTIGE);
-  }
-
-  showContextModal(tile) {
-    this.showModal(MODAL_IDS.CONTEXT, { tile });
-  }
-
-  hideContextModal() {
-    this.hideModal(MODAL_IDS.CONTEXT);
-  }
-
-  hideCopyPasteModal() {
-    this.hideModal(MODAL_IDS.COPY_PASTE);
   }
 
   _hideReactorFailedToStartModal(pauseGame = false) {

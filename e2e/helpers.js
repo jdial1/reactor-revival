@@ -315,8 +315,11 @@ export async function refreshBlueprintProjection(page, options = {}) {
 export async function clearGameStorage(page) {
   await page.addInitScript(() => {
     try {
+      if (sessionStorage.getItem("__e2e_storage_cleared") === "1") return;
       localStorage.clear();
       sessionStorage.clear();
+      globalThis.indexedDB?.deleteDatabase?.("keyval-store");
+      sessionStorage.setItem("__e2e_storage_cleared", "1");
     } catch (_) {}
   });
 }
@@ -353,7 +356,6 @@ export async function bootGame(page) {
   log("bootGame:start");
   await clearGameStorage(page);
   await page.goto(E2E_URL, { waitUntil: "domcontentloaded" });
-
   await waitForSplashReady(page);
   await clickWhenVisible(page.locator("#splash-new-game-btn"), "splash new game");
 
@@ -548,6 +550,36 @@ export async function selectPart(page, partId) {
   }
 }
 
+export async function placePartDirect(page, partId, row, col) {
+  log("placePartDirect", { partId, row, col });
+  const result = await page.evaluate(
+    ({ id, r, c }) => {
+      const game = window.__reactorAudit?.game;
+      const bridge = game?.coreBridge;
+      if (!bridge) return { ok: false, reason: "no bridge" };
+      const um = game.unlockManager;
+      const part = game.partset?.getPartById(id);
+      if (part && um && !um.isPartUnlocked(part)) {
+        game.placedCounts = game.placedCounts ?? {};
+        let current = part;
+        while (current) {
+          const prev = um.getPreviousTierSpec(current);
+          if (!prev) break;
+          game.placedCounts[`${prev.type}:${prev.level}`] = 10;
+          current = game.partset.getPartsByType(prev.type).find((p) => p.level === prev.level) ?? null;
+        }
+        bridge.session?.setPlacedCounts?.(game.placedCounts);
+      }
+      const res = bridge.dispatch({ type: "PLACE_PART_PAID", payload: { row: r, col: c, partId: id } });
+      const tile = game.tileset?.getTile(r, c);
+      return { ok: !!tile?.part || res?.ok === true, partId: tile?.part?.id ?? null, res };
+    },
+    { id: partId, r: row, c: col }
+  );
+  if (!result.ok) throw new Error(`placePartDirect ${partId}@${row},${col}: ${JSON.stringify(result)}`);
+  return result;
+}
+
 export async function placePartOnGrid(page, partId, row, col) {
   log("placePartOnGrid:start", { partId, row, col });
   await selectPart(page, partId);
@@ -575,18 +607,19 @@ export async function placePartOnGrid(page, partId, row, col) {
         ui?.stateManager?.setClickedPart(part);
       }
 
-      const placedResult = game.coreBridge?.placePart?.(r, c, id);
-      const placed = placedResult ? [placedResult] : [];
-
-      const onTile = !!tile.part || placed.length > 0;
+      const placedResult = game.coreBridge?.dispatch?.({
+        type: "PLACE_PART_PAID",
+        payload: { row: r, col: c, partId: id },
+      });
+      const onTile = !!tile.part || placedResult?.ok === true;
       return {
         ok: onTile,
         mode: "live",
         partId: tile.part?.id ?? null,
         row: r,
         col: c,
-        placedCount: placed.length,
-        reason: onTile ? undefined : "placement-rejected",
+        placedCount: onTile ? 1 : 0,
+        reason: onTile ? undefined : placedResult?.result?.reason ?? "placement-rejected",
       };
     },
     { id: partId, r: row, c: col }
@@ -619,7 +652,11 @@ export async function placePartsOnGrid(page, placements) {
       const tile = game.tileset.getTile(row, col);
       if (!part) return { ok: false, reason: `unknown part ${partId}` };
       if (!tile) return { ok: false, reason: `missing tile ${row},${col}` };
-      if (game.coreBridge?.placePart?.(row, col, partId)) placedCount++;
+      const res = game.coreBridge?.dispatch?.({
+        type: "PLACE_PART_PAID",
+        payload: { row, col, partId },
+      });
+      if (res?.ok) placedCount++;
     }
 
     const missing = parts.filter(
@@ -645,7 +682,10 @@ export async function injectFunds(page, amount = 10_000_000) {
   await page.evaluate((amt) => {
     const game = window.__reactorAudit?.game;
     if (!game) throw new Error("Game audit hook unavailable — load with ?e2e=1");
-    game.coreBridge?.creditMoney?.(amt, { applyPrestige: true });
+    game.coreBridge?.dispatch?.({
+      type: "CREDIT_MONEY",
+      payload: { amount: amt, applyPrestige: true },
+    });
     game.reactor?.updateStats?.();
     game.partset?.check_affordability?.(game);
   }, amount);
@@ -655,8 +695,10 @@ export async function injectExoticParticles(page, amount = 100) {
   log("injectExoticParticles", amount);
   await page.evaluate((amt) => {
     const game = window.__reactorAudit?.game;
-    if (!game) throw new Error("Game audit hook unavailable — load with ?e2e=1");
-    game.current_exotic_particles = amt;
+    const session = game?.coreBridge?.session;
+    if (!session?.creditExoticParticles) throw new Error("session.creditExoticParticles unavailable");
+    session.creditExoticParticles(amt);
+    game.coreBridge?.projectLiveState?.();
     game.upgradeset?.check_affordability?.(game);
   }, amount);
 }
@@ -734,4 +776,181 @@ export async function expectAchievement(page, achievementTitle, { timeout = 2000
     await dumpDiagnostics(page, `achievement-toast:${achievementTitle}`);
     throw error;
   }
+}
+
+export async function readSessionSnapshot(page) {
+  return page.evaluate(() => {
+    const game = window.__reactorAudit?.game;
+    const snap = game?.coreBridge?.getSnapshot?.() ?? game?.coreBridge?.session?.getSnapshot?.();
+    const om = game?.objectives_manager;
+    const slotIds = (snap?.grid?.slots ?? []).map((s) => s?.id ?? null);
+    const tileIds = [];
+    const list = game?.tileset?.active_tiles_list ?? game?.tileset?.tiles_list ?? [];
+    for (const t of list) {
+      if (t?.part?.id) tileIds.push(t.part.id);
+    }
+    return {
+      money: Number(snap?.economy?.money ?? game?.state?.current_money ?? 0),
+      ep: Number(snap?.economy?.currentExoticParticles ?? game?.state?.current_exotic_particles ?? 0),
+      heat: Number(snap?.grid?.currentHeat ?? 0),
+      power: Number(snap?.grid?.currentPower ?? 0),
+      melted: !!snap?.hasMeltedDown,
+      objectiveIndex: om?.current_objective_index ?? 0,
+      checkId: om?.current_objective_def?.checkId ?? null,
+      slotIds,
+      tileIds,
+      pause: !!game?.paused,
+      heatControl: !!game?.heat_control,
+    };
+  });
+}
+
+export async function dispatchSession(page, type, payload = {}) {
+  return page.evaluate(
+    ({ commandType, commandPayload }) => {
+      const bridge = window.__reactorAudit?.game?.coreBridge;
+      return bridge?.dispatch?.({ type: commandType, payload: commandPayload }) ?? { ok: false };
+    },
+    { commandType: type, commandPayload: payload }
+  );
+}
+
+export async function sellPartAt(page, row, col) {
+  const result = await dispatchSession(page, "SELL_PART", { row, col });
+  expect(result.ok, `SELL_PART ${row},${col}`).toBe(true);
+}
+
+export async function ventHullHeat(page) {
+  const result = await dispatchSession(page, "VENT_HEAT", {});
+  expect(result.ok, "VENT_HEAT").toBe(true);
+}
+
+export async function setToggle(page, toggleName, value) {
+  const result = await dispatchSession(page, "SET_TOGGLE", { toggleName, value: !!value });
+  expect(result.ok, `SET_TOGGLE ${toggleName}`).toBe(true);
+}
+
+export async function autoSaveGame(page) {
+  await page.evaluate(async () => {
+    const game = window.__reactorAudit?.game;
+    await game?.saveManager?.saveToSlot?.(1);
+    await game?.saveManager?.autoSave?.();
+  });
+}
+
+export async function reloadPreservingStorage(page) {
+  log("reloadPreservingStorage");
+  await page.goto(E2E_URL, { waitUntil: "domcontentloaded" });
+  await waitForSplashReady(page);
+  const resume = page.locator(".splash-btn-continue").first();
+  await expect(resume, "splash resume").toBeVisible({ timeout: 15000 });
+  await clickWhenVisible(resume, "splash resume");
+  await page.waitForFunction(() => {
+    const wrapper = document.getElementById("wrapper");
+    return wrapper && !wrapper.classList.contains("hidden") && window.__reactorAudit?.game?.router?.currentPageId != null;
+  }, { timeout: 30000 });
+  await dismissBlockingModals(page);
+}
+
+export async function forceWelcomeBackModal(page) {
+  await autoSaveGame(page);
+  await page.evaluate(() => {
+    sessionStorage.setItem("__e2e_time_offset_ms", "180000");
+  });
+  await page.addInitScript(() => {
+    try {
+      const raw = sessionStorage.getItem("__e2e_time_offset_ms");
+      if (!raw || window.__e2eTimePatched) return;
+      window.__e2eTimePatched = true;
+      const offset = Number(raw) || 0;
+      const realNow = Date.now.bind(Date);
+      Date.now = () => realNow() + offset;
+    } catch (_) {}
+  });
+  log("forceWelcomeBackModal:reload+offset");
+
+  await page.goto(E2E_URL, { waitUntil: "domcontentloaded" });
+  await waitForSplashReady(page);
+  const resume = page.locator(".splash-btn-continue").first();
+  await expect(resume, "splash resume").toBeVisible({ timeout: 15000 });
+  await clickWhenVisible(resume, "splash resume");
+
+  const ff = page.locator(".welcome-back-ff");
+  await expect(ff, "welcome-back fast-forward").toBeVisible({ timeout: 30000 });
+  const before = await readSessionSnapshot(page);
+  await clickWhenVisible(ff, "welcome-back fast-forward");
+  await page.waitForFunction(() => !document.querySelector(".welcome-back-modal-overlay"), {
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    sessionStorage.removeItem("__e2e_time_offset_ms");
+  });
+  for (const id of ["#quick-start-close", "#quick-start-close-2"]) {
+    const locator = page.locator(id);
+    if (await locator.isVisible().catch(() => false)) {
+      await clickWhenVisible(locator, `dismiss modal ${id}`);
+    }
+  }
+  return before;
+}
+
+export async function readRecoveredBlueprintNames(page) {
+  return page.evaluate(() => {
+    try {
+      const raw = localStorage.getItem("reactor_my_layouts");
+      const list = raw ? JSON.parse(raw) : [];
+      return (Array.isArray(list) ? list : []).map((e) => e?.name).filter(Boolean);
+    } catch {
+      return [];
+    }
+  });
+}
+
+export async function exportImportRoundTrip(page) {
+  const payload = await page.evaluate(async () => {
+    const game = window.__reactorAudit?.game;
+    const state = await game.saveManager.getSaveState();
+    return JSON.stringify(state);
+  });
+  expect(payload.length).toBeGreaterThan(20);
+  await page.evaluate(async (raw) => {
+    const game = window.__reactorAudit?.game;
+    const data = JSON.parse(raw);
+    await game.saveManager.applySaveState(game, data);
+  }, payload);
+  return payload;
+}
+
+export async function assertManifestAndSwApi(page) {
+  const report = await page.evaluate(async () => {
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    const href = manifestLink?.href ?? null;
+    let manifestOk = false;
+    if (href) {
+      try {
+        const res = await fetch(href);
+        manifestOk = res.ok;
+      } catch {
+        manifestOk = false;
+      }
+    }
+    return {
+      hasServiceWorkerApi: "serviceWorker" in navigator,
+      manifestHref: href,
+      manifestOk,
+      hostname: location.hostname,
+    };
+  });
+  expect(report.hasServiceWorkerApi).toBe(true);
+  expect(report.manifestHref).toBeTruthy();
+  expect(report.manifestOk).toBe(true);
+  return report;
+}
+
+export async function claimOrAdvanceObjective(page) {
+  await page.evaluate(() => {
+    const om = window.__reactorAudit?.game?.objectives_manager;
+    om?.check_current_objective?.();
+    om?.claimObjective?.();
+  });
 }

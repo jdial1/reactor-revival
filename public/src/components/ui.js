@@ -20,7 +20,6 @@ import {
   updateSectionCountsState as syncSectionCountsState,
   mountExoticParticlesDisplayIfNeeded as mountControlDeckEpDisplay,
   CopyPasteUI,
-  UserAccountUI,
   setupBuildTabButton,
   setupMenuTabButton,
   setupDesktopTopNavButtons,
@@ -48,10 +47,8 @@ import {
   updatePartsPanelBodyClass,
   refreshPartsPanel,
   getPageReactor,
-  snapUiDisplayValuesFromState,
   applyUiStateToDom,
   processUiUpdateQueue,
-  updateUiRollingNumbers,
   initializePartsPanel as runInitializePartsPanel,
   teardownPartsPanel,
   syncToggleStatesFromGame as applyToggleStatesFromGame,
@@ -104,7 +101,6 @@ function borrowFloatingTextElement(pool) {
     if (isFloatingTextElement(candidate)) {
       candidate.className = "floating-text";
       candidate.removeAttribute("style");
-      candidate.classList.remove("floating-text--debit", "floating-text--credit");
       return candidate;
     }
   }
@@ -120,7 +116,6 @@ function initMainLayoutInner(ui) {
   setupPartsPanel(ui);
   initControlDeckVarObjs(ui);
   ui.quickStartUI.addHelpButtonToMainPage();
-  ui.userAccountUI.setupUserAccountButton();
   setupBuildTabButton(ui);
   setupMenuTabButton(ui);
   setupDesktopTopNavButtons(ui);
@@ -132,35 +127,51 @@ function initMainLayoutInner(ui) {
       <p>${unsafeHTML(ui.help_text.basic_overview.content)}</p>
     `, basicOverview);
   }
-  const prestigeHelp = document.getElementById("help_prestige_section");
+  const objectivesHelp = getUiElement(ui, "help_objectives_section");
+  if (objectivesHelp && ui.help_text?.objectives?.title) {
+    render(html`
+      <h3>${ui.help_text.objectives.title}</h3>
+      <p>${unsafeHTML(ui.help_text.objectives.content)}</p>
+    `, objectivesHelp);
+  }
+  const meltdownHelp = getUiElement(ui, "help_meltdown_section");
+  if (meltdownHelp && ui.help_text?.meltdown?.title) {
+    render(html`
+      <h3>${ui.help_text.meltdown.title}</h3>
+      <p>${unsafeHTML(ui.help_text.meltdown.content)}</p>
+    `, meltdownHelp);
+  }
+  const prestigeHelp = getUiElement(ui, "help_prestige_section");
   if (prestigeHelp && ui.help_text?.prestige?.title) {
     render(html`
       <h3>${ui.help_text.prestige.title}</h3>
       <p>${unsafeHTML(ui.help_text.prestige.content)}</p>
     `, prestigeHelp);
   }
-  const offlineHelp = document.getElementById("help_offline_section");
+  const offlineHelp = getUiElement(ui, "help_offline_section");
   if (offlineHelp && ui.help_text?.controls?.offlineCatchup) {
     render(html`
       <h3>Offline Progress</h3>
       <p>${unsafeHTML(ui.help_text.controls.offlineCatchup)}</p>
     `, offlineHelp);
   }
-  const layoutsHelp = document.getElementById("help_layouts_section");
+  const layoutsHelp = getUiElement(ui, "help_layouts_section");
   if (layoutsHelp && ui.help_text?.layouts?.title) {
     render(html`
       <h3>${ui.help_text.layouts.title}</h3>
       <p>${unsafeHTML(ui.help_text.layouts.content)}</p>
     `, layoutsHelp);
   }
-  const partsHelp = document.getElementById("help_parts_section");
-  if (partsHelp && ui.help_text?.parts?.sellConsequences) {
+  const partsHelp = getUiElement(ui, "help_parts_section");
+  if (partsHelp && ui.help_text?.parts) {
+    const p = ui.help_text.parts;
     render(html`
       <h3>Parts &amp; Selling</h3>
-      <p>${ui.help_text.parts.sellConsequences}</p>
+      ${p.valves ? html`<p>${p.valves}</p>` : ""}
+      ${p.sellConsequences ? html`<p>${p.sellConsequences}</p>` : ""}
     `, partsHelp);
   }
-  const controlsHelp = document.getElementById("help_controls_section");
+  const controlsHelp = getUiElement(ui, "help_controls_section");
   if (controlsHelp && ui.help_text?.controls) {
     const c = ui.help_text.controls;
     render(html`
@@ -170,7 +181,7 @@ function initMainLayoutInner(ui) {
     `, controlsHelp);
   }
   if (ui.gridScaler) ui.gridScaler.init();
-  if (document.getElementById("reactor_wrapper")) {
+  if (getUiElement(ui, "reactor_wrapper")) {
     ui.gridScaler?.resize?.();
   }
   requestAnimationFrame((ts) => startRenderLoop(ui, ts));
@@ -191,8 +202,6 @@ export class UI {
   constructor() {
     this.game = null;
     this.var_objs_config = {};
-    this.last_money = 0;
-    this.last_exotic_particles = 0;
     this.uiState = createUIState();
     this._uiStateTeardown = null;
     this.update_interface_interval = 100;
@@ -206,7 +215,6 @@ export class UI {
     this.help_mode_active = false;
     this.copyPasteUI = new CopyPasteUI(this);
     this.copyPaste = this.copyPasteUI;
-    this.userAccountUI = new UserAccountUI(this);
     this.pageSetupUI = new PageSetupUI(this);
     this.objectiveController = null;
     this.achievementController = null;
@@ -231,13 +239,6 @@ export class UI {
 
     this._lastUiTime = 0;
 
-    this.displayValues = {
-      money: { current: 0, target: 0 },
-      heat: { current: 0, target: 0 },
-      power: { current: 0, target: 0 },
-      ep: { current: 0, target: 0 },
-    };
-
     this._visualPool = { floatingText: [], steamParticle: [], bolt: [] };
     this.detachGameEventListeners = null;
     this.detachGlobalListeners = null;
@@ -256,10 +257,8 @@ export class UI {
     this.getUpgradeContainer = (k) => getUpgradeSectionContainer(this, k);
     this.appendUpgrade = (k, el) => appendUpgradeToSection(this, k, el);
     this.getUiElement = (id) => getUiElement(this, id);
-    this.snapUiDisplayValuesFromState = () => snapUiDisplayValuesFromState(this);
     this.applyUiStateToDom = () => applyUiStateToDom(this);
     this.processUiUpdateQueue = () => processUiUpdateQueue(this);
-    this.updateUiRollingNumbers = (dt) => updateUiRollingNumbers(this, dt);
     this.startRenderLoop = (ts) => startRenderLoop(this, ts);
   }
 
@@ -324,7 +323,7 @@ export class UI {
 
   showFloatingText(container, amount) {
     if (!container || amount <= 0) return;
-    const parent = container.querySelector?.(".floating-text-container");
+    const parent = container.getElementsByClassName?.("floating-text-container")?.[0];
     if (!parent || parent.nodeType !== 1) return;
     const pool = this._visualPool;
     const textEl = borrowFloatingTextElement(pool);
@@ -351,14 +350,17 @@ export class UI {
       } else {
         textEl.textContent = String(amountOrText ?? "");
       }
-      textEl.classList.toggle("floating-text--debit", variant === "debit");
-      textEl.classList.toggle("floating-text--credit", variant === "credit");
+      textEl.className = variant === "debit"
+        ? "floating-text floating-text--debit"
+        : variant === "credit"
+          ? "floating-text floating-text--credit"
+          : "floating-text";
       textEl.style.left = `${pos.x}px`;
       textEl.style.top = `${pos.y}px`;
       overlay.appendChild(textEl);
       setTimeout(() => {
         textEl.remove();
-        textEl.classList.remove("floating-text--debit", "floating-text--credit");
+        textEl.className = "floating-text";
         pool.floatingText.push(textEl);
       }, 1000);
     } catch (err) {
@@ -394,7 +396,10 @@ export class UI {
 
   setHelpModeActive(active) {
     this.help_mode_active = !!active;
-    document.body?.classList.toggle("help-mode-active", this.help_mode_active);
+    const body = document.body;
+    if (!body) return;
+    const base = body.className.replace(/\bhelp-mode-active\b/g, "").replace(/\s+/g, " ").trim();
+    body.className = this.help_mode_active ? (base ? `${base} help-mode-active` : "help-mode-active") : base;
   }
 
   resizeReactor() {
@@ -416,8 +421,8 @@ export class UI {
       this.deviceFeatures?.upgradeCardHoverBuzz?.();
     };
     const wrappers = [
-      document.getElementById("upgrades_content_wrapper"),
-      document.getElementById("experimental_upgrades_content_wrapper"),
+      getUiElement(this, "upgrades_content_wrapper"),
+      getUiElement(this, "experimental_upgrades_content_wrapper"),
     ].filter(Boolean);
     wrappers.forEach((el) => el.addEventListener("mouseover", onMouseOver));
     this._unmounts.push(() => {
@@ -544,7 +549,6 @@ export class UI {
     teardownNavListeners(this);
     teardownResizeListeners(this);
     teardownPartsPanel(this);
-    this.userAccountUI?.teardownUserAccountButton?.();
     if (this.game) unsubscribeContextModalEvents(this, this.game);
     if (typeof this.detachGameEventListeners === "function") {
       this.detachGameEventListeners();

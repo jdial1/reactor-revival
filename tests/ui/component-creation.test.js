@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi, setupGameWithDOM, cleanupGame } from "../helpers/setup.js";
-import { numFormat } from "@app/utils.js";
+import { numFormat } from "@app/core/numbers.js";
 import { render } from "lit-html";
 import {
   StartButton,
-  LoadGameButton,
-  LoadGameUploadRow,
   PartButton,
   UpgradeCard,
   BuyButton,
   TooltipCloseButton
 } from "@app/components/upgrades/button-factory.js";
+import { partIconPath } from "@app/components/tooltip-stats.js";
+import { formatUpgradeDisplayCost } from "@app/components/upgrades/upgrade-display.js";
 
 describe("UI Component Creation and State", () => {
   const itWithDOM = it.skip;
@@ -39,28 +39,6 @@ describe("UI Component Creation and State", () => {
       btn.click();
       expect(onClick).toHaveBeenCalledTimes(1);
     });
-
-    itWithDOM("should create a 'Load Game' button with correct data and cloud sync status", () => {
-      const saveData = { current_money: 123456 };
-      const playedTime = "1h 23m 45s";
-
-      let btn = renderToDiv(LoadGameButton(saveData, playedTime, false, () => { }));
-      expect(btn.querySelector(".money").textContent).toContain("123.46K");
-      expect(btn.querySelector(".played-time").textContent.trim()).toBe(playedTime);
-      expect(btn.querySelector(".synced-label").style.display).toBe("none");
-
-      btn = renderToDiv(LoadGameButton(saveData, playedTime, true, () => { }));
-      expect(btn.querySelector(".synced-label").style.display).not.toBe("none");
-    });
-
-    itWithDOM("should create a load/upload button row correctly", () => {
-      const saveData = { current_money: 789 };
-      const playedTime = "10m 5s";
-
-      const row = renderToDiv(LoadGameUploadRow(saveData, playedTime, false, () => { }));
-      expect(row.querySelector("#splash-load-game-btn")).not.toBeNull();
-      expect(row.querySelector(".money").textContent).toContain("789");
-    });
   });
 
   describe("In-Game UI Button Creation", () => {
@@ -73,7 +51,7 @@ describe("UI Component Creation and State", () => {
       expect(btn.title).toBe(part.title);
       expect(btn.getAttribute("aria-label")).toContain(part.title);
       expect(btn.getAttribute("aria-label")).toContain(part.cost.toString());
-      expect(btn.querySelector(".image").style.backgroundImage).toContain(part.getImagePath());
+      expect(btn.querySelector(".image").style.backgroundImage).toContain(partIconPath(part));
       expect(btn.querySelector(".part-price").textContent).toContain(numFormat(part.cost));
       expect(btn.classList.contains("unaffordable")).toBe(false);
       expect(btn.disabled).toBe(false);
@@ -93,19 +71,17 @@ describe("UI Component Creation and State", () => {
       const card = renderToDiv(UpgradeCard(upgrade, null, () => {}));
       expect(card.dataset.id).toBe(upgrade.id);
       expect(card.querySelector(".image").style.backgroundImage).toContain(upgrade.upgrade.icon);
-      expect(card.querySelector(".cost-display").textContent).toBe(upgrade.display_cost);
+      expect(card.querySelector(".cost-display").textContent).toBe(formatUpgradeDisplayCost(upgrade));
       expect(card.querySelector(".level-text").textContent).toBe("Level 2/32");
       expect(card.querySelector(".upgrade-title").textContent).toBe(upgrade.title);
     });
 
     it("should create a buy button that reflects cost and affordability", () => {
       const upgrade = game.upgradeset.getUpgrade("improved_piping");
-      upgrade.updateDisplayCost();
-
       upgrade.affordable = true;
       let buyBtn = renderToDiv(BuyButton(upgrade, () => { }));
       expect(buyBtn.disabled).toBe(false);
-      expect(buyBtn.querySelector(".cost-text").textContent).toBe(upgrade.display_cost);
+      expect(buyBtn.querySelector(".cost-text").textContent).toBe(formatUpgradeDisplayCost(upgrade));
 
       upgrade.affordable = false;
       buyBtn = renderToDiv(BuyButton(upgrade, () => { }));

@@ -44,7 +44,6 @@ export function renderSplashTemplate(isMuted, onMuteClick, onHideMenuClick) {
           <footer class="splash-panel-footer">
             <div class="splash-module splash-module-extcomm">
               <div class="splash-module-corner-label">EXT_COMM_LINK</div>
-              <div id="splash-auth-in-footer" class="splash-auth-in-footer"></div>
               <div class="splash-module-stats">
                 <span id="splash-version-text" class="splash-version-text"></span>
                 <span id="splash-user-count" class="splash-user-count-inline">

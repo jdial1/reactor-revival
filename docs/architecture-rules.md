@@ -11,7 +11,7 @@ Core Principle: State is the single source of truth. Data flows down, actions fl
 
     1.2 Centralized Intent Queue: User inputs (clicks, keypresses) must never directly mutate game state. They must dispatch an "Intent" (e.g., { type: 'SELL_POWER' }) to a central queue. The game engine processes this queue synchronously at the start of the tick.
 
-    1.3 Pure Evaluators: Systems like Objectives, Achievements, and Unlocks must act as pure evaluators. They check if conditions are met (true/false). They must not directly mutate the economy (e.g., injecting reward money). A central reward processor observes the completion flag and handles the payout.
+    1.3 Pure Evaluators: Systems like Objectives, Achievements, and Unlocks must act as pure evaluators on the host. They check if conditions are met (true/false) and may advance claim/index protocol. They must not dispatch economy commands (`GRANT_REWARD`, `CREDIT_MONEY`, etc.). Reward payout for objectives is owned by reactor-core-lib's `checkObjective` / `grantReward` path when the objective becomes complete; host claim only calls session `claimCurrent` (index advance). A first-class `CLAIM_OBJECTIVE` command remains a lib gap (F5.2).
 
 Law 2: Declarative, Dumb UI (Lit-HTML)
 
@@ -49,9 +49,9 @@ Law 5: Strongly Typed Data & Centralized Configuration
 
 Core Principle: Magic strings/numbers and corrupted saves destroy browser games.
 
-    5.1 Single Configuration File: All balancing mathematics, tick rates, overflow thresholds, and UI timing constants must live in a single, strongly-typed configuration schema (e.g., balanceConfigSchema.js). No scattered magic numbers.
+    5.1 Centralized Configuration: Balancing mathematics, tick rates, and overflow thresholds live in strongly-typed schemas / `constants/balance.js` (via `balanceConfigSchema.js` / `sim.js`). UI presentation timings and sensory intensity live in `constants/ui-timing.js`. Do not invent new file-scoped magic numbers for those categories — extend the central modules.
 
-    5.2 Strict Save Hydration: The save file parsing logic must rely on a strict serialization boundary. The parsed JSON must be validated via Zod, transformed into a plain JavaScript object, and then absorbed by the state machine. Do not write hydration logic that manually patches live class instances (e.g., game.reactor.current_heat = savedData.heat).
+    5.2 Strict Save Validation + Host Hydration: The save file parsing logic must validate via Zod and produce a plain JavaScript object before any live mutation. The Host then runs an explicit hydration pipeline (`game-save.js` SYNC/ASYNC/POST hydrators) that projects that DTO onto host objects (`game.state`, grid dimensions, reactor mirrors) and hydrates the lib session. A single lib `HYDRATE_SAVE` pure state-swap is not the 1.0 contract; do not pretend host hydration is forbidden — keep it assignment-only after Zod, never ad-hoc mid-session patches from unvalidated JSON.
 
 Law 6: Modularity & Namespace Purity
 
