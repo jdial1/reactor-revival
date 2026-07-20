@@ -257,7 +257,7 @@ GAP RANK — largest distance to a honest 1.0 tag
 (severity = blocks trust or multiplies every later step; not "coolest"):
 
   G1  FEATURE FREEZE + GATE TRUTH                          → Step 1
-      Status: PARTIAL. 1a DONE · 1b IN FORCE · 1c DONE · 1d PARTIAL (R1+R3+R5).
+      Status: DONE. 1a DONE · 1b IN FORCE · 1c DONE · 1d DONE.
       Why largest: without freeze + RC+soak criteria, later deletes fight noise.
       Done when: 1a–1d binary exits hold (1b IN FORCE through tag).
 
@@ -302,8 +302,8 @@ GAP RANK — largest distance to a honest 1.0 tag
       Done when: tag-hard items hold (met); 9b supporting diet closed.
 
   G10 SHIP HARDENING (soak + tag; no late perf discover)   → Step 10
-      Status: BLOCKED on trust spine (G1–G7 hard exits) + player soak.
-      Perf already proven on Steps 4 + 7 — 10 does not rediscover FPS.
+      Status: OPEN. Trust spine + 1d RC green; remaining = README honesty
+      + known-issues + tag from clean main. Perf already proven on 4+7.
       Done when: 10a/10c/10d DONE from green main.
 
 NOT in the top gap list (parked / optional — see DEFERRED):
@@ -321,11 +321,11 @@ All must be true (binary — map to Steps + G1–G10):
 
   [x] Steps 1–7 hard exits hold; Step 9 tag-hard (9a+9c) hold; no open
       freeze exceptions (Step 8 critical-path usable still OPEN — 8c/8d)
-  [ ] Full `npm test` green locally and in CI; lint warnings fail CI
-      (local green; CI run IDs after push — 1d R2)
+  [x] Full `npm test` green locally and in CI; lint warnings fail CI
+      (R2: Actions 29778027717 on 1eb2430)
   [x] Knip unused-export count ≤ committed baseline
-  [ ] Playwright e2e covers S1–S8 on CI (manual soak does not count)
-      (local soak green; CI after push — 1d R4)
+  [x] Playwright e2e covers S1–S8 on CI (manual soak does not count)
+      (R4: Actions 29778027846 on 1eb2430; S1–S9)
   [x] No production host→session stomps; no dual claim; no host meltdown eval
   [x] Bridge dispatch is passthrough (no remap switch); bespoke zoo gone
   [x] Projection data methodless; display = pure UI functions
@@ -357,7 +357,7 @@ Stance (non-negotiable):
 
 Trust spine order (QW list FROZEN — work this only):
   Step 3d DONE · 4a–4d DONE · 5 DONE · Step 6 DONE · Step 7 DONE →
-  Step 9a DONE · Step 9d DONE · Step 1d RC ← NEXT → tag (10).
+  Step 9a DONE · Step 9d DONE · Step 1d DONE ← NEXT → tag (10).
   Parallel/supporting: 8c/8d usable chrome; 3b knip; 9b setup diet DONE.
 
 Deep-dive snapshot (2026-07-18, excl. generated):
@@ -493,7 +493,7 @@ as sole gate; prove green + write RC criteria including player soak S1–S8.
       Exit: gate truth written; CI runs npm test first.
 
   1d  Green gate + RC criteria + Playwright soak map
-      Status: PARTIAL (2026-07-20)
+      Status: DONE (2026-07-20)
       S1–S9 → Playwright file map owned (9d):
         S1 e2e/soak-s1-fresh-install.spec.js
         S2 e2e/soak-s2-control-deck.spec.js
@@ -511,19 +511,21 @@ as sole gate; prove green + write RC criteria including player soak S1–S8.
         R4) CI job e2e-soak.yml green (Chromium soak on PR/master)
         R5) No open freeze exceptions (1b); QW list remains FROZEN
         R6) Acceptance checklist §E boxes for Steps 1–7 + 9a/9c/9d hold
-      DONE: R1 local npm test green (2026-07-20); R3 soak 9/9 local;
-        R5 freeze exceptions = 0 and QW list FROZEN (in force);
-        file map + RC written; deleted eslint.yml duplicate check
-        zoo → sole-gate `npm test` on PR/master (workflow name CI);
-        e2e-soak.yml present locally (not yet on default branch).
-      OPEN: R2/R4 green Actions run IDs after commit+push/PR (workflows wired
-        locally incl. e2e-soak.yml ASCII S1-S9; 404 on default branch until
-        push). R6: SUCCESS #6 Steps 5/6 DONE; §E CI boxes still open.
+      DONE: R1 local npm test; R3 soak 9/9 local; R5 freeze+QW FROZEN;
+        R2 CI npm test green — Actions run 29778027717
+          (https://github.com/jdial1/reactor-revival/actions/runs/29778027717)
+          headSha 1eb24303cd451b07a55e8fb0f277d8eba71bbabd;
+        R4 e2e-soak.yml green — Actions run 29778027846
+          (https://github.com/jdial1/reactor-revival/actions/runs/29778027846)
+          same headSha; file map + sole-gate CI + e2e-soak.yml on master;
+        test-runner runs build:sw before vitest (public/sw.js gitignored).
+      R6: Steps 1–7 + 9a/9c/9d §E boxes hold; remaining §E =
+        README/known-issues + tag (Step 10).
       Exit: green proof recorded; RC written; S1–S8 → Playwright file map owned.
 
 Step 1 exit: 1a/1c/1d DONE and 1b IN FORCE.
 
-PROGRESS: 1a DONE · 1b IN FORCE · 1c DONE · 1d PARTIAL (R1+R3+R5; R2/R4 await push).
+PROGRESS: 1a DONE · 1b IN FORCE · 1c DONE · 1d DONE.
 
 Avoid:
   - New parts, upgrades, objectives, prestige rules, planner modes, pages
@@ -2000,7 +2002,9 @@ NEXT FOCUS (immediate — trust spine; QW list FROZEN)
 ---------------------------------------------------
 Do not reopen physics cutover. Reject new QWs. Stop unexport theater.
 
-  Order: Step 1d finish (R2/R4 CI run IDs after push) ← NEXT → tag (10).
+  Order: Step 1d DONE ← NEXT → tag (10) · parallel 8c/8d.
+  CLOSED: 1d R2/R4 CI proof (29778027717 / 29778027846 on 1eb2430);
+    build:sw in test-runner for gitignored public/sw.js.
   CLOSED: 6d SET_TOGGLE follow-on + pause honesty; 1d R5 DONE.
   Parallel: 8c/8d; 3b knip.
   CLOSED: Step 2a ignore/generate hygiene (sw.js untracked; lib/css
@@ -2019,7 +2023,7 @@ Do not reopen physics cutover. Reject new QWs. Stop unexport theater.
   Parked (not DTO debt): Objective claim protocol, Reactor updateStats/sell,
   Upgrade.setLevel. Tile place/sell entity API deleted (intent_queue only).
 
-PROGRESS LANDING (2026-07-20 — 1d prep + SUCCESS #6 honesty)
+PROGRESS LANDING (2026-07-20 — Step 1d DONE / R2+R4 CI green)
   - Scrap inventory CLOSED; QW1–QW24 FROZEN (no further QWs)
   - Soft exits / fat-facade freeze / CSS consolidate / late perf /
     SUCCESS #6 stomp blessing / scoped game valtio — SUPERSEDED
@@ -2100,15 +2104,15 @@ PROGRESS LANDING (2026-07-20 — 1d prep + SUCCESS #6 honesty)
     game-state-sync pause↔engine dual-path; meltdown recovery via
     onToggle; setDefaults pause clear = host + session.setPaused only
     (no SET_TOGGLE dispatch — avoids syncGridToGame onto cleared host).
-  - Step 1d PARTIAL: R1+R3+R5 DONE; R2/R4 await commit+push (e2e-soak.yml
-    local ASCII-ready; absent on default branch until push); §E partial.
+  - Step 1d DONE: R1–R5 hold; R2 CI 29778027717 + R4 soak 29778027846
+    on headSha 1eb2430; test-runner build:sw before vitest; §E CI boxes
+    checked. Remaining §E: README/known-issues + v1.0.0 tag (Step 10).
   - SUCCESS #6 honesty: Steps 5/6 passthrough + zero valtio sim mirrors
     marked DONE (was stale PARTIAL).
   - Deleted tests/core/view-sync/_probe.test.js (valtio probe theater).
-  - Next bites: Step 1d R2/R4 CI run proof (needs commit+push) · tag (10)
-    · 8c/8d
+  - Next bites: Step 10 tag hardening · 8c/8d usable chrome
 
-  N1) Step 1 — PARTIAL: 1a DONE · 1b IN FORCE · 1c DONE · 1d PARTIAL (R1+R3+R5)
+  N1) Step 1 — DONE: 1a DONE · 1b IN FORCE · 1c DONE · 1d DONE
   N2) Step 2 — DONE: 2a DONE · 2b DONE · 2c DONE · 2d DONE
   N3) Step 3 — DONE: 3a DONE · 3b SUPPORTING · 3c DONE · 3d DONE
   N4) Step 4 — DONE: 4a DONE · 4b DONE · 4c DONE · 4d DONE
@@ -2117,6 +2121,6 @@ PROGRESS LANDING (2026-07-20 — 1d prep + SUCCESS #6 honesty)
   N7) Step 7 — DONE: 7a DONE · 7b DONE · 7c DONE · 7d DONE
   N8) Step 8 — 8a DONE · 8b DROPPED · 8c OPEN · 8d OPEN (usable, not bytes)
   N9) Step 9 — DONE: 9a DONE · 9b DONE · 9c DONE · 9d DONE
-  N10) Step 10 — BLOCKED: 1d RC + tag; perf confirmation only
+  N10) Step 10 — NEXT: tag from green main; README/known-issues; no late perf
 
   End of document.
