@@ -50,6 +50,9 @@ async function runTests() {
   if (simNoDomExit !== 0) process.exit(simNoDomExit);
   if (syntaxExit !== 0) process.exit(syntaxExit);
 
+  const swExit = await runCommand('npm', ['run', 'build:sw']);
+  if (swExit !== 0) process.exit(swExit);
+
   const vitestArgs = [
     'vitest',
     'run',
