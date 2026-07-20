@@ -1,11 +1,9 @@
 [
     {
-        "version": "1.0.0",
+        "version": "26_07_20-1624",
         "date": "2026-07-20",
         "bullets": [
-            "Reactor physics, money, heat, and grid are session-owned; the UI reads bridge snapshots only.",
-            "Playwright soak covers install, control deck, save/reload, welcome-back, meltdown, prestige, export/import, offline PWA, and heat/power accrual.",
-            "Service worker ships from config/src-sw.js (public/sw.js is generated at build and test time)."
+            "Prepare public 1.0.0 release notes and known-issues freeze for tag."
         ]
     }
 ]
