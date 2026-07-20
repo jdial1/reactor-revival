@@ -1,10 +1,9 @@
 [
     {
-        "version": "26_07_20-1546",
+        "version": "26_07_20-1554",
         "date": "2026-07-20",
         "bullets": [
-            "Land Reductive 1.0 trust spine and wire CI soak for Step 1d RC.\n\nCollapse dual-state/host stomps into session dispatch + snapshot UI, add S1-S9 Playwright soak and sole-gate npm test workflows so R2/R4 can prove green on origin.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
-            "Fix host-session sync after core-lib cutover so thin-wrapper tests pass.\n\nPreserve protium/economy across ticks, isolate objective completion state, and keep exploding-tile grid projection consistent with session authority.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
+            "Generate public/sw.js in the test gate so CI PWA tests match Step 2a.\n\npublic/sw.js is gitignored source-of-truth is config/src-sw.js; CI had no local artifact so service-worker tests ENOENT'd.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
         ]
     }
 ]
