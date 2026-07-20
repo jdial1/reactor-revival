@@ -1,9 +1,9 @@
 [
     {
-        "version": "26_07_20-1554",
+        "version": "26_07_20-1603",
         "date": "2026-07-20",
         "bullets": [
-            "Generate public/sw.js in the test gate so CI PWA tests match Step 2a.\n\npublic/sw.js is gitignored source-of-truth is config/src-sw.js; CI had no local artifact so service-worker tests ENOENT'd.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
+            "Record Step 1d R2/R4 green Actions run IDs and close the RC gate.\n\nCite CI 29778027717 and e2e-soak 29778027846 on 1eb2430; mark G1/1d DONE and unblock Step 10.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
         ]
     }
 ]
