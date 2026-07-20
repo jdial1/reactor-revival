@@ -41,8 +41,19 @@ Static app lives under `public/` (GitHub Pages deploys that folder). Run **`npm 
 
 - **`npm run build:sw`** — Workbox injects the precache manifest from `config/src-sw.js` into `public/sw.js`.
 - **Tests** — `npm test` (lint + syntax + Vitest) is the sole merge/release gate. `npm run test:deploy` is an optional fast subset only. Playwright e2e is separate: `npm run test:e2e` (`e2e/`). See `tests/README.md`.
-- **Version** — `package.json` `"1.0.0"` is aspirational until a real `v1.0.0` tag (see `docs/reactor-core-lib-missing-features.txt`).
+- **Version** — Product version is `1.0.0` (`package.json`, `APP_VERSION`, git tag `v1.0.0`). `public/version.json` is a deploy cache stamp generated at Pages publish time, not a second product version.
 - **`scripts/`** — `build/` (serve, copy-libs, generate/bundle), `qa/` (test/lint/pwa/debt), `ui-audit/` (screenshots/console). See `package.json` `scripts`.
+
+### Known issues (1.0 freeze)
+
+Severity: **block** = money/heat/save desync (cannot tag) · **ship** = public-facing but non-blocking · **park** = post-1.0.
+
+| Severity | Issue |
+|----------|--------|
+| ship | Tablet/mobile chrome polish incomplete (Step 8c/8d) — place/tick/save/settings work; label/clip debt remains. |
+| park | Lib afford snapshot flags / first-class `CLAIM_OBJECTIVE` — host wraps via dispatch; not a tag blocker. |
+
+Freeze exceptions for money/heat/save desync: **0**. In-game changelog: `public/data/changelog.json`.
 
 ### Repository layout
 

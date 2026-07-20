@@ -302,8 +302,9 @@ GAP RANK — largest distance to a honest 1.0 tag
       Done when: tag-hard items hold (met); 9b supporting diet closed.
 
   G10 SHIP HARDENING (soak + tag; no late perf discover)   → Step 10
-      Status: OPEN. Trust spine + 1d RC green; remaining = README honesty
-      + known-issues + tag from clean main. Perf already proven on 4+7.
+      Status: PARTIAL. 10a DONE · 10b DONE · 10c DONE · 10d BLOCKED.
+      Remaining = git tag v1.0.0 from clean green main (10d).
+      Perf/soak/PWA/known-issues confirmed (10a–10c).
       Done when: 10a/10c/10d DONE from green main.
 
 NOT in the top gap list (parked / optional — see DEFERRED):
@@ -334,7 +335,8 @@ All must be true (binary — map to Steps + G1–G10):
   [x] console.* banned in public/src; logger.js only; no deploy regex strip
   [x] Perf budgets recorded and held at Step 4 and Step 7 exits
   [x] QW list remains FROZEN; no new QW PRs landed after freeze
-  [ ] README + known-issues (severity) match ship; money/heat/save issues = block
+  [x] README + known-issues (severity) match ship; money/heat/save issues = block
+      (10c: README Known issues table; freeze exceptions = 0)
   [ ] One version story; git tag v1.0.0 from clean green main
 
 If a checkbox fails, do not tag — fix under the owning Step, or add to
@@ -357,8 +359,8 @@ Stance (non-negotiable):
 
 Trust spine order (QW list FROZEN — work this only):
   Step 3d DONE · 4a–4d DONE · 5 DONE · Step 6 DONE · Step 7 DONE →
-  Step 9a DONE · Step 9d DONE · Step 1d DONE ← NEXT → tag (10).
-  Parallel/supporting: 8c/8d usable chrome; 3b knip; 9b setup diet DONE.
+  Step 9a DONE · Step 9d DONE · Step 1d DONE · 10a–10c DONE ← NEXT →
+  tag (10d). Parallel: 8c/8d usable chrome.
 
 Deep-dive snapshot (2026-07-18, excl. generated):
   public/src total          ~26.4k lines / ~138 JS modules
@@ -1098,7 +1100,7 @@ layouts are not broken.
       no new design system; screenshot hard gate deferred.
       Exit: critical path usable; no broken chrome on reference mobile.
 
-Step 8 exit: 8a DONE and 8c/8d DONE. 8b not a gate.
+Step 8 exit: 8a DONE; 8c/8d OPEN. 8b not a gate.
 
 PROGRESS: 8a DONE · 8b DROPPED · 8c OPEN · 8d OPEN.
 
@@ -1257,34 +1259,39 @@ Broad move: Player soak S1–S8, PWA/SW, migrations, welcome-back, meltdown
 order, changelog, known-issues severity freeze, tag. No last-minute systems.
 
   10a  PWA / SW + save / recovery + Playwright soak
-      Status: BLOCKED
-      Verify PWA/SW, save migrations, Welcome-Back FF, meltdown recovery
-      order. S1–S8 must already be green via Playwright on CI (Step 9d) —
-      humans do not check off soak at tag week.
-      Exit: CI e2e S1–S8 + checklist pass. Blocked on 1–7 hard exits + 9a/9c/9d.
+      Status: DONE (2026-07-20)
+      DONE: CI e2e-soak S1–S9 green (Actions 29778027846 on 1eb2430);
+        CI npm test green (29778027717) includes build:sw before vitest;
+        local `npm run check-pwa-root-files` finds sw.js/manifest/
+        browserconfig; save reload / Welcome-Back / meltdown covered by
+        S3/S4/S5 soak specs (no human checklist).
+      Exit: CI e2e S1–S8 + PWA/SW/save/recovery checklist pass (held).
 
   10b  Perf budget confirmation (NOT discovery)
-      Status: BLOCKED — confirmation only
-      Re-confirm Step 4 + Step 7 recorded budgets still hold on release
-      candidate. No new systems to "fix" perf. If budget fails, fix under
-      Step 4/7 — do not invent Step-10 optimizers.
+      Status: DONE (2026-07-20) — confirmation only
+      DONE: re-ran check:tick-project-budget on RC —
+        12x12 avg=0.197ms max=0.646ms budget=16.667ms (n=100);
+        check:methodless-projection ok. No new optimizers.
       Exit: budgets still hold on RC. Not a first-time measurement gate.
 
   10c  Changelog + known-issues severity freeze
-      Status: BLOCKED
-      Changelog for public; known issues listed with severity.
-      Money/heat/save desync = cannot freeze as "known" — must fix.
+      Status: DONE (2026-07-20)
+      DONE: public/data/changelog.json replaced commit-dump with ship
+        bullets (1.0.0); generate-changelog strips Co-authored-by /
+        multi-line bodies; README Known issues (severity) table —
+        ship=8c/8d polish, park=L1/L2 afford/CLAIM; money/heat/save
+        desync freeze exceptions = 0.
       Exit: issues frozen; freeze exceptions = 0.
 
   10d  Tag v1.0.0 from green main
-      Status: BLOCKED
+      Status: BLOCKED on clean green main + §E version/tag box
       Real tag; one version story; deploy without console-strip; critical
       path smoke pass; README launch link matches ship.
       Exit: tagged v1.0.0. Blocked until §E checklist all true.
 
 Step 10 exit: 10a/10b/10c/10d DONE from green main after hard exits above.
 
-PROGRESS: 10a BLOCKED · 10b BLOCKED · 10c BLOCKED · 10d BLOCKED.
+PROGRESS: 10a DONE · 10b DONE · 10c DONE · 10d BLOCKED.
 
 Avoid:
   - Last-minute features, balance reworks, or new prestige layers
@@ -2002,7 +2009,10 @@ NEXT FOCUS (immediate — trust spine; QW list FROZEN)
 ---------------------------------------------------
 Do not reopen physics cutover. Reject new QWs. Stop unexport theater.
 
-  Order: Step 1d DONE ← NEXT → tag (10) · parallel 8c/8d.
+  Order: Step 10d tag v1.0.0 ← NEXT · parallel 8c/8d.
+  CLOSED: 10c changelog + known-issues severity freeze (README table;
+    changelog.json ship bullets; generate-changelog trailer strip).
+  CLOSED: 10a PWA/SW + soak CI; 10b tick+project budget reconfirm.
   CLOSED: 1d R2/R4 CI proof (29778027717 / 29778027846 on 1eb2430);
     build:sw in test-runner for gitignored public/sw.js.
   CLOSED: 6d SET_TOGGLE follow-on + pause honesty; 1d R5 DONE.
@@ -2023,7 +2033,7 @@ Do not reopen physics cutover. Reject new QWs. Stop unexport theater.
   Parked (not DTO debt): Objective claim protocol, Reactor updateStats/sell,
   Upgrade.setLevel. Tile place/sell entity API deleted (intent_queue only).
 
-PROGRESS LANDING (2026-07-20 — Step 1d DONE / R2+R4 CI green)
+PROGRESS LANDING (2026-07-20 — Step 10c DONE)
   - Scrap inventory CLOSED; QW1–QW24 FROZEN (no further QWs)
   - Soft exits / fat-facade freeze / CSS consolidate / late perf /
     SUCCESS #6 stomp blessing / scoped game valtio — SUPERSEDED
@@ -2106,11 +2116,15 @@ PROGRESS LANDING (2026-07-20 — Step 1d DONE / R2+R4 CI green)
     (no SET_TOGGLE dispatch — avoids syncGridToGame onto cleared host).
   - Step 1d DONE: R1–R5 hold; R2 CI 29778027717 + R4 soak 29778027846
     on headSha 1eb2430; test-runner build:sw before vitest; §E CI boxes
-    checked. Remaining §E: README/known-issues + v1.0.0 tag (Step 10).
-  - SUCCESS #6 honesty: Steps 5/6 passthrough + zero valtio sim mirrors
-    marked DONE (was stale PARTIAL).
-  - Deleted tests/core/view-sync/_probe.test.js (valtio probe theater).
-  - Next bites: Step 10 tag hardening · 8c/8d usable chrome
+    checked. Remaining §E: git tag v1.0.0 (Step 10d).
+  - Step 10a DONE: PWA check-pwa-root-files ok; soak CI 29778027846;
+    S3/S4/S5 cover save / Welcome-Back / meltdown (no human soak).
+  - Step 10b DONE: tick+project 12x12 avg=0.197ms max=0.646ms
+    (budget 16.667ms); methodless-projection ok on RC.
+  - Step 10c DONE: deleted deploy commit-dump from changelog.json;
+    ship bullets + README Known issues severity freeze; generate-changelog
+    strips Co-authored-by / body noise; §E README box checked.
+  - Next bites: Step 10d tag v1.0.0 · parallel 8c/8d
 
   N1) Step 1 — DONE: 1a DONE · 1b IN FORCE · 1c DONE · 1d DONE
   N2) Step 2 — DONE: 2a DONE · 2b DONE · 2c DONE · 2d DONE
@@ -2121,6 +2135,6 @@ PROGRESS LANDING (2026-07-20 — Step 1d DONE / R2+R4 CI green)
   N7) Step 7 — DONE: 7a DONE · 7b DONE · 7c DONE · 7d DONE
   N8) Step 8 — 8a DONE · 8b DROPPED · 8c OPEN · 8d OPEN (usable, not bytes)
   N9) Step 9 — DONE: 9a DONE · 9b DONE · 9c DONE · 9d DONE
-  N10) Step 10 — NEXT: tag from green main; README/known-issues; no late perf
+  N10) Step 10 — PARTIAL: 10a DONE · 10b DONE · 10c DONE · 10d BLOCKED
 
   End of document.

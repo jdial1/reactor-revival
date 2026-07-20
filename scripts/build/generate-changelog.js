@@ -61,7 +61,10 @@ function normalizeBullets(lines) {
   const seen = new Set();
   const out = [];
   for (const raw of lines) {
-    const line = String(raw ?? "").trim();
+    const line = String(raw ?? "")
+      .split("\n")
+      .map((s) => s.trim())
+      .find((s) => s && !/^(co-authored-by|signed-off-by|reviewed-by):/i.test(s));
     if (!line) continue;
     if (SKIP_SUBJECT_PREFIXES.some((p) => line.startsWith(p))) continue;
     if (isParentLegacyMessage(line)) continue;
