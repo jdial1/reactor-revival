@@ -1,9 +1,10 @@
 [
     {
-        "version": "26_07_17-1206",
-        "date": "2026-07-17",
+        "version": "26_07_20-1546",
+        "date": "2026-07-20",
         "bullets": [
-            "Close host soft leaks and finish session ownership inversion.\n\nRoute tile place/clear and explosion/meltdown heat through the session, drop pre-tick scalar amplify, and thin Upgrade.setLevel to display with bridge-side modifier sync.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
+            "Land Reductive 1.0 trust spine and wire CI soak for Step 1d RC.\n\nCollapse dual-state/host stomps into session dispatch + snapshot UI, add S1-S9 Playwright soak and sole-gate npm test workflows so R2/R4 can prove green on origin.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+            "Fix host-session sync after core-lib cutover so thin-wrapper tests pass.\n\nPreserve protium/economy across ticks, isolate objective completion state, and keep exploding-tile grid projection consistent with session authority.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
         ]
     }
 ]
