@@ -9,10 +9,6 @@ export function dispatchToggleIntent(game, toggleName, value, _sourceId = null) 
   });
 }
 
-export function dispatchPauseIntent(game, paused, sourceId = "navigation") {
-  dispatchToggleIntent(game, "pause", !!paused, sourceId);
-}
-
 export function dispatchRebootIntent(game, { keepEp = false } = {}) {
   if (!game) return;
   void dispatchPlayerIntent(game, game.engine, {

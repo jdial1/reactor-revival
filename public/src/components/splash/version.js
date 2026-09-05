@@ -5,7 +5,7 @@ import { logger } from "../../core/logger.js";
 import { bindLitRenderMulti } from "../../dom/lit-reactive.js";
 import { pwaState } from "../../state/ui-state.js";
 import { getUiElement } from "../shell/page-dom.js";
-import { setClassFlag } from "./dom-flags.js";
+import { setClassFlag } from "../../dom/class-flags.js";
 
 async function fetchVersionFromUrl(url) {
   const response = await fetch(url);

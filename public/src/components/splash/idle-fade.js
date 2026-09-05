@@ -1,4 +1,4 @@
-import { setClassFlag } from "./dom-flags.js";
+import { setClassFlag } from "../../dom/class-flags.js";
 
 const FADE_SLIGHT_MS = 15000;
 const FADE_FULL_MS = 30000;

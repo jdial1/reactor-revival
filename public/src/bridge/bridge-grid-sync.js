@@ -8,8 +8,6 @@ export function bumpGridPartsRevision(tileset) {
   if (engine) engine._workerPartSnapshotCache = null;
 }
 
-export function syncGridCheap(_bridge) {}
-
 function copyTileStateToInstance(bridge, tile, inst, row, col) {
   if (tile.heat_contained != null) {
     bridge.session.grid.setTileHeat(row, col, toNumber(tile.heat_contained));

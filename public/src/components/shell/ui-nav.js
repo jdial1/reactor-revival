@@ -14,7 +14,7 @@ import {
 } from "./ui-parts-panel.js";
 import { navIndicatorTemplate } from "../../templates/uiComponentsTemplates.js";
 
-function findPageButton(nav, pageId) {
+export function findPageButton(nav, pageId) {
   if (!nav) return null;
   const buttons = nav.getElementsByTagName("button");
   for (let i = 0; i < buttons.length; i++) {

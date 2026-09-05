@@ -2,7 +2,7 @@ import { isTestEnv } from "../simUtils.js";
 import { get, set, del, clear } from "./idb-keyval.js";
 import { fromError } from "../core/zod-error.js";
 import { logger } from "../core/logger.js";
-import { StorageUtils, isStorageAvailable } from "./local.js";
+import { isStorageAvailable } from "./local.js";
 import { superjsonStringify, superjsonParse } from "../core/save-wire.js";
 
 const isTestEnvStorage = isTestEnv;
@@ -133,15 +133,6 @@ export async function migrateLocalStorageToIndexedDB() {
   } catch (err) {
     logger.warn("migrateLocalStorageToIndexedDB failed", err);
   }
-}
-
-export function getBackupSaveForSlot1() { return StorageUtils.getRaw(SAVE_BACKUP_KEY); }
-
-export function setSlot1FromBackup() {
-  const backup = StorageUtils.getRaw(SAVE_BACKUP_KEY);
-  if (backup == null) return false;
-  StorageUtils.setRaw(SAVE_SLOT1_KEY, backup);
-  return true;
 }
 
 export async function rotateSlot1ToBackup(value) {

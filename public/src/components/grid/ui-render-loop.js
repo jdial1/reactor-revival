@@ -18,19 +18,6 @@ export function applyUiStateToDom(ui) {
   }
 }
 
-export function applyUiStateToDomForKeys(ui, keys) {
-  const game = ui.game;
-  const config = ui.var_objs_config;
-  if (!config || !game) return;
-  for (const configKey of keys) {
-    const cfg = config[configKey];
-    if (!cfg) continue;
-    const val = getUiConfigDisplayValue(game, configKey);
-    if (val === undefined) continue;
-    cfg.onupdate?.(val);
-  }
-}
-
 export function processUiUpdateQueue(ui) {
   applyUiStateToDom(ui);
 }

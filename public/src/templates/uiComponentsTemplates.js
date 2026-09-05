@@ -340,34 +340,6 @@ export function controlDeckControlsNavTemplate({
   `;
 }
 
-export function debugVariablesSectionTemplate({
-  fileName,
-  sortedEntries,
-  escapeKey,
-  renderValue,
-}) {
-  return html`
-    <div class="debug-section">
-      <h4>${fileName}</h4>
-      <div class="debug-variables-list">
-        ${repeat(sortedEntries, ([k]) => k, ([key, value]) => html`
-          <div class="debug-variable">
-            <span class="debug-key">${escapeKey(key)}:</span>
-            <span class="debug-value">${renderValue(value)}</span>
-          </div>
-        `)}
-      </div>
-    </div>
-  `;
-}
-
-export function debugVariablesTemplate({
-  entries,
-  renderSection,
-}) {
-  return html`${repeat(entries, ([fileName]) => fileName, renderSection)}`;
-}
-
 export function emptyLayoutsListTemplate() {
   return html`<p style="color: rgb(180 180 180); margin: 0;">No saved layouts. Copy a reactor layout to add it here.</p>`;
 }
@@ -806,19 +778,6 @@ export function navIndicatorTemplate({
   visible,
 }) {
   return html`<span class="nav-indicator ${visible ? "visible" : ""}"></span>`;
-}
-
-export function upgradeCostTextTemplate({
-  value,
-}) {
-  return html`${value}`;
-}
-
-export function sectionCountTextTemplate({
-  researched,
-  total,
-}) {
-  return html` ${researched}/${total}`;
 }
 
 export function sectionHubMetaTemplate({

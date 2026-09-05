@@ -46,20 +46,6 @@ export const on = (parentElement, selector, eventType, handler) => {
   return () => parentElement.removeEventListener(eventType, listener);
 };
 
-export function resolveDomElement(node, fallbackId = null) {
-  if (typeof document === "undefined") return null;
-  let id = fallbackId;
-  if (!id && node != null) {
-    try {
-      id = node.id;
-    } catch {
-      id = null;
-    }
-  }
-  if (typeof id === "string" && id) return document.getElementById(id);
-  return null;
-}
-
 export function getDomElementById(id) {
   if (!id || typeof document === "undefined") return null;
   return document.getElementById(id);

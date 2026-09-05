@@ -32,16 +32,6 @@ export const HEAT_FLOW = {
   pulseCount: 2,
 };
 
-export const SINGULARITY = {
-  blackHoleAlpha: 0.85,
-  innerTint: "rgba(40, 20, 80, 0.5)",
-  midTint: "rgba(80, 40, 120, 0.2)",
-  ringBaseAlpha: 0.25,
-  ringPulseAmplitude: 0.15,
-  ringTimeScale: 0.008,
-  orbitTimeScale: 0.002,
-};
-
 export const OVERHEAT_VISUAL = {
   heatRatioThreshold: 0.9,
   wiggleFreq: 0.008,

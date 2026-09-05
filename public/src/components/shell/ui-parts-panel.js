@@ -79,10 +79,6 @@ export function refreshPartsPanel(ui) {
   bumpSnapshotRev(ui.game);
 }
 
-export function onPartsPanelActiveTabChanged(ui, _tabId) {
-  refreshPartsPanel(ui);
-}
-
 function createPartTemplateHandlers(ui, partset, unlockManager, selectedPartId) {
   const game = ui.game;
   return (part) => {

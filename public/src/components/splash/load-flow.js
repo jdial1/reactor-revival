@@ -13,7 +13,8 @@ import {
   preloadAllPartImages,
 } from "../../services/pwa.js";
 import { getUiElement } from "../shell/page-dom.js";
-import { resolveIdSelector, setClassFlag } from "./dom-flags.js";
+import { resolveIdSelector } from "./dom-flags.js";
+import { setClassFlag } from "../../dom/class-flags.js";
 
 async function waitForSplashElement(selector, maxAttempts = 20) {
   for (let i = 0; i < maxAttempts; i++) {

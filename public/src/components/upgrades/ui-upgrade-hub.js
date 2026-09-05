@@ -1,8 +1,6 @@
 import { safeCall, teardownAll } from "../../core/teardown.js";
 import { html, render } from "lit-html";
-import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { numFormat as fmt } from "../../core/numbers.js";
-import { escapeHtml } from "../../dom/lit.js";
 import { bindLitRenderMulti } from "../../dom/lit-reactive.js";
 import { subscribeKey } from "valtio/vanilla/utils";
 import { runCheckAffordability, setUpgradeCardRefreshHandler } from "../../bridge/bridge-upgrades.js";
@@ -11,18 +9,9 @@ import { calculateSectionCounts, findTopAffordableInSection } from "../../domain
 import { UpgradeCard } from "./button-factory.js";
 import { purchaseUpgradeWithFeedback } from "./presentation.js";
 import { getUiElement } from "../shell/page-dom.js";
-import {
-  debugVariablesSectionTemplate,
-  debugVariablesTemplate,
-  sectionHubMetaTemplate,
-} from "../../templates/uiComponentsTemplates.js";
+import { sectionHubMetaTemplate } from "../../templates/uiComponentsTemplates.js";
+import { firstByClass } from "../../dom/class-flags.js";
 const EXPAND_UPGRADE_IDS = ["expand_reactor_rows", "expand_reactor_cols"];
-
-function firstByClass(root, className) {
-  if (!root) return null;
-  const list = root.getElementsByClassName(className);
-  return list[0] ?? null;
-}
 
 function forEachSectionH2(wrapper, fn) {
   if (!wrapper) return;
@@ -282,183 +271,4 @@ export function appendUpgradeToSection(ui, locationKey, upgradeEl) {
   if (container && upgradeEl) {
     container.appendChild(upgradeEl);
   }
-}
-
-function formatUpgradeDebugValue(value) {
-  if (value === null || value === undefined) {
-    return "<span class='debug-null'>null</span>";
-  }
-  if (typeof value === "boolean") {
-    return `<span class='debug-boolean'>${value}</span>`;
-  }
-  if (typeof value === "number") {
-    return `<span class='debug-number'>${value}</span>`;
-  }
-  if (typeof value === "string") {
-    return `<span class='debug-string'>"${escapeHtml(value)}"</span>`;
-  }
-  if (typeof value === "object") {
-    if (Array.isArray(value)) {
-      return `<span class='debug-array'>[${value.length} items]</span>`;
-    }
-    return `<span class='debug-object'>{${Object.keys(value).length} keys}</span>`;
-  }
-  return `<span class='debug-other'>${escapeHtml(String(value))}</span>`;
-}
-
-export function showUpgradeDebugPanel(ui) {
-  const getEl = (id) => getUiElement(ui, id);
-  const debugSection = getEl("debug_section");
-  const debugToggleBtn = getEl("debug_toggle_btn");
-  if (debugSection && debugToggleBtn) {
-    debugSection.className = debugSection.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
-    debugToggleBtn.textContent = "Hide Debug Info";
-    updateUpgradeDebugVariables(ui);
-  }
-}
-
-export function hideUpgradeDebugPanel(ui) {
-  const getEl = (id) => getUiElement(ui, id);
-  const debugSection = getEl("debug_section");
-  const debugToggleBtn = getEl("debug_toggle_btn");
-  if (debugSection && debugToggleBtn) {
-    const base = debugSection.className.replace(/\bhidden\b/g, "").replace(/\s+/g, " ").trim();
-    debugSection.className = base ? `${base} hidden` : "hidden";
-    debugToggleBtn.textContent = "Show Debug Info";
-  }
-}
-
-function updateUpgradeDebugVariables(ui) {
-  const debugVariables = getUiElement(ui, "debug_variables");
-  if (!ui.game || !debugVariables) return;
-  const gameVars = collectUpgradeDebugGameVariables(ui);
-  const sectionTemplate = ([fileName, variables]) => {
-    const sortedEntries = Object.entries(variables).sort(([a], [b]) => a.localeCompare(b));
-    return debugVariablesSectionTemplate({
-      fileName,
-      sortedEntries,
-      escapeKey: escapeHtml,
-      renderValue: (value) => unsafeHTML(formatUpgradeDebugValue(value)),
-    });
-  };
-  const entries = Object.entries(gameVars);
-  const template = debugVariablesTemplate({ entries, renderSection: sectionTemplate });
-  render(template, debugVariables);
-}
-
-function collectUpgradeDebugGameVariables(ui) {
-  const vars = {
-    "Game (game.js)": {},
-    "Reactor (reactor.js)": {},
-    "State Manager": {},
-    "UI State": {},
-    Performance: {},
-    Tileset: {},
-    Engine: {},
-  };
-  if (!ui.game) return vars;
-  const game = ui.game;
-  vars["Game (game.js)"]["version"] = game.version;
-  vars["Game (game.js)"]["base_cols"] = game.base_cols;
-  vars["Game (game.js)"]["base_rows"] = game.base_rows;
-  vars["Game (game.js)"]["max_cols"] = game.max_cols;
-  vars["Game (game.js)"]["max_rows"] = game.max_rows;
-  vars["Game (game.js)"]["rows"] = game.rows;
-  vars["Game (game.js)"]["cols"] = game.cols;
-  vars["Game (game.js)"]["base_loop_wait"] = game.base_loop_wait;
-  vars["Game (game.js)"]["base_manual_heat_reduce"] = game.base_manual_heat_reduce;
-  vars["Game (game.js)"]["upgrade_max_level"] = game.upgrade_max_level;
-  vars["Game (game.js)"]["base_money"] = game.base_money;
-  vars["Game (game.js)"]["current_money"] = game.state.current_money;
-  vars["Game (game.js)"]["protium_particles"] = game.protium_particles;
-  vars["Game (game.js)"]["total_exotic_particles"] = game.state.total_exotic_particles;
-  vars["Game (game.js)"]["exotic_particles"] = game.exoticParticleManager.exotic_particles;
-  vars["Game (game.js)"]["current_exotic_particles"] = game.state.current_exotic_particles;
-  vars["Game (game.js)"]["loop_wait"] = game.loop_wait;
-  vars["Game (game.js)"]["paused"] = game.paused;
-  vars["Game (game.js)"]["autoSellEnabled"] = game.autoSellEnabled;
-  vars["Game (game.js)"]["isAutoBuyEnabled"] = game.isAutoBuyEnabled;
-  vars["Game (game.js)"]["sold_power"] = game.sold_power;
-  vars["Game (game.js)"]["sold_heat"] = game.sold_heat;
-
-  if (game.reactor) {
-    const reactor = game.reactor;
-    vars["Reactor (reactor.js)"]["base_max_heat"] = reactor.base_max_heat;
-    vars["Reactor (reactor.js)"]["base_max_power"] = reactor.base_max_power;
-    vars["Reactor (reactor.js)"]["current_heat"] = reactor.current_heat;
-    vars["Reactor (reactor.js)"]["current_power"] = reactor.current_power;
-    vars["Reactor (reactor.js)"]["max_heat"] = reactor.max_heat;
-    vars["Reactor (reactor.js)"]["altered_max_heat"] = reactor.altered_max_heat;
-    vars["Reactor (reactor.js)"]["max_power"] = reactor.max_power;
-    vars["Reactor (reactor.js)"]["altered_max_power"] = reactor.altered_max_power;
-    vars["Reactor (reactor.js)"]["auto_sell_multiplier"] = reactor.auto_sell_multiplier;
-    vars["Reactor (reactor.js)"]["heat_controlled"] = reactor.heat_controlled;
-    const mods = reactor.sessionModifiers;
-    vars["Reactor (reactor.js)"]["heat_power_multiplier"] = mods?.heat_power_multiplier ?? 0;
-    vars["Reactor (reactor.js)"]["heat_outlet_controlled"] = !!mods?.heat_outlet_controlled;
-    vars["Reactor (reactor.js)"]["vent_capacitor_multiplier"] = mods?.vent_capacitor_multiplier ?? 0;
-    vars["Reactor (reactor.js)"]["vent_plating_multiplier"] = mods?.vent_plating_multiplier ?? 0;
-    vars["Reactor (reactor.js)"]["transfer_capacitor_multiplier"] = mods?.transfer_capacitor_multiplier ?? 0;
-    vars["Reactor (reactor.js)"]["transfer_plating_multiplier"] = mods?.transfer_plating_multiplier ?? 0;
-    vars["Reactor (reactor.js)"]["stirling_multiplier"] = mods?.stirling_multiplier ?? 0;
-    vars["Reactor (reactor.js)"]["has_melted_down"] = reactor.has_melted_down;
-    vars["Reactor (reactor.js)"]["stats_power"] = reactor.stats_power;
-    vars["Reactor (reactor.js)"]["stats_heat_generation"] = reactor.stats_heat_generation;
-    vars["Reactor (reactor.js)"]["stats_vent"] = reactor.stats_vent;
-    vars["Reactor (reactor.js)"]["stats_inlet"] = reactor.stats_inlet;
-    vars["Reactor (reactor.js)"]["stats_outlet"] = reactor.stats_outlet;
-    vars["Reactor (reactor.js)"]["stats_total_part_heat"] = reactor.stats_total_part_heat;
-    vars["Reactor (reactor.js)"]["vent_multiplier_eff"] = reactor.vent_multiplier_eff;
-    vars["Reactor (reactor.js)"]["transfer_multiplier_eff"] = reactor.transfer_multiplier_eff;
-  }
-
-  if (game.tileset) {
-    const tileset = game.tileset;
-    vars["Tileset"]["max_rows"] = tileset.max_rows;
-    vars["Tileset"]["max_cols"] = tileset.max_cols;
-    vars["Tileset"]["rows"] = tileset.rows;
-    vars["Tileset"]["cols"] = tileset.cols;
-    vars["Tileset"]["tiles_list_length"] = tileset.tiles_list?.length || 0;
-    vars["Tileset"]["active_tiles_list_length"] = tileset.active_tiles_list?.length || 0;
-    vars["Tileset"]["tiles_with_parts"] = tileset.tiles_list?.filter((t) => t.part)?.length || 0;
-  }
-
-  if (game.engine) {
-    const engine = game.engine;
-    vars["Engine"]["running"] = engine.running;
-    vars["Engine"]["tick_count"] = engine.tick_count;
-    vars["Engine"]["last_tick_time"] = engine.last_tick_time;
-    vars["Engine"]["tick_interval"] = engine.tick_interval;
-  }
-
-  if (ui.stateManager) {
-    const stateVars = ui.stateManager.getAllVars();
-    Object.entries(stateVars).forEach(([key, value]) => {
-      vars["State Manager"][key] = value;
-    });
-  }
-
-  vars["UI State"]["update_interface_interval"] = ui.update_interface_interval;
-  vars["UI State"]["isDragging"] = ui.inputHandler?.isDragging ?? false;
-  vars["UI State"]["lastTileModified"] = ui.inputHandler?.lastTileModified ? "Tile Object" : null;
-  vars["UI State"]["longPressTimer"] = ui.inputHandler?.longPressTimer ? "Active" : null;
-  vars["UI State"]["longPressDuration"] = ui.inputHandler?.longPressDuration ?? 500;
-  vars["UI State"]["snapshot_rev"] = ui.uiState?.snapshot_rev ?? 0;
-  vars["UI State"]["ctrl9HoldTimer"] = null;
-  vars["UI State"]["ctrl9HoldStartTime"] = null;
-  vars["UI State"]["ctrl9MoneyInterval"] = null;
-  vars["UI State"]["ctrl9BaseAmount"] = null;
-  vars["UI State"]["ctrl9ExponentialRate"] = null;
-  vars["UI State"]["ctrl9IntervalMs"] = null;
-  vars["UI State"]["screen_resolution"] = `${window.innerWidth}x${window.innerHeight}`;
-  vars["UI State"]["device_pixel_ratio"] = window.devicePixelRatio;
-
-  if (game.performance) {
-    const perf = game.performance;
-    vars["Performance"]["enabled"] = perf.enabled;
-    vars["Performance"]["marks"] = Object.keys(perf.marks || {}).length;
-    vars["Performance"]["measures"] = Object.keys(perf.measures || {}).length;
-  }
-
-  return vars;
 }

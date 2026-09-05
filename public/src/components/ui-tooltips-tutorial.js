@@ -18,18 +18,7 @@ import { subscribeKey } from "valtio/vanilla/utils";
 import { styleMap, when, unsafeHTML, BaseComponent } from "../dom/lit.js";
 import { purchaseUpgradeWithFeedback } from "./upgrades/presentation.js";
 import { getUiElement } from "./shell/page-dom.js";
-
-function firstByClass(root, className) {
-  if (!root) return null;
-  return root.getElementsByClassName(className)[0] ?? null;
-}
-
-function setClassFlag(el, className, on) {
-  if (!el) return;
-  const re = new RegExp(`\\b${className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
-  const base = el.className.replace(re, "").replace(/\s+/g, " ").trim();
-  el.className = on ? (base ? `${base} ${className}` : className) : base;
-}
+import { firstByClass, setClassFlag } from "../dom/class-flags.js";
 
 function resolveSimpleSelector(sel) {
   if (!sel || typeof sel !== "string") return null;

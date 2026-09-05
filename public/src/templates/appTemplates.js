@@ -114,20 +114,6 @@ export function gameSetupTemplate(selectedDifficulty, onDifficultySelect, onBack
   `;
 }
 
-export function updateToastTemplate(onRefresh, onClose) {
-  return html`
-    <div class="update-toast">
-      <div class="update-toast-content">
-        <div class="update-toast-message">
-          <span class="update-toast-text">New content available, click to reload.</span>
-        </div>
-        <button id="refresh-button" class="update-toast-button" @click=${onRefresh}>Reload</button>
-        <button class="update-toast-close" @click=${onClose}>×</button>
-      </div>
-    </div>
-  `;
-}
-
 export function fallbackStartTemplate(onStart) {
   return html`
     <div style="position: fixed;inset: 0;background: var(--surface-inset);display: flex;align-items: center;justify-content: center;z-index: 99999;flex-direction: column;color: var(--text-primary);font-family: monospace;">

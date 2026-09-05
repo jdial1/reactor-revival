@@ -1,6 +1,6 @@
 import { BaseComponent } from "../../dom/lit.js";
 import { logger } from "../../core/logger.js";
-import { setClassFlag } from "./dom-flags.js";
+import { setClassFlag } from "../../dom/class-flags.js";
 
 export class SplashUIManager extends BaseComponent {
   constructor(refs) {

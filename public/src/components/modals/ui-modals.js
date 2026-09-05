@@ -18,40 +18,15 @@ import { WEAVE_QUANTUM, WELCOME_BACK_FF_MAX_TICKS } from "../../constants/balanc
 import { hudViewFromSnapshot, resolveSessionSnapshot } from "../shell/hud-from-snapshot.js";
 import { dispatchPlayerIntents } from "../../bridge/bridge-intents.js";
 import { dispatchRebootIntent } from "../grid/ui-intents.js";
+import { firstByClass, forEachByClass, setClassFlag } from "../../dom/class-flags.js";
+import { findPageButton } from "../shell/ui-nav.js";
 import { postGameLoopProjectionQuery } from "../../domain/engine.js";
-
-function firstByClass(root, className) {
-  if (!root) return null;
-  return root.getElementsByClassName(className)[0] ?? null;
-}
-
-function forEachByClass(root, className, fn) {
-  if (!root) return;
-  const list = root.getElementsByClassName(className);
-  for (let i = 0; i < list.length; i++) fn(list[i]);
-}
 
 function findMechSwitch(overlay, checkboxId) {
   const switches = overlay?.getElementsByClassName("mech-switch");
   if (!switches) return null;
   for (let i = 0; i < switches.length; i++) {
     if (switches[i].dataset.checkboxId === checkboxId) return switches[i];
-  }
-  return null;
-}
-
-function setClassFlag(el, className, on) {
-  if (!el) return;
-  const re = new RegExp(`\\b${className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
-  const base = el.className.replace(re, "").replace(/\s+/g, " ").trim();
-  el.className = on ? (base ? `${base} ${className}` : className) : base;
-}
-
-function findPageButton(nav, pageId) {
-  if (!nav) return null;
-  const buttons = nav.getElementsByTagName("button");
-  for (let i = 0; i < buttons.length; i++) {
-    if (buttons[i].dataset.page === pageId) return buttons[i];
   }
   return null;
 }

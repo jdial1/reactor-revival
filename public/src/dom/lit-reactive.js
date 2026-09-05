@@ -89,18 +89,6 @@ function createLitBinding({ getTemplate, attachSubscriptions, requireInitialTarg
   };
 }
 
-export function bindLitRender(state, renderFn, container, onAfterRender) {
-  return createLitBinding({
-    getTemplate: () => renderFn(state),
-    attachSubscriptions: (scheduleRender) => {
-      const unsubs = [];
-      unsubs.push(subscribe(state, scheduleRender));
-      return unsubs;
-    },
-    onAfterRender,
-  })(container);
-}
-
 export function bindLitRenderMultiStates(states, renderFn, container, onAfterRender) {
   return createLitBinding({
     getTemplate: () => renderFn(),

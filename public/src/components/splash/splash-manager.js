@@ -7,7 +7,7 @@ import { LEADERBOARD_CONFIG } from "../../constants/balance.js";
 import { StorageUtils, StorageAdapter } from "../../storage/index.js";
 import { VersionChecker, setupInstallPrompt } from "../../services/pwa.js";
 import { getUiElement } from "../shell/page-dom.js";
-import { firstByClass, forEachByClass, setClassFlag } from "./dom-flags.js";
+import { firstByClass, forEachByClass, setClassFlag } from "../../dom/class-flags.js";
 import { initSplashMenuIdleFade } from "./idle-fade.js";
 import { fetchVersionForSplash, mountSplashUserCountReactive, addSplashStats } from "./version.js";
 import { SplashUIManager } from "./ui-manager.js";

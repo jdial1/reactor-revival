@@ -129,15 +129,4 @@ export function formatPlaytimeLog(ms) {
   const h = Math.floor(ms / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR));
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
-export function formatRelativeTime(timestamp) {
-  if (!timestamp) return "Unknown";
-  const date = new Date(Number(timestamp) || timestamp);
-  const diffMs = Date.now() - date;
-  const diffHours = Math.floor(diffMs / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR));
-  const diffDays = Math.floor(diffMs / (MS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY));
-  if (diffHours < 1) return "Just now";
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
 export const timeFormat = (ms) => formatDuration(ms, false);

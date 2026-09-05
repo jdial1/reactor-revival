@@ -120,10 +120,6 @@ export async function runRebootActionDiscardEp(game) {
   await runRebootActionInternal(game, false);
 }
 
-export async function runRebootAction(game, keep_exotic_particles = false) {
-  await runRebootActionInternal(game, keep_exotic_particles);
-}
-
 export async function runFullReboot(game) {
   if (game.engine && game.engine.running) game.engine.stop();
   game.gridManager.setRows(game.base_rows);
