@@ -375,6 +375,14 @@ html[data-reduced-motion] #app_root { animation: none !important;
  body.help-mode-active .item-grid .part .part-details-bonuses .neg { color: rgb(255 68 68);
  }
 }
+/* Lit renders the parts panel into #parts_panel_reactive_root, which sits between
+   #parts_section and its real children. Nine layout rules target
+   `#parts_section > ...` (order/flex for the header, tab contents, module info and
+   controls nav), so that wrapper silently broke every one of them: on mobile the
+   open panel fell back to the docked strip's `max-height: 52px`, showing a single
+   row of parts above a large dead area. display:contents removes the wrapper from
+   layout so its children are the section's flex children, as those rules assume. */
+#parts_panel_reactive_root { display: contents; }
 
 #parts_tab_contents { overflow: hidden auto; max-width: 100%; box-sizing: border-box; flex: 1 1 0; min-height: 0; padding: 0 0.5rem 0.5rem;
 }
@@ -641,11 +649,9 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #wrapper.page-reactor:not(.parts-panel-open) #parts_section #controls_nav { display: none !important;
  }
 
- #wrapper.page-reactor:not(.parts-panel-open) #parts_section #parts_module_info { display: block !important; overflow: visible !important; height: auto !important; max-height: none !important; padding: 0 !important; margin: 0 !important; opacity: 1 !important; pointer-events: auto !important; visibility: visible !important;
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section #parts_module_info { display: block !important; overflow: visible !important; height: auto !important; max-height: none !important; padding: 0 !important; margin: 0 !important; opacity: 1 !important; pointer-events: auto !important; visibility: visible !important; margin-top: 0; order: 1;
  }
 
- #wrapper.page-reactor:not(.parts-panel-open) #parts_section > #parts_module_info { margin-top: 0; order: 1;
- }
 
  #parts_section:not(.collapsed), #wrapper.parts-panel-open #parts_section { display: flex !important; opacity: 1 !important; pointer-events: auto; transform: translateY(0) !important; visibility: visible !important; animation: panel-jolt 0.15s steps(2) 2, panel-glow-pulse-mobile 5s infinite linear;
  }
@@ -653,25 +659,25 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #parts_panel_reactive_root { display: contents;
  }
 
- #parts_section > .parts_header { order: 1; flex: 0 0 auto;
+ #parts_section .parts_header { order: 1; flex: 0 0 auto;
  }
 
- #parts_section > #parts_close_btn { order: 2; flex: 0 0 auto;
+ #parts_section #parts_close_btn { order: 2; flex: 0 0 auto;
  }
 
- #parts_section > #parts_module_info { order: 3; flex: 0 0 auto; margin-top: auto;
+ #parts_section #parts_module_info { order: 3; flex: 0 0 auto; margin-top: auto;
  }
 
- #parts_section > #controls_nav { order: 4; flex: 0 0 auto;
+ #parts_section #controls_nav { order: 4; flex: 0 0 auto;
  }
 
- #parts_section > #parts_tab_contents { order: 5; flex: 0 0 auto;
+ #parts_section #parts_tab_contents { order: 5; flex: 0 0 auto;
  }
 
- #wrapper.parts-panel-open #parts_section > #parts_module_info { margin-top: 0;
+ #wrapper.parts-panel-open #parts_section #parts_module_info { margin-top: 0;
  }
 
- #wrapper.parts-panel-open #parts_section > #parts_tab_contents { order: 2; flex: 1 1 auto; min-height: 0; max-height: none; overflow: hidden auto;
+ #wrapper.parts-panel-open #parts_section #parts_tab_contents { order: 2; flex: 1 1 auto; min-height: 0; max-height: none; overflow: hidden auto;
  }
 
  .parts-close-btn { width: auto; min-height: 36px; padding: 0 12px; margin: 4px 8px 0 auto; align-self: flex-end;
@@ -711,6 +717,34 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  }
 
  #parts_tab_contents .item-grid .part { width: 40px; height: 40px; flex: 0 0 40px; scroll-snap-align: start;
+ }
+ /* The rules above style the collapsed dock: a 44px-tall horizontal scroller with
+    hidden category headings. When the panel is opened full-screen the same rules
+    made every category a one-item row with dead space beside it, so restore a
+    wrapping grid and bring the headings back. */
+ #wrapper.parts-panel-open #parts_tab_contents .item-grid {
+  max-height: none;
+  flex-wrap: wrap;
+  overflow: visible;
+  scroll-snap-type: none;
+ }
+
+ #wrapper.parts-panel-open #parts_tab_contents hgroup { display: block; padding: 2px 0; }
+
+ #wrapper.parts-panel-open #parts_tab_contents { padding: 4px 6px 8px; }
+ /* A new game turns help mode on (boot-session startNewGameFlow), which lays parts
+    out as full-width explanatory rows. The dock's 40px tile sizing above outranks
+    that by id specificity, so the open panel rendered 40px tiles holding ~51px of
+    text. Give help mode's row layout priority while the panel is open. */
+ body.help-mode-active #wrapper.parts-panel-open #parts_tab_contents .item-grid {
+  flex-wrap: nowrap;
+ }
+
+ body.help-mode-active #wrapper.parts-panel-open #parts_tab_contents .item-grid .part {
+  width: 100%;
+  height: auto;
+  min-height: 48px;
+  flex: 0 0 auto;
  }
 
  .parts-module-info-panel { flex: 0 0 auto; padding: 4px 6px; border-top: 2px solid var(--bevel-dark); background: rgb(18 22 20); box-shadow: var(--well-depth); font-size: 0.5rem; line-height: 1.35;

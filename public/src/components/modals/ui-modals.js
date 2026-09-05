@@ -197,8 +197,8 @@ function systemSection(prefs, notificationsChecked) {
       </div>
 
       <h4 style=${SECTION_HEAD_MARGIN}>SYSTEM INFO</h4>
-      <p style="margin: 0.5rem 0; font-size: 0.65rem; color: var(--neutral-200);">Version: <span id="app_version" style="color: var(--text-primary);">Loading...</span></p>
-      <p style="margin: 0.5rem 0; font-size: 0.65rem; color: var(--neutral-200);">Display Mode: <span id="app_display_mode" style="color: var(--text-primary);">Detecting...</span></p>
+      <p style="margin: 0.5rem 0; font-size: 0.65rem; color: var(--sovietwave-paper);">Version: <span id="app_version" style="color: var(--text-primary);">Loading...</span></p>
+      <p style="margin: 0.5rem 0; font-size: 0.65rem; color: var(--sovietwave-paper);">Display Mode: <span id="app_display_mode" style="color: var(--text-primary);">Detecting...</span></p>
 
       <h4 style=${SECTION_HEAD_MARGIN}>LEGAL</h4>
       <div class="settings-legal-links" style="display: flex; flex-direction: column; gap: 0.5rem;">

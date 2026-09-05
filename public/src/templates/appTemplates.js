@@ -132,7 +132,7 @@ export function fallbackStartTemplate(onStart) {
   return html`
     <div style="position: fixed;inset: 0;background: var(--surface-inset);display: flex;align-items: center;justify-content: center;z-index: 99999;flex-direction: column;color: var(--text-primary);font-family: monospace;">
       <h1 style="color: var(--canvas-confirm-danger);">Splash UI Failed to Load</h1>
-      <p style="margin-bottom: 20px;color: var(--neutral-200);">You can still start the game in fallback mode.</p>
+      <p style="margin-bottom: 20px;color: var(--sovietwave-paper);">You can still start the game in fallback mode.</p>
       <button class="pixel-btn btn-start" @click=${onStart} style="padding: 10px 20px;font-size: 16px;">START GAME</button>
     </div>
   `;
