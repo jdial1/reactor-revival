@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-1455",
+        "date": "2026-09-05",
+        "bullets": [
+            "Fix game failing to start on GitHub Pages (manifest 404)"
+        ]
+    },
+    {
         "version": "26_09_05-1402",
         "date": "2026-09-05",
         "bullets": [
