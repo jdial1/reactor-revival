@@ -65,7 +65,7 @@ export function formatObjectiveDisplayInfo(manager) {
   return buildDisplayInfoFromProgress(objective, chapterIndex, chapterSize, completedInChapter, progress);
 }
 
-export function formatObjectiveRewardLabel(reward) {
+function formatObjectiveRewardLabel(reward) {
   const money = Number(reward?.money ?? 0);
   const ep = Number(reward?.ep ?? 0);
   if (money > 0) return `$${fmt(money)}`;

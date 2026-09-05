@@ -1,3 +1,4 @@
+import { isTestEnv } from "../../simUtils.js";
 import { logger } from "../../core/logger.js";
 import { getUiElement, getPageReactorWrapper } from "./page-dom.js";
 import { applyBodyClassesFromUiState } from "../../state/ui-state.js";
@@ -119,8 +120,7 @@ export class MeltdownUI {
 
     if (
       !forceAnimate &&
-      typeof process !== "undefined" &&
-      (process.env.NODE_ENV === "test" || process.env.VITEST === "true")
+      isTestEnv()
     ) {
       ui.game.tileset?.clearAllTiles?.();
       logger.log("debug", "ui", "All parts exploded!");

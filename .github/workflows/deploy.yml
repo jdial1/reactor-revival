@@ -110,8 +110,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chrome for Puppeteer
-        run: npx puppeteer browsers install chrome
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
 
       - name: Wait for deployment to be ready
         run: sleep 60
@@ -124,21 +124,27 @@ jobs:
           echo "Running PWA checks for: ${{ needs.deploy.outputs.page_url }}"
           node scripts/qa/pwa-check.js --remote
 
-      - name: Run UI console audit
+      - name: Run UI console and layout audit
         env:
           BASE_URL: ${{ needs.deploy.outputs.page_url }}
-          AUDIT_FAIL_ON: pageerror,critical.startup
         run: |
-          echo "Running UI console audit for: $BASE_URL"
-          npm run ui:console-audit:deploy
+          echo "Running UI console and layout audit for: $BASE_URL"
+          npm run test:e2e:audit
 
-      - name: Run UI screenshots
+      - name: Run UI render sweep
         env:
           BASE_URL: ${{ needs.deploy.outputs.page_url }}
-          SCREENSHOT_LAYOUT_AUDIT: "1"
         run: |
-          echo "Running UI screenshots for: $BASE_URL"
-          npm run ui:screenshots:deploy
+          echo "Running UI render sweep for: $BASE_URL"
+          npm run test:e2e:render
+
+      - name: Upload UI report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-ui-report
+          path: playwright-report/
+          retention-days: 7
 
       - name: Create check status comment (on failure)
         if: failure()

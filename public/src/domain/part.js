@@ -20,7 +20,7 @@ const buildCategoryOrders = (compiledList) => {
   return { categoryTypeOrder, typeOrderIndex };
 };
 
-export function applyCompiledPartFields(part, compiled) {
+function applyCompiledPartFields(part, compiled) {
   if (!part || !compiled) return;
   const fallback = part.part || compiled;
   const def = compiled.definition || fallback.definition || {};

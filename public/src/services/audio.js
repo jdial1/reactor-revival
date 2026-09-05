@@ -572,7 +572,7 @@ const SENSORY_MAP = {
   8: { sampleKey: "sell", category: "effects", duckAmbience: true },
 };
 
-export const handleAudioEvent = (svc, eventType, context, options = {}) => {
+const handleAudioEvent = (svc, eventType, context, options = {}) => {
   const config = EVENT_TO_EFFECTS[eventType];
   if (!config) return;
   const merged = { ...context, ...options };
@@ -672,7 +672,7 @@ async function loadAmbienceLayers(svc, base) {
   return results.map((p) => (p.status === 'fulfilled' ? p.value : null));
 }
 
-export const loadSampleBuffers = async (svc) => {
+const loadSampleBuffers = async (svc) => {
   if (!getAudioContext(svc) || isTestEnv()) return;
   const base = getResourceUrl('audio/');
   const uiUrls = {

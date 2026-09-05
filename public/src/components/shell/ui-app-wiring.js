@@ -64,7 +64,7 @@ class AudioController {
   }
 }
 
-export class ObjectivesUI {
+class ObjectivesUI {
   constructor(ui, controller = null) {
     this.ui = ui;
     this.controller = controller;
@@ -96,7 +96,7 @@ export class ObjectivesUI {
   }
 }
 
-export class PauseStateUI {
+class PauseStateUI {
   constructor(ui) {
     this.ui = ui;
   }
@@ -111,7 +111,7 @@ export class PauseStateUI {
   }
 }
 
-export function wireUiShell(ui) {
+function wireUiShell(ui) {
   if (ui.modalOrchestrator) return;
   ui.modalOrchestrator = createModalOrchestrator();
   ui.gridScaler = new GridScaler(ui);
@@ -123,7 +123,7 @@ export function wireUiShell(ui) {
   });
 }
 
-export function teardownUiShell(ui) {
+function teardownUiShell(ui) {
   ui.modalOrchestrator = null;
   ui.gridScaler = null;
   if (Object.getOwnPropertyDescriptor(ui, "gridCanvasRenderer")?.get) {
@@ -132,14 +132,14 @@ export function teardownUiShell(ui) {
   teardownGridCanvasService();
 }
 
-export function wireRenderingSubsystems(ui) {
+function wireRenderingSubsystems(ui) {
   if (ui.heatVisualsUI) return;
   ui.heatVisualsUI = new HeatVisualsUI(ui);
   ui.gridInteractionUI = new GridInteractionUI(ui);
   ui.meltdownUI = new MeltdownUI(ui);
 }
 
-export function teardownRenderingSubsystems(ui) {
+function teardownRenderingSubsystems(ui) {
   ui.meltdownUI?.cleanup?.();
   ui.heatVisualsUI = null;
   ui.gridInteractionUI = null;
@@ -151,12 +151,12 @@ export function wireUiDomSubsystems(ui) {
   wireRenderingSubsystems(ui);
 }
 
-export function teardownUiDomSubsystems(ui) {
+function teardownUiDomSubsystems(ui) {
   teardownRenderingSubsystems(ui);
   teardownUiShell(ui);
 }
 
-export function wireGameServices(ui, game) {
+function wireGameServices(ui, game) {
   teardownGameServices(ui, game);
   if (ui._deviceServiceTeardown) {
     safeCall(() => { ui._deviceServiceTeardown(); });
@@ -179,7 +179,7 @@ export function wireGameServices(ui, game) {
   };
 }
 
-export function teardownGameServices(ui, _game) {
+function teardownGameServices(ui, _game) {
   if (ui._deviceServiceTeardown) {
     safeCall(() => { ui._deviceServiceTeardown(); });
     ui._deviceServiceTeardown = null;
@@ -194,7 +194,7 @@ export function teardownGameServices(ui, _game) {
   ui.inputHandler = null;
 }
 
-export function wireAppControllers(ui, game) {
+function wireAppControllers(ui, game) {
   teardownAppControllers(ui, game);
   ui.audioController = new AudioController({
     getAudioService: () => resolveAudioService(game?.audio),
@@ -209,12 +209,12 @@ export function wireAppControllers(ui, game) {
   };
 }
 
-export function teardownAppControllers(ui, game) {
+function teardownAppControllers(ui, game) {
   ui.audioController?.detach?.(game);
   ui.audioController = null;
 }
 
-export function wireAppPresenters(ui, game) {
+function wireAppPresenters(ui, game) {
   teardownAppPresenters(ui);
   ui.objectiveController = new ObjectiveController({
     getGame: () => game,
@@ -241,7 +241,7 @@ export function wireAppPresenters(ui, game) {
   };
 }
 
-export function teardownAppPresenters(ui) {
+function teardownAppPresenters(ui) {
   if (ui.objectiveController?.unmount) ui.objectiveController.unmount();
   ui.achievementController?.unmount?.();
   ui.objectiveController = null;

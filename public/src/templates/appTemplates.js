@@ -59,7 +59,7 @@ export function renderSplashTemplate(isMuted, onMuteClick, onHideMenuClick) {
   `;
 }
 
-export function difficultyCardTemplate(diffKey, diffLabel, diffDesc, selectedDifficulty, onSelect) {
+function difficultyCardTemplate(diffKey, diffLabel, diffDesc, selectedDifficulty, onSelect) {
   const isSelected = diffKey === selectedDifficulty;
   const classes = classMap({
     "difficulty-card": true,

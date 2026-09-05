@@ -10,7 +10,8 @@ import { getCompactLayout } from "./domain/reactor-codec.js";
 import { readThemeColor } from "./components/shell/theme-colors.js";
 import { html, render } from "lit-html";
 import { UI } from "./components/ui.js";
-import { AudioService, createSplashManager, resolveAudioService } from "./services/app-services.js";
+import { AudioService, resolveAudioService } from "./services/app-services.js";
+import { createSplashManager } from "./components/splash/splash-manager.js";
 import { safeCall, teardownAll } from "./core/teardown.js";
 import {
   getValidatedPreferences,

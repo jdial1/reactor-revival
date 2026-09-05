@@ -1,3 +1,4 @@
+import { isTestEnv } from "../simUtils.js";
 import { SaveDataSchema, SaveDataWriteSchema } from "../schema/index.js";
 import { queryClient, queryKeys } from "../services/leaderboard.js";
 import {
@@ -30,7 +31,7 @@ async function performSave(slot, saveData) {
 
 export async function saveGameMutation({ slot, saveData, getNextSaveSlot, isAutoSave = false }) {
   if (typeof indexedDB === "undefined") return null;
-  if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") return null;
+  if (isTestEnv()) return null;
 
   const effectiveSlot = isAutoSave ? "auto" : (slot ?? (await getNextSaveSlot()));
   await performSave(effectiveSlot, saveData);

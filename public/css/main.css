@@ -1123,7 +1123,7 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #parts_close_btn { display: none;
  }
  /* Add left padding to main content when parts panel is visible */
- #wrapper.page-reactor #main { position: relative; padding-left: 275px; background-color: var(--sovietwave-slate);
+ #wrapper.page-reactor #main { position: relative; box-sizing: border-box; padding-left: 275px; background-color: var(--sovietwave-slate);
  }
  /* Add padding to info bar since it's outside main */
  #wrapper.page-reactor #info_bar { padding-left: 275px !important;

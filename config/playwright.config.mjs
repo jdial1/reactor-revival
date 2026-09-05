@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
-import { RESOLUTIONS } from "../scripts/ui-audit/ui-screenshot-config.js";
+import { RESOLUTIONS } from "../e2e/viewports.js";
 
 const baseURL = process.env.BASE_URL || "http://localhost:8080";
 
@@ -12,7 +12,7 @@ function e2eResolutionProjects() {
 
   if (filter && resolutions.length === 0) {
     throw new Error(
-      `E2E_RESOLUTION "${filter}" is not defined in scripts/ui-audit/ui-screenshot-config.js RESOLUTIONS`
+      `E2E_RESOLUTION "${filter}" is not defined in e2e/viewports.js RESOLUTIONS`
     );
   }
 
@@ -38,17 +38,20 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   timeout: 180000,
-  reporter: "list",
+  reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL,
     trace: "on-first-failure",
     screenshot: "only-on-failure",
   },
   projects: e2eResolutionProjects(),
-  webServer: {
-    command: "npm run dev",
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-  },
+  // When BASE_URL points at an already-running or deployed site, don't boot a local one.
+  webServer: process.env.BASE_URL
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: baseURL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120000,
+      },
 });

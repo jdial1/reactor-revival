@@ -21,7 +21,7 @@ function engineStatusChipView(game) {
   return html`<span class="ui-views-engine-chip ${paused ? "paused" : ""} ${stopped ? "idle" : ""}" title=${title} aria-hidden="true">${label}</span>`;
 }
 
-export function mountHeatRatioStrip(game, host) {
+function mountHeatRatioStrip(game, host) {
   if (!game || !host) return () => {};
   const run = () => {
     render(heatRatioStripView(game), host);
@@ -37,7 +37,7 @@ export function mountHeatRatioStrip(game, host) {
   };
 }
 
-export function mountEngineStatusChip(game, host) {
+function mountEngineStatusChip(game, host) {
   if (!game || !host) return () => {};
   const run = () => {
     render(engineStatusChipView(game), host);
@@ -58,7 +58,7 @@ function muteIndicatorView() {
   return html`<span class="ui-views-mute" title="Audio muted" aria-label="Audio muted">🔇</span>`;
 }
 
-export function mountMuteIndicator(host) {
+function mountMuteIndicator(host) {
   if (!host) return () => {};
   const run = () => {
     render(muteIndicatorView(), host);

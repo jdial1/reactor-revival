@@ -1,15 +1,13 @@
 import { z } from "../../lib/zod.js";
 import { toDecimal } from "../simUtils.js";
 
-export const NumericLike = z.union([z.number(), z.string()]);
+const NumericLike = z.union([z.number(), z.string()]);
 
-export const DecimalLike = z.union([
+const DecimalLike = z.union([
   z.number(),
   z.string(),
   z.custom((v) => v == null || (typeof v?.gte === "function")),
 ]);
-
-export const GridCoordinate = z.number().int().min(0);
 
 export const DecimalSchema = NumericLike.transform((v) => (v != null && v !== "" ? toDecimal(v) : toDecimal(0)));
 

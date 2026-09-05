@@ -143,7 +143,7 @@ function buildInfoBarTemplate(ui) {
   });
 }
 
-export function teardownInfoBar(ui) {
+function teardownInfoBar(ui) {
   if (ui._infoBarUnmount) {
     safeCall(() => { ui._infoBarUnmount(); });
     ui._infoBarUnmount = null;
@@ -262,12 +262,7 @@ export function teardownGameLayout(ui) {
 
 export {
   updatePartsPanelBodyClass,
-  togglePartsPanelForBuildButton,
   refreshPartsPanel,
-  onPartsPanelActiveTabChanged,
-  setupPartsTabs,
-  setupMacroToolbar,
-  updateMacroToolbar,
   updateQuickSelectSlots,
   closePartsPanel,
   initializePartsPanel,
@@ -284,10 +279,6 @@ export {
   ensureUpgradeDetailPanelMounted,
   getUpgradeSectionContainer,
   appendUpgradeToSection,
-  showUpgradeDebugPanel,
-  hideUpgradeDebugPanel,
-  updateUpgradeDebugVariables,
-  collectUpgradeDebugGameVariables,
 } from "./upgrades/ui-upgrade-hub.js";
 export {
   PwaDisplayModeUI,
@@ -310,35 +301,22 @@ export class ComponentRenderingUI {
 
 
 export {
-  clipToGrid,
   calculateLayoutCostBreakdown,
-  computeBlueprintDiff,
-  applyBlueprintLayoutDiff,
-  calculateLayoutCost,
   deserializeReactor,
-  deserializeReactorInput,
-  filterLayoutByCheckedTypes,
-  calculateCurrentSellValue,
   buildAffordableLayout,
-  buildPasteState,
-  validatePasteResources,
-  calculateLayoutDiffBreakdown,
 } from "../domain/blueprint.js";
 export { renderComponentIcons } from "./blueprints/ui-blueprint-helpers.js";
-export { encodeLayoutShare, decodeLayoutShare, isLayoutShareCode } from "../core/layoutShareCodec.js";
+export { isLayoutShareCode } from "../core/layoutShareCodec.js";
 
 
 
 
 
 export {
-  renderLayoutPreview,
-  buildPartSummary,
 } from "./grid/ui-reactor-layout.js";
-export { getCompactLayout, serializeReactor } from "../domain/reactor-codec.js";
+export { serializeReactor } from "../domain/reactor-codec.js";
 export {
   CopyPasteUI,
-  hideCopyPasteModal,
 } from "./blueprints/ui-copy-paste.js";
 
 export {

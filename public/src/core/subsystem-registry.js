@@ -1,6 +1,6 @@
 const HOOKS = ["init", "onTick", "postTick", "teardown"];
 
-export function createSubsystemRegistry() {
+function createSubsystemRegistry() {
   const entries = new Map();
   return {
     register(name, hooks = {}) {

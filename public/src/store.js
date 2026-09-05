@@ -2,9 +2,6 @@ export {
   preferences,
   modalUi,
   pwaState,
-  enqueueAndDrain,
-  runSellAction,
-  runManualReduceHeatAction,
   getValidatedPreferences,
   initPreferencesStore,
   getVolumePreferences,
@@ -24,9 +21,9 @@ export {
   shellHeatRatioAttr,
   EngineStatus,
 } from "./state.js";
-export { BlueprintSchema, LegacyGridSchema } from "./schema/index.js";
+export { LegacyGridSchema } from "./schema/index.js";
 export { enqueueGameEffect } from "./state/game-effects.js";
-export { subscribe, proxy, snapshot, ref } from "valtio/vanilla";
+export { subscribe, proxy, ref } from "valtio/vanilla";
 import { subscribeKey as valtioSubscribeKey } from "valtio/vanilla/utils";
 
 export function subscribeKey(proxyObject, key, callback) {

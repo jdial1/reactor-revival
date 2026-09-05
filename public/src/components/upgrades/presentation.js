@@ -31,12 +31,12 @@ export function purchaseUpgradeWithFeedback(upgradeset, upgradeId, { onSuccess }
 
 const partElements = new WeakMap();
 
-export const bindPartElement = (part, el) => {
+const bindPartElement = (part, el) => {
   if (el && el.nodeType === 1) partElements.set(part, el);
   else partElements.delete(part);
 };
 
-export const getPartElement = (part) => partElements.get(part) ?? null;
+const getPartElement = (part) => partElements.get(part) ?? null;
 
 export const createPartElement = (part, game = null) => {
   const g = game ?? null;
@@ -61,7 +61,7 @@ export const createPartElement = (part, game = null) => {
   return el;
 };
 
-export const createUpgradeElement = (upgrade) => {
+const createUpgradeElement = (upgrade) => {
   const doctrineSource = (id) => upgrade.game?.upgradeset?.getDoctrineForUpgrade(id);
   const onBuyClick = (e) => {
     e.stopPropagation();
@@ -70,7 +70,7 @@ export const createUpgradeElement = (upgrade) => {
   return renderToNode(UpgradeCard(upgrade, doctrineSource, onBuyClick));
 };
 
-export const attachUpgradePresentation = (UpgradeClass) => {
+const attachUpgradePresentation = (UpgradeClass) => {
   UpgradeClass.prototype.createElement = function createElement() {
     return createUpgradeElement(this);
   };

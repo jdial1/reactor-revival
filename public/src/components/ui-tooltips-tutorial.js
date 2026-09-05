@@ -684,7 +684,7 @@ function tooltipContentTemplate(obj, tile, game, onBuy) {
   });
 }
 
-export class TooltipManager extends BaseComponent {
+class TooltipManager extends BaseComponent {
   constructor(main_element_selector, tooltip_element_selector, game) {
     super();
     this.$main = resolveSimpleSelector(main_element_selector);

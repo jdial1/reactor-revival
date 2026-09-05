@@ -1,4 +1,4 @@
-﻿#splash-container { flex: 1; display: flex; width: 100%; min-width: 0; min-height: 0; background: var(--sovietwave-slate); padding: 1.5%;
+#splash-container { flex: 1; display: flex; width: 100%; min-width: 0; min-height: 0; background: var(--sovietwave-slate); padding: 1.5%;
 }
 
 #splash-screen { position: relative; display: flex; overflow: hidden; flex: 1; width: 100%; max-width: none; min-height: 0; flex-direction: column; align-items: stretch; justify-content: flex-end; padding: 0; margin: 0; background-color: var(--sovietwave-slate); background-image: var(--splash-bg-url, url("../img/misc/stalenhag_bg/bg_img1.webp")); background-repeat: no-repeat; background-position: 15% 15%; background-size: min(110vmax, 4096px) min(110vmax, 4096px); animation: splash-ken-burns 40s linear forwards; font-family: var(--splash-font) !important; text-align: center; letter-spacing: 1px; border-radius: 3%; transform: translateZ(0); backface-visibility: hidden;
@@ -585,5 +585,29 @@ button:active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 40%); transform: transla
  0%, 100% { border-top-color: var(--bevel-light); }
  50% { border-top-color: var(--sovietwave-industrial-red); }
 }
+/* --- Short viewports (landscape phones) ------------------------------------
+   #splash-screen clips with overflow:hidden, and the menu column is taller
+   than a ~390px-tall landscape phone, so the SYS button was cut off entirely
+   and settings were unreachable from the splash. Let the column scroll and
+   tighten its vertical rhythm so the whole menu fits. */
+@media (height <= 560px) {
+ #splash-screen {
+  overflow: hidden auto;
+  padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+ }
+ /* .splash-control-deck caps the menu at 45vh -- only 175px on a 390px-tall
+    landscape phone, against the ~296px the menu actually needs -- and the panel
+    clips with overflow:hidden, so the SYS button was cut off entirely. Release
+    the viewport-proportional cap when the viewport is this short. */
+ #splash-screen .splash-menu-panel {
+  overflow: visible;
+  min-height: 0;
+  max-height: none;
+  flex-shrink: 0;
+ }
 
+ .splash-start-options { padding: 0.5rem 0.75rem 0.75rem; gap: 0.5rem; }
 
+ .splash-btn-row-secondary .splash-btn,
+ .splash-btn-row-tertiary .splash-btn { height: 44px; min-height: 44px; }
+}

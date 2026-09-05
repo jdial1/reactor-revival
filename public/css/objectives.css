@@ -1919,7 +1919,7 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
  }
 }
 
-.splash-menu-panel { position: relative; display: flex; width: 100%; max-width: 480px; flex-direction: column; padding: 0; margin: 0; border: 8px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 15px; box-shadow: 0 26px 55px rgb(0 0 0 / 45%), inset 2px 2px 5px rgb(255 255 255 / 10%), inset -2px -2px 5px rgb(0 0 0 / 50%), 4px 4px 0 var(--bevel-shadow); overflow: hidden; align-self: center; will-change: transform;
+.splash-menu-panel { position: relative; display: flex; box-sizing: border-box; width: 100%; max-width: 480px; flex-direction: column; padding: 0; margin: 0; border: 8px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); border-radius: 15px; box-shadow: 0 26px 55px rgb(0 0 0 / 45%), inset 2px 2px 5px rgb(255 255 255 / 10%), inset -2px -2px 5px rgb(0 0 0 / 50%), 4px 4px 0 var(--bevel-shadow); overflow: hidden; align-self: center; will-change: transform;
 }
 
 .splash-menu-inner { position: relative; z-index: 2; display: flex; flex-direction: column; flex: 1; background: var(--splash-panel-bg); box-shadow: inset 0 2px 4px rgba(0 0 0 / 30%), inset 0 -2px 6px rgba(0 0 0 / 18%); transition: opacity 0.5s ease; isolation: isolate;
@@ -2022,7 +2022,7 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 .splash-user-count-inline { font-family: var(--splash-font); opacity: 0.8;
 }
 
-.splash-start-options { display: flex; flex-direction: column; gap: 0.75rem; width: 100%; padding: 0.75rem 1rem 1rem;
+.splash-start-options { display: flex; box-sizing: border-box; flex-direction: column; gap: 0.75rem; width: 100%; padding: 0.75rem 1rem 1rem;
 }
 
 .splash-btn-google { display: flex; align-items: center; justify-content: center;
@@ -2363,4 +2363,20 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 
 .chapter-celebration-title { margin: 0; font-size: clamp(1.4rem, 5vw, 2.2rem); color: rgb(255 255 255);
 }
+/* --- Quick-start on short viewports ----------------------------------------
+   The onboarding card is taller than a landscape phone, so its primary
+   "INITIATE REACTOR" button sat below the fold with no visible affordance --
+   the overlay scrolls, but nothing tells you to. Cap the card to the viewport
+   and let only its body scroll, which keeps the header and the commit buttons
+   on screen. */
+@media (height <= 560px) {
+ .quick-start-screen {
+  max-height: calc(100dvh - 1rem);
+  margin: 0.5rem auto;
+ }
 
+ .quick-start-screen .bios-content {
+  overflow-y: auto;
+  min-height: 0;
+ }
+}

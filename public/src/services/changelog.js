@@ -2,7 +2,7 @@ import { bundledGameData } from "../generated/bundledStaticData.js";
 import { logger } from "../core/logger.js";
 import { ChangelogSchema } from "../schema/index.js";
 
-export { ChangelogEntrySchema, ChangelogSchema } from "../schema/index.js";
+export { ChangelogSchema } from "../schema/index.js";
 
 let _changelogCache = null;
 

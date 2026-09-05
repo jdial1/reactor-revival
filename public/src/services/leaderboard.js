@@ -78,7 +78,7 @@ export const getLocalBestRun = (sortBy = "power") => {
   return cache[sortBy] ?? null;
 };
 
-export class LeaderboardService {
+class LeaderboardService {
   constructor() {
     this.initialized = false;
     this.initPromise = null;

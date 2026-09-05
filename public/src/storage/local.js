@@ -1,5 +1,5 @@
 import { getDecimal } from "../simUtils.js";
-import { superjsonStringify, superjsonParse } from "../core/decimal-proxy.js";
+import { superjsonStringify, superjsonParse } from "../core/save-wire.js";
 
 export const STORAGE_KEYS = Object.freeze({
   GAME_SAVE: "reactorGameSave",

@@ -15,7 +15,7 @@ function serializeOutboxRows(rows) {
   }));
 }
 
-export async function outboxReadAll() {
+async function outboxReadAll() {
   return (await get(OUTBOX_KEY)) || [];
 }
 

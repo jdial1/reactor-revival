@@ -1,3 +1,4 @@
+import { isTestEnv } from "../simUtils.js";
 import { recordSimEvent } from "../domain/sim-events.js";
 import { bumpGridPartsRevision } from "./bridge-grid-sync.js";
 import { requireActiveBridge } from "./active.js";
@@ -26,10 +27,7 @@ function clearMeltdownRecoveryAfterPlace(game) {
     game.onToggleStateChange?.("pause", false);
     return;
   }
-  const isTestEnv = (typeof process !== "undefined" && process.env && process.env.NODE_ENV === "test")
-    || (typeof global !== "undefined" && global.__VITEST__)
-    || (typeof window !== "undefined" && window.__VITEST__);
-  if (isTestEnv) return;
+  if (isTestEnv()) return;
   game.engine?.start?.();
 }
 
@@ -83,7 +81,7 @@ function afterSessionCommand(game, bridge, type, payload, ok, result) {
 
 export function shouldDrainIntentsImmediately(game) {
   if (!game) return true;
-  if (typeof process !== "undefined" && process.env?.VITEST) return true;
+  if (isTestEnv()) return true;
   if (game.paused) return true;
   if (!game.engine?.running) return true;
   return false;

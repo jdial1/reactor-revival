@@ -25,12 +25,12 @@ function trackAbortController(ui, controller) {
   return controller.signal;
 }
 
-export function clearPageReactor(ui) {
+function clearPageReactor(ui) {
   const reactor = getPageReactor(ui);
   if (reactor) reactor.innerHTML = "";
 }
 
-export function setPageGridContainer(ui, container) {
+function setPageGridContainer(ui, container) {
   if (ui.gridCanvasRenderer) ui.gridCanvasRenderer.setContainer(container);
 }
 
@@ -113,7 +113,7 @@ function setHubCollapsed(ui, key, collapsed, { accordionWrapper = null } = {}) {
   }
 }
 
-export function setupUpgradeHubCollapsibleSections(ui) {
+function setupUpgradeHubCollapsibleSections(ui) {
   if (ui._upgradeHubCollapsibleSetup) return;
   ui._upgradeHubCollapsibleSetup = true;
   mountHubCollapsedProjection(ui);
@@ -145,7 +145,7 @@ export function setupUpgradeHubCollapsibleSections(ui) {
   bind("experimental_upgrades_section");
 }
 
-export function setupAboutScrollHint(ui) {
+function setupAboutScrollHint(ui) {
   const section = document.getElementById("about_section");
   const hint = document.getElementById("about_scroll_hint");
   if (!section || !hint) return;
@@ -234,7 +234,7 @@ export function setupResearchCollapsibleSections(ui) {
   }
 }
 
-export function setupVersionDisplayForPage(ui) {
+function setupVersionDisplayForPage(ui) {
   if (!ui?.uiState || ui._versionDisplayMounted) return;
   const aboutEl = document.getElementById("about_version");
   const appEl = document.getElementById("app_version");

@@ -27,7 +27,7 @@ import {
 const HAZARD_FILL_PERCENT = 95;
 const CRITICAL_FILL_PERCENT = 80;
 
-export function formatSimulationTickLine(game) {
+function formatSimulationTickLine(game) {
   if (!game) return "—";
   const period = (game.loop_wait || 1000) / 1000;
   const periodStr = period >= 10 ? period.toFixed(1) : period.toFixed(2);
@@ -139,7 +139,7 @@ function buildMobilePassiveBarTemplate(state) {
   });
 }
 
-export function mountMobilePassiveBar(ui) {
+function mountMobilePassiveBar(ui) {
   if (window.innerWidth > MOBILE_BREAKPOINT_PX || ui._mobilePassiveBarMounted || !ui.uiState) return;
 
   const passiveBar = getUiElement(ui, "mobile_passive_top_bar");

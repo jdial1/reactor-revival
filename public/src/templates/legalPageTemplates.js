@@ -16,7 +16,7 @@ const MONTH_NAMES = [
   "December",
 ];
 
-export function formatPrivacyPolicyDateFromVersion(version) {
+function formatPrivacyPolicyDateFromVersion(version) {
   if (!version) return null;
   const parts = String(version).split("-")[0].split("_");
   if (parts.length !== 3) return null;

@@ -216,6 +216,9 @@ export default [
         }, {
           group: ["../utils.js", "../../utils.js", "@app/utils.js"],
           message: "Import from domain-specific modules (simUtils.js, storage/, constants/) instead of the utils.js barrel.",
+        }, {
+          group: ["valtio", "valtio/*", "lit-html", "lit-html/*", "**/dom/lit.js"],
+          message: "Law 3: the domain layer is a pure calculator — no store or view imports.",
         }],
       }],
     },
@@ -284,6 +287,23 @@ export default [
       }, {
         selector: "CallExpression[callee.object.property.name='classList'][callee.property.name=/^(add|remove|toggle|replace)$/]",
         message: "Step 7d: classList mutations only in mount/boot allowlist — use Lit classMap."
+      }]
+    }
+  },
+  {
+    // Law 2.1: heat visuals are owned by the Lit shell. These helpers were the
+    // imperative dual-path and must not come back (was check-declarative-dom.js).
+    files: ["public/src/**/*.js"],
+    rules: {
+      "no-restricted-syntax": ["error", {
+        selector: "Identifier[name='syncReactorHeatVisualDom']",
+        message: "Deleted with the imperative heat dual-path — the Lit shell owns heat visuals."
+      }, {
+        selector: "Identifier[name='_applyHeatFromRatio']",
+        message: "Deleted with the imperative heat dual-path — the Lit shell owns heat visuals."
+      }, {
+        selector: "Identifier[name='clearHeatWarningClasses']",
+        message: "Deleted with the imperative heat dual-path — the Lit shell owns heat visuals."
       }]
     }
   }

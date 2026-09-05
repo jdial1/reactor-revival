@@ -1,3 +1,4 @@
+import { ref } from "valtio/vanilla";
 import { tileKey, resolveTileFromKey } from "../../store.js";
 import { getPageReactor } from "./page-dom.js";
 import { handleGridInteraction } from "../grid/grid-intent-handler.js";
@@ -201,7 +202,7 @@ export class InputHandler {
     eventTarget.addEventListener("pointerdown", pointerDownHandler, { signal });
     eventTarget.addEventListener("pointermove", pointerMoveHandler, { signal });
     eventTarget.addEventListener("pointerleave", pointerLeaveHandler, { signal });
-    this._reactorAbortController = ac;
+    this._reactorAbortController = ref(ac);
     this._registerInputUnmount(this.ui);
   }
 
@@ -257,7 +258,7 @@ export class InputHandler {
     reactorElement.addEventListener("pointerleave", () => {
       this.ui.gridInteractionUI.clearSegmentHighlight();
     }, { signal });
-    this._segmentHighlightAbortController = ac;
+    this._segmentHighlightAbortController = ref(ac);
     this._registerInputUnmount(this.ui);
   }
 

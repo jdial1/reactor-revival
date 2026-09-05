@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-export { RESOLUTIONS } from "../scripts/ui-audit/ui-screenshot-config.js";
+export { RESOLUTIONS } from "./viewports.js";
 
 export const BASE_URL = process.env.BASE_URL || "http://localhost:8080";
 export const E2E_URL = `${BASE_URL.replace(/\/$/, "")}/?e2e=1`;
@@ -386,6 +386,29 @@ export async function navigateToPage(page, pageId) {
   if (current === pageId) return;
 
   await clickVisiblePageNav(page, pageId);
+  await page.waitForFunction(
+    (id) => window.__reactorAudit?.game?.router?.currentPageId === id,
+    pageId,
+    { timeout: 15000 }
+  );
+}
+
+// Route straight through the router instead of the nav chrome. Some pages have no
+// visible nav button at small viewports, so the UI sweeps use this to reach every
+// page regardless of the affordances a given viewport exposes.
+export async function gotoPageViaRouter(page, pageId) {
+  const current = await page.evaluate(() => window.__reactorAudit?.game?.router?.currentPageId);
+  if (current === pageId) return;
+
+  const routed = await page.evaluate(async (id) => {
+    const router = window.__reactorAudit?.game?.router;
+    if (!router?.loadPage) return false;
+    await router.loadPage(id, true);
+    return router.currentPageId === id;
+  }, pageId);
+
+  if (!routed) await clickVisiblePageNav(page, pageId);
+
   await page.waitForFunction(
     (id) => window.__reactorAudit?.game?.router?.currentPageId === id,
     pageId,

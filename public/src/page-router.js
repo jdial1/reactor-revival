@@ -17,7 +17,7 @@ import { dispatchToggleIntent } from "./components/grid/ui-intents.js";
 import { isShopOverlayPage, isSimVisiblePage, dedupeReactorStatsDom } from "./components/shell/page-dom.js";
 import { populatePrivacyPolicyDateElement, fallbackPrivacyPolicyDate } from "./templates/legalPageTemplates.js";
 
-export const PAGE_STATES = {
+const PAGE_STATES = {
   reactor_section: { template: pageSectionTemplates.reactor_section },
   upgrades_section: { template: pageSectionTemplates.upgrades_section },
   experimental_upgrades_section: {

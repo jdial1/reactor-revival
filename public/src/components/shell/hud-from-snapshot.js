@@ -18,7 +18,7 @@ function buffContextFromGame(game) {
   };
 }
 
-export function computeActiveBuffs(view) {
+function computeActiveBuffs(view) {
   const buffs = [];
   const manualOverride = (view.manual_override_mult || 0) > 0 && Date.now() < (view.override_end_time || 0);
   if (manualOverride) {

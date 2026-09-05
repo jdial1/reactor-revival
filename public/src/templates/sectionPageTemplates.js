@@ -26,7 +26,7 @@ function researchSectionHeaderBlock({ title, blurb, expanded = false }) {
   `;
 }
 
-export function reactorSectionTemplate() {
+function reactorSectionTemplate() {
   return html`
 <section id="reactor_section" class="page">
   <div id="reactor_background"></div>
@@ -141,7 +141,7 @@ export function reactorSectionTemplate() {
   `;
 }
 
-export function upgradesSectionTemplate() {
+function upgradesSectionTemplate() {
   return html`
 <section id="upgrades_section" class="page">
   <div id="upgrades_no_affordable_banner" class="affordability-banner hidden">
@@ -175,7 +175,7 @@ export function upgradesSectionTemplate() {
   `;
 }
 
-export function researchSectionTemplate() {
+function researchSectionTemplate() {
   return html`
 <section id="experimental_upgrades_section" class="page">
   <article id="doctrine_tree_viewer" class="doctrine-tree-viewer research-collapsible section-collapsed hidden" data-hub-key="doctrine_tree_viewer">
@@ -234,7 +234,7 @@ export function researchSectionTemplate() {
   `;
 }
 
-export function soundboardSectionTemplate() {
+function soundboardSectionTemplate() {
   return html`
 <section id="soundboard_section" class="page soundboard-page">
   <div class="pixel-panel is-inset">
@@ -297,7 +297,7 @@ export function soundboardSectionTemplate() {
   `;
 }
 
-export function aboutSectionTemplate() {
+function aboutSectionTemplate() {
   return html`
 <section id="about_section" class="page">
   <div class="about-content">
@@ -392,7 +392,7 @@ export function leaderboardControlsTemplate({ uiState, onSortChange }) {
   `;
 }
 
-export function leaderboardSectionTemplate() {
+function leaderboardSectionTemplate() {
   return html`
 <section id="leaderboard_section" class="page">
   <div class="pixel-panel is-inset">
@@ -422,7 +422,7 @@ export function leaderboardSectionTemplate() {
   `;
 }
 
-export function privacyPolicySectionTemplate() {
+function privacyPolicySectionTemplate() {
   return html`
 <section id="privacy_policy_section" class="page">
   ${privacyPolicyPageContainerTemplate(true)}
@@ -430,7 +430,7 @@ export function privacyPolicySectionTemplate() {
   `;
 }
 
-export function termsOfServiceSectionTemplate() {
+function termsOfServiceSectionTemplate() {
   return html`
 <section id="terms_of_service_section" class="page">
   ${termsOfServicePageContainerTemplate(true)}

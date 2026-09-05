@@ -417,4 +417,39 @@
  100% { opacity: 0; transform: translateX(calc(-50% + var(--steam-offset-x, 0px))) translateY(-80px) scale(1.5);
  }
 }
+/* --- Short viewports (landscape phones) ------------------------------------
+   The mobile chrome is a stack of fixed-height bars: passive top bar, build
+   row, control deck, parts dock and bottom nav. Sized for a ~844px-tall
+   portrait phone they total ~333px, which on a 390px-tall landscape phone left
+   the reactor grid about 100px tall -- the core of the game was effectively
+   gone. Tighten each bar and retire the docked parts strip; parts stay
+   reachable through the Build FAB, which opens the full-screen panel. */
+@media (width <= 900px) and (height <= 540px) {
+ :root {
+  --mobile-passive-top-height: 34px;
+  --bottom-nav-height-mobile: 42px;
+ }
 
+ #wrapper.page-reactor { --mobile-parts-dock-height: 0px; }
+ /* Docked "select a module" strip is pure overhead at this height. */
+ #wrapper.page-reactor:not(.parts-panel-open) #parts_section { display: none !important; }
+
+ #reactor_control_deck { height: calc(78px + env(safe-area-inset-bottom)); }
+ /* Keep the quick-select row sitting directly on top of the shorter deck. */
+ #build_above_deck_row {
+  height: 48px;
+  bottom: calc(var(--bottom-nav-height, 40px) + var(--mobile-parts-dock-height, 0px) + 80px + env(safe-area-inset-bottom));
+ }
+
+ #build_above_deck_row .quick-select-slot,
+ #build_above_deck_row .control-deck-fab { max-height: 48px; }
+ /* Wide-and-short: stacked icon/value/denominator cannot fit a 40px-tall
+    readout, so the denominator was being clipped. Lay the readout out
+    horizontally instead -- it suits the letterbox shape and keeps every
+    figure legible. */
+ .control-deck-content { flex-direction: row; gap: 6px; }
+ .control-deck-icon { width: 18px; height: 18px; }
+ .control-deck-value { font-size: 0.8rem; }
+ .control-deck-denom { font-size: 0.55rem; }
+ .control-deck-rate { top: 2px; right: 4px; font-size: 0.6rem; }
+}

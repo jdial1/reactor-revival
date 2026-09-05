@@ -103,7 +103,6 @@ function formatDurationParts(ms, useHtml = false) {
 
 export const numFormat = (n, p, f) => formatNumber(n, { places: p, fixedDecimals: f });
 
-export const formatStatNum = (n) => formatNumber(n, { places: 1 }) || "0";
 export const formatPrestigeNumber = (n) => formatNumber(n, { places: 2, infinitySymbol: "∞" });
 export function formatTime(ms) { return formatDurationParts(ms, true); }
 export function formatDuration(ms, useHtml = false) { return formatDurationParts(ms, useHtml); }

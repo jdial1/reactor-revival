@@ -1,4 +1,4 @@
-export { COLORS, readThemeColor } from "../components/shell/theme-colors.js";
+export { COLORS } from "../components/shell/theme-colors.js";
 
 export const HEAT_MAP = {
   blobRadiusRatio: 0.42,

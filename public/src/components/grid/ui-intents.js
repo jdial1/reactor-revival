@@ -21,7 +21,7 @@ export function dispatchRebootIntent(game, { keepEp = false } = {}) {
   });
 }
 
-export function dispatchUiIntent(game, intent, e) {
+function dispatchUiIntent(game, intent, e) {
   if (!game?.state) return;
   const btn = e?.currentTarget;
   const sourceId = btn?.id;
@@ -49,7 +49,7 @@ function createIntentDelegationHandler(game, root) {
   };
 }
 
-export function bindIntentDelegation(game, root) {
+function bindIntentDelegation(game, root) {
   if (!root || root._intentDelegationBound) return;
   const handler = createIntentDelegationHandler(game, root);
   root.addEventListener("click", handler);

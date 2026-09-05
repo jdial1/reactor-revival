@@ -1,13 +1,11 @@
+import { isTestEnv } from "../simUtils.js";
 import { get, set, del, clear } from "./idb-keyval.js";
 import { fromError } from "../core/zod-error.js";
 import { logger } from "../core/logger.js";
 import { StorageUtils, isStorageAvailable } from "./local.js";
-import { superjsonStringify, superjsonParse } from "../core/decimal-proxy.js";
+import { superjsonStringify, superjsonParse } from "../core/save-wire.js";
 
-const isTestEnvStorage = () =>
-  (typeof process !== "undefined" && process.env?.NODE_ENV === "test") ||
-  (typeof global !== "undefined" && global.__VITEST__) ||
-  (typeof window !== "undefined" && window.__VITEST__);
+const isTestEnvStorage = isTestEnv;
 
 function safeDeserialize(raw) {
   if (typeof raw !== "string") return raw;

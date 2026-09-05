@@ -1,6 +1,6 @@
 const PCT_BASE = 100;
 
-export const PART_TOOLTIP_BONUS_RULES = Object.freeze({
+const PART_TOOLTIP_BONUS_RULES = Object.freeze({
   vent: Object.freeze([
     Object.freeze({
       upgradeId: "active_venting",

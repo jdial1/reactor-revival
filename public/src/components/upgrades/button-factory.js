@@ -9,7 +9,6 @@ import {
   partDetailsBlockTemplate,
   partStatIconTemplate,
   partStatTemplate,
-  closeButtonTemplate,
 } from "../../templates/buttonFactoryTemplates.js";
 
 function withTemplateTarget(e, selector, onClick) {
@@ -91,18 +90,6 @@ export const BuyButton = (upgrade, onClick) => {
 export const TooltipCloseButton = (onClick) => html`
   <span @click=${(e) => withTemplateTarget(e, "#tooltip_close_btn", onClick)}>
     <button id="tooltip_close_btn" title="Close" aria-label="Close tooltip">×</button>
-  </span>
-`;
-
-export const HelpButton = (onClick, title = "Click for information") => html`
-  <span @click=${(e) => withTemplateTarget(e, "button.help-btn", onClick)}>
-    <button class="help-btn" title=${title} aria-label=${title}>?</button>
-  </span>
-`;
-
-export const InstallButton = (onClick) => html`
-  <span @click=${(e) => withTemplateTarget(e, "button.contrast", onClick)}>
-    <button class="contrast">Install App</button>
   </span>
 `;
 
@@ -232,37 +219,3 @@ export const PartButton = (part, onClick, opts = {}) => {
     bonusLines,
   });
 };
-
-export const CloseButton = (modal, onClick) => closeButtonTemplate({ onClick });
-
-export function createNewGameButton(onClick) {
-  return renderToNode(StartButton(false, onClick));
-}
-
-export function createTooltipCloseButton(onClick) {
-  return renderToNode(TooltipCloseButton(onClick));
-}
-
-export function createHelpButton(onClick, title = "Click for information") {
-  return renderToNode(HelpButton(onClick, title));
-}
-
-export function createUpgradeButton(upgrade, doctrineSource) {
-  return renderToNode(UpgradeCard(upgrade, doctrineSource, () => {}));
-}
-
-export function createPartButton(part) {
-  return renderToNode(PartButton(part, () => {}));
-}
-
-export function createBuyButton(upgrade, onClick) {
-  return renderToNode(BuyButton(upgrade, onClick));
-}
-
-export function createInstallButton(onClick) {
-  return renderToNode(InstallButton(onClick));
-}
-
-export function createCloseButton(modal) {
-  return renderToNode(CloseButton(modal, () => modal.remove()));
-}

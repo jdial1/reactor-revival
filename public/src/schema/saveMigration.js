@@ -1,5 +1,5 @@
 export const SAVE_FORMAT_VERSION_LATEST = 3;
-export const SAVE_FORMAT_VERSION_INITIAL = 1;
+const SAVE_FORMAT_VERSION_INITIAL = 1;
 
 const LEGACY_TECH_TREE_IDS = new Set(["architect", "physicist", "engineer"]);
 
@@ -75,7 +75,7 @@ export function encodeTilesCompact(tileList, rows, cols, idToIndex) {
   };
 }
 
-export function decodeTilesCompact(tiles_compact, part_table) {
+function decodeTilesCompact(tiles_compact, part_table) {
   if (!tiles_compact || tiles_compact.encoding !== "u16_f32f32") return [];
   const { rows, cols, ids_b64, ticks_b64, heat_b64 } = tiles_compact;
   if (!rows || !cols || !ids_b64 || !ticks_b64 || !heat_b64 || !part_table?.length) return [];

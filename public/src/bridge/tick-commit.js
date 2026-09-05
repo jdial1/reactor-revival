@@ -1,3 +1,4 @@
+import { isTestEnv, isDevRuntime } from "../simUtils.js";
 import { resolveCoreSnapshot } from "./core-state-projection.js";
 
 function clonePlain(value) {
@@ -30,9 +31,8 @@ function deepFreeze(obj) {
 }
 
 function shouldFreezeCommit() {
-  if (typeof process !== "undefined" && process.env?.VITEST) return true;
-  if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") return false;
-  return true;
+  // Deep-freezing every commit is a debugging aid, not a production behaviour.
+  return isDevRuntime();
 }
 
 function freezeCommit(commit) {
@@ -76,7 +76,7 @@ export function buildTickCommit(session, tickResult, tickMeta = {}, eventsOverri
 export function assertNotTickInFlight(bridge, label) {
   if (!bridge?._tickInFlight) return;
   if (bridge.game?._isRestoringSave) return;
-  if (typeof process !== "undefined" && process.env?.VITEST && bridge.game?._hostEconomyWrite) return;
-  if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") return;
+  if (isTestEnv() && bridge.game?._hostEconomyWrite) return;
+  if (!isDevRuntime()) return;
   throw new Error(`Host session write during tick commit: ${label}`);
 }

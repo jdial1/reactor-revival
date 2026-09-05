@@ -1,5 +1,5 @@
 import { EngineStatus } from "../schema/stateSchemas.js";
-import { toNumber, isTestEnv, BASE_LOOP_WAIT_MS } from "../simUtils.js";
+import { toNumber, isTestEnv, isDevRuntime, BASE_LOOP_WAIT_MS } from "../simUtils.js";
 import { logger } from "../core/logger.js";
 import {
   MAX_TEST_FRAMES,
@@ -20,10 +20,7 @@ import { getActiveBridge } from "../bridge/active.js";
 import { syncGridToGame } from "../bridge/bridge-grid-sync.js";
 import { runSubsystemHook } from "../core/subsystem-registry.js";
 
-const DEBUG_PERFORMANCE =
-  (typeof process !== "undefined" && process.env?.NODE_ENV === "test") ||
-  (typeof globalThis !== "undefined" && globalThis.location?.hostname === "localhost") ||
-  false;
+const DEBUG_PERFORMANCE = isDevRuntime();
 
 const perfNow = () =>
   typeof performance !== "undefined" && typeof performance.now === "function"

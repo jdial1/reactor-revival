@@ -1,6 +1,6 @@
 import { requireActiveBridge } from "../bridge/active.js";
 
-export function getPreviousTierSpec(part, partset) {
+function getPreviousTierSpec(part, partset) {
   if (!part) return null;
   if (part.level && part.level > 1) {
     return { type: part.type, level: part.level - 1, category: part.category };
@@ -16,20 +16,20 @@ export function getPreviousTierSpec(part, partset) {
   return { type: prevType, level: prevMaxLevel, category: part.category };
 }
 
-export function isFirstInChainSpec(spec, partset) {
+function isFirstInChainSpec(spec, partset) {
   if (!spec) return false;
   const idx = partset?.typeOrderIndex?.get(`${spec.category}:${spec.type}`);
   return idx === 0 && spec.level === 1;
 }
 
-export function isSpecUnlocked(spec, partset, getPlacedCount) {
+function isSpecUnlocked(spec, partset, getPlacedCount) {
   if (!spec) return false;
   const prev = getPreviousTierSpec({ type: spec.type, level: spec.level, category: spec.category }, partset);
   if (!prev) return true;
   return getPlacedCount(prev.type, prev.level) >= 10;
 }
 
-export function shouldShowPart(part, partset, getPlacedCount) {
+function shouldShowPart(part, partset, getPlacedCount) {
   if (!part) return false;
   if (part.category === "valve") return true;
   const prevSpec = getPreviousTierSpec(part, partset);
@@ -37,7 +37,7 @@ export function shouldShowPart(part, partset, getPlacedCount) {
   return isSpecUnlocked(prevSpec, partset, getPlacedCount);
 }
 
-export function isPartUnlocked(part, ctx) {
+function isPartUnlocked(part, ctx) {
   if (ctx.partset?.isPartDoctrineLocked(part)) return false;
   if (!part || part.category === "valve") {
     ctx.logger?.debug(`[UNLOCK] Part ${part?.id || "null"}: Valve or null, unlocked by default.`);

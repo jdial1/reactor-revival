@@ -47,6 +47,17 @@ export function isTestEnv() {
     || (typeof window !== "undefined" && window.__VITEST__);
 }
 
+// public/src ships to the browser unbundled (index.html loads src/app.js as a
+// native module), so `process` does not exist at runtime in production and no
+// build step substitutes it. Any guard written as `process.env.NODE_ENV ===
+// "production"` is therefore unreachable in the browser -- use this instead to
+// decide whether to run development-only invariants and diagnostics.
+export function isDevRuntime() {
+  if (isTestEnv()) return true;
+  const host = typeof globalThis !== "undefined" ? globalThis.location?.hostname : undefined;
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+}
+
 export const DEFAULT_OVERFLOW_RATIO = 1;
 export const DEFAULT_POWER_MULTIPLIER = 1;
 export const DEFAULT_SELL_PRICE_MULTIPLIER = 1;

@@ -196,7 +196,7 @@ function buildPartsPanelLayoutTemplate(ui, uiState) {
   });
 }
 
-export function setupPartsTabs(ui) {
+function setupPartsTabs(ui) {
   if (ui._partsPanelReactiveMounted) {
     const root = getUiElement(ui, "parts_panel_reactive_root");
     if (root?.isConnected) return;
@@ -308,7 +308,7 @@ export function setupMacroToolbar(ui) {
   }
 }
 
-export function updateMacroToolbar(ui) {
+function updateMacroToolbar(ui) {
   setupMacroToolbar(ui);
 }
 

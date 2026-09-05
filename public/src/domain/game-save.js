@@ -200,7 +200,7 @@ const SYNC_HYDRATORS = [applyCoreGameState, applySessionMetadata, applyReactorSt
 const ASYNC_HYDRATORS = [applyUpgrades, restoreTiles];
 const POST_ASYNC_HYDRATORS = [applyObjectives, applyAchievements, applyUIState];
 
-export async function applySaveState(game, savedData) {
+async function applySaveState(game, savedData) {
   if (!savedData || typeof savedData !== "object") {
     throw new Error("Save corrupted: invalid save data structure");
   }
@@ -303,7 +303,7 @@ export const createGameSaveManager = (game, getCompactLayoutFn = null) => {
   );
 };
 
-export class GameSaveManager {
+class GameSaveManager {
   constructor(getPersistenceContext, getSaveContext) {
     this.getPersistenceContext = getPersistenceContext;
     this.getSaveContext = getSaveContext;

@@ -82,8 +82,6 @@ export class BaseComponent {
   }
 }
 
-export const performance = (typeof window !== 'undefined' && window.performance) || { now: () => new Date().getTime() };
-
 export function getBasePath() {
   if (typeof window === 'undefined' || !window.location || !window.location.hostname) return '';
   try {

@@ -9,7 +9,7 @@ import {
 import { BalanceConfigSchema } from "./balanceConfigSchema.js";
 import { migrateSave } from "./saveMigration.js";
 
-export const TechTreeDoctrineSchema = z
+const TechTreeDoctrineSchema = z
   .object({
     id: z.string(),
     title: z.string(),
@@ -27,7 +27,7 @@ export const TechTreeDoctrineSchema = z
 
 export const TechTreeSchema = z.array(TechTreeDoctrineSchema);
 
-export const ObjectiveDefinitionSchema = z
+const ObjectiveDefinitionSchema = z
   .object({
     title: z.string(),
     flavor_text: z.string().optional(),
@@ -40,7 +40,7 @@ export const ObjectiveDefinitionSchema = z
 
 export const ObjectiveListSchema = z.array(ObjectiveDefinitionSchema);
 
-export const AchievementDefinitionSchema = z
+const AchievementDefinitionSchema = z
   .object({
     id: z.string(),
     title: z.string(),
@@ -72,7 +72,7 @@ export const DifficultyPresetSchema = z.object({
 const HelpTextSectionSchema = z.record(z.string(), z.union([z.string(), z.object({ title: z.string(), content: z.string() }).passthrough()]));
 export const HelpTextSchema = z.record(z.string(), HelpTextSectionSchema);
 
-export const ChangelogEntrySchema = z.object({
+const ChangelogEntrySchema = z.object({
   version: z.string(),
   date: z.string().optional(),
   bullets: z.array(z.string()).min(1),
@@ -153,7 +153,7 @@ export const UpgradeDefinitionSchema = z.object({
   part_level: z.number().int().min(1).optional(),
 }).strict();
 
-export const TileSchema = z.object({
+const TileSchema = z.object({
   row: z.number().int().min(0),
   col: z.number().int().min(0),
   partId: z.string(),

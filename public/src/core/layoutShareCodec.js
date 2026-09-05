@@ -79,7 +79,7 @@ export function encodeLayoutShare(layout, partset) {
   return `${SHARE_PREFIX}${bytesToBase64Url(bytes)}`;
 }
 
-export function decodeLayoutShare(code, partset) {
+function decodeLayoutShare(code, partset) {
   if (!isLayoutShareCode(code) || !partset) return null;
   const payload = code.slice(SHARE_PREFIX.length);
   let bytes;

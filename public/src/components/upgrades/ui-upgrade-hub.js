@@ -114,7 +114,7 @@ function renderGroupedUpgradeCards(upgradeset, byContainer) {
   clearEmptyUpgradeContainers(byContainer);
 }
 
-export function refreshUpgradeCards(upgradeset) {
+function refreshUpgradeCards(upgradeset) {
   if (typeof document === "undefined" || !upgradeset) return;
   syncSelectedUpgradeVisibility(upgradeset);
   const filtered = filterVisibleUpgrades(upgradeset.upgradesArray, upgradeset);
@@ -294,7 +294,7 @@ function buildUpgradeDetailPanelData(upgrade, upgradeset) {
   };
 }
 
-export function mountUpgradeDetailPanel(ui, panelId) {
+function mountUpgradeDetailPanel(ui, panelId) {
   const panel = getUiElement(ui, panelId);
   if (!panel?.isConnected || !ui?.uiState) return null;
   const isResearchPanel = panelId === "research_detail_panel";
@@ -420,7 +420,7 @@ export function hideUpgradeDebugPanel(ui) {
   }
 }
 
-export function updateUpgradeDebugVariables(ui) {
+function updateUpgradeDebugVariables(ui) {
   const debugVariables = getUiElement(ui, "debug_variables");
   if (!ui.game || !debugVariables) return;
   const gameVars = collectUpgradeDebugGameVariables(ui);
@@ -438,7 +438,7 @@ export function updateUpgradeDebugVariables(ui) {
   render(template, debugVariables);
 }
 
-export function collectUpgradeDebugGameVariables(ui) {
+function collectUpgradeDebugGameVariables(ui) {
   const vars = {
     "Game (game.js)": {},
     "Reactor (reactor.js)": {},

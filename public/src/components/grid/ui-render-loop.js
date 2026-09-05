@@ -1,7 +1,7 @@
 import { updateLeaderboardIcon } from "../shell/ui-nav.js";
 import { getGridCanvasRenderer } from "./ui-grid.js";
 
-export function getUiConfigDisplayValue(game, configKey) {
+function getUiConfigDisplayValue(game, configKey) {
   if (configKey === "exotic_particles") return game?.exoticParticleManager?.exotic_particles;
   return game?.state?.[configKey];
 }

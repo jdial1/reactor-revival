@@ -265,7 +265,7 @@ async function launchGame(pageRouter, ui, game) {
   }
 }
 
-export async function startNewGameFlow(game, pageRouter, ui, splashManager) {
+async function startNewGameFlow(game, pageRouter, ui, splashManager) {
   try {
     if (splashManager) splashManager.hide();
     await delay(SPLASH_HIDE_DELAY_MS);
@@ -408,7 +408,7 @@ export async function handleUserSession(ctx) {
   }
 }
 
-export async function clearAllSaveDataForSplashReturn(game) {
+async function clearAllSaveDataForSplashReturn(game) {
   await StorageAdapter.remove(STORAGE_KEYS.GAME_SAVE);
   await StorageAdapter.remove(AUTOSAVE_SLOT_KEY);
   for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {

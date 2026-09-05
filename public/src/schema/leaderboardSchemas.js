@@ -1,6 +1,6 @@
 import { z } from "../../lib/zod.js";
 
-export const LeaderboardEntrySchema = z.object({
+const LeaderboardEntrySchema = z.object({
   user_id: z.string(),
   run_id: z.string().optional(),
   heat: z.number().optional().default(0),

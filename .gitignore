@@ -26,8 +26,6 @@ public/reactor_leaderboard.sqlite3
 *.pyc
 *.py
 scripts/playtest_failure.png
-screenshots/
-reference/
 /test-results
 /playwright-report
 /.cursor
