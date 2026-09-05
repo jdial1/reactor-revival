@@ -237,6 +237,35 @@ html[data-reduced-motion] #app_root { animation: none !important;
 .quick-start-line,
 .quick-start-header { font-family: var(--ui-terminal-font) !important;
 }
+/* The module panel only renders while a part is selected; this corner control
+   clears the selection and collapses the panel again, reclaiming its height. */
+.parts-module-info-panel,
+#parts_module_info.upgrade-hub-detail-panel { position: relative; }
+
+.parts-module-info-close {
+ position: absolute;
+ z-index: 3;
+ top: 2px;
+ right: 2px;
+ display: flex;
+ width: 30px;
+ height: 30px;
+ align-items: center;
+ justify-content: center;
+ padding: 0;
+ border: 2px solid;
+ border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+ background: var(--panel-bg);
+ color: var(--sovietwave-paper);
+ cursor: pointer;
+ font-family: var(--ui-terminal-font);
+ font-size: 0.8rem;
+ line-height: 1;
+}
+
+.parts-module-info-close:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); }
+/* Keep the readout clear of the button. */
+#parts_module_info > :not(.parts-module-info-close) { padding-right: 34px; }
 
 .parts-module-info-empty,
 .parts-module-info-panel { font-family: var(--ui-terminal-font);

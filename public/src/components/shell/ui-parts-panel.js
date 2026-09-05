@@ -152,16 +152,14 @@ function buildPartDetailPanelData(part, ui) {
   };
 }
 
+// Only called with a selected part: the panel itself is gated on selection.
 function buildPartsModuleInfoContent(ui, selPart, uiState) {
   const isMobile = uiState?.is_mobile_viewport ?? (typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX);
   if (isMobile) {
-    if (!selPart) return upgradeHubDetailEmptyTemplate("— Select a module —");
     const data = buildPartDetailPanelData(selPart, ui);
     return data ? upgradeHubDetailPanelTemplate(data) : upgradeHubDetailEmptyTemplate("— Select a module —");
   }
-  return selPart
-    ? partsModuleInfoCardTemplate(selPart, ui.game)
-    : html`<span class="parts-module-info-empty">— Select a module —</span>`;
+  return partsModuleInfoCardTemplate(selPart, ui.game);
 }
 
 function buildPartsPanelLayoutTemplate(ui, uiState) {
@@ -181,7 +179,7 @@ function buildPartsPanelLayoutTemplate(ui, uiState) {
   const selectedPartId = uiState?.interaction?.selectedPartId ?? null;
   const selPart = selectedPartId && partset ? partset.getPartById(selectedPartId) : null;
   const isMobile = uiState?.is_mobile_viewport ?? (typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX);
-  const moduleInfoContent = buildPartsModuleInfoContent(ui, selPart, uiState);
+  const moduleInfoContent = selPart ? buildPartsModuleInfoContent(ui, selPart, uiState) : null;
 
   return partsPanelLayoutTemplate({
     powerActive,
@@ -193,6 +191,8 @@ function buildPartsPanelLayoutTemplate(ui, uiState) {
     tabContent,
     moduleInfoContent,
     moduleInfoPanelClass: isMobile ? "upgrade-hub-detail-panel" : "parts-module-info-panel",
+    hasSelection: !!selPart,
+    onDeselect: () => ui.stateManager?.setClickedPart?.(null),
   });
 }
 

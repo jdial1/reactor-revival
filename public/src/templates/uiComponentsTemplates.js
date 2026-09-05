@@ -191,6 +191,8 @@ export function partsPanelLayoutTemplate({
   tabContent,
   moduleInfoContent,
   moduleInfoPanelClass = "parts-module-info-panel",
+  hasSelection = false,
+  onDeselect,
 }) {
   return html`
     <div class="parts_header">
@@ -227,9 +229,22 @@ export function partsPanelLayoutTemplate({
     <div id="parts_tab_contents">
       ${tabContent}
     </div>
-    <div id="parts_module_info" class=${moduleInfoPanelClass} aria-live="polite">
-      ${moduleInfoContent}
-    </div>
+    ${hasSelection
+      ? html`
+          <div id="parts_module_info" class=${moduleInfoPanelClass} aria-live="polite">
+            <button
+              class="parts-module-info-close"
+              type="button"
+              title="Deselect module"
+              aria-label="Deselect module"
+              @click=${onDeselect}
+            >
+              &#x2715;
+            </button>
+            ${moduleInfoContent}
+          </div>
+        `
+      : null}
   `;
 }
 
