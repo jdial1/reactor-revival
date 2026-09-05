@@ -34,7 +34,7 @@ const workerGlobals = {
 export default [
   {
     ignores: [
-      "**/public/lib/*.js",
+      "**/public/lib/**",
       "**/public/sw.js",
       "**/public/sw-temp.js",
       "**/config/src-sw.js",

@@ -18,6 +18,11 @@ const IGNORED_CONSOLE = [
   /localhost:3000\/health/,
   /ERR_CONNECTION_REFUSED/,
   /analytics/,
+  // reactor-core-lib probes two locations for its game manifest. The first is an
+  // absolute /lib/... URL that cannot resolve under a GitHub Pages project
+  // subpath, so it always 404s before the second (correct) location succeeds.
+  // The boot is asserted separately via the critical-error overlay check below.
+  /\/lib\/reactor-core\/games\//,
 ];
 
 const isIgnored = (text) => IGNORED_CONSOLE.some((pattern) => pattern.test(text));

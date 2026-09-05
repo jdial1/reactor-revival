@@ -67,7 +67,14 @@ const esmEntryPoints = {
   "lit-repeat": "lit-html/directives/repeat.js",
   "lit-when": "lit-html/directives/when.js",
   "lit-unsafe-html": "lit-html/directives/unsafe-html.js",
-  "reactor-core": path.join(corePkgRoot, "src", "index.js"),
+  // reactor-core-lib locates its game data with
+  //   new URL("../../games/<id>", import.meta.url)
+  // which assumes the module sits at <lib>/reactor-core/<a>/<b>/. Emitting the
+  // bundle flat as lib/reactor-core.js made that resolve above the site root, so
+  // the manifest 404'd on GitHub Pages project sites and the game never started.
+  // Keep the source depth (src/engine/runtime/) so the library's own relative
+  // lookup lands on lib/reactor-core/games/, where copy-libs writes the data.
+  "reactor-core/engine/runtime/index": path.join(corePkgRoot, "src", "index.js"),
 };
 
 const stubNodeBuiltins = {
