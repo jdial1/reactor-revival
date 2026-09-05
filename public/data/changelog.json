@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-1555",
+        "date": "2026-09-05",
+        "bullets": [
+            "Fix mobile parts panel collapsing to a 52px strip, plus illegible settings text"
+        ]
+    },
+    {
         "version": "26_09_05-1455",
         "date": "2026-09-05",
         "bullets": [
