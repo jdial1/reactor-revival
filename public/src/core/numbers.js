@@ -12,11 +12,15 @@ const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
 
 let _prefsGetter = null;
+// The getter may return the format string itself or a preferences-shaped
+// object. Returning the string lets callers read a single store key instead of
+// materialising a whole preferences object on every format call.
 export function setFormatPreferencesGetter(fn) { _prefsGetter = fn; }
 function getNumberFormatPreference() {
   try {
     if (typeof window === "undefined") return null;
-    return _prefsGetter?.()?.numberFormat ?? null;
+    const pref = _prefsGetter?.();
+    return (typeof pref === "string" ? pref : pref?.numberFormat) ?? null;
   } catch (_) { return null; }
 }
 function trimTrailingZeros(mantissaStr, fixedDecimals) { if (fixedDecimals) return mantissaStr; return mantissaStr.replace(/\.(\d*?)0+$/, (_, digits) => (digits ? `.${digits}` : "")); }
@@ -49,10 +53,22 @@ function formatNumberCompact(num, places, fixedDecimals) {
   let mantissaStr = Number(mantissa).toFixed(places);
   return trimTrailingZeros(mantissaStr, fixedDecimals) + suffix;
 }
+// Intl.NumberFormat construction dominates this function, and the readouts ask
+// for the same handful of shapes every frame, so keep the instances around.
+const _intlFormatters = new Map();
+function getIntlFormatter(maximumFractionDigits, minimumFractionDigits) {
+  const key = `${maximumFractionDigits}:${minimumFractionDigits}`;
+  let formatter = _intlFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short", maximumFractionDigits, minimumFractionDigits });
+    _intlFormatters.set(key, formatter);
+  }
+  return formatter;
+}
 function formatNumberWithIntl(num, places, fixedDecimals) {
   const maximumFractionDigits = places != null ? places : FORMAT_DEFAULT_PLACES;
   const minimumFractionDigits = fixedDecimals ? maximumFractionDigits : 0;
-  const formatter = new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short", maximumFractionDigits, minimumFractionDigits: fixedDecimals ? minimumFractionDigits : undefined });
+  const formatter = getIntlFormatter(maximumFractionDigits, fixedDecimals ? minimumFractionDigits : undefined);
   let result = formatter.format(num);
   if (!fixedDecimals) result = result.replace(/\.(\d*?)0+([a-zA-Z]+)/, (_, digits, suffix) => (digits ? `.${digits}${suffix}` : suffix));
   return result;

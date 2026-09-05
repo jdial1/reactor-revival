@@ -606,8 +606,11 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 
 #main_top_nav { height: var(--main-top-nav-height, 60px);
 }
-
-@media (width <= 900px) { #wrapper.page-reactor { --mobile-parts-dock-height: 115px;
+/* The closed parts dock reserves this much space above the bottom nav. Its
+   contents are display:none while closed and the part strip now lives in
+   #build_above_deck_row, so the dock collapses to its borders - reserving
+   115px for it left a dead band between the control deck and the nav. */
+@media (width <= 900px) { #wrapper.page-reactor { --mobile-parts-dock-height: 0px;
  }
 
  #wrapper.page-reactor.parts-panel-open { --mobile-parts-dock-height: 0px;
@@ -1671,7 +1674,7 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  }
 
  #upgrades_section,
- #experimental_upgrades_section { overflow: visible; height: auto; min-height: 0; max-height: none; flex: 1 1 auto; padding: calc(var(--mobile-passive-top-height) + env(safe-area-inset-top) + 25px) 0.25rem calc(90px + var(--bottom-nav-height, 40px) + 2 * env(safe-area-inset-bottom) + 25px); -webkit-overflow-scrolling: touch; touch-action: pan-y;
+ #experimental_upgrades_section { overflow: visible; height: auto; min-height: 0; max-height: none; flex: 1 1 auto; padding: calc(var(--mobile-passive-top-height) + env(safe-area-inset-top) + 25px) 0.25rem calc(var(--bottom-nav-height, 40px) + 2 * env(safe-area-inset-bottom) + 25px); -webkit-overflow-scrolling: touch; touch-action: pan-y;
  }
 
  #upgrades_content_wrapper,

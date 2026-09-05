@@ -14,7 +14,6 @@ import { AudioService, resolveAudioService } from "./services/app-services.js";
 import { createSplashManager } from "./components/splash/splash-manager.js";
 import { safeCall, teardownAll } from "./core/teardown.js";
 import {
-  getValidatedPreferences,
   initPreferencesStore,
   modalUi,
   pwaState,
@@ -62,7 +61,9 @@ export function teardownAppErrorHandlers() {
   }
 }
 
-setFormatPreferencesGetter(getValidatedPreferences);
+// Read the one key the formatter needs. getValidatedPreferences() spreads the
+// whole preferences proxy, which meant ~20 proxy traps per formatted number.
+setFormatPreferencesGetter(() => preferences.numberFormat);
 if (typeof document !== "undefined") {
   logger.log("info", "boot", "app.js evaluated (static imports finished)");
 }

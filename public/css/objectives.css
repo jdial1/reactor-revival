@@ -1258,8 +1258,12 @@ body[data-tutorial-step="sell_power"] #parts_section { position: relative; z-ind
 
 #wrapper.page-reactor #reactor_section { padding-top: calc(70px + 16px);
 }
-
-@media (width <= 900px) { #wrapper.page-reactor #reactor_section { min-height: calc(100vh - var(--main-top-nav-height, 60px) - 50px - 90px - var(--bottom-nav-height, 40px) - var(--mobile-parts-dock-height, 0px)); padding-top: 0; padding-bottom: calc(50px + 90px + var(--bottom-nav-height, 40px) + var(--mobile-parts-dock-height, 0px) + 8px);
+/* Only the fixed furniture that overlaps this section needs reserving: the
+   bottom nav and the parts dock. The old calc also held back 50px for the
+   info bar (display:none on this page) and 90px for the selected-detail
+   readout, which no longer exists - together a dead band at the bottom of
+   the reactor on every phone. */
+@media (width <= 900px) { #wrapper.page-reactor #reactor_section { min-height: calc(100vh - var(--main-top-nav-height, 60px) - var(--bottom-nav-height, 40px) - var(--mobile-parts-dock-height, 0px)); padding-top: 0; padding-bottom: calc(var(--bottom-nav-height, 40px) + var(--mobile-parts-dock-height, 0px) + 8px);
  }
 }
 
