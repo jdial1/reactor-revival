@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-1651",
+        "date": "2026-09-05",
+        "bullets": [
+            "Remove the selected-detail readout from every page and panel"
+        ]
+    },
+    {
         "version": "26_09_05-1622",
         "date": "2026-09-05",
         "bullets": [
@@ -27,13 +34,6 @@
         "date": "2026-09-05",
         "bullets": [
             "Fix game failing to start on GitHub Pages (manifest 404)"
-        ]
-    },
-    {
-        "version": "26_09_05-1402",
-        "date": "2026-09-05",
-        "bullets": [
-            "Replace puppeteer UI tooling with Playwright, fix layout and prune dead code"
         ]
     }
 ]
