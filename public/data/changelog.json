@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-1622",
+        "date": "2026-09-05",
+        "bullets": [
+            "Condense parts store category headings"
+        ]
+    },
+    {
         "version": "26_09_05-1555",
         "date": "2026-09-05",
         "bullets": [
@@ -27,13 +34,6 @@
         "date": "2026-09-05",
         "bullets": [
             "Replace puppeteer UI tooling with Playwright, fix layout and prune dead code"
-        ]
-    },
-    {
-        "version": "26_07_20-1632",
-        "date": "2026-07-20",
-        "bullets": [
-            "Record v1.0.0 tag and preserve ship changelog across deploys."
         ]
     }
 ]
