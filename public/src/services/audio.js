@@ -276,17 +276,17 @@ class AudioWarningManager {
     const tickGain = ctx.createGain();
     const tickFilter = ctx.createBiquadFilter();
     tickOsc.type = 'square';
-    tickOsc.frequency.value = 8000 + Math.random() * 2000;
+    tickOsc.frequency.value = 1500 + Math.random() * 600;
     tickFilter.type = 'bandpass';
-    tickFilter.frequency.value = 6000;
-    tickFilter.Q.value = 8;
+    tickFilter.frequency.value = 1800;
+    tickFilter.Q.value = 3;
     tickOsc.connect(tickFilter);
     tickFilter.connect(tickGain);
     tickGain.connect(categoryGain);
-    tickGain.gain.setValueAtTime(0.08 * intensity, t);
-    tickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.01);
+    tickGain.gain.setValueAtTime(0.06 * intensity, t);
+    tickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.014);
     tickOsc.start(t);
-    tickOsc.stop(t + 0.01);
+    tickOsc.stop(t + 0.014);
   }
 
   _scheduleGeigerBatch(intensity) {
@@ -357,10 +357,10 @@ class AudioWarningManager {
     oscKlaxon.stop(t + alarmDuration);
     const oscTurbine = ctx.createOscillator();
     const gainTurbine = ctx.createGain();
-    const startFreq = 2000 + intensity * 1000;
+    const startFreq = 420 + intensity * 180;
     oscTurbine.type = 'triangle';
     oscTurbine.frequency.setValueAtTime(startFreq, t);
-    oscTurbine.frequency.linearRampToValueAtTime(startFreq + 200, t + alarmDuration);
+    oscTurbine.frequency.linearRampToValueAtTime(startFreq + 60, t + alarmDuration);
     oscTurbine.connect(gainTurbine);
     gainTurbine.connect(categoryGain);
     gainTurbine.gain.setValueAtTime(0.05 * intensity, t);
@@ -627,6 +627,29 @@ export const processSensoryMask = (svc, mask, ambience = null) => {
   }
 };
 
+const LOOPED_BUFFER_KEYS = new Set(['ep_spark']);
+
+// MP3 decoding pads roughly 10 ms of digital silence onto each end of a file.
+// For one-shots that is inaudible; for a bed that loops every few seconds it is
+// a periodic dropout. The generated loops never fall to true silence, so the
+// padding is safe to trim by threshold.
+function trimDecodedPadding(ctx, buffer) {
+  if (!ctx || !buffer) return buffer;
+  const data = buffer.getChannelData(0);
+  const silence = 1e-4;
+  let start = 0;
+  while (start < data.length && Math.abs(data[start]) < silence) start++;
+  let end = data.length;
+  while (end > start && Math.abs(data[end - 1]) < silence) end--;
+  const length = end - start;
+  if (length <= 0 || length === data.length) return buffer;
+  const trimmed = ctx.createBuffer(buffer.numberOfChannels, length, buffer.sampleRate);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    trimmed.copyToChannel(buffer.getChannelData(ch).subarray(start, end), ch);
+  }
+  return trimmed;
+}
+
 const AUDIO_LOAD_CONCURRENCY = 6;
 
 async function runWithConcurrencyLimit(tasks, limit) {
@@ -647,7 +670,9 @@ async function loadUrlMapInto(svc, urlMap, target) {
     try {
       const r = await fetch(url);
       const ab = await r.arrayBuffer();
-      target[key] = await getAudioContext(svc)?.decodeAudioData(ab);
+      const ctx = getAudioContext(svc);
+      const decoded = await ctx?.decodeAudioData(ab);
+      target[key] = LOOPED_BUFFER_KEYS.has(key) ? trimDecodedPadding(ctx, decoded) : decoded;
     } catch (e) {
       logger.log('warn', 'audio', 'Audio load failed', url, e);
     }
@@ -662,7 +687,8 @@ async function loadAmbienceLayers(svc, base) {
       try {
         const r = await fetch(url);
         const ab = await r.arrayBuffer();
-        return await getAudioContext(svc)?.decodeAudioData(ab);
+        const ctx = getAudioContext(svc);
+        return trimDecodedPadding(ctx, await ctx?.decodeAudioData(ab));
       } catch (e) {
         logger.log('warn', 'audio', 'Ambience load failed', url, e);
         return null;
@@ -701,8 +727,10 @@ const loadSampleBuffers = async (svc) => {
   ]);
   if (ambienceBuffers) ambienceBuffers.push(...ambienceResults);
   const ambienceReady = ambienceBuffers?.length >= 3 && ambienceBuffers.every(Boolean);
-  if (ambienceReady && svc.enabled && svc.ambienceGain?.gain.value > 0 && svc.ambienceManager.hasActiveAmbience()) {
-    svc.ambienceManager.stopAmbience();
+  if (ambienceReady && svc.enabled && svc.ambienceGain?.gain.value > 0) {
+    // init() runs startAmbience() before these buffers exist, so it bails out.
+    // Start the bed here once the layers have actually landed.
+    if (svc.ambienceManager.hasActiveAmbience()) svc.ambienceManager.stopAmbience();
     svc.ambienceManager.startAmbience();
   }
 };

@@ -44,7 +44,9 @@
     "test:e2e:ui": "cross-env E2E_RESOLUTION= playwright test -c config/playwright.config.mjs --ui",
     "test:e2e:resolution": "playwright test -c config/playwright.config.mjs",
     "test:e2e:render": "playwright test -c config/playwright.config.mjs e2e/ui-render.spec.js",
-    "test:e2e:audit": "cross-env E2E_RESOLUTION=1920x1080 playwright test -c config/playwright.config.mjs e2e/ui-audit.spec.js"
+    "test:e2e:audit": "cross-env E2E_RESOLUTION=1920x1080 playwright test -c config/playwright.config.mjs e2e/ui-audit.spec.js",
+    "assets:audio": "node scripts/audio/generate-sfx.mjs",
+    "check:audio": "node scripts/audio/generate-sfx.mjs --report"
   },
   "keywords": [],
   "x-build": {
@@ -60,6 +62,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@eslint/js": "^9.39.2",
     "@fontsource/oswald": "^5.2.8",
     "@fontsource/press-start-2p": "^5.2.7",
