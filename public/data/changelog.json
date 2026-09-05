@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-1402",
+        "date": "2026-09-05",
+        "bullets": [
+            "Replace puppeteer UI tooling with Playwright, fix layout and prune dead code"
+        ]
+    },
+    {
         "version": "26_07_20-1632",
         "date": "2026-07-20",
         "bullets": [
