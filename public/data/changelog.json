@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-1857",
+        "date": "2026-09-05",
+        "bullets": [
+            "Cut dead exports and four copies of the same DOM helpers"
+        ]
+    },
+    {
         "version": "26_09_05-1805",
         "date": "2026-09-05",
         "bullets": [
@@ -27,13 +34,6 @@
         "date": "2026-09-05",
         "bullets": [
             "Remove the selected-detail readout from every page and panel"
-        ]
-    },
-    {
-        "version": "26_09_05-1622",
-        "date": "2026-09-05",
-        "bullets": [
-            "Condense parts store category headings"
         ]
     }
 ]
